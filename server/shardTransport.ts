@@ -192,6 +192,10 @@ export class ShardTransport implements NetTransport {
   private readonly resumeCbs = new Set<(id: PlayerId) => void>();
   private readonly sessionCbs = new Set<(m: SessionMsg, from: PlayerId) => void>();
   private readonly hostLostCbs = new Set<() => void>();
+  /** THE SOAK (balance/soak_shard.ts): bytes of every frame write() handed a socket. */
+  bytesOut = 0;
+  /** THE SOAK (balance/soak_shard.ts): frames write() handed a socket. */
+  framesOut = 0;
   /** Log sink (the host wires its own). */
   log: (line: string) => void = line => console.log(line);
 
@@ -470,7 +474,7 @@ export class ShardTransport implements NetTransport {
   private write(conn: Conn, frame: Uint8Array, oneShot = false): boolean {
     if (conn.closed) return false;
     if (!oneShot && conn.sock.writableLength >= SHARD_WIRE_CFG.sendBufferCap) return false; // congested: skip a snapshot, never stall
-    try { conn.sock.write(frame); return true; } catch { return false; }
+    try { conn.sock.write(frame); this.bytesOut += frame.length; this.framesOut++; return true; } catch { return false; } // THE SOAK counts what left
   }
 
   private broadcast(m: WireMsg, except?: Conn, oneShot = false): void {

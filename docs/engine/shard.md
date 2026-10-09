@@ -219,6 +219,125 @@ also ships on any tick it differs from the one this world last shipped (THE CHAN
 BEAT), so a graduation reaches every client on the next snapshot and the beat only
 re-sends an unchanged view.
 
+## THE SOAK — load and endurance
+
+```bash
+npm run soak:shard -- --bots 10 --seconds 120
+```
+
+`balance/soak_shard.ts` boots a REAL `ShardHost` in its own process (the
+Unbroken Wilds on the open account, ephemeral), listens on a free loopback
+port and runs the host's own wall-clock pump (`ShardHost.start()`, the CLI's),
+so pacing, catch-up and dropped ticks are a hosted world's, never
+probe-stepped. THE FLEET (`balance/soak_bots.ts`) is forked into a process of
+its own: N clients parsing every snapshot would otherwise share the server's
+event loop, heap and GC, and the numbers would be the bots' as much as the
+world's. Every bot is the shipped client (`WsTransport` over Node's
+`WebSocket`) with a small brain: a random walk that re-picks its heading every
+1-3 s inside ±1500 px of the hearth (turning home past the edge), aiming at
+the nearest live `team === 'enemy'` row within 400 px and standing to hold
+slot 0 while one is within 160 px. The classes are dealt round-robin (warrior,
+magician, rogue, necromancer). Inputs ride THE FLEET'S CLOCK at a true 60 Hz,
+a browser's frame clock: on Windows (15.6 ms timers) the fleet spins one core
+on `setImmediate`, elsewhere it sleeps to a millisecond short of each frame.
+
+The run has three phases:
+
+1. **Warm-up** (measured apart, never gated): the bots join 200 ms apart, so
+   THE HEARTH WAKE and THE SPAWN GRACE run as in play. Once the first two
+   stand seated they form a party over the session wire (`party invite`, then
+   the invitee's `accept` on its `partyInvite`), so THE GROUP LAW and the
+   party rows ride the soak.
+2. **The window**: `--seconds` of steady load, opened and closed by a forced
+   full GC, so the heap reads LIVE memory at both edges. It is sampled every
+   5 s. At its midpoint the last bot's socket is closed without `leave()`
+   (no `session leaving`, so THE DORMANT SEAT) at its first quiet moment (no
+   foe in sight, up to 15 s), and 5 s later a new transport takes the seat
+   back with the token its welcome left (`shardResumeFor`, read right after
+   each bot's own welcome: THE REMEMBERED SESSION is one per page and the
+   fleet shares one module). A bot whose fresh hero falls (`runEnd`) answers
+   with its class pick's `rejoin` 3 s later, so the load never thins.
+3. **Teardown**: every bot leaves with its word and the host stops.
+
+| flag | meaning |
+|---|---|
+| `--bots <n>` | bot players (default 10; the door caps grow to the fleet, and `maxPerIp` is lifted as the CLI's `--per-ip 0` does, since every bot arrives from one address) |
+| `--seconds <s>` | the measured window (default 120) |
+| `--seed <hex\|dec>` | THE HOSTED SEED (default `0x0ddba11`, the probe's wilds: one fixed world, so runs compare; `Math.random` is seeded from it too, so the boot draws the same world) |
+| `--classic` | a classic world (the hearth) instead of the Unbroken Wilds |
+| `--no-drop` | skip THE DORMANT SEAT's cut (also `--drop off`) |
+| `--report <path>` | the JSON report (default `balance/reports/soak_<stamp>.json`, gitignored) |
+| `--thresholds <path>` | the gates (default `balance/soak.config.json`) |
+
+Exit 0 means every gate held, 2 a breach (each one named), 1 that the harness
+itself failed.
+
+**What it reads.** One seam in the shard's own code: `ShardTransport.bytesOut`
+and `framesOut`, bumped in `write()` for every frame handed a socket. The
+rest is metered on the instances (the pump calls `this.tick`, the host calls
+`this.net.*`), so no engine or host code changes: the tick time around every
+`ShardHost.tick`; one snapshot's encoded size as the counters' bytes ÷ frames
+around `sendState` (written once per socket, never encoded twice); zone bytes
+around `sendZone`/`sendZoneTo`; FED, the share of seat-ticks whose
+`drainInputs` held that seat's input; pump wakes (ticks that start more than
+0.5 ms after the previous one ended); THE SHADOW's jumps (the keeper moving
+more than 300 px in one tick: a new focus seat); every V8 pause from a `gc`
+`PerformanceObserver`; the heap polled every 250 ms (each window keeps its
+trough); `host.status()`, and the shard's own dormancy, resume and party
+ears for the drop and the party.
+
+**The gates** (`balance/soak.config.json`; each row documents itself there).
+All are read over the window. `require: false` turns a boolean gate into a
+report-only row.
+
+| gate | limit | reads |
+|---|---|---|
+| `tickP95Ms` | ≤ 20 ms | the 95th-percentile host tick (engine step, snapshot serialize and encode, the wire, the beats), set for 10 bots; the 60 Hz budget is 16.7 ms |
+| `droppedShare` | ≤ 5% | ticks the pump dropped to bound a stall ÷ (stepped + dropped) |
+| `heapGrowthMB` | ≤ 64 MB per 120 s | the live heap at the window's close minus its open, the fleet seated at both edges (growth under constant load, not the seats' cost); never less than 64 MB for a shorter window |
+| `faults` | 0 | `ShardHost.faults + ShardTransport.faults` over the whole soak |
+| `errors` | 0 | the harness's own failures: a bot never seated, a welcome with no token, a socket lost without the cut, a fleet that died early, THE BREAKER, seats left standing |
+| `resume` | required | the cut seat lay dormant on the shard AND the same seat id came back (the shard re-bound it, the client heard `resumed`) |
+| `party` | required | the shard's own `PartyDesk` rows held both founders |
+
+**Reading the table.** One row per 5 s sample: `seats` (non-keeper; `*` = a
+seat lay dormant), `conn` (sockets bound to seats), `actors`, the window's
+tick p50/p95/max and dropped ticks, `wake/s` (pump wakes a second), `fed`, the
+p95 snapshot, outbound kB/s per client (kB = 1000 bytes), and the heap's
+trough in MB. Below it: the run's tick percentiles; the worst 5 s window; the
+five slowest ticks, each with any GC or shadow jump inside it; dropped ticks;
+GC pauses (how much landed inside ticks); the pump (wakes/s, ticks per wake);
+shadow jumps; fed; the warm-up; snapshot sizes; outbound per client split
+into snapshots, zone and other; the heap edges (plus the troughs' slope); the
+dormant seat; the party; the bots (deaths, rejoins); errors; then the gates.
+The JSON adds every sample, the per-bot stats, the slowest ticks of both
+phases, the GC breakdown by kind and the host's log.
+
+**How to read fed and the wakes.** `World.applyInputs` steps a seat that has
+no input this tick not at all, and two client frames that land in one wake
+merge into one tick of movement (`mergeInputs`: the edges are kept, the walk
+is not). So fed is the share of server ticks a remote hero actually walks.
+The pump's wake rate follows the host's timer resolution: Windows wakes a
+16.7 ms interval on its 15.6 ms system tick (about 32 Hz, two ticks per wake)
+unless some process has raised the resolution, so a Windows soak can swing
+between runs. The `wake/s` column says which world a run measured.
+
+**Measured** (2026-10-09, i9-10900K × 20, Windows 10, Node 24.9, with
+co-sessions holding ~45-50% of the CPU). Four bots, 60 s: tick p50 7.1 /
+p95 11.6 ms, nothing dropped, fed 92% at 54 wakes/s; an earlier run under
+coarse timers and heavier load read p95 24.5 ms (a breach), 4.3% dropped,
+fed 55% at 22 wakes/s. Ten bots, 120 s, three runs: tick p95 17.3 / 21.1 /
+20.4 ms against the 20 ms gate (p50 10.1-13.2 ms), 0.25-2.3% dropped, fed
+52-78%, heap +3.8 to +5.6 MB, no faults; the dormant seat resumed and the
+party formed every time. A wilds snapshot weighs 23 kB at four players (78%
+actor rows, 17% the vendor shelf, which rides every snapshot between
+restocks) and 27 kB at ten: at 20 Hz, ~540 kB/s per client, ~5.4 MB/s of
+egress for ten. The tick spikes (100-490 ms) are mostly `massRuntime.update`
+(10 of the 12 slowest ticks in a 90 s attribution pass): the wilds' warm
+queues (`geographicWarm`, `nativeWarm`, `processionWarm`) run inline when
+`typeof Worker === 'undefined'`, which is always true on Node. A classic
+world's tick reads p50 2.7 ms.
+
 ## Hosting on Codespaces
 
 A codespace on this branch is a SESSION HOST, not a server: it runs while

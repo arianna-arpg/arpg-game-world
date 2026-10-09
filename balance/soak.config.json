@@ -1,0 +1,34 @@
+{
+  "_doc": "Gates for `npm run soak:shard` (balance/soak_shard.ts; docs/engine/shard.md \"THE SOAK\"). The soak boots a real ShardHost (the Unbroken Wilds on the open account, ephemeral), runs the host's own wall-clock pump and drives a fleet of bot players, forked into a process of their own, over real WebSockets. Every gate is read over the MEASURED WINDOW: --seconds of steady load after the warm-up's joins and party. A breach exits 2 and names itself; `require: false` turns a boolean gate into a report-only row. The numbers were set at the 10-bot, 120 s reference load; the receipts that justify them are in docs/engine/shard.md.",
+  "gates": {
+    "tickP95Ms": {
+      "max": 20,
+      "_doc": "95th percentile of one host tick (ShardHost.tick: the engine step, the snapshot's serialize and encode, the wire writes and the beats), timed around every tick the pump stepped in the window. The 60 Hz budget is 16.7 ms; 20 ms keeps headroom for desktop noise and still catches a world that spends its whole frame. Set for 10 bots; a heavier soak is judged against the same line."
+    },
+    "droppedShare": {
+      "max": 0.05,
+      "_doc": "Ticks the pump DROPPED to bound a stall (ShardHost.droppedTicks: a backlog past maxCatchUpTicks is discarded, so the world ran slow for everyone) over ticks stepped plus dropped, in the window. 0.05 = one tick in twenty."
+    },
+    "heapGrowthMB": {
+      "max": 64,
+      "perSeconds": 120,
+      "_doc": "The live heap (heapUsed after a forced full GC) at the window's close minus at its open, the fleet seated at both edges, so it is growth under constant load: a leak's signature, not the cost of the seats. The allowance is max per perSeconds of window and never less than max (a 600 s soak may grow five times as much). The report's sampledSlopeMBPerMin, the unforced samples' trend, is printed beside it."
+    },
+    "faults": {
+      "max": 0,
+      "_doc": "Faults the shard caught and survived (ShardHost.faults + ShardTransport.faults: a throw in the simulate phase, a meta action, a host callback) across the whole soak, warm-up and teardown included. A shard never dies on one; the soak never forgives one."
+    },
+    "errors": {
+      "max": 0,
+      "_doc": "The harness's and the fleet's own failures: a bot that could not connect or was never seated, a welcome with no reconnect token, a socket lost without the soak's own cut, a fleet that died early, THE BREAKER, seats still standing after every bot left."
+    },
+    "resume": {
+      "require": true,
+      "_doc": "THE DORMANT SEAT: the last bot's socket, closed without its leave() at the window's midpoint (its first quiet moment), must lie DORMANT on the shard, and 5 s later its reconnect must take the SAME seat back with THE RECONNECT TOKEN: the shard re-binds it and the client hears resumed. n/a under --no-drop."
+    },
+    "party": {
+      "require": true,
+      "_doc": "THE PARTY: the first two bots form a party over the session wire (an invite, then the invitee's accept) in the warm-up, and the shard's own PartyDesk rows must hold both. n/a with one bot. Whether it still stands at the end is reported, never gated: a member that falls leaves its party by law."
+    }
+  }
+}

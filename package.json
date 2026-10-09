@@ -16,6 +16,7 @@
     "preview": "vite preview",
     "check": "tsc --noEmit && tsc -p tsconfig.launcher.json && tsc -p tsconfig.sim.json && tsc -p tsconfig.shard.json",
     "shard": "tsx server/shard.ts",
+    "soak:shard": "tsx balance/soak_shard.ts",
     "sim": "tsx balance/cli.ts",
     "probe": "tsx balance/runprobes.ts",
     "genqa": "tsx balance/genqa.ts",
