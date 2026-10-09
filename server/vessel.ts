@@ -32,6 +32,11 @@
 // ---------------------------------------------------------------------------
 
 import { MAX_LEARNED_SKILLS, type Seat, type World } from '../src/engine/world';
+import type { Actor } from '../src/engine/actor';
+import { recentIndex } from '../src/engine/recency';
+import { COOP_SCALING } from '../src/data/coop';
+import { dist } from '../src/core/math';
+import { MASS_ZONE } from '../src/worldmass/preset';
 import { CLASSES, type ClassDef } from '../src/data/classes';
 import { MONSTERS } from '../src/data/monsters';
 import { walletBreakdown, walletMortalValue } from '../src/data/essences';
@@ -78,7 +83,29 @@ export const VESSEL_CFG = {
   /** THE FAREWELL's throttle: a seat's requested mirror (`session leaving`)
    *  is honored at most once per this many world seconds. */
   farewellEverySec: 2,
+  /** THE ACTING SEAT (the death beat): seconds a fallen body stands dead and
+   *  untargetable on the wire before its client hears `runEnd` and the seat
+   *  leaves, so the killing blow is seen; 0 = at once. */
+  deathBeatSec: 1.5,
+  /** THE ACTING SEAT (the leave mid-fight): a deliberate leave by a standing
+   *  hero hurt, or hurting, within this many seconds goes DORMANT like a
+   *  dropped socket (never the farewell mirror). */
+  combatLeaveSec: 8,
+  /** THE ACTING SEAT (places walked): on the Unbroken Wilds (one zone) a place
+   *  is a surface cell this wide, about a classic zone's span; elsewhere a
+   *  place is a zone. */
+  placeCellPx: 2000,
 };
+
+/** THE ACTING SEAT (a refused hero): the refusals that are the player's door
+ *  and never the vessel's fault. Their client hears the word and stays home;
+ *  any other refusal sends the hero back to Mu to wake one that can travel. */
+const REFUSAL = {
+  twin: 'this hero already walks this world',
+  noAccount: 'this client keeps no account to carry a hero by',
+};
+/** The recency ledger's counters the leave mid-fight reads (engine/recency.ts). */
+const HURT = recentIndex('hurt'), HIT = recentIndex('hit');
 
 /** A judged vessel: the save (its world half dropped) and the rebuilt build. */
 type Built = NonNullable<ReturnType<typeof rebuildSavedMeta>>;
@@ -189,6 +216,9 @@ export function judgeVessel(raw: unknown): VesselJudgment {
 
 const classOf = (id: string | undefined): ClassDef => CLASSES.find(c => c.id === id) ?? CLASSES[0];
 
+/** The word a fall owes its client: where the body lies and what it minted. */
+type FallWord = { note: ShardCorpseNote; reckoning: ShardReckoning };
+
 /** One vessel seat's standing record. */
 export interface VesselSeat {
   seatId: string;
@@ -199,10 +229,10 @@ export interface VesselSeat {
   /** Bonds the shard did not field (their skill unknown to the build): they
    *  sleep through the session and ride home as they came. */
   dormant: CompanionSaved[];
-  /** World kills at the graft (the reckoning's journey count). */
-  killsAtJoin: number;
-  /** Zones this vessel stood in on the shard. */
-  zones: Set<string>;
+  /** THE ACTING SEAT: the places this vessel walked on the shard (zones; on
+   *  the wilds, surface cells of VESSEL_CFG.placeCellPx). Its kills are the
+   *  seat's own tally (World.seatKills), never the server's. */
+  places: Set<string>;
   /** Mirrors shipped home (the probe's read). */
   mirrors: number;
   /** World time of the last requested mirror (THE FAREWELL's throttle). */
@@ -218,6 +248,13 @@ export class VesselDesk {
   falls = 0;
   /** Fresh (vessel-less) heroes whose down ended them since boot (THE FRESH HERO'S END). */
   freshFalls = 0;
+  /** THE ACTING SEAT (the death beat): seats whose fall is decided, their body
+   *  standing dead on the wire until `until` (the desk's clock); then the word
+   *  goes home (`tell`: `corpse` when a body was recorded, then `runEnd`) and
+   *  the seat leaves. */
+  private readonly beats = new Map<string, { until: number; tell: boolean; word?: FallWord }>();
+  /** The desk's own seconds (summed tick dt: a beat ends even on a world whose frame faults). */
+  private clock = 0;
 
   constructor(
     private readonly world: World,
@@ -239,11 +276,12 @@ export class VesselDesk {
   /** The vessel record standing on a seat, if one traveled. */
   vesselOf(seatId: string): Readonly<VesselSeat> | undefined { return this.vessels.get(seatId); }
 
-  /** THE JOIN: seat the peer as its uploaded vessel when the judgment allows,
-   *  else as the fresh hero of its chosen class (M0's join, unchanged). Null
-   *  = THE LATE WORD: the upload is a vessel that already fell here and its
-   *  client never heard; it hears now (`corpse`, `runEnd`) and joins no seat
-   *  until its class pick's `rejoin`. */
+  /** THE JOIN: seat the peer as its uploaded vessel when the judgment allows;
+   *  a join with no vessel is the fresh hero of its chosen class (M0's join).
+   *  Null = THE LATE WORD (the upload is a vessel that already fell here and
+   *  its client never heard; it hears now, `corpse` then `runEnd`, and joins
+   *  no seat until its class pick's `rejoin`) or THE ACTING SEAT's refusal (a
+   *  vessel the shard will not seat is never seated fresh: `refused`). */
   seat(peer: PeerInfo, rawVessel: unknown): Seat | null {
     const w = this.world;
     const accountId = isAccountId(peer.accountId) ? peer.accountId : undefined;
@@ -258,13 +296,13 @@ export class VesselDesk {
         this.opts.log(`[shard] ${peer.id} uploaded ${word.note.name}, who fell here; it hears the word now`);
         return null;
       }
-      if (!accountId) judged = { refused: 'no account id to key its records by' };
+      if (!accountId) judged = { refused: REFUSAL.noAccount };
       else if (this.corpses.hasFallen(accountId, charId)) judged = { refused: 'this vessel already fell on this shard' };
-      else if ([...this.vessels.values()].some(v => v.accountId === accountId && v.charId === charId)) judged = { refused: 'this vessel already walks the world' };
+      else if ([...this.vessels.values()].some(v => v.accountId === accountId && v.charId === charId)) judged = { refused: REFUSAL.twin };
     }
-    if (judged && 'refused' in judged) this.opts.log(`[shard] ${peer.id}'s vessel refused (${judged.refused}); a fresh hero joins instead`);
+    if (judged && 'refused' in judged) { this.refuse(peer.id, judged.refused); return null; }
     const vessel = judged && 'save' in judged ? judged : null;
-    let seat = w.addSeat(peer.id, classOf(vessel?.save.classId ?? peer.classId), new RemoteInput(peer.id),
+    const seat = w.addSeat(peer.id, classOf(vessel?.save.classId ?? peer.classId), new RemoteInput(peer.id),
       vessel ? { startingCompanions: false, startingFlasks: false } : undefined);
     if (vessel && accountId) {
       try {
@@ -273,8 +311,8 @@ export class VesselDesk {
         // A graft that will not stand leaves no half-built hero behind.
         this.vessels.delete(peer.id);
         w.removeSeat(peer.id);
-        seat = w.addSeat(peer.id, classOf(peer.classId), new RemoteInput(peer.id));
-        this.opts.log(`[shard] ${peer.id}'s vessel would not stand (${String(e)}); a fresh hero joins instead`);
+        this.refuse(peer.id, `a build that will not stand (${String(e)})`);
+        return null;
       }
     }
     this.corpses.join(peer.id, accountId);
@@ -300,6 +338,10 @@ export class VesselDesk {
     hero.guardIntervention = Object.fromEntries(Object.entries(save.guardIntervention ?? {})
       .filter(([, left]) => Number.isFinite(left) && left > 0));
     restoreFlaskChargeBanks(hero, save.flaskCharges);
+    // THE ACTING SEAT (the traveller's flasks): a traveller who left home before
+    // the innkeep's welcome gift is dealt it here (this world's innkeep answers
+    // only its keeper); its OWN ledger decides and remembers, never the shard's.
+    w.dealTravellerFlasks(seat, save.ledger ??= {});
     // The bonds whose skill the build knows take the field beside it; the
     // rest sleep through the session (the local resume's stash rule).
     const fielded: CompanionSaved[] = [], dormant: CompanionSaved[] = [];
@@ -313,7 +355,7 @@ export class VesselDesk {
     if (!Number.isFinite(life) || life <= 0 || !Number.isFinite(hero.life)) throw new Error('the build does not stand');
     this.vessels.set(seat.id, {
       seatId: seat.id, accountId, charId: built.meta.charId, upload: save, dormant,
-      killsAtJoin: w.kills, zones: new Set([w.zone.id]), mirrors: 0, askedAt: -Infinity,
+      places: new Set(), mirrors: 0, askedAt: -Infinity, // (places fill from the tick: the graft stands the seat beside the keeper, the hearth wake moves it after)
     });
   }
 
@@ -382,24 +424,60 @@ export class VesselDesk {
   /** A connection closed: forget its seat (the world despawns it). A mortal
    *  vessel that leaves while DOWN has fallen: leaving is never the road out
    *  of a death (its body and tombstone are banked; its client hears THE LATE
-   *  WORD at its next upload of that vessel). */
+   *  WORD at its next upload of that vessel). A seat already in its death
+   *  beat has fallen too: its word waits in the tombstone. */
   leave(seatId: string): void {
     const rec = this.vessels.get(seatId);
     const seat = rec ? this.world.seats.find(s => s.id === seatId) : undefined;
     if (rec && seat && this.downed(seat) && this.endsTheRun(seat)) this.fall(seat, rec, false);
+    this.beats.delete(seatId);
     this.vessels.delete(seatId);
     this.accounts.delete(seatId);
     this.corpses.leave(seatId);
   }
 
+  /** A join the desk will not seat (THE ACTING SEAT: never a fresh hero in its
+   *  place). A door refusal (REFUSAL) is the word alone; any other sends the
+   *  hero back to Mu bound for this world (`mu`). */
+  private refuse(seatId: string, why: string): void {
+    const door = why === REFUSAL.twin || why === REFUSAL.noAccount;
+    this.send(door ? { t: 'refused', word: why } : { t: 'refused', word: `this hero cannot travel to this world (${why})`, mu: true }, seatId);
+    this.opts.log(`[shard] ${seatId}'s vessel refused (${why}); ${door ? 'it hears the word' : 'it goes back to Mu'}`);
+  }
+
+  /** THE ACTING SEAT (the leave mid-fight): a standing hero hurt, or hurting,
+   *  within VESSEL_CFG.combatLeaveSec (the actor's recency ledger) is in a
+   *  fight, and its deliberate leave sleeps like a lost socket
+   *  (ShardTransport.leaveHolds) with no farewell mirror. A downed or dead
+   *  hero keeps the older laws (a leave while down is the fall). */
+  inCombat(seatId: string): boolean {
+    const seat = this.world.seats.find(s => s.id === seatId && !s.keeper);
+    if (!seat || this.downed(seat)) return false;
+    const fought = (a: Actor): boolean => Math.min(a.since[HURT], a.since[HIT]) < VESSEL_CFG.combatLeaveSec;
+    return fought(seat.actor) || fought(this.world.seatHero(seat));
+  }
+
+  /** THE ACTING SEAT (places walked): where a seat stands, as the reckoning
+   *  counts places (a zone; on the Unbroken Wilds, a surface cell). */
+  private placeOf(seat: Seat): string {
+    const zone = this.world.zone.id;
+    if (zone !== MASS_ZONE) return zone;
+    const p = this.world.seatHero(seat).pos, c = VESSEL_CFG.placeCellPx;
+    return `${zone}@${Math.floor(p.x / c)},${Math.floor(p.y / c)}`;
+  }
+
   // ---- the tick ---------------------------------------------------------------
-  /** After the engine step: the zones walked, THE DEATH COVENANT (before THE
+  /** After the engine step: the places walked, THE DEATH COVENANT (before THE
    *  MERCY's clock could ever stand a mortal vessel back up: the covenant
-   *  reads the down the same tick it lands, the mercy needs reviveSec), then
-   *  the mirror beat. */
+   *  reads the down the same tick it lands, the mercy needs reviveSec), the
+   *  death beats that ran out, then the mirror beat. */
   tick(dt: number): void {
     const w = this.world;
-    for (const rec of this.vessels.values()) rec.zones.add(w.zone.id); // M0: every seat stands in the one live zone
+    this.clock += dt;
+    for (const rec of this.vessels.values()) {
+      const seat = w.seats.find(s => s.id === rec.seatId);
+      if (seat && !this.downed(seat)) rec.places.add(this.placeOf(seat));
+    }
     for (const rec of [...this.vessels.values()]) {
       const seat = w.seats.find(s => s.id === rec.seatId);
       if (seat && this.covenantDue(seat)) this.fall(seat, rec);
@@ -408,9 +486,17 @@ export class VesselDesk {
     // ends here too — no mercy clock ever stands a mortal back up on a shard.
     if (VESSEL_CFG.freshHeroDies) {
       for (const seat of [...w.seats]) {
-        if (seat.keeper || this.vessels.has(seat.id) || !this.downed(seat) || !this.endsTheRun(seat) || this.partyHolds(seat)) continue;
+        if (seat.keeper || this.vessels.has(seat.id) || this.beats.has(seat.id)
+          || !this.downed(seat) || !this.endsTheRun(seat) || this.partyHolds(seat)) continue;
         this.freshFall(seat);
       }
+    }
+    // THE DEATH BEAT runs out: the word goes home and the seat leaves.
+    for (const [id, beat] of [...this.beats]) {
+      if (this.clock < beat.until) continue;
+      this.beats.delete(id);
+      const seat = w.seats.find(s => s.id === id);
+      if (seat) this.endFall(seat, beat.tell, beat.word);
     }
     this.beat -= dt;
     if (this.beat <= 0) {
@@ -419,23 +505,31 @@ export class VesselDesk {
     }
   }
 
-  /** Is this seat's down a mortal vessel's death? The stage's own policy
-   *  decides (a contract that survives death keeps THE MERCY), and under
-   *  'mercy' a standing player who could still kneel keeps the down co-op's. */
-  /** THE GROUP LAW (her word 2026-10-09): inside a party a lethal down is a DOWN — a
-   *  nearby player may kneel — and the covenant fells the downed only when no member of
-   *  its party stands (THE PARTY WIPE); an ungrouped seat is single player's. */
+  /** THE GROUP LAW (her word 2026-10-09): inside a party a lethal down is a DOWN while a
+   *  mate who could kneel stands, and the covenant fells the downed only when none does
+   *  (THE PARTY WIPE); an ungrouped seat is single player's. THE ACTING SEAT: "could
+   *  kneel" is a standing mate within the near radius (COOP_SCALING.shareRadius, the
+   *  killer's due's own reach), never one a continent away. */
   private partyHolds(seat: Seat): boolean {
     const mates = this.opts.party?.(seat.id) ?? [seat.id];
     if (mates.length <= 1) return false;
-    return this.world.seats.some(o => o !== seat && mates.includes(o.id) && !o.actor.dead && !o.actor.downed);
+    return this.world.seats.some(o => o !== seat && mates.includes(o.id) && this.couldKneel(o, seat));
+  }
+  /** A standing player within the near radius of a down (radius 0 = anywhere). */
+  private couldKneel(o: Seat, down: Seat): boolean {
+    if (o.keeper || o.actor.dead || o.actor.downed) return false;
+    const r = COOP_SCALING.shareRadius;
+    return r <= 0 || dist(this.world.seatHero(o).pos, this.world.seatHero(down).pos) <= r;
   }
 
+  /** Is this seat's down a mortal vessel's death? The stage's own policy
+   *  decides (a contract that survives death keeps THE MERCY); a party mate
+   *  who could kneel keeps it a down (THE GROUP LAW), and under 'mercy' so
+   *  does any player who could. */
   private covenantDue(seat: Seat): boolean {
     if (!this.downed(seat) || !this.endsTheRun(seat)) return false;
     if (this.partyHolds(seat)) return false; // THE GROUP LAW: a mate stands to kneel
-    if (VESSEL_CFG.covenantAt === 'mercy'
-      && this.world.seats.some(o => o !== seat && !o.keeper && !o.actor.dead && !o.actor.downed)) return false;
+    if (VESSEL_CFG.covenantAt === 'mercy' && this.world.seats.some(o => o !== seat && this.couldKneel(o, seat))) return false;
     return true;
   }
   private downed(seat: Seat): boolean {
@@ -447,25 +541,28 @@ export class VesselDesk {
     return stageOf(seat.meta.modeId, seat.meta.modeStage).onDeath === 'end';
   }
 
-  /** THE FRESH HERO'S END: the client hears `runEnd` (its run was never a save), the
-   *  seat leaves the world; nothing is recorded — a fresh hero owns no body worth a walk. */
+  /** THE FRESH HERO'S END: the client hears `runEnd` (its run was never a save) after
+   *  THE DEATH BEAT and the seat leaves the world; nothing is recorded: a fresh hero
+   *  owns no body worth a walk. */
   private freshFall(seat: Seat): void {
     const w = this.world;
-    this.send({ t: 'runEnd' }, seat.id);
     this.opts.log(`[shard] ${seat.id}'s fresh hero ${seat.meta.name} fell in ${w.zone.name}: the run ends, nothing to reclaim`);
     this.freshFalls++;
     this.corpses.leave(seat.id);
     this.accounts.delete(seat.id);
-    w.removeSeat(seat.id);
-    this.opts.onSeatGone?.(seat.id);
+    this.beginBeat(seat, true);
   }
 
-  /** THE DEATH COVENANT, whole, in one frame. `heard` = the client is still
-   *  connected to hear its word now (else the tombstone keeps it). */
+  /** THE DEATH COVENANT, decided whole in one frame. `heard` = the client is
+   *  still connected to hear its word: THE DEATH BEAT stands the body dead on
+   *  the wire first, then the word goes home and the seat leaves (endFall);
+   *  unheard (a leave while down), the seat goes at once and the tombstone
+   *  keeps the word. */
   private fall(seat: Seat, rec: VesselSeat, heard = true): void {
     const w = this.world, m = seat.meta, hero = w.seatHero(seat), zone = w.zone;
     const stage = stageOf(m.modeId, m.modeStage);
-    const kills = Math.max(0, w.kills - rec.killsAtJoin), zones = rec.zones.size;
+    // THE ACTING SEAT: the seat's own kills and places, never the server's.
+    const kills = w.seatKills(seat), zones = Math.max(1, rec.places.size);
     // 1. THE APPRAISAL: this seat's carried essence at the strict mortal
     //    exchange times the dying stage's rate (World.reckonRunEssence's
     //    fold, read for ONE seat), before anything leaves the world.
@@ -483,27 +580,49 @@ export class VesselDesk {
       accountId: rec.accountId, charId: rec.charId, name: m.name, classId: m.classDef.id, level: hero.level,
       zoneId: zone.id, zoneName: zone.name, pos, map: { x: zone.map.x, y: zone.map.y }, loot, diedAt,
     }) : null;
-    // 3. THE WORD HOME: where it lies and what the fall minted, then the run's
-    //    end (the client runs its mortal reckoning and wipes its run slot).
+    // 3. THE WORD it is owed: where it lies and what the fall minted.
     const note: ShardCorpseNote = {
       ...(body ? { id: body.id } : {}), charId: rec.charId, name: m.name, classId: m.classDef.id, level: hero.level,
       zoneId: zone.id, zoneName: zone.name, pos, pieces: body ? loot.items.length : 0, diedAt,
     };
-    if (heard) {
-      this.send({ t: 'corpse', note, reckoning }, seat.id);
-      this.send({ t: 'runEnd' }, seat.id);
-    }
     // 4. THE TOMBSTONE: this vessel never walks onto this shard again, and
     //    the word stays owed beside it (re-spoken at a stale re-upload).
     this.corpses.markFallen(rec.accountId, rec.charId, { note, reckoning });
-    // 5. The seat leaves the world; the body stands instead.
+    // 5. The record closes; the seat leaves the world after THE DEATH BEAT
+    //    (heard) or at once, and the body stands instead.
     this.vessels.delete(seat.id);
     this.corpses.leave(seat.id);
-    if (seat.home) { try { w.seatEject(seat, 'released'); } catch { /* the seat leaves either way */ } }
-    w.removeSeat(seat.id);
-    this.opts.onSeatGone?.(seat.id);
     this.falls++;
     this.opts.log(`[shard] ${seat.id}'s vessel ${m.name} fell in ${zone.name}${heard ? '' : ' (leaving while down)'}: `
       + `${body ? `${loot.items.length} pieces lie there` : 'nothing to reclaim'}, ${reckoning.minted} minted`);
+    this.beginBeat(seat, heard, { note, reckoning });
+  }
+
+  /** THE DEATH BEAT (THE ACTING SEAT): the fallen body stands DEAD and
+   *  untargetable on the wire for VESSEL_CFG.deathBeatSec, home in its own
+   *  flesh and beyond any revive or mercy (a dead seat is neither downed nor
+   *  struck again), so its player and every neighbour see the blow land;
+   *  then endFall. A fall no client will hear, or a beat of 0, ends at once. */
+  private beginBeat(seat: Seat, tell: boolean, word?: FallWord): void {
+    if (!tell || VESSEL_CFG.deathBeatSec <= 0) { this.endFall(seat, tell, word); return; }
+    if (seat.home) { try { this.world.seatEject(seat, 'released'); } catch { /* the hero falls in its own flesh either way */ } }
+    const a = seat.actor;
+    a.downed = false; a.dead = true; a.life = 0; a.casting = null; a.untargetable = true;
+    seat.reviveDwellBy.clear();
+    this.beats.set(seat.id, { until: this.clock + VESSEL_CFG.deathBeatSec, tell, ...(word ? { word } : {}) });
+  }
+
+  /** The fall's end: the word home (a recorded fall's `corpse`, then `runEnd`;
+   *  the client runs its reckoning and wipes its run slot), then the seat
+   *  leaves the world. */
+  private endFall(seat: Seat, tell: boolean, word?: FallWord): void {
+    const w = this.world;
+    if (tell) {
+      if (word) this.send({ t: 'corpse', note: word.note, reckoning: word.reckoning }, seat.id);
+      this.send({ t: 'runEnd' }, seat.id);
+    }
+    if (seat.home) { try { w.seatEject(seat, 'released'); } catch { /* the seat leaves either way */ } }
+    w.removeSeat(seat.id);
+    this.opts.onSeatGone?.(seat.id);
   }
 }

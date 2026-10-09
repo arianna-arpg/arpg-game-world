@@ -35,6 +35,8 @@ import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from 
 import type { PlayerId, PlayerInput } from '../src/net/intent';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { isAccountId } from '../src/meta/account';
+import { SHARD_REFUSAL, shardBuildStamp } from '../src/net/shardBuild';
+import { seatViewBody, seatViewFrame, seatViewSplit } from '../src/net/seatView';
 
 export const SHARD_WIRE_CFG = {
   /** Largest frame/message a client may send (its inputs and intents are tiny). */
@@ -188,10 +190,13 @@ export class ShardTransport implements NetTransport {
   private readonly zoneCbs = new Set<(z: ZoneMsg) => void>();
   private readonly joinCbs = new Set<(p: PeerInfo, join: ShardJoin) => void>();
   private readonly leaveCbs = new Set<(id: PlayerId) => void>();
-  private readonly dormantCbs = new Set<(id: PlayerId) => void>();
+  private readonly dormantCbs = new Set<(id: PlayerId, worded: boolean) => void>();
   private readonly resumeCbs = new Set<(id: PlayerId) => void>();
   private readonly sessionCbs = new Set<(m: SessionMsg, from: PlayerId) => void>();
   private readonly hostLostCbs = new Set<() => void>();
+  /** THE ACTING SEAT: a deliberate leave the host holds (a seat in combat)
+   *  goes DORMANT like a lost socket; null = every word leaves at once. */
+  leaveHolds: ((id: PlayerId) => boolean) | null = null;
   /** Log sink (the host wires its own). */
   log: (line: string) => void = line => console.log(line);
 
@@ -331,6 +336,14 @@ export class ShardTransport implements NetTransport {
   private dispatch(conn: Conn, m: WireMsg): void {
     if (!m || typeof m !== 'object') return;
     if (m.t === 'join' && !conn.seat) {
+      // THE BUILD STAMP (THE ACTING SEAT): another build is refused at the door,
+      // one word for its lobby, before any seat or roster row is made.
+      if (m.build !== shardBuildStamp()) {
+        this.write(conn, encodeText(JSON.stringify({ t: 'refused', word: SHARD_REFUSAL.build } satisfies WireMsg)), true);
+        this.log(`[shard] a join from another build (${cleanId(typeof m.build === 'string' ? m.build.replace(/\./g, '_') : '') || 'no stamp'}) was refused`);
+        this.drop(conn, 1008, 'another build', true);
+        return;
+      }
       // THE RECONNECT TOKEN: a join naming a DORMANT seat with its token takes that seat back.
       if (m.resume !== undefined && m.resume !== null && this.resume(conn, m.resume)) return;
       // THE DOOR CAPS: a dormant seat still holds its place in the world.
@@ -372,7 +385,8 @@ export class ShardTransport implements NetTransport {
    *  (THE SEED THREAD, the hearth's features, THE LAND DIGEST, THE RECONNECT TOKEN). */
   private welcome(conn: Conn): Uint8Array {
     return encodeText(JSON.stringify({ t: 'welcome', self: conn.seat!, peers: this.peerList, seed: this.seedSource() >>> 0, worldmass: this.worldmass,
-      features: this.features, ...(this.land ? { land: this.land } : {}), resume: { token: conn.token } } satisfies WireMsg));
+      features: this.features, ...(this.land ? { land: this.land } : {}), resume: { token: conn.token },
+      build: shardBuildStamp() } satisfies WireMsg)); // THE BUILD STAMP
   }
 
   /** THE RECONNECT TOKEN: re-bind a DORMANT seat to this connection when the
@@ -406,12 +420,16 @@ export class ShardTransport implements NetTransport {
     if (!gone) return;
     this.bySeat.delete(gone);
     this.pending.delete(gone); // the hand that held these is gone
-    if (!conn.leaving && !refused && !this.closing && this.dormantCbs.size) {
+    // THE ACTING SEAT: a word said mid-fight is no farewell. A seat the host
+    // holds (leaveHolds: hurt or hurting within VESSEL_CFG.combatLeaveSec)
+    // sleeps like a lost socket instead of leaving at once.
+    const lost = !conn.leaving || (this.leaveHolds?.(gone) ?? false);
+    if (lost && !refused && !this.closing && this.dormantCbs.size) {
       // THE DORMANT SEAT: no word and no refusal, so the connection was LOST.
       // The seat stays (its roster row and token kept, no pleave); the host's
       // clock decides (a host that never listens keeps the old law below).
       this.dormant.set(gone, conn.token);
-      this.dormantCbs.forEach(cb => this.guard(() => cb(gone)));
+      this.dormantCbs.forEach(cb => this.guard(() => cb(gone, conn.leaving)));
       return;
     }
     this.peerList = this.peerList.filter(p => p.id !== gone);
@@ -490,7 +508,16 @@ export class ShardTransport implements NetTransport {
   sendInput(seat: PlayerId, input: PlayerInput): void { this.pending.set(seat, input); } // the host's own seats
   drainInputs(): Map<PlayerId, PlayerInput> { const out = this.pending; this.pending = new Map(); return out; }
 
-  sendState(s: StateSnapshot): void { this.broadcast({ t: 'snap', snap: s }); }
+  /** THE ACTING SEAT (net/seatView.ts): a snapshot with nothing private is one
+   *  frame for everyone; otherwise its shared body encodes once and each
+   *  connection hears its own seat's HUD rows, its party's notices and an
+   *  eyecatch it may see, spliced in. */
+  sendState(s: StateSnapshot): void {
+    const view = seatViewSplit(s);
+    if (!view) { this.broadcast({ t: 'snap', snap: s }); return; }
+    const body = seatViewBody(view);
+    for (const [seat, c] of this.bySeat) this.write(c, encodeText(seatViewFrame(body, view, seat)));
+  }
   onState(cb: (s: StateSnapshot) => void): () => void { this.stateCbs.add(cb); return () => { this.stateCbs.delete(cb); }; }
   sendZone(z: ZoneMsg): void { this.broadcast({ t: 'zone', zone: z }, undefined, true); }
   /** Ship the zone to ONE seat (a joiner's first terrain, a re-seat). */
@@ -502,8 +529,9 @@ export class ShardTransport implements NetTransport {
   /** A join: the host-side roster row (with its accountId) + the vessel it carried. */
   onPeerJoin(cb: (p: PeerInfo, join: ShardJoin) => void): () => void { this.joinCbs.add(cb); return () => { this.joinCbs.delete(cb); }; }
   onPeerLeave(cb: (id: PlayerId) => void): () => void { this.leaveCbs.add(cb); return () => { this.leaveCbs.delete(cb); }; }
-  /** THE DORMANT SEAT: a seat's socket was lost without its word (the host starts its clock, or releases it at once). */
-  onPeerDormant(cb: (id: PlayerId) => void): () => void { this.dormantCbs.add(cb); return () => { this.dormantCbs.delete(cb); }; }
+  /** THE DORMANT SEAT: a seat's socket was lost without its word, or said it mid-fight (`worded`, THE
+   *  ACTING SEAT's leaveHolds); the host starts its clock, or releases it at once. */
+  onPeerDormant(cb: (id: PlayerId, worded: boolean) => void): () => void { this.dormantCbs.add(cb); return () => { this.dormantCbs.delete(cb); }; }
   /** THE RECONNECT TOKEN: a dormant seat was re-bound to a new connection (the host stops its clock). */
   onPeerResume(cb: (id: PlayerId) => void): () => void { this.resumeCbs.add(cb); return () => { this.resumeCbs.delete(cb); }; }
 

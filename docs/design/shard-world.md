@@ -621,6 +621,15 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
     grouped member's death loses the run as a mortal's does. BUILD with THE
     PARTY: the covenant reads the seat's party — ungrouped: at once; grouped:
     only when no member of its party stands.
+    **THE ACTING SEAT (2026-10-09):** the group's hold reads REACH: a down is
+    held only while a party mate stands within the near radius
+    (`COOP_SCALING.shareRadius`, the killer's due's own reach), so a mate a
+    continent away never keeps a body from its covenant; THE MERCY waits on
+    party mates alone (a stranger near never withholds it) and never raises a
+    body whose stage ends the run; and the fall is decided the tick it lands
+    while the body stands dead and untargetable on the wire for
+    `VESSEL_CFG.deathBeatSec` before the word, so the killing blow is seen
+    (`balance/probe_shardseat.ts`).
 15. **Roads that move the whole party** (caravan, town portal, caves,
     classic portals) until per-seat travel exists — A: move everyone.
     B: move only when every connected player gathers, shown as a muster

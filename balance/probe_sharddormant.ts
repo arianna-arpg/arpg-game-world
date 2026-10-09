@@ -41,6 +41,7 @@ import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import { VESSEL_CFG } from '../server/vessel';
 import { WsTransport, WS_TRANSPORT_CFG, shardResumeFor, type ShardResume } from '../src/net/ws';
 import { WS_OP, decodeFrames, encodeFrame } from '../src/net/wsframe';
+import { shardBuildStamp } from '../src/net/shardBuild';
 import type { StateSnapshot } from '../src/net/snapshot';
 import type { SessionMsg } from '../src/net/transport';
 import { NullInput, type PlayerInput } from '../src/net/intent';
@@ -158,7 +159,7 @@ async function rawJoin(name: string): Promise<Raw> {
       if (m.t === 'snap') raw.snaps++; else raw.msgs.push(m);
     }
   });
-  raw.send({ t: 'join', classId: 'rogue', name });
+  raw.send({ t: 'join', classId: 'rogue', name, build: shardBuildStamp() }); // THE BUILD STAMP: an honest client says its build
   await waitMs(() => raw.msgs.some(m => m.t === 'welcome'));
   const welcome = raw.msgs.find(m => m.t === 'welcome') as { self?: string; resume?: { token?: string } } | undefined;
   raw.self = welcome?.self ?? ''; raw.token = welcome?.resume?.token ?? '';
@@ -398,12 +399,14 @@ host.net.onPeerLeave(id => { released.set(id, host.world.time); });
     check('F dormant: the mortal is in reach of any blow (no grace, no ward)', !heroM.untargetable && !heroM.invulnerable && !heroM.dead);
     const falls0 = host.vessels.falls;
     host.world.kill(heroM);
-    await waitFor(() => host.vessels.falls > falls0 && !host.net.isDormant(mw.self) && seen.leaves.includes(mw.self), host, 60);
+    // (THE DEATH BEAT: the fall is decided at once, the body stands dead VESSEL_CFG.deathBeatSec, then the seat goes.)
+    await waitFor(() => host.vessels.falls > falls0 && !host.net.isDormant(mw.self) && seen.leaves.includes(mw.self), host,
+      Math.ceil(VESSEL_CFG.deathBeatSec * SHARD_CFG.tickHz) + 60);
     const bodies = host.corpses.forAccount(acctM.accountId);
     check('F covenant: struck down while dormant, it falls as any mortal falls (its body and gear, the tombstone)',
       host.vessels.falls === falls0 + 1 && bodies.length === 1 && bodies[0].loot.items.length === 1
       && host.corpses.hasFallen(acctM.accountId, VM.charId!), `${bodies.length} bodies`);
-    check('F covenant: its dormancy ends with it (the seat gone, the peers hear pleave at once)',
+    check('F covenant: its dormancy ends with it (the seat gone after THE DEATH BEAT, the peers hear pleave then)',
       !seatOf(mw.self) && !host.net.isDormant(mw.self) && seen.leaves.includes(mw.self));
     const cm2 = new WsTransport();
     const order: string[] = [];

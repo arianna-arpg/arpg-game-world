@@ -16,6 +16,7 @@
 
 import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from './transport';
 import type { PlayerId, PlayerInput } from './intent';
+import { SHARD_REFUSAL, shardBuildStamp } from './shardBuild';
 
 /** THE GRAMMAR — one JSON message per frame, both directions. */
 export type WireMsg =
@@ -27,10 +28,16 @@ export type WireMsg =
       /** THE RECONNECT TOKEN (card 16 B, docs/engine/shard.md "The pieces"):
        *  a dropped session's seat and the token its welcome carried; a match
        *  on a DORMANT seat re-binds this connection to it. */
-      resume?: ShardResume }
+      resume?: ShardResume;
+      /** THE BUILD STAMP (net/shardBuild.ts): the shard refuses another build at the door. */
+      build?: string }
   | { t: 'welcome'; self: PlayerId; peers: PeerInfo[]; seed: number; worldmass?: boolean; features?: string[]; land?: string;
       /** THE RECONNECT TOKEN the shard minted for this seat at this join (a resume mints a fresh one). */
-      resume?: { token: string } }
+      resume?: { token: string };
+      /** THE BUILD STAMP: the build the shard runs (a client refuses another, or none). */
+      build?: string }
+  /** THE BUILD STAMP's door: the join was refused before any seat was made (one word for the lobby). */
+  | { t: 'refused'; word: string }
   | { t: 'input'; seat: PlayerId; input: PlayerInput }
   | { t: 'snap'; snap: StateSnapshot }
   | { t: 'zone'; zone: ZoneMsg }
@@ -155,11 +162,18 @@ export class WsTransport implements NetTransport {
       ws.onopen = (): void => {
         ws.send(JSON.stringify({ t: 'join', classId: info.classId, name: info.name, cosmeticLoadout: info.cosmeticLoadout,
           ...(info.accountId ? { accountId: info.accountId } : {}), ...(vessel ? { vessel } : {}),
-          ...(resume ? { resume: { seat: resume.seat, token: resume.token } } : {}) } satisfies WireMsg)); // THE RECONNECT TOKEN
+          ...(resume ? { resume: { seat: resume.seat, token: resume.token } } : {}), // THE RECONNECT TOKEN
+          build: shardBuildStamp() } satisfies WireMsg)); // THE BUILD STAMP
       };
       ws.onmessage = (ev): void => {
         let m: WireMsg;
         try { m = JSON.parse(String(ev.data)) as WireMsg; } catch { return; }
+        if (m.t === 'refused' && !this.welcomed) { fail(typeof m.word === 'string' ? m.word : SHARD_REFUSAL.build); return; } // THE BUILD STAMP's door
+        if (m.t === 'welcome' && m.build !== shardBuildStamp()) { // THE BUILD STAMP: another build's world (or an older shard's)
+          fail(SHARD_REFUSAL.build);
+          try { ws.close(1000, 'another build'); } catch { /* already closed */ }
+          return;
+        }
         if (m.t === 'welcome') {
           this.self = m.self; this.peerList = m.peers; this.welcomed = true;
           // THE REMEMBERED SESSION: this seat and its token outlive a lost host

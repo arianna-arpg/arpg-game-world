@@ -144,6 +144,10 @@ export interface NoticeEntry {
   size: number;
   channel: string;
   bornAt: number;
+  /** THE ACTING SEAT (a hosted world): the seat ids that hear this line (the
+   *  acting seat's party); absent = every player. The shard's wire ships the
+   *  line to them alone and strips the list (net/seatView.ts). */
+  to?: string[];
 }
 
 export type NoticeAnchorId = 'top' | 'topLeft' | 'topRight' | 'bottom';

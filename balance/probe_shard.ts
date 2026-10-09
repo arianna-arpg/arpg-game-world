@@ -66,6 +66,8 @@ import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import type { StateSnapshot, ZoneMsg } from '../src/net/snapshot';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { type PlayerInput } from '../src/net/intent';
+import { shardBuildStamp } from '../src/net/shardBuild';
+import { VESSEL_CFG } from '../server/vessel';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -249,7 +251,7 @@ check('C wire: snapshots ride the wire rate (exactly 20 per 60 ticks)', snaps - 
   const faults0 = host.faults;
   const raw = new WebSocket(url);
   await new Promise<void>((res, rej) => { raw.onopen = () => res(); raw.onerror = () => rej(new Error('raw open failed')); });
-  raw.send(JSON.stringify({ t: 'join', classId: 'warrior', name: 'Raw' }));
+  raw.send(JSON.stringify({ t: 'join', classId: 'warrior', name: 'Raw', build: shardBuildStamp() })); // THE BUILD STAMP: an honest client says its build
   await waitFor(() => host.world.seats.length === 3, host, 50);
   check('E hostile: a raw joiner is seated as p2', host.world.seats.some(s => s.id === 'p2'));
   const kx = host.keeper.actor.pos.x, p1x = p1.actor.pos.x;
@@ -280,7 +282,7 @@ check('C wire: snapshots ride the wire rate (exactly 20 per 60 ticks)', snaps - 
   const burstFaults = host.faults;
   const raw2 = new WebSocket(url);
   await new Promise<void>((res, rej) => { raw2.onopen = () => res(); raw2.onerror = () => rej(new Error('raw2 open failed')); });
-  raw2.send(JSON.stringify({ t: 'join', classId: 'warrior', name: 'Burst' }));
+  raw2.send(JSON.stringify({ t: 'join', classId: 'warrior', name: 'Burst', build: shardBuildStamp() }));
   await waitFor(() => host.world.seats.length === 3, host, 50);
   for (let i = 0; i < 500; i++) raw2.send(JSON.stringify({ t: 'session', msg: { t: 'action', action: i % 2 ? null : { t: 'sortBag', mode: 'kind' } } }));
   await yieldIO(); await yieldIO();
@@ -390,8 +392,12 @@ check('C wire: snapshots ride the wire rate (exactly 20 per 60 ticks)', snaps - 
   const heard: string[] = []; mortal.onSession(m => { heard.push(m.t); });
   host.world.kill(mh);
   await runTicks(host, 3);
-  check('H covenant: a fresh hero\'s lethal down ends it the same tick — runEnd, the seat gone, the world never wipes',
-    !host.world.seats.some(s => s.id === mw.self) && heard.includes('runEnd') && host.vessels.freshFalls >= 1 && !host.world.gameOver, `heard ${heard.join(',') || '(nothing)'}`);
+  // THE DEATH BEAT (THE ACTING SEAT): the end is decided that tick; the body stands dead on the wire for the beat, then the word.
+  check('H covenant: a fresh hero\'s lethal down is its end the same tick, standing dead through THE DEATH BEAT, the world never wipes',
+    host.vessels.freshFalls >= 1 && mh.dead && !mh.downed && mh.untargetable && !heard.includes('runEnd') && !host.world.gameOver);
+  await runTicks(host, Math.ceil(VESSEL_CFG.deathBeatSec * SHARD_CFG.tickHz) + 2);
+  check('H covenant: when the beat ends, runEnd and the seat gone',
+    !host.world.seats.some(s => s.id === mw.self) && heard.includes('runEnd') && !host.world.gameOver, `heard ${heard.join(',') || '(nothing)'}`);
   mortal.leave();
   await waitFor(() => host.world.seats.length === 2, host, 60);
   // THE MERCY for the Immortal: a contract that survives death keeps the keeper's clock.

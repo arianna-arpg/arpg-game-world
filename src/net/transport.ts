@@ -72,7 +72,8 @@ export type SessionMsg =
   //            plus the reclaims it completed since the last row.
   //   leaving  (seat→shard):  the farewell: mirror me before my socket closes;
   //            and THE DELIBERATE LEAVE: that close ends my seat at once,
-  //            never dormant (card 16 B: a close without it leaves the hero).
+  //            never dormant (card 16 B: a close without it leaves the hero),
+  //            unless said mid-fight (THE ACTING SEAT: it sleeps like a lost socket).
   | { t: 'heroSave'; save: import('../meta/character').CharacterSave }
   | { t: 'corpse'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning }
   | { t: 'corpses'; zoneId: string; bodies: import('./vesselWire').ShardBodyRow[]; reclaimed?: number }
@@ -81,7 +82,13 @@ export type SessionMsg =
   // party desk (client→host), an invite landing on its target, and a refusal's one line.
   | { t: 'party'; op: import('./partyWire').PartyOp; seat?: PlayerId }
   | { t: 'partyInvite'; from: PlayerId; name: string; party: string }
-  | { t: 'partyWord'; word: string };
+  | { t: 'partyWord'; word: string }
+  // THE ACTING SEAT (a refused hero, shard→a seat): the shard would not seat the
+  // vessel this join carried, and never seats a fresh hero in its place. `mu`:
+  // the hero cannot travel, so the client goes back to Mu bound for this world
+  // to wake one that can; absent, the word is a door (the hero already walks
+  // here) and the client goes home with it.
+  | { t: 'refused'; word: string; mu?: boolean };
 
 /** THE SEED THREAD — a client's World must be minted from the HOST's run seed,
  *  never one of its own. `manifest.seed` drives the shared map (the starter web

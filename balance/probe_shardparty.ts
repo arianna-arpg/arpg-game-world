@@ -12,6 +12,7 @@
 //      eldest member, a seat gone from the world gone from its party.
 import { ShardHost, SHARD_CFG } from '../server/shardHost';
 import { PARTY_CFG } from '../server/party';
+import { VESSEL_CFG } from '../server/vessel';
 import { WsTransport } from '../src/net/ws';
 import { COOP_SCALING } from '../src/data/coop';
 import type { SessionMsg } from '../src/net/transport';
@@ -138,13 +139,22 @@ check('A keeper: the warden is never seated in a party', host.parties.invite(A.i
   await runTicks(host, 3);
   check('D group: a grouped hero\'s lethal down is a DOWN while a mate stands — the seat stays, no runEnd',
     a.actor.downed && !!seatOf(A.id) && !A.heard.some(m => m.t === 'runEnd') && host.vessels.freshFalls === 0);
+  // THE DEATH BEAT (THE ACTING SEAT): a fall is decided the tick it lands; the body stands
+  // dead on the wire for VESSEL_CFG.deathBeatSec, then the word goes home and the seat leaves.
+  // (B is struck before the beats run out: an idle mate beside a down revives it by dwell.)
+  const beatTicks = Math.ceil(VESSEL_CFG.deathBeatSec * SHARD_CFG.tickHz) + 10;
   w.kill(c.actor);
-  await waitFor(() => !seatOf(C.id), host, 10);
-  check('D single: the ungrouped hero\'s down ends it at once (card 14 C)', !seatOf(C.id) && C.heard.some(m => m.t === 'runEnd') && host.vessels.freshFalls === 1);
+  await runTicks(host, 2);
+  check('D single: the ungrouped hero\'s down is its end at once (card 14 C), standing dead through the beat',
+    host.vessels.freshFalls === 1 && c.actor.dead && !C.heard.some(m => m.t === 'runEnd'));
   w.kill(b.actor);
-  await waitFor(() => !seatOf(A.id) && !seatOf(B.id), host, 10);
+  await runTicks(host, 2);
   check('D wipe: the last mate\'s down is THE PARTY WIPE — every downed member falls that tick',
-    !seatOf(A.id) && !seatOf(B.id) && A.heard.some(m => m.t === 'runEnd') && B.heard.some(m => m.t === 'runEnd') && host.vessels.freshFalls === 3);
+    a.actor.dead && b.actor.dead && host.vessels.freshFalls === 3 && !A.heard.some(m => m.t === 'runEnd'));
+  await waitFor(() => !seatOf(A.id) && !seatOf(B.id) && !seatOf(C.id), host, beatTicks);
+  check('D single: the ungrouped hero\'s down ends it (card 14 C): runEnd when the beat ends, the seat gone', !seatOf(C.id) && C.heard.some(m => m.t === 'runEnd'));
+  check('D wipe: when the beat ends every member hears runEnd and leaves',
+    !seatOf(A.id) && !seatOf(B.id) && A.heard.some(m => m.t === 'runEnd') && B.heard.some(m => m.t === 'runEnd'));
   check('D wipe: the fallen are gone from the desk', !host.parties.partyOf(A.id) && !host.parties.partyOf(B.id));
 }
 

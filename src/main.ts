@@ -51,6 +51,7 @@ import type { PlayerInput, MetaAction } from './net/intent';
 import { wireSeed } from './net/transport';
 import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from './net/transport';
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
+import { applyOwnSeatRows, stampSeatRows } from './net/seatView';
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
 import { WsTransport, defaultShardUrl, shardResumeFor } from './net/ws';
@@ -2290,7 +2291,9 @@ function hostTail(dt: number): void {
 
 /** Host: serialize the world and broadcast it to every connected client. */
 function broadcastSnapshot(): void {
-  net.sendState(serializeSnapshot(world, ++snapTick));
+  const snap = serializeSnapshot(world, ++snapTick);
+  stampSeatRows(world, snap); // THE ACTING SEAT: each guest's own HUD rows ride its own entry (net/seatView.ts)
+  net.sendState(snap);
   // Per-seat META rides the snapshot only when its dirty flag is set; once a
   // snapshot carries it, the change is on the wire — clear so we don't re-ship it.
   world.metaDirty.clear();
@@ -2305,7 +2308,11 @@ function broadcastSnapshot(): void {
 function clientApplyAndRender(dt: number): void {
   snapAccum += dt;
   const alpha = Math.min(1, snapAccum / SNAP_INTERVAL);
-  if (latestSnapshot) applySnapshot(world, latestSnapshot, prevSnapshot, alpha);
+  if (latestSnapshot) {
+    applySnapshot(world, latestSnapshot, prevSnapshot, alpha);
+    applyOwnSeatRows(world, latestSnapshot); // THE ACTING SEAT: my refusal note over my head, my low-life surge
+  }
+  clientDeathBeat(dt); // THE ACTING SEAT: the death beat's presentation (hosted worlds)
   // PREDICTION: override the own hero's interpolated position with the locally
   // predicted one (anchor to the host's ack + replay unacked input) for responsive
   // movement. Other actors keep snapshot interpolation.
@@ -2454,6 +2461,8 @@ function onSessionMsg(msg: SessionMsg, from: string): void {
     }
   } else if (msg.t === 'runEnd') {
     onClientRunEnd();
+  } else if (msg.t === 'refused') {
+    onClientRefused(typeof msg.word === 'string' ? msg.word : '', msg.mu === true); // THE ACTING SEAT: a refused hero
   } else if (msg.t === 'partyInvite') {
     // THE PARTY: an invitation lands (one standing per inviter); the panel shows it until answered.
     if (!partyInvites.some(i => i.from === msg.from)) partyInvites.push({ from: msg.from, name: msg.name, party: msg.party });
@@ -2509,7 +2518,10 @@ function flushRejoins(): void {
 /** CLIENT: the host's run ended — leave the (now-stale) render shell and offer a
  *  fresh class pick; choosing one asks the host to re-seat us in its next run. */
 function onClientRunEnd(): void {
-  running = false;          // stop rendering the dead run
+  // THE ACTING SEAT (the death beat): a hosted world's fall plays its presentation
+  // from the first dead frame; the rendering runs on, frozen, until it completes.
+  const presenting = net instanceof WsTransport && !!world.deathPresentation;
+  if (!presenting) running = false; // stop rendering the dead run
   unsubscribeFromHost();    // drop the dead run's snapshot/zone subs + stale interp state
   pendingRejoinClass = null;
   // THE LOGIN THROUGH MU (card 22): on a hosted world a fallen player reads the
@@ -2519,7 +2531,9 @@ function onClientRunEnd(): void {
     const url = lastShardUrl;
     const toMu = (): void => { resetToLocal(); pendingServer = url ? { url } : null; startMu(); };
     const fell = shardVessel?.takeDeath(net, world);
-    if (fell) ui.showDeath(fell.reck, toMu); else toMu();
+    const open = (revealSec = 0): void => { if (fell) ui.showDeath(fell.reck, toMu, revealSec); else toMu(); };
+    if (presenting) clientDeath = { open, opened: false }; // clientDeathBeat opens it at the presentation's reveal
+    else open();
     return;
   }
   ui.resetClassRoster();    // deal a fresh class hand for the rejoin pick
@@ -2533,6 +2547,38 @@ function onClientRunEnd(): void {
   // then picks the next hero; its body waits where it fell.
   const fell = shardVessel?.takeDeath(net, world);
   if (fell) ui.showDeath(fell.reck, pickNextHero); else pickNextHero();
+}
+
+/** THE ACTING SEAT (the death beat, docs/render/player-death.md): on a hosted world
+ *  a fallen hero's body stands dead on the wire for VESSEL_CFG.deathBeatSec before
+ *  `runEnd`, so the blow is seen. The presentation starts at the first frame our own
+ *  seat reads dead, as in single player; `runEnd` hands onClientRunEnd's screen in
+ *  (clientDeath), which opens at the presentation's reveal (at once if past it), and
+ *  the frozen world stops rendering when the presentation completes. */
+let clientDeath: { open: (revealSec?: number) => void; opened: boolean } | null = null;
+function clientDeathBeat(dt: number): void {
+  if (!(net instanceof WsTransport) || !DEATH_PRESENTATION.enabled) return;
+  if (!world.deathPresentation && world.player.dead && latestSnapshot?.seats[world.clientSeatId]?.dead) world.deathPresentation = { elapsed: 0 };
+  const dp = world.deathPresentation;
+  if (!dp) return;
+  dp.elapsed += dt;
+  const pose = deathPresentationPose(dp.elapsed);
+  world.screenFade = pose.fade;
+  if (clientDeath && pose.reveal && !clientDeath.opened) { clientDeath.opened = true; clientDeath.open(DEATH_PRESENTATION.revealSec); }
+  if (clientDeath?.opened && pose.complete) { clientDeath = null; running = false; }
+}
+
+/** CLIENT (THE ACTING SEAT, a refused hero): the shard would not seat the vessel we
+ *  carried, and never seats a fresh hero in its place. A hero that cannot travel
+ *  drifts back into Mu bound for the same world (wake another and it travels); a
+ *  door word (this hero already walks there) lands on the start menu. */
+function onClientRefused(word: string, mu: boolean): void {
+  if (!(net instanceof WsTransport)) return;
+  running = false;
+  if (!mu) { toStartMenu(word || 'the world would not seat this hero'); return; }
+  const url = lastShardUrl;
+  resetToLocal(); pendingServer = url ? { url } : null; startMu();
+  if (word) world.text(world.player.pos, word, '#d8b87a', 13, undefined, 6);
 }
 
 /** CLIENT: the host re-seated us in its new run — rebuild our render shell and
@@ -2714,6 +2760,7 @@ function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, w
   inputSeq = 0; predictHistory.length = 0; predZoneId = '';
   ui.resetRunView();        // the client's shell world is new too — reset the view state
   deathShown = false;
+  clientDeath = null; // THE ACTING SEAT: a new shell owes no screen to a death beat of the last one
   running = true;
   ui.hideAll();
 }

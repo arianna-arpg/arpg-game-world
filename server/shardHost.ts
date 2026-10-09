@@ -40,6 +40,7 @@ import { updateAI } from '../src/engine/ai';
 import { CLASSES, type ClassDef } from '../src/data/classes';
 import { rollSeed } from '../src/core/rng';
 import { serializeSnapshot, serializeZone } from '../src/net/snapshot';
+import { stampSeatRows } from '../src/net/seatView';
 import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction, PlayerInput } from '../src/net/intent';
 import { massDigest } from '../src/worldmass/random';
@@ -293,7 +294,8 @@ export class ShardHost {
       this.parties.dropSeat(id); // THE PARTY: out of its party and its invites
       this.world.settleNearScale(true); // keeperSeat: THE NEAR LAW re-read where every body stands after the leave (and clamped for the save)
     });
-    this.net.onPeerDormant(id => this.onDormant(id)); // THE DORMANT SEAT: a lost socket's hero stays, on a clock
+    this.net.onPeerDormant((id, worded) => this.onDormant(id, worded)); // THE DORMANT SEAT: a lost socket's hero stays, on a clock
+    this.net.leaveHolds = id => this.vessels.inCombat(id); // THE ACTING SEAT: a word said mid-fight sleeps like a lost socket
     this.net.onPeerResume(id => this.onResume(id)); // THE RECONNECT TOKEN: the clock stops, the seat's world re-ships
     this.net.onSession((m, from) => this.onSession(m, from));
   }
@@ -396,12 +398,12 @@ export class ShardHost {
    *  SEAT (still under THE SPAWN GRACE: unseen by foes, it never willed a
    *  step) has nothing to escape and leaves at once, and a seat with no body
    *  left (a fall took it) has nothing to wake. */
-  private onDormant(id: string): void {
+  private onDormant(id: string, worded = false): void {
     const seat = this.world.seats.find(s => s.id === id && !s.keeper);
     if (!seat || this.graces.has(id)) { this.net.release(id); return; }
     this.dormancy.set(id, this.world.time + SHARD_CFG.dormantSec);
     this.corpses.sleep(id); // a body with no hand reclaims nothing
-    this.log(`[shard] ${id} lost its connection; its hero lies dormant ${SHARD_CFG.dormantSec}s (${this.net.connectionCount()} connected)`);
+    this.log(`[shard] ${id} ${worded ? 'left mid-fight' : 'lost its connection'}; its hero lies dormant ${SHARD_CFG.dormantSec}s (${this.net.connectionCount()} connected)`);
   }
 
   /** THE RECONNECT TOKEN: a dormant seat's player is back on a new
@@ -454,7 +456,9 @@ export class ShardHost {
       // CORPSE RETURNS: a fallen vessel's player wakes beside its own dead).
       this.onJoin({ id: from, name: peer?.name ?? 'Joiner', classId: msg.classId, isHost: false, cosmeticLoadout: peer?.cosmeticLoadout, accountId: this.vessels.accountOf(from) });
     } else if (msg.t === 'leaving') {
-      this.vessels.requestMirror(from); // THE FAREWELL: the vessel's last mirror before its socket closes
+      // THE FAREWELL: the vessel's last mirror before its socket closes. THE ACTING
+      // SEAT: never mid-fight (that leave sleeps like a lost socket; the beat's mirror stands).
+      if (!this.vessels.inCombat(from)) this.vessels.requestMirror(from);
     } else if (msg.t === 'party') {
       this.onPartyWord(msg, from);
     }
@@ -579,7 +583,9 @@ export class ShardHost {
       // THE WIRE RATE on integer ticks (60 / 20 = every 3rd): a reset timer
       // under a fixed step fired every 4th tick — 15 Hz wearing a 20 Hz name.
       if (this.ticks % Math.max(1, Math.round(SHARD_CFG.tickHz / SHARD_CFG.stateHz)) === 0) {
-        this.net.sendState(serializeSnapshot(w, ++this.snapTick));
+        const snap = serializeSnapshot(w, ++this.snapTick);
+        stampSeatRows(w, snap); // THE ACTING SEAT: each seat's own rows and audiences (the transport ships each to its own)
+        this.net.sendState(snap);
         w.metaDirty.clear();
       }
     }

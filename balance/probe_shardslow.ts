@@ -72,7 +72,7 @@ import { autoPlace } from '../src/engine/inventory';
 import type { ItemCategory } from '../src/engine/items';
 import type { Seat } from '../src/engine/world';
 import {
-  deserializeAccount, ensureAccountId, isAccountId, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED,
+  deserializeAccount, ensureAccountId, isAccountId, LEDGER_ACCOUNT_DEATHS, LEDGER_CORPSES_RECLAIMED, LEDGER_FLASK_LESSON,
   serializeAccount, type Account,
 } from '../src/meta/account';
 import { loadAccount, loadAccountAsync } from '../src/meta/persistence';
@@ -412,17 +412,21 @@ await waitFor(() => !!seatOf(cw.self), vh, 60);
   check('M vessel: the grafted hero stands whole', Number.isFinite(hero.maxLife()) && hero.life === hero.maxLife() && !hero.downed);
 }
 {
+  // THE ACTING SEAT (a refused hero): a vessel the shard will not seat is never seated
+  // fresh in its place (card 22: a fresh hero is never a shard's hero).
   const bad = new WsTransport();
+  const badRows = rowsOf(bad);
   const bw = await bad.connect(vurl, { name: 'Broken', classId: 'rogue', accountId: claimedAccount().accountId },
     { ...V, charId: 'c-broken', knownSkills: 'nope' } as unknown as CharacterSave);
   const dup = new WsTransport();
+  const dupRows = rowsOf(dup);
   const dw = await dup.connect(vurl, { name: 'Twin', classId: 'warrior', accountId: acctA.accountId }, V);
-  await waitFor(() => !!seatOf(bw.self) && !!seatOf(dw.self), vh, 60);
-  const sb = seatOf(bw.self)!, sd = seatOf(dw.self)!;
-  check('M fallback: a vessel that fails the judgment joins as the fresh card hero',
-    sb.meta.classDef.id === 'rogue' && vh.world.seatHero(sb).level === 1 && sb.meta.items.length === 0 && !vh.vessels.vesselOf(bw.self));
-  check('M fallback: a vessel already walking the world is never seated twice',
-    !vh.vessels.vesselOf(dw.self) && vh.world.seatHero(sd).level === 1);
+  await waitFor(() => badRows.some(m => m.t === 'refused') && dupRows.some(m => m.t === 'refused'), vh, 60);
+  const br = badRows.find(m => m.t === 'refused'), dr = dupRows.find(m => m.t === 'refused');
+  check('M refused: a vessel that fails the judgment is never seated fresh: its client goes back to Mu',
+    br?.t === 'refused' && br.mu === true && !seatOf(bw.self) && !vh.vessels.vesselOf(bw.self), br?.t === 'refused' ? br.word : 'no word');
+  check('M refused: a vessel already walking the world is never seated twice (the door word, no seat)',
+    dr?.t === 'refused' && !dr.mu && !seatOf(dw.self) && !vh.vessels.vesselOf(dw.self), dr?.t === 'refused' ? dr.word : 'no word');
   bad.leave(); dup.leave();
   await waitFor(() => !seatOf(bw.self) && !seatOf(dw.self), vh, 60);
 }
@@ -436,7 +440,10 @@ await waitFor(() => !!seatOf(cw.self), vh, 60);
     !!slot && slot.world === undefined && slot.charId === V.charId && slot.level === 12 && uids(slot.items ?? []) === vBag);
   check('M mirror: it went to that seat alone', cvRows.some(m => m.t === 'heroSave') && !watcherRows.some(m => m.t === 'heroSave'));
   check("M mirror: the pass-through stays the vessel's own, never the shard's",
-    slot?.ledger?.probe_counter === 7 && Object.keys(slot?.ledger ?? {}).length === 1 && slot?.expedition?.seed === 0x1234);
+    // (+ THE ACTING SEAT's traveller's flasks: the gift a virgin vessel was dealt is stamped on its OWN ledger)
+    slot?.ledger?.probe_counter === 7 && JSON.stringify(Object.keys(slot?.ledger ?? {}).sort())
+      === JSON.stringify(['mireille_flasks_given', LEDGER_FLASK_LESSON, 'probe_counter'].sort()) && slot?.expedition?.seed === 0x1234,
+    JSON.stringify(slot?.ledger));
   // THE GUARD: once another run owns the slot, a late mirror never lands.
   const parked = new WsTransport();
   const guarded = new ShardVesselLink(parked, acctA, V, () => null, { mayWrite: () => false });
@@ -475,7 +482,11 @@ const deathSpot = vh.world.findFreeSpot(vec(wp.x + 180, wp.y + 160), 16);
   hero.pos.x = deathSpot.x; hero.pos.y = deathSpot.y;
   await runTicks(vh, 5);
   vh.world.kill(hero);
-  await runTicks(vh, 30);
+  await runTicks(vh, 3);
+  // THE ACTING SEAT (THE DEATH BEAT): the fall is decided at once; the body stands dead for the beat.
+  check('N covenant: the fall is decided the tick it lands; the body stands dead and untargetable through THE DEATH BEAT',
+    vh.vessels.falls === 1 && !!seatOf(c2.self) && hero.dead && hero.untargetable && !cv2Rows.some(m => m.t === 'runEnd'));
+  await runTicks(vh, Math.ceil(VESSEL_CFG.deathBeatSec * SHARD_CFG.tickHz) + 10);
   // Card 14 C (her ruling 2026-10-08): the down IS the death, however many stand to kneel.
   check('N covenant: a mortal vessel\'s lethal down falls it at once, even while another player stands to kneel (card 14 C)',
     !seatOf(c2.self) && vh.vessels.falls === 1 && vh.corpses.forAccount(acctA.accountId).length === 1);
@@ -537,8 +548,8 @@ await waitFor(() => vh.vessels.falls === 1, vh, 120);
   const hero = vh.world.seatHero(seatOf(fw.self)!);
   const fallsBefore = vh.vessels.falls;
   vh.world.kill(hero);
-  await waitFor(() => !seatOf(fw.self), vh, 10);
-  check('N fresh: a fresh hero\'s lethal down ends it the same tick — runEnd, the seat gone, no body (card 14 C)',
+  await waitFor(() => !seatOf(fw.self), vh, Math.ceil(VESSEL_CFG.deathBeatSec * SHARD_CFG.tickHz) + 10); // THE DEATH BEAT first
+  check('N fresh: a fresh hero\'s lethal down ends it (after THE DEATH BEAT): runEnd, the seat gone, no body (card 14 C)',
     !seatOf(fw.self) && cfRows.some(m => m.t === 'runEnd') && !cfRows.some(m => m.t === 'corpse') && vh.vessels.freshFalls === 1
     && vh.vessels.falls === fallsBefore && vh.corpses.forAccount(acctF.accountId).length === 0, cfRows.map(m => m.t).join(' → ') || '(nothing heard)');
   cf.leave();
@@ -574,7 +585,7 @@ await waitFor(() => vh.vessels.falls === 1, vh, 120);
   heroW.pos.x = spotW.x; heroW.pos.y = spotW.y;
   const fallsW = vh.vessels.falls;
   vh.world.kill(heroW);
-  await waitFor(() => vh.vessels.falls === fallsW + 1, vh, 60);
+  await waitFor(() => vh.vessels.falls === fallsW + 1 && !seatOf(ww.self), vh, Math.ceil(VESSEL_CFG.deathBeatSec * SHARD_CFG.tickHz) + 60); // THE DEATH BEAT first
   check('N tombstone\'s word: beside a standing ally the mortal vessel still falls at once (card 14 C)',
     !seatOf(ww.self) && vh.vessels.falls === fallsW + 1 && vh.corpses.forAccount(acctW.accountId).length === 1);
   const fallenW = onDisk().fallen.find(f => f.charId === W.charId);
