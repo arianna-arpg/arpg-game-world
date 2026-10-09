@@ -295,6 +295,8 @@ individual `this.player` reads only where a per-seat read is the honest one
 (dwells, travel, warband standoff), never by removing the seat.
 
 ### 3.3 THE SIM UNIT (M1)
+*The implementation plan, anchored to the tree at 4b2ee251 with every world-level field classified, the hand-off order, the road catalog, the wire per unit, the probes and four build waves, is docs/design/shard-m1-plan.md (2026-10-09). Where that plan and this sketch differ, the plan is the law: THE PIN replaces the one-time alias, every unit stands its own warden, roads emit TICKETS the host executes after all units tick.*
+
 One `World` per live zone. The keeper's World owns the chart; every other
 unit ALIASES the keeper's world-level objects by reference (`zoneMap`,
 `caveMap`, `visited`, `surveyed`, `discoveredWaypoints`, `zoneMemory`, `sim`,
@@ -859,8 +861,8 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 
 | # | Finding (CONFIRMED unless noted) | Wave |
 |---|---|---|
-| 1 | Rubber-banding BY CONSTRUCTION: `PlayerInput` carries no dt, the transport merges one input per tick, `applyInputs` moves one tick per tick, so a 30 fps client walks at half speed on the server and snaps back every snapshot; stalls merge N inputs into one tick. | W1 THE HONEST INPUT |
-| 2 | Every non-keeper seat's held casts run on the monster AI's hold roll (`a !== this.player` in updateCasting): guards drop, channels end, charges release on a 1.2–2.6 s timer. | W3 |
+| 1 | Rubber-banding BY CONSTRUCTION: `PlayerInput` carries no dt, the transport merges one input per tick, `applyInputs` moves one tick per tick, so a 30 fps client walks at half speed on the server and snaps back every snapshot; stalls merge N inputs into one tick. | W1 THE HONEST INPUT — BUILT 2026-10-09 (3038a198): dt on the wire, move replay under a time budget; probe_shardinput |
+| 2 | Every non-keeper seat's held casts run on the monster AI's hold roll (`a !== this.player` in updateCasting): guards drop, channels end, charges release on a 1.2–2.6 s timer. | W3 — BUILT 2026-10-09 (7efc8c8c): seated actors hold on their own input; probe_shardseat |
 | 3 | `World.zones` (telegraphs, fields) and leap landing rings never ride the wire: invisible slams, strikes and hazards on a client. | W2 THE WIRE'S EYES — BUILT 2026-10-09 (6edffa88): `ZoneW` rows within reach, leap dest/radius/telegraph; probe_shardwire |
 | 4 | THE FOCUS: the mass runtime keys on the keeper's one position; a player 3,000 px away walks a barren, static world. MEASURED (the soak, 6 bots 3,500 px apart): the living radius around each player is least 0, mean 3.2 foes; THE ROVING SHADOW (a keeper that visits each cluster in turn, shipped off) lifts the mean to 6.7 at a 10 s cadence and 8.1 at 2 s but drops 43% and 68% of ticks (each hop re-keys the runtime at 135–170 ms; the extra clusters' natives raise the sustained load). | THE MANY SHADOWS (several foci inside the runtime, no re-keying, per-focus budgets) + the loaders off the tick, with the seamless lane |
 | 4b | THE SPREAD COST (the soak): six bots spread 3,500 px with ONE focus already breach the gate (p95 47 ms, 8% dropped) against 13 ms with the same six around the hearth: the runtime's per-observer paths (dormancy, native paging) scale with how far apart players stand. | THE MANY SHADOWS, budgeted |
@@ -871,13 +873,13 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 | 9 | The client re-applies the WHOLE latest snapshot every render frame: optimistic actions revert until the echo. | Pass B (adopt once, interpolate per frame) |
 | 10 | `persist()` stringifies and writes ~4 MB on the tick: ~250 ms of no ticks every 20 s. | Pass C |
 | 11 | No jitter buffer; corrections hard-snap; the camera has no smoothing. | Pass B |
-| 12 | Own-hero speed modifiers are not predicted (statuses are display stubs). | W1 |
-| 13 | Death: the killing blow is never shown; the screen comes ~60 ms after it. | W3 THE DEATH BEAT |
+| 12 | Own-hero speed modifiers are not predicted (statuses are display stubs). | W1 — BUILT: the own seat's speed and traction ride the wire |
+| 13 | Death: the killing blow is never shown; the screen comes ~60 ms after it. | W3 THE DEATH BEAT — BUILT: `VESSEL_CFG.deathBeatSec` 1.5, the client plays the death presentation from the first dead snapshot |
 | 14 | THE DRESS BEAT re-ships the whole zone on any doodad churn (up to every 4 s). | Pass C (doodad deltas) |
 | 15 | Projectiles, tethers, lite hordes and pose scalars step at 20 Hz (no ids, no velocity). | W2 — BUILT for flights (`ProjW.id`+`v`, THE FORWARD LAW) and tethers (actor ids); lite hordes and pose scalars remain |
-| 16 | Own facing and walk pose are server-driven. | W1 |
+| 16 | Own facing and walk pose are server-driven. | W1 — BUILT |
 | 17 | Server-only events with no client cue (shake, low-life surge, corpses, dissolves, the harvest rite's invisible dwell). | W3 (per-seat rows) + Pass B |
-| 18 | Quick taps lost in merged ticks. | W1 |
+| 18 | Quick taps lost in merged ticks. | W1 — BUILT |
 | 19 | Damage numbers have no owner. | W2 — BUILT: `TextW.o` + `Settings.floatOwners` |
 
 **THE GAP CRITIC — tiers by player impact.**
