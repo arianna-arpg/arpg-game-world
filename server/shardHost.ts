@@ -40,7 +40,7 @@ import { updateAI } from '../src/engine/ai';
 import { CLASSES, type ClassDef } from '../src/data/classes';
 import { rollSeed } from '../src/core/rng';
 import { serializeSnapshot, serializeZone } from '../src/net/snapshot';
-import { stampSeatRows } from '../src/net/seatView';
+import { stampAudiences } from '../src/net/seatView';
 import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction, PlayerInput } from '../src/net/intent';
 import { massDigest } from '../src/worldmass/random';
@@ -603,7 +603,7 @@ export class ShardHost {
       // under a fixed step fired every 4th tick — 15 Hz wearing a 20 Hz name.
       if (this.ticks % Math.max(1, Math.round(SHARD_CFG.tickHz / SHARD_CFG.stateHz)) === 0) {
         const snap = serializeSnapshot(w, ++this.snapTick);
-        stampSeatRows(w, snap); // THE ACTING SEAT: each seat's own rows and audiences (the transport ships each to its own)
+        stampAudiences(w, snap); // THE ACTING SEAT: the notices' and the eyecatch's audiences (the transport ships each to its own)
         this.net.sendState(snap);
         w.metaDirty.clear();
       }

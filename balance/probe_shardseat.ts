@@ -26,7 +26,7 @@ import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import { WsTransport } from '../src/net/ws';
 import { shardBuildStamp, SHARD_REFUSAL } from '../src/net/shardBuild';
 import { applyOwnSeatRows } from '../src/net/seatView';
-import { applySnapshot, type StateSnapshot } from '../src/net/snapshot';
+import { applySnapshot, SEAT_OWN_ROWS, type StateSnapshot } from '../src/net/snapshot';
 import type { SessionMsg } from '../src/net/transport';
 import { NullInput, type PlayerInput } from '../src/net/intent';
 import { COOP_SCALING } from '../src/data/coop';
@@ -429,6 +429,7 @@ const acct = claimedAccount();
     w.notice('probe: a world line by its mint', '#ffffff', 14, 'world', 'world');
     w.actingSeat = null;
     w.notice('probe: nobody acted', '#ffffff', 14, 'civic');
+    N1.c.sendSession({ t: 'action', action: { t: 'refundPassive', nodeId: 'probe_nowhere' } }); // an own row beside the audience
     await runTicks(8);
     const lines = (cl: Client): Set<string> => new Set(cl.snaps.slice(from.get(cl.id)).flatMap(s => (s.no ?? []).map(n => n.text)));
     const L = [N1, N2, N3, N4].map(lines);
@@ -437,6 +438,9 @@ const acct = claimedAccount();
     check('J notice: world events, a mint site\'s world scope and lines no seat caused reach every player',
       L.every(set => set.has('probe: world news') && set.has('probe: a world line by its mint') && set.has('probe: nobody acted')));
     check('J notice: no audience list ever ships', [N1, N2, N3, N4].every(cl => cl.snaps.slice(from.get(cl.id)).every(s => (s.no ?? []).every(n => !('to' in n)))));
+    check('J own rows: with an audience on the wire, a seat\'s own rows still reach its own socket alone (THE OWN ENTRY)',
+      N1.snaps.slice(from.get(N1.id)).some(s => !!s.seats[N1.id]?.fn)
+      && [N1, N2, N3, N4].every(cl => cl.snaps.slice(from.get(cl.id)).every(s => Object.entries(s.seats).every(([id, row]) => id === cl.id || SEAT_OWN_ROWS.every(k => row[k] === undefined)))));
     const from2 = new Map([N1, N2, N3, N4].map(cl => [cl.id, cl.snaps.length]));
     w.eyecatch = { casterId: s1.actor.id, skillId: 'probe_art', style: 'flank', title: 'PROBE', tint: '#ffffff', side: 'ally', t0: w.timeflow.age, paneSec: 3 };
     await runTicks(8);

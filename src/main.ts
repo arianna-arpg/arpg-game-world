@@ -51,7 +51,8 @@ import type { PlayerInput, MetaAction } from './net/intent';
 import { wireSeed } from './net/transport';
 import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from './net/transport';
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
-import { applyOwnSeatRows, stampSeatRows } from './net/seatView';
+import { tickNetClocks } from './net/snapshot'; // THE WIRE'S EYES: the own hero's clocks between snapshots
+import { applyOwnSeatRows } from './net/seatView'; // THE ACTING SEAT: the own seat's note and surge
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
 import { WsTransport, defaultShardUrl, shardResumeFor } from './net/ws';
@@ -2299,9 +2300,7 @@ function hostTail(dt: number): void {
 
 /** Host: serialize the world and broadcast it to every connected client. */
 function broadcastSnapshot(): void {
-  const snap = serializeSnapshot(world, ++snapTick);
-  stampSeatRows(world, snap); // THE ACTING SEAT: each guest's own HUD rows ride its own entry (net/seatView.ts)
-  net.sendState(snap);
+  net.sendState(serializeSnapshot(world, ++snapTick));
   // Per-seat META rides the snapshot only when its dirty flag is set; once a
   // snapshot carries it, the change is on the wire — clear so we don't re-ship it.
   world.metaDirty.clear();
@@ -2316,8 +2315,11 @@ function broadcastSnapshot(): void {
 function clientApplyAndRender(dt: number): void {
   snapAccum += dt;
   const alpha = Math.min(1, snapAccum / SNAP_INTERVAL);
+  // THE WIRE'S EYES: the own hero's cooldowns run down between snapshots (a new one
+  // re-anchors them), and past the newest snapshot a projectile flies on along its `v`.
+  tickNetClocks(world, dt);
   if (latestSnapshot) {
-    applySnapshot(world, latestSnapshot, prevSnapshot, alpha);
+    applySnapshot(world, latestSnapshot, prevSnapshot, alpha, Math.max(0, snapAccum - SNAP_INTERVAL));
     applyOwnSeatRows(world, latestSnapshot); // THE ACTING SEAT: my refusal note over my head, my low-life surge
   }
   clientDeathBeat(dt); // THE ACTING SEAT: the death beat's presentation (hosted worlds)

@@ -77,6 +77,8 @@ import { GRAB_VERB_LABEL } from '../engine/grab';
 import { tellSpecsOf } from '../engine/tells';
 import { fellProgress } from '../engine/rampage';
 import { watchRungOf, watchValueOf } from '../engine/watch';
+import { gaugeFloor, gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE WIRE'S EYES: the bar's gauge rows
+import { COOP_SCALING } from '../data/coop'; // THE WIRE'S EYES: the zone rows' reach (THE NEAR LAW's radius)
 
 export type Vec2W = [number, number];
 
@@ -93,6 +95,26 @@ export interface PingW { s: string; p: Vec2W; k: number; a: number; u: number; }
 export const WIRE_CFG = {
   /** Snapshots between memoryAccess rows (30 at 20 Hz = 1.5 s, the META_HEARTBEAT's own cadence). */
   memoryAccessBeat: 30,
+  /** THE SHELF BEAT (the memoryAccess idiom for the vendor rows: `vendor`, `vendorRestockAt`,
+   *  `vendorCap`): a changed shelf ships on the next snapshot, an unchanged one only every
+   *  `vendorBeat`-th (30 = 1.5 s), so a client that applied only the newest of a queued run
+   *  heals on the beat. A client keeps the last rows it saw (absent = unchanged). */
+  vendorBeat: 30,
+  /** THE WIRE'S EYES (docs/engine/shard.md): the dials of the rows a client draws from. */
+  eyes: {
+    /** A ground field or telegraph (`zones`) ships while its edge lies within this many px of
+     *  any seated player's body (the keeper is never a viewer); 0 = THE NEAR LAW's own radius
+     *  (COOP_SCALING.shareRadius), and 0 there too = every zone (the co-op lanes). */
+    zoneReach: 0,
+    /** At most this many zone rows ride one snapshot, the nearest to a seated player first. */
+    zoneMax: 160,
+    /** The own seat's cooldown clocks (`SeatW.cd`) ride this grid in seconds, the remainder
+     *  rounded UP so a client never reads a skill ready before the host does. */
+    clockGrid: 0.05,
+    /** A client extrapolates a projectile along its `v` for at most this many seconds past
+     *  the newest snapshot (a late snapshot's flight never freezes, never runs away). */
+    projAheadSec: 0.1,
+  },
 };
 
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
@@ -220,7 +242,10 @@ export interface ActorW {
   auras?: AuraW[];             // emanating aura fields
   con?: { kind: string; domeRadius?: number };  // construct (dome bubble)
   fuse?: number;               // armed bomber fuse
-  leap?: { timer: number; total: number; vent?: number };  // airborne leap (body swell; `vent` = the vent-ride's column radius — the steam jet draws)
+  leap?: { timer: number; total: number; vent?: number;  // airborne leap (body swell; `vent` = the vent-ride's column radius: the steam jet draws)
+    /** THE WIRE'S EYES: a TELEGRAPHED dive's landing ring (LeapDelivery.telegraph): where it
+     *  lands, how wide, and the ring's color. Absent on an untelegraphed leap (nothing draws). */
+    dest?: Vec2W; radius?: number; telegraph?: string; };
   /** Snake/worm trailing segments. SEGMENT-FABRIC extras ride only when
    *  live (bosses, briefly): `ht` = hittable chain (solid draw + hitbox
    *  overlay truth), `wd` = torn-segment bitmask (torn draws/tests smaller),
@@ -260,9 +285,15 @@ export interface CastW { parryCue?: number;
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
  *  painters roll on (wave crest, square tumble) — client and host draw the
  *  same curve the host's hit test sampled. */
-export interface ProjW { reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
-/** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
-export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
+export interface ProjW { reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number;
+  /** THE WIRE'S EYES: the flight's stable wire id (the client glides a flight it saw before
+   *  by id) and its velocity in px/s (the displacement since the host's last snapshot, the
+   *  heading times speed at birth), which a late snapshot's flight extrapolates along. */
+  id?: number; v?: Vec2W; }
+/** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). `ai`/`bi` =
+ *  THE WIRE'S EYES: the endpoint bodies' host ids (the `bl` idiom), so the client's band
+ *  follows its own interpolated bodies; the coords stand in for an endpoint it lacks. */
+export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; ai?: number; bi?: number; }
 export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; dropUid?: number; vid?: string; eid?: string; tid?: number; cnt?: number; }
 /** kind is an ORB_DEFS registry id — the client renders from the registry. */
 export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; }
@@ -273,7 +304,11 @@ export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; 
   /** Reward feedback uses each client's visible-combat clearance. */
   yieldToCombat?: boolean;
   /** Optional exact gear identity for duplicate announcement curation. */
-  dropUid?: number; }
+  dropUid?: number;
+  /** THE WIRE'S EYES: the owner seat of a damage or heal number (the striker's or healer's
+   *  credited seat, its owner chain's root), so a hosted client draws all, its party's or
+   *  its own (Settings.floatOwners). Absent on every other float, which always draws. */
+  o?: string; }
 /** A notice-feed line (screen-anchored world news) — the client filters by
  *  its own channel mutes and draws at its own anchor/duration. */
 export interface NoticeW { text: string; color: string; size: number; ch: string; born: number; }
@@ -301,11 +336,54 @@ export interface FlashW { combatCue?: import('../engine/combatCues').CombatCue; 
  *  undefined and the ring draws classic full-strength, never a false "safe". */
 export interface DeathBurstW { p: Vec2W; ph: 0 | 1; r: number; c: string; arm: 0 | 1; t: number; co: number; trail: Vec2W[]; tm?: Team; }
 
+/** THE WIRE'S EYES: one ground telegraph or lingering field (World.zones) as the
+ *  renderer's zone pass and the hotbar read it, never its gameplay state (no damage,
+ *  victims, clocks of ticks or domains cross). Sparse: every optional row is absent
+ *  in its common case. Rebuilt as render stubs by applySnapshot (the cast-stub idiom). */
+export interface ZoneW {
+  /** The zone's wire id (stable for its life): the client glides p/r/f/fill by it. */
+  id: number;
+  p: Vec2W; r: number; c: string;
+  /** AoeShape (absent = the circle) and, for a faced shape, its facing (rad) and arc. */
+  sh?: number; f?: number; arc?: number;
+  /** Exploded: the live field. Absent = the telegraph, whose countdown `fill` (0..1) rises. */
+  ex?: 1; fill?: number;
+  /** The field's story (Zone.tier, else its caster's); absent = 0. */
+  tier?: number;
+  /** THE GROUNDED STRIKE's named grounds (telegraph only: the roil draws on those cells). */
+  og?: string[];
+  /** A FISSURE segment [ax, ay, bx, by]; `sa` = armed now (aftershock ready / roulette
+   *  armed), `sv` = volatile: the crack's two lit faces (live fields only). */
+  seg?: [number, number, number, number]; sa?: 1; sv?: 1;
+  /** The EDGE BAND's safe eye (telegraph) and the fill-in cage's closing edge (live field). */
+  ef?: number; ed?: number;
+  /** A LOBBED SHOT's launch point and apex factor (the incoming comet across the countdown). */
+  lf?: Vec2W; la?: number;
+  /** An ARMED PULSE's next beat: [seconds to it at this snapshot, radiusMult]. */
+  pr?: [number, number];
+  /** A field that RIDES a body (follow / anchor): its host id, so the stub sits on it. */
+  ri?: number;
+  /** A seated hero's own field, for its hotbar: caster host id, skill id, toggled. */
+  ci?: number; sk?: string; tg?: 1;
+}
+
 /** Per-seat camera + HUD anchor (broadcast for all seats; each client reads its own). */
 export interface SeatW {
   pos: Vec2W;
   life: number; maxLife: number; mana: number; maxMana: number; es: number; maxEs: number;
   dead: boolean; downed: boolean;
+  /** THE WIRE'S EYES, THE OWN ENTRY (SEAT_OWN_ROWS): the seat's running cooldowns as
+   *  skill id -> [remaining, total] on WIRE_CFG.eyes.clockGrid; absent = none running. */
+  cd?: Record<string, [number, number]>;
+  /** THE WIRE'S EYES, THE OWN ENTRY: the bar's gauge banks as skill id -> [fill 0..1
+   *  (floored, 2dp), locked 0|1, ready 0|1]; absent = every bank empty and open. */
+  gg?: Record<string, [number, 0 | 1, 0 | 1]>;
+  /** THE ACTING SEAT, THE OWN ENTRY (SEAT_OWN_ROWS): the seat's newest refusal note (text +
+   *  host world time); its client floats it once over its own head (net/seatView.ts). */
+  fn?: { text: string; at: number };
+  /** THE ACTING SEAT, THE OWN ENTRY: seconds left on the seat's hit-while-low surge (its
+   *  client's own low-life glow reads it). */
+  lh?: number;
   /** Movement-PREDICTION fields: `seq` = the last input the host applied for this
    *  seat (the client replays its unacked inputs forward from `pos`); `rooted` =
    *  the host has this hero movement-locked (so the client stops predicting forward);
@@ -576,9 +654,11 @@ export interface StateSnapshot {
    *  applies its OWN entry (snap.seatMeta[clientSeatId]). */
   seatMeta?: Record<string, SeatMetaW>;
   /** Brandt's shared vendor stock (host-authoritative) + its restock clock — so a
-   *  client renders the SAME list the host will resolve a buyVendor index against. */
-  vendor: VendorEntryW[];
-  vendorRestockAt: number;
+   *  client renders the SAME list the host will resolve a buyVendor index against.
+   *  THE SHELF BEAT (WIRE_CFG.vendorBeat): the three vendor rows ride together, on a
+   *  change and on the beat; absent = unchanged (the client keeps the last it saw). */
+  vendor?: VendorEntryW[];
+  vendorRestockAt?: number;
   /** The HOST account's reserve capacity (World.vendorLockCap) — the client
    *  panel draws toggles against the counter's true ledger, not its own. */
   vendorCap?: number;
@@ -600,6 +680,9 @@ export interface StateSnapshot {
   actors: ActorW[];
   projectiles: ProjW[];
   tethers: TetherW[];
+  /** THE WIRE'S EYES: the ground telegraphs and lingering fields near a seated player, as
+   *  the zone painter reads them (ZoneW); absent = none stand. Render stubs on the client. */
+  zones?: ZoneW[];
   drops: DropW[];
   townPortalViews?: import('../engine/townportal').TownPortalView[];
   orbs: OrbW[];
@@ -880,6 +963,8 @@ function actorToW(a: Actor, world: World): ActorW {
     w.leap = a.leap.vent
       ? { timer: a.leap.timer, total: a.leap.total, vent: a.leap.vent.columnR }
       : { timer: a.leap.timer, total: a.leap.total };
+    // THE WIRE'S EYES: a telegraphed dive ships its landing ring (renderer drawZones).
+    if (a.leap.telegraph) Object.assign(w.leap, { dest: v2(a.leap.dest), radius: Math.round(a.leap.radius * 10) / 10, telegraph: a.leap.telegraph.color });
   }
   if (a.worm) {
     w.worm = { seg: a.worm.segments.map(v2), taper: a.worm.taper };
@@ -957,8 +1042,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     })(),
     arena: { w: world.arena.w, h: world.arena.h },
     seats, seatMeta,
-    vendor: world.vendorStock.map(e => vendorEntryW(e, world)), vendorRestockAt: world.vendorRestockAt,
-    vendorCap: world.vendorLockCap(),
+    ...vendorRowsOf(world, tick), // THE SHELF BEAT: the vendor rows on a change, and on the beat
     ...(world.partyRows ? { parties: world.partyRows } : {}), // THE PARTY: the rows ride every snapshot of a hosted world
     ...((): { pings?: PingW[] } => { // THE PING: the live marks ride every snapshot of a hosted world (and any snapshot carrying one)
       const live = world.livePings();
@@ -979,11 +1063,14 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     })),
     actors: world.actors.filter(a => (!a.dead || a.isPlayerKind()) && !world.seatOf(a)?.keeper) // keeperSeat: unseen, unshipped
       .map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
-    projectiles: world.projectiles.map(p => ({ reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
+    projectiles: world.projectiles.map(p => ({ reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile,
+      ...flightOf(p, world.time) })), // THE WIRE'S EYES: the flight's wire id + velocity
     tethers: world.tethers.map(t => ({
       ax: Math.round(t.ax), ay: Math.round(t.ay), bx: Math.round(t.bx), by: Math.round(t.by),
       c: t.color, w: t.width,
+      ai: t.a.id, bi: t.b.id, // THE WIRE'S EYES: the endpoint bodies (the `bl` idiom)
     })),
+    zones: zonesOf(world), // THE WIRE'S EYES: the ground telegraphs and fields near a seated player
     townPortalViews: world.townPortalViews(),
     drops: world.drops.map(d => ({
       p: v2(d.pos), bob: d.bob, kind: d.item.kind,
@@ -1006,7 +1093,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       cnt: d.item.kind === 'essence' || d.item.kind === 'abilityEssence' ? d.item.count : undefined,
     })),
     orbs: world.orbs.map(o => ({ p: v2(o.pos), bob: o.bob, life: o.life, kind: o.kind })),
-    texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind, ...(t.yieldToCombat ? { yieldToCombat: true } : {}), ...(t.dropUid === undefined ? {} : { dropUid: t.dropUid }) })),
+    texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind, ...(t.yieldToCombat ? { yieldToCombat: true } : {}), ...(t.dropUid === undefined ? {} : { dropUid: t.dropUid }),
+      ...(t.seat === undefined ? {} : { o: t.seat }) })), // THE WIRE'S EYES: a combat number's owner seat
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
@@ -1046,6 +1134,222 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     ev: evapOf(world),
     dwf: world.frostHeld() ? 1 : undefined,
   };
+}
+
+// ----------------------------------------------------- THE WIRE'S EYES (host) --
+// The rows a client draws from that rode nowhere before (docs/engine/shard.md): the
+// ground's telegraphs and fields, the flights' ids and velocities, the own seat's
+// clocks, and the shelf on its beat. Each is absent in its common case.
+
+/** THE SHELF BEAT's ledger: the vendor rows this world last shipped, as the JSON they went out as. */
+const lastShippedVendor = new WeakMap<World, string>();
+
+/** THE SHELF BEAT (WIRE_CFG.vendorBeat): the three vendor rows ride together whenever any
+ *  of them differs from what this world last shipped (a purchase, a restock, a hold, the
+ *  cap) and on the beat however still; between, they are absent and a client keeps its last. */
+function vendorRowsOf(world: World, tick: number): Pick<StateSnapshot, 'vendor' | 'vendorRestockAt' | 'vendorCap'> {
+  const rows = {
+    vendor: world.vendorStock.map(e => vendorEntryW(e, world)),
+    vendorRestockAt: world.vendorRestockAt,
+    vendorCap: world.vendorLockCap(),
+  };
+  const key = JSON.stringify(rows);
+  if (tick % WIRE_CFG.vendorBeat !== 1 && lastShippedVendor.get(world) === key) return {};
+  lastShippedVendor.set(world, key);
+  return rows;
+}
+
+/** A flight's wire memory, keyed by the projectile itself (so it lives exactly as long). */
+interface FlightMemo { id: number; x: number; y: number; t: number; v: Vec2W }
+const FLIGHTS = new WeakMap<object, FlightMemo>();
+let flightSeq = 0;
+
+/** THE WIRE'S EYES: a flight's stable wire id and its velocity in px/s: its displacement
+ *  since the last snapshot this world serialized while that sample is fresh (a curving,
+ *  orbiting or time-held flight reports what it actually did), else its speed along its
+ *  heading (at birth, after a gap, and never a frame rebound's re-seat as a velocity). */
+function flightOf(p: World['projectiles'][number], time: number): { id: number; v: Vec2W } {
+  const x = p.pos.x, y = p.pos.y;
+  const along = (): Vec2W => [Math.round(Math.cos(p.dir) * p.speed), Math.round(Math.sin(p.dir) * p.speed)];
+  let m = FLIGHTS.get(p);
+  if (!m) {
+    m = { id: ++flightSeq, x, y, t: time, v: along() };
+    FLIGHTS.set(p, m);
+  } else if (time - m.t > 1e-6) {
+    const dt = time - m.t, vx = (x - m.x) / dt, vy = (y - m.y) / dt, cap = 3 * Math.max(60, p.speed);
+    m.v = dt <= 0.25 && vx * vx + vy * vy <= cap * cap ? [Math.round(vx), Math.round(vy)] : along();
+    m.x = x; m.y = y; m.t = time;
+  }
+  return { id: m.id, v: [m.v[0], m.v[1]] };
+}
+
+type ZoneT = World['zones'][number];
+/** A zone's wire memory: its id, and its telegraph's countdown span (the zone's own stamped
+ *  `delay0`, else the first delay seen once it is no longer armed). */
+interface ZoneMemo { id: number; span?: number }
+const ZONE_MEMOS = new WeakMap<object, ZoneMemo>();
+let zoneSeq = 0;
+
+/** How far a zone's edge lies from the nearest viewer (a fissure segment by its line). */
+function zoneGap(z: ZoneT, viewers: readonly { x: number; y: number }[]): number {
+  let best = Infinity;
+  for (const v of viewers) {
+    let d: number;
+    if (z.seg) {
+      const { ax, ay, bx, by } = z.seg, dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+      const t = len2 > 0 ? Math.max(0, Math.min(1, ((v.x - ax) * dx + (v.y - ay) * dy) / len2)) : 0;
+      d = Math.hypot(v.x - (ax + dx * t), v.y - (ay + dy * t));
+    } else {
+      d = Math.hypot(v.x - z.pos.x, v.y - z.pos.y);
+    }
+    best = Math.min(best, d - z.radius);
+  }
+  return best;
+}
+
+/** THE WIRE'S EYES: the zones whose edge lies within reach of a seated player's body
+ *  (WIRE_CFG.eyes.zoneReach, else THE NEAR LAW's radius; 0 = every zone), the nearest first
+ *  past WIRE_CFG.eyes.zoneMax. The keeper is never a viewer: it watches nothing. Undefined
+ *  while none stand near anyone (the common case ships zero bytes). */
+function zonesOf(world: World): ZoneW[] | undefined {
+  if (!world.zones.length) return undefined;
+  const eyes = WIRE_CFG.eyes;
+  const reach = eyes.zoneReach > 0 ? eyes.zoneReach : COOP_SCALING.shareRadius;
+  const heroes = new Set<Actor>();
+  for (const s of world.seats) if (!s.keeper) heroes.add(s.actor); // keeperSeat: the warden is no viewer
+  if (!heroes.size) return undefined;
+  const viewers = [...heroes].map(a => a.pos);
+  const near: { z: ZoneT; d: number }[] = [];
+  for (const z of world.zones) {
+    const d = zoneGap(z, viewers);
+    if (reach > 0 && d > reach) continue;
+    near.push({ z, d });
+  }
+  if (!near.length) return undefined;
+  if (near.length > eyes.zoneMax) { near.sort((a, b) => a.d - b.d); near.length = eyes.zoneMax; }
+  return near.map(({ z }) => zoneW(z, world, heroes));
+}
+
+/** One zone as its painter reads it (ZoneW). Gameplay state never crosses. */
+function zoneW(z: ZoneT, world: World, heroes: ReadonlySet<Actor>): ZoneW {
+  let m = ZONE_MEMOS.get(z);
+  if (!m) { m = { id: ++zoneSeq }; ZONE_MEMOS.set(z, m); }
+  const w: ZoneW = { id: m.id, p: v2(z.pos), r: Math.round(z.radius * 10) / 10, c: z.color };
+  if (z.shape) {
+    w.sh = z.shape;
+    w.f = Math.round(z.facing * 1000) / 1000;
+    if (z.arcRad !== undefined) w.arc = Math.round(z.arcRad * 1000) / 1000;
+  }
+  const tier = z.tier ?? z.caster.tier ?? 0;
+  if (tier) w.tier = tier;
+  if (z.exploded) {
+    w.ex = 1;
+    if (z.seg && ((z.aftershock && world.time >= z.aftershock.readyAt) || (z.roulette && world.time < z.roulette.armedUntil))) w.sa = 1;
+    if (z.seg && z.volatile) w.sv = 1;
+    if (z.edge && z.edge > 0.02) w.ed = Math.round(z.edge * 100) / 100;
+    if (z.pulse && z.pulse.left > 0) w.pr = [Math.round(Math.max(0, z.pulse.next - world.time) * 100) / 100, Math.round(z.pulse.radiusMult * 1000) / 1000];
+  } else {
+    if (!z.armed && m.span === undefined) m.span = z.delay0 !== undefined && z.delay0 > 0 && z.delay0 < 100 ? z.delay0 : z.delay;
+    w.fill = z.armed || !m.span ? 0 : Math.round(Math.max(0, Math.min(1, 1 - z.delay / m.span)) * 100) / 100;
+    if (z.onGround?.length) w.og = [...z.onGround];
+    if (z.edgeFrac) w.ef = Math.round(z.edgeFrac * 1000) / 1000;
+    if (z.lobFrom) { w.lf = v2(z.lobFrom); if (z.lobArc !== undefined) w.la = z.lobArc; }
+  }
+  if (z.seg) w.seg = [Math.round(z.seg.ax), Math.round(z.seg.ay), Math.round(z.seg.bx), Math.round(z.seg.by)];
+  const rider = z.anchor ?? (z.follow ? z.caster : undefined);
+  if (rider) w.ri = rider.id;
+  if (heroes.has(z.caster)) { w.ci = z.caster.id; w.sk = z.inst.def.id; if (z.toggled) w.tg = 1; }
+  return w;
+}
+
+/** THE WIRE'S EYES: a seat's running cooldowns on the clock grid (THE OWN ENTRY). The
+ *  remainder rounds UP, so a client never reads a skill ready before the host does. */
+function ownCooldownsOf(a: Actor): Pick<SeatW, 'cd'> {
+  if (!a.cooldowns.size) return {};
+  const q = Math.max(1, Math.round(1 / WIRE_CFG.eyes.clockGrid));
+  let cd: Record<string, [number, number]> | undefined;
+  for (const [id, left] of a.cooldowns) {
+    if (!(left > 0)) continue;
+    const rem = Math.max(1, Math.ceil(left * q - 1e-6)) / q;
+    const total = a.cooldownTotals.get(id) ?? SKILLS[id]?.cooldown ?? left;
+    (cd ??= {})[id] = [rem, Math.max(rem, Math.round(total * q) / q)];
+  }
+  return cd ? { cd } : {};
+}
+
+/** THE WIRE'S EYES: the bar's gauge banks (THE OWN ENTRY): fill floored at 2dp (so a full
+ *  read is a full bank), locked and ready as the press would judge them. Empty, open banks
+ *  ship nothing. */
+function ownGaugesOf(a: Actor): Pick<SeatW, 'gg'> {
+  let gg: Record<string, [number, 0 | 1, 0 | 1]> | undefined;
+  for (const inst of a.skills) {
+    const spec = inst?.def.gauge;
+    if (!inst || !spec) continue;
+    const eff = a.gaugeEff(inst)!;
+    const fill = Math.floor(gaugeFrac(inst, eff) * 100) / 100;
+    const locked = gaugeLocked(inst), ready = gaugeReady(inst, eff, spec);
+    if (fill <= 0 && !locked && !ready) continue;
+    (gg ??= {})[inst.def.id] = [fill, locked ? 1 : 0, ready ? 1 : 0];
+  }
+  return gg ? { gg } : {};
+}
+
+/** THE OWN ENTRY: the SeatW rows only their own seat reads (its clocks). A shard ships each
+ *  socket its own seat's rows and never another's (ShardTransport.sendState through
+ *  ownEntryJson); a broadcast lane (co-op) carries every seat's and each client reads its
+ *  own. Naming a key here puts that row under the law. */
+export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh']; // + THE ACTING SEAT's note and surge
+
+/** THE ACTING SEAT (World.seatHudWire): the seat's refusal note while it is fresh. */
+function ownNoteOf(s: Seat, world: World): { fn?: { text: string; at: number } } {
+  const fn = world.seatHudWire(s)?.fn;
+  return fn ? { fn } : {};
+}
+/** THE ACTING SEAT (World.seatHudWire): the seconds left on the seat's low-life surge. */
+function ownSurgeOf(s: Seat, world: World): { lh?: number } {
+  const lh = world.seatHudWire(s)?.lh;
+  return lh !== undefined ? { lh } : {};
+}
+let ownEntrySeq = 0;
+
+/** THE OWN ENTRY, split for per-socket delivery (the snapshot as JSON). */
+export interface OwnEntrySplit {
+  /** Every own row struck: the frame for a socket whose seat carries none (shared). */
+  bare: string;
+  /** The frame for `seat` with its own rows kept, or null when it carries none (send `bare`). */
+  forSeat(seat: string): string | null;
+}
+
+/** THE OWN ENTRY, split for per-socket delivery: null when no seat entry carries an own row
+ *  (the one broadcast frame stands, byte-identical). The body is stringified ONCE with the
+ *  seats map held out by a sentinel and each socket's seats map (a few hundred bytes) spliced
+ *  in; a sentinel not found exactly once falls back to a plain stringify per socket
+ *  (correctness never rides the optimization: the characterBody idiom). No seeded stream is
+ *  touched. */
+export function ownEntryJson(s: StateSnapshot): OwnEntrySplit | null {
+  const ids = Object.keys(s.seats);
+  const owns = (id: string): boolean => !!s.seats[id] && SEAT_OWN_ROWS.some(k => s.seats[id][k] !== undefined);
+  if (!ids.some(owns)) return null;
+  const bare: Record<string, SeatW> = {};
+  for (const id of ids) {
+    const e = { ...s.seats[id] };
+    for (const k of SEAT_OWN_ROWS) delete e[k];
+    bare[id] = e;
+  }
+  const bareRows = ids.map(id => JSON.stringify(id) + ':' + JSON.stringify(bare[id]));
+  const seatsFor = (mine: string): string => '{' + ids.map((id, i) =>
+    (id === mine ? JSON.stringify(id) + ':' + JSON.stringify(s.seats[id]) : bareRows[i])).join(',') + '}';
+  const quoted = JSON.stringify(`\u0000own-entry-${++ownEntrySeq}\u0000`);
+  const marked = JSON.stringify({ ...s, seats: JSON.parse(quoted) as string });
+  const at = marked.indexOf(quoted);
+  if (at < 0 || marked.indexOf(quoted, at + quoted.length) >= 0) {
+    return {
+      bare: JSON.stringify({ ...s, seats: bare }),
+      forSeat: mine => (owns(mine) ? JSON.stringify({ ...s, seats: { ...bare, [mine]: s.seats[mine] } }) : null),
+    };
+  }
+  const head = marked.slice(0, at), tail = marked.slice(at + quoted.length);
+  return { bare: head + seatsFor('') + tail, forSeat: mine => (owns(mine) ? head + seatsFor(mine) + tail : null) };
 }
 
 /** The rampage fabric's felled rows (undefined while the ground stands whole
@@ -1157,6 +1461,10 @@ function seatW(s: Seat, world: World): SeatW {
     mana: Math.max(0, Math.round(a.mana)), maxMana: Math.round(a.maxMana()),
     es: Math.round(a.es), maxEs: Math.round(a.maxEs()),
     dead: a.dead, downed: a.downed,
+    ...ownCooldownsOf(a), // THE WIRE'S EYES: SeatW.cd, THE OWN ENTRY (its own socket alone hears it)
+    ...ownGaugesOf(a), // THE WIRE'S EYES: SeatW.gg, THE OWN ENTRY
+    ...ownNoteOf(s, world), // THE ACTING SEAT: SeatW.fn, the refusal note, THE OWN ENTRY
+    ...ownSurgeOf(s, world), // THE ACTING SEAT: SeatW.lh, the low-life surge, THE OWN ENTRY
     ...(seq !== undefined ? { seq } : {}),
     ...(world.movementLocked(a) ? { rooted: true } : {}),
     ...(a.sheet.get('traction') < 0.999 ? { slippery: true } : {}),
@@ -1252,12 +1560,101 @@ function applyNetEvap(world: World, rows: readonly EvapW[] | undefined): void {
   if (membership) world.rebuildClientTerrain();
 }
 
+// --------------------------------------------------- THE WIRE'S EYES (client) --
+
+/** The client's flight memory, per render world: where each flight (wire id) was last
+ *  DRAWN, and, for the snapshot now gliding, where each one started its glide. */
+interface FlightLedger { snap: StateSnapshot | null; from: Map<number, Vec2W>; drawn: Map<number, Vec2W> }
+const FLIGHT_LEDGERS = new WeakMap<World, FlightLedger>();
+function flightLedger(world: World, snap: StateSnapshot): FlightLedger {
+  let l = FLIGHT_LEDGERS.get(world);
+  if (!l) { l = { snap: null, from: new Map(), drawn: new Map() }; FLIGHT_LEDGERS.set(world, l); }
+  if (l.snap !== snap) { l.snap = snap; l.from = l.drawn; l.drawn = new Map(); } // a new snapshot: the glide starts where the last frame drew
+  return l;
+}
+
+/** One zone row as the render stub the zone painter and the hotbar read (the cast-stub
+ *  idiom: the fields the renderer touches, nothing it could run). `pz` = the same zone in
+ *  `prev` (by wire id): its position, radius, facing and countdown glide toward this row.
+ *  A field riding a body (`ri`) sits on that pooled body at draw time (a getter), so a worn
+ *  field follows the predicted own hero exactly. The countdown maps onto the painter's own
+ *  clocks: delay = 1 - fill against a one-second fuse and `delay0` (the lob's comet). */
+function zoneStub(z: ZoneW, pz: ZoneW | undefined, alpha: number, time: number): object {
+  const lerp = (a: number, b: number): number => a + (b - a) * alpha;
+  const rider = z.ri !== undefined ? POOL.get(z.ri) : undefined;
+  const at = { x: pz ? lerp(pz.p[0], z.p[0]) : z.p[0], y: pz ? lerp(pz.p[1], z.p[1]) : z.p[1] };
+  const fill = z.ex ? 1 : pz && !pz.ex && pz.fill !== undefined ? lerp(pz.fill, z.fill ?? 0) : z.fill ?? 0;
+  const tier = z.tier ?? 0;
+  return {
+    get pos() { return rider ? rider.pos : at; },
+    radius: pz ? lerp(pz.r, z.r) : z.r, color: z.c, shape: z.sh ?? 0,
+    facing: pz?.f !== undefined && z.f !== undefined ? angLerp(pz.f, z.f, alpha) : z.f ?? 0,
+    arcRad: z.arc, exploded: !!z.ex, linger: z.ex ? 1 : 0,
+    delay: 1 - fill, delay0: z.lf ? 1 : undefined,
+    tier, caster: (z.ci !== undefined ? POOL.get(z.ci) : undefined) ?? { tier },
+    inst: { def: { id: z.sk ?? '', delivery: { telegraph: 1 } } },
+    onGround: z.og, edgeFrac: z.ef, edge: z.ed,
+    seg: z.seg ? { ax: z.seg[0], ay: z.seg[1], bx: z.seg[2], by: z.seg[3] } : undefined,
+    aftershock: z.sa ? { readyAt: -Infinity } : undefined,
+    volatile: z.sv ? {} : undefined,
+    lobFrom: z.lf ? { x: z.lf[0], y: z.lf[1] } : undefined, lobArc: z.la,
+    pulse: z.pr ? { left: 1, next: time + z.pr[0], radiusMult: z.pr[1] } : undefined,
+    toggled: z.tg ? true : undefined,
+  };
+}
+
+/** THE WIRE'S EYES: the snapshot the own hero's cooldowns were last anchored to, per world. */
+const CLOCK_ANCHORS = new WeakMap<World, StateSnapshot>();
+
+/** THE WIRE'S EYES, the own hero's clocks (THE OWN ENTRY): a NEW snapshot re-anchors the
+ *  cooldown maps the hotbar's sweep reads (tickNetClocks runs them down between snapshots);
+ *  the gauge rows land on the bar's own instances on every apply (a meta re-apply mints
+ *  fresh ones), the bank set so the client's own gauge reads (fill, the gate's ready, the
+ *  lock) answer what the host's did. */
+function applyOwnClocks(world: World, snap: StateSnapshot, me: SeatW): void {
+  const p = world.player;
+  if (CLOCK_ANCHORS.get(world) !== snap) {
+    CLOCK_ANCHORS.set(world, snap);
+    p.cooldowns.clear();
+    p.cooldownTotals.clear();
+    for (const [id, [left, total]] of Object.entries(me.cd ?? {})) {
+      p.cooldowns.set(id, left);
+      p.cooldownTotals.set(id, total);
+    }
+  }
+  for (const inst of p.skills) {
+    const spec = inst?.def.gauge;
+    if (!inst || !spec) continue;
+    const row = me.gg?.[inst.def.id];
+    const eff = p.gaugeEff(inst)!, floor = gaugeFloor(spec, eff), fill = (row?.[0] ?? 0) * eff.need;
+    const st = (inst.state ??= {});
+    st.gauge = Math.max(0, row?.[2] ? Math.max(fill, floor) : Math.min(fill, floor - 1e-3));
+    st.gaugeLock = row?.[1] ? 1 : 0;
+  }
+}
+
+/** THE WIRE'S EYES: run the own hero's cooldown clocks down between snapshots, once a frame
+ *  in the client loop before applySnapshot (which re-anchors them on each new snapshot), at
+ *  the hero's own recovery rate, so the hotbar's sweep moves at frame rate instead of 20 Hz.
+ *  A clock that runs out drops, as the host's does. */
+export function tickNetClocks(world: World, dt: number): void {
+  const p = world.player;
+  if (!p.cooldowns.size || !(dt > 0)) return;
+  const rate = Math.max(0, p.sheet.get('cooldownRecovery'));
+  for (const [id, left] of p.cooldowns) {
+    const next = left - dt * rate;
+    if (next <= 0) p.cooldowns.delete(id); else p.cooldowns.set(id, next);
+  }
+}
+
 /** Apply a host snapshot onto a render-only client World (no sim runs). Rebuilds
  *  the entity arrays the renderer iterates; re-installs the StatSheet bases the
  *  renderer reads so maxLife()/invisible/detectability/casting work unchanged.
  *  When `prev` + `alpha` (0..1) are given, actor POSITIONS/facing are interpolated
- *  prev→snap for smooth motion between 20 Hz snapshots (everything else uses snap). */
-export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSnapshot | null, alpha = 1): void {
+ *  prev→snap for smooth motion between 20 Hz snapshots (everything else uses snap).
+ *  `ahead` = THE WIRE'S EYES: seconds the client has run past the newest snapshot
+ *  (a late one), which a projectile spends flying on along its `v`. */
+export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSnapshot | null, alpha = 1, ahead = 0): void {
   if (snap.parties !== undefined) { world.partyRows = snap.parties; world.partyRev++; } // THE PARTY: absent = unchanged (read before any zone or vendor gate)
   if (snap.pings !== undefined) {
     // THE PING: the host's marks replace the shell's — except the shell's OWN press the
@@ -1505,7 +1902,11 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.fuse = aw.fuse;
     a.leap = aw.leap
       ? ({ timer: aw.leap.timer, total: aw.leap.total,
-        vent: aw.leap.vent !== undefined ? { columnR: aw.leap.vent } : undefined } as unknown as LeapState)
+        vent: aw.leap.vent !== undefined ? { columnR: aw.leap.vent } : undefined,
+        // THE WIRE'S EYES: a telegraphed dive's landing ring (drawZones reads dest, radius, telegraph).
+        ...(aw.leap.telegraph !== undefined && aw.leap.dest
+          ? { dest: { x: aw.leap.dest[0], y: aw.leap.dest[1] }, radius: aw.leap.radius ?? 0, telegraph: { color: aw.leap.telegraph } }
+          : {}) } as unknown as LeapState)
       : undefined;
     if (aw.worm) {
       // Interpolate the trailing segments the same way the head (a.pos) is lerped,
@@ -1562,14 +1963,51 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   });
 
   // Lightweight entities — plain render structs the renderer reads positionally.
-  world.projectiles = snap.projectiles.map(p => ({ reflectedCue: p.reflectedCue,
-    orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined,
-    pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0, cosmeticMotif: p.cosmeticMotif,
-    cosmeticProjectile: cosmeticStyle(COSMETIC_PROJECTILES, p.cosmeticProjectile) ? p.cosmeticProjectile : undefined,
-  })) as unknown as World['projectiles'];
-  world.tethers = (snap.tethers ?? []).map(t => ({
-    ax: t.ax, ay: t.ay, bx: t.bx, by: t.by, color: t.c, width: t.w,
-  })) as unknown as World['tethers'];
+  // THE WIRE'S EYES: a flight seen before glides by its wire id from where it was last
+  // DRAWN to the newest snapshot (so a late snapshot's flight resumes from where it flew,
+  // never snaps back), and past the newest one it flies on along its `v` (projAheadSec).
+  // THE FORWARD LAW: a glide never runs a flight backward against its own `v` (a flight
+  // that flew on past where the next snapshot found it holds until the wire catches up).
+  const flight = flightLedger(world, snap);
+  const prevFlights = lerping ? new Map(prev!.projectiles.flatMap(p => (p.id !== undefined ? [[p.id, p] as const] : []))) : null;
+  const flyOn = Math.min(Math.max(0, ahead), WIRE_CFG.eyes.projAheadSec);
+  world.projectiles = snap.projectiles.map(p => {
+    let x = p.p[0], y = p.p[1], dir = p.d, age = p.a ?? 0;
+    if (p.id !== undefined) {
+      const pp = prevFlights?.get(p.id);
+      const from = flight.from.get(p.id) ?? pp?.p;
+      if (lerping && from) {
+        x = from[0] + (x - from[0]) * alpha; y = from[1] + (y - from[1]) * alpha;
+        if (pp) { dir = angLerp(pp.d, p.d, alpha); age = (pp.a ?? 0) + (age - (pp.a ?? 0)) * alpha; }
+      } else if (flyOn > 0 && p.v) {
+        x += p.v[0] * flyOn; y += p.v[1] * flyOn; age += flyOn;
+      }
+      const last = flight.drawn.get(p.id) ?? flight.from.get(p.id);
+      if (last && p.v && (x - last[0]) * p.v[0] + (y - last[1]) * p.v[1] < 0) { x = last[0]; y = last[1]; } // THE FORWARD LAW
+      flight.drawn.set(p.id, [x, y]);
+    }
+    return { reflectedCue: p.reflectedCue,
+      orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined,
+      pos: { x, y }, dir, radius: p.r, color: p.c, shape: p.sh, age, cosmeticMotif: p.cosmeticMotif,
+      cosmeticProjectile: cosmeticStyle(COSMETIC_PROJECTILES, p.cosmeticProjectile) ? p.cosmeticProjectile : undefined,
+    };
+  }) as unknown as World['projectiles'];
+  // THE WIRE'S EYES: a band's ends ride the client's own bodies (the endpoints' host ids,
+  // the `bl` idiom) at DRAW time, so a beam follows interpolated and predicted bodies
+  // alike; the shipped coords stand in for an end this client does not hold.
+  world.tethers = (snap.tethers ?? []).map(t => {
+    const A = t.ai !== undefined ? POOL.get(t.ai) : undefined, B = t.bi !== undefined ? POOL.get(t.bi) : undefined;
+    return {
+      get ax() { return A ? A.pos.x : t.ax; }, get ay() { return A ? A.pos.y : t.ay; },
+      get bx() { return B ? B.pos.x : t.bx; }, get by() { return B ? B.pos.y : t.by; },
+      color: t.c, width: t.w,
+    };
+  }) as unknown as World['tethers'];
+  // THE WIRE'S EYES: the host's ground telegraphs and fields as render stubs (the cast-stub
+  // idiom): drawn, never run (no client update touches world.zones; absent = none stand).
+  // A row seen in `prev` glides by its wire id; a field riding a body sits on it at draw time.
+  const prevZones = lerping && prev!.zones ? new Map(prev!.zones.map(z => [z.id, z])) : null;
+  world.zones = (snap.zones ?? []).map(z => zoneStub(z, prevZones?.get(z.id), lerping ? alpha : 1, snap.time)) as unknown as World['zones'];
   world.townPortalClientViews = (snap.townPortalViews ?? []).map(p => ({ ...p,
     cosmeticLoadout: sanitizeCosmeticLoadout(p.cosmeticLoadout) }));
   world.drops = snap.drops.map(d => ({
@@ -1595,7 +2033,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.creepers.visuals = (snap.creepers ?? []).map(v => ({ ...v, trail: v.trail.map(p => ({ ...p })) }));
   world.satellites.flights.visuals = (snap.satelliteFlights ?? []).map(v => ({ ...v, from: { ...v.from }, to: { ...v.to } }));
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0 })) as unknown as World['orbs'];
-  world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k, ...(t.yieldToCombat ? { yieldToCombat: true } : {}), ...(t.dropUid === undefined ? {} : { dropUid: t.dropUid }) })) as unknown as World['texts'];
+  world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k, ...(t.yieldToCombat ? { yieldToCombat: true } : {}), ...(t.dropUid === undefined ? {} : { dropUid: t.dropUid }),
+    ...(t.o === undefined ? {} : { seat: t.o }) })) as unknown as World['texts']; // THE WIRE'S EYES: a combat number's owner seat
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
@@ -1622,9 +2061,13 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   })) as unknown as World['deathBursts'];
   // Mirror the host's authoritative vendor stock so the smith panel renders the
   // real wares and a buyVendor index resolves against the SAME list host-side.
-  if (snap.vendor) {
+  // THE SHELF BEAT: the rows ride on a change and on the beat (absent = unchanged); a
+  // snapshot the client never applied (it applies only the newest of a queued run) still
+  // delivers its change through `prev`, the newest carrier winning.
+  const shelf = snap.vendor !== undefined ? snap : prev?.vendor !== undefined ? prev : null;
+  if (shelf?.vendor) {
     const locks: { entry: VendorEntry; idx: number; commission?: boolean }[] = [];
-    world.vendorStock = snap.vendor
+    world.vendorStock = shelf.vendor
       .map((w, i) => {
         const e = rehydrateVendor(w);
         if (e && w.lk) locks.push({ entry: e, idx: i, ...(w.lk === 2 ? { commission: true } : {}) });
@@ -1637,9 +2080,13 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // the panel's one read path (vendorEntryHold) now answers identically
     // on host and client. The client never resolves or persists it.
     world.vendorHolds['brandt'] = { locks, watchedSec: 0 };
-    world.vendorRestockAt = snap.vendorRestockAt;
-    world.netVendorCap = snap.vendorCap;
-    if (snap.memoryAccess !== undefined) world.netMemoryAccess = snap.memoryAccess; // THE WIRE DISCIPLINE: absent = unchanged
+    world.vendorRestockAt = shelf.vendorRestockAt ?? world.vendorRestockAt;
+    world.netVendorCap = shelf.vendorCap;
+  }
+  {
+    // THE KEEPER'S GATE + the boards ride every snapshot (the shelf's beat is its own).
+    const access = snap.memoryAccess ?? prev?.memoryAccess; // THE WIRE DISCIPLINE: absent = unchanged (the newest carrier wins)
+    if (access !== undefined) world.netMemoryAccess = access;
     world.netVendorTradeOpen = snap.vendorTradeOpen;
     world.netVendorGemsOpen = snap.vendorGemsOpen;
     world.netBagBoard = snap.bagBoard;
@@ -1660,6 +2107,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   const myMeta = snap.seatMeta?.[world.clientSeatId];
   if (myMeta) applySeatMeta(world, world.localSeat, myMeta);
   const me = snap.seats[world.clientSeatId];
+  if (me) applyOwnClocks(world, snap, me); // THE WIRE'S EYES: the own hero's cooldown and gauge rows
   if (me) {
     const p = world.player;
     // When the own hero is a pooled actor its pos was already interpolated above;

@@ -36,7 +36,8 @@ import type { PlayerId, PlayerInput } from '../src/net/intent';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { isAccountId } from '../src/meta/account';
 import { SHARD_REFUSAL, shardBuildStamp } from '../src/net/shardBuild';
-import { seatViewBody, seatViewFrame, seatViewSplit } from '../src/net/seatView';
+import { ownEntryJson } from '../src/net/snapshot'; // THE WIRE'S EYES: THE OWN ENTRY
+import { seatAudienceBody, seatAudienceFrame, seatAudienceSplit } from '../src/net/seatView'; // THE ACTING SEAT: the audiences
 
 export const SHARD_WIRE_CFG = {
   /** Largest frame/message a client may send (its inputs and intents are tiny). */
@@ -512,15 +513,26 @@ export class ShardTransport implements NetTransport {
   sendInput(seat: PlayerId, input: PlayerInput): void { this.pending.set(seat, input); } // the host's own seats
   drainInputs(): Map<PlayerId, PlayerInput> { const out = this.pending; this.pending = new Map(); return out; }
 
-  /** THE ACTING SEAT (net/seatView.ts): a snapshot with nothing private is one
-   *  frame for everyone; otherwise its shared body encodes once and each
-   *  connection hears its own seat's HUD rows, its party's notices and an
-   *  eyecatch it may see, spliced in. */
+  /** THE OWN ENTRY (snapshot.ts SEAT_OWN_ROWS) and THE ACTING SEAT's audiences (net/seatView.ts):
+   *  a seat's own rows (its clocks, its refusal note, its surge) reach its own socket and never
+   *  another's, a notice with an audience reaches that audience alone and an eyecatch the seats
+   *  that may see it; a snapshot carrying none of these is the one broadcast frame it was. */
   sendState(s: StateSnapshot): void {
-    const view = seatViewSplit(s);
-    if (!view) { this.broadcast({ t: 'snap', snap: s }); return; }
-    const body = seatViewBody(view);
-    for (const [seat, c] of this.bySeat) this.write(c, encodeText(seatViewFrame(body, view, seat)));
+    const heard = seatAudienceSplit(s); // THE ACTING SEAT: an audience rides this snapshot (the own rows go with it)
+    if (heard) {
+      const body = seatAudienceBody(heard);
+      for (const [seat, c] of this.bySeat) this.write(c, encodeText(seatAudienceFrame(body, heard, seat)));
+      return;
+    }
+    // THE OWN ENTRY (snapshot.ts SEAT_OWN_ROWS): a seat's own rows (its clocks) reach its own
+    // socket and never another's; a snapshot carrying none is the one broadcast frame it was.
+    const own = ownEntryJson(s);
+    if (!own) { this.broadcast({ t: 'snap', snap: s }); return; }
+    let bare: Uint8Array | null = null; // the shared frame for every socket whose seat carries no own row
+    for (const [seat, c] of this.bySeat) {
+      const mine = own.forSeat(seat);
+      this.write(c, mine !== null ? encodeText('{"t":"snap","snap":' + mine + '}') : (bare ??= encodeText('{"t":"snap","snap":' + own.bare + '}')));
+    }
   }
   onState(cb: (s: StateSnapshot) => void): () => void { this.stateCbs.add(cb); return () => { this.stateCbs.delete(cb); }; }
   sendZone(z: ZoneMsg): void { this.broadcast({ t: 'zone', zone: z }, undefined, true); }
