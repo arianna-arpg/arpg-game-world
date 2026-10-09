@@ -34,6 +34,16 @@
 //      awake past the linger and resumes with that unit's zone, a grouped down whose
 //      only mate stands in another unit falls (no kneel across Worlds), THE MERCY
 //      raises an Immortal inside a unit;
+//   F  THE ROADS PER PLAYER (W2): a seat idle on the hearth's road out walks it alone
+//      (an acting seat on the same road stays, then moves on its own dwell); THE RETREAT
+//      LAW keeps a second arriver's own door; a cave mouth wakes a pocket and the
+//      climb-out lands at the mouth under the seat's own exit grace; the town portal
+//      carries a seat home and back down to its slept pocket; the caravan carries it
+//      home; the road ring (SeatW.rd) rides only the dwelling seat's row, and a shell
+//      draws it;
+//   H  A SEALED ROAD'S WORD (W2): the dock, the harbor board's passage, the Delver's
+//      shaft and an unbuilt realm gate answer an idle seat once per approach on its own
+//      row, build no ring and move nobody; another seat hears nothing;
 //   R  THE RUN ROW: a classic shard's save carries its clears and run ledger, and a
 //      save without the row still stands.
 import ts from 'typescript';
@@ -47,7 +57,7 @@ import type { SimUnit } from '../server/simUnits';
 import { WsTransport, shardResumeFor, type ShardResume } from '../src/net/ws';
 import type { StateSnapshot, ZoneMsg } from '../src/net/snapshot';
 import type { SessionMsg } from '../src/net/transport';
-import { NullInput, type PlayerInput } from '../src/net/intent';
+import { NullInput, type MetaAction, type PlayerInput } from '../src/net/intent';
 import { World, type Seat } from '../src/engine/world';
 import type { Actor, ConstructState } from '../src/engine/actor';
 import { resetActorIdCounter } from '../src/engine/actor';
@@ -55,7 +65,10 @@ import { makeSkillInstance } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import { mintCave } from '../src/engine/worldgen';
 import { rollItem } from '../src/engine/itemgen';
-import { PINNED_FIELDS, SHARD_UNIT_FIELDS, UNIT_CFG } from '../src/engine/shardUnits';
+import { PINNED_FIELDS, SHARD_UNIT_FIELDS, UNIT_CFG, entryLanding } from '../src/engine/shardUnits';
+import { SHARD_ROADS_CFG, seatDoorOf, seatLadderOf } from '../src/engine/shardRoads';
+import { applyOwnSeatRows } from '../src/net/seatView';
+import type { Doodad } from '../src/engine/levelgen';
 import { makeAccount, ensureAccountId, type Account } from '../src/meta/account';
 import { serializeCouchGuest, type CharacterSave } from '../src/meta/character';
 import { buildManifest } from '../src/packages/manifest';
@@ -773,6 +786,207 @@ let crossSeed = 0;
     downed && !m.actor.downed && !m.actor.dead && units.unitOf(M.id) === mu);
   for (const cl of [A, B, P, Q, R, S2, M]) cl.c.leave();
   await waitFor(() => units.allSeats().length === 0, sec(VESSEL_CFG.deathBeatSec) + 120);
+}
+
+// ======================================================= F: THE ROADS PER PLAYER ==
+/** Every live foe of a unit holds its hand (a road test is a walk, not a fight: a shove resets a dwell). */
+const pacify = (w: World): void => { for (const a of w.actors) if (a.team === 'enemy' && !a.dead) a.passive = true; };
+const act = (cl: Client, action: MetaAction): void => { cl.c.sendSession({ t: 'action', action }); };
+/** Distinct notes with this text a client's own row carried since snapshot `from` (one per `at`). */
+const notesHeard = (cl: Client, from: number, text: string): number =>
+  new Set(cl.snaps.slice(from).map(s => s.seats[cl.id]?.fn).filter(f => f?.text === text).map(f => f!.at)).size;
+{
+  const F1 = await join('Fen'), F2 = await join('Gale');
+  await runTicks(2);
+  const s1 = seatOf(F1.id)!, s2 = seatOf(F2.id)!;
+  s1.actor.invulnerable = true; s2.actor.invulnerable = true;
+  pacify(k);
+  // F1 THE EXIT, per seat: both stand on the hearth's road out; F2's hands stay busy, F1 is idle.
+  const out = k.exits.find(e => e.to === cross)!;
+  place(s1, out.pos.x, out.pos.y); place(s2, out.pos.x + 4, out.pos.y);
+  const n1 = F1.snaps.length, n2 = F2.snaps.length, handoffs0 = units.handoffs;
+  const moved = await waitFor(() => { s2.lastActedAt = k.time; return units.unitOf(F1.id) !== units.keeper; }, sec(3));
+  const fu = units.unitOf(F1.id)!;
+  const uw = fu.world;
+  check('F exit: a seat idle on the hearth\'s road out walks it alone into a unit of the zone beyond, while the acting seat on the same road stays',
+    moved && fu.role === 'unit' && uw.zone.id === cross && units.unitOf(F2.id) === units.keeper && k.zone.id === hearth
+    && units.handoffs === handoffs0 + 1, `${units.unitOf(F1.id)?.key} / ${units.unitOf(F2.id)?.key}`);
+  const landAt = entryLanding(uw, hearth);
+  check('F exit: it lands by the back-portal rule (inside the road it came by)', dist(s1.actor.pos, landAt) < 30,
+    `${Math.round(dist(s1.actor.pos, landAt))} px off`);
+  const rings = F1.snaps.slice(n1).map(s => s.seats[F1.id]?.rd).filter((r): r is [number, number, number, string] => !!r);
+  check('F ring: the dwelling seat\'s own snapshots carry its road ring (SeatW.rd), the exit filling where it stands',
+    rings.length >= 3 && rings.every(r => r[3] === 'zone_exit' && Math.abs(r[0] - out.pos.x) < 1) && rings.some(r => r[2] >= 0.5),
+    rings.map(r => r[2]).join(','));
+  check('F ring: another seat never hears a road ring, its own or the dweller\'s (THE OWN ENTRY)',
+    F2.snaps.slice(n2).length > 10 && F2.snaps.slice(n2).every(s => Object.values(s.seats).every(e => e.rd === undefined)));
+  const followed = await waitFor(() => units.unitOf(F2.id) === fu, sec(3));
+  check('F exit: the acting seat moves only on its own dwell, into the same awake unit', followed && units.unitOf(F1.id) === fu);
+  // F2 THE RETREAT LAW: a second arriver from another side keeps its own way back.
+  pacify(uw);
+  const N = k.zoneMap[cross].exits.map(e => e.to).find(to => to !== '?' && to !== hearth && !!k.zoneMap[to]
+    && k.zoneMap[to].exits.some(x => x.to === cross) && uw.exits.some(x => x.to === to))!;
+  units.travel(F2.id, N);
+  const nw = worldOf(F2.id);
+  pacify(nw);
+  const inN = nw.exits.find(e => e.to === cross)!;
+  place(s2, inN.pos.x, inN.pos.y);
+  const second = await waitFor(() => units.unitOf(F2.id) === fu, sec(3));
+  check('F door: a second arriver walks into the same unit from another side, each seat wearing its own door',
+    second && seatDoorOf(uw, s2) === N && seatDoorOf(uw, s1) === hearth, `${N}: ${seatDoorOf(uw, s1)} / ${seatDoorOf(uw, s2)}`);
+  const obj0 = uw.zone.objective, done0 = uw.objectiveDone;
+  uw.zone.objective = { ...obj0, seal: true }; uw.objectiveDone = false;
+  const toHearth = uw.exits.find(e => e.to === hearth)!, toN = uw.exits.find(e => e.to === N)!;
+  check('F door: THE RETREAT LAW seals each seat\'s far roads and spares its own door',
+    !uw.isExitLocked(toHearth, seatDoorOf(uw, s1)) && uw.isExitLocked(toN, seatDoorOf(uw, s1))
+    && !uw.isExitLocked(toN, seatDoorOf(uw, s2)) && uw.isExitLocked(toHearth, seatDoorOf(uw, s2)));
+  const word = uw.exitLockHint(toN).text;
+  place(s1, toN.pos.x, toN.pos.y);
+  const nf = F1.snaps.length;
+  await runTicks(sec(1.5));
+  check('F door: a seat on a road its door does not spare stays sealed in, and hears the seal once, on its own row',
+    units.unitOf(F1.id) === fu && notesHeard(F1, nf, word) === 1, `${notesHeard(F1, nf, word)} × '${word}'`);
+  place(s2, toN.pos.x, toN.pos.y);
+  const fled = await waitFor(() => units.unitOf(F2.id)?.world.zone.id === N, sec(3));
+  check('F door: the second arriver\'s own door opens behind it alone (it walks back out; the first stays)', fled && units.unitOf(F1.id) === fu);
+  uw.zone.objective = obj0; uw.objectiveDone = done0;
+  // F3 THE CAVE MOUTH and THE CLIMB-OUT, with THE EXIT GRACE per seat.
+  place(s1, uw.arena.w / 2, uw.arena.h / 2);
+  const mouth = vec(s1.actor.pos.x, s1.actor.pos.y);
+  (priv(uw).caveEntrances as { pos: { x: number; y: number }; seed: number; kind: string }[])
+    .push({ pos: vec(mouth.x, mouth.y), seed: 0x5eed3, kind: 'cave_entrance' });
+  const wakes0 = units.wakes;
+  const down = await waitFor(() => !!units.unitOf(F1.id)?.world.inCave, sec(4));
+  const pu = units.unitOf(F1.id)!;
+  const pocket = pu.world.zone.id;
+  const ladder = seatLadderOf(pu.world, s1);
+  check('F mouth: a seat idle on a cave mouth descends alone into a woken pocket unit (the others stay where they stand)',
+    down && pu !== fu && pocket.startsWith('cave_') && units.wakes === wakes0 + 1 && units.unitOf(F2.id)?.world.zone.id === N, pocket);
+  check('F mouth: the pocket hands the seat its own ladder (the mouth it took, from its own door)',
+    ladder.caveReturn?.zoneId === cross && dist(ladder.caveReturn.pos, mouth) < 1 && ladder.caveReturn.entryFrom === hearth && ladder.caveStack.length === 0);
+  pacify(pu.world);
+  const up = pu.world.exits.find(e => e.to === cross)!;
+  place(s1, up.pos.x, up.pos.y);
+  const climbed = await waitFor(() => units.unitOf(F1.id) === fu, sec(3));
+  check('F climb: the climb-out lands the seat in the parent unit at the mouth it went down (the step off the hole)',
+    climbed && dist(s1.actor.pos, vec(mouth.x, mouth.y + 40)) < 30, `${Math.round(dist(s1.actor.pos, vec(mouth.x, mouth.y + 40)))} px off`);
+  await runTicks(sec(1.5));
+  check('F grace: the climbed-out seat standing on its mouth holds there (THE EXIT GRACE, its own)', units.unitOf(F1.id) === fu);
+  place(s1, mouth.x + 220, mouth.y); await runTicks(3);
+  place(s1, mouth.x, mouth.y);
+  const again = await waitFor(() => units.unitOf(F1.id)?.world.zone.id === pocket, sec(4));
+  check('F grace: once it stepped clear the mouth answers again (into the same awake pocket)', again && units.unitOf(F1.id) === pu);
+  // F4 THE TOWN PORTAL, out of the pocket and back down (the way back wakes the slept pocket from its spot).
+  pacify(pu.world);
+  place(s1, up.pos.x + 160, up.pos.y + 120);
+  await runTicks(3);
+  const castAt = vec(s1.actor.pos.x, s1.actor.pos.y);
+  act(F1, { t: 'townPortal' });
+  const opened = await waitFor(() => pu.world.townPortalViews().some(v => v.owner === F1.id), sec(3));
+  const pv = pu.world.townPortalViews().find(v => v.owner === F1.id);
+  check('F portal: the townPortal intent is no longer sealed: the asking seat casts its own passage in its own unit', opened && !!pv);
+  if (pv) place(s1, pv.pos.x, pv.pos.y);
+  const home = await waitFor(() => units.unitOf(F1.id) === units.keeper, sec(3));
+  const rp = k.townPortalViews().find(v => v.owner === F1.id);
+  check('F portal: it carries the seat home alone and lands it on its return passage at the hearth (THE HEARTH ALIAS)',
+    home && !!rp && dist(s1.actor.pos, rp.pos) < 40 && units.unitOf(F2.id)?.world.zone.id === N,
+    rp ? `${Math.round(dist(s1.actor.pos, rp.pos))} px from the return passage` : 'no return passage');
+  await runTicks(sec(1));
+  check('F portal: the arrival latch holds the seat on its return passage until it steps clear', units.unitOf(F1.id) === units.keeper);
+  units.sleep(pu);
+  const sleptRow = memoryOf().get(pocket);
+  check('F portal: the emptied pocket sleeps with its row (the way back must wake it)', !units.unit(pu.key) && !!sleptRow);
+  if (rp) { place(s1, rp.pos.x + 160, rp.pos.y); await runTicks(3); place(s1, rp.pos.x, rp.pos.y); }
+  const down2 = await waitFor(() => units.unitOf(F1.id)?.world.zone.id === pocket, sec(3));
+  const pu2 = units.unitOf(F1.id)!;
+  const ladder2 = seatLadderOf(pu2.world, s1);
+  check('F portal: the return passage carries it back down to the pocket at the portal\'s spot, its ladder whole',
+    down2 && pu2 !== pu && dist(s1.actor.pos, castAt) < 40 && ladder2.caveReturn?.zoneId === cross && dist(ladder2.caveReturn.pos, mouth) < 1
+    && pu2.world.caveReturn?.zoneId === cross, `${Math.round(dist(s1.actor.pos, castAt))} px from the cast`);
+  // F5 THE CARAVAN: the caravanTo intent carries the asking seat home (band 0 = the hearth).
+  const cw = worldOf(F2.id);
+  const cv = cw.createMonster('townsfolk_caravanner', 1, 'player');
+  cv.passive = true; cv.untargetable = true;
+  cv.pos = vec(s2.actor.pos.x + 40, s2.actor.pos.y); cw.actors.push(cv);
+  await runTicks(2);
+  act(F2, { t: 'caravanTo', band: 0 });
+  const escorted = await waitFor(() => units.unitOf(F2.id) === units.keeper, sec(2));
+  check('F caravan: the caravanTo intent is no longer sealed: the escort carries the asking seat alone into the keeper (band 0, the hearth)',
+    escorted && units.unitOf(F1.id) === pu2);
+  // F6 THE ROAD RING on the client: the shell draws the ring its host fills, and only while it is filled.
+  const shellW = new World(makeAccount(), Object.freeze(buildManifest(makeAccount(), 0x5e11f)));
+  shellW.createPlayer(CLASSES[0], { startingCompanions: false, startingFlasks: false });
+  shellW.clientSeatId = 'me';
+  const row = { pos: [0, 0], life: 1, maxLife: 1, mana: 0, maxMana: 0, es: 0, maxEs: 0, dead: false, downed: false };
+  applyOwnSeatRows(shellW, { seats: { me: { ...row, rd: [140, 220, 0.5, 'zone_exit'] } } } as unknown as StateSnapshot);
+  const drawn = shellW.dwellRingsView().find(r => r.kind === 'zone_exit');
+  applyOwnSeatRows(shellW, { seats: { me: row } } as unknown as StateSnapshot);
+  check('F ring: a shell draws the road ring its own row carries (World.netRoadDwell into dwellRingsView), and none once it is gone',
+    !!drawn && drawn.pos.x === 140 && drawn.pos.y === 220 && drawn.frac === 0.5 && !shellW.dwellRingsView().some(r => r.kind === 'zone_exit'));
+  for (const cl of [F1, F2]) cl.c.leave();
+  await waitFor(() => !seatOf(F1.id) && !seatOf(F2.id), 60);
+}
+
+// ======================================================= H: A SEALED ROAD'S WORD ==
+{
+  const H1 = await join('Hale'), H2 = await join('Ivo');
+  await runTicks(2);
+  const zone = nearZones(cross).find(id => !units.unitFor(id) && !memoryOf().has(id)) ?? nearZones(cross)[0];
+  const hu = units.travel(H1.id, zone)!;
+  units.travel(H2.id, zone);
+  const hw = hu.world;
+  pacify(hw);
+  const h1 = seatOf(H1.id)!, h2 = seatOf(H2.id)!;
+  h1.actor.invulnerable = true; h2.actor.invulnerable = true;
+  const W = SHARD_ROADS_CFG.words;
+  /** A standing spot at a fraction of the zone (clamped onto walkable ground). */
+  const spot = (fx: number, fy: number): { x: number; y: number } => hw.clampPos(vec(hw.arena.w * fx, hw.arena.h * fy), 16);
+  const dockAt = spot(0.5, 0.5), boardAt = spot(0.8, 0.5), shaftAt = spot(0.5, 0.8), gateAt = spot(0.8, 0.8), awayAt = spot(0.2, 0.2);
+  const h1At = spot(0.2, 0.8);
+  place(h1, h1At.x, h1At.y);
+  // The sealed furniture, fabricated where H2 will stand: a port's dock and harbor board, a
+  // Delver's shaft, a realm gate (its road is W4's). Each answers an idle seat once per approach.
+  const port0 = hw.zone.port;
+  hw.zone.port = true;
+  const dock = { pos: vec(dockAt.x, dockAt.y), radius: 16, kind: 'dock' } as unknown as Doodad;
+  const board = { pos: vec(boardAt.x, boardAt.y), radius: 14, kind: 'harbor_board' } as unknown as Doodad;
+  hw.doodads.push(dock, board);
+  priv(hw).descentSite = { delverId: -1, platform: vec(shaftAt.x, shaftAt.y) };
+  (priv(hw).demonPortals as { pos: { x: number; y: number }; invId: string }[]).push({ pos: vec(gateAt.x, gateAt.y), invId: 'probe_rift' });
+  const visit = async (at: { x: number; y: number }, secs: number): Promise<{ m1: number; m2: number }> => {
+    const m1 = H1.snaps.length, m2 = H2.snaps.length;
+    place(h2, at.x, at.y);
+    await runTicks(sec(secs));
+    return { m1, m2 };
+  };
+  const away = (): void => place(h2, awayAt.x, awayAt.y);
+  const v1 = await visit(dockAt, 2.6);
+  check('H dock: a seat idle at the dock hears the quay\'s word once on its own row, and nothing moves',
+    notesHeard(H2, v1.m2, W.dock) === 1 && units.unitOf(H2.id) === hu && units.unitOf(H1.id) === hu,
+    `${notesHeard(H2, v1.m2, W.dock)} × '${W.dock}'`);
+  check('H dock: it builds no dwell, so no ring rides its row', H2.snaps.slice(v1.m2).every(s => !s.seats[H2.id]?.rd));
+  check('H dock: the other seat hears nothing', H1.snaps.slice(v1.m1).length > 10
+    && H1.snaps.slice(v1.m1).every(s => Object.values(s.seats).every(e => e.fn === undefined)));
+  away(); await runTicks(10);
+  const v1b = await visit(dockAt, 1);
+  check('H dock: a fresh approach hears it again (once per approach)', notesHeard(H2, v1b.m2, W.dock) === 1);
+  away(); await runTicks(10);
+  const v2 = await visit(boardAt, 1.5);
+  check('H voyage: the harbor board\'s passage answers with its own word, once', notesHeard(H2, v2.m2, W.voyage) === 1 && units.unitOf(H2.id) === hu);
+  away(); await runTicks(10);
+  const v3 = await visit(shaftAt, 1.5);
+  check('H shaft: the Delver\'s shaft answers with its own word, once, and nobody descends',
+    notesHeard(H2, v3.m2, W.descent) === 1 && units.unitOf(H2.id) === hu && hw.zone.id === zone);
+  away(); await runTicks(10);
+  const v4 = await visit(gateAt, 1.5);
+  check('H gate: a realm gate whose road is not built yet answers too (nothing stays silently shut)',
+    notesHeard(H2, v4.m2, W.realm) === 1 && units.unitOf(H2.id) === hu && H2.snaps.slice(v4.m2).every(s => !s.seats[H2.id]?.rd));
+  hw.zone.port = port0;
+  hw.doodads = hw.doodads.filter(d => d !== dock && d !== board);
+  priv(hw).descentSite = null;
+  priv(hw).demonPortals = (priv(hw).demonPortals as { invId: string }[]).filter(p => p.invId !== 'probe_rift');
+  for (const cl of [H1, H2]) cl.c.leave();
+  await waitFor(() => !seatOf(H1.id) && !seatOf(H2.id), 60);
 }
 
 await host.stop({ persist: false });

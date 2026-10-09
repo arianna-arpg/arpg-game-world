@@ -81,6 +81,7 @@ import { watchRungOf, watchValueOf } from '../engine/watch';
 import { gaugeFloor, gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE WIRE'S EYES: the bar's gauge rows
 import { COOP_SCALING } from '../data/coop'; // THE WIRE'S EYES: the zone rows' reach (THE NEAR LAW's radius)
 import { applyCounterRows, applyCounterZone, counterZoneOf, harvestRowOf, journalRowOf, type HarvestW, type JournalW } from './journalWire'; // THE COUNTERS AND THE JOURNAL
+import { roadDwellRow } from '../engine/shardRoads'; // THE ROADS PER PLAYER (shard M1 W2): the road ring
 
 export type Vec2W = [number, number];
 
@@ -397,6 +398,10 @@ export interface SeatW {
   /** THE COUNTERS AND THE JOURNAL, THE OWN ENTRY: the seat's harvest view while it stands
    *  near a node or works a rite; absent = none. Hosted worlds alone. */
   hv?: HarvestW;
+  /** THE ROADS PER PLAYER, THE OWN ENTRY (engine/shardRoads.ts roadDwellRow): the road dwell
+   *  the host is filling for this seat, [x, y, fill 0..1 (floored, 2dp), transit kind], so its
+   *  client draws the ring the host fills (World.netRoadDwell); absent = none. Hosted worlds alone. */
+  rd?: [number, number, number, string];
   /** Movement-PREDICTION fields: `seq` = the last input the host applied for this
    *  seat (the client replays its unacked inputs forward from `pos`); `rooted` =
    *  the host has this hero movement-locked (so the client stops predicting forward);
@@ -1354,7 +1359,7 @@ function ownGaugesOf(a: Actor): Pick<SeatW, 'gg'> {
  *  seat's). A shard ships each socket its own seat's and never another's
  *  (ShardTransport.sendState through ownEntryJson); a broadcast lane (co-op) carries every
  *  seat's and each client reads its own. Naming a key here puts that SeatW row under the law. */
-export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh', 'jn', 'hv']; // + THE ACTING SEAT's note and surge, THE COUNTERS AND THE JOURNAL's journal and rite
+export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh', 'jn', 'hv', 'rd']; // + THE ACTING SEAT's note and surge, THE COUNTERS AND THE JOURNAL's journal and rite, THE ROADS PER PLAYER's road ring
 
 /** THE ACTING SEAT (World.seatHudWire): the seat's refusal note while it is fresh. */
 function ownNoteOf(s: Seat, world: World): { fn?: { text: string; at: number } } {
@@ -1365,6 +1370,11 @@ function ownNoteOf(s: Seat, world: World): { fn?: { text: string; at: number } }
 function ownSurgeOf(s: Seat, world: World): { lh?: number } {
   const lh = world.seatHudWire(s)?.lh;
   return lh !== undefined ? { lh } : {};
+}
+/** THE ROADS PER PLAYER (engine/shardRoads.ts): the road dwell the host fills for the seat (a hosted world alone). */
+function ownRoadOf(s: Seat, world: World): { rd?: [number, number, number, string] } {
+  const rd = world.shardWorld ? roadDwellRow(world, s) : undefined;
+  return rd ? { rd } : {};
 }
 let ownEntrySeq = 0;
 
@@ -1563,6 +1573,7 @@ function seatW(s: Seat, world: World): SeatW {
     ...ownGaugesOf(a), // THE WIRE'S EYES: SeatW.gg, THE OWN ENTRY
     ...ownNoteOf(s, world), // THE ACTING SEAT: SeatW.fn, the refusal note, THE OWN ENTRY
     ...ownSurgeOf(s, world), // THE ACTING SEAT: SeatW.lh, the low-life surge, THE OWN ENTRY
+    ...ownRoadOf(s, world), // THE ROADS PER PLAYER: SeatW.rd, the road ring the host fills, THE OWN ENTRY
     ...(seq !== undefined ? { seq } : {}),
     ...(world.movementLocked(a) ? { rooted: true } : {}),
     ...(a.sheet.get('traction') < 0.999 ? { slippery: true } : {}),

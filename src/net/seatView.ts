@@ -20,7 +20,9 @@
 //                      floats over the own head, the host's failNote look, one
 //                      float kept in place from the row so an adoption never
 //                      eats it and a frame never stacks it; its surge
-//                      (SeatW.lh) drives the low-life glow.
+//                      (SeatW.lh) drives the low-life glow; its road ring
+//                      (SeatW.rd, THE ROADS PER PLAYER) is the shell's
+//                      World.netRoadDwell, the ring its host is filling.
 //
 // The note and the surge themselves ride SeatW as THE OWN ENTRY's rows
 // (snapshot.ts seatW, SEAT_OWN_ROWS): a co-op (WebRTC) host broadcasts them
@@ -120,6 +122,9 @@ const noteFloat = new WeakMap<World, World['texts'][number]>();
 export function applyOwnSeatRows(world: World, snap: StateSnapshot): void {
   const own = snap.seats[world.clientSeatId];
   world.lowLifeHitFlash = own?.lh ?? 0;
+  // THE ROADS PER PLAYER (SeatW.rd): the road ring the host fills for this seat.
+  const rd = own?.rd;
+  world.netRoadDwell = rd ? { pos: { x: rd[0], y: rd[1] }, frac: rd[2], kind: rd[3] } : null;
   const fn = own?.fn, held = noteFloat.get(world);
   const drop = (): void => {
     if (!held) return;

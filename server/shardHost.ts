@@ -574,9 +574,9 @@ export class ShardHost {
       landed.set(seatId, n);
       if (n > SHARD_CFG.actionsPerSeatPerTick) continue;
       if (!action || typeof action !== 'object' || typeof (action as { t?: unknown }).t !== 'string') continue;
-      // THE SEALED ROADS: intents that move the WHOLE party stay shut on a
-      // keeper world until per-seat travel exists (card 15).
-      if (action.t === 'caravanTo' || action.t === 'townPortal') continue;
+      // THE ROADS PER PLAYER (shard M1 W2): caravanTo, townPortal and the
+      // waypoint are judged for the acting seat inside its own unit and move
+      // that seat alone (a ticket the hand-off queue drains after every unit).
       try { w.applyAction(seat, action); }
       catch (e) { this.noteFault(`meta action from ${seatId}`, e); }
     }
@@ -634,6 +634,9 @@ export class ShardHost {
       role: u.role, key: u.key,
       enqueue: t => this.units.enqueue(t),
       dispatch: (zoneId, fn) => this.units.dispatch(zoneId, fn),
+      // THE ROADS PER PLAYER: an awake zone's live seed (the town portal's faded check) and THE HEARTH SEAT.
+      liveSeed: zoneId => this.units.liveSeedOf(zoneId),
+      hearth: () => this.hearthSeat(),
     };
   }
 
