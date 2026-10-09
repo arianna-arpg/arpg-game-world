@@ -53,7 +53,7 @@ import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from 
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
-import { WsTransport, defaultShardUrl } from './net/ws';
+import { WsTransport, defaultShardUrl, shardResumeFor } from './net/ws';
 import { wildsShellActive, wildsShellAttach, wildsShellDetach, wildsShellStream, wildsShellZone } from './net/wildsClient';
 import { readTravelingVessel, ShardVesselLink, travelNote } from './meta/shardVessel';
 import { openCoopLobby } from './ui/lobby';
@@ -2583,15 +2583,20 @@ function openLobby(): void {
       // keyed home by this account's id; else the card's fresh hero, as ever.
       const vessel = await readTravelingVessel();
       const cls = CLASSES.find(c => c.id === (vessel?.classId ?? classId)) ?? CLASSES[0];
+      // THE RECONNECT TOKEN (card 16 B): a session lost on this address inside
+      // the window asks for its dormant seat back; else this is a fresh join.
+      const resume = shardResumeFor(url) ?? undefined;
       try {
         net = ws;
         subscribeToHost();
         wireSession();                             // run-lifecycle channel (newRun/hostLeft)
         shardVessel = new ShardVesselLink(ws, account, vessel, () => (net === ws ? world : null),
           { runWiped: () => ui.setContinueSave(null), mayWrite: () => net === ws || !running });
-        const { self, seed, worldmass, features, land } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
-          cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel ?? undefined);
-        startAsClient(cls, self, seed, worldmass ? { features, land } : undefined);
+        const { self, seed, worldmass, features, land, resumed } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
+          cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel ?? undefined, resume);
+        // A resumed seat is the hero that stood there: its class is its roster row's, never this lobby card's.
+        const seated = resumed ? CLASSES.find(c => c.id === ws.peers().find(p => p.id === self)?.classId) ?? cls : cls;
+        startAsClient(seated, self, seed, worldmass ? { features, land } : undefined);
       } catch (e) { resetToLocal(); throw e; }     // an unreachable server must revert net to LocalTransport
     },
     connectDefault: defaultShardUrl(), // THE SERVED CLIENT: a codespace's page offers the shard that served it (WS_TRANSPORT_CFG.defaultUrl elsewhere)

@@ -157,6 +157,8 @@ interface SeatBodies {
   unsent: boolean;
   /** Reclaims completed since the last row (the client's account deed). */
   reclaimed: number;
+  /** THE DORMANT SEAT: its socket is lost; no dwell runs and no row ships until it wakes. */
+  asleep: boolean;
 }
 
 /** The SessionMsg sink (ShardTransport.sendSession to one seat). */
@@ -271,9 +273,23 @@ export class ShardCorpses {
    *  stands. A seat without an account still receives (empty) rows, so a
    *  client shell never draws a body the shard does not hold. */
   join(seatId: string, accountId: string | undefined): void {
-    this.seats.set(seatId, { accountId, zoneId: null, bodies: [], stale: true, unsent: true, reclaimed: 0 });
+    this.seats.set(seatId, { accountId, zoneId: null, bodies: [], stale: true, unsent: true, reclaimed: 0, asleep: false });
   }
   leave(seatId: string): void { this.seats.delete(seatId); }
+  /** THE DORMANT SEAT: a seat whose socket was lost keeps its view, but a body
+   *  with no hand reclaims nothing (its dwell rests at zero) and no row ships
+   *  to a socket that is gone (a deed still owed waits for the wake). */
+  sleep(seatId: string): void {
+    const sb = this.seats.get(seatId);
+    if (!sb) return;
+    sb.asleep = true;
+    for (const b of sb.bodies) b.dwell = 0;
+  }
+  /** THE RECONNECT TOKEN: the resumed seat's new shell gets its bodies whole on the next sweep. */
+  wake(seatId: string): void {
+    const sb = this.seats.get(seatId);
+    if (sb) { sb.asleep = false; sb.stale = true; }
+  }
 
   /** The bodies standing for one seat right now (the probe's read). */
   standing(seatId: string): readonly { id: string; pos: Vec2; dwell: number }[] {
@@ -310,7 +326,7 @@ export class ShardCorpses {
     const w = this.world;
     for (const [seatId, sb] of this.seats) {
       const seat = w.seats.find(s => s.id === seatId);
-      if (!seat) continue;
+      if (!seat || sb.asleep) continue; // THE DORMANT SEAT: no hand, no dwell
       // M0: every seat stands in the one live zone (the party travels together).
       if (sb.stale || sb.zoneId !== w.zone.id) this.stand(sb);
       this.dwell(seat, sb, dt);
@@ -318,7 +334,7 @@ export class ShardCorpses {
     // Ship after EVERY seat swept: a reclaim re-stands its account's other seats.
     for (const [seatId, sb] of this.seats) {
       const seat = w.seats.find(s => s.id === seatId);
-      if (seat && (sb.stale || sb.unsent)) { if (sb.stale) this.stand(sb); this.ship(seat, sb); }
+      if (seat && !sb.asleep && (sb.stale || sb.unsent)) { if (sb.stale) this.stand(sb); this.ship(seat, sb); } // a dormant seat hears nothing
     }
   }
 

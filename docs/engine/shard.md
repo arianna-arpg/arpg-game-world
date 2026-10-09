@@ -44,15 +44,16 @@ newest saved world of that kind back. The render shell, prediction,
 the meta intents and the run-lifecycle channel are the co-op lane's,
 unchanged. Type-checks ride `npm run check` (`tsconfig.shard.json` covers
 `server/` with node types; `src/net/` stays browser-safe under the main
-gate). The regression rig is `balance/probe_shard.ts` (`npm run probe -- shard`).
+gate). The regression rig is `balance/probe_shard.ts` (`npm run probe -- shard`);
+THE DORMANT SEAT's is `balance/probe_sharddormant.ts`.
 
 ## The pieces
 
 | piece | file | law |
 |---|---|---|
 | THE WIRE FRAME | `src/net/wsframe.ts` | RFC 6455 as pure functions over `Uint8Array`: text/binary/continuation, close/ping/pong, client masks unmasked, server frames written unmasked, oversize (1009) and malformed (1002) frames reported never thrown. Zero dependencies — THE CLEAN TREE. |
-| `WsTransport` | `src/net/ws.ts` | the CLIENT role of `NetTransport` over the native `WebSocket`; `connect(url, info)` resolves `{ self, seed }` off the shard's welcome (THE SEED THREAD); `WireMsg` is `webrtc.ts`'s `NetMsg` grammar verbatim. A socket that dies before the welcome is the connect's failure; after it, `onHostLost`. |
-| `ShardTransport` | `server/shardTransport.ts` | the HOST role over `node:http` upgrade + the frame assembler. Seat ids bind to the CONNECTION at join; inputs and session messages are keyed by that binding, never by the seat a client claims. Every input is shape-checked (`sanitizeInput`); unknown session kinds drop; a congested socket is skipped (never stalls the loop); a keepalive ping reaps silent sockets; non-JSON or protocol errors close the socket, which despawns its seat. |
+| `WsTransport` | `src/net/ws.ts` | the CLIENT role of `NetTransport` over the native `WebSocket`; `connect(url, info)` resolves `{ self, seed }` off the shard's welcome (THE SEED THREAD); `WireMsg` is `webrtc.ts`'s `NetMsg` grammar verbatim. A socket that dies before the welcome is the connect's failure; after it, `onHostLost`. `leave()` says the word (`session leaving`) before it closes (THE DORMANT SEAT, below). |
+| `ShardTransport` | `server/shardTransport.ts` | the HOST role over `node:http` upgrade + the frame assembler. Seat ids bind to the CONNECTION at join; inputs and session messages are keyed by that binding, never by the seat a client claims. Every input is shape-checked (`sanitizeInput`); unknown session kinds drop; a congested socket is skipped (never stalls the loop); a keepalive ping reaps silent sockets; non-JSON or protocol errors close the socket and end its seat at once (THE REFUSED WIRE); any other lost socket leaves its seat DORMANT (below). |
 | `ShardHost` | `server/shardHost.ts` | boot (`bootShardEngine`: shims, package factions, the content census; registrations via `src/sim/arena`'s import list), one `World` from a real expedition manifest, the host frame verbatim (`poll seats → applyInputs → drain meta intents → updateAI → update`), the zone message on change, the meta heartbeat, 20 Hz snapshots, the persistence beat, a bounded fixed-step pump that logs engine faults instead of dying. |
 | THE WILDS SHELL | `src/net/wildsClient.ts` | the render shell's half of a hosted Unbroken Wilds: `wildsShellAttach` starts the mass runtime restore-only (inert) from the welcome's seed on a World built with the shard's town features, `wildsShellStream` streams pages around the own hero each frame (the runtime's own streaming block over public members) and keeps the sky on the shard's clock, `wildsShellZone` re-seats the mass walk under the server's doodads on the surface and drops the runtime for a pocket. Wired from main.ts (`clientWilds`). |
 | THE SHADOW / THE DRESS BEAT | `ShardHost` | on the wilds the keeper shadows the focus seat `SHARD_CFG.keeper.shadowOffset` px behind it each tick (the runtime streams, births and dwells around `world.player`); a changed doodad roster re-ships the zone message at most once per `SHARD_CFG.dressSec`. |
@@ -62,6 +63,7 @@ gate). The regression rig is `balance/probe_shard.ts` (`npm run probe -- shard`)
 | THE HEARTH WAKE / THE SPAWN GRACE | `ShardHost.onJoin` / `hearthSeat` / `endGraces` | every joiner stands up on a free spot at THE HEARTH SEAT — the wilds' native settlement keeps its own bedside (`MassSettlement.spawn`, the same spot on a fresh or a resumed surface), a classic world's is where the keeper first stood — never beside the shadowed keeper, wherever THE FOCUS has walked it. The joiner is untargetable until its first WILLED input (a direction, a held or edged slot, a meta press) or `SHARD_CFG.spawnGraceSec`, whichever comes first; the grace is per seat, ends with the seat, and the keeper never wears one. |
 | THE LAND DIGEST | `wildsSave.shellLandDigest` / `ShardTransport.land` / `wildsShellAttach(world, seed, land)` | the land is the seed's AND the preset's: a shell lays `startWorldMass`'s reservation over the build's preset, whose digest is the mass runtime's own `configHash`. The wilds save reader refuses (and the boot sets aside) a save whose digest differs — her ruling 2026-10-08: old saves are legacy, never migrated — and the welcome carries the digest the shard runs, so a client built on another preset refuses the join loudly instead of predicting against walls the server does not have. |
 | THE NEAR LAW AT THE MINT | `World.settleNearScale` | `createMonster` scales a body at its (0, 0) placeholder before its caller seats it, so with a radius set the scale is queued and settled where the body actually stands after each tick's update, and settled for every living enemy at a join (`addSeat` seats the newcomer beside the shadowed keeper before the hearth wake moves it) and at a leave. The life-fraction law is `rescaleEnemies`', which the engine keeps with its rounding (the seamless lane's brittles probe pins and replays it); the shard's settle clamps so no rounded life tops a fractional maximum, and a wilds save resumes "the same wounds" to the number. Off a shard the radius is 0 and the queue never fills. |
+| THE DORMANT SEAT / THE RECONNECT TOKEN | `ShardTransport` (`onPeerDormant`, `release`, `onPeerResume`, `isDormant`), `ShardHost` (`onDormant`, `onResume`, `sweepDormancy`), `WsTransport` (`shardResumeFor`) | card 16 B (ruled 2026-10-08): a dropped socket is never a free escape. A socket that closes without its client's word (`session leaving`, which `leave()` always says) never despawns its seat: the hero lies DORMANT for `SHARD_CFG.dormantSec`, standing, input-less and fully targetable, on every roster and snapshot with no `pleave`, its vessel and corpse records kept (the corpse desk sleeps it: no reclaim dwell, no row to a socket that is gone). Dying meanwhile is the ordinary death (THE DEATH COVENANT reads a dormant vessel as any other, and its fall ends the dormancy at once); when the clock runs out the old leave path runs and the peers hear `pleave` then. Every welcome carries THE RECONNECT TOKEN (`resume.token`, `node:crypto`, minted at every join and turned at every resume); a `join` carrying `resume { seat, token }` that names a DORMANT seat re-binds the new connection to it (the same seat, actor and vessel record; no `pjoin`; the host re-ships the terrain, the whole meta, the bodies' row and an input ack from zero), and anything else (a wrong or spent token, a seat that is not dormant) joins fresh with one log line. The client keeps its last session (`{ url, self, token, at }`, page memory, `at` re-stamped when the host is lost) past a lost host; the lobby's Connect offers it to the same normalized address inside `WS_TRANSPORT_CFG.resumeWindowMs` (no auto-reconnect yet), and a deliberate `leave()` forgets it. THE UNTRIED SEAT (still under THE SPAWN GRACE: it never willed a step, so it has nothing to escape) and THE REFUSED WIRE (a socket the shard closed for breaking the grammar) leave at once, as does every seat of a closing shard. A dormant seat holds its place under `maxSeats`. The status page marks it (`dormant: true`, `dormantLeftSec`). |
 
 ## M0 semantics (honest, inherited from co-op)
 
@@ -169,7 +171,7 @@ Wire rows (types and sanitizers in `src/net/vesselWire.ts`):
 | `session heroSave { save }` | shard → one seat | the vessel's mirror |
 | `session corpse { note, reckoning }` | shard → one seat | `ShardCorpseNote` (id?, charId, name, classId, level, zoneId, zoneName, pos, pieces, diedAt) + `ShardReckoning` (rows, carried, mult, minted, renown, level, zones, kills, modeId, modeStage); `runEnd` follows. Sent at the fall, and again (THE LATE WORD) at any re-upload of the fallen vessel |
 | `session corpses { zoneId, bodies, reclaimed? }` | shard → one seat | its own standing bodies (`ShardBodyRow`: id, x, y, classId, level, dwell) + reclaims since the last row |
-| `session leaving` | seat → shard | THE FAREWELL: mirror me before my socket closes |
+| `session leaving` | seat → shard | THE FAREWELL: mirror me before my socket closes; and THE DELIBERATE LEAVE: that close ends my seat at once, never dormant |
 
 Honest limits: a fresh hero (no upload) keeps M0's semantics (no mirror, the
 mercy); trust is the claim tier (the shard believes a well-formed vessel, the
@@ -184,18 +186,20 @@ rides the wire).
 
 `SHARD_CFG` (server/shardHost.ts): `tickHz` 60, `stateHz` 20,
 `metaHeartbeatSec` 1.5, `persistSec` 20, `maxCatchUpTicks` 5,
-`keeper { classId, name, reviveSec 8, shadowOffset 0 }`, `nearRadius` 1600, `dressSec` 4, `spawnGraceSec` 20, `saveDir`,
+`keeper { classId, name, reviveSec 8, shadowOffset 0 }`, `nearRadius` 1600, `dressSec` 4, `spawnGraceSec` 20,
+`dormantSec` 30 (THE DORMANT SEAT: world seconds a lost socket's hero stands before the leave path runs), `saveDir`,
 `wildsSaveSuffix` `'_wilds'` (THE WILDS SAVE's own file, `wildsSave`), `faultLogSec` 5, `telemetryTicks` 600;
 `WILDS_CLIENT_CFG.surveyEveryFrames` 30 (src/net/wildsClient.ts). `SHARD_WIRE_CFG`
 (server/shardTransport.ts): `maxClientMessage` 256 KB, `sendBufferCap` 96 KB,
-`pingSec` 15, `reapSec` 45, `maxSlots` 16. `WS_TRANSPORT_CFG.defaultUrl`
+`pingSec` 15, `reapSec` 45, `maxSlots` 16, `resumeTokenBytes` 16 (THE RECONNECT TOKEN, hex on the welcome). `WS_TRANSPORT_CFG.defaultUrl`
 (src/net/ws.ts) is the lobby box's first offer (the box remembers the last
 address that seated you, `localStorage` key `hw_shard_url`), `defaultPort` 8787
 the port a bare host name is given, `connectTimeoutMs` 10 s how long a connect
 waits for a welcome before it fails as silence; `normalizeShardUrl` turns the
 `https://` address a codespace shows into `wss://`, `http://` into `ws://` and a
 bare host into `ws://host:8787`; `farewellMs` 1500 is how long
-a leaving vessel holds its socket for the last mirror. `WIRE_CFG.memoryAccessBeat`
+a leaving vessel holds its socket for the last mirror; `resumeWindowMs` 30 s is how long after a
+lost session the lobby's Connect still offers its seat and token (THE RECONNECT TOKEN). `WIRE_CFG.memoryAccessBeat`
 (src/net/snapshot.ts) is the account-view beat; the view is built every tick and
 also ships on any tick it differs from the one this world last shipped (THE CHANGE
 BEAT), so a graduation reaches every client on the next snapshot and the beat only

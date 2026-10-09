@@ -623,6 +623,12 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
     free escape from death). B: the hero lies dormant N seconds and a
     reconnect token reclaims it. C: the server holds the hero until the
     next login. Rec: B now, C with THE VESSEL. **RULED B (2026-10-08).**
+    **BUILT as B (2026-10-08):** a socket lost without the client's word
+    (`session leaving`) leaves its hero standing and targetable for
+    `SHARD_CFG.dormantSec` (30 s; a death meanwhile is the ordinary death),
+    and the welcome's reconnect token takes the same seat back from the
+    lobby inside `WS_TRANSPORT_CFG.resumeWindowMs` (THE DORMANT SEAT,
+    docs/engine/shard.md; `balance/probe_sharddormant.ts`).
 17. **Identity and talk** — A: a name entered once, overhead names on
     heroes, world-anchored pings (a visible cue, SHOW DON'T TELL). B: text
     chat as well. Rec: A; chat is yours. **RULED A now, B as a later pass
