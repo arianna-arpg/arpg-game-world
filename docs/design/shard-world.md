@@ -295,6 +295,8 @@ individual `this.player` reads only where a per-seat read is the honest one
 (dwells, travel, warband standoff), never by removing the seat.
 
 ### 3.3 THE SIM UNIT (M1)
+*The implementation plan, anchored to the tree at 4b2ee251 with every world-level field classified, the hand-off order, the road catalog, the wire per unit, the probes and four build waves, is docs/design/shard-m1-plan.md (2026-10-09). Where that plan and this sketch differ, the plan is the law: THE PIN replaces the one-time alias, every unit stands its own warden, roads emit TICKETS the host executes after all units tick.*
+
 One `World` per live zone. The keeper's World owns the chart; every other
 unit ALIASES the keeper's world-level objects by reference (`zoneMap`,
 `caveMap`, `visited`, `surveyed`, `discoveredWaypoints`, `zoneMemory`, `sim`,
