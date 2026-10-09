@@ -170,6 +170,112 @@ function roadWalk(): { digest: string; hash: string; legs: Record<string, boolea
   check('B solo: World.atZone is the conditional it replaces (this zone runs, any other is nothing)', here === 1 && there === 0);
 }
 
+// ============================================ J (the solo half): THE WORLD SWEEP ==
+// THE SWEEP-WALK DIGEST, committed by W3 BEFORE any sweep was split: a seeded solo
+// expedition with every split sweep's event lit where the hero stands and beside it (a
+// warband's arrival here and one next door, a tide that streams then ebbs over us, a grief
+// that dissolves at dawn, a quickening, a Long Night ground, the gloaming outlasted, a
+// bloom, a plague, a ritual and its ignition, a sovereign's lair to mint, a demon rift, the
+// harborholds' clocks run out) walks on to the next zone. Every split sweep and every
+// OCCUPIED LAW reader runs, and the digest (the hops, the hero, the actors, the random
+// draws, the clock, the chart, the run ledger, the notice feed and the whole world save)
+// must print the same constant after W3: solo and the co-op host are byte-identical.
+const SWEEP_WALK_HASH = 'df418c17';
+const SWEEP_WALK_SEED = 0x5bee9;
+function sweepWalk(): { digest: string; hash: string; legs: Record<string, unknown> } {
+  const radius0 = COOP_SCALING.shareRadius, budget0 = FORECHART_CFG.beatBudgetMs;
+  COOP_SCALING.shareRadius = 0; FORECHART_CFG.beatBudgetMs = Infinity; // a solo world, the pinned governor
+  const restore = seedGlobalRandom(SWEEP_WALK_SEED);
+  const seeded = Math.random;
+  let draws = 0;
+  Math.random = () => { draws++; return seeded(); };
+  try {
+    resetActorIdCounter();
+    const account = makeAccount();
+    const w = new World(account, Object.freeze(buildManifest(account, SWEEP_WALK_SEED)));
+    w.createPlayer(CLASSES.find(c => c.id === 'warrior')!, { name: 'Sweeper', startingCompanions: false, startingFlasks: false });
+    const hero = (): Actor => w.player;
+    hero().invulnerable = true;
+    hero().level = 30; w.recalcSeat(w.localSeat); // the packages' level gates open
+    const hops: string[] = [w.zone.id];
+    const idle = (): void => { w.localSeat.lastActedAt = -1e3; w.localSeat.lastMovedAt = -1e3; hero().push = null; hero().casting = null; };
+    const step = (secs: number, done?: () => boolean): boolean => {
+      for (let t = 0; t < secs; t += 1 / 30) {
+        w.update(1 / 30);
+        if (hops[hops.length - 1] !== w.zone.id) hops.push(w.zone.id);
+        if (done?.()) return true;
+      }
+      return !!done?.();
+    };
+    const stand = (x: number, y: number): void => { const at = w.clampPos(vec(x, y), hero().radius); hero().pos.x = at.x; hero().pos.y = at.y; idle(); };
+    // Out of the hearth onto open ground (no event seats on a sanctuary).
+    const out = w.exits.find(e => e.to !== '?')!;
+    stand(out.pos.x, out.pos.y);
+    const hearth = w.zone.id;
+    const exited = step(10, () => w.zone.id !== hearth);
+    const here = w.zone.id;
+    stand(w.arena.w / 2, w.arena.h / 2);
+    const nbExit = w.exits.find(e => e.to !== '?' && e.to !== hearth && !!w.zoneMap[e.to]);
+    const nb = nbExit?.to ?? hearth;
+    const view = w.devOverlayView(), sim = w.sim;
+    const lit: Record<string, unknown> = {
+      deadwake: sim.deadwakeField?.devIgnite(view, here), haunt: sim.hauntField?.devIgnite(view, here),
+      quickening: sim.quickeningField?.devIgnite(view, here), longNight: sim.longNightField?.devEstablish(view, here),
+      mycelia: sim.myceliaField?.devIgnite(view, nb),
+      contagion: sim.contagionField?.devIgnite(view, nb) || sim.contagionField?.devIgnite(view, here),
+      ritual: sim.conclaveField?.devOpenRitual(view, nb), lair: sim.worldBossField?.devLair(view, nb),
+      demon: sim.demonField?.devIgnite(view, nb),
+    };
+    sim.gloamingField?.devIgnite();
+    sim.conclaveField?.devMaxIncubation();
+    const host = { faction: 'goblin', pos: { ...w.zone.map }, target: { ...w.zone.map }, fromZoneId: nb, targetZoneId: here,
+      radius: 60, age: 0, life: 100, arrived: true };
+    sim.invasion.arrivals.push(host, { ...host, pos: { ...host.pos }, target: { ...host.target }, targetZoneId: nb, fromZoneId: here });
+    step(12);
+    // The holds' clocks run out: one falls, one is besieged anew, one stands rebuilt.
+    w.devHoldsInfo().slice(0, 3).forEach((row, i) => {
+      const hold = w.zoneMap[row.id].harborhold!;
+      if (i === 0) { hold.state = 'besieged'; hold.fallAt = w.time; }
+      else if (i === 1) { hold.state = 'open'; hold.siegeAt = w.time; }
+      else { hold.state = 'fallen'; hold.rebuildAt = w.time; }
+    });
+    priv(w).holdSweepAt = 0;
+    const marches = (priv(w).warbandMarches as unknown[]).length;
+    // The dawn and the ebb: the grief dissolves here, the tide recedes over us.
+    const hf = sim.hauntField; if (hf) (priv(hf).dissipated as unknown[]).push({ id: 'probe_grief', zoneId: here, color: '#c8c8c8' });
+    const df = sim.deadwakeField; if (df) (priv(df).ebbedQueue as unknown[]).push({ x: w.zone.map.x, y: w.zone.map.y });
+    step(8);
+    // The gloaming outlasted, witnessed.
+    const gf = sim.gloamingField; if (gf) { gf.markWitnessed(); priv(gf).phase = 'idle'; priv(w).gloamPrevPhase = 'waning'; }
+    step(1);
+    // On to the neighbour, and the sweeps run on from there.
+    if (nbExit) stand(nbExit.pos.x, nbExit.pos.y);
+    const walked = step(10, () => w.zone.id !== here);
+    stand(w.arena.w / 2, w.arena.h / 2);
+    step(12);
+    const fnv = (s: string): string => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); };
+    const p = hero().pos;
+    const digest = [hops.join('>'), `${Math.round(p.x)},${Math.round(p.y)}`, `actors ${w.actors.length}`, `draws ${draws}`,
+      `t ${w.time.toFixed(2)}`, `zones ${Object.keys(w.zoneMap).length}`, `gen ${String(priv(w).nextGenId)}`,
+      `ledger ${JSON.stringify(w.ledger)}`, `save ${fnv(JSON.stringify(w.serializeWorldState()))}`,
+      (w.notices as { text: string }[]).map(n => n.text).join('/')].join(' | ');
+    const holds = w.devHoldsInfo().map(r => r.state).join(',');
+    return { digest, hash: fnv(digest), legs: { exited, walked, marches, holds, ...lit } };
+  } finally {
+    Math.random = seeded; restore();
+    COOP_SCALING.shareRadius = radius0; FORECHART_CFG.beatBudgetMs = budget0;
+  }
+}
+{
+  const walk = sweepWalk();
+  const legs = walk.legs;
+  check('J solo: the sweep walk lights every split sweep\'s event, a warband marches in where the hero stands, the holds turn',
+    !!legs.exited && !!legs.walked && legs.marches === 1 && ['deadwake', 'haunt', 'quickening', 'longNight', 'mycelia', 'contagion', 'ritual', 'lair', 'demon'].every(k => legs[k] === true)
+    && /fallen/.test(String(legs.holds)), JSON.stringify(legs));
+  check('J solo: THE SWEEP-WALK DIGEST is the constant W3 committed before any sweep was split (THE SOLO INVARIANT)',
+    walk.hash === SWEEP_WALK_HASH, `${walk.hash} ← ${walk.digest.slice(0, 160)}…`);
+}
+
 // ====================================================== A: THE DERIVED CENSUS ==
 {
   const path = resolve('src/engine/world.ts');
