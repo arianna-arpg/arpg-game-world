@@ -21108,7 +21108,7 @@ export class World {
   nearCampfire(): boolean {
     if (this.massRuntime) return false; // worldmass keeps run consequences; refresh migration is pending
     const a = this.stationAnchor('campfire'); // THE ANCHORED DWELL: the fire itself
-    return featureEnabled(this.account, FEATURE.CAMPFIRE)
+    return this.counterOwned(FEATURE.CAMPFIRE) // a hosted world's shell never offers it (its refresh is the world's, keeper-held)
       && this.townPresent() && !!a
       && dist(this.player.pos, a.pos) <= CAMPFIRE_RADIUS
       && this.dwellReachable(this.player.pos, a.pos, DWELL_CFG.reach, { from: this.player.tier ?? 0, to: a.tier });

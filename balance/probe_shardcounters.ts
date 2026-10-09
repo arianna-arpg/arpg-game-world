@@ -166,6 +166,15 @@ const bench = w.stationAnchor('salvage')!, board = w.stationAnchor('bounty_board
   check('A font: the host stands the seat at the Font', standAt(sA, font.pos, () => w.nearFont(sA)));
   const fontOpened = await shellTicks(shell, A, sec(3), () => shell.fontDwellRequested);
   check('A font: the shell\'s linger opens the Font (the Font list shipped)', fontOpened && shell.fontDwellSeatId === shell.localSeat.id);
+  // The campfire's refresh is the world's (keeper-held on a hosted world): even a shell whose own
+  // account owns the fire never offers it.
+  const fire = w.stationAnchor('campfire');
+  if (fire) {
+    standAt(sA, fire.pos, () => dist(sA.actor.pos, fire.pos) <= 60);
+    shell.account.features.add(FEATURE.CAMPFIRE);
+    await shellTicks(shell, A, 6);
+    check('A fire: a hosted shell never offers the campfire, whatever its own account owns', shell.campfireHint() === null);
+  }
   // A shell whose zone message carried no counters (a co-op host's) never lingers.
   const { shell: coop } = makeShell(A);
   const bare = { ...A.zones.at(-1)! };
