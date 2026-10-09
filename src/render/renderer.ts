@@ -207,7 +207,7 @@ import { AOE_SHAPE, bandSwingGeo } from '../engine/skills';
 
 import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
 import { UnderstoryLayer } from './vis/understory';
-import { CAMERA_CFG, cameraZoomOf, cameraModeOf, couchConfineRect, couchFit, placeCamera } from './camera';
+import { CAMERA_CFG, CAMERA_FOLLOW_CFG, cameraZoomOf, cameraModeOf, couchConfineRect, couchFit, placeCamera, springFollow, type CameraFollow } from './camera';
 import { COUCH_CFG } from '../data/couch';
 import { drawVoidFrame, voidBaseOf } from './vis/voidFrame';
 import { activePieces } from '../world/shape';
@@ -339,6 +339,13 @@ export class Renderer {
    *  separately. An absent preference preserves the classic 1.3 framing. */
   private get baseZoom(): number { return CAMERA_CFG.zoom.base * cameraZoomOf(this.getSettings?.().cameraZoom); }
   private couchStretch = 1;
+  /** THE SMOOTH SHELL's follow (camera.ts springFollow): a client shell's camera chases its
+   *  hero on a critically damped spring. Null on solo and every host (main.ts sets it on a
+   *  render shell alone): the hard lock, byte for byte. */
+  cameraFollow: CameraFollow | null = null;
+  /** THE SMOOTH SHELL's watchdog (net/shell.ts): 0..1, how long a hosted world has gone
+   *  silent past its stall; the frame strains with it (a drawn cue, no text). 0 draws nothing. */
+  linkStrain = 0;
   private get zoom(): number { return this.baseZoom * this.couchStretch * this.pixelScale; }
   /** Frame delta off the sim clock (canopy/roof fade smoothing). */
   private frameDt = 0;
@@ -648,6 +655,11 @@ export class Renderer {
     } else if (!couchOn) {
       this.couchStretch = 1; // solo: pinned exactly — the classic frame
     } // else: couch play under a degenerate view — hold the stretch as-is
+    // THE SMOOTH SHELL's follow: a client shell's frame chases its hero on a critically damped
+    // spring (a scene's eye and a frame lock still pin it; null everywhere else: the hard lock).
+    if (this.cameraFollow && !couchOn && !world.scene?.focus && !lockFocus) {
+      focus = springFollow(this.cameraFollow, focus, performance.now(), CAMERA_FOLLOW_CFG);
+    }
     // The positional veils are single-eye fabrics — under a shared couch
     // frame they suspend per COUCH_CFG.render (both players see what the
     // camera sees); each veil's own fade handles the transition gracefully.
@@ -988,6 +1000,7 @@ export class Renderer {
     this.drawSurvivalVignette(world); // THE SURVIVAL VEIL: per-row meter washes (breath's asphyxiation blue)
     this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge — over the veil: death keeps the last word
     this.drawAfflictionOverlays(world); // blood, kindling, poison and curses retain separate identities
+    if (this.linkStrain > 0) this.drawLinkStrain(w, h); // THE SMOOTH SHELL's watchdog: the frame strains while the world is silent
     // THE UI-SCALE SUB-PASS: pure screen-space widgets draw in virtual
     // (uiW×uiH) coords under one ctx.scale, so the player's UI Scale dial
     // grows the whole HUD together (ui/uiScale.ts — the DOM surfaces ride
@@ -2136,6 +2149,22 @@ export class Renderer {
         [1, 'rgba(170,230,250,0.55)'],
       ],
     }, 0.65 * pulse);
+  }
+
+  /** THE SMOOTH SHELL's watchdog (net/shell.ts): the frame STRAINS while a hosted world is
+   *  silent: a void vignette closing in on a slow held breath, an ether rim pulling taut at the
+   *  very edge, both growing with linkStrain and gone the moment the wire speaks again. Shown,
+   *  never told: no text. Her palette (void #07070d, ether #8fa8d8). */
+  private drawLinkStrain(w: number, h: number): void {
+    const k = Math.min(1, this.linkStrain), kq = qFrac(k), t = performance.now() / 1000;
+    drawEdgeOverlay(this.ctx, w, h, {
+      key: `linkstrain|${kq}`, innerFrac: 0.6 - 0.3 * kq,
+      stops: [[0, 'rgba(7,7,13,0)'], [0.7, 'rgba(7,7,13,0.55)'], [1, 'rgba(7,7,13,0.94)']],
+    }, (0.3 + 0.55 * k) * (0.86 + 0.14 * Math.sin(t * 1.6)));
+    drawEdgeOverlay(this.ctx, w, h, {
+      key: 'linkstrain-rim', innerFrac: 0.9,
+      stops: [[0, 'rgba(143,168,216,0)'], [0.84, 'rgba(143,168,216,0.06)'], [1, 'rgba(143,168,216,0.5)']],
+    }, k * (0.5 + 0.5 * Math.abs(Math.sin(t * 2.4))));
   }
 
   /** Icy edge wash + drifting snowflakes (chill / frozen). */

@@ -2993,6 +2993,11 @@ export class World {
    *  host instead of applying it locally. Absent on the host / single-player, where
    *  requestMeta applies the mutation directly. */
   clientActionHook?: (action: MetaAction) => void;
+  /** THE ECHO LAW (net/shell.ts, docs/engine/shard.md THE SMOOTH SHELL): set beside
+   *  clientActionHook on a render shell; told when requestMeta ALSO applied the intent
+   *  locally (optimistic), so the shell holds that state against older snapshots until
+   *  the host echoes the action. Absent on every host and solo world. */
+  clientOptimistic?: (action: MetaAction) => void;
   /** CO-OP prediction: the last input SEQ the host has applied per seat — echoed in
    *  SeatW so a client replays its unacked inputs from the authoritative position. */
   readonly lastInputSeq = new Map<string, number>();
@@ -26330,6 +26335,7 @@ export class World {
         && action.t !== 'bountyLock' && action.t !== 'bountyCoastWrits'
         && action.t !== 'forgeBegin' && action.t !== 'forgeCancel') {
         this.applyAction(this.localSeat, action);
+        this.clientOptimistic?.(action); // THE ECHO LAW: held against the wire until its echo
       }
     } else {
       this.applyAction(this.localSeat, action);

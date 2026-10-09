@@ -20,6 +20,13 @@
 // seat lies DORMANT (its roster row kept, no `pleave`) until the host's clock
 // releases it or a join carrying THE RECONNECT TOKEN takes it back. The word,
 // a wire the shard refused, and a closing shard end a seat at once, as before.
+//
+// THE RETURN (THE SMOOTH SHELL, docs/engine/shard.md): a client that lost its
+// link reconnects in place with `resumeOnly`: its token takes back its dormant
+// seat, or its LIVE one when the old link died unheard (the old socket is let
+// go), and otherwise the join is refused, never seated fresh. THE IDENTITY: a
+// join carrying the account and the vessel of a dormant seat takes it back
+// without the token (a new tab), instead of hearing the twin refusal.
 // ---------------------------------------------------------------------------
 
 import { createReadStream, statSync } from 'node:fs';
@@ -129,6 +136,12 @@ export function sanitizeInput(raw: unknown): PlayerInput | null {
 }
 
 const CLIENT_SESSION_KINDS = new Set<SessionMsg['t']>(['rejoin', 'cosmetics', 'action', 'leaving', 'party']);
+
+/** The charId a join's (unjudged) vessel names, read for THE IDENTITY's reclaim alone ('' = none). */
+function vesselCharId(v: unknown): string {
+  const id = v && typeof v === 'object' ? (v as { charId?: unknown }).charId : undefined;
+  return typeof id === 'string' ? id.slice(0, 64) : '';
+}
 
 /** What a join carries beyond its roster row (THE VESSEL — docs/engine/
  *  shard.md "The vessel and the corpse"): the uploaded hero, UNJUDGED here
@@ -340,8 +353,24 @@ export class ShardTransport implements NetTransport {
         this.drop(conn, 1008, 'another build', true);
         return;
       }
-      // THE RECONNECT TOKEN: a join naming a DORMANT seat with its token takes that seat back.
-      if (m.resume !== undefined && m.resume !== null && this.resume(conn, m.resume)) return;
+      // THE RECONNECT TOKEN: a join naming a DORMANT seat with its token takes that seat back
+      // (THE RETURN: a resumeOnly join may also take back its own LIVE seat, its link dead unheard).
+      if (m.resume !== undefined && m.resume !== null && this.resume(conn, m.resume, m.resumeOnly === true)) return;
+      // THE IDENTITY (THE SMOOTH SHELL): a join carrying the account and the vessel of a
+      // DORMANT seat is its own player come back without the token (a new tab, a cleared
+      // page): that seat, never the twin refusal and never a second hero.
+      const back = this.reclaim && isAccountId(m.accountId) ? this.reclaim(m.accountId, vesselCharId(m.vessel)) : null;
+      if (back !== null && this.dormant.has(back)) {
+        this.rebind(conn, back);
+        this.log(`[shard] ${back} came back by its account and vessel (no token); its dormant seat is re-bound`);
+        return;
+      }
+      // THE RETURN: a join that wants its seat back and nothing else is refused, never seated fresh.
+      if (m.resumeOnly === true) {
+        this.write(conn, encodeText(JSON.stringify({ t: 'refused', word: SHARD_REFUSAL.resume } satisfies WireMsg)), true);
+        this.drop(conn, 1008, 'no seat to return to', true);
+        return;
+      }
       // THE DOOR CAPS: a dormant seat still holds its place in the world.
       if (this.bySeat.size + this.dormant.size >= SHARD_WIRE_CFG.maxSeats) { this.drop(conn, 1013, 'shard full'); return; }
       const seatId: PlayerId = 'p' + (this.nextSeat++);
@@ -379,32 +408,56 @@ export class ShardTransport implements NetTransport {
 
   /** The welcome a seated connection hears, a fresh join's and a resume's alike
    *  (THE SEED THREAD, the hearth's features, THE LAND DIGEST, THE RECONNECT TOKEN). */
-  private welcome(conn: Conn): Uint8Array {
+  private welcome(conn: Conn, resumed = false): Uint8Array {
     return encodeText(JSON.stringify({ t: 'welcome', self: conn.seat!, peers: this.peerList, seed: this.seedSource() >>> 0, worldmass: this.worldmass,
       features: this.features, ...(this.land ? { land: this.land } : {}), resume: { token: conn.token },
+      ...(resumed ? { resumed: true } : {}), // THE RETURN: a standing seat came back
       build: shardBuildStamp() } satisfies WireMsg)); // THE BUILD STAMP
   }
 
   /** THE RECONNECT TOKEN: re-bind a DORMANT seat to this connection when the
    *  join names it with its token: the same seat id, actor and records, a
-   *  fresh token, and no `pjoin` (no peer ever saw it leave). Anything else
-   *  joins fresh (false), with one log line. */
-  private resume(conn: Conn, raw: unknown): boolean {
+   *  fresh token, and no `pjoin` (no peer ever saw it leave). THE RETURN
+   *  (`returning`: the join wants its seat and nothing else): a LIVE seat whose
+   *  own token comes back over a new socket is a link that died without the
+   *  shard hearing it, so the old socket is let go (its close touches no seat)
+   *  and the seat re-binds. Anything else joins fresh (false), with one log line. */
+  private resume(conn: Conn, raw: unknown, returning = false): boolean {
     const r: Partial<ShardResume> = raw && typeof raw === 'object' ? raw as Partial<ShardResume> : {};
     const seat = typeof r.seat === 'string' ? r.seat : '', token = typeof r.token === 'string' ? r.token : '';
     const held = this.dormant.get(seat);
+    const live = held === undefined && returning ? this.bySeat.get(seat) : undefined;
+    if (live && live !== conn && sameToken(live.token, token)) {
+      live.seat = null; // the old socket no longer holds the seat: its close is nobody's leave
+      this.bySeat.delete(seat);
+      this.pending.delete(seat); // the hand on the dead link is gone
+      this.drop(live, 4000, 'superseded', true);
+      this.log(`[shard] ${seat} returned over a new socket; its old link let go`);
+      this.rebind(conn, seat);
+      return true;
+    }
     if (held === undefined || !sameToken(held, token)) {
       this.log(`[shard] a resume naming ${cleanId(seat) || 'no seat'} was refused (${held === undefined ? 'not a dormant seat' : 'a wrong token'}); it joins fresh`);
       return false;
     }
+    this.rebind(conn, seat);
+    return true;
+  }
+
+  /** Bind a standing seat (dormant, or one THE RETURN let go of) to this connection: a fresh
+   *  token, the welcome (marked resumed), and the host stops the clock and re-ships its world. */
+  private rebind(conn: Conn, seat: PlayerId): void {
     this.dormant.delete(seat);
     conn.seat = seat;
     conn.token = mintToken();
     this.bySeat.set(seat, conn);
-    this.write(conn, this.welcome(conn), true);
+    this.write(conn, this.welcome(conn, true), true);
     this.resumeCbs.forEach(cb => this.guard(() => cb(seat))); // the host stops the clock and re-ships the seat's world
-    return true;
   }
+
+  /** THE IDENTITY's reclaim (THE SMOOTH SHELL): the host names the DORMANT seat whose
+   *  vessel is this account's character `charId` (null: none). Unset = no reclaim. */
+  reclaim: ((accountId: string, charId: string) => PlayerId | null) | null = null;
 
   /** A socket ended. `refused` = the shard closed it for breaking the wire. */
   private onClosed(conn: Conn, refused = false): void {

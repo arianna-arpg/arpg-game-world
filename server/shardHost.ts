@@ -42,7 +42,7 @@ import { COOP_SCALING } from '../src/data/coop';
 import { updateAI } from '../src/engine/ai';
 import { CLASSES, type ClassDef } from '../src/data/classes';
 import { rollSeed } from '../src/core/rng';
-import { serializeSnapshot, serializeZone } from '../src/net/snapshot';
+import { noteActionEcho, resetActionEcho, serializeSnapshot, serializeZone } from '../src/net/snapshot';
 import { stampAudiences } from '../src/net/seatView';
 import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction, PlayerInput } from '../src/net/intent';
@@ -295,7 +295,7 @@ export class ShardHost {
   private snapTick = 0;
   private metaHeartbeat = SHARD_CFG.metaHeartbeatSec;
   private persistTimer = SHARD_CFG.worldSaveSec; // THE WORLD SAVE BEAT
-  private readonly pendingActions: { seat: string; action: MetaAction }[] = [];
+  private readonly pendingActions: { seat: string; action: MetaAction; seq?: unknown }[] = []; // seq: THE ECHO LAW
   private timer: NodeJS.Timeout | null = null;
   private lastWall = 0;
   private accum = 0;
@@ -364,6 +364,9 @@ export class ShardHost {
       onSeatGone: id => { this.parties.dropSeat(id); this.units.forget(id); },
     });
     this.units.onArrive = (seat, to, from, woke) => this.onArrive(seat, to, from, woke);
+    // THE IDENTITY (THE SMOOTH SHELL): a join carrying a dormant vessel's account and character
+    // takes that seat back without its token, never the twin refusal.
+    this.net.reclaim = (accountId, charId) => this.vessels.dormantSeatOf(accountId, charId, id => this.net.isDormant(id));
     this.net.onPeerJoin((p, join) => this.onJoin(p, join));
     this.net.onPeerLeave(id => {
       this.dormancy.delete(id); // THE DORMANT SEAT: the word, a clock run out or a closing shard ends any dormancy
@@ -498,6 +501,7 @@ export class ShardHost {
     if (!u || !seat) return; // (never: a seat with no body is released at once, so it cannot be resumed)
     const w = u.world; // THE DORMANT SEAT per unit: the seat's own unit re-ships
     w.lastInputSeq.delete(id); // the new shell counts its inputs from zero
+    resetActionEcho(seat); // THE ECHO LAW: and its actions too
     w.markMetaDirty(seat);
     this.corpses.wake(id);
     this.net.sendZoneTo(id, serializeZone(w));
@@ -520,7 +524,7 @@ export class ShardHost {
 
   private onSession(msg: SessionMsg, from: string): void {
     if (msg.t === 'action') {
-      this.pendingActions.push({ seat: from, action: msg.action });
+      this.pendingActions.push({ seat: from, action: msg.action, seq: msg.seq }); // THE ECHO LAW: the client's seq rides along
     } else if (msg.t === 'cosmetics') {
       const loadout = sanitizeCosmeticLoadout(msg.loadout);
       const peer = this.net.peers().find(p => p.id === from);
@@ -550,14 +554,18 @@ export class ShardHost {
   /** HOST: apply this frame's queued client meta intents to their OWN seats.
    *  A malformed or hostile action must never throw out of the frame
    *  (main.ts drainMetaActions, verbatim). */
-  private drainMetaActions(u: SimUnit, w: World, actions: readonly { seat: string; action: MetaAction }[]): void {
+  private drainMetaActions(u: SimUnit, w: World, actions: readonly { seat: string; action: MetaAction; seq?: unknown }[]): void {
     if (!actions.length) return;
     const landed = new Map<string, number>();
-    for (const { seat: seatId, action } of actions) {
+    for (const { seat: seatId, action, seq } of actions) {
       // THE SEAT LEDGER: an action applies inside its own seat's unit, under its pin.
       if (this.units.unitOf(seatId) !== u) continue;
       const seat = w.seats.find(s => s.id === seatId && !s.keeper);
       if (!seat) continue;
+      // THE ECHO LAW (net/shell.ts): every action of a standing seat is JUDGED here (applied,
+      // refused, or dropped below), and its seq echoes home on the seat's build, so the
+      // client's optimistic state yields to this tick's truth.
+      noteActionEcho(w, seat, seq);
       // THE ACTION BUDGET: a seat lands at most actionsPerSeatPerTick intents a
       // tick; a flood past it is dropped, never queued (a 20,000-row burst used
       // to apply whole in one tick).
