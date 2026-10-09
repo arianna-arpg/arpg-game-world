@@ -39,8 +39,9 @@
 //   L  THE PREDICTED ROOT: a rooting press stands a local cast at once, stops the
 //      replay of the moves after it, and reconciles against the host's cast row;
 //      a press the host never casts ends after the RTT plus the grace
-//   M  the own hero's mobile cast rides its real instance (CastW.sk): the
-//      shell's replay walks it at the cast's factor (a bare stub threw there)
+//   M  the own hero's mobile cast and held mobile channel ride their real
+//      instances (CastW.sk): the shell's replay walks them at the host's factor
+//      (a bare stub threw inside moveActor, freezing the client)
 //   N  a reload inside the window: the page-surviving session takes the same
 //      seat back resumeOnly (a fresh page, a fresh module); past the window, none
 // ---------------------------------------------------------------------------
@@ -601,6 +602,31 @@ let walkSpeed = 0; // px/s, B's walk as measured off the tape (I), read by J
   check('M mobile: the own hero\'s mobile cast rides its real instance (CastW.sk) and the shell\'s replay walks it as the host does, no throw',
     !!inst && !threw && rode && castFrames > 0 && walked > 1 && near(walked, hostWalked, 1),
     threw || `${mobileId}: ${castFrames} cast frames on its own bar instance ${rode}; walked ${walked.toFixed(1)} px, the host ${hostWalked.toFixed(1)} px`);
+  await step(30);
+  // A HELD channel that walks (Whirlwind): the hand holds its slot, the host keeps it up, and the
+  // shell's replay strides through it on the real instance (a bare stub threw here too).
+  const ww = makeSkillInstance(SKILLS.whirlwind, 1, 0);
+  ww.devGift = true;
+  sA.meta.knownSkills.set('whirlwind', ww);
+  a.skills[4] = ww;
+  a.sheet.setBase('mana', 5000); a.fillResources(); a.cooldowns.clear(); a.useLock = 0;
+  place(A, 1200, 1000);
+  w.markMetaDirty(sA);
+  await step(8);
+  const wx0 = p.pos.x - A.shell!.offset.x;
+  const held = (): boolean[] => p.skills.map((_, i) => i === 4);
+  let first = true, chanFrames = 0, wThrew = '';
+  A.drive = () => { const li: PlayerInput = { dx: 1, dy: 0, aim: aimOf(A, 160, 0), held: held(), edge: held().map(h => h && first) }; first = false; return li; };
+  try {
+    for (let f = 0; f < 30; f++) { await step(1); const cs = p.casting; if (cs && isWireCast(cs) && cs.mode === 'channel' && cs.inst === p.skills[4]) chanFrames++; }
+    A.drive = () => ({ dx: 0, dy: 0, aim: aimOf(A, 160, 0), held: [], edge: [] });
+    await step(9);
+  } catch (e) { wThrew = e instanceof Error ? e.message : String(e); }
+  A.drive = null;
+  const wWalked = p.pos.x - A.shell!.offset.x - wx0, wHost = a.pos.x - 1200;
+  check('M channel: a held mobile channel (Whirlwind) rides its real instance and the shell\'s replay strides through it as the host does, no throw',
+    !wThrew && chanFrames > 10 && wWalked > 1 && near(wWalked, wHost, 1.5),
+    wThrew || `${chanFrames} channel frames on the bar's own instance; walked ${wWalked.toFixed(1)} px, the host ${wHost.toFixed(1)} px`);
   await step(30);
 }
 
