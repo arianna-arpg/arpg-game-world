@@ -21182,17 +21182,20 @@ export class World {
    *  its other duties (spawns, the apron law, the ways) untouched. */
   stationAnchor(site: TownSiteId): { pos: Vec2; tier: number; doodad: Doodad } | null {
     if (!this.townPresent()) return null;
+    // THE CLIENT'S COUNTERS: a render shell's town may stand at another rung than the host's (its
+    // own account grows it), so it never re-derives a site: the host's own resolution was shipped.
+    if (this.netCounters) {
+      const d = this.netStationAnchors?.get(site);
+      return d && !d.gone && !d.felled ? { pos: vec(d.pos.x, d.pos.y), tier: d.tier ?? 0, doodad: d } : null;
+    }
     const seat = this.townSite(site);
     const sid = townSiteStructure(site);
-    // THE CLIENT'S COUNTERS: a render shell's town may stand at another rung than the host's
-    // (its own account grows it), so the host's shipped anchor answers by its id alone.
-    const shipped = !!this.netCounters;
-    if (!sid || (!seat && !shipped)) return null;
+    if (!seat || !sid) return null;
     let best: Doodad | null = null, bd = Infinity;
     for (const d of this.doodads) {
       if (d.anchor !== sid || d.gone || d.felled) continue;
-      const dd = seat ? dist(d.pos, seat) : 0;
-      if ((dd <= DWELL_CFG.anchorReach || shipped) && dd < bd) { bd = dd; best = d; }
+      const dd = dist(d.pos, seat);
+      if (dd <= DWELL_CFG.anchorReach && dd < bd) { bd = dd; best = d; }
     }
     return best ? { pos: vec(best.pos.x, best.pos.y), tier: best.tier ?? 0, doodad: best } : null;
   }
@@ -53914,6 +53917,9 @@ export class World {
    *  features (shipped in the zone message). A render shell reads them, never
    *  its own account's; host, solo and couch read the account. */
   netCounters?: ReadonlySet<string>;
+  /** THE CLIENT'S COUNTERS: each station's piece by town site, as the host resolved it (the
+   *  zone message's anchors, matched to the shell's doodads by spot). Render shells alone. */
+  netStationAnchors?: Map<string, Doodad>;
   counterOwned(feature: string): boolean {
     return this.netCounters ? this.netCounters.has(feature) : featureEnabled(this.account, feature);
   }

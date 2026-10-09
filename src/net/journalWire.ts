@@ -24,6 +24,8 @@
 // ---------------------------------------------------------------------------
 
 import type { Seat, World } from '../engine/world';
+import type { Doodad } from '../engine/levelgen';
+import type { TownSiteId } from '../data/townBuild';
 import { FEATURE } from '../meta/account';
 import { questMarkers, registerMarkerSource, type MapMarker } from '../world/mapMarkers';
 import { massQuestPins, type MassQuestPin } from '../worldmass/quests';
@@ -32,16 +34,22 @@ import type { StateSnapshot, ZoneMsg } from './snapshot';
 /** THE KEEPER'S GATE for a client's counters: the station features whose verdict a render
  *  shell reads off the zone message (World.counterOwned), never off its own account. */
 export const COUNTER_FEATURES: readonly string[] = [FEATURE.SALVAGE_STATION, FEATURE.BOUNTY_BOARD, FEATURE.TRACKER, FEATURE.ORACLE_STONE];
+/** The town sites whose station piece the host resolves for a shell (World.stationAnchor's sites). */
+export const COUNTER_SITES: readonly TownSiteId[] = ['salvage', 'bounty_board', 'tracker', 'oracle', 'campfire'];
 
-/** THE CLIENT'S COUNTERS on the zone message (hosted worlds alone): the station pieces'
- *  anchors (World.stationAnchor finds a station by them) with their story, the Sacrificial
- *  Fonts, and the counters the host owns. Absent everywhere else. */
+/** THE CLIENT'S COUNTERS on the zone message (hosted worlds alone): each station's piece as
+ *  the host resolved it (its spot, its structure, its site, its story: a shell's own town may
+ *  stand at another rung, so it never re-derives the site), the Sacrificial Fonts, and the
+ *  counters the host owns. Absent everywhere else. */
 export type CounterZoneW = Pick<ZoneMsg, 'anchors' | 'fonts' | 'counters'>;
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 export function counterZoneOf(world: World): CounterZoneW {
   if (!world.localSeat.keeper) return {};
   const anchors: NonNullable<ZoneMsg['anchors']> = [];
-  for (const d of world.doodads) if (d.anchor && !d.gone) anchors.push({ p: [r2(d.pos.x), r2(d.pos.y)], a: d.anchor, ...(d.tier ? { t: d.tier } : {}) });
+  for (const s of COUNTER_SITES) {
+    const a = world.stationAnchor(s);
+    if (a?.doodad.anchor) anchors.push({ p: [r2(a.doodad.pos.x), r2(a.doodad.pos.y)], a: a.doodad.anchor, s, ...(a.tier ? { t: a.tier } : {}) });
+  }
   return {
     anchors,
     fonts: world.fonts.map(f => ({ p: [r2(f.pos.x), r2(f.pos.y)], ...(f.tier ? { t: f.tier } : {}) })),
@@ -49,16 +57,21 @@ export function counterZoneOf(world: World): CounterZoneW {
   };
 }
 
-/** The client's half of the zone message (after applyZone): the anchors land on the doodads
- *  standing at their spots, the Fonts stand, and the counters' verdicts are the host's. A
- *  message without the rows (a co-op host's) leaves the shell as it was. */
+/** The client's half of the zone message (after applyZone): each station's piece is the
+ *  doodad standing at its shipped spot (World.netStationAnchors, by site), the Fonts stand, and
+ *  the counters' verdicts are the host's. A message without the rows (a co-op host's) leaves
+ *  the shell lingering at nothing. */
 export function applyCounterZone(world: World, msg: ZoneMsg): void {
-  if (!msg.counters) { world.netCounters = undefined; return; } // not a hosted world's message: the shell lingers at nothing
-  const at = new Map<string, { a: string; t?: number }>();
-  for (const r of msg.anchors ?? []) at.set(r.p[0] + ',' + r.p[1], { a: r.a, t: r.t });
-  for (const d of world.doodads) {
-    const hit = at.get(d.pos.x + ',' + d.pos.y);
-    if (hit) { d.anchor = hit.a; if (hit.t) d.tier = hit.t; }
+  world.netStationAnchors = new Map();
+  if (!msg.counters) { world.netCounters = undefined; return; }
+  const at = new Map<string, Doodad>();
+  for (const d of world.doodads) at.set(d.pos.x + ',' + d.pos.y, d);
+  for (const r of msg.anchors ?? []) {
+    const d = at.get(r.p[0] + ',' + r.p[1]);
+    if (!d) continue;
+    d.anchor = r.a;
+    if (r.t) d.tier = r.t;
+    world.netStationAnchors.set(r.s, d);
   }
   world.fonts = (msg.fonts ?? []).map(f => ({ pos: { x: f.p[0], y: f.p[1] }, ...(f.t ? { tier: f.t } : {}) }));
   world.netCounters = new Set(msg.counters);

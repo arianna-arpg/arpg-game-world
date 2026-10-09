@@ -141,6 +141,13 @@ const bench = w.stationAnchor('salvage')!, board = w.stationAnchor('bounty_board
       && !!z.counters?.includes(FEATURE.SALVAGE_STATION) && !!z.counters?.includes(FEATURE.BOUNTY_BOARD),
     `anchors ${z.anchors?.map(r => r.a).join(',')}; fonts ${z.fonts?.length}; counters ${z.counters?.join(',')}`);
   const { shell } = makeShell(A);
+  const same = (site: 'salvage' | 'bounty_board' | 'tracker' | 'oracle'): boolean => {
+    const h = w.stationAnchor(site), c = shell.stationAnchor(site);
+    return !!h && !!c && Math.abs(h.pos.x - c.pos.x) < 0.01 && Math.abs(h.pos.y - c.pos.y) < 0.01;
+  };
+  check('A zone: a shell on a fresh account finds each station where the host resolved it (never re-deriving its own town\'s sites)',
+    same('salvage') && same('bounty_board') && same('tracker') && same('oracle'),
+    `tracker host ${JSON.stringify(w.stationAnchor('tracker')?.pos)} shell ${JSON.stringify(shell.stationAnchor('tracker')?.pos)}`);
   check('A zone: a shell on a fresh account wears the shipped anchors and reads the host\'s counters',
     shell.stationAnchor('salvage') !== null && shell.stationAnchor('bounty_board') !== null && shell.salvageUnlocked()
       && shell.bountyBoardUnlocked() && !shell.account.features.has(FEATURE.SALVAGE_STATION) && shell.fonts.length === w.fonts.length);
@@ -294,7 +301,7 @@ const near = (p: Vec2, at: Vec2, r: number): boolean => dist(p, at) <= r;
   act(B, { t: 'bountyAccept', id: offers[1] });
   await runTicks(3);
   const hA = w.bountyHands.find(h => h.id === offers[0]), hB = w.bountyHands.find(h => h.id === offers[1]);
-  check('D board: one hand per seat per board — A\'s second take is refused, B\'s own take stands beside A\'s',
+  check('D board: one hand per seat per board: A\'s second take is refused, B\'s own take stands beside A\'s',
     aHeld === 1 && hA?.holder === A.id && hB?.holder === B.id && w.bountyHands.length >= 2,
     `A held ${aHeld}; holders ${w.bountyHands.map(h => `${h.id}:${h.holder}`).join(',')}`);
   await runTicks(sec(0.7));

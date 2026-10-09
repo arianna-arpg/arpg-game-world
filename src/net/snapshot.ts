@@ -2318,10 +2318,11 @@ export interface ZoneMsg {
    *  the client renders tells/rakes and replays sprung mirrors; all
    *  authority (sweeps, springs, credit) stays host-side. */
   trapworks?: TrapworkSpec[];
-  /** THE CLIENT'S COUNTERS (net/journalWire.ts, hosted worlds alone): the station pieces'
-   *  anchors by spot (`a` the structure id, `t` its story), the Sacrificial Fonts, and
-   *  the station features the host owns (THE KEEPER'S GATE for the client's lingers). */
-  anchors?: { p: Vec2W; a: string; t?: number }[];
+  /** THE CLIENT'S COUNTERS (net/journalWire.ts, hosted worlds alone): each station's piece as
+   *  the host resolved it, by spot (`a` the structure id, `s` the town site, `t` its story),
+   *  the Sacrificial Fonts, and the station features the host owns (THE KEEPER'S GATE for the
+   *  client's lingers). */
+  anchors?: { p: Vec2W; a: string; s: string; t?: number }[];
   fonts?: { p: Vec2W; t?: number }[];
   counters?: string[];
 }
