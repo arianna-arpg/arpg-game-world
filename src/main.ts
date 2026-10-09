@@ -51,6 +51,7 @@ import type { PlayerInput, MetaAction } from './net/intent';
 import { wireSeed } from './net/transport';
 import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from './net/transport';
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
+import { tickNetClocks } from './net/snapshot'; // THE WIRE'S EYES: the own hero's clocks between snapshots
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
 import { WsTransport, defaultShardUrl, shardResumeFor } from './net/ws';
@@ -2313,7 +2314,10 @@ function broadcastSnapshot(): void {
 function clientApplyAndRender(dt: number): void {
   snapAccum += dt;
   const alpha = Math.min(1, snapAccum / SNAP_INTERVAL);
-  if (latestSnapshot) applySnapshot(world, latestSnapshot, prevSnapshot, alpha);
+  // THE WIRE'S EYES: the own hero's cooldowns run down between snapshots (a new one
+  // re-anchors them), and past the newest snapshot a projectile flies on along its `v`.
+  tickNetClocks(world, dt);
+  if (latestSnapshot) applySnapshot(world, latestSnapshot, prevSnapshot, alpha, Math.max(0, snapAccum - SNAP_INTERVAL));
   // PREDICTION: override the own hero's interpolated position with the locally
   // predicted one (anchor to the host's ack + replay unacked input) for responsive
   // movement. Other actors keep snapshot interpolation.

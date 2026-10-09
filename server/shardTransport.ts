@@ -35,6 +35,7 @@ import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from 
 import type { PlayerId, PlayerInput } from '../src/net/intent';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { isAccountId } from '../src/meta/account';
+import { ownEntryJson } from '../src/net/snapshot'; // THE WIRE'S EYES: THE OWN ENTRY
 
 export const SHARD_WIRE_CFG = {
   /** Largest frame/message a client may send (its inputs and intents are tiny). */
@@ -494,7 +495,17 @@ export class ShardTransport implements NetTransport {
   sendInput(seat: PlayerId, input: PlayerInput): void { this.pending.set(seat, input); } // the host's own seats
   drainInputs(): Map<PlayerId, PlayerInput> { const out = this.pending; this.pending = new Map(); return out; }
 
-  sendState(s: StateSnapshot): void { this.broadcast({ t: 'snap', snap: s }); }
+  sendState(s: StateSnapshot): void {
+    // THE OWN ENTRY (snapshot.ts SEAT_OWN_ROWS): a seat's own rows (its clocks) reach its own
+    // socket and never another's; a snapshot carrying none is the one broadcast frame it was.
+    const own = ownEntryJson(s);
+    if (!own) { this.broadcast({ t: 'snap', snap: s }); return; }
+    let bare: Uint8Array | null = null; // the shared frame for every socket whose seat carries no own row
+    for (const [seat, c] of this.bySeat) {
+      const mine = own.forSeat(seat);
+      this.write(c, mine !== null ? encodeText('{"t":"snap","snap":' + mine + '}') : (bare ??= encodeText('{"t":"snap","snap":' + own.bare + '}')));
+    }
+  }
   onState(cb: (s: StateSnapshot) => void): () => void { this.stateCbs.add(cb); return () => { this.stateCbs.delete(cb); }; }
   sendZone(z: ZoneMsg): void { this.broadcast({ t: 'zone', zone: z }, undefined, true); }
   /** Ship the zone to ONE seat (a joiner's first terrain, a re-seat). */

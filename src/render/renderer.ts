@@ -92,6 +92,7 @@ import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import {
   floatKindOn, noticeChannelOn, NOTICE_CFG, PICKUP_FEED_CFG, type NoticeEntry,
 } from '../world/bulletins';
+import { floatOwnerShown } from '../world/bulletins'; // THE FLOAT'S OWNER (THE WIRE'S EYES)
 import { dayCycle, sceneSkyTime } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
@@ -7580,8 +7581,13 @@ export class Renderer {
     // THE INFO STREAM's per-kind curation: each client gates kinds by its
     // OWN settings (the host mints one truth; every seat curates its view).
     const kindPrefs = this.getSettings?.().floatKinds;
+    // THE FLOAT'S OWNER (THE WIRE'S EYES): on a hosted world (partyRows stands) a number
+    // another seat struck or mended draws per Settings.floatOwners; elsewhere every one does.
+    const ownerMode = world.partyRows !== null ? this.getSettings?.().floatOwners : 'all';
+    const sameParty = (a: string, b: string): boolean => world.sameSeatParty(a, b);
     for (const t of world.texts) {
       if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
+      if (!floatOwnerShown(ownerMode, world.clientSeatId, t.seat, sameParty)) continue;
       // Bind tokens resolve at DRAW, not at spawn — a float naming a key
       // stays honest even if the player rebinds (or grabs the pad) mid-air.
       const txt = this.resolveText(t.text);
