@@ -450,8 +450,10 @@ async function main(): Promise<number> {
   tell({ t: 'end' });
   if (!await until(() => ev.fleetExited, SOAK_CFG.teardownTimeoutSec * 1000)) { err('the fleet did not finish its leaves'); fleet.kill(); }
   if (!ev.stats) err('the fleet sent no stats');
-  if (!await until(() => host.world.seats.every(s => !!s.keeper), 5000))
-    err(`${host.world.seats.filter(s => !s.keeper).length} seat(s) still stood after every bot left`);
+  // THE ACTING SEAT: a word said mid-fight sleeps like a lost socket (VESSEL_CFG.combatLeaveSec),
+  // so a bot that left in a fight leaves its seat DORMANT; that seat is the law's, and stop() ends it.
+  if (!await until(() => host.world.seats.every(s => !!s.keeper || host.net.isDormant(s.id)), 5000))
+    err(`${host.world.seats.filter(s => !s.keeper && !host.net.isDormant(s.id)).length} seat(s) still stood after every bot left`);
   await host.stop({ persist: false });
   gcObs.disconnect();
   restoreRandom();
