@@ -59,8 +59,14 @@ export const SHARD_CFG = {
   stateHz: 20,
   /** Re-dirty every seat's meta this often (main.ts META_HEARTBEAT). */
   metaHeartbeatSec: 1.5,
-  /** Write the world half of the save this often (main.ts's autosave beat). */
+  /** THE MIRROR BEAT: the vessels mirror home this often (VesselDesk.beatSec); a few KB each. */
   persistSec: 20,
+  /** THE WORLD SAVE BEAT: write the world half this often. Measured 2026-10-09 on the wilds:
+   *  serializeWorldState() alone costs 150-200 ms (3.9 of its 6.5 MB is THE LAND, a pure
+   *  function of the seed), a stall every beat — so the world writes a third as often as the
+   *  mirrors until the seamless lane's save omits the land (charter §6.6). A crash loses at
+   *  most this much of the world; the heroes lose at most persistSec. */
+  worldSaveSec: 60,
   /** THE DRESS BEAT: the zone message is the one-shot carrier of doodads and
    *  structures, and the wilds GROW them as the focus walks (ecology, sites,
    *  native scenery). When the doodad roster changed since the last send, the
@@ -242,7 +248,7 @@ export class ShardHost {
 
   private snapTick = 0;
   private metaHeartbeat = SHARD_CFG.metaHeartbeatSec;
-  private persistTimer = SHARD_CFG.persistSec;
+  private persistTimer = SHARD_CFG.worldSaveSec; // THE WORLD SAVE BEAT
   private lastSentZone = '';
   private lastSentDoodadRev = -1;
   private dressTimer = 0;
@@ -610,7 +616,7 @@ export class ShardHost {
     }
     if (this.savePath) {
       this.persistTimer -= dt;
-      if (this.persistTimer <= 0) { this.persistTimer = SHARD_CFG.persistSec; this.persist(); }
+      if (this.persistTimer <= 0) { this.persistTimer = SHARD_CFG.worldSaveSec; this.persist(); } // THE WORLD SAVE BEAT (the mirrors keep persistSec)
     }
   }
 

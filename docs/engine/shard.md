@@ -27,7 +27,7 @@ disabled" refusal of `npm.ps1`; in a PowerShell window the same fix is
 | `--class <id>` | the keeper's class (cosmetic; it never fights) |
 | `--worldmass` | THE UNBROKEN WILDS: host the seamless foundation's continuous surface; a joining shell renders it from the seed (charter §3.12). Persistent like a classic world, to its own `shard_<seed>_wilds.json`; a saved one resumes in the mass lane's order before the first socket (`resumeWilds`, "Persistence on the wilds" below). |
 | `--open` | THE OPEN ACCOUNT: every class, station feature and memory unlocked on the shard account (play-test servers) |
-| `--ephemeral` | never write the world; default writes `saves/shard_<seed>.json` (`shard_<seed>_wilds.json` on the wilds) every `SHARD_CFG.persistSec` and on Ctrl-C. A world resumes when the shard starts again with the same `--seed`: the file is named by it |
+| `--ephemeral` | never write the world; default writes `saves/shard_<seed>.json` (`shard_<seed>_wilds.json` on the wilds) every `SHARD_CFG.worldSaveSec` and on Ctrl-C. A world resumes when the shard starts again with the same `--seed`: the file is named by it |
 | `--save-dir <p>` | where shard saves land |
 | `--per-ip <n>` | sockets one address may hold (`SHARD_WIRE_CFG.maxPerIp`, default 8); `0` = no cap — behind a port forwarder (a codespace) every player arrives from the forwarder's one address |
 | `--client <dir>` | THE SERVED CLIENT: a web build (`npm run build:web` → `site/play`, the default when it exists) handed out on plain GETs at `/`, so a hosted world is one link and client and server never drift; THE STATUS PAGE moves to `/status` |
@@ -103,7 +103,7 @@ SEAT's is `balance/probe_sharddormant.ts`, THE ACTING SEAT's `balance/probe_shar
 A `--worldmass` shard is persistent like a classic one. THE WRITE is the
 classic beat unchanged: `ShardHost.persist()` wraps
 `World.serializeWorldState()` in the `ShardSave` wrapper and writes it
-atomically (tmp + rename) every `SHARD_CFG.persistSec` and at `stop()`. The
+atomically (tmp + fsync + rename) every `SHARD_CFG.worldSaveSec` (THE WORLD SAVE BEAT, 60 s; the mirrors keep `persistSec`) and at `stop()`. The
 mass half needs no writer of its own because the world half already embeds
 it: `worldmass` is the live runtime's `snapshot()` (terrain edits, claims,
 every native body with its spot and wound, the settlement, sites, ecology,
@@ -205,7 +205,7 @@ rides the wire).
 ## Dials
 
 `SHARD_CFG` (server/shardHost.ts): `tickHz` 60, `stateHz` 20,
-`metaHeartbeatSec` 1.5, `persistSec` 20, `maxCatchUpTicks` 5,
+`metaHeartbeatSec` 1.5, `persistSec` 20 (the mirror beat), `worldSaveSec` 60 (the world save beat), `maxCatchUpTicks` 5,
 `keeper { classId, name, reviveSec 8, shadowOffset 0 }`, `nearRadius` 1600, `dressSec` 4, `spawnGraceSec` 20, `chronoRadius` 900,
 `dormantSec` 30 (THE DORMANT SEAT: world seconds a lost socket's hero stands before the leave path runs), `saveDir`,
 `PARTY_CFG` (server/party.ts): `maxMembers` 6, `inviteSec` 60;
@@ -410,7 +410,7 @@ that served it.
    another land.
 7. Keep the codespace's tab open while playing. When it stops, start it again
    at github.com/codespaces and repeat steps 4 and 5; the shard resumes the
-   newest `saves/shard_*` world and loses at most `SHARD_CFG.persistSec`.
+   newest `saves/shard_*` world and loses at most `SHARD_CFG.worldSaveSec` of the world (the heroes at most `persistSec`).
 8. Stop it after a session (`gh codespace stop -c <name>`). Back up before the
    30-day deletion of a stopped codespace:
    `gh codespace cp -e -r -c <name> 'remote:/workspaces/arpg-game-world/saves' ./shard-saves/`.
