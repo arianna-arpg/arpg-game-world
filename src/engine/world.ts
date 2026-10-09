@@ -15475,6 +15475,9 @@ export class World {
               p.destinationPos = dw.findFreeSpot(vec(anchor.x + TOWN_PORTAL_CFG.arrivalOffset.x,
                 anchor.y + TOWN_PORTAL_CFG.arrivalOffset.y), 18, 0);
               p.returning = true;
+              // THE WILDS LAW: the settlement is the surface, so the return passage
+              // stands in the zone the seat landed in (the hearth's id never names it).
+              if (dw.massRuntime) p.destination = dw.zone.id;
               return { at: { x: p.destinationPos.x, y: p.destinationPos.y } };
             } });
           this.townPortalArrival.add(seat.id); // step clear before another dwell (it travels with the seat)

@@ -36,6 +36,9 @@
 //      pinned, and a save that will not stand gives way to a fresh wilds
 //   R  THE ROVING SHADOW (SHARD_CFG.rove, ships off): off, the keeper never hops;
 //      on, two clusters are visited in turn; one cluster never hops
+//   S  THE WILDS POCKET ROAD (shard M1 W2): a seat idle on a native mouth walks alone
+//      into a pocket unit while the keeper keeps the surface; a town portal there
+//      carries it to the settlement and back down; the way out lands it at the mouth
 // THE VESSEL AND THE CORPSE (docs/engine/shard.md "The vessel and the corpse"):
 //   L  THE IDENTITY: an account mints one stable id; the join carries it to
 //      the host alone; minting never touches the seeded stream
@@ -81,6 +84,7 @@ import { loadAccount, loadAccountAsync } from '../src/meta/persistence';
 import { storageKey } from '../src/buildProfile';
 import { loadCharacter, serializeCouchGuest, type CharacterSave } from '../src/meta/character';
 import { readTravelingVessel, ShardVesselLink } from '../src/meta/shardVessel';
+import { seatLadderOf } from '../src/engine/shardRoads'; // S: THE WILDS POCKET ROAD (THE SEAT'S LADDER)
 
 // THE STREAM LAW: the slow half seeds its own stream (the fast half's B section seeds that file's).
 const restoreRandom = seedGlobalRandom(0x5a4e);
@@ -730,6 +734,96 @@ restoreRandom();
   ca.leave(); cb.leave();
   await waitFor(() => rh.world.seats.length === 1, rh, 60);
   await rh.stop();
+}
+
+// ===================================================== S: THE WILDS POCKET ROAD ==
+// THE ROADS PER PLAYER on the Unbroken Wilds (shard M1 W2, plan 4.2 and 7.1 F): the
+// keeper hosts the whole surface (THE WILDS LAW), so a seat idle on a native mouth
+// (the hearth's cellar hatch) mints its pocket in the keeper and walks alone into a
+// woken pocket unit while the keeper stays on the surface; the pocket's way out lands
+// it back in the keeper at the hatch under its own exit grace; a town portal cast in a
+// wild pocket carries it to the settlement (THE HEARTH ALIAS) and back down to its spot.
+{
+  type Mouth = { pos: { x: number; y: number }; kind: string; seed: number; mouthTier?: number };
+  const SSEED = 0x0ddba11; // the probe's wilds (Q's seed), one fixed world
+  const sh = new ShardHost({ seed: SSEED, saveDir: null, open: true, worldmass: true, log: quiet });
+  await sh.ready();
+  await runTicks(sh, 60);
+  const portS = await sh.listen(0, '127.0.0.1');
+  const cs = new WsTransport();
+  const welcome = await cs.connect(`ws://127.0.0.1:${portS}`, { name: 'Wyn', classId: 'warrior' });
+  const id = welcome.self;
+  await waitFor(() => !!sh.units.seatOf(id), sh, 60);
+  const k = sh.world;
+  const seat = sh.units.seatOf(id)!;
+  seat.actor.invulnerable = true;
+  const calm = (w: World): void => { for (const a of w.actors) if (a.team === 'enemy' && !a.dead) a.passive = true; };
+  const hatch = (k as unknown as { caveEntrances: Mouth[] }).caveEntrances.find(m => m.kind === 'cellar_hatch');
+  const put = (w: World, x: number, y: number, tier = 0): void => {
+    const p = w.clampPos(vec(x, y), seat.actor.radius);
+    seat.actor.pos.x = p.x; seat.actor.pos.y = p.y; seat.actor.tier = tier;
+  };
+  try {
+    calm(k);
+    if (hatch) put(k, hatch.pos.x, hatch.pos.y, hatch.mouthTier ?? 0);
+    const down = await waitFor(() => !!sh.units.unitOf(id)?.world.zone.id.startsWith('cave_'), sh, Math.ceil(4 * SHARD_CFG.tickHz));
+    const pu = sh.units.unitOf(id);
+    const pocket = pu?.world.zone.id ?? '';
+    check('S wilds mouth: a seat idle on the hearth\'s cellar hatch walks alone into a woken pocket unit, the keeper staying on the surface',
+      !!hatch && down && !!pu && pu.role === 'unit' && k.zone.id === MASS_ZONE && !!k.massRuntime && !k.inCave && !!k.caveMap[pocket],
+      `${pocket} (${sh.units.size} unit(s) awake)`);
+    const rung = pu ? seatLadderOf(pu.world, seat).caveReturn : null;
+    check('S wilds mouth: the seat\'s ladder hangs off the surface at the hatch (THE WILDS LAW: its way home is the keeper)',
+      !!hatch && rung?.zoneId === MASS_ZONE && dist(rung.pos, hatch.pos) < 1 && rung.kind === 'cellar_hatch');
+    if (pu) calm(pu.world);
+    // THE WAY OUT: the pocket's road home lands in the keeper at the hatch, under the seat's own grace.
+    const out = pu?.world.exits.find(e => e.to === MASS_ZONE);
+    if (pu && out) put(pu.world, out.pos.x, out.pos.y);
+    const climbed = await waitFor(() => sh.units.unitOf(id) === sh.units.keeper, sh, Math.ceil(3 * SHARD_CFG.tickHz));
+    check('S wilds climb: the pocket\'s way out lands the seat in the keeper at the hatch (never a pocket World loading the surface)',
+      !!hatch && climbed && dist(seat.actor.pos, hatch.pos) < 40 && k.zone.id === MASS_ZONE,
+      hatch ? `${Math.round(dist(seat.actor.pos, hatch.pos))} px from the hatch` : 'no hatch');
+    await runTicks(sh, Math.ceil(1.5 * SHARD_CFG.tickHz));
+    check('S wilds grace: standing on the hatch it climbed out of, the seat holds there (its own exit grace)',
+      sh.units.unitOf(id) === sh.units.keeper);
+    // A TOWN PORTAL out of a wild pocket (the cellar is the settlement's own, a safe pocket that
+    // refuses one): a native mouth seated out of doors carries the seat down, the portal carries
+    // it to the settlement (THE HEARTH ALIAS: the wilds keep no waypoint, so THE HEARTH SEAT
+    // anchors it) and its return passage back down to its spot.
+    const hearth = sh.hearthSeat();
+    const wild = k.clampPos(vec(hearth.x + 420, hearth.y + 380), seat.actor.radius);
+    k.setMassEntrances('probe:wild', [{ pos: vec(wild.x, wild.y), seed: 0x5eed5, kind: 'cave_entrance', parent: k.zone }]);
+    put(k, (hatch?.pos.x ?? wild.x) + 220, hatch?.pos.y ?? wild.y); // the grace lifts once the seat stands clear of every mouth
+    await runTicks(sh, 3);
+    put(k, wild.x, wild.y);
+    const down2 = await waitFor(() => !!sh.units.unitOf(id)?.world.zone.id.startsWith('cave_') && sh.units.unitOf(id) !== pu, sh, Math.ceil(4 * SHARD_CFG.tickHz));
+    const wu = sh.units.unitOf(id);
+    const wildPocket = wu?.world.zone.id ?? '';
+    if (wu) calm(wu.world);
+    const wout = wu?.world.exits.find(e => e.to === MASS_ZONE);
+    if (wu && wout) put(wu.world, wout.pos.x + 140, wout.pos.y + 100);
+    await runTicks(sh, 3);
+    const castAt = vec(seat.actor.pos.x, seat.actor.pos.y);
+    cs.sendSession({ t: 'action', action: { t: 'townPortal' } });
+    const opened = await waitFor(() => !!wu?.world.townPortalViews().some(v => v.owner === id), sh, Math.ceil(3 * SHARD_CFG.tickHz));
+    const pv = wu?.world.townPortalViews().find(v => v.owner === id);
+    if (wu && pv) put(wu.world, pv.pos.x, pv.pos.y);
+    const home = await waitFor(() => sh.units.unitOf(id) === sh.units.keeper, sh, Math.ceil(3 * SHARD_CFG.tickHz));
+    const rp = k.townPortalViews().find(v => v.owner === id);
+    check('S wilds portal: a portal cast in a wild pocket carries the seat to the settlement (the keeper), its return passage beside THE HEARTH SEAT',
+      down2 && wildPocket.startsWith('cave_') && wu?.world.zone.objective.kind !== 'safe' && opened && home && !!rp
+      && dist(seat.actor.pos, rp.pos) < 40 && dist(rp.pos, hearth) < 300 && k.zone.id === MASS_ZONE && !!k.massRuntime,
+      rp ? `${Math.round(dist(rp.pos, hearth))} px from the hearth seat` : `no return passage (pocket ${wildPocket || 'none'}, opened ${opened})`);
+    if (rp) { put(k, rp.pos.x + 160, rp.pos.y); await runTicks(sh, 3); put(k, rp.pos.x, rp.pos.y); }
+    const back = await waitFor(() => sh.units.unitOf(id)?.world.zone.id === wildPocket && sh.units.unitOf(id) !== sh.units.keeper, sh, Math.ceil(3 * SHARD_CFG.tickHz));
+    check('S wilds portal: its return passage carries it back down to the wild pocket at the portal\'s spot',
+      !!rp && back && dist(seat.actor.pos, castAt) < 40, `${Math.round(dist(seat.actor.pos, castAt))} px from the cast`);
+    check('S wilds: no fault in any unit along the roads', sh.faults === 0, `faults ${sh.faults}`);
+  } finally {
+    cs.leave();
+    await waitFor(() => !sh.units.seatOf(id), sh, 60);
+    await sh.stop();
+  }
 }
 
 // Let in-flight socket closes settle before the process ends: Node on Windows
