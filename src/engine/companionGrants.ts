@@ -36,6 +36,16 @@ interface CompanionGrant {
 export class CompanionGrants {
   private owners = new WeakMap<Actor, Map<string, CompanionGrant>>();
 
+  /** THE HAND-OFF (shard M1, engine/shardUnits.ts): an owner's rows (the live
+   *  follower and its respawn clock) leave this World with it, so the destination
+   *  never mints a second follower beside the one that walked in. Opaque. */
+  lift(owner: Actor): unknown {
+    const rows = this.owners.get(owner);
+    this.owners.delete(owner);
+    return rows;
+  }
+  seat(owner: Actor, rows: unknown): void { if (rows) this.owners.set(owner, rows as Map<string, CompanionGrant>); }
+
   derive(owner: Actor, defs: readonly SkillDef[], source: (id: string) => string,
     retire: (body: Actor) => void, refresh: (body: Actor, inst: SkillInstance) => void,
     relicSource: (id: string) => string | undefined = () => undefined): void {

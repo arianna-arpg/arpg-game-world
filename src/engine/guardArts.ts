@@ -84,6 +84,10 @@ export class GuardArts {
     }
   }
   clearAll(): void { for (const a of this.states.keys()) this.clear(a); this.states.clear(); this.visuals = []; }
+  /** THE HAND-OFF (shard M1, engine/shardUnits.ts): one body's layers cleared now,
+   *  in the World it leaves. Its sheet keys come from this World's own counter, so a
+   *  late clear here could strip the destination's live layer under the same key. */
+  clearOwner(a: Actor): void { this.clear(a); this.states.delete(a); }
 
   /** Rebind surviving bodies at zone boundaries before the next AI/input phase. */
   rebind(): void { for (const a of this.w.actors) this.sync(a); }

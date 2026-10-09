@@ -36,6 +36,14 @@ export class ReplenishmentClocks {
     if (inst) this.actors.get(actor)?.delete(inst);
     else this.actors.delete(actor);
   }
+  /** THE HAND-OFF (shard M1, engine/shardUnits.ts): an actor's clocks travel with
+   *  it (the single World kept them across a zone change). Opaque. */
+  lift(actor: Actor): unknown {
+    const clocks = this.actors.get(actor);
+    this.actors.delete(actor);
+    return clocks;
+  }
+  seat(actor: Actor, clocks: unknown): void { if (clocks) this.actors.set(actor, clocks as Map<SkillInstance, number>); }
 
   update(actor: Actor, entries: { inst: SkillInstance; interval: number; room: number; count: number }[],
     dt: number, spawn: (inst: SkillInstance, count: number) => void): void {

@@ -31,6 +31,9 @@ export class Assaults {
   private wards = new Map<Actor, Ward>();
   constructor(private w: World) {}
   clearAll(): void { for (const c of [...this.courts.values()]) this.clear(c); }
+  /** THE HAND-OFF (shard M1, engine/shardUnits.ts): one owner's court cleared now,
+   *  in the World it leaves, so this World never tears down a body that walks another. */
+  clearOwner(owner: Actor): void { const c = this.courts.get(owner); if (c) this.clear(c); }
   private policy(host: SkillInstance): string { return JSON.stringify([host.treeNodes, host.level, host.sockets.map(s => s && [s.def.id, s.level])]); }
   private live(c: Court): boolean { return !c.owner.dead && !c.owner.downed && this.w.seats.some(s => s.actor === c.owner) && c.owner.skills.includes(c.host) && c.policy === this.policy(c.host); }
   private court(owner: Actor, host: SkillInstance): Court {

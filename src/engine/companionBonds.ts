@@ -168,6 +168,19 @@ export class CompanionBonds {
     beast.skills = [...state.native, ...[...state.granted].filter(([id]) => !state.native.some(s => s?.def.id === id)).map(([, s]) => s)];
   }
 
+  /** THE HAND-OFF (shard M1, engine/shardUnits.ts): a carried beast's bond leaves
+   *  this World whole (its native kit, claimed size and clocks), so refresh never
+   *  tears down a body that already walks another World, and the destination never
+   *  re-adopts a dressed body as if its kit were native. Opaque to everyone else. */
+  exportBond(beast: Actor): unknown {
+    const state = this.states.get(beast);
+    if (!state) return undefined;
+    this.states.delete(beast);
+    state.exposure.clear(); // the bodies it watched stay behind
+    return state;
+  }
+  importBond(beast: Actor, bond: unknown): void { if (bond) this.states.set(beast, bond as BondState); }
+
   refresh(): void {
     for (const [beast, state] of this.states) if (beast.dead || !beast.companion || !this.host(beast) || !this.w.actors.includes(beast)) {
       this.clearPayloads(beast, state); beast.sheet.removeSource('companionBond'); beast.skills = state.native;

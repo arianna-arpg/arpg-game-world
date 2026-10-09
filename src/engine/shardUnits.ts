@@ -27,7 +27,7 @@
 // these tables, and every seam it touches is a no-op (THE SOLO INVARIANT).
 // ---------------------------------------------------------------------------
 
-import type { Vec2 } from '../core/math';
+import { angleTo, vec, type Vec2 } from '../core/math';
 import type { Actor } from './actor';
 import type { BuffEffect } from './skills';
 import type { Seat, World } from './world';
@@ -315,4 +315,257 @@ export interface SeatPacket {
   /** Lite-tier throng rows, freed in the source and re-spawned in the
    *  destination (pool rows never move: they hold owner ids, never bodies). */
   lite: { defId: string; plies: number }[];
+}
+
+/** The arrays THE HAND-OFF purges of the carried casters' rows (step 4), each
+ *  with the Actor-valued keys that tie a row to its caster. */
+const PURGED_ROWS: readonly [field: string, keys: readonly string[]][] = [
+  ['projectiles', ['caster']], ['pendingSummons', ['caster']], ['pendingRespawns', ['caster']],
+  ['pendingDetonations', ['mine']], ['pendingFollowUps', ['caster']], ['pendingBlinks', ['actor', 'faceTarget']],
+  ['pendingRepeats', ['caster']], ['pendingSteps', ['caster']], ['pendingSalvos', ['caster']],
+  ['pendingAmbushes', ['caster']], ['pendingMetas', ['caster']], ['pendingPersists', ['caster']],
+  ['pendingFuses', ['caster']], ['tethers', ['a', 'b', 'owner']],
+];
+
+/** Keyed store access for the table-driven rows (Map, Set and their weak kin). */
+type Store = { has(k: unknown): boolean; delete(k: unknown): boolean; get?(k: unknown): unknown; set?(k: unknown, v: unknown): unknown; add?(k: unknown): unknown };
+const isSetLike = (s: Store): boolean => typeof s.add === 'function' && typeof s.set !== 'function';
+
+/** Remove an Actor-keyed array's rows in place. */
+function prune<T>(arr: T[], drop: (x: T) => boolean): void {
+  for (let i = arr.length - 1; i >= 0; i--) if (drop(arr[i])) arr.splice(i, 1);
+}
+
+/** loadZone's back-portal rule on a live World: 120 px in from the exit that
+ *  leads back to `from`, else the zone's own entry. */
+export function entryLanding(w: World, from?: string | null): Vec2 {
+  const back = from ? w.exits.find(e => e.to === from) : undefined;
+  if (!back) { const e = w.shardUnitHost().zoneEntry; return vec(e.x, e.y); }
+  const ang = angleTo(back.pos, vec(w.arena.w / 2, w.arena.h / 2));
+  return vec(back.pos.x + Math.cos(ang) * 120, back.pos.y + Math.sin(ang) * 120);
+}
+
+/** THE CARRY SET (plan 3.2, the M1 rule): the hero, then every living,
+ *  non-construct body whose whole owner chain up to the hero is carried. */
+export function carrySetOf(w: World, hero: Actor): Actor[] {
+  const carried = new Set<Actor>([hero]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const a of w.actors) {
+      if (carried.has(a) || a.dead || a.construct || !a.owner || !carried.has(a.owner)) continue;
+      carried.add(a);
+      grew = true;
+    }
+  }
+  return [...carried];
+}
+
+/** DETACH (plan 3.4), run in the unit the seat leaves, under its pin. Lifts
+ *  the seat, its hero and its court out whole and leaves the source World
+ *  holding nothing that names them; or refuses with a reason. */
+export function detachSeat(w: World, seatId: string): SeatPacket | { refused: string } {
+  const host = w.shardUnitHost();
+  const seat = w.seats.find(s => s.id === seatId && !s.keeper);
+  if (!seat) return { refused: 'no such seat here' };
+  // 1. The refusals, then the eject (a borrowed body belongs to its zone).
+  if (seat.actor.heldBy !== undefined || w.seatHero(seat).heldBy !== undefined) return { refused: 'held' };
+  if (host.harvestSessions.some(h => h.seatId === seatId)) return { refused: 'mid-harvest' };
+  if (host.traceRuns.some(r => r.seatId === seatId)) return { refused: 'mid-trace' };
+  if (seat.home) w.seatEject(seat, 'travel');
+  const hero = w.seatHero(seat);
+  if (hero.dead) return { refused: 'fallen' };
+  // 3 (first, so the teardown knows whom it serves). THE CARRY SET; the rest
+  // of the hero's chain is culled quietly, as a single World's zone change
+  // drops it (constructs and broken chains never walk on).
+  const carry = carrySetOf(w, hero);
+  const carried = new Set(carry);
+  const carriedIds = new Set(carry.map(a => a.id));
+  const culled = w.actors.filter(a => !carried.has(a) && !a.dead && a.ownedBy(hero));
+  for (const a of culled) { host.releaseContract(a, false); a.dead = true; }
+  const gone = new Set<Actor>([...carry, ...culled]);
+  // 2. TEARDOWN ON ABSENCE, now: the controllers that clean up after an actor
+  // missing from their World would otherwise mutate a body that walks another.
+  const bonds: [Actor, unknown][] = [];
+  for (const a of carry) {
+    const bond = w.companionBonds.exportBond(a);
+    if (bond) bonds.push([a, bond]);
+    w.assaults.clearOwner(a);
+    w.challenges.clearOwner(a);
+    w.attackSequences.clearOwner(a);
+    w.guardArts.clearOwner(a);
+    w.satellites.retire(a);
+    w.auroras.retire(a);
+    w.guardians.retire(a);
+    w.creepers.retire(a);
+  }
+  // 4. Purge every flight, field, band and pending row the chain owns (a
+  // toggled field refunds its reservation through expireZone).
+  const f = fields(w);
+  for (const [field, keys] of PURGED_ROWS) {
+    const arr = f[field] as Record<string, unknown>[] | undefined;
+    if (Array.isArray(arr)) prune(arr, row => keys.some(k => gone.has(row[k] as Actor)));
+  }
+  prune(host.pendingBursts, row => gone.has(row.owner));
+  prune(host.pendingContagions, row => gone.has(row.caster) || gone.has(row.host));
+  for (const z of [...w.zones]) if (gone.has(z.caster) || (!!z.anchor && gone.has(z.anchor))) w.retireOwnedZone(z);
+  // 5. THE CROSS-WORLD LEAKS: sources keyed by this World's own counters and
+  // stripped only by this World's own sweeps.
+  for (const z of w.zones) {
+    if (!z.domainAffected || !z.domainKey) continue;
+    for (const a of carry) if (z.domainAffected.delete(a)) a.sheet.removeSource(z.domainKey);
+  }
+  const auraOf = (name: string): number => Number(name.slice(name.lastIndexOf(':') + 1));
+  for (const a of w.actors) {
+    if (a.dead) continue;
+    const mine = carried.has(a);
+    for (const name of a.sheet.sourceNames()) {
+      if (name.startsWith('aura:')) {
+        // A carried body sheds the auras of bearers that stay; a body that
+        // stays sheds the carried bearers' auras.
+        if (mine !== carriedIds.has(auraOf(name))) a.sheet.removeSource(name);
+      } else if (mine && name.startsWith('altar:')) a.sheet.removeSource(name);
+    }
+  }
+  for (const a of carry) for (const aura of a.activeAuras.values()) {
+    for (const id of [...aura.affected]) if (!carriedIds.has(id)) aura.affected.delete(id);
+  }
+  for (const al of w.altars) for (const id of carriedIds) al.affected.delete(id);
+  for (const a of carry) if (a.gripping) host.grabRelease(a);
+  for (const a of w.actors) {
+    if (carried.has(a)) continue;
+    if (a.gripping && carriedIds.has(a.gripping.id)) host.grabRelease(a);
+    if (a.aiTargetId !== undefined && carriedIds.has(a.aiTargetId)) { a.aiTargetId = undefined; a.aiTargetRef = undefined; }
+  }
+  for (const s of w.seats) s.reviveDwellBy.delete(seatId);
+  seat.reviveDwellBy.clear();
+  // 6. THE SEAT PACKET: the MOVE rows lifted, the DROP rows purged.
+  const rows: MovedRow[] = [];
+  const keysOf = (hand: SeatHand): unknown[] => hand.endsWith('-seat-id') ? [seat.id] : hand.endsWith('-seat') ? [seat]
+    : hand.endsWith('-actor-id') ? [...carriedIds] : hand.endsWith('-actor') ? carry : [];
+  for (const [field, row] of Object.entries(SHARD_UNIT_FIELDS)) {
+    if (row.cls !== 'seat' || row.hand === 'custom') continue;
+    const store = f[field] as Store | undefined;
+    if (!store) continue;
+    for (const key of keysOf(row.hand)) {
+      if (!store.has(key)) continue;
+      if (row.hand.startsWith('move')) rows.push({ field, key, value: isSetLike(store) ? true : store.get!(key) });
+      store.delete(key);
+    }
+  }
+  const grants: [Actor, unknown][] = [], clocks: [Actor, unknown][] = [];
+  for (const a of carry) {
+    const g = host.companionGrants.lift(a); if (g) grants.push([a, g]);
+    const c = host.replenishment.lift(a); if (c) clocks.push([a, c]);
+  }
+  const buffSources: [BuffEffect, unknown][] = [];
+  const treeBuffs = f.treeBuffSources as WeakMap<BuffEffect, unknown>;
+  for (const a of carry) for (const b of a.buffs.values()) {
+    const src = treeBuffs.get(b.def);
+    if (src !== undefined) { buffSources.push([b.def, src]); treeBuffs.delete(b.def); }
+  }
+  const traceRests: [number, number][] = [];
+  const rests = f.traceRests as Map<number, number>;
+  for (const it of seat.meta.items) {
+    const at = rests.get(it.uid);
+    if (at !== undefined) { traceRests.push([it.uid, at]); rests.delete(it.uid); }
+  }
+  // The leaver's ids out of the self-healing ledgers (the plan's prune).
+  const tokens = f.engageTokens as Map<string, number[]>;
+  for (const [key, held] of [...tokens]) {
+    const target = Number(key.slice(key.indexOf(':') + 1));
+    const live = held.filter(id => !carriedIds.has(id));
+    if (carriedIds.has(target) || !live.length) tokens.delete(key);
+    else if (live.length !== held.length) tokens.set(key, live);
+  }
+  const claims = f.ringClaims as Map<number, { actorId: number }[]>;
+  for (const [tid, list] of [...claims]) {
+    const live = list.filter(c => !carriedIds.has(c.actorId));
+    if (carriedIds.has(tid) || !live.length) claims.delete(tid);
+    else if (live.length !== list.length) claims.set(tid, live);
+  }
+  const los = f.losMemo as Map<number, unknown>;
+  for (const key of [...los.keys()]) {
+    if (carriedIds.has(Math.floor(key / 1_000_000)) || carriedIds.has(key % 1_000_000)) los.delete(key);
+  }
+  const lite: { defId: string; plies: number }[] = [];
+  const pool = w.lite;
+  for (let i = 0; i < pool.used; i++) {
+    if (!pool.alive[i] || !carriedIds.has(pool.owner[i])) continue;
+    const kind = w.liteKinds[pool.kind[i]];
+    if (kind) lite.push({ defId: kind.defId, plies: pool.plies[i] });
+    pool.free(i);
+  }
+  // 7. Out of the World: never removeSeat (it culls the whole court).
+  w.seats.splice(w.seats.indexOf(seat), 1);
+  w.actors = w.actors.filter(a => !gone.has(a));
+  host.indexSeats();
+  if (fields(w).actingSeat === seat) fields(w).actingSeat = null;
+  w.events.emit('party/leave', { actor: seat.actor, seat: seat.id });
+  w.settleNearScale(true);
+  return { seat, hero, carry, from: w.zone.id, rows, bonds, grants, clocks, buffSources, traceRests, lite };
+}
+
+/** ATTACH (plan 3.5), run in the unit the seat enters, under its pin: the
+ *  carried bodies cross the door the way loadZone's own carry does, then land
+ *  through THE FILTERED HOST (World.landSeatAt) and the seat's rows install. */
+export function attachSeat(w: World, packet: SeatPacket, landing: RoadLanding): void {
+  const host = w.shardUnitHost();
+  const { seat, hero, carry } = packet;
+  // 2. loadZone's per-actor door reset (the cue arrays, THE BLINK LAW).
+  for (const a of carry) {
+    a.procCuePulses.length = 0; a.procPopEvents.length = 0;
+    a.restoreGains.length = 0; a.feedingMeal = undefined;
+    a.dash = null; a.casting = null; a.push = null;
+    if (a.caromRun) w.endCarom(a, { quiet: true });
+    a.frameLockRect = null;
+    a.tier = 0; a.onTierLink = false; a.aiTierGoal = undefined;
+    if (a !== hero) {
+      a.aiTargetId = undefined; a.aiTargetRef = undefined; a.aiLastSeen = undefined;
+      a.aiCommand = undefined; a.aiTokenKey = undefined; a.aiRingTarget = undefined;
+    }
+    // 3. Status relays close over their own World.
+    a.statusRelay = host.relayStatus;
+  }
+  for (const inst of seat.meta.knownSkills.values()) if (inst.state?.markPos) inst.state.markPos = null;
+  for (const inst of seat.grantedInsts?.values() ?? []) if (inst.state?.markPos) inst.state.markPos = null;
+  // 4. In, then landed by the one landing law.
+  w.seats.push(seat);
+  for (const a of carry) if (!w.actors.includes(a)) w.actors.push(a);
+  host.indexSeats();
+  const at = landing === 'entry' ? entryLanding(w, packet.from) : landing.at;
+  const opts = landing === 'entry' ? undefined
+    : { ...(landing.spread !== undefined ? { spread: landing.spread } : {}), ...(landing.band ? { band: landing.band } : {}),
+      ...(landing.tier !== undefined ? { tier: landing.tier } : {}) };
+  w.landSeatAt(seat, carry, at, opts);
+  // 5. The rows install, then the build re-derives in its new World.
+  const f = fields(w);
+  for (const r of packet.rows) {
+    const store = f[r.field] as Store | undefined;
+    if (!store) continue;
+    if (isSetLike(store)) store.add!(r.key); else store.set!(r.key, r.value);
+  }
+  for (const [beast, bond] of packet.bonds) w.companionBonds.importBond(beast, bond);
+  for (const [owner, rows] of packet.grants) host.companionGrants.seat(owner, rows);
+  for (const [actor, c] of packet.clocks) host.replenishment.seat(actor, c);
+  const treeBuffs = f.treeBuffSources as WeakMap<BuffEffect, unknown>;
+  for (const [def, src] of packet.buffSources) treeBuffs.set(def, src);
+  const rests = f.traceRests as Map<number, number>;
+  for (const [uid, until] of packet.traceRests) rests.set(uid, until);
+  w.recalcSeat(seat);
+  w.companionBonds.refresh();
+  for (const a of carry) if (a !== hero) w.guardArts.sync(a);
+  for (let c = 0; c < packet.lite.length; c++) {
+    const row = packet.lite[c];
+    if (!hero.skills.some(s => s?.def.throng?.tier === 'lite' && s.def.throng.monsterId === row.defId)) continue;
+    const kindIdx = w.liteKindOf(row.defId);
+    if (kindIdx < 0) continue;
+    const ang = (c / Math.max(1, packet.lite.length)) * Math.PI * 2;
+    const bx = hero.pos.x + Math.cos(ang) * 46, by = hero.pos.y + Math.sin(ang) * 46;
+    const open = host.liteOpenAt(bx, by);
+    w.lite.spawn(kindIdx, open ? bx : hero.pos.x, open ? by : hero.pos.y, 1, hero.id, row.plies);
+  }
+  // 6. The roster hears it; the near law re-reads where every body stands.
+  w.markMetaDirty(seat);
+  w.events.emit('party/join', { actor: seat.actor, seat: seat.id });
+  w.settleNearScale(true);
 }

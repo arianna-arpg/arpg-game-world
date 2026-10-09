@@ -586,6 +586,7 @@ import { encounterBirthPlaceEncounters, encounterBirthEventDensityFor, encounter
 import { descentPlaceDescentDelver, descentMintDelverStock, descentEnterDescentZone, type NativeSceneDescentHost } from './nativeSceneDescent';
 
 import { harborHoldStateFor, harborBootQuay, harborBootHarborhold, harborResealDoor, harborRefreshHoldDress, harborHoldDressSpotOk, harborRefreshHoldServices, harborArmPortMercs, harborLandPartyAt, type NativeSceneHarborHost } from './nativeSceneHarbor';
+import type { ShardUnitHost, ShardWorldLink } from './shardUnits'; // THE SIM UNITS (shard M1)
 
 import { nativeTheaterContextNow, nativeTheaterConcurrencyNow, nativeTheaterRunBeat, nativeTheaterPourRoom, nativeTheaterSpawn, nativeSpawnEventActor, nativeClampNear, nativeAnyAliveWithTag, nativeZoneEntryPos, type NativeSceneTheaterHost } from './nativeSceneTheater';
 import {buildNativeSceneRuntimes,materializeNativeLiveZoneEvents,type NativeSceneRuntimeRegistryHost} from './nativeSceneRuntimeRegistry';
@@ -4750,7 +4751,10 @@ export class World {
     startingCompanions?: boolean;
     startingFlasks?: boolean;
     /** THE OPENING (meta/classkit.ts): the resolved kit bar — see makePlayerSeat. */
-    kit?: readonly (string | null)[] }): void {
+    kit?: readonly (string | null)[];
+    /** THE UNIT WARDEN (shard M1, engine/shardUnits.ts): false stands the hero
+     *  without loading the hearth; a sim unit loads its own zone after. */
+    load?: boolean }): void {
     // The local seat is this client's own hero (camera + input anchor). Input is
     // a placeholder until main.ts wires the OS reader (Phase 4); single-player
     // reads it through the `player`/`meta` getters exactly as before.
@@ -4773,7 +4777,7 @@ export class World {
     this.actors.push(this.localSeat.actor);
     // Roster lifecycle: the local hero joins the party (drives the party UI).
     this.events.emit('party/join', { actor: this.localSeat.actor, seat: 'p0' });
-    this.loadZone(START_ZONE);
+    if (opts?.load !== false) this.loadZone(START_ZONE); // THE UNIT WARDEN (shardUnits): a unit loads its own zone
     if (opts?.startingCompanions !== false) this.grantStartingCompanions();
     if (opts?.startingFlasks !== false) this.dealVeteranFlasks();
   }
@@ -9763,6 +9767,73 @@ export class World {
      *  story-seated mouth, and they pass its recorded story here. */
     tier?: number;
   }): void { return harborLandPartyAt(this.nativeSceneHarborHost(),at,opts); }
+
+  // ---- THE SIM UNITS (shard M1, engine/shardUnits.ts): the engine seams ----
+
+  /** THE FILTERED HOST (shard M1): one seat and its carried court land through
+   *  the one landing law (harborLandPartyAt: the story-aware clamp, the trail
+   *  break, the tier seat, the tether landing) with the cached harbor view
+   *  overridden to that seat alone, so a hand-off arrival never moves the
+   *  unit's other seats. Every carried body rides (THE CARRY SET may reach
+   *  past one hop), each counted as a rider of the landing. */
+  landSeatAt(seat: Seat, carry: readonly Actor[], at: Vec2, opts?: Parameters<World['landPartyAt']>[1]): void {
+    const view = Object.create(this.nativeSceneHarborHost()) as NativeSceneHarborHost;
+    Object.defineProperties(view, {
+      player: { value: this.seatHero(seat) },
+      seats: { value: carry.map(actor => ({ actor })) },
+      actors: { value: [...carry] },
+    });
+    harborLandPartyAt(view, at, opts);
+  }
+
+  /** THE PERSIST CAPTURE (shard M1): the live zone's PURE memory row (the
+   *  autosave's own capture, never the leave verbs) written into the shared
+   *  memory map, so the keeper's world save carries a zone awake in a unit. */
+  captureLiveMemory(): void {
+    const m = this.zoneMemorySnapshot();
+    if (m) this.zoneMemory.set(this.zone.id, m);
+  }
+
+  /** THE SLEEP (shard M1): a unit leaving play runs the departure's leave verbs
+   *  in loadZone's own order (the survivor scan, then the memory capture with
+   *  its conclave incubate and ledger), exactly as a seat leaving the zone does. */
+  sleepZone(): void {
+    this.scanNemesisSurvivors();
+    this.captureZoneMemory();
+  }
+
+  /** THE SPLIT DISPATCH's idiom (shard M1): run `fn` on the World hosting
+   *  `zoneId`. Solo and co-op it is the conditional it replaces (this zone,
+   *  else nothing); the shard branch (ShardWorldLink.dispatch) is W3's. */
+  atZone(zoneId: string, fn: (w: World) => void): void {
+    if (zoneId === this.zone.id) fn(this);
+  }
+
+  private shardUnitView?: ShardUnitHost;
+  /** THE UNIT HOST VIEW (shard M1): the private reaches THE HAND-OFF and THE
+   *  WAKE need (engine/shardUnits.ts), beside the native host views. */
+  shardUnitHost(): ShardUnitHost {
+    if (this.shardUnitView) return this.shardUnitView;
+    const world = this;
+    const host: ShardUnitHost = {
+      indexSeats: () => world.indexSeats(),
+      grabRelease: a => world.grabRelease(a),
+      releaseContract: (a, respawn) => world.releaseContract(a, respawn),
+      liteOpenAt: (x, y) => world.liteOpenAt(x, y),
+      get relayStatus() { return world.relayStatus; },
+      get zoneEntry() { return world.zoneEntry; },
+      get adoptedZonePending() { return world.adoptedZonePending; }, set adoptedZonePending(v) { world.adoptedZonePending = v; },
+      get caveStack() { return world.caveStack; }, set caveStack(v) { world.caveStack = v; },
+      get harvestSessions() { return world.harvestSessions; },
+      get traceRuns() { return world.traceRuns; },
+      get pendingBursts() { return world.pendingBursts; },
+      get pendingContagions() { return world.pendingContagions; },
+      get companionGrants() { return world.companionGrants; },
+      get replenishment() { return world.replenishment; },
+    };
+    Object.defineProperty(this, 'shardUnitView', { value: host, writable: true, configurable: true, enumerable: false });
+    return host;
+  }
 
   /** Shove freshly-generated hostiles off a pocket's entry ring
    *  (POCKET_CFG.arrivalGrace): outward along their own bearing when the
@@ -19660,6 +19731,10 @@ export class World {
   /** THE PARTY on the wire: the rows the shard publishes (snapshot.ts ships them on change). */
   partyRows: import('../net/partyWire').PartyRow[] | null = null;
   partyRev = 0;
+  /** THE SIM UNITS (shard M1, engine/shardUnits.ts): the host's link on every
+   *  World a shard runs, the keeper's and each unit's, and THE PRIMARY GATE's
+   *  read. Absent everywhere else; its absence IS the solo invariant. */
+  shardWorld?: ShardWorldLink;
   /** Are two seats one unit — the same seat, or party mates? */
   sameParty(a: Seat, b: Seat): boolean { return this.sameSeatParty(a.id, b.id); }
 
@@ -23566,6 +23641,7 @@ export class World {
    *  fall. Gate re-seals apply on the NEXT load of a zone — never under the
    *  player's feet (no lock-ins; services still shut at once). */
   private updateHarborholds(): void {
+    if (this.shardWorld?.role === 'unit') return; // THE PRIMARY GATE (shard M1): the lifecycle sweep is the keeper's
     if (this.gameOver || this.time < this.holdSweepAt) return;
     this.holdSweepAt = this.time + HARBORHOLD_CFG.sweepSec;
     for (const def of Object.values(this.zoneMap)) {
@@ -44582,26 +44658,30 @@ export class World {
 
     // MYCELIA: feed the bloom per-zone event activity (it can't reach the sim) BEFORE the
     // overlay ticks, then reconcile the biome warps it has saturated.
-    this.feedMyceliaActivity();
+    // THE PRIMARY GATE (shard M1, engine/shardUnits.ts): a sim unit skips the
+    // keeper's world sweeps below (the keeper ticks first and drains every world
+    // queue); off a shard there is no link and every sweep runs as it always did.
+    const unitWorld = this.shardWorld?.role === 'unit';
+    if (!unitWorld) this.feedMyceliaActivity();
     // Advance the living world (day/night, weather drift, faction territory).
-    this.sim.update(dt, this.simView());
-    if (!this.massRuntime) this.odyssey.update(); // worldmass places have not adopted graph campaign targets yet
+    if (!unitWorld) this.sim.update(dt, this.simView());
+    if (!unitWorld && !this.massRuntime) this.odyssey.update(); // worldmass places have not adopted graph campaign targets yet
     this.questRescues.update();
     // THE FORECHART: keep the veiled halo minted ahead of the walker, and grow
     // any far soundings the overlays have requested (world/forechart.ts).
-    if (this.graphWorkAvailable()) this.updateForechart();
+    if (!unitWorld && this.graphWorkAvailable()) this.updateForechart();
     // THE SETTLE SWEEP: mint-time settles are local — chained displacement
     // can leave a pair past the hover floor across a pool edge; the slow
     // whole-chart pass self-heals it (no-op scan on a clean chart).
-    this.updateWebSettle();
+    if (!unitWorld) this.updateWebSettle();
     // THE OMENS: the world murmurs about what waits unfound (world/omens.ts).
-    this.updateOmens();
+    if (!unitWorld) this.updateOmens();
     // THE OBJECTIVE WEB: a class earned mid-run lands mid-run.
-    this.updateDeedRecovery();
-    this.sweepClassClaims();
-    this.drainMyceliaLedger();
+    if (!unitWorld) this.updateDeedRecovery();
+    if (!unitWorld) this.sweepClassClaims();
+    if (!unitWorld) this.drainMyceliaLedger();
     this.updateContagionInfection();
-    this.reconcileDeepwinter();
+    if (!unitWorld) this.reconcileDeepwinter();
     this.updateStorm(dt);
     this.updateDemonStorm(dt);
     this.updateBombardment();
@@ -44632,7 +44712,7 @@ export class World {
     // Lines land in THE NOTICE FEED (screen-anchored, stacked, per-line
     // clocks, channel-curated at draw) — never in the overhead float lane,
     // where world news used to fight the combat text for the same pixels.
-    for (const b of collectBulletins(this)) {
+    if (!unitWorld) for (const b of collectBulletins(this)) {
       pushNotice(this.notices, b, this.time);
     }
 
@@ -44644,7 +44724,7 @@ export class World {
     // toggles. Weather is intentionally excluded (a tide of the dead can't snuff
     // the sky), so no weather here.
     const dwf = this.sim.deadwakeField;
-    if (dwf && dwf.consumedZones.length) {
+    if (!unitWorld && dwf && dwf.consumedZones.length) {
       const con = dwf.surge().consume;
       for (const zid of dwf.consumedZones) {
         if (con.demonInvasion) this.sim.demonFieldFor(this.zoneMap[zid]?.dimension)?.resolveInvasion(zid);
@@ -44661,7 +44741,7 @@ export class World {
     // completed wing's far pole takes root — drained here into KEYED biome
     // warps (restore re-queues them, so a resumed save re-roots).
     const swf = this.sim.swarmingField;
-    if (swf) {
+    if (!unitWorld && swf) {
       const mf2 = this.sim.migrationField;
       if (mf2) {
         for (const herdId of swf.predate(mf2.herdBands())) {
@@ -44680,10 +44760,10 @@ export class World {
 
     // WARBAND ARRIVALS: a host that just reached its target node, while YOU stand
     // in that zone, marches in for real — a coherent pack at the entry it came by.
-    for (const host of this.sim.invasion.arrivals) {
+    if (!unitWorld) for (const host of this.sim.invasion.arrivals) {
       if (host.targetZoneId === this.zone.id) this.spawnWarband(host);
     }
-    this.sim.invasion.arrivals.length = 0;
+    if (!unitWorld) this.sim.invasion.arrivals.length = 0;
     this.updateWarbandMarches();
 
     // DEMON INVASION: mint the epicenter zone at its coordinate (within the visible
@@ -44695,7 +44775,7 @@ export class World {
     // EVERY instance drains — each DIMENSION's rifts tear in its own graph:
     // hell's epicenters carry hell's dimension/palette/level pressure and never
     // touch the surface biome field (only surface events scorch the surface wash).
-    for (const dfi of this.sim.demonFieldsAll()) {
+    if (!unitWorld) for (const dfi of this.sim.demonFieldsAll()) {
       if (!dfi.mintRequests.length) continue;
       const dfDim = dfi.dimension; // undefined = the surface instance
       for (const req of dfi.mintRequests) {
@@ -44758,7 +44838,7 @@ export class World {
     // CONCLAVE → ELDRITCH INCURSION: when the incubation counter maxes, the Conclave
     // hands an ignition to the shared Incursion field (overlays can't reach each
     // other — the engine bridges). The observer LANDS far off in the wilds.
-    const ig = this.sim.conclaveField?.takeIgnition();
+    const ig = unitWorld ? undefined : this.sim.conclaveField?.takeIgnition();
     if (ig) {
       const info = this.sim.incursionField.ignite(ig.archetype, ig.origin, Math.max(this.zone.level, this.player.level));
       if (info) this.notice(info.announce, info.color, 18, 'events');
@@ -44768,7 +44848,7 @@ export class World {
     // them; a road forms only when the player explores near. Each warps the biome
     // field, locking its ground into the archetype's blight. (Host/SP only.)
     const inc = this.sim.incursionField;
-    if (inc.mintRequests.length) {
+    if (!unitWorld && inc.mintRequests.length) {
       for (const req of inc.mintRequests) {
         if (this.zoneMap[req.zoneKey]) { inc.bindEpicenter(req.id, req.zoneKey); continue; }
         // Even an alien intrusion needs GROUND to blight — pulled ashore.
@@ -44808,8 +44888,8 @@ export class World {
     // transient field), the dead half RELEASES (a gradual fade at
     // BIOME_FIELD_CFG.warpFadePerSec — the land HEALS, it never snaps). Every
     // ending — kill, burnout, collapse, package absent — heals by construction.
-    this.warpSweepAcc += dt;
-    if (this.warpSweepAcc >= 1) {
+    if (!unitWorld) this.warpSweepAcc += dt;
+    if (!unitWorld && this.warpSweepAcc >= 1) {
       this.warpSweepAcc = 0;
       const bf = this.sim.biomeField;
       const liveEps = new Map<string, { coord: { x: number; y: number }; archetype: string }>();
@@ -44872,7 +44952,7 @@ export class World {
     // path appears as they approach. Host/SP only; new exits stream to clients
     // via the zone snapshot; syncZoneExits() (below) surfaces the portal live
     // if the road landed on the player's zone.
-    for (const z of Object.values(this.zoneMap)) {
+    if (!unitWorld) for (const z of Object.values(this.zoneMap)) {
       if (!z.floating) continue;
       // Proximity only counts WITHIN a dimension — the planes share one
       // coordinate space, and a hell rift must not wire in because the player

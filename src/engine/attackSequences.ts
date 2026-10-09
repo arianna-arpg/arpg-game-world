@@ -381,4 +381,7 @@ export class AttackSequences {
     }
   }
   clearAll(): void { for (const s of [...this.states]) this.clear(s.owner, s.host); }
+  /** THE HAND-OFF (shard M1, engine/shardUnits.ts): one owner's cycles cleared now,
+   *  in the World it leaves (never by this World's later sweep on its absence). */
+  clearOwner(owner: Actor): void { for (const s of [...this.states]) if (s.owner === owner) this.clear(s.owner, s.host); }
 }
