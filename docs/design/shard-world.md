@@ -861,12 +861,12 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 |---|---|---|
 | 1 | Rubber-banding BY CONSTRUCTION: `PlayerInput` carries no dt, the transport merges one input per tick, `applyInputs` moves one tick per tick, so a 30 fps client walks at half speed on the server and snaps back every snapshot; stalls merge N inputs into one tick. | W1 THE HONEST INPUT |
 | 2 | Every non-keeper seat's held casts run on the monster AI's hold roll (`a !== this.player` in updateCasting): guards drop, channels end, charges release on a 1.2–2.6 s timer. | W3 |
-| 3 | `World.zones` (telegraphs, fields) and leap landing rings never ride the wire: invisible slams, strikes and hazards on a client. | W2 THE WIRE'S EYES |
+| 3 | `World.zones` (telegraphs, fields) and leap landing rings never ride the wire: invisible slams, strikes and hazards on a client. | W2 THE WIRE'S EYES — BUILT 2026-10-09 (6edffa88): `ZoneW` rows within reach, leap dest/radius/telegraph; probe_shardwire |
 | 4 | THE FOCUS: the mass runtime keys on the keeper's one position; a player 3,000 px away walks a barren, static world. MEASURED (the soak, 6 bots 3,500 px apart): the living radius around each player is least 0, mean 3.2 foes; THE ROVING SHADOW (a keeper that visits each cluster in turn, shipped off) lifts the mean to 6.7 at a 10 s cadence and 8.1 at 2 s but drops 43% and 68% of ticks (each hop re-keys the runtime at 135–170 ms; the extra clusters' natives raise the sustained load). | THE MANY SHADOWS (several foci inside the runtime, no re-keying, per-focus budgets) + the loaders off the tick, with the seamless lane |
 | 4b | THE SPREAD COST (the soak): six bots spread 3,500 px with ONE focus already breach the gate (p95 47 ms, 8% dropped) against 13 ms with the same six around the hearth: the runtime's per-observer paths (dormancy, native paging) scale with how far apart players stand. | THE MANY SHADOWS, budgeted |
 | 5 | No stall watchdog, no auto-reconnect; an F5 loses the resume token and the vessel is refused as "already walks the world". | Pass B (the shell) |
 | 6 | No local action feedback: every press waits a round trip; cast roots snap back; dashes step at 20 Hz. | Pass B |
-| 7 | Cooldowns and gauges are never serialized: the client's bar never sweeps, ultimates never fill. | W2 |
+| 7 | Cooldowns and gauges are never serialized: the client's bar never sweeps, ultimates never fill. | W2 — BUILT: THE OWN ENTRY (`SeatW.cd`/`gg` spliced per socket, `tickNetClocks` runs them down) |
 | 8 | No interest management: every actor and every dirty build to every client; XP dirties a build; the 1.5 s heartbeat re-dirties all. PLAUSIBLE sizes. | Pass C (the wire diet) |
 | 9 | The client re-applies the WHOLE latest snapshot every render frame: optimistic actions revert until the echo. | Pass B (adopt once, interpolate per frame) |
 | 10 | `persist()` stringifies and writes ~4 MB on the tick: ~250 ms of no ticks every 20 s. | Pass C |
@@ -874,11 +874,11 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 | 12 | Own-hero speed modifiers are not predicted (statuses are display stubs). | W1 |
 | 13 | Death: the killing blow is never shown; the screen comes ~60 ms after it. | W3 THE DEATH BEAT |
 | 14 | THE DRESS BEAT re-ships the whole zone on any doodad churn (up to every 4 s). | Pass C (doodad deltas) |
-| 15 | Projectiles, tethers, lite hordes and pose scalars step at 20 Hz (no ids, no velocity). | W2 |
+| 15 | Projectiles, tethers, lite hordes and pose scalars step at 20 Hz (no ids, no velocity). | W2 — BUILT for flights (`ProjW.id`+`v`, THE FORWARD LAW) and tethers (actor ids); lite hordes and pose scalars remain |
 | 16 | Own facing and walk pose are server-driven. | W1 |
 | 17 | Server-only events with no client cue (shake, low-life surge, corpses, dissolves, the harvest rite's invisible dwell). | W3 (per-seat rows) + Pass B |
 | 18 | Quick taps lost in merged ticks. | W1 |
-| 19 | Damage numbers have no owner. | W2 |
+| 19 | Damage numbers have no owner. | W2 — BUILT: `TextW.o` + `Settings.floatOwners` |
 
 **THE GAP CRITIC — tiers by player impact.**
 

@@ -14,7 +14,7 @@ import type { EncounterOrder } from './encounterCombat';
 // controls them (input vs AI) and which team they fight for.
 // ---------------------------------------------------------------------------
 
-import { chance, vec, type Vec2 } from '../core/math';
+import { chance, clamp, vec, type Vec2 } from '../core/math';
 import {
   FULL_ES_FRAC, FULL_LIFE_FRAC, FULL_MANA_FRAC,
   LOW_ES_FRAC, LOW_MANA_FRAC, StatSheet, attributeModifiers, CONDITION_IDS,
@@ -2043,6 +2043,15 @@ export class Actor {
     const sc = this.stanceRead();
     return this.sheet.get('poise', sc?.tags, sc?.extra);
   }
+  /** THE HONEST INPUT's walk fold (docs/engine/shard.md): the moveSpeed stat with
+   *  every status source and a held stance's kit. World.moveActor walks it, and a
+   *  seat's row ships it (SeatW spd) so a predicting client walks the same pace. */
+  walkSpeed(): number {
+    const sc = this.stanceRead();
+    return this.sheet.get('moveSpeed', sc?.tags, sc?.extra);
+  }
+  /** Traction underfoot as World.moveActor reads it (the slippery family lowers it). */
+  walkTraction(): number { return clamp(this.sheet.get('traction'), 0.05, 1); }
   maxInsight(): number { return this.sheet.get('insight'); }
   maxEndurance(): number { return this.sheet.get('endurance'); }
 

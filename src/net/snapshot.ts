@@ -52,6 +52,7 @@ import { hullOf, type ZoneShape } from '../world/shape';
 import { GridWalkField, type PackedWalk } from '../world/gridWalk';
 import { emptyAbilityEssences, emptyEssences } from '../engine/world';
 import type { World, Seat, VendorEntry } from '../engine/world';
+import { HONEST_INPUT_CFG } from './intent'; // THE HONEST INPUT: the walk fold's row
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
@@ -392,6 +393,13 @@ export interface SeatW {
   seq?: number;
   rooted?: boolean;
   slippery?: boolean;
+  /** THE HONEST INPUT (docs/engine/shard.md): the seat's walk speed, the fold its
+   *  moveActor walks (Actor.walkSpeed: the moveSpeed stat with its status sources);
+   *  a client's own hero predicts at it (World.ownWalk). It rides a WALKING seat's row
+   *  (HONEST_INPUT_CFG.walkRowSec): absent, the shell keeps the fold it last heard. */
+  spd?: number;
+  /** THE HONEST INPUT: the seat's traction (Actor.walkTraction), beside spd; absent = 1, firm. */
+  trc?: number;
   /** Environmental-survival meters (breath, light) — only rows BELOW max ride
    *  (the HUD hides full meters, and most frames most seats carry none). The
    *  client rebuilds its own hero's Actor.survival map from this so the
@@ -651,7 +659,9 @@ export interface StateSnapshot {
   pings?: PingW[];
   /** Per-seat build/progression — present ONLY for seats whose meta CHANGED since
    *  the last broadcast (dirty-flagged), so it rides along cheaply. Each client
-   *  applies its OWN entry (snap.seatMeta[clientSeatId]). */
+   *  applies its OWN entry (snap.seatMeta[clientSeatId]). THE OWN META: a shard
+   *  ships each socket its own seat's entry alone (ownEntryView), so the key is
+   *  absent on a socket whose seat carries none on that snapshot. */
   seatMeta?: Record<string, SeatMetaW>;
   /** Brandt's shared vendor stock (host-authoritative) + its restock clock — so a
    *  client renders the SAME list the host will resolve a buyVendor index against.
@@ -1294,10 +1304,12 @@ function ownGaugesOf(a: Actor): Pick<SeatW, 'gg'> {
   return gg ? { gg } : {};
 }
 
-/** THE OWN ENTRY: the SeatW rows only their own seat reads (its clocks). A shard ships each
- *  socket its own seat's rows and never another's (ShardTransport.sendState through
- *  ownEntryJson); a broadcast lane (co-op) carries every seat's and each client reads its
- *  own. Naming a key here puts that row under the law. */
+/** THE OWN ENTRY: what only its own seat reads. Two kinds ride under the law: the SeatW rows
+ *  named here (the seat's clocks, THE ACTING SEAT's refusal note and low-life surge) and THE
+ *  OWN META, `seatMeta[seat]` (the book, bag, doll and wallets a client ever reads are its own
+ *  seat's). A shard ships each socket its own seat's and never another's
+ *  (ShardTransport.sendState through ownEntryJson); a broadcast lane (co-op) carries every
+ *  seat's and each client reads its own. Naming a key here puts that SeatW row under the law. */
 export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh']; // + THE ACTING SEAT's note and surge
 
 /** THE ACTING SEAT (World.seatHudWire): the seat's refusal note while it is fresh. */
@@ -1312,44 +1324,86 @@ function ownSurgeOf(s: Seat, world: World): { lh?: number } {
 }
 let ownEntrySeq = 0;
 
+/** A seat entry with every own row struck (another seat's view of it). */
+function stripOwnRows(e: SeatW): SeatW {
+  const c = { ...e };
+  for (const k of SEAT_OWN_ROWS) delete c[k];
+  return c;
+}
+
+/** THE OWN ENTRY's per-socket view of a snapshot (the law in one place): every seat's entry
+ *  stands but only `seat`'s keeps its own rows, and `seatMeta` holds `seat`'s build alone
+ *  (absent when this snapshot carries none for it). The per-socket frame is this view's JSON:
+ *  the heartbeat and the dirty-flag beat keep their meaning seat by seat. */
+export function ownEntryView(s: StateSnapshot, seat: string): StateSnapshot {
+  const seats: Record<string, SeatW> = {};
+  for (const [id, e] of Object.entries(s.seats)) seats[id] = id === seat ? e : stripOwnRows(e);
+  const meta = s.seatMeta?.[seat];
+  return { ...s, seats, seatMeta: meta ? { [seat]: meta } : undefined };
+}
+
 /** THE OWN ENTRY, split for per-socket delivery (the snapshot as JSON). */
 export interface OwnEntrySplit {
-  /** Every own row struck: the frame for a socket whose seat carries none (shared). */
+  /** Every own row and every meta struck: the frame for a socket whose seat carries none (shared). */
   bare: string;
-  /** The frame for `seat` with its own rows kept, or null when it carries none (send `bare`). */
+  /** The frame for `seat` (ownEntryView's JSON), or null when it carries nothing of its own (send `bare`). */
   forSeat(seat: string): string | null;
 }
 
 /** THE OWN ENTRY, split for per-socket delivery: null when no seat entry carries an own row
- *  (the one broadcast frame stands, byte-identical). The body is stringified ONCE with the
- *  seats map held out by a sentinel and each socket's seats map (a few hundred bytes) spliced
- *  in; a sentinel not found exactly once falls back to a plain stringify per socket
- *  (correctness never rides the optimization: the characterBody idiom). No seeded stream is
- *  touched. */
+ *  and no meta rides (the one broadcast frame stands, byte-identical). The body is stringified
+ *  ONCE with the seats map and the meta map held out by sentinels; each socket's seats map (a
+ *  few hundred bytes) and its own meta are spliced in, the meta key struck whole for a socket
+ *  with none. A sentinel not found exactly once, or cuts that would touch, fall back to a
+ *  plain stringify of each socket's view (correctness never rides the optimization: the
+ *  characterBody idiom). No seeded stream is touched. */
 export function ownEntryJson(s: StateSnapshot): OwnEntrySplit | null {
   const ids = Object.keys(s.seats);
-  const owns = (id: string): boolean => !!s.seats[id] && SEAT_OWN_ROWS.some(k => s.seats[id][k] !== undefined);
-  if (!ids.some(owns)) return null;
-  const bare: Record<string, SeatW> = {};
-  for (const id of ids) {
-    const e = { ...s.seats[id] };
-    for (const k of SEAT_OWN_ROWS) delete e[k];
-    bare[id] = e;
-  }
-  const bareRows = ids.map(id => JSON.stringify(id) + ':' + JSON.stringify(bare[id]));
+  const meta = s.seatMeta;
+  const owns = (id: string): boolean =>
+    (!!s.seats[id] && SEAT_OWN_ROWS.some(k => s.seats[id][k] !== undefined)) || !!meta?.[id];
+  if (meta === undefined && !ids.some(owns)) return null;
+  const plain = (): OwnEntrySplit => ({
+    bare: JSON.stringify(ownEntryView(s, '')),
+    forSeat: mine => (owns(mine) ? JSON.stringify(ownEntryView(s, mine)) : null),
+  });
+  const bareRows = ids.map(id => JSON.stringify(id) + ':' + JSON.stringify(stripOwnRows(s.seats[id])));
   const seatsFor = (mine: string): string => '{' + ids.map((id, i) =>
     (id === mine ? JSON.stringify(id) + ':' + JSON.stringify(s.seats[id]) : bareRows[i])).join(',') + '}';
-  const quoted = JSON.stringify(`\u0000own-entry-${++ownEntrySeq}\u0000`);
-  const marked = JSON.stringify({ ...s, seats: JSON.parse(quoted) as string });
-  const at = marked.indexOf(quoted);
-  if (at < 0 || marked.indexOf(quoted, at + quoted.length) >= 0) {
-    return {
-      bare: JSON.stringify({ ...s, seats: bare }),
-      forSeat: mine => (owns(mine) ? JSON.stringify({ ...s, seats: { ...bare, [mine]: s.seats[mine] } }) : null),
-    };
+  const n = ++ownEntrySeq;
+  const q1 = JSON.stringify(`\u0000own-seats-${n}\u0000`), q2 = JSON.stringify(`\u0000own-meta-${n}\u0000`);
+  const marked = JSON.stringify({ ...s, seats: JSON.parse(q1) as string, ...(meta !== undefined ? { seatMeta: JSON.parse(q2) as string } : {}) });
+  const once = (needle: string): number => {
+    const i = marked.indexOf(needle);
+    return i >= 0 && marked.indexOf(needle, i + needle.length) < 0 ? i : -1;
+  };
+  const cuts: { at: number; end: number; put: (mine: string) => string }[] = [];
+  const i1 = once(q1);
+  if (i1 < 0) return plain();
+  cuts.push({ at: i1, end: i1 + q1.length, put: seatsFor });
+  if (meta !== undefined) {
+    // The meta key is cut WITH its separating comma, so a socket with no meta of its own
+    // receives no `seatMeta` key at all (its view's JSON), never an empty map.
+    const key = '"seatMeta":', i2 = once(key + q2);
+    if (i2 < 0 || once(q2) !== i2 + key.length) return plain();
+    const lead = marked[i2 - 1] === ',', trail = !lead && marked[i2 + key.length + q2.length] === ',';
+    const at = lead ? i2 - 1 : i2, end = i2 + key.length + q2.length + (trail ? 1 : 0);
+    cuts.push({ at, end, put: mine => (meta[mine]
+      ? (lead ? ',' : '') + key + JSON.stringify({ [mine]: meta[mine] }) + (trail ? ',' : '')
+      : '') });
   }
-  const head = marked.slice(0, at), tail = marked.slice(at + quoted.length);
-  return { bare: head + seatsFor('') + tail, forSeat: mine => (owns(mine) ? head + seatsFor(mine) + tail : null) };
+  cuts.sort((a, b) => a.at - b.at);
+  if (cuts.length > 1 && cuts[0].end > cuts[1].at) return plain();
+  const pieces: string[] = [];
+  let pos = 0;
+  for (const c of cuts) { pieces.push(marked.slice(pos, c.at)); pos = c.end; }
+  pieces.push(marked.slice(pos));
+  const frame = (mine: string): string => {
+    let out = pieces[0];
+    for (let k = 0; k < cuts.length; k++) out += cuts[k].put(mine) + pieces[k + 1];
+    return out;
+  };
+  return { bare: frame(''), forSeat: mine => (owns(mine) ? frame(mine) : null) };
 }
 
 /** The rampage fabric's felled rows (undefined while the ground stands whole
@@ -1455,7 +1509,7 @@ function seatW(s: Seat, world: World): SeatW {
   const a = s.actor;
   const seq = world.lastInputSeq.get(s.id);
   const surv = survivalOf(a);
-  return {
+  const row: SeatW = {
     pos: v2(a.pos),
     life: Math.max(0, Math.round(a.life)), maxLife: Math.round(a.maxLife()),
     mana: Math.max(0, Math.round(a.mana)), maxMana: Math.round(a.maxMana()),
@@ -1470,6 +1524,12 @@ function seatW(s: Seat, world: World): SeatW {
     ...(a.sheet.get('traction') < 0.999 ? { slippery: true } : {}),
     ...(surv ? { survival: surv } : {}),
   };
+  // THE HONEST INPUT: the walk fold rides a WALKING seat's row (stepped within walkRowSec), so
+  // a still seat's quiet snapshot carries none and the shell keeps the fold it last heard.
+  if (world.time - a.lastMoveAt <= HONEST_INPUT_CFG.walkRowSec) row.spd = Math.round(a.walkSpeed() * 1000) / 1000;
+  const trc = a.walkTraction();
+  if (row.spd !== undefined && trc < 1) row.trc = Math.round(trc * 1000) / 1000; // THE HONEST INPUT: the traction under it (absent = firm)
+  return row;
 }
 
 /** Below-max survival rows (undefined when none — full meters ship nothing). */
@@ -1762,7 +1822,11 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.life = aw.life; a.es = aw.es; a.absorbLayers.clear(); a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
     a.bodyActionPose = aw.bodyActionPose ? { ...aw.bodyActionPose } : null;
-    a.bodyWalkPose = aw.bodyWalkPose ? { ...aw.bodyWalkPose } : null;
+    // THE HONEST INPUT: a predicting shell's OWN hero (a render shell, the one marker
+    // main.ts installs: clientActionHook) walks its own gait, stamped once per frame by
+    // the replay (net/predict.ts); every other body wears the host's pose.
+    if (aw.seat === world.clientSeatId && world.clientActionHook) a.bodyWalkPose = undefined;
+    else a.bodyWalkPose = aw.bodyWalkPose ? { ...aw.bodyWalkPose } : null;
     a.passive = aw.passive; a.untargetable = aw.ut;
     a.summonReform = aw.summonReform ? { remaining: aw.summonReform[0], duration: aw.summonReform[1], invulnerable: false, untargetable: false } : undefined;
     a.movementTether = aw.movementTether ? { ...aw.movementTether,
@@ -2122,6 +2186,10 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // double-count against recalcSeat's sources).
     p.life = me.life; p.mana = me.mana; p.es = me.es;
     p.dead = me.dead; p.downed = me.downed;
+    // THE HONEST INPUT: our hero predicts at the host's walk fold (its row's spd/trc),
+    // never the shell's own sheet, whose statuses are display stubs. A still seat's row
+    // carries none: the fold last heard stands (a fresh shell walks its own sheet).
+    if (me.spd !== undefined) { const ow = world.ownWalk ??= { spd: 0, trc: 1 }; ow.spd = me.spd; ow.trc = me.trc ?? 1; }
     // Environmental-survival meters: rebuild the own hero's map from the wire
     // so the registry-driven HUD bars (breath, light) draw exactly as on the
     // host. Absent on the wire = every meter full = no map (bars hidden).

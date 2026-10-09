@@ -54,6 +54,7 @@ import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './ne
 import { tickNetClocks } from './net/snapshot'; // THE WIRE'S EYES: the own hero's clocks between snapshots
 import { applyOwnSeatRows } from './net/seatView'; // THE ACTING SEAT: the own seat's note and surge
 import { RemoteInput } from './net/remote';
+import { faceOwnAim, replayOwnFrames } from './net/predict';
 import { WebRtcTransport } from './net/webrtc';
 import { WsTransport, defaultShardUrl, shardResumeFor } from './net/ws';
 import { wildsShellActive, wildsShellAttach, wildsShellDetach, wildsShellStream, wildsShellZone } from './net/wildsClient';
@@ -322,6 +323,8 @@ let inputSeq = 0;
 const predictHistory: Array<{ seq: number; dx: number; dy: number; dt: number }> = [];
 const PREDICT_BUFFER = 240;        // ~4s @ 60fps — caps replay cost + runaway
 let predZoneId = '';               // zone change → discard stale (old-zone) inputs
+let predictAim: { x: number; y: number } | null = null; // THE HONEST INPUT: the aim our newest frame sent (the hero faces it)
+let predictWalked = 0;             // THE HONEST INPUT: the newest seq whose replay stamped the gait (one stride per frame)
 /** Disposers for the client's onState / onZone subscriptions. */
 let snapshotDispose: (() => void) | null = null;
 let zoneDispose: (() => void) | null = null;
@@ -1905,6 +1908,10 @@ function tick(now: number): void {
           if (intent) net.sendInput(seat.id, intent);
         }
         // 3. Apply all seat intents (single path for every player-kind hero).
+        // THE TIME BUDGET runs on the wall: the seconds this frame's dt clamp cut off
+        // still passed for a remote client's hands (World.passInputTime; a local seat
+        // sends no dt, so nothing of single player reads it).
+        world.passInputTime(frameGapMs / 1000 - dt);
         world.applyInputs(net.drainInputs(), dt);
         // 3.5. Apply clients' META intents (point-spends, gem ops, drops) to their
         //      OWN seats BEFORE the sim ticks — so the change lands in this tick's
@@ -2072,6 +2079,8 @@ function tick(now: number): void {
         // Stamp + buffer the input for prediction, THEN send it. The host echoes
         // the last-applied seq; predictOwnHero replays everything newer locally.
         li.seq = ++inputSeq;
+        li.dt = dt; // THE HONEST INPUT: the host walks this frame at the dt we predict it at
+        predictAim = li.aim;
         predictHistory.push({ seq: li.seq, dx: li.dx, dy: li.dy, dt });
         if (predictHistory.length > PREDICT_BUFFER) predictHistory.shift();
         net.sendInput(net.self, li);
@@ -2381,8 +2390,9 @@ function predictOwnHero(): void {
   // the client can't reproduce) — anchor-only there avoids a prediction rubber-band.
   p.pos.x = me.pos[0]; p.pos.y = me.pos[1];
   if (!me.rooted && !me.slippery) {
-    for (const h of predictHistory) world.moveActor(p, h.dx, h.dy, h.dt);
+    predictWalked = replayOwnFrames(world, p, predictHistory, predictWalked); // THE HONEST INPUT: one stride per frame
   }
+  faceOwnAim(p, predictAim, !!me.rooted); // THE HONEST INPUT: the hero faces the aim it sends
 }
 
 /** Client: start applying the host's broadcasts (set up at join, torn down on Leave). */
@@ -2768,6 +2778,7 @@ function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, w
   // Reset movement-prediction state so our input seq realigns with the host's fresh
   // per-seat ack (a new run = a fresh World on the host = an empty lastInputSeq).
   inputSeq = 0; predictHistory.length = 0; predZoneId = '';
+  predictAim = null; predictWalked = 0; // THE HONEST INPUT
   ui.resetRunView();        // the client's shell world is new too — reset the view state
   deathShown = false;
   clientDeath = null; // THE ACTING SEAT: a new shell owes no screen to a death beat of the last one

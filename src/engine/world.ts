@@ -98,7 +98,7 @@ import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type MonsterPartDef, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
-import { NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
+import { HONEST_INPUT_CFG, NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
 import { SkillInputOrder } from './skillInputOrder';
 import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
 import { WorldMassRuntime, type MassAdventureSave } from '../worldmass/runtime';
@@ -2995,6 +2995,19 @@ export class World {
   /** CO-OP prediction: the last input SEQ the host has applied per seat — echoed in
    *  SeatW so a client replays its unacked inputs from the authoritative position. */
   readonly lastInputSeq = new Map<string, number>();
+  /** THE TIME BUDGET's ledger (net/intent.ts HONEST_INPUT_CFG, docs/engine/shard.md):
+   *  per seat, the walking seconds it may still claim (credit), the input clock at
+   *  its last walk (at) and the seconds the budget refused it (refused: a speed
+   *  hack's, or a stall past the bank). Opened by a seat's first dt-carrying input;
+   *  transient (never saved, never wired); leaves with the seat. */
+  readonly moveBudget = new Map<string, { credit: number; at: number; refused: number }>();
+  /** THE TIME BUDGET's clock: the raw seconds applyInputs was handed (the tick's dt,
+   *  never bent by timeflow), plus the wall a stalled host dropped (passInputTime). */
+  private inputClock = 0;
+  /** THE HONEST INPUT on a render shell: the walk fold (speed, traction) the shell's
+   *  OWN hero wears, read off its seat row (SeatW spd/trc) by applySnapshot, so the
+   *  predicted moveActor walks at the host's pace. Null on every host and solo world. */
+  ownWalk: { spd: number; trc: number } | null = null;
 
   /** The LOCAL hero. A read-only getter over the local seat so the ~90 existing
    *  `this.player` reads keep working unchanged while the roster goes multi-seat. */
@@ -4805,6 +4818,7 @@ export class World {
     const seat = this.seats[i];
     this.seats.splice(i, 1);
     this.spentPresses.delete(id); // THE SPENT PRESS leaves with the hand
+    this.moveBudget.delete(id); // THE TIME BUDGET leaves with it
     this.actors = this.actors.filter(a => a !== seat.actor && a.owner !== seat.actor);
     this.indexSeats();
     this.events.emit('party/leave', { actor: seat.actor, seat: id });
@@ -5389,6 +5403,7 @@ export class World {
    *  looped over the roster. Dead/downed seats are skipped. `aim` is world-space. */
   applyInputs(inputs: Map<string, PlayerInput>, dt: number): void {
     this.doorPressIntents = null;
+    this.inputClock += dt; // THE TIME BUDGET's clock: raw seconds, never bent by timeflow
     for (const seat of this.seats) {
       const a = seat.actor;
       this.actingSeat = seat; // THE ACTING SEAT: what this seat's hands cause is this seat's
@@ -5430,7 +5445,11 @@ export class World {
       // once, including paused/dead frames; a stale input cannot open a door.
       if ((inp.dx || inp.dy) && !inp.held.some(Boolean) && !inp.edge.some(Boolean) && !inp.metaEdge?.some(Boolean))
         (this.doorPressIntents ??= new Map()).set(seat.id, vec(inp.dx, inp.dy));
-      this.moveActor(a, inp.dx, inp.dy, tf === 1 ? dt : dt * tf);
+      // THE HONEST INPUT (net/intent.ts HONEST_INPUT_CFG): a wire client's frames
+      // walk at the dt each was polled for, every frame of the tick's batch, under
+      // THE TIME BUDGET; an input with no dt walks the tick's dt exactly as ever.
+      if (inp.moves || inp.dt !== undefined) this.walkFrames(seat, a, inp, tf, dt);
+      else this.moveActor(a, inp.dx, inp.dy, tf === 1 ? dt : dt * tf);
       const aim = inp.aim;
       // LIVE aim for guided projectiles (guidePower) — refreshed every frame,
       // so a missile already in flight keeps chasing the moving cursor.
@@ -5574,6 +5593,44 @@ export class World {
     let spent = this.spentPresses.get(seat.id);
     if (!spent) this.spentPresses.set(seat.id, spent = new Set());
     spent.add(slot);
+  }
+
+  /** THE HONEST INPUT (net/intent.ts HONEST_INPUT_CFG, docs/engine/shard.md): walk a
+   *  wire client's frames, each at the dt it was polled for (clamped as the client
+   *  clamps its frame), under THE TIME BUDGET. The seat's credit starts at graceSec,
+   *  refills with the input clock since its last walk and banks at most bankSec; a
+   *  frame that would walk past it walks only what is left, the rest refused (and
+   *  counted), so a speed hack walks no faster than the clock. A still frame claims
+   *  nothing. The rest of the input (aim, casts, edges) applies once, by the caller. */
+  private walkFrames(seat: Seat, a: Actor, inp: PlayerInput, tf: number, dt: number): void {
+    const cfg = HONEST_INPUT_CFG;
+    let b = this.moveBudget.get(seat.id);
+    if (!b) this.moveBudget.set(seat.id, b = { credit: cfg.graceSec, at: this.inputClock - dt, refused: 0 });
+    b.credit = Math.min(cfg.bankSec, b.credit + (this.inputClock - b.at));
+    b.at = this.inputClock;
+    const moves = inp.moves;
+    const n = moves ? Math.min(moves.length, cfg.maxBatch) : 1;
+    for (let i = 0; i < n; i++) {
+      const m = moves ? moves[i] : null;
+      const mx = m ? m[0] : inp.dx, my = m ? m[1] : inp.dy, claim = m ? m[2] : inp.dt;
+      let step = typeof claim === 'number' && claim > 0 ? Math.min(claim, cfg.maxMoveDt) : 0;
+      if (step > 0 && (mx || my)) {
+        if (step > b.credit) {
+          b.refused += step - b.credit;
+          step = b.credit;
+          if (step <= 0) continue; // refused whole: past the budget nothing walks
+        }
+        b.credit -= step;
+      }
+      this.moveActor(a, mx, my, tf === 1 ? step : step * tf);
+    }
+  }
+
+  /** THE TIME BUDGET runs on the wall: a host whose pump DROPS ticks (a stall past
+   *  its catch-up) credits the dropped seconds here before it catches up, so the
+   *  frames a client sent through the stall still walk (server/shardHost.ts pump). */
+  passInputTime(sec: number): void {
+    if (sec > 0 && Number.isFinite(sec)) this.inputClock += sec;
   }
 
   /** Party size for ENEMY SCALING purposes — FRACTIONAL by design (coopScale
@@ -58535,11 +58592,13 @@ export class World {
     // SNOW DENSITY: standing cover is heavy going for every walker
     // (SNOW_CFG.slowAtFull at a full blanket). Boats don't wade snow.
     const snowScale = this.sailing ? 1 : 1 - this.snowCoverAt(a.pos) * SNOW_CFG.slowAtFull;
-    // A held stance's own kit joins the read (Actor.stanceRead) — the
-    // marching wall's 'guarding'-scoped speed rows live on the instance.
-    const sc = a.stanceRead();
-    const speed = a.sheet.get('moveSpeed', sc?.tags, sc?.extra) * channelFactor * regionScale * boatScale * windScale * snowScale;
-    const traction = clamp(a.sheet.get('traction'), 0.05, 1);
+    // A held stance's own kit joins the read (Actor.walkSpeed's stanceRead): the
+    // marching wall's 'guarding'-scoped speed rows live on the instance. THE HONEST
+    // INPUT: a render shell's OWN hero walks the fold its seat row carries (ownWalk;
+    // the shell's statuses are display stubs); every host body reads its own sheet.
+    const ow = this.ownWalk !== null && a === this.player ? this.ownWalk : null;
+    const speed = (ow ? ow.spd : a.walkSpeed()) * channelFactor * regionScale * boatScale * windScale * snowScale;
+    const traction = ow ? ow.trc : a.walkTraction();
     a.lastMoveAt = this.time;
     a.idleFor = 0; // a deliberate step breaks the 'stationary' stance
     a.plantFor = 0; // …and the plant clock with it (the commitment resets)

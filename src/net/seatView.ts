@@ -10,9 +10,11 @@
 //   seatAudienceFrame  snapshot with no audience goes on to THE OWN ENTRY
 //                      (snapshot.ts ownEntryJson) untouched; with one, the
 //                      shared body encodes once and each connection splices
-//                      in its own part: every seat row (only its own carrying
-//                      the SEAT_OWN_ROWS rows), the notices it hears and the
-//                      eyecatch if it may see it. No audience list ever ships.
+//                      in its own part: THE OWN ENTRY's view (ownEntryView:
+//                      every seat row, only its own carrying the SEAT_OWN_ROWS
+//                      rows, and its own seatMeta alone), the notices it hears
+//                      and the eyecatch if it may see it. No audience list
+//                      ever ships.
 //   applyOwnSeatRows   the client's half (after applySnapshot): the own row's
 //                      refusal note (SeatW.fn) floats over the own head, the
 //                      host's failNote look, rebuilt each apply from the row so
@@ -27,7 +29,7 @@
 import { dist } from '../core/math';
 import { COOP_SCALING } from '../data/coop';
 import type { World } from '../engine/world';
-import { SEAT_OWN_ROWS, type NoticeW, type SeatW, type StateSnapshot } from './snapshot';
+import { ownEntryView, type NoticeW, type StateSnapshot } from './snapshot';
 
 declare module './snapshot' {
   interface NoticeW {
@@ -72,11 +74,10 @@ function eyecatchAudience(world: World, casterId: number): string[] | undefined 
 }
 
 export interface SeatAudienceSplit {
-  shared: Omit<StateSnapshot, 'seats' | 'no' | 'ec' | 'ecTo'>;
-  /** Every seat row stripped of its own rows (what another seat sees). */
-  pub: Record<string, SeatW>;
-  /** The seat rows that carry own rows, whole (each for its own socket). */
-  own: Record<string, SeatW>;
+  /** The snapshot whole (THE OWN ENTRY's view reads its seats and seatMeta per socket). */
+  snap: StateSnapshot;
+  /** Everything every socket hears alike, encoded once. */
+  shared: Omit<StateSnapshot, 'seats' | 'seatMeta' | 'no' | 'ec' | 'ecTo'>;
   no?: NoticeW[];
   ec?: StateSnapshot['ec'];
   ecTo?: string[];
@@ -85,21 +86,15 @@ export interface SeatAudienceSplit {
 /** Null when no notice or eyecatch carries an audience (THE OWN ENTRY alone decides then). */
 export function seatAudienceSplit(snap: StateSnapshot): SeatAudienceSplit | null {
   if (snap.ecTo === undefined && !snap.no?.some(n => n.to)) return null;
-  const { seats, no, ec, ecTo, ...shared } = snap;
-  const pub: Record<string, SeatW> = {}, own: Record<string, SeatW> = {};
-  for (const [id, row] of Object.entries(seats)) {
-    if (!SEAT_OWN_ROWS.some(k => row[k] !== undefined)) { pub[id] = row; continue; }
-    own[id] = row;
-    const bare = { ...row };
-    for (const k of SEAT_OWN_ROWS) delete bare[k];
-    pub[id] = bare;
-  }
-  return { shared, pub, own, ...(no ? { no } : {}), ...(ec ? { ec } : {}), ...(ecTo ? { ecTo } : {}) };
+  const { seats: _seats, seatMeta: _meta, no, ec, ecTo, ...shared } = snap;
+  return { snap, shared, ...(no ? { no } : {}), ...(ec ? { ec } : {}), ...(ecTo ? { ecTo } : {}) };
 }
 
-/** One seat's part of the frame: the rows, the notices it hears, its eyecatch. */
-export function seatAudienceFor(v: SeatAudienceSplit, seatId: string): Pick<StateSnapshot, 'seats' | 'no' | 'ec'> {
-  const out: Pick<StateSnapshot, 'seats' | 'no' | 'ec'> = { seats: v.own[seatId] ? { ...v.pub, [seatId]: v.own[seatId] } : v.pub };
+/** One seat's part of the frame: THE OWN ENTRY's view of the seats and the build (its own rows
+ *  and its own meta alone, snapshot.ts ownEntryView), the notices it hears, its eyecatch. */
+export function seatAudienceFor(v: SeatAudienceSplit, seatId: string): Pick<StateSnapshot, 'seats' | 'seatMeta' | 'no' | 'ec'> {
+  const view = ownEntryView(v.snap, seatId);
+  const out: Pick<StateSnapshot, 'seats' | 'seatMeta' | 'no' | 'ec'> = { seats: view.seats, ...(view.seatMeta ? { seatMeta: view.seatMeta } : {}) };
   if (v.no) out.no = v.no.filter(n => !n.to || n.to.includes(seatId)).map(n => { if (!n.to) return n; const { to: _to, ...line } = n; return line; });
   if (v.ec && (!v.ecTo || v.ecTo.includes(seatId))) out.ec = v.ec;
   return out;
