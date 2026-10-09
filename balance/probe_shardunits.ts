@@ -77,6 +77,9 @@ const priv = (o: object): Priv => o as unknown as Priv;
 // lifted: the same seeded solo walk must print it after every wave (W2's lift included).
 const ROAD_WALK_HASH = 'cadf869b';
 const ROAD_WALK_SEED = 0x40adca7;
+// The walk runs FIRST in this file: a sim world's boot (makeSimWorld below) adds its arena to
+// the static chart every later World clones, and a shard host widens THE NEAR LAW; either
+// would deal the walk another world.
 bootShardEngine();
 function roadWalk(): { digest: string; hash: string; legs: Record<string, boolean> } {
   const radius0 = COOP_SCALING.shareRadius, budget0 = FORECHART_CFG.beatBudgetMs;
