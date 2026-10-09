@@ -1,3 +1,4 @@
+import { NATIVE_REGIONAL_SEATING } from './nativeRegionalSeating';
 import { nativeRegionalSources } from './nativeRegionalSources';
 import { wovenRegionalTerrainGrammar } from './regionalTerrainGrammar';
 import { regionalDiscoveryContent } from './regionalDiscoverySources';
@@ -87,7 +88,7 @@ export function massAdventure(): MassAdventure {
   const nativeRegional = nativeRegionalSources(progression.minLevel, progression.maxLevel);
   const regionalDiscoveries = regionalDiscoveryContent(progression.minLevel, progression.maxLevel);
   const terrain: MassSpec = {
-    nativeRegional: nativeRegional.policy,
+    nativeRegional: {...nativeRegional.policy, seating: NATIVE_REGIONAL_SEATING},
     regionalDiscoveries: regionalDiscoveries.policy,
     id: 'hollow-wake-country', version: 8, addressSpan: 960, terrainCell: 30,
     fields: [

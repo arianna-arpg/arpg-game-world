@@ -7,7 +7,7 @@ import { nativeRegionalSources, captureNativeRegional } from '../src/worldmass/n
 import { MassNativeRegional, type NativeRegionalPlan } from '../src/worldmass/nativeRegional';
 import { nativeRegionalMaterial, nativeRegionalCircle, nativeRegionalRoutes } from '../src/worldmass/nativeRegionalGeometry';
 import { reserveMassOpening } from '../src/worldmass/patchReservations';
-import { massAdventure } from '../src/worldmass/preset';
+import { massAdventure as currentMassAdventure } from '../src/worldmass/preset';
 import { MassGenerator, makeMassRun } from '../src/worldmass/generator';
 import { MassStream } from '../src/worldmass/stream';
 import { MassState } from '../src/worldmass/state';
@@ -19,6 +19,8 @@ import { landformHabitatStand } from '../src/worldmass/landformHabitats';
 import type { MassSpec } from '../src/worldmass/contracts';
 void makeSimWorld;
 const copy=<T>(v:T):T=>JSON.parse(canonical(v));
+// Frozen schema-17 course; modern source-fit seating has its own coverage rig.
+const massAdventure=()=>{const config=copy(currentMassAdventure());delete config.terrain.nativeRegional!.seating;return config;};
 const catalogue=nativeRegionalSources(),start=performance.now();
 let passed=0;
 function test(name:string,run:()=>void){run();passed++;console.log('PASS '+name);}

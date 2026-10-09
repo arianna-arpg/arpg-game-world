@@ -1,3 +1,12 @@
+NativeRegionalSeating (schema 18) preserves all original complete-locale
+placements and tries at most eight source-fit fallback seats only after the
+original sixteen fail. Keep exact historical omission, snapped whole-source
+containment, final-center biomes, protected sites and unchanged native owners.
+Verify nativeseating, historical nativeregional, the worldmass suite, all types,
+genqa and the native-seating-ui.cjs course after an isolated build. See
+docs/worldgen/native-regional-seating.md for multi-seed coverage, read budgets
+and remaining woodland, native-owner and synchronous-planning limits.
+
 NativeRegional (schema 17) captures complete supported main locale programs
 through the shared native builder. New sources retain original district/link/
 river geometry, exact dressing, pinned rules, coverage and geographic levels.

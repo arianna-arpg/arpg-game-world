@@ -2,10 +2,11 @@
 // native movement samples; these screenshots are not a full combat playthrough.
 const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
+const nativeSeating=process.env.HOLLOW_WAKE_NATIVE_SEATING==='1',prefix=nativeSeating?'native-seating':'native-regional';
 const reports=path.join(__dirname,'reports');fs.mkdirSync(reports,{recursive:true});
-app.setPath('userData',path.join(reports,'native-regional-profile-'+process.pid));app.disableHardwareAcceleration();
+app.setPath('userData',path.join(reports,prefix+'-profile-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
- const root=path.resolve(__dirname,'../.claude/native-regional.local.work/dist'),report={errors:[],method:'Default seed42 naturally admitted complete native locales; controlled arrivals, native movement, body clearance, scenery mutation, durable cold Continue.'};
+ const root=path.resolve(__dirname,process.env.HOLLOW_WAKE_NATIVE_REGIONAL_DIST??('../.claude/'+prefix+'.local.work/dist')),report={errors:[],method:'Default seed42 naturally admitted complete native locales; controlled arrivals, native movement, body clearance, scenery mutation, durable cold Continue.'};
  const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://localhost').pathname,file=path.resolve(root,'.'+(name==='/'?'/index.html':name));
   if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.writeHead(404);res.end();return;}
   res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');fs.createReadStream(file).pipe(res);
@@ -14,8 +15,8 @@ app.whenReady().then(async()=>{
  win.webContents.on('console-message',e=>{if(e.level==='error')report.errors.push(e.message);});
  const run=async(fn,...args)=>{const r=await win.webContents.executeJavaScript('(async()=>{try{return {ok:true,value:await ('+fn+')('+args.map(a=>JSON.stringify(a)).join(',')+')}}catch(e){return {ok:false,error:e.stack||String(e)}}})()');if(!r.ok)throw Error(r.error);return r.value;};
  const boot=async()=>{await win.loadURL(url);await run(async()=>{window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});for(let i=0;i<100&&!window.__game;i++)await new Promise(r=>setTimeout(r,100));if(!window.__game)throw Error('Missing game');await new Promise(r=>setTimeout(r,200));});};
- const save=()=>fs.writeFileSync(path.join(reports,'native-regional-ui.json'),JSON.stringify(report,null,2));
- const shot=async name=>{await run(()=>__game.renderer.render(__game.world()));win.webContents.invalidate();await new Promise(r=>setTimeout(r,120));const file=path.join(reports,'native-regional-'+name+'.png');fs.writeFileSync(file,(await win.webContents.capturePage()).toPNG());return file;};
+ const save=()=>fs.writeFileSync(path.join(reports,prefix+'-ui.json'),JSON.stringify(report,null,2));
+ const shot=async name=>{await run(()=>__game.renderer.render(__game.world()));win.webContents.invalidate();await new Promise(r=>setTimeout(r,120));const file=path.join(reports,prefix+'-'+name+'.png');fs.writeFileSync(file,(await win.webContents.capturePage()).toPNG());return file;};
  const timer=setTimeout(()=>{save();console.error('Native regional acceptance timed out');app.exit(1);},300000);
  const helpers=plans=>{
   window.__nrPlans=plans;
@@ -40,20 +41,30 @@ app.whenReady().then(async()=>{
   };
  };
  try{
-  await boot();report.search=await run(()=>{
-   __game.devStartRun('warrior');__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);w.player.invulnerable=true;__game.step(1);
+  let coordinates=[[5,-8],[2,-4],[-1,-1]];
+  if(nativeSeating){
+   const survey=JSON.parse(fs.readFileSync(path.join(reports,'native-seating-survey.json'),'utf8')).find(r=>r.sourceFit.seed===42);
+   const added=survey.sourceFit.accepted.filter(p=>!survey.historical.accepted.some(h=>h.x===p.x&&h.y===p.y));
+   const large=survey.sourceFit.accepted.find(p=>p.width===4800);assert.ok(large,'original large region retained');
+   assert.equal(added.length,2,'two additional natural waterland sources');coordinates=[...added,large].map(p=>[p.x,p.y]);
+  }
+  await boot();report.search=await run((coordinates,historical)=>{
+   __game.devStartRun('warrior');__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);
+   if(historical){const previous=w.massRuntime,config=JSON.parse(JSON.stringify(previous.config));delete config.terrain.nativeRegional.seating;
+    const legacy=new previous.constructor(42,'expedition:42',config);previous.dispose();w.massRuntime=null;legacy.attach(w);}
+   w.player.invulnerable=true;__game.step(1);
    document.querySelectorAll('button').forEach(b=>{if(b.textContent.trim()==='Walk on')b.click();});__game.ui.hideAll();
-   const m=w.massRuntime,plans=[[5,-8],[2,-4],[-1,-1]].map(([x,y])=>m.generator.nativeRegional.candidate('surface',BigInt(x),BigInt(y))).filter(Boolean);
+   const m=w.massRuntime,plans=coordinates.map(([x,y])=>m.generator.nativeRegional.candidate('surface',BigInt(x),BigInt(y))).filter(Boolean);
    if(plans.length<2)throw Error('Natural regions missing');
    return {plans,coverage:m.config.terrain.nativeRegional.coverage.length,supported:m.config.terrain.nativeRegional.sources.length};
-  });save();await run(helpers,report.search.plans);
+  },coordinates,!nativeSeating);save();await run(helpers,report.search.plans);
   const sheet=await run(()=>{
    const plans=window.__nrPlans,canvas=document.createElement('canvas');canvas.width=plans.length*440;canvas.height=490;const c=canvas.getContext('2d');c.fillStyle='#172019';c.fillRect(0,0,canvas.width,canvas.height);
    plans.forEach((p,i)=>{const g=p.source.geometry,unit=390/(g.width/30),ox=i*440+20,oy=62;c.fillStyle='#ede6cf';c.font='15px sans-serif';c.fillText(p.source.program,ox,24);c.font='12px sans-serif';c.fillText(p.source.variant+' / '+g.width+' × '+g.height,ox,44);
     g.rows.forEach((row,y)=>[...row].forEach((v,x)=>{if(v==='.')return;const r=g.materials[v.charCodeAt(0)-65];c.fillStyle={ground:'#899362',wall:'#394032',water:'#326982',locale_river:'#326982',locale_bridge:'#bda374'}[r]||'#687456';c.fillRect(ox+x*unit,oy+y*unit,unit+.2,unit+.2);}));
     c.fillStyle='#ebc579';p.source.terminals.slice(4).forEach(t=>{c.beginPath();c.arc(ox+t.x/30*unit,oy+t.y/30*unit,3,0,Math.PI*2);c.fill();});
    });return canvas.toDataURL('image/png');
-  });fs.writeFileSync(path.join(reports,'native-regional-contact.png'),Buffer.from(sheet.split(',')[1],'base64'));
+  });fs.writeFileSync(path.join(reports,prefix+'-contact.png'),Buffer.from(sheet.split(',')[1],'base64'));
   report.routes=[];
   for(let i=0;i<report.search.plans.length;i++)for(const terminal of [4,5]){
    const arrival=await run((i,t)=>window.__nrArrive(i,t),i,terminal);
@@ -70,7 +81,7 @@ app.whenReady().then(async()=>{
    const d=m.config.content.find(c=>c.id==='nativeRegional/'+p.source.id).site.doodads[0],live=w.doodads.find(v=>v.kind===d.kind&&Math.hypot(v.pos.x-center.x-d.pos.x,v.pos.y-center.y-d.pos.y)<.01);
    if(!live)throw Error('Missing native scenery mutation target');w.doodads=w.doodads.filter(v=>v!==live);w.markDoodadsChanged();return {owner:p.id,kind:d.kind};
   });
-  const before=await run(()=>window.__nrState());assert.equal(before.schema,17);
+  const before=await run(()=>window.__nrState());assert.equal(before.schema,nativeSeating?18:17);
   await run(async()=>{__game.save();await __game.flushRunSave();});await boot();
   await run(async()=>{for(let i=0;i<100&&!document.querySelector('#sm-continue:not([disabled])');i++)await new Promise(r=>setTimeout(r,100));const b=document.querySelector('#sm-continue:not([disabled])');if(!b)throw Error('Continue unavailable');b.click();for(let i=0;i<100&&!__game.world().massRuntime;i++)await new Promise(r=>setTimeout(r,100));__game.ui.hideAll();});
   await run(helpers,report.search.plans);const after=await run(()=>window.__nrState());assert.deepEqual(after,before,'complete native terrain and scenery changes survive cold Continue');

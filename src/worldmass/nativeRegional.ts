@@ -1,3 +1,4 @@
+import { nativeRegionalSeat, type NativeRegionalSeating } from './nativeRegionalSeating';
 import '../data/localeMaterials';
 import type { LocalePlan } from '../world/locales';
 import type { LocaleReport } from '../engine/localeGen';
@@ -18,6 +19,7 @@ export interface NativeRegionalSource {
 }
 export interface NativeRegionalPolicy {
   source:string;version:1;spacing:number;chance:number;jitter:number;clearance:number; seats:number;
+  seating?: NativeRegionalSeating;
   exclusions?: import('./contracts').MassPatchPolicy['exclusions'];
   sources:readonly NativeRegionalSource[];
   coverage:readonly {program:string;variant:string;width:number;sourceHash:string;unsupported:readonly string[]}[];
@@ -36,6 +38,9 @@ export function validateNativeRegional(spec:MassSpec):void {
     ||!Array.isArray(p.sources)||p.sources.length>135||!unique(p.sources.map(s=>s.id))
     ||!Array.isArray(p.recipes)||p.recipes.length>16||!unique(p.recipes.map(r=>r.id))
     ||!Array.isArray(p.coverage)||p.coverage.length>270)throw Error('Invalid nativeRegional policy');
+  if(Object.hasOwn(p,'seating') && (!p.seating || p.seating.kind!=='source-fit' || p.seating.version!==1
+    || !Number.isSafeInteger(p.seating.fallbackSeats) || p.seating.fallbackSeats<1 || p.seating.fallbackSeats>8
+    || canonical(Object.keys(p.seating).sort())!==canonical(['fallbackSeats','kind','version'])))throw Error('Invalid nativeRegionalSeating policy');
   if(p.exclusions && (!Array.isArray(p.exclusions)||p.exclusions.length>32||p.exclusions.some(e=>
     !e.source||canonical(address(e.origin.dimension,e.origin.cx,e.origin.cy,e.origin.x,e.origin.y,spec.addressSpan))!==canonical(e.origin)
     ||!Object.values(e.bounds).every(Number.isFinite)||e.bounds.minX>e.bounds.maxX||e.bounds.minY>e.bounds.maxY
@@ -65,26 +70,46 @@ export function validateNativeRegional(spec:MassSpec):void {
  * content never move/clip around protected sites. A failed seat is refused whole. */
 export class MassNativeRegional {
   private cache=new Map<string,NativeRegionalPlan|null>();
-  readonly counters={tried:0,accepted:0,opening:0,sites:0,water:0,ports:0};
+  readonly counters={tried:0,accepted:0,opening:0,sites:0,siteBudget:0,biome:0,water:0,ports:0,reads:0,fallbackTried:0,fallbackAccepted:0};
   constructor(readonly spec:MassSpec,readonly run:MassRun,
     private read:(at:MassAddress)=>MassTerrain,
     private sites:(origin:MassAddress,box:MassPatchBox)=>readonly RegionalLandformSite[]|null) {}
+  private substrateAt(at:MassAddress):MassTerrain {this.counters.reads++;return this.read(at);}
   get policy():NativeRegionalPolicy{return this.spec.nativeRegional!;}
   candidate(dimension:string,gx:bigint,gy:bigint):NativeRegionalPlan|null {
     const key=canonical([dimension,gx.toString(),gy.toString()]);
     if(this.cache.has(key))return this.cache.get(key)!;
     const p=this.policy,rng=massRandom(this.run.seed,[p.source,p.version,key]),span=this.spec.addressSpan;
     let result:NativeRegionalPlan|null=null;
-    if(rng.chance(p.chance))for(let seat=0;seat<p.seats&&!result;seat++) {
+    if(rng.chance(p.chance))for(let seat=0;seat<p.seats+(p.seating?.fallbackSeats??0)&&!result;seat++) {
       this.counters.tried++;
       const axis=(g:bigint)=>{const n=g*BigInt(p.spacing),q=floorDiv(n,BigInt(span));return[q.toString(),Number(n-q*BigInt(span))] as const;};
       const [cx,x]=axis(gx),[cy,y]=axis(gy);
-      const center=address(dimension,cx,cy,x+p.spacing*(.5+rng.range(-.5,.5)*p.jitter),y+p.spacing*(.5+rng.range(-.5,.5)*p.jitter),span);
-      const base=this.read(center),recipe=p.recipes.find(r=>r.biomes.includes(base.biome));if(!recipe)continue;
-      const sourceId=rng.pick(recipe.sources),source=p.sources.find(s=>s.id===sourceId)!,g=source.geometry;
-      // Snap geometry to the same physical 30-unit lattice as streamed pages.
-      const origin=moveAddress(center,{x:-g.width/2,y:-g.height/2},span);
-      origin.x=Math.floor(origin.x/30)*30;origin.y=Math.floor(origin.y/30)*30;
+      let source:NativeRegionalSource,recipe:NativeRegionalPolicy['recipes'][number],origin:MassAddress;
+      if(p.seating && seat>=p.seats) {
+        this.counters.fallbackTried++;
+        // Select a physical envelope first, then choose the actual native source
+        // from the biome at its final snapped center. Moving a source chosen in
+        // another biome needlessly discarded valid woodland/highland seats.
+        const shape=rng.pick(p.sources).geometry;
+        const fit=nativeRegionalSeat(shape,p.spacing,p.clearance,this.run.seed,key,seat-p.seats,p.seating.fallbackSeats);
+        origin=address(dimension,cx,cy,x+fit.x-shape.width/2,y+fit.y-shape.height/2,span);
+        origin.x=Math.floor(origin.x/30)*30;origin.y=Math.floor(origin.y/30)*30;
+        const biome=this.substrateAt(moveAddress(origin,{x:shape.width/2,y:shape.height/2},span)).biome;
+        const match=p.recipes.find(r=>r.biomes.includes(biome));
+        const choices=match?.sources.map(id=>p.sources.find(s=>s.id===id)!)
+          .filter(s=>s.geometry.width===shape.width&&s.geometry.height===shape.height)??[];
+        if(!match||!choices.length){this.counters.biome++;continue;}
+        recipe=match;source=rng.pick(choices);
+      } else {
+        // Preserve schema-17 random draws and source locations exactly.
+        const center=address(dimension,cx,cy,x+p.spacing*(.5+rng.range(-.5,.5)*p.jitter),y+p.spacing*(.5+rng.range(-.5,.5)*p.jitter),span);
+        const base=this.substrateAt(center),match=p.recipes.find(r=>r.biomes.includes(base.biome));if(!match)continue;
+        recipe=match;const sourceId=rng.pick(recipe.sources);source=p.sources.find(s=>s.id===sourceId)!;
+        origin=moveAddress(center,{x:-source.geometry.width/2,y:-source.geometry.height/2},span);
+        origin.x=Math.floor(origin.x/30)*30;origin.y=Math.floor(origin.y/30)*30;
+      }
+      const g=source.geometry;
       let rejected=false;
       for(const e of [...(p.exclusions??[]),...(this.spec.landforms?.exclusions??[]),...(this.spec.patches?.exclusions??[])]) {
         if(e.origin.dimension!==dimension)continue;
@@ -96,17 +121,18 @@ export class MassNativeRegional {
       }
       if(rejected){this.counters.opening++;continue;}
       const sites=this.sites(origin,{minX:-p.clearance,minY:-p.clearance,maxX:g.width+p.clearance,maxY:g.height+p.clearance});
-      if(!sites||sites.some(s=>nativeRegionalCircle(g,s.x,s.y,s.radius+p.clearance))){this.counters.sites++;continue;}
+      if(!sites){this.counters.siteBudget++;continue;}
+      if(sites.some(s=>nativeRegionalCircle(g,s.x,s.y,s.radius+p.clearance))){this.counters.sites++;continue;}
       let wet=0;
-      for(let yy=1;yy<=5;yy++)for(let xx=1;xx<=5;xx++)if(regionKind(this.read(moveAddress(origin,{x:g.width*xx/6,y:g.height*yy/6},span)).region)?.standStatusDeep)wet++;
+      for(let yy=1;yy<=5;yy++)for(let xx=1;xx<=5;xx++)if(regionKind(this.substrateAt(moveAddress(origin,{x:g.width*xx/6,y:g.height*yy/6},span)).region)?.standStatusDeep)wet++;
       if(wet>5){this.counters.water++;continue;}
       for(const [i,port] of source.ports.entries())for(let side=-1;side<=1;side++) {
         const dx=i===0?-1:i===1?1:0,dy=i===2?-1:i===3?1:0;
-        const t=this.read(moveAddress(origin,{x:port.x+dx*30-dy*side*30,y:port.y+dy*30+dx*side*30},span));
+        const t=this.substrateAt(moveAddress(origin,{x:port.x+dx*30-dy*side*30,y:port.y+dy*30+dx*side*30},span));
         if(!regionKind(t.region)?.walkable||regionKind(t.region)?.standStatusDeep)rejected=true;
       }
       if(rejected){this.counters.ports++;continue;}
-      result=freezeData({id:canonical([this.run.runId,p.source,p.version,key]),origin,source,recipe:recipe.id});this.counters.accepted++;
+      result=freezeData({id:canonical([this.run.runId,p.source,p.version,key]),origin,source,recipe:recipe.id});this.counters.accepted++;if(seat>=p.seats)this.counters.fallbackAccepted++;
     }
     this.cache.set(key,result);if(this.cache.size>32)this.cache.delete(this.cache.keys().next().value!);
     return result;
