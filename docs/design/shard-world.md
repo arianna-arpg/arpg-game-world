@@ -611,6 +611,16 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
     keeper's. **BUILT:** `VESSEL_CFG.covenantAt = 'down'` and THE FRESH
     HERO'S END (`freshHeroDies`); the slow rig's N section pins the fall at
     once, the fresh end, the Immortal's mercy and the tombstone's word.
+    **CLARIFIED (2026-10-09, her word):** the down-is-death law is the
+    UNGROUPED player's — "if a player NOT in a group or party dies, they are
+    treated as single player regardless of who is AROUND". A player in a
+    GROUP (card 23: the party is our co-op mechanic made explicit) keeps
+    co-op's downed state: a nearby player may revive them, and "grouped party
+    members only officially die if the party dies and no one is left to
+    revive or recuperate" — a party wipe fells every downed member, and a
+    grouped member's death loses the run as a mortal's does. BUILD with THE
+    PARTY: the covenant reads the seat's party — ungrouped: at once; grouped:
+    only when no member of its party stands.
 15. **Roads that move the whole party** (caravan, town portal, caves,
     classic portals) until per-seat travel exists — A: move everyone.
     B: move only when every connected player gathers, shown as a muster
@@ -673,10 +683,13 @@ in Mu first.**
     on a shard a kill pays the killing seat alone until THE PARTY widens it.
     Cards 14, 18 and 21 are built; card 16 is in flight.
 
-23. **THE PARTY** (for her word; her ask 2026-10-08 — "players that are
-    PARTIED TOGETHER are effectively a unit, our equivalent of co-op; two
-    individual players do not NEED to be partied to play in the same
-    vicinity"). The recommendation: a party is an explicit social unit
+23. **THE PARTY** (her word 2026-10-08/09 — "players that are PARTIED
+    TOGETHER are effectively a unit, our equivalent of co-op; two individual
+    players do not NEED to be partied to play in the same vicinity"; and on
+    2026-10-09: a group "implies or infers something akin to our coop
+    mechanic, which may need a further mechanic to allow players to actually
+    group and ungroup together, just like in an MMORPG" — RULED: build it).
+    The contract: a party is an explicit social unit
     (invite, accept, leave; a leader only for kicks and the muster) and the
     ONLY thing that makes two players a unit. Independents are neighbors.
     Enemies scale by who stands near them whatever their parties (the mob
@@ -687,7 +700,16 @@ in Mu first.**
     that move a whole party wait at the muster ring (card 15) and leave
     independents alone. A revive reaches party members and anyone who walks
     up and kneels. The wire: a `party` row per seat (leader, members), the
-    invite as a session message, the HUD's party frame. Build after her word.
+    invite as a session message, the HUD's party frame. **THE GROUP LAW
+    (her clarification 2026-10-09):** inside a party the downed state is
+    co-op's — a member may be revived by a nearby player, and the covenant
+    fells the downed only when no member of the party stands (the party
+    wipe); outside one, every lethal down is the death (card 14 C). BUILD
+    NEXT (after the dormant seat and the Immortal's travel land): the party
+    registry on the shard (invite, accept, decline, leave, kick; the leader
+    for kicks and the muster), the seat's party on the wire, the covenant
+    and THE KILLER'S DUE reading the party, a Party panel to invite the
+    players in sight, the muster ring for card 15 after that.
 
 ---
 
