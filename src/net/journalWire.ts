@@ -15,9 +15,10 @@
 //                     idiom); absent = unchanged, a client keeps the last row.
 //   harvestRowOf      the host's half: the seat's rite view (SeatW.hv) while it
 //                     stands near a node or works a rite; absent = none.
-//   applyCounterRows  the client's half: the shell's quest reads, its board
-//                     panel, its map pins and its rite prompt answer from the
-//                     rows (World.netJournal, World.netHarvest).
+//   applyCounterRows  the client's half, in THE SPLIT's arrival half (snapshot.ts
+//                     adoptSnapshot, once per snapshot): the shell's quest reads,
+//                     its board panel, its map pins and its rite prompt answer
+//                     from the rows (World.netJournal, World.netHarvest).
 //
 // Hosted worlds alone (the keeper seat stands): a co-op host never builds a
 // row and a co-op client never reads one (THE SOLO INVARIANT).
@@ -202,10 +203,10 @@ export function harvestRowOf(world: World, seat: Seat): HarvestW | undefined {
   return world.seatHarvestView(seat, JOURNAL_WIRE_CFG.harvestReach) ?? undefined;
 }
 
-/** The client's half (after applySnapshot): the own seat's journal row (kept until the next
- *  one; a client that skipped a change heals on the beat) and, on a hosted world's shell, its
- *  rite row (every snapshot; absent = none). A new reward waiting at the giver opens the
- *  journal, as the host's own dwell asks (World.questRewardRequested). */
+/** The client's half, adopted once per snapshot (snapshot.ts adoptSnapshot, THE SPLIT): the
+ *  own seat's journal row (kept until the next one; a lost frame heals on the beat) and, on a
+ *  hosted world's shell, its rite row (every snapshot; absent = none). A new reward waiting at
+ *  the giver opens the journal, as the host's own dwell asks (World.questRewardRequested). */
 export function applyCounterRows(world: World, snap: StateSnapshot): void {
   const own = snap.seats[world.clientSeatId];
   if (!own) return;

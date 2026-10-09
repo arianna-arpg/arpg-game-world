@@ -39,7 +39,7 @@ import { COOP_SCALING } from '../src/data/coop';
 import { updateAI } from '../src/engine/ai';
 import { CLASSES, type ClassDef } from '../src/data/classes';
 import { rollSeed } from '../src/core/rng';
-import { serializeSnapshot, serializeZone } from '../src/net/snapshot';
+import { noteActionEcho, resetActionEcho, serializeSnapshot, serializeZone } from '../src/net/snapshot';
 import { stampAudiences } from '../src/net/seatView';
 import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction, PlayerInput } from '../src/net/intent';
@@ -252,7 +252,7 @@ export class ShardHost {
   private lastSentZone = '';
   private lastSentDoodadRev = -1;
   private dressTimer = 0;
-  private readonly pendingActions: { seat: string; action: MetaAction }[] = [];
+  private readonly pendingActions: { seat: string; action: MetaAction; seq?: unknown }[] = []; // seq: THE ECHO LAW
   private timer: NodeJS.Timeout | null = null;
   private lastWall = 0;
   private accum = 0;
@@ -314,6 +314,9 @@ export class ShardHost {
       party: id => this.parties.membersOf(id), // THE GROUP LAW
       onSeatGone: id => this.parties.dropSeat(id),
     });
+    // THE IDENTITY (THE SMOOTH SHELL): a join carrying a dormant vessel's account and character
+    // takes that seat back without its token, never the twin refusal.
+    this.net.reclaim = (accountId, charId) => this.vessels.dormantSeatOf(accountId, charId, id => this.net.isDormant(id));
     this.net.onPeerJoin((p, join) => this.onJoin(p, join));
     this.net.onPeerLeave(id => {
       this.dormancy.delete(id); // THE DORMANT SEAT: the word, a clock run out or a closing shard ends any dormancy
@@ -443,6 +446,7 @@ export class ShardHost {
     const seat = this.world.seats.find(s => s.id === id);
     if (!seat) return; // (never: a seat with no body is released at once, so it cannot be resumed)
     this.world.lastInputSeq.delete(id); // the new shell counts its inputs from zero
+    resetActionEcho(seat); // THE ECHO LAW: and its actions too
     this.world.markMetaDirty(seat);
     this.world.journalDirty.add(id); // THE COUNTERS AND THE JOURNAL: the new shell hears its journal on its first snapshot
     this.corpses.wake(id);
@@ -466,7 +470,7 @@ export class ShardHost {
 
   private onSession(msg: SessionMsg, from: string): void {
     if (msg.t === 'action') {
-      this.pendingActions.push({ seat: from, action: msg.action });
+      this.pendingActions.push({ seat: from, action: msg.action, seq: msg.seq }); // THE ECHO LAW: the client's seq rides along
     } else if (msg.t === 'cosmetics') {
       const loadout = sanitizeCosmeticLoadout(msg.loadout);
       const peer = this.net.peers().find(p => p.id === from);
@@ -499,9 +503,13 @@ export class ShardHost {
   private drainMetaActions(): void {
     if (!this.pendingActions.length) return;
     const landed = new Map<string, number>();
-    for (const { seat: seatId, action } of this.pendingActions) {
+    for (const { seat: seatId, action, seq } of this.pendingActions) {
       const seat = this.world.seats.find(s => s.id === seatId);
       if (!seat) continue;
+      // THE ECHO LAW (net/shell.ts): every action of a standing seat is JUDGED here (applied,
+      // refused, or dropped below), and its seq echoes home on the seat's build, so the
+      // client's optimistic state yields to this tick's truth.
+      noteActionEcho(this.world, seat, seq);
       // THE ACTION BUDGET: a seat lands at most actionsPerSeatPerTick intents a
       // tick; a flood past it is dropped, never queued (a 20,000-row burst used
       // to apply whole in one tick).

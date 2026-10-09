@@ -80,7 +80,7 @@ import { fellProgress } from '../engine/rampage';
 import { watchRungOf, watchValueOf } from '../engine/watch';
 import { gaugeFloor, gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE WIRE'S EYES: the bar's gauge rows
 import { COOP_SCALING } from '../data/coop'; // THE WIRE'S EYES: the zone rows' reach (THE NEAR LAW's radius)
-import { applyCounterZone, counterZoneOf, harvestRowOf, journalRowOf, type HarvestW, type JournalW } from './journalWire'; // THE COUNTERS AND THE JOURNAL
+import { applyCounterRows, applyCounterZone, counterZoneOf, harvestRowOf, journalRowOf, type HarvestW, type JournalW } from './journalWire'; // THE COUNTERS AND THE JOURNAL
 
 export type Vec2W = [number, number];
 
@@ -282,6 +282,10 @@ export interface CastW { parryCue?: number;
    *  vent-leaper will erupt at take-off — the client draws the same roil
    *  under the caster's feet (render/vis/ventRideLayer.ts). */
   vent?: number;
+  /** THE SMOOTH SHELL: a seated hero's cast names its skill, so the shell's own hero
+   *  casts its real instance (its replay walks a mobile cast, a guard or a channel at the
+   *  host's factor) and THE PREDICTED ROOT reconciles against it. Players' rows only. */
+  sk?: string;
 }
 
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
@@ -475,6 +479,11 @@ export interface SeatMetaW {
   abil?: Record<string, number>;
   /** Vestige wallet (socket material), per vestige id. */
   vest?: Record<string, number>;
+  /** THE ECHO LAW (net/shell.ts, docs/engine/shard.md THE SMOOTH SHELL): the newest client
+   *  action seq the host has judged for this seat (applied, refused or dropped alike); a
+   *  shell holds its optimistic state against any build older than its own newest action.
+   *  Absent = the host has judged none (and every lane that sends no seq). */
+  as?: number;
 }
 
 const supW = (s: SupportInstance): SupportInstW =>
@@ -490,6 +499,20 @@ const skillInstW = (s: SkillInstance): SkillInstW => ({
   rp: s.replenishmentPaused ? 1 : undefined,
   triggerOff: s.state?.triggerOff,
 });
+
+/** THE ECHO LAW (host side): the newest client action seq judged per seat. Noted by the
+ *  host's action drain (the shard's and main.ts's WebRTC host's) for every queued action of a
+ *  standing seat, whatever the action did, and shipped on that seat's build (SeatMetaW.as). */
+const ACTION_ECHOES = new WeakMap<Seat, number>();
+/** THE ECHO LAW: the host judged this seat's action `seq` (marks the seat's build dirty, so
+ *  the echo rides the very next snapshot). A seq that is not a whole number is no echo. */
+export function noteActionEcho(world: World, seat: Seat, seq: unknown): void {
+  if (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 0) return;
+  ACTION_ECHOES.set(seat, Math.max(seq, ACTION_ECHOES.get(seat) ?? 0));
+  world.markMetaDirty(seat);
+}
+/** THE ECHO LAW: a resumed seat's new shell counts its actions from zero again. */
+export function resetActionEcho(seat: Seat): void { ACTION_ECHOES.delete(seat); }
 
 /** Host: serialize one seat's build/progression for its owning client.
  *  Level + bar read the HERO body (the possession seam, engine/possess.ts):
@@ -527,6 +550,7 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
     ess: { ...m.essences },
     abil: { ...m.abilityEssences },
     vest: { ...m.vestiges },
+    ...(ACTION_ECHOES.has(seat) ? { as: ACTION_ECHOES.get(seat)! } : {}), // THE ECHO LAW
   };
 }
 
@@ -951,6 +975,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.casting) {
     const cs = a.casting;
     const cw: CastW = { c: cs.inst.def.color, mode: cs.mode, total: cs.total, elapsed: cs.elapsed };
+    if (a.kind === 'player') cw.sk = cs.inst.def.id; // THE SMOOTH SHELL: the own cast's real instance
     // THE VENT-RIDE's broil rides the cast wire (the client draws the roil).
     const cd = cs.inst.def.delivery;
     if (cd.type === 'leap' && cd.vent) cw.vent = cd.vent.columnR;
@@ -1653,23 +1678,25 @@ function flightLedger(world: World, snap: StateSnapshot): FlightLedger {
 }
 
 /** One zone row as the render stub the zone painter and the hotbar read (the cast-stub
- *  idiom: the fields the renderer touches, nothing it could run). `pz` = the same zone in
- *  `prev` (by wire id): its position, radius, facing and countdown glide toward this row.
- *  A field riding a body (`ri`) sits on that pooled body at draw time (a getter), so a worn
- *  field follows the predicted own hero exactly. The countdown maps onto the painter's own
- *  clocks: delay = 1 - fill against a one-second fuse and `delay0` (the lob's comet). */
-function zoneStub(z: ZoneW, pz: ZoneW | undefined, alpha: number, time: number): object {
-  const lerp = (a: number, b: number): number => a + (b - a) * alpha;
+ *  idiom: the fields the renderer touches, nothing it could run). THE SPLIT: the stub is
+ *  built once per adopted snapshot (its glide fields standing at the row's own values),
+ *  and glideZoneStub re-sets its position, radius, facing and countdown each frame toward
+ *  the same zone's row in `prev` (by wire id). A field riding a body (`ri`) sits on that
+ *  pooled body at draw time (a getter), so a worn field follows the predicted own hero
+ *  exactly. The countdown maps onto the painter's own clocks: delay = 1 - fill against a
+ *  one-second fuse and `delay0` (the lob's comet). */
+interface ZoneStub { at: { x: number; y: number }; radius: number; facing: number; delay: number }
+function zoneStub(z: ZoneW, time: number): ZoneStub {
   const rider = z.ri !== undefined ? POOL.get(z.ri) : undefined;
-  const at = { x: pz ? lerp(pz.p[0], z.p[0]) : z.p[0], y: pz ? lerp(pz.p[1], z.p[1]) : z.p[1] };
-  const fill = z.ex ? 1 : pz && !pz.ex && pz.fill !== undefined ? lerp(pz.fill, z.fill ?? 0) : z.fill ?? 0;
+  const at = { x: z.p[0], y: z.p[1] };
   const tier = z.tier ?? 0;
   return {
+    at,
     get pos() { return rider ? rider.pos : at; },
-    radius: pz ? lerp(pz.r, z.r) : z.r, color: z.c, shape: z.sh ?? 0,
-    facing: pz?.f !== undefined && z.f !== undefined ? angLerp(pz.f, z.f, alpha) : z.f ?? 0,
+    radius: z.r, color: z.c, shape: z.sh ?? 0,
+    facing: z.f ?? 0,
     arcRad: z.arc, exploded: !!z.ex, linger: z.ex ? 1 : 0,
-    delay: 1 - fill, delay0: z.lf ? 1 : undefined,
+    delay: 1 - (z.ex ? 1 : z.fill ?? 0), delay0: z.lf ? 1 : undefined,
     tier, caster: (z.ci !== undefined ? POOL.get(z.ci) : undefined) ?? { tier },
     inst: { def: { id: z.sk ?? '', delivery: { telegraph: 1 } } },
     onGround: z.og, edgeFrac: z.ef, edge: z.ed,
@@ -1679,7 +1706,21 @@ function zoneStub(z: ZoneW, pz: ZoneW | undefined, alpha: number, time: number):
     lobFrom: z.lf ? { x: z.lf[0], y: z.lf[1] } : undefined, lobArc: z.la,
     pulse: z.pr ? { left: 1, next: time + z.pr[0], radiusMult: z.pr[1] } : undefined,
     toggled: z.tg ? true : undefined,
-  };
+  } as ZoneStub;
+}
+/** THE SPLIT's per-frame half of a zone stub: its row `z` glided from `pz` (the same zone in
+ *  `prev`) by `alpha`; with no `pz` the row's own values stand. */
+function glideZoneStub(stub: ZoneStub, z: ZoneW, pz: ZoneW | undefined, alpha: number): void {
+  if (!pz) {
+    stub.at.x = z.p[0]; stub.at.y = z.p[1]; stub.radius = z.r; stub.facing = z.f ?? 0;
+    stub.delay = 1 - (z.ex ? 1 : z.fill ?? 0);
+    return;
+  }
+  const lerp = (a: number, b: number): number => a + (b - a) * alpha;
+  stub.at.x = lerp(pz.p[0], z.p[0]); stub.at.y = lerp(pz.p[1], z.p[1]);
+  stub.radius = lerp(pz.r, z.r);
+  stub.facing = pz.f !== undefined && z.f !== undefined ? angLerp(pz.f, z.f, alpha) : z.f ?? 0;
+  stub.delay = 1 - (z.ex ? 1 : !pz.ex && pz.fill !== undefined ? lerp(pz.fill, z.fill ?? 0) : z.fill ?? 0);
 }
 
 /** THE WIRE'S EYES: the snapshot the own hero's cooldowns were last anchored to, per world. */
@@ -1687,7 +1728,7 @@ const CLOCK_ANCHORS = new WeakMap<World, StateSnapshot>();
 
 /** THE WIRE'S EYES, the own hero's clocks (THE OWN ENTRY): a NEW snapshot re-anchors the
  *  cooldown maps the hotbar's sweep reads (tickNetClocks runs them down between snapshots);
- *  the gauge rows land on the bar's own instances on every apply (a meta re-apply mints
+ *  the gauge rows land on the bar's own instances on every adoption (a meta re-apply mints
  *  fresh ones), the bank set so the client's own gauge reads (fill, the gate's ready, the
  *  lock) answer what the host's did. */
 function applyOwnClocks(world: World, snap: StateSnapshot, me: SeatW): void {
@@ -1713,9 +1754,9 @@ function applyOwnClocks(world: World, snap: StateSnapshot, me: SeatW): void {
 }
 
 /** THE WIRE'S EYES: run the own hero's cooldown clocks down between snapshots, once a frame
- *  in the client loop before applySnapshot (which re-anchors them on each new snapshot), at
- *  the hero's own recovery rate, so the hotbar's sweep moves at frame rate instead of 20 Hz.
- *  A clock that runs out drops, as the host's does. */
+ *  in the client loop (an adoption re-anchors them on each new snapshot), at the hero's own
+ *  recovery rate, so the hotbar's sweep moves at frame rate instead of 20 Hz. A clock that
+ *  runs out drops, as the host's does. */
 export function tickNetClocks(world: World, dt: number): void {
   const p = world.player;
   if (!p.cooldowns.size || !(dt > 0)) return;
@@ -1726,32 +1767,64 @@ export function tickNetClocks(world: World, dt: number): void {
   }
 }
 
-/** Apply a host snapshot onto a render-only client World (no sim runs). Rebuilds
- *  the entity arrays the renderer iterates; re-installs the StatSheet bases the
- *  renderer reads so maxLife()/invisible/detectability/casting work unchanged.
- *  When `prev` + `alpha` (0..1) are given, actor POSITIONS/facing are interpolated
- *  prev→snap for smooth motion between 20 Hz snapshots (everything else uses snap).
- *  `ahead` = THE WIRE'S EYES: seconds the client has run past the newest snapshot
- *  (a late one), which a projectile spends flying on along its `v`. */
-export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSnapshot | null, alpha = 1, ahead = 0): void {
+// ------------------------------------------- THE SMOOTH SHELL: THE SPLIT (client) --
+// A snapshot is ADOPTED once, when it arrives (adoptSnapshot: every row that is state:
+// actors made and dropped, statuses, cast stubs, cues, cosmetics, zones, flights, texts,
+// the own build, the shelf, parties, pings), and each FRAME only INTERPOLATES
+// (interpolateSnapshot: positions, facing, pose scalars, cast-bar fill, the flights'
+// glide, worm segments). applySnapshot is the two halves back to back: what every
+// headless rig and the co-op mirrors read is the old one-call apply, byte for byte.
+
+/** The cast stubs adoptSnapshot built from the wire (the per-frame half refreshes their
+ *  aim and fill); a shell's own predicted cast (net/shell.ts THE PREDICTED ROOT) is not one. */
+const WIRE_CASTS = new WeakSet<object>();
+/** Is this cast a wire stub (adopted from a snapshot row), not a cast the shell runs itself? */
+export function isWireCast(cs: object | null | undefined): boolean { return !!cs && WIRE_CASTS.has(cs); }
+/** The pings a snapshot shipped (THE ECHO LAW keeps only the shell's OWN unjudged marks). */
+const SHIPPED_PINGS = new WeakSet<object>();
+/** What one adoption built for the per-frame half: the flights and zone stubs, by row. */
+interface Adopted { snap: StateSnapshot; flights: { pos: { x: number; y: number }; dir: number; age: number }[]; zones: Map<number, ZoneStub> }
+const ADOPTED = new WeakMap<World, Adopted>();
+
+/** THE SMOOTH SHELL's own-hero cast stub source: the host's own cast row names its skill
+ *  (`CastW.sk`), so the shell's stub carries the REAL instance from its own bar, book or
+ *  catalog: the replay's movement law (castMoveFactor, a guard's step, a channel's stride)
+ *  reads it as the host does. A stub's bare def threw there (THE SMOOTH SHELL's find). */
+function ownCastInst(world: World, a: Actor, sk: string): SkillInstance | undefined {
+  const onBar = a.skills.find(s => s?.def.id === sk);
+  if (onBar) return onBar;
+  const known = world.localSeat?.meta.knownSkills.get(sk);
+  if (known) return known;
+  const def = SKILLS[sk];
+  return def ? makeSkillInstance(def, 1, 0) : undefined;
+}
+
+export interface AdoptOptions {
+  /** THE ECHO LAW (net/shell.ts): false holds the own build back (the shell has an
+   *  optimistic action the host has not judged yet). Absent = always adopt. */
+  metaGate?: (meta: SeatMetaW) => boolean;
+  /** THE ECHO LAW on the ping row: keep the shell's own unjudged mark beside the host's list. */
+  holdOwnPings?: boolean;
+}
+
+/** THE SPLIT, the arrival half: adopt a host snapshot onto a render-only client World (no
+ *  sim runs). Rebuilds the entity arrays the renderer iterates and re-installs the StatSheet
+ *  bases the renderer reads so maxLife()/invisible/detectability/casting work unchanged. A
+ *  body seen before keeps the position the per-frame half last drew (interpolateSnapshot
+ *  places it); a new body stands at its row. `prev` = the snapshot adopted before this one:
+ *  the shelf and the account view it carried stand when this one carries none. */
+export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSnapshot | null, opts?: AdoptOptions): void {
   if (snap.parties !== undefined) { world.partyRows = snap.parties; world.partyRev++; } // THE PARTY: absent = unchanged (read before any zone or vendor gate)
   if (snap.pings !== undefined) {
-    // THE PING: the host's marks replace the shell's — except the shell's OWN press the
-    // host has not judged yet (set at or after this snapshot's clock): it stands until a
-    // later beat answers it, so the per-frame re-apply of a stale snapshot never blinks it.
+    // THE PING: the host's marks replace the shell's. THE ECHO LAW (net/shell.ts): while the
+    // shell's own press waits for the host's judgment, its own mark stands beside the list.
     const me = world.clientSeatId;
-    const pending = world.pings.filter(p => p.seat === me && p.at >= snap.time && !snap.pings!.some(r => r.s === me));
-    world.pings = snap.pings.map(r => ({ seat: r.s, pos: { x: r.p[0], y: r.p[1] }, tier: r.k, at: r.a, until: r.u })).concat(pending);
+    const pending = opts?.holdOwnPings ? world.pings.filter(p => p.seat === me && !SHIPPED_PINGS.has(p) && !snap.pings!.some(r => r.s === me)) : [];
+    world.pings = snap.pings.map(r => { const p = { seat: r.s, pos: { x: r.p[0], y: r.p[1] }, tier: r.k, at: r.a, until: r.u }; SHIPPED_PINGS.add(p); return p; }).concat(pending);
   }
   if (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) {
     world.syncedGrantedPockets = Object.fromEntries((snap.grantedPockets ?? []).map(r => [r.owner, r.pockets]));
   }
-  // The shared clock interpolates exactly like actor positions do: every
-  // time-driven read on the client — painter sway, projectile form phase,
-  // TRACK RIDER POSES (trackPose is a pure function of this clock) — glides
-  // at render rate instead of stepping at the 20 Hz wire. Monotonic: alpha
-  // walks prev.time → snap.time, and snapshots only move forward.
-  world.time = prev && alpha < 1 ? prev.time + (snap.time - prev.time) * alpha : snap.time;
   world.arena.w = snap.arena.w;
   world.arena.h = snap.arena.h;
 
@@ -1816,24 +1889,15 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.liteWire = snap.lt ?? null;
 
   if (!MINION_OWNER) MINION_OWNER = new Actor('owner', 'player', { x: 0, y: 0 });
-  const lerping = !!prev && alpha < 1;
-  const prevById = lerping ? new Map(prev!.actors.map(a => [a.id, a])) : null;
 
   const seen = new Set<number>();
   const actors: Actor[] = [];
   const partyByseat = new Map<string, Actor>();
   for (const aw of snap.actors) {
     let a = POOL.get(aw.id);
-    if (!a) { a = new Actor(aw.name, aw.team, { x: aw.p[0], y: aw.p[1] }); POOL.set(aw.id, a); }
-    // Interpolate position + facing from the previous snapshot for smooth motion.
-    const pa = prevById?.get(aw.id);
-    if (pa) {
-      a.pos.x = pa.p[0] + (aw.p[0] - pa.p[0]) * alpha;
-      a.pos.y = pa.p[1] + (aw.p[1] - pa.p[1]) * alpha;
-      a.facing = angLerp(pa.f, aw.f, alpha);
-    } else {
-      a.pos.x = aw.p[0]; a.pos.y = aw.p[1]; a.facing = aw.f;
-    }
+    // THE SPLIT: a new body stands at its row; one seen before keeps where the per-frame
+    // half last drew it (interpolateSnapshot places every body each frame).
+    if (!a) { a = new Actor(aw.name, aw.team, { x: aw.p[0], y: aw.p[1] }); a.facing = aw.f; POOL.set(aw.id, a); }
     a.radius = aw.r; a.color = aw.c; a.shape = aw.sh;
     a.cosmeticLoadout = aw.cosmeticLoadout ? sanitizeCosmeticLoadout(aw.cosmeticLoadout) : EMPTY_COSMETIC_LOADOUT;
     a.cosmeticKind = aw.cosmeticKind === 'wisp' ? 'wisp' : undefined;
@@ -1961,11 +2025,15 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // so renderer.ts stays untouched). Absent → cleared → that FX simply skips.
     a.statuses.length = 0;
     if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), stacks: s.stacks, statusDuration: s.statusDuration, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
+    // THE SMOOTH SHELL: the own hero's cast row names its skill (CastW.sk), and the stub
+    // carries the real instance (ownCastInst), so the shell's replay walks a mobile cast,
+    // a guard or a channel at the host's own factor instead of throwing on a bare def.
+    const realInst = aw.cast?.sk !== undefined && aw.seat !== undefined && aw.seat === world.clientSeatId ? ownCastInst(world, a, aw.cast.sk) : undefined;
     a.casting = aw.cast ? ({
       // THE VENT-RIDE's broil: the client's cast stub carries the column
       // radius as a leap delivery with a vent, so the roil layer reads one
       // shape on both sides of the wire.
-      inst: { def: { color: aw.cast.c, guard: aw.cast.guardArc !== undefined ? { arcDeg: aw.cast.guardArc } : undefined,
+      inst: realInst ?? { def: { color: aw.cast.c, guard: aw.cast.guardArc !== undefined ? { arcDeg: aw.cast.guardArc } : undefined,
         delivery: aw.cast.vent !== undefined ? { type: 'leap', vent: { columnR: aw.cast.vent } } : undefined } },
       mode: aw.cast.mode, total: aw.cast.total, elapsed: aw.cast.elapsed,
       castingCompletion: aw.cast.castingCompletion,
@@ -1979,6 +2047,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       bashAt: aw.cast.bashAt, bashLow: aw.cast.bashLow, bashArmAt: aw.cast.bashArmAt,
       aim: { x: a.pos.x, y: a.pos.y }, held: false, baseMult: 1,
     } as unknown as CastingState) : null;
+    if (a.casting) WIRE_CASTS.add(a.casting);
     a.activeAuras.clear();
     if (aw.auras) aw.auras.forEach((au, i) => a!.activeAuras.set('a' + i, ({ inst: { def: { color: au.c } }, radius: au.r, shape: au.sh } as unknown as ActiveAura)));
     a.construct = aw.con ? ({ kind: aw.con.kind, domeRadius: aw.con.domeRadius } as unknown as ConstructState) : undefined;
@@ -1992,17 +2061,13 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
           : {}) } as unknown as LeapState)
       : undefined;
     if (aw.worm) {
-      // Interpolate the trailing segments the same way the head (a.pos) is lerped,
-      // so the body tracks the smoothly-gliding head instead of stepping at 20Hz.
-      const paw = pa?.worm;
-      const seg = aw.worm.seg.map((s, i) => {
-        const ps = paw?.seg[i];
-        return ps && lerping ? { x: ps[0] + (s[0] - ps[0]) * alpha, y: ps[1] + (s[1] - ps[1]) * alpha } : { x: s[0], y: s[1] };
-      });
+      // The trailing segments stand at the row; the per-frame half glides them the
+      // way the head is glided, so the body tracks it instead of stepping at 20 Hz.
       // SEGMENT FABRIC: torn bitmask → wounded[], flash countdowns, and the
       // kit-part looks re-resolved from the def registry (defId ships; the
       // strings never ride the wire) — the client draws the same solid
       // plated chain the host tested, tears and all.
+      const seg = aw.worm.seg.map(s => ({ x: s[0], y: s[1] }));
       const wounded = aw.worm.wd !== undefined
         ? seg.map((_, i) => (aw.worm!.wd! & (1 << i)) !== 0)
         : undefined;
@@ -2045,35 +2110,18 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     return actor && actors.includes(actor) ? [{ ...cloneRecoveryCue(row), actorId: actor.id, held: false }] : [];
   });
 
-  // Lightweight entities — plain render structs the renderer reads positionally.
-  // THE WIRE'S EYES: a flight seen before glides by its wire id from where it was last
-  // DRAWN to the newest snapshot (so a late snapshot's flight resumes from where it flew,
-  // never snaps back), and past the newest one it flies on along its `v` (projAheadSec).
-  // THE FORWARD LAW: a glide never runs a flight backward against its own `v` (a flight
-  // that flew on past where the next snapshot found it holds until the wire catches up).
-  const flight = flightLedger(world, snap);
-  const prevFlights = lerping ? new Map(prev!.projectiles.flatMap(p => (p.id !== undefined ? [[p.id, p] as const] : []))) : null;
-  const flyOn = Math.min(Math.max(0, ahead), WIRE_CFG.eyes.projAheadSec);
+  // Lightweight entities: plain render structs the renderer reads positionally. The
+  // flights stand at their rows here; THE WIRE'S EYES' glide (interpolateSnapshot) moves
+  // them each frame by their wire ids.
+  const adopted: Adopted = { snap, flights: [], zones: new Map() };
   world.projectiles = snap.projectiles.map(p => {
-    let x = p.p[0], y = p.p[1], dir = p.d, age = p.a ?? 0;
-    if (p.id !== undefined) {
-      const pp = prevFlights?.get(p.id);
-      const from = flight.from.get(p.id) ?? pp?.p;
-      if (lerping && from) {
-        x = from[0] + (x - from[0]) * alpha; y = from[1] + (y - from[1]) * alpha;
-        if (pp) { dir = angLerp(pp.d, p.d, alpha); age = (pp.a ?? 0) + (age - (pp.a ?? 0)) * alpha; }
-      } else if (flyOn > 0 && p.v) {
-        x += p.v[0] * flyOn; y += p.v[1] * flyOn; age += flyOn;
-      }
-      const last = flight.drawn.get(p.id) ?? flight.from.get(p.id);
-      if (last && p.v && (x - last[0]) * p.v[0] + (y - last[1]) * p.v[1] < 0) { x = last[0]; y = last[1]; } // THE FORWARD LAW
-      flight.drawn.set(p.id, [x, y]);
-    }
-    return { reflectedCue: p.reflectedCue,
+    const row = { reflectedCue: p.reflectedCue,
       orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined,
-      pos: { x, y }, dir, radius: p.r, color: p.c, shape: p.sh, age, cosmeticMotif: p.cosmeticMotif,
+      pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0, cosmeticMotif: p.cosmeticMotif,
       cosmeticProjectile: cosmeticStyle(COSMETIC_PROJECTILES, p.cosmeticProjectile) ? p.cosmeticProjectile : undefined,
     };
+    adopted.flights.push(row);
+    return row;
   }) as unknown as World['projectiles'];
   // THE WIRE'S EYES: a band's ends ride the client's own bodies (the endpoints' host ids,
   // the `bl` idiom) at DRAW time, so a beam follows interpolated and predicted bodies
@@ -2088,9 +2136,13 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   }) as unknown as World['tethers'];
   // THE WIRE'S EYES: the host's ground telegraphs and fields as render stubs (the cast-stub
   // idiom): drawn, never run (no client update touches world.zones; absent = none stand).
-  // A row seen in `prev` glides by its wire id; a field riding a body sits on it at draw time.
-  const prevZones = lerping && prev!.zones ? new Map(prev!.zones.map(z => [z.id, z])) : null;
-  world.zones = (snap.zones ?? []).map(z => zoneStub(z, prevZones?.get(z.id), lerping ? alpha : 1, snap.time)) as unknown as World['zones'];
+  // A row seen in `prev` glides by its wire id each frame; a field riding a body sits on it.
+  world.zones = (snap.zones ?? []).map(z => {
+    const stub = zoneStub(z, snap.time);
+    adopted.zones.set(z.id, stub);
+    return stub;
+  }) as unknown as World['zones'];
+  ADOPTED.set(world, adopted);
   world.townPortalClientViews = (snap.townPortalViews ?? []).map(p => ({ ...p,
     cosmeticLoadout: sanitizeCosmeticLoadout(p.cosmeticLoadout) }));
   world.drops = snap.drops.map(d => ({
@@ -2145,8 +2197,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   // Mirror the host's authoritative vendor stock so the smith panel renders the
   // real wares and a buyVendor index resolves against the SAME list host-side.
   // THE SHELF BEAT: the rows ride on a change and on the beat (absent = unchanged); a
-  // snapshot the client never applied (it applies only the newest of a queued run) still
-  // delivers its change through `prev`, the newest carrier winning.
+  // snapshot the client never applied still delivers its change through `prev`, the
+  // newest carrier winning (THE SPLIT adopts every arrival, so this is the old lane's net).
   const shelf = snap.vendor !== undefined ? snap : prev?.vendor !== undefined ? prev : null;
   if (shelf?.vendor) {
     const locks: { entry: VendorEntry; idx: number; commission?: boolean }[] = [];
@@ -2186,20 +2238,14 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   if (own) world.localSeat.actor = own;
   // LAYER 2 — apply the replicated OWN-seat build FIRST (when it changed), so the
   // char-sheet / skill-book / tree read correct values and recalcSeat owns the
-  // resource maxes + derived stats before the per-frame patch runs.
+  // resource maxes + derived stats before the per-frame patch runs. THE ECHO LAW: a
+  // shell's gate holds back a build older than its own newest optimistic action.
   const myMeta = snap.seatMeta?.[world.clientSeatId];
-  if (myMeta) applySeatMeta(world, world.localSeat, myMeta);
+  if (myMeta && (!opts?.metaGate || opts.metaGate(myMeta))) applySeatMeta(world, world.localSeat, myMeta);
   const me = snap.seats[world.clientSeatId];
   if (me) applyOwnClocks(world, snap, me); // THE WIRE'S EYES: the own hero's cooldown and gauge rows
   if (me) {
     const p = world.player;
-    // When the own hero is a pooled actor its pos was already interpolated above;
-    // only the shell needs a position (lerped from the prev seat sample).
-    if (!own) {
-      const pme = prev?.seats[world.clientSeatId];
-      p.pos.x = lerping && pme ? pme.pos[0] + (me.pos[0] - pme.pos[0]) * alpha : me.pos[0];
-      p.pos.y = lerping && pme ? pme.pos[1] + (me.pos[1] - pme.pos[1]) * alpha : me.pos[1];
-    }
     // CURRENT resources come from the per-tick SeatW; the MAXES come from
     // recalcSeat (the replicated meta) — so we never setBase them here (that would
     // double-count against recalcSeat's sources).
@@ -2226,6 +2272,174 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   for (const [seat, actor] of partyByseat) {
     world.party.members.push({ actor, seat, local: seat === world.clientSeatId });
   }
+  // THE COUNTERS AND THE JOURNAL (net/journalWire.ts): the own journal and rite rows are state,
+  // adopted once per arrival (a hosted world's alone; a co-op shell never hears them).
+  applyCounterRows(world, snap);
+}
+
+/** A snapshot's actor rows by host id, built once per snapshot (snapshots never change once
+ *  they arrive): the per-frame half reads the pair's rows every frame. */
+const ROWS_BY_ID = new WeakMap<StateSnapshot, Map<number, ActorW>>();
+function actorRowsById(s: StateSnapshot): Map<number, ActorW> {
+  let m = ROWS_BY_ID.get(s);
+  if (!m) { m = new Map(s.actors.map(r => [r.id, r])); ROWS_BY_ID.set(s, m); }
+  return m;
+}
+
+/** One timing the per-frame half reads: the two snapshots it glides between, the fraction
+ *  between them, and the seconds past the newer one (a late link's run-on). */
+export interface InterpFrame { prev: StateSnapshot | null; snap: StateSnapshot; alpha: number; ahead: number }
+export interface InterpOptions {
+  /** THE JITTER BUFFER (net/shell.ts): the bodies' own timing (the pair bracketing the render
+   *  clock, which runs behind the server); absent = the eyes' timing below. */
+  bodies?: InterpFrame;
+  /** Starved past the newer snapshot, a body runs on along its velocity at most this many
+   *  seconds, then holds (0 = the old law: bodies stand at the newer row). */
+  runOn?: number;
+}
+
+/** THE SPLIT, the per-frame half: place what the arrival half adopted. `prev`, `snap`,
+ *  `alpha` and `ahead` are THE WIRE'S EYES' timing (the clock the renderer reads, the
+ *  flights' glide and run-on, the zone stubs' glide, all over the newest adopted pair);
+ *  the bodies (positions, facing, the pose scalars, cast-bar fill, worm segments) ride
+ *  `opts.bodies` when given (THE JITTER BUFFER), else the same timing. */
+export function interpolateSnapshot(world: World, prev: StateSnapshot | null | undefined, snap: StateSnapshot, alpha = 1, ahead = 0, opts?: InterpOptions): void {
+  const lerping = !!prev && alpha < 1;
+  // The shared clock interpolates exactly like actor positions do: every
+  // time-driven read on the client (painter sway, projectile form phase,
+  // TRACK RIDER POSES: trackPose is a pure function of this clock) glides
+  // at render rate instead of stepping at the 20 Hz wire. Monotonic: alpha
+  // walks prev.time → snap.time, and snapshots only move forward.
+  world.time = prev && alpha < 1 ? prev.time + (snap.time - prev.time) * alpha : snap.time;
+
+  // THE BODIES: each pooled body placed between its rows in the bodies' pair (a body the
+  // pair does not hold yet stands where it was adopted).
+  const B = opts?.bodies ?? { prev: prev ?? null, snap, alpha, ahead };
+  const bLerp = !!B.prev && B.alpha < 1;
+  const span = B.prev ? B.snap.time - B.prev.time : 0;
+  const runOn = opts?.runOn && span > 0 ? Math.min(Math.max(0, B.ahead), opts.runOn) : 0;
+  const bPrevById = B.prev && (bLerp || runOn > 0) ? actorRowsById(B.prev) : null;
+  const ownPredicted = (aw: ActorW): boolean => aw.seat !== undefined && aw.seat === world.clientSeatId && !!world.clientActionHook;
+  let sawOwn = false;
+  for (const aw of B.snap.actors) {
+    if (aw.seat !== undefined && aw.seat === world.clientSeatId) sawOwn = true;
+    const a = POOL.get(aw.id);
+    if (!a) continue; // gone at a newer adoption
+    // THE JITTER BUFFER delays the OTHER bodies: a predicting shell's own hero is its own
+    // (net/shell.ts places it, faces it and runs its bar on the present clock).
+    if (opts?.bodies && ownPredicted(aw)) continue;
+    const pa = bPrevById?.get(aw.id);
+    if (bLerp && pa) {
+      a.pos.x = pa.p[0] + (aw.p[0] - pa.p[0]) * B.alpha;
+      a.pos.y = pa.p[1] + (aw.p[1] - pa.p[1]) * B.alpha;
+      a.facing = angLerp(pa.f, aw.f, B.alpha);
+    } else if (runOn > 0 && pa) {
+      // THE JITTER BUFFER, starved: run on along the body's own velocity, capped (then hold).
+      a.pos.x = aw.p[0] + (aw.p[0] - pa.p[0]) / span * runOn;
+      a.pos.y = aw.p[1] + (aw.p[1] - pa.p[1]) / span * runOn;
+      a.facing = aw.f;
+    } else {
+      a.pos.x = aw.p[0]; a.pos.y = aw.p[1]; a.facing = aw.f;
+    }
+    // THE POSE SCALARS glide between the pair's poses (a pose the pair does not hold
+    // in both rows stands at its adopted values).
+    const pw = a.bodyWalkPose, rw = aw.bodyWalkPose, pwPrev = pa?.bodyWalkPose;
+    if (pw && rw) {
+      if (bLerp && pwPrev) {
+        pw.travel = rw.travel >= pwPrev.travel ? pwPrev.travel + (rw.travel - pwPrev.travel) * B.alpha : rw.travel;
+        pw.direction = angLerp(pwPrev.direction, rw.direction, B.alpha);
+        pw.weight = pwPrev.weight + (rw.weight - pwPrev.weight) * B.alpha;
+      } else { pw.travel = rw.travel; pw.direction = rw.direction; pw.weight = rw.weight; }
+    }
+    const pb = a.bodyActionPose, rb = aw.bodyActionPose, pbPrev = pa?.bodyActionPose;
+    if (pb && rb) {
+      const l = (x: number, y: number): number => (bLerp && pbPrev ? x + (y - x) * B.alpha : y);
+      pb.shift = l(pbPrev?.shift ?? rb.shift, rb.shift); pb.turn = l(pbPrev?.turn ?? rb.turn, rb.turn);
+      pb.sx = l(pbPrev?.sx ?? rb.sx, rb.sx); pb.sy = l(pbPrev?.sy ?? rb.sy, rb.sy);
+      pb.facing = bLerp && pbPrev ? angLerp(pbPrev.facing, rb.facing, B.alpha) : rb.facing;
+      if (rb.prepare !== undefined) pb.prepare = l(pbPrev?.prepare ?? rb.prepare, rb.prepare);
+      if (rb.strike !== undefined) pb.strike = l(pbPrev?.strike ?? rb.strike, rb.strike);
+    }
+    // THE CAST-BAR FILL glides between the pair's rows of one running cast (the own
+    // predicting hero's bar runs on the shell's own clock: net/shell.ts).
+    const cs = a.casting;
+    if (cs && WIRE_CASTS.has(cs)) {
+      const rc = aw.cast, pc = pa?.cast;
+      if (rc && !ownPredicted(aw)) {
+        const same = bLerp && !!pc && pc.mode === rc.mode;
+        cs.elapsed = same && rc.elapsed >= pc!.elapsed ? pc!.elapsed + (rc.elapsed - pc!.elapsed) * B.alpha : rc.elapsed;
+        if (rc.pulseTimer !== undefined) cs.pulseTimer = same && pc!.pulseTimer !== undefined && rc.pulseTimer <= pc!.pulseTimer
+          ? pc!.pulseTimer + (rc.pulseTimer - pc!.pulseTimer) * B.alpha : rc.pulseTimer;
+      }
+      cs.aim.x = a.pos.x; cs.aim.y = a.pos.y;
+    }
+    // WORM SEGMENTS glide the way the head does.
+    if (a.worm && aw.worm) {
+      const segs = a.worm.segments, paw = pa?.worm;
+      for (let i = 0; i < segs.length && i < aw.worm.seg.length; i++) {
+        const s = aw.worm.seg[i], ps = paw?.seg[i];
+        if (ps && bLerp) { segs[i].x = ps[0] + (s[0] - ps[0]) * B.alpha; segs[i].y = ps[1] + (s[1] - ps[1]) * B.alpha; }
+        else { segs[i].x = s[0]; segs[i].y = s[1]; }
+      }
+    }
+  }
+
+  // THE WIRE'S EYES, the eyes' timing: a flight seen before glides by its wire id from
+  // where it was last DRAWN to the newest snapshot (so a late snapshot's flight resumes from
+  // where it flew, never snaps back), and past the newest one it flies on along its `v`
+  // (projAheadSec). THE FORWARD LAW: a glide never runs a flight backward against its own
+  // `v` (a flight that flew on past where the next snapshot found it holds until the wire
+  // catches up).
+  const adopted = ADOPTED.get(world);
+  if (adopted && adopted.snap === snap) {
+    const flight = flightLedger(world, snap);
+    const prevFlights = lerping ? new Map(prev!.projectiles.flatMap(p => (p.id !== undefined ? [[p.id, p] as const] : []))) : null;
+    const flyOn = Math.min(Math.max(0, ahead), WIRE_CFG.eyes.projAheadSec);
+    for (let i = 0; i < snap.projectiles.length; i++) {
+      const p = snap.projectiles[i], out = adopted.flights[i];
+      if (!out) continue;
+      let x = p.p[0], y = p.p[1], dir = p.d, age = p.a ?? 0;
+      if (p.id !== undefined) {
+        const pp = prevFlights?.get(p.id);
+        const from = flight.from.get(p.id) ?? pp?.p;
+        if (lerping && from) {
+          x = from[0] + (x - from[0]) * alpha; y = from[1] + (y - from[1]) * alpha;
+          if (pp) { dir = angLerp(pp.d, p.d, alpha); age = (pp.a ?? 0) + (age - (pp.a ?? 0)) * alpha; }
+        } else if (flyOn > 0 && p.v) {
+          x += p.v[0] * flyOn; y += p.v[1] * flyOn; age += flyOn;
+        }
+        const last = flight.drawn.get(p.id) ?? flight.from.get(p.id);
+        if (last && p.v && (x - last[0]) * p.v[0] + (y - last[1]) * p.v[1] < 0) { x = last[0]; y = last[1]; } // THE FORWARD LAW
+        flight.drawn.set(p.id, [x, y]);
+      }
+      out.pos.x = x; out.pos.y = y; out.dir = dir; out.age = age;
+    }
+    // THE WIRE'S EYES: the zone stubs glide by wire id (a riding field sits on its body).
+    const prevZones = lerping && prev!.zones ? new Map(prev!.zones.map(z => [z.id, z])) : null;
+    for (const z of snap.zones ?? []) {
+      const stub = adopted.zones.get(z.id);
+      if (stub) glideZoneStub(stub, z, prevZones?.get(z.id), lerping ? alpha : 1);
+    }
+  }
+
+  // The own hero when it is no pooled body (never on a seated shell): the seat's own row.
+  const me = B.snap.seats[world.clientSeatId];
+  if (me && !sawOwn) {
+    const p = world.player, pme = B.prev?.seats[world.clientSeatId];
+    p.pos.x = bLerp && pme ? pme.pos[0] + (me.pos[0] - pme.pos[0]) * B.alpha : me.pos[0];
+    p.pos.y = bLerp && pme ? pme.pos[1] + (me.pos[1] - pme.pos[1]) * B.alpha : me.pos[1];
+  }
+}
+
+/** Apply a host snapshot onto a render-only client World in one call: THE SPLIT's two
+ *  halves back to back (adopt, then place). When `prev` + `alpha` (0..1) are given, the
+ *  bodies, the clock and the zones glide prev→snap; `ahead` = THE WIRE'S EYES: seconds the
+ *  client has run past the newest snapshot (a late one), which a flight spends flying on
+ *  along its `v`. A live shell adopts on arrival and places each frame instead
+ *  (net/shell.ts). */
+export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSnapshot | null, alpha = 1, ahead = 0): void {
+  adoptSnapshot(world, snap, prev);
+  interpolateSnapshot(world, prev, snap, alpha, ahead);
 }
 
 // ----------------------------------------------------- zone terrain (P5) -----

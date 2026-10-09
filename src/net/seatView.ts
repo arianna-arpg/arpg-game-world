@@ -15,10 +15,11 @@
 //                      rows, and its own seatMeta alone), the notices it hears
 //                      and the eyecatch if it may see it. No audience list
 //                      ever ships.
-//   applyOwnSeatRows   the client's half (after applySnapshot): the own row's
-//                      refusal note (SeatW.fn) floats over the own head, the
-//                      host's failNote look, rebuilt each apply from the row so
-//                      the per-frame snapshot re-apply never eats it; its surge
+//   applyOwnSeatRows   the client's half (after applySnapshot, and each frame of
+//                      THE SMOOTH SHELL): the own row's refusal note (SeatW.fn)
+//                      floats over the own head, the host's failNote look, one
+//                      float kept in place from the row so an adoption never
+//                      eats it and a frame never stacks it; its surge
 //                      (SeatW.lh) drives the low-life glow.
 //
 // The note and the surge themselves ride SeatW as THE OWN ENTRY's rows
@@ -30,7 +31,6 @@ import { dist } from '../core/math';
 import { COOP_SCALING } from '../data/coop';
 import type { World } from '../engine/world';
 import { ownEntryView, type NoticeW, type StateSnapshot } from './snapshot';
-import { applyCounterRows } from './journalWire';
 
 declare module './snapshot' {
   interface NoticeW {
@@ -111,18 +111,31 @@ export function seatAudienceFrame(body: string, v: SeatAudienceSplit, seatId: st
   return body + (part.length > 2 ? ',' + part.slice(1, -1) : '') + '}}';
 }
 
-/** The client's half (after applySnapshot): the own row's note and surge. */
+/** The client's half (after applySnapshot, or each frame of THE SMOOTH SHELL): the own row's
+ *  note and surge. Idempotent: the note is ONE float this world keeps (re-seated when an
+ *  adoption rebuilt the texts, moved and faded in place each call, dropped at its end), so a
+ *  per-frame call never stacks it and an adoption never eats it. */
 const notedAt = new WeakMap<World, { at: number; x: number; y: number }>();
+const noteFloat = new WeakMap<World, World['texts'][number]>();
 export function applyOwnSeatRows(world: World, snap: StateSnapshot): void {
-  applyCounterRows(world, snap); // THE COUNTERS AND THE JOURNAL: the own journal and rite rows (net/journalWire.ts)
   const own = snap.seats[world.clientSeatId];
   world.lowLifeHitFlash = own?.lh ?? 0;
-  const fn = own?.fn;
-  if (!fn) return;
+  const fn = own?.fn, held = noteFloat.get(world);
+  const drop = (): void => {
+    if (!held) return;
+    const i = world.texts.indexOf(held);
+    if (i >= 0) world.texts.splice(i, 1);
+    noteFloat.delete(world);
+  };
+  if (!fn) { drop(); return; }
   let mark = notedAt.get(world);
   if (!mark || mark.at !== fn.at) notedAt.set(world, mark = { at: fn.at, x: world.player.pos.x, y: world.player.pos.y });
   const age = Math.max(0, world.time - fn.at), life = SEAT_VIEW_CFG.noteLife - age;
-  if (life <= 0) return;
-  world.texts.push({ pos: { x: mark.x, y: mark.y - SEAT_VIEW_CFG.noteLift - SEAT_VIEW_CFG.noteRise * age },
-    text: fn.text, color: SEAT_VIEW_CFG.noteColor, size: SEAT_VIEW_CFG.noteSize, life, maxLife: SEAT_VIEW_CFG.noteLife });
+  if (life <= 0) { drop(); return; }
+  const pos = { x: mark.x, y: mark.y - SEAT_VIEW_CFG.noteLift - SEAT_VIEW_CFG.noteRise * age };
+  if (held && held.text === fn.text && world.texts.includes(held)) { held.pos = pos; held.life = life; return; }
+  drop();
+  const t = { pos, text: fn.text, color: SEAT_VIEW_CFG.noteColor, size: SEAT_VIEW_CFG.noteSize, life, maxLife: SEAT_VIEW_CFG.noteLife };
+  world.texts.push(t);
+  noteFloat.set(world, t);
 }

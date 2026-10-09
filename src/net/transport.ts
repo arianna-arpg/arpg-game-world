@@ -61,7 +61,9 @@ export type SessionMsg =
   | { t: 'cosmetics'; loadout: import('../engine/cosmetics').CosmeticLoadout }
   | { t: 'newRun'; seat: PlayerId; seed: number }
   | { t: 'hostLeft' }
-  | { t: 'action'; action: MetaAction }
+  // THE ECHO LAW (net/shell.ts): a client action's rising seq; the host echoes the newest it
+  // judged on the seat's own build (SeatMetaW.as). Absent from a lane that keeps no echo.
+  | { t: 'action'; action: MetaAction; seq?: number }
   // THE VESSEL + THE DEATH COVENANT (THE SHARD: docs/engine/shard.md "The
   // vessel and the corpse"; the rows are typed and sanitized in vesselWire.ts):
   //   heroSave (shard→a seat): the vessel's mirror, a CharacterSave with NO

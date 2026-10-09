@@ -26,7 +26,7 @@ import { ShardHost, SHARD_CFG } from '../server/shardHost';
 import { VESSEL_CFG } from '../server/vessel';
 import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import { WsTransport } from '../src/net/ws';
-import { applySnapshot, applyZone, serializeSnapshot, serializeZone, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
+import { adoptSnapshot, applyZone, interpolateSnapshot, serializeSnapshot, serializeZone, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
 import { applyOwnSeatRows } from '../src/net/seatView';
 import { JOURNAL_WIRE_CFG } from '../src/net/journalWire';
 import type { SessionMsg } from '../src/net/transport';
@@ -101,8 +101,10 @@ function standAt(s: Seat, center: Vec2, pred: () => boolean, side = 0): boolean 
 }
 const hearth = host.hearthSeat();
 const toHearth = (s: Seat, dx = 0): void => { const p = w.clampPos(vec(hearth.x + dx, hearth.y), s.actor.radius); s.actor.pos.x = p.x; s.actor.pos.y = p.y; };
-/** A render shell, as main.ts startAsClient builds one: no sim, intents to the host. */
-function makeShell(cl: Client): { shell: World; sent: MetaAction[] } {
+/** A render shell, as main.ts startAsClient builds one: no sim, intents to the host. It adopts
+ *  the client's snapshots from `from` on (its own arrival index; default the newest). */
+const adoptedUpTo = new WeakMap<World, number>();
+function makeShell(cl: Client, from = cl.snaps.length - 1): { shell: World; sent: MetaAction[] } {
   const acct = makeAccount(); // a FRESH account: the shell must read the host's verdicts, never its own
   const shell = new World(acct, Object.freeze(buildManifest(acct, w.manifest.seed)));
   const sent: MetaAction[] = [];
@@ -110,12 +112,18 @@ function makeShell(cl: Client): { shell: World; sent: MetaAction[] } {
   shell.clientSeatId = cl.id;
   shell.createPlayer(warrior, { startingCompanions: false, startingFlasks: false });
   applyZone(shell, cl.zones.at(-1)!);
+  adoptedUpTo.set(shell, Math.max(0, from));
   return { shell, sent };
 }
-/** One client frame: the newest snapshot applied (positions, clock, own rows), then the shell's own lingers. */
+/** One client frame, THE SMOOTH SHELL's way: every snapshot that arrived since the last frame
+ *  ADOPTED once (its state, the journal and rite rows with it), the newest placed, the own rows,
+ *  then the shell's own lingers. */
 function shellFrame(shell: World, cl: Client): void {
+  let i = adoptedUpTo.get(shell) ?? cl.snaps.length - 1;
+  for (; i < cl.snaps.length; i++) adoptSnapshot(shell, cl.snaps[i], cl.snaps[i - 1] ?? null);
+  adoptedUpTo.set(shell, i);
   const s = cl.snaps.at(-1);
-  if (s) { applySnapshot(shell, s); applyOwnSeatRows(shell, s); }
+  if (s) { interpolateSnapshot(shell, cl.snaps.at(-2) ?? null, s); applyOwnSeatRows(shell, s); }
   shell.updateClientCounters(DT);
 }
 async function shellTicks(shell: World, cl: Client, n: number, until?: () => boolean): Promise<boolean> {
@@ -269,10 +277,11 @@ const near = (p: Vec2, at: Vec2, r: number): boolean => dist(p, at) <= r;
   corpses.record({ accountId: accB.accountId, charId: 'old-bram', name: 'Old Bram', classId: 'warrior', level: 3,
     zoneId: w.zone.id, zoneName: w.zone.name, pos: { x: 400, y: 400 }, map: { x: w.zone.map.x, y: w.zone.map.y }, loot: { items: [] }, diedAt: Date.now() });
   await runTicks(sec(1));
-  const { shell: shellB } = makeShell(B);
+  // B's shell adopts from the arrival that carried B's newest journal row on (a shell that has
+  // adopted every snapshot since it joined holds exactly that row).
+  const lastRowAt = B.snaps.map(s => !!s.seats[B.id]?.jn).lastIndexOf(true);
+  const { shell: shellB } = makeShell(B, lastRowAt);
   for (let i = 0; i < 4; i++) shellFrame(shellB, B);
-  const lastRow = [...B.snaps].reverse().find(s => s.seats[B.id]?.jn);
-  if (lastRow) applyOwnSeatRows(shellB, lastRow);
   const pins = collectMarkers(shellB);
   check('C shell: B\'s shell reads its log and its pins off the row (its contract, its own remembered body)',
     shellB.questLog().active.some(e => e.id === 'relic_depths_l8') && pins.some(m => m.id === 'quest-target-relic_depths_l8')
