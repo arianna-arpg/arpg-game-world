@@ -2,6 +2,17 @@ import type { NativeAreaScenePopulation } from './nativeAreaScenePopulation';
 import type { NativeSceneObjectiveState } from './nativeSceneState';
 import * as native from '../engine/nativeScenePopulation';
 import type { NativeSceneServiceHost } from '../engine/nativeScenePopulation';
+const birthBindings=new WeakMap<object,{population:NativeAreaScenePopulation;state:NativeSceneObjectiveState}>();
+export function hasNativeSceneObjectiveBinding(host:object,population:NativeAreaScenePopulation,state:NativeSceneObjectiveState):boolean {
+ const b=birthBindings.get(host);return b?.population===population&&b.state===state;
+}
+const environmentBindings=new WeakMap<object,NativeSceneObjectiveState>();
+export function bindNativeSceneObjectives<T extends object>(services:T,state:NativeSceneObjectiveState):T&Pick<NativeSceneObjectiveState,'objectiveDone'> {
+ if(Object.hasOwn(services,'objectiveDone'))throw Error('Native objectives would replace an existing service');
+ Object.defineProperty(services,'objectiveDone',{enumerable:true,get:()=>state.objectiveDone});
+ environmentBindings.set(services,state);return services as T&Pick<NativeSceneObjectiveState,'objectiveDone'>;
+}
+export function hasNativeSceneObjectiveState(services:object,state:NativeSceneObjectiveState):boolean{return environmentBindings.get(services)===state;}
 /** Real shared native objective birth services. Additional package adoption,
  * completion/reward, beacon and runtime controllers remain explicit owners. */
 export type NativeSceneObjectiveContext=Pick<NativeSceneServiceHost,
@@ -36,5 +47,6 @@ export function sceneObjectiveServices(pop:NativeAreaScenePopulation,state:Nativ
   spawnPoint:(...a:Parameters<NativeSceneServiceHost['spawnPoint']>)=>native.sceneSpawnPoint(out,...a),
   applyWaveFrenzy:(...a:Parameters<NativeSceneServiceHost['applyWaveFrenzy']>)=>native.applySceneWaveFrenzy(out,...a),
  };
+ birthBindings.set(out,{population:pop,state});
  return out;
 }

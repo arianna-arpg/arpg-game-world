@@ -22,7 +22,7 @@ import type { ZoneDef } from '../../data/zones';
 import { coordDist, type MapCoord } from '../../world/coords';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
-import { registerEventFront } from '../../engine/eventWeather';
+import { registerEventFront, type EventWeatherHost } from '../../engine/eventWeather';
 import type { World } from '../../engine/world';
 import { scaledCap } from '../frequency';
 import type { DemonSurge, InvasionStage, InvasionType } from '../encounters';
@@ -509,7 +509,7 @@ export class DemonInvasionField implements WorldOverlay {
 // upstream by skyFront itself.
 registerEventFront({
   id: 'demon_invasion',
-  sample: (world: World, zone: ZoneDef) => {
+  sample: (world: EventWeatherHost, zone: ZoneDef) => {
     if (zone.objective.kind === 'safe') return null;
     const info = world.sim.demonFieldFor(zone.dimension)?.invasionOn(zone.id);
     if (!info?.stage.weather) return null;

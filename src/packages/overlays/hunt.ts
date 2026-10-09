@@ -34,7 +34,7 @@ import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
 import { registerBountySource } from '../../data/bountyboard';
 import { FACTIONS, MONSTERS } from '../../data/monsters';
-import { registerEventFront } from '../../engine/eventWeather';
+import { registerEventFront, type EventWeatherHost } from '../../engine/eventWeather';
 import type { World } from '../../engine/world';
 import { registerAttentionSource, type AttentionPoint } from '../../world/attention';
 import type { MapCoord } from '../../world/coords';
@@ -405,7 +405,7 @@ registerWeather('hunt_nest', {
 // dead or ended hunt pins nothing, so the dress evaporates with the chase.
 registerEventFront({
   id: 'hunt',
-  sample: (world: World, zone) => {
+  sample: (world: EventWeatherHost, zone) => {
     const hf = world.sim.huntField;
     if (!hf) return null;
     const h = hf.peek();

@@ -4730,3 +4730,17 @@ audio, continuous play feel or commercial-quality gameplay.
 Verification for this batch: all three type checks, all 380 fast green probes
 and the 25-episode simulation smoke pass. The nine slow and three excluded
 probes were not run. Required ownership review attributes every staged hunk.
+
+
+## NativeSceneBirthComposition checkpoint
+
+Complete post-arrival native birth now composes its 124 ports from concrete
+local owners and the existing 36-row runtime registry. NativeSceneSky supplies
+actual local sky/radiance, with all installed event-weather source bodies and
+classic/geographic rules unchanged. Shared campaign, transition, objective and
+resident identities are validated before birth. The strict original/current/local
+comparison passes 52 courses including returned/completed puzzles and partial
+failures. See [native area birth composition](../worldgen/native-area-birth-composition.md)
+for evidence, reproduced baseline test failures and remaining work. This checkpoint
+does not activate source issuance, whole-owner paging, genuine native biome/zone
+hierarchy or map zoom. Placement continues as a separate course.

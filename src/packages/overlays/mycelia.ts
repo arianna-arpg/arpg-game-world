@@ -38,7 +38,7 @@
 import { clamp, mixHex } from '../../core/math';
 import { Rng } from '../../core/rng';
 import type { ZoneDef } from '../../data/zones';
-import { registerEventFront } from '../../engine/eventWeather';
+import { registerEventFront, type EventWeatherHost } from '../../engine/eventWeather';
 import type { World } from '../../engine/world';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
@@ -765,7 +765,7 @@ export class MyceliaField implements WorldOverlay {
 // the crossfade all standard. One pure read; the pin dies with the window.
 registerEventFront({
   id: 'mycelia',
-  sample: (world: World, zone: ZoneDef) => {
+  sample: (world: EventWeatherHost, zone: ZoneDef) => {
     const mf = world.sim.myceliaField;
     const info = mf?.expressionOn(zone.id);
     if (!mf || !info) return null;

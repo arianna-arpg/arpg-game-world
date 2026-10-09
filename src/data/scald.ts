@@ -29,8 +29,7 @@ import {
 } from '../engine/levelgen';
 import { registerLiquid } from '../engine/genkit'; // the lake's two waters (M2a)
 import { registerCreep } from '../engine/creep'; // the runoff row (M2b)
-import { registerEventFront } from '../engine/eventWeather'; // THE SURGE HOUR's steam (M3)
-import type { World } from '../engine/world';
+import { registerEventFront, type EventWeatherHost } from '../engine/eventWeather'; // THE SURGE HOUR's steam (M3)
 import { registerRegion } from '../world/regions';
 import { registerWeather } from '../world/weather';
 import { registerMeld } from './melds';
@@ -532,7 +531,7 @@ registerWeather('scald_surge_steam', {
 });
 registerEventFront({
   id: 'scald_surge',
-  sample: (world: World) => {
+  sample: (world: EventWeatherHost) => {
     const s = world.geyserSurge();
     if (!s || !s.held) return null;
     const t = world.time;

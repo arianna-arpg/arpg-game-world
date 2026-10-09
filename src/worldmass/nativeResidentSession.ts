@@ -56,6 +56,10 @@ export class NativeResidentSession {
   if(out.census.player!==this.campaign.localSeat.actor)throw Error('Native resident shopper/seat identity differs');
   return Object.freeze(out);
  }
+ /** Birth composition checks this before any door or harbor mutation. */
+ ownsBirthPopulation(population:NativeAreaScenePopulation):boolean {
+  return population.input.scene===this.area.census&&population.input.context.npcDialogues===this.npcDialogues;
+ }
  bindArea(area:NativeResidentArea):void {this.area=this.checkedArea(area);}
  inhabitants(population:NativeAreaScenePopulation) {
   if(population.input.scene!==this.area.census||population.input.context.npcDialogues!==this.npcDialogues)

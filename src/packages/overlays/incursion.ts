@@ -43,7 +43,7 @@ import type { ZoneDef } from '../../data/zones';
 import { DIRS, MAP_DIR, projectCoord, type MapCoord } from '../../world/coords';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
-import { registerEventFront } from '../../engine/eventWeather';
+import { registerEventFront, type EventWeatherHost } from '../../engine/eventWeather';
 import { scaledCap } from '../frequency';
 import type { World } from '../../engine/world';
 
@@ -823,7 +823,7 @@ export class IncursionField implements WorldOverlay {
 // all of it runtime, none of it persisted; the pall is the light over it.
 registerEventFront({
   id: 'incursion',
-  sample: (world: World, zone: ZoneDef) => {
+  sample: (world: EventWeatherHost, zone: ZoneDef) => {
     if (zone.objective.kind === 'safe') return null;
     const inc = world.sim.incursionField;
     const wx = inc ? inc.eventContext(zone.id)?.archetype.weather : undefined;

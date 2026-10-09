@@ -61,6 +61,8 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativescenesky.ts', status: 'green', tier: 'fast', why: 'NativeSceneSky exact original source, all event sky sources, independent local areas, actual span terrain and geographic early-return parity.' },
+  { probe: 'probe_nativescenebirthcomposition.ts', status: 'green', tier: 'fast', why: 'NativeSceneBirth complete owner composition, cold original/current/local full births, remembered state, RNG, partial failures and authority refusal.' },
   { probe: 'probe_nativestructureaccess.ts', status: 'green', tier: 'fast', why: 'Whole resolved native plans within actual bounds/backing, exact fixture and anchor identity, bounded draw-free relocation, complete generation tapes and real movement' },
   { probe: 'probe_nativesceneruntimebirth.ts', status: 'green', tier: 'fast', why: 'NativeSceneRuntimeBirth exact main event/site births, actual local geometry/population and campaign state, full cold original/current/local comparisons and partial effects' },
   { probe: 'probe_nativesceneruntimeregistry.ts', status: 'green', tier: 'fast', why: 'NativeSceneRuntimeRegistry complete 36-row native order, carried local state and controllers, real-area original/classic/local dispatch and partial effects' },

@@ -410,7 +410,8 @@ import {
 } from '../data/harborholds';
 import { holdGateApron, holdGateDoor, holdStructureIn } from '../world/harborholds';
 import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
-import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radiance';
+import type { RadianceCond } from '../world/radiance';
+import '../world/radiance';
 import '../world/strata';
 import { COURSE_FIELD_SALT, courseBiomeAt, courseMintHints, strewnInstancesNear, type CourseInstance, type CourseMintHints, type CourseSpec } from '../world/courses';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
@@ -500,7 +501,7 @@ import type { InvasionHost } from '../world/invasion';
 import { SNOW_CFG } from './snowCover';
 export { SNOW_CFG } from './snowCover';
 import { WEATHER_DEFS, WET_SKY, type WeatherFront, type WeatherStrike } from '../world/weather';
-import { eventFrontFor } from './eventWeather';
+import './eventWeather';
 import { WEATHER_DRESS_CFG, dressPlanFor, rollDressPieces } from './weatherDress';
 import { dayCycle, inPhases, DAY_LENGTH } from '../world/daynight';
 import { exitInside, hullOf, samplePoint, type Bounds } from '../world/shape';
@@ -586,6 +587,7 @@ import { descentPlaceDescentDelver, descentMintDelverStock, descentEnterDescentZ
 import { harborHoldStateFor, harborBootQuay, harborBootHarborhold, harborResealDoor, harborRefreshHoldDress, harborHoldDressSpotOk, harborRefreshHoldServices, harborArmPortMercs, harborLandPartyAt, type NativeSceneHarborHost } from './nativeSceneHarbor';
 
 import { nativeTheaterContextNow, nativeTheaterConcurrencyNow, nativeTheaterRunBeat, nativeTheaterPourRoom, nativeTheaterSpawn, nativeSpawnEventActor, nativeClampNear, nativeAnyAliveWithTag, nativeZoneEntryPos, type NativeSceneTheaterHost } from './nativeSceneTheater';
+import {nativeSkyFront,nativeRadiance,nativeRadianceCondHeld,type NativeSceneSkyHost} from './nativeSceneSky';
 import {buildNativeSceneRuntimes,materializeNativeLiveZoneEvents,type NativeSceneRuntimeRegistryHost} from './nativeSceneRuntimeRegistry';
 import * as nativeRuntimeBirth from './nativeSceneRuntimeBirth';
 import {nativeFellDoodad,nativeRebuildClientTerrain,type NativeSceneTerrainHost} from './nativeSceneTerrain';
@@ -50751,34 +50753,17 @@ export class World {
    *  reach. THE gate every in-zone weather consumer reads (sky strikes,
    *  directional wind, weather-fog, snowfall, the renderer's particles and
    *  wash) — the node map and its spawn bias stay node-space concerns. */
-  skyFront(pos: Vec2 = this.player.pos): WeatherFront | null {
-    const mass = this.massRuntime;
-    if (mass?.weather) return mass.weather.sample(mass.walk.at(pos.x,pos.y), this.localZoneAt(pos), pos);
-    if (skyOf(this.zone) === 'sheltered') return null;
-    // EVENT-PINNED WEATHER (engine/eventWeather.ts): a world event holding this
-    // ground may pin its own front — a Demon Invasion's storm, an Incursion's
-    // pall — folded here so EVERY consumer of the sky (wash, particles, veil,
-    // radiance, wind, strikes, dress) reads one truth. Strongest wins: one sky
-    // at a time reads clean, and a raging blizzard can still drown a young
-    // storm's first minutes.
-    const pinned = eventFrontFor(this, this.zone);
-    const sky = this.sim.weather.sample(this.zone);
-    return pinned && pinned.intensity >= (sky?.intensity ?? 0) ? pinned : sky;
-  }
+  skyFront(pos: Vec2 = this.player.pos): WeatherFront | null { return nativeSkyFront(this.nativeSceneSkyHost(),pos); }
 
   /** THE RADIANCE SCALAR (world/radiance.ts): the sky's light over THIS zone
    *  right now — dayCycle().light bent by the live front's radiance dial,
    *  flat twilight under shelter. Pure per (time, front kind, skyOf): host,
    *  client and a resume all agree. Every radiance consumer reads it here. */
-  radiance(): number {
-    return radianceOf(this.time, this.skyFront()?.kind ?? null, skyOf(this.zone) === 'sheltered');
-  }
+  radiance(): number { return nativeRadiance(this.nativeSceneSkyHost()); }
 
   /** Does a RadianceCond hold over this zone right now? The one gate the
    *  span fabric, front lanes and any future radiance-keyed row consult. */
-  radianceCondHeld(cond: RadianceCond | undefined): boolean {
-    return radianceCondHeld(cond, this.time, this.skyFront()?.kind ?? null, skyOf(this.zone) === 'sheltered');
-  }
+  radianceCondHeld(cond: RadianceCond | undefined): boolean { return nativeRadianceCondHeld(this.nativeSceneSkyHost(),cond); }
 
   zoneWind(pos: Vec2 = this.player.pos): { nx: number; ny: number; strength: number } | null {
     if (!this.massRuntime?.weather && this.windCache.at === this.time) return this.windCache.w;
@@ -58496,6 +58481,20 @@ get zone(){return world.zone;},
       get markDoodadsChanged(){const fn=world.markDoodadsChanged;return(...args:Parameters<NativeSceneTerrainHost['markDoodadsChanged']>)=>fn.apply(world,args);},
     });
     Object.defineProperty(this,'nativeSceneTerrainView',{value:host,enumerable:false,writable:true,configurable:true});
+    return host;
+  }
+  declare private nativeSceneSkyView?:NativeSceneSkyHost;
+  private nativeSceneSkyHost():NativeSceneSkyHost {
+    if(this.nativeSceneSkyView)return this.nativeSceneSkyView;
+    const world=this;
+    const host:NativeSceneSkyHost=Object.freeze({
+      get player(){return world.player;},get zone(){return world.zone;},get massRuntime(){return world.massRuntime;},
+      get sim(){return world.sim;},get time(){return world.time;},
+      get localZoneAt(){const fn=world.localZoneAt;return(...args:Parameters<World['localZoneAt']>)=>fn.apply(world,args);},
+      get geyserSurge(){const fn=world.geyserSurge;return(...args:Parameters<World['geyserSurge']>)=>fn.apply(world,args);},
+      get skyFront(){const fn=world.skyFront;return(...args:Parameters<World['skyFront']>)=>fn.apply(world,args);},
+    });
+    Object.defineProperty(this,'nativeSceneSkyView',{value:host,enumerable:false,writable:true,configurable:true});
     return host;
   }
   declare private nativeSceneArrivalView?:NativeSceneArrivalHost;

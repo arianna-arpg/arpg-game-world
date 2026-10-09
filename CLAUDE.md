@@ -1,3 +1,14 @@
+NativeSceneBirthComposition wires all 124 original birth ports to concrete native
+owners and the complete 36-row registry. Bind one census, geometry, population,
+resident factory, objective state, campaign and carried transition; binding never
+resets or publishes an area. NativeSceneSky preserves native sky/radiance rules,
+all seven event-weather sources and geographic weather. Verify nativescenebirthcomposition,
+nativescenesky, adjacent native owners, all types, generation, sim and isolated
+client entry/Continue/return. Source issuance, ongoing controller/reward ownership,
+whole-area paging, genuine native hierarchy and map zoom still precede complete
+integration. See docs/worldgen/native-area-birth-composition.md and the latest
+.claude/continuation.native-area-integration.local.txt; placement is separate.
+
 NativeRegionalSeating (schema 18) preserves all original complete-locale
 placements and tries at most eight source-fit fallback seats only after the
 original sixteen fail. Keep exact historical omission, snapped whole-source
