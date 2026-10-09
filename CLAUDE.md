@@ -3817,14 +3817,16 @@ we verify changes.
   shoulder, invulnerable, its level the players'), THE SEALED ROADS, THE
   NEAR LAW (`COOP_SCALING.shareRadius`), THE MERCY for a lone downed seat.
   THE VESSEL (card 6: `server/vessel.ts`, `server/corpses.ts`,
-  `meta/shardVessel.ts`): a client's run-slot hero travels on its join and
-  mirrors home; a mortal vessel's fall leaves its corpse on the shard keyed
+  `meta/shardVessel.ts`): a client's hero travels on its join and mirrors
+  home to its own slot (THE IMMORTAL TRAVELS: the wake names it by `charId`,
+  so a roster vessel goes too); a mortal vessel's fall leaves its corpse on the shard keyed
   by `Account.accountId` and ends the run on the client; its next hero
   reclaims it. The wilds persist (`server/wildsSave.ts`, THE RESUME LAW).
   The wire wears THE INBOX LAWS, THE DOOR CAPS, THE ACTION BUDGET, THE
   BREAKER and a status page on a plain GET. The shard account's gate (M2)
-  and per-seat travel (M1) are still carded. Verify `probe_shard.ts` (fast)
-  and `probe_shardslow.ts` (the wilds save and the vessel, `--slow`).
+  and per-seat travel (M1) are still carded. Verify `probe_shard.ts` (fast),
+  `probe_shardimmortal.ts` (the roster vessel's road, fast) and
+  `probe_shardslow.ts` (the wilds save and the vessel, `--slow`).
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
   `docs/ui/folio.md`, probe `balance/probe_folio.ts`): dwell dialogs that

@@ -684,10 +684,16 @@ in Mu first.**
     connects. **BUILT:** `connectToShard` (main.ts) — a vessel travels, else
     Mu picks one (the tutorial first for a virgin account) and the bedside
     wake travels it; a fall drifts back into Mu bound for the same server;
-    the lobby's connect answers 'connected' or 'mu'. Immortal vessels (roster
-    saves) cannot travel yet — a later pass. THE KILLER'S DUE rides with it:
-    on a shard a kill pays the killing seat alone until THE PARTY widens it.
-    Cards 14, 18 and 21 are built; card 16 is in flight.
+    the lobby's connect answers 'connected' or 'mu'. **THE IMMORTAL TRAVELS
+    (built):** the wake names its hero by `charId` (THE WAKE'S WORD), so an
+    Immortal vessel (a roster save) is read from its own card's slot and
+    travels, and its mirrors land in that slot with its card refreshed, never
+    in the shared Continue; the lobby takes the run slot's hero first, else
+    the one standing roster card (two are ambiguous and Mu picks; a fallen
+    vessel never travels); on a shard it keeps THE MERCY until its own
+    covenant is ruled (`balance/probe_shardimmortal.ts`). THE KILLER'S DUE
+    rides with it: on a shard a kill pays the killing seat alone until THE
+    PARTY widens it. Cards 14, 18 and 21 are built; card 16 is in flight.
 
 23. **THE PARTY** (her word 2026-10-08/09 — "players that are PARTIED
     TOGETHER are effectively a unit, our equivalent of co-op; two individual
