@@ -76,7 +76,12 @@ export type SessionMsg =
   | { t: 'heroSave'; save: import('../meta/character').CharacterSave }
   | { t: 'corpse'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning }
   | { t: 'corpses'; zoneId: string; bodies: import('./vesselWire').ShardBodyRow[]; reclaimed?: number }
-  | { t: 'leaving' };
+  | { t: 'leaving' }
+  // THE PARTY (docs/design/shard-world.md card 23 — net/partyWire.ts): a client's word to its
+  // party desk (client→host), an invite landing on its target, and a refusal's one line.
+  | { t: 'party'; op: import('./partyWire').PartyOp; seat?: PlayerId }
+  | { t: 'partyInvite'; from: PlayerId; name: string; party: string }
+  | { t: 'partyWord'; word: string };
 
 /** THE SEED THREAD — a client's World must be minted from the HOST's run seed,
  *  never one of its own. `manifest.seed` drives the shared map (the starter web

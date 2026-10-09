@@ -43,6 +43,7 @@ import { serializeSnapshot, serializeZone } from '../src/net/snapshot';
 import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction, PlayerInput } from '../src/net/intent';
 import { massDigest } from '../src/worldmass/random';
+import { PartyDesk } from './party';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
 import { ShardTransport, type ShardJoin } from './shardTransport';
@@ -209,6 +210,9 @@ export class ShardHost {
   private hearth: { x: number; y: number; tier: number } = { x: 0, y: 0, tier: 0 };
   /** THE SPAWN GRACE: seat id → world time the grace ends. */
   private readonly graces = new Map<string, number>();
+  /** THE PARTY (server/party.ts). */
+  readonly parties: PartyDesk;
+  private partyRevSeen = -1;
   /** THE DORMANT SEAT: seat id → world time its dormancy ends (the leave path runs then). */
   private readonly dormancy = new Map<string, number>();
   private readonly bootAt = Date.now();
@@ -274,11 +278,19 @@ export class ShardHost {
     const toSeat = (msg: SessionMsg, to: string): void => this.net.sendSession(msg, to);
     const recordsDir = opts.saveDir === null ? null : opts.saveDir ?? SHARD_CFG.saveDir;
     this.corpses = new ShardCorpses(this.world, toSeat, shardRecordsPath(recordsDir, this.seed), this.seed, this.log);
-    this.vessels = new VesselDesk(this.world, toSeat, this.corpses, { beatSec: SHARD_CFG.persistSec, log: this.log });
+    // THE PARTY (server/party.ts, card 23): the explicit social unit; the keeper is never seated in one.
+    this.parties = new PartyDesk(id => this.world.seats.some(s => s.id === id && !s.keeper));
+    this.world.partyMates = id => this.parties.membersOf(id); // keeperSeat lane: THE KILLER'S DUE pays the party
+    this.vessels = new VesselDesk(this.world, toSeat, this.corpses, {
+      beatSec: SHARD_CFG.persistSec, log: this.log,
+      party: id => this.parties.membersOf(id), // THE GROUP LAW
+      onSeatGone: id => this.parties.dropSeat(id),
+    });
     this.net.onPeerJoin((p, join) => this.onJoin(p, join));
     this.net.onPeerLeave(id => {
       this.dormancy.delete(id); // THE DORMANT SEAT: the word, a clock run out or a closing shard ends any dormancy
       this.vessels.leave(id); this.graces.delete(id); this.world.removeSeat(id);
+      this.parties.dropSeat(id); // THE PARTY: out of its party and its invites
       this.world.settleNearScale(true); // keeperSeat: THE NEAR LAW re-read where every body stands after the leave (and clamped for the save)
     });
     this.net.onPeerDormant(id => this.onDormant(id)); // THE DORMANT SEAT: a lost socket's hero stays, on a clock
@@ -443,6 +455,8 @@ export class ShardHost {
       this.onJoin({ id: from, name: peer?.name ?? 'Joiner', classId: msg.classId, isHost: false, cosmeticLoadout: peer?.cosmeticLoadout, accountId: this.vessels.accountOf(from) });
     } else if (msg.t === 'leaving') {
       this.vessels.requestMirror(from); // THE FAREWELL: the vessel's last mirror before its socket closes
+    } else if (msg.t === 'party') {
+      this.onPartyWord(msg, from);
     }
   }
 
@@ -526,6 +540,8 @@ export class ShardHost {
       if (!w.gameOver) for (const a of w.actors) updateAI(a, w, dt);
       w.update(dt);
       w.settleNearScale(); // keeperSeat: THE NEAR LAW where this tick's mints stand
+      this.parties.sweep(w.time); // THE PARTY: lapsed invites fall away
+      this.publishParties();
       this.consecutiveFaults = 0;
     } catch (e) {
       this.noteFault('the simulate phase', e);
@@ -591,6 +607,39 @@ export class ShardHost {
   hearthSeat(): { x: number; y: number; tier: number } {
     const s = this.world.massRuntime?.settlement?.spawn;
     return s ? { x: s.x, y: s.y, tier: this.hearth.tier } : this.hearth;
+  }
+
+  /** THE PARTY's words (card 23): invite, accept, decline, leave, kick — every refusal
+   *  answers the asker with one line; an invite lands on its target. */
+  private onPartyWord(msg: Extract<SessionMsg, { t: 'party' }>, from: string): void {
+    const now = this.world.time;
+    const seat = typeof msg.seat === 'string' ? msg.seat : '';
+    let word: string | null = null;
+    switch (msg.op) {
+      case 'invite': {
+        word = this.parties.invite(from, seat, now);
+        if (!word) {
+          const party = this.parties.partyOf(from)!;
+          const name = this.world.seats.find(s => s.id === from)?.actor.name ?? from;
+          this.net.sendSession({ t: 'partyInvite', from, name, party: party.id }, seat);
+        }
+        break;
+      }
+      case 'accept': word = this.parties.accept(from, now); break;
+      case 'decline': word = this.parties.decline(from); break;
+      case 'leave': word = this.parties.leave(from); break;
+      case 'kick': word = this.parties.kick(from, seat); break;
+      default: word = 'no such word';
+    }
+    if (word) this.net.sendSession({ t: 'partyWord', word }, from);
+  }
+
+  /** THE PARTY on the wire: when the desk changed, the world's rows change with it. */
+  private publishParties(): void {
+    if (this.partyRevSeen === this.parties.rev) return;
+    this.partyRevSeen = this.parties.rev;
+    this.world.partyRows = this.parties.rows();
+    this.world.partyRev++;
   }
 
   /** THE SPAWN GRACE ends at the first willed input or at its clock. */
@@ -675,6 +724,7 @@ export class ShardHost {
       zone: w.zone.id,
       clock: +w.time.toFixed(1),
       uptimeSec: Math.round((Date.now() - this.bootAt) / 1000),
+      parties: this.parties.rows(),
       seats: w.seats.filter(s => !s.keeper).map(s => {
         const until = this.dormancy.get(s.id); // THE DORMANT SEAT on the page: marked, with its seconds left
         return { id: s.id, name: s.actor.name, level: s.actor.level, alive: !s.actor.dead && !s.actor.downed,

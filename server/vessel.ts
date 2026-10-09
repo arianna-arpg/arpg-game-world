@@ -223,7 +223,13 @@ export class VesselDesk {
     private readonly world: World,
     private readonly send: SeatSend,
     private readonly corpses: ShardCorpses,
-    private readonly opts: { beatSec: number; log: (line: string) => void },
+    private readonly opts: {
+      beatSec: number; log: (line: string) => void;
+      /** THE GROUP LAW (card 14 clarified / card 23): a seat's party mates, itself included. */
+      party?: (seatId: string) => readonly string[];
+      /** A seat the covenant removed from the world (the party desk drops it). */
+      onSeatGone?: (seatId: string) => void;
+    },
   ) {
     this.beat = opts.beatSec;
   }
@@ -402,7 +408,7 @@ export class VesselDesk {
     // ends here too — no mercy clock ever stands a mortal back up on a shard.
     if (VESSEL_CFG.freshHeroDies) {
       for (const seat of [...w.seats]) {
-        if (seat.keeper || this.vessels.has(seat.id) || !this.downed(seat) || !this.endsTheRun(seat)) continue;
+        if (seat.keeper || this.vessels.has(seat.id) || !this.downed(seat) || !this.endsTheRun(seat) || this.partyHolds(seat)) continue;
         this.freshFall(seat);
       }
     }
@@ -416,8 +422,18 @@ export class VesselDesk {
   /** Is this seat's down a mortal vessel's death? The stage's own policy
    *  decides (a contract that survives death keeps THE MERCY), and under
    *  'mercy' a standing player who could still kneel keeps the down co-op's. */
+  /** THE GROUP LAW (her word 2026-10-09): inside a party a lethal down is a DOWN — a
+   *  nearby player may kneel — and the covenant fells the downed only when no member of
+   *  its party stands (THE PARTY WIPE); an ungrouped seat is single player's. */
+  private partyHolds(seat: Seat): boolean {
+    const mates = this.opts.party?.(seat.id) ?? [seat.id];
+    if (mates.length <= 1) return false;
+    return this.world.seats.some(o => o !== seat && mates.includes(o.id) && !o.actor.dead && !o.actor.downed);
+  }
+
   private covenantDue(seat: Seat): boolean {
     if (!this.downed(seat) || !this.endsTheRun(seat)) return false;
+    if (this.partyHolds(seat)) return false; // THE GROUP LAW: a mate stands to kneel
     if (VESSEL_CFG.covenantAt === 'mercy'
       && this.world.seats.some(o => o !== seat && !o.keeper && !o.actor.dead && !o.actor.downed)) return false;
     return true;
@@ -441,6 +457,7 @@ export class VesselDesk {
     this.corpses.leave(seat.id);
     this.accounts.delete(seat.id);
     w.removeSeat(seat.id);
+    this.opts.onSeatGone?.(seat.id);
   }
 
   /** THE DEATH COVENANT, whole, in one frame. `heard` = the client is still
@@ -484,6 +501,7 @@ export class VesselDesk {
     this.corpses.leave(seat.id);
     if (seat.home) { try { w.seatEject(seat, 'released'); } catch { /* the seat leaves either way */ } }
     w.removeSeat(seat.id);
+    this.opts.onSeatGone?.(seat.id);
     this.falls++;
     this.opts.log(`[shard] ${seat.id}'s vessel ${m.name} fell in ${zone.name}${heard ? '' : ' (leaving while down)'}: `
       + `${body ? `${loot.items.length} pieces lie there` : 'nothing to reclaim'}, ${reckoning.minted} minted`);

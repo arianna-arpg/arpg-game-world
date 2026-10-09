@@ -561,6 +561,8 @@ export interface StateSnapshot {
   zoneId: string;
   arena: { w: number; h: number };
   seats: Record<string, SeatW>;
+  /** THE PARTY (net/partyWire.ts): every party's composition, shipped on change and on the account view's beat. */
+  parties?: import('./partyWire').PartyRow[];
   /** Per-seat build/progression — present ONLY for seats whose meta CHANGED since
    *  the last broadcast (dirty-flagged), so it rides along cheaply. Each client
    *  applies its OWN entry (snap.seatMeta[clientSeatId]). */
@@ -907,6 +909,8 @@ let WATCH_V_OF: (a: Actor) => number = () => 0;
  *  shipped view, so a graduation reaches every client on the next snapshot while an
  *  unchanged view rides only the beat (the first snapshot a joiner sees ships it). */
 const lastShippedMemoryAccess = new WeakMap<World, string>();
+/** THE PARTY's change beat: the party revision this world last shipped. */
+const lastShippedPartyRev = new WeakMap<World, number>();
 export function serializeSnapshot(world: World, tick: number): StateSnapshot {
   const seatById = new Map<Actor, string>();
   for (const s of world.seats) seatById.set(s.actor, s.id);
@@ -949,6 +953,12 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     seats, seatMeta,
     vendor: world.vendorStock.map(e => vendorEntryW(e, world)), vendorRestockAt: world.vendorRestockAt,
     vendorCap: world.vendorLockCap(),
+    ...((): { parties?: import('./partyWire').PartyRow[] } => { // THE PARTY: on change, or on the beat
+      if (!world.partyRows) return {};
+      if (tick % WIRE_CFG.memoryAccessBeat !== 1 && lastShippedPartyRev.get(world) === world.partyRev) return {};
+      lastShippedPartyRev.set(world, world.partyRev);
+      return { parties: world.partyRows };
+    })(),
     memoryAccess: (() => { // THE WIRE DISCIPLINE: the beat, or a view that changed
       const view = memoryAccessView(world.account), key = JSON.stringify(view);
       if (tick % WIRE_CFG.memoryAccessBeat !== 1 && lastShippedMemoryAccess.get(world) === key) return undefined;
@@ -1616,6 +1626,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     world.vendorRestockAt = snap.vendorRestockAt;
     world.netVendorCap = snap.vendorCap;
     if (snap.memoryAccess !== undefined) world.netMemoryAccess = snap.memoryAccess; // THE WIRE DISCIPLINE: absent = unchanged
+    if (snap.parties !== undefined) { world.partyRows = snap.parties; world.partyRev++; } // THE PARTY: absent = unchanged
     world.netVendorTradeOpen = snap.vendorTradeOpen;
     world.netVendorGemsOpen = snap.vendorGemsOpen;
     world.netBagBoard = snap.bagBoard;

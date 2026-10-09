@@ -124,7 +124,7 @@ export function sanitizeInput(raw: unknown): PlayerInput | null {
   return out;
 }
 
-const CLIENT_SESSION_KINDS = new Set<SessionMsg['t']>(['rejoin', 'cosmetics', 'action', 'leaving']);
+const CLIENT_SESSION_KINDS = new Set<SessionMsg['t']>(['rejoin', 'cosmetics', 'action', 'leaving', 'party']);
 
 /** What a join carries beyond its roster row (THE VESSEL — docs/engine/
  *  shard.md "The vessel and the corpse"): the uploaded hero, UNJUDGED here

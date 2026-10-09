@@ -19563,6 +19563,17 @@ export class World {
     return root ? this.seatByActor.get(root) : undefined;
   }
 
+  /** keeperSeat lane — THE PARTY's view (server/party.ts through the shard): a seat's party
+   *  mates by id, itself included; absent = every seat its own unit. */
+  partyMates: ((seatId: string) => readonly string[]) | null = null;
+  /** THE PARTY on the wire: the rows the shard publishes (snapshot.ts ships them on change). */
+  partyRows: import('../net/partyWire').PartyRow[] | null = null;
+  partyRev = 0;
+  /** Are two seats one unit — the same seat, or party mates? */
+  sameParty(a: Seat, b: Seat): boolean {
+    return a === b || (this.partyMates?.(a.id)?.includes(b.id) ?? false);
+  }
+
   grantXp(amount: number, at?: Vec2, to?: Seat): void {
     for (const seat of this.seats) {
       if (seat.actor.dead) continue;
@@ -19570,7 +19581,7 @@ export class World {
       // place pays only the seats within reach of it; radius 0 = everyone. THE
       // KILLER'S DUE (her ruling 2026-10-08: the single-player law until parties):
       // with a radius set and a killing seat known, only that seat is paid.
-      if (at && COOP_SCALING.shareRadius > 0 && to && seat !== to) continue; // keeperSeat: the killer's due
+      if (at && COOP_SCALING.shareRadius > 0 && to && !this.sameParty(to, seat)) continue; // keeperSeat: the killer's due — its party within reach (card 23)
       if (at && COOP_SCALING.shareRadius > 0 && dist(at, this.seatHero(seat).pos) > COOP_SCALING.shareRadius) continue; // SOVEREIGNTY: census — pay is apportioned by reach, never a touch (keeperSeat lane)
       // A hired blade never earns its own levels — its power is NORMALIZED to
       // the patron (MERC_CFG.scale), re-synced on the patron's level-ups.

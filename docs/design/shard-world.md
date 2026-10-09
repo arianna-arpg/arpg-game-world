@@ -715,7 +715,11 @@ in Mu first.**
     registry on the shard (invite, accept, decline, leave, kick; the leader
     for kicks and the muster), the seat's party on the wire, the covenant
     and THE KILLER'S DUE reading the party, a Party panel to invite the
-    players in sight, the muster ring for card 15 after that.
+    players in sight, the muster ring for card 15 after that. **BUILT, the
+    server half (server/party.ts, net/partyWire.ts, the host's words, the
+    covenant's partyHolds, the due's sameParty, the wire's parties rows;
+    probe_shardparty.ts):** the panel is the next commit; the muster ring
+    (card 15 B) after it.
 
 ---
 
