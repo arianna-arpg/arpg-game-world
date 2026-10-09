@@ -83,6 +83,10 @@ export const HONEST_INPUT_CFG = {
   bankSec: 0.5,
   /** Frames one tick's batch keeps: a flood past it is dropped at the merge, never walked. */
   maxBatch: 240,
+  /** THE WALK FOLD's row (SeatW spd/trc) rides a seat that stepped within this many
+   *  seconds: a still seat's quiet snapshot carries none, and the shell keeps the fold
+   *  it last heard (World.ownWalk). */
+  walkRowSec: 0.5,
 };
 
 /** THE PRESS IS KEPT, and THE HONEST INPUT's merge (docs/engine/shard.md): fold one

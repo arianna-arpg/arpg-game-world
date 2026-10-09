@@ -52,6 +52,7 @@ import { hullOf, type ZoneShape } from '../world/shape';
 import { GridWalkField, type PackedWalk } from '../world/gridWalk';
 import { emptyAbilityEssences, emptyEssences } from '../engine/world';
 import type { World, Seat, VendorEntry } from '../engine/world';
+import { HONEST_INPUT_CFG } from './intent'; // THE HONEST INPUT: the walk fold's row
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
@@ -388,9 +389,10 @@ export interface SeatW {
   slippery?: boolean;
   /** THE HONEST INPUT (docs/engine/shard.md): the seat's walk speed, the fold its
    *  moveActor walks (Actor.walkSpeed: the moveSpeed stat with its status sources);
-   *  a client's own hero predicts at it (World.ownWalk). Absent from an older host. */
+   *  a client's own hero predicts at it (World.ownWalk). It rides a WALKING seat's row
+   *  (HONEST_INPUT_CFG.walkRowSec): absent, the shell keeps the fold it last heard. */
   spd?: number;
-  /** THE HONEST INPUT: the seat's traction (Actor.walkTraction); absent = 1, firm ground. */
+  /** THE HONEST INPUT: the seat's traction (Actor.walkTraction), beside spd; absent = 1, firm. */
   trc?: number;
   /** Environmental-survival meters (breath, light) — only rows BELOW max ride
    *  (the HUD hides full meters, and most frames most seats carry none). The
@@ -1457,9 +1459,11 @@ function seatW(s: Seat, world: World): SeatW {
     ...(a.sheet.get('traction') < 0.999 ? { slippery: true } : {}),
     ...(surv ? { survival: surv } : {}),
   };
-  row.spd = Math.round(a.walkSpeed() * 1000) / 1000; // THE HONEST INPUT: the pace the client's own hero predicts at
+  // THE HONEST INPUT: the walk fold rides a WALKING seat's row (stepped within walkRowSec), so
+  // a still seat's quiet snapshot carries none and the shell keeps the fold it last heard.
+  if (world.time - a.lastMoveAt <= HONEST_INPUT_CFG.walkRowSec) row.spd = Math.round(a.walkSpeed() * 1000) / 1000;
   const trc = a.walkTraction();
-  if (trc < 1) row.trc = Math.round(trc * 1000) / 1000; // THE HONEST INPUT: the traction under it (absent = firm)
+  if (row.spd !== undefined && trc < 1) row.trc = Math.round(trc * 1000) / 1000; // THE HONEST INPUT: the traction under it (absent = firm)
   return row;
 }
 
@@ -2118,9 +2122,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     p.life = me.life; p.mana = me.mana; p.es = me.es;
     p.dead = me.dead; p.downed = me.downed;
     // THE HONEST INPUT: our hero predicts at the host's walk fold (its row's spd/trc),
-    // never the shell's own sheet, whose statuses are display stubs.
-    if (me.spd === undefined) world.ownWalk = null;
-    else { const ow = world.ownWalk ??= { spd: 0, trc: 1 }; ow.spd = me.spd; ow.trc = me.trc ?? 1; }
+    // never the shell's own sheet, whose statuses are display stubs. A still seat's row
+    // carries none: the fold last heard stands (a fresh shell walks its own sheet).
+    if (me.spd !== undefined) { const ow = world.ownWalk ??= { spd: 0, trc: 1 }; ow.spd = me.spd; ow.trc = me.trc ?? 1; }
     // Environmental-survival meters: rebuild the own hero's map from the wire
     // so the registry-driven HUD bars (breath, light) draw exactly as on the
     // host. Absent on the wire = every meter full = no map (bars hidden).

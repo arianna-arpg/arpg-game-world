@@ -15,8 +15,9 @@
 //      dropped seconds are credited before its catch-up (the budget runs on the wall);
 //      a step anywhere in a batch ends THE SPAWN GRACE
 //   E  THE QUICK TAP: a tap whose down and up land in one tick casts its non-toggle skill once
-//   F  the walk fold: the own row ships spd (a chill moves it) and trc, and the client's
-//      replay walks the chilled pace the host walks
+//   F  the walk fold: a walking row ships spd (a chill moves it) and trc, a still row none
+//      (the shell keeps the fold it last heard), and the client's replay walks the
+//      chilled pace the host walks
 //   G  THE SOLO INVARIANT: a local seat's input with no dt walks the tick's dt as before
 //   H  the own feet: a predicting shell's hero wears its own gait (one stride per frame)
 //      and faces the aim it sends
@@ -248,16 +249,21 @@ for (const fps of [30, 60, 144]) {
 // ============================================================== F: the walk fold ==
 {
   const hero = stage(P1, MID);
-  await tick(3); await sleep(20);
+  await tick(Math.ceil(HONEST_INPUT_CFG.walkRowSec / DT) + 3); await sleep(20);
+  const still = P1.latest!.seats[P1.id], heard = shell1.ownWalk?.spd;
+  applySnapshot(shell1, P1.latest!);
+  check('F quiet: a still seat\'s row carries no walk fold, and the shell keeps the fold it last heard',
+    !!still && still.spd === undefined && still.trc === undefined && heard !== undefined && shell1.ownWalk?.spd === heard, `kept ${shell1.ownWalk?.spd}`);
+  await walk(P1, 60, 6); await sleep(20);
   const plain = P1.latest?.seats[P1.id]?.spd, hostPlain = hero.walkSpeed();
   hero.applyStatus('chill', 0, 1, 'probe');
+  const hostChilled = hero.walkSpeed(), from = here(hero);
+  const frames = await walk(P1, 60, 30);
   await tick(3); await sleep(20);
-  const chilledSnap = P1.latest!, row = chilledSnap.seats[P1.id], hostChilled = hero.walkSpeed();
-  check('F fold: the own row ships the walk speed the host walks', plain !== undefined && Math.abs(plain - hostPlain) <= 0.001, `row ${plain}, host ${hostPlain}`);
+  const chilledSnap = P1.latest!, row = chilledSnap.seats[P1.id];
+  check('F fold: a walking seat\'s row ships the walk speed the host walks', plain !== undefined && Math.abs(plain - hostPlain) <= 0.001, `row ${plain}, host ${hostPlain}`);
   check('F fold: a chill moves the row with the host', row?.spd !== undefined && hostChilled < hostPlain - 1 && Math.abs(row.spd - hostChilled) <= 0.001,
     `row ${row?.spd}, host ${hostChilled.toFixed(3)} (unchilled ${hostPlain})`);
-  const from = here(hero);
-  const frames = await walk(P1, 60, 30);
   const at = replay(shell1, chilledSnap, from, frames);
   const naive = shell1.player.sheet.get('moveSpeed');
   check('F fold: the shell wears the row (World.ownWalk); its own sheet never saw the chill', shell1.ownWalk?.spd === row?.spd && naive > hostChilled + 1,
@@ -265,7 +271,7 @@ for (const fps of [30, 60, 144]) {
   check('F fold: chilled, the host walks what the client predicts (no 20 Hz sawtooth)', dist(here(hero), at.get(frames[29].seq)!) <= 1 && dist(here(hero), from) > 20,
     `host ${dist(here(hero), from).toFixed(2)} px, replay ${dist(at.get(frames[29].seq)!, from).toFixed(2)} px`);
   hero.applyStatus('slippery', 0, 1, 'probe');
-  await tick(3); await sleep(20);
+  await walk(P1, 60, 3); await sleep(20);
   const slick = P1.latest!.seats[P1.id];
   applySnapshot(shell1, P1.latest!);
   check('F traction: the row ships the traction the host reads, and the shell wears it', slick?.trc !== undefined && slick.slippery === true
