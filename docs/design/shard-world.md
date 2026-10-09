@@ -724,8 +724,10 @@ in Mu first.**
     players in sight, the muster ring for card 15 after that. **BUILT, the
     server half (server/party.ts, net/partyWire.ts, the host's words, the
     covenant's partyHolds, the due's sameParty, the wire's parties rows;
-    probe_shardparty.ts):** the panel is the next commit; the muster ring
-    (card 15 B) after it.
+    probe_shardparty.ts) and the client half (ui/party.ts — the menu's
+    Party page: your party, the invitations, the players around you; the
+    shell collects the invitations and the shard's words):** the muster ring
+    (card 15 B) is next.
 
 ---
 

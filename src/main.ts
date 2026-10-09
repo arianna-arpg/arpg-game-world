@@ -57,6 +57,7 @@ import { WsTransport, defaultShardUrl, shardResumeFor } from './net/ws';
 import { wildsShellActive, wildsShellAttach, wildsShellDetach, wildsShellStream, wildsShellZone } from './net/wildsClient';
 import { readTravelingVessel, ShardVesselLink, travelNote } from './meta/shardVessel';
 import { openCoopLobby } from './ui/lobby';
+import { PartyPanel } from './ui/party';
 import { CLASSES, type ClassDef } from './data/classes';
 import { SKILLS as CLIP_SKILLS } from './data/skills';
 import { makeSkillGem as clipSkillGem } from './engine/skills';
@@ -2453,6 +2454,11 @@ function onSessionMsg(msg: SessionMsg, from: string): void {
     }
   } else if (msg.t === 'runEnd') {
     onClientRunEnd();
+  } else if (msg.t === 'partyInvite') {
+    // THE PARTY: an invitation lands (one standing per inviter); the panel shows it until answered.
+    if (!partyInvites.some(i => i.from === msg.from)) partyInvites.push({ from: msg.from, name: msg.name, party: msg.party });
+  } else if (msg.t === 'partyWord') {
+    partyWord = msg.word; // THE PARTY: the shard's one-line refusal, shown on the panel
   } else if (msg.t === 'newRun') {
     onClientNewRun(msg.seat, msg.seed);
   } else if (msg.t === 'hostLeft') {
@@ -2617,6 +2623,25 @@ let pendingServer: { url: string } | null = null;
 /** The last shard this client was seated on: a fall drifts back into Mu bound for it. */
 let lastShardUrl: string | null = null;
 
+/** THE PARTY PANEL (card 23 — ui/party.ts): what landed on me (invitations, the shard's
+ *  last word) and the reads the panel draws from; its words go over the session wire. */
+const partyInvites: { from: string; name: string; party: string }[] = [];
+let partyWord: string | null = null;
+const partyPanel = new PartyPanel(
+  {
+    me: () => world.clientSeatId,
+    peers: () => net.peers().filter(p => !p.isHost).map(p => ({ id: p.id, name: p.name })), // the host row is the keeper: no seat to group with
+    rows: () => world.partyRows,
+    invites: () => partyInvites,
+    word: () => partyWord,
+  },
+  {
+    send: (op, seat) => { if (net instanceof WsTransport) net.sendSession({ t: 'party', op, ...(seat ? { seat } : {}) }); },
+    settleInvite: from => { const i = partyInvites.findIndex(x => x.from === from); if (i >= 0) partyInvites.splice(i, 1); },
+  },
+);
+ui.setPartyPanel(partyPanel);
+
 /** THE SHARD's door (card 22 — THE LOGIN THROUGH MU): the traveling hero goes when there
  *  is one (THE VESSEL: the run slot's hero, else THE LONE VESSEL — the one standing roster
  *  card; its class over the lobby card, keyed home by this account's id); with none, Mu
@@ -2707,6 +2732,7 @@ function resetToLocal(): void {
   net = new LocalTransport();
   lastSentZone = '';
   clientWilds = null; // a wilds shell's zone routing never outlives its session (the runtime dies with the World on the next adopt)
+  partyInvites.length = 0; partyWord = null; partyPanel.close(); // THE PARTY: a session's invitations die with it
 }
 
 /** Return to the start menu, always resetting the transport to local first — so

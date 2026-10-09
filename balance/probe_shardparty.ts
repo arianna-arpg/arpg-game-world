@@ -103,9 +103,9 @@ check('A keeper: the warden is never seated in a party', host.parties.invite(A.i
     JSON.stringify(shipped[0]?.parties ?? null));
   const quietFrom = seen.length;
   await runTicks(host, 12);
-  const quiet = seen.slice(quietFrom).filter(x => x.parties);
-  check('B wire: then the rows hold their tongue (at most the account view\'s beat re-sends them, unchanged)',
-    quiet.length <= 1 && quiet.every(x => JSON.stringify(x.parties) === JSON.stringify(shipped[0].parties)), `${quiet.length} re-sends over 12 ticks`);
+  const quiet = seen.slice(quietFrom);
+  check('B wire: the rows ride every snapshot (ids only — a client applying the newest of a queue never misses a change)',
+    quiet.length >= 3 && quiet.every(x => x.parties && JSON.stringify(x.parties) === JSON.stringify(shipped[0].parties)), `${quiet.length} snapshots, ${quiet.filter(x => x.parties).length} with rows`);
   off();
   host.parties.leave(C.id); await runTicks(host, 3);
 }
