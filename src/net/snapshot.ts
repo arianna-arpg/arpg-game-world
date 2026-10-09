@@ -314,6 +314,12 @@ export interface SeatW {
   seq?: number;
   rooted?: boolean;
   slippery?: boolean;
+  /** THE HONEST INPUT (docs/engine/shard.md): the seat's walk speed, the fold its
+   *  moveActor walks (Actor.walkSpeed: the moveSpeed stat with its status sources);
+   *  a client's own hero predicts at it (World.ownWalk). Absent from an older host. */
+  spd?: number;
+  /** THE HONEST INPUT: the seat's traction (Actor.walkTraction); absent = 1, firm ground. */
+  trc?: number;
   /** Environmental-survival meters (breath, light) — only rows BELOW max ride
    *  (the HUD hides full meters, and most frames most seats carry none). The
    *  client rebuilds its own hero's Actor.survival map from this so the
@@ -1151,7 +1157,7 @@ function seatW(s: Seat, world: World): SeatW {
   const a = s.actor;
   const seq = world.lastInputSeq.get(s.id);
   const surv = survivalOf(a);
-  return {
+  const row: SeatW = {
     pos: v2(a.pos),
     life: Math.max(0, Math.round(a.life)), maxLife: Math.round(a.maxLife()),
     mana: Math.max(0, Math.round(a.mana)), maxMana: Math.round(a.maxMana()),
@@ -1162,6 +1168,10 @@ function seatW(s: Seat, world: World): SeatW {
     ...(a.sheet.get('traction') < 0.999 ? { slippery: true } : {}),
     ...(surv ? { survival: surv } : {}),
   };
+  row.spd = Math.round(a.walkSpeed() * 1000) / 1000; // THE HONEST INPUT: the pace the client's own hero predicts at
+  const trc = a.walkTraction();
+  if (trc < 1) row.trc = Math.round(trc * 1000) / 1000; // THE HONEST INPUT: the traction under it (absent = firm)
+  return row;
 }
 
 /** Below-max survival rows (undefined when none — full meters ship nothing). */
@@ -1365,7 +1375,11 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.life = aw.life; a.es = aw.es; a.absorbLayers.clear(); a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
     a.bodyActionPose = aw.bodyActionPose ? { ...aw.bodyActionPose } : null;
-    a.bodyWalkPose = aw.bodyWalkPose ? { ...aw.bodyWalkPose } : null;
+    // THE HONEST INPUT: a predicting shell's OWN hero (a render shell, the one marker
+    // main.ts installs: clientActionHook) walks its own gait, stamped once per frame by
+    // the replay (net/predict.ts); every other body wears the host's pose.
+    if (aw.seat === world.clientSeatId && world.clientActionHook) a.bodyWalkPose = undefined;
+    else a.bodyWalkPose = aw.bodyWalkPose ? { ...aw.bodyWalkPose } : null;
     a.passive = aw.passive; a.untargetable = aw.ut;
     a.summonReform = aw.summonReform ? { remaining: aw.summonReform[0], duration: aw.summonReform[1], invulnerable: false, untargetable: false } : undefined;
     a.movementTether = aw.movementTether ? { ...aw.movementTether,
@@ -1674,6 +1688,10 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // double-count against recalcSeat's sources).
     p.life = me.life; p.mana = me.mana; p.es = me.es;
     p.dead = me.dead; p.downed = me.downed;
+    // THE HONEST INPUT: our hero predicts at the host's walk fold (its row's spd/trc),
+    // never the shell's own sheet, whose statuses are display stubs.
+    if (me.spd === undefined) world.ownWalk = null;
+    else { const ow = world.ownWalk ??= { spd: 0, trc: 1 }; ow.spd = me.spd; ow.trc = me.trc ?? 1; }
     // Environmental-survival meters: rebuild the own hero's map from the wire
     // so the registry-driven HUD bars (breath, light) draw exactly as on the
     // host. Absent on the wire = every meter full = no map (bars hidden).

@@ -167,7 +167,8 @@ function maskedFrame(opcode: number, payload: Uint8Array, fin = true): Uint8Arra
   const i1: PlayerInput = { dx: 0, dy: 0, aim: { x: 0, y: 0 }, held: [true], edge: [true, false], metaEdge: [false, true], seq: 1 };
   const i2: PlayerInput = { dx: 1, dy: 0, aim: { x: 5, y: 5 }, held: [false], edge: [false, false], seq: 2 };
   const m12 = mergeInputs(i1, i2);
-  check('A merge: two frames in one tick keep both frames\' edges and the later axes', m12.dx === 1 && m12.seq === 2 && m12.edge[0] === true && m12.edge[1] === false && m12.metaEdge?.[1] === true && m12.held[0] === false);
+  // THE QUICK TAP (THE HONEST INPUT, docs/engine/shard.md): the slot pressed in the batch is held for the tick.
+  check('A merge: two frames in one tick keep both frames\' edges, the later axes, and THE QUICK TAP holds the pressed slot', m12.dx === 1 && m12.seq === 2 && m12.edge[0] === true && m12.edge[1] === false && m12.metaEdge?.[1] === true && m12.held[0] === true);
 }
 
 // ============================================================ B: the boot ==

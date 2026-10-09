@@ -32,7 +32,7 @@ import type { AddressInfo } from 'node:net';
 import { WS_GUID, WsMessageAssembler, encodeClose, encodePing, encodePong, encodeText } from '../src/net/wsframe';
 import type { ShardResume, WireMsg } from '../src/net/ws';
 import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from '../src/net/transport';
-import type { PlayerId, PlayerInput } from '../src/net/intent';
+import { HONEST_INPUT_CFG, mergeInputs, type PlayerId, type PlayerInput } from '../src/net/intent';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { isAccountId } from '../src/meta/account';
 
@@ -121,6 +121,7 @@ export function sanitizeInput(raw: unknown): PlayerInput | null {
   const out: PlayerInput = { dx: num(r.dx, -1, 1), dy: num(r.dy, -1, 1), aim: { x: ax, y: ay }, held: bools(r.held), edge: bools(r.edge) };
   if (Array.isArray(r.metaEdge)) out.metaEdge = bools(r.metaEdge);
   if (typeof r.seq === 'number' && Number.isFinite(r.seq)) out.seq = Math.max(0, Math.floor(r.seq));
+  if (typeof r.dt === 'number' && Number.isFinite(r.dt)) out.dt = num(r.dt, 0, HONEST_INPUT_CFG.maxMoveDt); // THE HONEST INPUT: a frame claims at most the client's clamp
   return out;
 }
 
@@ -131,19 +132,9 @@ const CLIENT_SESSION_KINDS = new Set<SessionMsg['t']>(['rejoin', 'cosmetics', 'a
  *  (server/vessel.ts validates it before anything grafts). */
 export interface ShardJoin { vessel?: unknown }
 
-/** THE PRESS IS KEPT: two client frames landing in one server tick used to
- *  overwrite each other, losing a single-frame edge or meta press. The later
- *  frame's axes, aim, held and seq stand; the EDGES of both are kept. */
-export function mergeInputs(prev: PlayerInput, next: PlayerInput): PlayerInput {
-  const or = (a: readonly boolean[], b: readonly boolean[]): boolean[] => {
-    const n = Math.max(a.length, b.length), out: boolean[] = [];
-    for (let i = 0; i < n; i++) out.push(!!a[i] || !!b[i]);
-    return out;
-  };
-  const merged: PlayerInput = { ...next, edge: or(prev.edge, next.edge) };
-  if (prev.metaEdge || next.metaEdge) merged.metaEdge = or(prev.metaEdge ?? [], next.metaEdge ?? []);
-  return merged;
-}
+/** THE PRESS IS KEPT and THE HONEST INPUT's batch: the fold lives beside the
+ *  intent (src/net/intent.ts) so the WebRTC host folds its frames the same way. */
+export { mergeInputs };
 
 /** THE SERVED CLIENT's content types (a web build's files; anything else is a blob). */
 const CLIENT_TYPES: Record<string, string> = {
@@ -361,7 +352,7 @@ export class ShardTransport implements NetTransport {
       const input = sanitizeInput(m.input);
       if (input) {
         const prev = this.pending.get(conn.seat); // keyed by the BINDING, never m.seat
-        this.pending.set(conn.seat, prev ? mergeInputs(prev, input) : input); // THE PRESS IS KEPT
+        this.pending.set(conn.seat, mergeInputs(prev, input)); // THE PRESS IS KEPT, THE QUICK TAP and THE HONEST INPUT's batch
       }
     } else if (m.t === 'session' && conn.seat) {
       const msg = m.msg;

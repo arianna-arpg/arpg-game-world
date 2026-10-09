@@ -648,7 +648,8 @@ export class ShardHost {
     if (!this.graces.size) return;
     for (const [id, until] of this.graces) {
       const inp = inputs.get(id);
-      const willed = !!inp && (inp.dx !== 0 || inp.dy !== 0 || inp.held.some(Boolean) || inp.edge.some(Boolean) || (inp.metaEdge?.some(Boolean) ?? false));
+      const willed = !!inp && (inp.dx !== 0 || inp.dy !== 0 || inp.held.some(Boolean) || inp.edge.some(Boolean) || (inp.metaEdge?.some(Boolean) ?? false)
+        || (inp.moves?.some(m => m[0] !== 0 || m[1] !== 0) ?? false)); // THE HONEST INPUT: a step anywhere in the tick's batch is willed
       if (!willed && this.world.time < until) continue;
       this.graces.delete(id);
       const seat = this.world.seats.find(s => s.id === id);
@@ -686,6 +687,11 @@ export class ShardHost {
     this.accum += (now - this.lastWall) / 1000;
     this.lastWall = now;
     const dt = 1 / SHARD_CFG.tickHz;
+    // THE TIME BUDGET runs on the wall (World.passInputTime): the seconds this wake is
+    // about to DROP still passed for the players' hands, credited before the catch-up
+    // so the frames a client sent through the stall walk in full (the world runs none).
+    const dropping = this.accum - SHARD_CFG.maxCatchUpTicks * dt;
+    if (dropping >= dt) this.world.passInputTime(dropping);
     let n = 0;
     while (this.accum >= dt && n < SHARD_CFG.maxCatchUpTicks) {
       const t0 = performance.now();
