@@ -63,6 +63,8 @@ import { challengeOf } from './challengeSpec';
 import { companionBondOf, companionRecoverySeconds, COMPANION_CFG, type CompanionSaved } from './companionSpec';
 import { companionStanceIdOf, nextStanceId } from './companionStances';
 import { COMPANION_STANCES } from '../data/companionStances';
+import { PING_CUE } from '../data/identityCues';
+import { clampPingReach, prunePings, type WorldPing } from './pings';
 import { OdysseyRuntime } from './odyssey';
 import { NpcDialogueDirector } from './npcDialogues';
 import { siteZoneExits } from './exitSiting';
@@ -1845,6 +1847,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     // both untrusted strings the mutator re-resolves against the registries.
     case 'companionStance':
       return (a.skillId === undefined || isStr(a.skillId)) && (a.stance === undefined || isStr(a.stance));
+    case 'ping': return Number.isFinite(a.x) && Number.isFinite(a.y); // THE PING: a finite point (placePing clamps the reach)
     case 'levelSkill': return isStr(a.skillId);
     // THE SACRIFICIAL FONT's recipes (data/essences.ts FONT_CFG): rarities
     // are a closed vocabulary, tiers untrusted client integers (the
@@ -19592,8 +19595,64 @@ export class World {
   partyRows: import('../net/partyWire').PartyRow[] | null = null;
   partyRev = 0;
   /** Are two seats one unit — the same seat, or party mates? */
-  sameParty(a: Seat, b: Seat): boolean {
-    return a === b || (this.partyMates?.(a.id)?.includes(b.id) ?? false);
+  sameParty(a: Seat, b: Seat): boolean { return this.sameSeatParty(a.id, b.id); }
+
+  /** THE PARTY BY SEAT ID, both sides of the wire: the desk's answer on the host,
+   *  the shipped rows on a render-shell client (keeperSeat — a client has no desk). */
+  sameSeatParty(a: string, b: string): boolean {
+    if (a === b) return true;
+    if (this.partyMates) return this.partyMates(a).includes(b);
+    return this.partyRows?.some(r => r.members.includes(a) && r.members.includes(b)) ?? false;
+  }
+
+  /** THE SEAT OF A BODY, both sides of the wire: the seat id a hero stands for —
+   *  the party view's row first (`party.members` carries WIRE ids on a client and
+   *  seat ids on the host), else the roster (the local seat answers with the wire
+   *  id it holds). Null for every body that is no seat's hero. */
+  seatIdOfActor(a: Actor): string | null {
+    const m = this.party.members.find(x => x.actor === a);
+    if (m) return m.seat;
+    const s = this.seats.find(x => x.actor === a);
+    return s ? (s === this.localSeat ? this.clientSeatId : s.id) : null;
+  }
+
+  /** THE PING (card 17 A, engine/pings.ts; dials data/identityCues.ts PING_CUE):
+   *  the world-anchored marks players set for their party — ONE standing per
+   *  seat (a new press replaces it), judged here for cadence and reach, expiring
+   *  on the world clock. The snapshot ships the live rows; the renderer draws a
+   *  mark for its setter and the setter's party mates (`pingVisibleTo`). */
+  pings: WorldPing[] = [];
+  private pingClocks = new Map<string, number>();
+
+  /** The one writer. Returns false when the press changed nothing (the seat's
+   *  cadence, a dead body). A far aim lands ON the reach ring, never refused. */
+  placePing(seat: Seat, x: number, y: number): boolean {
+    const now = this.time, a = seat.actor;
+    if (a.dead || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const last = this.pingClocks.get(seat.id);
+    if (last !== undefined && now - last < PING_CUE.cooldownSec && now >= last) return false;
+    const reached = clampPingReach(a.pos, { x, y }, PING_CUE.maxReach); // SOVEREIGNTY: sight — a mark is seen, it touches no body
+    const at = this.clampPos(reached, 0);
+    for (const id of this.pingClocks.keys()) if (!this.seats.some(s => s.id === id)) this.pingClocks.delete(id);
+    this.pingClocks.set(seat.id, now);
+    this.pings = prunePings(this.pings, now).filter(p => p.seat !== seat.id);
+    this.pings.push({ seat: seat.id, pos: { x: at.x, y: at.y }, tier: a.tier ?? 0, at: now, until: now + PING_CUE.lifeSec });
+    return true;
+  }
+
+  /** The marks still standing (prunes the list in place as it reads). */
+  livePings(): WorldPing[] {
+    if (this.pings.length && this.pings.some(p => p.until <= this.time)) this.pings = prunePings(this.pings, this.time);
+    return this.pings;
+  }
+
+  /** Who sees a mark (by seat id — the wire id on a client): its setter and the
+   *  setter's party. Off a party desk and off shipped rows (solo, couch) every
+   *  local seat sees every mark. */
+  pingVisibleTo(viewer: string, p: WorldPing): boolean {
+    if (p.seat === viewer) return true;
+    if (!this.partyMates && !this.partyRows) return true;
+    return this.sameSeatParty(viewer, p.seat);
   }
 
   grantXp(amount: number, at?: Vec2, to?: Seat): void {
@@ -26156,6 +26215,7 @@ export class World {
       case 'pickTreeNode': this.pickTreeNode(action.skillId, action.nodeId, seat); break;
       case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;
       case 'companionStance': this.cycleCompanionStance(seat, action.skillId, action.stance); break;
+      case 'ping': this.placePing(seat, action.x, action.y); break;
       case 'fontMerge': this.fontMergeSkill(action.skillId, action.rarity, seat); break;
       case 'fontConvert': this.fontConvertEssence(action.tier, action.dir, seat); break;
       case 'fontReset': this.fontResetTree(action.skillId, seat); break;

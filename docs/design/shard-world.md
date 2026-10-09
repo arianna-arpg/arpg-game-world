@@ -546,6 +546,39 @@ HUD's local site name reads a private runtime map the shell never fills.
    the seamless lane owes the shard one adapter (its runtime as a unit). Every
    other fabric reaches the shard through the transport seam it already
    reaches co-op through.
+6. **THE ASKS (2026-10-09) — three seams the shard needs from the seamless
+   lane's own files, each with its measurement.** The shard never edits
+   `src/worldmass/**` (6.3); these are requests for that lane, carried by her.
+   - **THE MANY SHADOWS** (`src/worldmass/runtime.ts` `update`, lines ~720–816):
+     the runtime's page requests, places, site discovery, survey, native
+     wanted cells, scenery cells and births all key on ONE position,
+     `world.player.pos` (the keeper on the focus seat). Ask: `update(world, foci)`
+     with one focus per standing player cluster — the union of page cells
+     without pruning the other clusters' places, discovery and survey per
+     focus, births per focus under the one `maxPopulation` budget shared by
+     cluster. Evidence (the soak, six bots 3,500 px apart): the living
+     radius around a player away from the focus is 0; a keeper that visits
+     clusters in turn (THE ROVING SHADOW, shipped off) lifts the mean to 6.7
+     to 8.1 foes but re-keys the runtime on every hop at 135 to 170 ms and
+     drops 43 to 68 percent of ticks, so the seam must live inside the
+     runtime, not on the keeper's feet.
+   - **THE LOADERS OFF THE TICK.** The wilds' background loading expects Web
+     Workers; Node has no `Worker`, so on a shard it runs inside the tick: the
+     soak traced 10 of the 12 slowest ticks (100 to 490 ms) to
+     `massRuntime.update`, and the codespace drops a quarter of its ticks on
+     two cores with no player connected. Ask: a `worker_threads`-backed
+     loader (the same message contract behind a Node adapter), or a loader
+     that yields in slices the host can budget per tick.
+   - **THE LAND ONCE.** `serializeWorldState()` takes 150 to 200 ms on the wilds
+     and the shard calls it every `persistSec`; of the 6.5 MB it builds, 3.9 MB
+     is `worldmass.config`, THE LAND, a pure function of the seed that never
+     changes after boot (the land digest proves it), and 2.2 MB the state.
+     Ask: a save option (or shape) that omits the config and re-derives it
+     from the seed at read time, so the shard serializes the state alone.
+   The per-observer cost stands beside these: with ONE focus, six bots spread
+   3,500 px already breach the tick gate (p95 47 ms, 8 percent dropped,
+   against 13 ms clustered), because dormancy and native paging scale with
+   how far apart the observers stand; THE MANY SHADOWS must budget that too.
 
 ---
 
@@ -652,7 +685,13 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
 17. **Identity and talk** — A: a name entered once, overhead names on
     heroes, world-anchored pings (a visible cue, SHOW DON'T TELL). B: text
     chat as well. Rec: A; chat is yours. **RULED A now, B as a later pass
-    (2026-10-08): text chat is important, not paramount.**
+    (2026-10-08): text chat is important, not paramount.** **BUILT A
+    (2026-10-09):** THE IDENTITY CUES — the name entered once rides the
+    body and the wire, every other hero wears it overhead (gold for a mate,
+    ether for a neighbour), and `g` marks the ground for your party: rings,
+    a beacon, an edge chevron off-screen, host-judged for cadence and reach
+    (`data/identityCues.ts`, `engine/pings.ts`, docs/engine/shard.md;
+    `balance/probe_shardidentity.ts`). Text chat (B) stays the later pass.
 18. **World-freezing powers on a shard** (Time Stop, any world-wide hold)
     — A: freeze the whole World. B: scope them to a radius. C: exempt
     other players. Rec: B. **RULED B WITH C (2026-10-08):** a world-freezing
@@ -737,6 +776,40 @@ in Mu first.**
     Party page: your party, the invitations, the players around you; the
     shell collects the invitations and the shard's words):** the muster ring
     (card 15 B) is next.
+24. **THE QUEST LEDGER** (raised by the gap sweep, §7d item 3) — A: per
+    ACCOUNT (each player's quest state lives on the shard keyed by account
+    id, the corpse idiom; a quest a player finishes is finished for that
+    player alone). B: per WORLD (one shared ledger; one player's turn-in
+    finishes it for everyone). C: mixed (authored story quests per account,
+    world events and sieges shared). Rec: C, which is A for every quest a
+    giver hands a person and B for what the world does to itself.
+25. **POCKET TENANCY** (M1's first question) — A: shared pockets (whoever
+    walks into a cave meets the same cave, her "generated for any player
+    that simultaneously ran across it"). B: one instance per party.
+    Rec: A by default, B by a data flag for authored dungeons and arena
+    seals.
+26. **THE RETURN** (where a hero stands after a leave) — A: always the
+    hearth (today). B: where it logged out, within a radius, with a leave
+    in combat going dormant like a dropped socket (W3 builds the dormant
+    half either way). Rec: B.
+27. **THE SPOILS' OWNER** (card 23 said per player; the sweep found the
+    ground is first-come) — A: strictly per player, forever. B: per player
+    with a free-for-all after a timeout. C: A plus a deliberate give or
+    trade lane. Rec: A now (the honest floor), C as its own pass; B only
+    if you want shared pickup at all.
+28. **THE BLEED-OUT** (a grouped mortal's down) — A: no timer; a downed
+    grouped hero waits for a mate as long as the party stands. B: a
+    bleed-out of N seconds after which the covenant falls, reset by a
+    kneel. Rec: B at 60 s.
+29. **THE SHELF PER BUYER** — A: one world shelf rolled at the keeper's
+    level (today, §5). B: the shelf rolls per buyer's level. Rec: hold A;
+    revisit with M2's account gate.
+30. **THE IMMORTAL'S OWN COVENANT ON A SHARD** — today an Immortal cannot
+    die on a shard: a stage that does not end the run never meets the
+    covenant and the mercy stands it up. A: the stage's own death policy
+    runs on the server and mirrors home (a Sworn stage advances, an
+    Undying falls with its frozen fee, the corpse by the stage's rule).
+    B: leave Immortals deathless on shards. Rec: A.
 
 ---
 
@@ -774,6 +847,67 @@ Until then `shard-world` stays a merge away, and the dry run above is the
 receipt that the landing is clean today. Neither lane waits for the
 other to be "near completion": the foundation reaches content parity
 with main on its own clock, and the shard keeps riding it.
+
+## §7d The two sweeps (2026-10-09) and their waves
+
+Her ask: "a multitude of sweeps … synchronization between the client and
+server … a seamless, fully integrated MMORPG environment." Two read-only
+audits (Opus, every item cited by file and line) ran on the tree at
+d6019949 + card 17 A. Their verdicts and where each finding lands.
+
+**THE SYNC CRITIC — "2 of 10 at 120 ms with 10 players."**
+
+| # | Finding (CONFIRMED unless noted) | Wave |
+|---|---|---|
+| 1 | Rubber-banding BY CONSTRUCTION: `PlayerInput` carries no dt, the transport merges one input per tick, `applyInputs` moves one tick per tick, so a 30 fps client walks at half speed on the server and snaps back every snapshot; stalls merge N inputs into one tick. | W1 THE HONEST INPUT |
+| 2 | Every non-keeper seat's held casts run on the monster AI's hold roll (`a !== this.player` in updateCasting): guards drop, channels end, charges release on a 1.2–2.6 s timer. | W3 |
+| 3 | `World.zones` (telegraphs, fields) and leap landing rings never ride the wire: invisible slams, strikes and hazards on a client. | W2 THE WIRE'S EYES |
+| 4 | THE FOCUS: the mass runtime keys on the keeper's one position; a player 3,000 px away walks a barren, static world. MEASURED (the soak, 6 bots 3,500 px apart): the living radius around each player is least 0, mean 3.2 foes; THE ROVING SHADOW (a keeper that visits each cluster in turn, shipped off) lifts the mean to 6.7 at a 10 s cadence and 8.1 at 2 s but drops 43% and 68% of ticks (each hop re-keys the runtime at 135–170 ms; the extra clusters' natives raise the sustained load). | THE MANY SHADOWS (several foci inside the runtime, no re-keying, per-focus budgets) + the loaders off the tick, with the seamless lane |
+| 4b | THE SPREAD COST (the soak): six bots spread 3,500 px with ONE focus already breach the gate (p95 47 ms, 8% dropped) against 13 ms with the same six around the hearth: the runtime's per-observer paths (dormancy, native paging) scale with how far apart players stand. | THE MANY SHADOWS, budgeted |
+| 5 | No stall watchdog, no auto-reconnect; an F5 loses the resume token and the vessel is refused as "already walks the world". | Pass B (the shell) |
+| 6 | No local action feedback: every press waits a round trip; cast roots snap back; dashes step at 20 Hz. | Pass B |
+| 7 | Cooldowns and gauges are never serialized: the client's bar never sweeps, ultimates never fill. | W2 |
+| 8 | No interest management: every actor and every dirty build to every client; XP dirties a build; the 1.5 s heartbeat re-dirties all. PLAUSIBLE sizes. | Pass C (the wire diet) |
+| 9 | The client re-applies the WHOLE latest snapshot every render frame: optimistic actions revert until the echo. | Pass B (adopt once, interpolate per frame) |
+| 10 | `persist()` stringifies and writes ~4 MB on the tick: ~250 ms of no ticks every 20 s. | Pass C |
+| 11 | No jitter buffer; corrections hard-snap; the camera has no smoothing. | Pass B |
+| 12 | Own-hero speed modifiers are not predicted (statuses are display stubs). | W1 |
+| 13 | Death: the killing blow is never shown; the screen comes ~60 ms after it. | W3 THE DEATH BEAT |
+| 14 | THE DRESS BEAT re-ships the whole zone on any doodad churn (up to every 4 s). | Pass C (doodad deltas) |
+| 15 | Projectiles, tethers, lite hordes and pose scalars step at 20 Hz (no ids, no velocity). | W2 |
+| 16 | Own facing and walk pose are server-driven. | W1 |
+| 17 | Server-only events with no client cue (shake, low-life surge, corpses, dissolves, the harvest rite's invisible dwell). | W3 (per-seat rows) + Pass B |
+| 18 | Quick taps lost in merged ticks. | W1 |
+| 19 | Damage numbers have no owner. | W2 |
+
+**THE GAP CRITIC — tiers by player impact.**
+
+| # | Finding | Wave |
+|---|---|---|
+| 1 | One living focus (tier 1). | THE MANY SHADOWS |
+| 2 | Loot is first-come for everyone; card 23 said per player. | THE OWNED SPOILS (card 27) |
+| 3 | Quests are dead on a shard (seven breaks: offers, wire, linger, rewards to the keeper, cargo from the keeper's bag, XP to all, world-wide state). | THE COUNTERS AND THE JOURNAL (card 24 first) |
+| 4 | Stations never answer a linger (keeper-only dwell; station anchors not shipped). | THE COUNTERS AND THE JOURNAL |
+| 5 | Every road off the surface is sealed with no word. | M1; an interim cue |
+| 6 | Held casts drop after ~2 s. | W3 |
+| 7 | Chests, shrines, diamonds, fractures, waypoints answer only the keeper. | W3 |
+| 8 | The bounty board is dead on a shard. | THE COUNTERS AND THE JOURNAL |
+| 9 | A new account never gets flasks on a shard. | W3 |
+| 10 | Nothing earned reaches the home account; the shard account is in memory only. | M2 THE SEAT'S GATE |
+| 11 | The group hold has no distance; the mercy waits on strangers. | W3 (card 28 for the bleed-out) |
+| 12 | Events have no owner and gather on the keeper. | M3 |
+| 13 | Harvest is closed to remote seats. | THE COUNTERS AND THE JOURNAL |
+| 14 | Mercenaries cannot be hired. | M2 |
+| 16 | Event, objective and quest XP pays everyone. | THE COUNTERS AND THE JOURNAL |
+| 17 | Leaving mid-fight is a full heal and a free trip home. | W3 (card 26) |
+| 18 | Refusal words are silent for every player. | W3 |
+| 19 | The world runs at the highest player's level. | M3 (card 29) |
+| 20 | Immortals cannot die on a shard. | card 30 |
+| 23, 24, 26, 27, 29, 30 | Reckoning counts the server; no build stamp; the horn from anywhere; UI buttons that bypass requests; notices and banners to everyone. | W3 |
+
+The three waves W1, W2 and W3 run in parallel on worktrees off the card
+17 A commit, each with its own probe; Passes B and C follow on the merged
+tree; the milestone waves wait on cards 24–30.
 
 ## §8 M0 receipts (2026-10-07, this pass)
 

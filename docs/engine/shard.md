@@ -68,6 +68,8 @@ SEAT's is `balance/probe_sharddormant.ts`, THE ACTING SEAT's `balance/probe_shar
 | THE KILLER'S DUE | `World.grantXp(amount, at, to)` / `seatOfRoot` | her ruling 2026-10-08 (the gameplay is single player's, never co-op's, until THE PARTY): with a radius set and the killing seat known (the credited killer's owner chain — a minion's kill is its keeper's), a kill pays that seat alone; an unowned kill still pays by reach. A party will widen "that seat" to its party. |
 | THE SCOPED FREEZE | `Timeflow.chronoScope` / `ActorTimeFilter.within` / `World.castChrono` | card 18 B with C: on a shard every chrono cast bends a radius (`SHARD_CFG.chronoRadius`) around its caster and never the caster's own team — one player's stop never bends another player, a world-scoped spec becomes a bubble, an enemy's stop freezes the players inside its reach. Off a shard the spec's own scope stands. |
 | THE PARTY | `server/party.ts` (`PartyDesk`, `PARTY_CFG`) / `net/partyWire.ts` / `ShardHost.onPartyWord` | card 23 (her word): the explicit social unit — players are independent neighbors until they group. A client's `party` session word (invite / accept / decline / leave / kick, `seat` naming the other) reaches the desk; an invite lands on its target as `partyInvite`, every refusal answers the asker as `partyWord` (one line); any member may invite, the leader exists for kicks (and the muster to come), a leaving leader hands the lead to the eldest member, a party of one dissolves, a seat gone from the world is gone from its party and its invites, invites lapse after `inviteSec`, the keeper is never seated. The snapshot carries `parties` (`PartyRow`s — ids only, a few bytes) on EVERY snapshot of a hosted world (`World.partyRows`, published by the host when the desk's `rev` moves; a client that applies only the newest of a queued run must never miss a change, so no change beat here). THE GROUP LAW (card 14, her clarification): `VesselDesk.partyHolds` — inside a party a lethal down is a DOWN while a mate stands, and the covenant fells every downed member at THE PARTY WIPE; ungrouped, the down is the death. THE KILLER'S DUE widens to the killer's party within the near radius (`World.sameParty` off `partyMates`). The status page lists the parties. THE PARTY PANEL (`ui/party.ts`, the menu's "Party" page, sealed off a hosted world) draws your party (the leader marked; leave; the leader kicks), the invitations that landed (accept / decline) and the ungrouped players around you (invite) off `World.partyRows`, the transport's peers and the session words the shell collects; it re-draws on `PARTY_PANEL_CFG.refreshMs`. |
+| THE IDENTITY CUES | `data/identityCues.ts` (`HERO_NAME_CUE`, `PING_CUE`) / `engine/pings.ts` / `World.placePing` / `net/snapshot.ts` `pings` / renderer `drawPings` | card 17 A (her ruling): a name entered once, overhead names, world-anchored pings — shown, never told. THE NAME: a joined body wears the name it entered once (the vessel's own, else the join's — `ShardHost.onJoin`), it rides the actor row, and every OTHER player's hero wears it over the scalp (her gold for a party mate, ether for an independent neighbour, dimmed when down; `Settings.heroNames` 'all' / 'party' / 'off'); the co-op strip on a hosted world is YOUR party, never every neighbour. THE PING: the `ping` bind (keyboard `g`, pad unbound) sends the meta word `{ t: 'ping', x, y }` with the aim's world point (the pad's reticle when it owns the aim) — host-judged like every meta intent: `PING_CUE.cooldownSec` per seat refuses, a point beyond `maxReach` lands ON the reach ring along the bearing (never refused), ONE standing mark per seat (a new press replaces it), `lifeSec` on the world clock. The snapshot carries the live `pings` on every snapshot of a hosted world (the host's list is the truth each beat; the shell's optimistic mark is replaced by it). A mark is seen by its setter and the setter's party (`World.pingVisibleTo` over `sameParty`, which reads the desk on the host and the shipped rows on a client; solo and couch see every local mark): rings breathing out of the point under a bobbing beacon shard, and, off-screen, a chevron on the frame's inset edge facing it (`pingEdgePoint`). |
+| THE ROVING SHADOW (an experiment, SHIPS OFF) | `SHARD_CFG.rove` ({ sec, clusterPx }) / `ShardHost.roveTarget` / the status page's `rove` | THE SHADOW gives the mass runtime ONE position (the keeper on the focus seat), so a player away from the focus walks a world where nothing is born (the sweeps' tier-one finding, charter §7d). With `rove.sec` > 0 and the standing seats in more than one cluster (bodies farther apart than `clusterPx`, 0 = the runtime's populationRadius), the keeper visits each cluster in turn for `sec` seconds of world time, the focus's cluster first, standing on the visited cluster's most recent seat; one cluster is THE SHADOW exactly as before and never hops. MEASURED 2026-10-09 (`npm run soak:shard -- --bots 6 --seconds 60 --spread 3500 --rove N --no-drop`, bots seated 3,500 px apart on a ring): rove off = the living radius (live foes within 1,300 px of each standing seat) least 0, mean 3.2, tick p95 47 ms, 8% dropped (the spread ALONE breaches: the runtime's per-observer paths, dormancy and native paging, scale with how far apart players stand); rove 10 s = mean 6.7, p95 79 ms, 43% dropped, each hop ~170 ms; rove 2 s = mean 8.1, p95 111 ms, 68% dropped, hops ~135 ms, and the sustained load grows with the natives the extra clusters bear. So the dial ships at 0: a teleporting keeper re-keys the runtime (pages, places, scenery, ecology) on every hop, and a living world around N spread players costs CPU the single-position runtime cannot pay inside the tick. The honest road is THE MANY SHADOWS inside the runtime (several foci without re-keying, per-focus population budgets) with the loaders off the tick (Node has no Worker; a worker_threads shim), both in the seamless lane's files. The dial, the probe (probe_shardslow R) and the soak's `--spread`/`--rove` stay so the next measurement is one command. |
 | THE LOGIN THROUGH MU | `main.ts connectToShard` | card 22: a join with a traveling vessel travels it; without one, Mu opens as in single player (the tutorial first, locally, for a virgin account) and the bedside wake travels the vessel it just saved; a fall reads its reckoning and drifts back into Mu bound for the same server. The lobby's connect answers 'connected' or 'mu'. |
 | THE NEAR LAW AT THE MINT | `World.settleNearScale` | `createMonster` scales a body at its (0, 0) placeholder before its caller seats it, so with a radius set the scale is queued and settled where the body actually stands after each tick's update, and settled for every living enemy at a join (`addSeat` seats the newcomer beside the shadowed keeper before the hearth wake moves it) and at a leave. The life-fraction law is `rescaleEnemies`', which the engine keeps with its rounding (the seamless lane's brittles probe pins and replays it); the shard's settle clamps so no rounded life tops a fractional maximum, and a wilds save resumes "the same wounds" to the number. Off a shard the radius is 0 and the queue never fills. |
 | THE DORMANT SEAT / THE RECONNECT TOKEN | `ShardTransport` (`onPeerDormant`, `release`, `onPeerResume`, `isDormant`), `ShardHost` (`onDormant`, `onResume`, `sweepDormancy`), `WsTransport` (`shardResumeFor`) | card 16 B (ruled 2026-10-08): a dropped socket is never a free escape. A socket that closes without its client's word (`session leaving`, which `leave()` always says) never despawns its seat: the hero lies DORMANT for `SHARD_CFG.dormantSec`, standing, input-less and fully targetable, on every roster and snapshot with no `pleave`, its vessel and corpse records kept (the corpse desk sleeps it: no reclaim dwell, no row to a socket that is gone). Dying meanwhile is the ordinary death (THE DEATH COVENANT reads a dormant vessel as any other, and its fall ends the dormancy at once); when the clock runs out the old leave path runs and the peers hear `pleave` then. Every welcome carries THE RECONNECT TOKEN (`resume.token`, `node:crypto`, minted at every join and turned at every resume); a `join` carrying `resume { seat, token }` that names a DORMANT seat re-binds the new connection to it (the same seat, actor and vessel record; no `pjoin`; the host re-ships the terrain, the whole meta, the bodies' row and an input ack from zero), and anything else (a wrong or spent token, a seat that is not dormant) joins fresh with one log line. The client keeps its last session (`{ url, self, token, at }`, page memory, `at` re-stamped when the host is lost) past a lost host; the lobby's Connect offers it to the same normalized address inside `WS_TRANSPORT_CFG.resumeWindowMs` (no auto-reconnect yet), and a deliberate `leave()` forgets it. THE UNTRIED SEAT (still under THE SPAWN GRACE: it never willed a step, so it has nothing to escape) and THE REFUSED WIRE (a socket the shard closed for breaking the grammar) leave at once, as does every seat of a closing shard. A dormant seat holds its place under `maxSeats`. The status page marks it (`dormant: true`, `dormantLeftSec`). |
@@ -221,6 +223,127 @@ lost session the lobby's Connect still offers its seat and token (THE RECONNECT 
 also ships on any tick it differs from the one this world last shipped (THE CHANGE
 BEAT), so a graduation reaches every client on the next snapshot and the beat only
 re-sends an unchanged view.
+
+## THE SOAK — load and endurance
+
+```bash
+npm run soak:shard -- --bots 10 --seconds 120
+```
+
+`balance/soak_shard.ts` boots a REAL `ShardHost` in its own process (the
+Unbroken Wilds on the open account, ephemeral), listens on a free loopback
+port and runs the host's own wall-clock pump (`ShardHost.start()`, the CLI's),
+so pacing, catch-up and dropped ticks are a hosted world's, never
+probe-stepped. THE FLEET (`balance/soak_bots.ts`) is forked into a process of
+its own: N clients parsing every snapshot would otherwise share the server's
+event loop, heap and GC, and the numbers would be the bots' as much as the
+world's. Every bot is the shipped client (`WsTransport` over Node's
+`WebSocket`) with a small brain: a random walk that re-picks its heading every
+1-3 s inside ±1500 px of the hearth (turning home past the edge), aiming at
+the nearest live `team === 'enemy'` row within 400 px and standing to hold
+slot 0 while one is within 160 px. The classes are dealt round-robin (warrior,
+magician, rogue, necromancer). Inputs ride THE FLEET'S CLOCK at a true 60 Hz,
+a browser's frame clock: on Windows (15.6 ms timers) the fleet spins one core
+on `setImmediate`, elsewhere it sleeps to a millisecond short of each frame.
+
+The run has three phases:
+
+1. **Warm-up** (measured apart, never gated): the bots join 200 ms apart, so
+   THE HEARTH WAKE and THE SPAWN GRACE run as in play. Once the first two
+   stand seated they form a party over the session wire (`party invite`, then
+   the invitee's `accept` on its `partyInvite`), so THE GROUP LAW and the
+   party rows ride the soak.
+2. **The window**: `--seconds` of steady load, opened and closed by a forced
+   full GC, so the heap reads LIVE memory at both edges. It is sampled every
+   5 s. At its midpoint the last bot's socket is closed without `leave()`
+   (no `session leaving`, so THE DORMANT SEAT) at its first quiet moment (no
+   foe in sight, up to 15 s), and 5 s later a new transport takes the seat
+   back with the token its welcome left (`shardResumeFor`, read right after
+   each bot's own welcome: THE REMEMBERED SESSION is one per page and the
+   fleet shares one module). A bot whose fresh hero falls (`runEnd`) answers
+   with its class pick's `rejoin` 3 s later, so the load never thins.
+3. **Teardown**: every bot leaves with its word and the host stops.
+
+| flag | meaning |
+|---|---|
+| `--bots <n>` | bot players (default 10; the door caps grow to the fleet, and `maxPerIp` is lifted as the CLI's `--per-ip 0` does, since every bot arrives from one address) |
+| `--seconds <s>` | the measured window (default 120) |
+| `--seed <hex\|dec>` | THE HOSTED SEED (default `0x0ddba11`, the probe's wilds: one fixed world, so runs compare; `Math.random` is seeded from it too, so the boot draws the same world) |
+| `--classic` | a classic world (the hearth) instead of the Unbroken Wilds |
+| `--no-drop` | skip THE DORMANT SEAT's cut (also `--drop off`) |
+| `--spread <px>` | THE SPREAD: the harness seats each bot at its own anchor on a ring of this radius about the hearth and the bot roams around that anchor (a party that split up; 0 = everyone around the hearth). The table's `spread` column is the widest distance between two standing seats, `living` the live foes within the population radius of each standing seat, least / mean (THE LIVING RADIUS, the premise the one-focus law breaks) |
+| `--rove <sec>` | THE ROVING SHADOW's visit length (`SHARD_CFG.rove.sec`; 0 = the focus alone, the shipped law) |
+| `--report <path>` | the JSON report (default `balance/reports/soak_<stamp>.json`, gitignored) |
+| `--thresholds <path>` | the gates (default `balance/soak.config.json`) |
+
+Exit 0 means every gate held, 2 a breach (each one named), 1 that the harness
+itself failed.
+
+**What it reads.** One seam in the shard's own code: `ShardTransport.bytesOut`
+and `framesOut`, bumped in `write()` for every frame handed a socket. The
+rest is metered on the instances (the pump calls `this.tick`, the host calls
+`this.net.*`), so no engine or host code changes: the tick time around every
+`ShardHost.tick`; one snapshot's encoded size as the counters' bytes ÷ frames
+around `sendState` (written once per socket, never encoded twice); zone bytes
+around `sendZone`/`sendZoneTo`; FED, the share of seat-ticks whose
+`drainInputs` held that seat's input; pump wakes (ticks that start more than
+0.5 ms after the previous one ended); THE SHADOW's jumps (the keeper moving
+more than 300 px in one tick: a new focus seat); every V8 pause from a `gc`
+`PerformanceObserver`; the heap polled every 250 ms (each window keeps its
+trough); `host.status()`, and the shard's own dormancy, resume and party
+ears for the drop and the party.
+
+**The gates** (`balance/soak.config.json`; each row documents itself there).
+All are read over the window. `require: false` turns a boolean gate into a
+report-only row.
+
+| gate | limit | reads |
+|---|---|---|
+| `tickP95Ms` | ≤ 20 ms | the 95th-percentile host tick (engine step, snapshot serialize and encode, the wire, the beats), set for 10 bots; the 60 Hz budget is 16.7 ms |
+| `droppedShare` | ≤ 5% | ticks the pump dropped to bound a stall ÷ (stepped + dropped) |
+| `heapGrowthMB` | ≤ 64 MB per 120 s | the live heap at the window's close minus its open, the fleet seated at both edges (growth under constant load, not the seats' cost); never less than 64 MB for a shorter window |
+| `faults` | 0 | `ShardHost.faults + ShardTransport.faults` over the whole soak |
+| `errors` | 0 | the harness's own failures: a bot never seated, a welcome with no token, a socket lost without the cut, a fleet that died early, THE BREAKER, seats left standing |
+| `resume` | required | the cut seat lay dormant on the shard AND the same seat id came back (the shard re-bound it, the client heard `resumed`) |
+| `party` | required | the shard's own `PartyDesk` rows held both founders |
+
+**Reading the table.** One row per 5 s sample: `seats` (non-keeper; `*` = a
+seat lay dormant), `conn` (sockets bound to seats), `actors`, the window's
+tick p50/p95/max and dropped ticks, `wake/s` (pump wakes a second), `fed`, the
+p95 snapshot, outbound kB/s per client (kB = 1000 bytes), and the heap's
+trough in MB. Below it: the run's tick percentiles; the worst 5 s window; the
+five slowest ticks, each with any GC or shadow jump inside it; dropped ticks;
+GC pauses (how much landed inside ticks); the pump (wakes/s, ticks per wake);
+shadow jumps; fed; the warm-up; snapshot sizes; outbound per client split
+into snapshots, zone and other; the heap edges (plus the troughs' slope); the
+dormant seat; the party; the bots (deaths, rejoins); errors; then the gates.
+The JSON adds every sample, the per-bot stats, the slowest ticks of both
+phases, the GC breakdown by kind and the host's log.
+
+**How to read fed and the wakes.** `World.applyInputs` steps a seat that has
+no input this tick not at all, and two client frames that land in one wake
+merge into one tick of movement (`mergeInputs`: the edges are kept, the walk
+is not). So fed is the share of server ticks a remote hero actually walks.
+The pump's wake rate follows the host's timer resolution: Windows wakes a
+16.7 ms interval on its 15.6 ms system tick (about 32 Hz, two ticks per wake)
+unless some process has raised the resolution, so a Windows soak can swing
+between runs. The `wake/s` column says which world a run measured.
+
+**Measured** (2026-10-09, i9-10900K × 20, Windows 10, Node 24.9, with
+co-sessions holding ~45-50% of the CPU). Four bots, 60 s: tick p50 7.1 /
+p95 11.6 ms, nothing dropped, fed 92% at 54 wakes/s; an earlier run under
+coarse timers and heavier load read p95 24.5 ms (a breach), 4.3% dropped,
+fed 55% at 22 wakes/s. Ten bots, 120 s, three runs: tick p95 17.3 / 21.1 /
+20.4 ms against the 20 ms gate (p50 10.1-13.2 ms), 0.25-2.3% dropped, fed
+52-78%, heap +3.8 to +5.6 MB, no faults; the dormant seat resumed and the
+party formed every time. A wilds snapshot weighs 23 kB at four players (78%
+actor rows, 17% the vendor shelf, which rides every snapshot between
+restocks) and 27 kB at ten: at 20 Hz, ~540 kB/s per client, ~5.4 MB/s of
+egress for ten. The tick spikes (100-490 ms) are mostly `massRuntime.update`
+(10 of the 12 slowest ticks in a 90 s attribution pass): the wilds' warm
+queues (`geographicWarm`, `nativeWarm`, `processionWarm`) run inline when
+`typeof Worker === 'undefined'`, which is always true on Node. A classic
+world's tick reads p50 2.7 ms.
 
 ## Hosting on Codespaces
 

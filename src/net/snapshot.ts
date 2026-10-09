@@ -80,6 +80,9 @@ import { watchRungOf, watchValueOf } from '../engine/watch';
 
 export type Vec2W = [number, number];
 
+/** THE PING on the wire (engine/pings.ts WorldPing): seat, point, story, at, until. */
+export interface PingW { s: string; p: Vec2W; k: number; a: number; u: number; }
+
 /** THE WIRE DISCIPLINE (docs/design/shard-world.md §3.9): account-derived
  *  views ship on a BEAT, not every tick. The memoryAccess row is ~44 KB and
  *  changes only when the keeper's memory unlocks do, yet it rode all 20
@@ -565,6 +568,9 @@ export interface StateSnapshot {
    *  snapshot of a hosted world (a client that applies only the newest of a queue must never
    *  miss a change; absent = not a hosted world). */
   parties?: import('./partyWire').PartyRow[];
+  /** THE PING (card 17 A, engine/pings.ts): the live marks — present on every snapshot of a hosted
+   *  world (the host's list is the truth each beat; a client expires them on the clock it follows). */
+  pings?: PingW[];
   /** Per-seat build/progression — present ONLY for seats whose meta CHANGED since
    *  the last broadcast (dirty-flagged), so it rides along cheaply. Each client
    *  applies its OWN entry (snap.seatMeta[clientSeatId]). */
@@ -954,6 +960,10 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     vendor: world.vendorStock.map(e => vendorEntryW(e, world)), vendorRestockAt: world.vendorRestockAt,
     vendorCap: world.vendorLockCap(),
     ...(world.partyRows ? { parties: world.partyRows } : {}), // THE PARTY: the rows ride every snapshot of a hosted world
+    ...((): { pings?: PingW[] } => { // THE PING: the live marks ride every snapshot of a hosted world (and any snapshot carrying one)
+      const live = world.livePings();
+      return world.partyRows || live.length ? { pings: live.map(p => ({ s: p.seat, p: [p.pos.x, p.pos.y] as Vec2W, k: p.tier, a: p.at, u: p.until })) } : {};
+    })(),
     memoryAccess: (() => { // THE WIRE DISCIPLINE: the beat, or a view that changed
       const view = memoryAccessView(world.account), key = JSON.stringify(view);
       if (tick % WIRE_CFG.memoryAccessBeat !== 1 && lastShippedMemoryAccess.get(world) === key) return undefined;
@@ -1249,6 +1259,14 @@ function applyNetEvap(world: World, rows: readonly EvapW[] | undefined): void {
  *  prev→snap for smooth motion between 20 Hz snapshots (everything else uses snap). */
 export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSnapshot | null, alpha = 1): void {
   if (snap.parties !== undefined) { world.partyRows = snap.parties; world.partyRev++; } // THE PARTY: absent = unchanged (read before any zone or vendor gate)
+  if (snap.pings !== undefined) {
+    // THE PING: the host's marks replace the shell's — except the shell's OWN press the
+    // host has not judged yet (set at or after this snapshot's clock): it stands until a
+    // later beat answers it, so the per-frame re-apply of a stale snapshot never blinks it.
+    const me = world.clientSeatId;
+    const pending = world.pings.filter(p => p.seat === me && p.at >= snap.time && !snap.pings!.some(r => r.s === me));
+    world.pings = snap.pings.map(r => ({ seat: r.s, pos: { x: r.p[0], y: r.p[1] }, tier: r.k, at: r.a, until: r.u })).concat(pending);
+  }
   if (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) {
     world.syncedGrantedPockets = Object.fromEntries((snap.grantedPockets ?? []).map(r => [r.owner, r.pockets]));
   }

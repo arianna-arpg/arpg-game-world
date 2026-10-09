@@ -1254,6 +1254,14 @@ function handleLocalPanels(): void {
     || (!padPointer.active && pad.justPressed(settings.padBinds.companionStance)))) {
     world.requestMeta({ t: 'companionStance' });
   }
+  // THE PING (card 17 A — engine/pings.ts, data/identityCues.ts PING_CUE): mark the
+  // ground under the aim for your party — host-judged like every meta intent; the
+  // pad's reticle when it owns the aim, else the mouse.
+  if (!ui.blockingFor(world.localSeat.id) && (input.justPressed(kb.ping)
+    || (!padPointer.active && pad.justPressed(settings.padBinds.ping)))) {
+    const at = renderer.padAim ?? renderer.toWorld(input.mouse);
+    world.requestMeta({ t: 'ping', x: at.x, y: at.y });
+  }
   // Panel toggles answer to key OR pad bind — and the pad ones deliberately
   // stay live in pointer mode (the D-pad flips panels while browsing them).
   const pb = settings.padBinds;

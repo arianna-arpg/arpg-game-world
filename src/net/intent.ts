@@ -108,6 +108,7 @@ export type MetaAction =
   | { t: 'pickTreeNode'; skillId: string; nodeId: string }     // skill-mode tree: spend/replace the pick (World.pickTreeNode)
   | { t: 'untameCompanion'; actorId: number }                  // the Tracker's release counter
   | { t: 'companionStance'; skillId?: string; stance?: string } // THE STANCE SHIFT (engine/companionStances.ts): cycle (or set) one bond's conduct, or every bond on the bar when no skill is named
+  | { t: 'ping'; x: number; y: number }                        // THE PING (card 17 A, engine/pings.ts + data/identityCues.ts PING_CUE): mark a world point for your party — host-judged (reach, cadence), one standing mark per seat
   | { t: 'socket'; uid: number; skillId: string }              // bag support item → skill socket
   | { t: 'unsocketBagSkill'; uid: number; socket: number }    // stored skill's socket → bag support; needs room
   | { t: 'unsocket'; skillId: string; socket: number }         // socket → bag item (needs room)

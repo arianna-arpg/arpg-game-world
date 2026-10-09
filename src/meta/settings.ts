@@ -35,7 +35,8 @@ export type ActionId =
   | 'skillSlot2' | 'skillSlot3' | 'skillSlot4' | 'skillSlot5' | 'skillSlot6' | 'skillSlot7'
   | 'metaModifier' | 'pickup'
   | 'panelChar' | 'panelTree' | 'panelSkills' | 'panelMap' | 'panelInv'
-  | 'panelMenu' | 'townPortal' | 'itemLock' | 'companionStance' | 'dialogueAdvance';
+  | 'panelMenu' | 'townPortal' | 'itemLock' | 'companionStance' | 'dialogueAdvance'
+  | 'ping'; // THE PING (card 17 A — engine/pings.ts, data/identityCues.ts PING_CUE): mark the ground for your party
 
 /** Pad-bindable actions: everything the keyboard binds, PLUS bar slots 0/1
  *  (fixed to LMB/RMB on mouse, free to live on any button on a pad). */
@@ -263,6 +264,8 @@ export interface Settings {
    *  writes this OFF. Settings persist beside the account (disk slot +
    *  portage), so the choice survives every run. */
   confirmMemorySale: boolean;
+  /** THE NAME OVER THE HERO (data/identityCues.ts HERO_NAME_CUE.mode when unset): 'all' | 'party' | 'off'. */
+  heroNames?: import('../data/identityCues').HeroNameMode;
 }
 
 /** THE MENU BAR options (ui/menuConfig.ts owns the dials + anchors). */
@@ -345,6 +348,8 @@ export interface SettingsSave {
   portalButton?: { anchor?: string; visibility?: string };
   /** THE SALE PROMPT (additive — a pre-dial save reads ON). */
   confirmMemorySale?: boolean;
+  /** THE NAME OVER THE HERO (additive — data/identityCues.ts HERO_NAME_CUE.mode when absent): 'all' | 'party' | 'off'. */
+  heroNames?: import('../data/identityCues').HeroNameMode;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -361,6 +366,8 @@ export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
   // THE COMPANION STANCE (engine/companionStances.ts): cycles every bonded
   // beast's conduct on the bar — the hunter's whistle-and-hand-signal key.
   companionStance: 'x',
+  // THE PING (engine/pings.ts, PING_CUE): mark the ground under the aim for your party — the MMO's G.
+  ping: 'g',
   dialogueAdvance: 'enter',
 };
 
@@ -371,7 +378,7 @@ export const ACTION_IDS = Object.keys(DEFAULT_KEYBINDS) as ActionId[];
 export function bindingContextsOverlap(a: string, b: string): boolean {
   if (a === 'dialogueAdvance' || b === 'dialogueAdvance') return false;
   const other = a === 'itemLock' ? b : b === 'itemLock' ? a : null;
-  return !other || !/^(skillSlot\d+|moveUp|moveDown|moveLeft|moveRight|townPortal|companionStance)$/.test(other);
+  return !other || !/^(skillSlot\d+|moveUp|moveDown|moveLeft|moveRight|townPortal|companionStance|ping)$/.test(other); // ping: a combat control (PING_CUE)
 }
 
 /** Default controller layout. The left stick IS movement (an axis, not a
@@ -388,6 +395,7 @@ export const DEFAULT_PAD_BINDS: Record<PadActionId, string> = {
   panelMenu: 'pad:l3',
   townPortal: '', itemLock: 'pad:a',
   companionStance: '', // pad buttons are scarce — bindable, ships unbound
+  ping: '', // THE PING (PING_CUE): bindable, ships unbound on the pad
   dialogueAdvance: 'pad:a',
 };
 
@@ -415,6 +423,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   panelInv: 'Inventory', panelMenu: 'Menu',
   townPortal: 'Town Portal', itemLock: 'Hold to Lock / Reserve (menus)',
   companionStance: 'Companion Stance (cycle)',
+  ping: 'Ping (mark the ground for your party)', // THE PING (PING_CUE)
   dialogueAdvance: 'Advance Dialogue',
 };
 
@@ -564,6 +573,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   menuBar: { ...s.menuBar },
   portalButton: { ...s.portalButton },
   confirmMemorySale: s.confirmMemorySale,
+  ...(s.heroNames ? { heroNames: s.heroNames } : {}), // HERO_NAME_CUE: the overhead-name dial rides the save only when set
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -706,6 +716,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     // THE SALE PROMPT (additive): a pre-dial save reads ON — the guard is
     // the default, the opt-out is the player's own click.
     confirmMemorySale: s.confirmMemorySale ?? true,
+    ...(s.heroNames ? { heroNames: s.heroNames } : {}), // HERO_NAME_CUE: absent = the shipped default (no key, so deep-equal settings stay equal)
     // THE TOWN PORTAL BUTTON (additive): an unknown anchor (a renamed row,
     // a pre-dial save) falls back to the registry default.
     portalButton: {
