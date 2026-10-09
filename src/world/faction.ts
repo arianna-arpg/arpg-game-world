@@ -30,7 +30,7 @@ import type { World } from '../engine/world';
 import { registerBulletinSource, type WorldBulletin } from './bulletins';
 import { patronFaction } from './biomes';
 import { factionAllowed } from './zonePolicy';
-import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from './overlay';
+import { NO_BIAS, presentCensus, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from './overlay';
 import { FACTION_COLORS, FALLBACK_FACTION_COLOR } from './palette';
 import { factionAllowsContext } from './traits';
 
@@ -47,6 +47,8 @@ const INF_CAP = 100;
 const OWN_MARGIN = 10;         // lead over the runner-up needed to "own"
 const CONQUER_THRESHOLD = 78;  // hold past this and the zone FLIPS to your side
 const STEP = 0.5;
+/** A zone no player's World stands in reads no live census (THE OCCUPIED LAW). */
+const NO_CENSUS: Readonly<Record<string, number>> = Object.freeze({});
 
 /** factionId -> influence, sparse (entries below ~0.5 are pruned). */
 type NodeInfluence = Record<string, number>;
@@ -265,9 +267,6 @@ export class FactionField implements WorldOverlay {
   }
 
   private step(view: OverlayView): void {
-    const census = view.census;
-    const curId = view.currentZoneId;
-
     // 1. Diffusion over real roads (double-buffered: read field, write delta).
     //    Safe zones neither hold nor transmit influence — they stay neutral.
     const delta = new Map<string, NodeInfluence>();
@@ -299,13 +298,16 @@ export class FactionField implements WorldOverlay {
 
     // 2. Apply diffusion, then the three forces: a live census in the zone you
     //    stand in, a homeland's pull back to its baseline, and the slow fade of
-    //    a faction squatting on ground that isn't its own.
+    //    a faction squatting on ground that isn't its own. THE OCCUPIED LAW
+    //    (shard M1-W3): every zone a player's World stands in feeds its own
+    //    live census (solo: the current zone alone).
     for (const z of view.nodes) {
       if (z.objective.kind === 'safe') continue;
       const inf = this.field.get(z.id);
       if (!inf) continue;
       const native = this.nativeFaction(z);
-      const isCurrent = z.id === curId;
+      const census = presentCensus(view, z.id) ?? NO_CENSUS;
+      const isCurrent = census !== NO_CENSUS;
       const dn = delta.get(z.id);
       const facs = new Set<string>([...Object.keys(inf), ...(dn ? Object.keys(dn) : [])]);
       if (native) facs.add(native);

@@ -8796,6 +8796,9 @@ export class World {
    *  mint path (travel, quests, events, dev) stays visible as always. */
   private mintVeil = false;
   private forechartNextAt = 0;
+  /** THE OCCUPIED LAW's round-robin (shard M1-W3): the occupied zone the next
+   *  halo sweep centers on (a hosted world with more than one live World). */
+  private forechartTurn = 0;
   /** Far pre-chart requests being grown (deduped; each drops when its cluster
    *  reaches size or its ground proves unmintable). Transient by design — a
    *  resumed run's events re-request theirs (the drain re-asks every sweep). */
@@ -8859,14 +8862,18 @@ export class World {
     const haloBlocked = veiled >= FORECHART_CFG.maxVeiled;
     // The halo centers on the STANDING zone (a cave sweeps around its surface
     // anchor coordinate — def.map carries the parent's). Same-dimension only.
-    const dim = this.zone.dimension ?? 'surface';
-    const origin = this.zone.map;
+    // THE OCCUPIED LAW's many origins (shard M1-W3): a hosted world's halo
+    // round-robins over every occupied zone, one origin a sweep (solo: the one).
+    const posts = this.presentWorlds();
+    const stand = posts.length > 1 ? posts[this.forechartTurn++ % posts.length].zone : this.zone;
+    const dim = stand.dimension ?? 'surface';
+    const origin = stand.map;
     let budget = FORECHART_CFG.perSweep
       * (veiled < FORECHART_CFG.hustleBelow ? FORECHART_CFG.hustleMul : 1);
     const cands: { z: ZoneDef; d: number }[] = [];
     if (!haloBlocked) {
       for (const z of all) {
-        if (!forechartSource(z, dim) || z.id === this.zone.id) continue;
+        if (!forechartSource(z, dim) || z.id === stand.id) continue;
         const d = coordDist(z.map, origin);
         if (d <= FORECHART_CFG.ring) cands.push({ z, d });
       }
@@ -9009,12 +9016,20 @@ export class World {
   private updateOmens(): void {
     if (this.gameOver || this.time < this.omenNextAt) return;
     this.omenNextAt = this.time + OMEN_CFG.checkSec;
-    const here = this.zone.map;
-    const dim = this.zone.dimension ?? 'surface';
+    // THE OCCUPIED LAW (shard M1-W3): the world murmurs to every occupied
+    // zone; an omen reads from the nearest one of its plane (solo: the one).
+    const posts = this.presentWorlds();
     for (const o of collectOmens(this)) {
-      if ((o.dimension ?? 'surface') !== dim) continue;
+      const odim = o.dimension ?? 'surface';
+      let near: World | null = null, d = Infinity;
+      for (const w of posts) {
+        if ((w.zone.dimension ?? 'surface') !== odim) continue;
+        const dw = coordDist(o.at, w.zone.map);
+        if (!near || dw < d) { near = w; d = dw; }
+      }
+      if (!near) continue;
+      const here = near.zone.map;
       const reach = omenReach(o);
-      const d = coordDist(o.at, here);
       // THE REVEAL: near enough (or the omen has aged loud enough) — the seat
       // is surveyed onto the map, once per instance.
       if (reach.reveal > 0 && d <= reach.reveal && o.zoneId && !this.omenRevealed.has(o.id)) {
@@ -9048,10 +9063,17 @@ export class World {
         const n = this.omenWhisperN.get(o.id) ?? 0;
         this.omenWhisperN.set(o.id, n + 1);
         const key = hashStr(`${o.id}:${n}`);
-        const line = omenLine(o, o.lines[key % o.lines.length], here);
-        withSeededRandom(key, () => this.text(
-          vec(this.player.pos.x, this.player.pos.y - 110),
-          line, o.color ?? OMEN_CFG.color, OMEN_CFG.size));
+        // THE SPLIT DISPATCH (shard M1-W3): one whisper an omen, heard in every
+        // occupied zone within its reach, each with its own bearing, floated
+        // over that World's own player.
+        for (const w of posts) {
+          if ((w.zone.dimension ?? 'surface') !== odim) continue;
+          if (w !== near && coordDist(o.at, w.zone.map) > reach.whisper) continue;
+          const line = omenLine(o, o.lines[key % o.lines.length], w.zone.map);
+          this.atZone(w.zone.id, x => withSeededRandom(key, () => x.text(
+            vec(x.player.pos.x, x.player.pos.y - 110),
+            line, o.color ?? OMEN_CFG.color, OMEN_CFG.size)));
+        }
       }
     }
   }
@@ -9807,11 +9829,50 @@ export class World {
     this.captureZoneMemory();
   }
 
-  /** THE SPLIT DISPATCH's idiom (shard M1): run `fn` on the World hosting
-   *  `zoneId`. Solo and co-op it is the conditional it replaces (this zone,
-   *  else nothing); the shard branch (ShardWorldLink.dispatch) is W3's. */
-  atZone(zoneId: string, fn: (w: World) => void): void {
-    if (zoneId === this.zone.id) fn(this);
+  /** THE SPLIT DISPATCH's idiom (shard M1-W3): run `fn` on the World standing
+   *  in `zoneId` and return its answer (undefined when none does). Solo and
+   *  co-op it is the conditional it replaces (this zone, else nothing); on a
+   *  shard the keeper's sweeps reach the awake sim unit standing there, under
+   *  its own pin (ShardWorldLink.dispatch; from inside another unit the work
+   *  waits for the hand-off drain). */
+  atZone<T>(zoneId: string, fn: (w: World) => T): T | undefined {
+    if (zoneId === this.zone.id) return fn(this);
+    return this.shardWorld?.dispatch(zoneId, fn);
+  }
+
+  /** THE OCCUPIED LAW (shard M1-W3): every live World of a hosted world, this
+   *  keeper's own first, then each awake sim unit's; solo and co-op, this World
+   *  alone. The keeper sweeps that read "where the player is" walk it (the
+   *  forechart's origins, the omens, the floating roads, the conclave's
+   *  ignite level). Read-only: never a pinned read of another World's alias fields. */
+  presentWorlds(): readonly World[] {
+    return this.shardWorld?.worlds() ?? [this];
+  }
+
+  /** THE OCCUPIED LAW's audience: who hears a line gated on where players stand
+   *  (`where` judges each occupied zone). Solo: undefined when the standing
+   *  zone passes (the one player hears it, as ever), null when it does not. On
+   *  a hosted world: the player seats standing in the passing zones (null when
+   *  no occupied zone passes), so a tide's ebb or a war below reaches the
+   *  players it concerns and no one else. */
+  occupiedAudience(where: (z: ZoneDef) => boolean): string[] | undefined | null {
+    if (!this.shardWorld) return where(this.zone) ? undefined : null;
+    let any = false;
+    const to: string[] = [];
+    for (const w of this.presentWorlds()) {
+      if (!where(w.zone)) continue;
+      any = true;
+      for (const s of w.seats) if (!s.keeper) to.push(s.id);
+    }
+    return any ? to : null;
+  }
+
+  /** A notice for an occupied audience (occupiedAudience): undefined is
+   *  everyone, an empty list no one (the line is never minted). */
+  private noticeOccupied(to: string[] | undefined, text: string, color?: string, size?: number, channel?: string): void {
+    if (to && !to.length) return;
+    this.notice(text, color, size, channel);
+    if (to) this.notices[this.notices.length - 1].to = to;
   }
 
   private shardUnitView?: ShardUnitHost;
@@ -11973,6 +12034,8 @@ export class World {
       get time() { return world.time; }, get sim() { return world.sim; },
       get visited() { return world.visited; }, get surveyed() { return world.surveyed; },
       continentFor: c => world.continentFor(c), simView: () => world.simView(),
+      // THE OCCUPIED LAW (shard M1-W3): a hosted world's view reports every live World.
+      ...(world.shardWorld ? { presence: () => world.presentWorlds() } : {}),
     };
   }
   private static nativePopulationSources(): NativePopulationSources {
@@ -14450,9 +14513,12 @@ export class World {
 
     // THE FRONT OUTLASTED: a witnessed gloaming that has fully receded banks
     // the survival ledger once, on the observed transition (resume-safe).
+    // THE SPLIT DISPATCH (shard M1-W3): every World watches its own edge and
+    // floats the word over its own players; the ledger (one, aliased) is
+    // banked by the keeper alone, so the edge counts once however many units wake.
     const phase = gf.phaseNow();
     if (this.gloamPrevPhase !== 'idle' && phase === 'idle' && gf.isWitnessed()) {
-      bumpLedger(this.ledger, 'gloaming_survived');
+      if (this.shardWorld?.role !== 'unit') bumpLedger(this.ledger, 'gloaming_survived');
       this.text(this.player.pos, 'the gloaming is outlasted', '#d8cfa8', 13);
     }
     this.gloamPrevPhase = phase;
@@ -17094,12 +17160,14 @@ export class World {
    *  + open encounters. */
   private eventActivityAt(zid: string): number {
     let a = this.sim.activityAt(zid);
-    if (zid === this.zone.id) {
+    // THE SPLIT DISPATCH (shard M1-W3): the keeper builds the map once; the
+    // engine-local term is the World standing in the zone (solo: this one).
+    this.atZone(zid, w => {
       // OFFSTAGE runs are bodiless leans (a night-long watch change) — no
       // turmoil for the bloom to feed on (the concurrency fold's own filter).
-      a += this.theaterRuns.filter(r => !r.done && !theaterKindDef(r.kind)?.offstage).length;
-      a += this.encounters.length;
-    }
+      a += w.theaterRuns.filter(r => !r.done && !theaterKindDef(r.kind)?.offstage).length;
+      a += w.encounters.length;
+    });
     return a;
   }
 
@@ -17200,11 +17268,14 @@ export class World {
     // THE EBB drains first (the haunting's drainDissipated placement — even on
     // ground the stream skips, the queue never backs up): a tide that SPENT its
     // pour well recedes on its own — announce it if it was pouring over us.
-    for (const at of df.drainEbbed()) {
-      const def = this.zoneMap[this.zone.id];
-      if (def && coordDist(def.map, at) <= df.surge().radius) {
-        this.notice(df.surge().ebbText, df.surge().color ?? '#7a5aa6', 18, 'events');
-      }
+    // THE SPLIT DISPATCH (shard M1-W3): the keeper drains once, and "us" is
+    // every occupied zone within the tide's reach (its players hear it).
+    if (this.shardWorld?.role !== 'unit') for (const at of df.drainEbbed()) {
+      const to = this.occupiedAudience(z => {
+        const def = this.zoneMap[z.id];
+        return !!def && coordDist(def.map, at) <= df.surge().radius;
+      });
+      if (to !== null) this.noticeOccupied(to, df.surge().ebbText, df.surge().color ?? '#7a5aa6', 18, 'events');
     }
     if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
       this.deadwakeStreamTimer = 0; return;
@@ -17246,8 +17317,10 @@ export class World {
     // DAWN BANISHMENTS first (drained even from ground the stream skips, so the
     // queue never backs up): a dissolved grief's standing spawns fade out of
     // the zone it held — its spawns only ever live in that zone's actor list.
-    for (const gone of hf.drainDissipated()) {
-      if (gone.zoneId === this.zone.id) this.dissipateHauntSpawns(gone.color);
+    // THE SPLIT DISPATCH (shard M1-W3): the keeper drains once; the fade runs
+    // in the World standing in the grief's zone.
+    if (this.shardWorld?.role !== 'unit') for (const gone of hf.drainDissipated()) {
+      this.atZone(gone.zoneId, w => w.dissipateHauntSpawns(gone.color));
     }
     if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
       this.hauntStreamTimer = 0; return;
@@ -17963,7 +18036,9 @@ export class World {
     if (!fields.length) return;
 
     // THE RECONCILE (0.5s cadence; a property walk over the graph — cheap).
-    this.quickenSweepAcc += dt;
+    // THE SPLIT DISPATCH (shard M1-W3): the stamps are the chart's, the
+    // keeper's alone; the presence underfoot below is each World's own zone.
+    if (this.shardWorld?.role !== 'unit') this.quickenSweepAcc += dt;
     if (this.quickenSweepAcc >= 0.5) {
       this.quickenSweepAcc = 0;
       const arcByZone = new Map<string, { id: string; level: number; until: number; onSurge: boolean; onFade: boolean }>();
@@ -18411,32 +18486,10 @@ export class World {
   private updateLongNight(dt: number): void {
     const lnf = this.sim.longNightField;
     if (!lnf) { this.longNightStreamTimer = 0; return; }
-    // THE SKY FEED: grounds under a covering BLOOD MOON feed double tonight —
-    // engine-side because overlays can't see the weather field (and sheltered
-    // ground has no sky to bleed under: skyOf, the one exposure gate).
-    if (dayCycle(this.time).phase === 'night') {
-      const under: string[] = [];
-      for (const zid of lnf.groundZoneIds()) {
-        const z = this.zoneMap[zid];
-        if (!z || skyOf(z) === 'sheltered') continue;
-        const f = this.sim.weather.sample(z);
-        if (f && f.kind === 'bloodmoon') under.push(zid);
-      }
-      if (under.length) lnf.markBloodmoon(under);
-    }
-    // World-facing beats → toasts + ledgers (conversions announce wherever
-    // the player is — a zone quietly turning is the one thing this event
-    // must never do silently; the map pulse + warp label carry the rest).
-    for (const a of lnf.consumeAnnouncements()) {
-      const name = this.zoneMap[a.zoneId]?.name ?? 'charted ground';
-      if (a.kind === 'converted') {
-        bumpLedger(this.ledger, 'long_night_converted');
-        this.notice(`Three nights fed — ${name} belongs to the Court now. Burn its coach by day.`, lnf.surge().color, 17, 'events');
-      } else {
-        this.notice(`The COUNTESS takes court at ${name} — the Long Night deepens.`, lnf.surge().color, 18, 'events');
-      }
-    }
-    this.reconcileLongNightWarps();
+    // THE SPLIT DISPATCH (shard M1-W3): the sky feed, the announcements and
+    // the warp reconcile are the world's, run once by the keeper; the ground,
+    // the coach and the pour below are each World's own zone.
+    if (this.shardWorld?.role !== 'unit') this.longNightWorldChores(lnf);
     if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
       this.longNightStreamTimer = 0; return;
     }
@@ -18505,6 +18558,38 @@ export class World {
     let n = 0;
     for (const a of this.actors) if (!a.dead && a.team === 'enemy' && a.tag === 'long_night_spawn') n++;
     return n;
+  }
+
+  /** THE LONG NIGHT's world chores, the keeper's half of the split (shard
+   *  M1-W3; solo they run every frame exactly as they always did): the sky
+   *  feed, the world-facing announcements, the warp reconcile. */
+  private longNightWorldChores(lnf: NonNullable<World['sim']['longNightField']>): void {
+    // THE SKY FEED: grounds under a covering BLOOD MOON feed double tonight —
+    // engine-side because overlays can't see the weather field (and sheltered
+    // ground has no sky to bleed under: skyOf, the one exposure gate).
+    if (dayCycle(this.time).phase === 'night') {
+      const under: string[] = [];
+      for (const zid of lnf.groundZoneIds()) {
+        const z = this.zoneMap[zid];
+        if (!z || skyOf(z) === 'sheltered') continue;
+        const f = this.sim.weather.sample(z);
+        if (f && f.kind === 'bloodmoon') under.push(zid);
+      }
+      if (under.length) lnf.markBloodmoon(under);
+    }
+    // World-facing beats → toasts + ledgers (conversions announce wherever
+    // the player is — a zone quietly turning is the one thing this event
+    // must never do silently; the map pulse + warp label carry the rest).
+    for (const a of lnf.consumeAnnouncements()) {
+      const name = this.zoneMap[a.zoneId]?.name ?? 'charted ground';
+      if (a.kind === 'converted') {
+        bumpLedger(this.ledger, 'long_night_converted');
+        this.notice(`Three nights fed — ${name} belongs to the Court now. Burn its coach by day.`, lnf.surge().color, 17, 'events');
+      } else {
+        this.notice(`The COUNTESS takes court at ${name} — the Long Night deepens.`, lnf.surge().color, 18, 'events');
+      }
+    }
+    this.reconcileLongNightWarps();
   }
 
   /** Reconcile the BiomeField warps the Court owns against its converted
@@ -18987,8 +19072,10 @@ export class World {
   /** Per-frame: mint drain + in-zone serpent fabric + standing-fight sync. */
   private updateWorldBosses(dt: number): void {
     // 1. MINT DRAIN — every instance (each dimension's sovereigns take ground
-    //    in their own graph).
-    for (const f of this.sim.worldBossFieldsAll()) {
+    //    in their own graph). THE SPLIT DISPATCH (shard M1-W3): the chart's
+    //    mints are the keeper's; the walls, the passing and the fight sync
+    //    below stay with each World's own zone.
+    if (this.shardWorld?.role !== 'unit') for (const f of this.sim.worldBossFieldsAll()) {
       for (const req of f.pendingMints()) this.mintWorldBossZone(f, req);
     }
     const f = this.sim.worldBossFieldFor(this.zone.dimension);
@@ -21727,8 +21814,10 @@ export class World {
    *  deed may have landed: the cull's claim, the gather's rite, the
    *  arrival note, the zone's own clear, and the field watch's sweep. */
   private noteBountyReady(p: BountyPosting): void {
-    // THE BOARD PER SEAT: a held writ's "return to the board" reaches its holder's party.
-    const holder = p.holder && this.localSeat.keeper ? this.seats.find(s => s.id === p.holder) : undefined;
+    // THE BOARD PER SEAT: a held writ's "return to the board" reaches its holder's
+    // party, wherever its holder stands (THE OCCUPIED LAW, shard M1-W3).
+    const holder = p.holder && this.localSeat.keeper
+      ? this.presentWorlds().flatMap(w => w.seats).find(s => s.id === p.holder) : undefined;
     if (!holder) return sceneNoteBountyReady(this.nativeSceneBountyHost(), p);
     const was = this.actingSeat;
     this.actingSeat = holder;
@@ -22716,6 +22805,9 @@ export class World {
   private bountyWatchAccum = 0;
   private watchBountyHands(dt: number, nearBoard: boolean): void {
     if (this.clientActionHook) return;
+    // THE SPLIT DISPATCH (shard M1-W3): the watch reconciles the world's one
+    // slate, so it is the keeper's alone (a unit's would re-run it per unit).
+    if (this.shardWorld?.role === 'unit') return;
     if (this.localSeat.keeper) this.sweepBountyHolders();
     if (!this.bountyHands.length && !(nearBoard && this.bountyOffers.length)) return;
     this.bountyWatchAccum += dt;
@@ -22729,10 +22821,13 @@ export class World {
    *  and turn in, no one's cap), and a returning hero (its own character id) takes its
    *  hand back under the seat it now holds. */
   private sweepBountyHolders(): void {
+    // THE OCCUPIED LAW (shard M1-W3): "left the world" means no seat in any of
+    // its live Worlds, never only this one's.
+    const seats = this.presentWorlds().flatMap(w => w.seats);
     for (const p of this.bountyHands) {
       if (!p.holder && !p.holderChar) continue;
-      if (p.holder && this.seats.some(s => s.id === p.holder && !s.keeper)) continue;
-      const back = p.holderChar ? this.seats.find(s => !s.keeper && s.meta.charId === p.holderChar) : undefined;
+      if (p.holder && seats.some(s => s.id === p.holder && !s.keeper)) continue;
+      const back = p.holderChar ? seats.find(s => !s.keeper && s.meta.charId === p.holderChar) : undefined;
       if (back) p.holder = back.id; else delete p.holder;
     }
   }
@@ -23705,9 +23800,9 @@ export class World {
   /** Fell a hold (a lost defense, an unattended deadline): fires, sealed
    *  gates, the rebuild clock. In-zone the change is live; far coasts just
    *  flip state and dress on the next visit. */
-  private fellHold(def: ZoneDef, msg: string | null): void {
+  private fellHold(def: ZoneDef, msg: string | null): boolean {
     const hold = def.harborhold;
-    if (!hold) return;
+    if (!hold) return false;
     const cls = holdClassOf(hold);
     hold.state = 'fallen';
     hold.falls++;
@@ -23715,14 +23810,18 @@ export class World {
     hold.fallAt = undefined;
     hold.siegeAt = undefined;
     hold.rebuildAt = this.time + cls.rebuildSec;
-    if (def.id === this.zone.id) {
-      const ps = holdStructureIn(this.structures, cls.structure);
+    // THE SPLIT DISPATCH (shard M1-W3): the gate reseal, the dress, the services
+    // and the overrun text belong to the World standing in the hold's zone (the
+    // answer: whether one did).
+    return this.atZone(def.id, w => {
+      const ps = holdStructureIn(w.structures, cls.structure);
       const gate = ps ? holdGateDoor(ps) : null;
-      if (gate) this.resealDoor(gate.door.id);
-      this.refreshHoldDress(def);
-      this.refreshHoldServices(def);
-      if (msg) this.text(vec(this.player.pos.x, this.player.pos.y - 84), msg, '#e85050', 16);
-    }
+      if (gate) w.resealDoor(gate.door.id);
+      w.refreshHoldDress(def);
+      w.refreshHoldServices(def);
+      if (msg) w.text(vec(w.player.pos.x, w.player.pos.y - 84), msg, '#e85050', 16);
+      return true;
+    }) === true;
   }
 
   /** THE RESTORATION (the 'holdRestore' intent): carried Essence buys the
@@ -23758,6 +23857,10 @@ export class World {
     if (this.shardWorld?.role === 'unit') return; // THE PRIMARY GATE (shard M1): the lifecycle sweep is the keeper's
     if (this.gameOver || this.time < this.holdSweepAt) return;
     this.holdSweepAt = this.time + HARBORHOLD_CFG.sweepSec;
+    // THE SPLIT DISPATCH (shard M1-W3): the keeper walks every hold's clocks; a
+    // transition's dress, services and in-zone word go to the World standing in
+    // the hold's zone (`here` answers whether one did).
+    const here = (def: ZoneDef, fn: (w: World) => void): boolean => this.atZone(def.id, w => { fn(w); return true; }) === true;
     for (const def of Object.values(this.zoneMap)) {
       const hold = def.harborhold;
       if (!hold) continue;
@@ -23765,11 +23868,11 @@ export class World {
       if (hold.state === 'fallen' && hold.rebuildAt !== undefined && this.time >= hold.rebuildAt) {
         hold.state = HARBORHOLD_CFG.rebuildTo;
         hold.rebuildAt = undefined;
-        if (def.id === this.zone.id) {
-          this.refreshHoldDress(def);
-          this.refreshHoldServices(def);
-          this.notice(`${def.name} stands rebuilt — and besieged anew`, '#e8a050', 14, 'war');
-        }
+        here(def, w => {
+          w.refreshHoldDress(def);
+          w.refreshHoldServices(def);
+          w.notice(`${def.name} stands rebuilt — and besieged anew`, '#e8a050', 14, 'war');
+        });
         continue;
       }
       if (hold.state === 'open') {
@@ -23780,20 +23883,22 @@ export class World {
           hold.state = 'besieged';
           hold.siegeAt = undefined;
           if (cls.fallAfterSec > 0) hold.fallAt = this.time + cls.fallAfterSec;
-          if (def.id === this.zone.id) {
-            this.refreshHoldDress(def);
-            this.refreshHoldServices(def);
-            this.notice(`${def.name} is besieged — sound the horn!`, '#e85050', 16, 'war');
-          } else if (this.visible(def)) {
+          const stood = here(def, w => {
+            w.refreshHoldDress(def);
+            w.refreshHoldServices(def);
+            w.notice(`${def.name} is besieged — sound the horn!`, '#e85050', 16, 'war');
+          });
+          if (!stood && this.visible(def)) {
             this.notice(`word comes: ${def.name} is under siege`, '#e8a050', 14, 'war');
           }
         }
         continue;
       }
       if (hold.state === 'besieged' && hold.fallAt !== undefined && this.time >= hold.fallAt) {
-        if (this.holdDefense?.zoneId === def.id) continue; // the muster paused it (belt)
-        this.fellHold(def, def.id === this.zone.id ? 'the siege overruns the walls — the harbor burns' : null);
-        if (def.id !== this.zone.id && this.visible(def)) {
+        // The muster paused it (belt): the live defense is the hosting World's own.
+        if (this.holdDefense?.zoneId === def.id || this.atZone(def.id, w => w.holdDefense?.zoneId === def.id)) continue;
+        const stood = this.fellHold(def, 'the siege overruns the walls — the harbor burns'); // the word floats only where the hold stands
+        if (!stood && this.visible(def)) {
           this.notice(`${def.name} has fallen to the tide`, '#e85050', 14, 'war');
         }
       }
@@ -44964,8 +45069,10 @@ export class World {
 
     // WARBAND ARRIVALS: a host that just reached its target node, while YOU stand
     // in that zone, marches in for real — a coherent pack at the entry it came by.
+    // THE SPLIT DISPATCH (shard M1-W3): the keeper drains the arrivals once; the
+    // pack lands in the World standing in the target zone, and nowhere else.
     if (!unitWorld) for (const host of this.sim.invasion.arrivals) {
-      if (host.targetZoneId === this.zone.id) this.spawnWarband(host);
+      this.atZone(host.targetZoneId, w => w.spawnWarband(host));
     }
     if (!unitWorld) this.sim.invasion.arrivals.length = 0;
     this.updateWarbandMarches();
@@ -45020,8 +45127,10 @@ export class World {
         dfi.bindTarget(req.invId, req.zoneKey);
         // Announce only invasions of the plane the player stands in — a hell
         // rift tearing while you walk the surface stays hell's own business.
-        if ((dfDim ?? 'surface') === (this.zone.dimension ?? 'surface')) {
-          this.notice('A demon-blighted rift tears open in the distance!', '#e8503c', 15, 'events');
+        // THE OCCUPIED LAW (shard M1-W3): heard by whoever stands in that plane.
+        const hearers = this.occupiedAudience(z => (dfDim ?? 'surface') === (z.dimension ?? 'surface'));
+        if (hearers !== null) {
+          this.noticeOccupied(hearers, 'A demon-blighted rift tears open in the distance!', '#e8503c', 15, 'events');
         }
       }
       dfi.mintRequests.length = 0;
@@ -45044,7 +45153,11 @@ export class World {
     // other — the engine bridges). The observer LANDS far off in the wilds.
     const ig = unitWorld ? undefined : this.sim.conclaveField?.takeIgnition();
     if (ig) {
-      const info = this.sim.incursionField.ignite(ig.archetype, ig.origin, Math.max(this.zone.level, this.player.level));
+      // THE OCCUPIED LAW (shard M1-W3): the ignite level reads every occupied
+      // zone's level beside the world's character level (solo: the standing zone).
+      let level = this.player.level;
+      for (const w of this.presentWorlds()) level = Math.max(level, w.zone.level);
+      const info = this.sim.incursionField.ignite(ig.archetype, ig.origin, level);
       if (info) this.notice(info.announce, info.color, 18, 'events');
     }
     // Drain incursion mints: a CLUSTER of hidden (concealed + floating) epicenter
@@ -45156,14 +45269,16 @@ export class World {
     // path appears as they approach. Host/SP only; new exits stream to clients
     // via the zone snapshot; syncZoneExits() (below) surfaces the portal live
     // if the road landed on the player's zone.
+    // THE OCCUPIED LAW (shard M1-W3): "near the player" is near any zone a
+    // player's World stands in (solo: the standing zone).
+    const posts = unitWorld ? [] : this.presentWorlds();
     if (!unitWorld) for (const z of Object.values(this.zoneMap)) {
       if (!z.floating) continue;
       // Proximity only counts WITHIN a dimension — the planes share one
       // coordinate space, and a hell rift must not wire in because the player
       // walks surface ground that happens to overlap its numbers.
-      const sameDim = (z.dimension ?? 'surface') === (this.zone.dimension ?? 'surface');
-      const nearPlayer = sameDim
-        && Math.hypot(z.map.x - this.zone.map.x, z.map.y - this.zone.map.y) <= APPROACH_RADIUS;
+      const nearPlayer = posts.some(w => (z.dimension ?? 'surface') === (w.zone.dimension ?? 'surface')
+        && Math.hypot(z.map.x - w.zone.map.x, z.map.y - w.zone.map.y) <= APPROACH_RADIUS);
       if (!nearPlayer) continue;
       connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0), APPROACH_RADIUS, this.visited);
       if (z.floating) continue; // no local road yet; retry as exploration grows
@@ -53899,7 +54014,11 @@ export class World {
     const acting = this.actingSeat;
     if (!acting || acting.keeper || !this.localSeat.keeper || scope === 'world'
       || ACTING_SEAT_CFG.worldChannels.includes(channel)) return undefined;
-    return this.seats.filter(s => !s.keeper && this.sameParty(acting, s)).map(s => s.id);
+    // THE OCCUPIED LAW (shard M1-W3): the feed is one across the sim units, so
+    // the party is heard wherever its members stand, never only in this unit.
+    const to: string[] = [];
+    for (const w of this.presentWorlds()) for (const s of w.seats) if (!s.keeper && this.sameParty(acting, s)) to.push(s.id);
+    return to;
   }
 
   /** Credited kills per seat (the killer's owner chain): the reckoning counts
