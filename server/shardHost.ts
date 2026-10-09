@@ -91,6 +91,19 @@ export const SHARD_CFG = {
   /** THE FOCUS: the keeper shadows the standing seat that acted most recently;
    *  the current focus keeps it unless another seat has been newer by this many seconds. */
   focusSwapSec: 3,
+  /** THE ROVING SHADOW (the wilds; docs/engine/shard.md): when the standing seats
+   *  form more than one CLUSTER (bodies farther apart than clusterPx; 0 = the mass
+   *  runtime's populationRadius), the keeper's shadow visits each cluster in turn
+   *  for `sec` seconds of world time, so the runtime's one position (its pages,
+   *  births, discovery, survey and ecology) reaches every player over time instead
+   *  of the focus alone. One cluster = THE SHADOW exactly as before (no hop ever).
+   *  sec 0 = off (the focus alone, the pre-rove law). SHIPS OFF: measured 2026-10-09
+   *  with 6 bots spread 3,500 px (balance/soak_shard.ts --spread 3500 --rove N), a 2 s
+   *  cadence lifted the living radius (foes within reach of each player) from a mean of
+   *  3.2 to 8.1 but every hop re-keyed the runtime (pages, places, scenery, ecology) at
+   *  ~135 ms a tick and the sustained load dropped 68% of ticks; the honest fix is THE
+   *  MANY SHADOWS inside the runtime (several foci, no re-keying), charter §7d. */
+  rove: { sec: 0, clusterPx: 0 },
   /** Tick-time ring for the status page's p50/p95 (ticks). */
   telemetryTicks: 600,
   /** THE KEEPER SEAT. reviveSec = THE MERCY: seconds a downed seat waits with
@@ -206,6 +219,11 @@ export class ShardHost {
   /** Called once when THE BREAKER trips (the CLI exits non-zero for a supervisor). */
   onBroken: (() => void) | null = null;
   private focusId: string | null = null;
+  /** THE ROVING SHADOW's seat (the most recent seat of the cluster being visited), the
+   *  world time its visit ends, and the hops taken (the status page's `rove`). */
+  private roveAnchorId: string | null = null;
+  private roveUntil = 0;
+  roveHops = 0;
   /** THE HEARTH: where the keeper first stood (the bedside, the hearth's spawn) — every joiner wakes here. */
   private hearth: { x: number; y: number; tier: number } = { x: 0, y: 0, tier: 0 };
   /** THE SPAWN GRACE: seat id → world time the grace ends. */
@@ -596,10 +614,46 @@ export class ShardHost {
   private shadowFocus(): void {
     const focus = this.focusSeat();
     if (!focus) return;
+    const target = this.roveTarget(focus);
     const k = this.keeper.actor;
-    k.pos.x = focus.actor.pos.x;
-    k.pos.y = focus.actor.pos.y + SHARD_CFG.keeper.shadowOffset;
-    k.tier = focus.actor.tier;
+    k.pos.x = target.actor.pos.x;
+    k.pos.y = target.actor.pos.y + SHARD_CFG.keeper.shadowOffset;
+    k.tier = target.actor.tier;
+  }
+
+  /** THE ROVING SHADOW (SHARD_CFG.rove): the seat the keeper shadows THIS tick.
+   *  Standing seats cluster greedily by recency (a seat joins the first cluster
+   *  whose anchor stands within the radius, else founds one); one cluster answers
+   *  the focus, as THE SHADOW always did; several are visited round-robin, the
+   *  focus's cluster first, each for rove.sec of world time, the keeper standing
+   *  on the visited cluster's most recent seat. A hop is a real teleport of the
+   *  keeper, so the mass runtime's page requests and places re-key to the new
+   *  cell (its pages stay cached around every observer; dormancy and native
+   *  paging read all observers already). */
+  private roveTarget(focus: Seat): Seat {
+    const cfg = SHARD_CFG.rove;
+    if (!(cfg.sec > 0)) { this.roveAnchorId = null; return focus; }
+    const standing = this.world.seats.filter(s => !s.keeper && !s.actor.dead && !s.actor.downed);
+    const radius = cfg.clusterPx > 0 ? cfg.clusterPx : (this.world.massRuntime?.config.populationRadius ?? 1300);
+    const score = (s: Seat): number => Math.max(s.lastActedAt, s.lastMovedAt);
+    const ordered = [...standing].sort((a, b) => score(b) - score(a));
+    const clusters: Seat[][] = [];
+    for (const s of ordered) {
+      const c = clusters.find(cl => Math.hypot(cl[0].actor.pos.x - s.actor.pos.x, cl[0].actor.pos.y - s.actor.pos.y) <= radius);
+      if (c) c.push(s); else clusters.push([s]);
+    }
+    if (clusters.length <= 1) { this.roveAnchorId = null; return focus; }
+    const now = this.world.time;
+    const current = this.roveAnchorId ? clusters.find(cl => cl.some(x => x.id === this.roveAnchorId)) : undefined;
+    if (current && now < this.roveUntil) { this.roveAnchorId = current[0].id; return current[0]; }
+    const focusIdx = Math.max(0, clusters.findIndex(cl => cl.includes(focus)));
+    const ring = [...clusters.slice(focusIdx), ...clusters.slice(0, focusIdx)];
+    const curIdx = current ? ring.indexOf(current) : -1;
+    const next = ring[(curIdx + 1) % ring.length];
+    if (current && next !== current) this.roveHops++;
+    this.roveAnchorId = next[0].id;
+    this.roveUntil = now + cfg.sec;
+    return next[0];
   }
 
   /** THE HEARTH SEAT: the wilds' native settlement keeps its own bedside
@@ -737,6 +791,7 @@ export class ShardHost {
       droppedTicks: this.droppedTicks,
       faults: this.faults + this.net.faults,
       actors: w.actors.length,
+      rove: { on: this.worldmass && SHARD_CFG.rove.sec > 0, hops: this.roveHops, visiting: this.roveAnchorId }, // THE ROVING SHADOW
       saving: this.savePath ? basename(this.savePath) : 'ephemeral',
       broken: this.broken,
     };

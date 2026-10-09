@@ -82,6 +82,8 @@ interface Bot {
   awaitingRejoin: boolean; cutting: boolean;
   inputs: number; snaps: number; zones: number; deaths: number; rejoins: number; lost: number;
   timers: Set<ReturnType<typeof setTimeout>>;
+  /** THE SPREAD: this bot's own roaming anchor (the hearth when the fleet is not spread). */
+  anchor?: { x: number; y: number };
 }
 
 function parseArgs(argv: string[]): Record<string, string | true> {
@@ -109,6 +111,7 @@ const classes = str('classes', 'warrior').split(',').filter(Boolean);
 const staggerMs = Math.max(0, Number(str('stagger-ms', '200')) || 0);
 const dropBot = Math.floor(Number(str('drop-bot', '-1')));
 const lifeSec = Math.max(30, Number(str('life-sec', '900')) || 900);
+const spread = Math.max(0, Number(str('spread', '0')) || 0); // THE SPREAD: anchors on a ring about the hearth
 
 const msg = (e: unknown): string => e instanceof Error ? e.message : String(e);
 function emit(e: FleetEvent): void {
@@ -138,7 +141,8 @@ function step(b: Bot, now: number): void {
   const t = b.t, at = b.pos;
   if (!t || !at || b.awaitingRejoin || b.cutting || ending) return;
   if (now >= b.turnAt) turn(b, now, b.rng() * Math.PI * 2);
-  const ox = at.x - hearth.x, oy = at.y - hearth.y;
+  const home = b.anchor ?? hearth;
+  const ox = at.x - home.x, oy = at.y - home.y;
   // Past the box and still heading out: home, give or take half a radian.
   if ((Math.abs(ox) > FLEET_CFG.roamPx || Math.abs(oy) > FLEET_CFG.roamPx) && Math.cos(b.heading) * ox + Math.sin(b.heading) * oy > 0)
     turn(b, now, Math.atan2(-oy, -ox) + (b.rng() - 0.5));
@@ -333,6 +337,7 @@ async function main(): Promise<void> {
       pos: null, down: false, seatedOnce: false, foe: null, awaitingRejoin: false, cutting: false,
       inputs: 0, snaps: 0, zones: 0, deaths: 0, rejoins: 0, lost: 0, timers: new Set(),
     };
+    if (spread > 0) b.anchor = { x: hearth.x + Math.cos(2 * Math.PI * i / n) * spread, y: hearth.y + Math.sin(2 * Math.PI * i / n) * spread }; // THE SPREAD
     bots.push(b);
     const t = new WsTransport();
     b.t = t;

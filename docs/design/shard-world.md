@@ -546,6 +546,39 @@ HUD's local site name reads a private runtime map the shell never fills.
    the seamless lane owes the shard one adapter (its runtime as a unit). Every
    other fabric reaches the shard through the transport seam it already
    reaches co-op through.
+6. **THE ASKS (2026-10-09) — three seams the shard needs from the seamless
+   lane's own files, each with its measurement.** The shard never edits
+   `src/worldmass/**` (6.3); these are requests for that lane, carried by her.
+   - **THE MANY SHADOWS** (`src/worldmass/runtime.ts` `update`, lines ~720–816):
+     the runtime's page requests, places, site discovery, survey, native
+     wanted cells, scenery cells and births all key on ONE position,
+     `world.player.pos` (the keeper on the focus seat). Ask: `update(world, foci)`
+     with one focus per standing player cluster — the union of page cells
+     without pruning the other clusters' places, discovery and survey per
+     focus, births per focus under the one `maxPopulation` budget shared by
+     cluster. Evidence (the soak, six bots 3,500 px apart): the living
+     radius around a player away from the focus is 0; a keeper that visits
+     clusters in turn (THE ROVING SHADOW, shipped off) lifts the mean to 6.7
+     to 8.1 foes but re-keys the runtime on every hop at 135 to 170 ms and
+     drops 43 to 68 percent of ticks, so the seam must live inside the
+     runtime, not on the keeper's feet.
+   - **THE LOADERS OFF THE TICK.** The wilds' background loading expects Web
+     Workers; Node has no `Worker`, so on a shard it runs inside the tick: the
+     soak traced 10 of the 12 slowest ticks (100 to 490 ms) to
+     `massRuntime.update`, and the codespace drops a quarter of its ticks on
+     two cores with no player connected. Ask: a `worker_threads`-backed
+     loader (the same message contract behind a Node adapter), or a loader
+     that yields in slices the host can budget per tick.
+   - **THE LAND ONCE.** `serializeWorldState()` takes 150 to 200 ms on the wilds
+     and the shard calls it every `persistSec`; of the 6.5 MB it builds, 3.9 MB
+     is `worldmass.config`, THE LAND, a pure function of the seed that never
+     changes after boot (the land digest proves it), and 2.2 MB the state.
+     Ask: a save option (or shape) that omits the config and re-derives it
+     from the seed at read time, so the shard serializes the state alone.
+   The per-observer cost stands beside these: with ONE focus, six bots spread
+   3,500 px already breach the tick gate (p95 47 ms, 8 percent dropped,
+   against 13 ms clustered), because dormancy and native paging scale with
+   how far apart the observers stand; THE MANY SHADOWS must budget that too.
 
 ---
 
@@ -820,7 +853,8 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 | 1 | Rubber-banding BY CONSTRUCTION: `PlayerInput` carries no dt, the transport merges one input per tick, `applyInputs` moves one tick per tick, so a 30 fps client walks at half speed on the server and snaps back every snapshot; stalls merge N inputs into one tick. | W1 THE HONEST INPUT |
 | 2 | Every non-keeper seat's held casts run on the monster AI's hold roll (`a !== this.player` in updateCasting): guards drop, channels end, charges release on a 1.2–2.6 s timer. | W3 |
 | 3 | `World.zones` (telegraphs, fields) and leap landing rings never ride the wire: invisible slams, strikes and hazards on a client. | W2 THE WIRE'S EYES |
-| 4 | THE FOCUS: the mass runtime keys on the keeper's one position; a player 3,000 px away walks a barren, static world. | THE MANY SHADOWS (M6's first cut, with the seamless lane) |
+| 4 | THE FOCUS: the mass runtime keys on the keeper's one position; a player 3,000 px away walks a barren, static world. MEASURED (the soak, 6 bots 3,500 px apart): the living radius around each player is least 0, mean 3.2 foes; THE ROVING SHADOW (a keeper that visits each cluster in turn, shipped off) lifts the mean to 6.7 at a 10 s cadence and 8.1 at 2 s but drops 43% and 68% of ticks (each hop re-keys the runtime at 135–170 ms; the extra clusters' natives raise the sustained load). | THE MANY SHADOWS (several foci inside the runtime, no re-keying, per-focus budgets) + the loaders off the tick, with the seamless lane |
+| 4b | THE SPREAD COST (the soak): six bots spread 3,500 px with ONE focus already breach the gate (p95 47 ms, 8% dropped) against 13 ms with the same six around the hearth: the runtime's per-observer paths (dormancy, native paging) scale with how far apart players stand. | THE MANY SHADOWS, budgeted |
 | 5 | No stall watchdog, no auto-reconnect; an F5 loses the resume token and the vessel is refused as "already walks the world". | Pass B (the shell) |
 | 6 | No local action feedback: every press waits a round trip; cast roots snap back; dashes step at 20 Hz. | Pass B |
 | 7 | Cooldowns and gauges are never serialized: the client's bar never sweeps, ultimates never fill. | W2 |
