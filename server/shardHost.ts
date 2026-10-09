@@ -14,10 +14,13 @@
 // that the world-level reads address, exempt from party scale / XP / the
 // wire, and THE MERCY that stands a downed seat back up when no ally can.
 //
-// M0 semantics are the co-op lane's, unchanged and documented as such: the
-// party travels together, a joiner is a fresh level-1 hero, and every
-// account-gated read rides the shard's own account (THE KEEPER'S GATE). The
-// milestones that lift those are the charter's M1-M3.
+// THE SIM UNITS (M1, server/simUnits.ts + engine/shardUnits.ts): one World per
+// live zone. The keeper's World stays `this.world` (the chart, the clock, the
+// account, the world sweeps); every other live zone is a UNIT the registry
+// wakes and sleeps, a seat moves between them by THE HAND-OFF, each unit ticks
+// under THE PIN and ships its own snapshot to its own seats. A joiner is a
+// fresh level-1 hero (or its vessel) and every account-gated read rides the
+// shard's own account (THE KEEPER'S GATE) until M2.
 // ---------------------------------------------------------------------------
 
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, writeSync } from 'node:fs';
@@ -50,6 +53,8 @@ import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstat
 import { ShardTransport, type ShardJoin } from './shardTransport';
 import { VesselDesk } from './vessel';
 import { ShardCorpses, shardRecordsPath } from './corpses';
+import { UnitRegistry, type SimUnit } from './simUnits';
+import { UNIT_CFG, unitClocks } from '../src/engine/shardUnits';
 import { readWildsSave, resumeWilds, setAsideWildsSave } from './wildsSave';
 
 export const SHARD_CFG = {
@@ -161,6 +166,45 @@ export interface ShardSave {
   seed: number;
   savedAt: number;
   world: WorldStateSave;
+  /** THE RUN ROW (shard M1, plan section 6): the keeper's character-save half
+   *  that is world-level in function, which a shard never persisted before.
+   *  Optional and read tolerantly: absent = a restart forgets them, as before. */
+  run?: ShardRunRow;
+}
+
+/** The run row's shape (each field tolerant on read). */
+export interface ShardRunRow {
+  completedObjectives: string[];
+  ledger: Record<string, number>;
+  throngClaimed: string[];
+  annexFound: string[];
+}
+
+/** THE RUN ROW, captured off the keeper's World. */
+export function captureRunRow(w: World): ShardRunRow {
+  return {
+    completedObjectives: [...w.completedObjectives], ledger: { ...w.ledger },
+    throngClaimed: [...w.throngClaimed], annexFound: [...w.annexFound],
+  };
+}
+
+/** THE RUN ROW, adopted onto the keeper's World after its world half stood:
+ *  every field optional, every value checked; a clear whose ground the world
+ *  half no longer carries drops (the character save's own law: kept zones and
+ *  the stable cave_ namespace). */
+export function adoptRunRow(w: World, raw: unknown): void {
+  if (!raw || typeof raw !== 'object') return;
+  const run = raw as Partial<Record<keyof ShardRunRow, unknown>>;
+  const strs = (v: unknown): string[] => Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  if (Array.isArray(run.completedObjectives)) {
+    w.completedObjectives = new Set(strs(run.completedObjectives).filter(id => !!w.zoneMap[id] || id.startsWith('cave_')));
+  }
+  if (run.ledger && typeof run.ledger === 'object' && !Array.isArray(run.ledger)) {
+    w.ledger = Object.fromEntries(Object.entries(run.ledger as Record<string, unknown>)
+      .filter((e): e is [string, number] => typeof e[1] === 'number' && Number.isFinite(e[1])));
+  }
+  if (Array.isArray(run.throngClaimed)) w.throngClaimed = new Set(strs(run.throngClaimed));
+  if (Array.isArray(run.annexFound)) w.annexFound = new Set(strs(run.annexFound));
 }
 
 /** The seed of the newest `shard_<seed>.json` in a save dir, or undefined. */
@@ -225,7 +269,9 @@ export class ShardHost {
   broken = false;
   /** Called once when THE BREAKER trips (the CLI exits non-zero for a supervisor). */
   onBroken: (() => void) | null = null;
-  private focusId: string | null = null;
+  /** THE SIM UNITS (server/simUnits.ts): the keeper and every live unit, THE SEAT
+   *  LEDGER, THE HAND-OFF QUEUE and the direct `travel` door. */
+  readonly units: UnitRegistry;
   /** THE ROVING SHADOW's seat (the most recent seat of the cluster being visited), the
    *  world time its visit ends, and the hops taken (the status page's `rove`). */
   private roveAnchorId: string | null = null;
@@ -249,9 +295,6 @@ export class ShardHost {
   private snapTick = 0;
   private metaHeartbeat = SHARD_CFG.metaHeartbeatSec;
   private persistTimer = SHARD_CFG.worldSaveSec; // THE WORLD SAVE BEAT
-  private lastSentZone = '';
-  private lastSentDoodadRev = -1;
-  private dressTimer = 0;
   private readonly pendingActions: { seat: string; action: MetaAction }[] = [];
   private timer: NodeJS.Timeout | null = null;
   private lastWall = 0;
@@ -261,6 +304,8 @@ export class ShardHost {
    *  up — no tick steps, no persist writes and no socket opens until ready(). */
   private wildsResuming = false;
   private resuming: Promise<void> = Promise.resolve();
+  /** THE RUN ROW a saved wilds carried (adopted once the surface stood). */
+  private wildsRun: unknown = undefined;
 
   constructor(opts: ShardOptions = {}) {
     bootShardEngine();
@@ -273,6 +318,13 @@ export class ShardHost {
     if (opts.open) openAccount(this.account);
     this.keeperClass = this.classById(opts.keeperClass ?? SHARD_CFG.keeper.classId);
     this.world = this.standKeeperWorld();
+    this.units = new UnitRegistry(this.world, {
+      wardenClass: this.keeperClass, wardenName: SHARD_CFG.keeper.name, reviveSec: SHARD_CFG.keeper.reviveSec,
+      publish: (w, u) => this.publishInto(w, u),
+      hearth: () => this.hearthSeat(),
+      breakerTicks: () => SHARD_CFG.faultBreakerTicks,
+      log: line => this.log(line),
+    });
     COOP_SCALING.shareRadius = SHARD_CFG.nearRadius; // THE NEAR LAW, the shard's own
     this.worldmass = !!opts.worldmass;
     this.savePath = opts.saveDir === null ? null
@@ -283,7 +335,7 @@ export class ShardHost {
       // own order: createPlayer, then startWorldMass) — or THE WILDS SAVE stands
       // a saved surface back up in the mass lane's own resume order (wildsSave).
       const saved = this.savePath ? readWildsSave(this.savePath, SHARD_CFG.saveSchema, this.seed) : null;
-      if (saved && 'ws' in saved) this.resuming = this.resumeWildsSave(saved.ws);
+      if (saved && 'ws' in saved) { this.wildsRun = saved.run; this.resuming = this.resumeWildsSave(saved.ws); }
       else this.standFreshWilds(saved?.refused);
     } else {
       if (this.savePath && existsSync(this.savePath)) this.restore();
@@ -302,21 +354,24 @@ export class ShardHost {
     // remembers its dead (absent only when the shard writes nothing at all).
     const toSeat = (msg: SessionMsg, to: string): void => this.net.sendSession(msg, to);
     const recordsDir = opts.saveDir === null ? null : opts.saveDir ?? SHARD_CFG.saveDir;
-    this.corpses = new ShardCorpses(this.world, toSeat, shardRecordsPath(recordsDir, this.seed), this.seed, this.log);
+    this.corpses = new ShardCorpses(this.units, toSeat, shardRecordsPath(recordsDir, this.seed), this.seed, this.log);
     // THE PARTY (server/party.ts, card 23): the explicit social unit; the keeper is never seated in one.
-    this.parties = new PartyDesk(id => this.world.seats.some(s => s.id === id && !s.keeper));
-    this.world.partyMates = id => this.parties.membersOf(id); // keeperSeat lane: THE KILLER'S DUE pays the party
-    this.vessels = new VesselDesk(this.world, toSeat, this.corpses, {
+    this.parties = new PartyDesk(id => !!this.units.seatOf(id));
+    this.publishInto(this.world, this.units.keeper); // HOST class: the link, the party, the timeflow policies
+    this.vessels = new VesselDesk(this.units, toSeat, this.corpses, {
       beatSec: SHARD_CFG.persistSec, log: this.log,
       party: id => this.parties.membersOf(id), // THE GROUP LAW
-      onSeatGone: id => this.parties.dropSeat(id),
+      onSeatGone: id => { this.parties.dropSeat(id); this.units.forget(id); },
     });
+    this.units.onArrive = (seat, to, from, woke) => this.onArrive(seat, to, from, woke);
     this.net.onPeerJoin((p, join) => this.onJoin(p, join));
     this.net.onPeerLeave(id => {
       this.dormancy.delete(id); // THE DORMANT SEAT: the word, a clock run out or a closing shard ends any dormancy
-      this.vessels.leave(id); this.graces.delete(id); this.world.removeSeat(id);
+      this.vessels.leave(id); this.graces.delete(id);
+      // THE SEAT LEDGER: the leave runs in the unit the seat stands in.
+      this.units.within(id, w => { w.removeSeat(id); w.settleNearScale(true); }); // keeperSeat: THE NEAR LAW re-read after the leave
+      this.units.forget(id);
       this.parties.dropSeat(id); // THE PARTY: out of its party and its invites
-      this.world.settleNearScale(true); // keeperSeat: THE NEAR LAW re-read where every body stands after the leave (and clamped for the save)
     });
     this.net.onPeerDormant((id, worded) => this.onDormant(id, worded)); // THE DORMANT SEAT: a lost socket's hero stays, on a clock
     this.net.leaveHolds = id => this.vessels.inCombat(id); // THE ACTING SEAT: a word said mid-fight sleeps like a lost socket
@@ -363,11 +418,13 @@ export class ShardHost {
     const t0 = performance.now();
     try {
       const r = await resumeWilds(this.world, ws, this.keeper);
+      adoptRunRow(this.world, this.wildsRun); // THE RUN ROW (absent = today)
       this.log(`[shard] resumed the Unbroken Wilds 0x${this.seed.toString(16)} (t=${Math.round(this.world.time)}s, ${r.natives} natives, `
         + `${r.pockets} pockets${r.wasInPocket ? ', the keeper back from a pocket' : ''}) in ${Math.round(performance.now() - t0)} ms`);
     } catch (e) {
       this.world.massRuntime?.dispose();
       this.world = this.standKeeperWorld();
+      this.units.rebindKeeper(this.world); // THE SIM UNITS: the keeper unit follows the world that stands
       this.standFreshWilds(e instanceof Error ? e.message : String(e));
     } finally {
       this.wildsResuming = false;
@@ -393,7 +450,7 @@ export class ShardHost {
 
   // ---- the session desk -----------------------------------------------------
   private onJoin(peer: PeerInfo, join?: ShardJoin): void {
-    if (this.world.seats.some(s => s.id === peer.id)) return;
+    if (this.units.unitOf(peer.id)) return; // THE SEAT LEDGER: the seat already stands somewhere
     // THE VESSEL: an uploaded hero grafts when the judgment allows; else the
     // fresh hero of the chosen class (M0's join, unchanged).
     const seat = this.vessels.seat(peer, join?.vessel);
@@ -412,7 +469,7 @@ export class ShardHost {
     this.world.settleNearScale(true); // keeperSeat: addSeat scaled every body beside the shadowed keeper; the hearth is where the joiner stands
     // The joiner needs the standing terrain NOW, not at the next zone change.
     this.net.sendZoneTo(peer.id, serializeZone(this.world));
-    this.lastSentZone = this.world.zone.id;
+    this.units.keeper.lastSentZone = this.world.zone.id;
     this.log(`[shard] ${peer.id} joined as ${seat.meta.classDef.id}${vessel ? ` (the vessel ${seat.meta.name}, level ${this.world.seatHero(seat).level})` : ''} (${this.net.connectionCount()} connected)`);
   }
 
@@ -424,7 +481,7 @@ export class ShardHost {
    *  step) has nothing to escape and leaves at once, and a seat with no body
    *  left (a fall took it) has nothing to wake. */
   private onDormant(id: string, worded = false): void {
-    const seat = this.world.seats.find(s => s.id === id && !s.keeper);
+    const seat = this.units.seatOf(id);
     if (!seat || this.graces.has(id)) { this.net.release(id); return; }
     this.dormancy.set(id, this.world.time + SHARD_CFG.dormantSec);
     this.corpses.sleep(id); // a body with no hand reclaims nothing
@@ -437,13 +494,14 @@ export class ShardHost {
    *  bodies' rows, and an input ack counted from zero again. */
   private onResume(id: string): void {
     this.dormancy.delete(id);
-    const seat = this.world.seats.find(s => s.id === id);
-    if (!seat) return; // (never: a seat with no body is released at once, so it cannot be resumed)
-    this.world.lastInputSeq.delete(id); // the new shell counts its inputs from zero
-    this.world.markMetaDirty(seat);
+    const u = this.units.unitOf(id), seat = this.units.seatOf(id);
+    if (!u || !seat) return; // (never: a seat with no body is released at once, so it cannot be resumed)
+    const w = u.world; // THE DORMANT SEAT per unit: the seat's own unit re-ships
+    w.lastInputSeq.delete(id); // the new shell counts its inputs from zero
+    w.markMetaDirty(seat);
     this.corpses.wake(id);
-    this.net.sendZoneTo(id, serializeZone(this.world));
-    this.lastSentZone = this.world.zone.id;
+    this.net.sendZoneTo(id, serializeZone(w));
+    u.lastSentZone = w.zone.id;
     this.log(`[shard] ${id} resumed its dormant hero (${this.net.connectionCount()} connected)`);
   }
 
@@ -452,9 +510,9 @@ export class ShardHost {
    *  released: the peers hear `pleave`, then the leave path runs. */
   private sweepDormancy(): void {
     if (!this.dormancy.size) return;
-    const w = this.world;
+    const now = this.world.time; // THE ONE CLOCK
     for (const [id, until] of [...this.dormancy]) {
-      if (w.time < until && w.seats.some(s => s.id === id)) continue;
+      if (now < until && this.units.seatOf(id)) continue;
       this.dormancy.delete(id);
       this.net.release(id);
     }
@@ -467,12 +525,12 @@ export class ShardHost {
       const loadout = sanitizeCosmeticLoadout(msg.loadout);
       const peer = this.net.peers().find(p => p.id === from);
       if (peer) peer.cosmeticLoadout = loadout;
-      const seat = this.world.seats.find(s => s.id === from);
+      const seat = this.units.seatOf(from);
       if (seat) (seat.home ?? seat.actor).cosmeticLoadout = loadout;
     } else if (msg.t === 'rejoin') {
       // A shard's run never ends, so a rejoin only ever re-seats a peer whose
       // seat is somehow gone (the co-op lane's reseatPeer, minus the new run).
-      if (this.world.seats.some(s => s.id === from)) return;
+      if (this.units.unitOf(from)) return;
       const peer = this.net.peers().find(p => p.id === from);
       // newRun FIRST: the client's render shell (and its zone subscription)
       // stands up on it, so the zone message the re-seat sends must follow it.
@@ -492,11 +550,13 @@ export class ShardHost {
   /** HOST: apply this frame's queued client meta intents to their OWN seats.
    *  A malformed or hostile action must never throw out of the frame
    *  (main.ts drainMetaActions, verbatim). */
-  private drainMetaActions(): void {
-    if (!this.pendingActions.length) return;
+  private drainMetaActions(u: SimUnit, w: World, actions: readonly { seat: string; action: MetaAction }[]): void {
+    if (!actions.length) return;
     const landed = new Map<string, number>();
-    for (const { seat: seatId, action } of this.pendingActions) {
-      const seat = this.world.seats.find(s => s.id === seatId);
+    for (const { seat: seatId, action } of actions) {
+      // THE SEAT LEDGER: an action applies inside its own seat's unit, under its pin.
+      if (this.units.unitOf(seatId) !== u) continue;
+      const seat = w.seats.find(s => s.id === seatId && !s.keeper);
       if (!seat) continue;
       // THE ACTION BUDGET: a seat lands at most actionsPerSeatPerTick intents a
       // tick; a flood past it is dropped, never queued (a 20,000-row burst used
@@ -508,10 +568,9 @@ export class ShardHost {
       // THE SEALED ROADS: intents that move the WHOLE party stay shut on a
       // keeper world until per-seat travel exists (card 15).
       if (action.t === 'caravanTo' || action.t === 'townPortal') continue;
-      try { this.world.applyAction(seat, action); }
+      try { w.applyAction(seat, action); }
       catch (e) { this.noteFault(`meta action from ${seatId}`, e); }
     }
-    this.pendingActions.length = 0;
   }
 
   /** One fault ledger for every lane: counted always, printed at most once
@@ -534,90 +593,153 @@ export class ShardHost {
    *  work, sidezone mints) — so it wears the flags again, stands up, and
    *  mirrors the highest standing player's level. It also acted this very
    *  frame, so THE SEALED ROADS hold (a dwell reads an idle seat). */
-  private wardenStand(): void {
-    const w = this.world;
-    const keeper = this.keeper;
+  private wardenStand(u: SimUnit): void {
+    const w = u.world;
+    const keeper = w.localSeat;
     const k = keeper.actor;
-    k.invulnerable = true; k.untargetable = true; k.passive = true;
+    // THE UNIT WARDEN: every warden levitates too (out of the sky-fall and the pit,
+    // which travel only the world's player), whoever it shadows.
+    k.invulnerable = true; k.untargetable = true; k.passive = true; k.levitates = true;
     if (k.downed || k.dead) { k.downed = false; k.dead = false; }
     if (k.life <= 0) k.life = k.maxLife();
     keeper.lastActedAt = w.time;
+    // The keeper mirrors the highest standing level SHARD-WIDE (the world's own
+    // character level: event gates, package draws); a unit, the highest in it.
     let level = 0;
-    for (const s of w.seats) if (!s.keeper && !s.actor.dead) level = Math.max(level, s.actor.level);
+    for (const s of u.role === 'keeper' ? this.units.allSeats() : w.seats) if (!s.keeper && !s.actor.dead) level = Math.max(level, s.actor.level);
     if (level > 0 && k.level !== level) { k.level = level; w.recalcSeat(keeper); }
+  }
+
+  /** HOST class (shard M1): the host's fields published into a World it runs, at
+   *  boot and at every wake: the timeflow policies, the party, and the link. */
+  private publishInto(w: World, u: SimUnit): void {
+    w.timeflow.allowHold = () => false; // a hosted world never freezes for one hand
+    w.timeflow.chronoScope = { radius: SHARD_CFG.chronoRadius }; // keeperSeat: THE SCOPED FREEZE
+    w.partyMates = id => this.parties.membersOf(id); // keeperSeat lane: THE KILLER'S DUE pays the party
+    if (this.partyRevSeen >= 0) { w.partyRows = this.parties.rows(); w.partyRev++; }
+    w.shardWorld = {
+      role: u.role, key: u.key,
+      enqueue: t => this.units.enqueue(t),
+      dispatch: (zoneId, fn) => this.units.dispatch(zoneId, fn),
+    };
+  }
+
+  /** THE HAND-OFF landed (server/simUnits.ts): THE SPAWN GRACE at the arrival, and
+   *  the seat's new terrain at once (the client's standing zone lane). */
+  private onArrive(seat: Seat, to: SimUnit, from: SimUnit, woke: boolean): void {
+    if (!seat.keeper) {
+      seat.actor.untargetable = true;
+      this.graces.set(seat.id, Math.max(this.graces.get(seat.id) ?? 0, this.world.time + UNIT_CFG.arrivalGraceSec));
+    }
+    this.net.sendZoneTo(seat.id, serializeZone(to.world));
+    this.log(`[shard] ${seat.id} walked from ${from.world.zone.id} to ${to.world.zone.id}${woke ? ' (a unit woke)' : ''} (${this.units.size} unit(s) awake)`);
   }
 
   // ---- the host frame -------------------------------------------------------
   /** One engine step: the host frame verbatim, then the wire, then the beats. */
   tick(dt: number): void {
     if (this.wildsResuming) return; // THE RESUME LAW: no frame meets a half-stood world (wildsSave)
-    const w = this.world;
-    // THE GUARDED PHASES: a throw in the simulate phase never skips the wire
-    // or the beats (clients used to freeze and saves to stop), and THE
-    // BREAKER counts the run of faulting ticks.
+    const k = this.world;
+    // THE ONE CLOCK (shard M1): every unit enters its step at the keeper's
+    // tick-start readings, so each lands where the keeper lands.
+    const clocks = unitClocks(k);
+    // THE GUARDED PHASES: a throw in a simulate phase never skips the wire or
+    // the beats (clients used to freeze and saves to stop); THE BREAKER counts
+    // the keeper's run of faulting ticks, THE UNIT BREAKER each unit's.
+    let inputs = new Map<string, PlayerInput>();
+    const actions = this.pendingActions.splice(0);
     try {
-      this.wardenStand();
-      if (this.worldmass) this.shadowFocus();
-      for (const seat of w.seats) {
-        const intent = seat.input.poll(seat.actor, w, dt); // RemoteInput polls null — its intent arrives via the wire
-        if (intent) this.net.sendInput(seat.id, intent);
+      for (const u of this.units.each()) {
+        for (const seat of u.world.seats) {
+          const intent = seat.input.poll(seat.actor, u.world, dt); // RemoteInput polls null — its intent arrives via the wire
+          if (intent) this.net.sendInput(seat.id, intent);
+        }
       }
-      const inputs = this.net.drainInputs();
+      inputs = this.net.drainInputs(); // one drain: a World reads only its own seats' rows
       this.endGraces(inputs);
-      w.applyInputs(inputs, dt);
-      this.drainMetaActions();
-      if (!w.gameOver) for (const a of w.actors) updateAI(a, w, dt);
-      w.update(dt);
-      w.settleNearScale(); // keeperSeat: THE NEAR LAW where this tick's mints stand
-      this.parties.sweep(w.time); // THE PARTY: lapsed invites fall away
-      this.publishParties();
-      this.consecutiveFaults = 0;
-    } catch (e) {
-      this.noteFault('the simulate phase', e);
-      this.consecutiveFaults++;
-      if (!this.broken && this.consecutiveFaults >= SHARD_CFG.faultBreakerTicks) {
-        this.broken = true;
-        this.log(`[shard] THE BREAKER: ${this.consecutiveFaults} faulting ticks running — the world is held; a supervisor should restart it`);
-        this.onBroken?.();
+    } catch (e) { this.noteFault('the input phase', e); }
+    for (const u of this.units.each()) {
+      if (u.broken) continue;
+      try {
+        this.units.run(u, w => {
+          this.wardenStand(u);
+          if (u.role === 'keeper') { if (this.worldmass) this.shadowFocus(); } else this.unitShadow(u);
+          w.applyInputs(inputs, dt);
+          this.drainMetaActions(u, w, actions);
+          if (!w.gameOver) for (const a of w.actors) updateAI(a, w, dt);
+          w.update(dt);
+          w.settleNearScale(); // keeperSeat: THE NEAR LAW where this tick's mints stand
+        }, clocks);
+        if (u.role === 'keeper') this.consecutiveFaults = 0; else u.faults = 0;
+      } catch (e) {
+        this.noteFault(u.role === 'keeper' ? 'the simulate phase' : `unit ${u.key}`, e);
+        if (u.role !== 'keeper') this.units.noteFault(u); // THE UNIT BREAKER: its seats to the hearth, the unit dropped
+        else {
+          this.consecutiveFaults++;
+          if (!this.broken && this.consecutiveFaults >= SHARD_CFG.faultBreakerTicks) {
+            this.broken = true;
+            this.log(`[shard] THE BREAKER: ${this.consecutiveFaults} faulting ticks running — the world is held; a supervisor should restart it`);
+            this.onBroken?.();
+          }
+        }
       }
     }
+    try {
+      this.units.drain(); // THE HAND-OFF QUEUE: every ticket after every unit ticked
+      this.parties.sweep(k.time); // THE PARTY: lapsed invites fall away
+      this.publishParties();
+    } catch (e) { this.noteFault('the hand-off queue', e); }
     this.ticks++;
     this.vessels.tick(dt); // THE VESSEL: THE DEATH COVENANT (before THE MERCY could answer) + the mirror beat
     this.corpses.tick(dt); // THE CORPSE RETURNS: each seat's own standing bodies + the reclaim dwell
     this.sweepDormancy(); // THE DORMANT SEAT: a clock run out (or a fall that took the body) ends the seat
 
     if (this.net.connectionCount() > 0) {
-      this.dressTimer -= dt;
-      if (w.zone.id !== this.lastSentZone) {
-        this.lastSentZone = w.zone.id;
-        this.lastSentDoodadRev = w.doodadsVersion();
-        this.dressTimer = SHARD_CFG.dressSec;
-        this.net.sendZone(serializeZone(w));
-      } else if (this.dressTimer <= 0 && w.doodadsVersion() !== this.lastSentDoodadRev) {
-        // THE DRESS BEAT: the roster moved (the wilds grew, a tree fell, a swap
-        // kept the count) — the engine's own doodad revision is the signal.
-        this.lastSentDoodadRev = w.doodadsVersion();
-        this.dressTimer = SHARD_CFG.dressSec;
-        this.net.sendZone(serializeZone(w));
-      }
       this.metaHeartbeat -= dt;
-      if (this.metaHeartbeat <= 0) {
-        this.metaHeartbeat = SHARD_CFG.metaHeartbeatSec;
-        for (const s of w.seats) w.markMetaDirty(s);
-      }
+      const heartbeat = this.metaHeartbeat <= 0;
+      if (heartbeat) this.metaHeartbeat = SHARD_CFG.metaHeartbeatSec;
       // THE WIRE RATE on integer ticks (60 / 20 = every 3rd): a reset timer
       // under a fixed step fired every 4th tick — 15 Hz wearing a 20 Hz name.
-      if (this.ticks % Math.max(1, Math.round(SHARD_CFG.tickHz / SHARD_CFG.stateHz)) === 0) {
-        const snap = serializeSnapshot(w, ++this.snapTick);
-        stampAudiences(w, snap); // THE ACTING SEAT: the notices' and the eyecatch's audiences (the transport ships each to its own)
-        this.net.sendState(snap);
-        w.metaDirty.clear();
-      }
+      // ONE snapTick per beat stamps every unit's snapshot (a client's tick
+      // stays monotonic across a hand-off).
+      const beat = this.ticks % Math.max(1, Math.round(SHARD_CFG.tickHz / SHARD_CFG.stateHz)) === 0;
+      if (beat) this.snapTick++;
+      for (const u of this.units.each()) this.wire(u, dt, heartbeat, beat);
     }
     if (this.savePath) {
       this.persistTimer -= dt;
       if (this.persistTimer <= 0) { this.persistTimer = SHARD_CFG.worldSaveSec; this.persist(); } // THE WORLD SAVE BEAT (the mirrors keep persistSec)
     }
+    this.units.sweep(k.time); // THE LINGER and THE SOFT CAP
+  }
+
+  /** THE WIRE PER UNIT (plan 5.1-5.3): a unit's zone message (a change, THE DRESS
+   *  BEAT), the meta heartbeat and its snapshot, to its own seats alone. */
+  private wire(u: SimUnit, dt: number, heartbeat: boolean, beat: boolean): void {
+    const ids = this.units.seatsOf(u).map(s => s.id);
+    const w = u.world;
+    u.dressTimer -= dt;
+    if (!ids.length) { u.lastSentZone = w.zone.id; u.lastSentDoodadRev = w.doodadsVersion(); return; }
+    if (w.zone.id !== u.lastSentZone) {
+      u.lastSentZone = w.zone.id;
+      u.lastSentDoodadRev = w.doodadsVersion();
+      u.dressTimer = SHARD_CFG.dressSec;
+      this.net.sendZoneToMany(serializeZone(w), ids);
+    } else if (u.dressTimer <= 0 && w.doodadsVersion() !== u.lastSentDoodadRev) {
+      // THE DRESS BEAT: the roster moved (the wilds grew, a tree fell, a swap
+      // kept the count) — the engine's own doodad revision is the signal.
+      u.lastSentDoodadRev = w.doodadsVersion();
+      u.dressTimer = SHARD_CFG.dressSec;
+      this.net.sendZoneToMany(serializeZone(w), ids);
+    }
+    if (heartbeat) for (const s of w.seats) w.markMetaDirty(s);
+    if (!beat) return;
+    this.units.run(u, uw => {
+      const snap = serializeSnapshot(uw, this.snapTick);
+      stampAudiences(uw, snap); // THE ACTING SEAT: the notices' and the eyecatch's audiences (the transport ships each to its own)
+      this.net.sendStateTo(snap, ids);
+      uw.metaDirty.clear();
+    });
   }
 
   /** THE SHADOW: the keeper's body follows the focus seat on the wilds (see
@@ -631,6 +753,19 @@ export class ShardHost {
     k.pos.x = target.actor.pos.x;
     k.pos.y = target.actor.pos.y + SHARD_CFG.keeper.shadowOffset;
     k.tier = target.actor.tier;
+  }
+
+  /** THE UNIT SHADOW (shard M1): a unit's warden stands on its unit's focus seat
+   *  each tick (offset 0), so the world's player reads that are not roads (spawns
+   *  far from the player, proximity triggers, the floats) center on a real player
+   *  of that unit. With no standing seat it stays where it last stood. */
+  private unitShadow(u: SimUnit): void {
+    const focus = this.focusSeatOf(u);
+    if (!focus) return;
+    const k = u.world.localSeat.actor;
+    k.pos.x = focus.actor.pos.x;
+    k.pos.y = focus.actor.pos.y;
+    k.tier = focus.actor.tier;
   }
 
   /** THE ROVING SHADOW (SHARD_CFG.rove): the seat the keeper shadows THIS tick.
@@ -687,7 +822,7 @@ export class ShardHost {
         word = this.parties.invite(from, seat, now);
         if (!word) {
           const party = this.parties.partyOf(from)!;
-          const name = this.world.seats.find(s => s.id === from)?.actor.name ?? from;
+          const name = this.units.seatOf(from)?.actor.name ?? from;
           this.net.sendSession({ t: 'partyInvite', from, name, party: party.id }, seat);
         }
         break;
@@ -705,8 +840,8 @@ export class ShardHost {
   private publishParties(): void {
     if (this.partyRevSeen === this.parties.rev) return;
     this.partyRevSeen = this.parties.rev;
-    this.world.partyRows = this.parties.rows();
-    this.world.partyRev++;
+    // THE WIRE PER UNIT: the party rows are world-wide, published into every unit.
+    for (const u of this.units.each()) { u.world.partyRows = this.parties.rows(); u.world.partyRev++; }
   }
 
   /** THE SPAWN GRACE ends at the first willed input or at its clock. */
@@ -718,8 +853,8 @@ export class ShardHost {
         || (inp.moves?.some(m => m[0] !== 0 || m[1] !== 0) ?? false)); // THE HONEST INPUT: a step anywhere in the tick's batch is willed
       if (!willed && this.world.time < until) continue;
       this.graces.delete(id);
-      const seat = this.world.seats.find(s => s.id === id);
-      if (seat && !seat.keeper) seat.actor.untargetable = false;
+      const seat = this.units.seatOf(id);
+      if (seat) seat.actor.untargetable = false;
     }
   }
 
@@ -728,15 +863,17 @@ export class ShardHost {
    *  by focusSwapSec (an idle or downed first joiner no longer pins the
    *  world's life to itself; a jump across the map costs a cold tick, so it
    *  is never flapped). Null = none connected. */
-  focusSeat(): Seat | null {
-    const standing = this.world.seats.filter(s => !s.keeper && !s.actor.dead && !s.actor.downed);
-    if (!standing.length) { this.focusId = null; return null; }
+  focusSeat(): Seat | null { return this.focusSeatOf(this.units.keeper); }
+  /** THE FOCUS of one unit (THE UNIT SHADOW's rule): its standing seats alone. */
+  focusSeatOf(u: SimUnit): Seat | null {
+    const standing = u.world.seats.filter(s => !s.keeper && !s.actor.dead && !s.actor.downed);
+    if (!standing.length) { u.focusId = null; return null; }
     const score = (s: Seat): number => Math.max(s.lastActedAt, s.lastMovedAt);
     let best = standing[0];
     for (const s of standing) if (score(s) > score(best)) best = s;
-    const current = standing.find(s => s.id === this.focusId);
+    const current = standing.find(s => s.id === u.focusId);
     if (current && score(best) - score(current) < SHARD_CFG.focusSwapSec) return current;
-    this.focusId = best.id;
+    u.focusId = best.id;
     return best;
   }
 
@@ -798,17 +935,19 @@ export class ShardHost {
       clock: +w.time.toFixed(1),
       uptimeSec: Math.round((Date.now() - this.bootAt) / 1000),
       parties: this.parties.rows(),
-      seats: w.seats.filter(s => !s.keeper).map(s => {
+      seats: this.units.allSeats().map(s => {
         const until = this.dormancy.get(s.id); // THE DORMANT SEAT on the page: marked, with its seconds left
         return { id: s.id, name: s.actor.name, level: s.actor.level, alive: !s.actor.dead && !s.actor.downed,
+          unit: this.units.unitOf(s.id)?.key ?? 'keeper', // THE SEAT LEDGER on the page
           ...(until !== undefined ? { dormant: true, dormantLeftSec: +Math.max(0, until - w.time).toFixed(1) } : {}) };
       }),
+      units: this.units.status(), // THE SIM UNITS: key, zone, seats, awake since, empty since
       connections: this.net.connectionCount(),
       ticks: this.ticks,
       tickMsP50: q(0.5), tickMsP95: q(0.95),
       droppedTicks: this.droppedTicks,
       faults: this.faults + this.net.faults,
-      actors: w.actors.length,
+      actors: this.units.each().reduce((n, u) => n + u.world.actors.length, 0),
       rove: { on: this.worldmass && SHARD_CFG.rove.sec > 0, hops: this.roveHops, visiting: this.roveAnchorId }, // THE ROVING SHADOW
       saving: this.savePath ? basename(this.savePath) : 'ephemeral',
       broken: this.broken,
@@ -829,7 +968,9 @@ export class ShardHost {
   persist(): void {
     if (!this.savePath || this.wildsResuming || this.broken) return; // THE RESUME LAW; and a broken world never overwrites its last good save
     try {
-      const save: ShardSave = { schemaVersion: SHARD_CFG.saveSchema, seed: this.seed, savedAt: Date.now(), world: this.world.serializeWorldState() };
+      this.units.captureAll(); // THE PERSIST CAPTURE: every awake unit's live memory row first
+      const save: ShardSave = { schemaVersion: SHARD_CFG.saveSchema, seed: this.seed, savedAt: Date.now(), world: this.world.serializeWorldState(),
+        run: captureRunRow(this.world) }; // THE RUN ROW
       mkdirSync(dirname(this.savePath), { recursive: true });
       // THE DURABLE WRITE: the whole file lands in a sibling, is FSYNCED, then renamed
       // over the last good save — a process kill never leaves a half-written save, and
@@ -862,6 +1003,7 @@ export class ShardHost {
       this.log(`[shard] no usable save at ${this.savePath} — a fresh world${aside ? `; the old file set aside as ${basename(aside)}` : ''}`);
       return;
     }
+    adoptRunRow(this.world, save.run); // THE RUN ROW (absent = today)
     this.world.reconcileSoulrivers();
     this.world.reconcileSeaPorts();
     this.world.reconcileWebLaws();

@@ -83,8 +83,8 @@ const seatOf = (id: string): Seat => w.seats.find(s => s.id === id)!;
 // The host's own snapshot objects (the shared body, before THE OWN ENTRY splits it per socket).
 const sent: StateSnapshot[] = [];
 {
-  const send = host.net.sendState.bind(host.net);
-  host.net.sendState = (s: StateSnapshot): void => { sent.push(s); send(s); };
+  const send = host.net.sendStateTo.bind(host.net); // THE WIRE PER UNIT (shard M1): each unit's snapshot rides sendStateTo
+  host.net.sendStateTo = (s: StateSnapshot, ids: Iterable<string>): void => { sent.push(s); send(s, ids); };
 }
 
 interface Client { c: WsTransport; id: string; got: StateSnapshot[]; zones: ZoneMsg[] }

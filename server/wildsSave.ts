@@ -68,7 +68,7 @@ export function shellLandDigest(seed: number): string {
 
 /** A wilds save as read off disk: absent (null), refused (with the reason), or
  *  a world half that carries the Unbroken Wilds of THIS seed. */
-export type WildsSaveRead = null | { refused: string } | { ws: WorldStateSave };
+export type WildsSaveRead = null | { refused: string } | { ws: WorldStateSave; run?: unknown };
 
 /** Read the wilds save at `path`: the shard wrapper at `schema`, a world half at
  *  this build's WORLD_SCHEMA_VERSION, carrying a mass checkpoint whose run is
@@ -87,7 +87,7 @@ export function readWildsSave(path: string, schema: number, seed: number): Wilds
   if (save.seed !== seed || run !== seed) return { refused: `another seed's world (wrapper ${String(save.seed)}, run ${String(run)}, shard ${seed})` };
   const land = shellLandDigest(seed);
   if (ws.worldmass.configHash !== land) return { refused: `another build's land (saved ${String(ws.worldmass.configHash)}, a shell lays ${land})` };
-  return { ws };
+  return { ws, ...(save.run !== undefined ? { run: save.run } : {}) }; // THE RUN ROW rides beside (shard M1)
 }
 
 /** THE REFUSED SAVE: move an unusable wilds save aside so a fresh world's

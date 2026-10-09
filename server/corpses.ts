@@ -47,6 +47,7 @@ import type { SessionMsg } from '../src/net/transport';
 import {
   sanitizeCorpseNote, sanitizeReckoning, type ShardBodyRow, type ShardCorpseNote, type ShardReckoning,
 } from '../src/net/vesselWire';
+import type { SeatWorlds } from './simUnits';
 
 export const SHARD_CORPSE_CFG = {
   /** Bodies a shard remembers per account: the account ring's own size
@@ -173,7 +174,8 @@ export class ShardCorpses {
   reclaims = 0;
 
   constructor(
-    private readonly world: World,
+    /** THE DESKS PER UNIT (shard M1): each seat's bodies stand in the seat's own unit. */
+    private readonly units: SeatWorlds,
     private readonly send: SeatSend,
     readonly path: string | null,
     private readonly seed: number,
@@ -302,13 +304,13 @@ export class ShardCorpses {
     // A static id re-matches by its stable id alone; a churned generated id
     // re-binds by map coordinate (an ephemeral world re-mints its frontier),
     // never while its own zone still stands, never into a cave.
-    if (!CHURNING_ZONE.test(c.zoneId) || !c.map || this.world.zoneMap[c.zoneId]) return false;
-    if (!this.world.zoneMap[zone.id] || zone.caveDepth != null) return false;
+    const chart = this.units.keeperWorld().zoneMap; // the shared chart (THE PIN's alias)
+    if (!CHURNING_ZONE.test(c.zoneId) || !c.map || chart[c.zoneId]) return false;
+    if (!chart[zone.id] || zone.caveDepth != null) return false;
     return Math.hypot(zone.map.x - c.map.x, zone.map.y - c.map.y) <= CORPSE_MATCH_RADIUS;
   }
 
-  private stand(sb: SeatBodies): void {
-    const w = this.world;
+  private stand(sb: SeatBodies, w: World): void {
     const prior = new Map(sb.bodies.map(b => [b.corpse.id, b.dwell]));
     const sameZone = sb.zoneId === w.zone.id;
     sb.bodies = this.forAccount(sb.accountId).filter(c => this.liesIn(c, w.zone)).map(c => ({
@@ -323,25 +325,27 @@ export class ShardCorpses {
   /** The per-tick sweep: re-stand on a zone change or a records change, run
    *  each seat's reclaim dwell, then ship every seat's lagging rows. */
   tick(dt: number): void {
-    const w = this.world;
     for (const [seatId, sb] of this.seats) {
-      const seat = w.seats.find(s => s.id === seatId);
-      if (!seat || sb.asleep) continue; // THE DORMANT SEAT: no hand, no dwell
-      // M0: every seat stands in the one live zone (the party travels together).
-      if (sb.stale || sb.zoneId !== w.zone.id) this.stand(sb);
-      this.dwell(seat, sb, dt);
+      const w = this.units.worldOf(seatId);
+      const seat = w?.seats.find(s => s.id === seatId);
+      if (!w || !seat || sb.asleep) continue; // THE DORMANT SEAT: no hand, no dwell
+      // THE DESKS PER UNIT: a seat's bodies stand in the zone of its own unit, and re-stand
+      // when a hand-off (or its unit's road) moves it to another zone.
+      if (sb.stale || sb.zoneId !== w.zone.id) this.stand(sb, w);
+      this.dwell(seat, sb, dt, w);
     }
     // Ship after EVERY seat swept: a reclaim re-stands its account's other seats.
     for (const [seatId, sb] of this.seats) {
-      const seat = w.seats.find(s => s.id === seatId);
-      if (seat && !sb.asleep && (sb.stale || sb.unsent)) { if (sb.stale) this.stand(sb); this.ship(seat, sb); } // a dormant seat hears nothing
+      const w = this.units.worldOf(seatId);
+      const seat = w?.seats.find(s => s.id === seatId);
+      if (w && seat && !sb.asleep && (sb.stale || sb.unsent)) { if (sb.stale) this.stand(sb, w); this.ship(seat, sb, w); } // a dormant seat hears nothing
     }
   }
 
   /** THE RECLAIM DWELL: the 'corpse_reclaim' transit row's reach, discipline
    *  and clock (updatePlayerCorpses' own), read for the owning seat. */
-  private dwell(seat: Seat, sb: SeatBodies, dt: number): void {
-    const w = this.world, a = seat.actor;
+  private dwell(seat: Seat, sb: SeatBodies, dt: number, w: World): void {
+    const a = seat.actor;
     const radius = transitRadius('corpse_reclaim', SHARD_CORPSE_CFG.reclaimRadius);
     const need = transitDwell('corpse_reclaim', SHARD_CORPSE_CFG.reclaimDwell);
     const reach = transitReach('corpse_reclaim');
@@ -349,7 +353,7 @@ export class ShardCorpses {
     for (const b of sb.bodies) {
       const near = able && dist(b.pos, a.pos) <= radius && w.dwellReachable(a.pos, b.pos, reach, w.storyPair(a));
       b.dwell = near ? b.dwell + dt : 0;
-      if (b.dwell >= need) { this.reclaim(seat, sb, b); return; }
+      if (b.dwell >= need) { this.units.within(seat.id, uw => this.reclaim(seat, sb, b, uw)); return; }
       if (Math.abs(b.dwell - b.sentDwell) >= need * SHARD_CORPSE_CFG.dwellStep || (b.dwell === 0 && b.sentDwell !== 0)) sb.unsent = true;
     }
   }
@@ -357,8 +361,8 @@ export class ShardCorpses {
   /** The gear comes home into the claimant's own bag (a full bag spills at its
    *  feet as OWED property), each piece a pickup-feed row; the body's flash;
    *  the record clears and the file writes. */
-  private reclaim(seat: Seat, sb: SeatBodies, b: Standing): void {
-    const w = this.world, hero = w.seatHero(seat);
+  private reclaim(seat: Seat, sb: SeatBodies, b: Standing, w: World): void {
+    const hero = w.seatHero(seat);
     for (const it of b.corpse.loot.items) {
       const item = lootItem(it);
       if (!item) continue; // a patched-out base stays lost, as at any load
@@ -376,12 +380,12 @@ export class ShardCorpses {
     this.remove(b.corpse.id); // every seat of this account re-stands
   }
 
-  private ship(seat: Seat, sb: SeatBodies): void {
+  private ship(seat: Seat, sb: SeatBodies, w: World): void {
     const bodies: ShardBodyRow[] = sb.bodies.map(b => ({
       id: b.corpse.id, x: b.pos.x, y: b.pos.y, classId: b.corpse.classId, level: b.corpse.level, dwell: b.dwell,
     }));
     for (const b of sb.bodies) b.sentDwell = b.dwell;
-    this.send({ t: 'corpses', zoneId: sb.zoneId ?? this.world.zone.id, bodies, ...(sb.reclaimed ? { reclaimed: sb.reclaimed } : {}) }, seat.id);
+    this.send({ t: 'corpses', zoneId: sb.zoneId ?? w.zone.id, bodies, ...(sb.reclaimed ? { reclaimed: sb.reclaimed } : {}) }, seat.id);
     sb.reclaimed = 0;
     sb.unsent = false;
   }

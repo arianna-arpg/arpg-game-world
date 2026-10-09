@@ -508,25 +508,40 @@ export class ShardTransport implements NetTransport {
    *  a seat's own rows (its clocks, its refusal note, its surge) reach its own socket and never
    *  another's, a notice with an audience reaches that audience alone and an eyecatch the seats
    *  that may see it; a snapshot carrying none of these is the one broadcast frame it was. */
-  sendState(s: StateSnapshot): void {
+  sendState(s: StateSnapshot): void { this.sendStateTo(s, this.bySeat.keys()); }
+  /** THE WIRE PER UNIT (shard M1): a unit's snapshot to its own seats' sockets alone (a
+   *  seat with no socket, the warden or a dormant seat, is skipped). sendState's laws, per
+   *  socket: THE OWN ENTRY and the audiences split each frame exactly as the broadcast did. */
+  sendStateTo(s: StateSnapshot, seatIds: Iterable<PlayerId>): void {
+    const conns: [PlayerId, Conn][] = [];
+    for (const id of seatIds) { const c = this.bySeat.get(id); if (c) conns.push([id, c]); }
+    if (!conns.length) return;
     const heard = seatAudienceSplit(s); // THE ACTING SEAT: an audience rides this snapshot (the own rows go with it)
     if (heard) {
       const body = seatAudienceBody(heard);
-      for (const [seat, c] of this.bySeat) this.write(c, encodeText(seatAudienceFrame(body, heard, seat)));
+      for (const [seat, c] of conns) this.write(c, encodeText(seatAudienceFrame(body, heard, seat)));
       return;
     }
     // THE OWN ENTRY (snapshot.ts SEAT_OWN_ROWS): a seat's own rows (its clocks) reach its own
-    // socket and never another's; a snapshot carrying none is the one broadcast frame it was.
+    // socket and never another's; a snapshot carrying none is the one shared frame it was.
     const own = ownEntryJson(s);
-    if (!own) { this.broadcast({ t: 'snap', snap: s }); return; }
+    if (!own) { const frame = encodeText(JSON.stringify({ t: 'snap', snap: s } satisfies WireMsg)); for (const [, c] of conns) this.write(c, frame); return; }
     let bare: Uint8Array | null = null; // the shared frame for every socket whose seat carries no own row
-    for (const [seat, c] of this.bySeat) {
+    for (const [seat, c] of conns) {
       const mine = own.forSeat(seat);
       this.write(c, mine !== null ? encodeText('{"t":"snap","snap":' + mine + '}') : (bare ??= encodeText('{"t":"snap","snap":' + own.bare + '}')));
     }
   }
   onState(cb: (s: StateSnapshot) => void): () => void { this.stateCbs.add(cb); return () => { this.stateCbs.delete(cb); }; }
   sendZone(z: ZoneMsg): void { this.broadcast({ t: 'zone', zone: z }, undefined, true); }
+  /** THE WIRE PER UNIT (shard M1): a unit's zone message (a change, THE DRESS BEAT) to its own seats. */
+  sendZoneToMany(z: ZoneMsg, seatIds: Iterable<PlayerId>): void {
+    let frame: Uint8Array | null = null;
+    for (const id of seatIds) {
+      const c = this.bySeat.get(id);
+      if (c) this.write(c, frame ??= encodeText(JSON.stringify({ t: 'zone', zone: z } satisfies WireMsg)), true);
+    }
+  }
   /** Ship the zone to ONE seat (a joiner's first terrain, a re-seat). */
   sendZoneTo(seat: PlayerId, z: ZoneMsg): void {
     const c = this.bySeat.get(seat);

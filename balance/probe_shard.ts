@@ -18,7 +18,8 @@
 //   G  XP: the keeper never levels
 //   H  THE MERCY: a lone downed seat rises after reviveSec
 //   I  the leave: a dropped socket despawns its seat
-//   J  persistence: the world half writes and a second host resumes it
+//   J  persistence: the world half writes and a second host resumes it; a zone
+//      awake in a sim unit rides the save (THE PERSIST CAPTURE, M1)
 //   K  THE UNBROKEN WILDS: the seamless foundation's surface hosts headless
 //   P  THE WILDS ON THE WIRE: a render shell lays the same land from the seed,
 //      takes the life from the wire, keeps its walk, streams pages, and the
@@ -65,7 +66,7 @@ import { WS_FRAME_CFG, WS_OP, WsMessageAssembler, decodeFrames, encodeClose, enc
 import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import type { StateSnapshot, ZoneMsg } from '../src/net/snapshot';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { type PlayerInput } from '../src/net/intent';
+import { NullInput, type PlayerInput } from '../src/net/intent';
 import { shardBuildStamp } from '../src/net/shardBuild';
 import { VESSEL_CFG } from '../server/vessel';
 
@@ -436,10 +437,19 @@ await host.stop();
   try {
     const a = new ShardHost({ seed: 0x0badf00d, saveDir: dir, open: false, log: () => { /* quiet */ } });
     for (let i = 0; i < 120; i++) a.tick(DT);
+    // THE PERSIST CAPTURE (M1, THE SIM UNITS): a zone awake in a unit rides the world save as
+    // its live memory row (its stored row is otherwise written only when the unit sleeps).
+    a.world.addSeat('pj', CLASSES[0], new NullInput(), { startingCompanions: false, startingFlasks: false });
+    const awakeZone = a.world.exits.find(e => e.to !== '?')!.to;
+    const awakeUnit = a.units.travel('pj', awakeZone);
+    for (let i = 0; i < 30; i++) a.tick(DT);
     const zonesA = Object.keys(a.world.zoneMap).length;
     const timeA = a.world.time;
     a.persist();
     check('J persist: the world half writes under the shard wrapper', !!a.savePath && existsSync(a.savePath));
+    const savedA = JSON.parse(readFileSync(a.savePath!, 'utf-8')) as ShardSave;
+    check('J persist: THE PERSIST CAPTURE carries a zone awake in a unit (its live memory row rides the save)',
+      !!awakeUnit && awakeUnit.role === 'unit' && awakeUnit.world.zone.id === awakeZone && !!savedA.world.memory?.some(m => m.zoneId === awakeZone), awakeZone);
     const b = new ShardHost({ seed: 0x0badf00d, saveDir: dir, open: false, log: () => { /* quiet */ } });
     check('J persist: a second host resumes the saved clock and chart', Math.abs(b.world.time - timeA) < 1e-6 && Object.keys(b.world.zoneMap).length === zonesA, `t ${b.world.time.toFixed(2)} vs ${timeA.toFixed(2)}, zones ${Object.keys(b.world.zoneMap).length} vs ${zonesA}`);
     check('J persist: the resumed keeper wakes in the hearth, alone', b.world.zone.id === 'lastlight' && b.world.seats.length === 1 && !!b.keeper.keeper);

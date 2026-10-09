@@ -54,6 +54,7 @@ import { captureLoot } from '../src/meta/death';
 import { stageOf } from '../src/meta/modes';
 import { isAccountId, renownForRun } from '../src/meta/account';
 import type { SeatSend, ShardCorpses } from './corpses';
+import type { SeatWorlds } from './simUnits';
 
 export const VESSEL_CFG = {
   /** The largest vessel (JSON characters) a join may graft. The wire's own
@@ -106,6 +107,8 @@ const REFUSAL = {
 };
 /** The recency ledger's counters the leave mid-fight reads (engine/recency.ts). */
 const HURT = recentIndex('hurt'), HIT = recentIndex('hit');
+/** A seat's own hero (World.seatHero's fold, which reads no World). */
+const heroOf = (seat: Seat): Actor => seat.home ?? seat.actor;
 
 /** A judged vessel: the save (its world half dropped) and the rebuilt build. */
 type Built = NonNullable<ReturnType<typeof rebuildSavedMeta>>;
@@ -257,7 +260,8 @@ export class VesselDesk {
   private clock = 0;
 
   constructor(
-    private readonly world: World,
+    /** THE DESKS PER UNIT (shard M1): every read that was the one World reads the seat's own unit. */
+    private readonly units: SeatWorlds,
     private readonly send: SeatSend,
     private readonly corpses: ShardCorpses,
     private readonly opts: {
@@ -283,7 +287,7 @@ export class VesselDesk {
    *  no seat until its class pick's `rejoin`) or THE ACTING SEAT's refusal (a
    *  vessel the shard will not seat is never seated fresh: `refused`). */
   seat(peer: PeerInfo, rawVessel: unknown): Seat | null {
-    const w = this.world;
+    const w = this.units.keeperWorld(); // THE HEARTH WAKE: a join lands in the keeper
     const accountId = isAccountId(peer.accountId) ? peer.accountId : undefined;
     if (accountId) this.accounts.set(peer.id, accountId); else this.accounts.delete(peer.id);
     let judged: VesselJudgment | null = rawVessel === undefined || rawVessel === null ? null : judgeVessel(rawVessel);
@@ -323,7 +327,7 @@ export class VesselDesk {
    *  seat-scoped half of applySavedCharacter. The run ledger, objective
    *  clears, corpse spawning, annex and claim ledgers are the WORLD's here. */
   private graft(seat: Seat, save: CharacterSave, built: Built, accountId: string): void {
-    const w = this.world;
+    const w = this.units.keeperWorld();
     // THE SEATED HEAL (the local resume's own): learned skills off the bar take free seats.
     const bar = [...save.bar];
     while (bar.length < MAX_LEARNED_SKILLS) bar.push(null);
@@ -367,9 +371,13 @@ export class VesselDesk {
    *  clocks) comes home as it stands. */
   serialize(seatId: string): CharacterSave | null {
     const rec = this.vessels.get(seatId);
-    const seat = rec ? this.world.seats.find(s => s.id === seatId) : undefined;
+    const seat = rec ? this.units.seatOf(seatId) : undefined;
     if (!rec || !seat) return null;
-    const w = this.world, hero = w.seatHero(seat), up = rec.upload;
+    // THE DESKS PER UNIT: the vessel mirrors home from the unit it stands in, its companions with it.
+    return this.units.within(seatId, w => this.serializeIn(w, seat, rec)) ?? null;
+  }
+  private serializeIn(w: World, seat: Seat, rec: VesselSeat): CharacterSave {
+    const hero = w.seatHero(seat), up = rec.upload;
     const save: CharacterSave = {
       ...serializeCouchGuest(w, seat, { companions: [], throng: [], throngClaimed: up.throngClaimed ?? [] }),
       // THE PASS-THROUGH: the vessel's own, never the shard's.
@@ -416,8 +424,9 @@ export class VesselDesk {
    *  before its socket closes; honored once per VESSEL_CFG.farewellEverySec. */
   requestMirror(seatId: string): boolean {
     const rec = this.vessels.get(seatId);
-    if (!rec || this.world.time - rec.askedAt < VESSEL_CFG.farewellEverySec) return false;
-    rec.askedAt = this.world.time;
+    const now = this.units.keeperWorld().time; // THE ONE CLOCK
+    if (!rec || now - rec.askedAt < VESSEL_CFG.farewellEverySec) return false;
+    rec.askedAt = now;
     return this.mirror(seatId);
   }
 
@@ -428,7 +437,7 @@ export class VesselDesk {
    *  beat has fallen too: its word waits in the tombstone. */
   leave(seatId: string): void {
     const rec = this.vessels.get(seatId);
-    const seat = rec ? this.world.seats.find(s => s.id === seatId) : undefined;
+    const seat = rec ? this.units.seatOf(seatId) : undefined;
     if (rec && seat && this.downed(seat) && this.endsTheRun(seat)) this.fall(seat, rec, false);
     this.beats.delete(seatId);
     this.vessels.delete(seatId);
@@ -451,18 +460,18 @@ export class VesselDesk {
    *  (ShardTransport.leaveHolds) with no farewell mirror. A downed or dead
    *  hero keeps the older laws (a leave while down is the fall). */
   inCombat(seatId: string): boolean {
-    const seat = this.world.seats.find(s => s.id === seatId && !s.keeper);
+    const seat = this.units.seatOf(seatId);
     if (!seat || this.downed(seat)) return false;
     const fought = (a: Actor): boolean => Math.min(a.since[HURT], a.since[HIT]) < VESSEL_CFG.combatLeaveSec;
-    return fought(seat.actor) || fought(this.world.seatHero(seat));
+    return fought(seat.actor) || fought(heroOf(seat));
   }
 
   /** THE ACTING SEAT (places walked): where a seat stands, as the reckoning
    *  counts places (a zone; on the Unbroken Wilds, a surface cell). */
   private placeOf(seat: Seat): string {
-    const zone = this.world.zone.id;
+    const zone = (this.units.worldOf(seat.id) ?? this.units.keeperWorld()).zone.id; // the seat's own unit
     if (zone !== MASS_ZONE) return zone;
-    const p = this.world.seatHero(seat).pos, c = VESSEL_CFG.placeCellPx;
+    const p = heroOf(seat).pos, c = VESSEL_CFG.placeCellPx;
     return `${zone}@${Math.floor(p.x / c)},${Math.floor(p.y / c)}`;
   }
 
@@ -472,20 +481,20 @@ export class VesselDesk {
    *  reads the down the same tick it lands, the mercy needs reviveSec), the
    *  death beats that ran out, then the mirror beat. */
   tick(dt: number): void {
-    const w = this.world;
     this.clock += dt;
     for (const rec of this.vessels.values()) {
-      const seat = w.seats.find(s => s.id === rec.seatId);
+      const seat = this.units.seatOf(rec.seatId);
       if (seat && !this.downed(seat)) rec.places.add(this.placeOf(seat));
     }
+    // THE DEATH COVENANT across units: every seat judged in its own unit.
     for (const rec of [...this.vessels.values()]) {
-      const seat = w.seats.find(s => s.id === rec.seatId);
+      const seat = this.units.seatOf(rec.seatId);
       if (seat && this.covenantDue(seat)) this.fall(seat, rec);
     }
     // THE FRESH HERO'S END (card 14 C): a vessel-less seat whose stage ends on death
     // ends here too — no mercy clock ever stands a mortal back up on a shard.
     if (VESSEL_CFG.freshHeroDies) {
-      for (const seat of [...w.seats]) {
+      for (const seat of this.units.allSeats()) {
         if (seat.keeper || this.vessels.has(seat.id) || this.beats.has(seat.id)
           || !this.downed(seat) || !this.endsTheRun(seat) || this.partyHolds(seat)) continue;
         this.freshFall(seat);
@@ -495,7 +504,7 @@ export class VesselDesk {
     for (const [id, beat] of [...this.beats]) {
       if (this.clock < beat.until) continue;
       this.beats.delete(id);
-      const seat = w.seats.find(s => s.id === id);
+      const seat = this.units.seatOf(id);
       if (seat) this.endFall(seat, beat.tell, beat.word);
     }
     this.beat -= dt;
@@ -513,13 +522,14 @@ export class VesselDesk {
   private partyHolds(seat: Seat): boolean {
     const mates = this.opts.party?.(seat.id) ?? [seat.id];
     if (mates.length <= 1) return false;
-    return this.world.seats.some(o => o !== seat && mates.includes(o.id) && this.couldKneel(o, seat));
+    return this.units.allSeats().some(o => o !== seat && mates.includes(o.id) && this.couldKneel(o, seat));
   }
-  /** A standing player within the near radius of a down (radius 0 = anywhere). */
+  /** A standing player within the near radius of a down (radius 0 = anywhere), and
+   *  IN THE SAME UNIT (THE DESKS PER UNIT: positions in two Worlds are not comparable). */
   private couldKneel(o: Seat, down: Seat): boolean {
-    if (o.keeper || o.actor.dead || o.actor.downed) return false;
+    if (o.keeper || o.actor.dead || o.actor.downed || !this.units.together(o.id, down.id)) return false;
     const r = COOP_SCALING.shareRadius;
-    return r <= 0 || dist(this.world.seatHero(o).pos, this.world.seatHero(down).pos) <= r;
+    return r <= 0 || dist(heroOf(o).pos, heroOf(down).pos) <= r;
   }
 
   /** Is this seat's down a mortal vessel's death? The stage's own policy
@@ -529,11 +539,11 @@ export class VesselDesk {
   private covenantDue(seat: Seat): boolean {
     if (!this.downed(seat) || !this.endsTheRun(seat)) return false;
     if (this.partyHolds(seat)) return false; // THE GROUP LAW: a mate stands to kneel
-    if (VESSEL_CFG.covenantAt === 'mercy' && this.world.seats.some(o => o !== seat && this.couldKneel(o, seat))) return false;
+    if (VESSEL_CFG.covenantAt === 'mercy' && this.units.allSeats().some(o => o !== seat && this.couldKneel(o, seat))) return false;
     return true;
   }
   private downed(seat: Seat): boolean {
-    const hero = this.world.seatHero(seat);
+    const hero = heroOf(seat);
     return seat.actor.downed || seat.actor.dead || hero.downed || hero.dead;
   }
   /** The stage's own policy: does a death from it END the run? */
@@ -545,7 +555,7 @@ export class VesselDesk {
    *  THE DEATH BEAT and the seat leaves the world; nothing is recorded: a fresh hero
    *  owns no body worth a walk. */
   private freshFall(seat: Seat): void {
-    const w = this.world;
+    const w = this.units.worldOf(seat.id) ?? this.units.keeperWorld();
     this.opts.log(`[shard] ${seat.id}'s fresh hero ${seat.meta.name} fell in ${w.zone.name}: the run ends, nothing to reclaim`);
     this.freshFalls++;
     this.corpses.leave(seat.id);
@@ -559,7 +569,8 @@ export class VesselDesk {
    *  unheard (a leave while down), the seat goes at once and the tombstone
    *  keeps the word. */
   private fall(seat: Seat, rec: VesselSeat, heard = true): void {
-    const w = this.world, m = seat.meta, hero = w.seatHero(seat), zone = w.zone;
+    // THE DESKS PER UNIT: the body records the seat's own unit (its zone, its spot, its pocket).
+    const w = this.units.worldOf(seat.id) ?? this.units.keeperWorld(), m = seat.meta, hero = w.seatHero(seat), zone = w.zone;
     const stage = stageOf(m.modeId, m.modeStage);
     // THE ACTING SEAT: the seat's own kills and places, never the server's.
     const kills = w.seatKills(seat), zones = Math.max(1, rec.places.size);
@@ -605,7 +616,7 @@ export class VesselDesk {
    *  then endFall. A fall no client will hear, or a beat of 0, ends at once. */
   private beginBeat(seat: Seat, tell: boolean, word?: FallWord): void {
     if (!tell || VESSEL_CFG.deathBeatSec <= 0) { this.endFall(seat, tell, word); return; }
-    if (seat.home) { try { this.world.seatEject(seat, 'released'); } catch { /* the hero falls in its own flesh either way */ } }
+    if (seat.home) { try { this.units.within(seat.id, w => w.seatEject(seat, 'released')); } catch { /* the hero falls in its own flesh either way */ } }
     const a = seat.actor;
     a.downed = false; a.dead = true; a.life = 0; a.casting = null; a.untargetable = true;
     seat.reviveDwellBy.clear();
@@ -616,13 +627,15 @@ export class VesselDesk {
    *  the client runs its reckoning and wipes its run slot), then the seat
    *  leaves the world. */
   private endFall(seat: Seat, tell: boolean, word?: FallWord): void {
-    const w = this.world;
     if (tell) {
       if (word) this.send({ t: 'corpse', note: word.note, reckoning: word.reckoning }, seat.id);
       this.send({ t: 'runEnd' }, seat.id);
     }
-    if (seat.home) { try { w.seatEject(seat, 'released'); } catch { /* the seat leaves either way */ } }
-    w.removeSeat(seat.id);
+    // THE DESKS PER UNIT: the seat leaves the unit it stands in.
+    this.units.within(seat.id, w => {
+      if (seat.home) { try { w.seatEject(seat, 'released'); } catch { /* the seat leaves either way */ } }
+      w.removeSeat(seat.id);
+    });
     this.opts.onSeatGone?.(seat.id);
   }
 }

@@ -235,6 +235,8 @@ async function waitFor(cond: () => boolean, host: ShardHost | null, maxTicks: nu
     if (hatch && w.massRuntime) {
       w.landPartyAt(hatch.pos);
       w.massRuntime.update(w, true);
+      // The M0 engine lane (shard M1 plan 7.2): a direct enterSidezone on the keeper moves the
+      // keeper unit whole; the per-seat roads that emit tickets instead are W2's.
       pocketable(w).enterSidezone(hatch);
       cave = w.zone.id;
     }

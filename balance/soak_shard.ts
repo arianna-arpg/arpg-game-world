@@ -279,8 +279,10 @@ async function main(): Promise<number> {
     fn(...a);
     if (win.open) sink(net.bytesOut - b0, net.framesOut - f0);
   };
-  net.sendState = metered(net.sendState.bind(net), (b, f) => { win.bytesSnap += b; if (f > 0) win.snapBytes.push(b / f); });
-  net.sendZone = metered(net.sendZone.bind(net), b => { win.bytesZone += b; win.zoneSends++; });
+  // THE WIRE PER UNIT (shard M1): a unit's snapshot goes through sendStateTo, its zone message
+  // through sendZoneToMany (sendState and sendZone remain as the all-seats forms).
+  net.sendStateTo = metered(net.sendStateTo.bind(net), (b, f) => { win.bytesSnap += b; if (f > 0) win.snapBytes.push(b / f); });
+  net.sendZoneToMany = metered(net.sendZoneToMany.bind(net), b => { win.bytesZone += b; win.zoneSends++; });
   net.sendZoneTo = metered(net.sendZoneTo.bind(net), b => { win.bytesZone += b; win.zoneToSends++; });
   // FED: of the seats that could act this tick, how many had a client input to act on
   // (World.applyInputs steps a seat with no input this tick not at all).
@@ -289,7 +291,7 @@ async function main(): Promise<number> {
     const m = realDrain();
     if (win.open) {
       win.inputs += m.size;
-      for (const s of host.world.seats) if (!s.keeper && !net.isDormant(s.id)) win.seatTicks++;
+      for (const s of host.units.allSeats()) if (!net.isDormant(s.id)) win.seatTicks++;
     }
     return m;
   };
@@ -336,7 +338,7 @@ async function main(): Promise<number> {
         if (spread > 0) {
           // THE SPREAD: the harness seats each bot at its own anchor on the ring (a party
           // that split up), and the bot roams around that anchor from then on.
-          const seat = host.world.seats.find(x => x.id === e.seat);
+          const seat = host.units.seatOf(e.seat);
           if (seat) {
             const ang = 2 * Math.PI * e.bot / bots;
             const want = { x: hearth.x + Math.cos(ang) * spread, y: hearth.y + Math.sin(ang) * spread };
@@ -389,9 +391,9 @@ async function main(): Promise<number> {
   // focus law breaks: a seat far from the shadow meets no births).
   const popRadius = host.world.massRuntime?.config.populationRadius ?? 1300;
   const livingRadius = (): { min: number; mean: number } => {
-    const standing = host.world.seats.filter(s => !s.keeper && !s.actor.dead && !s.actor.downed && !net.isDormant(s.id));
+    const standing = host.units.allSeats().filter(s => !s.actor.dead && !s.actor.downed && !net.isDormant(s.id));
     if (!standing.length) return { min: 0, mean: 0 };
-    const counts = standing.map(s => host.world.actors.filter(a => a.team === 'enemy' && !a.dead
+    const counts = standing.map(s => (host.units.worldOf(s.id) ?? host.world).actors.filter(a => a.team === 'enemy' && !a.dead
       && Math.hypot(a.pos.x - s.actor.pos.x, a.pos.y - s.actor.pos.y) <= popRadius).length);
     return { min: Math.min(...counts), mean: counts.reduce((a, b) => a + b, 0) / counts.length };
   };
@@ -407,7 +409,7 @@ async function main(): Promise<number> {
     const dormant = st.seats.filter(s => s.dormant).length;
     const bytes = net.bytesOut - prev.bytes, seatTicks = win.seatTicks - prev.seatTicks;
     const living = livingRadius();
-    const standingNow = host.world.seats.filter(x => !x.keeper && !x.actor.dead && !x.actor.downed);
+    const standingNow = host.units.allSeats().filter(x => !x.actor.dead && !x.actor.downed);
     let fleetSpreadPx = 0;
     for (const a of standingNow) for (const b of standingNow) fleetSpreadPx = Math.max(fleetSpreadPx, Math.hypot(a.actor.pos.x - b.actor.pos.x, a.actor.pos.y - b.actor.pos.y));
     samples.push({
@@ -452,8 +454,8 @@ async function main(): Promise<number> {
   if (!ev.stats) err('the fleet sent no stats');
   // THE ACTING SEAT: a word said mid-fight sleeps like a lost socket (VESSEL_CFG.combatLeaveSec),
   // so a bot that left in a fight leaves its seat DORMANT; that seat is the law's, and stop() ends it.
-  if (!await until(() => host.world.seats.every(s => !!s.keeper || host.net.isDormant(s.id)), 5000))
-    err(`${host.world.seats.filter(s => !s.keeper && !host.net.isDormant(s.id)).length} seat(s) still stood after every bot left`);
+  if (!await until(() => host.units.allSeats().every(s => host.net.isDormant(s.id)), 5000))
+    err(`${host.units.allSeats().filter(s => !host.net.isDormant(s.id)).length} seat(s) still stood after every bot left`);
   await host.stop({ persist: false });
   gcObs.disconnect();
   restoreRandom();
