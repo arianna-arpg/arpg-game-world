@@ -1037,7 +1037,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
   for (const s of world.seats) if (!s.keeper) seats[s.id] = seatW(s, world); // keeperSeat: the warden is no party member
   // THE COUNTERS AND THE JOURNAL (net/journalWire.ts): each seat's journal and rite rows, THE OWN
   // ENTRY's, on a hosted world alone (each absent in its common case); a rite holds the hands.
-  if (world.localSeat.keeper) for (const s of world.seats) {
+  if (world.localSeat.keeper) world.withApproachPass(() => { for (const s of world.seats) { // one pass: each board's routes once
     const row = seats[s.id];
     if (!row) continue;
     const jn = journalRowOf(world, s, tick);
@@ -1045,7 +1045,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     const hv = harvestRowOf(world, s);
     if (hv) row.hv = hv;
     if (world.harvestHolds(s)) row.rooted = true;
-  }
+  } });
 
   // META: ship a seat's build only when it CHANGED (level/pickup/mutation marked
   // it dirty). The host clears world.metaDirty after the broadcast (main.ts).

@@ -22169,10 +22169,24 @@ export class World {
 
   /** Shared route policy: callers receive evidence, never map knowledge. */
   bountyApproaches(boardId: string, manageable: boolean): Map<string, TravelRoute> {
+    const key = boardId + (manageable ? ':m' : ':d');
+    const pass = this.approachPass?.get(key);
+    if (pass) return pass;
     const home = this.bountyBoardRoster().find(b => b.id === boardId)?.homeZoneId ?? START_ZONE;
     const cfg = manageable ? BOUNTY_BOARD_CFG.routes.manageable : BOUNTY_BOARD_CFG.routes.demanding;
-    return bountyRoutes(this, home, { maxLevel: this.player.level + cfg.above,
+    const routes = bountyRoutes(this, home, { maxLevel: this.player.level + cfg.above,
       maxSteps: cfg.steps, maxDistance: cfg.distance * this.bountyReach() });
+    this.approachPass?.set(key, routes);
+    return routes;
+  }
+
+  /** THE JOURNAL ROW's pass (net/journalWire.ts): one snapshot's seats read each board's
+   *  approaches once (the routes read the world, never the seat). Null outside a pass. */
+  private approachPass: Map<string, Map<string, TravelRoute>> | null = null;
+  withApproachPass<T>(fn: () => T): T {
+    if (this.approachPass) return fn();
+    this.approachPass = new Map();
+    try { return fn(); } finally { this.approachPass = null; }
   }
 
   bountyAppropriate(p: BountyPosting, routes = this.bountyApproaches(p.boardId, true)): boolean {
