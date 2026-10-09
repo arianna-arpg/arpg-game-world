@@ -54,7 +54,7 @@ import { ShardTransport, type ShardJoin } from './shardTransport';
 import { VesselDesk } from './vessel';
 import { ShardCorpses, shardRecordsPath } from './corpses';
 import { UnitRegistry, type SimUnit } from './simUnits';
-import { UNIT_CFG, unitClocks } from '../src/engine/shardUnits';
+import { UNIT_CFG } from '../src/engine/shardUnits';
 import { readWildsSave, resumeWilds, setAsideWildsSave } from './wildsSave';
 
 export const SHARD_CFG = {
@@ -635,7 +635,8 @@ export class ShardHost {
     w.shardWorld = {
       role: u.role, key: u.key,
       enqueue: t => this.units.enqueue(t),
-      dispatch: (zoneId, fn) => this.units.dispatch(zoneId, fn),
+      dispatch: (zoneId, fn) => this.units.dispatch(zoneId, fn), // THE SPLIT DISPATCH (W3)
+      worlds: () => this.units.worlds(), // THE OCCUPIED LAW's source (W3)
       // THE ROADS PER PLAYER: an awake zone's live seed (the town portal's faded check) and THE HEARTH SEAT.
       liveSeed: zoneId => this.units.liveSeedOf(zoneId),
       hearth: () => this.hearthSeat(),
@@ -660,8 +661,9 @@ export class ShardHost {
     if (this.wildsResuming) return; // THE RESUME LAW: no frame meets a half-stood world (wildsSave)
     const k = this.world;
     // THE ONE CLOCK (shard M1): every unit enters its step at the keeper's
-    // tick-start readings, so each lands where the keeper lands.
-    const clocks = unitClocks(k);
+    // tick-start readings, so each lands where the keeper lands (and so does a
+    // dispatch from the keeper's sweeps into a unit that has not stepped yet).
+    const clocks = this.units.beginTick();
     // THE GUARDED PHASES: a throw in a simulate phase never skips the wire or
     // the beats (clients used to freeze and saves to stop); THE BREAKER counts
     // the keeper's run of faulting ticks, THE UNIT BREAKER each unit's.
@@ -678,7 +680,7 @@ export class ShardHost {
       this.endGraces(inputs);
     } catch (e) { this.noteFault('the input phase', e); }
     for (const u of this.units.each()) {
-      if (u.broken) continue;
+      if (u.broken || this.units.frozen(u)) continue; // THE LINGER FREEZE (W3): a seatless unit stands still
       try {
         this.units.run(u, w => {
           this.wardenStand(u);

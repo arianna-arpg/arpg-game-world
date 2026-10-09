@@ -53,6 +53,10 @@ export interface WorldBulletin {
   /** The NOTICE CHANNEL this line belongs to (a registerNoticeChannel id) —
    *  the player's mute switch. Absent = 'world', the catch-all. */
   channel?: string;
+  /** THE OCCUPIED LAW (shard M1-W3): on a hosted world, the seat ids that hear
+   *  a line its source gated on where players stand (World.occupiedAudience);
+   *  absent = every player, as every line always was. */
+  to?: string[];
 }
 
 /** The shared bulletin look — one place, no per-call literals. */
@@ -183,6 +187,7 @@ export function pushNotice(list: NoticeEntry[], b: WorldBulletin, now: number): 
     size: b.size ?? BULLETIN_CFG.size,
     channel: b.channel ?? 'world',
     bornAt: now,
+    ...(b.to ? { to: [...b.to] } : {}),
   });
   while (list.length > NOTICE_CFG.keep) list.shift();
 }

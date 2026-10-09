@@ -111,6 +111,12 @@ export class UnitRegistry implements SeatWorlds {
   /** THE PIN's guard: the unit a run is inside (runs never nest across units). */
   private active: SimUnit | null = null;
   private order: SimUnit[] | null = null;
+  /** THE ONE CLOCK's reading of the tick in flight (beginTick; cleared once every
+   *  unit ran): a dispatch into a unit that has not stepped yet enters there. */
+  private tickClocks: UnitClocks | null = null;
+  /** THE SPLIT DISPATCH's deferrals: work one unit sent to another World's zone,
+   *  run at the drain (never a pin inside a pin). */
+  private readonly deferred: { zoneId: string; fn: (w: World) => unknown }[] = [];
   /** The executor's word to the host (set by ShardHost). */
   onArrive: ArrivalHook | null = null;
   /** Ledgers since boot (the status page's and the probe's read). */
@@ -158,6 +164,12 @@ export class UnitRegistry implements SeatWorlds {
   allSeats(): Seat[] { return this.each().flatMap(u => this.seatsOf(u)); }
   /** Are two seats in the same unit (positions comparable, a kneel possible)? */
   together(a: string, b: string): boolean { const u = this.unitOf(a); return !!u && u === this.unitOf(b); }
+  /** THE OCCUPIED LAW's source (W3): every live World, the keeper's first, then
+   *  each awake unit's by key (a broken unit is no ground). */
+  worlds(): readonly World[] { return this.each().filter(u => !u.broken).map(u => u.world); }
+  /** THE LINGER FREEZE (W3): a seatless unit stands still through its linger
+   *  (UNIT_CFG.freezeLinger); the keeper never freezes. */
+  frozen(u: SimUnit): boolean { return UNIT_CFG.freezeLinger && u.role === 'unit' && u.emptySince !== null; }
 
   /** THE HEARTH ALIAS + THE WILDS LAW: the awake unit hosting `zoneId`, read
    *  off each World's LIVE zone (a probe's direct loadZone moves its unit). */
@@ -196,18 +208,52 @@ export class UnitRegistry implements SeatWorlds {
     const u = this.unitOf(seatId);
     return u ? this.run(u, fn) : undefined;
   }
-  /** THE SPLIT DISPATCH (W3 fills its callers): run `fn` on the unit hosting
-   *  `zoneId` under its pin, or drop it when none is awake. */
-  dispatch(zoneId: string, fn: (w: World) => void): void {
-    const u = this.unitFor(zoneId);
-    if (u) this.run(u, fn);
+  /** THE SPLIT DISPATCH's host: the World standing in `zoneId` itself, the
+   *  keeper's live zone first, else an awake shared unit's. THE WILDS LAW's
+   *  travel alias never answers here: zone-local work belongs to the World
+   *  that stands in the zone (on the wilds the keeper stands in the surface,
+   *  never in a graph zone a road ticket would alias to it). An instanced unit
+   *  (card 25 B) hosts no zone's dispatch until W4 rules whether instances hear
+   *  the world sweeps. */
+  private hostOf(zoneId: string): SimUnit | undefined {
+    if (this.keeper.world.zone.id === zoneId) return this.keeper;
+    for (const u of this.units.values()) if (!u.broken && !u.instance && u.world.zone.id === zoneId) return u;
+    return undefined;
+  }
+  /** THE ONE CLOCK's reading for this tick (the keeper's, before any World
+   *  stepped): every unit enters its step at it, and so does a dispatch into a
+   *  unit before that unit's step. */
+  beginTick(): UnitClocks {
+    return (this.tickClocks = unitClocks(this.keeper.world));
+  }
+  /** THE SPLIT DISPATCH (W3, World.atZone's shard branch): run `fn` on the World
+   *  hosting `zoneId` and return its answer; undefined when none is awake. The
+   *  keeper's sweeps call it from the keeper's bare run, so the unit enters
+   *  under its own pin at THE ONE CLOCK's reading (a frozen unit included: its
+   *  zone is awake ground, and the work waits there for a seat's return). From
+   *  inside another unit's run the work is deferred to the drain (a pin never
+   *  opens inside a pin, and the keeper is never entered with a unit's stale
+   *  alias fields) and answers undefined. */
+  dispatch<T>(zoneId: string, fn: (w: World) => T): T | undefined {
+    const u = this.hostOf(zoneId);
+    if (!u) return undefined;
+    if (this.active && this.active !== u) { this.deferred.push({ zoneId, fn }); return undefined; }
+    return this.run(u, fn, this.tickClocks ?? undefined);
   }
 
   // ---- THE HAND-OFF QUEUE -------------------------------------------------
   enqueue(t: RoadTicket): void { this.queue.push(t); }
   /** Execute every queued ticket (after all units ticked). One faulting
-   *  hand-off never stops the rest. */
+   *  hand-off never stops the rest. THE SPLIT DISPATCH's deferrals run first,
+   *  in the Worlds hosting their zones now (every World reads the keeper's
+   *  clocks again: the tick's units all stepped). */
   drain(): void {
+    this.tickClocks = null;
+    while (this.deferred.length) {
+      const d = this.deferred.shift()!;
+      try { this.dispatch(d.zoneId, d.fn); }
+      catch (e) { this.hooks.log(`[shard] a deferred dispatch to ${d.zoneId} faulted: ${e instanceof Error ? e.stack ?? e.message : String(e)}`); }
+    }
     // THE ROADS PER PLAYER: one road per seat per drain. A second ticket for a
     // seat already moved this drain was decided in the unit it just left.
     const moved = new Set<string>();
@@ -388,7 +434,7 @@ export class UnitRegistry implements SeatWorlds {
     return this.each().map(u => ({
       key: u.key, zone: u.world.zone.id, seats: this.seatsOf(u).map(s => s.id),
       awakeSince: +u.awakeSince.toFixed(1), ...(u.emptySince !== null ? { emptySince: +u.emptySince.toFixed(1) } : {}),
-      ...(u.broken ? { broken: true } : {}),
+      ...(this.frozen(u) ? { frozen: true } : {}), ...(u.broken ? { broken: true } : {}),
     }));
   }
 }

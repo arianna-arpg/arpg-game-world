@@ -23,7 +23,7 @@ import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
 import type { World } from '../../engine/world';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
-import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
+import { NO_BIAS, zonePresent, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { eventTargetable } from '../../world/zonePolicy';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
@@ -268,13 +268,14 @@ export class ConclaveField implements WorldOverlay {
     // let conclave keep pace). Byte-identical to before at the default profile.
     if (!this.rng.chance(clamp(cfg.openChance * g.ignitionMul, 0, cfg.openChanceCap))) return;
     // A ritual opens on non-safe/waves/cave/floating, populated ground that doesn't
-    // already host one — and NOT the zone the player currently stands in. The cultists
+    // already host one — and NOT a zone a player currently stands in (THE OCCUPIED
+    // LAW, shard M1-W3: every sim unit's zone is refused like the keeper's). The cultists
     // hide OFF the charted map, so it prefers a FRESH (uncharted) zone the player will
     // discover on first entry; only a small chartedChance (or a no-fresh fallback)
     // lands it in already-explored ground. Materializes lazily on entry (by-id), so a
     // fresh-zone ritual simply appears the first time the player walks in.
     const cands = view.nodes.filter(z =>
-      z.id !== view.currentZoneId && eventTargetable(this.id, z)
+      !zonePresent(view, z.id) && eventTargetable(this.id, z)
       && z.objective.kind !== 'waves'
       && !!z.packs?.table?.length && !this.rituals.has(z.id));
     if (!cands.length) return;

@@ -39,6 +39,13 @@ export const UNIT_CFG = {
    *  turns back within the linger walks into the same live zone. The keeper
    *  (the hearth) never sleeps. */
   unitLinger: 30,
+  /** THE LINGER FREEZE (W3): a seatless unit stops ticking for its whole linger
+   *  (no update, no wire), its bodies and flights standing still where the last
+   *  seat left them; a seat's return resumes it under THE ONE CLOCK's re-pin of
+   *  `time` and `inputClock`, the same semantics as a sleep and a wake (the world
+   *  moved on while nobody watched). A dormant or downed seat is a seat: its unit
+   *  keeps ticking. False = every awake unit ticks through its linger (W1). */
+  freezeLinger: true,
   /** THE SOFT CAP: awake units (the keeper not counted) past this many put the
    *  longest-seatless unit to sleep at once. A wake is never refused. */
   maxUnits: 32,
@@ -100,9 +107,16 @@ export interface ShardWorldLink {
   key: UnitKey;
   /** THE HAND-OFF QUEUE's door: a road enqueues a ticket, never travels. */
   enqueue(t: RoadTicket): void;
-  /** THE SPLIT DISPATCH's door: run `fn` on the unit hosting `zoneId` (dropped
-   *  when none is awake). World.atZone's shard branch is W3's. */
-  dispatch(zoneId: string, fn: (w: World) => void): void;
+  /** THE SPLIT DISPATCH's door (W3, World.atZone's shard branch): run `fn` on the
+   *  World hosting `zoneId` under its pin and return its answer; undefined when
+   *  no World is awake there. Called from inside another unit it is deferred to
+   *  THE HAND-OFF QUEUE's drain (and answers undefined). */
+  dispatch<T>(zoneId: string, fn: (w: World) => T): T | undefined;
+  /** THE OCCUPIED LAW's source (W3): every live World of the shard, the
+   *  keeper's own first, then each awake unit's by key (a lingering unit, frozen
+   *  or not, is awake ground). Read-only: a World read through it is never
+   *  pinned, so it serves bodies, seats and zones, never the alias fields. */
+  worlds(): readonly World[];
   /** THE ROADS PER PLAYER (W2): the live seed of the unit hosting `zoneId`, or
    *  undefined when none is awake (the town portal's faded check reads an
    *  awake source's live seed; its stored memory row is stale until it sleeps). */
@@ -183,7 +197,8 @@ export const SHARD_UNIT_FIELDS: Readonly<Record<string, UnitFieldRow>> = {
   forechartNextAt: K(), mintVeil: K(), omenNextAt: K(), webSettleNextAt: K(), webSettleSeenSeq: K(),
   classClaimNextAt: K(), warpSweepAcc: K(), holdSweepAt: K(), bountyWatchAccum: K(), quickenSweepAcc: K(),
   deepwinterWarped: K(), deepwinterEyeWarped: K(), longNightWarped: K(),
-  gloamPrevPhase: K('until W3 the gloaming_survived edge may bump once per awake unit'),
+  gloamPrevPhase: K('each World tracks its own edge; the gloaming_survived bump is the keeper\'s alone (W3)'),
+  forechartTurn: K('THE OCCUPIED LAW: the halo\'s round-robin over the occupied zones (W3)'),
   odyssey: K('a this-bound runtime whose update never runs in a unit'),
   zonesSaveMemo: K(), zonesRowMemo: K(), memorySaveMemo: K(), memoryRowMemo: K(),
   zonesSaveRowDerives: K('the save memo\'s own tally'), memorySaveRowDerives: K('the save memo\'s own tally'),

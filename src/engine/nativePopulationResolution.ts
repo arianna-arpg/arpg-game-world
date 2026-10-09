@@ -30,16 +30,25 @@ export interface NativePopulationHost {
   readonly visited: OverlayView['visited']; readonly surveyed: OverlayView['surveyed'];
   continentFor(c: {x:number;y:number}): {kind: ReturnType<OverlayView['terrain']>};
   simView(): OverlayView;
+  /** THE OCCUPIED LAW (shard M1-W3): every live World of a hosted world, the
+   *  keeper's own first (its zone and its bodies). Absent off a shard. */
+  presence?(): readonly { readonly zone: Pick<ZoneDef, 'id'>; readonly actors: NativePopulationHost['actors'] }[];
 }
 export interface NativeResolvedSpawn { table: PackTableEntry[]; countMul: number; inject: string[] }
 
-export function nativeSimView(host: NativePopulationHost): OverlayView {
+/** A live by-faction enemy headcount over one World's bodies. */
+function nativeCensus(actors: NativePopulationHost['actors']): Record<string, number> {
     const census: Record<string, number> = {};
-    for (const a of host.actors) {
+    for (const a of actors) {
       if (a.team === 'enemy' && !a.dead && a.faction) {
         census[a.faction] = (census[a.faction] ?? 0) + 1;
       }
     }
+    return census;
+  }
+
+export function nativeSimView(host: NativePopulationHost): OverlayView {
+    const census = nativeCensus(host.actors);
     const charLevel = host.player ? host.player.level : 1;
     const allNodes = Object.values(host.zoneMap);
     const nodes: ZoneDef[] = [];
@@ -48,13 +57,30 @@ export function nativeSimView(host: NativePopulationHost): OverlayView {
       if ((z.dimension ?? 'surface') !== 'surface') continue;
       nodes.push(z); byId[z.id] = z;
     }
-    return {
+    const view: OverlayView = {
       nodes, byId, allNodes,
       currentZoneId: host.zone.id, time: host.time, census,
       charLevel, gates: host.sim.gatesFor(charLevel), visited: host.visited,
       surveyed: host.surveyed,
       terrain: (c) => host.continentFor(c).kind,
     };
+    // THE OCCUPIED LAW (shard M1-W3): a hosted world reports every zone a live
+    // World stands in and each one's own census beside the keeper's; solo the
+    // two fields stay absent and every reader keeps its one-zone answer.
+    const present = host.presence?.();
+    if (present) {
+      const ids: string[] = [];
+      const byZone: Record<string, Readonly<Record<string, number>>> = {};
+      for (const p of present) {
+        if (byZone[p.zone.id]) continue;
+        ids.push(p.zone.id);
+        byZone[p.zone.id] = p.zone.id === host.zone.id ? census : nativeCensus(p.actors);
+      }
+      if (!byZone[host.zone.id]) { ids.unshift(host.zone.id); byZone[host.zone.id] = census; }
+      view.presentZoneIds = ids;
+      view.censusByZone = byZone;
+    }
+    return view;
   }
 
 export function nativeBaseTable(host: Pick<NativePopulationHost, 'sim'>, sources: NativePopulationSources, def: ZoneDef): PackTableEntry[] {
