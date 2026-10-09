@@ -33,7 +33,16 @@
 //      only mate stands in another unit falls (no kneel across Worlds), THE MERCY
 //      raises an Immortal inside a unit;
 //   R  THE RUN ROW: a classic shard's save carries its clears and run ledger, and a
-//      save without the row still stands.
+//      save without the row still stands;
+//   J  THE WORLD SWEEP (W3): the solo half first (THE SWEEP-WALK DIGEST, pinned before
+//      any sweep was split: a seeded solo expedition with every split sweep's event lit
+//      must print the same constant), then on the shard with two seats in two units: the
+//      WorldSim steps once a tick, a warband arrival lands in the unit holding its target
+//      and nowhere else, the gloaming outlasted banks once, a haunt's dawn dissolution
+//      reaches its unit, the forechart's halo charts around both occupied zones, the
+//      deadwake never consumes a zone a unit stands in; THE LINGER FREEZE: a seatless
+//      unit takes no step (its bodies and flights hold), a return resumes it on THE ONE
+//      CLOCK, and a dormant or a downed seat keeps its unit ticking.
 import ts from 'typescript';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -60,8 +69,10 @@ import { buildManifest } from '../src/packages/manifest';
 import { CLASSES } from '../src/data/classes';
 import { SKILLS } from '../src/data/skills';
 import { COOP_SCALING } from '../src/data/coop';
-import { START_ZONE } from '../src/data/zones';
-import { FORECHART_CFG } from '../src/world/forechart';
+import { START_ZONE, type ZoneDef } from '../src/data/zones';
+import { FACTIONS } from '../src/data/monsters';
+import { FORECHART_CFG, forechartSource } from '../src/world/forechart';
+import { WORLDSTATE_CFG } from '../src/meta/worldstate';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { dist, vec } from '../src/core/math';
@@ -787,6 +798,220 @@ let crossSeed = 0;
     downed && !m.actor.downed && !m.actor.dead && units.unitOf(M.id) === mu);
   for (const cl of [A, B, P, Q, R, S2, M]) cl.c.leave();
   await waitFor(() => units.allSeats().length === 0, sec(VESSEL_CFG.deathBeatSec) + 120);
+}
+
+// ========================================================= J: THE WORLD SWEEP ==
+{
+  // A clean slate: every seatless unit the sections above left lingering sleeps now.
+  const linger0 = UNIT_CFG.unitLinger;
+  UNIT_CFG.unitLinger = 0;
+  await runTicks(2);
+  UNIT_CFG.unitLinger = linger0;
+  const J1 = await join('Jory'), J2 = await join('Juno');
+  await runTicks(2, () => { step(J1); step(J2); });
+  const hearthAt = k.zoneMap[hearth].map;
+  const at = (id: string): { x: number; y: number } => k.zoneMap[id].map;
+  /** The nearest neighbour that may serve the forechart as a source (THE SWEEP's bait). */
+  const baitOf = (id: string, not: readonly string[] = []): string | undefined => k.zoneMap[id].exits.map(e => e.to)
+    .filter(to => to !== '?' && !!k.zoneMap[to] && !not.includes(to) && to !== hearth
+      && forechartSource({ ...k.zoneMap[to], exits: [{ to: '?', side: 'n' }] } as ZoneDef, k.zoneMap[to].dimension ?? 'surface'))
+    .sort((a, b) => dist(at(a), at(id)) - dist(at(b), at(id)))[0];
+  // Two occupied zones far from each other and from the hearth, each with a bait close beside it.
+  const free = nearZones(hearth).filter(id => !units.unitFor(id) && dist(at(id), hearthAt) >= 500
+    && !!baitOf(id) && dist(at(baitOf(id)!), at(id)) <= 200);
+  const x = free[0];
+  const y = free.find(id => id !== x && dist(at(id), at(x)) >= 600)!;
+  const ux = units.travel(J1.id, x)!, uy = units.travel(J2.id, y)!;
+  await runTicks(3, () => { step(J1); step(J2); });
+  check('J setup: two seats stand in two awake units beside the keeper',
+    !!ux && !!uy && ux !== uy && ux.role === 'unit' && uy.role === 'unit' && units.worlds().length === 3
+    && units.unitOf(J1.id) === ux && units.unitOf(J2.id) === uy, `${x} + ${y}`);
+
+  // The WorldSim steps once a tick: THE PRIMARY GATE keeps the world sweeps the keeper's.
+  {
+    const sim = k.sim as unknown as { update: (...a: unknown[]) => unknown };
+    const up0 = sim.update;
+    let ups = 0;
+    sim.update = function (this: unknown, ...a: unknown[]) { ups++; return up0.apply(this, a); };
+    await runTicks(10);
+    delete (sim as { update?: unknown }).update;
+    check('J sim: the WorldSim steps once a tick with three Worlds awake', ups === 10, `${ups} steps in 10 ticks`);
+  }
+
+  // THE SPLIT DISPATCH: a warband arrival lands in the unit standing in its target zone, and nowhere else.
+  {
+    type March = { members: Actor[] };
+    const marchesOf = (w: World): March[] => priv(w).warbandMarches as March[];
+    const m0 = [marchesOf(k).length, marchesOf(ux.world).length, marchesOf(uy.world).length];
+    const faction = ['goblin', 'undead', 'beastkin', 'demon'].find(f => !!FACTIONS[f]?.table?.length && k.sim.faction.conquerorOf(y) !== f)!;
+    const from = k.zoneMap[y].exits.find(e => e.to !== '?' && !!k.zoneMap[e.to])?.to ?? hearth;
+    k.sim.invasion.arrivals.push({ faction, pos: { ...at(y) }, target: { ...at(y) }, fromZoneId: from, targetZoneId: y,
+      radius: 60, age: 0, life: 100, arrived: true });
+    await runTicks(1);
+    const m1 = [marchesOf(k).length, marchesOf(ux.world).length, marchesOf(uy.world).length];
+    const pack = marchesOf(uy.world).at(-1)?.members ?? [];
+    check('J warband: an arrival aimed at the second unit\'s zone marches in there and nowhere else',
+      m1[2] === m0[2] + 1 && m1[1] === m0[1] && m1[0] === m0[0] && pack.length > 0
+      && pack.every(a => uy.world.actors.includes(a) && !ux.world.actors.includes(a) && !k.actors.includes(a))
+      && k.sim.invasion.arrivals.length === 0, `${faction} → ${y}: marches ${m0.join('/')} → ${m1.join('/')}`);
+  }
+
+  // The gloaming outlasted: every World sees the edge, the ledger banks it once.
+  {
+    const gf = k.sim.gloamingField;
+    const n0 = k.ledger.gloaming_survived ?? 0;
+    if (gf) {
+      const g = priv(gf);
+      g.phase = 'idle'; g.cooldownLeft = 1e6; g.devForce = false; gf.markWitnessed();
+      for (const w of units.worlds()) priv(w).gloamPrevPhase = 'waning';
+    }
+    await runTicks(1);
+    check('J gloaming: the front outlasted banks gloaming_survived once with two units awake',
+      !!gf && (k.ledger.gloaming_survived ?? 0) === n0 + 1 && units.worlds().every(w => priv(w).gloamPrevPhase === 'idle'),
+      `${n0} → ${k.ledger.gloaming_survived ?? 0}`);
+  }
+
+  // A haunt's dawn dissolution reaches the unit standing in the grief's zone.
+  {
+    const hf = k.sim.hauntField;
+    const shade = (u: SimUnit): Actor => units.run(u, w => {
+      const m = w.createMonster('skeleton_warrior', 5, 'enemy');
+      m.tag = 'haunt_spawn'; m.passive = true;
+      m.pos = w.clampPos(vec(w.arena.w / 2 + 320, w.arena.h / 2 + 320), m.radius);
+      w.actors.push(m);
+      return m;
+    });
+    const sy = shade(uy), sx = shade(ux);
+    if (hf) (priv(hf).dissipated as unknown[]).push({ id: 'probe_units_grief', zoneId: y, color: '#c8c8c8' });
+    await runTicks(1);
+    check('J haunt: a dawn dissolution fades the grief\'s shades in the unit holding its zone, and nowhere else',
+      !!hf && !uy.world.actors.includes(sy) && ux.world.actors.includes(sx));
+    const xi = ux.world.actors.indexOf(sx);
+    if (xi >= 0) ux.world.actors.splice(xi, 1);
+  }
+
+  // THE OCCUPIED LAW's many origins: the forechart's halo round-robins over every occupied
+  // zone. One unit a sweep and a sweep a tick; a bait (an open frontier) stands beside each
+  // unit's zone, and the hearth's own bait is re-opened every tick, so a sweep centred on the
+  // hearth alone could never reach the units' baits.
+  {
+    const nh = baitOf(hearth, [x, y])!;
+    const nx = baitOf(x, [y, nh])!, ny = baitOf(y, [x, nh, nx])!;
+    const bait = (id: string): void => {
+      const z = k.zoneMap[id];
+      if (!z.exits.some(e => e.to === '?' && !e.lock)) z.exits.push({ to: '?', side: 'n' });
+    };
+    const f0 = { ...FORECHART_CFG, sounding: { ...FORECHART_CFG.sounding } }, cap0 = WORLDSTATE_CFG.zoneCap;
+    Object.assign(FORECHART_CFG, { perSweep: 1, hustleMul: 1, maxVeiled: Number.POSITIVE_INFINITY, sweepSec: 0, beatBudgetMs: Number.POSITIVE_INFINITY });
+    FORECHART_CFG.sounding.perSweep = 0;
+    (WORLDSTATE_CFG as { zoneCap: number }).zoneCap = Number.POSITIVE_INFINITY;
+    bait(nx); bait(ny);
+    const charted: string[] = [];
+    const cn0 = priv(k).chartNeighborsOf as (z: ZoneDef) => unknown;
+    priv(k).chartNeighborsOf = function (this: World, z: ZoneDef): unknown { charted.push(z.id); return cn0.call(this, z); };
+    priv(k).forechartNextAt = 0;
+    const origins = units.worlds().length;
+    await runTicks(origins * 3, () => bait(nh));
+    delete priv(k).chartNeighborsOf;
+    Object.assign(FORECHART_CFG, { perSweep: f0.perSweep, hustleMul: f0.hustleMul, maxVeiled: f0.maxVeiled, sweepSec: f0.sweepSec, beatBudgetMs: f0.beatBudgetMs });
+    FORECHART_CFG.sounding.perSweep = f0.sounding.perSweep;
+    (WORLDSTATE_CFG as { zoneCap: number }).zoneCap = cap0;
+    check('J forechart: the halo charts around both occupied zones over successive sweeps (each unit\'s bait is reached from its own zone)',
+      charted.includes(nx) && charted.includes(ny),
+      `${origins} origins; hearth bait ${nh} (${Math.round(dist(at(nh), hearthAt))} out), ${nx} (${Math.round(dist(at(nx), at(x)))} from ${x}, ${Math.round(dist(at(nx), hearthAt))} from the hearth), ${ny} (${Math.round(dist(at(ny), at(y)))} from ${y}, ${Math.round(dist(at(ny), hearthAt))} from the hearth); charted ${charted.join(',')}`);
+  }
+
+  // The deadwake never consumes a zone a unit's player stands in.
+  {
+    const df = k.sim.deadwakeField;
+    let ok = false, detail = 'no deadwake field';
+    if (df) {
+      const cfg = df.surge() as { consumeChance: number; radius: number };
+      const c0 = { chance: cfg.consumeChance, radius: cfg.radius };
+      cfg.consumeChance = 1; cfg.radius = 900;
+      for (const id of nearZones(y).slice(0, 4)) k.visited.add(id); // charted ground beside the tide
+      const consumed: string[] = [];
+      const list = df.consumedZones;
+      const push0 = list.push;
+      list.push = (...ids: string[]): number => { consumed.push(...ids); return push0.apply(list, ids); };
+      const lit = df.devIgnite(k.devOverlayView(), y);
+      await runTicks(2);
+      delete (list as { push?: unknown }).push;
+      priv(df).wakes = []; // the rig's tide recedes at once
+      cfg.consumeChance = c0.chance; cfg.radius = c0.radius;
+      const present = units.worlds().map(w => w.zone.id);
+      ok = lit && consumed.length > 0 && !consumed.some(id => present.includes(id));
+      detail = `lit ${lit}; consumed ${consumed.length} (${consumed.slice(0, 6).join(',')}); present ${present.join(',')}`;
+    }
+    check('J deadwake: a tide over two units\' ground consumes the events around them, never a zone a unit\'s player stands in', ok, detail);
+  }
+
+  // THE LINGER FREEZE: a seatless unit stands still through its linger; a return resumes it.
+  {
+    const uw = ux.world;
+    const foe = uw.actors.find(a => a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable && !!a.defId);
+    const bolt = Object.values(SKILLS).find(d => {
+      const p = d.delivery as { type: string; speed?: number; range?: number; homing?: number; trajectory?: unknown; count?: number; explode?: unknown };
+      return p.type === 'projectile' && (p.speed ?? 0) >= 200 && (p.range ?? 0) >= 600 && !p.homing && !p.trajectory && !p.count && !p.explode && !d.requirements && d.cooldown === 0;
+    })!;
+    let flew = false;
+    if (foe) {
+      for (let i = 0; i < 4 && !flew; i++) {
+        foe.sheet.setBase('mana', 5000); foe.fillResources(); foe.useLock = 0;
+        units.run(ux, w => w.useSkill(foe, makeSkillInstance(bolt, 1, 0), vec(foe.pos.x + 700, foe.pos.y), false));
+        flew = await waitFor(() => uw.projectiles.some(p => p.caster === foe), sec(1.5));
+      }
+    }
+    const flight = uw.projectiles.find(p => p.caster === foe);
+    let steps = 0;
+    const up0 = uw.update;
+    uw.update = function (this: World, dt: number): void { steps++; up0.call(this, dt); };
+    units.travel(J1.id, hearth);
+    const t0 = uw.time;
+    const poses = (): string => uw.actors.filter(a => !a.dead).map(a => `${a.id}:${a.pos.x.toFixed(3)},${a.pos.y.toFixed(3)}`).join('|');
+    const p0 = poses(), fp0 = flight ? `${flight.pos.x},${flight.pos.y}` : '';
+    await runTicks(30);
+    const st = host.status() as { units: { key: string; frozen?: boolean }[] };
+    check('J freeze: a seatless unit stands still through its linger (no step: its bodies and its flights hold)',
+      flew && !!flight && units.frozen(ux) && steps === 0 && poses() === p0 && `${flight.pos.x},${flight.pos.y}` === fp0
+      && uw.projectiles.includes(flight) && st.units.find(r => r.key === ux.key)?.frozen === true,
+      `flew ${flew}, ${steps} steps, t ${t0.toFixed(3)} → ${uw.time.toFixed(3)} (keeper ${k.time.toFixed(3)})`);
+    const back = units.travel(J1.id, x);
+    await runTicks(3);
+    delete (uw as unknown as { update?: unknown }).update;
+    check('J freeze: a seat\'s return resumes it on THE ONE CLOCK (its flight flies on)',
+      back === ux && !units.frozen(ux) && steps === 3 && Math.abs(uw.time - k.time) < 1e-9 && !!flight
+      && (`${flight.pos.x},${flight.pos.y}` !== fp0 || !uw.projectiles.includes(flight)),
+      `${steps} steps; unit t ${uw.time.toFixed(3)} vs keeper ${k.time.toFixed(3)}`);
+    // A dormant seat is a seat: its unit keeps ticking.
+    const dormant0 = SHARD_CFG.dormantSec;
+    SHARD_CFG.dormantSec = 2; // the rig's own clock (the dial is the law's, not its number)
+    const sock = (priv(host.net).bySeat as Map<string, { sock: { destroy(): void } }>).get(J2.id);
+    sock?.sock.destroy();
+    const slept = await waitFor(() => host.net.isDormant(J2.id), 60);
+    SHARD_CFG.dormantSec = dormant0;
+    const ty = uy.world.time;
+    await runTicks(20);
+    check('J freeze: a dormant seat keeps its unit ticking',
+      slept && !units.frozen(uy) && uy.world.time > ty && Math.abs(uy.world.time - k.time) < 1e-9 && units.unitOf(J2.id) === uy,
+      `dormant ${slept}, unit t ${ty.toFixed(3)} → ${uy.world.time.toFixed(3)}`);
+    // A downed seat is a seat: its unit keeps ticking.
+    const J3 = await join('Jinx');
+    await runTicks(2, () => step(J3));
+    const zone3 = nearZones(hearth).find(id => !units.unitFor(id) && id !== x && id !== y)!;
+    const u3 = units.travel(J3.id, zone3)!;
+    const s3 = seatOf(J3.id)!;
+    s3.meta.modeId = 'immortal';
+    u3.world.kill(s3.actor);
+    await runTicks(2);
+    const t3 = u3.world.time;
+    await runTicks(20);
+    check('J freeze: a downed seat keeps its unit ticking',
+      s3.actor.downed && !units.frozen(u3) && u3.world.time > t3 && Math.abs(u3.world.time - k.time) < 1e-9,
+      `downed ${s3.actor.downed}, unit t ${t3.toFixed(3)} → ${u3.world.time.toFixed(3)}`);
+    for (const cl of [J1, J3]) cl.c.leave();
+    await waitFor(() => units.allSeats().length === 0, sec(VESSEL_CFG.deathBeatSec) + 240);
+  }
 }
 
 await host.stop({ persist: false });
