@@ -1030,7 +1030,16 @@ const notesHeard = (cl: Client, from: number, text: string): number =>
   const escorted = await waitFor(() => units.unitOf(F2.id) === units.keeper, sec(2));
   check('F caravan: the caravanTo intent is no longer sealed: the escort carries the asking seat alone into the keeper (band 0, the hearth)',
     escorted && units.unitOf(F1.id) === pu2);
-  // F6 THE ROAD RING on the client: the shell draws the ring its host fills, and only while it is filled.
+  // F6 THE WAYPOINT intent: the asking seat, judged in its own unit, lands at the attuned stone.
+  k.discoveredWaypoints.add(hearth); // the hearth's stone, brushed
+  pacify(pu2.world);
+  act(F1, { t: 'waypoint', zoneId: hearth });
+  const waypointed = await waitFor(() => units.unitOf(F1.id) === units.keeper, sec(2));
+  const stone = k.waypointPos;
+  check('F waypoint: the new waypoint intent carries the asking seat alone to the attuned stone in the keeper',
+    waypointed && !!stone && dist(s1.actor.pos, stone) < 130 && units.unitOf(F2.id) === units.keeper,
+    stone ? `${Math.round(dist(s1.actor.pos, stone))} px from the stone` : 'no stone');
+  // F7 THE ROAD RING on the client: the shell draws the ring its host fills, and only while it is filled.
   const shellW = new World(makeAccount(), Object.freeze(buildManifest(makeAccount(), 0x5e11f)));
   shellW.createPlayer(CLASSES[0], { startingCompanions: false, startingFlasks: false });
   shellW.clientSeatId = 'me';
