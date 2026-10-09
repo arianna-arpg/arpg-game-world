@@ -3823,7 +3823,8 @@ we verify changes.
   reclaims it. The wilds persist (`server/wildsSave.ts`, THE RESUME LAW).
   The wire wears THE INBOX LAWS, THE DOOR CAPS, THE ACTION BUDGET, THE
   BREAKER and a status page on a plain GET. The shard account's gate (M2)
-  and per-seat travel (M1) are still carded. Verify `probe_shard.ts`.
+  and per-seat travel (M1) are still carded. Verify `probe_shard.ts` (fast)
+  and `probe_shardslow.ts` (the wilds save and the vessel, `--slow`).
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
   `docs/ui/folio.md`, probe `balance/probe_folio.ts`): dwell dialogs that

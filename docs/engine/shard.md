@@ -44,7 +44,10 @@ newest saved world of that kind back. The render shell, prediction,
 the meta intents and the run-lifecycle channel are the co-op lane's,
 unchanged. Type-checks ride `npm run check` (`tsconfig.shard.json` covers
 `server/` with node types; `src/net/` stays browser-safe under the main
-gate). The regression rig is `balance/probe_shard.ts` (`npm run probe -- shard`).
+gate). The regression rigs are `balance/probe_shard.ts` (the fast half: the host, the wire,
+the keeper laws, the wilds on the wire; `npm run probe -- shard`) and
+`balance/probe_shardslow.ts` (the slow half: THE WILDS SAVE and THE VESSEL, several
+wilds boots; `npm run probe -- --slow` or `npm run probe -- shardslow`).
 
 ## The pieces
 

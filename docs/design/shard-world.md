@@ -643,7 +643,9 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
     willed input or `spawnGraceSec` (THE HEARTH WAKE + THE SPAWN GRACE).
 21. **The probe's tier** — the shard rig now boots four wilds (about 90 s):
     keep it on the fast lane, or split the wilds-save section into a slow
-    rig. Rec: split. **RULED: the recommendation (2026-10-08).**
+    rig. Rec: split. **RULED: the recommendation (2026-10-08). BUILT:**
+    `probe_shard.ts` keeps A–K and P on the fast lane; `probe_shardslow.ts`
+    carries Q and L–O on the slow tier.
 
 **Her rulings of 2026-10-08 also settle card 6's open thirds through card
 22: a shard pins no life contract — the vessel brings its own from Mu — and
