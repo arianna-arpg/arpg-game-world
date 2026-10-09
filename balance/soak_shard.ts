@@ -25,6 +25,9 @@
 //   --seed <hex|dec>    THE HOSTED SEED (default SOAK_CFG.seed: one fixed world, so runs compare)
 //   --classic           a classic world (the hearth) instead of the Unbroken Wilds
 //   --no-drop           skip THE DORMANT SEAT's cut (also --drop off)
+//   --spread <px>       THE SPREAD: each bot roams around its own anchor on a ring of this radius
+//                       about the hearth (0 = everyone around the hearth) — the split-party case
+//   --rove <sec>        THE ROVING SHADOW's visit length (SHARD_CFG.rove.sec; 0 = the focus alone)
 //   --report <path>     the JSON report (default balance/reports/soak_<stamp>.json, gitignored)
 //   --thresholds <path> the gates (default balance/soak.config.json)
 //
@@ -188,6 +191,10 @@ interface Sample {
   statusP50: number; statusP95: number; dropped: number;
   fed: number; snaps: number; snapKBp95: number; outKBps: number; outKBpsPerClient: number;
   heapTroughMB: number; heapPeakMB: number; rssMB: number; party: boolean;
+  /** THE LIVING RADIUS: live foes within the population radius of each standing seat — the least and the mean. */
+  livingMin: number; livingMean: number;
+  /** THE SPREAD as it stands: the widest distance between two standing seats (px). */
+  fleetSpreadPx: number;
 }
 type Stamped = FleetEvent & { at: number };
 
@@ -206,6 +213,9 @@ async function main(): Promise<number> {
   const seed = (num(args.seed) ?? SOAK_CFG.seed) >>> 0;
   const classic = args.classic === true;
   const dropOn = !(args['no-drop'] === true || (typeof args.drop === 'string' && /^(0|off|false|no)$/i.test(args.drop)));
+  const spread = Math.max(0, num(args.spread) ?? 0); // THE SPREAD (the fleet's anchors)
+  const roveArg = num(args.rove);
+  if (roveArg !== undefined) SHARD_CFG.rove.sec = Math.max(0, roveArg); // THE ROVING SHADOW's dial, before the host stands
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const reportPath = typeof args.report === 'string' ? args.report : `${SOAK_CFG.reportDir}/soak_${stamp}.json`;
   const gatesPath = typeof args.thresholds === 'string' ? args.thresholds : SOAK_CFG.thresholds;
@@ -311,7 +321,7 @@ async function main(): Promise<number> {
   };
   const fleetPath = fileURLToPath(new URL('./soak_bots.ts', import.meta.url));
   const fleet = fork(fleetPath, [
-    '--url', url, '--bots', String(bots), '--hearth', `${hearth.x},${hearth.y}`, '--seed', String(seed),
+    '--url', url, '--bots', String(bots), '--hearth', `${hearth.x},${hearth.y}`, '--seed', String(seed), '--spread', String(spread),
     '--classes', SOAK_CFG.classes.join(','), '--stagger-ms', String(SOAK_CFG.staggerMs),
     '--drop-bot', String(dropOn ? bots - 1 : -1),
     '--life-sec', String(Math.ceil(seconds + SOAK_CFG.warmupTimeoutSec + SOAK_CFG.partyWaitSec + 120)),
@@ -321,7 +331,21 @@ async function main(): Promise<number> {
   fleet.on('message', (raw: unknown) => {
     const e = raw as Stamped, rt = performance.now();
     switch (e.t) {
-      case 'seated': seated.set(e.bot, e.seat); break;
+      case 'seated': {
+        seated.set(e.bot, e.seat);
+        if (spread > 0) {
+          // THE SPREAD: the harness seats each bot at its own anchor on the ring (a party
+          // that split up), and the bot roams around that anchor from then on.
+          const seat = host.world.seats.find(x => x.id === e.seat);
+          if (seat) {
+            const ang = 2 * Math.PI * e.bot / bots;
+            const want = { x: hearth.x + Math.cos(ang) * spread, y: hearth.y + Math.sin(ang) * spread };
+            const at = host.world.clampPos(host.world.findFreeSpot(want, seat.actor.radius + 2) ?? want, seat.actor.radius);
+            seat.actor.pos.x = at.x; seat.actor.pos.y = at.y;
+          }
+        }
+        break;
+      }
       case 'party': ev.party = { seats: e.seats, at: rt, server: host.parties.rows().some(r => r.members.includes(e.seats[0]) && r.members.includes(e.seats[1])) }; break;
       case 'partyWord': partyWords.push(`bot ${e.bot}: ${e.word}`); break;
       case 'dropped': ev.drop = { ...e, rt }; break;
@@ -361,6 +385,16 @@ async function main(): Promise<number> {
   const heapPoller = setInterval(pollHeap, SOAK_CFG.heapPollMs);
   const samples: Sample[] = [];
   const prev = { ms: 0, tick: 0, wakes: 0, snap: 0, dropped: base.dropped, bytes: base.bytes, inputs: 0, seatTicks: 0 };
+  // THE LIVING RADIUS: how alive the world is around EACH player (the premise the
+  // focus law breaks: a seat far from the shadow meets no births).
+  const popRadius = host.world.massRuntime?.config.populationRadius ?? 1300;
+  const livingRadius = (): { min: number; mean: number } => {
+    const standing = host.world.seats.filter(s => !s.keeper && !s.actor.dead && !s.actor.downed && !net.isDormant(s.id));
+    if (!standing.length) return { min: 0, mean: 0 };
+    const counts = standing.map(s => host.world.actors.filter(a => a.team === 'enemy' && !a.dead
+      && Math.hypot(a.pos.x - s.actor.pos.x, a.pos.y - s.actor.pos.y) <= popRadius).length);
+    return { min: Math.min(...counts), mean: counts.reduce((a, b) => a + b, 0) / counts.length };
+  };
   const partyStands = (): boolean => {
     const p = ev.party;
     return !!p && host.parties.rows().some(r => r.members.includes(p.seats[0]) && r.members.includes(p.seats[1]));
@@ -372,7 +406,12 @@ async function main(): Promise<number> {
     pollHeap();
     const dormant = st.seats.filter(s => s.dormant).length;
     const bytes = net.bytesOut - prev.bytes, seatTicks = win.seatTicks - prev.seatTicks;
+    const living = livingRadius();
+    const standingNow = host.world.seats.filter(x => !x.keeper && !x.actor.dead && !x.actor.downed);
+    let fleetSpreadPx = 0;
+    for (const a of standingNow) for (const b of standingNow) fleetSpreadPx = Math.max(fleetSpreadPx, Math.hypot(a.actor.pos.x - b.actor.pos.x, a.actor.pos.y - b.actor.pos.y));
     samples.push({
+      livingMin: living.min, livingMean: r2(living.mean), fleetSpreadPx: Math.round(fleetSpreadPx),
       t: r2(ms / 1000), seats: st.seats.length, dormant, connections: st.connections, actors: st.actors,
       ticks: ticks.length, wakes: win.wakes - prev.wakes,
       tickP50: r2(pct(ticks, 0.5)), tickP95: r2(pct(ticks, 0.95)), tickMax: r2(ticks[ticks.length - 1] ?? 0),
@@ -491,6 +530,7 @@ async function main(): Promise<number> {
       worstWindow: worst ? { endSec: worst.t, p50: worst.tickP50, p95: worst.tickP95, max: worst.tickMax, dropped: worst.dropped } : null,
       slowest: slowest(win.tickMs, win.tickAt, win.t0, SOAK_CFG.slowestTicks, winGcs, jumps),
     },
+    living: { radiusPx: popRadius, spreadPx: spread, roveSec: SHARD_CFG.rove.sec, minOfMins: samples.length ? Math.min(...samples.map(x => x.livingMin)) : 0, meanOfMeans: r2(mean(samples.map(x => x.livingMean))) }, // THE LIVING RADIUS
     shadow: { jumps: winJumps.length, jumpTicksMeanMs: r2(mean(winJumps.map(j => win.tickMs[win.tickAt.indexOf(j.at)] ?? 0))), at: winJumps.map(j => ({ sec: rel(j.at), px: Math.round(j.px) })) },
     gc: gcSummary,
     pump: { wakesPerSec: r2(win.wakes / windowSec), ticksPerWake: r2(win.tickMs.length / Math.max(1, win.wakes)) },
@@ -527,12 +567,12 @@ async function main(): Promise<number> {
   const L = (s: string | number, w: number): string => String(s).padStart(w);
   const R = (s: string | number, w: number): string => String(s).padEnd(w);
   const out: string[] = [];
-  out.push('', `THE SOAK  ${world} ${seedHex}  ·  ${bots} bots  ·  ${r2(windowSec)} s window  ·  warm-up ${r2(warmSec)} s  ·  boot ${r2(bootSec)} s`);
+  out.push('', `THE SOAK  ${world} ${seedHex}  ·  ${bots} bots${spread ? ` spread ${spread} px` : ''}${host.worldmass ? `  ·  rove ${SHARD_CFG.rove.sec ? SHARD_CFG.rove.sec + ' s' : 'off'}` : ''}  ·  ${r2(windowSec)} s window  ·  warm-up ${r2(warmSec)} s  ·  boot ${r2(bootSec)} s`);
   out.push(`  ${report.machine.cpuModel} × ${cpu.length}  ·  ${process.platform} ${release()}  ·  node ${process.version}  ·  the fleet in its own process`);
-  out.push('', `${L('t s', 6)} ${L('seats', 5)} ${L('conn', 4)} ${L('actors', 6)}   ${L('tick p50', 8)} ${L('p95', 6)} ${L('max', 6)} ${L('drop', 4)} ${L('wake/s', 6)} ${L('fed', 4)}   ${L('snap kB p95', 11)} ${L('out kB/s/cl', 11)}   ${L('heap MB', 7)}`);
+  out.push('', `${L('t s', 6)} ${L('seats', 5)} ${L('conn', 4)} ${L('actors', 6)}   ${L('tick p50', 8)} ${L('p95', 6)} ${L('max', 6)} ${L('drop', 4)} ${L('wake/s', 6)} ${L('fed', 4)}   ${L('snap kB p95', 11)} ${L('out kB/s/cl', 11)}   ${L('heap MB', 7)}   ${L('living', 9)} ${L('spread', 6)}`);
   for (const s of samples)
-    out.push(`${L(s.t.toFixed(1), 6)} ${L(s.seats + (s.dormant ? '*' : ''), 5)} ${L(s.connections, 4)} ${L(s.actors, 6)}   ${L(s.tickP50.toFixed(2), 8)} ${L(s.tickP95.toFixed(2), 6)} ${L(s.tickMax.toFixed(1), 6)} ${L(s.dropped, 4)} ${L((s.wakes / SOAK_CFG.sampleSec).toFixed(1), 6)} ${L(Math.round(s.fed * 100) + '%', 4)}   ${L(s.snapKBp95.toFixed(1), 11)} ${L(s.outKBpsPerClient.toFixed(1), 11)}   ${L(s.heapTroughMB.toFixed(1), 7)}`);
-  out.push(`  (heap MB = the window's trough; fed = seat-ticks that had a client input${samples.some(s => s.dormant) ? '; * a seat lay dormant' : ''})`);
+    out.push(`${L(s.t.toFixed(1), 6)} ${L(s.seats + (s.dormant ? '*' : ''), 5)} ${L(s.connections, 4)} ${L(s.actors, 6)}   ${L(s.tickP50.toFixed(2), 8)} ${L(s.tickP95.toFixed(2), 6)} ${L(s.tickMax.toFixed(1), 6)} ${L(s.dropped, 4)} ${L((s.wakes / SOAK_CFG.sampleSec).toFixed(1), 6)} ${L(Math.round(s.fed * 100) + '%', 4)}   ${L(s.snapKBp95.toFixed(1), 11)} ${L(s.outKBpsPerClient.toFixed(1), 11)}   ${L(s.heapTroughMB.toFixed(1), 7)}   ${L(s.livingMin + '/' + s.livingMean.toFixed(1), 9)} ${L(s.fleetSpreadPx, 6)}`);
+  out.push(`  (heap MB = the window's trough; fed = seat-ticks that had a client input; living = live foes within ${popRadius} px of each standing seat, least / mean${samples.some(s => s.dormant) ? '; * a seat lay dormant' : ''})`);
   const k = report.wire.byKind;
   const slow = report.tick.slowest.map(x => `${x.ms} ms @ ${x.atSec} s${x.jumpPx ? ` (shadow jump ${x.jumpPx} px)` : ''}${x.gcMs >= 1 ? ` (gc ${x.gcMs})` : ''}`).join(', ');
   const rows: [string, string][] = [
@@ -543,6 +583,7 @@ async function main(): Promise<number> {
     ['gc pauses', `${gcSummary.pauses} (${gcSummary.byKind.major.n} major, max ${gcSummary.maxMs} ms); ${gcSummary.totalMs} ms in all, ${gcSummary.inTicksMs} ms of it inside ticks (${r2(gcSummary.inTicksMs / Math.max(1, win.tickMs.reduce((a, b) => a + b, 0)) * 100)}% of tick time)`],
     ['the pump', `${report.pump.wakesPerSec} wakes/s, ${report.pump.ticksPerWake} ticks per wake`],
     ['shadow jumps', host.worldmass ? `${report.shadow.jumps} (the keeper moved to another focus seat; those ticks averaged ${report.shadow.jumpTicksMeanMs} ms)` : 'n/a (classic)'],
+    ['the living radius', `least ${report.living.minOfMins}, mean ${report.living.meanOfMeans} foes within ${popRadius} px of a standing seat${spread ? ` (bots spread ${spread} px)` : ''}${host.worldmass ? ` · rove ${SHARD_CFG.rove.sec ? SHARD_CFG.rove.sec + ' s, ' + ((host.status() as { rove?: { hops: number } }).rove?.hops ?? 0) + ' hops' : 'off'}` : ''}`],
     ['inputs fed', `${r2(fed * 100)}% of seat-ticks (${report.inputs.hostSeenHzPerSeat} Hz per seat; the fleet sent ${fleetStats?.stepHz ?? '?'} Hz on a ${fleetStats?.clock ?? '?'} clock)`],
     ['warm-up (not gated)', `${warm.tickMs.length} ticks, p95 ${report.warmup.tickP95} ms, max ${report.warmup.tickMax} ms, ${warmDropped} dropped`],
     ['snapshot bytes p50 / p95 / max', `${r2(pct(snaps, 0.5) / 1000)} / ${r2(pct(snaps, 0.95) / 1000)} / ${r2((snaps[snaps.length - 1] ?? 0) / 1000)} kB over ${snaps.length} snapshots`],
