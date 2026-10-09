@@ -34,6 +34,8 @@
 //      clock, the runtime, every saved native, the keeper at the hearth, the
 //      seed on the welcome; a pocket save wakes at the hearth with the pocket
 //      pinned, and a save that will not stand gives way to a fresh wilds
+//   R  THE ROVING SHADOW (SHARD_CFG.rove, ships off): off, the keeper never hops;
+//      on, two clusters are visited in turn; one cluster never hops
 // THE VESSEL AND THE CORPSE (docs/engine/shard.md "The vessel and the corpse"):
 //   L  THE IDENTITY: an account mints one stable id; the join carries it to
 //      the host alone; minting never touches the seeded stream
@@ -673,6 +675,49 @@ await waitFor(() => vh.world.seats.length === 1, vh, 60);
 await vh.stop();
 rmSync(vdir, { recursive: true, force: true });
 restoreRandom();
+
+// ======================================================== R: THE ROVING SHADOW ==
+// SHARD_CFG.rove (ships OFF; docs/engine/shard.md): with the dial off the keeper
+// shadows the focus seat every tick and never hops, however far the seats stand
+// apart; with it on and the standing seats in two clusters, the keeper visits each
+// cluster in turn on the cadence, and one cluster again means no hop at all.
+{
+  const roveWas = SHARD_CFG.rove.sec;
+  const RSEED = 0x0ddba11; // the probe's wilds (Q's seed), one fixed world
+  const rh = new ShardHost({ seed: RSEED, saveDir: null, open: true, worldmass: true, log: quiet });
+  await rh.ready();
+  await runTicks(rh, 60);
+  const portR = await rh.listen(0, '127.0.0.1');
+  const ca = new WsTransport(), cb = new WsTransport();
+  await ca.connect(`ws://127.0.0.1:${portR}`, { name: 'Ashe', classId: 'warrior' });
+  await cb.connect(`ws://127.0.0.1:${portR}`, { name: 'Bryn', classId: 'warrior' });
+  await waitFor(() => rh.world.seats.length === 3, rh, 60);
+  const sa = rh.world.seats.find(x => x.id === 'p1')!, sb = rh.world.seats.find(x => x.id === 'p2')!;
+  const hopsOf = (): number => (rh.status() as { rove: { hops: number } }).rove.hops;
+  const keeperOn = (seat: typeof sa): boolean => Math.abs(rh.keeper.actor.pos.x - seat.actor.pos.x) < 1 && Math.abs(rh.keeper.actor.pos.y - (seat.actor.pos.y + SHARD_CFG.keeper.shadowOffset)) < 1;
+  try {
+    SHARD_CFG.rove.sec = 0;
+    sb.actor.pos.x = sa.actor.pos.x + 4000; sb.actor.pos.y = sa.actor.pos.y;
+    sa.lastActedAt = rh.world.time; // Ashe is the focus (the most recent act)
+    let tracked = 0;
+    for (let i = 0; i < 60; i++) { await runTicks(rh, 1); if (keeperOn(rh.focusSeat()!)) tracked++; }
+    check('R rove off: the keeper shadows the focus seat every tick and never hops, two clusters or not', tracked === 60 && hopsOf() === 0, `tracked ${tracked}/60, hops ${hopsOf()}`);
+    SHARD_CFG.rove.sec = 1;
+    const seen = new Set<string>();
+    const ticks = Math.round(2.5 * SHARD_CFG.tickHz);
+    for (let i = 0; i < ticks; i++) { await runTicks(rh, 1); if (keeperOn(sa)) seen.add('a'); else if (keeperOn(sb)) seen.add('b'); }
+    check('R rove on: two clusters are visited in turn on the cadence (the keeper stood on both bodies; at least two hops in 2.5 s at 1 s visits)',
+      seen.has('a') && seen.has('b') && hopsOf() >= 2, `stood on ${[...seen].join(',')}, hops ${hopsOf()}`);
+    const hopsBefore = hopsOf();
+    sb.actor.pos.x = sa.actor.pos.x + 200; sb.actor.pos.y = sa.actor.pos.y; // one cluster again
+    let trackedAgain = 0;
+    for (let i = 0; i < 90; i++) { await runTicks(rh, 1); if (keeperOn(rh.focusSeat()!)) trackedAgain++; }
+    check('R rove on, one cluster: no hop; the keeper tracks the focus as before', hopsOf() === hopsBefore && trackedAgain === 90, `hops ${hopsBefore}→${hopsOf()}, tracked ${trackedAgain}/90`);
+  } finally { SHARD_CFG.rove.sec = roveWas; }
+  ca.leave(); cb.leave();
+  await waitFor(() => rh.world.seats.length === 1, rh, 60);
+  await rh.stop();
+}
 
 // Let in-flight socket closes settle before the process ends: Node on Windows
 // asserts inside libuv when process.exit lands mid-close (a red exit code on
