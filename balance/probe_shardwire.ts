@@ -23,11 +23,14 @@
 //      purchase and a restock ship on the next snapshot
 //   H  the client's stubs: zones, own clocks (anchor + local countdown), gauge
 //      banks, a flight's glide and fly-on, a band's ends, float owners
+//   I  THE OWN META: a client hears its own seat's build and never another's,
+//      on a change and on the heartbeat, and a resumed dormant seat hears its
+//      own on its first snapshot; the spliced frame is the per-socket view's JSON
 // and prints the measured snapshot bytes with and without the new rows.
 // ---------------------------------------------------------------------------
 
 import { ShardHost, SHARD_CFG } from '../server/shardHost';
-import { WsTransport } from '../src/net/ws';
+import { WsTransport, shardResumeFor } from '../src/net/ws';
 import { SKILLS } from '../src/data/skills';
 import { CLASSES } from '../src/data/classes';
 import { makeSkillInstance } from '../src/engine/skills';
@@ -62,6 +65,14 @@ async function waitFor(cond: () => boolean, host: ShardHost, maxTicks: number): 
   return cond();
 }
 const bytes = (x: unknown): number => Buffer.byteLength(JSON.stringify(x));
+/** THE OWN ENTRY's per-socket view, built here by hand (independent of snapshot.ts): every
+ *  other seat's own rows struck, and the meta map holding `mine`'s build alone or no key. */
+function viewOf(s: StateSnapshot, mine: string): StateSnapshot {
+  const c = JSON.parse(JSON.stringify(s)) as StateSnapshot;
+  for (const [id, e] of Object.entries(c.seats)) if (id !== mine) for (const k of SEAT_OWN_ROWS) delete e[k];
+  if (c.seatMeta !== undefined) c.seatMeta = c.seatMeta[mine] ? { [mine]: c.seatMeta[mine] } : undefined;
+  return c;
+}
 
 const host = new ShardHost({ seed: 0x3e7e5, saveDir: null, open: true, log: () => { /* quiet */ } });
 await host.ready();
@@ -203,14 +214,10 @@ let zoneId = -1;
   // OTHER seat's own rows struck; a seat that carries none takes the shared bare frame.
   const both = sent.slice(-seen.length).find(s => !!s.seats[B.id]?.cd && !!s.seats[A.id]?.cd)!;
   const split = ownEntryJson(both)!;
-  const expect = (mine: string): string => {
-    const c = JSON.parse(JSON.stringify(both)) as StateSnapshot;
-    for (const [id, e] of Object.entries(c.seats)) if (id !== mine) for (const k of SEAT_OWN_ROWS) delete e[k];
-    return JSON.stringify(c);
-  };
+  const expect = (mine: string): string => JSON.stringify(viewOf(both, mine));
   check('D own entry: the spliced frames equal a plain stringify of each seat\'s view, and the bare frame strikes them all',
     !!both && split.forSeat(A.id) === expect(A.id) && split.forSeat(B.id) === expect(B.id) && split.forSeat('p99') === null
-      && split.bare === expect('p99') && ownEntryJson({ ...both, seats: JSON.parse(expect('p99')).seats }) === null);
+      && split.bare === expect('p99') && ownEntryJson({ ...both, seats: JSON.parse(expect('p99')).seats, seatMeta: undefined }) === null);
 }
 
 // ===================================================== B: the dive's landing ring ==
@@ -428,6 +435,67 @@ let zoneId = -1;
   check('H floats: a number\'s owner seat lands on the client\'s float', !!owned && shell.texts.some(t => t.seat === A.id));
 }
 
+// ===================================================== I: THE OWN META ==
+// A seat's whole build (the book, bag, doll, wallets) is its own business: a socket hears its
+// own seat's seatMeta and never another's, on a change and on the heartbeat, and a dormant
+// seat that comes back hears its own on its first snapshot after the resume.
+let resumed: WsTransport | null = null;
+{
+  const othersMeta = (cl: Client): number => cl.got.filter(s => s.seatMeta && Object.keys(s.seatMeta).some(id => id !== cl.id)).length;
+  const ownMeta = (cl: Client, from: number): number => cl.got.slice(from).filter(s => !!s.seatMeta?.[cl.id]).length;
+  // The beat: a quiet stretch past two heartbeats. The host's body holds every seat's build
+  // on the beat; each socket hears its own.
+  const nA = A.got.length, nB = B.got.length, nS = sent.length;
+  await runTicks(host, Math.ceil(SHARD_CFG.metaHeartbeatSec * 2.2 * SHARD_CFG.tickHz));
+  const beatsHost = sent.slice(nS).filter(s => !!s.seatMeta?.[A.id] && !!s.seatMeta?.[B.id]).length;
+  check('I beat: the heartbeat still ships each seat its own build (twice in 2.2 beats), the host body holding both',
+    beatsHost >= 2 && ownMeta(A, nA) >= 2 && ownMeta(B, nB) >= 2, `host ${beatsHost}, A ${ownMeta(A, nA)}, B ${ownMeta(B, nB)}`);
+  check('I own: across the whole run neither client ever heard the other\'s build',
+    othersMeta(A) === 0 && othersMeta(B) === 0 && A.got.some(s => !!s.seatMeta) && B.got.some(s => !!s.seatMeta),
+    `A heard another's in ${othersMeta(A)}, B in ${othersMeta(B)}`);
+  // The change: just past a beat, A's wallet moves (the dirty-flag beat). A's next snapshot
+  // carries its build; B's, for the same tick, carries no meta at all.
+  await waitFor(() => !!A.got.at(-1)?.seatMeta?.[A.id], host, 200);
+  await runTicks(host, 3);
+  const ess = Object.keys(seatA.meta.essences)[0] as keyof typeof seatA.meta.essences;
+  const purse = seatA.meta.essences[ess] + 7;
+  seatA.meta.essences[ess] = purse;
+  w.markMetaDirty(seatA);
+  const cA = A.got.length, cB = B.got.length;
+  await waitFor(() => A.got.length > cA && B.got.length > cB, host, 12);
+  const nextA = A.got[cA], nextB = B.got.find((s, i) => i >= cB && s.tick === nextA?.tick);
+  check('I change: a changed build ships on the next snapshot, to its own socket alone',
+    !!nextA?.seatMeta?.[A.id] && nextA.seatMeta[A.id].ess?.[ess] === purse && Object.keys(nextA.seatMeta).length === 1
+      && !!nextB && nextB.seatMeta === undefined,
+    `tick ${nextA?.tick}: A ${JSON.stringify(Object.keys(nextA?.seatMeta ?? {}))}, B ${nextB?.seatMeta === undefined ? 'none' : JSON.stringify(Object.keys(nextB.seatMeta))}`);
+  // The resume: B wills a step (its grace is over), its socket is cut raw (THE DORMANT SEAT),
+  // and a new transport takes the seat back with THE RECONNECT TOKEN.
+  for (let i = 0; i < 6; i++) {
+    B.c.sendInput(B.id, { dx: 0, dy: 1, aim: at(seatB.actor, 0, 60), held: [], edge: [], seq: 500 + i });
+    await runTicks(host, 1);
+  }
+  const tok = shardResumeFor(url);
+  (host.net as unknown as { bySeat: Map<string, { sock: { destroy(): void } }> }).bySeat.get(B.id)?.sock.destroy();
+  const dormant = await waitFor(() => host.net.isDormant(B.id), host, 60);
+  const firsts: StateSnapshot[] = [];
+  resumed = new WsTransport();
+  resumed.onState(s => { firsts.push(s); });
+  const back = await resumed.connect(url, { name: 'Bryn', classId: 'warrior' }, undefined, tok ?? undefined);
+  await waitFor(() => firsts.length > 0, host, 30);
+  const first = firsts[0];
+  check('I resume: a dormant seat taken back hears its own build on its first snapshot, and only its own',
+    dormant && tok?.seat === B.id && back.self === B.id && !!back.resumed && !!first?.seatMeta?.[B.id] && Object.keys(first.seatMeta!).length === 1,
+    `dormant ${dormant}, token seat ${tok?.seat}, resumed ${back.resumed}, first snapshot meta ${JSON.stringify(Object.keys(first?.seatMeta ?? {}))}`);
+  // The split against a plain stringify of each socket's view, on a beat body (both builds).
+  const beat = sent.slice(nS).find(s => !!s.seatMeta?.[A.id] && !!s.seatMeta?.[B.id])!;
+  const cut = ownEntryJson(beat)!;
+  check('I view: on a beat body each spliced frame is its socket\'s view (its own build, its own rows), the bare frame neither',
+    !!beat && cut.forSeat(A.id) === JSON.stringify(viewOf(beat, A.id)) && cut.forSeat(B.id) === JSON.stringify(viewOf(beat, B.id))
+      && cut.forSeat('p99') === null && cut.bare === JSON.stringify(viewOf(beat, 'p99')) && !cut.bare.includes('"seatMeta"'));
+  const metaBytes = beat ? bytes(beat.seatMeta) : 0;
+  info(`bytes: a beat body's seatMeta is ${metaBytes} B for ${Object.keys(beat?.seatMeta ?? {}).length} seats; each socket now hears its own (~${Math.round(metaBytes / Math.max(1, Object.keys(beat?.seatMeta ?? {}).length))} B), not all of them`);
+}
+
 // ================================================== the bytes, measured ==
 {
   // The host's own body (before THE OWN ENTRY splits it), one serialize each way: as shipped,
@@ -459,6 +527,7 @@ let zoneId = -1;
 }
 
 for (const x of [A, B]) x.c.leave();
+resumed?.leave();
 await waitFor(() => w.seats.length === 1, host, 120);
 await host.stop();
 await new Promise(r => setTimeout(r, 600));
