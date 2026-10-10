@@ -815,6 +815,20 @@ in Mu first.**
     Party page: your party, the invitations, the players around you; the
     shell collects the invitations and the shard's words):** the muster ring
     (card 15 B) is next.
+    **THE PARTY THAT READS (2026-10-10):** the audit of a player's first hour
+    found the party unreadable (five findings). BUILT: THE PARTY FOUNDS ON
+    ACCEPT (an invite founds nothing, so a decline or a lapse leaves no party
+    of one and the inviter stays an ungrouped neighbour others may ask); the
+    invite's `until` on the wire and THE INVITE TELL (a pip on the menu's
+    Party row, a beckon over the inviter's head in its class color); THE NEAR
+    ROSTER and a stable panel (near you by THE NEAR LAW's radius, the far
+    roster by name, the DOM patched only on change); THE REVIVE ROW
+    (`SeatW.rv`: the ring and the cue a mate never saw, the downed player's
+    own progress); THE WIPE RADIUS, SHOWN (THE NEAR LAW's ring around a held
+    down, its holders marked); THE RELEASE and THE BLEED-OUT (card 28); and
+    THE PARTY SURVIVES A DEATH (a fallen member's place held
+    `PARTY_CFG.rejoinSec`, 120 s, for its account's next vessel, no
+    re-invite). docs/engine/shard.md; `balance/probe_shardpartyreads.ts`.
 24. **THE QUEST LEDGER** (raised by the gap sweep, §7d item 3) — A: per
     ACCOUNT (each player's quest state lives on the shard keyed by account
     id, the corpse idiom; a quest a player finishes is finished for that
@@ -839,7 +853,16 @@ in Mu first.**
 28. **THE BLEED-OUT** (a grouped mortal's down) — A: no timer; a downed
     grouped hero waits for a mate as long as the party stands. B: a
     bleed-out of N seconds after which the covenant falls, reset by a
-    kneel. Rec: B at 60 s.
+    kneel. Rec: B at 60 s. **RULED B (2026-10-10, her word: "no player may
+    hold another downed player hostage"). BUILT with THE PARTY THAT READS:**
+    `VESSEL_CFG.bleedOutSec` ships at 60. The clock starts the first tick a
+    mate's standing holds a down, a kneel resets it to full, and when it runs
+    out the wait is over: a mortal falls by the covenant, and a life that
+    survives death (an Immortal, card 30 still open) goes to THE MERCY instead
+    of waiting on a mate who never kneels. THE RELEASE stands beside it, the
+    player's own choice: the interact key gives up the wait at once. 0 turns
+    the clock off. `balance/probe_shardpartyreads.ts` pins the 60 s default,
+    the kneel's reset and the run-out.
 29. **THE SHELF PER BUYER** — A: one world shelf rolled at the keeper's
     level (today, §5). B: the shelf rolls per buyer's level. Rec: hold A;
     revisit with M2's account gate.
@@ -935,7 +958,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 | 8 | The bounty board is dead on a shard. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 9 | A new account never gets flasks on a shard. | W3 |
 | 10 | Nothing earned reaches the home account; the shard account is in memory only. | M2 THE SEAT'S GATE |
-| 11 | The group hold has no distance; the mercy waits on strangers. | W3 (card 28 for the bleed-out) |
+| 11 | The group hold has no distance; the mercy waits on strangers. | W3; card 28 RULED B and BUILT 2026-10-10 (THE PARTY THAT READS: THE BLEED-OUT at 60 s, reset by a kneel, and THE RELEASE) |
 | 12 | Events have no owner and gather on the keeper. | M3 |
 | 13 | Harvest is closed to remote seats. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 14 | Mercenaries cannot be hired. | M2 |
