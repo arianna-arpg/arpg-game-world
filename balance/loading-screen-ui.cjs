@@ -77,13 +77,14 @@ app.whenReady().then(async () => {
   assert.ok(play.passed >= 2); assert.equal(play.hits, 1); assert.equal(play.streak, 0); assert.equal(play.speed, 1); report.checks.push({ pointerGates: play });
   await shot('impact');
   const pad = await run(async () => {
+   const before = __game.loading.snapshot.lane;
    window.__qaPads = [{ connected: true, axes: [0, -0.8], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) }];
    await new Promise(r => setTimeout(r, 700)); const lane = __game.loading.snapshot.lane;
    document.querySelector('#mu-loading-screen button').click();
    const held = __game.loading.padQuarantined;
-   window.__qaPads = []; return { lane, held, released: __game.loading.padQuarantined, cancelled: window.__qaCancel, active: __game.loading.active };
+   window.__qaPads = []; return { before, lane, held, released: __game.loading.padQuarantined, cancelled: window.__qaCancel, active: __game.loading.active };
   });
-  assert.ok(pad.lane < 0); assert.equal(pad.held, true); assert.equal(pad.released, false); assert.equal(pad.cancelled, 1); assert.equal(pad.active, false);
+  assert.ok(pad.lane <= Math.max(-265, pad.before - 80) + 1); assert.equal(pad.held, true); assert.equal(pad.released, false); assert.equal(pad.cancelled, 1); assert.equal(pad.active, false);
   report.checks.push('controller steering, cancellation and neutral-release quarantine');
   const heldConfirm = await run(async () => {
    window.__qaPads = [{ connected: true, axes: [0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: i === 0, value: i === 0 ? 1 : 0 })) }];
@@ -94,11 +95,51 @@ app.whenReady().then(async () => {
    return { cancelled, active };
   });
   assert.deepEqual(heldConfirm, { cancelled: 0, active: true }); report.checks.push('held confirm cannot immediately cancel entry');
+  // Real pointer collection: choices remain exclusive, all visual offers can
+  // be taken, score tracks the clear/pickup ledger and Wild Wisps accelerate.
+  const choices = await run(async () => {
+   window.__qaLease = __game.loading.begin({ kind: 'travel', direction: 'right', label: 'Following the wandering souls' });
+   const start = performance.now(), seen = new Set(), taken = new Set(), ledger = [], widths = new Map();
+   let previous = __game.loading.snapshot, selected;
+   while (performance.now() - start < 35000) {
+    const snap = __game.loading.snapshot;
+    for (const gate of snap.gates) widths.set(gate.id, gate.width);
+    if (snap.collected > previous.collected) {
+     const p = snap.pickups.find(p => p.state === 'taken' && !taken.has(p.choice));
+     if (!p) throw Error('Collection has no unique claimed choice');
+     if (snap.pickups.some(other => other.choice === p.choice && other.state === 'live')) throw Error('Sibling remained collectible');
+     taken.add(p.choice); seen.add(p.kind); ledger.push(p.kind);
+     if (p.kind === 'wild' && snap.boostGates !== previous.boostGates + 3) throw Error('Wild Wisp did not accelerate by three clears');
+     selected = undefined;
+    }
+    if (seen.size === 3 && snap.collected >= 5 && snap.passed >= 4) {
+     return { snap, ledger, widths: [...widths.values()], scoreText: document.querySelector('.mu-score-value').textContent };
+    }
+    const gate = snap.gates.find(g => !g.resolved);
+    const offers = snap.pickups.filter(p => p.state === 'live' && p.u >= 218);
+    const pair = offers.filter(p => p.choice === offers[0]?.choice);
+    if (!pair.some(p => p.id === selected)) selected = (pair.find(p => !seen.has(p.kind)) ?? pair[0])?.id;
+    const offer = pair.find(p => p.id === selected);
+    const lane = offer && offer.u < (gate?.u ?? Infinity) ? offer.lane : gate?.gap ?? snap.lane;
+    const rect = document.querySelector('#mu-loading-screen canvas').getBoundingClientRect();
+    const scale = Math.min(rect.width / 1000, rect.height / 560);
+    document.querySelector('#mu-loading-screen').dispatchEvent(new PointerEvent('pointermove', { clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 + lane * scale, bubbles: true }));
+    previous = snap; await new Promise(r => setTimeout(r, 16));
+   }
+   throw Error('Pickup course timed out: ' + JSON.stringify({ seen: [...seen], snap: __game.loading.snapshot }));
+  });
+  assert.equal(choices.snap.hits, 0);
+  assert.equal(choices.snap.score, choices.snap.passed * 10 + choices.ledger.reduce((sum, kind) => sum + ({ mote: 25, gilded: 100, wild: 50 })[kind], 0));
+  assert.equal(Number(choices.scoreText), choices.snap.score);
+  assert.ok(Math.max(...choices.widths) - Math.min(...choices.widths) > 5);
+  assert.equal(choices.snap.boostGates, choices.ledger.filter(kind => kind === 'wild').length * 3);
+  report.checks.push({ collectibleChoices: choices }); await shot('choices');
+  await run(() => window.__qaLease.finish());
   // A small viewport keeps the same hit/pointer mapping and visible controls.
   win.setContentSize(390, 720);
   await run(() => { window.__qaLease = __game.loading.begin({ kind: 'entry', label: 'Recalling your vessel' }); });
   await pause(1000); await shot('narrow');
-  await run(() => { if (document.querySelector('#mu-loading-screen').scrollWidth > innerWidth) throw Error('Loading cover overflows'); window.__qaLease.finish(); });
+  await run(() => { if (document.querySelector('#mu-loading-screen').scrollWidth > innerWidth) throw Error('Loading cover overflows'); if (document.querySelector('#mu-loading-screen canvas').getBoundingClientRect().bottom > document.querySelector('#mu-loading-screen footer').getBoundingClientRect().top) throw Error('Footer overlaps crossing'); window.__qaLease.finish(); });
   win.setContentSize(1280, 850);
   // Exercise the actual async entry wrapper; it must expose down BEFORE construction.
   const entry = await run(async () => {

@@ -1,6 +1,6 @@
 The playable Mu loading-screen foundation is documented in docs/ui/loading-screen.md.
 LoadingScreen owns cancellable status, retry, input isolation and token-safe cleanup;
-SpiritRun owns rewardless gates and three travel directions. Entry/Continue descend;
+SpiritRun owns variable gate openings, paired score/acceleration pickups and three travel directions. Entry/Continue descend;
 native page readiness chooses a horizontal crossing. It shares Mu/wardrobe painting.
 Synchronous generation is still synchronous: yield bounded work or use workers.
 Verify spiritrun, character resume probes, all types, sim smoke, boot smoke and

@@ -13,7 +13,30 @@ Mouse/touch steer across the travel direction; WASD/arrows and the first connect
 controller's left stick/D-pad provide the same axis. Pass through gate openings.
 Each clear raises speed up to a cap. Contact binds the wisp briefly, reduces steering
 and resets the streak/speed, without restarting loading or erasing total clears.
-Gate spacing and limited changes between openings keep the fastest course reachable.
+Each gate rolls its own opening width (114–238 units; the collision body is 30
+units wide). The opening remains inside the corridor with a solid outer rim.
+Gate center changes are capped at 110 units. Two pickups form a choice halfway
+between gates: collecting one releases the other. Their lanes sit 56 units to
+either side of the two gates' midpoint, within the steering reach of both gates
+even at maximum speed. A pair with a Memory Mote puts it toward the next opening;
+the more valuable alternative asks for the longer return. Other pairs offer points
+against acceleration. Unclaimed pickups simply pass by.
+
+| Pickup | Appearance | Score | Extra acceleration |
+| --- | --- | ---: | --- |
+| Memory Mote | Teal pearl | 25 | None |
+| Gilded Soul | Nested gold diamond | 100 | None |
+| Wild Wisp | Violet wings and three trailing chevrons | 50 | Three gate clears (+0.27×) |
+
+A cleared gate gives 10 points and +0.09× speed. Wild Wisp acceleration shares the
+2.8× cap and is reset with the streak on impact; earned points are retained.
+Each choice pays once, even if two bodies overlap in a test fixture. Score belongs
+only to the crossing, never the account. The renderer uses each gate's actual
+width, distinct pickup silhouettes and point values, collection bursts, a violet
+surge wake, illuminated gate caps/runes and quiet background ribbons. No new art
+assets or game rewards are introduced. Reduced motion suppresses collection
+expansion, particle spray and surge rings. The probe drives both choices through
+long extreme/seeded courses at the speed cap and checks the complete return path.
 
 ## Integration
 
@@ -83,7 +106,8 @@ The toy loads no external assets and introduces no runtime dependencies.
 - `npm run smoke` after a normal production build
 
 The UI course uses isolated browser storage and a hidden Electron window. It checks
-all directions, keyboard/pointer/controller steering, stale leases, cancellation,
+all directions, keyboard/pointer/controller steering, every pickup kind, exclusive
+choices, scoring and acceleration, variable widths, stale leases, cancellation,
 input release, failed loads/retry, world holds and real entry/Continue; it saves
 screenshots under `balance/reports/`. The debug surface is `__game.loading` and
 `__game.devStartLoadingRun()`. Open `?loadingPreview=down`, `?loadingPreview=right`
