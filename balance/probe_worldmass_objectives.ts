@@ -154,7 +154,7 @@ try {
   assert.ok(w.dwellRingsView().some(r => r.kind === 'pyre'));
   assert.ok(w.pyresView());
   const checkpoint = m.geography!.hierarchy.controller(plan.owner.id, 'objective:pyres')!;
-  const saved = serializeCharacter(w); assert.equal(saved.world!.worldmass!.schema,18); /* NativeRegionalSeatingSchema */ assert.ok(saved.world!.worldmass!.geography);
+  const saved = serializeCharacter(w); assert.equal(saved.world!.worldmass!.schema,19); /* WildernessPathsSchema */ assert.ok(saved.world!.worldmass!.geography);
   const continued = makeSimWorld('warrior', 1712); assert.ok(applySavedCharacter(continued, saved)); assert.ok(continued.adoptWorldState(saved.world));
   continued.startWorldMass(saved.world!.worldmass!.state.run.seed, saved.world!.worldmass); w = continued; m = w.massRuntime!;
   assert.deepEqual(m.geography!.hierarchy.controller(plan.owner.id, 'objective:pyres')!.state, checkpoint.state);

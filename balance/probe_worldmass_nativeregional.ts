@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { makeSimWorld } from '../src/sim/arena';
@@ -20,7 +21,7 @@ import type { MassSpec } from '../src/worldmass/contracts';
 void makeSimWorld;
 const copy=<T>(v:T):T=>JSON.parse(canonical(v));
 // Frozen schema-17 course; modern source-fit seating has its own coverage rig.
-const massAdventure=()=>{const config=copy(currentMassAdventure());delete config.terrain.nativeRegional!.seating;return config;};
+const massAdventure=()=>{const config=beforeWildernessPaths(copy(currentMassAdventure()));delete config.terrain.nativeRegional!.seating;return config;};
 const catalogue=nativeRegionalSources(),start=performance.now();
 let passed=0;
 function test(name:string,run:()=>void){run();passed++;console.log('PASS '+name);}

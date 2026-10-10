@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -12,7 +13,7 @@ import { TILESETS } from '../src/data/tilesets';
 import { MONSTERS } from '../src/data/monsters';
 import { presenceTable } from '../src/engine/presence';
 
-const restore=seedGlobalRandom(62042),config=massAdventure();
+const restore=seedGlobalRandom(62042),config=beforeWildernessPaths(structuredClone(massAdventure()));
 assert.equal(config.terrain.version,8);
 for(const family of MASS_BIOME_FAMILIES){
  const content=config.content.find(c=>c.id===family.id)!;assert.ok(content);

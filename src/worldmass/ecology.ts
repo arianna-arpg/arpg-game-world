@@ -160,7 +160,8 @@ export class MassEcology {
               const ground = this.mass.stream.sample(this.mass.walk.at(pos.x, pos.y));
               if (!rule.biomes.includes(ground.biome) || !(rule.regions ?? ['ground','sand']).includes(ground.region)) continue;
             }
-            if (this.mass.geography?.reserves(this.mass.walk.at(pos.x,pos.y),radius)
+            if (this.mass.wildernessPaths?.reserves(this.mass.walk.at(pos.x,pos.y),Math.max(radius,shapeBoundR(hitSurfaceOf({kind:row.kind,pos,radius,rot:0},'move'))))
+              || this.mass.geography?.reserves(this.mass.walk.at(pos.x,pos.y),radius)
               || this.mass.nativeFeatures?.intersects(this.mass.walk.at(pos.x,pos.y),radius)
               || this.mass.settlement?.reserves(pos.x, pos.y, radius) || this.mass.journey?.reserves(pos, radius)
               || sites.some(p => {

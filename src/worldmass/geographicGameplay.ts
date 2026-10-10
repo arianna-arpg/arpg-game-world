@@ -273,7 +273,8 @@ export class MassGeographicGameplay {
   chestOpened(chest:Chest,now:number):void{if(this.caravans.processions.chestContext(chest))this.caravans.processions.chestOpened(chest,now);else this.objectives.chestOpened(chest,now);}
   private host(world:World):MassObjectiveHost {
     this.bodies??=new MassObjectiveBodies(world,this.mass.generator.run.seed,{population:()=>this.mass.population,
-      maxPopulation:()=>this.mass.population+this.mass.availablePopulation(),retainRadius:2400,quietSeconds:12});
+      // nearbyReservations must not reserve an active native objective out of its own births.
+      maxPopulation:owner=>this.mass.population+this.mass.availablePopulation(owner),retainRadius:2400,quietSeconds:12});
     return this.snapshotHost={get now(){return world.time;},hold:world.massHoldHost(false),
       installPyres:(owner,fixtures)=>world.installMassPyres(owner,fixtures),
       installHolds:(owner,kind,fixtures)=>world.installMassHolds(owner,kind,fixtures),

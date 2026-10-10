@@ -1,3 +1,4 @@
+import { nativeAmbientPack } from './ambientPacks';
 import { NATIVE_REGIONAL_SEATING } from './nativeRegionalSeating';
 import { nativeRegionalSources } from './nativeRegionalSources';
 import { wovenRegionalTerrainGrammar } from './regionalTerrainGrammar';
@@ -35,6 +36,7 @@ import { Q_FRONTIER_WATCH, Q_FRONTIER_STONEWARD } from '../quests/frontier';
 export const MASS_ZONE = 'worldmass_expedition';
 export interface MassContent extends MassPopulation {
   id: string; source: string; count: number;
+  ambientPack?: import('./ambientPacks').MassAmbientPack;
   /** Omitted = authored fixed population. Rows snapshot the native level envelopes. */
   levels?: MassPopulation[];
   levelOffset?: number;
@@ -43,6 +45,7 @@ export interface MassContent extends MassPopulation {
   magicPack?: { source: string; mechanic: string };
 }
 export interface MassAdventure {
+  wildernessPaths?: import('./wildernessPaths').WildernessPathsSpec;
   nativeCountry?: NativeCountrySpec;
   geography?: import('./geographicGameplay').MassGeographicSpec;
   bounties?: import('./bounties').MassBountySpec;
@@ -133,7 +136,7 @@ export function massAdventure(): MassAdventure {
       ],
     },
     places: [...activities.map(a=>a.recipe), ...regional.map(r => r.recipe), ...fields.map(f=>f.recipe), ...families.map(f => ({ id: f.id + '-habitat', version: 1, content: f.id,
-      period: 1100, chance: .7, radius: 180, jitter: .7, priority: 1, landformHabitat: true as const,
+      period: 500, chance: .9, radius: 150, jitter: .6 /* ambientPack encounter spacing */, priority: 1, landformHabitat: true as const,
       when: [{ field: 'elevation', min: -.1 }, ...f.when] })),
       { id: 'wayside-camp', version: 1, content: 'wayside-camp', period: 1600, chance: .65,
         radius: 180, jitter: .65, priority: 3, when: [{ field: 'elevation', min: 0 }],
@@ -159,13 +162,15 @@ export function massAdventure(): MassAdventure {
     fieldResidency: { source: 'worldmass/field-residency', retainRadius: 2048, maxResident: 32 },
     shrineResidency: { source: 'worldmass/shrine-residency', retainRadius: 2048, maxResident: 32 },
     puzzleResidency: { source: 'worldmass/puzzle-residency', retainRadius: 2048, maxResident: 16 },
-    dormancy: { source: 'worldmass/native-dormancy-v1', wakeRadius: 1600, sleepRadius: 2400, quietSeconds: 12 },
+    // WildernessPaths: retire settled bodies beyond the active encounter neighborhood.
+    dormancy: { source: 'worldmass/native-dormancy-v2', wakeRadius: 1300, sleepRadius: 1600, quietSeconds: 12 },
     content: [...nativeRegional.content, ...regionalDiscoveries.content, ...activities.map(a=>({id:a.id,source:a.site.source,level:1,count:0,table:[{id:'plains_wolf',weight:1}],site:a.site})), ...[...regional, ...fields].map(field=>{
       const levels=populations(field.roster==='undead'?FACTIONS.undead.table:TILESETS[field.roster].packs.table)
         .map(row=>reserveMassGuardians(row,field.count));
       return {...levels[0],id:field.id,source:field.site.source,count:field.count,levels,site:field.site};
     }), ...families.map(f => ({ id: f.id, source: 'tilesets/' + f.id + '/packs', level: 1, count: 3,
-      levels: populations(TILESETS[f.id].packs.table).map(row=>{
+      ambientPack: nativeAmbientPack('tilesets/'+f.id+'/native-groups-v1',TILESETS[f.id].packs),
+      levels: populations(TILESETS[f.id].packs.table).map(({limits: _mixedSlotLimits,...row})=>{ // ambientPack keeps native coherent group sizes
         const encounters=nativeMassEncounters(f.id,TILESETS[f.id].biome??f.id,row.level);
         return {...row,...(encounters?{encounters}:{})};
       }),
@@ -192,7 +197,9 @@ export function massAdventure(): MassAdventure {
           site: landmark.site, ...(landmark.magicPack ? { magicPack: landmark.magicPack } : {}) };
       }),
     ],
-    journey: { reservePopulation: true, source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
+    wildernessPaths: {source:'worldmass/wilderness-paths-v1',district:7680,width:90,color:'#62573e',chance:.75,
+      destinations:regional.map(p=>({content:p.id,entry:{x:0,y:300}}))},
+    journey: { reservePopulation: true, nearbyReservations: true, source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
       notices: [
         { destination: 'west-camp', note: 'Gnolls hold the western road; their bone-thrower borrows courage from the leader. A shrine and provisions remain at camp. Farther north along the circuit, a burned caravan shelters clustered dead and a bone mender.' },
         { destination: 'east-camp', note: 'Crystals wait among the graves of a quiet grove. Kindling the lattice is a riddle; farther along the circuit, a side path leads to a ring of fading coals. Past the grove, paired stones answer matching voices.' },

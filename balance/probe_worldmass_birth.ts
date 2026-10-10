@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -7,7 +8,7 @@ import { serializeCharacter } from '../src/meta/character';
 import { MassBirths, validMassBirth } from '../src/worldmass/birth';
 
 const restore=seedGlobalRandom(731822);
-const spec=JSON.parse(JSON.stringify(massAdventure()));
+const spec=JSON.parse(JSON.stringify(beforeWildernessPaths(structuredClone(massAdventure()))));
 spec.terrain.places=[];delete spec.journey.extensions;delete spec.journey.stops;
 // This fixture deliberately retains just one route, without the public circuit's notices.
 delete spec.journey.notices;

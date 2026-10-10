@@ -1,3 +1,15 @@
+WildernessPaths (schema19) adds coherent native-sized ambient packs, closer
+encounter anchors, local destination reservations and occasional complete paths
+between existing guarded/cache-bearing sites. Preserve historical omission, exact
+native squad/paging state, full anatomy wake bounds, complete retained puzzle
+return, full dry body ribbons, protected native footprints,
+player terrain edits and bounded deterministic planning. No actor state is erased
+to free population. Verify worldmass_wilderness plus affected historic fixtures,
+all types/genqa/sim and wilderness-ui.cjs in an isolated completed build. Density
+is now measured near main's ambient range on open reference terrain; whole-area
+content/controller parity and cold planning remain unfinished. See
+docs/worldgen/wilderness-paths.md and the placement handoff for evidence.
+
 The playable Mu loading-screen foundation is documented in docs/ui/loading-screen.md.
 LoadingScreen owns cancellable status, retry, input isolation and token-safe cleanup;
 SpiritRun owns score-free staggered wisps, branching gates and optional surge
@@ -39,9 +51,9 @@ visual/AI query deadlines that prevented offscreen dormancy. Keep actual emitted
 attacks, unknown clocks and controller dependencies pinned; never erase native
 state to free capacity. Verify worldmass_exploration, dormancy/pinattribution,
 engine/formations/paging/resume and all types, plus the actual client Continue
-course. Native density is still substantially below main, and continuing
-wilderness roads are absent: docs/worldgen/exploration-population.md defines
-measured gaps and required live-content/route acceptance, not completed parity.
+course. The later WildernessPaths pass raises ambient density and adds occasional
+real destination links. docs/worldgen/exploration-population.md retains the
+original measurements and the remaining whole-content parity requirements.
 
 SeamlessOnlyContent is the intended final architecture (user direction, 2026-10-09).
 Use main as the reference for complete content and native behavior, not as a

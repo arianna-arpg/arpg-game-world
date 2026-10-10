@@ -1,3 +1,4 @@
+import {nativeQuietAnatomy,nativeQuietAnatomyNear} from './nativeQuietAnatomy';
 import { MONSTERS } from '../data/monsters';
 import { tellSpecsOf } from '../engine/tells';
 import { canonical } from './random';
@@ -341,11 +342,13 @@ export interface NativeDormancyOwnership {
   /** ExplorationPopulation's ordinary living-native eligibility proof. Kind-owned
    * controllers continue supplying their own narrower clock certificates. */
   nativeQuietQueryClocks?: true;
+  /** Ordinary native factories may certify complete settled anatomy. */
+  nativeQuietAnatomy?: true;
 }
 export function nativeDormancyRefusal(a:Actor,world:World,quietSeconds:number, captured?:NativeActorState|null,
   ownership?:NativeDormancyOwnership): string | null {
   if(a.dead||a.team!=='enemy'||!a.fromZoneGen||a.companion||a.downed)return 'not a living native enemy';
-  return nativeActorQuietRefusal(a,world,quietSeconds,captured,{...ownership,nativeQuietQueryClocks:true});
+  return nativeActorQuietRefusal(a,world,quietSeconds,captured===undefined?captureNativeActorState(a):captured,{...ownership,nativeQuietQueryClocks:true,nativeQuietAnatomy:true});
 }
 
 /** Shared native quiet-state proof only. The caller must first prove its own
@@ -375,6 +378,7 @@ export function nativeActorQuietRefusal(a:Actor,world:World,quietSeconds:number,
     return 'native stateful skill';
   for(const key of linked)if(Reflect.get(a,key)!==undefined&&Reflect.get(a,key)!==null){
     if(key==='garrison'&&ownership?.garrisonSlot===a.garrison?.slotId&&!a.garrison?.pending)continue;
+    if(captured&&ownership?.nativeQuietAnatomy&&nativeQuietAnatomy(a,key,world.time,quietSeconds))continue;
     return 'native component '+key;
   }
   if(a.magicPack?.runtime)return 'native magic-pack runtime';
@@ -429,7 +433,7 @@ export class MassDormancy {
     for(const [id,a]of owned){const key=a.squadId===undefined?'body:'+id:'squad:'+a.squadId;const group=groups.get(key)??[];group.push(a);groups.set(key,group);}
     const pins=massDormancyPins(world,owned), remove=new Set<Actor>();let slept=0,woke=0,checked=0;
     const observers=world.actors.filter(a=>!a.dead&&a.team!=='enemy');
-    const near=(a:Actor,r:number)=>observers.some(o=>Math.hypot(a.pos.x-o.pos.x,a.pos.y-o.pos.y)<=r);
+    const near=(a:Actor,r:number)=>observers.some(o=>Math.hypot(a.pos.x-o.pos.x,a.pos.y-o.pos.y)<=r||nativeQuietAnatomyNear(a,o.pos,r));
     const cohorts=[...groups.values()];let nextCursor=this.retireCursor;
     for(let i=0;i<cohorts.length;i++){
       const index=(this.retireCursor+i)%cohorts.length,group=cohorts[index];

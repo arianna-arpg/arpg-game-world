@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -18,7 +19,7 @@ const hooks=(w:World)=>w as unknown as {
   puzzles:PuzzleRun[];puzzleStruck(node:Actor,striker:Actor,wounding:boolean):void;
   updatePuzzles(dt:number):void;updateShrines():void;
 };
-const config=structuredClone(massAdventure()) as MassAdventure;
+const config=structuredClone(beforeWildernessPaths(structuredClone(massAdventure()))) as MassAdventure;
 config.shrineResidency={source:'qa/repeated-shrines',retainRadius:2048,maxResident:2};
 config.puzzleResidency={source:'qa/repeated-riddles',retainRadius:2048,maxResident:2};
 const content=structuredClone(config.content.find(c=>c.id==='memorial-grove')!);

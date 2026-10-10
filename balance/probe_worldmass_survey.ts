@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { MassSurvey } from '../src/worldmass/survey';
 import { MassState } from '../src/worldmass/state';
@@ -11,7 +12,7 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { serializeCharacter } from '../src/meta/character';
 import { massMap } from '../src/worldmass/paint';
 
-const config=massAdventure(),spec=config.survey!,span=config.terrain.addressSpan;
+const config=beforeWildernessPaths(structuredClone(massAdventure())),spec=config.survey!,span=config.terrain.addressSpan;
 const state=new MassState(makeMassRun(42,'survey-unit',config.terrain),config.terrain.terrainCell);
 const survey=new MassSurvey(state,spec);
 const at=address('surface','9007199254740993','-9007199254740993',-12,12,span);

@@ -1,6 +1,8 @@
 # Exploration population and destination audit
 
 Status, 2026-10-09: the derived-cache / settled-query dormancy defect is fixed.
+WildernessPaths now adds native-sized ordinary groups, nearby site reservations
+and occasional real destination links; see [wilderness-paths.md](wilderness-paths.md).
 Native population density, complete content parity, and a continuing wilderness
 road network are **not complete**. These are acceptance requirements for seamless
 integration, not optional polish after declaring the mode equivalent to main.
@@ -62,7 +64,7 @@ additional event/objective/structure populations of a complete main area.
 | Desert | 14.04 | 14.56 | 15.28 |
 | Tundra | 17.66 | 15.49 | 17.59 |
 
-The current ordinary seamless recipe has period 1,100, chance 0.7, and three
+The pre-WildernessPaths ordinary seamless recipe had period 1,100, chance 0.7, and three
 bodies: **1.736 bodies / million units² before placement exclusions**. Formation
 replacements and separate activity/site populations add encounters, so this is
 not a measurement of total rendered world density. Nonetheless, neither the
@@ -110,7 +112,7 @@ placement are insufficient to pass these requirements.
    and missing native categories. Review actual rendered traversal as well as
    deterministic generation receipts.
 
-## Continuing roads are missing
+## Original continuing-road gap
 
 MassJourney explicitly creates a finite Lastlight opening network. Its branches,
 roadside encounters and circuit do not constitute a wilderness road generator.

@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -102,7 +103,7 @@ try{
  const tiny=structuredClone(massAdventure()) as MassAdventure;tiny.maxPopulation=3;
  const small=makeSimWorld('warrior',9152);new WorldMassRuntime(42,'small',tiny).attach(small);arrive(small);
  assert.equal(guts(small).puzzles.some(r=>r.spec.kind==='accord'),false,'never admit a partial pair court');
- const legacy=structuredClone(massAdventure()) as MassAdventure;
+ const legacy=beforeWildernessPaths(structuredClone(massAdventure())) as MassAdventure;
  delete legacy.bounties;delete legacy.journey!.reservePopulation;
  legacy.content=legacy.content.filter(c=>c.id!=='paired-stones');legacy.journey!.extensions=legacy.journey!.extensions!.filter(e=>e.content!=='paired-stones');
  const old=makeSimWorld('warrior',9124);new WorldMassRuntime(42,'legacy',legacy).attach(old);

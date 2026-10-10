@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -17,7 +18,7 @@ const policy=massLandformPolicy(), at=(x:number,y:number)=>address('surface','0'
 let passed=0;
 function test(name:string,fn:()=>void){fn();passed++;console.log('PASS '+name);}
 function config(shape=policy.shapes[0].id):MassAdventure {
-  const c=copy(massAdventure());delete c.terrain.regionalDiscoveries;delete c.terrain.nativeRegional;
+  const c=copy(beforeWildernessPaths(structuredClone(massAdventure())));delete c.terrain.regionalDiscoveries;delete c.terrain.nativeRegional;
   delete c.settlement;delete c.journey;delete c.ecology;delete c.progression;delete c.nativeCountry;delete c.geography;delete c.terrain.patches;
   c.startRadius=0;c.maxPopulation=4;c.populationRadius=1200;
   c.terrain.fields=[{id:'elevation',base:0,layers:[]}];
@@ -127,7 +128,7 @@ test('native formations compose with corridors atomically and preserve their cas
 test('ordinary habitat composition increases real terrain density while retaining real habitats',()=>{
   let current=0,legacy=0,overlaps=0;const recipes=new Set<string>();
   for(const seed of [42,713,991]) {
-    const currentSpec=copy(massAdventure().terrain); delete currentSpec.landforms!.regional;delete currentSpec.regionalDiscoveries;delete currentSpec.nativeRegional; // regionalExtent is surveyed separately
+    const currentSpec=copy(beforeWildernessPaths(structuredClone(massAdventure())).terrain); delete currentSpec.landforms!.regional;delete currentSpec.regionalDiscoveries;delete currentSpec.nativeRegional; // regionalExtent is surveyed separately
     const oldSpec=copy(currentSpec);
     for(const p of oldSpec.places)delete p.landformHabitat;
     const now=new MassGenerator(makeMassRun(seed,'density',currentSpec),currentSpec),old=new MassGenerator(makeMassRun(seed,'density',oldSpec),oldSpec);

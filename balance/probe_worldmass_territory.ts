@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -7,7 +8,7 @@ import { WorldMassRuntime } from '../src/worldmass/runtime';
 import { validateMassTerritory } from '../src/worldmass/territory';
 
 const restore=seedGlobalRandom(4418);
-const cfg=structuredClone(massAdventure());
+const cfg=structuredClone(beforeWildernessPaths(structuredClone(massAdventure())));
 delete cfg.settlement;delete cfg.journey;delete cfg.ecology;delete cfg.progression;delete cfg.rewards;
 delete cfg.terrain.patches;delete cfg.terrain.landforms;delete cfg.terrain.regionalDiscoveries;delete cfg.terrain.nativeRegional;
 cfg.terrain.fields =[];cfg.terrain.surfaces=[{id:'plain',source:'test/plain',priority:0,when:[],region:'ground',color:'#424b32',biome:'downs'}];
