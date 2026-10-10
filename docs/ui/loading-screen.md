@@ -19,30 +19,43 @@ respond through color, motion and fading rings. Keep numeric diagnostics in the
 debug snapshot only; actual loading progress may still use measured work units.
 Memory Motes, Gilded Souls and Wild Wisps share a pale Mu soul-flame silhouette.
 Their size, radiance and gentle sputter/flicker/flare convey energy without ranked
-colors or symbols. Two spirits in a choice arrive at staggered travel positions; taking one releases the other.
-The Wild Wisp gently increases the underlying pace. None has collectible value.
+colors or symbols. Each has additional continuous size/intensity variation. Groups
+range from quiet stretches to six independently collectible flames, with random
+kind order, uneven travel gaps and varied lane offsets. Some flood one route;
+others scatter across branches. Taking one never removes its neighbors. Wild
+Wisps gently increase the underlying pace. None has collectible value.
 
-Gates choose one, two or three independently sized openings. Collision checks the
-union of those openings; the renderer paints its complement, including central
-piers. Widths are 114–238 units for one opening, 114–180 for two, and 114–136 for
-three. Every opening preserves a solid outer rim and a body-clear incoming and
-outgoing route. Gate spacing and steering allow a route even at peak boosted
-speed; optional encounters require choosing a suitable preceding opening.
+Gates partition their full span into one, two or three openings, with independent
+widths and irregular solid piers instead of preset lanes or symmetric templates.
+Openings range from 68 to 250 units; the 30-unit collision body always fits. Widths
+share the available space when their sum would crowd out the 24-unit solid rims.
+Collision checks the union of openings; rendering paints its complement.
+
+At a calm pace, gate gaps vary from 620 to 820 units, with more flames on average.
+As speed builds, newly planned gaps shrink toward 340–440 units. Existing gates
+never move or resize abruptly when speed changes. Every opening physically fits
+the wisp, and every encounter has a complete route at base speed. At the highest
+speed, extreme lane changes can become impossible; surviving indefinitely is not
+a requirement. The pastime never gates readiness or rewards participation.
 
 Occasional pale, ephemeral chevron currents appear between gates or within one
-or more openings. Every in-opening current has room for the collision body to
-pass beside it, including the narrowest aperture. They add a temporary surge
-beyond the ordinary pace cap, then ease back down. Repeated currents refresh the
-duration without stacking indefinitely. Passing a gate accelerates the underlying
-pace; a collision briefly binds/slows the wisp and resets all acceleration and
-active currents. Currents cannot negate an impact in the same step.
+or more sufficiently wide openings. Every in-opening current leaves room for the
+body to pass beside it; narrow slots never force collection. They add a temporary
+surge beyond the ordinary pace cap, then ease back down. Repeated currents refresh
+the duration without stacking indefinitely. Passing a gate accelerates the pace;
+a collision briefly binds/slows the wisp and resets all acceleration and currents.
+Currents cannot negate an impact in the same step.
 
-Tuning lives in `SPIRIT_RUN`: ordinary cap 2.8, boosted cap 3.6, current duration
-2.2 seconds and final ease 0.45 seconds. Gates are 480 units apart, staggered
-encounters 140 units apart along travel, and the collision body is 30 units wide.
-These are implementation parameters, never player-facing achievements. The
-probe drives complete encounter/return routes at boosted speed with 30 Hz input,
-checks every solid pier, and proves current collection, bypass, expiry and reset.
+Tuning lives in `SPIRIT_RUN`. The absolute speed cap is 5.4, raised 50% from 3.6.
+The original per-gate gain (0.09), Wild Wisp gain (three gate increments) and
+temporary current kick (0.8) are unchanged; the ordinary ceiling is now 4.6.
+Building to the higher ceiling takes more encounters, never faster acceleration
+per encounter. Currents still last 2.2 seconds, easing out over the final 0.45.
+Flame centers keep at least 38 travel units between them, with larger random gaps.
+These are internal parameters, never player-facing achievements. The probe drives
+complete calm-speed encounter routes with 30 Hz input, tests irregular layouts
+and speed-dependent spacing, and checks current collection, bypass, expiry/reset
+and peak collision behavior. Playing, idling or colliding never affects loading.
 Reduced motion keeps current silhouettes and essential travel but suppresses
 animated wakes, expanding rings and particle spray; flames and decorative
 background parallax stay still. Art uses native canvas only.

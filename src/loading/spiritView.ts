@@ -12,9 +12,9 @@ import { SPIRIT_RUN, SPIRIT_CURRENT_COLOR, SpiritRun, spiritLayout, spiritGateSo
 // One Mu soul-flame, from a quiet sputter to a brighter, restless flare.
 // These are visual envelopes only; every encounter keeps its existing hit radius.
 const SOUL_FLAMES = {
-  mote: { size: 0.82, radiance: 29, flicker: 2.6 },
+  mote: { size: 0.68, radiance: 26, flicker: 2.3 },
   gilded: { size: 1, radiance: 37, flicker: 3.4 },
-  wild: { size: 1.2, radiance: 46, flicker: 4.2 },
+  wild: { size: 1.32, radiance: 49, flicker: 4.6 },
 } as const;
 
 /** The Vault/vestige alphabet, baked once per glyph in the bounded sprite cache. */
@@ -131,21 +131,21 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
     ctx.restore();
   }
 
-  // Staggered spirits drift independently; a chosen companion releases its sibling.
+  // Independent soul-flames range continuously from small sputters to broad flares.
   for (const pickup of run.pickups) {
     const def = SOUL_FLAMES[pickup.kind], p = point(pickup.u, pickup.lane), color = MU_CFG.wisp.color;
     if (pickup.state === 'taken') continue;
-    ctx.save(); ctx.globalAlpha = pickup.state === 'released' ? 0.45 * (1 - pickup.fade / c.pickupFade) : 1;
+    ctx.save(); ctx.globalAlpha = 1;
     ctx.translate(p.x, p.y); ctx.scale(scale, scale);
-    const phase = time * def.flicker + pickup.id * 2.4;
+    const phase = time * def.flicker * pickup.flame + pickup.id * 2.4;
     const breath = 1 + Math.sin(phase) * 0.045 + Math.sin(phase * 1.7) * 0.025;
-    const radius = def.radiance * breath;
+    const radius = def.radiance * pickup.flame * breath;
     const glow = ctx.createRadialGradient(0, -4, 2, 0, -4, radius);
     glow.addColorStop(0, color + '80'); glow.addColorStop(0.35, color + '2b'); glow.addColorStop(1, color + '00');
     ctx.fillStyle = glow; ctx.fillRect(-radius, -radius - 4, radius * 2, radius * 2);
     // Flames rise in screen space in all three directions. Their bright heart
     // remains at the encounter center; the slender tips gutter and curl above it.
-    ctx.scale(def.size, def.size * breath);
+    ctx.scale(def.size * pickup.flame, def.size * pickup.flame * breath);
     const curl = Math.sin(phase * 0.8) * 2.4, lick = Math.sin(phase * 1.3) * 1.8;
     const flame = ctx.createLinearGradient(0, -26, 0, 10);
     flame.addColorStop(0, color + '18'); flame.addColorStop(0.45, color + 'b8'); flame.addColorStop(1, color + 'ef');
