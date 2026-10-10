@@ -29,6 +29,9 @@
 //      upload crosses on arrival (stripped, stepped) and hears the word once;
 //   M  the mortal's word is unchanged (`corpse` then `runEnd`, never a stage word; every check of
 //      probe_shardimmortal.ts, probe_shard.ts and the slow rig's N section holds there).
+// THE RETURN (card 26 B, W7) beside each death, checked inside C, F and O: a death's mirror and any
+// mirror inside THE DEATH BEAT name no stand and THE WAKE's names the hearth; a fall forgets its
+// stand and the risen vessel walks in at the hearth; an owed crossing's upload sheds its stand.
 // ---------------------------------------------------------------------------
 
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -157,6 +160,10 @@ const s1 = seatOf(T1.id)!;
     iSave >= 0 && iWord > iSave && word?.t === 'stageDeath' && word.stage === 1 && word.reckoning.carried === 40
     && word.reckoning.mult === IMMORTAL_CFG.firstDeathPayoutMult && word.reckoning.minted === Math.floor(40 * IMMORTAL_CFG.firstDeathPayoutMult)
     && word.reckoning.modeStage === 0 && word.note.pieces === 2, kinds(T1.rows));
+  const iCross = T1.rows.slice(0, iWord).map(m => m.t).lastIndexOf('heroSave');
+  const crossMirror = T1.rows[iCross];
+  check('C return: the crossing\'s mirror names no stand (THE RETURN: a crossing\'s wake is the hearth)',
+    crossMirror?.t === 'heroSave' && crossMirror.save.stand === undefined);
   check('C home: the client books the tithe, its run counters and the death tally as a solo crossing books them',
     acct1.credits === credits0 + 10 && (acct1.ledger[LEDGER_ACCOUNT_DEATHS] ?? 0) === deaths0 + 1 + (V1.ledger?.[LEDGER_ACCOUNT_DEATHS] ?? 0) && T1.link.crossings === 1,
     `credits ${credits0} > ${acct1.credits}`);
@@ -165,11 +172,22 @@ const s1 = seatOf(T1.id)!;
     slotSave?.charId === charId1 && slotSave.modeStage === 1 && (slotSave.items ?? []).length === 0 && Object.keys(slotSave.equipped ?? {}).length === 0
     && card1().stage === 1 && !card1().fallen, JSON.stringify({ stage: slotSave?.modeStage, items: slotSave?.items?.length }));
   check('C home: no run ends (no `runEnd`, no `corpse`, no `fell`)', !T1.rows.some(m => m.t === 'runEnd' || m.t === 'corpse' || m.t === 'fell'));
+  // A mirror inside THE DEATH BEAT (the desk's own beat, a farewell) names no stand either.
+  const beatRows = T1.rows.length, inBeat = hero.dead;
+  host.vessels.mirror(T1.id);
+  await waitFor(() => T1.rows.slice(beatRows).some(m => m.t === 'heroSave'), 10);
+  const beatMirror = T1.rows.slice(beatRows).find(m => m.t === 'heroSave');
+  check('C return: a mirror inside THE DEATH BEAT names no stand (the body lies dead; its wake is the hearth)',
+    inBeat && beatMirror?.t === 'heroSave' && beatMirror.save.stand === undefined);
   await waitFor(() => !hero.dead, sec(VESSEL_CFG.deathBeatSec) + 30);
   check('C wake: when the beat ends the hero stands at the hearth, whole, under THE SPAWN GRACE (never a leave)',
     !hero.dead && !hero.downed && hero.life === hero.maxLife() && hero.untargetable && fromHearth(s1) < 140
     && !!seatOf(T1.id) && !!host.vessels.vesselOf(T1.id), `${Math.round(fromHearth(s1))} px from the hearth`);
   check('C wake: still no run ends', !T1.rows.some(m => m.t === 'runEnd'));
+  await waitFor(() => T1.rows.slice(beatRows).some(m => m.t === 'heroSave' && !!m.save.stand), 30);
+  const home = T1.rows.slice(beatRows).flatMap(m => (m.t === 'heroSave' && m.save.stand ? [m.save.stand] : []))[0];
+  check('C return: THE WAKE mirrors the hearth\'s stand home (where its next login lands)',
+    !!home && home.spot.zoneId === w.zone.id && Math.hypot(home.spot.x - hearth.x, home.spot.y - hearth.y) < 140, JSON.stringify(home?.spot));
 }
 
 // ============================================================= V: THE STAGE'S RING ==
@@ -226,6 +244,10 @@ const s1 = seatOf(T1.id)!;
   w.seatHero(s1).untargetable = false;
   place(s1, hearth.x + 380, hearth.y - 220);
   await runTicks(3);
+  const standRows = T1.rows.length;
+  host.vessels.mirror(T1.id); // its slot holds where it stands (THE RETURN), as every walking mirror's does
+  await waitFor(() => T1.rows.slice(standRows).some(m => m.t === 'heroSave'), 10);
+  const stoodAt = parsed(slot1)?.stand;
   const credits0 = acct1.credits, deaths0 = acct1.ledger[LEDGER_ACCOUNT_DEATHS] ?? 0, level = w.seatHero(s1).level;
   const before = T1.rows.length;
   w.kill(w.seatHero(s1));
@@ -248,6 +270,8 @@ const s1 = seatOf(T1.id)!;
     !!card.fallen && card.fallen.fee === resurrectFee(level, acct1.level) && card.fallen.level === level && card.fallen.at === rec?.at, JSON.stringify(card.fallen));
   check('F slot: the slot is kept (a roster vessel\'s conclusion never wipes), holding the stripped vessel',
     parsed(slot1)?.charId === charId1 && (parsed(slot1)?.items ?? []).length === 0 && parsed(slot1)?.modeStage === 1);
+  check('F return: the fall forgets its stand (neither the slot\'s vessel nor the desk names one: its resurrection wakes at the hearth)',
+    !!stoodAt && parsed(slot1)?.stand === undefined && host.vessels.keptStand(acct1.accountId, charId1) === undefined, JSON.stringify(stoodAt?.spot));
   check('F book: the Undying pays nothing and counts nothing (its stage\'s own switches); the screen is staged',
     acct1.credits === credits0 && (acct1.ledger[LEDGER_ACCOUNT_DEATHS] ?? 0) === deaths0 && !!T1.link.takeDeath(T1.c, null));
   T1.c.leave();
@@ -278,6 +302,9 @@ const s1 = seatOf(T1.id)!;
   await waitFor(() => !!seatOf(T1c.id), 60);
   check('F lifted: a risenAt later than the fall lifts the record; the vessel walks the shard again',
     !!seatOf(T1c.id) && !!host.vessels.vesselOf(T1c.id) && !host.corpses.fallRecord(acct1.accountId, charId1) && !T1c.rows.some(m => m.t === 'refused'));
+  const risenSeat = seatOf(T1c.id);
+  check('F return: the risen vessel walks in at the hearth', !!risenSeat && fromHearth(risenSeat) < 140,
+    `${risenSeat ? Math.round(fromHearth(risenSeat)) : -1} px from the hearth`);
   T1c.c.leave();
   await waitFor(() => !seatOf(T1c.id), 120);
 }
@@ -359,7 +386,9 @@ const s1 = seatOf(T1.id)!;
   check('O owed: leaving while down is never the road out of a death: the crossing runs unheard and is owed',
     host.vessels.crossings === cross0 + 1 && !!owed && owed.stage === 1 && acctO.credits === credits0
     && host.corpses.forAccount(acctO.accountId).some(b => b.ring === 'own'));
-  const TO2 = await travel(acctO, VO, 'Oath'); // its client still holds the vessel as it stood before the down
+  // Its client still holds the vessel as it stood before the down, the stand its last mirror named with it.
+  const away = { seed: w.manifest.seed >>> 0, spot: { zoneId: w.zone.id, x: hearth.x - 300, y: hearth.y + 200 }, tier: 0 };
+  const TO2 = await travel(acctO, { ...VO, stand: away }, 'Oath');
   await waitFor(() => !!seatOf(TO2.id) && TO2.rows.some(m => m.t === 'stageDeath'), 60);
   const so2 = seatOf(TO2.id);
   check('O arrival: its next upload crosses on arrival (stripped, its stage stepped)',
@@ -367,6 +396,10 @@ const s1 = seatOf(T1.id)!;
   check('O word: the crossed vessel goes home, then the word, booked once',
     TO2.rows.findIndex(m => m.t === 'heroSave') >= 0 && TO2.rows.findIndex(m => m.t === 'stageDeath') > TO2.rows.findIndex(m => m.t === 'heroSave')
     && acctO.credits === credits0 + Math.floor(20 * IMMORTAL_CFG.firstDeathPayoutMult) && TO2.link.crossings === 1, kinds(TO2.rows));
+  const arrival = TO2.rows.find(m => m.t === 'heroSave');
+  check('O return: the crossed arrival sheds the stand its upload carried: it wakes at the hearth, its mirror naming none',
+    !!so2 && fromHearth(so2) < 140 && arrival?.t === 'heroSave' && arrival.save.stand === undefined,
+    `${so2 ? Math.round(fromHearth(so2)) : -1} px from the hearth`);
   TO2.c.leave(); mate.c.leave();
   await waitFor(() => !seatOf(TO2.id) && !seatOf(mate.id), 120);
 }

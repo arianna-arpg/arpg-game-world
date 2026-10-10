@@ -546,13 +546,14 @@ export class VesselDesk {
   }
 
   /** Ship one vessel's mirror home (`session heroSave`, to that seat alone). `standless` (card
-   *  30, a death's mirror): no stand rides it, so a death's wake is the hearth (THE RETURN). */
+   *  30, a death's mirror), and any mirror inside the seat's DEATH BEAT (the desk's beat, a
+   *  farewell): no stand rides it, so a death's wake is the hearth (THE RETURN). */
   mirror(seatId: string, standless = false): boolean {
     let save: CharacterSave | null;
     try { save = this.serialize(seatId); }
     catch (e) { this.opts.log(`[shard] ${seatId}'s mirror failed: ${String(e)}`); return false; }
     if (!save) return false;
-    if (standless) delete save.stand;
+    if (standless || this.beats.has(seatId)) delete save.stand; // a body in its death beat stands nowhere
     this.send({ t: 'heroSave', save }, seatId);
     const rec = this.vessels.get(seatId)!;
     rec.mirrors++;
