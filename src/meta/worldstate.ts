@@ -338,6 +338,11 @@ export interface WorldStateSave {
    *  hold is nothing — unlike a sold-out merc sheet, empty here is not
    *  load-bearing). */
   vendorHolds?: Record<string, VendorHoldSave>;
+  /** THE SHELF PER BUYER (card 29 ruled; World.charVendorHolds): on a hosted world
+   *  THE PATRON'S HOLD and THE STANDING ORDER key by character: each character's
+   *  holds (vendorHolds' own shape), by character key. Absent off a hosted world
+   *  and while no character's hold carries state. */
+  charVendorHolds?: Record<string, Record<string, VendorHoldSave>>;
   /** Harbor charts PAID for (World.buyHarborChart): the OMEN ids whose chart
    *  the player bought — the board's persisted once-guard, so a resumed run
    *  neither re-lists nor re-charges a bought row while the FREE whisper/

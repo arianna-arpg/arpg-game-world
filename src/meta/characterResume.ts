@@ -34,6 +34,7 @@ export type CharacterResumeRead =
   | { status: 'ready'; resume: CharacterResume }
   | { status: 'empty' | 'deleted' | 'incompatible' | 'stale' }
   | { status: 'refused'; reason: string };
-export type CharacterContinueSummary = Pick<CharacterFields, 'classId' | 'name' | 'level' | 'charId' | 'modeId'>;
+/** The menu's Continue label (HOME SLOTS, W7: `shard` makes it a "Return to <world>"). */
+export type CharacterContinueSummary = Pick<CharacterFields, 'classId' | 'name' | 'level' | 'charId' | 'modeId' | 'shard'>;
 export const characterResumeFields = (resume: CharacterResume): CharacterFields =>
   resume.kind === 'inline' ? resume.save : resume.character;

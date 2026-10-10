@@ -6,6 +6,8 @@ import type { NativeCohortLease } from '../worldmass/nativePaging';
 import { BrowserRunStore, isBrowserRunReference } from './browserRunStore';
 import { characterResumeFields, type CharacterFields, type CharacterResume, type CharacterResumeRead, type CharacterContinueSummary, type ResumeAuthority } from './characterResume';
 import { freezeData, massDigest } from '../worldmass/random';
+import type { ShardStand } from '../net/vesselWire';
+import { shardHomeOf, type ShardHome } from '../net/shardDoor';
 // ---------------------------------------------------------------------------
 // CHARACTER PERSISTENCE — the active-run half of localStorage.
 //
@@ -47,6 +49,7 @@ import type { MercSnapshot } from './mercs';
 import type { Account } from './account';
 import { personalStashEntries, restoreStash, type PersonalStash } from '../engine/stash';
 import { STASH_DEFS } from '../data/stashes';
+import { sanitizeQuestWorlds, type QuestLedgerSave } from '../engine/questLedger'; // THE CHARACTER'S QUESTS (card 24)
 
 export const CHAR_SCHEMA_VERSION = SAVE_COMPATIBILITY.run;
 const CHAR_KEY = storageKey('arpg_character_v1');
@@ -203,6 +206,13 @@ export interface CharacterSave {
    *  snapshots INLINE (resilient to roster churn), refs for pool release.
    *  The Harborwarden's retinue makes this a list; one blade = one entry. */
   mercenaries?: { name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string }[];
+  /** THE CHARACTER'S QUESTS (card 24 ruled; engine/questLedger.ts): the hero's own quest
+   *  ledger for each hosted world it walked (its quest log, its imbues, its rolled bounty
+   *  postings and boards, its quest keys, its Odyssey leads), keyed by questWorldKey. A
+   *  shard adopts its own world's at the vessel's graft and mirrors it home; every save
+   *  passes the rest through. Optional: a save without one has walked no hosted world
+   *  (a solo run's quests ride its world half, as ever). */
+  quests?: Record<string, QuestLedgerSave>;
   /** THE WAKEFUL WORLD (meta/worldstate.ts): the world half of the run — the
    *  minted zone graph, discovery, the clock, zone memory, quests, the spot
    *  the character stood on, and per-overlay snapshots. Optional → a save
@@ -210,6 +220,14 @@ export interface CharacterSave {
    *  exactly the pre-worldstate behavior. Applied by the RESUME path
    *  (World.adoptWorldState + resumeSpawn), never by applySavedCharacter. */
   world?: WorldStateSave;
+  /** HOME SLOTS (W7, net/shardDoor.ts THE HOME SLOT TAG): the hosted world this hero
+   *  lives on (its address, seed and name), stamped by the client on every mirror it
+   *  writes. A bound save is a RETURN at the menu, never a solo resume. Absent on every
+   *  solo save (THE SOLO INVARIANT). */
+  shard?: ShardHome;
+  /** THE RETURN (card 26 B, W7, net/vesselWire.ts): where the hero last stood on its
+   *  world, as the shard's mirror carried it; the next login lands it there. */
+  stand?: ShardStand;
 }
 
 const saveSkill = (i: SkillInstance): SavedSkill => ({
@@ -314,6 +332,7 @@ export function serializeCharacter(world: World): CharacterSave {
     modeStage: m.modeStage,
     charId: m.charId,
     deaths: world.charDeaths.map(d => ({ ...d })),
+    ...(m.questWorlds ? { quests: structuredClone(m.questWorlds) } : {}), // THE CHARACTER'S QUESTS: the hosted worlds' ledgers pass through
     world: ws,
     ...(world.hiredMercs.length ? {
       mercenaries: world.hiredMercs.map(hm => ({
@@ -494,6 +513,10 @@ export function rebuildSavedMeta(save: CharacterFields): { meta: PlayerMeta; dea
   };
   // The character's own corpse ring (same per-record tolerance as the account's).
   const deaths = (save.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS);
+  // THE CHARACTER'S QUESTS: the hosted worlds' ledgers ride the hero (shape-checked here;
+  // the world that adopts one re-validates every row against its own chart).
+  const questWorlds = sanitizeQuestWorlds(save.quests);
+  if (questWorlds) meta.questWorlds = questWorlds;
   return { meta, deaths };
 }
 
@@ -828,8 +851,10 @@ export async function readCharacterContinueSummary(slot=CHAR_SLOT):Promise<Chara
     const fields=save as CharacterFields;
     if(slot===CHAR_SLOT){const {slot:intendedSlot,intent,barrier,epoch,reference,cancelled}=read.lease;
       summaryPatron={id:fields.charId,lease:{slot:intendedSlot,intent,barrier,epoch,reference,cancelled}};}
+    const home=shardHomeOf(fields); // HOME SLOTS (W7): a bound save's Continue is a return
     return {classId:fields.classId,level:fields.level,...(fields.name===undefined?{}:{name:fields.name}),
-      ...(fields.charId===undefined?{}:{charId:fields.charId}),...(fields.modeId===undefined?{}:{modeId:fields.modeId})};
+      ...(fields.charId===undefined?{}:{charId:fields.charId}),...(fields.modeId===undefined?{}:{modeId:fields.modeId}),
+      ...(home?{shard:home}:{})};
   }catch{return null;}
 }
 export async function readCharacterResume(slot=CHAR_SLOT,options:{signal?:AbortSignal}={}):Promise<CharacterResumeRead> {
@@ -1143,6 +1168,7 @@ export function serializeCouchGuest(
     modeStage: m.modeStage,
     charId: m.charId,
     deaths: (seat.couchDeaths ?? []).map(d => ({ ...d })),
+    ...(m.questWorlds ? { quests: structuredClone(m.questWorlds) } : {}), // THE CHARACTER'S QUESTS: the hosted worlds' ledgers pass through
     // world: deliberately absent — a guest save carries no ground.
   };
 }

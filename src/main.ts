@@ -57,10 +57,15 @@ import { WireShell } from './net/shell'; // THE SMOOTH SHELL: the client's timel
 import { CAMERA_FOLLOW_CFG, newCameraFollow } from './render/camera'; // THE SMOOTH SHELL's follow
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
-import { WsTransport, defaultShardUrl, shardResumeFor, rememberedShardSession, WS_TRANSPORT_CFG } from './net/ws';
+import { WsTransport, defaultShardUrl, normalizeShardUrl, servedShardUrl, servedWorldName, shardResumeFor, rememberedShardSession, WS_TRANSPORT_CFG } from './net/ws';
+import {
+  continueRoute, doorWord, farewellLine, forgetDoor, readDoor, reloadOnceFor, returnWord, sameWorld,
+  vesselTooLarge, worldNameOf, writeDoor, type ShardDoor,
+} from './net/shardDoor';
+import { SHARD_REFUSAL, shardBuildStamp } from './net/shardBuild';
 import { wildsShellActive, wildsShellAttach, wildsShellDetach, wildsShellRemember, wildsShellRing, wildsShellStream, wildsShellZone } from './net/wildsClient';
 import { ShardCrossing } from './net/crossing'; // THE ONE CROSSING: one cover over a hosted world's arrival
-import { readTravelingVessel, ShardVesselLink, travelNote } from './meta/shardVessel';
+import { readTravelingVessel, ShardVesselLink, soloWorldStands, travelNote } from './meta/shardVessel';
 import { openCoopLobby } from './ui/lobby';
 import { PartyPanel } from './ui/party';
 import { PARTY_INBOX, clientGrouped, partyPanelModel } from './net/partyReads'; // THE PARTY THAT READS
@@ -483,7 +488,9 @@ function startGame(
     || new URLSearchParams(location.search).has('prologue'));
   // THE ONE CROSSING (net/crossing.ts): a server-bound wake mints its vessel on a World that
   // stands no local town (no zone loads, nothing is drawn); the shard's hearth is the far side.
-  const serverBound = !!pendingServer && !prologueDue;
+  // THE DOOR (W7): the tab's persisted binding is what a wake travels to.
+  const door = readDoor();
+  const serverBound = !!door && !prologueDue;
   // The LIFE-CONTRACT (meta/modes.ts): class select passes the sworn mode.
   // A roster mode binds an account VESSEL at creation — the character saves
   // cross-session into its own slot from its first breath.
@@ -556,15 +563,16 @@ function startGame(
   running = !serverBound; // THE ONE CROSSING: the minting world is no run; the shard's shell starts the loop
   // THE LOGIN THROUGH MU (card 22): a server-bound wake travels at once — the vessel
   // just saved at the bedside is the one the shard seats, and this run stays its home.
-  if (pendingServer && !prologueDue) {
-    const { url } = pendingServer; pendingServer = null;
+  // THE DOOR (W7) is the tab's persisted binding, so a reload or the menu in between
+  // never drops it; a hero woken for a world consents to leave its bedside world behind.
+  if (door && serverBound) {
     crossingWake(); // THE ONE CROSSING: this wake's cover stands from the flush to the hero's streamed ground
     void (async () => {
       try {
         await flushCharacterSaves();
         if (crossing.phase !== 'wake') return; // THE ONE CROSSING: a cancelled wake never connects
-        await connectToShard(url, classDef.id, { charId }); // THE WAKE'S WORD: this charId, mortal or roster
-      } catch (e) { if (!crossingCancelled(e)) toStartMenu(`Could not reach ${url}: ${e instanceof Error ? e.message : String(e)}`); }
+        await connectToShard(door.url, classDef.id, { charId }, { replaceSolo: true }); // THE WAKE'S WORD: this charId, mortal or roster
+      } catch (e) { if (!crossingCancelled(e)) toStartMenu(doorWord(e)); }
     })();
   }
 }
@@ -659,7 +667,14 @@ function beginPressed(): void {
   }
   startMu();
 }
-ui.onBeginRun = beginPressed;
+// THE DOOR (W7): the menu's Begin is a solo road chosen; the tab forgets the world it was bound for.
+ui.onBeginRun = () => { forgetDoor(); beginPressed(); };
+// THE FRONT DOOR (W7): the menu's primary row on a page a world served (or a tab bound for one).
+ui.serverDoor = frontDoor;
+ui.onEnterWorld = door => { void enterTheWorld(door); };
+// THE HONEST LEAVING (W7): a hosted world's words and its Exit (the pause menu reads these).
+ui.hostedWorld = () => (net instanceof WsTransport ? lastShardWorld ?? 'the world' : null);
+ui.onExitWorld = () => { void exitWorld(); };
 
 /** Both Continue buttons reread their slot. The menu holds a label only; an
  * old cached character cannot replace a newer save or a reassigned vessel. */
@@ -701,6 +716,17 @@ async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<
       || fields.modeId && fields.modeId !== roster.modeId)
       || !roster && modeById(fields.modeId ?? DEFAULT_MODE_ID).save === 'roster')
       throw Error('The saved character belongs to a different slot');
+    // HOME SLOTS (W7): a hero bound to a hosted world RETURNS there (THE LOGIN THROUGH MU
+    // naming it); its world-less mirror never builds a solo world.
+    const route = continueRoute(fields);
+    if (route.kind === 'return') {
+      loading.update({ label: `Returning to ${worldNameOf(route.home)}` });
+      await loading.paint();
+      if (!current()) return;
+      await returnToWorld(route.home, route.charId ?? roster?.charId);
+      return;
+    }
+    forgetDoor(); // a solo road chosen at the menu: the tab is bound for no world
     prepared = await prepareCharacterWorld(account, read.resume, {
       isCurrent: () => current() && cardCurrent(), signal: controller.signal, fallbackSeed: rollSeed(),
       loadingStage: async label => { loading.update({ label }); await loading.paint(); },
@@ -997,7 +1023,13 @@ const diskHydrated = (async (): Promise<void> => {
       await diskHydrated;
       if (running) return; // the player already began something else
       try { await connectToShard(back.url, CLASSES[0].id, undefined, { resumeOnly: true }); }
-      catch (e) { toStartMenu(`Could not return to ${back.url}: ${e instanceof Error ? e.message : String(e)}`); }
+      catch (e) {
+        // THE RETURN (card 26 B, W7): the seat is gone (the reload grace ran out, a restart);
+        // a hero bound to this world logs back in where it logged out instead.
+        const route = continueRoute(await readCharacterContinueSummary().catch(() => null));
+        if (route.kind === 'return' && sameWorld(route.home.url, back.url) && !running) { await returnToWorld(route.home, route.charId); return; }
+        toStartMenu(returnWord(worldNameOf(readDoor() ?? { url: back.url }), e instanceof Error ? e.message : ''));
+      }
     })();
   }
 }
@@ -2589,20 +2621,27 @@ let returning = false;
  *  retrying until the dormant window closes; only then the start menu, with the one word. */
 function startReturn(): void {
   if (returning || !(net instanceof WsTransport)) return;
-  if (!running) { onHostGone(HOST_LOST_WORD); return; } // no shell to keep: the old road
+  // THE RETURN'S WORD (W7): a hosted world's menu line names the world and carries the shard's own word.
+  const place = lastShardWorld ?? 'the world';
+  if (!running) { onHostGone(returnWord(place, '')); return; } // no shell to keep: the old road
   const ws = net;
   const deadline = performance.now() + WS_TRANSPORT_CFG.resumeWindowMs - Math.max(0, performance.now() - shell.lastArrivalMs);
   returning = true;
   void (async () => {
+    let word = '';
     try {
       for (let tries = 0; net === ws; tries++) {
         const r = await ws.resumeInPlace();
         if (net !== ws) return; // the player left meanwhile
         if (r.ok) { shell.resumed(performance.now()); return; } // the same seat: the shell never left
+        word = r.word;
         if (r.final || performance.now() >= deadline) break;
         await new Promise(res => setTimeout(res, Math.min(2000, 250 * 2 ** tries)));
       }
-      if (net === ws) onHostGone(HOST_LOST_WORD);
+      if (net !== ws) return;
+      // THE BUILD MISMATCH on a served page: the world was updated under us; the page reloads once.
+      if (lastShardUrl && reloadForBuild(lastShardUrl, new Error(word))) return;
+      onHostGone(returnWord(place, word)); // THE DOOR stays: the menu offers the way back
     } finally { returning = false; }
   })();
 }
@@ -2699,8 +2738,8 @@ function onClientRunEnd(): void {
   // reckoning, then drifts back into Mu bound for the same server — the next vessel
   // is a walk, and its wake travels. (Card 14 C: the fall is the run's end.)
   if (net instanceof WsTransport) {
-    const url = lastShardUrl;
-    const toMu = (): void => { resetToLocal(); pendingServer = url ? { url } : null; startMu(); };
+    const url = lastShardUrl, name = lastShardWorld;
+    const toMu = (): void => { resetToLocal(); if (url) writeDoor({ url, ...(name ? { world: name } : {}) }); startMu(); }; // THE DOOR stays bound
     const fell = shardVessel?.takeDeath(net, world);
     const open = (revealSec = 0): void => { if (fell) ui.showDeath(fell.reck, toMu, revealSec); else toMu(); };
     if (presenting) clientDeath = { open, opened: false }; // clientDeathBeat opens it at the presentation's reveal
@@ -2784,9 +2823,9 @@ function clientDeathBeat(dt: number): void {
 function onClientRefused(word: string, mu: boolean): void {
   if (!(net instanceof WsTransport)) return;
   running = false;
-  if (!mu) { toStartMenu(word || 'the world would not seat this hero'); return; }
-  const url = lastShardUrl;
-  resetToLocal(); pendingServer = url ? { url } : null; startMu();
+  if (!mu) { toStartMenu(doorWord(word, 'the world would not seat this hero')); return; }
+  const url = lastShardUrl, name = lastShardWorld;
+  resetToLocal(); if (url) writeDoor({ url, ...(name ? { world: name } : {}) }); startMu(); // THE DOOR stays bound
   if (word) world.text(world.player.pos, word, '#d8b87a', 13, undefined, 6);
 }
 
@@ -2858,9 +2897,17 @@ function openLobby(): void {
     // that never leaves — the joiner's road is the WebRTC join's, with the
     // socket where the copy-paste dance was (WsTransport, same grammar).
     // THE LOGIN THROUGH MU (card 22): the vessel travels, or Mu picks one first (connectToShard).
-    connect: (url, classId) => connectToShard(url, classId),
-    connectDefault: defaultShardUrl(), // THE SERVED CLIENT: a codespace's page offers the shard that served it (WS_TRANSPORT_CFG.defaultUrl elsewhere)
-    serverHero: async (classId) => travelNote(await readTravelingVessel(account), classId), // the account names THE LONE VESSEL
+    // THE FRONT DOOR (W7): a server join is class-free (the saved hero, else Mu), and the
+    // lobby's confirm is THE SOLO GUARD's word for a hero whose slot holds a solo world.
+    connect: (url, o) => connectToShard(url, CLASSES[0].id, undefined, { replaceSolo: o.replaceSolo }),
+    connectDefault: defaultShardUrl(), // THE SERVED MARK: a page a world served offers that world (WS_TRANSPORT_CFG.defaultUrl elsewhere)
+    connectServed: servedShardUrl() ?? undefined, // ... and offers it before a remembered address
+    serverHero: async () => { // the account names THE LONE VESSEL
+      const v = await readTravelingVessel(account);
+      const solo = v ? await soloWorldStands(account, v) : false;
+      return { note: travelNote(v), ...(v && solo ? { leaveBehind: leaveBehindLine(v, 'this world') } : {}) };
+    },
+    word: doorWord, // one plain line per failure
     onClose: () => { /* host keeps playing; a non-started joiner just closes */ },
   });
 }
@@ -2874,10 +2921,61 @@ function openLobby(): void {
 let clientWilds: { seed: number; land?: string } | null = null; // THE LAND DIGEST rides from the welcome to the attach
 /** THE LOGIN THROUGH MU (docs/design/shard-world.md card 22, her ruling 2026-10-08): the
  *  server a vessel-less join was bound for — Mu picks the vessel and the bedside wake
- *  travels it (connectToShard). The start menu cancels it; a fall re-arms it. */
-let pendingServer: { url: string } | null = null;
+ *  travels it (connectToShard). THE DOOR (W7, net/shardDoor.ts) keeps it in sessionStorage,
+ *  so a reload and the main menu keep it; only a deliberate leave (Leave or Exit on a
+ *  world, or a solo road chosen at the menu) forgets it, and a fall re-arms it. */
 /** The last shard this client was seated on: a fall drifts back into Mu bound for it. */
 let lastShardUrl: string | null = null;
+/** THE FRONT DOOR (W7): the name its welcome gave (the menu's "Return to <world>"). */
+let lastShardWorld: string | null = null;
+
+/** THE FRONT DOOR (W7): the world the start menu leads into: the tab's own binding (THE
+ *  DOOR), else the world that served this page (THE SERVED MARK); null on a plain page. */
+function frontDoor(): ShardDoor | null {
+  const bound = readDoor();
+  if (bound) return bound;
+  const served = servedShardUrl(), name = servedWorldName();
+  return served ? { url: served, ...(name ? { world: name } : {}) } : null;
+}
+
+/** THE SOLO GUARD's line (W7): what traveling costs a hero whose slot holds a solo world. */
+function leaveBehindLine(v: CharacterSave, world: string): string {
+  const name = v.name?.trim() || CLASSES.find(c => c.id === v.classId)?.name || 'This hero';
+  return `${name}'s own world stays behind for good: once ${name} travels, ${name} lives in ${world} and the menu returns ${name} there.`;
+}
+
+/** THE FRONT DOOR (W7): the start menu's primary row. The traveling hero goes (THE LOGIN
+ *  THROUGH MU: Mu picks one when there is none); a hero whose slot holds a solo world asks
+ *  first (the travel confirm), never silently. */
+async function enterTheWorld(door: ShardDoor, opts: { replaceSolo?: boolean } = {}): Promise<void> {
+  writeDoor(door);
+  try {
+    const v = await readTravelingVessel(account);
+    if (v && !opts.replaceSolo && !shardResumeFor(door.url) && await soloWorldStands(account, v)) {
+      ui.showTravelConfirm(leaveBehindLine(v, worldNameOf(door)), () => { void enterTheWorld(door, { replaceSolo: true }); });
+      return;
+    }
+    await connectToShard(door.url, CLASSES[0].id, undefined, opts);
+  } catch (e) { toStartMenu(doorWord(e)); }
+}
+
+/** HOME SLOTS (W7): Continue on a hero bound to a hosted world is a RETURN, THE LOGIN
+ *  THROUGH MU naming the hero by its charId, never a solo world built from its mirror. */
+async function returnToWorld(home: { url: string; world?: string }, charId: string | undefined): Promise<void> {
+  writeDoor({ url: home.url, ...(home.world ? { world: home.world } : {}) });
+  try { await connectToShard(home.url, CLASSES[0].id, charId ? { charId } : undefined); }
+  catch (e) { toStartMenu(doorWord(e)); }
+}
+
+/** THE BUILD MISMATCH on a served page (W7): the client is not the build its world runs,
+ *  so the page reloads once (a served client updates with its shard); true = reloading. */
+function reloadForBuild(url: string, e: unknown): boolean {
+  const word = e instanceof Error ? e.message : String(e ?? '');
+  const served = servedShardUrl();
+  if (word !== SHARD_REFUSAL.build || !served || !sameWorld(served, url) || !reloadOnceFor(url, shardBuildStamp())) return false;
+  try { location.reload(); } catch { return false; }
+  return true;
+}
 
 /** THE PARTY PANEL (card 23 — ui/party.ts): what landed on me (invitations, the shard's
  *  last word) and the reads the panel draws from; its words go over the session wire.
@@ -2932,8 +3030,14 @@ function pressTheRelease(): void {
  *  slot or an Immortal from its roster card's slot). The tutorial stays LOCAL: a virgin
  *  account walks it before Mu, still bound for the same server. From the wake, a hero
  *  that cannot travel is an error (never a second trip into Mu). `opts.resumeOnly` (THE
- *  RETURN after a reload): the seat back or a refusal, never a fresh join. */
-async function connectToShard(url: string, classId: string, wake?: { charId: string }, opts?: { resumeOnly?: boolean }): Promise<'connected' | 'mu'> {
+ *  RETURN after a reload): the seat back or a refusal, never a fresh join. THE FRONT DOOR
+ *  (W7): THE DOOR binds the tab to the world; a hero too large to travel hears so before
+ *  any upload; THE SOLO GUARD lets a hero whose slot holds a solo world travel only with
+ *  `opts.replaceSolo` (the lobby's confirm, the menu's, or a hero woken for this world);
+ *  the welcome's world tags every write home (HOME SLOTS); a served page whose build the
+ *  world refuses reloads once (reloadForBuild). */
+async function connectToShard(url: string, classId: string, wake?: { charId: string },
+  opts?: { resumeOnly?: boolean; replaceSolo?: boolean }): Promise<'connected' | 'mu'> {
   const vessel = await readTravelingVessel(account, wake?.charId); // THE IMMORTAL TRAVELS: the wake names its hero
   // THE RECONNECT TOKEN (card 16 B — THE DORMANT SEAT): a session lost on this address
   // inside the window asks for its dormant seat back first; the hero that stood there is
@@ -2942,10 +3046,16 @@ async function connectToShard(url: string, classId: string, wake?: { charId: str
   if (opts?.resumeOnly && !resume) throw new Error('there is no seat to return to');
   if (!vessel && !resume) {
     if (wake) throw new Error('this hero cannot travel to a server (its saved vessel could not be read)');
-    pendingServer = { url };
+    writeDoor({ url, ...(lastShardUrl && sameWorld(lastShardUrl, url) && lastShardWorld ? { world: lastShardWorld } : {}) }); // THE DOOR
+    ui.hideAll(); // the menu (and a lobby's start menu beneath it) gives the screen to Mu, as Begin's own press does
     beginPressed();
     return 'mu';
   }
+  // THE FRONT DOOR (W7): a hero larger than a world carries hears so here, never a silent close.
+  if (vessel && vesselTooLarge(vessel)) throw new Error(SHARD_REFUSAL.heroTooLarge);
+  // THE SOLO GUARD (W7): its first write home would replace a standing solo world.
+  const soloWorld = !!vessel && !resume && await soloWorldStands(account, vessel);
+  if (soloWorld && !opts?.replaceSolo) throw new Error(`${vessel!.name?.trim() || 'this hero'}'s own world would be left behind; confirm it first`);
   const ws = new WsTransport();
   const cls = CLASSES.find(c => c.id === (vessel?.classId ?? classId)) ?? CLASSES[0];
   // THE ONE CROSSING: a direct join, a reload's return and a wake's connect ride one cover.
@@ -2956,8 +3066,8 @@ async function connectToShard(url: string, classId: string, wake?: { charId: str
     subscribeToHost();
     wireSession();                             // run-lifecycle channel (newRun/hostLeft)
     shardVessel = new ShardVesselLink(ws, account, vessel, () => (net === ws ? world : null),
-      { runWiped: () => ui.setContinueSave(null), mayWrite: () => net === ws || !running });
-    const { self, seed, worldmass, features, land, resumed } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
+      { runWiped: () => ui.setContinueSave(null), mayWrite: () => net === ws || !running, soloWorld, consent: !!opts?.replaceSolo });
+    const { self, seed, worldmass, features, land, resumed, world: worldName } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
       cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel ?? undefined, resume, { resumeOnly: opts?.resumeOnly });
     // THE ONE CROSSING: the shell's synchronous build waits a painted "Laying the land".
     if (net !== ws) throw new Error(CROSSING_CANCELLED);
@@ -2967,12 +3077,19 @@ async function connectToShard(url: string, classId: string, wake?: { charId: str
     // A resumed seat is the hero that stood there: its class is its roster row's, never this card's.
     const seated = resumed ? CLASSES.find(c => c.id === ws.peers().find(p => p.id === self)?.classId) ?? cls : cls;
     startAsClient(seated, self, seed, worldmass ? { features, land } : undefined);
+    // HOME SLOTS (W7): the hero lives on this world now; every write home names it.
+    const home = { url: normalizeShardUrl(url), seed: seed >>> 0, ...(worldName ? { world: worldName } : {}) };
+    shardVessel.bindHome(home);
+    writeDoor({ url: home.url, ...(worldName ? { world: worldName } : {}) });
     lastShardUrl = url;
+    lastShardWorld = worldNameOf(home);
     return 'connected';
   } catch (e) {                                // an unreachable server must revert net to LocalTransport
     const cancelled = net !== ws;              // THE ONE CROSSING: the cover's Cancel already took us to the menu
     resetToLocal();
-    throw cancelled ? new Error(CROSSING_CANCELLED) : e;
+    if (cancelled) throw new Error(CROSSING_CANCELLED);
+    if (reloadForBuild(url, e)) return new Promise<'connected'>(() => { /* the page reloads (THE BUILD MISMATCH, W7) */ });
+    throw e;
   }
 }
 
@@ -3057,7 +3174,7 @@ function resetToLocal(): void {
 function toStartMenu(notice?: string): void {
   loadingScreen.close(); loadingGate = undefined;
   cancelCharacterResume();
-  pendingServer = null; // THE LOGIN THROUGH MU: the menu cancels a server-bound wake
+  // THE DOOR (W7) survives the menu: only a deliberate leave or a solo road forgets it.
   // A HOST SAYS GOODBYE FIRST — and says it HERE rather than in leaveCoop, so
   // that every road to the menu carries it (the Leave button, "Save & Main
   // Menu", any future exit), never just the one that remembered. The ordering is
@@ -3074,8 +3191,35 @@ function toStartMenu(notice?: string): void {
 }
 
 /** Leave a co-op session and return to the menu (client or host). The host's
- *  goodbye rides toStartMenu, which every exit road already shares. */
-function leaveCoop(): void { toStartMenu(); }
+ *  goodbye rides toStartMenu, which every exit road already shares. THE HONEST LEAVING
+ *  (W7): a hosted world's Leave waits for its farewell and lands with the truth. */
+function leaveCoop(): void {
+  if (net instanceof WsTransport) { void leaveWorld().then(line => toStartMenu(line)); return; }
+  toStartMenu();
+}
+
+/** THE HONEST LEAVING (W7): a deliberate leave of a hosted world. THE DOOR is forgotten,
+ *  the word is said (`net.leave()`), and the farewell is awaited: the mirror's ack (the
+ *  save written and flushed), the shard's word that the hero stands its ground in a fight,
+ *  or the cap (WS_TRANSPORT_CFG.farewellMs). Resolves with the one line to show. */
+async function leaveWorld(): Promise<string> {
+  const ws = net instanceof WsTransport ? net : null;
+  const hero = world.meta.name?.trim() || 'Your hero', place = lastShardWorld ?? 'the world';
+  forgetDoor();
+  if (!ws) return '';
+  ws.leave();
+  const end = await (ws.farewellEnd ?? Promise.resolve({ end: 'quiet' as const }));
+  if (end.end === 'saved') { try { await flushCharacterSaves(); } catch { /* the slot keeps its last committed write */ } }
+  return farewellLine(end, hero, place);
+}
+
+/** THE HONEST LEAVING (W7): Exit Game on a hosted world: the deliberate leave, the
+ *  farewell's line, then the exit screen ("close this tab") with the truth on it. */
+async function exitWorld(): Promise<void> {
+  const line = await leaveWorld();
+  toStartMenu();
+  ui.showExitScreen(line);
+}
 
 /** CLIENT: the session is OVER — the host said goodbye (`hostLeft`) or its
  *  connection died silently (onHostLost). There is no host migration, so the one
@@ -3113,6 +3257,14 @@ function quitFlush(): void {
 }
 window.addEventListener('pagehide', quitFlush);
 window.addEventListener('beforeunload', quitFlush);
+// THE UNLOAD WORD (W7, THE HONEST LEAVING, best effort): a page going away tells its world
+// over the socket (`leaving` with `unload`, then the close frame): a reload takes the same
+// seat back, a closed tab's hero leaves soon (net/ws.ts unloadLeave). pagehide alone: a
+// beforeunload a page may still cancel must never cost the session.
+window.addEventListener('pagehide', () => { if (net instanceof WsTransport) net.unloadLeave(); });
+// A page the browser kept in its back-forward cache comes back with that socket closed: reload
+// it, and the reload takes the seat back (THE REMEMBERED SESSION) instead of a silent shell.
+window.addEventListener('pageshow', ev => { if (ev.persisted && net instanceof WsTransport) location.reload(); });
 requestAnimationFrame(frame);
 // Explicit art/feel preview: no timer, run creation or persistence. Cancel returns
 // to the ordinary menu. Real loading never waits for a minigame result.

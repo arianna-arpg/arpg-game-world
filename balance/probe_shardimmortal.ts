@@ -293,11 +293,12 @@ check('C graft: the grafted hero stands whole', Number.isFinite(heroI.maxLife())
 
 // ===================================================== G: THE TRAVEL NOTE ==
 {
-  const noteI = travelNote(V, 'warrior'), noteM = travelNote(M, 'rogue');
+  // THE FRONT DOOR (W7): the server join is class-free, so no line speaks of a class card.
+  const noteI = travelNote(V), noteM = travelNote(M);
   check('G note: the lobby line names a roster vessel, its contract and its rung',
-    noteI === 'Traveling: Ysolde, level 9 Rogue (Immortal, Sworn). Your Immortal vessel goes in place of the class card.', noteI);
-  check('G note: a run-slot hero reads as before',
-    noteM === 'Traveling: Brannoc, level 6 Warrior. Your saved hero goes in place of the class card.', noteM);
+    noteI === 'Traveling: Ysolde, level 9 Rogue (Immortal, Sworn).', noteI);
+  check('G note: a run-slot hero is named the same way, without its contract',
+    noteM === 'Traveling: Brannoc, level 6 Warrior.', noteM);
 }
 
 await waitFor(() => host.world.seats.length === 1, host, 60);

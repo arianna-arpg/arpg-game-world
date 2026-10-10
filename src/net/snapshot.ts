@@ -405,6 +405,10 @@ export interface SeatW {
   /** THE COUNTERS AND THE JOURNAL, THE OWN ENTRY: the seat's harvest view while it stands
    *  near a node or works a rite; absent = none. Hosted worlds alone. */
   hv?: HarvestW;
+  /** THE SHELF PER BUYER, THE OWN ENTRY (card 29 ruled): the buyer's own shelf at Brandt's
+   *  counter, its restock mark and its reserve capacity, on a change and on THE SHELF BEAT
+   *  (the root vendor rows' own grammar, per buyer); absent = unchanged. Hosted worlds alone. */
+  vd?: ShelfW;
   /** THE ROADS PER PLAYER, THE OWN ENTRY (engine/shardRoads.ts roadDwellRow): the road dwell
    *  the host is filling for this seat, [x, y, fill 0..1 (floored, 2dp), transit kind], so its
    *  client draws the ring the host fills (World.netRoadDwell); absent = none. Hosted worlds alone. */
@@ -1092,6 +1096,13 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     if (hv) row.hv = hv;
     if (world.harvestHolds(s)) row.rooted = true;
   } });
+  // THE SHELF PER BUYER (card 29 ruled): each buyer's own shelf, THE OWN ENTRY's (hosted worlds alone),
+  // where the counter it is read at stands (a buyer's shelf travels with it; elsewhere it rides nowhere
+  // and the client keeps its last).
+  if (world.localSeat.keeper && world.smithCounterHere()) for (const s of world.seats) {
+    const row = seats[s.id], vd = row ? ownShelfOf(world, s, tick) : undefined;
+    if (row && vd) row.vd = vd;
+  }
 
   // META: ship a seat's build only when it CHANGED (level/pickup/mutation marked
   // it dirty). The host clears world.metaDirty after the broadcast (main.ts).
@@ -1224,6 +1235,7 @@ const lastShippedVendor = new WeakMap<World, string>();
  *  of them differs from what this world last shipped (a purchase, a restock, a hold, the
  *  cap) and on the beat however still; between, they are absent and a client keeps its last. */
 function vendorRowsOf(world: World, tick: number): Pick<StateSnapshot, 'vendor' | 'vendorRestockAt' | 'vendorCap'> {
+  if (world.localSeat.keeper) return {}; // THE SHELF PER BUYER: a hosted world ships each buyer its own (SeatW.vd)
   const rows = {
     vendor: world.vendorStock.map(e => vendorEntryW(e, world)),
     vendorRestockAt: world.vendorRestockAt,
@@ -1233,6 +1245,39 @@ function vendorRowsOf(world: World, tick: number): Pick<StateSnapshot, 'vendor' 
   if (tick % WIRE_CFG.vendorBeat !== 1 && lastShippedVendor.get(world) === key) return {};
   lastShippedVendor.set(world, key);
   return rows;
+}
+
+/** THE SHELF PER BUYER on the wire (card 29 ruled): one buyer's shelf at Brandt's
+ *  counter (its own entries, each wearing its own hold's flag), the shared restock mark
+ *  and its reserve capacity. */
+export interface ShelfW { v: VendorEntryW[]; at: number; cap: number }
+
+/** THE SHELF BEAT per buyer: the seat's own shelf rows this world last shipped. */
+const lastShippedShelf = new WeakMap<Seat, string>();
+
+/** THE SHELF PER BUYER (SeatW.vd, THE OWN ENTRY): a hosted world's seat's own shelf, read
+ *  in its own buyer's scope, shipped when it differs from what the seat last heard (a
+ *  purchase, a restock, a hold, the cap) and on THE SHELF BEAT; absent between, and
+ *  absent while the seat has never stood at a counter. Hosted worlds alone. */
+function ownShelfOf(world: World, s: Seat, tick: number): ShelfW | undefined {
+  if (!world.localSeat.keeper || s.keeper || s.merc) return undefined;
+  const row = world.withBuyer(s, (): ShelfW => ({
+    v: world.vendorStock.map(e => vendorEntryW(e, world)), at: world.vendorRestockAt, cap: world.vendorLockCap(),
+  }));
+  const was = lastShippedShelf.get(s);
+  if (!row.v.length && was === undefined) return undefined;
+  const key = JSON.stringify(row);
+  if (tick % WIRE_CFG.vendorBeat !== 1 && was === key) return undefined;
+  lastShippedShelf.set(s, key);
+  return row;
+}
+
+/** THE SHELF PER BUYER, the client's read: the own seat's shelf row (a hosted world's),
+ *  else the root rows (the co-op lane: the host's one shelf), the newest carrier winning. */
+function shelfRowsFor(world: World, snap: StateSnapshot, prev: StateSnapshot | null | undefined): Pick<StateSnapshot, 'vendor' | 'vendorRestockAt' | 'vendorCap'> | null {
+  const own = snap.seats[world.clientSeatId]?.vd ?? prev?.seats[world.clientSeatId]?.vd;
+  if (own) return { vendor: own.v, vendorRestockAt: own.at, vendorCap: own.cap };
+  return snap.vendor !== undefined ? snap : prev?.vendor !== undefined ? prev : null;
 }
 
 /** A flight's wire memory, keyed by the projectile itself (so it lives exactly as long). */
@@ -1377,6 +1422,8 @@ function ownGaugesOf(a: Actor): Pick<SeatW, 'gg'> {
  *  (ShardTransport.sendState through ownEntryJson); a broadcast lane (co-op) carries every
  *  seat's and each client reads its own. Naming a key here puts that SeatW row under the law. */
 export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh', 'jn', 'hv', 'rd']; // + THE ACTING SEAT's note and surge, THE COUNTERS AND THE JOURNAL's journal and rite, THE ROADS PER PLAYER's road ring
+/** THE SHELF PER BUYER (card 29 ruled): the buyer's own shelf row rides THE OWN ENTRY too. */
+(SEAT_OWN_ROWS as (keyof SeatW)[]).push('vd');
 
 /** THE ACTING SEAT (World.seatHudWire): the seat's refusal note while it is fresh. */
 function ownNoteOf(s: Seat, world: World): { fn?: { text: string; at: number } } {
@@ -2237,7 +2284,7 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   // THE SHELF BEAT: the rows ride on a change and on the beat (absent = unchanged); a
   // snapshot the client never applied still delivers its change through `prev`, the
   // newest carrier winning (THE SPLIT adopts every arrival, so this is the old lane's net).
-  const shelf = snap.vendor !== undefined ? snap : prev?.vendor !== undefined ? prev : null;
+  const shelf = shelfRowsFor(world, snap, prev); // THE SHELF PER BUYER: the own seat's shelf on a hosted world
   if (shelf?.vendor) {
     const locks: { entry: VendorEntry; idx: number; commission?: boolean }[] = [];
     world.vendorStock = shelf.vendor

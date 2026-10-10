@@ -877,6 +877,25 @@ in Mu first.**
     Odyssey's choices, which faction fell, world events, the restock clock)
     are the shard's and shared. Four Immortals of one account each have their
     own quests and meet one world. Built as THE CHARACTER'S QUESTS (W9).**
+    **BUILT 2026-10-10 (W9, branch shard-w9-character):** THE CHARACTER'S QUESTS (docs/engine/shard.md): a hero's
+    quest log, imbues, rolled bounty postings and boards, the quest keys that
+    gate its offers and its Odyssey leads are one ledger on its seat (a SEAT
+    row THE HAND-OFF moves) and on its CharacterSave (one ledger per hosted
+    world it walks, mirrored home on the beat and the farewell, adopted at the
+    graft); the world's half (the campaign's receipts, preparations, assaults
+    and pressure, world events, sieges) stays the keeper's, and a zone
+    objective credits the ledgers THE NEAR LAW pays; the board deals each
+    character its own slate on the shared beat. Solo and the co-op host are
+    byte for byte (THE SOLO DIGEST, balance/probe_shardcharacter.ts). Owed to
+    M2: a turn-in's ACCOUNT stamps (quest_done, the bounty counters, the
+    vocation unlocks) still reach the shard's account, and the posting pins
+    and growth rungs read `World.gateAccountOf` (the shard's account today).
+    Owed to the foundation (its file, untouched here): the Unbroken Wilds'
+    country boards (`dealMassBounties`, src/worldmass/bounties.ts) already
+    keep each hero's slate and hands in its own ledger, but their draw is
+    seeded without the character limb and filtered at `world.player`'s level
+    (the keeper's), so two heroes at one settlement board read one draw; the
+    seat is the seed's `questCharKey()` and the level's `questHandLevel()`.
 25. **POCKET TENANCY** (M1's first question) — A: shared pockets (whoever
     walks into a cave meets the same cave, her "generated for any player
     that simultaneously ran across it"). B: one instance per party.
@@ -902,6 +921,16 @@ in Mu first.**
     it logged out, and that is the ONLY behaviour; there is no choice between
     a hearth and a logout spot. The hearth stays a new hero's first wake and
     the wake after a death. W7 builds it.**
+    **BUILT (2026-10-10, W7, branch `shard-w7-door`):** THE RETURN. Every
+    mirror carries the hero's last stand (the zone or pocket, the spot, the
+    story, THE HOSTED SEED), the desk keeps the stand of a leave no client
+    heard (the dormant release, a closed tab), and the next login lands the
+    hero there under THE SPAWN GRACE: back into a pocket whose unit still
+    stands, at the mouth on the surface when the pocket is gone, into the
+    unit of any other charted zone; a new hero, a stand from another world
+    or ground the chart no longer holds wakes at the hearth with one log
+    line. No player-facing choice exists (docs/engine/shard.md "THE RETURN";
+    `balance/probe_sharddoor.ts` I).
 27. **THE SPOILS' OWNER** (card 23 said per player; the sweep found the
     ground is first-come) — A: strictly per player, forever. B: per player
     with a free-for-all after a timeout. C: A plus a deliberate give or
@@ -949,6 +978,21 @@ in Mu first.**
     rolls per buyer (per character) from the shared restock clock, at the
     buyer's level and gates, the way Path of Exile's vendors are each player's
     own. Built as THE SHELF PER BUYER (W9).**
+    **BUILT 2026-10-10 (W9, branch shard-w9-character):**
+    THE SHELF PER BUYER (docs/engine/shard.md, docs/engine/vendors.md): every
+    counter on a hosted world deals each buyer its own shelf from the shared
+    restock beat (world seed, counter, beat, character), at the buyer's level,
+    against its own carried gems; THE PATRON'S HOLD and THE STANDING ORDER
+    key by character (saved per character in the world save); THE OWN ENTRY
+    ships each buyer its own shelf (`SeatW.vd`); a purchase splices the
+    buyer's alone. Solo and the co-op host are byte for byte (THE SOLO
+    DIGEST). Owed to M2: every gate (trade, wares, quality, lock and rush
+    rungs, the support share) reads ONE resolver, `World.gateAccountOf`,
+    which answers the shard's open account until the account gate re-points it.
+    **M2 NOTE (W9, 2026-10-10):** the restock clock stays ONE shared beat as
+    she ruled; a buyer's own rush rungs cannot hasten it on a shard until M2
+    decides whether rungs read per account (`World.gateAccountOf` is the one
+    seam to re-point).
 30. **THE IMMORTAL'S OWN COVENANT ON A SHARD** — today an Immortal cannot
     die on a shard: a stage that does not end the run never meets the
     covenant and the mercy stands it up. A: the stage's own death policy
@@ -1006,6 +1050,38 @@ in Mu first.**
     cross-thread hand-off (the couch guest's build plus live state, the court
     captured exactly). B: timed summons re-minted at their life fraction. Rec:
     A.
+38. **THE RELEASE FROM A WORLD** (W7's finding, 2026-10-10) — a hero bound to
+    a world that is gone for good (a deleted codespace) has no road back to
+    solo play: a bound save only ever returns. A: a deliberate "release this
+    hero from its world" act on the roster card (clears `CharacterSave.shard`
+    and `stand` after one confirm; the hero stands in Lastlight as a solo
+    save). B: leave it bound; a new hero is the road. Rec: A.
+39. **THE SERVER-HELD MIRROR** (W7's finding) — a closed tab cannot hear its
+    last mirror, so up to one beat (20 s) of progress is lost. A: the shard
+    keeps each hero's latest mirror and hands it back at the next login (bends
+    card 6: the hero is the client's). B: keep card 6 whole; THE UNLOAD GRACE
+    and Exit's farewell already bound the loss. Rec: B now, A folded into M2's
+    account gate when the server holds the account anyway.
+40. **THE BOUND HERO AT ANOTHER DOOR** (W7's finding) — the lobby's
+    lone-vessel read takes a hero bound to another world into this one without
+    a word (its binding moves with it). A: refuse until the player confirms,
+    the solo guard's own shape ("this hero stands in <world>; travel
+    anyway?"). B: silent, as today. Rec: A.
+41. **EXIT'S FAREWELL CAP** (W7's dial) — `WS_TRANSPORT_CFG.farewellMs` is
+    1,500 ms today: Exit waits that long for the farewell mirror's ack before
+    it reads "quiet"; THE UNLOAD GRACE is `SHARD_CFG.unloadGraceSec` 15 s.
+    Rec: as set; both numbers are unblessed.
+42. **WHICH POCKETS ARE INSTANCED** (card 25's first question, M1-W4) — the
+    `tenancy: 'party'` flag exists on sidezone defs, arena specs and pocket
+    ZoneDefs and nothing carries it yet. A: the arena boss courts and the
+    Odyssey's authored set-piece maps (card 25's own words: authored dungeons
+    and arena seals). B: nothing; every pocket shared. C: a wider list she
+    names. Rec: A.
+43. **AN INSTANCE'S CLEAR AND THE WORLD** (card 25's second question) — a
+    party's instance keeps its own clears and never counts for the world's. A:
+    keep it the instance's own (one party can never clear a shared place for
+    everyone). B: an instance's clear also stamps the world's clears (about
+    ten lines in the registry). Rec: A.
 
 ---
 
@@ -1023,6 +1099,7 @@ the base taken and what moved.
 | 2026-10-09 | `6948a362` (7 more LOCAL commits: regional courts, winding terrain, complete native locales, fixture ownership) | 0 | a clean auto-merge; a dry run (`git merge-tree`) of shard-world INTO the foundation tip is clean too. THE INTEGRATION POLICY (her question 2026-10-09) is §7c. |
 | 2026-10-10 | `18a1b437` THE INTEGRATION: the foundation session merged shard-world (096393f1) and the roads branch (889884fc) into its lane, delivered §6.6's three asks (c1bfe588) and fast-forwarded `shard-world` to the same commit, so both branches stand as ONE tree; §7c's cadence continues from here (the shard keeps merging the foundation down; the foundation lands the shard up). | 0 | the shard rigs, the three new foundation probes and a soak are green on 18a1b437 |
 | 2026-10-10 (M1-W4) | `72da43c3` (shard-world: the M6 plan, her rulings, THE PAIR STRIDE) merged into shard-m1-muster | 1, the charter (cards 15 and 25: her rulings as recorded on shard-world, then W4's receipts) | the hand-off's sight-memo prune now decodes by `LOS_PAIR_STRIDE` (b0813633). THE FOUNDATION'S WORLD GUARD (`probe_nativeinstalledsources`, "unknown future edits still fail") reads the merged World as unknown, as it already did 72da43c3's: the reviewed hash for its re-pin is `9fb3f8fb7740bc6218d5deb0dff4b94c953e6ed83260ed52447a3ff97d12df66` (`nativeInstalledShardWorldHash`), and with it accepted every assertion below the guard passes. The ten other fast-lane reds fail on 18a1b437 too. |
+| 2026-10-10 (W9) | `72da43c3` (7559f07a), then `9fb0134b` (shard-world: THE WIRE DIET, THE ONE CROSSING, the muster ring and the realm roads, c65aa442), then `fc661190` (THE PARTY THAT READS, 9cf6d2bd) merged into shard-w9-character | 2, 2, then 1: the roster and the charter (her rulings on cards 24 and 29, then W9's receipts); the roster (probe_shardcharacter beside probe_shardcrossing) and the shard contract (THE WIRE DIET's row, then W9's two rows; both dial lines); this ledger (W9's row, then W8b's) | THE FOUNDATION'S WORLD GUARD (`probe_nativeinstalledsources`) reads W9's World as unknown, as it already read shard-world's: the reviewed hash for its re-pin is `358d4c8b757f235a1b8e058eda7d067dbaf3ec8998dc4e2c76b3b540e69096c4` (`nativeInstalledShardWorldHash`, on the tree after the third merge), and with it accepted every assertion below the guard passes (a trial re-pin, restored). `probe_nativescenesky`'s World census (members pinned 2351) is red at 72da43c3 too (2450) and reads 2516 on W9's merged tree. The foundation's verbatim settlement bodies stay verbatim (`probe_nativesettlementservices`, `probe_nativesceneharbor` green): the shelf per buyer seeds through `World.buyerSettlementHost`. Of the other nine fast-lane reds, six are the foundation's named reds and three (worldmass_courtcontinuity, worldmass_processioncontinuity, worldmass_terrainvariation) fail on 72da43c3 with the same assertions. |
 | 2026-10-10 (W8b) | `72da43c3`, then `88d9df33` (shard-world: her rulings, the M6 plan, THE PAIR STRIDE, the muster ring and the realm roads, THE ONE CROSSING) merged into shard-w8b-party | 2, the charter (card 28: her ruling as recorded on shard-world, then W8b's built receipt; card 15 B's built line, then card 23's receipt) | THE PARTY THAT READS adds World seams (`partyDowns`, `netRevive`, THE MERCY's wait ending at THE RELEASE or THE BLEED-OUT, the downed release in `pickupItem`, the shell's revive ring off its row), so THE FOUNDATION'S WORLD GUARD (`probe_nativeinstalledsources`) reads the merged World as unknown: W8b's seams on `88d9df33` read `2dd6b49a10bf14eda5c0c951893002cbd66b53021ff2dcbd933d6be4a197ea99` (`nativeInstalledShardWorldHash`), and with it accepted every assertion below the guard passes. The archive stays as shard-world carries it: the re-pin is the lane's. |
 | 2026-10-09 (W5) | THE SEAMS THE SHARD NOW CARRIES IN THE FOUNDATION'S FILES, for the landing: `src/worldmass/clearance.ts` passes the cleared site's place to `grantXp` (XP BY PLACE, one line); `src/worldmass/quests.ts` reads a hosted shell's map pins off its journal row and filters bounty pins by `World.handOwns` (three lines). Both additive, byte-identical off a shard. | 0 | recorded so the foundation session meets them knowingly at the landing (§7c). |
 
@@ -1087,7 +1164,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 |---|---|---|
 | 1 | One living focus (tier 1). | THE MANY SHADOWS — DELIVERED by the foundation (c1bfe588): player neighborhoods in the wilds runtime |
 | 2 | Loot is first-come for everyone; card 23 said per player. | THE OWNED SPOILS (card 27): BUILT 2026-10-10 (W10 THE SPOILS' OWNER, branch shard-w10-spoils): a drop belongs to one seat, a party sets its own rule, probe_shardspoils |
-| 3 | Quests are dead on a shard (seven breaks: offers, wire, linger, rewards to the keeper, cargo from the keeper's bag, XP to all, world-wide state). | THE COUNTERS AND THE JOURNAL (card 24 first): BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters): quest state stays the world's, every act and reward the acting seat's; card 24 still open |
+| 3 | Quests are dead on a shard (seven breaks: offers, wire, linger, rewards to the keeper, cargo from the keeper's bag, XP to all, world-wide state). | THE COUNTERS AND THE JOURNAL (card 24 first): BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters): quest state stays the world's, every act and reward the acting seat's; card 24 ruled and BUILT 2026-10-10 (W9 THE CHARACTER'S QUESTS, probe_shardcharacter): the quest state is each character's own |
 | 4 | Stations never answer a linger (keeper-only dwell; station anchors not shipped). | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 5 | Every road off the surface is sealed with no word. | M1 W2 THE ROADS PER PLAYER: BUILT 2026-10-09 (branch shard-m1-roads): every road moves the seat that took it, alone; the dock, the voyage, the Wraithsail and the Descent's shaft say their word once per approach on the seat's own row and draw no ring; probe_shardunits F and H. M1 W4 THE REALM ROADS BUILT 2026-10-10: every realm gate opened (its prep in the source, its first wake in the realm unit), a dimension's crossing on the Unbroken Wilds keeping its word; probe_shardunits K, probe_shardslow S |
 | 6 | Held casts drop after ~2 s. | W3 |
@@ -1102,7 +1179,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 | 16 | Event, objective and quest XP pays everyone. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 17 | Leaving mid-fight is a full heal and a free trip home. | W3 (card 26) |
 | 18 | Refusal words are silent for every player. | W3 |
-| 19 | The world runs at the highest player's level. | M3 (card 29) |
+| 19 | The world runs at the highest player's level. | M3 (card 29: the shelf per buyer BUILT 2026-10-10 in W9 at the buyer's own level; the world's own level stays M3's) |
 | 20 | Immortals cannot die on a shard. | card 30: BUILT 2026-10-10 (W10 THE IMMORTAL'S COVENANT ON A SHARD, branch shard-w10-spoils): the stage's own death runs on the server and mirrors home, probe_shardcovenant |
 | 23, 24, 26, 27, 29, 30 | Reckoning counts the server; no build stamp; the horn from anywhere; UI buttons that bypass requests; notices and banners to everyone. | W3 |
 | 25 | The client map shows no quest pins or corpse marker. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
@@ -1114,18 +1191,66 @@ tree; the milestone waves wait on cards 24–30.
 ## §7e The player's first hour (2026-10-10)
 
 A read-only audit (Opus) walked a brand-new player's first hour on a hosted
-world. W7 THE FRONT DOOR answers the door and the goodbye; W8a THE ONE
-CROSSING answers the arrival (`docs/engine/shard.md`, THE ONE CROSSING;
-`balance/probe_shardcrossing.ts`).
+world. W7 THE FRONT DOOR answers the door and the goodbye, and card 26 as she
+ruled it the same day (`docs/engine/shard.md`, THE FRONT DOOR and THE RETURN;
+`balance/probe_sharddoor.ts`); W8a THE ONE CROSSING answers the arrival
+(`docs/engine/shard.md`, THE ONE CROSSING; `balance/probe_shardcrossing.ts`).
 
 | # | Finding (CONFIRMED unless noted) | Wave |
 |---|---|---|
+| D1 | The served page booted into the single-player start menu; Begin played the solo tutorial and a solo run; the binding to the server was one in-memory variable that a reload or the main menu dropped. | W7: BUILT 2026-10-10. THE SERVED MARK: the shard stamps the index it serves (a forwarded host's page and the dev door `?dev&shard=` count too), and such a page's primary row is **Enter the world**, the solo rows one row down. THE DOOR keeps the binding in sessionStorage through a reload and the menu; only a deliberate leave or a solo road chosen at the menu forgets it. |
+| D2 | The lobby's server road was illegible: the copy-paste note first, class cards that meant nothing for a server, a false travel note ("a fresh Warrior"), errors as "Connection failed: Error: ...", and a full shard and a hero frame over 256 KB closed with no word. | W7: BUILT 2026-10-10. The road is class-free (the cards wait for Host or Join); its line names the hero that travels, or says Mu picks one; failures read as one plain line; the door refuses a full world (`SHARD_REFUSAL.full`) and a hero past the wire's cap (`SHARD_REFUSAL.heroTooLarge`) with their words, and the client checks THE JUDGMENT's own cap before it uploads. |
+| D3 | Joining with a solo hero silently deleted that run's world (the first mirror overwrote the run slot), and Continue then built a fresh SOLO world from the mirror, stranding the shard hero. | W7: BUILT 2026-10-10. HOME SLOTS: every write home names its world (the address, the seed, the name the welcome carries), from the first snapshot that seats the hero; Continue on a bound save reads **Return to <world>** and connects with its charId, and the solo resume refuses a bound save. THE SOLO GUARD: a hero whose slot holds a standing solo world travels only after the lobby's line and confirm (or the menu's), and no write replaces that world without the word. |
+| D4 | Exit Game and a closed tab never said goodbye: the hero lay dormant and targetable for 30 s and the last 20 s were unsaved; a leave mid-fight left the hero standing with no mirror and no word. | W7: BUILT 2026-10-10. HONEST LEAVING: Leave the World and Exit Game say the deliberate word and await the farewell mirror (or a short cap), then land with one true line; a leave mid-fight hears "your hero stands its ground for 30 s" on the seat's own note, never a modal. THE UNLOAD WORD (best effort): a page going away tells its world over its socket and by a beacon (the beacon is the one that survives a real reload); a calm hero sleeps untargetable on a 15 s reload grace (a reload takes the seat back; a closed tab's hero leaves), and the moments since the last beat stay honestly unsaved (Exit avoids that). |
+| D5 | A failed return discarded the shard's word ("Connection to the host was lost."), offered no way back, and a stale served tab never reloaded after a build change. | W7: BUILT 2026-10-10. THE RETURN'S WORD: the menu line names the world and carries the shard's word; THE DOOR offers **Return to <world>** (a resume inside the dormant window, else a fresh login that lands where it left); a reload past the window logs a bound hero back in by itself; a served page whose world refuses its build reloads once. |
+| D6 | Co-op wording on a shard ("Leave Co-op", "Leave this co-op session?", "host"); heroes never named filled the server as "Warrior". | W7: BUILT 2026-10-10. A hosted world says "world" and "server" ("Leave the World", "Leave this world?", the world's name), the WebRTC lane keeps "co-op" and "host". THE STOPGAP NAME: an unnamed hero wears its class and a two-digit number its account picks, the next free one on a clash (display only; the Mu card's naming is the honest fix). |
+| D7 | `server/shard.ts`'s header still said `ws://` addresses and a 20 s world save. | W7: fixed 2026-10-10. The served address, the https and bare-host forms, the 60 s world beat beside the 20 s mirrors, and the `--per-ip`, `--client` and new `--name` flags. |
+| 26 | Her ruling the same day: a hero logs back in WHERE IT LOGGED OUT, the only behaviour. | W7: BUILT 2026-10-10. THE RETURN: every mirror carries the last stand, the desk keeps the stand of a leave no client heard, and the next login lands the hero there under THE SPAWN GRACE: back in a standing pocket, at a gone pocket's mouth, the hearth only for a new hero or a foreign or missing place (card 26's receipt above). |
 | A1 | The server-bound wake shows a local town, then snaps: the served build runs the classic profile, so a classic Lastlight bedside stands up, freezes when the socket is assigned, then the screen snaps to the shard's wilds hearth with no cover (the frame loop's loading gate was host-only). Two arrivals in two different towns. | W8a THE ONE CROSSING: BUILT 2026-10-10. The wake mints its vessel on a World that loads no zone and draws nothing, and the Mu crossing's cover stands from the character flush through the connect, the shell, the zone message and the first snapshot to the first page ring around the hero; a direct join, a reload's return and a hand-off ride the same lease, THE RETURN in place never covers. A wilds shell stands no local town either. Measured in the browser: no frame drawn between the pick and the hero on the shard's ground. |
 | A2 | Terrain streams in around the hero with no cover at the hearth (PLAUSIBLE). | W8a: BUILT. The cover releases only when every page of the 3x3 around the hero is published (`WILDS_CLIENT_CFG.coverRing`), the pages counted and measured on the cover. |
 | A3 | The map's explored fog resets after every cave and every login (the shell disposed its runtime for a pocket and booted a fresh one on the way out); the boot on every climb-out is a hitch (PLAUSIBLE). | W8a: BUILT. THE RUNTIME SURVIVES POCKETS (the same runtime re-seated: the survey, the page cache and no second boot; the boot measured 2.6 to 6 s of main thread in Node, the climb-out about 3 ms) and THE KEPT MAP (the explored cells per account and world in localStorage, re-claimed at the next login). |
 | A4 | (found by W8a's browser walk) A door the shard opened before a join is shut in the shell's walk: the shell lays its settlement with the doors closed, applyZone adopts each door's open flag, so the snapshot's idempotent door sync never repaints the grid. A login after the Waking House door was pushed met it shut in prediction. | W8a: BUILT, THE SHARD'S OPEN DOORS (the surface zone message carves them into the shell's own grid; probe_shardcrossing G). |
-| A5 | (found by W8a) After THE RETURN in place, `leave()`'s farewell never hears the hero's last mirror (resumeInPlace's handler dispatches only while `this.ws` is its socket, and `leave()` nulls it first), so the socket stays open the whole `farewellMs` and a quick re-join meanwhile is refused as the hero's twin. | OPEN: W7's goodbye (src/net/ws.ts). |
+| A5 | (found by W8a) After THE RETURN in place, `leave()`'s farewell never hears the hero's last mirror (resumeInPlace's handler dispatches only while `this.ws` is its socket, and `leave()` nulls it first), so the socket stays open the whole `farewellMs` and a quick re-join meanwhile is refused as the hero's twin. | W7: BUILT 2026-10-10. The farewell rides whichever socket stands (THE RETURN's resumed one included) and the mirror's ack closes it; THE COMPLETED LEAVE resolves the farewell only once the socket has closed (the shard runs the leave before it answers the close), so a re-join right after it is a fresh seat; and the shard's belt finishes a said leave whose close it never heard before the same hero's return (probe_sharddoor F). |
 | A6 | (found by W8a) A pocket on a wilds shell keeps `arena.boundless` from the surface (the zone message ships no boundless flag), so a cave draws as streamed ground with no border and the camera never clamps to it. | W8a: BUILT 2026-10-10, THE ZONE'S OWN BOUNDS: the zone message states its arena's `boundless` (absent = bounded) and every client's zone handling sets it from that word, so a pocket reads bounded (the clamp, the camera and the floor) and the surface boundless again on the climb-out; probe_shardcrossing D. |
+| A7 | (found by W7's browser check; predates the shard, since the foresight painter of 2026-08-19) A hosted or co-op client's game loop dies the first time an enemy casts in view: `renderer.ts` drawActor's foresight calls `instanceDelivery` on the client's cast stub, whose def carries no delivery. | W11 THE FORESIGHT ON THE WIRE: in flight 2026-10-10 (`src/engine/foresight.ts` pure geometry on both sides, `CastW.fg` from the host, the painter never resolves a stub; plus W9's `vd` skipped-beat carry and W6's hit tint). |
+
+What W7's build found beyond the audit (for her word where marked):
+
+- A shard served on `localhost` or a LAN address was invisible to the old
+  served-client check (only forwarded hosts counted), so even its own page
+  offered `ws://localhost:8787`; THE SERVED MARK covers every host.
+- A leave said mid-fight waited the whole farewell cap for a mirror that
+  would never come; the held word now ends the wait at once.
+- A reload under THE SPAWN GRACE is an untried seat and leaves at once, so the
+  reloaded page's resume found nothing; the bound hero now logs back in by itself.
+- The plain hearth wake moves the hero alone (its court stays where the
+  graft stood it, beside the shadowed keeper); THE RETURN's landing carries the
+  court, the hearth wake is left as found.
+- FOR HER WORD: a hero bound to a world that is gone for good (a deleted
+  codespace) has no road back to solo play; a deliberate "release this hero
+  from its world" action would give it one.
+- FOR HER WORD: a closed tab cannot hear its last mirror, so up to one beat
+  (20 s) of a hero's progress is lost; a shard that keeps each hero's latest
+  mirror and hands it back at the next login would close that, at the cost of
+  card 6's "the hero is the client's".
+- FOR HER WORD: the lobby's lone-vessel read takes a hero bound to another
+  world to this one without a word (its binding moves with it).
+- The listener's connection cap (64) still answers an HTTP 503 a browser's
+  WebSocket cannot read; the seat cap (16) speaks first in practice.
+- Found in the browser check: a real reload in Chromium drops the socket's
+  last frame, so the `leaving` word alone never arrived; THE UNLOAD BEACON
+  (`navigator.sendBeacon` to `/leave`) is the half that lands, and was added.
+- Found in the browser check: the first Exit read "did not answer in time" because
+  that hero had come back through THE RETURN in place: W8a's A5, built above.
+- Found in the browser check, OUTSIDE W7's regions (for the wave that owns the
+  renderer and the wire's actor rows): a hosted client's game loop dies the
+  first time an enemy casts in view. `renderer.ts` drawActor's cast telegraph
+  (`castTelegraphs`, on by default) calls `instanceDelivery(fc.inst)` on the
+  client's cast stub, whose def carries no delivery (`net/snapshot.ts`, the
+  remote cast row's adoption), so `inst.def.delivery.type` throws into
+  reportFatal ("The run hit an error"). Reproduced twice on the Unbroken Wilds
+  at the hearth; the probes and the soak draw nothing, so none of them can
+  see it.
 
 ## §8 M0 receipts (2026-10-07, this pass)
 

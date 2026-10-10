@@ -1,5 +1,5 @@
 import type { Actor } from './actor';
-import type { World } from './world';
+import type { Seat, World } from './world';
 import { OdysseyRisings } from './odysseyRisings';
 import { issueCommand } from './ai';
 import { angleDiff, angleTo, dist, vec } from '../core/math';
@@ -36,12 +36,17 @@ export class OdysseyRuntime {
   }
   private tell(line: string): void { this.w.notice(line, '#6ad8c0', 17, 'world'); }
   private dirty(): void { this.w.markMetaDirty(this.w.localSeat); }
+  /** THE WORLD'S HALF (card 24 ruled): the campaign a quest done or a leader felled
+   *  moves. A hosted world's sim unit never runs its own (its update is the keeper's),
+   *  so it reads the keeper's: one world's consequence wherever the deed was done. */
+  private campaign(): OdysseyState | undefined { return this.state ?? this.w.keeperCampaign(); }
 
   /** Validated saved receipts also upgrade existing live campaigns. Never infer
    * depth from account faction totals: two first victories are not stage two. */
   private recordPowerMilestones(): void {
-    if (!this.state || !this.w.metaProgressionActive()) return;
-    for (let stage = 1; stage <= odysseyAct(this.state); stage++) {
+    const camp = this.campaign();
+    if (!camp || !this.w.metaProgressionActive()) return;
+    for (let stage = 1; stage <= odysseyAct(camp); stage++) {
       const key = odysseyMilestoneKey(stage);
       if (this.w.account.ledger[key]) continue;
       this.w.account.ledger[key] = 1;
@@ -74,6 +79,14 @@ export class OdysseyRuntime {
       this.tell('Your Odyssey has four leaders. Explore their operations or seek leads from the Quartermaster. Choose any pursuit in the quest journal.');
       this.dirty();
     }
+    // THE CHARACTER'S QUESTS (card 24 ruled): on a hosted world the campaign's quests and
+    // leads are each hero's own (the world keeps the roster, the receipts and the pressure).
+    if (w.localSeat.keeper) {
+      this.updateHeroes(s);
+      clearDormantOdysseyPressure(s);
+      this.updateScouts(); this.updateSiege(); this.risings.update(s); this.capture();
+      return;
+    }
     // Older initialized campaigns may predate the rescue lead. Enrollment is
     // idempotent and preserves any existing target, directions and progress.
     if (!w.account.ledger[ORACLE_RESCUED]) {
@@ -97,10 +110,70 @@ export class OdysseyRuntime {
     this.updateScouts(); this.updateSiege(); this.risings.update(s); this.capture();
   }
 
+  /** THE CHARACTER'S QUESTS on a hosted world: every hero standing anywhere on the shard
+   *  holds its own campaign rows (enrolled idempotently, a fallen leader's and a prepared
+   *  operation's never offered anew and quietly ended), and learns an operation by
+   *  walking it, each in its own hand. */
+  private updateHeroes(s: OdysseyState): void {
+    const w = this.w;
+    for (const ww of w.presentWorlds()) {
+      for (const seat of ww.seats) {
+        if (seat.keeper || seat.merc) continue;
+        w.withQuestHand(seat, () => {
+          // The enrollment re-reads only when its inputs moved (the world's half, the
+          // hero's own log, the account's rescue): a per-tick walk would scan the account
+          // ledger for every hero every tick.
+          const key = this.enrollKey(s);
+          if (this.enrolled.get(seat) !== key) { this.enrollHero(s); this.enrolled.set(seat, this.enrollKey(s)); }
+          for (const id of s.roster) {
+            if (ww.zone.id === `quest_${odysseyQuestId(id, 'operation')}`) this.reveal(id);
+          }
+        });
+      }
+    }
+  }
+  /** The last enrollment's inputs per hero (updateHeroes). */
+  private readonly enrolled = new WeakMap<Seat, string>();
+  private enrollKey(s: OdysseyState): string {
+    const w = this.w, l = w.questLedger();
+    return `${s.prepared.length}:${s.defeated.length}:${s.surveyDone ? 1 : 0}:${l.active.length}:${l.completed.size}:${w.gateAccountOf(w.questHand()).ledger[ORACLE_RESCUED] ? 1 : 0}`;
+  }
+
+  /** One hero's campaign rows, in its own hand (THE CHARACTER'S QUESTS): the solo opening's
+   *  enrollment, idempotent, read against the world's half (a fallen leader's pursuit and a
+   *  prepared operation end quietly in its log; the survey opens when the act reaches it). */
+  private enrollHero(s: OdysseyState): void {
+    const w = this.w;
+    const acct = w.gateAccountOf(w.questHand()).ledger;
+    const ended = new Set<string>();
+    for (const id of s.roster) {
+      if (!odysseySurvives(s, id)) { ended.add(odysseyQuestId(id, 'operation')); ended.add(odysseyQuestId(id, 'leader')); continue; }
+      if (s.prepared.includes(id)) ended.add(odysseyQuestId(id, 'operation'));
+      else w.enrollOdysseyQuest(QUESTS[odysseyQuestId(id, 'operation')], false);
+      w.enrollOdysseyQuest(QUESTS[odysseyQuestId(id, 'leader')], false);
+    }
+    if (ended.size && w.activeQuests.some(q => ended.has(q.questId))) w.activeQuests = w.activeQuests.filter(q => !ended.has(q.questId));
+    if (odysseyAct(s) === 4 && !s.surveyDone) w.enrollOdysseyQuest(QUESTS[ODYSSEY_SURVEY], true);
+    if (!acct[ORACLE_RESCUED]) {
+      const revenge = revengeFactionOf(acct);
+      w.enrollOdysseyQuest(QUESTS[revengeCullId(revenge)], true);
+      w.enrollOdysseyQuest(QUESTS[revengeCommanderId(revenge)], false);
+    }
+    // One commander opportunity per life: rescue OR remembrance, never both (the hero's own life).
+    const run = w.questRunLedger();
+    const rescuedThisLife = !!run[ORACLE_RESCUED] || !!run.revenge_taken
+      || w.activeQuests.some(a => !!QUESTS[a.questId]?.rescue)
+      || [...w.completedQuests].some(id => !!QUESTS[id]?.rescue);
+    if (acct[ORACLE_RESCUED] && !rescuedThisLife) w.enrollOdysseyQuest(QUESTS[oracleCommanderId(revengeFactionOf(acct))], true);
+  }
+
+  /** THE CHARACTER'S QUESTS: the leads a read or act answers (the hand's own on a hosted world). */
+  private leadsOf(s: OdysseyState): string[] { return this.w.odysseyLeads(s); }
+
   /** The giver recognizes existing opportunities; never mints a second target. */
-  hasLocalLeads(): boolean { return this.w.graphWorkAvailable() && !!this.state && this.state.leads.length < this.state.roster.length; }
+  hasLocalLeads(): boolean { const s = this.campaign(); return this.w.graphWorkAvailable() && !!s && this.leadsOf(s).length < s.roster.length; }
   localLeads(): void {
-    const s = this.state;
+    const s = this.campaign(); // THE WORLD'S HALF: a unit reads the keeper's campaign
     if (!s) return;
     for (const id of s.roster) this.reveal(id);
     this.revealRevenge();
@@ -110,9 +183,9 @@ export class OdysseyRuntime {
     this.w.learnQuestDirections(`quest_${revengeCommanderId(revengeFactionOf(this.w.account.ledger))}`);
   }
   reveal(id: string): void {
-    const s = this.state;
-    if (!this.w.graphWorkAvailable() || !s || s.leads.includes(id) || !s.roster.includes(id)) return;
-    s.leads.push(id);
+    const s = this.campaign(); // THE WORLD'S HALF: a unit reads the keeper's campaign
+    if (!this.w.graphWorkAvailable() || !s || this.leadsOf(s).includes(id) || !s.roster.includes(id)) return;
+    this.leadsOf(s).push(id); // THE CHARACTER'S QUESTS: the hand's own lead on a hosted world
     for (const step of ['operation', 'leader'] as const) {
       this.w.learnQuestDirections(`quest_${odysseyQuestId(id, step)}`);
     }
@@ -123,7 +196,7 @@ export class OdysseyRuntime {
   }
 
   questCompleted(questId: string): void {
-    const w = this.w, s = this.state;
+    const w = this.w, s = this.campaign(); // THE WORLD'S HALF: a unit reads the keeper's campaign
     if (!s) return;
     if (questId === revengeCullId(revengeFactionOf(w.account.ledger))) {
       this.revealRevenge(); this.reveal(revengeFactionOf(w.account.ledger));
@@ -137,6 +210,7 @@ export class OdysseyRuntime {
         s.prepared.push(id); this.reveal(id); this.reconcileGrounds();
         this.tell(`${odysseyFaction(id).name}: preparations complete. The leader loses its escort; this work will survive later acts.`);
       }
+      if (questId === odysseyQuestId(id, 'leader') && w.localSeat.keeper) { this.leaderQuestDone(s, id); continue; } // THE CHARACTER'S QUESTS
       if (questId !== odysseyQuestId(id, 'leader') || !defeatOdysseyLeader(s, id)) continue;
       this.recordPowerMilestones();
       // Receipt first, then pay. Neither ordinary warlords nor account kill
@@ -164,8 +238,40 @@ export class OdysseyRuntime {
     this.dirty();
   }
 
+  /** THE CHARACTER'S QUESTS on a hosted world: a hero's own leader quest is done. THE
+   *  WORLD'S HALF falls once (the receipt, the milestones, the tutorial release, the turf,
+   *  the grounds, the act's word); the pay is the hand's, for every hero whose own pursuit
+   *  the deed credited (its points, its XP by its own place, its Memories at its feet). */
+  private leaderQuestDone(s: OdysseyState, id: string): void {
+    const w = this.w, hand = w.questHand();
+    if (defeatOdysseyLeader(s, id)) {
+      this.recordPowerMilestones();
+      w.ledger[`odyssey_leader:${id}`] = 1;
+      w.ledger.hero_renowned = 1;
+      if (id === revengeFactionOf(w.account.ledger) && w.metaProgressionActive()) {
+        w.account.ledger[ODYSSEY_TUTORIAL_RELEASE] = 1;
+        w.accountDirty = true;
+      }
+      this.tell(`${odysseyFaction(id).leaderName} falls.`);
+      this.tell(odysseyFaction(id).clue);
+      if (odysseyPressureTier(s, C.bandit) !== null) this.expandBanditTurf();
+      this.reconcileGrounds();
+      this.tell(odysseyAct(s) === 4
+        ? 'Four fragments share one bearing. Secure the marked survey ground when ready, around level 80.'
+        : `Act ${odysseyAct(s) + 1}: surviving leaders prepare their grounds. Expected readiness: level ${odysseyReadiness(s)}. Your completed preparations remain.`);
+    }
+    if (hand.keeper) return;
+    const at = w.seatHero(hand).pos;
+    hand.meta.vocationPoints += C.pointsPerLeader;
+    hand.meta.passivePoints += C.passivePointsPerLeader;
+    w.grantXp(2000 * odysseyAct(s), at, hand);
+    for (let i = 0; i < C.gemsPerLeader; i++) w.dropGemAt(at, undefined, true, 'quest');
+    w.markMetaDirty(hand);
+    w.text({ x: at.x, y: at.y - 64 }, `+${C.pointsPerLeader} Vocation points, +${C.passivePointsPerLeader} passive point`, '#e8c860', 16);
+  }
+
   private reconcileGrounds(): void {
-    const s = this.state;
+    const s = this.campaign(); // THE WORLD'S HALF: a unit reads the keeper's campaign
     if (!s) return;
     for (const id of s.roster) {
       if (!odysseySurvives(s, id)) continue;
@@ -182,7 +288,7 @@ export class OdysseyRuntime {
       && !z.special && !z.id.startsWith('quest_') && !z.floating && !z.concealed)
       .sort((a, b) => Math.hypot(a.map.x - home.map.x, a.map.y - home.map.y)
         - Math.hypot(b.map.x - home.map.x, b.map.y - home.map.y) || a.id.localeCompare(b.id));
-    for (const z of candidates.slice(0, c.turfPerAct * odysseyAct(this.state!))) w.sim.faction.reinforce(z.id, 'bandit', c.turfInfluence);
+    for (const z of candidates.slice(0, c.turfPerAct * odysseyAct(this.campaign()!))) w.sim.faction.reinforce(z.id, 'bandit', c.turfInfluence);
     this.tell('Bandits press their claims around the dispatch route. Watch their roads for messengers.');
   }
 
@@ -190,7 +296,7 @@ export class OdysseyRuntime {
     // Dormant graph campaigns retain their receipts; country kills belong to
     // the active geography and cannot reveal unreachable graph destinations.
     if (!this.w.graphWorkAvailable()) return;
-    const s = this.state;
+    const s = this.campaign(); // THE WORLD'S HALF: a unit reads the keeper's campaign
     if (!s) return;
     if (a.tag === 'odyssey_scout') {
       delete s.scout; this.scoutActor = undefined;

@@ -186,11 +186,15 @@ export const SHARD_UNIT_FIELDS: Readonly<Record<string, UnitFieldRow>> = {
   zoneMap: A('the chart'), caveMap: A('every pocket def'), visited: A(), surveyed: A(),
   discoveredWaypoints: A(), zoneMemory: A('the shared memory rows (THE PERSIST CAPTURE writes into it)'),
   sim: A('the WorldSim: nothing in it reaches back into a World'), manifest: A('the same frozen object by construction'),
-  accountSource: A('THE KEEPER\'S GATE until M2'), activeQuests: A(), completedQuests: A(),
-  questImbues: A('reassigned by claimQuestImbue'), questRewardItems: A('the reward menu is the counters wave\'s'),
-  completedObjectives: A(), mercSheets: A(), vendorHolds: A(),
-  bountyOffers: A('reassigned by armBountyBoard and reconcileBounties'),
-  bountyHands: A('reassigned by the slate verbs'), bountyBoardState: A(), chartsBought: A(),
+  accountSource: A('THE KEEPER\'S GATE until M2'),
+  // THE CHARACTER'S QUESTS (card 24): the quest log, imbues, slate, hands and boards are a
+  // character's own ledger now (seatQuests below); the World keeps the local seat's alone.
+  ownQuestLedger: A('the run\'s quest state off a shard; the keeper seat\'s sink on one'),
+  completedObjectives: A(), mercSheets: A(),
+  // THE SHELF PER BUYER (card 29): the World's own counter book, and each character's own
+  // (THE PATRON'S HOLD and THE STANDING ORDER key by character on a shard).
+  ownVendorHolds: A(), charVendorHolds: A('each character\'s holds at this world\'s counters'),
+  chartsBought: A(),
   townPortals: A('reassigned by the portal verbs; a seat\'s own row rides it'), townPortalDestination: A(),
   ledger: A('the run ledger'), throngClaimed: A(), annexFound: A(),
   discoveredDimensions: A('a per-run once-latch'), seasSeen: A('a per-run once-latch (seas_found)'),
@@ -224,7 +228,7 @@ export const SHARD_UNIT_FIELDS: Readonly<Record<string, UnitFieldRow>> = {
   adoptedZonePending: K('the adopt\'s latch; THE WAKE sets a unit\'s own'),
   questRescues: K('the adopt reconciles the keeper\'s; each unit updates its own'),
   townTierIdx: K('the hearth\'s tier; a unit never hosts the hearth'), townStationKey: K('the hearth\'s station fold'),
-  vendorArmedBeat: K('the adopt clears the keeper\'s; a unit\'s copy arms its own shelf (the plan\'s zone-local)'),
+  ownVendorArmedBeat: K('the adopt clears the keeper\'s; a unit\'s copy arms its own shelf (the plan\'s zone-local)'),
   // ---- HOST: published by the host into every World the shard runs
   shardWorld: { cls: 'host', note: 'the link and THE PRIMARY GATE' },
   partyMates: { cls: 'host' }, partyRows: { cls: 'host' }, partyRev: { cls: 'host' },
@@ -249,6 +253,8 @@ export const SHARD_UNIT_FIELDS: Readonly<Record<string, UnitFieldRow>> = {
   dotAccum: S('drop-actor-id'), comboCursors: S('drop-actor'),
   journalDirty: S('drop-seat-id', 'THE JOURNAL ROW: marked again in B, so the arrival hears its new zone at once'),
   questGiverDwells: S('drop-seat', 'a giver linger never crosses Worlds'),
+  seatQuests: S('move-seat-id', 'THE CHARACTER\'S QUESTS: the hero\'s own quest ledger travels with it'),
+  seatShelves: S('move-seat-id', 'THE SHELF PER BUYER: the buyer\'s standing shelves travel with it'),
   // ---- UNIT: dies with its unit (a row only where a detector looks)
   openedHollows: U('zone-local'), annexOpen: U('zone-local'), lures: U('zone-local'), theaterPour: U('zone-local'),
   holdMissingWarned: U('zone-local'), crossDimWarned: U('zone-local'), brittleWarnAt: U('zone-local'),
@@ -636,6 +642,7 @@ export function attachSeat(w: World, packet: SeatPacket, landing: LandingSpot): 
   // 6. The roster hears it; the near law re-reads where every body stands.
   w.markMetaDirty(seat);
   w.journalDirty.add(seat.id); // THE JOURNAL ROW: the arrival hears its new zone's boards and pins at once
+  w.noteSeatArrival(seat, packet.from); // THE CHARACTER'S QUESTS: its own postings read the arrival
   w.events.emit('party/join', { actor: seat.actor, seat: seat.id });
   w.settleNearScale(true);
 }

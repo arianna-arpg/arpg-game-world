@@ -76,10 +76,13 @@ export type SessionMsg =
   //            and THE DELIBERATE LEAVE: that close ends my seat at once,
   //            never dormant (card 16 B: a close without it leaves the hero),
   //            unless said mid-fight (THE ACTING SEAT: it sleeps like a lost socket).
+  //            `unload` (W7, THE UNLOAD WORD): the page is going away (a closed
+  //            tab or a reload); an out-of-fight hero sleeps untargetable for the
+  //            short reload grace instead (SHARD_CFG.unloadGraceSec).
   | { t: 'heroSave'; save: import('../meta/character').CharacterSave }
   | { t: 'corpse'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning }
   | { t: 'corpses'; zoneId: string; bodies: import('./vesselWire').ShardBodyRow[]; reclaimed?: number }
-  | { t: 'leaving' }
+  | { t: 'leaving'; unload?: boolean }
   // THE IMMORTAL'S COVENANT ON A SHARD (card 30, RULED A 2026-10-10; vesselWire.ts sanitizes):
   //   stageDeath (shard→a seat): THE CROSSING, a stage that survives death died on the shard:
   //            where its body lies, the tithe the shard appraised at the dying stage's rate

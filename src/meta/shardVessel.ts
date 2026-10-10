@@ -52,6 +52,7 @@ import {
 import { characterResumeFields, type CharacterFields } from './characterResume';
 import { releaseMercsOf } from './mercs';
 import { DEFAULT_MODE_ID, FADE_DEFAULTS, modeById, resurrectFee, ROSTER_SLOT_BASE, stageOf, type RosterEntry } from './modes';
+import { mirrorMayReplace, shardHomeOf, type ShardHome } from '../net/shardDoor';
 import { saveAccount, saveAccountDurable } from './persistence';
 import { isCurrentCharacterSave } from './saveCompatibility';
 import { settleClassUnlocks } from './unlocks';
@@ -119,12 +120,11 @@ export async function readTravelingVessel(account?: Account, charId?: string): P
   return out;
 }
 
-/** The lobby's one line naming which hero will travel (utility-screen text). */
-export function travelNote(vessel: CharacterSave | null, lobbyClassId: string): string {
-  if (!vessel) {
-    const cls = CLASSES.find(c => c.id === lobbyClassId);
-    return `Traveling: a fresh ${cls?.name ?? 'hero'} (you have no saved hero to bring).`;
-  }
+/** The lobby's one line naming which hero will travel (utility-screen text). THE FRONT
+ *  DOOR (W7): a server join is class-free, so the line says the truth: the saved hero by
+ *  name, or that Mu picks one first (THE LOGIN THROUGH MU). */
+export function travelNote(vessel: CharacterSave | null): string {
+  if (!vessel) return 'No saved hero travels: you will choose one in Mu, and it wakes in this world.';
   const cls = CLASSES.find(c => c.id === vessel.classId);
   const name = vessel.name?.trim() || cls?.name || vessel.classId;
   const who = `${name}, level ${vessel.level} ${cls?.name ?? vessel.classId}`;
@@ -133,9 +133,27 @@ export function travelNote(vessel: CharacterSave | null, lobbyClassId: string): 
   if (mode.save === 'roster') {
     const badge = stageOf(vessel.modeId, vessel.modeStage ?? 0).badge;
     const rung = badge ? `, ${badge.charAt(0)}${badge.slice(1).toLowerCase()}` : '';
-    return `Traveling: ${who} (${mode.name}${rung}). Your ${mode.name} vessel goes in place of the class card.`;
+    return `Traveling: ${who} (${mode.name}${rung}).`;
   }
-  return `Traveling: ${who}. Your saved hero goes in place of the class card.`;
+  return `Traveling: ${who}.`;
+}
+
+/** THE SOLO GUARD (W7): does this vessel's own slot (the run slot, or its roster card's)
+ *  hold a STANDING SOLO WORLD (a world half, or native pages, that no hosted world is
+ *  bound to)? Its first mirror would replace that world, so the lobby says so once and
+ *  asks first. Read the way Continue reads, never written; false when unsure of nothing. */
+export async function soloWorldStands(account: Account, vessel: CharacterSave): Promise<boolean> {
+  const card = modeById(vessel.modeId).save === 'roster' ? account.roster.find(r => r.charId === vessel.charId) : undefined;
+  const slot = modeById(vessel.modeId).save === 'roster' ? card?.slot ?? -1 : CHAR_SLOT;
+  if (slot < 0) return false;
+  try {
+    const read = await readCharacterResume(slot);
+    if (read.status !== 'ready') return false;
+    const r = read.resume;
+    const fields = r.kind === 'inline' ? r.save : r.character;
+    if (fields.charId !== vessel.charId || shardHomeOf(fields)) return false;
+    return r.kind === 'browser-native-pages' || r.save.world !== undefined;
+  } catch { return false; }
 }
 
 /** A fall the shard reported, staged for the death screen. */
@@ -164,6 +182,14 @@ export class ShardVesselLink {
   private crossed: { stage: number; minted: number; zoneName: string; at: number } | null = null;
   /** Crossings booked this session (the rig's read). */
   crossings = 0;
+  /** HOME SLOTS (W7): the world this hero lives on once its welcome named it (bindHome). */
+  private home: ShardHome | null = null;
+  /** HOME SLOTS (W7): THE BINDING WRITE was tried (once: the first snapshot that seats us). */
+  private bindTried = false;
+  /** THE SOLO GUARD (W7): the slot still holds the standing solo world it held at travel. */
+  private soloWorld: boolean;
+  /** Writes THE SOLO GUARD refused (the rig's read). */
+  guarded = 0;
 
   constructor(
     readonly net: WsTransport,
@@ -178,11 +204,26 @@ export class ShardVesselLink {
       /** May a mirror land in the slot now? False once another run owns it
        *  (a farewell's late mirror must never overwrite a new run's save). */
       mayWrite?: () => boolean;
+      /** THE SOLO GUARD (W7): the vessel's slot held a standing solo world when it
+       *  traveled (soloWorldStands); its first write would replace that world. */
+      soloWorld?: boolean;
+      /** THE SOLO GUARD (W7): the player's word that it may (the lobby's line and
+       *  confirm, or a hero woken in Mu for this very world). */
+      consent?: boolean;
     } = {},
   ) {
     this.current = vessel;
+    this.soloWorld = !!hooks.soloWorld;
     net.farewell = !!vessel; // THE FAREWELL: a traveling hero asks for its last mirror at leave
     net.onSession(m => this.onSession(m));
+    // HOME SLOTS (W7): THE BINDING WRITE. The first snapshot that seats this hero tags its
+    // slot with the world it now lives on, so a session lost before the first mirror still
+    // leaves a save that returns here (never one a solo Continue would wake elsewhere).
+    net.onState(s => {
+      if (!this.home || this.bindTried || !this.current || !s?.seats?.[net.self]) return;
+      this.bindTried = true;
+      this.write({ ...this.current });
+    });
     // THE IDENTITY goes to disk before the shard keys a single record by it
     // (a compatible boot mints it into the cache only; this is its first use).
     saveAccount(account);
@@ -190,6 +231,21 @@ export class ShardVesselLink {
 
   /** The hero this link speaks for (null: none, or it fell). */
   get traveling(): CharacterSave | null { return this.current; }
+
+  /** HOME SLOTS (W7): the welcome named the world; every write from now on carries it. */
+  bindHome(home: ShardHome): void { this.home = home; }
+
+  /** One write home (a mirror, or THE BINDING WRITE): tagged with the home world, and
+   *  refused by THE SOLO GUARD while the slot holds a solo world nobody agreed to replace. */
+  private write(s: CharacterSave): boolean {
+    if (this.hooks.mayWrite && !this.hooks.mayWrite()) return false;
+    if (!mirrorMayReplace({ soloWorld: this.soloWorld }, !!this.hooks.consent)) { this.guarded++; return false; }
+    const tagged: CharacterSave = this.home ? { ...s, shard: this.home } : s;
+    if (saveVesselMirror(this.account, tagged) < 0) return false;
+    this.current = tagged;
+    this.soloWorld = false; // the slot now holds this hero, world-less
+    return true;
+  }
 
   private onSession(m: SessionMsg): void {
     if (!m || typeof m !== 'object') return;
@@ -258,9 +314,7 @@ export class ShardVesselLink {
     const v = this.current, s = raw as CharacterSave | null;
     if (!v || !s || typeof s !== 'object' || s.charId !== v.charId || s.classId !== v.classId
       || (s.modeId ?? DEFAULT_MODE_ID) !== (v.modeId ?? DEFAULT_MODE_ID)) return;
-    if (this.hooks.mayWrite && !this.hooks.mayWrite()) return;
-    if (saveVesselMirror(this.account, s) < 0) return;
-    this.current = s;
+    if (!this.write(s)) return;
     this.mirrors++;
   }
 
