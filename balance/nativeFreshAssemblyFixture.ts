@@ -1,9 +1,7 @@
+import {installedNativeAreaSources,installedNativeAreaConfig} from '../src/worldmass/nativeAreaInstalledSources';
 /** Test campaign/service binding only. No World scene, geometry, population or controller state is transferred. */
-import {World,NAV_CFG,PARTY_LAND_CFG} from '../src/engine/world';
-import {MIN_PORTAL_SEP} from '../src/engine/worldgen';
-import {climateAt} from '../src/world/climate';
+import {World} from '../src/engine/world';
 import {continentAt,continentSeedFrom} from '../src/world/continents';
-import {ZONE_MEMORY_CFG} from '../src/engine/zonecontents';
 import {NativeAreaSceneAssembly,type NativeAreaAssemblyInput} from '../src/worldmass/nativeAreaSceneAssembly';
 const birthKeys={
  campaign:['account','annexFound','time','zoneMemory','completedObjectives','stationArmed','discoveredWaypoints','sim','ledger','manifest','zoneMap','caveMap','nextGenId','surveyed','visited','crossDimWarned','vendorHolds','mercSheets','charDirty','seats','descentRun','descentStocks','holdMissingWarned','vendorArmedBeat','chandlerStock','vendorRestockAt','activeQuests','accountDirty','localSeat','questImbues','massSettlementDay','meta','charDeaths','hiredMercs','lastSagaFlushAt','manifestedThisRun','bountyHands','clientActionHook'],
@@ -21,16 +19,13 @@ export function freshAssemblyInput(w:any,definition:World['zone'],campaign?:any)
  campaign??=pick(w,[...birthKeys.campaign,'mintVeil','squadSeq','theaterVisitSeq','vendorStock']);campaign.massRuntime=null;campaign.nativeResidentHistory??={dialogueVisits:w.npcDialogues.visits,dialogueScene:w.dialogueScene};
  for(const k of ['questStanding','questDefOf','metaProgressionActive','reliquaryLesson','mireilleLessonLived','mireilleGiftOwed','mireilleGiftLesson'])campaign[k]??=w[k].bind(w);
  campaign.notice??=w.notice.bind(w);campaign.text??=w.text.bind(w);campaign.continentFor??=(c:any)=>continentAt(c,continentSeedFrom(campaign.sim.biomeField.fieldSeed));
- const a=w.nativeAmbientHost();
  return {definition,player:w.player,initialActors:[w.player],campaign,
- sources:{population:{ambient:{...pick(a,['config','rand','randInt','monster','rollPackSize','rollRarity','magicPackPool','magicPackSize','rollMagicPack','storyTable','tierFloorAt','encounterGroupContext','rollEncounterGroup','presenceMul']),get random(){return Math.random;},weightedPick:w.weightedPick,packageActive:(id:string,level:number)=>campaign.sim.packageActive(id,level),notice:campaign.notice},groups:w.nativeEncounterGroupHost(),factory:w.nativeMonsterFactorySources(),promotion:w.nativeMonsterPromotionSources(),hostility:(World as any).nativeHostilitySources(),relay:(World as any).nativeStatusRelaySources()},
- populationResolution:(World as any).nativePopulationSources(),environment:(World as any).nativeSceneEnvironmentSources,ecology:(World as any).nativeSceneEcologySources,
- coast:{...w.nativeSceneCoastSources(),climateAt,continentAt,continentSeedFrom,ZONE_MEMORY_CFG,exitPreparation:w.nativeExitPreparationSources()},runtime:w.nativeRuntimeBirthSources(),inhabitants:{nativeInhabitantSources:(World as any).nativeInhabitantSources}},
+ sources:installedNativeAreaSources(campaign),
  services:{geometry:{seasSeen:w.seasSeen,oceanBearing:w.oceanBearing.bind(w),seaNameOf:w.seaNameOf.bind(w),notice:campaign.notice,text:campaign.text,seatOf:w.seatOf.bind(w),drainSurvival:unavailable('drainSurvival')},population:{resolveHit:unavailable('resolveHit')},
  residents:{viewRectFor:unavailable('viewRectFor'),scene:w.scene,clientActionHook:w.clientActionHook},environment:{timeflow:w.timeflow,completePuzzle:unavailable('completePuzzle')},ecology:{throngClaimed:w.throngClaimed},occurrences:{traceRuns:w.traceRuns,timeflow:w.timeflow},
  theater:{geyserMode:w.geyserMode,notice:campaign.notice,imminentThreatTo:unavailable('imminentThreatTo'),plantDressAt:unavailable('plantDressAt'),dropGemAt:unavailable('dropGemAt'),moveActor:unavailable('moveActor'),slipAway:unavailable('slipAway')},
  openings:{text:campaign.text,dropGemAt:unavailable('opening dropGemAt'),shedOrb:unavailable('shedOrb')},history:{notice:campaign.notice,text:campaign.text,events:w.events}},
  carry:{inCave:!campaign.zoneMap[definition.id],entryFrom:null,voyage:null,charBorn:w.charBorn,charRegrowAcc:w.charRegrowAcc,townTierIdx:w.townTierIdx},
- config:{navigationPad:NAV_CFG.pad,eventSpacing:240,minPortalSeparation:MIN_PORTAL_SEP,partyLand:PARTY_LAND_CFG,arrivalGrace:1}}
+ config:installedNativeAreaConfig()}
 }
 export {NativeAreaSceneAssembly};

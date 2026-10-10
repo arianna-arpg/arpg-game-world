@@ -1,3 +1,4 @@
+import {beforeNativeInstalledSources} from './nativeInstalledSourceFixture';
 /** Original/current/local native graph, complete boundary and continued layout/birth courses. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -43,7 +44,7 @@ const arrivalTail=Function('vec','angleTo','rand',emit('return function(def,zone
 const names=Object.keys(archive.methods),bindings:Record<string,unknown>={};
 for(const row of archive.imports){const mod=await import(new URL('../src/engine/'+row.module+'.ts',import.meta.url).href);for(const name of row.names)if(!name.startsWith('type '))bindings[name]=mod[name];}
 const original=Function(...Object.keys(bindings),emit(archive.constant+'\n'+archive.helper+'\nreturn {\n'+Object.values(archive.methods).join(',\n')+'\n}'))(...Object.values(bindings));
-const worldText=read('src/engine/world.ts'),sf=ts.createSourceFile('world.ts',worldText,99,true),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
+const worldText=beforeNativeInstalledSources(read('src/engine/world.ts')),sf=ts.createSourceFile('world.ts',worldText,99,true),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
 const others=cl.members.filter(m=>![...names,'nativeSceneGraphView','nativeSceneGraphHost'].includes(m.name?.getText(sf)??'')).map(m=>m.getText(sf).replace(/\r\n/g,'\n'));
 assert.equal(others.length,nativeGraphOtherWorldCount);assert.equal(hash(JSON.stringify(others)),nativeGraphOtherWorldHash);
 const core=ts.createSourceFile('core.ts',read('src/engine/nativeSceneGraph.ts'),99,true);
@@ -69,7 +70,7 @@ if(!lane){
  console.log('PASS cold original/current/local courses',JSON.stringify({courses:receipts[0].length,receipt:hash(JSON.stringify(receipts[0])),rows:receipts[0].map(({index,mode,face,newZones,coverage,bodies,draws}:any)=>({index,mode,face,newZones,coverage,bodies,draws}))}));
 }else{
  installHeadlessShims();registerAllPackageFactions();validateContent();
- const policy=Function('return ('+worldText.match(/const POCKET_CFG = (\{[^;]+\});/)![1]+')')();
+ const policy=Function('return ('+read('src/engine/nativePopulationRules.ts').match(/const POCKET_CFG = (\{[^;]+\});/)![1]+')')();
  function naturalWorld(index:number){
   const account=makeAccount(),manifest=buildManifest(account,991),w:any=new World(account,Object.freeze(manifest));
   w.createPlayer(CLASSES.find(c=>c.id==='warrior')!,{startingCompanions:false});w.sim.bindGeographyPolicies();
