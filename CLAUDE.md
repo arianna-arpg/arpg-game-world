@@ -1,3 +1,14 @@
+NativeAreaSourceSession and NativeAreaSceneAssembly now issue actual campaign
+content capabilities and construct fresh complete owners through one layout/birth.
+Keep complete complex children, same memory/RNG and shared squad/vendor/event/
+dialogue history. prepare returns only immutable placement hints; tickets and
+positions are not publication or terrain authority. Verify nativeareasourcesession
+(14 cold courses), resident/birth/boundary/layout probes, all types and generation.
+See docs/worldgen/native-area-source-session.md for the authoritative continuation.
+Next: real installed source bootstrap, physical admission/publication, ongoing
+event/reward ownership and persistent whole-area streaming, then native hierarchy
+and map zoom. The test adapter is not activation. Follow SeamlessOnlyContent below.
+
 ExplorationPopulation fixes derived bombard census retention and settled native
 visual/AI query deadlines that prevented offscreen dormancy. Keep actual emitted
 attacks, unknown clocks and controller dependencies pinned; never erase native
@@ -6,6 +17,16 @@ engine/formations/paging/resume and all types, plus the actual client Continue
 course. Native density is still substantially below main, and continuing
 wilderness roads are absent: docs/worldgen/exploration-population.md defines
 measured gaps and required live-content/route acceptance, not completed parity.
+
+SeamlessOnlyContent is the intended final architecture (user direction, 2026-10-09).
+Use main as the reference for complete content and native behavior, not as a
+requirement to preserve player-facing zones, border teleports or a second game
+mode. Keep the old zone implementation as a backup branch. Native area IDs and
+internal graph records may remain where they own content/events; their eventual
+presentation is continuous geography. Integrate complete areas, events, ongoing
+owners and persistence, then map hierarchy and zoom over that same world.
+Do not add unrelated gameplay. Visually exposed mechanisms must show their
+meaning through the world and existing visual language.
 
 NativeAreaSceneGraph shares all 22 original campaign graph preparation methods
 with World. NativeAreaSceneBoundaries binds actual local graph/coast/geometry for

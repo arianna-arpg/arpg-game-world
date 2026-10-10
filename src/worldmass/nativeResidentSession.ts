@@ -7,6 +7,8 @@ export type NativeResidentCampaign=Pick<NativeNpcDialogueHost,
  'account'|'ledger'|'activeQuests'|'questStanding'|'questDefOf'|'manifest'|'metaProgressionActive'|'accountDirty'|'charDirty'|'time'|'localSeat'|'questImbues'|'reliquaryLesson'|'mireilleLessonLived'|'mireilleGiftOwed'|'mireilleGiftLesson'> & {massSettlementDay:World['massSettlementDay']};
 export type NativeResidentLocal=Pick<NativeNpcDialogueHost,
  'localZoneAt'|'isSafeAt'|'viewRectFor'|'lineOfSight'|'exits'|'massRuntime'|'scene'|'clientActionHook'> & {readonly census:NativeSceneCensus};
+/** Run-long variation survives local director/area construction. */
+export interface NativeResidentHistory {dialogueVisits:Map<string,number>;dialogueScene:number}
 export interface NativeResidentArea {census:NativeSceneCensus;local:NativeResidentLocal}
 /** One native run/session owner, retained through sequential area entries.
  * bindArea changes the live local providers only. The complete native resident
@@ -24,7 +26,8 @@ export class NativeResidentSession {
  dialogueScene=0;
  readonly residentContext:NativeAreaResidentContext;
  readonly factoryService:{readonly npcDialogues:Pick<NpcDialogueDirector,'appearanceFor'>};
- constructor(raw:{campaign:NativeResidentCampaign;area:NativeResidentArea}){
+ constructor(raw:{campaign:NativeResidentCampaign;area:NativeResidentArea;history?:NativeResidentHistory}){
+  if(raw.history&&(!(raw.history.dialogueVisits instanceof Map)||!Number.isSafeInteger(raw.history.dialogueScene)||raw.history.dialogueScene<0))throw Error('Native resident history needs retained visit data');
   const roots=Object.create(null);for(const key of ['campaign','area']){
    const d=raw&&Object.getOwnPropertyDescriptor(raw,key);
    if(!d||!Object.hasOwn(d,'value')||!d.value||typeof d.value!=='object')throw Error('Native residents need own object '+key);
@@ -39,7 +42,8 @@ export class NativeResidentSession {
   fields(()=>self.area.local,['exits','massRuntime','scene','clientActionHook']);
   methods(()=>self.campaign,['questStanding','questDefOf','metaProgressionActive','reliquaryLesson','mireilleLessonLived','mireilleGiftOwed','mireilleGiftLesson']);
   methods(()=>self.area.local,['localZoneAt','isSafeAt','viewRectFor','lineOfSight']);
-  this.host=Object.freeze(host);this.npcDialogues=new NpcDialogueDirector(host);
+  this.host=Object.freeze(host);this.npcDialogues=new NpcDialogueDirector(host,raw.history?.dialogueVisits);
+  if(raw.history){const history=raw.history;Object.defineProperty(this,'dialogueScene',{enumerable:true,get:()=>history.dialogueScene,set:(v:number)=>{history.dialogueScene=v;}});}
   this.residentContext=Object.freeze({
    get account(){return self.campaign.account;},get ledger(){return self.campaign.ledger;},get massSettlementDay(){return self.campaign.massSettlementDay;},
    get speakerRows(){return self.speakerRows;},get speechMemory(){return self.speechMemory;},get speechFocus(){return self.speechFocus;},

@@ -40,11 +40,11 @@ export function npcDialogueEligible(w: NativeNpcDialogueHost, def: NpcDialogueDe
  * pages and input; this director owns conditions, variation and trigger life. */
 export class NpcDialogueDirector {
   private choices = new Map<number, { id: string; text: string }>();
-  private visits = new Map<string, number>();
+  private visits:Map<string, number>;
   private armed = new Set<string>();
   private admittedVisits = new Map<number, string>();
   private calling?: { def: NpcDialogueDef; line: NpcSpeechLine; until: number };
-  constructor(private readonly w: NativeNpcDialogueHost) {}
+  constructor(private readonly w: NativeNpcDialogueHost, visits:Map<string,number>=new Map()) { this.visits=visits; }
 
   appearanceFor(defId: string): string | undefined {
     const rule = NPC_APPEARANCES[defId];
