@@ -18,7 +18,7 @@ import type {NativeAreaBirthArguments} from '../src/engine/nativeAreaBirth';
 import {composeNativeSceneBirth,runComposedNativeBirth} from '../src/worldmass/nativeSceneBirthComposition';
 import {completeBirthFixture,completeBirthRoots} from './nativeSceneBirthFixture';
 import {original,archive} from './nativeCompleteBirthArchive';
-const worldSource=fs.readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8');
+const worldSource=fs.readFileSync(new URL('../src/engine/nativePopulationRules.ts',import.meta.url),'utf8');
 const policy=Function('return ('+worldSource.match(/const POCKET_CFG = (\{[^;]+\});/)![1]+')')();
 const fixtures=[{seed:713,target:{x:6765,y:160},mintSeed:2229205504,index:810064},{seed:991,target:{x:-35,y:1280},mintSeed:1015847609,index:810204},{seed:713,target:null,mintSeed:713,index:0}];
 const lane=process.argv.find(a=>a.startsWith('--birth-lane='))?.split('=')[1];

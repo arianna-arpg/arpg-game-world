@@ -1,3 +1,4 @@
+import './nativeSceneBootstrap';
 import './nativeInhabitants';
 import { type NativeInhabitantHost, type NativeInhabitantSources } from './nativeInhabitants';
 import { nativeFloorElevAt, nativeRayElev, nativeShotElev, nativeLineOfSight, nativeSightClipD, nativeLineOfFire, nativeClipShot, type NativeSightHost, type NativeSightSources } from './nativeSight';
@@ -27,7 +28,7 @@ import { updateCastAim } from './castAim';
 import { markBodyAction } from './bodyAction';
 import { markBodyWalk } from './bodyWalk';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
-import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
+import { anatomyCueState, anatomyFlash, notePartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
 import { feedingCueFlash, restorationCueFlash, noteRestoreGain } from './feedingCues';
 import { companionCueFlash, companionCueSpec, type CompanionCueEvent } from './companionCues';
@@ -69,7 +70,7 @@ import { siteZoneExits } from './exitSiting';
 import { fillFlaskChargeBanks } from './flaskState';
 import { ODYSSEY_CFG, odysseyFaction, odysseyQuestId } from '../data/odyssey';
 import { instanceCastCycle, instanceTreeMods, instanceTreeOver } from './skills';
-import { finishAIRecovery, monsterTurnSpeed } from './handling';
+import { finishAIRecovery } from './handling';
 import { COMBAT_DEEDS, DEED_CFG } from '../data/classdeeds';
 import { selectContainerLoot } from '../data/containerloot';
 import { rollMemoryEssenceTier } from '../data/essences';
@@ -81,7 +82,7 @@ import { instanceEffects } from './skills';
 import { costWard } from './costward';
 import { summonKitIds } from './skills';
 import '../world/escarpments'; // Preserve original registration order.
-import {biomeFrontierTarget} from './worldgen';
+import './worldgen'; // Preserve native registration order.
 import '../world/locales'; // Preserve original registration order.
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
 import { DiscIndex } from './spatial';
@@ -112,7 +113,7 @@ import { MASS_CFG, impactFrac, impactScale, shoveAuthority } from './mass';
 import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf, ROUSE_RULES } from './ai';
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
-import { convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG, CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo, skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst, type SkillRarity, supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew, BAR_SLOTS, MAX_SUPPORT_LEVEL, parseSlotGraftStat, SLOTGRAFT_PREFIX, SWAP_DISCIPLINE_CFG, BLOOM_CFG, GRANT_CFG, parseSkillGrantStat, skillGrantStat, SKILLGRANT_PREFIX, type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GroundCascadeSpec, type GroundPulseSpec, type GuardBashSpec, type LitePourEffect, type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect, type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SummonDelivery, type SupportDef, type SupportInstance, type TetherSpec, type ConduitSpec, type ImpactDressSpec } from './skills';
+import { convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG, CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo, skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst, type SkillRarity, supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew, BAR_SLOTS, MAX_SUPPORT_LEVEL, parseSlotGraftStat, SLOTGRAFT_PREFIX, SWAP_DISCIPLINE_CFG, BLOOM_CFG, GRANT_CFG, parseSkillGrantStat, skillGrantStat, SKILLGRANT_PREFIX, type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GroundCascadeSpec, type GroundPulseSpec, type GuardBashSpec, type LitePourEffect, type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect, type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SummonDelivery, type SupportDef, type SupportInstance, type TetherSpec, type ConduitSpec, type ImpactDressSpec } from './skills';
 import { birthCount, CLUTCH_CFG, ORPHAN_FRENZY, type BirthEffect } from './clutch';
 import { mintSupportInstance, spawnVeinOf, SUPPORTBASE_CFG } from './supportbase';
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
@@ -161,8 +162,8 @@ import { awakenMemoryFromDrop, memoryCommissionReady, memoryProgressionOpen, mem
 import { MEMORY_UNLOCK_CFG, type MemorySecondaryMechanic } from '../data/memoryUnlocks';
 import { powerProgressionRefusal } from '../data/powerProgression';
 import { SKILLS } from '../data/skills';
-import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, FIXTURE_IDS, MONSTERS, WILDLIFE, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
-import { presenceMul, presenceTable } from './presence';
+import { AMBIENT_TAGS, FACTIONS, FIXTURE_IDS, MONSTERS, WILDLIFE, temperOf, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { presenceMul } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { updateScene, sceneInterceptFall, sceneNoteCast, type SceneRuntime } from './scenes';
 import { CLASSES, classOpeningSkills, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
@@ -170,7 +171,7 @@ import '../data/coop';
 import type { CouchSeatTag } from '../data/couch';
 import { SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
-import { CHOICE_GROUPS, PASSIVE_CHOICE_CFG, choiceDealSpent, choiceLockReason, choiceOptionOf, chosenOf, graftSourcesOf, sanitizeChoices } from '../data/passiveChoices';
+import { PASSIVE_CHOICE_CFG, choiceDealSpent, choiceLockReason, choiceOptionOf, chosenOf, graftSourcesOf, sanitizeChoices } from '../data/passiveChoices';
 import { openRealms, realmOf, realmOpen, type PassiveRealmDef } from '../data/passiveRealms';
 import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocationRootId, vocationStepKey, type VocationSiteFilter } from '../data/vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
@@ -184,7 +185,7 @@ import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule,
 import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { ATTRIBUTE_IDS, ATTRIBUTES, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, isAttributeId } from './stats';
-import { skyOf, START_ZONE, ZONES, objectiveSeals, escapeExitAllowed, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
+import { skyOf, START_ZONE, ZONES, objectiveSeals, escapeExitAllowed, type ExitRoadSpec, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { SUITES, type SuiteDef, type SuiteStation } from '../data/suites';
 import { BEACON_CFG } from '../data/beacons';
 import { LEYLINE_CFG } from '../data/leyline';
@@ -202,7 +203,7 @@ import type { MassOccurrenceBirth, MassOccurrenceDisturbance } from '../worldmas
 import { driveNativeBeacon, nativeBeaconConfig, type NativeBeaconHost, type NativeBeaconReinforceConfig, type NativeBeaconTables } from './beaconObjectives';
 import { driveNativeRiftPours, finishNativeDig, driveHoldObjectives, resolveHoldContest, type HoldFixture, type HoldObjectiveHost, type HoldObjectiveOptions } from './holdObjectives';
 import { objectiveRewardXp } from '../data/objectiveRewards';
-import { PROCESSION_CFG } from '../data/processions';
+import '../data/processions'; // Preserve native registration order.
 import { driveNativeProcession, nativeProcessionConfig, nativeProcessionSteering, type NativeProcessionConfig, type NativeProcessionState } from './processionObjectives';
 import type { MassProcessionCartBirth, MassProcessionAmbushBirth, MassProcessionRoadRow } from '../worldmass/processionTypes';
 import '../data/bounties';
@@ -225,19 +226,16 @@ import { deathVoiceOf, dominantTypeOf, hitVoiceOf, skillBaseTypeOf } from './bod
 import { DEATH_PRESENTATION } from '../data/deathPresentation';
 import { deathPresentationPose } from './deathPresentation';
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
-import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
+import { canSquish, SQUISH_CFG } from './squish';
 import { PIT_CFG, pitAt, pitIdentityKey, type PitSurface } from './pitfall';
 import { floorStoryOf, landingTier, laneLedgerOnDescend, linkFlipTier, linkSpanOf, resolveTierCrossing, sameStory, storyTable, tierElevOf, tierEnclosed, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
-import { gateThroatAt } from './layoutRecipes';
-import { liquidOf } from './genkit';
+import './layoutRecipes'; // Preserve native registration order.
+import './genkit'; // Preserve native registration order.
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
 import { eyecatchElapsed, eyecatchHoldSec, ULT_CFG, ULT_QA, ultCooldownCap, ultGlobalGapSec, ultThrottleSec, type EyecatchState } from './ultimates';
 import { gaugeAdd, gaugeShaveSec, gaugeSpend, type GaugeFeedSpec } from './gauge';
-import {
-  gatherSympathyRecipients, SYMPATHY_CFG, SYMPATHY_HOOKS, SYMPATHY_LINKS,
-  sympathyRelationOf, sympathyStat,
-} from './sympathy';
+import { gatherSympathyRecipients, SYMPATHY_CFG, SYMPATHY_LINKS, sympathyRelationOf, sympathyStat } from './sympathy';
 import { CHARGE_DEFS } from './charges';
 import { pushOutOfShape, shapeAabbHalf, shapeContains, type HitShape } from './shapes';
 import { projFormNose, projFormTouches } from './projForms';
@@ -255,11 +253,11 @@ import '../data/arenas'; // side-effect: the ward-seal doodad rules register
 import '../data/sympathies'; // side-effect: the sympathy link registry fills
 import '../data/lightwells'; // side-effect: the ambient lightwell rows register
 import '../data/tracks'; // side-effect: the track rider + contact-doodad rows register
-import { rollFolk } from '../data/innfolk'; // THE FOLK ROSTER (registers the inn's pools on import)
+import '../data/innfolk'; // Preserve native registration order. // THE FOLK ROSTER (registers the inn's pools on import)
 import '../data/trapworks'; // side-effect: the trapworks kit (riders + tells) registers
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
-import {connectFloatingZone, countRoads, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, footprintBars, roadBudgetOf, settleWeb, webDisturbance, WEB_CFG, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET} from './worldgen';
-import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
+import { connectFloatingZone, countRoads, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, footprintBars, roadBudgetOf, settleWeb, webDisturbance, WEB_CFG, MIN_PORTAL_SEP } from './worldgen';
+import { VOYAGE_CFG, VOYAGE_ZONE_ID, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
 import { expandedTown, townTier, townSiteAt, townSiteStructure, townStationFeatures, TOWN_TIERS, type TownSiteId } from '../data/townBuild';
@@ -288,7 +286,7 @@ import {
 } from './crafting';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
-import { TILESETS, CAVE_FACE_IDS, pickTilesetForBiome } from '../data/tilesets';
+import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, ZONE_QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
 import { massQuestDestination, massQuestSatisfied, massQuestTarget, validMassQuestEntry } from '../worldmass/quests';
 import { RELIQUARY_LESSON, resolveQuestZone } from '../quests/reliquary';
@@ -302,13 +300,13 @@ import { Rng, rollSeed, withSeededRandom } from '../core/rng';
 import '../data/shrines';
 import { type AltarDef, type ShrineDef } from '../data/shrines';
 import { WorldSim } from '../world/sim';
-import {patronFaction, biomesForFaction, BIOMES, BIOME_FIELD, OCEAN_BIOME} from '../world/biomes';
-import { boundaryGateOf } from '../data/boundaryGates';
-import {fieldRegionAt, isFieldPixel, fieldCoreRect, FIELD_GEN, type FieldExtent} from '../world/fieldRegion';
-import {channelFracOf, ferryLaneFor, isSoulriverId, ribbonCoordAt, soulriverInstanceOf, soulriverKeyOf, soulriverPlan, SOULRIVER_CFG} from '../world/soulriver';
+import { patronFaction, biomesForFaction, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
+import '../data/boundaryGates'; // Preserve native registration order.
+import { fieldRegionAt, fieldCoreRect, FIELD_GEN, type FieldExtent } from '../world/fieldRegion';
+import { channelFracOf, ferryLaneFor, isSoulriverId, ribbonCoordAt, soulriverInstanceOf, soulriverKeyOf, soulriverPlan, SOULRIVER_CFG } from '../world/soulriver';
 import { zoneKindOf } from '../data/zoneKinds';
 import '../config'; // Preserve original registration order.
-import { eventLevel as resolveEventLevel } from '../world/levelField';
+import '../world/levelField'; // Preserve native registration order.
 import '../world/openingProgression'; // Preserve original registration order.
 import { bountyRoutes } from '../world/bountyRoutes';
 import type { TravelRoute } from '../world/travelRoutes';
@@ -319,9 +317,9 @@ import { regionKind, survivalResource, survivalEaseStat, survivalBandMeter, SURV
 import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
 import '../world/atlas';
 import { climateAt } from '../world/climate';
-import { VeilIndex, VEIL_DEFAULTS, veilSpecOf, type VeilPatch } from './veil';
-import { registerDoodadFamily } from './doodadFamilies';
-import { FOG_BANKS, FOG_CFG, FogField, type FogBank } from './fog';
+import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
+import './doodadFamilies'; // Preserve native registration order.
+import { FOG_BANKS, FogField, type FogBank } from './fog';
 import { CREEP_CFG, CREEPS, CreepField, crestPoint, type FrontConsumeRow } from './creep';
 import { placeTrack, riderSurface, TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
 import { cometFanOf, columnPayload, GEYSER_CFG, rainFanOf, ventDownstream, ventReadAt, ventSpill, type GeyserField, type GeyserSpec, type GeyserSurgeRead, type PlacedVent } from './geysers';
@@ -329,16 +327,14 @@ import { dwellerPhaseAt, lintVentDweller, VENT_DWELLER_CFG, type DwellerPhase } 
 import { REGROWTH_CFG, SCALD_CFG, type BaskSpec } from '../data/scald';
 import { LEDGER_TRAP_SPRUNG, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { driveOccSites, OCC_CFG, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
-import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
+import { attunedStatus, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { capturePuzzleKindles, restorePuzzleKindles, pickKnockNode, puzzleContactHeatsCombat, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun, type PuzzleCheckpoint } from './puzzles';
 import { MINION_COMBAT } from './minionCombat';
 import { batchScaleOf, buildWornThrongDef, isThrongBody, THRONG_CFG, throngMarkerOf, throngSpecsOn, WORN_THRONGS, wornThrongDefOfSkillId, wornThrongSkillId, wornThrongStat, type ThrongSourceRow, type ThrongSpec } from './throng';
-import {
-  CLING_CFG, clingBurrowed, clingEligible, clingMotionShaken, clingSeatPos, clingSeatsOf, gnawTags,
-} from './cling';
+import { CLING_CFG, clingEligible, clingMotionShaken, clingSeatPos, clingSeatsOf, gnawTags } from './cling';
 import { castSealShuts, type CastSealSpec } from './castseal';
 import { syncAttributeBequests } from './bequests';
-import { STATUS_RELAYS, STATUS_RELAY_IDS, relayStatusStat } from './reception';
+import './reception'; // Preserve native registration order.
 import { TRAIL_GRANTS, POCKET_GRANTS, pocketGrantStat, trailGrantStat, placeGrantedPockets,
   POCKET_GRANT_IDS, TRAIL_GRANT_IDS, substituteThrongKind, type GrantedPocket, type TrailMemory } from './fieldgrants';
 import { LITE_CFG, LitePool, liteNoise, liteRingOffset, liteSeatHash, type LiteCond, type LiteKind, type LitePocket, type LiteRegenSpec, type LiteSwarmRow } from './lite';
@@ -354,7 +350,7 @@ import {
 import {
   MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
 } from './mounts';
-import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
+import { resolveTell, TELL_CFG } from './tells';
 import { reserveStageCue } from './reserveCues';
 import { caromCapacity, payloadTransition } from './payloadCues';
 import { buffProcCue, noteProcCue, procCueStyle } from './procCues';
@@ -369,13 +365,10 @@ import { DEFENSE_CUE_CFG } from '../data/defenseCues';
 import { speechTell, speechWindowFor, speechAvailable, type SpeechMemory } from './speech'; // THE TRANSIENT TELLING — the speech fabric's world half (residentPrompt)
 import { dwellFocus, type DwellFocus, type DwellCandidate } from './dwellFocus';
 import { SPEECH_ATTENTION_CFG, speechAttentionFor } from '../data/speechAttention';
-import { SPEECH_GRAMMAR_CFG, composeSpeech, dealSpeechDecks, hauntPhrase, makeSpeakerRow, type SpeechContext, type SpeechSpeakerRow } from './speechGrammar'; // THE SPEECH GRAMMAR — what a spoken body says (residentPrompt composes through it)
+import { SPEECH_GRAMMAR_CFG, composeSpeech, dealSpeechDecks, hauntPhrase, type SpeechContext, type SpeechSpeakerRow } from './speechGrammar'; // THE SPEECH GRAMMAR — what a spoken body says (residentPrompt composes through it)
 import '../data/speechGrammar'; // THE SPEECH GRAMMAR's corpus: registers the templates + haunt phrases on import
 import { PACK_CFG, foldPack } from './pack';
-import {
-  drainHolds, makeReserve, pipsOf, RESERVE_CFG, regenHolds, reserveCostOf,
-  reserveFrac, reserveSpent, stageAt, type ReserveSpec, type ReserveState,
-} from './reserves';
+import { drainHolds, pipsOf, RESERVE_CFG, regenHolds, reserveCostOf, reserveFrac, reserveSpent, stageAt, type ReserveSpec, type ReserveState } from './reserves';
 import { ROOTED_CFG, standsRooted } from './rooted';
 import {
   feedWatch, layTrailPoint, trailNewest, trailNext, WATCH_CFG, WATCH_RUNG,
@@ -384,7 +377,7 @@ import {
 import type { WispKindRow, WisplightSurge } from '../packages/overlays/wisplight';
 import type { DroveSurge } from '../packages/overlays/drove';
 import type { QuickeningField } from '../packages/overlays/quickening';
-import { plyCountOf, plyFloorOf } from './plies';
+import { plyFloorOf } from './plies';
 import { COURT_SHRINE_KIND } from '../data/puzzles';
 import './collapse';
 import { type CollapseField } from './collapse';
@@ -400,18 +393,15 @@ import { OMEN_CFG, collectOmens, omenLine, omenReach, type Omen } from '../world
 import { PORT_CFG } from '../data/ports';
 import { SEA_CFG } from '../data/seas';
 import { seaAt, seaById, seaSpotsNear, type Sea, type SeaPortSpot } from '../world/seas';
-import {
-  HARBORHOLD_CFG, HOLD_COMPOSITIONS, holdActiveServices, holdClassFor, holdClassOf,
-  holdRestoreCost, mintHoldState, sanitizeHoldState, type HarborholdState, type HoldClassDef,
-} from '../data/harborholds';
+import { HARBORHOLD_CFG, holdActiveServices, holdClassOf, holdRestoreCost, sanitizeHoldState, type HarborholdState, type HoldClassDef } from '../data/harborholds';
 import { holdGateApron, holdGateDoor, holdStructureIn } from '../world/harborholds';
-import {dimensionDef, dimensionBiomeAt, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT} from '../world/dimensions';
+import { dimensionDef, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
 import type { RadianceCond } from '../world/radiance';
 import '../world/radiance';
 import '../world/strata';
-import {COURSE_FIELD_SALT, courseBiomeAt, strewnInstancesNear, type CourseInstance, type CourseMintHints, type CourseSpec} from '../world/courses';
+import { type CourseInstance, type CourseMintHints, type CourseSpec } from '../world/courses';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
-import { registerGenPin } from './genPins';
+import './genPins'; // Preserve native registration order.
 import { authoredMapOf, authoredZoneSpec, definedSpec, sealAuthoredZone } from './authoredMaps'; // THE AUTHORED-MAP FABRIC
 import type { ZoneSpec } from './worldgen';
 
@@ -420,10 +410,6 @@ import type { ZoneSpec } from './worldgen';
  *  here so THE ORPHAN CENSUS (data/validate.ts) counts them as the live
  *  references they are — and READ at the sites below, so a pin can never
  *  outlive its use. */
-const HARBORCOVE_LAYOUT = registerGenPin('layout', 'harborcove', 'every sea PORT zone is carved by it');
-const OPEN_SEA_LAYOUT = registerGenPin('layout', 'open_sea', 'the sailing zone the voyage mints');
-const GLACIAL_HEART_LM = registerGenPin('landmark', 'glacial_heart', 'deepwinter grafts it onto the crystallized heart zone');
-const FROZEN_LAKE_LM = registerGenPin('landmark', 'frozen_lake', 'the pre-graft heart scar old saves already wear');
 
 /** Options for clampPos: a per-move DISPLACEMENT POLICY (lets a flicker/teleport
  *  override confinement) + an opt-in COLLISION RESULT (what stopped the move — the
@@ -457,8 +443,8 @@ import type { BrigandInfo, BrigandSurge } from '../packages/overlays/brigands';
 import type { FractureCapstone, FractureSurge } from '../packages/overlays/fractures';
 import { INCURSION_ARCHETYPES, type IncursionArchetype } from '../packages/overlays/incursion';
 import { holdfastTollCost, holdfastTollLabel, type GuardianSpec, type PocketSpec } from '../packages/holdfast';
-import {pocketFormOf, type PocketFormDef} from '../data/pocketForms';
-import { lordDef } from '../packages/lords';
+import { pocketFormOf, type PocketFormDef } from '../data/pocketForms';
+import '../packages/lords'; // Preserve native registration order.
 import { allEncounterSpecs, allFurnishSpecs, packageSeed } from '../packages/registry';
 import { CLASSIC_EXTRACT_TEMPER, ENCOUNTER_CFG } from '../packages/encounters';
 import type { BoroughSpec, ExtractDisperseSpec, ExtractSpec, ExtractTemperSpec } from '../packages/encounters';
@@ -469,21 +455,21 @@ import { noteSoulsSheltered } from '../data/boroughs';
 import { promoteNativeRarity, promoteNativeRarityStacked, promoteNativeMagicPack, refreshNativeMagicPacks,
   type NativeMonsterPromotionSources, type NativeMonsterPromotionHost } from './nativeMonsterPromotion';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
-import { magicPackPool, magicPackSize, magicPackMinimum, rollMagicPack, readMagicPack, updateMagicPacks, magicPackDeath, type MagicPackState } from './magicPacks';
-import { MAGIC_PACKS, MAGIC_PACK_CFG } from '../data/magicPacks';
+import { magicPackPool, magicPackSize, rollMagicPack, readMagicPack, magicPackDeath, type MagicPackState } from './magicPacks';
+import '../data/magicPacks'; // Preserve native registration order.
 import { encounterGroupContext, rollEncounterGroup, planEncounterGroup, applyEncounterGroup,
   clearEncounterGroup, updateEncounterGroups, readEncounterGroup, type EncounterGroupState,
   type EncounterGroupSpawnOptions } from './encounterGroups';
 import { ENCOUNTER_GROUPS, ENCOUNTER_GROUP_CFG } from '../data/encounterGroups';
 import { updateEncounterCombat } from './encounterCombat';
-import { stepMagicPackMechanics, type MagicPackVisual } from './magicPackMechanics';
+import { type MagicPackVisual } from './magicPackMechanics';
 import { Satellites } from './satellites';
 import type { CarriedEffectContext } from './carriedEffects';
 import { Auroras } from './auroras';
 import { Guardians } from './guardians';
 import { Creepers } from './creepers';
 import { SATELLITE_CFG } from './satelliteSpec';
-import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
+import '../data/monsterNames'; // Preserve native registration order.
 import type { OverlayView } from '../world/overlay';
 import { claimedZonesFromBag } from '../world/overlay';
 import {
@@ -500,7 +486,7 @@ import { WEATHER_DEFS, WET_SKY, type WeatherFront, type WeatherStrike } from '..
 import './eventWeather';
 import { WEATHER_DRESS_CFG, dressPlanFor, rollDressPieces } from './weatherDress';
 import { dayCycle, inPhases, DAY_LENGTH } from '../world/daynight';
-import { exitInside, hullOf, samplePoint, type Bounds } from '../world/shape';
+import { hullOf, samplePoint, type Bounds } from '../world/shape';
 import { isDeathAligned, factionTemper } from '../world/traits';
 import { extractionLookFor } from '../data/extraction';
 import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
@@ -591,6 +577,13 @@ import {enforceNativeArrivalGrace,nativeUberDefeated,nativeNearestZoneOf,type Na
 import {coastSeaFromNode,coastNodeFromSea,coastStreamCoast,coastMintIslandZone,coastEnsureSeaPorts,coastRefreshExitLabels,coastEventLevel,coastNotarizeRoad,coastLinkBackTo,coastRoadIsWet,coastLandRoute,coastPlaceExit,coastIsIllegalCrossDim,coastWarnCrossDim,coastDimensionBiomeFor,coastLiveCourses,coastCourseAnchor,coastFieldExitPos,coastBoundaryGateFor,coastMeldFor,type NativeSceneCoastHost,type NativeSceneCoastSources} from './nativeSceneCoast';
 import * as nativeGraph from './nativeSceneGraph';
 import type {NativeSceneGraphHost} from './nativeSceneGraph';
+import { installedNativeFactorySources, installedNativePromotionSources, installedNativePopulationSources, installedNativeHostilitySources, installedNativeRelaySources, installedNativeExitSources, installedNativeRuntimeSources, installedNativeCoastSources, installedNativeInhabitantSources, installedNativeEcologySources, installedNativeEnvironmentSources } from './nativeSceneSources';
+import { COUNT_SCALE, REF_AREA, POCKET_CFG, FIELD_PACK_AREA_CAP, monsterSkillLevelOf, rollPackSize, nativeWeightedPick } from './nativePopulationRules';
+export { monsterSkillLevelOf } from './nativePopulationRules';
+import { CONTAGION_GRAFT_KEY, NAV_CFG, PARTY_LAND_CFG, EVENT_SPACING, hashStr } from './nativeSceneConfig';
+export { NAV_CFG, PARTY_LAND_CFG, SCENERY_CFG } from './nativeSceneConfig';
+import { OPEN_SEA_LAYOUT, GLACIAL_HEART_LM, FROZEN_LAKE_LM } from './nativeSceneConfig';
+import './nativeSceneRegistration';
 
 export type { Doodad } from './levelgen';
 
@@ -837,11 +830,6 @@ function statusReqs(req: string | string[] | undefined): string[] | null {
  *  resource; the engine treats its bearer as shrouded — see ai.ts). */
 const STEALTH_CHARGE = 'stealth';
 
-/** The graft key the CONTAGION stamps on the parts it grows (the mutant
- *  strain's tentacle — Movement III): infectActorWith mints under it,
- *  the sweep's revert withers exactly it. One word, two sites. */
-const CONTAGION_GRAFT_KEY = 'contagion';
-
 /** Is the actor operating unseen — stealth charges banked or invisible? */
 function isStealthed(a: Actor): boolean {
   return isConcealed(a) || a.sheet.get('invisible') > 0;
@@ -908,17 +896,6 @@ export const RESONANCE_CFG = {
   /** THE TOLL's drawn life (seconds) — the rings expand to the lure reach. */
   tollLife: 0.9,
 };
-
-/** AMBIENT SCENERY-ACTOR tunables (World.bootScenery — ZoneDef.scenery
- *  rows: passive object-actors planted at load on their own salted
- *  stream). */
-export const SCENERY_CFG = {
-  /** Placement-stream salt over the zone seed (never moves layout rng;
-   *  distinct from PUZZLE_CFG.salt so the lanes can't shift each other). */
-  salt: 0x0f17c5,
-  /** Door clearance a planted body keeps (interactSpot's clear). */
-  portalClear: 200,
-} as const;
 
 /** DESERT HEAT tunables (World.updateScorch — THE SCORCH BAR's ambient
  *  lanes): the sunscorch cadence. ONE bar unit == ONE legacy stack, so
@@ -1009,33 +986,6 @@ export const WIND_CFG = {
    *  weight 1 (divided by effectiveWeight — poise and mass are literal
    *  anchors; a behemoth barely notices what skids a goblin). */
   pushPerSec: 24,
-};
-
-/** CONVEX-ZONE NAV tunables (World.pathField): the lazy flow-field grid raked
- *  over a plains zone's blocking doodads, so AI routes around cliff pockets
- *  and chasm lips exactly as it routes through warren walls. */
-export const NAV_CFG = {
-  /** Blocker inflation (px): paths keep a shoulder's clearance off trunks
-   *  and chasm lips. A gap the pad closes simply falls back to straight
-   *  steering (pathStep null) — clampPos stays the collision authority. */
-  pad: 10,
-};
-
-/** Tags whose bearers are AMBIENT living-world texture, streamed through zones
- *  by overlay packages — NEVER part of the zone objective, so a waves/clear
- *  zone can't soft-lock behind them. Materializers tag their spawns; a new
- *  ambient package adds its tag here. */
-/** THE STARFALL COURT's fielding knobs (materializeStarfall). The front
- *  itself is the whole gate — its strike/cadence knobs live on the weather
- *  registry row ('starfall'); these shape only what GROWS beneath it. */
-const STARFALL_CFG = {
-  faction: 'starfall',
-  heartDefId: FIXTURE_IDS.fallen_star,
-  /** Chance the shower left a standing heart worth breaking. */
-  heartChance: 0.6,
-  packCount: [2, 3] as [number, number],
-  packSize: [2, 4] as [number, number],
-  color: '#9ad4e8',
 };
 
 // THE AMBIENT-TAG VOCABULARY moved to its data home (data/monsters.ts,
@@ -2165,57 +2115,11 @@ export interface VendorHold {
 
 // --- the world ---------------------------------------------------------------
 
-// Leveling rebalance: trim per-enemy XP, lift pack count by the inverse, and
-// scale count with the (linear) span of the zone so bigger arenas hold more
-// foes while NET xp-per-zone — and thus the zones-per-level tempo — holds.
-const XP_SCALE = 0.8;
-/** BASELINE per-level monster growth (INCREASED %, applied to EVERY monster as
- *  the `level` source). One global lever; a monster tunes FURTHER per-stat via
- *  its opt-in `scaling` (StatScale). */
-const MONSTER_LEVEL_SCALE: Record<string, number> = {
-  life: 0.22, damage: 0.1, accuracy: 0.06, evasion: 0.06,
-};
-/** A monster's KIT level from its body level (the same ladder the player's
- *  gems climb): one skill level per four body levels. createMonster mints
- *  through it and relevelActor re-levels a living body's kit through it. */
-export function monsterSkillLevelOf(level: number): number {
-  return 1 + Math.floor((level - 1) / 4);
-}
-const COUNT_SCALE = 1.25;        // ≈ 1/XP_SCALE: restores net XP at the reference area
-const REF_AREA = 1900 * 1300;    // the old deepwood footprint — the rebalance anchor
-/** PURCHASED-POCKET population knobs (the "never a death trap" contract —
- *  docs/engine/pockets.md). packAreaFloor: the pack-budget area floor (vs the
- *  0.8 every other zone keeps) — a deliberately small hollow holds a genuinely
- *  small guard, and the floor exists so it still holds SOMETHING.
- *  arrivalGrace: the hostile-free ring around the one portal at fresh gen —
- *  the buyer always gets a fair landing. */
-const POCKET_CFG = { packAreaFloor: 0.3, arrivalGrace: 300 };
-const FIELD_PACK_AREA_CAP = 3.0; // Fields scale the enemy budget further with playable space
-
-/** Roll a pack SIZE from a weighted archetype spread (swarm / standard / grazing) — the
- *  per-pack variety lever (PackSpec.archetypes). Uses the same non-seeded rand as the
- *  rest of pack spawning (Zone Memory remembers the result, so determinism isn't needed). */
-function rollPackSize(archs: PackArchetype[]): number {
-  let total = 0;
-  for (const a of archs) total += a.weight;
-  let r = rand(0, total);
-  for (const a of archs) { r -= a.weight; if (r <= 0) return randInt(a.size[0], a.size[1]); }
-  const last = archs[archs.length - 1];
-  return randInt(last.size[0], last.size[1]);
-}
+// Native population tuning and selection live in nativePopulationRules.
 const WAYPOINT_CLEAR = 500;      // safe bubble cleared of enemies around a waypoint landing
-/** THE PARTY-LANDING LAW's default scatter (World.landPartyAt): how the
- *  travelling party fans out beside the hero when an arrival adjusts the
- *  party's stand after loadZone. Sites with their own flavor (the
- *  waypoint's wide ring, the quay's tight file) pass overrides — dials,
- *  never per-site copies of the loop. */
-export const PARTY_LAND_CFG = {
-  spread: 60,                            // sideways half-width of the scatter
-  band: [30, 70] as readonly [number, number], // vertical scatter band (a step below the hero)
-};
+
 // (Encounter placement chance / field cap / close-reward terms live in
 // ENCOUNTER_CFG — packages/encounters.ts — so the framework tunes as data.)
-const EVENT_SPACING = 240;       // min gap between co-occurring world-event centers (legibility)
 const FRACTURE_FOE_CAP = 24;     // max living fracture-spewed foes (perf + clearability)
 // (Dwell seconds + stand-on radii + progress-ring styles for every transit
 // family — zone exits, sidezone mouths, realm gates, doors, toll keepers,
@@ -2224,48 +2128,12 @@ const FRACTURE_FOE_CAP = 24;     // max living fracture-spewed foes (perf + clea
 // site, so a package can retune a kind with one registered row.)
 const DOOR_REACH = 26;           // how far beyond the door's own span the dwell reaches
 
-/** FNV-1a hash of a string → a stable per-zone seed offset (encounter placement). */
-function hashStr(s: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
-  return h >>> 0;
-}
-
 /** Per-fire count for an Incursion event from its CountScale × the zone's influence
  *  intensity (count = perFire × (floor + gain×intensity); ≥1 once it fires). All
  *  three knobs are archetype data — no magic curve baked into the engine. */
 function eventCount(cfg: { perFire: number; intensityFloor: number; intensityGain: number }, intensity: number): number {
   return Math.max(1, Math.round(cfg.perFire * (cfg.intensityFloor + cfg.intensityGain * intensity)));
 }
-// THE 'companionsFull' CONVERSION RULE (SkillDef.convert): a companion
-// skill whose every bond slot is HELD presses as its converted face (a
-// full Tame becomes the Whistle). Registered here because the read needs
-// world state; the registry itself is the open seam (engine/skills.ts).
-registerConvertRule('companionsFull', (caster, inst, world) =>
-  world.companionBondsOfSkill(caster, inst.def.id) >= world.companionCapOf(inst));
-// THE 'chargesEmpty' CONVERSION RULE: a use-charge skill with a DRY bank
-// presses as its converted face — the ammunition idiom (an empty scattergun
-// becomes its own reload; a restoreSkillCharges payload turns it back).
-// Graft-aware (instanceUseCharges), so a CHAMBERED cast runs dry the same
-// way. Registered beside its sibling; the registry stays the open seam.
-registerConvertRule('chargesEmpty', (caster, inst) => {
-  const uc = instanceUseCharges(inst);
-  // Empower banks never present the reload face: a dry press casts PLAIN
-  // (the hybrid family's whole point — fuel, not ammunition).
-  // (A VENT PRESS — useCharges.ventAll — never converts: dry, it spits plain.)
-  return !!uc && uc.empower === undefined && !uc.ventAll && caster.skillChargeBank(inst).count <= 0;
-});
-// THE 'seatAway' CONVERSION RULE (the possession seam, engine/possess.ts):
-// while the PRESSING BODY's seat is riding away from home, the granting gem
-// presents its ending verb — Possession becomes Relinquish, a form gem
-// becomes Return to Flesh. The gem rides the borrowed bar as the GUEST
-// SLOT (seatEmbody), so the button that began the ride ends it.
-registerConvertRule('seatAway', (caster, _inst, world) => !!world.seatOf(caster)?.home);
-
-// THE SYMPATHY FABRIC's npc read (engine/sympathy.ts stays data-registry-free
-// — the registerConvertRule pattern): a friendly body with an authored
-// npcRole counts as kin for the 'npcs' relation.
-SYMPATHY_HOOKS.isNpc = a => !!a.defId && !!MONSTERS[a.defId]?.npcRole;
 
 /** THE RENOWN GATE (run-ledger key — name flagged for her blessing pass):
  *  has THIS hero become KNOWN, by name, to the world's people? Her ruling
@@ -2358,7 +2226,6 @@ const AMALGAM_DWELL = 1.0;       // seconds lingering before a hunt is accepted
 const AMALGAM_PICK_RADIUS = 60;  // dwell range at a body-part pick spot
 const AMALGAM_PICK_DWELL = 1.0;  // seconds lingering before a part is grafted
 const AMALGAM_PICK_RING = 66;    // part-pick spots ring the Bonewright at this radius
-const AMALGAM_GRAVE_RING = 104;  // graves ring the Bonewright at this radius
 const DELVER_RADIUS = 160;       // dwell/trade range at the Delver (mirrors the smith)
 const CARAVAN_RADIUS = 160;      // dwell range at the Caravanner (opens the band menu)
 const CARAVAN_DWELL = 0.9;       // seconds lingering before the Caravan menu opens
@@ -2374,31 +2241,6 @@ const DWELL_IDLE_GRACE = 0.15;   // a dwell only builds once the player has been
                                  // clause — no cast/leap/shove still resolving), so
                                  // passing by, fighting, or a cast that outlives its
                                  // press never counts as dwelling
-// DOODAD FAMILIES (engine/doodadFamilies.ts) — the engine's own consumers
-// register the exact predicates they derive with, so reported in-place churn
-// (a drying pool's radius steps) re-derives only what it can actually touch:
-// 'nav-block' — the convex nav grid's stamped bodies (spans + move-blockers).
-//   GROUND discs are deliberately NOT members: paintNavGrounds prices them,
-//   but pricing is advisory (clampPos + groundAt stay the live truth) and
-//   adds/removes still rebuild via the length key — only a drying pool's
-//   shrink steps ride a briefly-stale price, instead of rasterizing the
-//   whole grid per step.
-// 'veil' — the canopy veil index's crown-bearing kinds.
-const FAM_NAV_BLOCK = registerDoodadFamily('nav-block', (k) => {
-  const r = doodadRuleOf(k as DoodadKind);
-  return !!r.spans || !!r.blocksMove;
-});
-const FAM_VEIL = registerDoodadFamily('veil', (k) => veilSpecOf(k as DoodadKind) != null);
-void FAM_NAV_BLOCK; void FAM_VEIL; // indices resolved by id at the key sites
-
-// THE ENTRY FREEZE (World.materializeDeepwinter) — which liquids a standing
-// frost front reads as frozen, named as GENKIT LIQUID IDS (engine/genkit.ts),
-// never as doodad kinds. These are the same registry rows the MINT-TIME
-// freeze names (layoutRecipes' `freezeAt` pours `frozenLiquid`, default
-// 'ice'), so re-registering a row moves the mint path and the entry path
-// together — and 'shallows' rides along because a ford is water too.
-const DEEPWINTER_THAWED_LIQUIDS = ['water', 'shallows'];
-const DEEPWINTER_FROZEN_LIQUID = 'ice';
 
 const CORPSE_RADIUS = 110;       // how close to your old corpse to begin reclaiming
 const CORPSE_DWELL = 1.0;        // seconds dwelling to reclaim (recovering the dead is deliberate)
@@ -8744,12 +8586,7 @@ export class World {
       dimensionBiomeFor:dimension=>world.dimensionBiomeFor(dimension),zoneMemoryFresh:id=>world.zoneMemoryFresh(id),
       fieldExitPos:exit=>world.fieldExitPos(exit),pickProcessionDest:zone=>world.pickProcessionDest(zone)};
   }
-  private nativeExitPreparationSources():NativeExitPreparationSources {
-    return {get PORTAL_EDGE_INSET(){return PORTAL_EDGE_INSET;},get MIN_PORTAL_SEP(){return MIN_PORTAL_SEP;},
-      get BIOMES(){return BIOMES;},get TILESETS(){return TILESETS;},get PROCESSION_CFG(){return PROCESSION_CFG;},
-      get isFieldPixel(){return isFieldPixel;},get exitInside(){return exitInside;},get biomeFrontierTarget(){return biomeFrontierTarget;},
-      warn:message=>console.warn(message)};
-  }
+  private nativeExitPreparationSources():NativeExitPreparationSources { return installedNativeExitSources(); }
 
   /** A FIELD zone's exit portal: march inward from the rect edge along the side's axis
    *  until the heat-map blob begins, then sit a little inside it — so the portal lands on
@@ -9059,10 +8896,7 @@ export class World {
     return nativeWildlifeTableFor(World.nativePopulationSources(), def, d => World.caveAirFor(d));
   }
 
-  /** The pool roll's identity salt (the CAVE_FACE_SALT discipline): the
-   *  draw rides its own stream derived off the zone's mint seed — nothing
-   *  shared moves, and the answer is a pure function of the def. */
-  private static readonly CAVE_POOL_SALT = 0xca9e51;
+
 
   /** THE CAVE AIR RESOLVER (the pooled-fauna fabric, data in CAVE_POOLS):
    *  which ambient repertoire a CAVE breathes, resolved from the minted def
@@ -9112,18 +8946,12 @@ export class World {
 
   /** Native providers remain lazy and live. This is an operation boundary,
    * not captured source/controller authority for detached areas. */
-  private static readonly nativeInhabitantSources: NativeInhabitantSources = {
-    get MONSTERS() { return MONSTERS; }, get FIXTURE_IDS() { return FIXTURE_IDS; }, get FACTIONS() { return FACTIONS; },
-    get RARITY_DEFS() { return RARITY_DEFS; }, get DAY_LENGTH() { return DAY_LENGTH; },
-    get vec() { return vec; }, get rand() { return rand; }, get randInt() { return randInt; },
-    get hashStr() { return hashStr; }, get withSeededRandom() { return withSeededRandom; },
-    get rollFolk() { return rollFolk; }, get makeSpeakerRow() { return makeSpeakerRow; }, get random() { return Math.random; },
-  };
+  private static readonly nativeInhabitantSources: NativeInhabitantSources = installedNativeInhabitantSources();
   /** The complete post-arrival birth operation; no extra seed scope is opened. */
   private runNativeAreaBirth(...args:NativeAreaBirthArguments):void {
     birthNativeArea(this.nativeAreaBirthHost(),...args);
   }
-  private static readonly nativeSceneEcologySources:NativeSceneEcologySources={get XP_SCALE(){return XP_SCALE;}};
+  private static readonly nativeSceneEcologySources:NativeSceneEcologySources= installedNativeEcologySources();
   private nativeSceneEcologyView?:NativeSceneEcologyHost;
   private nativeSceneEcologyHost():NativeSceneEcologyHost {
     if(this.nativeSceneEcologyView)return this.nativeSceneEcologyView;
@@ -9179,7 +9007,7 @@ export class World {
     return host;
   }
 
-  private static readonly nativeSceneEnvironmentSources:NativeSceneEnvironmentSources={get SCENERY_CFG(){return SCENERY_CFG;}};
+  private static readonly nativeSceneEnvironmentSources:NativeSceneEnvironmentSources= installedNativeEnvironmentSources();
   private nativeSceneEnvironmentView?:NativeSceneEnvironmentHost;
   private nativeSceneEnvironmentHost():NativeSceneEnvironmentHost {
    if(this.nativeSceneEnvironmentView)return this.nativeSceneEnvironmentView;
@@ -10033,15 +9861,7 @@ export class World {
   private nativeMonsterPromotionView?: NativeMonsterPromotionHost;
   private nativeMonsterPromotionSources(): NativeMonsterPromotionSources {
     if (this.nativeMonsterPromotionSourceView) return this.nativeMonsterPromotionSourceView;
-    const view: NativeMonsterPromotionSources = {
-      get RARITY_DEFS() { return RARITY_DEFS; }, get rarityMods() { return rarityMods; },
-      get MONSTER_NAME_CFG() { return MONSTER_NAME_CFG; }, get rollMonsterName() { return rollMonsterName; },
-      get MAGIC_PACKS() { return MAGIC_PACKS; }, get MAGIC_PACK_CFG() { return MAGIC_PACK_CFG; },
-      get magicPackMinimum() { return magicPackMinimum; }, get MONSTERS() { return MONSTERS; },
-      get stepMagicPackMechanics() { return stepMagicPackMechanics; }, get updateMagicPacks() { return updateMagicPacks; },
-      get SKILLS() { return SKILLS; }, get makeSkillInstance() { return makeSkillInstance; },
-      get monsterSkillLevelOf() { return monsterSkillLevelOf; }, get random() { return Math.random; },
-    };
+    const view: NativeMonsterPromotionSources = installedNativePromotionSources();
     // A cached view is not a controller dependency: its actors getter must
     // not reintroduce the intentionally excluded root census to dormancy.
     Object.defineProperty(this, 'nativeMonsterPromotionSourceView', { value: view, writable: true, configurable: true, enumerable: false });
@@ -11083,15 +10903,7 @@ export class World {
       continentFor: c => world.continentFor(c), simView: () => world.simView(),
     };
   }
-  private static nativePopulationSources(): NativePopulationSources {
-    return {
-      get FACTIONS() { return FACTIONS; }, get MONSTERS() { return MONSTERS; },
-      get WILDLIFE() { return WILDLIFE; }, get TILESETS() { return TILESETS; },
-      get CAVE_FACE_IDS() { return CAVE_FACE_IDS; }, get CAVE_POOL_CFG() { return CAVE_POOL_CFG; },
-      get CAVE_POOLS() { return CAVE_POOLS; }, get CAVE_POOL_SALT() { return World.CAVE_POOL_SALT; },
-      get Rng() { return Rng; }, get factionAllowed() { return factionAllowed; }, get presenceMul() { return presenceMul; },
-    };
-  }
+  private static nativePopulationSources(): NativePopulationSources { return installedNativePopulationSources(); }
 
   /** Snapshot for the world-sim: the node graph plus a live by-faction
    *  headcount of the enemies in THIS zone (one pass over the actor list).
@@ -18372,16 +18184,7 @@ export class World {
    *  leveled lists apply uniformly to packs, rosters, events and overlays.
    *  Omit it only for tables that genuinely have no level context. */
   private weightedPick(table: readonly PackTableEntry[], atLevel?: number): string {
-    const picks = atLevel === undefined ? table
-      : presenceTable(table, atLevel, id => MONSTERS[id]?.presence);
-    let total = 0;
-    for (const e of picks) total += e.weight;
-    let roll = rand(0, total);
-    for (const e of picks) {
-      roll -= e.weight;
-      if (roll <= 0) return e.id;
-    }
-    return picks[picks.length - 1].id;
+    return nativeWeightedPick(table, atLevel);
   }
 
   /** THE SEEDED FALLBACK — a sampler off this load's own dedicated sub-stream,
@@ -25434,38 +25237,7 @@ export class World {
    *  count) and the boss poise pool. createMonster mints through it and
    *  relevelActor re-stamps a LIVING body through it (the growing bond), so
    *  a re-leveled body and a fresh mint at that level can never drift. */
-  private nativeMonsterFactorySources(): NativeMonsterFactorySources {
-    return {
-      get Actor() { return Actor; },
-      get MONSTERS() { return MONSTERS; },
-      get vec() { return vec; },
-      get mod() { return mod; },
-      get sympathyStat() { return sympathyStat; },
-      get rand() { return rand; },
-      get tellSpecsOf() { return tellSpecsOf; },
-      get DEFENSE_CFG() { return DEFENSE_CFG; },
-      get defDensity() { return defDensity; },
-      get defBreathes() { return defBreathes; },
-      get squishSpecOf() { return squishSpecOf; },
-      get makeReserve() { return makeReserve; },
-      get rollStartTone() { return rollStartTone; },
-      get attunedStatus() { return attunedStatus; },
-      get TUNE_CFG() { return TUNE_CFG; },
-      get chance() { return chance; },
-      get rollItem() { return rollItem; },
-      get monsterTurnSpeed() { return monsterTurnSpeed; },
-      get makeSkillInstance() { return makeSkillInstance; },
-      get SKILLS() { return SKILLS; },
-      get SUPPORTS() { return SUPPORTS; },
-      get validTreeNodes() { return validTreeNodes; },
-      get CHOICE_GROUPS() { return CHOICE_GROUPS; },
-      get plyCountOf() { return plyCountOf; },
-      get MONSTER_LEVEL_SCALE() { return MONSTER_LEVEL_SCALE; },
-      get XP_SCALE() { return XP_SCALE; },
-      get monsterSkillLevelOf() { return monsterSkillLevelOf; },
-      get random() { return Math.random; },
-    };
-  }
+  private nativeMonsterFactorySources(): NativeMonsterFactorySources { return installedNativeFactorySources(); }
   private nativeMonsterFactoryHost(): NativeMonsterFactoryHost {
     const world = this;
     return {
@@ -25693,17 +25465,10 @@ export class World {
     return view;
   }
   private static nativeHostilitySources(): NativeHostilitySources {
-    return World.nativeHostilitySourceView ??= {
-      get throngTravelProtected() { return throngTravelProtected; }, get clingBurrowed() { return clingBurrowed; },
-      get normalizeBrain() { return normalizeBrain; }, get STATUS_DEFS() { return STATUS_DEFS; },
-      get factionStance() { return factionStance; }, get dist() { return dist; },
-    };
+    return World.nativeHostilitySourceView ??= installedNativeHostilitySources();
   }
   private static nativeStatusRelaySources(): NativeStatusRelaySources {
-    return World.nativeStatusRelaySourceView ??= {
-      get STATUS_RELAY_IDS() { return STATUS_RELAY_IDS; }, get STATUS_RELAYS() { return STATUS_RELAYS; },
-      get relayStatusStat() { return relayStatusStat; }, get sameStory() { return sameStory; }, get dist() { return dist; },
-    };
+    return World.nativeStatusRelaySourceView ??= installedNativeRelaySources();
   }
 
 
@@ -57715,43 +57480,7 @@ get zone(){return world.zone;},
   declare private nativeRuntimeBirthSourceView?:nativeRuntimeBirth.NativeSceneRuntimeBirthSources;
   private nativeRuntimeBirthSources():nativeRuntimeBirth.NativeSceneRuntimeBirthSources {
     if(this.nativeRuntimeBirthSourceView)return this.nativeRuntimeBirthSourceView;
-    const sources:nativeRuntimeBirth.NativeSceneRuntimeBirthSources=Object.freeze({
-      get bumpLedger():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['bumpLedger']{return bumpLedger;},
-      get vec():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['vec']{return vec;},
-      get MONSTERS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['MONSTERS']{return MONSTERS;},
-      get clamp():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['clamp']{return clamp;},
-      get FACTIONS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['FACTIONS']{return FACTIONS;},
-      get dist():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['dist']{return dist;},
-      get randInt():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['randInt']{return randInt;},
-      get rollRarity():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['rollRarity']{return rollRarity;},
-      get rand():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['rand']{return rand;},
-      get Rng():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['Rng']{return Rng;},
-      get packageSeed():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['packageSeed']{return packageSeed;},
-      get hashStr():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['hashStr']{return hashStr;},
-      get gateThroatAt():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['gateThroatAt']{return gateThroatAt;},
-      get boundaryGateOf():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['boundaryGateOf']{return boundaryGateOf;},
-      get blocksMovement():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['blocksMovement']{return blocksMovement;},
-      get AMALGAM_GRAVE_RING():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['AMALGAM_GRAVE_RING']{return AMALGAM_GRAVE_RING;},
-      get SKILLS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['SKILLS']{return SKILLS;},
-      get makeSkillInstance():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['makeSkillInstance']{return makeSkillInstance;},
-      get SUPPORTS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['SUPPORTS']{return SUPPORTS;},
-      get lordDef():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['lordDef']{return lordDef;},
-      get strainOf():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['strainOf']{return strainOf;},
-      get STATUS_DEFS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['STATUS_DEFS']{return STATUS_DEFS;},
-      get WATCH_CFG():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['WATCH_CFG']{return WATCH_CFG;},
-      get CONTAGION_GRAFT_KEY():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['CONTAGION_GRAFT_KEY']{return CONTAGION_GRAFT_KEY;},
-      get liquidOf():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['liquidOf']{return liquidOf;},
-      get DEEPWINTER_FROZEN_LIQUID():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['DEEPWINTER_FROZEN_LIQUID']{return DEEPWINTER_FROZEN_LIQUID;},
-      get DEEPWINTER_THAWED_LIQUIDS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['DEEPWINTER_THAWED_LIQUIDS']{return DEEPWINTER_THAWED_LIQUIDS;},
-      get FOG_BANKS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['FOG_BANKS']{return FOG_BANKS;},
-      get FIXTURE_IDS():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['FIXTURE_IDS']{return FIXTURE_IDS;},
-      get skyOf():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['skyOf']{return skyOf;},
-      get STARFALL_CFG():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['STARFALL_CFG']{return STARFALL_CFG;},
-      get chance():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['chance']{return chance;},
-      get clearPartScar():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['clearPartScar']{return clearPartScar;},
-      get FogField():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['FogField']{return FogField;},
-      get FOG_CFG():nativeRuntimeBirth.NativeSceneRuntimeBirthSources['FOG_CFG']{return FOG_CFG;},
-    });
+    const sources:nativeRuntimeBirth.NativeSceneRuntimeBirthSources=Object.freeze(installedNativeRuntimeSources());
     Object.defineProperty(this,'nativeRuntimeBirthSourceView',{value:sources,enumerable:false,writable:true,configurable:true});return sources;
   }
   declare private nativeSceneTerrainView?:NativeSceneTerrainHost;
@@ -57894,31 +57623,7 @@ get zone(){return world.zone;},
   private nativeSceneCoastSourceView?:NativeSceneCoastSources;
   private nativeSceneCoastSources():NativeSceneCoastSources {
     if(this.nativeSceneCoastSourceView)return this.nativeSceneCoastSourceView;
-    const sources:NativeSceneCoastSources=Object.freeze({
-      get VOYAGE_CFG():NativeSceneCoastSources['VOYAGE_CFG']{return VOYAGE_CFG;},
-      get ISLAND_FIELD():NativeSceneCoastSources['ISLAND_FIELD']{return ISLAND_FIELD;},
-      get islandsNear():NativeSceneCoastSources['islandsNear']{return islandsNear;},
-      get seaSpotsNear():NativeSceneCoastSources['seaSpotsNear']{return seaSpotsNear;},
-      get seaAt():NativeSceneCoastSources['seaAt']{return seaAt;},
-      get TILESETS():NativeSceneCoastSources['TILESETS']{return TILESETS;},
-      get SEA_CFG():NativeSceneCoastSources['SEA_CFG']{return SEA_CFG;},
-      get placeZoneAt():NativeSceneCoastSources['placeZoneAt']{return placeZoneAt;},
-      get holdClassFor():NativeSceneCoastSources['holdClassFor']{return holdClassFor;},
-      get mintHoldState():NativeSceneCoastSources['mintHoldState']{return mintHoldState;},
-      get HOLD_COMPOSITIONS():NativeSceneCoastSources['HOLD_COMPOSITIONS']{return HOLD_COMPOSITIONS;},
-      get HARBORCOVE_LAYOUT():NativeSceneCoastSources['HARBORCOVE_LAYOUT']{return HARBORCOVE_LAYOUT;},
-      get resolveEventLevel():NativeSceneCoastSources['resolveEventLevel']{return resolveEventLevel;},
-      get zoneKindOf():NativeSceneCoastSources['zoneKindOf']{return zoneKindOf;},
-      get footprintBars():NativeSceneCoastSources['footprintBars']{return footprintBars;},
-      get spacedExitAt():NativeSceneCoastSources['spacedExitAt']{return spacedExitAt;},
-      get biomeFrontierTarget():NativeSceneCoastSources['biomeFrontierTarget']{return biomeFrontierTarget;},
-      get PORTAL_RADIUS():NativeSceneCoastSources['PORTAL_RADIUS']{return PORTAL_RADIUS;},
-      get COURSE_FIELD_SALT():NativeSceneCoastSources['COURSE_FIELD_SALT']{return COURSE_FIELD_SALT;},
-      get dimensionDef():NativeSceneCoastSources['dimensionDef']{return dimensionDef;},
-      get dimensionBiomeAt():NativeSceneCoastSources['dimensionBiomeAt']{return dimensionBiomeAt;},
-      get strewnInstancesNear():NativeSceneCoastSources['strewnInstancesNear']{return strewnInstancesNear;},
-      get courseBiomeAt():NativeSceneCoastSources['courseBiomeAt']{return courseBiomeAt;},
-    });
+    const sources:NativeSceneCoastSources=Object.freeze(installedNativeCoastSources());
     Object.defineProperty(this,'nativeSceneCoastSourceView',{value:sources,enumerable:false,writable:true,configurable:true});
     return sources;
   }

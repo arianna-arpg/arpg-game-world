@@ -5,9 +5,20 @@ dialogue history. prepare returns only immutable placement hints; tickets and
 positions are not publication or terrain authority. Verify nativeareasourcesession
 (14 cold courses), resident/birth/boundary/layout probes, all types and generation.
 See docs/worldgen/native-area-source-session.md for the authoritative continuation.
-Next: real installed source bootstrap, physical admission/publication, ongoing
+NativeInstalledSources below completes source bootstrap. Next: physical admission/publication, ongoing
 event/reward ownership and persistent whole-area streaming, then native hierarchy
 and map zoom. The test adapter is not activation. Follow SeamlessOnlyContent below.
+
+NativeInstalledSources supplies complete native area sources directly from the
+installed registries. World shares eleven provider factories, native tunables
+and registrations. Preserve original lazy reads, receivers, source caching and
+registration order; nativeSceneBootstrap excludes the two World-capturing save
+roots. Verify nativeinstalledsources (original receipt and strict no-World graph),
+nativeareasourcesession, full birth, adjacent owners, all types and generation.
+See docs/worldgen/native-installed-sources.md for evidence and the next boundary:
+shared-player relay ownership, per-area traces/holds, ongoing local services,
+whole-area publication/persistence and native hierarchy/map zoom. Source loading
+alone is not full-area client activation. Follow SeamlessOnlyContent below.
 
 ExplorationPopulation fixes derived bombard census retention and settled native
 visual/AI query deadlines that prevented offscreen dormancy. Keep actual emitted

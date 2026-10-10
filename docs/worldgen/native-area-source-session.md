@@ -2,6 +2,8 @@
 
 Checkpoint: 2026-10-09, after native-area-graph-preparation.md.
 
+Follow-up: [installed native sources and standalone registration](native-installed-sources.md) implements the production source/bootstrap boundary below; ongoing activation remains unfinished.
+
 ## Final architecture
 
 Seamless is the intended sole game/content architecture. Main is the reference
