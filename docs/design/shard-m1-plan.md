@@ -572,6 +572,58 @@ The catalog stands as written in 4.2 with these corrections, each found while bu
   dormancy); the soak's pocket scenario (5.9); the waypoint is reachable only once the chart
   rides the wire (5.10).
 
+### 4.10 W4 as built (2026-10-10, branch shard-m1-muster): where the build moved off this plan
+
+Card 15 B's detail and card 25 were RULED on 2026-10-10 exactly as built (the contract is
+docs/engine/shard.md "THE MUSTER RING, THE REALM ROADS, TENANCY"):
+
+- **The muster's dials are hers.** Any member raises the ring (`MUSTER_CFG.raise` 'any', the
+  'leader' kept as a value), its radius is 400 px and its wait 20 s (4.6's 110 / 12 / 'leader'
+  were unblessed). The ring lapses when its raiser walks off it, falls or leaves the unit, or
+  when its party dissolves or its raiser leaves the party.
+- **One ring per party per unit, and a ring binds the party there.** While it stands the
+  party's members in that unit take no road of their own (the scanner builds them no travel
+  dwell): standing on it is joining it, so a member who presses the road joins it instead of
+  travelling alone. Members in another unit muster there on their own.
+- **The road makes every member's ticket.** A scanner travel road carries `make(seat)`; at the
+  fire each member on the ring gets the ticket the road makes for that member inside the unit
+  (its own door and ladder, its own escape credit), all drained in the same tick, the raiser
+  first, each later member landing `landSpreadPx` out along a golden-angle spiral from the
+  road's own landing (a function landing, resolved in the destination). Downed and dormant
+  members never block a ring.
+- **The intents stay each seat's own act** (the town portal, the caravan, the waypoint): W2
+  made each the asking seat's alone, and W4 leaves them so (a card if she wants them mustered).
+- **THE INSTANCE FORGETS needs no fresh-mint flag.** An instance pins neither the shared memory
+  map nor the world's clears (`INSTANCE_OWN_FIELDS`): its own empty copies stand in, so the
+  wake's untouched loadZone finds no shared row and mints fresh, its sleep and THE PERSIST
+  CAPTURE write nothing the world keeps, and a clear inside it stays its own (quests still
+  progress through the shared quest rows). Whether such a clear should also count for the
+  world is card 25's open row.
+- **Tenancy resolves in the registry from the pocket's own word** (`ZoneDef.tenancy`, stamped
+  at the mint from the sidezone or the arena), so every road into a party pocket (its mouth,
+  the town portal's way back, a climb-out from a deeper pocket) finds the party's instance,
+  and `liveSeed(zoneId, seatId)` answers per party. An instance hears no world sweep's zone
+  half (dispatch reaches the shared World standing there); THE OCCUPIED LAW counts it occupied.
+- **The realm context rides the first wake.** Solo writes it before loadZone because its one
+  World becomes the realm; on a hosted world the source stays awake for its other seats, and a
+  context there would shut its own gates (`maybeOpenDemonPortal` and the sanctum's twin refuse
+  while one stands), so the realm unit's World takes it at its first wake.
+- **The gate stays standing for the next seat.** 4.2 had the prep consume the source's
+  Necropolis gate, as solo does; a hosted source stays awake and `updateNecropolis` would raise
+  a new gate the next frame, so the hosted prep leaves it (solo keeps its consume).
+- **A dimension's crossing stays sealed on the Unbroken Wilds** (THE WILDS LAW: its gate zone is
+  graph ground, the keeper's surface until M6), keeping the realm word; on a classic shard the
+  gate zone wakes a unit, and the crossing's first wake is the tear's word, once per wake.
+- **The act's stamps count per crossing seat.** A co-op party crossed as one (one
+  'demon_portals_opened', one 'fracture_rifts_entered'); a hosted party crosses seat by seat,
+  each member's crossing its own act. Named for her, unruled.
+- **THE PAIR STRIDE, met at the merge** (shard-world 72da43c3 re-packed the sight memo's keys as
+  `a.id * LOS_PAIR_STRIDE + b.id`): the hand-off's prune of the leaver's sight pairs decodes by
+  `LOS_PAIR_STRIDE` now (it still split by the old 1e6 and left every pair in the source);
+  probe_shardunits D pins it.
+- **THE REALM-WALK DIGEST** (probe_shardunits B, the realm half): a seeded solo hero crosses
+  every realm gate and climbs out of each arena; committed before the split, it holds after it.
+
 ## 5. THE WIRE PER UNIT
 
 **5.1 Snapshots.** Each unit serializes its own (`serializeSnapshot(unit.world, tick)`, `net/snapshot.ts:1015`)
@@ -713,7 +765,7 @@ commit, and a merge-tree dry run against the foundation tip (charter 7c).
 | **W1 THE UNIT FABRIC** (two lanes against one contract: the `SeatPacket`, `RoadTicket`, `ShardWorldLink` and `SHARD_UNIT_FIELDS` types land first, in `src/engine/shardUnits.ts`) | W1a engine: the alias table and THE PIN, `detachSeat`/`attachSeat`, THE FILTERED HOST, THE PRIMARY GATE, the wake/sleep/capture seams, `atZone` (solo branch only). W1b host: the registry, THE SEAT LEDGER, the tick order, THE ONE CLOCK, THE UNIT WARDEN and THE UNIT SHADOW, the wire per unit, THE PERSIST CAPTURE, the desks per unit, the direct `travel` API for probes, the status page | W1a: `src/engine/shardUnits.ts` (NEW, whole); `world.ts` seams only: the `shardWorld` field, the two gated blocks (44585-44604, 44634-44893), the `createPlayer` `load` option (4776), a `shardUnitHost()` view beside the native host views, `landSeatAt`, `captureLiveMemory`, `sleepZone`, `atZone`; `engine/companionBonds.ts` (`exportBond`/`importBond`). W1b: `server/simUnits.ts` (NEW, whole), `server/shardHost.ts`, `server/shardTransport.ts`, `server/vessel.ts`, `server/corpses.ts`, `server/party.ts`, `balance/probe_shardunits.ts` (NEW: A, B, C, D, E, I), `balance/proberoster.ts`, `docs/engine/shard.md`, charter receipts | W1a ~550 lines; W1b ~900 with the probe | 7.1 A-E and I green; every shard probe green; the classic soak's p95 within 10% of today's (THE PIN must not cost) |
 | **W2 THE ROADS PER PLAYER** | THE LIFT, the shard scanner and its per-seat dwells and grace, the tickets of 4.2 (exits, frontier, climb-out, far mouth, the wilds pocket both ways, cave mouths, town portal both ways, caravan, waypoint plumbing), THE RETREAT LAW, the intents re-opened, the sealed words, the `rd` row | `world.ts`: the road block 46040-46430, `isExitLocked` 47186, `travelToWaypoint` 47229, `travelThrough` 47895 (shard branch only), `updateTownPortals` 15322, `startCaravan` 24165, `dwellRingsView` 46642; `src/engine/shardRoads.ts` (NEW); `net/intent.ts` (`waypoint`); `net/snapshot.ts` + `net/seatView.ts` (`rd`); `server/simUnits.ts` (the ticket executor's landings); `shardHost.ts:510` (the seal) | ~800 | 7.1 F and H; B's digest unchanged; the road rigs green |
 | **W3 THE WORLD SWEEP** | the SPLIT dispatch (1.6), `atZone`'s shard branch, THE OCCUPIED LAW (`presentZoneIds`, `censusByZone`), many origins for the forechart, the omens, the floating zones and the conclave level | `world.ts`: the gated blocks' interiors and the SPLIT methods (14347, 17006, 17121, 17167, 17885, 18335, 18912, 22545, 23568); `world/overlay.ts`, `engine/nativePopulationResolution.ts`, `world/invasion.ts`, `world/faction.ts`, `packages/overlays/{deadwake,contagion,conclave}.ts`; a `dispatch` method on `server/simUnits.ts` that W1 declares as a stub | ~450 | 7.1 J; the overlay probes and `npm run eventqa` |
-| **W4 THE MUSTER RING, THE REALM ROADS, TENANCY** | `MusterDesk`, the `mu` row and its painter, the realm gates' prep and first wake, the tenancy flag and instance keys, THE INSTANCE FORGETS | `server/muster.ts` (NEW), `server/simUnits.ts` (instance keys), `world.ts` realm functions (`enterDemonRealm` 16484, `enterRealmArena` 16527, `enterNecropolis` 19133, `enterCrusadeSanctum` 19176, `enterFractureRift` 12842, `enterCourtDomain` 6912, `enterDimension` 8306) split into a prep and a first wake; `data/sidezones.ts`, `data/arenas.ts` (the flag's type); `net/snapshot.ts` (`mu`); `render/renderer.ts` (the painter beside the ring pass, 4670) | ~700 | 7.1 G and the realm sections; the realm and arena rigs green |
+| **W4 THE MUSTER RING, THE REALM ROADS, TENANCY** (BUILT 2026-10-10, branch shard-m1-muster; 4.10) | `MusterDesk`, the `mu` row and its painter, the realm gates' prep and first wake, the tenancy flag and instance keys, THE INSTANCE FORGETS | `server/muster.ts` (NEW), `server/simUnits.ts` (instance keys), `world.ts` realm functions (`enterDemonRealm` 16484, `enterRealmArena` 16527, `enterNecropolis` 19133, `enterCrusadeSanctum` 19176, `enterFractureRift` 12842, `enterCourtDomain` 6912, `enterDimension` 8306) split into a prep and a first wake; `data/sidezones.ts`, `data/arenas.ts` (the flag's type); `net/snapshot.ts` (`mu`); `render/renderer.ts` (the painter beside the ring pass, 4670) | ~700 | 7.1 G and the realm sections; the realm and arena rigs green |
 
 W2 and W3 never share a `world.ts` region (the road block and its road functions versus the world
 block and its sweep methods); their only shared file is `server/simUnits.ts`, where W2 owns the ticket

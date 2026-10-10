@@ -132,7 +132,8 @@ import { MAGIC_PACK_CFG, MAGIC_PACKS } from '../data/magicPacks';
 import { drawMagicPackEffects, drawMagicPackRole } from './vis/magicPackLayer';
 import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
 import { APPARITION_ROLE, MU_CFG } from '../data/mu';
-import { HERO_NAME_CUE, PING_CUE } from '../data/identityCues';
+import { HERO_NAME_CUE, MUSTER_CUE, PING_CUE } from '../data/identityCues';
+import { musterRingIsOwn } from '../engine/shardMuster';
 import { pingEdgePoint } from '../engine/pings';
 import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
 import { contrastGuard, hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
@@ -1580,6 +1581,40 @@ export class Renderer {
   /** THE dwell progress ring — every linger-to-act draw goes through here. The
    *  style (radius/width/color/alpha) is the transit KIND's data row
    *  (data/transit.ts); a missing color tints with the zone `accent`. */
+  /** THE MUSTER RING (card 15 B, shard M1 W4; dials data/identityCues.ts MUSTER_CUE):
+   *  a party's road waiting for the party. A ring on the ground around the road:
+   *  its wash grows from the road with the gathered share (members on it out of
+   *  members standing in the unit), its rim closes as the wait runs out; her gold
+   *  for the viewer's own party, faint ether for a stranger's. Shapes only, never
+   *  a word (SHOW DON'T TELL). World space; a hosted world's rows alone. */
+  private drawMusterRings(world: World): void {
+    const rings = world.musterRings;
+    if (!rings?.length) return;
+    const { ctx } = this, cue = MUSTER_CUE;
+    ctx.save();
+    for (const r of rings) {
+      const own = musterRingIsOwn(world, r);
+      const a = own ? 1 : cue.strangerAlpha;
+      ctx.strokeStyle = ctx.fillStyle = own ? cue.inkParty : cue.inkStranger;
+      const share = r.need > 0 ? clamp(r.have / r.need, 0, 1) : 1;
+      if (share > 0) {
+        ctx.globalAlpha = a * cue.washAlpha;
+        ctx.beginPath(); ctx.arc(r.x, r.y, r.r * share, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = a * cue.baseAlpha;
+      ctx.lineWidth = cue.lineW;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2); ctx.stroke();
+      const left = r.wait > 0 ? clamp(r.left / r.wait, 0, 1) : 0;
+      if (left > 0) {
+        const breath = 1 + cue.pulse * Math.sin(world.time * cue.pulseHz * Math.PI * 2);
+        ctx.globalAlpha = clamp(a * cue.rimAlpha * breath, 0, 1);
+        ctx.lineWidth = cue.rimW;
+        ctx.beginPath(); ctx.arc(r.x, r.y, r.r, -Math.PI / 2, -Math.PI / 2 + left * Math.PI * 2); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   private drawProgressRing(x: number, y: number, frac: number, kind: string, accent = '#e8e8e8'): void {
     if (frac <= 0.02) return;
     const s = transitRing(kind);
@@ -4699,6 +4734,7 @@ export class Renderer {
     for (const ring of world.dwellRingsView()) {
       this.drawProgressRing(ring.pos.x, ring.pos.y, ring.frac, ring.kind, world.zone.theme.accent);
     }
+    this.drawMusterRings(world); // THE MUSTER RING (shard M1 W4): a party's road waiting for the party
     // MAKE LANDFALL — the landing dwell at sea: the shared ring around the boat
     // plus a shore prompt (the Voyage's exit rule). A Voyage Island names itself.
     const ndw = world.voyageLandingView();

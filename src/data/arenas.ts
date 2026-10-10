@@ -80,6 +80,10 @@ export interface ArenaSpec {
   wards?: ArenaWardSpec;
   /** A living CROWD on the arena's stands — see ArenaCrowdSpec. */
   crowd?: ArenaCrowdSpec;
+  /** TENANCY (card 25, RULED 2026-10-10): 'party' gives each party its own
+   *  instance of this realm on a hosted world (SidezoneDef.tenancy's law);
+   *  absent = 'shared'. Stamped on the minted pocket (ZoneDef.tenancy). */
+  tenancy?: 'shared' | 'party';
 }
 
 // The stock seal doodads: pure triggers (never block movement or shots), kept

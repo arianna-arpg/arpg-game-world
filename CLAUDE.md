@@ -4011,6 +4011,7 @@ we verify changes.
   mirror), a solo world is replaced only with the player's word, Leave and Exit await the
   farewell and tell the truth, and THE RETURN (card 26 B) logs a hero back in where it
   logged out. Verify `probe_sharddoor.ts`.
+  THE ONE CROSSING (`src/net/crossing.ts`, `docs/engine/shard.md`, charter §7e): a hosted world's arrival (a server-bound wake, a direct join, a reload's return) and its pocket hand-offs ride one Mu crossing cover until the hero stands on streamed ground; the wake mints its vessel on a World that loads no zone, and a wilds shell parks its runtime across pockets (THE RUNTIME SURVIVES POCKETS), keeps its explored map per account and world (THE KEPT MAP) and carves the shard's open doors into its own grid; verify `probe_shardcrossing.ts`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
   `docs/ui/folio.md`, probe `balance/probe_folio.ts`): dwell dialogs that

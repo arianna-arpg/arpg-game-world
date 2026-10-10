@@ -48,6 +48,7 @@ import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction, PlayerInput } from '../src/net/intent';
 import { massDigest } from '../src/worldmass/random';
 import { PartyDesk } from './party';
+import { MusterDesk } from './muster';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
 import { ShardTransport, type ShardJoin } from './shardTransport';
@@ -303,6 +304,8 @@ export class ShardHost {
   private readonly graces = new Map<string, number>();
   /** THE PARTY (server/party.ts). */
   readonly parties: PartyDesk;
+  /** THE MUSTER RING (server/muster.ts, M1-W4): a party's road waits for the party. */
+  readonly musters: MusterDesk;
   private partyRevSeen = -1;
   /** THE DORMANT SEAT: seat id → world time its dormancy ends (the leave path runs then). */
   private readonly dormancy = new Map<string, number>();
@@ -347,6 +350,7 @@ export class ShardHost {
       publish: (w, u) => this.publishInto(w, u),
       hearth: () => this.hearthSeat(),
       breakerTicks: () => SHARD_CFG.faultBreakerTicks,
+      instanceOf: id => this.parties.partyOf(id)?.id ?? `seat:${id}`, // TENANCY (W4): a party pocket's instance
       log: line => this.log(line),
     });
     COOP_SCALING.shareRadius = SHARD_CFG.nearRadius; // THE NEAR LAW, the shard's own
@@ -387,6 +391,11 @@ export class ShardHost {
     this.corpses = new ShardCorpses(this.units, toSeat, shardRecordsPath(recordsDir, this.seed), this.seed, this.log);
     // THE PARTY (server/party.ts, card 23): the explicit social unit; the keeper is never seated in one.
     this.parties = new PartyDesk(id => !!this.units.seatOf(id));
+    // THE MUSTER RING (card 15 B): a party's road waits at a ring; downed and dormant members never block it.
+    this.musters = new MusterDesk(this.units, this.parties, {
+      standing: seat => !seat.actor.dead && !seat.actor.downed && !this.net.isDormant(seat.id),
+      log: line => this.log(line),
+    });
     this.publishInto(this.world, this.units.keeper); // HOST class: the link, the party, the corpse marks, the timeflow policies
     this.vessels = new VesselDesk(this.units, toSeat, this.corpses, {
       beatSec: SHARD_CFG.persistSec, log: this.log,
@@ -765,9 +774,13 @@ export class ShardHost {
       enqueue: t => this.units.enqueue(t),
       dispatch: (zoneId, fn) => this.units.dispatch(zoneId, fn), // THE SPLIT DISPATCH (W3)
       worlds: () => this.units.worlds(), // THE OCCUPIED LAW's source (W3)
-      // THE ROADS PER PLAYER: an awake zone's live seed (the town portal's faded check) and THE HEARTH SEAT.
-      liveSeed: zoneId => this.units.liveSeedOf(zoneId),
+      // THE ROADS PER PLAYER: an awake zone's live seed (the town portal's faded check; a party
+      // pocket's for the asking seat's party) and THE HEARTH SEAT.
+      liveSeed: (zoneId, seatId) => this.units.liveSeedOf(zoneId, seatId),
       hearth: () => this.hearthSeat(),
+      // THE MUSTER RING (W4): a finished road offered to its party's muster, and the seats it binds.
+      muster: (seat, road) => this.musters.offer(seat, road),
+      mustering: seatId => this.musters.mustering(seatId),
     };
   }
 
@@ -833,6 +846,8 @@ export class ShardHost {
         }
       }
     }
+    // THE MUSTER RING: the rings judged after every unit ticked; a fired party's tickets join this drain.
+    try { this.musters.judge(k.time); } catch (e) { this.noteFault('the muster', e); }
     try {
       this.units.drain(); // THE HAND-OFF QUEUE: every ticket after every unit ticked
       this.parties.sweep(k.time); // THE PARTY: lapsed invites fall away
@@ -1091,6 +1106,7 @@ export class ShardHost {
           ...(until !== undefined ? { dormant: true, dormantLeftSec: +Math.max(0, until - w.time).toFixed(1) } : {}) };
       }),
       units: this.units.status(), // THE SIM UNITS: key, zone, seats, awake since, empty since
+      musters: this.musters.status(w.time), // THE MUSTER RING: each party's road waiting, its gathered share and its wait
       connections: this.net.connectionCount(),
       ticks: this.ticks,
       tickMsP50: q(0.5), tickMsP95: q(0.95),
