@@ -22065,16 +22065,18 @@ export class World {
     if (this.shardWorld?.role === 'unit') return;
     // THE CHARACTER'S QUESTS (card 24 ruled): on a hosted world every hero's own hands and
     // slate are watched, each in its own hand, wherever on the shard it stands (THE
-    // OCCUPIED LAW); a hand travels with its character, so none is ever left unheld.
+    // OCCUPIED LAW); a hand travels with its character, so none is ever left unheld. An
+    // open slate alone is watched while its reader stands at a board in its own World (the
+    // one board a slate's live repaint serves, as the solo watch reads it).
     if (this.localSeat.keeper) {
-      const heroes = this.allQuestHands().filter(s => {
-        const l = this.questLedgerOf(s);
-        return l.hands.length > 0 || l.offers.length > 0;
-      });
-      if (!heroes.length) return;
       this.bountyWatchAccum += dt;
       if (this.bountyWatchAccum < 2) return;
       this.bountyWatchAccum = 0;
+      const heroes = this.allQuestHands().filter(s => {
+        const l = this.questLedgerOf(s);
+        return l.hands.length > 0 || (l.offers.length > 0
+          && !!this.presentWorlds().find(w => w.seats.includes(s))?.nearBountyBoard(s));
+      });
       for (const s of heroes) this.withQuestHand(s, () => {
         for (const p of this.bountyHands) this.noteBountyReady(p);
         this.reconcileBounties();
@@ -25120,15 +25122,18 @@ export class World {
    *  cargo, carried in its own bag; a cargo lying on the ground stands for one
    *  owed hand (first come), and only the remainder mints, where the deed was done. */
   private ensureSeatCargo(): void {
-    const lying = new Map<string, number>();
-    for (const d of this.drops) {
-      if (d.item.kind === 'gear' && d.item.item.questId) lying.set(d.item.item.questId, (lying.get(d.item.item.questId) ?? 0) + 1);
-    }
+    let lying: Map<string, number> | null = null; // the ground's cargo, counted once a hand is owed (never per tick)
     for (const seat of this.handSeats()) {
       for (const aq of this.questLedgerOf(seat).active) {
         if (aq.placeId || !aq.fieldDone || aq.zoneId !== this.zone.id) continue;
         const q = this.withQuestHand(seat, () => this.questDefOf(aq.questId));
         if (!q?.collect || seat.meta.items.some(i => i.questId === q.id)) continue;
+        if (!lying) {
+          lying = new Map<string, number>();
+          for (const d of this.drops) {
+            if (d.item.kind === 'gear' && d.item.item.questId) lying.set(d.item.item.questId, (lying.get(d.item.item.questId) ?? 0) + 1);
+          }
+        }
         const standing = lying.get(q.id) ?? 0;
         if (standing > 0) { lying.set(q.id, standing - 1); continue; }
         const item: ItemInstance = { uid: nextItemUid(), baseId: q.collect.baseId,

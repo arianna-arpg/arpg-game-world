@@ -1,5 +1,5 @@
 import type { Actor } from './actor';
-import type { World } from './world';
+import type { Seat, World } from './world';
 import { OdysseyRisings } from './odysseyRisings';
 import { issueCommand } from './ai';
 import { angleDiff, angleTo, dist, vec } from '../core/math';
@@ -120,13 +120,23 @@ export class OdysseyRuntime {
       for (const seat of ww.seats) {
         if (seat.keeper || seat.merc) continue;
         w.withQuestHand(seat, () => {
-          this.enrollHero(s);
+          // The enrollment re-reads only when its inputs moved (the world's half, the
+          // hero's own log, the account's rescue): a per-tick walk would scan the account
+          // ledger for every hero every tick.
+          const key = this.enrollKey(s);
+          if (this.enrolled.get(seat) !== key) { this.enrollHero(s); this.enrolled.set(seat, this.enrollKey(s)); }
           for (const id of s.roster) {
             if (ww.zone.id === `quest_${odysseyQuestId(id, 'operation')}`) this.reveal(id);
           }
         });
       }
     }
+  }
+  /** The last enrollment's inputs per hero (updateHeroes). */
+  private readonly enrolled = new WeakMap<Seat, string>();
+  private enrollKey(s: OdysseyState): string {
+    const w = this.w, l = w.questLedger();
+    return `${s.prepared.length}:${s.defeated.length}:${s.surveyDone ? 1 : 0}:${l.active.length}:${l.completed.size}:${w.gateAccountOf(w.questHand()).ledger[ORACLE_RESCUED] ? 1 : 0}`;
   }
 
   /** One hero's campaign rows, in its own hand (THE CHARACTER'S QUESTS): the solo opening's
