@@ -19,10 +19,12 @@ debug snapshot only; actual loading progress may still use measured work units.
 Memory Motes, Gilded Souls and Wild Wisps share a pale Mu soul-flame silhouette.
 Their size, radiance and gentle sputter/flicker/flare convey energy without ranked
 colors or symbols. Each has additional continuous size/intensity variation. Groups
-range from quiet stretches to six independently collectible flames, with random
-kind order, uneven travel gaps and varied lane offsets. Some flood one route;
-others scatter across branches. Taking one never removes its neighbors. Wild
-Wisps gently increase the underlying pace. None has collectible value.
+range from quiet stretches to six flame choices, with random kind order, uneven
+travel gaps and varied lane offsets. Some flood one route; others scatter across
+branches. Taking the first flame in a gate interval immediately releases the
+others, which gently dissolve over 0.75 seconds and cannot be collected during
+that fade. The next interval and chevron currents remain independent. Wild Wisps
+gently increase the underlying pace. None has collectible value.
 
 Gates partition their full span into one, two or three openings, with independent
 widths and irregular solid piers instead of preset lanes or symmetric templates.
@@ -46,14 +48,16 @@ a collision briefly binds/slows the wisp and resets all acceleration and current
 Currents cannot negate an impact in the same step.
 
 Tuning lives in `SPIRIT_RUN`. The absolute speed cap is 5.4, raised 50% from 3.6.
-The original per-gate gain (0.09), Wild Wisp gain (three gate increments) and
-temporary current kick (0.8) are unchanged; the ordinary ceiling is now 4.6.
-Building to the higher ceiling takes more encounters, never faster acceleration
-per encounter. Currents still last 2.2 seconds, easing out over the final 0.45.
+The per-gate gain is 0.06, a third slower than the original 0.09; a Wild Wisp adds
+three gate increments (0.18). The ordinary ceiling stays 4.6, reached after sixty
+unboosted clear gates rather than forty. One flame choice per interval prevents
+dense clusters from stacking abrupt boosts. The temporary current kick stays 0.8;
+currents last 2.2 seconds, easing out over the final 0.45.
 Flame centers keep at least 38 travel units between them, with larger random gaps.
 These are internal parameters, never player-facing achievements. The probe drives
 complete calm-speed encounter routes with 30 Hz input, tests irregular layouts
-and speed-dependent spacing, and checks current collection, bypass, expiry/reset
+and speed-dependent spacing, one flame choice per interval, smooth release fades,
+and current collection, bypass, expiry/reset
 and peak collision behavior. Playing, idling or colliding never affects loading.
 
 The model prepares a full maximum gate interval beyond the far edge, including
