@@ -609,6 +609,24 @@ HUD's local site name reads a private runtime map the shell never fills.
      cannot lower `maxPopulation` itself because THE LAND DIGEST hashes the
      mass config. Units on worker threads (M6) is the lasting answer.
 
+     **THE EXACT SEAM (the M6 plan §3.3, 2026-10-10):** host state on the
+     runtime instance, never in the config, the land digest, the checkpoint or
+     any save: `setPopulationBudget({ total, floor } | null)` (a group's limit
+     becomes `clamp(floor, config.maxPopulation, floor(total / groups))` in both
+     branches of `populationLimit`; reservations, merges and dormancy unchanged;
+     lowering never kills; `null` restores today byte for byte, pinned in
+     `probe_worldmass_foci`) and `populationStats()` (the groups with their live
+     count and limit); optionally `setResidencyRadius(r | null)` so births stay
+     within `r` of a focus with the wake and sleep radii following (no
+     birth-then-sleep pump). The shard calls the setter from the host once a
+     second after detecting the method, so its governor runs cost-only against
+     an older foundation. Two findings beside it: the sight memo keyed pairs as
+     `a.id * 1e6 + b.id` and a long-lived shard's ids pass a million (fixed on
+     the shard lane as THE PAIR STRIDE, `probe_loskey.ts`);
+     `restoreNativeActorState` deletes every property before reassigning, which
+     likely leaves restored natives in V8's slow object mode (PLAUSIBLE, the
+     foundation's to measure).
+
    **Foundation implementation (2026-10-09):** the isolated
    `codex/shard-runtime-foundation` integration supplies simultaneous seat foci,
    connected-cluster population budgets, Node compiler ports, and seed/preset
@@ -711,6 +729,9 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
     party at a visible muster ring; two independent players in one place
     are never moved together and travel home on their own. Until THE PARTY
     (card 23) exists the roads stay sealed (C).
+    **RULED (2026-10-10, her word): B stands. She asked what the muster ring's
+    detail meant; it is the party's dwell at a road (any member raises it, 400
+    px, 20 s), and her agreement lands as built (M1-W4).**
 16. **Disconnects** — A: the hero vanishes at once (today; a disconnect is a
     free escape from death). B: the hero lies dormant N seconds and a
     reconnect token reclaims it. C: the server holds the hero until the
@@ -822,33 +843,87 @@ in Mu first.**
     finishes it for everyone). C: mixed (authored story quests per account,
     world events and sieges shared). Rec: C, which is A for every quest a
     giver hands a person and B for what the world does to itself.
+    **RULED (2026-10-10, her word): the unit is the CHARACTER, exactly as
+    single player. Each hero carries its own quest log, its own rolled board
+    postings and its own Odyssey leads; the world's consequences (the
+    Odyssey's choices, which faction fell, world events, the restock clock)
+    are the shard's and shared. Four Immortals of one account each have their
+    own quests and meet one world. Built as THE CHARACTER'S QUESTS (W9).**
 25. **POCKET TENANCY** (M1's first question) — A: shared pockets (whoever
     walks into a cave meets the same cave, her "generated for any player
     that simultaneously ran across it"). B: one instance per party.
     Rec: A by default, B by a data flag for authored dungeons and arena
     seals.
+    **RULED (2026-10-10, her word): A, with B as a data flag per pocket (M1-W4
+    builds it).**
 26. **THE RETURN** (where a hero stands after a leave) — A: always the
     hearth (today). B: where it logged out, within a radius, with a leave
     in combat going dormant like a dropped socket (W3 builds the dormant
     half either way). Rec: B.
+    **RULED (2026-10-10, her word): B, and stronger: a hero logs back in where
+    it logged out, and that is the ONLY behaviour; there is no choice between
+    a hearth and a logout spot. The hearth stays a new hero's first wake and
+    the wake after a death. W7 builds it.**
 27. **THE SPOILS' OWNER** (card 23 said per player; the sweep found the
     ground is first-come) — A: strictly per player, forever. B: per player
     with a free-for-all after a timeout. C: A plus a deliberate give or
     trade lane. Rec: A now (the honest floor), C as its own pass; B only
     if you want shared pickup at all.
+    **RULED (2026-10-10, her word): A as the default, with the FOUNDATION for
+    B: a party may set its own drop rule, owner first and free for all after a
+    timeout. Built as THE SPOILS' OWNER (W10).**
 28. **THE BLEED-OUT** (a grouped mortal's down) — A: no timer; a downed
     grouped hero waits for a mate as long as the party stands. B: a
     bleed-out of N seconds after which the covenant falls, reset by a
     kneel. Rec: B at 60 s.
+    **RULED (2026-10-10, her word): B at 60 s, reset by a kneel; no holding a
+    downed player hostage. W8b ships `VESSEL_CFG.bleedOutSec` at 60.**
 29. **THE SHELF PER BUYER** — A: one world shelf rolled at the keeper's
     level (today, §5). B: the shelf rolls per buyer's level. Rec: hold A;
     revisit with M2's account gate.
+    **RULED (2026-10-10, her word): toward B as accounts diverge: the shelf
+    rolls per buyer (per character) from the shared restock clock, at the
+    buyer's level and gates, the way Path of Exile's vendors are each player's
+    own. Built as THE SHELF PER BUYER (W9).**
 30. **THE IMMORTAL'S OWN COVENANT ON A SHARD** — today an Immortal cannot
     die on a shard: a stage that does not end the run never meets the
     covenant and the mercy stands it up. A: the stage's own death policy
     runs on the server and mirrors home (a Sworn stage advances, an
     Undying falls with its frozen fee, the corpse by the stage's rule).
     B: leave Immortals deathless on shards. Rec: A.
+    **RULED (2026-10-10, her word): A. Built as THE IMMORTAL'S COVENANT ON A
+    SHARD (W10).**
+31. **THE M6 ORDER** (the M6 plan `docs/design/shard-m6-plan.md` §6,
+    2026-10-10: units and islands across cores) — A: W0 (the one-thread diet:
+    the profile, the phase meter, THE THINKING EDGE, local rosters if the
+    profile points at the whole-roster scans) and W1 (THE GOVERNOR over the
+    foundation's budget seam) now, W2 (THE GLASS UNIT: pockets that speak only
+    in messages, still one thread) and W3 (THE THREAD HOST) once the
+    foundation commits to the island runtime. B: all four now. C: W0 and W1,
+    then decide from the profile and the player counts she expects. Rec: A.
+32. **THE GOVERNOR'S NUMBERS** — the per-group floor (Rec: 24, today's
+    delivered least); whether the tick may drop to 40 Hz under the heaviest
+    load (the wire stays 20 Hz; 30 Hz would halve it); whether THE DOOR (new
+    joins held at the lobby under overload) exists at all. Rec: 24, 40 Hz
+    allowed, no door until a real host is measured.
+33. **THE HARDWARE** — threads need cores and the codespace has two. Rec: a 4
+    to 8 core host before W3 lands; W0 and W1 run anywhere.
+34. **A WORKER'S DEATH** — A: its players wake at the hearth from their last
+    mirror (up to `persistSec` 20 s of progress lost). B: a seat checkpoint
+    beat (2 s, a few kB a seat). Rec: B.
+35. **ONE CLOCK** — A: lockstep across threads, every thread stepping the same
+    tick with the same start time and inputClock, so the slowest thread sets
+    the shard's tick. B: a clock per thread with a rebase law at every
+    hand-off. Rec: A.
+36. **THE ISLAND SEPARATION** — islands split where no player can see across
+    (about 3,200 px: the 1,600 px awake radius plus the view) with hysteresis;
+    a merge costs a short hold (up to about 100 ms) for the merging players
+    only; THE NEAR LAW (1,600 px) and the group merge (2,600 px) never cross
+    an island by arithmetic. Rec: as stated; the number is unblessed.
+37. **THE TRAVELLING COURT** — A: exact capture of every carried body on a
+    cross-thread hand-off (the couch guest's build plus live state, the court
+    captured exactly). B: timed summons re-minted at their life fraction. Rec:
+    A.
 
 ---
 
