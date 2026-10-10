@@ -4,12 +4,13 @@ import { Rng } from '../core/rng';
 export type SpiritDirection = 'down' | 'right' | 'left';
 export const SPIRIT_RUN = Object.freeze({
   length: 1000, halfWidth: 280, playerU: 230, radius: 15,
-  baseSpeed: 210, speedPerGate: 0.09, maxSpeed: 2.8,
-  steerSpeed: 490, gateGapMin: 114, gateGapMax: 238,
-  gateRim: 24, gateThickness: 22, gateSpacing: 480,
-  choiceStagger: 70, pickupRadius: 12, pickupFade: 0.28,
+  baseSpeed: 210, speedPerGate: 0.09, maxSpeed: 4.6,
+  steerSpeed: 490, gateGapMin: 68, gateGapMax: 250,
+  gateRim: 24, gateThickness: 22, gateSpacingMin: 620, gateSpacingMax: 820,
+  gateSpacingTightMin: 340, gateSpacingTightMax: 440, routeMargin: 38,
+  maxPickups: 6, pickupStagger: 38, pickupGateMargin: 72, pickupRadius: 12, pickupFade: 0.28,
   currentHalfLength: 30, currentHalfWidth: 12, currentExtra: 0.8,
-  currentSeconds: 2.2, currentEase: 0.45, maxBoostSpeed: 3.6,
+  currentSeconds: 2.2, currentEase: 0.45, maxBoostSpeed: 5.4,
   burstSeconds: 0.75, maxBursts: 18, surgeSeconds: 1.2,
   hinderSeconds: 0.7, hinderSpeed: 0.36, entrySeconds: 0.7,
 });
@@ -21,14 +22,12 @@ export const SPIRIT_PICKUPS = {
 } as const;
 export const SPIRIT_CURRENT_COLOR = '#b6fff0';
 export type SpiritPickupKind = keyof typeof SPIRIT_PICKUPS;
-const SPIRIT_CHOICES: readonly (readonly [SpiritPickupKind, SpiritPickupKind])[] = [
-  ['mote', 'gilded'], ['mote', 'wild'], ['gilded', 'wild'],
-];
+const SPIRIT_KINDS = Object.keys(SPIRIT_PICKUPS) as SpiritPickupKind[];
 export interface SpiritOpening { lane: number; width: number }
-export interface SpiritGate { id: number; u: number; openings: SpiritOpening[]; resolved: boolean; hit: boolean }
+export interface SpiritGate { id: number; u: number; spacing: number; openings: SpiritOpening[]; resolved: boolean; hit: boolean }
 export interface SpiritPickup {
-  id: number; choice: number; u: number; lane: number; kind: SpiritPickupKind;
-  state: 'live' | 'taken' | 'released'; fade: number;
+  id: number; gate: number; u: number; lane: number; kind: SpiritPickupKind; flame: number;
+  state: 'live' | 'taken'; fade: number;
 }
 export interface SpiritCurrent {
   id: number; gate: number; placement: 'opening' | 'between'; u: number; lane: number; taken: boolean; fade: number;
@@ -70,6 +69,7 @@ export class SpiritRun {
   private nextId = 1;
   private untilGate = 0;
   private previous: SpiritOpening[] = [{ lane: 0, width: SPIRIT_RUN.gateGapMax }];
+  private upcoming?: { openings: SpiritOpening[]; spacing: number };
   constructor(readonly direction: SpiritDirection, private random: () => number = spiritRandom()) { this.spawn(); }
   get speed(): number {
     const c = SPIRIT_RUN, pace = Math.min(c.maxSpeed, 1 + (this.streak + this.boostGates) * c.speedPerGate);
@@ -77,47 +77,86 @@ export class SpiritRun {
   }
   get playerU(): number { return SPIRIT_RUN.playerU * Math.min(1, this.time / SPIRIT_RUN.entrySeconds); }
   private pick<T>(values: readonly T[]): T { return values[Math.min(values.length - 1, Math.floor(this.random() * values.length))]; }
+  private between(low: number, high: number): number { return low + this.random() * (high - low); }
+  private plan(): { openings: SpiritOpening[]; spacing: number } {
+    const c = SPIRIT_RUN, roll = this.random(), count = roll < 0.34 ? 1 : roll < 0.7 ? 2 : 3;
+    // Partition the whole gate, with no fixed lanes or symmetric templates.
+    // Independent widths share only the physical space left after the solid rims.
+    const widths = Array.from({ length: count }, () => c.gateGapMin + this.random() ** 1.5 * (c.gateGapMax - c.gateGapMin));
+    const extra = widths.reduce((sum, width) => sum + width - c.gateGapMin, 0);
+    const budget = c.halfWidth * 2 - (count + 1) * c.gateRim - count * c.gateGapMin;
+    if (extra > budget) for (let i = 0; i < count; i++) widths[i] = c.gateGapMin + (widths[i] - c.gateGapMin) * budget / extra;
+    const free = Math.max(0, c.halfWidth * 2 - widths.reduce((sum, width) => sum + width, 0) - (count + 1) * c.gateRim);
+    const weights = Array.from({ length: count + 1 }, () => 0.025 + this.random() ** 3);
+    const total = weights.reduce((sum, weight) => sum + weight, 0);
+    let edge = -c.halfWidth;
+    const openings = widths.map((width, i) => {
+      edge += c.gateRim + free * weights[i] / total;
+      const opening = { lane: edge + width / 2, width }; edge += width; return opening;
+    });
+    // Sample the next gap once. Existing gates never jump when pace changes.
+    // At the ceiling, short gaps and extreme lane changes may be impossible;
+    // this is a rewardless pastime, not a course the player has to complete.
+    const pace = clamp((this.speed - 1) / (c.maxBoostSpeed - 1), 0, 1);
+    const spacing = this.between(c.gateSpacingMin + (c.gateSpacingTightMin - c.gateSpacingMin) * pace,
+      c.gateSpacingMax + (c.gateSpacingTightMax - c.gateSpacingMax) * pace);
+    return { openings, spacing };
+  }
   private spawn(): void {
-    const c = SPIRIT_RUN, roll = this.random(), count = roll < 0.4 ? 1 : roll < 0.78 ? 2 : 3;
-    const drift = (this.random() * 2 - 1) * (count === 1 ? 55 : count === 2 ? 30 : 10);
-    const centers = count === 1 ? [0] : count === 2 ? [-130, 130] : [-175, 0, 175];
-    const maximum = count === 1 ? c.gateGapMax : count === 2 ? 180 : 136;
-    const openings = centers.map(lane => ({ lane: lane + drift,
-      width: c.gateGapMin + this.random() * (maximum - c.gateGapMin) }));
-    const id = this.nextId++, u = c.length + 60;
-    this.gates.push({ id, u, openings, resolved: false, hit: false });
-    // Every aperture has an incoming and outgoing route within 240 lane units.
-    // At the boosted cap the clear-to-clear steering budget is over 277 units.
+    const c = SPIRIT_RUN, { openings, spacing } = this.upcoming ?? this.plan();
+    // Carry substep overshoot into the new gate so actual spacing matches its plan.
+    const id = this.nextId++, u = c.length + 60 + this.untilGate;
+    this.gates.push({ id, u, spacing, openings, resolved: false, hit: false });
     const to = this.pick(openings).lane, from = nearest(this.previous, to).lane;
+    const route = (along: number, start: number, end: number, clustered: boolean, bend: number): number => {
+      const bounds = (speed: number): [number, number] => {
+        const reach = (distance: number): number => (distance - c.radius - c.gateThickness / 2 - c.routeMargin)
+          * c.steerSpeed / (c.baseSpeed * speed);
+        return [Math.max(-c.halfWidth + c.radius, start - reach(along), end - reach(spacing - along)),
+          Math.min(c.halfWidth - c.radius, start + reach(along), end + reach(spacing - along))];
+      };
+      let [low, high] = bounds(this.speed);
+      // Keep a complete calm-speed route even when the current pace is too wild
+      // for it. Collecting flames at high speed is a choice, never a guarantee.
+      if (low > high) [low, high] = bounds(1);
+      return clustered ? clamp(start + (end - start) * along / spacing + bend + this.between(-14, 14), low, high)
+        : this.between(low, high);
+    };
     const currentRoll = this.random();
     const current = (lane: number, at: number, placement: SpiritCurrent['placement']): void => {
       this.currents.push({ id: id * 3 + this.currents.filter(b => b.gate === id).length,
         gate: id, placement, lane, u: at, taken: false, fade: 0 });
     };
-    if (currentRoll < 0.32) {
-      const first = this.pick(openings); current(first.lane, u, 'opening');
-      if (openings.length > 1 && this.random() < 0.22)
-        current(this.pick(openings.filter(o => o !== first)).lane, u, 'opening');
+    // Narrow slots stay precise without forcing a speed boost on the player.
+    const currentHoles = openings.filter(o => o.width / 2 - c.radius > c.currentHalfWidth + c.radius + 10);
+    if (currentRoll < 0.32 && currentHoles.length) {
+      const first = this.pick(currentHoles); current(first.lane, u, 'opening');
+      if (currentHoles.length > 1 && this.random() < 0.28)
+        current(this.pick(currentHoles.filter(o => o !== first)).lane, u, 'opening');
     }
     if (currentRoll >= 0.32 && currentRoll < 0.54) {
-      current((from + to) / 2, u - c.gateSpacing / 2, 'between');
-    } else {
-      const pair = this.pick(SPIRIT_CHOICES);
-      pair.forEach((kind, i) => {
-        const along = c.gateSpacing / 2 + (i ? 1 : -1) * c.choiceStagger;
-        // Fit each staggered encounter to a complete route. The margin also
-        // covers one 30 Hz control frame after clearing the preceding gate.
-        const reach = (distance: number): number => (distance - c.radius - c.gateThickness / 2 - 18)
-          * c.steerSpeed / (c.baseSpeed * c.maxBoostSpeed);
-        const low = Math.max(from - reach(along), to - reach(c.gateSpacing - along));
-        const high = Math.min(from + reach(along), to + reach(c.gateSpacing - along));
-        const bend = (i ? -1 : 1) * (25 + this.random() * 20);
-        const lane = clamp(from + (to - from) * along / c.gateSpacing + bend, low, high);
-        this.pickups.push({ id: id * 2 + i, choice: id, u: u - c.gateSpacing + along,
-          lane, kind, state: 'live', fade: 0 });
-      });
+      const along = spacing * this.between(0.35, 0.65);
+      current(route(along, from, to, false, 0), u - spacing + along, 'between');
     }
-    this.previous = openings; this.untilGate += c.gateSpacing;
+    const pace = clamp((this.speed - 1) / (c.maxBoostSpeed - 1), 0, 1);
+    const density = this.between(0.2 * (1 - pace), 1);
+    const count = density < 0.1 ? 0 : density < 0.25 ? 1 : density < 0.45 ? 2
+      : density < 0.64 ? 3 : density < 0.8 ? 4 : density < 0.91 ? 5 : c.maxPickups;
+    const clustered = this.random() < 0.55, bend = this.between(-35, 35);
+    // Random gaps plus a small minimum stagger avoid adjacent pairs or regular
+    // bead strings. Some groups flood one route; others scatter across branches.
+    const slack = spacing - c.pickupGateMargin * 2 - Math.max(0, count - 1) * c.pickupStagger;
+    const offsets = Array.from({ length: count }, () => this.random() * slack).sort((a, b) => a - b);
+    offsets.forEach((offset, i) => {
+      const along = c.pickupGateMargin + offset + i * c.pickupStagger;
+      const end = clustered ? to : this.pick(openings).lane;
+      const start = clustered ? from : nearest(this.previous, end).lane;
+      const lane = route(along, start, end, clustered, bend), at = u - spacing + along;
+      if (this.currents.some(b => b.gate === id && Math.hypot(b.u - at, b.lane - lane) < 62)) return;
+      this.pickups.push({ id: id * c.maxPickups + i, gate: id, u: at, lane,
+        kind: this.pick(SPIRIT_KINDS), flame: this.between(0.82, 1.18), state: 'live', fade: 0 });
+    });
+    this.previous = openings; this.upcoming = this.plan(); this.untilGate += this.upcoming.spacing;
   }
   private burst(kind: SpiritBurst['kind']): void {
     this.bursts.push({ u: this.playerU, lane: this.lane, kind, age: 0 });
@@ -140,7 +179,6 @@ export class SpiritRun {
       this.distance += travel; this.untilGate -= travel;
       for (const burst of this.bursts) { burst.age += dt; burst.u -= travel * 0.28; }
       this.bursts = this.bursts.filter(b => b.age < c.burstSeconds);
-      if (this.untilGate <= 0) this.spawn();
       for (const gate of this.gates) {
         gate.u -= travel;
         if (gate.resolved) continue;
@@ -161,9 +199,7 @@ export class SpiritRun {
         const def = SPIRIT_PICKUPS[pickup.kind]; this.collected++; this.boostGates += def.boostGates;
         if (def.boostGates) this.surge = c.surgeSeconds;
         this.burst(pickup.kind);
-        for (const sibling of this.pickups) if (sibling.choice === pickup.choice) {
-          sibling.state = sibling === pickup ? 'taken' : 'released'; sibling.fade = 0;
-        }
+        pickup.state = 'taken'; pickup.fade = 0;
       }
       for (const current of this.currents) {
         current.u -= travel;
@@ -173,6 +209,7 @@ export class SpiritRun {
           || Math.abs(current.lane - this.lane) > c.currentHalfWidth + c.radius) continue;
         current.taken = true; this.currentsTaken++; this.dash = c.currentSeconds; this.burst('current');
       }
+      if (this.untilGate <= 0) this.spawn();
       this.gates = this.gates.filter(g => g.u > -80);
       this.pickups = this.pickups.filter(p => p.u > -80 && (p.state === 'live' || p.fade < c.pickupFade));
       this.currents = this.currents.filter(b => b.u > -80 && (!b.taken || b.fade < c.pickupFade));
