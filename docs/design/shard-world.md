@@ -973,6 +973,10 @@ in Mu first.**
     DIGEST). Owed to M2: every gate (trade, wares, quality, lock and rush
     rungs, the support share) reads ONE resolver, `World.gateAccountOf`,
     which answers the shard's open account until the account gate re-points it.
+    **M2 NOTE (W9, 2026-10-10):** the restock clock stays ONE shared beat as
+    she ruled; a buyer's own rush rungs cannot hasten it on a shard until M2
+    decides whether rungs read per account (`World.gateAccountOf` is the one
+    seam to re-point).
 30. **THE IMMORTAL'S OWN COVENANT ON A SHARD** — today an Immortal cannot
     die on a shard: a stage that does not end the run never meets the
     covenant and the mercy stands it up. A: the stage's own death policy
@@ -1012,6 +1016,38 @@ in Mu first.**
     cross-thread hand-off (the couch guest's build plus live state, the court
     captured exactly). B: timed summons re-minted at their life fraction. Rec:
     A.
+38. **THE RELEASE FROM A WORLD** (W7's finding, 2026-10-10) — a hero bound to
+    a world that is gone for good (a deleted codespace) has no road back to
+    solo play: a bound save only ever returns. A: a deliberate "release this
+    hero from its world" act on the roster card (clears `CharacterSave.shard`
+    and `stand` after one confirm; the hero stands in Lastlight as a solo
+    save). B: leave it bound; a new hero is the road. Rec: A.
+39. **THE SERVER-HELD MIRROR** (W7's finding) — a closed tab cannot hear its
+    last mirror, so up to one beat (20 s) of progress is lost. A: the shard
+    keeps each hero's latest mirror and hands it back at the next login (bends
+    card 6: the hero is the client's). B: keep card 6 whole; THE UNLOAD GRACE
+    and Exit's farewell already bound the loss. Rec: B now, A folded into M2's
+    account gate when the server holds the account anyway.
+40. **THE BOUND HERO AT ANOTHER DOOR** (W7's finding) — the lobby's
+    lone-vessel read takes a hero bound to another world into this one without
+    a word (its binding moves with it). A: refuse until the player confirms,
+    the solo guard's own shape ("this hero stands in <world>; travel
+    anyway?"). B: silent, as today. Rec: A.
+41. **EXIT'S FAREWELL CAP** (W7's dial) — `WS_TRANSPORT_CFG.farewellMs` is
+    1,500 ms today: Exit waits that long for the farewell mirror's ack before
+    it reads "quiet"; THE UNLOAD GRACE is `SHARD_CFG.unloadGraceSec` 15 s.
+    Rec: as set; both numbers are unblessed.
+42. **WHICH POCKETS ARE INSTANCED** (card 25's first question, M1-W4) — the
+    `tenancy: 'party'` flag exists on sidezone defs, arena specs and pocket
+    ZoneDefs and nothing carries it yet. A: the arena boss courts and the
+    Odyssey's authored set-piece maps (card 25's own words: authored dungeons
+    and arena seals). B: nothing; every pocket shared. C: a wider list she
+    names. Rec: A.
+43. **AN INSTANCE'S CLEAR AND THE WORLD** (card 25's second question) — a
+    party's instance keeps its own clears and never counts for the world's. A:
+    keep it the instance's own (one party can never clear a shared place for
+    everyone). B: an instance's clear also stamps the world's clears (about
+    ten lines in the registry). Rec: A.
 
 ---
 
@@ -1142,6 +1178,7 @@ ruled it the same day (`docs/engine/shard.md`, THE FRONT DOOR and THE RETURN;
 | A4 | (found by W8a's browser walk) A door the shard opened before a join is shut in the shell's walk: the shell lays its settlement with the doors closed, applyZone adopts each door's open flag, so the snapshot's idempotent door sync never repaints the grid. A login after the Waking House door was pushed met it shut in prediction. | W8a: BUILT, THE SHARD'S OPEN DOORS (the surface zone message carves them into the shell's own grid; probe_shardcrossing G). |
 | A5 | (found by W8a) After THE RETURN in place, `leave()`'s farewell never hears the hero's last mirror (resumeInPlace's handler dispatches only while `this.ws` is its socket, and `leave()` nulls it first), so the socket stays open the whole `farewellMs` and a quick re-join meanwhile is refused as the hero's twin. | W7: BUILT 2026-10-10. The farewell rides whichever socket stands (THE RETURN's resumed one included) and the mirror's ack closes it; THE COMPLETED LEAVE resolves the farewell only once the socket has closed (the shard runs the leave before it answers the close), so a re-join right after it is a fresh seat; and the shard's belt finishes a said leave whose close it never heard before the same hero's return (probe_sharddoor F). |
 | A6 | (found by W8a) A pocket on a wilds shell keeps `arena.boundless` from the surface (the zone message ships no boundless flag), so a cave draws as streamed ground with no border and the camera never clamps to it. | W8a: BUILT 2026-10-10, THE ZONE'S OWN BOUNDS: the zone message states its arena's `boundless` (absent = bounded) and every client's zone handling sets it from that word, so a pocket reads bounded (the clamp, the camera and the floor) and the surface boundless again on the climb-out; probe_shardcrossing D. |
+| A7 | (found by W7's browser check; predates the shard, since the foresight painter of 2026-08-19) A hosted or co-op client's game loop dies the first time an enemy casts in view: `renderer.ts` drawActor's foresight calls `instanceDelivery` on the client's cast stub, whose def carries no delivery. | W11 THE FORESIGHT ON THE WIRE: in flight 2026-10-10 (`src/engine/foresight.ts` pure geometry on both sides, `CastW.fg` from the host, the painter never resolves a stub; plus W9's `vd` skipped-beat carry and W6's hit tint). |
 
 What W7's build found beyond the audit (for her word where marked):
 
