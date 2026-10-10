@@ -85,8 +85,11 @@ export type SessionMsg =
   | { t: 'leaving'; unload?: boolean }
   // THE PARTY (docs/design/shard-world.md card 23 — net/partyWire.ts): a client's word to its
   // party desk (client→host), an invite landing on its target, and a refusal's one line.
+  // THE PARTY THAT READS: an invite names the inviter's party only when it stands (an
+  // ungrouped inviter's party founds on the accept) and carries `until`, the world time it
+  // lapses, so the client drops it then.
   | { t: 'party'; op: import('./partyWire').PartyOp; seat?: PlayerId }
-  | { t: 'partyInvite'; from: PlayerId; name: string; party: string }
+  | { t: 'partyInvite'; from: PlayerId; name: string; party?: string; until: number }
   | { t: 'partyWord'; word: string }
   // THE ACTING SEAT (a refused hero, shard→a seat): the shard would not seat the
   // vessel this join carried, and never seats a fresh hero in its place. `mu`:

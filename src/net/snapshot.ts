@@ -78,6 +78,7 @@ import { GRAB_VERB_LABEL } from '../engine/grab';
 import { tellSpecsOf } from '../engine/tells';
 import { fellProgress } from '../engine/rampage';
 import { watchRungOf, watchValueOf } from '../engine/watch';
+import { reviveRowOf } from './partyReads'; // THE PARTY THAT READS: the revive row (SeatW.rv)
 import { gaugeFloor, gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE WIRE'S EYES: the bar's gauge rows
 import { COOP_SCALING } from '../data/coop'; // THE WIRE'S EYES: the zone rows' reach (THE NEAR LAW's radius)
 import { applyCounterRows, applyCounterZone, counterZoneOf, harvestRowOf, journalRowOf, type HarvestW, type JournalW } from './journalWire'; // THE COUNTERS AND THE JOURNAL
@@ -403,6 +404,11 @@ export interface SeatW {
    *  the host is filling for this seat, [x, y, fill 0..1 (floored, 2dp), transit kind], so its
    *  client draws the ring the host fills (World.netRoadDwell); absent = none. Hosted worlds alone. */
   rd?: [number, number, number, string];
+  /** THE PARTY THAT READS, THE OWN ENTRY (net/partyReads.ts reviveRowOf): the down this seat
+   *  reads (its own while downed, else the body in its revive reach, else a mate's down its
+   *  standing holds) with the kneel's fill, THE BLEED-OUT's seconds and THE WIPE RADIUS; the
+   *  client's World.netRevive. Absent = none. Hosted worlds alone. */
+  rv?: import('./partyWire').ReviveW;
   /** Movement-PREDICTION fields: `seq` = the last input the host applied for this
    *  seat (the client replays its unacked inputs forward from `pos`); `rooted` =
    *  the host has this hero movement-locked (so the client stops predicting forward);
@@ -1382,6 +1388,8 @@ function ownRoadOf(s: Seat, world: World): { rd?: [number, number, number, strin
   const rd = world.shardWorld ? roadDwellRow(world, s) : undefined;
   return rd ? { rd } : {};
 }
+/** THE PARTY THAT READS: the revive row (SeatW.rv) rides THE OWN ENTRY too (its own statement). */
+(SEAT_OWN_ROWS as (keyof SeatW)[]).push('rv');
 let ownEntrySeq = 0;
 
 /** A seat entry with every own row struck (another seat's view of it). */
@@ -1590,6 +1598,8 @@ function seatW(s: Seat, world: World): SeatW {
   if (world.time - a.lastMoveAt <= HONEST_INPUT_CFG.walkRowSec) row.spd = Math.round(a.walkSpeed() * 1000) / 1000;
   const trc = a.walkTraction();
   if (row.spd !== undefined && trc < 1) row.trc = Math.round(trc * 1000) / 1000; // THE HONEST INPUT: the traction under it (absent = firm)
+  const rv = reviveRowOf(world, s); // THE PARTY THAT READS: SeatW.rv, the revive row (hosted worlds alone), THE OWN ENTRY
+  if (rv) row.rv = rv;
   return row;
 }
 
