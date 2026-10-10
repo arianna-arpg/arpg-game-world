@@ -283,6 +283,7 @@ player's body to a zone's edge; 0 = `COOP_SCALING.shareRadius`, the shard's
 fly-on past the newest snapshot); `FLOAT_OWNER_CFG.mode` 'all' (world/bulletins.ts, the
 default under `Settings.floatOwners`).
 THE COUNTERS AND THE JOURNAL: `JOURNAL_WIRE_CFG` (src/net/journalWire.ts): `everySnapshots` 10 (snapshots between a seat's journal recomputes; its own act recomputes at once), `beat` 30 (an unchanged journal re-ships every 1.5 s), `harvestReach` 240 (px from a seat to a standing node for its rite row), `boardReach` 360 (px from a seat to a board for the board's view to ride its journal), `emptyBeats` 2 (beats an emptied journal still rides); `COUNTER_FEATURES` (the station features a shell reads off the zone message).
+THE ONE CROSSING: `CROSSING_CFG.handoffGraceMs` 250 (src/net/crossing.ts: the last frame a hand-off holds before the crossing's screen rises); `WILDS_CLIENT_CFG.coverRing` 1 (pages around the hero's own the cover waits for), `keepEveryFrames` 7200 (THE KEPT MAP's idle beat while the survey grows), `keepMaxPages` 4096 (src/net/wildsClient.ts).
 
 ## THE SOAK — load and endurance
 
