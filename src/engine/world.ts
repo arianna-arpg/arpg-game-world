@@ -6,7 +6,7 @@ import { nativeRelayStatus, type NativeStatusRelaySources, type NativeStatusRela
 import { createNativeMonster, stampNativeMonsterLevel, armNativeMonsterAmbush, type NativeMonsterFactoryHost, type NativeMonsterFactorySources } from './nativeMonsterFactory';
 import { nativeSimView, nativeBaseTable, nativeEffectiveSpawn, nativeWildlifeTableFor, nativeCaveAirFor, nativeVerminPressure, type NativePopulationHost, type NativePopulationSources } from './nativePopulationResolution';
 import './nativePlacement';
-import { type NativePlacementHost } from './nativePlacement';
+import { nativeFarPoint, type NativePlacementHost } from './nativePlacement';
 import { nativeExitRoadAnnotations, nativeProcessionDestination, separateNativeExits, type NativeExitPreparationHost, type NativeExitPreparationSources } from './nativeExitPreparation';
 import { spawnNativeEncounterGroup, type NativeEncounterGroupHost } from './nativeEncounterGroup';
 import './nativeNavigation';
@@ -588,7 +588,8 @@ import { encounterBirthPlaceEncounters, encounterBirthEventDensityFor, encounter
 import { descentPlaceDescentDelver, descentMintDelverStock, descentEnterDescentZone, type NativeSceneDescentHost } from './nativeSceneDescent';
 
 import { harborHoldStateFor, harborBootQuay, harborBootHarborhold, harborResealDoor, harborRefreshHoldDress, harborHoldDressSpotOk, harborRefreshHoldServices, harborArmPortMercs, harborLandPartyAt, type NativeSceneHarborHost } from './nativeSceneHarbor';
-import type { ShardUnitHost, ShardWorldLink } from './shardUnits'; // THE SIM UNITS (shard M1)
+import type { RoadTicket, ShardUnitHost, ShardWorldLink } from './shardUnits'; // THE SIM UNITS (shard M1)
+import { ladderOfSpot, scanShardRoads, seatDoorOf, seatLadderOf, shardSpotOf, type CaveMouthRow, type RealmGateRow, type SealedRoadKind, type ShardRoadHost } from './shardRoads'; // THE ROADS PER PLAYER (shard M1 W2)
 
 import { nativeTheaterContextNow, nativeTheaterConcurrencyNow, nativeTheaterRunBeat, nativeTheaterPourRoom, nativeTheaterSpawn, nativeSpawnEventActor, nativeClampNear, nativeAnyAliveWithTag, nativeZoneEntryPos, type NativeSceneTheaterHost } from './nativeSceneTheater';
 import {nativeSkyFront,nativeRadiance,nativeRadianceCondHeld,type NativeSceneSkyHost} from './nativeSceneSky';
@@ -1884,6 +1885,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     // group's def id (untrusted — the recall re-resolves both in-seat).
     case 'recallMemory': return isIdx(a.uid) && isStr(a.dropper) && (a.facet === undefined || isStr(a.facet));
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
+    case 'waypoint': return isStr(a.zoneId); // THE ROADS PER PLAYER: a zone id (travelToWaypoint re-judges the attuned set)
     case 'harborChart': return isStr(a.omen); // the rumored seat's omen id
     // THE BOUNTY BOARD: posting ids are untrusted strings — every handler
     // re-resolves them against the live slate/hands and no-ops on a miss.
@@ -9907,6 +9909,26 @@ export class World {
     return host;
   }
 
+  private shardRoadView?: ShardRoadHost;
+  /** THE ROADS PER PLAYER's host view (shard M1 W2): the private reaches the
+   *  shard scanner (engine/shardRoads.ts) needs, beside shardUnitHost. */
+  shardRoadHost(): ShardRoadHost {
+    if (this.shardRoadView) return this.shardRoadView;
+    const world = this;
+    const host: ShardRoadHost = {
+      get caveEntrances() { return world.caveEntrances; },
+      get caveStack() { return world.caveStack; },
+      get currentZoneSeed() { return world.currentZoneSeed; },
+      mouthRoad: (seat, cm) => world.shardMouthRoad(seat, cm),
+      exitRoad: (seat, e) => world.shardExitRoad(seat, e),
+      breakArenaSeal: seal => world.breakArenaSeal(seal),
+      failNote: (a, key, msg) => world.failNote(a, key, msg),
+      sealedRoadUnder: seat => world.sealedRoadUnder(seat),
+    };
+    Object.defineProperty(this, 'shardRoadView', { value: host, writable: true, configurable: true, enumerable: false });
+    return host;
+  }
+
   /** Shove freshly-generated hostiles off a pocket's entry ring
    *  (POCKET_CFG.arrivalGrace): outward along their own bearing when the
    *  ground allows, else to the farthest stand. The samplers (spawnPoint /
@@ -15429,7 +15451,8 @@ export class World {
 
   castTownPortal(seat: Seat = this.localSeat): boolean {
     const reason = this.townPortalRefusal(seat);
-    if (reason) { this.text(seat.actor.pos, reason, TOWN_PORTAL_CFG.color, 13); return false; }
+    // THE ACTING SEAT (shard M1 W2, the intent re-opened): the refusal is the asking seat's own line.
+    if (reason) { this.seatNote(seat, seat.actor.pos, reason, TOWN_PORTAL_CFG.color, 13); return false; }
     if (seat.actor.casting) return false;
     return this.useSkill(seat.actor, makeSkillGem(SKILLS[TOWN_PORTAL_CFG.skillId], 1, 'common'), seat.actor.pos, true);
   }
@@ -15437,7 +15460,9 @@ export class World {
   /** Invoked by the utility skill's effect, after its ordinary cast completes. */
   private openTownPortal(seat: Seat): void {
     if (this.townPortalRefusal(seat)) return;
-    const origin = this.serializeWorldState().player;
+    // THE ROADS PER PLAYER (shard M1 W2): a hosted world's origin is the seat's
+    // own spot (its zone, its ladder, its door), never the unit's warden's.
+    const origin = this.shardWorld ? shardSpotOf(this, seat) : this.serializeWorldState().player;
     if (!origin) return;
     delete origin.vitals; // travelling never rolls back healing, costs or damage
     const at = seat.actor.pos;
@@ -15446,7 +15471,7 @@ export class World {
     const sourcePos = this.findFreeSpot(vec(at.x + TOWN_PORTAL_CFG.spawnOffset, at.y), 18, seat.actor.tier ?? 0);
     this.townPortals = this.townPortals.filter(p => p.owner !== seat.id);
     this.townPortals.push({ owner: seat.id, origin, originTier: seat.actor.tier ?? 0, sourcePos,
-      sourceEntryFrom: this.entryFrom ?? undefined, sourceSeed: this.currentZoneSeed, destination: this.townPortalDestination ?? TOWN_PORTAL_CFG.destination, returning: false });
+      sourceEntryFrom: (this.shardWorld ? seatDoorOf(this, seat) : this.entryFrom) ?? undefined, sourceSeed: this.currentZoneSeed, destination: this.townPortalDestination ?? TOWN_PORTAL_CFG.destination, returning: false });
     this.townPortalDwell.delete(seat.id);
     this.townPortalArrival.delete(seat.id);
     this.text(sourcePos, 'Town Portal', TOWN_PORTAL_CFG.color, 14);
@@ -15484,20 +15509,52 @@ export class World {
       const dwell = (this.townPortalDwell.get(seat.id) ?? 0) + dt;
       this.townPortalDwell.set(seat.id, dwell);
       if (dwell < TOWN_PORTAL_CFG.dwellSeconds) continue;
-      this.townPortalDwell.clear();
+      // THE ROADS PER PLAYER (shard M1 W2): on a hosted world the portal moves
+      // its owner alone, so the other seats' dwells stand.
+      if (this.shardWorld) this.townPortalDwell.delete(seat.id); else this.townPortalDwell.clear();
       if (p.returning) {
         const source = p.origin.cave?.zoneId ?? p.origin.zoneId;
-        if (this.zoneMemory.get(source)?.seed !== p.sourceSeed) {
+        // An awake source's seed is its live unit's (its stored row is stale until it sleeps).
+        if ((this.shardWorld?.liveSeed?.(source) ?? this.zoneMemory.get(source)?.seed) !== p.sourceSeed
+          || (this.shardWorld && !this.zoneMap[source] && !this.caveMap[source])) {
           this.townPortals = this.townPortals.filter(q => q !== p);
           this.notice('The old return passage has faded.', TOWN_PORTAL_CFG.color, 14, 'world');
           continue;
         }
         if (TOWN_PORTAL_CFG.consumeOnReturn) this.townPortals = this.townPortals.filter(q => q !== p);
         else p.returning = false;
+        if (this.shardWorld) {
+          // The way back: the source's own unit at the portal's spot, down the
+          // saved descent when it was cast below ground (the ladder rides the ticket).
+          const spot = p.origin.cave ?? p.origin, rungs = p.origin.cave?.rungs;
+          this.shardWorld.enqueue({ seatId: seat.id, dest: source, ladder: ladderOfSpot(p.origin),
+            from: rungs?.length ? rungs[rungs.length - 1].zoneId : p.sourceEntryFrom ?? null,
+            landing: { at: { x: spot.x, y: spot.y }, tier: p.originTier } });
+          this.townPortalArrival.add(seat.id); // step clear before another dwell (it travels with the seat)
+          continue; // the unit's other seats keep their frame
+        }
         this.resumeSpawn('exact', p.origin, p.sourceEntryFrom);
         const spot = p.origin.cave ?? p.origin;
         if (this.zone.id === source) this.landPartyAt(vec(spot.x, spot.y), { tier: p.originTier });
       } else {
+        if (this.shardWorld) {
+          // THE HEARTH ALIAS: the destination is the keeper's; the landing
+          // resolves there (its waypoint, else THE HEARTH SEAT), where the
+          // return portal stands.
+          this.shardWorld.enqueue({ seatId: seat.id, dest: p.destination, from: null,
+            landing: dw => {
+              const anchor = dw.waypointPos ?? dw.shardWorld?.hearth?.() ?? dw.player.pos;
+              p.destinationPos = dw.findFreeSpot(vec(anchor.x + TOWN_PORTAL_CFG.arrivalOffset.x,
+                anchor.y + TOWN_PORTAL_CFG.arrivalOffset.y), 18, 0);
+              p.returning = true;
+              // THE WILDS LAW: the settlement is the surface, so the return passage
+              // stands in the zone the seat landed in (the hearth's id never names it).
+              if (dw.massRuntime) p.destination = dw.zone.id;
+              return { at: { x: p.destinationPos.x, y: p.destinationPos.y } };
+            } });
+          this.townPortalArrival.add(seat.id); // step clear before another dwell (it travels with the seat)
+          continue; // the unit's other seats keep their frame
+        }
         this.loadZone(p.destination);
         const anchor = this.waypointPos ?? this.player.pos;
         p.destinationPos = this.findFreeSpot(vec(anchor.x + TOWN_PORTAL_CFG.arrivalOffset.x,
@@ -24472,6 +24529,14 @@ export class World {
     if (!this.caravanBandUnlocked(band)) return false;
     const destId = band === 0 ? START_ZONE : this.mintCaravanRoute(band);
     if (this.zone.id === destId) return false; // already there
+    // THE ROADS PER PLAYER (shard M1 W2): on a hosted world the escort carries
+    // the asking seat alone (the route minted here, in its own unit); band 0
+    // lands in the keeper (THE HEARTH ALIAS).
+    if (this.shardWorld) {
+      if (seat.actor.dead || seat.actor.downed) return false;
+      this.shardWorld.enqueue({ seatId: seat.id, dest: destId, from: this.zone.id, landing: 'entry' });
+      return true;
+    }
     this.loadZone(destId, this.zone.id);
     return true;
   }
@@ -26621,7 +26686,8 @@ export class World {
       // snapshot reconciles, reverting anything the host rejected.
       this.clientActionHook(action);
       // EXCEPT zone-changing actions: caravanTo runs a full loadZone (heavy regen,
-      // and the client would mint with its OWN seed → a divergent flicker),
+      // and the client would mint with its OWN seed → a divergent flicker; the
+      // waypoint likewise, and its client lane would ask again),
       // vocationQuest MINTS a quest zone into the world map, and harborChart
       // runs a SURVEY PULSE (mints + reveals graph ground). Forward only; the
       // host's authoritative snapshot/zone broadcast moves the client.
@@ -26630,7 +26696,7 @@ export class World {
       // The bounty intents likewise: accepting lifts veils + redraws exit
       // labels, and the slate is host-armed — forward only; the snapshot
       // moves the client.
-      if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'questAccept' && action.t !== 'questReward' && action.t !== 'harborChart'
+      if (action.t !== 'caravanTo' && action.t !== 'waypoint' && action.t !== 'vocationQuest' && action.t !== 'questAccept' && action.t !== 'questReward' && action.t !== 'harborChart'
         && action.t !== 'holdMuster' && action.t !== 'holdRestore'
         && action.t !== 'bountyAccept' && action.t !== 'bountyAbandon' && action.t !== 'bountyTurnIn'
         && action.t !== 'bountyLock' && action.t !== 'bountyCoastWrits'
@@ -26708,6 +26774,7 @@ export class World {
       case 'swapSkillSlots': this.swapSkillSlots(action.a, action.b, seat); break;
       case 'recallMemory': this.recallMemory(seat, action.uid, action.dropper, action.facet); break;
       case 'caravanTo': this.startCaravan(action.band, seat); break;
+      case 'waypoint': this.travelToWaypoint(action.zoneId, seat); break; // THE ROADS PER PLAYER (shard M1 W2)
       case 'harborChart': this.buyHarborChart(action.omen, seat); break;
       case 'bountyAccept': this.acceptBounty(action.id, seat); break;
       case 'bountyAbandon': this.abandonBounty(action.id, seat); break;
@@ -46445,51 +46512,24 @@ export class World {
     // indoorsOnly kinds (the cellar hatch) also demand the player stand under
     // the SAME ROOF as the mouth — nobody dwells a hatch through a house wall.
     if (!this.player.dead && !this.player.downed && !this.traversal) {
-      // Player-side roof resolved ONCE per frame; each mouth carries its own
-      // precomputed home roof (loadZone) — the indoors gate is two compares.
-      const playerRoof = this.caveEntrances.some(c => c.roof !== undefined && c.roof !== null)
-        ? this.roofedStructureAt(this.player.pos) : null;
-      const onMouth = (cm: { pos: Vec2; kind: string; roof?: PlacedStructure | null; mouthTier?: number }): boolean =>
-        dist(this.player.pos, cm.pos) <= transitRadius(`sidezone:${cm.kind}`, 28) + this.player.radius
-        // THE STORY GATE (mouthTier — the under-tier lanes): a mouth dwells
-        // only from ITS OWN story. A taproot gate seated down in the root
-        // galleries never triggers under a surface walker crossing the duct
-        // line above it — and a surface mouth never triggers under a duct
-        // runner passing beneath it (drawn == dwelled, both directions).
-        && (cm.mouthTier ?? 0) === (this.player.tier ?? 0)
-        && (!sidezoneOf(cm.kind)?.indoorsOnly || (!!cm.roof && cm.roof === playerRoof))
-        // THE CONDITIONED DOOR (SidezoneDef.when — the lair fabric's night
-        // barrow): a closed door never starts the dwell. The refusal READ
-        // lives below the mouth scan, so the schedule is never a mystery.
-        && (!sidezoneOf(cm.kind)?.when || this.radianceCondHeld(sidezoneOf(cm.kind)!.when!.cond))
-        // THE SEALED MOUTH (SidezoneDef.sealedBy — the exhumation law,
-        // data/lonecrypt.ts): a riddle-sealed door never starts the dwell
-        // either; its refusal rides the same float below.
-        && !this.sidezoneSealHolds(cm.kind)
-        && this.dwellReachable(this.player.pos, cm.pos, transitReach(`sidezone:${cm.kind}`), this.storyPair(this.player, { tier: cm.mouthTier }));
+      // THE LIFT (shard M1 W2): the mouth scan is mouthUnder, shared with the
+      // shard scanner (engine/shardRoads.ts), which reads each seat's body.
+      const mouthIdx = this.mouthUnder(this.player);
       if (this.caveExitGrace) {
-        if (!this.caveEntrances.some(onMouth)) this.caveExitGrace = false;
+        if (mouthIdx < 0) this.caveExitGrace = false;
         this.caveDwellIdx = -1;
       } else {
-        let mouthIdx = -1;
-        for (let i = 0; i < this.caveEntrances.length; i++) { if (onMouth(this.caveEntrances[i])) { mouthIdx = i; break; } }
         // THE CONDITIONED DOOR's refusal read: standing on a door whose cond
         // does NOT hold floats its schedule (throttled) — a closed barrow
         // tells you it is closed, and roughly when it will not be. A SEALED
         // mouth (sealedBy — the exhumation law) floats its own line through
-        // the same clock: the shut door names the ring that opens it.
-        if (mouthIdx < 0 && this.time - this.doorRefusalAt > 2.5) {
-          for (const cm of this.caveEntrances) {
-            const sz = sidezoneOf(cm.kind);
-            const condShut = !!sz?.when && !this.radianceCondHeld(sz.when.cond);
-            const sealShut = !condShut && this.sidezoneSealHolds(cm.kind);
-            if (!condShut && !sealShut) continue;
-            if (dist(this.player.pos, cm.pos) > transitRadius(`sidezone:${cm.kind}`, 28) + this.player.radius) continue;
+        // the same clock: the shut door names the ring that opens it. A
+        // hosted world speaks it per seat instead (the scanner's note row).
+        if (!this.shardWorld && mouthIdx < 0 && this.time - this.doorRefusalAt > 2.5) {
+          const shut = this.mouthRefusalUnder(this.player);
+          if (shut) {
             this.doorRefusalAt = this.time;
-            this.text(vec(cm.pos.x, cm.pos.y - 26),
-              (condShut ? sz!.when!.refusal : sz!.sealedBy!.refusal) ?? 'the door does not answer…',
-              '#b8a8d8', 12);
-            break;
+            this.text(vec(shut.pos.x, shut.pos.y - 26), shut.text, '#b8a8d8', 12);
           }
         }
         // Dwell builds only while standing idle AND not being knocked (a knockback
@@ -46627,77 +46667,10 @@ export class World {
         // never yanks you into a realm without meaning to (mirrors the portal + cave
         // dwell; a knockback onto a gate can't carry you in either). Gather the open
         // gates with their enter actions and dwell on the NEAREST one you stand on.
-        const gates: { pos: Vec2; kind: string; key: string; enter: () => void }[] = [];
-        // The Underworld BREACH (bottom of the cave ladder) is a realm gate too.
-        if (this.breachPos) {
-          // Which dimension does a cave breach tear into? Whatever REGISTERED a
-          // cave_breach entry (data) — first registrant today; a weighted roll
-          // when a second breach-entered layer ever ships.
-          const bd = dimensionsEnteredBy('cave_breach')[0];
-          if (bd) gates.push({ pos: this.breachPos, kind: 'breach', key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id) });
-        }
-        // DIMENSION GATE DOODADS (DimensionEntry.gateDoodad, scanned per
-        // loadZone): the Ascent's shining arch — dwell it to cross into its
-        // dimension. Radius/dwell ride per-kind transit rows like every gate
-        // ('realm_gate:dim_<id>' chains to the 'realm_gate' family).
-        for (const g of this.dimGates) {
-          gates.push({
-            pos: g.pos, kind: `dim_${g.dimId}`, key: `dim:${g.dimId}:${Math.round(g.pos.x)},${Math.round(g.pos.y)}`,
-            // A gate may RIDE a registered traversal (DimensionEntry.traversal):
-            // the crossing plays the cinematic and the dimension swap fires
-            // behind its veil (the geyser-mouth pattern) — the ascendant arch
-            // launches you again, steadier. No row = the old instant cross.
-            enter: () => {
-              const trav = dimensionDef(g.dimId).entry?.traversal;
-              if (trav) this.beginTraversal(trav, { swap: () => this.enterDimension(g.dimId) });
-              else this.enterDimension(g.dimId);
-            },
-          });
-        }
-        for (const dp of this.demonPortals) gates.push({ pos: dp.pos, kind: 'demon', key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
-        for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
-        for (const np of this.necropolisPortals) gates.push({ pos: np.pos, kind: 'necropolis', key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
-        for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, kind: 'fracture', key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr) });
-        // COURT DOORS (encounter fabric): the fed breach's standing way into
-        // its lord's domain — the same deliberate dwell as every threshold
-        // (its 'realm_gate:<gateKind>' transit row sets the feel).
-        for (const e of this.encounters) {
-          if (e.phase !== 'door' || !e.doorAt) continue;
-          const at = e.doorAt;
-          gates.push({
-            pos: at, kind: e.def.court?.door?.gateKind ?? 'court',
-            key: `court:${e.def.id}:${e.lordId ?? ''}`,
-            enter: () => this.enterCourtDomain(e),
-          });
-        }
-        // THE WRAITHSAIL at sea: cross her under sail — nose into her shadow
-        // and hold fast to BOARD. The boarding is a realm gate like any other
-        // threshold (its 'realm_gate:wraithsail' transit row sizes the
-        // hull-wide reach); interceptRadius gates the listing so the dwell
-        // only ever arms on a genuine crossing.
-        if (this.sailing) {
-          const wf = this.sim.wraithsailField;
-          const ship = wf?.shipInfo();
-          if (wf && ship && wf.boardable()) {
-            const boat = this.nodeFromSea(this.player.pos);
-            if (Math.hypot(ship.x - boat.x, ship.y - boat.y) <= wf.surge().interceptRadius) {
-              gates.push({
-                pos: this.seaFromNode({ x: ship.x, y: ship.y }), kind: 'wraithsail',
-                key: `wraithsail:${ship.id}`,
-                enter: () => this.beginWraithsailBoarding(),
-              });
-            }
-          }
-        }
-        // Radius + dwell are per-KIND transit rows ('realm_gate:demon' chains to
-        // the 'realm_gate' family) — a heavier gate can ask a longer, wider linger
-        // with one data row.
-        let onGate: { pos: Vec2; kind: string; key: string; enter: () => void } | null = null, bestGD = Infinity;
-        for (const g of gates) {
-          const d = dist(this.player.pos, g.pos);
-          if (d <= transitRadius(`realm_gate:${g.kind}`, 32) + this.player.radius && d < bestGD
-            && this.dwellReachable(this.player.pos, g.pos, transitReach(`realm_gate:${g.kind}`), this.storyPair(this.player))) { bestGD = d; onGate = g; }
-        }
+        // THE LIFT (shard M1 W2): the gate list is realmGates and the nearest
+        // gate under a body gateUnder, shared with the shard scanner.
+        const gates = this.realmGates();
+        const onGate = this.gateUnder(this.player, gates);
         if (onGate && this.playerIdle() && !this.player.push) {
           if (this.realmDwellKey !== onGate.key) {
             this.realmDwellKey = onGate.key; this.realmDwellKind = onGate.kind;
@@ -46715,12 +46688,7 @@ export class World {
         // deliberate linger as every transit; the 'ward_seal' transit row sets
         // the feel. Breaking the last seal manifests the warded boss.
         if (this.arenaWard) {
-          let onSeal: Doodad | null = null, sealD = Infinity;
-          for (const s of this.arenaWard.seals) {
-            const d = dist(this.player.pos, s.pos);
-            if (d <= transitRadius(`ward_seal:${s.kind}`, 30) + this.player.radius && d < sealD
-              && this.dwellReachable(this.player.pos, s.pos, transitReach(`ward_seal:${s.kind}`), this.storyPair(this.player, s))) { sealD = d; onSeal = s; }
-          }
+          const onSeal = this.wardSealUnder(this.player); // THE LIFT (shard M1 W2)
           if (onSeal && this.playerIdle() && !this.player.push) {
             if (this.wardDwellSeal !== onSeal) { this.wardDwellSeal = onSeal; this.wardDwellStart = this.time; }
             if (this.time - this.wardDwellStart >= transitDwell(`ward_seal:${onSeal.kind}`)) {
@@ -46738,9 +46706,8 @@ export class World {
         // ONLY when you step out of the ring (one parley per approach — a refused
         // toll or acting beside the keeper never re-prompts; the Dwell-gate
         // discipline, hand-rolled for the ring).
-        const keeper = this.holdfastKeeper();
-        const nearKeeper = !!keeper && dist(this.player.pos, keeper.pos) <= transitRadius('holdfast', 78)
-          && this.dwellReachable(this.player.pos, keeper.pos, transitReach('holdfast'), this.storyPair(this.player, keeper));
+        const keeper = this.holdfastNear(this.player); // THE LIFT (shard M1 W2): the keeper when near, else null
+        const nearKeeper = !!keeper;
         if (!nearKeeper) {
           this.holdfastDwellKey = ''; // stepped out of the ring → re-arm
         } else if (this.holdfastDwellKey !== 'done') {
@@ -46786,37 +46753,13 @@ export class World {
     // a boundary no longer yanks you to the next zone (crossing a boundary should
     // never punish you). Sealed exits still nag; the minions follow on travel.
     if (!this.player.dead && !this.player.downed) {
-      // Pick the NEAREST unlocked portal the player is standing within (not the
-      // first in array order) — so even an overlapping/hand-authored portal pair
-      // each stays reachable (you step through whichever you're closer to). The
-      // placement-time spacing makes overlaps not happen; this is belt-and-suspenders.
-      let onExit: ZoneExit | null = null, bestD = Infinity;
-      let lockedExit: ZoneExit | null = null, lockedD = Infinity;
-      for (const e of this.exits) {
-        const d = dist(this.player.pos, e.pos);
-        if (d > e.radius) continue;
-        if (!this.dwellReachable(this.player.pos, e.pos,
-          transitReach(e.boundary ? `zone_exit:${e.boundary}` : 'zone_exit'), this.storyPair(this.player))) continue;
-        if (this.isExitLocked(e)) { if (d < lockedD) { lockedD = d; lockedExit = e; } continue; }
-        if (d < bestD) { bestD = d; onExit = e; }
-      }
-      if (!onExit && lockedExit && this.lockHint <= 0) {
+      // THE LIFT (shard M1 W2): the exit scan is exitUnder and the lock's own
+      // word exitLockHint, shared with the shard scanner (each seat's own door).
+      const { onExit, lockedExit } = this.exitUnder(this.player);
+      if (!this.shardWorld && !onExit && lockedExit && this.lockHint <= 0) {
         this.lockHint = 1.5;
-        // A HOLDFAST exit shows its guardian's bespoke hint (a toll, not the
-        // objective); a road held by a living EVENT names its holder instead.
-        const led = this.zone.exits[lockedExit.defIndex];
-        const gdef = led?.lock && this.holdfastSite ? this.sim.holdfastField?.def(this.holdfastSite.defId) : null;
-        const eb = led && led.to !== '?' ? edgeBlockAt(this, this.zone.id, led.to) : null;
-        // The harborhold causeway names its own ask (break the siege / raise
-        // the ruin) — the quay beyond is the hold's reward, and the door
-        // says so (HARBORHOLD_CFG.quay.lockHint).
-        const holdHint = led?.lock === 'harborhold' && this.zone.harborhold
-          ? (this.zone.harborhold.state === 'fallen'
-            ? HARBORHOLD_CFG.quay.lockHint.fallen : HARBORHOLD_CFG.quay.lockHint.besieged)
-          : null;
-        this.text(vec(lockedExit.pos.x, lockedExit.pos.y - 40),
-          eb ? eb.reason : holdHint ?? (gdef ? gdef.sealedHint : 'sealed — finish the objective'),
-          eb?.color ?? '#d05050', 13);
+        const hint = this.exitLockHint(lockedExit);
+        this.text(vec(lockedExit.pos.x, lockedExit.pos.y - 40), hint.text, hint.color, 13);
       }
       // Dwell builds only while standing idle AND not being KNOCKED — a knockback
       // onto a portal must never carry you off (it's not your intent). A live
@@ -46833,6 +46776,225 @@ export class World {
         this.exitDwellIdx = -1; // stepped off / acting / knocked → the dwell resets
       }
     }
+    // THE ROADS PER PLAYER (shard M1 W2): on a hosted world every standing
+    // seat's roads are judged with its own body and leave as tickets
+    // (engine/shardRoads.ts); the block above reads only the parked warden.
+    if (this.shardWorld) scanShardRoads(this);
+  }
+
+  // ---- THE LIFT (shard M1 W2, THE ROADS PER PLAYER) ------------------------
+  // The road scans of update()'s road block as named methods: the solo block
+  // calls them with the local hero (same order, same reads, same bytes: the
+  // road-walk digests of probe_shardunits B pin it) and the shard scanner
+  // (engine/shardRoads.ts) with each seat's own body, so drawn == dwelt for
+  // every player of a hosted world.
+
+  /** THE LIFT: does body `a` stand on mouth `cm`? `roof` is the body's own
+   *  roof, resolved once per scan (each mouth carries its precomputed home
+   *  roof from loadZone, so the indoors gate is two compares). */
+  private onMouth(a: Actor, cm: CaveMouthRow, roof: PlacedStructure | null): boolean {
+    return dist(a.pos, cm.pos) <= transitRadius(`sidezone:${cm.kind}`, 28) + a.radius
+      // THE STORY GATE (mouthTier — the under-tier lanes): a mouth dwells
+      // only from ITS OWN story. A taproot gate seated down in the root
+      // galleries never triggers under a surface walker crossing the duct
+      // line above it — and a surface mouth never triggers under a duct
+      // runner passing beneath it (drawn == dwelled, both directions).
+      && (cm.mouthTier ?? 0) === (a.tier ?? 0)
+      && (!sidezoneOf(cm.kind)?.indoorsOnly || (!!cm.roof && cm.roof === roof))
+      // THE CONDITIONED DOOR (SidezoneDef.when — the lair fabric's night
+      // barrow): a closed door never starts the dwell. The refusal READ
+      // (mouthRefusalUnder) lives beside the scan, so the schedule is never a mystery.
+      && (!sidezoneOf(cm.kind)?.when || this.radianceCondHeld(sidezoneOf(cm.kind)!.when!.cond))
+      // THE SEALED MOUTH (SidezoneDef.sealedBy — the exhumation law,
+      // data/lonecrypt.ts): a riddle-sealed door never starts the dwell
+      // either; its refusal rides the same read.
+      && !this.sidezoneSealHolds(cm.kind)
+      && this.dwellReachable(a.pos, cm.pos, transitReach(`sidezone:${cm.kind}`), this.storyPair(a, { tier: cm.mouthTier }));
+  }
+
+  /** THE LIFT: the first mouth body `a` stands on (the entrances' order), or -1. */
+  mouthUnder(a: Actor): number {
+    const roof = this.caveEntrances.some(c => c.roof !== undefined && c.roof !== null) ? this.roofedStructureAt(a.pos) : null;
+    for (let i = 0; i < this.caveEntrances.length; i++) if (this.onMouth(a, this.caveEntrances[i], roof)) return i;
+    return -1;
+  }
+
+  /** THE LIFT: the conditioned door or the sealed mouth body `a` stands
+   *  within (the first shut one), with its own refusal words, or null. */
+  mouthRefusalUnder(a: Actor): { pos: Vec2; text: string } | null {
+    for (const cm of this.caveEntrances) {
+      const sz = sidezoneOf(cm.kind);
+      const condShut = !!sz?.when && !this.radianceCondHeld(sz.when.cond);
+      const sealShut = !condShut && this.sidezoneSealHolds(cm.kind);
+      if (!condShut && !sealShut) continue;
+      if (dist(a.pos, cm.pos) > transitRadius(`sidezone:${cm.kind}`, 28) + a.radius) continue;
+      return { pos: cm.pos, text: (condShut ? sz!.when!.refusal : sz!.sealedBy!.refusal) ?? 'the door does not answer…' };
+    }
+    return null;
+  }
+
+  /** THE LIFT: every open realm gate of the zone with its enter action, in the
+   *  solo dwell's order. A row's `road` is THE ROADS PER PLAYER's ticket maker
+   *  for one seat (W4 fills each gate: its prep in the source, the ticket's
+   *  first wake in the realm); a gate without one stays sealed on a hosted
+   *  world and answers a seat with its word (engine/shardRoads.ts). */
+  realmGates(): RealmGateRow[] {
+    const gates: RealmGateRow[] = [];
+    // The Underworld BREACH (bottom of the cave ladder) is a realm gate too.
+    if (this.breachPos) {
+      // Which dimension does a cave breach tear into? Whatever REGISTERED a
+      // cave_breach entry (data) — first registrant today; a weighted roll
+      // when a second breach-entered layer ever ships.
+      const bd = dimensionsEnteredBy('cave_breach')[0];
+      if (bd) gates.push({ pos: this.breachPos, kind: 'breach', key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id) });
+    }
+    // DIMENSION GATE DOODADS (DimensionEntry.gateDoodad, scanned per
+    // loadZone): the Ascent's shining arch — dwell it to cross into its
+    // dimension. Radius/dwell ride per-kind transit rows like every gate
+    // ('realm_gate:dim_<id>' chains to the 'realm_gate' family).
+    for (const g of this.dimGates) {
+      gates.push({
+        pos: g.pos, kind: `dim_${g.dimId}`, key: `dim:${g.dimId}:${Math.round(g.pos.x)},${Math.round(g.pos.y)}`,
+        // A gate may RIDE a registered traversal (DimensionEntry.traversal):
+        // the crossing plays the cinematic and the dimension swap fires
+        // behind its veil (the geyser-mouth pattern) — the ascendant arch
+        // launches you again, steadier. No row = the old instant cross.
+        enter: () => {
+          const trav = dimensionDef(g.dimId).entry?.traversal;
+          if (trav) this.beginTraversal(trav, { swap: () => this.enterDimension(g.dimId) });
+          else this.enterDimension(g.dimId);
+        },
+      });
+    }
+    for (const dp of this.demonPortals) gates.push({ pos: dp.pos, kind: 'demon', key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
+    for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
+    for (const np of this.necropolisPortals) gates.push({ pos: np.pos, kind: 'necropolis', key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
+    for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, kind: 'fracture', key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr) });
+    // COURT DOORS (encounter fabric): the fed breach's standing way into
+    // its lord's domain — the same deliberate dwell as every threshold
+    // (its 'realm_gate:<gateKind>' transit row sets the feel).
+    for (const e of this.encounters) {
+      if (e.phase !== 'door' || !e.doorAt) continue;
+      const at = e.doorAt;
+      gates.push({
+        pos: at, kind: e.def.court?.door?.gateKind ?? 'court',
+        key: `court:${e.def.id}:${e.lordId ?? ''}`,
+        enter: () => this.enterCourtDomain(e),
+      });
+    }
+    // THE WRAITHSAIL at sea: cross her under sail — nose into her shadow
+    // and hold fast to BOARD. The boarding is a realm gate like any other
+    // threshold (its 'realm_gate:wraithsail' transit row sizes the
+    // hull-wide reach); interceptRadius gates the listing so the dwell
+    // only ever arms on a genuine crossing.
+    if (this.sailing) {
+      const wf = this.sim.wraithsailField;
+      const ship = wf?.shipInfo();
+      if (wf && ship && wf.boardable()) {
+        const boat = this.nodeFromSea(this.player.pos);
+        if (Math.hypot(ship.x - boat.x, ship.y - boat.y) <= wf.surge().interceptRadius) {
+          gates.push({
+            pos: this.seaFromNode({ x: ship.x, y: ship.y }), kind: 'wraithsail',
+            key: `wraithsail:${ship.id}`,
+            enter: () => this.beginWraithsailBoarding(),
+          });
+        }
+      }
+    }
+    return gates;
+  }
+
+  /** THE LIFT: the nearest realm gate body `a` stands on, or null. Radius and
+   *  dwell are per-KIND transit rows ('realm_gate:demon' chains to the
+   *  'realm_gate' family): a heavier gate can ask a longer, wider linger with
+   *  one data row. */
+  gateUnder(a: Actor, gates: readonly RealmGateRow[]): RealmGateRow | null {
+    let onGate: RealmGateRow | null = null, bestGD = Infinity;
+    for (const g of gates) {
+      const d = dist(a.pos, g.pos);
+      if (d <= transitRadius(`realm_gate:${g.kind}`, 32) + a.radius && d < bestGD
+        && this.dwellReachable(a.pos, g.pos, transitReach(`realm_gate:${g.kind}`), this.storyPair(a))) { bestGD = d; onGate = g; }
+    }
+    return onGate;
+  }
+
+  /** THE LIFT: the nearest arena ward seal body `a` stands on (the 'ward_seal'
+   *  transit rows), or null. */
+  wardSealUnder(a: Actor): Doodad | null {
+    if (!this.arenaWard) return null;
+    let onSeal: Doodad | null = null, sealD = Infinity;
+    for (const s of this.arenaWard.seals) {
+      const d = dist(a.pos, s.pos);
+      if (d <= transitRadius(`ward_seal:${s.kind}`, 30) + a.radius && d < sealD
+        && this.dwellReachable(a.pos, s.pos, transitReach(`ward_seal:${s.kind}`), this.storyPair(a, s))) { sealD = d; onSeal = s; }
+    }
+    return onSeal;
+  }
+
+  /** THE LIFT: the holdfast's toll keeper when body `a` stands in its parley
+   *  ring (the 'holdfast' transit row), else null. */
+  holdfastNear(a: Actor): Actor | null {
+    const keeper = this.holdfastKeeper();
+    return !!keeper && dist(a.pos, keeper.pos) <= transitRadius('holdfast', 78)
+      && this.dwellReachable(a.pos, keeper.pos, transitReach('holdfast'), this.storyPair(a, keeper)) ? keeper : null;
+  }
+
+  /** THE LIFT: the NEAREST unlocked exit body `a` stands within (not the first
+   *  in array order, so even an overlapping or hand-authored portal pair each
+   *  stays reachable: you step through whichever you're closer to; the
+   *  placement-time spacing makes overlaps not happen, this is
+   *  belt-and-suspenders), and the nearest locked one. THE RETREAT LAW: the
+   *  locks are judged from the door `from` (the zone's entry by default; a
+   *  hosted world's scanner passes each seat's own door). */
+  exitUnder(a: Actor, from: string | null = this.entryFrom): { onExit: ZoneExit | null; lockedExit: ZoneExit | null } {
+    let onExit: ZoneExit | null = null, bestD = Infinity;
+    let lockedExit: ZoneExit | null = null, lockedD = Infinity;
+    for (const e of this.exits) {
+      const d = dist(a.pos, e.pos);
+      if (d > e.radius) continue;
+      if (!this.dwellReachable(a.pos, e.pos,
+        transitReach(e.boundary ? `zone_exit:${e.boundary}` : 'zone_exit'), this.storyPair(a))) continue;
+      if (this.isExitLocked(e, from)) { if (d < lockedD) { lockedD = d; lockedExit = e; } continue; }
+      if (d < bestD) { bestD = d; onExit = e; }
+    }
+    return { onExit, lockedExit };
+  }
+
+  /** THE LIFT: a locked exit's own word. A HOLDFAST exit shows its guardian's
+   *  bespoke hint (a toll, not the objective); a road held by a living EVENT
+   *  names its holder instead; the harborhold causeway names its own ask
+   *  (break the siege / raise the ruin: the quay beyond is the hold's reward,
+   *  and the door says so, HARBORHOLD_CFG.quay.lockHint); else the
+   *  objective's seal. */
+  exitLockHint(e: ZoneExit): { text: string; color: string } {
+    const led = this.zone.exits[e.defIndex];
+    const gdef = led?.lock && this.holdfastSite ? this.sim.holdfastField?.def(this.holdfastSite.defId) : null;
+    const eb = led && led.to !== '?' ? edgeBlockAt(this, this.zone.id, led.to) : null;
+    const holdHint = led?.lock === 'harborhold' && this.zone.harborhold
+      ? (this.zone.harborhold.state === 'fallen'
+        ? HARBORHOLD_CFG.quay.lockHint.fallen : HARBORHOLD_CFG.quay.lockHint.besieged)
+      : null;
+    return { text: eb ? eb.reason : holdHint ?? (gdef ? gdef.sealedHint : 'sealed — finish the objective'), color: eb?.color ?? '#d05050' };
+  }
+
+  /** THE SEALED WORDS' reach (shard M1 W2, plan 4.8): the sealed road a seat
+   *  stands at, each within its own dwell reach, or null. On a hosted world the
+   *  dock's cast-off (the Wraithsail's word while she lies alongside), the
+   *  harbor board's passage and the Delver's shaft stay sealed: each owns a
+   *  per-World singleton run (the voyage, the Wraithsail's stash, the descent). */
+  private sealedRoadUnder(seat: Seat): { kind: SealedRoadKind; pos: Vec2 } | null {
+    const a = seat.actor;
+    const dock = this.portDock();
+    if (dock && dist(a.pos, dock.pos) <= 110 && this.dwellReachable(a.pos, dock.pos, DWELL_CFG.reach, this.storyPair(a, dock))) {
+      return { kind: this.sim.wraithsailField?.dockedOn(this.zone.id) ? 'wraithsail' : 'dock', pos: dock.pos };
+    }
+    const board = this.nearHarborBoard(seat) ? this.doodads.find(d => d.kind === 'harbor_board') : undefined;
+    if (board) return { kind: 'voyage', pos: board.pos };
+    const site = this.descentSite;
+    if (site && !this.descentRun && !this.descentSpent.has(this.zone.id)
+      && dist(a.pos, site.platform) <= transitRadius('descent_shaft', 72)
+      && this.dwellReachable(a.pos, site.platform, transitReach('descent_shaft'), this.storyPair(a))) return { kind: 'descent', pos: site.platform };
+    return null;
   }
 
   /** Dwell-to-travel progress on the exit the player lingers on (renderer ring),
@@ -47008,13 +47170,16 @@ export class World {
     if (font) put(font.pos, this.fontGate.frac(SALVAGE_CFG.stationDwell), 'station:font');
     const board = this.bountyBoardsHere().find(b => anySeat(s => this.nearBountyBoard(s, b.id)));
     if (board) put(board.pos, this.bountyGate.frac(BOUNTY_BOARD_CFG.dwell.sec), 'station:bounty');
-    // The sea's furniture: the dock, the harbor board, the muster horn.
-    const dock = this.portDock();
+    // The sea's furniture: the dock, the harbor board, the muster horn. THE
+    // SEALED WORDS (shard M1 W2): a hosted world's shell draws no ring at the
+    // dock or the harbor board, sealed roads there (its seat hears their word).
+    const sealedShell = !!this.netCounters;
+    const dock = sealedShell ? null : this.portDock();
     if (dock && dist(this.player.pos, dock.pos) <= 110
       && this.dwellReachable(this.player.pos, dock.pos, DWELL_CFG.reach, this.storyPair(this.player, dock))) {
       put(dock.pos, this.sailGate.frac(CARAVAN_DWELL), 'station:dock');
     }
-    if (this.nearHarborBoard()) put(this.doodads.find(d => d.kind === 'harbor_board')?.pos, this.harborGate.frac(CARAVAN_DWELL), 'station:harbor_board');
+    if (!sealedShell && this.nearHarborBoard()) put(this.doodads.find(d => d.kind === 'harbor_board')?.pos, this.harborGate.frac(CARAVAN_DWELL), 'station:harbor_board');
     if (this.nearMusterHorn()) put(this.doodads.find(d => d.kind === 'muster_horn')?.pos, this.holdGate.frac(HARBORHOLD_CFG.muster.dwellSec), 'station:muster_horn');
     // Bodies: the counters (each VendorDef names its keeper's role), the
     // caravanner, the innkeeper, the quartermaster, the Bonewright, the
@@ -47042,6 +47207,12 @@ export class World {
     return out;
   }
 
+  /** THE ROAD RING (shard M1 W2): the road dwell a hosted world's host fills
+   *  for this shell's own seat (SeatW.rd, net/seatView.ts applyOwnSeatRows),
+   *  or null. A shell runs no road scan, so this row is its only road ring;
+   *  a sealed road builds no dwell and so draws none. Render shells alone. */
+  netRoadDwell: { pos: Vec2; frac: number; kind: string } | null = null;
+
   /** Every dwell progress ring live this frame — ONE feed for the renderer's
    *  single ring pass. Each entry names its transit KIND, so the ring's style
    *  (radius/width/color) is a data row in data/transit.ts, never a renderer
@@ -47053,6 +47224,9 @@ export class World {
     };
     // THE DWELL TELL's fills: the stations and NPCs the seat lingers at.
     for (const t of this.dwellTargetsView()) add(t);
+    // THE ROAD RING (shard M1 W2, SeatW.rd): a hosted world's shell draws the
+    // road dwell its host is filling for its own seat (null everywhere else).
+    add(this.netRoadDwell);
     add(this.exitDwellView());
     add(this.caveDwellView());
     add(this.realmDwellView());
@@ -47589,8 +47763,13 @@ export class World {
    * until the objective is met. Default policy: only BOSS arenas seal —
    * waves/spawners roads stay open, their progress riding Zone Memory, so
    * leaving mid-fight costs nothing but the walk back.
+   *
+   * THE RETREAT LAW (shard M1 W2): `from` is the door the seal spares, the
+   * zone's own entry by default; on a hosted world the shard scanner passes
+   * each seat's own door (engine/shardRoads.ts), so a second arriver from
+   * another side keeps its own way back.
    */
-  isExitLocked(e: ZoneExit): boolean {
+  isExitLocked(e: ZoneExit, from: string | null = this.entryFrom): boolean {
     // HOLDFAST: a fortified bonus exit stays sealed until its toll is met — INDEPENDENT
     // of the zone objective (checked BEFORE the objectiveDone early-out, so clearing the
     // zone never opens the gate). Resolved against the durable HoldfastField lock state.
@@ -47626,22 +47805,27 @@ export class World {
     // does. Any overlay can hold a road via registerEdgeBlockSource.
     if (ed && ed.to !== '?' && edgeBlockAt(this, this.zone.id, ed.to)) return true;
     if (this.objectiveDone) return false;
-    return objectiveSeals(this.zone.objective) && e.to !== this.entryFrom;
+    return objectiveSeals(this.zone.objective) && e.to !== from;
   }
 
   /**
    * Fast travel between attuned waypoints (clicked on the world map).
    * Refused while enemies are close — no waypointing out of a brawl.
    */
-  travelToWaypoint(zoneId: string): boolean {
+  travelToWaypoint(zoneId: string, seat: Seat = this.localSeat): boolean {
     // SOVEREIGNTY: seat — the party gathers (the derived census, probe_tiers RIG T).
+    // THE ROADS PER PLAYER (shard M1 W2): a render shell asks its host (the
+    // waypoint intent); a hosted world judges the asking seat (its body, its
+    // hunters, its own note row) and moves it alone through a ticket.
+    if (this.clientActionHook) { this.requestMeta({ t: 'waypoint', zoneId }); return false; }
     if (!this.discoveredWaypoints.has(zoneId) || this.zone.id === zoneId) return false;
-    if (this.player.dead || this.gameOver) return false;
+    const hero = this.shardWorld ? seat.actor : this.player;
+    if (hero.dead || this.gameOver) return false;
     // A waypointless DIMENSION refuses fast-travel outright (belt over the
     // mint-side veto: an attunement smuggled in by an older save still
     // cannot fire — the Aetherial is crossed, never teleported into).
     if (dimensionDef(this.zoneMap[zoneId]?.dimension).waypoints === false) {
-      this.text(this.player.pos, 'no road bends that high — the realm must be crossed', '#9fc0e8', 13);
+      this.seatNote(seat, hero.pos, 'no road bends that high — the realm must be crossed', '#9fc0e8', 13);
       return false;
     }
     // ANTI-TELEPORT gate: refuse fast-travel to a waypoint sitting within an arena's
@@ -47653,7 +47837,7 @@ export class World {
     if (dest && dest.id !== START_ZONE && Object.values(this.zoneMap).some(z =>
       z.wpExclusionRadius !== undefined && z.id !== dest.id && z.id !== START_ZONE
       && Math.hypot(z.map.x - dest.map.x, z.map.y - dest.map.y) < z.wpExclusionRadius)) {
-      this.text(this.player.pos, 'too close to the seat of the Unmade to attune a path', '#d05050', 13);
+      this.seatNote(seat, hero.pos, 'too close to the seat of the Unmade to attune a path', '#d05050', 13);
       return false;
     }
     // Passive scenery (a Training Dummy, a barrel) isn't "hunting" you — only a
@@ -47661,10 +47845,18 @@ export class World {
     // (a passing herd, grazing wildlife, toll wardens — the whole ambient
     // registry incl. live guardian tags, not a hand-picked subset that rots
     // as packages grow) never count; a ROUSED one does (it's genuinely hunting).
-    if (this.enemiesOf(this.player).some(e => !e.passive
-      && !(this.isAmbientTag(e.tag) && !e.aiAwakened) && dist(e.pos, this.player.pos) < 350)) {
-      this.text(this.player.pos, 'cannot waypoint while hunted', '#d05050', 13);
+    if (this.enemiesOf(hero).some(e => !e.passive
+      && !(this.isAmbientTag(e.tag) && !e.aiAwakened) && dist(e.pos, hero.pos) < 350)) {
+      this.seatNote(seat, hero.pos, 'cannot waypoint while hunted', '#d05050', 13);
       return false;
+    }
+    if (this.shardWorld) {
+      // THE ROADS PER PLAYER: the seat lands at the far stone (resolved there),
+      // and a freshly woken zone clears its bubble around the arrival.
+      this.shardWorld.enqueue({ seatId: seat.id, dest: zoneId, from: null,
+        landing: dw => dw.waypointPos ? { at: { x: dw.waypointPos.x, y: dw.waypointPos.y + 50 }, spread: 80, band: [-10, 60] } : 'entry',
+        after: (dw, s, woke) => { if (woke) dw.clearWaypointLanding(dw.seatHero(s)); } });
+      return true;
     }
     this.loadZone(zoneId);
     if (this.waypointPos) {
@@ -47687,6 +47879,28 @@ export class World {
       }
     }
     return true;
+  }
+
+  /** THE ROADS PER PLAYER (shard M1 W2): the waypoint's safe bubble around one
+   *  arrival, travelToWaypoint's own clear centred on that hero (never the
+   *  unit's warden): freshly-generated enemies too close are shoved to their
+   *  own far point from it; zone-memory survivors keep their stands. */
+  private clearWaypointLanding(hero: Actor): void {
+    // SOVEREIGNTY: seat (the arrival's bubble: travelToWaypoint's own clear, the derived census)
+    for (const a of this.actors) {
+      if (a.team === 'enemy' && !a.dead && a.owner !== hero && !a.fromZoneGen
+        && dist(a.pos, hero.pos) < WAYPOINT_CLEAR) {
+        a.pos = this.clampPos(this.farPointFrom(hero, WAYPOINT_CLEAR), a.radius);
+      }
+    }
+  }
+
+  /** farPoint measured from a given body (THE FILTERED HOST idiom: the
+   *  geometry view with its player overridden to that body). */
+  private farPointFrom(from: Actor, min: number): Vec2 {
+    const view = Object.create(this.nativeSceneGeometryHost()) as NativeSceneGeometryHost;
+    Object.defineProperty(view, 'player', { value: from });
+    return nativeFarPoint(nativeSceneNativePlacementHost(view), min, false);
   }
 
   /** Descend a registered sidezone mouth (data/sidezones.ts) into a pocket zone
@@ -47771,6 +47985,31 @@ export class World {
     // story), so the climb-out lands back IN the gallery at the door.
     this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom, kind: cm.kind, seed: cm.seed, ...(cm.underSpan ? { underSpan: cm.underSpan } : {}), ...(this.player.tier ? { tier: this.player.tier } : {}) };
     this.loadZone(dest.id, this.zone.id); // deliberately NO sim.onNodeCharted — pockets are off-graph
+  }
+
+  /** THE ROADS PER PLAYER (shard M1 W2): enterSidezone's shard twin, for one
+   *  seat. The pocket mints in the source (on the Unbroken Wilds the keeper's
+   *  native mint: the mass walk and its roots), furnishes, takes the
+   *  TRAVELLER's level when it levels with the character, ledgers the find, and
+   *  hands the seat its own ladder (its way home, one rung deeper, from its own
+   *  door). Traversal mouths take the instant step: the cinematic owns the one
+   *  local player, never a seat of a hosted world. */
+  private shardMouthRoad(seat: Seat, cm: CaveMouthRow): RoadTicket | null {
+    const sz = sidezoneOf(cm.kind);
+    if (!sz) return null;
+    const dest = this.mintSidezone(cm);
+    if (!dest) return null;
+    const ladder = seatLadderOf(this, seat);
+    // A deeper pocket under the wilds rides the wilds save (the keeper's roots, THE PIN's alias).
+    if ((ladder.caveStack[0] ?? ladder.caveReturn)?.zoneId === MASS_ZONE) this.massCaveIds.add(dest.id);
+    this.applySidezoneFurnish(dest, sz);
+    if (sz.levelWith === 'character') dest.level = Math.max(1, this.seatHero(seat).level);
+    if (sz.ledgerOnEnter) bumpLedger(this.ledger, sz.ledgerOnEnter);
+    const tier = seat.actor.tier;
+    const rung = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: seatDoorOf(this, seat), kind: cm.kind, seed: cm.seed,
+      ...(cm.underSpan ? { underSpan: cm.underSpan } : {}), ...(tier ? { tier } : {}) };
+    return { seatId: seat.id, dest: dest.id, from: this.zone.id, landing: 'entry',
+      ladder: { caveReturn: rung, caveStack: ladder.caveReturn ? [...ladder.caveStack, ladder.caveReturn] : [...ladder.caveStack] } };
   }
 
   // --- THE TRAVERSAL FABRIC (engine/traversal.ts): vertical crossings -------
@@ -48397,6 +48636,82 @@ export class World {
       // reward to the giver instead of paying at the portal.
       if (this.activeQuests.some(e => e.zoneId === escaped.id)) this.onQuestZoneFieldCleared(escaped.id);
     }
+  }
+
+  /** THE ROADS PER PLAYER (shard M1 W2): travelThrough's shard twin, for one
+   *  seat. A hosted world never loads a zone for a road: its source half runs
+   *  here (the seat's own ladder's climb-out, the far span mouth, a '?'
+   *  frontier charted in place, the escape credit judged from THE SEAT'S DOOR
+   *  and paid to the traveller's party within reach) and its destination half
+   *  rides the returned ticket, executed after every unit ticked. */
+  private shardExitRoad(seat: Seat, e: ZoneExit): RoadTicket | null {
+    const a = seat.actor, ladder = seatLadderOf(this, seat), ret = ladder.caveReturn;
+    const pocket = !this.zoneMap[this.zone.id];
+    if (pocket && ret && e.to === ret.zoneId) {
+      // THE DESCENT's shaft is its run's own climb (sealed on a hosted world).
+      if (this.descentRun && this.zone.id === this.descentRun.caveId) return null;
+      // THE WILDS LAW: a native pocket's way out is the keeper's surface, at the mouth.
+      if (ret.zoneId === MASS_ZONE) {
+        const top = ladder.caveStack[0] ?? ret;
+        const near = !!(top.kind && sidezoneOf(top.kind)?.indoorsOnly) || (top.tier ?? 0) > 0 ? 25 : 50;
+        return { seatId: seat.id, dest: MASS_ZONE, from: null, ladder: { caveReturn: null, caveStack: [] }, grace: 'caveExit',
+          landing: { at: { x: top.pos.x, y: top.pos.y }, spread: near, band: [0, near], tier: top.tier ?? 0 } };
+      }
+      // The climb-out: one rung up the seat's own ladder, onto the parent at the
+      // mouth by the indoor and story rules (travelThrough's own landing).
+      const indoors = !!(ret.kind && sidezoneOf(ret.kind)?.indoorsOnly), sunken = (ret.tier ?? 0) >= 1;
+      const stepY = indoors || sunken ? 0 : 40, sc = indoors || sunken ? 0.5 : 1;
+      const stack = ladder.caveStack.map(r => ({ ...r, pos: vec(r.pos.x, r.pos.y) }));
+      return { seatId: seat.id, dest: ret.zoneId, from: ret.entryFrom, ladder: { caveReturn: stack.pop() ?? null, caveStack: stack },
+        grace: 'caveExit', landing: { at: { x: ret.pos.x, y: ret.pos.y + stepY }, spread: 50 * sc, band: [0, 50 * sc], tier: ret.tier ?? 0 } };
+    }
+    if (pocket && this.zone.underSpan && this.zoneMap[e.to]) {
+      // THE FAR MOUTH (the rooted web): surface at the far member's own span
+      // mouth, resolved in the destination after its load.
+      const span = this.zone.underSpan;
+      bumpLedger(this.ledger, 'rootspan_crossed');
+      return { seatId: seat.id, dest: e.to, from: null, ladder: { caveReturn: null, caveStack: [] }, grace: 'caveExit',
+        landing: dw => {
+          const mouth = dw.caveEntrances.find(en => en.underSpan === span);
+          if (!mouth) return 'entry';
+          const t = mouth.mouthTier ?? 0;
+          return { at: { x: mouth.pos.x, y: mouth.pos.y + (t >= 1 ? 0 : 40) }, spread: t >= 1 ? 25 : 50, band: t >= 1 ? [0, 25] : [0, 50], tier: t };
+        } };
+    }
+    let dest = e.to;
+    if (dest === '?') {
+      const def = this.zone.exits[e.defIndex];
+      if (def.to !== '?') dest = def.to; // another seat's road charted it first (the live exit lags its def)
+      else {
+        const gen = this.chartFrontier(this.zone, def); // THE PIN carries the chart and nextGenId home
+        if (gen.id === this.zone.id) return null;
+        def.to = gen.id;
+        dest = gen.id;
+      }
+      e.to = dest; // the unit stays: its live exit now names the charted ground
+    }
+    // THE RETREAT LAW's escape credit: judged from the seat's own door, paid in
+    // the source to the traveller's party within reach (THE KILLER'S DUE).
+    const escaped = escapeExitAllowed(this.zone.objective, seatDoorOf(this, seat), dest) && !this.objectiveDone
+      && !this.completedObjectives.has(this.zone.id) ? this.zone : null;
+    let word: string | null = null;
+    if (escaped) {
+      const acting = this.actingSeat;
+      this.actingSeat = seat;
+      try {
+        this.completedObjectives.add(escaped.id);
+        const bonus = objectiveRewardXp(escaped.level);
+        this.grantXp(bonus, a.pos, seat);
+        word = `Escaped ${escaped.name}! +${bonus} xp`;
+        if (this.activeQuests.some(q => q.zoneId === escaped.id)) this.onQuestZoneFieldCleared(escaped.id);
+      } finally { this.actingSeat = acting; }
+    }
+    const carry = !this.zoneMap[dest] && !!this.caveMap[dest]; // pocket to pocket: the way home walks along
+    return {
+      seatId: seat.id, dest, from: this.zone.id, landing: 'entry',
+      ...(carry ? { ladder: { caveReturn: ladder.caveReturn, caveStack: [...ladder.caveStack] } } : {}),
+      ...(word ? { after: (dw: World, s: Seat) => { const h = dw.seatHero(s); dw.text(vec(h.pos.x, h.pos.y - 70), word!, '#ffd700', 16); } } : {}),
+    };
   }
 
   /** Totems target & cast; sentries fire down their lane; traps arm and

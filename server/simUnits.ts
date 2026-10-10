@@ -42,6 +42,7 @@ import {
   UNIT_CFG, attachSeat, detachSeat, pinIn, pinOut, unitClocks,
   type RoadLanding, type RoadTicket, type SeatPacket, type UnitClocks, type UnitKey,
 } from '../src/engine/shardUnits';
+import { shardRoadArrive, shardRoadDepart } from '../src/engine/shardRoads';
 
 /** One live World of the shard (plan section 2). */
 export interface SimUnit {
@@ -180,6 +181,14 @@ export class UnitRegistry implements SeatWorlds {
     return undefined;
   }
 
+  /** THE ROADS PER PLAYER: the live seed of the awake unit hosting `zoneId`,
+   *  undefined when none is awake (the town portal's faded check: an awake
+   *  zone's stored memory row is stale until it sleeps). */
+  liveSeedOf(zoneId: string): number | undefined {
+    const u = this.unitFor(zoneId);
+    return u ? u.world.shardRoadHost().currentZoneSeed : undefined;
+  }
+
   // ---- THE PIN around every entry into a unit -----------------------------
   /** Run `fn` inside a unit: THE PIN in (the clocks at `clocks`, default the
    *  keeper's now), the unit as the global policy owner, THE PIN out in a
@@ -245,9 +254,13 @@ export class UnitRegistry implements SeatWorlds {
       try { this.dispatch(d.zoneId, d.fn); }
       catch (e) { this.hooks.log(`[shard] a deferred dispatch to ${d.zoneId} faulted: ${e instanceof Error ? e.stack ?? e.message : String(e)}`); }
     }
+    // THE ROADS PER PLAYER: one road per seat per drain. A second ticket for a
+    // seat already moved this drain was decided in the unit it just left.
+    const moved = new Set<string>();
     while (this.queue.length) {
       const t = this.queue.shift()!;
-      try { this.execute(t); }
+      if (moved.has(t.seatId)) { this.hooks.log(`[shard] ${t.seatId}'s second road this tick (to ${t.dest}) dropped`); continue; }
+      try { if (this.execute(t)) moved.add(t.seatId); }
       catch (e) { this.hooks.log(`[shard] the hand-off of ${t.seatId} to ${t.dest} faulted: ${e instanceof Error ? e.stack ?? e.message : String(e)}`); }
     }
   }
@@ -264,7 +277,8 @@ export class UnitRegistry implements SeatWorlds {
     if (!src || (!k.zoneMap[t.dest] && !k.caveMap[t.dest])) { this.refusals++; return null; }
     let dest = this.unitFor(t.dest, t.instance);
     if (dest === src) return src; // already there: a road into its own unit moves nothing
-    const from = t.from ?? src.world.zone.id;
+    // THE ROADS PER PLAYER: an absent edge is the source zone; null is none (a waypoint, a portal).
+    const from = t.from === undefined ? src.world.zone.id : t.from;
     const now = k.time;
     const packet = this.run(src, w => detachSeat(w, t.seatId));
     if ('refused' in packet) {
@@ -272,6 +286,7 @@ export class UnitRegistry implements SeatWorlds {
       this.hooks.log(`[shard] ${t.seatId} cannot travel to ${t.dest}: ${packet.refused}`);
       return null;
     }
+    this.run(src, w => shardRoadDepart(w, t.seatId)); // the seat's door, ladder, grace and dwell leave with it
     let woke = false;
     try {
       if (!dest) { dest = this.wake({ ...t, from }); woke = true; }
@@ -282,16 +297,24 @@ export class UnitRegistry implements SeatWorlds {
     }
     const warden = dest.world.localSeat.actor;
     const landing: RoadLanding = t.landing ?? (woke ? { at: { x: warden.pos.x, y: warden.pos.y } } : 'entry');
-    this.land(dest, { ...packet, from }, landing);
+    this.land(dest, { ...packet, from }, landing, t, woke);
     if (src.role === 'unit' && !this.seatsOf(src).length) src.emptySince ??= now;
     this.handoffs++;
     this.onArrive?.(packet.seat, dest, src, woke, t);
     return dest;
   }
 
-  /** Attach a packet in its destination and move THE SEAT LEDGER's row. */
-  private land(dest: SimUnit, packet: SeatPacket, landing: RoadLanding): void {
-    this.run(dest, w => attachSeat(w, packet, landing));
+  /** Attach a packet in its destination and move THE SEAT LEDGER's row. THE
+   *  ROADS PER PLAYER: a landing function resolves in the destination (after
+   *  its wake), the road's per-seat rows install there (THE SEAT'S DOOR, THE
+   *  SEAT'S LADDER, THE EXIT GRACE), then the road's own after-word runs. */
+  private land(dest: SimUnit, packet: SeatPacket, landing: RoadLanding, t?: RoadTicket, woke = false): void {
+    this.run(dest, w => {
+      attachSeat(w, packet, typeof landing === 'function' ? landing(w) : landing);
+      if (!t) return;
+      shardRoadArrive(w, packet.seat, t, packet.from);
+      t.after?.(w, packet.seat, woke);
+    });
     if (dest.role === 'keeper') this.ledger.delete(packet.seat.id);
     else this.ledger.set(packet.seat.id, dest.key);
     dest.emptySince = null;
@@ -323,7 +346,7 @@ export class UnitRegistry implements SeatWorlds {
       const view = uw.shardUnitHost();
       view.adoptedZonePending = true; // the placeholder hearth is never captured into the shared memory
       if (t.ladder) { uw.caveReturn = t.ladder.caveReturn; view.caveStack = [...t.ladder.caveStack]; }
-      uw.loadZone(t.dest, t.from);
+      uw.loadZone(t.dest, t.from ?? undefined);
       t.onFirstWake?.(uw);
     });
     u.lastSentZone = w.zone.id; // the arrival hears its zone directly (sendZoneTo); the unit's own beat starts here

@@ -532,6 +532,46 @@ takes one delver at a time". Nothing else on a shard stays silently shut.
 
 ---
 
+### 4.9 W2 as built (2026-10-09, branch shard-m1-roads): where the build moved off this plan
+
+The catalog stands as written in 4.2 with these corrections, each found while building it
+(the contract is docs/engine/shard.md "The roads per player"):
+
+- **The ticket's edge can be NONE.** `RoadTicket.from` is `string | null`: the waypoint, the
+  town portal out and the far span mouth arrive by no edge (loadZone's own `from`-less load,
+  `entryFrom` null), which "absent = the source zone" could not say.
+- **Landings resolve in the destination.** `RoadLanding` gained a function form, run under
+  the destination's pin after its wake (the far span mouth, the portal's waypoint plus
+  offset, the waypoint's stone), and the ticket an `after(w, seat, woke)` hook (the escape's
+  word over the arrival; the waypoint's clear bubble, centred on the arriving hero through
+  a filtered geometry view, since a unit's own `farPoint` measures from its warden).
+- **Per-seat road state is never a World field.** THE SEAT'S DOOR, THE SEAT'S LADDER, THE
+  EXIT GRACE, the dwell, the holdfast parley and the words heard live in a WeakMap keyed by
+  the unit's World (`engine/shardRoads.ts`), installed by the executor at arrival and lifted
+  at departure, so THE PIN and the census never see them. A seat with no ladder row reads
+  its unit's own (THE DIRECT ROAD's arrivals).
+- **The exit grace is "clear of every mouth".** Stepping from one mouth straight onto another
+  keeps it, exactly as the solo `caveExitGrace` does; the slow rig steps clear first.
+- **A frontier's live exit lags its def.** An awake unit keeps its live `ZoneExit` after a
+  seat charts it, so the twin reads the def's `to` first (another seat may have charted it)
+  and writes the charted id onto the live exit; its label on clients stays the frontier's
+  until the zone is next re-sent (the dress beat keys on doodads).
+- **The town portal's dwell clear is per seat** on a hosted world (`clear()` would reset every
+  other seat's dwell), and its arrival latch is set in the source and rides the hand-off.
+- **The wilds' return passage.** A portal's destination is the hearth's id, and on the
+  Unbroken Wilds the keeper's zone is the surface's, so `townPortalViews` never showed the
+  return passage there (in solo too: the seamless lane's to settle). A hosted world's
+  landing writes the surface's id onto the portal.
+- **The sealed words, mapped.** Four words for the dock (the cast-off), the voyage (the harbor
+  board's passage: `sailTo` and `chartCourse` are host-only UI calls), the Wraithsail (the
+  dock while she lies alongside; at sea she is never met on a shard) and the shaft. A fifth,
+  placeholder, answers a realm gate whose `RealmGateRow.road` W4 has not filled, so nothing
+  stays silently shut; W4 fills the slot per gate (the prep in the source, `onFirstWake`).
+- **One road per seat per drain**, so two roads decided in one tick never move a seat twice.
+- **Not built (named):** a dormant seat idle on a road still walks it (the World cannot see
+  dormancy); the soak's pocket scenario (5.9); the waypoint is reachable only once the chart
+  rides the wire (5.10).
+
 ## 5. THE WIRE PER UNIT
 
 **5.1 Snapshots.** Each unit serializes its own (`serializeSnapshot(unit.world, tick)`, `net/snapshot.ts:1015`)

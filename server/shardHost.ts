@@ -579,9 +579,9 @@ export class ShardHost {
       landed.set(seatId, n);
       if (n > SHARD_CFG.actionsPerSeatPerTick) continue;
       if (!action || typeof action !== 'object' || typeof (action as { t?: unknown }).t !== 'string') continue;
-      // THE SEALED ROADS: intents that move the WHOLE party stay shut on a
-      // keeper world until per-seat travel exists (card 15).
-      if (action.t === 'caravanTo' || action.t === 'townPortal') continue;
+      // THE ROADS PER PLAYER (shard M1 W2): caravanTo, townPortal and the
+      // waypoint are judged for the acting seat inside its own unit and move
+      // that seat alone (a ticket the hand-off queue drains after every unit).
       try { w.applyAction(seat, action); }
       catch (e) { this.noteFault(`meta action from ${seatId}`, e); }
     }
@@ -606,7 +606,9 @@ export class ShardHost {
    *  "character level" in forty-one reads (event gates, vendor shelves, bounty
    *  work, sidezone mints) — so it wears the flags again, stands up, and
    *  mirrors the highest standing player's level. It also acted this very
-   *  frame, so THE SEALED ROADS hold (a dwell reads an idle seat). */
+   *  frame, so the solo road block (which reads only its World's own player)
+   *  never carries a warden anywhere; every seat's roads are THE SHARD
+   *  SCANNER's (THE ROADS PER PLAYER, engine/shardRoads.ts). */
   private wardenStand(u: SimUnit): void {
     const w = u.world;
     const keeper = w.localSeat;
@@ -640,6 +642,9 @@ export class ShardHost {
       enqueue: t => this.units.enqueue(t),
       dispatch: (zoneId, fn) => this.units.dispatch(zoneId, fn), // THE SPLIT DISPATCH (W3)
       worlds: () => this.units.worlds(), // THE OCCUPIED LAW's source (W3)
+      // THE ROADS PER PLAYER: an awake zone's live seed (the town portal's faded check) and THE HEARTH SEAT.
+      liveSeed: zoneId => this.units.liveSeedOf(zoneId),
+      hearth: () => this.hearthSeat(),
     };
   }
 

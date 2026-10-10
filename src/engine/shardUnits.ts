@@ -62,8 +62,12 @@ export type UnitKey = string;
 export type CaveRung = NonNullable<World['caveReturn']>;
 
 /** Where a hand-off lands a seat. 'entry' applies loadZone's back-portal rule
- *  to the destination's live exits (the arrival edge is the ticket's `from`). */
-export type RoadLanding = 'entry' | { at: Vec2; spread?: number; band?: [number, number]; tier?: number };
+ *  to the destination's live exits (the arrival edge is the ticket's `from`).
+ *  THE ROADS PER PLAYER (W2): a function is resolved IN the destination, under
+ *  its pin, after its wake (a far span mouth, the town portal's waypoint, the
+ *  waypoint's own stone: spots only the destination knows). */
+export type LandingSpot = 'entry' | { at: Vec2; spread?: number; band?: [number, number]; tier?: number };
+export type RoadLanding = LandingSpot | ((w: World) => LandingSpot);
 
 /** THE TICKET (plan 3.1): a road's decision for ONE seat, carried to the host.
  *  Roads, intents and the muster enqueue; the host executes every ticket after
@@ -73,8 +77,10 @@ export interface RoadTicket {
   seatId: string;
   /** A zoneMap or caveMap id (the host resolves its unit). */
   dest: string;
-  /** The arrival edge: loadZone's back-portal rule. Absent = the source zone. */
-  from?: string;
+  /** The arrival edge: loadZone's back-portal rule, and THE SEAT'S DOOR (THE
+   *  RETREAT LAW, engine/shardRoads.ts). Absent = the source zone; null = no
+   *  edge (a waypoint or a town portal arrives by none, as loadZone's own). */
+  from?: string | null;
   /** Card 25 B's instance key (W4). */
   instance?: string;
   /** A pocket's way home, installed on the unit a wake boots. */
@@ -86,6 +92,10 @@ export interface RoadTicket {
   grace?: 'caveExit';
   /** Runs once, in the destination, after a wake's load (W4: the realm's boss). */
   onFirstWake?: (w: World) => void;
+  /** THE ROADS PER PLAYER (W2): runs in the destination after the seat landed,
+   *  under its pin (the escape's word over the arrival, the waypoint's clear
+   *  bubble on a fresh wake). */
+  after?: (w: World, seat: Seat, woke: boolean) => void;
   /** THE MUSTER RING (W4). */
   muster?: { party: string; at: Vec2 };
 }
@@ -107,6 +117,14 @@ export interface ShardWorldLink {
    *  or not, is awake ground). Read-only: a World read through it is never
    *  pinned, so it serves bodies, seats and zones, never the alias fields. */
   worlds(): readonly World[];
+  /** THE ROADS PER PLAYER (W2): the live seed of the unit hosting `zoneId`, or
+   *  undefined when none is awake (the town portal's faded check reads an
+   *  awake source's live seed; its stored memory row is stale until it sleeps). */
+  liveSeed?(zoneId: string): number | undefined;
+  /** THE ROADS PER PLAYER (W2): THE HEARTH SEAT (the keeper's classic hearth,
+   *  or the wilds settlement's spawn): the town portal's anchor where the
+   *  hearth stands no waypoint. */
+  hearth?(): { x: number; y: number; tier: number };
 }
 
 /** The clocks THE ONE CLOCK pins into a unit at every entry. */
@@ -323,8 +341,9 @@ export interface SeatPacket {
   hero: Actor;
   /** THE CARRY SET: the hero first, then its court (the same objects, ids kept). */
   carry: Actor[];
-  /** The zone the seat left: the arrival edge for an 'entry' landing. */
-  from: string;
+  /** The zone the seat left: the arrival edge for an 'entry' landing (null =
+   *  no edge: the zone's own entry). */
+  from: string | null;
   rows: MovedRow[];
   bonds: [Actor, unknown][];
   grants: [Actor, unknown][];
@@ -528,7 +547,7 @@ export function detachSeat(w: World, seatId: string): SeatPacket | { refused: st
 /** ATTACH (plan 3.5), run in the unit the seat enters, under its pin: the
  *  carried bodies cross the door the way loadZone's own carry does, then land
  *  through THE FILTERED HOST (World.landSeatAt) and the seat's rows install. */
-export function attachSeat(w: World, packet: SeatPacket, landing: RoadLanding): void {
+export function attachSeat(w: World, packet: SeatPacket, landing: LandingSpot): void {
   const host = w.shardUnitHost();
   const { seat, hero, carry } = packet;
   // 2. loadZone's per-actor door reset (the cue arrays, THE BLINK LAW).
