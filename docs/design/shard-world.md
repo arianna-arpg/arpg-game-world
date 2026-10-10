@@ -711,6 +711,9 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
     party at a visible muster ring; two independent players in one place
     are never moved together and travel home on their own. Until THE PARTY
     (card 23) exists the roads stay sealed (C).
+    **RULED (2026-10-10, her word): B stands. She asked what the muster ring's
+    detail meant; it is the party's dwell at a road (any member raises it, 400
+    px, 20 s), and her agreement lands as built (M1-W4).**
 16. **Disconnects** — A: the hero vanishes at once (today; a disconnect is a
     free escape from death). B: the hero lies dormant N seconds and a
     reconnect token reclaims it. C: the server holds the hero until the
@@ -822,33 +825,56 @@ in Mu first.**
     finishes it for everyone). C: mixed (authored story quests per account,
     world events and sieges shared). Rec: C, which is A for every quest a
     giver hands a person and B for what the world does to itself.
+    **RULED (2026-10-10, her word): the unit is the CHARACTER, exactly as
+    single player. Each hero carries its own quest log, its own rolled board
+    postings and its own Odyssey leads; the world's consequences (the
+    Odyssey's choices, which faction fell, world events, the restock clock)
+    are the shard's and shared. Four Immortals of one account each have their
+    own quests and meet one world. Built as THE CHARACTER'S QUESTS (W9).**
 25. **POCKET TENANCY** (M1's first question) — A: shared pockets (whoever
     walks into a cave meets the same cave, her "generated for any player
     that simultaneously ran across it"). B: one instance per party.
     Rec: A by default, B by a data flag for authored dungeons and arena
     seals.
+    **RULED (2026-10-10, her word): A, with B as a data flag per pocket (M1-W4
+    builds it).**
 26. **THE RETURN** (where a hero stands after a leave) — A: always the
     hearth (today). B: where it logged out, within a radius, with a leave
     in combat going dormant like a dropped socket (W3 builds the dormant
     half either way). Rec: B.
+    **RULED (2026-10-10, her word): B, and stronger: a hero logs back in where
+    it logged out, and that is the ONLY behaviour; there is no choice between
+    a hearth and a logout spot. The hearth stays a new hero's first wake and
+    the wake after a death. W7 builds it.**
 27. **THE SPOILS' OWNER** (card 23 said per player; the sweep found the
     ground is first-come) — A: strictly per player, forever. B: per player
     with a free-for-all after a timeout. C: A plus a deliberate give or
     trade lane. Rec: A now (the honest floor), C as its own pass; B only
     if you want shared pickup at all.
+    **RULED (2026-10-10, her word): A as the default, with the FOUNDATION for
+    B: a party may set its own drop rule, owner first and free for all after a
+    timeout. Built as THE SPOILS' OWNER (W10).**
 28. **THE BLEED-OUT** (a grouped mortal's down) — A: no timer; a downed
     grouped hero waits for a mate as long as the party stands. B: a
     bleed-out of N seconds after which the covenant falls, reset by a
     kneel. Rec: B at 60 s.
+    **RULED (2026-10-10, her word): B at 60 s, reset by a kneel; no holding a
+    downed player hostage. W8b ships `VESSEL_CFG.bleedOutSec` at 60.**
 29. **THE SHELF PER BUYER** — A: one world shelf rolled at the keeper's
     level (today, §5). B: the shelf rolls per buyer's level. Rec: hold A;
     revisit with M2's account gate.
+    **RULED (2026-10-10, her word): toward B as accounts diverge: the shelf
+    rolls per buyer (per character) from the shared restock clock, at the
+    buyer's level and gates, the way Path of Exile's vendors are each player's
+    own. Built as THE SHELF PER BUYER (W9).**
 30. **THE IMMORTAL'S OWN COVENANT ON A SHARD** — today an Immortal cannot
     die on a shard: a stage that does not end the run never meets the
     covenant and the mercy stands it up. A: the stage's own death policy
     runs on the server and mirrors home (a Sworn stage advances, an
     Undying falls with its frozen fee, the corpse by the stage's rule).
     B: leave Immortals deathless on shards. Rec: A.
+    **RULED (2026-10-10, her word): A. Built as THE IMMORTAL'S COVENANT ON A
+    SHARD (W10).**
 
 ---
 
