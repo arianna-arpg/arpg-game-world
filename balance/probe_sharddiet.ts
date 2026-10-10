@@ -209,8 +209,8 @@ const rowOf = (s: StateSnapshot, id: number): ActorW | undefined => s.actors.fin
 // ============================================================ D: QUANTIZATION ==
 {
   const grid = 1 / WIRE_DIET_CFG.posSteps, turn = Math.PI * 2 / WIRE_DIET_CFG.turnSteps;
-  const QUANT = new Set(['p', 'f', 'hf', 'bodyWalkPose', 'bodyActionPose', 'worm', 'st', 'concealmentExposedUntil']);
-  let rows = 0, off = 0, dp = 0, df = 0, dh = 0, dpose = 0;
+  const QUANT = new Set(['p', 'f', 'hf', 'bodyWalkPose', 'bodyActionPose', 'worm', 'st', 'concealmentExposedUntil', 'cast']);
+  let rows = 0, off = 0, dp = 0, df = 0, dh = 0, dpose = 0, fgRows = 0;
   const offKeys = new Set<string>();
   for (const cl of [A, B, C]) for (const s of cl.got) {
     const h = canonical(s);
@@ -229,10 +229,18 @@ const rowOf = (s: StateSnapshot, id: number): ActorW | undefined => s.actors.fin
         if (JSON.stringify((r as unknown as Record<string, unknown>)[k]) !== JSON.stringify((c as unknown as Record<string, unknown>)[k])) { off++; offKeys.add(k); }
       }
       if (!!c.bodyWalkPose !== !!r.bodyWalkPose || !!c.bodyActionPose !== !!r.bodyActionPose || !!c.worm !== !!r.worm) { off++; offKeys.add('a pose or worm'); }
+      // THE FORESIGHT ON THE WIRE: a cast row is the canonical row exactly, its foresight row (fg) inside the grid.
+      if (r.cast || c.cast) {
+        const { fg: rf, ...rc } = r.cast ?? { c: '', mode: '', total: 0, elapsed: 0 };
+        const { fg: cf, ...cc } = c.cast ?? { c: '', mode: '', total: 0, elapsed: 0 };
+        const fgOff = !!rf !== !!cf || (!!rf && !!cf && (rf.length !== cf.length || rf.some((v, i) => Math.abs(v! - cf[i]!) > (i === 5 || i === 6 ? turn / 2 : grid / 2) + 1e-9)));
+        if (!!r.cast !== !!c.cast || JSON.stringify(rc) !== JSON.stringify(cc) || fgOff) { off++; offKeys.add('cast'); }
+        if (cf) fgRows++;
+      }
     }
   }
   check('D codec: every inflated row equals the host\'s canonical row field for field (the quantized ones aside)',
-    rows > 200 && off === 0, `${rows} rows, ${off} off ${JSON.stringify([...offKeys])}`);
+    rows > 200 && off === 0, `${rows} rows (${fgRows} wearing a foresight row), ${off} off ${JSON.stringify([...offKeys])}`);
   check('D grid: positions within half the 0.25 px grid, facing within half a 1/512 turn, the hit flash within a hundredth, the walk within its grid',
     dp <= grid / 2 + 1e-9 && df <= turn / 2 + 1e-9 && dh <= 0.01 + 1e-9 && dpose <= 0.005 + 1e-9,
     `pos ${dp.toFixed(4)} px, facing ${df.toFixed(5)} rad, flash ${dh.toFixed(4)}, walk ${dpose.toFixed(4)}`);

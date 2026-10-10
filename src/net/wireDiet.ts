@@ -36,6 +36,7 @@
 import type { World } from '../engine/world';
 import type { Doodad, PlacedStructure } from '../engine/levelgen';
 import type { ActorW, DoodadW, StateSnapshot } from './snapshot';
+import type { ForesightW } from './foresightWire'; // THE FORESIGHT ON THE WIRE: its row on the frame's grid (type only: ws.ts stays light)
 
 export const WIRE_DIET_CFG = {
   /** The diet on a hosted world's per-socket path (false = the pre-diet frames, for A/B). */
@@ -140,6 +141,17 @@ export function dietMemo(): DietMemo { return { ids: new Map(), miss: false }; }
 /** The grid this build writes. */
 export function dietGrid(): DietGrid { return [WIRE_DIET_CFG.posSteps, WIRE_DIET_CFG.turnSteps]; }
 
+/** THE FORESIGHT ON THE WIRE's row on the grid (`CastW.fg`, net/foresightWire.ts ForesightW):
+ *  slot 0 the kind byte, slots 5 and 6 the arc and the bearing (on the turn grid), every other
+ *  slot a length or a position (on the px grid). `on` lays it on (the shard), else off. */
+const FORESIGHT_ANGLE_SLOTS: ReadonlySet<number> = new Set([5, 6]);
+export function dietForesight(fg: ForesightW, g: DietGrid, on: boolean): ForesightW {
+  const ps = g[0] > 0 ? g[0] : 1, steps = g[1] > 0 ? g[1] : 1;
+  return fg.map((v, i) => (i === 0 || v === undefined ? v
+    : FORESIGHT_ANGLE_SLOTS.has(i) ? (on ? Math.round(v * (steps / TAU)) : v * (TAU / steps))
+      : (on ? Math.round(v * ps) : v / ps))) as ForesightW;
+}
+
 /** THE CODEC, the shard's half: one actor row, quantized and elided (a fresh object built by
  *  copying, the canonical row untouched). */
 export function dietRow(a: ActorW, g: DietGrid): Record<string, unknown> {
@@ -168,6 +180,9 @@ export function dietRow(a: ActorW, g: DietGrid): Record<string, unknown> {
         break;
       }
       case 'worm': o.worm = { ...a.worm!, seg: a.worm!.seg.map(s => [Math.round(s[0] * ps), Math.round(s[1] * ps)]) }; break;
+      // THE FORESIGHT ON THE WIRE: an enemy wind-up's row rides the frame's own grid (a cast is
+      // per-frame state, never an identity).
+      case 'cast': o.cast = a.cast!.fg ? { ...a.cast!, fg: dietForesight(a.cast!.fg, g, true) } : v; break;
       case 'st': o.st = a.st!.map(s => (s.statusDuration !== undefined ? { ...s, statusDuration: r2(s.statusDuration) } : s)); break;
       case 'concealmentExposedUntil': o[k] = r2(v as number); break;
       default: o[k] = v;
@@ -231,6 +246,7 @@ export function dietInflate(s: StateSnapshot, memo?: DietMemo): StateSnapshot {
       delete a.ba;
     }
     if (a.worm) a.worm.seg = a.worm.seg.map(p => [p[0] / ps, p[1] / ps]);
+    if (a.cast?.fg) a.cast.fg = dietForesight(a.cast.fg, g, false); // THE FORESIGHT ON THE WIRE, off the grid
   }
   if (memo && seen) for (const id of [...memo.ids.keys()]) if (!seen.has(id)) memo.ids.delete(id);
   return s;

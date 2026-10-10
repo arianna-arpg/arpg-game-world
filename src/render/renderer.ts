@@ -4,6 +4,8 @@ import { buffReadoutLines, drawBuffReadout } from './vis/buffReadout';
 import { drawSkillIcon } from './skillIcons';
 import { statusIcons, layoutStatusIcons, drawStatusIcons, drawStatusIconHover, type StatusIconHover } from './vis/statusIcons';
 import { drawMeleeReach } from './vis/meleeReachLayer';
+import { drawForesight, foresightProgress } from './vis/foresightLayer'; // THE FORESIGHT's painter (draws the geometry alone)
+import { foresightView } from '../engine/foresight'; // THE FORESIGHT ON THE WIRE: a stub's row, else the resolve
 import { treePointBudget } from '../engine/skillEmpowerment';
 import { altarInfluences } from '../engine/altarCues';
 import { drawAltarInfluence } from './vis/altarCueLayer';
@@ -53,7 +55,7 @@ import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { guardBashReady, instanceChargeCost, instanceDelivery, instanceMeta, instanceMods, metaFaceOf, instanceStrikeTiming, instanceTriggerArmed, instanceUseCharges, poolReadOf, skillContextTags, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
+import { guardBashReady, instanceChargeCost, instanceMeta, metaFaceOf, instanceStrikeTiming, instanceTriggerArmed, instanceUseCharges, poolReadOf, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
@@ -206,7 +208,7 @@ import { drawEffectVoice } from './vis/effectVoice';
 import './vis/attackSequenceVoice';
 import './vis/groundRising'; // Ground-born encounters signal through soil, dust and grasping hands.
 import { traceAoePath } from './vis/aoeTrace'; // THE AOE TRACER — one path builder per registered figure (drawn == tested with world.ts inAoe)
-import { AOE_SHAPE, bandSwingGeo } from '../engine/skills';
+import { AOE_SHAPE } from '../engine/skills';
 
 import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
 import { UnderstoryLayer } from './vis/understory';
@@ -6362,126 +6364,16 @@ export class Renderer {
     // resolution owns the co-op read; only the controlling seat sees this guide.
     if(a===world.localSeat.actor && (this.getSettings?.().castTelegraphs ?? true)) drawMeleeReach(ctx,a);
 
-    // FORESIGHT — an enemy wind-up marks where the blow will land, in the
-    // skill's color, firming toward impact. GROUND footprints ring their
-    // landing spot (plus a center pip); MELEE swings and breath CONES wedge
-    // out from the body along the stamped aim (the cast lock pins the pose
-    // there and the resolve fires there — the drawing is the truth, stat
-    // scaling and all); hostile NOVAS ring the caster. Read it, step out.
-    // Toggleable (Settings.castTelegraphs).
+    // FORESIGHT (render/vis/foresightLayer.ts paints it; engine/foresight.ts resolves it):
+    // an enemy wind-up marks where the blow will land, in the skill's color, firming toward
+    // impact. Toggleable (Settings.castTelegraphs). THE FORESIGHT ON THE WIRE: a render
+    // shell's stub carries the host's own geometry and never resolves (its def holds no
+    // delivery: the resolve threw there and killed every client loop); every cast the World
+    // runs resolves its own, exactly as this painter always did.
     if (a.team === 'enemy' && a.casting && (this.getSettings?.().castTelegraphs ?? true)) {
       const fc = a.casting;
-      // THE RESOLVED VIEW (skill-mode audit, M1 — the M0 find): the wedge
-      // reads what the resolve will fire. A MonsterDef tree pin (or a
-      // possessed body's picked kit) now draws its true arc — the
-      // telegraph can never lie about a branch.
-      const del = instanceDelivery(fc.inst);
-      // Channels breathe with the pulse clock; bar casts firm once.
-      const prog = fc.mode === 'channel'
-        ? (fc.total > 0 ? clamp(1 - Math.max(0, fc.pulseTimer ?? 0) / fc.total, 0, 1) : 1)
-        : (fc.total > 0 ? clamp(fc.elapsed / fc.total, 0, 1) : 1);
-      if (del.type === 'ground') {
-        const aim = fc.lockedAim ?? fc.aim;
-        const rr = del.radius;
-        ctx.save();
-        ctx.translate(aim.x, aim.y); // world space — the body transform ended above
-        ctx.strokeStyle = fc.inst.def.color;
-        ctx.globalAlpha = 0.18 + 0.3 * prog;
-        ctx.lineWidth = 1.5 + prog * 1.5;
-        ctx.setLineDash([6, 6]);
-        ctx.beginPath();
-        ctx.arc(0, 0, rr, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        // The fill breathes in as the cast completes.
-        ctx.globalAlpha = 0.05 + 0.09 * prog;
-        ctx.fillStyle = fc.inst.def.color;
-        ctx.beginPath();
-        ctx.arc(0, 0, rr * (0.35 + 0.65 * prog), 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 0.5 + 0.4 * prog;
-        ctx.beginPath();
-        ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-        ctx.globalAlpha = baseAlpha;
-      } else if ((del.type === 'melee' || del.type === 'cone'
-        || (del.type === 'nova' && del.affects !== 'allies')) && fc.mode !== 'guard') {
-        // Mirror the resolve's TRUE geometry (world.ts melee/cone/nova
-        // cases): same stat multipliers, same reach formulae — the wedge
-        // never lies. Channels track the live facing (their pulses do);
-        // everything else aims down the stamp the resolve will fire at.
-        const tags = skillContextTags(fc.inst.def);
-        const extra = instanceMods(fc.inst);
-        const aim = fc.lockedAim ?? fc.aim;
-        const aoeScale = a.sheet.get('aoeRadius', tags, extra);
-        const ang = del.type === 'nova' ? 0
-          : fc.mode === 'channel' || dist(a.pos, aim) < 2
-            ? a.facing
-            : Math.atan2(aim.y - a.pos.y, aim.x - a.pos.x);
-        const reach = del.type === 'melee'
-          ? (a.radius + del.range) * a.sheet.get('meleeReach', tags, extra)
-          : del.type === 'cone'
-            ? del.range * aoeScale * a.sheet.get('meleeReach', tags, extra)
-            : del.radius * aoeScale;
-        const arcRad = del.type === 'nova' ? Math.PI * 2
-          : Math.min(Math.PI * 2, (del.arcDeg * Math.PI / 180)
-            * (del.type === 'melee' ? Math.sqrt(aoeScale) : 1)
-            * a.sheet.get('swingArc', tags, extra));
-        // Edge-band shapes (Surgical Strike, Shock Nova): only the rim cuts.
-        const inner = del.type !== 'melee' && del.edgeOnly ? reach * del.edgeOnly : 0;
-        const full = arcRad >= Math.PI * 2 - 0.01;
-        const wedge = (r0: number, r1: number): void => {
-          ctx.beginPath();
-          if (full) {
-            ctx.arc(x, y, r1, 0, Math.PI * 2);
-            if (r0 > 0) ctx.arc(x, y, r0, Math.PI * 2, 0, true);
-          } else if (r0 > 0) {
-            ctx.arc(x, y, r1, ang - arcRad / 2, ang + arcRad / 2);
-            ctx.arc(x, y, r0, ang + arcRad / 2, ang - arcRad / 2, true);
-            ctx.closePath();
-          } else {
-            ctx.moveTo(x, y);
-            ctx.arc(x, y, r1, ang - arcRad / 2, ang + arcRad / 2);
-            ctx.closePath();
-          }
-        };
-        ctx.save();
-        ctx.strokeStyle = fc.inst.def.color;
-        ctx.globalAlpha = 0.18 + 0.3 * prog;
-        ctx.lineWidth = 1.5 + prog * 1.5;
-        ctx.setLineDash([6, 6]);
-        // THE CROSSING STRIP's foresight: a banded swing (MeleeDelivery.shape
-        // 'band' as the aoeShape query's base — a sigil override still wins,
-        // exactly as the resolve reads it) foreshadows its STRIP through the
-        // same bandSwingGeo the strike seats, so the pit champion's third
-        // beat reads as a sweep across your face, never as a wedge into it.
-        const swingShape = del.type === 'melee'
-          ? a.sheet.get('aoeShape', tags, extra, AOE_SHAPE[del.shape ?? 'circle']) : 0;
-        const bandGeo = swingShape === AOE_SHAPE.band ? bandSwingGeo(reach, arcRad) : null;
-        const bandC = bandGeo
-          ? { x: x + Math.cos(ang) * bandGeo.standoff, y: y + Math.sin(ang) * bandGeo.standoff }
-          : null;
-        const figure = (r1: number): void => {
-          if (bandGeo && bandC) {
-            ctx.beginPath();
-            traceAoePath(ctx, bandC.x, bandC.y, bandGeo.halfWidth * (r1 / reach), AOE_SHAPE.band, ang);
-          } else {
-            wedge(inner, r1);
-          }
-        };
-        figure(reach);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        // The fill sweeps out from the body as the swing commits (a strip
-        // firms from its centre outward).
-        ctx.globalAlpha = 0.05 + 0.09 * prog;
-        ctx.fillStyle = fc.inst.def.color;
-        figure(Math.max(inner + 2, reach * (0.35 + 0.65 * prog)));
-        ctx.fill();
-        ctx.restore();
-        ctx.globalAlpha = baseAlpha;
-      }
+      const geo = foresightView(a, fc);
+      if (geo) drawForesight(ctx, geo, x, y, a.facing, foresightProgress(fc), baseAlpha);
     }
 
     // THE STRUGGLE METER (the grab fabric): a held body wears its break

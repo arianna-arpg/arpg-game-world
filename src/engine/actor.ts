@@ -86,6 +86,10 @@ export interface CastingState {
   resolvedGuardArc?: number;
   /** Host-resolved local weapon footprint; null means deliberately absent. */
   resolvedMeleeReach?: import('./meleeReach').MeleeReachCue | null;
+  /** THE FORESIGHT ON THE WIRE: a render shell's stub carries the host's own wind-up
+   *  geometry (engine/foresight.ts; null = the host draws none) and never resolves one.
+   *  Absent on every cast the World runs. */
+  foresight?: import('./foresight').ForesightGeo | null;
   inst: SkillInstance;
   mode: CastMode;
   aim: Vec2;               // updated each frame when the mode tracks aim

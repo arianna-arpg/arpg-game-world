@@ -84,6 +84,7 @@ import { COOP_SCALING } from '../data/coop'; // THE WIRE'S EYES: the zone rows' 
 import { applyCounterRows, applyCounterZone, counterZoneOf, harvestRowOf, journalRowOf, type HarvestW, type JournalW } from './journalWire'; // THE COUNTERS AND THE JOURNAL
 import { roadDwellRow } from '../engine/shardRoads'; // THE ROADS PER PLAYER (shard M1 W2): the road ring
 import { applyDressDelta, glideLite } from './wireDiet'; // THE WIRE DIET (shard sync pass C): the dress delta and the lite glide
+import { foresightOfRow, foresightRowOf, type ForesightW } from './foresightWire'; // THE FORESIGHT ON THE WIRE (W11)
 
 export type Vec2W = [number, number];
 
@@ -289,6 +290,10 @@ export interface CastW { parryCue?: number;
    *  casts its real instance (its replay walks a mobile cast, a guard or a channel at the
    *  host's factor) and THE PREDICTED ROOT reconciles against it. Players' rows only. */
   sk?: string;
+  /** THE FORESIGHT ON THE WIRE (net/foresightWire.ts): an enemy wind-up's drawn geometry,
+   *  host resolved (engine/foresight.ts), so a client draws the ring or the wedge the host
+   *  draws and never resolves a stub. Absent = the host draws nothing for this cast. */
+  fg?: ForesightW;
 }
 
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
@@ -1015,6 +1020,8 @@ function actorToW(a: Actor, world: World): ActorW {
     if (cs.bashAt !== undefined) cw.bashAt = cs.bashAt;
     if (cs.bashLow) cw.bashLow = true;
     if (cs.bashArmAt !== undefined) cw.bashArmAt = cs.bashArmAt;
+    const fg = foresightRowOf(a, cs); // THE FORESIGHT ON THE WIRE: an enemy wind-up's geometry, host resolved
+    if (fg) cw.fg = fg;
     w.cast = cw;
   }
   if (a.activeAuras.size) {
@@ -2127,6 +2134,9 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       aim: { x: a.pos.x, y: a.pos.y }, held: false, baseMult: 1,
     } as unknown as CastingState) : null;
     if (a.casting) WIRE_CASTS.add(a.casting);
+    // THE FORESIGHT ON THE WIRE: the stub carries the host's own wind-up geometry (null: the
+    // host draws none), so the painter never resolves a stub (its def holds no delivery).
+    if (a.casting) a.casting.foresight = foresightOfRow(aw.cast?.fg, aw.cast?.c ?? a.color);
     a.activeAuras.clear();
     if (aw.auras) aw.auras.forEach((au, i) => a!.activeAuras.set('a' + i, ({ inst: { def: { color: au.c } }, radius: au.r, shape: au.sh } as unknown as ActiveAura)));
     a.construct = aw.con ? ({ kind: aw.con.kind, domeRadius: aw.con.domeRadius } as unknown as ConstructState) : undefined;

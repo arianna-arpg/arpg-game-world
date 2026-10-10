@@ -520,6 +520,7 @@ let resumed: WsTransport | null = null;
     for (const t of c.tethers) { delete t.ai; delete t.bi; }
     for (const t of c.texts) delete t.o;
     for (const a of c.actors) if (a.leap) { delete a.leap.dest; delete a.leap.radius; delete a.leap.telegraph; }
+    for (const a of c.actors) if (a.cast) delete a.cast.fg; // THE FORESIGHT ON THE WIRE (W11): an enemy wind-up's row
     return c;
   };
   const busy = sent.filter(s => s.zones?.length && Object.values(s.seats).some(e => e.cd));
