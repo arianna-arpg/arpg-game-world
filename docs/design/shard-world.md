@@ -943,7 +943,8 @@ in Mu first.**
     world every drop wears its owner (`GemDrop.owner`, `freeAt`): a kill's the
     credited seat (THE KILLER'S DUE's read, through THE SPOILS STAMP's marks), a
     chest's its opener, a breakable's its breaker, a dig's its digger, a seat's
-    act and owed pay the acting seat, a discard its dropper; orbs never. THE
+    act the acting seat, a quest's pay its hand (THE CHARACTER'S QUESTS' QUEST
+    HAND), a discard its dropper; orbs never. THE
     TOUCH LAW refuses every other hand until the drop is free; a departed
     owner's drops are anyone's. The party's rule is the leader's (`party` word,
     op `rule`): 'owner' (the default), 'timed' (`PARTY_CFG.freeAfterSec`, 20 s,
@@ -1018,6 +1019,8 @@ in Mu first.**
     its fall again and is refused 'fallen'. Leaving while down is no escape for
     any stage (an unheard crossing is owed to the next upload). A mate's kneel
     inside the bleed-out saves every stage; the mortal's path is unchanged.
+    Beside THE RETURN (card 26 B) a death names no stand: a crossing's wake, a
+    resurrection's walk and an owed crossing's arrival all land at the hearth.
     docs/engine/shard.md; `balance/probe_shardcovenant.ts`.
 31. **THE M6 ORDER** (the M6 plan `docs/design/shard-m6-plan.md` §6,
     2026-10-10: units and islands across cores) — A: W0 (the one-thread diet:
