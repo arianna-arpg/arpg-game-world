@@ -63,6 +63,7 @@ import { STATUS_DEFS, type StatusDef } from '../engine/status';
 import { toneTint } from '../engine/tuning';
 import { STANCE_PLANT_TIME, type Actor } from '../engine/actor';
 import { throngEvolution } from '../engine/throngEvolution';
+import type { LiteWire } from '../net/wireDiet'; // THE WIRE DIET: the lite mirror's wire ids (a hosted shell's bob phase)
 import { throngSightSet, wornThrongKindsOf } from '../engine/throng';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { PLY_CFG } from '../engine/plies';
@@ -5381,7 +5382,9 @@ export class Renderer {
         if (x < minX || x > maxX || y < minY || y > maxY) continue;
         const s = this.liteSpriteOf(wire.k[wire.b[j]] ?? '');
         if (!s) continue;
-        const bob = s.flier ? Math.sin(t * 5 + j * 0.8) * 2.2 : 0;
+        const ids = (wire as LiteWire).i; // THE WIRE DIET: a body's own phase rides its wire id (shard only)
+        const ph = ids ? ids[j / 3] * 0.8 : j * 0.8;
+        const bob = s.flier ? Math.sin(t * 5 + ph) * 2.2 : 0;
         ctx.drawImage(s.img, x - s.half, y - s.half + bob);
       }
       return;

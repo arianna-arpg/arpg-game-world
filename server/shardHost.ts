@@ -45,6 +45,7 @@ import { CLASSES, type ClassDef } from '../src/data/classes';
 import { rollSeed } from '../src/core/rng';
 import { noteActionEcho, resetActionEcho, serializeSnapshot, serializeZone } from '../src/net/snapshot';
 import { stampAudiences } from '../src/net/seatView';
+import { WIRE_DIET_CFG } from '../src/net/wireDiet'; // THE WIRE DIET's switch (the dress beat's whole re-ship)
 import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction, PlayerInput } from '../src/net/intent';
 import { massDigest } from '../src/worldmass/random';
@@ -53,6 +54,7 @@ import { MusterDesk } from './muster';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
 import { ShardTransport, type ShardJoin } from './shardTransport';
+import { ShardDiet } from './wireDiet'; // THE WIRE DIET (shard sync pass C): interest, the codec, the dress ledger, the carry
 import { VesselDesk } from './vessel';
 import { ShardCorpses, shardRecordsPath } from './corpses';
 import { UnitRegistry, type SimUnit } from './simUnits';
@@ -277,6 +279,9 @@ export class ShardHost {
   /** THE SIM UNITS (server/simUnits.ts): the keeper and every live unit, THE SEAT
    *  LEDGER, THE HAND-OFF QUEUE and the direct `travel` door. */
   readonly units: UnitRegistry;
+  /** THE WIRE DIET (server/wireDiet.ts): each socket's frame per audience, its dress delta
+   *  and its carry; the transport writes what it builds. */
+  readonly diet: ShardDiet;
   /** THE ROVING SHADOW's seat (the most recent seat of the cluster being visited), the
    *  world time its visit ends, and the hops taken (the status page's `rove`). */
   private roveAnchorId: string | null = null;
@@ -354,6 +359,8 @@ export class ShardHost {
     }
     this.hearth = { x: this.keeper.actor.pos.x, y: this.keeper.actor.pos.y, tier: this.keeper.actor.tier };
     this.net = new ShardTransport();
+    this.diet = new ShardDiet(id => this.units.worldOf(id)); // THE WIRE DIET: a seat's ground is its unit's World
+    this.net.diet = this.diet;
     this.net.log = this.log;
     this.net.worldmass = this.worldmass;
     this.net.features = [...this.account.features];
@@ -786,13 +793,17 @@ export class ShardHost {
       // kept the count) — the engine's own doodad revision is the signal.
       u.lastSentDoodadRev = w.doodadsVersion();
       u.dressTimer = SHARD_CFG.dressSec;
-      this.net.sendZoneToMany(serializeZone(w), ids);
+      // THE WIRE DIET: the dress itself rides each socket's `dd` rows on the next snapshot; the
+      // whole message re-ships only when the zone's own frame (theme, exits, lanes, walk) moved.
+      const z = serializeZone(w);
+      if (!WIRE_DIET_CFG.enabled || this.diet.frameMoved(w, z)) this.net.sendZoneToMany(z, ids);
     }
     if (heartbeat) for (const s of w.seats) w.markMetaDirty(s);
     if (!beat) return;
     this.units.run(u, uw => {
       const snap = serializeSnapshot(uw, this.snapTick);
       stampAudiences(uw, snap); // THE ACTING SEAT: the notices' and the eyecatch's audiences (the transport ships each to its own)
+      this.diet.bind(snap, uw); // THE WIRE DIET: the transport builds each socket's frame from this World
       this.net.sendStateTo(snap, ids);
       uw.metaDirty.clear();
     });

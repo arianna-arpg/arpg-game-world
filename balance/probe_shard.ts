@@ -55,7 +55,8 @@ import { COOP_SCALING } from '../src/data/coop';
 import type { Actor } from '../src/engine/actor';
 import { WsTransport, WS_TRANSPORT_CFG, defaultShardUrl, normalizeShardUrl } from '../src/net/ws';
 import { wildsShellActive, wildsShellAttach, wildsShellStream, wildsShellZone } from '../src/net/wildsClient';
-import { applySnapshot, serializeSnapshot, serializeZone } from '../src/net/snapshot';
+import { applySnapshot, serializeSnapshot, serializeZone, type StateSnapshot as Snap } from '../src/net/snapshot';
+import { WIRE_DIET_CFG, dressKey } from '../src/net/wireDiet'; // THE WIRE DIET: P's dress law (the delta, and the switch's old beat)
 import { World } from '../src/engine/world';
 import { buildManifest } from '../src/packages/manifest';
 import { makeAccount } from '../src/meta/account';
@@ -549,16 +550,31 @@ await host.stop();
   check('P pocket: a pocket zone message drops the shell\'s runtime', shell.massRuntime === null);
   wildsShellZone(shell, zmsg, hello.seed);
   check('P pocket: the surface message re-seats the runtime and its walk', shell.massRuntime !== null && shell.walk === shell.massRuntime.walk && shell.zone.id === MASS_ZONE);
-  // THE DRESS BEAT: a grown doodad roster re-ships the zone message within dressSec.
+  // THE DRESS BEAT under THE WIRE DIET: a grown doodad roster rides the next snapshot's `dd`
+  // rows and the zone message stays home (it ships on a zone change); with the diet switched
+  // off, the beat re-ships the whole message within dressSec as it always did.
   let zones2 = 0;
+  const dressed: Snap[] = [];
   const offZ = c.onZone(() => { zones2++; });
+  const offD = c.onState(s => { if (s.dd) dressed.push(s); });
   await runTicks(wilds, Math.ceil(SHARD_CFG.dressSec * SHARD_CFG.tickHz) + 2);
   const quiet = zones2;
-  w.doodads.push({ ...w.doodads[0], pos: { x: w.doodads[0].pos.x + 7, y: w.doodads[0].pos.y + 7 } });
-  w.markDoodadsChanged(); // the engine's own revision is the beat's signal
+  const grown = { ...w.doodads[0], pos: { x: w.doodads[0].pos.x + 7, y: w.doodads[0].pos.y + 7 } };
+  w.doodads.push(grown);
+  w.markDoodadsChanged(); // the engine's own revision is the ledger's signal
   await runTicks(wilds, Math.ceil(SHARD_CFG.dressSec * SHARD_CFG.tickHz) + 2);
-  offZ();
-  check('P dress: a changed doodad roster re-ships the zone message on the beat, a still one does not', quiet === 0 && zones2 === 1, `quiet ${quiet}, after ${zones2}`);
+  const grownKey = dressKey(Math.round(grown.pos.x * 100) / 100, Math.round(grown.pos.y * 100) / 100, grown.kind);
+  const carried = dressed.flatMap(s => s.dd?.a ?? []).filter(r => dressKey(r.p[0], r.p[1], r.kind) === grownKey).length;
+  check('P dress: a changed doodad roster rides the next snapshot\'s dd rows and never re-ships the zone message, a still one ships nothing',
+    quiet === 0 && zones2 === 0 && carried === 1, `quiet ${quiet}, after ${zones2}, the piece carried ${carried}x`);
+  WIRE_DIET_CFG.enabled = false;
+  const zonesOff = zones2;
+  w.doodads.push({ ...grown, pos: { x: grown.pos.x + 7, y: grown.pos.y + 7 } });
+  w.markDoodadsChanged();
+  await runTicks(wilds, Math.ceil(SHARD_CFG.dressSec * SHARD_CFG.tickHz) + 2);
+  WIRE_DIET_CFG.enabled = true;
+  offZ(); offD();
+  check('P dress: with the diet switched off, the beat re-ships the whole message (the old law, kept for the A/B)', zones2 - zonesOff === 1, `re-ships ${zones2 - zonesOff}`);
 
   c.leave();
   await waitFor(() => w.seats.length === 1, wilds, 60);
