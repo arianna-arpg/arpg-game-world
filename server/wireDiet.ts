@@ -23,8 +23,9 @@
 //                      changes since it (`dd`); a zone message stamps it.
 //   THE CARRY          a beat a socket skipped (flow control, a congested
 //                      buffer) carries its rows that ride only on a change
-//                      (the journal, the build, the shelf, the account view)
-//                      into the next frame that socket receives.
+//                      (the journal, the build, the shelf, the buyer's own
+//                      shelf row, the account view) into the next frame that
+//                      socket receives.
 //   THE LITE IDS       a lite body keeps one wire id per life (a slot's
 //                      rebirth re-salts its seat hash: a new id).
 // ---------------------------------------------------------------------------
@@ -35,6 +36,7 @@ import type { Doodad, PlacedStructure } from '../src/engine/levelgen';
 import { COOP_SCALING } from '../src/data/coop';
 import { encodeFrame, WS_OP } from '../src/net/wsframe';
 import { SEAT_OWN_ROWS, type DoodadW, type SeatMetaW, type SeatW, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
+import type { ShelfW } from '../src/net/snapshot'; // THE SHELF PER BUYER's row rides THE CARRY (W9's finding)
 import type { JournalW } from '../src/net/journalWire';
 import { WIRE_DIET_CFG, dietFarRow, dietGrid, dietIdentity, dietKept, dietRow, dressKey, type DressDeltaW } from '../src/net/wireDiet';
 import '../src/net/seatView'; // THE ACTING SEAT's host-side audiences (NoticeW.to, StateSnapshot.ecTo)
@@ -54,6 +56,8 @@ export interface DietSeat {
 }
 interface DietCarry {
   jn?: JournalW;
+  /** THE SHELF PER BUYER: the buyer's own shelf row (SeatW.vd), which rides only on a change and its beat. */
+  vd?: ShelfW;
   meta?: SeatMetaW;
   shelf?: Pick<StateSnapshot, 'vendor' | 'vendorRestockAt' | 'vendorCap'>;
   access?: StateSnapshot['memoryAccess'];
@@ -297,6 +301,8 @@ export class ShardDiet {
     const c = st.carry ??= {};
     const jn = s.seats[seatId]?.jn;
     if (jn !== undefined) c.jn = jn;
+    const vd = s.seats[seatId]?.vd; // THE SHELF PER BUYER's row (W9's finding: a skipped beat held its change)
+    if (vd !== undefined) c.vd = vd;
     const meta = s.seatMeta?.[seatId];
     if (meta) c.meta = meta;
     if (s.vendor !== undefined) c.shelf = { vendor: s.vendor, vendorRestockAt: s.vendorRestockAt, vendorCap: s.vendorCap };
@@ -476,7 +482,9 @@ export class ShardDiet {
       tail.push(',"seats":{' + nearIds.filter(id => s.seats[id]).map(id => {
         if (id !== me) return JSON.stringify(id) + ':' + stripped(id);
         const own = s.seats[id];
-        return JSON.stringify(id) + ':' + JSON.stringify(own.jn === undefined && carry?.jn !== undefined ? { ...own, jn: carry.jn } : own);
+        const withJn = own.jn === undefined && carry?.jn !== undefined ? { ...own, jn: carry.jn } : own;
+        const withVd = withJn.vd === undefined && carry?.vd !== undefined ? { ...withJn, vd: carry.vd } : withJn; // THE SHELF PER BUYER carries too
+        return JSON.stringify(id) + ':' + JSON.stringify(withVd);
       }).join(',') + '}');
       const meta = s.seatMeta?.[me] ?? carry?.meta;
       if (meta) tail.push(',"seatMeta":' + JSON.stringify({ [me]: meta }));

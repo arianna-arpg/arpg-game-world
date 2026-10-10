@@ -27,6 +27,8 @@
 //   F  FLOW CONTROL: a client that stops acking gets at most maxUnacked + 1 frames
 //      past its ack, its changed build and dress carry into the frame that resumes
 //      it, and it resumes when it acks
+//   F2 THE CARRY holds the buyer's own shelf row (SeatW.vd): a change a throttled
+//      socket skipped rides the frame that resumes it, off the beat
 //   G  the hit flash glides on a hosted shell (a fall eases, a rise stands)
 // ---------------------------------------------------------------------------
 
@@ -42,7 +44,7 @@ import { registerDoodadRule } from '../src/engine/levelgen';
 import { makeAccount } from '../src/meta/account';
 import { buildManifest } from '../src/packages/manifest';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { applySnapshot, applyZone, interpolateSnapshot, serializeZone, type ActorW, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
+import { applySnapshot, applyZone, interpolateSnapshot, serializeZone, WIRE_CFG, type ActorW, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
 import { WIRE_DIET_CFG, dressKey, glideLite, type LiteWire } from '../src/net/wireDiet';
 import { WireShell } from '../src/net/shell';
 
@@ -400,6 +402,41 @@ const rowOf = (s: StateSnapshot, id: number): ActorW | undefined => s.actors.fin
   const fresh = A.got.filter(s => s.zoneId === hearthZone);
   check('E zone: a zone change ships the whole zone (the one road it still rides), and the new ground\'s frames follow',
     !!u && A.zones.length === z0 + 1 && A.zones.at(-1)!.zoneId === hearthZone && fresh.length >= 3, `zones +${A.zones.length - z0}, frames ${fresh.length}`);
+}
+
+// =================================== F2: the buyer's shelf row rides THE CARRY ==
+{
+  // W9's finding (W11): THE SHELF PER BUYER's own row (SeatW.vd) rides only on a change and on
+  // its beat, so a change a throttled socket skipped must ride the frame that resumes it, as
+  // the journal and the build do. B joins A at Brandt's counter (the hearth unit), stops acking,
+  // the counter restocks while B is skipped, and B's next frame carries its new shelf off the beat.
+  const beat = WIRE_CFG.vendorBeat;
+  host.units.travel(B.id, hearthZone);
+  for (let i = 0; i < 200 && B.got.at(-1)?.zoneId !== hearthZone; i++) await tick(1);
+  const hw = host.units.worldOf(B.id)!;
+  const counter = hw.zone.id === hearthZone && hw.smithCounterHere();
+  for (let i = 0; i < 400 && !B.got.some(s => s.zoneId === hearthZone && s.seats[B.id]?.vd); i++) await tick(1);
+  // Throttle just past a beat, so the resume lands well before the next one.
+  for (let i = 0; i < 400 && (B.got.at(-1)?.tick ?? 0) % beat !== 2; i++) await tick(1);
+  (host as unknown as { metaHeartbeat: number }).metaHeartbeat = 1e9;
+  B.c.setAcking(false);
+  const k0 = host.diet.skipped;
+  await tick(BEAT * (WIRE_DIET_CFG.maxUnacked + 3));
+  const skipping = host.diet.skipped > k0;
+  const n0 = B.got.length;
+  hw.restockVendor(); // every buyer's shelf there re-deals: B's row changes while B is skipped
+  await tick(BEAT * 3);
+  const starved = B.got.length - n0;
+  const changed = [...sent.values()].filter(s => s.zoneId === hearthZone && s.seats[B.id]?.vd).at(-1);
+  B.c.setAcking(true);
+  const n1 = B.got.length;
+  await tick(BEAT * 3);
+  const first = B.got[n1], hostFirst = first ? canonical(first) : undefined;
+  check('F2 carry: a throttled buyer\'s shelf change rides the frame that resumes it, off the beat (the host\'s own snapshot for that tick carried none)',
+    counter && skipping && starved === 0 && !!changed && !!first && first.tick % beat !== 1 && !!hostFirst && hostFirst.seats[B.id]?.vd === undefined
+      && JSON.stringify(first.seats[B.id]?.vd) === JSON.stringify(changed.seats[B.id].vd),
+    `counter ${counter}, skipping ${skipping}, starved ${starved}, change at tick ${changed?.tick ?? '-'}, resumed at tick ${first?.tick ?? '-'}: vd ${first?.seats[B.id]?.vd ? 'carried' : 'none'}`);
+  (host as unknown as { metaHeartbeat: number }).metaHeartbeat = SHARD_CFG.metaHeartbeatSec;
 }
 
 // ======================================================= G: the hit flash glides ==

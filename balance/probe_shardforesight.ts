@@ -31,6 +31,8 @@
 //   D  THE BROADCAST LANE: the co-op host's serializeSnapshot carries the row
 //      through the WebRTC lane's JSON round trip, and a co-op client's stub draws
 //      the host's figure (no grid on that lane: the row exactly)
+//   E  THE SHELF ROW ON A SKIPPED BEAT (W9's finding): THE CARRY holds the buyer's
+//      own shelf row (SeatW.vd) through skipped beats into the next frame out
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
@@ -51,7 +53,8 @@ import { foresightOf, foresightView, type ForesightGeo } from '../src/engine/for
 import { drawForesight, foresightProgress } from '../src/render/vis/foresightLayer';
 import { traceAoePath } from '../src/render/vis/aoeTrace';
 import { foresightOfRow, FORESIGHT_W_KIND, type ForesightW } from '../src/net/foresightWire';
-import { applySnapshot, applyZone, serializeSnapshot, serializeZone, type ActorW, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
+import { applySnapshot, applyZone, serializeSnapshot, serializeZone, type ActorW, type ShelfW, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
+import { decodeFrames } from '../src/net/wsframe';
 import { DIET_IDENTITY, WIRE_DIET_CFG, dietGrid, dietKept, dietRow } from '../src/net/wireDiet';
 import { makeAccount } from '../src/meta/account';
 import { buildManifest } from '../src/packages/manifest';
@@ -613,6 +616,37 @@ for (const [label, def, aimAt] of [
   check('B none: a cast that draws nothing (a summon) ships its cast row without fg', casts.length >= 1 && casts.every(x => rowOf(x, foe.id)!.cast!.fg === undefined),
     `${summon.id}: ${casts.length} cast rows`);
   W.actors.splice(W.actors.indexOf(foe), 1);
+}
+
+// ============================================ E: THE SHELF ROW ON A SKIPPED BEAT ==
+{
+  // W9's finding: THE CARRY held a skipped beat's journal and build, never the buyer's own shelf
+  // row (SeatW.vd), so a throttled buyer heard its shelf change only on its next shelf beat. The
+  // diet's own two halves, driven by hand on a real snapshot of this world: a skipped beat that
+  // carried the change, a quieter skipped beat after it, then the frame that goes out.
+  const base = [...sent.values()].map(v => v.s).filter(s => s.zoneId === W.zone.id && !!s.seats[A.id]).at(-1)!;
+  const shelf: ShelfW = { v: [], at: 4321.5, cap: 3 };
+  const mine = (s: StateSnapshot, vd: ShelfW | undefined): StateSnapshot => {
+    const own = { ...s.seats[A.id] };
+    if (vd) own.vd = vd; else delete own.vd;
+    return { ...s, seats: { ...s.seats, [A.id]: own } };
+  };
+  const st = host.diet.seat();
+  host.diet.hold(st, mine(base, shelf), A.id); // the beat that carried the change, skipped
+  host.diet.hold(st, mine(base, undefined), A.id); // a quieter beat after it, skipped too
+  const outOf = (f: { frame: Uint8Array }): StateSnapshot => {
+    const d = decodeFrames(f.frame, 1 << 24, false);
+    return (JSON.parse(new TextDecoder().decode(d.frames[0].payload)) as { snap: StateSnapshot }).snap;
+  };
+  const quiet = mine(base, undefined);
+  const [f1] = host.diet.frames(W, quiet, [{ seat: A.id, st, conn: null }]);
+  const out1 = f1 ? outOf(f1) : undefined;
+  if (f1) host.diet.delivered(st, f1);
+  const [f2] = host.diet.frames(W, quiet, [{ seat: A.id, st, conn: null }]);
+  const out2 = f2 ? outOf(f2) : undefined;
+  check('E carry: a buyer\'s shelf row a skipped beat held rides the next frame that goes out (a quieter skipped beat never drops it), and once delivered it is spent',
+    JSON.stringify(out1?.seats[A.id]?.vd) === JSON.stringify(shelf) && !!out2 && out2.seats[A.id]?.vd === undefined,
+    `first ${JSON.stringify(out1?.seats[A.id]?.vd ?? null)}, then ${JSON.stringify(out2?.seats[A.id]?.vd ?? null)}`);
 }
 
 A.c.leave();
