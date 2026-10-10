@@ -25,7 +25,8 @@
 //   E  THE SHELF PER BUYER: two buyers at one counter are dealt from the same beat, read
 //      different shelves at their own levels, a purchase changes the buyer's alone, THE
 //      PATRON'S HOLD keys by character and rides the world save so, and each socket hears
-//      its own shelf row (SeatW.vd) and never another's.
+//      its own shelf row (SeatW.vd) and never another's, where its counter stands (a unit
+//      with no counter ships none; home again it rides on its beat).
 import { createHash } from 'node:crypto';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -481,6 +482,26 @@ const KEY = questWorldKey(w.manifest.seed, false);
   check('E wire: and never another\'s (THE OWN ENTRY)',
     A.snaps.slice(nA).every(s => s.seats[B.id]?.vd === undefined) && B.snaps.slice(nB).every(s => s.seats[A.id]?.vd === undefined)
       && A.snaps.slice(nA).every(s => s.vendor === undefined));
+  // The shelf travels with its buyer and rides only where its counter stands: a unit with no
+  // counter ships none on its beat (the client keeps its last), and home again it rides.
+  // (THE SHELF BEAT counts snapshots: one every vendorBeat of them, a snapshot every few ticks.)
+  const beatTicks = WIRE_CFG.vendorBeat * Math.max(1, Math.round(SHARD_CFG.tickHz / SHARD_CFG.stateHz)) + 6;
+  const onBeat = (s: StateSnapshot): boolean => s.tick % WIRE_CFG.vendorBeat === 1;
+  const road = w.exits.find(e => e.to !== '?' && !!w.zoneMap[e.to])!;
+  const unit = host.units.travel(A.id, road.to);
+  await runTicks(1);
+  const nAway = A.snaps.length;
+  await runTicks(beatTicks);
+  const away = A.snaps.slice(nAway);
+  host.units.travel(A.id, w.zone.id);
+  toHearth(sA, -60);
+  const nHome = A.snaps.length;
+  await runTicks(beatTicks);
+  const home = A.snaps.slice(nHome).filter(s => s.seats[A.id]?.vd);
+  check('E wire: away from the counter the shelf rides nowhere, and home again it rides on its beat',
+    !!unit && unit.world !== w && !unit.world.smithCounterHere() && away.some(onBeat) && away.every(s => s.seats[A.id]?.vd === undefined)
+      && home.length > 0 && home[home.length - 1].seats[A.id]!.vd!.v.length === shelfOf2(sA).length,
+    `${away.length} snapshots away (a beat among them: ${away.some(onBeat)}), ${home.length} rows home`);
 }
 
 for (const cl of [A, B]) cl.c.leave();

@@ -219,10 +219,12 @@ own restock re-deals every buyer's there, and a purchase splices the buyer's
 shelf alone. THE PATRON'S HOLD and THE STANDING ORDER persist per character in
 `WorldStateSave.charVendorHolds` (the vendorHolds shape, by character key; absent
 off a hosted world). The wire ships each buyer its own shelf as `SeatW.vd` under
-THE OWN ENTRY on a change and on THE SHELF BEAT; a hosted world never ships the
-root `vendor` rows. Off a hosted world nothing here runs: the seeds, the shelf and
-the rows are byte for byte what they were (`balance/probe_shardcharacter.ts` Z
-pins THE SOLO DIGEST; E pins the per-buyer law).
+THE OWN ENTRY on a change and on THE SHELF BEAT, in a zone where Brandt's counter
+stands (`World.smithCounterHere`; elsewhere the client keeps its last); a hosted
+world never ships the root `vendor` rows. Off a hosted world nothing here runs:
+the seeds, the shelf and the rows are byte for byte what they were
+(`balance/probe_shardcharacter.ts` Z pins THE SOLO DIGEST; E pins the per-buyer
+law).
 
 ## The counter tabs + the counter glass (2026-07-22)
 

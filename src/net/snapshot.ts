@@ -1080,8 +1080,10 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     if (hv) row.hv = hv;
     if (world.harvestHolds(s)) row.rooted = true;
   } });
-  // THE SHELF PER BUYER (card 29 ruled): each buyer's own shelf, THE OWN ENTRY's (hosted worlds alone).
-  if (world.localSeat.keeper) for (const s of world.seats) {
+  // THE SHELF PER BUYER (card 29 ruled): each buyer's own shelf, THE OWN ENTRY's (hosted worlds alone),
+  // where the counter it is read at stands (a buyer's shelf travels with it; elsewhere it rides nowhere
+  // and the client keeps its last).
+  if (world.localSeat.keeper && world.smithCounterHere()) for (const s of world.seats) {
     const row = seats[s.id], vd = row ? ownShelfOf(world, s, tick) : undefined;
     if (row && vd) row.vd = vd;
   }

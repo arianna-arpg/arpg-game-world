@@ -44016,6 +44016,12 @@ export class World {
     return shelf;
   }
 
+  /** Does Brandt's counter stand here? THE SHELF PER BUYER's wire gate (net/snapshot.ts):
+   *  a buyer's shelf row ships only where the counter it is read at stands. */
+  smithCounterHere(): boolean {
+    return this.zoneHasVendorCounter && this.actors.some(a => this.hasNpcRole(a, 'vendor') && !a.dead);
+  }
+
   /** THE SHELF PER BUYER's seed limb: the buyer's character inside a hosted purchase
    *  (null elsewhere, so the solo and co-op seeds stay what they were). */
   shelfCharKey(): string | null { return this.shelfBuyer ? charKeyOf(this.shelfBuyer) : null; }
