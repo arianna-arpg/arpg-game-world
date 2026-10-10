@@ -1,3 +1,12 @@
+ExplorationPopulation fixes derived bombard census retention and settled native
+visual/AI query deadlines that prevented offscreen dormancy. Keep actual emitted
+attacks, unknown clocks and controller dependencies pinned; never erase native
+state to free capacity. Verify worldmass_exploration, dormancy/pinattribution,
+engine/formations/paging/resume and all types, plus the actual client Continue
+course. Native density is still substantially below main, and continuing
+wilderness roads are absent: docs/worldgen/exploration-population.md defines
+measured gaps and required live-content/route acceptance, not completed parity.
+
 NativeAreaSceneGraph shares all 22 original campaign graph preparation methods
 with World. NativeAreaSceneBoundaries binds actual local graph/coast/geometry for
 the complete pre-layout operation, retaining IDs, native child zones, events,

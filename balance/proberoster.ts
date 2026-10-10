@@ -175,6 +175,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_birth.ts', status: 'green', tier: 'fast', why: 'native factory variants and wounded guardians survive Continue without consuming combat RNG; legacy descriptors and invalid records' },
   { probe: 'probe_worldmass_regional.ts', status: 'green', tier: 'fast', why: 'native regional compositions, climate coverage and body-clear cache approaches in every orientation' },
   { probe: 'probe_worldmass_activityresidency.ts', status: 'green', tier: 'fast', why: 'repeated native shrine and puzzle owners, safe retirement, partial progress and once-only real Continue' },
+  { probe: 'probe_worldmass_exploration.ts', status: 'green', tier: 'fast', why: 'Actual AI and World travel releases census/query pins, keeps emitted attacks live, and preserves 360 native survivors through cold Continue and return' },
   { probe: 'probe_worldmass_dormancy.ts', status: 'green', tier: 'fast', why: 'native cohort-safe dormancy, pinned dependencies, exact sleeping state, bounded fair retirement and real generated Continue' },
   { probe: 'probe_worldmass_nativefeatures.ts', status: 'green', tier: 'fast', why: 'complete native compiler descriptors, massif and compound structure breadth, cave seating and honest capability refusal' },
   { probe: 'probe_worldmass_nativegeneration.ts', status: 'green', tier: 'fast', why: 'Isolated native event and court-shrine side channels preserve complete frozen definitions and restore finite registries.' },

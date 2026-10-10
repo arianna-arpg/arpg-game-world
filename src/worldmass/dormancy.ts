@@ -1,3 +1,6 @@
+import { MONSTERS } from '../data/monsters';
+import { tellSpecsOf } from '../engine/tells';
+import { canonical } from './random';
 import { Actor } from '../engine/actor';
 import { StatSheet } from '../engine/stats';
 import type { World } from '../engine/world';
@@ -335,11 +338,14 @@ export interface NativeDormancyOwnership {
   /** The source owner certifies the native observational tell scheduler. Its
    * deadline, specs, values and revision remain in the complete actor codec. */
   nativeTellClock?: true;
+  /** ExplorationPopulation's ordinary living-native eligibility proof. Kind-owned
+   * controllers continue supplying their own narrower clock certificates. */
+  nativeQuietQueryClocks?: true;
 }
 export function nativeDormancyRefusal(a:Actor,world:World,quietSeconds:number, captured?:NativeActorState|null,
   ownership?:NativeDormancyOwnership): string | null {
   if(a.dead||a.team!=='enemy'||!a.fromZoneGen||a.companion||a.downed)return 'not a living native enemy';
-  return nativeActorQuietRefusal(a,world,quietSeconds,captured,ownership);
+  return nativeActorQuietRefusal(a,world,quietSeconds,captured,{...ownership,nativeQuietQueryClocks:true});
 }
 
 /** Shared native quiet-state proof only. The caller must first prove its own
@@ -377,11 +383,26 @@ export function nativeActorQuietRefusal(a:Actor,world:World,quietSeconds:number,
   for(const [k,v]of Object.entries(a))if(typeof v==='number'&&/(At|Until)$/.test(k)&&v>world.time){
     // This recurring visual read has no gameplay work to finish. Keep its
     // exact clock; after absence the native scheduler evaluates once, normally.
-    if(k==='tellNextAt'&&ownership?.nativeTellClock&&captured)continue;
+    if(k==='tellNextAt'&&captured&&(ownership?.nativeTellClock
+      || ownership?.nativeQuietQueryClocks&&nativeTellClockOwned(a)))continue;
+    // ExplorationPopulation: idle target rescans and movement duty cycles own no
+    // pending attack. All engagement/action guards above still apply; on wake
+    // the ordinary AI observes the preserved deadline and evaluates normally.
+    if(captured&&ownership?.nativeQuietQueryClocks&&(k==='aiRescanAt'||k==='aiTempoUntil'))continue;
     return 'native deadline '+k;
   }
   if(!(captured===undefined?captureNativeActorState(a):captured))return 'unsupported native state';
   return null;
+}
+
+/** The ordinary factory's visual scheduler reads state and emits no gameplay.
+ * Match its complete authored/variant source; custom sources still need their owner.
+ * Exact capture keeps both the deadline and current visual values. */
+function nativeTellClockOwned(a:Actor):boolean {
+  const def=a.defId&&MONSTERS[a.defId];
+  if(!def)return false;
+  try {return canonical(a.tellSpecs??[])===canonical(tellSpecsOf(def,a.brainVariant)??[]);}
+  catch {return false;} // Unknown/custom sources never earn a visual-only certificate.
 }
 
 export class MassDormancy {

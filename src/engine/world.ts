@@ -4125,7 +4125,8 @@ export class World {
    *  construction (the loop itself decides everything); stale-FALSE cannot
    *  happen without all three keys standing still. */
   private bombardPresent = false;
-  private bombardKey: { actors: Actor[] | null; len: number; mintRev: number } =
+  // ExplorationPopulation: a derived census must not retain or lease every actor.
+  private bombardKey: { actors: WeakRef<Actor[]> | null; len: number; mintRev: number } =
     { actors: null, len: -1, mintRev: -1 };
   private bombardMintRev = 0;
   shrines: Shrine[] = [];
@@ -15478,10 +15479,10 @@ export class World {
     // is derived, never hand-fed: identity/length re-key on any list
     // change, the mint rev on any fresh gun (createMonster), and a stale
     // TRUE just runs the loop below, which decides everything itself.
-    const k = this.bombardKey;
-    if (k.actors !== this.actors || k.len !== this.actors.length
-      || k.mintRev !== this.bombardMintRev) {
-      k.actors = this.actors; k.len = this.actors.length; k.mintRev = this.bombardMintRev;
+    const bombardCensus = this.bombardKey;
+    if (bombardCensus.actors?.deref() !== this.actors || bombardCensus.len !== this.actors.length
+      || bombardCensus.mintRev !== this.bombardMintRev) {
+      bombardCensus.actors = new WeakRef(this.actors); bombardCensus.len = this.actors.length; bombardCensus.mintRev = this.bombardMintRev;
       this.bombardPresent = this.actors.some(a =>
         a.defId !== undefined && MONSTERS[a.defId]?.bombard !== undefined);
     }

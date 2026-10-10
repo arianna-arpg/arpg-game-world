@@ -4758,3 +4758,13 @@ geographic policies restore their prior owners. See
 for binding, verification and the synchronous execution contract. Source issuance,
 ongoing controllers, complete event/content persistence, whole-area streaming,
 native biome/zone hierarchy and map zoom still require integration.
+
+## ExplorationPopulation acceptance follow-up (2026-10-09)
+
+The real travel starvation, native ambient density comparison, meaningful activity
+coverage and continuing wilderness road requirements are tracked in
+[Exploration population and destination audit](../worldgen/exploration-population.md).
+Complete native source/controller persistence must support the original population
+budgets; neither extracted birth methods nor decorative source counts establish
+content parity. MassJourney remains a finite opening circuit. The continuing
+road network and measured encounter-cadence gates in that audit remain unfinished.
