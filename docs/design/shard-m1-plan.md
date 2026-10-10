@@ -617,6 +617,10 @@ docs/engine/shard.md "THE MUSTER RING, THE REALM ROADS, TENANCY"):
 - **The act's stamps count per crossing seat.** A co-op party crossed as one (one
   'demon_portals_opened', one 'fracture_rifts_entered'); a hosted party crosses seat by seat,
   each member's crossing its own act. Named for her, unruled.
+- **THE PAIR STRIDE, met at the merge** (shard-world 72da43c3 re-packed the sight memo's keys as
+  `a.id * LOS_PAIR_STRIDE + b.id`): the hand-off's prune of the leaver's sight pairs decodes by
+  `LOS_PAIR_STRIDE` now (it still split by the old 1e6 and left every pair in the source);
+  probe_shardunits D pins it.
 - **THE REALM-WALK DIGEST** (probe_shardunits B, the realm half): a seeded solo hero crosses
   every realm gate and climbs out of each arena; committed before the split, it holds after it.
 
