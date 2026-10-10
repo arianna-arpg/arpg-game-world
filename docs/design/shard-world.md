@@ -862,6 +862,12 @@ in Mu first.**
     M2: a turn-in's ACCOUNT stamps (quest_done, the bounty counters, the
     vocation unlocks) still reach the shard's account, and the posting pins
     and growth rungs read `World.gateAccountOf` (the shard's account today).
+    Owed to the foundation (its file, untouched here): the Unbroken Wilds'
+    country boards (`dealMassBounties`, src/worldmass/bounties.ts) already
+    keep each hero's slate and hands in its own ledger, but their draw is
+    seeded without the character limb and filtered at `world.player`'s level
+    (the keeper's), so two heroes at one settlement board read one draw; the
+    seat is the seed's `questCharKey()` and the level's `questHandLevel()`.
 25. **POCKET TENANCY** (M1's first question) — A: shared pockets (whoever
     walks into a cave meets the same cave, her "generated for any player
     that simultaneously ran across it"). B: one instance per party.
