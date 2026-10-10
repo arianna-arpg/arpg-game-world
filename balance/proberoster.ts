@@ -62,6 +62,8 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_spiritrun.ts', status: 'green', tier: 'fast', why: 'Loading-screen directions, collision boundaries, streak speed, frame rates and bounded gates.' },
+
+  { probe: 'probe_nativeareasourcesession.ts', status: 'green', tier: 'slow', why: 'NativeAreaSourceSession and fresh area assembly preserve real campaign families, complete preparation and retained owners.' },
   { probe: 'probe_nativescenegraph.ts', status: 'green', tier: 'slow', why: 'Complete native graph, boundary, layout and birth agreement against original campaign code.' },
   { probe: 'probe_nativescenesky.ts', status: 'green', tier: 'fast', why: 'NativeSceneSky exact original source, all event sky sources, independent local areas, actual span terrain and geographic early-return parity.' },
   { probe: 'probe_nativescenebirthcomposition.ts', status: 'green', tier: 'fast', why: 'NativeSceneBirth complete owner composition, cold original/current/local full births, remembered state, RNG, partial failures and authority refusal.' },

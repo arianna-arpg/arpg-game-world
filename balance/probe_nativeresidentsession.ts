@@ -40,7 +40,12 @@ const archiveBytes=gunzipSync(Buffer.from('H4sIAAAAAAAACu1923IcN5bgrxzVOMwqO528X
 assert.equal(createHash('sha256').update(archiveBytes).digest('hex'),'101472c8806e2c95ebcb9158fb7009db106fa43964aa72cf704cdbf511f612c9');
 const archive=JSON.parse(archiveBytes.toString('utf8'));
 const emit=(text:string)=>ts.transpileModule(text,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-assert.equal(emit(readFileSync(new URL('../src/engine/npcDialogues.ts',import.meta.url),'utf8')),emit(archive.director.source),'whole director runtime/import identity');
+// NativeResidentHistory adds only optional visit-map injection. Pin the complete
+// original executable after restoring these two explicit constructor declarations.
+const sharedVisitSource=readFileSync(new URL('../src/engine/npcDialogues.ts',import.meta.url),'utf8');
+assert.ok(sharedVisitSource.includes('private visits:Map<string, number>;'));
+assert.ok(sharedVisitSource.includes('constructor(private readonly w: NativeNpcDialogueHost, visits:Map<string,number>=new Map()) { this.visits=visits; }'));
+assert.equal(emit(sharedVisitSource.replace('private visits:Map<string, number>;','private visits = new Map<string, number>();').replace('constructor(private readonly w: NativeNpcDialogueHost, visits:Map<string,number>=new Map()) { this.visits=visits; }','constructor(private readonly w: NativeNpcDialogueHost) {}')),emit(archive.director.source),'whole director runtime/import identity except explicit retained visit-map constructor');
 assert.equal(emit(readFileSync(new URL('../src/data/npcDialogues.ts',import.meta.url),'utf8')),emit(archive.data),'complete installed fact source runtime/import identity');
 const lexical:Record<string,unknown>={'../data/npcDialogues':dialogueData,'../data/monsters':{MONSTERS},'../data/transit':{npcDwellRadius},'../core/math':{dist},'../core/rng':{Rng},'./dialogue':{dialoguePages}};
 const original={} as typeof candidate;
