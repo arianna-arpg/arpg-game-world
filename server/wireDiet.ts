@@ -227,10 +227,16 @@ function dressSince(L: DressLedger, rev: number): { dd: DressDeltaW | null; json
   return out;
 }
 
-/** A zone message's frame: everything but the dress (the doodads and the plan structures). */
+/** A zone message's frame: everything but the dress (the doodads and the plan structures),
+ *  once per message (a message to many sockets is one frame). */
+const RESIDUALS = new WeakMap<ZoneMsg, string>();
 function residualOf(z: ZoneMsg): string {
-  const { doodads: _d, structures: _s, ...rest } = z;
-  return JSON.stringify(rest);
+  let r = RESIDUALS.get(z);
+  if (r === undefined) {
+    const { doodads: _d, structures: _s, ...rest } = z;
+    RESIDUALS.set(z, r = JSON.stringify(rest));
+  }
+  return r;
 }
 
 // --------------------------------------------------------------------- THE DIET --
@@ -271,10 +277,10 @@ export class ShardDiet {
 
   /** A zone message went to this socket: its ground is the World's as it stands (the ledger
    *  scanned at this moment). A message whose dress does not count out to the ledger's (one
-   *  serialized at another moment) stamps nothing, so the next frame ships a fresh one. */
+   *  serialized at another moment) stamps nothing, so the next frame ships a fresh one. (THE
+   *  CARRY is no ground: a build held through a throttle still rides the next frame.) */
   zoneShipped(st: DietSeat, seatId: string, z: ZoneMsg): void {
     const w = this.worldOfSeat(seatId);
-    st.carry = null;
     if (!w || z.zoneId !== w.zone.id) { st.dressWorld = null; return; }
     const L = dressScan(w);
     if (z.doodads.length !== L.roster.size) { st.dressWorld = null; return; }
