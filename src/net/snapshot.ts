@@ -82,6 +82,7 @@ import { gaugeFloor, gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'
 import { COOP_SCALING } from '../data/coop'; // THE WIRE'S EYES: the zone rows' reach (THE NEAR LAW's radius)
 import { applyCounterRows, applyCounterZone, counterZoneOf, harvestRowOf, journalRowOf, type HarvestW, type JournalW } from './journalWire'; // THE COUNTERS AND THE JOURNAL
 import { roadDwellRow } from '../engine/shardRoads'; // THE ROADS PER PLAYER (shard M1 W2): the road ring
+import { applyDressDelta, glideLite } from './wireDiet'; // THE WIRE DIET (shard sync pass C): the dress delta and the lite glide
 
 export type Vec2W = [number, number];
 
@@ -797,7 +798,7 @@ export interface StateSnapshot {
    *  (MonsterDef ids), `b` = flat (kindIdx, x, y) triples. Present only
    *  while the host's pool holds bodies; the client renders it verbatim
    *  (World.liteWire) — host-authoritative, self-healing at 20 Hz. */
-  lt?: { k: string[]; b: number[] };
+  lt?: { k: string[]; b: number[]; i?: number[] }; // THE WIRE DIET (shard only): `i` = each body's wire id, the shell's glide (net/wireDiet.ts)
   /** THE RAMPAGE FABRIC's felled set (engine/rampage.ts): position-keyed
    *  (doodad positions are seed-shared and immutable — splice-proof where
    *  indices are not) with the host-resolved stand-up progress `p` (-1 =
@@ -1845,6 +1846,9 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.musterRings = snap.mu?.length && (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) ? snap.mu : null;
   world.arena.w = snap.arena.w;
   world.arena.h = snap.arena.h;
+  // THE WIRE DIET (shard only, net/wireDiet.ts): the dress delta lands FIRST, so the door,
+  // hollow, annex, well, felled and drying reconciles below find the pieces it laid.
+  applyDressDelta(world, snap);
 
   // Structure doors: converge on the host's states through the SAME gate the
   // host used (client-side collision flip + grid repaint). Idempotent, so the
@@ -2338,6 +2342,7 @@ export function interpolateSnapshot(world: World, prev: StateSnapshot | null | u
   const runOn = opts?.runOn && span > 0 ? Math.min(Math.max(0, B.ahead), opts.runOn) : 0;
   const bPrevById = B.prev && (bLerp || runOn > 0) ? actorRowsById(B.prev) : null;
   const ownPredicted = (aw: ActorW): boolean => aw.seat !== undefined && aw.seat === world.clientSeatId && !!world.clientActionHook;
+  const hosted = world.partyRows !== null; // THE WIRE DIET's per-frame glides read a hosted world alone
   let sawOwn = false;
   for (const aw of B.snap.actors) {
     if (aw.seat !== undefined && aw.seat === world.clientSeatId) sawOwn = true;
@@ -2359,6 +2364,9 @@ export function interpolateSnapshot(world: World, prev: StateSnapshot | null | u
     } else {
       a.pos.x = aw.p[0]; a.pos.y = aw.p[1]; a.facing = aw.f;
     }
+    // THE WIRE DIET (a hosted world alone): the hit flash fades between the pair's rows; a
+    // fresh blow (a rise) stands at once.
+    if (hosted) a.hitFlash = bLerp && pa && aw.hf < pa.hf ? pa.hf + (aw.hf - pa.hf) * B.alpha : aw.hf;
     // THE POSE SCALARS glide between the pair's poses (a pose the pair does not hold
     // in both rows stands at its adopted values).
     const pw = a.bodyWalkPose, rw = aw.bodyWalkPose, pwPrev = pa?.bodyWalkPose;
@@ -2438,6 +2446,8 @@ export function interpolateSnapshot(world: World, prev: StateSnapshot | null | u
       const stub = adopted.zones.get(z.id);
       if (stub) glideZoneStub(stub, z, prevZones?.get(z.id), lerping ? alpha : 1);
     }
+    // THE WIRE DIET: the lite horde glides by wire id on the flights' own timing (shard only: `lt.i`).
+    glideLite(world, prev ?? null, snap, lerping ? alpha : 1, ahead, WIRE_CFG.eyes.projAheadSec);
   }
 
   // The own hero when it is no pooled body (never on a seated shell): the seat's own row.
