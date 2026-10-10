@@ -609,6 +609,24 @@ HUD's local site name reads a private runtime map the shell never fills.
      cannot lower `maxPopulation` itself because THE LAND DIGEST hashes the
      mass config. Units on worker threads (M6) is the lasting answer.
 
+     **THE EXACT SEAM (the M6 plan §3.3, 2026-10-10):** host state on the
+     runtime instance, never in the config, the land digest, the checkpoint or
+     any save: `setPopulationBudget({ total, floor } | null)` (a group's limit
+     becomes `clamp(floor, config.maxPopulation, floor(total / groups))` in both
+     branches of `populationLimit`; reservations, merges and dormancy unchanged;
+     lowering never kills; `null` restores today byte for byte, pinned in
+     `probe_worldmass_foci`) and `populationStats()` (the groups with their live
+     count and limit); optionally `setResidencyRadius(r | null)` so births stay
+     within `r` of a focus with the wake and sleep radii following (no
+     birth-then-sleep pump). The shard calls the setter from the host once a
+     second after detecting the method, so its governor runs cost-only against
+     an older foundation. Two findings beside it: the sight memo keyed pairs as
+     `a.id * 1e6 + b.id` and a long-lived shard's ids pass a million (fixed on
+     the shard lane as THE PAIR STRIDE, `probe_loskey.ts`);
+     `restoreNativeActorState` deletes every property before reassigning, which
+     likely leaves restored natives in V8's slow object mode (PLAUSIBLE, the
+     foundation's to measure).
+
    **Foundation implementation (2026-10-09):** the isolated
    `codex/shard-runtime-foundation` integration supplies simultaneous seat foci,
    connected-cluster population budgets, Node compiler ports, and seed/preset
@@ -875,6 +893,37 @@ in Mu first.**
     B: leave Immortals deathless on shards. Rec: A.
     **RULED (2026-10-10, her word): A. Built as THE IMMORTAL'S COVENANT ON A
     SHARD (W10).**
+31. **THE M6 ORDER** (the M6 plan `docs/design/shard-m6-plan.md` §6,
+    2026-10-10: units and islands across cores) — A: W0 (the one-thread diet:
+    the profile, the phase meter, THE THINKING EDGE, local rosters if the
+    profile points at the whole-roster scans) and W1 (THE GOVERNOR over the
+    foundation's budget seam) now, W2 (THE GLASS UNIT: pockets that speak only
+    in messages, still one thread) and W3 (THE THREAD HOST) once the
+    foundation commits to the island runtime. B: all four now. C: W0 and W1,
+    then decide from the profile and the player counts she expects. Rec: A.
+32. **THE GOVERNOR'S NUMBERS** — the per-group floor (Rec: 24, today's
+    delivered least); whether the tick may drop to 40 Hz under the heaviest
+    load (the wire stays 20 Hz; 30 Hz would halve it); whether THE DOOR (new
+    joins held at the lobby under overload) exists at all. Rec: 24, 40 Hz
+    allowed, no door until a real host is measured.
+33. **THE HARDWARE** — threads need cores and the codespace has two. Rec: a 4
+    to 8 core host before W3 lands; W0 and W1 run anywhere.
+34. **A WORKER'S DEATH** — A: its players wake at the hearth from their last
+    mirror (up to `persistSec` 20 s of progress lost). B: a seat checkpoint
+    beat (2 s, a few kB a seat). Rec: B.
+35. **ONE CLOCK** — A: lockstep across threads, every thread stepping the same
+    tick with the same start time and inputClock, so the slowest thread sets
+    the shard's tick. B: a clock per thread with a rebase law at every
+    hand-off. Rec: A.
+36. **THE ISLAND SEPARATION** — islands split where no player can see across
+    (about 3,200 px: the 1,600 px awake radius plus the view) with hysteresis;
+    a merge costs a short hold (up to about 100 ms) for the merging players
+    only; THE NEAR LAW (1,600 px) and the group merge (2,600 px) never cross
+    an island by arithmetic. Rec: as stated; the number is unblessed.
+37. **THE TRAVELLING COURT** — A: exact capture of every carried body on a
+    cross-thread hand-off (the couch guest's build plus live state, the court
+    captured exactly). B: timed summons re-minted at their life fraction. Rec:
+    A.
 
 ---
 
