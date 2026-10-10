@@ -69,8 +69,7 @@ import type { StateSnapshot, ZoneMsg } from '../src/net/snapshot';
 import type { SessionMsg } from '../src/net/transport';
 import { NullInput, type MetaAction, type PlayerInput } from '../src/net/intent';
 import { World, type Seat } from '../src/engine/world';
-import type { Actor, ConstructState } from '../src/engine/actor';
-import { resetActorIdCounter } from '../src/engine/actor';
+import { Actor, resetActorIdCounter, type ConstructState } from '../src/engine/actor';
 import { makeSkillInstance } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import { mintCave } from '../src/engine/worldgen';
@@ -87,6 +86,7 @@ import { SKILLS } from '../src/data/skills';
 import { COOP_SCALING } from '../src/data/coop';
 import { START_ZONE, type ZoneDef } from '../src/data/zones';
 import { FACTIONS } from '../src/data/monsters';
+import { BREACH } from '../src/packages/defs/breach';
 import { FORECHART_CFG, forechartSource } from '../src/world/forechart';
 import { WORLDSTATE_CFG } from '../src/meta/worldstate';
 import { makeSimWorld } from '../src/sim/arena';
@@ -391,6 +391,158 @@ function sweepWalk(): { digest: string; hash: string; legs: Record<string, unkno
     && /fallen/.test(String(legs.holds)), JSON.stringify(legs));
   check('J solo: THE SWEEP-WALK DIGEST is the constant W3 committed before any sweep was split (THE SOLO INVARIANT)',
     walk.hash === SWEEP_WALK_HASH, `${walk.hash} ← ${walk.digest.slice(0, 160)}…`);
+}
+
+// ===================================== B (the realm half): THE REALM-WALK DIGEST ==
+// THE REALM-WALK DIGEST, committed by W4 BEFORE the realm roads were split into a prep
+// half and a first-wake half: a seeded solo hero walks through every realm gate a world
+// stands (a demon rift, a crusade sanctum, the Necropolis, a fracture rift, a court's door,
+// then a cave breach into the dimension below), each staged with a real event behind it
+// (the overlays' dev seams; a rift's row and a court's door built from data), and climbs
+// back out of each arena. The digest (the hops, each realm's population, its first wake's
+// boss or seals and its context, the hero, the actors, the random draws, the clock, the
+// run ledger and the dimensions found) must print the same constant after the split.
+// It runs after the sweep walk, so the digests pinned before it never see its worlds.
+type RealmKind = 'demon' | 'crusade' | 'necropolis' | 'fracture' | 'court' | 'breach';
+const REALM_KINDS: readonly RealmKind[] = ['demon', 'crusade', 'necropolis', 'fracture', 'court', 'breach'];
+/** Stand a realm gate of `kind` at `at` in the World's own zone with a real event behind it
+ *  (the overlays' dev seams; a fracture rift's row and a court's door fabricated from data).
+ *  Returns the gate's key, or null when the zone will not hold the event. */
+function stageRealm(w: World, kind: RealmKind, at: { x: number; y: number }): string | null {
+  const zid = w.zone.id, view = w.devOverlayView(), sim = w.sim, p = w.clampPos(vec(at.x, at.y), 30);
+  switch (kind) {
+    case 'demon': {
+      const dfz = sim.demonFieldFor(w.zone.dimension);
+      if (!dfz || !(dfz.invasionOn(zid) || dfz.devIgnite(view, zid))) return null;
+      const info = dfz.invasionOn(zid);
+      if (!info) return null;
+      (priv(w).demonPortals as unknown[]).push({ pos: p, invId: info.id });
+      return `demon:${info.id}`;
+    }
+    case 'crusade': {
+      const cf = sim.crusadeField;
+      if (!cf || !(cf.crusadeOn(zid) || cf.devIgnite(view, zid))) return null;
+      const info = cf.crusadeOn(zid);
+      if (!info) return null;
+      (priv(w).crusadePortals as unknown[]).push({ pos: p, crusadeId: info.crusadeId });
+      return `crusade:${info.crusadeId}`;
+    }
+    case 'necropolis': {
+      const df = sim.deadwakeField;
+      if (!df || !(df.necropolisInfo() || df.devForceNecropolis(view, zid))) return null;
+      (priv(w).necropolisPortals as unknown[]).push({ pos: p });
+      return 'necropolis';
+    }
+    case 'fracture': {
+      const v = sim.fractureField?.surge().variants.find(x => !!x.capstone);
+      if (!v?.capstone) return null;
+      const id = `probe_rift_${zid}`;
+      (priv(w).fractureRifts as unknown[]).push({ id, pos: p, faction: v.faction, color: '#9a7ad0', variant: v.variant, level: w.zone.level, cap: v.capstone });
+      return `fracture:${id}`;
+    }
+    case 'court': {
+      const def = BREACH.encounters![0];
+      const lordId = def.court!.lords[0];
+      w.encounters.push({ def, scale: def.scales[0], pos: p, phase: 'door', radius: 60, timer: 30, maxTimer: 30, spawnTimer: 99,
+        kills: 0, bonusUsed: 0, spawned: new Set<number>(), lordId, doorAt: vec(p.x, p.y) });
+      return `court:${def.id}:${lordId}`;
+    }
+    case 'breach': {
+      priv(w).breachPos = p;
+      return w.realmGates().find(x => x.kind === 'breach')?.key ?? null;
+    }
+  }
+}
+/** The realm's first wake, as a census: its bosses (by the arena tags), its seals, its context. */
+const realmCensus = (w: World): { bosses: string; seals: number; ctx: string } => ({
+  bosses: w.actors.filter(a => !a.dead && !!a.tag && /realm|crusade_leader|necropolis_boss|fracture_boss|court_vessel/.test(a.tag)).map(a => a.tag).sort().join('+'),
+  seals: (priv(w).arenaWard as { seals: unknown[] } | null)?.seals.length ?? 0,
+  ctx: ['realmContext', 'crusadeRealmContext', 'necropolisRealmContext', 'fractureRealmContext'].filter(f => !!priv(w)[f]).join('+'),
+});
+const REALM_WALK_HASH = '15f0f829';
+const REALM_WALK_SEED = 0x4ea1a;
+function realmWalk(): { digest: string; hash: string; legs: Record<string, unknown> } {
+  const radius0 = COOP_SCALING.shareRadius, budget0 = FORECHART_CFG.beatBudgetMs;
+  COOP_SCALING.shareRadius = 0; FORECHART_CFG.beatBudgetMs = Infinity; // a solo world, the pinned governor
+  // The process's actor id counter where the walks before this one left it: the shard below
+  // deals ids from it (they salt per-body draws), so this walk hands it back untouched.
+  const ids0 = new Actor('the counter', 'enemy', { x: 0, y: 0 }).id;
+  const restore = seedGlobalRandom(REALM_WALK_SEED);
+  const seeded = Math.random;
+  let draws = 0;
+  Math.random = () => { draws++; return seeded(); };
+  try {
+    resetActorIdCounter();
+    const account = makeAccount();
+    const w = new World(account, Object.freeze(buildManifest(account, REALM_WALK_SEED)));
+    w.createPlayer(CLASSES.find(c => c.id === 'warrior')!, { name: 'Realmer', startingCompanions: false, startingFlasks: false });
+    const hero = (): Actor => w.player;
+    hero().invulnerable = true;
+    hero().level = 30; w.recalcSeat(w.localSeat); // the packages' level gates open
+    const hops: string[] = [w.zone.id];
+    const idle = (): void => { w.localSeat.lastActedAt = -1e3; w.localSeat.lastMovedAt = -1e3; hero().push = null; hero().casting = null; };
+    const step = (secs: number, done?: () => boolean): boolean => {
+      for (let t = 0; t < secs; t += 1 / 30) {
+        w.update(1 / 30);
+        if (hops[hops.length - 1] !== w.zone.id) hops.push(w.zone.id);
+        if (done?.()) return true;
+      }
+      return !!done?.();
+    };
+    const stand = (x: number, y: number): void => { const at = w.clampPos(vec(x, y), hero().radius); hero().pos.x = at.x; hero().pos.y = at.y; idle(); };
+    const calm = (): void => { for (const a of w.actors) if (a.team === 'enemy' && !a.dead) a.passive = true; };
+    const out = w.exits.find(e => e.to !== '?')!;
+    stand(out.pos.x, out.pos.y);
+    const exited = step(10, () => w.zone.id !== START_ZONE);
+    const field = w.zone.id;
+    // The field and its charted neighbours host the realms in turn (one event's ground never another's).
+    const sources = [field, ...Object.keys(w.zoneMap).filter(id => id !== field && id !== START_ZONE && !w.zoneMap[id].special
+      && w.zoneMap[id].objective.kind !== 'safe' && !id.startsWith('cave_') && !w.visited.has(id) && w.zoneMap[field].exits.some(e => e.to === id))];
+    const legs: Record<string, unknown> = { exited, sources: sources.length };
+    const rec: string[] = [];
+    let si = 0;
+    for (const kind of REALM_KINDS) {
+      let key: string | null = null;
+      for (let tries = 0; tries < sources.length && !key; tries++) {
+        const src = sources[si++ % sources.length];
+        if (w.zone.id !== src) { w.loadZone(src); hops.push(w.zone.id); }
+        calm();
+        stand(w.arena.w / 2, w.arena.h / 2);
+        key = stageRealm(w, kind, { x: hero().pos.x + 120, y: hero().pos.y });
+      }
+      const gate = key ? w.realmGates().find(g => g.key === key) : undefined;
+      const source = w.zone.id;
+      if (!gate) { legs[kind] = 'no gate'; continue; }
+      gate.enter(); // the solo crossing: both halves in the old order
+      hops.push(w.zone.id);
+      const c = realmCensus(w);
+      rec.push(`${kind}:${w.zone.id}:${w.actors.length}:${c.bosses}:${c.seals}:${c.ctx}`);
+      legs[kind] = w.zone.id !== source;
+      step(1);
+      if (kind === 'breach') continue; // the dimension below is the walk's end
+      calm();
+      const back = w.exits.find(e => e.to === w.caveReturn?.zoneId);
+      if (back) stand(back.pos.x, back.pos.y);
+      legs[kind + 'Back'] = !!back && step(10, () => w.zone.id === source);
+    }
+    const p = hero().pos;
+    const fnv = (s: string): string => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); };
+    const digest = [hops.join('>'), rec.join(' / '), `${Math.round(p.x)},${Math.round(p.y)}`, `actors ${w.actors.length}`, `draws ${draws}`,
+      `t ${w.time.toFixed(2)}`, `ledger ${JSON.stringify(w.ledger)}`, `dims ${[...(priv(w).discoveredDimensions as Set<string>)].join(',')}`].join(' | ');
+    return { digest, hash: fnv(digest), legs };
+  } finally {
+    Math.random = seeded; restore();
+    COOP_SCALING.shareRadius = radius0; FORECHART_CFG.beatBudgetMs = budget0;
+    resetActorIdCounter(ids0);
+  }
+}
+{
+  const walk = realmWalk();
+  const legs = walk.legs;
+  check('B realm walk: the solo hero crosses every realm gate (a rift, a sanctum, the Necropolis, a fracture rift, a court\'s door, a breach) and climbs out of each arena',
+    !!legs.exited && REALM_KINDS.every(k => legs[k] === true) && REALM_KINDS.filter(k => k !== 'breach').every(k => legs[k + 'Back'] === true), JSON.stringify(legs));
+  check('B realm walk: THE REALM-WALK DIGEST is the constant W4 committed before the realm roads were split (THE SOLO INVARIANT)',
+    walk.hash === REALM_WALK_HASH, `${walk.hash} ← ${walk.digest.slice(0, 220)}…`);
 }
 
 // ====================================================== A: THE DERIVED CENSUS ==
