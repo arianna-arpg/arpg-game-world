@@ -590,6 +590,24 @@ HUD's local site name reads a private runtime map the shell never fills.
    3,500 px already breach the tick gate (p95 47 ms, 8 percent dropped,
    against 13 ms clustered), because dormancy and native paging scale with
    how far apart the observers stand; THE MANY SHADOWS must budget that too.
+   - **THE NEIGHBORHOOD GOVERNOR (ask 4, 2026-10-10, measured on 18a1b437).**
+     The delivered neighborhoods give EVERY group the full `maxPopulation`
+     budget (96), so the live population scales with the number of groups:
+     six bots 3,500 px apart stand ~345 natives (one focus stood ~63) and the
+     single sim thread falls to a tick of p50 100 to 150 ms, p95 230 to 520 ms,
+     87 percent of ticks dropped, inputs fed 20 percent; three bots apart stand
+     ~210 natives at p50 45 ms (p95 97 ms). The cost is ~0.2 ms per live actor
+     per tick, so one thread carries ~80 live actors inside a 60 Hz budget
+     (~150 at 30 Hz; a 30 Hz tick does not help, the per-tick cost is the
+     whole problem: six bots at 30 Hz stood p50 141 ms). The living radius
+     itself is delivered: least 21 to 32, mean 27 to 44 foes within reach of
+     every spread player, against 0 before. Ask: a shard-wide population
+     budget shared across groups (per group = max(floor, total / groups)) on
+     `update(world, boot, foci, { budget })`, and an adaptive governor the host
+     feeds with its measured tick (the soak's `--spread` run is the receipt),
+     so a spread party meets a living world the thread can carry; the shard
+     cannot lower `maxPopulation` itself because THE LAND DIGEST hashes the
+     mass config. Units on worker threads (M6) is the lasting answer.
 
    **Foundation implementation (2026-10-09):** the isolated
    `codex/shard-runtime-foundation` integration supplies simultaneous seat foci,
