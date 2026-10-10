@@ -44,6 +44,7 @@ import { buildManifest } from '../src/packages/manifest';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { applySnapshot, applyZone, interpolateSnapshot, serializeZone, type ActorW, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
 import { WIRE_DIET_CFG, dressKey, glideLite } from '../src/net/wireDiet';
+import { WireShell } from '../src/net/shell';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -325,6 +326,30 @@ const rowOf = (s: StateSnapshot, id: number): ActorW | undefined => s.actors.fin
   const twins = w.doodads.filter(d => !d.well && !w.titans.owns(d)).map(d => JSON.stringify(dressRowOf(d)));
   check('E twin: the ledger\'s row is serializeZone\'s row, piece for piece', twins.length === zrows.length && twins.every((t, i) => t === JSON.stringify(zrows[i])));
   off();
+}
+
+// ================================================ E: the dress lands in arrival order ==
+{
+  // A live shell (THE SMOOTH SHELL) adopts only a snapshot newer than its latest; a delta riding
+  // one it does not adopt (an equal clock) still lands, once, in the order the shard sent it.
+  const acct = makeAccount();
+  const world = new World(acct, Object.freeze(buildManifest(acct, w.manifest.seed)));
+  world.createPlayer(CLASSES[0], { startingCompanions: false, startingFlasks: false });
+  world.clientSeatId = A.id;
+  applyZone(world, A.zones.at(-1)!);
+  const shell = new WireShell();
+  shell.attach(world);
+  const base = JSON.parse(JSON.stringify(A.got.at(-1)!)) as StateSnapshot;
+  const row = { p: [4321.5, 1234.25] as [number, number], r: 9, kind: 'qa_diet_post' };
+  const first: StateSnapshot = { ...base, time: base.time + 1, dd: undefined };
+  const same: StateSnapshot = { ...base, time: base.time + 1, tick: base.tick + 1, dd: { a: [row] } };
+  shell.arrive(first, 1000);
+  const adoptedBefore = shell.latest === first;
+  shell.arrive(same, 1050);
+  shell.arrive(same, 1100);
+  const laid = world.doodads.filter(d => d.kind === row.kind && d.pos.x === row.p[0] && d.pos.y === row.p[1]).length;
+  check('E order: a delta riding a snapshot the shell does not adopt (an equal clock) still lands, once',
+    adoptedBefore && shell.latest === first && laid === 1, `latest kept ${shell.latest === first}, laid ${laid}`);
 }
 
 // ========================================================= F: FLOW CONTROL ==
