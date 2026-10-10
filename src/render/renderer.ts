@@ -5338,7 +5338,8 @@ export class Renderer {
         if (x < minX || x > maxX || y < minY || y > maxY) continue;
         const s = this.liteSpriteOf(wire.k[wire.b[j]] ?? '');
         if (!s) continue;
-        const bob = s.flier ? Math.sin(t * 5 + j * 0.8) * 2.2 : 0;
+        const ph = wire.i ? wire.i[j / 3] * 0.8 : j * 0.8; // THE WIRE DIET: a body's own phase rides its wire id (shard only)
+        const bob = s.flier ? Math.sin(t * 5 + ph) * 2.2 : 0;
         ctx.drawImage(s.img, x - s.half, y - s.half + bob);
       }
       return;

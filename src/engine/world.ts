@@ -4132,8 +4132,9 @@ export class World {
   private liteHasTrample = false;
   private liteMinTrampleSpeed = Infinity;
   /** CLIENT half (co-op): the host's `lt` draw list, applied by snapshot —
-   *  null on the host (the renderer reads the live pool instead). */
-  liteWire: { k: string[]; b: number[] } | null = null;
+   *  null on the host (the renderer reads the live pool instead). THE WIRE DIET
+   *  (shard only): `i` = each body's wire id (its glide, its bob's phase). */
+  liteWire: { k: string[]; b: number[]; i?: number[] } | null = null;
   /** Quests CONCURRENTLY in progress (the journal). Each dwell by a giver turns in a
    *  finished one (low→high level) or accepts the next available (low→high, random
    *  ties), respecting per-category caps. Saved with the world state (quests.active).
