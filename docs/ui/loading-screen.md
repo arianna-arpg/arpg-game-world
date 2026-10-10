@@ -135,6 +135,10 @@ performance requirement delays entry into a ready world.
 
 This is a loading presentation and async-work foundation, not an MMO scheduler.
 It covers class entry, Continue and the existing authoritative native-page waits.
+A hosted world's arrival (a server-bound wake, a direct join, a reload's return)
+and its pocket hand-offs ride THE ONE CROSSING (`src/net/crossing.ts`,
+`docs/engine/shard.md`): one lease from the vessel's flush to the first page
+ring around the hero, the world held beneath it.
 It does not automatically detect every cold asset, interior transition, or network
 handshake. Callers can use the same lease API when those operations gain readiness
 contracts. Routine seamless movement does not intentionally insert loading screens.

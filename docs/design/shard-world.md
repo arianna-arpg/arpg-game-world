@@ -458,8 +458,10 @@ laws the zone message would break are held in the shell: `applyZone` nulls
 `world.walk` (a `MassWalk` is not a packed grid), so the shell re-seats the
 runtime's walk after every zone message and prediction clamps on the real
 ground; and a POCKET (a native cave, a side area) arrives as an ordinary
-zone id, so the shell drops its runtime for the pocket and re-attaches when
-the surface returns. Server side, two laws the single-focus runtime needs:
+zone id, so the shell parks its runtime for the pocket and re-seats the same
+one when the surface returns (THE RUNTIME SURVIVES POCKETS, §7e: the survey,
+the page cache and the runtime outlive every cave; the boot it used to repeat
+on every climb-out took seconds). Server side, two laws the single-focus runtime needs:
 THE SHADOW (the runtime streams, births and dwells around `world.player`,
 the keeper on a shard, so on the wilds the keeper's body shadows the FOCUS
 SEAT — the first standing player — `shadowOffset` px behind it every tick;
@@ -950,6 +952,22 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 The three waves W1, W2 and W3 run in parallel on worktrees off the card
 17 A commit, each with its own probe; Passes B and C follow on the merged
 tree; the milestone waves wait on cards 24–30.
+
+## §7e The player's first hour (2026-10-10)
+
+A read-only audit (Opus) walked a brand-new player's first hour on a hosted
+world. W7 THE FRONT DOOR answers the door and the goodbye; W8a THE ONE
+CROSSING answers the arrival (`docs/engine/shard.md`, THE ONE CROSSING;
+`balance/probe_shardcrossing.ts`).
+
+| # | Finding (CONFIRMED unless noted) | Wave |
+|---|---|---|
+| A1 | The server-bound wake shows a local town, then snaps: the served build runs the classic profile, so a classic Lastlight bedside stands up, freezes when the socket is assigned, then the screen snaps to the shard's wilds hearth with no cover (the frame loop's loading gate was host-only). Two arrivals in two different towns. | W8a THE ONE CROSSING: BUILT 2026-10-10. The wake mints its vessel on a World that loads no zone and draws nothing, and the Mu crossing's cover stands from the character flush through the connect, the shell, the zone message and the first snapshot to the first page ring around the hero; a direct join, a reload's return and a hand-off ride the same lease, THE RETURN in place never covers. A wilds shell stands no local town either. Measured in the browser: no frame drawn between the pick and the hero on the shard's ground. |
+| A2 | Terrain streams in around the hero with no cover at the hearth (PLAUSIBLE). | W8a: BUILT. The cover releases only when every page of the 3x3 around the hero is published (`WILDS_CLIENT_CFG.coverRing`), the pages counted and measured on the cover. |
+| A3 | The map's explored fog resets after every cave and every login (the shell disposed its runtime for a pocket and booted a fresh one on the way out); the boot on every climb-out is a hitch (PLAUSIBLE). | W8a: BUILT. THE RUNTIME SURVIVES POCKETS (the same runtime re-seated: the survey, the page cache and no second boot; the boot measured 2.6 to 6 s of main thread in Node, the climb-out about 3 ms) and THE KEPT MAP (the explored cells per account and world in localStorage, re-claimed at the next login). |
+| A4 | (found by W8a's browser walk) A door the shard opened before a join is shut in the shell's walk: the shell lays its settlement with the doors closed, applyZone adopts each door's open flag, so the snapshot's idempotent door sync never repaints the grid. A login after the Waking House door was pushed met it shut in prediction. | W8a: BUILT, THE SHARD'S OPEN DOORS (the surface zone message carves them into the shell's own grid; probe_shardcrossing G). |
+| A5 | (found by W8a) After THE RETURN in place, `leave()`'s farewell never hears the hero's last mirror (resumeInPlace's handler dispatches only while `this.ws` is its socket, and `leave()` nulls it first), so the socket stays open the whole `farewellMs` and a quick re-join meanwhile is refused as the hero's twin. | OPEN: W7's goodbye (src/net/ws.ts). |
+| A6 | (found by W8a) A pocket on a wilds shell keeps `arena.boundless` from the surface (the zone message ships no boundless flag), so a cave draws as streamed ground with no border and the camera never clamps to it. | OPEN: a one-line zone-row flag or a shell-side reset, for the zone-message owner. |
 
 ## §8 M0 receipts (2026-10-07, this pass)
 
