@@ -42,7 +42,7 @@ import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from 
 import { HONEST_INPUT_CFG, mergeInputs, type PlayerId, type PlayerInput } from '../src/net/intent';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { isAccountId } from '../src/meta/account';
-import { SHARD_REFUSAL, shardBuildStamp } from '../src/net/shardBuild';
+import { SHARD_REFUSAL, SHARD_UNLOAD_BEACON_PATH, shardBuildStamp } from '../src/net/shardBuild';
 import { ownEntryJson } from '../src/net/snapshot'; // THE WIRE'S EYES: THE OWN ENTRY
 import { seatAudienceBody, seatAudienceFrame, seatAudienceSplit } from '../src/net/seatView'; // THE ACTING SEAT: the audiences
 
@@ -108,6 +108,8 @@ interface Conn {
   leaving: boolean | 'unload';
 }
 
+/** THE UNLOAD BEACON's body ceiling (a seat id and a token). */
+const SHARD_UNLOAD_BEACON_MAX = 1024;
 /** THE RECONNECT TOKEN, minted (node:crypto, never the seeded stream). */
 const mintToken = (): string => randomBytes(SHARD_WIRE_CFG.resumeTokenBytes).toString('hex');
 /** THE RECONNECT TOKEN's compare: constant-time over equal lengths (a token is a secret). */
@@ -263,6 +265,9 @@ export class ShardTransport implements NetTransport {
         // A plain HTTP hit is not a game client: THE STATUS PAGE answers '/status' (and '/'
         // with no served client), THE SERVED CLIENT answers everything under its folder.
         const url = (req.url ?? '/').split('?')[0];
+        // THE UNLOAD BEACON (W7): a page going away says so over HTTP too (navigator.sendBeacon
+        // survives an unload that can drop the socket's last frame).
+        if (req.method === 'POST' && url === SHARD_UNLOAD_BEACON_PATH) { this.unloadBeacon(req, res); return; }
         if (this.statusSource && (url === '/status' || (url === '/' && !this.clientDir))) {
           let body = '{}';
           try { body = JSON.stringify(this.statusSource()); } catch { /* a status that throws reads as empty */ }
@@ -496,6 +501,31 @@ export class ShardTransport implements NetTransport {
     this.write(conn, this.welcome(conn, true), true);
     this.resumeCbs.forEach(cb => this.guard(() => cb(seat))); // the host stops the clock and re-ships the seat's world
   }
+
+  /** THE UNLOAD BEACON (W7, THE HONEST LEAVING, best effort): `{ seat, token }` posted by a
+   *  page going away. The seat's token proves it. A live socket's close then takes THE
+   *  UNLOAD WORD's road; a seat already dormant (its close came first) is re-timed by the
+   *  host onto the reload grace (onPeerUnload). Anything else is ignored. Always 204. */
+  private unloadBeacon(req: IncomingMessage, res: ServerResponse): void {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', (c: string) => { body += c; if (body.length > SHARD_UNLOAD_BEACON_MAX) req.destroy(); });
+    req.on('end', () => {
+      res.writeHead(204, { 'cache-control': 'no-store' });
+      res.end();
+      let m: { seat?: unknown; token?: unknown } = {};
+      try { m = JSON.parse(body) as { seat?: unknown; token?: unknown }; } catch { return; }
+      const seat = typeof m.seat === 'string' ? m.seat : '', token = typeof m.token === 'string' ? m.token : '';
+      const live = this.bySeat.get(seat);
+      if (live && sameToken(live.token, token)) { if (!live.leaving) live.leaving = 'unload'; return; }
+      const held = this.dormant.get(seat);
+      if (held !== undefined && sameToken(held, token)) this.unloadCbs.forEach(cb => this.guard(() => cb(seat)));
+    });
+    req.on('error', () => { /* a torn beacon says nothing */ });
+  }
+  private readonly unloadCbs = new Set<(id: PlayerId) => void>();
+  /** THE UNLOAD BEACON (W7): a DORMANT seat's page said it went away (its close came first). */
+  onPeerUnload(cb: (id: PlayerId) => void): () => void { this.unloadCbs.add(cb); return () => { this.unloadCbs.delete(cb); }; }
 
   /** THE IDENTITY's reclaim (THE SMOOTH SHELL): the host names the DORMANT seat whose
    *  vessel is this account's character `charId` (null: none). Unset = no reclaim. */

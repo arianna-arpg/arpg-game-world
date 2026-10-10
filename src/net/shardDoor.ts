@@ -152,7 +152,8 @@ export function farewellLine(f: ShardFarewell, hero: string, world: string): str
     const w = (f.word ?? '').trim().replace(/[.!?]+$/, '');
     return `${w ? w.charAt(0).toUpperCase() + w.slice(1) : 'Your hero stands its ground'}, then rests where it stood.`;
   }
-  return `${world} did not answer in time; ${hero} is saved as of the last beat.`;
+  const line = `${world} did not answer in time; ${hero} is saved as of the last beat.`;
+  return line.charAt(0).toUpperCase() + line.slice(1);
 }
 
 /** A small stable hash (FNV-1a) of a salt: THE STOPGAP NAME's number. */

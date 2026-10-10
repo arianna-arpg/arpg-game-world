@@ -36,6 +36,10 @@ export const SHARD_REFUSAL = {
  *  close; it stays under the wire's own frame cap (SHARD_WIRE_CFG.maxClientMessage). */
 export const SHARD_VESSEL_MAX_CHARS = 240 * 1024;
 
+/** THE UNLOAD BEACON (W7): the path a page going away posts `{ seat, token }` to
+ *  (navigator.sendBeacon), beside THE UNLOAD WORD on its socket. */
+export const SHARD_UNLOAD_BEACON_PATH = '/leave';
+
 /** THE HONEST LEAVING (W7): the word a deliberate leave hears when the shard
  *  holds the hero in a fight (THE ACTING SEAT's leave mid-fight). It rides the
  *  seat's own note row (SeatW.fn); the shard appends the seconds. */

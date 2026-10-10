@@ -16,7 +16,7 @@
 
 import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from './transport';
 import type { PlayerId, PlayerInput } from './intent';
-import { SHARD_LEAVE_WORD, SHARD_REFUSAL, shardBuildStamp } from './shardBuild';
+import { SHARD_LEAVE_WORD, SHARD_REFUSAL, SHARD_UNLOAD_BEACON_PATH, shardBuildStamp } from './shardBuild';
 import { storageKey } from '../buildProfile';
 
 /** THE GRAMMAR — one JSON message per frame, both directions. */
@@ -457,12 +457,21 @@ export class WsTransport implements NetTransport {
    *  same seat back and a closed tab's hero leaves soon instead of lying targetable for
    *  dormantSec; a fight keeps THE ACTING SEAT's law. No farewell mirror can land. */
   unloadLeave(): void {
-    const ws = this.ws;
-    if (!ws || !this.welcomed || this.hostGone || ws.readyState !== WebSocket.OPEN) return;
+    const ws = this.ws, s = this.session;
+    if (!this.welcomed || this.hostGone || !s) return;
     this.hostGone = true; // our own teardown: never a lost host
     this.ws = null;
-    try { ws.send(JSON.stringify({ t: 'session', msg: { t: 'leaving', unload: true } } satisfies WireMsg)); } catch { /* best effort */ }
-    try { ws.close(1000, 'unload'); } catch { /* already closed */ }
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ t: 'session', msg: { t: 'leaving', unload: true } } satisfies WireMsg)); } catch { /* best effort */ }
+    }
+    try { ws?.close(1000, 'unload'); } catch { /* already closed */ }
+    // THE UNLOAD BEACON: the same word over HTTP, which survives an unload that can drop the
+    // socket's last frame (the shard re-times a seat its close already left dormant).
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+        navigator.sendBeacon(this.url.replace(/^ws/i, 'http') + SHARD_UNLOAD_BEACON_PATH, JSON.stringify({ seat: s.self, token: s.token }));
+      }
+    } catch { /* best effort */ }
   }
 
   private send(m: WireMsg): void {

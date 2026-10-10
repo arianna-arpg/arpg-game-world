@@ -410,6 +410,7 @@ export class ShardHost {
     this.net.onPeerDormant((id, worded, unload) => this.onDormant(id, worded, unload)); // THE DORMANT SEAT: a lost socket's hero stays, on a clock
     this.net.leaveHolds = id => this.vessels.inCombat(id); // THE ACTING SEAT: a word said mid-fight sleeps like a lost socket
     this.net.onPeerResume(id => this.onResume(id)); // THE RECONNECT TOKEN: the clock stops, the seat's world re-ships
+    this.net.onPeerUnload(id => this.onUnloadBeacon(id)); // THE UNLOAD BEACON (W7): a page gone after its close
     this.net.onSession((m, from) => this.onSession(m, from));
   }
 
@@ -491,8 +492,8 @@ export class ShardHost {
     if (!seat) return; // THE LATE WORD: a fallen vessel's client hears its death; its class pick rejoins
     const vessel = this.vessels.vesselOf(peer.id);
     seat.actor.cosmeticLoadout = sanitizeCosmeticLoadout(peer.cosmeticLoadout);
-    // THE NAME (card 17 A): the body wears the name entered once — the vessel's own, else the
-    // join's — as the roster wears it (THE STOPGAP NAME, W7: two unnamed heroes read apart).
+    // THE NAME (card 17 A): the body wears the name entered once (the vessel's own, else the
+    // join's) as the roster wears it (THE STOPGAP NAME, W7: two unnamed heroes read apart).
     seat.actor.name = peer.name || (vessel ? seat.meta.name : '') || seat.actor.name;
     // THE HEARTH WAKE + THE SPAWN GRACE: up at the hearth, unseen by foes until
     // the first willed input (or the grace runs out).
@@ -592,6 +593,18 @@ export class ShardHost {
     this.dormancy.set(id, this.world.time + sec);
     this.corpses.sleep(id); // a body with no hand reclaims nothing
     this.log(`[shard] ${id} ${unload ? 'closed its page' : worded ? 'left mid-fight' : 'lost its connection'}; its hero lies dormant ${sec}s${unload ? ', untargetable' : ''} (${this.net.connectionCount()} connected)`);
+  }
+
+  /** THE UNLOAD BEACON (W7): a dormant seat whose page said it went away (the beacon came
+   *  after its close) moves onto the reload grace: untargetable, the shorter clock. A seat in
+   *  a fight keeps THE ACTING SEAT's dormancy; one already on the grace keeps it. */
+  private onUnloadBeacon(id: string): void {
+    const seat = this.units.seatOf(id), until = this.dormancy.get(id);
+    if (!seat || until === undefined || this.unloadGraces.has(id) || this.vessels.inCombat(id)) return;
+    seat.actor.untargetable = true;
+    this.unloadGraces.add(id);
+    this.dormancy.set(id, Math.min(until, this.world.time + SHARD_CFG.unloadGraceSec));
+    this.log(`[shard] ${id} closed its page (the beacon); its hero sleeps untargetable ${SHARD_CFG.unloadGraceSec}s`);
   }
 
   /** THE RECONNECT TOKEN: a dormant seat's player is back on a new

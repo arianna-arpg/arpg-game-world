@@ -23,7 +23,9 @@
 //   F  HONEST LEAVING: Exit says the word and the farewell mirror lands (the seat
 //      leaves at once); a leave mid-fight is told the truth (the hero stands its
 //      ground, dormant and targetable); THE UNLOAD WORD sleeps a calm hero
-//      untargetable on the reload grace, a reload takes it back, the grace ends it
+//      untargetable on the reload grace, a reload takes it back, the grace ends it;
+//      THE UNLOAD BEACON does the same when the socket's last frame is lost (before
+//      or after the close), and a wrong token moves nothing
 //   G  THE RETURN'S WORD: a lost seat's return carries the shard's word to its
 //      caller; the menu line names the world; a build mismatch reloads once
 //   H  THE STOPGAP NAME: two unnamed heroes read apart (class + number, stable per
@@ -34,6 +36,7 @@
 //      gone lands it at the mouth; a new hero and a foreign stand wake at the hearth
 // ---------------------------------------------------------------------------
 
+import { request as httpRequest } from 'node:http';
 import { ShardHost, SHARD_CFG } from '../server/shardHost';
 import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import { VESSEL_CFG } from '../server/vessel';
@@ -46,7 +49,7 @@ import {
   reloadOnceFor, returnWord, sameWorld, shardHeroName, shardHomeOf, soloResumeRefusal, vesselTooLarge,
   worldNameOf, writeDoor,
 } from '../src/net/shardDoor';
-import { SHARD_LEAVE_WORD, SHARD_REFUSAL, SHARD_VESSEL_MAX_CHARS, shardBuildStamp } from '../src/net/shardBuild';
+import { SHARD_LEAVE_WORD, SHARD_REFUSAL, SHARD_UNLOAD_BEACON_PATH, SHARD_VESSEL_MAX_CHARS, shardBuildStamp } from '../src/net/shardBuild';
 import { sanitizeStand } from '../src/net/vesselWire';
 import type { SessionMsg } from '../src/net/transport';
 import type { PlayerInput } from '../src/net/intent';
@@ -350,6 +353,54 @@ const vU = forge({ name: 'Una', charId: 'c-door-una' });
   check('F unload: a page that never comes back lets the hero go when the grace ends (no 30 s of targetable dormancy)',
     gone && !host.net.isDormant(U.id));
   check('F unload: and the desk keeps where it stood for its next login (THE RETURN)', !!host.vessels.keptStand(acctU.accountId, vU.charId!));
+}
+
+// ================================================ F (cont.): THE UNLOAD BEACON ==
+/** A page's beacon, as navigator.sendBeacon posts it (text/plain JSON). */
+function beacon(body: unknown): Promise<number> {
+  return new Promise(resolve => {
+    const req = httpRequest({ host: '127.0.0.1', port, path: SHARD_UNLOAD_BEACON_PATH, method: 'POST', headers: { 'content-type': 'text/plain;charset=UTF-8' } },
+      r => { r.resume(); r.on('end', () => resolve(r.statusCode ?? 0)); });
+    req.on('error', () => resolve(0));
+    req.end(JSON.stringify(body));
+  });
+}
+{
+  // The beacon first (a live socket), then the socket drops without its word.
+  const B1 = await join('Bea', { acct: claimed(), vessel: forge({ name: 'Bea', charId: 'c-door-bea' }), link: { consent: true } });
+  await act(B1);
+  const tok1 = shardResumeFor(url)!;
+  check('F beacon: a wrong token is ignored (204, nothing moves)', (await beacon({ seat: B1.id, token: 'f'.repeat(32) })) === 204);
+  cut(B1.id);
+  await waitFor(() => host.net.isDormant(B1.id), 60);
+  check('F beacon: a wrong token never changes a lost socket\'s dormancy', !seatOf(B1.id)!.actor.untargetable);
+  host.net.release(B1.id);
+  await waitFor(() => !seatOf(B1.id), 30);
+  const B2 = await join('Bel', { acct: claimed(), vessel: forge({ name: 'Bel', charId: 'c-door-bel' }), link: { consent: true } });
+  await act(B2);
+  const tok2 = shardResumeFor(url)!;
+  check('F beacon: the beacon answers 204', (await beacon({ seat: B2.id, token: tok2.token })) === 204 && tok1.token !== tok2.token);
+  cut(B2.id); // the page's socket dropped its last frame: no word reached the shard
+  await waitFor(() => host.net.isDormant(B2.id), 60);
+  check('F beacon: posted while the socket stood, the close takes THE UNLOAD WORD\'s road (untargetable, the reload grace)',
+    !!seatOf(B2.id)?.actor.untargetable && logs.some(l => l.includes(`${B2.id} closed its page;`)));
+  host.net.release(B2.id);
+  await waitFor(() => !seatOf(B2.id), 30);
+  // The close first (a dormant seat), then the beacon.
+  const B3 = await join('Bryn', { acct: claimed(), vessel: forge({ name: 'Bryn', charId: 'c-door-bryn' }), link: { consent: true } });
+  await act(B3);
+  const tok3 = shardResumeFor(url)!;
+  cut(B3.id);
+  await waitFor(() => host.net.isDormant(B3.id), 60);
+  const targetable = !seatOf(B3.id)!.actor.untargetable;
+  await beacon({ seat: B3.id, token: tok3.token });
+  await waitFor(() => !!seatOf(B3.id)?.actor.untargetable, 30);
+  const row = (host.status() as { seats: { id: string; dormantLeftSec?: number }[] }).seats.find(r => r.id === B3.id);
+  check('F beacon: after the close, the beacon moves a dormant hero onto the reload grace (untargetable, the shorter clock)',
+    targetable && !!seatOf(B3.id)?.actor.untargetable && (row?.dormantLeftSec ?? 99) <= SHARD_CFG.unloadGraceSec
+    && logs.some(l => l.includes(`${B3.id} closed its page (the beacon)`)), JSON.stringify(row));
+  host.net.release(B3.id);
+  await waitFor(() => !seatOf(B3.id), 30);
 }
 
 // ===================================================== G: THE RETURN'S WORD ==

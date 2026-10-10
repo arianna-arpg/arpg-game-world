@@ -2895,6 +2895,7 @@ async function connectToShard(url: string, classId: string, wake?: { charId: str
   if (!vessel && !resume) {
     if (wake) throw new Error('this hero cannot travel to a server (its saved vessel could not be read)');
     writeDoor({ url, ...(lastShardUrl && sameWorld(lastShardUrl, url) && lastShardWorld ? { world: lastShardWorld } : {}) }); // THE DOOR
+    ui.hideAll(); // the menu (and a lobby's start menu beneath it) gives the screen to Mu, as Begin's own press does
     beginPressed();
     return 'mu';
   }
