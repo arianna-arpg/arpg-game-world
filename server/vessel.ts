@@ -298,6 +298,13 @@ export class VesselDesk {
   accountOf(seatId: string): string | undefined { return this.accounts.get(seatId); }
   /** The vessel record standing on a seat, if one traveled. */
   vesselOf(seatId: string): Readonly<VesselSeat> | undefined { return this.vessels.get(seatId); }
+  /** THE COMPLETED LEAVE (W7): the seat this account's character `charId` stands on, live or
+   *  dormant (null: none). The transport finishes that seat's said leave before a return. */
+  seatOfIdentity(accountId: string, charId: string): string | null {
+    if (!accountId || !charId) return null;
+    for (const v of this.vessels.values()) if (v.accountId === accountId && v.charId === charId) return v.seatId;
+    return null;
+  }
   /** THE IDENTITY's reclaim (THE SMOOTH SHELL): the DORMANT seat this account's character
    *  `charId` stands on, if any (a player come back without its token takes it, never the
    *  twin refusal); null for a live seat, another account's, or none. */

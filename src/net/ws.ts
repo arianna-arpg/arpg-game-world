@@ -332,7 +332,7 @@ export class WsTransport implements NetTransport {
       ws.onmessage = (ev): void => {
         let m: WireMsg;
         try { m = JSON.parse(String(ev.data)) as WireMsg; } catch { return; }
-        if (settled) { if (this.ws === ws) this.dispatch(m); return; }
+        if (settled) { if (this.ws === ws || this.farewellWs === ws) this.dispatch(m); return; } // THE FAREWELL rides a resumed socket too
         if (m.t === 'refused') { done({ ok: false, word: typeof m.word === 'string' ? m.word : '', final: true }); return; }
         if (m.t !== 'welcome') return; // nothing a client needs precedes the welcome
         if (m.build !== shardBuildStamp()) { done({ ok: false, word: SHARD_REFUSAL.build, final: true }); return; }
@@ -414,6 +414,9 @@ export class WsTransport implements NetTransport {
   farewell = false;
   /** THE HONEST LEAVING (W7): settles the farewell in flight (closes the socket). */
   private farewellSettle: ((f: ShardFarewell) => void) | null = null;
+  /** THE HONEST LEAVING (W7): the socket a farewell rides once leave() took it from `ws`
+   *  (a socket THE RETURN reopened in place included): its last mirror is still heard. */
+  private farewellWs: WebSocket | null = null;
   /** THE HONEST LEAVING (W7): how the last deliberate leave ended (a menu's Exit awaits it);
    *  null until leave() said its word. Resolves at the mirror, the shard's word, or the cap. */
   farewellEnd: Promise<ShardFarewell> | null = null;
@@ -431,16 +434,34 @@ export class WsTransport implements NetTransport {
     if (!ws) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let settled: (f: ShardFarewell) => void = () => { /* no farewell in flight */ };
+    let ended = false;
+    // THE COMPLETED LEAVE (W7): the farewell resolves once the socket has truly closed. The
+    // shard runs the seat's leave before it answers our close, so a re-join made right after
+    // the farewell is never refused as a twin; a close nobody answers resolves at a second cap.
     const close = (f: ShardFarewell = { end: 'quiet' }): void => {
+      if (ended) return;
+      ended = true;
       this.farewellSettle = null;
       if (timer !== null) clearTimeout(timer);
-      try { ws.close(1000, 'leave'); } catch { /* already closed */ }
-      settled(f);
+      const done = (): void => { if (this.farewellWs === ws) this.farewellWs = null; settled(f); };
+      if (ws.readyState === WebSocket.CLOSED) { done(); return; }
+      let cap: ReturnType<typeof setTimeout> | null = null;
+      const closed = (): void => {
+        if (cap !== null) clearTimeout(cap);
+        cap = null;
+        ws.removeEventListener('close', closed);
+        done();
+      };
+      ws.addEventListener('close', closed);
+      cap = setTimeout(closed, WS_TRANSPORT_CFG.farewellMs);
+      (cap as { unref?: () => void }).unref?.(); // a Node rig never waits on a farewell
+      try { ws.close(1000, 'leave'); } catch { closed(); }
     };
     if (deliberate && ws.readyState === WebSocket.OPEN) {
       this.farewellEnd = new Promise<ShardFarewell>(res => { settled = res; });
       try { ws.send(JSON.stringify({ t: 'session', msg: { t: 'leaving' } } satisfies WireMsg)); } catch { close(); return; }
       if (this.farewell) {
+        this.farewellWs = ws; // THE FAREWELL rides the socket that stands (THE RETURN's resumed one included)
         this.farewellSettle = close;
         timer = setTimeout(() => close({ end: 'quiet' }), WS_TRANSPORT_CFG.farewellMs);
         (timer as { unref?: () => void }).unref?.(); // a Node rig never waits on a farewell

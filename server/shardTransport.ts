@@ -391,6 +391,18 @@ export class ShardTransport implements NetTransport {
       // THE RECONNECT TOKEN: a join naming a DORMANT seat with its token takes that seat back
       // (THE RETURN: a resumeOnly join may also take back its own LIVE seat, its link dead unheard).
       if (m.resume !== undefined && m.resume !== null && this.resume(conn, m.resume, m.resumeOnly === true)) return;
+      // THE COMPLETED LEAVE (W7): a join carrying the identity of a seat whose own socket
+      // already said its deliberate word (a farewell whose close the shard has not heard yet)
+      // finishes that leave first, so a return right after a leave is never refused as a
+      // twin; a seat held in a fight sleeps instead, and THE IDENTITY below takes it back.
+      if (this.identitySeat && isAccountId(m.accountId)) {
+        const prior = this.identitySeat(m.accountId, vesselCharId(m.vessel));
+        const pc = prior !== null ? this.bySeat.get(prior) : undefined;
+        if (pc && pc !== conn && pc.leaving === true) {
+          this.log(`[shard] ${prior} said its leave and its own hero returns on a new socket; the leave completes first`);
+          this.drop(pc, 1000, 'left');
+        }
+      }
       // THE IDENTITY (THE SMOOTH SHELL): a join carrying the account and the vessel of a
       // DORMANT seat is its own player come back without the token (a new tab, a cleared
       // page): that seat, never the twin refusal and never a second hero.
@@ -526,6 +538,10 @@ export class ShardTransport implements NetTransport {
   private readonly unloadCbs = new Set<(id: PlayerId) => void>();
   /** THE UNLOAD BEACON (W7): a DORMANT seat's page said it went away (its close came first). */
   onPeerUnload(cb: (id: PlayerId) => void): () => void { this.unloadCbs.add(cb); return () => { this.unloadCbs.delete(cb); }; }
+
+  /** THE COMPLETED LEAVE (W7): the host names the seat (live or dormant) whose vessel is
+   *  this account's character `charId` (null: none). Unset = no completion. */
+  identitySeat: ((accountId: string, charId: string) => PlayerId | null) | null = null;
 
   /** THE IDENTITY's reclaim (THE SMOOTH SHELL): the host names the DORMANT seat whose
    *  vessel is this account's character `charId` (null: none). Unset = no reclaim. */

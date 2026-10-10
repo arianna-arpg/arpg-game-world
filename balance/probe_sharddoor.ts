@@ -355,6 +355,46 @@ const vU = forge({ name: 'Una', charId: 'c-door-una' });
   check('F unload: and the desk keeps where it stood for its next login (THE RETURN)', !!host.vessels.keptStand(acctU.accountId, vU.charId!));
 }
 
+// =================================== F (cont.): the farewell after THE RETURN in place ==
+{
+  // W8a's browser find: after THE RETURN reopened the socket in place, the farewell never
+  // heard its mirror (the resumed socket dispatched only while it was `ws`), held the socket
+  // the whole cap, and a quick re-join meanwhile was refused as a twin.
+  const acctR = claimed();
+  const vR = forge({ name: 'Rook', charId: 'c-door-rook' });
+  const R1 = await join('Rook', { acct: acctR, vessel: vR, link: { consent: true } });
+  await act(R1);
+  const at = await place(R1.id, hearth.x + 300, hearth.y + 340);
+  cut(R1.id); // the link dies unheard; the seat lies dormant
+  await waitFor(() => host.net.isDormant(R1.id), 60);
+  let back: { ok: boolean } | null = null;
+  void R1.t.resumeInPlace().then(r => { back = r; });
+  await waitFor(() => back !== null, 120);
+  check('F return: THE RETURN takes the seat back in place (the same seat, a new socket)', !!back && (back as { ok: boolean }).ok && !host.net.isDormant(R1.id) && !!seatOf(R1.id));
+  const mirrors0 = R1.link?.mirrors ?? 0;
+  R1.t.leave();
+  const f = await farewell(R1);
+  check('F return: after a return in place the farewell still hears its mirror over the resumed socket (saved, never the cap)',
+    f.end === 'saved' && (R1.link?.mirrors ?? 0) === mirrors0 + 1, `${f.end}, ${(R1.link?.mirrors ?? 0) - mirrors0} mirror(s)`);
+  check('F return: and the farewell resolves only once the seat has left the world (the shard ran the leave)',
+    !seatOf(R1.id) && !host.net.isDormant(R1.id));
+  const R2 = await join('Rook', { acct: acctR, vessel: stored()!, link: { consent: true } });
+  check('F return: a re-join made at once after the completed leave is seated, never refused as a twin',
+    !!seatOf(R2.id) && !R2.heard.some(m => m.t === 'refused'), R2.heard.map(m => m.t).join(','));
+  check('F return: and it logs back in where it left', dist(seatOf(R2.id)!.actor.pos, at) < 40);
+  // The shard's own belt: a seat whose socket said its word but whose close never came is
+  // finished by its own hero's return (a lost close frame can never strand a twin refusal).
+  await act(R2);
+  (host.net as unknown as { bySeat: Map<string, { leaving: boolean | 'unload' }> }).bySeat.get(R2.id)!.leaving = true; // the word heard, the close lost
+  const R3 = await join('Rook', { acct: acctR, vessel: stored()!, link: { consent: true } });
+  check('F return: a return while the old socket said its word but never closed finishes that leave first (no twin refusal)',
+    !!seatOf(R3.id) && R3.id !== R2.id && !seatOf(R2.id) && !R3.heard.some(m => m.t === 'refused')
+    && logs.some(l => l.includes(`${R2.id} said its leave and its own hero returns`)), R3.heard.map(m => m.t).join(','));
+  R3.t.leave();
+  await farewell(R3);
+  await waitFor(() => !seatOf(R3.id), 30);
+}
+
 // ================================================ F (cont.): THE UNLOAD BEACON ==
 /** A page's beacon, as navigator.sendBeacon posts it (text/plain JSON). */
 function beacon(body: unknown): Promise<number> {

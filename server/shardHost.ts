@@ -397,6 +397,8 @@ export class ShardHost {
     // THE IDENTITY (THE SMOOTH SHELL): a join carrying a dormant vessel's account and character
     // takes that seat back without its token, never the twin refusal.
     this.net.reclaim = (accountId, charId) => this.vessels.dormantSeatOf(accountId, charId, id => this.net.isDormant(id));
+    // THE COMPLETED LEAVE (W7): a return right after a leave finishes that leave first (never a twin).
+    this.net.identitySeat = (accountId, charId) => this.vessels.seatOfIdentity(accountId, charId);
     this.net.onPeerJoin((p, join) => this.onJoin(p, join));
     this.net.onPeerLeave(id => {
       this.dormancy.delete(id); // THE DORMANT SEAT: the word, a clock run out or a closing shard ends any dormancy
