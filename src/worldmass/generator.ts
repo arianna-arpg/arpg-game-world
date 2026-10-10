@@ -117,6 +117,24 @@ export class MassGenerator {
     const ordinary=[...this.placesInCell(cell),...(this.nativeRegional?.inCell(cell)??[])];
     return this.regionalDiscoveries ? Object.freeze([...ordinary,...this.regionalDiscoveries.inCell(cell)].sort((a,b)=>compare(a.id,b.id))) : ordinary;
   }
+  /** WildernessPaths query accepted site footprints once per bounded district;
+   * population anchors cannot obstruct a path and need not be enumerated. */
+  wildernessSites(origin:MassAddress,size:number):readonly MassPlace[]{
+    if(!Number.isSafeInteger(size)||size<1||size>9600)throw Error('Invalid wildernessSites query');
+    const span=this.spec.addressSpan,result:MassPlace[]=[];
+    for(const recipe of this.spec.places){
+      if(recipe.landformHabitat)continue;
+      const lo=latticeAt(moveAddress(origin,{x:-recipe.radius,y:-recipe.radius},span),span,recipe.period);
+      const hi=latticeAt(moveAddress(origin,{x:size+recipe.radius,y:size+recipe.radius},span),span,recipe.period);
+      if((hi.gx-lo.gx+1n)*(hi.gy-lo.gy+1n)>4096n)throw Error('WildernessPaths site budget exceeded');
+      for(let gy=lo.gy;gy<=hi.gy;gy++)for(let gx=lo.gx;gx<=hi.gx;gx++){
+        const p=this.candidate(recipe,origin.dimension,gx,gy);if(!p||!this.accepted(p,recipe))continue;
+        const q=localOffset(p.center,origin,span,64);
+        if(Math.hypot(Math.max(0,-q.x,q.x-size),Math.max(0,-q.y,q.y-size))<=p.radius)result.push(p);
+      }
+    }
+    return Object.freeze(result.sort((a,b)=>compare(a.id,b.id)));
+  }
   private noise(at: MassAddress, period: number, salt: number): number {
     return massNoise(at, this.spec.addressSpan, period, salt);
   }

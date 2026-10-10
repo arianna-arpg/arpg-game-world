@@ -24,7 +24,7 @@ export interface MassObjectiveEffects {
   digHost(slot: number): NativeDigFinishHost;
   beaconHost(): NativeBeaconHost;
 }
-export interface MassObjectiveBodyPolicy { population(): number; maxPopulation(): number; retainRadius?: number; quietSeconds?: number }
+export interface MassObjectiveBodyPolicy { population(): number; maxPopulation(owner?:string): number; retainRadius?: number; quietSeconds?: number }
 
 const clone = <T>(v: T): T => JSON.parse(canonical(v)) as T;
 
@@ -103,7 +103,7 @@ export class MassObjectiveBodies {
   }
   canInstall(owner: string, zone: Readonly<ZoneDef>, fixtures: HoldFixture[], value?: unknown): boolean {
     const saved = this.saved(owner, zone, fixtures, value);
-    return !this.live.has(owner) && this.policy.population() + (saved?.births.reduce((n, b) => n + b.bodies.filter(a => !a.dead).length, 0) ?? 0) <= this.policy.maxPopulation();
+    return !this.live.has(owner) && this.policy.population() + (saved?.births.reduce((n, b) => n + b.bodies.filter(a => !a.dead).length, 0) ?? 0) <= this.policy.maxPopulation(owner);
   }
   install(owner: string, zone: Readonly<ZoneDef>, fixtures: HoldFixture[], value?: unknown): MassObjectiveEffects | null {
     if (!this.canInstall(owner, zone, fixtures, value)) return null;
@@ -142,7 +142,7 @@ export class MassObjectiveBodies {
       range: (lo: number, hi: number) => massRandom(this.seed, [owner, 'native-objective/draw', draws++]).range(lo, hi),
       int: (lo: number, hi: number) => massRandom(this.seed, [owner, 'native-objective/draw', draws++]).int(lo, hi),
     };
-    const capacity = () => Math.max(0, Math.floor(this.policy.maxPopulation() - this.policy.population()));
+    const capacity = () => Math.max(0, Math.floor(this.policy.maxPopulation(owner) - this.policy.population()));
     const spawn = (slot: number, at: Vec2, config: RiftPourConfig | DigFinishConfig['ambush'] | NativeBeaconReinforceConfig, count?: number,
       beaconTables?: NativeBeaconTables): number => {
       if (detached) throw Error('Retired objective cannot create bodies');

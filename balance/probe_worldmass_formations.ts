@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { massAdventure, type MassAdventure } from '../src/worldmass/preset';
 import { nativeMassEncounters, validateMassEncounters, massFormation, formationIdentity } from '../src/worldmass/encounters';
@@ -10,7 +11,7 @@ import { serializeCharacter } from '../src/meta/character';
 import { OBJECTIVE_REWARD } from '../src/data/objectiveRewards';
 
 const restore=seedGlobalRandom(92751);
-const preset=massAdventure();
+const preset=beforeWildernessPaths(structuredClone(massAdventure()));
 let plans=0;
 for(const content of preset.content)for(const row of [content,...(content.levels??[])]){
   if(!row.encounters)continue;validateMassEncounters(row.encounters,row.level);plans+=row.encounters.plans.length;

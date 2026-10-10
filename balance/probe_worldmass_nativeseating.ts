@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
@@ -171,7 +172,7 @@ test('all surveyed native regions preserve exact cells and whole protected site 
 });
 
 test('new schema18 persists complete source-fit geometry and rejects old-client downgrade',()=>{
- seedGlobalRandom(2193);const world=makeSimWorld('warrior',2193),mass=new WorldMassRuntime(42,'nativeRegional-runtime',massAdventure());mass.attach(world);
+ seedGlobalRandom(2193);const world=makeSimWorld('warrior',2193),mass=new WorldMassRuntime(42,'nativeRegional-runtime',beforeWildernessPaths(structuredClone(massAdventure())));mass.attach(world);
  const pick=survey[0].sourceFit.accepted.find(p=>p.recipe==='nativeRegional-waterlands')!,plan=mass.generator.nativeRegional!.candidate('surface',BigInt(pick.x),BigInt(pick.y))!;
  const at=moveAddress(plan.origin,plan.source.terminals[4],960);world.landPartyAt(localOffset(at,{...mass.origin,x:0,y:0},960,100000));mass.update(world,true);
  const saved=mass.snapshot(world);assert.equal(saved.schema,18);const restoredWorld=makeSimWorld('warrior',2194),restored=new WorldMassRuntime(42,'nativeRegional-runtime',saved.config,saved);restored.attach(restoredWorld,saved);

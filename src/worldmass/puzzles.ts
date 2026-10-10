@@ -103,6 +103,11 @@ export class MassPuzzles {
   missing(place:MassPlace,rows:readonly MassPuzzleSpec[]):number{
     return rows.reduce((n,r)=>n+(this.live.has(puzzleId(place,r))?0:puzzleSeats(r).length),0);
   }
+  /** Existing dormant boards wake as retained owners, like sleeping native
+   * bodies. The ambient population budget only admits newly born encounters. */
+  retainedSeats(place:MassPlace,rows:readonly MassPuzzleSpec[]):number{
+    return rows.reduce((n,r)=>n+(!this.live.has(puzzleId(place,r))&&this.saved.has(puzzleId(place,r))?puzzleSeats(r).length:0),0);
+  }
   canAdmit(place:Pick<MassPlace,'id'>,rows:readonly MassPuzzleSpec[]):boolean{
     return this.live.size+rows.filter(r=>!this.live.has(puzzleId(place,r))).length<=(this.policy?.maxResident??MASS_PUZZLE_LIMIT);
   }

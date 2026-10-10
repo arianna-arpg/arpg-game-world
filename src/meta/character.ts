@@ -621,7 +621,7 @@ export async function commitCharacterNativeCohort(world: World, lease: NativeCoh
   const task=(async()=>{
     const ref=await nativePageStore().writePage(page.cohort.run,page.cohort.page,JSON.stringify(page));
     if(!current()||!lease.revalidate())return false;
-    const entry={ref,ids:[...lease.ids],positions:lease.ids.map(id=>{const e=page.enemies.find(e=>e.id===id)!;return {x:e.x,y:e.y};})},pages=[...manifest,entry];
+    const entry={ref,ids:[...lease.ids],positions:lease.ids.map(id=>{const e=page.enemies.find(e=>e.id===id)!;return {x:e.x,y:e.y,...(e.nativeQuietRadius===undefined?{}:{nativeQuietRadius:e.nativeQuietRadius})};})},pages=[...manifest,entry];
     Object.freeze(entry.ref);Object.freeze(entry.ids);entry.positions.forEach(p=>Object.freeze(p));Object.freeze(entry.positions);Object.freeze(entry);
     const order=[...priorOrder,...save.world!.worldmass!.enemies.map(e=>e.id).filter(id=>!priorOrder.includes(id))];
     const body=encodeCharacterPages(save,pages,order);

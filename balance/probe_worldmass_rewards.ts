@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -17,7 +18,7 @@ import { memoryProvenanceLabel } from '../src/engine/memories';
 
 const restore=seedGlobalRandom(8723);
 try {
- const cfg:MassAdventure=structuredClone(massAdventure());
+ const cfg:MassAdventure=structuredClone(beforeWildernessPaths(structuredClone(massAdventure())));
  assert.equal(cfg.rewards,undefined,'new expeditions have no support-choice policy');
  delete cfg.progression;delete cfg.journey;delete cfg.ecology;delete cfg.settlement;
  delete cfg.terrain.patches;delete cfg.terrain.landforms;delete cfg.terrain.regionalDiscoveries;delete cfg.terrain.nativeRegional;

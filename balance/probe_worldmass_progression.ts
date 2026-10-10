@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -15,7 +16,7 @@ import { massMap } from '../src/worldmass/paint';
 import type { Chest } from '../src/engine/world';
 
 const restore = seedGlobalRandom(74812);
-const cfg = massAdventure(), policy = cfg.progression!;
+const cfg = beforeWildernessPaths(structuredClone(massAdventure())), policy = cfg.progression!;
 validateMassProgression(policy, cfg.terrain);
 for (const field of [-1, 0, 1]) {
   assert.equal(geographicLevel(policy, 0, { danger: field }), 1);

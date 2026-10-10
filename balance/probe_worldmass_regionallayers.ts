@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -17,7 +18,7 @@ import { generateRegionalDiscoveries, type RegionalDiscoverySpec } from '../src/
 // RegionalWeave keeps this course pinned to the schema15 vocabulary and policy.
 const regionalCourtFamilies = layeredRegionalTerrainGrammar().morphology!.families.map(f => f.family);
 function regionalWeaveHistorical() {
-  const config = JSON.parse(JSON.stringify(massAdventure())) as ReturnType<typeof massAdventure>;
+  const config = beforeWildernessPaths(JSON.parse(JSON.stringify(massAdventure())) as ReturnType<typeof massAdventure>);
   config.terrain.landforms!.regional!.composition = layeredRegionalTerrainGrammar();
   Reflect.deleteProperty(config.terrain, 'nativeRegional');
   return config;

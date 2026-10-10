@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -13,7 +14,7 @@ import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 
 // Keep the actual legacy policy under test as the default adds repeated fields.
 const finiteAdventure=()=>{
- const config=JSON.parse(canonical(massAdventure()));
+ const config=beforeWildernessPaths(JSON.parse(canonical(massAdventure())));
  delete config.fieldResidency;
  // This finite-owner course has no repeated post-terrain discoveries.
  delete config.terrain.regionalDiscoveries;

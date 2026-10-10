@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -8,7 +9,7 @@ import { canonical, massRandom } from '../src/worldmass/random';
 import { MONSTERS } from '../src/data/monsters';
 import type { MassPopulation } from '../src/worldmass/progression';
 
-const restore=seedGlobalRandom(65531), cfg=massAdventure();
+const restore=seedGlobalRandom(65531), cfg=beforeWildernessPaths(structuredClone(massAdventure()));
 const limited=cfg.content.flatMap(c=>c.levels??[]).filter(p=>p.limits?.length);
 assert.ok(limited.length>0);
 for(const p of cfg.content.flatMap(c=>c.levels??[])){

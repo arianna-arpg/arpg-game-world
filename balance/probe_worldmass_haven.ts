@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -118,6 +119,8 @@ for (const grown of [false, true]) {
   assert.deepEqual(massMapSigns(renewed.massRuntime!,renewed.doodads),massMapSigns(mass,w.doodads),'native sign identity and geography survive Continue');
   for (const f of townStationFeatures()) renewed.account.features.add(f);
   const again = makeSimWorld('warrior', 2931); Object.assign(again.account, renewed.account);
+  // WildernessPaths may retain additional geographic controllers; restore their clock too.
+  again.time = renewed.time;
   again.startWorldMass(451, replay);
   assert.equal(again.massRuntime!.settlement!.tier, town.tier, 'new account features cannot move this run’s buildings');
   renewed.loadZone('lastlight');
@@ -125,7 +128,7 @@ for (const grown of [false, true]) {
   console.log('PASS exact Continue preserves doors, broken bodies/scenery, town tier and native wake', JSON.stringify(stored).length);
 }
 // Old descriptors deliberately retain their old clearing and land.
-const legacy = JSON.parse(canonical(massAdventure())); delete legacy.settlement; delete legacy.progression; delete legacy.journey; delete legacy.ecology;
+const legacy = beforeWildernessPaths(JSON.parse(canonical(massAdventure()))); delete legacy.settlement; delete legacy.progression; delete legacy.journey; delete legacy.ecology;
 delete legacy.survey;delete legacy.nativeCountry;delete legacy.geography;delete legacy.terrain.patches;delete legacy.terrain.landforms;delete legacy.terrain.regionalDiscoveries;delete legacy.terrain.nativeRegional;
 legacy.terrain.version = 2; legacy.terrain.addressSpan = 768; legacy.terrain.terrainCell = 24;
 const old = makeSimWorld('warrior', 531);

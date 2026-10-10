@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -14,7 +15,7 @@ import { regionKind } from '../src/world/regions';
 import { groundedCellsIn } from '../src/render/vis/boilLayer';
 
 const restore = seedGlobalRandom(812735);
-const w = makeSimWorld('warrior', 812735), config = JSON.parse(JSON.stringify(massAdventure()));
+const w = makeSimWorld('warrior', 812735), config = JSON.parse(JSON.stringify(beforeWildernessPaths(structuredClone(massAdventure()))));
 delete config.progression; delete config.journey; delete config.ecology;
 delete config.settlement; // this probe isolates the wilderness adapter
 delete config.survey; // legacy lattice fixture retains page-based cartography

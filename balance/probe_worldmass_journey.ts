@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -31,7 +32,11 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
   for (const place of journey.places) {
     const center = journey.local(place);
     w.player.pos = { ...center };
-    m.update(w, true);
+    // WildernessPaths: these jumps stand in for travel between destinations.
+    // Give settled distant cohorts their normal quiet interval before admission.
+    w.time += 20;
+    // Retirement is deliberately bounded per tick, even after a long jump.
+    for(let tick=0;tick<8;tick++)m.update(w, true);
     assert.equal(m.localSite(center)?.id,place.id);
     assert.equal(m.localSite(center)?.level,m.populationFor(place).level);
     assert.equal(m.localSite(m.settlement!.spawn),null);
@@ -102,7 +107,7 @@ for (const seed of [1, 42, 451, 7108, 99871]) {
   assert.ok(massMap(m, w.player.pos).includes('Searched'));
   console.log('PASS sparse scenery changes, felling clocks, edited paths and topology survive Continue; searched caches marked');
 }
-const legacy: MassAdventure = JSON.parse(canonical(massAdventure()));
+const legacy: MassAdventure = JSON.parse(canonical(beforeWildernessPaths(structuredClone(massAdventure()))));
 delete legacy.journey;
 delete legacy.settlement!.quests;
 delete legacy.ecology;
@@ -118,7 +123,7 @@ assert.equal(again.massRuntime!.generator.run.version, 4);
 assert.equal(again.massRuntime!.journey, null);
 console.log('PASS version 4 Continue keeps its original geography without adding routes or scenery');
 // A modified first tree must not change which later trees the seed generates.
-const groveConfig: MassAdventure = JSON.parse(canonical(massAdventure()));
+const groveConfig: MassAdventure = JSON.parse(canonical(beforeWildernessPaths(structuredClone(massAdventure()))));
 delete groveConfig.settlement; delete groveConfig.journey; delete groveConfig.progression;
 delete groveConfig.nativeCountry;delete groveConfig.geography; // isolated ecology fixture has no native structure placement
 groveConfig.terrain.places = []; groveConfig.content = []; groveConfig.startRadius = 0;

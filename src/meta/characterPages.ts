@@ -1,3 +1,4 @@
+import {validNativeQuietRadius} from '../worldmass/nativeQuietAnatomy';
 import type { CharacterSave } from './character';
 import type { NativePageRef, NativePageStorage } from './browserNativePages';
 import type { NativeCohortLease, NativeCohortPage } from '../worldmass/nativePaging';
@@ -17,7 +18,7 @@ import type { CharacterResume } from './characterResume';
 /** This is a transport envelope, never a new CharacterSave schema. The game's
  * one BrowserRunStore slot owns its commit and previous revision. Portable and
  * native-file saves are expanded back to the existing inline format. */
-export interface CharacterPageEntry { ref: NativePageRef; ids: string[]; positions: {x:number;y:number}[] }
+export interface CharacterPageEntry { ref: NativePageRef; ids: string[]; positions: {x:number;y:number;nativeQuietRadius?:number}[] }
 export interface CharacterPagesEnvelope {
   characterPages: 1; character: CharacterSave; pages: CharacterPageEntry[]; order: string[];
 }
@@ -88,7 +89,7 @@ export async function readCharacterNativePage(storage: Pick<NativePageStorage,'r
   if (data?.characterNativePage!==1 || !c || c.schema!==1 || c.run!==entry.ref.run || c.page!==entry.ref.page
     || !Array.isArray(data.enemies) || !Array.isArray(c.bodies) || !c.checkpoint || !Array.isArray(entry.ids)
     || !Array.isArray(entry.positions) || entry.positions.length!==entry.ids.length
-    || entry.positions.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y))
+    || entry.positions.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)||!validNativeQuietRadius(p.nativeQuietRadius))
     || entry.ids.length<1 || entry.ids.length>96 || new Set(entry.ids).size!==entry.ids.length
     || canonical(data.enemies.map(e=>e.id).sort())!==canonical([...entry.ids].sort())
     || canonical(c.bodies.map(b=>b.id).sort())!==canonical([...entry.ids].sort())
@@ -96,9 +97,9 @@ export async function readCharacterNativePage(storage: Pick<NativePageStorage,'r
     || canonical(c.checkpoint.actors.map(r=>r.id).sort())!==canonical([...entry.ids].sort())
     || canonical([...c.checkpoint.sleeping].sort())!==canonical([...entry.ids].sort())
     || c.checkpoint.unsupported.length
-    || data.enemies.some(e=>!entry.ids.some((id,i)=>id===e.id&&entry.positions[i].x===e.x&&entry.positions[i].y===e.y))) reject();
+    || data.enemies.some(e=>!entry.ids.some((id,i)=>id===e.id&&entry.positions[i].x===e.x&&entry.positions[i].y===e.y&&(entry.positions[i].nativeQuietRadius??0)===(e.nativeQuietRadius??0)))) reject();
   validateNativeDormancyCheckpoint(c.checkpoint, data.enemies, true,
-    new Map(data.enemies.map(e => [e.id, e.magicPack?.id ?? e.encounterGroup?.id])));
+    new Map(data.enemies.map(e => [e.id, e.magicPack?.id ?? e.encounterGroup?.id ?? e.ambientPack?.id])));
   return data;
 }
 
@@ -137,13 +138,13 @@ export function validateCharacterPageEnvelope(value: unknown): CharacterPagesEnv
     refs.add(r.page); keys.add(r.key);
     for (let i=0; i<entry.ids.length; i++) {
       const id=entry.ids[i], pos=entry.positions[i];
-      if (typeof id !== 'string' || !id || ids.has(id) || dead.has(id) || !pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) reject();
+      if (typeof id !== 'string' || !id || ids.has(id) || dead.has(id) || !pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !validNativeQuietRadius(pos.nativeQuietRadius)) reject();
       ids.add(id);
     }
   }
   if (value.order.length !== ids.size || new Set(value.order).size !== ids.size || value.order.some(id => !ids.has(id))) reject();
   validateNativeDormancyCheckpoint(mass.dormancy, mass.enemies, false,
-    new Map(mass.enemies.map(e => [e.id, e.magicPack?.id ?? e.encounterGroup?.id])));
+    new Map(mass.enemies.map(e => [e.id, e.magicPack?.id ?? e.encounterGroup?.id ?? e.ambientPack?.id])));
   return value;
 }
 
@@ -161,6 +162,8 @@ export async function preparePagedCharacterResume(value: unknown, storage: Pick<
       || canonical(c.frame) !== canonical(mass.origin) || canonical(c.policy) !== canonical(mass.config.dormancy)
       || data.enemies.some(e => !MONSTERS[e.monster] || !Number.isSafeInteger(e.level) || e.level < 1
         || ![e.x,e.y,e.life,e.scale].every(Number.isFinite) || e.life <= 0 || e.scale <= 0
+        || !validNativeQuietRadius(e.nativeQuietRadius)
+        || e.ambientPack && (mass.schema<19 || !mass.config.content.some(c=>!!c.ambientPack) || !Number.isSafeInteger(e.ambientPack.id) || e.ambientPack.id<0 || typeof e.ambientPack.leader!=='boolean' || !!e.magicPack || !!e.encounterGroup)
         || e.magicPack && (!readMagicPack(e.magicPack) || typeof e.name !== 'string')
         || e.encounterGroup && (!nativeFormationFits(e.monster, e.encounterGroup) || typeof e.name !== 'string' || !!e.magicPack)
         || (mass.config.nativeBirthSource || e.birth !== undefined) && !validMassBirth(e.birth!)
@@ -224,7 +227,8 @@ export async function decodeCharacterPages(value: unknown, storage: Pick<NativeP
     target.sleeping.push(...compact.sleeping);
     mass.enemies.push(...page.enemies.map(e=>({...e,
       ...(e.magicPack?{magicPack:{...e.magicPack,id:squads.get(e.magicPack.id)??reject()}}:{}),
-      ...(e.encounterGroup?{encounterGroup:{...e.encounterGroup,id:squads.get(e.encounterGroup.id)??reject()}}:{})})));
+      ...(e.encounterGroup?{encounterGroup:{...e.encounterGroup,id:squads.get(e.encounterGroup.id)??reject()}}:{}),
+      ...(e.ambientPack?{ambientPack:{...e.ambientPack,id:squads.get(e.ambientPack.id)??reject()}}:{})})));
   }
   if (new Set(value.order).size!==known.size || value.order.length!==known.size || value.order.some(id=>!known.has(id))) reject();
   const rank = new Map(value.order.map((id,i)=>[id,i]));

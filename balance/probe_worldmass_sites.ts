@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -13,7 +14,7 @@ import { serializeCharacter } from '../src/meta/character';
 
 const restore = seedGlobalRandom(51342);
 function fixture(kind: 'wayside-camp' | 'pillaged-ruin'): MassAdventure {
-  const config: MassAdventure = JSON.parse(canonical(massAdventure()));
+  const config: MassAdventure = JSON.parse(canonical(beforeWildernessPaths(structuredClone(massAdventure()))));
   delete config.progression; delete config.journey; delete config.ecology;
   delete config.settlement; // native-town lifecycle has its own probe
   delete config.survey; // legacy lattice fixture retains page-based cartography

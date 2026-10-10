@@ -1,3 +1,4 @@
+import { beforeWildernessPaths } from './worldmassFixtures';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -59,7 +60,7 @@ again.player.pos = again.massRuntime!.journey!.local(gate); again.massRuntime!.u
 assert.equal(again.actors.filter(a=>!a.dead&&a.magicPack?.mechanic==='footfall').length,3);
 console.log('PASS separate cohorts retain casualty count, survivors, wounds, names and native power on Continue');
 
-const limited: MassAdventure = JSON.parse(canonical(massAdventure()));
+const limited: MassAdventure = JSON.parse(canonical(beforeWildernessPaths(structuredClone(massAdventure()))));
 limited.maxPopulation = 1;
 const narrowWorld=makeSimWorld('warrior',45),narrow=new WorldMassRuntime(42,'limited-cohort',limited);
 narrow.attach(narrowWorld);
@@ -76,7 +77,7 @@ field.attach(fieldWorld);
 assert.equal(field.snapshot(fieldWorld).enemies.length,0,'unstructured cohorts obey the same total body cap');
 console.log('PASS population saturation cannot introduce a partial magic group or an unguarded cache');
 
-const atomicConfig: MassAdventure = JSON.parse(canonical(massAdventure()));
+const atomicConfig: MassAdventure = JSON.parse(canonical(beforeWildernessPaths(structuredClone(massAdventure()))));
 atomicConfig.terrain.places=[];delete atomicConfig.journey!.stops;
 // The single-gate cohort fixture does not retain the public circuit's notices.
 delete atomicConfig.journey!.notices;
@@ -101,14 +102,14 @@ atomicWorld.findFreeSpot=find;atomic.update(atomicWorld,true);
 assert.equal(atomicWorld.actors.filter(a=>a.magicPack?.mechanic==='footfall').length,4);
 console.log('PASS failed seating leaves no partial encounter; later retry admits the complete native cohort');
 
-const legacy: MassAdventure = JSON.parse(canonical(massAdventure()));
+const legacy: MassAdventure = JSON.parse(canonical(beforeWildernessPaths(structuredClone(massAdventure()))));
 for(const c of legacy.content)delete c.magicPack;
 const oldWorld=makeSimWorld('warrior',46),old=new WorldMassRuntime(42,'plain-landmarks',legacy);
 old.attach(oldWorld);oldWorld.player.pos=old.journey!.local(old.journey!.places.find(p=>p.content==='broken-gate')!);old.update(oldWorld,true);
 const oldSave=old.snapshot(oldWorld),oldAgain=makeSimWorld('warrior',47);
 new WorldMassRuntime(42,'plain-landmarks',oldSave.config,oldSave).attach(oldAgain,oldSave);
 assert.ok(!oldAgain.actors.some(a=>a.magicPack),'existing descriptors cannot acquire new encounters');
-const invalid: MassAdventure=JSON.parse(canonical(massAdventure()));
+const invalid: MassAdventure=JSON.parse(canonical(beforeWildernessPaths(structuredClone(massAdventure()))));
 invalid.content.find(c=>c.id==='broken-gate')!.magicPack!.mechanic='__proto__';
 assert.throws(()=>new WorldMassRuntime(42,'invalid-cohort',invalid),/Invalid native worldmass cohort/);
 console.log('PASS existing plain encounters remain plain; unknown coordinated mechanics rejected');
