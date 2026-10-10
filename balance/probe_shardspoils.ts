@@ -21,6 +21,9 @@
 //      reach of the kill, never to one out of reach, and a member come into reach joins the turn;
 //   W  THE WIRE: `DropW.o` / `fa` ride the hosted wire (and the shell ghosts another seat's held
 //      drop), and never the co-op broadcast (serializeSnapshot alone, or a world with no rule);
+//   Q  THE QUEST HAND: a quest's pay is its hand's (owed gems and gear, and the essence a quest's
+//      scope pays, wear the hand the scope names); owed pay outside every act and scope wears no
+//      one (the keeper is no hand);
 //   P  THE RESTART: a world stood back up from its save keeps its spoils and forgets their owners
 //      (a seat id lives and dies with the shard's process).
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -45,6 +48,7 @@ import { makeAccount } from '../src/meta/account';
 import { buildManifest } from '../src/packages/manifest';
 import { CLASSES } from '../src/data/classes';
 import { COOP_SCALING } from '../src/data/coop';
+import { ESSENCE_IDS } from '../src/data/essences';
 import { FORECHART_CFG } from '../src/world/forechart';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { vec, type Vec2 } from '../src/core/math';
@@ -376,6 +380,30 @@ PARTY_CFG.freeAfterSec = free0;
     alphas[0] === SPOILS_CFG.ghostAlpha && alphas[1] === 1 && alphas[2] === 1 && alphas[3] === SPOILS_CFG.ghostAlpha, alphas.join());
   (shell as unknown as { time: number }).time = 102.5;
   check('W draw: when its seconds run out the drop draws full for everyone', dropAlpha(shell, shell.drops[3]) === 1);
+}
+
+// ================================================================= Q: THE QUEST HAND ==
+// THE CHARACTER'S QUESTS pay a quest's hand (World.questHand: the hand a quest's scope names, else
+// the acting seat): its owed gems and gear, and the essence its scope pays, wear that hand.
+{
+  at(a, -400); at(b, -400, 200); at(c, 300, 300);
+  await runTicks(2);
+  const pay = vec(anchor.x + 120, anchor.y - 160), mark = w.drops.length;
+  w.withQuestHand(b, () => {
+    w.dropGemAt(pay, undefined, true, 'quest');
+    w.dropGearAt(pay, rollItem({ ilvl: 5, rarity: 'magic', category: 'boots' })!, undefined, true);
+    w.dropEssenceAt(pay, { essence: ESSENCE_IDS[0], count: 1 });
+  });
+  const paid = w.drops.slice(mark);
+  check('Q hand: a quest scope\'s owed gems and gear and its essence wear its hand',
+    paid.length >= 3 && paid.every(d => d.owner === B.id), JSON.stringify(paid.map(d => [d.item.kind, d.owner])));
+  const mark2 = w.drops.length;
+  w.dropGemAt(pay, undefined, true, 'quest');
+  w.dropEssenceAt(pay, { essence: ESSENCE_IDS[0], count: 1 });
+  const loose = w.drops.slice(mark2);
+  check('Q none: owed pay outside every act and scope wears no one (the keeper is no hand)',
+    loose.length >= 2 && loose.every(d => d.owner === undefined), JSON.stringify(loose.map(d => [d.item.kind, d.owner])));
+  for (const d of w.drops.slice(mark)) w.drops.splice(w.drops.indexOf(d), 1); // the rig's own spoils go
 }
 
 Object.assign(DROP_CFG, drop0);

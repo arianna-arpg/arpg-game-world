@@ -20022,6 +20022,9 @@ export class World {
     const s = ESSENCE_SPILL_CFG.scatter;
     const pos = this.clampPos(vec(at.x + rand(-s, s), at.y + rand(-s, s)), 10, undefined, this.spoilClamp());
     this.drops.push({ pos, item: { kind: 'essence', essence: gain.essence, count: gain.count }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
+    // THE OWNER STAMP (card 27): essence a quest pays inside its hand's scope (THE QUEST HAND)
+    // is that hand's; every other packet wears its own pass's stamp. Inert off a hosted world.
+    if (this.dropRuleOf && this.questSeat) this.ownSpoils(this.drops.length - 1, this.questSeat);
   }
 
   // --- ABILITY ESSENCES (data/essences.ts ABILITY_ESSENCES) ------------------
@@ -42473,9 +42476,9 @@ export class World {
   ): void {
     const d0 = this.drops.length;
     this.mintGemAt(at, bias, owed, from, memoryKind, pin, contextZone);
-    // THE OWNER STAMP (card 27): owed pay wears the seat it is owed to, the acting seat (a
-    // quest's gems land inside its hand's act). Inert off a hosted world.
-    if (owed && this.dropRuleOf) this.ownSpoils(d0, this.actingSeat);
+    // THE OWNER STAMP (card 27): owed pay wears the seat it is owed to, THE QUEST HAND (a
+    // quest's scope names its hand, else the acting seat). Inert off a hosted world.
+    if (owed && this.dropRuleOf) this.ownSpoils(d0, this.questHand());
   }
   private mintGemAt(
     at: Vec2, bias?: SkillTag[], owed = false, from?: string | MemoryProvenance,
@@ -43346,8 +43349,8 @@ export class World {
     if (droppedBy) { drop.grace = DROP_PICKUP_GRACE; drop.droppedBy = droppedBy; }
     this.drops.push(drop);
     // THE OWNER STAMP (card 27): a discard wears its dropper beside droppedBy; owed pay wears
-    // the seat it is owed to, the acting seat (a quest's payout lands inside its hand's act).
-    if (this.dropRuleOf && (droppedBy || owed)) this.ownSpoils(this.drops.length - 1, droppedBy ? this.seats.find(s => s.id === droppedBy) : this.actingSeat);
+    // the seat it is owed to, THE QUEST HAND (a quest's scope names its hand, else the acting seat).
+    if (this.dropRuleOf && (droppedBy || owed)) this.ownSpoils(this.drops.length - 1, droppedBy ? this.seats.find(s => s.id === droppedBy) : this.questHand());
     if (!droppedBy) {
       this.lootDropCue(at, ITEM_RARITIES[item.rarity].color);
       // THE DISCOVERY LEDGER (engine/containers.ts ContainerDef.foundLedger):
