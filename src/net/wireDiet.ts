@@ -111,15 +111,25 @@ const r2 = (n: number): number => Math.round(n * 100) / 100;
 export const DIET_IDENTITY = ['r', 'c', 'sh', 'team', 'name', 'maxLife', 'maxEs', 'mn', 'passive', 'mat', 'lk', 'ep', 'rarity',
   'defId', 'cosmeticSourceSkill', 'faction', 'cosmeticKind', 'cosmeticLoadout', 'adorn', 'bv', 'encounterGroup'] as const;
 
-/** THE IDENTITY ONCE, the shard's half: an encoded row's identity as one comparable string. */
+/** THE IDENTITY ONCE, the shard's half: an encoded row's identity as one comparable string
+ *  (primitives as they are, objects as JSON; each field keeps its one type, and no field's
+ *  text holds the separator: names are cleaned of control characters at the door). */
 export function dietIdentity(o: Record<string, unknown>): string {
-  return JSON.stringify(DIET_IDENTITY.map(k => (o[k] === undefined ? null : o[k])));
+  let s = '';
+  for (const k of DIET_IDENTITY) {
+    const v = o[k];
+    s += (v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)) + '\u0000';
+  }
+  return s;
 }
+const IDENTITY_KEYS: ReadonlySet<string> = new Set(DIET_IDENTITY);
 /** THE IDENTITY ONCE, the shard's half: an encoded row with its identity struck (`k`: the
- *  client's memo holds it). */
+ *  client's memo holds it). Built by copying, never by deleting (a deleted key turns the
+ *  object slow for every later read). */
 export function dietKept(o: Record<string, unknown>): Record<string, unknown> {
-  const c: Record<string, unknown> = { ...o, k: 1 };
-  for (const f of DIET_IDENTITY) delete c[f];
+  const c: Record<string, unknown> = {};
+  for (const k in o) if (!IDENTITY_KEYS.has(k)) c[k] = o[k];
+  c.k = 1;
   return c;
 }
 /** THE IDENTITY ONCE, the client's half: one socket's memo of the identities it holds (the
@@ -130,31 +140,39 @@ export function dietMemo(): DietMemo { return { ids: new Map(), miss: false }; }
 /** The grid this build writes. */
 export function dietGrid(): DietGrid { return [WIRE_DIET_CFG.posSteps, WIRE_DIET_CFG.turnSteps]; }
 
-/** THE CODEC, the shard's half: one actor row, quantized and elided (a fresh object; the
- *  canonical row is untouched). */
+/** THE CODEC, the shard's half: one actor row, quantized and elided (a fresh object built by
+ *  copying, the canonical row untouched). */
 export function dietRow(a: ActorW, g: DietGrid): Record<string, unknown> {
   const [ps, ts] = g, turn = ts / TAU;
-  const o = { ...a } as Record<string, unknown>;
-  o.p = [Math.round(a.p[0] * ps), Math.round(a.p[1] * ps)];
-  o.f = Math.round(a.f * turn);
-  for (const k of DIET_FALSE) if (o[k] === false) delete o[k];
-  for (const k of DIET_ZERO) if (o[k] === 0) delete o[k];
-  // The hit flash on hundredths, rounded up: a flash still burning never reads as none.
-  if (a.hf > 0) o.hf = Math.ceil(a.hf * 100); else delete o.hf;
-  if (a.bodyWalkPose) {
-    const w = a.bodyWalkPose;
-    o.bw = [Math.round(w.travel * 100), Math.round(w.direction * turn), Math.round(w.weight * 100)];
-    delete o.bodyWalkPose;
+  const src = a as unknown as Record<string, unknown>;
+  const o: Record<string, unknown> = {};
+  for (const k in src) {
+    const v = src[k];
+    if (v === undefined) continue;
+    switch (k) {
+      case 'p': o.p = [Math.round(a.p[0] * ps), Math.round(a.p[1] * ps)]; break;
+      case 'f': o.f = Math.round(a.f * turn); break;
+      case 'downed': case 'dead': case 'mn': case 'passive': case 'ut': if (v !== false) o[k] = v; break; // DIET_FALSE
+      case 'es': case 'maxEs': if (v !== 0) o[k] = v; break; // DIET_ZERO
+      // The hit flash on hundredths, rounded up: a flash still burning never reads as none.
+      case 'hf': if (a.hf > 0) o.hf = Math.ceil(a.hf * 100); break;
+      case 'bodyWalkPose': {
+        const w = a.bodyWalkPose!;
+        o.bw = [Math.round(w.travel * 100), Math.round(w.direction * turn), Math.round(w.weight * 100)];
+        break;
+      }
+      case 'bodyActionPose': {
+        const b = a.bodyActionPose!;
+        o.ba = [Math.round(b.shift * 1000), Math.round(b.turn * 1000), Math.round(b.sx * 1000), Math.round(b.sy * 1000),
+          Math.round(b.facing * turn), b.prepare === undefined ? null : Math.round(b.prepare * 100), b.strike === undefined ? null : Math.round(b.strike * 100)];
+        break;
+      }
+      case 'worm': o.worm = { ...a.worm!, seg: a.worm!.seg.map(s => [Math.round(s[0] * ps), Math.round(s[1] * ps)]) }; break;
+      case 'st': o.st = a.st!.map(s => (s.statusDuration !== undefined ? { ...s, statusDuration: r2(s.statusDuration) } : s)); break;
+      case 'concealmentExposedUntil': o[k] = r2(v as number); break;
+      default: o[k] = v;
+    }
   }
-  if (a.bodyActionPose) {
-    const b = a.bodyActionPose;
-    o.ba = [Math.round(b.shift * 1000), Math.round(b.turn * 1000), Math.round(b.sx * 1000), Math.round(b.sy * 1000),
-      Math.round(b.facing * turn), b.prepare === undefined ? null : Math.round(b.prepare * 100), b.strike === undefined ? null : Math.round(b.strike * 100)];
-    delete o.bodyActionPose;
-  }
-  if (a.worm) o.worm = { ...a.worm, seg: a.worm.seg.map(s => [Math.round(s[0] * ps), Math.round(s[1] * ps)]) };
-  if (a.st) o.st = a.st.map(s => (s.statusDuration !== undefined ? { ...s, statusDuration: r2(s.statusDuration) } : s));
-  if (a.concealmentExposedUntil !== undefined) o.concealmentExposedUntil = r2(a.concealmentExposedUntil);
   return o;
 }
 
