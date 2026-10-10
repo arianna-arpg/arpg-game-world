@@ -92,7 +92,7 @@ export class LoadingScreen {
       #mu-loading-screen button:focus-visible{outline:2px solid #e8c992;outline-offset:4px}
       @media(max-height:480px){#mu-loading-screen canvas{inset:80px 0 145px;height:calc(100% - 225px)}#mu-loading-screen .mu-head{top:14px}#mu-loading-screen h1{font-size:22px;margin:4px 0}#mu-loading-screen footer{bottom:12px;gap:5px}#mu-loading-screen .mu-detail{margin-top:2px}}
       </style><canvas aria-label="Steer the wisp through the openings in the spirit gates. Follow wandering spirits and optionally ride the wispy chevron currents to surge ahead."></canvas>
-      <header class="mu-head"><div><div class="mu-eyebrow">HOLLOW WAKE / MU</div><h1 class="runescript" aria-label="The Crossing — Loading">${encipher('The Crossing')}</h1></div></header>
+      <header class="mu-head"><div><div class="mu-eyebrow">HOLLOW WAKE</div><h1 class="runescript" aria-label="The Crossing — Loading">${encipher('The Crossing')}</h1></div></header>
       <footer><div><div class="mu-status" role="status" aria-live="polite"></div><div class="mu-detail"></div><progress aria-label="Loading progress"></progress></div><div class="mu-actions"></div><div class="mu-pickups">FOLLOW THE WISPS &nbsp; · &nbsp; RIDE THE CURRENTS</div><div class="mu-controls">MOUSE / TOUCH &nbsp; · &nbsp; WASD / ARROWS &nbsp; · &nbsp; LEFT STICK</div></footer>`;
     this.canvas = root.querySelector('canvas')!; this.label = root.querySelector('.mu-status')!;
     this.detail = root.querySelector('.mu-detail')!;
