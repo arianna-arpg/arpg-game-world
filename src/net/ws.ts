@@ -18,6 +18,7 @@ import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from 
 import type { PlayerId, PlayerInput } from './intent';
 import { SHARD_REFUSAL, shardBuildStamp } from './shardBuild';
 import { storageKey } from '../buildProfile';
+import { WIRE_DIET_CFG, dietInflate, dietMemo } from './wireDiet'; // THE WIRE DIET: the codec's client half and THE ACK
 
 /** THE GRAMMAR — one JSON message per frame, both directions. */
 export type WireMsg =
@@ -45,7 +46,11 @@ export type WireMsg =
       build?: string }
   /** THE BUILD STAMP's door: the join was refused before any seat was made (one word for the lobby). */
   | { t: 'refused'; word: string }
-  | { t: 'input'; seat: PlayerId; input: PlayerInput }
+  /** THE WIRE DIET's ack (`ak`): the newest snapshot tick this client applied, riding its input;
+   *  `rs`: THE IDENTITY ONCE missed a body's identity, so the shard resends them all. */
+  | { t: 'input'; seat: PlayerId; input: PlayerInput; ak?: number; rs?: 1 }
+  /** THE WIRE DIET's ack on its own: arrivals no input carried the echo of (WIRE_DIET_CFG.ackEvery). */
+  | { t: 'ack'; k: number; rs?: 1 }
   | { t: 'snap'; snap: StateSnapshot }
   | { t: 'zone'; zone: ZoneMsg }
   | { t: 'pjoin'; peer: PeerInfo }
@@ -183,6 +188,21 @@ export class WsTransport implements NetTransport {
   private joinInfo: Omit<PeerInfo, 'id' | 'isHost'> | null = null;
   /** When the session's page-surviving copy was last written (ms; at most once a second). */
   private persistedAt = 0;
+  /** THE WIRE DIET's ack: the newest snapshot tick this socket's client applied (-1: none yet).
+   *  A new socket starts over (the shard's ledger does too). */
+  private ackTick = -1;
+  /** Snapshots applied since an input (or a bare ack) last carried the echo. */
+  private unechoed = 0;
+  /** THE WIRE DIET's ack lever: false stops acknowledging (a rig's slow link). */
+  private acking = true;
+  /** THE IDENTITY ONCE: this socket's memo of the bodies' identities (a new socket starts empty). */
+  private memo = dietMemo();
+  /** THE IDENTITY ONCE's resend word, once, on the next ack (a memo miss). */
+  private resend(): { rs?: 1 } {
+    if (!this.memo.miss) return {};
+    this.memo.miss = false;
+    return { rs: 1 };
+  }
 
   peers(): PeerInfo[] { return this.peerList; }
 
@@ -204,6 +224,7 @@ export class WsTransport implements NetTransport {
     opts?: { resumeOnly?: boolean }): Promise<{ self: PlayerId; seed: number; worldmass: boolean; features: string[]; land?: string; resumed: boolean }> {
     this.url = normalizeShardUrl(url);
     this.joinInfo = info;
+    this.ackTick = -1; this.memo = dietMemo(); // THE WIRE DIET: a new socket acks, and holds identities, from nothing
     return new Promise((resolve, reject) => {
       let ws: WebSocket;
       try { ws = new WebSocket(normalizeShardUrl(url)); } catch (e) { reject(e instanceof Error ? e : new Error(String(e))); return; }
@@ -269,6 +290,7 @@ export class WsTransport implements NetTransport {
     const s = this.session, info = this.joinInfo, url = this.url;
     if (!s || !info || !url) return Promise.resolve({ ok: false, word: 'no session to return to', final: true });
     this.detachSocket();
+    this.ackTick = -1; this.memo = dietMemo(); // THE WIRE DIET: the shard's ledger for the new socket starts over
     return new Promise(resolve => {
       let ws: WebSocket;
       try { ws = new WebSocket(url); } catch (e) { resolve({ ok: false, word: e instanceof Error ? e.message : String(e), final: false }); return; }
@@ -337,7 +359,20 @@ export class WsTransport implements NetTransport {
 
   private dispatch(m: WireMsg): void {
     switch (m.t) {
-      case 'snap': this.touchSession(); this.stateCbs.forEach(cb => cb(m.snap)); break;
+      case 'snap': {
+        // THE WIRE DIET: a diet frame inflates to the canonical rows before any subscriber sees
+        // it, and the tick is acknowledged once applied: on the next input, or on its own once
+        // ackEvery arrivals found no input to carry it (a menu, a fallen hero, a hidden tab).
+        const snap = dietInflate(m.snap, this.memo);
+        this.touchSession();
+        this.stateCbs.forEach(cb => cb(snap));
+        if (typeof snap.tick === 'number' && snap.tick > this.ackTick) this.ackTick = snap.tick;
+        if (this.acking && (this.memo.miss || ++this.unechoed >= Math.min(WIRE_DIET_CFG.ackEvery, WIRE_DIET_CFG.maxUnacked + 1))) {
+          this.unechoed = 0;
+          this.send({ t: 'ack', k: this.ackTick, ...this.resend() });
+        }
+        break;
+      }
       case 'zone': this.zoneCbs.forEach(cb => cb(m.zone)); break;
       case 'pjoin':
         if (!this.peerList.some(p => p.id === m.peer.id)) this.peerList.push(m.peer);
@@ -400,7 +435,16 @@ export class WsTransport implements NetTransport {
     try { ws.send(JSON.stringify(m)); } catch { /* a closing socket drops the frame */ }
   }
 
-  sendInput(seat: PlayerId, input: PlayerInput): void { this.send({ t: 'input', seat, input }); }
+  sendInput(seat: PlayerId, input: PlayerInput): void {
+    if (this.acking) this.unechoed = 0;
+    this.send({ t: 'input', seat, input, ...(this.acking && this.ackTick >= 0 ? { ak: this.ackTick, ...this.resend() } : {}) }); // THE WIRE DIET's ack rides the input
+  }
+  /** THE WIRE DIET's ack lever (a rig's slow link): false stops acknowledging; true resumes
+   *  with the newest tick applied, at once. */
+  setAcking(on: boolean): void {
+    this.acking = on;
+    if (on && this.ackTick >= 0) this.send({ t: 'ack', k: this.ackTick });
+  }
   /** A client never drains — the shard does. */
   drainInputs(): Map<PlayerId, PlayerInput> { return new Map(); }
 

@@ -82,6 +82,7 @@ import { gaugeFloor, gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'
 import { COOP_SCALING } from '../data/coop'; // THE WIRE'S EYES: the zone rows' reach (THE NEAR LAW's radius)
 import { applyCounterRows, applyCounterZone, counterZoneOf, harvestRowOf, journalRowOf, type HarvestW, type JournalW } from './journalWire'; // THE COUNTERS AND THE JOURNAL
 import { roadDwellRow } from '../engine/shardRoads'; // THE ROADS PER PLAYER (shard M1 W2): the road ring
+import { applyDressDelta, glideLite } from './wireDiet'; // THE WIRE DIET (shard sync pass C): the dress delta and the lite glide
 
 export type Vec2W = [number, number];
 
@@ -698,6 +699,10 @@ export interface StateSnapshot {
   /** THE PING (card 17 A, engine/pings.ts): the live marks — present on every snapshot of a hosted
    *  world (the host's list is the truth each beat; a client expires them on the clock it follows). */
   pings?: PingW[];
+  /** THE MUSTER RING (shard M1 W4, engine/shardMuster.ts): the rings standing in the snapshot's
+   *  unit, unit-wide (a stranger draws them faint). Absent = none stands (the common case keeps the
+   *  quiet snapshot's shape key for key); every snapshot carrying one carries them all. */
+  mu?: import('../engine/shardMuster').MusterRingRow[];
   /** Per-seat build/progression — present ONLY for seats whose meta CHANGED since
    *  the last broadcast (dirty-flagged), so it rides along cheaply. Each client
    *  applies its OWN entry (snap.seatMeta[clientSeatId]). THE OWN META: a shard
@@ -797,7 +802,7 @@ export interface StateSnapshot {
    *  (MonsterDef ids), `b` = flat (kindIdx, x, y) triples. Present only
    *  while the host's pool holds bodies; the client renders it verbatim
    *  (World.liteWire) — host-authoritative, self-healing at 20 Hz. */
-  lt?: { k: string[]; b: number[] };
+  lt?: { k: string[]; b: number[]; i?: number[] }; // THE WIRE DIET (shard only): `i` = each body's wire id, the shell's glide (net/wireDiet.ts)
   /** THE RAMPAGE FABRIC's felled set (engine/rampage.ts): position-keyed
    *  (doodad positions are seed-shared and immutable — splice-proof where
    *  indices are not) with the host-resolved stand-up progress `p` (-1 =
@@ -1118,6 +1123,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       const live = world.livePings();
       return world.partyRows || live.length ? { pings: live.map(p => ({ s: p.seat, p: [p.pos.x, p.pos.y] as Vec2W, k: p.tier, a: p.at, u: p.until })) } : {};
     })(),
+    ...(world.musterRings?.length ? { mu: world.musterRings.map(r => ({ ...r })) } : {}), // THE MUSTER RING: absent = none stands
     memoryAccess: (() => { // THE WIRE DISCIPLINE: the beat, or a view that changed
       const view = memoryAccessView(world.account), key = JSON.stringify(view);
       if (tick % WIRE_CFG.memoryAccessBeat !== 1 && lastShippedMemoryAccess.get(world) === key) return undefined;
@@ -1883,8 +1889,13 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   if (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) {
     world.syncedGrantedPockets = Object.fromEntries((snap.grantedPockets ?? []).map(r => [r.owner, r.pockets]));
   }
+  // THE MUSTER RING (shard M1 W4): absent = none stands; a stale zone's rings never draw on new ground.
+  world.musterRings = snap.mu?.length && (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) ? snap.mu : null;
   world.arena.w = snap.arena.w;
   world.arena.h = snap.arena.h;
+  // THE WIRE DIET (shard only, net/wireDiet.ts): the dress delta lands FIRST, so the door,
+  // hollow, annex, well, felled and drying reconciles below find the pieces it laid.
+  applyDressDelta(world, snap);
 
   // Structure doors: converge on the host's states through the SAME gate the
   // host used (client-side collision flip + grid repaint). Idempotent, so the
@@ -2378,6 +2389,7 @@ export function interpolateSnapshot(world: World, prev: StateSnapshot | null | u
   const runOn = opts?.runOn && span > 0 ? Math.min(Math.max(0, B.ahead), opts.runOn) : 0;
   const bPrevById = B.prev && (bLerp || runOn > 0) ? actorRowsById(B.prev) : null;
   const ownPredicted = (aw: ActorW): boolean => aw.seat !== undefined && aw.seat === world.clientSeatId && !!world.clientActionHook;
+  const hosted = world.partyRows !== null; // THE WIRE DIET's per-frame glides read a hosted world alone
   let sawOwn = false;
   for (const aw of B.snap.actors) {
     if (aw.seat !== undefined && aw.seat === world.clientSeatId) sawOwn = true;
@@ -2399,6 +2411,9 @@ export function interpolateSnapshot(world: World, prev: StateSnapshot | null | u
     } else {
       a.pos.x = aw.p[0]; a.pos.y = aw.p[1]; a.facing = aw.f;
     }
+    // THE WIRE DIET (a hosted world alone): the hit flash fades between the pair's rows; a
+    // fresh blow (a rise) stands at once.
+    if (hosted) a.hitFlash = bLerp && pa && aw.hf < pa.hf ? pa.hf + (aw.hf - pa.hf) * B.alpha : aw.hf;
     // THE POSE SCALARS glide between the pair's poses (a pose the pair does not hold
     // in both rows stands at its adopted values).
     const pw = a.bodyWalkPose, rw = aw.bodyWalkPose, pwPrev = pa?.bodyWalkPose;
@@ -2478,6 +2493,8 @@ export function interpolateSnapshot(world: World, prev: StateSnapshot | null | u
       const stub = adopted.zones.get(z.id);
       if (stub) glideZoneStub(stub, z, prevZones?.get(z.id), lerping ? alpha : 1);
     }
+    // THE WIRE DIET: the lite horde glides by wire id on the flights' own timing (shard only: `lt.i`).
+    glideLite(world, prev ?? null, snap, lerping ? alpha : 1, ahead, WIRE_CFG.eyes.projAheadSec);
   }
 
   // The own hero when it is no pooled body (never on a seated shell): the seat's own row.
@@ -2556,6 +2573,10 @@ export interface ZoneMsg {
    *  Seeds stay host-side (the annex mint is the host's business). */
   arena: {
     w: number; h: number; shape: ZoneShape;
+    /** THE ZONE'S OWN BOUNDS: a boundless (streamed) arena says so here, absent = bounded. A
+     *  client's clamp, camera and floor read it on every zone message (a wilds shell's pocket
+     *  is bounded, its surface boundless again on the climb-out). */
+    boundless?: boolean;
     pieces?: { id: string; x: number; y: number; w: number; h: number; shape?: ZoneShape; active?: boolean }[];
   };
   theme: ZoneTheme;
@@ -2610,6 +2631,7 @@ export function serializeZone(world: World): ZoneMsg {
     dimension: world.zone.dimension,
     arena: {
       w: world.arena.w, h: world.arena.h, shape: world.arena.shape,
+      ...(world.arena.boundless ? { boundless: true } : {}), // THE ZONE'S OWN BOUNDS
       ...(world.arena.pieces?.length ? {
         pieces: world.arena.pieces.map(pc => ({
           id: pc.id, x: pc.x, y: pc.y, w: pc.w, h: pc.h,
@@ -2638,6 +2660,9 @@ export function serializeZone(world: World): ZoneMsg {
 /** Client: rebuild the render terrain from a host zone message. */
 export function applyZone(world: World, msg: ZoneMsg): void {
   world.arena.w = msg.arena.w; world.arena.h = msg.arena.h; world.arena.shape = msg.arena.shape;
+  // THE ZONE'S OWN BOUNDS: the host's word, every message (a client's own last arena never
+  // stands in for it: a wilds shell's pocket kept the surface's boundless before this).
+  world.arena.boundless = msg.arena.boundless === true;
   // THE COMPOSITE BOUND: adopt the host's pieces whole (fresh objects), then
   // let the hull + revealed set follow — the client's predicted clampPos and
   // the drawn face read the same union the host tests.

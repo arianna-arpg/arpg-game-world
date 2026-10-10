@@ -29,6 +29,7 @@
 //                       about the hearth (0 = everyone around the hearth) — the split-party case
 //   --rove <sec>        THE ROVING SHADOW's visit length (SHARD_CFG.rove.sec; 0 = the focus alone)
 //   --tick-hz <n>       the host tick rate for this run (SHARD_CFG.tickHz; 60 ships) — a cost experiment
+//   --diet off          THE WIRE DIET switched off (WIRE_DIET_CFG.enabled): the pre-diet frames, the A/B
 //   --report <path>     the JSON report (default balance/reports/soak_<stamp>.json, gitignored)
 //   --thresholds <path> the gates (default balance/soak.config.json)
 //
@@ -46,6 +47,7 @@ import { runInNewContext } from 'node:vm';
 import { ShardHost, SHARD_CFG } from '../server/shardHost';
 import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import { deriveSeed, seedGlobalRandom } from '../src/sim/rng';
+import { WIRE_DIET_CFG } from '../src/net/wireDiet'; // THE WIRE DIET's A/B switch (--diet off)
 import type { FleetBotStats, FleetCommand, FleetEvent } from './soak_bots';
 
 export const SOAK_CFG = {
@@ -219,6 +221,7 @@ async function main(): Promise<number> {
   const tickHzArg = num(args['tick-hz']);
   if (tickHzArg !== undefined && tickHzArg > 0) SHARD_CFG.tickHz = tickHzArg; // THE TICK RATE experiment (SHARD_CFG.tickHz; 60 ships)
   if (roveArg !== undefined) SHARD_CFG.rove.sec = Math.max(0, roveArg); // THE ROVING SHADOW's dial, before the host stands
+  if (typeof args.diet === 'string' && /^(0|off|false|no)$/i.test(args.diet)) WIRE_DIET_CFG.enabled = false; // THE WIRE DIET's A/B
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const reportPath = typeof args.report === 'string' ? args.report : `${SOAK_CFG.reportDir}/soak_${stamp}.json`;
   const gatesPath = typeof args.thresholds === 'string' ? args.thresholds : SOAK_CFG.thresholds;
@@ -523,7 +526,7 @@ async function main(): Promise<number> {
 
   const cpu = cpus();
   const report = {
-    soak: { version: 1, at: new Date().toISOString(), world, seed: seedHex, bots, seconds, windowSec: r2(windowSec), classes: SOAK_CFG.classes, drop: dropOn },
+    soak: { version: 1, at: new Date().toISOString(), world, seed: seedHex, bots, seconds, windowSec: r2(windowSec), classes: SOAK_CFG.classes, drop: dropOn, diet: WIRE_DIET_CFG.enabled },
     machine: { platform: process.platform, release: release(), node: process.version, cpus: cpu.length, cpuModel: cpu[0]?.model.trim() ?? '?', memGB: Math.round(totalmem() / 1024 ** 3) },
     host: { bootSec: r2(bootSec), tickHz: SHARD_CFG.tickHz, stateHz: SHARD_CFG.stateHz, wireCaps: { maxSeats: SHARD_WIRE_CFG.maxSeats, maxConnections: SHARD_WIRE_CFG.maxConnections, maxPerIp: 'unbounded' } },
     warmup: {
@@ -574,7 +577,7 @@ async function main(): Promise<number> {
   const L = (s: string | number, w: number): string => String(s).padStart(w);
   const R = (s: string | number, w: number): string => String(s).padEnd(w);
   const out: string[] = [];
-  out.push('', `THE SOAK  ${world} ${seedHex}  ·  ${bots} bots${spread ? ` spread ${spread} px` : ''}${host.worldmass ? `  ·  rove ${SHARD_CFG.rove.sec ? SHARD_CFG.rove.sec + ' s' : 'off'}` : ''}  ·  ${r2(windowSec)} s window  ·  warm-up ${r2(warmSec)} s  ·  boot ${r2(bootSec)} s`);
+  out.push('', `THE SOAK  ${world} ${seedHex}  ·  ${bots} bots${spread ? ` spread ${spread} px` : ''}${host.worldmass ? `  ·  rove ${SHARD_CFG.rove.sec ? SHARD_CFG.rove.sec + ' s' : 'off'}` : ''}  ·  diet ${WIRE_DIET_CFG.enabled ? 'on' : 'off'}  ·  ${r2(windowSec)} s window  ·  warm-up ${r2(warmSec)} s  ·  boot ${r2(bootSec)} s`);
   out.push(`  ${report.machine.cpuModel} × ${cpu.length}  ·  ${process.platform} ${release()}  ·  node ${process.version}  ·  the fleet in its own process`);
   out.push('', `${L('t s', 6)} ${L('seats', 5)} ${L('conn', 4)} ${L('actors', 6)}   ${L('tick p50', 8)} ${L('p95', 6)} ${L('max', 6)} ${L('drop', 4)} ${L('wake/s', 6)} ${L('fed', 4)}   ${L('snap kB p95', 11)} ${L('out kB/s/cl', 11)}   ${L('heap MB', 7)}   ${L('living', 9)} ${L('spread', 6)}`);
   for (const s of samples)

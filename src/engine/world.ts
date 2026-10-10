@@ -2356,6 +2356,37 @@ interface ArenaBossSpec {
   announceColor?: string;
 }
 
+/** THE SHARED REALM-ARENA PIPELINE's ask (World.enterRealmArena): one realm's
+ *  arena, the way home and its boss. */
+interface RealmArenaArgs {
+  caveId: string;
+  /** Fallback tileset when the arena spec doesn't pin one. */
+  tileset: string;
+  arena?: ArenaSpec;
+  /** Ambient pack band (the arena spec's `packs` outranks it); null = none —
+   *  the population is hand-placed (the necropolis way). */
+  packs: { count: [number, number]; size: [number, number] } | null;
+  /** Ambient roster (already boss-filtered by the caller). */
+  rosterTable: PackTableEntry[];
+  /** Pin the realm's level (the fracture chamber out-levels its zone). */
+  levelOverride?: number;
+  returnPos: Vec2;
+  boss: ArenaBossSpec;
+}
+
+/** THE REALM ROADS (shard M1 W4): what a realm gate's crossing decides in the
+ *  zone it leaves, before the realm loads (the PREP half): the arena it
+ *  raises, THE REALM CONTEXT the realm's own World must carry (read when its
+ *  boss falls) and the act's stamps (the run ledger, an overlay's bind). Solo
+ *  runs the halves in the old order around loadZone; a hosted world's gate
+ *  road runs the stamps and the arena's mint in the source and hands the
+ *  context and the arena's FIRST WAKE to the realm unit (RoadTicket.onFirstWake). */
+interface RealmPlan {
+  arena: RealmArenaArgs;
+  context?: (w: World) => void;
+  stamp?: () => void;
+}
+
 /** A prior run's death spot, spawned in-zone by coordinate match. SEPARATE from
  *  the necromancy `corpses[]` (ephemeral raisable enemy remnants). */
 interface PlayerCorpse {
@@ -6826,33 +6857,42 @@ export class World {
    *  the VESSEL as the warded-or-fielded pinnacle). The domain's ambient
    *  population mixes the def's family roster with the lord's own kin. */
   private enterCourtDomain(e: ActiveEncounter): void {
+    // THE REALM ROADS (shard M1 W4): the plan is the prep (a court carries no context).
+    const plan = this.courtRealmPlan(e);
+    if (plan) this.enterRealmArena(plan.arena);
+  }
+
+  /** The court door's PREP half (THE REALM ROADS): the lord's domain and its vessel. */
+  private courtRealmPlan(e: ActiveEncounter): RealmPlan | null {
     const lord = e.lordId ? courtLord(e.lordId) : undefined;
     const door = e.def.court?.door;
-    if (!lord || !door || e.phase !== 'door' || !e.doorAt) return;
+    if (!lord || !door || e.phase !== 'door' || !e.doorAt) return null;
     // The court contract: a domain PINS its tileset (package validate()
     // enforces it at QA) — there is no sane ambient fallback for a realm.
     if (!lord.domain.tileset) {
       console.warn(`[courts] lord '${lord.id}' domain pins no tileset — the door is inert`);
-      return;
+      return null;
     }
     const facId = e.def.factions[0] ?? '';
     const table = [
       ...(FACTIONS[facId]?.table ?? []),
       ...lord.roster,
     ].filter(r => r.id !== lord.vessel && !MONSTERS[r.id]?.boss);
-    this.enterRealmArena({
-      caveId: `cave_court_${lord.id}_${this.zone.id}`,
-      tileset: lord.domain.tileset,
-      arena: lord.domain,
-      packs: null,                // the domain's own packs band decides (data)
-      rosterTable: table,
-      levelOverride: Math.max(1, this.zone.level + door.levelBonus),
-      returnPos: e.doorAt,
-      boss: {
-        monsterId: lord.vessel, faction: facId, tag: 'court_vessel',
-        levelBonus: 0, announce: lord.deeds.manifest, announceColor: lord.color,
+    return {
+      arena: {
+        caveId: `cave_court_${lord.id}_${this.zone.id}`,
+        tileset: lord.domain.tileset,
+        arena: lord.domain,
+        packs: null,                // the domain's own packs band decides (data)
+        rosterTable: table,
+        levelOverride: Math.max(1, this.zone.level + door.levelBonus),
+        returnPos: e.doorAt,
+        boss: {
+          monsterId: lord.vessel, faction: facId, tag: 'court_vessel',
+          levelBonus: 0, announce: lord.deeds.manifest, announceColor: lord.color,
+        },
       },
-    });
+    };
   }
 
   /** Spawn n monsters from the encounter roster, UNIFORMLY inside its radius. */
@@ -7925,11 +7965,25 @@ export class World {
    *  a heaven, a limbo, or any new layer is a registry row, not a new function.
    *  The map gains the dimension TAB the moment this fires. */
   enterDimension(dimId: string): void {
+    // THE REALM ROADS (shard M1 W4): the crossing's prep is its own half; solo keeps the old order.
+    const gate = this.dimensionCrossing(dimId, this.player.level, this.caveStack[0] ?? this.caveReturn);
+    if (!gate) return;
+    this.caveReturn = null; // the breach consumes the ladder — you cross, not climb
+    this.caveStack.length = 0;
+    this.notice('the world tears open…', gate.color, 15, 'events');
+    this.loadZone(gate.id);
+  }
+
+  /** THE REALM ROADS' dimension crossing, its PREP half: the dimension found,
+   *  its gate zone minted once at the traveller's level and anchored where the
+   *  traveller's surface chain began (`outermost`: the first rung of its
+   *  ladder). Returns the gate zone and the dimension's color, or null. */
+  private dimensionCrossing(dimId: string, level: number, outermost: { zoneId: string } | null | undefined): { id: string; color: string } | null {
     const dim = dimensionDef(dimId);
     const gateSpec = dim.entry?.gate;
     if (!gateSpec) {
       console.warn(`[world] enterDimension('${dimId}') — no DimensionDef.entry.gate declared`);
-      return;
+      return null;
     }
     this.discoveredDimensions.add(dim.id);
     const gateId = gateSpec.id;
@@ -7938,7 +7992,7 @@ export class World {
       // FIRST record holds the surface zone (later records hold cave ids,
       // which never resolve in zoneMap — the old lookup silently anchored
       // everything on the town).
-      const originId = (this.caveStack[0] ?? this.caveReturn)?.zoneId ?? START_ZONE;
+      const originId = outermost?.zoneId ?? START_ZONE;
       const surfaceAnchor = this.zoneMap[originId] ?? this.zoneMap[START_ZONE];
       // A ROADLESS dimension (DimensionEntry.road: false — the Aetherial)
       // mints its gate with NO cross-edge in either direction: the realm is
@@ -7960,7 +8014,7 @@ export class World {
         tileset: gateTileset ?? 'wasteland',
         biomeFor: this.dimensionBiomeFor(dim.id),
         levelFor: this.levelFor,
-        level: Math.max(this.zone.level + (dim.levelBonus ?? 0), this.player.level),
+        level: Math.max(this.zone.level + (dim.levelBonus ?? 0), level),
         seed: (this.manifest.seed ^ gateSpec.seedSalt) >>> 0,
         name: gateSpec.name,
         // The anchor: once attuned, the dimension is a map-travel away —
@@ -7978,10 +8032,23 @@ export class World {
       // No onNodeCharted: gate zones sit outside every overlay's ledgers.
       this.zoneMap[gateId] = gen;
     }
-    this.caveReturn = null; // the breach consumes the ladder — you cross, not climb
-    this.caveStack.length = 0;
-    this.notice('the world tears open…', dim.color, 15, 'events');
-    this.loadZone(gateId);
+    return { id: gateId, color: dim.color };
+  }
+
+  /** THE REALM ROADS (shard M1 W4): a breach's or a dimension arch's road for
+   *  one seat of a hosted world. The crossing's prep runs here in the source
+   *  (at the traveller's level, anchored by its own ladder); the ladder is
+   *  consumed (you cross, not climb) and the seat lands at the gate zone's
+   *  entry. The realm is graph ground whose own load is the whole arrival; its
+   *  first wake is the tear's word (world news, as solo's), once per wake. A
+   *  traversal-riding arch takes the instant step (the cinematic owns the one
+   *  local player, never a seat of a hosted world). */
+  private shardDimensionRoad(seat: Seat, dimId: string): RoadTicket | null {
+    const ladder = seatLadderOf(this, seat);
+    const gate = this.dimensionCrossing(dimId, this.seatHero(seat).level, ladder.caveStack[0] ?? ladder.caveReturn);
+    if (!gate) return null;
+    return { seatId: seat.id, dest: gate.id, from: null, landing: 'entry', ladder: { caveReturn: null, caveStack: [] },
+      onFirstWake: w => w.notice('the world tears open…', gate.color, 15, 'events') };
   }
 
   /** Legacy alias — the underworld's cave-breach gate (kept for dev tooling). */
@@ -12198,24 +12265,36 @@ export class World {
    *  themed by the variant's tileset + packed with its faction's honour-guard,
    *  set the realm context (read on the boss kill), and spawn the capstone boss. */
   private enterFractureRift(fr: { id: string; pos: Vec2; faction: string; color: string; variant: string; level: number; cap: FractureCapstone }): void {
-    this.fractureRealmContext = { variant: fr.variant, faction: fr.faction, color: fr.color, rewardMul: fr.cap.rewardMul };
-    bumpLedger(this.ledger, 'fracture_rifts_entered');
-    this.enterRealmArena({
-      caveId: `cave_fracture_${fr.id}`, // unique per rift → a fresh chamber each time
-      tileset: fr.cap.tileset,
-      arena: fr.cap.arena,
-      // Controlled ambient horde (minus the boss id, so the only champion is
-      // the curated one) — a fight, not a zerg.
-      packs: { count: [2, 4], size: [2, 3] },
-      rosterTable: (FACTIONS[fr.faction]?.table ?? []).filter(e => e.id !== fr.cap.boss),
-      levelOverride: fr.level + fr.cap.levelBonus, // the chamber out-levels the zone
-      returnPos: fr.pos,
-      boss: {
-        monsterId: fr.cap.boss, faction: fr.faction, tag: 'fracture_boss',
-        far: 440, garrison: { count: [5, 9], spread: 120 },
-        announce: '{name} awaits in the rift!', announceColor: fr.color,
+    // THE REALM ROADS (shard M1 W4): the plan is the prep; solo keeps the old order.
+    const plan = this.fractureRealmPlan(fr);
+    plan.context!(this);
+    plan.stamp!();
+    this.enterRealmArena(plan.arena);
+  }
+
+  /** The fracture rift's PREP half (THE REALM ROADS): its chamber, its boss, the reward it carries. */
+  private fractureRealmPlan(fr: { id: string; pos: Vec2; faction: string; color: string; variant: string; level: number; cap: FractureCapstone }): RealmPlan {
+    const ctx = { variant: fr.variant, faction: fr.faction, color: fr.color, rewardMul: fr.cap.rewardMul };
+    return {
+      context: w => { w.fractureRealmContext = ctx; },
+      stamp: () => bumpLedger(this.ledger, 'fracture_rifts_entered'),
+      arena: {
+        caveId: `cave_fracture_${fr.id}`, // unique per rift → a fresh chamber each time
+        tileset: fr.cap.tileset,
+        arena: fr.cap.arena,
+        // Controlled ambient horde (minus the boss id, so the only champion is
+        // the curated one) — a fight, not a zerg.
+        packs: { count: [2, 4], size: [2, 3] },
+        rosterTable: (FACTIONS[fr.faction]?.table ?? []).filter(e => e.id !== fr.cap.boss),
+        levelOverride: fr.level + fr.cap.levelBonus, // the chamber out-levels the zone
+        returnPos: fr.pos,
+        boss: {
+          monsterId: fr.cap.boss, faction: fr.faction, tag: 'fracture_boss',
+          far: 440, garrison: { count: [5, 9], spread: 120 },
+          announce: '{name} awaits in the rift!', announceColor: fr.color,
+        },
       },
-    });
+    };
   }
 
   /** Open fracture-capstone rifts in this zone (for the renderer). */
@@ -14683,8 +14762,9 @@ export class World {
       if (this.shardWorld) this.townPortalDwell.delete(seat.id); else this.townPortalDwell.clear();
       if (p.returning) {
         const source = p.origin.cave?.zoneId ?? p.origin.zoneId;
-        // An awake source's seed is its live unit's (its stored row is stale until it sleeps).
-        if ((this.shardWorld?.liveSeed?.(source) ?? this.zoneMemory.get(source)?.seed) !== p.sourceSeed
+        // An awake source's seed is its live unit's (its stored row is stale until it sleeps); a party
+        // pocket's is the seat's party's own instance (TENANCY, card 25).
+        if ((this.shardWorld?.liveSeed?.(source, seat.id) ?? this.zoneMemory.get(source)?.seed) !== p.sourceSeed
           || (this.shardWorld && !this.zoneMap[source] && !this.caveMap[source])) {
           this.townPortals = this.townPortals.filter(q => q !== p);
           this.notice('The old return passage has faded.', TOWN_PORTAL_CFG.color, 14, 'world');
@@ -15867,11 +15947,22 @@ export class World {
    *  the surge's shared portal turf; a warded realm holds its Balor back until
    *  every seal is broken. Opening the portal counts (the ledger). */
   private enterDemonRealm(invId: string, portalPos: Vec2): void {
+    // THE REALM ROADS (shard M1 W4): the plan is the prep; solo keeps the old order.
+    const plan = this.demonRealmPlan(invId, portalPos);
+    if (!plan) return;
+    plan.context!(this);
+    plan.stamp!();
+    this.enterRealmArena(plan.arena);
+  }
+
+  /** The demon rift's PREP half (THE REALM ROADS): the invasion still standing
+   *  behind the rift, its realm's arena and boss, the reward it carries. */
+  private demonRealmPlan(invId: string, portalPos: Vec2): RealmPlan | null {
     const dfz = this.sim.demonFieldFor(this.zone.dimension);
     const surge = dfz?.surge();
-    if (!surge) return;
+    if (!surge) return null;
     const info = dfz?.invasionOn(this.zone.id);
-    if (!info || info.id !== invId) return; // invasion burned out / moved on — no stale realm
+    if (!info || info.id !== invId) return null; // invasion burned out / moved on — no stale realm
     const stageIdx = info.stageIdx;
     // An attributed strike's realm is its LORD'S demesne: the lord's marshal
     // holds it at the head of the lord's own host (the War Below's banner all
@@ -15880,27 +15971,30 @@ export class World {
     const realmFaction = info.faction;
     // The realm pays the OVERWORLD stage reward PLUS a per-stage portal premium —
     // strictly more than felling the overworld Balor, the payoff for the deep risk.
-    this.realmContext = { invId, rewardMul: info.rewardMul * (1 + surge.portal.rewardMulPerStage * stageIdx) };
-    bumpLedger(this.ledger, 'demon_portals_opened'); // surfaces the Infernal Dominion tier
-    this.enterRealmArena({
-      caveId: `cave_realm_${invId}`, // 'cave_' prefix ⇒ off-graph + cave-return travel
-      tileset: surge.portal.tileset,
-      arena: info.type.realm,
-      // The realm is the strike faction's OWN turf — a controlled ambient horde
-      // (minus the champion, so the curated one is the only officer), not natives.
-      packs: { count: [2, 4], size: [2, 3] },
-      rosterTable: (FACTIONS[realmFaction]?.table ?? FACTIONS['demon']?.table ?? []).filter(e => e.id !== champId),
-      returnPos: portalPos,
-      boss: {
-        monsterId: champId, faction: realmFaction,
-        levelBonus: surge.portal.champion.levelBonus + stageIdx,
-        tag: 'balor_realm',
-        garrison: { count: [6, 10], squad: true }, // the demesne guard fights as one warband
-        announce: info.lordId ? 'The lord\'s marshal awaits in its master\'s demesne!'
-          : 'The Balor awaits in its infernal demesne!',
-        announceColor: info.color ?? '#c81e3a',
+    const ctx = { invId, rewardMul: info.rewardMul * (1 + surge.portal.rewardMulPerStage * stageIdx) };
+    return {
+      context: w => { w.realmContext = ctx; },
+      stamp: () => bumpLedger(this.ledger, 'demon_portals_opened'), // surfaces the Infernal Dominion tier
+      arena: {
+        caveId: `cave_realm_${invId}`, // 'cave_' prefix ⇒ off-graph + cave-return travel
+        tileset: surge.portal.tileset,
+        arena: info.type.realm,
+        // The realm is the strike faction's OWN turf — a controlled ambient horde
+        // (minus the champion, so the curated one is the only officer), not natives.
+        packs: { count: [2, 4], size: [2, 3] },
+        rosterTable: (FACTIONS[realmFaction]?.table ?? FACTIONS['demon']?.table ?? []).filter(e => e.id !== champId),
+        returnPos: portalPos,
+        boss: {
+          monsterId: champId, faction: realmFaction,
+          levelBonus: surge.portal.champion.levelBonus + stageIdx,
+          tag: 'balor_realm',
+          garrison: { count: [6, 10], squad: true }, // the demesne guard fights as one warband
+          announce: info.lordId ? 'The lord\'s marshal awaits in its master\'s demesne!'
+            : 'The Balor awaits in its infernal demesne!',
+          announceColor: info.color ?? '#c81e3a',
+        },
       },
-    });
+    };
   }
 
   /** THE SHARED REALM-ARENA PIPELINE — every event's off-graph realm (demon
@@ -15908,22 +16002,21 @@ export class World {
    *  here: mint the pocket from the ArenaSpec (tileset / recipe / name /
    *  packs, data/arenas.ts), set the cave-return, load, then either raise the
    *  WARD RITUAL (seals gate the boss — the Chaos-Sanctuary move) or field
-   *  the boss at once. Callers set their own realm context + ledger first. */
-  private enterRealmArena(o: {
-    caveId: string;
-    /** Fallback tileset when the arena spec doesn't pin one. */
-    tileset: string;
-    arena?: ArenaSpec;
-    /** Ambient pack band (the arena spec's `packs` outranks it); null = none —
-     *  the population is hand-placed (the necropolis way). */
-    packs: { count: [number, number]; size: [number, number] } | null;
-    /** Ambient roster (already boss-filtered by the caller). */
-    rosterTable: PackTableEntry[];
-    /** Pin the realm's level (the fracture chamber out-levels its zone). */
-    levelOverride?: number;
-    returnPos: Vec2;
-    boss: ArenaBossSpec;
-  }): void {
+   *  the boss at once. Callers set their own realm context + ledger first.
+   *  THE REALM ROADS (shard M1 W4): the mint and the first wake are their own
+   *  halves (realmArenaMint, realmArenaWake), called here in the old order. */
+  private enterRealmArena(o: RealmArenaArgs): void {
+    this.realmArenaMint(o);
+    this.caveReturn = { zoneId: this.zone.id, pos: vec(o.returnPos.x, o.returnPos.y), entryFrom: this.entryFrom };
+    this.loadZone(o.caveId, this.zone.id); // deliberately NO onNodeCharted — realms are off-graph
+    this.realmArenaWake(o);
+  }
+
+  /** THE REALM ROADS' mint (the prep's last act, in the zone the crossing
+   *  leaves): the arena pocket from its ArenaSpec, minted once into the chart
+   *  of pockets. TENANCY (card 25): an arena whose spec asks `tenancy: 'party'`
+   *  stamps its pocket so a hosted world keys a unit per party. */
+  private realmArenaMint(o: RealmArenaArgs): void {
     const a = o.arena;
     if (!this.caveMap[o.caveId]) {
       const opts = a && (a.layoutType !== undefined || a.layoutParams !== undefined || a.name !== undefined
@@ -15942,10 +16035,17 @@ export class World {
       realm.packs = band
         ? { count: band.count, size: band.size, table: o.rosterTable }
         : { count: [0, 0], size: [0, 0], table: o.rosterTable };
+      if (a?.tenancy) realm.tenancy = a.tenancy; // TENANCY (card 25): the pocket remembers its spec's word
       this.caveMap[o.caveId] = realm;
     }
-    this.caveReturn = { zoneId: this.zone.id, pos: vec(o.returnPos.x, o.returnPos.y), entryFrom: this.entryFrom };
-    this.loadZone(o.caveId, this.zone.id); // deliberately NO onNodeCharted — realms are off-graph
+  }
+
+  /** THE REALM ROADS' FIRST WAKE (what the realm does to its freshly loaded
+   *  World, right after the load): the ward ritual or the boss, then the crowd.
+   *  Runs in the realm's own World: solo right after loadZone, on a hosted
+   *  world once in the realm unit (RoadTicket.onFirstWake). */
+  private realmArenaWake(o: RealmArenaArgs): void {
+    const a = o.arena;
     let bossActor: Actor | null = null;
     if (a?.wards) this.raiseArenaWards(a.wards, o.boss);
     else bossActor = this.spawnArenaBoss(o.boss);
@@ -15959,6 +16059,30 @@ export class World {
         bossId: bossActor?.id ?? null, callIdx: 0, dispersed: false,
       };
     }
+  }
+
+  /** THE REALM ROADS (shard M1 W4): a realm gate's road for one seat of a
+   *  hosted world. The PREP half runs here in the zone the seat leaves (the
+   *  act's stamps, the arena minted into the shared chart of pockets); the
+   *  ticket carries the way home (a rung at the gate from THE SEAT'S DOOR,
+   *  over its own ladder) and the realm's FIRST WAKE (its context, its seals
+   *  or boss, its crowd), which runs once, in the realm unit, right after its
+   *  load. A seat crossing while the realm stands awake walks into the same
+   *  realm (shared, or the party's own instance by the arena's tenancy). The
+   *  gate stays standing in the source for the next seat (solo consumes the
+   *  Necropolis's: its one player left the zone). */
+  private shardRealmRoad(seat: Seat, plan: RealmPlan | null): RoadTicket | null {
+    if (!plan) return null;
+    plan.stamp?.();
+    const o = plan.arena;
+    this.realmArenaMint(o);
+    const ladder = seatLadderOf(this, seat);
+    return {
+      seatId: seat.id, dest: o.caveId, from: this.zone.id, landing: 'entry',
+      ladder: { caveReturn: { zoneId: this.zone.id, pos: vec(o.returnPos.x, o.returnPos.y), entryFrom: seatDoorOf(this, seat) },
+        caveStack: [...ladder.caveStack] },
+      onFirstWake: w => { plan.context?.(w); w.realmArenaWake(o); },
+    };
   }
 
   /** Field an arena's boss + court from its ArenaBossSpec — the ONE spawn loop
@@ -18537,29 +18661,43 @@ export class World {
    *  (cave-return travel carries you back). Spawns the Bonelord (the uber, Crowned)
    *  and its garrison; felling it PURGES the Necropolis for the combined-event spoils. */
   private enterNecropolis(portalPos: Vec2): void {
+    // THE REALM ROADS (shard M1 W4): the plan is the prep; solo keeps the old order.
+    const plan = this.necropolisRealmPlan(portalPos);
+    if (!plan) return;
+    plan.stamp!();
+    plan.context!(this);
+    this.necropolisPortals.length = 0;
+    this.enterRealmArena(plan.arena);
+  }
+
+  /** The Necropolis gate's PREP half (THE REALM ROADS): the seat it binds, its
+   *  arena and Bonelord, the spoils it carries. */
+  private necropolisRealmPlan(portalPos: Vec2): RealmPlan | null {
     const df = this.sim.deadwakeField;
     const n = df?.necropolisInfo();
-    if (!df || !n) return;
+    if (!df || !n) return null;
     const cfg = df.surge().necropolis;
     const id = `cave_necropolis_${n.id}`; // 'cave_' ⇒ off-graph + cave-return travel
-    df.bindNecropolisZone(id);
-    this.necropolisRealmContext = { reward: cfg.reward };
-    this.necropolisPortals.length = 0;
+    const ctx = { reward: cfg.reward };
     const faction = df.surge().faction ?? 'undead';
-    this.enterRealmArena({
-      caveId: id, tileset: cfg.tileset,
-      arena: cfg.arena,
-      packs: null, // boss + garrison placed by hand — no ambient packs
-      rosterTable: df.surge().floodRoster,
-      returnPos: portalPos,
-      boss: {
-        pool: cfg.bossPool, faction, levelBonus: cfg.levelBonus, bossBump: cfg.bossBump,
-        tag: 'necropolis_boss', xpFloor: cfg.bossXpFloor, far: 440,
-        garrison: { count: cfg.garrison, spread: 140 },
-        garrisonTable: df.surge().floodRoster,
-        announce: '{name} holds the Necropolis!', announceColor: '#e8dcb0',
+    return {
+      context: w => { w.necropolisRealmContext = ctx; },
+      stamp: () => df.bindNecropolisZone(id),
+      arena: {
+        caveId: id, tileset: cfg.tileset,
+        arena: cfg.arena,
+        packs: null, // boss + garrison placed by hand — no ambient packs
+        rosterTable: df.surge().floodRoster,
+        returnPos: portalPos,
+        boss: {
+          pool: cfg.bossPool, faction, levelBonus: cfg.levelBonus, bossBump: cfg.bossBump,
+          tag: 'necropolis_boss', xpFloor: cfg.bossXpFloor, far: 440,
+          garrison: { count: cfg.garrison, spread: 140 },
+          garrisonTable: df.surge().floodRoster,
+          announce: '{name} holds the Necropolis!', announceColor: '#e8dcb0',
+        },
       },
-    });
+    };
   }
 
   /** An ANCHORED crusade's THRONE gate stands in owned ground near its heart
@@ -18580,33 +18718,47 @@ export class World {
    *  the Leader (the faction's warlord, Crowned); felling it COLLAPSES the whole
    *  crusade for the fattest, network-scaled spoils. */
   private enterCrusadeSanctum(crusadeId: string, portalPos: Vec2): void {
+    // THE REALM ROADS (shard M1 W4): the plan is the prep; solo keeps the old order.
+    const plan = this.crusadeRealmPlan(crusadeId, portalPos);
+    if (!plan) return;
+    plan.context!(this);
+    plan.stamp!();
+    this.enterRealmArena(plan.arena);
+  }
+
+  /** The sanctum gate's PREP half (THE REALM ROADS): the crusade still holding
+   *  the ground, its Leader's arena, the spoils it carries. */
+  private crusadeRealmPlan(crusadeId: string, portalPos: Vec2): RealmPlan | null {
     const cf = this.sim.crusadeField;
-    if (!cf) return;
+    if (!cf) return null;
     const info = cf.crusadeOn(this.zone.id);
-    if (!info || info.crusadeId !== crusadeId) return; // crusade collapsed / moved — no stale realm
+    if (!info || info.crusadeId !== crusadeId) return null; // crusade collapsed / moved — no stale realm
     const surge = cf.surge();
     const faction = cf.factionOf(crusadeId) ?? info.faction;
     const leaderId = this.sim.warlord.bossId(faction)
       ?? FACTIONS[faction]?.table?.[FACTIONS[faction].table.length - 1]?.id;
-    this.crusadeRealmContext = { crusadeId, faction, rewardMul: surge.sanctum.rewardMul };
-    cf.markSanctumMinted(crusadeId);
-    this.enterRealmArena({
-      caveId: `cave_crusade_${crusadeId}`, tileset: surge.sanctum.tileset,
-      arena: surge.sanctum.arena,
-      // The arena's population is AUTHORED on the sanctum config: null packs +
-      // a [0,0] garrison is the true ONE-ON-ONE — the Leader alone on his
-      // sand, the crowd's champion-calls his only reinforcement. The roster
-      // still feeds the CROWD (faction minus the Leader, the curated boss).
-      packs: surge.sanctum.packs,
-      rosterTable: (FACTIONS[faction]?.table ?? []).filter(e => e.id !== leaderId),
-      returnPos: portalPos,
-      boss: {
-        monsterId: leaderId, faction, levelBonus: surge.sanctum.levelBonus, bossBump: surge.sanctum.bossBump,
-        tag: 'crusade_leader', xpFloor: surge.sanctum.xpFloor,
-        garrison: surge.sanctum.garrison,
-        announce: '{name} commands the sanctum!', announceColor: '#ffd700',
+    const ctx = { crusadeId, faction, rewardMul: surge.sanctum.rewardMul };
+    return {
+      context: w => { w.crusadeRealmContext = ctx; },
+      stamp: () => cf.markSanctumMinted(crusadeId),
+      arena: {
+        caveId: `cave_crusade_${crusadeId}`, tileset: surge.sanctum.tileset,
+        arena: surge.sanctum.arena,
+        // The arena's population is AUTHORED on the sanctum config: null packs +
+        // a [0,0] garrison is the true ONE-ON-ONE — the Leader alone on his
+        // sand, the crowd's champion-calls his only reinforcement. The roster
+        // still feeds the CROWD (faction minus the Leader, the curated boss).
+        packs: surge.sanctum.packs,
+        rosterTable: (FACTIONS[faction]?.table ?? []).filter(e => e.id !== leaderId),
+        returnPos: portalPos,
+        boss: {
+          monsterId: leaderId, faction, levelBonus: surge.sanctum.levelBonus, bossBump: surge.sanctum.bossBump,
+          tag: 'crusade_leader', xpFloor: surge.sanctum.xpFloor,
+          garrison: surge.sanctum.garrison,
+          announce: '{name} commands the sanctum!', announceColor: '#ffd700',
+        },
       },
-    });
+    };
   }
 
   /** THE selection chokepoint: every "which monster?" roll lands here. Pass
@@ -19061,6 +19213,11 @@ export class World {
    *  World a shard runs, the keeper's and each unit's, and THE PRIMARY GATE's
    *  read. Absent everywhere else; its absence IS the solo invariant. */
   shardWorld?: ShardWorldLink;
+  /** THE MUSTER RING (shard M1 W4, engine/shardMuster.ts; HOST class): the rings
+   *  standing in this World, each a party's road waiting for the party. The host's
+   *  muster desk publishes them every tick (server/muster.ts), the snapshot ships
+   *  them (`mu`) and a shell adopts them for the painter. Null off a hosted world. */
+  musterRings: import('./shardMuster').MusterRingRow[] | null = null;
   /** Are two seats one unit — the same seat, or party mates? */
   sameParty(a: Seat, b: Seat): boolean { return this.sameSeatParty(a.id, b.id); }
 
@@ -46170,9 +46327,10 @@ export class World {
 
   /** THE LIFT: every open realm gate of the zone with its enter action, in the
    *  solo dwell's order. A row's `road` is THE ROADS PER PLAYER's ticket maker
-   *  for one seat (W4 fills each gate: its prep in the source, the ticket's
+   *  for one seat (THE REALM ROADS, W4: its prep in the source, the ticket's
    *  first wake in the realm); a gate without one stays sealed on a hosted
-   *  world and answers a seat with its word (engine/shardRoads.ts). */
+   *  world and answers a seat with its word (engine/shardRoads.ts). Off a
+   *  hosted world no row carries a road (the solo rows stand as they were). */
   realmGates(): RealmGateRow[] {
     const gates: RealmGateRow[] = [];
     // The Underworld BREACH (bottom of the cave ladder) is a realm gate too.
@@ -46181,7 +46339,7 @@ export class World {
       // cave_breach entry (data) — first registrant today; a weighted roll
       // when a second breach-entered layer ever ships.
       const bd = dimensionsEnteredBy('cave_breach')[0];
-      if (bd) gates.push({ pos: this.breachPos, kind: 'breach', key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id) });
+      if (bd) gates.push({ pos: this.breachPos, kind: 'breach', key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id), ...this.dimensionRoad(bd.id) });
     }
     // DIMENSION GATE DOODADS (DimensionEntry.gateDoodad, scanned per
     // loadZone): the Ascent's shining arch — dwell it to cross into its
@@ -46199,12 +46357,17 @@ export class World {
           if (trav) this.beginTraversal(trav, { swap: () => this.enterDimension(g.dimId) });
           else this.enterDimension(g.dimId);
         },
+        ...this.dimensionRoad(g.dimId),
       });
     }
-    for (const dp of this.demonPortals) gates.push({ pos: dp.pos, kind: 'demon', key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
-    for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
-    for (const np of this.necropolisPortals) gates.push({ pos: np.pos, kind: 'necropolis', key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
-    for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, kind: 'fracture', key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr) });
+    for (const dp of this.demonPortals) gates.push({ pos: dp.pos, kind: 'demon', key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos),
+      ...this.realmRoad(s => this.shardRealmRoad(s, this.demonRealmPlan(dp.invId, dp.pos))) });
+    for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos),
+      ...this.realmRoad(s => this.shardRealmRoad(s, this.crusadeRealmPlan(cp.crusadeId, cp.pos))) });
+    for (const np of this.necropolisPortals) gates.push({ pos: np.pos, kind: 'necropolis', key: 'necropolis', enter: () => this.enterNecropolis(np.pos),
+      ...this.realmRoad(s => this.shardRealmRoad(s, this.necropolisRealmPlan(np.pos))) });
+    for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, kind: 'fracture', key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr),
+      ...this.realmRoad(s => this.shardRealmRoad(s, this.fractureRealmPlan(fr))) });
     // COURT DOORS (encounter fabric): the fed breach's standing way into
     // its lord's domain — the same deliberate dwell as every threshold
     // (its 'realm_gate:<gateKind>' transit row sets the feel).
@@ -46215,6 +46378,7 @@ export class World {
         pos: at, kind: e.def.court?.door?.gateKind ?? 'court',
         key: `court:${e.def.id}:${e.lordId ?? ''}`,
         enter: () => this.enterCourtDomain(e),
+        ...this.realmRoad(s => this.shardRealmRoad(s, this.courtRealmPlan(e))),
       });
     }
     // THE WRAITHSAIL at sea: cross her under sail — nose into her shadow
@@ -46237,6 +46401,20 @@ export class World {
       }
     }
     return gates;
+  }
+
+  /** THE REALM ROADS (shard M1 W4): a gate row's road, on a hosted world alone
+   *  (off one the row stays exactly the solo row). */
+  private realmRoad(make: (seat: Seat) => RoadTicket | null): Pick<RealmGateRow, 'road'> {
+    return this.shardWorld ? { road: make } : {};
+  }
+
+  /** THE REALM ROADS' dimension crossings, under THE WILDS LAW: on the
+   *  Unbroken Wilds every graph zone is the keeper's surface, so a dimension's
+   *  gate zone has no World of its own to stand in until the surface is
+   *  partitioned (M6); there the breach and the arch keep the sealed word. */
+  private dimensionRoad(dimId: string): Pick<RealmGateRow, 'road'> {
+    return this.zoneMap[MASS_ZONE] ? {} : this.realmRoad(s => this.shardDimensionRoad(s, dimId));
   }
 
   /** THE LIFT: the nearest realm gate body `a` stands on, or null. Radius and
@@ -47339,6 +47517,7 @@ export class World {
     if ((ladder.caveStack[0] ?? ladder.caveReturn)?.zoneId === MASS_ZONE) this.massCaveIds.add(dest.id);
     this.applySidezoneFurnish(dest, sz);
     if (sz.levelWith === 'character') dest.level = Math.max(1, this.seatHero(seat).level);
+    if (sz.tenancy && dest.tenancy !== sz.tenancy) dest.tenancy = sz.tenancy; // TENANCY (card 25): the pocket wears its kind's word (a party's own instance)
     if (sz.ledgerOnEnter) bumpLedger(this.ledger, sz.ledgerOnEnter);
     const tier = seat.actor.tier;
     const rung = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: seatDoorOf(this, seat), kind: cm.kind, seed: cm.seed,
