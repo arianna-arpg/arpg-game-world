@@ -76,10 +76,13 @@ export type SessionMsg =
   //            and THE DELIBERATE LEAVE: that close ends my seat at once,
   //            never dormant (card 16 B: a close without it leaves the hero),
   //            unless said mid-fight (THE ACTING SEAT: it sleeps like a lost socket).
+  //            `unload` (W7, THE UNLOAD WORD): the page is going away (a closed
+  //            tab or a reload); an out-of-fight hero sleeps untargetable for the
+  //            short reload grace instead (SHARD_CFG.unloadGraceSec).
   | { t: 'heroSave'; save: import('../meta/character').CharacterSave }
   | { t: 'corpse'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning }
   | { t: 'corpses'; zoneId: string; bodies: import('./vesselWire').ShardBodyRow[]; reclaimed?: number }
-  | { t: 'leaving' }
+  | { t: 'leaving'; unload?: boolean }
   // THE PARTY (docs/design/shard-world.md card 23 — net/partyWire.ts): a client's word to its
   // party desk (client→host), an invite landing on its target, and a refusal's one line.
   // THE PARTY THAT READS: an invite names the inviter's party only when it stands (an

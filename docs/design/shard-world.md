@@ -921,6 +921,16 @@ in Mu first.**
     it logged out, and that is the ONLY behaviour; there is no choice between
     a hearth and a logout spot. The hearth stays a new hero's first wake and
     the wake after a death. W7 builds it.**
+    **BUILT (2026-10-10, W7, branch `shard-w7-door`):** THE RETURN. Every
+    mirror carries the hero's last stand (the zone or pocket, the spot, the
+    story, THE HOSTED SEED), the desk keeps the stand of a leave no client
+    heard (the dormant release, a closed tab), and the next login lands the
+    hero there under THE SPAWN GRACE: back into a pocket whose unit still
+    stands, at the mouth on the surface when the pocket is gone, into the
+    unit of any other charted zone; a new hero, a stand from another world
+    or ground the chart no longer holds wakes at the hearth with one log
+    line. No player-facing choice exists (docs/engine/shard.md "THE RETURN";
+    `balance/probe_sharddoor.ts` I).
 27. **THE SPOILS' OWNER** (card 23 said per player; the sweep found the
     ground is first-come) — A: strictly per player, forever. B: per player
     with a free-for-all after a timeout. C: A plus a deliberate give or
@@ -1111,18 +1121,65 @@ tree; the milestone waves wait on cards 24–30.
 ## §7e The player's first hour (2026-10-10)
 
 A read-only audit (Opus) walked a brand-new player's first hour on a hosted
-world. W7 THE FRONT DOOR answers the door and the goodbye; W8a THE ONE
-CROSSING answers the arrival (`docs/engine/shard.md`, THE ONE CROSSING;
-`balance/probe_shardcrossing.ts`).
+world. W7 THE FRONT DOOR answers the door and the goodbye, and card 26 as she
+ruled it the same day (`docs/engine/shard.md`, THE FRONT DOOR and THE RETURN;
+`balance/probe_sharddoor.ts`); W8a THE ONE CROSSING answers the arrival
+(`docs/engine/shard.md`, THE ONE CROSSING; `balance/probe_shardcrossing.ts`).
 
 | # | Finding (CONFIRMED unless noted) | Wave |
 |---|---|---|
+| D1 | The served page booted into the single-player start menu; Begin played the solo tutorial and a solo run; the binding to the server was one in-memory variable that a reload or the main menu dropped. | W7: BUILT 2026-10-10. THE SERVED MARK: the shard stamps the index it serves (a forwarded host's page and the dev door `?dev&shard=` count too), and such a page's primary row is **Enter the world**, the solo rows one row down. THE DOOR keeps the binding in sessionStorage through a reload and the menu; only a deliberate leave or a solo road chosen at the menu forgets it. |
+| D2 | The lobby's server road was illegible: the copy-paste note first, class cards that meant nothing for a server, a false travel note ("a fresh Warrior"), errors as "Connection failed: Error: ...", and a full shard and a hero frame over 256 KB closed with no word. | W7: BUILT 2026-10-10. The road is class-free (the cards wait for Host or Join); its line names the hero that travels, or says Mu picks one; failures read as one plain line; the door refuses a full world (`SHARD_REFUSAL.full`) and a hero past the wire's cap (`SHARD_REFUSAL.heroTooLarge`) with their words, and the client checks THE JUDGMENT's own cap before it uploads. |
+| D3 | Joining with a solo hero silently deleted that run's world (the first mirror overwrote the run slot), and Continue then built a fresh SOLO world from the mirror, stranding the shard hero. | W7: BUILT 2026-10-10. HOME SLOTS: every write home names its world (the address, the seed, the name the welcome carries), from the first snapshot that seats the hero; Continue on a bound save reads **Return to <world>** and connects with its charId, and the solo resume refuses a bound save. THE SOLO GUARD: a hero whose slot holds a standing solo world travels only after the lobby's line and confirm (or the menu's), and no write replaces that world without the word. |
+| D4 | Exit Game and a closed tab never said goodbye: the hero lay dormant and targetable for 30 s and the last 20 s were unsaved; a leave mid-fight left the hero standing with no mirror and no word. | W7: BUILT 2026-10-10. HONEST LEAVING: Leave the World and Exit Game say the deliberate word and await the farewell mirror (or a short cap), then land with one true line; a leave mid-fight hears "your hero stands its ground for 30 s" on the seat's own note, never a modal. THE UNLOAD WORD (best effort): a page going away tells its world over its socket and by a beacon (the beacon is the one that survives a real reload); a calm hero sleeps untargetable on a 15 s reload grace (a reload takes the seat back; a closed tab's hero leaves), and the moments since the last beat stay honestly unsaved (Exit avoids that). |
+| D5 | A failed return discarded the shard's word ("Connection to the host was lost."), offered no way back, and a stale served tab never reloaded after a build change. | W7: BUILT 2026-10-10. THE RETURN'S WORD: the menu line names the world and carries the shard's word; THE DOOR offers **Return to <world>** (a resume inside the dormant window, else a fresh login that lands where it left); a reload past the window logs a bound hero back in by itself; a served page whose world refuses its build reloads once. |
+| D6 | Co-op wording on a shard ("Leave Co-op", "Leave this co-op session?", "host"); heroes never named filled the server as "Warrior". | W7: BUILT 2026-10-10. A hosted world says "world" and "server" ("Leave the World", "Leave this world?", the world's name), the WebRTC lane keeps "co-op" and "host". THE STOPGAP NAME: an unnamed hero wears its class and a two-digit number its account picks, the next free one on a clash (display only; the Mu card's naming is the honest fix). |
+| D7 | `server/shard.ts`'s header still said `ws://` addresses and a 20 s world save. | W7: fixed 2026-10-10. The served address, the https and bare-host forms, the 60 s world beat beside the 20 s mirrors, and the `--per-ip`, `--client` and new `--name` flags. |
+| 26 | Her ruling the same day: a hero logs back in WHERE IT LOGGED OUT, the only behaviour. | W7: BUILT 2026-10-10. THE RETURN: every mirror carries the last stand, the desk keeps the stand of a leave no client heard, and the next login lands the hero there under THE SPAWN GRACE: back in a standing pocket, at a gone pocket's mouth, the hearth only for a new hero or a foreign or missing place (card 26's receipt above). |
 | A1 | The server-bound wake shows a local town, then snaps: the served build runs the classic profile, so a classic Lastlight bedside stands up, freezes when the socket is assigned, then the screen snaps to the shard's wilds hearth with no cover (the frame loop's loading gate was host-only). Two arrivals in two different towns. | W8a THE ONE CROSSING: BUILT 2026-10-10. The wake mints its vessel on a World that loads no zone and draws nothing, and the Mu crossing's cover stands from the character flush through the connect, the shell, the zone message and the first snapshot to the first page ring around the hero; a direct join, a reload's return and a hand-off ride the same lease, THE RETURN in place never covers. A wilds shell stands no local town either. Measured in the browser: no frame drawn between the pick and the hero on the shard's ground. |
 | A2 | Terrain streams in around the hero with no cover at the hearth (PLAUSIBLE). | W8a: BUILT. The cover releases only when every page of the 3x3 around the hero is published (`WILDS_CLIENT_CFG.coverRing`), the pages counted and measured on the cover. |
 | A3 | The map's explored fog resets after every cave and every login (the shell disposed its runtime for a pocket and booted a fresh one on the way out); the boot on every climb-out is a hitch (PLAUSIBLE). | W8a: BUILT. THE RUNTIME SURVIVES POCKETS (the same runtime re-seated: the survey, the page cache and no second boot; the boot measured 2.6 to 6 s of main thread in Node, the climb-out about 3 ms) and THE KEPT MAP (the explored cells per account and world in localStorage, re-claimed at the next login). |
 | A4 | (found by W8a's browser walk) A door the shard opened before a join is shut in the shell's walk: the shell lays its settlement with the doors closed, applyZone adopts each door's open flag, so the snapshot's idempotent door sync never repaints the grid. A login after the Waking House door was pushed met it shut in prediction. | W8a: BUILT, THE SHARD'S OPEN DOORS (the surface zone message carves them into the shell's own grid; probe_shardcrossing G). |
-| A5 | (found by W8a) After THE RETURN in place, `leave()`'s farewell never hears the hero's last mirror (resumeInPlace's handler dispatches only while `this.ws` is its socket, and `leave()` nulls it first), so the socket stays open the whole `farewellMs` and a quick re-join meanwhile is refused as the hero's twin. | OPEN: W7's goodbye (src/net/ws.ts). |
+| A5 | (found by W8a) After THE RETURN in place, `leave()`'s farewell never hears the hero's last mirror (resumeInPlace's handler dispatches only while `this.ws` is its socket, and `leave()` nulls it first), so the socket stays open the whole `farewellMs` and a quick re-join meanwhile is refused as the hero's twin. | W7: BUILT 2026-10-10. The farewell rides whichever socket stands (THE RETURN's resumed one included) and the mirror's ack closes it; THE COMPLETED LEAVE resolves the farewell only once the socket has closed (the shard runs the leave before it answers the close), so a re-join right after it is a fresh seat; and the shard's belt finishes a said leave whose close it never heard before the same hero's return (probe_sharddoor F). |
 | A6 | (found by W8a) A pocket on a wilds shell keeps `arena.boundless` from the surface (the zone message ships no boundless flag), so a cave draws as streamed ground with no border and the camera never clamps to it. | W8a: BUILT 2026-10-10, THE ZONE'S OWN BOUNDS: the zone message states its arena's `boundless` (absent = bounded) and every client's zone handling sets it from that word, so a pocket reads bounded (the clamp, the camera and the floor) and the surface boundless again on the climb-out; probe_shardcrossing D. |
+
+What W7's build found beyond the audit (for her word where marked):
+
+- A shard served on `localhost` or a LAN address was invisible to the old
+  served-client check (only forwarded hosts counted), so even its own page
+  offered `ws://localhost:8787`; THE SERVED MARK covers every host.
+- A leave said mid-fight waited the whole farewell cap for a mirror that
+  would never come; the held word now ends the wait at once.
+- A reload under THE SPAWN GRACE is an untried seat and leaves at once, so the
+  reloaded page's resume found nothing; the bound hero now logs back in by itself.
+- The plain hearth wake moves the hero alone (its court stays where the
+  graft stood it, beside the shadowed keeper); THE RETURN's landing carries the
+  court, the hearth wake is left as found.
+- FOR HER WORD: a hero bound to a world that is gone for good (a deleted
+  codespace) has no road back to solo play; a deliberate "release this hero
+  from its world" action would give it one.
+- FOR HER WORD: a closed tab cannot hear its last mirror, so up to one beat
+  (20 s) of a hero's progress is lost; a shard that keeps each hero's latest
+  mirror and hands it back at the next login would close that, at the cost of
+  card 6's "the hero is the client's".
+- FOR HER WORD: the lobby's lone-vessel read takes a hero bound to another
+  world to this one without a word (its binding moves with it).
+- The listener's connection cap (64) still answers an HTTP 503 a browser's
+  WebSocket cannot read; the seat cap (16) speaks first in practice.
+- Found in the browser check: a real reload in Chromium drops the socket's
+  last frame, so the `leaving` word alone never arrived; THE UNLOAD BEACON
+  (`navigator.sendBeacon` to `/leave`) is the half that lands, and was added.
+- Found in the browser check: the first Exit read "did not answer in time" because
+  that hero had come back through THE RETURN in place: W8a's A5, built above.
+- Found in the browser check, OUTSIDE W7's regions (for the wave that owns the
+  renderer and the wire's actor rows): a hosted client's game loop dies the
+  first time an enemy casts in view. `renderer.ts` drawActor's cast telegraph
+  (`castTelegraphs`, on by default) calls `instanceDelivery(fc.inst)` on the
+  client's cast stub, whose def carries no delivery (`net/snapshot.ts`, the
+  remote cast row's adoption), so `inst.def.delivery.type` throws into
+  reportFatal ("The run hit an error"). Reproduced twice on the Unbroken Wilds
+  at the hearth; the probes and the soak draw nothing, so none of them can
+  see it.
 
 ## §8 M0 receipts (2026-10-07, this pass)
 

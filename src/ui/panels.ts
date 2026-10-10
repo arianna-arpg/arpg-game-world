@@ -176,6 +176,7 @@ import { objectiveRead, objectiveSeals, type ZoneDef } from '../data/zones';
 import { underSpanPolicyOf } from '../data/underspans';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
+import { sameWorld, shardHomeOf, worldNameOf } from '../net/shardDoor';
 import { bindTooltips, configureTooltipDetail, installTooltipHints, hideTooltip, tooltipSweep, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
 import { VENDORS, VENDOR_CFG, fmtRestock, type VendorDef } from '../data/vendors';
@@ -940,6 +941,17 @@ export class UI {
    *  the virgin lane walks the tutorial, everyone else drifts into Mu. The
    *  legacy screen stays whole beneath it (co-op rejoin still uses it). */
   onBeginRun: (() => void) | null = null;
+  /** THE FRONT DOOR (W7, net/shardDoor.ts): the world the start menu leads into (the
+   *  tab's binding, or the world that served this page); null on a plain page. The menu's
+   *  primary row becomes "Enter the world" (onEnterWorld), the solo rows one row down. */
+  serverDoor: (() => { url: string; world?: string } | null) | null = null;
+  onEnterWorld: ((door: { url: string; world?: string }) => void) | null = null;
+  /** THE HONEST LEAVING (W7): the hosted world this client stands in (its name), or null
+   *  off one: the pause menu says "world" there and "co-op" on the WebRTC lane. */
+  hostedWorld: (() => string | null) | null = null;
+  /** THE HONEST LEAVING (W7): Exit Game on a hosted world (the deliberate leave, the
+   *  farewell awaited, then the exit screen with the truth). */
+  onExitWorld: (() => void) | null = null;
 
   constructor(
     private getWorld: () => World,
@@ -10253,7 +10265,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // (world.endRun mid-scene reroutes to the menu), and the exit door
       // speaks only the account truth.
       const sceneLive = !this.isCoopClient() && !!this.getWorld().scene;
-      const endTitle = this.isCoopClient() ? '' : sceneLive
+      // THE HONEST LEAVING (W7): a hosted world speaks of the world, the WebRTC lane of co-op.
+      const hosted = this.isCoopClient() ? this.hostedWorld?.() ?? null : null;
+      const endTitle = hosted ? ` title="Leave ${esc(hosted)}: your hero logs back in where it stands"` : this.isCoopClient() ? '' : sceneLive
         ? ' title="Return to the main menu (nothing here is lost — the account is already saved)"'
         : rosterMode
           ? ' title="Save the vessel and return to the main menu"'
@@ -10267,7 +10281,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
           <button id="esc-keys">Options</button>
-          <button id="esc-end"${endTitle}>${this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
+          <button id="esc-end"${endTitle}>${hosted ? 'Leave the World' : this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
           <button id="esc-close"${closeTitle}>${this.isCoopClient() || sceneLive ? 'Exit Game' : 'Save & Exit'}</button>
         </div>`;
       document.getElementById('esc-resume')!.addEventListener('click', () => this.hideEscapeMenu());
@@ -10284,7 +10298,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         // CLIENT: world is a render SHELL — never run host-authoritative endRun()
         // (it would corrupt the shell with no effect). Leave the session instead.
         if (this.isCoopClient()) {
-          if (window.confirm('Leave this co-op session?')) { this.hideEscapeMenu(); this.onLeaveCoop(); }
+          if (window.confirm(hosted ? 'Leave this world?' : 'Leave this co-op session?')) { this.hideEscapeMenu(); this.onLeaveCoop(); }
           return;
         }
         if (sceneLive || rosterMode) {
@@ -10300,6 +10314,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         }
       });
       document.getElementById('esc-close')!.addEventListener('click', () => {
+        // THE HONEST LEAVING (W7): on a hosted world Exit says goodbye first (the farewell
+        // awaited), then the exit screen carries the truth; it never just says "close the tab".
+        if (hosted && this.onExitWorld) {
+          root.innerHTML = `<h1>Leaving</h1><div class="acct-head">Saying goodbye to ${esc(hosted)}…</div>`;
+          this.onExitWorld();
+          return;
+        }
         try { window.close(); } catch { /* browsers block closing non-script-opened tabs */ }
         root.innerHTML = `
           ${this.closeGlyphHtml('Resume (Esc)')}<h1>Progress Saved</h1>
@@ -11179,7 +11200,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
    *  start menu can enable Continue. Null disables it. */
   setContinueSave(save: CharacterContinueSummary | null): void {
     this.continueSave = save ? { classId: save.classId, name: save.name, level: save.level,
-      charId: save.charId, modeId: save.modeId } : null;
+      charId: save.charId, modeId: save.modeId, ...(shardHomeOf(save) ? { shard: shardHomeOf(save)! } : {}) } : null; // HOME SLOTS (W7)
     // Refresh only the menu PROPER (startMenuBack null): re-rendering while a
     // subscreen (Options, the Immortal roster) is up would yank the reader out.
     if (!this.startMenu.classList.contains('hidden') && this.startHandlers && !this.startMenuBack) this.renderStartMenu();
@@ -11224,6 +11245,12 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       ? `${cont.name ?? CLASSES.find(c => c.id === cont.classId)?.name ?? 'the character'}, Level ${cont.level}`
       : '';
     const canContinue = !!cont;
+    // THE FRONT DOOR (W7): on a page a world served (or a tab bound for one) the primary row
+    // leads into that world; HOME SLOTS: a hero bound to a world reads "Return to <world>".
+    const door = this.serverDoor?.() ?? null;
+    const home = cont?.shard ?? null;
+    const homeHere = !!home && !!door && sameWorld(home.url, door.url);
+    const primary = ' style="border-color:var(--gold)"';
     // THE IMMORTAL SHELF: however many vessels the account swears, the menu
     // proper spends ONE button on them — the roster lives in its own pane
     // (renderImmortalRoster), so the option count here stays flat and no
@@ -11244,10 +11271,13 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         ? ` · <b style="color:var(--gold)">${acc.credits}</b> ${META_CURRENCY_LABEL} awaiting the Reckoning` : ''}</div>
       ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
       <div class="esc-btns">
-        <button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>
-        <button id="sm-continue" ${this.continuePending ? 'disabled' : ''} ${canContinue
-          ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${canContinue
-          ? 'Continue Run' : 'No Run to Continue'}</button>
+        ${door && !homeHere ? `<button id="sm-door"${primary} title="${esc(worldNameOf(door))}">Enter the world</button>` : ''}
+        ${homeHere ? '' : `<button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>`}
+        <button id="sm-continue"${homeHere ? primary : ''} ${this.continuePending ? 'disabled' : ''} ${home
+          ? `title="${esc(contWho)} lives in ${esc(worldNameOf(home))}, and logs back in where it left"`
+          : canContinue ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${home
+          ? `Return to ${esc(worldNameOf(home))}` : canContinue ? 'Continue Run' : 'No Run to Continue'}</button>
+        ${homeHere ? `<button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>` : ''}
         ${immortalsBtn}
         ${isVaultAvailable(acc) ? `<button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
           ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>` : ''}
@@ -11268,6 +11298,12 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.showClassSelect(h.onStart, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster));
     });
     if (h.onCoop) document.getElementById('sm-coop')!.addEventListener('click', () => h.onCoop!());
+    document.getElementById('sm-door')?.addEventListener('click', (ev) => {
+      if (!door || !this.onEnterWorld) return;
+      const b = ev.currentTarget as HTMLButtonElement;
+      b.disabled = true; b.textContent = 'Entering the world…';
+      this.onEnterWorld(door);
+    });
     document.getElementById('sm-continue')!.addEventListener('click', () => {
       if (!this.continueSave || this.continuePending) return;
       h.onContinue();
@@ -11301,14 +11337,38 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
    *  refused): everything is already saved at the menu, so say so and let the
    *  player close the window by hand — or step Back. The desktop shell closes
    *  before this ever shows. */
-  private renderExitScreen(): void {
+  private renderExitScreen(line?: string): void {
     this.startMenuBack = () => this.renderStartMenu();
     this.startMenu.innerHTML = `
       ${this.closeGlyphHtml('Back')}
       <h1>SAFE TO CLOSE</h1>
+      ${line ? `<div class="acct-head">${esc(line)}</div>` : ''}
       <div class="acct-head">Your account is saved — close this window or tab to exit.</div>
       <div class="esc-btns"><button id="sm-exit-back">Back</button></div>`;
     document.getElementById('sm-exit-back')!.addEventListener('click', () => this.renderStartMenu());
+  }
+
+  /** THE HONEST LEAVING (W7): the exit screen after a hosted world's goodbye, wearing the
+   *  farewell's line (saved, or the hero standing its ground in a fight). */
+  showExitScreen(line?: string): void {
+    if (!this.startHandlers) return;
+    this.startMenu.classList.remove('hidden');
+    this.renderExitScreen(line);
+  }
+
+  /** THE SOLO GUARD at the front door (W7): a plain line and a confirm, never a modal:
+   *  the hero's own solo world stays behind for good if it travels. */
+  showTravelConfirm(line: string, onYes: () => void): void {
+    if (!this.startHandlers) return;
+    this.startMenu.classList.remove('hidden');
+    this.startMenuBack = () => this.renderStartMenu();
+    this.startMenu.innerHTML = `
+      ${this.closeGlyphHtml('Back')}
+      <h1>LEAVE A WORLD BEHIND?</h1>
+      <div class="acct-head">${esc(line)}</div>
+      <div class="esc-btns"><button id="sm-travel-yes">Travel</button><button id="sm-travel-back">Back</button></div>`;
+    document.getElementById('sm-travel-yes')!.addEventListener('click', () => { this.renderStartMenu(); onYes(); });
+    document.getElementById('sm-travel-back')!.addEventListener('click', () => this.renderStartMenu());
   }
 
   /** THE IMMORTAL ROSTER PANE: account-owned characters (Immortal vessels),

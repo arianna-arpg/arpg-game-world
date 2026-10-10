@@ -22,15 +22,23 @@ export interface LobbyCallbacks {
   /** Join with the host's invite blob as the chosen class. Resolves with OUR
    *  response blob (paste back to host) + a `connected` promise. */
   join: (offer: string, classId: string) => Promise<{ answer: string; connected: Promise<void> }>;
-  /** THE SHARD (docs/design/shard-world.md): connect to a hosted world at a
-   *  ws:// address as the chosen class (a WsTransport client). Absent = the
-   *  row is not offered. Resolves once the shard seated us. */
-  connect?: (url: string, classId: string) => Promise<'connected' | 'mu'>; // 'mu' = THE LOGIN THROUGH MU took the screen
-  /** The address the server box offers first (WS_TRANSPORT_CFG.defaultUrl). */
+  /** THE SHARD (docs/design/shard-world.md): connect to a hosted world at its
+   *  address (a WsTransport client). Absent = the row is not offered. Resolves
+   *  once the shard seated us. THE FRONT DOOR (W7): class-free (the saved hero
+   *  travels, else Mu picks one); `replaceSolo` is THE SOLO GUARD's confirm. */
+  connect?: (url: string, opts: { replaceSolo: boolean }) => Promise<'connected' | 'mu'>; // 'mu' = THE LOGIN THROUGH MU took the screen
+  /** The address the server box offers first (the world that served this page, else
+   *  WS_TRANSPORT_CFG.defaultUrl; a remembered address wins over the plain default). */
   connectDefault?: string;
-  /** THE VESSEL: one line naming which hero will travel to the server (the
-   *  saved hero, or a fresh one of the chosen class). Absent = no line. */
-  serverHero?: (classId: string) => Promise<string>;
+  /** THE VESSEL: the line naming which hero will travel (the saved hero by name, or Mu
+   *  picks one), and THE SOLO GUARD's line when its slot holds a solo world that its
+   *  travel would leave behind (the lobby asks first). Absent = no line. */
+  serverHero?: () => Promise<{ note: string; leaveBehind?: string }>;
+  /** One plain line per failure (net/shardDoor.ts doorWord). */
+  word?: (e: unknown) => string;
+  /** THE SERVED MARK (W7): the world that served this page; the box offers it before a
+   *  remembered address. */
+  connectServed?: string;
   onClose: () => void;
 }
 
@@ -70,12 +78,21 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
     return b;
   };
 
+  // THE FRONT DOOR (W7): one plain line per failure (no "Error:" prefix).
+  const plain = (e: unknown): string => cb.word ? cb.word(e) : String(e instanceof Error ? e.message : e);
   const title = h('h2', 'Co-op (Beta)'); css(title, { margin: '0 0 6px', color: '#e8d44a' });
-  const note = h('div', 'No server needed — connect by pasting two codes. Pick your class, then Host or Join. Heads up: a few strict home networks block direct connections (no relay yet); if it never connects, that’s likely why.');
+  // THE FRONT DOOR (W7): the two roads told apart. A server join is class-free (the saved
+  // hero travels, else Mu picks one); the class cards belong to the paste-two-codes road.
+  const note = h('div', cb.connect
+    ? 'Join a hosted world by its address, or play with a friend directly: one hosts, the other joins, by pasting two codes.'
+    : 'Play with a friend directly: one hosts, the other joins, by pasting two codes.');
   css(note, { color: '#9a93ac', fontSize: '12px', marginBottom: '12px', lineHeight: '1.5' });
+  const rtcNote = h('div', 'No server needed: you connect by pasting two codes. Pick your class, then Host or Join. A few strict home networks block direct connections (no relay yet); if it never connects, that is likely why.');
+  css(rtcNote, { color: '#9a93ac', fontSize: '12px', marginBottom: '8px', lineHeight: '1.5' });
 
   // Class selection — real class CARDS restricted to the player's own unlocks.
   const classRow = h('div'); css(classRow, { marginBottom: '12px' });
+  classRow.append(rtcNote);
   classRow.append(h('div', 'Choose from your unlocked classes:'));
   const cardWrap = h('div'); css(cardWrap, { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' });
   let selectedClassId = cb.classes[0]?.id ?? '';
@@ -112,13 +129,16 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
   const status = h('div'); css(status, { marginTop: '8px', minHeight: '16px', color: '#7ec850', fontSize: '12px' });
   const say = (m: string, ok = true): void => { status.textContent = m; css(status, { color: ok ? '#7ec850' : '#e08080' }); };
 
-  panel.append(title, note, classRow, actions, stage, status);
+  panel.append(title, note, actions, classRow, stage, status);
   document.body.append(overlay);
+  // THE FRONT DOOR (W7): the cards wait for a road that needs them (Host or Join).
+  const showClasses = (on: boolean): void => { classRow.style.display = on ? '' : 'none'; };
+  showClasses(!cb.connect);
 
   // --- HOST flow -----------------------------------------------------------
   hostBtn.addEventListener('click', async () => {
     stage.innerHTML = ''; say('Setting up host…');
-    hostBtn.disabled = joinBtn.disabled = true; lockClasses();
+    hostBtn.disabled = joinBtn.disabled = true; if (serverBtn) serverBtn.disabled = true; showClasses(true); lockClasses();
     try {
       const { invite, accept, newInvite } = await cb.host(selectedClassId);
       stage.append(h('p', '1) Send this INVITE code to your friend:'));
@@ -136,54 +156,67 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
           // Mint a fresh invite for the NEXT friend (each peer needs its own).
           inv.value = await newInvite();
           say('Friend connected! A FRESH invite is now in the box above — copy it to add another friend.');
-        } catch (e) { say('Connect failed: ' + String(e), false); }
+        } catch (e) { say(plain(e), false); }
       });
       stage.append(conn);
       say('You’re hosting and playing — share the invite above.');
-    } catch (e) { say('Host failed: ' + String(e), false); hostBtn.disabled = joinBtn.disabled = false; classLocked = false; refreshers.forEach(r => r()); }
+    } catch (e) { say(plain(e), false); hostBtn.disabled = joinBtn.disabled = false; if (serverBtn) serverBtn.disabled = false; classLocked = false; refreshers.forEach(r => r()); }
   });
 
   // --- SERVER flow (THE SHARD — a WsTransport client) ----------------------
   serverBtn?.addEventListener('click', () => {
     stage.innerHTML = ''; say('');
-    hostBtn.disabled = joinBtn.disabled = true; if (serverBtn) serverBtn.disabled = true; lockClasses();
-    stage.append(h('p', 'Server address (ws://host:port, or the https:// address a codespace shows):'));
+    hostBtn.disabled = joinBtn.disabled = true; if (serverBtn) serverBtn.disabled = true; showClasses(false);
+    stage.append(h('p', 'The world’s address (the https:// link a codespace shows, or ws://host:port):'));
     const url = document.createElement('input');
     url.type = 'text';
     // THE REMEMBERED ADDRESS: the last server that seated us, else the default.
     let remembered: string | null = null;
     try { remembered = window.localStorage.getItem('hw_shard_url'); } catch { /* storage may refuse */ }
-    url.value = remembered || (cb.connectDefault ?? 'ws://localhost:8787');
+    url.value = cb.connectServed ?? (remembered || (cb.connectDefault ?? 'ws://localhost:8787')); // THE SERVED MARK (W7) first
     css(url, { width: '100%', marginTop: '6px', background: '#0e0c14', color: '#b8e0b8', border: '1px solid #3a3450', borderRadius: '5px', padding: '6px', font: '12px monospace', boxSizing: 'border-box' });
     stage.append(url);
-    if (cb.serverHero) {
-      const traveler = h('div'); css(traveler, { marginTop: '6px', color: '#9a93ac', fontSize: '12px' });
-      stage.append(traveler);
-      void cb.serverHero(selectedClassId).then(line => { traveler.textContent = line; }, () => { /* the line stays empty */ });
-    }
-    const keep = h('div', 'A hosted world keeps running without you. The hero that travels comes home when you leave, and a mortal fall leaves its body where it fell for your next hero to find.');
+    // THE FRONT DOOR (W7): the truth about who travels, and THE SOLO GUARD's line + confirm.
+    const traveler = h('div'); css(traveler, { marginTop: '6px', color: '#9a93ac', fontSize: '12px' });
+    const warn = h('div'); css(warn, { marginTop: '6px', color: '#e8b06a', fontSize: '12px', lineHeight: '1.4', display: 'none' });
+    const agreeRow = document.createElement('label');
+    css(agreeRow, { display: 'none', marginTop: '6px', color: '#d8d4e0', fontSize: '12px', cursor: 'var(--cursor-point, pointer)' });
+    const agree = document.createElement('input'); agree.type = 'checkbox'; css(agree, { marginRight: '6px', verticalAlign: 'middle' });
+    agreeRow.append(agree, document.createTextNode('Leave that world behind and travel'));
+    stage.append(traveler, warn, agreeRow);
+    let leaveBehind = false;
+    const keep = h('div', 'A hosted world keeps running without you. Your hero comes home when you leave and logs back in where it left; a mortal fall leaves its body where it fell for your next hero to find.');
     css(keep, { marginTop: '6px', color: '#7a7390', fontSize: '11px', lineHeight: '1.4' });
     stage.append(keep);
     const go = btn('Connect'); css(go, { marginTop: '8px' });
     stage.append(go);
+    const gate = (): void => { go.disabled = leaveBehind && !agree.checked; };
+    agree.addEventListener('change', gate);
+    if (cb.serverHero) {
+      void cb.serverHero().then(r => {
+        traveler.textContent = r.note;
+        if (r.leaveBehind) { leaveBehind = true; warn.textContent = r.leaveBehind; warn.style.display = ''; agreeRow.style.display = 'block'; gate(); }
+      }, () => { /* the line stays empty */ });
+    }
     go.addEventListener('click', async () => {
       const target = url.value.trim();
-      if (!target) { say('Enter the server address first.', false); return; }
+      if (!target) { say('Enter the world’s address first.', false); return; }
+      if (leaveBehind && !agree.checked) return; // THE SOLO GUARD: never without the word
       go.disabled = true; say('Connecting…');
       try {
-        const answer = await cb.connect!(target, selectedClassId); // 'connected', or 'mu' (THE LOGIN THROUGH MU)
+        const answer = await cb.connect!(target, { replaceSolo: leaveBehind && agree.checked }); // 'connected', or 'mu' (THE LOGIN THROUGH MU)
         try { window.localStorage.setItem('hw_shard_url', target); } catch { /* storage may refuse */ }
         if (answer === 'mu') { overlay.remove(); return; } // THE LOGIN THROUGH MU: the hub takes the screen; the pick travels
-        say('Connected! Entering the hosted world…');
+        say('Connected. Entering the world…');
         setTimeout(() => overlay.remove(), 800);
-      } catch (e) { say('Connection failed: ' + String(e), false); go.disabled = false; }
+      } catch (e) { say(plain(e), false); go.disabled = false; gate(); }
     });
   });
 
   // --- JOIN flow -----------------------------------------------------------
   joinBtn.addEventListener('click', () => {
     stage.innerHTML = ''; say('');
-    hostBtn.disabled = joinBtn.disabled = true; lockClasses();
+    hostBtn.disabled = joinBtn.disabled = true; if (serverBtn) serverBtn.disabled = true; showClasses(true); lockClasses();
     stage.append(h('p', '1) Paste the host’s INVITE code here:'));
     const offer = box('paste the host’s invite…'); stage.append(offer);
     const gen = btn('Generate Response');
@@ -198,8 +231,8 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
         stage.append(copyBtn(ans, 'Copy response'));
         say('Waiting for the host to connect you…');
         connected.then(() => { say('Connected! Entering the host’s world…'); setTimeout(() => overlay.remove(), 800); })
-          .catch((e: unknown) => say('Connection failed: ' + String(e), false));
-      } catch (e) { say('Failed: ' + String(e), false); gen.disabled = false; }
+          .catch((e: unknown) => say(plain(e), false));
+      } catch (e) { say(plain(e), false); gen.disabled = false; }
     });
   });
 }

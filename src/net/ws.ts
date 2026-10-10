@@ -16,7 +16,7 @@
 
 import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from './transport';
 import type { PlayerId, PlayerInput } from './intent';
-import { SHARD_REFUSAL, shardBuildStamp } from './shardBuild';
+import { SHARD_LEAVE_WORD, SHARD_REFUSAL, SHARD_UNLOAD_BEACON_PATH, shardBuildStamp } from './shardBuild';
 import { storageKey } from '../buildProfile';
 import { WIRE_DIET_CFG, dietInflate, dietMemo } from './wireDiet'; // THE WIRE DIET: the codec's client half and THE ACK
 
@@ -43,7 +43,9 @@ export type WireMsg =
       /** THE RETURN: the welcome re-bound a standing seat (a token, or THE IDENTITY of a dormant vessel). */
       resumed?: boolean;
       /** THE BUILD STAMP: the build the shard runs (a client refuses another, or none). */
-      build?: string }
+      build?: string;
+      /** THE FRONT DOOR (W7): the world's own name (a menu's "Return to <world>"). */
+      world?: string }
   /** THE BUILD STAMP's door: the join was refused before any seat was made (one word for the lobby). */
   | { t: 'refused'; word: string }
   /** THE WIRE DIET's ack (`ak`): the newest snapshot tick this client applied, riding its input;
@@ -95,15 +97,54 @@ export function normalizeShardUrl(raw: string): string {
   return s;
 }
 
-/** THE SERVED CLIENT's first offer: a page a forwarded host handed out (a codespace's shard
- *  serving its own client) offers the shard that served it; everywhere else, the default. */
-export function defaultShardUrl(): string {
+/** THE SERVED MARK (W7, THE FRONT DOOR): the meta tag a shard's served index wears
+ *  (server/shardTransport.ts serveClient); its content is the world's name. */
+export const SHARD_SERVED_MARK = 'hw-shard';
+
+/** A page as THE SERVED MARK reads it (its origin, host, query, and the mark's content). */
+export interface ShardPage { origin: string; hostname: string; search: string; mark: string | null }
+/** This page (null off a browser: a probe, a worker). */
+function thisPage(): ShardPage | null {
   try {
-    const host = location.hostname;
-    if (WS_TRANSPORT_CFG.tlsHostSuffixes.some(sfx => host.toLowerCase().endsWith(sfx))) return normalizeShardUrl(location.origin);
-  } catch { /* no window: a probe, a worker */ }
-  return WS_TRANSPORT_CFG.defaultUrl;
+    const mark = typeof document === 'undefined' ? null
+      : document.querySelector(`meta[name="${SHARD_SERVED_MARK}"]`)?.getAttribute('content') ?? null;
+    return { origin: location.origin, hostname: location.hostname, search: location.search, mark };
+  } catch { return null; }
 }
+
+/** THE SERVED MARK (W7, THE FRONT DOOR): the world a page leads to, or null for a plain
+ *  page. A page a shard served (its mark), or one a forwarded host handed out (a codespace;
+ *  an older shard that wears no mark), leads to its own origin; THE DEV DOOR
+ *  (`?dev&shard=<address>`, honored only under the `?dev` opt-in) points a dev server's
+ *  page at a local shard, so a plain link can never aim a player at a stranger's world. */
+export function servedShardUrl(page: ShardPage | null = thisPage()): string | null {
+  if (!page) return null;
+  const host = page.hostname.toLowerCase();
+  if (page.mark !== null || WS_TRANSPORT_CFG.tlsHostSuffixes.some(sfx => host.endsWith(sfx))) {
+    return /^https?:\/\//i.test(page.origin) ? normalizeShardUrl(page.origin) : null;
+  }
+  let q: URLSearchParams;
+  try { q = new URLSearchParams(page.search); } catch { return null; }
+  const dev = q.has('dev') ? (q.get('shard') ?? '').trim() : '';
+  return dev ? normalizeShardUrl(dev) : null;
+}
+
+/** THE SERVED MARK's world name (null: an unmarked page). */
+export function servedWorldName(page: ShardPage | null = thisPage()): string | null {
+  const m = page?.mark?.trim();
+  return m ? m.slice(0, 64) : null;
+}
+
+/** THE SERVED CLIENT's first offer: a page a shard served offers the shard that served it
+ *  (THE SERVED MARK); everywhere else, the default. */
+export function defaultShardUrl(): string {
+  return servedShardUrl() ?? WS_TRANSPORT_CFG.defaultUrl;
+}
+
+/** THE HONEST LEAVING (W7): how a deliberate leave ended. `saved`: the farewell mirror
+ *  landed before the close; `held`: the shard holds the hero in a fight (its word rides
+ *  the seat's own note, `word`); `quiet`: neither came before the cap (or no hero traveled). */
+export interface ShardFarewell { end: 'saved' | 'held' | 'quiet'; word?: string }
 
 /** THE RECONNECT TOKEN (card 16 B): a dropped session's seat and its token. */
 export interface ShardResume { seat: PlayerId; token: string }
@@ -221,7 +262,7 @@ export class WsTransport implements NetTransport {
    *  says the shard re-bound it (else the welcome seated us fresh).
    *  `opts.resumeOnly` (THE RETURN): the seat back or a refusal, never a fresh seat. */
   connect(url: string, info: Omit<PeerInfo, 'id' | 'isHost'>, vessel?: import('../meta/character').CharacterSave, resume?: ShardResume,
-    opts?: { resumeOnly?: boolean }): Promise<{ self: PlayerId; seed: number; worldmass: boolean; features: string[]; land?: string; resumed: boolean }> {
+    opts?: { resumeOnly?: boolean }): Promise<{ self: PlayerId; seed: number; worldmass: boolean; features: string[]; land?: string; resumed: boolean; world?: string }> {
     this.url = normalizeShardUrl(url);
     this.joinInfo = info;
     this.ackTick = -1; this.memo = dietMemo(); // THE WIRE DIET: a new socket acks, and holds identities, from nothing
@@ -263,8 +304,9 @@ export class WsTransport implements NetTransport {
             // (townTier) — a wilds shell builds its World with these so the seed
             // lays the SAME settlement the server laid (strings only, sanitized).
             const features = Array.isArray(m.features) ? m.features.filter((f): f is string => typeof f === 'string').slice(0, 256) : [];
+            const world = typeof m.world === 'string' && m.world.trim() ? m.world.trim().slice(0, 64) : undefined; // THE FRONT DOOR: the world's name
             resolve({ self: m.self, seed: m.seed, worldmass: m.worldmass === true, features, land: typeof m.land === 'string' ? m.land : undefined,
-              resumed: m.resumed === true || (!!resume && m.self === resume.seat) }); // THE RECONNECT TOKEN: the dormant seat came back
+              resumed: m.resumed === true || (!!resume && m.self === resume.seat), ...(world ? { world } : {}) }); // THE RECONNECT TOKEN: the dormant seat came back
           }
           return;
         }
@@ -312,7 +354,7 @@ export class WsTransport implements NetTransport {
       ws.onmessage = (ev): void => {
         let m: WireMsg;
         try { m = JSON.parse(String(ev.data)) as WireMsg; } catch { return; }
-        if (settled) { if (this.ws === ws) this.dispatch(m); return; }
+        if (settled) { if (this.ws === ws || this.farewellWs === ws) this.dispatch(m); return; } // THE FAREWELL rides a resumed socket too
         if (m.t === 'refused') { done({ ok: false, word: typeof m.word === 'string' ? m.word : '', final: true }); return; }
         if (m.t !== 'welcome') return; // nothing a client needs precedes the welcome
         if (m.build !== shardBuildStamp()) { done({ ok: false, word: SHARD_REFUSAL.build, final: true }); return; }
@@ -365,6 +407,10 @@ export class WsTransport implements NetTransport {
         // ackEvery arrivals found no input to carry it (a menu, a fallen hero, a hidden tab).
         const snap = dietInflate(m.snap, this.memo);
         this.touchSession();
+        if (this.farewellSettle) { // THE HONEST LEAVING (W7): the shard's word that it holds the hero rides our own note
+          const fn = snap?.seats?.[this.self]?.fn;
+          if (typeof fn?.text === 'string' && fn.text.startsWith(SHARD_LEAVE_WORD.held)) this.farewellSettle({ end: 'held', word: fn.text });
+        }
         this.stateCbs.forEach(cb => cb(snap));
         if (typeof snap.tick === 'number' && snap.tick > this.ackTick) this.ackTick = snap.tick;
         if (this.acking && (this.memo.miss || ++this.unechoed >= Math.min(WIRE_DIET_CFG.ackEvery, WIRE_DIET_CFG.maxUnacked + 1))) {
@@ -384,7 +430,7 @@ export class WsTransport implements NetTransport {
         break;
       case 'session':
         this.sessionCbs.forEach(cb => cb(m.msg, 'p0')); // from the shard (the host seat)
-        if (m.msg?.t === 'heroSave') this.farewellClose?.(); // THE FAREWELL: the last mirror landed
+        if (m.msg?.t === 'heroSave') this.farewellSettle?.({ end: 'saved' }); // THE FAREWELL: the last mirror landed (and was written)
         break;
       default: break; // join/input/welcome never arrive at a client
     }
@@ -398,7 +444,14 @@ export class WsTransport implements NetTransport {
    *  standing receive it as any message. Disarmed: the word, then the
    *  instant close. */
   farewell = false;
-  private farewellClose: (() => void) | null = null;
+  /** THE HONEST LEAVING (W7): settles the farewell in flight (closes the socket). */
+  private farewellSettle: ((f: ShardFarewell) => void) | null = null;
+  /** THE HONEST LEAVING (W7): the socket a farewell rides once leave() took it from `ws`
+   *  (a socket THE RETURN reopened in place included): its last mirror is still heard. */
+  private farewellWs: WebSocket | null = null;
+  /** THE HONEST LEAVING (W7): how the last deliberate leave ended (a menu's Exit awaits it);
+   *  null until leave() said its word. Resolves at the mirror, the shard's word, or the cap. */
+  farewellEnd: Promise<ShardFarewell> | null = null;
 
   leave(): void {
     // THE DELIBERATE LEAVE (card 16 B): a live session we end ourselves says
@@ -412,21 +465,66 @@ export class WsTransport implements NetTransport {
     this.ws = null;
     if (!ws) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const close = (): void => {
-      this.farewellClose = null;
+    let settled: (f: ShardFarewell) => void = () => { /* no farewell in flight */ };
+    let ended = false;
+    // THE COMPLETED LEAVE (W7): the farewell resolves once the socket has truly closed. The
+    // shard runs the seat's leave before it answers our close, so a re-join made right after
+    // the farewell is never refused as a twin; a close nobody answers resolves at a second cap.
+    const close = (f: ShardFarewell = { end: 'quiet' }): void => {
+      if (ended) return;
+      ended = true;
+      this.farewellSettle = null;
       if (timer !== null) clearTimeout(timer);
-      try { ws.close(1000, 'leave'); } catch { /* already closed */ }
+      const done = (): void => { if (this.farewellWs === ws) this.farewellWs = null; settled(f); };
+      if (ws.readyState === WebSocket.CLOSED) { done(); return; }
+      let cap: ReturnType<typeof setTimeout> | null = null;
+      const closed = (): void => {
+        if (cap !== null) clearTimeout(cap);
+        cap = null;
+        ws.removeEventListener('close', closed);
+        done();
+      };
+      ws.addEventListener('close', closed);
+      cap = setTimeout(closed, WS_TRANSPORT_CFG.farewellMs);
+      (cap as { unref?: () => void }).unref?.(); // a Node rig never waits on a farewell
+      try { ws.close(1000, 'leave'); } catch { closed(); }
     };
     if (deliberate && ws.readyState === WebSocket.OPEN) {
+      this.farewellEnd = new Promise<ShardFarewell>(res => { settled = res; });
       try { ws.send(JSON.stringify({ t: 'session', msg: { t: 'leaving' } } satisfies WireMsg)); } catch { close(); return; }
       if (this.farewell) {
-        this.farewellClose = close;
-        timer = setTimeout(close, WS_TRANSPORT_CFG.farewellMs);
+        this.farewellWs = ws; // THE FAREWELL rides the socket that stands (THE RETURN's resumed one included)
+        this.farewellSettle = close;
+        timer = setTimeout(() => close({ end: 'quiet' }), WS_TRANSPORT_CFG.farewellMs);
         (timer as { unref?: () => void }).unref?.(); // a Node rig never waits on a farewell
         return;
       }
     }
     close();
+  }
+
+  /** THE UNLOAD WORD (W7, THE HONEST LEAVING, best effort): the page is going away (a tab
+   *  closed, or a reload: the two cannot be told apart at unload). Says `leaving` with
+   *  `unload` and closes at once, keeping THE REMEMBERED SESSION: the shard holds an
+   *  out-of-fight hero untargetable for SHARD_CFG.unloadGraceSec, so a reload takes the
+   *  same seat back and a closed tab's hero leaves soon instead of lying targetable for
+   *  dormantSec; a fight keeps THE ACTING SEAT's law. No farewell mirror can land. */
+  unloadLeave(): void {
+    const ws = this.ws, s = this.session;
+    if (!this.welcomed || this.hostGone || !s) return;
+    this.hostGone = true; // our own teardown: never a lost host
+    this.ws = null;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ t: 'session', msg: { t: 'leaving', unload: true } } satisfies WireMsg)); } catch { /* best effort */ }
+    }
+    try { ws?.close(1000, 'unload'); } catch { /* already closed */ }
+    // THE UNLOAD BEACON: the same word over HTTP, which survives an unload that can drop the
+    // socket's last frame (the shard re-times a seat its close already left dormant).
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+        navigator.sendBeacon(this.url.replace(/^ws/i, 'http') + SHARD_UNLOAD_BEACON_PATH, JSON.stringify({ seat: s.self, token: s.token }));
+      }
+    } catch { /* best effort */ }
   }
 
   private send(m: WireMsg): void {

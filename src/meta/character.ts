@@ -6,6 +6,8 @@ import type { NativeCohortLease } from '../worldmass/nativePaging';
 import { BrowserRunStore, isBrowserRunReference } from './browserRunStore';
 import { characterResumeFields, type CharacterFields, type CharacterResume, type CharacterResumeRead, type CharacterContinueSummary, type ResumeAuthority } from './characterResume';
 import { freezeData, massDigest } from '../worldmass/random';
+import type { ShardStand } from '../net/vesselWire';
+import { shardHomeOf, type ShardHome } from '../net/shardDoor';
 // ---------------------------------------------------------------------------
 // CHARACTER PERSISTENCE — the active-run half of localStorage.
 //
@@ -214,6 +216,14 @@ export interface CharacterSave {
    *  exactly the pre-worldstate behavior. Applied by the RESUME path
    *  (World.adoptWorldState + resumeSpawn), never by applySavedCharacter. */
   world?: WorldStateSave;
+  /** HOME SLOTS (W7, net/shardDoor.ts THE HOME SLOT TAG): the hosted world this hero
+   *  lives on (its address, seed and name), stamped by the client on every mirror it
+   *  writes. A bound save is a RETURN at the menu, never a solo resume. Absent on every
+   *  solo save (THE SOLO INVARIANT). */
+  shard?: ShardHome;
+  /** THE RETURN (card 26 B, W7, net/vesselWire.ts): where the hero last stood on its
+   *  world, as the shard's mirror carried it; the next login lands it there. */
+  stand?: ShardStand;
 }
 
 const saveSkill = (i: SkillInstance): SavedSkill => ({
@@ -837,8 +847,10 @@ export async function readCharacterContinueSummary(slot=CHAR_SLOT):Promise<Chara
     const fields=save as CharacterFields;
     if(slot===CHAR_SLOT){const {slot:intendedSlot,intent,barrier,epoch,reference,cancelled}=read.lease;
       summaryPatron={id:fields.charId,lease:{slot:intendedSlot,intent,barrier,epoch,reference,cancelled}};}
+    const home=shardHomeOf(fields); // HOME SLOTS (W7): a bound save's Continue is a return
     return {classId:fields.classId,level:fields.level,...(fields.name===undefined?{}:{name:fields.name}),
-      ...(fields.charId===undefined?{}:{charId:fields.charId}),...(fields.modeId===undefined?{}:{modeId:fields.modeId})};
+      ...(fields.charId===undefined?{}:{charId:fields.charId}),...(fields.modeId===undefined?{}:{modeId:fields.modeId}),
+      ...(home?{shard:home}:{})};
   }catch{return null;}
 }
 export async function readCharacterResume(slot=CHAR_SLOT,options:{signal?:AbortSignal}={}):Promise<CharacterResumeRead> {

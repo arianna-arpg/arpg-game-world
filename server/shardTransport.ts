@@ -29,7 +29,7 @@
 // without the token (a new tab), instead of hearing the twin refusal.
 // ---------------------------------------------------------------------------
 
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { extname, resolve, sep } from 'node:path';
 import type { ServerResponse } from 'node:http';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
@@ -37,12 +37,12 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Duplex } from 'node:stream';
 import type { AddressInfo } from 'node:net';
 import { WS_GUID, WsMessageAssembler, encodeClose, encodePing, encodePong, encodeText } from '../src/net/wsframe';
-import type { ShardResume, WireMsg } from '../src/net/ws';
+import { SHARD_SERVED_MARK, type ShardResume, type WireMsg } from '../src/net/ws';
 import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from '../src/net/transport';
 import { HONEST_INPUT_CFG, mergeInputs, type PlayerId, type PlayerInput } from '../src/net/intent';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { isAccountId } from '../src/meta/account';
-import { SHARD_REFUSAL, shardBuildStamp } from '../src/net/shardBuild';
+import { SHARD_REFUSAL, SHARD_UNLOAD_BEACON_PATH, shardBuildStamp } from '../src/net/shardBuild';
 import { ownEntryJson, serializeZone } from '../src/net/snapshot'; // THE WIRE'S EYES: THE OWN ENTRY (+ THE WIRE DIET's self-heal zone)
 import { seatAudienceBody, seatAudienceFrame, seatAudienceSplit } from '../src/net/seatView'; // THE ACTING SEAT: the audiences
 import { WIRE_DIET_CFG } from '../src/net/wireDiet'; // THE WIRE DIET: the flow control's dial
@@ -104,8 +104,10 @@ interface Conn {
   congestedSince: number;
   /** THE RECONNECT TOKEN this connection's seat answers to (minted at its join). */
   token: string;
-  /** THE DELIBERATE LEAVE: the client said `session leaving`, so its close ends the seat at once. */
-  leaving: boolean;
+  /** THE DELIBERATE LEAVE: the client said `session leaving`, so its close ends the seat at once;
+   *  'unload' (W7, THE UNLOAD WORD): its page went away, so its close sleeps the seat on the
+   *  short reload grace instead (the host's clock). */
+  leaving: boolean | 'unload';
   /** THE WIRE DIET's flow control: the newest snapshot tick its client acknowledged (-1: none
    *  yet, so the userland buffer alone governs it), the newest written to it, and the ticks of
    *  the frames written since its ack (the window counts FRAMES: a skipped gap is no frame). */
@@ -116,6 +118,8 @@ interface Conn {
   diet: DietSeat | null;
 }
 
+/** THE UNLOAD BEACON's body ceiling (a seat id and a token). */
+const SHARD_UNLOAD_BEACON_MAX = 1024;
 /** THE RECONNECT TOKEN, minted (node:crypto, never the seeded stream). */
 const mintToken = (): string => randomBytes(SHARD_WIRE_CFG.resumeTokenBytes).toString('hex');
 /** THE RECONNECT TOKEN's compare: constant-time over equal lengths (a token is a secret). */
@@ -199,13 +203,20 @@ export class ShardTransport implements NetTransport {
   features: string[] = [];
   /** THE LAND DIGEST the shard's wilds run (null on a classic world): a shell that lays another land refuses the join. */
   land: string | null = null;
+  /** THE FRONT DOOR (W7): the world's own name, carried on every welcome (a menu's
+   *  "Return to <world>") and worn by the served page (THE SERVED MARK). */
+  worldName = 'the hosted world';
+  /** THE STOPGAP NAME (W7): the host names a joining hero for the roster (an unnamed
+   *  hero wears its class and a short number; a name another wears takes a number).
+   *  Null = the join's own name, cleaned. */
+  nameJoin: ((name: string, classId: string, accountId: string | undefined, taken: string[]) => string) | null = null;
   private keepalive: NodeJS.Timeout | null = null;
 
   private readonly stateCbs = new Set<(s: StateSnapshot) => void>();
   private readonly zoneCbs = new Set<(z: ZoneMsg) => void>();
   private readonly joinCbs = new Set<(p: PeerInfo, join: ShardJoin) => void>();
   private readonly leaveCbs = new Set<(id: PlayerId) => void>();
-  private readonly dormantCbs = new Set<(id: PlayerId, worded: boolean) => void>();
+  private readonly dormantCbs = new Set<(id: PlayerId, worded: boolean, unload: boolean) => void>();
   private readonly resumeCbs = new Set<(id: PlayerId) => void>();
   private readonly sessionCbs = new Set<(m: SessionMsg, from: PlayerId) => void>();
   private readonly hostLostCbs = new Set<() => void>();
@@ -244,6 +255,17 @@ export class ShardTransport implements NetTransport {
     let size: number;
     try { const s = statSync(file); if (!s.isFile()) return false; size = s.size; } catch { return false; }
     const type = CLIENT_TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream';
+    if (rel === '/index.html') {
+      // THE SERVED MARK (W7, THE FRONT DOOR): the page a world hands out says so, so its
+      // start menu leads into this world (src/net/ws.ts servedShardUrl).
+      let html: string;
+      try { html = readFileSync(file, 'utf8'); } catch { return false; }
+      const mark = `<meta name="${SHARD_SERVED_MARK}" content="${this.worldName.replace(/[<>&"]/g, '')}">`;
+      const body = Buffer.from(html.includes('<head>') ? html.replace('<head>', '<head>' + mark) : mark + html, 'utf8');
+      res.writeHead(200, { 'content-type': type, 'content-length': body.length, 'cache-control': 'no-cache' });
+      res.end(body);
+      return true;
+    }
     res.writeHead(200, { 'content-type': type, 'content-length': size, 'cache-control': rel.startsWith('/assets/') ? 'public, max-age=86400, immutable' : 'no-cache' });
     createReadStream(file).pipe(res);
     return true;
@@ -256,6 +278,9 @@ export class ShardTransport implements NetTransport {
         // A plain HTTP hit is not a game client: THE STATUS PAGE answers '/status' (and '/'
         // with no served client), THE SERVED CLIENT answers everything under its folder.
         const url = (req.url ?? '/').split('?')[0];
+        // THE UNLOAD BEACON (W7): a page going away says so over HTTP too (navigator.sendBeacon
+        // survives an unload that can drop the socket's last frame).
+        if (req.method === 'POST' && url === SHARD_UNLOAD_BEACON_PATH) { this.unloadBeacon(req, res); return; }
         if (this.statusSource && (url === '/status' || (url === '/' && !this.clientDir))) {
           let body = '{}';
           try { body = JSON.stringify(this.statusSource()); } catch { /* a status that throws reads as empty */ }
@@ -353,7 +378,17 @@ export class ShardTransport implements NetTransport {
       // pong: lastSeen already stamped; binary: ignored (the grammar is text).
       if (conn.closed) return;
     }
-    if (conn.asm.error) this.drop(conn, conn.asm.error.code, conn.asm.error.reason, true); // THE REFUSED WIRE: never dormant
+    if (conn.asm.error) {
+      // THE FRONT DOOR (W7): a join frame past the wire's cap is a hero too large to
+      // travel, and its lobby hears so before the close (never a silent drop).
+      if (conn.asm.error.code === 1009 && !conn.seat) this.refuse(conn, SHARD_REFUSAL.heroTooLarge);
+      this.drop(conn, conn.asm.error.code, conn.asm.error.reason, true); // THE REFUSED WIRE: never dormant
+    }
+  }
+
+  /** A join refused at the door: its one word for the lobby (`refused`), no seat made. */
+  private refuse(conn: Conn, word: string): void {
+    this.write(conn, encodeText(JSON.stringify({ t: 'refused', word } satisfies WireMsg)), true);
   }
 
   private dispatch(conn: Conn, m: WireMsg): void {
@@ -370,6 +405,18 @@ export class ShardTransport implements NetTransport {
       // THE RECONNECT TOKEN: a join naming a DORMANT seat with its token takes that seat back
       // (THE RETURN: a resumeOnly join may also take back its own LIVE seat, its link dead unheard).
       if (m.resume !== undefined && m.resume !== null && this.resume(conn, m.resume, m.resumeOnly === true)) return;
+      // THE COMPLETED LEAVE (W7): a join carrying the identity of a seat whose own socket
+      // already said its deliberate word (a farewell whose close the shard has not heard yet)
+      // finishes that leave first, so a return right after a leave is never refused as a
+      // twin; a seat held in a fight sleeps instead, and THE IDENTITY below takes it back.
+      if (this.identitySeat && isAccountId(m.accountId)) {
+        const prior = this.identitySeat(m.accountId, vesselCharId(m.vessel));
+        const pc = prior !== null ? this.bySeat.get(prior) : undefined;
+        if (pc && pc !== conn && pc.leaving === true) {
+          this.log(`[shard] ${prior} said its leave and its own hero returns on a new socket; the leave completes first`);
+          this.drop(pc, 1000, 'left');
+        }
+      }
       // THE IDENTITY (THE SMOOTH SHELL): a join carrying the account and the vessel of a
       // DORMANT seat is its own player come back without the token (a new tab, a cleared
       // page): that seat, never the twin refusal and never a second hero.
@@ -385,16 +432,28 @@ export class ShardTransport implements NetTransport {
         this.drop(conn, 1008, 'no seat to return to', true);
         return;
       }
-      // THE DOOR CAPS: a dormant seat still holds its place in the world.
-      if (this.bySeat.size + this.dormant.size >= SHARD_WIRE_CFG.maxSeats) { this.drop(conn, 1013, 'shard full'); return; }
+      // THE DOOR CAPS: a dormant seat still holds its place in the world. THE FRONT DOOR
+      // (W7): a full world says so to the lobby before it closes.
+      if (this.bySeat.size + this.dormant.size >= SHARD_WIRE_CFG.maxSeats) {
+        this.refuse(conn, SHARD_REFUSAL.full);
+        this.log(`[shard] a join was refused: the world is full (${SHARD_WIRE_CFG.maxSeats} seats)`);
+        this.drop(conn, 1013, 'shard full', true);
+        return;
+      }
       const seatId: PlayerId = 'p' + (this.nextSeat++);
       conn.seat = seatId;
       conn.token = mintToken(); // THE RECONNECT TOKEN, minted at every join
       this.bySeat.set(seatId, conn);
+      // THE NAME (card 17 A) is the vessel's own, else the join's; THE STOPGAP NAME (W7)
+      // tells two unnamed heroes (or two of one name) apart on the roster.
+      const vesselRow = m.vessel && typeof m.vessel === 'object' ? m.vessel as { name?: unknown; classId?: unknown } : null;
+      const classId = cleanId(typeof vesselRow?.classId === 'string' ? vesselRow.classId : m.classId);
+      const ownName = cleanName(typeof vesselRow?.name === 'string' ? vesselRow.name : m.name, '');
+      const taken = this.peerList.filter(p => !p.isHost).map(p => p.name);
       const peer: PeerInfo = {
         id: seatId, isHost: false,
-        name: cleanName(m.name),
-        classId: cleanId(m.classId),
+        name: this.nameJoin ? cleanName(this.nameJoin(ownName, classId, isAccountId(m.accountId) ? m.accountId : undefined, taken)) : cleanName(ownName || m.name),
+        classId,
         cosmeticLoadout: sanitizeCosmeticLoadout(m.cosmeticLoadout),
       };
       this.peerList.push(peer);
@@ -417,7 +476,7 @@ export class ShardTransport implements NetTransport {
     } else if (m.t === 'session' && conn.seat) {
       const msg = m.msg;
       if (!msg || typeof msg !== 'object' || !CLIENT_SESSION_KINDS.has(msg.t)) return;
-      if (msg.t === 'leaving') conn.leaving = true; // THE DELIBERATE LEAVE: this socket's close ends its seat at once
+      if (msg.t === 'leaving') conn.leaving = msg.unload === true ? 'unload' : true; // THE DELIBERATE LEAVE (W7: or THE UNLOAD WORD)
       const seat = conn.seat;
       this.sessionCbs.forEach(cb => this.guard(() => cb(msg, seat)));
     }
@@ -437,7 +496,7 @@ export class ShardTransport implements NetTransport {
    *  (THE SEED THREAD, the hearth's features, THE LAND DIGEST, THE RECONNECT TOKEN). */
   private welcome(conn: Conn, resumed = false): Uint8Array {
     return encodeText(JSON.stringify({ t: 'welcome', self: conn.seat!, peers: this.peerList, seed: this.seedSource() >>> 0, worldmass: this.worldmass,
-      features: this.features, ...(this.land ? { land: this.land } : {}), resume: { token: conn.token },
+      features: this.features, ...(this.land ? { land: this.land } : {}), resume: { token: conn.token }, world: this.worldName, // THE FRONT DOOR: the world's name
       ...(resumed ? { resumed: true } : {}), // THE RETURN: a standing seat came back
       build: shardBuildStamp() } satisfies WireMsg)); // THE BUILD STAMP
   }
@@ -482,6 +541,35 @@ export class ShardTransport implements NetTransport {
     this.resumeCbs.forEach(cb => this.guard(() => cb(seat))); // the host stops the clock and re-ships the seat's world
   }
 
+  /** THE UNLOAD BEACON (W7, THE HONEST LEAVING, best effort): `{ seat, token }` posted by a
+   *  page going away. The seat's token proves it. A live socket's close then takes THE
+   *  UNLOAD WORD's road; a seat already dormant (its close came first) is re-timed by the
+   *  host onto the reload grace (onPeerUnload). Anything else is ignored. Always 204. */
+  private unloadBeacon(req: IncomingMessage, res: ServerResponse): void {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', (c: string) => { body += c; if (body.length > SHARD_UNLOAD_BEACON_MAX) req.destroy(); });
+    req.on('end', () => {
+      res.writeHead(204, { 'cache-control': 'no-store' });
+      res.end();
+      let m: { seat?: unknown; token?: unknown } = {};
+      try { m = JSON.parse(body) as { seat?: unknown; token?: unknown }; } catch { return; }
+      const seat = typeof m.seat === 'string' ? m.seat : '', token = typeof m.token === 'string' ? m.token : '';
+      const live = this.bySeat.get(seat);
+      if (live && sameToken(live.token, token)) { if (!live.leaving) live.leaving = 'unload'; return; }
+      const held = this.dormant.get(seat);
+      if (held !== undefined && sameToken(held, token)) this.unloadCbs.forEach(cb => this.guard(() => cb(seat)));
+    });
+    req.on('error', () => { /* a torn beacon says nothing */ });
+  }
+  private readonly unloadCbs = new Set<(id: PlayerId) => void>();
+  /** THE UNLOAD BEACON (W7): a DORMANT seat's page said it went away (its close came first). */
+  onPeerUnload(cb: (id: PlayerId) => void): () => void { this.unloadCbs.add(cb); return () => { this.unloadCbs.delete(cb); }; }
+
+  /** THE COMPLETED LEAVE (W7): the host names the seat (live or dormant) whose vessel is
+   *  this account's character `charId` (null: none). Unset = no completion. */
+  identitySeat: ((accountId: string, charId: string) => PlayerId | null) | null = null;
+
   /** THE IDENTITY's reclaim (THE SMOOTH SHELL): the host names the DORMANT seat whose
    *  vessel is this account's character `charId` (null: none). Unset = no reclaim. */
   reclaim: ((accountId: string, charId: string) => PlayerId | null) | null = null;
@@ -499,13 +587,17 @@ export class ShardTransport implements NetTransport {
     // THE ACTING SEAT: a word said mid-fight is no farewell. A seat the host
     // holds (leaveHolds: hurt or hurting within VESSEL_CFG.combatLeaveSec)
     // sleeps like a lost socket instead of leaving at once.
-    const lost = !conn.leaving || (this.leaveHolds?.(gone) ?? false);
+    const held = !!conn.leaving && (this.leaveHolds?.(gone) ?? false);
+    // THE UNLOAD WORD (W7): a page that went away out of a fight sleeps on the host's
+    // short reload grace (a reload takes the seat back; a closed tab's hero leaves soon).
+    const unload = conn.leaving === 'unload' && !held;
+    const lost = !conn.leaving || held || unload;
     if (lost && !refused && !this.closing && this.dormantCbs.size) {
       // THE DORMANT SEAT: no word and no refusal, so the connection was LOST.
       // The seat stays (its roster row and token kept, no pleave); the host's
       // clock decides (a host that never listens keeps the old law below).
       this.dormant.set(gone, conn.token);
-      this.dormantCbs.forEach(cb => this.guard(() => cb(gone, conn.leaving)));
+      this.dormantCbs.forEach(cb => this.guard(() => cb(gone, !!conn.leaving, unload)));
       return;
     }
     this.peerList = this.peerList.filter(p => p.id !== gone);
@@ -666,8 +758,9 @@ export class ShardTransport implements NetTransport {
   onPeerJoin(cb: (p: PeerInfo, join: ShardJoin) => void): () => void { this.joinCbs.add(cb); return () => { this.joinCbs.delete(cb); }; }
   onPeerLeave(cb: (id: PlayerId) => void): () => void { this.leaveCbs.add(cb); return () => { this.leaveCbs.delete(cb); }; }
   /** THE DORMANT SEAT: a seat's socket was lost without its word, or said it mid-fight (`worded`, THE
-   *  ACTING SEAT's leaveHolds); the host starts its clock, or releases it at once. */
-  onPeerDormant(cb: (id: PlayerId, worded: boolean) => void): () => void { this.dormantCbs.add(cb); return () => { this.dormantCbs.delete(cb); }; }
+   *  ACTING SEAT's leaveHolds), or its page went away out of a fight (`unload`, W7's THE UNLOAD
+   *  WORD: the short reload grace); the host starts its clock, or releases it at once. */
+  onPeerDormant(cb: (id: PlayerId, worded: boolean, unload: boolean) => void): () => void { this.dormantCbs.add(cb); return () => { this.dormantCbs.delete(cb); }; }
   /** THE RECONNECT TOKEN: a dormant seat was re-bound to a new connection (the host stops its clock). */
   onPeerResume(cb: (id: PlayerId) => void): () => void { this.resumeCbs.add(cb); return () => { this.resumeCbs.delete(cb); }; }
 
