@@ -12,5 +12,6 @@ export const nativeInstalledOtherWorldHash = "aa3c2da1358d22106f293ec4b9115e0f5c
  * World.netRevive, THE MERCY no longer waiting once THE RELEASE or THE
  * BLEED-OUT ends a held down, a downed seat's interact press as the release on a
  * hosted world, and a hosted shell's revive ring read from its row are
- * intentional additions. */
-export const nativeInstalledShardWorldHash = "08bd1286cd371256655f40cd6070acba0cd8f032a463461182fa1fe1c5db7ea1";
+ * intentional additions; so is THE PAIR STRIDE in World.losCached (72da43c3),
+ * reviewed at the merge of shard-world into W8b. */
+export const nativeInstalledShardWorldHash = "1bfba6bd309d7f2d441a61824d075ac437d667e9245552699639db6f68cd3092";
