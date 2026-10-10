@@ -35,6 +35,7 @@ import { MAX_LEARNED_SKILLS, type Seat, type World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 import { recentIndex } from '../src/engine/recency';
 import { COOP_SCALING } from '../src/data/coop';
+import type { DownView } from '../src/net/partyWire'; // THE PARTY THAT READS: the down's read
 import { dist } from '../src/core/math';
 import { MASS_ZONE } from '../src/worldmass/preset';
 import { CLASSES, type ClassDef } from '../src/data/classes';
@@ -89,6 +90,12 @@ export const VESSEL_CFG = {
    *  untargetable on the wire before its client hears `runEnd` and the seat
    *  leaves, so the killing blow is seen; 0 = at once. */
   deathBeatSec: 1.5,
+  /** THE BLEED-OUT (card 28, RULED B 2026-10-10, her word: "no player may hold another
+   *  downed player hostage"): seconds a grouped down waits on its mates once a mate's
+   *  standing holds it; a kneel resets the clock to full, and when it runs out the wait
+   *  is over: a mortal falls by the covenant, a stage that survives death goes to THE
+   *  MERCY. 0 = no clock (the wait lasts while a mate stands). */
+  bleedOutSec: 60,
   /** THE ACTING SEAT (the leave mid-fight): a deliberate leave by a standing
    *  hero hurt, or hurting, within this many seconds goes DORMANT like a
    *  dropped socket (never the farewell mirror). */
@@ -261,6 +268,11 @@ export class VesselDesk {
   private readonly beats = new Map<string, { until: number; tell: boolean; word?: FallWord }>();
   /** The desk's own seconds (summed tick dt: a beat ends even on a world whose frame faults). */
   private clock = 0;
+  /** THE BLEED-OUT (card 28): a held down's deadline on the desk's clock, set at the first
+   *  tick a mate's standing holds it, reset to full while a mate kneels, gone when it stands. */
+  private readonly bleeds = new Map<string, number>();
+  /** THE RELEASE: downed seats whose player gave up the wait (the interact press). */
+  private readonly released = new Set<string>();
 
   constructor(
     /** THE DESKS PER UNIT (shard M1): every read that was the one World reads the seat's own unit. */
@@ -271,8 +283,9 @@ export class VesselDesk {
       beatSec: number; log: (line: string) => void;
       /** THE GROUP LAW (card 14 clarified / card 23): a seat's party mates, itself included. */
       party?: (seatId: string) => readonly string[];
-      /** A seat the covenant removed from the world (the party desk drops it). */
-      onSeatGone?: (seatId: string) => void;
+      /** A seat the covenant removed from the world, with the name it wore (the party desk
+       *  holds its place: THE HELD PLACE). */
+      onSeatGone?: (seatId: string, name: string) => void;
     },
   ) {
     this.beat = opts.beatSec;
@@ -467,6 +480,7 @@ export class VesselDesk {
     this.beats.delete(seatId);
     this.vessels.delete(seatId);
     this.accounts.delete(seatId);
+    this.bleeds.delete(seatId); this.released.delete(seatId); // THE BLEED-OUT, THE RELEASE: nothing outlives the seat
     this.corpses.leave(seatId);
   }
 
@@ -511,6 +525,7 @@ export class VesselDesk {
       const seat = this.units.seatOf(rec.seatId);
       if (seat && !this.downed(seat)) rec.places.add(this.placeOf(seat));
     }
+    this.tendBleeds(); // THE BLEED-OUT (card 28): every held down's clock, before the covenant reads it
     // THE DEATH COVENANT across units: every seat judged in its own unit.
     for (const rec of [...this.vessels.values()]) {
       const seat = this.units.seatOf(rec.seatId);
@@ -521,7 +536,7 @@ export class VesselDesk {
     if (VESSEL_CFG.freshHeroDies) {
       for (const seat of this.units.allSeats()) {
         if (seat.keeper || this.vessels.has(seat.id) || this.beats.has(seat.id)
-          || !this.downed(seat) || !this.endsTheRun(seat) || this.partyHolds(seat)) continue;
+          || !this.downed(seat) || !this.endsTheRun(seat) || (this.partyHolds(seat) && !this.waitEnded(seat.id))) continue;
         this.freshFall(seat);
       }
     }
@@ -549,6 +564,76 @@ export class VesselDesk {
     if (mates.length <= 1) return false;
     return this.units.allSeats().some(o => o !== seat && mates.includes(o.id) && this.couldKneel(o, seat));
   }
+  /** THE WIPE RADIUS, SHOWN: the seats whose standing holds a down (partyHolds' own reach). */
+  private holdersOf(seat: Seat): string[] {
+    const mates = this.opts.party?.(seat.id) ?? [seat.id];
+    if (mates.length <= 1) return [];
+    return this.units.allSeats().filter(o => o !== seat && mates.includes(o.id) && this.couldKneel(o, seat)).map(o => o.id);
+  }
+
+  // ---- THE PARTY THAT READS: THE BLEED-OUT and THE RELEASE (card 28) -------------
+  /** A body lying downed: downed, not dead (THE DEATH BEAT's body is dead). */
+  private lyingDown(seat: Seat): boolean {
+    const a = seat.actor, hero = heroOf(seat);
+    return (a.downed || hero.downed) && !a.dead && !hero.dead;
+  }
+  /** Someone kneels by the body: a revive dwell building on it (THE MERCY's clock is no knee). */
+  private kneeled(seat: Seat): boolean {
+    if (!seat.reviveDwellBy.size) return false;
+    const w = this.units.worldOf(seat.id) ?? this.units.keeperWorld();
+    for (const [id, t] of seat.reviveDwellBy) if (t > 0 && !w.seats.some(s => s.id === id && s.keeper)) return true;
+    return false;
+  }
+  /** THE BLEED-OUT (card 28, RULED B): a down a mate's standing holds starts its clock at the
+   *  first tick it is held; a kneel holds the clock full (resets it); a seat standing again,
+   *  falling or gone forgets its clock and its release. */
+  private tendBleeds(): void {
+    for (const id of [...this.bleeds.keys(), ...this.released]) {
+      const seat = this.units.seatOf(id);
+      if (!seat || !this.lyingDown(seat) || this.beats.has(id)) { this.bleeds.delete(id); this.released.delete(id); }
+    }
+    const sec = VESSEL_CFG.bleedOutSec;
+    if (!(sec > 0)) { this.bleeds.clear(); return; }
+    for (const seat of this.units.allSeats()) {
+      if (seat.keeper || this.beats.has(seat.id) || !this.lyingDown(seat)) continue;
+      if (this.kneeled(seat)) this.bleeds.set(seat.id, this.clock + sec); // a kneel resets the clock to full
+      else if (!this.bleeds.has(seat.id) && this.partyHolds(seat)) this.bleeds.set(seat.id, this.clock + sec);
+    }
+  }
+  /** The wait on mates is over: the player released it, or THE BLEED-OUT ran out. A mortal
+   *  falls by the covenant; a stage that survives death goes to THE MERCY (World.updateDownedSeats
+   *  reads it through World.partyDowns). */
+  waitEnded(seatId: string): boolean {
+    if (this.released.has(seatId)) return true;
+    const until = this.bleeds.get(seatId);
+    return VESSEL_CFG.bleedOutSec > 0 && until !== undefined && this.clock >= until;
+  }
+  /** THE RELEASE (card 28): the player's own choice. A downed seat whose down a mate's standing
+   *  holds gives up the wait with its interact press (World.applyAction's pickupItem, through
+   *  World.partyDowns): a mortal falls by the covenant this very tick, a stage that survives
+   *  death goes to THE MERCY. A press with nothing holding the down changes nothing. True =
+   *  the press was taken. */
+  release(seatId: string): boolean {
+    const seat = this.units.seatOf(seatId);
+    if (!seat || seat.keeper || this.beats.has(seatId) || this.released.has(seatId) || !this.lyingDown(seat)) return false;
+    if (!this.partyHolds(seat)) return false;
+    this.released.add(seatId);
+    this.opts.log(`[shard] ${seatId} gave up the wait (THE RELEASE)`);
+    return true;
+  }
+  /** THE PARTY THAT READS: a downed seat's read for its revive row (SeatW.rv): THE BLEED-OUT's
+   *  seconds left, the seats whose standing holds it and THE NEAR LAW's radius. Null for a
+   *  standing seat or a fallen body. */
+  downView(seatId: string): DownView | null {
+    const seat = this.units.seatOf(seatId);
+    if (!seat || seat.keeper || this.beats.has(seatId) || !this.lyingDown(seat)) return null;
+    const ended = this.waitEnded(seatId), until = this.bleeds.get(seatId), sec = VESSEL_CFG.bleedOutSec;
+    return {
+      ...(!ended && sec > 0 && until !== undefined ? { left: Math.max(0, until - this.clock), total: sec } : {}),
+      holders: ended ? [] : this.holdersOf(seat),
+      radius: COOP_SCALING.shareRadius,
+    };
+  }
   /** A standing player within the near radius of a down (radius 0 = anywhere), and
    *  IN THE SAME UNIT (THE DESKS PER UNIT: positions in two Worlds are not comparable). */
   private couldKneel(o: Seat, down: Seat): boolean {
@@ -559,10 +644,11 @@ export class VesselDesk {
 
   /** Is this seat's down a mortal vessel's death? The stage's own policy
    *  decides (a contract that survives death keeps THE MERCY); a party mate
-   *  who could kneel keeps it a down (THE GROUP LAW), and under 'mercy' so
-   *  does any player who could. */
+   *  who could kneel keeps it a down (THE GROUP LAW) until the wait is over
+   *  (THE RELEASE, THE BLEED-OUT), and under 'mercy' so does any player who could. */
   private covenantDue(seat: Seat): boolean {
     if (!this.downed(seat) || !this.endsTheRun(seat)) return false;
+    if (this.waitEnded(seat.id)) return true; // THE RELEASE / THE BLEED-OUT (card 28): the wait is over
     if (this.partyHolds(seat)) return false; // THE GROUP LAW: a mate stands to kneel
     if (VESSEL_CFG.covenantAt === 'mercy' && this.units.allSeats().some(o => o !== seat && this.couldKneel(o, seat))) return false;
     return true;
@@ -645,6 +731,7 @@ export class VesselDesk {
     const a = seat.actor;
     a.downed = false; a.dead = true; a.life = 0; a.casting = null; a.untargetable = true;
     seat.reviveDwellBy.clear();
+    this.bleeds.delete(seat.id); this.released.delete(seat.id); // THE BLEED-OUT, THE RELEASE: the fall settled the wait
     this.beats.set(seat.id, { until: this.clock + VESSEL_CFG.deathBeatSec, tell, ...(word ? { word } : {}) });
   }
 
@@ -661,6 +748,7 @@ export class VesselDesk {
       if (seat.home) { try { w.seatEject(seat, 'released'); } catch { /* the seat leaves either way */ } }
       w.removeSeat(seat.id);
     });
-    this.opts.onSeatGone?.(seat.id);
+    this.bleeds.delete(seat.id); this.released.delete(seat.id);
+    this.opts.onSeatGone?.(seat.id, heroOf(seat).name); // THE HELD PLACE: the name the party's dim row wears
   }
 }

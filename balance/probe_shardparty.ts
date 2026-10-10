@@ -3,7 +3,9 @@
 // seats three players over the wire and pins:
 //   A  the words — invite lands on its target, accept groups, the refusals answer the asker
 //      with one line (yourself, already grouped, no invite, not the leader), the keeper is
-//      never seated in a party, a lapsed invite is no invite;
+//      never seated in a party, a lapsed invite is no invite; THE PARTY FOUNDS ON ACCEPT (THE
+//      PARTY THAT READS): an invite founds nothing and carries its `until`, the inviter stays an
+//      ungrouped neighbour others may ask, and a decline or a lapse leaves no party behind;
 //   B  the wire — the snapshot ships the parties on change, then holds its tongue;
 //   C  THE KILLER'S DUE widens to the party within reach, never a stranger beside it;
 //   D  THE GROUP LAW — a grouped hero's lethal down is a DOWN while a mate stands, and the
@@ -63,11 +65,27 @@ await waitFor(() => B.heard.some(m => m.t === 'partyInvite'), host, 60);
 const inv = B.heard.find(m => m.t === 'partyInvite');
 check('A invite: the invite lands on its target, naming the inviter', inv?.t === 'partyInvite' && inv.from === A.id && inv.name === 'Anvil' && !!host.parties.inviteFor(B.id),
   inv?.t === 'partyInvite' ? `${inv.name} → ${B.id}` : 'no invite heard');
-check('A invite: the inviter founded a party of one, its leader', host.parties.partyOf(A.id)?.leader === A.id && host.parties.partyOf(A.id)?.members.length === 1);
+// THE PARTY THAT READS: THE PARTY FOUNDS ON ACCEPT (the audit's first finding: an invite used
+// to found a party of one that a decline or a lapse never dissolved). This check replaces the
+// old "the inviter founded a party of one, its leader": the law it pinned is retired.
+check('A found: an invite founds no party; the inviter stays ungrouped (THE PARTY FOUNDS ON ACCEPT)',
+  !host.parties.partyOf(A.id) && !host.parties.rows().some(r => r.members.includes(A.id)));
+check('A invite: the invite carries its lapse on the wire (`until`, the shard clock) and names no party yet',
+  inv?.t === 'partyInvite' && inv.until === host.parties.inviteFor(B.id)?.until && Math.abs(inv.until - (w.time + PARTY_CFG.inviteSec)) < 1 && inv.party === undefined,
+  inv?.t === 'partyInvite' ? `until ${inv.until.toFixed(2)} at ${w.time.toFixed(2)}` : 'no invite');
+// The founder stays a neighbour every other player may ask (never "already grouped").
+C.c.sendSession({ t: 'party', op: 'invite', seat: A.id });
+await waitFor(() => A.heard.some(m => m.t === 'partyInvite'), host, 60);
+check('A found: another player may still invite the ungrouped inviter', host.parties.inviteFor(A.id)?.from === C.id && !words(C).length,
+  words(C).join(', ') || 'no refusal');
+A.c.sendSession({ t: 'party', op: 'decline' });
+await waitFor(() => !host.parties.inviteFor(A.id), host, 60);
+check('A decline: a declined invite leaves no party behind', !host.parties.inviteFor(A.id) && !host.parties.partyOf(C.id) && !host.parties.partyOf(A.id));
 B.c.sendSession({ t: 'party', op: 'accept' });
 await waitFor(() => (host.parties.partyOf(B.id)?.members.length ?? 0) === 2, host, 60);
 const party = host.parties.partyOf(A.id)!;
 check('A accept: the invitee joins — one party, two members, the leader first', !!party && party.members[0] === A.id && party.members[1] === B.id && host.parties.partyOf(B.id) === party);
+check('A found: the first accept founds the party, the inviter leading it', party?.leader === A.id);
 A.c.sendSession({ t: 'party', op: 'invite', seat: A.id });
 await waitFor(() => words(A).length >= 1, host, 60);
 check('A refusal: inviting yourself answers with one line', lastWord(A) === 'cannot invite yourself', lastWord(A));
@@ -165,7 +183,14 @@ check('A keeper: the warden is never seated in a party', host.parties.invite(A.i
   const D = await join('Dorrin'), E = await join('Esme'), F = await join('Fen');
   await runTicks(host, 2);
   const now = (): number => w.time;
-  check('E found: an invite founds, an accept joins', host.parties.invite(D.id, E.id, now()) === null && host.parties.accept(E.id, now()) === null
+  // THE PARTY THAT READS: an ungrouped inviter's invite that lapses on the host's clock leaves nothing.
+  {
+    const word = host.parties.invite(D.id, E.id, now());
+    host.parties.sweep(now() + PARTY_CFG.inviteSec + 1);
+    check('E lapse: an ungrouped inviter\'s lapsed invite leaves no party and no invite', word === null && !host.parties.inviteFor(E.id)
+      && !host.parties.partyOf(D.id) && !host.parties.rows().some(r => r.members.includes(D.id)));
+  }
+  check('E found: the accept founds, a second accept joins', host.parties.invite(D.id, E.id, now()) === null && !host.parties.partyOf(D.id) && host.parties.accept(E.id, now()) === null
     && host.parties.invite(E.id, F.id, now()) === null && host.parties.accept(F.id, now()) === null && host.parties.partyOf(D.id)?.members.length === 3);
   check('E kick: the leader kicks a member', host.parties.kick(D.id, F.id) === null && !host.parties.partyOf(F.id) && host.parties.partyOf(D.id)?.members.length === 2);
   check('E leave: the leader leaving passes the lead to the eldest member', host.parties.leave(D.id) === null && host.parties.partyOf(E.id) === null && !host.parties.partyOf(D.id),

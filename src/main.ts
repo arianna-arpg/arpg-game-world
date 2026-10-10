@@ -63,6 +63,8 @@ import { ShardCrossing } from './net/crossing'; // THE ONE CROSSING: one cover o
 import { readTravelingVessel, ShardVesselLink, travelNote } from './meta/shardVessel';
 import { openCoopLobby } from './ui/lobby';
 import { PartyPanel } from './ui/party';
+import { PARTY_INBOX, clientGrouped, partyPanelModel } from './net/partyReads'; // THE PARTY THAT READS
+import { PARTY_WIRE_CFG, type PartyInviteNote } from './net/partyWire';
 import { CLASSES, type ClassDef } from './data/classes';
 import { SKILLS as CLIP_SKILLS } from './data/skills';
 import { makeSkillGem as clipSkillGem } from './engine/skills';
@@ -1222,6 +1224,7 @@ function readLocalInput(dt: number): PlayerInput | null {
 /** LOCAL-only UI input (the pause menu + panel toggles). Kept out of the intent
  *  pipeline — these are this client's screen, never gameplay sent to the host. */
 function handleLocalPanels(): void {
+  pressTheRelease(); // THE RELEASE (card 28): a downed hero on a hosted world gives up the wait
   // Dead/downed suppresses ALL local UI input, exactly as the old single input
   // handler did (`if (p.dead) return`) — so escape/panels can't pop over the
   // death screen. (A downed local hero in co-op likewise can't toggle panels.)
@@ -2630,8 +2633,9 @@ function onSessionMsg(msg: SessionMsg, from: string): void {
   } else if (msg.t === 'refused') {
     onClientRefused(typeof msg.word === 'string' ? msg.word : '', msg.mu === true); // THE ACTING SEAT: a refused hero
   } else if (msg.t === 'partyInvite') {
-    // THE PARTY: an invitation lands (one standing per inviter); the panel shows it until answered.
-    if (!partyInvites.some(i => i.from === msg.from)) partyInvites.push({ from: msg.from, name: msg.name, party: msg.party });
+    // THE PARTY: an invitation lands (one standing per inviter); THE PARTY THAT READS: it stands
+    // until its `until` (the shard's clock), wearing the Party pip and the beckon over the inviter.
+    PARTY_INBOX.land(msg, world.time);
   } else if (msg.t === 'partyWord') {
     partyWord = msg.word; // THE PARTY: the shard's one-line refusal, shown on the panel
   } else if (msg.t === 'newRun') {
@@ -2838,23 +2842,48 @@ let pendingServer: { url: string } | null = null;
 let lastShardUrl: string | null = null;
 
 /** THE PARTY PANEL (card 23 — ui/party.ts): what landed on me (invitations, the shard's
- *  last word) and the reads the panel draws from; its words go over the session wire. */
-const partyInvites: { from: string; name: string; party: string }[] = [];
+ *  last word) and the reads the panel draws from; its words go over the session wire.
+ *  THE PARTY THAT READS (net/partyReads.ts): the invitations live in PARTY_INBOX, each standing
+ *  until it lapses or its inviter leaves; the panel draws one model (partyPanelModel: your
+ *  party, the invitations, the players near you within THE NEAR LAW's radius, the far roster)
+ *  and patches only what changed. */
+const partyInvites = PARTY_INBOX.invites;
 let partyWord: string | null = null;
+/** THE INVITE TELL's standing invitations: a lapsed one, or one whose inviter left the world, falls away. */
+const partyInvitesStanding = (): readonly PartyInviteNote[] => {
+  const here = new Set(net.peers().map(p => p.id));
+  return PARTY_INBOX.standing(world.time, clientGrouped(world), from => here.has(from));
+};
 const partyPanel = new PartyPanel(
-  {
-    me: () => world.clientSeatId,
-    peers: () => net.peers().filter(p => !p.isHost).map(p => ({ id: p.id, name: p.name })), // the host row is the keeper: no seat to group with
-    rows: () => world.partyRows,
-    invites: () => partyInvites,
-    word: () => partyWord,
-  },
+  () => partyPanelModel({
+    me: world.clientSeatId,
+    at: world.player?.pos ?? null,
+    bodies: world.party.members.map(m => ({ seat: m.seat, name: m.actor.name, pos: m.actor.pos })), // the heroes on my wire
+    peers: net.peers().filter(p => !p.isHost).map(p => ({ id: p.id, name: p.name })), // the host row is the keeper: no seat to group with
+    rows: world.partyRows,
+    invites: partyInvitesStanding(),
+    word: partyWord,
+    radius: PARTY_WIRE_CFG.nearRadius,
+  }),
   {
     send: (op, seat) => { if (net instanceof WsTransport) net.sendSession({ t: 'party', op, ...(seat ? { seat } : {}) }); },
-    settleInvite: from => { const i = partyInvites.findIndex(x => x.from === from); if (i >= 0) partyInvites.splice(i, 1); },
+    settleInvite: from => PARTY_INBOX.settle(from),
   },
 );
 ui.setPartyPanel(partyPanel);
+// THE INVITE TELL in the world (THE PARTY THAT READS): a beckon over each inviter whose
+// invitation stands, in its class color (renderer drawPartyMarks); none off a hosted world.
+renderer.partyBeckons = () => world.partyRows === null ? [] : partyInvitesStanding().map(i => i.from);
+
+/** THE RELEASE (card 28, RULED B 2026-10-10; THE PARTY THAT READS): a downed hero on a hosted
+ *  world may give up the wait on its mates with the interact key (the pickup bind), the
+ *  player's own choice; the shard's desk takes the press (World.applyAction's pickupItem while
+ *  downed): a mortal falls by the covenant at once, a life that survives death goes to THE MERCY. */
+function pressTheRelease(): void {
+  const p = world.player;
+  if (!p?.downed || p.dead || world.partyRows === null || !(net instanceof WsTransport)) return;
+  if (input.justPressed(settings.keybinds.pickup) || pad.justPressed(settings.padBinds.pickup)) world.requestMeta({ t: 'pickupItem' });
+}
 
 /** THE SHARD's door (card 22 — THE LOGIN THROUGH MU): the traveling hero goes when there
  *  is one (THE VESSEL: the run slot's hero, else THE LONE VESSEL — the one standing roster

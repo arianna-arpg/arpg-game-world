@@ -850,6 +850,20 @@ in Mu first.**
     Party page: your party, the invitations, the players around you; the
     shell collects the invitations and the shard's words):** the muster ring
     (card 15 B) BUILT 2026-10-10 (M1-W4, `server/muster.ts`).
+    **THE PARTY THAT READS (2026-10-10):** the audit of a player's first hour
+    found the party unreadable (five findings). BUILT: THE PARTY FOUNDS ON
+    ACCEPT (an invite founds nothing, so a decline or a lapse leaves no party
+    of one and the inviter stays an ungrouped neighbour others may ask); the
+    invite's `until` on the wire and THE INVITE TELL (a pip on the menu's
+    Party row, a beckon over the inviter's head in its class color); THE NEAR
+    ROSTER and a stable panel (near you by THE NEAR LAW's radius, the far
+    roster by name, the DOM patched only on change); THE REVIVE ROW
+    (`SeatW.rv`: the ring and the cue a mate never saw, the downed player's
+    own progress); THE WIPE RADIUS, SHOWN (THE NEAR LAW's ring around a held
+    down, its holders marked); THE RELEASE and THE BLEED-OUT (card 28); and
+    THE PARTY SURVIVES A DEATH (a fallen member's place held
+    `PARTY_CFG.rejoinSec`, 120 s, for its account's next vessel, no
+    re-invite). docs/engine/shard.md; `balance/probe_shardpartyreads.ts`.
 24. **THE QUEST LEDGER** (raised by the gap sweep, §7d item 3) — A: per
     ACCOUNT (each player's quest state lives on the shard keyed by account
     id, the corpse idiom; a quest a player finishes is finished for that
@@ -921,6 +935,16 @@ in Mu first.**
     kneel. Rec: B at 60 s.
     **RULED (2026-10-10, her word): B at 60 s, reset by a kneel; no holding a
     downed player hostage. W8b ships `VESSEL_CFG.bleedOutSec` at 60.**
+    **BUILT (W8b, THE PARTY THAT READS):** `VESSEL_CFG.bleedOutSec` ships at
+    60. The clock starts the first tick a mate's standing holds a down, a kneel
+    resets it to full, and when it runs out the wait is over: a mortal falls by
+    the covenant, and a life that survives death goes to THE MERCY instead of
+    waiting on a mate who never kneels (THE IMMORTAL'S COVENANT ON A SHARD,
+    card 30 for W10, takes that moment over: `VesselDesk.waitEnded` is the
+    seam). THE RELEASE stands beside it, the player's own choice: the interact
+    key gives up the wait at once. 0 turns the clock off.
+    `balance/probe_shardpartyreads.ts` pins the 60 s default, the kneel's
+    reset and the run-out.
 29. **THE SHELF PER BUYER** — A: one world shelf rolled at the keeper's
     level (today, §5). B: the shelf rolls per buyer's level. Rec: hold A;
     revisit with M2's account gate.
@@ -996,6 +1020,7 @@ the base taken and what moved.
 | 2026-10-10 | `18a1b437` THE INTEGRATION: the foundation session merged shard-world (096393f1) and the roads branch (889884fc) into its lane, delivered §6.6's three asks (c1bfe588) and fast-forwarded `shard-world` to the same commit, so both branches stand as ONE tree; §7c's cadence continues from here (the shard keeps merging the foundation down; the foundation lands the shard up). | 0 | the shard rigs, the three new foundation probes and a soak are green on 18a1b437 |
 | 2026-10-10 (M1-W4) | `72da43c3` (shard-world: the M6 plan, her rulings, THE PAIR STRIDE) merged into shard-m1-muster | 1, the charter (cards 15 and 25: her rulings as recorded on shard-world, then W4's receipts) | the hand-off's sight-memo prune now decodes by `LOS_PAIR_STRIDE` (b0813633). THE FOUNDATION'S WORLD GUARD (`probe_nativeinstalledsources`, "unknown future edits still fail") reads the merged World as unknown, as it already did 72da43c3's: the reviewed hash for its re-pin is `9fb3f8fb7740bc6218d5deb0dff4b94c953e6ed83260ed52447a3ff97d12df66` (`nativeInstalledShardWorldHash`), and with it accepted every assertion below the guard passes. The ten other fast-lane reds fail on 18a1b437 too. |
 | 2026-10-10 (W9) | `72da43c3` (7559f07a), then `9fb0134b` (shard-world: THE WIRE DIET, THE ONE CROSSING, the muster ring and the realm roads, c65aa442) merged into shard-w9-character | 2 then 2: the roster and the charter (her rulings on cards 24 and 29, then W9's receipts); the roster (probe_shardcharacter beside probe_shardcrossing) and the shard contract (THE WIRE DIET's row, then W9's two rows; both dial lines) | THE FOUNDATION'S WORLD GUARD (`probe_nativeinstalledsources`) reads W9's World as unknown, as it already read shard-world's: the reviewed hash for its re-pin is `8de9b46b2c8ddcb3860ee7068bfa42088e52ff0945d94b970924ebece2489598` (`nativeInstalledShardWorldHash`), and with it accepted every assertion below the guard passes (a trial re-pin, restored). `probe_nativescenesky`'s World census (members pinned 2351) is red at 72da43c3 too (2450) and reads 2514 on W9's merged tree. The foundation's verbatim settlement bodies stay verbatim (`probe_nativesettlementservices`, `probe_nativesceneharbor` green): the shelf per buyer seeds through `World.buyerSettlementHost`. Of the other nine fast-lane reds, six are the foundation's named reds and three (worldmass_courtcontinuity, worldmass_processioncontinuity, worldmass_terrainvariation) fail on 72da43c3 with the same assertions. |
+| 2026-10-10 (W8b) | `72da43c3`, then `88d9df33` (shard-world: her rulings, the M6 plan, THE PAIR STRIDE, the muster ring and the realm roads, THE ONE CROSSING) merged into shard-w8b-party | 2, the charter (card 28: her ruling as recorded on shard-world, then W8b's built receipt; card 15 B's built line, then card 23's receipt) | THE PARTY THAT READS adds World seams (`partyDowns`, `netRevive`, THE MERCY's wait ending at THE RELEASE or THE BLEED-OUT, the downed release in `pickupItem`, the shell's revive ring off its row), so THE FOUNDATION'S WORLD GUARD (`probe_nativeinstalledsources`) reads the merged World as unknown: W8b's seams on `88d9df33` read `2dd6b49a10bf14eda5c0c951893002cbd66b53021ff2dcbd933d6be4a197ea99` (`nativeInstalledShardWorldHash`), and with it accepted every assertion below the guard passes. The archive stays as shard-world carries it: the re-pin is the lane's. |
 | 2026-10-09 (W5) | THE SEAMS THE SHARD NOW CARRIES IN THE FOUNDATION'S FILES, for the landing: `src/worldmass/clearance.ts` passes the cleared site's place to `grantXp` (XP BY PLACE, one line); `src/worldmass/quests.ts` reads a hosted shell's map pins off its journal row and filters bounty pins by `World.handOwns` (three lines). Both additive, byte-identical off a shard. | 0 | recorded so the foundation session meets them knowingly at the landing (§7c). |
 
 ## §7c The integration policy (her question 2026-10-09)
@@ -1067,7 +1092,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 | 8 | The bounty board is dead on a shard. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 9 | A new account never gets flasks on a shard. | W3 |
 | 10 | Nothing earned reaches the home account; the shard account is in memory only. | M2 THE SEAT'S GATE |
-| 11 | The group hold has no distance; the mercy waits on strangers. | W3 (card 28 for the bleed-out) |
+| 11 | The group hold has no distance; the mercy waits on strangers. | W3; card 28 RULED B and BUILT 2026-10-10 (THE PARTY THAT READS: THE BLEED-OUT at 60 s, reset by a kneel, and THE RELEASE) |
 | 12 | Events have no owner and gather on the keeper. | M3 |
 | 13 | Harvest is closed to remote seats. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 14 | Mercenaries cannot be hired. | M2 |

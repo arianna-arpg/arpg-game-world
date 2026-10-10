@@ -49,6 +49,7 @@ import type { Actor, CastingState } from '../engine/actor';
 import type { World } from '../engine/world';
 import { instanceCastMode, instanceConvert, instanceDelivery, instanceStrikeTiming, instanceTrigger, type SkillInstance } from '../engine/skills';
 import { replenishingDelivery } from '../engine/replenishment';
+import { applyOwnReviveRow } from './partyReads'; // THE PARTY THAT READS: the revive row (SeatW.rv)
 import type { MetaAction, PlayerInput } from './intent';
 import { adoptSnapshot, interpolateSnapshot, isWireCast, tickNetClocks, type InterpFrame, type StateSnapshot } from './snapshot';
 import { applyOwnSeatRows } from './seatView';
@@ -455,6 +456,7 @@ export class WireShell {
     interpolateSnapshot(w, this.prevAdopted, s, alpha, ahead, { bodies, runOn: cfg.extrapolateMs / 1000 });
     this.castFrame(dt, nowMs);
     applyOwnSeatRows(w, s); // THE ACTING SEAT: the own note over the own head, the low-life surge
+    applyOwnReviveRow(w, s); // THE PARTY THAT READS: the revive ring, the bleed-out and the wipe radius
     this.predictOwnHero(dt);
   }
 
