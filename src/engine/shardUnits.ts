@@ -30,7 +30,7 @@
 import { angleTo, vec, type Vec2 } from '../core/math';
 import type { Actor } from './actor';
 import type { BuffEffect } from './skills';
-import type { Seat, World } from './world';
+import { LOS_PAIR_STRIDE, type Seat, type World } from './world';
 import type { MusterRoad } from './shardMuster';
 
 /** The unit fabric's dials (unblessed; docs/engine/shard.md "THE SIM UNITS, W1"). */
@@ -552,8 +552,8 @@ export function detachSeat(w: World, seatId: string): SeatPacket | { refused: st
     else if (live.length !== list.length) claims.set(tid, live);
   }
   const los = f.losMemo as Map<number, unknown>;
-  for (const key of [...los.keys()]) {
-    if (carriedIds.has(Math.floor(key / 1_000_000)) || carriedIds.has(key % 1_000_000)) los.delete(key);
+  for (const key of [...los.keys()]) { // THE PAIR STRIDE: the memo packs a pair as a.id * LOS_PAIR_STRIDE + b.id
+    if (carriedIds.has(Math.floor(key / LOS_PAIR_STRIDE)) || carriedIds.has(key % LOS_PAIR_STRIDE)) los.delete(key);
   }
   const lite: { defId: string; plies: number }[] = [];
   const pool = w.lite;

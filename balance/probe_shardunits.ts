@@ -23,7 +23,8 @@
 //      second-hop minion, a companion and a throng body (lite rows re-spawned), a
 //      construct culled in the source, the party desk, the ack, the kill tally; the
 //      source keeps nothing that names the court (domain and aura sources, a toggled
-//      field refunded, flights, target refs, the four teardown-on-absence controllers);
+//      field refunded, flights, target refs, the sight memo's pairs under THE PAIR STRIDE, the four
+//      teardown-on-absence controllers);
 //      THE SPAWN GRACE holds until the first willed input;
 //   E  THE SLEEP and THE WAKE: THE PERSIST CAPTURE writes an awake unit's live row, a
 //      seatless unit sleeps after unitLinger with its survivors and wounds in memory, a
@@ -85,7 +86,7 @@ import { WsTransport, shardResumeFor, type ShardResume } from '../src/net/ws';
 import type { StateSnapshot, ZoneMsg } from '../src/net/snapshot';
 import type { SessionMsg } from '../src/net/transport';
 import { NullInput, type MetaAction, type PlayerInput } from '../src/net/intent';
-import { World, type Seat } from '../src/engine/world';
+import { LOS_PAIR_STRIDE, World, type Seat } from '../src/engine/world';
 import { Actor, resetActorIdCounter, type ConstructState } from '../src/engine/actor';
 import { makeSkillInstance } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
@@ -902,6 +903,10 @@ let crossSeed = 0;
   const ids = { hero: hero.id, minion: minion.id, sub: sub.id, companion: companion?.id, throng: throngBody?.id };
   const bondsA = priv(uw.companionBonds).states as Map<Actor, unknown>;
   const bonded = !!companion && bondsA.has(companion);
+  // The source's sight memo holds pairs naming the court (THE PAIR STRIDE packs each one).
+  uw.losCached(hero, foe); uw.losCached(foe, hero); uw.losCached(minion, foe);
+  const memoKeys = (): number[] => [...(priv(uw).losMemo as Map<number, unknown>).keys()];
+  const memoNamed = memoKeys().length;
   // THE HAND-OFF: out of the Crossroads unit, into the keeper's hearth.
   const home = units.travel(B.id, hearth);
   const kw = k;
@@ -925,6 +930,10 @@ let crossSeed = 0;
     !hero.sheet.hasSource('domain:probe') && !domainZone?.domainAffected?.has(hero) && !hero.sheet.hasSource(`aura:probe_ward:${foe.id}`)
     && !foe.sheet.hasSource(`aura:probe_ward:${hero.id}`) && minion.sheet.hasSource(`aura:probe_ward:${hero.id}`) && !hero.sheet.hasSource('altar:0'));
   check('D leaks: the source\'s monsters drop their target ref on the court', foe.aiTargetId === undefined && foe.aiTargetRef === undefined);
+  const courtIds = new Set([hero.id, minion.id, sub.id]);
+  check('D leaks: the source\'s sight memo keeps no pair naming a carried body (decoded by THE PAIR STRIDE)',
+    memoNamed >= 3 && !memoKeys().some(key => courtIds.has(Math.floor(key / LOS_PAIR_STRIDE)) || courtIds.has(key % LOS_PAIR_STRIDE)),
+    `${memoNamed} pairs before the hand-off, ${memoKeys().length} after`);
   const ctl = (w: World): boolean => [hero, minion, companion!].some(a => (priv(w.guardArts).states as Map<Actor, unknown>).has(a)
     || (priv(w.assaults).courts as Map<Actor, unknown>).has(a));
   check('D leaks: the bond state moved whole (the source holds none), and the source\'s guard arts and courts hold no carried body',
