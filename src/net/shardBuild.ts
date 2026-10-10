@@ -14,8 +14,11 @@ import { SAVE_COMPATIBILITY } from '../meta/saveCompatibility';
  *  2: THE WIRE DIET (net/wireDiet.ts): the codec's rows, the dress delta and the acks.
  *  3: THE IMMORTAL'S COVENANT ON A SHARD (card 30): a client must book `stageDeath` and `fell`
  *     (an older one would play the shatter, lose the tithe and never stamp its fallen card);
- *     THE SPOILS' OWNER's (card 27) drop rows and party words ride beside them. */
-export const SHARD_WIRE_PROTOCOL = 3;
+ *     THE SPOILS' OWNER's (card 27) drop rows and party words ride beside them.
+ *  4: THE FORESIGHT ON THE WIRE (W11): an enemy cast row's foresight (`CastW.fg`, laid on the
+ *     diet's grid) and the body row's hit tint (`ActorW.ht`); an older client resolves a cast
+ *     stub's foresight (the crash on every enemy wind-up) and never reads the tint. */
+export const SHARD_WIRE_PROTOCOL = 4;
 
 /** This build's stamp, as the join and the welcome carry it. */
 export function shardBuildStamp(): string {
