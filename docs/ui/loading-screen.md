@@ -16,7 +16,9 @@ This is an ambiguous, atmospheric pastime. There is no score, points, pickup
 valuation, gate counter, speed readout, high score or account reward. Encounters
 respond through color, motion and fading rings. Keep numeric diagnostics in the
 debug snapshot only; actual loading progress may still use measured work units.
-Memory Motes, Gilded Souls and Wild Wisps have distinct silhouettes. Two spirits
+Memory Motes, Gilded Souls and Wild Wisps share a pale Mu soul-flame silhouette.
+Their size, radiance and gentle sputter/flicker/flare convey energy without ranked
+colors or symbols. Two spirits
 in a choice arrive at staggered travel positions; taking one releases the other.
 The Wild Wisp gently increases the underlying pace. None has collectible value.
 
@@ -42,7 +44,18 @@ These are implementation parameters, never player-facing achievements. The
 probe drives complete encounter/return routes at boosted speed with 30 Hz input,
 checks every solid pier, and proves current collection, bypass, expiry and reset.
 Reduced motion keeps current silhouettes and essential travel but suppresses
-animated wakes, expanding rings and particle spray. Art uses native canvas only.
+animated wakes, expanding rings and particle spray; flames and decorative
+background parallax stay still. Art uses native canvas only.
+
+The deeper backdrop directly reuses Mu's `TILESETS.mu.theme.ambientFx` through
+`drawAmbientFx`: the abyss depth well, nebular haze and layered motes also echoed
+by `site/assets/abyss.js`. The crossing's ribbons and pillars remain above it.
+Gate inscriptions draw from the canonical `RUNESCRIPT` alphabet used by vestiges
+and Vault unlocks. Geometry-seeded choices stay fixed as each gate moves and
+consume no simulation randomness; glyph sprites use the bounded shared cache.
+The heading is `encipher('The Crossing')` in the existing rune font stack, with
+the accessible name “The Crossing — Loading”. Keep these shared sources instead
+of inventing another alphabet, palette or abyss effect.
 
 
 ## Integration

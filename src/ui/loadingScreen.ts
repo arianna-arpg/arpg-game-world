@@ -1,3 +1,4 @@
+import { encipher } from '../data/runescript';
 import type { CosmeticLoadout } from '../engine/cosmetics';
 import { SpiritRun, spiritDirection, spiritLayout, type SpiritDirection } from '../loading/spiritRun';
 import { drawSpiritRun } from '../loading/spiritView';
@@ -79,7 +80,7 @@ export class LoadingScreen {
       #mu-loading-screen *{box-sizing:border-box}
       #mu-loading-screen .mu-head{position:absolute;top:clamp(20px,5vh,52px);left:clamp(22px,5vw,76px);right:clamp(22px,5vw,76px);display:flex;justify-content:space-between;gap:20px;pointer-events:none}
       #mu-loading-screen .mu-eyebrow{font:11px system-ui;letter-spacing:.3em;color:#86a59e}
-      #mu-loading-screen h1{font-weight:400;font-size:clamp(24px,3vw,42px);letter-spacing:.08em;margin:9px 0}
+      #mu-loading-screen h1{font-weight:400;font-size:clamp(24px,3vw,42px);letter-spacing:.14em;margin:9px 0;color:#bcd4e8;text-shadow:0 0 22px #9ab8dc38}
       #mu-loading-screen canvas{position:absolute;inset:108px 0 162px;width:100%;height:calc(100% - 270px)}
       #mu-loading-screen footer{position:absolute;bottom:clamp(18px,4vh,42px);left:clamp(22px,5vw,76px);right:clamp(22px,5vw,76px);display:grid;grid-template-columns:1fr auto;gap:12px 26px;align-items:end;font-family:system-ui}
       #mu-loading-screen .mu-status{font-size:14px;letter-spacing:.04em}
@@ -91,7 +92,7 @@ export class LoadingScreen {
       #mu-loading-screen button:focus-visible{outline:2px solid #e8c992;outline-offset:4px}
       @media(max-height:480px){#mu-loading-screen canvas{inset:80px 0 145px;height:calc(100% - 225px)}#mu-loading-screen .mu-head{top:14px}#mu-loading-screen h1{font-size:22px;margin:4px 0}#mu-loading-screen footer{bottom:12px;gap:5px}#mu-loading-screen .mu-detail{margin-top:2px}}
       </style><canvas aria-label="Steer the wisp through the openings in the spirit gates. Follow wandering spirits and optionally ride the wispy chevron currents to surge ahead."></canvas>
-      <header class="mu-head"><div><div class="mu-eyebrow">HOLLOW WAKE / MU</div><h1>The Crossing</h1></div></header>
+      <header class="mu-head"><div><div class="mu-eyebrow">HOLLOW WAKE / MU</div><h1 class="runescript" aria-label="The Crossing — Loading">${encipher('The Crossing')}</h1></div></header>
       <footer><div><div class="mu-status" role="status" aria-live="polite"></div><div class="mu-detail"></div><progress aria-label="Loading progress"></progress></div><div class="mu-actions"></div><div class="mu-pickups">FOLLOW THE WISPS &nbsp; · &nbsp; RIDE THE CURRENTS</div><div class="mu-controls">MOUSE / TOUCH &nbsp; · &nbsp; WASD / ARROWS &nbsp; · &nbsp; LEFT STICK</div></footer>`;
     this.canvas = root.querySelector('canvas')!; this.label = root.querySelector('.mu-status')!;
     this.detail = root.querySelector('.mu-detail')!;

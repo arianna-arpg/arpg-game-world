@@ -44,6 +44,14 @@ app.whenReady().then(async () => {
    }, direction);
    assert.equal(moved.direction, direction); assert.ok(moved.lane > 35); report.checks.push('keyboard ' + direction);
   }
+  const heading = await run(() => {
+   const h = document.querySelector('#mu-loading-screen h1');
+   return { text: h.textContent, accessible: h.getAttribute('aria-label'), font: getComputedStyle(h).fontFamily };
+  });
+  assert.match(heading.text, /^[\u16a0-\u16ff ]+$/u);
+  assert.equal(heading.accessible, 'The Crossing — Loading');
+  assert.ok(heading.font.includes('Segoe UI Symbol'));
+  report.checks.push({ runeHeading: heading });
   const leases = await run(async () => {
    const first = window.__qaLease;
    window.__qaLease = __game.loading.begin({ kind: 'travel', direction: 'right', label: 'Measured progress', completed: 3, total: 8 });

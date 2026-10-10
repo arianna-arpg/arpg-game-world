@@ -1,8 +1,30 @@
 import { MU_CFG } from '../data/mu';
+import { TILESETS } from '../data/tilesets';
+import { RUNESCRIPT } from '../data/runescript';
+import { drawAmbientFx } from '../render/vis/ambientFx';
+import { hash01 } from '../render/vis/color';
+import { baked } from '../render/vis/sprites';
 import type { CosmeticLoadout } from '../engine/cosmetics';
 import { cosmeticBody, cosmeticPick, drawCosmeticOrbit } from '../render/vis/cosmetics';
 import { bodySprite, adornSprite, spriteHalf, lookOf, drawLiveParts } from '../render/vis/body';
-import { SPIRIT_RUN, SPIRIT_PICKUPS, SPIRIT_CURRENT_COLOR, SpiritRun, spiritLayout, spiritGateSolids } from './spiritRun';
+import { SPIRIT_RUN, SPIRIT_CURRENT_COLOR, SpiritRun, spiritLayout, spiritGateSolids } from './spiritRun';
+
+// One Mu soul-flame, from a quiet sputter to a brighter, restless flare.
+// These are visual envelopes only; every encounter keeps its existing hit radius.
+const SOUL_FLAMES = {
+  mote: { size: 0.82, radiance: 29, flicker: 2.6 },
+  gilded: { size: 1, radiance: 37, flicker: 3.4 },
+  wild: { size: 1.2, radiance: 46, flicker: 4.2 },
+} as const;
+
+/** The Vault/vestige alphabet, baked once per glyph in the bounded sprite cache. */
+function gateRune(rune: string): HTMLCanvasElement {
+  return baked('loading-rune:' + rune, 48, 48, ctx => {
+    ctx.font = '30px "Segoe UI Symbol", "Noto Sans Runic", Junicode, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#c3dce8';
+    ctx.fillText(rune, 0, 1);
+  });
+}
 
 /** Uses Mu's real body/parts and the same wardrobe resolution as the world. */
 export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, height: number,
@@ -12,7 +34,15 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
   const time = reducedMotion ? 0 : run.time;
   const focus = point(650, 0), mist = ctx.createRadialGradient(focus.x, focus.y, 10, width / 2, height / 2, Math.max(width, height) * 0.7);
   mist.addColorStop(0, '#233442'); mist.addColorStop(0.45, '#131f2e'); mist.addColorStop(1, '#070b12');
-  ctx.fillStyle = mist; ctx.fillRect(0, 0, width, height);
+  const mu = TILESETS.mu.theme;
+  ctx.fillStyle = mu.floor; ctx.fillRect(0, 0, width, height);
+  ctx.globalAlpha = 0.65; ctx.fillStyle = mist; ctx.fillRect(0, 0, width, height); ctx.globalAlpha = 1;
+  // The actual Mu depth well, nebular haze and three parallax mote strata, also
+  // echoed by the website's abyss. Keep the crossing's ribbons and pillars above it.
+  const travel = reducedMotion ? 0 : run.distance * scale * 0.18;
+  const camX = run.direction === 'down' ? 0 : run.direction === 'left' ? -travel : travel;
+  const camY = run.direction === 'down' ? travel : 0;
+  for (const fx of mu.ambientFx ?? []) drawAmbientFx(ctx, fx, width, height, time, camX, camY);
   const line = (u: number, v: number, u2: number, v2: number): void => {
     const a = point(u, v), b = point(u2, v2); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   };
@@ -33,7 +63,7 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
   for (const side of [-1, 1]) {
     ctx.globalAlpha = 0.17; line(0, side * 275, 1000, side * 275);
     for (let i = 0; i < 9; i++) {
-      const u = ((i * 142 - run.distance * 0.26) % 1280 + 1280) % 1280 - 100;
+      const u = ((i * 142 - (reducedMotion ? 0 : run.distance) * 0.26) % 1280 + 1280) % 1280 - 100;
       ctx.globalAlpha = 0.11;
       path([[u - 10, side * 280], [u + 16, side * 242], [u + 38, side * 236], [u + 61, side * 280]]);
       ctx.closePath(); ctx.fillStyle = '#354652'; ctx.fill(); ctx.stroke();
@@ -41,7 +71,7 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
     }
   }
   for (let i = 0; i < 88; i++) {
-    const u = ((i * 173.7 - run.distance * (0.18 + (i % 4) * 0.09)) % 1120 + 1120) % 1120 - 60;
+    const u = ((i * 173.7 - (reducedMotion ? 0 : run.distance) * (0.18 + (i % 4) * 0.09)) % 1120 + 1120) % 1120 - 60;
     const v = Math.sin(i * 71.2) * 260;
     ctx.globalAlpha = 0.1 + (i % 5) * 0.038; ctx.strokeStyle = i % 3 ? '#97d8cb' : '#d5bb87';
     line(u, v, u + (reducedMotion ? 2 : 4 + run.speed * 4), v);
@@ -60,18 +90,19 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
       for (const [edge, side] of [[low, 1], [high, -1]]) if (Math.abs(edge) < c.halfWidth) {
         ctx.save(); ctx.shadowColor = color; ctx.shadowBlur = reducedMotion ? 0 : 13 * scale;
         ctx.lineWidth = 3 * scale; line(gate.u - half, edge, gate.u + half, edge); ctx.restore();
-        const size = Math.min(18, (high - low) * 0.32); ctx.fillStyle = color;
+        const size = Math.min(14, (high - low) * 0.26); ctx.fillStyle = color;
         path([[gate.u, edge + side * 3], [gate.u + 5, edge + side * size * 0.65],
           [gate.u, edge + side * size], [gate.u - 5, edge + side * size * 0.65]]);
         ctx.closePath(); ctx.fill();
       }
-      ctx.strokeStyle = '#c3e6dd'; ctx.lineWidth = Math.max(0.7, scale * 0.7);
-      const count = Math.floor((high - low) / 27);
-      for (let j = 1; j < count; j++) {
-        const v = low + (high - low) * j / count, design = (gate.id + j) % 3;
-        if (design === 0) { line(gate.u - 4, v - 4, gate.u + 4, v + 4); line(gate.u - 4, v + 4, gate.u + 4, v - 4); }
-        else if (design === 1) { path([[gate.u - 4, v - 3], [gate.u + 4, v], [gate.u - 4, v + 3]]); ctx.stroke(); }
-        else { line(gate.u, v - 4, gate.u, v + 4); line(gate.u - 4, v, gate.u + 4, v); }
+      const span = high - low, count = span < 38 ? 0 : Math.max(1, Math.floor((span - 44) / 27) + 1);
+      for (let j = 0; j < count; j++) {
+        const v = count === 1 ? (low + high) / 2 : low + 22 + (span - 44) * j / (count - 1), at = point(gate.u, v);
+        // Geometry supplies per-crossing variety without consuming either RNG.
+        // Never include time or moving u: a gate keeps its inscription as it passes.
+        const index = Math.floor(hash01(gate.id * 31 + j, Math.round(low * 100)) * RUNESCRIPT.length);
+        const glyph = gateRune(RUNESCRIPT[index].rune), side = 24 * scale;
+        ctx.drawImage(glyph, at.x - side / 2, at.y - side / 2, side, side);
       }
     }
     ctx.restore();
@@ -102,33 +133,46 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
 
   // Staggered spirits drift independently; a chosen companion releases its sibling.
   for (const pickup of run.pickups) {
-    const def = SPIRIT_PICKUPS[pickup.kind], p = point(pickup.u, pickup.lane);
+    const def = SOUL_FLAMES[pickup.kind], p = point(pickup.u, pickup.lane), color = MU_CFG.wisp.color;
     if (pickup.state === 'taken') continue;
     ctx.save(); ctx.globalAlpha = pickup.state === 'released' ? 0.45 * (1 - pickup.fade / c.pickupFade) : 1;
     ctx.translate(p.x, p.y); ctx.scale(scale, scale);
-    const pulse = 1 + Math.sin(time * 3 + pickup.id) * 0.07;
-    const glow = ctx.createRadialGradient(0, 0, 3, 0, 0, 33 * pulse);
-    glow.addColorStop(0, def.color + '75'); glow.addColorStop(0.45, def.color + '26'); glow.addColorStop(1, def.color + '00');
-    ctx.fillStyle = glow; ctx.fillRect(-36, -36, 72, 72);
-    ctx.strokeStyle = def.color; ctx.fillStyle = def.color; ctx.lineWidth = 1.3;
-    ctx.save(); ctx.rotate(run.direction === 'down' ? Math.PI / 2 : run.direction === 'left' ? Math.PI : 0);
-    if (def.shape === 'pearl') {
-      ctx.beginPath(); ctx.moveTo(9, 0); ctx.quadraticCurveTo(2, -14, -18, 0); ctx.quadraticCurveTo(2, 14, 9, 0); ctx.fill();
-      ctx.beginPath(); ctx.arc(0, 0, 14, -1, 1); ctx.stroke();
-    } else if (def.shape === 'diamond') {
-      for (const r of [11, 19]) { ctx.beginPath(); ctx.moveTo(r, 0); ctx.lineTo(0, r); ctx.lineTo(-r, 0); ctx.lineTo(0, -r); ctx.closePath(); ctx.stroke(); }
-      ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
-    } else {
-      ctx.beginPath(); ctx.moveTo(12, 0); ctx.bezierCurveTo(1, -12, -7, -13, -20, -10);
-      ctx.lineTo(-8, 0); ctx.lineTo(-20, 10); ctx.bezierCurveTo(-7, 13, 1, 12, 12, 0); ctx.fill();
-      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-25 - i * 8, -5); ctx.lineTo(-20 - i * 8, 0); ctx.lineTo(-25 - i * 8, 5); ctx.stroke(); }
+    const phase = time * def.flicker + pickup.id * 2.4;
+    const breath = 1 + Math.sin(phase) * 0.045 + Math.sin(phase * 1.7) * 0.025;
+    const radius = def.radiance * breath;
+    const glow = ctx.createRadialGradient(0, -4, 2, 0, -4, radius);
+    glow.addColorStop(0, color + '80'); glow.addColorStop(0.35, color + '2b'); glow.addColorStop(1, color + '00');
+    ctx.fillStyle = glow; ctx.fillRect(-radius, -radius - 4, radius * 2, radius * 2);
+    // Flames rise in screen space in all three directions. Their bright heart
+    // remains at the encounter center; the slender tips gutter and curl above it.
+    ctx.scale(def.size, def.size * breath);
+    const curl = Math.sin(phase * 0.8) * 2.4, lick = Math.sin(phase * 1.3) * 1.8;
+    const flame = ctx.createLinearGradient(0, -26, 0, 10);
+    flame.addColorStop(0, color + '18'); flame.addColorStop(0.45, color + 'b8'); flame.addColorStop(1, color + 'ef');
+    ctx.fillStyle = flame; ctx.beginPath(); ctx.moveTo(0, 10);
+    ctx.bezierCurveTo(-12, 9, -12, -1, -7, -10);
+    ctx.quadraticCurveTo(-8, -3, -3, -4);
+    ctx.bezierCurveTo(1, -8, -5 + curl, -17, 2 + curl, -26 - lick);
+    ctx.bezierCurveTo(-1 + curl, -14, 12, -10, 9, -1);
+    ctx.quadraticCurveTo(13, -3, 12, -8);
+    ctx.bezierCurveTo(17, 5, 7, 11, 0, 10); ctx.fill();
+    ctx.fillStyle = '#f0f7fa'; ctx.beginPath(); ctx.moveTo(0, 7);
+    ctx.bezierCurveTo(-7, 5, -6, -2, -1 + curl * 0.25, -11);
+    ctx.bezierCurveTo(-2, -3, 7, -1, 5, 4); ctx.quadraticCurveTo(3, 8, 0, 7); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(0, 2, 2.1, 3.2, 0, 0, Math.PI * 2); ctx.fill();
+    // Faint threads lift off the same flame; no badges, gems or ranked colors.
+    ctx.strokeStyle = color + '65'; ctx.lineWidth = 0.7;
+    for (let i = 0; i < 2; i++) {
+      const drift = (time * (0.4 + def.size * 0.15) + hash01(pickup.id, i + 51)) % 1;
+      const x = (i ? 1 : -1) * (6 + Math.sin(phase + i) * 2), y = -9 - drift * 21;
+      ctx.save(); ctx.globalAlpha *= (1 - drift) * 0.45;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + curl, y - 4, x + curl * 0.6, y - 8); ctx.stroke(); ctx.restore();
     }
-    ctx.fillStyle = '#f4f7ed'; ctx.beginPath(); ctx.arc(2, 0, 3, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     ctx.restore();
   }
   for (const burst of run.bursts) {
     const f = burst.age / c.burstSeconds, p = point(burst.u, burst.lane);
-    const color = burst.kind === 'impact' ? '#efa2a0' : burst.kind === 'gate' ? '#a2d9ce' : burst.kind === 'current' ? SPIRIT_CURRENT_COLOR : SPIRIT_PICKUPS[burst.kind].color;
+    const color = burst.kind === 'impact' ? '#efa2a0' : burst.kind === 'gate' ? '#a2d9ce' : burst.kind === 'current' ? SPIRIT_CURRENT_COLOR : MU_CFG.wisp.color;
     ctx.save(); ctx.globalAlpha = 1 - f; ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.3 * scale;
     if (!reducedMotion) {
       ctx.beginPath(); ctx.arc(p.x, p.y, (18 + f * 40) * scale, 0, Math.PI * 2); ctx.stroke();
@@ -142,7 +186,7 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
   }
   ctx.globalAlpha = 1;
   const look = cosmeticBody({ shape: 'circle', ...MU_CFG.wisp, radius: 22 }, loadout, false, true);
-  const color = run.dash ? SPIRIT_CURRENT_COLOR : run.surge ? SPIRIT_PICKUPS.wild.color : look.color, p = point(run.playerU, run.lane);
+  const color = run.dash ? SPIRIT_CURRENT_COLOR : run.surge ? MU_CFG.wisp.color : look.color, p = point(run.playerU, run.lane);
   // A wild soul lengthens the wake; impact visibly binds and extinguishes it.
   if (!reducedMotion) for (let i = 18; i > 0; i--) {
     const tr = point(run.playerU - i * (4 + run.speed * 2), run.lane + Math.sin(time * 4 - i * 0.3) * i * 0.35);

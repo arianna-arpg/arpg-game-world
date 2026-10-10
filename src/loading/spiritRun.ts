@@ -13,11 +13,11 @@ export const SPIRIT_RUN = Object.freeze({
   burstSeconds: 0.75, maxBursts: 18, surgeSeconds: 1.2,
   hinderSeconds: 0.7, hinderSpeed: 0.36, entrySeconds: 0.7,
 });
-/** Encounters have silhouettes and responses, never points or collectible value. */
+/** Encounters have atmosphere and responses, never points or collectible value. */
 export const SPIRIT_PICKUPS = {
-  mote: { name: 'Memory Mote', boostGates: 0, color: '#a2e9d8', shape: 'pearl' },
-  gilded: { name: 'Gilded Soul', boostGates: 0, color: '#f4cb7f', shape: 'diamond' },
-  wild: { name: 'Wild Wisp', boostGates: 3, color: '#c7a5ff', shape: 'wing' },
+  mote: { name: 'Memory Mote', boostGates: 0 },
+  gilded: { name: 'Gilded Soul', boostGates: 0 },
+  wild: { name: 'Wild Wisp', boostGates: 3 },
 } as const;
 export const SPIRIT_CURRENT_COLOR = '#b6fff0';
 export type SpiritPickupKind = keyof typeof SPIRIT_PICKUPS;

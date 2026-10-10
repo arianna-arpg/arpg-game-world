@@ -3,6 +3,8 @@ LoadingScreen owns cancellable status, retry, input isolation and token-safe cle
 SpiritRun owns score-free staggered wisps, branching gates and optional surge
 currents in three travel directions. Entry/Continue descend;
 native page readiness chooses a horizontal crossing. It shares Mu/wardrobe painting.
+The loading-screen art reuses Mu's abyss, pale soul-flames and the canonical
+RUNESCRIPT alphabet for stable gate inscriptions and the encoded Crossing title.
 Reuse the loading-screen lease for future disruptive preparations; integration
 handoff and candidate callers are in docs/ui/loading-screen.md. Never tie the
 pastime to progression or delay readiness. Synchronous generation is still
