@@ -9824,7 +9824,6 @@ export class World {
       get zone(){return world.zone;},
       get pickGem(){const method=world.pickGem;return ((...args:Parameters<NativeSettlementHost['pickGem']>)=>method.apply(world,args)) as NativeSettlementHost['pickGem'];},
       get seats(){return world.shelfBuyer ? [world.shelfBuyer] : world.seats;}, // THE SHELF PER BUYER: the buyer's own carried gems
-      get shelfCharKey(){const method=world.shelfCharKey;return (...args:Parameters<NativeSettlementHost['shelfCharKey']>)=>method.apply(world,args);},
       get mercSheetFor(){const method=world.mercSheetFor;return (...args:Parameters<NativeSettlementHost['mercSheetFor']>)=>method.apply(world,args);},
       get dealTemplateOffers(){const method=world.dealTemplateOffers;return (...args:Parameters<NativeSettlementHost['dealTemplateOffers']>)=>method.apply(world,args);},
       get mercOutpost(){return world.mercOutpost;},set mercOutpost(value){world.mercOutpost=value;},
@@ -43691,7 +43690,7 @@ export class World {
   /** Arm/refresh ONE counter: resolve the standing order's elapsed beats,
    *  roll a fresh shelf at the counter's bracket, seat the reserved rows.
    *  Every arm site and the restock walk through here — one builder. */
-  armVendorStock(key: string): VendorEntry[] { return settlementArmVendorStock(this.nativeSettlementHost(),key); }
+  armVendorStock(key: string): VendorEntry[] { return settlementArmVendorStock(this.buyerSettlementHost(),key); } // THE SHELF PER BUYER: the buyer's own seed
 
   vendorQualityPieces(key: string): number { return settlementVendorQualityPieces(this.nativeSettlementHost(),key); }
 
@@ -43749,7 +43748,7 @@ export class World {
    *  a reserved row wearing the commission mark and stops the watch — the
    *  order stands fulfilled-pending-purchase; releasing the find unbought
    *  resumes the watch (you turned down the find, not the order). */
-  private resolveCommission(key: string): void { return settlementResolveCommission(this.nativeSettlementHost(),key); }
+  private resolveCommission(key: string): void { return settlementResolveCommission(this.buyerSettlementHost(),key); } // THE SHELF PER BUYER: the buyer's own beats
 
   /** P(one restock beat surfaces the gem): the slot's kind share × the gem's
    *  weight share of ITS pool (the roller's own filter + weights at the
@@ -44025,6 +44024,18 @@ export class World {
   /** THE SHELF PER BUYER's seed limb: the buyer's character inside a hosted purchase
    *  (null elsewhere, so the solo and co-op seeds stay what they were). */
   shelfCharKey(): string | null { return this.shelfBuyer ? charKeyOf(this.shelfBuyer) : null; }
+
+  /** THE SHELF PER BUYER's seed: the counters' native rolls (engine/nativeSettlementServices.ts,
+   *  kept verbatim) seed off `host.manifest.seed` with the counter and the beat; inside a
+   *  hosted buyer's scope the host they read wears the buyer's own seed (the world seed
+   *  folded with its character), so each buyer draws its own shelf and its own standing
+   *  order's finds from the same beat. Everywhere else it is the one host (THE SOLO DIGEST). */
+  private buyerSettlementHost(): NativeSettlementHost {
+    const host = this.nativeSettlementHost(), buyer = this.shelfCharKey();
+    if (!buyer) return host;
+    const seed = (this.manifest.seed ^ hashStr(`vendorbuyer:${buyer}`)) >>> 0;
+    return Object.create(host, { manifest: { value: { seed }, enumerable: true } }) as NativeSettlementHost;
+  }
 
   /** The hero a shelf rolls for: the buyer's on a hosted world, the hero elsewhere. */
   private shelfHero(): Actor { return this.shelfBuyer ? this.seatHero(this.shelfBuyer) : this.player; }

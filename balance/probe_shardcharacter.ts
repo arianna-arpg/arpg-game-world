@@ -23,7 +23,8 @@
 //      different postings, hold and turn in their own hands, each paid at its own feet, the
 //      board history in each hero's own keys;
 //   E  THE SHELF PER BUYER: two buyers at one counter are dealt from the same beat, read
-//      different shelves at their own levels, a purchase changes the buyer's alone, THE
+//      different shelves (at one level too: each its own character's seed) at their own
+//      levels, a purchase changes the buyer's alone, THE
 //      PATRON'S HOLD keys by character and rides the world save so, and each socket hears
 //      its own shelf row (SeatW.vd) and never another's, where its counter stands (a unit
 //      with no counter ships none; home again it rides on its beat).
@@ -441,11 +442,18 @@ const KEY = questWorldKey(w.manifest.seed, false);
 // ================================================= E: THE SHELF PER BUYER ==
 {
   const smith = w.actors.find(a => !a.dead && a.defId && MONSTERS[a.defId]?.npcRole === 'vendor')!;
+  const shelfOf2 = (s: Seat): VendorEntry[] => w.withBuyer(s, () => w.vendorStock);
+  const armedOf = (s: Seat): number | undefined => w.seatShelves.get(s.id)?.armed.brandt;
+  // The character's own seed: at one level, one beat and one kit, two buyers still draw two shelves.
+  w.seatHero(sA).level = 12; w.seatHero(sB).level = 12;
+  w.restockVendor();
+  await runTicks(2);
+  const evenA = JSON.stringify(shelfOf2(sA).map(entryFace)), evenB = JSON.stringify(shelfOf2(sB).map(entryFace));
+  check('E seed: at one level two buyers still read different shelves (each its own character\'s draw)',
+    shelfOf2(sA).length > 0 && shelfOf2(sB).length > 0 && evenA !== evenB, `A ${shelfOf2(sA).length}, B ${shelfOf2(sB).length} wares at level 12`);
   w.seatHero(sA).level = 4; w.seatHero(sB).level = 30;
   w.restockVendor(); // the counter's own restock re-deals every buyer's shelf here, at its level now
   await runTicks(2);
-  const shelfOf2 = (s: Seat): VendorEntry[] => w.withBuyer(s, () => w.vendorStock);
-  const armedOf = (s: Seat): number | undefined => w.seatShelves.get(s.id)?.armed.brandt;
   const beat = Math.floor(w.time / (wx.restockSeconds() as number));
   const a0 = JSON.stringify(shelfOf2(sA).map(entryFace)), b0 = JSON.stringify(shelfOf2(sB).map(entryFace));
   check('E shelf: two buyers at one counter are dealt from the same beat and read different shelves',

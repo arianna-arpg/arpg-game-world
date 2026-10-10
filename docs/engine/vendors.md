@@ -205,10 +205,13 @@ fn)` scopes a counter act (a buy, a reserve, the standing order, the arm) to its
 buyer, and inside it `vendorStock`, `chandlerStock`, the armed beats and
 `vendorHolds` are the buyer's own (`World.seatShelves`, a SEAT row the hand-off
 carries; `World.charVendorHolds`, keyed by character). The roll keeps THE
-FOREORDAINED SHELF with one more limb: `vendorshelf:<counter>:<beat>:<character>`
-(and the standing order's `vendorhold:<counter>:<gem>:<beat>:<character>`), so a
-buyer's shelf is a pure function of (seed, counter, beat, character): the same
-beat for everyone, a different draw for each. It rolls at the buyer's level (the
+FOREORDAINED SHELF over the buyer's own seed: the counters' native rolls
+(`vendorshelf:<counter>:<beat>`, the standing order's
+`vendorhold:<counter>:<gem>:<beat>`) read a host whose world seed is folded with
+`vendorbuyer:<character>` (`World.buyerSettlementHost`; the native bodies in
+`engine/nativeSettlementServices.ts` stay verbatim), so a buyer's shelf is a pure
+function of (seed, counter, beat, character): the same beat for everyone, a
+different draw for each. It rolls at the buyer's level (the
 gear shelf's ilvl and the gem bracket read the buyer's hero) against the buyer's
 own carried gems, and every gate (the trade gate, the wares, quality and lock
 rungs, the support share, the rush rungs) reads `World.gateAccountOf(seat)`, ONE
