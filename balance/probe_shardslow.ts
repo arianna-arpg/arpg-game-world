@@ -84,7 +84,8 @@ import { loadAccount, loadAccountAsync } from '../src/meta/persistence';
 import { storageKey } from '../src/buildProfile';
 import { loadCharacter, serializeCouchGuest, type CharacterSave } from '../src/meta/character';
 import { readTravelingVessel, ShardVesselLink } from '../src/meta/shardVessel';
-import { seatLadderOf } from '../src/engine/shardRoads'; // S: THE WILDS POCKET ROAD (THE SEAT'S LADDER)
+import { SHARD_ROADS_CFG, seatLadderOf } from '../src/engine/shardRoads'; // S: THE WILDS POCKET ROAD (THE SEAT'S LADDER, the sealed realm word)
+import type { StateSnapshot } from '../src/net/snapshot';
 
 // THE STREAM LAW: the slow half seeds its own stream (the fast half's B section seeds that file's).
 const restoreRandom = seedGlobalRandom(0x5a4e);
@@ -742,7 +743,9 @@ restoreRandom();
 // (the hearth's cellar hatch) mints its pocket in the keeper and walks alone into a
 // woken pocket unit while the keeper stays on the surface; the pocket's way out lands
 // it back in the keeper at the hatch under its own exit grace; a town portal cast in a
-// wild pocket carries it to the settlement (THE HEARTH ALIAS) and back down to its spot.
+// wild pocket carries it to the settlement (THE HEARTH ALIAS) and back down to its spot;
+// and THE REALM ROADS (W4) under THE WILDS LAW: a breach in a wild pocket keeps its sealed
+// word (a dimension's gate zone is graph ground, the keeper's surface on the wilds).
 {
   type Mouth = { pos: { x: number; y: number }; kind: string; seed: number; mouthTier?: number };
   const SSEED = 0x0ddba11; // the probe's wilds (Q's seed), one fixed world
@@ -751,6 +754,8 @@ restoreRandom();
   await runTicks(sh, 60);
   const portS = await sh.listen(0, '127.0.0.1');
   const cs = new WsTransport();
+  const sSnaps: StateSnapshot[] = [];
+  cs.onState(st => { sSnaps.push(st); if (sSnaps.length > 400) sSnaps.splice(0, 200); });
   const welcome = await cs.connect(`ws://127.0.0.1:${portS}`, { name: 'Wyn', classId: 'warrior' });
   const id = welcome.self;
   await waitFor(() => !!sh.units.seatOf(id), sh, 60);
@@ -818,6 +823,21 @@ restoreRandom();
     const back = await waitFor(() => sh.units.unitOf(id)?.world.zone.id === wildPocket && sh.units.unitOf(id) !== sh.units.keeper, sh, Math.ceil(3 * SHARD_CFG.tickHz));
     check('S wilds portal: its return passage carries it back down to the wild pocket at the portal\'s spot',
       !!rp && back && dist(seat.actor.pos, castAt) < 40, `${Math.round(dist(seat.actor.pos, castAt))} px from the cast`);
+    // THE REALM ROADS (W4) under THE WILDS LAW: no World of its own can stand in a dimension's gate
+    // zone on the wilds, so a breach in a wild pocket answers with the sealed word, once, no ring.
+    if (wu) {
+      const ww = wu.world as unknown as { breachPos: unknown };
+      const bp = wu.world.clampPos(vec(seat.actor.pos.x + 90, seat.actor.pos.y), 30);
+      ww.breachPos = bp;
+      const n0 = sSnaps.length;
+      put(wu.world, bp.x, bp.y);
+      await runTicks(sh, Math.ceil(2 * SHARD_CFG.tickHz));
+      const heard = new Set(sSnaps.slice(n0).map(st => st.seats[id]?.fn).filter(f => f?.text === SHARD_ROADS_CFG.words.realm).map(f => f!.at)).size;
+      check('S wilds breach: a dimension\'s crossing keeps its sealed word on the Unbroken Wilds (THE WILDS LAW), heard once, no ring, nobody moves',
+        heard === 1 && sh.units.unitOf(id) === wu && sSnaps.slice(n0).length > 10 && sSnaps.slice(n0).every(st => !st.seats[id]?.rd),
+        `${heard} × '${SHARD_ROADS_CFG.words.realm}'`);
+      ww.breachPos = null;
+    }
     check('S wilds: no fault in any unit along the roads', sh.faults === 0, `faults ${sh.faults}`);
   } finally {
     cs.leave();

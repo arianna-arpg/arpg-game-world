@@ -7,11 +7,5 @@ export const nativeInstalledOtherWorldHash = "aa3c2da1358d22106f293ec4b9115e0f5c
 /** Reviewed integration of seamless de2fa0e2 and shard e80265c0. The World
  * merge is automatic: hosted seats, roads, persistence and runtime foci are
  * intentional additions. Original providers and cold boot receipts below the
- * World guard remain checked independently; unknown future edits still fail.
- * Reviewed W8b (THE PARTY THAT READS, 2026-10-10): World.partyDowns and
- * World.netRevive, THE MERCY no longer waiting once THE RELEASE or THE
- * BLEED-OUT ends a held down, a downed seat's interact press as the release on a
- * hosted world, and a hosted shell's revive ring read from its row are
- * intentional additions; so is THE PAIR STRIDE in World.losCached (72da43c3),
- * reviewed at the merge of shard-world into W8b. */
-export const nativeInstalledShardWorldHash = "1bfba6bd309d7f2d441a61824d075ac437d667e9245552699639db6f68cd3092";
+ * World guard remain checked independently; unknown future edits still fail. */
+export const nativeInstalledShardWorldHash = "8ead611168fa07f81d70cc19fe26020e9356dbf88593033829133a18260ee2f5";

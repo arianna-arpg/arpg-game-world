@@ -30,7 +30,8 @@
 import { angleTo, vec, type Vec2 } from '../core/math';
 import type { Actor } from './actor';
 import type { BuffEffect } from './skills';
-import type { Seat, World } from './world';
+import { LOS_PAIR_STRIDE, type Seat, type World } from './world';
+import type { MusterRoad } from './shardMuster';
 
 /** The unit fabric's dials (unblessed; docs/engine/shard.md "THE SIM UNITS, W1"). */
 export const UNIT_CFG = {
@@ -55,7 +56,8 @@ export const UNIT_CFG = {
   arrivalGraceSec: 3,
 };
 
-/** 'keeper' | a zone id | `${zoneId}#${instance}` (instances are W4's). */
+/** 'keeper' | a zone id | `${zoneId}#${instance}` (an instance is a party's own
+ *  pocket, TENANCY: its party's id, or `seat:<id>` for an ungrouped seat). */
 export type UnitKey = string;
 
 /** One rung of a pocket's way home (World.caveReturn's own shape). */
@@ -81,7 +83,9 @@ export interface RoadTicket {
    *  RETREAT LAW, engine/shardRoads.ts). Absent = the source zone; null = no
    *  edge (a waypoint or a town portal arrives by none, as loadZone's own). */
   from?: string | null;
-  /** Card 25 B's instance key (W4). */
+  /** TENANCY (card 25, W4): the destination's instance key, resolved by the
+   *  registry from the pocket's own word (ZoneDef.tenancy 'party' = the
+   *  traveller's party); a road never sets it. */
   instance?: string;
   /** A pocket's way home, installed on the unit a wake boots. */
   ladder?: { caveReturn: CaveRung | null; caveStack: CaveRung[] };
@@ -96,8 +100,10 @@ export interface RoadTicket {
    *  under its pin (the escape's word over the arrival, the waypoint's clear
    *  bubble on a fresh wake). */
   after?: (w: World, seat: Seat, woke: boolean) => void;
-  /** THE MUSTER RING (W4). */
-  muster?: { party: string; at: Vec2 };
+  /** THE MUSTER RING (W4): a ticket a ring fired for one member standing on it
+   *  (its party, and its slot: the landing spreads by it, so the party lands
+   *  side by side). */
+  muster?: { party: string; slot: number };
 }
 
 /** THE LINK (World.shardWorld, HOST class): published by the host into every
@@ -120,11 +126,20 @@ export interface ShardWorldLink {
   /** THE ROADS PER PLAYER (W2): the live seed of the unit hosting `zoneId`, or
    *  undefined when none is awake (the town portal's faded check reads an
    *  awake source's live seed; its stored memory row is stale until it sleeps). */
-  liveSeed?(zoneId: string): number | undefined;
+  liveSeed?(zoneId: string, seatId?: string): number | undefined;
   /** THE ROADS PER PLAYER (W2): THE HEARTH SEAT (the keeper's classic hearth,
    *  or the wilds settlement's spawn): the town portal's anchor where the
    *  hearth stands no waypoint. */
   hearth?(): { x: number; y: number; tier: number };
+  /** THE MUSTER RING (W4, server/muster.ts): a seat's finished travel road,
+   *  offered to its party's muster before it moves anyone. True = the road waits
+   *  at a ring (raised now, or the party's own already standing here); false =
+   *  the seat travels alone now (an independent, a party with no other member
+   *  standing in this unit, a non-leader under the 'leader' raise). */
+  muster?(seat: Seat, road: MusterRoad): boolean;
+  /** THE MUSTER RING (W4): does a ring of this seat's party stand in its unit?
+   *  Then its roads wait for the party: standing on the ring is joining it. */
+  mustering?(seatId: string): boolean;
 }
 
 /** The clocks THE ONE CLOCK pins into a unit at every entry. */
@@ -215,6 +230,7 @@ export const SHARD_UNIT_FIELDS: Readonly<Record<string, UnitFieldRow>> = {
   partyMates: { cls: 'host' }, partyRows: { cls: 'host' }, partyRev: { cls: 'host' },
   timeflow: { cls: 'host', note: 'each World\'s own; the host sets allowHold and chronoScope' },
   seatCorpseMarks: { cls: 'host', note: 'THE CORPSE ON THE CHART: a seat\'s own remembered bodies for its journal row' },
+  musterRings: { cls: 'host', note: 'THE MUSTER RING: the rings the host\'s muster desk publishes into each unit (W4)' },
   // ---- SEAT: moved or dropped by THE HAND-OFF (the seat-keyed reason)
   lastInputSeq: S('move-seat-id', 'the ack continues'), spentPresses: S('move-seat-id', 'a press a gate spent never fires in B'),
   seatKillTally: S('move-seat', 'the fall\'s reckoning'), townPortalArrival: S('move-seat-id'),
@@ -263,6 +279,16 @@ export const SHARD_UNIT_FIELDS: Readonly<Record<string, UnitFieldRow>> = {
 export const PINNED_FIELDS: readonly string[] = Object.entries(SHARD_UNIT_FIELDS)
   .filter(([, r]) => r.cls === 'alias' || r.cls === 'counter').map(([f]) => f);
 
+/** THE INSTANCE FORGETS (TENANCY, card 25, W4): the alias rows an instanced
+ *  unit keeps its OWN of, never pinned. The shared memory map: its wake's load
+ *  finds no shared row and mints fresh, its sleep and THE PERSIST CAPTURE write
+ *  nothing the world keeps (the shared row is keyed by zone id; two instances
+ *  would overwrite each other). The world's clears: a party's clear of its own
+ *  instance stays its own and never opens the next party's fresh instance at
+ *  its wake (whether it should also count for the world is card 25's open row).
+ *  Its own copies stand empty from the unit's construction and die with it. */
+export const INSTANCE_OWN_FIELDS: ReadonlySet<string> = new Set(['zoneMemory', 'completedObjectives']);
+
 // ---------------------------------------------------------------------------
 // THE PIN (plan D1, D4): ~40 reference copies per entry, exact under the
 // shard's single thread. Reached through an index cast (`sim` is readonly at
@@ -272,8 +298,9 @@ export const PINNED_FIELDS: readonly string[] = Object.entries(SHARD_UNIT_FIELDS
 type Fields = Record<string, unknown>;
 const fields = (w: World): Fields => w as unknown as Fields;
 
-/** THE PIN's entry ledger: the keeper's values a unit entered with. */
-export interface PinEntry { readonly at: unknown[] }
+/** THE PIN's entry ledger: the keeper's values a unit entered with, and the
+ *  pinned fields the unit keeps its own of (THE INSTANCE FORGETS). */
+export interface PinEntry { readonly at: unknown[]; readonly own?: ReadonlySet<string> }
 
 /** THE ONE CLOCK's reading of a World (the keeper's, at tick start). */
 export function unitClocks(w: World): UnitClocks {
@@ -281,18 +308,21 @@ export function unitClocks(w: World): UnitClocks {
 }
 
 /** THE PIN in: the keeper's world-level values onto the unit, the clocks at
- *  the given reading (never copied back). */
-export function pinIn(keeper: World, unit: World, clocks: UnitClocks): PinEntry {
+ *  the given reading (never copied back). `own` names the pinned fields this
+ *  unit keeps its own of (an instance: INSTANCE_OWN_FIELDS). */
+export function pinIn(keeper: World, unit: World, clocks: UnitClocks, own?: ReadonlySet<string>): PinEntry {
   const k = fields(keeper), u = fields(unit);
   const at: unknown[] = new Array(PINNED_FIELDS.length);
   for (let i = 0; i < PINNED_FIELDS.length; i++) {
-    const f = PINNED_FIELDS[i], v = k[f];
+    const f = PINNED_FIELDS[i];
+    if (own?.has(f)) { at[i] = u[f]; continue; } // THE INSTANCE FORGETS: its own copy stands
+    const v = k[f];
     at[i] = v;
     u[f] = v;
   }
   u.time = clocks.time;
   u.inputClock = clocks.inputClock;
-  return { at };
+  return own ? { at, own } : { at };
 }
 
 /** THE PIN out: every pinned field the unit reassigned (or counted on) goes
@@ -301,7 +331,7 @@ export function pinOut(keeper: World, unit: World, entry: PinEntry): void {
   const k = fields(keeper), u = fields(unit);
   for (let i = 0; i < PINNED_FIELDS.length; i++) {
     const f = PINNED_FIELDS[i], v = u[f];
-    if (v !== entry.at[i]) k[f] = v;
+    if (v !== entry.at[i] && !entry.own?.has(f)) k[f] = v;
   }
 }
 
@@ -522,8 +552,8 @@ export function detachSeat(w: World, seatId: string): SeatPacket | { refused: st
     else if (live.length !== list.length) claims.set(tid, live);
   }
   const los = f.losMemo as Map<number, unknown>;
-  for (const key of [...los.keys()]) {
-    if (carriedIds.has(Math.floor(key / 1_000_000)) || carriedIds.has(key % 1_000_000)) los.delete(key);
+  for (const key of [...los.keys()]) { // THE PAIR STRIDE: the memo packs a pair as a.id * LOS_PAIR_STRIDE + b.id
+    if (carriedIds.has(Math.floor(key / LOS_PAIR_STRIDE)) || carriedIds.has(key % LOS_PAIR_STRIDE)) los.delete(key);
   }
   const lite: { defId: string; plies: number }[] = [];
   const pool = w.lite;

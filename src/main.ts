@@ -58,7 +58,8 @@ import { CAMERA_FOLLOW_CFG, newCameraFollow } from './render/camera'; // THE SMO
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
 import { WsTransport, defaultShardUrl, shardResumeFor, rememberedShardSession, WS_TRANSPORT_CFG } from './net/ws';
-import { wildsShellActive, wildsShellAttach, wildsShellDetach, wildsShellStream, wildsShellZone } from './net/wildsClient';
+import { wildsShellActive, wildsShellAttach, wildsShellDetach, wildsShellRemember, wildsShellRing, wildsShellStream, wildsShellZone } from './net/wildsClient';
+import { ShardCrossing } from './net/crossing'; // THE ONE CROSSING: one cover over a hosted world's arrival
 import { readTravelingVessel, ShardVesselLink, travelNote } from './meta/shardVessel';
 import { openCoopLobby } from './ui/lobby';
 import { PartyPanel } from './ui/party';
@@ -480,6 +481,9 @@ function startGame(
   const massExpedition = worldmassRequested();
   const prologueDue = !massExpedition && (sceneDue(account, 'prologue')
     || new URLSearchParams(location.search).has('prologue'));
+  // THE ONE CROSSING (net/crossing.ts): a server-bound wake mints its vessel on a World that
+  // stands no local town (no zone loads, nothing is drawn); the shard's hearth is the far side.
+  const serverBound = !!pendingServer && !prologueDue;
   // The LIFE-CONTRACT (meta/modes.ts): class select passes the sworn mode.
   // A roster mode binds an account VESSEL at creation — the character saves
   // cross-session into its own slot from its first breath.
@@ -519,11 +523,11 @@ function startGame(
   // skips the re-walk: the flasks arrive learned, barred, and brimming at
   // first breath. No-op until that first graduation — and placed BEFORE
   // persistRun so the baseline snapshot already carries them.
-  world.createPlayer(classDef, { modeId: mode.id, charId, name: charName, kit: resolveClassKit(account, classDef, kitPicks) });
+  world.createPlayer(classDef, { modeId: mode.id, charId, name: charName, kit: resolveClassKit(account, classDef, kitPicks), load: !serverBound });
   // THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
   // deal the ultimate + gauge debuts into the fresh bag, unlearned.
   world.dealLabArts();
-  if (massExpedition) world.startWorldMass();
+  if (massExpedition && !serverBound) world.startWorldMass();
   // THE SKILL GRAFT (meta/unlocks.ts kind 'graft'): the armed charge spends
   // HERE — where the run truly begins — before the baseline save, so the
   // snapshot carries the grafted gem from the first breath. A pick without
@@ -549,14 +553,18 @@ function startGame(
   // played once, ever — and its staging ground lives off-graph, so even a
   // mid-scene autosave resumes at the ordinary wake.
   if (prologueDue) sceneBegin(world, 'prologue');
-  running = true;
+  running = !serverBound; // THE ONE CROSSING: the minting world is no run; the shard's shell starts the loop
   // THE LOGIN THROUGH MU (card 22): a server-bound wake travels at once — the vessel
   // just saved at the bedside is the one the shard seats, and this run stays its home.
   if (pendingServer && !prologueDue) {
     const { url } = pendingServer; pendingServer = null;
+    crossingWake(); // THE ONE CROSSING: this wake's cover stands from the flush to the hero's streamed ground
     void (async () => {
-      try { await flushCharacterSaves(); await connectToShard(url, classDef.id, { charId }); } // THE WAKE'S WORD: this charId, mortal or roster
-      catch (e) { toStartMenu(`Could not reach ${url}: ${e instanceof Error ? e.message : String(e)}`); }
+      try {
+        await flushCharacterSaves();
+        if (crossing.phase !== 'wake') return; // THE ONE CROSSING: a cancelled wake never connects
+        await connectToShard(url, classDef.id, { charId }); // THE WAKE'S WORD: this charId, mortal or roster
+      } catch (e) { if (!crossingCancelled(e)) toStartMenu(`Could not reach ${url}: ${e instanceof Error ? e.message : String(e)}`); }
     })();
   }
 }
@@ -579,7 +587,9 @@ async function withLoadingScreen(...args: Parameters<typeof startGame>): Promise
     cancel: cancelLoadingToMenu });
   try {
     await lease.paint(); if (!lease.current) return false;
-    startGame(...args);
+    wakeLease = lease; // THE ONE CROSSING: a server-bound wake keeps this cover to the far side
+    try { startGame(...args); } finally { wakeLease = null; }
+    if (crossingLease === lease) return true;
     lease.update({ label: 'Opening the world' });
     await lease.paint(); if (!lease.current) return false;
     renderer.render(world);
@@ -736,6 +746,8 @@ declare global {
       subscribeToHost: () => void;
       /** THE SMOOTH SHELL (net/shell.ts): the client timeline, for QA reads. */
       wireShell: () => WireShell;
+      /** THE ONE CROSSING (net/crossing.ts): the hosted arrival's cover, for QA reads. */
+      crossing: () => ShardCrossing;
       unsubscribeFromHost: () => void;
       fakeJoin: (classId?: string) => string;
       fakeLeave: (id: string) => void;
@@ -799,6 +811,7 @@ window.__game = {
   applySnap: (s: StateSnapshot, prev?: StateSnapshot | null, alpha = 1) => applySnapshot(world, s, prev, alpha),
   subscribeToHost, unsubscribeFromHost,
   wireShell: () => shell,
+  crossing: () => crossing,
   fakeJoin: (classId) => {
     const id = 'p' + world.seats.length;
     onRemoteJoin({ id, name: 'Remote', classId: classId ?? CLASSES[0].id, isHost: false });
@@ -1873,6 +1886,14 @@ function tick(now: number): void {
       else loadingGate.lease.update({ label: 'Crossing the veil', detail: readiness.required + ' nearby world pages remaining' });
     }
   }
+  // THE ONE CROSSING (net/crossing.ts): a hosted arrival or hand-off holds the world (no input
+  // leaves, nothing of it is drawn) while the shell places and streams beneath the cover; a
+  // hand-off's grace keeps the last frame and the hands' keys, then the screen rises. The
+  // frame that releases it is held too, so the shell places once a frame.
+  if (crossing.covered) {
+    crossingFrame(dt);
+    if (!loadingScreen.active) { pad.poll(now / 1000); pad.endFrame(); input.endFrame(); return; }
+  }
   if (loadingScreen.active) { input.clearForLoading(); pad.poll(now / 1000); pad.endFrame(); net.drainInputs(); return; }
 
   // THE RENDER SCALE: apply the dial/governor, and keep the pointer seam
@@ -2443,6 +2464,7 @@ function pollClientCounters(dt: number): void {
 function subscribeToHost(): void {
   snapshotDispose = net.onState(s => {
     const { metaApplied } = shell.arrive(s, performance.now());
+    crossingSnapshot(s); // THE ONE CROSSING: the first snapshot holding the hero in its zone
     // Re-render the open build panels ONLY when our meta actually CHANGED — not on
     // the periodic heartbeat re-send of identical meta (which would churn the panel
     // and reset any scroll). Compare the serialized own-seat meta to the last one.
@@ -2452,13 +2474,74 @@ function subscribeToHost(): void {
       if (json !== lastMetaJson) { lastMetaJson = json; clientMetaDirty = true; }
     }
   });
-  zoneDispose = net.onZone(z => { if (clientWilds) wildsShellZone(world, z, clientWilds.seed); else applyZone(world, z); });
+  // THE ONE CROSSING: a zone message that beats the shell's standing waits for it (connectToShard
+  // paints the cover first), then lands in startAsClient.
+  zoneDispose = net.onZone(z => { if (shellRising && shellRising === net) crossingZoneHeld = z; else clientZone(z); });
+}
+/** Client: the host's zone message on the shell (the wilds shell's routing, else the classic
+ *  one), and THE ONE CROSSING's word on it: a new zone on a live shell is a hand-off. */
+function clientZone(z: ZoneMsg): void {
+  const shown = world.appliedZoneId;
+  const surface = clientWilds ? wildsShellZone(world, z, clientWilds.seed) : (applyZone(world, z), false);
+  if (net instanceof WsTransport) { crossing.zoneMsg(z.zoneId, surface, shown, performance.now()); crossingCover(); }
+}
+
+/** THE ONE CROSSING (net/crossing.ts, docs/engine/shard.md): one cover over a hosted world's
+ *  arrival (a server-bound wake, a direct join, a reload's return) and its hand-offs (a pocket
+ *  and back), mirrored onto the Mu crossing until the hero stands on streamed ground. */
+const crossing = new ShardCrossing();
+/** The screen the crossing shows: a wake's own entry cover, adopted, else its own. */
+let crossingLease: LoadingLease | null = null;
+/** withLoadingScreen's cover while startGame runs (a server-bound wake adopts it). */
+let wakeLease: LoadingLease | null = null;
+/** The transport whose shell is still rising (welcomed, startAsClient not yet run) and a
+ *  zone message that landed meanwhile (applied the moment the shell stands). */
+let shellRising: WsTransport | null = null;
+let crossingZoneHeld: ZoneMsg | null = null;
+const CROSSING_CANCELLED = 'the crossing was cancelled';
+const crossingCancelled = (e: unknown): boolean => e instanceof Error && e.message === CROSSING_CANCELLED;
+/** Mirror the crossing's view onto the loading screen (begin, update or finish its lease). */
+function crossingCover(): void {
+  const v = crossing.view(performance.now());
+  if (!v.covered) { crossingLease?.finish(); crossingLease = null; return; }
+  if (!v.shown) return; // a hand-off's grace: the last frame stands
+  const status = { label: v.label, ...(v.detail ? { detail: v.detail } : {}),
+    ...(v.total ? { completed: v.completed, total: v.total } : {}) }; // the ring's pages: measured, never faked
+  if (crossingLease?.current) crossingLease.update(status);
+  else crossingLease = loadingScreen.begin({ kind: v.kind, ...status, loadout: account.cosmetics.loadout, cancel: cancelLoadingToMenu });
+}
+function crossingWake(): void {
+  crossing.wake(performance.now());
+  if (wakeLease?.current) crossingLease = wakeLease;
+  crossingCover();
+}
+function crossingEnd(): void {
+  crossing.end(); shellRising = null; crossingZoneHeld = null;
+  crossingCover();
+}
+/** The first snapshot holding our hero in the crossing's zone moves it on. */
+function crossingSnapshot(s: StateSnapshot): void {
+  if (crossing.covered && shell.world === world && net instanceof WsTransport) {
+    crossing.snapshot(s.zoneId, !!s.seats[world.clientSeatId]);
+    crossingCover();
+  }
+}
+/** One held frame: the shell places the hero where the shard has it and streams the ground
+ *  around it, and the page ring may release the cover. */
+function crossingFrame(dt: number): void {
+  if (running && shell.world === world && net instanceof WsTransport) {
+    shell.frame(dt, performance.now());
+    if (clientWilds && wildsShellActive(world)) wildsShellStream(world, world.player.pos);
+    if (crossing.phase === 'ring') { const r = wildsShellRing(world); crossing.ring(r.ready, r.pending, r.total); }
+  }
+  crossingCover();
 }
 /** Client: stop applying broadcasts. */
 function unsubscribeFromHost(): void {
   if (snapshotDispose) { snapshotDispose(); snapshotDispose = null; }
   if (zoneDispose) { zoneDispose(); zoneDispose = null; }
   shell.reset(); lastMetaJson = ''; // THE SMOOTH SHELL: the session's timeline goes with it
+  crossingEnd(); // THE ONE CROSSING: and its cover
 }
 
 /** HOST: a peer joined — spawn a wire-fed seat for them (their class, a
@@ -2826,20 +2909,32 @@ async function connectToShard(url: string, classId: string, wake?: { charId: str
   }
   const ws = new WsTransport();
   const cls = CLASSES.find(c => c.id === (vessel?.classId ?? classId)) ?? CLASSES[0];
+  // THE ONE CROSSING: a direct join, a reload's return and a wake's connect ride one cover.
+  crossing.connect(performance.now()); crossingCover();
   try {
     net = ws;
+    shellRising = ws; // THE ONE CROSSING: zone messages wait for the shell that rises below
     subscribeToHost();
     wireSession();                             // run-lifecycle channel (newRun/hostLeft)
     shardVessel = new ShardVesselLink(ws, account, vessel, () => (net === ws ? world : null),
       { runWiped: () => ui.setContinueSave(null), mayWrite: () => net === ws || !running });
     const { self, seed, worldmass, features, land, resumed } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
       cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel ?? undefined, resume, { resumeOnly: opts?.resumeOnly });
+    // THE ONE CROSSING: the shell's synchronous build waits a painted "Laying the land".
+    if (net !== ws) throw new Error(CROSSING_CANCELLED);
+    crossing.welcome(); crossingCover();
+    await crossingLease?.paint();
+    if (net !== ws) throw new Error(CROSSING_CANCELLED);
     // A resumed seat is the hero that stood there: its class is its roster row's, never this card's.
     const seated = resumed ? CLASSES.find(c => c.id === ws.peers().find(p => p.id === self)?.classId) ?? cls : cls;
     startAsClient(seated, self, seed, worldmass ? { features, land } : undefined);
     lastShardUrl = url;
     return 'connected';
-  } catch (e) { resetToLocal(); throw e; }     // an unreachable server must revert net to LocalTransport
+  } catch (e) {                                // an unreachable server must revert net to LocalTransport
+    const cancelled = net !== ws;              // THE ONE CROSSING: the cover's Cancel already took us to the menu
+    resetToLocal();
+    throw cancelled ? new Error(CROSSING_CANCELLED) : e;
+  }
 }
 
 function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, wilds?: { features: string[]; land?: string }): void { // wilds.land = THE LAND DIGEST
@@ -2869,15 +2964,25 @@ function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, w
   world.clientActionHook = (action) => net.sendSession({ t: 'action', action, seq: shell.noteAction(performance.now()) });
   world.clientOptimistic = (action) => shell.noteOptimistic(action, performance.now());
   world.clientSeatId = selfSeat;
-  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });   // a local shell (getters/camera/HUD) — not the authority
+  // A local shell (getters/camera/HUD), not the authority. THE ONE CROSSING: a wilds shell
+  // stands no local town (load: false); the seed's own hearth is laid by the runtime below.
+  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false, load: !wilds });
   if (wilds) {
     clientWilds = { seed: world.manifest.seed, land: wilds.land };
     wildsShellAttach(world, clientWilds.seed, clientWilds.land); // inert: the land from the seed, the life from the wire; THE LAND DIGEST proves the preset
+    wildsShellRemember(world, account.accountId, clientWilds.seed, clientWilds.land); // THE KEPT MAP: this account's explored cells come back
+  }
+  // THE ONE CROSSING: the shell stands; a zone message that landed while it rose applies now.
+  if (shellRising && shellRising === net) {
+    const held = crossingZoneHeld;
+    shellRising = null; crossingZoneHeld = null;
+    if (held) clientZone(held);
   }
   // THE SMOOTH SHELL: the timeline binds to this shell (its prediction and echo restart, so
   // our input seq realigns with the host's fresh per-seat ack, and the newest snapshot
   // already here is adopted at once); the camera chases the hero on its spring.
   shell.attach(world);
+  if (shell.latest) crossingSnapshot(shell.latest); // THE ONE CROSSING: a snapshot that landed while the shell rose
   renderer.cameraFollow = CAMERA_FOLLOW_CFG.omega > 0 ? newCameraFollow() : null;
   ui.resetRunView();        // the client's shell world is new too — reset the view state
   deathShown = false;
@@ -2900,6 +3005,7 @@ function resetToLocal(): void {
   net = new LocalTransport();
   lastSentZone = '';
   renderer.cameraFollow = null; renderer.linkStrain = 0; // THE SMOOTH SHELL: the hard lock and a calm frame again
+  if (clientWilds) wildsShellDetach(world); // THE KEPT MAP is written; a pocket's parked runtime goes with its session
   clientWilds = null; // a wilds shell's zone routing never outlives its session (the runtime dies with the World on the next adopt)
   partyInvites.length = 0; partyWord = null; partyPanel.close(); // THE PARTY: a session's invitations die with it
 }

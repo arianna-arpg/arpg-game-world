@@ -23,7 +23,8 @@
 //      second-hop minion, a companion and a throng body (lite rows re-spawned), a
 //      construct culled in the source, the party desk, the ack, the kill tally; the
 //      source keeps nothing that names the court (domain and aura sources, a toggled
-//      field refunded, flights, target refs, the four teardown-on-absence controllers);
+//      field refunded, flights, target refs, the sight memo's pairs under THE PAIR STRIDE, the four
+//      teardown-on-absence controllers);
 //      THE SPAWN GRACE holds until the first willed input;
 //   E  THE SLEEP and THE WAKE: THE PERSIST CAPTURE writes an awake unit's live row, a
 //      seatless unit sleeps after unitLinger with its survivors and wounds in memory, a
@@ -42,9 +43,10 @@
 //      home and the waypoint intent to the attuned stone; the road ring (SeatW.rd)
 //      rides only the dwelling seat's row, a shell draws it, and a hosted shell draws
 //      no linger ring at a sealed road;
-//   H  A SEALED ROAD'S WORD (W2): the dock, the harbor board's passage, the Delver's
-//      shaft and an unbuilt realm gate answer an idle seat once per approach on its own
-//      row, build no ring and move nobody; another seat hears nothing;
+//   H  A SEALED ROAD'S WORD (W2): the dock, the harbor board's passage and the Delver's
+//      shaft answer an idle seat once per approach on its own row, build no ring and move
+//      nobody; another seat hears nothing; a realm gate's road is built now (W4): it
+//      dwells, and a gate whose realm is gone moves nobody;
 //   R  THE RUN ROW: a classic shard's save carries its clears and run ledger, and a
 //      save without the row still stands;
 //   J  THE WORLD SWEEP (W3): the solo half first (THE SWEEP-WALK DIGEST, pinned before
@@ -55,7 +57,23 @@
 //      reaches its unit, the forechart's halo charts around both occupied zones, the
 //      deadwake never consumes a zone a unit stands in; THE LINGER FREEZE: a seatless
 //      unit takes no step (its bodies and flights hold), a return resumes it on THE ONE
-//      CLOCK, and a dormant or a downed seat keeps its unit ticking.
+//      CLOCK, and a dormant or a downed seat keeps its unit ticking;
+//   B  (the realm half, W4) THE REALM-WALK DIGEST: a seeded solo hero crosses every realm
+//      gate a world stands and climbs out of each arena, pinned before the seven realm
+//      functions were split into a prep half and a first wake;
+//   G  THE MUSTER RING (W4, card 15 B): a party member's road waits at a ring while a mate
+//      stands in its unit (the row rides every snapshot of the unit, a shell adopts it, the
+//      painter reads gold for the party and faint for a stranger); the mate steps on and
+//      the party travels in one drain into one unit, side by side; at the wait's end the
+//      ring moves whoever stands on it and the rest follow later alone into the same unit;
+//      an independent crosses at once; the raiser walking off, or the party dissolving,
+//      lapses it; under the 'leader' raise a non-leader goes alone; TENANCY (card 25): a
+//      party pocket wakes one unit per party, and THE INSTANCE FORGETS (no shared row read
+//      at its wake, none written at its sleep, its clears its own, a fresh instance next);
+//   K  THE REALM ROADS (W4): every realm gate's road (a demon rift, a crusade sanctum, the
+//      Necropolis, a fracture rift, a court's door, a breach) carries a seat into a woken
+//      realm unit with its first wake applied there once and its context there alone, a
+//      way home at the gate, a second seat into the same realm, and the way out back home.
 import ts from 'typescript';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -68,16 +86,19 @@ import { WsTransport, shardResumeFor, type ShardResume } from '../src/net/ws';
 import type { StateSnapshot, ZoneMsg } from '../src/net/snapshot';
 import type { SessionMsg } from '../src/net/transport';
 import { NullInput, type MetaAction, type PlayerInput } from '../src/net/intent';
-import { World, type Seat } from '../src/engine/world';
-import type { Actor, ConstructState } from '../src/engine/actor';
-import { resetActorIdCounter } from '../src/engine/actor';
+import { LOS_PAIR_STRIDE, World, type Seat } from '../src/engine/world';
+import { Actor, resetActorIdCounter, type ConstructState } from '../src/engine/actor';
 import { makeSkillInstance } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import { mintCave } from '../src/engine/worldgen';
 import { rollItem } from '../src/engine/itemgen';
 import { PINNED_FIELDS, SHARD_UNIT_FIELDS, UNIT_CFG, entryLanding } from '../src/engine/shardUnits';
 import { SHARD_ROADS_CFG, seatDoorOf, seatLadderOf } from '../src/engine/shardRoads';
+import { musterRingIsOwn } from '../src/engine/shardMuster';
+import { MUSTER_CFG } from '../server/muster';
+import { registerSidezone, sidezoneOf, sidezonePocketId } from '../src/data/sidezones';
 import { applyOwnSeatRows } from '../src/net/seatView';
+import { applySnapshot } from '../src/net/snapshot';
 import type { Doodad } from '../src/engine/levelgen';
 import { makeAccount, ensureAccountId, type Account } from '../src/meta/account';
 import { serializeCouchGuest, type CharacterSave } from '../src/meta/character';
@@ -87,6 +108,7 @@ import { SKILLS } from '../src/data/skills';
 import { COOP_SCALING } from '../src/data/coop';
 import { START_ZONE, type ZoneDef } from '../src/data/zones';
 import { FACTIONS } from '../src/data/monsters';
+import { BREACH } from '../src/packages/defs/breach';
 import { FORECHART_CFG, forechartSource } from '../src/world/forechart';
 import { WORLDSTATE_CFG } from '../src/meta/worldstate';
 import { makeSimWorld } from '../src/sim/arena';
@@ -391,6 +413,158 @@ function sweepWalk(): { digest: string; hash: string; legs: Record<string, unkno
     && /fallen/.test(String(legs.holds)), JSON.stringify(legs));
   check('J solo: THE SWEEP-WALK DIGEST is the constant W3 committed before any sweep was split (THE SOLO INVARIANT)',
     walk.hash === SWEEP_WALK_HASH, `${walk.hash} ← ${walk.digest.slice(0, 160)}…`);
+}
+
+// ===================================== B (the realm half): THE REALM-WALK DIGEST ==
+// THE REALM-WALK DIGEST, committed by W4 BEFORE the realm roads were split into a prep
+// half and a first-wake half: a seeded solo hero walks through every realm gate a world
+// stands (a demon rift, a crusade sanctum, the Necropolis, a fracture rift, a court's door,
+// then a cave breach into the dimension below), each staged with a real event behind it
+// (the overlays' dev seams; a rift's row and a court's door built from data), and climbs
+// back out of each arena. The digest (the hops, each realm's population, its first wake's
+// boss or seals and its context, the hero, the actors, the random draws, the clock, the
+// run ledger and the dimensions found) must print the same constant after the split.
+// It runs after the sweep walk, so the digests pinned before it never see its worlds.
+type RealmKind = 'demon' | 'crusade' | 'necropolis' | 'fracture' | 'court' | 'breach';
+const REALM_KINDS: readonly RealmKind[] = ['demon', 'crusade', 'necropolis', 'fracture', 'court', 'breach'];
+/** Stand a realm gate of `kind` at `at` in the World's own zone with a real event behind it
+ *  (the overlays' dev seams; a fracture rift's row and a court's door fabricated from data).
+ *  Returns the gate's key, or null when the zone will not hold the event. */
+function stageRealm(w: World, kind: RealmKind, at: { x: number; y: number }): string | null {
+  const zid = w.zone.id, view = w.devOverlayView(), sim = w.sim, p = w.clampPos(vec(at.x, at.y), 30);
+  switch (kind) {
+    case 'demon': {
+      const dfz = sim.demonFieldFor(w.zone.dimension);
+      if (!dfz || !(dfz.invasionOn(zid) || dfz.devIgnite(view, zid))) return null;
+      const info = dfz.invasionOn(zid);
+      if (!info) return null;
+      (priv(w).demonPortals as unknown[]).push({ pos: p, invId: info.id });
+      return `demon:${info.id}`;
+    }
+    case 'crusade': {
+      const cf = sim.crusadeField;
+      if (!cf || !(cf.crusadeOn(zid) || cf.devIgnite(view, zid))) return null;
+      const info = cf.crusadeOn(zid);
+      if (!info) return null;
+      (priv(w).crusadePortals as unknown[]).push({ pos: p, crusadeId: info.crusadeId });
+      return `crusade:${info.crusadeId}`;
+    }
+    case 'necropolis': {
+      const df = sim.deadwakeField;
+      if (!df || !(df.necropolisInfo() || df.devForceNecropolis(view, zid))) return null;
+      (priv(w).necropolisPortals as unknown[]).push({ pos: p });
+      return 'necropolis';
+    }
+    case 'fracture': {
+      const v = sim.fractureField?.surge().variants.find(x => !!x.capstone);
+      if (!v?.capstone) return null;
+      const id = `probe_rift_${zid}`;
+      (priv(w).fractureRifts as unknown[]).push({ id, pos: p, faction: v.faction, color: '#9a7ad0', variant: v.variant, level: w.zone.level, cap: v.capstone });
+      return `fracture:${id}`;
+    }
+    case 'court': {
+      const def = BREACH.encounters![0];
+      const lordId = def.court!.lords[0];
+      w.encounters.push({ def, scale: def.scales[0], pos: p, phase: 'door', radius: 60, timer: 30, maxTimer: 30, spawnTimer: 99,
+        kills: 0, bonusUsed: 0, spawned: new Set<number>(), lordId, doorAt: vec(p.x, p.y) });
+      return `court:${def.id}:${lordId}`;
+    }
+    case 'breach': {
+      priv(w).breachPos = p;
+      return w.realmGates().find(x => x.kind === 'breach')?.key ?? null;
+    }
+  }
+}
+/** The realm's first wake, as a census: its bosses (by the arena tags), its seals, its context. */
+const realmCensus = (w: World): { bosses: string; seals: number; ctx: string } => ({
+  bosses: w.actors.filter(a => !a.dead && !!a.tag && /realm|crusade_leader|necropolis_boss|fracture_boss|court_vessel/.test(a.tag)).map(a => a.tag).sort().join('+'),
+  seals: (priv(w).arenaWard as { seals: unknown[] } | null)?.seals.length ?? 0,
+  ctx: ['realmContext', 'crusadeRealmContext', 'necropolisRealmContext', 'fractureRealmContext'].filter(f => !!priv(w)[f]).join('+'),
+});
+const REALM_WALK_HASH = '15f0f829';
+const REALM_WALK_SEED = 0x4ea1a;
+function realmWalk(): { digest: string; hash: string; legs: Record<string, unknown> } {
+  const radius0 = COOP_SCALING.shareRadius, budget0 = FORECHART_CFG.beatBudgetMs;
+  COOP_SCALING.shareRadius = 0; FORECHART_CFG.beatBudgetMs = Infinity; // a solo world, the pinned governor
+  // The process's actor id counter where the walks before this one left it: the shard below
+  // deals ids from it (they salt per-body draws), so this walk hands it back untouched.
+  const ids0 = new Actor('the counter', 'enemy', { x: 0, y: 0 }).id;
+  const restore = seedGlobalRandom(REALM_WALK_SEED);
+  const seeded = Math.random;
+  let draws = 0;
+  Math.random = () => { draws++; return seeded(); };
+  try {
+    resetActorIdCounter();
+    const account = makeAccount();
+    const w = new World(account, Object.freeze(buildManifest(account, REALM_WALK_SEED)));
+    w.createPlayer(CLASSES.find(c => c.id === 'warrior')!, { name: 'Realmer', startingCompanions: false, startingFlasks: false });
+    const hero = (): Actor => w.player;
+    hero().invulnerable = true;
+    hero().level = 30; w.recalcSeat(w.localSeat); // the packages' level gates open
+    const hops: string[] = [w.zone.id];
+    const idle = (): void => { w.localSeat.lastActedAt = -1e3; w.localSeat.lastMovedAt = -1e3; hero().push = null; hero().casting = null; };
+    const step = (secs: number, done?: () => boolean): boolean => {
+      for (let t = 0; t < secs; t += 1 / 30) {
+        w.update(1 / 30);
+        if (hops[hops.length - 1] !== w.zone.id) hops.push(w.zone.id);
+        if (done?.()) return true;
+      }
+      return !!done?.();
+    };
+    const stand = (x: number, y: number): void => { const at = w.clampPos(vec(x, y), hero().radius); hero().pos.x = at.x; hero().pos.y = at.y; idle(); };
+    const calm = (): void => { for (const a of w.actors) if (a.team === 'enemy' && !a.dead) a.passive = true; };
+    const out = w.exits.find(e => e.to !== '?')!;
+    stand(out.pos.x, out.pos.y);
+    const exited = step(10, () => w.zone.id !== START_ZONE);
+    const field = w.zone.id;
+    // The field and its charted neighbours host the realms in turn (one event's ground never another's).
+    const sources = [field, ...Object.keys(w.zoneMap).filter(id => id !== field && id !== START_ZONE && !w.zoneMap[id].special
+      && w.zoneMap[id].objective.kind !== 'safe' && !id.startsWith('cave_') && !w.visited.has(id) && w.zoneMap[field].exits.some(e => e.to === id))];
+    const legs: Record<string, unknown> = { exited, sources: sources.length };
+    const rec: string[] = [];
+    let si = 0;
+    for (const kind of REALM_KINDS) {
+      let key: string | null = null;
+      for (let tries = 0; tries < sources.length && !key; tries++) {
+        const src = sources[si++ % sources.length];
+        if (w.zone.id !== src) { w.loadZone(src); hops.push(w.zone.id); }
+        calm();
+        stand(w.arena.w / 2, w.arena.h / 2);
+        key = stageRealm(w, kind, { x: hero().pos.x + 120, y: hero().pos.y });
+      }
+      const gate = key ? w.realmGates().find(g => g.key === key) : undefined;
+      const source = w.zone.id;
+      if (!gate) { legs[kind] = 'no gate'; continue; }
+      gate.enter(); // the solo crossing: both halves in the old order
+      hops.push(w.zone.id);
+      const c = realmCensus(w);
+      rec.push(`${kind}:${w.zone.id}:${w.actors.length}:${c.bosses}:${c.seals}:${c.ctx}`);
+      legs[kind] = w.zone.id !== source;
+      step(1);
+      if (kind === 'breach') continue; // the dimension below is the walk's end
+      calm();
+      const back = w.exits.find(e => e.to === w.caveReturn?.zoneId);
+      if (back) stand(back.pos.x, back.pos.y);
+      legs[kind + 'Back'] = !!back && step(10, () => w.zone.id === source);
+    }
+    const p = hero().pos;
+    const fnv = (s: string): string => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); };
+    const digest = [hops.join('>'), rec.join(' / '), `${Math.round(p.x)},${Math.round(p.y)}`, `actors ${w.actors.length}`, `draws ${draws}`,
+      `t ${w.time.toFixed(2)}`, `ledger ${JSON.stringify(w.ledger)}`, `dims ${[...(priv(w).discoveredDimensions as Set<string>)].join(',')}`].join(' | ');
+    return { digest, hash: fnv(digest), legs };
+  } finally {
+    Math.random = seeded; restore();
+    COOP_SCALING.shareRadius = radius0; FORECHART_CFG.beatBudgetMs = budget0;
+    resetActorIdCounter(ids0);
+  }
+}
+{
+  const walk = realmWalk();
+  const legs = walk.legs;
+  check('B realm walk: the solo hero crosses every realm gate (a rift, a sanctum, the Necropolis, a fracture rift, a court\'s door, a breach) and climbs out of each arena',
+    !!legs.exited && REALM_KINDS.every(k => legs[k] === true) && REALM_KINDS.filter(k => k !== 'breach').every(k => legs[k + 'Back'] === true), JSON.stringify(legs));
+  check('B realm walk: THE REALM-WALK DIGEST is the constant W4 committed before the realm roads were split (THE SOLO INVARIANT)',
+    walk.hash === REALM_WALK_HASH, `${walk.hash} ← ${walk.digest.slice(0, 220)}…`);
 }
 
 // ====================================================== A: THE DERIVED CENSUS ==
@@ -729,6 +903,10 @@ let crossSeed = 0;
   const ids = { hero: hero.id, minion: minion.id, sub: sub.id, companion: companion?.id, throng: throngBody?.id };
   const bondsA = priv(uw.companionBonds).states as Map<Actor, unknown>;
   const bonded = !!companion && bondsA.has(companion);
+  // The source's sight memo holds pairs naming the court (THE PAIR STRIDE packs each one).
+  uw.losCached(hero, foe); uw.losCached(foe, hero); uw.losCached(minion, foe);
+  const memoKeys = (): number[] => [...(priv(uw).losMemo as Map<number, unknown>).keys()];
+  const memoNamed = memoKeys().length;
   // THE HAND-OFF: out of the Crossroads unit, into the keeper's hearth.
   const home = units.travel(B.id, hearth);
   const kw = k;
@@ -752,6 +930,10 @@ let crossSeed = 0;
     !hero.sheet.hasSource('domain:probe') && !domainZone?.domainAffected?.has(hero) && !hero.sheet.hasSource(`aura:probe_ward:${foe.id}`)
     && !foe.sheet.hasSource(`aura:probe_ward:${hero.id}`) && minion.sheet.hasSource(`aura:probe_ward:${hero.id}`) && !hero.sheet.hasSource('altar:0'));
   check('D leaks: the source\'s monsters drop their target ref on the court', foe.aiTargetId === undefined && foe.aiTargetRef === undefined);
+  const courtIds = new Set([hero.id, minion.id, sub.id]);
+  check('D leaks: the source\'s sight memo keeps no pair naming a carried body (decoded by THE PAIR STRIDE)',
+    memoNamed >= 3 && !memoKeys().some(key => courtIds.has(Math.floor(key / LOS_PAIR_STRIDE)) || courtIds.has(key % LOS_PAIR_STRIDE)),
+    `${memoNamed} pairs before the hand-off, ${memoKeys().length} after`);
   const ctl = (w: World): boolean => [hero, minion, companion!].some(a => (priv(w.guardArts).states as Map<Actor, unknown>).has(a)
     || (priv(w.assaults).courts as Map<Actor, unknown>).has(a));
   check('D leaks: the bond state moved whole (the source holds none), and the source\'s guard arts and courts hold no carried body',
@@ -1117,8 +1299,8 @@ const notesHeard = (cl: Client, from: number, text: string): number =>
     notesHeard(H2, v3.m2, W.descent) === 1 && units.unitOf(H2.id) === hu && hw.zone.id === zone);
   away(); await runTicks(10);
   const v4 = await visit(gateAt, 1.5);
-  check('H gate: a realm gate whose road is not built yet answers too (nothing stays silently shut)',
-    notesHeard(H2, v4.m2, W.realm) === 1 && units.unitOf(H2.id) === hu && H2.snaps.slice(v4.m2).every(s => !s.seats[H2.id]?.rd));
+  check('H gate: a realm gate\'s road is built now (W4): the idle seat dwells it (its ring rides its own row) and hears no sealed word, and a gate whose realm is gone moves nobody',
+    notesHeard(H2, v4.m2, W.realm) === 0 && units.unitOf(H2.id) === hu && H2.snaps.slice(v4.m2).some(s => s.seats[H2.id]?.rd?.[3] === 'realm_gate:demon'));
   hw.zone.port = port0;
   hw.doodads = hw.doodads.filter(d => d !== dock && d !== board);
   priv(hw).descentSite = null;
@@ -1339,6 +1521,253 @@ const notesHeard = (cl: Client, from: number, text: string): number =>
     for (const cl of [J1, J3]) cl.c.leave();
     await waitFor(() => units.allSeats().length === 0, sec(VESSEL_CFG.deathBeatSec) + 240);
   }
+}
+
+// =================================================== G: THE MUSTER RING (W4) ==
+/** Tick until `cond` holds, running `each` before every tick (a calm source keeps a dwell unshoved). */
+async function waitWith(cond: () => boolean, maxTicks: number, each: () => void): Promise<boolean> {
+  for (let i = 0; i < maxTicks; i++) { if (cond()) return true; each(); host.tick(DT); await yieldIO(); }
+  return cond();
+}
+{
+  const linger0 = UNIT_CFG.unitLinger, wait0 = MUSTER_CFG.waitSec, raise0 = MUSTER_CFG.raise;
+  const M = await join('Maren'), N = await join('Nils'), O = await join('Orla'), P = await join('Pell');
+  await runTicks(2, () => { for (const cl of [M, N, O, P]) step(cl); });
+  /** Group two seats (the asker founds the party and leads it); the party's id. */
+  const group = (lead: Client, mate: Client): string => {
+    host.parties.invite(lead.id, mate.id, k.time); host.parties.accept(mate.id, k.time);
+    return host.parties.partyOf(lead.id)?.id ?? '';
+  };
+  let party = group(M, N);
+  const zone = nearZones(hearth).find(id => !units.unitFor(id) && !memoryOf().has(id)) ?? nearZones(hearth)[0];
+  const gu = units.travel(M.id, zone)!;
+  for (const cl of [N, O, P]) units.travel(cl.id, zone);
+  const gw = gu.world;
+  pacify(gw);
+  const sM = seatOf(M.id)!, sN = seatOf(N.id)!, sO = seatOf(O.id)!, sP = seatOf(P.id)!;
+  for (const s of [sM, sN, sO, sP]) s.actor.invulnerable = true;
+  const mouthAt = gw.clampPos(vec(gw.arena.w / 2, gw.arena.h / 2), 16);
+  const mouths = priv(gw).caveEntrances as { pos: { x: number; y: number }; seed: number; kind: string }[];
+  mouths.push({ pos: vec(mouthAt.x, mouthAt.y), seed: 0x5eed6, kind: 'cave_entrance' });
+  // Spots off the ring (the farthest corners first) and one on it, beside the mouth.
+  const corners = [[0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]].map(([fx, fy]) => gw.clampPos(vec(gw.arena.w * fx, gw.arena.h * fy), 16))
+    .filter(p => dist(p, mouthAt) > MUSTER_CFG.radiusPx + 60).sort((a, b) => dist(b, mouthAt) - dist(a, mouthAt));
+  const far = corners[0] ?? gw.clampPos(vec(mouthAt.x, mouthAt.y + 600), 16), far2 = corners[1] ?? far;
+  const near = gw.clampPos(vec(mouthAt.x + 150, mouthAt.y + 30), 16);
+  const calmIn = (): void => { for (const w of units.worlds()) pacify(w); };
+  // G1 THE RAISE: Maren's road at the mouth waits for the party while Nils stands in the unit off the ring.
+  place(sN, far.x, far.y); place(sO, near.x, near.y); place(sP, far2.x, far2.y); place(sM, mouthAt.x, mouthAt.y);
+  const raised0 = host.musters.raised, h0 = units.handoffs;
+  const up = await waitWith(() => host.musters.size === 1, sec(3), calmIn);
+  const nM = M.snaps.length; // the snapshots after the raise
+  await runTicks(6);
+  const row = gw.musterRings?.[0];
+  check('G raise: a party member\'s finished road waits at a ring on the road while its mate stands in the unit (nobody moves)',
+    up && host.musters.raised === raised0 + 1 && units.handoffs === h0 && units.unitOf(M.id) === gu && units.unitOf(N.id) === gu
+    && !!row && row.party === party && row.need === 2 && row.have === 1 && row.r === MUSTER_CFG.radiusPx && Math.abs(row.x - Math.round(mouthAt.x)) <= 1
+    && dist(far, mouthAt) > MUSTER_CFG.radiusPx, `${JSON.stringify(row)}; the mate ${Math.round(dist(sN.actor.pos, mouthAt))} px off`);
+  const lastM = M.snaps.at(-1), lastN = N.snaps.at(-1), lastO = O.snaps.at(-1);
+  check('G wire: the ring rides every snapshot of its unit (mu), the raiser\'s, its mate\'s and a stranger\'s alike',
+    [lastM, lastN, lastO].every(s => s?.mu?.length === 1 && s.mu[0].party === party && s.mu[0].have === 1 && s.mu[0].need === 2
+      && s.mu[0].left > 0 && s.mu[0].left <= MUSTER_CFG.waitSec && s.mu[0].wait === MUSTER_CFG.waitSec),
+    JSON.stringify(lastO?.mu));
+  check('G wire: the raiser builds no road ring of its own while it musters (its roads wait for the party)',
+    M.snaps.length > nM + 1 && M.snaps.slice(nM + 1).every(s => !s.seats[M.id]?.rd));
+  // The shell's half: the row adopts onto a render World, and the painter reads gold for the party, faint for a stranger.
+  const shell = new World(makeAccount(), Object.freeze(buildManifest(makeAccount(), 0x5e11e)));
+  shell.createPlayer(CLASSES[0], { startingCompanions: false, startingFlasks: false });
+  let adopted = false;
+  try { if (lastO) { applySnapshot(shell, lastO); adopted = shell.musterRings?.length === 1 && shell.musterRings[0].party === party; } } catch (e) { adopted = false; console.log(String(e)); }
+  shell.clientSeatId = M.id;
+  const gold = !!shell.musterRings?.[0] && musterRingIsOwn(shell, shell.musterRings[0]);
+  shell.clientSeatId = O.id;
+  const faint = !!shell.musterRings?.[0] && !musterRingIsOwn(shell, shell.musterRings[0]);
+  check('G draw: a shell adopts the ring, and its painter reads the viewer\'s own party\'s (gold) apart from a stranger\'s (faint)', adopted && gold && faint);
+  // G2 THE FIRE: the mate steps onto the ring; the party travels together in one drain, into one unit.
+  const h1 = units.handoffs, fired0 = host.musters.fired;
+  place(sN, near.x, near.y + 40);
+  const fired = await waitWith(() => units.unitOf(M.id) !== gu, sec(2), calmIn);
+  const pu = units.unitOf(M.id)!;
+  check('G fire: the mate steps on the ring and the party travels in one drain into one unit (a stranger on the ring stays)',
+    fired && units.unitOf(N.id) === pu && pu !== gu && pu.world.inCave && units.handoffs === h1 + 2 && host.musters.fired === fired0 + 1
+    && units.unitOf(O.id) === gu && units.unitOf(P.id) === gu, `${pu?.key}; +${units.handoffs - h1} hand-offs`);
+  await runTicks(3);
+  check('G fire: the party lands side by side, and the ring is gone from its unit and the wire',
+    dist(sM.actor.pos, sN.actor.pos) >= MUSTER_CFG.landSpreadPx * 0.5 && host.musters.size === 0 && !gw.musterRings && !O.snaps.at(-1)?.mu,
+    `${Math.round(dist(sM.actor.pos, sN.actor.pos))} px apart`);
+  if (lastO) {
+    const quiet = O.snaps.at(-1);
+    if (quiet) applySnapshot(shell, quiet);
+  }
+  check('G draw: a snapshot without the row clears the shell\'s rings (absent = none stands)', !shell.musterRings);
+  // G3 THE WAIT: the ring waits the dial's seconds, then moves whoever stands on it; the mate off it follows later alone.
+  units.travel(M.id, zone); units.travel(N.id, zone);
+  MUSTER_CFG.waitSec = 2; // the rig's clock (the dial is the law's, not its number)
+  place(sN, far.x, far.y); place(sM, mouthAt.x, mouthAt.y);
+  const up3 = await waitWith(() => host.musters.size === 1, sec(3), calmIn);
+  const t3 = k.time;
+  const alone = await waitWith(() => units.unitOf(M.id) !== gu, sec(4), calmIn);
+  check('G wait: at the wait\'s end the ring moves whoever stands on it (the raiser) and the mate off it stays',
+    up3 && alone && k.time - t3 >= MUSTER_CFG.waitSec - 0.1 && units.unitOf(M.id) === pu && units.unitOf(N.id) === gu,
+    `${(k.time - t3).toFixed(2)} s`);
+  MUSTER_CFG.waitSec = wait0;
+  place(sN, mouthAt.x, mouthAt.y);
+  const later = await waitWith(() => units.unitOf(N.id) !== gu, sec(3), calmIn);
+  check('G wait: the mate left behind takes the road alone later (no member stands with it), into the same unit (shared tenancy)',
+    later && units.unitOf(N.id) === pu && host.musters.size === 0);
+  // G4 an independent's road takes it alone at once.
+  const r4 = host.musters.raised;
+  place(sP, mouthAt.x, mouthAt.y);
+  const pAlone = await waitWith(() => units.unitOf(P.id) !== gu, sec(3), calmIn);
+  check('G independent: an ungrouped seat\'s road takes it alone at once (no ring is raised), into the same unit',
+    pAlone && host.musters.raised === r4 && units.unitOf(P.id) === pu);
+  // G5 THE LAPSE: the raiser walking off its ring.
+  for (const cl of [M, N, P]) units.travel(cl.id, zone);
+  place(sN, far.x, far.y); place(sP, far2.x, far2.y); place(sM, mouthAt.x, mouthAt.y);
+  await waitWith(() => host.musters.size === 1, sec(3), calmIn);
+  const l5 = host.musters.lapsed, h5 = units.handoffs;
+  place(sM, far2.x + 40, far2.y);
+  await runTicks(3, calmIn);
+  check('G lapse: the raiser walking off its ring lapses it, and nobody moves',
+    host.musters.size === 0 && host.musters.lapsed === l5 + 1 && units.handoffs === h5 && units.unitOf(M.id) === gu && units.unitOf(N.id) === gu);
+  // G6 THE LAPSE: the party dissolving (a party of two dissolves when one leaves); the raiser goes alone.
+  place(sM, mouthAt.x, mouthAt.y);
+  await waitWith(() => host.musters.size === 1, sec(3), calmIn);
+  const l6 = host.musters.lapsed;
+  host.parties.leave(N.id);
+  await runTicks(1, calmIn);
+  const dissolved = host.musters.size === 0 && host.musters.lapsed === l6 + 1;
+  const solo = await waitWith(() => units.unitOf(M.id) !== gu, sec(3), calmIn);
+  check('G lapse: the party dissolving lapses its ring, and the raiser (an independent now) takes its road alone',
+    dissolved && solo && units.unitOf(N.id) === gu);
+  // G7 THE RAISE under 'leader': a non-leader's road takes it alone.
+  units.travel(M.id, zone);
+  party = group(M, N);
+  MUSTER_CFG.raise = 'leader';
+  place(sM, far.x, far.y); place(sN, mouthAt.x, mouthAt.y);
+  const r7 = host.musters.raised;
+  const nAlone = await waitWith(() => units.unitOf(N.id) !== gu, sec(3), calmIn);
+  MUSTER_CFG.raise = raise0;
+  check('G leader: under raise \'leader\' a non-leader\'s road takes it alone (no ring), the leader staying',
+    nAlone && host.musters.raised === r7 && units.unitOf(M.id) === gu && host.parties.partyOf(M.id)?.leader === M.id);
+  // G8 TENANCY (card 25): a party pocket wakes one unit per party; THE INSTANCE FORGETS.
+  units.travel(N.id, zone);
+  registerSidezone({ ...sidezoneOf('cave_entrance')!, kind: 'probe_party_cave', tenancy: 'party' });
+  mouths.splice(mouths.findIndex(m => m.seed === 0x5eed6), 1);
+  mouths.push({ pos: vec(mouthAt.x, mouthAt.y), seed: 0x5eed7, kind: 'probe_party_cave' });
+  const pocket = sidezonePocketId(gw.zone.id, 'probe_party_cave', 0x5eed7);
+  const anyRow = [...memoryOf().values()][0];
+  if (anyRow) memoryOf().set(pocket, { ...anyRow, seed: 0x7777, savedAt: k.time } as typeof anyRow); // a shared row no instance may read
+  place(sN, near.x, near.y); place(sM, mouthAt.x, mouthAt.y); place(sP, far2.x, far2.y);
+  const inA = await waitWith(() => units.unitOf(M.id)?.world.zone.id === pocket, sec(3), calmIn);
+  const ia = units.unitOf(M.id)!;
+  check('G tenancy: a party pocket wakes the party\'s own instance (one unit keyed by the party), the whole party in it',
+    inA && ia.key === `${pocket}#${party}` && ia.instance === party && units.unitOf(N.id) === ia && k.caveMap[pocket]?.tenancy === 'party', ia?.key);
+  check('G tenancy: THE INSTANCE FORGETS at its wake: the shared row is never restored (the instance mints fresh)',
+    !!anyRow && priv(ia.world).currentZoneSeed !== 0x7777, String(priv(ia.world).currentZoneSeed));
+  place(sP, mouthAt.x, mouthAt.y);
+  const inB = await waitWith(() => units.unitOf(P.id)?.world.zone.id === pocket, sec(3), calmIn);
+  const ib = units.unitOf(P.id)!;
+  check('G tenancy: an ungrouped seat at the same mouth wakes its own instance of the same ground (one unit per party)',
+    inB && ib !== ia && ib.key === `${pocket}#seat:${P.id}` && ib.world.zone.id === ia.world.zone.id, ib?.key);
+  units.run(ia, w => { w.completedObjectives.add(pocket); });
+  check('G tenancy: a clear inside an instance stays its own (the world\'s clears and the other instance never hold it)',
+    !k.completedObjectives.has(pocket) && units.run(ib, w => !w.completedObjectives.has(pocket)) && units.run(ia, w => w.completedObjectives.has(pocket)));
+  check('G tenancy: the live seed answers per party (a portal back finds its own instance), and no shared unit stands there',
+    units.liveSeedOf(pocket, M.id) === priv(ia.world).currentZoneSeed && units.liveSeedOf(pocket, P.id) === priv(ib.world).currentZoneSeed
+    && units.liveSeedOf(pocket) === undefined && units.unitFor(pocket) === undefined);
+  for (const cl of [M, N, P]) units.travel(cl.id, zone);
+  UNIT_CFG.unitLinger = 0;
+  const s0 = units.sleeps;
+  await runTicks(2, calmIn);
+  UNIT_CFG.unitLinger = linger0;
+  check('G tenancy: THE INSTANCE FORGETS at its sleep: both instances drop and capture nothing (the shared row stands as planted)',
+    !units.unit(ia.key) && !units.unit(ib.key) && units.sleeps >= s0 + 2 && memoryOf().get(pocket)?.seed === 0x7777 && !k.completedObjectives.has(pocket));
+  place(sN, near.x, near.y); place(sM, mouthAt.x, mouthAt.y);
+  const again = await waitWith(() => units.unitOf(M.id)?.world.zone.id === pocket, sec(3), calmIn);
+  const ic = units.unitOf(M.id)!;
+  check('G tenancy: the party\'s next crossing wakes a fresh instance (its old clear forgotten)',
+    again && ic !== ia && ic.key === ia.key && units.run(ic, w => !w.completedObjectives.has(pocket)));
+  memoryOf().delete(pocket);
+  for (const cl of [M, N, O, P]) units.travel(cl.id, hearth);
+  await runTicks(2);
+  for (const cl of [M, N, O, P]) cl.c.leave();
+  await waitFor(() => units.allSeats().length === 0, sec(VESSEL_CFG.deathBeatSec) + 120);
+}
+
+// =================================================== K: THE REALM ROADS (W4) ==
+// Every realm gate's road on a hosted world: the PREP half in the zone the seat leaves
+// (the act's stamps, the arena minted), the realm's FIRST WAKE in the realm unit, once
+// (its seals or boss, its context: never on the source), the way home a rung at the gate
+// from the seat's own door; a second seat walks into the same awake realm and the first
+// wake is not run again; the realm's way out lands the seat back at its gate.
+{
+  const X = await join('Kestrel'), Y = await join('Lark');
+  await runTicks(2, () => { step(X); step(Y); });
+  const sX = seatOf(X.id)!, sY = seatOf(Y.id)!;
+  sX.actor.invulnerable = true; sY.actor.invulnerable = true;
+  const calmIn = (): void => { for (const w of units.worlds()) pacify(w); };
+  const realmOf: Record<RealmKind, (w: World) => boolean> = {
+    demon: w => w.zone.id.startsWith('cave_realm_'), crusade: w => w.zone.id.startsWith('cave_crusade_'),
+    necropolis: w => w.zone.id.startsWith('cave_necropolis_'), fracture: w => w.zone.id.startsWith('cave_fracture_'),
+    court: w => w.zone.id.startsWith('cave_court_'), breach: w => !w.inCave && (w.zone.dimension ?? 'surface') !== 'surface',
+  };
+  const TEAR = 'the world tears open…';
+  const tears = (): number => (k.notices as { text: string }[]).filter(n => n.text === TEAR).length;
+  const used = new Set<string>();
+  for (const kind of REALM_KINDS) {
+    let su: SimUnit | null = null, key: string | null = null, at = { x: 0, y: 0 };
+    for (const zid of nearZones(hearth)) {
+      if (used.has(zid) || units.unitFor(zid)) continue;
+      used.add(zid);
+      const cand = units.travel(X.id, zid);
+      if (!cand) continue;
+      units.travel(Y.id, zid);
+      key = units.run(cand, w => {
+        pacify(w);
+        at = w.clampPos(vec(w.arena.w / 2, w.arena.h / 2), 30);
+        return stageRealm(w, kind, at);
+      });
+      if (key) { su = cand; break; }
+    }
+    if (!su || !key) { check(`K ${kind}: a realm gate stands in a source unit`, false, 'no zone held the event'); continue; }
+    const sw = su.world, gkey = key;
+    const gate = units.run(su, w => w.realmGates().find(g => g.key === gkey));
+    if (!gate) { check(`K ${kind}: the staged gate is listed`, false, gkey); continue; }
+    place(sY, gate.pos.x + 300, gate.pos.y + 220); place(sX, gate.pos.x, gate.pos.y);
+    const w0 = units.wakes, t0 = tears();
+    const crossed = await waitWith(() => units.unitOf(X.id) !== su, sec(4), calmIn);
+    const ru = units.unitOf(X.id)!, rw = ru.world;
+    const c1 = realmCensus(rw), src = realmCensus(sw);
+    const ladder = seatLadderOf(rw, sX);
+    const contexted = kind === 'demon' || kind === 'crusade' || kind === 'necropolis' || kind === 'fracture';
+    check(`K ${kind}: the gate's road carries the seat alone into a woken realm unit, its first wake applied there (the source untouched)`,
+      crossed && ru.role === 'unit' && realmOf[kind](rw) && units.wakes === w0 + 1 && units.unitOf(Y.id) === su
+      && (kind === 'breach' ? tears() === t0 + 1 : (c1.bosses !== '' || c1.seals > 0))
+      && (contexted ? c1.ctx !== '' && src.ctx === '' : c1.ctx === '') && src.bosses === '' && src.seals === 0,
+      `${rw.zone.id}: bosses ${c1.bosses || 'none'}, seals ${c1.seals}, context ${c1.ctx || 'none'} (source ${src.ctx || 'none'}); tears +${tears() - t0}`);
+    check(`K ${kind}: its way home is a rung at the gate from the seat's own door (the breach consumes the ladder)`,
+      kind === 'breach' ? !ladder.caveReturn && !ladder.caveStack.length
+        : ladder.caveReturn?.zoneId === sw.zone.id && dist(ladder.caveReturn.pos, gate.pos) < 1,
+      JSON.stringify(ladder.caveReturn));
+    place(sY, gate.pos.x, gate.pos.y);
+    const followed = await waitWith(() => units.unitOf(Y.id) !== su, sec(4), calmIn);
+    const c2 = realmCensus(rw);
+    check(`K ${kind}: a second seat walks into the same awake realm, and the first wake is never applied again`,
+      followed && units.unitOf(Y.id) === ru && units.wakes === w0 + 1 && c2.bosses === c1.bosses && c2.seals === c1.seals
+      && (kind !== 'breach' || tears() === t0 + 1), `bosses ${c1.bosses} → ${c2.bosses}, seals ${c1.seals} → ${c2.seals}`);
+    if (kind !== 'breach') {
+      const out = rw.exits.find(e => e.to === sw.zone.id);
+      if (out) place(sX, out.pos.x, out.pos.y);
+      const home = !!out && await waitWith(() => units.unitOf(X.id) === su, sec(4), calmIn);
+      check(`K ${kind}: the realm's way out lands the seat back in the source unit at its gate`,
+        home && dist(sX.actor.pos, gate.pos) < 80, `${Math.round(dist(sX.actor.pos, gate.pos))} px from the gate`);
+    }
+  }
+  for (const cl of [X, Y]) units.travel(cl.id, hearth);
+  await runTicks(2);
+  for (const cl of [X, Y]) cl.c.leave();
+  await waitFor(() => units.allSeats().length === 0, sec(VESSEL_CFG.deathBeatSec) + 120);
 }
 
 await host.stop({ persist: false });
