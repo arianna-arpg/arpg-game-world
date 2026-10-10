@@ -106,6 +106,23 @@ failures and four existing spacing warnings. Simulation smoke: 25 episodes pass.
 The critic found no blocking issue within this preparation scope; it reviewed
 code and proof structure rather than independently rerunning these checks.
 
+The isolated staged snapshot, committed as b80f295d, also passes the built-client
+course: real movement, native cave entry, same-hero durable Continue, exact return
+and native structure frames. The continued cave image was inspected. The local
+client harness waits for an actual restored player before inspection and retains
+all original identity/state assertions. This is regression evidence for the
+current playable path; the new full-area assembly is not activated there.
+
+A combined build containing concurrent uncommitted ambient-pack changes refused
+Continue with "Missing native formation". The independent critic traced it to
+plain ambient squadId/squadLeader assignment without corresponding MassEnemySave
+metadata or reconstruction in restoreNativeBody. Dormancy records the formation
+identity for awake actors too, then correctly refuses a restored actor lacking
+its formation. The isolated committed snapshot has no ambientPack code and passes
+the same client course. The population work must retain and consistently remap
+its squad metadata across saving/paging; do not weaken dormancy validation.
+Those concurrent edits were preserved and are not part of this checkpoint.
+
 ## Next integration boundary
 
 This checkpoint is production preparation, not playable full-content activation.
