@@ -1,3 +1,11 @@
+The playable Mu loading-screen foundation is documented in docs/ui/loading-screen.md.
+LoadingScreen owns cancellable status, retry, input isolation and token-safe cleanup;
+SpiritRun owns rewardless gates and three travel directions. Entry/Continue descend;
+native page readiness chooses a horizontal crossing. It shares Mu/wardrobe painting.
+Synchronous generation is still synchronous: yield bounded work or use workers.
+Verify spiritrun, character resume probes, all types, sim smoke, boot smoke and
+the isolated balance/loading-screen-ui.cjs course after a scoped build.
+
 NativeSceneBirthComposition wires all 124 original birth ports to concrete native
 owners and the complete 36-row registry. Bind one census, geometry, population,
 resident factory, objective state, campaign and carried transition; binding never

@@ -95,6 +95,7 @@ export const Z_LADDER = {
   padPointer: 99999, // ui/padpointer.ts — the pad's cursor ring
   drag: 100000,      // .dnd-ghost — the lifted payload chip
   forge: 100000,     // dev/entityForge.ts + dev/glyphForge.ts (+1 = inner pickers)
+  loading: 200000,   // loading-screen: opaque input-owning cover; fatal errors stay above it
   error: 999999,     // ui/errorOverlay.ts — mirrored by the index.html boot trap
 } as const;
 

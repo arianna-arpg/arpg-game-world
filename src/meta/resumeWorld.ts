@@ -19,6 +19,7 @@ export interface PreparedCharacterWorld {
 export async function prepareCharacterWorld(account: Account, resume: CharacterResume, options: {
   isCurrent: () => boolean; signal?: AbortSignal; fallbackSeed: number;
   spawn: ResumeSpawn; roster?: { charId: string; modeId: string };
+  loadingStage?: (label: string) => Promise<void>;
 }): Promise<PreparedCharacterWorld> {
   const baseline = JSON.stringify(serializeAccount(account));
   const current = (): boolean => !options.signal?.aborted && options.isCurrent()
@@ -27,6 +28,8 @@ export async function prepareCharacterWorld(account: Account, resume: CharacterR
   const fields = characterResumeFields(resume), cls = CLASSES.find(c => c.id === fields.classId);
   if (!cls) throw Error('The saved character class is unavailable');
   const manifest = reconcileManifest(fields.expedition, account, options.fallbackSeed);
+  if (options.loadingStage) await options.loadingStage('Restoring the world');
+  if (!current()) throw Error('Continue was superseded');
   const candidate = World.staged(structuredClone(account), Object.freeze(manifest));
   let rollback = (): void => {};
   let published = false, discarded = false;
@@ -59,6 +62,8 @@ export async function prepareCharacterWorld(account: Account, resume: CharacterR
         candidate.resumeSpawn(options.spawn, ws.player);
       }
     });
+    if (options.loadingStage) await options.loadingStage('Recalling nearby world pages');
+    if (!current()) throw Error('Continue was superseded');
     // An active cave owns the player pose now. Its surface page claims remain
     // bound, but surface hydration waits for the actual mouth return.
     if (candidate.massRuntime) await candidate.massRuntime.prepareResumeNeighborhood(candidate,
