@@ -5,11 +5,11 @@ export type SpiritDirection = 'down' | 'right' | 'left';
 export const SPIRIT_RUN = Object.freeze({
   length: 1000, halfWidth: 280, playerU: 230, radius: 15,
   spawnPadding: 80, arrivalDistance: 240, arrivalSeconds: 0.55,
-  baseSpeed: 210, speedPerGate: 0.09, maxSpeed: 4.6,
+  baseSpeed: 210, speedPerGate: 0.06, maxSpeed: 4.6,
   steerSpeed: 490, gateGapMin: 68, gateGapMax: 250,
   gateRim: 24, gateThickness: 22, gateSpacingMin: 620, gateSpacingMax: 820,
   gateSpacingTightMin: 340, gateSpacingTightMax: 440, routeMargin: 38,
-  maxPickups: 6, pickupStagger: 38, pickupGateMargin: 72, pickupRadius: 12, pickupFade: 0.28,
+  maxPickups: 6, pickupStagger: 38, pickupGateMargin: 72, pickupRadius: 12, pickupFade: 0.28, choiceFade: 0.75,
   currentHalfLength: 30, currentHalfWidth: 12, currentExtra: 0.8,
   currentSeconds: 2.2, currentEase: 0.45, maxBoostSpeed: 5.4,
   burstSeconds: 0.75, maxBursts: 18, surgeSeconds: 1.2,
@@ -28,7 +28,7 @@ export interface SpiritOpening { lane: number; width: number }
 export interface SpiritGate { id: number; u: number; spacing: number; openings: SpiritOpening[]; resolved: boolean; hit: boolean }
 export interface SpiritPickup {
   id: number; gate: number; u: number; lane: number; kind: SpiritPickupKind; flame: number;
-  state: 'live' | 'taken'; fade: number;
+  state: 'live' | 'taken' | 'released'; fade: number;
 }
 export interface SpiritCurrent {
   id: number; gate: number; placement: 'opening' | 'between'; u: number; lane: number; taken: boolean; fade: number;
@@ -36,6 +36,9 @@ export interface SpiritCurrent {
 export interface SpiritBurst { u: number; lane: number; kind: SpiritPickupKind | 'gate' | 'impact' | 'current'; age: number }
 export interface SpiritControls { axis: number; target?: number }
 const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
+const smooth = (value: number): number => {
+  const t = clamp(value, 0, 1); return t * t * (3 - 2 * t);
+};
 const nearest = (openings: readonly SpiritOpening[], lane: number): SpiritOpening =>
   openings.reduce((a, b) => Math.abs(a.lane - lane) <= Math.abs(b.lane - lane) ? a : b);
 
@@ -53,11 +56,16 @@ export function spiritGateSolids(gate: SpiritGate): { low: number; high: number 
 /** A fixed mist veil at the far edge, plus a gentle initial scene reveal.
  * Painting only: opacity never changes collision, timing or random choices. */
 export function spiritArrivalAlpha(u: number, time: number, reducedMotion = false): number {
-  const c = SPIRIT_RUN, smooth = (value: number): number => {
-    const t = clamp(value, 0, 1); return t * t * (3 - 2 * t);
-  };
+  const c = SPIRIT_RUN;
   return smooth((c.length + c.spawnPadding - u) / c.arrivalDistance)
     * (reducedMotion ? 1 : smooth(time / c.arrivalSeconds));
+}
+
+/** Unchosen flames dissolve together; their full silhouette and glow share the fade. */
+export function spiritPickupAlpha(pickup: SpiritPickup, time: number, reducedMotion = false): number {
+  if (pickup.state === 'taken') return 0;
+  const choice = pickup.state === 'released' ? 1 - smooth(pickup.fade / SPIRIT_RUN.choiceFade) : 1;
+  return spiritArrivalAlpha(pickup.u, time, reducedMotion) * choice;
 }
 
 let spiritSequence = 0;
@@ -216,6 +224,11 @@ export class SpiritRun {
         if (def.boostGates) this.surge = c.surgeSeconds;
         this.burst(pickup.kind);
         pickup.state = 'taken'; pickup.fade = 0;
+        // A gate interval offers one flame choice. Retire siblings immediately,
+        // even within this substep, while their art gently fades out in place.
+        for (const other of this.pickups) if (other.gate === pickup.gate && other.state === 'live') {
+          other.state = 'released'; other.fade = 0;
+        }
       }
       for (const current of this.currents) {
         current.u -= travel;
@@ -227,7 +240,7 @@ export class SpiritRun {
       }
       this.fillHorizon();
       this.gates = this.gates.filter(g => g.u > -80);
-      this.pickups = this.pickups.filter(p => p.u > -80 && (p.state === 'live' || p.fade < c.pickupFade));
+      this.pickups = this.pickups.filter(p => p.u > -80 && (p.state === 'live' || p.fade < (p.state === 'released' ? c.choiceFade : c.pickupFade)));
       this.currents = this.currents.filter(b => b.u > -80 && (!b.taken || b.fade < c.pickupFade));
     }
   }
