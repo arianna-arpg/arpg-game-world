@@ -67,7 +67,7 @@ app.whenReady().then(async () => {
     const rect = document.querySelector('#mu-loading-screen canvas').getBoundingClientRect();
     const scale = Math.min(rect.width / 1000, rect.height / 560);
     crash = snap.passed >= 2;
-    const lane = crash ? (gate?.gap > 0 ? -255 : 255) : gate?.gap ?? 0;
+    const lane = crash ? 255 : gate?.openings.reduce((a, b) => Math.abs(a.lane - snap.lane) <= Math.abs(b.lane - snap.lane) ? a : b).lane ?? 0;
     document.querySelector('#mu-loading-screen').dispatchEvent(new PointerEvent('pointermove', { clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 + lane * scale, bubbles: true }));
     if (snap.hits) return snap;
     await new Promise(r => setTimeout(r, 16));
@@ -95,46 +95,46 @@ app.whenReady().then(async () => {
    return { cancelled, active };
   });
   assert.deepEqual(heldConfirm, { cancelled: 0, active: true }); report.checks.push('held confirm cannot immediately cancel entry');
-  // Real pointer collection: choices remain exclusive, all visual offers can
-  // be taken, score tracks the clear/pickup ledger and Wild Wisps accelerate.
+  // Play the generated branching course with real pointer input. Follow optional
+  // encounters only when the chosen opening remains reachable; the pure probe
+  // separately exhausts their generated routes at the boosted speed cap.
   const choices = await run(async () => {
    window.__qaLease = __game.loading.begin({ kind: 'travel', direction: 'right', label: 'Following the wandering souls' });
-   const start = performance.now(), seen = new Set(), taken = new Set(), ledger = [], widths = new Map();
-   let previous = __game.loading.snapshot, selected;
-   while (performance.now() - start < 35000) {
+   const start = performance.now(), counts = new Set(), placements = new Set(), widths = new Map();
+   let gateId, lane = 0;
+   while (performance.now() - start < 45000) {
     const snap = __game.loading.snapshot;
-    for (const gate of snap.gates) widths.set(gate.id, gate.width);
-    if (snap.collected > previous.collected) {
-     const p = snap.pickups.find(p => p.state === 'taken' && !taken.has(p.choice));
-     if (!p) throw Error('Collection has no unique claimed choice');
-     if (snap.pickups.some(other => other.choice === p.choice && other.state === 'live')) throw Error('Sibling remained collectible');
-     taken.add(p.choice); seen.add(p.kind); ledger.push(p.kind);
-     if (p.kind === 'wild' && snap.boostGates !== previous.boostGates + 3) throw Error('Wild Wisp did not accelerate by three clears');
-     selected = undefined;
+    for (const g of snap.gates) { counts.add(g.openings.length); for (let i = 0; i < g.openings.length; i++) widths.set(g.id + ':' + i, g.openings[i].width); }
+    for (const b of snap.currents) if (b.taken) placements.add(b.placement);
+    const root = document.querySelector('#mu-loading-screen');
+    if (/\d|score|points/i.test(root.innerText) || 'score' in snap) throw Error('Crossing exposes a numeric score or count');
+    if (counts.size === 3 && placements.size === 2 && snap.collected >= 2 && snap.dash > 0 && snap.gates.some(g => !g.resolved && g.openings.length > 1)) {
+     return { snap, counts: [...counts], placements: [...placements], widths: [...widths.values()] };
     }
-    if (seen.size === 3 && snap.collected >= 5 && snap.passed >= 4) {
-     return { snap, ledger, widths: [...widths.values()], scoreText: document.querySelector('.mu-score-value').textContent };
+    const g = snap.gates.find(g => !g.resolved);
+    const reach = distance => Math.max(0, distance) * 490 / (210 * 3.6);
+    if (g && gateId !== g.id) {
+     gateId = g.id;
+     const available = g.openings.filter(o => Math.abs(o.lane - snap.lane) < reach(g.u - 230 - 52));
+     const boosted = available.find(o => snap.currents.some(b => b.gate === g.id && b.placement === 'opening' && b.lane === o.lane));
+     lane = (boosted ?? g.openings.reduce((a, b) => Math.abs(a.lane - snap.lane) <= Math.abs(b.lane - snap.lane) ? a : b)).lane;
     }
-    const gate = snap.gates.find(g => !g.resolved);
-    const offers = snap.pickups.filter(p => p.state === 'live' && p.u >= 218);
-    const pair = offers.filter(p => p.choice === offers[0]?.choice);
-    if (!pair.some(p => p.id === selected)) selected = (pair.find(p => !seen.has(p.kind)) ?? pair[0])?.id;
-    const offer = pair.find(p => p.id === selected);
-    const lane = offer && offer.u < (gate?.u ?? Infinity) ? offer.lane : gate?.gap ?? snap.lane;
-    const rect = document.querySelector('#mu-loading-screen canvas').getBoundingClientRect();
-    const scale = Math.min(rect.width / 1000, rect.height / 560);
-    document.querySelector('#mu-loading-screen').dispatchEvent(new PointerEvent('pointermove', { clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 + lane * scale, bubbles: true }));
-    previous = snap; await new Promise(r => setTimeout(r, 16));
+    const events = [...snap.pickups.filter(p => p.state === 'live'), ...snap.currents.filter(b => !b.taken && b.placement === 'between')]
+      .filter(p => p.u > 242 && p.u < (g?.u ?? 1000) - 60
+        && Math.abs(p.lane - snap.lane) <= reach(p.u - 230 - 12)
+        && Math.abs(p.lane - lane) < reach((g?.u ?? 1000) - p.u - 52)).sort((a, b) => a.u - b.u);
+    const target = events[0]?.lane ?? lane;
+    const rect = document.querySelector('#mu-loading-screen canvas').getBoundingClientRect(), scale = Math.min(rect.width / 1000, rect.height / 560);
+    root.dispatchEvent(new PointerEvent('pointermove', { clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 + target * scale, bubbles: true }));
+    await new Promise(r => setTimeout(r, 16));
    }
-   throw Error('Pickup course timed out: ' + JSON.stringify({ seen: [...seen], snap: __game.loading.snapshot }));
+   throw Error('Branching course timed out: ' + JSON.stringify({ counts: [...counts], placements: [...placements], snap: __game.loading.snapshot }));
   });
-  assert.equal(choices.snap.hits, 0);
-  assert.equal(choices.snap.score, choices.snap.passed * 10 + choices.ledger.reduce((sum, kind) => sum + ({ mote: 25, gilded: 100, wild: 50 })[kind], 0));
-  assert.equal(Number(choices.scoreText), choices.snap.score);
+  assert.equal(choices.snap.hits, 0); assert.ok(choices.snap.currentsTaken >= 2);
   assert.ok(Math.max(...choices.widths) - Math.min(...choices.widths) > 5);
-  assert.equal(choices.snap.boostGates, choices.ledger.filter(kind => kind === 'wild').length * 3);
-  report.checks.push({ collectibleChoices: choices }); await shot('choices');
+  report.checks.push({ branchingCurrents: choices }); await shot('choices');
   await run(() => window.__qaLease.finish());
+
   // A small viewport keeps the same hit/pointer mapping and visible controls.
   win.setContentSize(390, 720);
   await run(() => { window.__qaLease = __game.loading.begin({ kind: 'entry', label: 'Recalling your vessel' }); });

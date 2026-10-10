@@ -2,7 +2,7 @@ import { MU_CFG } from '../data/mu';
 import type { CosmeticLoadout } from '../engine/cosmetics';
 import { cosmeticBody, cosmeticPick, drawCosmeticOrbit } from '../render/vis/cosmetics';
 import { bodySprite, adornSprite, spriteHalf, lookOf, drawLiveParts } from '../render/vis/body';
-import { SPIRIT_RUN, SPIRIT_PICKUPS, SpiritRun, spiritLayout } from './spiritRun';
+import { SPIRIT_RUN, SPIRIT_PICKUPS, SPIRIT_CURRENT_COLOR, SpiritRun, spiritLayout, spiritGateSolids } from './spiritRun';
 
 /** Uses Mu's real body/parts and the same wardrobe resolution as the world. */
 export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, height: number,
@@ -48,27 +48,27 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
   }
   for (const gate of run.gates) {
     ctx.save(); ctx.globalAlpha = gate.resolved ? (gate.hit ? 0.35 : 0.17) : 0.92;
-    const narrow = gate.width < 154, color = gate.hit ? '#e89895' : narrow ? '#a6b1df' : '#8ac8bf';
-    for (const side of [-1, 1]) {
-      const inner = gate.gap + side * gate.width / 2, outer = side * c.halfWidth, half = c.gateThickness / 2;
-      const a = point(gate.u - half, inner), b = point(gate.u + half, outer);
-      const tip = point(gate.u, inner), end = point(gate.u, outer);
-      const stone = ctx.createLinearGradient(tip.x, tip.y, end.x, end.y);
-      stone.addColorStop(0, gate.hit ? '#674448' : '#456174'); stone.addColorStop(0.18, '#2b3e50'); stone.addColorStop(1, '#14242e');
-      // The luminous field occupies exactly the tested rectangular solid.
+    const narrow = gate.openings.some(o => o.width < 154), color = gate.hit ? '#e89895' : narrow ? '#a6b1df' : '#8ac8bf';
+    for (const { low, high } of spiritGateSolids(gate)) {
+      const half = c.gateThickness / 2, a = point(gate.u - half, low), b = point(gate.u + half, high);
+      const start = point(gate.u, low), end = point(gate.u, high);
+      const stone = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+      stone.addColorStop(0, gate.hit ? '#674448' : '#456174'); stone.addColorStop(0.5, '#1d2e3e'); stone.addColorStop(1, gate.hit ? '#674448' : '#456174');
       ctx.fillStyle = stone; ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, scale);
       ctx.fillRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(a.x - b.x), Math.abs(a.y - b.y));
       ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-      ctx.save(); ctx.shadowColor = color; ctx.shadowBlur = reducedMotion ? 0 : 13 * scale;
-      ctx.lineWidth = 3 * scale; line(gate.u - half, inner, gate.u + half, inner); ctx.restore();
-      ctx.fillStyle = color;
-      path([[gate.u, inner + side * 4], [gate.u + 7, inner + side * 15], [gate.u, inner + side * 27], [gate.u - 7, inner + side * 15]]);
-      ctx.closePath(); ctx.fill();
+      for (const [edge, side] of [[low, 1], [high, -1]]) if (Math.abs(edge) < c.halfWidth) {
+        ctx.save(); ctx.shadowColor = color; ctx.shadowBlur = reducedMotion ? 0 : 13 * scale;
+        ctx.lineWidth = 3 * scale; line(gate.u - half, edge, gate.u + half, edge); ctx.restore();
+        const size = Math.min(18, (high - low) * 0.32); ctx.fillStyle = color;
+        path([[gate.u, edge + side * 3], [gate.u + 5, edge + side * size * 0.65],
+          [gate.u, edge + side * size], [gate.u - 5, edge + side * size * 0.65]]);
+        ctx.closePath(); ctx.fill();
+      }
       ctx.strokeStyle = '#c3e6dd'; ctx.lineWidth = Math.max(0.7, scale * 0.7);
-      const count = Math.floor(Math.abs(outer - inner) / 27);
+      const count = Math.floor((high - low) / 27);
       for (let j = 1; j < count; j++) {
-        const v = inner + (outer - inner) * j / count;
-        const design = (gate.id + j) % 3;
+        const v = low + (high - low) * j / count, design = (gate.id + j) % 3;
         if (design === 0) { line(gate.u - 4, v - 4, gate.u + 4, v + 4); line(gate.u - 4, v + 4, gate.u + 4, v - 4); }
         else if (design === 1) { path([[gate.u - 4, v - 3], [gate.u + 4, v], [gate.u - 4, v + 3]]); ctx.stroke(); }
         else { line(gate.u, v - 4, gate.u, v + 4); line(gate.u - 4, v, gate.u + 4, v); }
@@ -76,16 +76,34 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
     }
     ctx.restore();
   }
-  // Joined diamonds mark one offer pair. The quiet link dissolves on selection.
+  // Ephemeral currents use close chevrons, all facing the actual travel direction.
+  for (const current of run.currents) {
+    if (current.taken) continue;
+    const p = point(current.u, current.lane);
+    ctx.save(); ctx.globalAlpha = 1; ctx.translate(p.x, p.y); ctx.scale(scale, scale);
+    ctx.rotate(run.direction === 'down' ? Math.PI / 2 : run.direction === 'left' ? Math.PI : 0);
+    const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 54);
+    glow.addColorStop(0, '#a1ffdf35'); glow.addColorStop(1, '#a1ffdf00');
+    ctx.fillStyle = glow; ctx.fillRect(-56, -56, 112, 112);
+    ctx.strokeStyle = SPIRIT_CURRENT_COLOR; ctx.lineCap = 'round';
+    for (let i = 0; i < 5; i++) {
+      const x = (i - 2) * 11;
+      ctx.globalAlpha = reducedMotion ? 0.8 : 0.52 + 0.34 * (0.5 + 0.5 * Math.sin(time * 6 - i));
+      ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(x - 5, -11);
+      ctx.quadraticCurveTo(x + 1, -7, x + 6, 0); ctx.quadraticCurveTo(x + 1, 7, x - 5, 11); ctx.stroke();
+    }
+    ctx.lineWidth = 0.8;
+    for (const side of [-1, 1]) {
+      ctx.globalAlpha = 0.26; ctx.beginPath(); ctx.moveTo(-55, side * 18);
+      ctx.bezierCurveTo(-28, side * 8, 10, side * 24, 40, side * 12); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Staggered spirits drift independently; a chosen companion releases its sibling.
   for (const pickup of run.pickups) {
     const def = SPIRIT_PICKUPS[pickup.kind], p = point(pickup.u, pickup.lane);
     if (pickup.state === 'taken') continue;
-    const sibling = run.pickups.find(other => other.choice === pickup.choice && other.id > pickup.id);
-    if (sibling && pickup.state === 'live') {
-      ctx.globalAlpha = 0.15; ctx.strokeStyle = '#a9abc0'; ctx.lineWidth = 1; ctx.setLineDash([2 * scale, 7 * scale]);
-      line(pickup.u, pickup.lane + 25 * Math.sign(sibling.lane - pickup.lane), sibling.u, sibling.lane - 25 * Math.sign(sibling.lane - pickup.lane));
-      ctx.setLineDash([]);
-    }
     ctx.save(); ctx.globalAlpha = pickup.state === 'released' ? 0.45 * (1 - pickup.fade / c.pickupFade) : 1;
     ctx.translate(p.x, p.y); ctx.scale(scale, scale);
     const pulse = 1 + Math.sin(time * 3 + pickup.id) * 0.07;
@@ -106,13 +124,11 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
       for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-25 - i * 8, -5); ctx.lineTo(-20 - i * 8, 0); ctx.lineTo(-25 - i * 8, 5); ctx.stroke(); }
     }
     ctx.fillStyle = '#f4f7ed'; ctx.beginPath(); ctx.arc(2, 0, 3, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-    ctx.fillStyle = def.color; ctx.font = `${Math.max(11, 9 / scale)}px system-ui`; ctx.textAlign = 'center';
-    ctx.fillText('+' + def.points, 0, 32);
     ctx.restore();
   }
   for (const burst of run.bursts) {
     const f = burst.age / c.burstSeconds, p = point(burst.u, burst.lane);
-    const color = burst.kind === 'impact' ? '#efa2a0' : burst.kind === 'gate' ? '#a2d9ce' : SPIRIT_PICKUPS[burst.kind].color;
+    const color = burst.kind === 'impact' ? '#efa2a0' : burst.kind === 'gate' ? '#a2d9ce' : burst.kind === 'current' ? SPIRIT_CURRENT_COLOR : SPIRIT_PICKUPS[burst.kind].color;
     ctx.save(); ctx.globalAlpha = 1 - f; ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.3 * scale;
     if (!reducedMotion) {
       ctx.beginPath(); ctx.arc(p.x, p.y, (18 + f * 40) * scale, 0, Math.PI * 2); ctx.stroke();
@@ -122,15 +138,11 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
         ctx.fillRect(at.x - 1, at.y - 1, 2 * scale, 2 * scale);
       }
     }
-    if (burst.points) {
-      ctx.font = `${Math.max(11, 16 * scale)}px Georgia`; ctx.textAlign = 'center';
-      ctx.fillText('+' + burst.points + (burst.kind === 'wild' ? ' · SURGE' : ''), p.x, p.y - (25 + (reducedMotion ? 0 : f * 28)) * scale);
-    }
     ctx.restore();
   }
   ctx.globalAlpha = 1;
   const look = cosmeticBody({ shape: 'circle', ...MU_CFG.wisp, radius: 22 }, loadout, false, true);
-  const color = run.surge ? SPIRIT_PICKUPS.wild.color : look.color, p = point(run.playerU, run.lane);
+  const color = run.dash ? SPIRIT_CURRENT_COLOR : run.surge ? SPIRIT_PICKUPS.wild.color : look.color, p = point(run.playerU, run.lane);
   // A wild soul lengthens the wake; impact visibly binds and extinguishes it.
   if (!reducedMotion) for (let i = 18; i > 0; i--) {
     const tr = point(run.playerU - i * (4 + run.speed * 2), run.lane + Math.sin(time * 4 - i * 0.3) * i * 0.35);
@@ -139,9 +151,9 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
   }
   ctx.globalAlpha = 1; ctx.save(); ctx.translate(p.x, p.y); ctx.scale(scale, scale);
   drawCosmeticOrbit(ctx, cosmeticPick(loadout, 'playerEffect')?.paint, 28, time);
-  if (run.surge && !reducedMotion) {
-    ctx.strokeStyle = SPIRIT_PICKUPS.wild.color; ctx.lineWidth = 1.2;
-    for (const r of [30, 38]) { ctx.globalAlpha = run.surge / c.surgeSeconds * 0.7; ctx.beginPath(); ctx.arc(0, 0, r, time * 3, time * 3 + Math.PI * 1.4); ctx.stroke(); }
+  if ((run.surge || run.dash) && !reducedMotion) {
+    ctx.strokeStyle = color; ctx.lineWidth = 1.2;
+    for (const r of [30, 38]) { ctx.globalAlpha = Math.min(1, run.dash || run.surge / c.surgeSeconds) * 0.7; ctx.beginPath(); ctx.arc(0, 0, r, time * 3, time * 3 + Math.PI * 1.4); ctx.stroke(); }
     ctx.globalAlpha = 1;
   }
   if (run.hinder) {

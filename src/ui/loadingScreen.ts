@@ -1,5 +1,5 @@
 import type { CosmeticLoadout } from '../engine/cosmetics';
-import { SPIRIT_PICKUPS, SpiritRun, spiritDirection, spiritLayout, type SpiritDirection } from '../loading/spiritRun';
+import { SpiritRun, spiritDirection, spiritLayout, type SpiritDirection } from '../loading/spiritRun';
 import { drawSpiritRun } from '../loading/spiritView';
 import { Z_LADDER } from './zorder';
 
@@ -25,8 +25,6 @@ export class LoadingScreen {
   private label?: HTMLElement;
   private detail?: HTMLElement;
   private progress?: HTMLProgressElement;
-  private score?: HTMLElement;
-  private runMeta?: HTMLElement;
   private actions?: HTMLElement;
   private cancel?: () => void;
   private retry?: () => void;
@@ -61,9 +59,9 @@ export class LoadingScreen {
   get snapshot() {
     const r = this.run;
     return { active: this.active, direction: r?.direction, time: r?.time, lane: r?.lane,
-      passed: r?.passed, streak: r?.streak, hits: r?.hits, speed: r?.speed, score: r?.score, collected: r?.collected, boostGates: r?.boostGates,
-      pickups: r?.pickups.map(p => ({ ...p })),
-      gates: r?.gates.map(g => ({ ...g })), label: this.label?.textContent, failed: !!this.retry };
+      passed: r?.passed, streak: r?.streak, hits: r?.hits, speed: r?.speed, dash: r?.dash, currentsTaken: r?.currentsTaken, collected: r?.collected, boostGates: r?.boostGates,
+      pickups: r?.pickups.map(p => ({ ...p })), currents: r?.currents.map(b => ({ ...b })),
+      gates: r?.gates.map(g => ({ ...g, openings: g.openings.map(o => ({ ...o })) })), label: this.label?.textContent, failed: !!this.retry };
   }
   begin(options: LoadingOptions): LoadingLease {
     this.close(); const token = ++this.token;
@@ -82,9 +80,6 @@ export class LoadingScreen {
       #mu-loading-screen .mu-head{position:absolute;top:clamp(20px,5vh,52px);left:clamp(22px,5vw,76px);right:clamp(22px,5vw,76px);display:flex;justify-content:space-between;gap:20px;pointer-events:none}
       #mu-loading-screen .mu-eyebrow{font:11px system-ui;letter-spacing:.3em;color:#86a59e}
       #mu-loading-screen h1{font-weight:400;font-size:clamp(24px,3vw,42px);letter-spacing:.08em;margin:9px 0}
-      #mu-loading-screen .mu-score{text-align:right;font:10px system-ui;color:#a6b7b9;line-height:1.7;letter-spacing:.08em;white-space:nowrap}
-      #mu-loading-screen .mu-score-value{font:26px Georgia;color:#eed6a4;letter-spacing:.07em;font-variant-numeric:tabular-nums}
-      #mu-loading-screen .mu-run-meta{font-size:10px;letter-spacing:.04em;color:#97bbb5}
       #mu-loading-screen canvas{position:absolute;inset:108px 0 162px;width:100%;height:calc(100% - 270px)}
       #mu-loading-screen footer{position:absolute;bottom:clamp(18px,4vh,42px);left:clamp(22px,5vw,76px);right:clamp(22px,5vw,76px);display:grid;grid-template-columns:1fr auto;gap:12px 26px;align-items:end;font-family:system-ui}
       #mu-loading-screen .mu-status{font-size:14px;letter-spacing:.04em}
@@ -95,11 +90,11 @@ export class LoadingScreen {
       #mu-loading-screen button{border:1px solid #69877f;background:#17282c;color:#dfebe3;padding:9px 17px;font:12px system-ui;cursor:pointer;margin-left:8px}
       #mu-loading-screen button:focus-visible{outline:2px solid #e8c992;outline-offset:4px}
       @media(max-height:480px){#mu-loading-screen canvas{inset:80px 0 145px;height:calc(100% - 225px)}#mu-loading-screen .mu-head{top:14px}#mu-loading-screen h1{font-size:22px;margin:4px 0}#mu-loading-screen footer{bottom:12px;gap:5px}#mu-loading-screen .mu-detail{margin-top:2px}}
-      </style><canvas aria-label="Steer the wisp through the openings in the spirit gates. Choose one spirit per pair for points; violet Wild Wisps also increase speed."></canvas>
-      <header class="mu-head"><div><div class="mu-eyebrow">HOLLOW WAKE / MU</div><h1>The Crossing</h1></div><div class="mu-score" aria-hidden="true">SCORE<div class="mu-score-value">000000</div><div class="mu-run-meta"></div></div></header>
-      <footer><div><div class="mu-status" role="status" aria-live="polite"></div><div class="mu-detail"></div><progress aria-label="Loading progress"></progress></div><div class="mu-actions"></div><div class="mu-pickups">${Object.values(SPIRIT_PICKUPS).map(p => `<span style="color:${p.color}">${p.name.toUpperCase()} +${p.points}${p.boostGates ? ' · SPEED ↑' : ''}</span>`).join('')}</div><div class="mu-controls">MOUSE / TOUCH &nbsp; · &nbsp; WASD / ARROWS &nbsp; · &nbsp; LEFT STICK</div></footer>`;
+      </style><canvas aria-label="Steer the wisp through the openings in the spirit gates. Follow wandering spirits and optionally ride the wispy chevron currents to surge ahead."></canvas>
+      <header class="mu-head"><div><div class="mu-eyebrow">HOLLOW WAKE / MU</div><h1>The Crossing</h1></div></header>
+      <footer><div><div class="mu-status" role="status" aria-live="polite"></div><div class="mu-detail"></div><progress aria-label="Loading progress"></progress></div><div class="mu-actions"></div><div class="mu-pickups">FOLLOW THE WISPS &nbsp; · &nbsp; RIDE THE CURRENTS</div><div class="mu-controls">MOUSE / TOUCH &nbsp; · &nbsp; WASD / ARROWS &nbsp; · &nbsp; LEFT STICK</div></footer>`;
     this.canvas = root.querySelector('canvas')!; this.label = root.querySelector('.mu-status')!;
-    this.detail = root.querySelector('.mu-detail')!; this.score = root.querySelector('.mu-score-value')!; this.runMeta = root.querySelector('.mu-run-meta')!;
+    this.detail = root.querySelector('.mu-detail')!;
     this.progress = root.querySelector('progress')!; this.actions = root.querySelector('.mu-actions')!;
     root.addEventListener('pointermove', e => this.point(e));
     root.addEventListener('pointerdown', e => { if (!(e.target instanceof HTMLButtonElement)) { this.point(e); root.focus({ preventScroll: true }); } });
@@ -144,7 +139,7 @@ export class LoadingScreen {
     this.keys.clear(); this.padHeld = true; this.clearWorldInput();
     this.root.remove(); this.root = undefined; this.run = undefined; this.retry = undefined;
     if (this.canvas) this.canvas.width = this.canvas.height = 1;
-    this.canvas = undefined; this.label = this.detail = this.score = this.runMeta = this.actions = undefined;
+    this.canvas = undefined; this.label = this.detail = this.actions = undefined;
     this.progress = undefined; this.loadout = undefined; this.cancel = undefined;
     for (const row of this.inert) row.el.inert = row.was;
     this.inert = []; if (this.focus?.isConnected) this.focus.focus({ preventScroll: true });
@@ -190,8 +185,6 @@ export class LoadingScreen {
     this.run.step(this.last && !document.hidden ? (now - this.last) / 1000 : 0, { axis, target: this.pointer }); this.last = now;
     const ctx = canvas.getContext('2d');
     if (ctx) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); drawSpiritRun(ctx, width, height, this.run, this.loadout, this.media.matches); }
-    this.score!.textContent = String(this.run.score).padStart(6, '0');
-    this.runMeta!.textContent = `GATES ${String(this.run.passed).padStart(2, '0')} · ${this.run.speed.toFixed(2)} ×`;
     this.raf = requestAnimationFrame(this.frame);
   };
 }
