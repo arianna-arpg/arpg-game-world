@@ -33,6 +33,8 @@ source.zone.name = 'registry changed';
 assert.notEqual(start.zone.native!.zone.name, source.zone.name);
 assert.ok(Object.isFrozen(start.zone.native!.zone.theme));
 const initial = h.enroll(start.zone, 'native-operation', 'native/fixtures', { count: 3 }, { charges: [1, 0, 0] }, 10);
+assert.equal(h.at(zero).zone,h.owner(start.zone.id),'a new durable owner supersedes any cached location');
+assert.equal(h.at(moveAddress(zero,{x:1,y:1},960)),h.at(zero),'points in one exact chunk share an immutable location');
 assert.ok(h.update(start.zone.id, initial.id, initial.revision, 10, initial.state, 'active'));
 let a = h.controller(start.zone.id, initial.id)!;
 assert.ok(h.update(start.zone.id, a.id, a.revision, 12, { charges: [3, 0, 0] }));

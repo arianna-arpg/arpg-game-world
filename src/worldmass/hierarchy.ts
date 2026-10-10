@@ -107,6 +107,7 @@ export class MassHierarchy {
   readonly policy: Readonly<MassHierarchyPolicy>;
   readonly sources: readonly Readonly<MassRegionSource>[];
   private cache = new Map<string, Readonly<MassGeography>>();
+  private locations = new Map<string, Readonly<MassHierarchyLocation>>();
   private records = new Map<string, MassGeographicSave>();
   constructor(readonly run: string, readonly seed: number, readonly addressSpan: number,
     policy: MassHierarchyPolicy = MASS_HIERARCHY_DEFAULT, sources: readonly MassRegionSource[] = [], saved?: MassHierarchySave,
@@ -145,9 +146,17 @@ export class MassHierarchy {
   }
   at(at: MassAddress): Readonly<MassHierarchyLocation> {
     const p = whole(at, this.addressSpan);
+    // All three immutable owners are constant inside one exact chunk. Keep
+    // weather/AI queries from reconstructing their identities per body/frame.
+    const key=JSON.stringify([at.dimension,floorDiv(p.x,BigInt(this.policy.chunkSpan)).toString(),floorDiv(p.y,BigInt(this.policy.chunkSpan)).toString()]);
+    const previous=this.locations.get(key);
+    if(previous){this.locations.delete(key);this.locations.set(key,previous);return previous;}
     const get = (k: MassGeographicKind) => this.geography(k, at.dimension,
       floorDiv(p.x, BigInt(this.span(k))).toString(), floorDiv(p.y, BigInt(this.span(k))).toString());
-    return Object.freeze({ world: this.world(at.dimension), region: get('region'), zone: get('zone'), chunk: get('chunk') });
+    const location=Object.freeze({ world: this.world(at.dimension), region: get('region'), zone: get('zone'), chunk: get('chunk') });
+    this.locations.set(key,location);
+    if(this.locations.size>this.policy.cacheSize)this.locations.delete(this.locations.keys().next().value!);
+    return location;
   }
   intersections(kind: MassGeographicKind, bounds: MassBounds): readonly Readonly<MassGeography>[] {
     validateMassBounds(bounds);
@@ -182,7 +191,7 @@ export class MassHierarchy {
       return old;
     }
     let row = this.records.get(owner.id);
-    if (!row) { row = { owner: freezeData(copy(owner)), controllers: [] }; this.records.set(owner.id, row); }
+    if (!row) { row = { owner: freezeData(copy(owner)), controllers: [] }; this.records.set(owner.id, row); this.locations.clear(); }
     if (row.controllers.length >= 128) throw Error('Geographic owner controller budget exceeded');
     const c: MassControllerSave = { id, source, definition: copy(definition), definitionHash: hash, phase: 'waiting', clock: 0,
       updatedAt: now, revision: 0, state: copy(state), receipts: [] };

@@ -102,6 +102,7 @@ import { HONEST_INPUT_CFG, NullInput, SPENT_PRESS_CFG, type PlayerInput, type Pl
 import { SkillInputOrder } from './skillInputOrder';
 import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
 import { WorldMassRuntime, type MassAdventureSave } from '../worldmass/runtime';
+import { compactMass, type MassCheckpointOptions, type MassWorldCheckpoint } from '../worldmass/checkpoint';
 import { MASS_ZONE } from '../worldmass/preset';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { readTownPortals, type TownPortal, type TownPortalView } from './townportal';
@@ -3871,6 +3872,9 @@ export class World {
   walk: WalkField | null = null;
   /** Opt-in worldmass expedition; page residency does not own combat lifetime. */
   massRuntime: WorldMassRuntime | null = null;
+  /** Dedicated hosts have no terrain painter. Physics still samples exact
+   * ground on demand; clients build their own visual pages from the seed. */
+  massRenderPages = true;
   startWorldMass(seed = rollSeed(), save?: MassAdventureSave | MassResidentResume,
     options?: { restoreOnly?: boolean }): void {
     this.massAway = null;
@@ -15696,7 +15700,9 @@ export class World {
     };
   }
 
-  serializeWorldState(): WorldStateSave {
+  serializeWorldState(): WorldStateSave;
+  serializeWorldState(options: MassCheckpointOptions): MassWorldCheckpoint;
+  serializeWorldState(options?: MassCheckpointOptions): WorldStateSave | MassWorldCheckpoint {
     // Snapshot the overlays FIRST: their bags carry the ownedZones claims
     // (world/overlay.ts convention) that decide which event ground rides.
     const overlays = this.sim.snapshotOverlays();
@@ -15843,8 +15849,8 @@ export class World {
     const vfrac = (cur: number, max: number): number => max > 0 ? clamp(cur / max, 0, 1) : 1;
     return {
       schemaVersion: WORLD_SCHEMA_VERSION,
-      ...(this.massRuntime ? { worldmass: this.massRuntime.snapshot(this) }
-        : this.massAway ? { worldmass: copyMassSidearea(this.massAway.surface) } : {}),
+      ...(this.massRuntime ? { worldmass: options ? this.massRuntime.snapshot(this, options) : this.massRuntime.snapshot(this) }
+        : this.massAway ? { worldmass: copyMassSidearea(options ? compactMass(this.massAway.surface) : this.massAway.surface) } : {}),
       ...(this.captureMassSideareas() ? { massSideareas: this.captureMassSideareas() } : {}),
       odyssey: this.odyssey.snapshot(),
       zones,

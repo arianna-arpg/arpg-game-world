@@ -17,7 +17,7 @@ export interface MassCourtPuzzlesSave {
   puzzles: { source: string; id: string; progress: PuzzleCheckpoint }[];
 }
 export interface MassCourtPuzzlePolicy {
-  population(): number; maxPopulation(): number; retainRadius?: number;
+  population(): number; maxPopulation(at?:{x:number;y:number}): number; retainRadius?: number;
 }
 export interface MassCourtPuzzleBinding {
   mount(): void; rollbackMount(): void;
@@ -83,6 +83,7 @@ export class MassCourtPuzzles {
   }
   get population(): number { return [...this.live.values()].reduce((n, runs) => n + runs.reduce((m, r) => m + r.nodes.length, 0), 0); }
   views(): readonly PuzzleRun[] { return [...this.live.values()].flat(); }
+  massPopulationSlots(){return this.views().flatMap(r=>r.nodes.map(a=>({pos:a.pos,count:1})));}
   private saved(instance: NativeFeatureInstance, value?: MassCourtPuzzlesSave): MassCourtPuzzlesSave | undefined {
     if (value === undefined) return;
     const rows = rowsOf(instance);
@@ -103,7 +104,7 @@ export class MassCourtPuzzles {
     if (!rows.length) { if (value) throw Error('Native court lost its source'); return; }
     const count = this.requiredPopulation(instance, value), saved = this.saved(instance, value), owner = instance.id, world = this.world;
     if (this.live.has(owner)) throw Error('Duplicate native court owner');
-    if (this.policy.population() + count > this.policy.maxPopulation()) throw Error('Native court requires its complete node reservation');
+    if (this.policy.population() + count > this.policy.maxPopulation(instance.offset)) throw Error('Native court requires its complete node reservation');
     const runs = rows.map((row, i) => {
       const spec = clone(row.spec as CourtShrineSpec), id = runId(owner, row.id);
       spec.shrine.x += instance.offset.x; spec.shrine.y += instance.offset.y;
@@ -137,7 +138,7 @@ export class MassCourtPuzzles {
     return {
       mount: () => {
         if (mounted || detached || this.live.has(owner)) throw Error('Native court enrolled twice');
-        if (this.policy.population() + count > this.policy.maxPopulation()) throw Error('Native court lost its node reservation');
+        if (this.policy.population() + count > this.policy.maxPopulation(instance.offset)) throw Error('Native court lost its node reservation');
         rollback = world.enrollPreparedPuzzles(runs); mountedAt = world.time; mounted = true; this.live.set(owner, runs);
       },
       rollbackMount: () => {

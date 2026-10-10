@@ -1,3 +1,14 @@
+Shard runtime foundation: WorldMassRuntime accepts simultaneous seat foci with
+per-connected-cluster population budgets. Node uses one worker_threads compiler
+for the three existing checked loader contracts and skips client-only terrain
+page preparation; physics remains authoritative. Compact shard world saves omit
+seed-derived land before serialization, verify its digest on restore, and retain
+portable full saves by default. Verify worldmass_foci, worldmass_checkpoint,
+shardworkers, both probe families, all types, genqa, sim smoke, browser build and
+the unchanged clustered/spread soak gates. Cold queries and publication remain
+synchronous; implementation is not a claim that every timing gate passes. See
+docs/engine/shard-runtime-foundation.md for contracts, evidence and limits.
+
 NativeSceneBirthComposition wires all 124 original birth ports to concrete native
 owners and the complete 36-row registry. Bind one census, geometry, population,
 resident factory, objective state, campaign and carried transition; binding never

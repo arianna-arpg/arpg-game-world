@@ -582,6 +582,16 @@ HUD's local site name reads a private runtime map the shell never fills.
    against 13 ms clustered), because dormancy and native paging scale with
    how far apart the observers stand; THE MANY SHADOWS must budget that too.
 
+   **Foundation implementation (2026-10-09):** the isolated
+   `codex/shard-runtime-foundation` integration supplies simultaneous seat foci,
+   connected-cluster population budgets, Node compiler ports, and seed/preset
+   checkpoints that omit the land before serialization. See
+   [the runtime contract and verification](../engine/shard-runtime-foundation.md).
+   The current world save uses `worldSaveSec` (60 seconds); `persistSec`
+   remains the 20-second player mirror beat. Background compilation and the
+   multi-focus seam do not by themselves certify the shard's timing gates;
+   retain the measured soak results and remaining costs in that record.
+
 ---
 
 ## §7 Decision cards — for her word

@@ -71,6 +71,7 @@ function detachFields(world: World, removed: Set<Altar>): void {
  * Already emitted native attacks keep their own lifetimes and source actors.
  * Legacy finite expeditions retain their original always-resident policy. */
 export class MassFields {
+  massFocusCount=1;
   private live = new Map<string, Altar>();
   private saved = new Map<string, MassFieldSave>();
   private owners = new Map<string, FieldOwner>();
@@ -88,11 +89,11 @@ export class MassFields {
   }
   private needed(world: World, pos: {x:number;y:number}, radius: number): boolean {
     if(!this.policy)return true;
-    if(Math.hypot(world.player.pos.x-pos.x,world.player.pos.y-pos.y)<=this.policy.retainRadius)return true;
+    if((world.massRuntime?.focusDistance(world,pos)??Math.hypot(world.player.pos.x-pos.x,world.player.pos.y-pos.y))<=this.policy.retainRadius)return true;
     return world.actors.some(a=>!a.dead && Math.hypot(a.pos.x-pos.x,a.pos.y-pos.y)<=radius+a.radius+128);
   }
   canAdmit(place: Pick<MassPlace,'id'>, rows: readonly MassAltarSpec[]): boolean {
-    return !this.policy || this.live.size+rows.filter(row=>!this.live.has(fieldId(place,row))).length<=this.policy.maxResident;
+    return !this.policy || this.live.size+rows.filter(row=>!this.live.has(fieldId(place,row))).length<=this.policy.maxResident*this.massFocusCount;
   }
   private remember(id: string, altar: Altar): MassFieldSave {
     const owner=this.owners.get(id);

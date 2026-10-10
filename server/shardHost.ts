@@ -56,6 +56,8 @@ import { ShardCorpses, shardRecordsPath } from './corpses';
 import { UnitRegistry, type SimUnit } from './simUnits';
 import { UNIT_CFG } from '../src/engine/shardUnits';
 import { readWildsSave, resumeWilds, setAsideWildsSave } from './wildsSave';
+import { installNodeMassWorkers } from './massWorkers';
+import { hydrateMassWorld, massCheckpointLand, type MassWorldCheckpoint } from '../src/worldmass/checkpoint';
 
 export const SHARD_CFG = {
   /** The fixed engine step (the sim harness's cadence; the live host's cap is 0.05). */
@@ -165,7 +167,7 @@ export interface ShardSave {
   schemaVersion: number;
   seed: number;
   savedAt: number;
-  world: WorldStateSave;
+  world: MassWorldCheckpoint;
   /** THE RUN ROW (shard M1, plan section 6): the keeper's character-save half
    *  that is world-level in function, which a shard never persisted before.
    *  Optional and read tolerantly: absent = a restart forgets them, as before. */
@@ -308,12 +310,14 @@ export class ShardHost {
   private wildsRun: unknown = undefined;
 
   constructor(opts: ShardOptions = {}) {
+    installNodeMassWorkers();
     bootShardEngine();
     this.log = opts.log ?? ((line) => console.log(line));
     // THE HOSTED SEED: given, else the NEWEST world in the save dir (a restart
     // with no flag brings the same world back), else a fresh roll.
     const saveDir = opts.saveDir === null ? null : (opts.saveDir ?? SHARD_CFG.saveDir);
     this.seed = (opts.seed ?? (saveDir ? newestSavedSeed(saveDir, !!opts.worldmass) : undefined) ?? rollSeed()) >>> 0;
+    if (opts.worldmass) massCheckpointLand(this.seed, 'expedition:' + this.seed);
     this.account = makeAccount();
     if (opts.open) openAccount(this.account);
     this.keeperClass = this.classById(opts.keeperClass ?? SHARD_CFG.keeper.classId);
@@ -327,6 +331,7 @@ export class ShardHost {
     });
     COOP_SCALING.shareRadius = SHARD_CFG.nearRadius; // THE NEAR LAW, the shard's own
     this.worldmass = !!opts.worldmass;
+    this.world.massRenderPages = false;
     this.savePath = opts.saveDir === null ? null
       : join(opts.saveDir ?? SHARD_CFG.saveDir, `shard_${this.seed.toString(16).padStart(8, '0')}${this.worldmass ? SHARD_CFG.wildsSaveSuffix : ''}.json`);
     if (this.worldmass) {
@@ -976,6 +981,7 @@ export class ShardHost {
     if (this.savePath && opts.persist !== false) this.persist();
     this.vessels.mirrorAll(); // THE MIRROR: every vessel home before the wire closes (a broken world's heroes are not broken)
     await this.net.close();
+    this.world.massRuntime?.dispose(); // massWorkers ports belong to the stopped runtime.
   }
 
   // ---- persistence ----------------------------------------------------------
@@ -985,7 +991,7 @@ export class ShardHost {
     if (!this.savePath || this.wildsResuming || this.broken) return; // THE RESUME LAW; and a broken world never overwrites its last good save
     try {
       this.units.captureAll(); // THE PERSIST CAPTURE: every awake unit's live memory row first
-      const save: ShardSave = { schemaVersion: SHARD_CFG.saveSchema, seed: this.seed, savedAt: Date.now(), world: this.world.serializeWorldState(),
+      const save: ShardSave = { schemaVersion: SHARD_CFG.saveSchema, seed: this.seed, savedAt: Date.now(), world: this.world.serializeWorldState({ massCheckpoint: true }),
         run: captureRunRow(this.world) }; // THE RUN ROW
       mkdirSync(dirname(this.savePath), { recursive: true });
       // THE DURABLE WRITE: the whole file lands in a sibling, is FSYNCED, then renamed
@@ -1007,7 +1013,7 @@ export class ShardHost {
   private restore(): void {
     let save: ShardSave | null = null;
     try { save = JSON.parse(readFileSync(this.savePath!, 'utf-8')) as ShardSave; } catch { save = null; }
-    const ws = save?.world;
+    const ws = save?.world && !save.world.worldmass ? hydrateMassWorld(save.world) : undefined;
     if (!save || save.schemaVersion !== SHARD_CFG.saveSchema || !ws || ws.schemaVersion !== WORLD_SCHEMA_VERSION
       || ws.worldmass // a wilds world half is THE WILDS SAVE's (wildsSave), never a classic world's
       || !this.world.adoptWorldState(ws)) {

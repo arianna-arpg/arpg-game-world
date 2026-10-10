@@ -55,7 +55,7 @@ interface NativeHostSave {
 }
 export interface NativeHostPolicy {
   /** Shared population includes this host. Never create a second hidden cap. */
-  population():number; maxPopulation():number;
+  population():number; maxPopulation(at?:Vec2):number;
   retainRadius?:number; quietSeconds?:number;
   zoneOwner?:(pos:Vec2)=>string;
 }
@@ -84,6 +84,8 @@ export class MassNativeHost implements NativeFeatureHost {
     this.brittles=new MassNativeBrittles(world,{...policy,retainRadius:this.retainRadius,quietSeconds:this.quietSeconds});
   }
   get clock():number{return this.world.time;}
+  massPopulationSlots(){return [...[...this.residents.values()].flatMap(rows=>[...rows.values()].filter(a=>!a.dead).map(a=>({pos:a.pos,count:1}))),
+    ...this.occurrences.massPopulationSlots(),...this.courts.massPopulationSlots(),...this.brittles.massPopulationSlots()];}
   get population():number{let n=this.occurrences.population+this.courts.population+this.brittles.population;for(const rows of this.residents.values())for(const a of rows.values())if(!a.dead)n++;return n;}
   get hasOccurrences():boolean{return this.occurrences.hasOccurrences;}
   updateOccurrences(dt:number,disturbances:readonly MassOccurrenceDisturbance[]):void{this.occurrences.update(dt,disturbances);}
@@ -118,7 +120,7 @@ export class MassNativeHost implements NativeFeatureHost {
     const saved=this.saved(instance,savedNativeState);
     const needed=saved?saved.bodies.filter(b=>!b.dead).length:upperPopulation(instance);
     return this.policy.population()+needed+this.occurrences.requiredPopulation(instance,saved?.occurrences)
-      +this.courts.requiredPopulation(instance,saved?.courts)+this.brittles.requiredPopulation(instance,saved?.brittles)<=this.policy.maxPopulation();
+      +this.courts.requiredPopulation(instance,saved?.courts)+this.brittles.requiredPopulation(instance,saved?.brittles)<=this.policy.maxPopulation(instance.offset);
   }
   private refusal(a:Actor,state:NativeActorState|null,instance:NativeFeatureInstance):string|null{
     if(a.dead)return null;
@@ -175,7 +177,7 @@ export class MassNativeHost implements NativeFeatureHost {
     const effects=this.effects.prepare(instance,saved?.effects);
     const brittles=this.brittles.prepare(instance,saved?.brittles);
     if(this.policy.population()+live.length+this.occurrences.requiredPopulation(instance,saved?.occurrences)
-      +this.courts.requiredPopulation(instance,saved?.courts)+this.brittles.requiredPopulation(instance,saved?.brittles)>this.policy.maxPopulation())throw Error('Native feature population exceeded its reservation');
+      +this.courts.requiredPopulation(instance,saved?.courts)+this.brittles.requiredPopulation(instance,saved?.brittles)>this.policy.maxPopulation(instance.offset))throw Error('Native feature population exceeded its reservation');
     const detachScene=world.installMassNativeScene(instance);
     try{effects?.mount();court?.mount();brittles?.mount();occurrence?.mount();}catch(error){
       // Every earlier controller has an exact rollback. Occurrences mount last

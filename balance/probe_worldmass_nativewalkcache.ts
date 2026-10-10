@@ -59,7 +59,7 @@ try{
  for(let y=15;y<1800&&!solid;y+=30)for(let x=15;x<1800&&!solid;x+=30)if(regionKind(features.regionAt(moveAddress(origin,{x,y},960)))?.blocks)solid={x,y};
  assert.ok(solid);const before=providerCalls;
  for(let i=0;i<1000;i++)assert.equal(regionKind(walk.regionAt(solid.x,solid.y))!.blocks,true);
- assert.equal(providerCalls-before,1);assert.equal(features.stats.resident,0,'real native blockers exist before any scene admission');
+ assert.ok(providerCalls-before<=1,'a hot walk cell needs at most one source lookup; residency may already have cached that exact point');assert.equal(features.stats.resident,0,'real native blockers exist before any scene admission');
  const grid=features.gridAt(solid)!.grid;
  grid.fillRegion(solid.x,solid.y,solid.x,solid.y,'ground');
  assert.equal(walk.regionAt(solid.x,solid.y),'ground','real sparse native edits invalidate cached blockers synchronously');

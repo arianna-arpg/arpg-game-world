@@ -36,7 +36,7 @@ export interface MassNativeBrittlesSave {
   transient: string[]; transientDebris: boolean;
 }
 export interface MassNativeBrittlePolicy {
-  population(): number; maxPopulation(): number; retainRadius: number; quietSeconds: number;
+  population(): number; maxPopulation(at?:Vec2): number; retainRadius: number; quietSeconds: number;
 }
 export interface MassNativeBrittleBinding {
   mount(): void; rollbackMount(): void; actors(): ReadonlySet<Actor>; capture(): MassNativeBrittlesSave;
@@ -75,6 +75,8 @@ export function massNativeBrittlesSupported(instance: NativeFeatureInstance): bo
 /** Stable birth receipts stay inside this native feature. Wake bodies never
  * enter fromZoneGen memory or classic native actor pages. */
 export class MassNativeBrittles {
+  massPopulationSlots(){return [...this.live.values()].flatMap(slots=>slots.flatMap(slot=>slot.births
+    .filter(b=>b.published&&b.actor&&!b.actor.dead).map(b=>({pos:b.actor!.pos,count:1}))));}
   private live=new Map<string,LiveSlot[]>();
   private pending=0;
   constructor(readonly world: World, readonly policy: MassNativeBrittlePolicy) {
@@ -197,7 +199,7 @@ export class MassNativeBrittles {
       if(faulted)throw Error('Faulted native brittle owner cannot retry');
       if(slot.popped||slot.doodad.gone)return false;
       if(!nativeUrnSourceSupported(slot.definition,instance.zone)||!world.nativeUrnRewardContextSupported())return false;
-      if(this.policy.population()+2>this.policy.maxPopulation())return false;
+      if(this.policy.population()+2>this.policy.maxPopulation(slot.doodad.pos))return false;
       // Recursive surface procs see this lease immediately, before any effect.
       let reserved=2;this.pending+=reserved;observed=true;slot.popped=true;activeCommits++;
       try{
@@ -229,7 +231,7 @@ export class MassNativeBrittles {
       actors:()=>new Set(owned().values()),capture,
       mount:()=>{
         if(mounted||detached||this.live.has(owner))throw Error('Native brittle enrolled twice');
-        if(this.policy.population()+slots.reduce((n,s)=>n+s.births.filter(b=>!b.receipt.dead).length,0)>this.policy.maxPopulation())
+        if(this.policy.population()+slots.reduce((n,s)=>n+s.births.filter(b=>!b.receipt.dead).length,0)>this.policy.maxPopulation(instance.offset))
           throw Error('Native brittle saved population lacks capacity');
         try{
           unregister=world.installMassNativeBrittles(owner,slots.filter(s=>!s.popped).map(slot=>({doodad:slot.doodad,invoke:native=>invoke(slot,native)})));

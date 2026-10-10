@@ -51,9 +51,7 @@ import type { Seat, World } from '../src/engine/world';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
 import type { MassSideareaSave } from '../src/worldmass/sideareas';
 import type { ShardSave } from './shardHost';
-import { massAdventure } from '../src/worldmass/preset';
-import { reserveMassOpening } from '../src/worldmass/patchReservations';
-import { massDigest } from '../src/worldmass/random';
+import { hydrateMassWorld, massCheckpointLand } from '../src/worldmass/checkpoint';
 
 /** THE LAND DIGEST — the land is the seed's AND the preset's: what a joining shell
  *  lays from the welcome's seed (wildsShellAttach → startWorldMass's own reservation
@@ -63,7 +61,7 @@ import { massDigest } from '../src/worldmass/random';
  *  old saves are legacy, never migrated). */
 export function shellLandDigest(seed: number): string {
   const s = seed >>> 0;
-  return massDigest(reserveMassOpening(s, 'expedition:' + s, massAdventure()));
+  return massCheckpointLand(s, 'expedition:' + s);
 }
 
 /** A wilds save as read off disk: absent (null), refused (with the reason), or
@@ -87,7 +85,8 @@ export function readWildsSave(path: string, schema: number, seed: number): Wilds
   if (save.seed !== seed || run !== seed) return { refused: `another seed's world (wrapper ${String(save.seed)}, run ${String(run)}, shard ${seed})` };
   const land = shellLandDigest(seed);
   if (ws.worldmass.configHash !== land) return { refused: `another build's land (saved ${String(ws.worldmass.configHash)}, a shell lays ${land})` };
-  return { ws, ...(save.run !== undefined ? { run: save.run } : {}) }; // THE RUN ROW rides beside (shard M1)
+  try { return { ws: hydrateMassWorld(ws), ...(save.run !== undefined ? { run: save.run } : {}) }; }
+  catch (error) { return { refused: String(error instanceof Error ? error.message : error) }; }
 }
 
 /** THE REFUSED SAVE: move an unusable wilds save aside so a fresh world's

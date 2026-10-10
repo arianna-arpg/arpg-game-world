@@ -24,7 +24,7 @@ export interface MassObjectiveEffects {
   digHost(slot: number): NativeDigFinishHost;
   beaconHost(): NativeBeaconHost;
 }
-export interface MassObjectiveBodyPolicy { population(): number; maxPopulation(): number; retainRadius?: number; quietSeconds?: number }
+export interface MassObjectiveBodyPolicy { population(): number; maxPopulation(at?:Vec2): number; retainRadius?: number; quietSeconds?: number }
 
 const clone = <T>(v: T): T => JSON.parse(canonical(v)) as T;
 
@@ -54,6 +54,7 @@ export class MassObjectiveBodies {
       || !Number.isFinite(this.quietSeconds) || this.quietSeconds < 5) throw Error('Invalid native objective population policy');
   }
   get population(): number { let n = 0; for (const r of this.live.values()) for (const b of r.births) for (const a of b.bodies.values()) if (!a.dead) n++; return n; }
+  massPopulationSlots(){return [...this.live.values()].flatMap(r=>r.births.flatMap(b=>[...b.bodies.values()].filter(a=>!a.dead).map(a=>({pos:a.pos,count:1}))));}
   private saved(owner: string, zone: Readonly<ZoneDef>, fixtures: HoldFixture[], value?: unknown): MassObjectiveBodiesSave | undefined {
     if (value === undefined) return;
     const s = value as MassObjectiveBodiesSave;
@@ -103,7 +104,7 @@ export class MassObjectiveBodies {
   }
   canInstall(owner: string, zone: Readonly<ZoneDef>, fixtures: HoldFixture[], value?: unknown): boolean {
     const saved = this.saved(owner, zone, fixtures, value);
-    return !this.live.has(owner) && this.policy.population() + (saved?.births.reduce((n, b) => n + b.bodies.filter(a => !a.dead).length, 0) ?? 0) <= this.policy.maxPopulation();
+    return !this.live.has(owner) && this.policy.population() + (saved?.births.reduce((n, b) => n + b.bodies.filter(a => !a.dead).length, 0) ?? 0) <= this.policy.maxPopulation(fixtures[0]?.pos);
   }
   install(owner: string, zone: Readonly<ZoneDef>, fixtures: HoldFixture[], value?: unknown): MassObjectiveEffects | null {
     if (!this.canInstall(owner, zone, fixtures, value)) return null;
@@ -142,11 +143,11 @@ export class MassObjectiveBodies {
       range: (lo: number, hi: number) => massRandom(this.seed, [owner, 'native-objective/draw', draws++]).range(lo, hi),
       int: (lo: number, hi: number) => massRandom(this.seed, [owner, 'native-objective/draw', draws++]).int(lo, hi),
     };
-    const capacity = () => Math.max(0, Math.floor(this.policy.maxPopulation() - this.policy.population()));
+    const capacity = (at:Vec2) => Math.max(0, Math.floor(this.policy.maxPopulation(at) - this.policy.population()));
     const spawn = (slot: number, at: Vec2, config: RiftPourConfig | DigFinishConfig['ambush'] | NativeBeaconReinforceConfig, count?: number,
       beaconTables?: NativeBeaconTables): number => {
       if (detached) throw Error('Retired objective cannot create bodies');
-      const available = capacity(); if (!available) return 0;
+      const available = capacity(at); if (!available) return 0;
       const table = beaconTables?.native ?? world.massObjectiveSpawnTable(zone, at); if (!table.length && !beaconTables?.mix.length) return 0;
       const base: ObjectiveBirthBase = { owner, slot, sequence, seed: streamSeed(this.seed, [owner, 'native-objective/birth', sequence]), zone,
         at: { ...at }, table: clone([...table]) };

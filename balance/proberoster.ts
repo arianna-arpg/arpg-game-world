@@ -603,6 +603,9 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_processioncontinuity.ts', status: 'green', tier: 'fast', why: 'Independent native carts, reserved ambushes, real dependency pins, wounds, absence and once arrival/loss ownership.' },
   { probe: 'probe_worldmass_processiongameplay.ts', status: 'green', tier: 'fast', why: 'Natural full-runtime route detours around existing scenery, complete atomic admission, exact saved roads and wounded CharacterSave Continue.' },
   { probe: 'probe_worldmass_nativeingress.ts', status: 'green', tier: 'fast', why: 'Real native exterior body-clear ingress, bounded route proof, terrain refusals, reserved corridors and exact saved acceptance.' },
+  { probe: 'probe_worldmass_foci.ts', status: 'green', tier: 'fast', why: 'Independent cluster budgets, union pages, overlap, casualty/reload identity and exact observer broad phase.' },
+  { probe: 'probe_worldmass_checkpoint.ts', status: 'green', tier: 'fast', why: 'Land-free checkpoints preserve consequences and cold restore while refusing changed presets.' },
+  { probe: 'probe_shardworkers.ts', status: 'green', tier: 'fast', why: 'Real Node compiler parity, large terrain envelopes, event-loop progress and worker disposal.' },
 ];
 
 /** Green rows — the gate — optionally narrowed to one lane. */

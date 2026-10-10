@@ -39,7 +39,7 @@ export interface MassOccurrencesSave {
   transientDecor: number[];
 }
 export interface MassOccurrencePolicy {
-  population(): number; maxPopulation(): number; zoneOwner?: (pos: Vec2) => string;
+  population(): number; maxPopulation(at?:Vec2): number; zoneOwner?: (pos: Vec2) => string;
   retainRadius: number; quietSeconds: number;
 }
 export interface MassOccurrenceBinding {
@@ -115,6 +115,10 @@ export class MassOccurrences {
     }
     return count;
   }
+  massPopulationSlots(){return [...this.live.values()].flatMap(run=>[
+    ...run.sites.map(s=>({pos:{x:s.x,y:s.y},count:initialWave(s)})),
+    ...run.births.flatMap(b=>[...b.bodies.values()].filter(a=>!a.dead).map(a=>({pos:a.pos,count:1})))
+  ]);}
   views() { return [...this.live.values()].flatMap(run => run.sites.map((site, index) => ({
     owner: run.instance.id, index, pos: { x: site.x, y: site.y }, ...stateOf(site, run.geographicZones[index]), reserved: initialWave(site) }))); }
   private validateShape(s: MassOccurrencesSave): void {
@@ -273,11 +277,11 @@ export class MassOccurrences {
         for (const [index, site] of sites.entries()) {
           // Reservation normally makes this true. Keep a defensive preflight
           // before native spring mutates state, bank, cues or the random stream.
-          if (site.state === 'armed' && this.policy.population() > this.policy.maxPopulation()) continue;
+          if (site.state === 'armed' && this.policy.population() > this.policy.maxPopulation({x:site.x,y:site.y})) continue;
           const draw = () => massRandom(instance.placement.request.seed, [owner, 'native-occurrence/draw', draws++]);
           const host: OccHost = {
             timeOf: () => world.time, zoneLevel: () => instance.zone.level,
-            heroDist: (x, y) => world.player.dead || !sameStory(world.player, { tier: 0 }) ? Infinity : Math.hypot(world.player.pos.x - x, world.player.pos.y - y),
+            heroDist: (x, y) => world.massRuntime?.focusDistance(world,{x,y},0) ?? (world.player.dead || !sameStory(world.player, { tier: 0 }) ? Infinity : Math.hypot(world.player.pos.x - x, world.player.pos.y - y)),
             disturbedNear: (x, y, r) => disturbances.some(p => p.tier === 0 && Math.hypot(p.x - x, p.y - y) <= r),
             dice: (lo, hi) => draw().range(lo, hi), diceInt: (lo, hi) => draw().int(lo, hi),
             plant: row => {
@@ -286,7 +290,7 @@ export class MassOccurrences {
               detachDecor.push(world.installMassOccurrenceDecor(owner, instance.zone, [d])); decor.push(d);
             },
             pour: (spec, x, y, band, count) => {
-              const available = Math.max(0, Math.floor(this.policy.maxPopulation() - this.policy.population()));
+              const available = Math.max(0, Math.floor(this.policy.maxPopulation({x,y}) - this.policy.population()));
               // Initial waves consume their released reservation in full.
               // Recurring beats may use fewer shared slots, like other owners.
               const n = Math.min(count, available); if (!n) return 0;
