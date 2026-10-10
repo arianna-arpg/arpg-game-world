@@ -50,6 +50,7 @@ import type { PeerInfo } from '../src/net/transport';
 import type { ShardCorpseNote, ShardReckoning } from '../src/net/vesselWire';
 import { isCurrentCharacterSave } from '../src/meta/saveCompatibility';
 import { rebuildSavedMeta, serializeCouchGuest, throngRowsOf, type CharacterSave } from '../src/meta/character';
+import { questWorldKey, withQuestWorld } from '../src/engine/questLedger'; // THE CHARACTER'S QUESTS (card 24)
 import { captureLoot } from '../src/meta/death';
 import { stageOf } from '../src/meta/modes';
 import { isAccountId, renownForRun } from '../src/meta/account';
@@ -201,6 +202,8 @@ function shapeRefusal(s: CharacterSave): string | null {
   if (!optional(s.primedPours, Array.isArray) || !optional(s.deaths, Array.isArray)) return 'bad pours or corpse ring';
   if (!optional(s.modeId, x => typeof x === 'string') || !optional(s.modeStage, x => Number.isInteger(x) && (x as number) >= 0)) return 'a bad life-contract';
   if (!optional(s.name, x => typeof x === 'string' && x.length <= VESSEL_CFG.maxName)) return 'a bad name';
+  // THE CHARACTER'S QUESTS: the ledgers are plain records here; the adopting world re-validates every row.
+  if (!optional(s.quests, v => plainObj(v) && Object.values(v).every(l => plainObj(l) && Array.isArray(l.active) && Array.isArray(l.completed)))) return 'a bad quest ledger';
   return null;
 }
 
@@ -367,6 +370,9 @@ export class VesselDesk {
         ...(e.aim && Number.isFinite(e.aim.x) && Number.isFinite(e.aim.y) ? { aim: { x: e.aim.x, y: e.aim.y } } : {}) }));
     const life = hero.maxLife();
     if (!Number.isFinite(life) || life <= 0 || !Number.isFinite(hero.life)) throw new Error('the build does not stand');
+    // THE CHARACTER'S QUESTS (card 24 ruled): the hero's own ledger for THIS world stands up
+    // as the seat's (every row re-validated against the live chart); other worlds' ride home.
+    w.adoptQuestLedger(seat, built.meta.questWorlds?.[this.questWorld()]);
     this.vessels.set(seat.id, {
       seatId: seat.id, accountId, charId: built.meta.charId, upload: save, dormant,
       places: new Set(), mirrors: 0, askedAt: -Infinity, // (places fill from the tick: the graft stands the seat beside the keeper, the hearth wake moves it after)
@@ -409,7 +415,16 @@ export class VesselDesk {
     // and annex finds belong to the shard).
     if (up.expedition) save.expedition = up.expedition; else delete save.expedition;
     if (up.annexFound) save.annexFound = [...up.annexFound]; else delete save.annexFound;
+    // THE CHARACTER'S QUESTS (card 24 ruled): this world's ledger as the hero holds it now,
+    // every other world's as it came (the newest QUEST_LEDGER_CFG.worldsKept kept).
+    save.quests = withQuestWorld(seat.meta.questWorlds, this.questWorld(), w.packQuestLedger(seat, Date.now()));
     return save;
+  }
+
+  /** THE WORLD KEY a vessel's ledger rides home under: this shard's hosted seed and lane. */
+  private questWorld(): string {
+    const keeper = this.units.keeperWorld();
+    return questWorldKey(keeper.manifest.seed, !!keeper.massRuntime);
   }
 
   /** Ship one vessel's mirror home (`session heroSave`, to that seat alone). */

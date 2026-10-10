@@ -47,6 +47,23 @@ export class QuestRescues {
   update(): void {
     const w = this.w;
     if (w.clientActionHook || w.scene || !w.player || w.player.dead || w.player.downed) return;
+    // THE CHARACTER'S QUESTS (card 24): on a hosted world the captive stands for the first
+    // hero here whose own ledger holds its rescue, in that hero's hand.
+    if (w.localSeat.keeper) {
+      for (const seat of w.seats) {
+        if (seat.keeper || seat.merc) continue;
+        if (w.withQuestHand(seat, () => w.activeQuests.some(a => a.zoneId === w.zone.id && !!w.questDefOf(a.questId)?.rescue))) {
+          w.withQuestHand(seat, () => this.updateHand());
+          return;
+        }
+      }
+      return;
+    }
+    this.updateHand();
+  }
+
+  private updateHand(): void {
+    const w = this.w;
     const aq = w.activeQuests.find(a => a.zoneId === w.zone.id && w.questDefOf(a.questId)?.rescue);
     const q = aq && w.questDefOf(aq.questId), r = q?.rescue;
     if (!aq || !q || !r) return;

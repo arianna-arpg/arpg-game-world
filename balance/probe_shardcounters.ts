@@ -13,8 +13,9 @@
 //   C  THE JOURNAL ROW reaches only its seat (SeatW.jn, THE OWN ENTRY): a shell reads its
 //      log and pins off it, and a seat's own remembered body rides its pins;
 //   D  THE BOARD PER SEAT: a posting is taken at the board, one hand per seat per board, A's
-//      and B's hands stand together, each journal lists its own, only the holder turns a
-//      hand in, and each pays at its own seat's feet with its own receipt;
+//      and B's hands stand together (each dealt from its own slate: THE CHARACTER'S QUESTS,
+//      card 24), each journal lists its own, only the holder turns a hand in, and each pays
+//      at its own seat's feet with its own receipt;
 //   E  THE HARVEST for a remote seat: a seat's linger at a node arms its own rite, the rite
 //      rides its own row (SeatW.hv) and holds its hands (rooted), and its symbol presses over
 //      the input path complete it;
@@ -70,6 +71,8 @@ const url = `ws://127.0.0.1:${port}`;
 const w = host.world;
 const wx = w as unknown as Record<string, any>; // the rig's hands on private state (fixtures, sessions, the objective)
 const seatOf = (id: string): Seat => w.seats.find(s => s.id === id)!;
+/** THE CHARACTER'S QUESTS (card 24 ruled): a seat's own quest ledger (its log, its slate, its hands). */
+const ledgerOf = (s: Seat) => w.questLedgerOf(s);
 const warrior = CLASSES.find(c => c.id === 'warrior')!;
 
 /** A client over the wire: every snapshot, zone message and session word it hears. */
@@ -173,9 +176,9 @@ const bench = w.stationAnchor('salvage')!, board = w.stationAnchor('bounty_board
   const view = shell.bountyBoardView(BOUNTY_BOARD_CFG.boardId);
   check('A board: the shell\'s linger opens the board, and the slate the host dealt for the reader reaches it',
     boardOpened && shell.bountyDwellBoardId === BOUNTY_BOARD_CFG.boardId && view.offers.length > 0
-      && view.offers.length === w.bountyOffers.filter(o => o.boardId === BOUNTY_BOARD_CFG.boardId).length
+      && view.offers.length === ledgerOf(sA).offers.filter(o => o.boardId === BOUNTY_BOARD_CFG.boardId).length
       && view.countdown > 0,
-    `opened ${boardOpened}, offers ${view.offers.length} (host ${w.bountyOffers.length}), countdown ${view.countdown.toFixed(1)}`);
+    `opened ${boardOpened}, offers ${view.offers.length} (host ${ledgerOf(sA).offers.length}), countdown ${view.countdown.toFixed(1)}`);
   shell.bountyDwellRequested = false;
   // The Font.
   check('A font: the host stands the seat at the Font', standAt(sA, font.pos, () => w.nearFont(sA)));
@@ -213,20 +216,20 @@ const near = (p: Vec2, at: Vec2, r: number): boolean => dist(p, at) <= r;
   toHearth(sA, 60); toHearth(sC, -60); // two players AFK at the hearth, far from the giver
   sB.actor.level = 6;
   check('B quest: the host stands B at the giver', standAt(sB, giver.pos, () => w.withQuestHand(sB, () => w.nearAnyQuestGiver())));
-  const took = await waitFor(() => w.activeQuests.some(q => q.questId === QID), sec(4));
+  const took = await waitFor(() => ledgerOf(sB).active.some(q => q.questId === QID), sec(4));
   check('B quest: B\'s own linger at the giver takes the contract (the giver judged by B, never the keeper)', took,
-    `active ${w.activeQuests.map(q => q.questId).join(',')}`);
+    `active ${ledgerOf(sB).active.map(q => q.questId).join(',')}`);
   const keeper = host.keeper;
   const before = { b: xpOf(sB), a: xpOf(sA), c: xpOf(sC), bPts: sB.meta.passivePoints, bLvl: sB.actor.level, kPts: keeper.meta.passivePoints,
     kBag: keeper.meta.items.length, bMem: memUnits(sB), drops: w.drops.length };
-  const aq = w.activeQuests.find(q => q.questId === QID)!;
+  const aq = ledgerOf(sB).active.find(q => q.questId === QID)!;
   aq.fieldDone = true; // the field is done; the turn-in is the giver's
-  const paid = await waitFor(() => !w.activeQuests.includes(aq), sec(4));
+  const paid = await waitFor(() => !ledgerOf(sB).active.includes(aq), sec(4));
   await runTicks(6); // the gem pay falls at B's feet as Memories, and B's own hands take them
   const gems = memUnits(sB) - before.bMem + w.drops.slice(before.drops).filter(d => near(d.pos, sB.actor.pos, 90)).length;
   const quest = sB.meta.passivePoints - before.bPts - (sB.actor.level - before.bLvl); // the quest's own point, past any level-up's
   check('B quest: B\'s linger turns it in, and the pay is B\'s: its passive point, its XP, its gems at its own feet',
-    paid && w.completedQuests.has(QID) && quest === 1 && xpOf(sB) > before.b && gems >= 3,
+    paid && ledgerOf(sB).completed.has(QID) && quest === 1 && xpOf(sB) > before.b && gems >= 3,
     `paid ${paid}, points ${before.bPts}->${sB.meta.passivePoints} (level ${before.bLvl}->${sB.actor.level}), xp ${before.b}->${xpOf(sB)}, gems at B ${gems}`);
   check('B quest: never the keeper (no point, no bag) and never a player AFK at the hearth (no XP)',
     keeper.meta.passivePoints === before.kPts && keeper.meta.items.length === before.kBag
@@ -239,8 +242,8 @@ const near = (p: Vec2, at: Vec2, r: number): boolean => dist(p, at) <= r;
   oracle.pos = op; w.actors.push(oracle);
   sB.actor.level = 8;
   check('B choice: the host stands B at the Oracle', standAt(sB, oracle.pos, () => w.withQuestHand(sB, () => w.nearAnyQuestGiver())));
-  const tookRelic = await waitFor(() => w.activeQuests.some(q => q.questId === RELIQUARY_QUEST_ID), sec(4));
-  const rq = w.activeQuests.find(q => q.questId === RELIQUARY_QUEST_ID);
+  const tookRelic = await waitFor(() => ledgerOf(sB).active.some(q => q.questId === RELIQUARY_QUEST_ID), sec(4));
+  const rq = ledgerOf(sB).active.find(q => q.questId === RELIQUARY_QUEST_ID);
   if (rq) rq.fieldDone = true;
   const offered = await waitFor(() => !!B.snaps.at(-1)?.seats[B.id]?.jn?.rewards.some(r => r.questId === RELIQUARY_QUEST_ID), sec(4));
   const row = [...B.snaps].reverse().find(s => s.seats[B.id]?.jn)?.seats[B.id]?.jn;
@@ -249,7 +252,7 @@ const near = (p: Vec2, at: Vec2, r: number): boolean => dist(p, at) <= r;
     `took ${tookRelic}, offered ${offered}`);
   const bBag = sB.meta.items.length, kBag = keeper.meta.items.length;
   if (choice) act(B, { t: 'questReward', questId: RELIQUARY_QUEST_ID, choiceId: choice.id });
-  const claimed = await waitFor(() => w.completedQuests.has(RELIQUARY_QUEST_ID), sec(1));
+  const claimed = await waitFor(() => ledgerOf(sB).completed.has(RELIQUARY_QUEST_ID), sec(1));
   check('B choice: B\'s claim lands the piece in B\'s bag, never the keeper\'s',
     claimed && sB.meta.items.length === bBag + 1 && keeper.meta.items.length === kBag
       && sB.meta.items.some(i => i.name === choice?.name),
@@ -264,7 +267,7 @@ const near = (p: Vec2, at: Vec2, r: number): boolean => dist(p, at) <= r;
     `A ${ownOnly(A)}, B ${ownOnly(B)}, C ${ownOnly(C)}`);
   const rows = B.snaps.filter(s => s.seats[B.id]?.jn);
   const bytes = rows.map(s => JSON.stringify(s.seats[B.id].jn).length);
-  console.log(`INFO  C bytes: B's journal row rode ${rows.length} of ${B.snaps.length} snapshots, ${Math.min(...bytes)}-${Math.max(...bytes)} B (${w.activeQuests.length} quests held world-wide)`);
+  console.log(`INFO  C bytes: B's journal row rode ${rows.length} of ${B.snaps.length} snapshots, ${Math.min(...bytes)}-${Math.max(...bytes)} B (${ledgerOf(sB).active.length} quests in B's own ledger)`);
   check('C journal: B heard its own row with its contract in it',
     B.snaps.some(s => !!s.seats[B.id]?.jn?.log.active.some(e => e.id === QID))
       && B.snaps.some(s => !!s.seats[B.id]?.jn?.done.includes(QID)));
@@ -272,7 +275,7 @@ const near = (p: Vec2, at: Vec2, r: number): boolean => dist(p, at) <= r;
   sB.actor.level = 9;
   w.ledger[ORACLE_RESCUED] = 0;
   standAt(sB, giver.pos, () => w.withQuestHand(sB, () => w.nearAnyQuestGiver()));
-  await waitFor(() => w.activeQuests.some(q => q.questId === 'relic_depths_l8'), sec(4));
+  await waitFor(() => ledgerOf(sB).active.some(q => q.questId === 'relic_depths_l8'), sec(4));
   const corpses = (host as unknown as { corpses: { record(c: object): unknown } }).corpses;
   corpses.record({ accountId: accB.accountId, charId: 'old-bram', name: 'Old Bram', classId: 'warrior', level: 3,
     zoneId: w.zone.id, zoneName: w.zone.name, pos: { x: 400, y: 400 }, map: { x: w.zone.map.x, y: w.zone.map.y }, loot: { items: [] }, diedAt: Date.now() });
@@ -293,50 +296,53 @@ const near = (p: Vec2, at: Vec2, r: number): boolean => dist(p, at) <= r;
 {
   const BID = BOUNTY_BOARD_CFG.boardId;
   toHearth(sA, 40); toHearth(sB, -40);
-  w.armBountyBoard(BID);
+  // THE BOARD PER CHARACTER (card 24 ruled): each hero is dealt its own slate from the shared beat.
+  w.withQuestHand(sA, () => w.armBountyBoard(BID));
+  w.withQuestHand(sB, () => w.armBountyBoard(BID));
   await runTicks(3);
-  const offers = w.bountyOffers.filter(o => o.boardId === BID).map(o => o.id);
-  act(A, { t: 'bountyAccept', id: offers[0] });
+  const offersA = ledgerOf(sA).offers.filter(o => o.boardId === BID).map(o => o.id);
+  const offersB = ledgerOf(sB).offers.filter(o => o.boardId === BID).map(o => o.id);
+  act(A, { t: 'bountyAccept', id: offersA[0] });
   await runTicks(3);
-  check('D board: a posting is taken at its board, never from across the town', !w.bountyHands.some(h => h.id === offers[0]),
-    `offers ${offers.join(',')}`);
+  check('D board: a posting is taken at its board, never from across the town', !ledgerOf(sA).hands.some(h => h.id === offersA[0]),
+    `offers A ${offersA.join(',')}; B ${offersB.join(',')}`);
   check('D board: A and B stand at the board, on its two sides',
     standAt(sA, board.pos, () => w.nearBountyBoard(sA, BID), -1) && standAt(sB, board.pos, () => w.nearBountyBoard(sB, BID) && dist(sA.actor.pos, sB.actor.pos) >= 100, 1));
-  act(A, { t: 'bountyAccept', id: offers[0] });
+  act(A, { t: 'bountyAccept', id: offersA[0] });
   await runTicks(3);
-  act(A, { t: 'bountyAccept', id: offers[1] });
+  act(A, { t: 'bountyAccept', id: offersA[1] });
   await runTicks(3);
-  const aHeld = w.bountyHands.filter(h => h.holder === A.id).length;
-  act(B, { t: 'bountyAccept', id: offers[1] });
+  const aHeld = ledgerOf(sA).hands.length;
+  act(B, { t: 'bountyAccept', id: offersB[0] });
   await runTicks(3);
-  const hA = w.bountyHands.find(h => h.id === offers[0]), hB = w.bountyHands.find(h => h.id === offers[1]);
+  const hA = ledgerOf(sA).hands.find(h => h.id === offersA[0]), hB = ledgerOf(sB).hands.find(h => h.id === offersB[0]);
   check('D board: one hand per seat per board: A\'s second take is refused, B\'s own take stands beside A\'s',
-    aHeld === 1 && hA?.holder === A.id && hB?.holder === B.id && w.bountyHands.length >= 2,
-    `A held ${aHeld}; holders ${w.bountyHands.map(h => `${h.id}:${h.holder}`).join(',')}`);
+    aHeld === 1 && hA?.holder === A.id && hB?.holder === B.id && ledgerOf(sB).hands.length === 1,
+    `A held ${aHeld}; A ${ledgerOf(sA).hands.map(h => `${h.id}:${h.holder}`).join(',')}; B ${ledgerOf(sB).hands.map(h => `${h.id}:${h.holder}`).join(',')}`);
   await runTicks(sec(0.7));
   const boardRow = (cl: Client) => [...cl.snaps].reverse().find(s => s.seats[cl.id]?.jn?.boards?.[BID])?.seats[cl.id]?.jn?.boards?.[BID];
   const ra = boardRow(A), rb = boardRow(B);
   check('D board: each seat\'s journal lists its own hand alone',
-    !!ra && !!rb && ra.hands.length === 1 && ra.hands[0].id === offers[0] && rb.hands.length === 1 && rb.hands[0].id === offers[1],
+    !!ra && !!rb && ra.hands.length === 1 && ra.hands[0].id === offersA[0] && rb.hands.length === 1 && rb.hands[0].id === offersB[0],
     `A ${ra?.hands.map(h => h.id).join(',')}, B ${rb?.hands.map(h => h.id).join(',')}`);
   // The work is done (the kinds' own predicates, forced for the rig).
   const restore = new Map<string, unknown>();
   for (const h of [hA!, hB!]) { const row = BOUNTY_KINDS[h.kind]; if (!restore.has(h.kind)) restore.set(h.kind, row.done); row.done = () => true; }
-  act(B, { t: 'bountyTurnIn', id: offers[0] });
+  act(B, { t: 'bountyTurnIn', id: offersA[0] });
   await runTicks(3);
-  check('D board: only the holder turns a hand in (B cannot turn in A\'s)', w.bountyHands.some(h => h.id === offers[0]));
+  check('D board: only the holder turns a hand in (B cannot turn in A\'s)', ledgerOf(sA).hands.some(h => h.id === offersA[0]));
   // A writ pays at the turning seat's feet; essence vacuums into that seat's own wallet, a pouch into its own bag.
   const take = (s: Seat): number => essOf(s) * 1000 + memUnits(s) * 10 + s.meta.items.length;
   const p0 = { a: take(sA), b: take(sB), k: take(host.keeper) };
-  act(A, { t: 'bountyTurnIn', id: offers[0] });
+  act(A, { t: 'bountyTurnIn', id: offersA[0] });
   await runTicks(8);
   check('D board: A\'s writ pays A (never the keeper, never B)',
-    !w.bountyHands.some(h => h.id === offers[0]) && take(sA) > p0.a && take(sB) === p0.b && take(host.keeper) === p0.k,
+    !ledgerOf(sA).hands.some(h => h.id === offersA[0]) && take(sA) > p0.a && take(sB) === p0.b && take(host.keeper) === p0.k,
     `A ${p0.a}->${take(sA)}, B ${p0.b}->${take(sB)}, keeper ${p0.k}->${take(host.keeper)}`);
   const p1 = { a: take(sA), b: take(sB) };
-  act(B, { t: 'bountyTurnIn', id: offers[1] });
+  act(B, { t: 'bountyTurnIn', id: offersB[0] });
   await runTicks(8);
-  check('D board: B\'s writ pays B', !w.bountyHands.some(h => h.id === offers[1]) && take(sB) > p1.b && take(sA) === p1.a,
+  check('D board: B\'s writ pays B', !ledgerOf(sB).hands.some(h => h.id === offersB[0]) && take(sB) > p1.b && take(sA) === p1.a,
     `B ${p1.b}->${take(sB)}, A ${p1.a}->${take(sA)}`);
   for (const [kind, done] of restore) (BOUNTY_KINDS[kind] as { done: unknown }).done = done;
   w.journalDirty.add(A.id); w.journalDirty.add(B.id);

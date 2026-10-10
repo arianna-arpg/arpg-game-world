@@ -61,6 +61,8 @@ export interface NativeSettlementHost {
  townTierIdx: World['townTierIdx'];
  arena: World['arena'];
  mercSheets: World['mercSheets'];
+ /** THE SHELF PER BUYER (card 29): the buyer's character inside a hosted purchase, else null. */
+ shelfCharKey: World['shelfCharKey'];
 }
 function hashStr(s: string): number {
   let h = 0x811c9dc5;
@@ -79,7 +81,10 @@ export function settlementArmVendorStock(host:NativeSettlementHost,key: string):
     // WAITING for the beat to turn. (Live params still fold honestly: a
     // level-up or borough swell mid-beat changes what a FRESH arm rolls,
     // but the standing-shelf law means mid-beat re-arms don't happen.)
-    const seed = (host.manifest.seed ^ hashStr(`vendorshelf:${key}:${host.restockOrdinal()}`)) >>> 0;
+    // THE SHELF PER BUYER (card 29 ruled): on a hosted world the buyer's own draw from the
+    // same beat (world seed × counter × beat × character); no limb anywhere else.
+    const buyer = host.shelfCharKey();
+    const seed = (host.manifest.seed ^ hashStr(`vendorshelf:${key}:${host.restockOrdinal()}${buyer ? ':' + buyer : ''}`)) >>> 0;
     return withSeededRandom(seed, () => {
       const stock = host.overlayHold(key, host.buildVendorStock({ counter: key }))
         .filter(entry => host.vendorEntryAllowed(key, entry));
@@ -125,8 +130,9 @@ export function settlementResolveCommission(host:NativeSettlementHost,key: strin
     const nowBeat = Math.floor(host.time / sec);
     const from = Math.max(Math.floor(hold.watchedSec / sec) + 1, nowBeat - VENDOR_CFG.commission.maxCatchup);
     const p = host.commissionOdds(c);
+    const buyer = host.shelfCharKey(); // THE SHELF PER BUYER: the standing order watches the buyer's own beats
     for (let o = from; o <= nowBeat && p > 0; o++) {
-      const rng = new Rng((host.manifest.seed ^ hashStr(`vendorhold:${key}:${c.kind}:${c.id}:${o}`)) >>> 0);
+      const rng = new Rng((host.manifest.seed ^ hashStr(`vendorhold:${key}:${c.kind}:${c.id}:${o}${buyer ? ':' + buyer : ''}`)) >>> 0);
       if (rng.next() >= p) continue;
       const entry = host.mintCommissionEntry(c, rng, key);
       if (!entry) break; // the registry lost the gem — the sanitizer owns the rest

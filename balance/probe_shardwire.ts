@@ -19,7 +19,7 @@
 //   E  a combat float carries `o` = the striking seat; a non-combat float none
 //   F  size discipline: with nothing to show, the snapshot carries none of the
 //      new rows (the pre-pass shape, key for key)
-//   G  THE SHELF BEAT: the vendor rows ride the beat in a quiet stretch, a
+//   G  THE SHELF BEAT: the buyer's own shelf row (SeatW.vd, THE SHELF PER BUYER) rides the beat in a quiet stretch, a
 //      purchase and a restock ship on the next snapshot
 //   H  the client's stubs: zones, own clocks (anchor + local countdown), gauge
 //      banks, a flight's glide and fly-on, a band's ends, float owners
@@ -131,26 +131,31 @@ let quietBytes = 0, beatBytes = 0;
   const strays = quiet.flatMap(s => Object.keys(s).filter(k => !PRE_TOP.has(k)));
   // THE COUNTERS AND THE JOURNAL: a held journal (the world's own quests) rides its beat in a quiet
   // stretch, as the shelf and the account view ride theirs; on no other snapshot.
+  // THE SHELF PER BUYER (card 29 ruled): a hosted world ships each buyer its own shelf as its
+  // own row (SeatW.vd, THE OWN ENTRY) on its beat, and never the root rows.
   const seatStrays = quiet.flatMap(s => Object.values(s.seats).flatMap(e => Object.keys(e)
-    .filter(k => !PRE_SEAT.has(k) && !(k === 'jn' && s.tick % JOURNAL_WIRE_CFG.beat === 1))));
+    .filter(k => !PRE_SEAT.has(k) && !(k === 'jn' && s.tick % JOURNAL_WIRE_CFG.beat === 1)
+      && !(k === 'vd' && s.tick % WIRE_CFG.vendorBeat === 1))));
   check('F shape: a quiet snapshot is the pre-pass shape (no zones row, no new seat rows)',
     quiet.length >= WIRE_CFG.vendorBeat * 2 && strays.length === 0 && seatStrays.length === 0 && quiet.every(s => s.zones === undefined),
     `${quiet.length} snapshots; strays ${JSON.stringify([...new Set([...strays, ...seatStrays])])}`);
   check('F shape: no flight, no band, no owned float rides a quiet snapshot',
     quiet.every(s => s.projectiles.length === 0 && s.tethers.length === 0 && s.texts.every(t => t.o === undefined)));
-  const withShelf = quiet.filter(s => s.vendor !== undefined);
-  check('G beat: in a quiet stretch the shelf rides only the beat (tick % vendorBeat === 1)',
+  const shelfOf = (s: StateSnapshot) => s.seats[A.id]?.vd;
+  const withShelf = quiet.filter(s => shelfOf(s) !== undefined);
+  check('G beat: in a quiet stretch the buyer\'s own shelf rides only the beat (tick % vendorBeat === 1)',
     withShelf.length >= 2 && withShelf.every(s => s.tick % WIRE_CFG.vendorBeat === 1)
-      && quiet.filter(s => s.tick % WIRE_CFG.vendorBeat === 1).every(s => s.vendor !== undefined),
+      && quiet.filter(s => s.tick % WIRE_CFG.vendorBeat === 1).every(s => shelfOf(s) !== undefined),
     `${withShelf.length} of ${quiet.length} carried it, at ticks ${withShelf.map(s => s.tick).join(',')}`);
-  check('G beat: the three vendor rows ride together', quiet.every(s => (s.vendor === undefined) === (s.vendorRestockAt === undefined)
-    && (s.vendor === undefined) === (s.vendorCap === undefined)));
-  const plain = quiet.find(s => s.vendor === undefined && s.memoryAccess === undefined);
+  check('G beat: a hosted world never ships the root shelf rows (each buyer hears its own)',
+    quiet.every(s => s.vendor === undefined && s.vendorRestockAt === undefined && s.vendorCap === undefined)
+      && withShelf.every(s => Array.isArray(shelfOf(s)!.v) && typeof shelfOf(s)!.at === 'number' && typeof shelfOf(s)!.cap === 'number'));
+  const plain = quiet.find(s => shelfOf(s) === undefined && s.memoryAccess === undefined);
   const beat = withShelf[0];
   quietBytes = plain ? bytes(plain) : 0;
   beatBytes = beat ? bytes(beat) : 0;
-  const shelfBytes = beat ? bytes({ vendor: beat.vendor, vendorRestockAt: beat.vendorRestockAt, vendorCap: beat.vendorCap }) : 0;
-  info(`G bytes: a quiet snapshot ${quietBytes} B; the shelf rows ${shelfBytes} B (${beat?.vendor?.length ?? 0} wares) now ride 1 snapshot in ${WIRE_CFG.vendorBeat}, not all of them`);
+  const shelfBytes = beat ? bytes(shelfOf(beat)) : 0;
+  info(`G bytes: a quiet snapshot ${quietBytes} B; the buyer's shelf row ${shelfBytes} B (${beat ? shelfOf(beat)!.v.length : 0} wares) now rides 1 snapshot in ${WIRE_CFG.vendorBeat}, not all of them`);
 }
 
 // ============================================== A + D: the ground and the clocks ==
@@ -324,28 +329,31 @@ let zoneId = -1;
   }
   // Settle onto a beat-free stretch, then buy between beats.
   await waitFor(() => (A.got.at(-1)?.tick ?? 0) % WIRE_CFG.vendorBeat === 6, host, 200);
-  const n0 = A.got.length, wares = w.vendorStock.length;
-  const bought = w.vendorStock.length > 0 && w.buyVendorGem(0, seatA);
+  // THE SHELF PER BUYER: A's own shelf (the buyer's scope) and its own row on A's wire.
+  const shelfA = () => w.withBuyer(seatA, () => w.vendorStock);
+  const rowA = (s: StateSnapshot | undefined) => s?.seats[A.id]?.vd;
+  const n0 = A.got.length, wares = shelfA().length;
+  const bought = shelfA().length > 0 && w.buyVendorGem(0, seatA);
   await runTicks(host, 6);
   const next = since(A, n0)[0];
-  check('G change: a purchase ships the shelf on the next snapshot, off the beat',
-    bought && !!next && next.tick % WIRE_CFG.vendorBeat !== 1 && next.vendor?.length === wares - 1,
-    `bought ${bought} (smith ${!!smith}, near ${w.nearSmith(seatA)}), next tick ${next?.tick}, wares ${wares} -> ${next?.vendor?.length}`);
+  check('G change: a purchase ships the buyer\'s shelf on the next snapshot, off the beat',
+    bought && !!next && next.tick % WIRE_CFG.vendorBeat !== 1 && rowA(next)?.v.length === wares - 1,
+    `bought ${bought} (smith ${!!smith}, near ${w.nearSmith(seatA)}), next tick ${next?.tick}, wares ${wares} -> ${rowA(next)?.v.length}`);
   const after = since(A, n0 + 1).filter(s => s.tick % WIRE_CFG.vendorBeat !== 1);
-  check('G change: and then holds its tongue until the beat', after.length >= 1 && after.every(s => s.vendor === undefined));
-  // The counter's own restock (the beat law's function) re-arms the shelf: it ships next.
+  check('G change: and then holds its tongue until the beat', after.length >= 1 && after.every(s => rowA(s) === undefined));
+  // The counter's own restock (the beat law's function) re-arms every buyer's shelf here: it ships next.
   await waitFor(() => (A.got.at(-1)?.tick ?? 0) % WIRE_CFG.vendorBeat === 9, host, 200);
   const n1 = A.got.length, mark = w.vendorRestockAt;
   w.restockVendor();
   await runTicks(host, 6);
   const re = since(A, n1)[0];
-  check('G restock: a restock ships the shelf on the next snapshot (the new mark with it)',
-    !!re && re.vendor !== undefined && re.vendorRestockAt === w.vendorRestockAt && re.tick % WIRE_CFG.vendorBeat !== 1,
+  check('G restock: a restock ships the buyer\'s shelf on the next snapshot (the new mark with it)',
+    !!re && rowA(re) !== undefined && rowA(re)!.at === w.vendorRestockAt && re.tick % WIRE_CFG.vendorBeat !== 1,
     `mark ${mark} -> ${w.vendorRestockAt}, next tick ${re?.tick}`);
   // The beat re-ships an unchanged shelf, so a client that missed a change heals.
   await waitFor(() => (A.got.at(-1)?.tick ?? 0) % WIRE_CFG.vendorBeat === 1, host, 200);
   const beat = A.got.at(-1)!;
-  check('G heal: the beat re-ships the unchanged shelf', beat.vendor !== undefined && JSON.stringify(beat.vendor) === JSON.stringify(re?.vendor));
+  check('G heal: the beat re-ships the unchanged shelf', rowA(beat) !== undefined && JSON.stringify(rowA(beat)!.v) === JSON.stringify(rowA(re)?.v));
 }
 
 // ===================================================== H: the client's stubs ==

@@ -47,6 +47,7 @@ import type { MercSnapshot } from './mercs';
 import type { Account } from './account';
 import { personalStashEntries, restoreStash, type PersonalStash } from '../engine/stash';
 import { STASH_DEFS } from '../data/stashes';
+import { sanitizeQuestWorlds, type QuestLedgerSave } from '../engine/questLedger'; // THE CHARACTER'S QUESTS (card 24)
 
 export const CHAR_SCHEMA_VERSION = SAVE_COMPATIBILITY.run;
 const CHAR_KEY = storageKey('arpg_character_v1');
@@ -199,6 +200,13 @@ export interface CharacterSave {
    *  snapshots INLINE (resilient to roster churn), refs for pool release.
    *  The Harborwarden's retinue makes this a list; one blade = one entry. */
   mercenaries?: { name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string }[];
+  /** THE CHARACTER'S QUESTS (card 24 ruled; engine/questLedger.ts): the hero's own quest
+   *  ledger for each hosted world it walked (its quest log, its imbues, its rolled bounty
+   *  postings and boards, its quest keys, its Odyssey leads), keyed by questWorldKey. A
+   *  shard adopts its own world's at the vessel's graft and mirrors it home; every save
+   *  passes the rest through. Optional: a save without one has walked no hosted world
+   *  (a solo run's quests ride its world half, as ever). */
+  quests?: Record<string, QuestLedgerSave>;
   /** THE WAKEFUL WORLD (meta/worldstate.ts): the world half of the run — the
    *  minted zone graph, discovery, the clock, zone memory, quests, the spot
    *  the character stood on, and per-overlay snapshots. Optional → a save
@@ -310,6 +318,7 @@ export function serializeCharacter(world: World): CharacterSave {
     modeStage: m.modeStage,
     charId: m.charId,
     deaths: world.charDeaths.map(d => ({ ...d })),
+    ...(m.questWorlds ? { quests: structuredClone(m.questWorlds) } : {}), // THE CHARACTER'S QUESTS: the hosted worlds' ledgers pass through
     world: ws,
     ...(world.hiredMercs.length ? {
       mercenaries: world.hiredMercs.map(hm => ({
@@ -490,6 +499,10 @@ export function rebuildSavedMeta(save: CharacterFields): { meta: PlayerMeta; dea
   };
   // The character's own corpse ring (same per-record tolerance as the account's).
   const deaths = (save.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS);
+  // THE CHARACTER'S QUESTS: the hosted worlds' ledgers ride the hero (shape-checked here;
+  // the world that adopts one re-validates every row against its own chart).
+  const questWorlds = sanitizeQuestWorlds(save.quests);
+  if (questWorlds) meta.questWorlds = questWorlds;
   return { meta, deaths };
 }
 
@@ -1139,6 +1152,7 @@ export function serializeCouchGuest(
     modeStage: m.modeStage,
     charId: m.charId,
     deaths: (seat.couchDeaths ?? []).map(d => ({ ...d })),
+    ...(m.questWorlds ? { quests: structuredClone(m.questWorlds) } : {}), // THE CHARACTER'S QUESTS: the hosted worlds' ledgers pass through
     // world: deliberately absent — a guest save carries no ground.
   };
 }

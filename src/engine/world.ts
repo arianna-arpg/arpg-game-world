@@ -295,6 +295,7 @@ import { massQuestDestination, massQuestSatisfied, massQuestTarget, validMassQue
 import { RELIQUARY_LESSON, resolveQuestZone } from '../quests/reliquary';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { imbuedItem, imbueOptions, mintQuestImbue, restoreQuestImbues, type QuestImbue } from './questImbue';
+import { charKeyOf, newQuestLedger, packQuestLedger, type QuestLedger, type QuestLedgerSave } from './questLedger'; // THE CHARACTER'S QUESTS (card 24)
 import { QuestRescues } from './questRescues';
 import { questRewardChoices } from './questRewardChoices';
 import { passiveRefund } from './passiveRefund';
@@ -2005,6 +2006,10 @@ export interface PlayerMeta {
   /** Authoritative host fold, shipped to remote views. */
   relicEmpowerment?: number;
   relicEnabled?: boolean;
+  /** THE CHARACTER'S QUESTS (card 24 ruled; CharacterSave.quests): the quest ledgers this
+   *  hero carries for the hosted worlds it walked, by world key, passed through every
+   *  save of a world that keeps its own (a solo run's quests ride its world half). */
+  questWorlds?: Record<string, QuestLedgerSave>;
 }
 
 /** A zeroed essence wallet (fresh seats, wire fallbacks). */
@@ -2137,6 +2142,15 @@ export interface VendorHoldRow {
   entry: VendorEntry;
   idx: number;
   commission?: boolean;
+}
+
+/** THE SHELF PER BUYER (card 29 ruled): one buyer's standing shelves on a hosted
+ *  world, each counter's wares and the beat each was armed at (THE STANDING SHELF,
+ *  per buyer; never persisted: a re-arm re-deals the same seeded shelf). */
+export interface BuyerShelf {
+  brandt: VendorEntry[];
+  chandler: VendorEntry[];
+  armed: Record<string, number>;
 }
 
 /** One counter's persisted hold (WorldStateSave.vendorHolds, the muster-roll
@@ -3503,24 +3517,37 @@ export class World {
    *  indirection as the Caravanner — World can't import the UI). */
   salvageDwellRequested = false;
   private salvageGate = new Dwell(() => this.time);
+  /** THE CHARACTER'S QUESTS (card 24 ruled; engine/questLedger.ts): the local
+   *  seat's quest ledger, which IS the run's quest state (THE SOLO INVARIANT:
+   *  the fields below read and write it whenever no hosted hand is in play) and
+   *  on a hosted world the keeper's own, a sink no character's quest lands in. */
+  ownQuestLedger: QuestLedger = newQuestLedger();
+  /** THE CHARACTER'S QUESTS on a hosted world: every player seat's own ledger by
+   *  seat id (THE HAND-OFF moves it with the seat; the vessel carries it home). */
+  readonly seatQuests = new Map<string, QuestLedger>();
   /** THE BOUNTY BOARD (docs/design/bounty-board.md M0): the beat's slate of
    *  generated postings — persisted state, never a derivation (the pool is
-   *  the LIVE world; see WorldStateSave.bountyBoard). */
-  bountyOffers: BountyPosting[] = [];
+   *  the LIVE world; see WorldStateSave.bountyBoard). THE CHARACTER'S QUESTS:
+   *  the quest hand's own slate (one per character on a hosted world). */
+  get bountyOffers(): BountyPosting[] { return this.questLedger().offers; }
+  set bountyOffers(v: BountyPosting[]) { this.questLedger().offers = v; }
   /** THE TAKEN HANDS — accepted postings (each one's quest half is an
    *  ordinary activeQuests row). An ARRAY by law even though THE ONE-HAND
    *  cap holds it at one today: the cap FOLDS per issuing board
    *  (Posting.boardId), so regional boards + per-board hands (the writ
    *  kinship, post-M4) are a dial's turn — never hardcode the singular
-   *  (walk-1's ruling). */
-  bountyHands: BountyPosting[] = [];
+   *  (walk-1's ruling). THE CHARACTER'S QUESTS: the quest hand's own. */
+  get bountyHands(): BountyPosting[] { return this.questLedger().hands; }
+  set bountyHands(v: BountyPosting[]) { this.questLedger().hands = v; }
   /** THE KINSHIP's per-board bookkeeping (walk 2 — regional boards on the
    *  shared registry): each board's last-armed beat (the standing-slate
    *  law) and its TURN-IN REFRESH seed limb (persisted — a resolution
    *  re-deals that board NOW; the counter joins the arm's seed so the
    *  forced deal is as foreordained as a beat's). Board ids ARE home zone
-   *  ids ('lastlight', a quay's port zone id). */
-  private bountyBoardState: Record<string, { armedBeat: number; refreshSeq: number }> = {};
+   *  ids ('lastlight', a quay's port zone id). THE CHARACTER'S QUESTS: the
+   *  quest hand's own boards. */
+  private get bountyBoardState(): Record<string, { armedBeat: number; refreshSeq: number }> { return this.questLedger().boards; }
+  private set bountyBoardState(v: Record<string, { armedBeat: number; refreshSeq: number }>) { this.questLedger().boards = v; }
   private bountyGate = new Dwell(() => this.time);
   /** ONE-SHOT: the bounty board's dwell — the main loop opens the postings
    *  panel (the salvage bench's flag idiom verbatim). */
@@ -3596,8 +3623,11 @@ export class World {
   vocationOfferRequested = false;
   questRewardRequested = false;
   private questRewardShown: string | null = null;
-  private readonly questRewardItems = new Map<string, ItemInstance>();
-  questImbues: QuestImbue[] = [];
+  /** One fixed reward item per card (THE CHARACTER'S QUESTS: the quest hand's own previews). */
+  private get questRewardItems(): Map<string, ItemInstance> { return this.questLedger().rewardItems; }
+  /** Imbues earned and waiting (THE CHARACTER'S QUESTS: the quest hand's own). */
+  get questImbues(): QuestImbue[] { return this.questLedger().imbues; }
+  set questImbues(v: QuestImbue[]) { this.questLedger().imbues = v; }
   readonly questRescues = new QuestRescues(this);
   /** ONE-SHOT: the run wrote something ACCOUNT-scoped mid-run (a vocation
    *  unlock's ledger key) — the main loop persists the account when it sees
@@ -4041,8 +4071,13 @@ export class World {
   /** Brandt's wares: skill gems (and, once unlocked, support gems) on a
    *  TIME-BASED restock — refreshed by the world clock, not by re-entering
    *  town. Priced in essence. Size + restock speed scale with account
-   *  features (see buildVendorStock/restockVendor). */
-  vendorStock: VendorEntry[] = [];
+   *  features (see buildVendorStock/restockVendor). THE SHELF PER BUYER (card 29
+   *  ruled): the buyer's own shelf inside a purchase on a hosted world (withBuyer),
+   *  the World's own everywhere else. */
+  get vendorStock(): VendorEntry[] { return this.shelfBuyer ? this.buyerShelfOf(this.shelfBuyer).brandt : this.ownVendorStock; }
+  set vendorStock(v: VendorEntry[]) { if (this.shelfBuyer) this.buyerShelfOf(this.shelfBuyer).brandt = v; else this.ownVendorStock = v; }
+  /** The World's own shelf at Brandt's counter (the solo hero's, the co-op host's one). */
+  ownVendorStock: VendorEntry[] = [];
   /** This zone's waypoint (if it has one). */
   waypointPos: Vec2 | null = null;
   /** Zone ids whose waypoints have been attuned this run. */
@@ -4142,11 +4177,15 @@ export class World {
    *  quest's field leg. THE READINESS LAW (questStanding): for an AUTHORED quest the
    *  flag IS the field leg's truth; for a GENERATED posting it is only the ANNOUNCE
    *  latch of the withhold notice (noteBountyReady) — the row's standing is its
-   *  kind's own predicates (handState), never this flag, never the zone objective. */
-  activeQuests: SavedQuestEntry[] = [];
+   *  kind's own predicates (handState), never this flag, never the zone objective.
+   *  THE CHARACTER'S QUESTS: the quest hand's own (World.questLedger). */
+  get activeQuests(): SavedQuestEntry[] { return this.questLedger().active; }
+  set activeQuests(v: SavedQuestEntry[]) { this.questLedger().active = v; }
   readonly odyssey = new OdysseyRuntime(this);
-  /** Quests finished THIS run (chain gating + re-offer suppression). Per-run. */
-  completedQuests = new Set<string>();
+  /** Quests finished THIS run (chain gating + re-offer suppression). Per-run.
+   *  THE CHARACTER'S QUESTS: the quest hand's own. */
+  get completedQuests(): Set<string> { return this.questLedger().completed; }
+  set completedQuests(v: Set<string>) { this.questLedger().completed = v; }
   private questGiverDwell = 0;
   /** Escape objectives: countdown to the next trickle spawn. */
   private escapeTimer = 0;
@@ -4411,8 +4450,11 @@ export class World {
    *  (key = hold key). Within one beat the projection is the beat's whole
    *  truth — zone hops keep it verbatim (splices included), and only a
    *  turned beat (or a fresh world) re-arms. Never persisted: a reload
-   *  re-arms from the SAME per-beat seed and meets the same shelf. */
-  private vendorArmedBeat: Record<string, number> = {};
+   *  re-arms from the SAME per-beat seed and meets the same shelf. THE SHELF
+   *  PER BUYER: the buyer's own inside a purchase on a hosted world. */
+  private get vendorArmedBeat(): Record<string, number> { return this.shelfBuyer ? this.buyerShelfOf(this.shelfBuyer).armed : this.ownVendorArmedBeat; }
+  private set vendorArmedBeat(v: Record<string, number>) { if (this.shelfBuyer) this.buyerShelfOf(this.shelfBuyer).armed = v; else this.ownVendorArmedBeat = v; }
+  private ownVendorArmedBeat: Record<string, number> = {};
   /** loadZone latch: a counter NPC (vendor/chandler) stands in THIS zone —
    *  the restock tick's gate (a standing shelf elsewhere waits frozen for
    *  the return arm; no ghost restocks in the wilds). */
@@ -4421,8 +4463,20 @@ export class World {
    *  rows + the standing commission, keyed by the counter's hold key
    *  (VendorDef.holdKey ?? id). Persisted in WorldStateSave.vendorHolds;
    *  lives OUTSIDE the stock arrays so leaving town (which empties them)
-   *  never sheds a reservation. */
-  vendorHolds: Record<string, VendorHold> = {};
+   *  never sheds a reservation. THE SHELF PER BUYER (card 29 ruled): on a hosted
+   *  world THE PATRON'S HOLD and THE STANDING ORDER key by character
+   *  (charVendorHolds), read inside a purchase (withBuyer). */
+  get vendorHolds(): Record<string, VendorHold> {
+    return this.shelfBuyer ? (this.charVendorHolds[charKeyOf(this.shelfBuyer)] ??= {}) : this.ownVendorHolds;
+  }
+  set vendorHolds(v: Record<string, VendorHold>) {
+    if (this.shelfBuyer) this.charVendorHolds[charKeyOf(this.shelfBuyer)] = v; else this.ownVendorHolds = v;
+  }
+  /** The World's own holds (the solo hero's, the co-op host's one counter book). */
+  ownVendorHolds: Record<string, VendorHold> = {};
+  /** THE SHELF PER BUYER on a hosted world: each character's holds at this world's
+   *  counters, by character key (persisted in WorldStateSave.charVendorHolds). */
+  charVendorHolds: Record<string, Record<string, VendorHold>> = {};
   /** NET CLIENT only: the HOST account's reserve capacity, mirrored off the
    *  snapshot (the counter's true ledger — a client's own Vault does not
    *  govern the host's counters). Undefined on host/solo/couch. */
@@ -4674,6 +4728,8 @@ export class World {
     this.seats.splice(i, 1);
     this.spentPresses.delete(id); // THE SPENT PRESS leaves with the hand
     this.moveBudget.delete(id); // THE TIME BUDGET leaves with it
+    this.seatQuests.delete(id); // THE CHARACTER'S QUESTS: the hero's ledger left with its vessel's mirror
+    this.seatShelves.delete(id); // THE SHELF PER BUYER: the buyer's standing shelf leaves with it
     this.actors = this.actors.filter(a => a !== seat.actor && a.owner !== seat.actor);
     this.indexSeats();
     this.events.emit('party/leave', { actor: seat.actor, seat: id });
@@ -9740,7 +9796,7 @@ export class World {
       get curateVendorStock(){const method=world.curateVendorStock;return (...args:Parameters<NativeSettlementHost['curateVendorStock']>)=>method.apply(world,args);},
       get time(){return world.time;},
       get restockSeconds(){const method=world.restockSeconds;return (...args:Parameters<NativeSettlementHost['restockSeconds']>)=>method.apply(world,args);},
-      get account(){return world.account;},
+      get account(){return world.gateAccountOf(world.shelfBuyer);}, // THE SEAT'S GATE: the buyer's account (the World's own until M2)
       get vendorHolds(){return world.vendorHolds;},
       get commissionOdds(){const method=world.commissionOdds;return (...args:Parameters<NativeSettlementHost['commissionOdds']>)=>method.apply(world,args);},
       get mintCommissionEntry(){const method=world.mintCommissionEntry;return (...args:Parameters<NativeSettlementHost['mintCommissionEntry']>)=>method.apply(world,args);},
@@ -9754,7 +9810,7 @@ export class World {
       get rollSkillGem(){const method=world.rollSkillGem;return (...args:Parameters<NativeSettlementHost['rollSkillGem']>)=>method.apply(world,args);},
       get waresBonus(){const method=world.waresBonus;return (...args:Parameters<NativeSettlementHost['waresBonus']>)=>method.apply(world,args);},
       get sim(){return world.sim;},
-      get player(){return world.player;},
+      get player(){return world.shelfHero();}, // THE SHELF PER BUYER: the shelf rolls at the buyer's level
       get vendorQualityPieces(){const method=world.vendorQualityPieces;return (...args:Parameters<NativeSettlementHost['vendorQualityPieces']>)=>method.apply(world,args);},
       get carriedGemIds(){const method=world.carriedGemIds;return (...args:Parameters<NativeSettlementHost['carriedGemIds']>)=>method.apply(world,args);},
       get skillDropPool(){const method=world.skillDropPool;return (...args:Parameters<NativeSettlementHost['skillDropPool']>)=>method.apply(world,args);},
@@ -9762,7 +9818,8 @@ export class World {
       get supportDropPool(){const method=world.supportDropPool;return (...args:Parameters<NativeSettlementHost['supportDropPool']>)=>method.apply(world,args);},
       get zone(){return world.zone;},
       get pickGem(){const method=world.pickGem;return ((...args:Parameters<NativeSettlementHost['pickGem']>)=>method.apply(world,args)) as NativeSettlementHost['pickGem'];},
-      get seats(){return world.seats;},
+      get seats(){return world.shelfBuyer ? [world.shelfBuyer] : world.seats;}, // THE SHELF PER BUYER: the buyer's own carried gems
+      get shelfCharKey(){const method=world.shelfCharKey;return (...args:Parameters<NativeSettlementHost['shelfCharKey']>)=>method.apply(world,args);},
       get mercSheetFor(){const method=world.mercSheetFor;return (...args:Parameters<NativeSettlementHost['mercSheetFor']>)=>method.apply(world,args);},
       get dealTemplateOffers(){const method=world.dealTemplateOffers;return (...args:Parameters<NativeSettlementHost['dealTemplateOffers']>)=>method.apply(world,args);},
       get mercOutpost(){return world.mercOutpost;},set mercOutpost(value){world.mercOutpost=value;},
@@ -14871,7 +14928,11 @@ export class World {
     // Snapshot the overlays FIRST: their bags carry the ownedZones claims
     // (world/overlay.ts convention) that decide which event ground rides.
     const overlays = this.sim.snapshotOverlays();
-    const claimed = new Set(this.activeQuests.map(q => q.zoneId));
+    // THE CHARACTER'S QUESTS: the world half saves the local seat's ledger (the run's quest
+    // state; the keeper's sink on a hosted world), and every standing hero's held ground rides.
+    const own = this.ownQuestLedger;
+    const ownBoard = (id: string): { armedBeat: number; refreshSeq: number } => own.boards[id] ??= { armedBeat: -1, refreshSeq: 0 };
+    const claimed = this.questClaimedGround();
     for (const id of claimedZonesFromBag(overlays)) claimed.add(id);
     let zones: ZoneDef[];
     const fold = this.zonesSaveFold(claimed);
@@ -15028,10 +15089,10 @@ export class World {
       townPortals: structuredClone(this.townPortals),
       townPortalDestination: this.townPortalDestination,
       quests: {
-        active: this.activeQuests.map(q => ({ ...q })),
-        completed: [...this.completedQuests],
+        active: own.active.map(q => ({ ...q })),
+        completed: [...own.completed],
       },
-      questImbues: structuredClone(this.questImbues),
+      questImbues: structuredClone(own.imbues),
       ...(spotZone && spotPos ? {
         player: {
           zoneId: spotZone, x: spotPos.x, y: spotPos.y,
@@ -15066,21 +15127,22 @@ export class World {
       // THE PATRON'S HOLD: reserved counter rows + standing orders (absent
       // when no hold carries state — the JSON layer drops the undefined).
       vendorHolds: this.serializeVendorHolds(),
+      ...this.serializeCharVendorHolds(), // THE SHELF PER BUYER: each character's own (hosted worlds)
       // Harbor charts PAID for (omen ids) — the board's persisted once-guard
       // (absent when none: nothing bought is not load-bearing).
       ...(this.chartsBought.size ? { chartsBought: [...this.chartsBought] } : {}),
       // THE BOUNTY BOARD's standing slate + taken hands — persisted, never
       // re-derived (the live-world pool law; charter §4).
-      ...(this.bountyOffers.length || this.bountyHands.length ? {
+      ...(own.offers.length || own.hands.length ? {
         bountyBoard: {
-          armedBeat: this.boardStateOf(BOUNTY_BOARD_CFG.boardId).armedBeat,
-          offers: this.bountyOffers.map(clonePosting),
-          ...(this.bountyHands.length ? { hands: this.bountyHands.map(clonePosting) } : {}),
-          ...(this.boardStateOf(BOUNTY_BOARD_CFG.boardId).refreshSeq > 0 ? { refreshSeq: this.boardStateOf(BOUNTY_BOARD_CFG.boardId).refreshSeq } : {}),
+          armedBeat: ownBoard(BOUNTY_BOARD_CFG.boardId).armedBeat,
+          offers: own.offers.map(clonePosting),
+          ...(own.hands.length ? { hands: own.hands.map(clonePosting) } : {}),
+          ...(ownBoard(BOUNTY_BOARD_CFG.boardId).refreshSeq > 0 ? { refreshSeq: ownBoard(BOUNTY_BOARD_CFG.boardId).refreshSeq } : {}),
           // THE KINSHIP: every regional board's own bookkeeping (the legacy
           // top-level pair stays the Lastlight mirror for older readers).
-          ...(Object.keys(this.bountyBoardState).some(k => k !== BOUNTY_BOARD_CFG.boardId)
-            ? { boards: Object.fromEntries(Object.entries(this.bountyBoardState)
+          ...(Object.keys(own.boards).some(k => k !== BOUNTY_BOARD_CFG.boardId)
+            ? { boards: Object.fromEntries(Object.entries(own.boards)
               .filter(([k]) => k !== BOUNTY_BOARD_CFG.boardId)
               .map(([k, v]) => [k, { armedBeat: v.armedBeat, ...(v.refreshSeq > 0 ? { refreshSeq: v.refreshSeq } : {}) }])) } : {}),
         },
@@ -15275,6 +15337,10 @@ export class World {
     // tolerance doctrine: a hold row whose gem left the registry drops, a
     // site-scoped hold drops with its ground, nothing rerolls here).
     this.vendorHolds = this.rebuildVendorHolds(sanitizeVendorHolds(ws.vendorHolds, healed));
+    // THE SHELF PER BUYER: each character's holds stand back up the same way (absent = none).
+    this.charVendorHolds = Object.fromEntries(Object.entries(ws.charVendorHolds ?? {})
+      .map(([who, holds]) => [who, this.rebuildVendorHolds(sanitizeVendorHolds(holds, healed))] as const)
+      .filter(([, holds]) => Object.keys(holds).length));
     // …and THE STANDING SHELF yields to what stood back up: the armed-beat
     // memory clears, so the next zone arm re-deals this beat's shelf WITH
     // the restored reservations seated. (The world CONSTRUCTS into town —
@@ -19905,6 +19971,7 @@ export class World {
    *  must FIT the bag (checked before a single essence moves — a full bag
    *  refuses the sale, never eats the price). */
   buyVendorGem(index: number, seat: Seat = this.localSeat): boolean {
+    if (this.buysAsOwn(seat)) return this.withBuyer(seat, () => this.buyVendorGem(index, seat)); // THE SHELF PER BUYER: a purchase splices the buyer's own shelf
     const m = seat.meta;
     const entry = this.vendorStock[index];
     if (!entry || !this.nearSmith(seat) || !this.vendorEntryAllowed('brandt', entry)) return false;
@@ -21001,7 +21068,7 @@ export class World {
   private bountyBroaderBonus(): number {
     let add = 0;
     for (const r of BOUNTY_BOARD_CFG.growth.broader) {
-      if (featureEnabled(this.account, r.flag)) add += r.add;
+      if (featureEnabled(this.gateAccountOf(this.questHand()), r.flag)) add += r.add; // THE SEAT'S GATE
     }
     return add;
   }
@@ -21011,7 +21078,7 @@ export class World {
   bountyReach(): number {
     let mul = 1;
     for (const r of BOUNTY_BOARD_CFG.growth.farther) {
-      if (featureEnabled(this.account, r.flag)) mul *= r.mul;
+      if (featureEnabled(this.gateAccountOf(this.questHand()), r.flag)) mul *= r.mul; // THE SEAT'S GATE
     }
     return mul;
   }
@@ -21303,12 +21370,16 @@ export class World {
     // THE TURN-IN REFRESH's seed limb rides only once it has ever fired
     // (seq 0 keeps the M0-exact derivation — old saves and standing
     // probes meet unchanged slates until a resolution actually refreshes).
+    // THE BOARD PER CHARACTER (card 24 ruled): on a hosted world the hand's own draw
+    // from the shared beat (worldSeed × board × beat × character); absent elsewhere.
+    const who = this.questCharKey();
     const seedKey = `bountyboard:${boardId}:${beat}`
-      + (bs.refreshSeq > 0 ? `:${bs.refreshSeq}` : '');
+      + (bs.refreshSeq > 0 ? `:${bs.refreshSeq}` : '') + (who ? `:${who}` : '');
     // The id limb (never colliding with a standing hand's id after a
     // same-beat refresh, nor across boards — the slate-key law).
+    // THE BOARD PER CHARACTER: nor across characters (the character limb).
     const slateKey = (boardId === BOUNTY_BOARD_CFG.boardId ? `${beat}` : `${boardId}_${beat}`)
-      + (bs.refreshSeq > 0 ? `r${bs.refreshSeq}` : '');
+      + (bs.refreshSeq > 0 ? `r${bs.refreshSeq}` : '') + (who ? `_${who}` : '');
     const rng = new Rng((this.manifest.seed ^ hashStr(seedKey)) >>> 0);
     const allRows = Object.values(BOUNTY_KINDS);
     // Zone-uniqueness holds WITHIN a board's slate + its own hands; other
@@ -21353,7 +21424,7 @@ export class World {
     const band = liveBountyBand(this, boardId);
     const anchor = band?.anchor;
     const young = !!anchor
-      && (this.ledger[anchor.youngLedger] ?? 0) + (this.account.ledger[anchor.youngLedger] ?? 0)
+      && (this.questRunLedger()[anchor.youngLedger] ?? 0) + (this.gateAccountOf(this.questHand()).ledger[anchor.youngLedger] ?? 0) // THE CHARACTER'S QUESTS: the hand's own history
         < anchor.youngBelow;
     // THE GROWTH RUNGS (M4): BROADER widens the standing slate (the band's
     // own offers override outranks it); FARTHER stretches every roll's
@@ -21390,10 +21461,10 @@ export class World {
       const host: BountyRollHost = {
         routes, // Bounty journey rolls reuse the validated approach graph.
         routeFits: id => routes.has(id) && (manageable
-          ? this.zoneMap[id].level >= Math.max(1, this.player.level - BOUNTY_BOARD_CFG.routes.appropriateBelow)
+          ? this.zoneMap[id].level >= Math.max(1, this.questHandLevel() - BOUNTY_BOARD_CFG.routes.appropriateBelow)
             && !objectiveSeals(this.zoneMap[id].objective) && !this.zoneMap[id].special && !this.zoneMap[id].eventOwned
             && !answers().some(a => a.ref.zoneId === id)
-          : this.zoneMap[id].level <= this.player.level + BOUNTY_BOARD_CFG.routes.challengeAbove),
+          : this.zoneMap[id].level <= this.questHandLevel() + BOUNTY_BOARD_CFG.routes.challengeAbove),
         view, zoneMap: this.zoneMap, objectiveDone: id => this.objectiveDoneAt(id),
         visited: id => this.visited.has(id),
         pickGemId: (lvl, r) => this.pickBountyGemId(lvl, r),
@@ -21409,7 +21480,7 @@ export class World {
         // THE KINSHIP: localization + the juicing lean + the dedupe.
         boardZoneId: home, lean, kindClaimed,
         ...(pin ? { pin } : {}),
-        playerLevel: this.player.level, boardId, beat, slateKey, seq: i,
+        playerLevel: this.questHandLevel(), boardId, beat, slateKey, seq: i,
       };
       // Weighted kind pick under THE DIVERSITY CAP (slate.maxPerKind —
       // card 6's shape): a kind at its cap leaves the draw, and so does a
@@ -21441,7 +21512,7 @@ export class World {
         // region cannot supply it, retain the normal honest candidate instead.
         if (!manageable && i === BOUNTY_BOARD_CFG.routes.manageableSeats && !pin) {
           const stretchHost = { ...host, routeFits: (id: string) => host.routeFits!(id)
-            && this.zoneMap[id].level > this.player.level };
+            && this.zoneMap[id].level > this.questHandLevel() };
           for (const r of rows) {
             const stretch = r.roll(stretchHost, rng, taken);
             if (stretch) { p = stretch; rowId = r.id; break; }
@@ -21479,7 +21550,7 @@ export class World {
           && !this.bountyOffers.some(p => p.boardId !== boardId && p.kind === 'cull' && p.zoneId === id);
       }).sort((a,b) => a[1].distance - b[1].distance || a[0].localeCompare(b[0]))[0];
       if (target) {
-        const level = Math.max(1, this.player.level - 1, this.zoneMap[target[0]].level);
+        const level = Math.max(1, this.questHandLevel() - 1, this.zoneMap[target[0]].level);
         const reliefRng = new Rng((this.manifest.seed ^ hashStr(`${seedKey}:relief:${level}`)) >>> 0);
         for (let alternative = 0; alternative < (band ? 1 : BOUNTY_BOARD_CFG.routes.manageableSeats); alternative++) {
           offers.push({ id: `bounty_${slateKey}_relief_${level}_${alternative}`, boardId, beat, zoneId: target[0],
@@ -21502,12 +21573,13 @@ export class World {
 
   /** Shared route policy: callers receive evidence, never map knowledge. */
   bountyApproaches(boardId: string, manageable: boolean): Map<string, TravelRoute> {
-    const key = boardId + (manageable ? ':m' : ':d');
+    const lvl = this.questHandLevel(); // THE BOARD PER CHARACTER: the hand's own reach
+    const key = boardId + (manageable ? ':m' : ':d') + (this.localSeat.keeper ? ':' + lvl : '');
     const pass = this.approachPass?.get(key);
     if (pass) return pass;
     const home = this.bountyBoardRoster().find(b => b.id === boardId)?.homeZoneId ?? START_ZONE;
     const cfg = manageable ? BOUNTY_BOARD_CFG.routes.manageable : BOUNTY_BOARD_CFG.routes.demanding;
-    const routes = bountyRoutes(this, home, { maxLevel: this.player.level + cfg.above,
+    const routes = bountyRoutes(this, home, { maxLevel: lvl + cfg.above,
       maxSteps: cfg.steps, maxDistance: cfg.distance * this.bountyReach() });
     this.approachPass?.set(key, routes);
     return routes;
@@ -21528,8 +21600,8 @@ export class World {
     return !!z && !objectiveSeals(z.objective) && !z.special && !z.eventOwned
       && BOUNTY_BOARD_CFG.routes.manageableKinds.includes(p.kind)
       && !bountySourceRows().some(row => row.census(this).some(ref => ref.zoneId === p.zoneId))
-      && level >= Math.max(1, this.player.level - BOUNTY_BOARD_CFG.routes.appropriateBelow)
-      && level <= this.player.level && routes.has(p.expedition?.anchor ?? p.zoneId);
+      && level >= Math.max(1, this.questHandLevel() - BOUNTY_BOARD_CFG.routes.appropriateBelow)
+      && level <= this.questHandLevel() && routes.has(p.expedition?.anchor ?? p.zoneId);
   }
 
   /** Name a TRUE skill Memory from the account's own drop pool at this
@@ -21632,7 +21704,7 @@ export class World {
       z.veiled = false;
       this.refreshExitLabels();
     }
-    bumpLedger(this.ledger, 'bounties_accepted');
+    this.questStamp('bounties_accepted'); // THE CHARACTER'S QUESTS: the hand's own board history
     if (this.metaProgressionActive()) {
       this.account.ledger[BOUNTY_BOARD_CFG.boardIntroduction.receipt] = 1;
       this.accountDirty = true;
@@ -21664,7 +21736,7 @@ export class World {
   bountyLockCapacity(): number {
     let n = 0;
     for (const r of BOUNTY_BOARD_CFG.lock.ladder) {
-      if (featureEnabled(this.account, r.flag)) n++;
+      if (featureEnabled(this.gateAccountOf(this.questHand()), r.flag)) n++; // THE SEAT'S GATE: the pinning hand's own rungs (M2)
     }
     return n;
   }
@@ -21702,7 +21774,7 @@ export class World {
     this.bountyHands = this.bountyHands.filter(h => h.id !== id);
     const ai = this.activeQuests.findIndex(e => e.questId === id);
     if (ai >= 0) this.activeQuests.splice(ai, 1);
-    bumpLedger(this.ledger, 'bounties_abandoned');
+    this.questStamp('bounties_abandoned'); // THE CHARACTER'S QUESTS
     this.notice('The posting is forfeit — the board keeps its silence.', BOUNTY_BOARD_CFG.accent, 14, 'civic');
     this.charDirty = true;
     return true;
@@ -21728,7 +21800,7 @@ export class World {
       this.bountyHands = this.bountyHands.filter(h => h.id !== id);
       const ai = this.activeQuests.findIndex(e => e.questId === id);
       if (ai >= 0) this.activeQuests.splice(ai, 1);
-      bumpLedger(this.ledger, 'bounties_failed');
+      this.questStamp('bounties_failed'); // THE CHARACTER'S QUESTS
       this.notice('The board takes the failed posting back — no pay, no debt.', BOUNTY_BOARD_CFG.accent, 15, 'civic');
       this.charDirty = true;
       this.bountyReceipt = { boardId: p.boardId, title: row.copy(this, p).title, pay: '', failed: true, at: this.time, ...(this.localSeat.keeper ? { seat: seat.id } : {}) };
@@ -21766,7 +21838,9 @@ export class World {
    *  own unveil): the findability guarantee without the veil lift. */
   bountyOmens(): Omen[] {
     const out: Omen[] = [];
-    for (const p of this.bountyHands) {
+    // THE CHARACTER'S QUESTS: on a hosted world every hero's own errands whisper.
+    const held = this.localSeat.keeper ? this.allQuestHands().flatMap(s => this.questLedgerOf(s).hands) : this.bountyHands;
+    for (const p of held) {
       if (p.kind !== 'errand' || p.face === 'lift') continue;
       if (this.visited.has(p.zoneId)) continue;
       const z = this.zoneMap[p.zoneId];
@@ -21938,7 +22012,10 @@ export class World {
    *  promote, nemesis-name, dedupe, tag). Posts only the REMAINDER
    *  (count − claimed − standing), so wiped ground re-deals and the hunt
    *  can always finish. */
-  private seedCullMarks(def: ZoneDef, rng: { int(a: number, b: number): number; next(): number }): void { return sceneSeedCullMarks(this.nativeSceneBountyHost(),def,rng); }
+  private seedCullMarks(def: ZoneDef, rng: { int(a: number, b: number): number; next(): number }): void {
+    if (this.localSeat.keeper) { this.seedHeroWrits('cull', def, kindHost => sceneSeedCullMarks(kindHost, def, rng)); return; } // THE CHARACTER'S QUESTS
+    return sceneSeedCullMarks(this.nativeSceneBountyHost(),def,rng);
+  }
 
   /** THE GATHER's ground (first-writ W2 — the cull's remote-writ law on
    *  the harvest fabric): a held gather posting targeting THIS zone plants
@@ -21949,13 +22026,22 @@ export class World {
    *  (never the zone's mint stream — a held writ must not re-deal another
    *  system's draws) and ride the standing rite machinery whole: arming,
    *  the rite, the payout, the zone-memory spent flags. */
-  private seedGatherNodes(def: ZoneDef, pois: Vec2[]): void { return sceneSeedGatherNodes(this.nativeSceneBountyHost(),def,pois); }
+  private seedGatherNodes(def: ZoneDef, pois: Vec2[]): void {
+    if (this.localSeat.keeper) { this.seedHeroWrits('gather', def, kindHost => sceneSeedGatherNodes(kindHost, def, pois)); return; } // THE CHARACTER'S QUESTS
+    return sceneSeedGatherNodes(this.nativeSceneBountyHost(),def,pois);
+  }
 
   /** The arrival note (loadZone): a held posting on this ground asks THE
    *  READINESS LAW's one fold at the door — the errand's entry IS its deed
    *  (the field-clear hook's twin for a kind whose predicate is the walk
    *  itself); any other kind simply reads afield until its own ask lands. */
-  private noteBountyArrivals(def: ZoneDef, firstVisit: boolean, from?: string): void { return sceneNoteBountyArrivals(this.nativeSceneBountyHost(),def,firstVisit,from); }
+  private noteBountyArrivals(def: ZoneDef, firstVisit: boolean, from?: string): void {
+    // THE CHARACTER'S QUESTS: on a hosted world a zone's birth names no arriving hero; each
+    // seat's own arrival (noteSeatArrival, THE HAND-OFF) is its deed, the wake's first visit
+    // kept for the seat that woke it.
+    if (this.localSeat.keeper) { this.wakeFirstVisit = firstVisit; return; }
+    return sceneNoteBountyArrivals(this.nativeSceneBountyHost(),def,firstVisit,from);
+  }
 
   /** THE FIELD WATCH (M2 — the annul reconcile's full honesty, charter §4):
    *  K4's done flips ANYWHERE (the boss slain, the hold opened, the
@@ -21972,28 +22058,30 @@ export class World {
     // THE SPLIT DISPATCH (shard M1-W3): the watch reconciles the world's one
     // slate, so it is the keeper's alone (a unit's would re-run it per unit).
     if (this.shardWorld?.role === 'unit') return;
-    if (this.localSeat.keeper) this.sweepBountyHolders();
+    // THE CHARACTER'S QUESTS (card 24 ruled): on a hosted world every hero's own hands and
+    // slate are watched, each in its own hand, wherever on the shard it stands (THE
+    // OCCUPIED LAW); a hand travels with its character, so none is ever left unheld.
+    if (this.localSeat.keeper) {
+      const heroes = this.allQuestHands().filter(s => {
+        const l = this.questLedgerOf(s);
+        return l.hands.length > 0 || l.offers.length > 0;
+      });
+      if (!heroes.length) return;
+      this.bountyWatchAccum += dt;
+      if (this.bountyWatchAccum < 2) return;
+      this.bountyWatchAccum = 0;
+      for (const s of heroes) this.withQuestHand(s, () => {
+        for (const p of this.bountyHands) this.noteBountyReady(p);
+        this.reconcileBounties();
+      });
+      return;
+    }
     if (!this.bountyHands.length && !(nearBoard && this.bountyOffers.length)) return;
     this.bountyWatchAccum += dt;
     if (this.bountyWatchAccum < 2) return;
     this.bountyWatchAccum = 0;
     for (const p of this.bountyHands) this.noteBountyReady(p);
     this.reconcileBounties();
-  }
-
-  /** THE BOARD PER SEAT: a hand whose holder left the world is unheld (anyone's to finish
-   *  and turn in, no one's cap), and a returning hero (its own character id) takes its
-   *  hand back under the seat it now holds. */
-  private sweepBountyHolders(): void {
-    // THE OCCUPIED LAW (shard M1-W3): "left the world" means no seat in any of
-    // its live Worlds, never only this one's.
-    const seats = this.presentWorlds().flatMap(w => w.seats);
-    for (const p of this.bountyHands) {
-      if (!p.holder && !p.holderChar) continue;
-      if (p.holder && seats.some(s => s.id === p.holder && !s.keeper)) continue;
-      const back = p.holderChar ? seats.find(s => !s.keeper && s.meta.charId === p.holderChar) : undefined;
-      if (back) p.holder = back.id; else delete p.holder;
-    }
   }
 
   /** Linger at the board → arm this beat's slate + open the postings panel
@@ -22012,10 +22100,15 @@ export class World {
         && bs.armedBeat >= 0 && bs.armedBeat !== this.bountyBeat()) {
         this.armBountyBoard(b.id);
       }
-      // THE BOARD PER SEAT (a hosted world): the slate deals for any standing player at the
-      // board (its own client lingers and opens the panel), on the shared beat.
-      if (this.localSeat.keeper && !this.clientActionHook && bs.armedBeat !== this.bountyBeat()
-        && this.handSeats().some(s => this.nearBountyBoard(s, b.id))) this.armBountyBoard(b.id);
+      // THE BOARD PER CHARACTER (a hosted world, card 24 ruled): each standing player at
+      // the board is dealt its own slate (its own client lingers and opens the panel), on
+      // the shared beat.
+      if (this.localSeat.keeper && !this.clientActionHook) {
+        for (const s of this.handSeats()) {
+          if (!this.nearBountyBoard(s, b.id)) continue;
+          this.withQuestHand(s, () => { if (this.boardStateOf(b.id).armedBeat !== this.bountyBeat()) this.armBountyBoard(b.id); });
+        }
+      }
     }
     // The arrival latch matters here: the GROWN town's waypoint stands
     // inside the board's dwell disc — coming home must never auto-open
@@ -24380,7 +24473,7 @@ export class World {
       features: this.account.features,
       classId: m.classDef.id,
       vocations: m.vocations,
-      runLedger: this.ledger,
+      runLedger: this.questRunLedger(), // THE CHARACTER'S QUESTS: the hand's own quest keys over the run ledger
       accountLedger: this.account.ledger,
     };
   }
@@ -24416,7 +24509,7 @@ export class World {
       if (this.activeQuests.some(e => e.questId === q.id)) return false;
       if (this.giverPresent(q.giver) === null) return false; // one of its offering NPCs must be present
       if (q.requiresLedger
-        && (this.ledger[q.requiresLedger] ?? 0) < 1
+        && (gateCtx.runLedger[q.requiresLedger] ?? 0) < 1 // THE CHARACTER'S QUESTS: the hand's own keys (questGateCtx)
         && (this.account.ledger[q.requiresLedger] ?? 0) < 1) return false;
       if (q.requiresQuests?.some(id => !this.completedQuests.has(id))) return false;
       if (q.gate && !q.gate(gateCtx)) return false;
@@ -24434,7 +24527,7 @@ export class World {
   private vocationEngaged(vocId: string): boolean {
     const v = VOCATIONS[vocId];
     if (!v) return false;
-    return v.quest.steps.some((_, i) => (this.ledger[vocationStepKey(vocId, i + 1)] ?? 0) >= 1);
+    return v.quest.steps.some((_, i) => (this.questRunLedger()[vocationStepKey(vocId, i + 1)] ?? 0) >= 1); // THE CHARACTER'S QUESTS
   }
 
   /** A vocation quest whose chain this character has NOT yet engaged — the
@@ -24471,6 +24564,9 @@ export class World {
     // itself, on its own clock; the act and its pay are its own (the keeper never asks).
     if (this.localSeat.keeper) {
       for (const seat of this.handSeats()) this.questGiverStep(seat, dt);
+      // THE CHARACTER'S QUESTS on the Unbroken Wilds: every hero's own country quests settle
+      // at their places (the runtime's own settle walks the run's one ledger, the keeper's).
+      if (this.massRuntime) this.settleHeroMassQuests();
       return;
     }
     if (!this.nearAnyQuestGiver()) this.questRewardShown = null;
@@ -24497,21 +24593,24 @@ export class World {
 
   /** One hosted seat's linger at the giver (updateQuestGiver's own law, per seat): a
    *  finished quest turns in first (a reward to choose waits in the seat's journal),
-   *  else the next acceptable quest is taken. A calling (a fresh vocation chain) and
-   *  the Odyssey's leads wait for a hosted menu that does not open yet. */
+   *  else the next acceptable quest is taken, and THE CHARACTER'S QUESTS: the giver
+   *  marks the hero's own Odyssey leads as it does for the solo hero. A calling (a
+   *  fresh vocation chain) waits for a hosted menu that does not open yet. */
   private questGiverDwells = new WeakMap<Seat, number>();
   private questGiverStep(seat: Seat, dt: number): void {
     this.withQuestHand(seat, () => {
       if (!this.seatIdle(seat) || !this.nearAnyQuestGiver()) { this.questGiverDwells.delete(seat); return; }
       const turnIns = this.pendingTurnIns();
       const next = turnIns.length ? null : this.nextAcceptableQuest();
-      if (!turnIns.length && !next) { this.questGiverDwells.delete(seat); return; }
+      const leads = this.graphWorkAvailable() && this.odyssey.hasLocalLeads() && this.nearQuestGiver();
+      if (!turnIns.length && !next && !leads) { this.questGiverDwells.delete(seat); return; }
       const t = (this.questGiverDwells.get(seat) ?? 0) + dt;
       if (t < QUESTGIVER_DWELL) { this.questGiverDwells.set(seat, t); return; }
       this.questGiverDwells.delete(seat);
       const was = this.actingSeat;
       this.actingSeat = seat; // THE ACTING SEAT: the linger is this seat's act (its party hears the news)
       try {
+        if (leads) this.odyssey.localLeads();
         if (turnIns.length) this.onQuestZoneCleared(turnIns[0]);
         else if (next) this.acceptQuest(next);
       } finally { this.actingSeat = was; }
@@ -24604,7 +24703,7 @@ export class World {
     if (m.vocations.length >= VOCATION_CFG.maxPerCharacter) return false;
     m.vocations.push(vocId);
     m.allocated.add(vocationRootId(vocId)); // the crest is free — its NODES cost points
-    bumpLedger(this.ledger, vocationLedgerKey(vocId));
+    this.withQuestHand(seat, () => this.questStamp(vocationLedgerKey(vocId))); // THE CHARACTER'S QUESTS: the granted seat's own chain
     // THE CHARACTER always receives the vocation (tree, points, title). The
     // ACCOUNT-wide unlock is meta-progression — an Undying character earns it
     // for itself alone (the user's canonical example of the sealed ledger).
@@ -24770,7 +24869,7 @@ export class World {
       const entry: SavedQuestEntry = { questId: q.id, zoneId: MASS_ZONE, placeId: place.id,
         fieldDone: false, directionsKnown: true };
       this.activeQuests.push(entry);
-      bumpLedger(this.ledger, 'quests_accepted'); this.charDirty = true;
+      this.questStamp('quests_accepted'); this.charDirty = true; // THE CHARACTER'S QUESTS
       this.notice('Quest: ' + q.offerLabel + ' · ' + massQuestTarget(this.massRuntime, entry, this.questHand().actor.pos), '#c8a8e8', 16, 'civic'); // THE QUEST HAND
       return;
     }
@@ -24889,7 +24988,7 @@ export class World {
     }
     this.activeQuests.push({ questId: q.id, zoneId, fieldDone: false, directionsKnown: reveal });
     if (reveal && q.zone.mapReveal === 'survey') this.revealQuestGround(zoneId);
-    bumpLedger(this.ledger, 'quests_accepted');
+    this.questStamp('quests_accepted'); // THE CHARACTER'S QUESTS
     // Name the bearing from the actual placement (band placement has no fixed compass).
     const ddx = target.x - from.map.x, ddy = target.y - from.map.y;
     const dirName = Math.abs(ddx) > Math.abs(ddy) ? (ddx > 0 ? 'east' : 'west') : (ddy > 0 ? 'south' : 'north');
@@ -24917,13 +25016,22 @@ export class World {
    *  WITHHOLD the reward and send the player home (the marker moves to town);
    *  otherwise pay out now (today's behavior). Turn-in quests NEVER pay in the
    *  zone — even on a re-clear — so the giver is always the payout point. */
-  private onQuestZoneFieldCleared(zoneId: string): void {
+  private onQuestZoneFieldCleared(zoneId: string, places?: readonly Vec2[], to?: Seat | null): void {
     // Every row on this ground (THE JUICING LEAN stacks boards' postings on
     // one zone beside an authored quest's own arena).
-    // THE QUEST HAND: a deed the sim noticed pays the act's seat, else the player nearest it.
-    this.deedHand(() => this.objectivePlaces(), () => {
+    const fieldRows = (): void => {
       for (const aq of this.activeQuests.filter(e => !e.placeId && e.zoneId === zoneId)) this.completeQuestField(aq);
-    });
+    };
+    // THE CHARACTER'S QUESTS (card 24): on a hosted world the deed completes the field leg
+    // in the ledger of every seat it credits (THE NEAR LAW), each in its own hand.
+    if (this.localSeat.keeper) {
+      const acting = this.actingSeat;
+      const author = to ?? (acting && !acting.keeper && !acting.merc ? acting : null);
+      for (const seat of this.creditedHands(places ?? this.objectivePlaces(), author)) this.withQuestHand(seat, fieldRows);
+      return;
+    }
+    // THE QUEST HAND: a deed the sim noticed pays the act's seat, else the player nearest it.
+    this.deedHand(() => this.objectivePlaces(), fieldRows);
   }
 
   /** THE QUEST HAND for a deed the sim noticed (a field cleared, a place satisfied): the
@@ -24938,6 +25046,19 @@ export class World {
   /** A place is its own objective owner inside the shared continuous scene.
    * The runtime's durable witness, never a caller's success flag, authorizes it. */
   completeMassQuest(questId: string, placeId: string): void {
+    // THE CHARACTER'S QUESTS (card 24): on a hosted world the satisfied place completes the
+    // leg in every credited seat's own ledger (THE NEAR LAW about the place).
+    if (this.localSeat.keeper) {
+      const live = this.massRuntime;
+      if (!live || !massQuestSatisfied(live, questId, placeId)) return;
+      const place = massQuestDestination(live, questId);
+      const places = place && live.journey ? [live.journey.local(place)] : [];
+      for (const seat of this.creditedHands(places)) this.withQuestHand(seat, () => {
+        const mine = this.activeQuests.find(q => q.questId === questId && q.placeId === placeId);
+        if (mine) this.completeQuestField(mine);
+      });
+      return;
+    }
     const mass = this.massRuntime, entry = this.activeQuests.find(q => q.questId === questId && q.placeId === placeId);
     if (!mass || !entry || this.player.dead || !massQuestSatisfied(mass, questId, placeId)) return;
     this.deedHand(() => { // THE QUEST HAND: the player nearest the satisfied place
@@ -24968,6 +25089,7 @@ export class World {
   /** Owed quest objects survive an expired ground cache or a full pack. A field
    * deed can recreate its uncollected object only on that quest's own ground. */
   private ensureQuestCargo(): void {
+    if (this.localSeat.keeper) { this.ensureSeatCargo(); return; } // THE CHARACTER'S QUESTS
     for (const aq of this.activeQuests) {
       if (aq.placeId || !aq.fieldDone || aq.zoneId !== this.zone.id) continue;
       const q = this.questDefOf(aq.questId);
@@ -24985,6 +25107,33 @@ export class World {
       const at = this.actors.find(a => a.defId === boss && a.dead)?.pos ?? deed ?? this.player.pos;
       this.dropGearAt(at, item, undefined, true);
       this.charDirty = true;
+    }
+  }
+
+  /** THE CHARACTER'S QUESTS (card 24) on a hosted world: every hand here whose own
+   *  ledger finished a collect quest's field leg on this ground is owed its own
+   *  cargo, carried in its own bag; a cargo lying on the ground stands for one
+   *  owed hand (first come), and only the remainder mints, where the deed was done. */
+  private ensureSeatCargo(): void {
+    const lying = new Map<string, number>();
+    for (const d of this.drops) {
+      if (d.item.kind === 'gear' && d.item.item.questId) lying.set(d.item.item.questId, (lying.get(d.item.item.questId) ?? 0) + 1);
+    }
+    for (const seat of this.handSeats()) {
+      for (const aq of this.questLedgerOf(seat).active) {
+        if (aq.placeId || !aq.fieldDone || aq.zoneId !== this.zone.id) continue;
+        const q = this.withQuestHand(seat, () => this.questDefOf(aq.questId));
+        if (!q?.collect || seat.meta.items.some(i => i.questId === q.id)) continue;
+        const standing = lying.get(q.id) ?? 0;
+        if (standing > 0) { lying.set(q.id, standing - 1); continue; }
+        const item: ItemInstance = { uid: nextItemUid(), baseId: q.collect.baseId,
+          name: q.collect.name, questId: q.id, rarity: 'common', ilvl: this.zone.level,
+          tier: 1, baseRoll: 0, affixes: [], implicitRolls: [] };
+        const boss = this.zone.objective.kind === 'boss' ? this.zone.objective.id : undefined;
+        const at = this.actors.find(a => a.defId === boss && a.dead)?.pos ?? this.objectivePlaces()[0] ?? this.seatHero(seat).pos;
+        this.dropGearAt(at, item, undefined, true);
+        this.charDirty = true;
+      }
     }
   }
 
@@ -25065,15 +25214,15 @@ export class World {
       }
       if (q.reward.grantVocation) this.grantVocation(q.reward.grantVocation, hand);
       if (q.reward.ledger) {
-        for (const [k, v] of Object.entries(q.reward.ledger)) bumpLedger(this.ledger, k, v);
+        for (const [k, v] of Object.entries(q.reward.ledger)) this.questStamp(k, v); // THE CHARACTER'S QUESTS: the chain keys are the hand's own
       }
       if (posting) {
         // THE SHARED-STAMP LAW (charter §2): a GENERATED posting never
         // stamps a per-id quest_done: key (fresh ids per posting would grow
         // the account ledger without bound) — the shared counters carry the
         // deed instead, run + account, same durability precedent.
-        bumpLedger(this.ledger, LEDGER_BOUNTY_DONE);
-        bumpLedger(this.ledger, bountyDoneKindKey(posting.kind));
+        this.questStamp(LEDGER_BOUNTY_DONE); // THE CHARACTER'S QUESTS
+        this.questStamp(bountyDoneKindKey(posting.kind));
         if (this.metaProgressionActive()) {
           const kk = bountyDoneKindKey(posting.kind);
           this.account.ledger[LEDGER_BOUNTY_DONE] = (this.account.ledger[LEDGER_BOUNTY_DONE] ?? 0) + 1;
@@ -25089,7 +25238,7 @@ export class World {
         // precedent: quit-without-death keeps the deed; the death-merge's later
         // add is harmless, every reader tests ≥ 1). Gatework `quest` avenues
         // read these the moment the deed lands, never a death later.
-        bumpLedger(this.ledger, questDoneKey(aq.questId));
+        this.questStamp(questDoneKey(aq.questId)); // THE CHARACTER'S QUESTS: the quest-done key gates the hand's own offers
         if (this.metaProgressionActive()) {
           this.account.ledger[questDoneKey(aq.questId)] =
             (this.account.ledger[questDoneKey(aq.questId)] ?? 0) + 1;
@@ -25189,7 +25338,8 @@ export class World {
 
   claimQuestImbue(questId: string, uid: number, affixId: string, seat: Seat = this.localSeat): boolean {
     if ((seat !== this.localSeat && !this.localSeat.keeper) || this.clientActionHook || seat.actor.dead || seat.actor.downed) return false; // keeperSeat
-    const reward = this.questImbues.find(r => r.questId === questId), q = QUESTS[questId];
+    const book = this.questLedgerOf(seat); // THE CHARACTER'S QUESTS: the claimant's own imbues (the run's one off a hosted world)
+    const reward = book.imbues.find(r => r.questId === questId), q = QUESTS[questId];
     const giver = q && this.withQuestHand(seat, () => this.giverPresent(q.turnIn?.giver ?? q.giver)); // THE QUEST HAND: the giver by the claimant
     if (!reward || !q || !giver) return false;
     const item = this.bagItem(seat, uid);
@@ -25197,7 +25347,7 @@ export class World {
     if (!item || !affix) return false;
     const result = imbuedItem(item, affix);
     seat.meta.items = seat.meta.items.map(i => i.uid === uid ? result : i);
-    this.questImbues = this.questImbues.filter(r => r !== reward);
+    book.imbues = book.imbues.filter(r => r !== reward);
     this.markMetaDirty(seat);
     this.notice(`${result.name} — ${giver.name ?? 'the giver'}’s promise is kept.`, ITEM_RARITIES.rare.color, 16, 'civic');
     saveCharacter(this);
@@ -41356,14 +41506,16 @@ export class World {
     {
       id: 'bounty_cull_claim',
       tag: 'bounty_mark',
-      when: () => this.bountyHands.some(h =>
-        h.kind === 'cull' && h.zoneId === this.zone.id && !!h.cull && h.cull.claimed < h.cull.count),
-      run: () => {
-        const p = this.bountyHands.find(h =>
-          h.kind === 'cull' && h.zoneId === this.zone.id && !!h.cull && h.cull.claimed < h.cull.count)!;
-        p.cull!.claimed++;
-        this.charDirty = true;
-        this.noteBountyReady(p); // THE READINESS LAW's one announce site
+      // THE CHARACTER'S QUESTS: the killer's own open cull here first, then any hand's.
+      when: ctx => this.openWritHand('cull', ctx.killer) !== null,
+      run: ctx => {
+        const h = this.openWritHand('cull', ctx.killer);
+        if (!h) return;
+        this.withQuestHand(h.seat, () => {
+          h.p.cull!.claimed++;
+          this.charDirty = true;
+          this.noteBountyReady(h.p); // THE READINESS LAW's one announce site
+        });
       },
     },
     // DESCENT — THE DEEP LEDGER: a slain brood-member banks essence UNITS
@@ -41880,7 +42032,10 @@ export class World {
       }
     }
     if (!silent && actor.team === 'enemy') {
-      this.odyssey.killed(actor, credit);
+      // THE CHARACTER'S QUESTS: on a hosted world a kill's lead is the killer's own.
+      const leadHand = this.localSeat.keeper ? this.seatOfRoot(killer) : undefined;
+      if (leadHand && !leadHand.keeper && !leadHand.merc) this.withQuestHand(leadHand, () => this.odyssey.killed(actor, credit));
+      else this.odyssey.killed(actor, credit);
       // THE SPOILS STORY: everything minted below wears this body's story —
       // the helpers clamp on it and stamp it (spoilStory, restored at the
       // block's end), and the marks catch any literal push (stampSpoils):
@@ -43394,8 +43549,8 @@ export class World {
     if (odysseyRefusal) return odysseyRefusal;
     if (v && v.tradeGate === false) return null;
     // No catalog in scope here — trade gates speak feature/ledger avenues.
-    if (gateMet(this.account, VENDOR_CFG.trade.gate, 'all', () => false)) return null;
-    return isVaultAvailable(this.account) ? VENDOR_CFG.trade.hint : 'You have no way to pay. This counter cannot trade with you yet.';
+    if (gateMet(this.gateAccountOf(this.shelfBuyer), VENDOR_CFG.trade.gate, 'all', () => false)) return null; // THE SEAT'S GATE: the buyer's account (M2)
+    return isVaultAvailable(this.gateAccountOf(this.shelfBuyer)) ? VENDOR_CFG.trade.hint : 'You have no way to pay. This counter cannot trade with you yet.';
   }
 
   /** THE MEMORY COUNTER (skill-items M3 — the gem case's face-seal retired):
@@ -43485,7 +43640,7 @@ export class World {
    *  the ceiling; nothing anywhere counts to three). */
   vendorLockCap(): number {
     let cap = 0;
-    for (const r of VENDOR_CFG.lock.ladder) if (featureEnabled(this.account, r.flag)) cap++;
+    for (const r of VENDOR_CFG.lock.ladder) if (featureEnabled(this.gateAccountOf(this.shelfBuyer), r.flag)) cap++; // THE SEAT'S GATE
     return cap;
   }
 
@@ -43571,6 +43726,7 @@ export class World {
       if (!smith) this.text(chandler.pos, `${chandler.name ?? 'The chandler'} restocks the wares.`, '#c8b06e', 13);
     }
     this.vendorRestockAt = (beat + 1) * this.restockSeconds();
+    if (this.localSeat.keeper) this.armBuyerShelves(true); // THE SHELF PER BUYER: every buyer here restocks with the counter
   }
 
   /** THE STANDING ORDER — resolve every restock beat since the counter last
@@ -43602,6 +43758,7 @@ export class World {
    *  ON reserves within the ladder's capacity; OFF releases — the row stays
    *  on the shelf until the next restock re-rolls its slot. */
   setVendorLock(vendorId: string, index: number, on: boolean, seat: Seat = this.localSeat): boolean {
+    if (this.buysAsOwn(seat)) return this.withBuyer(seat, () => this.setVendorLock(vendorId, index, on, seat)); // THE SHELF PER BUYER: the buyer's own hold
     const v = VENDORS.find(x => x.id === vendorId);
     if (!v?.holds?.locks || !v.near(this, seat)) return false;
     const stock = v.stock(this);
@@ -43638,6 +43795,7 @@ export class World {
     vendorId: string, gem: { kind: 'skill' | 'support'; id: string } | null,
     seat: Seat = this.localSeat,
   ): boolean {
+    if (this.buysAsOwn(seat)) return this.withBuyer(seat, () => this.setVendorCommission(vendorId, gem, seat)); // THE SHELF PER BUYER: the buyer's own standing order
     const v = VENDORS.find(x => x.id === vendorId);
     if (!v?.holds?.commission || !v.near(this, seat)) return false;
     if (!featureEnabled(this.account, FEATURE.VENDOR_COMMISSION)) return false;
@@ -43717,8 +43875,29 @@ export class World {
   private serializeVendorHolds(): Record<string, VendorHoldSave> | undefined {
     this.syncHoldIdx('brandt', this.vendorStock);
     this.syncHoldIdx('chandler', this.chandlerStock);
+    return this.packVendorHolds(this.vendorHolds);
+  }
+
+  /** THE SHELF PER BUYER: each character's holds, save-shaped by character key (each
+   *  buyer's live seats re-anchored first); absent off a hosted world or with none. */
+  private serializeCharVendorHolds(): Pick<WorldStateSave, 'charVendorHolds'> {
+    if (!this.localSeat.keeper) return {};
+    for (const seat of this.allQuestHands()) {
+      const shelf = this.seatShelves.get(seat.id);
+      if (shelf) this.withBuyer(seat, () => { this.syncHoldIdx('brandt', shelf.brandt); this.syncHoldIdx('chandler', shelf.chandler); });
+    }
+    const out: Record<string, Record<string, VendorHoldSave>> = {};
+    for (const [who, holds] of Object.entries(this.charVendorHolds)) {
+      const packed = this.packVendorHolds(holds);
+      if (packed) out[who] = packed;
+    }
+    return Object.keys(out).length ? { charVendorHolds: out } : {};
+  }
+
+  /** One counter book, save-shaped (only holds carrying state). */
+  private packVendorHolds(holds: Record<string, VendorHold>): Record<string, VendorHoldSave> | undefined {
     const out: Record<string, VendorHoldSave> = {};
-    for (const [key, hold] of Object.entries(this.vendorHolds)) {
+    for (const [key, hold] of Object.entries(holds)) {
       if (!hold.locks.length && !hold.commission) continue;
       out[key] = {
         locks: hold.locks.map(r => ({
@@ -43783,8 +43962,82 @@ export class World {
   // --- THE CHANDLER'S COUNTER (a harborhold service — data/harborholds.ts) ---
   /** The port counter's wares (armed by refreshHoldServices while the town
    *  stands and the chandler rung is bought; the ordinary stock builder —
-   *  per-port flavor is a queued lean on the builder's tables). */
-  chandlerStock: VendorEntry[] = [];
+   *  per-port flavor is a queued lean on the builder's tables). THE SHELF PER
+   *  BUYER: the buyer's own inside a purchase on a hosted world. */
+  get chandlerStock(): VendorEntry[] { return this.shelfBuyer ? this.buyerShelfOf(this.shelfBuyer).chandler : this.ownChandlerStock; }
+  set chandlerStock(v: VendorEntry[]) { if (this.shelfBuyer) this.buyerShelfOf(this.shelfBuyer).chandler = v; else this.ownChandlerStock = v; }
+  /** The World's own wares at the chandler's counter. */
+  ownChandlerStock: VendorEntry[] = [];
+
+  // --- THE SHELF PER BUYER (card 29 ruled 2026-10-10; docs/engine/vendors.md) -----
+  // A hosted world's counters roll per buyer, the way Path of Exile's vendors are
+  // each player's own: the same restock beat, the buyer's own seeded draw (world
+  // seed × counter × beat × character), the buyer's level and the gates of the
+  // account the seat claims (gateAccountOf). Off a hosted world there is one local
+  // buyer and its shelf is the World's own, byte for byte (THE SOLO INVARIANT,
+  // balance/probe_shardcharacter.ts Z).
+
+  /** THE SHELF PER BUYER's scope (withBuyer). Set on a hosted world alone. */
+  private shelfBuyer: Seat | null = null;
+  /** Each buyer's standing shelves by seat id (THE HAND-OFF moves them with the seat). */
+  readonly seatShelves = new Map<string, BuyerShelf>();
+
+  /** Run `fn` as `seat`'s visit to the counters: on a hosted world the shelf, the
+   *  armed beats, the holds and standing order, the level, the carried gems and the
+   *  gates are the buyer's own; elsewhere `fn` runs as it always did. Nests. */
+  withBuyer<T>(seat: Seat, fn: () => T): T {
+    if (!this.localSeat.keeper || seat.keeper || seat.merc) return fn();
+    const was = this.shelfBuyer;
+    this.shelfBuyer = seat;
+    try { return fn(); } finally { this.shelfBuyer = was; }
+  }
+
+  /** Does a counter act by `seat` still need its own buyer's scope? (A hosted world's
+   *  player seat outside its own withBuyer; never the keeper, a hired blade, or a
+   *  solo or co-op seat, whose shelf is the World's one.) */
+  private buysAsOwn(seat: Seat): boolean {
+    return !!this.localSeat.keeper && !seat.keeper && !seat.merc && this.shelfBuyer !== seat;
+  }
+
+  /** A buyer's standing shelves, stood up empty at its first read. */
+  private buyerShelfOf(seat: Seat): BuyerShelf {
+    let shelf = this.seatShelves.get(seat.id);
+    if (!shelf) this.seatShelves.set(seat.id, shelf = { brandt: [], chandler: [], armed: {} });
+    return shelf;
+  }
+
+  /** THE SHELF PER BUYER's seed limb: the buyer's character inside a hosted purchase
+   *  (null elsewhere, so the solo and co-op seeds stay what they were). */
+  shelfCharKey(): string | null { return this.shelfBuyer ? charKeyOf(this.shelfBuyer) : null; }
+
+  /** The hero a shelf rolls for: the buyer's on a hosted world, the hero elsewhere. */
+  private shelfHero(): Actor { return this.shelfBuyer ? this.seatHero(this.shelfBuyer) : this.player; }
+
+  /** THE SHELF PER BUYER's arm on a hosted world: every standing player in this zone
+   *  holds its own shelf at each counter that stands here, dealt from the shared beat
+   *  (a turned beat re-deals it; a standing one keeps it, purchases spliced; the
+   *  counter's own restock, `restock`, re-deals every buyer's here with it). */
+  private armBuyerShelves(restock = false): void {
+    const smith = this.actors.some(a => this.hasNpcRole(a, 'vendor') && !a.dead);
+    const chandler = this.actors.some(a => this.hasNpcRole(a, 'chandler') && !a.dead);
+    if (!smith && !chandler) return;
+    const beat = this.restockOrdinal();
+    for (const seat of this.handSeats()) {
+      this.withBuyer(seat, () => {
+        const armed = this.vendorArmedBeat;
+        if (smith && (restock || armed.brandt !== beat)) {
+          this.syncHoldIdx('brandt', this.vendorStock);
+          this.vendorStock = this.armVendorStock('brandt');
+          armed.brandt = beat;
+        }
+        if (chandler && (restock || armed.chandler !== beat)) {
+          this.syncHoldIdx('chandler', this.chandlerStock);
+          this.chandlerStock = this.armVendorStock('chandler');
+          armed.chandler = beat;
+        }
+      });
+    }
+  }
 
   /** Is this seat at the chandler's counter? (The VendorDef row's gate.)
    *  Reach rides the role ruleset (THE COUNTER LAW: a roofed chandler
@@ -43799,6 +44052,7 @@ export class World {
   /** Buy one of the chandler's wares — buyVendorGem's exact contract on the
    *  port counter's own stock (affordability → bag fit → the spend). */
   buyChandlerGem(index: number, seat: Seat = this.localSeat): boolean {
+    if (this.buysAsOwn(seat)) return this.withBuyer(seat, () => this.buyChandlerGem(index, seat)); // THE SHELF PER BUYER: the buyer's own shelf
     const m = seat.meta;
     const entry = this.chandlerStock[index];
     if (!entry || !this.nearChandler(seat)) return false;
@@ -44015,6 +44269,9 @@ export class World {
     // client's whole truth; accounts may even disagree on the quantum).
     if (this.zoneHasVendorCounter && !this.clientActionHook
       && this.vendorRestockAt > 0 && this.time >= this.vendorRestockAt) this.restockVendor();
+    // THE SHELF PER BUYER (card 29 ruled): on a hosted world each standing player here
+    // holds its own shelf, dealt from the shared beat.
+    if (this.zoneHasVendorCounter && this.localSeat.keeper && !this.clientActionHook) this.armBuyerShelves();
 
     // Mireille heals you for lingering near her (proximity, not a keypress).
     this.updateMireille(dt);
@@ -47754,7 +48011,7 @@ export class World {
         const bonus = objectiveRewardXp(escaped.level);
         this.grantXp(bonus, a.pos, seat);
         word = `Escaped ${escaped.name}! +${bonus} xp`;
-        if (this.activeQuests.some(q => q.zoneId === escaped.id)) this.onQuestZoneFieldCleared(escaped.id);
+        if (this.questOnZone(escaped.id)) this.onQuestZoneFieldCleared(escaped.id, [a.pos], seat); // THE CHARACTER'S QUESTS: the escaper and its party near the door
       } finally { this.actingSeat = acting; }
     }
     const carry = !this.zoneMap[dest] && !!this.caveMap[dest]; // pocket to pocket: the way home walks along
@@ -53412,7 +53669,8 @@ export class World {
   /** THE QUEST HAND: the seat a quest read or act answers. The scoped seat
    *  (withQuestHand: a seat's journal row, its giver linger, its claim), else on
    *  a hosted world the acting seat (a meta act, a credited kill), else the
-   *  local hero. Quest STATE stays the world's (card 24 is unruled); every ACT
+   *  local hero. THE CHARACTER'S QUESTS (card 24 ruled): the hand's own ledger
+   *  is the quest STATE every read and act sees (World.questLedger); every ACT
    *  and every REWARD is the hand's. */
   questHand(): Seat {
     if (this.questSeat) return this.questSeat;
@@ -53425,6 +53683,247 @@ export class World {
     const was = this.questSeat;
     this.questSeat = seat;
     try { return fn(); } finally { this.questSeat = was; }
+  }
+
+  // ---- THE CHARACTER'S QUESTS (card 24 ruled 2026-10-10; engine/questLedger.ts) ----
+  // The unit of a quest is the CHARACTER. Off a hosted world every read below is
+  // the local seat's ledger, the run's own quest state (THE SOLO INVARIANT); on a
+  // hosted world each player seat holds its own and the keeper's is a sink.
+
+  /** The quest state a read or act answers: the quest hand's own ledger. */
+  questLedger(): QuestLedger {
+    if (!this.localSeat?.keeper) return this.ownQuestLedger;
+    if (this.questLedgerOverride) return this.questLedgerOverride;
+    return this.questLedgerOf(this.questHand());
+  }
+
+  /** The ledger a hosted world's writ seeding reads through (seedHeroWrits). */
+  private questLedgerOverride: QuestLedger | null = null;
+  /** A hosted wake's first visit, kept for the seat that woke it (noteSeatArrival). */
+  private wakeFirstVisit = false;
+
+  /** THE CHARACTER'S QUESTS on a hosted world: a zone's writ ground (THE CULL's marks,
+   *  THE GATHER's nodes) deals the remainder of EVERY hero's open posting of that kind
+   *  on it, wherever the hero stands: each posting seeds in turn against a running
+   *  total, so the standing ground holds the sum of their remainders and each posting
+   *  keeps its own level and its own stream. */
+  private seedHeroWrits(kind: 'cull' | 'gather', def: ZoneDef, seed: (host: NativeSceneBountyHost) => void): void {
+    let total = 0;
+    for (const s of this.allQuestHands()) {
+      for (const p of this.questLedgerOf(s).hands) {
+        const writ = kind === 'cull' ? p.cull : p.gather;
+        if (p.kind !== kind || p.zoneId !== def.id || !writ) continue;
+        total += Math.max(0, writ.count - writ.claimed);
+        const was = this.questLedgerOverride;
+        this.questLedgerOverride = { ...newQuestLedger(), hands: [{ ...p, [kind]: { count: total, claimed: 0 } }] };
+        try { seed(this.nativeSceneBountyHost()); } finally { this.questLedgerOverride = was; }
+      }
+    }
+  }
+
+  /** THE CHARACTER'S QUESTS: a seat landed in this World (THE HAND-OFF's arrival): its own
+   *  held postings read the arrival (an errand's entry, a survey's new ground, a trail's
+   *  crossing); the wake's first visit is the seat's that woke it. Hosted worlds alone. */
+  noteSeatArrival(seat: Seat, from: string | null): void {
+    if (!this.localSeat.keeper || seat.keeper || seat.merc || this.clientActionHook) return;
+    const first = this.wakeFirstVisit;
+    this.wakeFirstVisit = false;
+    this.withQuestHand(seat, () => sceneNoteBountyArrivals(this.nativeSceneBountyHost(), this.zone, first, from ?? undefined));
+  }
+
+  /** A seat's own ledger. Off a hosted world (or for the keeper and a hired blade)
+   *  the run's one ledger; on a hosted world the seat's own, kept by the World it
+   *  stands in (THE OCCUPIED LAW: a keeper sweep reaching a seat in another unit
+   *  reads that unit's), stood up empty at its first read. */
+  questLedgerOf(seat: Seat): QuestLedger {
+    if (!this.localSeat?.keeper || seat.keeper || seat.merc) return this.ownQuestLedger;
+    const mine = this.seatQuests.get(seat.id);
+    if (mine) return mine;
+    let home: World = this;
+    for (const w of this.presentWorlds()) {
+      const there = w.seatQuests.get(seat.id);
+      if (there) return there;
+      if (w.seats.includes(seat)) home = w;
+    }
+    const fresh = newQuestLedger();
+    home.seatQuests.set(seat.id, fresh);
+    return fresh;
+  }
+
+  /** Stamp a quest act's run-ledger key: the hand's own ledger on a hosted world
+   *  (its quest-done and chain keys gate its own offers, never another hero's),
+   *  the run ledger everywhere else. */
+  questStamp(key: string, n = 1): void {
+    const hand = this.localSeat.keeper ? this.questHand() : null;
+    bumpLedger(hand && !hand.keeper && !hand.merc ? this.questLedgerOf(hand).keys : this.ledger, key, n);
+  }
+
+  /** The run ledger a quest gate reads: on a hosted world the world's run ledger
+   *  under the hand's own quest keys; everywhere else the run ledger itself. */
+  questRunLedger(): Readonly<Record<string, number>> {
+    const hand = this.localSeat.keeper ? this.questHand() : null;
+    if (!hand || hand.keeper || hand.merc) return this.ledger;
+    const keys = this.questLedgerOf(hand).keys;
+    return Object.keys(keys).length ? { ...this.ledger, ...keys } : this.ledger;
+  }
+
+  /** The level a quest hand's offers and board read: on a hosted world the hand's
+   *  own hero, elsewhere the hero (THE SOLO INVARIANT). */
+  questHandLevel(): number {
+    const hand = this.localSeat.keeper ? this.questHand() : null;
+    return hand && !hand.keeper ? this.seatHero(hand).level : this.player.level;
+  }
+
+  /** THE BOARD PER CHARACTER's seed limb: the hand's character on a hosted world
+   *  (its character id, else its seat for a fresh hero who never travels); null
+   *  elsewhere, so a solo or co-op deal keeps its seed byte for byte. */
+  questCharKey(): string | null {
+    const hand = this.localSeat.keeper ? this.questHand() : null;
+    return hand && !hand.keeper && !hand.merc ? charKeyOf(hand) : null;
+  }
+
+  /** THE SEAT'S GATE (M2 re-points it here, in one place): the account whose
+   *  gates a seat's market and board read (the trade gate, the wares and lock
+   *  rungs, the posting pins, the broader and farther rungs). Today every seat
+   *  reads the World's own account: the shard's open account on a hosted world
+   *  (THE KEEPER'S GATE) until M2's account gate gives each seat its own. */
+  gateAccountOf(_seat?: Seat | null): Account {
+    return this.account;
+  }
+
+  /** THE CHARACTER'S QUESTS: the Odyssey leads a read or act answers: the hand's own on a
+   *  hosted world, the campaign's (the run's one hero's) everywhere else. */
+  odysseyLeads(campaign: { leads: string[] }): string[] {
+    const hand = this.localSeat.keeper ? this.questHand() : null;
+    return hand && !hand.keeper && !hand.merc ? this.questLedgerOf(hand).leads : campaign.leads;
+  }
+
+  /** THE WORLD'S HALF on a hosted world: a sim unit's Odyssey campaign is the keeper's
+   *  (THE PRIMARY GATE keeps the runtime's update the keeper's alone). Undefined elsewhere. */
+  keeperCampaign(): ReturnType<OdysseyRuntime['snapshot']> {
+    return this.shardWorld?.role === 'unit' ? this.presentWorlds()[0]?.odyssey.state : undefined;
+  }
+
+  /** The seats whose ledgers a deed here may touch: on a hosted world the
+   *  deed's author (its owner chain's seat) first, then every standing player
+   *  seat in this World; elsewhere the local seat alone (the run's ledger). */
+  private deedHands(author?: Actor | null): Seat[] {
+    if (!this.localSeat.keeper) return [this.localSeat];
+    const out: Seat[] = [];
+    const own = this.seatOfRoot(author);
+    if (own && !own.keeper && !own.merc) out.push(own);
+    for (const s of this.handSeats()) if (!out.includes(s)) out.push(s);
+    return out;
+  }
+
+  /** A writ's claim (THE CULL's mark, THE GATHER's rite): the deed's author's own open
+   *  posting of that kind on this ground first, then any hand's here (any hand's kill
+   *  counts: the writ's honesty); off a hosted world the run's one ledger. */
+  private openWritHand(kind: 'cull' | 'gather', author: Actor | null): { seat: Seat; p: BountyPosting } | null {
+    for (const seat of this.deedHands(author)) {
+      const p = this.questLedgerOf(seat).hands.find(h => h.kind === kind && h.zoneId === this.zone.id
+        && (kind === 'cull' ? !!h.cull && h.cull.claimed < h.cull.count : !!h.gather && h.gather.claimed < h.gather.count));
+      if (p) return { seat, p };
+    }
+    return null;
+  }
+
+  /** Does any ledger here hold a quest on this ground (an objective's latch, an escape's credit)? */
+  private questOnZone(zoneId: string): boolean {
+    if (!this.localSeat.keeper) return this.activeQuests.some(e => e.zoneId === zoneId);
+    return this.seats.some(s => !s.keeper && !s.merc && this.questLedgerOf(s).active.some(e => e.zoneId === zoneId));
+  }
+
+  /** THE NEAR LAW for a deed on a hosted world: the seats it credits are the
+   *  standing player seats within COOP_SCALING.shareRadius of one of its places
+   *  (a radius of 0, or no place known, credits every one here), the deed's own
+   *  author (`to`) always, and with an author only its party (THE KILLER'S DUE:
+   *  grantXp's own filter, so a quest leg credits whom the deed's XP paid). */
+  private creditedHands(places: readonly Vec2[], to?: Seat | null): Seat[] {
+    const r = COOP_SCALING.shareRadius;
+    const out = to && !to.keeper && !to.merc ? [to] : [];
+    for (const s of this.handSeats()) {
+      if (out.includes(s)) continue;
+      if (places.length && r > 0 && !places.some(p => dist(p, this.seatHero(s).pos) <= r)) continue;
+      if (to && places.length && r > 0 && !this.sameParty(to, s)) continue;
+      out.push(s);
+    }
+    return out;
+  }
+
+  /** The seats holding quest ledgers: on a hosted world every player seat of every live
+   *  World (THE OCCUPIED LAW), off one the run's one hero. A sweep over held quests
+   *  world-wide (the save's claimed ground, a zone's writ ground, the bounty watch, the
+   *  vessel's mirror of the holds) reads these. */
+  private allQuestHands(): Seat[] {
+    if (!this.localSeat.keeper) return [this.localSeat];
+    const out: Seat[] = [];
+    for (const w of this.presentWorlds()) for (const s of w.seats) if (!s.keeper && !s.merc && !out.includes(s)) out.push(s);
+    return out;
+  }
+
+  /** The ground held quests claim in the world save (an event zone a quest targets rides
+   *  the save): the run's own ledger's, and on a hosted world every standing hero's. */
+  private questClaimedGround(): Set<string> {
+    const claimed = new Set(this.ownQuestLedger.active.map(q => q.zoneId));
+    if (this.localSeat.keeper) for (const s of this.allQuestHands()) for (const q of this.questLedgerOf(s).active) claimed.add(q.zoneId);
+    return claimed;
+  }
+
+  /** THE CHARACTER'S QUESTS on the Unbroken Wilds (a hosted world's keeper): every hero's
+   *  own country quests settle at their places, each credited by THE NEAR LAW
+   *  (completeMassQuest's hosted half), as the runtime's own settle does for the run's one. */
+  private settleHeroMassQuests(): void {
+    const held = new Set<string>();
+    for (const s of this.allQuestHands()) {
+      for (const q of this.questLedgerOf(s).active) if (q.placeId) held.add(q.questId + '\u0000' + q.placeId);
+    }
+    for (const key of held) {
+      const [questId, placeId] = key.split('\u0000');
+      this.completeMassQuest(questId, placeId);
+    }
+  }
+
+  /** THE CHARACTER'S QUESTS at a vessel's graft: a ledger the hero earned on
+   *  THIS world stands up as the seat's own, re-validated row by row against
+   *  the live chart and registries (adoptWorldState's own tolerance: a posting
+   *  whose ground or kind left drops, a held quest whose def or zone left
+   *  drops, the hands re-stamped to the seat they now ride). */
+  adoptQuestLedger(seat: Seat, saved: QuestLedgerSave | undefined): void {
+    if (!this.localSeat.keeper || seat.keeper) return;
+    const l = newQuestLedger();
+    this.seatQuests.set(seat.id, l);
+    if (!saved) return;
+    // A country posting (the Unbroken Wilds' board) stands while its run stands (the
+    // claim tier: a well-formed vessel is believed); every other posting re-validates.
+    const run = this.massRuntime?.generator.run.runId;
+    const country = (p: BountyPosting): boolean => !!p?.massBounty;
+    const ours = (ps: BountyPosting[] | undefined): BountyPosting[] =>
+      run === undefined ? [] : (ps ?? []).filter(p => country(p) && p.massBounty!.run === run).map(p => structuredClone(p));
+    const bb = sanitizeBountyBoard({ armedBeat: -1, offers: (saved.offers ?? []).filter(p => !country(p)),
+      hands: (saved.hands ?? []).filter(p => !country(p)), boards: saved.boards }, this.zoneMap);
+    for (const [k, v] of Object.entries(saved.boards ?? {})) {
+      if (v && Number.isFinite(v.armedBeat)) l.boards[k] = { armedBeat: Math.floor(v.armedBeat), refreshSeq: Math.max(0, Math.floor(v.refreshSeq ?? 0)) };
+    }
+    l.offers = [...(bb?.offers ?? []), ...ours(saved.offers)];
+    l.hands = [...(bb?.hands ?? []), ...ours(saved.hands)]
+      .map(h => ({ ...h, holder: seat.id, ...(seat.meta.charId ? { holderChar: seat.meta.charId } : {}) }));
+    this.withQuestHand(seat, () => {
+      l.active = saved.active.filter(q => this.questDefOf(q.questId)
+        && (q.placeId === undefined ? !!this.zoneMap[q.zoneId]
+          : !!this.massRuntime && massQuestDestination(this.massRuntime, q.questId)?.id === q.placeId))
+        .map(q => ({ ...q }));
+      for (const h of l.hands) if (!l.active.some(e => e.questId === h.id)) l.active.push({ questId: h.id, zoneId: h.zoneId, fieldDone: this.handState(h) !== 'afield' });
+    });
+    l.completed = new Set(saved.completed);
+    l.imbues = restoreQuestImbues(saved.imbues).filter(r => !!QUESTS[r.questId]?.reward.imbue && l.completed.has(r.questId));
+    l.keys = { ...(saved.keys ?? {}) };
+    l.leads = [...new Set(saved.leads ?? [])];
+  }
+
+  /** The seat's ledger, save-shaped for its vessel's mirror (THE CHARACTER'S QUESTS). */
+  packQuestLedger(seat: Seat, at: number): QuestLedgerSave {
+    return packQuestLedger(this.questLedgerOf(seat), at);
   }
 
   /** The hands a host-side dwell answers: the local hero and couch guests, or
@@ -55865,13 +56364,13 @@ export class World {
     // credits the POSTING. Expiry settles count too — the node is spent
     // either way and the accuracy already scaled the pour, so a missed
     // window can never strand the writ behind a finite stand.
-    const gp = this.bountyHands.find(h =>
-      h.kind === 'gather' && h.zoneId === this.zone.id && !!h.gather && h.gather.claimed < h.gather.count);
-    if (gp) {
-      gp.gather!.claimed++;
+    // THE CHARACTER'S QUESTS: the rite's own hand's open gather first, then any hand's here.
+    const gh = this.openWritHand('gather', this.seats.find(x => x.id === s.seatId)?.actor ?? null);
+    if (gh) this.withQuestHand(gh.seat, () => {
+      gh.p.gather!.claimed++;
       this.charDirty = true;
-      this.noteBountyReady(gp); // THE READINESS LAW's one announce site
-    }
+      this.noteBountyReady(gh.p); // THE READINESS LAW's one announce site
+    });
   }
 
   /** THE ANTI-MEMORIZE LAW's toggle gate: true while a rite's world-freeze
@@ -56994,7 +57493,7 @@ export class World {
     // completedObjectives; activeQuests/completedQuests are per-run, re-offered from
     // the account ledger), so this guards only a WITHIN-run re-clear of an
     // already-cleared quest zone (the 'already cleared' branch below).
-    const isQuestZone = this.activeQuests.some(e => e.zoneId === this.zone.id);
+    const isQuestZone = this.questOnZone(this.zone.id); // THE CHARACTER'S QUESTS: any ledger here holding this ground
     // One-time REWARD: a re-cleared zone pays no bounty (it still unseals above so
     // the player can leave). First clear pays the bounty.
     if (this.completedObjectives.has(this.zone.id)) {
