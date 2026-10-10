@@ -11,8 +11,11 @@
 import { SAVE_COMPATIBILITY } from '../meta/saveCompatibility';
 
 /** Bump when the shard's wire grammar changes in a way an older peer cannot read.
- *  2: THE WIRE DIET (net/wireDiet.ts): the codec's rows, the dress delta and the acks. */
-export const SHARD_WIRE_PROTOCOL = 2;
+ *  2: THE WIRE DIET (net/wireDiet.ts): the codec's rows, the dress delta and the acks.
+ *  3: THE IMMORTAL'S COVENANT ON A SHARD (card 30): a client must book `stageDeath` and `fell`
+ *     (an older one would play the shatter, lose the tithe and never stamp its fallen card);
+ *     THE SPOILS' OWNER's (card 27) drop rows and party words ride beside them. */
+export const SHARD_WIRE_PROTOCOL = 3;
 
 /** This build's stamp, as the join and the welcome carry it. */
 export function shardBuildStamp(): string {

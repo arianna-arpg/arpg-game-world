@@ -47,8 +47,9 @@
 //      the beat and at the farewell, and round-trips as the next upload
 //   N  THE DEATH COVENANT: a mortal vessel with no one left to kneel falls
 //      (body recorded, `corpse` then `runEnd`, the client's own reckoning,
-//      the run slot wiped, the seat gone); Immortal vessels and fresh heroes
-//      keep THE MERCY; a fallen vessel never walks in again; a vessel that
+//      the run slot wiped, the seat gone); an Immortal vessel takes its stage's
+//      own death (card 30: the Sworn crossing wakes at the hearth); a fallen
+//      vessel never walks in again; a vessel that
 //      leaves while down has fallen and hears THE LATE WORD at its next upload
 //   O  THE CORPSE RETURNS: the same account's next hero finds the body, only
 //      its owner reclaims it by the dwell, the gear comes home to its bag, the
@@ -537,12 +538,19 @@ await waitFor(() => vh.vessels.falls === 1, vh, 120);
   await waitFor(() => !!seatOf(iw.self), vh, 60);
   const hero = vh.world.seatHero(seatOf(iw.self)!);
   check('N immortal: an Immortal vessel grafts under its own contract', seatOf(iw.self)!.meta.modeId === 'immortal' && !!vh.vessels.vesselOf(iw.self));
+  // THE IMMORTAL'S COVENANT ON A SHARD (card 30, RULED A 2026-10-10): the stage's own death runs here;
+  // the Sworn rung's final down is THE CROSSING (balance/probe_shardcovenant.ts pins the whole law).
+  const fallsI = vh.vessels.falls, crossingsI = vh.vessels.crossings;
   vh.world.kill(hero);
   await runTicks(vh, 2);
-  check('N immortal: its death is a DOWN (its stage survives death: no fall, no body)',
-    hero.downed && !!seatOf(iw.self) && !ciRows.some(m => m.t === 'corpse' || m.t === 'runEnd') && vh.corpses.forAccount(acctI.accountId).length === 0);
-  await runTicks(vh, Math.ceil(SHARD_CFG.keeper.reviveSec * SHARD_CFG.tickHz * 1.1) + 2);
-  check('N immortal: THE MERCY stands it back up', !hero.downed && !hero.dead && hero.life > 0);
+  const bodiesI = vh.corpses.forAccount(acctI.accountId);
+  check('N immortal: its final down is its stage\'s own death, THE CROSSING (no mortal fall, no tombstone, a self-only body)',
+    vh.vessels.crossings === crossingsI + 1 && vh.vessels.falls === fallsI && !vh.corpses.hasFallen(acctI.accountId, VI.charId!)
+    && seatOf(iw.self)?.meta.modeStage === 1 && bodiesI.length === 1 && bodiesI[0].ring === 'own'
+    && !ciRows.some(m => m.t === 'corpse' || m.t === 'runEnd'));
+  await waitFor(() => !hero.dead, vh, Math.ceil(VESSEL_CFG.deathBeatSec * SHARD_CFG.tickHz) + 30);
+  check('N immortal: after THE DEATH BEAT it wakes at the hearth, standing (never a leave)',
+    !hero.downed && !hero.dead && hero.life > 0 && !!seatOf(iw.self) && ciRows.some(m => m.t === 'stageDeath'));
   ci.leave();
   await waitFor(() => !seatOf(iw.self), vh, 60);
 }
