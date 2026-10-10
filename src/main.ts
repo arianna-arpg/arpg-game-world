@@ -2720,6 +2720,43 @@ function onClientRunEnd(): void {
   if (fell) ui.showDeath(fell.reck, pickNextHero); else pickNextHero();
 }
 
+/** THE IMMORTAL'S COVENANT ON A SHARD (card 30): presentation only, the shard decided and
+ *  banked everything (and the link booked its word). THE CROSSING (a `stageDeath` word, then our
+ *  body dead on the wire) plays the solo fade: the dark falls at the mode's own pace while the
+ *  body lies dead, goes whole the frame the wake lands (our hero standing again, at the hearth,
+ *  so the move is never seen), holds, then lifts. THE FALL (an Undying's body dead) plays the
+ *  solo fall's dark, never the mortal's shatter; `runEnd` opens the screen over it. A crossing
+ *  word with no death on screen (a late word at a join) is booked and never shown. True while it
+ *  owns the frame. */
+const COVENANT_FADE_CFG = {
+  /** A crossing word this old with no death on screen is a late word: booked, never shown (ms). */
+  staleMs: 3000,
+};
+let clientCovenant: { kind: 'cross' | 'fall'; t: number; woke: number | null; fx: { fadeOutSec: number; holdSec: number; fadeInSec: number } } | null = null;
+function clientCovenantBeat(dt: number): boolean {
+  if (!(net instanceof WsTransport) || !shardVessel || shardVessel.net !== net) return false;
+  const me = shell.latest?.seats[world.clientSeatId];
+  const dead = !!me?.dead && world.player.dead;
+  if (!clientCovenant) {
+    const pending = shardVessel.crossingPending();
+    if (pending && dead) {
+      shardVessel.takeCrossing();
+      clientCovenant = { kind: 'cross', t: 0, woke: null, fx: shardVessel.fadePacing() };
+    } else if (pending && Date.now() - pending.at > COVENANT_FADE_CFG.staleMs) shardVessel.takeCrossing();
+    else if (dead && shardVessel.fallsOnDeath()) clientCovenant = { kind: 'fall', t: 0, woke: null, fx: shardVessel.fadePacing() };
+    if (!clientCovenant) return false;
+  }
+  const c = clientCovenant;
+  c.t += dt;
+  if (c.kind === 'fall') { world.screenFade = Math.min(1, c.t / RUN_END_FADE.outSec); return true; } // the solo fall's dark; runEnd opens the screen
+  if (c.woke === null && me && !me.dead) c.woke = c.t; // THE WAKE landed: the dark goes whole at once
+  if (c.woke === null) { world.screenFade = Math.min(1, c.t / Math.max(0.01, c.fx.fadeOutSec)); return true; }
+  const lift = Math.max(c.woke, c.fx.fadeOutSec) + c.fx.holdSec;
+  world.screenFade = c.t < lift ? 1 : Math.max(0, 1 - (c.t - lift) / Math.max(0.01, c.fx.fadeInSec));
+  if (c.t >= lift + c.fx.fadeInSec) { clientCovenant = null; world.screenFade = 0; }
+  return true;
+}
+
 /** THE ACTING SEAT (the death beat, docs/render/player-death.md): on a hosted world
  *  a fallen hero's body stands dead on the wire for VESSEL_CFG.deathBeatSec before
  *  `runEnd`, so the blow is seen. The presentation starts at the first frame our own
@@ -2728,6 +2765,7 @@ function onClientRunEnd(): void {
  *  the frozen world stops rendering when the presentation completes. */
 let clientDeath: { open: (revealSec?: number) => void; opened: boolean } | null = null;
 function clientDeathBeat(dt: number): void {
+  if (clientCovenantBeat(dt)) return; // THE IMMORTAL'S COVENANT ON A SHARD (card 30): the crossing's fade, the fall's dark
   if (!(net instanceof WsTransport) || !DEATH_PRESENTATION.enabled) return;
   if (!world.deathPresentation && world.player.dead && shell.latest?.seats[world.clientSeatId]?.dead) world.deathPresentation = { elapsed: 0 };
   const dp = world.deathPresentation;
@@ -2866,7 +2904,8 @@ const partyPanel = new PartyPanel(
     radius: PARTY_WIRE_CFG.nearRadius,
   }),
   {
-    send: (op, seat) => { if (net instanceof WsTransport) net.sendSession({ t: 'party', op, ...(seat ? { seat } : {}) }); },
+    // THE SPOILS' OWNER (card 27): the 'rule' word carries the leader's choice.
+    send: (op, seat, spoils) => { if (net instanceof WsTransport) net.sendSession({ t: 'party', op, ...(seat ? { seat } : {}), ...(spoils ?? {}) }); },
     settleInvite: from => PARTY_INBOX.settle(from),
   },
 );
@@ -2987,6 +3026,7 @@ function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, w
   ui.resetRunView();        // the client's shell world is new too — reset the view state
   deathShown = false;
   clientDeath = null; // THE ACTING SEAT: a new shell owes no screen to a death beat of the last one
+  clientCovenant = null; // card 30: nor a fade to the last one's crossing or fall
   running = true;
   ui.hideAll();
 }

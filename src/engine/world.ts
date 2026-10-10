@@ -1661,6 +1661,13 @@ export interface GemDrop {
    *  grab it — a hero upstairs never hoovers the common room's loot through
    *  the boards, nor the valley the butte's cache. Flat zones read 0. */
   tier?: number;
+  /** THE SPOILS' OWNER (card 27, docs/engine/shard.md): on a hosted world, the seat this
+   *  drop belongs to (THE OWNER STAMP, World.ownSpoils) and the world time it falls free to
+   *  anyone ('timed'; absent = never). THE TOUCH LAW (World.dropHolder): no other seat takes
+   *  it while it is held. Absent on every other lane, so a solo or co-op world's drops,
+   *  zone memory and saves never carry either field (THE SOLO INVARIANT). */
+  owner?: string;
+  freeAt?: number;
 }
 
 /** A resource orb on the ground — run it over and it POURS (ORB_DEFS is
@@ -5984,8 +5991,9 @@ export class World {
   private stripCarryOnDeath(): void { this.stripCarryOf(this.localSeat); }
 
   /** The seat-general strip (the local wipe above; a couch guest's vessel
-   *  paying its own covenant on a party wipe). */
-  private stripCarryOf(seat: Seat): void {
+   *  paying its own covenant on a party wipe; THE IMMORTAL'S COVENANT ON A
+   *  SHARD, card 30: one vessel's stage death, server/vessel.ts). */
+  stripCarryOf(seat: Seat): void {
     this.loseBagRelicsOnDeath(seat);
     const m = seat.meta;
     m.items = []; // gem wrappers ride the bag — one wipe covers them (M1)
@@ -19144,6 +19152,11 @@ export class World {
   /** keeperSeat lane — THE PARTY's view (server/party.ts through the shard): a seat's party
    *  mates by id, itself included; absent = every seat its own unit. */
   partyMates: ((seatId: string) => readonly string[]) | null = null;
+  /** keeperSeat lane, THE SPOILS' OWNER (card 27; net/spoils.ts, installed by the shard
+   *  beside partyMates): a seat's drop rule (its party's, else the shard's default), or null
+   *  for a seat no longer seated on the hosted world (THE OWNER'S ABSENCE: its drops are
+   *  anyone's). Absent off a hosted world: no drop is ever stamped (THE SOLO INVARIANT). */
+  dropRuleOf: ((seatId: string) => import('../net/spoils').DropRule | null) | null = null;
   /** THE PARTY on the wire: the rows the shard publishes (snapshot.ts ships them on change). */
   partyRows: import('../net/partyWire').PartyRow[] | null = null;
   partyRev = 0;
@@ -25979,7 +25992,9 @@ export class World {
     if (!isValidMetaAction(action)) return;
     const wasActing = this.actingSeat;
     this.actingSeat = seat; // THE ACTING SEAT: news this act mints reaches its party
+    const d0 = this.drops.length; // THE OWNER STAMP (card 27): what this act mints is this seat's
     try { this.applyActionAs(seat, action); } finally { this.actingSeat = wasActing; }
+    if (this.dropRuleOf) this.ownSpoils(d0, seat);
   }
 
   private applyActionAs(seat: Seat, action: MetaAction): void {
@@ -42154,6 +42169,8 @@ export class World {
           if (this.corpses.length > CORPSE_CFG.max) this.corpses.shift();
         }
         this.stampSpoils(spoilD0, spoilO0, actor.tier);
+        // THE OWNER STAMP (card 27): the same marks, the credited seat (THE KILLER'S DUE's read).
+        if (credit) this.ownSpoils(spoilD0, this.seatOfRoot(killer), actor.pos);
       });
       this.spoilStory = prevSpoil;
       this.actingSeat = prevActing;
@@ -42292,6 +42309,16 @@ export class World {
    *  (GEM_FLOORS) the unit remembers the tileset, so the recall may still
    *  cut the country's own gems — found in the scald before it is owned. */
   dropGemAt(
+    at: Vec2, bias?: SkillTag[], owed = false, from?: string | MemoryProvenance,
+    memoryKind?: MemoryKind, pin?: MemoryPin, contextZone?: Readonly<ZoneDef>,
+  ): void {
+    const d0 = this.drops.length;
+    this.mintGemAt(at, bias, owed, from, memoryKind, pin, contextZone);
+    // THE OWNER STAMP (card 27): owed pay wears the seat it is owed to, the acting seat (a
+    // quest's gems land inside its hand's act). Inert off a hosted world.
+    if (owed && this.dropRuleOf) this.ownSpoils(d0, this.actingSeat);
+  }
+  private mintGemAt(
     at: Vec2, bias?: SkillTag[], owed = false, from?: string | MemoryProvenance,
     memoryKind?: MemoryKind, pin?: MemoryPin, contextZone?: Readonly<ZoneDef>,
   ): void {
@@ -42674,6 +42701,7 @@ export class World {
     // THE SPOILS STORY: dropped at the seat's own feet, on its own story.
     const pos = this.clampPos(vec(p.pos.x + rand(-14, 14), p.pos.y + rand(-14, 14)), 10, undefined, p.tier >= 1 ? { tier: p.tier } : undefined);
     this.drops.push({ pos, item, bob: rand(0, Math.PI * 2), grace: DROP_PICKUP_GRACE, droppedBy: seat.id, tier: p.tier });
+    this.ownSpoils(this.drops.length - 1, seat); // THE OWNER STAMP (card 27): a discard wears its dropper
     this.markMetaDirty(seat);
     return item;
   }
@@ -43158,6 +43186,9 @@ export class World {
     const drop: GemDrop = { pos, item: { kind: 'gear', item }, bob: rand(0, Math.PI * 2), tier: story };
     if (droppedBy) { drop.grace = DROP_PICKUP_GRACE; drop.droppedBy = droppedBy; }
     this.drops.push(drop);
+    // THE OWNER STAMP (card 27): a discard wears its dropper beside droppedBy; owed pay wears
+    // the seat it is owed to, the acting seat (a quest's payout lands inside its hand's act).
+    if (this.dropRuleOf && (droppedBy || owed)) this.ownSpoils(this.drops.length - 1, droppedBy ? this.seats.find(s => s.id === droppedBy) : this.actingSeat);
     if (!droppedBy) {
       this.lootDropCue(at, ITEM_RARITIES[item.rarity].color);
       // THE DISCOVERY LEDGER (engine/containers.ts ContainerDef.foundLedger):
@@ -43268,6 +43299,8 @@ export class World {
       if (d.item.kind !== 'gear') continue;
       if (d.grace !== undefined && d.grace > 0) continue;
       if (d.droppedBy === seat.id && !d.dropperCleared) continue;
+      const holder = this.dropHolder(d); // THE TOUCH LAW (card 27): another seat's held drop is no grab
+      if (holder !== undefined && holder !== seat.id) continue;
       if ((d.tier ??= this.spoilStoryAt(d.pos)) !== p.tier) continue; // THE SAME-STORY LAW
       const dd = dist(d.pos, p.pos);
       if (dd <= p.radius + ITEM_CFG.pickupRadius && dd < bestD) { bestD = dd; bestIdx = i; }
@@ -51359,6 +51392,7 @@ export class World {
     c.openedAt = this.time; // M-SPILL: the lid swings (the renderer's own clock read)
     if(c.massObjectiveOwner)this.massRuntime?.geography?.chestOpened(c,this.time);
     const rewardLevel = c.rewardLevel ?? this.levelAt(c.pos);
+    const d0 = this.drops.length; // THE OWNER STAMP (card 27): the chest's pay is its opener's
     this.withMassReward(rewardLevel, () => {
       const memoryProvenance = 'chest'; // Durable cache identity stays on the chest; Memories name their registered source.
       const lootZone = this.massRuntime?.geography?.chestContext(c)
@@ -51381,7 +51415,20 @@ export class World {
         this.shedOrb(chance(0.5) ? 'life' : 'mana', c.pos, { scatter: 22, life: 14 });
       }
     });
+    if (this.dropRuleOf) this.ownSpoils(d0, this.chestOpener(c));
     this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 50, color: '#e8c87a', life: 0.4, maxLife: 0.4, fx: 'sparkle' }); // M-SPILL: the lid + the glints, no caption
+  }
+
+  /** THE SPOILS' OWNER (card 27): the seat whose hands opened a chest, the nearest standing
+   *  player whose reach holds its lock (updateChests' own test); null when no hand does. */
+  private chestOpener(c: Chest): Seat | null {
+    let best: Seat | null = null, bd = Infinity;
+    for (const s of this.seats) {
+      if (s.keeper || s.merc || s.actor.dead || s.actor.downed || !chestInReach(c, s.actor)) continue;
+      const d = dist(c.pos, s.actor.pos); // SOVEREIGNTY: census (attribution of the hand updateChests already let open it, never a touch)
+      if (d < bd) { bd = d; best = s; }
+    }
+    return best;
   }
 
   private updateChests(dt: number): void {
@@ -53071,12 +53118,13 @@ export class World {
   /** The nearest LIVING, non-downed seat within `reach` of a point — the pickup
    *  claimant. Single-player resolves to the one seat; co-op is free-for-all
    *  first-come (whoever walks over it). The future trading seam slots in here. */
-  private pickupSeat(at: Vec2, reach: number, exclude?: string, story = 0): Seat | undefined {
+  private pickupSeat(at: Vec2, reach: number, exclude?: string, story = 0, holder?: string): Seat | undefined {
     let best: Seat | undefined; let bestD = Infinity;
     for (const s of this.seats) {
       if (s.actor.dead || s.actor.downed) continue;
       if (s.keeper) continue;                      // keeperSeat: the warden's hands take nothing
       if (exclude && s.id === exclude) continue;   // dropper can't reclaim yet
+      if (holder !== undefined && s.id !== holder) continue; // THE TOUCH LAW (card 27): a held drop is its owner's alone
       if (s.actor.tier !== story) continue;        // THE SAME-STORY LAW: its own story's hands only
       const d = dist(at, s.actor.pos);
       if (d <= s.actor.radius + reach && d < bestD) { bestD = d; best = s; }
@@ -53101,6 +53149,45 @@ export class World {
   private stampSpoils(d0: number, o0: number, tier: number): void {
     for (let i = d0; i < this.drops.length; i++) this.drops[i].tier ??= tier;
     for (let i = o0; i < this.orbs.length; i++) this.orbs[i].tier ??= tier;
+  }
+
+  /** THE OWNER STAMP (card 27, THE SPOILS' OWNER; net/spoils.ts): every drop minted since
+   *  `d0` that wears no owner yet takes `seat`'s drop rule, through the same marks THE SPOILS
+   *  STAMP uses: 'owner' = that seat's forever, 'timed' = until freeAfterSec, 'free' = no
+   *  stamp at all. Under 'rotate' a kill's drops (`at` = the kill) go to the party's next
+   *  member within THE NEAR LAW's reach of it (the desk keeps the cursor: Path of Exile's
+   *  permanent allocation), never to one out of reach. Orbs are never owned, and neither is
+   *  quest cargo (the world's quest objects: any hand may carry them). Inert off a hosted
+   *  world (no rule hook): THE SOLO INVARIANT. */
+  ownSpoils(d0: number, seat: Seat | null | undefined, at?: Vec2): void {
+    if (!this.dropRuleOf || !seat || seat.keeper || seat.merc || this.drops.length <= d0) return;
+    const rule = this.dropRuleOf(seat.id);
+    if (!rule || rule.rule === 'free') return;
+    let owner = seat.id;
+    if (at && rule.allocation === 'rotate' && rule.deal) {
+      const r = COOP_SCALING.shareRadius;
+      const inReach = this.seats.filter(s => !s.keeper && !s.merc && !s.actor.dead && this.sameParty(seat, s)
+        && (r <= 0 || dist(at, this.seatHero(s).pos) <= r)).map(s => s.id); // SOVEREIGNTY: census (the deal is apportioned by reach, never a touch)
+      owner = rule.deal(inReach) ?? owner;
+    }
+    const freeAt = rule.rule === 'timed' ? this.time + Math.max(0, rule.freeAfterSec) : undefined;
+    for (let i = d0; i < this.drops.length; i++) {
+      const d = this.drops[i];
+      if (d.owner !== undefined || (d.item.kind === 'gear' && d.item.item.questId)) continue;
+      d.owner = owner;
+      if (freeAt !== undefined) d.freeAt = freeAt;
+    }
+  }
+
+  /** THE TOUCH LAW (card 27): the seat that alone may take this drop now, else undefined
+   *  (anyone's). A drop is held while it wears an owner who still stands on the hosted world
+   *  (THE OWNER'S ABSENCE: a departed owner's drops are anyone's) and its free time has not
+   *  come. Every other lane's drops wear no owner: undefined, byte-identical. */
+  dropHolder(d: GemDrop): string | undefined {
+    if (d.owner === undefined) return undefined;
+    if (d.freeAt !== undefined && this.time >= d.freeAt) return undefined;
+    if (this.dropRuleOf && !this.dropRuleOf(d.owner)) return undefined;
+    return d.owner;
   }
 
   /** THE SPOILS STORY's CONTEXT: the story the current spoils pass sheds on
@@ -53263,11 +53350,12 @@ export class World {
         if (!dropper || dist(dropper.actor.pos, drop.pos) > dropper.actor.radius + ITEM_CFG.pickupTouch.gem) drop.dropperCleared = true;
       }
       const exclude = drop.droppedBy && !drop.dropperCleared ? drop.droppedBy : undefined;
+      const holder = this.dropHolder(drop); // THE TOUCH LAW (card 27): a held drop answers its owner's hands alone
       // Touch hitboxes ride ITEM_CFG.pickupTouch — currency keeps the fat
       // vacuum ring; gear and gems sit tight to their shrunken sprites.
       // VESTIGES always vacuum — stackable satchel material, zero bag cost.
       if (drop.item.kind === 'vestige') {
-        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude, drop.tier);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude, drop.tier, holder);
         if (!seat) continue;
         this.grantVestige(seat, drop.item.id, drop.item.count);
         this.drops.splice(i, 1);
@@ -53276,7 +53364,7 @@ export class World {
       // ESSENCE always vacuums — currency underfoot, straight to the wallet
       // (grantEssence floats the gain, banks discovery, replicates the seat).
       if (drop.item.kind === 'essence') {
-        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude, drop.tier);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude, drop.tier, holder);
         if (!seat) continue;
         this.grantEssence(seat, { essence: drop.item.essence, count: drop.item.count });
         this.drops.splice(i, 1);
@@ -53284,7 +53372,7 @@ export class World {
       }
       // ABILITY ESSENCE packets vacuum the same way — skill food to the wallet.
       if (drop.item.kind === 'abilityEssence') {
-        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude, drop.tier);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude, drop.tier, holder);
         if (!seat) continue;
         this.grantAbilityEssence(seat, drop.item.tier, drop.item.count);
         this.drops.splice(i, 1);
@@ -53297,7 +53385,7 @@ export class World {
       // MERGES onto the seat's standing pouch tile of its KIND (no second
       // cell) or autoPlaces as the first pickup; a full bag leaves it lying.
       if (drop.item.kind === 'gear' && drop.item.item.mem) {
-        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude, drop.tier);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude, drop.tier, holder);
         if (!seat) continue;
         const item = drop.item.item;
         if (this.tryMergeMemoryItem(seat, item)) { this.drops.splice(i, 1); continue; }
@@ -53316,7 +53404,7 @@ export class World {
       if (drop.item.kind === 'gear') {
         if (this.isBankedRelicEcho(drop.item.item)) { this.drops.splice(i, 1); continue; }
         if (!this.gearVacuum) continue;
-        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gear, exclude, drop.tier);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gear, exclude, drop.tier, holder);
         if (!seat) continue;
         if (drop.item.item.questId && seat !== this.localSeat && !this.localSeat.keeper) continue; // keeperSeat
         if (!autoPlace(seat.meta.items, drop.item.item)) {
@@ -53331,7 +53419,7 @@ export class World {
         this.drops.splice(i, 1);
         continue;
       }
-      const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude, drop.tier);
+      const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude, drop.tier, holder);
       if (!seat) continue;
       const item = drop.item;
       // THE RESIDENCE: a vacuumed gem WRAPS into its 1×1 bag item — and for
@@ -56305,8 +56393,11 @@ export class World {
       this.shedOrb(kind, d.pos, { tier: d.tier,
         ...(context ? { amount: orbAmount(ORB_DEFS[kind], context.sourceZone.level) } : {}) });
     }
-    if (br.gemChance && chance(br.gemChance))
+    if (br.gemChance && chance(br.gemChance)) {
+      const d0 = this.drops.length;
       this.dropGemAt(vec(d.pos.x, d.pos.y), undefined, false, undefined, undefined, undefined, context?.sourceZone);
+      if (this.dropRuleOf) this.ownSpoils(d0, this.seatOfRoot(striker)); // THE OWNER STAMP (card 27): the breaker's
+    }
     // THE REMAINS (the quiet reclass): the wreck leaves its own pile — the
     // crumble SHOWS and the dust STAYS. Pushed after the splice; the rev
     // bump below covers the same-frame length-net window.
@@ -57488,7 +57579,11 @@ export class World {
           onFill: s => {
             finishNativeDig(s,DIG_CFG,{
               hasPacks:!!this.zone.packs,random:{range:rand,int:randInt},
-              spillGem:pos=>this.dropGemAt(pos),
+              spillGem:pos=>{
+                const d0=this.drops.length;
+                this.dropGemAt(pos);
+                if(this.dropRuleOf)this.ownSpoils(d0,this.nearestHand([s.pos])); // THE OWNER STAMP (card 27): the digger's
+              },
               ambush:(pos,A)=>{
                 const {table}=this.effectiveSpawn(this.zone,this.baseTable(this.zone));
                 const type=this.weightedPick(table,this.zone.level),n=randInt(A.count[0],A.count[1]);

@@ -80,12 +80,24 @@ export type SessionMsg =
   | { t: 'corpse'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning }
   | { t: 'corpses'; zoneId: string; bodies: import('./vesselWire').ShardBodyRow[]; reclaimed?: number }
   | { t: 'leaving' }
+  // THE IMMORTAL'S COVENANT ON A SHARD (card 30, RULED A 2026-10-10; vesselWire.ts sanitizes):
+  //   stageDeath (shard→a seat): THE CROSSING, a stage that survives death died on the shard:
+  //            where its body lies, the tithe the shard appraised at the dying stage's rate
+  //            and the stage it reached; the client books it as a solo crossing books it and
+  //            plays the fade (the hero wakes at the hearth on the shard).
+  //   fell     (shard→a seat): THE FALL, an Undying died: where its body lies, the appraisal,
+  //            the vessel's level and the fall record's time; the client stamps its own
+  //            roster card fallen (the fee frozen at receipt) and keeps the slot; `runEnd`
+  //            follows. Re-spoken at a stale upload of the fallen vessel (THE LATE WORD's shape).
+  | { t: 'stageDeath'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning; stage: number }
+  | { t: 'fell'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning; level: number; at: number }
   // THE PARTY (docs/design/shard-world.md card 23 — net/partyWire.ts): a client's word to its
   // party desk (client→host), an invite landing on its target, and a refusal's one line.
   // THE PARTY THAT READS: an invite names the inviter's party only when it stands (an
   // ungrouped inviter's party founds on the accept) and carries `until`, the world time it
   // lapses, so the client drops it then.
-  | { t: 'party'; op: import('./partyWire').PartyOp; seat?: PlayerId }
+  // THE SPOILS' OWNER (card 27): the 'rule' op carries the leader's choice (net/spoils.ts).
+  | { t: 'party'; op: import('./partyWire').PartyOp; seat?: PlayerId; rule?: import('./spoils').DropRuleKind; allocation?: import('./spoils').DropAllocation }
   | { t: 'partyInvite'; from: PlayerId; name: string; party?: string; until: number }
   | { t: 'partyWord'; word: string }
   // THE ACTING SEAT (a refused hero, shard→a seat): the shard would not seat the

@@ -21,18 +21,19 @@
 //   D  THE HOME SLOT: the mirror (the beat's send, then THE FAREWELL) lands in
 //      the roster slot with its card refreshed; the run slot and the Continue
 //      bookkeeping stay untouched; a lost card writes nothing anywhere
-//   E  THE MERCY: the Immortal's lethal down stays a down (no corpse, no
-//      runEnd, no body, no tombstone) and the keeper's clock stands it up
+//   E  THE IMMORTAL'S COVENANT (card 30): the Sworn vessel's lethal down crosses
+//      (no mortal fall, no tombstone, no runEnd, a self-only body), it wakes
+//      standing, and the crossed vessel lands in ITS roster slot
 //   F  THE RUN LANE: a run-slot vessel still mirrors to the run slot, the
 //      roster slot untouched
 //   G  THE TRAVEL NOTE names the roster vessel; the mortal line is unchanged
-// The Immortal's own covenant on a shard (a sworn death advancing the
-// ladder, an Undying fall) is a separate card: here it keeps THE MERCY.
+// The Immortal's own covenant on a shard in full (the fall, the risen stamp,
+// the kneel, the owed crossing) is balance/probe_shardcovenant.ts.
 // ---------------------------------------------------------------------------
 
 import { seedGlobalRandom } from '../src/sim/rng';
 import { ShardHost, SHARD_CFG } from '../server/shardHost';
-import { judgeVessel } from '../server/vessel';
+import { judgeVessel, VESSEL_CFG } from '../server/vessel';
 import { WsTransport } from '../src/net/ws';
 import { World, type Seat } from '../src/engine/world';
 import { NullInput } from '../src/net/intent';
@@ -45,7 +46,8 @@ import { emptyStash } from '../src/engine/stash';
 import type { ItemCategory, ItemInstance } from '../src/engine/items';
 import { buildManifest } from '../src/packages/manifest';
 import { ensureAccountId, FEATURE, makeAccount, type Account } from '../src/meta/account';
-import { freeRosterSlot, modeById, ROSTER_SLOT_BASE } from '../src/meta/modes';
+import { freeRosterSlot, IMMORTAL_CFG, modeById, ROSTER_SLOT_BASE } from '../src/meta/modes';
+import { walletMortalValue } from '../src/data/essences';
 import {
   CHAR_SLOT, charKeyFor, loadCharacter, persistRun, saveVesselMirror, serializeCouchGuest,
   writeCharacterMirrorRaw, type CharacterSave,
@@ -234,21 +236,28 @@ check('C graft: the grafted hero stands whole', Number.isFinite(heroI.maxLife())
     saveVesselMirror(orphan, { ...mirrored!, level: 77 }) === -1 && stored(slot) === before && stored(CHAR_SLOT) === continueBefore);
 }
 
-// ======================================================== E: THE MERCY ==
-// The Immortal's covenant on a shard is its own card; until it is built the
-// vessel keeps THE MERCY (its stage never ends the run: VesselDesk.endsTheRun).
+// ============================================= E: THE IMMORTAL'S COVENANT (card 30) ==
+// Card 30 (RULED A 2026-10-10): the Immortal's own covenant runs on the shard and mirrors home.
+// This section kept THE MERCY until it was built; the Sworn rung's final down is now THE
+// CROSSING, landing in ITS roster slot (balance/probe_shardcovenant.ts pins the whole law).
 {
-  const fallsBefore = host.vessels.falls;
+  const fallsBefore = host.vessels.falls, crossingsBefore = host.vessels.crossings;
+  const minted = Math.floor(walletMortalValue(si.meta.essences) * IMMORTAL_CFG.firstDeathPayoutMult), creditsBefore = acct.credits;
   host.world.kill(heroI);
   await runTicks(host, 2);
-  check("E mercy: the Immortal's lethal down is a DOWN: no fall, no body, no tombstone, no word",
-    heroI.downed && !!seatOf(iw.self) && host.vessels.falls === fallsBefore && host.corpses.forAccount(acct.accountId).length === 0
-    && !host.corpses.hasFallen(acct.accountId, charId) && !ciRows.some(m => m.t === 'corpse' || m.t === 'runEnd'));
-  await runTicks(host, Math.ceil(SHARD_CFG.keeper.reviveSec * SHARD_CFG.tickHz * 1.1) + 2);
-  check("E mercy: the keeper's clock stands it back up", !heroI.downed && !heroI.dead && heroI.life > 0 && !!seatOf(iw.self));
-  check('E mercy: the client books no death (no reckoning staged; its slot, its card and the Continue all stand)',
-    link.takeDeath(ci, null) === null && link.traveling?.charId === charId && parsed(slot)?.charId === charId
-    && !cardOf(charId)!.fallen && stored(CHAR_SLOT) === continueBefore && wiped === 0);
+  const bodies = host.corpses.forAccount(acct.accountId);
+  check("E covenant: the Sworn vessel's lethal down crosses: no mortal fall, no tombstone, no runEnd; the stage steps",
+    host.vessels.crossings === crossingsBefore + 1 && host.vessels.falls === fallsBefore && !host.corpses.hasFallen(acct.accountId, charId)
+    && !ciRows.some(m => m.t === 'corpse' || m.t === 'runEnd') && si.meta.modeStage === 1);
+  check('E covenant: its body is its own (self-only), holding its doll', bodies.length === 1 && bodies[0].ring === 'own' && bodies[0].charId === charId);
+  await waitFor(() => !heroI.dead, host, Math.ceil(VESSEL_CFG.deathBeatSec * SHARD_CFG.tickHz) + 30);
+  check('E wake: after THE DEATH BEAT it wakes standing (the seat never leaves)', !heroI.downed && !heroI.dead && heroI.life > 0 && !!seatOf(iw.self));
+  check('E home: the client books the crossing (the Sworn tithe) and stages no death screen',
+    acct.credits === creditsBefore + minted && link.crossings === 1 && link.takeDeath(ci, null) === null && link.traveling?.charId === charId,
+    `credits ${creditsBefore} > ${acct.credits}`);
+  check('E home: the crossed vessel lands in ITS roster slot (Undying, stripped; the card follows, never fallen); the run slot and the Continue stand',
+    parsed(slot)?.charId === charId && parsed(slot)?.modeStage === 1 && (parsed(slot)?.items ?? []).length === 0
+    && cardOf(charId)!.stage === 1 && !cardOf(charId)!.fallen && stored(CHAR_SLOT) === continueBefore && wiped === 0);
 }
 {
   const before = link.mirrors;

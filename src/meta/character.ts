@@ -81,6 +81,10 @@ interface SavedSkill {
 }
 export interface CharacterSave {
   guardIntervention?: Record<string, number>;
+  /** THE IMMORTAL'S COVENANT ON A SHARD (card 30): the wall-clock ms this vessel was last
+   *  RISEN at the Vault's Fallen shelf (its roster card's RosterEntry.risenAt, carried by the
+   *  traveling vessel). A shard's FALL RECORD lifts for an upload risen after the fall. */
+  risenAt?: number;
   stash?: PersonalStash;
   accountRelics?: 1;
   relicScope?: string;

@@ -1847,7 +1847,13 @@ function grantUnlock(a: Account, u: Unlockable): void {
       // playable again the moment the pour completes (its slot save was
       // never touched: it stands in the sanctuary exactly as it fell).
       const entry = a.roster.find(r => r.charId === u.payload.charId);
-      if (entry) delete entry.fallen;
+      if (entry) {
+        // THE IMMORTAL'S COVENANT ON A SHARD (card 30): the risen stamp, never before the fall's
+        // own time (a shard's FALL RECORD lifts for a vessel risen after it; the card's `at` is
+        // the shard's word, so a skewed local clock can never strand a paid resurrection).
+        entry.risenAt = Math.max(Date.now(), (entry.fallen?.at ?? 0) + 1);
+        delete entry.fallen;
+      }
       break;
     }
   }

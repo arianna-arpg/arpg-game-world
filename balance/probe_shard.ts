@@ -37,8 +37,9 @@
 //      the beat and at the farewell, and round-trips as the next upload
 //   N  THE DEATH COVENANT: a mortal vessel with no one left to kneel falls
 //      (body recorded, `corpse` then `runEnd`, the client's own reckoning,
-//      the run slot wiped, the seat gone); Immortal vessels and fresh heroes
-//      keep THE MERCY; a fallen vessel never walks in again; a vessel that
+//      the run slot wiped, the seat gone); an Immortal vessel takes its stage's
+//      own death (card 30: the Sworn crossing wakes at the hearth); a fallen
+//      vessel never walks in again; a vessel that
 //      leaves while down has fallen and hears THE LATE WORD at its next upload
 //   O  THE CORPSE RETURNS: the same account's next hero finds the body, only
 //      its owner reclaims it by the dwell, the gear comes home to its bag, the

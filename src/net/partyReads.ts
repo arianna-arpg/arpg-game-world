@@ -24,6 +24,7 @@ import { transitOf, transitReach } from '../data/transit';
 import type { Seat, World } from '../engine/world';
 import type { PartyInviteNote, PartyRow, ReviveW } from './partyWire';
 import type { StateSnapshot } from './snapshot';
+import { spoilsRowOf, type SpoilsRow } from './spoils'; // THE SPOILS' OWNER (card 27): the panel's drop-rule row
 
 // ---- THE REVIVE ROW, the host's half ----------------------------------------------
 
@@ -170,7 +171,8 @@ export interface PartyPanelInput {
 
 export interface PartyPanelModel {
   hosted: boolean;
-  party: { members: { id: string; name: string; lead: boolean; kick: boolean }[]; held: string[] } | null;
+  /** `spoils`: THE SPOILS' OWNER's drop-rule row (card 27, net/spoils.ts); its leader may change it. */
+  party: { members: { id: string; name: string; lead: boolean; kick: boolean }[]; held: string[]; spoils: SpoilsRow } | null;
   invites: { from: string; name: string }[];
   /** Players within THE NEAR LAW's radius of me, outside my party: `invite` when ungrouped. */
   near: { id: string; name: string; invite: boolean }[];
@@ -191,6 +193,7 @@ export function partyPanelModel(i: PartyPanelInput): PartyPanelModel {
   const party = mine ? {
     members: mine.members.map(id => ({ id, name: nameOf(id), lead: id === mine.leader, kick: mine.leader === i.me && id !== i.me })),
     held: [...(mine.held ?? [])],
+    spoils: spoilsRowOf(mine, i.me), // THE SPOILS' OWNER: the standing rule every member reads
   } : null;
   const near: PartyPanelModel['near'] = [];
   const nearIds = new Set<string>();

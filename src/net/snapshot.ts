@@ -84,6 +84,7 @@ import { COOP_SCALING } from '../data/coop'; // THE WIRE'S EYES: the zone rows' 
 import { applyCounterRows, applyCounterZone, counterZoneOf, harvestRowOf, journalRowOf, type HarvestW, type JournalW } from './journalWire'; // THE COUNTERS AND THE JOURNAL
 import { roadDwellRow } from '../engine/shardRoads'; // THE ROADS PER PLAYER (shard M1 W2): the road ring
 import { applyDressDelta, glideLite } from './wireDiet'; // THE WIRE DIET (shard sync pass C): the dress delta and the lite glide
+import { adoptDropOwners } from './spoils'; // THE SPOILS' OWNER (card 27): a held drop's owner and free time on the shell
 
 export type Vec2W = [number, number];
 
@@ -303,7 +304,11 @@ export interface ProjW { reflectedCue?: true; orbPaint?: import('../engine/skill
  *  THE WIRE'S EYES: the endpoint bodies' host ids (the `bl` idiom), so the client's band
  *  follows its own interpolated bodies; the coords stand in for an endpoint it lacks. */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; ai?: number; bi?: number; }
-export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; dropUid?: number; vid?: string; eid?: string; tid?: number; cnt?: number; }
+export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; dropUid?: number; vid?: string; eid?: string; tid?: number; cnt?: number;
+  /** THE SPOILS' OWNER (card 27, net/spoils.ts): the seat holding this drop and the whole
+   *  seconds until it is anyone's (rounded up; absent = never, or no owner). The hosted wire
+   *  alone (stampDropOwners); absent on every other lane. */
+  o?: string; fa?: number; }
 /** kind is an ORB_DEFS registry id — the client renders from the registry. */
 export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; }
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string;
@@ -2192,6 +2197,7 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
               ? { kind: 'abilityEssence', tier: d.tid ?? 1, count: d.cnt ?? 1 }
               : { kind: 'skill', inst: { def: { color: d.color, name: d.name ?? '?' }, rarity: d.rarity ?? 'common' } },
   })) as unknown as World['drops'];
+  adoptDropOwners(world, snap); // THE SPOILS' OWNER (card 27): the hosted wire's `o`/`fa`, onto the shell's drops
   world.magicPackEffects = (snap.magicPackEffects ?? []).map(v => ({ ...v }));
   world.satellites.visuals = (snap.satellites ?? []).map(v => ({ ...v }));
   world.guardArts.visuals = (snap.guardArts ?? []).map(v => ({ ...v }));

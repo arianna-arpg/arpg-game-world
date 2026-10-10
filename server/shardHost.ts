@@ -45,11 +45,12 @@ import { CLASSES, type ClassDef } from '../src/data/classes';
 import { rollSeed } from '../src/core/rng';
 import { noteActionEcho, resetActionEcho, serializeSnapshot, serializeZone } from '../src/net/snapshot';
 import { stampAudiences } from '../src/net/seatView';
+import { stampDropOwners, type DropAllocation, type DropRule, type DropRuleKind } from '../src/net/spoils'; // THE SPOILS' OWNER (card 27)
 import { WIRE_DIET_CFG } from '../src/net/wireDiet'; // THE WIRE DIET's switch (the dress beat's whole re-ship)
 import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction, PlayerInput } from '../src/net/intent';
 import { massDigest } from '../src/worldmass/random';
-import { PartyDesk } from './party';
+import { PARTY_CFG, PartyDesk } from './party';
 import { MusterDesk } from './muster';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
@@ -137,6 +138,10 @@ export const SHARD_CFG = {
    *  for the mercy. A continent apart is no party. THE PARTY THAT READS: the number lives
    *  in net/partyWire.ts, where the party panel's "near you" reads it too. */
   nearRadius: PARTY_WIRE_CFG.nearRadius,
+  /** THE SPOILS' OWNER (card 27, RULED A 2026-10-10: a drop belongs to one player): the drop
+   *  rule an UNGROUPED seat's spoils follow (a party's own rule is its leader's, server/party.ts).
+   *  'timed' frees a drop after PARTY_CFG.freeAfterSec. */
+  spoils: { rule: 'owner' as DropRuleKind, allocation: 'killer' as DropAllocation },
   /** The shard save's own schema (wraps WorldStateSave's). */
   saveSchema: 1,
   /** Where shard saves land by default (gitignored beside the game's). */
@@ -386,6 +391,10 @@ export class ShardHost {
       party: id => this.parties.membersOf(id), // THE GROUP LAW
       // THE PARTY THAT READS (THE HELD PLACE): a fall leaves its place held for its next vessel.
       onSeatGone: (id, name) => { this.parties.seatFell(id, this.world.time, name); this.units.forget(id); },
+      // THE IMMORTAL'S COVENANT ON A SHARD (card 30): THE CROSSING's wake lands at the hearth, and a
+      // crossing a dormant socket cannot hear is owed (THE OWED CROSSING).
+      wake: seat => this.wakeAtHearth(seat),
+      connected: id => !this.net.isDormant(id),
     });
     this.units.onArrive = (seat, to, from, woke) => this.onArrive(seat, to, from, woke);
     // THE IDENTITY (THE SMOOTH SHELL): a join carrying a dormant vessel's account and character
@@ -540,7 +549,27 @@ export class ShardHost {
     this.corpses.wake(id);
     this.net.sendZoneTo(id, serializeZone(w));
     u.lastSentZone = w.zone.id;
+    this.vessels.resumed(id); // card 30: its vessel home at once, with any crossing it never heard (THE OWED CROSSING)
     this.log(`[shard] ${id} resumed its dormant hero (${this.net.connectionCount()} connected)`);
+  }
+
+  /** THE WAKE (card 30, THE CROSSING): the crossed hero, stood up by the vessel desk, lands at
+   *  THE HEARTH SEAT through the landing law a hand-off uses (a seat in another unit rides THE
+   *  UNIT BREAKER's own ticket into the keeper's zone; one already in the keeper's World stands
+   *  up there as a join does) under THE SPAWN GRACE, its new ground shipped by the arrival. */
+  private wakeAtHearth(seat: Seat): void {
+    const h = this.hearthSeat(), u = this.units.unitOf(seat.id);
+    if (u && u.role !== 'keeper') {
+      const home = this.units.travel(seat.id, this.world.zone.id, { at: { x: h.x, y: h.y }, tier: h.tier });
+      if (!home) this.log(`[shard] ${seat.id}'s wake could not walk it home; it stands where it fell`);
+    } else if (u) {
+      const r = seat.actor.radius;
+      const at = this.world.clampPos(this.world.findFreeSpot({ x: h.x, y: h.y }, r + 2) ?? { x: h.x, y: h.y }, r);
+      seat.actor.pos.x = at.x; seat.actor.pos.y = at.y; seat.actor.tier = h.tier;
+      this.world.settleNearScale(true); // keeperSeat: THE NEAR LAW where the waker stands
+    }
+    seat.actor.untargetable = true; // THE SPAWN GRACE, as a join's
+    this.graces.set(seat.id, this.world.time + SHARD_CFG.spawnGraceSec);
   }
 
   /** THE DORMANT SEAT's clock: a seat whose dormancy ran out, or whose body a
@@ -661,11 +690,12 @@ export class ShardHost {
     w.timeflow.allowHold = () => false; // a hosted world never freezes for one hand
     w.timeflow.chronoScope = { radius: SHARD_CFG.chronoRadius }; // keeperSeat: THE SCOPED FREEZE
     w.partyMates = id => this.parties.membersOf(id); // keeperSeat lane: THE KILLER'S DUE pays the party
+    w.dropRuleOf = id => this.dropRuleOf(id); // keeperSeat lane, THE SPOILS' OWNER (card 27): the seat's drop rule
     // keeperSeat lane, THE PARTY THAT READS (server/vessel.ts): THE RELEASE, the wait's end
     // (THE BLEED-OUT) and the down's read for the revive row (SeatW.rv).
     w.partyDowns = { release: id => this.vessels.release(id), waitEnded: id => this.vessels.waitEnded(id), view: id => this.vessels.downView(id) };
     // THE COUNTERS AND THE JOURNAL: a seat's own remembered bodies ride its journal row's pins (the corpse on the chart).
-    w.seatCorpseMarks = seat => this.corpses.forAccount(this.vessels.accountOf(seat.id))
+    w.seatCorpseMarks = seat => this.corpses.forSeat(this.vessels.accountOf(seat.id), seat) // card 30: the bodies this seat may see
       .map(c => ({ zoneId: c.zoneId, ...(c.map ? { map: { ...c.map } } : {}), name: c.name, classId: c.classId, level: c.level }));
     if (this.partyRevSeen >= 0) { w.partyRows = this.parties.rows(); w.partyRev++; }
     w.shardWorld = {
@@ -803,6 +833,7 @@ export class ShardHost {
     this.units.run(u, uw => {
       const snap = serializeSnapshot(uw, this.snapTick);
       stampAudiences(uw, snap); // THE ACTING SEAT: the notices' and the eyecatch's audiences (the transport ships each to its own)
+      stampDropOwners(uw, snap); // THE SPOILS' OWNER (card 27): DropW.o / fa, the hosted wire alone
       this.diet.bind(snap, uw); // THE WIRE DIET: the transport builds each socket's frame from this World
       this.net.sendStateTo(snap, ids);
       uw.metaDirty.clear();
@@ -900,9 +931,24 @@ export class ShardHost {
       case 'decline': word = this.parties.decline(from); break;
       case 'leave': word = this.parties.leave(from); break;
       case 'kick': word = this.parties.kick(from, seat); break;
+      case 'rule': word = this.parties.setRule(from, msg.rule, msg.allocation); break; // THE SPOILS' OWNER: the leader alone
       default: word = 'no such word';
     }
     if (word) this.net.sendSession({ t: 'partyWord', word }, from);
+  }
+
+  /** THE SPOILS' OWNER (card 27; World.dropRuleOf on every World this host runs): a seated
+   *  seat's drop rule, its party's (the leader's choice, THE ROTATION dealt by the desk) else
+   *  the shard's default for an ungrouped seat; null for a seat no longer on the world (THE
+   *  OWNER'S ABSENCE: its drops are anyone's). */
+  private dropRuleOf(seatId: string): DropRule | null {
+    if (!this.units.seatOf(seatId)) return null;
+    const p = this.parties.ruleOf(seatId);
+    const base = p ?? SHARD_CFG.spoils;
+    return {
+      rule: base.rule, freeAfterSec: PARTY_CFG.freeAfterSec, allocation: base.allocation,
+      ...(p && base.allocation === 'rotate' ? { deal: (inReach: readonly string[]) => this.parties.deal(seatId, inReach) } : {}),
+    };
   }
 
   /** THE PARTY on the wire: when the desk changed, the world's rows change with it. */

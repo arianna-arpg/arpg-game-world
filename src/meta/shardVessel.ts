@@ -23,6 +23,11 @@
 //                        the death screen staged for the `runEnd` after it);
 //                        `corpses` draws this seat's OWN standing bodies on
 //                        the render shell and banks its reclaims' deed.
+//                        THE IMMORTAL'S COVENANT ON A SHARD (card 30):
+//                        `stageDeath` books a crossing as a solo crossing
+//                        books it (the fade is main.ts's presentation);
+//                        `fell` books an Undying's fall and stamps its own
+//                        roster card FALLEN, the fee frozen at receipt.
 //
 // Every row is read through net/vesselWire.ts's sanitizers, and only rows
 // about the vessel this client actually sent are honored.
@@ -31,7 +36,9 @@
 import type { World } from '../engine/world';
 import type { NetTransport, SessionMsg } from '../net/transport';
 import type { WsTransport } from '../net/ws';
-import { sanitizeBodyRows, sanitizeCorpseNote, sanitizeReckoning, type ShardCorpseNote, type ShardReckoning } from '../net/vesselWire';
+import {
+  sanitizeBodyRows, sanitizeCorpseNote, sanitizeFell, sanitizeReckoning, sanitizeStageReached, type ShardCorpseNote, type ShardReckoning,
+} from '../net/vesselWire';
 import { CLASSES } from '../data/classes';
 import { bumpLedger, mergeLedger } from '../packages/ledger';
 import {
@@ -44,7 +51,7 @@ import {
 } from './character';
 import { characterResumeFields, type CharacterFields } from './characterResume';
 import { releaseMercsOf } from './mercs';
-import { DEFAULT_MODE_ID, modeById, ROSTER_SLOT_BASE, stageOf, type RosterEntry } from './modes';
+import { DEFAULT_MODE_ID, FADE_DEFAULTS, modeById, resurrectFee, ROSTER_SLOT_BASE, stageOf, type RosterEntry } from './modes';
 import { saveAccount, saveAccountDurable } from './persistence';
 import { isCurrentCharacterSave } from './saveCompatibility';
 import { settleClassUnlocks } from './unlocks';
@@ -104,7 +111,12 @@ export async function readTravelingVessel(account?: Account, charId?: string): P
   const classId = fields.classId;
   if (!CLASSES.some(c => c.id === classId)) return null;
   const { world: _ground, ...hero } = fields as CharacterSave;
-  return structuredClone(hero);
+  const out = structuredClone(hero);
+  // THE IMMORTAL'S COVENANT ON A SHARD (card 30): a roster vessel carries its card's risen stamp,
+  // so a shard that remembers its fall lets a vessel risen since walk it again.
+  const risenAt = modeById(out.modeId).save === 'roster' ? cards.find(r => r.charId === out.charId)?.risenAt : undefined;
+  if (typeof risenAt === 'number' && Number.isFinite(risenAt)) out.risenAt = risenAt;
+  return out;
 }
 
 /** The lobby's one line naming which hero will travel (utility-screen text). */
@@ -148,6 +160,10 @@ export class ShardVesselLink {
   private death: ShardDeath | null = null;
   /** Mirrors written home this session (the rig's read). */
   mirrors = 0;
+  /** THE CROSSING the shard reported and the fade has not taken yet (card 30; `at` its arrival, ms). */
+  private crossed: { stage: number; minted: number; zoneName: string; at: number } | null = null;
+  /** Crossings booked this session (the rig's read). */
+  crossings = 0;
 
   constructor(
     readonly net: WsTransport,
@@ -180,6 +196,58 @@ export class ShardVesselLink {
     if (m.t === 'heroSave') this.onMirror(m.save);
     else if (m.t === 'corpse') this.onFell(m.note, m.reckoning);
     else if (m.t === 'corpses') this.onBodies(m.bodies, m.reclaimed);
+    // THE IMMORTAL'S COVENANT ON A SHARD (card 30): the stage's own death, decided and banked there.
+    else if (m.t === 'stageDeath') this.onCrossed(m.note, m.reckoning, m.stage);
+    else if (m.t === 'fell') {
+      const fall = sanitizeFell(m.level, m.at);
+      if (fall) this.onFell(m.note, m.reckoning, fall);
+    }
+  }
+
+  /** THE CROSSING's word (card 30, a stage that survives death died on the shard): the shard
+   *  banked the body, stripped the carry, stepped the ladder and woke the hero at the hearth;
+   *  its mirror already came home. The client books the crossing exactly as a solo crossing
+   *  books it and as onFell books a surviving stage: the tithe (applyCredits), the run counters
+   *  while the dying stage is inside the account loop, the account death tally when it counts,
+   *  the concluded hire, saveAccountDurable. Nothing else of consequence happens here; the fade
+   *  (main.ts) is presentation. */
+  private onCrossed(rawNote: unknown, rawReck: unknown, rawStage: unknown): void {
+    const v = this.current;
+    const note = sanitizeCorpseNote(rawNote), reck = sanitizeReckoning(rawReck), reached = sanitizeStageReached(rawStage);
+    if (!v || !note || !reck || reached === null || note.charId !== v.charId) return;
+    const a = this.account;
+    const stage = stageOf(v.modeId, reck.modeStage); // the DYING stage's policy (beginModeRespawn reads it before the step)
+    applyCredits(a, reck.minted);
+    if (stage.metaProgression) {
+      if (v.ledger) mergeLedger(a.ledger, v.ledger);
+      settleClassUnlocks(a);
+    }
+    if (stage.countsAccountDeath) bumpLedger(a.ledger, LEDGER_ACCOUNT_DEATHS);
+    releaseMercsOf(a, v.charId);
+    saveAccountDurable(a);
+    this.crossings++;
+    this.crossed = { stage: reached, minted: reck.minted, zoneName: note.zoneName, at: Date.now() };
+  }
+
+  /** THE CROSSING the shard reported and the fade has not taken (main.ts); null when none. */
+  crossingPending(): Readonly<{ stage: number; minted: number; zoneName: string; at: number }> | null { return this.crossed; }
+  /** Take it, once, for the fade; null when none landed. */
+  takeCrossing(): { stage: number; minted: number; zoneName: string; at: number } | null {
+    const c = this.crossed;
+    this.crossed = null;
+    return c;
+  }
+
+  /** The fade's pacing (the solo crossing's own): the vessel's mode's respawnFx, else FADE_DEFAULTS. */
+  fadePacing(): { fadeOutSec: number; holdSec: number; fadeInSec: number } {
+    return modeById(this.current?.modeId).respawnFx ?? FADE_DEFAULTS;
+  }
+
+  /** Does the traveling vessel's own stage FALL on death (an Undying)? The fade's other road
+   *  (main.ts): the solo fall's dark, never the mortal's shatter. */
+  fallsOnDeath(): boolean {
+    const v = this.current;
+    return !!v && stageOf(v.modeId, v.modeStage ?? 0).onDeath === 'fall';
   }
 
   /** THE MIRROR lands: honored only for the vessel this client sent, under
@@ -199,12 +267,21 @@ export class ShardVesselLink {
   /** THE DEATH COVENANT's word: the vessel fell on the shard. The client runs
    *  the mortal reckoning main.ts runs at a solo death (the shard appraised
    *  the carry; the corpse stays on the shard, never on this account's ring),
-   *  wipes the run slot, and stages the death screen for the `runEnd`. */
-  private onFell(rawNote: unknown, rawReck: unknown): void {
+   *  wipes the run slot, and stages the death screen for the `runEnd`.
+   *  THE FALL (card 30, `fell`): an Undying fell there. The same booking (its stage's
+   *  rate and switches; a roster vessel's slot is never wiped), and its own roster card
+   *  stamped FALLEN, the fee frozen at receipt (resurrectFee: its level, this account's
+   *  level) beside the shard's fall time: the Vault's Fallen shelf is the road back. A
+   *  card already standing fallen at that time heard it before (THE LATE WORD's re-speak):
+   *  nothing is booked twice. */
+  private onFell(rawNote: unknown, rawReck: unknown, fall?: { level: number; at: number }): void {
     const v = this.current;
     const note = sanitizeCorpseNote(rawNote), reck = sanitizeReckoning(rawReck);
     if (!v || !note || !reck || note.charId !== v.charId || this.death) return;
     const a = this.account;
+    const card = fall ? a.roster.find(r => r.charId === v.charId) : undefined;
+    if (fall && card?.fallen && card.fallen.at >= fall.at) { this.current = null; this.net.farewell = false; return; }
+    if (card && fall) card.fallen = { fee: resurrectFee(fall.level, a.level), at: fall.at, level: fall.level }; // frozen now
     const stage = stageOf(v.modeId, reck.modeStage);
     // THE WIPE first (permadeath): a crash between the halves may lose the
     // reckoning, never repeat it (a surviving slot would upload again and
@@ -219,7 +296,7 @@ export class ShardVesselLink {
     if (stage.metaProgression) {
       record = {
         schema: RUN_RECORD_SCHEMA, at: Date.now(), name: v.name?.trim() || note.name, classId: v.classId,
-        level: reck.level, zones: reck.zones, kills: reck.kills, reason: 'death', essence: reck.minted, renown: reck.renown,
+        level: reck.level, zones: reck.zones, kills: reck.kills, reason: fall ? 'fall' : 'death', essence: reck.minted, renown: reck.renown,
       };
       recordRun(a, record);
       // The vessel's own run counters fold home exactly as its solo run's would.

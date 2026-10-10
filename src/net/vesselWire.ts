@@ -137,3 +137,17 @@ export function sanitizeBodyRows(raw: unknown): ShardBodyRow[] {
   }
   return out;
 }
+
+/** THE IMMORTAL'S COVENANT ON A SHARD (card 30): a `stageDeath` word's stage reached
+ *  (the ladder's index, 0..64), or null. */
+export function sanitizeStageReached(v: unknown): number | null {
+  const n = num(v, 0, 64);
+  return n === null || !Number.isInteger(n) ? null : n;
+}
+
+/** THE FALL (card 30): a `fell` word's vessel level and its fall record's time (the shard's
+ *  wall clock, ms), or null. */
+export function sanitizeFell(level: unknown, at: unknown): { level: number; at: number } | null {
+  const l = num(level, 1, VESSEL_WIRE_CFG.maxValue), t = num(at, 0, Number.MAX_SAFE_INTEGER);
+  return l === null || t === null ? null : { level: Math.floor(l), at: t };
+}

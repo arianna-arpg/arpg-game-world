@@ -910,6 +910,22 @@ in Mu first.**
     **RULED (2026-10-10, her word): A as the default, with the FOUNDATION for
     B: a party may set its own drop rule, owner first and free for all after a
     timeout. Built as THE SPOILS' OWNER (W10).**
+    **BUILT (W10, THE SPOILS' OWNER, branch shard-w10-spoils):** on a hosted
+    world every drop wears its owner (`GemDrop.owner`, `freeAt`): a kill's the
+    credited seat (THE KILLER'S DUE's read, through THE SPOILS STAMP's marks), a
+    chest's its opener, a breakable's its breaker, a dig's its digger, a seat's
+    act and owed pay the acting seat, a discard its dropper; orbs never. THE
+    TOUCH LAW refuses every other hand until the drop is free; a departed
+    owner's drops are anyone's. The party's rule is the leader's (`party` word,
+    op `rule`): 'owner' (the default), 'timed' (`PARTY_CFG.freeAfterSec`, 20 s,
+    then anyone's) or 'free', and the allocation 'killer' (the default) or
+    'rotate' (successive kills dealt round-robin among the members in THE NEAR
+    LAW's reach of the kill); the PartyRow and the panel show it to every
+    member. `DropW.o` / `fa` ride the hosted wire alone; a shell draws another
+    seat's held drop ghosted. Solo and co-op drops never wear the fields (the
+    seeded solo walk prints the same digest before and after). The give or
+    trade lane (C) waits for its own pass. docs/engine/shard.md;
+    `balance/probe_shardspoils.ts`.
 28. **THE BLEED-OUT** (a grouped mortal's down) — A: no timer; a downed
     grouped hero waits for a mate as long as the party stands. B: a
     bleed-out of N seconds after which the covenant falls, reset by a
@@ -941,6 +957,24 @@ in Mu first.**
     B: leave Immortals deathless on shards. Rec: A.
     **RULED (2026-10-10, her word): A. Built as THE IMMORTAL'S COVENANT ON A
     SHARD (W10).**
+    **BUILT (W10, THE IMMORTAL'S COVENANT ON A SHARD, branch shard-w10-spoils):**
+    the covenant's moment is THE FINAL DOWN for every stage (no mate who could
+    kneel; the bleed-out run out or the release: `VesselDesk.waitEnded`, card
+    28's seam, is the one door) and the stage's own `onDeath` picks the
+    outcome. A Sworn (or any 'advance' / 'stay') vessel CROSSES on the server:
+    the tithe at its rate, a self-only body, its carry stripped, the ladder
+    stepped, the mirror and `stageDeath` home at once (the client books it as a
+    solo crossing books it and plays the solo fade), THE DEATH BEAT, then THE
+    WAKE at the hearth under the spawn grace (from any unit, through the
+    hand-off's landing). An Undying FALLS: the full covenant, the stripped
+    vessel home, THE FALL RECORD, then `fell` and `runEnd`; the client stamps
+    its own roster card with the frozen fee and keeps the slot. The Vault's
+    resurrection stamps `risenAt`, the traveling vessel carries it, and a
+    vessel risen after its fall walks the shard again; any other upload hears
+    its fall again and is refused 'fallen'. Leaving while down is no escape for
+    any stage (an unheard crossing is owed to the next upload). A mate's kneel
+    inside the bleed-out saves every stage; the mortal's path is unchanged.
+    docs/engine/shard.md; `balance/probe_shardcovenant.ts`.
 31. **THE M6 ORDER** (the M6 plan `docs/design/shard-m6-plan.md` §6,
     2026-10-10: units and islands across cores) — A: W0 (the one-thread diet:
     the profile, the phase meter, THE THINKING EDGE, local rosters if the
@@ -1052,7 +1086,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 | # | Finding | Wave |
 |---|---|---|
 | 1 | One living focus (tier 1). | THE MANY SHADOWS — DELIVERED by the foundation (c1bfe588): player neighborhoods in the wilds runtime |
-| 2 | Loot is first-come for everyone; card 23 said per player. | THE OWNED SPOILS (card 27) |
+| 2 | Loot is first-come for everyone; card 23 said per player. | THE OWNED SPOILS (card 27): BUILT 2026-10-10 (W10 THE SPOILS' OWNER, branch shard-w10-spoils): a drop belongs to one seat, a party sets its own rule, probe_shardspoils |
 | 3 | Quests are dead on a shard (seven breaks: offers, wire, linger, rewards to the keeper, cargo from the keeper's bag, XP to all, world-wide state). | THE COUNTERS AND THE JOURNAL (card 24 first): BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters): quest state stays the world's, every act and reward the acting seat's; card 24 still open |
 | 4 | Stations never answer a linger (keeper-only dwell; station anchors not shipped). | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 5 | Every road off the surface is sealed with no word. | M1 W2 THE ROADS PER PLAYER: BUILT 2026-10-09 (branch shard-m1-roads): every road moves the seat that took it, alone; the dock, the voyage, the Wraithsail and the Descent's shaft say their word once per approach on the seat's own row and draw no ring; probe_shardunits F and H. M1 W4 THE REALM ROADS BUILT 2026-10-10: every realm gate opened (its prep in the source, its first wake in the realm unit), a dimension's crossing on the Unbroken Wilds keeping its word; probe_shardunits K, probe_shardslow S |
@@ -1069,7 +1103,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 | 17 | Leaving mid-fight is a full heal and a free trip home. | W3 (card 26) |
 | 18 | Refusal words are silent for every player. | W3 |
 | 19 | The world runs at the highest player's level. | M3 (card 29) |
-| 20 | Immortals cannot die on a shard. | card 30 |
+| 20 | Immortals cannot die on a shard. | card 30: BUILT 2026-10-10 (W10 THE IMMORTAL'S COVENANT ON A SHARD, branch shard-w10-spoils): the stage's own death runs on the server and mirrors home, probe_shardcovenant |
 | 23, 24, 26, 27, 29, 30 | Reckoning counts the server; no build stamp; the horn from anywhere; UI buttons that bypass requests; notices and banners to everyone. | W3 |
 | 25 | The client map shows no quest pins or corpse marker. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 

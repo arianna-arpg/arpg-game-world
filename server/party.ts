@@ -26,6 +26,10 @@
 //                account's next seat inside the window takes it back on its
 //                join, and THE DISSOLVE counts held places beside seats, so a
 //                death never breaks a party of two.
+//   THE SPOILS' OWNER (card 27, RULED A with B's foundation): the leader sets
+//                the party's drop rule ('owner' | 'timed' | 'free') and its
+//                allocation ('killer' | 'rotate'); the rows ship them to every
+//                member, and `deal` keeps THE ROTATION's cursor.
 // This desk is PURE registry state: no world, no wire — ShardHost owns the
 // session messages, the snapshot ships each seat's party, VesselDesk reads
 // the membership. Every mutation returns a refusal word or null.
@@ -38,6 +42,12 @@ export const PARTY_CFG = {
   /** THE HELD PLACE: how long a fallen member's place waits for its account's
    *  next seat (world seconds); past it the place is gone. 0 = no place is held. */
   rejoinSec: 120,
+  /** THE SPOILS' OWNER (card 27, RULED A with B's foundation): a new party's drop rule and
+   *  allocation (the leader may change them: the 'rule' word), and the seconds a 'timed'
+   *  drop stays its owner's before it is anyone's. */
+  dropRule: 'owner' as DropRuleKind,
+  allocation: 'killer' as DropAllocation,
+  freeAfterSec: 20,
 };
 
 export interface Party {
@@ -47,6 +57,11 @@ export interface Party {
   members: string[];
   /** THE HELD PLACE: fallen members' places, each waiting on its account's next seat. */
   held: HeldPlace[];
+  /** THE SPOILS' OWNER (card 27): the drop rule and allocation the leader set. */
+  dropRule: DropRuleKind;
+  allocation: DropAllocation;
+  /** 'rotate': the member the last kill's drops were dealt to (THE ROTATION's cursor). */
+  dealt?: string;
 }
 
 /** A fallen member's place (THE HELD PLACE). */
@@ -70,10 +85,12 @@ export interface PartyInvite {
 }
 
 import type { PartyRow } from '../src/net/partyWire';
+import { isDropAllocation, isDropRule, type DropAllocation, type DropRuleKind } from '../src/net/spoils';
 
 export type PartyRefusal =
   | 'not seated' | 'already grouped' | 'already asked' | 'no such party' | 'party full'
-  | 'no invite' | 'not a member' | 'not the leader' | 'cannot invite yourself' | 'invite lapsed';
+  | 'no invite' | 'not a member' | 'not the leader' | 'cannot invite yourself' | 'invite lapsed'
+  | 'no such rule';
 
 export class PartyDesk {
   private parties = new Map<string, Party>();
@@ -103,9 +120,53 @@ export class PartyDesk {
     const out: PartyRow[] = [];
     for (const p of this.parties.values()) {
       if (!p.members.length) continue;
-      out.push({ id: p.id, leader: p.leader, members: [...p.members], ...(p.held.length ? { held: p.held.map(h => h.name) } : {}) });
+      out.push({ id: p.id, leader: p.leader, members: [...p.members], ...(p.held.length ? { held: p.held.map(h => h.name) } : {}),
+        rule: p.dropRule, freeAfterSec: PARTY_CFG.freeAfterSec, allocation: p.allocation }); // THE SPOILS' OWNER: every member sees the standing rule
     }
     return out;
+  }
+
+  // ---- THE SPOILS' OWNER (card 27, RULED A with B's foundation) --------------------------
+  /** The leader sets the party's drop rule and/or allocation (known values only); a refusal
+   *  word for anyone else. A word that changes nothing is no change (no rev). */
+  setRule(seatId: string, rule?: unknown, allocation?: unknown): PartyRefusal | null {
+    const party = this.partyOf(seatId);
+    if (!party) return 'not a member';
+    if (party.leader !== seatId) return 'not the leader';
+    if ((rule === undefined && allocation === undefined) || (rule !== undefined && !isDropRule(rule))
+      || (allocation !== undefined && !isDropAllocation(allocation))) return 'no such rule';
+    const nextRule = rule ?? party.dropRule, nextAlloc = allocation ?? party.allocation;
+    if (nextRule === party.dropRule && nextAlloc === party.allocation) return null;
+    party.dropRule = nextRule;
+    party.allocation = nextAlloc;
+    this.rev++;
+    return null;
+  }
+
+  /** A grouped seat's drop rule (null = ungrouped: the host reads the shard's default). */
+  ruleOf(seatId: string): { rule: DropRuleKind; allocation: DropAllocation } | null {
+    const p = this.partyOf(seatId);
+    return p ? { rule: p.dropRule, allocation: p.allocation } : null;
+  }
+
+  /** THE ROTATION (Path of Exile's permanent allocation): a kill's drops go to the member after
+   *  the last one dealt, in the party's own order, among `inReach` (THE NEAR LAW's members of
+   *  the kill), and the cursor moves there; null when none stands in reach. */
+  deal(seatId: string, inReach: readonly string[]): string | null {
+    const p = this.partyOf(seatId);
+    if (!p) return null;
+    const ring = p.members.filter(m => inReach.includes(m));
+    if (!ring.length) return null;
+    const last = p.dealt === undefined ? -1 : p.members.indexOf(p.dealt);
+    let pick = ring[0];
+    if (last >= 0) {
+      for (let k = 1; k <= p.members.length; k++) {
+        const m = p.members[(last + k) % p.members.length];
+        if (inReach.includes(m)) { pick = m; break; }
+      }
+    }
+    p.dealt = pick;
+    return pick;
   }
 
   /** Any member may invite; an ungrouped inviter founds nothing yet (THE PARTY FOUNDS ON ACCEPT). */
@@ -224,7 +285,8 @@ export class PartyDesk {
   private places(p: Party): number { return p.members.length + p.held.length; }
 
   private found(leader: string): Party {
-    const party: Party = { id: `g${(++this.serial).toString(36)}`, leader, members: [leader], held: [] };
+    const party: Party = { id: `g${(++this.serial).toString(36)}`, leader, members: [leader], held: [],
+      dropRule: PARTY_CFG.dropRule, allocation: PARTY_CFG.allocation }; // THE SPOILS' OWNER: the ruled defaults
     this.parties.set(party.id, party);
     this.bySeat.set(leader, party.id);
     this.rev++;

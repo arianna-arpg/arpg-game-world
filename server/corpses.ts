@@ -93,17 +93,30 @@ export interface ShardCorpse {
    *  (worn gear and side boards, the DeathRecord's own capture). */
   loot: LootPayload;
   diedAt: number;
+  /** THE IMMORTAL'S COVENANT ON A SHARD (card 30): 'own' = the dying stage's corpseRing was
+   *  the character's own (meta/modes.ts): only that character's seats ever see it (self-only,
+   *  as the solo own ring rides its save). Absent = the account ring (every mortal body). */
+  ring?: 'own';
 }
 
 /** THE TOMBSTONE: a vessel that fell here, and THE WORD its client is owed
  *  (the corpse note + the reckoning), kept so a client that never heard it
  *  (a crash, a dropped socket, a leave while downed) hears it at its next
- *  upload of that vessel, then runs its reckoning and wipes its slot. */
+ *  upload of that vessel, then runs its reckoning and wipes its slot.
+ *  THE IMMORTAL'S COVENANT ON A SHARD (card 30) keeps two more rows here, by `kind`:
+ *  'fall' = THE FALL RECORD (an Undying fell: `level` its level; a resurrection later
+ *  than `at` lifts it, every other upload hears `fell` again and is refused 'fallen'),
+ *  'cross' = THE OWED CROSSING (a crossing its client never heard: `stage` the stage it
+ *  reached; the next upload crosses on arrival and hears its word). Absent = the mortal's
+ *  tombstone, forever. */
 export interface FallenRow {
   accountId: string;
   charId: string;
   at: number;
   word?: { note: ShardCorpseNote; reckoning: ShardReckoning };
+  kind?: 'fall' | 'cross';
+  level?: number;
+  stage?: number;
 }
 
 /** The records file (saves/shard_<seed>.records.json). */
@@ -141,7 +154,16 @@ function sanitizeCorpse(raw: unknown): ShardCorpse | null {
     zoneId: r.zoneId, zoneName: r.zoneName, pos: { x: pos.x, y: pos.y },
     ...(map && finite(map.x) && finite(map.y) ? { map: { x: map.x, y: map.y } } : {}),
     loot: { items }, diedAt: r.diedAt,
+    ...(r.ring === 'own' ? { ring: 'own' as const } : {}), // card 30: a self-only body stays self-only
   };
+}
+
+/** THE IMMORTAL'S COVENANT ON A SHARD (card 30): may this seat see this body? A self-only body
+ *  ('own' ring) is its character's alone; an account body is every seat's of that account whose
+ *  stage spawns the account ring (an Undying, corpseSource 'own', sees only its own falls). */
+function bodyVisibleTo(c: ShardCorpse, seat: Seat | undefined): boolean {
+  if (c.ring === 'own') return !!seat && seat.meta.charId === c.charId;
+  return !seat || stageOf(seat.meta.modeId, seat.meta.modeStage).corpseSource !== 'own';
 }
 
 /** A body standing for one seat in its current zone. */
@@ -191,13 +213,61 @@ export class ShardCorpses {
   forAccount(accountId: string | undefined): ShardCorpse[] {
     return accountId ? this.corpses.filter(c => c.accountId === accountId) : [];
   }
-  /** Did this vessel already fall on this shard? (THE TOMBSTONE.) */
+  /** One account's bodies as one seat may see them (card 30: a self-only body is its
+   *  character's alone; an Undying sees only its own falls). */
+  forSeat(accountId: string | undefined, seat: Seat | undefined): ShardCorpse[] {
+    return this.forAccount(accountId).filter(c => bodyVisibleTo(c, seat));
+  }
+  /** Did this vessel already fall on this shard? (THE TOMBSTONE: the mortal's, forever.) */
   hasFallen(accountId: string, charId: string): boolean {
-    return this.fallen.some(f => f.accountId === accountId && f.charId === charId);
+    return this.fallen.some(f => f.accountId === accountId && f.charId === charId && f.kind === undefined);
   }
   /** The word a fallen vessel's client is owed (absent on a legacy row). */
   fallenWord(accountId: string, charId: string): FallenRow['word'] {
-    return this.fallen.find(f => f.accountId === accountId && f.charId === charId)?.word;
+    return this.fallen.find(f => f.accountId === accountId && f.charId === charId && f.kind === undefined)?.word;
+  }
+
+  // ---- THE IMMORTAL'S COVENANT ON A SHARD (card 30) ------------------------
+  /** THE FALL RECORD standing for this vessel (an Undying that fell here), if any. */
+  fallRecord(accountId: string, charId: string): FallenRow | undefined {
+    return this.fallen.find(f => f.accountId === accountId && f.charId === charId && f.kind === 'fall');
+  }
+  /** THE FALL RECORD: an Undying fell here; its word (the note, the appraisal, its level) is
+   *  kept for THE LATE WORD. A newer fall replaces an older record. Returns the row. */
+  markFall(accountId: string, charId: string, word: NonNullable<FallenRow['word']>, level: number): FallenRow {
+    this.fallen = this.fallen.filter(f => !(f.accountId === accountId && f.charId === charId && f.kind === 'fall'));
+    const row: FallenRow = { accountId, charId, at: Date.now(), word, kind: 'fall', level };
+    this.keep(row);
+    return row;
+  }
+  /** A resurrection later than the fall lifts its record: the vessel walks this shard again. */
+  liftFall(accountId: string, charId: string): void {
+    const n = this.fallen.length;
+    this.fallen = this.fallen.filter(f => !(f.accountId === accountId && f.charId === charId && f.kind === 'fall'));
+    if (this.fallen.length !== n) this.persist();
+  }
+  /** THE OWED CROSSING standing for this vessel (a crossing its client never heard), if any. */
+  owedCrossing(accountId: string, charId: string): FallenRow | undefined {
+    return this.fallen.find(f => f.accountId === accountId && f.charId === charId && f.kind === 'cross');
+  }
+  /** THE OWED CROSSING: a crossing its client never heard (a leave while down, a dormant
+   *  socket); the next upload crosses on arrival and hears the word. A newer one replaces it. */
+  markOwedCrossing(accountId: string, charId: string, word: NonNullable<FallenRow['word']>, stage: number): void {
+    this.fallen = this.fallen.filter(f => !(f.accountId === accountId && f.charId === charId && f.kind === 'cross'));
+    this.keep({ accountId, charId, at: Date.now(), word, kind: 'cross', stage });
+  }
+  /** The owed crossing was heard (or enforced): its row goes. */
+  clearOwedCrossing(accountId: string, charId: string): void {
+    const n = this.fallen.length;
+    this.fallen = this.fallen.filter(f => !(f.accountId === accountId && f.charId === charId && f.kind === 'cross'));
+    if (this.fallen.length !== n) this.persist();
+  }
+  /** One row in, the account's oldest past fallenPerAccount out, the file written. */
+  private keep(row: FallenRow): void {
+    this.fallen.push(row);
+    const mine = this.fallen.filter(f => f.accountId === row.accountId);
+    while (mine.length > SHARD_CORPSE_CFG.fallenPerAccount) this.fallen.splice(this.fallen.indexOf(mine.shift()!), 1);
+    this.persist();
   }
 
   /** Bank a fallen vessel's body (THE DEATH COVENANT's write). An account keeps
@@ -265,7 +335,11 @@ export class ShardCorpses {
     this.fallen = (Array.isArray(save.fallen) ? save.fallen : []).flatMap((f): FallenRow[] => {
       if (!f || !isAccountId(f.accountId) || !str(f.charId) || !finite(f.at)) return [];
       const note = sanitizeCorpseNote(f.word?.note), reckoning = sanitizeReckoning(f.word?.reckoning);
-      return [{ accountId: f.accountId, charId: f.charId, at: f.at, ...(note && reckoning ? { word: { note, reckoning } } : {}) }];
+      // card 30: a fall record keeps its level, an owed crossing its stage (a malformed one drops whole).
+      const kind = f.kind === 'fall' || f.kind === 'cross' ? f.kind : undefined;
+      if (kind && (!note || !reckoning || (kind === 'fall' ? !finite(f.level) : !Number.isInteger(f.stage)))) return [];
+      return [{ accountId: f.accountId, charId: f.charId, at: f.at, ...(note && reckoning ? { word: { note, reckoning } } : {}),
+        ...(kind ? { kind, ...(kind === 'fall' ? { level: f.level } : { stage: f.stage }) } : {}) }];
     });
     this.log(`[shard] remembers ${this.corpses.length} bodies and ${this.fallen.length} fallen vessels`);
   }
@@ -310,10 +384,10 @@ export class ShardCorpses {
     return Math.hypot(zone.map.x - c.map.x, zone.map.y - c.map.y) <= CORPSE_MATCH_RADIUS;
   }
 
-  private stand(sb: SeatBodies, w: World): void {
+  private stand(sb: SeatBodies, w: World, seat: Seat): void {
     const prior = new Map(sb.bodies.map(b => [b.corpse.id, b.dwell]));
     const sameZone = sb.zoneId === w.zone.id;
-    sb.bodies = this.forAccount(sb.accountId).filter(c => this.liesIn(c, w.zone)).map(c => ({
+    sb.bodies = this.forSeat(sb.accountId, seat).filter(c => this.liesIn(c, w.zone)).map(c => ({ // card 30: the stage's own ring
       corpse: c, pos: w.clampPos(vec(c.pos.x, c.pos.y), SHARD_CORPSE_CFG.clampRadius),
       dwell: sameZone ? prior.get(c.id) ?? 0 : 0, sentDwell: 0,
     }));
@@ -331,14 +405,14 @@ export class ShardCorpses {
       if (!w || !seat || sb.asleep) continue; // THE DORMANT SEAT: no hand, no dwell
       // THE DESKS PER UNIT: a seat's bodies stand in the zone of its own unit, and re-stand
       // when a hand-off (or its unit's road) moves it to another zone.
-      if (sb.stale || sb.zoneId !== w.zone.id) this.stand(sb, w);
+      if (sb.stale || sb.zoneId !== w.zone.id) this.stand(sb, w, seat);
       this.dwell(seat, sb, dt, w);
     }
     // Ship after EVERY seat swept: a reclaim re-stands its account's other seats.
     for (const [seatId, sb] of this.seats) {
       const w = this.units.worldOf(seatId);
       const seat = w?.seats.find(s => s.id === seatId);
-      if (w && seat && !sb.asleep && (sb.stale || sb.unsent)) { if (sb.stale) this.stand(sb, w); this.ship(seat, sb, w); } // a dormant seat hears nothing
+      if (w && seat && !sb.asleep && (sb.stale || sb.unsent)) { if (sb.stale) this.stand(sb, w, seat); this.ship(seat, sb, w); } // a dormant seat hears nothing
     }
   }
 
@@ -366,7 +440,11 @@ export class ShardCorpses {
     for (const it of b.corpse.loot.items) {
       const item = lootItem(it);
       if (!item) continue; // a patched-out base stays lost, as at any load
-      if (!autoPlace(seat.meta.items, item)) w.dropGearAt(hero.pos, item, undefined, true);
+      if (!autoPlace(seat.meta.items, item)) {
+        const d0 = w.drops.length;
+        w.dropGearAt(hero.pos, item, undefined, true);
+        w.ownSpoils(d0, seat); // THE SPOILS' OWNER (card 27): owed property is the claimant's
+      }
       notePickup(w.pickupFeed, seat.id, item.name, ITEM_RARITIES[item.rarity]?.color ?? SHARD_CORPSE_CFG.flash.color, w.time);
     }
     w.markMetaDirty(seat);

@@ -8,9 +8,12 @@
 // built once at open, a short clock re-reads the model and touches the DOM only
 // when the model's digest moved, rows are patched in place by key (a row that
 // did not change keeps its element and its buttons), and one delegated listener
-// answers every button, so a click never falls between two renders.
+// answers every button, so a click never falls between two renders. THE SPOILS'
+// OWNER (card 27): the party's drop-rule row, the standing rule shown to every
+// member, its three choices and the allocation toggle live for the leader alone.
 import type { PartyOp } from '../net/partyWire';
 import type { PartyPanelModel } from '../net/partyReads';
+import { isDropAllocation, isDropRule, type DropAllocation, type DropRuleKind, type SpoilsRow } from '../net/spoils';
 import { esc } from './dom';
 import { UI_SCALE_CFG } from './uiScale';
 import { Z_LADDER } from './zorder';
@@ -20,10 +23,17 @@ export const PARTY_PANEL_CFG = {
   refreshMs: 250,
   /** Inks: section heads, quiet rows, the leader's mark, a refusal. */
   ink: { head: '#9a8fb0', quiet: '#7a7390', lead: '#c8a84b', word: '#c47a5a' },
+  /** THE SPOILS' OWNER's drop-rule row: the heads and each choice's word ('timed' wears its seconds). */
+  spoils: {
+    head: 'Loot', allocHead: 'Dealt',
+    rule: { owner: 'Owner', timed: 'Timed', free: 'Free' } as Record<DropRuleKind, string>,
+    allocation: { killer: 'Killer', rotate: 'Rotate' } as Record<DropAllocation, string>,
+  },
 };
 
 export interface PartyPanelActions {
-  send: (op: PartyOp, seat?: string) => void;
+  /** `spoils`: the 'rule' word's choice (THE SPOILS' OWNER: the leader alone). */
+  send: (op: PartyOp, seat?: string, spoils?: { rule?: DropRuleKind; allocation?: DropAllocation }) => void;
   /** An invite answered (accepted or declined) leaves the list. */
   settleInvite: (from: string) => void;
 }
@@ -60,8 +70,28 @@ function syncRows(list: HTMLElement, rows: readonly PanelRow[]): void {
   for (const el of have.values()) el.remove();
 }
 
+/** THE SPOILS' OWNER's drop-rule rows: the three choices and the allocation toggle, the standing
+ *  ones marked; live buttons for the leader, the same row read-only for everyone else. */
+function spoilsRows(s: SpoilsRow): PanelRow[] {
+  const ink = PARTY_PANEL_CFG.ink, words = PARTY_PANEL_CFG.spoils;
+  const choice = (act: string, key: string, word: string, on: boolean): string => {
+    const style = `font-size:11px;${on ? `color:${ink.lead};font-weight:bold;` : ''}`;
+    return s.lead && !on ? `<button data-act="${act}" data-pick="${esc(key)}" style="${style}">${esc(word)}</button>`
+      : `<span style="${style}${s.lead ? '' : `color:${on ? ink.lead : ink.quiet};`}padding:0 4px">${esc(word)}</span>`;
+  };
+  const ruleWord = (r: DropRuleKind): string => r === 'timed' && s.freeAfterSec > 0 ? `${words.rule.timed} ${s.freeAfterSec}s` : words.rule[r];
+  const next: DropAllocation = s.allocation === 'killer' ? 'rotate' : 'killer';
+  return [
+    { key: 's:rule', html: `<span style="color:${ink.quiet}">${esc(words.head)}</span><span>`
+      + (['owner', 'timed', 'free'] as DropRuleKind[]).map(r => choice('rule', r, ruleWord(r), s.rule === r)).join(' ') + '</span>' },
+    { key: 's:alloc', html: `<span style="color:${ink.quiet}">${esc(words.allocHead)}</span>`
+      + (s.lead ? `<button data-act="alloc" data-pick="${next}" style="font-size:11px">${esc(words.allocation[s.allocation])}</button>`
+        : choice('alloc', s.allocation, words.allocation[s.allocation], true)) },
+  ];
+}
+
 interface PanelParts {
-  status: HTMLDivElement; members: HTMLDivElement; leave: HTMLButtonElement;
+  status: HTMLDivElement; members: HTMLDivElement; spoils: HTMLDivElement; leave: HTMLButtonElement;
   invitesHead: HTMLDivElement; invites: HTMLDivElement;
   nearHead: HTMLDivElement; near: HTMLDivElement; nearNone: HTMLDivElement;
   farHead: HTMLDivElement; far: HTMLDivElement; word: HTMLDivElement;
@@ -103,12 +133,12 @@ export class PartyPanel {
     leave.textContent = 'Leave the party';
     Object.assign(leave.style, { marginTop: '4px', fontSize: '11px' });
     const parts: PanelParts = {
-      status: div({ color: ink.head, margin: '6px 0 4px' }), members: div(), leave,
+      status: div({ color: ink.head, margin: '6px 0 4px' }), members: div(), spoils: div({ marginTop: '4px' }), leave,
       invitesHead: head('Invitations'), invites: div(),
       nearHead: head('Players near you'), near: div(), nearNone: div({ color: ink.quiet }, 'No one is near.'),
       farHead: head('Farther away'), far: div(), word: div({ color: ink.word, marginTop: '8px' }),
     };
-    root.append(top, parts.status, parts.members, parts.leave, parts.invitesHead, parts.invites,
+    root.append(top, parts.status, parts.members, parts.spoils, parts.leave, parts.invitesHead, parts.invites,
       parts.nearHead, parts.near, parts.nearNone, parts.farHead, parts.far, parts.word);
     root.addEventListener('click', e => this.onClick(e));
     document.body.append(root);
@@ -146,6 +176,8 @@ export class PartyPanel {
     // THE HELD PLACE: a fallen member's place, dim, waiting on its next vessel.
     if (m.party) m.party.held.forEach((name, i) => members.push({ key: `h:${i}:${name}`, html: `<span style="color:${ink.quiet}">${esc(name)} ○</span>` }));
     syncRows(parts.members, members);
+    syncRows(parts.spoils, m.party ? spoilsRows(m.party.spoils) : []); // THE SPOILS' OWNER: the standing rule, live for the leader
+    show(parts.spoils, !!m.party);
     show(parts.leave, !!m.party);
     syncRows(parts.invites, m.invites.map(x => ({
       key: `i:${x.from}`,
@@ -175,6 +207,8 @@ export class PartyPanel {
     if (act === 'accept' || act === 'decline') { this.acts.send(act, seat); if (seat) this.acts.settleInvite(seat); }
     else if (act === 'invite' || act === 'kick') this.acts.send(act, seat);
     else if (act === 'leave') this.acts.send('leave');
+    else if (act === 'rule' && isDropRule(b.dataset.pick)) this.acts.send('rule', undefined, { rule: b.dataset.pick });
+    else if (act === 'alloc' && isDropAllocation(b.dataset.pick)) this.acts.send('rule', undefined, { allocation: b.dataset.pick });
     this.render();
   }
 }

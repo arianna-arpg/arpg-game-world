@@ -64,6 +64,7 @@ import { toneTint } from '../engine/tuning';
 import { STANCE_PLANT_TIME, type Actor } from '../engine/actor';
 import { throngEvolution } from '../engine/throngEvolution';
 import type { LiteWire } from '../net/wireDiet'; // THE WIRE DIET: the lite mirror's wire ids (a hosted shell's bob phase)
+import { dropAlpha } from '../net/spoils'; // THE SPOILS' OWNER (card 27): another seat's held drop draws ghosted
 import { throngSightSet, wornThrongKindsOf } from '../engine/throng';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { PLY_CFG } from '../engine/plies';
@@ -6861,7 +6862,9 @@ export class Renderer {
   private drawDrops(world: World): void {
     const { ctx } = this;
     const D = VIS_CFG.drops; // every size below is a lever, never a literal
+    const alpha0 = ctx.globalAlpha;
     for (const d of world.drops) {
+      ctx.globalAlpha = alpha0 * dropAlpha(world, d); // THE SPOILS' OWNER (card 27): another seat's held drop, ghosted (shown, never told)
       const y = d.pos.y + Math.sin(d.bob) * D.bobAmp;
       const item = d.item;
       if (item.kind === 'vestige') {
@@ -6944,6 +6947,7 @@ export class Renderer {
       }
       ctx.restore();
     }
+    ctx.globalAlpha = alpha0;
   }
 
   private drawTownPortals(world: World): void {

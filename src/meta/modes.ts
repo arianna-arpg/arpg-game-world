@@ -405,6 +405,11 @@ export interface RosterEntry {
    *  moment); `level` is the vessel's level when it fell (display);
    *  `at` wall-clock ms. */
   fallen?: { fee: number; at: number; level: number };
+  /** THE IMMORTAL'S COVENANT ON A SHARD (card 30): wall-clock ms of this vessel's last
+   *  resurrection (stamped where the pour deletes `fallen`, never before its fall's `at`).
+   *  The traveling vessel carries it (CharacterSave.risenAt); a shard's FALL RECORD older
+   *  than it is lifted, and the vessel walks that shard again. */
+  risenAt?: number;
 }
 
 /** How many roster vessels this account may hold for a mode. */

@@ -4,11 +4,17 @@
 
 /** One party as the wire ships it (the snapshot's `parties` rows, on change). `held` names
  *  the fallen members whose places wait for their next vessel (THE HELD PLACE); absent = none. */
-export interface PartyRow { id: string; leader: string; members: string[]; held?: string[] }
+export interface PartyRow {
+  id: string; leader: string; members: string[]; held?: string[];
+  /** THE SPOILS' OWNER (card 27, net/spoils.ts): the party's drop rule, its timer and its
+   *  allocation, shown to every member (the panel's drop-rule row); the desk always ships them. */
+  rule?: import('./spoils').DropRuleKind; freeAfterSec?: number; allocation?: import('./spoils').DropAllocation;
+}
 
 /** What a client may ask of its party desk. `seat` names the other party
- *  (the invitee, or the member to kick). */
-export type PartyOp = 'invite' | 'accept' | 'decline' | 'leave' | 'kick';
+ *  (the invitee, or the member to kick). THE SPOILS' OWNER: 'rule' (the leader alone) sets
+ *  the drop rule and/or the allocation the word carries. */
+export type PartyOp = 'invite' | 'accept' | 'decline' | 'leave' | 'kick' | 'rule';
 
 export const PARTY_WIRE_CFG = {
   /** A refusal word's longest reading (the panel's one line). */
