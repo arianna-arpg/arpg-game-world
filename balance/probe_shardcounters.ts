@@ -335,13 +335,13 @@ const near = (p: Vec2, at: Vec2, r: number): boolean => dist(p, at) <= r;
   const take = (s: Seat): number => essOf(s) * 1000 + memUnits(s) * 10 + s.meta.items.length;
   const p0 = { a: take(sA), b: take(sB), k: take(host.keeper) };
   act(A, { t: 'bountyTurnIn', id: offersA[0] });
-  await runTicks(8);
+  await waitFor(() => take(sA) > p0.a, sec(2)); // the turn-in rides a real socket: wait on the pay, never on a tick count
   check('D board: A\'s writ pays A (never the keeper, never B)',
     !ledgerOf(sA).hands.some(h => h.id === offersA[0]) && take(sA) > p0.a && take(sB) === p0.b && take(host.keeper) === p0.k,
     `A ${p0.a}->${take(sA)}, B ${p0.b}->${take(sB)}, keeper ${p0.k}->${take(host.keeper)}`);
   const p1 = { a: take(sA), b: take(sB) };
   act(B, { t: 'bountyTurnIn', id: offersB[0] });
-  await runTicks(8);
+  await waitFor(() => take(sB) > p1.b, sec(2));
   check('D board: B\'s writ pays B', !ledgerOf(sB).hands.some(h => h.id === offersB[0]) && take(sB) > p1.b && take(sA) === p1.a,
     `B ${p1.b}->${take(sB)}, A ${p1.a}->${take(sA)}`);
   for (const [kind, done] of restore) (BOUNTY_KINDS[kind] as { done: unknown }).done = done;
