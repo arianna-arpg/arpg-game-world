@@ -822,6 +822,20 @@ in Mu first.**
     finishes it for everyone). C: mixed (authored story quests per account,
     world events and sieges shared). Rec: C, which is A for every quest a
     giver hands a person and B for what the world does to itself.
+    **BUILT 2026-10-10 (W9, branch shard-w9-character) as ruled: the unit is
+    the CHARACTER.** THE CHARACTER'S QUESTS (docs/engine/shard.md): a hero's
+    quest log, imbues, rolled bounty postings and boards, the quest keys that
+    gate its offers and its Odyssey leads are one ledger on its seat (a SEAT
+    row THE HAND-OFF moves) and on its CharacterSave (one ledger per hosted
+    world it walks, mirrored home on the beat and the farewell, adopted at the
+    graft); the world's half (the campaign's receipts, preparations, assaults
+    and pressure, world events, sieges) stays the keeper's, and a zone
+    objective credits the ledgers THE NEAR LAW pays; the board deals each
+    character its own slate on the shared beat. Solo and the co-op host are
+    byte for byte (THE SOLO DIGEST, balance/probe_shardcharacter.ts). Owed to
+    M2: a turn-in's ACCOUNT stamps (quest_done, the bounty counters, the
+    vocation unlocks) still reach the shard's account, and the posting pins
+    and growth rungs read `World.gateAccountOf` (the shard's account today).
 25. **POCKET TENANCY** (M1's first question) — A: shared pockets (whoever
     walks into a cave meets the same cave, her "generated for any player
     that simultaneously ran across it"). B: one instance per party.
@@ -843,6 +857,17 @@ in Mu first.**
 29. **THE SHELF PER BUYER** — A: one world shelf rolled at the keeper's
     level (today, §5). B: the shelf rolls per buyer's level. Rec: hold A;
     revisit with M2's account gate.
+    **BUILT 2026-10-10 (W9, branch shard-w9-character) as ruled: per buyer.**
+    THE SHELF PER BUYER (docs/engine/shard.md, docs/engine/vendors.md): every
+    counter on a hosted world deals each buyer its own shelf from the shared
+    restock beat (world seed, counter, beat, character), at the buyer's level,
+    against its own carried gems; THE PATRON'S HOLD and THE STANDING ORDER
+    key by character (saved per character in the world save); THE OWN ENTRY
+    ships each buyer its own shelf (`SeatW.vd`); a purchase splices the
+    buyer's alone. Solo and the co-op host are byte for byte (THE SOLO
+    DIGEST). Owed to M2: every gate (trade, wares, quality, lock and rush
+    rungs, the support share) reads ONE resolver, `World.gateAccountOf`,
+    which answers the shard's open account until the account gate re-points it.
 30. **THE IMMORTAL'S OWN COVENANT ON A SHARD** — today an Immortal cannot
     die on a shard: a stage that does not end the run never meets the
     covenant and the mercy stands it up. A: the stage's own death policy
@@ -927,7 +952,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 |---|---|---|
 | 1 | One living focus (tier 1). | THE MANY SHADOWS — DELIVERED by the foundation (c1bfe588): player neighborhoods in the wilds runtime |
 | 2 | Loot is first-come for everyone; card 23 said per player. | THE OWNED SPOILS (card 27) |
-| 3 | Quests are dead on a shard (seven breaks: offers, wire, linger, rewards to the keeper, cargo from the keeper's bag, XP to all, world-wide state). | THE COUNTERS AND THE JOURNAL (card 24 first): BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters): quest state stays the world's, every act and reward the acting seat's; card 24 still open |
+| 3 | Quests are dead on a shard (seven breaks: offers, wire, linger, rewards to the keeper, cargo from the keeper's bag, XP to all, world-wide state). | THE COUNTERS AND THE JOURNAL (card 24 first): BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters): quest state stays the world's, every act and reward the acting seat's; card 24 ruled and BUILT 2026-10-10 (W9 THE CHARACTER'S QUESTS, probe_shardcharacter): the quest state is each character's own |
 | 4 | Stations never answer a linger (keeper-only dwell; station anchors not shipped). | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 5 | Every road off the surface is sealed with no word. | M1 W2 THE ROADS PER PLAYER: BUILT 2026-10-09 (branch shard-m1-roads): every road moves the seat that took it, alone; the dock, the voyage, the Wraithsail and the Descent's shaft (and each realm gate until W4) say their word once per approach on the seat's own row and draw no ring; probe_shardunits F and H |
 | 6 | Held casts drop after ~2 s. | W3 |
@@ -942,7 +967,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 | 16 | Event, objective and quest XP pays everyone. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
 | 17 | Leaving mid-fight is a full heal and a free trip home. | W3 (card 26) |
 | 18 | Refusal words are silent for every player. | W3 |
-| 19 | The world runs at the highest player's level. | M3 (card 29) |
+| 19 | The world runs at the highest player's level. | M3 (card 29: the shelf per buyer BUILT 2026-10-10 in W9 at the buyer's own level; the world's own level stays M3's) |
 | 20 | Immortals cannot die on a shard. | card 30 |
 | 23, 24, 26, 27, 29, 30 | Reckoning counts the server; no build stamp; the horn from anywhere; UI buttons that bypass requests; notices and banners to everyone. | W3 |
 | 25 | The client map shows no quest pins or corpse marker. | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |

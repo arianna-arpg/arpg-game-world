@@ -196,6 +196,34 @@ reads the keeper's account); couch seats share the host world and get
 everything. (Pre-existing gap, unchanged: `chandlerStock` is not
 replicated.)
 
+## The shelf per buyer (a hosted world, card 29)
+
+Card 29 as ruled (2026-10-10): on a hosted world (a shard) every counter rolls
+per buyer, the way Path of Exile's vendors are each player's own; the shared
+shelf above is the solo hero's and the co-op host's alone. `World.withBuyer(seat,
+fn)` scopes a counter act (a buy, a reserve, the standing order, the arm) to its
+buyer, and inside it `vendorStock`, `chandlerStock`, the armed beats and
+`vendorHolds` are the buyer's own (`World.seatShelves`, a SEAT row the hand-off
+carries; `World.charVendorHolds`, keyed by character). The roll keeps THE
+FOREORDAINED SHELF with one more limb: `vendorshelf:<counter>:<beat>:<character>`
+(and the standing order's `vendorhold:<counter>:<gem>:<beat>:<character>`), so a
+buyer's shelf is a pure function of (seed, counter, beat, character): the same
+beat for everyone, a different draw for each. It rolls at the buyer's level (the
+gear shelf's ilvl and the gem bracket read the buyer's hero) against the buyer's
+own carried gems, and every gate (the trade gate, the wares, quality and lock
+rungs, the support share, the rush rungs) reads `World.gateAccountOf(seat)`, ONE
+resolver: today it answers the World's own account (the shard's open account,
+THE KEEPER'S GATE) and M2's account gate re-points that one line. Every standing
+player in a counter's zone is dealt its shelf when the beat turns, the counter's
+own restock re-deals every buyer's there, and a purchase splices the buyer's
+shelf alone. THE PATRON'S HOLD and THE STANDING ORDER persist per character in
+`WorldStateSave.charVendorHolds` (the vendorHolds shape, by character key; absent
+off a hosted world). The wire ships each buyer its own shelf as `SeatW.vd` under
+THE OWN ENTRY on a change and on THE SHELF BEAT; a hosted world never ships the
+root `vendor` rows. Off a hosted world nothing here runs: the seeds, the shelf and
+the rows are byte for byte what they were (`balance/probe_shardcharacter.ts` Z
+pins THE SOLO DIGEST; E pins the per-buyer law).
+
 ## The counter tabs + the counter glass (2026-07-22)
 
 Every counter renders as TWO FACES (`VendorDef.tabs ??
