@@ -343,6 +343,14 @@ export class WorldSim {
     setAtlasSeed(seed);
   }
 
+  /** Synchronous native generation restores the prior campaign's atlas/relief/capital policies on exit. */
+  withGeographyPolicies<T>(operation:()=>T):T {
+    const previous=WorldSim.geographyOwner;
+    if(!previous)throw Error('Native geography scope requires an installed campaign');
+    this.bindGeographyPolicies();
+    try{return operation();}finally{previous.bindGeographyPolicies();}
+  }
+
   constructor(manifest: ExpeditionManifest) {
     this.manifest = manifest;
     const seed = manifest.seed >>> 0;

@@ -298,6 +298,11 @@ const LABYRINTH_WIND = 30;
 type RouteGuard = (a: MapCoord, b: MapCoord) => boolean;
 let routeGuard: RouteGuard | null = null;
 export function setRouteGuard(g: RouteGuard | null): void { routeGuard = g; }
+/** Synchronous native preparation borrows the road policy and restores the exact previous owner, including on failure. */
+export function withRouteGuard<T>(guard:RouteGuard,operation:()=>T):T {
+  const previous=routeGuard;routeGuard=guard;
+  try{return operation();}finally{routeGuard=previous;}
+}
 function routeOk(a: MapCoord, b: MapCoord): boolean { return !routeGuard || routeGuard(a, b); }
 const WEAVE_RADIUS = 96;   // node-units: past the 52 anti-crowd floor + a MAP_DIR step (~78-86)
 /** Total real roads a zone may hold (4 sides + multi-exit slack). Exported:

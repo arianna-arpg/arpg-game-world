@@ -83,3 +83,8 @@ conversation/Continue pass for this checkpoint.
 
 Generation QA passes 869 cases across three seeds (2,607 cases, zero failures,
 four existing spacing warnings). Simulation smoke passes all 25 episodes.
+
+Next checkpoint: [native campaign graph preparation](native-area-graph-preparation.md)
+adds NativeAreaSceneGraph and the complete pre-layout boundary composition.
+Its complete native arrival/layout/birth course uses these same local owners;
+installed source-session issuance and full lifecycle activation remain next.

@@ -1,3 +1,15 @@
+NativeAreaSceneGraph shares all 22 original campaign graph preparation methods
+with World. NativeAreaSceneBoundaries binds actual local graph/coast/geometry for
+the complete pre-layout operation, retaining IDs, native child zones, events,
+allocator and partial effects. Scope the entire synchronous graph/layout/birth
+tranche with withGenerationPolicies; road and geographic policies restore their
+previous owners even on failure. Never span an await. Fourteen cold original/
+World/local courses cover real graphs, remembered/held/holdfast/complex births,
+river ports and partial failures. See docs/worldgen/native-area-graph-preparation.md
+and latest .claude/continuation.native-area-integration.local.txt. Installed source
+issuance, controller/reward ownership, whole-area paging, true native hierarchy
+and map zoom remain outstanding; placement stays separate.
+
 NeutralGround uses firm_sand for fresh seamless desert and shore foundations.
 Keep native loose sand/mud Mired and old saved sand descriptors unchanged.
 Fresh explicit ecology and landform material lists preserve scenery/admission;

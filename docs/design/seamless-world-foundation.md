@@ -4744,3 +4744,17 @@ failures. See [native area birth composition](../worldgen/native-area-birth-comp
 for evidence, reproduced baseline test failures and remaining work. This checkpoint
 does not activate source issuance, whole-owner paging, genuine native biome/zone
 hierarchy or map zoom. Placement continues as a separate course.
+
+
+## NativeAreaSceneGraph checkpoint
+
+The original 22-method campaign graph preparation now belongs to concrete local
+native owners as well as World. Complete boundary preparation, the actual native
+arrival sequence, layout and full birth agree across 14 cold archived/current/local
+courses, including remembered areas, held-city structures, holdfast pockets, full
+atlas complexes, river ports and partial publication failures. Scoped road and
+geographic policies restore their prior owners. See
+[native campaign graph preparation](../worldgen/native-area-graph-preparation.md)
+for binding, verification and the synchronous execution contract. Source issuance,
+ongoing controllers, complete event/content persistence, whole-area streaming,
+native biome/zone hierarchy and map zoom still require integration.

@@ -15,5 +15,5 @@ export const nativeSkyModuleHashes={
   "src/packages/overlays/mycelia.ts": "ed7f4497593021058fdfcd994960dbe882408cfd53f8230ea9995dc1bd3aaa90",
   "src/packages/overlays/hunt.ts": "6b0727c2051b9fb10fe722a7ae384fba9e88022bb6f9453eccfd11be52238ba7"
 };
-export const nativeSkyOtherWorldHash="4e34cf8abf86288e8125e50bc222e27d3fa1288391007b5b05bdc368801f9e25";
-export const nativeSkyOtherWorldCount=2373;
+export const nativeSkyOtherWorldHash="668c4df21d9f4a4dc7b322914ef4804f70fc0712d42f868b1ea85f99fb6f6a0d";
+export const nativeSkyOtherWorldCount=2351;

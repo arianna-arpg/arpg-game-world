@@ -24,7 +24,8 @@ const emit=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTa
 const read=(p:string)=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
 for(const [p,digest]of Object.entries(nativeSkyModuleHashes))assert.equal(hash(emit(read(p))),digest,'unchanged installed executable: '+p);
 const text=read('src/engine/world.ts'),sf=ts.createSourceFile('world.ts',text,99,true),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
-const excluded=['skyFront','radiance','radianceCondHeld','nativeSceneSkyView','nativeSceneSkyHost'];
+// Graph methods now have their own independent ef76cb1e archive proof.
+const excluded=["skyFront","radiance","radianceCondHeld","nativeSceneSkyView","nativeSceneSkyHost","rollHoldfast","eagerChartNeighbors","chartNeighborsOf","chartWithin","chartFrontier","fieldFrontierTarget","nearestLinkable","mintGroundTaken","roadlessGateHub","mintHoldfastPocket","mintSoulriverZone","nearestRiverPort","fieldifyZone","underSpanPass","rollPocketForm","applyPocketSpec","pullToLand","mintSpanPartner","severFootprintCrossers","soulriverPorts","dimensionBiomeDepthFor","courseMintFor","nativeSceneGraphView","nativeSceneGraphHost"];
 const others=cl.members.filter(m=>!excluded.includes(m.name?.getText(sf)??'')).map(m=>m.getText(sf).replace(/\r\n/g,'\n'));
 assert.equal(others.length,nativeSkyOtherWorldCount);assert.equal(hash(JSON.stringify(others)),nativeSkyOtherWorldHash);
 const core=ts.createSourceFile('nativeSceneSky.ts',read('src/engine/nativeSceneSky.ts'),99,true);
