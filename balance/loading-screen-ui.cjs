@@ -109,15 +109,23 @@ app.whenReady().then(async () => {
   const choices = await run(async () => {
    window.__qaLease = __game.loading.begin({ kind: 'travel', direction: 'right', label: 'Following the wandering souls' });
    const start = performance.now(), counts = new Set(), placements = new Set(), widths = new Map();
-   let gateId, lane = 0;
+   let gateId, lane = 0, births = 0;
+   const known = new Set();
+   const objects = snap => [...snap.gates.map(g => ({ ...g, key: 'g' + g.id })),
+    ...snap.pickups.map(p => ({ ...p, key: 'p' + p.id })), ...snap.currents.map(b => ({ ...b, key: 'b' + b.id }))];
+   for (const o of objects(__game.loading.snapshot)) known.add(o.key);
    while (performance.now() - start < 45000) {
     const snap = __game.loading.snapshot;
+    for (const o of objects(snap)) if (!known.has(o.key)) {
+     known.add(o.key); births++;
+     if (o.u <= 1000) throw Error('Loading object spawned inside the visible course: ' + JSON.stringify(o));
+    }
     for (const g of snap.gates) { counts.add(g.openings.length); for (let i = 0; i < g.openings.length; i++) widths.set(g.id + ':' + i, g.openings[i].width); }
     for (const b of snap.currents) if (b.taken) placements.add(b.placement);
     const root = document.querySelector('#mu-loading-screen');
     if (/\d|score|points/i.test(root.innerText) || 'score' in snap) throw Error('Crossing exposes a numeric score or count');
     if (counts.size === 3 && placements.size === 2 && snap.passed >= 3 && snap.collected >= 2 && snap.dash > 0 && snap.gates.some(g => !g.resolved && g.openings.length > 1)) {
-     return { snap, counts: [...counts], placements: [...placements], widths: [...widths.values()] };
+     return { snap, births, counts: [...counts], placements: [...placements], widths: [...widths.values()] };
     }
     const g = snap.gates.find(g => !g.resolved);
     const reach = distance => Math.max(0, distance) * 490 / (210 * 5.4);
@@ -138,7 +146,7 @@ app.whenReady().then(async () => {
    }
    throw Error('Branching course timed out: ' + JSON.stringify({ counts: [...counts], placements: [...placements], snap: __game.loading.snapshot }));
   });
-  assert.ok(choices.snap.passed >= 3); assert.ok(choices.snap.currentsTaken >= 2);
+  assert.ok(choices.births > 0); assert.ok(choices.snap.passed >= 3); assert.ok(choices.snap.currentsTaken >= 2);
   assert.ok(Math.max(...choices.widths) - Math.min(...choices.widths) > 5);
   report.checks.push({ branchingCurrents: choices }); await shot('choices');
   await run(() => window.__qaLease.finish());

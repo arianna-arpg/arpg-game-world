@@ -7,7 +7,7 @@ import { baked } from '../render/vis/sprites';
 import type { CosmeticLoadout } from '../engine/cosmetics';
 import { cosmeticBody, cosmeticPick, drawCosmeticOrbit } from '../render/vis/cosmetics';
 import { bodySprite, adornSprite, spriteHalf, lookOf, drawLiveParts } from '../render/vis/body';
-import { SPIRIT_RUN, SPIRIT_CURRENT_COLOR, SpiritRun, spiritLayout, spiritGateSolids } from './spiritRun';
+import { SPIRIT_RUN, SPIRIT_CURRENT_COLOR, SpiritRun, spiritLayout, spiritGateSolids, spiritArrivalAlpha } from './spiritRun';
 
 // One Mu soul-flame, from a quiet sputter to a brighter, restless flare.
 // These are visual envelopes only; every encounter keeps its existing hit radius.
@@ -77,7 +77,8 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
     line(u, v, u + (reducedMotion ? 2 : 4 + run.speed * 4), v);
   }
   for (const gate of run.gates) {
-    ctx.save(); ctx.globalAlpha = gate.resolved ? (gate.hit ? 0.35 : 0.17) : 0.92;
+    const arrival = spiritArrivalAlpha(gate.u, run.time, reducedMotion); if (!arrival) continue;
+    ctx.save(); ctx.globalAlpha = arrival * (gate.resolved ? (gate.hit ? 0.35 : 0.17) : 0.92);
     const narrow = gate.openings.some(o => o.width < 154), color = gate.hit ? '#e89895' : narrow ? '#a6b1df' : '#8ac8bf';
     for (const { low, high } of spiritGateSolids(gate)) {
       const half = c.gateThickness / 2, a = point(gate.u - half, low), b = point(gate.u + half, high);
@@ -109,9 +110,10 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
   }
   // Ephemeral currents use close chevrons, all facing the actual travel direction.
   for (const current of run.currents) {
-    if (current.taken) continue;
+    const arrival = spiritArrivalAlpha(current.u, run.time, reducedMotion);
+    if (current.taken || !arrival) continue;
     const p = point(current.u, current.lane);
-    ctx.save(); ctx.globalAlpha = 1; ctx.translate(p.x, p.y); ctx.scale(scale, scale);
+    ctx.save(); ctx.globalAlpha = arrival; ctx.translate(p.x, p.y); ctx.scale(scale, scale);
     ctx.rotate(run.direction === 'down' ? Math.PI / 2 : run.direction === 'left' ? Math.PI : 0);
     const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 54);
     glow.addColorStop(0, '#a1ffdf35'); glow.addColorStop(1, '#a1ffdf00');
@@ -119,13 +121,13 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
     ctx.strokeStyle = SPIRIT_CURRENT_COLOR; ctx.lineCap = 'round';
     for (let i = 0; i < 5; i++) {
       const x = (i - 2) * 11;
-      ctx.globalAlpha = reducedMotion ? 0.8 : 0.52 + 0.34 * (0.5 + 0.5 * Math.sin(time * 6 - i));
+      ctx.globalAlpha = arrival * (reducedMotion ? 0.8 : 0.52 + 0.34 * (0.5 + 0.5 * Math.sin(time * 6 - i)));
       ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(x - 5, -11);
       ctx.quadraticCurveTo(x + 1, -7, x + 6, 0); ctx.quadraticCurveTo(x + 1, 7, x - 5, 11); ctx.stroke();
     }
     ctx.lineWidth = 0.8;
     for (const side of [-1, 1]) {
-      ctx.globalAlpha = 0.26; ctx.beginPath(); ctx.moveTo(-55, side * 18);
+      ctx.globalAlpha = arrival * 0.26; ctx.beginPath(); ctx.moveTo(-55, side * 18);
       ctx.bezierCurveTo(-28, side * 8, 10, side * 24, 40, side * 12); ctx.stroke();
     }
     ctx.restore();
@@ -134,8 +136,9 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
   // Independent soul-flames range continuously from small sputters to broad flares.
   for (const pickup of run.pickups) {
     const def = SOUL_FLAMES[pickup.kind], p = point(pickup.u, pickup.lane), color = MU_CFG.wisp.color;
-    if (pickup.state === 'taken') continue;
-    ctx.save(); ctx.globalAlpha = 1;
+    const arrival = spiritArrivalAlpha(pickup.u, run.time, reducedMotion);
+    if (pickup.state === 'taken' || !arrival) continue;
+    ctx.save(); ctx.globalAlpha = arrival;
     ctx.translate(p.x, p.y); ctx.scale(scale, scale);
     const phase = time * def.flicker * pickup.flame + pickup.id * 2.4;
     const breath = 1 + Math.sin(phase) * 0.045 + Math.sin(phase * 1.7) * 0.025;
