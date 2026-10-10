@@ -78,11 +78,11 @@ import { GRAB_VERB_LABEL } from '../engine/grab';
 import { tellSpecsOf } from '../engine/tells';
 import { fellProgress } from '../engine/rampage';
 import { watchRungOf, watchValueOf } from '../engine/watch';
+import { reviveRowOf } from './partyReads'; // THE PARTY THAT READS: the revive row (SeatW.rv)
 import { gaugeFloor, gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE WIRE'S EYES: the bar's gauge rows
 import { COOP_SCALING } from '../data/coop'; // THE WIRE'S EYES: the zone rows' reach (THE NEAR LAW's radius)
 import { applyCounterRows, applyCounterZone, counterZoneOf, harvestRowOf, journalRowOf, type HarvestW, type JournalW } from './journalWire'; // THE COUNTERS AND THE JOURNAL
 import { roadDwellRow } from '../engine/shardRoads'; // THE ROADS PER PLAYER (shard M1 W2): the road ring
-import { reviveRowOf } from './partyReads'; // THE PARTY THAT READS: the revive row (SeatW.rv)
 
 export type Vec2W = [number, number];
 
@@ -1365,7 +1365,7 @@ function ownGaugesOf(a: Actor): Pick<SeatW, 'gg'> {
  *  seat's). A shard ships each socket its own seat's and never another's
  *  (ShardTransport.sendState through ownEntryJson); a broadcast lane (co-op) carries every
  *  seat's and each client reads its own. Naming a key here puts that SeatW row under the law. */
-export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh', 'jn', 'hv', 'rd', 'rv']; // + THE ACTING SEAT's note and surge, THE COUNTERS AND THE JOURNAL's journal and rite, THE ROADS PER PLAYER's road ring, THE PARTY THAT READS' revive row
+export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh', 'jn', 'hv', 'rd']; // + THE ACTING SEAT's note and surge, THE COUNTERS AND THE JOURNAL's journal and rite, THE ROADS PER PLAYER's road ring
 
 /** THE ACTING SEAT (World.seatHudWire): the seat's refusal note while it is fresh. */
 function ownNoteOf(s: Seat, world: World): { fn?: { text: string; at: number } } {
@@ -1382,6 +1382,8 @@ function ownRoadOf(s: Seat, world: World): { rd?: [number, number, number, strin
   const rd = world.shardWorld ? roadDwellRow(world, s) : undefined;
   return rd ? { rd } : {};
 }
+/** THE PARTY THAT READS: the revive row (SeatW.rv) rides THE OWN ENTRY too (its own statement). */
+(SEAT_OWN_ROWS as (keyof SeatW)[]).push('rv');
 let ownEntrySeq = 0;
 
 /** A seat entry with every own row struck (another seat's view of it). */

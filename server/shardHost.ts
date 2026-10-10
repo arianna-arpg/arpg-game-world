@@ -39,6 +39,7 @@ import { POWER_PROGRESSION, odysseyMilestoneKey } from '../src/data/powerProgres
 import { SKILLS } from '../src/data/skills';
 import { World, type Seat } from '../src/engine/world';
 import { COOP_SCALING } from '../src/data/coop';
+import { PARTY_WIRE_CFG } from '../src/net/partyWire'; // THE PARTY THAT READS: THE NEAR LAW's one number
 import { updateAI } from '../src/engine/ai';
 import { CLASSES, type ClassDef } from '../src/data/classes';
 import { rollSeed } from '../src/core/rng';
@@ -48,7 +49,6 @@ import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction, PlayerInput } from '../src/net/intent';
 import { massDigest } from '../src/worldmass/random';
 import { PartyDesk } from './party';
-import { PARTY_WIRE_CFG } from '../src/net/partyWire';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
 import { ShardTransport, type ShardJoin } from './shardTransport';

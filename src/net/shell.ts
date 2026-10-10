@@ -49,10 +49,10 @@ import type { Actor, CastingState } from '../engine/actor';
 import type { World } from '../engine/world';
 import { instanceCastMode, instanceConvert, instanceDelivery, instanceStrikeTiming, instanceTrigger, type SkillInstance } from '../engine/skills';
 import { replenishingDelivery } from '../engine/replenishment';
+import { applyOwnReviveRow } from './partyReads'; // THE PARTY THAT READS: the revive row (SeatW.rv)
 import type { MetaAction, PlayerInput } from './intent';
 import { adoptSnapshot, interpolateSnapshot, isWireCast, tickNetClocks, type InterpFrame, type StateSnapshot } from './snapshot';
 import { applyOwnSeatRows } from './seatView';
-import { applyOwnReviveRow } from './partyReads'; // THE PARTY THAT READS: the revive row (SeatW.rv)
 import { faceOwnAim, replayOwnFrames, type PredictFrame } from './predict';
 
 export const WIRE_SHELL_CFG = {

@@ -106,6 +106,7 @@ import type { HitShape } from '../engine/shapes';
 import { PROJ_FORM_GEO } from '../engine/projForms';
 import { projectileDrawScale } from './vis/projectileBounds';
 import { transitRing } from '../data/transit';
+import { PARTY_CUE } from '../data/partyCues'; // THE PARTY THAT READS
 import { EVENT_COLOR, gateLookOf } from '../data/gateVisuals';
 import { courtLord } from '../packages/courts';
 import { boundaryGateOf } from '../data/boundaryGates';
@@ -133,7 +134,6 @@ import { drawMagicPackEffects, drawMagicPackRole } from './vis/magicPackLayer';
 import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
 import { APPARITION_ROLE, MU_CFG } from '../data/mu';
 import { HERO_NAME_CUE, PING_CUE } from '../data/identityCues';
-import { PARTY_CUE } from '../data/partyCues'; // THE PARTY THAT READS
 import { pingEdgePoint } from '../engine/pings';
 import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
 import { contrastGuard, hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';

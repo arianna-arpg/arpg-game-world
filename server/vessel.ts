@@ -35,6 +35,7 @@ import { MAX_LEARNED_SKILLS, type Seat, type World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 import { recentIndex } from '../src/engine/recency';
 import { COOP_SCALING } from '../src/data/coop';
+import type { DownView } from '../src/net/partyWire'; // THE PARTY THAT READS: the down's read
 import { dist } from '../src/core/math';
 import { MASS_ZONE } from '../src/worldmass/preset';
 import { CLASSES, type ClassDef } from '../src/data/classes';
@@ -48,7 +49,6 @@ import type { CompanionSaved } from '../src/engine/companionSpec';
 import { RemoteInput } from '../src/net/remote';
 import type { PeerInfo } from '../src/net/transport';
 import type { ShardCorpseNote, ShardReckoning } from '../src/net/vesselWire';
-import type { DownView } from '../src/net/partyWire';
 import { isCurrentCharacterSave } from '../src/meta/saveCompatibility';
 import { rebuildSavedMeta, serializeCouchGuest, throngRowsOf, type CharacterSave } from '../src/meta/character';
 import { captureLoot } from '../src/meta/death';
