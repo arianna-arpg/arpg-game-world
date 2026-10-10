@@ -2509,6 +2509,10 @@ export interface ZoneMsg {
    *  Seeds stay host-side (the annex mint is the host's business). */
   arena: {
     w: number; h: number; shape: ZoneShape;
+    /** THE ZONE'S OWN BOUNDS: a boundless (streamed) arena says so here, absent = bounded. A
+     *  client's clamp, camera and floor read it on every zone message (a wilds shell's pocket
+     *  is bounded, its surface boundless again on the climb-out). */
+    boundless?: boolean;
     pieces?: { id: string; x: number; y: number; w: number; h: number; shape?: ZoneShape; active?: boolean }[];
   };
   theme: ZoneTheme;
@@ -2563,6 +2567,7 @@ export function serializeZone(world: World): ZoneMsg {
     dimension: world.zone.dimension,
     arena: {
       w: world.arena.w, h: world.arena.h, shape: world.arena.shape,
+      ...(world.arena.boundless ? { boundless: true } : {}), // THE ZONE'S OWN BOUNDS
       ...(world.arena.pieces?.length ? {
         pieces: world.arena.pieces.map(pc => ({
           id: pc.id, x: pc.x, y: pc.y, w: pc.w, h: pc.h,
@@ -2591,6 +2596,9 @@ export function serializeZone(world: World): ZoneMsg {
 /** Client: rebuild the render terrain from a host zone message. */
 export function applyZone(world: World, msg: ZoneMsg): void {
   world.arena.w = msg.arena.w; world.arena.h = msg.arena.h; world.arena.shape = msg.arena.shape;
+  // THE ZONE'S OWN BOUNDS: the host's word, every message (a client's own last arena never
+  // stands in for it: a wilds shell's pocket kept the surface's boundless before this).
+  world.arena.boundless = msg.arena.boundless === true;
   // THE COMPOSITE BOUND: adopt the host's pieces whole (fresh objects), then
   // let the hull + revealed set follow — the client's predicted clampPos and
   // the drawn face read the same union the host tests.
