@@ -549,7 +549,16 @@ HUD's local site name reads a private runtime map the shell never fills.
    other fabric reaches the shard through the transport seam it already
    reaches co-op through.
 6. **THE ASKS (2026-10-09) — three seams the shard needs from the seamless
-   lane's own files, each with its measurement.** The shard never edits
+   lane's own files, each with its measurement. DELIVERED by the foundation
+   session (c1bfe588, integrated at 18a1b437, 2026-10-10; contract in
+   docs/engine/shard-runtime-foundation.md; probes probe_worldmass_foci,
+   probe_shardworkers, probe_worldmass_checkpoint): player NEIGHBORHOODS
+   (`WorldMassRuntime.update(world, boot, foci?)`, overlapping
+   population-radius discs form groups, each with the full population budget,
+   the keeper excluded), background compilation on one Node worker thread
+   (`server/massWorkers.ts`), and compact checkpoints (`serializeWorldState({
+   massCheckpoint: true })`: 5.8 MB to 1.9 MB, 96 ms to 58 ms). The three
+   items below stand as the record of the ask.** The shard never edits
    `src/worldmass/**` (6.3); these are requests for that lane, carried by her.
    - **THE MANY SHADOWS** (`src/worldmass/runtime.ts` `update`, lines ~720–816):
      the runtime's page requests, places, site discovery, survey, native
@@ -837,6 +846,7 @@ the base taken and what moved.
 | 2026-10-07 | `67d9c290` (pushed tip) | 0 | the lane's first base (a rebase, before the branch was pushed) |
 | 2026-10-08 | `ae5b686f` (31 LOCAL commits of the codex worktree, unpushed at the time) | 3, all in `world.ts` | the party scale moved into `engine/nativeScenePopulation.ts` and THE NEAR LAW moved with it (`scenePartyScaleCount(host, at)`); the experimental exploration rewards were retired upstream, so the keeper-gated `claimExplorationReward` went with them; the coop import kept `COOP_SCALING` for the mercy and XP reads. Of the 17 `keeperSeat` seams, 15 stand in `world.ts` as they were, the two party-scale lines moved with the scale into the scene module, and the retired reward claim's gate went with its method. The merge audit (an Opus critic, 2026-10-08) found THE LAND DIGEST gap (the preset's terrain version moved under the seed — fixed: refused saves are legacy, the welcome proves the land) and THE NEAR LAW AT THE MINT (pre-existing: the mint-time scale read a placeholder — fixed: settled where the body stands); it noted that `mercEase` is read off the keeper's sheet on a shard (a seat's own Fair Company never lightens its hired blades — OWED) and that the shell mints the settlement watch at attach before the first snapshot replaces it (harmless). Nine other probes red after the merge are red on the codex tip itself (its in-flight work), left to that lane. |
 | 2026-10-09 | `6948a362` (7 more LOCAL commits: regional courts, winding terrain, complete native locales, fixture ownership) | 0 | a clean auto-merge; a dry run (`git merge-tree`) of shard-world INTO the foundation tip is clean too. THE INTEGRATION POLICY (her question 2026-10-09) is §7c. |
+| 2026-10-10 | `18a1b437` THE INTEGRATION: the foundation session merged shard-world (096393f1) and the roads branch (889884fc) into its lane, delivered §6.6's three asks (c1bfe588) and fast-forwarded `shard-world` to the same commit, so both branches stand as ONE tree; §7c's cadence continues from here (the shard keeps merging the foundation down; the foundation lands the shard up). | 0 | the shard rigs, the three new foundation probes and a soak are green on 18a1b437 |
 | 2026-10-09 (W5) | THE SEAMS THE SHARD NOW CARRIES IN THE FOUNDATION'S FILES, for the landing: `src/worldmass/clearance.ts` passes the cleared site's place to `grantXp` (XP BY PLACE, one line); `src/worldmass/quests.ts` reads a hosted shell's map pins off its journal row and filters bounty pins by `World.handOwns` (three lines). Both additive, byte-identical off a shard. | 0 | recorded so the foundation session meets them knowingly at the landing (§7c). |
 
 ## §7c The integration policy (her question 2026-10-09)
@@ -876,7 +886,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 | 2 | Every non-keeper seat's held casts run on the monster AI's hold roll (`a !== this.player` in updateCasting): guards drop, channels end, charges release on a 1.2–2.6 s timer. | W3 — BUILT 2026-10-09 (7efc8c8c): seated actors hold on their own input; probe_shardseat |
 | 3 | `World.zones` (telegraphs, fields) and leap landing rings never ride the wire: invisible slams, strikes and hazards on a client. | W2 THE WIRE'S EYES — BUILT 2026-10-09 (6edffa88): `ZoneW` rows within reach, leap dest/radius/telegraph; probe_shardwire |
 | 4 | THE FOCUS: the mass runtime keys on the keeper's one position; a player 3,000 px away walks a barren, static world. MEASURED (the soak, 6 bots 3,500 px apart): the living radius around each player is least 0, mean 3.2 foes; THE ROVING SHADOW (a keeper that visits each cluster in turn, shipped off) lifts the mean to 6.7 at a 10 s cadence and 8.1 at 2 s but drops 43% and 68% of ticks (each hop re-keys the runtime at 135–170 ms; the extra clusters' natives raise the sustained load). | THE MANY SHADOWS (several foci inside the runtime, no re-keying, per-focus budgets) + the loaders off the tick, with the seamless lane |
-| 4b | THE SPREAD COST (the soak): six bots spread 3,500 px with ONE focus already breach the gate (p95 47 ms, 8% dropped) against 13 ms with the same six around the hearth: the runtime's per-observer paths (dormancy, native paging) scale with how far apart players stand. | THE MANY SHADOWS, budgeted |
+| 4b | THE SPREAD COST (the soak): six bots spread 3,500 px with ONE focus already breach the gate (p95 47 ms, 8% dropped) against 13 ms with the same six around the hearth: the runtime's per-observer paths (dormancy, native paging) scale with how far apart players stand. | THE MANY SHADOWS, budgeted — DELIVERED by the foundation (c1bfe588): neighborhoods with exact spatial observer queries; the soak's `--spread` run on 18a1b437 is the receipt (§7d note below) |
 | 5 | No stall watchdog, no auto-reconnect; an F5 loses the resume token and the vessel is refused as "already walks the world". | W4 THE SMOOTH SHELL — BUILT 2026-10-09 (67827cfe): the frame strains at 1.5 s, `resumeInPlace` at 5 s or on close, the session in sessionStorage so an F5 resumes the same seat; a `resumeOnly` join takes over a live seat the shard had not yet noticed dead; probe_shardshell |
 | 6 | No local action feedback: every press waits a round trip; cast roots snap back; dashes step at 20 Hz. | W4 — BUILT in part: THE PREDICTED ROOT (a ready plain cast starts a local stub, moves after the press replay rooted, the host's cast row reconciles); dashes, leaps, channels, guards and charges remain |
 | 7 | Cooldowns and gauges are never serialized: the client's bar never sweeps, ultimates never fill. | W2 — BUILT: THE OWN ENTRY (`SeatW.cd`/`gg` spliced per socket, `tickNetClocks` runs them down) |
@@ -897,7 +907,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 
 | # | Finding | Wave |
 |---|---|---|
-| 1 | One living focus (tier 1). | THE MANY SHADOWS |
+| 1 | One living focus (tier 1). | THE MANY SHADOWS — DELIVERED by the foundation (c1bfe588): player neighborhoods in the wilds runtime |
 | 2 | Loot is first-come for everyone; card 23 said per player. | THE OWNED SPOILS (card 27) |
 | 3 | Quests are dead on a shard (seven breaks: offers, wire, linger, rewards to the keeper, cargo from the keeper's bag, XP to all, world-wide state). | THE COUNTERS AND THE JOURNAL (card 24 first): BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters): quest state stays the world's, every act and reward the acting seat's; card 24 still open |
 | 4 | Stations never answer a linger (keeper-only dwell; station anchors not shipped). | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |
