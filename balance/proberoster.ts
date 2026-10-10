@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_spiritrun.ts', status: 'green', tier: 'fast', why: 'Loading-screen directions, collision boundaries, streak speed, frame rates and bounded gates.' },
   { probe: 'probe_skillempowerment.ts', status: 'green', tier: 'fast', why: 'Legendary empowerment: conserved merges, restricted passive budgets, expanded ranks, save/wire identity and real modifier scaling' },
   { probe: 'probe_skillshowcase.ts', status: 'green', tier: 'fast', why: 'The skill showcase stage: every player skill plans one, the hand casts every delivery and cast mode, setups (claims, prep, corpses, allies, kept statuses, swarms), paced bank refills and seeded determinism' },
   { probe: 'probe_payloadcues.ts', status: 'green', tier: 'fast', why: 'Prepared drinks, ammunition and placed routes: paid state, true arming reach, scoped capacity, release/expiry/unequip, co-op mirrors and caption-free painters' },

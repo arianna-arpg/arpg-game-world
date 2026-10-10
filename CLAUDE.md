@@ -1,3 +1,12 @@
+The playable Mu loading-screen foundation is documented in docs/ui/loading-screen.md.
+LoadingScreen provides token-owned status, cancellation, retry and input isolation;
+SpiritRun is a rewardless pastime with soul-flames, branching rune gates and currents.
+Main's withLoadingScreen wraps its existing class-entry and Continue flows without
+importing seamless world or save machinery. The seamless branch additionally owns
+native-page readiness. Reuse the lease for future disruptive preparations; never
+delay readiness or grant gameplay rewards. Verify spiritrun, all types, boot smoke
+and balance/loading-screen-ui.cjs after an isolated build.
+
 # CLAUDE.md — Hollow Wake (ARPG)
 
 Shared sight/fog rendering fixes are documented in `docs/engine/visibility-stability.md`.
