@@ -89,6 +89,13 @@ registerMenuEntry({
   ...sealed('map'),
 });
 registerMenuEntry({
+  // THE PARTY (docs/design/shard-world.md card 23): the hosted world's social unit — sealed off a shard.
+  id: 'party', label: 'Party', icon: 'swords', group: 'hero', verb: 'party', order: 3.6,
+  blurb: 'Group with the players around you: one unit, with co-op\'s own downs and revives.',
+  usable: r => r.world.partyRows !== null,
+  sealedHint: () => 'Only on a hosted world.',
+});
+registerMenuEntry({
   id: 'journal', label: 'Journal', icon: 'journal', group: 'hero', verb: 'journal', order: 4,
   blurb: 'Active and completed quests, the writs you carry.',
   ...sealed('journal'),

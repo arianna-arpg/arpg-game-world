@@ -93,9 +93,12 @@ export function massQuestTarget(mass: WorldMassRuntime, entry: SavedQuestEntry, 
 /** Directions identify only the named destination or a present return giver;
  * reading pins never surveys terrain, spawns bodies or completes objectives. */
 export function massQuestPins(world: World): MassQuestPin[] {
+  // THE COUNTERS AND THE JOURNAL (docs/engine/shard.md): a hosted world's shell reads its own
+  // seat's pins off its journal row; the host reads them under THE QUEST HAND (World.handOwns).
+  if (world.clientActionHook && world.netJournal) return world.netJournal.mpins ?? [];
   const mass = world.massRuntime;
   if (!mass) return [];
-  const massBountyPins = world.bountyHands.flatMap((p): MassQuestPin[] => {
+  const massBountyPins = world.bountyHands.filter(p => world.handOwns(p)).flatMap((p): MassQuestPin[] => {
     const place = massBountyDestination(mass, p.massBounty);
     if (!place) return [];
     if (world.handState(p) === 'ready') {

@@ -16,6 +16,13 @@ export const COOP_SCALING = {
   damagePerPlayer: 0.15,
   /** Players past this don't add scaling (a 5th hero is "free"). */
   maxScaledPlayers: 4,
+  /** THE NEAR LAW (docs/design/shard-world.md card 8): the radius, in px,
+   *  within which seats COUNT as party for a kill's XP, an enemy's party
+   *  scale and the keeper's mercy. 0 = the whole world — solo and every
+   *  co-op lane keep their byte-identical world-wide party; a hosted shard
+   *  sets its own radius at boot (SHARD_CFG.nearRadius), since strangers a
+   *  continent apart share no fight. */
+  shareRadius: 0,
 };
 
 /** Life/damage 'more' fractions for a given live player count.

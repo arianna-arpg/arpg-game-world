@@ -34,6 +34,15 @@ export interface PlayerInput {
    *  the last-applied seq per seat in SeatW; the client replays its unacked inputs
    *  forward from the authoritative position. Absent for host/scripted seats. */
   seq?: number;
+  /** THE HONEST INPUT (docs/engine/shard.md): the seconds this frame was polled
+   *  for, the client's own clamped frame. A wire client stamps it on every input;
+   *  host and scripted seats leave it absent, and absent walks the tick's dt
+   *  exactly as ever (THE SOLO INVARIANT). */
+  dt?: number;
+  /** THE HONEST INPUT's batch: every frame a wire host folded into this tick's
+   *  one input, oldest first, as [dx, dy, dt] (mergeInputs builds it; a wire
+   *  frame never carries one). World.applyInputs walks each at its own dt. */
+  moves?: [number, number, number][];
 }
 
 /** THE SPENT PRESS (World.applyInputs — docs/engine/input.md): what an
@@ -56,6 +65,55 @@ export const SPENT_PRESS_CFG = {
    *  lane: a settled rite's still-held key fired its skill next frame). */
   spend: 'hold' as 'hold' | 'edge' | 'off',
 };
+
+/** THE HONEST INPUT (docs/engine/shard.md): a wire client's frames walk at the
+ *  dt each was polled for, every frame a tick gathered (mergeInputs), under THE
+ *  TIME BUDGET (World.applyInputs): a seat walks no faster than the clock. An
+ *  input with no dt (the host's own hands, a scripted seat, single player)
+ *  walks the tick's dt exactly as before. */
+export const HONEST_INPUT_CFG = {
+  /** The longest frame one move may claim: the client's own frame clamp (main.ts tick). */
+  maxMoveDt: 0.05,
+  /** THE GRACE: walking seconds a seat may run ahead of the clock. A seat's
+   *  budget starts here; it covers the jitter between a client's frames and the
+   *  host's ticks. */
+  graceSec: 0.1,
+  /** THE BANK: the most unspent clock a seat carries. A stalled link's withheld
+   *  frames walk in full up to this; a seat standing still banks no more. */
+  bankSec: 0.5,
+  /** Frames one tick's batch keeps: a flood past it is dropped at the merge, never walked. */
+  maxBatch: 240,
+  /** THE WALK FOLD's row (SeatW spd/trc) rides a seat that stepped within this many
+   *  seconds: a still seat's quiet snapshot carries none, and the shell keeps the fold
+   *  it last heard (World.ownWalk). */
+  walkRowSec: 0.5,
+};
+
+/** THE PRESS IS KEPT, and THE HONEST INPUT's merge (docs/engine/shard.md): fold one
+ *  wire frame onto the seat's pending input for this tick (`prev` absent: the tick's
+ *  first). The later frame's axes, aim, held and seq stand and every frame's EDGES
+ *  are kept. THE QUICK TAP: a slot pressed anywhere in the batch is held for the
+ *  tick, so a tap whose down and up land in one tick still casts. THE BATCH: every
+ *  frame that carries its dt joins `moves`, so no frame's walk is lost; a frame
+ *  without one makes the batch the legacy shape (the latest axes at the tick's dt). */
+export function mergeInputs(prev: PlayerInput | undefined, next: PlayerInput): PlayerInput {
+  const or = (a: readonly boolean[] | undefined, b: readonly boolean[] | undefined): boolean[] => {
+    const n = Math.max(a?.length ?? 0, b?.length ?? 0), out: boolean[] = [];
+    for (let i = 0; i < n; i++) out.push(!!a?.[i] || !!b?.[i]);
+    return out;
+  };
+  const edge = prev ? or(prev.edge, next.edge) : next.edge;
+  const merged: PlayerInput = { ...next, edge, held: or(next.held, edge) }; // THE QUICK TAP
+  delete merged.moves; // a wire frame never carries a batch: only this fold builds one
+  if (!prev) return merged;
+  if (prev.metaEdge || next.metaEdge) merged.metaEdge = or(prev.metaEdge, next.metaEdge);
+  const batch = prev.moves ?? (prev.dt !== undefined ? [[prev.dx, prev.dy, prev.dt] as [number, number, number]] : undefined);
+  if (batch && next.dt !== undefined) {
+    if (batch.length < HONEST_INPUT_CFG.maxBatch) batch.push([next.dx, next.dy, next.dt]);
+    merged.moves = batch;
+  } else delete merged.dt;
+  return merged;
+}
 
 /** Produces a seat's intent each frame, or null when the seat is idle. The
  *  controlling actor + the world are enough for any source (OS read, follow-AI,
@@ -108,6 +166,7 @@ export type MetaAction =
   | { t: 'pickTreeNode'; skillId: string; nodeId: string }     // skill-mode tree: spend/replace the pick (World.pickTreeNode)
   | { t: 'untameCompanion'; actorId: number }                  // the Tracker's release counter
   | { t: 'companionStance'; skillId?: string; stance?: string } // THE STANCE SHIFT (engine/companionStances.ts): cycle (or set) one bond's conduct, or every bond on the bar when no skill is named
+  | { t: 'ping'; x: number; y: number }                        // THE PING (card 17 A, engine/pings.ts + data/identityCues.ts PING_CUE): mark a world point for your party — host-judged (reach, cadence), one standing mark per seat
   | { t: 'socket'; uid: number; skillId: string }              // bag support item → skill socket
   | { t: 'unsocketBagSkill'; uid: number; socket: number }    // stored skill's socket → bag support; needs room
   | { t: 'unsocket'; skillId: string; socket: number }         // socket → bag item (needs room)

@@ -92,6 +92,7 @@ import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import {
   floatKindOn, noticeChannelOn, NOTICE_CFG, PICKUP_FEED_CFG, type NoticeEntry,
 } from '../world/bulletins';
+import { floatOwnerShown } from '../world/bulletins'; // THE FLOAT'S OWNER (THE WIRE'S EYES)
 import { dayCycle, sceneSkyTime } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
@@ -131,6 +132,8 @@ import { MAGIC_PACK_CFG, MAGIC_PACKS } from '../data/magicPacks';
 import { drawMagicPackEffects, drawMagicPackRole } from './vis/magicPackLayer';
 import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
 import { APPARITION_ROLE, MU_CFG } from '../data/mu';
+import { HERO_NAME_CUE, PING_CUE } from '../data/identityCues';
+import { pingEdgePoint } from '../engine/pings';
 import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
 import { contrastGuard, hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
@@ -204,7 +207,7 @@ import { AOE_SHAPE, bandSwingGeo } from '../engine/skills';
 
 import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
 import { UnderstoryLayer } from './vis/understory';
-import { CAMERA_CFG, cameraZoomOf, cameraModeOf, couchConfineRect, couchFit, placeCamera } from './camera';
+import { CAMERA_CFG, CAMERA_FOLLOW_CFG, cameraZoomOf, cameraModeOf, couchConfineRect, couchFit, placeCamera, springFollow, type CameraFollow } from './camera';
 import { COUCH_CFG } from '../data/couch';
 import { drawVoidFrame, voidBaseOf } from './vis/voidFrame';
 import { activePieces } from '../world/shape';
@@ -336,6 +339,13 @@ export class Renderer {
    *  separately. An absent preference preserves the classic 1.3 framing. */
   private get baseZoom(): number { return CAMERA_CFG.zoom.base * cameraZoomOf(this.getSettings?.().cameraZoom); }
   private couchStretch = 1;
+  /** THE SMOOTH SHELL's follow (camera.ts springFollow): a client shell's camera chases its
+   *  hero on a critically damped spring. Null on solo and every host (main.ts sets it on a
+   *  render shell alone): the hard lock, byte for byte. */
+  cameraFollow: CameraFollow | null = null;
+  /** THE SMOOTH SHELL's watchdog (net/shell.ts): 0..1, how long a hosted world has gone
+   *  silent past its stall; the frame strains with it (a drawn cue, no text). 0 draws nothing. */
+  linkStrain = 0;
   private get zoom(): number { return this.baseZoom * this.couchStretch * this.pixelScale; }
   /** Frame delta off the sim clock (canopy/roof fade smoothing). */
   private frameDt = 0;
@@ -645,6 +655,11 @@ export class Renderer {
     } else if (!couchOn) {
       this.couchStretch = 1; // solo: pinned exactly — the classic frame
     } // else: couch play under a degenerate view — hold the stretch as-is
+    // THE SMOOTH SHELL's follow: a client shell's frame chases its hero on a critically damped
+    // spring (a scene's eye and a frame lock still pin it; null everywhere else: the hard lock).
+    if (this.cameraFollow && !couchOn && !world.scene?.focus && !lockFocus) {
+      focus = springFollow(this.cameraFollow, focus, performance.now(), CAMERA_FOLLOW_CFG);
+    }
     // The positional veils are single-eye fabrics — under a shared couch
     // frame they suspend per COUCH_CFG.render (both players see what the
     // camera sees); each veil's own fade handles the transition gracefully.
@@ -962,6 +977,7 @@ export class Renderer {
       this.drawSpeeches(world);      // THE SPEECH FABRIC: wrapped talk bubbles, typewriter reveal
       this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
       this.drawTexts(world);
+      this.drawPings(world);        // THE PING (engine/pings.ts): your party's world-anchored marks + the edge chevrons
       this.drawSceneHeroHud(world); // scene fabric: hero-seated teaching bar + prompt (world-space)
       this.drawHarvest(world);      // harvest rites: node glints + live-bind symbol chips (world-space)
     this.drawTrace(world);        // the forge's steady hand: outline + band + laid ink (world-space)
@@ -984,6 +1000,7 @@ export class Renderer {
     this.drawSurvivalVignette(world); // THE SURVIVAL VEIL: per-row meter washes (breath's asphyxiation blue)
     this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge — over the veil: death keeps the last word
     this.drawAfflictionOverlays(world); // blood, kindling, poison and curses retain separate identities
+    if (this.linkStrain > 0) this.drawLinkStrain(w, h); // THE SMOOTH SHELL's watchdog: the frame strains while the world is silent
     // THE UI-SCALE SUB-PASS: pure screen-space widgets draw in virtual
     // (uiW×uiH) coords under one ctx.scale, so the player's UI Scale dial
     // grows the whole HUD together (ui/uiScale.ts — the DOM surfaces ride
@@ -1227,7 +1244,11 @@ export class Renderer {
    *  members grey out, so the strip doubles as the alive/downed readout. Future
    *  mercenaries/minions extend as sub-rows keyed on owner — no layout change. */
   private drawParty(world: World): void {
-    const strip = world.party.strip;
+    let strip = world.party.strip;
+    if (world.partyRows) {
+      // keeperSeat: on a hosted world the strip is YOUR party, never every neighbour on the shard (card 23).
+      strip = world.party.members.filter(m => world.sameSeatParty(world.clientSeatId, m.seat)).map(m => m.actor);
+    }
     if (strip.length <= 1) return;
     const { ctx } = this;
     const w = this.uiW; // virtual — this pass runs inside the UI-scale sub-pass
@@ -2128,6 +2149,22 @@ export class Renderer {
         [1, 'rgba(170,230,250,0.55)'],
       ],
     }, 0.65 * pulse);
+  }
+
+  /** THE SMOOTH SHELL's watchdog (net/shell.ts): the frame STRAINS while a hosted world is
+   *  silent: a void vignette closing in on a slow held breath, an ether rim pulling taut at the
+   *  very edge, both growing with linkStrain and gone the moment the wire speaks again. Shown,
+   *  never told: no text. Her palette (void #07070d, ether #8fa8d8). */
+  private drawLinkStrain(w: number, h: number): void {
+    const k = Math.min(1, this.linkStrain), kq = qFrac(k), t = performance.now() / 1000;
+    drawEdgeOverlay(this.ctx, w, h, {
+      key: `linkstrain|${kq}`, innerFrac: 0.6 - 0.3 * kq,
+      stops: [[0, 'rgba(7,7,13,0)'], [0.7, 'rgba(7,7,13,0.55)'], [1, 'rgba(7,7,13,0.94)']],
+    }, (0.3 + 0.55 * k) * (0.86 + 0.14 * Math.sin(t * 1.6)));
+    drawEdgeOverlay(this.ctx, w, h, {
+      key: 'linkstrain-rim', innerFrac: 0.9,
+      stops: [[0, 'rgba(143,168,216,0)'], [0.84, 'rgba(143,168,216,0.06)'], [1, 'rgba(143,168,216,0.5)']],
+    }, k * (0.5 + 0.5 * Math.abs(Math.sin(t * 2.4))));
   }
 
   /** Icy edge wash + drifting snowflakes (chill / frozen). */
@@ -6236,6 +6273,22 @@ export class Renderer {
       this.queueLabel(a, a.name, ink, dy, { font: '10px Verdana', stroke: false });
     }
 
+    // THE NAME OVER THE HERO (card 17 A, data/identityCues.ts HERO_NAME_CUE): every
+    // other player's hero wears the name it entered once — her gold for a party
+    // mate, ether for an independent neighbour; the local hero never wears its
+    // own (the strip and the sheet know it). Settings.heroNames dials it.
+    if (a.team === 'player' && a !== world.player) {
+      const seatId = world.seatIdOfActor(a); // both sides of the wire (the party view's row)
+      if (seatId && seatId !== world.clientSeatId && !world.seats.find(s => s.id === seatId)?.keeper) {
+        const mode = this.getSettings?.().heroNames ?? HERO_NAME_CUE.mode;
+        const mate = world.sameSeatParty(world.clientSeatId, seatId);
+        if (mode === 'all' || (mode === 'party' && mate)) {
+          const ink = a.dead || a.downed ? HERO_NAME_CUE.inkDown : mate ? HERO_NAME_CUE.inkMate : HERO_NAME_CUE.inkStranger;
+          this.queueLabel(a, a.name, ink, HERO_NAME_CUE.dy, { font: HERO_NAME_CUE.font, stroke: false });
+        }
+      }
+    }
+
     // The same body, story and post-veil label gates protect the approach hint.
     if (this.speechApproach?.a === a) {
       const cue = VIS_CFG.speechApproach, points = Array.from(this.speechApproach.text);
@@ -7499,14 +7552,71 @@ export class Renderer {
   }
 
   private readonly combatMeters = new CombatMeterLayout();
+  /** THE PING (card 17 A — engine/pings.ts; dials data/identityCues.ts PING_CUE):
+   *  the world-anchored marks your party set. On-screen: rings breathing out of
+   *  the point under a bobbing beacon shard; off-screen: a chevron on the frame's
+   *  inset edge facing the mark. Your own mark wears inkSelf, a mate's her gold.
+   *  Every cue is a shape — never a word (SHOW DON'T TELL). World space. */
+  private drawPings(world: World): void {
+    if (!world.pings.length) return;
+    const me = world.clientSeatId; // the wire id on a client, the seat id on the host
+    const { ctx } = this, cue = PING_CUE, now = world.time;
+    const view = { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom };
+    ctx.save();
+    for (const p of world.pings) {
+      if (p.until <= now || now < p.at - 0.5) continue;
+      if (!world.pingVisibleTo(me, p)) continue;
+      const ink = p.seat === me ? cue.inkSelf : cue.inkMate;
+      const age = Math.max(0, now - p.at), left = p.until - now;
+      const fade = Math.max(0, Math.min(1, left / cue.fadeOutSec, cue.fadeInSec > 0 ? age / cue.fadeInSec : 1));
+      if (fade <= 0) continue;
+      const edge = pingEdgePoint(view, p.pos, cue.edge.pad / this.zoom);
+      if (edge) {
+        // Off-screen: a chevron on the inset edge, its point toward the mark, pulsing with the rings.
+        const size = cue.edge.size / this.zoom;
+        const pulse = 0.75 + 0.25 * Math.sin((age / cue.ringSec) * Math.PI * 2);
+        ctx.save();
+        ctx.translate(edge.x, edge.y); ctx.rotate(edge.ang);
+        ctx.globalAlpha = fade * pulse; ctx.fillStyle = ink;
+        ctx.beginPath(); ctx.moveTo(size, 0); ctx.lineTo(-size * 0.7, -size * 0.75); ctx.lineTo(-size * 0.25, 0); ctx.lineTo(-size * 0.7, size * 0.75); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        continue;
+      }
+      // The rings: PING_CUE.rings breaths staggered over one period, each growing and thinning.
+      ctx.strokeStyle = ink; ctx.lineWidth = cue.lineW;
+      for (let i = 0; i < cue.rings; i++) {
+        const t = ((age / cue.ringSec) + i / cue.rings) % 1;
+        const rad = cue.ringRadius * (0.15 + 0.85 * t);
+        ctx.globalAlpha = fade * (1 - t) * 0.9;
+        ctx.beginPath(); ctx.ellipse(p.pos.x, p.pos.y, rad, rad * 0.55, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      // The beacon: a tapered shard standing on the point, bobbing, over a small ground disc.
+      const bob = Math.sin((now * cue.beacon.bobHz + p.at) * Math.PI * 2) * cue.beacon.bobPx;
+      ctx.globalAlpha = fade; ctx.fillStyle = ink;
+      ctx.beginPath();
+      ctx.moveTo(p.pos.x, p.pos.y - 5 - bob);
+      ctx.lineTo(p.pos.x - cue.beacon.w, p.pos.y - cue.beacon.h - bob);
+      ctx.lineTo(p.pos.x + cue.beacon.w, p.pos.y - cue.beacon.h - bob);
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = fade * 0.5;
+      ctx.beginPath(); ctx.ellipse(p.pos.x, p.pos.y, 6, 3.3, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   private drawTexts(world: World): void {
     const { ctx } = this;
     ctx.textAlign = 'center';
     // THE INFO STREAM's per-kind curation: each client gates kinds by its
     // OWN settings (the host mints one truth; every seat curates its view).
     const kindPrefs = this.getSettings?.().floatKinds;
+    // THE FLOAT'S OWNER (THE WIRE'S EYES): on a hosted world (partyRows stands) a number
+    // another seat struck or mended draws per Settings.floatOwners; elsewhere every one does.
+    const ownerMode = world.partyRows !== null ? this.getSettings?.().floatOwners : 'all';
+    const sameParty = (a: string, b: string): boolean => world.sameSeatParty(a, b);
     for (const t of world.texts) {
       if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
+      if (!floatOwnerShown(ownerMode, world.clientSeatId, t.seat, sameParty)) continue;
       // Bind tokens resolve at DRAW, not at spawn — a float naming a key
       // stays honest even if the player rebinds (or grabs the pad) mid-air.
       const txt = this.resolveText(t.text);

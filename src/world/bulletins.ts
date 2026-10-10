@@ -53,6 +53,10 @@ export interface WorldBulletin {
   /** The NOTICE CHANNEL this line belongs to (a registerNoticeChannel id) —
    *  the player's mute switch. Absent = 'world', the catch-all. */
   channel?: string;
+  /** THE OCCUPIED LAW (shard M1-W3): on a hosted world, the seat ids that hear
+   *  a line its source gated on where players stand (World.occupiedAudience);
+   *  absent = every player, as every line always was. */
+  to?: string[];
 }
 
 /** The shared bulletin look — one place, no per-call literals. */
@@ -144,6 +148,10 @@ export interface NoticeEntry {
   size: number;
   channel: string;
   bornAt: number;
+  /** THE ACTING SEAT (a hosted world): the seat ids that hear this line (the
+   *  acting seat's party); absent = every player. The shard's wire ships the
+   *  line to them alone and strips the list (net/seatView.ts). */
+  to?: string[];
 }
 
 export type NoticeAnchorId = 'top' | 'topLeft' | 'topRight' | 'bottom';
@@ -179,6 +187,7 @@ export function pushNotice(list: NoticeEntry[], b: WorldBulletin, now: number): 
     size: b.size ?? BULLETIN_CFG.size,
     channel: b.channel ?? 'world',
     bornAt: now,
+    ...(b.to ? { to: [...b.to] } : {}),
   });
   while (list.length > NOTICE_CFG.keep) list.shift();
 }
@@ -222,6 +231,23 @@ export const FLOAT_CFG = {
    *  ground names its gift, then hushes — the pickup feed keeps the ledger). */
   dropNameSec: 3,
 } as const;
+
+/** THE FLOAT'S OWNER (THE WIRE'S EYES, docs/engine/shard.md): whose combat numbers a client
+ *  on a HOSTED world draws: every number ('all', the shipped default and every other lane's
+ *  only behaviour), its party's ('party'), or its own ('mine'). A float with no owner (a cry,
+ *  a pickup, a number nobody's seat struck) always draws. Settings.floatOwners dials it. */
+export const FLOAT_OWNER_MODES = ['all', 'party', 'mine'] as const;
+export type FloatOwnerMode = typeof FLOAT_OWNER_MODES[number];
+export const FLOAT_OWNER_CFG: { mode: FloatOwnerMode } = { mode: 'all' };
+
+/** Does a viewer draw a float owned by `owner` under `mode`? `sameParty` is the world's
+ *  seat-id party read (World.sameSeatParty: the desk on the host, the rows on a client). */
+export function floatOwnerShown(mode: FloatOwnerMode | undefined, viewer: string, owner: string | undefined,
+  sameParty: (a: string, b: string) => boolean): boolean {
+  if (!owner) return true;
+  const m = mode ?? FLOAT_OWNER_CFG.mode;
+  return m === 'all' || owner === viewer || (m === 'party' && sameParty(viewer, owner));
+}
 
 // The debut kinds — every row is a mint site that already tags its text.
 registerFloatKind({

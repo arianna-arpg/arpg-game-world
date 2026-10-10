@@ -1,0 +1,34 @@
+{
+  // THE HOSTED SHARD ON CODESPACES (docs/engine/shard.md "Hosting on Codespaces",
+  // charter card 11): a codespace on this branch is a SESSION HOST — Node 22
+  // (CI's), `npm ci` + the web client built on create, port 8787 forwarded, the
+  // shard stood up DETACHED and supervised at every start and attach
+  // (start-shard.sh). The shard speaks plain HTTP/WebSocket and the forwarder
+  // adds TLS: players paste the https:// address the Ports panel shows, and the
+  // shard serves the client itself, so a hosted world is one link.
+  "name": "Hollow Wake shard",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22-bookworm",
+  "hostRequirements": { "cpus": 2, "memory": "8gb" },
+  // gh inside the codespace: start-shard.sh publishes the port once the shard answers.
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    // an SSH server, so `gh codespace ssh -c <name> -- tail shard.log` works from a laptop.
+    "ghcr.io/devcontainers/features/sshd:1": {}
+  },
+  "postCreateCommand": "npm ci && npm run build:web",
+  "postStartCommand": "bash .devcontainer/start-shard.sh",
+  "postAttachCommand": "bash .devcontainer/start-shard.sh",
+  "forwardPorts": [8787],
+  "portsAttributes": {
+    "8787": { "label": "Hollow Wake shard", "onAutoForward": "silent" }
+  },
+  "secrets": {
+    "SHARD_ARGS": {
+      "description": "Shard flags (default: --port 8787 --open --worldmass). Keep port 8787, or change forwardPorts too.",
+      "documentationUrl": "https://github.com/arianna-arpg/arpg-game-world/blob/shard-world/docs/engine/shard.md#hosting-on-codespaces"
+    }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["docs/engine/shard.md"] }
+  }
+}

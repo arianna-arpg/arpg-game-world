@@ -45,14 +45,22 @@ import { RENDER_SCALE_CFG, nextNotch } from './render/renderScale';
 import { UI } from './ui/panels';
 import { errorOverlayShown, showErrorOverlay, type CrashEntry } from './ui/errorOverlay';
 import { LocalTransport } from './net/local';
+import { makeAccount } from './meta/account'; // the wilds shell's fresh account (startAsClient)
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
 import type { PlayerInput, MetaAction } from './net/intent';
 import { wireSeed } from './net/transport';
 import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from './net/transport';
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
+import { noteActionEcho } from './net/snapshot'; // THE ECHO LAW: the WebRTC host echoes a client's judged action
+import { WireShell } from './net/shell'; // THE SMOOTH SHELL: the client's timeline (adopt, place, predict, watch)
+import { CAMERA_FOLLOW_CFG, newCameraFollow } from './render/camera'; // THE SMOOTH SHELL's follow
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
+import { WsTransport, defaultShardUrl, shardResumeFor, rememberedShardSession, WS_TRANSPORT_CFG } from './net/ws';
+import { wildsShellActive, wildsShellAttach, wildsShellDetach, wildsShellStream, wildsShellZone } from './net/wildsClient';
+import { readTravelingVessel, ShardVesselLink, travelNote } from './meta/shardVessel';
 import { openCoopLobby } from './ui/lobby';
+import { PartyPanel } from './ui/party';
 import { CLASSES, type ClassDef } from './data/classes';
 import { SKILLS as CLIP_SKILLS } from './data/skills';
 import { makeSkillGem as clipSkillGem } from './engine/skills';
@@ -280,24 +288,18 @@ let crashTestAt = COOP_PARAMS.has('crashtest') ? performance.now() + 1000 : Infi
 // render FPS), only ever while real peers are connected — single-player/local-only
 // never builds one, so SP stays byte-identical.
 const STATE_HZ = 20;
-const SNAP_INTERVAL = 1 / STATE_HZ;   // seconds between host snapshots (interp basis)
 let stateTimer = 0;
 let snapTick = 0;
-/** Latest + previous snapshots from the host (client only). The client renders
- *  entity positions interpolated PREV→LATEST over one snapshot interval, so motion
- *  is smooth ~60fps instead of stepping at the 20Hz wire rate. */
-let latestSnapshot: StateSnapshot | null = null;
-let prevSnapshot: StateSnapshot | null = null;
-/** Seconds since the latest snapshot arrived — drives the interpolation alpha. */
-let snapAccum = 0;
+/** THE SMOOTH SHELL (net/shell.ts, client only): the client's whole timeline. Each arriving
+ *  snapshot is ADOPTED once (state, the own build under THE ECHO LAW); each frame places it
+ *  (remote bodies on THE JITTER BUFFER's delayed clock, flights and telegraphs on the newest
+ *  pair), predicts the own hero (THE HONEST INPUT, THE SOFT CORRECTION, THE PREDICTED ROOT)
+ *  and watches the link (THE WATCHDOG). Reset per session. */
+const shell = new WireShell();
 /** CLIENT: set when a newly-arrived snapshot carried OUR replicated seat meta, so
  *  the client re-renders its open build panels (skill book / tree / char sheet)
  *  exactly when the data changes — the HUD is always live via the renderer. */
 let clientMetaDirty = false;
-/** CLIENT: false while the latest snapshot's seatMeta delta hasn't been applied by
- *  a frame yet — so if a NEWER snapshot arrives first (coalescing), it carries the
- *  un-applied delta forward instead of dropping it. Set true once a frame applies. */
-let metaApplied = true;
 /** CLIENT: JSON of the last OWN-seat meta we triggered a panel re-render for — so
  *  the 1.5s heartbeat (which re-ships IDENTICAL meta) doesn't perpetually re-render
  *  the open build panels (which would yank a scrolled list back to the top). */
@@ -306,15 +308,6 @@ let lastMetaJson = '';
  *  delta-replicated meta snapshot that was dropped (congested channel) or coalesced. */
 const META_HEARTBEAT = 1.5;
 let metaHeartbeat = 0;
-/** CLIENT movement PREDICTION (Layer 3): a monotonic input seq + a ring of recent
- *  {seq,dx,dy,dt}. Each frame the own hero is anchored to the host's last-acked
- *  authoritative position and our UNACKED inputs are replayed forward — so the
- *  local player moves with ~zero input latency instead of waiting on the 20Hz
- *  snapshot round-trip. Reset per client session so seq realigns with the host. */
-let inputSeq = 0;
-const predictHistory: Array<{ seq: number; dx: number; dy: number; dt: number }> = [];
-const PREDICT_BUFFER = 240;        // ~4s @ 60fps — caps replay cost + runaway
-let predZoneId = '';               // zone change → discard stale (old-zone) inputs
 /** Disposers for the client's onState / onZone subscriptions. */
 let snapshotDispose: (() => void) | null = null;
 let zoneDispose: (() => void) | null = null;
@@ -332,10 +325,13 @@ let sessionDispose: (() => void) | null = null;
 let hostLostDispose: (() => void) | null = null;
 const pendingRejoins = new Map<string, string>();
 let pendingRejoinClass: ClassDef | null = null;
+/** CLIENT, THE SHARD: the vessel link of the last shard session (heroSave
+ *  mirrors, THE DEATH COVENANT's word, our own bodies' rows — meta/shardVessel.ts). */
+let shardVessel: ShardVesselLink | null = null;
 /** HOST: meta intents (point-spends, gem ops, drops) received from clients this
  *  frame, tagged with the sender's seat. Drained + applied just before world.update
  *  (so the change replicates in the SAME tick's snapshot). */
-const pendingActions: Array<{ seat: string; action: MetaAction }> = [];
+const pendingActions: Array<{ seat: string; action: MetaAction; seq?: number }> = []; // seq: THE ECHO LAW
 
 /** A LIVE over-the-wire co-op session with at least one connected peer. Gates the
  *  run-end broadcast + the keep-the-transport-alive restart path. */
@@ -547,6 +543,15 @@ function startGame(
   // mid-scene autosave resumes at the ordinary wake.
   if (prologueDue) sceneBegin(world, 'prologue');
   running = true;
+  // THE LOGIN THROUGH MU (card 22): a server-bound wake travels at once — the vessel
+  // just saved at the bedside is the one the shard seats, and this run stays its home.
+  if (pendingServer && !prologueDue) {
+    const { url } = pendingServer; pendingServer = null;
+    void (async () => {
+      try { await flushCharacterSaves(); await connectToShard(url, classDef.id, { charId }); } // THE WAKE'S WORD: this charId, mortal or roster
+      catch (e) { toStartMenu(`Could not reach ${url}: ${e instanceof Error ? e.message : String(e)}`); }
+    })();
+  }
 }
 
 /** Class-select adapter: the picker hands back (class, sworn mode, name);
@@ -690,6 +695,8 @@ declare global {
       snapshot: () => StateSnapshot;
       applySnap: (s: StateSnapshot, prev?: StateSnapshot | null, alpha?: number) => void;
       subscribeToHost: () => void;
+      /** THE SMOOTH SHELL (net/shell.ts): the client timeline, for QA reads. */
+      wireShell: () => WireShell;
       unsubscribeFromHost: () => void;
       fakeJoin: (classId?: string) => string;
       fakeLeave: (id: string) => void;
@@ -750,6 +757,7 @@ window.__game = {
   snapshot: () => serializeSnapshot(world, 0),
   applySnap: (s: StateSnapshot, prev?: StateSnapshot | null, alpha = 1) => applySnapshot(world, s, prev, alpha),
   subscribeToHost, unsubscribeFromHost,
+  wireShell: () => shell,
   fakeJoin: (classId) => {
     const id = 'p' + world.seats.length;
     onRemoteJoin({ id, name: 'Remote', classId: classId ?? CLASSES[0].id, isHost: false });
@@ -922,6 +930,21 @@ const diskHydrated = (async (): Promise<void> => {
     saveAccount(account);
   }
 })();
+
+// THE RETURN after a reload (THE SMOOTH SHELL): a tab reloaded inside a hosted session's
+// window goes straight back to its seat (the token the page kept in sessionStorage) instead
+// of the start menu and a fresh join; a seat the world no longer holds lands on the menu.
+{
+  const back = rememberedShardSession();
+  if (back) {
+    void (async () => {
+      await diskHydrated;
+      if (running) return; // the player already began something else
+      try { await connectToShard(back.url, CLASSES[0].id, undefined, { resumeOnly: true }); }
+      catch (e) { toStartMenu(`Could not return to ${back.url}: ${e instanceof Error ? e.message : String(e)}`); }
+    })();
+  }
+}
 
 /** Read the OS into the LOCAL seat's intent for this frame (or null when there's
  *  nothing to drive — dead/downed, or the pause menu is up). Pure input capture;
@@ -1235,6 +1258,14 @@ function handleLocalPanels(): void {
   if (!ui.blockingFor(world.localSeat.id) && (input.justPressed(kb.companionStance)
     || (!padPointer.active && pad.justPressed(settings.padBinds.companionStance)))) {
     world.requestMeta({ t: 'companionStance' });
+  }
+  // THE PING (card 17 A — engine/pings.ts, data/identityCues.ts PING_CUE): mark the
+  // ground under the aim for your party — host-judged like every meta intent; the
+  // pad's reticle when it owns the aim, else the mouse.
+  if (!ui.blockingFor(world.localSeat.id) && (input.justPressed(kb.ping)
+    || (!padPointer.active && pad.justPressed(settings.padBinds.ping)))) {
+    const at = renderer.padAim ?? renderer.toWorld(input.mouse);
+    world.requestMeta({ t: 'ping', x: at.x, y: at.y });
   }
   // Panel toggles answer to key OR pad bind — and the pad ones deliberately
   // stay live in pointer mode (the D-pad flips panels while browsing them).
@@ -1878,6 +1909,10 @@ function tick(now: number): void {
           if (intent) net.sendInput(seat.id, intent);
         }
         // 3. Apply all seat intents (single path for every player-kind hero).
+        // THE TIME BUDGET runs on the wall: the seconds this frame's dt clamp cut off
+        // still passed for a remote client's hands (World.passInputTime; a local seat
+        // sends no dt, so nothing of single player reads it).
+        world.passInputTime(frameGapMs / 1000 - dt);
         world.applyInputs(net.drainInputs(), dt);
         // 3.5. Apply clients' META intents (point-spends, gem ops, drops) to their
         //      OWN seats BEFORE the sim ticks — so the change lands in this tick's
@@ -2041,14 +2076,10 @@ function tick(now: number): void {
       // ---- CLIENT: run NO sim. Send local input, render the host's snapshot. ----
       handleLocalPanels();
       const li = readLocalInput(dt);
-      if (li) {
-        // Stamp + buffer the input for prediction, THEN send it. The host echoes
-        // the last-applied seq; predictOwnHero replays everything newer locally.
-        li.seq = ++inputSeq;
-        predictHistory.push({ seq: li.seq, dx: li.dx, dy: li.dy, dt });
-        if (predictHistory.length > PREDICT_BUFFER) predictHistory.shift();
-        net.sendInput(net.self, li);
-      }
+      // Stamp + buffer the input for prediction, THEN send it (THE SMOOTH SHELL: the seq and
+      // dt of THE HONEST INPUT, THE WATCHDOG's still walk, THE PREDICTED ROOT's press). The
+      // host echoes the last-applied seq; the shell replays everything newer locally.
+      if (li) net.sendInput(net.self, shell.stampInput(li, dt, performance.now()));
       clientApplyAndRender(dt);
     }
   }
@@ -2279,23 +2310,21 @@ function broadcastSnapshot(): void {
   world.metaDirty.clear();
 }
 
-/** Client: apply the latest host snapshot — INTERPOLATED prev→latest over one
- *  snapshot interval — to the render-shell world and draw it (no sim runs here;
- *  the host owns the simulation). Actor POSITIONS + facing are smoothed via the
- *  prev→latest lerp; renderer effects keyed on performance.now() (aura/dome/font
- *  pulses, spins) advance locally; everything else sampled from the snapshot
- *  (cast-bar fill, item/orb bobs) steps at the 20Hz wire rate — acceptable for MVP. */
+/** Client: place the host's adopted snapshots and draw (no sim runs here; the host owns
+ *  the simulation). THE SMOOTH SHELL (net/shell.ts) does the frame's whole half: the own
+ *  clocks run down, remote bodies glide on THE JITTER BUFFER's delayed clock, flights and
+ *  telegraphs on the newest pair, the own seat's note and surge, and the own hero PREDICTED
+ *  (anchored to the host's ack, every unacked input replayed, corrections glided out).
+ *  Each snapshot was adopted once, when it arrived (subscribeToHost). */
 function clientApplyAndRender(dt: number): void {
-  snapAccum += dt;
-  const alpha = Math.min(1, snapAccum / SNAP_INTERVAL);
-  if (latestSnapshot) applySnapshot(world, latestSnapshot, prevSnapshot, alpha);
-  // PREDICTION: override the own hero's interpolated position with the locally
-  // predicted one (anchor to the host's ack + replay unacked input) for responsive
-  // movement. Other actors keep snapshot interpolation.
-  predictOwnHero();
-  // The latest snapshot's seatMeta delta (if any) is now applied — let the next
-  // arriving snapshot stop carrying it forward (coalescing guard in onState).
-  metaApplied = true;
+  const now = performance.now();
+  shell.frame(dt, now);
+  // THE WATCHDOG: a silent link strains the frame; past its patience THE RETURN begins.
+  renderer.linkStrain = shell.strain(now);
+  if (shell.phase(now) === 'lost') startReturn();
+  clientDeathBeat(dt); // THE ACTING SEAT: the death beat's presentation (hosted worlds)
+  // THE WILDS ON THE WIRE: stream the ground around our own hero every frame.
+  if (clientWilds && wildsShellActive(world)) wildsShellStream(world, world.player.pos);
   // Our replicated build changed (point spend, learn, drop, level-up) → re-render
   // any OPEN build panels now (they're not live like the HUD). refresh* methods
   // no-op when their panel is closed, so this is cheap.
@@ -2317,66 +2346,52 @@ function clientApplyAndRender(dt: number): void {
   world.updateCaravan(dt);
   pollCaravanMenu();
   pollCaravanReturn();
+  pollClientCounters(dt); // THE CLIENT'S COUNTERS: the bench, the board, the Font, the Tracker, the Oracle, the counters
   feedRendererAim();
   renderer.render(world);
 }
 
-/** CLIENT: position the OWN hero by PREDICTION instead of snapshot interpolation —
- *  anchor to the host's last-acked authoritative position, then REPLAY every input
- *  the host hasn't applied yet (moveActor, the SAME integrator + collision the host
- *  runs). The local player then moves with ~zero input latency; the reconciliation
- *  happens every frame, so a misprediction self-corrects on the next snapshot. The
- *  `rooted` flag (host says we're stun/cast/dash-locked) stops forward replay so the
- *  hero doesn't drift ahead while actually held in place. Other actors + ally seats
- *  keep snapshot interpolation. No-op for the host / single-player (never called). */
-function predictOwnHero(): void {
-  if (!latestSnapshot) return;
-  const me = latestSnapshot.seats[world.clientSeatId];
-  if (!me) return;
-  const p = world.player;
-  if (p.dead || p.downed) return;     // downed → the interpolated snapshot pos stands
-  // A zone change teleports us; the buffered inputs are from the old zone → drop them.
-  if (latestSnapshot.zoneId !== predZoneId) { predZoneId = latestSnapshot.zoneId; predictHistory.length = 0; }
-  // Forget inputs the host has already applied.
-  const ack = me.seq ?? 0;
-  while (predictHistory.length && predictHistory[0].seq <= ack) predictHistory.shift();
-  // Anchor to the authoritative position, then replay our unacked inputs forward.
-  // Skip the replay while ROOTED (stun/cast/dash) or on SLIPPERY ground (ice momentum
-  // the client can't reproduce) — anchor-only there avoids a prediction rubber-band.
-  p.pos.x = me.pos[0]; p.pos.y = me.pos[1];
-  if (!me.rooted && !me.slippery) {
-    for (const h of predictHistory) world.moveActor(p, h.dx, h.dy, h.dt);
+/** THE CLIENT'S COUNTERS (docs/engine/shard.md, THE COUNTERS AND THE JOURNAL): a hosted world's
+ *  render shell lingers at its own stations the way it lingers at the Caravanner, and opens the
+ *  same panels the host's own loop opens; every act inside them is a host-judged request. A
+ *  reward waiting in its journal row opens the journal, as the host's dwell asks. */
+function pollClientCounters(dt: number): void {
+  world.updateClientCounters(dt);
+  if (ui.escapeMenuOpen) return;
+  if (world.salvageDwellRequested) { world.salvageDwellRequested = false; if (!ui.salvageOpen) ui.showSalvage(world.salvageDwellSeatId); }
+  if (world.fontDwellRequested) { world.fontDwellRequested = false; if (!ui.fontOpen) ui.showFont(world.fontDwellSeatId); }
+  if (world.bountyDwellRequested) { world.bountyDwellRequested = false; if (!ui.bountiesOpen) ui.showBounties(world.bountyDwellSeatId, world.bountyDwellBoardId); }
+  if (world.oracleDwellRequested) { world.oracleDwellRequested = false; if (!ui.oracleOpen) ui.showOracle(world.oracleDwellSeatId); }
+  if (world.trackerDwellRequested) { world.trackerDwellRequested = false; if (!ui.bestiaryOpen) ui.showBestiary(world.trackerDwellSeatId); }
+  if (world.vendorDwellRequested) { world.vendorDwellRequested = false; if (!ui.vendorOpen) ui.showVendor(world.vendorDwellSeatId); }
+  if (world.questRewardRequested) {
+    world.questRewardRequested = false;
+    if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();
   }
 }
 
-/** Client: start applying the host's broadcasts (set up at join, torn down on Leave). */
+/** Client: start applying the host's broadcasts (set up at join, torn down on Leave).
+ *  THE SMOOTH SHELL: each snapshot is ADOPTED once, on arrival (the shell's arrive: the
+ *  ring, the render clock's line, the echo, the state); a frame only places it. */
 function subscribeToHost(): void {
   snapshotDispose = net.onState(s => {
-    // COALESCING GUARD: seatMeta is a delta shipped once. If an earlier snapshot's
-    // delta hasn't been applied by a frame yet and a newer snapshot arrives first
-    // (rAF slower than the 20Hz wire, GC hitch, backgrounded tab), carry the
-    // un-applied delta forward onto this one so it isn't silently dropped.
-    if (latestSnapshot?.seatMeta && !metaApplied) {
-      s.seatMeta = { ...latestSnapshot.seatMeta, ...(s.seatMeta ?? {}) };
-    }
-    if (s.seatMeta) metaApplied = false;
+    const { metaApplied } = shell.arrive(s, performance.now());
     // Re-render the open build panels ONLY when our meta actually CHANGED — not on
     // the periodic heartbeat re-send of identical meta (which would churn the panel
     // and reset any scroll). Compare the serialized own-seat meta to the last one.
-    const myMeta = s.seatMeta?.[world.clientSeatId];
+    const myMeta = metaApplied ? s.seatMeta?.[world.clientSeatId] : undefined;
     if (myMeta) {
       const json = JSON.stringify(myMeta);
       if (json !== lastMetaJson) { lastMetaJson = json; clientMetaDirty = true; }
     }
-    prevSnapshot = latestSnapshot ?? s; latestSnapshot = s; snapAccum = 0;
   });
-  zoneDispose = net.onZone(z => { applyZone(world, z); });
+  zoneDispose = net.onZone(z => { if (clientWilds) wildsShellZone(world, z, clientWilds.seed); else applyZone(world, z); });
 }
 /** Client: stop applying broadcasts. */
 function unsubscribeFromHost(): void {
   if (snapshotDispose) { snapshotDispose(); snapshotDispose = null; }
   if (zoneDispose) { zoneDispose(); zoneDispose = null; }
-  latestSnapshot = null; prevSnapshot = null; snapAccum = 0; metaApplied = true; lastMetaJson = '';
+  shell.reset(); lastMetaJson = ''; // THE SMOOTH SHELL: the session's timeline goes with it
 }
 
 /** HOST: a peer joined — spawn a wire-fed seat for them (their class, a
@@ -2409,7 +2424,37 @@ function wireSession(): void {
   // Wired for host and client alike (a host's transport never fires it) so the
   // two subscriptions live and die together.
   hostLostDispose?.();
-  hostLostDispose = net.onHostLost(() => onHostGone('Connection to the host was lost.'));
+  // THE RETURN (THE SMOOTH SHELL): a hosted world's lost socket is reconnected in place first;
+  // only a return that fails lands on the start menu, with the same one word.
+  hostLostDispose = net.onHostLost(() => { if (net instanceof WsTransport) startReturn(); else onHostGone(HOST_LOST_WORD); });
+}
+
+/** The one word a lost session leaves on the start menu. */
+const HOST_LOST_WORD = 'Connection to the host was lost.';
+/** THE RETURN in flight (one at a time). */
+let returning = false;
+/** THE RETURN (THE SMOOTH SHELL, docs/engine/shard.md): the socket under a hosted world
+ *  closed, or THE WATCHDOG lost patience with a silent one. Reconnect IN PLACE with THE
+ *  RECONNECT TOKEN (WsTransport.resumeInPlace), the shell standing and straining meanwhile,
+ *  retrying until the dormant window closes; only then the start menu, with the one word. */
+function startReturn(): void {
+  if (returning || !(net instanceof WsTransport)) return;
+  if (!running) { onHostGone(HOST_LOST_WORD); return; } // no shell to keep: the old road
+  const ws = net;
+  const deadline = performance.now() + WS_TRANSPORT_CFG.resumeWindowMs - Math.max(0, performance.now() - shell.lastArrivalMs);
+  returning = true;
+  void (async () => {
+    try {
+      for (let tries = 0; net === ws; tries++) {
+        const r = await ws.resumeInPlace();
+        if (net !== ws) return; // the player left meanwhile
+        if (r.ok) { shell.resumed(performance.now()); return; } // the same seat: the shell never left
+        if (r.final || performance.now() >= deadline) break;
+        await new Promise(res => setTimeout(res, Math.min(2000, 250 * 2 ** tries)));
+      }
+      if (net === ws) onHostGone(HOST_LOST_WORD);
+    } finally { returning = false; }
+  })();
 }
 
 /** Dispatch a run-lifecycle message. HOST handles `rejoin`; CLIENT handles
@@ -2431,10 +2476,17 @@ function onSessionMsg(msg: SessionMsg, from: string): void {
       // A client's meta intent for its OWN seat — queue for this frame's drain
       // (applyAction runs host-side with the channel-bound `from` seat, so a
       // client can only ever mutate its own build).
-      pendingActions.push({ seat: from, action: msg.action });
+      pendingActions.push({ seat: from, action: msg.action, seq: msg.seq }); // THE ECHO LAW: the client's seq rides along
     }
   } else if (msg.t === 'runEnd') {
     onClientRunEnd();
+  } else if (msg.t === 'refused') {
+    onClientRefused(typeof msg.word === 'string' ? msg.word : '', msg.mu === true); // THE ACTING SEAT: a refused hero
+  } else if (msg.t === 'partyInvite') {
+    // THE PARTY: an invitation lands (one standing per inviter); the panel shows it until answered.
+    if (!partyInvites.some(i => i.from === msg.from)) partyInvites.push({ from: msg.from, name: msg.name, party: msg.party });
+  } else if (msg.t === 'partyWord') {
+    partyWord = msg.word; // THE PARTY: the shard's one-line refusal, shown on the panel
   } else if (msg.t === 'newRun') {
     onClientNewRun(msg.seat, msg.seed);
   } else if (msg.t === 'hostLeft') {
@@ -2446,13 +2498,14 @@ function onSessionMsg(msg: SessionMsg, from: string): void {
  *  that has since left is simply skipped. applyAction validates + re-replicates. */
 function drainMetaActions(): void {
   if (!pendingActions.length) return;
-  for (const { seat: seatId, action } of pendingActions) {
+  for (const { seat: seatId, action, seq } of pendingActions) {
     const seat = world.seats.find(s => s.id === seatId);
     if (!seat) continue;
     // A client controls the action payload entirely — a malformed/hostile one
     // (bad index, prototype-chain key) must NEVER throw out of the frame loop
     // (that would permanently halt the host sim + freeze every client). One bad
     // action just no-ops. world.applyAction also validates before dispatch.
+    noteActionEcho(world, seat, seq); // THE ECHO LAW: judged this tick (applied or refused), echoed on its build
     try { world.applyAction(seat, action); }
     catch (e) { console.warn('[coop] dropped malformed meta action', action, e); }
   }
@@ -2485,15 +2538,67 @@ function flushRejoins(): void {
 /** CLIENT: the host's run ended — leave the (now-stale) render shell and offer a
  *  fresh class pick; choosing one asks the host to re-seat us in its next run. */
 function onClientRunEnd(): void {
-  running = false;          // stop rendering the dead run
+  // THE ACTING SEAT (the death beat): a hosted world's fall plays its presentation
+  // from the first dead frame; the rendering runs on, frozen, until it completes.
+  const presenting = net instanceof WsTransport && !!world.deathPresentation;
+  if (!presenting) running = false; // stop rendering the dead run
   unsubscribeFromHost();    // drop the dead run's snapshot/zone subs + stale interp state
   pendingRejoinClass = null;
+  // THE LOGIN THROUGH MU (card 22): on a hosted world a fallen player reads the
+  // reckoning, then drifts back into Mu bound for the same server — the next vessel
+  // is a walk, and its wake travels. (Card 14 C: the fall is the run's end.)
+  if (net instanceof WsTransport) {
+    const url = lastShardUrl;
+    const toMu = (): void => { resetToLocal(); pendingServer = url ? { url } : null; startMu(); };
+    const fell = shardVessel?.takeDeath(net, world);
+    const open = (revealSec = 0): void => { if (fell) ui.showDeath(fell.reck, toMu, revealSec); else toMu(); };
+    if (presenting) clientDeath = { open, opened: false }; // clientDeathBeat opens it at the presentation's reveal
+    else open();
+    return;
+  }
   ui.resetClassRoster();    // deal a fresh class hand for the rejoin pick
-  ui.showClassSelect(cls => {
+  const pickNextHero = (): void => ui.showClassSelect(cls => {
     pendingRejoinClass = cls;
     net.sendSession({ t: 'rejoin', classId: cls.id });
     ui.hideAll();           // the class pick is sent; wait for the host's newRun
   });
+  // THE DEATH COVENANT (THE SHARD — shardVessel): a vessel that fell on a
+  // hosted world reads its reckoning first (the death screen, the Vault),
+  // then picks the next hero; its body waits where it fell.
+  const fell = shardVessel?.takeDeath(net, world);
+  if (fell) ui.showDeath(fell.reck, pickNextHero); else pickNextHero();
+}
+
+/** THE ACTING SEAT (the death beat, docs/render/player-death.md): on a hosted world
+ *  a fallen hero's body stands dead on the wire for VESSEL_CFG.deathBeatSec before
+ *  `runEnd`, so the blow is seen. The presentation starts at the first frame our own
+ *  seat reads dead, as in single player; `runEnd` hands onClientRunEnd's screen in
+ *  (clientDeath), which opens at the presentation's reveal (at once if past it), and
+ *  the frozen world stops rendering when the presentation completes. */
+let clientDeath: { open: (revealSec?: number) => void; opened: boolean } | null = null;
+function clientDeathBeat(dt: number): void {
+  if (!(net instanceof WsTransport) || !DEATH_PRESENTATION.enabled) return;
+  if (!world.deathPresentation && world.player.dead && shell.latest?.seats[world.clientSeatId]?.dead) world.deathPresentation = { elapsed: 0 };
+  const dp = world.deathPresentation;
+  if (!dp) return;
+  dp.elapsed += dt;
+  const pose = deathPresentationPose(dp.elapsed);
+  world.screenFade = pose.fade;
+  if (clientDeath && pose.reveal && !clientDeath.opened) { clientDeath.opened = true; clientDeath.open(DEATH_PRESENTATION.revealSec); }
+  if (clientDeath?.opened && pose.complete) { clientDeath = null; running = false; }
+}
+
+/** CLIENT (THE ACTING SEAT, a refused hero): the shard would not seat the vessel we
+ *  carried, and never seats a fresh hero in its place. A hero that cannot travel
+ *  drifts back into Mu bound for the same world (wake another and it travels); a
+ *  door word (this hero already walks there) lands on the start menu. */
+function onClientRefused(word: string, mu: boolean): void {
+  if (!(net instanceof WsTransport)) return;
+  running = false;
+  if (!mu) { toStartMenu(word || 'the world would not seat this hero'); return; }
+  const url = lastShardUrl;
+  resetToLocal(); pendingServer = url ? { url } : null; startMu();
+  if (word) world.text(world.player.pos, word, '#d8b87a', 13, undefined, 6);
 }
 
 /** CLIENT: the host re-seated us in its new run — rebuild our render shell and
@@ -2559,6 +2664,13 @@ function openLobby(): void {
         return { answer, connected };
       } catch (e) { resetToLocal(); throw e; }     // a bad paste must revert net to LocalTransport
     },
+    // THE SHARD (docs/design/shard-world.md M0): a hosted world is a host
+    // that never leaves — the joiner's road is the WebRTC join's, with the
+    // socket where the copy-paste dance was (WsTransport, same grammar).
+    // THE LOGIN THROUGH MU (card 22): the vessel travels, or Mu picks one first (connectToShard).
+    connect: (url, classId) => connectToShard(url, classId),
+    connectDefault: defaultShardUrl(), // THE SERVED CLIENT: a codespace's page offers the shard that served it (WS_TRANSPORT_CFG.defaultUrl elsewhere)
+    serverHero: async (classId) => travelNote(await readTravelingVessel(account), classId), // the account names THE LONE VESSEL
     onClose: () => { /* host keeps playing; a non-started joiner just closes */ },
   });
 }
@@ -2566,26 +2678,116 @@ function openLobby(): void {
 /** Become a render-only CLIENT of a host: a shell World backs the camera/HUD/
  *  getters, but it never simulates — the frame loop's client branch applies the
  *  host's snapshots and renders. clientSeatId anchors the camera on OUR hero. */
-function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number): void {
+/** THE WILDS ON THE WIRE (src/net/wildsClient.ts): set while the shell shows
+ *  a hosted Unbroken Wilds — the zone handler and the frame loop route
+ *  through the wilds shell instead of the classic client lanes. */
+let clientWilds: { seed: number; land?: string } | null = null; // THE LAND DIGEST rides from the welcome to the attach
+/** THE LOGIN THROUGH MU (docs/design/shard-world.md card 22, her ruling 2026-10-08): the
+ *  server a vessel-less join was bound for — Mu picks the vessel and the bedside wake
+ *  travels it (connectToShard). The start menu cancels it; a fall re-arms it. */
+let pendingServer: { url: string } | null = null;
+/** The last shard this client was seated on: a fall drifts back into Mu bound for it. */
+let lastShardUrl: string | null = null;
+
+/** THE PARTY PANEL (card 23 — ui/party.ts): what landed on me (invitations, the shard's
+ *  last word) and the reads the panel draws from; its words go over the session wire. */
+const partyInvites: { from: string; name: string; party: string }[] = [];
+let partyWord: string | null = null;
+const partyPanel = new PartyPanel(
+  {
+    me: () => world.clientSeatId,
+    peers: () => net.peers().filter(p => !p.isHost).map(p => ({ id: p.id, name: p.name })), // the host row is the keeper: no seat to group with
+    rows: () => world.partyRows,
+    invites: () => partyInvites,
+    word: () => partyWord,
+  },
+  {
+    send: (op, seat) => { if (net instanceof WsTransport) net.sendSession({ t: 'party', op, ...(seat ? { seat } : {}) }); },
+    settleInvite: from => { const i = partyInvites.findIndex(x => x.from === from); if (i >= 0) partyInvites.splice(i, 1); },
+  },
+);
+ui.setPartyPanel(partyPanel);
+
+/** THE SHARD's door (card 22 — THE LOGIN THROUGH MU): the traveling hero goes when there
+ *  is one (THE VESSEL: the run slot's hero, else THE LONE VESSEL — the one standing roster
+ *  card; its class over the lobby card, keyed home by this account's id); with none, Mu
+ *  picks a vessel first and the bedside wake comes back through here to travel it ('mu'),
+ *  NAMING it (`wake.charId` — THE WAKE'S WORD: that hero travels, a mortal from the run
+ *  slot or an Immortal from its roster card's slot). The tutorial stays LOCAL: a virgin
+ *  account walks it before Mu, still bound for the same server. From the wake, a hero
+ *  that cannot travel is an error (never a second trip into Mu). `opts.resumeOnly` (THE
+ *  RETURN after a reload): the seat back or a refusal, never a fresh join. */
+async function connectToShard(url: string, classId: string, wake?: { charId: string }, opts?: { resumeOnly?: boolean }): Promise<'connected' | 'mu'> {
+  const vessel = await readTravelingVessel(account, wake?.charId); // THE IMMORTAL TRAVELS: the wake names its hero
+  // THE RECONNECT TOKEN (card 16 B — THE DORMANT SEAT): a session lost on this address
+  // inside the window asks for its dormant seat back first; the hero that stood there is
+  // the one to reclaim, vessel or not, so no Mu detour precedes a resume.
+  const resume = shardResumeFor(url) ?? undefined;
+  if (opts?.resumeOnly && !resume) throw new Error('there is no seat to return to');
+  if (!vessel && !resume) {
+    if (wake) throw new Error('this hero cannot travel to a server (its saved vessel could not be read)');
+    pendingServer = { url };
+    beginPressed();
+    return 'mu';
+  }
+  const ws = new WsTransport();
+  const cls = CLASSES.find(c => c.id === (vessel?.classId ?? classId)) ?? CLASSES[0];
+  try {
+    net = ws;
+    subscribeToHost();
+    wireSession();                             // run-lifecycle channel (newRun/hostLeft)
+    shardVessel = new ShardVesselLink(ws, account, vessel, () => (net === ws ? world : null),
+      { runWiped: () => ui.setContinueSave(null), mayWrite: () => net === ws || !running });
+    const { self, seed, worldmass, features, land, resumed } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
+      cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel ?? undefined, resume, { resumeOnly: opts?.resumeOnly });
+    // A resumed seat is the hero that stood there: its class is its roster row's, never this card's.
+    const seated = resumed ? CLASSES.find(c => c.id === ws.peers().find(p => p.id === self)?.classId) ?? cls : cls;
+    startAsClient(seated, self, seed, worldmass ? { features, land } : undefined);
+    lastShardUrl = url;
+    return 'connected';
+  } catch (e) { resetToLocal(); throw e; }     // an unreachable server must revert net to LocalTransport
+}
+
+function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, wilds?: { features: string[]; land?: string }): void { // wilds.land = THE LAND DIGEST
   couchReset(); // a render shell hosts no couch — the pads are free again
+  wildsShellDetach(world); // a previous shell's runtime never outlives its World
+  clientWilds = null;
   // THE SEED THREAD: build the shell from the HOST's run seed, never a local
   // roll — manifest.seed drives randomizeStarterWeb and every `manifest.seed ^ …`
   // mint derivation, so our own seed would put us on a different map from frame
   // one (the shell's zone graph, gate seeds and vendor shelves would all
   // disagree with the authority we render). wireSeed normalizes the untrusted
   // wire value; ONE seam covers both seating roads (welcome and newRun).
-  world = adoptWorld(new World(account, Object.freeze(buildManifest(account, wireSeed(hostSeed, rollSeed())))));
-  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });   // a local shell (getters/camera/HUD) — not the authority
-  world.clientSeatId = selfSeat;
+  // A WILDS shell builds its World with the SHARD's town features: the mass
+  // runtime lays the hearth from townTier(account), and the seed alone cannot
+  // pin that — the welcome's feature list can (wildsClient.ts).
+  // A WILDS shell's account is a FRESH one wearing the shard's features alone
+  // — the client's own ledger must not lay its rescues (an Oracle, a
+  // Reliquary) into a hearth the shard never grew.
+  const shellAccount = wilds ? { ...makeAccount(), features: new Set(wilds.features) } : account;
+  world = adoptWorld(new World(shellAccount, Object.freeze(buildManifest(account, wireSeed(hostSeed, rollSeed())))));
   // META mutations on a client are INTENTS: ship them to the host (which owns every
   // mutation) instead of applying to the throwaway render shell. requestMeta routes
   // through this; the host applies it to our seat and replicates the result back.
-  world.clientActionHook = (action) => net.sendSession({ t: 'action', action });
-  // Reset movement-prediction state so our input seq realigns with the host's fresh
-  // per-seat ack (a new run = a fresh World on the host = an empty lastInputSeq).
-  inputSeq = 0; predictHistory.length = 0; predZoneId = '';
+  // Installed BEFORE the player stands: every save path in the engine gates on it.
+  // THE ECHO LAW (net/shell.ts): each intent carries a rising seq the host echoes on our
+  // own build, and one ALSO applied locally holds that state against older snapshots.
+  world.clientActionHook = (action) => net.sendSession({ t: 'action', action, seq: shell.noteAction(performance.now()) });
+  world.clientOptimistic = (action) => shell.noteOptimistic(action, performance.now());
+  world.clientSeatId = selfSeat;
+  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });   // a local shell (getters/camera/HUD) — not the authority
+  if (wilds) {
+    clientWilds = { seed: world.manifest.seed, land: wilds.land };
+    wildsShellAttach(world, clientWilds.seed, clientWilds.land); // inert: the land from the seed, the life from the wire; THE LAND DIGEST proves the preset
+  }
+  // THE SMOOTH SHELL: the timeline binds to this shell (its prediction and echo restart, so
+  // our input seq realigns with the host's fresh per-seat ack, and the newest snapshot
+  // already here is adopted at once); the camera chases the hero on its spring.
+  shell.attach(world);
+  renderer.cameraFollow = CAMERA_FOLLOW_CFG.omega > 0 ? newCameraFollow() : null;
   ui.resetRunView();        // the client's shell world is new too — reset the view state
   deathShown = false;
+  clientDeath = null; // THE ACTING SEAT: a new shell owes no screen to a death beat of the last one
   running = true;
   ui.hideAll();
 }
@@ -2603,6 +2805,9 @@ function resetToLocal(): void {
   net.leave();
   net = new LocalTransport();
   lastSentZone = '';
+  renderer.cameraFollow = null; renderer.linkStrain = 0; // THE SMOOTH SHELL: the hard lock and a calm frame again
+  clientWilds = null; // a wilds shell's zone routing never outlives its session (the runtime dies with the World on the next adopt)
+  partyInvites.length = 0; partyWord = null; partyPanel.close(); // THE PARTY: a session's invitations die with it
 }
 
 /** Return to the start menu, always resetting the transport to local first — so
@@ -2611,6 +2816,7 @@ function resetToLocal(): void {
  *  under the player must say so — an unexplained menu reads as a crash). */
 function toStartMenu(notice?: string): void {
   cancelCharacterResume();
+  pendingServer = null; // THE LOGIN THROUGH MU: the menu cancels a server-bound wake
   // A HOST SAYS GOODBYE FIRST — and says it HERE rather than in leaveCoop, so
   // that every road to the menu carries it (the Leave button, "Save & Main
   // Menu", any future exit), never just the one that remembered. The ordering is

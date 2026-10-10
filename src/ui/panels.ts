@@ -629,6 +629,9 @@ export class UI {
    *  (generated families still surface only once touched — see sheet.ts). */
   private charShowAll = false;
   inventoryOpen = false;
+  /** THE PARTY PANEL (ui/party.ts): installed by the shell (main.ts) — null until it is. */
+  partyPanel: import('./party').PartyPanel | null = null;
+  setPartyPanel(p: import('./party').PartyPanel): void { this.partyPanel = p; }
   /** The essence SATCHEL flap on the inventory panel (persists across
    *  re-renders — a satchel stays however you left it). */
   private satchelOpen = false;
@@ -1512,6 +1515,8 @@ export class UI {
     });
     return {
       wardrobe: { open: () => this.showWardrobe(), isOpen: () => this.escapeMenuOpen && !!this.escapeMenu.querySelector('.wardrobe') },
+      // THE PARTY (ui/party.ts, card 23): the hosted world's social unit — a page the shell installs.
+      party: { open: () => this.partyPanel?.toggle(), isOpen: () => this.partyPanel?.isOpen() ?? false },
       inventory: { open: id => this.toggleInventory(id), isOpen: () => this.inventoryOpen },
       // THE CONTAINER FABRIC: one host row per registered side board — the
       // menu's 'container:<id>' verb opens the inventory on that face.
