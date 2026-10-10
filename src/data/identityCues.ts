@@ -51,3 +51,26 @@ export const PING_CUE = {
   inkSelf: '#e8e2c8',
   inkMate: '#c8a84b',
 };
+
+/** THE MUSTER RING (card 15 B, shard M1 W4; the desk is server/muster.ts): a
+ *  party's road waiting for the party, drawn on the ground around the road.
+ *  Its wash fills with the gathered share (members on it out of members
+ *  standing in the unit), its rim closes as the wait runs out; her gold for the
+ *  viewer's own party, faint ether for a stranger's. Shapes only, never a word. */
+export const MUSTER_CUE = {
+  /** The viewer's own party: her gold. */
+  inkParty: '#c8a84b',
+  /** A stranger's party: her ether, drawn at strangerAlpha. */
+  inkStranger: '#8fa8d8',
+  strangerAlpha: 0.35,
+  /** The ground ring (the whole circle) and its width. */
+  baseAlpha: 0.3,
+  lineW: 2,
+  /** The gathered share's wash, a disc growing from the road. */
+  washAlpha: 0.12,
+  /** The rim (the wait left), its width, and its breath (amplitude, Hz). */
+  rimAlpha: 0.85,
+  rimW: 4,
+  pulse: 0.15,
+  pulseHz: 0.8,
+};

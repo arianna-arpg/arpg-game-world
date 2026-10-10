@@ -694,6 +694,10 @@ export interface StateSnapshot {
   /** THE PING (card 17 A, engine/pings.ts): the live marks — present on every snapshot of a hosted
    *  world (the host's list is the truth each beat; a client expires them on the clock it follows). */
   pings?: PingW[];
+  /** THE MUSTER RING (shard M1 W4, engine/shardMuster.ts): the rings standing in the snapshot's
+   *  unit, unit-wide (a stranger draws them faint). Absent = none stands (the common case keeps the
+   *  quiet snapshot's shape key for key); every snapshot carrying one carries them all. */
+  mu?: import('../engine/shardMuster').MusterRingRow[];
   /** Per-seat build/progression — present ONLY for seats whose meta CHANGED since
    *  the last broadcast (dirty-flagged), so it rides along cheaply. Each client
    *  applies its OWN entry (snap.seatMeta[clientSeatId]). THE OWN META: a shard
@@ -1107,6 +1111,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       const live = world.livePings();
       return world.partyRows || live.length ? { pings: live.map(p => ({ s: p.seat, p: [p.pos.x, p.pos.y] as Vec2W, k: p.tier, a: p.at, u: p.until })) } : {};
     })(),
+    ...(world.musterRings?.length ? { mu: world.musterRings.map(r => ({ ...r })) } : {}), // THE MUSTER RING: absent = none stands
     memoryAccess: (() => { // THE WIRE DISCIPLINE: the beat, or a view that changed
       const view = memoryAccessView(world.account), key = JSON.stringify(view);
       if (tick % WIRE_CFG.memoryAccessBeat !== 1 && lastShippedMemoryAccess.get(world) === key) return undefined;
@@ -1836,6 +1841,8 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   if (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) {
     world.syncedGrantedPockets = Object.fromEntries((snap.grantedPockets ?? []).map(r => [r.owner, r.pockets]));
   }
+  // THE MUSTER RING (shard M1 W4): absent = none stands; a stale zone's rings never draw on new ground.
+  world.musterRings = snap.mu?.length && (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) ? snap.mu : null;
   world.arena.w = snap.arena.w;
   world.arena.h = snap.arena.h;
 

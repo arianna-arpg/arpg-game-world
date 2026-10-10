@@ -1008,6 +1008,10 @@ export interface ZoneDef {
   structurePlans?: import('../engine/structurePlans').StructurePlanOverrides;
   /** Explicitly seal player-created town travel for authored encounters. */
   townPortals?: boolean;
+  /** TENANCY (card 25, RULED 2026-10-10): the pocket's word, stamped at its
+   *  mint from SidezoneDef.tenancy / ArenaSpec.tenancy; a hosted world keys a
+   *  'party' pocket's unit per party (server/simUnits.ts). Absent = shared. */
+  tenancy?: 'shared' | 'party';
   id: string;
   name: string;
   /** Monster level for everything spawned here (waves may ramp beyond it). */

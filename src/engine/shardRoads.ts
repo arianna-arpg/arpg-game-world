@@ -12,6 +12,12 @@
 //                      builds the road's ticket in the source (World's
 //                      shardExitRoad / shardMouthRoad, a realm gate's `road`)
 //                      and enqueues it; a road never loads a zone on a shard.
+//   THE MUSTER RING    (W4) a finished travel road is first offered to the
+//                      seat's party's muster (ShardWorldLink.muster): a party
+//                      with another member standing in the unit waits at a
+//                      ring for the party (server/muster.ts); while its ring
+//                      stands, the party's members in the unit take no road
+//                      of their own (standing on the ring is joining it).
 //   THE SEAT'S DOOR    THE RETREAT LAW per seat: the edge a seat came in by,
 //                      written at arrival from its ticket. The seal of a
 //                      sealing objective spares each seat its own way back.
@@ -21,10 +27,12 @@
 //                      straight back down; it lifts once the seat stands clear.
 //   THE SEALED WORDS   the dock, the voyage, the Wraithsail and the Descent's
 //                      shaft stay sealed on a hosted world (each owns a
-//                      per-World singleton run), and a realm gate stays sealed
-//                      until its road is built (W4); each answers a seat idle
-//                      at it once per approach on the seat's own note row
-//                      (THE ACTING SEAT), and builds no dwell, so no ring.
+//                      per-World singleton run), and so does a realm gate whose
+//                      road this world cannot build (THE REALM ROADS, W4: a
+//                      dimension's crossing on the Unbroken Wilds, the
+//                      Wraithsail at sea); each answers a seat idle at it once
+//                      per approach on the seat's own note row (THE ACTING
+//                      SEAT), and builds no dwell, so no ring.
 //   THE ROAD RING      SeatW.rd: the dwell the host is filling, shipped to its
 //                      own seat (THE OWN ENTRY), drawn by its client.
 //
@@ -58,7 +66,7 @@ export const SHARD_ROADS_CFG = {
     voyage: 'no ship sails from this world yet',
     wraithsail: 'the Wraithsail does not answer here',
     descent: 'the shaft is sealed on this world',
-    realm: 'this gate does not open on this world yet',
+    realm: 'this gate does not open on this world yet', // a realm road this world cannot build (W4)
   } as Record<SealedRoadKind | 'realm', string>,
 };
 
@@ -74,9 +82,9 @@ export interface CaveMouthRow {
 export interface RealmGateRow {
   pos: Vec2; kind: string; key: string;
   enter: () => void;
-  /** THE ROADS PER PLAYER: the road one seat takes through this gate (the
-   *  per-gate prep in the source, then a ticket whose first wake raises the
-   *  realm: W4 fills each gate). Absent = sealed on a hosted world, with its word. */
+  /** THE ROADS PER PLAYER: the road one seat takes through this gate (THE
+   *  REALM ROADS, W4: the per-gate prep in the source, then a ticket whose
+   *  first wake raises the realm). Absent = sealed on a hosted world, with its word. */
   road?: (seat: Seat) => RoadTicket | null;
 }
 
@@ -213,8 +221,11 @@ export function ladderOfSpot(spot: SavedPlayerSpot): SeatLadder {
   return { caveReturn, caveStack: rungs };
 }
 
-/** One road a seat stands on this frame: the dwell it builds, and what fires. */
-interface Road { key: string; kind: string; pos: Vec2; need: number; fire: () => void }
+/** One road a seat stands on this frame: the dwell it builds, and what fires.
+ *  A TRAVEL road `make`s its ticket for any seat (THE MUSTER RING fires it for
+ *  every member standing on the ring); an ACT (a ward seal, the holdfast's
+ *  parley) acts in place and moves nobody. */
+interface Road { key: string; kind: string; pos: Vec2; need: number; make?: (s: Seat) => RoadTicket | null; act?: () => void }
 
 /** THE SHARD SCANNER (plan 4.1): every standing player seat's roads, read with
  *  its own body through THE LIFT. Called once per frame at the end of the road
@@ -234,6 +245,8 @@ export function scanShardRoads(w: World): void {
     const a = seat.actor, id = seat.id;
     if (a.dead || a.downed) { st.dwell.delete(id); continue; }
     const idle = w.seatIdle(seat) && !a.push;
+    // THE MUSTER RING (W4): while its party's ring stands in this unit, a member's roads wait for the party.
+    const bound = !!link.mustering?.(id);
     /** The words this seat stands at this frame: [key, word, needs idle]. */
     const words: [string, string, boolean][] = [];
     let road: Road | null = null;
@@ -245,7 +258,7 @@ export function scanShardRoads(w: World): void {
       if (mouthIdx >= 0) {
         const cm = host.caveEntrances[mouthIdx];
         road = { key: `mouth:${cm.kind}:${Math.round(cm.pos.x)},${Math.round(cm.pos.y)}`, kind: `sidezone:${cm.kind}`, pos: cm.pos, need: dwellOf(cm.kind),
-          fire: () => { const t = host.mouthRoad(seat, cm); if (t) link.enqueue(t); } };
+          make: s => host.mouthRoad(s, cm) };
       } else {
         // THE CONDITIONED DOOR and THE SEALED MOUTH speak on the seat's own row.
         const shut = w.mouthRefusalUnder(a);
@@ -254,15 +267,14 @@ export function scanShardRoads(w: World): void {
       if (!road) {
         const g = w.gateUnder(a, gates ??= w.realmGates());
         if (g?.road) {
-          const make = g.road;
           road = { key: `gate:${g.key}`, kind: `realm_gate:${g.kind}`, pos: g.pos, need: transitDwell(`realm_gate:${g.kind}`),
-            fire: () => { const t = make(seat); if (t) link.enqueue(t); } };
+            make: g.road };
         } else if (g) words.push([`gate:${g.key}`, SHARD_ROADS_CFG.words.realm, true]);
       }
       if (!road) {
         const seal = w.wardSealUnder(a);
         if (seal) road = { key: `ward:${Math.round(seal.pos.x)},${Math.round(seal.pos.y)}`, kind: `ward_seal:${seal.kind}`, pos: seal.pos,
-          need: transitDwell(`ward_seal:${seal.kind}`), fire: () => host.breakArenaSeal(seal) };
+          need: transitDwell(`ward_seal:${seal.kind}`), act: () => host.breakArenaSeal(seal) };
       }
       if (!road) {
         // HOLDFAST: the parley is consumed per approach (the solo latch, per seat).
@@ -270,7 +282,7 @@ export function scanShardRoads(w: World): void {
         if (!keeper) st.parley.delete(id);
         else if (!st.parley.has(id)) {
           road = { key: 'holdfast', kind: 'holdfast', pos: vec(keeper.pos.x, keeper.pos.y), need: transitDwell('holdfast'),
-            fire: () => { st.parley.add(id); w.applyAction(seat, { t: 'payToll', index: -1 }); } };
+            act: () => { st.parley.add(id); w.applyAction(seat, { t: 'payToll', index: -1 }); } };
         }
       }
     }
@@ -280,17 +292,31 @@ export function scanShardRoads(w: World): void {
       if (onExit) {
         const e = onExit, kind = e.boundary ? `zone_exit:${e.boundary}` : 'zone_exit';
         road = { key: `exit:${e.defIndex}`, kind, pos: e.pos, need: transitDwell(kind),
-          fire: () => { const t = host.exitRoad(seat, e); if (t) link.enqueue(t); } };
+          make: s => host.exitRoad(s, e) };
       } else if (lockedExit) words.push([`lock:${lockedExit.defIndex}`, w.exitLockHint(lockedExit).text, false]);
     }
     // THE SEALED WORDS: the roads this world does not run yet.
     const sealed = host.sealedRoadUnder(seat);
     if (sealed) words.push([`sealed:${sealed.kind}`, SHARD_ROADS_CFG.words[sealed.kind], true]);
+    // THE MUSTER RING: a bound member builds no travel dwell (the ring is its road now).
+    if (bound && road?.make) road = null;
     // The dwell: one road at a time, built only while idle and unshoved.
     let cur = st.dwell.get(id);
     if (road && idle) {
       if (!cur || cur.key !== road.key) st.dwell.set(id, cur = { key: road.key, kind: road.kind, pos: vec(road.pos.x, road.pos.y), start: w.time, need: road.need });
-      if (w.time - cur.start >= cur.need) { st.dwell.delete(id); road.fire(); }
+      if (w.time - cur.start >= cur.need) {
+        st.dwell.delete(id);
+        if (road.act) road.act();
+        else if (road.make) {
+          // THE MUSTER RING (W4): the party's muster takes the road first; an
+          // independent's (and a party alone in its unit) leaves at once.
+          const make = road.make;
+          if (!link.muster?.(seat, { key: road.key, kind: road.kind, pos: vec(road.pos.x, road.pos.y), make })) {
+            const t = make(seat);
+            if (t) link.enqueue(t);
+          }
+        }
+      }
     } else st.dwell.delete(id);
     // The words: once per approach, on the seat's own note row.
     let heard = st.heard.get(id);

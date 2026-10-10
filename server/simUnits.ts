@@ -27,9 +27,18 @@
 //   THE UNIT BREAKER   a unit (never the keeper) faulting faultBreakerTicks
 //                      ticks in a row hands its seats to the hearth and drops
 //                      without a capture (its state is suspect).
+//   TENANCY            (W4, card 25 RULED 2026-10-10) a pocket is shared by
+//                      default; one whose def says `tenancy: 'party'` wakes a
+//                      unit per party (`${zoneId}#${partyId}`, an ungrouped
+//                      seat's `seat:<id>`), resolved here from the pocket's
+//                      own word for every road into it. THE INSTANCE FORGETS:
+//                      an instance pins neither the shared memory map nor the
+//                      world's clears (engine/shardUnits.ts INSTANCE_OWN_FIELDS),
+//                      so it wakes fresh, captures nothing at its sleep or for
+//                      the world save, and keeps its clears its own.
 //
 // Node side (server/), owned whole by W1; W2 fills the ticket makers, W3 the
-// dispatch, W4 instances and the muster.
+// dispatch, W4 instances (THE MUSTER RING is server/muster.ts).
 // ---------------------------------------------------------------------------
 
 import { World, type Seat } from '../src/engine/world';
@@ -39,7 +48,7 @@ import { START_ZONE } from '../src/data/zones';
 import { MASS_ZONE } from '../src/worldmass/preset';
 import { makeAccount } from '../src/meta/account';
 import {
-  UNIT_CFG, attachSeat, detachSeat, pinIn, pinOut, unitClocks,
+  INSTANCE_OWN_FIELDS, UNIT_CFG, attachSeat, detachSeat, pinIn, pinOut, unitClocks,
   type RoadLanding, type RoadTicket, type SeatPacket, type UnitClocks, type UnitKey,
 } from '../src/engine/shardUnits';
 import { shardRoadArrive, shardRoadDepart } from '../src/engine/shardRoads';
@@ -49,7 +58,7 @@ export interface SimUnit {
   key: UnitKey;
   world: World;
   role: 'keeper' | 'unit';
-  /** Card 25 B's instance key (W4); absent = the zone's shared unit. */
+  /** TENANCY's instance key (W4: the party's id, or `seat:<id>`); absent = the zone's shared unit. */
   instance?: string;
   /** THE LINGER's clock: world time the unit last became seatless (null = seated). */
   emptySince: number | null;
@@ -80,6 +89,9 @@ export interface UnitHooks {
   hearth(): { x: number; y: number; tier: number };
   /** THE UNIT BREAKER's threshold (SHARD_CFG.faultBreakerTicks). */
   breakerTicks(): number;
+  /** TENANCY (W4): the instance a seat walks into a party pocket under (its
+   *  party's id; an ungrouped seat's own `seat:<id>`). */
+  instanceOf(seatId: string): string;
   log(line: string): void;
 }
 
@@ -183,10 +195,19 @@ export class UnitRegistry implements SeatWorlds {
 
   /** THE ROADS PER PLAYER: the live seed of the awake unit hosting `zoneId`,
    *  undefined when none is awake (the town portal's faded check: an awake
-   *  zone's stored memory row is stale until it sleeps). */
-  liveSeedOf(zoneId: string): number | undefined {
-    const u = this.unitFor(zoneId);
+   *  zone's stored memory row is stale until it sleeps). TENANCY: for a seat,
+   *  a party pocket answers with that seat's party's own instance. */
+  liveSeedOf(zoneId: string, seatId?: string): number | undefined {
+    const u = this.unitFor(zoneId, seatId !== undefined ? this.instanceFor(seatId, zoneId) : undefined);
     return u ? u.world.shardRoadHost().currentZoneSeed : undefined;
+  }
+
+  /** TENANCY (W4, card 25): the instance a seat walking into `zoneId` lands in,
+   *  read off the pocket's own word (ZoneDef.tenancy 'party' = its party's own;
+   *  anything else = undefined, the shared unit). */
+  private instanceFor(seatId: string, zoneId: string): string | undefined {
+    const k = this.keeper.world;
+    return (k.caveMap[zoneId] ?? k.zoneMap[zoneId])?.tenancy === 'party' ? this.hooks.instanceOf(seatId) : undefined;
   }
 
   // ---- THE PIN around every entry into a unit -----------------------------
@@ -198,7 +219,8 @@ export class UnitRegistry implements SeatWorlds {
     if (u.role === 'keeper' || this.active === u) return fn(u.world);
     if (this.active) throw new Error(`THE PIN: unit ${u.key} entered inside unit ${this.active.key}`);
     const k = this.keeper.world, w = u.world;
-    const entry = pinIn(k, w, clocks ?? unitClocks(k));
+    // THE INSTANCE FORGETS: an instance keeps its own memory map and clears (never pinned).
+    const entry = pinIn(k, w, clocks ?? unitClocks(k), u.instance !== undefined ? INSTANCE_OWN_FIELDS : undefined);
     this.active = u;
     try { return w.withGlobalPolicies(() => fn(w)); }
     finally { this.active = null; pinOut(k, w, entry); }
@@ -213,8 +235,9 @@ export class UnitRegistry implements SeatWorlds {
    *  travel alias never answers here: zone-local work belongs to the World
    *  that stands in the zone (on the wilds the keeper stands in the surface,
    *  never in a graph zone a road ticket would alias to it). An instanced unit
-   *  (card 25 B) hosts no zone's dispatch until W4 rules whether instances hear
-   *  the world sweeps. */
+   *  (TENANCY, W4) hosts no zone's dispatch: its ground is its party's alone, so
+   *  a world sweep's zone half lands in the shared World standing there (or
+   *  nowhere), while THE OCCUPIED LAW still counts the instance as occupied. */
   private hostOf(zoneId: string): SimUnit | undefined {
     if (this.keeper.world.zone.id === zoneId) return this.keeper;
     for (const u of this.units.values()) if (!u.broken && !u.instance && u.world.zone.id === zoneId) return u;
@@ -275,7 +298,10 @@ export class UnitRegistry implements SeatWorlds {
     const src = this.unitOf(t.seatId);
     const k = this.keeper.world;
     if (!src || (!k.zoneMap[t.dest] && !k.caveMap[t.dest])) { this.refusals++; return null; }
-    let dest = this.unitFor(t.dest, t.instance);
+    // TENANCY (W4): a party pocket is the traveller's party's own instance, whichever road leads in.
+    const instance = t.instance ?? this.instanceFor(t.seatId, t.dest);
+    if (instance !== undefined && t.instance === undefined) t = { ...t, instance };
+    let dest = this.unitFor(t.dest, instance);
     if (dest === src) return src; // already there: a road into its own unit moves nothing
     // THE ROADS PER PLAYER: an absent edge is the source zone; null is none (a waypoint, a portal).
     const from = t.from === undefined ? src.world.zone.id : t.from;
