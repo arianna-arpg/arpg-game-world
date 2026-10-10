@@ -130,6 +130,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_landformdressing.ts', status: 'green', tier: 'fast', why: 'Source-pinned native ground dressing, complete dry footprints, historical ecology, eviction and Continue' },
   { probe: 'probe_worldmass_landformintegrity.ts', status: 'green', tier: 'fast', why: 'Captured landform equivalence, every source across tiny signed chunks, candidate-local bounded substrate reuse' },
   { probe: 'probe_worldmass_landforms.ts', status: 'green', tier: 'fast', why: 'Shared native district terrain in seamless country, actual collision, body-wide routes, structural diversity, signed seams and cold Continue' },
+  { probe: 'probe_worldmass_neutralground.ts', status: 'green', tier: 'fast', why: 'Neutral desert and shore foundations, natural Mired coverage, native movement, scenery and historical Continue' },
   { probe: 'probe_worldmass_terrainpatches.ts', status: 'green', tier: 'fast', why: 'Physical localized terrain, neutral swept bypasses, reservations, deterministic full addresses and legacy Continue' },
   { probe: 'probe_conversation.ts', status: 'green', tier: 'fast', why: 'Stable NPC ownership, departure and panel suspension; speaker-specific work/rewards, action refresh and near-facing target emphasis' },
   { probe: 'probe_speechapproach.ts', status: 'green', tier: 'fast', why: 'Native selected-speaker approach hint: idle grace, pure reads, authored opt-out, live reach/story/roof, death, stale focus and retirement on dialogue readiness' },

@@ -682,6 +682,8 @@ registerRegion({ id: 'wall', walkable: false, blocks: true, blocksShot: true, bl
 // sit on pavement; the validate net keeps the pair harmless forever).
 registerRegion({ id: 'mud', walkable: true, blocks: false, label: 'the mud', standStatus: 'mired', pathCost: 2, severity: 10, overruns: true });
 registerRegion({ id: 'sand', walkable: true, blocks: false, label: 'the sand', standStatus: 'mired', pathCost: 2, severity: 10, overruns: true });
+// Firm sand is a neutral country foundation; loose native sand remains a deposit.
+registerRegion({ id: 'firm_sand', walkable: true, blocks: false, label: 'the firm sand' });
 // ASHFIELD — the wildfire front's wake (the creep fabric's convert lane):
 // dead burnt ground, fully walkable, no hazard and no molten glow — the
 // danger PASSED here, that's the point. moveScale 1 is deliberate: a benign

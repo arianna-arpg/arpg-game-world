@@ -110,7 +110,7 @@ export function massAdventure(): MassAdventure {
     ],
     surfaces: [
       { id: 'lake', source: 'regions/water', priority: 100, when: [{ field: 'elevation', max: -.25 }], region: 'water', color: WATER_SURFACE.deep, biome: 'downs' },
-      { id: 'shore', source: 'regions/sand', priority: 90, when: [{ field: 'elevation', max: -.16 }], region: 'sand', color: '#595340', biome: 'downs' },
+      { id: 'shore', source: 'regions/sand', priority: 90, when: [{ field: 'elevation', max: -.16 }], region: 'firm_sand', color: '#595340', biome: 'downs' },
       { id: 'outcrop', source: 'regions/wall', priority: 80, when: [{ field: 'rock', min: .65 }, { field: 'elevation', min: .2 }], region: 'wall', color: '#56594f', biome: 'highland' },
       {id:'frozen-ground',source:'regions/ice',priority:25,
         when:[{field:'temperature',max:-.35},{field:'rock',min:.20}],region:'ice',color:'#82999f',biome:'tundra'},
@@ -218,7 +218,7 @@ export function massAdventure(): MassAdventure {
       ] },
     ecology: { source: 'worldmass/country-scenery', spacing: 192, landformDressing: massLandformDressing(), rules: [
       ...MASS_CLIMATE_ECOLOGY,
-      { id: 'downs', biomes: ['downs'], chance: .62, cluster: { count: [2, 4], spread: 46 }, pieces: [
+      { id: 'downs', biomes: ['downs'], regions: ['ground', 'sand', 'firm_sand'], chance: .62, cluster: { count: [2, 4], spread: 46 }, pieces: [
         { kind: 'tree', weight: 4, radius: [28, 48] }, { kind: 'rock', weight: 2, radius: [14, 24] },
         { kind: 'grass', weight: 4, radius: [24, 44] }, { kind: 'berry_bush', weight: 1, radius: [24, 36] },
         { kind: 'flowers', weight: 2, radius: [18, 30] }, { kind: 'brush', weight: 2, radius: [24, 40] },
@@ -227,7 +227,7 @@ export function massAdventure(): MassAdventure {
         { kind: 'forest_oak', weight: 5, radius: [44, 72] }, { kind: 'conifer', weight: 2, radius: [34, 55] },
         { kind: 'fern', weight: 2, radius: [18, 30] }, { kind: 'rock', weight: 1, radius: [16, 26] },
       ] },
-      { id: 'desert', biomes: ['desert'], chance: .62, cluster: { count: [2, 4], spread: 46 }, pieces: [
+      { id: 'desert', biomes: ['desert'], regions: ['ground', 'sand', 'firm_sand'], chance: .62, cluster: { count: [2, 4], spread: 46 }, pieces: [
         { kind: 'dead_tree', weight: 2, radius: [34, 54] }, { kind: 'rock', weight: 3, radius: [22, 38] },
         { kind: 'cactus', weight: 3, radius: [22, 40] }, { kind: 'brush', weight: 2, radius: [22, 38] },
       ] },

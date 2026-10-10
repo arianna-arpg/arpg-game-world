@@ -54,7 +54,7 @@ export function massLandformPolicy(): MassLandformPolicy {
   const shapes=sources.flatMap(s=>(s.variants??[0,1]).map(v=>captureLandformShape(s.builder,v,s.envelope)));
   const ids=(...builders:string[])=>[0,1].flatMap(v=>builders.map(b=>b+'/'+v)).filter(id=>shapes.some(s=>s.id===id));
   return freezeData({source:'worldmass/native-district-landforms-v1',version:1,cell:30,spacing:2880,jitter:.24,chance:.9,bypass:120,
-    interiorRegions:['ground','sand','ice','wall'],bypassRegions:['ground','sand','ice'],shapes,
+    interiorRegions:['ground','sand','firm_sand','ice','wall'],bypassRegions:['ground','sand','firm_sand','ice'],shapes,
     recipes:[
       {id:'highland-passages',biomes:['highland','mountain','tundra','downs','forest'],when:[{field:'elevation',min:.42}],
         shapes:ids('ridge_spurs','terraced_homes','ossuary_spokes'),barrier:{region:'crag',color:'#57584d'}},

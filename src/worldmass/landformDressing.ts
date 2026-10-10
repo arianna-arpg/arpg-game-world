@@ -26,7 +26,7 @@ export function massLandformDressing(): NonNullable<MassEcologySpec['landformDre
       {kind:'snowdrift',weight:4,radius:[22,40]},{kind:'scree',weight:2,radius:[14,24]},
       {kind:'bone_pile',weight:1,radius:[12,20]},
     ]},
-    {id:'desert-remains',biomes:['desert'],regions:['ground','sand'],chance:.7,cluster:{count:[1,3],spread:46},pieces:[
+    {id:'desert-remains',biomes:['desert'],regions:['ground','sand','firm_sand'],chance:.7,cluster:{count:[1,3],spread:46},pieces:[
       {kind:'scree',weight:3,radius:[18,30]},{kind:'bone_pile',weight:2,radius:[12,22]},
       {kind:'rubble',weight:2,radius:[16,26]},
     ]},

@@ -1,3 +1,11 @@
+NeutralGround uses firm_sand for fresh seamless desert and shore foundations.
+Keep native loose sand/mud Mired and old saved sand descriptors unchanged.
+Fresh explicit ecology and landform material lists preserve scenery/admission;
+source palettes, climate fields and generation version remain unchanged. Verify
+worldmass_neutralground, climate/landforms/terrainpatches/native placement, all
+checks, genqa, sim and neutral-ground-ui.cjs against an isolated completed build.
+See docs/worldgen/neutral-ground.md; existing expeditions retain their terrain.
+
 NativeSceneBirthComposition wires all 124 original birth ports to concrete native
 owners and the complete 36-row registry. Bind one census, geometry, population,
 resident factory, objective state, campaign and carried transition; binding never

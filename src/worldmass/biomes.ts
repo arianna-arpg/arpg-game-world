@@ -9,7 +9,7 @@ export interface MassBiomeFamily {
 export const MASS_BIOME_FAMILIES: readonly MassBiomeFamily[] = [
   {id:'downs',region:'ground',when:[{field:'temperature',min:-.35},{field:'moisture',min:-.3,max:.35}]},
   {id:'forest',region:'ground',when:[{field:'temperature',min:-.35},{field:'moisture',min:.35},{field:'elevation',min:.22}]},
-  {id:'desert',region:'sand',when:[{field:'temperature',min:-.35},{field:'moisture',max:-.3}]},
+  {id:'desert',region:'firm_sand',when:[{field:'temperature',min:-.35},{field:'moisture',max:-.3}]},
   {id:'marsh',region:'ground',when:[{field:'temperature',min:-.35},{field:'moisture',min:.35},{field:'elevation',max:.22}]},
   {id:'tundra',region:'ground',color:'#68787c',when:[{field:'temperature',max:-.35}]},
 ];
