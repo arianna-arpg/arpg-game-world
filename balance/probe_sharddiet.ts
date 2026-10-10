@@ -43,7 +43,7 @@ import { makeAccount } from '../src/meta/account';
 import { buildManifest } from '../src/packages/manifest';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { applySnapshot, applyZone, interpolateSnapshot, serializeZone, type ActorW, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
-import { WIRE_DIET_CFG, dressKey, glideLite } from '../src/net/wireDiet';
+import { WIRE_DIET_CFG, dressKey, glideLite, type LiteWire } from '../src/net/wireDiet';
 import { WireShell } from '../src/net/shell';
 
 let failed = 0;
@@ -203,7 +203,7 @@ const rowOf = (s: StateSnapshot, id: number): ActorW | undefined => s.actors.fin
   glideLite(shell, s1, s2, 0.3, 0, 0.1);
   const held = shell.liteWire!.b[1];
   check('C glide: a body glides midway by its id, flies on along its pace past the newest row, and never runs back (THE FORWARD LAW)',
-    Math.abs(mid - 105) < 1e-9 && Math.abs(on - 120) < 1e-9 && held === on && shell.liteWire!.i?.[0] === 77, `mid ${mid}, on ${on}, held ${held}`);
+    Math.abs(mid - 105) < 1e-9 && Math.abs(on - 120) < 1e-9 && held === on && (shell.liteWire as LiteWire | null)?.i?.[0] === 77, `mid ${mid}, on ${on}, held ${held}`);
 }
 
 // ============================================================ D: QUANTIZATION ==
