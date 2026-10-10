@@ -1634,6 +1634,11 @@ export type DropItem =
   | { kind: 'essence'; essence: EssenceId; count: number }
   | { kind: 'abilityEssence'; tier: number; count: number };
 
+/** THE PAIR STRIDE: the sight memo's pair key stride (World.losCached).
+ *  2^26 keeps a.id * stride + b.id exact in a double for every a.id below
+ *  2^27; a pair with an id at or past it is never memoized. */
+export const LOS_PAIR_STRIDE = 1 << 26;
+
 export interface GemDrop {
   pos: Vec2;
   item: DropItem;
@@ -48794,7 +48799,16 @@ export class World {
    *  (a per-frame thrash cliff at exactly the moment frames were dearest). */
   private losMemo = new Map<number, { ok: boolean; until: number }>();
   losCached(a: Actor, b: Actor): boolean {
-    const key = a.id * 1_000_000 + b.id;
+    // THE PAIR STRIDE (the M6 plan's finding, 2026-10-10): the memo packs
+    // the ordered pair as a.id * stride + b.id. The old stride of 1e6 made
+    // two pairs share one entry once ids passed a million, which a
+    // long-lived shard reaches (dormancy re-mints every woken native). The
+    // stride is 2^26 now (exact in a double up to a.id < 2^27), and a pair
+    // beyond it marches its ray unmemoized instead of ever colliding. The
+    // jitter below keeps hashing the OLD composite, so every pair under a
+    // million ids wears the same deterministic expiry offset as before.
+    if (a.id >= LOS_PAIR_STRIDE || b.id >= LOS_PAIR_STRIDE) return this.lineOfSight(a.pos, b.pos, a.tier, b.tier);
+    const key = a.id * LOS_PAIR_STRIDE + b.id;
     const hit = this.losMemo.get(key);
     if (hit && hit.until > this.time) return hit.ok;
     const ok = this.lineOfSight(a.pos, b.pos, a.tier, b.tier);
@@ -48813,8 +48827,9 @@ export class World {
     // average, expiries spread across the window, and no draw from any rng
     // stream (seeded sim runs stay byte-identical).
     const j = LOS_CFG.memoJitter;
+    const legacyKey = a.id * 1_000_000 + b.id; // THE PAIR STRIDE: the jitter's hash input, unchanged
     const ttl = j > 0
-      ? LOS_CFG.memoTtl * (1 - j / 2 + j * ((Math.imul(key, 0x9E3779B1) >>> 16) / 65536))
+      ? LOS_CFG.memoTtl * (1 - j / 2 + j * ((Math.imul(legacyKey, 0x9E3779B1) >>> 16) / 65536))
       : LOS_CFG.memoTtl;
     this.losMemo.set(key, { ok, until: this.time + ttl });
     return ok;
