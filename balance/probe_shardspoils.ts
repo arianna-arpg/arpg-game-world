@@ -20,7 +20,12 @@
 //   R  'rotate': successive kills deal round-robin among the members within THE NEAR LAW's
 //      reach of the kill, never to one out of reach, and a member come into reach joins the turn;
 //   W  THE WIRE: `DropW.o` / `fa` ride the hosted wire (and the shell ghosts another seat's held
-//      drop), and never the co-op broadcast (serializeSnapshot alone, or a world with no rule).
+//      drop), and never the co-op broadcast (serializeSnapshot alone, or a world with no rule);
+//   P  THE RESTART: a world stood back up from its save keeps its spoils and forgets their owners
+//      (a seat id lives and dies with the shard's process).
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join as joinPath } from 'node:path';
 import { ShardHost, SHARD_CFG, bootShardEngine } from '../server/shardHost';
 import { PARTY_CFG } from '../server/party';
 import { SHARD_WIRE_CFG } from '../server/shardTransport';
@@ -377,6 +382,29 @@ Object.assign(DROP_CFG, drop0);
 for (const x of [A, B, C]) x.c.leave();
 await waitFor(() => w.seats.length === 1, 120);
 await host.stop();
+
+// ================================================================== P: THE RESTART ==
+// A seat id lives and dies with the shard's process: a world stood back up from its save forgets
+// every drop's owner (lying in its zone, or remembered in a zone's memory), so a restart never
+// hands one player's spoils to whoever is dealt the same id next.
+{
+  const dir = mkdtempSync(joinPath(tmpdir(), 'w10-spoils-'));
+  try {
+    const H1 = new ShardHost({ seed: 0x5b0129, saveDir: dir, open: true, log: () => { /* quiet */ } });
+    await H1.ready();
+    const k = H1.keeper.actor;
+    H1.world.drops.push({ pos: vec(k.pos.x + 90, k.pos.y), item: { kind: 'vestige', id: 'thal', count: 1 }, bob: 0, tier: 0, owner: 'p1', freeAt: 999 });
+    H1.persist();
+    await H1.stop({ persist: false });
+    const H2 = new ShardHost({ seed: 0x5b0129, saveDir: dir, open: true, log: () => { /* quiet */ } });
+    await H2.ready();
+    const back = H2.world.drops.find(x => x.item.kind === 'vestige' && x.item.id === 'thal');
+    check('P restart: a restored world keeps its spoils and forgets their owners (a restart\'s seat ids are new)',
+      !!back && back.owner === undefined && back.freeAt === undefined && H2.world.drops.every(x => x.owner === undefined),
+      back ? JSON.stringify({ owner: back.owner, freeAt: back.freeAt }) : 'the drop did not come back');
+    await H2.stop({ persist: false });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
 await new Promise(r => setTimeout(r, 600)); // in-flight socket closes settle before the exit (the shard rigs' law)
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

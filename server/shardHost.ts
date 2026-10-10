@@ -455,6 +455,7 @@ export class ShardHost {
     try {
       const r = await resumeWilds(this.world, ws, this.keeper);
       adoptRunRow(this.world, this.wildsRun); // THE RUN ROW (absent = today)
+      this.world.releaseSpoilOwners(); // THE SPOILS' OWNER (card 27): a restart's seat ids are new; the restored spoils are anyone's
       this.log(`[shard] resumed the Unbroken Wilds 0x${this.seed.toString(16)} (t=${Math.round(this.world.time)}s, ${r.natives} natives, `
         + `${r.pockets} pockets${r.wasInPocket ? ', the keeper back from a pocket' : ''}) in ${Math.round(performance.now() - t0)} ms`);
     } catch (e) {
@@ -1125,6 +1126,7 @@ export class ShardHost {
     this.world.reconcileSeaPorts();
     this.world.reconcileWebLaws();
     this.world.resumeSpawn('town', ws.player);
+    this.world.releaseSpoilOwners(); // THE SPOILS' OWNER (card 27): a restart's seat ids are new; the restored spoils are anyone's
     this.log(`[shard] resumed world ${this.seed.toString(16)} (${ws.zones.length} zones, t=${Math.round(ws.time)}s)`);
   }
 }

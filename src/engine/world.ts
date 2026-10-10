@@ -53190,6 +53190,16 @@ export class World {
     return d.owner;
   }
 
+  /** THE SPOILS' OWNER (card 27): a hosted world stood back up from its save forgets every
+   *  drop's owner, lying or remembered in a zone's memory. A seat id lives and dies with the
+   *  shard's process, so a restart must never hand one player's spoils to whoever is dealt the
+   *  same id next: the restored spoils are anyone's. Off a hosted world nothing wears an owner. */
+  releaseSpoilOwners(): void {
+    const free = (d: { owner?: string; freeAt?: number }): void => { delete d.owner; delete d.freeAt; };
+    for (const d of this.drops) free(d);
+    for (const m of this.zoneMemory.values()) for (const d of m.contents?.drops ?? []) free(d);
+  }
+
   /** THE SPOILS STORY's CONTEXT: the story the current spoils pass sheds on
    *  — set by the kill path around a body's whole spoils block and by the
    *  wounded purse, read by every drop/orb helper so a packet CLAMPS on that
