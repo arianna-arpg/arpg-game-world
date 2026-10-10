@@ -521,6 +521,7 @@ let resumed: WsTransport | null = null;
     for (const t of c.texts) delete t.o;
     for (const a of c.actors) if (a.leap) { delete a.leap.dest; delete a.leap.radius; delete a.leap.telegraph; }
     for (const a of c.actors) if (a.cast) delete a.cast.fg; // THE FORESIGHT ON THE WIRE (W11): an enemy wind-up's row
+    for (const a of c.actors) delete a.ht; // THE HIT TINT on the wire (W11): the flash's type
     return c;
   };
   const busy = sent.filter(s => s.zones?.length && Object.values(s.seats).some(e => e.cd));

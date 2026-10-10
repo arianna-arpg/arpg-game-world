@@ -66,6 +66,7 @@ import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { abilityEssenceOfTier, ESSENCES } from '../data/essences';
 import type { Attributes } from '../engine/stats';
+import { DAMAGE_TYPES, type DamageType } from '../engine/stats'; // THE HIT TINT on the wire (W11): a flash's type as its registry index
 import { comboCueRows } from '../engine/comboCues';
 import { comboConditionRows, type ComboConditionId } from '../engine/comboConditions';
 import { poolCueRows } from '../engine/reserveCues';
@@ -148,6 +149,9 @@ export interface ActorW {
   team: Team; name: string;
   life: number; maxLife: number; es: number; maxEs: number;
   hf: number;                  // hitFlash
+  /** THE HIT TINT on the wire (W11, W6's finding): the hit flash's damage type, its DAMAGE_TYPES
+   *  index, beside `hf` while the flash burns; absent with no flash (the classic white). */
+  ht?: number;
   downed: boolean; dead: boolean;
   mn: boolean;                 // isMinion() (purple outline)
   passive: boolean;
@@ -858,6 +862,9 @@ export interface EvapW { x: number; y: number; r: number; k: string; s?: 1 }
 export interface WellW { i: number; k: string; x: number; y: number; r: number; pf: number; }
 
 const v2 = (p: { x: number; y: number }): Vec2W => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100];
+/** THE HIT TINT on the wire (W11): a flash's type as its DAMAGE_TYPES index (`ActorW.ht`), and back. */
+const hitTypeW = (t: DamageType | undefined): number | undefined => { const i = t ? DAMAGE_TYPES.indexOf(t) : -1; return i >= 0 ? i : undefined; };
+const hitTypeOfW = (i: number | undefined): DamageType | undefined => (i === undefined ? undefined : DAMAGE_TYPES[i]);
 
 function actorToW(a: Actor, world: World): ActorW {
   const inv = a.sheet.get('invisible');
@@ -871,6 +878,8 @@ function actorToW(a: Actor, world: World): ActorW {
     summonReform: a.summonReform ? [a.summonReform.remaining, a.summonReform.duration] : undefined,
   };
   if (inv > 0) w.inv = inv;
+  const ht = a.hitFlash > 0 ? hitTypeW(a.hitFlashType) : undefined; // THE HIT TINT on the wire: the blow's type beside its flash
+  if (ht !== undefined) w.ht = ht;
   if (a.movementTether && !a.movementTether.released) w.movementTether = {
     ...a.movementTether, point: { ...a.movementTether.point }, safe: { ...a.movementTether.safe },
   };
@@ -1990,6 +1999,7 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.team = aw.team; a.name = aw.name;
     a.life = aw.life; a.es = aw.es; a.absorbLayers.clear(); a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
+    a.hitFlashType = hitTypeOfW(aw.ht); // THE HIT TINT on the wire: the stand-in's flash wears its blow's own color
     a.bodyActionPose = aw.bodyActionPose ? { ...aw.bodyActionPose } : null;
     // THE HONEST INPUT: a predicting shell's OWN hero (a render shell, the one marker
     // main.ts installs: clientActionHook) walks its own gait, stamped once per frame by
@@ -2434,6 +2444,8 @@ export function interpolateSnapshot(world: World, prev: StateSnapshot | null | u
     // THE WIRE DIET (a hosted world alone): the hit flash fades between the pair's rows; a
     // fresh blow (a rise) stands at once.
     if (hosted) a.hitFlash = bLerp && pa && aw.hf < pa.hf ? pa.hf + (aw.hf - pa.hf) * B.alpha : aw.hf;
+    // THE HIT TINT on the wire: the flash drawn wears the type of the row it eases from.
+    if (hosted) a.hitFlashType = hitTypeOfW(aw.ht ?? (bLerp && pa && aw.hf < pa.hf ? pa.ht : undefined));
     // THE POSE SCALARS glide between the pair's poses (a pose the pair does not hold
     // in both rows stands at its adopted values).
     const pw = a.bodyWalkPose, rw = aw.bodyWalkPose, pwPrev = pa?.bodyWalkPose;

@@ -33,6 +33,10 @@
 //      the host's figure (no grid on that lane: the row exactly)
 //   E  THE SHELF ROW ON A SKIPPED BEAT (W9's finding): THE CARRY holds the buyer's
 //      own shelf row (SeatW.vd) through skipped beats into the next frame out
+//   F  THE HIT TINT (W6's finding): the flash's damage type rides beside the flash
+//      (ActorW.ht) while it burns and never after, the client's stand-in wears it
+//      so its tint is the host's, a hosted shell's easing flash keeps the type it
+//      eases from, and the co-op broadcast carries it too
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
@@ -47,7 +51,8 @@ import {
   AOE_SHAPE, bandSwingGeo, instanceCastMode, instanceDelivery, instanceMods, makeSkillInstance, skillContextTags,
   type SkillDef, type SkillInstance,
 } from '../src/engine/skills';
-import { mod } from '../src/engine/stats';
+import { DAMAGE_TYPES, mod } from '../src/engine/stats';
+import { hitTintOf } from '../src/engine/bodyVoices';
 import { clamp, dist, vec, type Vec2 } from '../src/core/math';
 import { foresightOf, foresightView, type ForesightGeo } from '../src/engine/foresight';
 import { drawForesight, foresightProgress } from '../src/render/vis/foresightLayer';
@@ -647,6 +652,70 @@ for (const [label, def, aimAt] of [
   check('E carry: a buyer\'s shelf row a skipped beat held rides the next frame that goes out (a quieter skipped beat never drops it), and once delivered it is spent',
     JSON.stringify(out1?.seats[A.id]?.vd) === JSON.stringify(shelf) && !!out2 && out2.seats[A.id]?.vd === undefined,
     `first ${JSON.stringify(out1?.seats[A.id]?.vd ?? null)}, then ${JSON.stringify(out2?.seats[A.id]?.vd ?? null)}`);
+}
+
+// ===================================================== F: THE HIT TINT ON THE WIRE ==
+{
+  // W6's finding: the hit flash's damage type never rode the wire, so a remote flash drew the
+  // classic white. It rides as one short field beside the flash scalar (ActorW.ht, a DAMAGE_TYPES
+  // index) while the flash burns, and the client's stand-in wears it as hitFlashType.
+  const foe = readyFoe(W, vec(seatA.actor.pos.x - 240, seatA.actor.pos.y + 40));
+  await tick(4);
+  const n0 = A.got.length;
+  foe.hitFlash = 0.15; foe.hitFlashType = 'fire'; // a fire blow's stamp (applyHit's own two fields)
+  await tick(Math.ceil(0.4 * SHARD_CFG.tickHz));
+  const frames = A.got.slice(n0).filter(s => !!rowOf(s, foe.id));
+  const lit = frames.filter(s => rowOf(s, foe.id)!.hf > 0), dark = frames.filter(s => !(rowOf(s, foe.id)!.hf > 0));
+  const fire = DAMAGE_TYPES.indexOf('fire');
+  const hostLit = lit.map(s => canonical(s)).filter(Boolean).map(h => rowOf(h!.s, foe.id));
+  check('F tint: while the flash burns its row carries the blow\'s type (the host\'s and the client\'s alike), and none rides once it is out',
+    lit.length >= 2 && lit.every(s => rowOf(s, foe.id)!.ht === fire) && hostLit.length === lit.length && hostLit.every(r => r?.ht === fire)
+      && dark.length >= 1 && dark.every(s => rowOf(s, foe.id)!.ht === undefined),
+    `${lit.length} lit frames (ht ${JSON.stringify(lit.map(s => rowOf(s, foe.id)!.ht))}), ${dark.length} dark`);
+  // The client's stand-in reads it, and the renderer's own tint read matches the host's.
+  const cw = shellA();
+  applySnapshot(cw, lit[0]);
+  const body = cw.actors.find(x => x.team === 'enemy' && x.hitFlash > 0);
+  check('F tint: the client\'s stand-in wears the type, so its flash tints as the host\'s does',
+    body?.hitFlashType === 'fire' && hitTintOf(body.hitFlashType) === hitTintOf(foe.hitFlashType) && hitTintOf(body.hitFlashType) !== hitTintOf(undefined),
+    `client ${body?.hitFlashType ?? 'none'} ${body ? hitTintOf(body.hitFlashType) : '-'}, host ${hitTintOf(foe.hitFlashType)}`);
+  // A hosted shell's flash glides between the bodies' pair (THE WIRE DIET): the easing flash wears the
+  // type of the row it eases from, and a fresh blow its own.
+  const row = rowOf(lit[0], foe.id)!;
+  const at = (t: number, hf: number, ht?: number): StateSnapshot => ({ ...JSON.parse(JSON.stringify(lit[0])), time: t, parties: [],
+    actors: [{ ...JSON.parse(JSON.stringify(row)), hf, ...(ht === undefined ? { ht: undefined } : { ht }) }] }) as StateSnapshot;
+  const cold = DAMAGE_TYPES.indexOf('cold');
+  const s0 = at(20, 0.15, cold), s1 = at(20.05, 0), s2 = at(20.1, 0.15, fire);
+  const hs = shellA();
+  hs.partyRows = [];
+  applySnapshot(hs, s0);
+  applySnapshot(hs, s1, s0, 0.5);
+  const easing = hs.actors.find(x => x.name === row.name);
+  const easeType = easing?.hitFlashType, easeFlash = easing?.hitFlash ?? -1;
+  applySnapshot(hs, s2, s1, 0.25);
+  const fresh = hs.actors.find(x => x.name === row.name);
+  check('F glide: on a hosted shell the easing flash keeps the type it eases from, and a fresh blow wears its own at once',
+    Math.abs(easeFlash - 0.075) < 1e-9 && easeType === 'cold' && fresh?.hitFlash === 0.15 && fresh?.hitFlashType === 'fire',
+    `easing ${easeFlash} ${easeType}, fresh ${fresh?.hitFlash} ${fresh?.hitFlashType}`);
+  // The co-op broadcast lane carries it too.
+  const sf = readyFoe(sw, vec(hero.pos.x + 200, hero.pos.y + 90));
+  sf.hitFlash = 0.15; sf.hitFlashType = 'lightning';
+  const snap = JSON.parse(JSON.stringify(serializeSnapshot(sw, 11))) as StateSnapshot;
+  const zone = JSON.parse(JSON.stringify(serializeZone(sw))) as ZoneMsg;
+  const acct = makeAccount();
+  const co = new World(acct, Object.freeze(buildManifest(acct, sw.manifest.seed)));
+  co.createPlayer(CLASSES[0], { startingCompanions: false, startingFlasks: false });
+  co.clientSeatId = 'p9';
+  applyZone(co, zone);
+  applySnapshot(co, snap);
+  const coBody = co.actors.find(x => x.team === 'enemy' && x.hitFlash > 0);
+  const quiet = snap.actors.filter(r => !(r.hf > 0));
+  check('F lanes: the co-op broadcast carries the type to its client, and a body with no flash carries no field (one short field, absent when no flash)',
+    rowOf(snap, sf.id)?.ht === DAMAGE_TYPES.indexOf('lightning') && coBody?.hitFlashType === 'lightning' && quiet.length >= 1 && quiet.every(r => r.ht === undefined),
+    `row ht ${rowOf(snap, sf.id)?.ht}, client ${coBody?.hitFlashType ?? 'none'}, ${quiet.length} quiet rows`);
+  sf.hitFlash = 0;
+  sw.actors.splice(sw.actors.indexOf(sf), 1);
+  W.actors.splice(W.actors.indexOf(foe), 1);
 }
 
 A.c.leave();
