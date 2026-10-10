@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { Rng } from '../src/core/rng';
-import { SPIRIT_RUN as C, SPIRIT_PICKUPS, SpiritRun, spiritDirection, spiritLayout, spiritGateSolids, spiritArrivalAlpha,
+import { SPIRIT_RUN as C, SPIRIT_PICKUPS, SpiritRun, spiritDirection, spiritLayout, spiritGateSolids, spiritArrivalAlpha, spiritPickupAlpha,
   type SpiritGate, type SpiritOpening, type SpiritPickup, type SpiritCurrent, type SpiritPickupKind } from '../src/loading/spiritRun';
 
 const gate = (openings: SpiritOpening[], u = C.playerU + 24): SpiritGate => ({ id: 900, u, spacing: C.gateSpacingMin, openings, resolved: false, hit: false });
@@ -50,20 +50,51 @@ for (const width of [C.gateGapMin, 176, C.gateGapMax]) {
 }
 for (const kind of Object.keys(SPIRIT_PICKUPS) as SpiritPickupKind[]) {
   const r = empty(); r.pickups = [pickup(kind), pickup(kind, 2)]; r.step(1 / 60, { axis: 0 });
-  assert.equal(r.collected, 2); assert.ok(r.pickups.every(p => p.state !== 'live'));
-  assert.equal(r.speed, 1 + 2 * SPIRIT_PICKUPS[kind].boostGates * C.speedPerGate);
-  for (let i = 0; i < 20; i++) r.step(1 / 60, { axis: 0 });
-  assert.equal(r.collected, 2); assert.equal(r.pickups.length, 0);
+  assert.equal(r.collected, 1); assert.deepEqual(r.pickups.map(p => p.state), ['taken', 'released']);
+  assert.equal(r.speed, 1 + SPIRIT_PICKUPS[kind].boostGates * C.speedPerGate);
+  for (let i = 0; i < 50; i++) r.step(1 / 60, { axis: 0 });
+  assert.equal(r.collected, 1); assert.equal(r.pickups.length, 0);
   assert.equal('score' in r, false); assert.equal('points' in SPIRIT_PICKUPS[kind], false);
 }
-// Collecting one flame leaves every other member of the cluster in play.
-const cluster = empty(); cluster.pickups = [pickup('mote'), { ...pickup('wild', 2), u: C.playerU + 120 }];
-cluster.step(1 / 60, { axis: 0 }); assert.equal(cluster.collected, 1);
-assert.equal(cluster.pickups[1].state, 'live');
+// Six flames offer one choice, even when contacts share a substep or frame.
+for (const fps of [30, 60, 144]) for (const stagger of [0, C.pickupStagger]) {
+  const r = empty(); r.pickups = Array.from({ length: 6 }, (_, i) => ({ ...pickup('wild', i), u: C.playerU + 6 + i * stagger }));
+  r.step(1 / fps, { axis: 0 });
+  assert.equal(r.collected, 1); assert.equal(r.pickups.filter(p => p.state === 'released').length, 5);
+  assert.equal(r.speed, 1.18, 'a crowded interval cannot compound its first boost');
+  for (let i = 0; i < fps; i++) r.step(1 / fps, { axis: 0 });
+  assert.equal(r.collected, 1); assert.equal(r.boostGates, 3); assert.equal(r.pickups.length, 0);
+}
+// The choice applies to every kind, but only to its own gate interval.
+const cluster = empty(); cluster.pickups = [pickup('mote'), { ...pickup('wild', 2), u: C.playerU + 120 },
+  { ...pickup('wild', 3), gate: 2, u: C.playerU + 145 }];
+cluster.currents = [current()]; cluster.step(1 / 60, { axis: 0 });
+assert.equal(cluster.collected, 1); assert.equal(cluster.boostGates, 0);
+assert.equal(cluster.pickups[1].state, 'released'); assert.equal(cluster.pickups[2].state, 'live');
+assert.equal(cluster.currentsTaken, 1, 'currents remain independent of flame choices');
 for (let i = 0; i < 50; i++) cluster.step(1 / 60, { axis: 0 });
-assert.equal(cluster.collected, 2);
-assert.equal(C.speedPerGate, 0.09); assert.equal(SPIRIT_PICKUPS.wild.boostGates, 3); assert.equal(C.currentExtra, 0.8);
-assert.equal(C.maxBoostSpeed, 3.6 * 1.5, 'only the peak output rises; gains per encounter are unchanged');
+assert.equal(cluster.collected, 2); assert.equal(cluster.boostGates, 3);
+const missed = empty(); missed.pickups = [pickup('wild'), pickup('mote', 2)]; missed.lane = 100;
+missed.step(0.1, { axis: 0 }); assert.ok(missed.pickups.every(p => p.state === 'live'));
+const bound = empty(); bound.hinder = 1; bound.pickups = [pickup('wild'), pickup('mote', 2)];
+bound.step(0.1, { axis: 0 }); assert.equal(bound.collected, 0); assert.ok(bound.pickups.every(p => p.state === 'live'));
+const released = { ...pickup('wild'), state: 'released' as const };
+for (const reduced of [false, true]) {
+  const opacity = [0, 0.25, 0.5, 0.75, 1].map(t => spiritPickupAlpha({ ...released, fade: t * C.choiceFade }, 2, reduced));
+  assert.equal(opacity[0], 1); assert.equal(opacity[2], 0.5); assert.equal(opacity[4], 0);
+  assert.ok(opacity.every((a, i) => i === 0 || a < opacity[i - 1]));
+}
+assert.equal(spiritPickupAlpha({ ...released, state: 'taken' }, 2), 0);
+const slow = empty();
+for (let i = 0; i < 60; i++) {
+  slow.gates = [gate([hole()], C.playerU - 28)]; slow.pickups = []; slow.currents = [];
+  slow.step(1 / 120, { axis: 0 });
+  if (i === 9) assert.equal(slow.speed, 1.6);
+  if (i === 39) assert.ok(slow.speed < C.maxSpeed, 'the old forty-gate ceiling now leaves room to build');
+}
+assert.equal(slow.passed, 60); assert.equal(slow.speed, C.maxSpeed);
+assert.equal(SPIRIT_PICKUPS.wild.boostGates, 3); assert.equal(C.currentExtra, 0.8);
+assert.equal(C.maxBoostSpeed, 3.6 * 1.5, 'the higher peak remains available despite slower acceleration');
 // Currents work in any direction and have an optional bypass in eligible holes.
 for (const direction of ['down', 'left', 'right'] as const) for (const take of [false, true]) {
   const r = empty(direction); r.lane = take ? 0 : 35; r.gates = [gate([hole(0, 114)])]; r.currents = [current('opening')];

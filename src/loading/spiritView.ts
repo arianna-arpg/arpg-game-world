@@ -7,7 +7,7 @@ import { baked } from '../render/vis/sprites';
 import type { CosmeticLoadout } from '../engine/cosmetics';
 import { cosmeticBody, cosmeticPick, drawCosmeticOrbit } from '../render/vis/cosmetics';
 import { bodySprite, adornSprite, spriteHalf, lookOf, drawLiveParts } from '../render/vis/body';
-import { SPIRIT_RUN, SPIRIT_CURRENT_COLOR, SpiritRun, spiritLayout, spiritGateSolids, spiritArrivalAlpha } from './spiritRun';
+import { SPIRIT_RUN, SPIRIT_CURRENT_COLOR, SpiritRun, spiritLayout, spiritGateSolids, spiritArrivalAlpha, spiritPickupAlpha } from './spiritRun';
 
 // One Mu soul-flame, from a quiet sputter to a brighter, restless flare.
 // These are visual envelopes only; every encounter keeps its existing hit radius.
@@ -136,8 +136,8 @@ export function drawSpiritRun(ctx: CanvasRenderingContext2D, width: number, heig
   // Independent soul-flames range continuously from small sputters to broad flares.
   for (const pickup of run.pickups) {
     const def = SOUL_FLAMES[pickup.kind], p = point(pickup.u, pickup.lane), color = MU_CFG.wisp.color;
-    const arrival = spiritArrivalAlpha(pickup.u, run.time, reducedMotion);
-    if (pickup.state === 'taken' || !arrival) continue;
+    const arrival = spiritPickupAlpha(pickup, run.time, reducedMotion);
+    if (!arrival) continue;
     ctx.save(); ctx.globalAlpha = arrival;
     ctx.translate(p.x, p.y); ctx.scale(scale, scale);
     const phase = time * def.flicker * pickup.flame + pickup.id * 2.4;
