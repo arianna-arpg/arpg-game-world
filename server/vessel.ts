@@ -29,6 +29,12 @@
 //                seat leaves the world. Immortal vessels and fresh heroes
 //                keep THE MERCY as M0 shipped it: updateDownedSeats' law is
 //                untouched; the covenant only acts before it would.
+//   THE RETURN   (card 26 B, her ruling 2026-10-10; W7) a hero logs back in
+//                WHERE IT LOGGED OUT, the only behaviour: every mirror carries
+//                its last stand (the zone or pocket, the spot, the story), the
+//                desk keeps the stand of a leave its client never heard (the
+//                dormant release, a closed tab), and the next login reads the
+//                kept stand before the upload's own (ShardHost.returnLanding).
 // ---------------------------------------------------------------------------
 
 import { MAX_LEARNED_SKILLS, type Seat, type World } from '../src/engine/world';
@@ -47,7 +53,9 @@ import { flaskChargeBanks, restoreFlaskChargeBanks } from '../src/engine/flaskSt
 import type { CompanionSaved } from '../src/engine/companionSpec';
 import { RemoteInput } from '../src/net/remote';
 import type { PeerInfo } from '../src/net/transport';
-import type { ShardCorpseNote, ShardReckoning } from '../src/net/vesselWire';
+import { sanitizeStand, type ShardCorpseNote, type ShardReckoning, type ShardStand } from '../src/net/vesselWire';
+import { SHARD_VESSEL_MAX_CHARS } from '../src/net/shardBuild';
+import { seatLadderOf, shardSpotOf } from '../src/engine/shardRoads';
 import { isCurrentCharacterSave } from '../src/meta/saveCompatibility';
 import { rebuildSavedMeta, serializeCouchGuest, throngRowsOf, type CharacterSave } from '../src/meta/character';
 import { captureLoot } from '../src/meta/death';
@@ -58,8 +66,11 @@ import type { SeatWorlds } from './simUnits';
 
 export const VESSEL_CFG = {
   /** The largest vessel (JSON characters) a join may graft. The wire's own
-   *  frame cap (SHARD_WIRE_CFG.maxClientMessage) bounds the whole join first. */
-  maxBytes: 240 * 1024,
+   *  frame cap (SHARD_WIRE_CFG.maxClientMessage) bounds the whole join first.
+   *  THE FRONT DOOR (W7): one number with the client's pre-check (net/shardBuild.ts). */
+  maxBytes: SHARD_VESSEL_MAX_CHARS,
+  /** THE RETURN (W7): stands the desk keeps for leaves no client heard (the oldest go first). */
+  standsKept: 512,
   /** THE JUDGMENT's structural rails: no hostile upload ever grafts. */
   maxLevel: 999,
   maxDepth: 24,
@@ -109,6 +120,8 @@ const REFUSAL = {
 const HURT = recentIndex('hurt'), HIT = recentIndex('hit');
 /** A seat's own hero (World.seatHero's fold, which reads no World). */
 const heroOf = (seat: Seat): Actor => seat.home ?? seat.actor;
+/** THE RETURN's ledger key: one hero of one account. */
+const standKey = (rec: { accountId: string; charId: string }): string => `${rec.accountId}:${rec.charId}`;
 
 /** A judged vessel: the save (its world half dropped) and the rebuilt build. */
 type Built = NonNullable<ReturnType<typeof rebuildSavedMeta>>;
@@ -242,8 +255,14 @@ export interface VesselSeat {
   askedAt: number;
 }
 
+/** THE RETURN's answer for one login: the stand to land at, or why there is none. */
+export type StandRead = { stand: ShardStand; source: 'kept' | 'mirror' } | { none: 'new' | 'foreign' | 'malformed' };
+
 export class VesselDesk {
   private readonly vessels = new Map<string, VesselSeat>();
+  /** THE RETURN (W7): the last stand of every vessel that left with no client to hear it,
+   *  keyed `${accountId}:${charId}`; in memory and bounded (VESSEL_CFG.standsKept). */
+  private readonly stands = new Map<string, ShardStand>();
   /** Every seat that named an account at its join (rejoins re-read it). */
   private readonly accounts = new Map<string, string>();
   private beat: number;
@@ -405,6 +424,9 @@ export class VesselDesk {
       ...(up.mercenaries ? { mercenaries: up.mercenaries } : {}),
       ...(up.mercenary ? { mercenary: up.mercenary } : {}),
     };
+    // THE RETURN (card 26 B): every mirror carries the hero's last stand.
+    const stand = this.standIn(w, seat);
+    if (stand) save.stand = stand;
     // Its run config and reveal ledger are its own too (the shard's manifest
     // and annex finds belong to the shard).
     if (up.expedition) save.expedition = up.expedition; else delete save.expedition;
@@ -440,6 +462,52 @@ export class VesselDesk {
     return this.mirror(seatId);
   }
 
+  // ---- THE RETURN (card 26 B, W7) ---------------------------------------------
+  /** Where a seat stands, as its next login lands it: the seat's SAVED SPOT
+   *  (engine/shardRoads.ts shardSpotOf: the zone underfoot, or a pocket's surface
+   *  anchor with the pocket's descent), the story there, the pocket itself when it
+   *  stands under ground, its unit, and THE HOSTED SEED. Undefined where no spot can
+   *  be named (a realm arena, the decks): such a hero wakes at the hearth. */
+  private standIn(w: World, seat: Seat): ShardStand | undefined {
+    const spot = shardSpotOf(w, seat);
+    if (!spot) return undefined;
+    const a = seat.actor, story = Math.max(0, Math.floor(a.tier ?? 0));
+    const under = !w.zoneMap[w.zone.id];
+    const ladder = under ? seatLadderOf(w, seat) : null, outer = ladder ? ladder.caveStack[0] ?? ladder.caveReturn : null;
+    return {
+      seed: this.units.keeperWorld().manifest.seed >>> 0, spot,
+      tier: under ? Math.max(0, Math.floor(outer?.tier ?? 0)) : story,
+      ...(under ? { pocket: { zoneId: w.zone.id, x: a.pos.x, y: a.pos.y, tier: story } } : {}),
+      unit: w.shardWorld?.key ?? 'keeper',
+    };
+  }
+  /** Keep a stand for a login to come (the newest wins; the oldest go past the cap). */
+  private keepStand(rec: { accountId: string; charId: string }, stand: ShardStand): void {
+    const key = standKey(rec);
+    this.stands.delete(key);
+    this.stands.set(key, stand);
+    while (this.stands.size > VESSEL_CFG.standsKept) this.stands.delete(this.stands.keys().next().value!);
+  }
+  /** THE RETURN for a seat just grafted: the stand the desk kept for this hero (a
+   *  leave its client never heard; read once), else the one its upload carried
+   *  when it names this world, else none: a new hero (the hearth), a stand from
+   *  another world (`foreign`) or one that will not read (`malformed`). */
+  standFor(seatId: string): StandRead {
+    const rec = this.vessels.get(seatId);
+    if (!rec) return { none: 'new' };
+    const kept = this.stands.get(standKey(rec));
+    if (kept) { this.stands.delete(standKey(rec)); return { stand: kept, source: 'kept' }; }
+    if (rec.upload.stand === undefined || rec.upload.stand === null) return { none: 'new' };
+    const s = sanitizeStand(rec.upload.stand);
+    if (!s) return { none: 'malformed' };
+    if (s.seed !== this.units.keeperWorld().manifest.seed >>> 0) return { none: 'foreign' };
+    return { stand: s, source: 'mirror' };
+  }
+  /** THE RETURN's ledger, for the probe: the stand kept for one hero (never consumed here). */
+  keptStand(accountId: string, charId: string): ShardStand | undefined {
+    return this.stands.get(standKey({ accountId, charId }));
+  }
+
   /** A connection closed: forget its seat (the world despawns it). A mortal
    *  vessel that leaves while DOWN has fallen: leaving is never the road out
    *  of a death (its body and tombstone are banked; its client hears THE LATE
@@ -449,6 +517,12 @@ export class VesselDesk {
     const rec = this.vessels.get(seatId);
     const seat = rec ? this.units.seatOf(seatId) : undefined;
     if (rec && seat && this.downed(seat) && this.endsTheRun(seat)) this.fall(seat, rec, false);
+    // THE RETURN (card 26 B): a hero leaving on its feet (the farewell, the dormant
+    // release, a closed tab) leaves its stand here for its next login.
+    else if (rec && seat && !this.beats.has(seatId)) {
+      const stand = this.units.within(seatId, w => this.standIn(w, seat));
+      if (stand) this.keepStand(rec, stand);
+    }
     this.beats.delete(seatId);
     this.vessels.delete(seatId);
     this.accounts.delete(seatId);
@@ -609,6 +683,7 @@ export class VesselDesk {
     // 4. THE TOMBSTONE: this vessel never walks onto this shard again, and
     //    the word stays owed beside it (re-spoken at a stale re-upload).
     this.corpses.markFallen(rec.accountId, rec.charId, { note, reckoning });
+    this.stands.delete(standKey(rec)); // THE RETURN: a fallen hero wakes nowhere (the next hero, the hearth)
     // 5. The record closes; the seat leaves the world after THE DEATH BEAT
     //    (heard) or at once, and the body stands instead.
     this.vessels.delete(seat.id);

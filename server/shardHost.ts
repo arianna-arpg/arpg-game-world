@@ -54,7 +54,11 @@ import { ShardTransport, type ShardJoin } from './shardTransport';
 import { VesselDesk } from './vessel';
 import { ShardCorpses, shardRecordsPath } from './corpses';
 import { UnitRegistry, type SimUnit } from './simUnits';
-import { UNIT_CFG } from '../src/engine/shardUnits';
+import { UNIT_CFG, carrySetOf } from '../src/engine/shardUnits';
+import { ladderOfSpot, seatDoorOf, shardRoadArrive, type SeatLadder } from '../src/engine/shardRoads';
+import { shardHeroName } from '../src/net/shardDoor';
+import { SHARD_LEAVE_WORD } from '../src/net/shardBuild';
+import type { ShardStand } from '../src/net/vesselWire';
 import { readWildsSave, resumeWilds, setAsideWildsSave } from './wildsSave';
 import { installNodeMassWorkers } from './massWorkers';
 import { hydrateMassWorld, massCheckpointLand, type MassWorldCheckpoint } from '../src/worldmass/checkpoint';
@@ -102,6 +106,11 @@ export const SHARD_CFG = {
    *  a join carrying THE RECONNECT TOKEN takes the seat back meanwhile. Never a
    *  free escape: a hero that dies dormant dies by the ordinary law. */
   dormantSec: 30,
+  /** THE UNLOAD WORD (W7): a page that went away out of a fight (a closed tab, or a
+   *  reload: the two cannot be told apart at unload) leaves its hero UNTARGETABLE this
+   *  many world seconds, so a reload takes the same seat back and a closed tab's hero
+   *  leaves soon instead of lying targetable for dormantSec. A fight keeps dormantSec. */
+  unloadGraceSec: 15,
   /** THE FOCUS: the keeper shadows the standing seat that acted most recently;
    *  the current focus keeps it unless another seat has been newer by this many seconds. */
   focusSwapSec: 3,
@@ -161,7 +170,16 @@ export interface ShardOptions {
   worldmass?: boolean;
   /** Log sink (default console). */
   log?: (line: string) => void;
+  /** THE FRONT DOOR (W7): the world's own name on every welcome and on the served page
+   *  (a menu's "Return to <world>"); default "the Unbroken Wilds" or "the hosted world". */
+  name?: string;
 }
+
+/** THE RETURN (card 26 B, W7): where a login lands a returning hero. */
+export type ReturnPlan =
+  | { kind: 'keeper'; at: { x: number; y: number }; tier: number; mouth: boolean; why: string }
+  | { kind: 'unit'; dest: string; at: { x: number; y: number }; tier: number; from: string | null; ladder?: SeatLadder; mouth: boolean; why: string }
+  | { kind: 'hearth'; why: string };
 
 export interface ShardSave {
   schemaVersion: number;
@@ -288,6 +306,8 @@ export class ShardHost {
   private partyRevSeen = -1;
   /** THE DORMANT SEAT: seat id → world time its dormancy ends (the leave path runs then). */
   private readonly dormancy = new Map<string, number>();
+  /** THE UNLOAD WORD (W7): dormant seats sleeping on the reload grace (untargetable). */
+  private readonly unloadGraces = new Set<string>();
   private readonly bootAt = Date.now();
   private readonly tickMs: number[] = [];
   private tickMsAt = 0;
@@ -350,6 +370,11 @@ export class ShardHost {
     this.net = new ShardTransport();
     this.net.log = this.log;
     this.net.worldmass = this.worldmass;
+    // THE FRONT DOOR (W7): the world's name (the welcome, the served page's mark).
+    this.net.worldName = (opts.name?.trim() || (this.worldmass ? 'the Unbroken Wilds' : 'the hosted world')).slice(0, 64);
+    // THE STOPGAP NAME (W7): an unnamed hero wears its class and a short number (the
+    // account's own), and a name another hero wears takes the next number.
+    this.net.nameJoin = (name, classId, accountId, taken) => shardHeroName(name, this.classById(classId).name, accountId ?? classId, taken);
     this.net.features = [...this.account.features];
     this.net.land = this.world.massRuntime ? massDigest(this.world.massRuntime.config) : null; // THE LAND DIGEST (wildsSave.shellLandDigest)
     this.net.setSeedSource(() => this.world.manifest.seed);
@@ -375,13 +400,14 @@ export class ShardHost {
     this.net.onPeerJoin((p, join) => this.onJoin(p, join));
     this.net.onPeerLeave(id => {
       this.dormancy.delete(id); // THE DORMANT SEAT: the word, a clock run out or a closing shard ends any dormancy
+      this.unloadGraces.delete(id);
       this.vessels.leave(id); this.graces.delete(id);
       // THE SEAT LEDGER: the leave runs in the unit the seat stands in.
       this.units.within(id, w => { w.removeSeat(id); w.settleNearScale(true); }); // keeperSeat: THE NEAR LAW re-read after the leave
       this.units.forget(id);
       this.parties.dropSeat(id); // THE PARTY: out of its party and its invites
     });
-    this.net.onPeerDormant((id, worded) => this.onDormant(id, worded)); // THE DORMANT SEAT: a lost socket's hero stays, on a clock
+    this.net.onPeerDormant((id, worded, unload) => this.onDormant(id, worded, unload)); // THE DORMANT SEAT: a lost socket's hero stays, on a clock
     this.net.leaveHolds = id => this.vessels.inCombat(id); // THE ACTING SEAT: a word said mid-fight sleeps like a lost socket
     this.net.onPeerResume(id => this.onResume(id)); // THE RECONNECT TOKEN: the clock stops, the seat's world re-ships
     this.net.onSession((m, from) => this.onSession(m, from));
@@ -465,8 +491,9 @@ export class ShardHost {
     if (!seat) return; // THE LATE WORD: a fallen vessel's client hears its death; its class pick rejoins
     const vessel = this.vessels.vesselOf(peer.id);
     seat.actor.cosmeticLoadout = sanitizeCosmeticLoadout(peer.cosmeticLoadout);
-    // THE NAME (card 17 A): the body wears the name entered once — the vessel's own, else the join's.
-    seat.actor.name = (vessel ? seat.meta.name : peer.name) || seat.actor.name;
+    // THE NAME (card 17 A): the body wears the name entered once — the vessel's own, else the
+    // join's — as the roster wears it (THE STOPGAP NAME, W7: two unnamed heroes read apart).
+    seat.actor.name = peer.name || (vessel ? seat.meta.name : '') || seat.actor.name;
     // THE HEARTH WAKE + THE SPAWN GRACE: up at the hearth, unseen by foes until
     // the first willed input (or the grace runs out).
     const hearth = this.hearthSeat(), r = seat.actor.radius;
@@ -475,10 +502,77 @@ export class ShardHost {
     seat.actor.untargetable = true;
     this.graces.set(seat.id, this.world.time + SHARD_CFG.spawnGraceSec);
     this.world.settleNearScale(true); // keeperSeat: addSeat scaled every body beside the shadowed keeper; the hearth is where the joiner stands
+    // THE RETURN (card 26 B, W7): a traveling hero logs back in WHERE IT LOGGED OUT, under
+    // the same grace; a unit's landing ships its own terrain (THE HAND-OFF's arrival).
+    const back = vessel ? this.returnTo(seat) : null;
     // The joiner needs the standing terrain NOW, not at the next zone change.
-    this.net.sendZoneTo(peer.id, serializeZone(this.world));
-    this.units.keeper.lastSentZone = this.world.zone.id;
+    if (back !== 'unit') {
+      this.net.sendZoneTo(peer.id, serializeZone(this.world));
+      this.units.keeper.lastSentZone = this.world.zone.id;
+    }
     this.log(`[shard] ${peer.id} joined as ${seat.meta.classDef.id}${vessel ? ` (the vessel ${seat.meta.name}, level ${this.world.seatHero(seat).level})` : ''} (${this.net.connectionCount()} connected)`);
+  }
+
+  /** THE RETURN (card 26 B, her ruling 2026-10-10; W7): seat a returning hero where it
+   *  logged out. The desk's kept stand (a leave no client heard) wins over the upload's
+   *  own; a new hero, a stand from another world, or one that will not read wakes at the
+   *  hearth (logged). 'keeper' = repositioned in the keeper's World, 'unit' = handed into
+   *  a unit (its arrival shipped the zone), null = the hearth stands. */
+  private returnTo(seat: Seat): 'keeper' | 'unit' | null {
+    const read = this.vessels.standFor(seat.id);
+    if ('none' in read) {
+      if (read.none !== 'new') this.log(`[shard] ${seat.id}'s last stand is ${read.none === 'foreign' ? 'from another world' : 'unreadable'}; it wakes at the hearth`);
+      return null;
+    }
+    const plan = this.returnLanding(read.stand);
+    if (plan.kind === 'hearth') { this.log(`[shard] ${seat.id}'s last stand is gone (${plan.why}); it wakes at the hearth`); return null; }
+    const settle = this.units.unitOf(seat.id) === this.units.keeper ? this.world : null;
+    if (plan.kind === 'keeper' && settle) {
+      const w = settle, r = seat.actor.radius;
+      const at = plan.tier > 0 ? plan.at : w.clampPos(w.findFreeSpot({ x: plan.at.x, y: plan.at.y }, r + 2) ?? plan.at, r);
+      w.landSeatAt(seat, carrySetOf(w, w.seatHero(seat)), at, { tier: plan.tier });
+      // A mouth's landing never dwells straight back down (the climb-out's own EXIT GRACE).
+      if (plan.mouth) shardRoadArrive(w, seat, { seatId: seat.id, dest: w.zone.id, grace: 'caveExit' }, seatDoorOf(w, seat));
+      w.settleNearScale(true); // keeperSeat: THE NEAR LAW where the hero now stands
+      this.log(`[shard] ${seat.id} logs back in where it logged out (${plan.why}, ${Math.round(at.x)},${Math.round(at.y)})`);
+      return 'keeper';
+    }
+    if (plan.kind !== 'unit') return null;
+    this.units.enqueue({
+      seatId: seat.id, dest: plan.dest, from: plan.from, landing: { at: plan.at, tier: plan.tier },
+      ...(plan.ladder ? { ladder: plan.ladder } : {}), ...(plan.mouth ? { grace: 'caveExit' as const } : {}),
+    });
+    this.units.drain(); // THE HAND-OFF QUEUE's own door, between ticks (THE DIRECT ROAD's idiom)
+    if (this.units.unitOf(seat.id)?.role === 'unit') {
+      this.log(`[shard] ${seat.id} logs back in where it logged out (${plan.why})`);
+      return 'unit';
+    }
+    this.log(`[shard] ${seat.id}'s road back to ${plan.dest} would not open; it wakes at the hearth`);
+    return null;
+  }
+
+  /** THE RETURN's decision for one stand (pure over this world's chart and units): back
+   *  into its pocket while that pocket's unit stands; a pocket gone lands at its mouth on
+   *  the surface (the step off the hole, under the exit grace); on the surface or a zone
+   *  the keeper hosts, the keeper; any other charted zone, its unit (woken if asleep); a
+   *  stand from another world, or ground the chart no longer holds, the hearth. */
+  returnLanding(stand: ShardStand): ReturnPlan {
+    const k = this.world, spot = stand.spot;
+    if (stand.seed !== k.manifest.seed >>> 0) return { kind: 'hearth', why: 'another world' };
+    let mouth = false;
+    if (stand.pocket) {
+      const p = stand.pocket, u = this.units.unitFor(p.zoneId);
+      if (u && u.role === 'unit' && k.caveMap[p.zoneId]) {
+        return { kind: 'unit', dest: p.zoneId, at: { x: p.x, y: p.y }, tier: p.tier, from: null,
+          ...(spot.cave ? { ladder: ladderOfSpot(spot) } : {}), mouth: false, why: `in its pocket ${p.zoneId}` };
+      }
+      mouth = true; // THE POCKET GONE: its mouth on the surface (the spot's own anchor)
+    }
+    if (!k.zoneMap[spot.zoneId]) return { kind: 'hearth', why: `${spot.zoneId} is not on the chart` };
+    const at = { x: spot.x, y: spot.y + (mouth && stand.tier < 1 ? 40 : 0) };
+    const why = mouth ? `at the mouth of ${stand.pocket!.zoneId}, a pocket no longer standing` : `in ${spot.zoneId}`;
+    if (this.units.unitFor(spot.zoneId)?.role === 'keeper') return { kind: 'keeper', at, tier: stand.tier, mouth, why };
+    return { kind: 'unit', dest: spot.zoneId, at, tier: stand.tier, from: spot.entryFrom ?? null, mouth, why };
   }
 
   /** THE DORMANT SEAT (card 16 B): a socket was lost without its client's
@@ -488,12 +582,16 @@ export class ShardHost {
    *  SEAT (still under THE SPAWN GRACE: unseen by foes, it never willed a
    *  step) has nothing to escape and leaves at once, and a seat with no body
    *  left (a fall took it) has nothing to wake. */
-  private onDormant(id: string, worded = false): void {
+  private onDormant(id: string, worded = false, unload = false): void {
     const seat = this.units.seatOf(id);
     if (!seat || this.graces.has(id)) { this.net.release(id); return; }
-    this.dormancy.set(id, this.world.time + SHARD_CFG.dormantSec);
+    // THE UNLOAD WORD (W7): a page gone out of a fight sleeps untargetable on the short
+    // reload grace (a reload takes the seat back; a closed tab's hero leaves soon).
+    const sec = unload ? SHARD_CFG.unloadGraceSec : SHARD_CFG.dormantSec;
+    if (unload) { seat.actor.untargetable = true; this.unloadGraces.add(id); }
+    this.dormancy.set(id, this.world.time + sec);
     this.corpses.sleep(id); // a body with no hand reclaims nothing
-    this.log(`[shard] ${id} ${worded ? 'left mid-fight' : 'lost its connection'}; its hero lies dormant ${SHARD_CFG.dormantSec}s (${this.net.connectionCount()} connected)`);
+    this.log(`[shard] ${id} ${unload ? 'closed its page' : worded ? 'left mid-fight' : 'lost its connection'}; its hero lies dormant ${sec}s${unload ? ', untargetable' : ''} (${this.net.connectionCount()} connected)`);
   }
 
   /** THE RECONNECT TOKEN: a dormant seat's player is back on a new
@@ -502,6 +600,8 @@ export class ShardHost {
    *  bodies' rows, and an input ack counted from zero again. */
   private onResume(id: string): void {
     this.dormancy.delete(id);
+    // THE UNLOAD WORD (W7): a reloaded page's hero stays unseen until its first willed step (THE SPAWN GRACE).
+    if (this.unloadGraces.delete(id)) this.graces.set(id, this.world.time + SHARD_CFG.spawnGraceSec);
     const u = this.units.unitOf(id), seat = this.units.seatOf(id);
     if (!u || !seat) return; // (never: a seat with no body is released at once, so it cannot be resumed)
     const w = u.world; // THE DORMANT SEAT per unit: the seat's own unit re-ships
@@ -551,7 +651,15 @@ export class ShardHost {
     } else if (msg.t === 'leaving') {
       // THE FAREWELL: the vessel's last mirror before its socket closes. THE ACTING
       // SEAT: never mid-fight (that leave sleeps like a lost socket; the beat's mirror stands).
+      // THE UNLOAD WORD (W7): a page going away hears nothing; its stand stays with the desk.
+      if (msg.unload === true) return;
       if (!this.vessels.inCombat(from)) this.vessels.requestMirror(from);
+      else {
+        // THE HONEST LEAVING (W7): the hero stands its ground, and its player is told so on
+        // the seat's own note row (the client's farewell reads it; never a modal).
+        const word = `${SHARD_LEAVE_WORD.held} for ${SHARD_CFG.dormantSec} s`;
+        this.units.within(from, w => { const s = w.seats.find(x => x.id === from); if (s) w.shardRoadHost().failNote(s.actor, 'leave:held', word); });
+      }
     } else if (msg.t === 'party') {
       this.onPartyWord(msg, from);
     }

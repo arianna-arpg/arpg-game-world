@@ -4,18 +4,29 @@
 //   npm run shard -- --port 8787 --seed 1234 --open
 //
 //   --port <n>       listen port (default 8787; 0 = any free port)
-//   --host <addr>    bind address (default 0.0.0.0 — every interface)
-//   --seed <n>       the manifest seed (hex with 0x, else decimal; default a fresh roll)
+//   --host <addr>    bind address (default 0.0.0.0, every interface)
+//   --seed <n>       the manifest seed (hex with 0x, else decimal; default the newest
+//                    saved world of its kind, else a fresh roll)
 //   --class <id>     the keeper's class (default warrior)
 //   --worldmass      THE UNBROKEN WILDS: host the seamless foundation's continuous
 //                    surface, persisted to its own saves/shard_<seed>_wilds.json
 //                    and resumed in the mass lane's order (server/wildsSave.ts)
 //   --open           THE OPEN ACCOUNT: every class / station / memory unlocked
-//   --ephemeral      never write the world (default: saves/shard_<seed>.json every 20 s)
+//   --name <text>    THE FRONT DOOR: the world's own name, on every welcome and on the
+//                    served page (default "the Unbroken Wilds", or "the hosted world")
+//   --ephemeral      never write the world (default: saves/shard_<seed>.json every
+//                    SHARD_CFG.worldSaveSec, 60 s, and on Ctrl-C; the heroes mirror home
+//                    every persistSec, 20 s)
 //   --save-dir <p>   where shard saves land (default saves/)
+//   --per-ip <n>     sockets one address may hold (default 8; 0 = no cap, for a forwarder)
+//   --client <dir>   THE SERVED CLIENT: the web build handed out on plain GETs (default
+//                    site/play once `npm run build:web` wrote it); /status keeps the page
 //
-// Players connect from the game's Co-op lobby → "Join a Server" with
-// ws://<this machine>:<port>. Ctrl-C writes the world and closes the wire.
+// Players open the world's own address (the served client's start menu leads into it:
+// THE FRONT DOOR), or connect from the game's Co-op lobby → "Join a Server" with the
+// https:// address a codespace shows, ws://<this machine>:<port>, or a bare host name
+// (net/ws.ts normalizeShardUrl turns each into ws:// or wss://). Ctrl-C writes the
+// world, mirrors every hero home and closes the wire.
 // ---------------------------------------------------------------------------
 
 import { resolve } from 'node:path';
@@ -56,6 +67,7 @@ async function main(): Promise<void> {
     open: args.open === true,
     worldmass: args.worldmass === true,
     saveDir: args.ephemeral === true ? null : (typeof args['save-dir'] === 'string' ? args['save-dir'] : undefined),
+    ...(typeof args.name === 'string' ? { name: args.name } : {}), // THE FRONT DOOR: the world's name
   });
   // THE RESUME LAW (server/wildsSave.ts): a saved wilds stands back up before
   // the first socket or tick (listen awaits it too; this keeps the order plain).

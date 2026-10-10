@@ -29,7 +29,7 @@
 // without the token (a new tab), instead of hearing the twin refusal.
 // ---------------------------------------------------------------------------
 
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { extname, resolve, sep } from 'node:path';
 import type { ServerResponse } from 'node:http';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
@@ -37,7 +37,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Duplex } from 'node:stream';
 import type { AddressInfo } from 'node:net';
 import { WS_GUID, WsMessageAssembler, encodeClose, encodePing, encodePong, encodeText } from '../src/net/wsframe';
-import type { ShardResume, WireMsg } from '../src/net/ws';
+import { SHARD_SERVED_MARK, type ShardResume, type WireMsg } from '../src/net/ws';
 import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from '../src/net/transport';
 import { HONEST_INPUT_CFG, mergeInputs, type PlayerId, type PlayerInput } from '../src/net/intent';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
@@ -102,8 +102,10 @@ interface Conn {
   congestedSince: number;
   /** THE RECONNECT TOKEN this connection's seat answers to (minted at its join). */
   token: string;
-  /** THE DELIBERATE LEAVE: the client said `session leaving`, so its close ends the seat at once. */
-  leaving: boolean;
+  /** THE DELIBERATE LEAVE: the client said `session leaving`, so its close ends the seat at once;
+   *  'unload' (W7, THE UNLOAD WORD): its page went away, so its close sleeps the seat on the
+   *  short reload grace instead (the host's clock). */
+  leaving: boolean | 'unload';
 }
 
 /** THE RECONNECT TOKEN, minted (node:crypto, never the seeded stream). */
@@ -189,13 +191,20 @@ export class ShardTransport implements NetTransport {
   features: string[] = [];
   /** THE LAND DIGEST the shard's wilds run (null on a classic world): a shell that lays another land refuses the join. */
   land: string | null = null;
+  /** THE FRONT DOOR (W7): the world's own name, carried on every welcome (a menu's
+   *  "Return to <world>") and worn by the served page (THE SERVED MARK). */
+  worldName = 'the hosted world';
+  /** THE STOPGAP NAME (W7): the host names a joining hero for the roster (an unnamed
+   *  hero wears its class and a short number; a name another wears takes a number).
+   *  Null = the join's own name, cleaned. */
+  nameJoin: ((name: string, classId: string, accountId: string | undefined, taken: string[]) => string) | null = null;
   private keepalive: NodeJS.Timeout | null = null;
 
   private readonly stateCbs = new Set<(s: StateSnapshot) => void>();
   private readonly zoneCbs = new Set<(z: ZoneMsg) => void>();
   private readonly joinCbs = new Set<(p: PeerInfo, join: ShardJoin) => void>();
   private readonly leaveCbs = new Set<(id: PlayerId) => void>();
-  private readonly dormantCbs = new Set<(id: PlayerId, worded: boolean) => void>();
+  private readonly dormantCbs = new Set<(id: PlayerId, worded: boolean, unload: boolean) => void>();
   private readonly resumeCbs = new Set<(id: PlayerId) => void>();
   private readonly sessionCbs = new Set<(m: SessionMsg, from: PlayerId) => void>();
   private readonly hostLostCbs = new Set<() => void>();
@@ -231,6 +240,17 @@ export class ShardTransport implements NetTransport {
     let size: number;
     try { const s = statSync(file); if (!s.isFile()) return false; size = s.size; } catch { return false; }
     const type = CLIENT_TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream';
+    if (rel === '/index.html') {
+      // THE SERVED MARK (W7, THE FRONT DOOR): the page a world hands out says so, so its
+      // start menu leads into this world (src/net/ws.ts servedShardUrl).
+      let html: string;
+      try { html = readFileSync(file, 'utf8'); } catch { return false; }
+      const mark = `<meta name="${SHARD_SERVED_MARK}" content="${this.worldName.replace(/[<>&"]/g, '')}">`;
+      const body = Buffer.from(html.includes('<head>') ? html.replace('<head>', '<head>' + mark) : mark + html, 'utf8');
+      res.writeHead(200, { 'content-type': type, 'content-length': body.length, 'cache-control': 'no-cache' });
+      res.end(body);
+      return true;
+    }
     res.writeHead(200, { 'content-type': type, 'content-length': size, 'cache-control': rel.startsWith('/assets/') ? 'public, max-age=86400, immutable' : 'no-cache' });
     createReadStream(file).pipe(res);
     return true;
@@ -339,7 +359,17 @@ export class ShardTransport implements NetTransport {
       // pong: lastSeen already stamped; binary: ignored (the grammar is text).
       if (conn.closed) return;
     }
-    if (conn.asm.error) this.drop(conn, conn.asm.error.code, conn.asm.error.reason, true); // THE REFUSED WIRE: never dormant
+    if (conn.asm.error) {
+      // THE FRONT DOOR (W7): a join frame past the wire's cap is a hero too large to
+      // travel, and its lobby hears so before the close (never a silent drop).
+      if (conn.asm.error.code === 1009 && !conn.seat) this.refuse(conn, SHARD_REFUSAL.heroTooLarge);
+      this.drop(conn, conn.asm.error.code, conn.asm.error.reason, true); // THE REFUSED WIRE: never dormant
+    }
+  }
+
+  /** A join refused at the door: its one word for the lobby (`refused`), no seat made. */
+  private refuse(conn: Conn, word: string): void {
+    this.write(conn, encodeText(JSON.stringify({ t: 'refused', word } satisfies WireMsg)), true);
   }
 
   private dispatch(conn: Conn, m: WireMsg): void {
@@ -371,16 +401,28 @@ export class ShardTransport implements NetTransport {
         this.drop(conn, 1008, 'no seat to return to', true);
         return;
       }
-      // THE DOOR CAPS: a dormant seat still holds its place in the world.
-      if (this.bySeat.size + this.dormant.size >= SHARD_WIRE_CFG.maxSeats) { this.drop(conn, 1013, 'shard full'); return; }
+      // THE DOOR CAPS: a dormant seat still holds its place in the world. THE FRONT DOOR
+      // (W7): a full world says so to the lobby before it closes.
+      if (this.bySeat.size + this.dormant.size >= SHARD_WIRE_CFG.maxSeats) {
+        this.refuse(conn, SHARD_REFUSAL.full);
+        this.log(`[shard] a join was refused: the world is full (${SHARD_WIRE_CFG.maxSeats} seats)`);
+        this.drop(conn, 1013, 'shard full', true);
+        return;
+      }
       const seatId: PlayerId = 'p' + (this.nextSeat++);
       conn.seat = seatId;
       conn.token = mintToken(); // THE RECONNECT TOKEN, minted at every join
       this.bySeat.set(seatId, conn);
+      // THE NAME (card 17 A) is the vessel's own, else the join's; THE STOPGAP NAME (W7)
+      // tells two unnamed heroes (or two of one name) apart on the roster.
+      const vesselRow = m.vessel && typeof m.vessel === 'object' ? m.vessel as { name?: unknown; classId?: unknown } : null;
+      const classId = cleanId(typeof vesselRow?.classId === 'string' ? vesselRow.classId : m.classId);
+      const ownName = cleanName(typeof vesselRow?.name === 'string' ? vesselRow.name : m.name, '');
+      const taken = this.peerList.filter(p => !p.isHost).map(p => p.name);
       const peer: PeerInfo = {
         id: seatId, isHost: false,
-        name: cleanName(m.name),
-        classId: cleanId(m.classId),
+        name: this.nameJoin ? cleanName(this.nameJoin(ownName, classId, isAccountId(m.accountId) ? m.accountId : undefined, taken)) : cleanName(ownName || m.name),
+        classId,
         cosmeticLoadout: sanitizeCosmeticLoadout(m.cosmeticLoadout),
       };
       this.peerList.push(peer);
@@ -400,7 +442,7 @@ export class ShardTransport implements NetTransport {
     } else if (m.t === 'session' && conn.seat) {
       const msg = m.msg;
       if (!msg || typeof msg !== 'object' || !CLIENT_SESSION_KINDS.has(msg.t)) return;
-      if (msg.t === 'leaving') conn.leaving = true; // THE DELIBERATE LEAVE: this socket's close ends its seat at once
+      if (msg.t === 'leaving') conn.leaving = msg.unload === true ? 'unload' : true; // THE DELIBERATE LEAVE (W7: or THE UNLOAD WORD)
       const seat = conn.seat;
       this.sessionCbs.forEach(cb => this.guard(() => cb(msg, seat)));
     }
@@ -410,7 +452,7 @@ export class ShardTransport implements NetTransport {
    *  (THE SEED THREAD, the hearth's features, THE LAND DIGEST, THE RECONNECT TOKEN). */
   private welcome(conn: Conn, resumed = false): Uint8Array {
     return encodeText(JSON.stringify({ t: 'welcome', self: conn.seat!, peers: this.peerList, seed: this.seedSource() >>> 0, worldmass: this.worldmass,
-      features: this.features, ...(this.land ? { land: this.land } : {}), resume: { token: conn.token },
+      features: this.features, ...(this.land ? { land: this.land } : {}), resume: { token: conn.token }, world: this.worldName, // THE FRONT DOOR: the world's name
       ...(resumed ? { resumed: true } : {}), // THE RETURN: a standing seat came back
       build: shardBuildStamp() } satisfies WireMsg)); // THE BUILD STAMP
   }
@@ -472,13 +514,17 @@ export class ShardTransport implements NetTransport {
     // THE ACTING SEAT: a word said mid-fight is no farewell. A seat the host
     // holds (leaveHolds: hurt or hurting within VESSEL_CFG.combatLeaveSec)
     // sleeps like a lost socket instead of leaving at once.
-    const lost = !conn.leaving || (this.leaveHolds?.(gone) ?? false);
+    const held = !!conn.leaving && (this.leaveHolds?.(gone) ?? false);
+    // THE UNLOAD WORD (W7): a page that went away out of a fight sleeps on the host's
+    // short reload grace (a reload takes the seat back; a closed tab's hero leaves soon).
+    const unload = conn.leaving === 'unload' && !held;
+    const lost = !conn.leaving || held || unload;
     if (lost && !refused && !this.closing && this.dormantCbs.size) {
       // THE DORMANT SEAT: no word and no refusal, so the connection was LOST.
       // The seat stays (its roster row and token kept, no pleave); the host's
       // clock decides (a host that never listens keeps the old law below).
       this.dormant.set(gone, conn.token);
-      this.dormantCbs.forEach(cb => this.guard(() => cb(gone, conn.leaving)));
+      this.dormantCbs.forEach(cb => this.guard(() => cb(gone, !!conn.leaving, unload)));
       return;
     }
     this.peerList = this.peerList.filter(p => p.id !== gone);
@@ -605,8 +651,9 @@ export class ShardTransport implements NetTransport {
   onPeerJoin(cb: (p: PeerInfo, join: ShardJoin) => void): () => void { this.joinCbs.add(cb); return () => { this.joinCbs.delete(cb); }; }
   onPeerLeave(cb: (id: PlayerId) => void): () => void { this.leaveCbs.add(cb); return () => { this.leaveCbs.delete(cb); }; }
   /** THE DORMANT SEAT: a seat's socket was lost without its word, or said it mid-fight (`worded`, THE
-   *  ACTING SEAT's leaveHolds); the host starts its clock, or releases it at once. */
-  onPeerDormant(cb: (id: PlayerId, worded: boolean) => void): () => void { this.dormantCbs.add(cb); return () => { this.dormantCbs.delete(cb); }; }
+   *  ACTING SEAT's leaveHolds), or its page went away out of a fight (`unload`, W7's THE UNLOAD
+   *  WORD: the short reload grace); the host starts its clock, or releases it at once. */
+  onPeerDormant(cb: (id: PlayerId, worded: boolean, unload: boolean) => void): () => void { this.dormantCbs.add(cb); return () => { this.dormantCbs.delete(cb); }; }
   /** THE RECONNECT TOKEN: a dormant seat was re-bound to a new connection (the host stops its clock). */
   onPeerResume(cb: (id: PlayerId) => void): () => void { this.resumeCbs.add(cb); return () => { this.resumeCbs.delete(cb); }; }
 

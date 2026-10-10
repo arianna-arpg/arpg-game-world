@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------
 
 import { ESSENCES, type EssenceId } from '../data/essences';
+import type { SavedCaveRung, SavedPlayerSpot } from '../meta/worldstate';
 
 /** Where a fallen vessel's body lies on the shard: the `corpse` row's note. */
 export interface ShardCorpseNote {
@@ -63,6 +64,28 @@ export interface ShardBodyRow {
   dwell: number;
 }
 
+/** THE RETURN (card 26 B, her ruling 2026-10-10; W7): where a hero stood when it
+ *  last left a hosted world, the only place it logs back in. Every mirror carries it
+ *  (`CharacterSave.stand`: the farewell, the beat), the shard keeps it for a leave its
+ *  client never heard (the dormant release, a closed tab), and the next login lands
+ *  the hero there under THE SPAWN GRACE (server/shardHost.ts returnLanding). */
+export interface ShardStand {
+  /** THE HOSTED SEED of the world it stood in: a stand from another world is foreign. */
+  seed: number;
+  /** The seat's SAVED SPOT (engine/shardRoads.ts shardSpotOf): the zone underfoot, or
+   *  under ground the surface anchor at the pocket's outermost mouth plus the pocket
+   *  and its descent (`cave`). */
+  spot: SavedPlayerSpot;
+  /** The story at the spot (in a pocket: the outermost mouth's own story). */
+  tier: number;
+  /** Under ground: the pocket it stood in, its spot and its story. A pocket still
+   *  standing takes the hero back to that spot; a pocket gone lands it at the mouth
+   *  (the spot's surface anchor). */
+  pocket?: { zoneId: string; x: number; y: number; tier: number };
+  /** The unit it stood in (a record for the log; the landing reads the spot). */
+  unit?: string;
+}
+
 /** The wire's sanity rails: what a row may carry before it is refused. */
 export const VESSEL_WIRE_CFG = {
   /** Longest id/name string a row may carry. */
@@ -71,6 +94,10 @@ export const VESSEL_WIRE_CFG = {
   maxValue: 1e9,
   /** Bodies one `corpses` row may draw. */
   maxBodies: 32,
+  /** THE RETURN: rungs a stand's descent may carry (the save's own WORLDSTATE_CFG.caveRungCap). */
+  maxRungs: 8,
+  /** THE RETURN: the highest story a stand may name. */
+  maxTier: 8,
 };
 
 const num = (v: unknown, lo: number, hi: number): number | null =>
@@ -121,6 +148,45 @@ export function sanitizeCorpseNote(raw: unknown): ShardCorpseNote | null {
     ...(id ? { id } : {}), charId, name, classId, level: Math.floor(level), zoneId, zoneName,
     pos: { x, y }, pieces: Math.floor(pieces), diedAt,
   };
+}
+
+/** THE RETURN: a stand off the wire or out of a save, or null (a malformed stand is
+ *  no stand: the hero wakes at the hearth, never at a guessed place). */
+export function sanitizeStand(raw: unknown): ShardStand | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const seed = num(r.seed, 0, 0xffffffff), tier = num(r.tier, 0, VESSEL_WIRE_CFG.maxTier);
+  const s = r.spot as Record<string, unknown> | null;
+  if (seed === null || tier === null || !s || typeof s !== 'object') return null;
+  const zoneId = text(s.zoneId), x = num(s.x, -1e9, 1e9), y = num(s.y, -1e9, 1e9);
+  if (!zoneId || x === null || y === null) return null;
+  const entryFrom = typeof s.entryFrom === 'string' ? text(s.entryFrom) : null;
+  const spot: SavedPlayerSpot = { zoneId, x, y, ...(entryFrom ? { entryFrom } : {}) };
+  const c = s.cave as Record<string, unknown> | null | undefined;
+  if (c && typeof c === 'object') {
+    const caveId = text(c.zoneId), cx = num(c.x, -1e9, 1e9), cy = num(c.y, -1e9, 1e9);
+    const rungs: SavedCaveRung[] = [];
+    const raws = Array.isArray(c.rungs) ? c.rungs : [];
+    for (const row of raws.length <= VESSEL_WIRE_CFG.maxRungs ? raws : []) {
+      const o = row as Record<string, unknown> | null;
+      if (!o || typeof o !== 'object') break;
+      const rz = text(o.zoneId), rx = num(o.x, -1e9, 1e9), ry = num(o.y, -1e9, 1e9), kind = text(o.kind);
+      const rseed = num(o.seed, -0x80000000, 0xffffffff), rt = o.tier === undefined ? 0 : num(o.tier, 0, VESSEL_WIRE_CFG.maxTier);
+      if (!rz || rx === null || ry === null || !kind || rseed === null || rt === null) break;
+      const ef = typeof o.entryFrom === 'string' ? text(o.entryFrom) : null, span = typeof o.underSpan === 'string' ? text(o.underSpan) : null;
+      rungs.push({ zoneId: rz, x: rx, y: ry, kind, seed: rseed, ...(ef ? { entryFrom: ef } : {}), ...(span ? { underSpan: span } : {}), ...(rt ? { tier: rt } : {}) });
+    }
+    if (caveId && cx !== null && cy !== null && rungs.length && rungs.length === raws.length) spot.cave = { zoneId: caveId, x: cx, y: cy, rungs };
+  }
+  const p = r.pocket as Record<string, unknown> | null | undefined;
+  let pocket: ShardStand['pocket'];
+  if (p && typeof p === 'object') {
+    const pz = text(p.zoneId), px = num(p.x, -1e9, 1e9), py = num(p.y, -1e9, 1e9), pt = num(p.tier, 0, VESSEL_WIRE_CFG.maxTier);
+    if (!pz || px === null || py === null || pt === null) return null;
+    pocket = { zoneId: pz, x: px, y: py, tier: Math.floor(pt) };
+  }
+  const unit = typeof r.unit === 'string' ? text(r.unit) : null;
+  return { seed: seed >>> 0, spot, tier: Math.floor(tier), ...(pocket ? { pocket } : {}), ...(unit ? { unit } : {}) };
 }
 
 /** A `corpses` row's bodies off the wire (malformed rows drop, the count is capped). */

@@ -6,6 +6,7 @@ import { applyCharacterResumeFields, bindCharacterResumePages,
   characterResumeAuthority, characterResumeCurrent } from './character';
 import { characterResumeFields, type CharacterResume } from './characterResume';
 import type { ResumeSpawn } from './worldstate';
+import { soloResumeRefusal } from '../net/shardDoor';
 
 export interface PreparedCharacterWorld {
   readonly world: World;
@@ -27,6 +28,10 @@ export async function prepareCharacterWorld(account: Account, resume: CharacterR
   if (!current() || !await characterResumeCurrent(resume) || !current()) throw Error('Continue was superseded');
   const fields = characterResumeFields(resume), cls = CLASSES.find(c => c.id === fields.classId);
   if (!cls) throw Error('The saved character class is unavailable');
+  // HOME SLOTS (W7): a hero bound to a hosted world never wakes in a solo world built
+  // from its world-less mirror; its Continue is a return (main.ts), and this is the backstop.
+  const bound = soloResumeRefusal(fields);
+  if (bound) throw Error(bound);
   const manifest = reconcileManifest(fields.expedition, account, options.fallbackSeed);
   if (options.loadingStage) await options.loadingStage('Restoring the world');
   if (!current()) throw Error('Continue was superseded');
