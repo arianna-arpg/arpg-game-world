@@ -549,7 +549,16 @@ HUD's local site name reads a private runtime map the shell never fills.
    other fabric reaches the shard through the transport seam it already
    reaches co-op through.
 6. **THE ASKS (2026-10-09) — three seams the shard needs from the seamless
-   lane's own files, each with its measurement.** The shard never edits
+   lane's own files, each with its measurement. DELIVERED by the foundation
+   session (c1bfe588, integrated at 18a1b437, 2026-10-10; contract in
+   docs/engine/shard-runtime-foundation.md; probes probe_worldmass_foci,
+   probe_shardworkers, probe_worldmass_checkpoint): player NEIGHBORHOODS
+   (`WorldMassRuntime.update(world, boot, foci?)`, overlapping
+   population-radius discs form groups, each with the full population budget,
+   the keeper excluded), background compilation on one Node worker thread
+   (`server/massWorkers.ts`), and compact checkpoints (`serializeWorldState({
+   massCheckpoint: true })`: 5.8 MB to 1.9 MB, 96 ms to 58 ms). The three
+   items below stand as the record of the ask.** The shard never edits
    `src/worldmass/**` (6.3); these are requests for that lane, carried by her.
    - **THE MANY SHADOWS** (`src/worldmass/runtime.ts` `update`, lines ~720–816):
      the runtime's page requests, places, site discovery, survey, native
@@ -581,6 +590,42 @@ HUD's local site name reads a private runtime map the shell never fills.
    3,500 px already breach the tick gate (p95 47 ms, 8 percent dropped,
    against 13 ms clustered), because dormancy and native paging scale with
    how far apart the observers stand; THE MANY SHADOWS must budget that too.
+   - **THE NEIGHBORHOOD GOVERNOR (ask 4, 2026-10-10, measured on 18a1b437).**
+     The delivered neighborhoods give EVERY group the full `maxPopulation`
+     budget (96), so the live population scales with the number of groups:
+     six bots 3,500 px apart stand ~345 natives (one focus stood ~63) and the
+     single sim thread falls to a tick of p50 100 to 150 ms, p95 230 to 520 ms,
+     87 percent of ticks dropped, inputs fed 20 percent; three bots apart stand
+     ~210 natives at p50 45 ms (p95 97 ms). The cost is ~0.2 ms per live actor
+     per tick, so one thread carries ~80 live actors inside a 60 Hz budget
+     (~150 at 30 Hz; a 30 Hz tick does not help, the per-tick cost is the
+     whole problem: six bots at 30 Hz stood p50 141 ms). The living radius
+     itself is delivered: least 21 to 32, mean 27 to 44 foes within reach of
+     every spread player, against 0 before. Ask: a shard-wide population
+     budget shared across groups (per group = max(floor, total / groups)) on
+     `update(world, boot, foci, { budget })`, and an adaptive governor the host
+     feeds with its measured tick (the soak's `--spread` run is the receipt),
+     so a spread party meets a living world the thread can carry; the shard
+     cannot lower `maxPopulation` itself because THE LAND DIGEST hashes the
+     mass config. Units on worker threads (M6) is the lasting answer.
+
+     **THE EXACT SEAM (the M6 plan §3.3, 2026-10-10):** host state on the
+     runtime instance, never in the config, the land digest, the checkpoint or
+     any save: `setPopulationBudget({ total, floor } | null)` (a group's limit
+     becomes `clamp(floor, config.maxPopulation, floor(total / groups))` in both
+     branches of `populationLimit`; reservations, merges and dormancy unchanged;
+     lowering never kills; `null` restores today byte for byte, pinned in
+     `probe_worldmass_foci`) and `populationStats()` (the groups with their live
+     count and limit); optionally `setResidencyRadius(r | null)` so births stay
+     within `r` of a focus with the wake and sleep radii following (no
+     birth-then-sleep pump). The shard calls the setter from the host once a
+     second after detecting the method, so its governor runs cost-only against
+     an older foundation. Two findings beside it: the sight memo keyed pairs as
+     `a.id * 1e6 + b.id` and a long-lived shard's ids pass a million (fixed on
+     the shard lane as THE PAIR STRIDE, `probe_loskey.ts`);
+     `restoreNativeActorState` deletes every property before reassigning, which
+     likely leaves restored natives in V8's slow object mode (PLAUSIBLE, the
+     foundation's to measure).
 
    **Foundation implementation (2026-10-09):** the isolated
    `codex/shard-runtime-foundation` integration supplies simultaneous seat foci,
@@ -683,20 +728,22 @@ character walks back for it), 7 the first cut, 8 A, 9 as built, 10 as set,
     **RULED B FOR PARTIES ONLY (2026-10-08):** a party's road waits for the
     party at a visible muster ring; two independent players in one place
     are never moved together and travel home on their own. Until THE PARTY
-    (card 23) exists the roads stay sealed (C). **THE DETAIL RULED
-    (2026-10-10), exactly as built:** any member may raise the ring, its
-    radius is 400 px and its wait 20 s, every number a dial (`MUSTER_CFG`).
+    (card 23) exists the roads stay sealed (C).
+    **RULED (2026-10-10, her word): B stands. She asked what the muster ring's
+    detail meant; it is the party's dwell at a road (any member raises it, 400
+    px, 20 s), and her agreement lands as built (M1-W4).**
     **BUILT 2026-10-10 (M1-W4, branch shard-m1-muster; receipt
-    `balance/probe_shardunits.ts` G):** a party member's finished road (an
-    exit, a cave mouth, a realm gate) waits at a ring on the road while
-    another member stands in its unit; it fires the moment every member
-    standing there stands inside it, else at the wait with whoever does (the
-    rest follow later on their own into the same unit); the raiser walking off
-    it or the party dissolving lapses it; while it stands the party's members
-    there take no road of their own; the party travels in one drain into one
-    unit, side by side; an independent crosses at once; a ring is drawn, never
-    told (the `mu` row: gold for the party, faint for a stranger). The
-    intents (the town portal, the caravan, the waypoint) stay each seat's own.
+    `balance/probe_shardunits.ts` G), every number a dial (`MUSTER_CFG`):** a
+    party member's finished road (an exit, a cave mouth, a realm gate) waits at
+    a ring on the road while another member stands in its unit; it fires the
+    moment every member standing there stands inside it, else at the wait with
+    whoever does (the rest follow later on their own into the same unit); the
+    raiser walking off it or the party dissolving lapses it; while it stands
+    the party's members there take no road of their own; the party travels in
+    one drain into one unit, side by side; an independent crosses at once; a
+    ring is drawn, never told (the `mu` row: gold for the party, faint for a
+    stranger). The intents (the town portal, the caravan, the waypoint) stay
+    each seat's own.
 16. **Disconnects** — A: the hero vanishes at once (today; a disconnect is a
     free escape from death). B: the hero lies dormant N seconds and a
     reconnect token reclaims it. C: the server holds the hero until the
@@ -808,44 +855,97 @@ in Mu first.**
     finishes it for everyone). C: mixed (authored story quests per account,
     world events and sieges shared). Rec: C, which is A for every quest a
     giver hands a person and B for what the world does to itself.
+    **RULED (2026-10-10, her word): the unit is the CHARACTER, exactly as
+    single player. Each hero carries its own quest log, its own rolled board
+    postings and its own Odyssey leads; the world's consequences (the
+    Odyssey's choices, which faction fell, world events, the restock clock)
+    are the shard's and shared. Four Immortals of one account each have their
+    own quests and meet one world. Built as THE CHARACTER'S QUESTS (W9).**
 25. **POCKET TENANCY** (M1's first question) — A: shared pockets (whoever
     walks into a cave meets the same cave, her "generated for any player
     that simultaneously ran across it"). B: one instance per party.
     Rec: A by default, B by a data flag for authored dungeons and arena
-    seals. **RULED (2026-10-10), exactly as built: A by default, B by the
-    data flag** (`tenancy: 'party'` per pocket, on a sidezone or an arena).
+    seals.
+    **RULED (2026-10-10, her word): A, with B as a data flag per pocket (M1-W4
+    builds it).**
     **BUILT 2026-10-10 (M1-W4, branch shard-m1-muster; receipt
-    `balance/probe_shardunits.ts` G):** the flag is stamped on the minted
-    pocket and the registry keys its unit per party (`${zoneId}#${partyId}`,
-    an ungrouped seat's `seat:<id>`) for every road leading in; THE INSTANCE
-    FORGETS: an instance reads no shared memory row at its wake (it mints
-    fresh), writes none at its sleep or for the world save, and keeps its
-    clears its own; it hears no world sweep's zone half. No content carries
-    the flag yet. Open for her word: which pockets carry it, and whether a
-    party's clear of its instance should also count for the world's clears
-    (today it opens nothing outside the instance).
+    `balance/probe_shardunits.ts` G):** the flag (`tenancy: 'party'`, on a
+    sidezone or an arena) is stamped on the minted pocket and the registry keys
+    its unit per party (`${zoneId}#${partyId}`, an ungrouped seat's
+    `seat:<id>`) for every road leading in; THE INSTANCE FORGETS: an instance
+    reads no shared memory row at its wake (it mints fresh), writes none at its
+    sleep or for the world save, and keeps its clears its own; it hears no world
+    sweep's zone half. No content carries the flag yet. Open for her word: which
+    pockets carry it, and whether a party's clear of its instance should also
+    count for the world's clears (today it opens nothing outside the instance).
 26. **THE RETURN** (where a hero stands after a leave) — A: always the
     hearth (today). B: where it logged out, within a radius, with a leave
     in combat going dormant like a dropped socket (W3 builds the dormant
     half either way). Rec: B.
+    **RULED (2026-10-10, her word): B, and stronger: a hero logs back in where
+    it logged out, and that is the ONLY behaviour; there is no choice between
+    a hearth and a logout spot. The hearth stays a new hero's first wake and
+    the wake after a death. W7 builds it.**
 27. **THE SPOILS' OWNER** (card 23 said per player; the sweep found the
     ground is first-come) — A: strictly per player, forever. B: per player
     with a free-for-all after a timeout. C: A plus a deliberate give or
     trade lane. Rec: A now (the honest floor), C as its own pass; B only
     if you want shared pickup at all.
+    **RULED (2026-10-10, her word): A as the default, with the FOUNDATION for
+    B: a party may set its own drop rule, owner first and free for all after a
+    timeout. Built as THE SPOILS' OWNER (W10).**
 28. **THE BLEED-OUT** (a grouped mortal's down) — A: no timer; a downed
     grouped hero waits for a mate as long as the party stands. B: a
     bleed-out of N seconds after which the covenant falls, reset by a
     kneel. Rec: B at 60 s.
+    **RULED (2026-10-10, her word): B at 60 s, reset by a kneel; no holding a
+    downed player hostage. W8b ships `VESSEL_CFG.bleedOutSec` at 60.**
 29. **THE SHELF PER BUYER** — A: one world shelf rolled at the keeper's
     level (today, §5). B: the shelf rolls per buyer's level. Rec: hold A;
     revisit with M2's account gate.
+    **RULED (2026-10-10, her word): toward B as accounts diverge: the shelf
+    rolls per buyer (per character) from the shared restock clock, at the
+    buyer's level and gates, the way Path of Exile's vendors are each player's
+    own. Built as THE SHELF PER BUYER (W9).**
 30. **THE IMMORTAL'S OWN COVENANT ON A SHARD** — today an Immortal cannot
     die on a shard: a stage that does not end the run never meets the
     covenant and the mercy stands it up. A: the stage's own death policy
     runs on the server and mirrors home (a Sworn stage advances, an
     Undying falls with its frozen fee, the corpse by the stage's rule).
     B: leave Immortals deathless on shards. Rec: A.
+    **RULED (2026-10-10, her word): A. Built as THE IMMORTAL'S COVENANT ON A
+    SHARD (W10).**
+31. **THE M6 ORDER** (the M6 plan `docs/design/shard-m6-plan.md` §6,
+    2026-10-10: units and islands across cores) — A: W0 (the one-thread diet:
+    the profile, the phase meter, THE THINKING EDGE, local rosters if the
+    profile points at the whole-roster scans) and W1 (THE GOVERNOR over the
+    foundation's budget seam) now, W2 (THE GLASS UNIT: pockets that speak only
+    in messages, still one thread) and W3 (THE THREAD HOST) once the
+    foundation commits to the island runtime. B: all four now. C: W0 and W1,
+    then decide from the profile and the player counts she expects. Rec: A.
+32. **THE GOVERNOR'S NUMBERS** — the per-group floor (Rec: 24, today's
+    delivered least); whether the tick may drop to 40 Hz under the heaviest
+    load (the wire stays 20 Hz; 30 Hz would halve it); whether THE DOOR (new
+    joins held at the lobby under overload) exists at all. Rec: 24, 40 Hz
+    allowed, no door until a real host is measured.
+33. **THE HARDWARE** — threads need cores and the codespace has two. Rec: a 4
+    to 8 core host before W3 lands; W0 and W1 run anywhere.
+34. **A WORKER'S DEATH** — A: its players wake at the hearth from their last
+    mirror (up to `persistSec` 20 s of progress lost). B: a seat checkpoint
+    beat (2 s, a few kB a seat). Rec: B.
+35. **ONE CLOCK** — A: lockstep across threads, every thread stepping the same
+    tick with the same start time and inputClock, so the slowest thread sets
+    the shard's tick. B: a clock per thread with a rebase law at every
+    hand-off. Rec: A.
+36. **THE ISLAND SEPARATION** — islands split where no player can see across
+    (about 3,200 px: the 1,600 px awake radius plus the view) with hysteresis;
+    a merge costs a short hold (up to about 100 ms) for the merging players
+    only; THE NEAR LAW (1,600 px) and the group merge (2,600 px) never cross
+    an island by arithmetic. Rec: as stated; the number is unblessed.
+37. **THE TRAVELLING COURT** — A: exact capture of every carried body on a
+    cross-thread hand-off (the couch guest's build plus live state, the court
+    captured exactly). B: timed summons re-minted at their life fraction. Rec:
+    A.
 
 ---
 
@@ -861,6 +961,7 @@ the base taken and what moved.
 | 2026-10-07 | `67d9c290` (pushed tip) | 0 | the lane's first base (a rebase, before the branch was pushed) |
 | 2026-10-08 | `ae5b686f` (31 LOCAL commits of the codex worktree, unpushed at the time) | 3, all in `world.ts` | the party scale moved into `engine/nativeScenePopulation.ts` and THE NEAR LAW moved with it (`scenePartyScaleCount(host, at)`); the experimental exploration rewards were retired upstream, so the keeper-gated `claimExplorationReward` went with them; the coop import kept `COOP_SCALING` for the mercy and XP reads. Of the 17 `keeperSeat` seams, 15 stand in `world.ts` as they were, the two party-scale lines moved with the scale into the scene module, and the retired reward claim's gate went with its method. The merge audit (an Opus critic, 2026-10-08) found THE LAND DIGEST gap (the preset's terrain version moved under the seed — fixed: refused saves are legacy, the welcome proves the land) and THE NEAR LAW AT THE MINT (pre-existing: the mint-time scale read a placeholder — fixed: settled where the body stands); it noted that `mercEase` is read off the keeper's sheet on a shard (a seat's own Fair Company never lightens its hired blades — OWED) and that the shell mints the settlement watch at attach before the first snapshot replaces it (harmless). Nine other probes red after the merge are red on the codex tip itself (its in-flight work), left to that lane. |
 | 2026-10-09 | `6948a362` (7 more LOCAL commits: regional courts, winding terrain, complete native locales, fixture ownership) | 0 | a clean auto-merge; a dry run (`git merge-tree`) of shard-world INTO the foundation tip is clean too. THE INTEGRATION POLICY (her question 2026-10-09) is §7c. |
+| 2026-10-10 | `18a1b437` THE INTEGRATION: the foundation session merged shard-world (096393f1) and the roads branch (889884fc) into its lane, delivered §6.6's three asks (c1bfe588) and fast-forwarded `shard-world` to the same commit, so both branches stand as ONE tree; §7c's cadence continues from here (the shard keeps merging the foundation down; the foundation lands the shard up). | 0 | the shard rigs, the three new foundation probes and a soak are green on 18a1b437 |
 | 2026-10-09 (W5) | THE SEAMS THE SHARD NOW CARRIES IN THE FOUNDATION'S FILES, for the landing: `src/worldmass/clearance.ts` passes the cleared site's place to `grantXp` (XP BY PLACE, one line); `src/worldmass/quests.ts` reads a hosted shell's map pins off its journal row and filters bounty pins by `World.handOwns` (three lines). Both additive, byte-identical off a shard. | 0 | recorded so the foundation session meets them knowingly at the landing (§7c). |
 
 ## §7c The integration policy (her question 2026-10-09)
@@ -900,7 +1001,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 | 2 | Every non-keeper seat's held casts run on the monster AI's hold roll (`a !== this.player` in updateCasting): guards drop, channels end, charges release on a 1.2–2.6 s timer. | W3 — BUILT 2026-10-09 (7efc8c8c): seated actors hold on their own input; probe_shardseat |
 | 3 | `World.zones` (telegraphs, fields) and leap landing rings never ride the wire: invisible slams, strikes and hazards on a client. | W2 THE WIRE'S EYES — BUILT 2026-10-09 (6edffa88): `ZoneW` rows within reach, leap dest/radius/telegraph; probe_shardwire |
 | 4 | THE FOCUS: the mass runtime keys on the keeper's one position; a player 3,000 px away walks a barren, static world. MEASURED (the soak, 6 bots 3,500 px apart): the living radius around each player is least 0, mean 3.2 foes; THE ROVING SHADOW (a keeper that visits each cluster in turn, shipped off) lifts the mean to 6.7 at a 10 s cadence and 8.1 at 2 s but drops 43% and 68% of ticks (each hop re-keys the runtime at 135–170 ms; the extra clusters' natives raise the sustained load). | THE MANY SHADOWS (several foci inside the runtime, no re-keying, per-focus budgets) + the loaders off the tick, with the seamless lane |
-| 4b | THE SPREAD COST (the soak): six bots spread 3,500 px with ONE focus already breach the gate (p95 47 ms, 8% dropped) against 13 ms with the same six around the hearth: the runtime's per-observer paths (dormancy, native paging) scale with how far apart players stand. | THE MANY SHADOWS, budgeted |
+| 4b | THE SPREAD COST (the soak): six bots spread 3,500 px with ONE focus already breach the gate (p95 47 ms, 8% dropped) against 13 ms with the same six around the hearth: the runtime's per-observer paths (dormancy, native paging) scale with how far apart players stand. | THE MANY SHADOWS, budgeted — DELIVERED by the foundation (c1bfe588): neighborhoods with exact spatial observer queries; the soak's `--spread` run on 18a1b437 is the receipt (§7d note below) |
 | 5 | No stall watchdog, no auto-reconnect; an F5 loses the resume token and the vessel is refused as "already walks the world". | W4 THE SMOOTH SHELL — BUILT 2026-10-09 (67827cfe): the frame strains at 1.5 s, `resumeInPlace` at 5 s or on close, the session in sessionStorage so an F5 resumes the same seat; a `resumeOnly` join takes over a live seat the shard had not yet noticed dead; probe_shardshell |
 | 6 | No local action feedback: every press waits a round trip; cast roots snap back; dashes step at 20 Hz. | W4 — BUILT in part: THE PREDICTED ROOT (a ready plain cast starts a local stub, moves after the press replay rooted, the host's cast row reconciles); dashes, leaps, channels, guards and charges remain |
 | 7 | Cooldowns and gauges are never serialized: the client's bar never sweeps, ultimates never fill. | W2 — BUILT: THE OWN ENTRY (`SeatW.cd`/`gg` spliced per socket, `tickNetClocks` runs them down) |
@@ -921,7 +1022,7 @@ d6019949 + card 17 A. Their verdicts and where each finding lands.
 
 | # | Finding | Wave |
 |---|---|---|
-| 1 | One living focus (tier 1). | THE MANY SHADOWS |
+| 1 | One living focus (tier 1). | THE MANY SHADOWS — DELIVERED by the foundation (c1bfe588): player neighborhoods in the wilds runtime |
 | 2 | Loot is first-come for everyone; card 23 said per player. | THE OWNED SPOILS (card 27) |
 | 3 | Quests are dead on a shard (seven breaks: offers, wire, linger, rewards to the keeper, cargo from the keeper's bag, XP to all, world-wide state). | THE COUNTERS AND THE JOURNAL (card 24 first): BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters): quest state stays the world's, every act and reward the acting seat's; card 24 still open |
 | 4 | Stations never answer a linger (keeper-only dwell; station anchors not shipped). | THE COUNTERS AND THE JOURNAL: BUILT 2026-10-09 (W5 THE COUNTERS AND THE JOURNAL, probe_shardcounters) |

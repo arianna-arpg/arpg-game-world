@@ -28,6 +28,7 @@
 //   --spread <px>       THE SPREAD: each bot roams around its own anchor on a ring of this radius
 //                       about the hearth (0 = everyone around the hearth) — the split-party case
 //   --rove <sec>        THE ROVING SHADOW's visit length (SHARD_CFG.rove.sec; 0 = the focus alone)
+//   --tick-hz <n>       the host tick rate for this run (SHARD_CFG.tickHz; 60 ships) — a cost experiment
 //   --report <path>     the JSON report (default balance/reports/soak_<stamp>.json, gitignored)
 //   --thresholds <path> the gates (default balance/soak.config.json)
 //
@@ -215,6 +216,8 @@ async function main(): Promise<number> {
   const dropOn = !(args['no-drop'] === true || (typeof args.drop === 'string' && /^(0|off|false|no)$/i.test(args.drop)));
   const spread = Math.max(0, num(args.spread) ?? 0); // THE SPREAD (the fleet's anchors)
   const roveArg = num(args.rove);
+  const tickHzArg = num(args['tick-hz']);
+  if (tickHzArg !== undefined && tickHzArg > 0) SHARD_CFG.tickHz = tickHzArg; // THE TICK RATE experiment (SHARD_CFG.tickHz; 60 ships)
   if (roveArg !== undefined) SHARD_CFG.rove.sec = Math.max(0, roveArg); // THE ROVING SHADOW's dial, before the host stands
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const reportPath = typeof args.report === 'string' ? args.report : `${SOAK_CFG.reportDir}/soak_${stamp}.json`;
