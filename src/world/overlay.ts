@@ -52,6 +52,30 @@ export interface OverlayView {
    *  player can point to; a seat spec's "unknown ground" is outside both.
    *  (ZoneDef.veiled is the stricter read: minted ahead and still invisible.) */
   surveyed: ReadonlySet<string>;
+  /** THE OCCUPIED LAW (shard M1-W3): on a hosted world, every zone a live World
+   *  stands in, the keeper's own first (`currentZoneId`), then each awake sim
+   *  unit's. Absent off a shard, where the one standing zone is `currentZoneId`.
+   *  Read it through zonePresent / presentCensus, never directly. */
+  presentZoneIds?: readonly string[];
+  /** THE OCCUPIED LAW: each present zone's live enemy headcount by faction (the
+   *  `census` shape), keyed by zone id. Absent off a shard. */
+  censusByZone?: Readonly<Record<string, Readonly<Record<string, number>>>>;
+}
+
+/** THE OCCUPIED LAW (shard M1-W3): does a player's World stand in `zoneId`?
+ *  The readers whose job is "never act on ground a player stands in" ask this
+ *  (the warband pump, the deadwake's consume, the plague's patient zero, the
+ *  conclave's targeting); solo it is `zoneId === currentZoneId`. */
+export function zonePresent(view: OverlayView, zoneId: string): boolean {
+  return view.presentZoneIds ? view.presentZoneIds.includes(zoneId) : zoneId === view.currentZoneId;
+}
+
+/** THE OCCUPIED LAW's census: the live enemy headcount of a zone a player's
+ *  World stands in, undefined anywhere else (solo: `census` for the current
+ *  zone alone). The faction field's live-census diffusion reads it. */
+export function presentCensus(view: OverlayView, zoneId: string): Readonly<Record<string, number>> | undefined {
+  if (view.censusByZone) return view.censusByZone[zoneId];
+  return zoneId === view.currentZoneId ? view.census : undefined;
 }
 
 /**

@@ -1,4 +1,6 @@
 import { massTerrainRegions } from './contracts';
+import { massFocusRoundRobin } from './foci';
+import { massCompileInput } from './compilePort';
 import type { Vec2 } from '../core/math';
 import { Rng } from '../core/rng';
 import type { World } from '../engine/world';
@@ -158,8 +160,8 @@ export class MassProcessionGameplay {
       boxes: boxes.filter(b => b.minX - b.padding <= extent && b.maxX + b.padding >= -extent && b.minY - b.padding <= extent && b.maxY + b.padding >= -extent), capsules };
     if (geometry.circles.length + geometry.boxes.length + geometry.capsules.length > PROCESSION_ROUTE_POLICY.maxReservations) return null;
     const reservations = { ...geometry, revision: massDigest(geometry) };
-    return freezeData(clone({ compiler: PROCESSION_PLAN_COMPILER, policy: PROCESSION_ROUTE_POLICY, run: this.mass.generator.run, terrain,
-      owner, context, selection, selectionReceipt: nativeGeographicSelectionReceipt(this.hierarchy.seed, owner.id, selection), regions, patches, reservations }));
+    return massCompileInput({ compiler: PROCESSION_PLAN_COMPILER, policy: PROCESSION_ROUTE_POLICY, run: this.mass.generator.run, terrain,
+      owner, context, selection, selectionReceipt: nativeGeographicSelectionReceipt(this.hierarchy.seed, owner.id, selection), regions, patches, reservations });
   }
   preparationInput(at: MassAddress): Readonly<ProcessionPlanInput> | null { return this.request(this.hierarchy.at(at).zone); }
   private current(input: Readonly<ProcessionPlanInput>): boolean {
@@ -184,7 +186,7 @@ export class MassProcessionGameplay {
     } catch (e) { this.validation = null; this.warm.fail(String(e instanceof Error ? e.message : e)); }
     finally { this.counters.maxValidationSliceMs = Math.max(this.counters.maxValidationSliceMs, performance.now() - start); }
   }
-  prepare(at: MassAddress, now: number): void {
+  prepare(at: MassAddress, now: number, otherFoci: readonly MassAddress[] = []): void {
     if (this.disposed || !this.sources.length) return; if (!Number.isFinite(now) || now < 0) throw Error('Invalid procession preparation clock');
     this.advancePreparation(); if (now < this.nextPrepare || this.warm.stats.disposed) return; this.nextPrepare = now + .5;
     let delta = { x: 0, y: 0 }; if (this.prepareFrom) try { delta = localOffset(at, this.prepareFrom, this.mass.config.terrain.addressSpan, 64); } catch { /* dimension/jump: prepare around new location */ }
@@ -192,8 +194,13 @@ export class MassProcessionGameplay {
     const ahead = moveAddress(at, { x: length > 1 ? delta.x / length * zoneSpan : 0, y: length > 1 ? delta.y / length * zoneSpan : 0 }, span), middle = this.hierarchy.at(ahead).zone;
     const lower = moveAddress(middle.origin, { x: -zoneSpan * 2, y: -zoneSpan * 2 }, span), owners = [...this.hierarchy.intersections('zone', massAddressBounds(lower, zoneSpan * 5, zoneSpan * 5, span))];
     owners.sort((a, b) => { const aa = localOffset(a.center, ahead, span, 64), bb = localOffset(b.center, ahead, span, 64); return aa.x * aa.x + aa.y * aa.y - bb.x * bb.x - bb.y * bb.y || a.id.localeCompare(b.id); });
+    const focusOwners=massFocusRoundRobin([owners,...otherFoci.map(f=>{
+      const middle=this.hierarchy.at(f).zone,lower=moveAddress(middle.origin,{x:-zoneSpan*2,y:-zoneSpan*2},span);
+      return [...this.hierarchy.intersections('zone',massAddressBounds(lower,zoneSpan*5,zoneSpan*5,span))]
+        .sort((a,b)=>{const aa=localOffset(a.center,f,span,64),bb=localOffset(b.center,f,span,64);return aa.x*aa.x+aa.y*aa.y-bb.x*bb.x-bb.y*bb.y||a.id.localeCompare(b.id);});
+    })],o=>o.id);
     const requests: Readonly<ProcessionPlanInput>[] = [];
-    for (const owner of owners) {
+    for (const owner of focusOwners) {
       if (this.born.has(owner.id) || this.validation?.input.owner.id === owner.id) continue;
       if (this.plans.get(owner.id)) continue;
       const input = this.request(owner), negative = this.negativeInputs.get(owner.id);
@@ -201,7 +208,7 @@ export class MassProcessionGameplay {
       if (input) { this.plans.delete(owner.id); this.negativeInputs.delete(owner.id); requests.push(input); }
       else { this.cache(owner, null); this.counters.sourceNegatives++; }
     }
-    this.warm.offer(requests);
+    this.warm.offer(requests.slice(0,64));
   }
   /** Explicit tooling only. Pure geometry is cached but grants no live proof,
    * cart, road, reservation, discovery, reward or scene mutation. */
@@ -222,7 +229,7 @@ export class MassProcessionGameplay {
   private host(world: World): MassProcessionHost {
     this.lastWorld = world;
     return { world, get now() { return world.time; }, local: at => this.local(at), address: at => this.mass.walk.at(at.x, at.y),
-      availablePopulation: owner => this.mass.availablePopulation(owner), createCart: request => world.createMassProcessionCart(request), createAmbush: request => world.createMassProcessionAmbush(request),
+      availablePopulation: (owner,at) => this.mass.availablePopulation(owner,at), createCart: request => world.createMassProcessionCart(request), createAmbush: request => world.createMassProcessionAmbush(request),
       reachable: (player, cart, reach) => world.massProcessionReachable(player, cart, reach), steering: (cart, target) => world.massProcessionSteering(cart, target),
       installRoad: (owner, rows) => world.installMassProcessionRoad(owner, rows, at => this.local(at)), installChest: (owner, chest) => world.installMassObjectiveChest(owner, chest),
       complete: (owner, zone) => world.completeMassObjective(owner, zone, ''), wreck: (owner, zone, at, seed, source) => world.massProcessionWreck(owner, zone, at, seed, source) };
@@ -266,8 +273,8 @@ export class MassProcessionGameplay {
           if (!this.sameStamp(pending.stamp, this.stamp(world))) { pending.steps = this.checkScene(pending.entry, world); pending.stamp = this.stamp(world); this.counters.coldRestarts++; return; }
           const plan = pending.entry.plan;
           if (!this.current(plan.input)) { this.plans.delete(plan.owner.id); this.cold = null; this.nextPrepare = 0; return; }
-          const near = this.nearby(plan.entry); if (!near || Math.hypot(near.x - world.player.pos.x, near.y - world.player.pos.y) > this.mass.config.pageRadius * this.mass.config.terrain.addressSpan - 160) { this.cold = null; return; }
-          const host = this.host(world); if (this.mass.availablePopulation(plan.owner.id) < 1 + plan.context.config.puffCap || this.processions.residentCount >= this.processions.policy.maxResident) { this.cold = null; return; }
+          const near = this.nearby(plan.entry); if (!near || this.mass.focusDistance(world,near) > this.mass.config.pageRadius * this.mass.config.terrain.addressSpan - 160) { this.cold = null; return; }
+          const host = this.host(world); if (this.mass.availablePopulation(plan.owner.id,near) < 1 + plan.context.config.puffCap || this.processions.residentCount >= this.processions.focusLimit) { this.cold = null; return; }
           const birthStarted = performance.now(), roadPolicy: ProcessionRoadPolicy = { version: 1, source: 'engine/levelgen/layTraveledWay',
             seed: streamSeed(this.hierarchy.seed, [plan.owner.id, 'native-procession-road']), frame: this.mass.walk.at(0, 0), kind: 'road', overgrowth: 0, band: [16, 22], step: 30 };
           const rows = world.createMassProcessionRoad(plan.owner.id, roadPolicy.seed, plan.route.points.map(at => this.local(at)), roadPolicy)
@@ -286,8 +293,11 @@ export class MassProcessionGameplay {
   /** First call restores funded history before other optional population. */
   sync(world: World): void {
     if (this.disposed) return; this.lastWorld = world; if (world.time < this.nextSync) return; this.nextSync = world.time + .5;
-    const span = this.mass.config.terrain.addressSpan, at = this.mass.walk.at(world.player.pos.x, world.player.pos.y), lower = moveAddress(at, { x: -2400, y: -2400 }, span);
-    const owners = this.hierarchy.intersections('zone', massAddressBounds(lower, 4800, 4800, span)), host = this.host(world);
+    const span = this.mass.config.terrain.addressSpan;
+    const owners = massFocusRoundRobin(this.mass.focusPoints(world).map(f=>{
+      const at=this.mass.walk.at(f.pos.x,f.pos.y),lower=moveAddress(at,{x:-2400,y:-2400},span);
+      return this.hierarchy.intersections('zone',massAddressBounds(lower,4800,4800,span));
+    }),o=>o.id), host = this.host(world);
     this.processions.sync(owners, host);
     for (const owner of owners) {
       if (this.processions.has(owner.id)) continue;
@@ -295,11 +305,11 @@ export class MassProcessionGameplay {
         const saved = this.hierarchy.controller(owner.id, ACCESS)!.definition as SavedAccess;
         this.processions.admit(owner, born.plan.context, born.plan.route, host, born.plan.chestPosition ?? undefined, saved.road); continue;
       }
-      const entry = this.plans.get(owner.id); if (!entry || this.cold || this.mass.availablePopulation(owner.id) < 1 + entry.plan.context.config.puffCap) continue;
+      const entry = this.plans.get(owner.id); if (!entry || this.cold || this.mass.availablePopulation(owner.id,this.local(entry.plan.entry)) < 1 + entry.plan.context.config.puffCap) continue;
       if (!this.current(entry.plan.input)) { this.plans.delete(owner.id); this.nextPrepare = 0; continue; }
       if (entry.refused && this.sameStamp(entry.refused, this.stamp(world))) continue;
       entry.refused = undefined;
-      const q = this.nearby(entry.plan.entry); if (!q || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.mass.config.pageRadius * span - 160) continue;
+      const q = this.nearby(entry.plan.entry); if (!q || this.mass.focusDistance(world,q) > this.mass.config.pageRadius * span - 160) continue;
       this.cold = { entry, steps: this.checkScene(entry, world), stamp: this.stamp(world) };
     }
   }
@@ -307,6 +317,8 @@ export class MassProcessionGameplay {
   capture(): void { if (this.lastWorld) this.processions.capture(this.host(this.lastWorld)); }
   snapshot() { this.capture(); return this.hierarchy.snapshot(); }
   get population(): number { return this.processions.population; }
+  massPopulationSlots(){return this.processions.massPopulationSlots();}
+  massReservationSlots(exceptOwner?:string){return this.processions.massReservationSlots(at=>this.local(at),exceptOwner);}
   reservedPopulation(exceptOwner?: string): number { return this.processions.reservedPopulation(exceptOwner); }
   get warmStats() { return { ...this.counters, queue: this.warm.stats, validating: this.validation?.input.owner.id ?? null, checking: this.cold?.entry.plan.owner.id ?? null, cached: this.plans.size, born: this.born.size, disposed: this.disposed }; }
   dispose(): void { if (this.disposed) return; this.disposed = true; this.warm.dispose(); this.validation = null; this.cold = null; this.plans.clear(); this.negativeInputs.clear(); }

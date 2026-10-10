@@ -36,6 +36,7 @@ import { makeSkillGemItem, makeSupportGemItem, rebuildAnyItem } from '../engine/
 import { autoPlace } from '../engine/inventory';
 import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
+import type { Actor } from '../engine/actor'; // throngRowsOf's hero
 import { emptyAbilityEssences, emptyEssences, MAX_LEARNED_SKILLS, type PlayerMeta, type Seat, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
 import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused, saveSuppressed } from './persistence';
@@ -298,33 +299,7 @@ export function serializeCharacter(world: World): CharacterSave {
     // THE THRONG: rosters aggregate to one row per anchor skill (count +
     // the highest body level — claims re-level on restore anyway); the
     // claim ledger rides whole (keys are tiny, stale ones harmless).
-    throng: (() => {
-      const rows = new Map<string, { skillId: string; defId: string; level: number; count: number }>();
-      for (const a of world.actors) {
-        if (a.dead || a.owner !== hero || !a.defId) continue;
-        if (!a.sourceSkillId?.startsWith('__throng:')) continue;
-        const skillId = a.sourceSkillId.slice('__throng:'.length);
-        const morphKey = `${skillId}:${a.defId}`;
-        const row = rows.get(morphKey);
-        if (row) { row.count += a.throngUnits ?? 1; row.level = Math.max(row.level, a.level); }
-        else rows.set(morphKey, { skillId, defId: a.defId, level: a.level, count: a.throngUnits ?? 1 });
-      }
-      // THE LITE TIER (engine/lite.ts): a lite-tier anchor's pool rows join
-      // its count — the roster resumes at full strength either way.
-      for (const s of hero.skills) {
-        const spec = s?.def.throng;
-        if (!spec || spec.tier !== 'lite') continue;
-        const kindIdx = world.liteKindOf(spec.monsterId);
-        if (kindIdx < 0) continue;
-        const n = world.lite.countOwned(hero.id, kindIdx);
-        if (!n) continue;
-        const morphKey = `${s!.def.id}:${spec.monsterId}`;
-        const row = rows.get(morphKey);
-        if (row) row.count += n;
-        else rows.set(morphKey, { skillId: s!.def.id, defId: spec.monsterId, level: hero.level, count: n });
-      }
-      return [...rows.values()];
-    })(),
+    throng: throngRowsOf(world, hero),
     throngClaimed: [...world.throngClaimed],
     ...(world.annexFound.size ? { annexFound: [...world.annexFound] } : {}),
     // THE PRIMED POUR: paid, unreleased sips ride the save whole.
@@ -345,6 +320,40 @@ export function serializeCharacter(world: World): CharacterSave {
       })),
     } : {}),
   };
+}
+
+/** THE THRONG's save rows for one hero (throngRowsOf): every gathered roster
+ *  aggregated to one row per anchor skill and form (count + the highest body
+ *  level — claims re-level on restore anyway), lite-tier pool rows joined to
+ *  their anchor's count so the roster resumes at full strength either way.
+ *  The local save and THE SHARD's vessel mirror (server/vessel.ts) both read
+ *  their hero's rosters through this one fold. */
+export function throngRowsOf(world: World, hero: Actor): { skillId: string; defId: string; level: number; count: number }[] {
+  const rows = new Map<string, { skillId: string; defId: string; level: number; count: number }>();
+  for (const a of world.actors) {
+    if (a.dead || a.owner !== hero || !a.defId) continue;
+    if (!a.sourceSkillId?.startsWith('__throng:')) continue;
+    const skillId = a.sourceSkillId.slice('__throng:'.length);
+    const morphKey = `${skillId}:${a.defId}`;
+    const row = rows.get(morphKey);
+    if (row) { row.count += a.throngUnits ?? 1; row.level = Math.max(row.level, a.level); }
+    else rows.set(morphKey, { skillId, defId: a.defId, level: a.level, count: a.throngUnits ?? 1 });
+  }
+  // THE LITE TIER (engine/lite.ts): a lite-tier anchor's pool rows join
+  // its count — the roster resumes at full strength either way.
+  for (const s of hero.skills) {
+    const spec = s?.def.throng;
+    if (!spec || spec.tier !== 'lite') continue;
+    const kindIdx = world.liteKindOf(spec.monsterId);
+    if (kindIdx < 0) continue;
+    const n = world.lite.countOwned(hero.id, kindIdx);
+    if (!n) continue;
+    const morphKey = `${s!.def.id}:${spec.monsterId}`;
+    const row = rows.get(morphKey);
+    if (row) row.count += n;
+    else rows.set(morphKey, { skillId: s!.def.id, defId: spec.monsterId, level: hero.level, count: n });
+  }
+  return [...rows.values()];
 }
 
 /** Rebuild a SkillInstance; returns null for an unknown skill id (caller skips).
@@ -710,8 +719,12 @@ export function savedCharacterPatronId(): string | undefined {
     return isCurrentCharacterSave(data)&&typeof data?.charId==='string'&&data.charId.length>0?data.charId:undefined;
   } catch { return undefined; }
 }
-export function loadCharacter(): CharacterSave | null {
-  const data = cachedCharacter(CHAR_SLOT);
+/** The synchronous cache read of one slot (the shared run slot unless named),
+ *  never written: the menu's instant Continue label, and THE TRAVELING
+ *  VESSEL's fallback for a roster slot too (meta/shardVessel.ts: the bedside
+ *  wake's own write may not have reached the disk when its hero travels). */
+export function loadCharacter(slot = CHAR_SLOT): CharacterSave | null {
+  const data = cachedCharacter(slot);
   return isCurrentCharacterSave(data) ? data : null;
 }
 
@@ -1128,6 +1141,38 @@ export function serializeCouchGuest(
     deaths: (seat.couchDeaths ?? []).map(d => ({ ...d })),
     // world: deliberately absent — a guest save carries no ground.
   };
+}
+
+/** THE SHARD MIRROR (saveVesselMirror — docs/engine/shard.md "The vessel and
+ *  the corpse"): a hosted world mirrors a traveling vessel home as a
+ *  CharacterSave with NO world half (the couch guest's shape: the shard keeps
+ *  the ground). Written the way a couch guest's vessel is, routed like the
+ *  character's own saves: a run-mode vessel takes the shared Continue slot
+ *  (its next solo Continue wakes it on fresh ground), a roster vessel its own
+ *  slot by charId (a lost card writes nothing) with its card refreshed as
+ *  syncRosterEntry refreshes it, never touching the shared Continue (THE
+ *  IMMORTAL TRAVELS — balance/probe_shardimmortal.ts). Returns the slot
+ *  written, -1 when refused (a world half, a stale schema, the stand-down latch). */
+export function saveVesselMirror(account: Account, save: CharacterSave, durable = false): number {
+  if (saveRefused('shard vessel')) return -1;
+  if (!isCurrentCharacterSave(save) || save.world !== undefined) return -1;
+  const entry = modeById(save.modeId).save === 'roster' ? account.roster.find(r => r.charId === save.charId) : undefined;
+  const slot = modeById(save.modeId).save === 'roster' ? entry?.slot ?? -1 : CHAR_SLOT;
+  if (slot < 0) return -1;
+  let body: string;
+  try { body = JSON.stringify(save); }
+  catch (e) { console.error('[save] shard vessel mirror threw — nothing written:', e); return -1; }
+  writeCharacterMirror(slot, body);
+  if (durable) diskBeacon(slot, body); else diskPut(slot, body);
+  if (entry) {
+    entry.classId = save.classId;
+    entry.name = save.name?.trim() || entry.name;
+    entry.level = save.level;
+    entry.stage = save.modeStage ?? entry.stage;
+    entry.savedAt = Date.now();
+    if (durable) saveAccountDurable(account); else saveAccount(account);
+  }
+  return slot;
 }
 
 /** Persist one couch guest vessel to its roster slot + refresh its index

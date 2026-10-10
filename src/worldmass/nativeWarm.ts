@@ -1,6 +1,7 @@
 import type { NativeFeaturePlacement } from './nativeResidency';
 import { nativeFeatureSourceIdentity } from './nativeFeatures';
 import { canonical, freezeData } from './random';
+import { massCompilePort } from './compilePort';
 import { type NativeCompileJob, type NativeCompileReply, type NativeFeaturePreparation } from './nativePreparation';
 
 export interface NativeCompilePort {
@@ -105,6 +106,7 @@ export class NativeFeatureWarmQueue {
     inflight:this.inflight?1:0,disposed:this.stopped,error:this.error};}
 }
 export function createNativeFeatureWarmQueue(config?:NativeWarmConfig):NativeFeatureWarmQueue|null{
+  const port=massCompilePort('native');if(port)return new NativeFeatureWarmQueue(port,config);
   if(typeof Worker==='undefined')return null;
   try{return new NativeFeatureWarmQueue(new Worker(new URL('./nativeCompile.worker.ts',import.meta.url),{type:'module',name:'native-country-compiler'}),config);}
   catch{return null;}

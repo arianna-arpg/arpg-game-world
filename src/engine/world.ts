@@ -7,7 +7,7 @@ import { nativeRelayStatus, type NativeStatusRelaySources, type NativeStatusRela
 import { createNativeMonster, stampNativeMonsterLevel, armNativeMonsterAmbush, type NativeMonsterFactoryHost, type NativeMonsterFactorySources } from './nativeMonsterFactory';
 import { nativeSimView, nativeBaseTable, nativeEffectiveSpawn, nativeWildlifeTableFor, nativeCaveAirFor, nativeVerminPressure, type NativePopulationHost, type NativePopulationSources } from './nativePopulationResolution';
 import './nativePlacement';
-import { type NativePlacementHost } from './nativePlacement';
+import { nativeFarPoint, type NativePlacementHost } from './nativePlacement';
 import { nativeExitRoadAnnotations, nativeProcessionDestination, separateNativeExits, type NativeExitPreparationHost, type NativeExitPreparationSources } from './nativeExitPreparation';
 import { spawnNativeEncounterGroup, type NativeEncounterGroupHost } from './nativeEncounterGroup';
 import './nativeNavigation';
@@ -64,6 +64,8 @@ import { challengeOf } from './challengeSpec';
 import { companionBondOf, companionRecoverySeconds, COMPANION_CFG, type CompanionSaved } from './companionSpec';
 import { companionStanceIdOf, nextStanceId } from './companionStances';
 import { COMPANION_STANCES } from '../data/companionStances';
+import { PING_CUE } from '../data/identityCues';
+import { clampPingReach, prunePings, type WorldPing } from './pings';
 import { OdysseyRuntime } from './odyssey';
 import { NpcDialogueDirector } from './npcDialogues';
 import { siteZoneExits } from './exitSiting';
@@ -97,10 +99,11 @@ import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type MonsterPartDef, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
-import { NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
+import { HONEST_INPUT_CFG, NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
 import { SkillInputOrder } from './skillInputOrder';
 import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
 import { WorldMassRuntime, type MassAdventureSave } from '../worldmass/runtime';
+import { compactMass, type MassCheckpointOptions, type MassWorldCheckpoint } from '../worldmass/checkpoint';
 import { MASS_ZONE } from '../worldmass/preset';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { readTownPortals, type TownPortal, type TownPortalView } from './townportal';
@@ -167,7 +170,7 @@ import { presenceMul } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { updateScene, sceneInterceptFall, sceneNoteCast, type SceneRuntime } from './scenes';
 import { CLASSES, classOpeningSkills, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
-import '../data/coop';
+import { COOP_SCALING } from '../data/coop'; // keeperSeat: THE NEAR LAW's radius (the scale itself rides the scene service)
 import type { CouchSeatTag } from '../data/couch';
 import { SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
@@ -567,6 +570,8 @@ import { encounterBirthPlaceEncounters, encounterBirthEventDensityFor, encounter
 import { descentPlaceDescentDelver, descentMintDelverStock, descentEnterDescentZone, type NativeSceneDescentHost } from './nativeSceneDescent';
 
 import { harborHoldStateFor, harborBootQuay, harborBootHarborhold, harborResealDoor, harborRefreshHoldDress, harborHoldDressSpotOk, harborRefreshHoldServices, harborArmPortMercs, harborLandPartyAt, type NativeSceneHarborHost } from './nativeSceneHarbor';
+import type { RoadTicket, ShardUnitHost, ShardWorldLink } from './shardUnits'; // THE SIM UNITS (shard M1)
+import { ladderOfSpot, scanShardRoads, seatDoorOf, seatLadderOf, shardSpotOf, type CaveMouthRow, type RealmGateRow, type SealedRoadKind, type ShardRoadHost } from './shardRoads'; // THE ROADS PER PLAYER (shard M1 W2)
 
 import { nativeTheaterContextNow, nativeTheaterConcurrencyNow, nativeTheaterRunBeat, nativeTheaterPourRoom, nativeTheaterSpawn, nativeSpawnEventActor, nativeClampNear, nativeAnyAliveWithTag, nativeZoneEntryPos, type NativeSceneTheaterHost } from './nativeSceneTheater';
 import {nativeSkyFront,nativeRadiance,nativeRadianceCondHeld,type NativeSceneSkyHost} from './nativeSceneSky';
@@ -853,6 +858,22 @@ export const BOSS_BAR_CFG = {
  *  to this and counts down; the renderer normalizes against it to draw one
  *  smooth decaying bloom over the low-life vignette). */
 export const LOW_LIFE_FLASH_SEC = 0.45;
+
+/** THE ACTING SEAT (docs/engine/shard.md "The pieces"): one seat's HUD rows
+ *  for a screen this machine does not draw (World.seatHud → net/seatView.ts):
+ *  the newest refusal note, and the world time of the last hit it took below
+ *  its low-life line (the surge's clock). */
+export interface SeatHudRow { fn?: { text: string; at: number }; lhAt?: number }
+
+/** THE ACTING SEAT's dials. `worldChannels`: notice channels that are world
+ *  events by definition, heard by every player of a hosted world whoever
+ *  caused them (other channels go to the acting seat's party). */
+export const ACTING_SEAT_CFG = {
+  worldChannels: ['events', 'war'] as readonly string[],
+  /** Seconds a refusal note rides its seat's snapshots (SeatW.fn): long enough
+   *  that a skipped snapshot never loses it; the client floats it once. */
+  noteSec: 1.2,
+};
 
 /** THE GAZE tunables (World.updateGaze; ZoneTheme.gaze names the eye kinds).
  *  The stack cap and the cost of being SEEN live on the STATUS DEFS (beheld →
@@ -1460,6 +1481,15 @@ interface FloatingText {
   yieldToCombat?: boolean;
   /** Exact native gear identity; clients may collapse its duplicate ground announcement. */
   dropUid?: number;
+  /** THE WIRE'S EYES: a damage or heal number's credited seat (World.seatText /
+   *  creditFloat), stamped on a hosted world alone; the client's floatOwners dial reads it. */
+  seat?: string;
+}
+
+/** THE WIRE'S EYES: fold one DoT tick's credited seat into its window's (undefined = no tick
+ *  yet; a seat id = every tick so far was that seat's; null = mixed or unauthored). */
+function foldDotSeat(window: string | null | undefined, tick: string | null): string | null {
+  return window === undefined || window === tick ? tick : null;
 }
 
 /** THE DISSOLUTION GRAMMAR's live break record (World.dissolves — the flash
@@ -1779,6 +1809,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     // both untrusted strings the mutator re-resolves against the registries.
     case 'companionStance':
       return (a.skillId === undefined || isStr(a.skillId)) && (a.stance === undefined || isStr(a.stance));
+    case 'ping': return Number.isFinite(a.x) && Number.isFinite(a.y); // THE PING: a finite point (placePing clamps the reach)
     case 'levelSkill': return isStr(a.skillId);
     // THE SACRIFICIAL FONT's recipes (data/essences.ts FONT_CFG): rarities
     // are a closed vocabulary, tiers untrusted client integers (the
@@ -1802,6 +1833,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     // group's def id (untrusted — the recall re-resolves both in-seat).
     case 'recallMemory': return isIdx(a.uid) && isStr(a.dropper) && (a.facet === undefined || isStr(a.facet));
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
+    case 'waypoint': return isStr(a.zoneId); // THE ROADS PER PLAYER: a zone id (travelToWaypoint re-judges the attuned set)
     case 'harborChart': return isStr(a.omen); // the rumored seat's omen id
     // THE BOUNTY BOARD: posting ids are untrusted strings — every handler
     // re-resolves them against the live slate/hands and no-ops on a miss.
@@ -2019,6 +2051,13 @@ export interface Seat {
    *  way charDeaths rides the local save) — seeded at join, appended by a
    *  party wipe, written back by the guest persist. */
   couchDeaths?: DeathRecord[];
+  /** THE KEEPER SEAT (keeperSeat — docs/design/shard-world.md §3.2): set on
+   *  a HOSTED world's parked p0 — the body the world-level reads address
+   *  when no player stands near. Exempt from party scale and XP, absent from
+   *  the wire, never a reviver by reach; its `reviveSec` is THE MERCY: a
+   *  downed seat with no standing ally rises after that many seconds.
+   *  Absent everywhere else; its absence IS the solo invariant. */
+  keeper?: { reviveSec: number };
   /** World time of this seat's last deliberate action — its private dwell clock. */
   lastActedAt: number;
   /** THE SHIMMY LAW's clock: world seconds of this seat's last WILLED step
@@ -2796,9 +2835,27 @@ export class World {
    *  host instead of applying it locally. Absent on the host / single-player, where
    *  requestMeta applies the mutation directly. */
   clientActionHook?: (action: MetaAction) => void;
+  /** THE ECHO LAW (net/shell.ts, docs/engine/shard.md THE SMOOTH SHELL): set beside
+   *  clientActionHook on a render shell; told when requestMeta ALSO applied the intent
+   *  locally (optimistic), so the shell holds that state against older snapshots until
+   *  the host echoes the action. Absent on every host and solo world. */
+  clientOptimistic?: (action: MetaAction) => void;
   /** CO-OP prediction: the last input SEQ the host has applied per seat — echoed in
    *  SeatW so a client replays its unacked inputs from the authoritative position. */
   readonly lastInputSeq = new Map<string, number>();
+  /** THE TIME BUDGET's ledger (net/intent.ts HONEST_INPUT_CFG, docs/engine/shard.md):
+   *  per seat, the walking seconds it may still claim (credit), the input clock at
+   *  its last walk (at) and the seconds the budget refused it (refused: a speed
+   *  hack's, or a stall past the bank). Opened by a seat's first dt-carrying input;
+   *  transient (never saved, never wired); leaves with the seat. */
+  readonly moveBudget = new Map<string, { credit: number; at: number; refused: number }>();
+  /** THE TIME BUDGET's clock: the raw seconds applyInputs was handed (the tick's dt,
+   *  never bent by timeflow), plus the wall a stalled host dropped (passInputTime). */
+  private inputClock = 0;
+  /** THE HONEST INPUT on a render shell: the walk fold (speed, traction) the shell's
+   *  OWN hero wears, read off its seat row (SeatW spd/trc) by applySnapshot, so the
+   *  predicted moveActor walks at the host's pace. Null on every host and solo world. */
+  ownWalk: { spd: number; trc: number } | null = null;
 
   /** The LOCAL hero. A read-only getter over the local seat so the ~90 existing
    *  `this.player` reads keep working unchanged while the roster goes multi-seat. */
@@ -3476,7 +3533,7 @@ export class World {
    *  turnInBounty and printed by the re-opened board while fresh
    *  (bountyBoardView.receipt). Transient by design: never saved, never
    *  wired — a client reads its notice; the host's board reads the slip. */
-  bountyReceipt: { boardId: string; title: string; pay: string; failed: boolean; at: number } | null = null;
+  bountyReceipt: { boardId: string; title: string; pay: string; failed: boolean; at: number; /** THE BOARD PER SEAT: the seat it printed for (hosted worlds). */ seat?: string } | null = null;
   /** ONE-SHOT: the Sacrificial Font dwell — the main loop opens the Font
    *  screen (Merge / Convert / Reset; docs/design/skill-modes.md §7). */
   fontDwellRequested = false;
@@ -3654,6 +3711,9 @@ export class World {
   walk: WalkField | null = null;
   /** Opt-in worldmass expedition; page residency does not own combat lifetime. */
   massRuntime: WorldMassRuntime | null = null;
+  /** Dedicated hosts have no terrain painter. Physics still samples exact
+   * ground on demand; clients build their own visual pages from the seed. */
+  massRenderPages = true;
   startWorldMass(seed = rollSeed(), save?: MassAdventureSave | MassResidentResume,
     options?: { restoreOnly?: boolean }): void {
     this.massAway = null;
@@ -4542,7 +4602,10 @@ export class World {
     startingCompanions?: boolean;
     startingFlasks?: boolean;
     /** THE OPENING (meta/classkit.ts): the resolved kit bar — see makePlayerSeat. */
-    kit?: readonly (string | null)[] }): void {
+    kit?: readonly (string | null)[];
+    /** THE UNIT WARDEN (shard M1, engine/shardUnits.ts): false stands the hero
+     *  without loading the hearth; a sim unit loads its own zone after. */
+    load?: boolean }): void {
     // The local seat is this client's own hero (camera + input anchor). Input is
     // a placeholder until main.ts wires the OS reader (Phase 4); single-player
     // reads it through the `player`/`meta` getters exactly as before.
@@ -4565,7 +4628,7 @@ export class World {
     this.actors.push(this.localSeat.actor);
     // Roster lifecycle: the local hero joins the party (drives the party UI).
     this.events.emit('party/join', { actor: this.localSeat.actor, seat: 'p0' });
-    this.loadZone(START_ZONE);
+    if (opts?.load !== false) this.loadZone(START_ZONE); // THE UNIT WARDEN (shardUnits): a unit loads its own zone
     if (opts?.startingCompanions !== false) this.grantStartingCompanions();
     if (opts?.startingFlasks !== false) this.dealVeteranFlasks();
   }
@@ -4610,6 +4673,7 @@ export class World {
     const seat = this.seats[i];
     this.seats.splice(i, 1);
     this.spentPresses.delete(id); // THE SPENT PRESS leaves with the hand
+    this.moveBudget.delete(id); // THE TIME BUDGET leaves with it
     this.actors = this.actors.filter(a => a !== seat.actor && a.owner !== seat.actor);
     this.indexSeats();
     this.events.emit('party/leave', { actor: seat.actor, seat: id });
@@ -5194,8 +5258,10 @@ export class World {
    *  looped over the roster. Dead/downed seats are skipped. `aim` is world-space. */
   applyInputs(inputs: Map<string, PlayerInput>, dt: number): void {
     this.doorPressIntents = null;
+    this.inputClock += dt; // THE TIME BUDGET's clock: raw seconds, never bent by timeflow
     for (const seat of this.seats) {
       const a = seat.actor;
+      this.actingSeat = seat; // THE ACTING SEAT: what this seat's hands cause is this seat's
       const inp = inputs.get(seat.id);
       // ACK the input seq even when the seat can't act (dead/downed) — so the
       // client's prediction history stays trimmed and never replays stale inputs.
@@ -5234,7 +5300,11 @@ export class World {
       // once, including paused/dead frames; a stale input cannot open a door.
       if ((inp.dx || inp.dy) && !inp.held.some(Boolean) && !inp.edge.some(Boolean) && !inp.metaEdge?.some(Boolean))
         (this.doorPressIntents ??= new Map()).set(seat.id, vec(inp.dx, inp.dy));
-      this.moveActor(a, inp.dx, inp.dy, tf === 1 ? dt : dt * tf);
+      // THE HONEST INPUT (net/intent.ts HONEST_INPUT_CFG): a wire client's frames
+      // walk at the dt each was polled for, every frame of the tick's batch, under
+      // THE TIME BUDGET; an input with no dt walks the tick's dt exactly as ever.
+      if (inp.moves || inp.dt !== undefined) this.walkFrames(seat, a, inp, tf, dt);
+      else this.moveActor(a, inp.dx, inp.dy, tf === 1 ? dt : dt * tf);
       const aim = inp.aim;
       // LIVE aim for guided projectiles (guidePower) — refreshed every frame,
       // so a missile already in flight keeps chasing the moving cursor.
@@ -5279,7 +5349,7 @@ export class World {
             if (!this.improvisedHinted.has(a)) {
               // Found, not taught: the first swing names itself once.
               this.improvisedHinted.add(a);
-              this.text(vec(a.pos.x, a.pos.y - 46),
+              this.seatNote(this.seatOf(a), vec(a.pos.x, a.pos.y - 46),
                 'Bare hands answer an empty slot (Options can quiet them)', '#b8b0a0', 13);
             }
           }
@@ -5319,6 +5389,7 @@ export class World {
       // Face the cursor/target while able, so swings read right.
       if (a.canAct()) a.facing = Math.atan2(aim.y - a.pos.y, aim.x - a.pos.x);
     }
+    this.actingSeat = null;
   }
 
   /** THE SPENT PRESS's ledger (net/intent.ts SPENT_PRESS_CFG — docs/engine/
@@ -5379,16 +5450,79 @@ export class World {
     spent.add(slot);
   }
 
+  /** THE HONEST INPUT (net/intent.ts HONEST_INPUT_CFG, docs/engine/shard.md): walk a
+   *  wire client's frames, each at the dt it was polled for (clamped as the client
+   *  clamps its frame), under THE TIME BUDGET. The seat's credit starts at graceSec,
+   *  refills with the input clock since its last walk and banks at most bankSec; a
+   *  frame that would walk past it walks only what is left, the rest refused (and
+   *  counted), so a speed hack walks no faster than the clock. A still frame claims
+   *  nothing. The rest of the input (aim, casts, edges) applies once, by the caller. */
+  private walkFrames(seat: Seat, a: Actor, inp: PlayerInput, tf: number, dt: number): void {
+    const cfg = HONEST_INPUT_CFG;
+    let b = this.moveBudget.get(seat.id);
+    if (!b) this.moveBudget.set(seat.id, b = { credit: cfg.graceSec, at: this.inputClock - dt, refused: 0 });
+    b.credit = Math.min(cfg.bankSec, b.credit + (this.inputClock - b.at));
+    b.at = this.inputClock;
+    const moves = inp.moves;
+    const n = moves ? Math.min(moves.length, cfg.maxBatch) : 1;
+    for (let i = 0; i < n; i++) {
+      const m = moves ? moves[i] : null;
+      const mx = m ? m[0] : inp.dx, my = m ? m[1] : inp.dy, claim = m ? m[2] : inp.dt;
+      let step = typeof claim === 'number' && claim > 0 ? Math.min(claim, cfg.maxMoveDt) : 0;
+      if (step > 0 && (mx || my)) {
+        if (step > b.credit) {
+          b.refused += step - b.credit;
+          step = b.credit;
+          if (step <= 0) continue; // refused whole: past the budget nothing walks
+        }
+        b.credit -= step;
+      }
+      this.moveActor(a, mx, my, tf === 1 ? step : step * tf);
+    }
+  }
+
+  /** THE TIME BUDGET runs on the wall: a host whose pump DROPS ticks (a stall past
+   *  its catch-up) credits the dropped seconds here before it catches up, so the
+   *  frames a client sent through the stall still walk (server/shardHost.ts pump). */
+  passInputTime(sec: number): void {
+    if (sec > 0 && Number.isFinite(sec)) this.inputClock += sec;
+  }
+
   /** Party size for ENEMY SCALING purposes — FRACTIONAL by design (coopScale
    *  is linear in the extra-player count, so partial seats compose exactly).
    *  Human seats count 1; a hired blade counts MERC_CFG.partyScaleWeight ×
    *  (1 − the patron's mercEase stat) — the Harborwarden's Fair Company node
    *  buys the weight down to the TRUE SOLO CURVE with the blades beside you.
    *  The one place hirelings touch difficulty, and every term is a dial. */
-  private partyScaleCount(): number { return scenePartyScaleCount(this.nativeScenePopulationHost()); }
+  /** keeperSeat: `at` is THE NEAR LAW's place — an enemy's scale counts the seats near IT (nativeScenePopulation). */
+  private partyScaleCount(at?: Vec2): number { return scenePartyScaleCount(this.nativeScenePopulationHost(), at); }
 
+  /** keeperSeat — THE NEAR LAW AT THE MINT: createMonster scales a body at its (0, 0)
+   *  placeholder before its caller seats it, so on a shard (a radius set) the scale is
+   *  queued and settled where the body actually stands (settleNearScale). */
+  private nearScaleDue: Actor[] = [];
   /** Set (or clear) the co-op party-size scaling source on one hostile enemy. */
-  private applyPartyScale(a: Actor): void { return applyScenePartyScale(this.nativeScenePopulationHost(),a); }
+  private applyPartyScale(a: Actor): void {
+    if (COOP_SCALING.shareRadius > 0 && a.pos.x === 0 && a.pos.y === 0) this.nearScaleDue.push(a); // keeperSeat: scaled at the placeholder, settled after the seat
+    return applyScenePartyScale(this.nativeScenePopulationHost(),a);
+  }
+  /** keeperSeat — THE NEAR LAW where bodies stand: the queued mints (every living enemy with
+   *  `every` — a join seats the newcomer beside the shadowed keeper before the shard moves it
+   *  to the hearth, and a leave re-reads every body) re-scaled by the seats near each one under
+   *  rescaleEnemies' life-fraction law, clamped so no rounded life tops a fractional maximum
+   *  (the engine's own law keeps its rounding — the seamless lane pins and replays it; a shard's
+   *  wilds save must resume "the same wounds", so the shard's settle is the one that clamps).
+   *  Off a shard the radius is 0 and the queue never fills: solo is byte-identical. */
+  settleNearScale(every = false): void {
+    const due = every ? this.actors : this.nearScaleDue.splice(0);
+    if (every) this.nearScaleDue.length = 0;
+    for (const a of due) {
+      if (a.dead || a.team !== 'enemy' || a.owner) continue;
+      const frac = a.maxLife() > 0 ? a.life / a.maxLife() : 1;
+      applyScenePartyScale(this.nativeScenePopulationHost(), a);
+      a.life = Math.min(a.maxLife(), Math.max(1, Math.round(a.maxLife() * frac)));
+    }
+  }
 
   /** Re-scale all LIVING enemies after a join/leave, PRESERVING each one's current
    *  life fraction — so a join can't heal a half-dead boss and a leave can't gib
@@ -5488,6 +5622,22 @@ export class World {
       if (!seat.actor.downed) { if (seat.reviveDwellBy.size) seat.reviveDwellBy.clear(); continue; }
       for (const ally of this.seats) {
         if (ally === seat || ally.actor.dead || ally.actor.downed) continue;
+        if (ally.keeper) {
+          // keeperSeat — THE MERCY: the warden revives by CLOCK, never by
+          // reach, and only once no other seat stands to kneel.
+          // THE ACTING SEAT: a body whose stage ends the run on death is the
+          // covenant's (server/vessel.ts), never the mercy's; and only a PARTY
+          // MATE within reach could kneel, so a stranger near never withholds it.
+          if (stageOf(seat.meta.modeId, seat.meta.modeStage).onDeath === 'end') { seat.reviveDwellBy.delete(ally.id); continue; }
+          const anyOther = this.seats.some(o => o !== seat && !o.keeper && !o.actor.dead && !o.actor.downed
+            && this.sameParty(seat, o)
+            && (COOP_SCALING.shareRadius <= 0 || dist(o.actor.pos, seat.actor.pos) <= COOP_SCALING.shareRadius)); // THE NEAR LAW
+          if (anyOther) { seat.reviveDwellBy.delete(ally.id); continue; }
+          const t = (seat.reviveDwellBy.get(ally.id) ?? 0) + dt;
+          seat.reviveDwellBy.set(ally.id, t);
+          if (t >= ally.keeper.reviveSec) { this.reviveSeat(seat); break; }
+          continue;
+        }
         // THE REVIVE RINGS: reach, discipline and clock are the 'revive'
         // transit row's (data/transit.ts) — the same row reviveTargetsView
         // draws the ring from, so drawn == dwelt by construction.
@@ -5637,6 +5787,7 @@ export class World {
    *  falling covenant fells the vessel (run over, no wipe), a
    *  death-surviving mode stage respawns, and permadeath ends the run. */
   private concludeWipe(): void {
+    if (this.localSeat.keeper) return; // keeperSeat: a hosted world never ends — its warden stands again next tick
     for (const seat of this.seats) this.loseBagRelicsOnDeath(seat);
     if (this.descentRun) { this.resurfaceFromDescent('died'); return; }
     // The world remembers the fall BEFORE the mode decides what it costs —
@@ -6584,7 +6735,7 @@ export class World {
     bumpLedger(this.ledger, e.def.ledger.onClose);
     const uncovered = clamp(run.peakRadius / e.scale.maxRadius, 0, 1);
     const mul = e.scale.rewardMul * (1 + uncovered * v.rewardUncoverBonus);
-    this.grantXp(Math.round((ENCOUNTER_CFG.reward.xpBase + this.zone.level * ENCOUNTER_CFG.reward.xpPerLevel) * mul));
+    this.grantXp(Math.round((ENCOUNTER_CFG.reward.xpBase + this.zone.level * ENCOUNTER_CFG.reward.xpPerLevel) * mul), e.pos); // XP BY PLACE
     const gems = 1 + Math.floor(mul);
     for (let i = 0; i < gems; i++) this.dropGemAt(e.pos);
     const lord = e.lordId ? courtLord(e.lordId) : undefined;
@@ -6679,7 +6830,7 @@ export class World {
     this.text(vec(e.pos.x, e.pos.y - 30), `${e.def.label} sealed!`, e.def.trigger.color, 18);
     this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: e.radius, color: e.def.trigger.color, life: 0.5, maxLife: 0.5 });
     const mul = e.scale.rewardMul;
-    this.grantXp(Math.round((ENCOUNTER_CFG.reward.xpBase + this.zone.level * ENCOUNTER_CFG.reward.xpPerLevel) * mul));
+    this.grantXp(Math.round((ENCOUNTER_CFG.reward.xpBase + this.zone.level * ENCOUNTER_CFG.reward.xpPerLevel) * mul), e.pos); // XP BY PLACE
     const gems = 1 + Math.floor(mul);
     for (let i = 0; i < gems; i++) this.dropGemAt(e.pos);
   }
@@ -6993,7 +7144,7 @@ export class World {
         { essence: ESSENCE_IDS[tier], count });
     }
     const xp = Math.round((y.xpBase + lvl * y.xpPerLevel) * e.scale.rewardMul * temper.yieldMul * frac);
-    if (xp > 0) this.grantXp(xp);
+    if (xp > 0) this.grantXp(xp, e.pos); // XP BY PLACE
   }
 
   /** Walk the dispersal orders: territorial bodies hold until their leaveAt;
@@ -7322,7 +7473,7 @@ export class World {
         this.accountDirty = true;
       }
       const xp = Math.round((spec.refugees.xpBase + spec.refugees.xpPerSurvivor * survivors.length) * e.scale.rewardMul);
-      if (xp > 0) this.grantXp(xp);
+      if (xp > 0) this.grantXp(xp, e.pos); // XP BY PLACE
       // The road out: dormant resolute walkers, wheeled by the world tick.
       for (const f of survivors) {
         f.tag = 'borough_refugee';
@@ -7991,6 +8142,9 @@ export class World {
    *  mint path (travel, quests, events, dev) stays visible as always. */
   private mintVeil = false;
   private forechartNextAt = 0;
+  /** THE OCCUPIED LAW's round-robin (shard M1-W3): the occupied zone the next
+   *  halo sweep centers on (a hosted world with more than one live World). */
+  private forechartTurn = 0;
   /** Far pre-chart requests being grown (deduped; each drops when its cluster
    *  reaches size or its ground proves unmintable). Transient by design — a
    *  resumed run's events re-request theirs (the drain re-asks every sweep). */
@@ -8054,14 +8208,18 @@ export class World {
     const haloBlocked = veiled >= FORECHART_CFG.maxVeiled;
     // The halo centers on the STANDING zone (a cave sweeps around its surface
     // anchor coordinate — def.map carries the parent's). Same-dimension only.
-    const dim = this.zone.dimension ?? 'surface';
-    const origin = this.zone.map;
+    // THE OCCUPIED LAW's many origins (shard M1-W3): a hosted world's halo
+    // round-robins over every occupied zone, one origin a sweep (solo: the one).
+    const posts = this.presentWorlds();
+    const stand = posts.length > 1 ? posts[this.forechartTurn++ % posts.length].zone : this.zone;
+    const dim = stand.dimension ?? 'surface';
+    const origin = stand.map;
     let budget = FORECHART_CFG.perSweep
       * (veiled < FORECHART_CFG.hustleBelow ? FORECHART_CFG.hustleMul : 1);
     const cands: { z: ZoneDef; d: number }[] = [];
     if (!haloBlocked) {
       for (const z of all) {
-        if (!forechartSource(z, dim) || z.id === this.zone.id) continue;
+        if (!forechartSource(z, dim) || z.id === stand.id) continue;
         const d = coordDist(z.map, origin);
         if (d <= FORECHART_CFG.ring) cands.push({ z, d });
       }
@@ -8204,12 +8362,20 @@ export class World {
   private updateOmens(): void {
     if (this.gameOver || this.time < this.omenNextAt) return;
     this.omenNextAt = this.time + OMEN_CFG.checkSec;
-    const here = this.zone.map;
-    const dim = this.zone.dimension ?? 'surface';
+    // THE OCCUPIED LAW (shard M1-W3): the world murmurs to every occupied
+    // zone; an omen reads from the nearest one of its plane (solo: the one).
+    const posts = this.presentWorlds();
     for (const o of collectOmens(this)) {
-      if ((o.dimension ?? 'surface') !== dim) continue;
+      const odim = o.dimension ?? 'surface';
+      let near: World | null = null, d = Infinity;
+      for (const w of posts) {
+        if ((w.zone.dimension ?? 'surface') !== odim) continue;
+        const dw = coordDist(o.at, w.zone.map);
+        if (!near || dw < d) { near = w; d = dw; }
+      }
+      if (!near) continue;
+      const here = near.zone.map;
       const reach = omenReach(o);
-      const d = coordDist(o.at, here);
       // THE REVEAL: near enough (or the omen has aged loud enough) — the seat
       // is surveyed onto the map, once per instance.
       if (reach.reveal > 0 && d <= reach.reveal && o.zoneId && !this.omenRevealed.has(o.id)) {
@@ -8243,10 +8409,17 @@ export class World {
         const n = this.omenWhisperN.get(o.id) ?? 0;
         this.omenWhisperN.set(o.id, n + 1);
         const key = hashStr(`${o.id}:${n}`);
-        const line = omenLine(o, o.lines[key % o.lines.length], here);
-        withSeededRandom(key, () => this.text(
-          vec(this.player.pos.x, this.player.pos.y - 110),
-          line, o.color ?? OMEN_CFG.color, OMEN_CFG.size));
+        // THE SPLIT DISPATCH (shard M1-W3): one whisper an omen, heard in every
+        // occupied zone within its reach, each with its own bearing, floated
+        // over that World's own player.
+        for (const w of posts) {
+          if ((w.zone.dimension ?? 'surface') !== odim) continue;
+          if (w !== near && coordDist(o.at, w.zone.map) > reach.whisper) continue;
+          const line = omenLine(o, o.lines[key % o.lines.length], w.zone.map);
+          this.atZone(w.zone.id, x => withSeededRandom(key, () => x.text(
+            vec(x.player.pos.x, x.player.pos.y - 110),
+            line, o.color ?? OMEN_CFG.color, OMEN_CFG.size)));
+        }
       }
     }
   }
@@ -8784,6 +8957,132 @@ export class World {
      *  story-seated mouth, and they pass its recorded story here. */
     tier?: number;
   }): void { return harborLandPartyAt(this.nativeSceneHarborHost(),at,opts); }
+
+  // ---- THE SIM UNITS (shard M1, engine/shardUnits.ts): the engine seams ----
+
+  /** THE FILTERED HOST (shard M1): one seat and its carried court land through
+   *  the one landing law (harborLandPartyAt: the story-aware clamp, the trail
+   *  break, the tier seat, the tether landing) with the cached harbor view
+   *  overridden to that seat alone, so a hand-off arrival never moves the
+   *  unit's other seats. Every carried body rides (THE CARRY SET may reach
+   *  past one hop), each counted as a rider of the landing. */
+  landSeatAt(seat: Seat, carry: readonly Actor[], at: Vec2, opts?: Parameters<World['landPartyAt']>[1]): void {
+    const view = Object.create(this.nativeSceneHarborHost()) as NativeSceneHarborHost;
+    Object.defineProperties(view, {
+      player: { value: this.seatHero(seat) },
+      seats: { value: carry.map(actor => ({ actor })) },
+      actors: { value: [...carry] },
+    });
+    harborLandPartyAt(view, at, opts);
+  }
+
+  /** THE PERSIST CAPTURE (shard M1): the live zone's PURE memory row (the
+   *  autosave's own capture, never the leave verbs) written into the shared
+   *  memory map, so the keeper's world save carries a zone awake in a unit. */
+  captureLiveMemory(): void {
+    const m = this.zoneMemorySnapshot();
+    if (m) this.zoneMemory.set(this.zone.id, m);
+  }
+
+  /** THE SLEEP (shard M1): a unit leaving play runs the departure's leave verbs
+   *  in loadZone's own order (the survivor scan, then the memory capture with
+   *  its conclave incubate and ledger), exactly as a seat leaving the zone does. */
+  sleepZone(): void {
+    this.scanNemesisSurvivors();
+    this.captureZoneMemory();
+  }
+
+  /** THE SPLIT DISPATCH's idiom (shard M1-W3): run `fn` on the World standing
+   *  in `zoneId` and return its answer (undefined when none does). Solo and
+   *  co-op it is the conditional it replaces (this zone, else nothing); on a
+   *  shard the keeper's sweeps reach the awake sim unit standing there, under
+   *  its own pin (ShardWorldLink.dispatch; from inside another unit the work
+   *  waits for the hand-off drain). */
+  atZone<T>(zoneId: string, fn: (w: World) => T): T | undefined {
+    if (zoneId === this.zone.id) return fn(this);
+    return this.shardWorld?.dispatch(zoneId, fn);
+  }
+
+  /** THE OCCUPIED LAW (shard M1-W3): every live World of a hosted world, this
+   *  keeper's own first, then each awake sim unit's; solo and co-op, this World
+   *  alone. The keeper sweeps that read "where the player is" walk it (the
+   *  forechart's origins, the omens, the floating roads, the conclave's
+   *  ignite level). Read-only: never a pinned read of another World's alias fields. */
+  presentWorlds(): readonly World[] {
+    return this.shardWorld?.worlds() ?? [this];
+  }
+
+  /** THE OCCUPIED LAW's audience: who hears a line gated on where players stand
+   *  (`where` judges each occupied zone). Solo: undefined when the standing
+   *  zone passes (the one player hears it, as ever), null when it does not. On
+   *  a hosted world: the player seats standing in the passing zones (null when
+   *  no occupied zone passes), so a tide's ebb or a war below reaches the
+   *  players it concerns and no one else. */
+  occupiedAudience(where: (z: ZoneDef) => boolean): string[] | undefined | null {
+    if (!this.shardWorld) return where(this.zone) ? undefined : null;
+    let any = false;
+    const to: string[] = [];
+    for (const w of this.presentWorlds()) {
+      if (!where(w.zone)) continue;
+      any = true;
+      for (const s of w.seats) if (!s.keeper) to.push(s.id);
+    }
+    return any ? to : null;
+  }
+
+  /** A notice for an occupied audience (occupiedAudience): undefined is
+   *  everyone, an empty list no one (the line is never minted). */
+  private noticeOccupied(to: string[] | undefined, text: string, color?: string, size?: number, channel?: string): void {
+    if (to && !to.length) return;
+    this.notice(text, color, size, channel);
+    if (to) this.notices[this.notices.length - 1].to = to;
+  }
+
+  private shardUnitView?: ShardUnitHost;
+  /** THE UNIT HOST VIEW (shard M1): the private reaches THE HAND-OFF and THE
+   *  WAKE need (engine/shardUnits.ts), beside the native host views. */
+  shardUnitHost(): ShardUnitHost {
+    if (this.shardUnitView) return this.shardUnitView;
+    const world = this;
+    const host: ShardUnitHost = {
+      indexSeats: () => world.indexSeats(),
+      grabRelease: a => world.grabRelease(a),
+      releaseContract: (a, respawn) => world.releaseContract(a, respawn),
+      liteOpenAt: (x, y) => world.liteOpenAt(x, y),
+      get relayStatus() { return world.relayStatus; },
+      get zoneEntry() { return world.zoneEntry; },
+      get adoptedZonePending() { return world.adoptedZonePending; }, set adoptedZonePending(v) { world.adoptedZonePending = v; },
+      get caveStack() { return world.caveStack; }, set caveStack(v) { world.caveStack = v; },
+      get harvestSessions() { return world.harvestSessions; },
+      get traceRuns() { return world.traceRuns; },
+      get pendingBursts() { return world.pendingBursts; },
+      get pendingContagions() { return world.pendingContagions; },
+      get companionGrants() { return world.companionGrants; },
+      get replenishment() { return world.replenishment; },
+    };
+    Object.defineProperty(this, 'shardUnitView', { value: host, writable: true, configurable: true, enumerable: false });
+    return host;
+  }
+
+  private shardRoadView?: ShardRoadHost;
+  /** THE ROADS PER PLAYER's host view (shard M1 W2): the private reaches the
+   *  shard scanner (engine/shardRoads.ts) needs, beside shardUnitHost. */
+  shardRoadHost(): ShardRoadHost {
+    if (this.shardRoadView) return this.shardRoadView;
+    const world = this;
+    const host: ShardRoadHost = {
+      get caveEntrances() { return world.caveEntrances; },
+      get caveStack() { return world.caveStack; },
+      get currentZoneSeed() { return world.currentZoneSeed; },
+      mouthRoad: (seat, cm) => world.shardMouthRoad(seat, cm),
+      exitRoad: (seat, e) => world.shardExitRoad(seat, e),
+      breakArenaSeal: seal => world.breakArenaSeal(seal),
+      failNote: (a, key, msg) => world.failNote(a, key, msg),
+      sealedRoadUnder: seat => world.sealedRoadUnder(seat),
+    };
+    Object.defineProperty(this, 'shardRoadView', { value: host, writable: true, configurable: true, enumerable: false });
+    return host;
+  }
 
   /** Shove freshly-generated hostiles off a pocket's entry ring
    *  (POCKET_CFG.arrivalGrace): outward along their own bearing when the
@@ -10901,6 +11200,8 @@ export class World {
       get time() { return world.time; }, get sim() { return world.sim; },
       get visited() { return world.visited; }, get surveyed() { return world.surveyed; },
       continentFor: c => world.continentFor(c), simView: () => world.simView(),
+      // THE OCCUPIED LAW (shard M1-W3): a hosted world's view reports every live World.
+      ...(world.shardWorld ? { presence: () => world.presentWorlds() } : {}),
     };
   }
   private static nativePopulationSources(): NativePopulationSources { return installedNativePopulationSources(); }
@@ -11653,8 +11954,7 @@ export class World {
     ff.touch(); // we're engaged in its zone — keep it from idling out
     const surge = ff.surge();
     if (run.phase === 'fissure') {
-      const chasing = !this.player.dead && !this.player.downed
-        && dist(this.player.pos, run.head) <= surge.chaseRadius + this.player.radius;
+      const chasing = this.touchers().some(h => dist(h.pos, run.head) <= surge.chaseRadius + h.radius); // THE ACTING SEAT: any standing player chases it
       if (chasing) {
         run.grace = 0; // first engagement SPENDS the arrival grace — nested rules own it now
         this.advanceFissure(dt, surge);
@@ -11746,7 +12046,7 @@ export class World {
     run.chasmsSealed++;
     bumpLedger(this.ledger, 'fracture_chasms_cleared');
     this.flashes.push({ pos: vec(at.x, at.y), radius: surge.chasm.radius, color: run.color, life: 0.5, maxLife: 0.5 });
-    this.grantXp(Math.round(surge.chasmRewardXp + this.zone.level * surge.chasmXpPerLevel));
+    this.grantXp(Math.round(surge.chasmRewardXp + this.zone.level * surge.chasmXpPerLevel), at); // XP BY PLACE
     this.dropGemAt(at);
     if (run.chasmsSealed < run.chasmsTarget) {
       run.phase = 'fissure';
@@ -11778,7 +12078,7 @@ export class World {
         // The marker first TRAVELS to the next zone (purely visual) before surfacing —
         // from this zone's node toward the destination's node.
         ff.divert(dest, this.zone.map, this.zoneMap[dest].map);
-        this.grantXp(Math.round((surge.chasmRewardXp + this.zone.level * surge.chasmXpPerLevel) * surge.divertRewardMul));
+        this.grantXp(Math.round((surge.chasmRewardXp + this.zone.level * surge.chasmXpPerLevel) * surge.divertRewardMul), at); // XP BY PLACE
         this.dropGemAt(at);
         this.flashes.push({ pos: vec(at.x, at.y), radius: 130, color: run.color, life: 0.7, maxLife: 0.7 });
         this.text(vec(at.x, at.y - 30),
@@ -11790,7 +12090,7 @@ export class World {
     }
     // No hops left (or nowhere to divert): the fracture is run through — big payout.
     bumpLedger(this.ledger, 'fractures_sealed');
-    this.grantXp(Math.round(surge.sealReward.xpBase + this.zone.level * surge.sealReward.xpPerLevel));
+    this.grantXp(Math.round(surge.sealReward.xpBase + this.zone.level * surge.sealReward.xpPerLevel), at); // XP BY PLACE
     for (let i = 0; i < surge.sealReward.gems; i++) this.dropGemAt(at);
     this.flashes.push({ pos: vec(at.x, at.y), radius: 150, color: run.color, life: 0.7, maxLife: 0.7 });
     this.text(vec(at.x, at.y - 36), 'The fracture collapses — sealed!', '#ffd700', 18);
@@ -12129,7 +12429,7 @@ export class World {
     bumpLedger(this.ledger, 'rituals_subdued');
     const cfg = this.sim.conclaveField?.surge().ritual;
     if (cfg) {
-      this.grantXp(Math.round(cfg.clearReward.xpBase + this.zone.level * cfg.clearReward.xpPerLevel));
+      this.grantXp(Math.round(cfg.clearReward.xpBase + this.zone.level * cfg.clearReward.xpPerLevel), site.center); // XP BY PLACE
       for (let i = 0; i < cfg.clearReward.gems; i++) this.dropGemAt(site.center);
     }
     this.flashes.push({ pos: vec(site.center.x, site.center.y), radius: (cfg?.pentagramRadius ?? 80) * 1.6, color: '#a86ad8', life: 0.7, maxLife: 0.7 });
@@ -13349,9 +13649,12 @@ export class World {
 
     // THE FRONT OUTLASTED: a witnessed gloaming that has fully receded banks
     // the survival ledger once, on the observed transition (resume-safe).
+    // THE SPLIT DISPATCH (shard M1-W3): every World watches its own edge and
+    // floats the word over its own players; the ledger (one, aliased) is
+    // banked by the keeper alone, so the edge counts once however many units wake.
     const phase = gf.phaseNow();
     if (this.gloamPrevPhase !== 'idle' && phase === 'idle' && gf.isWitnessed()) {
-      bumpLedger(this.ledger, 'gloaming_survived');
+      if (this.shardWorld?.role !== 'unit') bumpLedger(this.ledger, 'gloaming_survived');
       this.text(this.player.pos, 'the gloaming is outlasted', '#d8cfa8', 13);
     }
     this.gloamPrevPhase = phase;
@@ -14256,7 +14559,8 @@ export class World {
 
   castTownPortal(seat: Seat = this.localSeat): boolean {
     const reason = this.townPortalRefusal(seat);
-    if (reason) { this.text(seat.actor.pos, reason, TOWN_PORTAL_CFG.color, 13); return false; }
+    // THE ACTING SEAT (shard M1 W2, the intent re-opened): the refusal is the asking seat's own line.
+    if (reason) { this.seatNote(seat, seat.actor.pos, reason, TOWN_PORTAL_CFG.color, 13); return false; }
     if (seat.actor.casting) return false;
     return this.useSkill(seat.actor, makeSkillGem(SKILLS[TOWN_PORTAL_CFG.skillId], 1, 'common'), seat.actor.pos, true);
   }
@@ -14264,7 +14568,9 @@ export class World {
   /** Invoked by the utility skill's effect, after its ordinary cast completes. */
   private openTownPortal(seat: Seat): void {
     if (this.townPortalRefusal(seat)) return;
-    const origin = this.serializeWorldState().player;
+    // THE ROADS PER PLAYER (shard M1 W2): a hosted world's origin is the seat's
+    // own spot (its zone, its ladder, its door), never the unit's warden's.
+    const origin = this.shardWorld ? shardSpotOf(this, seat) : this.serializeWorldState().player;
     if (!origin) return;
     delete origin.vitals; // travelling never rolls back healing, costs or damage
     const at = seat.actor.pos;
@@ -14273,7 +14579,7 @@ export class World {
     const sourcePos = this.findFreeSpot(vec(at.x + TOWN_PORTAL_CFG.spawnOffset, at.y), 18, seat.actor.tier ?? 0);
     this.townPortals = this.townPortals.filter(p => p.owner !== seat.id);
     this.townPortals.push({ owner: seat.id, origin, originTier: seat.actor.tier ?? 0, sourcePos,
-      sourceEntryFrom: this.entryFrom ?? undefined, sourceSeed: this.currentZoneSeed, destination: this.townPortalDestination ?? TOWN_PORTAL_CFG.destination, returning: false });
+      sourceEntryFrom: (this.shardWorld ? seatDoorOf(this, seat) : this.entryFrom) ?? undefined, sourceSeed: this.currentZoneSeed, destination: this.townPortalDestination ?? TOWN_PORTAL_CFG.destination, returning: false });
     this.townPortalDwell.delete(seat.id);
     this.townPortalArrival.delete(seat.id);
     this.text(sourcePos, 'Town Portal', TOWN_PORTAL_CFG.color, 14);
@@ -14311,20 +14617,52 @@ export class World {
       const dwell = (this.townPortalDwell.get(seat.id) ?? 0) + dt;
       this.townPortalDwell.set(seat.id, dwell);
       if (dwell < TOWN_PORTAL_CFG.dwellSeconds) continue;
-      this.townPortalDwell.clear();
+      // THE ROADS PER PLAYER (shard M1 W2): on a hosted world the portal moves
+      // its owner alone, so the other seats' dwells stand.
+      if (this.shardWorld) this.townPortalDwell.delete(seat.id); else this.townPortalDwell.clear();
       if (p.returning) {
         const source = p.origin.cave?.zoneId ?? p.origin.zoneId;
-        if (this.zoneMemory.get(source)?.seed !== p.sourceSeed) {
+        // An awake source's seed is its live unit's (its stored row is stale until it sleeps).
+        if ((this.shardWorld?.liveSeed?.(source) ?? this.zoneMemory.get(source)?.seed) !== p.sourceSeed
+          || (this.shardWorld && !this.zoneMap[source] && !this.caveMap[source])) {
           this.townPortals = this.townPortals.filter(q => q !== p);
           this.notice('The old return passage has faded.', TOWN_PORTAL_CFG.color, 14, 'world');
           continue;
         }
         if (TOWN_PORTAL_CFG.consumeOnReturn) this.townPortals = this.townPortals.filter(q => q !== p);
         else p.returning = false;
+        if (this.shardWorld) {
+          // The way back: the source's own unit at the portal's spot, down the
+          // saved descent when it was cast below ground (the ladder rides the ticket).
+          const spot = p.origin.cave ?? p.origin, rungs = p.origin.cave?.rungs;
+          this.shardWorld.enqueue({ seatId: seat.id, dest: source, ladder: ladderOfSpot(p.origin),
+            from: rungs?.length ? rungs[rungs.length - 1].zoneId : p.sourceEntryFrom ?? null,
+            landing: { at: { x: spot.x, y: spot.y }, tier: p.originTier } });
+          this.townPortalArrival.add(seat.id); // step clear before another dwell (it travels with the seat)
+          continue; // the unit's other seats keep their frame
+        }
         this.resumeSpawn('exact', p.origin, p.sourceEntryFrom);
         const spot = p.origin.cave ?? p.origin;
         if (this.zone.id === source) this.landPartyAt(vec(spot.x, spot.y), { tier: p.originTier });
       } else {
+        if (this.shardWorld) {
+          // THE HEARTH ALIAS: the destination is the keeper's; the landing
+          // resolves there (its waypoint, else THE HEARTH SEAT), where the
+          // return portal stands.
+          this.shardWorld.enqueue({ seatId: seat.id, dest: p.destination, from: null,
+            landing: dw => {
+              const anchor = dw.waypointPos ?? dw.shardWorld?.hearth?.() ?? dw.player.pos;
+              p.destinationPos = dw.findFreeSpot(vec(anchor.x + TOWN_PORTAL_CFG.arrivalOffset.x,
+                anchor.y + TOWN_PORTAL_CFG.arrivalOffset.y), 18, 0);
+              p.returning = true;
+              // THE WILDS LAW: the settlement is the surface, so the return passage
+              // stands in the zone the seat landed in (the hearth's id never names it).
+              if (dw.massRuntime) p.destination = dw.zone.id;
+              return { at: { x: p.destinationPos.x, y: p.destinationPos.y } };
+            } });
+          this.townPortalArrival.add(seat.id); // step clear before another dwell (it travels with the seat)
+          continue; // the unit's other seats keep their frame
+        }
         this.loadZone(p.destination);
         const anchor = this.waypointPos ?? this.player.pos;
         p.destinationPos = this.findFreeSpot(vec(anchor.x + TOWN_PORTAL_CFG.arrivalOffset.x,
@@ -14527,7 +14865,9 @@ export class World {
     };
   }
 
-  serializeWorldState(): WorldStateSave {
+  serializeWorldState(): WorldStateSave;
+  serializeWorldState(options: MassCheckpointOptions): MassWorldCheckpoint;
+  serializeWorldState(options?: MassCheckpointOptions): WorldStateSave | MassWorldCheckpoint {
     // Snapshot the overlays FIRST: their bags carry the ownedZones claims
     // (world/overlay.ts convention) that decide which event ground rides.
     const overlays = this.sim.snapshotOverlays();
@@ -14674,8 +15014,8 @@ export class World {
     const vfrac = (cur: number, max: number): number => max > 0 ? clamp(cur / max, 0, 1) : 1;
     return {
       schemaVersion: WORLD_SCHEMA_VERSION,
-      ...(this.massRuntime ? { worldmass: this.massRuntime.snapshot(this) }
-        : this.massAway ? { worldmass: copyMassSidearea(this.massAway.surface) } : {}),
+      ...(this.massRuntime ? { worldmass: options ? this.massRuntime.snapshot(this, options) : this.massRuntime.snapshot(this) }
+        : this.massAway ? { worldmass: copyMassSidearea(options ? compactMass(this.massAway.surface) : this.massAway.surface) } : {}),
       ...(this.captureMassSideareas() ? { massSideareas: this.captureMassSideareas() } : {}),
       odyssey: this.odyssey.snapshot(),
       zones,
@@ -15993,12 +16333,14 @@ export class World {
    *  + open encounters. */
   private eventActivityAt(zid: string): number {
     let a = this.sim.activityAt(zid);
-    if (zid === this.zone.id) {
+    // THE SPLIT DISPATCH (shard M1-W3): the keeper builds the map once; the
+    // engine-local term is the World standing in the zone (solo: this one).
+    this.atZone(zid, w => {
       // OFFSTAGE runs are bodiless leans (a night-long watch change) — no
       // turmoil for the bloom to feed on (the concurrency fold's own filter).
-      a += this.theaterRuns.filter(r => !r.done && !theaterKindDef(r.kind)?.offstage).length;
-      a += this.encounters.length;
-    }
+      a += w.theaterRuns.filter(r => !r.done && !theaterKindDef(r.kind)?.offstage).length;
+      a += w.encounters.length;
+    });
     return a;
   }
 
@@ -16099,11 +16441,14 @@ export class World {
     // THE EBB drains first (the haunting's drainDissipated placement — even on
     // ground the stream skips, the queue never backs up): a tide that SPENT its
     // pour well recedes on its own — announce it if it was pouring over us.
-    for (const at of df.drainEbbed()) {
-      const def = this.zoneMap[this.zone.id];
-      if (def && coordDist(def.map, at) <= df.surge().radius) {
-        this.notice(df.surge().ebbText, df.surge().color ?? '#7a5aa6', 18, 'events');
-      }
+    // THE SPLIT DISPATCH (shard M1-W3): the keeper drains once, and "us" is
+    // every occupied zone within the tide's reach (its players hear it).
+    if (this.shardWorld?.role !== 'unit') for (const at of df.drainEbbed()) {
+      const to = this.occupiedAudience(z => {
+        const def = this.zoneMap[z.id];
+        return !!def && coordDist(def.map, at) <= df.surge().radius;
+      });
+      if (to !== null) this.noticeOccupied(to, df.surge().ebbText, df.surge().color ?? '#7a5aa6', 18, 'events');
     }
     if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
       this.deadwakeStreamTimer = 0; return;
@@ -16145,8 +16490,10 @@ export class World {
     // DAWN BANISHMENTS first (drained even from ground the stream skips, so the
     // queue never backs up): a dissolved grief's standing spawns fade out of
     // the zone it held — its spawns only ever live in that zone's actor list.
-    for (const gone of hf.drainDissipated()) {
-      if (gone.zoneId === this.zone.id) this.dissipateHauntSpawns(gone.color);
+    // THE SPLIT DISPATCH (shard M1-W3): the keeper drains once; the fade runs
+    // in the World standing in the grief's zone.
+    if (this.shardWorld?.role !== 'unit') for (const gone of hf.drainDissipated()) {
+      this.atZone(gone.zoneId, w => w.dissipateHauntSpawns(gone.color));
     }
     if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
       this.hauntStreamTimer = 0; return;
@@ -16457,7 +16804,7 @@ export class World {
         // fold) and the drovers pay by the head (the Drover tier counts it).
         sf.noteReturned(info.id);
         bumpLedger(this.ledger, 'strays_returned');
-        this.grantXp(cfg.reward.xpPerHead + cfg.reward.xpPerHeadPerLevel * lvl);
+        this.grantXp(cfg.reward.xpPerHead + cfg.reward.xpPerHeadPerLevel * lvl, sc.fold); // XP BY PLACE
         this.text(vec(s.a.pos.x, s.a.pos.y - 24), 'home safe', '#b8e890', 12);
         s.a.postSpec = { hold: false, slack: 200 };
         s.a.aiPost = vec(sc.fold.x, sc.fold.y);
@@ -16494,7 +16841,7 @@ export class World {
         if (!a.dead) this.slipAway(a, '', color);
       }
       const cfg = sf.surge();
-      this.grantXp(cfg.reward.reliefXpBase + cfg.reward.reliefXpPerLevel * lvl);
+      this.grantXp(cfg.reward.reliefXpBase + cfg.reward.reliefXpPerLevel * lvl, sc.fold); // XP BY PLACE
       for (let i = 0; i < cfg.reward.reliefGems; i++) this.dropGemAt(vec(sc.fold.x, sc.fold.y));
     }
     bumpLedger(this.ledger, 'strayings_relieved');
@@ -16720,7 +17067,7 @@ export class World {
       if (!h.a.heldBy && dist(h.a.pos, sc.penAt) <= cfg.penRadius) {
         df.notePenned(info.id);
         bumpLedger(this.ledger, 'drove_heads_penned');
-        this.grantXp(cfg.reward.xpPerHead + cfg.reward.xpPerHeadPerLevel * lvl);
+        this.grantXp(cfg.reward.xpPerHead + cfg.reward.xpPerHeadPerLevel * lvl, sc.penAt); // XP BY PLACE
         this.text(vec(h.a.pos.x, h.a.pos.y - 24), 'penned!', '#b8e890', 12);
         h.a.postSpec = { hold: false, slack: Math.max(28, cfg.penRingR * 0.55), pace: 0.4 };
         h.a.aiPost = vec(
@@ -16743,7 +17090,7 @@ export class World {
     if (sc && info) {
       const cfg = df.surge();
       const at = sc.penAt;
-      this.grantXp(cfg.reward.gatherXpBase + cfg.reward.gatherXpPerLevel * lvl);
+      this.grantXp(cfg.reward.gatherXpBase + cfg.reward.gatherXpPerLevel * lvl, at); // XP BY PLACE
       if (chance(cfg.reward.gemChance)) this.dropGemAt(at, undefined, true);
       const pay = (tableId: string): void => {
         for (const res of resolveLootTable(tableId, { ilvl: this.zone.level })) {
@@ -16862,7 +17209,9 @@ export class World {
     if (!fields.length) return;
 
     // THE RECONCILE (0.5s cadence; a property walk over the graph — cheap).
-    this.quickenSweepAcc += dt;
+    // THE SPLIT DISPATCH (shard M1-W3): the stamps are the chart's, the
+    // keeper's alone; the presence underfoot below is each World's own zone.
+    if (this.shardWorld?.role !== 'unit') this.quickenSweepAcc += dt;
     if (this.quickenSweepAcc >= 0.5) {
       this.quickenSweepAcc = 0;
       const arcByZone = new Map<string, { id: string; level: number; until: number; onSurge: boolean; onFade: boolean }>();
@@ -17162,7 +17511,7 @@ export class World {
       sc.hosts.splice(i, 1);
       wf.noteHostSlain(sc.id, h.slot);
       bumpLedger(this.ledger, 'wisplight_hosts_slain');
-      this.grantXp(cfg.reward.xpBase + cfg.reward.xpPerLevel * lvl);
+      this.grantXp(cfg.reward.xpBase + cfg.reward.xpPerLevel * lvl, h.a.pos); // XP BY PLACE
       for (let g = 0; g < cfg.reward.gems; g++) this.dropGemAt(vec(h.a.pos.x, h.a.pos.y), undefined, false, this.provenanceOf(h.a));
       this.flashes.push({ pos: vec(h.a.pos.x, h.a.pos.y), radius: 90, color: col, life: 0.6, maxLife: 0.6 });
       this.text(vec(h.a.pos.x, h.a.pos.y - 24), 'the light spills out…', col, 14);
@@ -17197,7 +17546,7 @@ export class World {
     w.wanderLeft = rand(cfg.wanderSec[0], cfg.wanderSec[1]);
     if (announce) {
       bumpLedger(this.ledger, 'wisplights_kindled');
-      this.grantXp(cfg.reward.kindleXp);
+      this.grantXp(cfg.reward.kindleXp, w.a.pos); // XP BY PLACE
       this.flashes.push({ pos: vec(w.a.pos.x, w.a.pos.y), radius: 70, color: cfg.color ?? '#b8f0a0', life: 0.6, maxLife: 0.6 });
       this.text(vec(w.a.pos.x, w.a.pos.y - 22), 'the light wakes — the mire stirs around it', cfg.color ?? '#b8f0a0', 14);
     }
@@ -17310,32 +17659,10 @@ export class World {
   private updateLongNight(dt: number): void {
     const lnf = this.sim.longNightField;
     if (!lnf) { this.longNightStreamTimer = 0; return; }
-    // THE SKY FEED: grounds under a covering BLOOD MOON feed double tonight —
-    // engine-side because overlays can't see the weather field (and sheltered
-    // ground has no sky to bleed under: skyOf, the one exposure gate).
-    if (dayCycle(this.time).phase === 'night') {
-      const under: string[] = [];
-      for (const zid of lnf.groundZoneIds()) {
-        const z = this.zoneMap[zid];
-        if (!z || skyOf(z) === 'sheltered') continue;
-        const f = this.sim.weather.sample(z);
-        if (f && f.kind === 'bloodmoon') under.push(zid);
-      }
-      if (under.length) lnf.markBloodmoon(under);
-    }
-    // World-facing beats → toasts + ledgers (conversions announce wherever
-    // the player is — a zone quietly turning is the one thing this event
-    // must never do silently; the map pulse + warp label carry the rest).
-    for (const a of lnf.consumeAnnouncements()) {
-      const name = this.zoneMap[a.zoneId]?.name ?? 'charted ground';
-      if (a.kind === 'converted') {
-        bumpLedger(this.ledger, 'long_night_converted');
-        this.notice(`Three nights fed — ${name} belongs to the Court now. Burn its coach by day.`, lnf.surge().color, 17, 'events');
-      } else {
-        this.notice(`The COUNTESS takes court at ${name} — the Long Night deepens.`, lnf.surge().color, 18, 'events');
-      }
-    }
-    this.reconcileLongNightWarps();
+    // THE SPLIT DISPATCH (shard M1-W3): the sky feed, the announcements and
+    // the warp reconcile are the world's, run once by the keeper; the ground,
+    // the coach and the pour below are each World's own zone.
+    if (this.shardWorld?.role !== 'unit') this.longNightWorldChores(lnf);
     if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
       this.longNightStreamTimer = 0; return;
     }
@@ -17404,6 +17731,38 @@ export class World {
     let n = 0;
     for (const a of this.actors) if (!a.dead && a.team === 'enemy' && a.tag === 'long_night_spawn') n++;
     return n;
+  }
+
+  /** THE LONG NIGHT's world chores, the keeper's half of the split (shard
+   *  M1-W3; solo they run every frame exactly as they always did): the sky
+   *  feed, the world-facing announcements, the warp reconcile. */
+  private longNightWorldChores(lnf: NonNullable<World['sim']['longNightField']>): void {
+    // THE SKY FEED: grounds under a covering BLOOD MOON feed double tonight —
+    // engine-side because overlays can't see the weather field (and sheltered
+    // ground has no sky to bleed under: skyOf, the one exposure gate).
+    if (dayCycle(this.time).phase === 'night') {
+      const under: string[] = [];
+      for (const zid of lnf.groundZoneIds()) {
+        const z = this.zoneMap[zid];
+        if (!z || skyOf(z) === 'sheltered') continue;
+        const f = this.sim.weather.sample(z);
+        if (f && f.kind === 'bloodmoon') under.push(zid);
+      }
+      if (under.length) lnf.markBloodmoon(under);
+    }
+    // World-facing beats → toasts + ledgers (conversions announce wherever
+    // the player is — a zone quietly turning is the one thing this event
+    // must never do silently; the map pulse + warp label carry the rest).
+    for (const a of lnf.consumeAnnouncements()) {
+      const name = this.zoneMap[a.zoneId]?.name ?? 'charted ground';
+      if (a.kind === 'converted') {
+        bumpLedger(this.ledger, 'long_night_converted');
+        this.notice(`Three nights fed — ${name} belongs to the Court now. Burn its coach by day.`, lnf.surge().color, 17, 'events');
+      } else {
+        this.notice(`The COUNTESS takes court at ${name} — the Long Night deepens.`, lnf.surge().color, 18, 'events');
+      }
+    }
+    this.reconcileLongNightWarps();
   }
 
   /** Reconcile the BiomeField warps the Court owns against its converted
@@ -17886,8 +18245,10 @@ export class World {
   /** Per-frame: mint drain + in-zone serpent fabric + standing-fight sync. */
   private updateWorldBosses(dt: number): void {
     // 1. MINT DRAIN — every instance (each dimension's sovereigns take ground
-    //    in their own graph).
-    for (const f of this.sim.worldBossFieldsAll()) {
+    //    in their own graph). THE SPLIT DISPATCH (shard M1-W3): the chart's
+    //    mints are the keeper's; the walls, the passing and the fight sync
+    //    below stay with each World's own zone.
+    if (this.shardWorld?.role !== 'unit') for (const f of this.sim.worldBossFieldsAll()) {
       for (const req of f.pendingMints()) this.mintWorldBossZone(f, req);
     }
     const f = this.sim.worldBossFieldFor(this.zone.dimension);
@@ -18612,12 +18973,106 @@ export class World {
   /** Award experience. CO-OP: shared among every LIVING player seat (the chosen
    *  policy — keeps the party levelling together, no kill-stealing). Single-player
    *  is just the one local seat, byte-identical to before. */
-  grantXp(amount: number): void {
+  /** keeperSeat lane — THE KILLER'S DUE: the seat that owns a body (through its owner
+   *  chain: a minion's kill is its keeper's), or undefined for an unowned or absent one. */
+  seatOfRoot(a: Actor | null | undefined): Seat | undefined {
+    let root = a ?? null;
+    while (root?.owner) root = root.owner;
+    return root ? this.seatByActor.get(root) : undefined;
+  }
+
+  /** keeperSeat lane — THE PARTY's view (server/party.ts through the shard): a seat's party
+   *  mates by id, itself included; absent = every seat its own unit. */
+  partyMates: ((seatId: string) => readonly string[]) | null = null;
+  /** THE PARTY on the wire: the rows the shard publishes (snapshot.ts ships them on change). */
+  partyRows: import('../net/partyWire').PartyRow[] | null = null;
+  partyRev = 0;
+  /** THE SIM UNITS (shard M1, engine/shardUnits.ts): the host's link on every
+   *  World a shard runs, the keeper's and each unit's, and THE PRIMARY GATE's
+   *  read. Absent everywhere else; its absence IS the solo invariant. */
+  shardWorld?: ShardWorldLink;
+  /** Are two seats one unit — the same seat, or party mates? */
+  sameParty(a: Seat, b: Seat): boolean { return this.sameSeatParty(a.id, b.id); }
+
+  /** THE PARTY BY SEAT ID, both sides of the wire: the desk's answer on the host,
+   *  the shipped rows on a render-shell client (keeperSeat — a client has no desk). */
+  sameSeatParty(a: string, b: string): boolean {
+    if (a === b) return true;
+    if (this.partyMates) return this.partyMates(a).includes(b);
+    return this.partyRows?.some(r => r.members.includes(a) && r.members.includes(b)) ?? false;
+  }
+
+  /** THE SEAT OF A BODY, both sides of the wire: the seat id a hero stands for —
+   *  the party view's row first (`party.members` carries WIRE ids on a client and
+   *  seat ids on the host), else the roster (the local seat answers with the wire
+   *  id it holds). Null for every body that is no seat's hero. */
+  seatIdOfActor(a: Actor): string | null {
+    const m = this.party.members.find(x => x.actor === a);
+    if (m) return m.seat;
+    const s = this.seats.find(x => x.actor === a);
+    return s ? (s === this.localSeat ? this.clientSeatId : s.id) : null;
+  }
+
+  /** THE PING (card 17 A, engine/pings.ts; dials data/identityCues.ts PING_CUE):
+   *  the world-anchored marks players set for their party — ONE standing per
+   *  seat (a new press replaces it), judged here for cadence and reach, expiring
+   *  on the world clock. The snapshot ships the live rows; the renderer draws a
+   *  mark for its setter and the setter's party mates (`pingVisibleTo`). */
+  pings: WorldPing[] = [];
+  private pingClocks = new Map<string, number>();
+
+  /** The one writer. Returns false when the press changed nothing (the seat's
+   *  cadence, a dead body). A far aim lands ON the reach ring, never refused. */
+  placePing(seat: Seat, x: number, y: number): boolean {
+    const now = this.time, a = seat.actor;
+    if (a.dead || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const last = this.pingClocks.get(seat.id);
+    if (last !== undefined && now - last < PING_CUE.cooldownSec && now >= last) return false;
+    const reached = clampPingReach(a.pos, { x, y }, PING_CUE.maxReach); // SOVEREIGNTY: sight — a mark is seen, it touches no body
+    const at = this.clampPos(reached, 0);
+    for (const id of this.pingClocks.keys()) if (!this.seats.some(s => s.id === id)) this.pingClocks.delete(id);
+    this.pingClocks.set(seat.id, now);
+    this.pings = prunePings(this.pings, now).filter(p => p.seat !== seat.id);
+    this.pings.push({ seat: seat.id, pos: { x: at.x, y: at.y }, tier: a.tier ?? 0, at: now, until: now + PING_CUE.lifeSec });
+    return true;
+  }
+
+  /** The marks still standing (prunes the list in place as it reads). */
+  livePings(): WorldPing[] {
+    if (this.pings.length && this.pings.some(p => p.until <= this.time)) this.pings = prunePings(this.pings, this.time);
+    return this.pings;
+  }
+
+  /** Who sees a mark (by seat id — the wire id on a client): its setter and the
+   *  setter's party. Off a party desk and off shipped rows (solo, couch) every
+   *  local seat sees every mark. */
+  pingVisibleTo(viewer: string, p: WorldPing): boolean {
+    if (p.seat === viewer) return true;
+    if (!this.partyMates && !this.partyRows) return true;
+    return this.sameSeatParty(viewer, p.seat);
+  }
+
+  grantXp(amount: number, at?: Vec2 | readonly Vec2[], to?: Seat): void {
+    // XP BY PLACE (THE COUNTERS AND THE JOURNAL): a grant may name several places (an
+    // objective's fixtures). On a hosted world a grant naming none pays the acting seat's
+    // party near the act (a meta act, a credited kill's handler), so a player AFK at the
+    // hearth never levels off the field; with no act and no place it pays as before.
+    if (at === undefined && this.localSeat.keeper && COOP_SCALING.shareRadius > 0) {
+      const acting = this.actingSeat;
+      if (acting && !acting.keeper && !acting.merc) { at = this.seatHero(acting).pos; to ??= acting; }
+    }
+    const places = at === undefined ? null : 'x' in at ? [at] : at.length ? at : null;
     for (const seat of this.seats) {
       if (seat.actor.dead) continue;
+      // THE NEAR LAW (keeperSeat lane, data/coop.ts shareRadius): a kill with a
+      // place pays only the seats within reach of it; radius 0 = everyone. THE
+      // KILLER'S DUE (her ruling 2026-10-08: the single-player law until parties):
+      // with a radius set and a killing seat known, only that seat is paid.
+      if (places && COOP_SCALING.shareRadius > 0 && to && !this.sameParty(to, seat)) continue; // keeperSeat: the killer's due — its party within reach (card 23)
+      if (places && COOP_SCALING.shareRadius > 0 && !places.some(p => dist(p, this.seatHero(seat).pos) <= COOP_SCALING.shareRadius)) continue; // SOVEREIGNTY: census — pay is apportioned by reach, never a touch (keeperSeat lane)
       // A hired blade never earns its own levels — its power is NORMALIZED to
       // the patron (MERC_CFG.scale), re-synced on the patron's level-ups.
-      if (seat.merc) continue;
+      if (seat.merc || seat.keeper) continue; // keeperSeat: the warden never levels
       this.grantSeatXp(seat, amount);
     }
   }
@@ -18629,8 +19084,9 @@ export class World {
   private grantSeatXp(seat: Seat, amount: number): void {
     const m = seat.meta;
     const p = this.seatHero(seat);
-    // Mireille's Traveller's Rest blessing boosts experience while it lasts.
-    if (this.mireilleXpBuff > 0) amount = Math.round(amount * (1 + MIREILLE_XP_BUFF_MULT));
+    // Mireille's Traveller's Rest blessing boosts experience while it lasts (a hosted
+    // world's blessing is each seat's own: THE COUNTERS AND THE JOURNAL).
+    if (this.localSeat.keeper ? (this.mireilleSeatBuff.get(seat) ?? 0) > this.time : this.mireilleXpBuff > 0) amount = Math.round(amount * (1 + MIREILLE_XP_BUFF_MULT));
     amount *= reliquaryExperience(m.containers.reliquary ?? [], m.relicEnabled !== false);
     m.xp += amount;
     // Any XP change re-replicates this seat's meta (xp bar + level + points). The
@@ -18813,7 +19269,7 @@ export class World {
             seat.actor.tier >= 1 ? { tier: seat.actor.tier } : undefined),
           item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2), tier: seat.actor.tier, // THE SPOILS STORY: at the seat's feet
         });
-        this.text(seat.actor.pos, 'your pack is full — it falls at your feet', '#c08a68', 12);
+        this.seatNote(seat, seat.actor.pos, 'your pack is full — it falls at your feet', '#c08a68', 12);
         return null;
       }
       this.failNote(seat.actor, 'bagfull', 'inventory full');
@@ -18832,7 +19288,7 @@ export class World {
           pos: this.clampPos(vec(seat.actor.pos.x + rand(-14, 14), seat.actor.pos.y + rand(-14, 14)), 10),
           item: { kind: 'support', gem }, bob: rand(0, Math.PI * 2),
         });
-        this.text(seat.actor.pos, 'your pack is full — it falls at your feet', '#c08a68', 12);
+        this.seatNote(seat, seat.actor.pos, 'your pack is full — it falls at your feet', '#c08a68', 12);
         return null;
       }
       this.failNote(seat.actor, 'bagfull', 'inventory full');
@@ -19005,7 +19461,9 @@ export class World {
   swapReadiness(seat: Seat, kind: 'unlearn' | 'socket' | 'unsocket', skillId?: string): import('./swapReadiness').SwapReadiness {
     const cfg = SWAP_DISCIPLINE_CFG;
     if (cfg.sanctuaryWaives && this.isSafeAt(seat.actor.pos)) return { reason: null };
-    const remaining = cfg.calmSec - (this.time - this.lastCombatAt);
+    // keeperSeat: on a hosted world the blood that counts is the seat's own (World.lastCombatAt is every player's fight at once).
+    const lastCombat = this.localSeat.keeper ? this.seatHero(seat).lastCombatAt : this.lastCombatAt;
+    const remaining = cfg.calmSec - (this.time - lastCombat);
     if (remaining > 0) return { reason: 'the blood is still hot', remaining };
     if (this.pressingFoeNear(seat.actor.pos, seat.actor.tier)) return { reason: 'foes press too near' };
     if (kind === 'unlearn' && skillId) {
@@ -19551,12 +20009,12 @@ export class World {
   /** Mireille, if the player is standing within her counter's radius AND can
    *  honestly reach her (npcReach 'innkeep' = 'roof': her care is served
    *  UNDER the inn's roof, never dwelled through its wall from the square). */
-  private getMireille(): Actor | null {
+  private getMireille(p: Actor = this.player): Actor | null { // p: THE COUNTERS AND THE JOURNAL, the body that lingers
     // SOVEREIGNTY: census — a find by role (the derived census, probe_tiers RIG T).
     return this.actors.find(a =>
       this.hasNpcRole(a, 'innkeep')
-      && dist(a.pos, this.player.pos) <= MIREILLE_RADIUS
-      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('innkeep'), { from: this.player.tier ?? 0, to: a.tier ?? 0 })) ?? null;
+      && dist(a.pos, p.pos) <= MIREILLE_RADIUS
+      && this.dwellReachable(p.pos, a.pos, npcDwellReach('innkeep'), { from: p.tier ?? 0, to: a.tier ?? 0 })) ?? null;
   }
 
   /** Is the player by Mireille? (Used by the renderer for her locked-talk box.) */
@@ -19737,18 +20195,7 @@ export class World {
     // FLASK REPLENISH: her brews top the founts themselves. Every KNOWN
     // skill's orb-fed bank of the unlocked resource fills to its true cap
     // (gainCharge folds chargeCap mods, so deeper draughts fill deeper).
-    const fillFounts = (kind: 'life' | 'mana'): boolean => {
-      let any = false;
-      for (const inst of this.meta.knownSkills.values()) {
-        for (const cg of inst.def.chargeGain ?? []) {
-          if (cg.on !== 'orbPickup' || (cg.orbKind && cg.orbKind !== kind)) continue;
-          const cur = p.charges.get(cg.charge) ?? 0;
-          p.gainCharge(cg.charge, 999, cg.max, inst);
-          if ((p.charges.get(cg.charge) ?? 0) > cur) any = true;
-        }
-      }
-      return any;
-    };
+    const fillFounts = (kind: 'life' | 'mana'): boolean => this.fillOrbFounts(this.meta, p, kind);
     if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_LIFE) && fillFounts('life')) {
       did = true; parts.push('life founts');
     }
@@ -19760,6 +20207,48 @@ export class World {
     }
     if (did) this.text(p.pos, `Mireille: ${parts.join(', ')}`, '#a0d8a0', 14);
     return did;
+  }
+
+  /** Her brews top a hero's orb-fed founts: every KNOWN skill's bank of the resource
+   *  fills to its true cap (gainCharge folds chargeCap mods). True when any rose. */
+  private fillOrbFounts(meta: PlayerMeta, p: Actor, kind: 'life' | 'mana'): boolean {
+    let any = false;
+    for (const inst of meta.knownSkills.values()) {
+      for (const cg of inst.def.chargeGain ?? []) {
+        if (cg.on !== 'orbPickup' || (cg.orbKind && cg.orbKind !== kind)) continue;
+        const cur = p.charges.get(cg.charge) ?? 0;
+        p.gainCharge(cg.charge, 999, cg.max, inst);
+        if ((p.charges.get(cg.charge) ?? 0) > cur) any = true;
+      }
+    }
+    return any;
+  }
+
+  /** THE COUNTERS AND THE JOURNAL (a hosted world): each standing player lingers at her
+   *  for itself, on its own dwell and cooldown, and her care lands on that seat alone
+   *  (her life, mana and founts, and her blessing on its own clock). Her welcome gift is
+   *  the traveller's own (dealTravellerFlasks); the keeper never asks. */
+  private readonly mireilleSeats = new WeakMap<Seat, { t: number; cd: number }>();
+  private readonly mireilleSeatBuff = new WeakMap<Seat, number>();
+  private mireilleSeatStep(seat: Seat, dt: number): void {
+    let row = this.mireilleSeats.get(seat);
+    if (!row) this.mireilleSeats.set(seat, row = { t: 0, cd: 0 });
+    if (row.cd > 0) row.cd -= dt;
+    if (!this.mireilleUnlocked() || !this.getMireille(seat.actor) || !this.seatIdle(seat)) { row.t = 0; return; }
+    row.t += dt;
+    if (row.t < MIREILLE_DWELL || row.cd > 0) return;
+    const p = seat.actor, parts: string[] = [];
+    if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_LIFE) && p.life < p.maxLife()) { p.refillLife(); parts.push('life'); }
+    if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_MANA) && p.mana < p.maxMana()) { p.mana = p.maxMana(); parts.push('mana'); }
+    if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_LIFE) && this.fillOrbFounts(seat.meta, p, 'life')) parts.push('life founts');
+    if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_MANA) && this.fillOrbFounts(seat.meta, p, 'mana')) parts.push('mana founts');
+    const blessed = (this.mireilleSeatBuff.get(seat) ?? 0) - this.time;
+    if (featureEnabled(this.account, FEATURE.MIREILLE_XP_BUFF) && blessed < MIREILLE_XP_REFRESH) {
+      this.mireilleSeatBuff.set(seat, this.time + MIREILLE_XP_BUFF_SEC); parts.push('+5% xp');
+    }
+    if (!parts.length) return;
+    this.text(p.pos, `Mireille: ${parts.join(', ')}`, '#a0d8a0', 14);
+    row.t = 0; row.cd = MIREILLE_COOLDOWN;
   }
 
   /** Lingering in Mireille's radius triggers her service after a short dwell,
@@ -19812,6 +20301,9 @@ export class World {
       // it; the traded-away close keeps her standing line instead.
       this.mireilleAfterglow = this.getMireille() !== null && MIREILLE_GIFT_SKILLS.some(sid => this.meta.knownSkills.has(sid));
     }
+    // THE COUNTERS AND THE JOURNAL (a hosted world): every standing player lingers
+    // for itself (mireilleSeatStep); the keeper never asks.
+    if (this.localSeat.keeper) { for (const s of this.handSeats()) this.mireilleSeatStep(s, dt); return; }
     // Dwell only builds toward an AVAILABLE service: not while dead, away from
     // her, or while the player is acting. Her WELCOME GIFT (the flasks) needs
     // no unlock — the dwell builds for it even on a fresh account.
@@ -19831,8 +20323,10 @@ export class World {
    * use the same learn/bind paths as new gifts. Resume shells opt out at creation. */
   private veteranFlaskDeals = new WeakSet<Seat>();
   private provisioningFlaskSlots = new Set<Seat>();
-  dealVeteranFlasks(seat: Seat = this.localSeat): void {
-    if (!(this.account.ledger[LEDGER_FLASK_LESSON] ?? 0) || this.veteranFlaskDeals.has(seat)) return;
+  /** `owed` (THE ACTING SEAT): the traveller's own flag decides, never this
+   *  world's account (dealTravellerFlasks). */
+  dealVeteranFlasks(seat: Seat = this.localSeat, owed = !!(this.account.ledger[LEDGER_FLASK_LESSON] ?? 0)): void {
+    if (!owed || this.veteranFlaskDeals.has(seat)) return;
     if (seat === this.localSeat && this.ledger[MIREILLE_FILL_LEDGER]) return;
     const p = seat.actor, m = seat.meta;
     const slots = planSkillSlots(MIREILLE_GIFT_SKILLS, p.skills.map(inst => inst?.def.id ?? null), this.account.skillSlotMemory);
@@ -19865,6 +20359,23 @@ export class World {
       this.charDirty = true;
     }
     this.markMetaDirty(seat);
+  }
+
+  /** THE ACTING SEAT (the traveller's flasks): a hosted world's innkeep answers
+   *  only its keeper, so a traveller who left home before her welcome gift
+   *  never meets it. A seated traveller whose OWN ledger (its vessel's run
+   *  ledger, carried from home) says the gift was never handed, and who
+   *  neither knows nor carries a flask, is dealt them as a graduate is:
+   *  learned, seated, brimming. When dealt, the gift and its fill are stamped
+   *  onto that ledger (it rides home with the mirror). True when dealt. */
+  dealTravellerFlasks(seat: Seat, ledger: Record<string, number>): boolean {
+    if (ledger[MIREILLE_GIFT_LEDGER] || ledger[MIREILLE_FILL_LEDGER] || ledger[MIREILLE_LESSON_LEDGER]) return false;
+    if (MIREILLE_GIFT_SKILLS.some(sid => seat.meta.knownSkills.has(sid) || findBagGem(seat.meta.items, 'skill', sid))) return false;
+    this.dealVeteranFlasks(seat, true);
+    if (!this.veteranFlaskDeals.has(seat)) return false;
+    ledger[MIREILLE_GIFT_LEDGER] = 1;
+    ledger[MIREILLE_FILL_LEDGER] = 1;
+    return true;
   }
 
   /** THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
@@ -19928,7 +20439,7 @@ export class World {
   nearCampfire(): boolean {
     if (this.massRuntime) return false; // worldmass keeps run consequences; refresh migration is pending
     const a = this.stationAnchor('campfire'); // THE ANCHORED DWELL: the fire itself
-    return featureEnabled(this.account, FEATURE.CAMPFIRE)
+    return this.counterOwned(FEATURE.CAMPFIRE) // a hosted world's shell never offers it (its refresh is the world's, keeper-held)
       && this.townPresent() && !!a
       && dist(this.player.pos, a.pos) <= CAMPFIRE_RADIUS
       && this.dwellReachable(this.player.pos, a.pos, DWELL_CFG.reach, { from: this.player.tier ?? 0, to: a.tier });
@@ -20002,6 +20513,12 @@ export class World {
    *  its other duties (spawns, the apron law, the ways) untouched. */
   stationAnchor(site: TownSiteId): { pos: Vec2; tier: number; doodad: Doodad } | null {
     if (!this.townPresent()) return null;
+    // THE CLIENT'S COUNTERS: a render shell's town may stand at another rung than the host's (its
+    // own account grows it), so it never re-derives a site: the host's own resolution was shipped.
+    if (this.netCounters) {
+      const d = this.netStationAnchors?.get(site);
+      return d && !d.gone && !d.felled ? { pos: vec(d.pos.x, d.pos.y), tier: d.tier ?? 0, doodad: d } : null;
+    }
     const seat = this.townSite(site);
     const sid = townSiteStructure(site);
     if (!seat || !sid) return null;
@@ -20316,7 +20833,7 @@ export class World {
    *  (the Salvage Station) opens BOTH doors: the bench in town AND every
    *  vendor row whose scrap gate reads this (Brandt's sell lane). */
   salvageUnlocked(): boolean {
-    return featureEnabled(this.account, FEATURE.SALVAGE_STATION);
+    return this.counterOwned(FEATURE.SALVAGE_STATION); // THE KEEPER'S GATE, mirrored on a render shell
   }
 
   /** THE BENCH STANDS: owned + raised in this zone (the town), proximity
@@ -20363,7 +20880,7 @@ export class World {
   //  different giver"); pay resolves at THE TURN-IN back at the board.
 
   bountyBoardUnlocked(): boolean {
-    return featureEnabled(this.account, FEATURE.BOUNTY_BOARD);
+    return this.counterOwned(FEATURE.BOUNTY_BOARD); // THE KEEPER'S GATE, mirrored on a render shell
   }
 
   /** THE BOARD LESSON's live read (docs/design/bounty-first-writ.md §3 —
@@ -20429,8 +20946,14 @@ export class World {
    *  board's dwell), the prompt and the panel's states all share. */
   resolvedHandsAt(boardId: string): { id: string; state: 'ready' | 'failed' }[] {
     const out: { id: string; state: 'ready' | 'failed' }[] = [];
+    // THE JOURNAL ROW: a render shell reads its own hands off the board it was shipped.
+    const net = this.clientActionHook ? this.netJournal?.boards?.[boardId] : undefined;
+    if (net) {
+      for (const h of net.hands) if (h.state !== 'afield') out.push({ id: h.id, state: h.state });
+      return out;
+    }
     for (const p of this.bountyHands) {
-      if (p.boardId !== boardId) continue;
+      if (p.boardId !== boardId || !this.handOwns(p)) continue; // THE BOARD PER SEAT: the hand's own writs
       const state = this.handState(p);
       if (state !== 'afield') out.push({ id: p.id, state });
     }
@@ -20454,7 +20977,16 @@ export class World {
    *  re-arms it — and is never a readiness of its own). Called wherever a
    *  deed may have landed: the cull's claim, the gather's rite, the
    *  arrival note, the zone's own clear, and the field watch's sweep. */
-  private noteBountyReady(p: BountyPosting): void { return sceneNoteBountyReady(this.nativeSceneBountyHost(),p); }
+  private noteBountyReady(p: BountyPosting): void {
+    // THE BOARD PER SEAT: a held writ's "return to the board" reaches its holder's
+    // party, wherever its holder stands (THE OCCUPIED LAW, shard M1-W3).
+    const holder = p.holder && this.localSeat.keeper
+      ? this.presentWorlds().flatMap(w => w.seats).find(s => s.id === p.holder) : undefined;
+    if (!holder) return sceneNoteBountyReady(this.nativeSceneBountyHost(), p);
+    const was = this.actingSeat;
+    this.actingSeat = holder;
+    try { sceneNoteBountyReady(this.nativeSceneBountyHost(), p); } finally { this.actingSeat = was; }
+  }
 
   /** THE BEAT's quantum — the board's OWN clock (never the vendor restock
    *  quantum: a Rush Order rung must not re-pace the board). Future board
@@ -20552,8 +21084,10 @@ export class World {
       return false;
     }
     if (!this.forgeBases(writUid, seat).some(b => b.id === baseId)) return false;
-    // The rite's own calm law: no forging with the blood hot or teeth near.
-    if (this.time - this.lastCombatAt < SWAP_DISCIPLINE_CFG.calmSec && !this.isSafeAt(seat.actor.pos)) {
+    // The rite's own calm law: no forging with the blood hot or teeth near (on a hosted
+    // world the seat's own blood: THE COUNTERS AND THE JOURNAL).
+    const forgeCombat = this.localSeat.keeper ? this.seatHero(seat).lastCombatAt : this.lastCombatAt;
+    if (this.time - forgeCombat < SWAP_DISCIPLINE_CFG.calmSec && !this.isSafeAt(seat.actor.pos)) {
       this.notice('The hand is not steady yet — let the blood cool.', BOUNTY_BOARD_CFG.accent, 13, 'civic');
       return false;
     }
@@ -20968,10 +21502,24 @@ export class World {
 
   /** Shared route policy: callers receive evidence, never map knowledge. */
   bountyApproaches(boardId: string, manageable: boolean): Map<string, TravelRoute> {
+    const key = boardId + (manageable ? ':m' : ':d');
+    const pass = this.approachPass?.get(key);
+    if (pass) return pass;
     const home = this.bountyBoardRoster().find(b => b.id === boardId)?.homeZoneId ?? START_ZONE;
     const cfg = manageable ? BOUNTY_BOARD_CFG.routes.manageable : BOUNTY_BOARD_CFG.routes.demanding;
-    return bountyRoutes(this, home, { maxLevel: this.player.level + cfg.above,
+    const routes = bountyRoutes(this, home, { maxLevel: this.player.level + cfg.above,
       maxSteps: cfg.steps, maxDistance: cfg.distance * this.bountyReach() });
+    this.approachPass?.set(key, routes);
+    return routes;
+  }
+
+  /** THE JOURNAL ROW's pass (net/journalWire.ts): one snapshot's seats read each board's
+   *  approaches once (the routes read the world, never the seat). Null outside a pass. */
+  private approachPass: Map<string, Map<string, TravelRoute>> | null = null;
+  withApproachPass<T>(fn: () => T): T {
+    if (this.approachPass) return fn();
+    this.approachPass = new Map();
+    try { return fn(); } finally { this.approachPass = null; }
   }
 
   bountyAppropriate(p: BountyPosting, routes = this.bountyApproaches(p.boardId, true)): boolean {
@@ -21032,17 +21580,19 @@ export class World {
    *  the stale-offer race struck WITH its reason, and the claim lane's veil
    *  lift (a charge on veiled ground tells you the way — ruled; the errand
    *  kind alone will keep discovery the ask). */
-  acceptBounty(id: string, _seat: Seat = this.localSeat): boolean {
+  acceptBounty(id: string, seat: Seat = this.localSeat): boolean {
     if (!this.graphWorkAvailable() && !massBountiesAvailable(this)) return false;
     this.reconcileBounties();
     const i = this.bountyOffers.findIndex(p => p.id === id);
     if (i < 0) return false;
     const p = this.bountyOffers[i];
+    const hosted = !!this.localSeat.keeper;
+    if (hosted && !this.nearBountyBoard(seat, p.boardId)) return false; // THE BOARD PER SEAT: a posting is taken at its board
     if (this.massRuntime && (!p.massBounty || massBountyAccept(this, p)) || !this.massRuntime && p.massBounty) return false;
     const row = BOUNTY_KINDS[p.kind];
     if (!row) return false;
     const cap = QUEST_CATEGORY_CAPS.bounty ?? 1;
-    if (this.bountyHands.filter(h => h.boardId === p.boardId).length >= cap) {
+    if (this.bountyHands.filter(h => h.boardId === p.boardId && (!hosted || h.holder === seat.id)).length >= cap) { // THE BOARD PER SEAT: one hand per seat per board
       this.notice('One bounty in hand at a time — see the taken work through first.', BOUNTY_BOARD_CFG.accent, 14, 'civic');
       return false;
     }
@@ -21069,6 +21619,7 @@ export class World {
       return false;
     }
     this.bountyOffers.splice(i, 1);
+    if (hosted) { p.holder = seat.id; if (seat.meta.charId) p.holderChar = seat.meta.charId; } // THE BOARD PER SEAT: the taker holds it
     this.bountyHands.push(p);
     this.activeQuests.push({ questId: p.id, zoneId: p.zoneId, fieldDone: false });
     // THE CLAIM LANE's veil, per kind and face (walk-1 card 4): a charge or
@@ -21122,9 +21673,10 @@ export class World {
    *  Locking asks a free pin (capacity − standing pins); releasing is
    *  always free. The pin holds a SEAT through re-deals, never the truth
    *  — the reconcile still strikes a dead ask, pinned or not. */
-  setBountyLock(id: string, locked: boolean, _seat: Seat = this.localSeat): boolean {
+  setBountyLock(id: string, locked: boolean, seat: Seat = this.localSeat): boolean {
     const p = this.bountyOffers.find(o => o.id === id);
     if (!p) return false;
+    if (this.localSeat.keeper && !this.nearBountyBoard(seat, p.boardId)) return false; // THE BOARD PER SEAT: a pin is set at the board
     if (!locked) {
       if (p.locked) { delete p.locked; this.charDirty = true; }
       return true;
@@ -21144,9 +21696,9 @@ export class World {
 
   /** ABANDON a taken posting: the hand frees, the posting is forfeit (it
    *  does not return to the slate — the world moved on), no penalty. */
-  abandonBounty(id: string, _seat: Seat = this.localSeat): boolean {
+  abandonBounty(id: string, seat: Seat = this.localSeat): boolean {
     const p = this.bountyHands.find(h => h.id === id);
-    if (!p) return false;
+    if (!p || !this.withQuestHand(seat, () => this.handOwns(p))) return false; // THE BOARD PER SEAT: only its holder forfeits it
     this.bountyHands = this.bountyHands.filter(h => h.id !== id);
     const ai = this.activeQuests.findIndex(e => e.questId === id);
     if (ai >= 0) this.activeQuests.splice(ai, 1);
@@ -21163,7 +21715,7 @@ export class World {
    *  patterns", her words). An unfinished hand is refused with the ask. */
   turnInBounty(id: string, seat: Seat = this.localSeat): boolean {
     const p = this.bountyHands.find(h => h.id === id);
-    if (!p) return false;
+    if (!p || !this.withQuestHand(seat, () => this.handOwns(p))) return false; // THE BOARD PER SEAT: only its holder turns it in
     // THE KINSHIP: a hand turns in at ITS OWN board — the writ walks home
     // to where it was posted (one hand per board, one payout counter each).
     if (!this.nearBountyBoard(seat, p.boardId)) return false;
@@ -21179,7 +21731,7 @@ export class World {
       bumpLedger(this.ledger, 'bounties_failed');
       this.notice('The board takes the failed posting back — no pay, no debt.', BOUNTY_BOARD_CFG.accent, 15, 'civic');
       this.charDirty = true;
-      this.bountyReceipt = { boardId: p.boardId, title: row.copy(this, p).title, pay: '', failed: true, at: this.time };
+      this.bountyReceipt = { boardId: p.boardId, title: row.copy(this, p).title, pay: '', failed: true, at: this.time, ...(this.localSeat.keeper ? { seat: seat.id } : {}) };
       // The fail lane resolves LIKE a turn-in (walk-1's ruling) — the
       // refresh rides both endings; only the resolving board re-deals.
       this.refreshBountySlate(p.boardId);
@@ -21190,7 +21742,8 @@ export class World {
       return false;
     }
     const aq = this.activeQuests.find(e => e.questId === id);
-    if (aq) this.onQuestZoneCleared(aq); // pays essence + stamps (the bounty branch)
+    // pays essence + stamps (the bounty branch); on a hosted world at the turning seat's feet (THE QUEST HAND)
+    if (aq) { if (this.localSeat.keeper) this.withQuestHand(seat, () => this.onQuestZoneCleared(aq)); else this.onQuestZoneCleared(aq); }
     // The richer lanes (unique/lot/pouch/gem) pay HERE with the turning
     // seat in hand (the pouch merges into that seat's bag) — the payout
     // site's branch owns the stamps + the essence lane.
@@ -21199,7 +21752,7 @@ export class World {
     this.charDirty = true;
     // THE RECEIPT: the re-opened board prints what this paid (the counter
     // laws — the pay is read at the slate, not only heard as a notice).
-    this.bountyReceipt = { boardId: p.boardId, title: row.copy(this, p).title, pay: describeBountyPay(p.pay), failed: false, at: this.time };
+    this.bountyReceipt = { boardId: p.boardId, title: row.copy(this, p).title, pay: describeBountyPay(p.pay), failed: false, at: this.time, ...(this.localSeat.keeper ? { seat: seat.id } : {}) };
     // THE TURN-IN REFRESH: the collected hand re-deals ITS board's slate
     // — the same dwell pays the finished work and offers the fresh hand;
     // every other board's slate stands (the shared beat is the clock).
@@ -21339,8 +21892,16 @@ export class World {
      *  posting. Absent once BOUNTY_BOARD_CFG.counter.receiptSec has run. */
     receipt?: { title: string; pay: string; failed: boolean };
   } {
+    // THE JOURNAL ROW: a render shell reads the board its own seat was shipped (the
+    // countdown runs on the shared clock off the host's restock time).
+    const net = this.clientActionHook ? this.netJournal?.boards?.[boardId] : undefined;
+    if (net) {
+      const { restockAt, ...rest } = net;
+      return { ...rest, countdown: restockAt - this.time };
+    }
     const slip = this.bountyReceipt;
     const receipt = slip && slip.boardId === boardId && this.time - slip.at <= BOUNTY_BOARD_CFG.counter.receiptSec
+      && (!slip.seat || slip.seat === this.questHand().id) // THE BOARD PER SEAT: a receipt prints for the seat it paid
       ? { title: slip.title, pay: slip.pay, failed: slip.failed } : undefined;
     const easyRoutes = this.bountyApproaches(boardId, true), hardRoutes = this.bountyApproaches(boardId, false);
     const face = (p: BountyPosting): { id: string; title: string; ask: string; route: string; pay: string; locked?: boolean } => {
@@ -21366,7 +21927,7 @@ export class World {
       ...(receipt ? { receipt } : {}),
       offers: this.bountyOffers.filter(o => o.boardId === boardId && (this.graphWorkAvailable() ? !o.massBounty : massBountiesAvailable(this, boardId) && !!o.massBounty)).map(face),
       // THE READINESS LAW: the card's state is the one fold (handState).
-      hands: this.bountyHands.filter(h => h.boardId === boardId).map(p => ({ ...face(p), state: this.handState(p),
+      hands: this.bountyHands.filter(h => h.boardId === boardId && this.handOwns(h)).map(p => ({ ...face(p), state: this.handState(p), // THE BOARD PER SEAT: the reader's own hands
         ...(!this.graphWorkAvailable() && !p.massBounty && this.handState(p) === 'afield'
           ? { route: 'Destination unavailable in this expedition' } : {}) })),
     };
@@ -21408,12 +21969,31 @@ export class World {
   private bountyWatchAccum = 0;
   private watchBountyHands(dt: number, nearBoard: boolean): void {
     if (this.clientActionHook) return;
+    // THE SPLIT DISPATCH (shard M1-W3): the watch reconciles the world's one
+    // slate, so it is the keeper's alone (a unit's would re-run it per unit).
+    if (this.shardWorld?.role === 'unit') return;
+    if (this.localSeat.keeper) this.sweepBountyHolders();
     if (!this.bountyHands.length && !(nearBoard && this.bountyOffers.length)) return;
     this.bountyWatchAccum += dt;
     if (this.bountyWatchAccum < 2) return;
     this.bountyWatchAccum = 0;
     for (const p of this.bountyHands) this.noteBountyReady(p);
     this.reconcileBounties();
+  }
+
+  /** THE BOARD PER SEAT: a hand whose holder left the world is unheld (anyone's to finish
+   *  and turn in, no one's cap), and a returning hero (its own character id) takes its
+   *  hand back under the seat it now holds. */
+  private sweepBountyHolders(): void {
+    // THE OCCUPIED LAW (shard M1-W3): "left the world" means no seat in any of
+    // its live Worlds, never only this one's.
+    const seats = this.presentWorlds().flatMap(w => w.seats);
+    for (const p of this.bountyHands) {
+      if (!p.holder && !p.holderChar) continue;
+      if (p.holder && seats.some(s => s.id === p.holder && !s.keeper)) continue;
+      const back = p.holderChar ? seats.find(s => !s.keeper && s.meta.charId === p.holderChar) : undefined;
+      if (back) p.holder = back.id; else delete p.holder;
+    }
   }
 
   /** Linger at the board → arm this beat's slate + open the postings panel
@@ -21432,6 +22012,10 @@ export class World {
         && bs.armedBeat >= 0 && bs.armedBeat !== this.bountyBeat()) {
         this.armBountyBoard(b.id);
       }
+      // THE BOARD PER SEAT (a hosted world): the slate deals for any standing player at the
+      // board (its own client lingers and opens the panel), on the shared beat.
+      if (this.localSeat.keeper && !this.clientActionHook && bs.armedBeat !== this.bountyBeat()
+        && this.handSeats().some(s => this.nearBountyBoard(s, b.id))) this.armBountyBoard(b.id);
     }
     // The arrival latch matters here: the GROWN town's waypoint stands
     // inside the board's dwell disc — coming home must never auto-open
@@ -21512,7 +22096,7 @@ export class World {
   /** By the Tracker's fire? (Feature owned + in town + near TRACKER_SITE.) */
   nearTracker(seat: Seat = this.localSeat): boolean {
     const a = this.stationAnchor('tracker'); // THE ANCHORED DWELL: the Tracker's fire
-    return featureEnabled(this.account, FEATURE.TRACKER)
+    return this.counterOwned(FEATURE.TRACKER) // THE KEEPER'S GATE, mirrored on a render shell
       && this.townPresent() && !!a
       && dist(seat.actor.pos, a.pos) <= SALVAGE_CFG.stationRadius
       && this.dwellReachable(seat.actor.pos, a.pos, DWELL_CFG.reach, { from: seat.actor.tier ?? 0, to: a.tier });
@@ -21543,7 +22127,7 @@ export class World {
   /** Among the standing stones? (Feature owned + in town + near ORACLE_SITE.) */
   /** THE STONE STANDS: owned + raised in this zone, proximity aside. */
   hasOracle(): boolean {
-    return featureEnabled(this.account, FEATURE.ORACLE_STONE) && this.townPresent();
+    return this.counterOwned(FEATURE.ORACLE_STONE) && this.townPresent(); // THE KEEPER'S GATE, mirrored on a render shell
   }
 
   nearOracle(seat: Seat = this.localSeat): boolean {
@@ -22325,7 +22909,7 @@ export class World {
       this.refreshHoldDress(def);
       this.refreshHoldServices(def);
       const lvl = Math.max(1, def.level);
-      this.grantXp(Math.round(cls.reward.xpBase + cls.reward.xpPerLevel * lvl));
+      this.grantXp(Math.round(cls.reward.xpBase + cls.reward.xpPerLevel * lvl), ward?.pos); // XP BY PLACE
       for (let i = 0; i < cls.reward.caches; i++) {
         const c = this.createMonster(FIXTURE_IDS.harbor_cache, lvl, 'enemy');
         c.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-50, 50)), c.radius);
@@ -22370,9 +22954,9 @@ export class World {
   /** Fell a hold (a lost defense, an unattended deadline): fires, sealed
    *  gates, the rebuild clock. In-zone the change is live; far coasts just
    *  flip state and dress on the next visit. */
-  private fellHold(def: ZoneDef, msg: string | null): void {
+  private fellHold(def: ZoneDef, msg: string | null): boolean {
     const hold = def.harborhold;
-    if (!hold) return;
+    if (!hold) return false;
     const cls = holdClassOf(hold);
     hold.state = 'fallen';
     hold.falls++;
@@ -22380,14 +22964,18 @@ export class World {
     hold.fallAt = undefined;
     hold.siegeAt = undefined;
     hold.rebuildAt = this.time + cls.rebuildSec;
-    if (def.id === this.zone.id) {
-      const ps = holdStructureIn(this.structures, cls.structure);
+    // THE SPLIT DISPATCH (shard M1-W3): the gate reseal, the dress, the services
+    // and the overrun text belong to the World standing in the hold's zone (the
+    // answer: whether one did).
+    return this.atZone(def.id, w => {
+      const ps = holdStructureIn(w.structures, cls.structure);
       const gate = ps ? holdGateDoor(ps) : null;
-      if (gate) this.resealDoor(gate.door.id);
-      this.refreshHoldDress(def);
-      this.refreshHoldServices(def);
-      if (msg) this.text(vec(this.player.pos.x, this.player.pos.y - 84), msg, '#e85050', 16);
-    }
+      if (gate) w.resealDoor(gate.door.id);
+      w.refreshHoldDress(def);
+      w.refreshHoldServices(def);
+      if (msg) w.text(vec(w.player.pos.x, w.player.pos.y - 84), msg, '#e85050', 16);
+      return true;
+    }) === true;
   }
 
   /** THE RESTORATION (the 'holdRestore' intent): carried Essence buys the
@@ -22420,8 +23008,13 @@ export class World {
    *  fall. Gate re-seals apply on the NEXT load of a zone — never under the
    *  player's feet (no lock-ins; services still shut at once). */
   private updateHarborholds(): void {
+    if (this.shardWorld?.role === 'unit') return; // THE PRIMARY GATE (shard M1): the lifecycle sweep is the keeper's
     if (this.gameOver || this.time < this.holdSweepAt) return;
     this.holdSweepAt = this.time + HARBORHOLD_CFG.sweepSec;
+    // THE SPLIT DISPATCH (shard M1-W3): the keeper walks every hold's clocks; a
+    // transition's dress, services and in-zone word go to the World standing in
+    // the hold's zone (`here` answers whether one did).
+    const here = (def: ZoneDef, fn: (w: World) => void): boolean => this.atZone(def.id, w => { fn(w); return true; }) === true;
     for (const def of Object.values(this.zoneMap)) {
       const hold = def.harborhold;
       if (!hold) continue;
@@ -22429,11 +23022,11 @@ export class World {
       if (hold.state === 'fallen' && hold.rebuildAt !== undefined && this.time >= hold.rebuildAt) {
         hold.state = HARBORHOLD_CFG.rebuildTo;
         hold.rebuildAt = undefined;
-        if (def.id === this.zone.id) {
-          this.refreshHoldDress(def);
-          this.refreshHoldServices(def);
-          this.notice(`${def.name} stands rebuilt — and besieged anew`, '#e8a050', 14, 'war');
-        }
+        here(def, w => {
+          w.refreshHoldDress(def);
+          w.refreshHoldServices(def);
+          w.notice(`${def.name} stands rebuilt — and besieged anew`, '#e8a050', 14, 'war');
+        });
         continue;
       }
       if (hold.state === 'open') {
@@ -22444,20 +23037,22 @@ export class World {
           hold.state = 'besieged';
           hold.siegeAt = undefined;
           if (cls.fallAfterSec > 0) hold.fallAt = this.time + cls.fallAfterSec;
-          if (def.id === this.zone.id) {
-            this.refreshHoldDress(def);
-            this.refreshHoldServices(def);
-            this.notice(`${def.name} is besieged — sound the horn!`, '#e85050', 16, 'war');
-          } else if (this.visible(def)) {
+          const stood = here(def, w => {
+            w.refreshHoldDress(def);
+            w.refreshHoldServices(def);
+            w.notice(`${def.name} is besieged — sound the horn!`, '#e85050', 16, 'war');
+          });
+          if (!stood && this.visible(def)) {
             this.notice(`word comes: ${def.name} is under siege`, '#e8a050', 14, 'war');
           }
         }
         continue;
       }
       if (hold.state === 'besieged' && hold.fallAt !== undefined && this.time >= hold.fallAt) {
-        if (this.holdDefense?.zoneId === def.id) continue; // the muster paused it (belt)
-        this.fellHold(def, def.id === this.zone.id ? 'the siege overruns the walls — the harbor burns' : null);
-        if (def.id !== this.zone.id && this.visible(def)) {
+        // The muster paused it (belt): the live defense is the hosting World's own.
+        if (this.holdDefense?.zoneId === def.id || this.atZone(def.id, w => w.holdDefense?.zoneId === def.id)) continue;
+        const stood = this.fellHold(def, 'the siege overruns the walls — the harbor burns'); // the word floats only where the hold stands
+        if (!stood && this.visible(def)) {
           this.notice(`${def.name} has fallen to the tide`, '#e85050', 14, 'war');
         }
       }
@@ -23023,6 +23618,14 @@ export class World {
     if (!this.caravanBandUnlocked(band)) return false;
     const destId = band === 0 ? START_ZONE : this.mintCaravanRoute(band);
     if (this.zone.id === destId) return false; // already there
+    // THE ROADS PER PLAYER (shard M1 W2): on a hosted world the escort carries
+    // the asking seat alone (the route minted here, in its own unit); band 0
+    // lands in the keeper (THE HEARTH ALIAS).
+    if (this.shardWorld) {
+      if (seat.actor.dead || seat.actor.downed) return false;
+      this.shardWorld.enqueue({ seatId: seat.id, dest: destId, from: this.zone.id, landing: 'entry' });
+      return true;
+    }
     this.loadZone(destId, this.zone.id);
     return true;
   }
@@ -23661,11 +24264,12 @@ export class World {
   // clearing that zone's objective pays the reward and advances the chain.
 
   private getQuestGiver(defId?: string): Actor | null {
+    const p = this.questHand().actor; // THE QUEST HAND: the giver stands by the seat that asks (the hero off a hosted world)
     return this.actors.find(a =>
       (defId ? a.defId === defId && !a.dead : this.hasNpcRole(a, 'questgiver'))
       && !a.tag?.startsWith('quest_rescue:') // rescued prisoners transact after arriving home
-      && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS
-      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver'), this.storyPair(this.player, a))) ?? null;
+      && dist(a.pos, p.pos) <= QUESTGIVER_RADIUS
+      && this.dwellReachable(p.pos, a.pos, npcDwellReach('questgiver'), this.storyPair(p, a))) ?? null;
   }
 
   /** ANY of these giver defIds standing near the player (quests may list
@@ -23709,9 +24313,10 @@ export class World {
    *  vocation's shrine spirit, future field boards)? Registry-derived. */
   nearAnyQuestGiver(): boolean {
     const givers = this.massRuntime ? QUEST_GIVER_IDS : ZONE_QUEST_GIVER_IDS;
+    const p = this.questHand().actor; // THE QUEST HAND
     return this.actors.some(a => !a.dead && a.defId && givers.has(a.defId)
-      && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS
-      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver'), this.storyPair(this.player, a)));
+      && dist(a.pos, p.pos) <= QUESTGIVER_RADIUS
+      && this.dwellReachable(p.pos, a.pos, npcDwellReach('questgiver'), this.storyPair(p, a)));
   }
 
   /** Prompt text above a nearby quest giver, or null. ('{name}' resolves at
@@ -23770,10 +24375,11 @@ export class World {
 
   /** The read-only slice of run state a QuestDef.gate predicate may consult. */
   private questGateCtx(): QuestGateCtx {
+    const m = this.questHand().meta; // THE QUEST HAND
     return {
       features: this.account.features,
-      classId: this.meta.classDef.id,
-      vocations: this.meta.vocations,
+      classId: m.classDef.id,
+      vocations: m.vocations,
       runLedger: this.ledger,
       accountLedger: this.account.ledger,
     };
@@ -23794,7 +24400,8 @@ export class World {
   graphWorkAvailable(): boolean { return !this.massRuntime && !this.massAway; }
 
   private acceptableQuests(): QuestDef[] {
-    return this.eligibleQuestCandidates().filter(q => this.player.level >= this.questOfferLevel(q));
+    const level = this.questHand().actor.level; // THE QUEST HAND: work opens at the asking seat's level
+    return this.eligibleQuestCandidates().filter(q => level >= this.questOfferLevel(q));
   }
 
   /** Shared non-level gates for actual offers and explicitly authored previews.
@@ -23860,6 +24467,12 @@ export class World {
    *  CHOICE menu. ONE action per dwell, so a stack resolves a step at a time. */
   private updateQuestGiver(dt: number): void {
     this.ensureQuestCargo();
+    // THE QUEST HAND (a hosted world): every standing player lingers at the giver for
+    // itself, on its own clock; the act and its pay are its own (the keeper never asks).
+    if (this.localSeat.keeper) {
+      for (const seat of this.handSeats()) this.questGiverStep(seat, dt);
+      return;
+    }
     if (!this.nearAnyQuestGiver()) this.questRewardShown = null;
     if (this.player.dead || this.player.downed || !this.playerIdle()) {
       this.questGiverDwell = 0;
@@ -23882,12 +24495,38 @@ export class World {
     else if (choices.length) this.vocationOfferRequested = true; // main loop opens the menu (once per dwell)
   }
 
+  /** One hosted seat's linger at the giver (updateQuestGiver's own law, per seat): a
+   *  finished quest turns in first (a reward to choose waits in the seat's journal),
+   *  else the next acceptable quest is taken. A calling (a fresh vocation chain) and
+   *  the Odyssey's leads wait for a hosted menu that does not open yet. */
+  private questGiverDwells = new WeakMap<Seat, number>();
+  private questGiverStep(seat: Seat, dt: number): void {
+    this.withQuestHand(seat, () => {
+      if (!this.seatIdle(seat) || !this.nearAnyQuestGiver()) { this.questGiverDwells.delete(seat); return; }
+      const turnIns = this.pendingTurnIns();
+      const next = turnIns.length ? null : this.nextAcceptableQuest();
+      if (!turnIns.length && !next) { this.questGiverDwells.delete(seat); return; }
+      const t = (this.questGiverDwells.get(seat) ?? 0) + dt;
+      if (t < QUESTGIVER_DWELL) { this.questGiverDwells.set(seat, t); return; }
+      this.questGiverDwells.delete(seat);
+      const was = this.actingSeat;
+      this.actingSeat = seat; // THE ACTING SEAT: the linger is this seat's act (its party hears the news)
+      try {
+        if (turnIns.length) this.onQuestZoneCleared(turnIns[0]);
+        else if (next) this.acceptQuest(next);
+      } finally { this.actingSeat = was; }
+      this.journalDirty.add(seat.id); // THE JOURNAL ROW: the act re-ships at once
+    });
+  }
+
   /** Optional contracts reuse native eligibility and the exact destination binding.
    * Reading these cards never enrolls work, surveys terrain or forges rewards. */
-  questOfferChoices() {
+  questOfferChoices(): import('../net/journalWire').JournalOfferW[] {
+    if (this.clientActionHook) return this.netJournal?.offers ?? []; // THE JOURNAL ROW: the host's judgment for this seat
     const mass = this.massRuntime;
+    const hand = this.questHand().actor; // THE QUEST HAND
     if (mass?.config.settlement?.quests?.acceptance !== 'journal'
-      || this.clientActionHook || this.player.dead || this.player.downed) return [];
+      || hand.dead || hand.downed) return [];
     return this.acceptableQuests().filter(q => !this.isVocationChoice(q))
       .sort((a,b) => this.questOfferLevel(a) - this.questOfferLevel(b) || a.id.localeCompare(b.id))
       .map(q => {
@@ -23895,7 +24534,7 @@ export class World {
         const giver = this.giverPresent(q.giver)!;
         return {
           questId: q.id, label: q.offerLabel, giver: MONSTERS[giver.defId!]?.name ?? giver.name,
-          target: massQuestTarget(mass, {questId:q.id,zoneId:MASS_ZONE,placeId:place.id,fieldDone:false}, this.player.pos)!,
+          target: massQuestTarget(mass, {questId:q.id,zoneId:MASS_ZONE,placeId:place.id,fieldDone:false}, hand.pos)!,
           returnTo: q.turnIn ? (Array.isArray(q.turnIn.giver) ? q.turnIn.giver : [q.turnIn.giver])
             .map(id => MONSTERS[id]?.name ?? id).join(' or ') : null,
           xp: q.reward.xp ?? 0, passivePoints: q.reward.passivePoints ?? 0,
@@ -23907,20 +24546,26 @@ export class World {
   /** Host-owned journey, live giver reach and all native gates are rechecked
    * at dispatch. A stale, foreign or repeated journal action is inert. */
   acceptQuestOffer(questId: string, seat: Seat = this.localSeat): boolean {
-    if (seat !== this.localSeat || !this.questOfferChoices().some(q => q.questId === questId)) return false;
-    this.acceptQuest(QUESTS[questId]);
-    return this.activeQuests.some(q => q.questId === questId);
+    if (seat !== this.localSeat && !this.localSeat.keeper) return false; // keeperSeat: on a shard any seat may take a contract
+    return this.withQuestHand(seat, () => { // THE QUEST HAND: the giver, the gates and the level are the taker's
+      if (!this.questOfferChoices().some(q => q.questId === questId)) return false;
+      this.acceptQuest(QUESTS[questId]);
+      return this.activeQuests.some(q => q.questId === questId);
+    });
   }
 
   /** Menu-accept a vocation chain step (routed through requestMeta like every
    *  meta mutation). Validated against the live acceptable set — a stale menu
    *  click after conditions changed no-ops instead of corrupting state. */
-  acceptVocationQuest(questId: string, _seat: Seat = this.localSeat): boolean {
+  acceptVocationQuest(questId: string, seat: Seat = this.localSeat): boolean {
     const q = QUESTS[questId];
     if (!q || q.vocation === undefined) return false;
-    if (!this.acceptableQuests().some(x => x.id === questId)) return false;
-    this.acceptQuest(q);
-    return true;
+    // THE QUEST HAND (a hosted world): the chain opens to the asking seat's gates and level.
+    return this.withQuestHand(this.localSeat.keeper ? seat : this.localSeat, () => {
+      if (!this.acceptableQuests().some(x => x.id === questId)) return false;
+      this.acceptQuest(q);
+      return true;
+    });
   }
 
   /** The vocation CHOICE MENU's card list (UI view). Fresh chains only —
@@ -24040,7 +24685,8 @@ export class World {
     const p = this.bountyHands.find(h => h.id === e.questId);
     if (p) return this.handState(p);
     const q = QUESTS[e.questId];
-    const collected = !q?.collect || this.meta.items.some(i => i.questId === e.questId && i.baseId === q.collect!.baseId);
+    // THE QUEST HAND: the cargo is collected when the asking seat carries it.
+    const collected = !q?.collect || this.questHand().meta.items.some(i => i.questId === e.questId && i.baseId === q.collect!.baseId);
     return e.fieldDone && collected && !!q?.turnIn ? 'ready' : 'afield';
   }
 
@@ -24077,7 +24723,12 @@ export class World {
     }[];
     completed: { id: string; label: string; category: QuestCategory }[];
   } {
-    const active = this.activeQuests.map(e => {
+    if (this.clientActionHook && this.netJournal) return this.netJournal.log; // THE JOURNAL ROW
+    const handPos = this.questHand().actor.pos; // THE QUEST HAND
+    const active = this.activeQuests.filter(e => { // THE BOARD PER SEAT: another seat's hand is not this journal's
+      const p = this.bountyHands.find(h => h.id === e.questId);
+      return !p || this.handOwns(p);
+    }).map(e => {
       const q = this.questDefOf(e.questId); // generated postings resolve too
       const p = this.bountyHands.find(h => h.id === e.questId);
       const targetId = p && BOUNTY_KINDS[p.kind]?.target ? BOUNTY_KINDS[p.kind].target!(this, p) : e.zoneId;
@@ -24097,7 +24748,7 @@ export class World {
         // errand's veiled seat stays the ask.
         target: p?.massBounty ? standing === 'ready' ? 'Return to the Bounty Board at Lastlight' : massBountyRoute(this, p)
           : e.placeId && this.massRuntime ? standing === 'ready' ? 'Return to ' + home.counter + ' at ' + (homeName ?? 'the settlement')
-          : massQuestTarget(this.massRuntime, e, this.player.pos)
+          : massQuestTarget(this.massRuntime, e, handPos)
           : !this.graphWorkAvailable() && standing === 'afield' ? 'Destination unavailable in this expedition'
           : z ? (this.visible(z) ? z.name : e.directionsKnown === false
           ? 'Lead undiscovered — explore or seek information'
@@ -24120,7 +24771,7 @@ export class World {
         fieldDone: false, directionsKnown: true };
       this.activeQuests.push(entry);
       bumpLedger(this.ledger, 'quests_accepted'); this.charDirty = true;
-      this.notice('Quest: ' + q.offerLabel + ' · ' + massQuestTarget(this.massRuntime, entry, this.player.pos), '#c8a8e8', 16, 'civic');
+      this.notice('Quest: ' + q.offerLabel + ' · ' + massQuestTarget(this.massRuntime, entry, this.questHand().actor.pos), '#c8a8e8', 16, 'civic'); // THE QUEST HAND
       return;
     }
     if (q.geographies && !q.geographies.includes('zones')) return;
@@ -24269,7 +24920,19 @@ export class World {
   private onQuestZoneFieldCleared(zoneId: string): void {
     // Every row on this ground (THE JUICING LEAN stacks boards' postings on
     // one zone beside an authored quest's own arena).
-    for (const aq of this.activeQuests.filter(e => !e.placeId && e.zoneId === zoneId)) this.completeQuestField(aq);
+    // THE QUEST HAND: a deed the sim noticed pays the act's seat, else the player nearest it.
+    this.deedHand(() => this.objectivePlaces(), () => {
+      for (const aq of this.activeQuests.filter(e => !e.placeId && e.zoneId === zoneId)) this.completeQuestField(aq);
+    });
+  }
+
+  /** THE QUEST HAND for a deed the sim noticed (a field cleared, a place satisfied): the
+   *  acting seat when one acts, else on a hosted world the standing player nearest the
+   *  deed's places; the hero off a hosted world. */
+  private deedHand<T>(places: () => readonly Vec2[], fn: () => T): T {
+    if (!this.questHand().keeper) return fn();
+    const near = this.nearestHand(places());
+    return near ? this.withQuestHand(near, fn) : fn();
   }
 
   /** A place is its own objective owner inside the shared continuous scene.
@@ -24277,7 +24940,10 @@ export class World {
   completeMassQuest(questId: string, placeId: string): void {
     const mass = this.massRuntime, entry = this.activeQuests.find(q => q.questId === questId && q.placeId === placeId);
     if (!mass || !entry || this.player.dead || !massQuestSatisfied(mass, questId, placeId)) return;
-    this.completeQuestField(entry);
+    this.deedHand(() => { // THE QUEST HAND: the player nearest the satisfied place
+      const place = massQuestDestination(mass, questId);
+      return place && mass.journey ? [mass.journey.local(place)] : [];
+    }, () => this.completeQuestField(entry));
   }
 
   private completeQuestField(aq: SavedQuestEntry): void {
@@ -24305,13 +24971,18 @@ export class World {
     for (const aq of this.activeQuests) {
       if (aq.placeId || !aq.fieldDone || aq.zoneId !== this.zone.id) continue;
       const q = this.questDefOf(aq.questId);
-      if (!q?.collect || this.meta.items.some(i => i.questId === q.id)
-        || this.drops.some(d => d.item.kind === 'gear' && d.item.item.questId === q.id)) continue;
+      if (!q?.collect) continue;
+      // THE QUEST HAND (a hosted world): the one cargo is carried when any player's bag holds it.
+      const carried = this.localSeat.keeper
+        ? this.seats.some(s => !s.keeper && s.meta.items.some(i => i.questId === q.id))
+        : this.meta.items.some(i => i.questId === q.id);
+      if (carried || this.drops.some(d => d.item.kind === 'gear' && d.item.item.questId === q.id)) continue;
       const item: ItemInstance = { uid: nextItemUid(), baseId: q.collect.baseId,
         name: q.collect.name, questId: q.id, rarity: 'common', ilvl: this.zone.level,
         tier: 1, baseRoll: 0, affixes: [], implicitRolls: [] };
       const boss = this.zone.objective.kind === 'boss' ? this.zone.objective.id : undefined;
-      const at = this.actors.find(a => a.defId === boss && a.dead)?.pos ?? this.player.pos;
+      const deed = this.localSeat.keeper ? this.objectivePlaces()[0] : undefined; // XP BY PLACE's own: where the deed was done, never the keeper's spot
+      const at = this.actors.find(a => a.defId === boss && a.dead)?.pos ?? deed ?? this.player.pos;
       this.dropGearAt(at, item, undefined, true);
       this.charDirty = true;
     }
@@ -24324,8 +24995,12 @@ export class World {
     if (idx < 0) return;
     this.odyssey.questCompleted(aq.questId);
     const q = this.questDefOf(aq.questId);
+    // THE QUEST HAND: the seat that turns the quest in (or whose deed paid it) carries
+    // the cargo and takes the pay: its bag, its points, its feet. The hero off a hosted world.
+    const hand = this.questHand();
+    const hm = hand.meta, hp = hand.actor.pos;
     if (q?.collect) {
-      const cargo = this.meta.items.find(i => i.questId === q.id && i.baseId === q.collect!.baseId);
+      const cargo = hm.items.find(i => i.questId === q.id && i.baseId === q.collect!.baseId);
       if (!cargo || this.questStanding(aq) !== 'ready' || this.giverPresent(q.turnIn?.giver ?? []) === null) return;
     }
     if (q && (q.reward.choices?.length || q.reward.skillChoice)) {
@@ -24341,8 +25016,8 @@ export class World {
       if (!choice) return;
       const questReward = this.questRewardItem(q, choice.id, choice);
       if (!questReward) return;
-      if (!autoPlace(this.meta.items, questReward)) {
-        this.failNote(this.player, 'questReward', 'Make room in your pack, then choose your reward again.');
+      if (!autoPlace(hm.items, questReward)) {
+        this.failNote(hand.actor, 'questReward', 'Make room in your pack, then choose your reward again.');
         return;
       }
     }
@@ -24351,8 +25026,8 @@ export class World {
     const posting = this.bountyHands.find(h => h.id === aq.questId) ?? null;
     if (q) {
       if (q.collect) {
-        const cargo = this.meta.items.find(i => i.questId === q.id && i.baseId === q.collect!.baseId)!;
-        removeFromBag(this.meta.items, cargo.uid);
+        const cargo = hm.items.find(i => i.questId === q.id && i.baseId === q.collect!.baseId)!;
+        removeFromBag(hm.items, cargo.uid);
       }
       if (q.reward.imbue) {
         this.questImbues.push(mintQuestImbue(q.id, this.manifest.seed, q.reward.imbue.level, q.reward.imbue.choices));
@@ -24360,33 +25035,35 @@ export class World {
       }
       for (const feature of q.reward.features ?? []) this.account.features.add(feature);
       if (q.reward.features?.length) this.accountDirty = true;
-      if (q.reward.xp) this.grantXp(q.reward.xp);
+      // XP BY PLACE (the credit law): the hand's party near the giver; off a hosted world the
+      // near radius is 0 and the grant pays every seat as before.
+      if (q.reward.xp) this.grantXp(q.reward.xp, hp, hand.keeper ? undefined : hand);
       // OWED pay: a quest's gems are earned of the writ, not of the ground
       // underfoot — they land even where THE SPOILS LAW seals local mints.
       // THE MEMORY LAW: unnamed gem pay falls as Memories of the writ (the
       // 'quest' provenance word); a quest that NAMES its gem is an offered
       // reward and would mint it whole — none does today.
-      for (let i = 0; i < (q.reward.gems ?? 0); i++) this.dropGemAt(this.player.pos, undefined, true, 'quest');
+      for (let i = 0; i < (q.reward.gems ?? 0); i++) this.dropGemAt(hp, undefined, true, 'quest');
       // R1 ESSENCE (bounty board M0; any authored quest may pay it too):
       // ground packets at the payout site. Turn-in quests pay at the giver
       // — town for the board — so the spoils seal never bites; a future
       // non-turn-in essence quest paying on sealed ground would need the
       // owed lever grown onto dropEssenceAt (charter pitfall 4, recorded).
-      for (const c of q.reward.essence ?? []) this.dropEssenceAt(this.player.pos, c);
+      for (const c of q.reward.essence ?? []) this.dropEssenceAt(hp, c);
       if (q.reward.passivePoints) {
-        this.meta.passivePoints += q.reward.passivePoints;
-        this.text(vec(this.player.pos.x, this.player.pos.y - 64),
+        hm.passivePoints += q.reward.passivePoints;
+        this.text(vec(hp.x, hp.y - 64),
           `+${q.reward.passivePoints} passive point`, '#a0e0ff', 16);
       }
       if (q.reward.vocationPoints) {
-        this.meta.vocationPoints += q.reward.vocationPoints;
+        hm.vocationPoints += q.reward.vocationPoints;
         const vocColor = q.vocation ? VOCATIONS[q.vocation]?.color : undefined;
-        this.text(vec(this.player.pos.x, this.player.pos.y - 44),
+        this.text(vec(hp.x, hp.y - 44),
           `+${q.reward.vocationPoints} vocation point${q.reward.vocationPoints > 1 ? 's' : ''}`,
           vocColor ?? '#e8c860', 16);
-        this.markMetaDirty(this.localSeat);
+        this.markMetaDirty(hand);
       }
-      if (q.reward.grantVocation) this.grantVocation(q.reward.grantVocation);
+      if (q.reward.grantVocation) this.grantVocation(q.reward.grantVocation, hand);
       if (q.reward.ledger) {
         for (const [k, v] of Object.entries(q.reward.ledger)) bumpLedger(this.ledger, k, v);
       }
@@ -24426,7 +25103,7 @@ export class World {
     // — the bounty_done counters are the record (the shared-stamp law).
     if (!posting) this.completedQuests.add(aq.questId);
     this.activeQuests.splice(idx, 1);
-    this.markMetaDirty(this.localSeat);
+    this.markMetaDirty(hand); // THE QUEST HAND: the paid seat's build re-ships (the hero off a hosted world)
     if ((q?.reward.choices?.length || q?.reward.skillChoice || q?.reward.imbue) && !this.clientActionHook) {
       saveAccount(this.account);
       saveCharacter(this);
@@ -24436,6 +25113,7 @@ export class World {
   /** The journal shows choices only at the giver, from live ready quests. */
   questRewardOffers(): { questId: string; label: string; prompt: string; xp: number;
     choices: (NonNullable<QuestDef['reward']['choices']>[number] & { lines: string[]; footprint: string })[] }[] {
+    if (this.clientActionHook && this.netJournal) return this.netJournal.rewards; // THE JOURNAL ROW
     return this.pendingTurnIns().flatMap(aq => {
       const q = this.questDefOf(aq.questId);
       return q && (q.reward.choices?.length || q.reward.skillChoice) ? [{ questId: q.id, label: q.offerLabel,
@@ -24476,16 +25154,20 @@ export class World {
 
   claimQuestReward(questId: string, choiceId: string, seat: Seat = this.localSeat): boolean {
     // Authored quests belong to the host's journey; a guest cannot claim its pay.
-    if (seat !== this.localSeat || this.clientActionHook || this.player.dead || this.player.downed) return false;
-    const aq = this.pendingTurnIns().find(e => e.questId === questId);
-    const q = aq && this.questDefOf(aq.questId);
-    if (!aq || !q || !questRewardChoices(this.account, q).some(c => c.id === choiceId)) return false;
-    this.onQuestZoneCleared(aq, choiceId);
-    return !this.activeQuests.includes(aq);
+    if ((seat !== this.localSeat && !this.localSeat.keeper) || this.clientActionHook || seat.actor.dead || seat.actor.downed) return false; // keeperSeat: the acting seat's own body
+    return this.withQuestHand(seat, () => { // THE QUEST HAND: the giver by the claimant, the reward into its bag
+      const aq = this.pendingTurnIns().find(e => e.questId === questId);
+      const q = aq && this.questDefOf(aq.questId);
+      if (!aq || !q || !questRewardChoices(this.account, q).some(c => c.id === choiceId)) return false;
+      this.onQuestZoneCleared(aq, choiceId);
+      return !this.activeQuests.includes(aq);
+    });
   }
 
   /** Deferred rewards remain visible away from town, but only the giver can work. */
-  questImbueOffers() {
+  questImbueOffers(): import('../net/journalWire').JournalImbueW[] {
+    if (this.clientActionHook && this.netJournal) return this.netJournal.imbues; // THE JOURNAL ROW
+    const items = this.questHand().meta.items; // THE QUEST HAND: the asking seat's own magic pieces
     return this.questImbues.map(reward => {
       const q = QUESTS[reward.questId];
       const near = !!q && this.giverPresent(q.turnIn?.giver ?? q.giver) !== null;
@@ -24494,7 +25176,7 @@ export class World {
       const giver = giverId ? MONSTERS[giverId]?.name ?? 'The giver' : 'The giver';
       return { questId: reward.questId, level: reward.level, near, giver,
         prompt: q?.reward.imbue?.prompt ?? 'Choose a magic piece to make finer.',
-        items: this.meta.items.filter(item => item.rarity === 'magic' && !item.gem && !item.mem).map(item => ({
+        items: items.filter(item => item.rarity === 'magic' && !item.gem && !item.mem).map(item => ({
           uid: item.uid, name: item.name, current: describeItem(item).affix.map(l => l.text),
           options: imbueOptions(reward, item).map(a => ({ id: a.id,
             lines: describeItem({ ...item, affixes: [a] }).affix.map(l => l.text),
@@ -24506,9 +25188,9 @@ export class World {
   }
 
   claimQuestImbue(questId: string, uid: number, affixId: string, seat: Seat = this.localSeat): boolean {
-    if (seat !== this.localSeat || this.clientActionHook || seat.actor.dead || seat.actor.downed) return false;
+    if ((seat !== this.localSeat && !this.localSeat.keeper) || this.clientActionHook || seat.actor.dead || seat.actor.downed) return false; // keeperSeat
     const reward = this.questImbues.find(r => r.questId === questId), q = QUESTS[questId];
-    const giver = q && this.giverPresent(q.turnIn?.giver ?? q.giver);
+    const giver = q && this.withQuestHand(seat, () => this.giverPresent(q.turnIn?.giver ?? q.giver)); // THE QUEST HAND: the giver by the claimant
     if (!reward || !q || !giver) return false;
     const item = this.bagItem(seat, uid);
     const affix = item && imbueOptions(reward, item).find(a => a.id === affixId);
@@ -25093,7 +25775,8 @@ export class World {
       // snapshot reconciles, reverting anything the host rejected.
       this.clientActionHook(action);
       // EXCEPT zone-changing actions: caravanTo runs a full loadZone (heavy regen,
-      // and the client would mint with its OWN seed → a divergent flicker),
+      // and the client would mint with its OWN seed → a divergent flicker; the
+      // waypoint likewise, and its client lane would ask again),
       // vocationQuest MINTS a quest zone into the world map, and harborChart
       // runs a SURVEY PULSE (mints + reveals graph ground). Forward only; the
       // host's authoritative snapshot/zone broadcast moves the client.
@@ -25102,12 +25785,13 @@ export class World {
       // The bounty intents likewise: accepting lifts veils + redraws exit
       // labels, and the slate is host-armed — forward only; the snapshot
       // moves the client.
-      if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'questAccept' && action.t !== 'questReward' && action.t !== 'harborChart'
+      if (action.t !== 'caravanTo' && action.t !== 'waypoint' && action.t !== 'vocationQuest' && action.t !== 'questAccept' && action.t !== 'questReward' && action.t !== 'harborChart'
         && action.t !== 'holdMuster' && action.t !== 'holdRestore'
         && action.t !== 'bountyAccept' && action.t !== 'bountyAbandon' && action.t !== 'bountyTurnIn'
         && action.t !== 'bountyLock' && action.t !== 'bountyCoastWrits'
         && action.t !== 'forgeBegin' && action.t !== 'forgeCancel') {
         this.applyAction(this.localSeat, action);
+        this.clientOptimistic?.(action); // THE ECHO LAW: held against the wire until its echo
       }
     } else {
       this.applyAction(this.localSeat, action);
@@ -25120,6 +25804,12 @@ export class World {
    *  instead of corrupting state or throwing. Each mutator also runs its own guards. */
   applyAction(seat: Seat, action: MetaAction): void {
     if (!isValidMetaAction(action)) return;
+    const wasActing = this.actingSeat;
+    this.actingSeat = seat; // THE ACTING SEAT: news this act mints reaches its party
+    try { this.applyActionAs(seat, action); } finally { this.actingSeat = wasActing; }
+  }
+
+  private applyActionAs(seat: Seat, action: MetaAction): void {
     switch (action.t) {
       case 'townPortal': this.castTownPortal(seat); break;
       case 'learn': this.learnSkill(action.uid, seat, action.slot, action.emptyOnly); break;
@@ -25129,6 +25819,7 @@ export class World {
       case 'pickTreeNode': this.pickTreeNode(action.skillId, action.nodeId, seat); break;
       case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;
       case 'companionStance': this.cycleCompanionStance(seat, action.skillId, action.stance); break;
+      case 'ping': this.placePing(seat, action.x, action.y); break;
       case 'fontMerge': this.fontMergeSkill(action.skillId, action.rarity, seat); break;
       case 'fontConvert': this.fontConvertEssence(action.tier, action.dir, seat); break;
       case 'fontReset': this.fontResetTree(action.skillId, seat); break;
@@ -25172,6 +25863,7 @@ export class World {
       case 'swapSkillSlots': this.swapSkillSlots(action.a, action.b, seat); break;
       case 'recallMemory': this.recallMemory(seat, action.uid, action.dropper, action.facet); break;
       case 'caravanTo': this.startCaravan(action.band, seat); break;
+      case 'waypoint': this.travelToWaypoint(action.zoneId, seat); break; // THE ROADS PER PLAYER (shard M1 W2)
       case 'harborChart': this.buyHarborChart(action.omen, seat); break;
       case 'bountyAccept': this.acceptBounty(action.id, seat); break;
       case 'bountyAbandon': this.abandonBounty(action.id, seat); break;
@@ -25182,9 +25874,10 @@ export class World {
       case 'bountyCoastWrits':
         // The quay panel's Coast Writs button — the standing writ grammar,
         // self-guarded (cooldown + open hold + eligible quarry).
-        if (this.bountyBoardsHere().some(b => b.id !== BOUNTY_BOARD_CFG.boardId)) this.postHoldWrits();
+        if (this.bountyBoardsHere().some(b => b.id !== BOUNTY_BOARD_CFG.boardId
+          && (!this.localSeat.keeper || this.nearBountyBoard(seat, b.id)))) this.postHoldWrits(); // THE BOARD PER SEAT: the quay's writs post from its board
         break;
-      case 'holdMuster': this.beginHoldMuster(); break;
+      case 'holdMuster': if (this.nearMusterHorn(seat)) this.beginHoldMuster(); break; // THE ACTING SEAT: the horn sounds only for a hand on it
       case 'holdRestore': this.buyHoldRestore(seat); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
       case 'questAccept': this.acceptQuestOffer(action.questId, seat); break;
@@ -25226,6 +25919,7 @@ export class World {
     }
     // Whatever changed, re-replicate this seat's meta to its owner client.
     this.markMetaDirty(seat);
+    if (this.localSeat.keeper) this.journalDirty.add(seat.id); // THE JOURNAL ROW: an act may move its quests and boards
   }
 
   // ------------------------------------------------------------- monsters ---
@@ -26070,6 +26764,7 @@ export class World {
   releaseCompanion(actorId: number, seat: Seat = this.localSeat): void {
     const a = this.actorById(actorId);
     if (!a || !a.companion || a.dead || a.owner !== seat.actor) return;
+    if (this.localSeat.keeper && !this.nearTracker(seat)) return; // THE COUNTERS AND THE JOURNAL: a bond is undone at the Tracker's fire, by the seat standing there
     this.showCompanionCue(a, 'sever', a.owner);
     // The bond ends FIRST — else kill()'s companion intercept would merely
     // down it (and a downed body's kill() no-ops outright).
@@ -29780,7 +30475,13 @@ export class World {
    *  `world: true` bends the WHOLE sim instead (cinematic territory). */
   castChrono(caster: Actor, spec: ChronoSpec, id: string, duration: number, label?: string): void {
     let actors: ActorTimeFilter | undefined;
-    if (!spec.world) {
+    // keeperSeat lane — THE SCOPED FREEZE (card 18 B with C): on a hosted world a time
+    // stop is a bubble around its caster that never bends the caster's own team, whatever
+    // the spec asked (a world-scoped spec included); off a shard the spec's own law.
+    const scope = this.timeflow.chronoScope;
+    if (scope) {
+      actors = { exceptTeam: caster.team, within: { x: caster.pos.x, y: caster.pos.y, r: scope.radius } };
+    } else if (!spec.world) {
       const ex = spec.exempt ?? 'pack';
       actors = ex === 'caster' ? { exceptIds: [caster.id] }
         : ex === 'pack' ? { exceptIds: [caster.id], exceptOwnedBy: [caster.id] }
@@ -33687,7 +34388,7 @@ export class World {
             e.hitFlash = 0.1;
             e.hitFlashType = dominantTypeOf(tick);
             stampSegFlash(e, touch.seg);
-            this.accumulateDotText(e, taken, TETHER_TICK);
+            this.accumulateDotText(e, taken, TETHER_TICK, t.owner); // THE WIRE'S EYES: the band's owner
             if (e.life <= 0 && !e.dead) this.kill(e, false, t.owner);
           }
         }
@@ -34633,7 +35334,7 @@ export class World {
           if (ally.dead || ally.team !== caster.team) continue;
           if (dist(minion.pos, ally.pos) > 90) continue;
           const got = ally.healBy(mend);
-          if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
+          if (got > 0.5) this.seatText(caster, ally.pos, '+' + Math.round(got), '#8ae0a8', 10); // THE WIRE'S EYES: the healer's seat
         }
         this.flashes.push({
           pos: vec(minion.pos.x, minion.pos.y), radius: 90,
@@ -37215,7 +37916,7 @@ export class World {
       if (oh > 0) this.grantAbsorb(target, Math.min(target.maxLife() * 0.5, spill * oh), 6);
     }
     if (!quiet && landed >= 1) {
-      this.text(target.pos, '+' + Math.round(landed), '#6fc06f', 12);
+      this.seatText(caster, target.pos, '+' + Math.round(landed), '#6fc06f', 12); // THE WIRE'S EYES: the healer's seat
     }
     // HEALER AGGRO: anyone locked onto the healed victim books threat against
     // the mender (their brain's TargetSpec.threat.heal weighs it) — keeping a
@@ -38047,7 +38748,7 @@ export class World {
             if (ally.dead || ally.team !== caster.team || ally === caster) continue;
             if (dist(caster.pos, ally.pos) > DEFENSE_CFG.sustain.vampiricRadius) continue;
             const got = ally.healBy(heal);
-            if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
+            if (got > 0.5) this.seatText(caster, ally.pos, '+' + Math.round(got), '#8ae0a8', 10); // THE WIRE'S EYES: the healer's seat
           }
         }
         // LIFE BOND (the Chloromancer shape): the caster's damage feeds the
@@ -38062,7 +38763,7 @@ export class World {
             if (share > 0) {
               const got = bonded.healBy(dealt * share * (def.bondFeed ?? 1)
                 * caster.sheet.get('healPower', skillContextTags(def), extra));
-              if (got > 0.5) this.text(bonded.pos, '+' + Math.round(got), '#7ee0b8', 11);
+              if (got > 0.5) this.seatText(caster, bonded.pos, '+' + Math.round(got), '#7ee0b8', 11); // THE WIRE'S EYES: the healer's seat
             }
           }
         }
@@ -38229,9 +38930,16 @@ export class World {
       if (target === this.player && this.player.life > 0
         && this.player.life < this.player.maxLife() * this.player.lowLifeLine()) {
         this.lowLifeHitFlash = LOW_LIFE_FLASH_SEC;
+      } else {
+        // THE ACTING SEAT: every other player's surge rides its own HUD row
+        // (SeatW.lh) to its own screen; its own line moves its own gate.
+        const lowSeat = this.seatOf(target);
+        if (lowSeat && !lowSeat.keeper && !lowSeat.merc && !lowSeat.couch && target.life > 0
+          && target.life < target.maxLife() * target.lowLifeLine()) this.seatHudOf(lowSeat).lhAt = this.time;
       }
       this.text(target.pos, Math.round(dealt).toString(),
         result.crit ? '#ffd24a' : '#ffffff', result.crit ? 18 : 13, 'dmg');
+      this.creditFloat(caster); // THE WIRE'S EYES: the number's owner is the striker's credited seat
       // CULLED: the executing threshold fired inside applyHit.
       if (result.culled) {
         this.showCombatOutcome(target, 'culled', evidence);
@@ -40382,7 +41090,7 @@ export class World {
         if (a.team === b.owner.team) {
           if (b.fx.healAllies) {
             const healed = a.healBy(b.fx.healAllies.base + b.fx.healAllies.perLevel * lvl);
-            if (healed > 0.5) this.text(a.pos, '+' + Math.round(healed), '#8ae0a8', 11);
+            if (healed > 0.5) this.seatText(b.owner, a.pos, '+' + Math.round(healed), '#8ae0a8', 11); // THE WIRE'S EYES: the healer's seat
           }
         } else if (b.fx.damage) {
           const landed = mitigateTyped(a, {
@@ -40623,6 +41331,13 @@ export class World {
     // never disagree about who counts. Deliberately silent per kill — the
     // commonest objective must not floater-spam; the HUD line is the
     // scoreboard, and completeObjective is the one loud beat.
+    // XP BY PLACE (a hosted world): the field's last counted fall is where a zone's
+    // objective was last worked (objectivePlaces' fallback when no fixture names one).
+    {
+      id: 'objective_fall_place',
+      when: ctx => !!this.localSeat.keeper && this.objectiveCountable(ctx.actor),
+      run: ctx => { this.objectiveFallAt = { zone: this.zone.id, pos: vec(ctx.actor.pos.x, ctx.actor.pos.y) }; },
+    },
     {
       id: 'clear_cull_tally',
       when: ctx => !!this.cull && !this.objectiveDone
@@ -41000,7 +41715,7 @@ export class World {
       for (const m of this.actors) {
         if (m.dead || m === actor || m.owner !== actor.owner || m.construct) continue;
         const got = m.healBy(amount);
-        if (got > 0.5) this.text(m.pos, '+' + Math.round(got), '#8ae0a8', 10);
+        if (got > 0.5) this.seatText(actor.owner, m.pos, '+' + Math.round(got), '#8ae0a8', 10); // THE WIRE'S EYES: the healer's seat
       }
       this.flashes.push({
         pos: vec(actor.pos.x, actor.pos.y), radius: 70,
@@ -41173,9 +41888,12 @@ export class World {
       const spoilD0 = this.drops.length, spoilO0 = this.orbs.length;
       const prevSpoil = this.spoilStory;
       this.spoilStory = actor.tier;
+      const prevActing = this.actingSeat; // THE ACTING SEAT: the news a credited kill mints reaches the killer's party
+      if (credit) this.actingSeat = this.seatOfRoot(killer) ?? prevActing;
       this.withMassReward(actor.level, () => {
         if (credit) {
           this.kills++;
+          this.noteSeatKill(killer); // THE ACTING SEAT: the killing seat keeps its own count (the reckoning's kills)
           // THE WORLD'S MEMORY: grudges accrue to the name; a manifested
           // nemesis meets its fate (cheat death or the grudge ends).
           this.noteNemesisKill(actor);
@@ -41188,7 +41906,7 @@ export class World {
           // elite spill, no orbs. The summoner is the prize; endlessly farming
           // its spawn is a closed door.
           if (!actor.noBounty) {
-            this.grantXp(actor.xpValue);
+            this.grantXp(actor.xpValue, actor.pos, this.seatOfRoot(killer)); // THE NEAR LAW + THE KILLER'S DUE (keeperSeat lane)
             if (actor.xpValue > 0) this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11, 'xp');
             this.rollDrops(actor);
             // Elites spill extra gems on top of the base roll (bias rides along).
@@ -41261,6 +41979,7 @@ export class World {
         this.stampSpoils(spoilD0, spoilO0, actor.tier);
       });
       this.spoilStory = prevSpoil;
+      this.actingSeat = prevActing;
     }
     // THE DEATH VOICE (engine/bodyVoices.ts): a body dies as what it is made
     // of — flesh spatters, bone flecks, crystal sparkles, the ethereal wisps
@@ -42381,7 +43100,7 @@ export class World {
     if (drop.item.kind !== 'gear') return;
     const item = drop.item.item;
     if (this.isBankedRelicEcho(item)) { this.drops.splice(bestIdx, 1); return; }
-    if (item.questId && seat !== this.localSeat) return;
+    if (item.questId && seat !== this.localSeat && !this.localSeat.keeper) return; // keeperSeat: on a shard any hand may carry a quest
     // THE STONE (M2): a lying pouch (a full bag left it) still merges free.
     if (item.mem && this.tryMergeMemoryItem(seat, item)) {
       this.drops.splice(bestIdx, 1);
@@ -43374,26 +44093,30 @@ export class World {
 
     // MYCELIA: feed the bloom per-zone event activity (it can't reach the sim) BEFORE the
     // overlay ticks, then reconcile the biome warps it has saturated.
-    this.feedMyceliaActivity();
+    // THE PRIMARY GATE (shard M1, engine/shardUnits.ts): a sim unit skips the
+    // keeper's world sweeps below (the keeper ticks first and drains every world
+    // queue); off a shard there is no link and every sweep runs as it always did.
+    const unitWorld = this.shardWorld?.role === 'unit';
+    if (!unitWorld) this.feedMyceliaActivity();
     // Advance the living world (day/night, weather drift, faction territory).
-    this.sim.update(dt, this.simView());
-    if (!this.massRuntime) this.odyssey.update(); // worldmass places have not adopted graph campaign targets yet
+    if (!unitWorld) this.sim.update(dt, this.simView());
+    if (!unitWorld && !this.massRuntime) this.odyssey.update(); // worldmass places have not adopted graph campaign targets yet
     this.questRescues.update();
     // THE FORECHART: keep the veiled halo minted ahead of the walker, and grow
     // any far soundings the overlays have requested (world/forechart.ts).
-    if (this.graphWorkAvailable()) this.updateForechart();
+    if (!unitWorld && this.graphWorkAvailable()) this.updateForechart();
     // THE SETTLE SWEEP: mint-time settles are local — chained displacement
     // can leave a pair past the hover floor across a pool edge; the slow
     // whole-chart pass self-heals it (no-op scan on a clean chart).
-    this.updateWebSettle();
+    if (!unitWorld) this.updateWebSettle();
     // THE OMENS: the world murmurs about what waits unfound (world/omens.ts).
-    this.updateOmens();
+    if (!unitWorld) this.updateOmens();
     // THE OBJECTIVE WEB: a class earned mid-run lands mid-run.
-    this.updateDeedRecovery();
-    this.sweepClassClaims();
-    this.drainMyceliaLedger();
+    if (!unitWorld) this.updateDeedRecovery();
+    if (!unitWorld) this.sweepClassClaims();
+    if (!unitWorld) this.drainMyceliaLedger();
     this.updateContagionInfection();
-    this.reconcileDeepwinter();
+    if (!unitWorld) this.reconcileDeepwinter();
     this.updateStorm(dt);
     this.updateDemonStorm(dt);
     this.updateBombardment();
@@ -43424,7 +44147,7 @@ export class World {
     // Lines land in THE NOTICE FEED (screen-anchored, stacked, per-line
     // clocks, channel-curated at draw) — never in the overhead float lane,
     // where world news used to fight the combat text for the same pixels.
-    for (const b of collectBulletins(this)) {
+    if (!unitWorld) for (const b of collectBulletins(this)) {
       pushNotice(this.notices, b, this.time);
     }
 
@@ -43436,7 +44159,7 @@ export class World {
     // toggles. Weather is intentionally excluded (a tide of the dead can't snuff
     // the sky), so no weather here.
     const dwf = this.sim.deadwakeField;
-    if (dwf && dwf.consumedZones.length) {
+    if (!unitWorld && dwf && dwf.consumedZones.length) {
       const con = dwf.surge().consume;
       for (const zid of dwf.consumedZones) {
         if (con.demonInvasion) this.sim.demonFieldFor(this.zoneMap[zid]?.dimension)?.resolveInvasion(zid);
@@ -43453,7 +44176,7 @@ export class World {
     // completed wing's far pole takes root — drained here into KEYED biome
     // warps (restore re-queues them, so a resumed save re-roots).
     const swf = this.sim.swarmingField;
-    if (swf) {
+    if (!unitWorld && swf) {
       const mf2 = this.sim.migrationField;
       if (mf2) {
         for (const herdId of swf.predate(mf2.herdBands())) {
@@ -43472,10 +44195,12 @@ export class World {
 
     // WARBAND ARRIVALS: a host that just reached its target node, while YOU stand
     // in that zone, marches in for real — a coherent pack at the entry it came by.
-    for (const host of this.sim.invasion.arrivals) {
-      if (host.targetZoneId === this.zone.id) this.spawnWarband(host);
+    // THE SPLIT DISPATCH (shard M1-W3): the keeper drains the arrivals once; the
+    // pack lands in the World standing in the target zone, and nowhere else.
+    if (!unitWorld) for (const host of this.sim.invasion.arrivals) {
+      this.atZone(host.targetZoneId, w => w.spawnWarband(host));
     }
-    this.sim.invasion.arrivals.length = 0;
+    if (!unitWorld) this.sim.invasion.arrivals.length = 0;
     this.updateWarbandMarches();
 
     // DEMON INVASION: mint the epicenter zone at its coordinate (within the visible
@@ -43487,7 +44212,7 @@ export class World {
     // EVERY instance drains — each DIMENSION's rifts tear in its own graph:
     // hell's epicenters carry hell's dimension/palette/level pressure and never
     // touch the surface biome field (only surface events scorch the surface wash).
-    for (const dfi of this.sim.demonFieldsAll()) {
+    if (!unitWorld) for (const dfi of this.sim.demonFieldsAll()) {
       if (!dfi.mintRequests.length) continue;
       const dfDim = dfi.dimension; // undefined = the surface instance
       for (const req of dfi.mintRequests) {
@@ -43528,8 +44253,10 @@ export class World {
         dfi.bindTarget(req.invId, req.zoneKey);
         // Announce only invasions of the plane the player stands in — a hell
         // rift tearing while you walk the surface stays hell's own business.
-        if ((dfDim ?? 'surface') === (this.zone.dimension ?? 'surface')) {
-          this.notice('A demon-blighted rift tears open in the distance!', '#e8503c', 15, 'events');
+        // THE OCCUPIED LAW (shard M1-W3): heard by whoever stands in that plane.
+        const hearers = this.occupiedAudience(z => (dfDim ?? 'surface') === (z.dimension ?? 'surface'));
+        if (hearers !== null) {
+          this.noticeOccupied(hearers, 'A demon-blighted rift tears open in the distance!', '#e8503c', 15, 'events');
         }
       }
       dfi.mintRequests.length = 0;
@@ -43550,9 +44277,13 @@ export class World {
     // CONCLAVE → ELDRITCH INCURSION: when the incubation counter maxes, the Conclave
     // hands an ignition to the shared Incursion field (overlays can't reach each
     // other — the engine bridges). The observer LANDS far off in the wilds.
-    const ig = this.sim.conclaveField?.takeIgnition();
+    const ig = unitWorld ? undefined : this.sim.conclaveField?.takeIgnition();
     if (ig) {
-      const info = this.sim.incursionField.ignite(ig.archetype, ig.origin, Math.max(this.zone.level, this.player.level));
+      // THE OCCUPIED LAW (shard M1-W3): the ignite level reads every occupied
+      // zone's level beside the world's character level (solo: the standing zone).
+      let level = this.player.level;
+      for (const w of this.presentWorlds()) level = Math.max(level, w.zone.level);
+      const info = this.sim.incursionField.ignite(ig.archetype, ig.origin, level);
       if (info) this.notice(info.announce, info.color, 18, 'events');
     }
     // Drain incursion mints: a CLUSTER of hidden (concealed + floating) epicenter
@@ -43560,7 +44291,7 @@ export class World {
     // them; a road forms only when the player explores near. Each warps the biome
     // field, locking its ground into the archetype's blight. (Host/SP only.)
     const inc = this.sim.incursionField;
-    if (inc.mintRequests.length) {
+    if (!unitWorld && inc.mintRequests.length) {
       for (const req of inc.mintRequests) {
         if (this.zoneMap[req.zoneKey]) { inc.bindEpicenter(req.id, req.zoneKey); continue; }
         // Even an alien intrusion needs GROUND to blight — pulled ashore.
@@ -43600,8 +44331,8 @@ export class World {
     // transient field), the dead half RELEASES (a gradual fade at
     // BIOME_FIELD_CFG.warpFadePerSec — the land HEALS, it never snaps). Every
     // ending — kill, burnout, collapse, package absent — heals by construction.
-    this.warpSweepAcc += dt;
-    if (this.warpSweepAcc >= 1) {
+    if (!unitWorld) this.warpSweepAcc += dt;
+    if (!unitWorld && this.warpSweepAcc >= 1) {
       this.warpSweepAcc = 0;
       const bf = this.sim.biomeField;
       const liveEps = new Map<string, { coord: { x: number; y: number }; archetype: string }>();
@@ -43664,14 +44395,16 @@ export class World {
     // path appears as they approach. Host/SP only; new exits stream to clients
     // via the zone snapshot; syncZoneExits() (below) surfaces the portal live
     // if the road landed on the player's zone.
-    for (const z of Object.values(this.zoneMap)) {
+    // THE OCCUPIED LAW (shard M1-W3): "near the player" is near any zone a
+    // player's World stands in (solo: the standing zone).
+    const posts = unitWorld ? [] : this.presentWorlds();
+    if (!unitWorld) for (const z of Object.values(this.zoneMap)) {
       if (!z.floating) continue;
       // Proximity only counts WITHIN a dimension — the planes share one
       // coordinate space, and a hell rift must not wire in because the player
       // walks surface ground that happens to overlap its numbers.
-      const sameDim = (z.dimension ?? 'surface') === (this.zone.dimension ?? 'surface');
-      const nearPlayer = sameDim
-        && Math.hypot(z.map.x - this.zone.map.x, z.map.y - this.zone.map.y) <= APPROACH_RADIUS;
+      const nearPlayer = posts.some(w => (z.dimension ?? 'surface') === (w.zone.dimension ?? 'surface')
+        && Math.hypot(z.map.x - w.zone.map.x, z.map.y - w.zone.map.y) <= APPROACH_RADIUS);
       if (!nearPlayer) continue;
       connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0), APPROACH_RADIUS, this.visited);
       if (z.floating) continue; // no local road yet; retry as exploration grows
@@ -43878,7 +44611,7 @@ export class World {
           raw += amt;
           this.applyDeedDot(a, amt, ty as DamageType | 'untyped');
         }
-        if (raw > 0) this.accumulateDotText(a, raw, dt);
+        if (raw > 0) this.accumulateDotText(a, raw, dt, 'afflictions'); // THE WIRE'S EYES: the wounds' authors
         // A DoT emptied the shield — the esBreak proc seam fires here too.
         if (a.esBroke) {
           a.esBroke = false;
@@ -44801,20 +45534,21 @@ export class World {
     // predicate) REFUSES the brush while its siphon drinks: the refusal
     // floats throttled, and the moment the thief falls the same brush
     // attunes. Radius is data (LEYLINE_CFG.attuneRadius — the historical 70).
-    if (!this.player.dead && !this.player.downed && this.waypointPos
-      && !this.discoveredWaypoints.has(this.zone.id)
-      && this.player.tier === 0 // THE SAME-STORY LAW: the stone stands on the ground floor (placed on the base grid)
-      && dist(this.player.pos, this.waypointPos) <= LEYLINE_CFG.attuneRadius) {
+    // THE ACTING SEAT: any standing player's brush attunes it (the touchers).
+    const wpAt = this.waypointPos;
+    if (wpAt && !this.discoveredWaypoints.has(this.zone.id)
+      && this.touchers().some(h => h.tier === 0 // THE SAME-STORY LAW: the stone stands on the ground floor (placed on the base grid)
+        && dist(h.pos, wpAt) <= LEYLINE_CFG.attuneRadius)) {
       if (this.waypointBesieged()) {
         if (this.time - this.wpRefusedAt > 2.5) {
           this.wpRefusedAt = this.time;
-          this.flashes.push({ pos: vec(this.waypointPos.x, this.waypointPos.y),
+          this.flashes.push({ pos: vec(wpAt.x, wpAt.y),
             radius: LEYLINE_CFG.attuneRadius * 0.5, color: LEYLINE_CFG.beam, life: 0.5, maxLife: 0.5 });
         }
       } else {
         this.discoveredWaypoints.add(this.zone.id);
         this.flashes.push({
-          pos: vec(this.waypointPos.x, this.waypointPos.y),
+          pos: vec(wpAt.x, wpAt.y),
           radius: 50, color: '#5ad8d8', life: 0.5, maxLife: 0.5,
         });
       }
@@ -44829,51 +45563,24 @@ export class World {
     // indoorsOnly kinds (the cellar hatch) also demand the player stand under
     // the SAME ROOF as the mouth — nobody dwells a hatch through a house wall.
     if (!this.player.dead && !this.player.downed && !this.traversal) {
-      // Player-side roof resolved ONCE per frame; each mouth carries its own
-      // precomputed home roof (loadZone) — the indoors gate is two compares.
-      const playerRoof = this.caveEntrances.some(c => c.roof !== undefined && c.roof !== null)
-        ? this.roofedStructureAt(this.player.pos) : null;
-      const onMouth = (cm: { pos: Vec2; kind: string; roof?: PlacedStructure | null; mouthTier?: number }): boolean =>
-        dist(this.player.pos, cm.pos) <= transitRadius(`sidezone:${cm.kind}`, 28) + this.player.radius
-        // THE STORY GATE (mouthTier — the under-tier lanes): a mouth dwells
-        // only from ITS OWN story. A taproot gate seated down in the root
-        // galleries never triggers under a surface walker crossing the duct
-        // line above it — and a surface mouth never triggers under a duct
-        // runner passing beneath it (drawn == dwelled, both directions).
-        && (cm.mouthTier ?? 0) === (this.player.tier ?? 0)
-        && (!sidezoneOf(cm.kind)?.indoorsOnly || (!!cm.roof && cm.roof === playerRoof))
-        // THE CONDITIONED DOOR (SidezoneDef.when — the lair fabric's night
-        // barrow): a closed door never starts the dwell. The refusal READ
-        // lives below the mouth scan, so the schedule is never a mystery.
-        && (!sidezoneOf(cm.kind)?.when || this.radianceCondHeld(sidezoneOf(cm.kind)!.when!.cond))
-        // THE SEALED MOUTH (SidezoneDef.sealedBy — the exhumation law,
-        // data/lonecrypt.ts): a riddle-sealed door never starts the dwell
-        // either; its refusal rides the same float below.
-        && !this.sidezoneSealHolds(cm.kind)
-        && this.dwellReachable(this.player.pos, cm.pos, transitReach(`sidezone:${cm.kind}`), this.storyPair(this.player, { tier: cm.mouthTier }));
+      // THE LIFT (shard M1 W2): the mouth scan is mouthUnder, shared with the
+      // shard scanner (engine/shardRoads.ts), which reads each seat's body.
+      const mouthIdx = this.mouthUnder(this.player);
       if (this.caveExitGrace) {
-        if (!this.caveEntrances.some(onMouth)) this.caveExitGrace = false;
+        if (mouthIdx < 0) this.caveExitGrace = false;
         this.caveDwellIdx = -1;
       } else {
-        let mouthIdx = -1;
-        for (let i = 0; i < this.caveEntrances.length; i++) { if (onMouth(this.caveEntrances[i])) { mouthIdx = i; break; } }
         // THE CONDITIONED DOOR's refusal read: standing on a door whose cond
         // does NOT hold floats its schedule (throttled) — a closed barrow
         // tells you it is closed, and roughly when it will not be. A SEALED
         // mouth (sealedBy — the exhumation law) floats its own line through
-        // the same clock: the shut door names the ring that opens it.
-        if (mouthIdx < 0 && this.time - this.doorRefusalAt > 2.5) {
-          for (const cm of this.caveEntrances) {
-            const sz = sidezoneOf(cm.kind);
-            const condShut = !!sz?.when && !this.radianceCondHeld(sz.when.cond);
-            const sealShut = !condShut && this.sidezoneSealHolds(cm.kind);
-            if (!condShut && !sealShut) continue;
-            if (dist(this.player.pos, cm.pos) > transitRadius(`sidezone:${cm.kind}`, 28) + this.player.radius) continue;
+        // the same clock: the shut door names the ring that opens it. A
+        // hosted world speaks it per seat instead (the scanner's note row).
+        if (!this.shardWorld && mouthIdx < 0 && this.time - this.doorRefusalAt > 2.5) {
+          const shut = this.mouthRefusalUnder(this.player);
+          if (shut) {
             this.doorRefusalAt = this.time;
-            this.text(vec(cm.pos.x, cm.pos.y - 26),
-              (condShut ? sz!.when!.refusal : sz!.sealedBy!.refusal) ?? 'the door does not answer…',
-              '#b8a8d8', 12);
-            break;
+            this.text(vec(shut.pos.x, shut.pos.y - 26), shut.text, '#b8a8d8', 12);
           }
         }
         // Dwell builds only while standing idle AND not being knocked (a knockback
@@ -45011,77 +45718,10 @@ export class World {
         // never yanks you into a realm without meaning to (mirrors the portal + cave
         // dwell; a knockback onto a gate can't carry you in either). Gather the open
         // gates with their enter actions and dwell on the NEAREST one you stand on.
-        const gates: { pos: Vec2; kind: string; key: string; enter: () => void }[] = [];
-        // The Underworld BREACH (bottom of the cave ladder) is a realm gate too.
-        if (this.breachPos) {
-          // Which dimension does a cave breach tear into? Whatever REGISTERED a
-          // cave_breach entry (data) — first registrant today; a weighted roll
-          // when a second breach-entered layer ever ships.
-          const bd = dimensionsEnteredBy('cave_breach')[0];
-          if (bd) gates.push({ pos: this.breachPos, kind: 'breach', key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id) });
-        }
-        // DIMENSION GATE DOODADS (DimensionEntry.gateDoodad, scanned per
-        // loadZone): the Ascent's shining arch — dwell it to cross into its
-        // dimension. Radius/dwell ride per-kind transit rows like every gate
-        // ('realm_gate:dim_<id>' chains to the 'realm_gate' family).
-        for (const g of this.dimGates) {
-          gates.push({
-            pos: g.pos, kind: `dim_${g.dimId}`, key: `dim:${g.dimId}:${Math.round(g.pos.x)},${Math.round(g.pos.y)}`,
-            // A gate may RIDE a registered traversal (DimensionEntry.traversal):
-            // the crossing plays the cinematic and the dimension swap fires
-            // behind its veil (the geyser-mouth pattern) — the ascendant arch
-            // launches you again, steadier. No row = the old instant cross.
-            enter: () => {
-              const trav = dimensionDef(g.dimId).entry?.traversal;
-              if (trav) this.beginTraversal(trav, { swap: () => this.enterDimension(g.dimId) });
-              else this.enterDimension(g.dimId);
-            },
-          });
-        }
-        for (const dp of this.demonPortals) gates.push({ pos: dp.pos, kind: 'demon', key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
-        for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
-        for (const np of this.necropolisPortals) gates.push({ pos: np.pos, kind: 'necropolis', key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
-        for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, kind: 'fracture', key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr) });
-        // COURT DOORS (encounter fabric): the fed breach's standing way into
-        // its lord's domain — the same deliberate dwell as every threshold
-        // (its 'realm_gate:<gateKind>' transit row sets the feel).
-        for (const e of this.encounters) {
-          if (e.phase !== 'door' || !e.doorAt) continue;
-          const at = e.doorAt;
-          gates.push({
-            pos: at, kind: e.def.court?.door?.gateKind ?? 'court',
-            key: `court:${e.def.id}:${e.lordId ?? ''}`,
-            enter: () => this.enterCourtDomain(e),
-          });
-        }
-        // THE WRAITHSAIL at sea: cross her under sail — nose into her shadow
-        // and hold fast to BOARD. The boarding is a realm gate like any other
-        // threshold (its 'realm_gate:wraithsail' transit row sizes the
-        // hull-wide reach); interceptRadius gates the listing so the dwell
-        // only ever arms on a genuine crossing.
-        if (this.sailing) {
-          const wf = this.sim.wraithsailField;
-          const ship = wf?.shipInfo();
-          if (wf && ship && wf.boardable()) {
-            const boat = this.nodeFromSea(this.player.pos);
-            if (Math.hypot(ship.x - boat.x, ship.y - boat.y) <= wf.surge().interceptRadius) {
-              gates.push({
-                pos: this.seaFromNode({ x: ship.x, y: ship.y }), kind: 'wraithsail',
-                key: `wraithsail:${ship.id}`,
-                enter: () => this.beginWraithsailBoarding(),
-              });
-            }
-          }
-        }
-        // Radius + dwell are per-KIND transit rows ('realm_gate:demon' chains to
-        // the 'realm_gate' family) — a heavier gate can ask a longer, wider linger
-        // with one data row.
-        let onGate: { pos: Vec2; kind: string; key: string; enter: () => void } | null = null, bestGD = Infinity;
-        for (const g of gates) {
-          const d = dist(this.player.pos, g.pos);
-          if (d <= transitRadius(`realm_gate:${g.kind}`, 32) + this.player.radius && d < bestGD
-            && this.dwellReachable(this.player.pos, g.pos, transitReach(`realm_gate:${g.kind}`), this.storyPair(this.player))) { bestGD = d; onGate = g; }
-        }
+        // THE LIFT (shard M1 W2): the gate list is realmGates and the nearest
+        // gate under a body gateUnder, shared with the shard scanner.
+        const gates = this.realmGates();
+        const onGate = this.gateUnder(this.player, gates);
         if (onGate && this.playerIdle() && !this.player.push) {
           if (this.realmDwellKey !== onGate.key) {
             this.realmDwellKey = onGate.key; this.realmDwellKind = onGate.kind;
@@ -45099,12 +45739,7 @@ export class World {
         // deliberate linger as every transit; the 'ward_seal' transit row sets
         // the feel. Breaking the last seal manifests the warded boss.
         if (this.arenaWard) {
-          let onSeal: Doodad | null = null, sealD = Infinity;
-          for (const s of this.arenaWard.seals) {
-            const d = dist(this.player.pos, s.pos);
-            if (d <= transitRadius(`ward_seal:${s.kind}`, 30) + this.player.radius && d < sealD
-              && this.dwellReachable(this.player.pos, s.pos, transitReach(`ward_seal:${s.kind}`), this.storyPair(this.player, s))) { sealD = d; onSeal = s; }
-          }
+          const onSeal = this.wardSealUnder(this.player); // THE LIFT (shard M1 W2)
           if (onSeal && this.playerIdle() && !this.player.push) {
             if (this.wardDwellSeal !== onSeal) { this.wardDwellSeal = onSeal; this.wardDwellStart = this.time; }
             if (this.time - this.wardDwellStart >= transitDwell(`ward_seal:${onSeal.kind}`)) {
@@ -45122,9 +45757,8 @@ export class World {
         // ONLY when you step out of the ring (one parley per approach — a refused
         // toll or acting beside the keeper never re-prompts; the Dwell-gate
         // discipline, hand-rolled for the ring).
-        const keeper = this.holdfastKeeper();
-        const nearKeeper = !!keeper && dist(this.player.pos, keeper.pos) <= transitRadius('holdfast', 78)
-          && this.dwellReachable(this.player.pos, keeper.pos, transitReach('holdfast'), this.storyPair(this.player, keeper));
+        const keeper = this.holdfastNear(this.player); // THE LIFT (shard M1 W2): the keeper when near, else null
+        const nearKeeper = !!keeper;
         if (!nearKeeper) {
           this.holdfastDwellKey = ''; // stepped out of the ring → re-arm
         } else if (this.holdfastDwellKey !== 'done') {
@@ -45146,11 +45780,12 @@ export class World {
     // (EXTRACT encounters never step-open: theirs is the DWELL — an act of
     // attention, armed by updateExtraction — a knockback across a seam must
     // not start a defense.)
-    if (!this.player.dead && !this.player.downed) {
+    // THE ACTING SEAT: any standing player's step opens one (the touchers).
+    for (const h of this.touchers()) {
       for (const e of this.encounters) {
         if (e.phase !== 'dormant' || e.def.extract) continue;
         // (THE SAME-STORY LAW: an encounter seats on the ground floor — a storey walker over it never steps it open.)
-        if (this.player.tier === 0 && dist(this.player.pos, e.pos) <= this.player.radius + e.def.trigger.activateRadius) {
+        if (h.tier === 0 && dist(h.pos, e.pos) <= h.radius + e.def.trigger.activateRadius) {
           this.openEncounter(e);
         }
       }
@@ -45158,10 +45793,10 @@ export class World {
 
     // Fractures: RUN OVER the volatile fracture object (no dwell — it's twitchy)
     // to unleash the crawling fissure. No return; you keep playing as it crawls.
-    if (!this.player.dead && !this.player.downed
-      && this.fractureRun && this.fractureRun.phase === 'dormant'
-      && this.player.tier === 0 // THE SAME-STORY LAW: the fracture seats on the ground floor
-      && dist(this.player.pos, this.fractureRun.origin) <= this.player.radius + 26) {
+    // THE ACTING SEAT: any standing player's run-over springs it.
+    const dormantRun = this.fractureRun?.phase === 'dormant' ? this.fractureRun : null;
+    if (dormantRun && this.touchers().some(h => h.tier === 0 // THE SAME-STORY LAW: the fracture seats on the ground floor
+      && dist(h.pos, dormantRun.origin) <= h.radius + 26)) {
       this.triggerFracture();
     }
 
@@ -45169,37 +45804,13 @@ export class World {
     // a boundary no longer yanks you to the next zone (crossing a boundary should
     // never punish you). Sealed exits still nag; the minions follow on travel.
     if (!this.player.dead && !this.player.downed) {
-      // Pick the NEAREST unlocked portal the player is standing within (not the
-      // first in array order) — so even an overlapping/hand-authored portal pair
-      // each stays reachable (you step through whichever you're closer to). The
-      // placement-time spacing makes overlaps not happen; this is belt-and-suspenders.
-      let onExit: ZoneExit | null = null, bestD = Infinity;
-      let lockedExit: ZoneExit | null = null, lockedD = Infinity;
-      for (const e of this.exits) {
-        const d = dist(this.player.pos, e.pos);
-        if (d > e.radius) continue;
-        if (!this.dwellReachable(this.player.pos, e.pos,
-          transitReach(e.boundary ? `zone_exit:${e.boundary}` : 'zone_exit'), this.storyPair(this.player))) continue;
-        if (this.isExitLocked(e)) { if (d < lockedD) { lockedD = d; lockedExit = e; } continue; }
-        if (d < bestD) { bestD = d; onExit = e; }
-      }
-      if (!onExit && lockedExit && this.lockHint <= 0) {
+      // THE LIFT (shard M1 W2): the exit scan is exitUnder and the lock's own
+      // word exitLockHint, shared with the shard scanner (each seat's own door).
+      const { onExit, lockedExit } = this.exitUnder(this.player);
+      if (!this.shardWorld && !onExit && lockedExit && this.lockHint <= 0) {
         this.lockHint = 1.5;
-        // A HOLDFAST exit shows its guardian's bespoke hint (a toll, not the
-        // objective); a road held by a living EVENT names its holder instead.
-        const led = this.zone.exits[lockedExit.defIndex];
-        const gdef = led?.lock && this.holdfastSite ? this.sim.holdfastField?.def(this.holdfastSite.defId) : null;
-        const eb = led && led.to !== '?' ? edgeBlockAt(this, this.zone.id, led.to) : null;
-        // The harborhold causeway names its own ask (break the siege / raise
-        // the ruin) — the quay beyond is the hold's reward, and the door
-        // says so (HARBORHOLD_CFG.quay.lockHint).
-        const holdHint = led?.lock === 'harborhold' && this.zone.harborhold
-          ? (this.zone.harborhold.state === 'fallen'
-            ? HARBORHOLD_CFG.quay.lockHint.fallen : HARBORHOLD_CFG.quay.lockHint.besieged)
-          : null;
-        this.text(vec(lockedExit.pos.x, lockedExit.pos.y - 40),
-          eb ? eb.reason : holdHint ?? (gdef ? gdef.sealedHint : 'sealed — finish the objective'),
-          eb?.color ?? '#d05050', 13);
+        const hint = this.exitLockHint(lockedExit);
+        this.text(vec(lockedExit.pos.x, lockedExit.pos.y - 40), hint.text, hint.color, 13);
       }
       // Dwell builds only while standing idle AND not being KNOCKED — a knockback
       // onto a portal must never carry you off (it's not your intent). A live
@@ -45216,6 +45827,225 @@ export class World {
         this.exitDwellIdx = -1; // stepped off / acting / knocked → the dwell resets
       }
     }
+    // THE ROADS PER PLAYER (shard M1 W2): on a hosted world every standing
+    // seat's roads are judged with its own body and leave as tickets
+    // (engine/shardRoads.ts); the block above reads only the parked warden.
+    if (this.shardWorld) scanShardRoads(this);
+  }
+
+  // ---- THE LIFT (shard M1 W2, THE ROADS PER PLAYER) ------------------------
+  // The road scans of update()'s road block as named methods: the solo block
+  // calls them with the local hero (same order, same reads, same bytes: the
+  // road-walk digests of probe_shardunits B pin it) and the shard scanner
+  // (engine/shardRoads.ts) with each seat's own body, so drawn == dwelt for
+  // every player of a hosted world.
+
+  /** THE LIFT: does body `a` stand on mouth `cm`? `roof` is the body's own
+   *  roof, resolved once per scan (each mouth carries its precomputed home
+   *  roof from loadZone, so the indoors gate is two compares). */
+  private onMouth(a: Actor, cm: CaveMouthRow, roof: PlacedStructure | null): boolean {
+    return dist(a.pos, cm.pos) <= transitRadius(`sidezone:${cm.kind}`, 28) + a.radius
+      // THE STORY GATE (mouthTier — the under-tier lanes): a mouth dwells
+      // only from ITS OWN story. A taproot gate seated down in the root
+      // galleries never triggers under a surface walker crossing the duct
+      // line above it — and a surface mouth never triggers under a duct
+      // runner passing beneath it (drawn == dwelled, both directions).
+      && (cm.mouthTier ?? 0) === (a.tier ?? 0)
+      && (!sidezoneOf(cm.kind)?.indoorsOnly || (!!cm.roof && cm.roof === roof))
+      // THE CONDITIONED DOOR (SidezoneDef.when — the lair fabric's night
+      // barrow): a closed door never starts the dwell. The refusal READ
+      // (mouthRefusalUnder) lives beside the scan, so the schedule is never a mystery.
+      && (!sidezoneOf(cm.kind)?.when || this.radianceCondHeld(sidezoneOf(cm.kind)!.when!.cond))
+      // THE SEALED MOUTH (SidezoneDef.sealedBy — the exhumation law,
+      // data/lonecrypt.ts): a riddle-sealed door never starts the dwell
+      // either; its refusal rides the same read.
+      && !this.sidezoneSealHolds(cm.kind)
+      && this.dwellReachable(a.pos, cm.pos, transitReach(`sidezone:${cm.kind}`), this.storyPair(a, { tier: cm.mouthTier }));
+  }
+
+  /** THE LIFT: the first mouth body `a` stands on (the entrances' order), or -1. */
+  mouthUnder(a: Actor): number {
+    const roof = this.caveEntrances.some(c => c.roof !== undefined && c.roof !== null) ? this.roofedStructureAt(a.pos) : null;
+    for (let i = 0; i < this.caveEntrances.length; i++) if (this.onMouth(a, this.caveEntrances[i], roof)) return i;
+    return -1;
+  }
+
+  /** THE LIFT: the conditioned door or the sealed mouth body `a` stands
+   *  within (the first shut one), with its own refusal words, or null. */
+  mouthRefusalUnder(a: Actor): { pos: Vec2; text: string } | null {
+    for (const cm of this.caveEntrances) {
+      const sz = sidezoneOf(cm.kind);
+      const condShut = !!sz?.when && !this.radianceCondHeld(sz.when.cond);
+      const sealShut = !condShut && this.sidezoneSealHolds(cm.kind);
+      if (!condShut && !sealShut) continue;
+      if (dist(a.pos, cm.pos) > transitRadius(`sidezone:${cm.kind}`, 28) + a.radius) continue;
+      return { pos: cm.pos, text: (condShut ? sz!.when!.refusal : sz!.sealedBy!.refusal) ?? 'the door does not answer…' };
+    }
+    return null;
+  }
+
+  /** THE LIFT: every open realm gate of the zone with its enter action, in the
+   *  solo dwell's order. A row's `road` is THE ROADS PER PLAYER's ticket maker
+   *  for one seat (W4 fills each gate: its prep in the source, the ticket's
+   *  first wake in the realm); a gate without one stays sealed on a hosted
+   *  world and answers a seat with its word (engine/shardRoads.ts). */
+  realmGates(): RealmGateRow[] {
+    const gates: RealmGateRow[] = [];
+    // The Underworld BREACH (bottom of the cave ladder) is a realm gate too.
+    if (this.breachPos) {
+      // Which dimension does a cave breach tear into? Whatever REGISTERED a
+      // cave_breach entry (data) — first registrant today; a weighted roll
+      // when a second breach-entered layer ever ships.
+      const bd = dimensionsEnteredBy('cave_breach')[0];
+      if (bd) gates.push({ pos: this.breachPos, kind: 'breach', key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id) });
+    }
+    // DIMENSION GATE DOODADS (DimensionEntry.gateDoodad, scanned per
+    // loadZone): the Ascent's shining arch — dwell it to cross into its
+    // dimension. Radius/dwell ride per-kind transit rows like every gate
+    // ('realm_gate:dim_<id>' chains to the 'realm_gate' family).
+    for (const g of this.dimGates) {
+      gates.push({
+        pos: g.pos, kind: `dim_${g.dimId}`, key: `dim:${g.dimId}:${Math.round(g.pos.x)},${Math.round(g.pos.y)}`,
+        // A gate may RIDE a registered traversal (DimensionEntry.traversal):
+        // the crossing plays the cinematic and the dimension swap fires
+        // behind its veil (the geyser-mouth pattern) — the ascendant arch
+        // launches you again, steadier. No row = the old instant cross.
+        enter: () => {
+          const trav = dimensionDef(g.dimId).entry?.traversal;
+          if (trav) this.beginTraversal(trav, { swap: () => this.enterDimension(g.dimId) });
+          else this.enterDimension(g.dimId);
+        },
+      });
+    }
+    for (const dp of this.demonPortals) gates.push({ pos: dp.pos, kind: 'demon', key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
+    for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
+    for (const np of this.necropolisPortals) gates.push({ pos: np.pos, kind: 'necropolis', key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
+    for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, kind: 'fracture', key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr) });
+    // COURT DOORS (encounter fabric): the fed breach's standing way into
+    // its lord's domain — the same deliberate dwell as every threshold
+    // (its 'realm_gate:<gateKind>' transit row sets the feel).
+    for (const e of this.encounters) {
+      if (e.phase !== 'door' || !e.doorAt) continue;
+      const at = e.doorAt;
+      gates.push({
+        pos: at, kind: e.def.court?.door?.gateKind ?? 'court',
+        key: `court:${e.def.id}:${e.lordId ?? ''}`,
+        enter: () => this.enterCourtDomain(e),
+      });
+    }
+    // THE WRAITHSAIL at sea: cross her under sail — nose into her shadow
+    // and hold fast to BOARD. The boarding is a realm gate like any other
+    // threshold (its 'realm_gate:wraithsail' transit row sizes the
+    // hull-wide reach); interceptRadius gates the listing so the dwell
+    // only ever arms on a genuine crossing.
+    if (this.sailing) {
+      const wf = this.sim.wraithsailField;
+      const ship = wf?.shipInfo();
+      if (wf && ship && wf.boardable()) {
+        const boat = this.nodeFromSea(this.player.pos);
+        if (Math.hypot(ship.x - boat.x, ship.y - boat.y) <= wf.surge().interceptRadius) {
+          gates.push({
+            pos: this.seaFromNode({ x: ship.x, y: ship.y }), kind: 'wraithsail',
+            key: `wraithsail:${ship.id}`,
+            enter: () => this.beginWraithsailBoarding(),
+          });
+        }
+      }
+    }
+    return gates;
+  }
+
+  /** THE LIFT: the nearest realm gate body `a` stands on, or null. Radius and
+   *  dwell are per-KIND transit rows ('realm_gate:demon' chains to the
+   *  'realm_gate' family): a heavier gate can ask a longer, wider linger with
+   *  one data row. */
+  gateUnder(a: Actor, gates: readonly RealmGateRow[]): RealmGateRow | null {
+    let onGate: RealmGateRow | null = null, bestGD = Infinity;
+    for (const g of gates) {
+      const d = dist(a.pos, g.pos);
+      if (d <= transitRadius(`realm_gate:${g.kind}`, 32) + a.radius && d < bestGD
+        && this.dwellReachable(a.pos, g.pos, transitReach(`realm_gate:${g.kind}`), this.storyPair(a))) { bestGD = d; onGate = g; }
+    }
+    return onGate;
+  }
+
+  /** THE LIFT: the nearest arena ward seal body `a` stands on (the 'ward_seal'
+   *  transit rows), or null. */
+  wardSealUnder(a: Actor): Doodad | null {
+    if (!this.arenaWard) return null;
+    let onSeal: Doodad | null = null, sealD = Infinity;
+    for (const s of this.arenaWard.seals) {
+      const d = dist(a.pos, s.pos);
+      if (d <= transitRadius(`ward_seal:${s.kind}`, 30) + a.radius && d < sealD
+        && this.dwellReachable(a.pos, s.pos, transitReach(`ward_seal:${s.kind}`), this.storyPair(a, s))) { sealD = d; onSeal = s; }
+    }
+    return onSeal;
+  }
+
+  /** THE LIFT: the holdfast's toll keeper when body `a` stands in its parley
+   *  ring (the 'holdfast' transit row), else null. */
+  holdfastNear(a: Actor): Actor | null {
+    const keeper = this.holdfastKeeper();
+    return !!keeper && dist(a.pos, keeper.pos) <= transitRadius('holdfast', 78)
+      && this.dwellReachable(a.pos, keeper.pos, transitReach('holdfast'), this.storyPair(a, keeper)) ? keeper : null;
+  }
+
+  /** THE LIFT: the NEAREST unlocked exit body `a` stands within (not the first
+   *  in array order, so even an overlapping or hand-authored portal pair each
+   *  stays reachable: you step through whichever you're closer to; the
+   *  placement-time spacing makes overlaps not happen, this is
+   *  belt-and-suspenders), and the nearest locked one. THE RETREAT LAW: the
+   *  locks are judged from the door `from` (the zone's entry by default; a
+   *  hosted world's scanner passes each seat's own door). */
+  exitUnder(a: Actor, from: string | null = this.entryFrom): { onExit: ZoneExit | null; lockedExit: ZoneExit | null } {
+    let onExit: ZoneExit | null = null, bestD = Infinity;
+    let lockedExit: ZoneExit | null = null, lockedD = Infinity;
+    for (const e of this.exits) {
+      const d = dist(a.pos, e.pos);
+      if (d > e.radius) continue;
+      if (!this.dwellReachable(a.pos, e.pos,
+        transitReach(e.boundary ? `zone_exit:${e.boundary}` : 'zone_exit'), this.storyPair(a))) continue;
+      if (this.isExitLocked(e, from)) { if (d < lockedD) { lockedD = d; lockedExit = e; } continue; }
+      if (d < bestD) { bestD = d; onExit = e; }
+    }
+    return { onExit, lockedExit };
+  }
+
+  /** THE LIFT: a locked exit's own word. A HOLDFAST exit shows its guardian's
+   *  bespoke hint (a toll, not the objective); a road held by a living EVENT
+   *  names its holder instead; the harborhold causeway names its own ask
+   *  (break the siege / raise the ruin: the quay beyond is the hold's reward,
+   *  and the door says so, HARBORHOLD_CFG.quay.lockHint); else the
+   *  objective's seal. */
+  exitLockHint(e: ZoneExit): { text: string; color: string } {
+    const led = this.zone.exits[e.defIndex];
+    const gdef = led?.lock && this.holdfastSite ? this.sim.holdfastField?.def(this.holdfastSite.defId) : null;
+    const eb = led && led.to !== '?' ? edgeBlockAt(this, this.zone.id, led.to) : null;
+    const holdHint = led?.lock === 'harborhold' && this.zone.harborhold
+      ? (this.zone.harborhold.state === 'fallen'
+        ? HARBORHOLD_CFG.quay.lockHint.fallen : HARBORHOLD_CFG.quay.lockHint.besieged)
+      : null;
+    return { text: eb ? eb.reason : holdHint ?? (gdef ? gdef.sealedHint : 'sealed — finish the objective'), color: eb?.color ?? '#d05050' };
+  }
+
+  /** THE SEALED WORDS' reach (shard M1 W2, plan 4.8): the sealed road a seat
+   *  stands at, each within its own dwell reach, or null. On a hosted world the
+   *  dock's cast-off (the Wraithsail's word while she lies alongside), the
+   *  harbor board's passage and the Delver's shaft stay sealed: each owns a
+   *  per-World singleton run (the voyage, the Wraithsail's stash, the descent). */
+  private sealedRoadUnder(seat: Seat): { kind: SealedRoadKind; pos: Vec2 } | null {
+    const a = seat.actor;
+    const dock = this.portDock();
+    if (dock && dist(a.pos, dock.pos) <= 110 && this.dwellReachable(a.pos, dock.pos, DWELL_CFG.reach, this.storyPair(a, dock))) {
+      return { kind: this.sim.wraithsailField?.dockedOn(this.zone.id) ? 'wraithsail' : 'dock', pos: dock.pos };
+    }
+    const board = this.nearHarborBoard(seat) ? this.doodads.find(d => d.kind === 'harbor_board') : undefined;
+    if (board) return { kind: 'voyage', pos: board.pos };
+    const site = this.descentSite;
+    if (site && !this.descentRun && !this.descentSpent.has(this.zone.id)
+      && dist(a.pos, site.platform) <= transitRadius('descent_shaft', 72)
+      && this.dwellReachable(a.pos, site.platform, transitReach('descent_shaft'), this.storyPair(a))) return { kind: 'descent', pos: site.platform };
+    return null;
   }
 
   /** Dwell-to-travel progress on the exit the player lingers on (renderer ring),
@@ -45391,13 +46221,16 @@ export class World {
     if (font) put(font.pos, this.fontGate.frac(SALVAGE_CFG.stationDwell), 'station:font');
     const board = this.bountyBoardsHere().find(b => anySeat(s => this.nearBountyBoard(s, b.id)));
     if (board) put(board.pos, this.bountyGate.frac(BOUNTY_BOARD_CFG.dwell.sec), 'station:bounty');
-    // The sea's furniture: the dock, the harbor board, the muster horn.
-    const dock = this.portDock();
+    // The sea's furniture: the dock, the harbor board, the muster horn. THE
+    // SEALED WORDS (shard M1 W2): a hosted world's shell draws no ring at the
+    // dock or the harbor board, sealed roads there (its seat hears their word).
+    const sealedShell = !!this.netCounters;
+    const dock = sealedShell ? null : this.portDock();
     if (dock && dist(this.player.pos, dock.pos) <= 110
       && this.dwellReachable(this.player.pos, dock.pos, DWELL_CFG.reach, this.storyPair(this.player, dock))) {
       put(dock.pos, this.sailGate.frac(CARAVAN_DWELL), 'station:dock');
     }
-    if (this.nearHarborBoard()) put(this.doodads.find(d => d.kind === 'harbor_board')?.pos, this.harborGate.frac(CARAVAN_DWELL), 'station:harbor_board');
+    if (!sealedShell && this.nearHarborBoard()) put(this.doodads.find(d => d.kind === 'harbor_board')?.pos, this.harborGate.frac(CARAVAN_DWELL), 'station:harbor_board');
     if (this.nearMusterHorn()) put(this.doodads.find(d => d.kind === 'muster_horn')?.pos, this.holdGate.frac(HARBORHOLD_CFG.muster.dwellSec), 'station:muster_horn');
     // Bodies: the counters (each VendorDef names its keeper's role), the
     // caravanner, the innkeeper, the quartermaster, the Bonewright, the
@@ -45425,6 +46258,12 @@ export class World {
     return out;
   }
 
+  /** THE ROAD RING (shard M1 W2): the road dwell a hosted world's host fills
+   *  for this shell's own seat (SeatW.rd, net/seatView.ts applyOwnSeatRows),
+   *  or null. A shell runs no road scan, so this row is its only road ring;
+   *  a sealed road builds no dwell and so draws none. Render shells alone. */
+  netRoadDwell: { pos: Vec2; frac: number; kind: string } | null = null;
+
   /** Every dwell progress ring live this frame — ONE feed for the renderer's
    *  single ring pass. Each entry names its transit KIND, so the ring's style
    *  (radius/width/color) is a data row in data/transit.ts, never a renderer
@@ -45436,6 +46275,9 @@ export class World {
     };
     // THE DWELL TELL's fills: the stations and NPCs the seat lingers at.
     for (const t of this.dwellTargetsView()) add(t);
+    // THE ROAD RING (shard M1 W2, SeatW.rd): a hosted world's shell draws the
+    // road dwell its host is filling for its own seat (null everywhere else).
+    add(this.netRoadDwell);
     add(this.exitDwellView());
     add(this.caveDwellView());
     add(this.realmDwellView());
@@ -45972,8 +46814,13 @@ export class World {
    * until the objective is met. Default policy: only BOSS arenas seal —
    * waves/spawners roads stay open, their progress riding Zone Memory, so
    * leaving mid-fight costs nothing but the walk back.
+   *
+   * THE RETREAT LAW (shard M1 W2): `from` is the door the seal spares, the
+   * zone's own entry by default; on a hosted world the shard scanner passes
+   * each seat's own door (engine/shardRoads.ts), so a second arriver from
+   * another side keeps its own way back.
    */
-  isExitLocked(e: ZoneExit): boolean {
+  isExitLocked(e: ZoneExit, from: string | null = this.entryFrom): boolean {
     // HOLDFAST: a fortified bonus exit stays sealed until its toll is met — INDEPENDENT
     // of the zone objective (checked BEFORE the objectiveDone early-out, so clearing the
     // zone never opens the gate). Resolved against the durable HoldfastField lock state.
@@ -46009,22 +46856,27 @@ export class World {
     // does. Any overlay can hold a road via registerEdgeBlockSource.
     if (ed && ed.to !== '?' && edgeBlockAt(this, this.zone.id, ed.to)) return true;
     if (this.objectiveDone) return false;
-    return objectiveSeals(this.zone.objective) && e.to !== this.entryFrom;
+    return objectiveSeals(this.zone.objective) && e.to !== from;
   }
 
   /**
    * Fast travel between attuned waypoints (clicked on the world map).
    * Refused while enemies are close — no waypointing out of a brawl.
    */
-  travelToWaypoint(zoneId: string): boolean {
+  travelToWaypoint(zoneId: string, seat: Seat = this.localSeat): boolean {
     // SOVEREIGNTY: seat — the party gathers (the derived census, probe_tiers RIG T).
+    // THE ROADS PER PLAYER (shard M1 W2): a render shell asks its host (the
+    // waypoint intent); a hosted world judges the asking seat (its body, its
+    // hunters, its own note row) and moves it alone through a ticket.
+    if (this.clientActionHook) { this.requestMeta({ t: 'waypoint', zoneId }); return false; }
     if (!this.discoveredWaypoints.has(zoneId) || this.zone.id === zoneId) return false;
-    if (this.player.dead || this.gameOver) return false;
+    const hero = this.shardWorld ? seat.actor : this.player;
+    if (hero.dead || this.gameOver) return false;
     // A waypointless DIMENSION refuses fast-travel outright (belt over the
     // mint-side veto: an attunement smuggled in by an older save still
     // cannot fire — the Aetherial is crossed, never teleported into).
     if (dimensionDef(this.zoneMap[zoneId]?.dimension).waypoints === false) {
-      this.text(this.player.pos, 'no road bends that high — the realm must be crossed', '#9fc0e8', 13);
+      this.seatNote(seat, hero.pos, 'no road bends that high — the realm must be crossed', '#9fc0e8', 13);
       return false;
     }
     // ANTI-TELEPORT gate: refuse fast-travel to a waypoint sitting within an arena's
@@ -46036,7 +46888,7 @@ export class World {
     if (dest && dest.id !== START_ZONE && Object.values(this.zoneMap).some(z =>
       z.wpExclusionRadius !== undefined && z.id !== dest.id && z.id !== START_ZONE
       && Math.hypot(z.map.x - dest.map.x, z.map.y - dest.map.y) < z.wpExclusionRadius)) {
-      this.text(this.player.pos, 'too close to the seat of the Unmade to attune a path', '#d05050', 13);
+      this.seatNote(seat, hero.pos, 'too close to the seat of the Unmade to attune a path', '#d05050', 13);
       return false;
     }
     // Passive scenery (a Training Dummy, a barrel) isn't "hunting" you — only a
@@ -46044,10 +46896,18 @@ export class World {
     // (a passing herd, grazing wildlife, toll wardens — the whole ambient
     // registry incl. live guardian tags, not a hand-picked subset that rots
     // as packages grow) never count; a ROUSED one does (it's genuinely hunting).
-    if (this.enemiesOf(this.player).some(e => !e.passive
-      && !(this.isAmbientTag(e.tag) && !e.aiAwakened) && dist(e.pos, this.player.pos) < 350)) {
-      this.text(this.player.pos, 'cannot waypoint while hunted', '#d05050', 13);
+    if (this.enemiesOf(hero).some(e => !e.passive
+      && !(this.isAmbientTag(e.tag) && !e.aiAwakened) && dist(e.pos, hero.pos) < 350)) {
+      this.seatNote(seat, hero.pos, 'cannot waypoint while hunted', '#d05050', 13);
       return false;
+    }
+    if (this.shardWorld) {
+      // THE ROADS PER PLAYER: the seat lands at the far stone (resolved there),
+      // and a freshly woken zone clears its bubble around the arrival.
+      this.shardWorld.enqueue({ seatId: seat.id, dest: zoneId, from: null,
+        landing: dw => dw.waypointPos ? { at: { x: dw.waypointPos.x, y: dw.waypointPos.y + 50 }, spread: 80, band: [-10, 60] } : 'entry',
+        after: (dw, s, woke) => { if (woke) dw.clearWaypointLanding(dw.seatHero(s)); } });
+      return true;
     }
     this.loadZone(zoneId);
     if (this.waypointPos) {
@@ -46070,6 +46930,28 @@ export class World {
       }
     }
     return true;
+  }
+
+  /** THE ROADS PER PLAYER (shard M1 W2): the waypoint's safe bubble around one
+   *  arrival, travelToWaypoint's own clear centred on that hero (never the
+   *  unit's warden): freshly-generated enemies too close are shoved to their
+   *  own far point from it; zone-memory survivors keep their stands. */
+  private clearWaypointLanding(hero: Actor): void {
+    // SOVEREIGNTY: seat (the arrival's bubble: travelToWaypoint's own clear, the derived census)
+    for (const a of this.actors) {
+      if (a.team === 'enemy' && !a.dead && a.owner !== hero && !a.fromZoneGen
+        && dist(a.pos, hero.pos) < WAYPOINT_CLEAR) {
+        a.pos = this.clampPos(this.farPointFrom(hero, WAYPOINT_CLEAR), a.radius);
+      }
+    }
+  }
+
+  /** farPoint measured from a given body (THE FILTERED HOST idiom: the
+   *  geometry view with its player overridden to that body). */
+  private farPointFrom(from: Actor, min: number): Vec2 {
+    const view = Object.create(this.nativeSceneGeometryHost()) as NativeSceneGeometryHost;
+    Object.defineProperty(view, 'player', { value: from });
+    return nativeFarPoint(nativeSceneNativePlacementHost(view), min, false);
   }
 
   /** Descend a registered sidezone mouth (data/sidezones.ts) into a pocket zone
@@ -46154,6 +47036,31 @@ export class World {
     // story), so the climb-out lands back IN the gallery at the door.
     this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom, kind: cm.kind, seed: cm.seed, ...(cm.underSpan ? { underSpan: cm.underSpan } : {}), ...(this.player.tier ? { tier: this.player.tier } : {}) };
     this.loadZone(dest.id, this.zone.id); // deliberately NO sim.onNodeCharted — pockets are off-graph
+  }
+
+  /** THE ROADS PER PLAYER (shard M1 W2): enterSidezone's shard twin, for one
+   *  seat. The pocket mints in the source (on the Unbroken Wilds the keeper's
+   *  native mint: the mass walk and its roots), furnishes, takes the
+   *  TRAVELLER's level when it levels with the character, ledgers the find, and
+   *  hands the seat its own ladder (its way home, one rung deeper, from its own
+   *  door). Traversal mouths take the instant step: the cinematic owns the one
+   *  local player, never a seat of a hosted world. */
+  private shardMouthRoad(seat: Seat, cm: CaveMouthRow): RoadTicket | null {
+    const sz = sidezoneOf(cm.kind);
+    if (!sz) return null;
+    const dest = this.mintSidezone(cm);
+    if (!dest) return null;
+    const ladder = seatLadderOf(this, seat);
+    // A deeper pocket under the wilds rides the wilds save (the keeper's roots, THE PIN's alias).
+    if ((ladder.caveStack[0] ?? ladder.caveReturn)?.zoneId === MASS_ZONE) this.massCaveIds.add(dest.id);
+    this.applySidezoneFurnish(dest, sz);
+    if (sz.levelWith === 'character') dest.level = Math.max(1, this.seatHero(seat).level);
+    if (sz.ledgerOnEnter) bumpLedger(this.ledger, sz.ledgerOnEnter);
+    const tier = seat.actor.tier;
+    const rung = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: seatDoorOf(this, seat), kind: cm.kind, seed: cm.seed,
+      ...(cm.underSpan ? { underSpan: cm.underSpan } : {}), ...(tier ? { tier } : {}) };
+    return { seatId: seat.id, dest: dest.id, from: this.zone.id, landing: 'entry',
+      ladder: { caveReturn: rung, caveStack: ladder.caveReturn ? [...ladder.caveStack, ladder.caveReturn] : [...ladder.caveStack] } };
   }
 
   // --- THE TRAVERSAL FABRIC (engine/traversal.ts): vertical crossings -------
@@ -46782,6 +47689,82 @@ export class World {
     }
   }
 
+  /** THE ROADS PER PLAYER (shard M1 W2): travelThrough's shard twin, for one
+   *  seat. A hosted world never loads a zone for a road: its source half runs
+   *  here (the seat's own ladder's climb-out, the far span mouth, a '?'
+   *  frontier charted in place, the escape credit judged from THE SEAT'S DOOR
+   *  and paid to the traveller's party within reach) and its destination half
+   *  rides the returned ticket, executed after every unit ticked. */
+  private shardExitRoad(seat: Seat, e: ZoneExit): RoadTicket | null {
+    const a = seat.actor, ladder = seatLadderOf(this, seat), ret = ladder.caveReturn;
+    const pocket = !this.zoneMap[this.zone.id];
+    if (pocket && ret && e.to === ret.zoneId) {
+      // THE DESCENT's shaft is its run's own climb (sealed on a hosted world).
+      if (this.descentRun && this.zone.id === this.descentRun.caveId) return null;
+      // THE WILDS LAW: a native pocket's way out is the keeper's surface, at the mouth.
+      if (ret.zoneId === MASS_ZONE) {
+        const top = ladder.caveStack[0] ?? ret;
+        const near = !!(top.kind && sidezoneOf(top.kind)?.indoorsOnly) || (top.tier ?? 0) > 0 ? 25 : 50;
+        return { seatId: seat.id, dest: MASS_ZONE, from: null, ladder: { caveReturn: null, caveStack: [] }, grace: 'caveExit',
+          landing: { at: { x: top.pos.x, y: top.pos.y }, spread: near, band: [0, near], tier: top.tier ?? 0 } };
+      }
+      // The climb-out: one rung up the seat's own ladder, onto the parent at the
+      // mouth by the indoor and story rules (travelThrough's own landing).
+      const indoors = !!(ret.kind && sidezoneOf(ret.kind)?.indoorsOnly), sunken = (ret.tier ?? 0) >= 1;
+      const stepY = indoors || sunken ? 0 : 40, sc = indoors || sunken ? 0.5 : 1;
+      const stack = ladder.caveStack.map(r => ({ ...r, pos: vec(r.pos.x, r.pos.y) }));
+      return { seatId: seat.id, dest: ret.zoneId, from: ret.entryFrom, ladder: { caveReturn: stack.pop() ?? null, caveStack: stack },
+        grace: 'caveExit', landing: { at: { x: ret.pos.x, y: ret.pos.y + stepY }, spread: 50 * sc, band: [0, 50 * sc], tier: ret.tier ?? 0 } };
+    }
+    if (pocket && this.zone.underSpan && this.zoneMap[e.to]) {
+      // THE FAR MOUTH (the rooted web): surface at the far member's own span
+      // mouth, resolved in the destination after its load.
+      const span = this.zone.underSpan;
+      bumpLedger(this.ledger, 'rootspan_crossed');
+      return { seatId: seat.id, dest: e.to, from: null, ladder: { caveReturn: null, caveStack: [] }, grace: 'caveExit',
+        landing: dw => {
+          const mouth = dw.caveEntrances.find(en => en.underSpan === span);
+          if (!mouth) return 'entry';
+          const t = mouth.mouthTier ?? 0;
+          return { at: { x: mouth.pos.x, y: mouth.pos.y + (t >= 1 ? 0 : 40) }, spread: t >= 1 ? 25 : 50, band: t >= 1 ? [0, 25] : [0, 50], tier: t };
+        } };
+    }
+    let dest = e.to;
+    if (dest === '?') {
+      const def = this.zone.exits[e.defIndex];
+      if (def.to !== '?') dest = def.to; // another seat's road charted it first (the live exit lags its def)
+      else {
+        const gen = this.chartFrontier(this.zone, def); // THE PIN carries the chart and nextGenId home
+        if (gen.id === this.zone.id) return null;
+        def.to = gen.id;
+        dest = gen.id;
+      }
+      e.to = dest; // the unit stays: its live exit now names the charted ground
+    }
+    // THE RETREAT LAW's escape credit: judged from the seat's own door, paid in
+    // the source to the traveller's party within reach (THE KILLER'S DUE).
+    const escaped = escapeExitAllowed(this.zone.objective, seatDoorOf(this, seat), dest) && !this.objectiveDone
+      && !this.completedObjectives.has(this.zone.id) ? this.zone : null;
+    let word: string | null = null;
+    if (escaped) {
+      const acting = this.actingSeat;
+      this.actingSeat = seat;
+      try {
+        this.completedObjectives.add(escaped.id);
+        const bonus = objectiveRewardXp(escaped.level);
+        this.grantXp(bonus, a.pos, seat);
+        word = `Escaped ${escaped.name}! +${bonus} xp`;
+        if (this.activeQuests.some(q => q.zoneId === escaped.id)) this.onQuestZoneFieldCleared(escaped.id);
+      } finally { this.actingSeat = acting; }
+    }
+    const carry = !this.zoneMap[dest] && !!this.caveMap[dest]; // pocket to pocket: the way home walks along
+    return {
+      seatId: seat.id, dest, from: this.zone.id, landing: 'entry',
+      ...(carry ? { ladder: { caveReturn: ladder.caveReturn, caveStack: [...ladder.caveStack] } } : {}),
+      ...(word ? { after: (dw: World, s: Seat) => { const h = dw.seatHero(s); dw.text(vec(h.pos.x, h.pos.y - 70), word!, '#ffd700', 16); } } : {}),
+    };
+  }
+
   /** Totems target & cast; sentries fire down their lane; traps arm and
    *  trigger; pylons periodically cast. Mines wait for detonation. */
   private updateConstructs(dt: number): void {
@@ -47281,7 +48264,7 @@ export class World {
             if (e.invulnerable) amount = 0;
             if (amount > 0) {
               e.life -= amount;
-              this.accumulateDotText(e, amount, dt);
+              this.accumulateDotText(e, amount, dt, bearer); // THE WIRE'S EYES: the aura's bearer
               if (aura.spec.siphonFraction) {
                 bearer.healBy(amount * aura.spec.siphonFraction);
               }
@@ -47311,7 +48294,7 @@ export class World {
                   : a.sheet.get('lifeRegen');
                 const landed = a.healBy(base * heal.amount);
                 if (landed > 0) {
-                  this.text(a.pos, '+' + Math.round(landed), '#6fc06f', 12);
+                  this.seatText(bearer, a.pos, '+' + Math.round(landed), '#6fc06f', 12); // THE WIRE'S EYES: the healer's seat
                 }
               }
             }
@@ -50190,12 +51173,12 @@ export class World {
   }
 
   private updateChests(dt: number): void {
-    const p = this.player;
-    if (p.dead) return;
+    const hands = this.touchers(); // THE ACTING SEAT: any standing player's hands pick the lock
+    if (!hands.length) return;
     for (let i = this.chests.length - 1; i >= 0; i--) {
       const c = this.chests[i];
       if (c.opened) continue;
-      const near = chestInReach(c, p);
+      const near = hands.some(h => chestInReach(c, h));
       if (c.kind === 'objective') {
         if (this.chestObjectiveDone(c) && near) this.openChest(c);
         continue;
@@ -50225,10 +51208,12 @@ export class World {
 
   /** Shrines: first touch drinks the buff; the shrine goes dark. */
   private updateShrines(): void {
-    const p = this.player;
-    if (p.dead) return;
+    const hands = this.touchers(); // THE ACTING SEAT: the draught lands on whoever touched the shrine
+    if (!hands.length) return;
     for (const s of this.shrines) {
-      if (s.used || dist(s.pos, p.pos) > p.radius + 24) continue;
+      if (s.used) continue;
+      const p = hands.find(h => dist(s.pos, h.pos) <= h.radius + 24);
+      if (!p) continue;
       s.used = true;
       p.addBuff({ type: 'buff', id: 'shrine_' + s.def.id, label: s.def.name, duration: s.def.duration, mods: s.def.mods });
       this.text(vec(s.pos.x, s.pos.y - 20), s.def.name + '!', s.def.color, 16);
@@ -50439,7 +51424,12 @@ export class World {
     const targetInfo = cs.targetInfo as ResolvedTarget | undefined;
 
     // Monsters hold channels/charges/guards for a little while, then let go.
-    if (a !== this.player && (cs.mode === 'channel' || cs.mode === 'charge'
+    // THE ACTING SEAT: a seated body's hold is its own hand's (applyInputs feeds
+    // cs.held from the input), every shard player and co-op guest alike, never
+    // only this machine's hero. A hired blade keeps the monster's clock: its
+    // pilot (MercInput) presses an edge and never holds the button down.
+    const holdSeat = this.seatOf(a);
+    if ((!holdSeat || holdSeat.merc) && (cs.mode === 'channel' || cs.mode === 'charge'
       || cs.mode === 'guard' || cs.mode === 'overcharge')) {
       // A completion-gated gather (release.requireFull) is all-or-nothing:
       // the monster holds TO the cap — the readable doom-cast is the
@@ -51873,6 +52863,7 @@ export class World {
     let best: Seat | undefined; let bestD = Infinity;
     for (const s of this.seats) {
       if (s.actor.dead || s.actor.downed) continue;
+      if (s.keeper) continue;                      // keeperSeat: the warden's hands take nothing
       if (exclude && s.id === exclude) continue;   // dropper can't reclaim yet
       if (s.actor.tier !== story) continue;        // THE SAME-STORY LAW: its own story's hands only
       const d = dist(at, s.actor.pos);
@@ -52115,7 +53106,7 @@ export class World {
         if (!this.gearVacuum) continue;
         const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gear, exclude, drop.tier);
         if (!seat) continue;
-        if (drop.item.item.questId && seat !== this.localSeat) continue;
+        if (drop.item.item.questId && seat !== this.localSeat && !this.localSeat.keeper) continue; // keeperSeat
         if (!autoPlace(seat.meta.items, drop.item.item)) {
           this.failNote(seat.actor, 'bagfull', 'inventory full');
           continue;
@@ -52161,15 +53152,38 @@ export class World {
     }
   }
 
-  private dotAccum = new Map<number, { amount: number; timer: number }>();
-  private accumulateDotText(a: Actor, dot: number, dt: number): void {
+  private dotAccum = new Map<number, { amount: number; timer: number; seat?: string | null; afflicted?: boolean }>();
+  /** `by` = THE WIRE'S EYES: the tick's author (a band's owner, an aura's bearer, a vent, a
+   *  flight's caster), 'afflictions' = the victim's own damaging statuses, read once at the
+   *  mint; absent = unauthored (environmental ground). One seat's ticks name the window's
+   *  number; a mix names none. Hosted worlds only (creditFloat's law). */
+  private accumulateDotText(a: Actor, dot: number, dt: number, by?: Actor | 'afflictions'): void {
     let acc = this.dotAccum.get(a.id);
     if (!acc) { acc = { amount: 0, timer: 0 }; this.dotAccum.set(a.id, acc); }
     acc.amount += dot; acc.timer += dt;
+    if (this.partyRows !== null) { // keeperSeat: owners ride a hosted world's wire alone
+      if (by === 'afflictions') acc.afflicted = true;
+      else acc.seat = foldDotSeat(acc.seat, by ? this.seatOfRoot(by)?.id ?? null : null);
+    }
     if (acc.timer >= 0.5 && acc.amount >= 1) {
       this.text(a.pos, Math.round(acc.amount).toString(), '#d88a50', 11, 'dmg');
-      acc.amount = 0; acc.timer = 0;
+      if (acc.afflicted) acc.seat = foldDotSeat(acc.seat, this.afflictionSeat(a));
+      if (acc.seat) this.creditFloat(null, acc.seat);
+      acc.amount = 0; acc.timer = 0; acc.seat = undefined; acc.afflicted = undefined;
     }
+  }
+
+  /** THE WIRE'S EYES: the one seat whose bodies authored every damaging affliction `a` wears
+   *  (Actor statuses' casterId through the owner chain), else null (mixed or unauthored). */
+  private afflictionSeat(a: Actor): string | null {
+    let seat: string | null | undefined;
+    for (const s of a.statuses) {
+      if (!(s.dps > 0)) continue;
+      const by = s.casterId !== undefined ? this.actorById(s.casterId) : undefined;
+      seat = foldDotSeat(seat, this.seatOfRoot(by)?.id ?? null);
+      if (seat === null) return null;
+    }
+    return seat ?? null;
   }
 
   /** Where a returning projectile is headed. */
@@ -52254,7 +53268,7 @@ export class World {
           const taken = mitigateTyped(e, { [pl.damageType]: drain });
           if (taken > 0) {
             e.life -= taken;
-            this.accumulateDotText(e, taken, TETHER_TICK);
+            this.accumulateDotText(e, taken, TETHER_TICK, a); // THE WIRE'S EYES: the venting body
             if (e.life <= 0 && !e.dead) this.kill(e, false, a);
           }
         }
@@ -52312,11 +53326,244 @@ export class World {
     }
   }
 
+  // ---- THE ACTING SEAT (docs/engine/shard.md "The pieces") -------------------
+  // Every interaction judges the seat that acted, never "the local player"
+  // (on a shard that is the parked keeper). Off a hosted world every read
+  // below folds to the one hero: the solo invariant.
+
+  /** Per-seat HUD rows for every player seat this machine does not draw: the
+   *  newest refusal note (SeatW.fn) and the stamp of the last hit taken at low
+   *  life (SeatW.lh). net/seatView.ts ships each row to its own seat alone.
+   *  Keyed by the seat itself, so a departed seat's rows (and its own refusal
+   *  throttle, seatNoteAt) leave with it. */
+  private readonly seatHud = new WeakMap<Seat, SeatHudRow>();
+  private readonly seatNoteAt = new WeakMap<Seat, Map<string, number>>();
+  private seatHudOf(seat: Seat): SeatHudRow {
+    let row = this.seatHud.get(seat);
+    if (!row) this.seatHud.set(seat, row = {});
+    return row;
+  }
+  /** One seat's HUD rows as the wire ships them: the refusal note while it is
+   *  fresh (ACTING_SEAT_CFG.noteSec), the surge's seconds left. Null when both
+   *  have run out (and the row is forgotten). */
+  seatHudWire(seat: Seat): { fn?: { text: string; at: number }; lh?: number } | null {
+    const row = this.seatHud.get(seat);
+    if (!row) return null;
+    const out: { fn?: { text: string; at: number }; lh?: number } = {};
+    if (row.fn && this.time - row.fn.at < ACTING_SEAT_CFG.noteSec) out.fn = { text: row.fn.text, at: row.fn.at };
+    const left = row.lhAt === undefined ? 0 : LOW_LIFE_FLASH_SEC - (this.time - row.lhAt);
+    if (left > 0) out.lh = Math.round(left * 1000) / 1000;
+    if (out.fn || out.lh !== undefined) return out;
+    this.seatHud.delete(seat);
+    return null;
+  }
+
+  /** The seat whose own act is running (applyInputs' per-seat pass, a meta
+   *  action, a credited kill): on a hosted world the news that act mints goes
+   *  to its party (noticeAudience). Null between acts. */
+  actingSeat: Seat | null = null;
+
+  /** Who hears a notice minted now (seat ids), or undefined for everyone. On a
+   *  hosted world a line an acting seat caused goes to that seat's party; a
+   *  world event (ACTING_SEAT_CFG.worldChannels, or `scope: 'world'` at its
+   *  mint site) and a line no seat caused go to every player. */
+  private noticeAudience(channel: string, scope?: 'world'): string[] | undefined {
+    const acting = this.actingSeat;
+    if (!acting || acting.keeper || !this.localSeat.keeper || scope === 'world'
+      || ACTING_SEAT_CFG.worldChannels.includes(channel)) return undefined;
+    // THE OCCUPIED LAW (shard M1-W3): the feed is one across the sim units, so
+    // the party is heard wherever its members stand, never only in this unit.
+    const to: string[] = [];
+    for (const w of this.presentWorlds()) for (const s of w.seats) if (!s.keeper && this.sameParty(acting, s)) to.push(s.id);
+    return to;
+  }
+
+  /** Credited kills per seat (the killer's owner chain): the reckoning counts
+   *  a seat's own kills, never the server's. */
+  private readonly seatKillTally = new WeakMap<Seat, number>();
+  seatKills(seat: Seat): number { return this.seatKillTally.get(seat) ?? 0; }
+  private noteSeatKill(killer: Actor | undefined): void {
+    const seat = this.seatOfRoot(killer);
+    if (seat) this.seatKillTally.set(seat, this.seatKills(seat) + 1);
+  }
+
+  /** The bodies a shared interaction answers (a chest's lock, a shrine's
+   *  draught, an encounter's diamond, a fracture, a waypoint's brush): every
+   *  standing player seat, as the structure doors already read; never the
+   *  keeper's parked body, never a hired blade (a hireling's wander is no
+   *  choice). Solo: the hero alone. */
+  private touchers(): Actor[] {
+    const out: Actor[] = [];
+    for (const s of this.seats) {
+      if (s.keeper || s.merc || s.actor.dead || s.actor.downed) continue;
+      out.push(s.actor);
+    }
+    return out;
+  }
+
+  // ---- THE COUNTERS AND THE JOURNAL (docs/engine/shard.md "The pieces") -----
+  // A hosted world's counters, quests, bounty board, harvest rites and objective
+  // pay answer the seat whose hands are on them, never the parked keeper. Off a
+  // hosted world every read below folds to the one hero (THE SOLO INVARIANT).
+
+  /** THE QUEST HAND's explicit scope (withQuestHand). */
+  private questSeat: Seat | null = null;
+
+  /** THE QUEST HAND: the seat a quest read or act answers. The scoped seat
+   *  (withQuestHand: a seat's journal row, its giver linger, its claim), else on
+   *  a hosted world the acting seat (a meta act, a credited kill), else the
+   *  local hero. Quest STATE stays the world's (card 24 is unruled); every ACT
+   *  and every REWARD is the hand's. */
+  questHand(): Seat {
+    if (this.questSeat) return this.questSeat;
+    const acting = this.actingSeat;
+    return this.localSeat.keeper && acting && !acting.keeper && !acting.merc ? acting : this.localSeat;
+  }
+
+  /** Read or act as `seat`'s hand (THE QUEST HAND's scope; nests). */
+  withQuestHand<T>(seat: Seat, fn: () => T): T {
+    const was = this.questSeat;
+    this.questSeat = seat;
+    try { return fn(); } finally { this.questSeat = was; }
+  }
+
+  /** The hands a host-side dwell answers: the local hero and couch guests, or
+   *  on a hosted world every standing player seat (never the keeper, never a
+   *  hired blade). */
+  private handSeats(): Seat[] {
+    if (!this.localSeat.keeper) return this.localHumanSeats();
+    return this.seats.filter(s => !s.keeper && !s.merc && !s.actor.dead && !s.actor.downed);
+  }
+
+  /** THE BOARD PER SEAT: may the quest hand see and work this taken posting?
+   *  On a hosted world a hand is its holder's (an unheld one, whose holder
+   *  left the world, is anyone's); everywhere else every hand is the hero's. */
+  handOwns(p: BountyPosting): boolean {
+    return !this.localSeat.keeper || !p.holder || p.holder === this.questHand().id;
+  }
+
+  /** The standing player seat nearest any of these places: the deed's seat
+   *  when no act names one (a field clear the sim noticed). Null with none. */
+  private nearestHand(places: readonly Vec2[]): Seat | null {
+    let best: Seat | null = null, bd = Infinity;
+    for (const s of this.handSeats()) {
+      for (const p of places) {
+        const d = dist(this.seatHero(s).pos, p);
+        if (d < bd) { bd = d; best = s; }
+      }
+    }
+    return best;
+  }
+
+  /** XP BY PLACE: where a zone's objective was done: its hold fixtures (spires,
+   *  rifts, pyres, digs), its quarry's body, else the field's last counted fall
+   *  (stamped on a hosted world by the 'objective_fall_place' kill rule). Empty
+   *  when no place is known. */
+  private objectivePlaces(): Vec2[] {
+    const out: Vec2[] = [];
+    for (const f of [...this.spires, ...this.rifts, ...this.pyres, ...this.digs]) out.push(f.pos);
+    const o = this.zone.objective;
+    if (o.kind === 'boss') for (const a of this.actors) if (a.defId === o.id) out.push(a.pos);
+    const fall = this.objectiveFallAt;
+    if (!out.length && fall?.zone === this.zone.id) out.push(fall.pos);
+    return out;
+  }
+  /** The field's last counted fall on a hosted world, by zone (XP BY PLACE's fallback). */
+  private objectiveFallAt: { zone: string; pos: Vec2 } | null = null;
+
+  /** XP BY PLACE for a geographic objective on the Unbroken Wilds: its owner's
+   *  hold fixtures and its objective chest. */
+  private massObjectivePlaces(owner: string): Vec2[] {
+    const out: Vec2[] = [];
+    for (const f of [...this.spires, ...this.rifts, ...this.pyres, ...this.digs]) if (f.owner === owner) out.push(f.pos);
+    for (const c of this.chests) if (c.massObjectiveOwner === owner) out.push(c.pos);
+    return out;
+  }
+
+  /** XP BY PLACE for a cleared native site on the Unbroken Wilds: its centre in
+   *  the surface's local frame (undefined off the wilds). */
+  massSitePlace(found: { center: MassAddress }): Vec2 | undefined {
+    const mass = this.massRuntime;
+    if (!mass) return undefined;
+    try { return localOffset(found.center, { ...mass.origin, x: 0, y: 0 }, mass.config.terrain.addressSpan); }
+    catch { return undefined; }
+  }
+
+  /** THE KEEPER'S GATE for a client's counters: the host's owned counter
+   *  features (shipped in the zone message). A render shell reads them, never
+   *  its own account's; host, solo and couch read the account. */
+  netCounters?: ReadonlySet<string>;
+  /** THE CLIENT'S COUNTERS: each station's piece by town site, as the host resolved it (the
+   *  zone message's anchors, matched to the shell's doodads by spot). Render shells alone. */
+  netStationAnchors?: Map<string, Doodad>;
+  counterOwned(feature: string): boolean {
+    return this.netCounters ? this.netCounters.has(feature) : featureEnabled(this.account, feature);
+  }
+
+  /** THE JOURNAL ROW, mirrored (net/journalWire.ts): a render shell's own seat's
+   *  quests, offers, rewards, pins and boards as the host judged them. The
+   *  quest reads below answer from it on a client; undefined everywhere else. */
+  netJournal?: import('../net/journalWire').JournalW;
+  /** THE JOURNAL ROW's recompute marks (a seat's act may move its quests). */
+  readonly journalDirty = new Set<string>();
+  /** THE CORPSE ON THE CHART (installed by the shard): a seat's own remembered
+   *  bodies, by zone and map coordinate, for its journal row's pins. */
+  seatCorpseMarks: ((seat: Seat) => { zoneId: string; map?: { x: number; y: number }; name: string; classId: string; level: number }[]) | null = null;
+
+  /** THE CLIENT'S COUNTERS: a render shell runs no sim, so main.ts drives its
+   *  own seat's station lingers here the way it drives the Caravanner
+   *  (updateCaravan): the bench, the board, the Font, the Tracker, the Oracle
+   *  and the counters open the same panels, and every act inside them is a
+   *  host-judged request. The arrival latch re-arms per zone the shell adopts,
+   *  and the seat index follows the pooled body the snapshot seats as the own
+   *  hero, so the dwell's idle clock reads the steps prediction replays. */
+  private clientCounterZone: string | null = null;
+  updateClientCounters(dt: number): void {
+    if (!this.clientActionHook || !this.netCounters) return; // a hosted world's shell alone (the zone message ships its counters)
+    if (this.seatOf(this.localSeat.actor) !== this.localSeat) this.indexSeats();
+    if (this.appliedZoneId !== this.clientCounterZone) {
+      this.clientCounterZone = this.appliedZoneId;
+      this.stationArmed.clear();
+    }
+    this.updateSalvage(dt);
+    this.updateBountyBoard(dt);
+    this.updateFont(dt);
+    this.updateOracle(dt);
+    this.updateTracker(dt);
+    this.updateVendors(dt);
+  }
+
+  /** THE COUNTERS AND THE JOURNAL: a line only its own seat needs (a found hint, a full
+   *  pack) rides that seat's own note row on a hosted world (SeatW.fn, as a refusal note
+   *  does); elsewhere the floater stands where it always stood. */
+  private seatNote(seat: Seat | undefined, at: Vec2, msg: string, color: string, size: number): void {
+    if (seat && this.localSeat.keeper && !seat.keeper && !seat.couch && !seat.merc) {
+      this.seatHudOf(seat).fn = { text: msg, at: this.time };
+      return;
+    }
+    this.text(at, msg, color, size);
+  }
+
   /** Rate-limited failure blurbs — held buttons shouldn't wallpaper the
    *  screen with 'no valid target'. One note per skill per ~1.4s. */
   private failNoteAt = new Map<string, number>();
   private failNote(a: Actor, key: string, msg: string): void {
-    if (a !== this.player) return;
+    if (a !== this.player) {
+      // THE ACTING SEAT: a refusal speaks to the seat that pressed, on that
+      // seat's own throttle. A couch guest floats it over its own head on the
+      // shared screen; every other player seat (a shard player, a co-op guest)
+      // gets it as its own HUD row (SeatW.fn, net/seatView.ts), shipped to that
+      // seat alone. Monsters, hired blades and the keeper stay silent.
+      const seat = this.seatOf(a);
+      if (!seat || seat.keeper || seat.merc) return;
+      let noteAt = this.seatNoteAt.get(seat);
+      if (!noteAt) this.seatNoteAt.set(seat, noteAt = new Map());
+      if (this.time - (noteAt.get(key) ?? -9) < 1.4) return;
+      noteAt.set(key, this.time);
+      if (seat.couch) this.text(a.pos, msg, '#8a8678', 11);
+      else this.seatHudOf(seat).fn = { text: msg, at: this.time };
+      return;
+    }
     const last = this.failNoteAt.get(key) ?? -9;
     if (this.time - last < 1.4) return;
     this.failNoteAt.set(key, this.time);
@@ -53236,7 +54483,7 @@ export class World {
               e.life -= taken;
               e.hitFlash = 0.1;
               e.hitFlashType = dominantTypeOf(tick);
-              this.accumulateDotText(e, taken, PROJ_AURA_TICK);
+              this.accumulateDotText(e, taken, PROJ_AURA_TICK, p.caster); // THE WIRE'S EYES: the flight's caster
               if (e.life <= 0 && !e.dead) this.kill(e, false, p.caster);
             }
           }
@@ -54190,7 +55437,7 @@ export class World {
               if (ally.dead || ally.team !== z.caster.team || ally.tier !== (z.tier ?? z.caster.tier)) continue; // (the field's story)
               if (!this.zoneHas(z, ally.pos, ally.radius)) continue;
               const got = ally.healBy(z.healTick * hp);
-              if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
+              if (got > 0.5) this.seatText(z.caster, ally.pos, '+' + Math.round(got), '#8ae0a8', 10); // THE WIRE'S EYES: the healer's seat
             }
           } else {
           if (z.struck && instanceDelivery(z.inst).type === 'melee') {
@@ -54462,10 +55709,11 @@ export class World {
     }
     this.harvestOffer.clear();
     if (dt <= 0 || !this.harvestNodes.length) return;
-    // THE ARMING SCAN: local human hands only — the hero's seat and couch
-    // pads arm their own rites; mercs and remote peers never arm (no wire
-    // prompt exists to speak their binds).
-    for (const seat of this.localHumanSeats()) {
+    // THE ARMING SCAN: human hands only: the hero's seat and couch pads arm
+    // their own rites, and on a hosted world every standing player (its rite
+    // rides its own row, SeatW.hv, and its symbol presses ride the input path);
+    // mercs and a co-op host's remote peers never arm.
+    for (const seat of this.handSeats()) {
       if (this.harvestSessions.some(s => s.seatId === seat.id)) continue;
       const a = seat.actor;
       if (a.dead || a.downed) { this.harvestDwell.delete(seat.id); continue; }
@@ -54485,7 +55733,8 @@ export class World {
       // nothing is committed by walking a battle past it, no accidental
       // freeze can hijack a fight, and a co-op harvester is never
       // deafened (input law) with teeth already at their throat.
-      if (this.time - this.lastCombatAt < SWAP_DISCIPLINE_CFG.calmSec) {
+      const lastCombat = this.localSeat.keeper ? this.seatHero(seat).lastCombatAt : this.lastCombatAt; // THE COUNTERS AND THE JOURNAL: the seat's own blood
+      if (this.time - lastCombat < SWAP_DISCIPLINE_CFG.calmSec) {
         this.harvestDwell.delete(seat.id);
         continue;
       }
@@ -54656,6 +55905,7 @@ export class World {
       left: number; window: number; accent: string; pad: boolean; missT: number;
     }[];
   } | null {
+    if (this.clientActionHook && this.netHarvest !== undefined) return this.netHarvest; // THE COUNTERS AND THE JOURNAL: the shell's own rite row
     if (!this.harvestNodes.length && !this.harvestSessions.length) return null;
     const arms = new Map<number, number>();
     for (const d of this.harvestDwell.values()) {
@@ -54687,6 +55937,32 @@ export class World {
       }),
     };
   }
+
+  /** THE RITE ON THE WIRE (a hosted world's SeatW.hv): one seat's harvest view, cut to
+   *  the standing nodes within `reach` of its body (its own arming arc and offer) and its
+   *  own live rite. Null while it stands near no node and works no rite. */
+  netHarvest?: ReturnType<World['harvestView']>;
+  seatHarvestView(seat: Seat, reach: number): ReturnType<World['harvestView']> {
+    const a = seat.actor;
+    const s = this.harvestSessions.find(x => x.seatId === seat.id);
+    const near = this.harvestNodes.map((n, ix) => ({ n, ix }))
+      .filter(({ n }) => !n.spent && (n.doodad.tier ?? 0) === a.tier && dist(a.pos, n.pos) <= reach);
+    if (!s && !near.length) return null;
+    const dwell = this.harvestDwell.get(seat.id), offer = this.harvestOffer.get(seat.id);
+    return {
+      nodes: near.map(({ n, ix }) => ({
+        x: n.pos.x, y: n.pos.y, r: n.doodad.radius, spent: false, accent: n.def.accent,
+        armFrac: dwell && dwell.ix === ix ? Math.min(1, dwell.t / HARVEST_CFG.armSec) : 0,
+        offered: offer === ix, offeredPad: false,
+      })),
+      rites: s ? [{
+        x: a.pos.x, y: a.pos.y - a.radius, steps: s.seq, done: s.done, left: s.left, window: s.window,
+        accent: this.harvestNodes[s.ix]?.def.accent ?? '#e8e0c8', pad: false, missT: s.missT,
+      }] : [],
+    };
+  }
+  /** Is this seat's hands held by a rite (THE INPUT LAW's own gate)? The wire's rooted row. */
+  harvestHolds(seat: Seat): boolean { return this.harvestSessions.some(s => s.seatId === seat.id); }
 
   /** BRITTLE doodads (DoodadRule.brittle): lifeless breakables. 'touch' and
    *  'near' triggers probe the player's team here each tick (bucket-local);
@@ -55366,6 +56642,7 @@ export class World {
       for (const b of cand) {
         if (b.gridSeq <= a.gridSeq) continue; // each pair once, sweep order
         if (b.dead || b.downed || flat(b) || b.leap) continue;
+        if (this.seatByActor.get(b)?.keeper || this.seatByActor.get(a)?.keeper) continue; // keeperSeat: the warden has no shoulder
         // THE SOVEREIGNTY GATE (engine/tiers.ts sameStory): bodies on
         // different stories share a screen, never a shoulder — the lodger
         // strolling above the common room walks through nobody beneath the
@@ -55687,7 +56964,7 @@ export class World {
   completeMassObjective(owner: string, zone: Readonly<ZoneDef>, _label: string): void {
     if (!this.massRuntime || !owner || this.clientActionHook) return;
     // Show completion through the native final flare, changed fixtures and opened chest.
-    this.grantXp(objectiveRewardXp(zone.level));
+    this.grantXp(objectiveRewardXp(zone.level), this.massObjectivePlaces(owner)); // XP BY PLACE: the operation's fixtures and chest
   }
 
   /** Pay the zone's one-time bounty and unseal its exits. */
@@ -55729,7 +57006,7 @@ export class World {
     }
     this.completedObjectives.add(this.zone.id);
     const bonus = objectiveRewardXp(this.zone.level);
-    this.grantXp(bonus);
+    this.grantXp(bonus, this.localSeat.keeper ? this.objectivePlaces() : undefined); // XP BY PLACE: where the objective was done (hosted worlds)
     if (!visibleHold) this.text(vec(this.player.pos.x, this.player.pos.y - 50),
       `${label} +${bonus} xp`, '#ffd700', 18);
     else if (obj.kind === 'procession') rand(-10, 10); // retired native procession completion floater
@@ -57030,8 +58307,13 @@ export class World {
    *  sea found, a quest opening) — never a floater over the hero's head
    *  (the show-don't-tell axis: the head is for what is AT the head).
    *  Channels: world (the catch-all) · events · war · civic. */
-  notice(text: string, color?: string, size?: number, channel: string = 'world'): void {
+  notice(text: string, color?: string, size?: number, channel: string = 'world', scope?: 'world'): void {
     pushNotice(this.notices, { text, color, size, channel }, this.time);
+    // THE ACTING SEAT: on a hosted world a line some seat's act caused reaches
+    // that seat's party alone (the wire ships it to them); `scope: 'world'`
+    // marks a mint site whose line is world news whoever caused it.
+    const to = this.noticeAudience(channel, scope);
+    if (to) this.notices[this.notices.length - 1].to = to;
     // THE SPEECH GRAMMAR's '{lastEvent}': the newest news lines, kept past
     // the feed's own prune so the folk can still gossip about them.
     this.newsLog.push({ text, at: this.time });
@@ -57054,6 +58336,24 @@ export class World {
       life, maxLife: life, size, kind, ...(yieldToCombat ? { yieldToCombat: true } : {}),
       ...(dropUid === undefined ? {} : { dropUid }),
     });
+  }
+
+  /** THE WIRE'S EYES (docs/engine/shard.md): a combat number (a damage or heal float) minted
+   *  with its CREDITED seat, the striker's or healer's owner-chain root (THE KILLER'S DUE's
+   *  read), so a hosted client draws every number, its party's or its own
+   *  (Settings.floatOwners). Off a hosted world it is `text` exactly: no owner rides. */
+  seatText(by: Actor | null | undefined, at: Vec2, text: string, color: string, size = 13, kind?: string): void {
+    this.text(at, text, color, size, kind);
+    this.creditFloat(by);
+  }
+
+  /** THE WIRE'S EYES: stamp the float just minted with `by`'s credited seat (seatText's
+   *  second half, for a mint site that keeps its own `text` call). Hosted worlds only
+   *  (the shard publishes partyRows); the keeper is no one's credit. */
+  creditFloat(by: Actor | null | undefined, seatId?: string | null): void {
+    if (this.partyRows === null || !this.texts.length) return; // keeperSeat: the solo invariant (no owner off a hosted world)
+    const seat = seatId !== undefined ? seatId : this.seatOfRoot(by)?.id;
+    if (seat && !this.seats.find(s => s.id === seat)?.keeper) this.texts[this.texts.length - 1].seat = seat;
   }
 
   /** Move an actor with stat-driven speed, statuses included. */
@@ -57224,11 +58524,13 @@ export class World {
     // SNOW DENSITY: standing cover is heavy going for every walker
     // (SNOW_CFG.slowAtFull at a full blanket). Boats don't wade snow.
     const snowScale = this.sailing ? 1 : 1 - this.snowCoverAt(a.pos) * SNOW_CFG.slowAtFull;
-    // A held stance's own kit joins the read (Actor.stanceRead) — the
-    // marching wall's 'guarding'-scoped speed rows live on the instance.
-    const sc = a.stanceRead();
-    const speed = a.sheet.get('moveSpeed', sc?.tags, sc?.extra) * channelFactor * regionScale * boatScale * windScale * snowScale;
-    const traction = clamp(a.sheet.get('traction'), 0.05, 1);
+    // A held stance's own kit joins the read (Actor.walkSpeed's stanceRead): the
+    // marching wall's 'guarding'-scoped speed rows live on the instance. THE HONEST
+    // INPUT: a render shell's OWN hero walks the fold its seat row carries (ownWalk;
+    // the shell's statuses are display stubs); every host body reads its own sheet.
+    const ow = this.ownWalk !== null && a === this.player ? this.ownWalk : null;
+    const speed = (ow ? ow.spd : a.walkSpeed()) * channelFactor * regionScale * boatScale * windScale * snowScale;
+    const traction = ow ? ow.trc : a.walkTraction();
     a.lastMoveAt = this.time;
     a.idleFor = 0; // a deliberate step breaks the 'stationary' stance
     a.plantFor = 0; // …and the plant clock with it (the commitment resets)

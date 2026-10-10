@@ -68,6 +68,11 @@ element belongs to that element.**
 
 ## Standing kin
 
+- THE HONEST INPUT (`net/intent.ts HONEST_INPUT_CFG`, docs/engine/shard.md): a wire
+  client's frame carries its own `dt`; a host folds a tick's frames into one input
+  whose `moves` walk each at its dt under THE TIME BUDGET, and THE QUICK TAP holds a
+  slot pressed anywhere in that batch for the tick. A local seat sends no dt and walks
+  the tick's dt exactly as before.
 - THE SWAP-ON-CONFLICT keybind law (`ui/panels.ts`): one key drives ONE
   action, so an interact press can never double as a slot press by binding.
 - THE PRESSABLE BAR (`main.ts`): a mouse press on a HUD slot lands as that

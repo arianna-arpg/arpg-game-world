@@ -12,7 +12,7 @@
 import { SAVE_COMPATIBILITY, noteSaveReset } from './saveCompatibility';
 import { BUILD_PROFILE, storageKey } from '../buildProfile';
 import {
-  deserializeAccount, makeAccount, serializeAccount,
+  deserializeAccount, ensureAccountId, isAccountId, makeAccount, serializeAccount,
   type Account, type AccountSave,
 } from './account';
 import {
@@ -118,7 +118,19 @@ export function diskBeacon(slot: SaveSlot, body: string): void {
 
 // --- ACCOUNT ----------------------------------------------------------------
 
+/** THE IDENTITY (accountId): the id the synchronous boot load minted IN
+ *  MEMORY (its cache held none). It writes nothing (the disk-first load must
+ *  still judge the cached save for reset notices); that load adopts this id,
+ *  so one profile keeps one id, and persists it. */
+let bootAccountId: string | null = null;
+
 export function loadAccount(): Account {
+  const acc = cachedAccount();
+  if (ensureAccountId(acc)) bootAccountId = acc.accountId;
+  return acc;
+}
+
+function cachedAccount(): Account {
   let raw: string | null = null;
   try { raw = window.localStorage.getItem(KEY); } catch { return makeAccount(); }
   if (!raw) return makeAccount();
@@ -144,6 +156,14 @@ export async function loadAccountAsync(): Promise<Account> {
   if (accountReset) noteSaveReset('account');
   else if (runReset && (data?.roster?.length ?? 0) > 0) noteSaveReset('run');
   const fresh = acc ?? makeAccount();
+  // THE IDENTITY (accountId): a profile's first load mints it, keeping the id
+  // its cache or the synchronous boot load already holds. The cache carries
+  // it from this line on (every later boot adopts it); the disk takes it with
+  // the account's next ordinary write, since a compatible boot never writes
+  // the disk (a shard connection saves the account before any record keys by it).
+  let cachedId: unknown;
+  try { cachedId = (JSON.parse(window.localStorage.getItem(KEY) ?? 'null') as AccountSave | null)?.accountId; } catch { /* none */ }
+  ensureAccountId(fresh, isAccountId(cachedId) ? cachedId : bootAccountId);
   const body = JSON.stringify(serializeAccount(fresh));
   try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
   if (disk !== null && (accountReset || runReset)) diskPut(ACCOUNT_SLOT, body);

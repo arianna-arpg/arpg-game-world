@@ -76,6 +76,7 @@ const puzzleId=(p:Pick<MassPlace,'id'>,r:MassPuzzleSpec)=>canonical([p.id,'puzzl
 type Context={ rows: readonly MassPuzzleSpec[]; center: {x:number;y:number}; level:number };
 type Owner={id:string;center:MassAddress};
 export class MassPuzzles {
+  massFocusCount=1;
   private live=new Map<string,{run:PuzzleRun;place:string;row:MassPuzzleSpec}>();
   private saved=new Map<string,MassPuzzleSave>();
   private owners=new Map<string,Owner>();
@@ -100,6 +101,7 @@ export class MassPuzzles {
     const r=this.live.get(id);return !r||Math.hypot(r.run.at.x-at.x,r.run.at.y-at.y)<PUZZLE_CFG.earshot;
   }
   get population():number{return [...this.live.values()].reduce((n,r)=>n+r.run.nodes.length,0);}
+  massPopulationSlots(){return [...this.live.values()].flatMap(r=>r.run.nodes.map(a=>({pos:a.pos,count:1})));}
   missing(place:MassPlace,rows:readonly MassPuzzleSpec[]):number{
     return rows.reduce((n,r)=>n+(this.live.has(puzzleId(place,r))?0:puzzleSeats(r).length),0);
   }
@@ -109,12 +111,12 @@ export class MassPuzzles {
     return rows.reduce((n,r)=>n+(!this.live.has(puzzleId(place,r))&&this.saved.has(puzzleId(place,r))?puzzleSeats(r).length:0),0);
   }
   canAdmit(place:Pick<MassPlace,'id'>,rows:readonly MassPuzzleSpec[]):boolean{
-    return this.live.size+rows.filter(r=>!this.live.has(puzzleId(place,r))).length<=(this.policy?.maxResident??MASS_PUZZLE_LIMIT);
+    return this.live.size+rows.filter(r=>!this.live.has(puzzleId(place,r))).length<=(this.policy?.maxResident??MASS_PUZZLE_LIMIT)*this.massFocusCount;
   }
   private needed(world:World,run:PuzzleRun):boolean{
     if(!this.policy)return true;
     const tier=run.nodes[0]?.tier??0;
-    if((world.player.tier??0)===tier&&Math.hypot(world.player.pos.x-run.at.x,world.player.pos.y-run.at.y)<=this.policy.retainRadius)return true;
+    if((world.massRuntime?.focusDistance(world,run.at,tier)??((world.player.tier??0)===tier?Math.hypot(world.player.pos.x-run.at.x,world.player.pos.y-run.at.y):Infinity))<=this.policy.retainRadius)return true;
     const nodes=new Set(run.nodes);
     return world.actors.some(a=>!a.dead&&!nodes.has(a)&&(a.tier??0)===tier
       &&run.nodes.some(n=>Math.hypot(a.pos.x-n.pos.x,a.pos.y-n.pos.y)<=a.radius+n.radius+160));

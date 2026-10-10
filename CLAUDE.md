@@ -1,3 +1,9 @@
+The seamless foundation now includes the hosted-shard runtime and per-player
+roads. docs/engine/shard-runtime-foundation.md records the combined checkpoint,
+multi-focus reservation/dormancy contracts, exact validation and remaining
+baseline/performance failures. Continue new work from this combined baseline;
+the parked seamless-world branch and dirty root main are not integration targets.
+
 WildernessPaths (schema19) adds coherent native-sized ambient packs, closer
 encounter anchors, local destination reservations and occasional complete paths
 between existing guarded/cache-bearing sites. Preserve historical omission, exact
@@ -84,6 +90,17 @@ source palettes, climate fields and generation version remain unchanged. Verify
 worldmass_neutralground, climate/landforms/terrainpatches/native placement, all
 checks, genqa, sim and neutral-ground-ui.cjs against an isolated completed build.
 See docs/worldgen/neutral-ground.md; existing expeditions retain their terrain.
+
+Shard runtime foundation: WorldMassRuntime accepts simultaneous seat foci with
+per-connected-cluster population budgets. Node uses one worker_threads compiler
+for the three existing checked loader contracts and skips client-only terrain
+page preparation; physics remains authoritative. Compact shard world saves omit
+seed-derived land before serialization, verify its digest on restore, and retain
+portable full saves by default. Verify worldmass_foci, worldmass_checkpoint,
+shardworkers, both probe families, all types, genqa, sim smoke, browser build and
+the unchanged clustered/spread soak gates. Cold queries and publication remain
+synchronous; implementation is not a claim that every timing gate passes. See
+docs/engine/shard-runtime-foundation.md for contracts, evidence and limits.
 
 NativeSceneBirthComposition wires all 124 original birth ports to concrete native
 owners and the complete 36-row registry. Bind one census, geometry, population,
@@ -3962,6 +3979,31 @@ we verify changes.
   SPEECH GRAMMAR (`engine/speechGrammar.ts` — see the town paragraph
   above; docs `docs/engine/speech-grammar.md`).
   Tunables in `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
+- THE SHARD (`docs/design/shard-world.md` — the hosted world's charter;
+  `docs/engine/shard.md` — the M0 contract): `npm run shard` stands the real
+  engine up headless in Node (`server/shardHost.ts`, the co-op host frame
+  verbatim) behind a dependency-free WebSocket (`src/net/wsframe.ts` +
+  `server/shardTransport.ts`); a client joins from the Co-op lobby's "Join a
+  Server" through `src/net/ws.ts` (`WsTransport`, the WebRTC grammar over a
+  socket); `Host Shard.bat` is the double-click; `--worldmass` hosts THE
+  UNBROKEN WILDS and a joining shell renders them from the seed
+  (`src/net/wildsClient.ts`: the inert restore-only runtime, streaming,
+  the mass-walk law, the pocket law; THE SHADOW + THE DRESS BEAT on the
+  shard). THE KEEPER SEAT (`Seat.keeper`) is the parked p0 the world-level
+  reads address — THE WARDEN IS NO BODY and STANDS every tick (no hands, no
+  shoulder, invulnerable, its level the players'), THE SEALED ROADS, THE
+  NEAR LAW (`COOP_SCALING.shareRadius`), THE MERCY for a lone downed seat.
+  THE VESSEL (card 6: `server/vessel.ts`, `server/corpses.ts`,
+  `meta/shardVessel.ts`): a client's hero travels on its join and mirrors
+  home to its own slot (THE IMMORTAL TRAVELS: the wake names it by `charId`,
+  so a roster vessel goes too); a mortal vessel's fall leaves its corpse on the shard keyed
+  by `Account.accountId` and ends the run on the client; its next hero
+  reclaims it. The wilds persist (`server/wildsSave.ts`, THE RESUME LAW).
+  The wire wears THE INBOX LAWS, THE DOOR CAPS, THE ACTION BUDGET, THE
+  BREAKER and a status page on a plain GET. The shard account's gate (M2)
+  and the per-seat roads (M1 W2) are still carded. Verify `probe_shard.ts` (fast),
+  `probe_shardimmortal.ts` (the roster vessel's road, fast) and
+  `probe_shardslow.ts` (the wilds save and the vessel, `--slow`). THE IDENTITY CUES (card 17 A): overhead names on every other hero and the `g` ping that marks the ground for your party live in `data/identityCues.ts` + `engine/pings.ts` (one standing mark per seat, host-judged for cadence and reach); verify `probe_shardidentity.ts`. THE FIX WAVES (2026-10-09, from two read-only sweeps recorded in the charter §7d): THE HONEST INPUT (`PlayerInput.dt`, moves replayed under a time budget; `probe_shardinput.ts`), THE WIRE'S EYES (ground telegraphs, own cooldown and gauge clocks, flight ids, float owners, the shelf's beat, each seat's build to its own socket through `SEAT_OWN_ROWS`; `probe_shardwire.ts`), THE ACTING SEAT (held casts on the seat's own input, per-seat refusal notes, THE DEATH BEAT, interactions for whoever walks up, a build stamp at the door; `probe_shardseat.ts`), THE SMOOTH SHELL (`src/net/shell.ts`: adopt once per arrival and interpolate per frame, the echo law, a jitter buffer, in-place resume; `probe_shardshell.ts`), THE COUNTERS AND THE JOURNAL (town stations lingered by each client and judged per seat, quests and bounties answering the acting seat, a per-seat journal row `SeatW.jn` with the map pins, harvest for remote seats, XP by place; `probe_shardcounters.ts`), THE PARTY (`probe_shardparty.ts`), THE DORMANT SEAT (`probe_sharddormant.ts`), THE IMMORTAL TRAVELS (`probe_shardimmortal.ts`) and THE SOAK (`npm run soak:shard`, gates in `balance/soak.config.json`; `--spread` and `--rove` measure the one living focus). M1 THE SIM UNITS follows `docs/design/shard-m1-plan.md`; its W1 fabric stands (`server/simUnits.ts` + `engine/shardUnits.ts`: one World per live zone under THE PIN, THE HAND-OFF, the wire and the desks per unit; `probe_shardunits.ts`).
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
   `docs/ui/folio.md`, probe `balance/probe_folio.ts`): dwell dialogs that

@@ -123,6 +123,8 @@ function localPiece(d:Doodad,owner:string,offset:Vec2):Doodad {
  * durable geography. A provider must return the same overlapping candidates
  * for every point, independent of arrival order and page residency. */
 export class MassNativeResidency {
+  private massFocusCount=1;
+  setFocusCount(count:number):void{if(!Number.isSafeInteger(count)||count<1||count>16)throw Error('Invalid native focus budget');this.massFocusCount=count;}
   readonly config:Readonly<NativeResidencyConfig>;
   private readonly caps:ReadonlySet<string>;
   private born=new Map<string,Born>();
@@ -260,7 +262,7 @@ export class MassNativeResidency {
     this.observe(entry);
   }
   private makeRoom():void {
-    while(this.cache.size>=this.config.maxBlueprints){
+    while(this.cache.size>=this.config.maxBlueprints*this.massFocusCount){
       const entry=[...this.cache].find(([,e])=>!e.instance);
       if(!entry)throw Error('Pinned native feature cache exceeds budget');
       this.remember(entry[1],entry[1].born.changes.clock);this.cache.delete(entry[0]);
@@ -268,7 +270,7 @@ export class MassNativeResidency {
   }
   private refuse(id:string,reasons:string[]):null {
     this.refused.set(id,Object.freeze(reasons));
-    if(this.refused.size>this.config.maxBlueprints)this.refused.delete(this.refused.keys().next().value!);
+    if(this.refused.size>this.config.maxBlueprints*this.massFocusCount)this.refused.delete(this.refused.keys().next().value!);
     return null;
   }
   /** Cheap shortlist predicate; never generates or changes collision truth. */
@@ -335,7 +337,7 @@ export class MassNativeResidency {
     return [...rows].sort((a,b)=>(b.priority??0)-(a.priority??0)||a.id.localeCompare(b.id));
   }
   private containing(at:MassAddress):{entry:Cached;local:Vec2}|null {
-    for(const p of this.candidates(at)){
+    for(const p of this.cachedObstacleCandidates(at)){
       if(p.origin.dimension!==at.dimension)continue;
       const local=localOffset(at,p.origin,this.config.addressSpan,32);
       const entry=this.ensure(p);
@@ -424,7 +426,7 @@ export class MassNativeResidency {
       offset:localOffset(hit.entry.born.placement.origin,this.frameOrigin(),this.config.addressSpan)};
   }
   sync(wanted:readonly NativeFeaturePlacement[],host:NativeFeatureHost):{admitted:string[];deferred:string[];retired:string[]} {
-    if(wanted.length>this.config.maxResidents)throw Error('Wanted native scenery exceeds residency budget');
+    if(wanted.length>this.config.maxResidents*this.massFocusCount)throw Error('Wanted native scenery exceeds residency budget');
     const ids=new Set(wanted.map(p=>p.id)),retired:string[]=[],admitted:string[]=[],deferred:string[]=[];
     for(const [id,e]of this.cache)if(e.instance&&!ids.has(id)){
       if(!e.binding!.canRetire()||e.instance.layout.doodads.some(d=>d.contactSource||d.felled||d.evap)){deferred.push(id);continue;}
@@ -434,7 +436,7 @@ export class MassNativeResidency {
     }
     for(const p of wanted){
       const e=this.ensure(p);if(!e){deferred.push(p.id);continue;}if(e.instance)continue;
-      if(this.stats.resident>=this.config.maxResidents){deferred.push(p.id);continue;}
+      if(this.stats.resident>=this.config.maxResidents*this.massFocusCount){deferred.push(p.id);continue;}
       const offset=localOffset(p.origin,this.frameOrigin(),this.config.addressSpan);
       const layout=translateNativeFeature(e.blueprint,p.id,offset);
       for(const d of layout.doodads)if(d.felled){const delta=host.clock-e.born.changes.clock;d.felled.at+=delta;d.felled.wake+=delta;}

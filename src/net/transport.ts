@@ -38,6 +38,10 @@ export interface PeerInfo {
   name: string;
   classId: string;
   isHost: boolean;
+  /** THE IDENTITY (accountId, THE SHARD): the joiner's account id, carried on
+   *  its `join` and seen by the HOST alone (never re-broadcast in a roster).
+   *  It only ever keys this player's own records. */
+  accountId?: string;
 }
 
 /** Session-control (run LIFECYCLE) messages — distinct from the per-tick state.
@@ -57,7 +61,36 @@ export type SessionMsg =
   | { t: 'cosmetics'; loadout: import('../engine/cosmetics').CosmeticLoadout }
   | { t: 'newRun'; seat: PlayerId; seed: number }
   | { t: 'hostLeft' }
-  | { t: 'action'; action: MetaAction };
+  // THE ECHO LAW (net/shell.ts): a client action's rising seq; the host echoes the newest it
+  // judged on the seat's own build (SeatMetaW.as). Absent from a lane that keeps no echo.
+  | { t: 'action'; action: MetaAction; seq?: number }
+  // THE VESSEL + THE DEATH COVENANT (THE SHARD: docs/engine/shard.md "The
+  // vessel and the corpse"; the rows are typed and sanitized in vesselWire.ts):
+  //   heroSave (shard→a seat): the vessel's mirror, a CharacterSave with NO
+  //            world half, on the persistence beat and at the farewell.
+  //   corpse   (shard→a seat): a MORTAL vessel fell: where its body lies and
+  //            the reckoning the shard appraised (`runEnd` follows).
+  //   corpses  (shard→a seat): the seat's OWN standing bodies in its zone,
+  //            plus the reclaims it completed since the last row.
+  //   leaving  (seat→shard):  the farewell: mirror me before my socket closes;
+  //            and THE DELIBERATE LEAVE: that close ends my seat at once,
+  //            never dormant (card 16 B: a close without it leaves the hero),
+  //            unless said mid-fight (THE ACTING SEAT: it sleeps like a lost socket).
+  | { t: 'heroSave'; save: import('../meta/character').CharacterSave }
+  | { t: 'corpse'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning }
+  | { t: 'corpses'; zoneId: string; bodies: import('./vesselWire').ShardBodyRow[]; reclaimed?: number }
+  | { t: 'leaving' }
+  // THE PARTY (docs/design/shard-world.md card 23 — net/partyWire.ts): a client's word to its
+  // party desk (client→host), an invite landing on its target, and a refusal's one line.
+  | { t: 'party'; op: import('./partyWire').PartyOp; seat?: PlayerId }
+  | { t: 'partyInvite'; from: PlayerId; name: string; party: string }
+  | { t: 'partyWord'; word: string }
+  // THE ACTING SEAT (a refused hero, shard→a seat): the shard would not seat the
+  // vessel this join carried, and never seats a fresh hero in its place. `mu`:
+  // the hero cannot travel, so the client goes back to Mu bound for this world
+  // to wake one that can; absent, the word is a door (the hero already walks
+  // here) and the client goes home with it.
+  | { t: 'refused'; word: string; mu?: boolean };
 
 /** THE SEED THREAD — a client's World must be minted from the HOST's run seed,
  *  never one of its own. `manifest.seed` drives the shared map (the starter web

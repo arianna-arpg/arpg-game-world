@@ -10,6 +10,11 @@ export interface MassStreamConfig { maxPages: number; maxSamples: number }
 /** Cooperative preparation, atomic publication, bounded residency. Sampling is
  * independent of the queue so physics never guesses that unknown ground is air. */
 export class MassStream {
+  private focusPageBudget: number;
+  setFocusCount(count: number): void {
+    if (!Number.isSafeInteger(count) || count < 0 || count > 16) throw Error('Invalid terrain focus budget');
+    this.focusPageBudget = this.config.maxPages * Math.max(1, count);
+  }
   overlay?: {sample(at:MassAddress,base:MassTerrain):MassTerrain; revisionAt(cell:MassCell):number; readonly revision:number};
   get revision(): number { return this.state.terrainRevision + (this.overlay?.revision ?? 0); }
   revisionAt(cell:MassCell): number { return this.state.terrainRevisionAt(cell) + (this.overlay?.revisionAt(cell) ?? 0); }
@@ -23,6 +28,7 @@ export class MassStream {
     if (!Number.isSafeInteger(config.maxPages) || config.maxPages < 1
       || !Number.isSafeInteger(config.maxSamples) || config.maxSamples < 1) throw new Error('Invalid residency budget');
     this.config = Object.freeze({ ...config });
+    this.focusPageBudget = config.maxPages;
     if (canonical(state.run) !== canonical(generator.run)) throw new Error('Stream state belongs to another run');
     this.cols = generator.spec.addressSpan / generator.spec.terrainCell;
   }
@@ -46,7 +52,7 @@ export class MassStream {
       const normalized = address(c.dimension, c.cx, c.cy, 0, 0, this.generator.spec.addressSpan);
       next.set(cellKey(normalized), { dimension: normalized.dimension, cx: normalized.cx, cy: normalized.cy });
     }
-    if (next.size > this.config.maxPages) throw new Error('Requested terrain exceeds residency budget');
+    if (next.size > this.focusPageBudget) throw new Error('Requested terrain exceeds residency budget');
     this.needed = next;
     this.syncChanges();
     for (const key of this.pending.keys()) if (!next.has(key)) this.pending.delete(key);
@@ -55,7 +61,7 @@ export class MassStream {
     for (const [key, cell] of next) if (!this.pages.has(key))
       ordered.set(key, this.pending.get(key) ?? { key, cell, samples: [], revision: this.revisionAt(cell) });
     this.pending = ordered;
-    while (this.pages.size + this.pending.size > this.config.maxPages) {
+    while (this.pages.size + this.pending.size > this.focusPageBudget) {
       const key = [...this.pages.keys()].find(k => !next.has(k));
       if (key === undefined) throw new Error('Pinned terrain exceeded the budget');
       this.pages.delete(key);

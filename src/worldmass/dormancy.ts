@@ -3,6 +3,7 @@ import { MONSTERS } from '../data/monsters';
 import { tellSpecsOf } from '../engine/tells';
 import { canonical } from './random';
 import { Actor } from '../engine/actor';
+import { MassObserverIndex } from './foci';
 import { StatSheet } from '../engine/stats';
 import type { World } from '../engine/world';
 
@@ -432,8 +433,11 @@ export class MassDormancy {
     const groups=new Map<string,Actor[]>();
     for(const [id,a]of owned){const key=a.squadId===undefined?'body:'+id:'squad:'+a.squadId;const group=groups.get(key)??[];group.push(a);groups.set(key,group);}
     const pins=massDormancyPins(world,owned), remove=new Set<Actor>();let slept=0,woke=0,checked=0;
-    const observers=world.actors.filter(a=>!a.dead&&a.team!=='enemy');
-    const near=(a:Actor,r:number)=>observers.some(o=>Math.hypot(a.pos.x-o.pos.x,a.pos.y-o.pos.y)<=r||nativeQuietAnatomyNear(a,o.pos,r));
+    const observerPoints=[...world.actors.filter(a=>!a.dead&&a.team!=='enemy'
+      &&!world.seats.some(s=>s.keeper&&s.actor===a)).map(a=>a.pos),...(world.massRuntime?.focusPoints(world).map(f=>f.pos)??[])];
+    const massObservers=new MassObserverIndex(observerPoints,this.policy.sleepRadius);
+    const near=(a:Actor,r:number)=>massObservers.near(a.pos,r)
+      ||!!((a.worm||a.movementTether)&&observerPoints.some(p=>nativeQuietAnatomyNear(a,p,r)));
     const cohorts=[...groups.values()];let nextCursor=this.retireCursor;
     for(let i=0;i<cohorts.length;i++){
       const index=(this.retireCursor+i)%cohorts.length,group=cohorts[index];

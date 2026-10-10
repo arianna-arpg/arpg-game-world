@@ -19,7 +19,7 @@ import { sanitizeCosmeticLoadout } from '../meta/cosmetics';
 // ---------------------------------------------------------------------------
 
 import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from './transport';
-import type { PlayerId, PlayerInput } from './intent';
+import { mergeInputs, type PlayerId, type PlayerInput } from './intent';
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
@@ -152,7 +152,9 @@ export class WebRtcTransport implements NetTransport {
       } else if (m.t === 'input' && seatId) {
         // Key by the AUTHORITATIVE channel→seat binding, NOT the client-supplied
         // m.seat — else a peer could drive another seat (incl. the host's hero).
-        this.pending.set(seatId, m.input);
+        // THE HONEST INPUT (docs/engine/shard.md): the shard's fold, so two frames in
+        // one host frame keep both walks, both edges and a quick tap's press.
+        this.pending.set(seatId, mergeInputs(this.pending.get(seatId), m.input));
       } else if (m.t === 'session' && seatId) {
         // A client's run-lifecycle message (rejoin) — tagged with its bound seat.
         this.sessionCbs.forEach(cb => cb(m.msg, seatId!));

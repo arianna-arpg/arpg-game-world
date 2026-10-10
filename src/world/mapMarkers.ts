@@ -76,13 +76,18 @@ export function collectMarkers(world: World): MapMarker[] {
  *  kind predicates, an authored quest's field leg), so the pin can never
  *  outrun the counter. Home is the row's own turn-in (World.questHome: the
  *  ISSUING board, the giver's town). fog:'always' so the target is visible
- *  before a road exists. One marker per concurrent quest (ids suffixed). */
-registerMarkerSource((world): MapMarker[] => {
+ *  before a road exists. One marker per concurrent quest (ids suffixed).
+ *  THE COUNTERS AND THE JOURNAL: exported, so a hosted world reads one seat's
+ *  pins under THE QUEST HAND (net/journalWire.ts), a taken posting another
+ *  seat holds never pinned (World.handOwns). */
+export function questMarkers(world: World): MapMarker[] {
   const out: MapMarker[] = [];
   // Resolved rows grouped by their HOME node (a quay board's writ walks home
   // to the quay, Lastlight's to town) — one pin per counter, never a stack.
   const homes = new Map<string, { counter: string; claim: string[]; back: string[] }>();
   for (const aq of world.activeQuests) {
+    const posting = world.bountyHands.find(h => h.id === aq.questId);
+    if (posting && !world.handOwns(posting)) continue; // THE BOARD PER SEAT: another seat's hand is not this map's
     // questDefOf: generated bounty postings mark their claimed ground too
     // (the resolver seam — the board's "?" and the shared "!" ride free).
     const q = world.questDefOf(aq.questId);
@@ -94,7 +99,6 @@ registerMarkerSource((world): MapMarker[] => {
       homes.set(h.zoneId, g);
       continue;
     }
-    const posting = world.bountyHands.find(h => h.id === aq.questId);
     const kind = posting ? BOUNTY_KINDS[posting.kind] : undefined;
     const targetId = posting && kind?.target ? kind.target(world, posting) : aq.zoneId;
     const node = targetId ? world.zoneMap[targetId] : undefined;
@@ -132,7 +136,8 @@ registerMarkerSource((world): MapMarker[] => {
     });
   }
   return out;
-});
+}
+registerMarkerSource(questMarkers);
 
 /** THE BOAT — while a voyage is underway, the ship rides the map at its true
  *  node-space position (fog:'always': you always know where you are at sea),

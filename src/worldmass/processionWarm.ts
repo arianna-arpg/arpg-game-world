@@ -1,4 +1,5 @@
 import { MassGenerator } from './generator';
+import { massCompileInput, massCompilePort } from './compilePort';
 import { canonical, freezeData } from './random';
 import { compileProcessionPlanSteps, processionPlanIdentity, type ProcessionPlanInput, type ProcessionPlanJob,
   type ProcessionPlanReply, type ProcessionPreparation } from './processionPlan';
@@ -8,7 +9,7 @@ export interface ProcessionCompilePort {
   postMessage(job: ProcessionPlanJob): void; terminate(): void;
 }
 export interface ProcessionWarmConfig { maxQueued: number; maxReady: number; maxInputBytes: number; maxPayloadBytes: number; maxReadyBytes: number }
-export const PROCESSION_WARM_DEFAULTS: Readonly<ProcessionWarmConfig> = Object.freeze({ maxQueued: 8, maxReady: 2, maxInputBytes: 524288, maxPayloadBytes: 131072, maxReadyBytes: 2097152 });
+export const PROCESSION_WARM_DEFAULTS: Readonly<ProcessionWarmConfig> = Object.freeze({ maxQueued: 8, maxReady: 2, maxInputBytes: 8388608, maxPayloadBytes: 131072, maxReadyBytes: 33554432 });
 interface Pending { input: Readonly<ProcessionPlanInput>; key: string; sourceHash: string; inputBytes: number }
 export interface ProcessionReady { input: Readonly<ProcessionPlanInput>; preparation: Readonly<ProcessionPreparation> }
 interface Ready extends ProcessionReady { bytes: number }
@@ -24,8 +25,8 @@ export class ProcessionPlanWarmQueue {
   error: string | null = null;
   constructor(private readonly port: ProcessionCompilePort | null, config: ProcessionWarmConfig = { ...PROCESSION_WARM_DEFAULTS }) {
     if (!Object.values(config).every(Number.isSafeInteger) || config.maxQueued < 1 || config.maxQueued > 16 || config.maxReady < 1 || config.maxReady > 4
-      || config.maxInputBytes < 1024 || config.maxInputBytes > 1048576 || config.maxPayloadBytes < 1024 || config.maxPayloadBytes > 1048576
-      || config.maxReadyBytes < config.maxPayloadBytes + config.maxInputBytes || config.maxReadyBytes > 8388608) throw Error('Invalid procession preparation budget');
+      || config.maxInputBytes < 1024 || config.maxInputBytes > 8388608 || config.maxPayloadBytes < 1024 || config.maxPayloadBytes > 1048576
+      || config.maxReadyBytes < config.maxPayloadBytes + config.maxInputBytes || config.maxReadyBytes > 33554432) throw Error('Invalid procession preparation budget');
     this.config = Object.freeze({ ...config });
     if (port) { port.onmessage = e => this.receive(e.data); port.onerror = e => this.fail(e.message || 'Procession worker failed'); }
   }
@@ -35,7 +36,7 @@ export class ProcessionPlanWarmQueue {
     for (const input of inputs) {
       const text = canonical(input), inputBytes = text.length * 2; if (inputBytes > this.config.maxInputBytes) continue;
       const { inputHash: key, sourceHash } = processionPlanIdentity(input); if (seen.has(key)) continue; seen.add(key);
-      rows.push({ input: freezeData(JSON.parse(text) as ProcessionPlanInput), key, sourceHash, inputBytes });
+      rows.push({ input: massCompileInput(input), key, sourceHash, inputBytes });
       if (rows.length >= this.config.maxQueued + this.config.maxReady + 1) break;
     }
     this.wanted = new Set(rows.map(r => r.key));
@@ -103,6 +104,7 @@ export class ProcessionPlanWarmQueue {
 }
 /** Worker unavailable still prepares the exact same pure kernel incrementally. */
 export function createProcessionPlanWarmQueue(config?: ProcessionWarmConfig): ProcessionPlanWarmQueue {
+  const port=massCompilePort('procession');if(port)return new ProcessionPlanWarmQueue(port,config);
   if (typeof Worker !== 'undefined') try { return new ProcessionPlanWarmQueue(new Worker(new URL('./processionPlan.worker.ts', import.meta.url), { type: 'module', name: 'procession-route-compiler' }), config); } catch { /* CSP/worker support: use bounded fallback. */ }
   return new ProcessionPlanWarmQueue(null, config);
 }

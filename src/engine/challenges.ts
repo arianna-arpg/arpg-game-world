@@ -255,4 +255,9 @@ export class Challenges {
   clearAll(): void {
     for (const state of [...this.states.values()]) this.clear(state.owner, state.host);
   }
+  /** THE HAND-OFF (shard M1, engine/shardUnits.ts): one owner's challenges cleared
+   *  now, in the World it leaves (never by this World's later sweep on its absence). */
+  clearOwner(owner: Actor): void {
+    for (const state of [...this.states.values()]) if (state.owner === owner) this.clear(state.owner, state.host);
+  }
 }

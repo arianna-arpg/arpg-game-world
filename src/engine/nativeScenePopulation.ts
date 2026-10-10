@@ -15,7 +15,7 @@ import { readMagicPack } from './magicPacks';
 import { readEncounterGroup, applyEncounterGroup } from './encounterGroups';
 import { restoreMovementTether } from './movementTether';
 import { mod } from './stats';
-import { coopScale } from '../data/coop';
+import { coopScale, COOP_SCALING } from '../data/coop';
 import { MERC_CFG } from '../meta/mercs';
 export interface NativeSceneServiceHost {
   actors:World['actors'];
@@ -337,15 +337,18 @@ export function applySceneWaveFrenzy(host:Pick<NativeSceneServiceHost,'time' >, 
     if (fz.moveSpeedMore) m.sheet.setSource('waveFrenzy', [mod('moveSpeed', 'more', fz.moveSpeedMore)]);
   }
 
-export function scenePartyScaleCount(host:Pick<NativeSceneServiceHost,'player'|'seats' >):number {
+/** keeperSeat — THE NEAR LAW (data/coop.ts shareRadius): with `at` given and a radius set, only the seats
+ *  within reach of that place count; the keeper seat (the parked warden) never counts. 0 = the whole party. */
+export function scenePartyScaleCount(host:Pick<NativeSceneServiceHost,'player'|'seats' >, at?: Vec2):number {
     const ease = Math.min(1, Math.max(0, host.player.sheet.get('mercEase')));
     const mercWeight = MERC_CFG.partyScaleWeight * (1 - ease);
+    const near = at && COOP_SCALING.shareRadius > 0 ? COOP_SCALING.shareRadius : 0;
     return Math.max(1, host.seats.reduce((n, s) =>
-      n + (s.actor.dead ? 0 : s.merc ? mercWeight : 1), 0));
+      n + (s.actor.dead || s.keeper || (near > 0 && dist(at!, s.actor.pos) > near) ? 0 : s.merc ? mercWeight : 1), 0)); // keeperSeat: the warden is no party
   }
 
 export function applyScenePartyScale(host:Pick<NativeSceneServiceHost,'partyScaleCount' >, a: Actor):void {
-    const s = coopScale(host.partyScaleCount());
+    const s = coopScale(host.partyScaleCount(a.pos)); // keeperSeat: scaled by the seats near the enemy itself
     if (s.life > 0 || s.damage > 0) {
       a.sheet.setSource('partyScale', [mod('life', 'more', s.life), mod('damage', 'more', s.damage)]);
     } else {

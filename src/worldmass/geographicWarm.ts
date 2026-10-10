@@ -1,12 +1,13 @@
 import type { GeographicPlanInput,GeographicPlanJob,GeographicPlanReply,GeographicPreparation } from './geographicPlan';
 import { geographicPlanIdentity } from './geographicPlan';
-import { canonical,freezeData } from './random';
+import { canonical } from './random';
+import { massCompileInput, massCompilePort } from './compilePort';
 export interface GeographicCompilePort {
   onmessage:((event:MessageEvent<GeographicPlanReply>)=>void)|null;onerror:((event:ErrorEvent)=>void)|null;
   postMessage(job:GeographicPlanJob):void;terminate():void;
 }
 export interface GeographicWarmConfig {maxQueued:number;maxReady:number;maxInputBytes:number;maxPayloadBytes:number;maxReadyBytes:number}
-export const GEOGRAPHIC_WARM_DEFAULTS:Readonly<GeographicWarmConfig>=Object.freeze({maxQueued:16,maxReady:4,maxInputBytes:256*1024,maxPayloadBytes:256*1024,maxReadyBytes:1024*1024});
+export const GEOGRAPHIC_WARM_DEFAULTS:Readonly<GeographicWarmConfig>=Object.freeze({maxQueued:16,maxReady:4,maxInputBytes:8*1024*1024,maxPayloadBytes:256*1024,maxReadyBytes:1024*1024});
 interface Pending {input:Readonly<GeographicPlanInput>;key:string;sourceHash:string}
 export interface GeographicReady {input:Readonly<GeographicPlanInput>;preparation:GeographicPreparation}
 export class GeographicPlanWarmQueue{
@@ -16,7 +17,7 @@ export class GeographicPlanWarmQueue{
   private counters={offered:0,completed:0,discarded:0,workerMs:0};error:string|null=null;
   constructor(private readonly port:GeographicCompilePort,config:GeographicWarmConfig={...GEOGRAPHIC_WARM_DEFAULTS}){
     if(!Object.values(config).every(Number.isSafeInteger)||config.maxQueued<1||config.maxQueued>32||config.maxReady<1||config.maxReady>8
-      ||config.maxInputBytes<1024||config.maxInputBytes>1024*1024||config.maxPayloadBytes<1024||config.maxPayloadBytes>1024*1024
+      ||config.maxInputBytes<1024||config.maxInputBytes>8*1024*1024||config.maxPayloadBytes<1024||config.maxPayloadBytes>1024*1024
       ||config.maxReadyBytes<config.maxPayloadBytes||config.maxReadyBytes>8*1024*1024)throw Error('Invalid geographic worker budget');
     this.config=Object.freeze({...config});port.onmessage=e=>this.receive(e.data);port.onerror=e=>this.fail(e.message||'Geographic worker failed');
   }
@@ -26,7 +27,7 @@ export class GeographicPlanWarmQueue{
     for(const input of inputs){
       const text=canonical(input);if(text.length*2>this.config.maxInputBytes)continue;
       const {inputHash:key,sourceHash}=geographicPlanIdentity(input);if(seen.has(key))continue;seen.add(key);
-      rows.push({input:freezeData(JSON.parse(text) as GeographicPlanInput),key,sourceHash});if(rows.length>=this.config.maxQueued+this.config.maxReady+1)break;
+      rows.push({input:massCompileInput(input),key,sourceHash});if(rows.length>=this.config.maxQueued+this.config.maxReady+1)break;
     }
     this.wanted=new Set(rows.map(r=>r.key));for(const[key]of this.ready)if(!this.wanted.has(key)){this.ready.delete(key);this.counters.discarded++;}
     this.pending=rows.filter(r=>r.key!==this.inflight?.row.key&&!this.ready.has(r.key)).slice(0,this.config.maxQueued);
@@ -62,6 +63,7 @@ export class GeographicPlanWarmQueue{
   get stats(){return {...this.counters,queued:this.pending.length,ready:this.ready.size,readyBytes:this.readyBytes,inflight:this.inflight?1:0,disposed:this.stopped,error:this.error};}
 }
 export function createGeographicPlanWarmQueue(config?:GeographicWarmConfig):GeographicPlanWarmQueue|null{
+  const port=massCompilePort('geographic');if(port)return new GeographicPlanWarmQueue(port,config);
   if(typeof Worker==='undefined')return null;
   try{return new GeographicPlanWarmQueue(new Worker(new URL('./geographicPlan.worker.ts',import.meta.url),{type:'module',name:'geographic-plan-compiler'}),config);}catch{return null;}
 }

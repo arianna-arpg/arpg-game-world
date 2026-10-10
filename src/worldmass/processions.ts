@@ -26,7 +26,7 @@ export interface MassProcessionHost {
   local(at:MassAddress):Vec2;
   address(at:Vec2):MassAddress;
   /** Free actual seats after other funded owners' missing-seat reservations. */
-  availablePopulation(owner?:string):number;
+  availablePopulation(owner?:string,at?:Vec2):number;
   createCart(request:MassProcessionCartBirth):Actor;
   createAmbush(request:MassProcessionAmbushBirth):readonly Actor[];
   reachable:NativeProcessionHost['reachable'];
@@ -75,6 +75,8 @@ interface Run {
 /** Real native carts and ambushes owned by geographic zones, independent of
  * render chunks. Save authority is the hierarchy inside CharacterSave. */
 export class MassProcessions {
+  massFocusCount=1;
+  get focusLimit():number{return this.policy.maxResident*this.massFocusCount;}
   readonly policy:Readonly<MassProcessionPolicy>;
   private live=new Map<string,Run>();
   private definitions=new Map<string,Readonly<MassProcessionDefinition>>();
@@ -96,6 +98,9 @@ export class MassProcessions {
     }
   }
   get residentCount():number{return this.live.size;}
+  massPopulationSlots(){return [...this.live.values()].flatMap(r=>[...this.owned(r).values()].filter(a=>!a.dead).map(a=>({pos:a.pos,count:1})));}
+  massReservationSlots(local:(at:MassAddress)=>Vec2,exceptOwner?:string){return [...this.live].filter(([id,r])=>id!==exceptOwner&&!r.state.done&&!r.state.lost)
+    .map(([,r])=>({pos:r.cart?.pos??local(r.cartAt),count:Math.max(0,1+r.definition.context.config.puffCap-[...this.owned(r).values()].filter(a=>!a.dead).length)}));}
   get population():number{let n=0;for(const r of this.live.values())for(const a of this.owned(r).values())if(!a.dead)n++;return n;}
   reservedPopulation(exceptOwner?:string):number{
     let n=0;for(const [id,r]of this.live)if(id!==exceptOwner&&!r.state.done&&!r.state.lost)
@@ -116,7 +121,7 @@ export class MassProcessions {
     const old=this.hierarchy.controller(owner.id,ID);if(old)return this.mount(owner,this.definitions.get(owner.id)!,old,host);
     if(['pyres','rifts','unearth','beacon'].some(kind=>this.hierarchy.status(owner.id,'objective:'+kind)))throw Error('Multiple objectives share a procession zone');
     if(this.hierarchy.status(owner.id,POP)||this.hierarchy.status(owner.id,CHEST))throw Error('Orphan native procession child controller');
-    if(this.live.size>=this.policy.maxResident||host.availablePopulation(owner.id)<1+context.config.puffCap)return false;
+    if(this.live.size>=this.focusLimit||host.availablePopulation(owner.id,host.local(route.entry))<1+context.config.puffCap)return false;
     const wanted=this.chestWanted(owner,context);
     // Reserve one additional record for the facade's frozen physical ACCESS
     // proof; the native controller must never strand a partial record group.
@@ -142,7 +147,7 @@ export class MassProcessions {
     const want=new Set(wanted.map(o=>o.id));
     for(const [id,d]of [...this.definitions].sort(([a],[b])=>Number(want.has(b))-Number(want.has(a))||a.localeCompare(b))){
       if(this.live.has(id))continue;const c=this.hierarchy.controller(id,ID)!,s=c.state as MassProcessionProgress;
-      let near=false;try{const q=host.local(s.cartAt);near=Math.hypot(q.x-host.world.player.pos.x,q.y-host.world.player.pos.y)<=this.policy.returnRadius;}catch{/* outside local frame */}
+      let near=false;try{const q=host.local(s.cartAt);near=(host.world.massRuntime?.focusDistance(host.world,q)??Math.hypot(q.x-host.world.player.pos.x,q.y-host.world.player.pos.y))<=this.policy.returnRadius;}catch{/* outside local frame */}
       // A large geographic zone may still be wanted after the player truly
       // left this cart. Zone membership alone must not remount it immediately
       // after retirement; the saved physical cart is the return anchor.
@@ -209,7 +214,7 @@ export class MassProcessions {
     return saved?.births.filter(b=>b.kind==='ambush').reduce((n,b)=>n+b.bodies.filter(a=>!a.dead).length,0)??0;
   }
   private spawn(r:Run,h:MassProcessionHost,cart:Actor,heading:number,count:number):number{
-    if(r.away||r.state.done||r.state.lost||count>h.availablePopulation(r.owner.id))throw Error('Native procession reservation unavailable');
+    if(r.away||r.state.done||r.state.lost||count>h.availablePopulation(r.owner.id,r.cart?.pos??h.local(r.cartAt)))throw Error('Native procession reservation unavailable');
     const sequence=r.sequence,seed=streamSeed(this.hierarchy.seed,[r.owner.id,'native-procession/ambush',sequence]),at=h.address(cart.pos);
     const actors=h.createAmbush({owner:r.owner.id,sequence,seed,zone:r.definition.context.zone,config:r.definition.context.config,cart,at:{...cart.pos},heading,count});
     if(actors.length!==count||new Set(actors).size!==count||actors.some(a=>a.dead||a.team!=='enemy'||h.world.actors.includes(a)))throw Error('Native procession factory violated reserved wave');
@@ -228,7 +233,7 @@ export class MassProcessions {
     }
   }
   private absence(r:Run,h:MassProcessionHost):void{
-    const p=r.cart?.pos??h.local(r.cartAt),distance=Math.hypot(p.x-h.world.player.pos.x,p.y-h.world.player.pos.y);
+    const p=r.cart?.pos??h.local(r.cartAt),distance=h.world.massRuntime?.focusDistance(h.world,p)??Math.hypot(p.x-h.world.player.pos.x,p.y-h.world.player.pos.y);
     if(distance>this.policy.departRadius&&!r.away){
       r.away=true;if(r.cart&&!r.cart.dead&&!r.state.done&&!r.state.lost)pauseNativeProcession(r.state,r.cart);
       // Do not remove the lease immediately: ordinary native linger expires.
@@ -299,11 +304,11 @@ export class MassProcessions {
     h.world.removeMassLure(this.lureId(r.owner.id));r.detachChest?.();r.detachRoad();this.live.delete(r.owner.id);
   }
   private mount(owner:MassGeography,d:Readonly<MassProcessionDefinition>,c:Readonly<MassControllerSave>,h:MassProcessionHost,fresh=false):boolean{
-    if(this.live.has(owner.id))return true;if(this.live.size>=this.policy.maxResident)return false;
+    if(this.live.has(owner.id))return true;if(this.live.size>=this.focusLimit)return false;
     const progress=clone(c.state as MassProcessionProgress),saved=fresh?undefined:this.validatePopulation(owner.id,d,this.hierarchy.controller(owner.id,POP)!.state);this.validateCrossState(c,saved);
     if(saved&&saved.births.some(b=>b.bodies.some(a=>a.state))&&canonical(saved.frame)!==canonical(h.address({x:0,y:0})))throw Error('Exact native procession actor frame changed');
     const terminal=progress.done||progress.lost,living=saved?.births.reduce((n,b)=>n+b.bodies.filter(a=>!a.dead).length,0)??1;
-    if(h.availablePopulation(owner.id)<(terminal?living:Math.max(1+d.context.config.puffCap,living)))return false;
+    if(h.availablePopulation(owner.id,h.local(progress.cartAt))<(terminal?living:Math.max(1+d.context.config.puffCap,living)))return false;
     const r:Run={owner,definition:d,state:{cartId:null,rolling:false,started:progress.started,startPos:h.local(progress.startAt),dest:h.local(d.route.destination),destIdx:null,
       dwellStart:0,puffAt:0,heading:progress.heading,enteredAt:h.now,done:progress.done,lost:progress.lost},cartAt:progress.cartAt,startAt:progress.startAt,
       away:!!saved,waypoint:progress.waypoint,draws:saved?.draws??0,sequence:saved?.sequence??0,births:[],cart:null,detachRoad:()=>{},clock:h.now,retireAt:h.now,lureUntil:0};

@@ -35,6 +35,7 @@ type Owner = { id: string; center: MassAddress };
 /** Own placement and one-shot consumption only. The native touch/buff/expiry
  * pipeline remains the sole executor; no buff is reconstructed from a used stand. */
 export class MassShrines {
+  massFocusCount=1;
   private live = new Map<string, Shrine>();
   private saved = new Map<string, MassShrineSave>();
   private owners = new Map<string, Owner>();
@@ -51,11 +52,11 @@ export class MassShrines {
   }
   private needed(world: World, pos: Context['center']): boolean {
     if (!this.policy) return true;
-    if ((world.player.tier ?? 0) === 0 && Math.hypot(world.player.pos.x-pos.x,world.player.pos.y-pos.y) <= this.policy.retainRadius) return true;
+    if ((world.massRuntime?.focusDistance(world,pos,0)??((world.player.tier??0)===0?Math.hypot(world.player.pos.x-pos.x,world.player.pos.y-pos.y):Infinity)) <= this.policy.retainRadius) return true;
     return world.actors.some(a => !a.dead && (a.tier ?? 0) === 0 && Math.hypot(a.pos.x-pos.x,a.pos.y-pos.y) <= a.radius + 160);
   }
   canAdmit(place: Pick<MassPlace, 'id'>, rows: readonly MassShrineSpec[]): boolean {
-    return this.live.size + rows.filter(r => !this.live.has(shrineId(place,r))).length <= (this.policy?.maxResident ?? MASS_SHRINE_LIMIT);
+    return this.live.size + rows.filter(r => !this.live.has(shrineId(place,r))).length <= (this.policy?.maxResident ?? MASS_SHRINE_LIMIT)*this.massFocusCount;
   }
   private remember(id: string, shrine: Shrine): MassShrineSave {
     const owner = this.owners.get(id);

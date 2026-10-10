@@ -6,7 +6,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import ts from 'typescript';
 import {build} from 'esbuild';
-import {nativeInstalledSourcesArchive as archive,nativeInstalledSourcesArchiveHash,nativeInstalledBootstrapRoots,nativeInstalledOriginalBootHash,nativeInstalledOtherWorldHash} from './nativeInstalledSourcesArchive';
+import {nativeInstalledSourcesArchive as archive,nativeInstalledSourcesArchiveHash,nativeInstalledBootstrapRoots,nativeInstalledOriginalBootHash,nativeInstalledOtherWorldHash,nativeInstalledShardWorldHash} from './nativeInstalledSourcesArchive';
 import {beforeNativeInstalledSources} from './nativeInstalledSourceFixture';
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 const emit=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,removeComments:true}}).outputText;
@@ -30,7 +30,9 @@ if(cold){
  console.log('INSTALLED_COLD '+JSON.stringify({data,warnings}));
 }else{
  assert.equal(hash(JSON.stringify(archive)),nativeInstalledSourcesArchiveHash);
- const world=read('src/engine/world.ts');const before=ts.createSourceFile('world.ts',beforeNativeInstalledSources(world),99,true),oldWorld=before.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;assert.equal(hash(JSON.stringify(oldWorld.members.map(m=>m.getText(before).replaceAll('\r\n','\n')))),nativeInstalledOtherWorldHash,'every other World member stays unchanged');
+ const world=read('src/engine/world.ts');const before=ts.createSourceFile('world.ts',beforeNativeInstalledSources(world),99,true),oldWorld=before.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
+ const worldHash=hash(JSON.stringify(oldWorld.members.map(m=>m.getText(before).replaceAll('\r\n','\n'))));
+ assert.ok([nativeInstalledOtherWorldHash,nativeInstalledShardWorldHash].includes(worldHash),'World must match the original extraction or its reviewed shard integration: '+worldHash);
  const rootFile=parse('src/engine/nativeSceneBootstrap.ts');const roots=rootFile.statements.filter(ts.isImportDeclaration).map(n=>(n.moduleSpecifier as ts.StringLiteral).text);assert.deepEqual(roots,nativeInstalledBootstrapRoots.filter(p=>!['../meta/character','../worldmass/runtime'].includes(p)),'complete original import roots except the explicit save-restoration owners');
  const sources=parse('src/engine/nativeSceneSources.ts'),config=parse('src/engine/nativeSceneConfig.ts'),rules=parse('src/engine/nativePopulationRules.ts');
  const functions=['installedNativeFactorySources','installedNativePromotionSources','installedNativePopulationSources','installedNativeHostilitySources','installedNativeRelaySources','installedNativeExitSources','installedNativeRuntimeSources','installedNativeCoastSources','installedNativeInhabitantSources','installedNativeEcologySources','installedNativeEnvironmentSources'];

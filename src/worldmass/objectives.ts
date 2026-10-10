@@ -110,6 +110,7 @@ const nativeConfig = (kind: NativeMassHoldKind) => kind === 'beacon' ? { ...BEAC
 /** Native pyres with geographic enrollment. Several owners use exactly the same
  * native contest engine concurrently; there is no temporary World.zone swap. */
 export class MassObjectives {
+  massFocusCount=1;
   private live = new Map<string, Resident>();
   private kinds = new Map<string, NativeMassHoldKind>();
   constructor(readonly hierarchy: MassHierarchy, readonly maxResident = 8) {
@@ -184,7 +185,7 @@ export class MassObjectives {
     const oldKind = this.kinds.get(owner.id), existing = oldKind && this.hierarchy.controller(owner.id, idOf(oldKind));
     if (existing) return this.mount(owner, existing, host, local);
     const count = this.count(owner, context), zone = context?.zone ?? owner.native?.zone, o = zone?.objective;
-    if (!count || !o || !isNativeHold(o) || this.live.size >= this.maxResident) return false;
+    if (!count || !o || !isNativeHold(o) || this.live.size >= this.maxResident*this.massFocusCount) return false;
     if (o.kind !== 'pyres' && (!host.installHolds || !host.installEffects)) return false;
     if (o.kind === 'beacon' && !host.reveal) return false;
     const cfg = nativeConfig(o.kind), ID = idOf(o.kind);
@@ -314,7 +315,7 @@ export class MassObjectives {
   }
   private mount(owner: MassGeography, c: Readonly<MassControllerSave>, host: MassObjectiveHost, local: (at: MassAddress) => Vec2): boolean {
     if (this.live.has(owner.id)) return true;
-    if (this.live.size >= this.maxResident) return false;
+    if (this.live.size >= this.maxResident*this.massFocusCount) return false;
     const { definition, state } = this.read(owner, c);
     if (definition.kind === 'beacon' && !host.reveal) return false;
     const fixtures: HoldFixture[] = definition.positions.map((at, i) => {

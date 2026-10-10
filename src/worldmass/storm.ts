@@ -33,7 +33,7 @@ export class MassStorm {
   private owner(at:MassAddress):{id:string;center:MassAddress}{
     const grid=latticeAt(at,this.addressSpan,this.zoneSpan),p=BigInt(this.zoneSpan),s=BigInt(this.addressSpan);
     const x=grid.gx*p+p/2n,y=grid.gy*p+p/2n,cx=floorDiv(x,s),cy=floorDiv(y,s);
-    return {id:canonical([at.dimension,grid.gx.toString(),grid.gy.toString()]),
+    return {id:JSON.stringify([at.dimension,grid.gx.toString(),grid.gy.toString()]),
       center:address(at.dimension,cx.toString(),cy.toString(),Number(x-cx*s),Number(y-cy*s),this.addressSpan)};
   }
   private stormAt(at:MassAddress,host:MassStormHost):{front:WeatherFront;strike:WeatherStrike}|null{

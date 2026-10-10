@@ -767,8 +767,11 @@ registerBulletinSource((world: World) => {
   const hw = world.sim.hellWarField;
   if (!hw || !hw.bulletins.length) return [];
   const fresh = hw.bulletins.splice(0);
-  if ((world.zone.dimension ?? 'surface') !== (hw.dimension ?? 'surface')) return [];
-  return fresh;
+  // THE OCCUPIED LAW (shard M1-W3): heard by whoever stands in the war's plane,
+  // in any of a hosted world's sim units (solo: the standing zone decides).
+  const to = world.occupiedAudience(z => (z.dimension ?? 'surface') === (hw.dimension ?? 'surface'));
+  if (to === null || (to && !to.length)) return [];
+  return to ? fresh.map(b => ({ ...b, to })) : fresh;
 });
 
 // --- zone-info rows (registered on import) ---------------------------------------

@@ -1,0 +1,11 @@
+{
+  // Type-checks THE SHARD (server/ — the Node-side headless host) together
+  // with the src/ tree it imports — the tsconfig.sim.json pattern. src/net's
+  // wire codec and client transport stay browser-safe under the main gate;
+  // only server/ may import node builtins.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["server", "src"]
+}

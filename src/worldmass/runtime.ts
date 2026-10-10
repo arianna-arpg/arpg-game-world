@@ -2,6 +2,9 @@ import {nativeQuietAnatomyNear,nativeQuietAnatomyRadius,validNativeQuietRadius} 
 import { ambientCohort, validateAmbientPack } from './ambientPacks';
 import { WildernessPaths, validateWildernessPaths } from './wildernessPaths';
 import { landformHabitatSeat, landformHabitatStand } from './landformHabitats';
+import { compactMass, type MassCheckpoint, type MassCheckpointOptions } from './checkpoint';
+import { MassFoci, MassObserverIndex, massPlayerFoci, massFocusRoundRobin, type MassFocus, type MassPopulationSlot } from './foci';
+import type { Vec2 } from '../core/math';
 import { massTerrainRegions } from './contracts';
 import { reserveMassOpening } from './patchReservations';
 import { characterPagingAvailable, characterNativePages, commitCharacterNativeCohort, loadCharacterNativePage, forgetCharacterNativePage, resetCharacterNativePages, characterNativeSessionCurrent, characterNativeSessionToken, characterNativePageOrder } from '../meta/character';
@@ -28,7 +31,7 @@ import { magicPackMinimum, readMagicPack, type MagicPackState } from '../engine/
 import { RARITY_DEFS } from '../engine/rarity';
 import { regionKind } from '../world/regions';
 import { captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from '../engine/zonecontents';
-import { address, cellKey, localOffset, neighborCell, type MassCell } from './address';
+import { address, cellKey, localOffset, type MassCell } from './address';
 import { MassGenerator, makeMassRun } from './generator';
 import { canonical, freezeData, massDigest, massRandom } from './random';
 import { MassState, type MassStateSave } from './state';
@@ -126,6 +129,17 @@ export interface MassResumePreparation {
  * in-flight skills. The population cap is deliberately conservative until full
  * dependency-aware dormancy exists: wounded/engaged bodies are never discarded. */
 export class WorldMassRuntime {
+  readonly massFoci = new MassFoci();
+  private massFociInitialized = false;
+  private explicitMassFoci = false;
+  focusPoints(world: World): readonly MassFocus[] { return this.explicitMassFoci ? this.massFoci.members : massPlayerFoci(world, !this.massFociInitialized); }
+  focusDistance(world: World, pos: {x:number;y:number}, tier?:number): number {
+    if(this.explicitMassFoci)return this.massFoci.distance(pos,tier);
+    return Math.min(...this.focusPoints(world).filter(p=>tier===undefined||p.tier===tier).map(p=>Math.hypot(p.pos.x-pos.x,p.pos.y-pos.y)));
+  }
+  massPopulationSlots():MassPopulationSlot[]{return [
+    ...[...this.natives.values()].filter(a=>!a.dead&&!this.dormancy?.isSleeping(a)).map(a=>({pos:a.pos,count:1})),
+    ...this.puzzles.massPopulationSlots(),...(this.nativeHost?.massPopulationSlots()??[]),...(this.geography?.massPopulationSlots()??[])];}
   readonly legacyRewards: LegacyMassRewardArchive;
   readonly fields: MassFields;
   readonly dormancy: MassDormancy | null;
@@ -137,7 +151,7 @@ export class WorldMassRuntime {
   storms: MassStorm | null = null;
   nativeWarm: NativeFeatureWarmQueue | null = null;
   private nextNativeWarm = 0;
-  private warmFrom: {x:number;y:number} | null = null;
+  private warmFrom = new Map<string,{x:number;y:number}>();
   private nativeHost: MassNativeHost | null = null;
   readonly shrines: MassShrines;
   readonly puzzles: MassPuzzles;
@@ -150,7 +164,6 @@ export class WorldMassRuntime {
   settlement: MassSettlement | null = null;
   journey: MassJourney | null = null;
   wildernessPaths: WildernessPaths | null = null;
-  private nearbyReservations = {x:0,y:0};
   roadside: MassRoadside | null = null;
   ecology: MassEcology | null = null;
   readonly config: Readonly<MassAdventure>;
@@ -463,7 +476,7 @@ export class WorldMassRuntime {
         const policy=this.config.geography.policy;
         this.storms=new MassStorm(this.generator.run.seed,this.config.terrain.addressSpan,policy.chunkSpan*policy.chunksPerZone,save?.storms);
       }
-      this.nativeHost=new MassNativeHost(world,{maxPopulation:()=>this.config.maxPopulation-this.reservedPopulation(''),
+      this.nativeHost=new MassNativeHost(world,{maxPopulation:at=>this.populationLimit('',at),
         population:()=>this.population,retainRadius:2400,quietSeconds:12,
         ...(this.geography?{zoneOwner:(pos:{x:number;y:number})=>this.geography!.hierarchy.at(this.walk.at(pos.x,pos.y)).zone.id}:{})},save?.nativeFeatures);
     }
@@ -536,10 +549,12 @@ export class WorldMassRuntime {
     this.attached=true;this.nextPopulation=world.time;this.savedNativeOwners.clear();
   }
   private get resumeReadRadius():number{return (this.dormancy?.policy.wakeRadius??0)+this.config.populationRadius;}
-  private nativeObservers(world:World):Actor[]{return world.actors.filter(a=>!a.dead&&a.team!=='enemy');}
+  private nativeObservers(world:World):Actor[]{return world.actors.filter(a=>!a.dead&&a.team!=='enemy'&&!world.seats.some(s=>s.keeper&&s.actor===a));}
+  private nativeObserverPositions(world:World):Vec2[]{return [...this.nativeObservers(world).map(a=>a.pos),...this.focusPoints(world).map(f=>f.pos)];}
   private nearNativePages(world:World,radius:number):CharacterPageEntry[]{
-    const observers=this.nativeObservers(world),distance=(p:CharacterPageEntry)=>Math.min(...p.positions.map(at=>
-      Math.min(...observers.map(a=>Math.hypot(a.pos.x-at.x,a.pos.y-at.y)-(at.nativeQuietRadius??0)))));
+    const observers=new MassObserverIndex(this.nativeObserverPositions(world),Math.max(1,radius));
+    const distance=(p:CharacterPageEntry)=>Math.min(...p.positions.map(at=>
+      observers.distance(at,radius+(at.nativeQuietRadius??0))-(at.nativeQuietRadius??0)));
     return [...new Set(this.paged.values())].map(page=>({page,distance:distance(page)}))
       .filter(row=>row.distance<=radius).sort((a,b)=>a.distance-b.distance||a.page.ref.key.localeCompare(b.page.ref.key)).map(row=>row.page);
   }
@@ -704,14 +719,16 @@ export class WorldMassRuntime {
       ?? this.config.content.find(c=>c.id===place.content)!.count;
   }
   /** Only still-needed seats reserve space: never evict, respawn or heal a body. */
-  private reservedPopulation(except: string): number {
-    let missing = this.geography?.reservedPopulation(except)??0;
+  private reservedPopulation(except: string, at?:Vec2): number {
+    let missing = at&&this.massFoci.groups.length>1 ? this.massFoci.populationAt(at,this.geography?.massReservationSlots(except)??[])
+      : this.geography?.reservedPopulation(except)??0;
+    const focusDistance=(q:Vec2)=>this.massFoci.distance(q);
     const nearbyReservations=new Map((this.journey?.spec.reservePopulation?this.journey.places:[]).map(p=>[p.id,p]));
     if(this.journey?.spec.nearbyReservations)for(const rows of this.places.values())for(const p of rows)
       if(this.config.content.find(c=>c.id===p.content)?.site)nearbyReservations.set(p.id,p);
     const distance=(place:MassPlace)=>{
       const q=localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
-      return Math.max(0,Math.hypot(q.x-this.nearbyReservations.x,q.y-this.nearbyReservations.y)-place.radius);
+      return Math.max(0,focusDistance(q)-place.radius);
     };
     const current=this.journey?.spec.nearbyReservations?nearbyReservations.get(except):undefined;
     // Existing native geographic owners have first claim on their own complete
@@ -719,12 +736,15 @@ export class WorldMassRuntime {
     if(this.journey?.spec.nearbyReservations&&except&&!current)return missing;
     for (const place of nearbyReservations.values()) {
       if (place.id === except) continue;
+      const pos=localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
+      if(at&&this.massFoci.groups.length>1&&this.massFoci.groupAt(at)!==this.massFoci.groupAt(pos))continue;
       // nearbyReservations fund the closest real destination first. Two large
       // neighboring courts must not reserve one another out of existence.
-      if(current&&(distance(place)>distance(current)||distance(place)===distance(current)&&place.id>current.id))continue;
+      if(current&&this.massFoci.groupAt(pos)===this.massFoci.groupAt(localOffset(current.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan))
+        &&(distance(place)>distance(current)||distance(place)===distance(current)&&place.id>current.id))continue;
       if(this.journey?.spec.nearbyReservations){
         const q=localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
-        if(Math.hypot(q.x-this.nearbyReservations.x,q.y-this.nearbyReservations.y)>(this.dormancy?.policy.sleepRadius??this.config.populationRadius)+this.config.populationRadius+place.radius)continue;
+        if(focusDistance(q)>(this.dormancy?.policy.sleepRadius??this.config.populationRadius)+this.config.populationRadius+place.radius)continue;
       }
       const site = this.config.content.find(c=>c.id===place.content)!.site;
       const ids = [...Array.from({length:this.populationCount(place)},(_,i)=>canonical([place.id,i])),
@@ -736,7 +756,16 @@ export class WorldMassRuntime {
     return missing;
   }
   /** Actual free seats, including every other funded activity's future needs. */
-  availablePopulation(exceptOwner=''):number{return Math.max(0,this.config.maxPopulation-this.population-this.reservedPopulation(exceptOwner));}
+  availablePopulation(exceptOwner='',at?:{x:number;y:number}):number{return Math.max(0,this.populationLimit(exceptOwner,at)-this.population);}
+  populationLimit(exceptOwner='',at?:{x:number;y:number}):number{
+    const groups=this.massFociInitialized?this.massFoci.groups.length:1,total=this.population;
+    const global=this.config.maxPopulation*groups;
+    if(groups<=1||!at)return global-this.reservedPopulation(exceptOwner);
+    const slots=this.massPopulationSlots(),unlocated=Math.max(0,total-slots.reduce((n,r)=>n+r.count,0));
+    // Each distant group funds its own destinations. Charging every other
+    // group's unissued reservations here can deadlock all neighborhoods.
+    return Math.min(global,total+this.config.maxPopulation-this.massFoci.populationAt(at,slots)-unlocated-this.reservedPopulation(exceptOwner,at));
+  }
   /** Worker descriptors are suggestions until the authoritative residency validates
    * them. Retire the worker whenever its owning world or surface is discarded. */
   dispose():void { this.disposed=true;this.nativeWarm?.dispose();this.geography?.dispose(); }
@@ -749,17 +778,21 @@ export class WorldMassRuntime {
     }
     if(world.time<this.nextNativeWarm)return;
     this.nextNativeWarm=world.time+.5;
-    const p=world.player.pos,from=this.warmFrom;this.warmFrom={...p};
-    const dx=from?p.x-from.x:0,dy=from?p.y-from.y:0,length=Math.hypot(dx,dy);
-    const ahead={x:p.x+(length>1?dx/length*1500:0),y:p.y+(length>1?dy/length*1500:0)};
-    const at=this.walk.at(ahead.x,ahead.y);
-    const rows=country.near(at,country.spec.spacing/2).filter(row=>this.inLocalFrame(row.origin))
-      .map(row=>this.nativePlacement(row)).filter(row=>features.preparationNeeded(row));
-    rows.sort((a,b)=>{
-      const aa=localOffset(a.origin,at,this.config.terrain.addressSpan),bb=localOffset(b.origin,at,this.config.terrain.addressSpan);
-      return aa.x*aa.x+aa.y*aa.y-bb.x*bb.x-bb.y*bb.y;
+    const lanes=this.focusPoints(world).map(focus=>{
+      const p=focus.pos,from=this.warmFrom.get(focus.id);this.warmFrom.set(focus.id,{...p});
+      const dx=from?p.x-from.x:0,dy=from?p.y-from.y:0,length=Math.hypot(dx,dy);
+      const ahead={x:p.x+(length>1?dx/length*1500:0),y:p.y+(length>1?dy/length*1500:0)};
+      const at=this.walk.at(ahead.x,ahead.y);
+      const rows=country.near(at,country.spec.spacing/2).filter(row=>this.inLocalFrame(row.origin))
+        .map(row=>this.nativePlacement(row)).filter(row=>features.preparationNeeded(row));
+      rows.sort((a,b)=>{
+        const aa=localOffset(a.origin,at,this.config.terrain.addressSpan),bb=localOffset(b.origin,at,this.config.terrain.addressSpan);
+        return aa.x*aa.x+aa.y*aa.y-bb.x*bb.x-bb.y*bb.y;
+      });
+      return rows;
     });
-    queue.offer(rows);
+    for(const id of this.warmFrom.keys())if(!this.focusPoints(world).some(p=>p.id===id))this.warmFrom.delete(id);
+    queue.offer(massFocusRoundRobin(lanes,p=>p.id,64));
   }
   /** Run native occurrence drivers before World drains this frame's sounds.
    * Their binding owns controller, scenery and population snapshots together. */
@@ -771,39 +804,43 @@ export class WorldMassRuntime {
   }
   /** Survived-death wakes retain the run's land and consequences. */
   wake(world: World): void { world.landPartyAt(this.settlement?.spawn ?? { x: 12, y: 12 }); this.nearKey = ''; }
-  update(world: World, boot = false): void {
-    this.nearbyReservations = {...world.player.pos};
+  update(world: World, boot = false, input?:readonly MassFocus[]): void {
     if (world.zone.id !== MASS_ZONE || this.restoring) return;
     if(this.nativeReadiness(world).status!=='ready')return;
+    const foci=input??massPlayerFoci(world,boot);this.explicitMassFoci=input!==undefined;
+    this.massFoci.set(foci,this.config.populationRadius);this.massFociInitialized=true;
+    this.stream.setFocusCount(foci.length);
+    this.fields.massFocusCount=this.shrines.massFocusCount=this.puzzles.massFocusCount=Math.max(1,foci.length);
+    if(this.geography){this.geography.objectives.massFocusCount=this.geography.caravans.processions.massFocusCount=Math.max(1,foci.length);}
+    this.nativeFeatures?.setFocusCount(Math.max(1,foci.length));
+    if(!foci.length){this.stream.request([]);this.places.clear();this.nearKey='';return;}
     if(boot||world.time>=this.nextPopulation)this.geography?.restoreResidentOwners(world);
     else this.geography?.restoreProcessions(world);
-    this.geography?.prepare(this.walk.at(world.player.pos.x,world.player.pos.y),world.time);
+    this.geography?.prepare(this.walk.at(foci[0].pos.x,foci[0].pos.y),world.time,foci.slice(1).map(f=>this.walk.at(f.pos.x,f.pos.y)));
     this.prepareNativeCountry(world);
     if(this.weather){
       this.weather.setScales(this.weather.time,world.sim.weatherScales(world.devOverlayView()));
       this.weather.advanceTo(Math.max(this.weather.time, world.time));
     }
-    const at = this.walk.at(world.player.pos.x, world.player.pos.y), key = cellKey(at);
+    const focusCells=this.massFoci.members.map(f=>this.walk.at(f.pos.x,f.pos.y));
+    const key=focusCells.map(cellKey).join('|');
     if (key !== this.nearKey) {
       this.nearKey = key;
-      const cells: { cell: MassCell; distance: number }[] = [];
-      const r = this.config.pageRadius;
-      for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++)
-        cells.push({ cell: neighborCell(at, x, y), distance: x * x + y * y });
-      cells.sort((a, b) => a.distance - b.distance);
-      this.stream.request(cells.map(c => c.cell));
-      for (const k of this.places.keys()) if (!cells.some(c => cellKey(c.cell) === k)) this.places.delete(k);
-      for (const { cell } of cells) {
+      const cells=this.massFoci.pages(p=>this.walk.at(p.x,p.y),this.config.pageRadius);
+      this.stream.request(cells);
+      const wanted=new Set(cells.map(cellKey));
+      for (const k of this.places.keys()) if (!wanted.has(k)) this.places.delete(k);
+      for (const cell of cells) {
         const k = cellKey(cell);
         if (!this.places.has(k)) this.places.set(k, this.placesInCell(cell));
       }
-      this.state.claim('explored', key);
+      for(const cell of focusCells)this.state.claim('explored',cellKey(cell));
     }
-    this.stream.step(boot ? this.stream.cols ** 2 * 9 : this.config.samplesPerTick);
+    if(world.massRenderPages)this.stream.step(boot ? this.stream.cols ** 2 * 9 : this.config.samplesPerTick);
     for (const [id, actor] of this.natives) if (actor.dead) {
       this.state.claim('fallen', id); this.natives.delete(id);
     }
-    this.sites.discover(world.player.pos);
+    for(const f of foci)this.sites.discover(f.pos);
     for (const found of this.sites.discovered) {
       if (this.state.claimed('site-looted', found.id)) continue;
       if (this.siteSearched(found.id)) this.state.claim('site-looted', found.id);
@@ -813,11 +850,13 @@ export class WorldMassRuntime {
     this.dormancy?.update(world, this.natives);
     if(this.nativeFeatures && this.nativeCountry && this.nativeHost){
       const radius=Math.min(2400,this.nativeCountry.spec.spacing/2);
-      const wanted=new Map(this.nativeCountry.near(at,radius).map(p=>{const placement=this.nativePlacement(p);return [placement.id,placement] as const;}));
+      const wanted=new Map(massFocusRoundRobin(focusCells.map(at=>this.nativeCountry!.near(at,radius)),p=>p.id)
+        .map(p=>{const placement=this.nativePlacement(p);return [placement.id,placement] as const;}));
       // Already visited native geometry remains authoritative when a newer
       // reservation prevents the current provider from proposing its birth.
-      for(const placement of this.nativeFeatures.bornNear(at,radius))wanted.set(placement.id,placement);
-      if(!this.attached)this.nativeFeatures.sync(this.nativeFeatures.bornNear(at,radius).filter(p=>this.savedNativeOwners.has(p.id)),this.nativeHost);
+      const born=massFocusRoundRobin(focusCells.map(at=>this.nativeFeatures!.bornNear(at,radius)),p=>p.id);
+      for(const placement of born)wanted.set(placement.id,placement);
+      if(!this.attached)this.nativeFeatures.sync(born.filter(p=>this.savedNativeOwners.has(p.id)),this.nativeHost);
       this.nativeFeatures.sync([...wanted.values()],this.nativeHost);
     }
     this.fields.sync(world);
@@ -851,27 +890,24 @@ export class WorldMassRuntime {
     this.sites.sync(world, eligible);
     // Prepare scenery before bodies so native spawn collision sees tree trunks.
     const sceneryCells = new Map<string, MassCell>();
-    const radius = this.config.pageRadius;
-    for (let y = -radius; y <= radius; y++) for (let x = -radius; x <= radius; x++) {
-      const cell = neighborCell(at, x, y); sceneryCells.set(cellKey(cell), cell);
-    }
+    for(const cell of this.massFoci.pages(p=>this.walk.at(p.x,p.y),this.config.pageRadius))sceneryCells.set(cellKey(cell),cell);
     for (const actor of this.natives.values()) {
       if (this.dormancy?.isSleeping(actor)) continue;
       const cell = this.walk.at(actor.pos.x, actor.pos.y); sceneryCells.set(cellKey(cell), cell);
     }
     for (const cell of this.ecology?.pendingFellingCells() ?? []) sceneryCells.set(cellKey(cell), cell);
     this.ecology?.sync(world, [...sceneryCells.values()]);
-    if(!world.player.dead)this.survey.observe(at,target=>world.lineOfSight(world.player.pos,
-      localOffset(target,{...this.origin,x:0,y:0},this.config.terrain.addressSpan),world.player.tier));
+    for(const f of foci)this.survey.observe(this.walk.at(f.pos.x,f.pos.y),target=>world.lineOfSight(f.pos,
+      localOffset(target,{...this.origin,x:0,y:0},this.config.terrain.addressSpan),f.tier));
     this.geography?.sync(world);
-    this.sites.discover(world.player.pos);
+    for(const f of foci)this.sites.discover(f.pos);
     const seen = new Set<string>();
-    for (const places of this.places.values()) for (const p of places) {
+    for (const p of this.massFoci.order([...this.places.values()].flat(),p=>localOffset(p.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan),p=>p.id)) {
       if (seen.has(p.id)) continue; seen.add(p.id);
       const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
       if (!q || (this.settlement ? this.settlement.reserves(q.x, q.y, p.radius)
         : Math.hypot(q.x, q.y) < this.config.startRadius + p.radius)
-        || Math.hypot(q.x - world.player.pos.x, q.y - world.player.pos.y) > this.config.populationRadius) continue;
+        || this.massFoci.distance(q) > this.config.populationRadius) continue;
       const content = this.config.content.find(c => c.id === p.content)!;
       const landformHabitat = this.config.terrain.places.find(r=>r.id===p.recipe)?.landformHabitat
         && (!!this.generator.nativeRegional?.reserves(p.center,p.radius) || !!this.generator.landforms?.reserves(p.center,p.radius));
@@ -880,7 +916,7 @@ export class WorldMassRuntime {
       if(!this.fields.canAdmit(p,content.site?.altars??[])
         || !this.shrines.canAdmit(p,content.site?.shrines??[])
         || !this.puzzles.canAdmit(p,content.site?.puzzles??[]))continue;
-      const capacity = Math.max(0, this.config.maxPopulation - this.reservedPopulation(p.id));
+      const capacity = this.population + this.availablePopulation(p.id,q);
       const population = this.populationFor(p);
       const formation=massFormation(population.encounters,this.generator.run.seed,p.id);
       const ambientPack=formation?undefined:ambientCohort(content.ambientPack,population,this.generator.run.seed,p.id);
@@ -1112,8 +1148,10 @@ export class WorldMassRuntime {
   private updateNativePaging(world:World):void {
     if(!this.dormancy||!characterPagingAvailable()||!this.pagingCurrent(world)||this.restoring)return;
     this.startNativePageReads(world);
-    const observers=this.nativeObservers(world);
-    const near=(body:Actor,radius:number)=>observers.some(a=>Math.hypot(a.pos.x-body.pos.x,a.pos.y-body.pos.y)<=radius||nativeQuietAnatomyNear(body,a.pos,radius));
+    const observerPoints=this.nativeObserverPositions(world);
+    const observers=new MassObserverIndex(observerPoints,this.dormancy.policy.sleepRadius);
+    const near=(body:Actor,radius:number)=>observers.near(body.pos,radius)
+      ||!!((body.worm||body.movementTether)&&observerPoints.some(p=>nativeQuietAnatomyNear(body,p,radius)));
     // Bound eligible history, not unsupported mechanics. Those remain pinned.
     if(this.pagingWrite||world.time<this.nextPaging||this.natives.size<=Math.max(192,this.config.maxPopulation*2))return;
     this.nextPaging=world.time+2;
@@ -1154,7 +1192,9 @@ export class WorldMassRuntime {
     // In-place ordering keeps outstanding durable-write leases on this exact registry.
     this.natives.clear();for(const [id,a]of ordered)this.natives.set(id,a);
   }
-  snapshot(world: World): MassAdventureSave {
+  snapshot(world: World): MassAdventureSave;
+  snapshot(world: World, options: MassCheckpointOptions): MassCheckpoint;
+  snapshot(world: World, options?: MassCheckpointOptions): MassAdventureSave | MassCheckpoint {
     this.orderNativeBodies(world);
     const enemies: MassEnemySave[] = [];
     for (const [id, a] of this.natives) {
@@ -1167,7 +1207,7 @@ export class WorldMassRuntime {
         ...(this.ambientPacks.has(a) ? {ambientPack:{id:a.squadId!,leader:!!a.squadLeader}} : {}),
         ...(this.births.of(a) ? {birth:this.births.of(a)} : {}) });
     }
-    return JSON.parse(JSON.stringify({ schema: wildernessSchema(this.config) ? 19 : nativeSeatingSchema(this.config) ? 18 : nativeRegionalSchema(this.config) ? 17 : regionalWeaveSchema(this.config) ? 16 : regionalLayersSchema(this.config) ? 15 : regionalTerrainSchema(this.config) ? 14 : regionalLandformSchema(this.config) ? 13 : landformCompositionSchema(this.config) ? 12 : this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
+    const massCheckpoint: MassAdventureSave = { schema: wildernessSchema(this.config) ? 19 : nativeSeatingSchema(this.config) ? 18 : nativeRegionalSchema(this.config) ? 17 : regionalWeaveSchema(this.config) ? 16 : regionalLayersSchema(this.config) ? 15 : regionalTerrainSchema(this.config) ? 14 : regionalLandformSchema(this.config) ? 13 : landformCompositionSchema(this.config) ? 12 : this.config.geography ? 11 : this.config.dormancy || this.config.shrineResidency || this.config.puzzleResidency || this.config.nativeCountry ? 10 : this.config.bounties !== undefined ? 9 : this.config.journey?.reservePopulation !== undefined ? 8 : this.config.rewards?.earnFrom !== undefined ? 7 : this.config.settlement?.structurePlans !== undefined ? 6 : this.config.settlement?.quests?.acceptance === 'journal' ? 5 : this.config.content.some(c=>c.site?.puzzles?.length) ? 4 : this.config.journey?.roadside ? 3 : this.config.content.some(c => c.site?.shrines?.length) ? 2 : 1, config: this.config, configHash: this.configHash, state: this.state.snapshot(),
       ...(this.config.rewards ? { rewards: this.legacyRewards.snapshot() } : {}),
       ...(this.fields.snapshot().length ? { fields: this.fields.snapshot() } : {}),
       ...(this.shrines.snapshot().length ? { shrines: this.shrines.snapshot() } : {}),
@@ -1180,7 +1220,8 @@ export class WorldMassRuntime {
       ...(this.storms ? {storms:this.storms.snapshot()} : {}),
       origin: this.origin, player: { ...world.player.pos, tier: world.player.tier ?? 0 }, enemies,
       ...(this.settlement ? { settlement: this.settlement.snapshot(world) } : {}),
-      ...(this.ecology ? { ecology: this.ecology.snapshot(world) } : {}), sites: this.sites.snapshot(world), contents: captureZoneContents(world) })) as MassAdventureSave;
+      ...(this.ecology ? { ecology: this.ecology.snapshot(world) } : {}), sites: this.sites.snapshot(world), contents: captureZoneContents(world) };
+    return JSON.parse(JSON.stringify(options ? compactMass(massCheckpoint) : massCheckpoint));
   }
   get population(): number { return (this.dormancy?.activeCount(this.natives) ?? this.natives.size) + this.puzzles.population + (this.nativeHost?.population ?? 0) + (this.geography?.population ?? 0); }
 }

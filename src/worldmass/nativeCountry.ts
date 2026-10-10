@@ -148,6 +148,10 @@ function validateSpec(spec:NativeCountrySpec,terrainCell:number):void {
 export class MassNativeCountry {
   readonly spec:Readonly<NativeCountrySpec>;
   private cache=new Map<string,Candidate|null>();
+  /** Point/path/scenery queries in one placement cell share the same nine pure
+   * candidates. Keep their exact bounds; never quantize the queried point. */
+  private neighborhoods=new Map<string,readonly Candidate[]>();
+  private neighborhoodCounts={builds:0,hits:0};
   private refused=new Map<string,string>();
   private counts={considered:0,selected:0,chance:0,reserved:0,unmatched:0};
   constructor(readonly generator:MassGenerator,spec:NativeCountrySpec,
@@ -217,18 +221,34 @@ export class MassNativeCountry {
         ...(kind==='massif'&&row.rockMouth&&rng.chance(s.rockEntranceChance)?{rockEntrance:true}:{})}}});
   }
   at(at:MassAddress):readonly NativeFeaturePlacement[]{return this.near(at,0);}
+  private neighborhood(dimension:string,gx:bigint,gy:bigint):readonly Candidate[]{
+    const key=JSON.stringify([dimension,gx.toString(),gy.toString()]);
+    const hit=this.neighborhoods.get(key);
+    if(hit){this.neighborhoodCounts.hits++;this.neighborhoods.delete(key);this.neighborhoods.set(key,hit);return hit;}
+    this.neighborhoodCounts.builds++;
+    const rows:Candidate[]=[];
+    for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++){
+      const c=this.candidate(dimension,gx+BigInt(x),gy+BigInt(y));if(c)rows.push(c);
+    }
+    this.neighborhoods.set(key,rows);
+    // Even disjoint neighborhoods retain no more candidates than the original
+    // placement cache. Both stores are bounded independently of travel history.
+    while(this.neighborhoods.size>Math.max(1,Math.floor(this.spec.cacheSize/9)))
+      this.neighborhoods.delete(this.neighborhoods.keys().next().value!);
+    return rows;
+  }
   /** Also feeds live scenery admission; physical point queries use radius zero.
    * Radius is bounded independently of travel distance and explored history. */
   near(at:MassAddress,radius:number):readonly NativeFeaturePlacement[]{
     if(!Number.isFinite(radius)||radius<0||radius>this.spec.spacing/2)throw Error('Native country visibility query exceeds bounded neighborhood');
     const q=latticeAt(at,this.generator.spec.addressSpan,this.spec.spacing),out:NativeFeaturePlacement[]=[];
-    for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++){
-      const c=this.candidate(at.dimension,q.gx+BigInt(x),q.gy+BigInt(y));if(!c)continue;
+    for(const c of this.neighborhood(at.dimension,q.gx,q.gy)){
       const d=localOffset(at,c.placement.origin,this.generator.spec.addressSpan,64),size=c.placement.request.size!,pad=this.spec.queryHalo+radius;
       if(d.x>=-pad&&d.y>=-pad&&d.x<=size.w+pad&&d.y<=size.h+pad)out.push(c.placement);
     }
     return Object.freeze(out.sort((a,b)=>a.id.localeCompare(b.id)));
   }
   refusal(id:string):string|undefined{return this.refused.get(id);}
-  get stats(){return {...this.counts,cached:this.cache.size,refused:this.refused.size,sources:this.spec.catalogue.length};}
+  get stats(){return {...this.counts,cached:this.cache.size,refused:this.refused.size,sources:this.spec.catalogue.length,
+    neighborhoods:this.neighborhoods.size,neighborhoodBuilds:this.neighborhoodCounts.builds,neighborhoodHits:this.neighborhoodCounts.hits};}
 }

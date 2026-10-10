@@ -9,6 +9,8 @@ import {serializeCharacter} from '../src/meta/character';
 import {encodeCharacterPages,decodeCharacterPages,preparePagedCharacterResume,readCharacterNativePage,type CharacterNativePage,type CharacterPageEntry} from '../src/meta/characterPages';
 import {WorldMassRuntime} from '../src/worldmass/runtime';
 import type {Actor} from '../src/engine/actor';
+import {CLASSES} from '../src/data/classes';
+import {NullInput} from '../src/net/intent';
 const undo=seedGlobalRandom(7164),w=makeSimWorld('warrior',7164);w.startWorldMass(713);w.time=100;w.player.pos={x:50000,y:0};
 const save=serializeCharacter(w),mass=save.world!.worldmass!,policy=mass.config.dormancy!,owned=new Map<string,Actor>(),d=new MassDormancy(policy);
 mass.enemies=[];mass.dormancy=new MassDormancy(policy).snapshot(new Map(),w);
@@ -32,6 +34,10 @@ console.log('PASS nativeQuietAnatomy exact factory eligibility and active/foreig
 // The head can be distant while retained anatomy is still beside an observer.
 const tail={x:50000,y:0};worm.worm!.segments[0]=tail;
 d.update(w,owned);assert.ok([...owned.values()].every(a=>!d.isSleeping(a)),'near tail retains complete squad');
+const remote=w.addSeat('anatomy-remote',CLASSES[0],new NullInput(),{startingCompanions:false,startingFlasks:false});
+remote.actor.pos={...tail};w.player.pos={x:80000,y:0};
+d.update(w,owned);assert.ok([...owned.values()].every(a=>!d.isSleeping(a)),'a distant second player beside the tail retains the complete squad');
+w.removeSeat(remote.id);
 w.player.pos={x:80000,y:0};d.update(w,owned);assert.ok([...owned.values()].every(a=>d.isSleeping(a)));
 w.player.pos={...tail};d.update(w,owned);assert.ok([...owned.values()].every(a=>!d.isSleeping(a)),'tail wakes complete squad');
 w.player.pos={x:80000,y:0};d.update(w,owned);
