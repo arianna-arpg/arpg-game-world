@@ -338,5 +338,7 @@ export function glideLite(world: World, prev: StateSnapshot | null, snap: StateS
     l.drawn.set(id, [gx, gy]);
     out[j * 3] = lt.b[j * 3]; out[j * 3 + 1] = gx; out[j * 3 + 2] = gy;
   }
-  world.liteWire = { k: lt.k, b: out, i: lt.i };
+  world.liteWire = { k: lt.k, b: out, i: lt.i } as LiteWire; // the ids ride beside the World's own row type (no World member moves)
 }
+/** The shell's lite mirror with THE WIRE DIET's ids (World.liteWire wears them on a shard). */
+export type LiteWire = { k: string[]; b: number[]; i?: number[] };
