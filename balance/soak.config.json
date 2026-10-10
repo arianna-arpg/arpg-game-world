@@ -28,7 +28,7 @@
     },
     "party": {
       "require": true,
-      "_doc": "THE PARTY: the first two bots form a party over the session wire (an invite, then the invitee's accept) in the warm-up, and the shard's own PartyDesk rows must hold both. n/a with one bot. Whether it still stands at the end is reported, never gated: a member that falls leaves its party by law."
+      "_doc": "THE PARTY: the first two bots form a party over the session wire (an invite, then the invitee's accept) in the warm-up, and the shard's own PartyDesk rows must hold both. n/a with one bot. Whether it still stands at the end is reported, never gated: a member that falls keeps its place held for its next hero (THE HELD PLACE, PARTY_CFG.rejoinSec), so a party broken by the end lost a place to a lapse or a leave."
     }
   }
 }

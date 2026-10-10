@@ -48,6 +48,7 @@ import type { PeerInfo, SessionMsg } from '../src/net/transport';
 import type { MetaAction, PlayerInput } from '../src/net/intent';
 import { massDigest } from '../src/worldmass/random';
 import { PartyDesk } from './party';
+import { PARTY_WIRE_CFG } from '../src/net/partyWire';
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
 import { ShardTransport, type ShardJoin } from './shardTransport';
@@ -130,8 +131,9 @@ export const SHARD_CFG = {
   keeper: { classId: 'warrior', name: 'The Keeper', reviveSec: 8, shadowOffset: 0 },
   /** THE NEAR LAW (data/coop.ts shareRadius): seats within this many px of
    *  a kill share its XP, count as party for an enemy's scale and may kneel
-   *  for the mercy. A continent apart is no party. */
-  nearRadius: 1600,
+   *  for the mercy. A continent apart is no party. THE PARTY THAT READS: the number lives
+   *  in net/partyWire.ts, where the party panel's "near you" reads it too. */
+  nearRadius: PARTY_WIRE_CFG.nearRadius,
   /** The shard save's own schema (wraps WorldStateSave's). */
   saveSchema: 1,
   /** Where shard saves land by default (gitignored beside the game's). */
@@ -366,7 +368,8 @@ export class ShardHost {
     this.vessels = new VesselDesk(this.units, toSeat, this.corpses, {
       beatSec: SHARD_CFG.persistSec, log: this.log,
       party: id => this.parties.membersOf(id), // THE GROUP LAW
-      onSeatGone: id => { this.parties.dropSeat(id); this.units.forget(id); },
+      // THE PARTY THAT READS (THE HELD PLACE): a fall leaves its place held for its next vessel.
+      onSeatGone: (id, name) => { this.parties.seatFell(id, this.world.time, name); this.units.forget(id); },
     });
     this.units.onArrive = (seat, to, from, woke) => this.onArrive(seat, to, from, woke);
     // THE IDENTITY (THE SMOOTH SHELL): a join carrying a dormant vessel's account and character
@@ -479,6 +482,15 @@ export class ShardHost {
     this.net.sendZoneTo(peer.id, serializeZone(this.world));
     this.units.keeper.lastSentZone = this.world.zone.id;
     this.log(`[shard] ${peer.id} joined as ${seat.meta.classDef.id}${vessel ? ` (the vessel ${seat.meta.name}, level ${this.world.seatHero(seat).level})` : ''} (${this.net.connectionCount()} connected)`);
+    this.rejoinParty(seat.id);
+  }
+
+  /** THE PARTY THAT READS (THE HELD PLACE, server/party.ts): a seat standing up names its
+   *  account to the desk; a fallen member's next vessel on that account (or the same
+   *  connection's class pick) takes its held place back inside PARTY_CFG.rejoinSec. */
+  private rejoinParty(seatId: string): void {
+    const party = this.parties.seatJoined(seatId, this.vessels.accountOf(seatId), this.world.time);
+    if (party) this.log(`[shard] ${seatId} took its held place back in party ${party}`);
   }
 
   /** THE DORMANT SEAT (card 16 B): a socket was lost without its client's
@@ -633,6 +645,9 @@ export class ShardHost {
     w.timeflow.allowHold = () => false; // a hosted world never freezes for one hand
     w.timeflow.chronoScope = { radius: SHARD_CFG.chronoRadius }; // keeperSeat: THE SCOPED FREEZE
     w.partyMates = id => this.parties.membersOf(id); // keeperSeat lane: THE KILLER'S DUE pays the party
+    // keeperSeat lane, THE PARTY THAT READS (server/vessel.ts): THE RELEASE, the wait's end
+    // (THE BLEED-OUT) and the down's read for the revive row (SeatW.rv).
+    w.partyDowns = { release: id => this.vessels.release(id), waitEnded: id => this.vessels.waitEnded(id), view: id => this.vessels.downView(id) };
     // THE COUNTERS AND THE JOURNAL: a seat's own remembered bodies ride its journal row's pins (the corpse on the chart).
     w.seatCorpseMarks = seat => this.corpses.forAccount(this.vessels.accountOf(seat.id))
       .map(c => ({ zoneId: c.zoneId, ...(c.map ? { map: { ...c.map } } : {}), name: c.name, classId: c.classId, level: c.level }));
@@ -846,10 +861,12 @@ export class ShardHost {
     switch (msg.op) {
       case 'invite': {
         word = this.parties.invite(from, seat, now);
-        if (!word) {
-          const party = this.parties.partyOf(from)!;
+        const inv = word ? null : this.parties.inviteFor(seat);
+        if (inv) {
+          // THE PARTY THAT READS: the invite carries its lapse (the client drops it then) and
+          // names a party only when the inviter stands in one (THE PARTY FOUNDS ON ACCEPT).
           const name = this.units.seatOf(from)?.actor.name ?? from;
-          this.net.sendSession({ t: 'partyInvite', from, name, party: party.id }, seat);
+          this.net.sendSession({ t: 'partyInvite', from, name, until: inv.until, ...(inv.party ? { party: inv.party } : {}) }, seat);
         }
         break;
       }

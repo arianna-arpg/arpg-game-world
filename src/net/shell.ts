@@ -52,6 +52,7 @@ import { replenishingDelivery } from '../engine/replenishment';
 import type { MetaAction, PlayerInput } from './intent';
 import { adoptSnapshot, interpolateSnapshot, isWireCast, tickNetClocks, type InterpFrame, type StateSnapshot } from './snapshot';
 import { applyOwnSeatRows } from './seatView';
+import { applyOwnReviveRow } from './partyReads'; // THE PARTY THAT READS: the revive row (SeatW.rv)
 import { faceOwnAim, replayOwnFrames, type PredictFrame } from './predict';
 
 export const WIRE_SHELL_CFG = {
@@ -450,6 +451,7 @@ export class WireShell {
     interpolateSnapshot(w, this.prevAdopted, s, alpha, ahead, { bodies, runOn: cfg.extrapolateMs / 1000 });
     this.castFrame(dt, nowMs);
     applyOwnSeatRows(w, s); // THE ACTING SEAT: the own note over the own head, the low-life surge
+    applyOwnReviveRow(w, s); // THE PARTY THAT READS: the revive ring, the bleed-out and the wipe radius
     this.predictOwnHero(dt);
   }
 

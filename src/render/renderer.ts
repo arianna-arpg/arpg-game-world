@@ -133,6 +133,7 @@ import { drawMagicPackEffects, drawMagicPackRole } from './vis/magicPackLayer';
 import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
 import { APPARITION_ROLE, MU_CFG } from '../data/mu';
 import { HERO_NAME_CUE, PING_CUE } from '../data/identityCues';
+import { PARTY_CUE } from '../data/partyCues'; // THE PARTY THAT READS
 import { pingEdgePoint } from '../engine/pings';
 import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
 import { contrastGuard, hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
@@ -418,6 +419,10 @@ export class Renderer {
    *  talk (resolveNameTokens, vis/speech.ts) — so a renamed hero, or a fresh
    *  run's, re-addresses every line the same frame. */
   getPlayerName?: () => string;
+
+  /** Wired by main.ts (THE PARTY THAT READS, the invite tell): the seats whose invitation to
+   *  this client stands; each wears a beckon over its head (drawPartyMarks). Unwired = none. */
+  partyBeckons: (() => readonly string[]) | null = null;
 
   /** Wired by main.ts (same altitude as getSettings): THE OBSTRUCTION
    *  CENSUS — CSS-pixel rects of every open DOM pane standing over the
@@ -795,6 +800,7 @@ export class Renderer {
     this.drawChests(world);
     this.drawFonts(world);
     this.drawWaypoint(world);
+    this.drawDownReads(world);     // THE PARTY THAT READS: a held down's wipe radius, its bleed-out, your own revive fill
     this.drawHuntFootprint(world); // beast tracks to dwell on (the Hunt)
     this.drawAmalgamPicks(world);  // the Bonewright's body-part choice spots
     // Resolve attention once before both its ground cues and actor labels.
@@ -978,6 +984,7 @@ export class Renderer {
       this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
       this.drawTexts(world);
       this.drawPings(world);        // THE PING (engine/pings.ts): your party's world-anchored marks + the edge chevrons
+      this.drawPartyMarks(world);   // THE PARTY THAT READS: an inviter's beckon, your down's holders marked
       this.drawSceneHeroHud(world); // scene fabric: hero-seated teaching bar + prompt (world-space)
       this.drawHarvest(world);      // harvest rites: node glints + live-bind symbol chips (world-space)
     this.drawTrace(world);        // the forge's steady hand: outline + band + laid ink (world-space)
@@ -7602,6 +7609,93 @@ export class Renderer {
       ctx.beginPath(); ctx.ellipse(p.pos.x, p.pos.y, 6, 3.3, 0, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
+  }
+
+  /** THE PARTY THAT READS (data/partyCues.ts PARTY_CUE), the word layer. THE INVITE TELL: a
+   *  beckon over each inviter whose invitation to this client stands (partyBeckons), in its own
+   *  class color. THE HOLDERS: while you lie downed, the mates whose standing holds your down
+   *  (World.netRevive's `h`) wear brackets flanking their name, and one off-screen wears an edge
+   *  chevron facing it. Shapes only, never a word (SHOW DON'T TELL). World space. */
+  private drawPartyMarks(world: World): void {
+    const beckons = this.partyBeckons?.() ?? [];
+    const rv = world.netRevive;
+    const holders = rv && rv.s === world.clientSeatId ? rv.h ?? [] : [];
+    if (!beckons.length && !holders.length) return;
+    const { ctx } = this, cue = PARTY_CUE, now = world.time;
+    const bodyOf = (seat: string): Actor | undefined => world.party.members.find(m => m.seat === seat)?.actor;
+    ctx.save();
+    for (const seat of beckons) {
+      const a = bodyOf(seat);
+      if (!a || a.dead) continue;
+      const reveal = this.labelRevealAt(world, a.pos);
+      if (reveal <= 0.02) continue;
+      const b = cue.beckon, x = a.pos.x;
+      const bob = Math.sin((now * b.bobHz + a.id * 0.37) * Math.PI * 2) * b.bobPx;
+      const top = a.pos.y - a.radius - HERO_NAME_CUE.dy - b.lift - bob;
+      ctx.globalAlpha = reveal * b.alpha; ctx.fillStyle = a.color; ctx.strokeStyle = a.color; ctx.lineWidth = b.lineW;
+      ctx.beginPath(); // the shard, its point toward the inviter
+      ctx.moveTo(x, top + b.h); ctx.lineTo(x - b.w, top); ctx.lineTo(x + b.w, top);
+      ctx.closePath(); ctx.fill();
+      for (let i = 0; i < b.arcs; i++) { // the call: arcs breathing upward off the shard
+        const t = ((now / b.arcSec) + i / b.arcs) % 1;
+        ctx.globalAlpha = reveal * b.alpha * (1 - t);
+        ctx.beginPath(); ctx.arc(x, top, b.arcR * (0.35 + 0.65 * t), Math.PI * 1.2, Math.PI * 1.8); ctx.stroke();
+      }
+    }
+    if (holders.length) {
+      const h = cue.holder, s = h.size;
+      const view = { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom };
+      ctx.font = HERO_NAME_CUE.font; ctx.fillStyle = h.ink;
+      for (const seat of holders) {
+        const a = bodyOf(seat);
+        if (!a) continue;
+        const edge = pingEdgePoint(view, a.pos, h.edge.pad / this.zoom);
+        if (edge) { // off-screen: the ping's chevron, facing the mate who holds you
+          const size = h.edge.size / this.zoom;
+          ctx.save(); ctx.translate(edge.x, edge.y); ctx.rotate(edge.ang); ctx.globalAlpha = 0.9;
+          ctx.beginPath(); ctx.moveTo(size, 0); ctx.lineTo(-size * 0.7, -size * 0.75); ctx.lineTo(-size * 0.25, 0); ctx.lineTo(-size * 0.7, size * 0.75); ctx.closePath(); ctx.fill();
+          ctx.restore();
+          continue;
+        }
+        const reveal = this.labelRevealAt(world, a.pos);
+        if (reveal <= 0.02) continue;
+        const half = ctx.measureText(a.name).width / 2 + h.gap, y = a.pos.y - a.radius - HERO_NAME_CUE.dy - 4;
+        ctx.globalAlpha = reveal;
+        ctx.beginPath(); ctx.moveTo(a.pos.x - half, y); ctx.lineTo(a.pos.x - half - s, y - s); ctx.lineTo(a.pos.x - half - s, y + s); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(a.pos.x + half, y); ctx.lineTo(a.pos.x + half + s, y - s); ctx.lineTo(a.pos.x + half + s, y + s); ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  /** THE PARTY THAT READS (data/partyCues.ts PARTY_CUE), the ground: the down this client's row
+   *  reads (World.netRevive, SeatW.rv). THE WIPE RADIUS: THE NEAR LAW's ring around a held down,
+   *  drawn for the downed player and the mates whose standing holds it (the group law's reach
+   *  made visible). THE BLEED-OUT: a ring draining outside the revive ring as the wait runs out.
+   *  Your own down: the revive's fill (a kneel's progress, or THE MERCY's clock); a mate's fill
+   *  rides the dwell ring pass. World space. */
+  private drawDownReads(world: World): void {
+    const rv = world.netRevive;
+    if (!rv) return;
+    const { ctx } = this, cue = PARTY_CUE, now = world.time;
+    const own = rv.s === world.clientSeatId;
+    const at = own ? world.player.pos : world.party.members.find(m => m.seat === rv.s)?.actor.pos ?? { x: rv.p[0], y: rv.p[1] };
+    ctx.save();
+    if (rv.r && rv.r > 0) {
+      const wc = cue.wipe;
+      ctx.globalAlpha = Math.max(0, wc.alpha + wc.breath * Math.sin(now * wc.hz * Math.PI * 2));
+      ctx.strokeStyle = wc.ink; ctx.lineWidth = wc.lineW; ctx.setLineDash(wc.dash);
+      ctx.beginPath(); ctx.arc(at.x, at.y, rv.r, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (rv.l !== undefined && rv.lt) {
+      const b = cue.bleed, frac = clamp(rv.l / rv.lt, 0, 1);
+      const urgent = rv.l <= b.urgentSec ? 0.55 + 0.45 * Math.abs(Math.sin(now * b.urgentHz * Math.PI)) : 1;
+      ctx.globalAlpha = b.alpha * urgent; ctx.strokeStyle = b.ink; ctx.lineWidth = b.lineW;
+      ctx.beginPath(); ctx.arc(at.x, at.y, transitRing('revive').radius + b.gap, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+    if (own) this.drawProgressRing(at.x, at.y, rv.f, 'revive');
   }
 
   private drawTexts(world: World): void {

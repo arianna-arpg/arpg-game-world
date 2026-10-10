@@ -34,6 +34,7 @@ import { FEATURE } from '../meta/account';
 import { LEDGER_MERC_OUTPOST_FOUND } from '../meta/mercs';
 import { VENDORS } from './vendors';
 import { CONTAINER_DEFS } from './containers';
+import { PARTY_INBOX, clientGrouped } from '../net/partyReads';
 
 registerMenuGroup({ id: 'hero', label: 'Character', order: 0 });
 registerMenuGroup({ id: 'town', label: 'Stations', order: 1 });
@@ -223,6 +224,14 @@ registerMenuAttention({ id: 'tree_points', entry: 'inventory', kind: 'pip', read
 registerMenuAttention({
   id: 'quest_offers', entry: 'journal', kind: 'pip',
   read: r => r.seat === r.world.localSeat ? r.world.questOfferChoices().length : 0,
+});
+
+/** THE INVITE TELL (THE PARTY THAT READS, net/partyReads.ts): an invitation standing on this
+ *  client wears a pip on the Party page (and the button's roll-up) until it is answered or
+ *  lapses; off a hosted world the inbox is empty and the pip quiet. */
+registerMenuAttention({
+  id: 'party_invites', entry: 'party', kind: 'pip',
+  read: r => r.seat === r.world.localSeat && r.world.partyRows !== null ? PARTY_INBOX.standing(r.world.time, clientGrouped(r.world)).length : 0,
 });
 
 registerMenuAttention({

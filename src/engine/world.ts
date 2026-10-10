@@ -100,6 +100,7 @@ import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingSt
 import { EventBus } from './eventbus';
 import { Party } from './party';
 import { HONEST_INPUT_CFG, NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
+import { reviveTargetsOfRow } from '../net/partyReads'; // THE PARTY THAT READS: a hosted shell's revive ring reads its row
 import { SkillInputOrder } from './skillInputOrder';
 import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
 import { WorldMassRuntime, type MassAdventureSave } from '../worldmass/runtime';
@@ -5629,7 +5630,9 @@ export class World {
           // covenant's (server/vessel.ts), never the mercy's; and only a PARTY
           // MATE within reach could kneel, so a stranger near never withholds it.
           if (stageOf(seat.meta.modeId, seat.meta.modeStage).onDeath === 'end') { seat.reviveDwellBy.delete(ally.id); continue; }
-          const anyOther = this.seats.some(o => o !== seat && !o.keeper && !o.actor.dead && !o.actor.downed
+          // THE PARTY THAT READS (card 28): once the wait is over (THE RELEASE, THE BLEED-OUT)
+          // no mate's standing holds the mercy back (no player holds another hostage).
+          const anyOther = !(this.partyDowns?.waitEnded(seat.id) ?? false) && this.seats.some(o => o !== seat && !o.keeper && !o.actor.dead && !o.actor.downed
             && this.sameParty(seat, o)
             && (COOP_SCALING.shareRadius <= 0 || dist(o.actor.pos, seat.actor.pos) <= COOP_SCALING.shareRadius)); // THE NEAR LAW
           if (anyOther) { seat.reviveDwellBy.delete(ally.id); continue; }
@@ -18987,6 +18990,14 @@ export class World {
   /** THE PARTY on the wire: the rows the shard publishes (snapshot.ts ships them on change). */
   partyRows: import('../net/partyWire').PartyRow[] | null = null;
   partyRev = 0;
+  /** keeperSeat lane, THE PARTY THAT READS (server/vessel.ts through the shard): THE RELEASE,
+   *  the wait's end (THE BLEED-OUT) and a down's read for the revive row. Absent off a hosted
+   *  world: every lane's old down, byte-identical. */
+  partyDowns: import('../net/partyWire').PartyDowns | null = null;
+  /** THE PARTY THAT READS (net/partyReads.ts applyOwnReviveRow): a hosted shell's revive row
+   *  (SeatW.rv, THE OWN ENTRY), the one source of its revive rings and words, since a shell
+   *  holds only its own seat. Undefined everywhere but a hosted shell; null = a quiet row. */
+  netRevive: import('../net/partyWire').ReviveW | null | undefined = undefined;
   /** THE SIM UNITS (shard M1, engine/shardUnits.ts): the host's link on every
    *  World a shard runs, the keeper's and each unit's, and THE PRIMARY GATE's
    *  read. Absent everywhere else; its absence IS the solo invariant. */
@@ -25903,6 +25914,10 @@ export class World {
         // contextual — mid-rite the press is the rite's silence (the input
         // law's meta face); at an offered node it BEGINS the rite; only
         // otherwise does it stay the gear grab.
+        // THE RELEASE (card 28, THE PARTY THAT READS): on a hosted world a downed
+        // seat's interact press gives up the wait (the player's own choice), never
+        // a grab from the floor; the shard's desk judges it (a shell only forwards).
+        if (seat.actor.downed && this.partyRows !== null) { this.partyDowns?.release(seat.id); break; }
         if (this.harvestSessions.some(s => s.seatId === seat.id)) break;
         if (this.harvestConsent(seat)) break;
         this.pickupNearestGear(seat);
@@ -46128,6 +46143,9 @@ export class World {
    *  clock; drawn == dwelt). A ring that stands but never fills says "hold
    *  still": the dwell law builds only on an IDLE seat. */
   reviveTargetsView(): { pos: Vec2; frac: number; kind: string; name: string }[] {
+    // THE PARTY THAT READS (net/partyReads.ts, SeatW.rv): a hosted shell holds only its own
+    // seat, so its ring and the hint beside it read the row its host fills.
+    if (this.netRevive !== undefined) return reviveTargetsOfRow(this);
     const out: { pos: Vec2; frac: number; kind: string; name: string }[] = [];
     const seats = this.localHumanSeats().filter(s => !s.actor.dead && !s.actor.downed);
     if (!seats.length) return out;

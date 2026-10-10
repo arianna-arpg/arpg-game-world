@@ -82,6 +82,7 @@ import { gaugeFloor, gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'
 import { COOP_SCALING } from '../data/coop'; // THE WIRE'S EYES: the zone rows' reach (THE NEAR LAW's radius)
 import { applyCounterRows, applyCounterZone, counterZoneOf, harvestRowOf, journalRowOf, type HarvestW, type JournalW } from './journalWire'; // THE COUNTERS AND THE JOURNAL
 import { roadDwellRow } from '../engine/shardRoads'; // THE ROADS PER PLAYER (shard M1 W2): the road ring
+import { reviveRowOf } from './partyReads'; // THE PARTY THAT READS: the revive row (SeatW.rv)
 
 export type Vec2W = [number, number];
 
@@ -402,6 +403,11 @@ export interface SeatW {
    *  the host is filling for this seat, [x, y, fill 0..1 (floored, 2dp), transit kind], so its
    *  client draws the ring the host fills (World.netRoadDwell); absent = none. Hosted worlds alone. */
   rd?: [number, number, number, string];
+  /** THE PARTY THAT READS, THE OWN ENTRY (net/partyReads.ts reviveRowOf): the down this seat
+   *  reads (its own while downed, else the body in its revive reach, else a mate's down its
+   *  standing holds) with the kneel's fill, THE BLEED-OUT's seconds and THE WIPE RADIUS; the
+   *  client's World.netRevive. Absent = none. Hosted worlds alone. */
+  rv?: import('./partyWire').ReviveW;
   /** Movement-PREDICTION fields: `seq` = the last input the host applied for this
    *  seat (the client replays its unacked inputs forward from `pos`); `rooted` =
    *  the host has this hero movement-locked (so the client stops predicting forward);
@@ -1359,7 +1365,7 @@ function ownGaugesOf(a: Actor): Pick<SeatW, 'gg'> {
  *  seat's). A shard ships each socket its own seat's and never another's
  *  (ShardTransport.sendState through ownEntryJson); a broadcast lane (co-op) carries every
  *  seat's and each client reads its own. Naming a key here puts that SeatW row under the law. */
-export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh', 'jn', 'hv', 'rd']; // + THE ACTING SEAT's note and surge, THE COUNTERS AND THE JOURNAL's journal and rite, THE ROADS PER PLAYER's road ring
+export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh', 'jn', 'hv', 'rd', 'rv']; // + THE ACTING SEAT's note and surge, THE COUNTERS AND THE JOURNAL's journal and rite, THE ROADS PER PLAYER's road ring, THE PARTY THAT READS' revive row
 
 /** THE ACTING SEAT (World.seatHudWire): the seat's refusal note while it is fresh. */
 function ownNoteOf(s: Seat, world: World): { fn?: { text: string; at: number } } {
@@ -1584,6 +1590,8 @@ function seatW(s: Seat, world: World): SeatW {
   if (world.time - a.lastMoveAt <= HONEST_INPUT_CFG.walkRowSec) row.spd = Math.round(a.walkSpeed() * 1000) / 1000;
   const trc = a.walkTraction();
   if (row.spd !== undefined && trc < 1) row.trc = Math.round(trc * 1000) / 1000; // THE HONEST INPUT: the traction under it (absent = firm)
+  const rv = reviveRowOf(world, s); // THE PARTY THAT READS: SeatW.rv, the revive row (hosted worlds alone), THE OWN ENTRY
+  if (rv) row.rv = rv;
   return row;
 }
 

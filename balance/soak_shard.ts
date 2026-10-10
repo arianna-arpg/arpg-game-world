@@ -504,7 +504,7 @@ async function main(): Promise<number> {
   const partyFormed = !!partyEv && partyEv.server;
   const partyNote = bots < 2 ? 'n/a (one bot)'
     : !partyEv ? `never formed${partyWords.length ? ` (${partyWords.join('; ')})` : ''}`
-    : `${partyEv.seats.join(' + ')} formed ${partyEv.at < win.t0 ? 'in the warm-up' : `at ${rel(partyEv.at)} s`}${partyEv.server ? '' : ' (the shard disagrees)'}, ${partyAtEnd ? 'standing at the end' : 'broken by the end (a member fell)'}`;
+    : `${partyEv.seats.join(' + ')} formed ${partyEv.at < win.t0 ? 'in the warm-up' : `at ${rel(partyEv.at)} s`}${partyEv.server ? '' : ' (the shard disagrees)'}, ${partyAtEnd ? 'standing at the end' : 'broken by the end (a held place lapsed, or a member left)'}`;
 
   type Gate = { gate: string; value: string; limit: string; status: 'ok' | 'BREACH' | 'n/a' };
   const gate = (name: string, value: string, limit: string, ok: boolean, applies = true): Gate =>
