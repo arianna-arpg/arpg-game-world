@@ -53,6 +53,29 @@ try{
   for(const q of [...queries].reverse())assert.equal(canonical(country.at(q)),canonical(again.at(q)),'query order and eviction cannot change owner or request');
   const far=address('surface','4294967296','-4294967297',450,450,960);
   assert.equal(canonical(country.near(far,1500)),canonical(again.near(far,1500)),'full signed addresses are retained beyond32-bit coordinates');
+  // An independently filtered complete local catalogue checks exact footprint
+  // edges. Warm lookups must not reuse a prior point's inclusion decision.
+  const target=picked[Math.floor(picked.length/2)],targetCenter=moveAddress(target.origin,
+    {x:target.request.size!.w/2,y:target.request.size!.h/2},960);
+  const localRows=new Map<string,typeof target>();
+  for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)for(const row of country.near(
+    moveAddress(targetCenter,{x:x*spec.spacing,y:y*spec.spacing},960),spec.spacing/2))localRows.set(row.id,row);
+  let comparisons=0;
+  for(const radius of [0,1500,spec.spacing/2])for(const x of [-301,-300,-299,0,target.request.size!.w+300,target.request.size!.w+301])
+    for(const y of [-.25,15,target.request.size!.h+.25]){
+      const at=moveAddress(target.origin,{x,y},960),pad=spec.queryHalo+radius;
+      const expected=[...localRows.values()].filter(row=>{const p=localOffset(at,row.origin,960,64),size=row.request.size!;
+        return p.x>=-pad&&p.y>=-pad&&p.x<=size.w+pad&&p.y<=size.h+pad;}).sort((a,b)=>a.id.localeCompare(b.id));
+      assert.deepEqual(country.near(at,radius),expected);comparisons++;
+    }
+  country.at(targetCenter);const builds=country.stats.neighborhoodBuilds,hits=country.stats.neighborhoodHits;
+  for(let i=0;i<1000;i++)country.near(moveAddress(targetCenter,{x:i%10,y:i%7},960),i%2?0:1500);
+  assert.equal(country.stats.neighborhoodBuilds,builds,'nearby physics queries reuse the nine-candidate selection');
+  assert.equal(country.stats.neighborhoodHits-hits,1000);
+  assert.ok(country.stats.neighborhoods<=Math.floor(spec.cacheSize/9));
+  for(const q of queries)country.at(q);
+  assert.deepEqual(country.at(targetCenter),again.at(targetCenter),'neighborhood eviction preserves exact identity and geometry');
+  console.log('PASS '+comparisons+' independent footprint/radius comparisons, 1000 shared neighborhood lookups, bounded eviction and cold replay');
   assert.throws(()=>country.near(origin,spec.spacing),/bounded/);
   assert.throws(()=>makeNativeCountrySpec(20),/terrain cell/);
   assert.throws(()=>makeNativeCountrySpec(30,{spacing:1800}),/spacing/);

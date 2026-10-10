@@ -38,6 +38,10 @@ export class MassWeather {
   private cache = new Map<string, Cohort>();
   private steps = 0;
   private queries = new Map<string, { origin: MassAddress; field: WeatherField }>();
+  /** Share exact point reads among storm, wind, snow and AI in one weather
+   * frame. Context identity and live shelter gates remain part of every read. */
+  private samples=new Map<string,{context:ZoneDef;winner:Winner|null}>();
+  private sampleCounts={hits:0,misses:0};
   constructor(readonly seed: number, readonly addressSpan: number,
     private contextAt: (at: MassAddress) => ZoneDef | undefined,
     policy: MassWeatherPolicy = MASS_WEATHER_DEFAULT, saved?: MassWeatherSave) {
@@ -74,8 +78,9 @@ export class MassWeather {
     }
   }
   get time(): number { return this.clock; }
-  get stats(): { cohorts: number; replaySteps: number; maxLife: number; reach: number } {
-    return { cohorts: this.cache.size, replaySteps: this.steps, maxLife: this.maxLife, reach: this.reach };
+  get stats() {
+    return { cohorts: this.cache.size, replaySteps: this.steps, maxLife: this.maxLife, reach: this.reach,
+      samples:this.samples.size,sampleHits:this.sampleCounts.hits,sampleMisses:this.sampleCounts.misses };
   }
   private validateScales(scales: MassWeatherScales):void {
     if(!scales||!Number.isFinite(scales.spawnScale)||scales.spawnScale<0||scales.spawnScale>32
@@ -91,7 +96,7 @@ export class MassWeather {
     if(prior.spawnScale===scales.spawnScale&&prior.concurrencyScale===scales.concurrencyScale)return;
     const epoch={from,spawnScale:scales.spawnScale,concurrencyScale:scales.concurrencyScale};
     if(prior.from===from)this.epochs[this.epochs.length-1]=epoch;else this.epochs.push(epoch);
-    this.queries.clear();
+    this.queries.clear();this.samples.clear();
   }
   private scalesAt(clock:number):MassWeatherScales {
     let lo=0,hi=this.epochs.length-1;
@@ -101,7 +106,7 @@ export class MassWeather {
   advanceTo(clock: number): void {
     if (!Number.isFinite(clock) || clock < this.clock || clock < 0 || clock > Number.MAX_SAFE_INTEGER / 4)
       throw Error('Invalid geographic weather clock');
-    if (clock !== this.clock) this.queries.clear();
+    if (clock !== this.clock) {this.queries.clear();this.samples.clear();}
     this.clock = clock;
     const oldest=Math.max(0,Math.floor((clock-this.maxLife)/this.policy.cohortSeconds))*this.policy.cohortSeconds;
     while(this.epochs.length>1&&this.epochs[1].from<=oldest)this.epochs.shift();
@@ -126,7 +131,7 @@ export class MassWeather {
     return address(dimension, cx.toString(), cy.toString(), Number(x - cx * s), Number(y - cy * s), this.addressSpan);
   }
   private cohort(origin: MassAddress, gx: bigint, gy: bigint, index: number): Cohort | undefined {
-    const key = canonical([origin.dimension, gx.toString(), gy.toString(), index]);
+    const key = JSON.stringify([origin.dimension, gx.toString(), gy.toString(), index]);
     let c = this.cache.get(key);
     if (!c) {
       const source = this.contextAt(origin); if (!source || skyOf(source) === 'sheltered') return undefined;
@@ -153,8 +158,17 @@ export class MassWeather {
   }
   private winner(at: MassAddress, context: ZoneDef): Winner | null {
     if (at.dimension !== 'surface' || skyOf(context) === 'sheltered' || !this.clock) return null;
+    const sampleKey=JSON.stringify([at.dimension,at.cx,at.cy,at.x,at.y]),sample=this.samples.get(sampleKey);
+    if(sample&&sample.context===context){this.sampleCounts.hits++;return sample.winner;}
+    this.sampleCounts.misses++;
+    const result=this.findWinner(at,context);
+    this.samples.set(sampleKey,{context,winner:result});
+    if(this.samples.size>2048)this.samples.delete(this.samples.keys().next().value!);
+    return result;
+  }
+  private findWinner(at:MassAddress,context:ZoneDef):Winner|null {
     const p = this.policy, grid = latticeAt(at, this.addressSpan, p.sectorSpan);
-    const key = canonical([at.dimension, grid.gx.toString(), grid.gy.toString()]);
+    const key = JSON.stringify([at.dimension, grid.gx.toString(), grid.gy.toString()]);
     let cached = this.queries.get(key);
     if (!cached) {
       const origin = this.center(at.dimension, grid.gx, grid.gy), field = new WeatherField(new Rng(1));
@@ -182,6 +196,7 @@ export class MassWeather {
       cached = { origin, field }; this.queries.set(key, cached);
       while (this.queries.size > 16) this.queries.delete(this.queries.keys().next().value!);
     }
+    if(!cached.field.fronts.length)return null;
     const delta = localOffset(at, cached.origin, this.addressSpan, Math.ceil(p.sectorSpan / this.addressSpan) + 2);
     const offset = { x: delta.x / p.unitsPerNode, y: delta.y / p.unitsPerNode }, query = { ...context, map: offset };
     const front = cached.field.sample(query);

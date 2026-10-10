@@ -27,6 +27,17 @@ assert.equal(huge.region.ix, '400319966877377');
 assert.notEqual(h.at({ ...far, dimension: 'cave' }).world, huge.world);
 assert.equal(canonical(h.at(zero)), canonical(start), 'query order and tiny geography cache never rewrite geography');
 assert.throws(() => h.at({ ...zero, x: 960 }), /Noncanonical/);
+// Keep the former canonical-JSON boundary as an independent acceptance oracle.
+const addresses:unknown[]=[zero,far,{...zero,x:-0},{...zero,y:959.999},
+  {...zero,x:960},{...zero,y:-.001},{...zero,cx:'01'},{...zero,cy:'-0'},
+  {...zero,x:NaN},{...zero,y:Infinity},{...zero,cx:'9223372036854775808'},
+  {...zero,extra:0},Object.assign(Object.create(null),zero),Object.assign(Object.create({}),zero),
+  Object.defineProperty({...zero},'x',{value:0,enumerable:false}),
+  Object.defineProperty({...zero},'extra',{value:1,enumerable:false})];
+for(const value of addresses){const at=value as typeof zero;let accepted=false;
+  try{accepted=canonical(address(at.dimension,at.cx,at.cy,at.x,at.y,960))===canonical(at);}catch{}
+  if(accepted)assert.doesNotThrow(()=>h.at(at));else assert.throws(()=>h.at(at));
+}
 console.log('PASS exact World→Regions→Zones→Chunks, 21600/5400/1350 spans, huge and negative addresses, half-open bounds and bounded intersections');
 
 source.zone.name = 'registry changed';

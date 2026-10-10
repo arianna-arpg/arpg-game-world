@@ -37,7 +37,14 @@ const integer = (s: string): bigint => {
   return BigInt(s);
 };
 function whole(at: MassAddress, span: number): { x: bigint; y: bigint; fx: number; fy: number } {
-  if (canonical(address(at.dimension, at.cx, at.cy, at.x, at.y, span)) !== canonical(at)) throw Error('Noncanonical geographic address');
+  const normalized=address(at.dimension,at.cx,at.cy,at.x,at.y,span);
+  // Same strict plain-record boundary as canonical JSON, without serializing
+  // two records for every body's weather, climate and hierarchy lookup.
+  const keys=Object.keys(at),proto=Object.getPrototypeOf(at);
+  if((proto!==Object.prototype&&proto!==null)||keys.length!==5
+    ||keys.some(k=>!Object.hasOwn(normalized,k))
+    ||normalized.cx!==at.cx||normalized.cy!==at.cy||normalized.x!==at.x||normalized.y!==at.y
+    ||normalized.dimension!==at.dimension)throw Error('Noncanonical geographic address');
   return { x: cellInteger(at.cx) * BigInt(span) + BigInt(Math.floor(at.x)),
     y: cellInteger(at.cy) * BigInt(span) + BigInt(Math.floor(at.y)), fx: at.x % 1, fy: at.y % 1 };
 }

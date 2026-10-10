@@ -74,6 +74,25 @@ assert.ok(live.stats.cohorts<=128);live.advanceTo(live.time+.5);live.sample(live
 assert.ok(live.stats.replaySteps-nativeSteps<=128,'one birth step advances each retained cohort once');
 console.log('PASS default hour-old sky retains '+live.stats.cohorts+' cohorts without replay thrash; 200 warm samples in '+(performance.now()-t0).toFixed(2)+' ms');
 
+const sampleSave=mass.snapshot(),sampled=new MassWeather(seed,span,source,policy,sampleSave);
+const untouched=new MassWeather(seed,span,source,policy,sampleSave),expectedSample=untouched.sample(chosen,zone,{x:7,y:9});
+assert.ok(expectedSample);
+assert.deepEqual(sampled.sample(chosen,zone,{x:7,y:9}),expectedSample);
+const sampleHits=sampled.stats.sampleHits,mutable=sampled.sample(chosen,zone)!;
+mutable.pos.x+=9999;mutable.vel.y+=9999;mutable.intensity=0;
+assert.deepEqual(sampled.sample(chosen,zone,{x:7,y:9}),expectedSample,'callers cannot poison a shared weather sample');
+assert.equal(sampled.stats.sampleHits-sampleHits,2);
+const changedContext={...zone};sampled.sample(chosen,changedContext);changedContext.sky='sheltered';
+assert.equal(sampled.sample(chosen,changedContext),null,'same-frame shelter changes cannot reuse an open sky');
+for(let i=0;i<2100;i++)sampled.sample(moveAddress(chosen,{x:i*.125,y:i*.25},span),zone);
+assert.ok(sampled.stats.samples<=2048,'point reuse cannot accumulate actor or travel history');
+assert.deepEqual(sampled.sample(chosen,zone,{x:7,y:9}),expectedSample,'point eviction preserves exact weather');
+sampled.advanceTo(sampled.time+.01);untouched.advanceTo(untouched.time+.01);
+assert.equal(sampled.stats.samples,0);assert.deepEqual(sampled.sample(chosen,zone),untouched.sample(chosen,zone));
+sampled.setScales(sampled.time,{spawnScale:2,concurrencyScale:2});assert.equal(sampled.stats.samples,0);
+assert.deepEqual(sampled.snapshot().clock,untouched.snapshot().clock);
+console.log('PASS exact frame sample reuse, translated/copy-safe fronts, live shelter gates, bounded eviction and clock/scale invalidation');
+
 const gated=new MassWeather(seed,span,source,policy),unseen=new MassWeather(seed,span,source,policy);
 const nativeGated=new WeatherField(new Rng(streamSeed(seed,[policy.source,policy.version,'surface','0','0',0])));
 let gate={spawnScale:0,concurrencyScale:1};gated.setScales(0,gate);unseen.setScales(0,gate);

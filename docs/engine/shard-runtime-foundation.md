@@ -144,3 +144,99 @@ Local evidence is retained under `.claude/`: `worldmass-regressions.log`,
 `foundation-sim-smoke.log`, `foundation-boot-smoke.log`, `idle-shard.log`, and
 `soak-{clustered,spread}-final.local.json`. These generated reports are not
 committed.
+
+## Focused performance pass and integration sequence
+
+The follow-up pass starts from `c1bfe588`, keeping a fixed comparison while
+native area ownership and exploration content change in the other sessions.
+The first changes remove repeated work across simultaneous neighborhoods:
+
+- `MassNativeCountry` retains the nine pure candidates of a placement cell.
+  Each query still tests the exact point and radius against their original
+  bounds. The neighborhood store is limited to `floor(cacheSize / 9)` cells;
+  the existing candidate store remains independently bounded. Neither cache
+  stores collision results, mutable doors, actors or scenery state.
+- Weather readers share exact point results within one weather clock and
+  context identity. The 2,048-entry store clears when the clock or scale
+  history changes. Shelter is checked on every read, returned fronts remain
+  independent copies, and local-frame translations are applied per caller.
+- Hierarchy address validation preserves the canonical plain-record contract
+  without serializing both records on every query. Geographic weather/storm
+  cell keys use the same JSON bytes directly for their fixed primitive tuples.
+
+No population budget, AI cadence, weather rule or soak threshold changes.
+This pass does not make synchronous cold admission or publication bounded.
+
+Use the same local course before and after each change, running the timing
+measurements sequentially after correctness checks have finished:
+
+```text
+npm run soak:shard -- --bots 6 --seconds 60 --spread 0 --rove 0
+npm run soak:shard -- --bots 6 --seconds 60 --spread 3500 --rove 0
+```
+
+Keep seed `0x00ddba11`, reconnect enabled, the default thresholds, every
+standing player's nearby population, and the report's machine information.
+Profile separately; do not compare diagnostic profiler overhead to these
+timing runs. Local Windows results still need a follow-up on the actual
+server hardware after integration.
+
+The two updated spread runs measured p95 **55.11 / 58.23 ms**, versus
+**99.28 ms** in the unchanged `c1bfe588` control rerun during this session
+(the earlier baseline above was 74.22 ms). Dropped ticks were **30.09% /
+32.32%**, versus **55.40%** in that control. These sequential local runs show
+useful improvement but substantial run-to-run variation; they do not certify
+server capacity. Both updated runs still fail the 20 ms / 5% pacing gates.
+Their least nearby living populations were four and five respectively, with
+zero host faults or harness errors. Maximum ticks were 372.98 / 316.76 ms;
+cold hitches remain.
+
+The second updated run additionally failed the reconnect gate. Its host log
+records the selected bot's death and rejoin, then refusal of the previous p6
+resume token as no longer dormant; it joined as p7. The first updated run and
+the control reclaimed their seats. Preserve the second run as a failed
+receipt; do not omit it or weaken the reconnect gate. Reports and host logs:
+`.claude/performance-spread-{first,control,final}.local.{json,log}`.
+
+The updated clustered run measured p50 9.09 ms, p95 **20.07 ms**, maximum
+293.93 ms, **1.86%** dropped ticks and +17.22 MB live heap. Reconnect and party
+checks passed, with zero deaths, faults or errors. Only the p95 gate failed;
+20.07 ms is not rounded down to a pass. Its evidence is
+`.claude/performance-clustered-final.local.{json,log}`.
+
+Follow-up validation: all four type checks, generation QA (869 cases × three
+seeds, zero failures/four existing warnings), browser production build and
+26 focused probes pass: 13 geographic/runtime probes and all 13 shard probes.
+The latter include the dedicated dormant-seat and death/persistence courses.
+One additional probe, `nativescenesky`, stops at its pre-existing whole-World
+source pin: 2,455 members versus the archived 2,373. The same count mismatch
+was verified against Git object `c1bfe588`; World, the archive and that probe
+are unchanged by this pass. No pin was updated or test omitted to claim a pass.
+Evidence: `.claude/performance-baseline-sky-pin.local.json`,
+`performance-regressions.local.json`, `performance-shard-regressions.local.log`,
+`performance-final-check.local.log`, `performance-genqa.local.log` and
+`performance-build.local.log`.
+
+Integration should follow the in-flight sessions' tested checkpoint commits,
+not a long-lived collection of divergent runtime branches:
+
+1. Finish and record the intended seamless content/area-owner checkpoints and
+   the shard-side checkpoints. Leave unfinished edits in their owning sessions.
+2. Rehearse the merge in an isolated integration checkout, pinning both tips.
+   Merge `codex/shard-runtime-foundation` into `shard-world`, preserving the
+   shared history; this branch already includes shard `096393f1`.
+3. Bring that shard result into the current `codex/seamless-world-foundation`.
+   The older `seamless-world` branch is parked and is not this integration target.
+4. Verify the combined code: all type checks, worldmass and shard probes,
+   generation QA, browser boot and save/Continue, then clustered/spread soaks.
+   Git's conflict check is only a preliminary check. Timing failures stay
+   explicit even when correctness passes.
+5. Continue feature and performance work as short-lived branches from the
+   combined baseline, with one session owning the actual merge and shared
+   runtime edits. Integrate tested checkpoints regularly rather than waiting
+   for the whole MMORPG undertaking to finish.
+
+The preliminary Git rehearsal of `c1bfe588` with seamless `b80f295d` found one
+conflict, in `CLAUDE.md`; code, the probe roster and dormancy merged automatically.
+This is not a test of unfinished changes or a completed integration. No target
+branch was changed by that rehearsal.
