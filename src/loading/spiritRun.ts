@@ -4,6 +4,7 @@ import { Rng } from '../core/rng';
 export type SpiritDirection = 'down' | 'right' | 'left';
 export const SPIRIT_RUN = Object.freeze({
   length: 1000, halfWidth: 280, playerU: 230, radius: 15,
+  spawnPadding: 80, arrivalDistance: 240, arrivalSeconds: 0.55,
   baseSpeed: 210, speedPerGate: 0.09, maxSpeed: 4.6,
   steerSpeed: 490, gateGapMin: 68, gateGapMax: 250,
   gateRim: 24, gateThickness: 22, gateSpacingMin: 620, gateSpacingMax: 820,
@@ -49,6 +50,16 @@ export function spiritGateSolids(gate: SpiritGate): { low: number; high: number 
   spans.push({ low, high: SPIRIT_RUN.halfWidth }); return spans;
 }
 
+/** A fixed mist veil at the far edge, plus a gentle initial scene reveal.
+ * Painting only: opacity never changes collision, timing or random choices. */
+export function spiritArrivalAlpha(u: number, time: number, reducedMotion = false): number {
+  const c = SPIRIT_RUN, smooth = (value: number): number => {
+    const t = clamp(value, 0, 1); return t * t * (3 - 2 * t);
+  };
+  return smooth((c.length + c.spawnPadding - u) / c.arrivalDistance)
+    * (reducedMotion ? 1 : smooth(time / c.arrivalSeconds));
+}
+
 let spiritSequence = 0;
 function spiritRandom(): () => number {
   const seed = typeof crypto !== 'undefined' ? crypto.getRandomValues(new Uint32Array(1))[0] : Date.now();
@@ -67,10 +78,10 @@ export class SpiritRun {
   currents: SpiritCurrent[] = [];
   bursts: SpiritBurst[] = [];
   private nextId = 1;
-  private untilGate = 0;
+  private untilGate = -SPIRIT_RUN.gateSpacingMax;
   private previous: SpiritOpening[] = [{ lane: 0, width: SPIRIT_RUN.gateGapMax }];
   private upcoming?: { openings: SpiritOpening[]; spacing: number };
-  constructor(readonly direction: SpiritDirection, private random: () => number = spiritRandom()) { this.spawn(); }
+  constructor(readonly direction: SpiritDirection, private random: () => number = spiritRandom()) { this.fillHorizon(); }
   get speed(): number {
     const c = SPIRIT_RUN, pace = Math.min(c.maxSpeed, 1 + (this.streak + this.boostGates) * c.speedPerGate);
     return Math.min(c.maxBoostSpeed, pace + c.currentExtra * Math.min(1, this.dash / c.currentEase));
@@ -102,10 +113,15 @@ export class SpiritRun {
       c.gateSpacingMax + (c.gateSpacingTightMax - c.gateSpacingMax) * pace);
     return { openings, spacing };
   }
+  private fillHorizon(): void {
+    // A group's leading flame may be almost a full gate interval ahead of its
+    // gate. Prepare that entire interval before any of its art can be visible.
+    while (this.untilGate <= 0) this.spawn();
+  }
   private spawn(): void {
     const c = SPIRIT_RUN, { openings, spacing } = this.upcoming ?? this.plan();
     // Carry substep overshoot into the new gate so actual spacing matches its plan.
-    const id = this.nextId++, u = c.length + 60 + this.untilGate;
+    const id = this.nextId++, u = c.length + c.spawnPadding + c.gateSpacingMax + this.untilGate;
     this.gates.push({ id, u, spacing, openings, resolved: false, hit: false });
     const to = this.pick(openings).lane, from = nearest(this.previous, to).lane;
     const route = (along: number, start: number, end: number, clustered: boolean, bend: number): number => {
@@ -209,7 +225,7 @@ export class SpiritRun {
           || Math.abs(current.lane - this.lane) > c.currentHalfWidth + c.radius) continue;
         current.taken = true; this.currentsTaken++; this.dash = c.currentSeconds; this.burst('current');
       }
-      if (this.untilGate <= 0) this.spawn();
+      this.fillHorizon();
       this.gates = this.gates.filter(g => g.u > -80);
       this.pickups = this.pickups.filter(p => p.u > -80 && (p.state === 'live' || p.fade < c.pickupFade));
       this.currents = this.currents.filter(b => b.u > -80 && (!b.taken || b.fade < c.pickupFade));

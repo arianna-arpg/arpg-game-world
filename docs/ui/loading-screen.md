@@ -55,6 +55,18 @@ These are internal parameters, never player-facing achievements. The probe drive
 complete calm-speed encounter routes with 30 Hz input, tests irregular layouts
 and speed-dependent spacing, and checks current collection, bypass, expiry/reset
 and peak collision behavior. Playing, idling or colliding never affects loading.
+
+The model prepares a full maximum gate interval beyond the far edge, including
+flames and between-gate currents that lead their gate. The initial scene is
+prefilled; subsequent objects are created while still fully hidden. Each object
+emerges through the same smooth 240-unit edge veil, with a 0.55-second initial
+scene reveal. Gates, rune inscriptions, soul-flames, current chevrons and their
+glows share this opacity; everything is fully visible well before contact. The
+reveal is presentation only and never changes collisions, pace or loading. Reduced
+motion skips the timed intro but retains the spatial veil. Offscreen queues stay
+bounded, and the arrival probe watches actual object births in all directions and
+at 30/60/144 Hz, including maximum speed and collision recovery.
+
 Reduced motion keeps current silhouettes and essential travel but suppresses
 animated wakes, expanding rings and particle spray; flames and decorative
 background parallax stay still. Art uses native canvas only.

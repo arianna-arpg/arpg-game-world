@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { Rng } from '../src/core/rng';
-import { SPIRIT_RUN as C, SPIRIT_PICKUPS, SpiritRun, spiritDirection, spiritLayout, spiritGateSolids,
+import { SPIRIT_RUN as C, SPIRIT_PICKUPS, SpiritRun, spiritDirection, spiritLayout, spiritGateSolids, spiritArrivalAlpha,
   type SpiritGate, type SpiritOpening, type SpiritPickup, type SpiritCurrent, type SpiritPickupKind } from '../src/loading/spiritRun';
 
 const gate = (openings: SpiritOpening[], u = C.playerU + 24): SpiritGate => ({ id: 900, u, spacing: C.gateSpacingMin, openings, resolved: false, hit: false });
@@ -151,7 +151,7 @@ for (const seed of [0, 1, 13, 57, 813]) {
     const next = r.gates.find(g => !g.resolved);
     if (next && next.id !== targetId) { targetId = next.id; target = closest(next.openings, r.lane).lane; }
     r.streak = 100; r.dash = 100; r.step(1 / 30, { axis: 0, target });
-    assert.ok(r.gates.length < 5 && r.pickups.length <= 24 && r.currents.length < 8 && r.bursts.length <= C.maxBursts);
+    assert.ok(r.gates.length <= 6 && r.pickups.length <= 36 && r.currents.length <= 12 && r.bursts.length <= C.maxBursts);
   }
   assert.ok(r.passed > 80);
 }
@@ -167,7 +167,7 @@ assert.ok(crowdedLane && unevenGaps && punishing); assert.equal(placements.size,
 const gapMeans: number[] = [], flameMeans: number[] = [];
 for (const speed of [1, 2, 3, 4.6, 5.4]) {
   const rng = new Rng(712), r = new SpiritRun('right', () => rng.next());
-  const spacing: number[] = [], flames: number[] = []; let seen = 2;
+  const spacing: number[] = [], flames: number[] = []; let seen = 3;
   for (let i = 0; i < 30 * 300; i++) {
     r.streak = speed === 5.4 ? 100 : (speed - 1) / C.speedPerGate; r.dash = speed === 5.4 ? 100 : 0;
     r.gates.forEach(g => { g.resolved = true; }); r.pickups = []; r.currents = [];
@@ -196,6 +196,42 @@ const outcomes = [30, 60, 144].map(fps => {
 });
 assert.equal(outcomes[0].passed, outcomes[1].passed); assert.equal(outcomes[1].passed, outcomes[2].passed);
 assert.ok(Math.abs(outcomes[0].distance - outcomes[2].distance) < 12);
+// Regress the actual pop-in: newly created flames used to appear at u~330,
+// already near the player's gate. Watch births, not just where gates spawn.
+let observedBirths = 0;
+for (const direction of ['down', 'left', 'right'] as const) for (const fps of [30, 60, 144]) {
+  const rng = new Rng(391 + fps), r = new SpiritRun(direction, () => rng.next());
+  const seen = new Set<string>();
+  const objects = () => [...r.gates.map(g => ({ ...g, key: 'g' + g.id })),
+    ...r.pickups.map(p => ({ ...p, key: 'p' + p.id })), ...r.currents.map(b => ({ ...b, key: 'b' + b.id }))];
+  for (const o of objects()) {
+    seen.add(o.key); assert.equal(spiritArrivalAlpha(o.u, r.time), 0, 'initial scene starts with a soft reveal');
+  }
+  for (let i = 0; i < fps * 40; i++) {
+    // Alternate ordinary travel, peak boost and collisions while watching births.
+    if (i % (fps * 8) >= fps * 4) { r.streak = 100; r.dash = 100; }
+    r.step(1 / fps, { axis: 0 });
+    for (const o of objects()) if (!seen.has(o.key)) {
+      seen.add(o.key); observedBirths++;
+      assert.ok(o.u > C.length + C.spawnPadding, 'the whole group exists before its far-edge reveal');
+      assert.equal(spiritArrivalAlpha(o.u, r.time), 0, 'no new object pops into the visible course');
+      assert.equal(spiritArrivalAlpha(o.u, r.time, true), 0, 'reduced motion uses the same offscreen preparation');
+    }
+  }
+}
+assert.ok(observedBirths > 1000);
+const arrivalEdge = C.length + C.spawnPadding, arrivalEnd = arrivalEdge - C.arrivalDistance;
+for (const reduced of [false, true]) {
+  assert.equal(spiritArrivalAlpha(arrivalEdge, 2, reduced), 0);
+  assert.equal(spiritArrivalAlpha(arrivalEnd, 2, reduced), 1);
+  assert.equal(spiritArrivalAlpha(C.playerU + C.radius, 2, reduced), 1, 'objects are fully legible long before collision');
+  let prior = 0;
+  for (let u = arrivalEdge; u >= arrivalEnd; u -= 5) {
+    const alpha = spiritArrivalAlpha(u, 2, reduced); assert.ok(alpha >= prior && alpha <= 1); prior = alpha;
+  }
+}
+assert.ok(Math.abs(spiritArrivalAlpha(arrivalEnd, C.arrivalSeconds / 2) - 0.5) < 1e-9);
+assert.equal(spiritArrivalAlpha(arrivalEnd, 0, true), 1, 'reduced motion skips the timed intro');
 const bounds = empty('down');
 for (let i = 0; i < 900; i++) bounds.step(1 / 60, { axis: 1, target: Infinity });
 assert.equal(bounds.lane, C.halfWidth - C.radius);
@@ -207,4 +243,4 @@ try {
   Math.random = () => { throw Error('Loading consumed the combat random source'); };
   const r = new SpiritRun(spiritDirection('travel')); for (let i = 0; i < 600; i++) r.step(1 / 60, { axis: 0 });
 } finally { Math.random = combatRandom; }
-console.log('PASS SpiritRun: irregular apertures, independent staggered flame clusters, continuous radiance, unchanged gains, 50% higher peak, shrinking gaps, calm routes, optional currents, collision resets, no score and bounded effects');
+console.log('PASS SpiritRun: offscreen encounter preparation, smooth arrivals, irregular apertures, independent staggered flame clusters, continuous radiance, unchanged gains, 50% higher peak, shrinking gaps, calm routes, optional currents, collision resets, no score and bounded effects');
