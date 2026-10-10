@@ -52,6 +52,7 @@ import { replenishingDelivery } from '../engine/replenishment';
 import type { MetaAction, PlayerInput } from './intent';
 import { adoptSnapshot, interpolateSnapshot, isWireCast, tickNetClocks, type InterpFrame, type StateSnapshot } from './snapshot';
 import { applyOwnSeatRows } from './seatView';
+import { applyDressDelta } from './wireDiet'; // THE WIRE DIET: the dress lands in arrival order
 import { faceOwnAim, replayOwnFrames, type PredictFrame } from './predict';
 
 export const WIRE_SHELL_CFG = {
@@ -341,6 +342,10 @@ export class WireShell {
     ringPush(this.ring, s, cfg.ring);
     clockSample(this.clock, s.time, nowMs / 1000, cfg);
     this.lastArrivalMs = nowMs;
+    // THE WIRE DIET: a snapshot's dress delta is the shard's send order, so it lands on every
+    // arrival, adopted or not (an older one only fills the bracket); the adoption's own call
+    // then finds it laid (once per snapshot).
+    if (this.world) applyDressDelta(this.world, s);
     if (this.latest && s.time <= this.latest.time) return { metaApplied: false }; // an older snapshot only fills the bracket
     const seat = this.world?.clientSeatId;
     const own = seat !== undefined ? s.seats[seat] : undefined;

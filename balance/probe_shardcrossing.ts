@@ -28,7 +28,9 @@
 //   D  THE RUNTIME SURVIVES POCKETS: a pocket parks the runtime, the shard's
 //      surface snapshots never release the pocket's cover, and the climb-out
 //      re-seats the SAME runtime (no second boot) with its survey and its page
-//      cache, so the ring is ready at once
+//      cache, so the ring is ready at once; THE ZONE'S OWN BOUNDS: the pocket's
+//      zone message lands bounded (the clamp and the camera hold to it) and the
+//      climb-out's boundless again (the camera free-follows)
 //   F  THE RETURN in place: the socket dies, the same seat comes back, the
 //      shard re-ships the zone and no cover ever rises
 //   G  THE SHARD'S OPEN DOORS: a settlement door the shard opened before the join
@@ -47,7 +49,8 @@ import {
   WILDS_CLIENT_CFG, wildsMapKey, wildsShellAttach, wildsShellKeep, wildsShellRemember, wildsShellRing,
   wildsShellStream, wildsShellZone,
 } from '../src/net/wildsClient';
-import type { StateSnapshot, ZoneMsg } from '../src/net/snapshot';
+import { serializeZone, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
+import { CAMERA_MODES, placeCamera } from '../src/render/camera';
 import { World } from '../src/engine/world';
 import { buildManifest } from '../src/packages/manifest';
 import { ensureAccountId, makeAccount } from '../src/meta/account';
@@ -284,12 +287,26 @@ const claimSet = (w: World): Set<string> => new Set((w.massRuntime ?? null)?.sta
   const homeCell = rt.walk.at(home.x, home.y);
   check('D survey: the shell remembers what the hero saw', before.size > 8, `${before.size} cells`);
   const bootsBefore = boots;
-  const pocket: ZoneMsg = { ...lastSurface!, zoneId: 'cave_probe_crossing', name: 'A pocket', walk: null };
+  // A real bounded zone's own message (a classic ground, serialized by the host's serializer),
+  // standing in for the pocket a mouth would hand off to.
+  const caveAcct = makeAccount();
+  const caveWorld = new World(caveAcct, Object.freeze(buildManifest(caveAcct, 0xcafe5)));
+  caveWorld.createPlayer(CLASSES[0], { startingCompanions: false, startingFlasks: false });
+  const pocket: ZoneMsg = { ...serializeZone(caveWorld), zoneId: 'cave_probe_crossing', name: 'A pocket' };
+  const zoneMode = CAMERA_MODES.find(m => m.clampToZone)!;
+  const far = { x: 50_000, y: 50_000 }, vw = 800, vh = 600;
+  check('D bounds: the shard\'s surface message says boundless, a bounded zone\'s says nothing',
+    lastSurface!.arena.boundless === true && pocket.arena.boundless === undefined);
   nowMs += 16;
   clientZone(pocket);
   const v = crossing.view(nowMs);
   check('D pocket: the runtime is parked (off the World, the classic ground paints) and the hand-off holds the frame unshown',
     W.massRuntime === null && crossing.covered && !v.shown && v.kind === 'travel' && crossing.view(nowMs + CROSSING_CFG.handoffGraceMs).shown);
+  const pocketCam = placeCamera(zoneMode, far, vw, vh, W.arena);
+  check('D bounds: the pocket\'s zone message lands bounded, its own size, and the camera clamps to it',
+    W.arena.boundless === false && W.arena.w === pocket.arena.w && W.arena.h === pocket.arena.h
+    && pocketCam.x <= W.arena.w - vw + zoneMode.overshoot && pocketCam.y <= W.arena.h - vh + zoneMode.overshoot,
+    `arena ${W.arena.w}x${W.arena.h}, camera ${pocketCam.x.toFixed(0)},${pocketCam.y.toFixed(0)} for a focus at ${far.x}`);
   for (let i = 0; i < 6; i++) { nowMs += 1000 / 60; host.tick(DT); await yieldIO(); await yieldIO(); }
   check('D pocket: the shard\'s surface snapshots never release the pocket\'s cover', crossing.covered && crossing.zone === 'cave_probe_crossing');
   crossing.snapshot('cave_probe_crossing', true); // the pocket's first snapshot (the pocket is staged on the shell)
@@ -299,6 +316,9 @@ const claimSet = (w: World): Set<string> => new Set((w.massRuntime ?? null)?.sta
   const climbMs = performance.now() - t0;
   check('D climb-out: the SAME runtime is re-seated (no second boot), its walk under the World again',
     W.massRuntime === rt && boots === bootsBefore && W.walk === rt.walk && W.zone.id === MASS_ZONE, `${climbMs.toFixed(1)} ms (the boot took ${attachMs.toFixed(0)})`);
+  const surfaceCam = placeCamera(zoneMode, far, vw, vh, W.arena);
+  check('D bounds: the climb-out\'s zone message lands boundless again and the camera free-follows',
+    W.arena.boundless === true && surfaceCam.x === far.x - vw / 2 && surfaceCam.y === far.y - vh / 2);
   const after = claimSet(W);
   check('D climb-out: the survey survives the pocket whole', [...before].every(k => after.has(k)) && after.size >= before.size, `${before.size} before, ${after.size} after`);
   check('D climb-out: the page cache survives (the hearth\'s page is resident at once)', !!rt.stream.page(homeCell));

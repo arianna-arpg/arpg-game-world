@@ -10,8 +10,9 @@
 
 import { SAVE_COMPATIBILITY } from '../meta/saveCompatibility';
 
-/** Bump when the shard's wire grammar changes in a way an older peer cannot read. */
-export const SHARD_WIRE_PROTOCOL = 1;
+/** Bump when the shard's wire grammar changes in a way an older peer cannot read.
+ *  2: THE WIRE DIET (net/wireDiet.ts): the codec's rows, the dress delta and the acks. */
+export const SHARD_WIRE_PROTOCOL = 2;
 
 /** This build's stamp, as the join and the welcome carry it. */
 export function shardBuildStamp(): string {

@@ -43,8 +43,10 @@ import { HONEST_INPUT_CFG, mergeInputs, type PlayerId, type PlayerInput } from '
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { isAccountId } from '../src/meta/account';
 import { SHARD_REFUSAL, SHARD_UNLOAD_BEACON_PATH, shardBuildStamp } from '../src/net/shardBuild';
-import { ownEntryJson } from '../src/net/snapshot'; // THE WIRE'S EYES: THE OWN ENTRY
+import { ownEntryJson, serializeZone } from '../src/net/snapshot'; // THE WIRE'S EYES: THE OWN ENTRY (+ THE WIRE DIET's self-heal zone)
 import { seatAudienceBody, seatAudienceFrame, seatAudienceSplit } from '../src/net/seatView'; // THE ACTING SEAT: the audiences
+import { WIRE_DIET_CFG } from '../src/net/wireDiet'; // THE WIRE DIET: the flow control's dial
+import type { DietSeat, ShardDiet } from './wireDiet'; // THE WIRE DIET: the per-socket frames
 
 export const SHARD_WIRE_CFG = {
   /** Largest frame/message a client may send (its inputs and intents are tiny). */
@@ -106,6 +108,14 @@ interface Conn {
    *  'unload' (W7, THE UNLOAD WORD): its page went away, so its close sleeps the seat on the
    *  short reload grace instead (the host's clock). */
   leaving: boolean | 'unload';
+  /** THE WIRE DIET's flow control: the newest snapshot tick its client acknowledged (-1: none
+   *  yet, so the userland buffer alone governs it), the newest written to it, and the ticks of
+   *  the frames written since its ack (the window counts FRAMES: a skipped gap is no frame). */
+  ackTick: number;
+  sentTick: number;
+  inflight: number[];
+  /** THE WIRE DIET: what this socket's client holds (its ground's revision, its carry). */
+  diet: DietSeat | null;
 }
 
 /** THE UNLOAD BEACON's body ceiling (a seat id and a token). */
@@ -213,6 +223,9 @@ export class ShardTransport implements NetTransport {
   /** THE ACTING SEAT: a deliberate leave the host holds (a seat in combat)
    *  goes DORMANT like a lost socket; null = every word leaves at once. */
   leaveHolds: ((id: PlayerId) => boolean) | null = null;
+  /** THE WIRE DIET (server/wireDiet.ts), installed by the host: a snapshot it bound to its
+   *  World goes out per audience; null (or an unbound snapshot) = the pre-diet frames. */
+  diet: ShardDiet | null = null;
   /** THE SOAK (balance/soak_shard.ts): bytes of every frame write() handed a socket. */
   bytesOut = 0;
   /** THE SOAK (balance/soak_shard.ts): frames write() handed a socket. */
@@ -337,7 +350,8 @@ export class ShardTransport implements NetTransport {
       `Sec-WebSocket-Accept: ${accept}`,
       '', '',
     ].join('\r\n'));
-    const conn: Conn = { sock, seat: null, asm: new WsMessageAssembler(SHARD_WIRE_CFG.maxClientMessage, true), lastSeen: this.now(), closed: false, ip, openedAt: this.now(), congestedSince: 0, token: '', leaving: false };
+    const conn: Conn = { sock, seat: null, asm: new WsMessageAssembler(SHARD_WIRE_CFG.maxClientMessage, true), lastSeen: this.now(), closed: false, ip, openedAt: this.now(), congestedSince: 0, token: '', leaving: false,
+      ackTick: -1, sentTick: -1, inflight: [], diet: null };
     this.conns.add(conn);
     (sock as Duplex & { setNoDelay?: (on: boolean) => void }).setNoDelay?.(true);
     sock.on('data', (chunk: Buffer) => this.onData(conn, chunk));
@@ -450,7 +464,10 @@ export class ShardTransport implements NetTransport {
       const accountId = isAccountId(m.accountId) ? m.accountId : undefined;
       const hostPeer: PeerInfo = accountId ? { ...peer, accountId } : peer;
       this.joinCbs.forEach(cb => this.guard(() => cb(hostPeer, { vessel: m.vessel }))); // the host spawns the seat
+    } else if (m.t === 'ack' && conn.seat) {
+      this.noteAck(conn, m.k, m.rs); // THE WIRE DIET: an arrival acknowledged on its own (the inputs went quiet)
     } else if (m.t === 'input' && conn.seat) {
+      this.noteAck(conn, m.ak, m.rs); // THE WIRE DIET: the newest snapshot the client applied, riding its input
       const input = sanitizeInput(m.input);
       if (input) {
         const prev = this.pending.get(conn.seat); // keyed by the BINDING, never m.seat
@@ -463,6 +480,16 @@ export class ShardTransport implements NetTransport {
       const seat = conn.seat;
       this.sessionCbs.forEach(cb => this.guard(() => cb(msg, seat)));
     }
+  }
+
+  /** THE WIRE DIET's ack: a tick the client applied (monotonic, never past what was written);
+   *  `rs` = THE IDENTITY ONCE missed a body, so the next frame rides whole. */
+  private noteAck(conn: Conn, raw: unknown, rs?: unknown): void {
+    if (rs === 1 && conn.diet && this.diet) this.diet.resendIdentities(conn.diet);
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) return;
+    const k = Math.floor(raw);
+    if (k > conn.ackTick && k <= conn.sentTick) conn.ackTick = k;
+    while (conn.inflight.length && conn.inflight[0] <= conn.ackTick) conn.inflight.shift();
   }
 
   /** The welcome a seated connection hears, a fresh join's and a resume's alike
@@ -661,36 +688,70 @@ export class ShardTransport implements NetTransport {
     const conns: [PlayerId, Conn][] = [];
     for (const id of seatIds) { const c = this.bySeat.get(id); if (c) conns.push([id, c]); }
     if (!conns.length) return;
+    // THE WIRE DIET (server/wireDiet.ts): a snapshot the host bound to its World goes out per
+    // audience, under the flow control; anything else keeps the pre-diet frames below.
+    const dietWorld = WIRE_DIET_CFG.enabled && this.diet ? this.diet.worldFor(s) : undefined;
+    if (dietWorld && this.diet) { this.sendDiet(this.diet, dietWorld, s, conns); return; }
+    const sent = (c: Conn, ok: boolean): void => { if (ok) c.sentTick = s.tick; }; // THE WIRE DIET's ack reads the newest written
     const heard = seatAudienceSplit(s); // THE ACTING SEAT: an audience rides this snapshot (the own rows go with it)
     if (heard) {
       const body = seatAudienceBody(heard);
-      for (const [seat, c] of conns) this.write(c, encodeText(seatAudienceFrame(body, heard, seat)));
+      for (const [seat, c] of conns) sent(c, this.write(c, encodeText(seatAudienceFrame(body, heard, seat))));
       return;
     }
     // THE OWN ENTRY (snapshot.ts SEAT_OWN_ROWS): a seat's own rows (its clocks) reach its own
     // socket and never another's; a snapshot carrying none is the one shared frame it was.
     const own = ownEntryJson(s);
-    if (!own) { const frame = encodeText(JSON.stringify({ t: 'snap', snap: s } satisfies WireMsg)); for (const [, c] of conns) this.write(c, frame); return; }
+    if (!own) { const frame = encodeText(JSON.stringify({ t: 'snap', snap: s } satisfies WireMsg)); for (const [, c] of conns) sent(c, this.write(c, frame)); return; }
     let bare: Uint8Array | null = null; // the shared frame for every socket whose seat carries no own row
     for (const [seat, c] of conns) {
       const mine = own.forSeat(seat);
-      this.write(c, mine !== null ? encodeText('{"t":"snap","snap":' + mine + '}') : (bare ??= encodeText('{"t":"snap","snap":' + own.bare + '}')));
+      sent(c, this.write(c, mine !== null ? encodeText('{"t":"snap","snap":' + mine + '}') : (bare ??= encodeText('{"t":"snap","snap":' + own.bare + '}'))));
+    }
+  }
+  /** THE WIRE DIET's send: FLOW CONTROL first (a socket that acked once is skipped while more
+   *  than maxUnacked frames written to it wait for its ack, and its changed rows carry
+   *  forward), a whole zone to a socket whose ground is not this World's
+   *  (the self-heal), then one encoding per distinct audience set, written per socket. */
+  private sendDiet(diet: ShardDiet, w: Parameters<ShardDiet['frames']>[0], s: StateSnapshot, conns: readonly [PlayerId, Conn][]): void {
+    const take: { seat: string; st: DietSeat; conn: Conn }[] = [];
+    for (const [seat, c] of conns) {
+      const st = c.diet ??= diet.seat();
+      if (c.ackTick >= 0 && c.inflight.length > WIRE_DIET_CFG.maxUnacked) { diet.hold(st, s, seat); diet.skipped++; continue; }
+      if (diet.needsZone(st, w)) this.sendZoneTo(seat, serializeZone(w));
+      take.push({ seat, st, conn: c });
+    }
+    if (!take.length) return;
+    for (const f of diet.frames(w, s, take)) {
+      if (this.write(f.conn, f.frame)) {
+        f.conn.sentTick = s.tick;
+        if (f.conn.ackTick >= 0) f.conn.inflight.push(s.tick); // in flight until its ack (a client that never acked is the buffer's alone)
+        diet.delivered(f.st, f);
+      }
+      else diet.hold(f.st, s, f.seat); // a congested buffer skipped it: the changed rows carry
     }
   }
   onState(cb: (s: StateSnapshot) => void): () => void { this.stateCbs.add(cb); return () => { this.stateCbs.delete(cb); }; }
-  sendZone(z: ZoneMsg): void { this.broadcast({ t: 'zone', zone: z }, undefined, true); }
+  sendZone(z: ZoneMsg): void {
+    this.broadcast({ t: 'zone', zone: z }, undefined, true);
+    for (const [id, c] of this.bySeat) this.zoneShipped(c, id, z); // THE WIRE DIET: the ground each socket now holds
+  }
   /** THE WIRE PER UNIT (shard M1): a unit's zone message (a change, THE DRESS BEAT) to its own seats. */
   sendZoneToMany(z: ZoneMsg, seatIds: Iterable<PlayerId>): void {
     let frame: Uint8Array | null = null;
     for (const id of seatIds) {
       const c = this.bySeat.get(id);
-      if (c) this.write(c, frame ??= encodeText(JSON.stringify({ t: 'zone', zone: z } satisfies WireMsg)), true);
+      if (c && this.write(c, frame ??= encodeText(JSON.stringify({ t: 'zone', zone: z } satisfies WireMsg)), true)) this.zoneShipped(c, id, z);
     }
   }
   /** Ship the zone to ONE seat (a joiner's first terrain, a re-seat). */
   sendZoneTo(seat: PlayerId, z: ZoneMsg): void {
     const c = this.bySeat.get(seat);
-    if (c) this.write(c, encodeText(JSON.stringify({ t: 'zone', zone: z } satisfies WireMsg)), true);
+    if (c && this.write(c, encodeText(JSON.stringify({ t: 'zone', zone: z } satisfies WireMsg)), true)) this.zoneShipped(c, seat, z);
+  }
+  /** THE WIRE DIET: a zone message reached a socket; its client's ground is that zone's now. */
+  private zoneShipped(c: Conn, seat: PlayerId, z: ZoneMsg): void {
+    if (this.diet) this.diet.zoneShipped(c.diet ??= this.diet.seat(), seat, z);
   }
   onZone(cb: (z: ZoneMsg) => void): () => void { this.zoneCbs.add(cb); return () => { this.zoneCbs.delete(cb); }; }
   /** A join: the host-side roster row (with its accountId) + the vessel it carried. */
