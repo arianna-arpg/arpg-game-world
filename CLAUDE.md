@@ -1,3 +1,17 @@
+The playable Mu loading-screen foundation is documented in docs/ui/loading-screen.md.
+LoadingScreen owns cancellable status, retry, input isolation and token-safe cleanup;
+SpiritRun owns score-free staggered wisps, branching gates and optional surge
+currents in three travel directions. Entry/Continue descend;
+native page readiness chooses a horizontal crossing. It shares Mu/wardrobe painting.
+The loading-screen art reuses Mu's abyss, pale soul-flames and the canonical
+RUNESCRIPT alphabet for stable gate inscriptions and the encoded Crossing title.
+Reuse the loading-screen lease for future disruptive preparations; integration
+handoff and candidate callers are in docs/ui/loading-screen.md. Never tie the
+pastime to progression or delay readiness. Synchronous generation is still
+synchronous: yield bounded work or use workers.
+Verify spiritrun, character resume probes, all types, sim smoke, boot smoke and
+the isolated balance/loading-screen-ui.cjs course after a scoped build.
+
 ExplorationPopulation fixes derived bombard census retention and settled native
 visual/AI query deadlines that prevented offscreen dormancy. Keep actual emitted
 attacks, unknown clocks and controller dependencies pinned; never erase native

@@ -110,6 +110,12 @@ export class Input {
     return false;
   }
 
+  /** A loading screen owns the hands; held presses cannot leak across it. */
+  clearForLoading(): void {
+    this.physicalKeys.clear(); this.keys.clear(); this.pressed.clear();
+    this.lmb = this.rmb = this.lmbPressed = this.rmbPressed = false;
+  }
+
   endFrame(): void {
     this.pressed.clear();
     this.lmbPressed = false;

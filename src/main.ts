@@ -14,6 +14,7 @@ import { saveResetNotice } from './meta/saveCompatibility';
 import { DEATH_PRESENTATION } from './data/deathPresentation';
 import { deathPresentationPose } from './engine/deathPresentation';
 import { Input } from './core/input';
+import { LoadingScreen, type LoadingLease } from './ui/loadingScreen';
 import { assertScriptedInput } from './core/scriptedInput';
 import { PAD_CFG, PadState, connectedPadIndices, padIdAt, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
 import { COUCH_CFG } from './data/couch';
@@ -97,6 +98,8 @@ import type { Settings } from './meta/settings';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const input = new Input(canvas);
+const loadingScreen = new LoadingScreen(() => { input.clearForLoading(); barPress = null; });
+let loadingGate: { world: World; lease: LoadingLease } | undefined;
 
 // ---------------------------------------------------------------------------
 // THE CRASH TRAP (game half — the early half is inline in index.html and owns
@@ -127,6 +130,7 @@ function reportFatal(err: unknown, kind: string): void {
   const entry = crashPush(kind, e?.message ?? String(err ?? 'unknown error'), e?.stack);
   if (crashFatal) return;   // the first fatal owns the screen; later ones just ring
   crashFatal = entry;
+  loadingScreen.close();
   console.error('[crash] fatal —', err);
   suppressSaves(`fatal ${kind}: ${entry.msg}`);
   try { showErrorOverlay(entry, crashRing); }
@@ -357,6 +361,7 @@ function cancelCharacterResume(): void {
 }
 let previousAdoptedWorld: World | undefined;
 function adoptWorld(w: World): World {
+  if (loadingGate && loadingGate.world !== w) { loadingGate.lease.finish(); loadingGate = undefined; }
   cancelCharacterResume();
   w.bindGlobalPolicies();
   if(previousAdoptedWorld && previousAdoptedWorld !== w)previousAdoptedWorld.massRuntime?.dispose();
@@ -549,6 +554,33 @@ function startGame(
   running = true;
 }
 
+/** Loading cancellation does not save a partially prepared world. Reread only
+ * the menu summary, which was cleared when a fresh run started. */
+function cancelLoadingToMenu(): void {
+  toStartMenu('The crossing was cancelled.');
+  const request = resumeRequest;
+  void readCharacterContinueSummary().then(summary => {
+    if (request === resumeRequest && !running) ui.setContinueSave(summary);
+  }).catch(() => { /* The menu stays available; a later Continue rereads storage. */ });
+}
+
+/** Loading owns a paint before construction and before the first terrain bake.
+ * Long synchronous generators still need cooperative/worker migration; a cover
+ * is not a scheduler. The native readiness gate retains the entry direction. */
+async function withLoadingScreen(...args: Parameters<typeof startGame>): Promise<boolean> {
+  const lease = loadingScreen.begin({ kind: 'entry', label: 'Taking form', loadout: account.cosmetics.loadout,
+    cancel: cancelLoadingToMenu });
+  try {
+    await lease.paint(); if (!lease.current) return false;
+    startGame(...args);
+    lease.update({ label: 'Opening the world' });
+    await lease.paint(); if (!lease.current) return false;
+    renderer.render(world);
+    loadingGate = { world, lease };
+    return true;
+  } catch (error) { lease.finish(); reportFatal(error, 'world entry'); return false; }
+}
+
 /** Class-select adapter: the picker hands back (class, sworn mode, name);
  *  startGame wants (class, manifest, mode, name). One arrow so no call site
  *  can transpose them. THE SKILL GRAFT detour: an armed charge offers its
@@ -565,10 +597,10 @@ const startPicked = async (d: ClassDef, modeId?: string, name?: string, kitPicks
     // load before replacing its patron or mutating the authoritative account.
     await diskHydrated;
     if (account.skillGraft) {
-      ui.showSkillGraftPick(pick => startGame(d, undefined, modeId, name, pick, kitPicks));
+      ui.showSkillGraftPick(pick => { void withLoadingScreen(d, undefined, modeId, name, pick, kitPicks); });
       return;
     }
-    startGame(d, undefined, modeId, name, undefined, kitPicks);
+    await withLoadingScreen(d, undefined, modeId, name, undefined, kitPicks);
   } finally { startPickPending = false; }
 };
 
@@ -628,12 +660,15 @@ async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<
   const request = resumeRequest, controller = new AbortController();
   resumeController = controller;
   ui.setContinuePending(true);
-  const current = (): boolean => request === resumeRequest && !controller.signal.aborted;
+  const current = (): boolean => request === resumeRequest && !controller.signal.aborted && loading.current;
   const cardCurrent = (): boolean => !roster || !!account.roster.find(r => r.slot === slot
     && r.charId === roster.charId && r.modeId === roster.modeId && !r.fallen
     && modeById(r.modeId).save === 'roster');
+  const loading = loadingScreen.begin({ kind: 'entry', label: 'Recalling your vessel', loadout: account.cosmetics.loadout,
+    cancel: () => { cancelCharacterResume(); loading.finish(); } });
   let prepared: Awaited<ReturnType<typeof prepareCharacterWorld>> | undefined;
   try {
+    await loading.paint();
     await diskHydrated;
     if (!current()) return;
     if (!cardCurrent()) throw Error('The selected vessel changed during Continue');
@@ -651,6 +686,7 @@ async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<
       throw Error('The saved character belongs to a different slot');
     prepared = await prepareCharacterWorld(account, read.resume, {
       isCurrent: () => current() && cardCurrent(), signal: controller.signal, fallbackSeed: rollSeed(),
+      loadingStage: async label => { loading.update({ label }); await loading.paint(); },
       spawn: resolveResumeSpawn(modeById(fields.modeId ?? DEFAULT_MODE_ID).resume, settings.resumeSpawn),
       ...(roster ? { roster: { charId: roster.charId, modeId: roster.modeId } } : {}),
     });
@@ -667,6 +703,7 @@ async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<
     if (current()) ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar,
       error instanceof Error ? error.message : 'The saved world could not be read');
   } finally {
+    loading.finish();
     prepared?.discard();
     if (resumeController === controller) { resumeController = null; ui.setContinuePending(false); }
   }
@@ -705,6 +742,8 @@ declare global {
       fakePad: (p: FakePad | null) => void;
       step: (frames?: number, dtMs?: number) => void;
       devStartRun: (classId?: string) => string;
+      loading: LoadingScreen;
+      devStartLoadingRun: (classId?: string) => Promise<void>;
       devGrantSkill: (skillId: string, level?: number, slot?: number) => number;
       devInput: (source: ((dt: number) => PlayerInput | null) | null) => void;
       clipCatalog: () => {
@@ -775,6 +814,8 @@ window.__game = {
   step: (frames = 1, dtMs = 16.7) => { for (let i = 0; i < frames; i++) tick(last + dtMs); },
   // DEV/QA: start a run headlessly (the perf harness's ignition) — the real
   // startGame path under the first (or named) class, menus dismissed.
+  loading: loadingScreen,
+  devStartLoadingRun: async (classId?: string) => { if (await withLoadingScreen(CLASSES.find(c => c.id === classId) ?? CLASSES[0])) ui.hideAll(); },
   devStartRun: (classId?: string) => {
     const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
     document.getElementById('start-menu')?.classList.add('hidden');
@@ -934,6 +975,7 @@ const diskHydrated = (async (): Promise<void> => {
  *  restores the devices. */
 let devInputSource: ((dt: number) => PlayerInput | null) | null = null;
 function readLocalInput(dt: number): PlayerInput | null {
+  if (loadingScreen.active || loadingScreen.padQuarantined) return null;
   if (devInputSource) {
     try {
       const intent=devInputSource(dt);
@@ -1782,6 +1824,23 @@ function tick(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
+  // loading-screen: hold simulation, world rendering, menus and input while
+  // the independent toy frame continues. Native I/O advances in real time.
+  if (running && net.isHost && !world.gameOver && (!loadingScreen.active || loadingGate)) {
+    const readiness = world.massRuntime?.nativeReadiness(world);
+    if (readiness && readiness.status !== 'ready' && !loadingGate) {
+      loadingGate = { world, lease: loadingScreen.begin({ kind: 'travel', label: 'Crossing the veil',
+        loadout: account.cosmetics.loadout, cancel: cancelLoadingToMenu }) };
+    }
+    if (loadingGate) {
+      if (!readiness || readiness.status === 'ready') { loadingGate.lease.finish(); loadingGate = undefined; }
+      else if (readiness.status === 'refused') loadingGate.lease.fail(readiness.error ?? 'World pages are unavailable.',
+        () => { world.massRuntime?.retryNativePages(world); });
+      else loadingGate.lease.update({ label: 'Crossing the veil', detail: readiness.required + ' nearby world pages remaining' });
+    }
+  }
+  if (loadingScreen.active) { input.clearForLoading(); pad.poll(now / 1000); pad.endFrame(); net.drainInputs(); return; }
+
   // THE RENDER SCALE: apply the dial/governor, and keep the pointer seam
   // synced (CSS events map into buffer pixels through Input.pointerScale).
   renderScaleTick(now);
@@ -1793,6 +1852,11 @@ function tick(now: number): void {
   // cascade stays single-sourced in handleLocalPanels.
   const nowSec = now / 1000;
   pad.poll(nowSec);
+  if (loadingScreen.padQuarantined) {
+    // Include panel toggles and the pad pointer, not only combat reads.
+    pad.move.x = pad.move.y = pad.aimStick.x = pad.aimStick.y = 0;
+    pad.moveMag = pad.aimMag = 0; pad.down.clear(); pad.pressed.clear();
+  }
   for (const code of dialoguePadHeld) if (!pad.isDown(code)) dialoguePadHeld.delete(code);
   if (!running || world.player?.dead || world.player?.downed) dialogue.reset();
   dialogue.setAvailable(renderer.npcDialogueAvailable());
@@ -2508,7 +2572,7 @@ function onClientNewRun(seat: string, seed: number): void {
  *  flushRejoins); single-player returns to the start menu. */
 function onDeathDismiss(): void {
   if (coopActive()) {
-    ui.showClassSelect(cls => { startGame(cls); flushRejoins(); });
+    ui.showClassSelect(cls => { void withLoadingScreen(cls).then(started => { if (started) flushRejoins(); }); });
   } else {
     // THE LOOP CLOSES IN MU (data/mu.ts): a solo run's end drifts the player
     // back into the hub between lives — the next vessel is a walk, not a
@@ -2541,7 +2605,8 @@ function openLobby(): void {
         const invite = await rtc.createInvite();   // fallible WebRTC work FIRST
         net = rtc;                                 // commit globals only on success
         wireSession();                             // run-lifecycle channel (runEnd/rejoin/newRun)
-        startGame(CLASSES.find(c => c.id === classId) ?? CLASSES[0]); // host plays its own seat
+        if (!await withLoadingScreen(CLASSES.find(c => c.id === classId) ?? CLASSES[0]))
+          throw Error('World entry cancelled'); // loading-screen cancellation must not return a stale invite
         // newInvite mints a FRESH offer for the NEXT joiner (star topology — each
         // peer gets its own RTCPeerConnection), so >2-player co-op actually works.
         return { invite, accept: (resp: string) => rtc.acceptAnswer(resp), newInvite: () => rtc.createInvite() };
@@ -2610,6 +2675,7 @@ function resetToLocal(): void {
  *  `notice` is the reason we landed here, shown on the menu (a session that ended
  *  under the player must say so — an unexplained menu reads as a crash). */
 function toStartMenu(notice?: string): void {
+  loadingScreen.close(); loadingGate = undefined;
   cancelCharacterResume();
   // A HOST SAYS GOODBYE FIRST — and says it HERE rather than in leaveCoop, so
   // that every road to the menu carries it (the Leave button, "Save & Main
@@ -2667,3 +2733,13 @@ function quitFlush(): void {
 window.addEventListener('pagehide', quitFlush);
 window.addEventListener('beforeunload', quitFlush);
 requestAnimationFrame(frame);
+// Explicit art/feel preview: no timer, run creation or persistence. Cancel returns
+// to the ordinary menu. Real loading never waits for a minigame result.
+const loadingPreview = new URLSearchParams(location.search).get('loadingPreview');
+if (loadingPreview === 'down' || loadingPreview === 'left' || loadingPreview === 'right') {
+  void diskHydrated.then(() => {
+    if (running || loadingScreen.active) return;
+    const loading = loadingScreen.begin({ kind: 'entry', direction: loadingPreview,
+      label: 'Loading screen preview', loadout: account.cosmetics.loadout, cancel: () => loading.finish() });
+  });
+}
