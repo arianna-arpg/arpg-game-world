@@ -11,9 +11,12 @@ export interface MassStreamConfig { maxPages: number; maxSamples: number }
  * independent of the queue so physics never guesses that unknown ground is air. */
 export class MassStream {
   private focusPageBudget: number;
+  private focusSampleBudget: number;
   setFocusCount(count: number): void {
     if (!Number.isSafeInteger(count) || count < 0 || count > 16) throw Error('Invalid terrain focus budget');
     this.focusPageBudget = this.config.maxPages * Math.max(1, count);
+    this.focusSampleBudget = this.config.maxSamples * Math.max(1, count);
+    while (this.samples.size > this.focusSampleBudget) this.samples.delete(this.samples.keys().next().value!);
   }
   overlay?: {sample(at:MassAddress,base:MassTerrain):MassTerrain; revisionAt(cell:MassCell):number; readonly revision:number};
   get revision(): number { return this.state.terrainRevision + (this.overlay?.revision ?? 0); }
@@ -29,6 +32,7 @@ export class MassStream {
       || !Number.isSafeInteger(config.maxSamples) || config.maxSamples < 1) throw new Error('Invalid residency budget');
     this.config = Object.freeze({ ...config });
     this.focusPageBudget = config.maxPages;
+    this.focusSampleBudget = config.maxSamples;
     if (canonical(state.run) !== canonical(generator.run)) throw new Error('Stream state belongs to another run');
     this.cols = generator.spec.addressSpan / generator.spec.terrainCell;
   }
@@ -78,7 +82,7 @@ export class MassStream {
     const result: MassTerrain = patch ? Object.freeze({ ...base, region: patch.region, color: patch.color,
       source: Object.freeze({ ...base.source, rule: 'terrain-change', source: patch.cause }) }) : base;
     this.samples.delete(key); this.samples.set(key, Object.freeze({ terrain: result, revision }));
-    if (this.samples.size > this.config.maxSamples) this.samples.delete(this.samples.keys().next().value!);
+    if (this.samples.size > this.focusSampleBudget) this.samples.delete(this.samples.keys().next().value!);
     return this.overlay?.sample(at,result) ?? result;
   }
   step(sampleBudget: number): { sampled: number; published: number } {

@@ -69,6 +69,27 @@ const statusState=captureNativeActorState(focus)!;
 const twin=w.createMonster('gnoll_prowler',3,'enemy');
 restoreNativeActorState(twin,JSON.parse(JSON.stringify(statusState)),new Map([[focus.id,twin]]));
 assert.deepEqual(twin.statuses,focus.statuses,'the actor codec preserves active native state even though streaming pins it');
+// Restoring an exact graph must preserve the existing body and factory-owned
+// identity/behavior, remove absent fields, and retain own undefined fields.
+const layoutBody=w.createMonster('gnoll_prowler',3,'enemy');
+Reflect.set(layoutBody,'checkpointUndefined',undefined);
+const layoutState=captureNativeActorState(layoutBody)!;
+const layoutId=layoutBody.id,layoutRelay=layoutBody.statusRelay;
+Reflect.set(layoutBody,'checkpointStale',{nested:7});
+const deleted:string[]=[];
+const layoutProxy=new Proxy(layoutBody,{deleteProperty(target,key){deleted.push(String(key));return Reflect.deleteProperty(target,key);}});
+restoreNativeActorState(layoutProxy,JSON.parse(JSON.stringify(layoutState)),new Map([[layoutId,layoutProxy]]));
+assert.deepEqual(deleted,['checkpointStale'],'retained checkpoint fields are overwritten without deleting their layout');
+assert.equal(Object.hasOwn(layoutBody,'checkpointStale'),false);
+assert.equal(Object.hasOwn(layoutBody,'checkpointUndefined'),true);
+assert.equal(layoutBody.id,layoutId);assert.equal(layoutBody.statusRelay,layoutRelay);
+assert.deepEqual(captureNativeActorState(layoutBody),layoutState,'the full graph remains byte-exact');
+Reflect.set(layoutBody,'checkpointFirst',1);Reflect.set(layoutBody,'checkpointLast',2);
+const orderedState=captureNativeActorState(layoutBody)!;
+Reflect.deleteProperty(layoutBody,'checkpointFirst');Reflect.set(layoutBody,'checkpointFirst',999);
+restoreNativeActorState(layoutBody,orderedState,new Map([[layoutId,layoutBody]]));
+assert.deepEqual(captureNativeActorState(layoutBody),orderedState,'restore retains graph enumeration order even for reordered dynamic fields');
+console.log('PASS exact native restoration preserves retained field layouts, identity, behavior and property absence');
 focus.statuses=[];
 const dependent=w.createMonster('gnoll_prowler',1,'player');dependent.owner=focus;dependent.pos={x:100000,y:100};w.actors.push(dependent);
 assert.ok(massDormancyPins(w,owned).has(focus));m.update(w,owned);assert.ok(w.actors.includes(focus));

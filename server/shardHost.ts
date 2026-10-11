@@ -334,6 +334,8 @@ export class ShardHost {
   private persistTimer = SHARD_CFG.worldSaveSec; // THE WORLD SAVE BEAT
   private readonly pendingActions: { seat: string; action: MetaAction; seq?: unknown }[] = []; // seq: THE ECHO LAW
   private timer: NodeJS.Timeout | null = null;
+  private pumpContinuation: NodeJS.Immediate | null = null;
+  private pumping = false;
   private lastWall = 0;
   private accum = 0;
   private readonly keeperClass: ClassDef;
@@ -1125,6 +1127,10 @@ export class ShardHost {
   }
 
   private pump(): void {
+    // A slow catch-up batch may yield between complete authoritative ticks.
+    // Timer arrivals cannot start a second batch over its remaining debt.
+    if (this.pumping) return;
+    this.pumping = true;
     const now = performance.now();
     this.accum += (now - this.lastWall) / 1000;
     this.lastWall = now;
@@ -1135,31 +1141,44 @@ export class ShardHost {
     const dropping = this.accum - SHARD_CFG.maxCatchUpTicks * dt;
     if (dropping >= dt) this.world.passInputTime(dropping);
     let n = 0;
-    while (this.accum >= dt && n < SHARD_CFG.maxCatchUpTicks) {
-      const t0 = performance.now();
-      try { this.tick(dt); }
-      catch (e) {
-        this.faults++;
-        this.faultsSinceLog++;
-        // One stack per faultLogSec; a fault every tick would otherwise drown the log.
-        if (now - this.lastFaultLogAt >= SHARD_CFG.faultLogSec * 1000) {
-          this.lastFaultLogAt = now;
-          this.log(`[shard] engine fault at tick ${this.ticks} (${this.faultsSinceLog} since the last line): ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
-          this.faultsSinceLog = 0;
+    const continuePump = (): void => {
+      this.pumpContinuation = null;
+      const sliceStarted = performance.now();
+      while (this.accum >= dt && n < SHARD_CFG.maxCatchUpTicks) {
+        const t0 = performance.now();
+        try { this.tick(dt); }
+        catch (e) {
+          this.faults++;
+          this.faultsSinceLog++;
+          // One stack per faultLogSec; a fault every tick would otherwise drown the log.
+          if (now - this.lastFaultLogAt >= SHARD_CFG.faultLogSec * 1000) {
+            this.lastFaultLogAt = now;
+            this.log(`[shard] engine fault at tick ${this.ticks} (${this.faultsSinceLog} since the last line): ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
+            this.faultsSinceLog = 0;
+          }
+        }
+        const ms = performance.now() - t0;
+        if (this.tickMs.length < SHARD_CFG.telemetryTicks) this.tickMs.push(ms);
+        else { this.tickMs[this.tickMsAt] = ms; this.tickMsAt = (this.tickMsAt + 1) % SHARD_CFG.telemetryTicks; }
+        this.accum -= dt;
+        n++;
+        if (!this.pumping) return; // stop() cancels the remaining batch too.
+        if (this.accum >= dt && n < SHARD_CFG.maxCatchUpTicks && performance.now() - sliceStarted >= dt * 1000) {
+          // Let ready socket input, reconnects and worker replies land before the
+          // next whole tick. Never yield halfway through a World or unit step.
+          this.pumpContinuation = setImmediate(continuePump);
+          return;
         }
       }
-      const ms = performance.now() - t0;
-      if (this.tickMs.length < SHARD_CFG.telemetryTicks) this.tickMs.push(ms);
-      else { this.tickMs[this.tickMsAt] = ms; this.tickMsAt = (this.tickMsAt + 1) % SHARD_CFG.telemetryTicks; }
-      this.accum -= dt;
-      n++;
-    }
-    if (n >= SHARD_CFG.maxCatchUpTicks && this.accum >= dt) {
-      // A long stall is dropped, never replayed — and counted, so the status
-      // page shows a world that ran slow for everyone.
-      this.droppedTicks += Math.floor(this.accum / dt);
-      this.accum = 0;
-    }
+      if (n >= SHARD_CFG.maxCatchUpTicks && this.accum >= dt) {
+        // A long stall is dropped, never replayed — and counted, so the status
+        // page shows a world that ran slow for everyone.
+        this.droppedTicks += Math.floor(this.accum / dt);
+        this.accum = 0;
+      }
+      this.pumping = false;
+    };
+    continuePump();
   }
 
   /** THE STATUS PAGE (served by the transport on a plain GET): what the world is doing. */
@@ -1197,6 +1216,8 @@ export class ShardHost {
   /** Stop the pump, write the world, close the wire. */
   async stop(opts: { persist?: boolean } = {}): Promise<void> {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    if (this.pumpContinuation) { clearImmediate(this.pumpContinuation); this.pumpContinuation = null; }
+    this.pumping = false;
     if (this.savePath && opts.persist !== false) this.persist();
     this.vessels.mirrorAll(); // THE MIRROR: every vessel home before the wire closes (a broken world's heroes are not broken)
     await this.net.close();

@@ -477,3 +477,15 @@ the three known world-suite failures remain unresolved. Prioritize the shared
 population governor / simulation scaling, then the continuity failures and
 stale extraction receipts before treating this as a release-ready MMO baseline.
 No live server restart or separate deployment is performed by this audit.
+
+### ShardPerformanceReceipt — follow-up from consolidated 7799af63
+
+The isolated `codex/shard-performance` course is recorded in
+[the performance receipt](shard-performance.md). It profiles the unchanged
+foundation and compares bounded terrain caches, native restoration layout and
+event-loop service between complete host ticks against an unchanged-engine
+control. It includes exact terrain replay, real six-bot measurements, memory,
+input delivery, reconnect and the actual-client Save/Continue course. The
+original audit numbers above remain historical evidence. This follow-up does
+not resolve the three known worldmass failures or the stale native sky guard,
+and does not approve a population governor or change the shipped tick rate.

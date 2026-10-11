@@ -810,6 +810,7 @@ export class WorldMassRuntime {
     const foci=input??massPlayerFoci(world,boot);this.explicitMassFoci=input!==undefined;
     this.massFoci.set(foci,this.config.populationRadius);this.massFociInitialized=true;
     this.stream.setFocusCount(foci.length);
+    this.walk.setFocusCount(foci.length);
     this.fields.massFocusCount=this.shrines.massFocusCount=this.puzzles.massFocusCount=Math.max(1,foci.length);
     if(this.geography){this.geography.objectives.massFocusCount=this.geography.caravans.processions.massFocusCount=Math.max(1,foci.length);}
     this.nativeFeatures?.setFocusCount(Math.max(1,foci.length));

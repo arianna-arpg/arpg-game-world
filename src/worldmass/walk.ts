@@ -29,6 +29,14 @@ export class MassWalk implements RegionGrid {
   overlay?: { grid: RegionGrid; contains(x: number, y: number): boolean };
   private cache = new Map<string, Vec2 | null>();
   private regions = new Map<string, string>();
+  private regionCacheLimit: number;
+  /** Match the bounded simultaneous neighborhoods already served by the stream.
+   * Only derived terrain answers grow; path-search budgets stay unchanged. */
+  setFocusCount(count: number): void {
+    if (!Number.isSafeInteger(count) || count < 0 || count > 16) throw Error('Invalid navigation focus budget');
+    this.regionCacheLimit = this.config.regionCacheEntries * Math.max(1, count);
+    while (this.regions.size > this.regionCacheLimit) this.regions.delete(this.regions.keys().next().value!);
+  }
   private regionRevision = -1;
   private nativeRevision = -1;
   private cachedNative: MassWalk['native'];
@@ -42,6 +50,7 @@ export class MassWalk implements RegionGrid {
     readonly config: Readonly<MassNavigationConfig> = MASS_NAVIGATION) {
     this.origin = Object.freeze({ ...origin });
     this.config = Object.freeze({ ...config });
+    this.regionCacheLimit = config.regionCacheEntries;
     for (const n of Object.values(config)) if (!Number.isSafeInteger(n) || n < 1) throw new Error('Invalid navigation budget');
   }
   get version(): number { return this.stream.revision + (this.native?.revision ?? 0) + (this.overlay?.grid.version ?? 0); }
@@ -67,7 +76,7 @@ export class MassWalk implements RegionGrid {
     const at = this.at((gx+.5)*cs, (gy+.5)*cs);
     const region = this.native?.regionAt(at) ?? this.stream.sample(at).region;
     this.regions.set(key,region);
-    if (this.regions.size > this.config.regionCacheEntries) this.regions.delete(this.regions.keys().next().value!);
+    if (this.regions.size > this.regionCacheLimit) this.regions.delete(this.regions.keys().next().value!);
     return region;
   }
   isWalkable(x: number, y: number): boolean { return regionKind(this.regionAt(x, y))?.walkable ?? false; }

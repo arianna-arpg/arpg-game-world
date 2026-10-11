@@ -5,11 +5,18 @@ export interface MassPoint { x: number; y: number }
 
 const CELL_MIN = -(1n << 63n), CELL_MAX = (1n << 63n) - 1n;
 const DECIMAL = /^(0|-?[1-9][0-9]*)$/;
+// Coordinates repeat across physics/noise queries. Cache only fully validated
+// immutable strings; never narrow the signed 64-bit domain to Number.
+const cellIntegers = new Map<string, bigint>();
 export function cellInteger(value: string): bigint {
+  const cached = cellIntegers.get(value);
+  if (cached !== undefined) return cached;
   if (typeof value !== 'string' || value.length > 20 || !DECIMAL.test(value))
     throw new Error('World cell must be a canonical decimal integer');
   const n = BigInt(value);
   if (n < CELL_MIN || n > CELL_MAX) throw new RangeError('World cell exceeds signed 64-bit address range');
+  cellIntegers.set(value, n);
+  if (cellIntegers.size > 4096) cellIntegers.delete(cellIntegers.keys().next().value!);
   return n;
 }
 export function validSpan(span: number): void {

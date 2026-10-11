@@ -294,7 +294,16 @@ export function restoreNativeActorState(actor: Actor, saved: NativeActorState,
     throw Error('Invalid native checkpoint body');
   for(const key of Object.keys(next))if(rootExcluded.has(key)||typeof Reflect.get(actor,key)==='function')
     throw Error('Native checkpoint cannot replace identity or behavior');
-  for(const key of Object.keys(actor))if(!rootExcluded.has(key))Reflect.deleteProperty(actor,key);
+  // Keep the factory body's property layout for fields the checkpoint replaces.
+  // Deleting and re-adding those fields needlessly puts every restored native
+  // into dictionary mode. Keep only an already ordered prefix so assignment
+  // also reproduces the checkpoint's enumeration order. Absent/out-of-order
+  // fields still disappear, including absence versus an own undefined field.
+  const nativeRestoreKeys=Object.keys(next);let nativeRestorePrefix=0;
+  for(const key of Object.keys(actor))if(!rootExcluded.has(key)){
+    if(key===nativeRestoreKeys[nativeRestorePrefix])nativeRestorePrefix++;
+    else Reflect.deleteProperty(actor,key);
+  }
   Object.assign(actor,next);
 }
 
