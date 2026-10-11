@@ -1,3 +1,4 @@
+import {assertNativeHistoricalWorld} from './nativeHistoricalWorldGuard';
 import {beforeNativeInstalledSources} from './nativeInstalledSourceFixture';
 /** Source-pinned original/current/local sky parity and positive installed event reads. */
 import assert from 'node:assert/strict';
@@ -24,11 +25,10 @@ const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 const emit=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,removeComments:true}}).outputText;
 const read=(p:string)=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
 for(const [p,digest]of Object.entries(nativeSkyModuleHashes))assert.equal(hash(emit(read(p))),digest,'unchanged installed executable: '+p);
-const text=beforeNativeInstalledSources(read('src/engine/world.ts')),sf=ts.createSourceFile('world.ts',text,99,true),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
+const text=beforeNativeInstalledSources(read('src/engine/world.ts'));
 // Graph methods now have their own independent ef76cb1e archive proof.
 const excluded=["skyFront","radiance","radianceCondHeld","nativeSceneSkyView","nativeSceneSkyHost","rollHoldfast","eagerChartNeighbors","chartNeighborsOf","chartWithin","chartFrontier","fieldFrontierTarget","nearestLinkable","mintGroundTaken","roadlessGateHub","mintHoldfastPocket","mintSoulriverZone","nearestRiverPort","fieldifyZone","underSpanPass","rollPocketForm","applyPocketSpec","pullToLand","mintSpanPartner","severFootprintCrossers","soulriverPorts","dimensionBiomeDepthFor","courseMintFor","nativeSceneGraphView","nativeSceneGraphHost"];
-const others=cl.members.filter(m=>!excluded.includes(m.name?.getText(sf)??'')).map(m=>m.getText(sf).replace(/\r\n/g,'\n'));
-assert.equal(others.length,nativeSkyOtherWorldCount);assert.equal(hash(JSON.stringify(others)),nativeSkyOtherWorldHash);
+assertNativeHistoricalWorld(text,{label:'native sky',excluded,count:nativeSkyOtherWorldCount,hash:nativeSkyOtherWorldHash});
 const core=ts.createSourceFile('nativeSceneSky.ts',read('src/engine/nativeSceneSky.ts'),99,true);
 for(const [key,source]of Object.entries(nativeSkyArchive)){
  const original=ts.createSourceFile('a.ts','class A{'+source+'}',99,true).statements[0] as ts.ClassDeclaration;
@@ -36,7 +36,7 @@ for(const [key,source]of Object.entries(nativeSkyArchive)){
  const name='native'+key[0].toUpperCase()+key.slice(1),fn=core.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name) as ts.FunctionDeclaration;
  assert.equal(emit(fn.body!.getText().replace(/\bhost\b/g,'this')),emit(old),key+' exact original body');
 }
-console.log('PASS exact three original bodies, all seven event source modules and every other World member unchanged');
+console.log('PASS exact three original bodies, all seven event source modules and the original or reviewed complete World receipt');
 const oracle=Function('skyOf','eventFrontFor','radianceOf','radianceCondHeld',emit('return {\n'+Object.values(nativeSkyArchive).join(',\n')+'\n}'))(skyOf,eventFrontFor,radianceOf,radianceCondHeld) as Pick<World,'skyFront'|'radiance'|'radianceCondHeld'>;
 const undo=seedGlobalRandom(77101),w=makeSimWorld('warrior',77101),scene:NativeSceneCensus={zone:{...w.zone,id:'native-sky-a',objective:{kind:'clear'},sky:'open' as const},actors:[w.player],player:w.player};
 const environment=freshSceneEnvironmentState(),campaign={sim:w.sim,time:48},local=new NativeAreaSceneSky({scene,environment,campaign});

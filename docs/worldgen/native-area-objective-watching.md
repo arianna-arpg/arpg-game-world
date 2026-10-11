@@ -97,12 +97,21 @@ Run `npm run check`, the `nativeareaauthority`, `nativescenequests`,
 probes, full native birth/source-session courses, generation QA and simulation
 smoke. Use `--provenance` on the new source comparisons when validating lineage.
 
-The final four type-check targets and production build pass. Generation QA passed
-2,607 cases, and simulation smoke passed 25 episodes. The broader native-owner
-run passed 24 of 29 probes. The five failures (sky, graph, Titans, history and
-arrival) were also reproduced before this ownership change. Historical source
-and receipt repairs remain separate work; this checkpoint does not claim an
-all-green broad suite or a new approved balance baseline.
+The final four type-check targets, production build, and game/launcher boot checks
+pass. Generation QA passed 2,607 cases, and simulation smoke passed 25 episodes.
+The initial broader native-owner run passed 24 of 29 probes. The five failures
+(sky, graph, Titans, history and arrival) also reproduced before this ownership
+change; all five now pass their focused checks after a separate historical-test
+repair. No gameplay or balance baseline was changed by that repair.
+
+Sky/graph retain their original references and accept only two already-reviewed
+complete World receipts. The durable guard probe rejects 84 unknown mutations
+across 14 lineage/guard pairs. Titans (42 courses), history (60), and arrival (12)
+retain raw cross-lane equality and their original expected hashes. Their comparison
+helpers reverse only the exact reviewed Cleave restoration, arrival-policy move,
+and concealment ground-index change. A second durable probe rejects 28 source,
+payload and index mutations and verifies immutable Git provenance. Both probes
+are enrolled in the standing roster; use --provenance for the historical checks.
 
 ## Remaining activation work
 

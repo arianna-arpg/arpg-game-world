@@ -1,3 +1,4 @@
+import {assertNativeHistoricalWorld} from './nativeHistoricalWorldGuard';
 import {beforeNativeInstalledSources} from './nativeInstalledSourceFixture';
 /** Original/current/local native graph, complete boundary and continued layout/birth courses. */
 import assert from 'node:assert/strict';
@@ -44,9 +45,8 @@ const arrivalTail=Function('vec','angleTo','rand',emit('return function(def,zone
 const names=Object.keys(archive.methods),bindings:Record<string,unknown>={};
 for(const row of archive.imports){const mod=await import(new URL('../src/engine/'+row.module+'.ts',import.meta.url).href);for(const name of row.names)if(!name.startsWith('type '))bindings[name]=mod[name];}
 const original=Function(...Object.keys(bindings),emit(archive.constant+'\n'+archive.helper+'\nreturn {\n'+Object.values(archive.methods).join(',\n')+'\n}'))(...Object.values(bindings));
-const worldText=beforeNativeInstalledSources(read('src/engine/world.ts')),sf=ts.createSourceFile('world.ts',worldText,99,true),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
-const others=cl.members.filter(m=>![...names,'nativeSceneGraphView','nativeSceneGraphHost'].includes(m.name?.getText(sf)??'')).map(m=>m.getText(sf).replace(/\r\n/g,'\n'));
-assert.equal(others.length,nativeGraphOtherWorldCount);assert.equal(hash(JSON.stringify(others)),nativeGraphOtherWorldHash);
+const worldText=beforeNativeInstalledSources(read('src/engine/world.ts'));
+assertNativeHistoricalWorld(worldText,{label:'native graph',excluded:[...names,'nativeSceneGraphView','nativeSceneGraphHost'],count:nativeGraphOtherWorldCount,hash:nativeGraphOtherWorldHash});
 const core=ts.createSourceFile('core.ts',read('src/engine/nativeSceneGraph.ts'),99,true);
 for(const [name,source]of Object.entries(archive.methods)){
  const old=(ts.createSourceFile('old.ts','class A{'+source+'}',99,true).statements[0] as ts.ClassDeclaration).members[0] as ts.MethodDeclaration;
@@ -58,7 +58,7 @@ assert.equal(emit(core.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.t
 assert.equal(emit(core.statements.find(n=>ts.isVariableStatement(n)&&n.declarationList.declarations.some(d=>d.name.getText()==='CONNECT_DIST'))!.getText()),emit(archive.constant));
 const lane=process.argv.find(x=>x.startsWith('--graph-lane='))?.split('=')[1];
 if(!lane){
- console.log('PASS all 22 original graph bodies/defaults, native constants and every other World member');
+ console.log('PASS all 22 original graph bodies/defaults, native constants and the original or reviewed complete World receipt');
  const receipts:any[]=[];
  for(const selected of ['archive','world','local']){
   const run=spawnSync(process.execPath,['--import','tsx',fileURLToPath(import.meta.url),'--graph-lane='+selected],{encoding:'utf8',maxBuffer:16e6});

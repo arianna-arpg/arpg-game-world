@@ -1,3 +1,6 @@
+import {assertHistoricalConcealmentSource,beforeHistoricalArrivalGrounds} from './nativeHistoricalArrivalGrounds';
+import {assertHistoricalCleaveSource,beforeHistoricalCleaveReceipt} from './nativeHistoricalCleaveReceipt';
+import {assertHistoricalArrivalPolicy} from './nativeHistoricalArrivalPolicy';
 /** Retained original-method oracle, complete native layouts, and real factory bodies. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -32,8 +35,10 @@ const fixtureBytes=gunzipSync(Buffer.from('H4sIAAAAAAAACu29bW/byJIv/lUWylsP/11VX
 const hash = (s: string | Buffer) => createHash('sha256').update(s).digest('hex');
 assert.equal(hash(archiveBytes), '054d268f2d4a3d653dac5dafe9b9da32a481aa2ae5b8f8be292ad2acf0b86c7c');
 assert.equal(hash(fixtureBytes), '65e9e83cf176e490f61ee51b27df4cc71106bb7d6c54237882decdccf3a6e70b');
+assertHistoricalCleaveSource(fs.readFileSync(new URL('../src/data/skills.ts',import.meta.url),'utf8'));
+assertHistoricalConcealmentSource(fs.readFileSync(new URL('../src/world/regions.ts',import.meta.url),'utf8'));
 const archive = JSON.parse(archiveBytes.toString('utf8'));
-assert(fs.readFileSync(new URL('../src/engine/world.ts', import.meta.url), 'utf8').includes(archive.cfg), 'original arrival policy stays authoritative');
+assertHistoricalArrivalPolicy(fs.readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8'),fs.readFileSync(new URL('../src/engine/nativePopulationRules.ts',import.meta.url),'utf8'),archive.cfg);
 const fixtures = JSON.parse(fixtureBytes.toString('utf8'));
 const exports: any = {};
 Function('exports', 'MONSTERS', 'dist', 'rand', 'vec', ts.transpileModule(
@@ -226,7 +231,7 @@ if (lane) {
     outputs.push(gunzipSync(Buffer.from(line.slice('NATIVE_ARRIVAL_COLD='.length), 'base64')).toString('utf8'));
   }
   for (let i = 1; i < outputs.length; i++) assert.equal(hash(outputs[i]), hash(outputs[0]), 'complete native arrival output and random continuation');
-  assert.equal(hash(outputs[0]), 'b7aca130a981d05c86e24333ee2ebdf54c0e61a6b16faa03265638fe29eacdaf');
+  assert.equal(hash(JSON.stringify(beforeHistoricalArrivalGrounds(beforeHistoricalCleaveReceipt(JSON.parse(outputs[0]))))), 'b7aca130a981d05c86e24333ee2ebdf54c0e61a6b16faa03265638fe29eacdaf');
   const rows = JSON.parse(outputs[0]);
-  console.log('PASS native arrival', { triples: rows.length, bodies: rows.length * 10, draws: rows.reduce((n: number, r: any) => n + r.draws.length, 0), partialErrors: rows.filter((r: any) => r.error).length, fallbackControls: controls.length, sha256: hash(outputs[0]) });
+  console.log('PASS native arrival', { triples: rows.length, bodies: rows.length * 10, draws: rows.reduce((n: number, r: any) => n + r.draws.length, 0), partialErrors: rows.filter((r: any) => r.error).length, fallbackControls: controls.length, rawSha256: hash(outputs[0]), originalSha256: hash(JSON.stringify(beforeHistoricalArrivalGrounds(beforeHistoricalCleaveReceipt(JSON.parse(outputs[0]))))) });
 }

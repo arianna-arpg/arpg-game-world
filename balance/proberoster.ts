@@ -61,6 +61,8 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativehistoricalguards.ts', status: 'green', tier: 'fast', why: 'Original sky/graph pins plus existing reviewed complete World receipts; unknown additions, bodies, types, delegates, duplicates and removals refuse.' },
+  { probe: 'probe_nativehistoricalreceipts.ts', status: 'green', tier: 'fast', why: 'Exact historical Cleave and concealment reversals retain original receipts, raw native comparisons and mutation refusal coverage.' },
   { probe: 'probe_nativesceneprogression.ts', status: 'green', tier: 'fast', why: 'Original native rebuilds, companion and aura cleanup, actual cross-area XP routing, retained ecology and combat queue identities.' },
   { probe: 'probe_nativeareapresence.ts', status: 'green', tier: 'fast', why: 'Physical attendance for actual two-area births, XP, spoil rotation, party scaling, carried possession and restoration.' },
   { probe: 'probe_nativebirthadmission.ts', status: 'green', tier: 'fast', why: 'Actual watcher and rescue factory births acquire exact scene authority through delayed, nested and partially failing operations; borrowed and arbitrary actors are never swept in.' },
