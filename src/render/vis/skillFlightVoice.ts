@@ -6,6 +6,7 @@ import { drawSkillStrike } from './skillStrikeVoice';
 import { lightningProfile } from '../../data/lightningVisuals';
 import { drawLightningHead } from './lightningVoice';
 import { movementProfile } from '../../data/skillMovementVisuals';
+import { selfProfile } from '../../data/skillSelfVisuals';
 import type { SkillFieldVisual } from '../../engine/skillFieldVisual';
 import { drawSkillMark } from './skillBurstVoice';
 import { traceAoePath } from './aoeTrace';
@@ -113,6 +114,8 @@ export function fieldProfile(id: string): SkillFieldProfile | undefined {
   const strike = skillStrikeProfile(id);
   if (strike) return { motif: strike.motif, layout: 'spokes', motion: strike.motion === 'in' ? 'in' : 'out', count: strike.count, echo: strike.echo };
   if (Object.hasOwn(SKILL_FIELDS, id)) return SKILL_FIELDS[id];
+  const self = selfProfile(id);
+  if (self) return { motif: self.motif, layout: self.motion === 'twist' ? 'spiral' : 'spokes', motion: 'out', count: self.count };
   // A projectile's deposited field and a nova's delayed aftermath keep the
   // parent material and count instead of acquiring a generic elemental wash.
   if (Object.hasOwn(SKILL_FLIGHTS, id)) {

@@ -9,6 +9,16 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Self, mark and detonation identities use `data/skillSelfVisuals.ts` and
+`render/vis/skillSelfVoice.ts`: 106 self skills and three dedicated deliveries.
+Casting cues carry optional host-resolved source identity; stored power uses
+`engine/skillSelfVisual.ts` and copied `ActorW.selfBankCues`. Release hooks stay
+with real execution, consumption, mine timers and ward expiry. Existing rites
+and guard/status semantics remain authoritative. See `docs/design/self-skill-visuals.md`.
+Verify selfvisuals, castingcues, targetvisuals, movementvisuals, payloadcues,
+companioncues, defensecues, guard, effectvoice, all types and sim smoke;
+after build, run hidden `balance/self-visuals-ui.cjs` for the interactive study.
+
 Movement identities use `data/skillMovementVisuals.ts` and
 `render/vis/skillMovementVoice.ts`: 21 dashes, 14 leaps, nine blinks and one carom.
 `engine/skillMovementVisual.ts` carries bounded actual-travel histories; blink

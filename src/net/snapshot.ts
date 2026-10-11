@@ -4,6 +4,7 @@ import { armedStatusCues } from '../engine/armedCues';
 import { reactiveCueOf, wardCueActive, wardGuardians } from '../engine/combatReadability';
 import { memoryAccessView } from '../meta/memoryUnlocks';
 import { castingCompletion, castingCueOf } from '../engine/castingCues';
+import { selfBankCuesOf, type SelfBankCue } from '../engine/skillSelfVisual';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
 import { parryCueStrength } from '../engine/combatCues';
@@ -82,6 +83,7 @@ export type Vec2W = [number, number];
 
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
+  selfBankCues?: SelfBankCue[];
   movementTether?: Actor['movementTether'];
   encounterGroup?: Actor['encounterGroup'];
   encounterCue?: import('../engine/warningCues').EncounterCue;
@@ -762,6 +764,8 @@ function actorToW(a: Actor, world: World): ActorW {
   const armedCues = armedStatusCues(a);
   if (armedCues.length) w.armedCues = armedCues.map(cue => ({ ...cue }));
   w.reactiveCue = reactiveCueOf(a, world.time);
+  const selfBanks = selfBankCuesOf(a, world.time);
+  if (selfBanks.length) w.selfBankCues = selfBanks.map(row => ({ ...row }));
   const poolCues = poolCueRows(a);
   if (poolCues.length) w.poolCues = poolCues;
   const payloadCues = payloadCueRows(a, world);
@@ -1394,6 +1398,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.armedCues = aw.armedCues?.map(cue => ({ ...cue }));
     a.reactiveCue = aw.reactiveCue ? { ...aw.reactiveCue, volatile: aw.reactiveCue.volatile ? { ...aw.reactiveCue.volatile } : undefined } : undefined;
     a.poolCues = aw.poolCues?.map(row => ({ ...row })) ?? [];
+    a.selfBankCues = aw.selfBankCues?.map(row => ({ ...row })) ?? [];
     a.payloadCues = aw.payloadCues?.map(row => ({ ...row, points: row.points?.map(p => ({ ...p })) })) ?? [];
     a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];
     a.anatomyCues = aw.anatomyCues ? cloneAnatomyCues(aw.anatomyCues) : { weakpoints: [], parts: [], segments: [] };

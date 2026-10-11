@@ -62,14 +62,19 @@ The movement pass covers all 21 dashes, 14 leaps, nine blinks and Caged Comet.
 Departure, measured travel, landing, delayed warp and actual bank moments retain
 their source identity. See [movement skill visuals](movement-skill-visuals.md).
 
+The self/mark/detonation pass covers 106 self profiles plus Mark/Recall,
+Detonate Mines and Cold Snap. Charge silhouettes follow actual completion;
+banked-power reads remain separate, and detonations speak at consumed bodies
+or real expiry. Existing offering receipts are retained. See
+[self skill visuals](self-skill-visuals.md).
+
 The generated census in `balance/reports/skill-visuals/resource-audit.json`
 enumerates native recovery users and delivery counts from the live catalogue.
 These counts describe delivery families, not a claim that every member lacks art.
 
 | Priority | Area | Remaining opportunity |
 | --- | --- | --- |
-| 1 | Self effects (106), marks and detonations (3) | Audit charge-up, readiness, interruption and release beyond the completed rites; avoid stacking interchangeable rings |
-| 2 | Storm (33), summon (61), construct (45) | Arrival, cadence and lifetime cues, coordinated with existing anatomy/companion art |
+| 1 | Storm (33), summon (61), construct (45) | Arrival, cadence and lifetime cues, coordinated with existing anatomy/companion art |
 
 Already authored on this branch: 109 novas, 172 projectiles, six native beams,
 163 ground skills and 42 auras. Continue reviewing their scale, busy-scene density

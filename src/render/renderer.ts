@@ -174,6 +174,8 @@ import './vis/skillBurstVoice';
 import './vis/skillStrikeVoice';
 import { drawLightningTrace } from './vis/lightningVoice';
 import { drawMovementTrail } from './vis/skillMovementVoice';
+import { drawRecallMark, drawSelfBanks } from './vis/skillSelfVoice';
+import { selfBankCuesOf } from '../engine/skillSelfVisual';
 import { drawSkillTether } from './vis/skillTargetVoice';
 import { skillTetherVisual } from '../engine/skillTetherVisual';
 import { drawSkillFlightWake, drawSkillFlightHead, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
@@ -5896,6 +5898,7 @@ export class Renderer {
     }
     drawParryReady(ctx, a);
     drawCastingCue(ctx, a);
+    drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
     if (comboCueGround) {
       ctx.save(); ctx.setTransform(comboCueGround); ctx.globalAlpha = baseAlpha;
       drawComboBody(ctx, a.radius, comboCues); ctx.restore();
@@ -6540,9 +6543,7 @@ export class Renderer {
         if (!this.companionCuePointVisible(m, m.tier, world)) continue;
         ctx.save(); ctx.strokeStyle = m.color; ctx.lineWidth = 2; ctx.globalAlpha = .7;
         const r = COMPANION_CUE_CFG.markRadius;
-        ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
-        ctx.moveTo(m.x - r * .5, m.y); ctx.lineTo(m.x + r * .5, m.y);
-        ctx.moveTo(m.x, m.y - r * .5); ctx.lineTo(m.x, m.y + r * .5); ctx.stroke(); ctx.restore();
+        drawRecallMark(ctx, m.x, m.y, r * 1.4, m.color); ctx.restore();
       }
     }
   }

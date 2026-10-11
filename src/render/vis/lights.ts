@@ -218,6 +218,7 @@ export class LightLayer {
     for (let i = world.flashes.length - 1; i >= 0; i--) {
       const f = world.flashes[i];
       if (f.haze || f.departure || f.cosmeticMotif || f.lightning || f.movement
+        || f.fx?.startsWith('skillSelf:') && !f.fx.startsWith('skillSelf:burst:')
         || f.fx?.startsWith('skillMove:') && !f.fx.startsWith('skillMove:impact:')) continue; // decorative trails never displace combat lights
       const k = f.maxLife > 0 ? f.life / f.maxLife : 0;
       push(f.pos.x, f.pos.y, f.radius * 1.5, f.color, 0.5 * k, undefined, undefined, 'flashes');

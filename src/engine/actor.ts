@@ -1977,7 +1977,9 @@ export class Actor {
    *  sheet sources) — the world's minion sweep diffs against it. */
   wornPresence?: string[];
   /** IRON WARD: banked incoming damage awaiting its detonation. */
-  ironWard?: { stored: number; cap: number; until: number; ratio: number; radius: number };
+  ironWard?: { stored: number; cap: number; until: number; ratio: number; radius: number; visualColor?: string };
+  /** Host-resolved bank presentation on render-only peers; no damage authority. */
+  selfBankCues?: import('./skillSelfVisual').SelfBankCue[];
   /** Charge bookkeeping: seconds since last gain (decay clock), the
    *  fractional decay/drain accumulator, the per-second tap accumulator,
    *  and an active drain rate (Bloodlust's one-way burn). */

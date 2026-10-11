@@ -8,6 +8,7 @@ import { extendMovementTrail, type MovementTrail } from './skillMovementVisual';
 import { lightningProfile, LIGHTNING_STYLE } from '../data/lightningVisuals';
 import { extendLightningTrace, type LightningTrace } from './lightningVisual';
 import { skillTargetVoice, skillRiteVoice, TARGET_VISUAL_STYLE } from '../data/skillTargetVisuals';
+import { skillSelfVoice, SELF_VISUAL_STYLE } from '../data/skillSelfVisuals';
 import type { SkillTetherVisual } from './skillTetherVisual';
 import type { SkillFieldVisual } from './skillFieldVisual';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
@@ -2951,7 +2952,7 @@ export class World {
   corpses: Corpse[] = [];
   pendingSummons: PendingSummon[] = [];
   pendingRespawns: PendingRespawn[] = [];
-  pendingDetonations: { mine: Actor; timer: number }[] = [];
+  pendingDetonations: { mine: Actor; timer: number; visual?: Flash }[] = [];
   /** Scheduled follow-through casts (FollowUpSpec) counting down to fire. */
   pendingFollowUps: { caster: Actor; inst: SkillInstance; aim: Vec2; timer: number; dmgMult?: number }[] = [];
   /** Telegraphed enemy death-bursts mid-coalesce / mid-flight (the implode + tracking orb). */
@@ -30217,8 +30218,8 @@ export class World {
 
   /** Displace an actor with departure/arrival flashes. */
   teleportActor(actor: Actor, dest: Vec2, color = '#b8c8ff', disp?: DisplacementPolicy, story?: number, movementSkillId?: string): void {
-    const depart = movementSkillId && skillMovementVoice(movementSkillId, 'depart');
-    const arrive = movementSkillId && skillMovementVoice(movementSkillId, 'arrive');
+    const depart = movementSkillId && (skillMovementVoice(movementSkillId, 'depart') ?? skillSelfVoice(movementSkillId, 'depart'));
+    const arrive = movementSkillId && (skillMovementVoice(movementSkillId, 'arrive') ?? skillSelfVoice(movementSkillId, 'recall'));
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.6, color, life: 0.25, maxLife: 0.25,
       fx: depart || undefined, facing: actor.facing, recoveryCueTier: depart ? actor.tier : undefined });
     // A flicker/blink may carry a DisplacementPolicy ({ignoreConfine}) to land past
@@ -35306,13 +35307,15 @@ export class World {
           caster.venting.delete(def.pool.id);
         } else if (banked > 0) {
           caster.venting.add(def.pool.id);
+          this.showSelfRelease(caster, inst);
           // poolCues follows this held flag and its real bank/footprint.
         }
       } else {
         caster.pools.set(def.pool.id, 0);
         const radius = rel.radius * caster.sheet.get('aoeRadius', tags, extra);
         this.burstDamage(vec(caster.pos.x, caster.pos.y), radius,
-          banked * (rel.ratio ?? 1), def.pool.damageType, def.color, caster.team, caster.tier);
+          banked * (rel.ratio ?? 1), def.pool.damageType, cosmeticColor, caster.team, caster.tier, undefined, undefined,
+          banked > 0 ? skillSelfVoice(def.id, 'burst') : undefined);
       }
       return true;
     }
@@ -35331,6 +35334,7 @@ export class World {
       const count = runes.length;
       const last = runes[runes.length - 1] as RuneId;
       caster.runes = [];
+      this.showSelfRelease(caster, inst);
       const payload = makeInvocationPayload(inst, SKILLS[rule.skillId], last);
       noteProcCue(caster, rule.releaseCue === false ? false : {
         profile: 'rune', color: RUNE_INFO[last]?.color ?? def.color, ...rule.releaseCue,
@@ -36871,6 +36875,10 @@ export class World {
 
       case 'self':
         this.showSkillArrival(caster, inst, caster.pos, caster.radius + 18, caster.tier, true);
+        // Rites already receipt their real payment. Destructive orders speak
+        // at the body actually consumed below, never on an empty command.
+        if (!skillRiteVoice(def.id) && !instanceEffects(inst).some(f => f.type === 'detonateMinions' || f.type === 'shatterConstructs'))
+          this.showSelfRelease(caster, inst);
         // FIRE WALKER'S SPRINT (the moveTrail fabric on a movement BUFF —
         // stealth's burning wake): while the working holds, the runner
         // drops trail patches behind every stride, and the trail dies
@@ -37474,7 +37482,7 @@ export class World {
         const st = (inst.state ??= {});
         if (st.markPos) {
           // Recall: one-way trip home, then re-arm Mark.
-          this.teleportActor(caster, vec(st.markPos.x, st.markPos.y), def.color);
+          this.teleportActor(caster, vec(st.markPos.x, st.markPos.y), cosmeticColor, undefined, undefined, def.id);
           st.markPos = null;
         } else {
           const dd = Math.min(dist(caster.pos, aim), d.castRange);
@@ -37482,7 +37490,8 @@ export class World {
             caster.pos.x + Math.cos(caster.facing) * dd,
             caster.pos.y + Math.sin(caster.facing) * dd), 10);
           st.markPos = { x: at.x, y: at.y };
-          this.flashes.push({ pos: vec(at.x, at.y), radius: 20, color: cosmeticColor, life: 0.4, maxLife: 0.4 });
+          this.flashes.push({ pos: vec(at.x, at.y), radius: 28, color: cosmeticColor, life: 0.4, maxLife: 0.4,
+            fx: skillSelfVoice(def.id), recoveryCueTier: caster.tier });
         }
         break;
       }
@@ -37593,6 +37602,7 @@ export class World {
         this.flashes.push({
           pos: at, radius, color: cosmeticColor,
           life: 0.35, maxLife: 0.35, shape, facing: caster.facing,
+          fx: skillSelfVoice(def.id, 'burst'), recoveryCueTier: caster.tier,
         });
         this.spawnAftershocks(caster, inst, at, radius, shape);
         // The cascade family beyond ground: the pop's sequels mint here.
@@ -37605,8 +37615,14 @@ export class World {
       case 'detonate': {
         const mines = this.actors.filter(a =>
           a.owner === caster && !a.dead && a.construct?.kind === 'mine');
-        mines.forEach((mine, i) =>
-          this.pendingDetonations.push({ mine, timer: 0.05 + i * 0.08 }));
+        mines.forEach((mine, i) => {
+          const timer = 0.05 + i * 0.08, fx = skillSelfVoice(def.id, 'prepare');
+          const visual: Flash | undefined = fx ? { pos: { ...mine.pos }, radius: mine.radius + 18,
+            color: cosmeticColor, life: timer, maxLife: timer, fx, recoveryCueTier: mine.tier } : undefined;
+          if (visual) this.flashes.push(visual);
+          this.pendingDetonations.push({ mine, timer, visual });
+        });
+        if (mines.length) this.showSelfRelease(caster, inst);
         if (!mines.length) this.text(caster.pos, 'no mines placed', '#8a8678', 11);
         break;
       }
@@ -38147,6 +38163,7 @@ export class World {
           stored: 0, cap: fx.cap * caster.sheet.get('poolCap', tags, extra),
           until: this.time + dur, ratio: fx.ratio,
           radius: fx.radius * aoeScale,
+          visualColor: cosmeticColor,
         };
         caster.addBuff({
           type: 'buff', id: 'iron_ward', duration: fx.duration,
@@ -38168,7 +38185,7 @@ export class World {
           if (m.manaReserved > 0) continue; // persistent contracts refuse
           const sd2 = m.summonInst?.def.delivery;
           if (sd2?.type === 'summon' && sd2.persistent) continue;
-          this.explodeActor(m, fx.fraction);
+          this.explodeActor(m, fx.fraction, { color: cosmeticColor, visual: skillSelfVoice(def.id, 'burst') });
           if (!m.dead) this.kill(m, false, caster);
           spent++;
         }
@@ -38226,13 +38243,14 @@ export class World {
           // rite-detonable too — their own deathBurst rides the kill
           // artery, so the rite is an ACTIVATION, not a second payload.
           if (t.construct.deathBurst) {
+            this.showSelfRelease(caster, inst, t.pos, t.radius + 18, t.tier);
             this.kill(t, true);
             blown++;
             continue;
           }
           if (!['totem', 'sentry', 'pylon'].includes(t.construct.kind)) continue;
           this.burstDamage(vec(t.pos.x, t.pos.y), fx.radius,
-            t.maxLife() * fx.fraction, 'physical', def.color, caster.team, caster.tier);
+            t.maxLife() * fx.fraction, 'physical', cosmeticColor, caster.team, caster.tier, undefined, undefined, skillSelfVoice(def.id, 'burst'));
           this.kill(t, true);
           blown++;
         }
@@ -38793,6 +38811,12 @@ export class World {
       spin: p.spin * frac, weave: p.weave * frac,
       amp: p.amp * frac, orbitR0: p.orbitR0 * frac,
     };
+  }
+
+  private showSelfRelease(caster: Actor, inst: SkillInstance, at = caster.pos, radius = caster.radius + SELF_VISUAL_STYLE.radiusPad, tier = caster.tier): void {
+    const fx = skillSelfVoice(inst.def.id); if (!fx) return;
+    this.flashes.push({ pos: { ...at }, radius, color: cosmeticSkillPaint(this, caster, inst.def.id).color ?? inst.def.color,
+      life: SELF_VISUAL_STYLE.life, maxLife: SELF_VISUAL_STYLE.life, fx, facing: caster.facing, recoveryCueTier: tier });
   }
 
   /** A resolved cast signature; recovery receipts and status timers remain
@@ -41734,6 +41758,7 @@ export class World {
     this.flashes.push({
       pos: vec(a.pos.x, a.pos.y), radius: reach, color: inst.def.color,
       life: 0.25, maxLife: 0.25,
+      fx: skillSelfVoice(inst.def.id, 'burst'), recoveryCueTier: a.tier,
       ...(fullCircle ? {} : { arc: { facing: a.facing, arcRad } }),
     });
     this.flashes.push(defenseCueFlash(a, 'guard', 'bash', inst.def.color, { arc: fullCircle ? Math.PI * 2 : arcRad }));
@@ -42806,12 +42831,12 @@ export class World {
    * A minion detonates (Martyrdom passive / Unstable Flesh support),
    * dealing a fraction of its max life as fire damage to nearby enemies.
    */
-  explodeActor(minion: Actor, fraction: number, opts?: { type?: DamageType; color?: string; recoveryCue?: string }): void {
+  explodeActor(minion: Actor, fraction: number, opts?: { type?: DamageType; color?: string; recoveryCue?: string; visual?: string }): void {
     // The sourceActor carries minion damage, conversion and kill credit.
     const type = opts?.type ?? 'fire';
     const dmg = minion.maxLife() * fraction * minion.sheet.get('damage', new Set<SkillTag>(['aoe', type]));
     const radius = 45 + minion.radius * 2;
-    this.burstDamage(vec(minion.pos.x, minion.pos.y), radius, dmg, type, opts?.color ?? DAMAGE_COLOR[type], minion.team, minion.tier, minion, opts?.recoveryCue);
+    this.burstDamage(vec(minion.pos.x, minion.pos.y), radius, dmg, type, opts?.color ?? DAMAGE_COLOR[type], minion.team, minion.tier, minion, opts?.recoveryCue, opts?.visual);
   }
 
   /** Direct radial BLAST (the shared payload for explodeActor + the death-burst detonations).
@@ -42820,7 +42845,7 @@ export class World {
    *  damageTaken, and the shield-soak chain) — never true damage, so the player can dress
    *  resistances/armor against it. State is pre-baked (pos/dmg/team) so it works after the
    *  source actor is gone; the colour IS the damage-type tell (DAMAGE_COLOR). */
-  private burstDamage(pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team, sourceTier = 0, sourceActor?: Actor, recoveryCue?: string): void {
+  private burstDamage(pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team, sourceTier = 0, sourceActor?: Actor, recoveryCue?: string, visual?: string): void {
     for (const e of this.actors) {
       if (!this.isBurstTarget(e, sourceTeam, sourceTier)) continue;
       if (sourceActor && !this.hostileTo(sourceActor, e)) continue;
@@ -42845,7 +42870,8 @@ export class World {
       if (e.life <= 0 && !e.dead) this.kill(e, false, sourceActor);
     }
     this.flashes.push(recoveryCue ? { ...combatCueFlash(pos, recoveryCue, radius, 0, color), recoveryCueTier: sourceTier }
-      : { pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35 });
+      : { pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35,
+        ...(visual ? { fx: visual, recoveryCueTier: sourceTier } : {}) });
     // THE MALLET, ownerless: a baked blast rings EVERY side's bells and
     // pops brittle scenery — the exploding corpse beside the bell already
     // damaged it without a toll; now the blast answers too.
@@ -49921,7 +49947,7 @@ export class World {
         const amount = Math.min(iw.cap, iw.stored) * iw.ratio;
         if (amount > 0 && !a.dead) {
           this.burstDamage(vec(a.pos.x, a.pos.y), iw.radius, amount,
-            'physical', '#c8c0a8', a.team);
+            'physical', iw.visualColor ?? '#c8c0a8', a.team, 0, undefined, undefined, skillSelfVoice('iron_ward', 'burst'));
         }
       }
       // weakPointBonus reads the live interval at each damage resolution; this
@@ -56257,9 +56283,14 @@ export class World {
   private updateDetonations(dt: number): void {
     for (let i = this.pendingDetonations.length - 1; i >= 0; i--) {
       const pd = this.pendingDetonations[i];
+      if (pd.visual) {
+        pd.visual.pos = { ...pd.mine.pos }; pd.visual.recoveryCueTier = pd.mine.tier;
+        if (pd.mine.dead || !pd.mine.construct?.castInst) pd.visual.life = 0;
+      }
       pd.timer -= dt;
       if (pd.timer > 0) continue;
       this.pendingDetonations.splice(i, 1);
+      if (pd.visual) pd.visual.life = 0;
       const mine = pd.mine;
       if (mine.dead || !mine.construct?.castInst) continue;
       mine.useLock = 0; mine.mana = mine.maxMana(); mine.cooldowns.clear();
