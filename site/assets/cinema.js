@@ -51,24 +51,43 @@
     films: {
       announcement: {
         title: 'Hollow Wake · Announcement Trailer',
+        cut: 2,               // raised for the third trailer, so every visitor sees it once
+        aspect: 16 / 9,
+        duration: 60,
+        sources: [
+          { family: 'av1',  height: 1440, src: 'media/announcement-v3/announcement-v3-1440.av1.mp4',  type: 'video/mp4; codecs="av01.0.12M.10"' },
+          { family: 'av1',  height: 1080, src: 'media/announcement-v3/announcement-v3-1080.av1.mp4',  type: 'video/mp4; codecs="av01.0.08M.10"' },
+          { family: 'av1',  height: 720,  src: 'media/announcement-v3/announcement-v3-720.av1.mp4',   type: 'video/mp4; codecs="av01.0.05M.10"' },
+          { family: 'hevc', height: 1080, src: 'media/announcement-v3/announcement-v3-1080.hevc.mp4', type: 'video/mp4; codecs="hvc1.2.4.L120.B0"' },
+          { family: 'h264', height: 720,  src: 'media/announcement-v3/announcement-v3-720.h264.mp4',  type: 'video/mp4; codecs="avc1.64001F"' },
+        ],
+        /* narration text (show: 'always' | 'muted' | 'never'); band: the
+           picture rows it sits in, here the lower letterbox bar, so a line
+           never covers the picture */
+        captions: { src: 'media/announcement-v3/narration.en.vtt', lang: 'en', show: 'always', band: [0.872, 1] },
+        /* the exit: 'shatter' breaks the screen from the viewer's click (or
+           from at, as a share of the picture, when the film ends); 'fade'
+           lifts the darkness instead */
+        exit: { kind: 'shatter', at: [0.5, 0.44], pace: 1 },   // the insignia's eye, under the title
+      },
+      /* THE ARCHIVE: the previous cut, kept whole as a fallback. It is in no
+         feature row and no trigger, so the site never offers it; it plays at
+         ?cinema=announcement-v2, and pointing a feature row at it brings it
+         back. Its files stay on the site-media release and in the manifest. */
+      'announcement-v2': {
+        title: 'Hollow Wake · Announcement Trailer (previous cut)',
         cut: 1,
         aspect: 16 / 9,
         duration: 60,
         sources: [
-          { family: 'av1',  height: 1440, src: 'media/announcement/announcement-1440.av1.mp4',  type: 'video/mp4; codecs="av01.0.12M.10"' },
-          { family: 'av1',  height: 1080, src: 'media/announcement/announcement-1080.av1.mp4',  type: 'video/mp4; codecs="av01.0.08M.10"' },
-          { family: 'av1',  height: 720,  src: 'media/announcement/announcement-720.av1.mp4',   type: 'video/mp4; codecs="av01.0.05M.10"' },
-          { family: 'hevc', height: 1080, src: 'media/announcement/announcement-1080.hevc.mp4', type: 'video/mp4; codecs="hvc1.2.4.L120.B0"' },
-          { family: 'h264', height: 720,  src: 'media/announcement/announcement-720.h264.mp4',  type: 'video/mp4; codecs="avc1.64001F"' },
+          { family: 'av1',  height: 1440, src: 'media/announcement-v2/announcement-v2-1440.av1.mp4',  type: 'video/mp4; codecs="av01.0.12M.10"' },
+          { family: 'av1',  height: 1080, src: 'media/announcement-v2/announcement-v2-1080.av1.mp4',  type: 'video/mp4; codecs="av01.0.08M.10"' },
+          { family: 'av1',  height: 720,  src: 'media/announcement-v2/announcement-v2-720.av1.mp4',   type: 'video/mp4; codecs="av01.0.05M.10"' },
+          { family: 'hevc', height: 1080, src: 'media/announcement-v2/announcement-v2-1080.hevc.mp4', type: 'video/mp4; codecs="hvc1.2.4.L120.B0"' },
+          { family: 'h264', height: 720,  src: 'media/announcement-v2/announcement-v2-720.h264.mp4',  type: 'video/mp4; codecs="avc1.64001F"' },
         ],
-        /* narration text, shown while the film plays muted (show: 'muted' |
-           'always' | 'never'); band: the picture rows it sits in, here the
-           lower letterbox bar, so a line never covers the picture */
-        captions: { src: 'media/announcement/narration.en.vtt', lang: 'en', show: 'muted', band: [0.872, 1] },
-        /* the exit: 'shatter' breaks the screen from the viewer's click (or
-           from at, as a share of the picture, when the film ends); 'fade'
-           lifts the darkness instead */
-        exit: { kind: 'shatter', at: [0.5, 0.56], pace: 1 },
+        captions: { src: 'media/announcement-v2/narration.en.vtt', lang: 'en', show: 'always', band: [0.872, 1] },
+        exit: { kind: 'shatter', at: [0.5, 0.44], pace: 1 },
       },
     },
 
@@ -82,6 +101,30 @@
       hintSeconds: 1.8,           // the continue line surfaces after this long
       progress: true,             // a hairline along the bottom edge
       volume: 0.8,                // a first-time viewer's level; each viewer's own choice is remembered
+      /* THE MIND'S EYE: a living rim of dark that melds a film's picture into
+         the blanket, so no hard edge ever shows. It creeps and swirls like a
+         thought held in the dark, the picture opens out of it like an eye,
+         and the break carries it. It is the theater's, not the film's: every
+         film apply names wears it with no setting of its own, and the rim
+         finds the picture's edge by measuring the film's own black bars as it
+         plays. A film may still say rim: false, rim: true, or carry its own
+         dials (rim: {...}), and may name its picture's share of the frame
+         (picture: [x0, y0, x1, y1]) to skip the measuring. Reduced motion
+         holds it still. */
+      rim: {
+        apply: 'trailers', // who wears it: 'trailers' (films that do not loop), 'all' or 'none'
+        feather: 0.12,    // the soft band, in picture heights
+        vertical: 0.45,   // the top and bottom bands run this share of the sides (a wide picture keeps its height)
+        creep: 0.03,      // how far the dark wanders in and out of that band
+        round: 0.2,       // the window's corner radius, in picture heights (an eye, not a box)
+        grain: 1.7,       // the dark's features per picture height
+        drift: 0.14,      // how fast it morphs (noise depth per second)
+        swirl: 0.04,      // its turn about the picture's centre (radians per second)
+        twist: 0.8,       // the extra turn toward the rim (a slow vortex)
+        mist: 0.45,       // smoke in the band rather than a smooth ramp
+        open: [0.06, 2.2], // the reveal, like eyelids: the share of the window's height open at first, and seconds to rest
+        scale: 0.5,       // the rim canvas's resolution per CSS pixel (it is soft; a fraction is plenty)
+      },
       words: {
         next: 'Click to continue',
         nextTouch: 'Tap to continue',

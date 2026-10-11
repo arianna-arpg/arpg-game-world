@@ -28,7 +28,7 @@ const missing = [];
 /* THE PLANTED CLIP: the Database reads media/clips/index.json; the walkthrough
    answers it with one clip that reuses the announcement's 720p rendition */
 const CLIP_INDEX = JSON.stringify({ generated: 'qa', aspect: 16 / 9, clips: { cleave: { name: 'Cleave', duration: 6, sources: [
-  { family: 'h264', height: 720, src: 'media/announcement/announcement-720.h264.mp4', type: 'video/mp4; codecs="avc1.64001F"' }] } } });
+  { family: 'h264', height: 720, src: 'media/announcement-v2/announcement-v2-720.h264.mp4', type: 'video/mp4; codecs="avc1.64001F"' }] } } });
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/media/clips/index.json') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end(CLIP_INDEX); }
@@ -96,6 +96,48 @@ app.whenReady().then(async () => {
   await sleep(1200);
   await shot('03-splash-montage');
 
+  /* THE MIND'S EYE: the picture's edge melts into the dark, and the dark moves.
+     Sampled off real captures: the picture's own left edge reads black while
+     its heart reads the picture; held on one frame, the rim band changes. */
+  const grab = async () => { const img = await win.webContents.capturePage(); const sz = img.getSize(); return { b: img.toBitmap(), w: sz.width, h: sz.height }; };
+  const lumaIn = (g, r) => {
+    const sx = g.w / W, sy = g.h / H; let s = 0, n = 0;
+    for (let y = Math.round(r.y * sy); y < Math.round((r.y + r.h) * sy); y++) {
+      for (let x = Math.round(r.x * sx); x < Math.round((r.x + r.w) * sx); x++) {
+        const i = (y * g.w + x) * 4; s += 0.0722 * g.b[i] + 0.7152 * g.b[i + 1] + 0.2126 * g.b[i + 2]; n++;
+      }
+    }
+    return s / Math.max(1, n);
+  };
+  const moved = (g1, g2, r) => {
+    const sx = g1.w / W, sy = g1.h / H; let s = 0, n = 0;
+    for (let y = Math.round(r.y * sy); y < Math.round((r.y + r.h) * sy); y++) {
+      for (let x = Math.round(r.x * sx); x < Math.round((r.x + r.w) * sx); x++) {
+        const i = (y * g1.w + x) * 4; s += Math.abs(g1.b[i + 1] - g2.b[i + 1]); n++;
+      }
+    }
+    return s / Math.max(1, n);
+  };
+  const eye = await js(`(() => { const t = ${theater}, r = t.stageRect(), p = t.rim ? t.rim.picture() : (t.f.picture || [0, 0, 1, 1]); return { has: !!t.rim, measured: !!(t.rim && t.rim.detected), pic: p, x: r.x, y: r.y, w: r.w, h: r.h, top: r.y + p[1] * r.h, ph: (p[3] - p[1]) * r.h }; })()`);
+  /* the rim found the film's own bars (the announcement's 2.39:1 band sits
+     between 0.128 and 0.872 of the frame), measuring at most a sliver inside */
+  check('the mind\'s eye measures the film\'s own bars', eye.measured && eye.pic[0] === 0 && eye.pic[2] === 1
+    && eye.pic[1] >= 0.1281 && eye.pic[1] < 0.14 && eye.pic[3] <= 0.8719 && eye.pic[3] > 0.86, JSON.stringify(eye.pic.map((v) => +v.toFixed(4))));
+  const g1 = await grab();
+  const rimEdge = lumaIn(g1, { x: eye.x + 1, y: eye.top + eye.ph * 0.4, w: 5, h: eye.ph * 0.2 });
+  const heart = lumaIn(g1, { x: eye.x + eye.w * 0.4, y: eye.top + eye.ph * 0.4, w: eye.w * 0.2, h: eye.ph * 0.2 });
+  check('the mind\'s eye melts the picture\'s edge into the dark', eye.has && rimEdge < 10 && heart > rimEdge + 8, `edge ${rimEdge.toFixed(1)} · heart ${heart.toFixed(1)}`);
+  await js(`(${theater}).video.pause(); true`);   // hold the picture still (no theater dim): only the dark may move
+  await sleep(250);
+  const h1g = await grab();
+  await sleep(1300);
+  const h2g = await grab();
+  const band = { x: eye.x + eye.w * 0.2, y: eye.top, w: eye.w * 0.6, h: eye.ph * 0.16 };
+  const drift = moved(h1g, h2g, band);
+  check('the mind\'s eye creeps and swirls on a held frame', drift > 0.12, 'band change ' + drift.toFixed(2));
+  await js(`(() => { const p = (${theater}).video.play(); if (p && p.catch) p.catch(() => {}); return true; })()`);
+  await sleep(300);
+
   // ── 2. the shatter, stepped (the viewer clicks the picture) ────────────────
   const stage = await js(`(() => { const r = (${theater}).stageRect(); return r; })()`);
   const hit = { x: Math.round(stage.x + stage.w * 0.62), y: Math.round(stage.y + stage.h * 0.4) };
@@ -103,11 +145,19 @@ app.whenReady().then(async () => {
   await clickAt(hit.x, hit.y);
   check('a click in the picture starts the break', await waitFor(`!!document.querySelector('.hwcine-gl')`, 3000));
   check('the break carries the frozen frame', await js('HWCinemaTheater._last && HWCinemaTheater._last.hasFrame === 1'), JSON.stringify(await js('HWCinemaTheater._last')));
+  check('the break bakes the mind\'s eye into that frame', await js('HWCinemaTheater._last && HWCinemaTheater._last.rim === 1'));
   for (const t of [0.0, 0.1, 0.3, 0.5, 0.62, 0.8, 1.05, 1.4, 1.9, 2.4]) {
     await js(`HWCinemaTheater.freeze = ${t}; true`);
     await sleep(160);
     await shot('10-shatter-' + t.toFixed(2).replace('.', '_'));
   }
+  /* THE SETTLING: the break's very last frame carries no light at all, so the
+     canvas leaves on the page itself (no lingering rays, then a jump) */
+  await js('HWCinemaTheater.freeze = 2.69; true');
+  await sleep(160);
+  const settle = await js('HWCinemaTheater._light || null');
+  check('the break\'s light settles to nothing before the page returns', !!settle && settle.rays < 0.002 && settle.flash < 0.002 && settle.glow < 0.002 && settle.flare < 0.002,
+    settle ? `rays ${settle.rays.toFixed(5)} · flash ${settle.flash.toFixed(5)}` : 'no reading');
   await js('HWCinemaTheater.freeze = null; true');
   check('the theater closes and the page returns', await waitFor(`!document.querySelector('.hwcine') && !document.documentElement.classList.contains('hwcine-lock')`, 6000));
   await sleep(300);
@@ -137,6 +187,10 @@ app.whenReady().then(async () => {
   check('a click plays with sound (the gesture unlocks it)', await waitFor(`(${theater}).state === 'playing' && !(${theater}).video.muted`, 8000));
   await sleep(1500);
   await shot('22-banner-playing');
+  /* the narration reads with sound too (captions show: 'always'): seek to a line and wait for it */
+  await js(`(() => { const v = (${theater}).video; v.currentTime = 22.9; })()`);
+  check('the narration captions show while it plays with sound', await waitFor(`!(${theater}).video.muted && (${theater}).cap.classList.contains('on') && (${theater}).capText.textContent.length > 3`, 6000),
+    await js(`(${theater}).capText.textContent`));
   /* THE LEVEL: the pill's slider sets a level (never just mute or full), a
      drag that ends outside the pill never means "continue", the arrows turn
      it, and the choice is remembered */
@@ -162,7 +216,11 @@ app.whenReady().then(async () => {
   check('the down arrow turns the level down', (await js(`(${theater}).video.volume`)) < lv.vol - 0.05);
   /* the natural end: the film runs out and the screen breaks from the eye, with sound */
   const sounded0 = await js('HWCinemaTheater.sounded || 0');
-  await js(`(() => { const v = (${theater}).video; v.currentTime = 58.4; })()`);
+  /* the title card opens the film's bars to the whole frame: the rim keeps
+     measuring and widens with it, so the insignia and its lines stay clear */
+  await js(`(() => { const v = (${theater}).video; v.currentTime = 57.6; })()`);
+  check('the mind\'s eye widens when the film opens its bars', await waitFor(`(() => { const p = (${theater}).rim.picture(); return p[1] < 0.03 && p[3] > 0.97; })()`, 2000),
+    JSON.stringify(await js(`(() => { const t = ${theater}; return t && t.rim ? t.rim.picture().map((v) => +v.toFixed(3)) : null; })()`)));
   check('the film ends and breaks on its own', await waitFor(`!!document.querySelector('.hwcine-gl')`, 6000));
   check('the natural end still speaks (the break has its sound)', (await js('HWCinemaTheater.sounded || 0')) > sounded0);
   for (const t of [0.12, 0.4, 0.6, 0.9]) {
@@ -204,6 +262,7 @@ app.whenReady().then(async () => {
   check('reduced motion: no unprompted splash', await js('HWCinema.due === null'));
   await clickAt(h1.x, h1.y);
   await waitFor(`(${theater}) && (${theater}).state === 'playing'`, 8000);
+  check('reduced motion: the mind\'s eye holds still', await js(`(() => { const r = (${theater}).rim; return !!r && r.time() === 23 && r.open() === 1; })()`));
   await js(`(${theater}).exit(null); true`);
   await sleep(120);
   check('reduced motion: the exit fades, nothing breaks', await js(`!document.querySelector('.hwcine-gl') && document.querySelector('.hwcine-fade') !== null`));

@@ -102,8 +102,10 @@ function simArenaDef(): ZoneDef {
 let booted = false;
 
 /** One-time engine boot for a sim process: shims, registrations, validation,
- *  arena zone injection. Idempotent — every factory entry point calls it. */
-export function bootSimEngine(): void {
+ *  arena zone injection. Idempotent — every factory entry point calls it.
+ *  `validate: false` skips the content census: the skill showcase engine
+ *  (src/showcase/engine.ts) boots inside a game that already ran it. */
+export function bootSimEngine(opts: { validate?: boolean } = {}): void {
   if (booted) return;
   booted = true;
   installHeadlessShims();
@@ -118,7 +120,7 @@ export function bootSimEngine(): void {
   // the live game keeps its guard untouched.
   FORECHART_CFG.beatBudgetMs = Infinity;
   registerAllPackageFactions();
-  validateContent();
+  if (opts.validate !== false) validateContent();
   ZONES[SIM_ARENA_ID] = simArenaDef();
 }
 

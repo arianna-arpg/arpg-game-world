@@ -14,6 +14,7 @@
   var TAU = Math.PI * 2;
   var REDUCE = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   var TOUCH = !!(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+  var RIM_PAD = 4;   // CSS px the mind's-eye canvas overhangs the stage on every side
   function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
   function smooth(x) { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); }
   function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
@@ -40,6 +41,10 @@
       '.hwcine-live .hwcine-stage{opacity:1}' +
       '.hwcine-video{display:block;width:100%;height:100%;object-fit:contain;background:transparent;transition:filter .35s}' +
       '.hwcine-paused .hwcine-video{filter:brightness(.55)}' +
+      /* THE MIND'S EYE: the living rim over the picture, under the captions;
+         without WebGL2 a still, soft-edged window stands in for it */
+      '.hwcine-rim{position:absolute;left:-' + RIM_PAD + 'px;top:-' + RIM_PAD + 'px;width:calc(100% + ' + 2 * RIM_PAD + 'px);height:calc(100% + ' + 2 * RIM_PAD + 'px);pointer-events:none}' +
+      '.hwcine-rimcss{position:absolute;pointer-events:none}' +
       '.hwcine-cap{position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .35s ease}' +
       '.hwcine-cap.on{opacity:1}' +
       '.hwcine-cap span{font-family:"Cinzel",Georgia,serif;font-weight:500;letter-spacing:.06em;line-height:1.3;color:#e6e2d6;text-align:center;padding:0 7%;text-shadow:0 0 14px rgba(0,0,0,.95),0 1px 3px rgba(0,0,0,.95)}' +
@@ -143,6 +148,7 @@
 
   P.build = function () {
     var f = this.f, T = this.T, W = this.words();
+    var R = this.rimR = rimSpec(f, T);
     injectCSS(T);
     var el = this.el = document.createElement('div');
     el.className = 'hwcine' + (this.splash ? ' hwcine-splash' : '');
@@ -153,6 +159,7 @@
     el.innerHTML =
       '<div class="hwcine-blanket"></div>' +
       '<div class="hwcine-stage"><video class="hwcine-video" playsinline webkit-playsinline preload="auto" disablepictureinpicture disableremoteplayback x-webkit-airplay="deny"></video>' +
+      (R ? '<canvas class="hwcine-rim" aria-hidden="true"></canvas>' : '') +
       '<div class="hwcine-cap" aria-hidden="true"><span></span></div><div class="hwcine-play" aria-hidden="true"></div></div>' +
       '<div class="hwcine-wash" aria-hidden="true"></div>' +
       '<div class="hwcine-breath" aria-hidden="true">' + MARK + '</div>' +
@@ -172,6 +179,19 @@
     this.volEl = el.querySelector('.hwcine-vol');
     this.next = el.querySelector('.hwcine-next');
     this.wash = el.querySelector('.hwcine-wash');
+    /* the mind's eye: the living rim, or its still stand-in without WebGL2 */
+    if (R) {
+      var rc = el.querySelector('.hwcine-rim');
+      this.rim = MindsEye.create(rc, R);
+      if (this.rim) this.rim.watch(this.video);   // the film's own bars, measured as it plays
+      if (!this.rim) {
+        rc.parentNode.removeChild(rc);
+        this.rimCss = document.createElement('div');
+        this.rimCss.className = 'hwcine-rimcss';
+        this.rimCss.setAttribute('aria-hidden', 'true');
+        this.stage.insertBefore(this.rimCss, this.cap);
+      }
+    }
     this.next.textContent = TOUCH ? (W.nextTouch || W.next || 'Continue') : (W.next || 'Continue');
     this.sound.querySelector('.lbl').textContent = W.soundOn || 'Sound on';
     this.audio.setAttribute('aria-label', W.sound || 'Sound');
@@ -213,6 +233,17 @@
     this.cap.style.minHeight = ((band[1] - band[0]) * h) + 'px';
     this.capText.style.fontSize = clamp(h * 0.034, 12, 26) + 'px';
     this.w = w; this.h = h;
+    if (this.rim) this.rim.resize(w, h);
+    if (this.rimCss) {
+      /* the still stand-in: a rounded window on the picture's edge, a soft
+         inner shadow, and the ink reaching past the square corners */
+      var R = this.rimR, pic = R.picture, ph = (pic[3] - pic[1]) * h, ink = R.ink.map(function (c) { return Math.round(c * 255); }).join(',');
+      var s = this.rimCss.style;
+      s.left = pic[0] * w + 'px'; s.top = pic[1] * h + 'px';
+      s.width = (pic[2] - pic[0]) * w + 'px'; s.height = ph + 'px';
+      s.borderRadius = (R.round || 0) * ph + 'px';
+      s.boxShadow = '0 0 0 ' + Math.ceil(ph * 0.5) + 'px rgb(' + ink + '),inset 0 0 ' + Math.round((R.feather || 0.15) * ph * 1.6) + 'px ' + Math.round((R.feather || 0.15) * ph * 0.35) + 'px rgb(' + ink + ')';
+    }
   };
 
   P.stageRect = function () {
@@ -374,6 +405,7 @@
       self.started = true;
       self.state = 'playing';
       el.classList.add('hwcine-live');
+      if (self.rim) self.rim.live();   // the eye opens with the first live frame
       /* a film marked record: false (a skill clip) never touches the splash's memory */
       if (!self.preview && self.f.record !== false) self.api.seen(self.f.id);
       self.syncSound();
@@ -451,6 +483,7 @@
     var self = this, v = this.video;
     if (this.state !== 'playing') return;
     if (this.bar && v.duration) this.bar.style.transform = 'scaleX(' + clamp(v.currentTime / v.duration, 0, 1).toFixed(4) + ')';
+    if (this.rim) this.rim.draw();
     this.raf = requestAnimationFrame(function () { self.tick(); });
   };
 
@@ -465,6 +498,7 @@
     /* an ended film reports paused; it still spoke to the very end */
     var spoke = this.started && !v.muted && (!v.paused || v.ended);
     var level = v.muted ? 0 : v.volume;   // read before the duck below lowers it
+    var rim = this.rim ? this.rim.state() : null;   // the rim as the viewer last saw it: the break bakes it in
     this.state = 'exiting';
     cancelAnimationFrame(this.raf);
     this.el.classList.add('hwcine-exit');
@@ -482,6 +516,7 @@
         video: this.started ? v : null,
         rect: this.stageRect(),
         blanket: this.T.blanket,
+        rim: rim,
         at: p,
         pace: pace,
         cover: function () { self.stage.style.visibility = 'hidden'; self.blanket.style.visibility = 'hidden'; },
@@ -531,12 +566,240 @@
     this.listeners.forEach(function (l) { l[0].removeEventListener(l[1], l[2], l[3]); });
     try { this.video.removeAttribute('src'); this.video.load(); } catch (e) { /* released */ }
     if (this.gl) this.gl.release();
+    if (this.rim) this.rim.release();
     if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el);
     document.documentElement.classList.remove('hwcine-lock');
     var back = this.opts.from && this.opts.from.querySelector ? (this.opts.from.querySelector('.hwcine-voice') || null) : null;
     var target = document.activeElement === document.body || !document.activeElement ? (back && back === this.prevFocus ? back : this.prevFocus) : null;
     if (target && target.focus && document.contains(target)) { try { target.focus({ preventScroll: true }); } catch (e) { /* not focusable */ } }
     this.resolve(!!ok);
+  };
+
+  // ── the mind's eye: the picture held in the dark like a thought ────────────
+  /* ONE function, two consumers: the rim's own canvas over the playing film,
+     and the shatter's bake of the frozen frame, so the break starts on
+     exactly the picture the viewer saw. The window is a rounded "eye" on the
+     picture's own edge; its border creeps and swirls through slow,
+     domain-warped noise that turns about the centre (faster toward the rim),
+     and the band between clear and dark breathes like smoke. */
+  var RIM_GLSL =
+    'uniform vec4 uPic; uniform vec2 uStage; uniform vec4 uRimA; uniform vec4 uRimB; uniform float uOpen; uniform float uRimV;\n' +
+    'float rimH(vec3 p){ p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }\n' +
+    'float rimN(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);\n' +
+    '  float a = mix(mix(rimH(i), rimH(i + vec3(1.0, 0.0, 0.0)), f.x), mix(rimH(i + vec3(0.0, 1.0, 0.0)), rimH(i + vec3(1.0, 1.0, 0.0)), f.x), f.y);\n' +
+    '  float b = mix(mix(rimH(i + vec3(0.0, 0.0, 1.0)), rimH(i + vec3(1.0, 0.0, 1.0)), f.x), mix(rimH(i + vec3(0.0, 1.0, 1.0)), rimH(i + vec3(1.0, 1.0, 1.0)), f.x), f.y);\n' +
+    '  return mix(a, b, f.z) * 2.0 - 1.0; }\n' +
+    'float rimF(vec3 p, int oct){ float s = 0.0, a = 0.5; for (int k = 0; k < 4; k++) { if (k >= oct) break; s += a * rimN(p); p = p * 2.03 + vec3(17.1, 5.3, 3.7); a *= 0.5; } return s; }\n' +
+    /* the dark over this point of the stage (uv 0..1, y down): uPic is the
+       picture's rect in the stage, lengths are in picture heights */
+    'float rimDark(vec2 uv){\n' +
+    '  vec2 lo = uPic.xy * uStage, hi = uPic.zw * uStage;\n' +
+    '  float ph = max(1.0, hi.y - lo.y);\n' +
+    '  vec2 p = (uv * uStage - (lo + hi) * 0.5) / ph, b = (hi - lo) * 0.5 / ph;\n' +
+    /* the window is measured with its height stretched by 1 / uRimV, so the
+       top and bottom bands (and their creep) run uRimV as deep as the sides:
+       a wide picture keeps its height */
+    '  vec2 kv = vec2(1.0, 1.0 / max(0.05, uRimV)), pk = p * kv, bk = b * kv;\n' +
+    /* the eye opening: like eyelids, the window's height opens from a thin,
+       wide slit (uOpen is the share of its height open), its width from
+       three quarters of the picture */
+    '  vec2 bo = bk * vec2(mix(0.75, 1.0, uOpen), uOpen);\n' +
+    '  float r = min(uRimA.z, min(bo.x, bo.y));\n' +
+    '  vec2 q = abs(pk) - (bo - r);\n' +
+    '  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n' +
+    '  if (d < -(uRimA.x + 2.1 * uRimA.y)) return 0.0;\n' +
+    '  float t = uRimB.x, ang = uRimB.y + uRimB.z * length(p);\n' +
+    '  vec2 sw = mat2(cos(ang), sin(ang), -sin(ang), cos(ang)) * p * uRimA.w;\n' +
+    '  vec3 s = vec3(sw, t);\n' +
+    /* the border moves on broad octaves (soft wisps, never a torn edge); the
+       smoke inside the band keeps the fine ones */
+    '  vec2 w = vec2(rimF(s + vec3(1.7, 9.2, 0.0), 3), rimF(s + vec3(8.3, 2.8, 0.0), 3));\n' +
+    '  float n = rimF(s + vec3(1.6 * w, 0.0), 3);\n' +
+    '  float a = smoothstep(-uRimA.x, 0.0, d + uRimA.y * n * 2.2);\n' +
+    '  float m = rimF(vec3(sw * 2.4, t * 1.6 + 4.0), 4);\n' +
+    '  return clamp(a + uRimB.w * m * a * (1.0 - a) * 2.4, 0.0, 1.0);\n' +
+    '}\n';
+  var FS_RIM =
+    '#version 300 es\n' +
+    'precision highp float;\n' +
+    'in vec2 vUv;\n' +
+    'uniform vec3 uInk; uniform vec2 uPad;\n' +
+    RIM_GLSL +
+    'out vec4 o;\n' +
+    'void main(){\n' +
+    /* the canvas overhangs the stage by uPad (stage units) on every side, so
+       no layer snapping can ever show the video's own edge past the dark */
+    '  float a = rimDark(vec2(vUv.x, 1.0 - vUv.y) * (1.0 + 2.0 * uPad) - uPad);\n' +
+    /* a hair of dither so the dark's long ramp never bands */
+    '  if (a > 0.0) a = clamp(a + (rimH(vec3(gl_FragCoord.xy, 7.0)) - 0.5) / 160.0, 0.0, 1.0);\n' +
+    '  o = vec4(uInk * a, a);\n' +
+    '}\n';
+  /* the shatter's bake: the frozen frame with the rim laid in (uv = texture
+     space; the frame was uploaded unflipped, so its rows already run down) */
+  var FS_RIMBAKE =
+    '#version 300 es\n' +
+    'precision highp float;\n' +
+    'in vec2 vUv;\n' +
+    'uniform sampler2D uSrc; uniform vec3 uInk;\n' +
+    RIM_GLSL +
+    'out vec4 o;\n' +
+    'void main(){ o = vec4(mix(texture(uSrc, vUv).rgb, uInk, rimDark(vUv)), 1.0); }\n';
+
+  /* the film's rim, or null. Every film the policy names wears it
+     (theater.rim.apply: 'trailers' = films that do not loop, 'all', 'none')
+     unless it says rim: false; rim: true or an object opts any film in, and
+     an object's dials sit over the theater's. A film may name its picture's
+     share of the frame; otherwise the rim measures the film's own bars as it
+     plays (MindsEye.watch), so a new film needs no setting at all. */
+  function rimSpec(f, T) {
+    var base = T.rim || {}, apply = base.apply || 'trailers';
+    var on = f.rim === false ? false : f.rim ? true : apply === 'all' || (apply === 'trailers' && !f.loop);
+    if (!on) return null;
+    var out = {}, k, own = typeof f.rim === 'object' ? f.rim : {};
+    for (k in base) if (Object.prototype.hasOwnProperty.call(base, k)) out[k] = base[k];
+    for (k in own) if (Object.prototype.hasOwnProperty.call(own, k)) out[k] = own[k];
+    var b = T.blanket || [0, 0, 0, 1];
+    out.fixed = !!f.picture;
+    out.picture = (f.picture || [0, 0, 1, 1]).slice();
+    out.ink = [b[0] / 255, b[1] / 255, b[2] / 255];
+    out.open = out.open || [1, 0];
+    return out;
+  }
+  /* secs: the rim's own clock in seconds; it sets both the noise's depth
+     (drift) and the field's turn (swirl), so the two dials stay independent.
+     pic: the picture rect to draw with (the shatter passes the one it froze) */
+  function rimUniforms(gl, u, R, w, h, secs, open, pic) {
+    var P = pic || R.picture;
+    gl.uniform4f(u.uPic, P[0], P[1], P[2], P[3]);
+    gl.uniform2f(u.uStage, Math.max(1, w), Math.max(1, h));
+    gl.uniform4f(u.uRimA, R.feather || 0.15, R.creep || 0, R.round || 0, R.grain || 2);
+    gl.uniform4f(u.uRimB, secs * (R.drift || 0), secs * (R.swirl || 0), R.twist || 0, R.mist || 0);
+    gl.uniform1f(u.uOpen, open);
+    gl.uniform1f(u.uRimV, R.vertical || 1);
+    gl.uniform3fv(u.uInk, R.ink);
+  }
+
+  /* THE BARS, MEASURED: a film's picture is wherever its frame is not black.
+     A tiny copy of the frame (taller than wide: the edge that matters is
+     usually top and bottom) is read a few times a second; every row and
+     column whose mean rises above the threshold belongs to the picture, the
+     extent only grows (dark scenes cannot shrink it), and the edge is taken
+     at the inner side of the boundary sample, so any error falls inside the
+     picture, where the rim's dark already covers the true edge. The reading
+     never stops while the film plays: quick while the extent is still being
+     found, then a light look (calm) for the rest of the film, so a film that
+     opens its bars later (a title card that takes the whole frame) widens
+     the rim with it. */
+  var BARS = { w: 128, h: 288, every: 250, calm: 600, lum: 6, settle: 3000 };
+  function measureBars(video, ctx) {
+    var W = BARS.w, H = BARS.h, d;
+    ctx.drawImage(video, 0, 0, W, H);
+    try { d = ctx.getImageData(0, 0, W, H).data; } catch (e) { return null; }   // a cross-origin film without CORS
+    var rows = new Float32Array(H), cols = new Float32Array(W), x, y, i, l;
+    for (y = 0; y < H; y++) {
+      for (x = 0; x < W; x++) {
+        i = (y * W + x) * 4;
+        l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+        rows[y] += l; cols[x] += l;
+      }
+    }
+    var top = -1, bot = -1, left = -1, right = -1;
+    for (y = 0; y < H; y++) if (rows[y] / W > BARS.lum) { if (top < 0) top = y; bot = y; }
+    for (x = 0; x < W; x++) if (cols[x] / H > BARS.lum) { if (left < 0) left = x; right = x; }
+    if (top < 0 || left < 0) return null;   // a black frame says nothing
+    return [left === 0 ? 0 : (left + 1) / W, top === 0 ? 0 : (top + 1) / H,
+      right === W - 1 ? 1 : right / W, bot === H - 1 ? 1 : bot / H];
+  }
+  var MindsEye = {
+    create: function (cv, R) {
+      var gl = null, prog = null;
+      try { gl = cv.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false, powerPreference: 'low-power' }); } catch (e) { gl = null; }
+      if (!gl) return null;
+      try { prog = compile(gl, VS_FULL, FS_RIM); } catch (e) {
+        if (window.console) console.warn('[cinema] rim shader', e && e.message);
+        return null;
+      }
+      var E = { gl: gl, cv: cv, R: R, vao: gl.createVertexArray(), t0: now(), liveAt: 0, w: 0, h: 0, drawn: false,
+        target: R.picture.slice(), detected: false, video: null, bars: null, probeAt: 0, firstProbe: 0, grewAt: 0, lastT: now() };
+      /* the film's bars, measured while it plays (unless the film named its picture) */
+      E.watch = function (video) {
+        if (R.fixed || !video) return;
+        var c = document.createElement('canvas');
+        c.width = BARS.w; c.height = BARS.h;
+        E.video = video;
+        E.bars = c.getContext('2d', { willReadFrequently: true });
+      };
+      /* one step of the measuring and the easing; true when the picture moved */
+      E.measure = function () {
+        var tn = now(), v = E.video;
+        var cadence = E.detected && tn - E.grewAt > BARS.settle ? BARS.calm : BARS.every;
+        if (E.bars && v && v.readyState >= 2 && !v.paused && tn - E.probeAt >= cadence) {
+          if (!E.firstProbe) E.firstProbe = tn;
+          E.probeAt = tn;
+          var m = null;
+          try { m = measureBars(v, E.bars); } catch (e) { m = null; }
+          if (m) {
+            var t = E.target, grew = !E.detected;
+            if (!E.detected) { E.target = m; E.detected = true; }
+            else {
+              if (m[0] < t[0]) { t[0] = m[0]; grew = true; }
+              if (m[1] < t[1]) { t[1] = m[1]; grew = true; }
+              if (m[2] > t[2]) { t[2] = m[2]; grew = true; }
+              if (m[3] > t[3]) { t[3] = m[3]; grew = true; }
+            }
+            if (grew) E.grewAt = tn;
+          }
+        }
+        var dt = Math.min(0.1, (tn - E.lastT) / 1000), moved = false, P = R.picture, j, k;
+        E.lastT = tn;
+        if (R.fixed) return false;
+        k = REDUCE ? 1 : 1 - Math.exp(-dt / 0.25);   // reduced motion: snap, never slide
+        for (j = 0; j < 4; j++) {
+          var dlt = E.target[j] - P[j];
+          if (Math.abs(dlt) > 1e-4) { P[j] += dlt * k; moved = true; } else P[j] = E.target[j];
+        }
+        return moved;
+      };
+      E.picture = function () { return R.picture.slice(); };
+      /* the dark's clock in seconds: one still moment under reduced motion */
+      E.time = function () { return REDUCE ? 23 : (now() - E.t0) / 1000; };
+      /* the eye opening, eased from the first live frame */
+      E.open = function () {
+        var o = R.open;
+        if (REDUCE || !(o[1] > 0)) return 1;
+        if (!E.liveAt) return o[0];
+        var k = smooth((now() - E.liveAt) / 1000 / o[1]);
+        return o[0] + (1 - o[0]) * k;
+      };
+      E.live = function () { if (!E.liveAt) E.liveAt = now(); };
+      E.resize = function (w, h) {
+        E.w = w; E.h = h;
+        var s = R.scale || 0.5;
+        cv.width = Math.max(2, Math.round((w + 2 * RIM_PAD) * s));
+        cv.height = Math.max(2, Math.round((h + 2 * RIM_PAD) * s));
+        E.drawn = false;
+        E.draw();
+      };
+      E.draw = function () {
+        var moved = E.measure();
+        if (REDUCE && E.drawn && !moved) return;
+        gl.viewport(0, 0, cv.width, cv.height);
+        gl.disable(gl.BLEND);
+        gl.useProgram(prog.p);
+        rimUniforms(gl, prog.u, R, E.w, E.h, E.time(), E.open());
+        gl.uniform2f(prog.u.uPad, RIM_PAD / Math.max(1, E.w), RIM_PAD / Math.max(1, E.h));
+        gl.bindVertexArray(E.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        E.drawn = true;
+      };
+      /* the rim as it stands this moment, for the shatter's bake */
+      E.state = function () { return { R: R, secs: E.time(), open: E.open(), picture: R.picture.slice() }; };
+      E.release = function () {
+        var ext = gl.getExtension('WEBGL_lose_context');
+        if (ext) ext.loseContext();
+      };
+      return E;
+    },
   };
 
   // ── the shatter: cracks, the break, and the light behind the screen ────────
@@ -649,7 +912,7 @@
     '#version 300 es\n' +
     'precision highp float;\n' +
     'in vec2 aO; in vec2 aV; in vec4 aP; in vec3 aC;\n' +
-    'uniform vec2 uView; uniform float uT; uniform float uDpr;\n' +
+    'uniform vec2 uView; uniform float uT; uniform float uDpr; uniform float uTail;\n' +
     'out vec3 vC;\n' +
     'void main(){\n' +
     '  float t = uT - aP.z; float k = t / aP.x;\n' +
@@ -659,7 +922,7 @@
     '  gl_PointSize = aP.y * uDpr * (1.0 - 0.35 * k);\n' +
     '  float tw = 0.55 + 0.45 * sin(t * 31.0 + aP.z * 173.0);\n' +
     '  float life = (1.0 - k) * (1.0 - k) * smoothstep(0.0, 0.06, t);\n' +
-    '  vC = aC * tw * life;\n' +
+    '  vC = aC * tw * life * uTail;\n' +
     '}\n';
   var FS_DUST =
     '#version 300 es\n' +
@@ -811,6 +1074,9 @@
         if (window.console) console.warn('[cinema] shatter shaders', e && e.message);
         return { ok: false, release: function () {} };
       }
+      /* the mind's eye bake compiles with the rest, so the break never hitches;
+         if it cannot, the frozen frame simply goes in without its rim */
+      try { S.rimBake = compile(gl, VS_FULL, FS_RIMBAKE); } catch (e) { S.rimBake = null; }
       S.vao = gl.createVertexArray();
       S.dvao = gl.createVertexArray();
       S.lvao = gl.createVertexArray();
@@ -913,8 +1179,47 @@
       } catch (e) { hasFrame = 0; }   // a film served without CORS: the dark breaks alone
     }
     if (!hasFrame) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    /* the mind's eye goes into the frozen frame exactly as it stood (the same
+       function, the same clock), so the first frame of the break is the
+       picture the viewer saw, soft edges and all */
+    var frameTex = S.tex, rimBaked = 0;
+    if (hasFrame && o.rim && S.rimBake) {
+      var fw = o.video.videoWidth || 2, fh = o.video.videoHeight || 2;
+      var baked = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, baked);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fw, fh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      var fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, baked, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) {
+        gl.viewport(0, 0, fw, fh);
+        gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST);
+        gl.useProgram(S.rimBake.p);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, S.tex);
+        gl.uniform1i(S.rimBake.u.uSrc, 0);
+        rimUniforms(gl, S.rimBake.u, o.rim.R, o.rect.w, o.rect.h, o.rim.secs, o.rim.open, o.rim.picture);
+        gl.bindVertexArray(S.lvao);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindVertexArray(null);
+        frameTex = baked; rimBaked = 1;
+      }
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.deleteFramebuffer(fb);
+    }
 
     var CR = 0.24, BR = 0.46, END = 2.7;
+    /* THE SETTLING: over the break's last breaths every light (the flash, the
+       rays, the glare, the lit seams and edges, the motes) eases to nothing
+       together with the last glass, so the final frame IS the page and the
+       canvas leaves without a seam. (The rays decay slowly on their own and
+       used to still glow at a few percent when the canvas went, which read as
+       a lingering layer over a dark page, then a jump.) */
+    var TAIL = 0.6;
     var cam = 1.15 * Math.max(W, H);
     var LIGHT = [0.86, 0.91, 1.0], RAY = [0.6, 0.72, 0.86];
     var t0 = now(), covered = false;
@@ -933,6 +1238,9 @@
       var rays = te < BR ? 0.12 * smooth(tension) : Math.exp(-tb * 1.5) * (tb < 0.1 ? smooth(tb / 0.1) : 1);
       var flare = te < BR ? 0 : Math.exp(-tb * 1.2);
       var ring = te * 1800, ringA = te < 0.2 ? Math.pow(1 - te / 0.2, 2) : 0;
+      var tail = 1 - smooth((te - (END - TAIL)) / TAIL);   // 1, then eased to exactly 0 at END
+      glow *= tail; flash *= tail; rays *= tail; flare *= tail;
+      if (frozen) Q._light = { te: te, flash: flash, rays: rays, glow: glow, flare: flare, tail: tail };   // QA: the light at the held moment
 
       gl.viewport(0, 0, cv.width, cv.height);
       gl.clearColor(0, 0, 0, 0);
@@ -983,7 +1291,7 @@
       gl.uniform4fv(su.uBlanket, blanket);
       gl.uniform1f(su.uHasFrame, hasFrame);
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, S.tex);
+      gl.bindTexture(gl.TEXTURE_2D, frameTex);
       gl.uniform1i(su.uFrame, 0);
       gl.bindVertexArray(S.vao);
       gl.drawArrays(gl.TRIANGLES, 0, n);
@@ -1003,6 +1311,7 @@
       gl.uniform2f(du.uView, W, H);
       gl.uniform1f(du.uT, te);
       gl.uniform1f(du.uDpr, dpr);
+      gl.uniform1f(du.uTail, tail);
       gl.bindVertexArray(S.dvao);
       gl.drawArrays(gl.POINTS, 0, dn);
       gl.bindVertexArray(null);
@@ -1013,7 +1322,7 @@
       else o.done();
     }
     frame();
-    if (window.HWCinemaTheater) window.HWCinemaTheater._last = { shards: pat.shards.length, joints: pat.joints.length, verts: n, dust: dn, hasFrame: hasFrame, dpr: dpr };
+    if (window.HWCinemaTheater) window.HWCinemaTheater._last = { shards: pat.shards.length, joints: pat.joints.length, verts: n, dust: dn, hasFrame: hasFrame, rim: rimBaked, dpr: dpr };
   }
 
   // ── the sound of it: a crack, the break, and the light (Web Audio, no files)

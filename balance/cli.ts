@@ -1128,7 +1128,7 @@ function printExplain(x: PairExplain): void {
     for (const b of x.blindRules) console.log(`  · ${b}`);
   }
   if (x.shape) {
-    console.log(`SHAPE: ${x.shape.probe} probe${x.shape.probeWhy ? ` (${x.shape.probeWhy})` : ''}, ${x.shape.rig} rig${x.shape.rigWhy ? ` (${x.shape.rigWhy})` : ''}${x.shape.withKey ? ', resonance-keyed' : ''}${x.shape.dummyId ? `, target: ${x.shape.dummyId}` : ''}${x.shape.bled ? ', bled rig (half vitals)' : ''}`);
+    console.log(`SHAPE: ${x.shape.probe} probe${x.shape.probeWhy ? ` (${x.shape.probeWhy})` : ''}, ${x.shape.rig} rig${x.shape.rigWhy ? ` (${x.shape.rigWhy})` : ''}${x.shape.withKey ? ', resonance-keyed' : ''}${x.shape.dummyId ? `, target: ${x.shape.dummyId}` : ''}${x.shape.bled ? ', bled rig (half vitals)' : ''}${x.shape.drained ? ', drained rig (mana under the low line)' : ''}`);
   }
   if (x.probe) {
     console.log(`PROBE: ${x.probe.verdict.toUpperCase()} — ${x.probe.identicalSeeds}/${x.probe.seeds} seed(s) byte-identical, Δoutput ${(100 * x.probe.dOutputRel).toFixed(1)}%`);

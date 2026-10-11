@@ -343,7 +343,13 @@ export class Renderer {
   /** Saved world framing shares the projection used by pointer aim and all
    *  world passes. Couch fit still widens this base; resolution scales it
    *  separately. An absent preference preserves the classic 1.3 framing. */
-  private get baseZoom(): number { return CAMERA_CFG.zoom.base * cameraZoomOf(this.getSettings?.().cameraZoom); }
+  private captureBaseZoom: number | null = null;
+  /** Capture/showcase framing; null restores the live saved camera preference. */
+  setBaseZoom(zoom: number | null): void {
+    if (zoom !== null && (!Number.isFinite(zoom) || zoom <= 0)) throw new Error('Capture zoom must be positive and finite.');
+    this.captureBaseZoom = zoom;
+  }
+  private get baseZoom(): number { return this.captureBaseZoom ?? CAMERA_CFG.zoom.base * cameraZoomOf(this.getSettings?.().cameraZoom); }
   private couchStretch = 1;
   /** THE SMOOTH SHELL's follow (camera.ts springFollow): a client shell's camera chases its
    *  hero on a critically damped spring. Null on solo and every host (main.ts sets it on a
@@ -352,6 +358,20 @@ export class Renderer {
   /** THE SMOOTH SHELL's watchdog (net/shell.ts): 0..1, how long a hosted world has gone
    *  silent past its stall; the frame strains with it (a drawn cue, no text). 0 draws nothing. */
   linkStrain = 0;
+  /** Standalone stages can omit words and HUD while retaining world rendering. */
+  worldOnly = false;
+  directorFocus: { x: number; y: number } | null = null;
+  directorClean = false;
+  directorNoSightVeil = false;
+  directorCinematic = false;
+  private captureViewport: { w: number; h: number } | null = null;
+  setCaptureViewport(v: { w: number; h: number } | null): void {
+    if (v && (!Number.isFinite(v.w) || !Number.isFinite(v.h) || v.w <= 0 || v.h <= 0)) throw new Error('Capture viewport must be positive and finite.');
+    this.captureViewport = v ? { w: Math.max(2, Math.round(v.w)), h: Math.max(2, Math.round(v.h)) } : null;
+    this.resize();
+  }
+  private get frameW(): number { return this.captureViewport?.w ?? window.innerWidth; }
+  private get frameH(): number { return this.captureViewport?.h ?? window.innerHeight; }
   private get zoom(): number { return this.baseZoom * this.couchStretch * this.pixelScale; }
   /** Frame delta off the sim clock (canopy/roof fade smoothing). */
   private frameDt = 0;
@@ -493,13 +513,13 @@ export class Renderer {
   }
 
   resize(): void {
-    const w = window.innerWidth, h = window.innerHeight;
+    const w = this.frameW, h = this.frameH;
     // Buffer at the scaled size; the ELEMENT stays window-sized (CSS pins it
     // — with no explicit style the element would shrink to the buffer).
     this.canvas.width = Math.max(2, Math.round(w * this.pixelScale));
     this.canvas.height = Math.max(2, Math.round(h * this.pixelScale));
-    this.canvas.style.width = w + 'px';
-    this.canvas.style.height = h + 'px';
+    this.canvas.style.width = (this.captureViewport ? window.innerWidth : w) + 'px';
+    this.canvas.style.height = (this.captureViewport ? window.innerHeight : h) + 'px';
     // The crest overlay always carries NATIVE pixels (that is its point).
     this.overlay.width = Math.max(2, w);
     this.overlay.height = Math.max(2, h);
@@ -654,7 +674,7 @@ export class Renderer {
     // couch fit and the ordinary follow. The couch zoom still breathes;
     // the walls stand where the lock stamped them.
     const lockFocus = world.scene?.focus ? null : world.frameLockFocus();
-    let focus: { x: number; y: number } = world.scene?.focus ?? lockFocus ?? world.player.pos;
+    let focus: { x: number; y: number } = this.directorFocus ?? world.scene?.focus ?? lockFocus ?? world.player.pos;
     if (couchOn && viewOk) {
       // The fit sees the EFFECTIVE base zoom (× pixelScale): buffer dims and
       // zoom scale together, so the stretch math is scale-invariant.
@@ -673,7 +693,7 @@ export class Renderer {
     // The positional veils are single-eye fabrics — under a shared couch
     // frame they suspend per COUCH_CFG.render (both players see what the
     // camera sees); each veil's own fade handles the transition gracefully.
-    this.sightVeil.suspend = couchOn && COUCH_CFG.render.sightVeil === 'off';
+    this.sightVeil.suspend = (couchOn && COUCH_CFG.render.sightVeil === 'off') || this.directorNoSightVeil;
     this.roomVeil.suspend = couchOn && COUCH_CFG.render.roomVeil === 'off';
     const z = this.zoom, vw = w / z, vh = h / z;
     const az = world.arena;
@@ -976,10 +996,10 @@ export class Renderer {
     // is wordZ × (cssW / active buffer W) — the crest overlay carries native
     // pixels (ratio 1), the main canvas its render-scale buffer.
     this.wordView = {
-      z: crest ? wordZ : wordZ * (window.innerWidth / Math.max(1, this.canvas.width)),
+      z: crest ? wordZ : wordZ * (this.frameW / Math.max(1, this.canvas.width)),
       ox: this.cam.x - shx, oy: this.cam.y - shy,
     };
-    this.onCrest(crest, () => {
+    if (!this.worldOnly) this.onCrest(crest, () => {
       const wc = this.ctx;
       wc.save();
       wc.scale(wordZ, wordZ);
@@ -1008,6 +1028,10 @@ export class Renderer {
     }
 
     this.drawAtmosphere(world);
+    if (this.worldOnly) {         // a showcase stage: no screen overlays, no HUD
+      if (this.directorCinematic) this.drawCinematicOverlays(world, crest, w, h);
+      return;
+    }
     this.drawStatusFx();          // status ailment overlays (edge vignettes/frost/stars)
     this.drawSurvivalVignette(world); // THE SURVIVAL VEIL: per-row meter washes (breath's asphyxiation blue)
     this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge — over the veil: death keeps the last word
@@ -1030,7 +1054,7 @@ export class Renderer {
     this.uiW = surfW / us; this.uiH = surfH / us;
     // CSS px per virtual unit: the surface spans the window's CSS width
     // (resize() pins canvas.style.width = innerWidth on both surfaces).
-    this.uiToCss = us * (window.innerWidth / Math.max(1, surfW));
+    this.uiToCss = us * (this.frameW / Math.max(1, surfW));
     this.uiMouse.x = this.hudMouse.x / mScale / us; this.uiMouse.y = this.hudMouse.y / mScale / us;
     this.onCrest(crest, () => this.uiPass(us, () => {
       this.drawTimeflow(world);     // held-time wash + banner (engine/timeflow.ts hud specs)
@@ -1059,6 +1083,25 @@ export class Renderer {
     this.onCrest(crest, () => {
       this.drawTraversalFx(world);  // a vertical crossing's wind streaks + whiteout veil (covers the HUD)
       this.drawModeFade(world);     // a survived death's crossing — DEAD LAST (covers the HUD too)
+      if (world.deathPresentation) drawPlayerDeathScreenFlash(this.ctx, this.canvas.width, this.canvas.height, world.deathPresentation);
+    });
+  }
+
+  /** THE CINEMATIC OVERLAYS (directorCinematic): the action's own screen
+   *  moments, drawn in the same order and on the same surfaces as the full
+   *  pass above, minus every readout. */
+  private drawCinematicOverlays(world: World, crest: boolean, w: number, h: number): void {
+    const us = this.uiScaleLive();
+    const surfW = crest ? this.overlay.width : w;
+    const surfH = crest ? this.overlay.height : h;
+    this.uiW = surfW / us; this.uiH = surfH / us;
+    this.onCrest(crest, () => this.uiPass(us, () => {
+      this.drawTimeflow(world);
+      this.drawEyecatch(world);
+    }));
+    this.onCrest(crest, () => {
+      this.drawTraversalFx(world);
+      this.drawModeFade(world);
       if (world.deathPresentation) drawPlayerDeathScreenFlash(this.ctx, this.canvas.width, this.canvas.height, world.deathPresentation);
     });
   }
@@ -3947,7 +3990,7 @@ export class Renderer {
     const edge = VIS_CFG.speech.dodge.edge;
     const view: SpeechRect = {
       x: wv.ox + edge, y: wv.oy + edge,
-      w: window.innerWidth / wv.z - edge * 2, h: window.innerHeight / wv.z - edge * 2,
+      w: this.frameW / wv.z - edge * 2, h: this.frameH / wv.z - edge * 2,
     };
     // PHASE 1 — MEASURE. Every bubble's tuning, gate, clock, wrap and HOME
     // box (the wrap law's hang, pane-dodged) resolve before any draws, so
@@ -6216,7 +6259,7 @@ export class Renderer {
     // or hidden AI target. Native visibility/tier admission still owns this pass.
     const tc = VIS_CFG.combatFocus.threats;
     const nearbyThreat = tc.enabled && world.isPressingFoe(a, world.player.pos, world.player.tier, tc.radius);
-    if (a !== world.player && (nearbyThreat || a.life < a.maxLife() - 0.5 || anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.part)) {
+    if (a !== world.player && !this.directorClean && (nearbyThreat || a.life < a.maxLife() - 0.5 || anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.part)) {
       const bw = Math.max(a.radius * 2.2, nearbyThreat ? tc.minWidth : 0,
         anatomyState.weakpoints.length ? ANATOMY_CUE_CFG.overheadWidth : 0);
       const frac = clamp(a.life / a.maxLife(), 0, 1);
@@ -6248,7 +6291,7 @@ export class Renderer {
     // each dot one hit it can still eat. Same dent rule as every bar
     // (untorn stays clean); once the plies spend out, the ordinary life
     // bar above takes over and the body reads EXPOSED.
-    if (a !== world.player && a.pliesMax > 0 && a.plies > 0 && a.plies < a.pliesMax) {
+    if (a !== world.player && !this.directorClean && a.pliesMax > 0 && a.plies > 0 && a.plies < a.pliesMax) {
       const pip = PLY_CFG.pip;
       const w = (a.pliesMax - 1) * pip.gap;
       this.combatMeters.add(a,{x:x-w/2-pip.r,y:y-a.radius-8-pip.r,w:w+pip.r*2,h:pip.r*2},()=>{
@@ -6263,7 +6306,7 @@ export class Renderer {
     // LIFESPAN sliver (the Amalgam's clock): SIZABLE owned minions with a
     // finite hire show how much of it remains — swarms stay clean. A clock,
     // not a health readout: it ticks whether or not the life bar shows.
-    if (a !== world.player && a.owner && a.lifespan > 0 && a.radius >= 14 && a.lifespanTotal > 0) {
+    if (a !== world.player && !this.directorClean && a.owner && a.lifespan > 0 && a.radius >= 14 && a.lifespanTotal > 0) {
       const bw = a.radius * 2.2;
       this.combatMeters.add(a,{x:x-bw/2,y:y-a.radius-5.5,w:bw,h:2.5},()=>{
         ctx.fillStyle = '#b8a0e0';
@@ -6274,14 +6317,14 @@ export class Renderer {
 
     // Layered-defense bars: energy shield (cyan) and absorb (white) — the
     // shield bar follows the same dent rule (full ES on a full body = clean).
-    if (a.es > 0 && a.maxEs() > 0 && a.es < a.maxEs() - 0.5) {
+    if (!this.directorClean && a.es > 0 && a.maxEs() > 0 && a.es < a.maxEs() - 0.5) {
       const bw = a.radius * 2.2;
       this.combatMeters.add(a,{x:x-bw/2,y:y-a.radius-13,w:bw,h:3},()=>{
         ctx.fillStyle = '#5ad8d8';
         ctx.fillRect(x - bw / 2, y - a.radius - 13, bw * clamp(a.es / a.maxEs(), 0, 1), 3);
       });
     }
-    if (a.absorbTotal > 0) {
+    if (!this.directorClean && a.absorbTotal > 0) {
       const bw = a.radius * 2.2;
       this.combatMeters.add(a,{x:x-bw/2,y:y-a.radius-16,w:bw,h:2.5},()=>{
         ctx.fillStyle = '#e8f0f8';
@@ -6291,7 +6334,7 @@ export class Renderer {
     // POISE sliver (bronze): shown once the break-bar is DENTED — full bars
     // stay invisible so ordinary mobs read clean. A broken bar dims while
     // it climbs back to the re-arm line.
-    if (a !== world.player) {
+    if (a !== world.player && !this.directorClean) {
       const mp = a.maxPoise();
       if (mp > 0 && a.poise < mp - 0.5) {
         const bw = a.radius * 2.2;
@@ -6381,12 +6424,12 @@ export class Renderer {
     // meter above the head — the victim reads how close freedom is, the
     // HOLDER reads how long the catch will keep, and every ally reads
     // where the rescue stands.
-    if(a.heldBy!==undefined || a.grabHud) this.combatMeters.add(a,
+    if(!this.directorClean && (a.heldBy!==undefined || a.grabHud)) this.combatMeters.add(a,
       {x:x-50,y:y-a.radius-29,w:100,h:22},()=>this.drawGrabMeter(a,world));
 
     // Cast bar above the head (telegraphs enemy casts, too)
     const cs = a.casting;
-    if (cs) {
+    if (cs && !this.directorClean) {
       const castReadout = VIS_CFG.castReadout.enabled && world.seats.some(s => s.actor === a);
       const bw = castReadout ? VIS_CFG.castReadout.width : 44, bh = castReadout ? VIS_CFG.castReadout.height : 5;
       const movement = castReadout && (this.getSettings?.().castMovementHint ?? VIS_CFG.castReadout.showMovement) && castMovementHeld(world,a)

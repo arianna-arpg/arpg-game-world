@@ -42,13 +42,16 @@ import { buildManifest, type ExpeditionManifest } from './packages/manifest';
 import { bumpLedger, mergeLedger } from './packages/ledger';
 import { registerAllPackageFactions } from './packages/factionGen';
 import { Renderer } from './render/renderer';
+import { installSkillShowcases } from './showcase/host';
+import { Director } from './director/director';
+import { dayCycle as clipDayCycle, DAY_LENGTH as CLIP_DAY_LENGTH } from './world/daynight';
 import { RENDER_SCALE_CFG, nextNotch } from './render/renderScale';
 import { UI } from './ui/panels';
 import { errorOverlayShown, showErrorOverlay, type CrashEntry } from './ui/errorOverlay';
 import { LocalTransport } from './net/local';
 import { makeAccount } from './meta/account'; // the wilds shell's fresh account (startAsClient)
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
-import type { PlayerInput, MetaAction } from './net/intent';
+import type { PlayerInput, MetaAction, PlayerInputSource } from './net/intent';
 import { wireSeed } from './net/transport';
 import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from './net/transport';
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
@@ -73,7 +76,6 @@ import { PARTY_WIRE_CFG, type PartyInviteNote } from './net/partyWire';
 import { CLASSES, type ClassDef } from './data/classes';
 import { SKILLS as CLIP_SKILLS } from './data/skills';
 import { makeSkillGem as clipSkillGem } from './engine/skills';
-import { dayCycle as clipDayCycle, DAY_LENGTH as CLIP_DAY_LENGTH } from './world/daynight';
 import { DEV, GAME_TITLE } from './config';
 import { mountDevPanel } from './dev/panel';
 import { mountPassiveEditor } from './dev/passiveEditor';
@@ -383,6 +385,9 @@ registerAllPackageFactions();
 // A placeholder world until a run begins (the start menu is shown first); it is
 // replaced wholesale by startGame / resumeGame with the run's frozen manifest.
 let world = adoptWorld(new World(account, Object.freeze(buildManifest(account, rollSeed()))));
+// THE SKILL SHOWCASE (src/showcase/host.ts): any surface's data-skill-showcase
+// element becomes a live showcase of that skill, wherever it is shown.
+installSkillShowcases(document.body);
 const ui = new UI(
   () => world, () => account, () => saveAccount(account),
   () => settings, () => saveSettings(settings),
@@ -794,6 +799,9 @@ declare global {
       padPointer: () => PadPointer;
       fakePad: (p: FakePad | null) => void;
       step: (frames?: number, dtMs?: number) => void;
+      pilot: (src: PlayerInputSource | null) => void;
+      hold: (on: boolean) => void;
+      director: () => Director;
       devStartRun: (classId?: string) => string;
       loading: LoadingScreen;
       devStartLoadingRun: (classId?: string) => Promise<void>;
@@ -867,6 +875,30 @@ window.__game = {
   // per pass; a doubled drive double-steps its frame counter and snaps
   // stale actorShade fades early).
   step: (frames = 1, dtMs = 16.7) => { for (let i = 0; i < frames; i++) tick(last + dtMs); },
+  pilot: (src) => { localPilot = src; if (src) devInputSource = null; },
+  hold: (on) => { directorHold = on; },
+  director: () => director ??= new Director({
+    world: () => world, renderer,
+    startRun: async (classId, signal) => {
+      await diskHydrated;
+      signal.throwIfAborted();
+      // The disk reconcile owns the ledger until hydration resolves.
+      account.ledger.prologue_lived = 1;
+      const cancel = () => { if (loadingScreen.active) cancelLoadingToMenu(); };
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        const started = await withLoadingScreen(CLASSES.find(c => c.id === classId) ?? CLASSES[0]);
+        signal.throwIfAborted();
+        if (!started) throw new Error('Director entry was cancelled or failed.');
+        ui.hideAll();
+      } finally { signal.removeEventListener('abort', cancel); }
+    },
+    ready: waitDirectorReady,
+    step: (dtMs) => tick(last + dtMs),
+    setPilot: (src) => { localPilot = src; if (src) devInputSource = null; },
+    hold: (on) => { directorHold = on; },
+    ledger: () => account.ledger, ui: () => ui,
+  }),
   // DEV/QA: start a run headlessly (the perf harness's ignition) — the real
   // startGame path under the first (or named) class, menus dismissed.
   loading: loadingScreen,
@@ -881,8 +913,8 @@ window.__game = {
   // DEV/QA: seat any catalog skill by id straight onto a bar slot as THE DEV
   // GIFT (devThrongGrant's shape: past the learn gate, transient, never
   // saved), replacing whatever sat there, so a harness can walk the whole
-  // catalog without filling the pack: the skill-clip capture's door
-  // (scripts/capture-skill-clips.cjs). Returns the slot, or -1.
+  // catalog without filling the pack (balance/skill-showcase-ui.cjs mints its
+  // bag gems from it). Returns the slot, or -1.
   devGrantSkill: (skillId: string, level = 1, slot = 2) => {
     const def = CLIP_SKILLS[skillId];
     const p = world.player, known = world.localSeat.meta.knownSkills;
@@ -898,7 +930,7 @@ window.__game = {
     world.recalcPlayer();
     return slot;
   },
-  devInput: (source) => { devInputSource = source; },
+  devInput: (source) => { devInputSource = source; if (source) localPilot = null; },
   // DEV/QA: the skill-clip capture's catalog: every player skill (the
   // database page's list; noDrop rows are monster kit), each class's
   // opening bar (the body that films a skill) and the brightest hour.
@@ -1068,6 +1100,13 @@ function readLocalInput(dt: number): PlayerInput | null {
   // out of play (the world holds under either, solo — the timeflow law).
   if (ui.escapeMenuOpen || ui.couchJoinOpen) return null;
 
+  if (localPilot) {
+    try {
+      const intent = localPilot.poll(p, world, dt);
+      assertScriptedInput(intent);
+      return intent;
+    } catch (error) { localPilot = null; throw error; }
+  }
   const kb = settings.keybinds;
   const pb = settings.padBinds;
   // While the menu pointer owns the pad, its buttons/sticks are UI gestures,
@@ -1881,6 +1920,35 @@ function renderScaleTick(nowMs: number): void {
 }
 
 let last = performance.now();
+// THE AGENT SEAT + THE DIRECTOR (src/agent/, src/director/): a capture rig or
+// a playtest bot may drive the local seat through the same artery the
+// keyboard does (the pilot is read inside the guarded local-input path), and HOLD the
+// rAF pump so only __game.step() advances the game (deterministic takes).
+// Both are null/false in ordinary play — the classic loop, byte for byte.
+let localPilot: PlayerInputSource | null = null;
+let directorHold = false;
+let director: Director | null = null;
+/** A held capture still waits on the actual loading lease and native page I/O.
+ * Tick only through the loading gate; no scripted hand is installed yet. */
+async function waitDirectorReady(signal: AbortSignal): Promise<void> {
+  const prepared = world;
+  const deadline = performance.now() + 60000;
+  const cancel = () => { if (loadingScreen.active && world === prepared) cancelLoadingToMenu(); };
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    for (;;) {
+      signal.throwIfAborted();
+      if (world !== prepared || !running) throw new Error('Director world entry was replaced or cancelled.');
+      if (crashFatal) throw new Error('Director world entry failed: ' + crashFatal.msg);
+      const readiness = world.massRuntime?.nativeReadiness(world);
+      if (readiness?.status === 'refused') throw new Error(readiness.error ?? 'Director native pages were refused.');
+      if (!loadingScreen.active && (!readiness || readiness.status === 'ready')) return;
+      if (performance.now() >= deadline) throw new Error('Director world entry did not become ready.');
+      tick(last + 1000 / 60);
+      await new Promise<void>(resolve => setTimeout(resolve, 16));
+    }
+  } finally { signal.removeEventListener('abort', cancel); }
+}
 /** The rAF pump: one tick, then re-arm. All work lives in tick() so tests can
  *  drive frames SYNCHRONOUSLY via __game.step() — a hidden tab freezes rAF
  *  entirely (the tab-throttle gotcha), which would otherwise freeze input
@@ -1891,7 +1959,7 @@ let last = performance.now();
  *  crashed sim is not ticked onward beneath the overlay. */
 function frame(now: number): void {
   if (crashFatal) return;
-  try { tick(now); } catch (e) { reportFatal(e, 'game loop'); }
+  try { if (!directorHold) tick(now); } catch (e) { reportFatal(e, 'game loop'); }
   if (!crashFatal) requestAnimationFrame(frame);
 }
 function tick(now: number): void {

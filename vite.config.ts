@@ -20,6 +20,7 @@ import { loadingFramePlugin } from './scripts/loading-frame-plugin';
 import type { Connect, HmrContext, ViteDevServer, PreviewServer } from 'vite';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
 // THE RELOAD TREES — source trees that may NEVER take a partial HMR update.
@@ -136,6 +137,14 @@ export default defineConfig({
     __HOLLOW_WAKE_WORLDMASS__: process.env.HOLLOW_WAKE_WORLDMASS === '1',
   },
   plugins: [diskSavePlugin(), reloadTreesPlugin(), loadingFramePlugin()],
+  // The showcase is a separate realm; both entries share the game modules.
+  build: { rollupOptions: {
+    input: {
+      main: fileURLToPath(new URL('./index.html', import.meta.url)),
+      showcase: fileURLToPath(new URL('./showcase.html', import.meta.url)),
+    },
+    output: { chunkFileNames: 'assets/shared-[hash].js' },
+  } },
   // saves/ writes are DATA, not source — without this ignore, every zone-hop's
   // autosave tripped the watcher into a FULL RELOAD (killing the live world
   // mid-play and mid-QA; the long-standing "reload ate my test" gotcha).

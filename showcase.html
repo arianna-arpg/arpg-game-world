@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hollow Wake · skill showcase</title>
+  <!-- THE SKILL-SHOWCASE ENGINE (src/showcase/engine.ts): a sandboxed copy of
+       the game that plays one skill's stage at a time, world only, into this
+       canvas. The game's host (src/showcase/host.ts) holds it in a hidden
+       frame sized to its render resolution and copies frames to whatever
+       surface asked; the recorder (scripts/capture-skill-clips.cjs) opens it
+       directly. It never saves. Contract: docs/engine/skill-showcases.md. -->
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="showcase"></canvas>
+  <script type="module" src="/src/showcase/engine.ts"></script>
+</body>
+</html>
