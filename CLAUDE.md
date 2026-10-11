@@ -9,6 +9,13 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Resource pickups, siphons and measured leech returns share geometry in
+`data/resourceVisuals.ts` and `render/vis/resourceFlowLayer.ts`; bounded transfer
+receipts extend feeding cues and co-op snapshots without changing payout timing.
+Coverage and the remaining visual sweep live in `docs/design/skill-visual-sweep.md`.
+Verify resourcevisuals, feedingcues, defenses, grab, cosmetics, skillflights,
+sim smoke and hidden `balance/resource-visuals-ui.cjs` plus feeding-cues-ui.
+
 Native nova identities use `data/skillVisuals.ts` and `render/vis/skillBurstVoice.ts`.
 Projectile, beam, ground and aura identities extend this through
 `data/skillFlightVisuals.ts` and `render/vis/skillFlightVoice.ts`; the shared

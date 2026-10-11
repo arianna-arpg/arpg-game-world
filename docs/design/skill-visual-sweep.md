@@ -1,0 +1,80 @@
+# Skill visual sweep
+
+Working branch: `codex/skill-visual-identity`. This is a presentation pass on the
+main-based visual branch, kept separate from seamless content integration.
+
+## Recovery pass
+
+Life uses tapered blood drops and curved, accelerating strands. Mana uses split
+needles and straight filaments. Energy shield uses open plates and a second
+chevron. Wakeflames use a flickering flame crest. Geometry does not depend on
+paint, so a wardrobe tint cannot turn one resource into another.
+
+| Path | Coverage | Timing |
+| --- | --- | --- |
+| Homing resource pickups | Siphon Strike, Siphon Blood, Devouring Maw; future `siphonOrb` effects | Short wake behind the actual pickup; gain cue only on arrival |
+| Immediate native drains | Lifedrain, Soul Volley, Sanguine Leech; future `SkillDef.siphon` | Victim-to-recipient trace after actual healing |
+| Persistent draining aura | Vampiric Presence; future `siphonFraction` auras | Coalesced return while real ticks heal |
+| Hit sustain | `lifeOnHit`, `lifeLeech`, `manaLeech`, `esOnHit`, `esLeech`, including skill-local grafts | Actual clamped gain from the shared damage pipeline |
+| Status leech | Every status using `leechAcc` and `casterId` | Source is the affected body, recipient is the living applier |
+| Transferred leech | `vampiricShare` | Damaged victim to each actually healed ally |
+| Digestion | Grab/swallow `leech` | Actual mitigated digestion recovery |
+| Flesh consumption | Corpse Feast, devour/sacrifice paths with flesh/life feeding material | Existing closing jaws remain; fragments become blood strands |
+| Instant resource restores and pickups | Shared `applyRestore`, all life/mana/ES orbs | Matching body/HUD marks only after a positive gain |
+| Restore streams | Existing measured restore cues | Same new material shapes, original timing and opt-outs |
+
+`data/resourceVisuals.ts` owns the material grammar and density. The painter
+`render/vis/resourceFlowLayer.ts` shares these marks across the pickup, return,
+body and HUD layers. `engine/feedingCues.ts` stores only bounded presentation
+receipts: six per actor, at most 32 painted per frame, viewed seat first. Repeated
+ticks refresh endpoints/lifetime without restarting the animation. Stop, death,
+downing and zone transit clear the traces. No extra combat random draws occur.
+
+Instant recovery is already paid when its brief trace appears; it creates no
+projectile or delayed payout. Traveling siphons retain their pickup ownership,
+speed, expiry, death-to-ground fallback, proc/refund behavior and arrival heal.
+Co-op carries copied endpoints and presentation-only pickup destinations, never
+simulated actor ownership. Missing old-host fields clear safely. Both ends obey
+the existing covered-floor visibility check; the sight veil composites above.
+
+## Deliberately different effects
+
+- Carrion chewing and ritual mass remain distinct from liquid life extraction.
+- Magic-pack **siphon** transfers speed between pack members; it is not blood.
+- Waypoint/leyline siphons drain world power, not life.
+- Ward leech creates the existing defensive shell. It is not an ES pickup.
+- Ordinary regeneration is not a source-to-recipient transfer.
+- Life Bond and friendly healing are restorative links, not victim extraction.
+
+## Next visual passes
+
+The generated census in `balance/reports/skill-visuals/resource-audit.json`
+enumerates native recovery users and delivery counts from the live catalogue.
+These counts describe delivery families, not a claim that every member lacks art.
+
+| Priority | Area | Remaining opportunity |
+| --- | --- | --- |
+| 1 | Tethers and targeted skills (38 target deliveries) | Replace generic straight links with distinguishable attachment, tension and release motions; separate harm, restoration and control |
+| 2 | Melee (99), non-beam cones (32) | Sweep profiles, contact accents and recovery motions; preserve exact reach and safe openings |
+| 3 | Dash (21), leap (14), blink (9), carom (1) | Distinct departure/travel/landing language without disguising actual relocation |
+| 4 | Self effects (106), marks and detonations (3) | Audit charge-up, readiness, interruption and release; avoid stacking interchangeable rings |
+| 5 | Storm (33), summon (61), construct (45) | Arrival, cadence and lifetime cues, coordinated with existing anatomy/companion art |
+
+Already authored on this branch: 109 novas, 172 projectiles, six native beams,
+163 ground skills and 42 auras. Continue reviewing their scale, busy-scene density
+and low-contrast surfaces even though they have catalogue identities. This sweep
+does not declare encounter acceptance or the remaining families complete.
+
+## Verification
+
+- `npm run check`, `npm run build`, sim smoke.
+- Run `npm run probe -- <name>` separately for resourcevisuals, feedingcues,
+  defenses, grab, cosmetics and skillflights (the filter accepts one name).
+- Hidden `balance/resource-visuals-ui.cjs` after build: production painter, shared
+  tint, old/new pickup comparison, motion, hidden floors, bounded crowd drawing,
+  real siphon/drain/aura cases and co-op. Writes an animated resource study beside
+  the previous full skill catalogue.
+- Existing hidden `balance/feeding-cues-ui.cjs` after its probe and build.
+
+Before transferring to seamless, re-run integration checks against its current
+head. Do not merge the entire content-divergent branch to carry these visuals.

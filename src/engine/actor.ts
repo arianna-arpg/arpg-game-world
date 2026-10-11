@@ -1035,6 +1035,7 @@ export class Actor {
   companionCues?: import('./companionCues').CompanionCueState;
   feedingMeal?: import('./feedingCues').FeedingMealCue;
   restoreGains: import('./feedingCues').RestoreGainCue[] = [];
+  resourceFlows: import('./feedingCues').ResourceFlowCue[] = [];
   anatomyCues?: import('./anatomyCues').AnatomyCueState;
   partScars: import('./anatomyCues').AnatomyPartCue[] = [];
   procCuePulses: import('./procCues').ProcCuePulse[] = [];

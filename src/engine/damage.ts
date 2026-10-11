@@ -1,5 +1,6 @@
 import { throngTravelProtected } from './throngEvolution';
 import { spendAbsorbLayers } from './absorb';
+import { noteResourceFlow } from './feedingCues';
 import { weakPointBonus } from './weakpoints';
 // ---------------------------------------------------------------------------
 // The damage pipeline. One path for everyone — player, monsters, minions.
@@ -897,7 +898,9 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   if (total > 0 && !attacker.dead) {
     const onHit = attacker.sheet.get('lifeOnHit', packet.tags, packet.extra);
     const leech = attacker.sheet.get('lifeLeech', packet.tags, packet.extra) * total;
-    const leechHealed = attacker.healBy(onHit + leech) * (leech / Math.max(0.000001, onHit + leech));
+    const healed = attacker.healBy(onHit + leech);
+    noteResourceFlow(attacker, target, 'life', healed);
+    const leechHealed = healed * (leech / Math.max(0.000001, onHit + leech));
     if (leechHealed > 0) attacker.gainEvents.push({ kind: 'heal', id: 'life', depth: 0, n: leechHealed, tags: [...packet.tags] });
     // WARD LEECH (Soulflay): a share of the hit crystallizes as the
     // decaying shell — gainWard is the one gate, so wardGain scales it.
@@ -907,10 +910,12 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     // shield on-hit/leech and mana leech, each capped by its own max.
     const esGain = attacker.sheet.get('esOnHit', packet.tags, packet.extra)
       + attacker.sheet.get('esLeech', packet.tags, packet.extra) * total;
-    if (esGain > 0) attacker.gainEs(esGain);
+    if (esGain > 0) noteResourceFlow(attacker, target, 'es', attacker.gainEs(esGain));
     const mLeech = attacker.sheet.get('manaLeech', packet.tags, packet.extra) * total;
     if (mLeech > 0) {
+      const before = attacker.mana;
       attacker.mana = Math.min(attacker.availableMaxMana(), attacker.mana + mLeech);
+      noteResourceFlow(attacker, target, 'mana', attacker.mana - before);
     }
     // POISE on hit (the fight-to-stay-armed lane): tag-queried like the
     // rest, flowing through gainPoise — it feeds a broken bar's climb and

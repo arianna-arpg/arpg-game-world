@@ -1,5 +1,7 @@
 import { FEEDING_CUE_CFG as C } from '../../data/feedingCues';
 import { feedingStyle, type FeedingCueState, type FeedingTransfer, type RestoreGainCue } from '../../engine/feedingCues';
+import { drawResourceFlow, drawResourceMark } from './resourceFlowLayer';
+import { RESOURCE_FLOW } from '../../data/resourceVisuals';
 function stroke(ctx: CanvasRenderingContext2D, color: string, width = C.lineWidth) {
   ctx.strokeStyle = C.outline; ctx.lineWidth = width + 2.5; ctx.stroke();
   ctx.strokeStyle = color; ctx.lineWidth = width; ctx.stroke();
@@ -24,6 +26,11 @@ export function drawFeedingTransfer(ctx: CanvasRenderingContext2D, f: {
   ctx.beginPath();
   ctx.arc(0, 0, r, -1.15, 1.15); ctx.moveTo(-Math.cos(1.15) * r, Math.sin(1.15) * r);
   ctx.arc(0, 0, r, Math.PI - 1.15, Math.PI + 1.15); stroke(ctx, f.color, 2); ctx.restore();
+  if (row.profile === 'flesh' || row.profile === 'life') {
+    drawResourceFlow(ctx, { source: 0, from: f.pos, to: row.to, fromTier: row.fromTier, toTier: row.toTier,
+      resource: 'life', color: f.color, age: t * RESOURCE_FLOW.life, left: f.life, strength: 1 });
+    ctx.restore(); return;
+  }
   for (let i = 0; i < style.pieces; i++) {
     const p = Math.max(0, Math.min(1, t * 1.3 - i * 0.045));
     const bend = Math.sin(p * Math.PI) * style.curl * (i % 2 ? 1 : -1);
@@ -58,7 +65,7 @@ export function drawFeedingBody(ctx: CanvasRenderingContext2D, row: FeedingCueSt
     for (let i = 0; i < C.bodyMotes; i++) {
       const p = (time * 2 + i / C.bodyMotes) % 1, angle = base + (i - 1) * 0.2;
       const r = radius * (1.4 - p * 0.9);
-      mote(ctx, Math.cos(angle) * r, Math.sin(angle) * r, g.color, g.resource === 'es' || g.resource === 'absorb');
+      drawResourceMark(ctx, g.resource, Math.cos(angle) * r, Math.sin(angle) * r, angle + Math.PI, 1.7, g.color);
     }
     ctx.restore();
   }
@@ -77,7 +84,7 @@ export function drawRestoreHud(ctx: CanvasRenderingContext2D, gains: RestoreGain
       const p = (time * 2 + i / C.bodyMotes) % 1;
       const angle = shield ? -Math.PI / 2 + (i - 1) * 0.26 : (resource === 'life' ? Math.PI : 0) + (i - 1) * 0.3;
       const r = radius + C.hudReach * (1 - p);
-      mote(ctx, x + Math.cos(angle) * r, y + Math.sin(angle) * r, g.color, shield, 2.4);
+      drawResourceMark(ctx, g.resource, x + Math.cos(angle) * r, y + Math.sin(angle) * r, angle + Math.PI, 1.7, g.color);
     }
     ctx.restore();
   }

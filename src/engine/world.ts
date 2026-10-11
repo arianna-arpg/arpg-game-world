@@ -6,7 +6,7 @@ import type { SkillFieldVisual } from './skillFieldVisual';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
-import { feedingCueFlash, noteRestoreGain } from './feedingCues';
+import { feedingCueFlash, noteRestoreGain, noteResourceFlow } from './feedingCues';
 import { companionCueFlash, companionCueSpec, type CompanionCueEvent } from './companionCues';
 import { RECOVERY_CUES, type RecoveryCueKind } from '../data/companionCues';
 import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
@@ -1689,6 +1689,11 @@ export interface ResourceOrb {
   /** SIPHON orbs home to their owner and pour on arrival (nobody else can
    *  scoop them); cleared if the owner dies — the blood falls to the floor. */
   homeTo?: Actor;
+  /** Presentation only on a replica; never a simulated pickup destination. */
+  flowTo?: Vec2;
+  flowTier?: number;
+  /** The struck body's story while airborne; does not change pickup rules. */
+  flowFromTier?: number;
   /** THE SPOILS STORY (see GemDrop.tier): the story the orb lies on — only a
    *  same-story seat scoops it; stamped by the shedder, else derived at the
    *  sweep from the floor. */
@@ -5927,7 +5932,7 @@ export class World {
     this.flashes = [];
     for (const a of this.actors) {
       a.procCuePulses.length = 0; a.procPopEvents.length = 0;
-      a.restoreGains.length = 0; a.feedingMeal = undefined;
+      a.restoreGains.length = 0; a.resourceFlows.length = 0; a.feedingMeal = undefined;
     }
     this.dissolves = []; // THE DISSOLUTION GRAMMAR: motions are zone-local after-images
     this.emergences = []; // THE EMERGENCE GRAMMAR: arrivals are zone-local too
@@ -33626,7 +33631,7 @@ export class World {
           this.recordIndirectDamage(v, a, deedLifeBefore);
           hold.dotAcc += taken;
           SIM_TAP.current?.onDot?.(v, taken, dot.type);
-          if (hold.spec.leech) a.healBy(taken * hold.spec.leech);
+          if (hold.spec.leech) noteResourceFlow(a, v, 'life', a.healBy(taken * hold.spec.leech));
           if (v.life <= 0 && !v.dead) {
             this.kill(v, false, a);
             this.grabRelease(a);
@@ -42381,6 +42386,7 @@ export class World {
       landed = target.gainEs(fx.amount);
       if (fx.resetEsDelay) target.esDelay = 0;
     }
+    if (fx.resource !== 'poise') noteRestoreGain(target, fx.resource, landed);
     if (landed > 0 && !opts?.noEvent && target.gainEvents.length < 64) {
       target.gainEvents.push({
         kind: 'restore', id: fx.resource, depth: 0,
@@ -43361,8 +43367,9 @@ export class World {
       // SIPHON (Lifedrain, Soul Volley): a fraction of the landed hit flows
       // home as HEALING — × healPower, gated by the caster's own healTaken.
       if (dealt > 0 && def.siphon && !caster.dead) {
-        caster.healBy(dealt * def.siphon
+        const gained = caster.healBy(dealt * def.siphon
           * caster.sheet.get('healPower', skillContextTags(def), extra));
+        noteResourceFlow(caster, target, 'life', gained, def.feedingCue);
       }
       // VAMPIRIC SHARE (the transferred leech): a slice of the landed hit
       // heals ALLIES around the striker — the WoW-VE shape, worn as a stat
@@ -43377,6 +43384,7 @@ export class World {
             if (ally.dead || ally.team !== caster.team || ally === caster) continue;
             if (dist(caster.pos, ally.pos) > DEFENSE_CFG.sustain.vampiricRadius) continue;
             const got = ally.healBy(heal);
+            noteResourceFlow(ally, target, 'life', got, def.feedingCue);
             if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
           }
         }
@@ -44181,7 +44189,7 @@ export class World {
         if (dealt > 0 && depth === 0 && !caster.construct) {
           this.shedOrb(fx.resource, target.pos, {
             scatter: 8, amount: fx.amount, life: 8,
-            homeTo: caster.owner ?? caster, clamp: false,
+            homeTo: caster.owner ?? caster, clamp: false, flowFromTier: target.tier ?? 0,
           });
         }
       } else if (fx.type === 'birth') {
@@ -49549,7 +49557,7 @@ export class World {
         const sip = s.leechAcc;
         s.leechAcc = 0;
         const applier = this.actors.find(x => x.id === s.casterId && !x.dead);
-        if (applier) applier.healBy(sip);
+        if (applier) noteResourceFlow(applier, a, 'life', applier.healBy(sip));
       }
       // TERRAIN-BOUND upkeep: derive a missing confinement from the nearest
       // matching ground (zone-memory restores, summons — every path self-
@@ -52845,7 +52853,7 @@ export class World {
               e.life -= amount;
               this.accumulateDotText(e, amount, dt);
               if (aura.spec.siphonFraction) {
-                bearer.healBy(amount * aura.spec.siphonFraction);
+                noteResourceFlow(bearer, e, 'life', bearer.healBy(amount * aura.spec.siphonFraction), aura.inst.def.feedingCue);
               }
               // Aura deaths retain their bearer, including summoned halo carriers.
               if (e.life <= 0 && !e.dead) this.kill(e, false, bearer);
@@ -57778,6 +57786,7 @@ export class World {
    *  chests, breakables, monster spills — funnels through here. */
   shedOrb(kind: string, at: Vec2, opts?: {
     scatter?: number; amount?: number; life?: number; homeTo?: Actor;
+    flowFromTier?: number;
     /** false: keep the raw scatter point (siphon orbs fly home anyway). */
     clamp?: boolean;
     /** THE SPOILS STORY: the shedder's story (a struck body's, a breakable's
@@ -57795,6 +57804,7 @@ export class World {
       kind, amount: opts?.amount ?? orbAmount(def, this.zone.level),
       bob: rand(0, Math.PI * 2), life: opts?.life ?? def.life ?? 12,
       homeTo: opts?.homeTo,
+      flowFromTier: opts?.flowFromTier,
       tier: story,
     });
     SIM_TAP.current?.onOrbShed?.(kind);

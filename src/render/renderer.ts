@@ -3,6 +3,8 @@ import { concealmentActive } from '../engine/perception';
 import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
 import { feedingCueState, type FeedingTransfer } from '../engine/feedingCues';
 import { drawFeedingBody, drawFeedingTransfer, drawRestoreHud } from './vis/feedingCueLayer';
+import { drawResourceFlow, drawResourcePickup } from './vis/resourceFlowLayer';
+import { RESOURCE_FLOW } from '../data/resourceVisuals';
 import { companionCueState, type CompanionCueFlash } from '../engine/companionCues';
 import { COMPANION_CUE_CFG } from '../data/companionCues';
 import { drawCompanionCueBody, drawCompanionCueLinks, drawCompanionCueFlash } from './vis/companionCueLayer';
@@ -839,6 +841,7 @@ export class Renderer {
     this.drawTownPortals(world);
     this.drawDrops(world);
     this.drawResourceOrbs(world);
+    this.drawResourceFlows(world);
     this.drawRemnants(world);
     for (const f of world.flashes) {
       if (f.feedingCue && !this.feedingTransferVisible(f.pos, f.feedingCue, world)) continue;
@@ -4960,7 +4963,7 @@ export class Renderer {
     }
   }
 
-  private feedingTransferVisible(from: Vec2, cue: FeedingTransfer, world: World): boolean {
+  private feedingTransferVisible(from: Vec2, cue: Pick<FeedingTransfer, 'to' | 'fromTier' | 'toTier'>, world: World): boolean {
     return [[from, cue.fromTier], [cue.to, cue.toTier]].every(([p, tier]) => {
       const at = p as Vec2;
       return tier === (world.player.tier ?? 0)
@@ -6927,26 +6930,26 @@ export class Renderer {
     for (const o of world.orbs) {
       const def = ORB_DEFS[o.kind];
       if (!def) continue;
-      const y = o.pos.y + Math.sin(o.bob) * 2.5;
-      const fade = Math.min(1, o.life / 2);
-      const r = def.size ?? 5.5;
-      // Charge-bearing kinds breathe — a candle guttering, not a bead.
-      const pulse = def.charge ? 1 + Math.sin(o.bob * 2) * 0.12 : 1;
-      ctx.globalAlpha = 0.85 * fade;
-      ctx.shadowColor = def.color;
-      ctx.shadowBlur = def.glow ?? 9;
-      ctx.fillStyle = def.color;
-      ctx.beginPath();
-      ctx.arc(o.pos.x, y, r * pulse, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 0.9 * fade;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(o.pos.x - r * 0.27, y - r * 0.27, r * 0.33, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      const to = o.homeTo ? (!o.homeTo.dead ? o.homeTo.pos : undefined) : o.flowTo;
+      const fromTier = (to ? o.flowFromTier : undefined) ?? o.tier ?? world.spoilStoryAt(o.pos);
+      if (!this.feedingTransferVisible(o.pos, { to: to ?? o.pos, fromTier, toTier: to ? o.homeTo?.tier ?? o.flowTier ?? fromTier : fromTier }, world)) continue;
+      drawResourcePickup(ctx, { ...o, to, material: def.restore ?? 'flame', color: def.color, size: def.size ?? 5.5 });
     }
+  }
+
+  /** Bounded actual-gain traces. Prioritize the viewed seat in a busy battle. */
+  private drawResourceFlows(world: World): void {
+    let remaining = RESOURCE_FLOW.visible;
+    const draw = (a: Actor) => {
+      if (a.dead || a.downed || !(a.feedingCues?.flows?.length || a.resourceFlows?.length)) return;
+      for (const flow of feedingCueState(a).flows ?? []) {
+        if (!remaining) return;
+        if (!this.feedingTransferVisible(flow.from, flow, world)) continue;
+        drawResourceFlow(this.ctx, flow); remaining--;
+      }
+    };
+    draw(world.player);
+    for (const a of world.actors) if (a !== world.player && remaining) draw(a);
   }
 
   /** Remnants: slow-spinning shards of leftover power (elemental trio +

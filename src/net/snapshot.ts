@@ -242,7 +242,7 @@ export interface ProjW { skillId?: string; reflectedCue?: true; orbPaint?: impor
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
 export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; vid?: string; eid?: string; tid?: number; cnt?: number; }
 /** kind is an ORB_DEFS registry id — the client renders from the registry. */
-export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; }
+export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; tier?: number; flowTo?: Vec2W; flowTier?: number; flowFromTier?: number; }
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string;
   /** INFO-STREAM float kind — ships so each CLIENT gates the draw by its own
    *  Settings.floatKinds (the host mints one truth; every seat curates). */
@@ -766,7 +766,7 @@ function actorToW(a: Actor, world: World): ActorW {
   const feedingCues = feedingCueState(a);
   const companionCues = companionCueState(a, world);
   if (companionCues.links.length || companionCues.marks.length || companionCues.stance) w.companionCues = cloneCompanionCues(companionCues);
-  if (feedingCues.gains.length || feedingCues.meal || feedingCues.mass) w.feedingCues = cloneFeedingCues(feedingCues);
+  if (feedingCues.gains.length || feedingCues.flows?.length || feedingCues.meal || feedingCues.mass) w.feedingCues = cloneFeedingCues(feedingCues);
   if (anatomyState.weakpoints.length || anatomyState.parts.length || anatomyState.segments.length || anatomyState.part)
     w.anatomyCues = cloneAnatomyCues(anatomyState);
   if (wardCueActive(a)) w.wardCue = { profile: a.wardCueProfile, sources: wardGuardians(a, world.actors).map(x => x.id) };
@@ -951,7 +951,10 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       tid: d.item.kind === 'abilityEssence' ? d.item.tier : undefined,
       cnt: d.item.kind === 'essence' || d.item.kind === 'abilityEssence' ? d.item.count : undefined,
     })),
-    orbs: world.orbs.map(o => ({ p: v2(o.pos), bob: o.bob, life: o.life, kind: o.kind })),
+    orbs: world.orbs.map(o => ({ p: v2(o.pos), bob: o.bob, life: o.life, kind: o.kind, tier: o.tier,
+      flowFromTier: o.flowFromTier,
+      flowTo: o.homeTo && !o.homeTo.dead ? v2(o.homeTo.pos) : undefined,
+      flowTier: o.homeTo && !o.homeTo.dead ? o.homeTo.tier ?? 0 : undefined })),
     texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind })),
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
@@ -1528,7 +1531,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.guardians.visuals = (snap.guardians ?? []).map(v => ({ ...v }));
   world.creepers.visuals = (snap.creepers ?? []).map(v => ({ ...v, trail: v.trail.map(p => ({ ...p })) }));
   world.satellites.flights.visuals = (snap.satelliteFlights ?? []).map(v => ({ ...v, from: { ...v.from }, to: { ...v.to } }));
-  world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0 })) as unknown as World['orbs'];
+  world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0,
+    tier: o.tier, flowTo: o.flowTo ? { x: o.flowTo[0], y: o.flowTo[1] } : undefined, flowTier: o.flowTier, flowFromTier: o.flowFromTier }));
   world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k })) as unknown as World['texts'];
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
