@@ -1240,6 +1240,26 @@ const PUSH_MAX_SPEED = 1500;
 /** 0 = circle, 1 = square, 2 = triangle (values of the aoeShape stat). */
 export type AoeShape = number;
 
+/** THE MADNESS BANK (SupportDef.madden — docs/engine/madden.md): ONE dwell
+ *  ledger per skill instance, worn by every standing placement any cast of
+ *  that skill lays (discs, wall and crack segments, march ripples, the clap
+ *  twin, re-cast clones, curse fields, the lifted linger field). A body banks
+ *  frame seconds while it stands in any of them, credited ONCE a frame however
+ *  many placements overlap it; the seconds survive leaving and re-casting,
+ *  and the madness SPENDS them — every bout costs `after` again. */
+export interface MaddenBank {
+  after: number;
+  /** Banked seconds per occupant (actor id). */
+  dwell: Map<number, number>;
+  /** World time of each occupant's last credit — the once-a-frame guard. */
+  credited: Map<number, number>;
+}
+
+/** Madness-bank dials. `epsilon` forgives float drift at the threshold: 360
+ *  frames of 1/60 sum to 5.999999999999984, so a body that stood a 6.0s
+ *  ground's whole life must still count as six seconds. */
+export const MADDEN_CFG = { epsilon: 1e-6 };
+
 interface Zone {
   fieldCue?: import('../data/companionCues').FieldCueSpec;
   /** Source-maintained choreography: breaking its skill or killing its
@@ -1383,9 +1403,9 @@ interface Zone {
   /** HEALING GROUND (SupportDef.healField): the tick MENDS allies in the
    *  area instead of striking enemies. */
   healTick?: number;
-  /** MADDENING GROUND (SupportDef.madden): accumulated seconds standing
-   *  inside, per occupant — past `after`, the `maddened` status lands. */
-  madden?: { after: number; dwell: Map<number, number> };
+  /** MADDENING GROUND (SupportDef.madden): the skill instance's MADNESS
+   *  BANK, shared by every placement of every cast (World.maddenBankOf). */
+  madden?: MaddenBank;
   /** ARMED PULSE (GroundDelivery.pulse / SupportDef.pulse): the dormant
    *  placement DETONATES AGAIN — `left` beats remain, the next at `next`
    *  (world time). Carries its resolved spec so the renderer can draw the
@@ -2806,6 +2826,9 @@ export class World {
   zones: Zone[] = [];
   /** Mints unique sheet-source keys for domain zones. */
   private domainSeq = 0;
+  /** THE MADNESS BANKS, one per madden-grafted skill instance (maddenBankOf).
+   *  Transient: never saved or wired — a reload starts every bank empty. */
+  private readonly maddenBanks = new WeakMap<SkillInstance, MaddenBank>();
   /** Live tether bands (see TetherSpec). Host-simulated; coords cached per
    *  tick for the renderer and the co-op wire. */
   tethers: Tether[] = [];
@@ -4408,6 +4431,12 @@ export class World {
     caster: Actor; inst: SkillInstance; aim: Vec2;
     n: number; k: number; timer: number; interval: number;
     dmgMult: number; aoeMult: number; scaleStep: number; retarget: boolean;
+    /** THE ECHO'S MARK (2026-09-30): a 'target' delivery strikes only what
+     *  targeting RESOLVED, and the train kept only the aim point, so every
+     *  echo of a targeted strike or mend landed on nobody. The press's
+     *  resolved body rides along (the caster for a self-fallback mend);
+     *  the drain re-resolves through the skill's own spec, anchored on it. */
+    mark?: Actor;
   }[] = [];
   /** Scheduled SEQUENCE steps (AimSpec.sequence): each carries its ABSOLUTE
    *  strike bearing, baked at cast time — the figure holds even as the
@@ -31320,6 +31349,7 @@ export class World {
             shape: 0, facing: caster.facing,
             dmgMult: cfMult, depth: 1,
             follow: true, toggled: true, reserved: reserve,
+            madden: this.maddenBankOf(inst),
             flatBonus,
           });
         } else {
@@ -31343,6 +31373,8 @@ export class World {
             tickInterval: cfTick, tickTimer: 0,
             shape: 0, facing: caster.facing,
             dmgMult: cfMult, depth: 1,
+            // The relocated patch keeps the skill's bank (one bank per skill).
+            madden: this.maddenBankOf(inst),
             flatBonus,
           });
           fieldAt = at;
@@ -32195,6 +32227,11 @@ export class World {
         const expDomain = (expGraft ? expGraft.domain : d.exposureDomain) ? true as const : undefined;
         const mintExposure = (): Zone['exposure'] =>
           expAfter ? { after: expAfter, dwell: new Map<number, number>() } : undefined;
+        // THE MADNESS BANK (SupportDef.madden): unlike breath, madness is
+        // one ledger for the whole skill — every placement below (wall
+        // segments, the primary, march ripples, the clap twin, re-cast
+        // clones) wears the instance's same bank.
+        const maddenBank = this.maddenBankOf(inst);
         // SIZE ENVELOPE (GroundDelivery.sizeOver / SupportDef.zoneSizeOver —
         // a socketed graft wins, the trail rule): resolved ONCE; every
         // placement this cast lays (wall segments, the primary, cascade
@@ -32248,8 +32285,10 @@ export class World {
               // Each wall segment quakes and breathes on its own ledger —
               // and each rides the envelope from its own birth radius (a
               // contracting wall THINS; a blooming one closes its gaps).
+              // Madness is the exception: the wall is one ground, one bank.
               pulse: mintPulse(d.delay ?? 0),
               exposure: mintExposure(),
+              madden: maddenBank,
               sizeOver,
               radius0: sizeOver ? d.radius * aoeScale : undefined,
               flatBonus,
@@ -32312,12 +32351,9 @@ export class World {
           retract: d.retract,
           // Seeking grounds (Creeping Frost's slinking winter).
           seek: d.seek ? { speed: d.seek.speed, range: d.seek.range ?? 420 } : undefined,
-          // Pulse-cadence + maddening cursed-ground grafts ride ANY
-          // lingering ground skill (SupportDef.zoneEmit / madden).
-          madden: (() => {
-            const m = socketSpec(inst, 'madden');
-            return m ? { after: m.after, dwell: new Map<number, number>() } : undefined;
-          })(),
+          // Maddening cursed ground rides ANY standing ground skill
+          // (SupportDef.madden — the instance's one bank).
+          madden: maddenBank,
           endBurst: d.endBurst,
           // A socketed Metronome grafts the back-and-forth onto any
           // lingering zone; the delivery's own spec is the innate base.
@@ -32390,8 +32426,7 @@ export class World {
             domain: undefined, domainKey: undefined, domainAffected: undefined,
             exposureDomain: undefined,
             marker: undefined, onImpact: undefined,
-            madden: prime.madden
-              ? { after: prime.madden.after, dwell: new Map<number, number>() } : undefined,
+            madden: maddenBank,
             pulse: mintPulse(d.delay ?? 0),
             exposure: mintExposure(),
           });
@@ -32480,6 +32515,7 @@ export class World {
                 // pulse damage riding the ripple's own dmgStep falloff.
                 pulse: mintPulse(delayBase + p.beatAt),
                 exposure: mintExposure(),
+                madden: maddenBank,
                 // Ripples inherit the sweep vocabulary — each with a FRESH
                 // struck set (per-zone crossing semantics).
                 arcRad: d.arcDeg !== undefined
@@ -32515,8 +32551,7 @@ export class World {
                 tickInterval: groundTick, tickTimer: groundTick0,
                 dmgMult: mult,
                 struck: d.hitOnce ? new Set() : undefined,
-                madden: prime.madden
-                  ? { after: prime.madden.after, dwell: new Map<number, number>() } : undefined,
+                madden: maddenBank,
                 exposure: mintExposure(),
                 pulse: mintPulse(delayBase),
                 emit: undefined, emitTimer: undefined, emitInst: undefined,
@@ -33985,12 +34020,22 @@ export class World {
         // Independent paid components have no second windup of their own;
         // their repeat beat carries their local attack/cast-speed investment.
         const interval = 0.22 / (opts.componentUse ? caster.speedFactor(inst) : 1);
+        // THE ECHO'S MARK: a targeted strike or mend re-finds its body at the
+        // drain through the skill's own spec. Corpse specs stay out (their
+        // beats already re-seek a fresh load inside executeSkill), engine-
+        // handed spec-less payloads have no spec to ask, and a CLAIM keeps one
+        // roll per press (the cooldown is tryTame's retry economy).
+        const echoSpec = instanceTargeting(inst);
+        const echoMark = instanceDelivery(inst).type === 'target' && targetInfo
+          && echoSpec && echoSpec.target !== 'corpse' && !def.effects.some(f => f.type === 'tame')
+          ? targetInfo.actor ?? (targetInfo.self ? caster : undefined) : undefined;
         this.pendingRepeats.push({
           caster, inst, aim: vec(aim.x, aim.y),
           n: repeats, k: 1, timer: interval, interval,
           dmgMult: useMult, aoeMult: opts.aoeMult ?? 1,
           scaleStep: caster.sheet.get('repeatScale', tags, extra),
           retarget: caster.sheet.get('repeatRetarget', tags, extra) > 0,
+          mark: echoMark,
           // THE FEEDER LOCALITY (2026-07-22, the user's ruling): the train
           // carries NO payment — cost-as-damage mints once, on the pressed
           // cast, as if the skill wore the feeder alone. Echo riders were
@@ -34769,6 +34814,9 @@ export class World {
     // discs do — a contracting crack knits itself shut, a blooming one
     // splits wider as it lives (each segment from its own birth width).
     const fizSizeOver = resolveSizeOver(instanceSizeOver(inst));
+    // THE MADNESS BANK: the crack is one ground — every lingering segment
+    // (spine, branches, the meleeFissure lash) wears the skill's one bank.
+    const maddenBank = this.maddenBankOf(inst);
     const lay = (px: number, py: number, segAng: number, delay: number, mult: number, linger: number): void => {
       const half = step / 2;
       this.zones.push({
@@ -34805,6 +34853,7 @@ export class World {
           return after && linger > 0
             ? { after, dwell: new Map<number, number>() } : undefined;
         })(),
+        madden: linger > 0 ? maddenBank : undefined,
         volatile: linger > 0 && volatile
           ? { ...volatile, next: this.time + delay + volatile.interval } : undefined,
         aftershock: linger > 0 && aftershock
@@ -37743,6 +37792,21 @@ export class World {
     }
   }
 
+  /** THE MADNESS BANK of a skill instance (SupportDef.madden): the one
+   *  ledger every standing placement of every cast wears — minted lazily
+   *  while a madden graft rides the instance, re-minted when the graft's
+   *  threshold changes, absent (undefined) without the graft. */
+  private maddenBankOf(inst: SkillInstance): MaddenBank | undefined {
+    const spec = socketSpec(inst, 'madden');
+    if (!spec) return undefined;
+    let bank = this.maddenBanks.get(inst);
+    if (!bank || bank.after !== spec.after) {
+      bank = { after: spec.after, dwell: new Map<number, number>(), credited: new Map<number, number>() };
+      this.maddenBanks.set(inst, bank);
+    }
+    return bank;
+  }
+
   private dropLingerField(caster: Actor, inst: SkillInstance, at: Vec2, useMult = 1): void {
     const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
@@ -37750,7 +37814,6 @@ export class World {
     const healField = socketSpec(inst, 'healField');
     if (fieldSecs <= 0 && !healField) return;
     const zoneEmit = socketSpec(inst, 'zoneEmit');
-    const madden = socketSpec(inst, 'madden');
     // THE HONEST LIFT (2026-07-22, the standing-surface law): the granted
     // field carries the time-evolution payloads exactly like a native
     // ground mint — the 'surface' gate admits Tidal Ground beside No Man's
@@ -37778,7 +37841,7 @@ export class World {
       dmgMult: healField ? 0 : 0.4 * useMult, depth: 1,
       forceDamage: !healField,
       emit: zoneEmit ? { skillId: zoneEmit.skillId, interval: zoneEmit.interval, at: zoneEmit.at } : undefined,
-      madden: madden ? { after: madden.after, dwell: new Map() } : undefined,
+      madden: this.maddenBankOf(inst),
       sizeOver,
       radius0: sizeOver ? radius : undefined,
       linger0: sizeOver ? linger : undefined,
@@ -52436,6 +52499,14 @@ export class World {
           if (best) aim = best.pos;
         }
       }
+      // THE ECHO'S MARK: an echo of a targeted strike or mend re-resolves
+      // through the skill's own spec, anchored on the press's body: the same
+      // victim while it still qualifies (status gates, line of fire, reach),
+      // else whatever a fresh press would find. Nothing found, nothing struck.
+      if (!targetInfo && r.mark) {
+        const found = this.resolveTargeting(r.caster, r.inst, r.mark.dead ? r.aim : r.mark.pos);
+        if (found) { aim = vec(found.pos.x, found.pos.y); targetInfo = found; }
+      }
       const factor = Math.max(0.2, 1 + r.scaleStep * r.k);
       this.executeSkill(r.caster, r.inst, aim, {
         dmgMult: r.dmgMult * factor,
@@ -55878,6 +55949,32 @@ export class World {
             }
           }
         }
+        // THE MADNESS BANK (SupportDef.madden): dwell long enough in the
+        // skill's ground and the fog takes you — the maddened lash at
+        // whatever is nearest, either side. Seconds bank PER FRAME (never a
+        // tick's worth at once: a 9s tick no longer maddens on first touch,
+        // a tickless sweep surface no longer banks nothing), credited once a
+        // frame per body however many of the skill's placements overlap it.
+        // Leaving keeps the bank (accumulated, unlike breath); the madness
+        // spends it. Enemies on the field's story only — zoneVictims'
+        // curse-allies coin would draw rng every frame.
+        if (z.madden && z.linger > 0) {
+          const bank = z.madden;
+          const story = z.tier ?? z.caster.tier;
+          for (const v of this.enemiesOf(z.caster)) {
+            if (v.tier !== story || bank.credited.get(v.id) === this.time) continue;
+            if (!this.zoneHas(z, v.pos, v.radius)) continue;
+            bank.credited.set(v.id, this.time);
+            const dwelt = (bank.dwell.get(v.id) ?? 0) + dt;
+            if (dwelt + MADDEN_CFG.epsilon >= bank.after && !v.statuses.some(s => s.id === 'maddened')) {
+              v.applyStatus('maddened', baselineStatusDps('maddened', this.zone.level),
+                1, z.inst.def.name, { casterId: z.caster.id });
+              bank.dwell.set(v.id, 0);
+            } else {
+              bank.dwell.set(v.id, dwelt);
+            }
+          }
+        }
         // TOGGLED fields (Miasma) freeze their clock — they end by choice
         // (re-press), by their caster's death, or with the zone itself.
         if (!z.toggled) z.linger -= dt;
@@ -55931,19 +56028,6 @@ export class World {
           // on the bell's own throttle, exactly as enemy fields do through
           // resolveHit.
           this.strikeZoneSurfaces(z);
-          }
-          // MADDENING GROUND: dwell long enough inside and the fog takes
-          // you — the maddened lash at whatever is nearest, either side.
-          if (z.madden) {
-            for (const v of this.zoneVictims(z)) {
-              if (!this.zoneHas(z, v.pos, v.radius)) continue;
-              const dwelt = (z.madden.dwell.get(v.id) ?? 0) + z.tickInterval;
-              z.madden.dwell.set(v.id, dwelt);
-              if (dwelt >= z.madden.after && !v.statuses.some(s => s.id === 'maddened')) {
-                v.applyStatus('maddened', baselineStatusDps('maddened', this.zone.level),
-                  1, z.inst.def.name, { casterId: z.caster.id });
-              }
-            }
           }
           // CONSECRATIONS: the field's mend side washes allies inside, per
           // tick and quietly (Healing Rain, Consecration — heal-and-harm
@@ -56030,6 +56114,15 @@ export class World {
     if (z.reserved && z.reserved > 0) {
       z.caster.reservedMana = Math.max(0, z.caster.reservedMana - z.reserved);
       z.reserved = 0;
+    }
+    // THE MADNESS BANK outlives its placements (one bank per skill), so it
+    // forgets the departed as they retire: dead or unloaded bodies leave
+    // the ledger instead of collecting for the whole run.
+    if (z.madden) {
+      for (const id of z.madden.dwell.keys()) {
+        const a = this.actorById(id);
+        if (!a || a.dead) { z.madden.dwell.delete(id); z.madden.credited.delete(id); }
+      }
     }
     if (!z.domainAffected || !z.domainKey) return;
     for (const a of z.domainAffected) a.sheet.removeSource(z.domainKey);

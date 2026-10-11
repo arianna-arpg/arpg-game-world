@@ -61,6 +61,10 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_echomark.ts', status: 'green', tier: 'fast', why: 'THE ECHO\'S MARK — echoes of a targeted strike or mend re-resolve through the skill\'s own spec anchored on the press\'s body: Spell Echo and every Unleash seal strike Solar Brand\'s mark, an echo whose mark died finds what a fresh press would (or nothing), Mend\'s echo mends the ally or the lone caster again, and a Tame Beast claim\'s echo carries no mark (one roll per press)' },
+  { probe: 'probe_madden.ts', status: 'green', tier: 'fast', why: 'THE MADNESS BANK — Maddening Miasma gates on a standing surface (flash grounds refuse, lifts admit), banks frame seconds in ONE ledger per skill (crack and wall segments, march ripples, curse fields; overlap credits once; a 9s tick no longer maddens on touch), keeps it across casts, spends it per madness, forgets the departed, and probes on the held lane' },
+  { probe: 'probe_targetstrike.ts', status: 'green', tier: 'fast', why: 'THE TARGET STRIKE (the Solar Brand lesson) — a bare field refuses the brand before any cost, the hero\'s brand damages its mark and lays two sunscorched stacks, a cinder chorister\'s kit brand lands on the hero, and the boot census names a spec-less target delivery on the drop and monster-kit lanes while passing an engine-handed payload' },
+  { probe: 'probe_nativemaincontent.ts', status: 'green', tier: 'fast', why: 'Checked main content carry-forward restores only exact archived members for historical guards; unrelated mutations remain visible.' },
   { probe: 'probe_spiritrun.ts', status: 'green', tier: 'fast', why: 'Loading-screen directions, collision boundaries, streak speed, frame rates and bounded gates.' },
 
   { probe: 'probe_nativeinstalledsources.ts', status: 'green', tier: 'fast', why: 'Original installed native registry boot without World, complete lazy providers, native config and unchanged full World members.' },
