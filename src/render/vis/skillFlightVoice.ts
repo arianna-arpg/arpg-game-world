@@ -1,6 +1,10 @@
 import { SKILL_FLIGHTS, SKILL_FIELDS, SKILL_BEAMS, SKILL_FLIGHT_STYLE as C,
   skillBeamVoice, type SkillFieldProfile } from '../../data/skillFlightVisuals';
 import { SKILL_BURSTS } from '../../data/skillVisuals';
+import { skillStrikeProfile } from '../../data/skillStrikeVisuals';
+import { drawSkillStrike } from './skillStrikeVoice';
+import { lightningProfile } from '../../data/lightningVisuals';
+import { drawLightningHead } from './lightningVoice';
 import type { SkillFieldVisual } from '../../engine/skillFieldVisual';
 import { drawSkillMark } from './skillBurstVoice';
 import { traceAoePath } from './aoeTrace';
@@ -22,6 +26,7 @@ export function flightProfile(p: SkillFlightVisual) {
 /** Wakes are faint, trailing decoration. The unchanged collision form remains
  * the bright head; wide forms keep their shared PROJ_FORM_GEO painter. */
 export function drawSkillFlightWake(ctx: CanvasRenderingContext2D, p: SkillFlightVisual): boolean {
+  if (lightningProfile(p.skillVisualId ?? p.inst?.def.id ?? '')) return true; // the measured path owns its wake
   const v = flightProfile(p);
   if (!v || p.radius <= 0 || !Number.isFinite(p.radius + p.dir + p.age + p.pos.x + p.pos.y)) return false;
   const r = p.radius, count = Math.min(C.maxMarks, v.count), phase = p.age * (v.motion === 'pulse' ? 9 : 5);
@@ -76,6 +81,7 @@ export function drawSkillFlightWake(ctx: CanvasRenderingContext2D, p: SkillFligh
 
 /** Local coordinates, called only after a wardrobe body declined the draw. */
 export function drawSkillFlightHead(ctx: CanvasRenderingContext2D, p: SkillFlightVisual): boolean {
+  if (drawLightningHead(ctx, p)) return true;
   const v = flightProfile(p);
   if (!v || p.shape !== 'circle' || p.radius <= 0) return false;
   const r = p.radius, phase = p.age * 6;
@@ -101,6 +107,8 @@ export function drawSkillFlightHead(ctx: CanvasRenderingContext2D, p: SkillFligh
 }
 
 export function fieldProfile(id: string): SkillFieldProfile | undefined {
+  const strike = skillStrikeProfile(id);
+  if (strike) return { motif: strike.motif, layout: 'spokes', motion: strike.motion === 'in' ? 'in' : 'out', count: strike.count, echo: strike.echo };
   if (Object.hasOwn(SKILL_FIELDS, id)) return SKILL_FIELDS[id];
   // A projectile's deposited field and a nova's delayed aftermath keep the
   // parent material and count instead of acquiring a generic elemental wash.
@@ -141,6 +149,10 @@ export function drawSkillField(ctx: CanvasRenderingContext2D, z: SkillFieldVisua
   // Ground-qualified strikes must keep the existing per-cell roil: decorative
   // ink in a dry, unhittable cell would falsely advertise damage.
   if (!p || z.onGround || z.radius <= 0 || !Number.isFinite(z.radius + z.pos.x + z.pos.y + time)) return false;
+  const strike = skillStrikeProfile(z.skillId);
+  if (strike && z.exploded && !z.seg && !z.edge) {
+    drawSkillStrike(ctx, { ...z, life: 1, maxLife: 1 }, .68 + .22 * Math.sin(time * 12), strike); return true;
+  }
   const r = z.radius, n = Math.min(C.maxFieldMarks, p.count), phase = time * 1.3;
   const seed = ((z.pos.x * 13 + z.pos.y * 7) | 0) >>> 0;
   ctx.save(); clipSkillField(ctx, z); ctx.translate(z.pos.x, z.pos.y); ctx.rotate(z.facing);

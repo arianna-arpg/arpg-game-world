@@ -8,8 +8,9 @@ so a new nova cannot silently join the generic-flash population.
 
 The second pass adds all 172 native projectiles, six native cone beams, 163
 ground skills and 42 auras in `src/data/skillFlightVisuals.ts`. Together these
-cover 492 catalogue entries. Movement, non-beam cones, direct targets, other
-melee and summon bodies keep their existing presentation.
+cover 492 catalogue entries. Later passes add [targets, tethers and offerings](target-skill-visuals.md)
+and [melee, non-beam cones and measured lightning](strike-skill-visuals.md).
+Movement and summon bodies remain on their existing presentation.
 
 ## Flights, beams and fields
 

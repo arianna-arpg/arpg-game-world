@@ -9,6 +9,15 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Melee and non-beam cone identities use `data/skillStrikeVisuals.ts` and
+`render/vis/skillStrikeVoice.ts`, clipped to actual reach, angle and safe centers.
+Four lightning flights add bounded, measured travel afterimages through
+`engine/lightningVisual.ts`; chain turns follow actual projectile movement.
+`docs/design/strike-skill-visuals.md` covers profiles, aftermath and co-op.
+Verify strikevisuals, skillvisuals, skillflights, crossjab, devotedstartertrees,
+supportfabric, cosmetics, effectvoice, projectilecull, all types, sim smoke and
+hidden `balance/strike-visuals-ui.cjs` after the strike probe and build.
+
 Targeted casts, tether bands and offerings use `data/skillTargetVisuals.ts`
 and `render/vis/skillTargetVoice.ts`. Distinct marks and motion survive recolor;
 links stay clipped to actual widths and replicate as paint-only DTOs.

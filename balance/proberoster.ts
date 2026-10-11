@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_strikevisuals.ts', status: 'green', tier: 'fast', why: 'Melee/cone census, bounded recolorable shapes, actual hit parity, safe delayed sectors, measured lightning paths and copied co-op trails.' },
   { probe: 'probe_skillvisuals.ts', status: 'green', tier: 'fast', why: 'Authored nova census, stable bounded geometry, live casts, combat parity, pulse identity and co-op footprints.' },
   { probe: 'probe_skillflights.ts', status: 'green', tier: 'fast', why: 'Authored flight/beam/field census, palette-independent geometry, real casts and render-only co-op fields.' },
   { probe: 'probe_resourcevisuals.ts', status: 'green', tier: 'fast', why: 'Actual-gain blood/mana/shield transfers, native siphons, delayed pickups, bounded density, palette independence and co-op.' },

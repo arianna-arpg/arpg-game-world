@@ -2,6 +2,9 @@ import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './ski
 import { skillMergePlan } from './skillMerge';
 import { skillBurstVoice } from '../data/skillVisuals';
 import { skillBeamVoice } from '../data/skillFlightVisuals';
+import { skillStrikeVoice } from '../data/skillStrikeVisuals';
+import { lightningProfile, LIGHTNING_STYLE } from '../data/lightningVisuals';
+import { extendLightningTrace, type LightningTrace } from './lightningVisual';
 import { skillTargetVoice, skillRiteVoice, TARGET_VISUAL_STYLE } from '../data/skillTargetVisuals';
 import type { SkillTetherVisual } from './skillTetherVisual';
 import type { SkillFieldVisual } from './skillFieldVisual';
@@ -1555,6 +1558,8 @@ export interface EmergeRecord {
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
+  lightning?: LightningTrace;
+  arcRad?: number;
   companionCue?: import('./companionCues').CompanionCueFlash;
   recoveryCueTier?: number;
   feedingCue?: import('./feedingCues').FeedingTransfer;
@@ -2900,6 +2905,7 @@ export class World {
   /** Replicated paint only. Never added to the simulation's damage zones. */
   remoteSkillFields?: SkillFieldVisual[];
   remoteSkillTethers?: SkillTetherVisual[];
+  private lightningFlashes = new WeakMap<Projectile, Flash>();
   /** Mints unique sheet-source keys for domain zones. */
   private domainSeq = 0;
   /** THE MADNESS BANKS, one per madden-grafted skill instance (maddenBankOf).
@@ -5933,6 +5939,7 @@ export class World {
     this.zones = [];
     this.remoteSkillFields = undefined;
     this.remoteSkillTethers = undefined;
+    this.lightningFlashes = new WeakMap();
     this.tethers = [];
     this.texts = [];
     this.flashes = [];
@@ -35872,7 +35879,7 @@ export class World {
           });
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius: sweepR * 0.6, color: cosmeticColor,
-            life: 0.2, maxLife: 0.2, arc: { facing: caster.facing, arcRad: sweepArc },
+            life: 0.2, maxLife: 0.2, arc: { facing: caster.facing, arcRad: sweepArc }, fx: d.fx ?? skillStrikeVoice(inst.def.id),
           });
           // The wave's launch point is the sweep's area anchor.
           fieldAt = vec(caster.pos.x, caster.pos.y);
@@ -35937,16 +35944,16 @@ export class World {
           this.flashes.push(banded
             ? {
               pos: vec(bandC.x, bandC.y), radius: bandGeo!.halfWidth, color: cosmeticColor,
-              life: 0.18, maxLife: 0.18, shape: AOE_SHAPE.band, facing: caster.facing, fx: d.fx,
+              life: 0.18, maxLife: 0.18, shape: AOE_SHAPE.band, facing: caster.facing, fx: d.fx ?? skillStrikeVoice(inst.def.id),
             }
             : swingShape >= 1 && swingShape <= 2
             ? {
               pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: cosmeticColor,
-              life: 0.18, maxLife: 0.18, shape: swingShape, facing: caster.facing, fx: d.fx,
+              life: 0.18, maxLife: 0.18, shape: swingShape, facing: caster.facing, fx: d.fx ?? skillStrikeVoice(inst.def.id),
             }
             : {
               pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: cosmeticColor,
-              life: 0.18, maxLife: 0.18, arc: { facing: caster.facing, arcRad }, fx: d.fx,
+              life: 0.18, maxLife: 0.18, arc: { facing: caster.facing, arcRad }, fx: d.fx ?? skillStrikeVoice(inst.def.id),
             });
           // Melee 'aoe' swings have an area too (Cleave + No Man's Land
           // scorches where the blade passed) — the arc's centroid; a
@@ -36240,13 +36247,13 @@ export class World {
           // The sigil's figure IS the flash (drawn == tested).
           this.flashes.push({
             pos: vec(sigilC.x, sigilC.y), radius: sigilR, color: cosmeticColor,
-            life: 0.25, maxLife: 0.25, shape: coneSigil, facing: sigilF,
+            life: 0.25, maxLife: 0.25, shape: coneSigil, facing: sigilF, fx: skillStrikeVoice(inst.def.id),
           });
         } else {
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius: range, color: cosmeticColor,
             life: 0.25, maxLife: 0.25, arc: { facing: caster.facing, arcRad },
-            edgeFrac: d.edgeOnly,
+            edgeFrac: d.edgeOnly, fx: skillStrikeVoice(inst.def.id),
           });
         }
         // A cone's area is the wedge — the field settles on its centroid
@@ -42111,7 +42118,9 @@ export class World {
   ): void {
     const burstDelivery = instanceDelivery(inst);
     const burstVoice = burstDelivery.type === 'nova'
-      ? burstDelivery.fx ?? skillBurstVoice(inst.def.id) : undefined;
+      ? burstDelivery.fx ?? skillBurstVoice(inst.def.id)
+      : burstDelivery.type === 'melee' ? burstDelivery.fx ?? skillStrikeVoice(inst.def.id)
+      : burstDelivery.type === 'cone' ? skillStrikeVoice(inst.def.id) : undefined;
     const cadence = socketSpec(inst, 'cadence')?.intervalStep;
     const pPlan = instancePulsePlan(inst);
     const pSpec = pPlan.native;
@@ -58748,6 +58757,23 @@ export class World {
     return false;
   }
 
+  /** Bounded afterimages of actual travel, including turns. No new combat event. */
+  private noteLightningTravel(p: Projectile, from: Vec2): void {
+    if (!lightningProfile(p.inst.def.id) || p.dissolved) return;
+    const to = p.phase ? p.pos : this.clipShot(from, p.pos, p.tier);
+    if (dist(from, to) < .01) return;
+    let flash = this.lightningFlashes.get(p);
+    if (!flash || !this.flashes.includes(flash)) {
+      if (this.flashes.filter(f => f.lightning).length >= LIGHTNING_STYLE.maxTraces) return;
+      flash = { pos: { ...to }, radius: p.radius, color: p.color, life: LIGHTNING_STYLE.fadeSeconds, maxLife: LIGHTNING_STYLE.fadeSeconds,
+        recoveryCueTier: p.tier ?? 0, lightning: { skillId: p.inst.def.id, width: p.radius, clock: p.age, points: [] } };
+      this.lightningFlashes.set(p, flash); this.flashes.push(flash);
+    }
+    flash.pos = { ...to }; flash.color = p.color; flash.life = flash.maxLife;
+    flash.lightning!.width = p.radius;
+    extendLightningTrace(flash.lightning!, from, to, p.age);
+  }
+
   private updateProjectiles(dt: number): void {
     const guardianContext = this.guardians.active ? this.carriedEffectContext() : undefined;
     const flowDt = dt; // the world-scaled frame; each flight bends it below
@@ -59398,6 +59424,7 @@ export class World {
       }
       // The newly reflected flight starts its return on the next update;
       // never hit something on the stale, incoming movement segment.
+      this.noteLightningTravel(p, prev);
       if (p.parryDamage) {
         if (dead) this.projectiles.splice(i, 1);
         continue;
@@ -59747,7 +59774,7 @@ export class World {
           this.strikeZoneSurfaces(z);
           this.flashes.push({
             pos: vec(z.pos.x, z.pos.y), radius: z.radius, color: z.color,
-            life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
+            life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing, arcRad: z.arcRad,
             edgeFrac: z.edgeFrac,
             // THE EFFECT VOICE: a keyed zone speaks its own painter at the
             // landing; the bolt stays the DERIVED costume of unkeyed sky
@@ -59945,9 +59972,9 @@ export class World {
             z.seg ? undefined : z.pos, z.seg ? undefined : pr);
           this.flashes.push({
             pos: vec(z.pos.x, z.pos.y), radius: pr, color: z.color,
-            life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
+            life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing, arcRad: z.arcRad,
             edgeFrac: z.edgeFrac,
-            fx: instanceDelivery(z.inst).type === 'nova' ? z.fx : undefined,
+            fx: ['nova', 'melee', 'cone'].includes(instanceDelivery(z.inst).type) ? z.fx : undefined,
           });
           this.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth);
           z.pulse.dmgMult *= z.pulse.dmgStep;

@@ -53,16 +53,20 @@ all six tether supports, shared healing/discharge/embedded/pack links, and seven
 offering or sacrifice identities. See [target skill visuals](target-skill-visuals.md)
 for coverage, actual-consumption hooks, co-op and the single-color study.
 
+The melee/cone pass covers all 99 native melee deliveries and 32 non-beam cones,
+plus measured trails for Lightning, Chain Lightning and their two skeletal
+counterparts. See [strike skill visuals](strike-skill-visuals.md) for action
+silhouettes, safe openings, delayed repeats and recorded chain-turn previews.
+
 The generated census in `balance/reports/skill-visuals/resource-audit.json`
 enumerates native recovery users and delivery counts from the live catalogue.
 These counts describe delivery families, not a claim that every member lacks art.
 
 | Priority | Area | Remaining opportunity |
 | --- | --- | --- |
-| 1 | Melee (99), non-beam cones (32) | Sweep profiles, contact accents and recovery motions; preserve exact reach and safe openings |
-| 2 | Dash (21), leap (14), blink (9), carom (1) | Distinct departure/travel/landing language without disguising actual relocation |
-| 3 | Self effects (106), marks and detonations (3) | Audit charge-up, readiness, interruption and release beyond the completed rites; avoid stacking interchangeable rings |
-| 4 | Storm (33), summon (61), construct (45) | Arrival, cadence and lifetime cues, coordinated with existing anatomy/companion art |
+| 1 | Dash (21), leap (14), blink (9), carom (1) | Distinct departure/travel/landing language without disguising actual relocation |
+| 2 | Self effects (106), marks and detonations (3) | Audit charge-up, readiness, interruption and release beyond the completed rites; avoid stacking interchangeable rings |
+| 3 | Storm (33), summon (61), construct (45) | Arrival, cadence and lifetime cues, coordinated with existing anatomy/companion art |
 
 Already authored on this branch: 109 novas, 172 projectiles, six native beams,
 163 ground skills and 42 auras. Continue reviewing their scale, busy-scene density

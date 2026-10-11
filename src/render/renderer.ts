@@ -171,6 +171,8 @@ import { drawTrapworkTells } from './vis/trapLayer';
 import { drawEffectVoice } from './vis/effectVoice';
 import './vis/attackSequenceVoice';
 import './vis/skillBurstVoice';
+import './vis/skillStrikeVoice';
+import { drawLightningTrace } from './vis/lightningVoice';
 import { drawSkillTether } from './vis/skillTargetVoice';
 import { skillTetherVisual } from '../engine/skillTetherVisual';
 import { drawSkillFlightWake, drawSkillFlightHead, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
@@ -4974,7 +4976,7 @@ export class Renderer {
     });
   }
 
-  private drawFlash(f: { companionCue?: CompanionCueFlash; feedingCue?: FeedingTransfer; pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
+  private drawFlash(f: { lightning?: import('../engine/lightningVisual').LightningTrace; arcRad?: number; companionCue?: CompanionCueFlash; feedingCue?: FeedingTransfer; pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
     const { ctx } = this;
     // A big synchronous sim step (headless probes, background-tab catch-up)
     // can overshoot a flash's life below zero before the prune sweeps it —
@@ -4988,6 +4990,7 @@ export class Renderer {
     if (!Number.isFinite(f.pos.x + f.pos.y + f.radius + f.life + f.maxLife)) return;
     const t = f.maxLife > 0 ? Math.max(0, Math.min(1, f.life / f.maxLife)) : 0;
     if (t <= 0 || f.radius <= 0) return;
+    if (f.lightning) { drawLightningTrace(ctx, f.lightning, f.color, t); return; }
     if (f.companionCue) drawCompanionCueFlash(ctx, { ...f, companionCue: f.companionCue });
     if (f.feedingCue) { drawFeedingTransfer(ctx, { ...f, feedingCue: f.feedingCue }); return; }
     if (f.cosmeticMotif) {
