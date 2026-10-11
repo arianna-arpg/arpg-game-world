@@ -4027,6 +4027,9 @@ we verify changes.
   surface-only terrain work and demanded candidate fields (worldmass_surfaces)
   retain all-family inhibition, exact noise folds and complete content pages,
   while dormancypinattribution pins exact owner identities and insertion order.
+  ShardPerformance also narrows compatible landform reservation queries to the
+  existing surface-page cache (worldmass_sitework) and removes per-sample noise
+  closures (worldmass_noisework); retain full content, exact hashes and arithmetic.
   Preserve
   exact saved state, full signed addresses, every player's population and the
   unchanged load gates; verify the affected worldmass/native probes and shard

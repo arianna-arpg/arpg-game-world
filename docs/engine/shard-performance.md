@@ -964,3 +964,219 @@ release readiness. Raw profile/trace/report files are `.claude/perf4-spikes.loca
 `.claude/perf4-spike-trace.local.json` and `.claude/perf4-profile.local.*`;
 the reproducible attribution reader/output are
 `.claude/ownership.perf4-spike-attribution.local.{cjs,json}`.
+
+## Fifth pass: cold reservation work
+
+The fourth-pass checkpoint `448c07fc` is the unchanged control. The remaining
+worst-tick stacks above include landform admission calling `patchSitesClear`:
+it obtains complete place pages, then discards ordinary habitat encounters
+because these owners are compatible with the landform. Generating and testing
+those discarded candidates is avoidable when all protected sites have surfaces.
+
+The generator now records that invariant from its frozen descriptor. Only
+`patchSitesClear(..., true)` with that invariant uses the existing surface-page
+query. Ordinary patch admission and descriptors containing an unpainted,
+non-habitat site keep the full-page path. Native-regional reservations, page
+bounds, circle/box intersections and early rejection order remain unchanged.
+Surface acceptance still checks competing candidates from every family,
+including habitats. A resident full page still takes precedence; the existing
+surface-to-full completion supplies every encounter on a subsequent content
+query. This adds no cache or cache capacity and changes no density, admission,
+simulation or scheduling policy.
+
+Geographic noise also uses a module-level corner sampler instead of creating
+a closure for every sample. The four hash inputs, full coordinate strings,
+dimension reads, corner order and interpolation arithmetic remain unchanged.
+This targets function setup visible in the hosted TypeScript profile; a
+production-bundle gain must be measured separately.
+
+### Exact output and isolated work
+
+`worldmass_sitework` embeds the exact `448c07fc` generator class with SHA-256
+`202fb9d326985d132c9491bc24db0921e32b2168cbb429a76766e53dc479408d`.
+Eight fixtures / 940 exact comparisons cover high/equal-priority habitat
+inhibition, unpainted protected-site and historical fallbacks, both admission
+flags, circle tangencies, distant signed coordinates, all six terrain/reservation/
+content orders, empty subsets, eviction, full-page reuse and native-regional
+veto precedence. Complete current/historical planner output and saved descriptors
+match. Independent review checked the embedded class against the actual commit.
+
+The fixed-work reservation course uses the shipped fields, surfaces and recipes
+on 24 cold pages, after the original native-regional veto. Candidate requests
+fall 17,004→5,320 and construction calls 3,732→578. Constructions include rejected
+and null results, not admitted encounters. Four alternating-order rounds give
+median cold reservation time 59.16→9.95 ms (83.2% less). Subsequent 384 warm
+queries take 0.781→0.690 ms. All eight output digests match.
+
+When terrain and complete content are subsequently requested, total requests
+and constructions are exactly 17,004 and 3,732 on both sides. Median combined
+cold reservation, terrain and content time is 59.83→60.30 ms (0.8% higher).
+This avoids work for reservation-only reads and postpones encounter work until
+needed; it is not a full-course throughput improvement. Both class variants
+share the current noise module, so this measurement isolates reservation work.
+Raw rounds and summary are `.claude/ownership.perf5-sitework.local.log` and
+`.claude/ownership.perf5-sitework-summary.local.json`.
+
+The independent `worldmass_noisework` oracle preserves the original noise body
+with SHA-256 `5e84eeee8ebd625e0c5928597f5c671e0b1b4860f903e5ab258555fbd9d8e947`.
+Its 4,090 checks cover exact floating-point results, ordered hash bytes and
+salts, lattice calls, full signed coordinates, large periods, invalid-input
+errors, changing/throwing getters and independently bundled output. This
+separate oracle addresses the generator probes' shared noise dependency.
+
+Four alternating rounds per runtime/workload each execute 131,072 identical
+queries. In the actual hosted TypeScript runtime, nearby median time falls
+444.08→362.99 ms (18.3%) and distant cache-churn time 1,032.48→902.95 ms (12.5%).
+The minified production-style bundle is essentially unchanged nearby
+(250.22→248.17 ms), and slower for distant churn (731.99→746.12 ms, 1.9%).
+All checksums agree. These bundled functions run in Node V8, not a browser
+frame benchmark; no client FPS gain is claimed. Existing address-cache capacity
+and key/eviction behavior are unchanged. All isolated timing finishes before
+broader verification and the live paired comparisons.
+Noise raw rounds/checksums and the exact source snapshot are
+`.claude/ownership.perf5-noise-bench.local.{json,log}` and
+`.claude/ownership.perf5-noise-source.local.ts`.
+
+Because live tails are mixed below, the sitework benchmark also measures the
+complete shipped terrain/landform planning chain at eight fixed, widely spaced
+points with fresh generators. Each point calls `terrainAt` and real landform
+reservation, then all points request full `regionalPlacesInCell` content. The
+native catalogue's minimum/median/maximum footprint radii happen to be the same
+1,392.7922 units in this descriptor; the course therefore uses that one actual
+radius. Seed 713, query order and output are identical. Constructors are outside
+timing. Both classes share current noise and other unchanged planner modules;
+this isolates reservation work, not the combined noise change or an actual
+native-country/runtime/shard owner.
+
+Four alternating rounds retain identical cold, content and combined digests.
+Median cold planning falls 3,407.06→2,692.13 ms (21.0%); the median of each
+round's worst query falls 594.95→482.81 ms (18.8%). All eight per-point repeated
+cold medians improve. The observed maximum across rounds is 693.72→525.54 ms.
+Deferred full content rises 327.70→375.81 ms (14.7%), while median combined
+planning/content time falls 3,726.11→3,079.05 ms (17.4%). This is repeatable
+fixed-work evidence of lower cold planning stalls, not proof of lower live
+tick tails. Per-query timings and all digests are retained in
+`.claude/ownership.perf5-completeplanner.local.log` and
+`.claude/ownership.perf5-completeplanner-summary.local.json`.
+
+### Fifth-pass verification
+
+All four type checks and the production build pass. Generation QA passes
+2,607 cases with four existing overlap warnings and one elapsed-time warning
+under concurrent correctness work. Simulation smoke passes all five scenarios
+/ 25 episodes, and the probe roster census passes. All 22 focused probes pass:
+the fourth pass's 18-probe set plus surfaces, sitework, noisework and
+dormancypinattribution. The type gate initially caught two unused imports in
+the new site probe; removing those imports resolves it without changing the
+oracle or assertions. Earlier unrelated baseline/intermittent failures remain
+recorded above, and no timing or correctness gate is weakened.
+
+Final checks/build/generation/simulation logs, the focused-probe summary and
+individual receipts are `.claude/perf5-final-*.local.*`. Independent critics
+reviewed the production changes and archival-oracle independence with no
+remaining correctness finding.
+
+The production client passes the full 1,102-frame, 3,213-unit wilderness route,
+eight distant arrivals, cold Continue and saved-survivor return. Nearby counts
+are 39/68/28/20/13/0/13/13 (mean 24.25). Continue retains all 275 original
+identities and admits 15 more, with sleepers rising 181→194. The fang priest
+returns at exactly 239.4 life with no readiness waits. There are no console
+errors or fatal crashes; both captured destination/encounter scenes were visually
+checked. Asynchronous preparation makes these counts a functional receipt,
+not a controlled density or FPS comparison. Full-content equivalence is checked
+by the archived-generator probes. The client exits before paired timing starts.
+
+### Fifth-pass repeated stress comparisons
+
+Two early-load pairs compare the final production changes with `448c07fc`:
+six real clients, 60 seconds, seed `0x00ddba11`, spread 3,500, rove zero,
+60 Hz, diagnostics on and profiler off. A launches control first and B reverses
+the order. Both hosts compete on one workstation; no correctness/client/profile
+jobs from this task overlap. Other workstation activity is uncontrolled.
+Average machine CPU is approximately 66–67%. These elapsed-time courses advance
+different numbers of steps and do not represent identical fixed work.
+
+| Course | Engine | Tick p50 / p95 / p99 (ms) | Worst tick (ms) | Dropped ticks | Steps/s | Input Hz/seat | Heap growth (MiB) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Early A | control | 109.80 / 234.65 / 458.80 | 1277.00 | 87.10% | 7.79 | 6.21 | 66.67 |
+| Early A | candidate | 100.67 / 226.55 / 363.70 | 1402.11 | 86.07% | 8.39 | 6.70 | 77.75 |
+| Early B | control | 99.96 / 209.83 / 295.04 | 1069.64 | 85.78% | 8.69 | 6.94 | 61.83 |
+| Early B | candidate | 109.20 / 222.51 / 457.85 | 842.38 | 86.69% | 8.05 | 6.41 | 55.22 |
+
+A improves p95 by 3.5% and p99 by 20.7%, but its maximum worsens 9.8%.
+B improves its maximum 21.2%, while p95 worsens 6.0% and p99 55.2%.
+These repeats do not establish lower worst live stalls or uniform jitter
+improvement. All four runs fail the unchanged p95 and dropped-tick gates.
+Both A runs also exceed the early heap-growth gate; both B runs pass it.
+Control A cuts its dormant seat at 56.07 seconds and cannot complete the
+five-second return before the window closes; candidate A resumes at 52.73
+seconds after its 47.56-second cut. Both B runs resume (control 52.27→57.53,
+candidate 52.64→57.75 seconds). Party/error/fault gates pass in all four runs.
+
+Nearby mean populations are control/candidate 40.86/39.22 in A and 41.27/41.21
+in B. The changed production files preserve all admission/density settings;
+exact content parity is established separately. Candidate A's largest stall
+contains 16.83 ms of recorded GC and 1,287.00 ms of runtime update, so the
+remaining synchronous runtime work still dominates that tick. Raw reports/logs
+are `.claude/perf5-early-{a,b}.local.*` in the candidate and control checkouts.
+
+Two clustered pairs keep the same seed/client/rate settings with spread zero
+and a shared earliest measurement start 60 seconds after dispatch. The second
+pair reverses launch order because the first candidate's p95 crossed the gate
+while its control passed. Average machine CPU is approximately 67% in A and
+71% in B. All task correctness, client, profile and other timing jobs are stopped.
+
+| Course | Engine | Tick p50 / p95 / p99 (ms) | Worst tick (ms) | Dropped ticks | Steps/s | Input Hz/seat | Heap growth (MiB) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Cluster A | control | 9.50 / 18.80 / 65.03 | 146.09 | 0.80% | 59.71 | 47.06 | 3.04 |
+| Cluster A | candidate | 9.51 / 29.53 / 65.00 | 244.01 | 0.72% | 59.46 | 42.36 | 2.86 |
+| Cluster B | control | 10.27 / 32.39 / 75.93 | 234.77 | 2.48% | 58.26 | 40.25 | 5.85 |
+| Cluster B | candidate | 10.38 / 21.47 / 71.62 | 240.65 | 1.95% | 58.66 | 42.11 | 5.24 |
+
+Typical/p99 times in A are essentially unchanged, but candidate p95 worsens
+57.1% and its maximum worsens 67.0%. In B, candidate p95 improves 33.7% and
+p99 5.7%, while the maximum is 2.5% higher. Both candidates still fail p95;
+only control A passes every gate. All four pass dropped ticks, heap, same-seat
+reconnect, party, errors and faults. This reversal does not establish a stable
+p95 regression, but neither pair demonstrates lower clustered worst ticks.
+Nearby mean populations are control/candidate 20.33/18.29 and 16.63/17.25.
+Raw reports/logs are `.claude/perf5-cluster.local.*` and
+`.claude/perf5-cluster-b.local.*`. The independently repeated fixed-work planner
+course above establishes the targeted savings; these live comparisons do not
+justify a broader jitter or release-readiness claim.
+All four control courses' JSON/log receipts are SHA-256 checked and preserved
+in `.claude/ownership.performance5-control-evidence/` before the temporary
+control checkout is archived.
+
+### Fifth-pass remaining stalls
+
+The final standalone six-client early-load diagnostic uses the candidate only,
+CPU profiling and the same inclusive per-tick timestamp wrappers. Other task
+correctness, client and timing jobs are stopped. Its durations include profiler
+and scheduling overhead; they are not a before/after performance comparison.
+
+The worst traced tick is 732.51 ms, with 666.10 ms in world update and only
+5.38 ms in runtime update. Sampled `checkIntelAccess` takes 612.40 ms inclusive,
+through wilderness path admission, cold native-country candidates and landform
+reservations. Within that chain, landform reservations take 535.92 ms,
+base terrain 341.55 ms, noise 194.68 ms and place collection 82.55 ms. These
+durations overlap and must not be added. The changed noise closure is gone,
+but hash work, lattice/address setup, regional terrain grammar and the remaining
+candidate work still contribute. The intel loop still cannot interrupt a single
+expensive synchronous query; its schedule and budget are unchanged.
+
+The second tick, 557.89 ms, includes 226.96 ms in dormancy update. Sampled pin
+discovery is 221.00 ms inclusive, with 168.81 ms of self time in immutable
+dependency certification. That earlier conservative scan remains another
+independent spike source. The third tick combines cold pathfinding terrain and
+regional content preparation. No owner exemption, admission delay or scheduling
+change is introduced in response to these samples.
+
+The diagnostic passes heap (+54.76 MiB), reconnect, party, errors and faults,
+but fails p95 (178.21 ms) and dropped ticks (84.59%). Raw profile, trace and
+report are `.claude/perf5-spikes.local.cpuprofile`,
+`.claude/perf5-spike-trace.local.json` and `.claude/perf5-profile.local.*`.
+The reproducible reader and output are
+`.claude/ownership.perf5-spike-attribution.local.{cjs,json}`. The fixed-work
+improvements justify this narrow checkpoint; persistent cold queries and mixed
+live tails remain unresolved rather than being recast as flawless play.

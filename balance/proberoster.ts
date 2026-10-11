@@ -62,6 +62,8 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_surfaces.ts', status: 'green', tier: 'fast', why: 'Surface-only terrain and demanded candidate fields preserve archived terrain and complete encounters across inhibition, numeric edge cases, signed addresses, historical schemas and cache eviction.' },
+  { probe: 'probe_worldmass_sitework.ts', status: 'green', tier: 'fast', why: 'Compatible landform reservations reuse surface pages while preserving archived site clearance, all-family inhibition and complete encounter content.' },
+  { probe: 'probe_worldmass_noisework.ts', status: 'green', tier: 'fast', why: 'Closure-free geographic noise retains exact archived hashes, lattice samples, arithmetic and errors across full signed addresses.' },
   { probe: 'probe_statfold.ts', status: 'green', tier: 'fast', why: 'Stat fold parity against the archived evaluator across source order, live conditions, gauges, tags, links and trades.' },
   { probe: 'probe_targetwork.ts', status: 'green', tier: 'fast', why: 'Conservative target-scan rejection preserves current sensing, segmented bodies, target ranking and original picker behavior.' },
   { probe: 'probe_spiritrun.ts', status: 'green', tier: 'fast', why: 'Loading-screen directions, collision boundaries, streak speed, frame rates and bounded gates.' },

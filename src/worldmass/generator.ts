@@ -87,6 +87,7 @@ export class MassGenerator {
   readonly nativeSubstrate: MassNativeSubstrate | null;
   private readonly surfaces: MassSpec['surfaces'];
   private readonly surfaceRecipes: readonly MassPlaceRecipe[];
+  private readonly landformSitesAreSurfaces: boolean;
   private readonly salts = new Map<MassSpec['fields'][number]['layers'][number], number>();
   private readonly candidates = new Map<string, MassPlace | null>();
   private readonly decisions = new Map<string, boolean>();
@@ -100,6 +101,7 @@ export class MassGenerator {
     this.nativeSubstrate = Object.hasOwn(this.spec, 'nativeSubstrate') ? new MassNativeSubstrate(this.run, this.spec) : null;
     this.surfaces = [...this.spec.surfaces].sort((a, b) => b.priority - a.priority || compare(a.id, b.id));
     this.surfaceRecipes = Object.freeze(this.spec.places.filter(p => p.surface));
+    this.landformSitesAreSurfaces = this.spec.places.every(p => p.surface || p.landformHabitat);
     for (const f of this.spec.fields) for (const l of f.layers)
       this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
     this.nativeRegional = this.spec.nativeRegional ? new MassNativeRegional(this.spec,this.run,at=>this.baseTerrainAt(at),
@@ -168,7 +170,13 @@ export class MassGenerator {
     const lo = moveAddress(origin, { x: box.minX, y: box.minY }, span);
     const hi = moveAddress(origin, { x: box.maxX, y: box.maxY }, span);
     for (let y = BigInt(lo.cy); y <= BigInt(hi.cy); y++) for (let x = BigInt(lo.cx); x <= BigInt(hi.cx); x++) {
-      for (const place of this.placesInCell({ dimension: origin.dimension, cx: x.toString(), cy: y.toString() })) {
+      const cell = { dimension: origin.dimension, cx: x.toString(), cy: y.toString() };
+      // When all protected sites paint terrain, the resident surface subset is
+      // already complete for this proof. Admission still checks every family.
+      // Historical unmarked populations and unpainted sites need the full page.
+      const places = landformHabitats && this.landformSitesAreSurfaces
+        ? this.surfacePlacesInCell(cell) : this.placesInCell(cell);
+      for (const place of places) {
         if (landformHabitats && this.spec.places.find(p=>p.id===place.recipe)?.landformHabitat) continue;
         const q = localOffset(place.center, origin, span, 100000);
         if (patchBoxIntersects(box, q.x, q.y, place.radius)) return false;
