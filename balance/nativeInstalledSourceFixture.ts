@@ -1,8 +1,10 @@
+import {beforeNativeScenePuzzles} from './nativeScenePuzzleFixture';
 /** Preserve old whole-World pins while explicitly checking only the independently proven source extraction. */
 import assert from 'node:assert/strict';
 import ts from 'typescript';
 import {nativeInstalledSourcesArchive as archive} from './nativeInstalledSourcesArchive';
 export function beforeNativeInstalledSources(text:string):string {
+ text=beforeNativeScenePuzzles(text);
  const sf=ts.createSourceFile('world.ts',text,99,true),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
  const edits:{start:number;end:number;text:string}[]=[];
  for(const row of archive.rows){

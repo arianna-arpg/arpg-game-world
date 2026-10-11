@@ -64,6 +64,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_spiritrun.ts', status: 'green', tier: 'fast', why: 'Loading-screen directions, collision boundaries, streak speed, frame rates and bounded gates.' },
 
   { probe: 'probe_nativeinstalledsources.ts', status: 'green', tier: 'fast', why: 'Original installed native registry boot without World, complete lazy providers, native config and unchanged full World members.' },
+  { probe: 'probe_nativescenepuzzles.ts', status: 'green', tier: 'fast', why: 'NativeScenePuzzles original lifecycle parity and retained-area identity, local effects and partial failures.' },
   { probe: 'probe_nativeareaisolation.ts', status: 'green', tier: 'fast', why: 'NativeAreaCoexistence preserves shared-party relays, actual local grounding and independent trace/harvest cleanup on the campaign clock.' },
   { probe: 'probe_nativeareasourcesession.ts', status: 'green', tier: 'slow', why: 'NativeAreaSourceSession and fresh area assembly preserve real campaign families, complete preparation and retained owners.' },
   { probe: 'probe_nativescenegraph.ts', status: 'green', tier: 'slow', why: 'Complete native graph, boundary, layout and birth agreement against original campaign code.' },

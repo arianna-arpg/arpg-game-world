@@ -1,4 +1,5 @@
 import './nativeSceneBootstrap';
+import {sceneUpdatePuzzles,scenePuzzleStruck,sceneDrainPuzzleKnocks,scenePuzzleTuned,sceneCompletePuzzle,type NativeScenePuzzleHost} from './nativeScenePuzzles';
 import './nativeInhabitants';
 import { type NativeInhabitantHost, type NativeInhabitantSources } from './nativeInhabitants';
 import { nativeFloorElevAt, nativeRayElev, nativeShotElev, nativeLineOfSight, nativeSightClipD, nativeLineOfFire, nativeClipShot, type NativeSightHost, type NativeSightSources } from './nativeSight';
@@ -333,7 +334,7 @@ import { REGROWTH_CFG, SCALD_CFG, type BaskSpec } from '../data/scald';
 import { LEDGER_TRAP_SPRUNG, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { driveOccSites, OCC_CFG, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
-import { capturePuzzleKindles, restorePuzzleKindles, pickKnockNode, puzzleContactHeatsCombat, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun, type PuzzleCheckpoint } from './puzzles';
+import { capturePuzzleKindles, restorePuzzleKindles, puzzleContactHeatsCombat, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, type PuzzleHost, type PuzzleRun, type PuzzleCheckpoint } from './puzzles';
 import { MINION_COMBAT } from './minionCombat';
 import { batchScaleOf, buildWornThrongDef, isThrongBody, THRONG_CFG, throngMarkerOf, throngSpecsOn, WORN_THRONGS, wornThrongDefOfSkillId, wornThrongSkillId, wornThrongStat, type ThrongSourceRow, type ThrongSpec } from './throng';
 import { CLING_CFG, clingEligible, clingMotionShaken, clingSeatPos, clingSeatsOf, gnawTags } from './cling';
@@ -36826,22 +36827,37 @@ export class World {
    *  (kind.solved dressing — proof, not homework). */
   private bootPuzzles(def: ZoneDef, pois: Vec2[], memory?: ZoneMemory | null): void { return sceneBootPuzzles(this.nativeSceneEnvironmentHost(),def,pois,memory); }
 
-  private updatePuzzles(dt: number): void {
-    this.drainPuzzleKnocks();
-    if (!this.puzzles.length) return;
-    for (const run of this.puzzles) {
-      if (!run.done) run.kind.tick?.(run, this.puzzleHost(run), dt);
-    }
+  private nativeScenePuzzleView?:NativeScenePuzzleHost;
+  private nativeScenePuzzleHost():NativeScenePuzzleHost {
+    if(this.nativeScenePuzzleView)return this.nativeScenePuzzleView;
+    const world=this;
+    const host:NativeScenePuzzleHost={
+      get puzzles(){return world.puzzles;},set puzzles(value){world.puzzles=value;},
+      get puzzleKnocks(){return world.puzzleKnocks;},set puzzleKnocks(value){world.puzzleKnocks=value;},
+      get time(){return world.time;},set time(value){world.time=value;},
+      get actors(){return world.actors;},set actors(value){world.actors=value;},
+      get zone(){return world.zone;},set zone(value){world.zone=value;},
+      get flashes(){return world.flashes;},set flashes(value){world.flashes=value;},
+      get hazardCaster(){return world.hazardCaster;},set hazardCaster(value){world.hazardCaster=value;},
+      get drainPuzzleKnocks(){const method=world.drainPuzzleKnocks;return (...args:Parameters<NativeScenePuzzleHost['drainPuzzleKnocks']>)=>method.apply(world,args);},
+      get puzzleHost(){const method=world.puzzleHost;return (...args:Parameters<NativeScenePuzzleHost['puzzleHost']>)=>method.apply(world,args);},
+      get spoilsSealed(){const method=world.spoilsSealed;return (...args:Parameters<NativeScenePuzzleHost['spoilsSealed']>)=>method.apply(world,args);},
+      get clampPos(){const method=world.clampPos;return (...args:Parameters<NativeScenePuzzleHost['clampPos']>)=>method.apply(world,args);},
+      get dropGemAt(){const method=world.dropGemAt;return (...args:Parameters<NativeScenePuzzleHost['dropGemAt']>)=>method.apply(world,args);},
+      get mintLootResult(){const method=world.mintLootResult;return (...args:Parameters<NativeScenePuzzleHost['mintLootResult']>)=>method.apply(world,args);},
+      get executeSkill(){const method=world.executeSkill;return (...args:Parameters<NativeScenePuzzleHost['executeSkill']>)=>method.apply(world,args);},
+    };
+    Object.defineProperty(this,'nativeScenePuzzleView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
   }
+
+  private updatePuzzles(dt: number): void { return sceneUpdatePuzzles(this.nativeScenePuzzleHost(),dt); }
 
   /** resolveHit's route for a landed hit on an enrolled node — THE KNOCK
    *  LAW: the blow QUEUES (however mitigated; `wounding` notes whether the
    *  life bar moved, for 'wounding'-dialed runs) and the per-frame drain
    *  judges, so the spill law and the hum see a whole blow first. */
-  private puzzleStruck(node: Actor, striker: Actor | null, wounding: boolean): void {
-    if (!node.puzzleNode) return;
-    this.puzzleKnocks.push({ node, striker, t: this.time, wounding });
-  }
+  private puzzleStruck(node: Actor, striker: Actor | null, wounding: boolean): void { return scenePuzzleStruck(this.nativeScenePuzzleHost(),node,striker,wounding); }
 
   /** The knock queue's per-frame drain (updatePuzzles, ahead of kind
    *  ticks). One BLOW = one group (same run, same striker, same instant):
@@ -36849,119 +36865,17 @@ export class World {
    *  'any' lets the zone itself play) and the knock dial refuse first,
    *  THE SPILL LAW collapses the group to its aimed bell, and THE HUM
    *  swallows a just-judged node's echoes — all here, so kinds stay pure. */
-  private drainPuzzleKnocks(): void {
-    const knocks = this.puzzleKnocks;
-    if (!knocks.length) return;
-    this.puzzleKnocks = [];
-    if (!this.puzzles.length) return;
-    const groups = new Map<string, { run: PuzzleRun; striker: Actor | null; nodes: Actor[] }>();
-    for (const k of knocks) {
-      const pn = k.node.puzzleNode;
-      if (!pn || k.node.dead) continue;
-      const run = this.puzzles.find(r => r.id === pn.id);
-      if (!run || run.done || !run.kind.struck) continue;
-      if (puzzleKnockOf(run) === 'wounding' && !k.wounding) continue;
-      const who = run.spec.who ?? run.kind.who;
-      if (who === 'player' && k.striker?.team !== 'player') continue;
-      const key = `${run.id}|${k.striker?.id ?? -1}|${k.t}`;
-      let g = groups.get(key);
-      if (!g) groups.set(key, g = { run, striker: k.striker, nodes: [] });
-      if (!g.nodes.includes(k.node)) g.nodes.push(k.node);
-    }
-    for (const g of groups.values()) {
-      if (g.run.done) continue;
-      const rung = puzzleSpillOf(g.run) === 'all'
-        ? g.nodes : [pickKnockNode(g.nodes, g.striker)];
-      // THE HUM at BLOW grain: a still-humming bell is spill, judged by
-      // nothing; if ANY bell of this blow rings fresh, the blow claims the
-      // ledger WHOLE — cleared once, then every rung bell hums together —
-      // so a fan-out's echo (a re-fan of the same bells one frame later)
-      // is swallowed as ONE knock, exactly like a single bell's double-tap.
-      // The structural discriminator stands: a fresh bell from a LATER
-      // blow clears the standing hums, so a legitimate return to a bell
-      // always rings something else in between (or outlasts the hum).
-      const fresh = rung.filter(n => (g.run.hums.get(n.id) ?? 0) <= this.time);
-      if (!fresh.length) continue;
-      g.run.hums.clear();
-      for (const n of fresh) g.run.hums.set(n.id, this.time + puzzleHumOf(g.run));
-      for (const node of fresh) {
-        g.run.kind.struck!(g.run, node, this.puzzleHost(g.run), g.striker);
-        if (g.run.done) break;
-      }
-    }
-  }
+  private drainPuzzleKnocks(): void { return sceneDrainPuzzleKnocks(this.nativeScenePuzzleHost()); }
 
   /** The attunement fabric's listener: a tunable body's tone moved. Only
    *  nodes enrolled in a run route further (ambient crystals just glow). */
-  private puzzleTuned(node: Actor, tone: DamageType, striker: Actor | null): void {
-    void striker;
-    const pn = node.puzzleNode;
-    if (!pn) return;
-    const run = this.puzzles.find(r => r.id === pn.id);
-    if (!run || run.done || !run.kind.tuned) return;
-    run.kind.tuned(run, node, this.puzzleHost(run), tone);
-  }
+  private puzzleTuned(node: Actor, tone: DamageType, striker: Actor | null): void { return scenePuzzleTuned(this.nativeScenePuzzleHost(),node,tone,striker); }
 
   /** A riddle RESOLVES: latch, chorus, and the spec's own rewards — a
    *  generous parting wash of the finishing tone (the fabric pays in its
    *  own coin), gems, a free-cast flourish. The objective lane (chest, xp,
    *  unseal) rides updateObjective's watcher, exactly like every kind. */
-  private completePuzzle(run: PuzzleRun): void {
-    // SOVEREIGNTY: census — the puzzle's own reward pass (the derived census, probe_tiers RIG T).
-    if (run.done) return;
-    run.done = true;
-    const goal = (run.state.goal as DamageType | undefined) ?? 'lightning';
-    const tint = toneTint(goal);
-    for (const n of run.nodes) {
-      this.flashes.push({
-        pos: vec(n.pos.x, n.pos.y), radius: n.radius + 26,
-        color: tint, life: 0.5, maxLife: 0.5,
-      });
-    }
-    const rewardZone = run.rewardZone;
-    const sealed = rewardZone ? rewardZone.spoils === 'none' : this.spoilsSealed();
-    const rw = puzzleRewardOf(run);
-    if (rw?.gems) {
-      for (let i = 0; i < rw.gems; i++) {
-        this.dropGemAt(vec(run.at.x + rand(-30, 30), run.at.y + rand(-30, 30)), undefined, false, run.rewardSource, undefined, undefined, rewardZone);
-      }
-    }
-    // THE DIVERSIFIED POUR (2026-08-07): a reward TABLE resolves through the
-    // standing loot fabric (engine/loot.ts — nestable tables, the drove-purse
-    // routing) and lands through the ordinary drop primitives. UNOWED on
-    // purpose: a riddle pays of the ground underfoot, not of a writ — sealed
-    // (spoils 'none') ground refuses the mint exactly like the gem lane
-    // above (the cheap skip is rollDrops' own idiom: no resolution, no rng).
-    if (rw?.table && !sealed) {
-      for (const res of resolveLootTable(rw.table, { ilvl: run.rewardLevel ?? this.zone.level })) {
-        const at = this.clampPos(vec(run.at.x + rand(-30, 30), run.at.y + rand(-30, 30)), 10);
-        this.mintLootResult(at, res, false, run.rewardSource, rewardZone);
-      }
-    }
-    if (rw?.washFor) {
-      const sid = attunedStatus(goal);
-      const sdef = STATUS_DEFS[sid];
-      const scale = rw.washFor / Math.max(0.01, sdef?.duration ?? rw.washFor);
-      for (const x of this.actors) {
-        if (x.dead || x.team !== 'player' || x.construct || x.passive) continue;
-        if (run.owner && !sameStory(x, run.nodes[0])) continue;
-        if (dist(x.pos, run.at) > TUNE_CFG.pulseRadius * 2) continue;
-        x.applyStatus(sid, 0, scale, 'attunement');
-      }
-    }
-    if (rw?.cast && SKILLS[rw.cast]) {
-      if (!this.hazardCaster) {
-        const c = new Actor('Resonance', 'player', vec(0, 0));
-        c.untargetable = true; c.invulnerable = true;
-        this.hazardCaster = c;
-      }
-      const caster = this.hazardCaster;
-      caster.level = Math.max(1, run.rewardLevel ?? this.zone.level);
-      caster.pos = vec(run.at.x, run.at.y);
-      const inst = makeSkillInstance(SKILLS[rw.cast], 1 + Math.floor(caster.level / 3));
-      this.executeSkill(caster, inst, vec(run.at.x, run.at.y), { noCooldown: true, noRepeat: true });
-    }
-  }
+  private completePuzzle(run: PuzzleRun): void { return sceneCompletePuzzle(this.nativeScenePuzzleHost(),run); }
 
   /** Live riddle views for the zone panel + attention chevrons
    *  (data/puzzles.ts registers both — the beacons.ts idiom). */

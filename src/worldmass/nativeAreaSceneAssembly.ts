@@ -1,3 +1,4 @@
+import {NativeAreaScenePuzzles,type NativeScenePuzzleEffects} from './nativeAreaScenePuzzles';
 import {makeNativeAreaArena} from '../engine/nativeAreaArena';
 import {NativeAreaTimeflow,type NativeAreaTimeflowHost} from './nativeAreaTimeflow';
 /** Fresh native area ownership and staged complete preparation. No World scene
@@ -78,7 +79,7 @@ export interface NativeAreaAssemblyServices {
  population:Pick<Input<typeof NativeAreaScenePopulation>['context'],'resolveHit'>;
  residents:Pick<Input<typeof NativeResidentSession>['area']['local'],'viewRectFor'|'scene'|'clientActionHook'>;
  timeflow:NativeAreaTimeflowHost;
- environment:Pick<Input<typeof NativeAreaSceneEnvironment>['services'],'completePuzzle'>;
+ puzzleEffects:NativeScenePuzzleEffects;
  ecology:Pick<Input<typeof NativeAreaSceneEcology>['services'],'throngClaimed'>;
  theater:Omit<Input<typeof NativeAreaSceneTheater>['services'],'radianceCondHeld'>;
  openings:Input<typeof NativeAreaSceneOpenings>['rewards'];
@@ -110,6 +111,7 @@ export class NativeAreaSceneAssembly {
  readonly generation:NativeAreaSceneGeneration;
  readonly transition:Transition;
  readonly timeflow:NativeAreaTimeflow;
+ readonly puzzleController:NativeAreaScenePuzzles;
  #phase:'fresh'|'preparing'|'prepared'|'birthing'|'born'|'failed'='fresh';
  #prepared?:{source:NativeAreaSource;session:NativeAreaSourceSession;layout:Readonly<Layout>;fingerprint:string;firstVisit:boolean;rngState:number;memoryState:string};
  constructor(raw:NativeAreaAssemblyInput){
@@ -141,8 +143,11 @@ export class NativeAreaSceneAssembly {
    state:populationState});
   // Keep the native numeric squad namespace shared by every retained area.
   Object.defineProperty(populationState,'squadSequence',{enumerable:true,get:()=>campaign.squadSeq,set:(v:number)=>{campaign.squadSeq=v;}});
+  let puzzleController:NativeAreaScenePuzzles;
+  const environmentServices=bindNativeSceneObjectives({completePuzzle:(run:Parameters<World['completePuzzle']>[0])=>puzzleController.completePuzzle(run),timeflow,get time(){return campaign.time;}},objectives);
   const environment=new NativeAreaSceneEnvironment({scene,geometry,population,
-   services:bindNativeSceneObjectives(extendView(servicesView(services.environment,['completePuzzle']),{timeflow,get time(){return campaign.time;}}),objectives),sources:sources.environment,state:environmentState});
+   services:environmentServices,sources:sources.environment,state:environmentState});
+  this.puzzleController=puzzleController=new NativeAreaScenePuzzles({scene,geometry,environment,campaign,effects:services.puzzleEffects});
   const ecology=new NativeAreaSceneEcology({scene,geometry,population,environment:environmentState,
    services:bindNativeSceneSky(extendView(servicesView(services.ecology,['throngClaimed']),{get time(){return campaign.time;},get seats(){return campaign.seats;}}),sky),sources:sources.ecology,state:freshSceneEcologyState()});
   const settlement=new NativeAreaSceneSettlement({scene,geometry,campaign,state:{townTierIdx:raw.carry.townTierIdx,mercOutpost:null}});
@@ -181,7 +186,7 @@ export class NativeAreaSceneAssembly {
   // Brandt's once-armed shelf is run state, including between counter areas.
   Object.defineProperty(this.input.state,'vendorStock',{enumerable:true,get:()=>campaign.vendorStock,set:(v:World['vendorStock'])=>{campaign.vendorStock=v;}});
   this.graph=new NativeAreaSceneGraph({coast,campaign});this.boundaries=new NativeAreaSceneBoundaries(this.graph);
-  for(const key of ['input','host','graph','boundaries','generation','transition','timeflow'])Object.defineProperty(this,key,{writable:false,configurable:false});
+  for(const key of ['input','host','graph','boundaries','generation','transition','timeflow','puzzleController'])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
  get phase(){return this.#phase;}
  sourceSession(geography:MassNativeGeography){return new NativeAreaSourceSession(this.graph,geography);}

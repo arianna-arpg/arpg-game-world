@@ -1,3 +1,14 @@
+NativeScenePuzzles shares the five original ongoing puzzle mutations with a
+retained area controller. Keep actual environment runs/queue, scene census,
+geometry, live campaign time and local resonance caster. Matching puzzle IDs
+across neighbors do not prove ownership: require actual node/run identity.
+Assembly binds its own completion before birth; loot/combat effects remain
+explicit real-owner capabilities, never the active World's fallback methods.
+Verify nativescenepuzzles, nativeareasourcesession, puzzles/attunement/puzzlecalm/
+worldmass_puzzlerewards, birth, all types, generation and sim. See
+docs/worldgen/native-area-puzzles.md. Scheduling/publication/persistence and
+complete area effects still precede full activation and the navigable-place pass.
+
 NativeAreaCoexistence makes fresh assemblies borrow campaign party relays and
 own trace state plus scoped activity holds on the real shared clock. Never let
 neighbor preparation acquire shared actor callbacks or release another area's

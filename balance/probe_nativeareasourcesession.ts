@@ -198,11 +198,33 @@ function verifySources(){
   const generate=failed.generation.generate;failed.generation.generate=function(...args){generate.apply(this,args);throw Error('after real layout');};
   assert.throws(()=>failed.prepare(failSession,failTicket,{x:sibling.size.w/2,y:sibling.size.h/2},true),/after real layout/);assert.equal(failed.phase,'failed');
   assert.throws(()=>failed.prepare(failSession,failTicket,{x:0,y:0},true),/already started/);assert.throws(()=>failed.birth(),/one prepared/);
-  const a=new NativeAreaSceneAssembly(freshAssemblyInput(w,z,raw.campaign)),b=new NativeAreaSceneAssembly(freshAssemblyInput(w,sibling,raw.campaign));
+  // NativeScenePuzzles: explicitly pinned native rows through two actual complete
+  // births. This tests retained controllers, not natural puzzle frequency or
+  // production loot/combat effects (the providers below deliberately record).
+  const puzzleDefinitions=[z,sibling].map(def=>({def,puzzles:def.puzzles,objective:def.objective}));
+  for(const def of [z,sibling]){def.puzzles=[{id:'ember_ring',chance:1}];def.objective={kind:'none'};}
+  const puzzleEffectsA:unknown[][]=[],puzzleEffectsB:unknown[][]=[];
+  const puzzleInput=(def:typeof z,calls:unknown[][])=>{const input=freshAssemblyInput(w,def,raw.campaign);
+   input.services.puzzleEffects={dropGemAt(...args){calls.push(['gem',...args]);},mintLootResult(...args){calls.push(['loot',...args]);},executeSkill(...args){calls.push(['cast',...args]);return true;}};return input;};
+  const a=new NativeAreaSceneAssembly(puzzleInput(z,puzzleEffectsA)),b=new NativeAreaSceneAssembly(puzzleInput(sibling,puzzleEffectsB));
   const boot=(area:NativeAreaSceneAssembly)=>{const source=area.sourceSession(mapping),id=area.input.scene.zone.id,place=area.prepare(source,source.issue(id),{x:area.input.geometry.arena.w/2,y:area.input.geometry.arena.h/2},false);area.input.scene.player.pos=area.input.geometry.clampPos({...place.spawnAt??place.entry},area.input.scene.player.radius);area.birth();};
   boot(a);const aBodies=[...a.input.scene.actors],aDoodads=a.input.geometry.doodads,aWalk=a.input.geometry.walk,aControllers=a.input.registry.input.state;
   boot(b);assert.equal(a.phase,'born');assert.equal(b.phase,'born');assert.deepEqual(a.input.scene.actors,aBodies);assert.equal(a.input.geometry.doodads,aDoodads);assert.equal(a.input.geometry.walk,aWalk);assert.equal(a.input.registry.input.state,aControllers);
   assert.ok(a.input.scene.actors.length>1&&b.input.scene.actors.length>1);assert.notEqual(a.input.geometry.walk,b.input.geometry.walk);
+  const puzzleA=a.input.environment.input.state.puzzles.find(r=>r.id==='ember_ring#0')!,puzzleB=b.input.environment.input.state.puzzles.find(r=>r.id==='ember_ring#0')!;
+  assert.ok(puzzleA&&puzzleB);assert.equal(puzzleA.id,puzzleB.id);assert.notEqual(puzzleA,puzzleB);
+  assert.throws(()=>a.puzzleController.puzzleStruck(puzzleB.nodes[0],w.player,true),/Foreign native puzzle node/);
+  assert.throws(()=>a.puzzleController.puzzleTuned(puzzleB.nodes[0],'fire',w.player),/Foreign native puzzle node/);
+  assert.throws(()=>a.puzzleController.completePuzzle(puzzleB),/Foreign native puzzle run/);
+  const beforeB={hums:[...puzzleB.hums],state:JSON.stringify(puzzleB.state),flashes:b.input.geometry.flashes.length};
+  const doneObjective=a.input.objectives.objectiveDone;
+  for(const node of puzzleA.nodes)a.puzzleController.puzzleStruck(node,w.player,true);
+  a.puzzleController.updatePuzzles(.01);
+  assert.equal(puzzleA.done,true,'actual ember kind completes through local deferred callback');assert.equal(puzzleB.done,false);
+  assert.deepEqual({hums:[...puzzleB.hums],state:JSON.stringify(puzzleB.state),flashes:b.input.geometry.flashes.length},beforeB);
+  assert.ok(puzzleEffectsA.length>0);assert.equal(puzzleEffectsB.length,0);
+  assert.equal(a.input.objectives.objectiveDone,doneObjective,'the separate objective watcher has not run');
+  for(const row of puzzleDefinitions){row.def.puzzles=row.puzzles;row.def.objective=row.objective;}
   const partial=new NativeAreaSceneAssembly(freshAssemblyInput(w,z,raw.campaign)),ps=partial.sourceSession(mapping);partial.prepare(ps,ps.issue(z.id),{x:z.size.w/2,y:z.size.h/2},false);
   const yard=partial.input.physical.syncTrainingYard;partial.input.physical.syncTrainingYard=function(...args){yard.apply(this,args);throw Error('after actual native bodies');};
   assert.throws(()=>partial.birth(),/after actual native bodies/);assert.equal(partial.phase,'failed');assert.ok(partial.input.scene.actors.length>1);assert.throws(()=>partial.birth(),/one prepared/);
