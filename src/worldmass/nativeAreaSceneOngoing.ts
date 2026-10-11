@@ -7,9 +7,10 @@ import {NativeAreaSceneAssembly,type NativeAreaAssemblyInput,type NativeAreaAsse
 import {NativeAreaActorAuthority,type NativeAreaAuthorityBinding} from './nativeAreaActorAuthority';
 import {NativeAreaSceneProgression,freshSceneProgressionState,type NativeSceneProgressionCampaign,type NativeSceneProgressionCombat,type NativeSceneProgressionRuntime,type NativeSceneProgressionState} from './nativeAreaSceneProgression';
 import {NativeAreaSceneQuests,freshSceneQuestState,type NativeQuestCampaign,type NativeSceneQuestState,type NativeSceneQuestRewardRuntime} from './nativeAreaSceneQuests';
+import {NativeAreaSceneQuestInteraction,freshSceneQuestInteractionState,type NativeQuestInteractionCampaign,type NativeSceneQuestInteractionState} from './nativeAreaSceneQuestInteraction';
 import {NativeAreaSceneObjectiveWatching,freshSceneObjectiveWatchingState,type NativeSceneObjectiveWatchingInput,type NativeSceneObjectiveWatchingState} from './nativeAreaSceneObjectiveWatching';
 
-export type NativeAreaOngoingCampaign=NativeAreaAssemblyCampaign & NativeQuestCampaign & NativeSceneProgressionCampaign & NativeSceneObjectiveWatchingInput['campaign'];
+export type NativeAreaOngoingCampaign=NativeAreaAssemblyCampaign & NativeQuestCampaign & NativeQuestInteractionCampaign & NativeSceneProgressionCampaign & NativeSceneObjectiveWatchingInput['campaign'];
 export type NativeAreaOngoingRuntime=NativeSceneProgressionRuntime & NativeSceneQuestRewardRuntime;
 export interface NativeAreaOngoingInput extends Omit<NativeAreaAssemblyInput,'campaign'|'services'> {
  campaign:NativeAreaOngoingCampaign;
@@ -21,14 +22,16 @@ export interface NativeAreaOngoingInput extends Omit<NativeAreaAssemblyInput,'ca
  characterWriter:World;
  progressionState:NativeSceneProgressionState;
  questState:NativeSceneQuestState;
+ interactionState:NativeSceneQuestInteractionState;
  watchingState:NativeSceneObjectiveWatchingState;
 }
 /** Fresh state is allocated once per complete area, never per visibility change. */
-export function freshAreaOngoingState(enteredAt:number){return {progressionState:freshSceneProgressionState(),questState:freshSceneQuestState(),watchingState:freshSceneObjectiveWatchingState(enteredAt)};}
+export function freshAreaOngoingState(enteredAt:number){return {progressionState:freshSceneProgressionState(),questState:freshSceneQuestState(),interactionState:freshSceneQuestInteractionState(),watchingState:freshSceneObjectiveWatchingState(enteredAt)};}
 export class NativeAreaSceneOngoing {
  readonly assembly:NativeAreaSceneAssembly;
  readonly progression:NativeAreaSceneProgression;
  readonly quests:NativeAreaSceneQuests;
+ readonly questInteraction:NativeAreaSceneQuestInteraction;
  readonly watching:NativeAreaSceneObjectiveWatching;
  readonly combat:NativeSceneProgressionCombat;
  readonly authority:NativeAreaActorAuthority<NativeAreaOngoingRuntime>;
@@ -47,13 +50,14 @@ export class NativeAreaSceneOngoing {
   this.progression=new NativeAreaSceneProgression({scene,population,geometry,ecology:assembly.input.ecology,runtime:registry.input.birth,loot:assembly.lootController,campaign:raw.campaign,state:raw.progressionState,authority:raw.authority});
   this.quests=new NativeAreaSceneQuests({authority:raw.authority,scene,geometry,population,physical,loot:assembly.lootController,bounty,graph:assembly.graph,coast,runtimeBirth:registry.input.birth,
    campaign:raw.campaign,state:raw.questState,scenePresence:assembly.scenePresence,objective:assembly.objectiveController,progression:this.progression,interaction:geometry,characterWriter:raw.characterWriter});
+  this.questInteraction=new NativeAreaSceneQuestInteraction({quests:this.quests,campaign:raw.campaign,state:raw.interactionState});
   this.watching=new NativeAreaSceneObjectiveWatching({authority:raw.authority,scene,geometry,population,objectives,state:raw.watchingState,birthState:state,
    environment,physical,completion:assembly.objectiveController,loot:assembly.lootController,graph:assembly.graph,coast,theater,adoption,objectiveServices:assembly.objectiveServices,
    campaign:raw.campaign,quests:this.quests,movement:raw.services.theater});
   this.combat=raw.combatFor(assembly,this.progression);
   if(this.combat.scene!==scene||this.combat.state!==raw.progressionState)throw Error('Native ongoing combat needs identical scene and retained queues');
   this.binding=raw.authority.register(scene,{progression:this.progression,combat:this.combat,loot:assembly.lootController,objective:assembly.objectiveController});
-  for(const key of ['assembly','progression','quests','watching','combat','authority','binding'])Object.defineProperty(this,key,{writable:false,configurable:false});
+  for(const key of ['assembly','progression','quests','questInteraction','watching','combat','authority','binding'])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
  /** The publisher supplies the exact physical census after removing borrowed
   * observers and performing any explicitly authorized transfers. No bodies move here. */
@@ -71,6 +75,12 @@ export class NativeAreaSceneOngoing {
   // Preparation preserves the previous owner. Only explicit admission takes routing.
   for(const actor of relayBodies)actor.statusRelay=this.assembly.input.population.factory.relayStatus;
   this.assembly.activatePresence(this.authority);
+ }
+ /** The external scheduler calls the native giver loop only after physical admission.
+  * The interaction owner selects actual local hands and owns their native dwell state. */
+ updateQuestGiver(dt:number):void{
+  if(!this.assembly.scenePresence.active)throw Error('Native quest interaction needs admitted attendance');
+  this.questInteraction.updateQuestGiver(dt);
  }
  /** Called by the area scheduler only with its actual representative present. */
  updateObjective(dt:number):void{

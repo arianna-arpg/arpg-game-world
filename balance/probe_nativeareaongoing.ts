@@ -5,6 +5,10 @@ import {STATUS_RELAYS,relayStatusStat} from '../src/engine/reception';
 /** Actual full birth -> admitted quest/progression/objective composition.
  * Combat death and movement remain explicit native-World test boundaries. */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+fs.mkdirSync(new URL('./reports/',import.meta.url),{recursive:true});
+import {createHash} from 'node:crypto';
+const receipts:{mode:string;checks:string[]}[]=[];
 import {World} from '../src/engine/world';
 import {makeSimWorld} from '../src/sim/arena';
 import {withSeededRandom} from '../src/core/rng';
@@ -18,7 +22,7 @@ import {address} from '../src/worldmass/address';
 import {placeZoneAt} from '../src/engine/worldgen';
 import {NativeAreaActorAuthority} from '../src/worldmass/nativeAreaActorAuthority';
 import {NativeAreaSceneOngoing,freshAreaOngoingState,type NativeAreaOngoingRuntime} from '../src/worldmass/nativeAreaSceneOngoing';
-import {freshAssemblyInput,NativeAreaSceneAssembly} from './nativeFreshAssemblyFixture';
+import {freshAssemblyInput} from './nativeFreshAssemblyFixture';
 import {QUESTS} from '../src/quests/defs';
 import {questDoneKey} from '../src/meta/account';
 import {NullInput} from '../src/net/intent';
@@ -35,20 +39,21 @@ for(const carried of [false,true])withSeededRandom(28031,()=>{
  const other=w.addSeat('neighbor',CLASSES.find(c=>c.id==='warrior')!,new NullInput(),{startingCompanions:false,startingFlasks:false});
  const raw:any=freshAssemblyInput(w,z),campaign:any=raw.campaign;
  // Campaign state stays live; no local census, physical store or controller is copied.
- for(const key of [...Object.keys(campaign),'ownQuestLedger','questLedgerOverride','questSeat','seatNoteAt','actingSeat','odyssey','mercSyncedLevel','timeflow','kills']){
+ for(const key of [...Object.keys(campaign),'ownQuestLedger','questLedgerOverride','questSeat','seatNoteAt','actingSeat','odyssey','mercSyncedLevel','timeflow','kills','journalDirty','netJournal']){
   if(typeof w[key]==='function'||key==='massRuntime'||key==='nativeResidentHistory')continue;
   Object.defineProperty(campaign,key,{configurable:true,enumerable:true,get:()=>w[key],set:v=>{w[key]=v;}});
  }
- for(const key of ['notice','markMetaDirty','sameParty','seatHero','seatHudOf','seatOf','questLedgerOf','forechartSounding','invalidateZonesSaveMemo','presentWorlds','keeperCampaign','odysseyLeads'])campaign[key]=(...args:any[])=>w[key](...args);
+ for(const key of ['notice','markMetaDirty','sameParty','seatHero','seatHudOf','seatOf','questLedgerOf','forechartSounding','invalidateZonesSaveMemo','presentWorlds','keeperCampaign','odysseyLeads','heroKnown','bagItem'])campaign[key]=(...args:any[])=>w[key](...args);
  const authority=new NativeAreaActorAuthority<NativeAreaOngoingRuntime>(campaign),states=freshAreaOngoingState(campaign.time);
  const combatNames=['kill','guardBash','executeSkill','burstDamage','guardArtHit','litePromoteNearest','companionPulseHit','useSkill','spawnConstruct','spawnProjectile','attackSequenceBurst','challengeBurst','challengeHit'];
  const combatFor=(assembly:any,progression:any)=>{const driver:any={scene:assembly.input.scene,state:progression.input.state};for(const name of combatNames)driver[name]=(...args:any[])=>(World.prototype as any)[name].apply(w,args);return driver;};
  const recipe={...raw,...states,authority,characterWriter:w,combatFor},run=new NativeAreaSceneOngoing(recipe);
+ recipe.interactionState=freshAreaOngoingState(campaign.time).interactionState;
  recipe.questState={...states.questState,scene:{foreign:true}} as any;recipe.campaign={...campaign};recipe.services={...raw.services,residents:{...raw.services.residents,scene:{foreign:true}}};
  assert.equal(run.assembly.input.residents.host.scene,states.questState.scene,'recipe rebinding cannot replace a retained provider');
- assert.equal(run.quests.input.progression,run.progression);assert.equal(run.watching.input.quests,run.quests);
+ assert.equal(run.questInteraction.input.quests,run.quests);assert.equal(run.questInteraction.input.state,states.interactionState);assert.equal(run.questInteraction.input.campaign,campaign);assert.equal(run.quests.input.progression,run.progression);assert.equal(run.watching.input.quests,run.quests);
  assert.equal(run.quests.input.scenePresence,run.assembly.scenePresence);assert.equal(run.assembly.lootController.input.scenePresence,run.assembly.scenePresence);assert.equal(run.assembly.objectiveController.input.scenePresence,run.assembly.scenePresence);
- assert.throws(()=>run.admit(run.assembly.input.scene.actors),/completed area birth/);assert.throws(()=>run.updateObjective(.1),/admitted attendance/);
+ assert.throws(()=>run.admit(run.assembly.input.scene.actors),/completed area birth/);assert.throws(()=>run.updateObjective(.1),/admitted attendance/);assert.throws(()=>run.updateQuestGiver(.1),/admitted attendance/);
  const session=run.assembly.sourceSession(mapping),placement=run.assembly.prepare(session,session.issue(z.id),{x:z.size.w/2,y:z.size.h/2},false);
  w.player.pos=run.assembly.input.geometry.clampPos({...placement.spawnAt??placement.entry},w.player.radius);run.assembly.birth();
  flesh.pos={...w.player.pos};
@@ -57,14 +62,17 @@ for(const carried of [false,true])withSeededRandom(28031,()=>{
  // The neighbor is a real campaign player at identical local coordinates, owned elsewhere.
  other.actor.pos={...w.player.pos};const peerDef={...z,id:'ongoing-peer'};w.zoneMap[peerDef.id]=peerDef;
  const peerRaw=freshAssemblyInput(w,peerDef,campaign);peerRaw.initialActors=[w.player,other.actor];
- const peerArea=new NativeAreaSceneAssembly(peerRaw),peerScene=peerArea.input.scene;
+ const peerStates=freshAreaOngoingState(campaign.time),peerRun=new NativeAreaSceneOngoing({...peerRaw,...peerStates,campaign,authority,characterWriter:w,combatFor});
+ const peerArea=peerRun.assembly,peerScene=peerArea.input.scene;
+ assert.notEqual(peerRun.questInteraction,run.questInteraction);assert.notEqual(peerStates.interactionState,states.interactionState);assert.notEqual(peerStates.interactionState.questGiverDwells,states.interactionState.questGiverDwells);
+ assert.equal(peerRun.questInteraction.input.quests,peerRun.quests);assert.equal(peerRun.watching.input.quests,peerRun.quests);
  const peerSession=peerArea.sourceSession(mapping);peerArea.prepare(peerSession,peerSession.issue(peerDef.id),{...w.player.pos},false);peerArea.birth();
  // Native preparation borrows the campaign observer; admission removes it
  // before the actual neighbor takes physical attendance.
  peerScene.actors=peerScene.actors.filter(a=>a!==w.player);peerScene.player=other.actor;
- // The peer has its own actual reward owners. Combat/progression remain the
- // unselected recording boundary in this neighbor-exclusion course.
- const peer=authority.register(peerScene,{progression:run.progression,combat:{...run.combat,scene:peerScene},loot:peerArea.lootController,objective:peerArea.objectiveController});authority.claim(peer,peerScene.actors);peerArea.activatePresence(authority);
+ // Both complete births own their actual retained controllers. Explicit
+ // admission removes the borrowed observer; combat remains the stated test boundary.
+ peerRun.admit([...peerScene.actors]);assert.equal(authority.require(other.actor).progression,peerRun.progression);
  assert.deepEqual(run.assembly.scenePresence.seats,[w.localSeat]);
  const foe=run.assembly.input.population.createMonster('zombie',1,'enemy');foe.pos={x:w.player.pos.x+15,y:w.player.pos.y};scene.actors.push(foe);authority.claim(run.binding,[foe]);
  const decoy=w.createMonster('zombie',1,'enemy');decoy.pos={...w.player.pos};w.actors.push(decoy);
@@ -79,7 +87,43 @@ for(const carried of [false,true])withSeededRandom(28031,()=>{
  for(const actor of scene.actors)if(actor.team==='enemy')actor.dead=true;
  run.updateObjective(.1);assert.ok(run.assembly.input.objectives.objectiveDone);assert.ok(w.completedObjectives.has(z.id));assert.ok(!w.activeQuests.includes(entry));assert.ok(w.ledger[questDoneKey(q.id)]>0);assert.ok(flesh.level>beforeLevel,'actual native rebuild follows XP threshold');assert.equal(other.meta.xp,beforePeer,'neighbor never receives local rewards');
  const xp=w.meta.xp,level=flesh.level;run.updateObjective(.1);assert.equal(w.meta.xp,xp);assert.equal(flesh.level,level);
+ // Authored native turn-ins exercise the real composed giver loop after both
+ // births. Actual actor clocks/quiescence are read; no idle callback is substituted.
+ for(const areaRun of [run,peerRun]){
+  const giver=areaRun.assembly.input.population.createMonster('townsfolk_questgiver',1,'player');
+  giver.pos={...w.player.pos};areaRun.assembly.input.scene.actors.push(giver);authority.claim(areaRun.binding,[giver]);
+ }
+ w.time+=20;w.localSeat.lastActedAt=0;other.lastActedAt=0;w.player.useLock=0;other.actor.useLock=0;
+ assert.ok(w.player.isQuiescent());assert.ok(other.actor.isQuiescent());
+ // Turn-in is the controlled authored branch. Existing Odyssey leads are already
+ // known, so this course does not add a simultaneous graph-discovery action.
+ const odyssey=run.quests.odyssey.campaign();if(odyssey){const leads=run.quests.odyssey.leadsOf(odyssey);for(const id of odyssey.roster)if(!leads.includes(id))leads.push(id);}
+ const turn=QUESTS.undead_south_l5,turnEntry={questId:turn.id,zoneId:z.id,fieldDone:true};w.activeQuests.push(turnEntry);
+ assert.ok(run.questInteraction.nearAnyQuestGiver());assert.equal(peerRun.questInteraction.nearAnyQuestGiver(),false,'matching coordinates do not admit the solo hand');
+ const peerDropsBefore=peerArea.input.physical.input.state.drops.length,peerXpBefore=other.meta.xp,localXpBefore=w.meta.xp;
+ run.updateQuestGiver(.35);assert.equal(states.interactionState.questGiverDwell,.35);assert.ok(w.activeQuests.includes(turnEntry));
+ peerStates.interactionState.questGiverDwell=.6;peerRun.updateQuestGiver(.65);assert.equal(peerStates.interactionState.questGiverDwell,0);assert.ok(w.activeQuests.includes(turnEntry));assert.equal(states.interactionState.questGiverDwell,.35);
+ // The native .15-second action grace still interrupts accumulated dwell.
+ w.localSeat.lastActedAt=w.time;run.updateQuestGiver(.2);assert.equal(states.interactionState.questGiverDwell,0);w.time+=1;
+ run.updateQuestGiver(.45);run.updateQuestGiver(.5);assert.ok(!w.activeQuests.includes(turnEntry));assert.ok(w.ledger[questDoneKey(turn.id)]>0);
+ assert.ok(w.meta.xp>localXpBefore||flesh.level>level);assert.equal(other.meta.xp,peerXpBefore);assert.equal(peerArea.input.physical.input.state.drops.length,peerDropsBefore);
+ // On a hosted campaign, the keeper need not stand in the peer area. Its real
+ // local hand uses that area's independent dwell map and actual recipient owners.
+ w.localSeat.keeper={reviveSec:3};const peerBook=w.questLedgerOf(other),peerTurn={questId:turn.id,zoneId:peerDef.id,fieldDone:true};peerBook.active.push(peerTurn);
+ const peerKnown=peerRun.quests.withQuestHand(other,()=>peerRun.quests.odyssey.campaign());if(peerKnown)peerRun.quests.withQuestHand(other,()=>{const leads=peerRun.quests.odyssey.leadsOf(peerKnown);for(const id of peerKnown.roster)if(!leads.includes(id))leads.push(id);});
+ const rootDropsBefore=run.assembly.input.physical.input.state.drops.length,rootXpBefore=w.meta.xp,rootLedgerBefore=JSON.stringify(w.ownQuestLedger),hostedPeerXp=other.meta.xp;
+ peerRun.updateQuestGiver(.4);assert.equal(peerStates.interactionState.questGiverDwells.get(other),.4);assert.equal(states.interactionState.questGiverDwells.has(other),false);assert.ok(peerBook.active.includes(peerTurn));
+ run.updateQuestGiver(.6);assert.ok(peerBook.active.includes(peerTurn));assert.equal(peerStates.interactionState.questGiverDwells.get(other),.4);
+ peerRun.updateQuestGiver(.55);assert.ok(!peerBook.active.includes(peerTurn));assert.ok(peerBook.completed.has(turn.id));assert.ok(other.meta.xp>hostedPeerXp||other.actor.level>1);
+ assert.ok(w.journalDirty.has(other.id));assert.equal(w.questSeat,null);assert.equal(w.actingSeat,null);assert.equal(w.meta.xp,rootXpBefore);assert.equal(JSON.stringify(w.ownQuestLedger),rootLedgerBefore);assert.equal(run.assembly.input.physical.input.state.drops.length,rootDropsBefore);
+ delete w.localSeat.keeper;
+ console.log('PASS composed interaction '+(carried?'carried hero':'standing hero')+': two actual ongoing births, independent retained state, pre-admission refusal, native idle break, solo local payout, foreign-area refusal, and hosted peer payout with keeper absent');
  // One live script controller suppresses rescues through the shared area lifecycle.
  states.questState.scene={active:true} as any;assert.equal(run.assembly.input.residents.host.scene,states.questState.scene);
+ receipts.push({mode:carried?'carried hero':'standing hero',checks:['two full native ongoing births','distinct retained interaction owners and states','input rebinding cannot replace captured owners','pre-admission interaction refusal','original objective completion and XP rebuild','original status relay ownership','original neighbor and repeat-completion exclusion','native action clock breaks dwell','solo giver turn-in pays only the present hand','matching-coordinate foreign interaction refuses','hosted peer turn-in pays in its actual area with keeper absent','campaign quest/acting scope restoration','foreign physical drop and quest ledger remain unchanged']});
  console.log('PASS ongoing area '+(carried?'carried hero':'standing hero')+': full native birth, explicit admission, shared quest/progression/watch owners, native XP rebuild, quest receipt, neighbor exclusion and repeat completion');
 });
+
+const result={sourceBase:'8c7ab5fa',retainedActivation:false,count:receipts.length,receipts,receipt:createHash('sha256').update(JSON.stringify(receipts)).digest('hex'),boundaries:['Combat death/movement remain explicit native-World test boundaries as in the original course','Controlled authored turn-in readiness and settled action clocks are fixture setup','Two real assembly births and actual composed interaction/quest/progression/watcher/loot/authority owners run directly','External scheduler/menu routing and client publication remain unactivated']};
+fs.writeFileSync(new URL('./reports/ongoing-interaction-proof.json',import.meta.url),JSON.stringify(result,null,2)+'\n');
+console.log(JSON.stringify({count:result.count,receipt:result.receipt}));

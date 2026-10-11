@@ -176,6 +176,20 @@ onQuestZoneFieldCleared:World['onQuestZoneFieldCleared']=(...args)=>native.scene
 deedHand<T>(places:()=>readonly import('../core/math').Vec2[],fn:()=>T):T{return native.sceneDeedHand(this.host,places,fn);}
 completeQuestField:World['completeQuestField']=(...args)=>native.sceneCompleteQuestField(this.host,...args);
 ensureQuestCargo:World['ensureQuestCargo']=(...args)=>native.sceneEnsureQuestCargo(this.host,...args);
+/** A solo giver interaction belongs to the physically present campaign hand.
+ * Ordinary field completion keeps ensureQuestCargo's source-area fallback. */
+ensureSoloInteractionQuestCargo():void {
+ const {authority,scene,campaign}=this.input,hand=campaign.localSeat;
+ if(hand.keeper)throw Error('Solo interaction cargo cannot use keeper policy');
+ if(!authority.seatsFor(authority.bindingFor(scene)).includes(hand))return;
+ authority.assertAdmitted(scene);
+ const localHost=Object.create(this.host) as Host;
+ Object.defineProperty(localHost,'player',{get:()=>{
+  if(authority.require(hand.actor).scene!==scene)throw Error('Interaction cargo lost its actual local hand');
+  return hand.actor;
+ }});
+ return native.sceneEnsureQuestCargo(localHost);
+}
 ensureSeatCargo:World['ensureSeatCargo']=(...args)=>native.sceneEnsureSeatCargo(this.host,...args);
 onQuestZoneCleared:World['onQuestZoneCleared']=(...args)=>{
  // Capture the exact native lookup after its row/Odyssey/definition work.

@@ -61,6 +61,8 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativequestinteraction.ts', status: 'green', tier: 'fast', why: 'Exact native quest giver, offer, vocation, imbue and idle rules; actual World receiver/default/save parity, physical area attendance, transfer-invalidated dwell and continuous-country branches.' },
+  { probe: 'probe_nativeinteractioncargo.ts', status: 'green', tier: 'fast', why: 'Solo giver cargo follows the physically present local hand; field completion retains its own area fallback, and foreign carried-body interaction refuses.' },
   { probe: 'probe_nativeprojectilelaunch.ts', status: 'green', tier: 'fast', why: 'Archived/shared/World/retained launch parity, exact registered queue and physical caster, real safe-area prey selection, cosmetic lineage, conversion, returns and emitter bounds.' },
   { probe: 'probe_nativeareamemory.ts', status: 'green', tier: 'fast', why: 'Actual retained-area memory, exact source and writer authority, once-per-save capture, partial failure, current-owner unregister refusal and same-process save/Continue with two fresh native births.' },
   { probe: 'probe_nativehistoricalguards.ts', status: 'green', tier: 'fast', why: 'Original sky/graph pins plus existing reviewed complete World receipts; unknown additions, bodies, types, delegates, duplicates and removals refuse.' },
@@ -68,7 +70,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_nativesceneprogression.ts', status: 'green', tier: 'fast', why: 'Original native rebuilds, companion and aura cleanup, actual cross-area XP routing, retained ecology and combat queue identities.' },
   { probe: 'probe_nativeareapresence.ts', status: 'green', tier: 'fast', why: 'Physical attendance for actual two-area births, XP, spoil rotation, party scaling, carried possession and restoration.' },
   { probe: 'probe_nativebirthadmission.ts', status: 'green', tier: 'fast', why: 'Actual watcher and rescue factory births acquire exact scene authority through delayed, nested and partially failing operations; borrowed and arbitrary actors are never swept in.' },
-  { probe: 'probe_nativeareaongoing.ts', status: 'green', tier: 'fast', why: 'Complete native birth, explicit admission, real quest and XP rebuild routing, repeat completion and neighboring attendance exclusion.' },
+  { probe: 'probe_nativeareaongoing.ts', status: 'green', tier: 'fast', why: 'Two complete native ongoing births, admitted quest giver dwell and hosted turn-in, real quest and XP rebuild routing, repeat completion and neighboring attendance exclusion.' },
   { probe: 'probe_nativescenequests.ts', status: 'green', tier: 'fast', why: 'Original quest rewards, real cargo/rescues, native Odyssey graph, saved character identity and retained area isolation.' },
   { probe: 'probe_nativesceneobjectivewatching.ts', status: 'green', tier: 'fast', why: 'Original and retained objective attendance, holds, waves, reinforcements, local births and exact reward state.' },
   { probe: 'probe_nativeareaauthority.ts', status: 'green', tier: 'fast', why: 'Exact identity admission, physical transfers, carried heroes, live rosters and atomic refusals.' },

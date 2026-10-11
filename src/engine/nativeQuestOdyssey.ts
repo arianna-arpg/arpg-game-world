@@ -138,4 +138,12 @@ expandBanditTurf(): void {
     for (const z of candidates.slice(0, c.turfPerAct * odysseyAct(this.campaign()!))) w.sim.faction.reinforce(z.id, 'bandit', c.turfInfluence);
     this.tell('Bandits press their claims around the dispatch route. Watch their roads for messengers.');
   }
+hasLocalLeads(): boolean { const s = this.campaign(); return this.w.graphWorkAvailable() && !!s && this.leadsOf(s).length < s.roster.length; }
+
+localLeads(): void {
+    const s = this.campaign(); // THE WORLD'S HALF: a unit reads the keeper's campaign
+    if (!s) return;
+    for (const id of s.roster) this.reveal(id);
+    this.revealRevenge();
+  }
 }

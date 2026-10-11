@@ -9,6 +9,8 @@ export class NativeAreaActorAuthority<S extends object> {
  #bindings=new Map<NativeAreaAuthorityBinding<S>,{owner:NativeAreaAuthorityOwner<S>;actors:Set<Actor>}>();
  #scenes=new Map<NativeSceneCensus,NativeAreaAuthorityBinding<S>>();
  #actors=new WeakMap<Actor,NativeAreaAuthorityBinding<S>>();
+ #attendance=new WeakMap<Actor,number>();
+ #attendanceSerial=0;
  constructor(campaign:{readonly seats:readonly Seat[]}){this.campaign=campaign;Object.defineProperty(this,'campaign',{writable:false,configurable:false});}
  register(scene:NativeSceneCensus,services:S):NativeAreaAuthorityBinding<S>{
   if(!scene||!Array.isArray(scene.actors)||!services||typeof services!=='object')throw Error('Native area authority needs real scene and services');
@@ -32,7 +34,7 @@ export class NativeAreaActorAuthority<S extends object> {
  claim(binding:NativeAreaAuthorityBinding<S>,actors:readonly Actor[]):void{
   const entry=this.#entry(binding);if(new Set(actors).size!==actors.length)throw Error('Repeated actor in native authority claim');
   for(const actor of actors){if(!binding.scene.actors.includes(actor))throw Error('Native authority claim needs actual scene membership');const prior=this.#actors.get(actor);if(prior&&prior!==binding)throw Error('Native actor already belongs to another area');}
-  for(const actor of actors){this.#actors.set(actor,binding);entry.actors.add(actor);}
+  for(const actor of actors){if(this.#actors.get(actor)!==binding)this.#attendance.set(actor,++this.#attendanceSerial);this.#actors.set(actor,binding);entry.actors.add(actor);}
  }
  /** Called after a physical handoff. The destination must already contain the
   * exact body. Shared borrowed census entries never transfer authority implicitly. */
@@ -41,12 +43,12 @@ export class NativeAreaActorAuthority<S extends object> {
   if(this.#actors.get(actor)!==from)throw Error('Native authority transfer has a stale source');
   if(!to.scene.actors.includes(actor))throw Error('Native authority transfer needs destination membership');
   if(from===to)return;
-  this.#actors.set(actor,to);old.actors.delete(actor);next.actors.add(actor);
+  this.#actors.set(actor,to);old.actors.delete(actor);next.actors.add(actor);this.#attendance.set(actor,++this.#attendanceSerial);
  }
  release(binding:NativeAreaAuthorityBinding<S>,actors:readonly Actor[]):void{
   const entry=this.#entry(binding);
   for(const actor of actors)if(this.#actors.get(actor)!==binding)throw Error('Cannot release another native area actor');
-  for(const actor of actors){this.#actors.delete(actor);entry.actors.delete(actor);}
+  for(const actor of actors){if(this.#actors.get(actor)===binding){this.#actors.delete(actor);entry.actors.delete(actor);this.#attendance.set(actor,++this.#attendanceSerial);}}
  }
  unregister(binding:NativeAreaAuthorityBinding<S>):void{
   const entry=this.#entry(binding);if(entry.actors.size)throw Error('Release native area actors before retiring authority');
@@ -62,6 +64,12 @@ export class NativeAreaActorAuthority<S extends object> {
    return this.#physical(carried[0].actor);
   }
   return this.#physical(actor);
+ }
+ /** Physical ownership changes invalidate dwells even across an unobserved round trip. */
+ attendanceRevision(actor:Actor):number {
+  this.require(actor); // Validate exact membership and carried-body identity first.
+  const carried=this.campaign.seats.find(s=>s.home===actor&&s.actor!==actor&&s.actor.possession?.huskMode==='carried');
+  return this.#attendance.get(carried?.actor??actor)!;
  }
  #physical(actor:Actor):NativeAreaAuthorityOwner<S>{
   const binding=this.#actors.get(actor);if(!binding)throw Error('Missing native actor authority');

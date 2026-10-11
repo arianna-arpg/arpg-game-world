@@ -161,18 +161,9 @@ export class OdysseyRuntime {
     if (acct[ORACLE_RESCUED] && !rescuedThisLife) w.enrollOdysseyQuest(QUESTS[oracleCommanderId(revengeFactionOf(acct))], true);
   }
 
-  /** THE CHARACTER'S QUESTS: the leads a read or act answers (the hand's own on a hosted world). */
-  private leadsOf(s: OdysseyState): string[] {return this.nativeQuestCore().leadsOf(s);}
-
   /** The giver recognizes existing opportunities; never mints a second target. */
-  hasLocalLeads(): boolean { const s = this.campaign(); return this.w.graphWorkAvailable() && !!s && this.leadsOf(s).length < s.roster.length; }
-  localLeads(): void {
-    const s = this.campaign(); // THE WORLD'S HALF: a unit reads the keeper's campaign
-    if (!s) return;
-    for (const id of s.roster) this.reveal(id);
-    this.revealRevenge();
-  }
-  private revealRevenge(): void {return this.nativeQuestCore().revealRevenge();}
+  hasLocalLeads(): boolean {return this.nativeQuestCore().hasLocalLeads();}
+  localLeads(): void {return this.nativeQuestCore().localLeads();}
   reveal(id: string): void {return this.nativeQuestCore().reveal(id);}
 
   questCompleted(questId: string): void {return this.nativeQuestCore().questCompleted(questId);}

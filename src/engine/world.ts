@@ -1,4 +1,5 @@
 import './nativeSceneBootstrap';
+import {sceneNearQuestGiver,sceneNearAnyQuestGiver,sceneQuestGiverPrompt,sceneActiveCategoryCounts,sceneQuestGateCtx,sceneQuestOfferLevel,sceneAcceptableQuests,sceneEligibleQuestCandidates,sceneVocationEngaged,sceneIsVocationChoice,sceneVocationChoiceOffers,sceneNextAcceptableQuest,sceneUpdateQuestGiver,sceneQuestGiverStep,sceneQuestOfferChoices,sceneAcceptQuestOffer,sceneAcceptVocationQuest,sceneVocationMenuOffers,sceneDeclineVocationOffer,sceneAcceptQuest,sceneQuestRewardOffers,sceneQuestImbueOffers,sceneClaimQuestImbue,sceneReliquaryLesson,sceneSeatIdle,scenePlayerIdle,QUESTGIVER_DWELL,type NativeSceneQuestInteractionHost} from './nativeSceneQuestInteraction';
 import {sceneSpawnProjectile,sceneSkillOcclusion,PROJ_CHILD_DEPTH_MAX,PROJ_AURA_TICK,type NativeSceneProjectileHost} from './nativeSceneProjectiles';
 import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
 import {nativeAreaMemorySnapshot,captureNativeAreaMemories} from '../worldmass/nativeAreaMemoryRegistry';
@@ -6,7 +7,7 @@ const nativeWorldInstances=new WeakSet<object>();
 /** True only for a body whose actual World constructor completed. */
 export function isNativeWorld(value:unknown):value is World{return typeof value==='object'&&value!==null&&nativeWorldInstances.has(value); }
 import {type NativeSceneProgressionHost,sceneRecalcSeat,sceneResyncMercenary,sceneMercTargetLevel,sceneApplyMercNormalization,sceneNormalizeMercMeta,sceneTrimAllocated,sceneRelevelActor,sceneBakeMinionOwnerStats,sceneSummonCrewSkills,sceneCompanionCapOf,sceneDeactivateAura,sceneDismissSummonToggle,sceneClearSummonReleaseFields,sceneMinionsOfSkill,sceneReleaseContract,sceneSettleLedger,sceneClearTreeFields,sceneClearTreeConstructs,sceneRetireOwnedZone,sceneExpireZone,sceneGuardArtCooldown,sceneStampSkillCooldown,sceneShowCompanionCue,sceneInheritedFlight,sceneReviveCompanion,sceneRecoverCompanion,sceneShowRecoveryCue,sceneEmergeBody,sceneEmergeGroundAt} from './nativeSceneProgression';
-import {type NativeSceneQuestHost,sceneOnQuestZoneFieldCleared,sceneDeedHand,sceneCompleteQuestField,sceneEnsureQuestCargo,sceneEnsureSeatCargo,sceneOnQuestZoneCleared,sceneQuestRewardItem,sceneClaimQuestReward,sceneQuestStanding,scenePendingTurnIns,sceneGiverPresent,sceneGetQuestGiver,sceneGrantVocation,sceneQuestHand,sceneWithQuestHand,sceneQuestLedger,sceneQuestStamp,sceneQuestRunLedger,sceneCreditedHands,sceneHandSeats,sceneNearestHand,sceneLocalHumanSeats,sceneFailNote,sceneLearnQuestDirections,scenePrepareOdysseyGround,sceneEnrollOdysseyQuest,sceneAcceptOdysseyCompatibleQuest,sceneQuestLocalAnchor,sceneFindBandCoord,sceneRevealQuestGround,sceneGraphWorkAvailable} from './nativeSceneQuests';
+import {QUESTGIVER_RADIUS,type NativeSceneQuestHost,sceneOnQuestZoneFieldCleared,sceneDeedHand,sceneCompleteQuestField,sceneEnsureQuestCargo,sceneEnsureSeatCargo,sceneOnQuestZoneCleared,sceneQuestRewardItem,sceneClaimQuestReward,sceneQuestStanding,scenePendingTurnIns,sceneGiverPresent,sceneGetQuestGiver,sceneGrantVocation,sceneQuestHand,sceneWithQuestHand,sceneQuestLedger,sceneQuestStamp,sceneQuestRunLedger,sceneCreditedHands,sceneHandSeats,sceneNearestHand,sceneLocalHumanSeats,sceneFailNote,sceneLearnQuestDirections,scenePrepareOdysseyGround,sceneEnrollOdysseyQuest,sceneAcceptOdysseyCompatibleQuest,sceneQuestLocalAnchor,sceneFindBandCoord,sceneRevealQuestGround,sceneGraphWorkAvailable} from './nativeSceneQuests';
 import {sceneUpdateObjective,sceneLairAskView,scenePackageAskView,sceneVentureAskView,sceneMassHoldHost,sceneMassProcessionReachable,sceneNativeBeaconHost,sceneContestPressers,sceneResolveContest,sceneSetLure,sceneSpawnProcessionAmbush,sceneNativeProcessionBodies,sceneSurveyAround,sceneUpdateRiftPours,sceneDriveHoldFixtures,sceneDwellReachable,sceneStoryPair,sceneMassObjectiveBeaconTables,sceneMassObjectiveSpawnTable,type NativeSceneObjectiveWatchingHost} from './nativeSceneObjectiveWatching';
 import {sceneCompleteObjective,sceneObjectivePlaces,sceneGrantXp,sceneGrantSeatXp,sceneQuestOnZone,sceneText,type NativeSceneObjectiveCompletionHost} from './nativeSceneObjectiveCompletion';
 import {sceneDropEssenceAt,sceneDropAbilityEssenceAt,sceneDropVestigeAt,sceneDropGearAt,sceneLootDropCue,sceneSpoilClamp,sceneOwnSpoils,sceneDropGemAt,sceneMintGemAt,sceneDropPinnedGem,sceneDropMemoryUnit,sceneNoteGemDrop,sceneNoteContainerFind,sceneMintLootResult,sceneShedOrb,DROP_PICKUP_GRACE,type NativeSceneLootHost} from './nativeSceneLoot';
@@ -149,7 +150,7 @@ import './relicPower';
 import '../meta/reliquary';
 import { RELIQUARY_CFG } from '../data/reliquary';
 import { syncTrainingYard } from './trainingYard';
-import {nextItemUid,compileItemMods,itemLevelReq,rebuildItem,rollItem,describeItem,itemGridSize} from './itemgen';
+import {nextItemUid,compileItemMods,itemLevelReq,rebuildItem,rollItem,itemGridSize} from './itemgen';
 import { ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier, ESSENCES, ESSENCE_IDS, ESSENCE_SPILL_CFG, essenceUnitsForValue, FONT_CFG, LEDGER_ESSENCE_TOUCHED, rollSpillPacket, skillLevelAbilityCost, spendWalletMortalValue, spillBudget, supportLevelAbilityCost, VENDOR_ESSENCE_PRICE, VENDOR_MEMORY_PRICE, VENDOR_SUPPORT_PRICE, walletBreakdown, walletMortalValue, type AbilityCost, type EssenceCost, type EssenceId, type EssenceSpillSpec } from '../data/essences';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, baseComplexityOf, slotsForCategory, socketCap, type ItemCategory, type ItemInstance, type ItemRarity, type RoughMemoryUnit } from './items';
 import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId, gemFloorFor, type GemFloor } from './loot';
@@ -173,7 +174,7 @@ import { SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
 import {PASSIVE_CHOICE_CFG,choiceDealSpent,choiceLockReason,graftSourcesOf} from '../data/passiveChoices';
 import { openRealms, realmOf, realmOpen, type PassiveRealmDef } from '../data/passiveRealms';
-import {VOCATIONS,VOCATION_CFG,vocationDiscoveryKey,vocationLedgerKey,vocationStepKey,type VocationSiteFilter} from '../data/vocations';
+import {VOCATIONS,VOCATION_CFG,vocationDiscoveryKey,vocationLedgerKey,type VocationSiteFilter} from '../data/vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
 import { PROC_LIST, PROCS, procStat, procPowerStat, scaleProcEffect, PROC_RIDER_LIST, procRiderStat, type ProcCastSpec, type ProcDef } from '../data/procs';
 import { VICTIM_CONDITIONS, VICTIM_HOOKS, victimScopeArmed, victimTags } from './victim'; // THE VICTIM SCOPE
@@ -288,10 +289,9 @@ import { QUEST_GIVER_IDS, ZONE_QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
 import { massQuestDestination, massQuestSatisfied, massQuestTarget, validMassQuestEntry } from '../worldmass/quests';
 import {RELIQUARY_LESSON} from '../quests/reliquary';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
-import {imbuedItem,imbueOptions,restoreQuestImbues,type QuestImbue} from './questImbue';
+import {restoreQuestImbues,type QuestImbue} from './questImbue';
 import { charKeyOf, newQuestLedger, packQuestLedger, type QuestLedger, type QuestLedgerSave } from './questLedger'; // THE CHARACTER'S QUESTS (card 24)
 import { QuestRescues } from './questRescues';
-import { questRewardChoices } from './questRewardChoices';
 import { passiveRefund } from './passiveRefund';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, questStandingLine, type QuestCategory, type QuestStanding } from '../quests/types';
 import { Rng, rollSeed, withSeededRandom } from '../core/rng';
@@ -2274,8 +2274,6 @@ const MIREILLE_LESSON_LEDGER = 'mireille_lesson_lived';
 const MIREILLE_FILL_LEDGER = LEDGER_FLASK_LESSON;
 const MIREILLE_XP_BUFF_SEC = 300;   // a 5-minute blessing
 const MIREILLE_XP_REFRESH = 240;    // only (re)grant when below this (no spam)
-const QUESTGIVER_RADIUS = 150;   // how close to stand to the quartermaster
-const QUESTGIVER_DWELL = 0.9;    // seconds lingering before he hands you a quest
 /** Cadence of the attunement/terraform passes (data/attunements.ts) — terrain
  *  resonance needs no per-frame precision. */
 const ATTUNE_TICK = 0.3;
@@ -2296,13 +2294,6 @@ const CARAVAN_DWELL = 0.9;       // seconds lingering before the Caravan menu op
 const APPROACH_RADIUS = 150;     // node-units: a floating quest zone wires in when a
                                  // charted zone lands this near (> WEAVE_RADIUS 96, so
                                  // the road draws while you're still ~1.5 steps out)
-const DWELL_IDLE_GRACE = 0.15;   // a dwell only builds once the player has been
-                                 // INPUT-free (no move/attack/cast press) this long
-                                 // AND the body is quiescent (seatIdle's second
-                                 // clause — no cast/leap/shove still resolving), so
-                                 // passing by, fighting, or a cast that outlives its
-                                 // press never counts as dwelling
-
 const CORPSE_RADIUS = 110;       // how close to your old corpse to begin reclaiming
 const CORPSE_DWELL = 1.0;        // seconds dwelling to reclaim (recovering the dead is deliberate)
 const BRITTLE_WARN_EVERY = 4;    // seconds between repeats of ONE brittle warn line
@@ -2812,6 +2803,78 @@ function procIndex(): NonNullable<typeof PROC_INDEX> {
 export interface NpcSpeechLine { a: Actor; text: string; color: string; seatId: string; delivery?: 'callout' }
 
 export class World {
+  declare private nativeSceneQuestInteractionView?:NativeSceneQuestInteractionHost;
+  private nativeSceneQuestInteractionHost():NativeSceneQuestInteractionHost {
+   if(this.nativeSceneQuestInteractionView)return this.nativeSceneQuestInteractionView;
+   const world=this;
+   const host:NativeSceneQuestInteractionHost={
+  get time(){return world.time;},
+  get acceptOdysseyCompatibleQuest(){const fn=world.acceptOdysseyCompatibleQuest;return(...args:Parameters<NativeSceneQuestInteractionHost['acceptOdysseyCompatibleQuest']>)=>fn.apply(world,args);},
+  get acceptQuest(){const fn=world.acceptQuest;return(...args:Parameters<NativeSceneQuestInteractionHost['acceptQuest']>)=>fn.apply(world,args);},
+  get acceptableQuests(){const fn=world.acceptableQuests;return(...args:Parameters<NativeSceneQuestInteractionHost['acceptableQuests']>)=>fn.apply(world,args);},
+  get account(){return world.account;},
+  get actingSeat(){return world.actingSeat;},set actingSeat(value){world.actingSeat=value;},
+  get activeCategoryCounts(){const fn=world.activeCategoryCounts;return(...args:Parameters<NativeSceneQuestInteractionHost['activeCategoryCounts']>)=>fn.apply(world,args);},
+  get activeQuests(){return world.activeQuests;},
+  get actors(){return world.actors;},
+  get bagItem(){const fn=world.bagItem;return(...args:Parameters<NativeSceneQuestInteractionHost['bagItem']>)=>fn.apply(world,args);},
+  get charDirty(){return world.charDirty;},set charDirty(value){world.charDirty=value;},
+  get clientActionHook(){return world.clientActionHook;},
+  get completedQuests(){return world.completedQuests;},
+  get dwellReachable(){const fn=world.dwellReachable;return(...args:Parameters<NativeSceneQuestInteractionHost['dwellReachable']>)=>fn.apply(world,args);},
+  get eligibleQuestCandidates(){const fn=world.eligibleQuestCandidates;return(...args:Parameters<NativeSceneQuestInteractionHost['eligibleQuestCandidates']>)=>fn.apply(world,args);},
+  get ensureQuestCargo(){const fn=world.ensureQuestCargo;return(...args:Parameters<NativeSceneQuestInteractionHost['ensureQuestCargo']>)=>fn.apply(world,args);},
+  get getQuestGiver(){const fn=world.getQuestGiver;return(...args:Parameters<NativeSceneQuestInteractionHost['getQuestGiver']>)=>fn.apply(world,args);},
+  get giverPresent(){const fn=world.giverPresent;return(...args:Parameters<NativeSceneQuestInteractionHost['giverPresent']>)=>fn.apply(world,args);},
+  get graphWorkAvailable(){const fn=world.graphWorkAvailable;return(...args:Parameters<NativeSceneQuestInteractionHost['graphWorkAvailable']>)=>fn.apply(world,args);},
+  get handSeats(){const fn=world.handSeats;return(...args:Parameters<NativeSceneQuestInteractionHost['handSeats']>)=>fn.apply(world,args);},
+  get heroKnown(){const fn=world.heroKnown;return(...args:Parameters<NativeSceneQuestInteractionHost['heroKnown']>)=>fn.apply(world,args);},
+  get isVocationChoice(){const fn=world.isVocationChoice;return(...args:Parameters<NativeSceneQuestInteractionHost['isVocationChoice']>)=>fn.apply(world,args);},
+  get journalDirty(){return world.journalDirty;},
+  get localSeat(){return world.localSeat;},
+  get manifest(){return world.manifest;},
+  get markMetaDirty(){const fn=world.markMetaDirty;return(...args:Parameters<NativeSceneQuestInteractionHost['markMetaDirty']>)=>fn.apply(world,args);},
+  get massRuntime(){return world.massRuntime;},
+  get meta(){return world.meta;},
+  get nearAnyQuestGiver(){const fn=world.nearAnyQuestGiver;return(...args:Parameters<NativeSceneQuestInteractionHost['nearAnyQuestGiver']>)=>fn.apply(world,args);},
+  get nearQuestGiver(){const fn=world.nearQuestGiver;return(...args:Parameters<NativeSceneQuestInteractionHost['nearQuestGiver']>)=>fn.apply(world,args);},
+  get netJournal(){return world.netJournal;},
+  get nextAcceptableQuest(){const fn=world.nextAcceptableQuest;return(...args:Parameters<NativeSceneQuestInteractionHost['nextAcceptableQuest']>)=>fn.apply(world,args);},
+  get notice(){const fn=world.notice;return(...args:Parameters<NativeSceneQuestInteractionHost['notice']>)=>fn.apply(world,args);},
+  get odyssey(){return world.odyssey;},
+  get onQuestZoneCleared(){const fn=world.onQuestZoneCleared;return(...args:Parameters<NativeSceneQuestInteractionHost['onQuestZoneCleared']>)=>fn.apply(world,args);},
+  get pendingTurnIns(){const fn=world.pendingTurnIns;return(...args:Parameters<NativeSceneQuestInteractionHost['pendingTurnIns']>)=>fn.apply(world,args);},
+  get player(){return world.player;},
+  get playerIdle(){const fn=world.playerIdle;return(...args:Parameters<NativeSceneQuestInteractionHost['playerIdle']>)=>fn.apply(world,args);},
+  get questDefOf(){const fn=world.questDefOf;return(...args:Parameters<NativeSceneQuestInteractionHost['questDefOf']>)=>fn.apply(world,args);},
+  get questGateCtx(){const fn=world.questGateCtx;return(...args:Parameters<NativeSceneQuestInteractionHost['questGateCtx']>)=>fn.apply(world,args);},
+  get questGiverDwell(){return world.questGiverDwell;},set questGiverDwell(value){world.questGiverDwell=value;},
+  get questGiverDwells(){return world.questGiverDwells;},
+  get questGiverStep(){const fn=world.questGiverStep;return(...args:Parameters<NativeSceneQuestInteractionHost['questGiverStep']>)=>fn.apply(world,args);},
+  get questHand(){const fn=world.questHand;return(...args:Parameters<NativeSceneQuestInteractionHost['questHand']>)=>fn.apply(world,args);},
+  get questImbues(){return world.questImbues;},
+  get questLedgerOf(){const fn=world.questLedgerOf;return(...args:Parameters<NativeSceneQuestInteractionHost['questLedgerOf']>)=>fn.apply(world,args);},
+  get questOfferChoices(){const fn=world.questOfferChoices;return(...args:Parameters<NativeSceneQuestInteractionHost['questOfferChoices']>)=>fn.apply(world,args);},
+  get questOfferLevel(){const fn=world.questOfferLevel;return(...args:Parameters<NativeSceneQuestInteractionHost['questOfferLevel']>)=>fn.apply(world,args);},
+  get questRewardItem(){const fn=world.questRewardItem;return(...args:Parameters<NativeSceneQuestInteractionHost['questRewardItem']>)=>fn.apply(world,args);},
+  get questRewardOffers(){const fn=world.questRewardOffers;return(...args:Parameters<NativeSceneQuestInteractionHost['questRewardOffers']>)=>fn.apply(world,args);},
+  get questRewardShown(){return world.questRewardShown;},set questRewardShown(value){world.questRewardShown=value;},
+  get questRunLedger(){const fn=world.questRunLedger;return(...args:Parameters<NativeSceneQuestInteractionHost['questRunLedger']>)=>fn.apply(world,args);},
+  get questStamp(){const fn=world.questStamp;return(...args:Parameters<NativeSceneQuestInteractionHost['questStamp']>)=>fn.apply(world,args);},
+  get reliquaryLesson(){const fn=world.reliquaryLesson;return(...args:Parameters<NativeSceneQuestInteractionHost['reliquaryLesson']>)=>fn.apply(world,args);},
+  get seatIdle(){const fn=world.seatIdle;return(...args:Parameters<NativeSceneQuestInteractionHost['seatIdle']>)=>fn.apply(world,args);},
+  get settleHeroMassQuests(){const fn=world.settleHeroMassQuests;return(...args:Parameters<NativeSceneQuestInteractionHost['settleHeroMassQuests']>)=>fn.apply(world,args);},
+  get storyPair(){const fn=world.storyPair;return(...args:Parameters<NativeSceneQuestInteractionHost['storyPair']>)=>fn.apply(world,args);},
+  get vocationChoiceOffers(){const fn=world.vocationChoiceOffers;return(...args:Parameters<NativeSceneQuestInteractionHost['vocationChoiceOffers']>)=>fn.apply(world,args);},
+  get vocationEngaged(){const fn=world.vocationEngaged;return(...args:Parameters<NativeSceneQuestInteractionHost['vocationEngaged']>)=>fn.apply(world,args);},
+  get vocationOfferDeclined(){return world.vocationOfferDeclined;},set vocationOfferDeclined(value){world.vocationOfferDeclined=value;},
+  get vocationOfferRequested(){return world.vocationOfferRequested;},set vocationOfferRequested(value){world.vocationOfferRequested=value;},
+  get withQuestHand(){const fn=world.withQuestHand;return <T>(seat:Seat,action:()=>T):T=>fn.call(world,seat,action) as T;},
+  get characterWriter(){return world;},
+   };
+   Object.defineProperty(this,'nativeSceneQuestInteractionView',{value:host,writable:true,configurable:true,enumerable:false});
+   return host;
+  }
   declare private nativeSceneProgressionView?:NativeSceneProgressionHost;
 private nativeSceneProgressionHost():NativeSceneProgressionHost {
  if(this.nativeSceneProgressionView)return this.nativeSceneProgressionView;
@@ -5256,10 +5319,7 @@ actors: Actor[] = [];
    *  a leap mid-air — holds every dwell at zero until the body is truly at
    *  rest. Per-seat so an ally's reviving dwell and the local player's NPC
    *  dwell are independent. */
-  seatIdle(seat: Seat): boolean {
-    return this.time - seat.lastActedAt >= DWELL_IDLE_GRACE
-      && seat.actor.isQuiescent();
-  }
+  seatIdle(seat: Seat): boolean { return sceneSeatIdle(this.nativeSceneQuestInteractionHost(),seat); }
 
   /** Mark a seat as having just acted (interrupts any dwell it owns). No-op for
    *  non-seat actors (monsters/minions), so it's safe to call on any caster. */
@@ -19872,9 +19932,7 @@ actors: Actor[] = [];
   /** Has the player held still (no move / attack / cast) long enough to count as
    *  truly dwelling? Any action resets the grace, so passing through or fighting
    *  near an NPC never triggers a dwell. (Shared by Mireille / quest giver / corpse.) */
-  playerIdle(): boolean {
-    return this.seatIdle(this.localSeat);
-  }
+  playerIdle(): boolean { return scenePlayerIdle(this.nativeSceneQuestInteractionHost()); }
 
   /** Mireille, if the player is standing within her counter's radius AND can
    *  honestly reach her (npcReach 'innkeep' = 'roof': her care is served
@@ -24079,17 +24137,11 @@ actors: Actor[] = [];
   }
 
   /** Is the player by the quartermaster? (Renderer prompt box.) */
-  nearQuestGiver(): boolean { return this.getQuestGiver() !== null; }
+  nearQuestGiver(): boolean { return sceneNearQuestGiver(this.nativeSceneQuestInteractionHost()); }
 
   /** Is the player near ANY quest-giving NPC (quartermaster, a secret
    *  vocation's shrine spirit, future field boards)? Registry-derived. */
-  nearAnyQuestGiver(): boolean {
-    const givers = this.massRuntime ? QUEST_GIVER_IDS : ZONE_QUEST_GIVER_IDS;
-    const p = this.questHand().actor; // THE QUEST HAND
-    return this.actors.some(a => !a.dead && a.defId && givers.has(a.defId)
-      && dist(a.pos, p.pos) <= QUESTGIVER_RADIUS
-      && this.dwellReachable(p.pos, a.pos, npcDwellReach('questgiver'), this.storyPair(p, a)));
-  }
+  nearAnyQuestGiver(): boolean { return sceneNearAnyQuestGiver(this.nativeSceneQuestInteractionHost()); }
 
   /** Prompt text above a nearby quest giver, or null. ('{name}' resolves at
    *  the DISPLAY surface against the live hero — resolveNameTokens, invoked
@@ -24099,166 +24151,58 @@ actors: Actor[] = [];
    *  (heroKnown): until the hero is known the by-name offers speak their
    *  pre-renown words — the quartermaster starts addressing you the day
    *  the world learns who you are.) */
-  questGiverPrompt(): string | null {
-    if (!this.nearAnyQuestGiver()) return null;
-    if (this.questImbues.some(r => this.giverPresent(QUESTS[r.questId]?.turnIn?.giver ?? []) !== null)) return 'Your imbue awaits. Show me the magic piece you would like me to work on.';
-    if (this.questRewardOffers().length) return 'Your keepsake awaits. Choose what you will carry.';
-    if (this.reliquaryLesson()) return 'A keepsake needs a home. Open your inventory and seat your charm in the Reliquary.';
-    if (this.graphWorkAvailable() && this.nearQuestGiver() && this.odyssey.hasLocalLeads()) return 'Linger — I can mark the Odyssey leaders and their supply operations.';
-    if (this.pendingTurnIns().length) return 'Linger — a bounty is yours to claim.';
-    if (this.questOfferChoices().length) return 'I have work if you want it.';
-    if (this.nextAcceptableQuest()) return this.heroKnown()
-      ? 'Linger, {name} — I have work for you…'
-      : 'Linger, and I have work for you…';
-    if (this.vocationChoiceOffers().length) return this.heroKnown()
-      ? 'Linger — a CALLING awaits you, {name}.'
-      : 'Linger — a CALLING awaits you.';
-    if (this.activeQuests.some(q => !this.massRuntime || q.placeId)) return 'Your hunts await out in the wilds.';
-    const upcoming = this.eligibleQuestCandidates().filter(q => q.offerLevelHint && this.questOfferLevel(q) > this.player.level)
-      .sort((a,b) => this.questOfferLevel(a) - this.questOfferLevel(b) || a.id.localeCompare(b.id))[0];
-    if (upcoming) return upcoming.offerLevelHint!.replaceAll('{level}', String(this.questOfferLevel(upcoming)));
-    if (!this.graphWorkAvailable()) return 'No hunts are posted for this country yet.';
-    return 'No work for you yet, traveller.';
-  }
+  questGiverPrompt(): string | null { return sceneQuestGiverPrompt(this.nativeSceneQuestInteractionHost()); }
 
   /** Active quests that are FIELD-DONE and whose turn-in giver is present right now —
    *  the queue the giver pays out, lowest offer-level FIRST. */
   private pendingTurnIns(): { questId: string; zoneId: string; fieldDone: boolean }[] { return scenePendingTurnIns(this.nativeSceneQuestHost()); }
 
   /** Active-quest count per category (for the per-category active caps). */
-  private activeCategoryCounts(): Record<string, number> {
-    const c: Record<string, number> = {};
-    for (const e of this.activeQuests) {
-      const cat = this.questDefOf(e.questId)?.category ?? DEFAULT_QUEST_CATEGORY;
-      c[cat] = (c[cat] ?? 0) + 1;
-    }
-    return c;
-  }
+  private activeCategoryCounts(): Record<string, number> { return sceneActiveCategoryCounts(this.nativeSceneQuestInteractionHost()); }
 
   /** The read-only slice of run state a QuestDef.gate predicate may consult. */
-  private questGateCtx(): QuestGateCtx {
-    const m = this.questHand().meta; // THE QUEST HAND
-    return {
-      features: this.account.features,
-      classId: m.classDef.id,
-      vocations: m.vocations,
-      runLedger: this.questRunLedger(), // THE CHARACTER'S QUESTS: the hand's own quest keys over the run ledger
-      accountLedger: this.account.ledger,
-    };
-  }
+  private questGateCtx(): QuestGateCtx { return sceneQuestGateCtx(this.nativeSceneQuestInteractionHost()); }
 
   /** Every quest acceptable RIGHT NOW from a present giver: not already active or
    *  completed, level + ledger gates met, its optional gate predicate satisfied,
    *  and its category still under its active cap. The chain (requiresLedger) still
    *  gates chained links; un-chained quests (the Unmade) are offered independently. */
-  questOfferLevel(q: QuestDef): number {
-    const range = q.offerLevelRange;
-    return range ? range[0] + Math.floor(new Rng((this.manifest.seed ^ hashStr(`offer:${q.id}`)) >>> 0).next()
-      * (range[1] - range[0] + 1)) : q.offerAtLevel;
-  }
+  questOfferLevel(q: QuestDef): number { return sceneQuestOfferLevel(this.nativeSceneQuestInteractionHost(),q); }
 
   /** Graph destinations cannot be offered until the active geography can reach them.
    * This gates new work only: already earned town rewards remain claimable. */
   graphWorkAvailable(): boolean { return sceneGraphWorkAvailable(this.nativeSceneQuestHost()); }
 
-  private acceptableQuests(): QuestDef[] {
-    const level = this.questHand().actor.level; // THE QUEST HAND: work opens at the asking seat's level
-    return this.eligibleQuestCandidates().filter(q => level >= this.questOfferLevel(q));
-  }
+  private acceptableQuests(): QuestDef[] { return sceneAcceptableQuests(this.nativeSceneQuestInteractionHost()); }
 
   /** Shared non-level gates for actual offers and explicitly authored previews.
    * Reading a preview never accepts work or reveals a destination. */
-  private eligibleQuestCandidates(): QuestDef[] {
-    const counts = this.activeCategoryCounts();
-    const gateCtx = this.questGateCtx();
-    return Object.values(QUESTS).filter(q => {
-      if (q.geographies && !q.geographies.includes(this.massRuntime ? 'continuous' : 'zones')) return false;
-      if (this.massRuntime && !massQuestDestination(this.massRuntime, q.id)) return false;
-      if (this.completedQuests.has(q.id)) return false;
-      if (this.activeQuests.some(e => e.questId === q.id)) return false;
-      if (this.giverPresent(q.giver) === null) return false; // one of its offering NPCs must be present
-      if (q.requiresLedger
-        && (gateCtx.runLedger[q.requiresLedger] ?? 0) < 1 // THE CHARACTER'S QUESTS: the hand's own keys (questGateCtx)
-        && (this.account.ledger[q.requiresLedger] ?? 0) < 1) return false;
-      if (q.requiresQuests?.some(id => !this.completedQuests.has(id))) return false;
-      if (q.gate && !q.gate(gateCtx)) return false;
-      const cat = q.category ?? DEFAULT_QUEST_CATEGORY;
-      const cap = QUEST_CATEGORY_CAPS[cat];
-      if (cap != null && (counts[cat] ?? 0) >= cap) return false;
-      return true;
-    });
-  }
+  private eligibleQuestCandidates(): QuestDef[] { return sceneEligibleQuestCandidates(this.nativeSceneQuestInteractionHost()); }
 
   /** Has this character ENGAGED a vocation's chain this run (any step done)?
    *  Engaged chains auto-continue at the giver; un-engaged ones are a CHOICE
    *  and only ever offered through the vocation menu. Step keys are read from
    *  the RUN ledger only — chain progress is per-character by design. */
-  private vocationEngaged(vocId: string): boolean {
-    const v = VOCATIONS[vocId];
-    if (!v) return false;
-    return v.quest.steps.some((_, i) => (this.questRunLedger()[vocationStepKey(vocId, i + 1)] ?? 0) >= 1); // THE CHARACTER'S QUESTS
-  }
+  private vocationEngaged(vocId: string): boolean { return sceneVocationEngaged(this.nativeSceneQuestInteractionHost(),vocId); }
 
   /** A vocation quest whose chain this character has NOT yet engaged — the
    *  "pick your calling" offers. Never dwell-auto-accepted. */
-  private isVocationChoice(q: QuestDef): boolean {
-    return q.vocation !== undefined && !this.vocationEngaged(q.vocation);
-  }
+  private isVocationChoice(q: QuestDef): boolean { return sceneIsVocationChoice(this.nativeSceneQuestInteractionHost(),q); }
 
   /** Fresh vocation chains currently on offer (the choice menu's list). */
-  private vocationChoiceOffers(): QuestDef[] {
-    return this.acceptableQuests().filter(q => this.isVocationChoice(q));
-  }
+  private vocationChoiceOffers(): QuestDef[] { return sceneVocationChoiceOffers(this.nativeSceneQuestInteractionHost()); }
 
   /** The next quest to hand out: lowest offer-level first; ties broken RANDOMLY (a
    *  pre-shuffle then a stable sort leaves same-level offers in random order).
    *  FRESH vocation chains are excluded — a specialization is a deliberate CHOICE
    *  (the menu), never a random dwell pull; engaged chains continue normally. */
-  private nextAcceptableQuest(): QuestDef | null {
-    if (this.massRuntime?.config.settlement?.quests?.acceptance === 'journal') return null;
-    const avail = this.acceptableQuests().filter(q => !this.isVocationChoice(q));
-    if (!avail.length) return null;
-    for (let i = avail.length - 1; i > 0; i--) { const j = randInt(0, i); [avail[i], avail[j]] = [avail[j], avail[i]]; }
-    avail.sort((a, b) => a.offerAtLevel - b.offerAtLevel); // stable → equal-level ties keep shuffled order
-    return avail[0];
-  }
+  private nextAcceptableQuest(): QuestDef | null { return sceneNextAcceptableQuest(this.nativeSceneQuestInteractionHost()); }
 
   /** Linger by a quest giver → FIRST turn in a finished quest (low→high level), ELSE
    *  accept the next available quest (low→high, random ties; per-category capped),
    *  ELSE — with fresh vocation chains on offer — ask the main loop to open the
    *  CHOICE menu. ONE action per dwell, so a stack resolves a step at a time. */
-  private updateQuestGiver(dt: number): void {
-    this.ensureQuestCargo();
-    // THE QUEST HAND (a hosted world): every standing player lingers at the giver for
-    // itself, on its own clock; the act and its pay are its own (the keeper never asks).
-    if (this.localSeat.keeper) {
-      for (const seat of this.handSeats()) this.questGiverStep(seat, dt);
-      // THE CHARACTER'S QUESTS on the Unbroken Wilds: every hero's own country quests settle
-      // at their places (the runtime's own settle walks the run's one ledger, the keeper's).
-      if (this.massRuntime) this.settleHeroMassQuests();
-      return;
-    }
-    if (!this.nearAnyQuestGiver()) this.questRewardShown = null;
-    if (this.player.dead || this.player.downed || !this.playerIdle()) {
-      this.questGiverDwell = 0;
-      // Stepping away re-arms the choice menu (a decline lasts one visit).
-      this.vocationOfferDeclined = false;
-      return;
-    }
-    const turnIns = this.pendingTurnIns();
-    const next = turnIns.length ? null : this.nextAcceptableQuest();
-    const choices = (!turnIns.length && !next && !this.vocationOfferDeclined)
-      ? this.vocationChoiceOffers() : [];
-    const odysseyLeads = this.graphWorkAvailable() && this.odyssey.hasLocalLeads() && this.nearQuestGiver();
-    if (!turnIns.length && !next && !choices.length && !odysseyLeads) { this.questGiverDwell = 0; return; }
-    this.questGiverDwell += dt;
-    if (this.questGiverDwell < QUESTGIVER_DWELL) return;
-    this.questGiverDwell = 0;
-    if (odysseyLeads) this.odyssey.localLeads();
-    if (turnIns.length) this.onQuestZoneCleared(turnIns[0]);
-    else if (next) this.acceptQuest(next);
-    else if (choices.length) this.vocationOfferRequested = true; // main loop opens the menu (once per dwell)
-  }
+  private updateQuestGiver(dt: number): void { return sceneUpdateQuestGiver(this.nativeSceneQuestInteractionHost(),dt); }
 
   /** One hosted seat's linger at the giver (updateQuestGiver's own law, per seat): a
    *  finished quest turns in first (a reward to choose waits in the seat's journal),
@@ -24266,75 +24210,20 @@ actors: Actor[] = [];
    *  marks the hero's own Odyssey leads as it does for the solo hero. A calling (a
    *  fresh vocation chain) waits for a hosted menu that does not open yet. */
   private questGiverDwells = new WeakMap<Seat, number>();
-  private questGiverStep(seat: Seat, dt: number): void {
-    this.withQuestHand(seat, () => {
-      if (!this.seatIdle(seat) || !this.nearAnyQuestGiver()) { this.questGiverDwells.delete(seat); return; }
-      const turnIns = this.pendingTurnIns();
-      const next = turnIns.length ? null : this.nextAcceptableQuest();
-      const leads = this.graphWorkAvailable() && this.odyssey.hasLocalLeads() && this.nearQuestGiver();
-      if (!turnIns.length && !next && !leads) { this.questGiverDwells.delete(seat); return; }
-      const t = (this.questGiverDwells.get(seat) ?? 0) + dt;
-      if (t < QUESTGIVER_DWELL) { this.questGiverDwells.set(seat, t); return; }
-      this.questGiverDwells.delete(seat);
-      const was = this.actingSeat;
-      this.actingSeat = seat; // THE ACTING SEAT: the linger is this seat's act (its party hears the news)
-      try {
-        if (leads) this.odyssey.localLeads();
-        if (turnIns.length) this.onQuestZoneCleared(turnIns[0]);
-        else if (next) this.acceptQuest(next);
-      } finally { this.actingSeat = was; }
-      this.journalDirty.add(seat.id); // THE JOURNAL ROW: the act re-ships at once
-    });
-  }
+  private questGiverStep(seat: Seat, dt: number): void { return sceneQuestGiverStep(this.nativeSceneQuestInteractionHost(),seat,dt); }
 
   /** Optional contracts reuse native eligibility and the exact destination binding.
    * Reading these cards never enrolls work, surveys terrain or forges rewards. */
-  questOfferChoices(): import('../net/journalWire').JournalOfferW[] {
-    if (this.clientActionHook) return this.netJournal?.offers ?? []; // THE JOURNAL ROW: the host's judgment for this seat
-    const mass = this.massRuntime;
-    const hand = this.questHand().actor; // THE QUEST HAND
-    if (mass?.config.settlement?.quests?.acceptance !== 'journal'
-      || hand.dead || hand.downed) return [];
-    return this.acceptableQuests().filter(q => !this.isVocationChoice(q))
-      .sort((a,b) => this.questOfferLevel(a) - this.questOfferLevel(b) || a.id.localeCompare(b.id))
-      .map(q => {
-        const place = massQuestDestination(mass, q.id)!;
-        const giver = this.giverPresent(q.giver)!;
-        return {
-          questId: q.id, label: q.offerLabel, giver: MONSTERS[giver.defId!]?.name ?? giver.name,
-          target: massQuestTarget(mass, {questId:q.id,zoneId:MASS_ZONE,placeId:place.id,fieldDone:false}, hand.pos)!,
-          returnTo: q.turnIn ? (Array.isArray(q.turnIn.giver) ? q.turnIn.giver : [q.turnIn.giver])
-            .map(id => MONSTERS[id]?.name ?? id).join(' or ') : null,
-          xp: q.reward.xp ?? 0, passivePoints: q.reward.passivePoints ?? 0,
-          rewards: q.reward.choices?.map(c => c.name) ?? [],
-        };
-      });
-  }
+  questOfferChoices(): import('../net/journalWire').JournalOfferW[] { return sceneQuestOfferChoices(this.nativeSceneQuestInteractionHost()); }
 
   /** Host-owned journey, live giver reach and all native gates are rechecked
    * at dispatch. A stale, foreign or repeated journal action is inert. */
-  acceptQuestOffer(questId: string, seat: Seat = this.localSeat): boolean {
-    if (seat !== this.localSeat && !this.localSeat.keeper) return false; // keeperSeat: on a shard any seat may take a contract
-    return this.withQuestHand(seat, () => { // THE QUEST HAND: the giver, the gates and the level are the taker's
-      if (!this.questOfferChoices().some(q => q.questId === questId)) return false;
-      this.acceptQuest(QUESTS[questId]);
-      return this.activeQuests.some(q => q.questId === questId);
-    });
-  }
+  acceptQuestOffer(questId: string, seat: Seat = this.localSeat): boolean { return sceneAcceptQuestOffer(this.nativeSceneQuestInteractionHost(),questId,seat); }
 
   /** Menu-accept a vocation chain step (routed through requestMeta like every
    *  meta mutation). Validated against the live acceptable set — a stale menu
    *  click after conditions changed no-ops instead of corrupting state. */
-  acceptVocationQuest(questId: string, seat: Seat = this.localSeat): boolean {
-    const q = QUESTS[questId];
-    if (!q || q.vocation === undefined) return false;
-    // THE QUEST HAND (a hosted world): the chain opens to the asking seat's gates and level.
-    return this.withQuestHand(this.localSeat.keeper ? seat : this.localSeat, () => {
-      if (!this.acceptableQuests().some(x => x.id === questId)) return false;
-      this.acceptQuest(q);
-      return true;
-    });
-  }
+  acceptVocationQuest(questId: string, seat: Seat = this.localSeat): boolean { return sceneAcceptVocationQuest(this.nativeSceneQuestInteractionHost(),questId,seat); }
 
   /** The vocation CHOICE MENU's card list (UI view). Fresh chains only —
    *  engaged chains continue through the ordinary dwell auto-accept. */
@@ -24342,22 +24231,11 @@ actors: Actor[] = [];
     questId: string; vocationId: string; name: string; blurb: string; color: string;
     className: string; ownClass: boolean; steps: number; offerLabel: string;
     secret: boolean; flavor?: string;
-  }[] {
-    return this.vocationChoiceOffers().map(q => {
-      const v = VOCATIONS[q.vocation!];
-      return {
-        questId: q.id, vocationId: v.id, name: v.name, blurb: v.blurb, color: v.color,
-        className: CLASSES.find(c => c.id === v.classId)?.name ?? v.classId,
-        ownClass: v.classId === this.meta.classDef.id,
-        steps: v.quest.steps.length, offerLabel: q.offerLabel,
-        secret: v.secret !== undefined, flavor: v.secret?.offerFlavor,
-      };
-    });
-  }
+  }[] { return sceneVocationMenuOffers(this.nativeSceneQuestInteractionHost()); }
 
   /** The player closed the vocation menu without choosing — don't re-open it
    *  until the dwell breaks (they step away and return). */
-  declineVocationOffer(): void { this.vocationOfferDeclined = true; }
+  declineVocationOffer(): void { return sceneDeclineVocationOffer(this.nativeSceneQuestInteractionHost()); }
 
   /** GRANT a vocation to a seat's character (the chain's final reward): respects
    *  the per-character cap, allocates the free root crest at the star's centre,
@@ -24501,20 +24379,7 @@ actors: Actor[] = [];
 
   /** Accept a quest: GENERATE its directional zone (once) and wire it into the
    *  local world graph via placeZoneAt; discovery belongs to exploration. */
-  private acceptQuest(q: QuestDef): void {
-    if (this.massRuntime) {
-      const place = massQuestDestination(this.massRuntime, q.id);
-      if (!place || this.completedQuests.has(q.id) || this.activeQuests.some(e => e.questId === q.id)) return;
-      const entry: SavedQuestEntry = { questId: q.id, zoneId: MASS_ZONE, placeId: place.id,
-        fieldDone: false, directionsKnown: true };
-      this.activeQuests.push(entry);
-      this.questStamp('quests_accepted'); this.charDirty = true; // THE CHARACTER'S QUESTS
-      this.notice('Quest: ' + q.offerLabel + ' · ' + massQuestTarget(this.massRuntime, entry, this.questHand().actor.pos), '#c8a8e8', 16, 'civic'); // THE QUEST HAND
-      return;
-    }
-    if (q.geographies && !q.geographies.includes('zones')) return;
-    this.acceptOdysseyCompatibleQuest(q, true);
-  }
+  private acceptQuest(q: QuestDef): void { return sceneAcceptQuest(this.nativeSceneQuestInteractionHost(),q); }
 
   /** Enroll an existing Odyssey opportunity through the normal quest mint. */
   enrollOdysseyQuest(q: QuestDef, reveal: boolean): void { return sceneEnrollOdysseyQuest(this.nativeSceneQuestHost(),q,reveal); }
@@ -24593,22 +24458,7 @@ actors: Actor[] = [];
 
   /** The journal shows choices only at the giver, from live ready quests. */
   questRewardOffers(): { questId: string; label: string; prompt: string; xp: number;
-    choices: (NonNullable<QuestDef['reward']['choices']>[number] & { lines: string[]; footprint: string })[] }[] {
-    if (this.clientActionHook && this.netJournal) return this.netJournal.rewards; // THE JOURNAL ROW
-    return this.pendingTurnIns().flatMap(aq => {
-      const q = this.questDefOf(aq.questId);
-      return q && (q.reward.choices?.length || q.reward.skillChoice) ? [{ questId: q.id, label: q.offerLabel,
-        prompt: q.reward.choicePrompt ?? 'Choose one item as your quest reward.', xp: q.reward.xp ?? 0,
-        choices: questRewardChoices(this.account, q).map(c => {
-          const item = this.questRewardItem(q, c.id, c);
-          const size = item ? itemGridSize(item) : { w: 1, h: 1 };
-          const rewardDescription = item ? describeItem(item) : undefined;
-          return { ...c, lines: rewardDescription ? [...rewardDescription.defense.map(l => l.text),
-            ...rewardDescription.implicit, ...rewardDescription.affix.map(l => l.text), ...rewardDescription.unique] : [],
-            footprint: `${size.w} × ${size.h}` };
-        }) }] : [];
-    });
-  }
+    choices: (NonNullable<QuestDef['reward']['choices']>[number] & { lines: string[]; footprint: string })[] }[] { return sceneQuestRewardOffers(this.nativeSceneQuestInteractionHost()); }
 
   /** One fixed item per card: preview and payout share exactly the same lines.
    * Reopening or reloading never rerolls it; only the runtime uid is transient. */
@@ -24617,51 +24467,12 @@ actors: Actor[] = [];
   claimQuestReward(questId: string, choiceId: string, seat: Seat = this.localSeat): boolean { return sceneClaimQuestReward(this.nativeSceneQuestHost(),questId,choiceId,seat); }
 
   /** Deferred rewards remain visible away from town, but only the giver can work. */
-  questImbueOffers(): import('../net/journalWire').JournalImbueW[] {
-    if (this.clientActionHook && this.netJournal) return this.netJournal.imbues; // THE JOURNAL ROW
-    const items = this.questHand().meta.items; // THE QUEST HAND: the asking seat's own magic pieces
-    return this.questImbues.map(reward => {
-      const q = QUESTS[reward.questId];
-      const near = !!q && this.giverPresent(q.turnIn?.giver ?? q.giver) !== null;
-      const givers = q?.turnIn?.giver ?? q?.giver;
-      const giverId = Array.isArray(givers) ? givers[0] : givers;
-      const giver = giverId ? MONSTERS[giverId]?.name ?? 'The giver' : 'The giver';
-      return { questId: reward.questId, level: reward.level, near, giver,
-        prompt: q?.reward.imbue?.prompt ?? 'Choose a magic piece to make finer.',
-        items: items.filter(item => item.rarity === 'magic' && !item.gem && !item.mem).map(item => ({
-          uid: item.uid, name: item.name, current: describeItem(item).affix.map(l => l.text),
-          options: imbueOptions(reward, item).map(a => ({ id: a.id,
-            lines: describeItem({ ...item, affixes: [a] }).affix.map(l => l.text),
-            unstudied: expertiseRank(this.account.craftLore, ITEM_AFFIXES[a.id].family) < 1,
-          })),
-        })),
-      };
-    });
-  }
+  questImbueOffers(): import('../net/journalWire').JournalImbueW[] { return sceneQuestImbueOffers(this.nativeSceneQuestInteractionHost()); }
 
-  claimQuestImbue(questId: string, uid: number, affixId: string, seat: Seat = this.localSeat): boolean {
-    if ((seat !== this.localSeat && !this.localSeat.keeper) || this.clientActionHook || seat.actor.dead || seat.actor.downed) return false; // keeperSeat
-    const book = this.questLedgerOf(seat); // THE CHARACTER'S QUESTS: the claimant's own imbues (the run's one off a hosted world)
-    const reward = book.imbues.find(r => r.questId === questId), q = QUESTS[questId];
-    const giver = q && this.withQuestHand(seat, () => this.giverPresent(q.turnIn?.giver ?? q.giver)); // THE QUEST HAND: the giver by the claimant
-    if (!reward || !q || !giver) return false;
-    const item = this.bagItem(seat, uid);
-    const affix = item && imbueOptions(reward, item).find(a => a.id === affixId);
-    if (!item || !affix) return false;
-    const result = imbuedItem(item, affix);
-    seat.meta.items = seat.meta.items.map(i => i.uid === uid ? result : i);
-    book.imbues = book.imbues.filter(r => r !== reward);
-    this.markMetaDirty(seat);
-    this.notice(`${result.name} — ${giver.name ?? 'the giver'}’s promise is kept.`, ITEM_RARITIES.rare.color, 16, 'civic');
-    saveCharacter(this);
-    return true;
-  }
+  claimQuestImbue(questId: string, uid: number, affixId: string, seat: Seat = this.localSeat): boolean { return sceneClaimQuestImbue(this.nativeSceneQuestInteractionHost(),questId,uid,affixId,seat); }
 
   /** Quit-proof account lesson: until a charm is actually seated, keep teaching. */
-  reliquaryLesson(): boolean {
-    return this.account.features.has(FEATURE.RELIQUARY)
-      && (this.account.ledger[RELIQUARY_LESSON] ?? 0) < 1;
-  }
+  reliquaryLesson(): boolean { return sceneReliquaryLesson(this.nativeSceneQuestInteractionHost()); }
 
   // -------------------------------------------------------- corpse run -------
   //

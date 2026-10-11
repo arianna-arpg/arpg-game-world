@@ -1,3 +1,13 @@
+NativeAreaSceneQuestInteraction owns admitted quest giver dwell, offers, vocation
+choices and imbue claims beside the actual ongoing quest/progression owners.
+Preserve physical local/hosted attendance, transfer-invalidated dwell, native idle
+reads and the real character writer. Solo interaction cargo follows its local
+hand; field completion keeps its source-area fallback. Verify nativequestinteraction,
+nativeinteractioncargo, nativeareaongoing, adjacent authority/quests/memory/source
+checks, worldmass_quests, all types and boot. See docs/worldgen/native-area-quest-interaction.md.
+Keep giver-before-objective ordering. Scheduler/menu/input routing and complete
+retained-area activation remain open.
+
 NativeAreaSceneProjectiles shares exact native launch and occlusion rules with
 World, using the registered progression owner's live queue and physical caster.
 Keep shared recursion/aura constants, method receivers, payload references and RNG.
