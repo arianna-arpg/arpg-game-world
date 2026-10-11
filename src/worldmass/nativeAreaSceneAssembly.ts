@@ -1,3 +1,5 @@
+import {NativeAreaSceneObjectiveCompletion,freshSceneObjectiveCompletionState,type NativeSceneObjectiveCampaign,type NativeSceneObjectiveProgression,type NativeSceneObjectiveQuests} from './nativeAreaSceneObjectiveCompletion';
+import {NativeAreaSceneLoot,freshSceneLootState,type NativeSceneLootCampaign} from './nativeAreaSceneLoot';
 import {NativeAreaScenePuzzles,type NativeScenePuzzleEffects} from './nativeAreaScenePuzzles';
 import {makeNativeAreaArena} from '../engine/nativeAreaArena';
 import {NativeAreaTimeflow,type NativeAreaTimeflowHost} from './nativeAreaTimeflow';
@@ -51,7 +53,7 @@ import {NativeAreaSceneRuntimeRegistry} from './nativeAreaSceneRuntimeRegistry';
 
 type Input<C extends new (...args:never[])=>unknown>=ConstructorParameters<C>[0];
 type Campaign<C extends new (...args:never[])=>{input:{campaign:object}}>=Input<C>['campaign'];
-export type NativeAreaAssemblyCampaign=NativeGraphCampaign
+export type NativeAreaAssemblyCampaign=NativeGraphCampaign & NativeSceneLootCampaign & NativeSceneObjectiveCampaign
  & Campaign<typeof NativeAreaScenePopulation> & Campaign<typeof NativeAreaSceneSettlement>
  & Campaign<typeof NativeAreaSceneBounty> & Campaign<typeof NativeAreaScenePhysical>
  & Campaign<typeof NativeAreaSceneOpenings> & Campaign<typeof NativeAreaSceneTheater>
@@ -75,15 +77,16 @@ export interface NativeAreaAssemblySources {
 /** Deferred controllers/rewards must be supplied by their actual owners.
  * No no-op or throwing replacement services are installed by this factory. */
 export interface NativeAreaAssemblyServices {
- geometry:Omit<ConstructorParameters<typeof NativeAreaSceneGeometry>[2],'radianceCondHeld'|'createMonster'|'time'|'seats'|'ledger'>;
+ geometry:Omit<ConstructorParameters<typeof NativeAreaSceneGeometry>[2],'radianceCondHeld'|'createMonster'|'time'|'seats'|'ledger'|'text'>;
  population:Pick<Input<typeof NativeAreaScenePopulation>['context'],'resolveHit'>;
  residents:Pick<Input<typeof NativeResidentSession>['area']['local'],'viewRectFor'|'scene'|'clientActionHook'>;
  timeflow:NativeAreaTimeflowHost;
- puzzleEffects:NativeScenePuzzleEffects;
+ puzzleEffects:Pick<NativeScenePuzzleEffects,'executeSkill'>;
  ecology:Pick<Input<typeof NativeAreaSceneEcology>['services'],'throngClaimed'>;
- theater:Omit<Input<typeof NativeAreaSceneTheater>['services'],'radianceCondHeld'>;
- openings:Input<typeof NativeAreaSceneOpenings>['rewards'];
- history:Input<typeof NativeAreaSceneHistory>['services'];
+ theater:Omit<Input<typeof NativeAreaSceneTheater>['services'],'radianceCondHeld'|'dropGemAt'>;
+ history:Omit<Input<typeof NativeAreaSceneHistory>['services'],'text'>;
+ objectiveProgression:NativeSceneObjectiveProgression;
+ objectiveQuests:Omit<NativeSceneObjectiveQuests,'activeQuests'>;
 }
 export interface NativeAreaAssemblyInput {
  definition:ZoneDef;player:Actor;
@@ -112,6 +115,8 @@ export class NativeAreaSceneAssembly {
  readonly transition:Transition;
  readonly timeflow:NativeAreaTimeflow;
  readonly puzzleController:NativeAreaScenePuzzles;
+ readonly lootController:NativeAreaSceneLoot;
+ readonly objectiveController:NativeAreaSceneObjectiveCompletion;
  #phase:'fresh'|'preparing'|'prepared'|'birthing'|'born'|'failed'='fresh';
  #prepared?:{source:NativeAreaSource;session:NativeAreaSourceSession;layout:Readonly<Layout>;fingerprint:string;firstVisit:boolean;rngState:number;memoryState:string};
  constructor(raw:NativeAreaAssemblyInput){
@@ -125,8 +130,9 @@ export class NativeAreaSceneAssembly {
   const timeflow=this.timeflow=new NativeAreaTimeflow(services.timeflow);
   const environmentState=freshSceneEnvironmentState(),objectives=freshSceneObjectiveState(definition.id,campaign.completedObjectives);
   const sky=new NativeAreaSceneSky({scene,environment:environmentState,campaign});
-  let population:NativeAreaScenePopulation;
-  const geometryCampaign=bindNativeSceneSky(extendView(servicesView(services.geometry,['seasSeen','oceanBearing','seaNameOf','notice','text','seatOf','drainSurvival']),{ledger:campaign.ledger,
+  let population:NativeAreaScenePopulation,objectiveController:NativeAreaSceneObjectiveCompletion;
+  const geometryCampaign=bindNativeSceneSky(extendView(servicesView(services.geometry,['seasSeen','oceanBearing','seaNameOf','notice','seatOf','drainSurvival']),{ledger:campaign.ledger,
+   text:(...args:Parameters<World['text']>)=>objectiveController.text(...args),
    get time(){return campaign.time;},get seats(){return campaign.seats;},
    createMonster:(...args:Parameters<World['createMonster']>)=>population.createMonster(...args)}),sky);
   const arena=makeNativeAreaArena(definition);
@@ -147,10 +153,13 @@ export class NativeAreaSceneAssembly {
   const environmentServices=bindNativeSceneObjectives({completePuzzle:(run:Parameters<World['completePuzzle']>[0])=>puzzleController.completePuzzle(run),timeflow,get time(){return campaign.time;}},objectives);
   const environment=new NativeAreaSceneEnvironment({scene,geometry,population,
    services:environmentServices,sources:sources.environment,state:environmentState});
-  this.puzzleController=puzzleController=new NativeAreaScenePuzzles({scene,geometry,environment,campaign,effects:services.puzzleEffects});
   const ecology=new NativeAreaSceneEcology({scene,geometry,population,environment:environmentState,
    services:bindNativeSceneSky(extendView(servicesView(services.ecology,['throngClaimed']),{get time(){return campaign.time;},get seats(){return campaign.seats;}}),sky),sources:sources.ecology,state:freshSceneEcologyState()});
   const settlement=new NativeAreaSceneSettlement({scene,geometry,campaign,state:{townTierIdx:raw.carry.townTierIdx,mercOutpost:null}});
+  const physical=new NativeAreaScenePhysical({scene,geometry,population,settlement,campaign,state:freshScenePhysicalState()});
+  const loot=this.lootController=new NativeAreaSceneLoot({scene,geometry,physical,settlement,campaign,state:freshSceneLootState()});
+  this.puzzleController=puzzleController=new NativeAreaScenePuzzles({scene,geometry,environment,campaign,
+   effects:extendView(servicesView(services.puzzleEffects,['executeSkill']),servicesView(loot,['dropGemAt','mintLootResult']))});
   const traceState={traceRuns:[] as World['traceRuns'],timeflow,get time(){return campaign.time;}};
   const occurrences=new NativeAreaSceneOccurrences({scene,geometry,population,services:traceState,state:freshSceneOccurrenceState()});
   const objectiveHost=sceneObjectiveServices(population,objectives,{
@@ -159,18 +168,20 @@ export class NativeAreaSceneAssembly {
    notice:(...a)=>geometry.notice(...a),text:(...a)=>geometry.text(...a),pathField:geometry.pathField.bind(geometry),
    farPoint:geometry.farPoint.bind(geometry),pointInSolid:geometry.pointInSolid.bind(geometry),farthestStand:geometry.farthestStand.bind(geometry)});
   const bounty=new NativeAreaSceneBounty({scene,geometry,population,environment,campaign,objectives:objectiveHost});
-  const physical=new NativeAreaScenePhysical({scene,geometry,population,settlement,campaign,state:freshScenePhysicalState()});
   const transition:Transition=this.transition={inCave:raw.carry.inCave,entryFrom:raw.carry.entryFrom,voyage:raw.carry.voyage,
    charBorn:raw.carry.charBorn,charRegrowAcc:raw.carry.charRegrowAcc,zoneHasVendorCounter:false,crusadeWorksAt:null,
    descentStock:[],descentSpawnTimer:0,encounters:[],encRng:new Rng(1)};
   const harbor=new NativeAreaSceneHarbor({scene,geometry,population,settlement,run:campaign,state:transition,services:campaign,config});
-  const openings=new NativeAreaSceneOpenings({scene,geometry,population,campaign,state:{annexOpen:new Set()},rewards:services.openings});
+  const openings=new NativeAreaSceneOpenings({scene,geometry,population,campaign,state:{annexOpen:new Set()},rewards:extendView(servicesView(geometry,['text']),servicesView(loot,['dropGemAt','shedOrb']))});
   const theater=new NativeAreaSceneTheater({scene,geometry,population,environment,ecology,campaign,
    state:{theaterVisit:0,theaterSpots:{camps:[],pois:[]},theaterRuns:[],theaterPour:new Map(),theaterAmbientBudget:0},
-   services:bindNativeSceneSky(servicesView(services.theater,['geyserMode','imminentThreatTo','plantDressAt','dropGemAt','notice','moveActor','slipAway']),sky)});
+   services:bindNativeSceneSky(extendView(servicesView(services.theater,['geyserMode','imminentThreatTo','plantDressAt','notice','moveActor','slipAway']),servicesView(loot,['dropGemAt'])),sky)});
   const encounters=new NativeAreaSceneEncounterBirth({scene,geometry,population,campaign,state:transition});
   const sites=new NativeAreaSceneSites({scene,geometry,population,settlement,campaign,state:{vocationSites:[]}});
-  const history=new NativeAreaSceneHistory({scene,geometry,population,campaign,services:services.history,state:{playerCorpses:[]}});
+  const history=new NativeAreaSceneHistory({scene,geometry,population,campaign,services:extendView(servicesView(services.history,['notice','events']),servicesView(geometry,['text'])),state:{playerCorpses:[]}});
+  this.objectiveController=objectiveController=new NativeAreaSceneObjectiveCompletion({scene,geometry,objectives,
+   state:freshSceneObjectiveCompletionState(),campaign,history,progression:services.objectiveProgression,
+   quests:extendView(servicesView(services.objectiveQuests,['questLedgerOf','onQuestZoneFieldCleared']),servicesView(campaign,['activeQuests']))});
   const descent=new NativeAreaSceneDescent({scene,geometry,population,settlement,campaign,state:transition,services:campaign});
   const coast=new NativeAreaSceneCoast({scene,geometry,campaign,state:transition,sources:sources.coast});
   const arrival=new NativeAreaSceneArrival({scene,geometry,campaign,policy:config});
@@ -186,7 +197,7 @@ export class NativeAreaSceneAssembly {
   // Brandt's once-armed shelf is run state, including between counter areas.
   Object.defineProperty(this.input.state,'vendorStock',{enumerable:true,get:()=>campaign.vendorStock,set:(v:World['vendorStock'])=>{campaign.vendorStock=v;}});
   this.graph=new NativeAreaSceneGraph({coast,campaign});this.boundaries=new NativeAreaSceneBoundaries(this.graph);
-  for(const key of ['input','host','graph','boundaries','generation','transition','timeflow','puzzleController'])Object.defineProperty(this,key,{writable:false,configurable:false});
+  for(const key of ['input','host','graph','boundaries','generation','transition','timeflow','puzzleController','lootController','objectiveController'])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
  get phase(){return this.#phase;}
  sourceSession(geography:MassNativeGeography){return new NativeAreaSourceSession(this.graph,geography);}

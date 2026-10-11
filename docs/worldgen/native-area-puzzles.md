@@ -1,5 +1,10 @@
 # Retained native puzzle lifecycle
 
+Continuation: [native-area-rewards.md](native-area-rewards.md) supplies the real
+area loot sink and native objective completion/XP owner. Its two-area integration
+proof replaces recording reward providers with actual local physical drops.
+The evidence and remaining-effect descriptions below record the earlier checkpoint.
+
 NativeScenePuzzles follows the preparation isolation checkpoint c35ee8ab.
 It shares the original five World puzzle mutation methods with a concrete
 NativeAreaScenePuzzles owner: updatePuzzles, puzzleStruck, drainPuzzleKnocks,

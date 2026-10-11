@@ -1,4 +1,6 @@
 import './nativeSceneBootstrap';
+import {sceneCompleteObjective,sceneObjectivePlaces,sceneGrantXp,sceneGrantSeatXp,sceneQuestOnZone,sceneText,type NativeSceneObjectiveCompletionHost} from './nativeSceneObjectiveCompletion';
+import {sceneDropEssenceAt,sceneDropAbilityEssenceAt,sceneDropVestigeAt,sceneDropGearAt,sceneLootDropCue,sceneSpoilClamp,sceneOwnSpoils,sceneDropGemAt,sceneMintGemAt,sceneDropPinnedGem,sceneDropMemoryUnit,sceneNoteGemDrop,sceneNoteContainerFind,sceneMintLootResult,sceneShedOrb,DROP_PICKUP_GRACE,type NativeSceneLootHost} from './nativeSceneLoot';
 import {sceneUpdatePuzzles,scenePuzzleStruck,sceneDrainPuzzleKnocks,scenePuzzleTuned,sceneCompletePuzzle,type NativeScenePuzzleHost} from './nativeScenePuzzles';
 import './nativeInhabitants';
 import { type NativeInhabitantHost, type NativeInhabitantSources } from './nativeInhabitants';
@@ -118,18 +120,14 @@ import { MASS_CFG, impactFrac, impactScale, shoveAuthority } from './mass';
 import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf, ROUSE_RULES } from './ai';
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
-import { convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG, CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo, skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst, type SkillRarity, supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew, BAR_SLOTS, MAX_SUPPORT_LEVEL, parseSlotGraftStat, SLOTGRAFT_PREFIX, SWAP_DISCIPLINE_CFG, BLOOM_CFG, GRANT_CFG, parseSkillGrantStat, skillGrantStat, SKILLGRANT_PREFIX, type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GroundCascadeSpec, type GroundPulseSpec, type GuardBashSpec, type LitePourEffect, type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect, type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SummonDelivery, type SupportDef, type SupportInstance, type TetherSpec, type ConduitSpec, type ImpactDressSpec } from './skills';
+import {convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, resolveSizeOver, rollCount, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG, CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo, skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst, type SkillRarity, supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew, BAR_SLOTS, MAX_SUPPORT_LEVEL, parseSlotGraftStat, SLOTGRAFT_PREFIX, SWAP_DISCIPLINE_CFG, BLOOM_CFG, GRANT_CFG, parseSkillGrantStat, skillGrantStat, SKILLGRANT_PREFIX, type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GroundCascadeSpec, type GroundPulseSpec, type GuardBashSpec, type LitePourEffect, type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect, type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SummonDelivery, type SupportDef, type SupportInstance, type TetherSpec, type ConduitSpec, type ImpactDressSpec} from './skills';
 import { birthCount, CLUTCH_CFG, ORPHAN_FRENZY, type BirthEffect } from './clutch';
 import { mintSupportInstance, spawnVeinOf, SUPPORTBASE_CFG } from './supportbase';
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
 import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, bagBoard, bagBoardFor, placeAt, removeFromBag, setBagBoardSource, swapBlockerFits, type BoardDims } from './inventory';
 import { bagSortMode, sortBagItems, type BagSortDir } from './bagsort';
-import {
-  CONTAINERS, boardDims, containerAccepts, containerBoard, containerBoardFor, containerLanding, seatAmplification,
-  containerMisfits, containerSeatRefusal, findCarried, setContainerBoardSource, unpackContainerBoard,
-  type ContainerBoardW,
-} from './containers';
+import {CONTAINERS, boardDims, containerBoard, containerBoardFor, containerLanding, seatAmplification, containerMisfits, containerSeatRefusal, findCarried, setContainerBoardSource, unpackContainerBoard, type ContainerBoardW} from './containers';
 import { CONTAINER_DEFS } from '../data/containers';
 import { amplifySeatMods } from './seatlaw'; // THE SEAT LAW
 import {
@@ -138,16 +136,9 @@ import {
   rebuildAnyItem, skillGemPayloadOf, skillOfGemItem,
   supportOfGemItem, writeBackSupportGem, bagSkillSupport,
 } from './gemitems';
-import {
-  memoryProvenanceLabel, MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
-  facetRng, findMemoryItem, makeMemoryItem, memoryFacetAttrs, memoryFormOf, memoryGroupKey, memoryGroups,
-  memoryKindForSeed, memoryKindOf, memoryRarityLean, memoryUnitsOf, mergeMemory, pickSeeded, rollSeededRarity,
-  seedLaneFrac,
-  type MemoryKind, type MemoryPin, type MemoryProvenance, type MemoryRecallGroup, type MemoryRecallResult,
-  type MemoryRecallViewData,
-} from './memories';
+import {memoryProvenanceLabel, MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE, facetRng, findMemoryItem, makeMemoryItem, memoryFacetAttrs, memoryGroupKey, memoryGroups, memoryKindOf, memoryRarityLean, memoryUnitsOf, mergeMemory, pickSeeded, rollSeededRarity, type MemoryKind, type MemoryPin, type MemoryProvenance, type MemoryRecallGroup, type MemoryRecallResult, type MemoryRecallViewData} from './memories';
 import { chestInReach, CHEST_INTERACTION_CFG } from './chestInteraction';
-import { accountRelicBoard, bankRelic, isRelic, loseCarriedRelics, migrateRelicCarry, migrateRelicCorpses, planRelicStorage, reconcileRelicStash, reliquaryExperience } from './accountReliquary';
+import {accountRelicBoard, bankRelic, isRelic, loseCarriedRelics, migrateRelicCarry, migrateRelicCorpses, planRelicStorage, reconcileRelicStash} from './accountReliquary';
 import { emptyStash, personalStashEntries, planStashMove, type PersonalStash, type StashCell } from './stash';
 import { STASH_DEFS } from '../data/stashes';
 import { empowerRelicMods } from './relicPower';
@@ -163,7 +154,7 @@ import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { treeSpentCount } from './skilltree'; // THE SKILL-TREE GRAPH — ranked spends (pickTreeNode)
-import { awakenMemoryFromDrop, memoryCommissionReady, memoryProgressionOpen, memorySecondaryOpen, type MemoryAccess } from '../meta/memoryUnlocks';
+import {memoryCommissionReady, memoryProgressionOpen, memorySecondaryOpen, type MemoryAccess} from '../meta/memoryUnlocks';
 import { MEMORY_UNLOCK_CFG, type MemorySecondaryMechanic } from '../data/memoryUnlocks';
 import { powerProgressionRefusal } from '../data/powerProgression';
 import { SKILLS } from '../data/skills';
@@ -504,16 +495,7 @@ import {
   ActiveTheaterRun, theaterKindDef, THEATER_CFG,
   type TheaterContext, type TheaterKindDef, type TheaterRow, type TheaterSpots,
 } from './theater';
-import {
-  featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE, applyCredits, META_CURRENCY_LABEL,
-  LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, CLASS_LEVEL_MILESTONES, isVaultAvailable,
-  LEDGER_CORPSES_RECLAIMED,
-  classLevelLedgerKey, gemDropKey, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
-  LEDGER_CRAFTS_UNLOCKED, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED,
-  questDoneKey, reachedLevelKey,
-  LEDGER_BOUNTY_DONE, LEDGER_BOUNTY_CRAFT_DONE, bountyDoneKindKey,
-  type Account,
-} from '../meta/account';
+import {featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE, applyCredits, META_CURRENCY_LABEL, LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, isVaultAvailable, LEDGER_CORPSES_RECLAIMED, LEDGER_VENDOR_BOUGHT, LEDGER_CRAFTS_UNLOCKED, LEDGER_ZONES_EXPLORED, questDoneKey, LEDGER_BOUNTY_DONE, LEDGER_BOUNTY_CRAFT_DONE, bountyDoneKindKey, type Account} from '../meta/account';
 import { gateMet } from '../meta/gates';
 import { planSkillSlots, rememberSkillSlot } from '../meta/skillSlotMemory';
 // THE MILESTONE DERIVATION: every level the unlock catalog's own gates ask
@@ -521,7 +503,7 @@ import { planSkillSlots, rememberSkillSlot } from '../meta/skillSlotMemory';
 // so a level gate authored anywhere in the catalog has a live signal BY
 // CONSTRUCTION (unlocks.ts → vendors.ts touches world only type-wise; no
 // runtime cycle).
-import { catalogClassLevelMilestones, catalogLevelMilestones, settleClassUnlocks } from '../meta/unlocks';
+import {settleClassUnlocks} from '../meta/unlocks';
 import { CLASS_WEB_CFG } from '../data/classTiers';
 import {
   modeById, resurrectFee, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
@@ -542,7 +524,7 @@ import {
 } from '../meta/nemesis';
 import { NEMESIS_RANKS } from '../data/nemesis';
 import { saveCharacter, rebuildSkill } from '../meta/character';
-import { saveAccount, saveAccountDurable } from '../meta/persistence';
+import {saveAccount} from '../meta/persistence';
 import { SIM_TAP } from './tap';
 import { captureLoot, skillToLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH_RADIUS, type DeathRecord, type SavedLoot } from '../meta/death';
 import {
@@ -1756,10 +1738,7 @@ export const CORPSE_CFG = {
   batch: { aoePerExtra: 0.12, durationPerExtra: 0.15, projectilesPerExtra: 1 },
 };
 
-/** Seconds a player-DROPPED gem stays un-grabbable so the dropper (standing on
- *  it) doesn't instantly re-pick it up — long enough to step off / hand it over.
- *  Monster & chest drops leave grace undefined → grabbable immediately (unchanged). */
-const DROP_PICKUP_GRACE = 0.8;
+// DROP_PICKUP_GRACE is shared with nativeSceneLoot.
 
 /** Doodad kinds that count as special GROUND (traction / depth effects) — shared by
  *  loadZone (host) and rebuildClientTerrain (client) so the lists match. DERIVED
@@ -2278,7 +2257,6 @@ const MIREILLE_LESSON_LEDGER = 'mireille_lesson_lived';
  *  dealt outright (dealVeteranFlasks) instead of re-walking the tutorial. */
 const MIREILLE_FILL_LEDGER = LEDGER_FLASK_LESSON;
 const MIREILLE_XP_BUFF_SEC = 300;   // a 5-minute blessing
-const MIREILLE_XP_BUFF_MULT = 0.05; // +5% experience while it lasts
 const MIREILLE_XP_REFRESH = 240;    // only (re)grant when below this (no spam)
 const QUESTGIVER_RADIUS = 150;   // how close to stand to the quartermaster
 const QUESTGIVER_DWELL = 0.9;    // seconds lingering before he hands you a quest
@@ -19304,112 +19282,13 @@ export class World {
     return this.sameSeatParty(viewer, p.seat);
   }
 
-  grantXp(amount: number, at?: Vec2 | readonly Vec2[], to?: Seat): void {
-    // XP BY PLACE (THE COUNTERS AND THE JOURNAL): a grant may name several places (an
-    // objective's fixtures). On a hosted world a grant naming none pays the acting seat's
-    // party near the act (a meta act, a credited kill's handler), so a player AFK at the
-    // hearth never levels off the field; with no act and no place it pays as before.
-    if (at === undefined && this.localSeat.keeper && COOP_SCALING.shareRadius > 0) {
-      const acting = this.actingSeat;
-      if (acting && !acting.keeper && !acting.merc) { at = this.seatHero(acting).pos; to ??= acting; }
-    }
-    const places = at === undefined ? null : 'x' in at ? [at] : at.length ? at : null;
-    for (const seat of this.seats) {
-      if (seat.actor.dead) continue;
-      // THE NEAR LAW (keeperSeat lane, data/coop.ts shareRadius): a kill with a
-      // place pays only the seats within reach of it; radius 0 = everyone. THE
-      // KILLER'S DUE (her ruling 2026-10-08: the single-player law until parties):
-      // with a radius set and a killing seat known, only that seat is paid.
-      if (places && COOP_SCALING.shareRadius > 0 && to && !this.sameParty(to, seat)) continue; // keeperSeat: the killer's due — its party within reach (card 23)
-      if (places && COOP_SCALING.shareRadius > 0 && !places.some(p => dist(p, this.seatHero(seat).pos) <= COOP_SCALING.shareRadius)) continue; // SOVEREIGNTY: census — pay is apportioned by reach, never a touch (keeperSeat lane)
-      // A hired blade never earns its own levels — its power is NORMALIZED to
-      // the patron (MERC_CFG.scale), re-synced on the patron's level-ups.
-      if (seat.merc || seat.keeper) continue; // keeperSeat: the warden never levels
-      this.grantSeatXp(seat, amount);
-    }
-  }
+  grantXp(amount: number, at?: Vec2 | readonly Vec2[], to?: Seat): void { return sceneGrantXp(this.nativeSceneObjectiveCompletionHost(),amount,at,to); }
 
   /** Apply XP to one seat: bank it, level the seat up, and (for the LOCAL seat
    *  only) trip the account-level ledger flag. Levels land on the HERO body
    *  (the possession seam): a borrowed body's level is the monster's own —
    *  attribution flows to the SEAT, never the flesh it happens to wear. */
-  private grantSeatXp(seat: Seat, amount: number): void {
-    const m = seat.meta;
-    const p = this.seatHero(seat);
-    // Mireille's Traveller's Rest blessing boosts experience while it lasts (a hosted
-    // world's blessing is each seat's own: THE COUNTERS AND THE JOURNAL).
-    if (this.localSeat.keeper ? (this.mireilleSeatBuff.get(seat) ?? 0) > this.time : this.mireilleXpBuff > 0) amount = Math.round(amount * (1 + MIREILLE_XP_BUFF_MULT));
-    amount *= reliquaryExperience(m.containers.reliquary ?? [], m.relicEnabled !== false);
-    m.xp += amount;
-    // Any XP change re-replicates this seat's meta (xp bar + level + points). The
-    // dirty Set coalesces, so a kill-storm still ships at most one meta/snapshot.
-    this.markMetaDirty(seat);
-    const levelUpCueStart = p.level;
-    while (m.xp >= m.xpNeeded) {
-      m.xp -= m.xpNeeded;
-      p.level++;
-      m.xpNeeded = PROGRESSION.xpForLevel(p.level);
-      // The level-up beat grants the PASSIVE point only (the skill-point
-      // lane retired with M-ECON — skill levels are Ability-Essence-fed).
-      m.passivePoints += PROGRESSION.passivePointsPerLevel;
-      this.recalcSeat(seat);
-      // A DOWNED seat banks XP and levels, but must NOT auto-heal off 0 — only an
-      // ally's revive restores it (to REVIVE_LIFE_FRAC). Mirrors the regen guard.
-      if (!p.downed) p.fillResources();
-      // Preserve the retired LEVEL UP! floater's random draw per level.
-      rand(-10, 10);
-      // LIVE PARITY: the patron levelled — re-normalize the hired blade.
-      if (seat === this.localSeat) this.resyncMercenary();
-    }
-    // One physical level-up burst per grant, including multi-level rewards.
-    if (p.level > levelUpCueStart) this.flashes.push({ pos: { ...seat.actor.pos }, radius: 80, color: '#ffd700', life: .65, maxLife: .65, fx: 'sparkle' });
-    // Reaching character level 5 surfaces the Quest Package in the Vault next run.
-    // Account-level progression belongs to THIS MACHINE's account — the local
-    // hero always, and a couch guest too (both characters are the account's
-    // own; remote peers and mercs never). The ledger flag merges in on death.
-    if (this.accountSeat(seat) && p.level >= 5 && !this.ledger.reached_level_5) {
-      bumpLedger(this.ledger, 'reached_level_5');
-    }
-    // Reaching the level cap (100) surfaces the META-META global event-frequency
-    // crank in the Vault. Same once-per-run flag shape as reached_level_5 (merges
-    // in on death; the unlock predicate tests >= 1).
-    if (this.accountSeat(seat) && p.level >= 100 && !this.ledger.reached_level_100) {
-      bumpLedger(this.ledger, 'reached_level_100');
-    }
-    // Every 10-level milestone — the Caravan tiers (and future unlocks) gate on these.
-    // Same once-per-run, account-seat shape; merges into account.ledger on death.
-    if (this.accountSeat(seat)) {
-      for (let m10 = 10; m10 <= 90; m10 += 10) {
-        const key = reachedLevelKey(m10);
-        if (p.level >= m10 && !this.ledger[key]) bumpLedger(this.ledger, key);
-      }
-      // THE MILESTONE DERIVATION (meta/unlocks.ts catalogLevelMilestones):
-      // every level the unlock catalog's own gates ask about stamps here —
-      // authoring a level gate IS registering its signal, so a gate whose
-      // key never fires (the old reached_level_15 hole) is structurally
-      // impossible. Stamps ALL milestones ≤ the current level, so a
-      // character already past one back-fills it on their next level-up.
-      for (const ms of catalogLevelMilestones()) {
-        const key = reachedLevelKey(ms);
-        if (p.level >= ms && !this.ledger[key]) bumpLedger(this.ledger, key);
-      }
-    }
-    // PER-CLASS milestones — THE OBJECTIVE WEB's play thresholds and THE
-    // MASTERY LADDER's rungs (account.ts CLASS_LEVEL_MILESTONES → unlocks.ts
-    // ClassUnlockSpec objectives / CLASS_TIERS): playing a class deep is how
-    // the account earns that class's kin and its own mastery. The standing
-    // list PLUS every level the catalog asks of THIS class (the class-
-    // milestone derivation — authoring a classLevel gate registers its
-    // stamp). Same once-per-run, account-seat, merge-on-death shape as the
-    // sweep above.
-    if (this.accountSeat(seat)) {
-      const levels = new Set([...CLASS_LEVEL_MILESTONES, ...catalogClassLevelMilestones(m.classDef.id)]);
-      for (const ms of levels) {
-        const key = classLevelLedgerKey(m.classDef.id, ms);
-        if (p.level >= ms && !this.ledger[key]) bumpLedger(this.ledger, key);
-      }
-    }
-  }
+  private grantSeatXp(seat: Seat, amount: number): void { return sceneGrantSeatXp(this.nativeSceneObjectiveCompletionHost(),seat,amount); }
 
   // ---------------------------------------------- point-spending operations -
 
@@ -20015,18 +19894,53 @@ export class World {
     this.markMetaDirty(seat); // the wallet rides seatMeta — replicate every gain
   }
 
+  private nativeSceneLootView?:NativeSceneLootHost;
+  private nativeSceneLootHost():NativeSceneLootHost {
+    if(this.nativeSceneLootView)return this.nativeSceneLootView;
+    const world=this;
+    const host:NativeSceneLootHost={
+      get account(){return world.account;},
+      get accountDirty(){return world.accountDirty;},set accountDirty(value){world.accountDirty=value;},
+      get dropRuleOf(){const fn=world.dropRuleOf;return fn?(...args:Parameters<NonNullable<NativeSceneLootHost['dropRuleOf']>>)=>fn.apply(world,args):fn;},set dropRuleOf(value){world.dropRuleOf=value;},
+      get drops(){return world.drops;},set drops(value){world.drops=value;},
+      get flashes(){return world.flashes;},set flashes(value){world.flashes=value;},
+      get orbs(){return world.orbs;},set orbs(value){world.orbs=value;},
+      get questSeat(){return world.questSeat;},set questSeat(value){world.questSeat=value;},
+      get seats(){return world.seats;},set seats(value){world.seats=value;},
+      get spoilStory(){return world.spoilStory;},set spoilStory(value){world.spoilStory=value;},
+      get time(){return world.time;},set time(value){world.time=value;},
+      get zone(){return world.zone;},set zone(value){world.zone=value;},
+      get clampPos(){const method=world.clampPos;return (...args:Parameters<NativeSceneLootHost['clampPos']>)=>method.apply(world,args);},
+      get dropAbilityEssenceAt(){const method=world.dropAbilityEssenceAt;return (...args:Parameters<NativeSceneLootHost['dropAbilityEssenceAt']>)=>method.apply(world,args);},
+      get dropEssenceAt(){const method=world.dropEssenceAt;return (...args:Parameters<NativeSceneLootHost['dropEssenceAt']>)=>method.apply(world,args);},
+      get dropGearAt(){const method=world.dropGearAt;return (...args:Parameters<NativeSceneLootHost['dropGearAt']>)=>method.apply(world,args);},
+      get dropGemAt(){const method=world.dropGemAt;return (...args:Parameters<NativeSceneLootHost['dropGemAt']>)=>method.apply(world,args);},
+      get dropMemoryUnit(){const method=world.dropMemoryUnit;return (...args:Parameters<NativeSceneLootHost['dropMemoryUnit']>)=>method.apply(world,args);},
+      get dropPinnedGem(){const method=world.dropPinnedGem;return (...args:Parameters<NativeSceneLootHost['dropPinnedGem']>)=>method.apply(world,args);},
+      get dropVestigeAt(){const method=world.dropVestigeAt;return (...args:Parameters<NativeSceneLootHost['dropVestigeAt']>)=>method.apply(world,args);},
+      get lootDropCue(){const method=world.lootDropCue;return (...args:Parameters<NativeSceneLootHost['lootDropCue']>)=>method.apply(world,args);},
+      get lootLevelAt(){const method=world.lootLevelAt;return (...args:Parameters<NativeSceneLootHost['lootLevelAt']>)=>method.apply(world,args);},
+      get metaProgressionActive(){const method=world.metaProgressionActive;return (...args:Parameters<NativeSceneLootHost['metaProgressionActive']>)=>method.apply(world,args);},
+      get mintGemAt(){const method=world.mintGemAt;return (...args:Parameters<NativeSceneLootHost['mintGemAt']>)=>method.apply(world,args);},
+      get noteContainerFind(){const method=world.noteContainerFind;return (...args:Parameters<NativeSceneLootHost['noteContainerFind']>)=>method.apply(world,args);},
+      get noteGemDrop(){const method=world.noteGemDrop;return (...args:Parameters<NativeSceneLootHost['noteGemDrop']>)=>method.apply(world,args);},
+      get ownSpoils(){const method=world.ownSpoils;return (...args:Parameters<NativeSceneLootHost['ownSpoils']>)=>method.apply(world,args);},
+      get questHand(){const method=world.questHand;return (...args:Parameters<NativeSceneLootHost['questHand']>)=>method.apply(world,args);},
+      get rollSkillGem(){const method=world.rollSkillGem;return (...args:Parameters<NativeSceneLootHost['rollSkillGem']>)=>method.apply(world,args);},
+      get rollSupportDropGated(){const method=world.rollSupportDropGated;return (...args:Parameters<NativeSceneLootHost['rollSupportDropGated']>)=>method.apply(world,args);},
+      get sameParty(){const method=world.sameParty;return (...args:Parameters<NativeSceneLootHost['sameParty']>)=>method.apply(world,args);},
+      get seatHero(){const method=world.seatHero;return (...args:Parameters<NativeSceneLootHost['seatHero']>)=>method.apply(world,args);},
+      get spoilClamp(){const method=world.spoilClamp;return (...args:Parameters<NativeSceneLootHost['spoilClamp']>)=>method.apply(world,args);},
+      get spoilsSealed(){const method=world.spoilsSealed;return (...args:Parameters<NativeSceneLootHost['spoilsSealed']>)=>method.apply(world,args);},
+      get zoneGemFloor(){const method=world.zoneGemFloor;return (...args:Parameters<NativeSceneLootHost['zoneGemFloor']>)=>method.apply(world,args);},
+    };
+    Object.defineProperty(this,'nativeSceneLootView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
   /** Shed an essence packet on the ground (the spill fabric) — vacuumed on
    *  touch like a vestige; scatter keeps a trail readable at a glance. */
-  dropEssenceAt(at: Vec2, gain: EssenceCost, contextZone?: Readonly<ZoneDef>): void {
-    if (contextZone ? contextZone.spoils === 'none' : this.spoilsSealed()) return; // THE SPOILS LAW — spilled essence is minted wealth
-    if (gain.count <= 0) return;
-    const s = ESSENCE_SPILL_CFG.scatter;
-    const pos = this.clampPos(vec(at.x + rand(-s, s), at.y + rand(-s, s)), 10, undefined, this.spoilClamp());
-    this.drops.push({ pos, item: { kind: 'essence', essence: gain.essence, count: gain.count }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
-    // THE OWNER STAMP (card 27): essence a quest pays inside its hand's scope (THE QUEST HAND)
-    // is that hand's; every other packet wears its own pass's stamp. Inert off a hosted world.
-    if (this.dropRuleOf && this.questSeat) this.ownSpoils(this.drops.length - 1, this.questSeat);
-  }
+  dropEssenceAt(at: Vec2, gain: EssenceCost, contextZone?: Readonly<ZoneDef>): void { return sceneDropEssenceAt(this.nativeSceneLootHost(),at,gain,contextZone); }
 
   // --- ABILITY ESSENCES (data/essences.ts ABILITY_ESSENCES) ------------------
   // The skill-leveling currency: wallet counters fed by zone-floored world
@@ -20067,15 +19981,7 @@ export class World {
    *  the tints. The mint uses lootDropCue's colored glint; the ground packet
    *  and pickup feed keep its identity and count. `rng` lets the kill
    *  path scatter off its own fork (below); direct mints default global. */
-  dropAbilityEssenceAt(at: Vec2, tier: number, count: number, rng: () => number = Math.random, contextZone?: Readonly<ZoneDef>): void {
-    if (contextZone ? contextZone.spoils === 'none' : this.spoilsSealed()) return; // THE SPOILS LAW — minted wealth
-    if (count <= 0) return;
-    const def = abilityEssenceOfTier(tier);
-    const s = ESSENCE_SPILL_CFG.scatter;
-    const pos = this.clampPos(vec(at.x + (rng() * 2 - 1) * s, at.y + (rng() * 2 - 1) * s), 10, undefined, this.spoilClamp());
-    this.drops.push({ pos, item: { kind: 'abilityEssence', tier: def.tier, count }, bob: rng() * Math.PI * 2, tier: this.spoilStory });
-    this.lootDropCue(at, def.color);
-  }
+  dropAbilityEssenceAt(at: Vec2, tier: number, count: number, rng: () => number = Math.random, contextZone?: Readonly<ZoneDef>): void { return sceneDropAbilityEssenceAt(this.nativeSceneLootHost(),at,tier,count,rng,contextZone); }
 
   /** THE FORKED TRICKLE: the kill-path roll draws from its OWN salted
    *  stream (core/rng.ts Rng off the manifest seed) — a new loot trickle
@@ -42331,24 +42237,7 @@ export class World {
    *  Immortal runs read but never feed (the bestiary's own guard); the
    *  flush lands exactly when a gem crosses the commission threshold (ride
    *  the next scheduled save otherwise — the bestiary's cadence). */
-  private noteGemDrop(gemId: string, skillRarity?: SkillInstance['rarity']): void {
-    if (!this.metaProgressionActive()) return;
-    if (awakenMemoryFromDrop(this.account, gemId, skillRarity)) this.accountDirty = true;
-    const key = gemDropKey(gemId);
-    const after = (this.account.ledger[key] ?? 0) + 1;
-    this.account.ledger[key] = after;
-    this.account.ledger[LEDGER_GEMDROP_TOTAL] = (this.account.ledger[LEDGER_GEMDROP_TOTAL] ?? 0) + 1;
-    if (after === VENDOR_CFG.commission.need) this.accountDirty = true;
-    // THE DEED GATE (LEDGER_LEGENDARY_SKILL_DROP): the account's first
-    // legendary SKILL gem, stamped here at the one genuine mint chokepoint —
-    // every skill-mint site hands its rarity in, so a future legendary from
-    // ANY of them lands the deed. One-shot; persisted immediately (a Vault
-    // row hangs on it — the flask lesson's own quit-proof precedent).
-    if (skillRarity === 'legendary' && !(this.account.ledger[LEDGER_LEGENDARY_SKILL_DROP] ?? 0)) {
-      this.account.ledger[LEDGER_LEGENDARY_SKILL_DROP] = 1;
-      this.accountDirty = true;
-    }
-  }
+  private noteGemDrop(gemId: string, skillRarity?: SkillInstance['rarity']): void { return sceneNoteGemDrop(this.nativeSceneLootHost(),gemId,skillRarity); }
 
   /** THE PROVENANCE a body's spoils seal into their Memories: its def id
    *  (the kit/bias lean at the recall) plus its rolled ELITE tier (an event
@@ -42387,62 +42276,11 @@ export class World {
   dropGemAt(
     at: Vec2, bias?: SkillTag[], owed = false, from?: string | MemoryProvenance,
     memoryKind?: MemoryKind, pin?: MemoryPin, contextZone?: Readonly<ZoneDef>,
-  ): void {
-    const d0 = this.drops.length;
-    this.mintGemAt(at, bias, owed, from, memoryKind, pin, contextZone);
-    // THE OWNER STAMP (card 27): owed pay wears the seat it is owed to, THE QUEST HAND (a
-    // quest's scope names its hand, else the acting seat). Inert off a hosted world.
-    if (owed && this.dropRuleOf) this.ownSpoils(d0, this.questHand());
-  }
+  ): void { return sceneDropGemAt(this.nativeSceneLootHost(),at,bias,owed,from,memoryKind,pin,contextZone); }
   private mintGemAt(
     at: Vec2, bias?: SkillTag[], owed = false, from?: string | MemoryProvenance,
     memoryKind?: MemoryKind, pin?: MemoryPin, contextZone?: Readonly<ZoneDef>,
-  ): void {
-    // THE SPOILS LAW: sealed ground refuses the mint — except OWED pay
-    // (a quest's payout is earned of the writ, not of this ground).
-    if (!owed && (contextZone ? contextZone.spoils === 'none' : this.spoilsSealed())) return;
-    const pos = this.clampPos(vec(at.x + rand(-20, 20), at.y + rand(-20, 20)), 10, undefined, this.spoilClamp());
-    // THE GEM FLOOR (charter §4): this ground's country may floor its own
-    // gems into the mint — found in the scald before the account owns them.
-    const floor = contextZone ? gemFloorFor(contextZone.tileset) : this.zoneGemFloor();
-    const prov: MemoryProvenance = typeof from === 'string' ? { d: from } : from ?? { d: MEMORY_CFG.foundProvenance };
-    // THE FORM: one read off the sealed seed decides memory vs bare gem,
-    // then that lane lands it. `direct` is the bare gem's OWN mint (the
-    // identity the roll produced), never a second roll.
-    const land = (bobF: number, direct: () => void): void => {
-      const seed = (bobF * 4294967296) >>> 0;
-      const asMemory = memoryKind !== undefined || memoryFormOf(seed, GEM_DROP_CFG.memoryShare);
-      if (!asMemory) { direct(); return; }
-      const kind: MemoryKind = pin ? 'rough' : memoryKind ?? memoryKindForSeed(seed, GEM_DROP_CFG.preformedShare);
-      const floored = !!floor && (floor.skills.size > 0 || floor.supports.size > 0);
-      this.dropMemoryUnit(pos, at, prov, seed, kind, bobF, pin, floored ? (contextZone ?? this.zone).tileset : undefined);
-    };
-    if (pin) {
-      // THE PROMISE spends the plain lane's own draw count (jitter + bob) —
-      // no pool roll: the identity IS the promise.
-      const bobF = Math.random();
-      land(bobF, () => this.dropPinnedGem(pos, at, pin, bobF));
-      return;
-    }
-    const dropSkill = (): void => {
-      const inst = this.rollSkillGem(bias, contextZone?.level ?? this.lootLevelAt(at), floor);
-      const bobF = Math.random(); // rand(0, 2π)'s own draw, raw — the seed site
-      land(bobF, () => {
-        this.noteGemDrop(inst.def.id, inst.rarity);
-        this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-        this.lootDropCue(at, SKILL_RARITIES[inst.rarity ?? 'common'].color);
-      });
-    };
-    if (chance(GEM_DROP_CFG.skillShare)) { dropSkill(); return; }
-    const gemDef = this.rollSupportDropGated(bias, contextZone?.level ?? this.lootLevelAt(at), floor);
-    if (!gemDef) { dropSkill(); return; } // no supports unlocked → a skill gem instead
-    const bobF = Math.random();
-    land(bobF, () => {
-      this.noteGemDrop(gemDef.id);
-      this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-      this.lootDropCue(at, gemDef.color);
-    });
-  }
+  ): void { return sceneMintGemAt(this.nativeSceneLootHost(),at,bias,owed,from,memoryKind,pin,contextZone); }
 
   /** THE PROMISE's bare form (memoryShare below 1 — the pre-law spoil): the
    *  exact gem a fixed spoil named, minted verbatim at the pinned level
@@ -42450,24 +42288,7 @@ export class World {
    *  so this form spends no draw the memory form doesn't; a chassis support
    *  cuts its vein off the same seed). A vanished id mints nothing here and
    *  says so once — the memory form's recall falls to the wild cut instead. */
-  private dropPinnedGem(pos: Vec2, at: Vec2, pin: MemoryPin, bobF: number): void {
-    const seed = (bobF * 4294967296) >>> 0;
-    if (pin.k === 'skill') {
-      const def = SKILLS[pin.id];
-      if (!def) { console.warn(`dropGemAt: pinned skill '${pin.id}' is not in the registry`); return; }
-      const inst = makeSkillGem(def, pin.l ?? 1, pin.r ?? rollSkillRarity(seedLaneFrac(seed, 'rarity')));
-      this.noteGemDrop(inst.def.id, inst.rarity); // a BUILT spoil is a genuine mint too — the drop index sees it
-      this.drops.push({ pos, item: { kind: 'skill', inst }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-      this.lootDropCue(at, SKILL_RARITIES[inst.rarity ?? 'common'].color);
-      return;
-    }
-    const def = SUPPORTS[pin.id];
-    if (!def) { console.warn(`dropGemAt: pinned support '${pin.id}' is not in the registry`); return; }
-    const cutRng = new Rng((seed ^ 0x9e3779b9) >>> 0);
-    this.noteGemDrop(def.id);
-    this.drops.push({ pos, item: { kind: 'support', gem: mintSupportInstance(def, pin.l ?? 1, () => cutRng.next()) }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-    this.lootDropCue(at, def.color);
-  }
+  private dropPinnedGem(pos: Vec2, at: Vec2, pin: MemoryPin, bobF: number): void { return sceneDropPinnedGem(this.nativeSceneLootHost(),pos,at,pin,bobF); }
 
   /** THE STONE's ground mint: one Memory unit sealed around its foreordained
    *  seed and THE EVENT FACTS (items.ts RoughMemoryUnit — the provenance's
@@ -42480,23 +42301,11 @@ export class World {
   private dropMemoryUnit(
     pos: Vec2, at: Vec2, prov: MemoryProvenance, seed: number, kind: MemoryKind, bobF: number,
     pin?: MemoryPin, tileset?: string,
-  ): void {
-    const unit: RoughMemoryUnit = {
-      d: prov.d, s: seed,
-      ...(prov.e && prov.e !== 'normal' ? { e: prov.e } : {}),
-      ...(tileset ? { t: tileset } : {}),
-      ...(pin ? { g: { ...pin } } : {}),
-    };
-    this.drops.push({ pos, item: { kind: 'gear', item: makeMemoryItem(kind, [unit]) }, bob: bobF * Math.PI * 2, tier: this.spoilStory });
-    this.lootDropCue(at, MEMORY_KINDS[kind].color);
-  }
+  ): void { return sceneDropMemoryUnit(this.nativeSceneLootHost(),pos,at,prov,seed,kind,bobF,pin,tileset); }
 
   /** The falling spoil already carries its ground identity. Show its arrival
    *  through a colored glint, preserving the former floater's sole RNG draw. */
-  private lootDropCue(at: Vec2, color: string): void {
-    const x = at.x + rand(-10, 10);
-    this.flashes.push({ pos: vec(x, at.y), radius: 24, color, life: .35, maxLife: .35, fx: 'sparkle' });
-  }
+  private lootDropCue(at: Vec2, color: string): void { return sceneLootDropCue(this.nativeSceneLootHost(),at,color); }
 
   /** The pouch pickup's one float + feed line (the count IS the news). */
   private noteMemoryPickup(seat: Seat, kind: MemoryKind, total: number): void {
@@ -43243,51 +43052,12 @@ export class World {
    *  carry the same grace/dropper guards as discarded gems. `owed` marks
    *  gear the player is OWED (a corpse reclaim, a dev conjure) — owned
    *  property, exempt from the spoils law like any discard. */
-  dropGearAt(at: Vec2, item: ItemInstance, droppedBy?: string, owed = false, contextZone?: Readonly<ZoneDef>): void {
-    // Lessons gate ambient relics at the shared mint seam, including caches.
-    // Earned rewards and owned property always retain their ordinary delivery.
-    if (!droppedBy && !owed && CONTAINER_DEFS.some(c => c.dropLedger
-      && (this.account.ledger[c.dropLedger] ?? 0) < 1 && containerAccepts(c, item))) return;
-    // THE SPOILS LAW: minted gear refuses on sealed ground; a player's own
-    // discards (droppedBy) and owed returns are movement and always land.
-    if (!droppedBy && !owed && (contextZone ? contextZone.spoils === 'none' : this.spoilsSealed())) return;
-    // THE SPOILS STORY: a discard lands on its dropper's story, minted gear
-    // on the shedder's (the context) — the clamp confines on that story.
-    const dropper = droppedBy ? this.seats.find(s => s.id === droppedBy)?.actor : undefined;
-    const story = dropper ? dropper.tier : this.spoilStory;
-    const pos = this.clampPos(vec(at.x + rand(-16, 16), at.y + rand(-16, 16)), 10, undefined,
-      story !== undefined && story >= 1 ? { tier: story } : undefined);
-    delete item.x;
-    delete item.y;
-    const drop: GemDrop = { pos, item: { kind: 'gear', item }, bob: rand(0, Math.PI * 2), tier: story };
-    if (droppedBy) { drop.grace = DROP_PICKUP_GRACE; drop.droppedBy = droppedBy; }
-    this.drops.push(drop);
-    // THE OWNER STAMP (card 27): a discard wears its dropper beside droppedBy; owed pay wears
-    // the seat it is owed to, THE QUEST HAND (a quest's scope names its hand, else the acting seat).
-    if (this.dropRuleOf && (droppedBy || owed)) this.ownSpoils(this.drops.length - 1, droppedBy ? this.seats.find(s => s.id === droppedBy) : this.questHand());
-    if (!droppedBy) {
-      this.lootDropCue(at, ITEM_RARITIES[item.rarity].color);
-      // THE DISCOVERY LEDGER (engine/containers.ts ContainerDef.foundLedger):
-      // a GENUINE world mint of a piece some side board accepts stamps the
-      // account once — the Vault's case for it surfaces only after the
-      // world has shown one (never a discard, a reclaim or an owed pay —
-      // the gem index's own doctrine).
-      if (!owed) this.noteContainerFind(item);
-    }
-  }
+  dropGearAt(at: Vec2, item: ItemInstance, droppedBy?: string, owed = false, contextZone?: Readonly<ZoneDef>): void { return sceneDropGearAt(this.nativeSceneLootHost(),at,item,droppedBy,owed,contextZone); }
 
   /** Stamp every side board's discovery key the first time the world mints
    *  a piece it accepts (meta-gated; persisted at once — a Vault row hangs
    *  on it, the flask lesson's quit-proof precedent). */
-  private noteContainerFind(item: ItemInstance): void {
-    if (!this.metaProgressionActive()) return;
-    for (const def of CONTAINER_DEFS) {
-      if (!def.foundLedger || !containerAccepts(def, item)) continue;
-      if ((this.account.ledger[def.foundLedger] ?? 0) >= 1) continue;
-      this.account.ledger[def.foundLedger] = 1;
-      this.accountDirty = true;
-    }
-  }
+  private noteContainerFind(item: ItemInstance): void { return sceneNoteContainerFind(this.nativeSceneLootHost(),item); }
 
   // ---------------------------------------------------- sockets & vestiges --
 
@@ -43301,12 +43071,7 @@ export class World {
   }
 
   /** Shed a vestige on the ground (kill path / tables) — vacuumed on touch. */
-  dropVestigeAt(at: Vec2, id: string, count = 1, contextZone?: Readonly<ZoneDef>): void {
-    if (contextZone ? contextZone.spoils === 'none' : this.spoilsSealed()) return; // THE SPOILS LAW — vestiges are minted wealth
-    if (!VESTIGES[id]) return;
-    const pos = this.clampPos(vec(at.x + rand(-14, 14), at.y + rand(-14, 14)), 10, undefined, this.spoilClamp());
-    this.drops.push({ pos, item: { kind: 'vestige', id, count }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
-  }
+  dropVestigeAt(at: Vec2, id: string, count = 1, contextZone?: Readonly<ZoneDef>): void { return sceneDropVestigeAt(this.nativeSceneLootHost(),at,id,count,contextZone); }
 
   /** INLAY a vestige into a socket: consumes one from the satchel; whatever
    *  held the socket before is DESTROYED (the dead are spent, not refunded).
@@ -44252,17 +44017,7 @@ export class World {
   }
 
   /** Every loot-table consumer shares currency, gem and item delivery. */
-  private mintLootResult(at: Vec2, result: LootResult, owed = false, from?: string | MemoryProvenance, contextZone?: Readonly<ZoneDef>): void {
-    switch (result.kind) {
-      // THE MEMORY LAW: a table's gem rides the drop chokepoint whole — its
-      // Memory wears the PAYING body's provenance (or the caller's word).
-      case 'gem': this.dropGemAt(at, undefined, owed, from, undefined, undefined, contextZone); break;
-      case 'item': this.dropGearAt(at, result.item, undefined, owed, contextZone); break;
-      case 'vestige': this.dropVestigeAt(at, result.id, result.count, contextZone); break;
-      case 'essence': this.dropEssenceAt(at, result.gain, contextZone); break;
-      case 'memoryEssence': this.dropAbilityEssenceAt(at, result.tier, result.count, Math.random, contextZone); break;
-    }
-  }
+  private mintLootResult(at: Vec2, result: LootResult, owed = false, from?: string | MemoryProvenance, contextZone?: Readonly<ZoneDef>): void { return sceneMintLootResult(this.nativeSceneLootHost(),at,result,owed,from,contextZone); }
 
   private rollDrops(actor: Actor): void {
     // THE SPOILS LAW: sealed ground mints nothing — no tables, no gem
@@ -53355,25 +53110,7 @@ export class World {
    *  permanent allocation), never to one out of reach. Orbs are never owned, and neither is
    *  quest cargo (the world's quest objects: any hand may carry them). Inert off a hosted
    *  world (no rule hook): THE SOLO INVARIANT. */
-  ownSpoils(d0: number, seat: Seat | null | undefined, at?: Vec2): void {
-    if (!this.dropRuleOf || !seat || seat.keeper || seat.merc || this.drops.length <= d0) return;
-    const rule = this.dropRuleOf(seat.id);
-    if (!rule || rule.rule === 'free') return;
-    let owner = seat.id;
-    if (at && rule.allocation === 'rotate' && rule.deal) {
-      const r = COOP_SCALING.shareRadius;
-      const inReach = this.seats.filter(s => !s.keeper && !s.merc && !s.actor.dead && this.sameParty(seat, s)
-        && (r <= 0 || dist(at, this.seatHero(s).pos) <= r)).map(s => s.id); // SOVEREIGNTY: census (the deal is apportioned by reach, never a touch)
-      owner = rule.deal(inReach) ?? owner;
-    }
-    const freeAt = rule.rule === 'timed' ? this.time + Math.max(0, rule.freeAfterSec) : undefined;
-    for (let i = d0; i < this.drops.length; i++) {
-      const d = this.drops[i];
-      if (d.owner !== undefined || (d.item.kind === 'gear' && d.item.item.questId)) continue;
-      d.owner = owner;
-      if (freeAt !== undefined) d.freeAt = freeAt;
-    }
-  }
+  ownSpoils(d0: number, seat: Seat | null | undefined, at?: Vec2): void { return sceneOwnSpoils(this.nativeSceneLootHost(),d0,seat,at); }
 
   /** THE TOUCH LAW (card 27): the seat that alone may take this drop now, else undefined
    *  (anyone's). A drop is held while it wears an owner who still stands on the hosted world
@@ -53408,10 +53145,7 @@ export class World {
   /** The clamp options a spoils helper passes: the context's story view
    *  (ClampOpts.tier) when a story is witnessed, else the legacy base-grid
    *  clamp — byte-identical on the ground and in flat zones. */
-  private spoilClamp(): ClampOpts | undefined {
-    const s = this.spoilStory;
-    return s !== undefined && s >= 1 ? { tier: s } : undefined;
-  }
+  private spoilClamp(): ClampOpts | undefined { return sceneSpoilClamp(this.nativeSceneLootHost()); }
 
   /** THE one orb spawn path: registry lookup, world cap, clamp, scatter.
    *  Every shed site — harvest hits, kill sheds, hurt sheds, siphons,
@@ -53423,22 +53157,7 @@ export class World {
     /** THE SPOILS STORY: the shedder's story (a struck body's, a breakable's
      *  own tier) — absent, the sweep reads the floor under the orb. */
     tier?: number;
-  }): void {
-    const def = ORB_DEFS[kind];
-    if (!def || this.orbs.length >= ORB_CAP) return;
-    const s = opts?.scatter ?? 0;
-    const p = vec(at.x + (s ? rand(-s, s) : 0), at.y + (s ? rand(-s, s) : 0));
-    const story = opts?.tier ?? this.spoilStory; // THE SPOILS STORY: the shedder's word, else the context's
-    this.orbs.push({
-      pos: opts?.clamp === false ? p
-        : this.clampPos(p, 8, undefined, story !== undefined && story >= 1 ? { tier: story } : undefined),
-      kind, amount: opts?.amount ?? orbAmount(def, this.lootLevelAt(at)),
-      bob: rand(0, Math.PI * 2), life: opts?.life ?? def.life ?? 12,
-      homeTo: opts?.homeTo,
-      tier: story,
-    });
-    SIM_TAP.current?.onOrbShed?.(kind);
-  }
+  }): void { return sceneShedOrb(this.nativeSceneLootHost(),kind,at,opts); }
 
   /** Pour a scooped orb into an actor: the def says what it carries —
    *  a resource restore, banked charges (CHARGE_DEFS personalities apply),
@@ -54078,10 +53797,7 @@ export class World {
   }
 
   /** Does any ledger here hold a quest on this ground (an objective's latch, an escape's credit)? */
-  private questOnZone(zoneId: string): boolean {
-    if (!this.localSeat.keeper) return this.activeQuests.some(e => e.zoneId === zoneId);
-    return this.seats.some(s => !s.keeper && !s.merc && this.questLedgerOf(s).active.some(e => e.zoneId === zoneId));
-  }
+  private questOnZone(zoneId: string): boolean { return sceneQuestOnZone(this.nativeSceneObjectiveCompletionHost(),zoneId); }
 
   /** THE NEAR LAW for a deed on a hosted world: the seats it credits are the
    *  standing player seats within COOP_SCALING.shareRadius of one of its places
@@ -54207,15 +53923,7 @@ export class World {
    *  rifts, pyres, digs), its quarry's body, else the field's last counted fall
    *  (stamped on a hosted world by the 'objective_fall_place' kill rule). Empty
    *  when no place is known. */
-  private objectivePlaces(): Vec2[] {
-    const out: Vec2[] = [];
-    for (const f of [...this.spires, ...this.rifts, ...this.pyres, ...this.digs]) out.push(f.pos);
-    const o = this.zone.objective;
-    if (o.kind === 'boss') for (const a of this.actors) if (a.defId === o.id) out.push(a.pos);
-    const fall = this.objectiveFallAt;
-    if (!out.length && fall?.zone === this.zone.id) out.push(fall.pos);
-    return out;
-  }
+  private objectivePlaces(): Vec2[] { return sceneObjectivePlaces(this.nativeSceneObjectiveCompletionHost()); }
   /** The field's last counted fall on a hosted world, by zone (XP BY PLACE's fallback). */
   private objectiveFallAt: { zone: string; pos: Vec2 } | null = null;
 
@@ -57726,43 +57434,52 @@ export class World {
    *  normal REPEATABLE boss (the Unmade's mode). The reusable seam for future ubers. */
   private uberDefeated(o: ObjectiveSpec, zoneId: string): boolean { return nativeUberDefeated(this.nativeSceneArrivalHost(),o,zoneId); }
 
-  private completeObjective(label: string): void {
-    if (this.objectiveDone) return;
-    const visibleHold = ['beacon', 'rifts', 'pyres', 'unearth', 'procession'].includes(this.zone.objective.kind);
-    this.objectiveDone = true; // per-load latch: unseals this zone's exits
-    // ONE-SHOT UBER: record an account-scoped kill so the boss is forever dead.
-    // Meta-progression — a sealed (Undying) character's trophy is its own; the
-    // account never learns of it (and the uber re-spawns for mortal successors).
-    const obj = this.zone.objective;
-    if (obj.kind === 'boss' && obj.uber?.scope === 'account' && this.metaProgressionActive()) {
-      this.account.ledger[obj.uber.key ?? `uber:${obj.id}`] = 1;
-      saveAccountDurable(this.account); // a forever-dead uber must survive a permadeath wipe
-    }
-    // The QUEST hook is INDEPENDENT of the one-time bounty latch: an accepted quest
-    // zone advances the chain + pays its reward on clear even if the generic bounty
-    // was already claimed (onQuestZoneCleared is idempotent — it removes the entry).
-    // Quest state never survives a resume (serializeCharacter strips quest_ ids from
-    // completedObjectives; activeQuests/completedQuests are per-run, re-offered from
-    // the account ledger), so this guards only a WITHIN-run re-clear of an
-    // already-cleared quest zone (the 'already cleared' branch below).
-    const isQuestZone = this.questOnZone(this.zone.id); // THE CHARACTER'S QUESTS: any ledger here holding this ground
-    // One-time REWARD: a re-cleared zone pays no bounty (it still unseals above so
-    // the player can leave). First clear pays the bounty.
-    if (this.completedObjectives.has(this.zone.id)) {
-      if (!visibleHold) this.text(vec(this.player.pos.x, this.player.pos.y - 50),
-        `${label} (already cleared)`, '#9a9a9a', 16);
-      else if (obj.kind === 'procession') rand(-10, 10); // retired native procession completion floater
-      if (isQuestZone) this.onQuestZoneFieldCleared(this.zone.id);
-      return;
-    }
-    this.completedObjectives.add(this.zone.id);
-    const bonus = objectiveRewardXp(this.zone.level);
-    this.grantXp(bonus, this.localSeat.keeper ? this.objectivePlaces() : undefined); // XP BY PLACE: where the objective was done (hosted worlds)
-    if (!visibleHold) this.text(vec(this.player.pos.x, this.player.pos.y - 50),
-      `${label} +${bonus} xp`, '#ffd700', 18);
-    else if (obj.kind === 'procession') rand(-10, 10); // retired native procession completion floater
-    if (isQuestZone) this.onQuestZoneFieldCleared(this.zone.id);
+  private nativeSceneObjectiveCompletionView?:NativeSceneObjectiveCompletionHost;
+  private nativeSceneObjectiveCompletionHost():NativeSceneObjectiveCompletionHost {
+    if(this.nativeSceneObjectiveCompletionView)return this.nativeSceneObjectiveCompletionView;
+    const world=this;
+    const host:NativeSceneObjectiveCompletionHost={
+      get account(){return world.account;},
+      get actingSeat(){return world.actingSeat;},
+      get activeQuests(){return world.activeQuests;},
+      get actors(){return world.actors;},
+      get completedObjectives(){return world.completedObjectives;},
+      get digs(){return world.digs;},
+      get flashes(){return world.flashes;},
+      get ledger(){return world.ledger;},
+      get localSeat(){return world.localSeat;},
+      get mireilleSeatBuff(){return world.mireilleSeatBuff;},
+      get mireilleXpBuff(){return world.mireilleXpBuff;},
+      get objectiveDone(){return world.objectiveDone;},set objectiveDone(value){world.objectiveDone=value;},
+      get objectiveFallAt(){return world.objectiveFallAt;},
+      get player(){return world.player;},
+      get pyres(){return world.pyres;},
+      get rifts(){return world.rifts;},
+      get seats(){return world.seats;},
+      get spires(){return world.spires;},
+      get texts(){return world.texts;},
+      get time(){return world.time;},
+      get zone(){return world.zone;},
+      get accountSeat(){const method=world.accountSeat;return (...args:Parameters<NativeSceneObjectiveCompletionHost['accountSeat']>)=>method.apply(world,args);},
+      get grantSeatXp(){const method=world.grantSeatXp;return (...args:Parameters<NativeSceneObjectiveCompletionHost['grantSeatXp']>)=>method.apply(world,args);},
+      get grantXp(){const method=world.grantXp;return (...args:Parameters<NativeSceneObjectiveCompletionHost['grantXp']>)=>method.apply(world,args);},
+      get markMetaDirty(){const method=world.markMetaDirty;return (...args:Parameters<NativeSceneObjectiveCompletionHost['markMetaDirty']>)=>method.apply(world,args);},
+      get metaProgressionActive(){const method=world.metaProgressionActive;return (...args:Parameters<NativeSceneObjectiveCompletionHost['metaProgressionActive']>)=>method.apply(world,args);},
+      get objectivePlaces(){const method=world.objectivePlaces;return (...args:Parameters<NativeSceneObjectiveCompletionHost['objectivePlaces']>)=>method.apply(world,args);},
+      get onQuestZoneFieldCleared(){const method=world.onQuestZoneFieldCleared;return (...args:Parameters<NativeSceneObjectiveCompletionHost['onQuestZoneFieldCleared']>)=>method.apply(world,args);},
+      get questLedgerOf(){const method=world.questLedgerOf;return (...args:Parameters<NativeSceneObjectiveCompletionHost['questLedgerOf']>)=>method.apply(world,args);},
+      get questOnZone(){const method=world.questOnZone;return (...args:Parameters<NativeSceneObjectiveCompletionHost['questOnZone']>)=>method.apply(world,args);},
+      get recalcSeat(){const method=world.recalcSeat;return (...args:Parameters<NativeSceneObjectiveCompletionHost['recalcSeat']>)=>method.apply(world,args);},
+      get resyncMercenary(){const method=world.resyncMercenary;return (...args:Parameters<NativeSceneObjectiveCompletionHost['resyncMercenary']>)=>method.apply(world,args);},
+      get sameParty(){const method=world.sameParty;return (...args:Parameters<NativeSceneObjectiveCompletionHost['sameParty']>)=>method.apply(world,args);},
+      get seatHero(){const method=world.seatHero;return (...args:Parameters<NativeSceneObjectiveCompletionHost['seatHero']>)=>method.apply(world,args);},
+      get text(){const method=world.text;return (...args:Parameters<NativeSceneObjectiveCompletionHost['text']>)=>method.apply(world,args);},
+    };
+    Object.defineProperty(this,'nativeSceneObjectiveCompletionView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
   }
+
+  private completeObjective(label: string): void { return sceneCompleteObjective(this.nativeSceneObjectiveCompletionHost(),label); }
 
   /** Advance whatever the zone is asking of the player. */
   private updateObjective(dt: number): void {
@@ -59085,13 +58802,7 @@ export class World {
     if (fx) this.flashes.push({ pos: vec(at.x, at.y), radius, color, life: 0.22, maxLife: 0.22, fx, ...(facing === undefined ? {} : { facing }) });
   }
 
-  text(at: Vec2, text: string, color: string, size = 13, kind?: string, life = 1, yieldToCombat = false, dropUid?: number): void {
-    this.texts.push({
-      pos: vec(at.x + rand(-10, 10), at.y - 16), text, color,
-      life, maxLife: life, size, kind, ...(yieldToCombat ? { yieldToCombat: true } : {}),
-      ...(dropUid === undefined ? {} : { dropUid }),
-    });
-  }
+  text(at: Vec2, text: string, color: string, size = 13, kind?: string, life = 1, yieldToCombat = false, dropUid?: number): void { return sceneText(this.nativeSceneObjectiveCompletionHost(),at,text,color,size,kind,life,yieldToCombat,dropUid); }
 
   /** THE WIRE'S EYES (docs/engine/shard.md): a combat number (a damage or heal float) minted
    *  with its CREDITED seat, the striker's or healer's owner-chain root (THE KILLER'S DUE's

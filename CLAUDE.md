@@ -1,3 +1,16 @@
+NativeSceneLoot and NativeSceneObjectiveCompletion now share the original reward,
+XP and completion mutations with retained area owners. Reuse the actual physical
+drop store and settlement rolls; preserve native allocation, quest scope, random
+consumption, local completion latches/text/flashes and campaign progression.
+Assembly routes puzzle/opening/theater rewards through its own loot sink.
+Progression rebuild and quest field payout remain required area-aware services;
+never bind a neighboring area's active World as their substitute. Verify
+nativesceneloot, nativesceneobjectivecompletion, nativeareasourcesession, full
+birth, affected reward/party/persistence probes, all types, generation and sim.
+See docs/worldgen/native-area-rewards.md for exact evidence and remaining work.
+The objective watcher, combat, publication and persistence still precede full
+activation and the bounded/open navigable-place pass.
+
 NativeScenePuzzles shares the five original ongoing puzzle mutations with a
 retained area controller. Keep actual environment runs/queue, scene census,
 geometry, live campaign time and local resonance caster. Matching puzzle IDs

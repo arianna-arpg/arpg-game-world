@@ -184,7 +184,7 @@ function verifySources(){
   const heldTime=w.timeflow;assert.ok(heldTime.holdSurface('trace'));assert.equal(heldTime.worldScale(),0);
   const traced=[{held:true}];w.traceRuns=traced;
   const serviceRaw=freshAssemblyInput(w,sibling,raw.campaign);
-  class DynamicTheater {mode:any=w.geyserMode;get geyserMode(){return this.mode;}notice(){assert.equal(this,provider);}imminentThreatTo=serviceRaw.services.theater.imminentThreatTo;plantDressAt=serviceRaw.services.theater.plantDressAt;dropGemAt=serviceRaw.services.theater.dropGemAt;moveActor=serviceRaw.services.theater.moveActor;slipAway=serviceRaw.services.theater.slipAway;}
+  class DynamicTheater {mode:any=w.geyserMode;get geyserMode(){return this.mode;}notice(){assert.equal(this,provider);}imminentThreatTo=serviceRaw.services.theater.imminentThreatTo;plantDressAt=serviceRaw.services.theater.plantDressAt;moveActor=serviceRaw.services.theater.moveActor;slipAway=serviceRaw.services.theater.slipAway;}
   const provider=new DynamicTheater();serviceRaw.services.theater=provider;
   const servicesOwner=new NativeAreaSceneAssembly(serviceRaw);servicesOwner.input.occurrences.traceAbortAll();assert.equal(w.traceRuns,traced);assert.equal(traced.length,1);assert.equal(heldTime.worldScale(),0);
   assert.ok(servicesOwner.timeflow.holdSurface('trace'));servicesOwner.input.occurrences.input.services.traceRuns=[{held:true}] as any;
@@ -199,13 +199,13 @@ function verifySources(){
   assert.throws(()=>failed.prepare(failSession,failTicket,{x:sibling.size.w/2,y:sibling.size.h/2},true),/after real layout/);assert.equal(failed.phase,'failed');
   assert.throws(()=>failed.prepare(failSession,failTicket,{x:0,y:0},true),/already started/);assert.throws(()=>failed.birth(),/one prepared/);
   // NativeScenePuzzles: explicitly pinned native rows through two actual complete
-  // births. This tests retained controllers, not natural puzzle frequency or
-  // production loot/combat effects (the providers below deliberately record).
+  // births. This tests retained controllers and actual NativeSceneLoot delivery,
+  // not natural puzzle frequency. Only combat casts below deliberately record.
   const puzzleDefinitions=[z,sibling].map(def=>({def,puzzles:def.puzzles,objective:def.objective}));
   for(const def of [z,sibling]){def.puzzles=[{id:'ember_ring',chance:1}];def.objective={kind:'none'};}
   const puzzleEffectsA:unknown[][]=[],puzzleEffectsB:unknown[][]=[];
   const puzzleInput=(def:typeof z,calls:unknown[][])=>{const input=freshAssemblyInput(w,def,raw.campaign);
-   input.services.puzzleEffects={dropGemAt(...args){calls.push(['gem',...args]);},mintLootResult(...args){calls.push(['loot',...args]);},executeSkill(...args){calls.push(['cast',...args]);return true;}};return input;};
+   input.services.puzzleEffects={executeSkill(...args){calls.push(['cast',...args]);return true;}};return input;};
   const a=new NativeAreaSceneAssembly(puzzleInput(z,puzzleEffectsA)),b=new NativeAreaSceneAssembly(puzzleInput(sibling,puzzleEffectsB));
   const boot=(area:NativeAreaSceneAssembly)=>{const source=area.sourceSession(mapping),id=area.input.scene.zone.id,place=area.prepare(source,source.issue(id),{x:area.input.geometry.arena.w/2,y:area.input.geometry.arena.h/2},false);area.input.scene.player.pos=area.input.geometry.clampPos({...place.spawnAt??place.entry},area.input.scene.player.radius);area.birth();};
   boot(a);const aBodies=[...a.input.scene.actors],aDoodads=a.input.geometry.doodads,aWalk=a.input.geometry.walk,aControllers=a.input.registry.input.state;
@@ -218,12 +218,29 @@ function verifySources(){
   assert.throws(()=>a.puzzleController.completePuzzle(puzzleB),/Foreign native puzzle run/);
   const beforeB={hums:[...puzzleB.hums],state:JSON.stringify(puzzleB.state),flashes:b.input.geometry.flashes.length};
   const doneObjective=a.input.objectives.objectiveDone;
+  const dropsBeforeA=a.input.physical.input.state.drops.length,dropsBeforeB=[...b.input.physical.input.state.drops],worldDrops=[...w.drops];
   for(const node of puzzleA.nodes)a.puzzleController.puzzleStruck(node,w.player,true);
   a.puzzleController.updatePuzzles(.01);
   assert.equal(puzzleA.done,true,'actual ember kind completes through local deferred callback');assert.equal(puzzleB.done,false);
   assert.deepEqual({hums:[...puzzleB.hums],state:JSON.stringify(puzzleB.state),flashes:b.input.geometry.flashes.length},beforeB);
-  assert.ok(puzzleEffectsA.length>0);assert.equal(puzzleEffectsB.length,0);
+  assert.ok(a.input.physical.input.state.drops.length>dropsBeforeA,'native ember reward table mints into the actual local physical owner');
+  assert.deepEqual(b.input.physical.input.state.drops,dropsBeforeB);assert.deepEqual(w.drops,worldDrops);
+  assert.equal(puzzleEffectsA.length,0);assert.equal(puzzleEffectsB.length,0);
   assert.equal(a.input.objectives.objectiveDone,doneObjective,'the separate objective watcher has not run');
+  // NativeSceneObjectiveCompletion: actual native XP and ledgers, below a
+  // level threshold so the fixture's unavailable progression owner is not invoked.
+  const xpNeeded=w.meta.xpNeeded;w.meta.xpNeeded=1e9;
+  const beforeXp=w.meta.xp,otherTexts=[...b.objectiveController.input.state.texts],worldTexts=[...w.texts];
+  const flashesB=[...b.input.geometry.flashes];a.objectiveController.completeObjective('Area A');
+  assert.ok(w.meta.xp>beforeXp);assert.equal(a.input.objectives.objectiveDone,true);
+  assert.equal(b.input.objectives.objectiveDone,false);assert.ok(raw.campaign.completedObjectives.has(z.id));
+  assert.deepEqual(b.objectiveController.input.state.texts,otherTexts);assert.deepEqual(w.texts,worldTexts);
+  assert.deepEqual(b.input.geometry.flashes,flashesB);
+  const paid=w.meta.xp,textCount=a.objectiveController.input.state.texts.length;
+  a.objectiveController.completeObjective('Area A again');assert.equal(w.meta.xp,paid);assert.equal(a.objectiveController.input.state.texts.length,textCount);
+  a.input.geometry.text({x:11,y:12},'Local ground message','#fff');assert.equal(a.objectiveController.input.state.texts.at(-1)?.text,'Local ground message');assert.deepEqual(w.texts,worldTexts);
+  b.objectiveController.completeObjective('Area B');assert.ok(w.meta.xp>paid);assert.equal(b.input.objectives.objectiveDone,true);
+  assert.ok(raw.campaign.completedObjectives.has(sibling.id));w.meta.xpNeeded=xpNeeded;
   for(const row of puzzleDefinitions){row.def.puzzles=row.puzzles;row.def.objective=row.objective;}
   const partial=new NativeAreaSceneAssembly(freshAssemblyInput(w,z,raw.campaign)),ps=partial.sourceSession(mapping);partial.prepare(ps,ps.issue(z.id),{x:z.size.w/2,y:z.size.h/2},false);
   const yard=partial.input.physical.syncTrainingYard;partial.input.physical.syncTrainingYard=function(...args){yard.apply(this,args);throw Error('after actual native bodies');};
