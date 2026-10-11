@@ -45,9 +45,17 @@ try {
   const profile=(excluded:ReadonlySet<object>)=>{
     let visited=0,walkVisits=0,streamVisits=0,generatorVisits=0,sampleEntryVisits=0,sampleDescriptorReads=0;
     const sampleWrappers=new Set((m.stream as unknown as {samples:Map<string,object>}).samples.values());
-    const visitCounts=new Map<string,number>();
-    Object.getOwnPropertyDescriptors=((value:object)=>{if(sampleWrappers.has(value))sampleDescriptorReads++;return descriptors(value);}) as typeof Object.getOwnPropertyDescriptors;
-    Object.entries=((value:object)=>{visited++;if(sampleWrappers.has(value))sampleEntryVisits++;if(value===walk)walkVisits++;if(value===m.stream)streamVisits++;if(value===m.generator)generatorVisits++;
+    const visitCounts=new Map<string,number>(),descriptorDictionaries=new WeakSet<object>();
+    // Count each source inspection once, independently of whether a scanner
+    // enumerates its temporary descriptor dictionary with entries or keys.
+    // A later ordinary source enumeration remains a separate reflective read.
+    Object.getOwnPropertyDescriptors=((value:object)=>{
+      visited++;visitCounts.set('descriptor inspection',(visitCounts.get('descriptor inspection')??0)+1);
+      if(sampleWrappers.has(value))sampleDescriptorReads++;
+      const result=descriptors(value);descriptorDictionaries.add(result);return result;
+    }) as typeof Object.getOwnPropertyDescriptors;
+    Object.entries=((value:object)=>{if(descriptorDictionaries.has(value))return entries(value);
+      visited++;if(sampleWrappers.has(value))sampleEntryVisits++;if(value===walk)walkVisits++;if(value===m.stream)streamVisits++;if(value===m.generator)generatorVisits++;
       const name=value?.constructor?.name??'null';visitCounts.set(name,(visitCounts.get(name)??0)+1);return entries(value);}) as typeof Object.entries;
     let pins:Set<Actor>;const before=performance.now();
     try{pins=massDormancyPins(w,owned,excluded);}finally{Object.entries=entries;Object.getOwnPropertyDescriptors=descriptors;}
@@ -69,7 +77,7 @@ try {
   assert.equal(w.massRuntime,m);assert.equal(w.walk,m.walk);
   console.log('PASS actual warmed native-world pin traversal includes derived MassWalk/stream/generator caches; unknown controllers and exact actor resources stay intact');
   for(const[label,r]of [['cold-all',all],['warm-all',warm],['diagnostic-excluded-walk',withoutWalk]] as const){const{pins,...stats}=r;console.log(JSON.stringify({label,pinIds:ids(pins),...stats}));}
-  console.log(JSON.stringify({terrain:m.stream.stats,classicOwned:owned.size,native:m.nativeFeatures?.stats,limit:'Diagnostic timings include Object.entries counting; use operation counts and browser dormancy owner timing, not these as a release benchmark.'}));
+  console.log(JSON.stringify({terrain:m.stream.stats,classicOwned:owned.size,native:m.nativeFeatures?.stats,limit:'Diagnostic timings include source-reflection counters; use operation counts and browser dormancy owner timing, not these as a release benchmark.'}));
   // A blanket walk exclusion is UNSAFE: arbitrary live references can be
   // attached to the real walk, including frozen containers and dynamic getters.
   let getterActor=bodies[5],getterCalls=0;

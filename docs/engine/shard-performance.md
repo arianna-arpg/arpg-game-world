@@ -1180,3 +1180,532 @@ The reproducible reader and output are
 `.claude/ownership.perf5-spike-attribution.local.{cjs,json}`. The fixed-work
 improvements justify this narrow checkpoint; persistent cold queries and mixed
 live tails remain unresolved rather than being recast as flawless play.
+
+## Sixth pass: cold terrain and dependency certification
+
+The fifth-pass checkpoint `a6f62a2d` is the control. The initial candidate targets three
+operations visible in the remaining cold spikes, without changing generated
+content, actor scheduling, encounter density, cache capacities or tick gates.
+
+- Dependency certification reuses `freezeData`'s existing proof of recursively
+  frozen own data descriptors. Proven objects can expose their enumerable values
+  without constructing descriptor records again. Every numeric reference key
+  is still checked, including an ID that becomes owned later. Arbitrary frozen
+  objects retain descriptor inspection; accessors, cycles, depth/work limits,
+  mutable containers and unknown classes retain the conservative fallback.
+- Regional terrain paint skips geometry sampling for a cell already set to dry
+  floor, because that value wins every later merge. Both internal samplers are
+  pure geometry, with random draws outside the raster loops. Clipped integer
+  bounds are computed once per paint. Complete rasters, nested content, random
+  cursors and subsequent processing remain unchanged.
+- Generation lattice calculations evaluate x and then y directly, removing a
+  per-query closure and intermediate tuples. Full signed coordinates, integer
+  arithmetic, validation, field-read order and error behavior remain unchanged.
+
+### Sixth-pass independent equivalence and work measurements
+
+`worldmass_dormancywork` embeds the exact `a6f62a2d` scanner declarations
+(SHA-256 `93bbe3995f28790fe91517665e765243300d29408ee484c2000758ee0845c783`).
+Its 23 comparisons cover ordered pins, future numeric owners, named array
+references, getter reads, hidden keys, cycles, weak/mutable containers and
+depth/work fallbacks. A proven synthetic graph takes 514→1 descriptor calls.
+The populated-world course retains 102 actors, 75 owned identities, 32,768
+terrain samples across 25 pages, and ordered pins `[46,47,48]`. Actor/resource/
+sleep/terrain state is unchanged before and after timing.
+
+In that real fixture, cold descriptor calls fall 169,788→131,409 (22.6%). Four
+alternating rounds, three fresh-certificate scans per side per round, give
+median cold totals 1,899.87→1,752.82 ms (7.7% lower; three of four rounds favor
+the candidate). Absolute totals drift upward across rounds. Warm totals over
+25 scans are 1,264.95→1,242.82 ms (1.7% lower; only two of four improve), which
+is treated as unchanged. The scanners use the same transform and fixed world;
+this isolates certification, not a live dormancy or frame-tail measurement.
+Raw rounds and exact state digests are
+`.claude/ownership.dormancy6-bench.local.{json,log}`.
+
+`worldmass_grammarwork` embeds the complete archived grammar module (SHA-256
+`04445787e5a25da3ea054264b88c87b5b097d3f4aa46b3dc2883c8e9f531268a`).
+Five fixtures / 803 comparisons cover all 12 court families, historical/current
+policies, full shape equality, per-stream RNG draws/cursors, immutable inputs,
+refusals, errors and missing motifs. It observes 180 generated shapes, 15
+refusals and one throw. Both independent critics verified the archive and
+the terminal-floor/pure-sampler argument.
+
+Eight-seed work counts fall 282,315→212,759 for historical circles (24.6%),
+282,315→222,771 for historical morphology (21.1%), and 310,496→241,424 for
+current weave (22.2%). Four alternating timing rounds use the same plain ES2022
+TypeScript transform for both full kernels; the actual hosted import is an
+independent correctness target. Median totals are 76.69→76.30, 119.43→106.97
+and 271.40→267.51 ms respectively. Current-weave paired totals range from a
+9.1% reduction to a 21.3% increase. Its median per-round maximum is
+47.71→44.42 ms and worst observed query 50.31→50.17 ms. These noisy times do
+not establish a repeatable live improvement; the exact reduction in geometry
+calls is the stronger evidence. Raw rounds and summary are
+`.claude/ownership.perf6-grammarwork.local.log` and
+`.claude/ownership.perf6-grammarwork-summary.local.json`.
+
+`worldmass_latticework` retains the original lattice function with SHA-256
+`016c04500a04442b3fd5d95ca5e68f2afd24cde368be51722e47455e0a1dd809`.
+Its 6,803 comparisons cover signed-64 limits, fractional and large integer
+inputs, cache eviction, changing/throwing getters, validation interleaving,
+exact errors and minified output. The cell cache and validation helpers are
+unchanged and shared; the lattice function itself is independently archived.
+
+A first module-level helper variant was rejected after minified nearby work
+slowed 9.4% (three of four pairs). The final explicit-axis version uses four
+alternating rounds of 262,144 queries per workload/runtime, after 8,192 warm-up
+queries. All 32 checksums match. Actual hosted TypeScript median times fall
+348.12→149.37 ms nearby (57.1%) and 1,407.40→1,126.79 ms with distant cache
+churn (19.9%); all eight pairs favor the change. Minified medians fall
+171.17→162.98 ms (4.8%) and 1,242.04→1,219.94 ms (1.8%), each favoring the
+change in three of four pairs. The bundled effects are modest and measured in
+Node V8, not browser frames. Final and rejected raw rounds, sources and summaries
+are `.claude/ownership.perf6-lattice-{final,rejected}.local.*`.
+
+### Sixth-pass live comparison protocol
+
+Repeated live comparisons run one host and its six real clients at a time,
+in predeclared control/candidate/candidate/control/control/candidate order.
+Each engine gets three 60-second windows with seed `0x00ddba11`, 60 Hz,
+rove zero, diagnostics on and profiler off. Early spread is 3,500 with the
+unchanged join/party/settle warm-up. The clustered course uses spread zero
+and `--window-after-host 60`, a measurement option that keeps recording warm
+ticks until that individual host has run for at least 60 seconds. Forced GC
+and its original settling period still precede the measured window.
+
+The same measurement harness is copied into the control checkout; all control
+engine code stays at `a6f62a2d`. Its fleet watchdog includes the selected warm
+period. Reports record actual host age at window start, every warm-up maximum,
+tick/input counts, nearby populations, machine load and all unchanged gates.
+The local runner rejects abnormal exits and stale reports. No task correctness,
+client, benchmark or profile jobs overlap these runs. Other workstation activity
+is uncontrolled. Equal elapsed windows and a common seed do not mean identical
+simulation work: inputs, joins, deaths and target choices depend on wall time
+and delivered snapshots. Repeated controls expose some of that variability.
+The raw runner and combined receipts are
+`.claude/ownership.perf6-serial.local.cjs` and
+`.claude/perf6-{early,cluster}-serial.local.json`.
+
+### Sixth-pass initial spread results and joining investigation
+
+The initial six unprofiled spread runs completed in the declared order. Values
+below are milliseconds except drop percentage; each pair uses repeat numbers,
+not simultaneous execution. Other machine activity remained uncontrolled.
+
+| Repeat | Engine | p95 | p99 | Window maximum | Joining maximum | Dropped ticks |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | Control | 283.58 | 477.99 | 1694.70 | 1202.70 | 88.13% |
+| 1 | Candidate | 260.71 | 487.87 | 1257.31 | 1336.49 | 88.42% |
+| 2 | Control | 337.22 | 638.02 | 1181.44 | 1695.20 | 90.40% |
+| 2 | Candidate | 210.34 | 338.36 | 1064.28 | 2221.76 | 85.30% |
+| 3 | Control | 345.78 | 556.53 | 1335.13 | 1696.93 | 90.30% |
+| 3 | Candidate | 329.27 | 791.04 | 1131.65 | 2725.41 | 90.35% |
+
+Window maximum improves in all three pairs, with median 1335.13→1131.65 ms
+(15.2%). Median p95 falls 337.22→260.71 ms and p99 556.53→487.87 ms, but
+the first and third individual p99 comparisons regress. More importantly,
+joining maximum regresses in every pair: 11.1%, 31.1% and 60.6%. The median
+maximum across joining and measurement rises 1695.20→2221.76 ms (31.1%).
+This is not an overall stall improvement. All six runs fail the unchanged p95
+and dropped-tick gates. Repeat 1 on both engines also fails heap growth; repeat
+3 on both engines fails the resume course because the selected bot never
+stood to be cut. Errors and faults remain zero and the party gate passes.
+
+Recorded machine CPU (67–87%) covers only the measurement window and cannot
+explain joining. Joining GC overlaps are only 12–38 ms. Candidate host ages at
+window start are 7.09/8.16/10.59 s versus 6.98/7.22/7.96 s for control, so
+the windows do not enclose identical cold work. All unfavorable receipts are
+retained in `.claude/perf6-early-serial.local.json`.
+
+Separate full-process diagnostic runs capture joining as well as measurement.
+The candidate's 1767.73 ms joining tick includes 1125.18 ms in scenery sync,
+139.66 ms in geographic preparation, 169.67 ms surveying five foci and
+58.72 ms in dormancy. Control's 1866.02 ms joining tick includes 1094.79 ms
+in scenery sync, 121.96 ms preparation, 181.77 ms surveying four foci and
+40.21 ms dormancy. These identify cold scenery/terrain as the dominant joining
+work; different focus counts prevent an exact cost comparison. They do not
+establish dependency scanning as the cause of the initial joining regressions.
+Canonical serialization's recursive visitor accounts for roughly 287/295 ms
+self time in those candidate/control ticks. Dependency certification remains
+a later-window hotspot (approximately 195/147 ms self time on different states).
+
+The scratch wrappers capture phase timings and main-process CPU samples from
+before host startup to after measurement. They leave bots/workers unprofiled.
+Inclusive phase/sample costs overlap and must never be added. Function keys
+retain source columns, because the hosted TypeScript transform puts many
+different functions on line 1. Instrumentation changes absolute timings; these
+runs are attribution evidence, not substitutes for unprofiled comparisons.
+Both diagnostic runs still fail p95, dropped ticks and heap gates. Raw files in
+each checkout are `.claude/perf6-profile.local.{json,log}`,
+`.claude/perf6-spikes.local.cpuprofile`, `.claude/perf6-spike-trace.local.json`
+and `.claude/ownership.perf6-spike-attribution.local.{cjs,json}`.
+
+The six initial clustered runs also completed, using the same frozen initial
+candidate. Their medians are:
+
+| Metric | Control | Initial candidate |
+| --- | ---: | ---: |
+| Window p95 | 34.12 ms | 23.10 ms |
+| Window p99 | 87.01 ms | 81.56 ms |
+| Window maximum | 279.28 ms | 111.39 ms |
+| Joining/window maximum | 439.74 ms | 358.46 ms |
+| Dropped ticks | 6.69% | 1.31% |
+| Simulation steps/s | 55.67 | 59.01 |
+| Nearby population | 15.61 | 15.18 |
+
+Window maxima improve in all three clustered pairs, and joining maxima also
+improve. All six still fail p95; control repeats 1 and 3 also fail dropped
+ticks. All other gates pass, with zero errors/faults. These are results for the
+initial implementation containing the subsequently rejected proxy shortcut.
+They cannot establish the performance of the corrected implementation. All
+individual rows, machine loads and counts are in
+`.claude/perf6-cluster-serial.local.json` and `.claude/perf6-results.local.json`.
+
+### Sixth-pass initial correctness verification
+
+All four type checks, the production build, roster census and simulation smoke
+(five scenarios / 25 episodes) pass. Generation QA passes 2,607 cases with four
+existing overlap warnings and four elapsed-time warnings under concurrent
+correctness work. The build retains its existing large-chunk warning.
+
+Twenty-eight of 29 focused probes pass on their first run: all 22 fifth-pass
+probes, the three new independent work probes, regionalweave, regionallayers
+and regionalextents. `worldmass_terrainvariation` fails its historical hash
+assertion at line 108: actual `f24109327cf6e53f`, expected `4225203d67bebfb4`.
+The isolated `a6f62a2d` control fails identically, confirming the earlier recorded
+baseline failure. No oracle, assertion, timing limit or content is altered to
+make it pass. Other historical failures recorded above were not rerun in this
+focused set. Type/build/generation/simulation and per-probe receipts are
+`.claude/perf6-final-*.local.*`; the control hash receipt is
+`.claude/perf6-baseline-terrainvariation.local.log` in the control checkout.
+
+Three critics reviewed the scoped changes. They verified archive provenance,
+getter/error ordering, conservative dependency handling, the pure raster
+samplers and identical candidate/control timing harnesses. The first lattice
+variant's bundled regression was rejected, and two harness robustness findings
+(watchdog allowance and stale/abnormal report refusal) were corrected before
+live runs. No remaining correctness blocker was identified in that initial review.
+A later adversarial proxy review found the dependency shortcut invalid; see below.
+
+The production client passes the 1,102-frame / 3,213-unit walking route, eight
+distant arrivals, native dormancy, cold Continue and saved-survivor return.
+Nearby counts are 43/59/25/19/10/0/11/13 (mean 22.5). Continue retains all
+253 original identities and admits 21 more, reaching 274, while sleepers rise
+160→179. The fang priest returns at exactly 239.4 life with no readiness waits.
+There are no console errors or fatal crashes; both destination and encounter
+screenshots were visually checked. As in prior passes, asynchronous preparation
+makes this a functional receipt rather than a controlled density or frame-time
+comparison. The client exits before live timing starts. Raw receipts are
+`.claude/perf6-final-client.local.{json,log}`.
+
+### Rejected direct-value dependency shortcut
+
+Two critics confirmed a counterexample after the initial validation: a proxy
+over a plain data object can pass `freezeData` and still run side effects or
+throw from its `get` trap. The archived descriptor certification never invokes
+that trap. Reading proven values with `Object.entries(value)` introduces it.
+Frozen-property invariants constrain returned values; they do not guarantee
+inert or nonthrowing proxy traps. No project contract excludes such proxies.
+
+The direct-value shortcut is rejected. Its initial exact-work measurements,
+client check and live comparisons remain recorded above as evidence about
+that initial candidate, not as validation of the final implementation. The
+initial production sources are retained in
+`.claude/ownership.performance6-initial-sources/`. Subsequent dependency work
+must retain descriptor inspection and cover proxy read/throw behavior explicitly.
+
+### Refined sixth-pass candidate
+
+The refined candidate keeps the exact lattice and terminal-floor changes. Its
+dependency loop obtains the original descriptor dictionary, then walks its keys
+without materializing `[key, descriptor]` pairs. It retains every source-object
+reflection operation, numeric-reference guard, fallback, budget and certificate.
+The dictionary is newly created by the builtin; the loop never reads source
+values directly. The archived/proxy probe now makes 31 exact comparisons. Both
+paths inspect 514 descriptor dictionaries in its synthetic graph. The refined
+loop's entry-pair allocation count falls 1,026→0 in that graph while reflection
+stays unchanged. The rejected
+implementation's real proxy-test failure is retained in
+`.claude/ownership.perf6-rejected-proxy.local.log`.
+
+Four fresh processes use paired orders AB/BA/BA/AB against one unchanged real
+world per process. Both private scanner copies use the same transform. Their
+first call is unprimed; later cold-certificate scans reset only the private
+certificate WeakSet while retaining the same function instance. Fixture setup,
+reset hooks, state verification and descriptor counters stay outside timing.
+This measures first scanner use after world construction, not cold host startup.
+All four preserve 102 actors, 75 owned identities, 25 pages/32,768 samples and
+pins `[46,47,48]`, with 169,788 descriptor calls on both sides.
+
+| Scanner phase | Samples per engine | Control median | Refined median |
+| --- | ---: | ---: | ---: |
+| First invocation | 4 | 419.95 ms | 396.70 ms |
+| Warm code, cold certificates | 12 | 394.67 ms | 386.58 ms |
+| Warm certificates | 40 | 29.97 ms | 28.79 ms |
+
+The latter two medians are medians of each process's median. First-use pairs
+favor the refined loop three of four times. Cold-cert individual comparisons
+split 6/12, warm comparisons split 20/40; these are modest typical savings.
+Observed maxima rise 451.65→455.18, 433.32→462.71 and 37.69→40.22 ms
+respectively, so this does not establish a scanner worst-stall reduction.
+GC overlaps and full sources/fixture hashes are retained in
+`.claude/ownership.perf6-scanner-first-current.local.json` and its four timestamped
+child receipts. There are 112 timed scans in total, without task-job overlap.
+
+Cold profiles also implicated canonical serialization across scenery, terrain
+keys, geography and candidate identities. Its shared module-level visitor now
+receives each call's cycle set through the callback receiver. `Array.from` keeps
+custom iterator, array-like fallback and iterator-closing behavior. Sorted
+record keys are reused for serialized entries, eliminating the map callback and
+second record array. Finite-value validation, plain-record checks, getter order,
+errors, aliases/cycles and root-only memoization remain unchanged; no cache or
+content policy is added.
+
+`worldmass_canonicalwork` embeds the full `a6f62a2d` module, SHA-256
+`4a2a5d79ab39ed752804d7142a368f0e66f8526014128a2802d0dd2e6daf650d`.
+Its 84 adversarial fixtures plus full workload-byte comparisons total 6,564
+checks against actual TypeScript and matched keepNames/minified ES2022 bundles.
+Two critics verified archive provenance and the installed helper's exact match
+to the tested candidate. Four alternating timing rounds give:
+
+| Serialization workload | Host-style control→refined | Minified control→refined |
+| --- | ---: | ---: |
+| 32,768 fresh tuples | 123.05→90.46 ms | 86.14→88.01 ms |
+| 32,768 fresh scenery snapshots | 175.17→133.53 ms | 134.30→120.46 ms |
+| 262,144 warm memo calls | 186.49→40.95 ms | 34.38→32.14 ms |
+
+All host-style pairs favor the change, as do all four minified scenery pairs.
+Minified tuple and memo pairs each split 2/4 and are inconclusive; the nested
+gain also narrows across rounds. Both timed variants use identical transforms;
+actual TypeScript is an independent correctness target. Fresh construction and
+checksum work are included equally, while frozen certification and memo priming
+are excluded. These Node V8 measurements are not browser-frame measurements.
+Raw rounds and metadata are `.claude/ownership.perf6-canonical-bench.local.log`
+and `.claude/ownership.perf6-canonical-bench-summary.local.json`.
+
+### Identical cold terrain and scenery replay
+
+The scratch replay runs the real synchronous `WorldMassRuntime.update` chain
+with seed `0x00ddba11`, normal boot/predecessor caches, and the host's existing
+`massRenderPages=false` setting. Fixed four-focus, additional six-focus and
+resident-six batches run at world times 0.5/1.0/1.5. The same script in both
+checkouts has SHA-256
+`3e6d28409a6ecbd923b0a1e946002d8156cb8afc504c926d96ac165e30b0c2d0`.
+No production scheduling, policy, density or cache limit changes are needed.
+
+A separate proof run takes fresh snapshots for every captured call, preserving
+local aliases/cycles and special primitive values, then deduplicates by exact
+snapshot text. Identity-only interning was rejected because it could hide later
+mutation. The proof matches 10,885 terrain results, 262 place results, 112,020
+reservation queries/results, 43,426 RNG draws/cursors and 88,432 snapshot values.
+All nine digests, descriptor/run hashes and query counts match. Critics also
+verified all recorded source hashes and that control modules remain `a6f62a2d`.
+
+| Checkpoint | Native identities | Doodads | Ecology pieces | Terrain samples |
+| --- | ---: | ---: | ---: | ---: |
+| Boot | 25 | 863 | 401 | 2,173 |
+| Four cold foci | 227 | 2,320 | 1,625 | 8,637 |
+| Six cold foci | 312 | 2,927 | 2,070 | 11,412 |
+| Six resident foci | 312 | 2,927 | 2,070 | 11,412 |
+
+The phase requests are 81/107/107 cells, with 107 unique cells and 9,239 new
+terrain generations. Global random use remains 31 draws at every checkpoint.
+These checks show no observed terrain, content, identity or density reduction
+on this course. Native snapshots cover identities, positions and vitals;
+`pieceState` supplies the static-scenery contract, not every hidden actor field.
+
+Six separate timing processes use C/A/A/C/C/A order, with heavy proof tapes
+disabled. All captured content/state digests and query counts still match.
+Every paired cold phase favors the refined candidate:
+
+| Phase | Control repeats (ms) | Refined repeats (ms) | Median change |
+| --- | --- | --- | ---: |
+| Four cold foci | 2349.88 / 2036.04 / 1844.45 | 1679.45 / 1566.48 / 1565.02 | −23.1% |
+| Additional six cold foci | 1403.55 / 1263.77 / 1182.64 | 1100.55 / 1018.05 / 992.71 | −19.4% |
+| Six resident foci | 168.70 / 147.45 / 127.91 | 126.35 / 123.07 / 117.52 | −16.5% |
+
+Four-focus paired reductions narrow 28.5%→23.1%→15.1%; additional-six
+reductions narrow 21.6%→19.4%→16.1%. Controls trend down, so these are
+descriptive results from three pairs, not a precise population estimate. Phases
+share process/caches and are not independent experiments. Lightweight wrappers
+remain in both timing paths; post-timing snapshots can influence later GC.
+
+This isolates combined synchronous admission/ecology work, not a whole host's
+socket batching, input, worker adoption, combat, browser frames or an individual
+change's contribution. `makeSimWorld` disables expedition packages and starting
+companions before ordinary mass attach. Proof-mode timings have no speed claim.
+Raw scripts are `.claude/ownership.perf6-cold-replay.local.ts` and
+`.claude/ownership.perf6-cold-series.local.cjs`; combined receipts are
+`.claude/ownership.perf6-cold-{proof,timing}-series.local.json`; full individual
+receipts remain in each engine checkout.
+
+### Refined verification and diagnostic correction
+
+All four type checks, production build, 569-probe roster census and simulation
+smoke (25 episodes) pass. Generation QA again passes all 2,607 cases, with four
+existing overlap warnings and two elapsed-time warnings during concurrent
+correctness work. The build retains its existing large-chunk warning.
+
+The 30 focused probes initially yield 28 passes, the unchanged historical
+`worldmass_terrainvariation` failure (`f24109327cf6e53f` versus
+`4225203d67bebfb4`), and one diagnostic-counter failure. That counter counted
+`Object.entries`, including temporary descriptor dictionaries; using keys
+removed those temporary enumerations without removing source inspections.
+
+The attribution probe now counts each source descriptor inspection directly,
+avoiding duplicate counting when a scanner later enumerates its descriptor
+dictionary. Ordinary source enumeration remains a separate read. Every prior
+assertion, including the greater-than-10,000 traversal threshold, exact pin
+order, live dependency leases, sample certificate checks and actor resources,
+is unchanged. The identical corrected probe passes on both refined and control
+engines, with identical counts: 77,640 cold inspections, 11,768 warm, and 7,458
+with the diagnostic walk exclusion. Both retain pins `[46,47,48]` and inspect
+16,384 actual sample wrappers cold, zero warm. These instrumented durations
+are not performance comparisons. Node-side types pass again after this
+test-only correction. The final focused outcome is 29 passes and the one
+previously control-confirmed historical hash failure; no assertion is waived.
+
+Initial failures and corrected receipts remain in `.claude/perf6-refined-*.local.*`,
+including `perf6-refined-pin-counter.local.log` in both checkouts. The production
+source fingerprint is `.claude/ownership.perf6-refined-production-hashes.local.json`.
+
+The final production client passes actual input along the complete wilderness
+path, all eight distant arrivals, native dormancy, cold Continue and saved-enemy
+return. Nearby counts are 43/65/32/20/6/0/11/13 (mean 23.75). Continue preserves
+all 259 prior identities and admits 20 more, reaching 279, while sleepers rise
+166→183. The returned mockthrush has its exact saved 45 life, with zero readiness
+waits. There are no console errors or fatal crashes. Both destination and
+distant-encounter screenshots were visually checked. The harness disables
+hardware acceleration and advances explicit frames: this is functional client
+evidence, not a frame-rate or controlled density comparison. It exits before
+the final live timings. Receipts are
+`.claude/perf6-refined-client.local.{json,log}`.
+
+### Final refined live comparisons
+
+The final early-spread series repeats the six-bot, 60-second, seed `0x00ddba11`,
+3,500-unit spread course in C/A/A/C/C/A order. Both engines use the identical
+soak harness, diagnostic counters, 60 Hz target and unchanged gates; neither
+uses a CPU profiler. No task client, tests, build, benchmark or other host runs
+overlap. The candidate fingerprint matches before and after this series. Other
+workstation activity remains uncontrolled. Each window follows its ordinary
+join/party/settle sequence, so actual simulation states and cold admission batches
+are not identical. All joining ticks remain in the warm-up receipt.
+
+| Early repeat | Control→refined p95 | Control→refined p99 | Window maximum | Joining maximum |
+| --- | --- | --- | --- | --- |
+| 1 | 284.66→459.24 ms | 677.97→763.55 ms | 1514.73→1085.47 ms | 2005.33→1354.58 ms |
+| 2 | 515.14→489.76 ms | 1184.86→1164.36 ms | 1515.49→1212.11 ms | 3792.50→2521.81 ms |
+| 3 | 486.58→465.69 ms | 1238.00→887.76 ms | 1536.78→1087.93 ms | 3694.04→3183.40 ms |
+
+Every joining and window maximum favors the refined candidate. Median window
+maxima fall 1515.49→1087.93 ms (−28.2%); median combined joining/window maxima,
+all in joining, fall 3694.04→2521.81 ms (−31.7%). Host boot and the original
+GC/settling gap are outside these recorded tick lanes, so this is not a
+whole-host maximum. These are descriptive three-pair results, not
+a general latency guarantee. Pair one's p95/p99 and input rates regress; its
+window CPU load differs 73.27→94.96%, and the other four windows are 99.93–100%.
+CPU readings cover only the window and cannot explain earlier joining spikes.
+
+Median stepped rates are 3.99→4.40 Hz, host-seen input rates 3.19→3.51 Hz per
+seat, and dropped shares 93.33→93.15%. The unchanged 20 ms p95 and 5% dropped
+gates fail in all six runs. Control repeat one's heap growth is +66.49 MB,
+exceeding 64 MB; the other five heap gates pass. All six resume and party gates
+pass, with zero faults/errors. Median nearby living counts are 44.83→44.60;
+these are observed live populations, not a controlled equality proof. The
+fixed-work replay above supplies the stronger captured-content equivalence.
+
+These results support a repeated reduction in the observed worst early stalls,
+while the spread workload remains far outside a playable timing budget on this
+machine. They do not supersede the rejected initial scanner results or convert
+the isolated scanner's mixed maxima into a scanner tail-latency claim. Raw final
+receipts are `.claude/perf6-refined-early-serial.local.json` and each checkout's
+`.claude/perf6-refined-early-{1,2,3}.local.{json,log}`. The combined reader is
+`.claude/ownership.perf6-refined-results.local.cjs`.
+
+The final clustered series uses the same serial order, six bots/60 seconds and
+seed with zero spread. `--window-after-host 60` enforces a common minimum host
+age; actual measured windows begin at 60.36–60.76 seconds. It does not equalize
+simulation state. Production fingerprints match after both complete series.
+
+| Cluster repeat | Control→refined p95 | Control→refined p99 | Window maximum | Warm-up maximum |
+| --- | --- | --- | --- | --- |
+| 1 | 48.94→39.35 ms | 130.04→112.37 ms | 260.53→167.60 ms | 521.84→413.12 ms |
+| 2 | 21.40→44.60 ms | 83.79→126.78 ms | 147.48→191.02 ms | 479.35→431.04 ms |
+| 3 | 17.90→29.08 ms | 84.36→78.26 ms | 222.30→121.31 ms | 384.64→376.09 ms |
+
+Warm-up maxima improve in all three pairs, while window maxima improve in two.
+Median maxima fall 479.35→413.12 ms during warm-up and 222.30→167.60 ms in the
+window. However, p95 worsens in two pairs, including repeat three despite its
+lower candidate CPU load; median p95 rises 21.40→39.35 ms and p99 rises
+84.36→112.37 ms. Window CPU pairs are 100→99.36%, 81.48→99.96% and
+82.30→76.10%. The series does not establish an overall steady-state latency win.
+A clustered sustained-latency regression remains unresolved.
+
+Median simulation/input rates are 58.27→51.35 Hz and 37.28→25.22 Hz per seat;
+median dropped shares rise 2.48→13.09%. Control repeat three passes all gates.
+The other five fail p95; control repeat one and candidate repeats one/two also
+fail dropped ticks. All six pass heap, errors, faults, resume and party gates.
+Nearby means are 17.51→19.90, 17.06→16.90 and 16.30→17.91. They show no broad
+density collapse, but differences in population and simulation state prevent an
+identical-live-work claim. Raw receipts are
+`.claude/perf6-refined-cluster-serial.local.json` and each checkout's
+`.claude/perf6-refined-cluster-{1,2,3}.local.{json,log}`. Both courses are summarized
+in `.claude/perf6-refined-results.local.{json,log}`.
+
+### Remaining final-version hotspots
+
+After both unprofiled series finish, a single final-fingerprint diagnostic
+startup course repeats the spread settings. It profiles the main process after
+the diagnostic module's static imports and includes host boot, pre-window and
+window work. Fleet/workers are not profiled. Per-tick inclusive phase times and
+terrain call counts are aligned with sampled stacks using microsecond timestamps.
+The pre-window lane includes the original GC/settling gap; it is not automatically
+equivalent to the soak's joining lane. End-state foci/native/scenery counts are
+detached scalar observations after each trace tick end, not admission batch sizes.
+The outer soak timer includes that additional diagnostic work. Nested phases
+overlap and must not be added together.
+
+The largest pre-window trace tick is 1405.42 ms, with ecology/scenery sync
+852.59 ms, geography preparation 124.36 ms, survey 144.61 ms and dormancy
+47.21 ms. It makes 6,863 terrain-generation calls and ends with four foci,
+201 native identities and 2,572 doodads. Sampled self time is led by canonical
+serialization (243.90 ms), followed by hashing (82.26 ms), corner sampling
+(67.68 ms) and native placement (65.40 ms). This confirms that cold scenery
+and terrain remain a larger target than dependency scanning in that tick.
+
+The largest window trace tick is 1348.34 ms: ecology/scenery sync 648.52 ms,
+dormancy 268.78 ms and survey 93.72 ms, with 3,595 terrain-generation calls.
+It ends with six foci, 277 native identities and 3,308 doodads. Sampled
+dependency-certificate self time is 185.28 ms and canonical self time 184.72 ms.
+A separate 902.84 ms window tick has 148.37 ms of sampled candidate self time,
+showing that encounter-candidate work remains another cold cost. These are
+diagnostic observations, not speed comparisons with unprofiled or earlier runs.
+
+There are zero after-tick observation errors. Diagnostic p95, dropped-tick and
+heap gates fail; fault/error, party and resume checks pass. All eight final
+production/harness fingerprints remain unchanged. Raw trace/profile, ordinary
+report and log use `.claude/perf6-refined-{spike-trace,spikes,profile}.local.*`;
+the attribution is `.claude/ownership.perf6-refined-spike-attribution.local.json`.
+
+Next exact-work investigations should classify serialization/hash callers and
+count repeated fresh scenery/terrain identities before adding bounded caches or
+private fast paths. The profile includes both terrain-source serialization and
+geographic plan hashing; total hash cost is not all corner noise. Count candidate
+hits, cached nulls, misses, evictions and key bytes on the cold placement trigger
+before changing its lookup. For dependency work, count cold descriptor inspections,
+certificate hits, graph roots and budget/depth refusals separately from timing.
+Preserve every source reflection operation: the rejected proxy shortcut is a
+concrete regression.
+Any follow-up also needs controlled steady-state work to investigate the mixed
+clustered p95 results. No new cadence, population, admission or timing-gate
+changes are part of this checkpoint. The pass improves fixed cold work and
+recorded early maxima; it does not certify consistently smooth gameplay.
+
+All 42 control-side sixth-pass scripts/receipts, including the baseline hash
+failure and corrected pin-attribution receipt, are copied and SHA-256 verified
+under `.claude/ownership.performance6-control-evidence/manifest.json` before
+archiving the temporary control checkout. Candidate receipts remain alongside
+the working checkout. Three independent critics found no remaining semantic
+blocker; their live-results audit explicitly retains the unresolved clustered
+latency concern. The ownership gate attributes all 19 staged hunks to this pass.

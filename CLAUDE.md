@@ -4030,6 +4030,14 @@ we verify changes.
   ShardPerformance also narrows compatible landform reservation queries to the
   existing surface-page cache (worldmass_sitework) and removes per-sample noise
   closures (worldmass_noisework); retain full content, exact hashes and arithmetic.
+  ShardPerformance removes temporary descriptor pairs during dependency scans
+  (worldmass_dormancywork), skips terminal dry-floor grammar samples
+  (worldmass_grammarwork), and evaluates lattice axes without closure/tuple setup
+  (worldmass_latticework), and shares canonical serialization's recursive visitor
+  (worldmass_canonicalwork). Preserve proxy traps, numeric late-owner references,
+  conservative fallback, full raster/RNG output and exact getter/error order. Serial soak
+  comparisons can use --window-after-host for a common minimum host-age warm-up;
+  record warm-up stalls and keep all load gates unchanged.
   Preserve
   exact saved state, full signed addresses, every player's population and the
   unchanged load gates; verify the affected worldmass/native probes and shard

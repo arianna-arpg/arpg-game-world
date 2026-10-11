@@ -59,7 +59,11 @@ function isDependencyFreeData(value:object,active?:Set<object>,budget?:{left:num
   if(--budget.left<0||active.size>=64||active.has(value))return false;
   active.add(value);
   try {
-    for(const [key,descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))){
+    // Keep descriptor inspection even for freezeData values: a frozen proxy
+    // can still have effectful get traps. Avoid only the temporary entry pairs.
+    const descriptors=Object.getOwnPropertyDescriptors(value);
+    for(const key of Object.keys(descriptors)){
+      const descriptor=descriptors[key];
       if(!descriptor.enumerable)continue;
       // Inspection never invokes getters. Fallback keeps the original scanner
       // semantics, including one ordinary read of an enumerable accessor.

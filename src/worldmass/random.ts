@@ -5,24 +5,37 @@ const massFrozenData=new WeakSet<object>();
 const massCanonicalMemo=new WeakMap<object,string>(),massDigestMemo=new WeakMap<object,string>();
 export function isMassFrozenData(value:unknown):boolean{return !!value&&typeof value==='object'&&massFrozenData.has(value);}
 
+// A shared visitor avoids creating/naming recursive and record callbacks for
+// every terrain key. Array.from keeps its original custom-iterator semantics;
+// the receiver carries only this serialization's cycle-detection set.
+function canonicalVisit(this: Set<object>, v: unknown): string {
+  const seen = this;
+  if (v === null || typeof v === 'boolean' || typeof v === 'string') return JSON.stringify(v);
+  if (typeof v === 'number' && Number.isFinite(v)) return JSON.stringify(v);
+  if (typeof v !== 'object' || v === null) throw new Error('Manifest must contain finite JSON data');
+  if(massFrozenData.has(v)){const cached=massCanonicalMemo.get(v);if(cached!==undefined)return cached;}
+  if (seen.has(v)) throw new Error('Manifest must not contain cycles');
+  if (!Array.isArray(v) && Object.getPrototypeOf(v) !== Object.prototype && Object.getPrototypeOf(v) !== null)
+    throw new Error('Manifest must contain plain records');
+  seen.add(v);
+  let text: string;
+  if (Array.isArray(v)) text = '[' + Array.from(v, canonicalVisit, seen).join(',') + ']';
+  else {
+    const entries = Object.keys(v).sort();
+    for (let i = 0; i < entries.length; i++) {
+      const k = entries[i];
+      entries[i] = JSON.stringify(k) + ':' + canonicalVisit.call(seen, (v as Record<string, unknown>)[k]);
+    }
+    text = '{' + entries.join(',') + '}';
+  }
+  seen.delete(v);
+  return text;
+}
+
 /** Stable manifest JSON. Non-JSON values are errors, never omitted identity inputs. */
 export function canonical(value: unknown): string {
   const seen = new Set<object>();
-  const visit = (v: unknown): string => {
-    if (v === null || typeof v === 'boolean' || typeof v === 'string') return JSON.stringify(v);
-    if (typeof v === 'number' && Number.isFinite(v)) return JSON.stringify(v);
-    if (typeof v !== 'object' || v === null) throw new Error('Manifest must contain finite JSON data');
-    if(massFrozenData.has(v)){const cached=massCanonicalMemo.get(v);if(cached!==undefined)return cached;}
-    if (seen.has(v)) throw new Error('Manifest must not contain cycles');
-    if (!Array.isArray(v) && Object.getPrototypeOf(v) !== Object.prototype && Object.getPrototypeOf(v) !== null)
-      throw new Error('Manifest must contain plain records');
-    seen.add(v);
-    const text = Array.isArray(v) ? '[' + Array.from(v, visit).join(',') + ']'
-      : '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + visit((v as Record<string, unknown>)[k])).join(',') + '}';
-    seen.delete(v);
-    return text;
-  };
-  const text=visit(value);
+  const text = canonicalVisit.call(seen, value);
   if(isMassFrozenData(value))massCanonicalMemo.set(value as object,text);
   return text;
 }

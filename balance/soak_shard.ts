@@ -34,6 +34,7 @@
 //   --diagnostics       inclusive phase, worker, machine-load and checkpoint measurements
 //   --profile <path>    CPU profile of the measured window (diagnostic timing only)
 //   --window-at <ms>    earliest window start as Unix milliseconds, for paired runs
+//   --window-after-host <s> minimum host-running warm-up before the window, for serial repeats
 //   --conditions <s>    machine/concurrency conditions recorded verbatim in the report
 //   --thresholds <path> the gates (default balance/soak.config.json)
 //
@@ -224,6 +225,7 @@ async function main(): Promise<number> {
   const spread = Math.max(0, num(args.spread) ?? 0); // THE SPREAD (the fleet's anchors)
   const roveArg = num(args.rove);
   const tickHzArg = num(args['tick-hz']);
+  const windowAfterHostSec = Math.max(0, num(args['window-after-host']) ?? 0);
   if (tickHzArg !== undefined && tickHzArg > 0) SHARD_CFG.tickHz = tickHzArg; // THE TICK RATE experiment (SHARD_CFG.tickHz; 60 ships)
   if (roveArg !== undefined) SHARD_CFG.rove.sec = Math.max(0, roveArg); // THE ROVING SHADOW's dial, before the host stands
   if (typeof args.diet === 'string' && /^(0|off|false|no)$/i.test(args.diet)) WIRE_DIET_CFG.enabled = false; // THE WIRE DIET's A/B
@@ -341,7 +343,7 @@ async function main(): Promise<number> {
     '--url', url, '--bots', String(bots), '--hearth', `${hearth.x},${hearth.y}`, '--seed', String(seed), '--spread', String(spread),
     '--classes', SOAK_CFG.classes.join(','), '--stagger-ms', String(SOAK_CFG.staggerMs),
     '--drop-bot', String(dropOn ? bots - 1 : -1),
-    '--life-sec', String(Math.ceil(seconds + SOAK_CFG.warmupTimeoutSec + SOAK_CFG.partyWaitSec + 120)),
+    '--life-sec', String(Math.ceil(seconds + Math.max(SOAK_CFG.warmupTimeoutSec + SOAK_CFG.partyWaitSec, windowAfterHostSec) + 120)),
   ], { execArgv: process.execArgv, stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
   fleetRef = fleet;
   const tell = (c: FleetCommand): void => { try { fleet.send(c); } catch (e) { err(`the fleet did not hear '${c.t}': ${String(e)}`); } };
@@ -386,6 +388,12 @@ async function main(): Promise<number> {
     err(`the warm-up seated ${seated.size} of ${bots} bots in ${SOAK_CFG.warmupTimeoutSec} s`);
   if (bots >= 2) await until(() => ev.party !== null || ev.fleetExited, SOAK_CFG.partyWaitSec * 1000);
   await sleep(SOAK_CFG.settleSec * 1000);
+  // ShardPerformance serial comparisons align by host age, excluding unequal
+  // module-load and boot times. Keep recording every tick through this warm-up.
+  if (windowAfterHostSec > 0) {
+    const readyAt = warm.t0 + windowAfterHostSec * 1000;
+    await until(() => performance.now() >= readyAt, Math.max(0, readyAt - performance.now()) + 1000);
+  }
   warm.on = false;
   const warmSec = (performance.now() - warm.t0) / 1000, warmDropped = host.droppedTicks - warmDropped0;
 
@@ -576,6 +584,7 @@ async function main(): Promise<number> {
       fleetStepHz: fleetStats?.stepHz ?? null, fleetClock: fleetStats?.clock ?? null },
     performanceEvidence,
     conditions: { note: typeof args.conditions === 'string' ? args.conditions : null,
+      windowAfterHostSec, hostElapsedAtWindowSec: r2((win.t0 - warm.t0) / 1000),
       windowAt: windowAt ?? null, windowStartedAt, startDelayMs: windowAt === undefined ? null : windowStartedAt - windowAt },
     heap: { startMB: r2(heapStartMB), endMB: r2(heapEndMB), growthMB: r2(heapGrowth), allowanceMB: r2(heapAllowance), forcedGc: !!fullGc, troughSlopeMBPerMin: r2(troughSlope) },
     faults,
