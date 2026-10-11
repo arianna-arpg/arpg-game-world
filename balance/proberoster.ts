@@ -62,6 +62,7 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_skillvisuals.ts', status: 'green', tier: 'fast', why: 'Authored nova census, stable bounded geometry, live casts, combat parity, pulse identity and co-op footprints.' },
+  { probe: 'probe_skillflights.ts', status: 'green', tier: 'fast', why: 'Authored flight/beam/field census, palette-independent geometry, real casts and render-only co-op fields.' },
   { probe: 'probe_spiritrun.ts', status: 'green', tier: 'fast', why: 'Loading-screen directions, collision boundaries, streak speed, frame rates and bounded gates.' },
   { probe: 'probe_skillempowerment.ts', status: 'green', tier: 'fast', why: 'Legendary empowerment: conserved merges, restricted passive budgets, expanded ranks, save/wire identity and real modifier scaling' },
   { probe: 'probe_skillshowcase.ts', status: 'green', tier: 'fast', why: 'The skill showcase stage: every player skill plans one, the hand casts every delivery and cast mode, setups (claims, prep, corpses, allies, kept statuses, swarms), paced bank refills and seeded determinism' },

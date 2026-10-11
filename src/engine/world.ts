@@ -1,6 +1,8 @@
 import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { skillMergePlan } from './skillMerge';
 import { skillBurstVoice } from '../data/skillVisuals';
+import { skillBeamVoice } from '../data/skillFlightVisuals';
+import type { SkillFieldVisual } from './skillFieldVisual';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
@@ -1035,6 +1037,8 @@ const HAUNT_TAGS = new Set([
 ]);
 
 export interface Projectile {
+  /** Replica identity only; live flights resolve their originating instance. */
+  skillVisualId?: string;
   orbPaint?: ProjectileDelivery['orbPaint'];
   /** A parried flight carries a captured counter payload, not a new cast. */
   parryDamage?: ParryDamage;
@@ -2884,6 +2888,8 @@ export class World {
   readonly timeflow = new Timeflow();
   projectiles: Projectile[] = [];
   zones: Zone[] = [];
+  /** Replicated paint only. Never added to the simulation's damage zones. */
+  remoteSkillFields?: SkillFieldVisual[];
   /** Mints unique sheet-source keys for domain zones. */
   private domainSeq = 0;
   /** THE MADNESS BANKS, one per madden-grafted skill instance (maddenBankOf).
@@ -5915,6 +5921,7 @@ export class World {
     for (const z of this.zones) this.expireZone(z);
     this.projectiles = [];
     this.zones = [];
+    this.remoteSkillFields = undefined;
     this.tethers = [];
     this.texts = [];
     this.flashes = [];
@@ -36205,13 +36212,14 @@ export class World {
         // LASER presentation (beamFx): razor cones ARE hitscan — draw the
         // crystal-beam line instead of an invisible sliver of wedge. The
         // drawn ray CLIPS at the first wall (honest laser: the stone eats it).
-        if (d.beamFx) {
+        if (d.beamFx && !sigiled) {
           const beamLen = phase ? range : dist(caster.pos, this.clipShot(caster.pos,
             vec(caster.pos.x + Math.cos(caster.facing) * range,
                 caster.pos.y + Math.sin(caster.facing) * range), caster.tier));
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius: beamLen, color: cosmeticColor,
             life: 0.22, maxLife: 0.22, beam: true, facing: caster.facing,
+            fx: skillBeamVoice(inst.def.id), arc: { facing: caster.facing, arcRad },
           });
         } else if (sigiled) {
           // The sigil's figure IS the flash (drawn == tested).

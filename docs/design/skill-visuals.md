@@ -6,9 +6,46 @@ Each skill has an authored composition in `src/data/skillVisuals.ts`. The
 regression census includes skills registered at startup (including commanders),
 so a new nova cannot silently join the generic-flash population.
 
-This is the first delivery family, not a claim that every skill in the game has
-received bespoke art. Projectiles, beams, ground fields, movement and summons
-retain their current presentation. Continue those as separate, reviewable passes.
+The second pass adds all 172 native projectiles, six native cone beams, 163
+ground skills and 42 auras in `src/data/skillFlightVisuals.ts`. Together these
+cover 492 catalogue entries. Movement, non-beam cones, direct targets, other
+melee and summon bodies keep their existing presentation.
+
+## Flights, beams and fields
+
+Projectile profiles name a material head, wake, motion and count, with optional
+counter-material and orb/star/cluster composition. Flight direction, velocity,
+homing and collision remain mechanical properties. Compact circular heads fit
+inside their existing collision disc; wide and other explicit forms retain
+`PROJ_FORM_GEO`. Their wakes carry the source material as well. Native resource
+motes retain their specialized `orbPaint` cue, and reflection cues remain intact.
+Wardrobe projectile bodies still take priority over the native head; skill wakes
+remain recognizable beneath them. Recolors always come from the live cast.
+
+Beams use lance, braid, eye, fault, prism and overlapping-scale structures.
+Every mark is clipped inside the real cone and the wall-limited endpoint, and
+ages with the existing flash. A sigiled beam now shows the sigil's area instead
+of a ray whose shape disagrees with the hit test.
+
+Persistent fields combine roots, partial rings, lattices, spirals, scattered
+patches or spokes with authored materials and movement. Ink is clipped against
+the true faced figure or fissure capsule, the circular safe center and any
+shaped closing cage. Existing warning urgency, pulse reach, incoming lobs and
+armed/hot fissure cues remain. Ground-qualified strikes retain their per-cell
+boil; they skip decorative field ink because the dry cells are safe. Native
+fields have a lighter wash so their pattern is readable. Auras also respect
+the owner's wardrobe recolor. Projectile deposits and nova aftermath inherit
+their source material where an explicit field profile is absent.
+
+Co-op snapshots carry projectile/aura source IDs and a render-only field view.
+The host and replica draw the same view, including facing, holes, closing cages,
+segments, lobs and pulse timing. Replicas do not create simulated damage zones.
+Missing fields from an older host clear the previous view; changing rooms clears
+it immediately. Animation uses simulation time or flight age, never frame RNG.
+
+The shared-color study tests identity without palette differences. Distinct
+profile tuples provide a coverage guard, not proof that all close relatives
+will be identifiable at combat speed.
 
 ## Visual contract
 
@@ -59,23 +96,26 @@ implementation into main to obtain these visuals. The older `seamless-world`
 branch predates substantial content and cue work, and should not be the source
 of new catalogue-wide visual changes.
 
-Most implementation is in two new modules. Integration seams are the renderer
-registration import, the nova/aftermath flash producers and the existing flash
-snapshot. On a destination with extra skills, give each new nova an explicit
-profile and rerun the census. A conflict-free patch alone is not a destination
+Integration seams are renderer registration, flight/field/aura paint paths,
+nova/aftermath/beam flash producers and snapshots. On a destination with extra
+skills, give every new entry in these delivery families an explicit profile
+and rerun both censuses. A conflict-free patch alone is not a destination
 verification: run the checks there before publishing it.
 
-Transfer preflight on 2026-10-11 against foundation `7799af63`: its booted nova
+First-pass transfer preflight on 2026-10-11 against foundation `7799af63`: its booted nova
 census matches all 109 profiles, with no missing or retired IDs. A three-way
 application in a disposable index applied every gameplay/rendering hunk; only
 the `world.ts` import insertion (keep both sets of imports) and the `CLAUDE.md`
 intro need reconciliation. The active seamless checkout and its staged work
 were not modified. Full destination compilation remains part of integration.
+That preflight predates the flight/field pass; repeat it for the new commit.
 
 ## Verification and preview
 
 - `npm run check`
 - `npm run probe -- skillvisuals`
+- `npm run probe -- skillflights`
+- `npm run probe -- projectilecull`
 - `npm run probe -- effectvoice`
 - `npm run probe -- crossjab`
 - `npm run probe -- cosmetics`
@@ -83,6 +123,7 @@ were not modified. Full destination compilation remains part of integration.
 - `npm run sim -- run --suite smoke`
 - `npm run build`
 - `node_modules/.bin/electron balance/skill-visuals-ui.cjs`
+- `node_modules/.bin/electron balance/skill-flight-ui.cjs`
 
 The dedicated probe checks the full census, unique authored compositions,
 color-independent deterministic geometry, bounded calls at tiny/huge radii,
@@ -93,6 +134,11 @@ through all six area shapes, and captures three actual casts in an empty arena.
 Generated artifacts live in `balance/reports/skill-visuals/` (ignored):
 `overview.png`, `monochrome.png`, `live-*.png`, `pixel-checks.json`, and the
 self-contained animated `study.html` with all burst profiles, search and pause.
+Run the flight harness last to replace that study with all 492 entries, family
+filters, a true shared-color toggle and a hide-names recognition test. It also
+writes `flight-overview.png`, `flight-monochrome.png`, `flight-pixels.json` and
+four additional live cast captures. The HTML lazily decodes visible cards;
+its two sets of eight-frame strips are a review artifact, never a game asset.
 The study normalizes radius for comparison; live captures retain gameplay scale.
 These checks establish technical correctness and provide an art-review surface.
 Instant recognition of every close relative still needs player judgment in

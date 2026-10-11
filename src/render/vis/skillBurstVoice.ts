@@ -7,7 +7,7 @@ const TAU = Math.PI * 2;
 
 /** Small reusable material marks, painted in a radial local frame. No text,
  * image assets, frame-random particles, or screen-space effects. */
-function mark(ctx: CanvasRenderingContext2D, motif: BurstMotif, s: number, k: number): void {
+export function drawSkillMark(ctx: CanvasRenderingContext2D, motif: BurstMotif, s: number, k: number): void {
   ctx.beginPath();
   switch (motif) {
     case 'ice':
@@ -190,7 +190,7 @@ export function drawSkillBurst(ctx: CanvasRenderingContext2D, f: EffectVoiceFlas
       }
       ctx.save(); ctx.translate(Math.cos(a) * d, Math.sin(a) * d);
       ctx.rotate(a + (profile.motion === 'in' ? Math.PI : 0));
-      mark(ctx, motif, size, k); ctx.restore();
+      drawSkillMark(ctx, motif, size, k); ctx.restore();
     }
   };
   layer(profile.motif, false);

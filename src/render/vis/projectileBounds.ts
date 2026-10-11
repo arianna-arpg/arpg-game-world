@@ -1,5 +1,6 @@
 import { PROJ_FORM_GEO as G } from '../../engine/projForms';
 import { VIS_CFG } from './visConfig';
+import { SKILL_FLIGHT_STYLE } from '../../data/skillFlightVisuals';
 
 /** Rotation-independent reach of every projectile painter, in radii.
  * Shared for the whole pass: conservative bounds are cheaper than deriving
@@ -7,6 +8,7 @@ import { VIS_CFG } from './visConfig';
  * which extend beyond the simulation's hit surface. Read live tuning. */
 export function projectileDrawScale(): number {
   return Math.max(
+    SKILL_FLIGHT_STYLE.reach,
     1 + G.vortex.stroke * 5, // even the default miter join stays inside
     G.square.half * Math.SQRT2,
     G.line.hAlong + G.line.hAcross,

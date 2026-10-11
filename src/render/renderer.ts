@@ -18,7 +18,7 @@ import { ASSAULT, assaultOrbitPositions } from '../engine/assault';
 import { cosmeticPortalColor, drawCosmeticPortal, cosmeticProjectileExtent, drawCosmeticProjectile, cosmeticHotbar, drawCosmeticHotbar } from './vis/cosmeticEffects';
 import { HIVECALL } from '../engine/hivecall';
 import { CosmeticTrails, cosmeticBody, cosmeticLoadoutFor, cosmeticPick, drawCosmeticMotif, drawCosmeticOrbit } from './vis/cosmetics';
-import { cosmeticSummonSkill } from '../meta/cosmetics';
+import { cosmeticSummonSkill, cosmeticSkillPaint } from '../meta/cosmetics';
 import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
 // Canvas renderer: world (camera-following) + HUD. Placeholder geometry art —
@@ -169,6 +169,8 @@ import { drawTrapworkTells } from './vis/trapLayer';
 import { drawEffectVoice } from './vis/effectVoice';
 import './vis/attackSequenceVoice';
 import './vis/skillBurstVoice';
+import { drawSkillFlightWake, drawSkillFlightHead, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
+import { skillFieldVisual } from '../engine/skillFieldVisual';
 import './vis/groundRising'; // Ground-born encounters signal through soil, dust and grasping hands.
 import { traceAoePath } from './vis/aoeTrace'; // THE AOE TRACER — one path builder per registered figure (drawn == tested with world.ts inAoe)
 import { AOE_SHAPE, bandSwingGeo } from '../engine/skills';
@@ -4673,7 +4675,7 @@ export class Renderer {
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    for (const z of world.zones) {
+    for (const z of world.remoteSkillFields ?? world.zones.map(z => skillFieldVisual(z, world.time))) {
       // FISSURE FRACTURES (Zone.seg): the crack IS the hitbox — a jagged
       // line the capsule's width, not a disc. Deterministic jitter (seeded
       // off the segment's own coordinates) keeps every frame's crack the
@@ -4685,9 +4687,7 @@ export class Renderer {
         const len = Math.hypot(dx, dy) || 1;
         const nx = -dy / len, ny = dx / len;
         const seed = (s.ax * 13.37 + s.ay * 7.77) % Math.PI;
-        const armed = z.exploded && z.linger > 0
-          && ((z.aftershock && world.time >= z.aftershock.readyAt)
-            || (z.roulette && world.time < z.roulette.armedUntil));
+        const armed = z.exploded && z.linger > 0 && z.armed;
         const hot = z.volatile && z.exploded && z.linger > 0;
         ctx.beginPath();
         ctx.moveTo(s.ax, s.ay);
@@ -4729,6 +4729,7 @@ export class Renderer {
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
+        drawSkillField(ctx, z, world.time);
         continue;
       }
       ctx.beginPath();
@@ -4750,12 +4751,12 @@ export class Renderer {
           // up as the countdown runs out. Drawn on the caster's own story only
           // — the lid over a cistern shows a surface walker nothing of the
           // water below.
-          if (world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === (z.caster.tier ?? 0)) {
+          if (world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === z.tier) {
             const wfz = world.walk;
             const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
             const cells = groundedCellsIn(wfz, z.pos, z.radius, z.onGround,
               { x0: this.cam.x - wfz.cell, y0: this.cam.y - wfz.cell, x1: this.cam.x + vw + wfz.cell, y1: this.cam.y + vh + wfz.cell });
-            const fuse = (z.inst.def.delivery as { telegraph?: number }).telegraph ?? 1;
+            const fuse = z.telegraph;
             ctx.save();
             drawBoilCells(ctx, cells, wfz.cell, boilRamp(z.delay, fuse), world.time);
             ctx.restore();
@@ -4765,12 +4766,12 @@ export class Renderer {
           // EDGE BAND (the inheritance law): only the ring that will
           // bite washes — the safe eye stays clean at the telegraph,
           // matching the detonation's spare test (drawn == tested).
-          const mid = z.radius * (1 + z.edgeFrac) / 2;
+          ctx.save(); clipSkillField(ctx, z);
           ctx.globalAlpha = 0.15;
-          ctx.lineWidth = Math.max(2, z.radius * (1 - z.edgeFrac));
+          ctx.fillStyle = z.color;
           ctx.beginPath();
-          this.traceAoe(z.pos.x, z.pos.y, mid, z.shape, z.facing, z.arcRad);
-          ctx.stroke();
+          this.traceAoe(z.pos.x, z.pos.y, z.radius, z.shape, z.facing, z.arcRad);
+          ctx.fill(); ctx.restore();
         } else {
           ctx.globalAlpha = 0.15;
           ctx.fillStyle = z.color;
@@ -4806,6 +4807,7 @@ export class Renderer {
           ctx.beginPath(); ctx.arc(hx, hy, hr * 0.45, 0, Math.PI * 2); ctx.fill();
         }
       } else if (z.edge && z.edge > 0.02) {
+        ctx.save(); clipSkillField(ctx, z);
         // Fill-in cage (Pillar of Flame / Wildfire Sweep): only the closing
         // band burns — CLIPPED to the zone's faced shape, so a crescent
         // fill-in draws a crescent band, never a whole phantom circle.
@@ -4830,14 +4832,19 @@ export class Renderer {
         ctx.beginPath();
         this.traceAoe(z.pos.x, z.pos.y, z.radius, z.shape, z.facing, z.arcRad);
         ctx.stroke();
+        ctx.restore();
       } else {
-        ctx.globalAlpha = 0.22;
+        ctx.save(); clipSkillField(ctx, z);
+        ctx.beginPath();
+        this.traceAoe(z.pos.x, z.pos.y, z.radius, z.shape, z.facing, z.arcRad);
+        ctx.globalAlpha = fieldProfile(z.skillId) ? 0.085 : 0.22;
         ctx.fillStyle = z.color;
         ctx.fill();
         ctx.globalAlpha = 0.6;
         ctx.strokeStyle = z.color;
         ctx.lineWidth = 1.5;
         ctx.stroke();
+        ctx.restore();
       }
       // ARMED PULSE (GroundDelivery.pulse): dormant ground CHARGES — a
       // warning ring at the pulse's TRUE reach (radius × radiusMult, the
@@ -4855,6 +4862,7 @@ export class Renderer {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+      drawSkillField(ctx, z, world.time);
     }
   }
 
@@ -6479,17 +6487,21 @@ export class Renderer {
         ctx.globalAlpha = 1;
       }
       for (const aura of a.activeAuras.values()) {
+        const color = cosmeticSkillPaint(world, a, aura.inst.def.id).color ?? aura.inst.def.color;
         const pulse = 0.06 + 0.02 * Math.sin(t * 3);
         ctx.globalAlpha = pulse;
-        ctx.fillStyle = aura.inst.def.color;
+        ctx.fillStyle = color;
         ctx.beginPath();
         this.traceAoe(a.pos.x, a.pos.y, aura.radius, aura.shape, a.facing);
         ctx.fill();
         ctx.globalAlpha = 0.35;
-        ctx.strokeStyle = aura.inst.def.color;
+        ctx.strokeStyle = color;
         ctx.lineWidth = 1.5;
         ctx.stroke();
         ctx.globalAlpha = 1;
+        drawSkillField(ctx, { skillId: aura.inst.def.id, pos: a.pos, radius: aura.radius,
+          color, shape: aura.shape, facing: a.facing, delay: 0, exploded: true,
+          linger: 1, tier: a.tier ?? 0, telegraph: 0 }, t);
       }
     }
   }
@@ -7101,24 +7113,25 @@ export class Renderer {
         drawOrbMote(ctx, p.pos.x, p.pos.y, p.radius, p.color, p.orbPaint, p.age);
         continue;
       }
-      // Every projectile is ENERGY IN FLIGHT now: an additive glow underlay
-      // in its own color + a motion streak trailing the heading. The shape
-      // language on top is unchanged — behavior stays readable, it just
-      // stopped looking like construction paper.
-      drawGlow(ctx, p.pos.x, p.pos.y, p.radius * VIS_CFG.fx.glowScale, p.color, VIS_CFG.fx.glowAlpha);
-      const sx = p.pos.x - Math.cos(p.dir) * p.radius * VIS_CFG.fx.streakLen;
-      const sy = p.pos.y - Math.sin(p.dir) * p.radius * VIS_CFG.fx.streakLen;
-      const streak = ctx.createLinearGradient(sx, sy, p.pos.x, p.pos.y);
-      streak.addColorStop(0, withAlpha(p.color, 0));
-      streak.addColorStop(1, withAlpha(p.color, VIS_CFG.fx.streakAlpha));
-      ctx.strokeStyle = streak;
-      ctx.lineWidth = Math.max(2, p.radius * 0.85);
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.lineTo(p.pos.x, p.pos.y);
-      ctx.stroke();
-      ctx.lineCap = 'butt';
+      // Authored source wakes survive wardrobe heads and recoloring.
+      // Unprofiled flights retain their existing glow and motion streak.
+      const authoredWake = drawSkillFlightWake(ctx, p);
+      if (!authoredWake) {
+        drawGlow(ctx, p.pos.x, p.pos.y, p.radius * VIS_CFG.fx.glowScale, p.color, VIS_CFG.fx.glowAlpha);
+        const sx = p.pos.x - Math.cos(p.dir) * p.radius * VIS_CFG.fx.streakLen;
+        const sy = p.pos.y - Math.sin(p.dir) * p.radius * VIS_CFG.fx.streakLen;
+        const streak = ctx.createLinearGradient(sx, sy, p.pos.x, p.pos.y);
+        streak.addColorStop(0, withAlpha(p.color, 0));
+        streak.addColorStop(1, withAlpha(p.color, VIS_CFG.fx.streakAlpha));
+        ctx.strokeStyle = streak;
+        ctx.lineWidth = Math.max(2, p.radius * 0.85);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(p.pos.x, p.pos.y);
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+      }
       ctx.fillStyle = p.color;
       ctx.save();
       ctx.translate(p.pos.x, p.pos.y);
@@ -7127,7 +7140,8 @@ export class Renderer {
       // Native form geometry rides PROJ_FORM_GEO, the same factors as collision.
       // A cosmetic body replaces the art only; the debug overlay keeps the true form.
       // Both animate on p.age (simulation time), shared with co-op peers.
-      if (!drawCosmeticProjectile(ctx, p.cosmeticProjectile, p.color, r, p.dir, p.age)) switch (p.shape) {
+      if (!drawCosmeticProjectile(ctx, p.cosmeticProjectile, p.color, r, p.dir, p.age)
+        && !drawSkillFlightHead(ctx, p)) switch (p.shape) {
         case 'vortex': {
           const g = PROJ_FORM_GEO.vortex;
           ctx.globalAlpha *= 0.3;

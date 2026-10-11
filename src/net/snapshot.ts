@@ -9,7 +9,8 @@ import { encounterCueOf } from '../engine/encounterCombat';
 import { parryCueStrength } from '../engine/combatCues';
 import type { TitanScenePiece } from '../engine/titans';
 import { cosmeticStyle, COSMETIC_PROJECTILES } from '../data/cosmeticStyles';
-import { cosmeticLoadoutFor, cosmeticSummonSkill, sanitizeCosmeticLoadout } from '../meta/cosmetics';
+import { cosmeticLoadoutFor, cosmeticSummonSkill, cosmeticSkillPaint, sanitizeCosmeticLoadout } from '../meta/cosmetics';
+import { skillFieldVisual, cloneSkillFieldVisual, type SkillFieldVisual } from '../engine/skillFieldVisual';
 import type { CosmeticLoadout, CosmeticMotif } from '../engine/cosmetics';
 const EMPTY_COSMETIC_LOADOUT: CosmeticLoadout = { slots: {}, skills: {} };
 import { flaskChargeBanks, restoreFlaskChargeBanks } from '../engine/flaskState';
@@ -210,7 +211,7 @@ export interface ActorW {
  *  two decimals): the derived scalar the body FX scale by (the tells-wire
  *  idiom — never the bank's source numbers). Absent = no bank worn. */
 export interface StatusW { id: string; stacks: number; bk?: number; dot?: 1; }
-export interface AuraW { c: string; r: number; sh: number; }
+export interface AuraW { c: string; r: number; sh: number; skillId?: string; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW { parryCue?: number;
   castingCompletion?: number;
@@ -236,7 +237,7 @@ export interface CastW { parryCue?: number;
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
  *  painters roll on (wave crest, square tumble) — client and host draw the
  *  same curve the host's hit test sampled. */
-export interface ProjW { reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
+export interface ProjW { skillId?: string; reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
 export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; vid?: string; eid?: string; tid?: number; cnt?: number; }
@@ -524,6 +525,7 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
 
 /** The full render-state replace a client draws each frame. */
 export interface StateSnapshot {
+  skillFields?: SkillFieldVisual[];
   satellites?: import('../engine/satellites').SatelliteVisual[];
   guardArts?: import('../engine/guardArts').GuardArtVisual[];
   satelliteFlights?: import('../engine/satelliteFlights').SatelliteFlightVisual[];
@@ -832,7 +834,8 @@ function actorToW(a: Actor, world: World): ActorW {
     w.cast = cw;
   }
   if (a.activeAuras.size) {
-    w.auras = [...a.activeAuras.values()].map(au => ({ c: au.inst.def.color, r: au.radius, sh: au.shape }));
+    w.auras = [...a.activeAuras.values()].map(au => ({ skillId: au.inst.def.id,
+      c: cosmeticSkillPaint(world, a, au.inst.def.id).color ?? au.inst.def.color, r: au.radius, sh: au.shape }));
   }
   if (a.construct) w.con = { kind: a.construct.kind, domeRadius: a.construct.domeRadius };
   if (a.fuse !== undefined) w.fuse = a.fuse;
@@ -922,7 +925,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       return b ? [[c.id, packContainerBoard(b)] as const] : [];
     })),
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
-    projectiles: world.projectiles.map(p => ({ reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
+    skillFields: world.zones.map(z => skillFieldVisual(z, world.time)),
+    projectiles: world.projectiles.map(p => ({ skillId: p.inst?.def.id ?? p.skillVisualId, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
     tethers: world.tethers.map(t => ({
       ax: Math.round(t.ax), ay: Math.round(t.ay), bx: Math.round(t.bx), by: Math.round(t.by),
       c: t.color, w: t.width,
@@ -1429,7 +1433,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       aim: { x: a.pos.x, y: a.pos.y }, held: false, baseMult: 1,
     } as unknown as CastingState) : null;
     a.activeAuras.clear();
-    if (aw.auras) aw.auras.forEach((au, i) => a!.activeAuras.set('a' + i, ({ inst: { def: { color: au.c } }, radius: au.r, shape: au.sh } as unknown as ActiveAura)));
+    if (aw.auras) aw.auras.forEach((au, i) => a!.activeAuras.set('a' + i, ({ inst: { def: { id: au.skillId ?? '', color: au.c } }, radius: au.r, shape: au.sh } as unknown as ActiveAura)));
     a.construct = aw.con ? ({ kind: aw.con.kind, domeRadius: aw.con.domeRadius } as unknown as ConstructState) : undefined;
     a.fuse = aw.fuse;
     a.leap = aw.leap
@@ -1491,7 +1495,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   });
 
   // Lightweight entities — plain render structs the renderer reads positionally.
-  world.projectiles = snap.projectiles.map(p => ({ reflectedCue: p.reflectedCue,
+  world.remoteSkillFields = (snap.skillFields ?? []).map(cloneSkillFieldVisual);
+  world.projectiles = snap.projectiles.map(p => ({ skillVisualId: p.skillId, reflectedCue: p.reflectedCue,
     orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined,
     pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0, cosmeticMotif: p.cosmeticMotif,
     cosmeticProjectile: cosmeticStyle(COSMETIC_PROJECTILES, p.cosmeticProjectile) ? p.cosmeticProjectile : undefined,
@@ -1752,6 +1757,7 @@ export function serializeZone(world: World): ZoneMsg {
 
 /** Client: rebuild the render terrain from a host zone message. */
 export function applyZone(world: World, msg: ZoneMsg): void {
+  world.remoteSkillFields = []; // discard the previous room's telegraphs immediately
   world.arena.w = msg.arena.w; world.arena.h = msg.arena.h; world.arena.shape = msg.arena.shape;
   // THE COMPOSITE BOUND: adopt the host's pieces whole (fresh objects), then
   // let the hull + revealed set follow — the client's predicted clampPos and
