@@ -171,6 +171,8 @@ import { drawTrapworkTells } from './vis/trapLayer';
 import { drawEffectVoice } from './vis/effectVoice';
 import './vis/attackSequenceVoice';
 import './vis/skillBurstVoice';
+import { drawSkillTether } from './vis/skillTargetVoice';
+import { skillTetherVisual } from '../engine/skillTetherVisual';
 import { drawSkillFlightWake, drawSkillFlightHead, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
 import { skillFieldVisual } from '../engine/skillFieldVisual';
 import './vis/groundRising'; // Ground-born encounters signal through soil, dust and grasping hands.
@@ -7071,28 +7073,14 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  /** Tether bands: a soft wide beam + a bright core line between the cached
-   *  endpoint coords, pulsing gently so a live wire reads as live. */
+  /** Authored strands within the actual band, with shared host/peer paint. */
   private drawTethers(world: World): void {
     const { ctx } = this;
-    if (!world.tethers.length) return;
-    const t = world.time;
-    const pulse = 0.75 + 0.25 * Math.sin(t * 5);
-    for (const tb of world.tethers) {
-      ctx.save();
-      ctx.strokeStyle = tb.color;
-      ctx.lineCap = 'round';
-      ctx.globalAlpha = 0.18 * pulse;
-      ctx.lineWidth = Math.max(3, tb.width * 1.6);
-      ctx.beginPath();
-      ctx.moveTo(tb.ax, tb.ay);
-      ctx.lineTo(tb.bx, tb.by);
-      ctx.stroke();
-      ctx.globalAlpha = 0.7 * pulse;
-      ctx.lineWidth = 1.6;
-      ctx.stroke();
-      ctx.restore();
-      ctx.globalAlpha = 1;
+    const rows = world.remoteSkillTethers ?? world.tethers.map(skillTetherVisual);
+    for (const row of rows) {
+      if (row.fromTier !== undefined && row.toTier !== undefined && !this.feedingTransferVisible(
+        { x: row.ax, y: row.ay }, { fromTier: row.fromTier, toTier: row.toTier, to: { x: row.bx, y: row.by } }, world)) continue;
+      drawSkillTether(ctx, row, world.time);
     }
   }
 

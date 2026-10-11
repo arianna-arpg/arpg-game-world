@@ -3466,7 +3466,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     // totems, pylons); minions stay excluded by simply not being listed.
     color: '#c8b8a0', requiresTags: ['trap', 'mine', 'totem'],
     mods: [],
-    tether: { link: 'caster', dps: 7, damageType: 'physical', width: 8 },
+    tether: { visual: 'tripwire', link: 'caster', dps: 7, damageType: 'physical', width: 8 },
     weight: 6,
   },
 
@@ -3477,7 +3477,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
       + ' killing field.',
     color: '#b0a890', requiresTags: ['trap', 'mine', 'totem'],
     mods: [],
-    tether: { link: 'network', dps: 7, damageType: 'physical', width: 8, radius: 380 },
+    tether: { visual: 'tripwire_web', link: 'network', dps: 7, damageType: 'physical', width: 8, radius: 380 },
     weight: 5,
   },
 
@@ -3487,7 +3487,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
       + ' between you and it take fire damage while it stands.',
     color: '#ff8a3a', requiresTags: ['totem', 'aura'],
     mods: [],
-    tether: { link: 'caster', dps: 9, damageType: 'fire', width: 14 },
+    tether: { visual: 'transient_inferno', link: 'caster', dps: 9, damageType: 'fire', width: 14 },
     weight: 5,
   },
 
@@ -3497,7 +3497,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
       + ' heals every ally standing in it, the target, you, and whoever holds the line between.',
     color: '#7ec88a', requiresTags: ['targeted'],
     mods: [],
-    tether: { link: 'target', affects: 'allies', healPerSec: 8, width: 16, duration: 8, color: '#7ec88a' },
+    tether: { visual: 'lifeline', link: 'target', affects: 'allies', healPerSec: 8, width: 16, duration: 8, color: '#7ec88a' },
     weight: 5,
   },
 
@@ -3507,7 +3507,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
       + ' the cord of witchfire take chaos damage while the bond holds.',
     color: '#9a5ad0', requiresTags: ['targeted'],
     mods: [],
-    tether: { link: 'target', affects: 'enemies', dps: 8, damageType: 'chaos', width: 12, duration: 8 },
+    tether: { visual: 'witchfire_leash', link: 'target', affects: 'enemies', dps: 8, damageType: 'chaos', width: 12, duration: 8 },
     weight: 5,
   },
 
@@ -3530,7 +3530,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
       + ' line you step through and enemies cannot.',
     color: '#d8e84a', requiresTags: ['movement'],
     mods: [],
-    tether: { link: 'network', dps: 8, damageType: 'lightning', width: 10, radius: 800 },
+    tether: { visual: 'charged_span', link: 'network', dps: 8, damageType: 'lightning', width: 10, radius: 800 },
     weight: 4,
   },
 

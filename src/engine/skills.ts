@@ -146,6 +146,8 @@ export interface TrajectorySpec {
  * damage honours the conversion schema like any other typed source.
  */
 export interface TetherSpec {
+  /** Authored geometry, independent of damage conversion or wardrobe tint. */
+  visual?: string;
   /** 'caster': spawned object ↔ its caster. 'network': spawned object ↔
    *  every sibling object of the same skill within `radius` (a trap web).
    *  'target': caster ↔ the skill's resolved target (bond skills/supports —

@@ -9,6 +9,14 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Targeted casts, tether bands and offerings use `data/skillTargetVisuals.ts`
+and `render/vis/skillTargetVoice.ts`. Distinct marks and motion survive recolor;
+links stay clipped to actual widths and replicate as paint-only DTOs.
+`docs/design/target-skill-visuals.md` covers the recipient/consumption hooks.
+Verify targetvisuals, corpse, devotedstartertrees, supportfabric, feedingcues,
+resourcevisuals, effectvoice, cosmetics, projectilecull, sim smoke and hidden
+`balance/target-visuals-ui.cjs` after the target probe and build.
+
 Resource pickups, siphons and measured leech returns share geometry in
 `data/resourceVisuals.ts` and `render/vis/resourceFlowLayer.ts`; bounded transfer
 receipts extend feeding cues and co-op snapshots without changing payout timing.

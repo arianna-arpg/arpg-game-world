@@ -2,6 +2,8 @@ import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './ski
 import { skillMergePlan } from './skillMerge';
 import { skillBurstVoice } from '../data/skillVisuals';
 import { skillBeamVoice } from '../data/skillFlightVisuals';
+import { skillTargetVoice, skillRiteVoice, TARGET_VISUAL_STYLE } from '../data/skillTargetVisuals';
+import type { SkillTetherVisual } from './skillTetherVisual';
 import type { SkillFieldVisual } from './skillFieldVisual';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
@@ -1205,6 +1207,8 @@ type TetherLink = TetherSpec['link'] | 'pack' | 'zap';
  *  shared typed mitigation, so beams are real, dressable damage — the transient
  *  "bleed" that exists only while something touches the line. */
 interface Tether {
+  visual?: string;
+  visualAge?: number;
   a: Actor; b: Actor;
   /** Whose beam this is (team resolution + kill credit). */
   owner: Actor;
@@ -2895,6 +2899,7 @@ export class World {
   zones: Zone[] = [];
   /** Replicated paint only. Never added to the simulation's damage zones. */
   remoteSkillFields?: SkillFieldVisual[];
+  remoteSkillTethers?: SkillTetherVisual[];
   /** Mints unique sheet-source keys for domain zones. */
   private domainSeq = 0;
   /** THE MADNESS BANKS, one per madden-grafted skill instance (maddenBankOf).
@@ -5927,6 +5932,7 @@ export class World {
     this.projectiles = [];
     this.zones = [];
     this.remoteSkillFields = undefined;
+    this.remoteSkillTethers = undefined;
     this.tethers = [];
     this.texts = [];
     this.flashes = [];
@@ -35201,6 +35207,7 @@ export class World {
           this.kill(pick2, true);
           const feedingCue = pick2.dead ? feedingCueFlash(pick2.pos, caster, def.feedingCue, 'ritual', pick2.tier, pick2.radius) : undefined;
           if (feedingCue) this.flashes.push(feedingCue);
+          if (pick2.dead) this.showSkillArrival(caster, inst, pick2.pos, pick2.radius + 12, pick2.tier, 'sacrifice');
         }
       }
     }
@@ -35397,6 +35404,7 @@ export class World {
         }
         if (t.consumesCorpse !== false && def.delivery.type !== 'summon') {
           for (const c of feast) this.removeCorpse(c);
+          for (const c of feast) this.showSkillArrival(caster, inst, c.pos, 28, c.tier ?? this.spoilStoryAt(c.pos), true);
           corpseFeast = Math.max(0, feast.length - 1);
           // DEVOUR (corpseLifeRestore — Corpse Feast): each body eaten
           // returns a share of its life force, through the one restore path.
@@ -35404,8 +35412,8 @@ export class World {
             const rr = t.corpseLifeRestore;
             let meat = 0;
             for (const c of feast) meat += c.maxLife;
-            if (rr.life) noteRestoreGain(caster, 'life', this.applyRestore(caster, { resource: 'life', amount: meat * rr.life }, { tags: def.tags }), def.feedingCue);
-            if (rr.mana) noteRestoreGain(caster, 'mana', this.applyRestore(caster, { resource: 'mana', amount: meat * rr.mana }, { tags: def.tags }), def.feedingCue);
+            if (rr.life) this.applyRestore(caster, { resource: 'life', amount: meat * rr.life }, { tags: def.tags, feedingCue: def.feedingCue });
+            if (rr.mana) this.applyRestore(caster, { resource: 'mana', amount: meat * rr.mana }, { tags: def.tags, feedingCue: def.feedingCue });
             for (const corpse of feast) {
               const feedingCue = feedingCueFlash(corpse.pos, caster, def.feedingCue, 'flesh', corpse.tier);
               if (feedingCue) this.flashes.push(feedingCue);
@@ -36109,10 +36117,7 @@ export class World {
               this.startRestoreStream(friendly, caster, inst, fx, opts.chargesSpent ?? 0, pourCrit);
             }
           }
-          this.flashes.push({
-            pos: vec(friendly.pos.x, friendly.pos.y), radius: friendly.radius + 10,
-            color: cosmeticColor, life: 0.25, maxLife: 0.25,
-          });
+          this.showSkillArrival(caster, inst, friendly.pos, friendly.radius + 14, friendly.tier);
           break;
         }
         if (targetInfo?.actor) {
@@ -36122,6 +36127,7 @@ export class World {
           const tameFx = def.effects.find((f): f is Extract<SkillEffect, { type: 'tame' }> => f.type === 'tame');
           if (tameFx) {
             this.tryTame(caster, inst, targetInfo.actor, tameFx);
+            if (targetInfo.actor.owner === caster) this.showSkillArrival(caster, inst, targetInfo.actor.pos, targetInfo.actor.radius + 14, targetInfo.actor.tier);
             break;
           }
           this.resolveHit(caster, inst, targetInfo.actor, useMult, 0, flatBonus);
@@ -36136,7 +36142,10 @@ export class World {
                 && (!need || e.statuses.some(s => need.includes(s.id))))
               .sort((a, b) => dist(targetInfo.pos, a.pos) - dist(targetInfo.pos, b.pos))
               .slice(0, extraTargets);
-            for (const e of more) this.resolveHit(caster, inst, e, useMult, 0, flatBonus);
+            for (const e of more) {
+              this.resolveHit(caster, inst, e, useMult, 0, flatBonus);
+              this.showSkillArrival(caster, inst, e.pos, e.radius + 14, e.tier);
+            }
           }
           if (d.splash) {
             const splash = d.splash * aoeScale;
@@ -36154,10 +36163,11 @@ export class World {
             this.strikeSurfaces(caster, targetInfo.pos, splash);
           }
         }
-        this.flashes.push({
-          pos: vec(origin.x, origin.y), radius: d.splash ? d.splash * aoeScale : 26,
-          color: cosmeticColor, life: 0.25, maxLife: 0.25,
-        });
+        if (!targetInfo?.corpse || targetSpec?.consumesCorpse === false || !skillRiteVoice(def.id)) {
+          this.showSkillArrival(caster, inst, targetInfo?.actor?.pos ?? origin,
+            d.splash ? d.splash * aoeScale : (targetInfo?.actor?.radius ?? 12) + 14,
+            targetInfo?.actor?.tier ?? caster.tier, false, !!d.splash);
+        }
         fieldAt = vec(origin.x, origin.y);
         break;
       }
@@ -36817,6 +36827,7 @@ export class World {
       }
 
       case 'self':
+        this.showSkillArrival(caster, inst, caster.pos, caster.radius + 18, caster.tier, true);
         // FIRE WALKER'S SPRINT (the moveTrail fabric on a movement BUFF —
         // stealth's burning wake): while the working holds, the runner
         // drops trail patches behind every stride, and the trail dies
@@ -38732,6 +38743,21 @@ export class World {
     };
   }
 
+  /** A resolved cast signature; recovery receipts and status timers remain
+   * separate. Frozen at the actual recipient, with no new gameplay event. */
+  private showSkillArrival(caster: Actor, inst: SkillInstance, at: Vec2, radius: number, tier: number,
+    rite: boolean | string = false, splash = false): void {
+    const id = typeof rite === 'string' ? rite : inst.def.id;
+    let fx = rite ? skillRiteVoice(id) : skillTargetVoice(id);
+    if (rite && (!fx || inst.def.feedingCue === false)) return;
+    if (splash && fx) fx = fx.replace('skillTarget:', 'skillTargetSplash:');
+    // A multi-effect offering grants several buffs at the same instant.
+    if (fx && this.flashes.some(f => f.fx === fx && f.life === f.maxLife && f.pos.x === at.x && f.pos.y === at.y)) return;
+    const life = fx ? TARGET_VISUAL_STYLE.life : .25;
+    this.flashes.push({ pos: { ...at }, radius, color: cosmeticSkillPaint(this, caster, inst.def.id).color ?? inst.def.color,
+      life, maxLife: life, fx, recoveryCueTier: tier });
+  }
+
   /** Lay a tether band between two actors. Damage is scaled by the owner's
    *  damage stat and CONVERTED here, at attach time — a Flameforged build's
    *  tripwire bleeds fire. One band per endpoint-pair per skill: re-casting
@@ -38763,6 +38789,7 @@ export class World {
     }
     this.tethers.push({
       a, b, owner, skillId: inst.def.id, link: spec.link, inst,
+      visual: spec.visual, visualAge: 0,
       amounts, heal: spec.healPerSec ?? 0,
       affects: spec.affects ?? 'enemies',
       width,
@@ -38889,6 +38916,7 @@ export class World {
   private updateTethers(dt: number): void {
     for (let i = this.tethers.length - 1; i >= 0; i--) {
       const t = this.tethers[i];
+      t.visualAge = (t.visualAge ?? 0) + dt;
       t.remaining -= dt;
       if (t.a.dead || t.b.dead || t.remaining <= 0) { this.tethers.splice(i, 1); continue; }
       t.ax = t.a.pos.x; t.ay = t.a.pos.y; t.bx = t.b.pos.x; t.by = t.b.pos.y;
@@ -42371,7 +42399,7 @@ export class World {
   private applyRestore(
     target: Actor,
     fx: { resource: 'life' | 'mana' | 'es' | 'poise'; amount: number; resetEsDelay?: boolean },
-    opts?: { noEvent?: boolean; tags?: SkillTag[] },
+    opts?: { noEvent?: boolean; tags?: SkillTag[]; feedingCue?: import('../data/feedingCues').FeedingCueSpec | false },
   ): number {
     let landed = 0;
     if (fx.resource === 'life') {
@@ -42386,7 +42414,7 @@ export class World {
       landed = target.gainEs(fx.amount);
       if (fx.resetEsDelay) target.esDelay = 0;
     }
-    if (fx.resource !== 'poise') noteRestoreGain(target, fx.resource, landed);
+    if (fx.resource !== 'poise') noteRestoreGain(target, fx.resource, landed, opts?.feedingCue);
     if (landed > 0 && !opts?.noEvent && target.gainEvents.length < 64) {
       target.gainEvents.push({
         kind: 'restore', id: fx.resource, depth: 0,
@@ -42607,12 +42635,14 @@ export class World {
       // A momentary mending arc (the discharge-zap visual pattern).
       this.tethers.push({
         a: from, b: next, owner: caster, skillId: inst.def.id, link: 'zap',
+        visual: 'healing_chain', visualAge: 0,
         amounts: {}, heal: 0, affects: 'allies', width: 5,
         remaining: 0.16, tickTimer: 99,
         color: '#7ec88a',
         ax: from.pos.x, ay: from.pos.y, bx: next.pos.x, by: next.pos.y,
       });
       this.applyHeal(caster, inst, next, fx, scale, quiet);
+      if (skillTargetVoice(inst.def.id)) this.showSkillArrival(caster, inst, next.pos, next.radius + 14, next.tier);
       visited.add(next);
       from = next;
     }
@@ -52516,6 +52546,7 @@ export class World {
                 // The beam IS a moment-long tether (the discharge visual).
                 this.tethers.push({
                   a: c, b: kin, owner: c, skillId: '__embedbeam:' + c.id, link: 'zap',
+                  visual: 'embed', visualAge: 0,
                   amounts: {}, heal: 0, affects: 'enemies', width,
                   remaining: 0.15, tickTimer: 9, color: c.color,
                   ax: c.pos.x, ay: c.pos.y, bx: kin.pos.x, by: kin.pos.y,
@@ -57517,11 +57548,13 @@ export class World {
     inst = inst.followUpHost ?? inst;
     if (!followUpHost && !inst.treeNodes?.some(id => treeNodeOf(inst.def, id)?.buffs?.length)) {
       target.addBuff(fx, durScale, 0, inst.def.tags);
+      if (target.buffs.has(fx.id)) this.showSkillArrival(caster, inst, target.pos, target.radius + 16, target.tier, true);
       return;
     }
     const tagged = { ...fx };
     this.treeBuffSources.set(tagged, { caster, inst });
     target.addBuff(tagged, durScale, 0, [...skillContextTags(inst)]);
+    if (target.buffs.has(fx.id)) this.showSkillArrival(caster, inst, target.pos, target.radius + 16, target.tier, true);
   }
 
   /** Retire fields that captured the previous allocation. */
@@ -58170,6 +58203,7 @@ export class World {
         // (tickTimer > remaining, so it never deals a tick of its own).
         this.tethers.push({
           a, b: best, owner: a, skillId: '__discharge:' + inst!.def.id, link: 'zap',
+          visual: inst!.def.id, visualAge: 0,
           amounts: {}, heal: 0, affects: 'enemies', width: 5,
           remaining: 0.14, tickTimer: 9, color: inst!.def.color,
           ax: a.pos.x, ay: a.pos.y, bx: best.pos.x, by: best.pos.y,
