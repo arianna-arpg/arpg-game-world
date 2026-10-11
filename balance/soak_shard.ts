@@ -31,6 +31,10 @@
 //   --tick-hz <n>       the host tick rate for this run (SHARD_CFG.tickHz; 60 ships) — a cost experiment
 //   --diet off          THE WIRE DIET switched off (WIRE_DIET_CFG.enabled): the pre-diet frames, the A/B
 //   --report <path>     the JSON report (default balance/reports/soak_<stamp>.json, gitignored)
+//   --diagnostics       inclusive phase, worker, machine-load and checkpoint measurements
+//   --profile <path>    CPU profile of the measured window (diagnostic timing only)
+//   --window-at <ms>    earliest window start as Unix milliseconds, for paired runs
+//   --conditions <s>    machine/concurrency conditions recorded verbatim in the report
 //   --thresholds <path> the gates (default balance/soak.config.json)
 //
 // Exit 0 = every gate held, 2 = a breach (each one named), 1 = the harness failed.
@@ -49,6 +53,7 @@ import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import { deriveSeed, seedGlobalRandom } from '../src/sim/rng';
 import { WIRE_DIET_CFG } from '../src/net/wireDiet'; // THE WIRE DIET's A/B switch (--diet off)
 import type { FleetBotStats, FleetCommand, FleetEvent } from './soak_bots';
+import { ShardPerformance } from './shardPerformance';
 
 export const SOAK_CFG = {
   bots: 10,
@@ -227,6 +232,9 @@ async function main(): Promise<number> {
   const gatesPath = typeof args.thresholds === 'string' ? args.thresholds : SOAK_CFG.thresholds;
   const gates = readGates(gatesPath);
   const seedHex = '0x' + seed.toString(16).padStart(8, '0');
+  // Optional phase/worker/save evidence; --profile captures only the load window.
+  const shardPerformance = args.diagnostics || typeof args.profile === 'string'
+    ? new ShardPerformance(typeof args.profile === 'string' ? args.profile : undefined) : null;
 
   // ---- the host -------------------------------------------------------------
   const hostLog: string[] = [];
@@ -249,6 +257,7 @@ async function main(): Promise<number> {
   const url = `ws://127.0.0.1:${port}`;
   const hearth = host.hearthSeat();
   const net = host.net;
+  shardPerformance?.bind(host);
   const world = host.worldmass ? 'the Unbroken Wilds' : 'classic';
   console.log(`[soak] ${world} ${seedHex} stood in ${bootSec.toFixed(1)} s on ${url}; ${bots} bots, a ${seconds} s window`);
 
@@ -383,8 +392,12 @@ async function main(): Promise<number> {
   // ---- the window -----------------------------------------------------------
   // The forced collection stalls the loop; the pump's catch-up (and any drop it
   // books) settles before the window opens, so the soak never bills its own GC.
+  const windowAt = num(args['window-at']);
+  if (windowAt !== undefined) await until(() => Date.now() >= windowAt, Math.max(0, windowAt - Date.now()) + 1000);
   const heapStartMB = liveHeapMB();
   await sleep(100);
+  await shardPerformance?.start();
+  const windowStartedAt = Date.now();
   win.t0 = performance.now();
   win.open = true;
   const base = { ticks: host.ticks, dropped: host.droppedTicks, bytes: net.bytesOut, frames: net.framesOut };
@@ -408,6 +421,7 @@ async function main(): Promise<number> {
     return !!p && host.parties.rows().some(r => r.members.includes(p.seats[0]) && r.members.includes(p.seats[1]));
   };
   const sample = (): void => {
+    shardPerformance?.sample(host);
     const ms = performance.now() - win.t0, sec = Math.max(1e-3, (ms - prev.ms) / 1000);
     const ticks = sorted(win.tickMs.slice(prev.tick)), snaps = sorted(win.snapBytes.slice(prev.snap));
     const st = host.status() as unknown as StatusView;
@@ -445,6 +459,7 @@ async function main(): Promise<number> {
     if (b >= seconds || ev.fleetExited) break;
   }
   win.open = false;
+  shardPerformance?.close();
   clearInterval(heapPoller);
   const winEnd = performance.now();
   const windowSec = (winEnd - win.t0) / 1000;
@@ -452,6 +467,7 @@ async function main(): Promise<number> {
   const partyAtEnd = partyStands();
   const heapEndMB = liveHeapMB();
   if (host.broken) err('THE BREAKER tripped: the simulate phase faulted every tick');
+  const performanceEvidence = await shardPerformance?.finish(host);
 
   // ---- teardown -------------------------------------------------------------
   ev.ending = true;
@@ -552,7 +568,15 @@ async function main(): Promise<number> {
       byKind: { snapshots: perClient(win.bytesSnap), zone: perClient(win.bytesZone), other: perClient(bytes - win.bytesSnap - win.bytesZone) },
       zoneBroadcasts: win.zoneSends, zoneToOne: win.zoneToSends,
     },
-    inputs: { fed: r2(fed), hostSeenHzPerSeat: r2(fed * SHARD_CFG.tickHz), fleetStepHz: fleetStats?.stepHz ?? null, fleetClock: fleetStats?.clock ?? null },
+    // A nominal 60 Hz multiplier overstates service when most ticks are dropped.
+    // This is drained input batches per seat per wall second, not client frames
+    // or accepted movement seconds (a batch can contain several honest frames).
+    inputs: { fed: r2(fed), hostSeenHzPerSeat: r2(fed * dTicks / windowSec),
+      nominalHzPerSeat: r2(fed * SHARD_CFG.tickHz), steppedHz: r2(dTicks / windowSec),
+      fleetStepHz: fleetStats?.stepHz ?? null, fleetClock: fleetStats?.clock ?? null },
+    performanceEvidence,
+    conditions: { note: typeof args.conditions === 'string' ? args.conditions : null,
+      windowAt: windowAt ?? null, windowStartedAt, startDelayMs: windowAt === undefined ? null : windowStartedAt - windowAt },
     heap: { startMB: r2(heapStartMB), endMB: r2(heapEndMB), growthMB: r2(heapGrowth), allowanceMB: r2(heapAllowance), forcedGc: !!fullGc, troughSlopeMBPerMin: r2(troughSlope) },
     faults,
     dormant: {

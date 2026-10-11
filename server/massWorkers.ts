@@ -7,7 +7,7 @@ import { installMassCompilePort, type MassCompilePort, type MassCompiler } from 
 // order prevents a compiler from monopolizing the worker with its next job.
 let worker: Worker | undefined, nextPort = 0;
 const ports = new Map<number, NodeMassCompilePort>();
-const telemetry = { submitted: 0, completed: 0, failed: 0 };
+const telemetry = { submitted: 0, completed: 0, failed: 0, roundTripMs: 0, maxRoundTripMs: 0 };
 export function massWorkersStatus() { return { ...telemetry, ports: ports.size, threads: worker ? 1 : 0 }; }
 
 function compilerThread(): Worker {
@@ -19,6 +19,7 @@ function compilerThread(): Worker {
   current.on('message', (message: { port: number; reply: unknown }) => {
     if (worker !== current) return;
     const port = ports.get(message.port); if (!port) return;
+    port.complete();
     telemetry.completed++; port.onmessage?.({ data: message.reply } as MessageEvent);
   });
   const fail = (message: string) => {
@@ -39,10 +40,17 @@ class NodeMassCompilePort implements MassCompilePort {
   onerror: MassCompilePort['onerror'] = null;
   private readonly id = ++nextPort;
   private stopped = false;
+  private submittedAt = 0;
   constructor(private readonly kind: MassCompiler) { ports.set(this.id, this); }
   postMessage(job: unknown): void {
     if (this.stopped) throw Error('Wilds compiler port is closed');
+    this.submittedAt = performance.now();
     compilerThread().postMessage({ port: this.id, kind: this.kind, job }); telemetry.submitted++;
+  }
+  /** Includes worker queueing and host event-loop delay, not just compiler CPU. */
+  complete(): void {
+    const ms = performance.now() - this.submittedAt;
+    telemetry.roundTripMs += ms; telemetry.maxRoundTripMs = Math.max(telemetry.maxRoundTripMs, ms);
   }
   terminate(): void {
     if (this.stopped) return;
