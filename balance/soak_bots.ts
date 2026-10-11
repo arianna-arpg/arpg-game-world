@@ -22,6 +22,7 @@ import { deriveSeed, mulberry32 } from '../src/sim/rng';
 import type { PlayerInput } from '../src/net/intent';
 import type { SessionMsg } from '../src/net/transport';
 import type { StateSnapshot } from '../src/net/snapshot';
+import { SoakLifeInput } from './soak_bot_lifecycle';
 
 export const FLEET_CFG = {
   /** Inputs each bot sends a second: THE FLEET'S CLOCK (below) steps every bot on each frame boundary. */
@@ -80,6 +81,7 @@ interface Bot {
   pos: { x: number; y: number } | null; down: boolean; seatedOnce: boolean;
   foe: { x: number; y: number; d: number } | null;
   awaitingRejoin: boolean; cutting: boolean;
+  lifeInput: SoakLifeInput;
   inputs: number; snaps: number; zones: number; deaths: number; rejoins: number; lost: number;
   timers: Set<ReturnType<typeof setTimeout>>;
   /** THE SPREAD: this bot's own roaming anchor (the hearth when the fleet is not spread). */
@@ -152,6 +154,7 @@ function step(b: Bot, now: number): void {
     ? { dx: 0, dy: 0, aim: { x: foe.x, y: foe.y }, held: [true], edge: [], seq: ++b.seq }
     : { dx: cx, dy: cy, aim: foe ? { x: foe.x, y: foe.y } : { x: at.x + cx * 100, y: at.y + cy * 100 }, held: [false], edge: [], seq: ++b.seq };
   t.sendInput(b.self, input);
+  b.lifeInput.sent(input);
   b.inputs++;
 }
 
@@ -162,6 +165,7 @@ function onSnap(b: Bot, s: StateSnapshot): void {
   const at = { x: row.pos[0], y: row.pos[1] };
   b.pos = at;
   b.down = row.dead || row.downed;
+  b.lifeInput.observe(row.seq); // WsTransport inflates full and delta snapshots before this callback.
   if (!b.seatedOnce) { b.seatedOnce = true; emit({ t: 'seated', bot: b.i, seat: b.self, classId: b.classId }); }
   let best: { x: number; y: number; d: number } | null = null;
   for (const a of s.actors) {
@@ -183,10 +187,12 @@ function onWord(b: Bot, t: WsTransport, m: SessionMsg): void {
     // THE FRESH HERO'S END: the seat left the world; the class pick's `rejoin` re-seats it.
     if (b.awaitingRejoin) return;
     b.awaitingRejoin = true; b.deaths++; b.pos = null; b.foe = null;
+    b.lifeInput.reset();
     emit({ t: 'death', bot: b.i, seat: b.self });
     later(b, FLEET_CFG.rejoinSec, () => { if (b.t === t && !ending) t.sendSession({ t: 'rejoin', classId: b.classId }); });
   } else if (m.t === 'newRun') {
     b.self = m.seat; b.awaitingRejoin = false; b.rejoins++;
+    b.lifeInput.reset();
     emit({ t: 'rejoined', bot: b.i, seat: m.seat });
   } else if (m.t === 'partyInvite') {
     if (b.i === 1 && m.from === bots[0]?.self) t.sendSession({ t: 'party', op: 'accept' });
@@ -229,6 +235,7 @@ async function resume(b: Bot): Promise<void> {
     const r = await t.connect(url, { name: b.name, classId: b.classId }, undefined, b.resume ?? undefined);
     b.self = r.self; b.cutting = false;
     b.seq = 0; // the new shell counts its inputs from zero (the shard forgot the old count)
+    b.lifeInput.reset();
     const mem = shardResumeFor(url);
     b.resume = mem && mem.seat === r.self ? mem : null; // the resume minted a fresh token
     emit({ t: 'resumed', bot: b.i, seat, resumedSeat: r.self, resumed: r.resumed });
@@ -254,7 +261,7 @@ function dropStep(now: number): void {
   const b = bots[dropBot];
   if (!b) { drop.done = true; emit({ t: 'dropSkipped', bot: dropBot, why: 'no such bot' }); return; }
   const waited = (now - drop.armedAt) / 1000;
-  const standing = !!b.t && !!b.pos && !b.down && !b.awaitingRejoin && !b.cutting;
+  const standing = !!b.t && !!b.pos && !b.down && !b.awaitingRejoin && !b.cutting && b.lifeInput.canCut;
   const quiet = standing && !b.foe;
   if (!quiet && !(standing && waited >= FLEET_CFG.dropQuietWaitSec)) {
     if (waited >= FLEET_CFG.dropQuietWaitSec * 2) { drop.done = true; emit({ t: 'dropSkipped', bot: b.i, why: 'the drop bot never stood to be cut' }); }
@@ -335,6 +342,7 @@ async function main(): Promise<void> {
       i, name: `Soak ${String(i + 1).padStart(2, '0')}`, classId: classes[i % classes.length] ?? 'warrior',
       t: null, self: '', resume: null, rng: mulberry32(deriveSeed(seed, i + 1)), seq: 0, heading: 0, turnAt: 0,
       pos: null, down: false, seatedOnce: false, foe: null, awaitingRejoin: false, cutting: false,
+      lifeInput: new SoakLifeInput(),
       inputs: 0, snaps: 0, zones: 0, deaths: 0, rejoins: 0, lost: 0, timers: new Set(),
     };
     if (spread > 0) b.anchor = { x: hearth.x + Math.cos(2 * Math.PI * i / n) * spread, y: hearth.y + Math.sin(2 * Math.PI * i / n) * spread }; // THE SPREAD

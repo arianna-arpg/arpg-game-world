@@ -4020,6 +4020,9 @@ we verify changes.
   also covers exact search-work rejection, live-input lattice memoization,
   bounded native candidate LRU and page-invalidated reservation candidates;
   verify searchwork, reservationwork, nativewalkcache and nativeobstaclecache.
+  ShardPerformance also records conservative far-target rejection and closure-free
+  stat folds (targetwork, statfold), plus per-life acknowledged soak reconnects
+  (sharddormant). Live sensing and modifier order stay exact; soak gates stay fixed.
   Preserve
   exact saved state, full signed addresses, every player's population and the
   unchanged load gates; verify the affected worldmass/native probes and shard

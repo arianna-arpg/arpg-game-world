@@ -486,3 +486,158 @@ and the exact cache replay script are preserved in
 `.claude/ownership.performance2-control-evidence/` before archiving the temporary
 control checkout. No production source changes occurred between the paired
 timing runs, the final profile and the early-load follow-up.
+
+## Third pass: exact target rejection and stat folds
+
+This pass starts at `401dfdfab68c53bee0e33f60c56aa9d4d4c7c01b` in the same
+isolated performance branch. The control uses that unchanged engine. Both
+control and candidate use the corrected fleet eligibility described below;
+no population, simulation frequency, path budget or load gate changes.
+
+The full target scan first rejects non-segmented bodies provably outside their
+current reach. It compares the largest absolute coordinate delta with the
+maximum of the existing front/rear `senseReach` results, including current
+detectability, concealment, alert state and authored multipliers. Nearby bodies
+bypass the extra stat reads. Infinite reach, NaNs and hittable segmented bodies
+fall through to the original checks. Survivors retain original roster order,
+diplomacy, invisibility, exact distance, sight, scoring and lock bookkeeping.
+There is no spatial-radius cap, target cache or change to rescan cadence.
+
+Stat computation folds source modifiers, then skill-local extras through two
+loops instead of allocating an `apply` closure on each uncached resolution.
+Filter/property-read order, floating-point arithmetic order, gauges, overrides,
+link copies/recursion, trades and cache invalidation are unchanged. A proposed
+faction-string hoist was discarded: the diagnostic made one-layer lookups
+10–19% slower, despite helping a four-layer fixture.
+
+### Reconnect harness correction
+
+The earlier early-load failures did not demonstrate a production reconnect
+expiry bug. In both preserved failing reports, the drop bot died, rejoined,
+then was cut before the new hero acted on the host. The host deliberately
+releases an untried spawn-grace seat. Its first standing snapshot can still
+carry the previous life's input acknowledgment, so merely checking for a
+sequence number is insufficient.
+
+The fleet now resets eligibility on `runEnd`, `newRun` and socket resume,
+records the first willed sequence actually sent in that life, and waits for
+that sequence to be acknowledged before its planned cut. Existing quiet-time
+and failure deadlines remain in force; a bot that never qualifies still fails
+the required resume gate. The host, tokens, spawn grace and resume gate were
+not changed. Full/delta snapshots pass through the existing decoder, and
+transport-identity checks reject events from replaced sockets.
+
+The expanded real-host `sharddormant` probe reproduces the old failure
+(send, close before a tick, release, fresh seat), then exercises a real
+death/rejoin with an old acknowledgment, new willed acknowledgment, dormant
+cut and exact same-seat/same-actor resume. Its full 73 checks pass.
+
+### Fixed-work evidence and limits
+
+`statfold` embeds the original evaluator, independent of the current fold:
+21,449 exact comparisons, 65 analytic assertions and two value/property-read
+trace checks pass. `targetwork` preserves the original picker and helpers
+(SHA-256 `736c7157786eeed87d8071bb1c784913cb00abc4ae10b611cd69505e31e02daa`):
+453 cases / 487 scans agree on target, distance, authoritative actor/sheet
+state, random draws and 773 ordered sight queries. Hostility calls fall from
+1,538 to 1,103; the far-roster fixture falls from 65 to 2. These are operation
+counts, not frame-rate claims. Derived stat caches can warm earlier for far
+friends; raw serialized cache contents need not have identical residency.
+
+A local benchmark using real player/monster sheets compared the archived and
+candidate fold over 1,536,000 reads per trial, alternating order across three
+trials. Every result digest matched. Skill-local queries were 1.21–1.45 times
+faster (median 1.31); condition/gauge-invalidated mixes were 1.08–1.19 times
+faster (median 1.10). Cached timings were short/noisy and do not support a
+whole-game claim.
+
+A static real-native roster diagnostic found 69,707 of 73,168 spread-scan
+candidates provably beyond reach (95.3%), with no false exclusions and equal
+picked-ID digests. Unmetered picker times over twenty forced scans per observer
+were 814–863 ms before and 214–248 ms after. A natural clustered roster also
+improved; packing the same 346 bodies into a small rectangle gave noisy
+changes from 2.0% faster to 5.6% slower. Those provisional times overlapped a
+type check, use warm fixed-time sight caches and base tuning, and are not
+live gameplay measurements. Integrated measurements follow below.
+
+### Correctness and client receipts
+
+All four type checks and the production build pass (the existing bundle-size
+warning remains). Generation QA passes 2,607 cases with four existing overlap
+warnings. Simulation smoke passes five scenarios / 25 episodes. Statfold,
+targetwork, conversions, applyarm, nativehostility, hellwar, tacticalai,
+watchers, stealth, segments, worldmass_targets, stalkercommitment and aiverbs
+pass. These checks retain their original assertions.
+
+The actual production-client wilderness course passes on its first attempt:
+nearby populations are 38/64/41/18/11/0/6/6 (mean 23), with 255 native identities
+before Continue and 162 sleepers. Continue preserves all originals, admits 16
+more identities and has 176 sleepers. The saved fang priest returns at exactly
+239.4 life with zero readiness waits. No console errors or fatal crashes were
+reported. The captured scene also renders normally. This is an automated
+travel/save/continue course, not a claim of measured rendering frame times.
+
+The broader checks also preserve two failures for adjudication:
+
+- `foragercommitment`: both unchanged control and candidate report exactly
+  11→21 melee casts and 6.15→9.23 seconds close engagement for seed 42, then
+  fail the seed-451 improvement assertion at line 40. This is a reproduced
+  baseline failure; it was not changed or silenced in this performance pass.
+- The first shard suite passes 21/22 probes, including all 73 dormant-seat
+  checks, but `shardcounters` reports A's writ paying no counted reward. The
+  unchanged control passes. A subsequent candidate diagnostic, retaining the
+  assertion and adding receipt logging, also passes: A gains eight coarse
+  essence, B/keeper gain nothing, and the correct hand's receipt is recorded.
+  The initial failure remains unresolved. The probe's reward counter omits
+  legitimate XP-only recipes, and asynchronous waits can change the live
+  slate inputs; neither explains the specific failure without its missing
+  receipt. No reward logic or assertion was changed to obtain a pass.
+
+The full worldmass suite was not rerun. The previously recorded foundation
+failures remain outside this change; no source guards or expected hashes were
+repinned. A successful subset is not a flawless-gameplay certification.
+
+### Repeated integrated comparisons
+
+Three paired 60-second courses use six real clients, seed `0x00ddba11`,
+60 Hz simulation, `rove=0`, diagnostics enabled and CPU profiling disabled.
+The paired hosts compete on the same workstation; the second spread pair
+reverses launch order. A future shared window allows the worlds to warm first.
+No correctness jobs from this task run in these windows. Other workstation
+activity is uncontrolled, and elapsed-time courses do not advance identical
+numbers of simulation steps. Treat these as capacity observations rather than
+fixed-work proofs. Population settings are identical on both sides.
+
+| Course | Engine | Tick p50 / p95 / p99 (ms) | Worst tick (ms) | Dropped ticks | Steps/s | Input Hz/seat | Heap growth (MiB) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Spread A | control | 110.80 / 204.84 / 282.36 | 359.30 | 86.00% | 8.37 | 6.68 | 17.90 |
+| Spread A | candidate | 90.95 / 184.74 / 303.65 | 336.73 | 83.28% | 9.91 | 7.89 | 18.26 |
+| Spread B | control | 125.61 / 262.06 / 388.53 | 855.50 | 88.55% | 6.85 | 5.47 | 7.71 |
+| Spread B | candidate | 128.23 / 269.25 / 341.72 | 379.10 | 88.44% | 6.87 | 5.48 | 8.88 |
+| Cluster | control | 8.57 / 22.16 / 59.02 | 198.03 | 0.75% | 59.73 | 47.80 | 6.56 |
+| Cluster | candidate | 8.90 / 22.46 / 60.27 | 142.97 | 0.50% | 59.73 | 46.23 | 3.88 |
+
+Spread A improves p95 by 9.8% and input throughput by 18.1%, but worsens p99
+by 7.5%. Spread B has effectively unchanged throughput, a 2.7% worse p95 and
+12.0% better p99. Machine-wide CPU averages are about 64% in A and 76% in B;
+clustered play averages 53%. Clustered typical timings are essentially neutral.
+The lower individual maxima do not establish a repeatable worst-tick gain.
+Both spread courses still fail the unchanged 20 ms p95 and 5% drop gates;
+both cluster courses fail p95. All six runs pass heap, same-seat reconnect,
+party, error and fault gates. Each spread run has four deaths/four rejoins;
+clustered runs have none. Nearby mean counts are control/candidate 33.50/31.81,
+34.90/32.78 and 18.89/18.00, with unchanged admission/density rules.
+
+The second spread control's 855.50 ms tick includes 42.98 ms of recorded GC;
+GC does not explain most of the stall. Its world-update maximum is 714.55 ms,
+versus 323.22 ms in the candidate. Runtime-update p99 remains roughly 192–194 ms
+on both sides, making individual runtime phases the next profiling target.
+
+Raw paired reports and logs are `.claude/perf3-pair-a.local.*`,
+`.claude/perf3-pair-b.local.*` and `.claude/perf3-cluster.local.*` in the candidate
+and exact-baseline control checkouts. The later standalone early-load profile
+and per-tick trace are `.claude/perf3-profile.local.json`,
+`.claude/perf3-spikes.local.cpuprofile` and `.claude/perf3-spike-trace.local.json`.
+That diagnostic run again exceeds the early heap-growth gate (+81.68 MiB),
+despite passing reconnect with the corrected fleet. Warm-window heap passes
+do not resolve this early-load limit.

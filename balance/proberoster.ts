@@ -61,6 +61,8 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_statfold.ts', status: 'green', tier: 'fast', why: 'Stat fold parity against the archived evaluator across source order, live conditions, gauges, tags, links and trades.' },
+  { probe: 'probe_targetwork.ts', status: 'green', tier: 'fast', why: 'Conservative target-scan rejection preserves current sensing, segmented bodies, target ranking and original picker behavior.' },
   { probe: 'probe_spiritrun.ts', status: 'green', tier: 'fast', why: 'Loading-screen directions, collision boundaries, streak speed, frame rates and bounded gates.' },
 
   { probe: 'probe_nativeinstalledsources.ts', status: 'green', tier: 'fast', why: 'Original installed native registry boot without World, complete lazy providers, native config and unchanged full World members.' },
