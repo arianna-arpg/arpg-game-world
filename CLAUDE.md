@@ -1,3 +1,12 @@
+NativeAreaSceneDisplacement owns admitted native impulses, grip/cling release,
+teleport, saddles and movement restrictions. Preserve local physical authority,
+actual census order, live method receivers and partial effects. World shares the
+original impulse constants through a nonenumerable adapter so real dependencies
+remain visible without pinning unrelated actors. Verify nativedisplacement,
+adjacent native/source, grab/cling/mount/mass, movement and dormancy checks, all
+types and boot. See docs/worldgen/native-area-displacement.md. Full movement,
+recovery/damage, retained ticking, scheduling and publication remain open.
+
 NativeAreaSceneSummonPreparation owns native factory preparation before physical
 insertion: summon selection, support forwarding, owner stats and releveling.
 Keep the actual admitted caster/registered progression, exact factory receiver,

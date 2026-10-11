@@ -1,6 +1,7 @@
 import './nativeSceneBootstrap';
 import {sceneAddTether,sceneAttachObjectTethers,TETHER_TICK,type NativeSceneTetherHost} from './nativeSceneTethers';
 import {sceneRollSummonType,sceneForwardSummonSockets} from './nativeSceneSummonPreparation';
+import {scenePushActor,sceneGrabRelease,sceneClingRelease,sceneTeleportActor,sceneMountFreeSeat,sceneMountSeatRider,sceneMountUnlink,sceneMountUnhorse,sceneMountWidowed,sceneMovementLocked,sceneCastMoveFactor,sceneChannelMobility,sceneLevitating,PUSH_DAMPING,type NativeSceneDisplacementHost} from './nativeSceneDisplacement';
 import {sceneNearQuestGiver,sceneNearAnyQuestGiver,sceneQuestGiverPrompt,sceneActiveCategoryCounts,sceneQuestGateCtx,sceneQuestOfferLevel,sceneAcceptableQuests,sceneEligibleQuestCandidates,sceneVocationEngaged,sceneIsVocationChoice,sceneVocationChoiceOffers,sceneNextAcceptableQuest,sceneUpdateQuestGiver,sceneQuestGiverStep,sceneQuestOfferChoices,sceneAcceptQuestOffer,sceneAcceptVocationQuest,sceneVocationMenuOffers,sceneDeclineVocationOffer,sceneAcceptQuest,sceneQuestRewardOffers,sceneQuestImbueOffers,sceneClaimQuestImbue,sceneReliquaryLesson,sceneSeatIdle,scenePlayerIdle,QUESTGIVER_DWELL,type NativeSceneQuestInteractionHost} from './nativeSceneQuestInteraction';
 import {sceneSpawnProjectile,sceneSkillOcclusion,PROJ_CHILD_DEPTH_MAX,PROJ_AURA_TICK,type NativeSceneProjectileHost} from './nativeSceneProjectiles';
 import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
@@ -128,7 +129,7 @@ import { ParryDamageWindow, parryCounter, type ParryDamage } from './parry';
 import { HIVECALL, hivecallNode, hivecallState, hivecallRescueFactor, hivecallFormDamage } from './hivecall';
 import { SEG_CFG, bodyWhere, nearestBody, noteBodyHit, reachTo, segR, segsHittable, stampSegFlash, tickSegFlash, woundCount, type SegBody } from './segments';
 import { DEFENSE_CFG } from './defense';
-import { MASS_CFG, impactFrac, impactScale, shoveAuthority } from './mass';
+import { MASS_CFG, impactFrac, impactScale } from './mass';
 import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf, ROUSE_RULES } from './ai';
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
@@ -348,7 +349,7 @@ import {
   type EjectReason, type PossessRide,
 } from './possess';
 import {
-  MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
+  seatCount, seatPos, type MountSlotSpec,
 } from './mounts';
 import { resolveTell, TELL_CFG } from './tells';
 import { reserveStageCue } from './reserveCues';
@@ -1234,12 +1235,7 @@ function speedLingerMul(
   return Math.min(spec.max ?? 4, Math.max(spec.min ?? 0.25, raw));
 }
 
-/** Push-impulse damping (per second). A lone push of `strength` travels
- *  ~strength units total; the constant sets how QUICKLY it eases out —
- *  higher = snappier shoves, lower = floatier batting. */
-const PUSH_DAMPING = 5.5;
-/** Velocity ceiling so stacked pulses jostle instead of launching. */
-const PUSH_MAX_SPEED = 1500;
+/* NativeSceneDisplacement owns shared push damping and speed limits. */
 
 /** 0 = circle, 1 = square, 2 = triangle (values of the aoeShape stat). */
 export type AoeShape = number;
@@ -11402,79 +11398,30 @@ actors: Actor[] = [];
    *  honest (rider re-files directly behind its steed — the renderer paints
    *  in array order). No eligibility gates here; callers gate (the mount
    *  verb checks mountAccepts, the pairing levers ARE the authorization). */
-  mountSeatRider(r: Actor, m: Actor): boolean {
-    const slot = m.defId ? MONSTERS[m.defId]?.mountSlot : undefined;
-    const seat = this.mountFreeSeat(m, slot);
-    if (seat < 0) return false;
-    r.mountId = m.id;
-    r.mountSeat = seat;
-    (m.riderIds ??= []).push(r.id);
-    const ri = this.actors.indexOf(r);
-    if (ri >= 0) {
-      this.actors.splice(ri, 1);
-      const mi = this.actors.indexOf(m);
-      this.actors.splice(mi < 0 ? this.actors.length : mi + 1, 0, r);
-    }
-    return true;
-  }
+  mountSeatRider(r: Actor, m: Actor): boolean { return sceneMountSeatRider(this.nativeSceneDisplacementHost(),r,m); }
 
   /** Lowest free seat index on a steed (-1 = saddle full). */
-  mountFreeSeat(m: Actor, slot: MountSlotSpec | undefined): number {
-    const cap = seatCount(slot);
-    for (let i = 0; i < cap; i++) {
-      let held = false;
-      for (const id of m.riderIds ?? []) {
-        const r = this.actorById(id);
-        if (r && !r.dead && r.mountId === m.id && (r.mountSeat ?? 0) === i) { held = true; break; }
-      }
-      if (!held) return i;
-    }
-    return -1;
-  }
+  mountFreeSeat(m: Actor, slot: MountSlotSpec | undefined): number { return sceneMountFreeSeat(this.nativeSceneDisplacementHost(),m,slot); }
 
   /** Sever one rider↔steed link (any cause — death, grip, vault, verbs).
    *  When the LAST saddle empties because its rider DIED, the slot's
    *  onRiderDeath policy answers; a surviving steed also turns zone-memory
    *  eligible at that moment (keep-what-stands: the widow is part of the
    *  zone's story now). */
-  mountUnlink(r: Actor, riderDied = false): void {
-    const m = r.mountId !== undefined ? this.actorById(r.mountId) : undefined;
-    r.mountId = undefined;
-    r.mountSeat = undefined;
-    if (!m) return;
-    const left = (m.riderIds ?? []).filter(id => id !== r.id);
-    m.riderIds = left.length ? left : undefined;
-    if (!left.length && !m.dead) {
-      if (m.team === 'enemy' && !m.owner) m.fromZoneGen = true;
-      if (riderDied) this.mountWidowed(m);
-    }
-  }
+  mountUnlink(r: Actor, riderDied = false): void { return sceneMountUnlink(this.nativeSceneDisplacementHost(),r,riderDied); }
 
   /** THE UNHORSED BEAT — the steed died under a live rider: the link
    *  severs, the rider tumbles (casterless shove — tuned reach at any
    *  mass, per the mass fabric) and wears the daze row. All dials in
    *  MOUNT_CFG; the status is ordinary STATUS_DEFS traffic. */
-  private mountUnhorse(r: Actor, m: Actor): void {
-    this.mountUnlink(r);
-    r.applyStatus(MOUNT_CFG.unhorse.status, 0, 1, 'Unhorsed');
-    this.pushActor(r, rand(0, Math.PI * 2), MOUNT_CFG.unhorse.push);
-    this.flashes.push({
-      pos: vec(m.pos.x, m.pos.y), radius: m.radius * 1.4,
-      color: MOUNT_CFG.unhorse.color, life: 0.3, maxLife: 0.3,
-    });
-  }
+  private mountUnhorse(r: Actor, m: Actor): void { return sceneMountUnhorse(this.nativeSceneDisplacementHost(),r,m); }
 
   /** The last rider died out of the saddle — the steed's conduct is the
    *  slot's onRiderDeath row: 'fight' (default) trusts its own brain (the
    *  empty-saddle warg still hunts); 'rout' breaks its nerve through the
    *  morale machinery (a panic status — a def that also carries `refuge`
    *  turns the rout into a true exit from the field). */
-  private mountWidowed(m: Actor): void {
-    const slot = m.defId ? MONSTERS[m.defId]?.mountSlot : undefined;
-    if (slot?.onRiderDeath === 'rout') {
-      m.applyStatus('horrified', 0, 5, 'Widowed');
-    }
-  }
+  private mountWidowed(m: Actor): void { return sceneMountWidowed(this.nativeSceneDisplacementHost(),m); }
 
   /** Drop dead / stale / retargeted holders so waiting packmates rotate in. */
   private pruneEngageTokens(): void {
@@ -25252,20 +25199,7 @@ actors: Actor[] = [];
   }
 
   /** Displace an actor with departure/arrival flashes. */
-  teleportActor(actor: Actor, dest: Vec2, color = '#b8c8ff', disp?: DisplacementPolicy, story?: number): void {
-    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.6, color, life: 0.25, maxLife: 0.25 });
-    // A flicker/blink may carry a DisplacementPolicy ({ignoreConfine}) to land past
-    // walls + across the void; default (no disp) = nearest-walkable snap as before.
-    // `story` (the tier fabric's enclosure law): the STORY the arrival seats
-    // on — the body wears it and the snap confines against that story's own
-    // floor (a blink stays upstairs; a recalled minion joins its keeper's
-    // layer). Absent = the legacy base-grid snap, byte for byte.
-    if (story !== undefined) actor.tier = story;
-    actor.pos = this.clampPos(vec(dest.x, dest.y), actor.radius, undefined,
-      story !== undefined ? { ...(disp ? { disp } : {}), mover: actor } : disp ? { disp } : undefined);
-    actor.dash = null;
-    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.8, color, life: 0.3, maxLife: 0.3 });
-  }
+  teleportActor(actor: Actor, dest: Vec2, color = '#b8c8ff', disp?: DisplacementPolicy, story?: number): void { return sceneTeleportActor(this.nativeSceneDisplacementHost(),actor,dest,color,disp,story); }
 
   /**
    * The targeting engine: resolve what a targeted skill will act on.
@@ -28184,44 +28118,7 @@ actors: Actor[] = [];
    *  (burrow.toss, random bearing) into a LONGER grace (burrow.grace) —
    *  the vulnerability window the host earned by shaking. Every other
    *  cause — and every plain-perch rider — keeps the classic short hop. */
-  private clingRelease(a: Actor, cause: 'shake' | 'drop' = 'drop'): void {
-    const ride = a.clingTo;
-    a.clingTo = undefined;
-    const bur = cause === 'shake' ? a.cling?.burrow : undefined;
-    // THE FLOP (ClingSpec.flop): the pop-out for a perched, visible rider —
-    // the shake alone earns it; burrow wins where both are authored.
-    const flop = cause === 'shake' && !bur ? a.cling?.flop : undefined;
-    a.clingCooldownUntil = this.time
-      + (bur ? bur.grace ?? CLING_CFG.burrow.grace
-        : flop ? flop.grace ?? CLING_CFG.flop.grace
-          : CLING_CFG.reattachGrace);
-    // The burrow marker dies with the ride (refresh-driven, but a half-
-    // second of ghost body would be a lie — the grab-release law).
-    for (let i = a.statuses.length - 1; i >= 0; i--) {
-      if (a.statuses[i].id === 'burrowed') {
-        a.statuses.splice(i, 1);
-        a.sheet.removeSource('status:burrowed');
-      }
-    }
-    if (!ride) return;
-    const ang = (bur || flop) ? rand(0, Math.PI * 2) : ride.ang;
-    const hop = bur ? bur.toss ?? CLING_CFG.burrow.toss
-      : flop ? flop.toss ?? CLING_CFG.flop.toss
-        : CLING_CFG.detachHop;
-    a.pos = this.clampPos(vec(
-      a.pos.x + Math.cos(ang) * hop,
-      a.pos.y + Math.sin(ang) * hop), a.radius);
-    // The flop's worn beat: the status row's own duration IS the window
-    // (data keeps it aligned with the grace — the lamprey's flail).
-    if (flop?.status && STATUS_DEFS[flop.status]) a.applyStatus(flop.status, 0, 1, 'the flop');
-    if (bur || flop) {
-      // The pop-out reads: a body flung clear of the flesh it was inside.
-      this.flashes.push({
-        pos: vec(a.pos.x, a.pos.y), radius: a.radius + 6,
-        color: a.color, life: 0.22, maxLife: 0.22,
-      });
-    }
-  }
+  private clingRelease(a: Actor, cause: 'shake' | 'drop' = 'drop'): void { return sceneClingRelease(this.nativeSceneDisplacementHost(),a,cause); }
 
   // -------------------------------------------------------------- the grab --
   /** THE GRAB SWEEP (engine/grab.ts): run the release ladder for every live
@@ -28373,24 +28270,7 @@ actors: Actor[] = [];
    *  half-second of ghost pip — or a concealed body — would be a lie), and
    *  stamp the victim's re-seize grace. The catch stands where the seat
    *  left it; a THROW is grabThrowRelease's job on top of this. */
-  private grabRelease(a: Actor): void {
-    const hold = a.gripping;
-    a.gripping = undefined;
-    if (!hold) return;
-    const v = this.actorById(hold.id);
-    if (!v) return;
-    if (v.heldBy === a.id) v.heldBy = undefined;
-    if (hold.verb === 'swallow') v.untargetable = hold.wasUntargetable ?? false;
-    for (let i = v.statuses.length - 1; i >= 0; i--) {
-      const id = v.statuses[i].id;
-      if (id === 'seized' || id === 'swallowed') {
-        v.statuses.splice(i, 1);
-        v.sheet.removeSource('status:' + id);
-      }
-    }
-    v.grabProofUntil = Math.max(v.grabProofUntil,
-      this.time + (hold.spec.releaseGrace ?? GRAB_CFG.break.graceSec));
-  }
+  private grabRelease(a: Actor): void { return sceneGrabRelease(this.nativeSceneDisplacementHost(),a); }
 
   /** The spit direction for a monster's own throw-release: 'foe' aims the
    *  catch at the holder's nearest OTHER enemy (the gulper spits you at
@@ -35764,62 +35644,39 @@ actors: Actor[] = [];
    * (v₀ = strength × damping ⇒ ∫v = strength), so existing data keeps its
    * reach — it just moves like physics now.
    */
+  declare private nativeSceneDisplacementView?:NativeSceneDisplacementHost;
+  private nativeSceneDisplacementHost():NativeSceneDisplacementHost {
+    if(this.nativeSceneDisplacementView)return this.nativeSceneDisplacementView;
+    const world=this;
+    const host:NativeSceneDisplacementHost=Object.freeze({
+      get actors(){return world.actors;},get flashes(){return world.flashes;},get time(){return world.time;},
+      get actorById(){const fn=world.actorById;return(...args:Parameters<World['actorById']>)=>fn.apply(world,args);},
+      get clampPos(){const fn=world.clampPos;return(...args:Parameters<World['clampPos']>)=>fn.apply(world,args);},
+      get pushActor(){const fn=world.pushActor;return(...args:Parameters<World['pushActor']>)=>fn.apply(world,args);},
+      get grabRelease(){const fn=world.grabRelease;return(...args:Parameters<World['grabRelease']>)=>fn.apply(world,args);},
+      get clingRelease(){const fn=world.clingRelease;return(...args:Parameters<World['clingRelease']>)=>fn.apply(world,args);},
+      get teleportActor(){const fn=world.teleportActor;return(...args:Parameters<World['teleportActor']>)=>fn.apply(world,args);},
+      get mountFreeSeat(){const fn=world.mountFreeSeat;return(...args:Parameters<World['mountFreeSeat']>)=>fn.apply(world,args);},
+      get mountSeatRider(){const fn=world.mountSeatRider;return(...args:Parameters<World['mountSeatRider']>)=>fn.apply(world,args);},
+      get mountUnlink(){const fn=world.mountUnlink;return(...args:Parameters<World['mountUnlink']>)=>fn.apply(world,args);},
+      get mountUnhorse(){const fn=world.mountUnhorse;return(...args:Parameters<World['mountUnhorse']>)=>fn.apply(world,args);},
+      get mountWidowed(){const fn=world.mountWidowed;return(...args:Parameters<World['mountWidowed']>)=>fn.apply(world,args);},
+      get movementLocked(){const fn=world.movementLocked;return(...args:Parameters<World['movementLocked']>)=>fn.apply(world,args);},
+      get castMoveFactor(){const fn=world.castMoveFactor;return(...args:Parameters<World['castMoveFactor']>)=>fn.apply(world,args);},
+      get channelMobility(){const fn=world.channelMobility;return(...args:Parameters<World['channelMobility']>)=>fn.apply(world,args);},
+      get levitating(){const fn=world.levitating;return(...args:Parameters<World['levitating']>)=>fn.apply(world,args);},
+    });
+    Object.defineProperty(this,'nativeSceneDisplacementView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
   pushActor(target: Actor, dir: number, strength: number, caster?: Actor, inst?: SkillInstance,
     opts?: {
       /** The impulse arrives with its authority ALREADY SPENT (a plow-
        *  through's momentum hand-off, engine/mass.ts) — fold only the
        *  target's weight, never the shover's again. */
       noAuthority?: boolean;
-    }): void {
-    // Planted things stay put — and a DORMANT un-roused neutral is planted:
-    // stray splash knockback must not scatter a sleeping band (the hit that
-    // ROUSES it restores physics the same tick aiAwakened latches). A
-    // MASSED construct (the Unmoored graft) is deliberately NOT planted —
-    // its weight is its only anchor now.
-    if ((target.construct && !target.construct.massed)
-      || target.anchored || target.leap || isDormant(target)) return;
-    // A HELD body eats the shove INTO the grip (the grab fabric): the
-    // impulse jostles the break meter instead of moving the pair — the
-    // hold, not the body, absorbs the blow.
-    if (target.heldBy !== undefined) {
-      const holder = this.actorById(target.heldBy);
-      const hold = holder?.gripping;
-      if (hold && hold.id === target.id) hold.struggle += strength * GRAB_CFG.break.shoveFeed;
-      return;
-    }
-    // A hard enough shove ON a holder tears its hold loose first (a pair
-    // never rides a launch); the stumble itself then lands normally.
-    if (target.gripping && strength >= GRAB_CFG.release.shove) {
-      this.grabRelease(target);
-    }
-    // A latched rider is SCRAPED LOOSE by any real shove (the latch's
-    // knockback counterplay, engine/cling.ts) — released first so the
-    // impulse lands on a free body.
-    if (target.clingTo) this.clingRelease(target);
-    // AUTHORITY: the PUSHER's mass folds in (engine/mass.ts) — heavy bodies
-    // shove harder, exactly 1 at effective weight 1 so every casterless
-    // push (wind, traps, tracks) and every fresh-hero knockback keeps its
-    // tuned reach. The asymmetry the fabric exists for: the ogre moves you
-    // more readily than you move it, UNLESS you build toward poise/mass.
-    const auth = caster && !opts?.noAuthority ? shoveAuthority(caster, inst) : 1;
-    // WEIGHT: mass divides the shove — a knockback that sends a goblin
-    // flying nudges an ogre. effectiveWeight folds in CURRENT unbroken
-    // poise (a poised colossus is an anchor; break the bar to move it) on
-    // top of the weight stat (Fortitude raises it, curses can shed it).
-    const eff = strength * auth / target.effectiveWeight();
-    const vx = Math.cos(dir) * eff * PUSH_DAMPING;
-    const vy = Math.sin(dir) * eff * PUSH_DAMPING;
-    const p = target.push;
-    if (p) {
-      p.vx += vx; p.vy += vy;
-      const sp = Math.hypot(p.vx, p.vy);
-      if (sp > PUSH_MAX_SPEED) { p.vx *= PUSH_MAX_SPEED / sp; p.vy *= PUSH_MAX_SPEED / sp; }
-      // The newest shover owns the collision procs; the crush re-arms.
-      if (caster && inst) { p.caster = caster; p.inst = inst; p.collided = false; }
-    } else {
-      target.push = { vx, vy, caster, inst };
-    }
-  }
+    }): void { return scenePushActor(this.nativeSceneDisplacementHost(),target,dir,strength,caster,inst,opts); }
 
   /** Scratch for the bowling-lane slam sweep (actorsNear contract). */
   private readonly slamScratch: Actor[] = [];
@@ -45817,9 +45674,7 @@ actors: Actor[] = [];
    *  (MonsterDef.levitates) or any 'levitation' stat — the phasing doctrine:
    *  one stat, so a status (cloudform), gear, a potion, or a whole floating
    *  monster all grant it identically and every fall door reads it the same. */
-  levitating(a: Actor): boolean {
-    return a.levitates || a.sheet.get('levitation') > 0;
-  }
+  levitating(a: Actor): boolean { return sceneLevitating(this.nativeSceneDisplacementHost(),a); }
 
   /** Who the vertical fabrics may drop this tick: grounded bodies only — the
    *  airborne, the floating and the mid-leap are the sky's own; a traversing
@@ -56794,56 +56649,15 @@ actors: Actor[] = [];
    *  channel)? Channel-SLOWED and guard are NOT locked (they move at a reduced
    *  factor). Replicated per-seat (SeatW.rooted) so a co-op client's movement
    *  PREDICTION doesn't drift the hero forward while the host has them rooted. */
-  movementLocked(a: Actor): boolean {
-    if (a.magicPack && a.sheet.getSourceMods('magicPack:beamChannel')) return true;
-    if (a.magicPack && a.sheet.getSourceMods('magicPack:eventChannel')) return true;
-    // The PASSIVE lock is a volition lock — a DRIVEN body (engine-wheeled
-    // scenery: the serpent's passing glimpse) has no volition to lock; the
-    // engine's own hand moves it. Death, stun, dash and anchors still hold.
-    // The carom motor is a volition lock too — the ball has no legs; the
-    // stick feeds nothing while the ride holds (reflex flasks still fire).
-    // THE STROLLING SCENERY (ai.ts updateHaunt): a passive body wearing a
-    // haunt has volition enough to drift between its seats — the lock lifts
-    // for it alone; every other passive body stands as ever.
-    if (a.dash || a.leap || a.caromRun || a.isStunned() || a.dead || a.anchored
-      || (a.passive && !a.driven && !(a.defId && MONSTERS[a.defId]?.brain?.behavior?.haunt))) return true;
-    // SEALS & FORMS: a toggled form with moveFactor 0 ROOTS its bearer
-    // (Stormbind plants you) — factors above 0 slow in moveActor instead.
-    for (const au of a.activeAuras.values()) {
-      const ad = au.inst.def.delivery;
-      if (ad.type === 'aura' && ad.moveFactor === 0) return true;
-    }
-    if (a.casting) {
-      if (a.casting.mode === 'channel') {
-        // channelMobility (Walking Meditation) can unlock even an IMMOBILE
-        // channel — invest hard enough and you stroll mid-maelstrom.
-        // THE GATHER'S STRIDE (ruled 2026-08-20): the LIVE spec binds here
-        // exactly as it does at the pulse clock — a Gathered Casting
-        // conversion walks by its own synthesized words (move 'slowed'),
-        // never by the def the conversion replaced. One resolution, one law.
-        return (a.casting.gather ?? instanceChannel(a.casting.inst))?.move === 'immobile'
-          && this.channelMobility(a, a.casting.inst) <= 0;
-      }
-      if (a.casting.mode === 'guard') return false;
-      // MOBILE CASTS: castMove data + the castMobility stat can unroot any
-      // cast bar — certain attacks are meant to be walked.
-      return this.castMoveFactor(a, a.casting.inst) <= 0;
-    }
-    return false;
-  }
+  movementLocked(a: Actor): boolean { return sceneMovementLocked(this.nativeSceneDisplacementHost(),a); }
 
   /** Movement factor while a (non-channel) cast bar runs: the skill's
    *  castMove data plus the caster's castMobility stat, capped at 1. */
-  private castMoveFactor(a: Actor, inst: SkillInstance): number {
-    return Math.min(1, (inst.def.castMove ?? 0)
-      + a.sheet.get('castMobility', skillContextTags(inst), instanceMods(inst)));
-  }
+  private castMoveFactor(a: Actor, inst: SkillInstance): number { return sceneCastMoveFactor(this.nativeSceneDisplacementHost(),a,inst); }
 
   /** The channelMobility stat for a held channel (flat bonus to the move
    *  factor — 'immobile' starts at 0, 'slowed' at its data factor). */
-  private channelMobility(a: Actor, inst: SkillInstance): number {
-    return a.sheet.get('channelMobility', skillContextTags(inst), instanceMods(inst));
-  }
+  private channelMobility(a: Actor, inst: SkillInstance): number { return sceneChannelMobility(this.nativeSceneDisplacementHost(),a,inst); }
 
   moveActor(a: Actor, dx: number, dy: number, dt: number): void {
     ensureMovementTether(a);

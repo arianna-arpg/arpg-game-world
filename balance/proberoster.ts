@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativedisplacement.ts', status: 'green', tier: 'fast', why: 'Exact native impulse, grab/cling release, teleport, saddle and movement-policy parity; physical area authority, actual World receivers, shared damping, partial failures and genuine dormancy dependencies.' },
   { probe: 'probe_nativequestinteraction.ts', status: 'green', tier: 'fast', why: 'Exact native quest giver, offer, vocation, imbue and idle rules; actual World receiver/default/save parity, physical area attendance, transfer-invalidated dwell and continuous-country branches.' },
   { probe: 'probe_nativeinteractioncargo.ts', status: 'green', tier: 'fast', why: 'Solo giver cargo follows the physically present local hand; field completion retains its own area fallback, and foreign carried-body interaction refuses.' },
   { probe: 'probe_nativesummonpreparation.ts', status: 'green', tier: 'fast', why: 'Original/shared/World/retained native summon selection, support forwarding and pre-insertion owner stats; actual creation scopes, exact factory timing, identity/RNG/partial failures and source restoration.' },

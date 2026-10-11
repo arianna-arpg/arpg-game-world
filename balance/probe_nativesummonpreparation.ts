@@ -32,6 +32,7 @@ import {sceneRelevelActor,sceneBakeMinionOwnerStats} from '../src/engine/nativeS
 import {nativeSceneProgressionArchive as progressionArchive} from './nativeSceneProgressionArchive';
 import {nativeSceneSummonPreparationArchive as archive,nativeSceneSummonPreparationArchiveHash} from './nativeSceneSummonPreparationArchive';
 import {beforeNativeSceneTethers} from './nativeSceneTetherFixture';
+import {beforeNativeSceneDisplacement} from './nativeSceneDisplacementIntegrationFixture';
 import {beforeNativeSceneSummonPreparation} from './nativeSceneSummonPreparationIntegrationFixture';
 import {nativeSceneSummonPreparationIntegrationArchive as integrationArchive,nativeSceneSummonPreparationIntegrationArchiveHash} from './nativeSceneSummonPreparationIntegrationArchive';
 const sha=(s:string)=>createHash('sha256').update(s).digest('hex'),checks:string[]=[],expanded:any[]=[];
@@ -172,7 +173,7 @@ const restoreWorld=(source:string)=>{const restored=beforeNativeSceneSummonPrepa
 integrationCheck('immutable summon integration archive and complete World restore to tether checkpoint',()=>{
  assert.equal(sha(JSON.stringify(integrationArchive)),nativeSceneSummonPreparationIntegrationArchiveHash);
  assert.equal(integrationArchive.originalArchiveHash,nativeSceneSummonPreparationArchiveHash);
- assert.equal(sha(integratedWorld),integrationArchive.afterHash);
+ assert.equal(sha(beforeNativeSceneDisplacement(integratedWorld)),integrationArchive.afterHash);
  assert.equal(restoreWorld(integratedWorld),execFileSync('git',['show',integrationArchive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:2e7}).replaceAll('\r\n','\n'));
 });
 integrationCheck('bootstrap stays first and World signatures defaults and exact delegates remain native',()=>{
