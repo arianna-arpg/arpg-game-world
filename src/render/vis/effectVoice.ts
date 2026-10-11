@@ -51,6 +51,8 @@ export interface EffectVoiceFlash {
   life: number;
   maxLife: number;
   facing?: number;
+  /** Safe circular center excluded from the flash's hit surface. */
+  edgeFrac?: number;
   /** The figure the flash tested (a registered AOE_SHAPE value, or the
    *  classic swing arc) — a voice that paints OVER its surface (the
    *  crossjab streak) traces exactly this through traceFlashFigure. */

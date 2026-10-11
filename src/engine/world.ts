@@ -1,5 +1,6 @@
 import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { skillMergePlan } from './skillMerge';
+import { skillBurstVoice } from '../data/skillVisuals';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
@@ -36040,6 +36041,7 @@ export class World {
           pos: vec(origin.x, origin.y), radius, color: cosmeticColor,
           life: 0.3, maxLife: 0.3, shape, facing: caster.facing,
           edgeFrac: d.edgeOnly,
+          fx: d.fx ?? skillBurstVoice(inst.def.id),
         });
         this.spawnAftershocks(caster, inst, origin, radius, shape);
         // The cascade family beyond ground: the burst's sequels (armed
@@ -42066,6 +42068,9 @@ export class World {
     tags: Set<SkillTag>, extra: Modifier[], arcRad?: number, edgeFrac?: number,
     walkFacing?: number,
   ): void {
+    const burstDelivery = instanceDelivery(inst);
+    const burstVoice = burstDelivery.type === 'nova'
+      ? burstDelivery.fx ?? skillBurstVoice(inst.def.id) : undefined;
     const cadence = socketSpec(inst, 'cadence')?.intervalStep;
     const pPlan = instancePulsePlan(inst);
     const pSpec = pPlan.native;
@@ -42098,6 +42103,7 @@ export class World {
         linger: pulseSpan, linger0: pulseSpan,
         tickInterval: Infinity, tickTimer: Infinity,
         shape, facing, arcRad, edgeFrac,
+        fx: burstVoice,
         dmgMult: useMult, depth: 0,
         pulse: pulseFor(0),
       });
@@ -42153,6 +42159,7 @@ export class World {
           linger: 0, linger0: 0,
           tickInterval: Infinity, tickTimer: 0,
           shape, facing, arcRad, edgeFrac,
+          fx: burstVoice,
           dmgMult: baseMult * Math.pow(dmgStep, p.k), depth: 0,
         });
       }
@@ -42175,6 +42182,7 @@ export class World {
           linger: quakes ? pulseSpan : 0, linger0: quakes ? pulseSpan : 0,
           tickInterval: Infinity, tickTimer: quakes ? Infinity : 0,
           shape, facing, arcRad, edgeFrac,
+          fx: burstVoice,
           dmgMult: mult, depth: 0,
           pulse: pulseFor(delayBase),
         });
@@ -59887,6 +59895,7 @@ export class World {
             pos: vec(z.pos.x, z.pos.y), radius: pr, color: z.color,
             life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
             edgeFrac: z.edgeFrac,
+            fx: instanceDelivery(z.inst).type === 'nova' ? z.fx : undefined,
           });
           this.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth);
           z.pulse.dmgMult *= z.pulse.dmgStep;

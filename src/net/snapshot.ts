@@ -257,13 +257,15 @@ export interface PickupW { s: string; l: string; c: string; n: number; born: num
  *  never from shipped draw state — and `bolt`/`meteor` carry the lightning/
  *  demon-sky flags so those skies stop landing generic on remote seats. All
  *  three absent (an old host, an unkeyed flash) = the classic ring, byte-
- *  identical to the pre-wire client. Other flash costumes (beam, haze, arc,
- *  shapes) remain deliberately unshipped — MVP fidelity, renderer-guarded. */
+ *  identical to the pre-wire client. FlashW also carries shape, safe center,
+ *  facing, arc and beam so skillBurstVoice and remote hit footprints agree. */
 export interface FlashW { combatCue?: import('../engine/combatCues').CombatCue; defenseCue?: import('../engine/defenseCues').DefenseCue; cosmeticMotif?: CosmeticMotif; p: Vec2W; radius: number; color: string; life: number; maxLife: number;
   feedingCue?: import('../engine/feedingCues').FeedingTransfer;
   companionCue?: import('../engine/companionCues').CompanionCueFlash;
   recoveryCueTier?: number;
-  fx?: string; bolt?: boolean; meteor?: boolean; departure?: RefugeDeparture; }
+  fx?: string; bolt?: boolean; meteor?: boolean; departure?: RefugeDeparture;
+  shape?: number; facing?: number; edgeFrac?: number;
+  arc?: { facing: number; arcRad: number }; beam?: boolean; }
 /** A death-burst telegraph (coalesce gather → tracking orb). RENDER-ONLY: the client
  *  never simulates these (homing is host-authoritative via nearestSeatPos over the seats);
  *  it just draws the host's state so the remote seat gets the same escape window. Carries
@@ -951,6 +953,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
     flashes: world.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, p: v2(f.pos), radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
+      shape: f.shape, facing: f.facing, edgeFrac: f.edgeFrac, arc: f.arc && { ...f.arc }, beam: f.beam,
       feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
       companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
       recoveryCueTier: f.recoveryCueTier,
@@ -1528,7 +1531,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
     companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
     recoveryCueTier: f.recoveryCueTier,
-    defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt, meteor: f.meteor })) as unknown as World['flashes'];
+    defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt, meteor: f.meteor,
+    shape: f.shape, facing: f.facing, edgeFrac: f.edgeFrac, arc: f.arc && { ...f.arc }, beam: f.beam })) as unknown as World['flashes'];
   // THE EYECATCH — re-stamped against the CLIENT's own raw clock (elapsed →
   // local t0); an absent row clears the pane with the host's (engine/ultimates.ts).
   world.eyecatch = snap.ec ? {

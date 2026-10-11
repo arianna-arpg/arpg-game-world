@@ -9,6 +9,12 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Native nova identities use `data/skillVisuals.ts` and `render/vis/skillBurstVoice.ts`.
+Shared prominence, authored silhouettes/motion, true shape/safe-center clipping,
+aftermath inheritance and co-op footprints are documented in `docs/design/skill-visuals.md`.
+Verify `probe_skillvisuals.ts` plus effectvoice/crossjab/cosmetics/supportfabric,
+sim smoke and the hidden `balance/skill-visuals-ui.cjs` after the probe and build.
+
 Shared sight/fog rendering fixes are documented in `docs/engine/visibility-stability.md`.
 Resolve visibility before drawing bodies; wall queries and pixels share one contact
 resolver. Verify the sightveil/visibility_stability probes and hidden

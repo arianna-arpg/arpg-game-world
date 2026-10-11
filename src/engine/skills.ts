@@ -1658,6 +1658,8 @@ export interface MeleeDelivery {
 
 export interface NovaDelivery {
   type: 'nova';           // circular burst centered on the caster
+  /** Optional burstVoice override; absent uses the authored skillVisuals profile. */
+  fx?: string;
   radius: number;         // (or on the resolved target, if the skill targets)
   /** 'all' also strikes allies AND the caster (Bloodlet);
    *  'allies' affects ONLY your side (blessing skills like Furor). */
