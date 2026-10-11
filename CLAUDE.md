@@ -4023,6 +4023,10 @@ we verify changes.
   ShardPerformance also records conservative far-target rejection and closure-free
   stat folds (targetwork, statfold), plus per-life acknowledged soak reconnects
   (sharddormant). Live sensing and modifier order stay exact; soak gates stay fixed.
+  ShardPerformance traces cold intel terrain planning and dependency reflection;
+  surface-only terrain work and demanded candidate fields (worldmass_surfaces)
+  retain all-family inhibition, exact noise folds and complete content pages,
+  while dormancypinattribution pins exact owner identities and insertion order.
   Preserve
   exact saved state, full signed addresses, every player's population and the
   unchanged load gates; verify the affected worldmass/native probes and shard

@@ -319,11 +319,13 @@ export function massDormancyPins(world: World, owned: ReadonlyMap<string,Actor>,
     if(typeof value==='number' && dependencyKeys.has(key)) {const a=ids.get(value);if(a)pinned.add(a);return;}
     if(!value||typeof value!=='object'||seen.has(value)||excludedOwners.has(value))return;
     if(value instanceof Actor){if(native.has(value))pinned.add(value);return;}
-    seen.add(value);
     if(isDependencyFreeData(value))return;
+    // Certified immutable graphs already have permanent cycle-free coverage;
+    // only graphs we actually traverse need the per-query seen set.
+    seen.add(value);
     if(value instanceof WeakMap||value instanceof WeakSet){for(const a of native)if(value.has(a))pinned.add(a);return;}
-    if(value instanceof Map){for(const [k,v]of value){if(typeof k==='number'){const a=ids.get(k);if(a)pinned.add(a);}else visit(k);visit(v);}return;}
-    if(value instanceof Set){for(const v of value){if(typeof v==='number'){const a=ids.get(v);if(a)pinned.add(a);}else visit(v);}return;}
+    if(value instanceof Map){for(const [k,v]of value){if(typeof k==='number'){const a=ids.get(k);if(a)pinned.add(a);}else if(k!==null&&typeof k==='object')visit(k);if(v!==null&&typeof v==='object')visit(v);}return;}
+    if(value instanceof Set){for(const v of value){if(typeof v==='number'){const a=ids.get(v);if(a)pinned.add(a);}else if(v!==null&&typeof v==='object')visit(v);}return;}
     for(const [k,v]of Object.entries(value))visit(v,k);
   };
   for(const [key,value] of Object.entries(world)) {

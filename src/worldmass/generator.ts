@@ -86,10 +86,12 @@ export class MassGenerator {
   readonly regionalDiscoveries: MassRegionalDiscoveries | null;
   readonly nativeSubstrate: MassNativeSubstrate | null;
   private readonly surfaces: MassSpec['surfaces'];
+  private readonly surfaceRecipes: readonly MassPlaceRecipe[];
   private readonly salts = new Map<MassSpec['fields'][number]['layers'][number], number>();
   private readonly candidates = new Map<string, MassPlace | null>();
   private readonly decisions = new Map<string, boolean>();
   private readonly placePages = new Map<string, readonly MassPlace[]>();
+  private readonly surfacePages = new Map<string, readonly MassPlace[]>();
   constructor(run: MassRun, spec: MassSpec) {
     const expected = makeMassRun(run.seed, run.runId, spec);
     if (canonical(run) !== canonical(expected)) throw new Error('World generator/content manifest mismatch');
@@ -97,6 +99,7 @@ export class MassGenerator {
     this.run = freezeData({ ...run });
     this.nativeSubstrate = Object.hasOwn(this.spec, 'nativeSubstrate') ? new MassNativeSubstrate(this.run, this.spec) : null;
     this.surfaces = [...this.spec.surfaces].sort((a, b) => b.priority - a.priority || compare(a.id, b.id));
+    this.surfaceRecipes = Object.freeze(this.spec.places.filter(p => p.surface));
     for (const f of this.spec.fields) for (const l of f.layers)
       this.salts.set(l, streamSeed(run.seed, [spec.id, spec.version, f.id, l.id]));
     this.nativeRegional = this.spec.nativeRegional ? new MassNativeRegional(this.spec,this.run,at=>this.baseTerrainAt(at),
@@ -208,7 +211,7 @@ export class MassGenerator {
   private baseTerrainAt(at: MassAddress): MassTerrain {
     if (this.nativeSubstrate) return this.nativeSubstrate.sample(at);
     const fields = this.fieldsAt(at), s = this.surfaces.find(row => matchesMassRanges(row.when, fields))!;
-    for (const place of this.spec.places.some(p => p.surface) ? this.placesInCell(at) : []) {
+    for (const place of this.surfaceRecipes.length ? this.surfacePlacesInCell(at) : []) {
       const recipe = this.spec.places.find(p => p.id === place.recipe)!;
       if (!recipe.surface) continue;
       const offset = localOffset(at, place.center, this.spec.addressSpan);
@@ -241,10 +244,30 @@ export class MassGenerator {
     const center = address(dimension, cx, cy,
       x + recipe.period * (0.5 + rng.range(-0.5, 0.5) * recipe.jitter),
       y + recipe.period * (0.5 + rng.range(-0.5, 0.5) * recipe.jitter), this.spec.addressSpan);
-    if (!matchesMassRanges(recipe.when, this.fieldsAt(center))) return null;
+    if (!this.candidateFieldsMatch(recipe.when, center)) return null;
     return { id: canonical([this.run.runId, ...namespace]), recipe: recipe.id, content: recipe.content,
       center, radius: recipe.radius, source: { generator: this.spec.id, version: this.spec.version,
         rule: recipe.id, source: recipe.content, stream: canonical(namespace) } };
+  }
+  /** Candidates only consume fields named by their ranges. Noise is independent
+   * per layer; keep each requested field's original fold and comparison order. */
+  private candidateFieldsMatch(rows: readonly MassRange[], at: MassAddress): boolean {
+    if (!rows.length) return true;
+    const values: Record<string, number> = Object.create(null) as Record<string, number>;
+    for (const r of rows) {
+      if (!Object.hasOwn(values, r.field)) {
+        const f = this.spec.fields.find(field => field.id === r.field)!;
+        let value = f.base;
+        for (const l of f.layers) {
+          const n = this.noise(at, l.period, this.salts.get(l)!);
+          value += (l.ridge ? (1 - Math.abs(n * 2 - 1)) ** 2 : n * 2 - 1) * l.amplitude;
+        }
+        values[r.field] = value;
+      }
+      const value = values[r.field];
+      if (!(value >= (r.min ?? -Infinity) && value < (r.max ?? Infinity))) return false;
+    }
+    return true;
   }
   /** Local inhibition: no higher-ranked candidate may intersect this footprint.
    * Finite dependencies, no recursive packing, no late movement of existing sites. */
@@ -275,9 +298,31 @@ export class MassGenerator {
   placesInCell(cell: MassCell): readonly MassPlace[] {
     const key = cellKey(cell), cached = this.placePages.get(key);
     if (cached) { this.placePages.delete(key); this.placePages.set(key, cached); return cached; }
+    const page = this.collectPlacesInCell(cell, this.spec.places, this.surfacePages.get(key));
+    this.placePages.set(key, page);
+    if (this.placePages.size > 128) this.placePages.delete(this.placePages.keys().next().value!);
+    return page;
+  }
+  /** Terrain only needs surface families, but their acceptance still checks all
+   * families. Reuse full pages when resident; never expose partial content pages. */
+  private surfacePlacesInCell(cell: MassCell): readonly MassPlace[] {
+    const key = cellKey(cell);
+    if (this.placePages.has(key)) return this.placesInCell(cell);
+    const cached = this.surfacePages.get(key);
+    if (cached) { this.surfacePages.delete(key); this.surfacePages.set(key, cached); return cached; }
+    const page = this.collectPlacesInCell(cell, this.surfaceRecipes);
+    this.surfacePages.set(key, page);
+    if (this.surfacePages.size > 128) this.surfacePages.delete(this.surfacePages.keys().next().value!);
+    return page;
+  }
+  private collectPlacesInCell(cell: MassCell, recipes: readonly MassPlaceRecipe[], knownSurfaces?: readonly MassPlace[]): readonly MassPlace[] {
     const s = this.spec.addressSpan, origin = address(cell.dimension, cell.cx, cell.cy, 0, 0, s);
     const result = new Map<string, MassPlace>();
-    for (const recipe of this.spec.places) {
+    // Even an empty resident subset already checked every surface family against
+    // all competitors. Complete it without repeating that immutable decision.
+    if (knownSurfaces) for (const p of knownSurfaces) result.set(p.id, p);
+    for (const recipe of recipes) {
+      if (knownSurfaces !== undefined && recipe.surface) continue;
       const pad = recipe.radius + recipe.period;
       const lo = latticeAt(moveAddress(origin, { x: -pad, y: -pad }, s), s, recipe.period);
       const hi = latticeAt(moveAddress(origin, { x: s + pad, y: s + pad }, s), s, recipe.period);
@@ -290,9 +335,6 @@ export class MassGenerator {
         if (Math.hypot(dx, dy) <= p.radius && this.accepted(p, recipe)) result.set(p.id, freezeData(p));
       }
     }
-    const page = Object.freeze([...result.values()].sort((a, b) => compare(a.id, b.id)));
-    this.placePages.set(key, page);
-    if (this.placePages.size > 128) this.placePages.delete(this.placePages.keys().next().value!);
-    return page;
+    return Object.freeze([...result.values()].sort((a, b) => compare(a.id, b.id)));
   }
 }

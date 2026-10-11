@@ -55,8 +55,11 @@ try {
   };
   const all=profile(new Set()),warm=profile(new Set()),withoutWalk=profile(new Set([walk]));
   const ids=(pins:ReadonlySet<Actor>)=>[...pins].map(a=>a.id).sort((a,b)=>a-b);
+  const orderedIds=(pins:ReadonlySet<Actor>)=>[...pins].map(a=>a.id);
   assert.deepEqual(ids(warm.pins),ids(all.pins));
   assert.deepEqual(ids(all.pins),ids(referencePins(w,owned)),'cold and warm exact pin set must match the uncached prior scanner');
+  assert.deepEqual(orderedIds(all.pins),orderedIds(referencePins(w,owned)),'cold pin insertion order must match the prior scanner');
+  assert.deepEqual(orderedIds(warm.pins),orderedIds(referencePins(w,owned)),'warm certificates must preserve pin insertion order');
   assert.deepEqual(ids(withoutWalk.pins),ids(all.pins),'excluding the concrete derived MassWalk branch must not change these actual live pin identities');
   assert.ok(expected.every(a=>all.pins.has(a)&&withoutWalk.pins.has(a)),'unknown nested numeric/direct/weak owners must retain dependencies');
   assert.equal(all.walkVisits,1);assert.equal(all.streamVisits,1);assert.equal(all.generatorVisits,1);
@@ -123,5 +126,29 @@ try {
   assert.ok(samples.size<=m.stream.config.maxSamples);
   for(const[label,r]of [['production-wrapper-cold',wrapperCold],['production-wrapper-warm',wrapperWarm]]as const){const{pins,...stats}=r;console.log(JSON.stringify({label,pinIds:ids(pins),...stats}));}
   console.log('PASS production immutable entries: full pin equality, exact sample-hit reuse, frozen patch/restore replacement, old entries unchanged, residency bound');
+  // Collection values have no dependency field name. Numeric Map KEYS and Set
+  // members retain their actor-ID meaning; other primitives are inert. Repeated
+  // certified aliases need no query-local seen entry, while a frozen accessor
+  // still requires one ordinary read, even when aliased across collections.
+  const shared=Object.freeze({fields:Object.freeze({density:12}),items:Object.freeze(['plain',0,null])});
+  let aliasReads=0;
+  const accessor=Object.freeze(Object.defineProperty({},'owner',{enumerable:true,get(){aliasReads++;return bodies[5];}}));
+  const primitives:unknown[]=[undefined,null,false,true,0,-0,NaN,Infinity,'text',17n,Symbol('primitive'),()=>bodies[15]];
+  const collectionWorld={actors:[],before:shared,map:new Map<unknown,unknown>([
+    ...primitives.map((v,i)=>['inert:'+i,v] as [unknown,unknown]),
+    ['numeric-value-is-inert',bodies[15].id],
+    [bodies[0].id,true],[{targetId:bodies[1].id},shared],['direct',bodies[2]],
+  ]),set:new Set<unknown>([...primitives,bodies[3].id,{owner:bodies[4]},shared,accessor]),
+  aliases:[shared,shared,accessor,new Map<unknown,unknown>([[shared,accessor]])]} as unknown as World;
+  const expectedOrder=bodies.slice(0,6).map(a=>a.id);
+  for(const temperature of ['cold','warm']){
+    const before=aliasReads,actual=massDormancyPins(collectionWorld,owned);
+    assert.equal(aliasReads,before+1,temperature+' aliased frozen accessor must be read once');
+    assert.deepEqual(orderedIds(actual),expectedOrder,temperature+' primitive collections must preserve exact pins and insertion order');
+    const prior=referencePins(collectionWorld,owned);
+    assert.equal(aliasReads,before+2,temperature+' original scanner reads the same aliased accessor once');
+    assert.deepEqual(orderedIds(actual),orderedIds(prior),temperature+' shared frozen graphs must match the original scanner');
+  }
+  console.log('PASS cold/warm exact pin insertion order; primitive Map/Set entries; shared frozen aliases; aliased live getter read once');
   m.dispose();
 } finally { restore(); }
