@@ -4016,7 +4016,11 @@ we verify changes.
 - ShardPerformance (`balance/shardPerformance.ts`) supplies opt-in phase,
   worker, checkpoint and window-only CPU evidence for `soak:shard`.
   `docs/engine/shard-performance.md` records the controlled performance course,
-  native restoration layout and bounded multi-focus terrain caches. Preserve
+  native restoration layout and bounded multi-focus terrain caches. ShardPerformance
+  also covers exact search-work rejection, live-input lattice memoization,
+  bounded native candidate LRU and page-invalidated reservation candidates;
+  verify searchwork, reservationwork, nativewalkcache and nativeobstaclecache.
+  Preserve
   exact saved state, full signed addresses, every player's population and the
   unchanged load gates; verify the affected worldmass/native probes and shard
   suites, all types, generation QA and simulation smoke before a checkpoint.

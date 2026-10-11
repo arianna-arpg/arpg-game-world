@@ -282,3 +282,207 @@ control checkout. Initial full-process profiles are under
 `.claude/ownership.performance-profiles/`; the final load-window profile is
 `.claude/final-window.local.cpuprofile`. The final candidate source is unchanged
 through both spread pairs, both clustered pairs and the final profile.
+
+## Second performance pass: exact query work
+
+This pass starts at `f9bef84d708140b3339eca8bc0d62a9a67a5fc1c`, so its
+control already contains the first pass above. It changes three runtime files,
+without changing tick rates, encounter density, population budgets, admission
+rules or load-test gates:
+
+- Navigation skips a previously admitted neighbor only when its known route
+  cannot improve through the current node. Every edge remains positive; heap
+  ties, neighbor order, pop budgets and cache order remain unchanged. The
+  seeded source is exempt because its coarse center may still need its first
+  physical query, including native ownership hydration.
+- The common navigation lattice reuses its GCD only after reading and matching
+  all three live numeric sizes. Mutable provider sizes, equal revisions,
+  replacements and removal still invalidate the derived answer.
+- Native obstacle candidates use a bounded linked LRU instead of deleting and
+  reinserting a hot Map key. Exact five-component JSON keys and eviction order
+  are unchanged. Empty rows share one frozen array; collision still reads live
+  doors, shapes, destruction, margins, channels and the current local frame.
+- Population reservations reuse only the immutable candidate map. Page changes,
+  journey/descriptor replacement and reservation flags invalidate it. Live
+  ownership and missing seats are counted on every query. Origin, focus-group
+  and distance calculations are shared within a query, and available capacity
+  uses one fresh synchronous population census.
+
+Three focused critics challenged correctness and measured the proposed work.
+They caught the source-cell first-observation case and a reentrant provider
+lookup that could insert duplicate LRU nodes; both are covered by regression
+checks. Reentrant replacement now preserves the original Map insertion order.
+At 32,768 entries, an actual runtime dependency scan visited zero residency or
+LRU nodes through its World and non-owned actor roots. No dependency-scanner
+exemption was added. A proposed cache-key concatenation was slower and was
+discarded. A targeting-grid shortcut was rejected because detection ranges,
+segmented bodies and roster ties require more than a simple radius query.
+
+### Fixed-work evidence
+
+`probe_worldmass_searchwork` retains the previous search body as an independent
+oracle. Its 191 comparisons preserve exact steps/null, FIFO contents/order,
+frame budgets, weighted/invalid/subnormal/overflow prices, revisions, overlays
+and first obstacle observations. Synthetic obstacle queries fall from 7,670 to
+4,895 (36.2%); the real cold-native course falls from 723 to 441 (39.0%), with
+identical born/sparse snapshots and no scene admission.
+
+An actual `MassNativeResidency.obstacleAt` replay uses 32,768 exact points and
+262,144 hot queries per trial, five trials after warm-up. Each version records
+exactly 32,768 provider calls, no timed misses and 1,310,720 timed hits. The
+point digest matches:
+`c2da8998e7233c5a795f945c65ddd272bb403050cdf3a54d86f1a1b5bca5fa47`.
+Control-then-candidate medians are 373.34/344.60 ms (7.7% less); reversing the
+order gives 321.29/275.21 ms (14.3% less). Both client correctness courses were
+running concurrently. These are hot-cache observations on a busy machine,
+not whole-frame speedups or independent live-load gates.
+
+`probe_worldmass_reservationwork` passes 1,833 comparisons against the original
+capacity calculation, including same-tick births, movement, casualties,
+sleeping/paged owners, geographic exclusions and unlocated seats, distance ties,
+focus merge/split/empty transitions, real page invalidation, and a complete
+nine-node native puzzle's admission, retained dormancy and exact restoration.
+The obstacle probe preserves 1,908 live shape/channel/margin comparisons and
+adds independent Map-model LRU churn, exact-address edge cases, nested lookups
+and retained-graph bounds. The navigation cache keeps its 1,860 independent
+ray/collision comparisons and now checks in-place lattice mutations.
+
+### Second-pass correctness and the client retry
+
+All four type targets and the final production build pass. All 22 shard probes
+pass with retries disabled, including persistence, reconnect and honest input.
+Eighteen focused worldmass/native probes pass: searchwork, reservationwork,
+nativewalkcache, nativeobstaclecache, foci, wilderness, exploration, dormancy,
+dormancypinattribution, puzzles, nativehost, occurrences, processions,
+processiongameplay, checkpoint, resumeworld, nativepaging and
+nativeinstalledsources. Generation QA passes all 2,607 cases with four existing
+overlap warnings; all 25 simulation smoke episodes pass. The existing build
+size warning remains. The final reservation refinement and test typing repair
+were followed by another complete type check/build and reservation oracle run.
+
+The first client run failed the unchanged final `nearby > 0` assertion. Its
+eight counts were 36/66/23/19/8/0/11/0 (mean 20.375), with 238 retained bodies,
+145 sleepers and no fatal error. This is a real failed receipt, not a passing
+Continue course. The code audit found no mutation/publication between the two
+old population reads; the test fixes terrain seed 99 but does not seed combat
+`Math.random`, and native worker arrival also varies. Those are possible
+sources of variation, not proof that the initial failure is unrelated.
+
+The final unchanged candidate build and `f9bef84d` control then both passed the
+original client course without changing its assertions. Candidate counts were
+44/69/25/22/11/0/11/13 (mean 24.375); control counts were
+39/68/34/18/5/0/1/2 (mean 20.875). Candidate Continue preserved all 270 original
+identities, admitted 16 additional bodies, and restored the saved mockthrush at
+45 life. Both courses reported zero client errors. The failed initial receipt
+is retained; passing a repeat does not establish deterministic encounter
+density or make that first failure disappear.
+
+The full worldmass suite was not rerun. The previously documented generation
+receipt/continuity failures and native-sky source-count failure remain unresolved;
+no guard, expected hash or threshold was repinned.
+
+### Second-pass live spread comparison
+
+Both versions run the same existing six-bot, 60-second, seed `0x00ddba11`
+course with `--spread 3500 --rove 0 --diagnostics` and a shared future
+`--window-at`. Pair B reverses launch order. The two hosts and their bot fleets
+run concurrently; this session's correctness jobs are stopped for the measured
+windows. Other workstation activity is uncontrolled. Instrumentation is
+identical and no CPU profiler runs in these comparisons.
+
+| Spread run | p50 / p95 / p99 (ms) | Max (ms) | Dropped | Input batches/seat/s | Nearby min / mean | Reconnect |
+|---|---|---:|---:|---:|---|---|
+| A control | 90.83 / 180.13 / 324.36 | 543.60 | 83.67% | 7.73 | 20 / 30.56 | Pass |
+| A candidate | 85.61 / 140.20 / 231.90 | 314.93 | 81.73% | 8.63 | 22 / 31.55 | Pass |
+| B control | 105.55 / 218.44 / 384.41 | 462.87 | 86.07% | 6.66 | 20 / 36.26 | Fail |
+| B candidate | 79.19 / 153.04 / 273.05 | 324.39 | 81.05% | 8.92 | 19 / 31.69 | Pass |
+
+Observed p95 improves 22.2%/29.9%, p99 improves 28.5%/29.0%, and actual input
+service improves 11.6%/33.9%. Candidate simulation advances 10.81/11.19 ticks/s
+versus 9.68/8.35 for control. The unchanged 20 ms p95 and 5% dropped-tick gates
+still fail in every spread run. All four retain their party, record four deaths
+and four rejoins, and report zero host faults/errors. Realized populations and
+worker admission histories differ: these are whole-course observations, not
+equal-actor speedup proofs. The independent oracles above establish exact
+query behavior separately.
+
+Candidate runtime-update p99 is 134.74/148.66 ms versus control 227.65/291.36 ms.
+This phase includes admission work, so it still contains visible stalls.
+Machine busy time is 51.51–51.55% in A and 49.53–49.86% in B. Start delays are
+330/473 ms for A control/candidate and 1,112/287 ms for B. The shared requested
+timestamp does not make the realized starts identical.
+
+| Spread run | Live heap start → end (MiB) | Growth (MiB) | Compact checkpoint bytes | Capture / JSON (ms) |
+|---|---|---:|---:|---|
+| A control | 301.30 → 315.16 | 13.87 | 3,197,236 | 314.73 / 27.37 |
+| A candidate | 300.72 → 325.72 | 24.99 | 3,482,460 | 336.40 / 25.10 |
+| B control | 303.46 → 317.27 | 13.81 | 3,196,254 | 337.21 / 31.67 |
+| B candidate | 304.17 → 327.70 | 23.53 | 3,505,740 | 343.23 / 31.75 |
+
+Candidate live heap is higher; all growth readings remain inside the unchanged
+64 MiB gate. The bounded-cache tests do not substitute for long-session heap
+evidence. Checkpoint measurements occur outside the load window and exclude
+disk/fsync; they still expose several-hundred-millisecond synchronous work.
+
+The clustered pair uses the same method with `--spread 0`:
+
+| Clustered run | p50 / p95 / p99 (ms) | Max (ms) | Dropped | Input batches/seat/s | Nearby min / mean | Heap growth (MiB) |
+|---|---|---:|---:|---:|---|---:|
+| Control | 8.17 / 24.94 / 58.94 | 148.26 | 0.36% | 48.97 | 16 / 17.79 | 3.07 |
+| Candidate | 8.11 / 24.55 / 54.51 | 110.11 | 0.31% | 48.94 | 15 / 18.51 | 3.01 |
+
+Clustered p95/input service are essentially unchanged in this observation;
+one pair does not establish a general clustered improvement. Both versions
+fail only the 20 ms p95 gate, pass reconnect, retain their party, and have no
+deaths, faults or errors. Machine utilization is 44.96–44.99%; start delays are
+252/312 ms for control/candidate. Candidate live heap ends at 233.60 MiB versus
+232.26 for control. This pass mainly helps the heavier spread-out course.
+
+### Early load and remaining work
+
+A final standalone 60-second CPU diagnosis begins after ordinary join warm-up,
+without the comparisons' extra scheduled-start wait. Of 60.32 sampled seconds,
+58.78 are inside ticks: 30.22 under AI and 24.77 under World update. Target
+acquisition accounts for 9.85 inclusive seconds, movement 9.23, path search
+6.21, and worldmass update 5.68. The largest relevant self costs include stat
+calculation (2.34 seconds), deterministic random draws (2.18), obstacle candidate
+lookup (2.01), region lookup (1.77), and faction stance (1.56). These overlap;
+profile overhead and a different world age prevent direct timing comparison
+with the paired runs or the first pass's 30-second profile.
+
+That diagnostic still fails: p95 157.29 ms, 80.54% dropped ticks, 81.12 MiB live
+heap growth (242.01 → 323.13 MiB), and reconnect returns a new seat. Its largest
+tick is 1,096.13 ms. To avoid attributing these failures to profiling alone, a
+further unprofiled pair runs the same earlier load window on both versions,
+without `--window-at`:
+
+| Early run | p95 / p99 / max (ms) | Dropped | Input batches/seat/s | Nearby min / mean | Live heap growth (MiB) | Reconnect |
+|---|---|---:|---:|---|---:|---|
+| Control | 218.05 / 571.87 / 1,538.87 | 85.38% | 6.93 | 26 / 40.76 | 65.40 | Fail |
+| Candidate | 192.53 / 335.05 / 1,398.76 | 83.21% | 8.33 | 23 / 38.62 | 76.37 | Fail |
+
+Both fail timing, dropped-tick, heap-growth and reconnect gates with no host
+faults/errors. Both lose the cut seat and return it as a new seat; both retain
+their original party. Control records three deaths/rejoins, candidate four
+deaths and three rejoins. CPU utilization is 43.05–43.11%. This reproduces the
+early-load problems on the baseline; it does not resolve them. Candidate heap
+growth is again roughly 11 MiB higher, and these short courses cannot establish
+long-term retention safety. All original gates remain in place.
+
+The next focused targets are repeated target/stat/hostility reads, exact physical
+queries, synchronous native/geographic validation, and checkpoint preparation.
+Any targeting change must preserve unusual detection ranges, segmented anatomy
+and roster tie order. Reconnect under overload, early heap growth, the variable
+client density assertion and the existing generation/continuity failures remain
+open. Large simulation scheduling changes still need their separate M6 design
+review; no population or simulation-rate reduction is part of this pass.
+
+Raw second-pass candidate reports/logs are `.claude/perf2-*.local.*`; the profile
+is `.claude/perf2-window.local.cpuprofile`, with its summary in
+`.claude/perf2-profile-summary.local.json`. The first failed client receipt is
+`.claude/perf2-client-first.local.json`; the passing final receipt is
+`.claude/perf2-client-final.local.json`. Control reports, the final client receipt
+and the exact cache replay script are preserved in
+`.claude/ownership.performance2-control-evidence/` before archiving the temporary
+control checkout. No production source changes occurred between the paired
+timing runs, the final profile and the early-load follow-up.

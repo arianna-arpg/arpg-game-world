@@ -589,6 +589,8 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_snow.ts', status: 'green', tier: 'fast', why: 'Native snow accumulation per geographic chunk, local climate, dormant retention and exact Continue.' },
   { probe: 'probe_worldmass_nativematerials.ts', status: 'green', tier: 'fast', why: 'Shared native masonry and foliage terrain painters with deterministic source geometry and revisions.' },
   { probe: 'probe_worldmass_nativewalkcache.ts', status: 'green', tier: 'fast', why: 'Native terrain query cache, cold collision, native edits, mixed lattice boundaries and exact Continue.' },
+  { probe: 'probe_worldmass_searchwork.ts', status: 'green', tier: 'fast', why: 'Preserved navigation oracle proves exact routes, query observations, search budgets and native state while reducing repeated work.' },
+  { probe: 'probe_worldmass_reservationwork.ts', status: 'green', tier: 'fast', why: 'Original capacity oracle covers same-tick ownership, retained puzzles, focus changes and real page invalidation without caching live population.' },
   { probe: 'probe_worldmass_weather_world.ts', status: 'green', tier: 'fast', why: 'Actual world physical weather and native wind/rain gates with saved country Continue.' },
   { probe: 'probe_worldmass_windchill.ts', status: 'green', tier: 'fast', why: 'Seat-local native cold, climate and wind; real warmth and region crossing, finite driver parity and native transient Continue boundary.' },
   { probe: 'probe_characterresume.ts', status: 'green', tier: 'fast', why: 'Sequential immutable native page preflight, complete portable exports, exact slot authority, stale/death/import refusal and metadata-only Continue.' },

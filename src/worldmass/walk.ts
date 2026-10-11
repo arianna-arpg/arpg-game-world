@@ -17,13 +17,25 @@ interface Node { x: number; y: number; cost: number; first: Vec2 }
  * even before a render page arrives; page residency never means solid/empty. */
 export class MassWalk implements RegionGrid {
   readonly cellOcclusion = true;
+  private latticeTerrain = 0;
+  private latticeOverlay = 0;
+  private latticeNative = 0;
+  private latticeSize = 0;
   /** The common lattice keeps native 30-unit walls and geographic 24-unit
    * cells exact for rays/sweeps; path search keeps its bounded coarse lattice. */
   get cellSize(): number {
-    let a = this.stream.generator.spec.terrainCell;
-    for (let b of [this.overlay?.grid.cellSize ?? a, this.native?.cellSize ?? a])
-      while (b) { const r = a % b; a = b; b = r; }
-    return a;
+    const terrain = this.stream.generator.spec.terrainCell;
+    const overlay = this.overlay?.grid.cellSize ?? terrain, native = this.native?.cellSize ?? terrain;
+    // Read all three live inputs before reusing their common lattice. Providers
+    // may change size in place without replacing their object or revision.
+    if (terrain === this.latticeTerrain && overlay === this.latticeOverlay && native === this.latticeNative)
+      return this.latticeSize;
+    let a = terrain, b = overlay;
+    while (b) { const r = a % b; a = b; b = r; }
+    b = native;
+    while (b) { const r = a % b; a = b; b = r; }
+    this.latticeTerrain = terrain; this.latticeOverlay = overlay; this.latticeNative = native;
+    return this.latticeSize = a;
   }
   native?: {regionAt(at:MassAddress):string|undefined; readonly revision:number; cellSize:number};
   overlay?: { grid: RegionGrid; contains(x: number, y: number): boolean };
@@ -197,12 +209,18 @@ export class MassWalk implements RegionGrid {
       for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
         const x = n.x + dx, y = n.y + dy;
         if (Math.max(Math.abs(x - fx), Math.abs(y - fy)) > this.config.searchRadius) continue;
+        const k = x + ',' + y, known = costs.get(k);
+        // Every admitted edge has positive cost. A known route no dearer than
+        // this node cannot improve through it; avoid repeated physical queries.
+        // The seeded source has not passed its coarse-center obstacle query:
+        // retain that first observation (native queries can hydrate ownership).
+        if (known !== undefined && known <= n.cost && (x !== fx || y !== fy)) continue;
         const q = { x: (x + .5) * cs, y: (y + .5) * cs }, id = this.regionAt(q.x, q.y);
         if (!regionKind(id)?.walkable || this.obstacles?.blocked(q.x, q.y)) continue;
         const price = profile?.costOf(id) ?? 1;
         if (!Number.isFinite(price) || price <= 0) continue;
-        const cost = n.cost + price, k = x + ',' + y;
-        if (cost >= (costs.get(k) ?? Infinity)) continue;
+        const cost = n.cost + price;
+        if (cost >= (known ?? Infinity)) continue;
         costs.set(k, cost); push({ x, y, cost, first: n.cost === 0 ? q : n.first });
       }
     }

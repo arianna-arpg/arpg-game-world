@@ -200,6 +200,8 @@ export class WorldMassRuntime {
   private readiness:Readonly<NativeReadiness>=Object.freeze({status:'ready',pending:0,required:0,retryable:false});
   get resumePending():boolean{return this.restoring;}
   private places = new Map<string, ReturnType<MassGenerator['placesInCell']>>();
+  private reservationCandidates: { journey: MassJourney | null; places: readonly MassPlace[] | undefined;
+    reserve: boolean; nearby: boolean; rows: ReadonlyMap<string, MassPlace> } | null = null;
   readonly origin: MassCell;
   readonly resumeTier: number;
   constructor(seed: number, runId: string, config: MassAdventure = massAdventure(), input?: MassRuntimeRestore) {
@@ -714,37 +716,50 @@ export class WorldMassRuntime {
     return content.levels.find(row => row.level === level)!;
   }
   private populationCount(place: Pick<MassPlace,'id'|'content'|'center'>): number {
-    return massFormation(this.populationFor(place).encounters,this.generator.run.seed,place.id)?.seats.length
-      ?? ambientCohort(this.config.content.find(c=>c.id===place.content)!.ambientPack,this.populationFor(place),this.generator.run.seed,place.id)?.length
+    const population=this.populationFor(place);
+    return massFormation(population.encounters,this.generator.run.seed,place.id)?.seats.length
+      ?? ambientCohort(this.config.content.find(c=>c.id===place.content)!.ambientPack,population,this.generator.run.seed,place.id)?.length
       ?? this.config.content.find(c=>c.id===place.content)!.count;
+  }
+  /** Cache only immutable candidate identities, never live missing-seat counts.
+   * The map is bounded by current pages plus the finite opening journey. */
+  private populationReservations(): ReadonlyMap<string, MassPlace> {
+    const journey=this.journey,places=journey?.places;
+    const reserve=!!journey?.spec.reservePopulation,nearby=!!journey?.spec.nearbyReservations;
+    const cached=this.reservationCandidates;
+    if(cached&&cached.journey===journey&&cached.places===places&&cached.reserve===reserve&&cached.nearby===nearby)return cached.rows;
+    const rows=new Map((reserve?places??[]:[]).map(p=>[p.id,p]));
+    if(nearby)for(const page of this.places.values())for(const p of page)
+      if(this.config.content.find(c=>c.id===p.content)?.site)rows.set(p.id,p);
+    this.reservationCandidates={journey,places,reserve,nearby,rows};return rows;
   }
   /** Only still-needed seats reserve space: never evict, respawn or heal a body. */
   private reservedPopulation(except: string, at?:Vec2): number {
     let missing = at&&this.massFoci.groups.length>1 ? this.massFoci.populationAt(at,this.geography?.massReservationSlots(except)??[])
       : this.geography?.reservedPopulation(except)??0;
     const focusDistance=(q:Vec2)=>this.massFoci.distance(q);
-    const nearbyReservations=new Map((this.journey?.spec.reservePopulation?this.journey.places:[]).map(p=>[p.id,p]));
-    if(this.journey?.spec.nearbyReservations)for(const rows of this.places.values())for(const p of rows)
-      if(this.config.content.find(c=>c.id===p.content)?.site)nearbyReservations.set(p.id,p);
-    const distance=(place:MassPlace)=>{
-      const q=localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
-      return Math.max(0,focusDistance(q)-place.radius);
-    };
+    const nearbyReservations=this.populationReservations();
     const current=this.journey?.spec.nearbyReservations?nearbyReservations.get(except):undefined;
     // Existing native geographic owners have first claim on their own complete
     // admission. Ordinary nearbyReservations cannot deadlock that admission.
     if(this.journey?.spec.nearbyReservations&&except&&!current)return missing;
+    const origin={...this.origin,x:0,y:0},span=this.config.terrain.addressSpan;
+    const atGroup=at&&this.massFoci.groups.length>1?this.massFoci.groupAt(at):undefined;
+    const currentPos=current?localOffset(current.center,origin,span):undefined;
+    const currentGroup=currentPos?this.massFoci.groupAt(currentPos):undefined;
+    const currentDistance=current?Math.max(0,focusDistance(currentPos!)-current.radius):0;
     for (const place of nearbyReservations.values()) {
       if (place.id === except) continue;
-      const pos=localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
-      if(at&&this.massFoci.groups.length>1&&this.massFoci.groupAt(at)!==this.massFoci.groupAt(pos))continue;
+      const pos=localOffset(place.center,origin,span);
+      const group=atGroup!==undefined||current?this.massFoci.groupAt(pos):undefined;
+      if(atGroup!==undefined&&atGroup!==group)continue;
+      const focusRange=current||this.journey?.spec.nearbyReservations?focusDistance(pos):0,distance=Math.max(0,focusRange-place.radius);
       // nearbyReservations fund the closest real destination first. Two large
       // neighboring courts must not reserve one another out of existence.
-      if(current&&this.massFoci.groupAt(pos)===this.massFoci.groupAt(localOffset(current.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan))
-        &&(distance(place)>distance(current)||distance(place)===distance(current)&&place.id>current.id))continue;
+      if(current&&group===currentGroup
+        &&(distance>currentDistance||distance===currentDistance&&place.id>current.id))continue;
       if(this.journey?.spec.nearbyReservations){
-        const q=localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
-        if(focusDistance(q)>(this.dormancy?.policy.sleepRadius??this.config.populationRadius)+this.config.populationRadius+place.radius)continue;
+        if(focusRange>(this.dormancy?.policy.sleepRadius??this.config.populationRadius)+this.config.populationRadius+place.radius)continue;
       }
       const site = this.config.content.find(c=>c.id===place.content)!.site;
       const ids = [...Array.from({length:this.populationCount(place)},(_,i)=>canonical([place.id,i])),
@@ -756,9 +771,14 @@ export class WorldMassRuntime {
     return missing;
   }
   /** Actual free seats, including every other funded activity's future needs. */
-  availablePopulation(exceptOwner='',at?:{x:number;y:number}):number{return Math.max(0,this.populationLimit(exceptOwner,at)-this.population);}
+  availablePopulation(exceptOwner='',at?:{x:number;y:number}):number{
+    const total=this.population;return Math.max(0,this.populationLimitFor(exceptOwner,at,total)-total);
+  }
   populationLimit(exceptOwner='',at?:{x:number;y:number}):number{
-    const groups=this.massFociInitialized?this.massFoci.groups.length:1,total=this.population;
+    return this.populationLimitFor(exceptOwner,at,this.population);
+  }
+  private populationLimitFor(exceptOwner:string,at:Vec2|undefined,total:number):number{
+    const groups=this.massFociInitialized?this.massFoci.groups.length:1;
     const global=this.config.maxPopulation*groups;
     if(groups<=1||!at)return global-this.reservedPopulation(exceptOwner);
     const slots=this.massPopulationSlots(),unlocated=Math.max(0,total-slots.reduce((n,r)=>n+r.count,0));
@@ -814,7 +834,7 @@ export class WorldMassRuntime {
     this.fields.massFocusCount=this.shrines.massFocusCount=this.puzzles.massFocusCount=Math.max(1,foci.length);
     if(this.geography){this.geography.objectives.massFocusCount=this.geography.caravans.processions.massFocusCount=Math.max(1,foci.length);}
     this.nativeFeatures?.setFocusCount(Math.max(1,foci.length));
-    if(!foci.length){this.stream.request([]);this.places.clear();this.nearKey='';return;}
+    if(!foci.length){this.stream.request([]);this.places.clear();this.reservationCandidates=null;this.nearKey='';return;}
     if(boot||world.time>=this.nextPopulation)this.geography?.restoreResidentOwners(world);
     else this.geography?.restoreProcessions(world);
     this.geography?.prepare(this.walk.at(foci[0].pos.x,foci[0].pos.y),world.time,foci.slice(1).map(f=>this.walk.at(f.pos.x,f.pos.y)));
@@ -830,10 +850,10 @@ export class WorldMassRuntime {
       const cells=this.massFoci.pages(p=>this.walk.at(p.x,p.y),this.config.pageRadius);
       this.stream.request(cells);
       const wanted=new Set(cells.map(cellKey));
-      for (const k of this.places.keys()) if (!wanted.has(k)) this.places.delete(k);
+      for (const k of this.places.keys()) if (!wanted.has(k)) {this.places.delete(k);this.reservationCandidates=null;}
       for (const cell of cells) {
         const k = cellKey(cell);
-        if (!this.places.has(k)) this.places.set(k, this.placesInCell(cell));
+        if (!this.places.has(k)) {this.places.set(k, this.placesInCell(cell));this.reservationCandidates=null;}
       }
       for(const cell of focusCells)this.state.claim('explored',cellKey(cell));
     }
