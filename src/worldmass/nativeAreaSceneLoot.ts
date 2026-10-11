@@ -7,10 +7,11 @@ import type {NativeAreaSceneSettlement} from './nativeAreaSceneSettlement';
 import {gemFloorFor} from '../engine/loot';
 import * as native from '../engine/nativeSceneLoot';
 export type NativeSceneLootCampaign=Pick<native.NativeSceneLootHost,
- 'account'|'accountDirty'|'seats'|'time'|'dropRuleOf'|'questSeat'|'metaProgressionActive'|'questHand'|'sameParty'|'seatHero'>;
+ 'account'|'accountDirty'|'time'|'dropRuleOf'|'questSeat'|'metaProgressionActive'|'questHand'|'sameParty'|'seatHero'>;
 export interface NativeSceneLootState {spoilStory:World['spoilStory'];orbs:World['orbs']}
 export function freshSceneLootState():NativeSceneLootState{return {spoilStory:undefined,orbs:[]};}
 export interface NativeSceneLootInput {
+ scenePresence:{readonly scene:NativeSceneCensus;readonly seats:World['seats']};
  scene:NativeSceneCensus;geometry:NativeAreaSceneGeometry;physical:NativeAreaScenePhysical;
  settlement:NativeAreaSceneSettlement;campaign:NativeSceneLootCampaign;state:NativeSceneLootState;
 }
@@ -19,13 +20,13 @@ export class NativeAreaSceneLoot {
  readonly host:native.NativeSceneLootHost;
  constructor(raw:NativeSceneLootInput){
   const bindings=Object.create(null);
-  for(const key of ['scene','geometry','physical','settlement','campaign','state']){
+  for(const key of ['scene','geometry','physical','settlement','campaign','state','scenePresence']){
    const d=raw&&Object.getOwnPropertyDescriptor(raw,key);
    if(!d||!Object.hasOwn(d,'value')||!d.value||typeof d.value!=='object')throw Error('Native loot requires an own object binding: '+key);
    bindings[key]=d.value;
   }
   const input:NativeSceneLootInput=this.input=Object.freeze(bindings),host={} as native.NativeSceneLootHost,self=this;
-  if(input.geometry.state!==input.scene||input.physical.input.scene!==input.scene||input.physical.input.geometry!==input.geometry
+  if(input.scenePresence.scene!==input.scene||input.geometry.state!==input.scene||input.physical.input.scene!==input.scene||input.physical.input.geometry!==input.geometry
    ||input.settlement.input.scene!==input.scene||input.settlement.input.geometry!==input.geometry
    ||input.physical.input.settlement!==input.settlement||(input.physical.input.campaign as object)!==input.campaign||(input.settlement.input.campaign as object)!==input.campaign)
    throw Error('Native loot requires identical scene, geometry, physical, settlement and campaign owners');
@@ -39,7 +40,8 @@ export class NativeAreaSceneLoot {
   fields(()=>input.scene,['zone']);fields(()=>input.geometry,['flashes']);
   // Native memory restoration replaces this array; the sink follows that exact owner.
   fields(()=>input.physical.input.state,['drops']);fields(()=>input.state,['spoilStory','orbs']);
-  fields(()=>input.campaign,['account','accountDirty','seats','time','questSeat']);
+  fields(()=>input.campaign,['account','accountDirty','time','questSeat']);
+  Object.defineProperty(host,'seats',{enumerable:true,get:()=>input.scenePresence.seats});
   Object.defineProperty(host,'dropRuleOf',{enumerable:true,get(){const fn=input.campaign.dropRuleOf;
    return fn?(...args:Parameters<NonNullable<native.NativeSceneLootHost['dropRuleOf']>>)=>fn.apply(input.campaign,args):fn;
   },set(value){input.campaign.dropRuleOf=value;}});

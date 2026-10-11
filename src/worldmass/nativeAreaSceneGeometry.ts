@@ -1,3 +1,4 @@
+import {sceneDwellReachable,sceneStoryPair} from '../engine/nativeSceneObjectiveWatching';
 import {nativeFellDoodad,nativeRebuildClientTerrain} from '../engine/nativeSceneTerrain';
 import { refreshMovementTether } from '../engine/movementTether';
 import { nativeFloorElevAt, nativeRayElev, nativeShotElev, nativeLineOfSight, nativeSightClipD, nativeLineOfFire, nativeClipShot, type NativeSightSources } from '../engine/nativeSight';
@@ -25,6 +26,8 @@ export interface NativeSceneCampaignContext { ledger:World['ledger']; seasSeen:W
 /** Genuine mutable geometry owner. Its roots are the real native working data,
  * shared with later birth and controller owners. It never borrows a World. */
 export class NativeAreaSceneGeometry implements native.NativeSceneGeometryHost, NativeAreaLayoutHost {
+ dwellReachable(...a:Parameters<World['dwellReachable']>){return sceneDwellReachable(this,...a);}
+ storyPair(...a:Parameters<World['storyPair']>){return sceneStoryPair(this,...a);}
  frontSpawned=0; frontRiders=0;
  get time(){return this.campaign.time;} get seats(){return this.campaign.seats;}
  get seatOf(){const c=this.campaign,f=c.seatOf;return (...args:Parameters<World['seatOf']>)=>f.apply(c,args);}

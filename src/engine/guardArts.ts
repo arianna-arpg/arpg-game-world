@@ -26,7 +26,7 @@ export class GuardArts {
   visuals: GuardArtVisual[] = [];
   private states = new Map<Actor, Map<SkillInstance, GuardArtState>>();
   private nextSource = 1;
-  constructor(private w: World) {}
+  constructor(private w: NativeGuardArtsHost) {}
   private policy(inst: SkillInstance): string {
     return JSON.stringify([inst.treeNodes, inst.level, inst.bonusLevels, inst.sockets.map(s => s && [s.def.id, s.level]), guardArtsOf(inst)]);
   }
@@ -292,4 +292,22 @@ export class GuardArts {
       progress: 1 - b.remaining / b.duration, color: s.host.def.color,
     }))));
   }
+}
+
+/** Structural authority only; executable controller bodies are unchanged. */
+export interface NativeGuardArtsHost {
+ actors:World['actors'];
+ clientActionHook?:World['clientActionHook'];
+ guardArtCooldown:World['guardArtCooldown'];
+ projectiles:World['projectiles'];
+ guardBash:World['guardBash'];
+ time:World['time'];
+ flashes:World['flashes'];
+ enemiesOf:World['enemiesOf'];
+ lineOfSight:World['lineOfSight'];
+ guardArtHit:World['guardArtHit'];
+ executeSkill:World['executeSkill'];
+ lite:World['lite'];
+ litePromoteNearest:World['litePromoteNearest'];
+ timeflow:World['timeflow'];
 }

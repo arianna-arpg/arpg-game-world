@@ -5,7 +5,8 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
 import {nativeMainContentArchive as archive,nativeMainContentArchiveHash} from './nativeMainContentArchive';
-import {beforeNativeMainContent} from './nativeMainContentFixture';
+import {beforeNativeMainContent,beforeNativeMainContentOnly} from './nativeMainContentFixture';
+import {nativeSceneProgressionArchive as progressionArchive} from './nativeSceneProgressionArchive';
 const hash=(text:string)=>createHash('sha256').update(text).digest('hex');
 const parse=(text:string)=>ts.createSourceFile('world.ts',text,99,true);
 const classOf=(sf:ts.SourceFile)=>sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
@@ -16,7 +17,25 @@ assert.deepEqual(archive.rows.map(r=>r.name),['pendingRepeats','executeSkill','l
 assert.deepEqual(archive.declarations.map(r=>r.name),['Zone','MaddenBank','MADDEN_CFG']);
 const normalized=beforeNativeMainContent(source),sf=parse(normalized),cl=classOf(sf);
 for(const row of archive.rows){const member=cl.members.find(m=>m.name?.getText(sf)===row.name);assert.equal(member?.getText(sf)??null,row.before,'exact archived integration restoration '+row.name);}
-for(const row of [...archive.rows,...archive.declarations]){assert.ok(source.includes(row.after));assert.throws(()=>beforeNativeMainContent(source.replace(row.after,row.after.slice(0,-1)+'/* altered checked member */'+row.after.slice(-1))),'changed candidate refuses '+row.name);}
+for(const row of [...archive.rows,...archive.declarations]){
+ let checked=row.after;
+ if(!source.includes(checked)){
+  // The original main expiry moved into the exactly checked progression core.
+  // Require its exact delegate AND its original body; never skip the mutation.
+  assert.equal(row.name,'expireZone','only the reviewed expiry was extracted');
+  const moved=progressionArchive.rows.find(r=>r.name===row.name)!;
+  assert.equal(moved.before,row.after,'same main expiry lineage');checked=moved.after;
+  const original=parse('class X{'+row.after+'}'),method=(original.statements[0] as ts.ClassDeclaration).members[0] as ts.MethodDeclaration;
+  const body=method.body!,start=body.getStart(original),edits:{start:number;end:number}[]=[];
+  const visit=(n:ts.Node)=>{if(n.kind===ts.SyntaxKind.ThisKeyword)edits.push({start:n.getStart(original)-start,end:n.end-start});ts.forEachChild(n,visit);};visit(body);
+  let expected=body.getText(original);for(const e of edits.reverse())expected=expected.slice(0,e.start)+'nativeHost'+expected.slice(e.end);
+  const core=parse(fs.readFileSync(new URL('../src/engine/nativeSceneProgression.ts',import.meta.url),'utf8').replaceAll('\r\n','\n'));
+  const fn=core.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='sceneExpireZone') as ts.FunctionDeclaration;
+  assert.equal(fn.body!.getText(core),expected,'exact relocated main expiry body');
+ }
+ assert.ok(source.includes(checked),'actual checked World member '+row.name);
+ assert.throws(()=>beforeNativeMainContent(source.replace(checked,checked.slice(0,-1)+'/* altered checked member */'+checked.slice(-1))),'changed candidate refuses '+row.name);
+}
 // An unlisted member survives normalization. Older whole-class guards still see it.
 const current=parse(source),close=classOf(current).end-1,alien=source.slice(0,close)+'\n private unlistedParityMutation=123;\n'+source.slice(close);
 assert.ok(beforeNativeMainContent(alien).includes('private unlistedParityMutation=123;'));
@@ -34,7 +53,7 @@ if(process.argv.includes('--provenance')){
  const patch=git(['diff','--binary',archive.mergeBase,archive.mainRef,'--','src/engine/world.ts']);assert.equal(patch,archive.worldPatch,'exact main-only Git patch');
  const rebuilt=replay(original,patch);assert.equal(hash(rebuilt),archive.candidateSourceHash,'only original main hunks produce candidate');
  const rebuiltSf=parse(rebuilt),rebuiltCl=classOf(rebuiltSf);assert.equal(hash(JSON.stringify(rebuiltCl.members.map(m=>m.getText(rebuiltSf)))),archive.candidateClassHash);
- const restored=beforeNativeMainContent(rebuilt),restoredSf=parse(restored),restoredCl=classOf(restoredSf);assert.equal(hash(JSON.stringify(restoredCl.members.map(m=>m.getText(restoredSf)))),archive.beforeClassHash,'old class receipt restored');
+ const restored=beforeNativeMainContentOnly(rebuilt),restoredSf=parse(restored),restoredCl=classOf(restoredSf);assert.equal(hash(JSON.stringify(restoredCl.members.map(m=>m.getText(restoredSf)))),archive.beforeClassHash,'old class receipt restored');
  assert.equal(emit(restored),emit(original),'complete original executable, imports and declarations restored');
 }
 console.log('PASS main-content strict member/declaration normalization, refusal guards and unlisted-mutation visibility'+(process.argv.includes('--provenance')?' with exact Git provenance':''));

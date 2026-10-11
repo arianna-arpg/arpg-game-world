@@ -52,7 +52,7 @@ export function companionCanMimic(inst: SkillInstance): boolean {
 export class CompanionBonds {
   private states = new Map<Actor, BondState>();
   private copies = new WeakSet<SkillInstance>();
-  constructor(private w: World) {}
+  constructor(private w: NativeCompanionBondsHost) {}
 
   host(beast: Actor): SkillInstance | undefined {
     const id = beast.sourceSkillId?.replace('__companion:', '');
@@ -371,4 +371,27 @@ export class CompanionBonds {
         raritySources: beast.sheet.sourceNames().filter(s => s === 'rarity' || s.startsWith('rarityStack')).map(s => [s, beast.sheet.getSourceMods(s)!] as [string, import('./stats').Modifier[]]) } : {}),
       ...(beast.companionReviveRemaining !== undefined ? { reviveRemaining: beast.companionReviveRemaining } : {}) };
   }
+}
+
+/** Structural authority only; executable controller bodies are unchanged. */
+export interface NativeCompanionBondsHost {
+ pendingRepeats:World['pendingRepeats'];
+ projectiles:World['projectiles'];
+ pendingFuses:World['pendingFuses'];
+ zones:World['zones'];
+ retireOwnedZone:World['retireOwnedZone'];
+ time:World['time'];
+ relevelActor:World['relevelActor'];
+ actors:World['actors'];
+ companionCapOf:World['companionCapOf'];
+ reviveCompanion:World['reviveCompanion'];
+ enemiesOf:World['enemiesOf'];
+ flashes:World['flashes'];
+ companionPulseHit:World['companionPulseHit'];
+ executeSkill:World['executeSkill'];
+ shedOrb:World['shedOrb'];
+ useSkill:World['useSkill'];
+ seatOf:World['seatOf'];
+ seats:World['seats'];
+ showCompanionCue:World['showCompanionCue'];
 }

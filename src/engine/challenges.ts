@@ -27,7 +27,7 @@ export class Challenges {
   private landings: Landing[] = [];
   private effigies: Effigy[] = [];
   private shocks: Shock[] = [];
-  constructor(private w: World) {}
+  constructor(private w: NativeChallengesHost) {}
   private policy(inst: SkillInstance) {
     return JSON.stringify([inst.treeNodes, inst.level, inst.sockets.map(s => s && [s.def.id, s.level]), inst.grafts?.map(s => [s.def.id, s.level])]);
   }
@@ -260,4 +260,24 @@ export class Challenges {
   clearOwner(owner: Actor): void {
     for (const state of [...this.states.values()]) if (state.owner === owner) this.clear(state.owner, state.host);
   }
+}
+
+/** Structural authority only; executable controller bodies are unchanged. */
+export interface NativeChallengesHost {
+ time:World['time'];
+ text:World['text'];
+ challengeBurst:World['challengeBurst'];
+ enemiesOf:World['enemiesOf'];
+ flashes:World['flashes'];
+ spawnProjectile:World['spawnProjectile'];
+ projectiles:World['projectiles'];
+ clampPos:World['clampPos'];
+ spawnConstruct:World['spawnConstruct'];
+ actors:World['actors'];
+ executeSkill:World['executeSkill'];
+ challengeHit:World['challengeHit'];
+ pendingRepeats:World['pendingRepeats'];
+ pendingFuses:World['pendingFuses'];
+ zones:World['zones'];
+ retireOwnedZone:World['retireOwnedZone'];
 }

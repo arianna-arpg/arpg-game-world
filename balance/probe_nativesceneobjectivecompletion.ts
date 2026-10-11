@@ -100,7 +100,7 @@ function fixture(lane:Lane,fault='',seed=731){
   onQuestZoneFieldCleared(this:any,...args:any[]){assert.equal(this,quests);tape.push(['questField',graph(args)]);if(fault==='onQuestZoneFieldCleared')throw Error('injected '+fault);},
  };
  const quests=Object.assign(Object.create(questProto),{activeQuests:ledgers.get(local)!.active});
- const input={scene,geometry,objectives,state,campaign,history,progression,quests};
+ const input={scene,scenePresence:{scene,get seats(){return campaign.seats;}},geometry,objectives,state,campaign,history,progression,quests};
  let controller:any;
  if(lane==='owner')controller=new NativeAreaSceneObjectiveCompletion(input);
  else {
@@ -204,6 +204,10 @@ pair('live-inherited-progression-replacement',f=>{
 });
 {
  const a=fixture('owner'),b=fixture('owner');b.input.campaign=a.input.campaign;b.input.quests=a.input.quests;
+ // This recording-boundary fixture explicitly borrows the same known cohort.
+ // Physical area isolation is exercised by probe_nativeareapresence instead.
+ b.scene.actors=a.scene.actors;b.scene.player=a.scene.player;
+ b.input.scenePresence={scene:b.scene,get seats(){return a.input.scenePresence.seats;}};
  // Two actual retained objective owners share the one live campaign, while
  // their latch, fall places, texts and flashes remain separate native state.
  const neighbor=new NativeAreaSceneObjectiveCompletion(b.input),aOwner=a.controller as NativeAreaSceneObjectiveCompletion;

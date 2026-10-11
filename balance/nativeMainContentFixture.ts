@@ -1,3 +1,6 @@
+import {beforeNativeSceneProgression} from './nativeSceneProgressionFixture';
+import {beforeNativeSceneQuest} from './nativeSceneQuestFixture';
+import {beforeNativeSceneObjectiveWatching} from './nativeSceneObjectiveWatchingFixture';
 /** Undo only exact checked main carry-forward members for older source receipts. */
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -5,6 +8,10 @@ import ts from 'typescript';
 import {nativeMainContentArchive as archive,nativeMainContentArchiveHash} from './nativeMainContentArchive';
 assert.equal(createHash('sha256').update(JSON.stringify(archive)).digest('hex'),nativeMainContentArchiveHash,'immutable main-content source archive');
 export function beforeNativeMainContent(text:string):string {
+ return beforeNativeMainContentOnly(beforeNativeSceneObjectiveWatching(beforeNativeSceneQuest(beforeNativeSceneProgression(text))));
+}
+/** Immutable historical candidates predate subsequent owner extractions. */
+export function beforeNativeMainContentOnly(text:string):string {
  const sf=ts.createSourceFile('world.ts',text,99,true),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
  assert.ok(cl,'main-content World class');
  const edits:{start:number;end:number;text:string}[]=[];

@@ -1,3 +1,31 @@
+NativeAreaSceneOngoing composes native quests, progression and objective watching
+with exact actor authority and explicit physical admission. Preserve live campaign
+quest scope, real local stores, receiver identity, partial failures and original
+source receipts. Preparation observers never establish physical attendance;
+NativeAreaScenePresence supplies the shared admitted roster for rewards and quests.
+Verify the new authority/quest/progression/watcher/ongoing probes plus native loot,
+completion, full birth/source session, all types, generation and sim. Production
+combat, scheduling, whole-area publication/persistence remain required; no active
+World fallback. See docs/worldgen/native-area-objective-watching.md for evidence,
+explicit test boundaries and the later bounded/open navigable-place pass.
+
+Main content through origin483b00c4 now includes native targeting/echo/Miasma fixes,
+main skill showcases, HeroAgent, Director and final site cinema alongside current
+loading/input/camera behavior. Director.stage is asynchronous and frame capture
+requires readiness. Native current-entry captures work; explicit legacy tileset
+travel refuses until genuine retained-area admission exists. Verify targetstrike,
+echomark, madden, skillshowcase, agent, and the showcase/Director/cinema client
+courses. See docs/engine/skill-showcases.md, docs/engine/agent.md,
+docs/engine/director.md and docs/design/site-cinema.md. Historical main balance
+measurements are not current baselines, and stricter current gates stay intact.
+
+The launcher lists current repository branches and selects only verified published
+branch bundles. Preserve branch-specific disk saves and browser storage, digest
+verification, offline fallback, stale/deleted branch refusal and update isolation.
+Use npm run test:launcher, smoke:launcher, smoke:update and the branch-bundle
+smoke in scripts/smoke-launcher-branch.cjs. The source workflow is carried forward;
+local tests do not publish a release. See docs/engine/launcher-branches.md.
+
 NativeSceneLoot and NativeSceneObjectiveCompletion now share the original reward,
 XP and completion mutations with retained area owners. Reuse the actual physical
 drop store and settlement rolls; preserve native allocation, quest scope, random

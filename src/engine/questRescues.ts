@@ -6,8 +6,9 @@ import { QUESTS } from '../quests/defs';
 /** Authored rescue objectives use ordinary NPC bodies, dialogue and account
  * receipts. A return reward, a random kill or a developer-spawned boss cannot
  * free a prisoner: only the owning quest's completed ground can do so. */
+export interface NativeQuestRescueHost extends Pick<World,"account"|"accountDirty"|"activeQuests"|"actors"|"clientActionHook"|"completedObjectives"|"completedQuests"|"createMonster"|"findFreeSpot"|"ledger"|"localSeat"|"markMetaDirty"|"metaProgressionActive"|"notice"|"player"|"questDefOf"|"scene"|"seats"|"withQuestHand"|"zone"> {}
 export class QuestRescues {
-  constructor(private readonly w: World) {}
+  constructor(private readonly w: NativeQuestRescueHost) {}
 
   /** Upgrade old saves from actual quest receipts, never level/crafting totals. */
   reconcile(): void {

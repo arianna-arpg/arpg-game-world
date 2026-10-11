@@ -1,3 +1,5 @@
+import {NativeAreaScenePresence} from './nativeAreaScenePresence';
+import type {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
 import {NativeAreaSceneObjectiveCompletion,freshSceneObjectiveCompletionState,type NativeSceneObjectiveCampaign,type NativeSceneObjectiveProgression,type NativeSceneObjectiveQuests} from './nativeAreaSceneObjectiveCompletion';
 import {NativeAreaSceneLoot,freshSceneLootState,type NativeSceneLootCampaign} from './nativeAreaSceneLoot';
 import {NativeAreaScenePuzzles,type NativeScenePuzzleEffects} from './nativeAreaScenePuzzles';
@@ -117,6 +119,8 @@ export class NativeAreaSceneAssembly {
  readonly puzzleController:NativeAreaScenePuzzles;
  readonly lootController:NativeAreaSceneLoot;
  readonly objectiveController:NativeAreaSceneObjectiveCompletion;
+ readonly scenePresence:NativeAreaScenePresence;
+ readonly objectiveServices:ReturnType<typeof sceneObjectiveServices>;
  #phase:'fresh'|'preparing'|'prepared'|'birthing'|'born'|'failed'='fresh';
  #prepared?:{source:NativeAreaSource;session:NativeAreaSourceSession;layout:Readonly<Layout>;fingerprint:string;firstVisit:boolean;rngState:number;memoryState:string};
  constructor(raw:NativeAreaAssemblyInput){
@@ -127,13 +131,14 @@ export class NativeAreaSceneAssembly {
   if(!raw.initialActors.includes(raw.player)||new Set(raw.initialActors).size!==raw.initialActors.length)throw Error('Native assembly needs one complete initial census');
   if(raw.carry.inCave!==!campaign.zoneMap[definition.id])throw Error('Native assembly cave identity differs');
   const scene={zone:definition,player:raw.player,actors:[...raw.initialActors]};
+  const scenePresence=this.scenePresence=new NativeAreaScenePresence(scene,campaign,campaign.seats.filter(s=>scene.actors.includes(s.actor)));
   const timeflow=this.timeflow=new NativeAreaTimeflow(services.timeflow);
   const environmentState=freshSceneEnvironmentState(),objectives=freshSceneObjectiveState(definition.id,campaign.completedObjectives);
   const sky=new NativeAreaSceneSky({scene,environment:environmentState,campaign});
   let population:NativeAreaScenePopulation,objectiveController:NativeAreaSceneObjectiveCompletion;
   const geometryCampaign=bindNativeSceneSky(extendView(servicesView(services.geometry,['seasSeen','oceanBearing','seaNameOf','notice','seatOf','drainSurvival']),{ledger:campaign.ledger,
    text:(...args:Parameters<World['text']>)=>objectiveController.text(...args),
-   get time(){return campaign.time;},get seats(){return campaign.seats;},
+   get time(){return campaign.time;},get seats(){return scenePresence.seats;},
    createMonster:(...args:Parameters<World['createMonster']>)=>population.createMonster(...args)}),sky);
   const arena=makeNativeAreaArena(definition);
   const geometry=new NativeAreaSceneGeometry(scene,arena,geometryCampaign,config);
@@ -143,7 +148,7 @@ export class NativeAreaSceneAssembly {
   const populationState={squadSequence:campaign.squadSeq,bombardMintRev:0,zoneGenTagging:false,magicPackEffects:[] as World['magicPackEffects'],magicPackResolving:false,magicPackRefreshPending:false};
   population=new NativeAreaScenePopulation({scene,geometry,campaign,sources:sources.population,populationSources:sources.populationResolution,sharedActors:raw.initialActors,
    context:{get time(){return campaign.time;},npcDialogues:residents.npcDialogues,
-    applyPartyScale:a=>applyScenePartyScale({partyScaleCount:()=>scenePartyScaleCount({player:scene.player,seats:campaign.seats})},a),
+    applyPartyScale:a=>applyScenePartyScale({partyScaleCount:at=>scenePartyScaleCount({player:scene.player,seats:scenePresence.seats},at)},a),
     opaqueAt:(x,y)=>geometry.opaqueAt(x,y),sanctuaryBlocksCombat:()=>scene.zone.objective.kind==='safe',
     resolveHit:(...args)=>services.population.resolveHit(...args)},
    state:populationState});
@@ -154,15 +159,15 @@ export class NativeAreaSceneAssembly {
   const environment=new NativeAreaSceneEnvironment({scene,geometry,population,
    services:environmentServices,sources:sources.environment,state:environmentState});
   const ecology=new NativeAreaSceneEcology({scene,geometry,population,environment:environmentState,
-   services:bindNativeSceneSky(extendView(servicesView(services.ecology,['throngClaimed']),{get time(){return campaign.time;},get seats(){return campaign.seats;}}),sky),sources:sources.ecology,state:freshSceneEcologyState()});
+   services:bindNativeSceneSky(extendView(servicesView(services.ecology,['throngClaimed']),{get time(){return campaign.time;},get seats(){return scenePresence.seats;}}),sky),sources:sources.ecology,state:freshSceneEcologyState()});
   const settlement=new NativeAreaSceneSettlement({scene,geometry,campaign,state:{townTierIdx:raw.carry.townTierIdx,mercOutpost:null}});
   const physical=new NativeAreaScenePhysical({scene,geometry,population,settlement,campaign,state:freshScenePhysicalState()});
-  const loot=this.lootController=new NativeAreaSceneLoot({scene,geometry,physical,settlement,campaign,state:freshSceneLootState()});
+  const loot=this.lootController=new NativeAreaSceneLoot({scene,scenePresence,geometry,physical,settlement,campaign,state:freshSceneLootState()});
   this.puzzleController=puzzleController=new NativeAreaScenePuzzles({scene,geometry,environment,campaign,
    effects:extendView(servicesView(services.puzzleEffects,['executeSkill']),servicesView(loot,['dropGemAt','mintLootResult']))});
   const traceState={traceRuns:[] as World['traceRuns'],timeflow,get time(){return campaign.time;}};
   const occurrences=new NativeAreaSceneOccurrences({scene,geometry,population,services:traceState,state:freshSceneOccurrenceState()});
-  const objectiveHost=sceneObjectiveServices(population,objectives,{
+  const objectiveHost=this.objectiveServices=sceneObjectiveServices(population,objectives,{
    get zoneEntry(){return geometry.zoneEntry;},get sim(){return campaign.sim;},get walk(){return geometry.walk;},
    get structures(){return geometry.structures;},get arena(){return geometry.arena;},get time(){return campaign.time;},
    notice:(...a)=>geometry.notice(...a),text:(...a)=>geometry.text(...a),pathField:geometry.pathField.bind(geometry),
@@ -179,7 +184,7 @@ export class NativeAreaSceneAssembly {
   const encounters=new NativeAreaSceneEncounterBirth({scene,geometry,population,campaign,state:transition});
   const sites=new NativeAreaSceneSites({scene,geometry,population,settlement,campaign,state:{vocationSites:[]}});
   const history=new NativeAreaSceneHistory({scene,geometry,population,campaign,services:extendView(servicesView(services.history,['notice','events']),servicesView(geometry,['text'])),state:{playerCorpses:[]}});
-  this.objectiveController=objectiveController=new NativeAreaSceneObjectiveCompletion({scene,geometry,objectives,
+  this.objectiveController=objectiveController=new NativeAreaSceneObjectiveCompletion({scene,scenePresence,geometry,objectives,
    state:freshSceneObjectiveCompletionState(),campaign,history,progression:services.objectiveProgression,
    quests:extendView(servicesView(services.objectiveQuests,['questLedgerOf','onQuestZoneFieldCleared']),servicesView(campaign,['activeQuests']))});
   const descent=new NativeAreaSceneDescent({scene,geometry,population,settlement,campaign,state:transition,services:campaign});
@@ -197,7 +202,12 @@ export class NativeAreaSceneAssembly {
   // Brandt's once-armed shelf is run state, including between counter areas.
   Object.defineProperty(this.input.state,'vendorStock',{enumerable:true,get:()=>campaign.vendorStock,set:(v:World['vendorStock'])=>{campaign.vendorStock=v;}});
   this.graph=new NativeAreaSceneGraph({coast,campaign});this.boundaries=new NativeAreaSceneBoundaries(this.graph);
-  for(const key of ['input','host','graph','boundaries','generation','transition','timeflow','puzzleController','lootController','objectiveController'])Object.defineProperty(this,key,{writable:false,configurable:false});
+  for(const key of ['input','host','graph','boundaries','generation','transition','timeflow','puzzleController','lootController','objectiveController','scenePresence','objectiveServices'])Object.defineProperty(this,key,{writable:false,configurable:false});
+ }
+ /** Admission is a separate runtime operation, after birth and explicit observer removal. */
+ activatePresence(authority:NativeAreaActorAuthority<object>):void{
+  if(this.#phase!=='born')throw Error('Native presence activation requires completed birth');
+  this.scenePresence.activate(authority);
  }
  get phase(){return this.#phase;}
  sourceSession(geography:MassNativeGeography){return new NativeAreaSourceSession(this.graph,geography);}

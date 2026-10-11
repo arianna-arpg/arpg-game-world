@@ -7,13 +7,14 @@ import type {NativeAreaSceneGeometry} from './nativeAreaSceneGeometry';
 import type {NativeAreaSceneHistory} from './nativeAreaSceneHistory';
 import * as native from '../engine/nativeSceneObjectiveCompletion';
 type Host=native.NativeSceneObjectiveCompletionHost;
-export type NativeSceneObjectiveCampaign=Pick<Host,'account'|'completedObjectives'|'localSeat'|'actingSeat'|'seats'|'mireilleSeatBuff'|'time'|'mireilleXpBuff'|'ledger'|'seatHero'|'sameParty'|'markMetaDirty'|'accountSeat'>;
+export type NativeSceneObjectiveCampaign=Pick<Host,'account'|'completedObjectives'|'localSeat'|'actingSeat'|'mireilleSeatBuff'|'time'|'mireilleXpBuff'|'ledger'|'seatHero'|'sameParty'|'markMetaDirty'|'accountSeat'>;
 export type NativeSceneObjectiveProgression=Pick<Host,'recalcSeat'|'resyncMercenary'>;
 export type NativeSceneObjectiveQuests=Pick<Host,'activeQuests'|'questLedgerOf'|'onQuestZoneFieldCleared'>;
 export interface NativeSceneObjectiveCompletionState {objectiveFallAt:Host['objectiveFallAt'];texts:Host['texts']}
 export function freshSceneObjectiveCompletionState():NativeSceneObjectiveCompletionState{return {objectiveFallAt:null,texts:[]};}
 export interface NativeSceneObjectiveCompletionInput {
  scene:NativeSceneCensus;
+ scenePresence:{readonly scene:NativeSceneCensus;readonly seats:World['seats']};
  geometry:Pick<NativeAreaSceneGeometry,'state'|'flashes'>;
  objectives:NativeSceneObjectiveState;
  state:NativeSceneObjectiveCompletionState;
@@ -33,14 +34,14 @@ export class NativeAreaSceneObjectiveCompletion {
  readonly host:Host;
  constructor(raw:NativeSceneObjectiveCompletionInput){
   const bindings=Object.create(null);
-  for(const key of ['scene','geometry','objectives','state','campaign','history','progression','quests']){
+  for(const key of ['scene','geometry','objectives','state','campaign','history','progression','quests','scenePresence']){
    const d=raw&&Object.getOwnPropertyDescriptor(raw,key);
    if(!d||!Object.hasOwn(d,'value')||!d.value||typeof d.value!=='object')throw Error('Native objective completion needs an own object binding: '+key);
    bindings[key]=d.value;
   }
   const input:NativeSceneObjectiveCompletionInput=this.input=Object.freeze(bindings),host={} as Host,self=this;
   const gd=Object.getOwnPropertyDescriptor(input.geometry,'state');
-  if(!gd||!Object.hasOwn(gd,'value')||gd.value!==input.scene)throw Error('Native objective completion needs identical geometry and scene');
+  if(input.scenePresence.scene!==input.scene||!gd||!Object.hasOwn(gd,'value')||gd.value!==input.scene)throw Error('Native objective completion needs identical geometry and scene');
   const td=Object.getOwnPropertyDescriptor(input.state,'texts');
   if(!td||!Object.hasOwn(td,'value')||!Array.isArray(td.value))throw Error('Native objective completion needs its retained text array');
   const fields=(provider:()=>object,keys:readonly string[],write=false)=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,
@@ -53,7 +54,8 @@ export class NativeAreaSceneObjectiveCompletion {
   fields(()=>input.scene,['zone','player','actors']);fields(()=>input.geometry,['flashes']);
   fields(()=>input.objectives,['objectiveDone','spires','rifts','pyres','digs'],true);
   fields(()=>input.state,['objectiveFallAt','texts'],true);
-  fields(()=>input.campaign,['account','completedObjectives','localSeat','actingSeat','seats','mireilleSeatBuff','time','mireilleXpBuff','ledger']);
+  fields(()=>input.campaign,['account','completedObjectives','localSeat','actingSeat','mireilleSeatBuff','time','mireilleXpBuff','ledger']);
+  fields(()=>input.scenePresence,['seats']);
   methods(()=>input.campaign,['seatHero','sameParty','markMetaDirty','accountSeat']);
   fields(()=>input.quests,['activeQuests']);methods(()=>input.quests,['questLedgerOf','onQuestZoneFieldCleared']);
   methods(()=>input.progression,['recalcSeat','resyncMercenary']);

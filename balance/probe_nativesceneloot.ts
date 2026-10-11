@@ -113,7 +113,7 @@ function fixture(lane:Lane,failAt=''){
  live(geometry,['clampPos']);live(campaign,['metaProgressionActive','questHand','sameParty','seatHero']);live(settlement,['rollSkillGem','rollSupportDropGated']);
  w.spoilsSealed=()=>scene.zone.spoils==='none';w.zoneGemFloor=()=>gemFloorFor(scene.zone.tileset);
  let controller:any;
- if(lane==='owner')controller=new NativeAreaSceneLoot({scene,geometry,physical,settlement,campaign,state} as any);
+ if(lane==='owner')controller=new NativeAreaSceneLoot({scene,scenePresence:{scene,get seats(){return campaign.seats;}},geometry,physical,settlement,campaign,state} as any);
  else {
   controller=w;
   if(lane==='original')for(const name of methods)w[name]=original[name];

@@ -35,7 +35,7 @@ export class AttackSequences {
   private rainAt = new WeakMap<Projectile, number>();
   private deferredContacts: { projectile: Projectile; target: Actor }[] = [];
   private serial = 0;
-  constructor(private w: World) {}
+  constructor(private w: NativeAttackSequencesHost) {}
 
   private policy(inst: SkillInstance): string {
     return JSON.stringify([inst.treeNodes, inst.level, inst.sockets.map(s => s && [s.def.id, s.level, s.rolled]),
@@ -384,4 +384,30 @@ export class AttackSequences {
   /** THE HAND-OFF (shard M1, engine/shardUnits.ts): one owner's cycles cleared now,
    *  in the World it leaves (never by this World's later sweep on its absence). */
   clearOwner(owner: Actor): void { for (const s of [...this.states]) if (s.owner === owner) this.clear(s.owner, s.host); }
+}
+
+/** Structural authority only; executable controller bodies are unchanged. */
+export interface NativeAttackSequencesHost {
+ enemiesOf:World['enemiesOf'];
+ time:World['time'];
+ flashes:World['flashes'];
+ executeSkill:World['executeSkill'];
+ pendingFuses:World['pendingFuses'];
+ lineOfFire:World['lineOfFire'];
+ clampPos:World['clampPos'];
+ spawnConstruct:World['spawnConstruct'];
+ spawnProjectile:World['spawnProjectile'];
+ inheritedFlight:World['inheritedFlight'];
+ zone:World['zone'];
+ attackSequenceBurst:World['attackSequenceBurst'];
+ actors:World['actors'];
+ timeflow:World['timeflow'];
+ projectiles:World['projectiles'];
+ pendingSalvos:World['pendingSalvos'];
+ pendingRepeats:World['pendingRepeats'];
+ pendingSteps:World['pendingSteps'];
+ pendingFollowUps:World['pendingFollowUps'];
+ zones:World['zones'];
+ retireOwnedZone:World['retireOwnedZone'];
+ kill:World['kill'];
 }
