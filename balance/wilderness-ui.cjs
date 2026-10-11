@@ -68,7 +68,25 @@ app.whenReady().then(async()=>{
   assert.ok(before.sleeping.every(id=>after.sleeping.includes(id)),'saved distant sleepers remain asleep');
   report.restoredRoad=await run(at=>__game.world().massRuntime.wildernessPaths.at(at).map(p=>p.id),report.route.from.center);assert.ok(report.restoredRoad.includes(report.route.id));
   report.continue={identities:after.enemies.length,sleepers:after.sleeping.length,newlyRetired:after.sleeping.length-before.sleeping.length,pos:after.pos};
-  report.return=await run(()=>{const w=__game.world(),m=w.massRuntime,s=m.snapshot(w),id=s.dormancy.sleeping[0],e=s.enemies.find(e=>e.id===id);if(!e)throw Error('No saved sleeper');w.landPartyAt({x:e.x,y:e.y});m.update(w,true);const a=m.natives.get(id);if(!a||!w.actors.includes(a)||a.life!==e.life||a.defId!==e.monster)throw Error('Return did not restore the saved survivor');return{id,monster:a.defId,life:a.life,fatal:__game.crash().fatal};});
+  report.return=await run(async()=>{
+   const w=__game.world(),m=w.massRuntime,s=m.snapshot(w),id=s.dormancy.sleeping[0],e=s.enemies.find(e=>e.id===id);
+   if(!e)throw Error('No saved sleeper');
+   w.landPartyAt({x:e.x,y:e.y});
+   // Arrival can require a neighboring paged cohort even when this survivor
+   // remains resident. Match the client's readiness gate before advancing;
+   // one synchronous update deliberately does nothing while bytes are pending.
+   const deadline=Date.now()+30000;let readinessWaits=0;
+   for(;;){
+    const ready=m.nativeReadiness(w);
+    if(ready.status==='ready')break;
+    if(ready.status==='refused')throw Error('Return native pages refused: '+ready.error);
+    if(Date.now()>=deadline)throw Error('Return native pages timed out: '+JSON.stringify(ready));
+    readinessWaits++;await new Promise(r=>setTimeout(r,10));
+   }
+   m.update(w,true);const a=m.natives.get(id);
+   if(!a||!w.actors.includes(a)||a.life!==e.life||a.defId!==e.monster)throw Error('Return did not restore the saved survivor');
+   return{id,monster:a.defId,life:a.life,readinessWaits,fatal:__game.crash().fatal};
+  });
   assert.equal(report.return.fatal,null);assert.deepEqual(report.errors,[]);save();console.log('PASS actual-client native dormancy, distant encounters, cold Continue and saved-survivor return');clearTimeout(timer);win.destroy();server.close();app.exit(0);
  }catch(error){report.failure=String(error.stack||error);try{report.failureImage=await shot('failure');}catch{}save();console.error(error);clearTimeout(timer);app.exit(1);}
 });

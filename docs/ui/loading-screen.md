@@ -152,7 +152,8 @@ The toy loads no external assets and introduces no runtime dependencies.
 
 ## Handoff for future integration
 
-The reusable Mu crossing is implemented on `codex/mu-loading-screen`. Its files
+The reusable Mu crossing is integrated into `codex/seamless-world-foundation`
+and `shard-world`; the completed `codex/mu-loading-screen` branch is retired. Its files
 are the loading UI/controller, the isolated SpiritRun model and its canvas view.
 Preview any direction with `?loadingPreview=down`, `right` or `left`; Cancel
 returns to the menu without creating a run. Preserve the player's equipped wisp

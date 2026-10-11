@@ -345,3 +345,135 @@ fast-forwarded to the same validated integration commit before publication.
 This keeps server and client world definitions aligned. Foundation and roads
 checkpoint branches are also pushed for their original history; no force push,
 root-main merge or takeover of unfinished native activation work is involved.
+
+## Branch reconciliation — 2026-10-11
+
+The published shard checkpoint `f810cdf972bbbb2037d7f636ea4961892f7e9124`
+contains all eight later implementation lanes, including the front door,
+Mu crossing, party UI/revival, per-character quests and vendors, owned loot,
+Immortal covenant and foresight wire correction. Published seamless was still
+at `18a1b437`, exactly 70 commits behind with no unique commits. Reconciliation
+advances both long-lived branches to the same integration checkpoint.
+
+The three final Mu commits had been cherry-picked. `git cherry` confirms all
+three equivalent patches in shard. Merging original Mu tip `af6f9e51` into
+`f810cdf9` produces exactly the same tree
+`5861c200bb21a3914f93203e9f0297ed521d6ed9`. The ancestry merge records their
+original history as integrated. Additional edits update this receipt, the
+loading-screen handoff and the browser course's native-readiness wait described
+below. No game code, population budgets or performance thresholds change here.
+
+`shard-world` and `codex/seamless-world-foundation` remain the working branches.
+The retired local branch set is listed below. Every tip is retained in their
+history except `codex/mu-loading-main-integration`, whose exact tip is the
+published `origin/main` checkpoint. The three retired remote refs are
+`codex/mu-loading-screen`, `codex/shard-runtime-foundation` and `shard-m1-roads`.
+The initial inventory had no active related editing sessions or open pull
+requests. At final publication review, the loading-screen session was active on
+`codex/playable-loading-runtime`, based on `18a1b437`, with uncommitted renderer
+isolation work. That new branch and its checkout are preserved; they are outside
+this tested checkpoint. The old Mu ref is no longer checked out. Existing
+scratch files, saves and test evidence in retired checkouts are preserved by
+detaching those checkouts; branch cleanup does not recursively delete them.
+Dirty root main and the older unmerged `seamless-world` experiment are preserved.
+
+| Retired branch | Retained tip at audit start |
+|---|---|
+| `shard-m1-muster` | `8279fe0afa3e` |
+| `shard-m1-roads` | `889884fc807a` |
+| `shard-m1-sweep` | `096393f199d8` |
+| `shard-m1-units` | `5abb61910ee4` |
+| `shard-soak` | `4d4d877e3ccb` |
+| `shard-vessel` | `3714837c0d04` |
+| `shard-w1-input` | `d69cf63e3ac0` |
+| `shard-w10-spoils` | `d711aa22549f` |
+| `shard-w11-foresight` | `a29d89dbca98` |
+| `shard-w2-wire` | `27665502d17d` |
+| `shard-w3-seat` | `7efc8c8c10b2` |
+| `shard-w4-shell` | `67827cfeb870` |
+| `shard-w5-counters` | `a2a5b1e4a814` |
+| `shard-w6-diet` | `bc185ab565ba` |
+| `shard-w7-door` | `c01e4ad096a9` |
+| `shard-w8a-crossing` | `450241ae3499` |
+| `shard-w8b-party` | `fc661190022a` |
+| `shard-w9-character` | `e8841828d213` |
+| `shard-wildsave` | `b0857b08b544` |
+| `codex/shard-runtime-foundation` | `bad32c1f8e38` |
+| `codex/mu-loading-screen` | `af6f9e51082b` |
+| `codex/mu-loading-main-integration` | `483b00c4e4da` |
+| `codex/mu-loading-seamless-integration` | `bf01e6d84db1` |
+| `codex/seamless-wilderness-publish-20261009` | `de2fa0e23b2e` |
+| `codex/shard-seamless-integration` | `f810cdf972bb` |
+
+The first wilderness browser run retained all 157 saved identities and admitted
+21 additional bodies on Continue, but its synchronous survivor-return assertion
+ran while one neighboring native page was pending. An isolated copy of that
+exact saved profile reproduced the failure: the retained fang priest remained
+asleep at 239.4 life; after the existing page-readiness contract completed, it
+woke with the same identity, position, species and life. The game loop already
+waits on this contract. The course now waits up to 30 seconds for `ready`,
+explicitly rejects `refused` or timeout, and retains the original exact survivor
+assertions. This is a harness timing repair, not a runtime change or suppression
+of the failure. The original failed receipt remains in
+`.claude/audit-wilderness-before.local.json`; diagnostic state is recorded in
+`balance/reports/audit-survivor.local.json` and the audit logs.
+
+Fresh verification on the reconciled game tree:
+
+- `npm run check`: game, launcher, simulation and shard types pass.
+- Production build passes (1,116 modules; existing large-bundle warning).
+- All 21 shard probes pass, including slow persistence, with retries disabled.
+- Generation QA: 2,607 cases, zero failures and four existing warnings.
+- Simulation smoke: all five scenarios / 25 episodes pass.
+- Nineteen affected solo/native probes pass: SpiritRun, character resume,
+  installed sources, native birth, LOS keys, town portals, dimensions, pitfall,
+  couch, resurrection, reckoning, spoils, corpses, Odyssey, vendor investment,
+  vendor locker, bounty board, Brandt quest and quest map.
+- Native sky's existing whole-World member-count guard remains red:
+  2,522 actual versus its stale 2,351 receipt. Its baseline failure was already
+  recorded above; this audit does not repin or bypass it.
+- Loading UI: all 14 checks pass; isolated game boot smoke passes.
+- Corrected wilderness UI: complete generated route, eight distant stops,
+  cold Continue and exact survivor return pass with zero client errors.
+  Continue preserves all 150 original identities and admits 16 nearby bodies.
+  The returned fang priest retains 239.4 life; the passing course actually
+  exercises a pending page-readiness wait. Nearby counts are
+  42/69/24/18/8/0/6/6 (mean 21.625); the empty stop remains visible.
+
+Logs are `.claude/audit-*.local.log`; the passing browser report is
+`balance/reports/wilderness-ui.json`. Test profiles use isolated save storage.
+
+The full worldmass suite finishes **121/124 passing**, with retries disabled
+(1,490.3 seconds). The same three probes fail as at the previous integration:
+terrainvariation (`f24109327cf6e53f` versus `4225203d67bebfb4`),
+courtcontinuity (cold-return enrollment, line 99) and processioncontinuity
+(natural whole-route admission, line 247). Separate diagnostic runs confirm
+those exact assertions. Procession gameplay, native arrival, beacon continuity,
+multi-focus budgets and compact checkpoints pass. This remains a tested
+integration checkpoint with known failures, not an all-green release gate.
+
+After the correctness jobs stopped, the six-bot, 60-second load courses ran
+sequentially on this Windows/Node 24.9.0 machine, seed `0x00ddba11`, at the
+shipped 60 Hz with roving disabled and the standard thresholds:
+
+| Course | Tick p50 / p95 / p99 | Maximum tick | Dropped ticks | Nearby living min / mean | Heap growth |
+|---|---|---|---|---|---|
+| Clustered | 8.21 / 37.54 / 59.89 ms | 256.34 ms | 131/3,581 = 3.66% | 19 / 22.61 | 20.73 MB |
+| Spread 3,500 units | 101.94 / 249.18 / 482.38 ms | 1,431.57 ms | 3,089/3,579 = 86.31% | 21 / 38.12 | 15.39 MB |
+
+Both have zero host faults and zero harness errors; parties form and remain
+standing. Clustered reconnect passes, but its p95 fails the 20 ms gate. Spread
+fails p95, the 5% dropped-tick gate and reconnect (the cut p6 was never held
+dormant); the fleet records three deaths and three rejoins. These are failed
+performance gates. The later shard features change the workload, so these
+receipts alone do not attribute a regression to an individual implementation.
+The newly active loading-runtime session may also have contributed background
+CPU load during these courses; these are observed gate results, not an isolated
+A/B comparison or server-capacity certification. Reports and complete logs are
+`.claude/audit-soak-{clustered,spread}.local.*`.
+
+The repository is consolidated for continued work, but performance capacity and
+the three known world-suite failures remain unresolved. Prioritize the shared
+population governor / simulation scaling, then the continuity failures and
+stale extraction receipts before treating this as a release-ready MMO baseline.
+No live server restart or separate deployment is performed by this audit.
