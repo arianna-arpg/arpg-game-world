@@ -16,9 +16,11 @@ export interface NativeAreaSceneTetherInput {
  authority:NativeSceneTetherAuthority;
 }
 // One mutable replacement slot belongs to one scene owner for its lifetime.
-// Distinct slots may initially reference the same array: native addTether always
-// replaces via filter before push; its early returns do not mutate that array.
+// Every actual array also belongs to that owner for its lifetime. Native
+// construction replaces the slot; native restoration appends to its current
+// array. Both share the raw array, never a copied queue or an Array proxy.
 const ownedStates=new WeakSet<NativeSceneTetherState>();
+const ownedArrays=new WeakMap<World['tethers'],NativeAreaSceneTethers>();
 export class NativeAreaSceneTethers {
  readonly input:NativeAreaSceneTetherInput;
  readonly host:NativeSceneTetherHost;
@@ -31,9 +33,10 @@ export class NativeAreaSceneTethers {
   }
   const input:NativeAreaSceneTetherInput=this.input=Object.freeze(bindings);
   if(input.authority.campaign!==input.campaign)throw Error('Native tethers need identical campaign authority');
-  const queue=Object.getOwnPropertyDescriptor(input.state,'tethers');
-  if(!queue||!Object.hasOwn(queue,'value')||!queue.writable||!Array.isArray(queue.value))throw Error('Native tethers need the actual mutable queue');
   if(ownedStates.has(input.state))throw Error('Native tethers need a fresh local queue state');
+  const queue=Object.getOwnPropertyDescriptor(input.state,'tethers');
+  if(!queue||!Object.hasOwn(queue,'value')||!queue.writable||!queue.configurable||!Array.isArray(queue.value))throw Error('Native tethers need the actual configurable mutable queue slot');
+  if(ownedArrays.has(queue.value))throw Error('Native tethers need an exclusively owned initial array');
   if(!Array.isArray(input.scene.actors))throw Error('Native tethers need the actual scene census');
   this.host=Object.freeze({
    get tethers(){return input.state.tethers;},set tethers(value:World['tethers']){input.state.tethers=value;},
@@ -41,7 +44,21 @@ export class NativeAreaSceneTethers {
    addTether:(...args:Parameters<World['addTether']>)=>this.addTether(...args),
   });
   for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false});
-  ownedStates.add(input.state);
+  // Bind only after every fallible constructor validation and host assembly.
+  // The own slot stays enumerable exactly as supplied for dependency scanning.
+  // All replacements are checked before publication; native filter/push still
+  // operate on the same unwrapped Array and preserve previous-array references.
+  let current:World['tethers']=queue.value;
+  Object.defineProperty(input.state,'tethers',{enumerable:queue.enumerable,configurable:false,
+   get:()=>current,
+   set:(value:World['tethers'])=>{
+    if(!Array.isArray(value))throw Error('Native tethers need an actual queue array');
+    const prior=ownedArrays.get(value);
+    if(prior&&prior!==this)throw Error('Native tether array belongs to another area owner');
+    ownedArrays.set(value,this);current=value;
+   },
+  });
+  ownedArrays.set(current,this);ownedStates.add(input.state);
  }
  #admit(actors:readonly Actor[]):void{
   const {scene,authority}=this.input;

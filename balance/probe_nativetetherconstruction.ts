@@ -177,15 +177,20 @@ withSeededRandom(31671,()=>{
   refuses(()=>second.addTether(spawned,near,physical,inst,player),/registered queue owner/,[state,secondState]);
   refuses(()=>second.attachObjectTethers(spawned,inst,player),/registered queue owner/,[state,secondState]);
  });
- checked('distinct state slots sharing an initial array separate before either native append',()=>{
+ checked('exclusive retained queue rejects an initial alias before any native append',()=>{
   const shared:World['tethers']=[];state.tethers=shared;
   const peerArea=new NativeAreaSceneAssembly(freshAssemblyInput(w,w.zone,campaign)),peerScene=peerArea.input.scene;peerScene.actors=[];
-  const peerState={tethers:shared},peer=new NativeAreaSceneTethers({scene:peerScene,campaign,state:peerState,authority}),pb=authority.register(peerScene,{tethers:peer});
+  const peerState={tethers:shared};
+  assert.throws(()=>new NativeAreaSceneTethers({scene:peerScene,campaign,state:peerState,authority}),/exclusively owned initial array/);
+  assert.equal(peerState.tethers,shared);assert.equal(shared.length,0);
+  // A rejected constructor must not consume the actual state replacement slot.
+  peerState.tethers=[];const peer=new NativeAreaSceneTethers({scene:peerScene,campaign,state:peerState,authority}),pb=authority.register(peerScene,{tethers:peer});
   const a=peerArea.input.population.createMonster('skeleton_warrior',5,'enemy'),b=peerArea.input.population.createMonster('skeleton_warrior',5,'enemy');peerScene.actors.push(a,b);authority.claim(pb,[a,b]);
-  owner.addTether(spawned,near,physical,inst,player);const first=state.tethers,band=first[0];
-  assert.notEqual(first,shared);assert.equal(peerState.tethers,shared);assert.equal(shared.length,0);
-  peer.addTether(a,b,physical,inst,a);assert.notEqual(peerState.tethers,shared);assert.notEqual(peerState.tethers,first);
-  assert.equal(shared.length,0);assert.equal(state.tethers,first);assert.equal(first.length,1);assert.equal(first[0],band);assert.equal(peerState.tethers.length,1);assert.equal(peerState.tethers[0].a,a);
+  assert.equal(peer.input.state,peerState);
+  assert.throws(()=>{peerState.tethers=shared;},/another area owner/);
+  owner.addTether(spawned,near,physical,inst,player);assert.notEqual(state.tethers,shared);
+  assert.equal(shared.length,0);assert.equal(peerState.tethers.length,0);
+  peer.addTether(a,b,physical,inst,a);assert.equal(peerState.tethers.length,1);assert.equal(peerState.tethers[0].a,a);assert.equal(shared.length,0);
  });
  checked('foreign equal-coordinate endpoints and owners refuse before native effects',()=>{
   const peerArea=new NativeAreaSceneAssembly(freshAssemblyInput(w,w.zone,campaign)),peerScene=peerArea.input.scene;peerScene.actors=[];
@@ -201,8 +206,8 @@ withSeededRandom(31671,()=>{
  checked('constructors preserve exact binding and state requirements',()=>{
   assert.throws(()=>new NativeAreaSceneTethers(Object.create({scene,campaign,state,authority})),/own object binding/);
   assert.throws(()=>new NativeAreaSceneTethers({scene,campaign:{seats:campaign.seats},state,authority}),/identical campaign/);
-  assert.throws(()=>new NativeAreaSceneTethers({scene,campaign,state:Object.create(state),authority}),/actual mutable queue/);
-  assert.throws(()=>new NativeAreaSceneTethers({scene,campaign,state:Object.freeze(freshSceneTetherState()),authority}),/actual mutable queue/);
+  assert.throws(()=>new NativeAreaSceneTethers({scene,campaign,state:Object.create(state),authority}),/actual configurable mutable queue slot/);
+  assert.throws(()=>new NativeAreaSceneTethers({scene,campaign,state:Object.freeze(freshSceneTetherState()),authority}),/actual configurable mutable queue slot/);
   assert.throws(()=>new NativeAreaSceneTethers({scene,campaign,state,authority}),/fresh local queue state/);
   // A failed constructor must not consume a valid fresh slot.
   const available=freshSceneTetherState();assert.throws(()=>new NativeAreaSceneTethers({scene,campaign:{seats:campaign.seats},state:available,authority}),/identical campaign/);

@@ -1,3 +1,4 @@
+import {beforeNativeSceneRestoration} from './nativeSceneRestorationIntegrationFixture';
 /** Impulse/release/saddle/policy proof. Native creation and genuine area providers
  * are used. Controlled link setup courses are identified; ticking, damage,
  * continuous movement, staged/detached actors and publication are not claimed. */
@@ -217,11 +218,11 @@ const restoreDisplacement=(text:string)=>{const restored=beforeNativeSceneDispla
 integrationCheck('immutable archive restores the complete committed summon World and bootstrap order',()=>{
  assert.equal(sha(JSON.stringify(integrationArchive)),nativeSceneDisplacementIntegrationArchiveHash);
  assert.equal(integrationArchive.originalArchiveHash,nativeSceneDisplacementArchiveHash);
- assert.equal(sha(current),integrationArchive.afterHash);
+ assert.equal(sha(beforeNativeSceneRestoration(current)),integrationArchive.afterHash);
  assert.equal(restoreDisplacement(current),execFileSync('git',['show',integrationArchive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}).replaceAll('\r\n','\n'));
  const statements=ts.createSourceFile('current.ts',current,99,true).statements;
  assert.equal(statements[0].getText(),"import './nativeSceneBootstrap';");
- assert(current.startsWith("import './nativeSceneBootstrap';\nimport {sceneAddTether,sceneAttachObjectTethers,TETHER_TICK,type NativeSceneTetherHost} from './nativeSceneTethers';\nimport {sceneRollSummonType,sceneForwardSummonSockets} from './nativeSceneSummonPreparation';\n"));
+ assert(beforeNativeSceneRestoration(current).startsWith("import './nativeSceneBootstrap';\nimport {sceneAddTether,sceneAttachObjectTethers,TETHER_TICK,type NativeSceneTetherHost} from './nativeSceneTethers';\nimport {sceneRollSummonType,sceneForwardSummonSockets} from './nativeSceneSummonPreparation';\n"));
 });
 const guardCore=(text:string)=>{
  const parsed=ts.createSourceFile('core.ts',text,99,true);

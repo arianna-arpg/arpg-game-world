@@ -2,6 +2,7 @@ import './nativeSceneBootstrap';
 import {sceneAddTether,sceneAttachObjectTethers,TETHER_TICK,type NativeSceneTetherHost} from './nativeSceneTethers';
 import {sceneRollSummonType,sceneForwardSummonSockets} from './nativeSceneSummonPreparation';
 import {scenePushActor,sceneGrabRelease,sceneClingRelease,sceneTeleportActor,sceneMountFreeSeat,sceneMountSeatRider,sceneMountUnlink,sceneMountUnhorse,sceneMountWidowed,sceneMovementLocked,sceneCastMoveFactor,sceneChannelMobility,sceneLevitating,PUSH_DAMPING,type NativeSceneDisplacementHost} from './nativeSceneDisplacement';
+import {sceneGrantAbsorb,sceneApplyRestore,sceneStartRestoreStream,sceneCritMendMult,sceneApplyHeal,sceneApplyHealChained,sceneCleanseActor,sceneRingAfflictions,sceneHealAlliesInArea,sceneSeatText,sceneCreditFloat,type NativeSceneRestorationHost} from './nativeSceneRestoration';
 import {sceneNearQuestGiver,sceneNearAnyQuestGiver,sceneQuestGiverPrompt,sceneActiveCategoryCounts,sceneQuestGateCtx,sceneQuestOfferLevel,sceneAcceptableQuests,sceneEligibleQuestCandidates,sceneVocationEngaged,sceneIsVocationChoice,sceneVocationChoiceOffers,sceneNextAcceptableQuest,sceneUpdateQuestGiver,sceneQuestGiverStep,sceneQuestOfferChoices,sceneAcceptQuestOffer,sceneAcceptVocationQuest,sceneVocationMenuOffers,sceneDeclineVocationOffer,sceneAcceptQuest,sceneQuestRewardOffers,sceneQuestImbueOffers,sceneClaimQuestImbue,sceneReliquaryLesson,sceneSeatIdle,scenePlayerIdle,QUESTGIVER_DWELL,type NativeSceneQuestInteractionHost} from './nativeSceneQuestInteraction';
 import {sceneSpawnProjectile,sceneSkillOcclusion,PROJ_CHILD_DEPTH_MAX,PROJ_AURA_TICK,type NativeSceneProjectileHost} from './nativeSceneProjectiles';
 import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
@@ -36278,14 +36279,36 @@ actors: Actor[] = [];
   }
 
   /** Grant an absorption shield (take the larger pool, refresh the clock). */
-  private grantAbsorb(target: Actor, amount: number, duration: number): void {
-    target.absorb = Math.max(target.absorb, amount);
-    target.absorbTimer = Math.max(target.absorbTimer, duration);
-    this.flashes.push({
-      pos: vec(target.pos.x, target.pos.y), radius: target.radius + 8,
-      color: '#d8e8f8', life: 0.25, maxLife: 0.25,
+  declare private nativeSceneRestorationView?:NativeSceneRestorationHost;
+  private nativeSceneRestorationHost():NativeSceneRestorationHost {
+    if(this.nativeSceneRestorationView)return this.nativeSceneRestorationView;
+    const world=this;
+    const host:NativeSceneRestorationHost=Object.freeze({
+      get actors(){return world.actors;},
+      get flashes(){return world.flashes;},
+      get texts(){return world.texts;},
+      get tethers(){return world.tethers;},
+      get partyRows(){return world.partyRows;},
+      get seats(){return world.seats;},
+      get text(){const fn=world.text;return(...args:Parameters<World['text']>)=>fn.apply(world,args);},
+      get seatOfRoot(){const fn=world.seatOfRoot;return(...args:Parameters<World['seatOfRoot']>)=>fn.apply(world,args);},
+      get grantAbsorb(){const fn=world.grantAbsorb;return(...args:Parameters<World['grantAbsorb']>)=>fn.apply(world,args);},
+      get applyRestore(){const fn=world.applyRestore;return(...args:Parameters<World['applyRestore']>)=>fn.apply(world,args);},
+      get startRestoreStream(){const fn=world.startRestoreStream;return(...args:Parameters<World['startRestoreStream']>)=>fn.apply(world,args);},
+      get critMendMult(){const fn=world.critMendMult;return(...args:Parameters<World['critMendMult']>)=>fn.apply(world,args);},
+      get applyHeal(){const fn=world.applyHeal;return(...args:Parameters<World['applyHeal']>)=>fn.apply(world,args);},
+      get applyHealChained(){const fn=world.applyHealChained;return(...args:Parameters<World['applyHealChained']>)=>fn.apply(world,args);},
+      get cleanseActor(){const fn=world.cleanseActor;return(...args:Parameters<World['cleanseActor']>)=>fn.apply(world,args);},
+      get ringAfflictions(){const fn=world.ringAfflictions;return(...args:Parameters<World['ringAfflictions']>)=>fn.apply(world,args);},
+      get healAlliesInArea(){const fn=world.healAlliesInArea;return(...args:Parameters<World['healAlliesInArea']>)=>fn.apply(world,args);},
+      get seatText(){const fn=world.seatText;return(...args:Parameters<World['seatText']>)=>fn.apply(world,args);},
+      get creditFloat(){const fn=world.creditFloat;return(...args:Parameters<World['creditFloat']>)=>fn.apply(world,args);},
     });
+    Object.defineProperty(this,'nativeSceneRestorationView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
   }
+
+  private grantAbsorb(target: Actor, amount: number, duration: number): void { return sceneGrantAbsorb(this.nativeSceneRestorationHost(),target,amount,duration); }
 
   /** Restore a resource (Power Surge, resource orbs). ES rides gainEs
    *  (the esFilled seam sees it); poise rides gainPoise (broken bars are
@@ -36310,28 +36333,7 @@ actors: Actor[] = [];
     target: Actor,
     fx: { resource: 'life' | 'mana' | 'es' | 'poise'; amount: number; resetEsDelay?: boolean },
     opts?: { noEvent?: boolean; tags?: SkillTag[] },
-  ): number {
-    let landed = 0;
-    if (fx.resource === 'life') {
-      landed = target.healBy(fx.amount);
-    } else if (fx.resource === 'mana') {
-      const before = target.mana;
-      target.mana = Math.min(target.availableMaxMana(), target.mana + fx.amount);
-      landed = target.mana - before;
-    } else if (fx.resource === 'poise') {
-      landed = target.gainPoise(fx.amount);
-    } else {
-      landed = target.gainEs(fx.amount);
-      if (fx.resetEsDelay) target.esDelay = 0;
-    }
-    if (landed > 0 && !opts?.noEvent && target.gainEvents.length < 64) {
-      target.gainEvents.push({
-        kind: 'restore', id: fx.resource, depth: 0,
-        n: landed, tags: opts?.tags,
-      });
-    }
-    return landed;
-  }
+  ): number { return sceneApplyRestore(this.nativeSceneRestorationHost(),target,fx,opts); }
 
   /** Open a RESTORE STREAM (restoreOverTime — the flask pour): the base
    *  pour deepens with the gem (amountPerLevel × effective level) and cuts
@@ -36359,41 +36361,7 @@ actors: Actor[] = [];
     },
     chargesSpent: number,
     critMult?: number,
-  ): void {
-    const tags = skillContextTags(inst);
-    const extra = instanceMods(inst);
-    const maxPool = fx.resource === 'life' ? target.maxLife()
-      : fx.resource === 'mana' ? target.availableMaxMana() : target.maxEs();
-    const pct = (fx.amountPctMax ?? 0)
-      + (fx.lane !== 'surge' ? caster.sheet.get('restorePctMax', tags, extra) : 0)
-      + (fx.lane ? caster.sheet.get('pourPct_' + fx.lane, tags, extra) : 0);
-    const base = fx.amount
-      + (fx.amountPerLevel ?? 0) * Math.max(0, effectiveSkillLevel(inst) - 1)
-      + pct * maxPool;
-    const total = base * (fx.perCharge ? Math.max(1, chargesSpent) : 1)
-      * caster.sheet.get('restorePower', tags, extra)
-      * (fx.lane ? caster.sheet.get('pourPower_' + fx.lane, tags, extra) : 1)
-      // THE LUCKY POUR: the whole stream may crit at the pour (a flask
-      // with Deadly Precision socketed pours deeper on its crits).
-      * (critMult ?? this.critMendMult(caster, inst, target.pos));
-    if (total <= 0) return;
-    const dur = Math.max(0.2, fx.duration
-      * caster.sheet.get('effectDuration', tags, extra));
-    target.restoreStreams.push({
-      resource: fx.resource, perSec: total / dur, remaining: total,
-      feedingCue: fx.feedingCue ?? inst.def.feedingCue,
-    });
-    // The pour is a GAIN EVENT (depth 0 — a drink is real play): sympathy
-    // links replay it on kin (the tamed-beast flask bond). Echo streams are
-    // granted directly and never re-event, so pours can't chain.
-    if (target.gainEvents.length < 64) {
-      target.gainEvents.push({
-        kind: 'restore', id: fx.resource, depth: 0,
-        n: total, dur, tags: inst.def.tags,
-      });
-    }
-    // feedingCue gains are emitted by actual ticks, including primed releases.
-  }
+  ): void { return sceneStartRestoreStream(this.nativeSceneRestorationHost(),target,caster,inst,fx,chargesSpent,critMult); }
 
   /** THE PRIMED POUR's release (pourPrime): the first LIFE-DAMAGE event
    *  opens every banked sip at once — each replays its def's whole SELF
@@ -36450,68 +36418,12 @@ actors: Actor[] = [];
    *  Deadly Precision genuinely sharpens a flask — and a crit multiplies
    *  the whole mend by the standard critical multiplier. One roll per
    *  pour/mend (streams roll at the pour, never per sip). */
-  private critMendMult(caster: Actor, inst: SkillInstance, at?: Vec2): number {
-    const tags = skillContextTags(inst, grantedTags(inst));
-    const extra = instanceMods(inst);
-    if (!chance(caster.sheet.get('critChance', tags, extra))) return 1;
-    const mult = caster.sheet.get('critMulti', tags, extra);
-    if (at) this.flashes.push(combatCueFlash(at, 'mend', 18));
-    return mult;
-  }
+  private critMendMult(caster: Actor, inst: SkillInstance, at?: Vec2): number { return sceneCritMendMult(this.nativeSceneRestorationHost(),caster,inst,at); }
 
   private applyHeal(
     caster: Actor, inst: SkillInstance, target: Actor,
     fx: { amount?: number; pctMax?: number; excludeCaster?: boolean }, mult = 1, quiet = false,
-  ): number {
-    if (target.dead || target.downed || (fx.excludeCaster && target === caster)) return 0;
-    const tags = skillContextTags(inst, grantedTags(inst));
-    const extra = instanceMods(inst);
-    const raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
-      * caster.sheet.get('healPower', tags, extra) * mult
-      * this.critMendMult(caster, inst, quiet ? undefined : target.pos);
-    if (raw <= 0) return 0;
-    // HEAL-OVER-TIME conversion (Mending Echoes): the direct mend POURS
-    // instead — total × factor over the graft's seconds, riding the
-    // restore-stream machinery (healTaken gates each sip via healBy).
-    const hot = socketSpec(inst, 'healOverTime');
-    if (hot) {
-      const total = raw * hot.factor;
-      target.restoreStreams.push({
-        resource: 'life', perSec: total / hot.seconds, remaining: total,
-        feedingCue: inst.def.feedingCue,
-      });
-      return 0;
-    }
-    const landed = target.healBy(raw);
-    // A landed mend is a GAIN EVENT (sympathy 'heal' channel — tick-rate
-    // sources call healBy directly and stay quiet here). Echoes heal via
-    // healBy alone and never re-event: heal chains are structurally dead.
-    if (landed > 0 && target.gainEvents.length < 64) {
-      target.gainEvents.push({
-        kind: 'heal', id: 'life', depth: 0, n: landed, tags: inst.def.tags,
-      });
-    }
-    // OVERMEND: spilled healing becomes a ward (grantAbsorb keeps the max).
-    const spill = raw * target.sheet.get('healTaken') - landed;
-    if (spill > 0.5) {
-      const oh = caster.sheet.get('overheal', tags, extra);
-      if (oh > 0) this.grantAbsorb(target, Math.min(target.maxLife() * 0.5, spill * oh), 6);
-    }
-    if (!quiet && landed >= 1) {
-      this.seatText(caster, target.pos, '+' + Math.round(landed), '#6fc06f', 12); // THE WIRE'S EYES: the healer's seat
-    }
-    // HEALER AGGRO: anyone locked onto the healed victim books threat against
-    // the mender (their brain's TargetSpec.threat.heal weighs it) — keeping a
-    // warband alive is its own provocation.
-    if (landed > 0 && caster !== target) {
-      for (const e of this.actors) {
-        if (e.dead || e.team === caster.team || !e.brain || e.aiTargetId !== target.id) continue;
-        const hw = normalizeBrain(e.brain).base.target?.threat?.heal ?? 0.5;
-        if (hw > 0) e.addThreat(caster.id, landed * hw);
-      }
-    }
-    return landed;
-  }
+  ): number { return sceneApplyHeal(this.nativeSceneRestorationHost(),caster,inst,target,fx,mult,quiet); }
 
   /** A heal that BOUNCES: after the primary target, each hop finds the most
    *  WOUNDED untouched ally within 220 at 75% falloff — bounce count =
@@ -36520,48 +36432,11 @@ actors: Actor[] = [];
   private applyHealChained(
     caster: Actor, inst: SkillInstance, target: Actor,
     fx: { amount?: number; pctMax?: number; chain?: number; excludeCaster?: boolean }, mult = 1, quiet = false,
-  ): void {
-    this.applyHeal(caster, inst, target, fx, mult, quiet);
-    const tags = skillContextTags(inst, grantedTags(inst));
-    const extra = instanceMods(inst);
-    let hops = (fx.chain ?? 0) + Math.round(caster.sheet.get('chainCount', tags, extra));
-    const visited = new Set<Actor>([target]);
-    let from = target;
-    let scale = mult;
-    while (hops-- > 0) {
-      let next: Actor | null = null; let worst = 0.999;
-      for (const a of this.actors) {
-        if (a.dead || a.downed || a.untargetable || a.construct || visited.has(a)) continue;
-        // Every hop carries the original heal's recipient exclusions.
-        if (fx.excludeCaster && a === caster) continue;
-        if (a.team !== caster.team || !sameStory(a, from)) continue; // (the sovereignty gate: the chain hops its own story)
-        if (dist(from.pos, a.pos) > 220) continue;
-        const frac = a.life / Math.max(1, a.maxLife());
-        if (frac < worst) { worst = frac; next = a; }
-      }
-      if (!next) break;
-      scale *= 0.75;
-      // A momentary mending arc (the discharge-zap visual pattern).
-      this.tethers.push({
-        a: from, b: next, owner: caster, skillId: inst.def.id, link: 'zap',
-        amounts: {}, heal: 0, affects: 'allies', width: 5,
-        remaining: 0.16, tickTimer: 99,
-        color: '#7ec88a',
-        ax: from.pos.x, ay: from.pos.y, bx: next.pos.x, by: next.pos.y,
-      });
-      this.applyHeal(caster, inst, next, fx, scale, quiet);
-      visited.add(next);
-      from = next;
-    }
-  }
+  ): void { return sceneApplyHealChained(this.nativeSceneRestorationHost(),caster,inst,target,fx,mult,quiet); }
 
   /** Strip up to `count` HARMFUL statuses (never beneficial ones), newest
    *  first. Consumed, not expired — a cleansed Doom never detonates. */
-  private cleanseActor(target: Actor, count = 2): number {
-    const stripped = target.cleanseDebuffs(count);
-    if (stripped > 0) this.text(target.pos, 'cleansed', '#a8e8d8', 12, 'combat');
-    return stripped;
-  }
+  private cleanseActor(target: Actor, count = 2): number { return sceneCleanseActor(this.nativeSceneRestorationHost(),target,count); }
 
   /** THE PARTIAL TOLL (SkillDef.selfCleanse): ring a PORTION of every
    *  harmful affliction off the bearer — stacking statuses shed
@@ -36570,34 +36445,7 @@ actors: Actor[] = [];
    *  their remaining time instead. cleanseActor's graded cousin: the bell
    *  buys a BEAT of relief, never absolution — re-stacking is the fight's
    *  rhythm, and cracking the bell silences it. */
-  private ringAfflictions(target: Actor, portion: number): number {
-    if (portion <= 0) return 0;
-    let rung = 0;
-    for (let i = target.statuses.length - 1; i >= 0; i--) {
-      const s = target.statuses[i];
-      const def = STATUS_DEFS[s.id];
-      if (def?.beneficial) continue;
-      if (s.stacks > 1) {
-        s.stacks -= Math.max(1, Math.round(s.stacks * portion));
-        if (s.stacks <= 0) {
-          target.statuses.splice(i, 1);
-          if (!target.statuses.some(o => o.id === s.id)) {
-            target.sheet.removeSource('status:' + s.id);
-          }
-        } else if (def?.mods && def.modsPerStack) {
-          // The sunscorch-dwindle discipline: per-stack mods re-sync on
-          // every shed so the sheet never wears stacks the body lost.
-          target.sheet.setSource('status:' + s.id,
-            def.mods.map(m => ({ ...m, value: m.value * s.stacks })));
-        }
-      } else {
-        s.remaining *= 1 - portion;
-      }
-      rung++;
-    }
-    if (rung > 0) this.text(target.pos, 'rung clean', '#d8c8a0', 12, 'combat');
-    return rung;
-  }
+  private ringAfflictions(target: Actor, portion: number): number { return sceneRingAfflictions(this.nativeSceneRestorationHost(),target,portion); }
 
   /** Apply a skill's heal/cleanse effects to every ALLY a geometry test
    *  accepts — the mend half of heal-and-harm deliveries (the damage half
@@ -36605,29 +36453,7 @@ actors: Actor[] = [];
   private healAlliesInArea(
     caster: Actor, inst: SkillInstance, accepts: (a: Actor) => boolean,
     mult = 1, quiet = false, once?: Set<number>,
-  ): void {
-    // `once` is a per-CROSSING ledger (the sweep zones' own struck set):
-    // a drifting crescent mends each ally exactly once per pass — a
-    // blade-pass, not a per-frame fountain. Lingering fields pass nothing
-    // and keep their per-tick wash. Ids are shared with the zone's damage
-    // victims and rung bells; the sets are disjoint by team, so nothing
-    // collides.
-    const fxs = inst.def.effects.filter(fx => fx.type === 'heal' || fx.type === 'cleanse');
-    if (!fxs.length) return;
-    for (const a of this.actors) {
-      if (a.dead || a.downed || a.untargetable || a.construct || a.team !== caster.team || !sameStory(a, caster)) continue; // (the sovereignty gate)
-      if (once?.has(a.id)) continue;
-      if (!accepts(a)) continue;
-      let touched = false;
-      for (const fx of fxs) {
-        if (fx.type === 'heal' && fx.excludeCaster && a === caster) continue;
-        touched = true;
-        if (fx.type === 'heal') this.applyHealChained(caster, inst, a, fx, mult, quiet);
-        else this.cleanseActor(a, fx.count ?? 2);
-      }
-      if (touched) once?.add(a.id);
-    }
-  }
+  ): void { return sceneHealAlliesInArea(this.nativeSceneRestorationHost(),caster,inst,accepts,mult,quiet,once); }
 
   /** RETALIATION (the thorns suite): flat always-on `thorns`, a fraction
    *  of the LANDED wound reflected (`thornsReflect`), plus the channel/
@@ -56629,19 +56455,12 @@ actors: Actor[] = [];
    *  with its CREDITED seat, the striker's or healer's owner-chain root (THE KILLER'S DUE's
    *  read), so a hosted client draws every number, its party's or its own
    *  (Settings.floatOwners). Off a hosted world it is `text` exactly: no owner rides. */
-  seatText(by: Actor | null | undefined, at: Vec2, text: string, color: string, size = 13, kind?: string): void {
-    this.text(at, text, color, size, kind);
-    this.creditFloat(by);
-  }
+  seatText(by: Actor | null | undefined, at: Vec2, text: string, color: string, size = 13, kind?: string): void { return sceneSeatText(this.nativeSceneRestorationHost(),by,at,text,color,size,kind); }
 
   /** THE WIRE'S EYES: stamp the float just minted with `by`'s credited seat (seatText's
    *  second half, for a mint site that keeps its own `text` call). Hosted worlds only
    *  (the shard publishes partyRows); the keeper is no one's credit. */
-  creditFloat(by: Actor | null | undefined, seatId?: string | null): void {
-    if (this.partyRows === null || !this.texts.length) return; // keeperSeat: the solo invariant (no owner off a hosted world)
-    const seat = seatId !== undefined ? seatId : this.seatOfRoot(by)?.id;
-    if (seat && !this.seats.find(s => s.id === seat)?.keeper) this.texts[this.texts.length - 1].seat = seat;
-  }
+  creditFloat(by: Actor | null | undefined, seatId?: string | null): void { return sceneCreditFloat(this.nativeSceneRestorationHost(),by,seatId); }
 
   /** Move an actor with stat-driven speed, statuses included. */
   /** Is this hero fully movement-LOCKED right now (the cases where moveActor

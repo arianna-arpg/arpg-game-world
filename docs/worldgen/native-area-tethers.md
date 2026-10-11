@@ -15,13 +15,20 @@ targets remain valid endpoints when physically present. Object tether attachment
 also requires the spawned object's actual owner to be the supplied caster, as
 established by the native minion and construct spawning paths.
 
-Each retained state object belongs to one successful tether owner construction.
-Its replacement slot must be writable. The host always reads the current slot;
-it never keeps a stale array after native replacement. Distinct state slots may
-initially reference one array: native addTether replaces its own slot with filter
-before appending, and the two-owner proof verifies this does not mutate the
-other slot or the shared initial array. No queue copying or proxy changes the
-original algorithm.
+Each retained state object and every raw array assigned to it belong to one
+successful tether owner for its lifetime. NativeAreaSceneRestoration appends
+healing arcs directly, so independent area slots cannot share an initial or later
+array. Construction requires an own writable, configurable data slot and installs
+an own nonconfigurable accessor with the supplied enumerability. Replacements
+claim the new array before publication; a failed constructor claims neither the
+state nor its array. The host always reads the current slot, preserving current
+and historical raw references without copying the queue or proxying the Array.
+
+The earlier construction-only policy allowed distinct state slots to share an
+initial array because addTether filters before appending. Its historical proof
+still explains that operation, but the current ownership contract supersedes
+that allowance. A separate negative control demonstrates why direct healing
+requires exclusive arrays. See [native area restoration](native-area-restoration.md).
 
 Carried shapeshift flesh is not a physical endpoint. The actual controlled form
 can construct a tether after explicit admission. Detached casters, staged
@@ -44,7 +51,7 @@ source-skill tags are explicit test setup. This proves construction, not complet
 summon birth. Independent review verified the frozen source hashes, exact native
 method bodies, type checks and runtime proof.
 
-Full tether ticking, damage, healing application, cleanup and crossings remain
+Full tether ticking, damage, tick-driven healing, cleanup and crossings remain
 separate combat/lifecycle work. Register this queue owner beside real area combat
 services when that composition exists. Do not supply an empty combat interface
 or claim scheduling, spatial publication or whole-area activation from these
@@ -71,8 +78,9 @@ attribution, quest interaction, projectile launch, progression, both historical
 guards and installed sources), the production build, and isolated game/launcher
 boot checks. No balance baseline or tolerance changed.
 
-A later restoration owner must account for applyHealChained, which appends visual
-arcs directly. The shared-initial-array evidence above applies only to the native
-construction methods reviewed here; it does not authorize independent append
-writers to share a queue. Any later writer must use the actual queue owner and
-prove that neighboring area queues remain independent.
+NativeAreaSceneRestoration now uses this exact registered queue for immediate
+chained-heal arcs. Its checks prove initial and later cross-area array assignments
+refuse, actual queue replacement stays live, and frozen-array append failures
+retain earlier native healing. The construction algorithm and its original
+36-course receipt remain unchanged; the old initial-sharing lifecycle expectation
+is explicitly replaced by the exclusive queue contract.

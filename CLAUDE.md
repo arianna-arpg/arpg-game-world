@@ -1,3 +1,13 @@
+NativeAreaSceneRestoration owns admitted healing, restoration, stream construction,
+cleansing and combat-text attribution over actual scene stores. Preserve physical
+caster/target authority, native partial effects, live campaign receivers and lazy
+seat attribution. NativeAreaSceneTethers now exclusively owns its replacement
+slot and every assigned raw queue; direct healing arcs cannot share another
+area's array. Verify nativerestoration, tether/displacement and adjacent effects,
+memory/source checks, all types and boot. See docs/worldgen/native-area-restoration.md.
+Stream ticking, full damage/death, detached caster lifetimes, scheduling and
+whole-area publication remain open.
+
 NativeAreaSceneDisplacement owns admitted native impulses, grip/cling release,
 teleport, saddles and movement restrictions. Preserve local physical authority,
 actual census order, live method receivers and partial effects. World shares the
@@ -23,7 +33,7 @@ identity, replacement order and partial failures. World shares TETHER_TICK and
 uses a nonenumerable adapter cache so dormancy retains real tether dependencies
 without retaining unrelated actors. Verify nativetetherconstruction, tetherecology,
 movementtether, dormancy/pinattribution, adjacent native/source checks, all types
-and boot. See docs/worldgen/native-area-tethers.md. Ticking, damage, healing,
+and boot. See docs/worldgen/native-area-tethers.md. Ticking, damage, tick-driven healing,
 crossing and complete retained combat/runtime activation remain open.
 
 NativeAreaSceneQuestInteraction owns admitted quest giver dwell, offers, vocation
