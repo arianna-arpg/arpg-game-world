@@ -26,7 +26,7 @@ function rig() {
   const victim = () => {
     const e = w.createMonster('skeleton_warrior', 1, 'enemy');
     e.pos = { x: 780, y: 700 }; e.brain = undefined; e.anchored = true;
-    e.sheet.setSource('target', [mod('life', 'override', 10000), mod('energyShield', 'override', 0), mod('blockChance', 'override', 0)]);
+    e.sheet.setSource('target', [mod('life', 'override', 10000), mod('energyShield', 'override', 0), mod('blockChance', 'override', 0), mod('evasion', 'override', 0)]);
     e.fillResources(); w.actors.push(e); return e;
   };
   const e = victim();
@@ -57,6 +57,15 @@ for (const def of orbSkills) {
   orb.pos = { ...p.pos }; api.updateOrbs(0.01);
   check(def.id + ': one arrival, one payout, matching gain cue', !w.orbs.length && p[resource] === 400 + orb.amount
     && p.gainEvents.filter(g => g.kind === 'orb').length === 1 && p.restoreGains.some(g => g.resource === resource));
+}
+{
+  const { w, p, e, api, skill } = rig(); p.life = 400;
+  // Successful-hit art needs a target that cannot evade. Exercise the missed
+  // attack separately with fixed entropy, rather than randomly failing that rig.
+  e.sheet.setSource('evade-test', [mod('evasion', 'override', 1e6)]);
+  e.evadeEntropy = 0; e.evadeWindow = 1;
+  api.resolveHit(p, skill('devouring_maw'), e);
+  check('an evaded siphon creates no pickup or predicted recovery', !w.orbs.length && p.life === 400 && !p.resourceFlows.length);
 }
 for (const def of auraSkills) {
   const { w, p, e, api, skill } = rig(); p.life = 400; const inst = skill(def.id); p.skills = [inst];
