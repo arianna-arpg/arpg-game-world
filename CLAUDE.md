@@ -9,6 +9,16 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Storm, summon and construct identities use `data/skillPresenceVisuals.ts`
+and `render/vis/skillPresenceVoice.ts`: 139 explicit source profiles.
+Births, completed actions, real aura/construct pulses and actual retirement
+own their cues. `ActorW.presenceBadge` copies source identity; ground-qualified
+`FlashW.onGround` clips impacts to the warning's terrain and floor gates.
+See `docs/design/presence-skill-visuals.md`. Verify presencevisuals, skillflights,
+selfvisuals, effectvoice, cosmetics, payloadcues, companioncues,
+companioninheritance, summonfill, clutch, cistern, scaldkit, supportfabric,
+all types and sim smoke; after build, run hidden `balance/presence-visuals-ui.cjs`.
+
 Self, mark and detonation identities use `data/skillSelfVisuals.ts` and
 `render/vis/skillSelfVoice.ts`: 106 self skills and three dedicated deliveries.
 Casting cues carry optional host-resolved source identity; stored power uses

@@ -74,12 +74,19 @@ These counts describe delivery families, not a claim that every member lacks art
 
 | Priority | Area | Remaining opportunity |
 | --- | --- | --- |
-| 1 | Storm (33), summon (61), construct (45) | Arrival, cadence and lifetime cues, coordinated with existing anatomy/companion art |
+| 1 | Crowded encounters and close relatives | Compare shared-color recognition at actual play scale, including overlapping fields and summon armies |
+
+Storms (33), summons (61) and constructs (45) now have explicit arrival,
+action and retirement identities, coordinated with existing anatomy and
+companion art. Actual death breaks a signature; quiet retirement unbinds it.
+Ground-qualified storm art shares the wet-cell gate. See
+[presence skill visuals](presence-skill-visuals.md) and its interactive study.
 
 Already authored on this branch: 109 novas, 172 projectiles, six native beams,
 163 ground skills and 42 auras. Continue reviewing their scale, busy-scene density
 and low-contrast surfaces even though they have catalogue identities. This sweep
-does not declare encounter acceptance or the remaining families complete.
+does not declare encounter acceptance or guarantee player recognition solely
+from distinct pixel signatures.
 
 ## Verification
 

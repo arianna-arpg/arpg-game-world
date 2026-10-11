@@ -9,6 +9,7 @@ import { lightningProfile, LIGHTNING_STYLE } from '../data/lightningVisuals';
 import { extendLightningTrace, type LightningTrace } from './lightningVisual';
 import { skillTargetVoice, skillRiteVoice, TARGET_VISUAL_STYLE } from '../data/skillTargetVisuals';
 import { skillSelfVoice, SELF_VISUAL_STYLE } from '../data/skillSelfVisuals';
+import { presenceProfile, skillPresenceVoice, PRESENCE_STYLE, type PresencePhase } from '../data/skillPresenceVisuals';
 import type { SkillTetherVisual } from './skillTetherVisual';
 import type { SkillFieldVisual } from './skillFieldVisual';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
@@ -1377,6 +1378,8 @@ interface Zone {
   /** The telegraph's INITIAL countdown (stamped only when a drawn effect
    *  needs progress = 1 − delay/delay0; armed strikes never stamp it). */
   delay0?: number;
+  /** Paint-only retirement guard for storm afterlives and cancelled warnings. */
+  presenceRetired?: boolean;
   /** IMPACT DRESS (ImpactDressSpec): the detonation leaves a drying pock
    *  (runtime doodad + Doodad.evap; capped per zone — BOMBARD_CFG). */
   impactDress?: ImpactDressSpec;
@@ -1561,6 +1564,8 @@ export interface EmergeRecord {
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
+  /** Ground-qualified strike decoration is clipped to these real terrain kinds. */
+  onGround?: string[];
   movement?: MovementTrail;
   lightning?: LightningTrace;
   arcRad?: number;
@@ -37163,10 +37168,10 @@ export class World {
             // silently — no comet hangs in the air for a held channel.
             lobFrom: d.lob && !arming ? vec(caster.pos.x, caster.pos.y) : undefined,
             lobArc: d.lob?.arc,
-            delay0: d.lob && !arming ? zDelay : undefined,
+            delay0: !arming ? zDelay : undefined,
             impactDress: d.impactDress,
             birth: strikeBirth, // THE CLUTCH FABRIC: the landing is a womb
-            fx: d.fx, // THE EFFECT VOICE: the delivery names its landing
+            fx: skillPresenceVoice(def.id, 'pulse') ?? d.fx,
             onGround: d.onGround, // THE GROUNDED STRIKE: the water boils, the shore does not
 
             armed: arming || undefined,
@@ -38511,7 +38516,31 @@ export class World {
       this.echoToClones(caster, inst, aim, useMult,
         opts.targetInfo as ResolvedTarget | undefined);
     }
+    if (!caster.dead) this.presenceMoment(caster, 'pulse');
     return true;
+  }
+
+  private presencePulseAt = new WeakMap<Actor, number>();
+  /** Every visible beat is a real event. Rapid multi-payload actions share a
+   * compact source accent instead of piling up identical body flashes. */
+  private presenceMoment(a: Actor, phase: PresencePhase): boolean {
+    const badge = a.presenceBadge, fx = badge && skillPresenceVoice(badge.skillId, phase);
+    if (!badge || !fx) return false;
+    if (phase === 'pulse') {
+      if (this.time - (this.presencePulseAt.get(a) ?? -Infinity) < .12) return true;
+      this.presencePulseAt.set(a, this.time);
+    }
+    const life = PRESENCE_STYLE[phase];
+    this.flashes.push({ pos: { ...a.pos }, radius: Math.min(56, a.radius + (phase === 'pulse' ? 12 : 20)),
+      color: badge.color, life, maxLife: life, fx, recoveryCueTier: a.tier });
+    return true;
+  }
+
+  private presenceArrival(a: Actor, caster: Actor, inst: SkillInstance): boolean {
+    const p = presenceProfile(inst.def.id);
+    if (!p || p.family === 'storm') return false;
+    a.presenceBadge = { skillId: inst.def.id, color: cosmeticSkillPaint(this, caster, inst.def.id).color ?? inst.def.color };
+    return this.presenceMoment(a, 'arrive');
   }
 
   /** bankRune uses runeForCast for school or schoolless spell fuel — only while an
@@ -40030,7 +40059,8 @@ export class World {
     // THE DEADWAKE: raising a minion stirs the corpse tide (a heavier tick when the
     // thing raised is itself undead — a skeleton, a spectre). No-op until armed.
     this.sim.deadwakeField?.accrue('summon', isDeathAligned(minion.faction));
-    this.flashes.push({ pos: vec(minion.pos.x, minion.pos.y), radius: 20 + minion.radius, color: inst.def.color, life: 0.35, maxLife: 0.35 });
+    if (!this.presenceArrival(minion, caster, inst))
+      this.flashes.push({ pos: vec(minion.pos.x, minion.pos.y), radius: 20 + minion.radius, color: inst.def.color, life: 0.35, maxLife: 0.35 });
     return minion;
   }
 
@@ -40499,7 +40529,8 @@ export class World {
       }
       this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius, color: c.color, life: 0.25, maxLife: 0.25 });
     }
-    this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 22, color: c.color, life: 0.3, maxLife: 0.3 });
+    if (!this.presenceArrival(c, caster, sourceInst))
+      this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 22, color: c.color, life: 0.3, maxLife: 0.3 });
     return c;
   }
 
@@ -42191,7 +42222,8 @@ export class World {
       ? burstDelivery.fx ?? skillBurstVoice(inst.def.id)
       : burstDelivery.type === 'melee' ? burstDelivery.fx ?? skillStrikeVoice(inst.def.id)
       : burstDelivery.type === 'cone' ? skillStrikeVoice(inst.def.id)
-      : burstDelivery.type === 'leap' ? skillMovementVoice(inst.def.id, 'impact') : undefined;
+      : burstDelivery.type === 'leap' ? skillMovementVoice(inst.def.id, 'impact')
+      : burstDelivery.type === 'storm' ? skillPresenceVoice(inst.def.id, 'pulse') ?? burstDelivery.fx : undefined;
     const cadence = socketSpec(inst, 'cadence')?.intervalStep;
     const pPlan = instancePulsePlan(inst);
     const pSpec = pPlan.native;
@@ -46258,7 +46290,7 @@ export class World {
     },
   ];
 
-  kill(actor: Actor, silent = false, killer?: Actor): void {
+  kill(actor: Actor, silent = false, killer?: Actor, departure?: 'expire'): void {
     if (actor.dead) return;
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
@@ -46470,6 +46502,7 @@ export class World {
     }
 
     actor.dead = true;
+    this.presenceMoment(actor, departure ?? (silent ? 'expire' : 'break'));
     this.guardArts.clear(actor);
     if (actor.owner) this.strikeReleaseBodies.get(actor.owner)?.delete(actor);
     this.satellites.retire(actor);
@@ -49513,7 +49546,7 @@ export class World {
       if (a.lifespan > 0) {
         a.lifespan -= dt;
         if (a.lifespan <= 0) {
-          this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * 1.4, color: a.color, life: 0.3, maxLife: 0.3 });
+          if (!a.presenceBadge) this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * 1.4, color: a.color, life: 0.3, maxLife: 0.3 });
           // Explosive CONSTRUCTS go off even on natural expiry — a bone
           // prison under Unstable Flesh is a timed demolition charge.
           if (a.construct && a.explodeOnDeath > 0) {
@@ -49535,7 +49568,7 @@ export class World {
           // THE RAGING-SPIRITS LEVER (minionExpiryIsDeath): a flagged
           // minion's duration lapse IS a death — every on-death rite
           // (explosions, death heals, allyDeath taps) fires on schedule.
-          this.kill(a, !a.expiryTriggersDeath);
+          this.kill(a, !a.expiryTriggersDeath, undefined, 'expire');
           continue;
         }
       }
@@ -52513,6 +52546,7 @@ export class World {
           }
           if (struck) {
             this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius, color: c.color, life: 0.18, maxLife: 0.18 });
+            this.presenceMoment(c, 'pulse');
           }
         }
       }
@@ -52745,7 +52779,7 @@ export class World {
             (owner as Actor & { dashSkill?: SkillInstance }).dashSkill = undefined;
             (owner as Actor & { dashHits?: Set<number> }).dashHits = undefined;
             st.timer = 0.8;
-            this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 26, color: c.color, life: 0.25, maxLife: 0.25 });
+            if (!this.presenceMoment(c, 'pulse')) this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 26, color: c.color, life: 0.25, maxLife: 0.25 });
           }
           break;
         }
@@ -52760,6 +52794,7 @@ export class World {
             if (owner && !owner.dead
               && dist(c.pos, owner.pos) <= c.radius + owner.radius + 4) {
               this.teleportActor(owner, vec(partner.pos.x + 30, partner.pos.y), c.color);
+              this.presenceMoment(c, 'pulse'); this.presenceMoment(partner, 'pulse');
               // Anti-ping-pong: both ends close briefly.
               st.timer = 1.2;
               if (partner.construct) partner.construct.timer = 1.2;
@@ -52994,6 +53029,7 @@ export class World {
           aura.pulseTimer -= dt;
           if (aura.pulseTimer <= 0) {
             aura.pulseTimer = aura.spec.pulse.interval;
+            this.presenceMoment(bearer, 'pulse');
             const heal = aura.spec.pulse.healAllies;
             if (heal) {
               for (const a of this.actors) {
@@ -59816,6 +59852,7 @@ export class World {
           zs.forEach((z2, k) => {
             z2.armed = undefined;
             z2.delay = 0.05 + k * interval;
+            z2.delay0 = z2.delay;
           });
         }
       }
@@ -59872,12 +59909,10 @@ export class World {
             pos: vec(z.pos.x, z.pos.y), radius: z.radius, color: z.color,
             life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing, arcRad: z.arcRad,
             edgeFrac: z.edgeFrac,
-            // THE EFFECT VOICE: a keyed zone speaks its own painter at the
-            // landing; the bolt stays the DERIVED costume of unkeyed sky
-            // strikes (hitAll) — true lightning never needs a key, and a
-            // keyed mortar never wears the sky's jag (absent == identical).
+            // Native storms use their source silhouette. Unkeyed weather
+            // keeps its legacy sky bolt; keyed mortars never borrow it.
             bolt: !z.fx && z.hitAll && !z.meteor, meteor: z.meteor,
-            fx: z.fx,
+            fx: z.fx, onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier,
           });
           z.onImpact?.(); // a meteor crater spits a demon / leaves a corpse
           // THE CLUTCH FABRIC: a birth-bearing strike's landing is a womb —
@@ -60070,7 +60105,8 @@ export class World {
             pos: vec(z.pos.x, z.pos.y), radius: pr, color: z.color,
             life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing, arcRad: z.arcRad,
             edgeFrac: z.edgeFrac,
-            fx: ['nova', 'melee', 'cone', 'leap'].includes(instanceDelivery(z.inst).type) ? z.fx : undefined,
+            fx: ['nova', 'melee', 'cone', 'leap', 'storm'].includes(instanceDelivery(z.inst).type) ? z.fx : undefined,
+            onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier,
           });
           this.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth);
           z.pulse.dmgMult *= z.pulse.dmgStep;
@@ -60354,6 +60390,13 @@ export class World {
 
   /** A zone leaves play: strip every occupant its domain dressed. */
   private expireZone(z: Zone): void {
+    if (!z.presenceRetired && (!z.exploded || z.pulse) && presenceProfile(z.inst.def.id)?.family === 'storm') {
+      z.presenceRetired = true;
+      this.flashes.push({ pos: { ...z.pos }, radius: z.radius, color: z.color,
+        life: PRESENCE_STYLE.expire, maxLife: PRESENCE_STYLE.expire,
+        fx: skillPresenceVoice(z.inst.def.id, 'expire'), shape: z.shape, facing: z.facing,
+        arcRad: z.arcRad, edgeFrac: z.edgeFrac, onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier });
+    }
     if (z.fieldCue) {
       this.flashes.push({ ...combatCueFlash(z.pos, z.fieldCue.release ?? 'field_release', z.radius, 0, z.fieldCue.color ?? z.color), recoveryCueTier: z.tier ?? z.caster.tier ?? 0 });
       z.fieldCue = undefined; // One retirement, even when cleanup paths converge.

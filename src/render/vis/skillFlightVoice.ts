@@ -7,6 +7,8 @@ import { lightningProfile } from '../../data/lightningVisuals';
 import { drawLightningHead } from './lightningVoice';
 import { movementProfile } from '../../data/skillMovementVisuals';
 import { selfProfile } from '../../data/skillSelfVisuals';
+import { presenceProfile } from '../../data/skillPresenceVisuals';
+import { drawPresenceField } from './skillPresenceVoice';
 import type { SkillFieldVisual } from '../../engine/skillFieldVisual';
 import { drawSkillMark } from './skillBurstVoice';
 import { traceAoePath } from './aoeTrace';
@@ -151,6 +153,9 @@ export function clipSkillField(ctx: CanvasRenderingContext2D, z: SkillFieldVisua
 }
 
 export function drawSkillField(ctx: CanvasRenderingContext2D, z: SkillFieldVisual, time: number): boolean {
+  if (!z.onGround && presenceProfile(z.skillId)?.family === 'storm' && z.radius > 0 && Number.isFinite(z.radius + z.pos.x + z.pos.y + time)) {
+    ctx.save(); clipSkillField(ctx, z); drawPresenceField(ctx, z, time); ctx.restore(); return true;
+  }
   const p = fieldProfile(z.skillId);
   // Ground-qualified strikes must keep the existing per-cell roil: decorative
   // ink in a dry, unhittable cell would falsely advertise damage.

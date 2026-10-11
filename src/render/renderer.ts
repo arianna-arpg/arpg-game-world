@@ -175,6 +175,7 @@ import './vis/skillStrikeVoice';
 import { drawLightningTrace } from './vis/lightningVoice';
 import { drawMovementTrail } from './vis/skillMovementVoice';
 import { drawRecallMark, drawSelfBanks } from './vis/skillSelfVoice';
+import { drawPresenceBadge } from './vis/skillPresenceVoice';
 import { selfBankCuesOf } from '../engine/skillSelfVisual';
 import { drawSkillTether } from './vis/skillTargetVoice';
 import { skillTetherVisual } from '../engine/skillTetherVisual';
@@ -856,7 +857,7 @@ export class Renderer {
       if (recoveryCueTier !== undefined && !this.companionCuePointVisible(f.pos, recoveryCueTier, world)) continue;
       if (f.movement && f.movement.points.some(p => !this.companionCuePointVisible(p, recoveryCueTier ?? 0, world))) continue;
       if (f.companionCue?.from && !this.companionCuePointVisible(f.companionCue.from, f.companionCue.from.tier, world)) continue;
-      this.drawFlash(f);
+      this.drawTerrainFlash(f, world);
     }
     this.drawCompanionCues(world);
     // THE PACK LAYER's drawn bonds (engine/pack.ts): the warden's lines to
@@ -4873,8 +4874,23 @@ export class Renderer {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      drawSkillField(ctx, z, world.time);
+      if (z.onGround && world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === z.tier) {
+        const cells = groundedCellsIn(world.walk, z.pos, z.radius, z.onGround);
+        ctx.save(); ctx.beginPath();
+        for (const cell of cells) ctx.rect(cell.x - world.walk.cell / 2, cell.y - world.walk.cell / 2, world.walk.cell, world.walk.cell);
+        ctx.clip(); drawSkillField(ctx, { ...z, onGround: undefined }, world.time); ctx.restore();
+      } else drawSkillField(ctx, z, world.time);
     }
+  }
+
+  /** Ground-qualified impacts share the warning's wet-cell and story gates. */
+  private drawTerrainFlash(f: World['flashes'][number], world: World): void {
+    if (!f.onGround) { this.drawFlash(f); return; }
+    if (!(world.walk instanceof GridWalkField) || (world.player?.tier ?? 0) !== (f.recoveryCueTier ?? 0)) return;
+    const { ctx } = this, cells = groundedCellsIn(world.walk, f.pos, f.radius, f.onGround);
+    ctx.save(); ctx.beginPath();
+    for (const cell of cells) ctx.rect(cell.x - world.walk.cell / 2, cell.y - world.walk.cell / 2, world.walk.cell, world.walk.cell);
+    ctx.clip(); this.drawFlash(f); ctx.restore();
   }
 
   /** The coalescing death-burst: a GATHER of inward-spiraling motes + a brightening core +
@@ -5899,6 +5915,7 @@ export class Renderer {
     drawParryReady(ctx, a);
     drawCastingCue(ctx, a);
     drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
+    if (!a.dead) drawPresenceBadge(ctx, a.presenceBadge, a.radius);
     if (comboCueGround) {
       ctx.save(); ctx.setTransform(comboCueGround); ctx.globalAlpha = baseAlpha;
       drawComboBody(ctx, a.radius, comboCues); ctx.restore();

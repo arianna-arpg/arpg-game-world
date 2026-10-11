@@ -84,6 +84,7 @@ export type Vec2W = [number, number];
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
   selfBankCues?: SelfBankCue[];
+  presenceBadge?: import('../data/skillPresenceVisuals').PresenceBadge;
   movementTether?: Actor['movementTether'];
   encounterGroup?: Actor['encounterGroup'];
   encounterCue?: import('../engine/warningCues').EncounterCue;
@@ -272,7 +273,7 @@ export interface FlashW { combatCue?: import('../engine/combatCues').CombatCue; 
   feedingCue?: import('../engine/feedingCues').FeedingTransfer;
   companionCue?: import('../engine/companionCues').CompanionCueFlash;
   recoveryCueTier?: number;
-  fx?: string; bolt?: boolean; meteor?: boolean; departure?: RefugeDeparture;
+  fx?: string; bolt?: boolean; meteor?: boolean; departure?: RefugeDeparture; onGround?: string[];
   shape?: number; facing?: number; edgeFrac?: number;
   arc?: { facing: number; arcRad: number }; beam?: boolean; }
 /** A death-burst telegraph (coalesce gather → tracking orb). RENDER-ONLY: the client
@@ -765,6 +766,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (armedCues.length) w.armedCues = armedCues.map(cue => ({ ...cue }));
   w.reactiveCue = reactiveCueOf(a, world.time);
   const selfBanks = selfBankCuesOf(a, world.time);
+  if (a.presenceBadge) w.presenceBadge = { ...a.presenceBadge };
   if (selfBanks.length) w.selfBankCues = selfBanks.map(row => ({ ...row }));
   const poolCues = poolCueRows(a);
   if (poolCues.length) w.poolCues = poolCues;
@@ -975,7 +977,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
       companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
       recoveryCueTier: f.recoveryCueTier,
-      defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
+      defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, onGround: f.onGround?.slice(), cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt || undefined, meteor: f.meteor || undefined })),
     ec: world.eyecatch
       && eyecatchElapsed(world.eyecatch, world.timeflow.age) < world.eyecatch.paneSec
       ? {
@@ -1399,6 +1401,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.reactiveCue = aw.reactiveCue ? { ...aw.reactiveCue, volatile: aw.reactiveCue.volatile ? { ...aw.reactiveCue.volatile } : undefined } : undefined;
     a.poolCues = aw.poolCues?.map(row => ({ ...row })) ?? [];
     a.selfBankCues = aw.selfBankCues?.map(row => ({ ...row })) ?? [];
+    a.presenceBadge = aw.presenceBadge ? { ...aw.presenceBadge } : undefined;
     a.payloadCues = aw.payloadCues?.map(row => ({ ...row, points: row.points?.map(p => ({ ...p })) })) ?? [];
     a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];
     a.anatomyCues = aw.anatomyCues ? cloneAnatomyCues(aw.anatomyCues) : { weakpoints: [], parts: [], segments: [] };
@@ -1554,7 +1557,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     feedingCue: f.feedingCue ? { ...f.feedingCue, to: { ...f.feedingCue.to } } : undefined,
     companionCue: f.companionCue ? { ...f.companionCue, from: f.companionCue.from && { ...f.companionCue.from } } : undefined,
     recoveryCueTier: f.recoveryCueTier,
-    defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt, meteor: f.meteor,
+    defenseCue: f.defenseCue ? { ...f.defenseCue } : undefined, fx: f.fx, onGround: f.onGround?.slice(), cosmeticMotif: f.cosmeticMotif, departure: f.departure, bolt: f.bolt, meteor: f.meteor,
     shape: f.shape, facing: f.facing, arcRad: f.arcRad, lightning: cloneLightningTrace(f.lightning), movement: cloneMovementTrail(f.movement), edgeFrac: f.edgeFrac, arc: f.arc && { ...f.arc }, beam: f.beam })) as unknown as World['flashes'];
   // THE EYECATCH — re-stamped against the CLIENT's own raw clock (elapsed →
   // local t0); an absent row clears the pane with the host's (engine/ultimates.ts).
