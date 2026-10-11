@@ -587,9 +587,9 @@ function cancelLoadingToMenu(): void {
   }).catch(() => { /* The menu stays available; a later Continue rereads storage. */ });
 }
 
-/** Loading owns a paint before construction and before the first terrain bake.
- * Long synchronous generators still need cooperative/worker migration; a cover
- * is not a scheduler. The native readiness gate retains the entry direction. */
+/** loadingScreen owns an independent foreground renderer. Await its first paint
+ * before starting CPU work, and drain its input before exposing the ready world.
+ * Native construction and save authority stay in their existing game process. */
 async function withLoadingScreen(...args: Parameters<typeof startGame>): Promise<boolean> {
   const lease = loadingScreen.begin({ kind: 'entry', label: 'Taking form', loadout: account.cosmetics.loadout,
     cancel: cancelLoadingToMenu });
@@ -601,6 +601,8 @@ async function withLoadingScreen(...args: Parameters<typeof startGame>): Promise
     lease.update({ label: 'Opening the world' });
     await lease.paint(); if (!lease.current) return false;
     renderer.render(world);
+    // loadingScreen drains foreground actions before exposing the prepared world.
+    await lease.paint(); if (!lease.current) return false;
     loadingGate = { world, lease };
     return true;
   } catch (error) { lease.finish(); reportFatal(error, 'world entry'); return false; }
@@ -742,6 +744,10 @@ async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<
     ui.resetRunView();
     deathShown = false; pendingDeathScreen = null;
     running = true; ui.hideAll();
+    // loadingScreen stays interactive through the actual first terrain/sprite bake.
+    loading.update({ label: 'Opening the world' });
+    await loading.paint();
+    if (current()) { renderer.render(world); await loading.paint(); }
   } catch (error) {
     if (current()) ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar,
       error instanceof Error ? error.message : 'The saved world could not be read');

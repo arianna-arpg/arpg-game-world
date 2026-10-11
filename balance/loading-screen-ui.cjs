@@ -14,8 +14,9 @@ app.whenReady().then(async () => {
  await new Promise(r => server.listen(0, '127.0.0.1', r));
  const win = new BrowserWindow({ show: false, width: 1280, height: 850, webPreferences: { offscreen: true, backgroundThrottling: false } });
  win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message); });
+ let surfaceTarget;
  const run = async (fn, ...args) => {
-  const result = await win.webContents.executeJavaScript('(async()=>{try{return {ok:true,value:await (' + fn + ')(' + args.map(a => JSON.stringify(a)).join(',') + ')}}catch(e){return {ok:false,error:e.stack||String(e)}}})()');
+  const result = await (surfaceTarget ?? win.webContents).executeJavaScript('(async()=>{try{return {ok:true,value:await (' + fn + ')(' + args.map(a => JSON.stringify(a)).join(',') + ')}}catch(e){return {ok:false,error:e.stack||String(e)}}})()');
   if (!result.ok) throw Error(result.error); return result.value;
  };
  const pause = ms => new Promise(r => setTimeout(r, ms));
@@ -29,6 +30,13 @@ app.whenReady().then(async () => {
    if (!window.__game) throw Error('Missing game'); await __game.hydrated();
    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => window.__qaPads ?? [] });
   });
+  // Surface mechanics run inside the actual isolated renderer. Host lease and
+  // busy-game-thread behavior are covered by loading-isolation-ui.cjs.
+  await run(async () => { window.__hostLease = __game.loading.begin({ kind: 'entry', label: 'Surface acceptance' }); await __hostLease.paint(); });
+  surfaceTarget = win.webContents.mainFrame.frames.find(f => f.url === 'about:srcdoc');
+  assert.ok(surfaceTarget && surfaceTarget.processId !== win.webContents.mainFrame.processId);
+  await run(() => { window.__game = { loading: __muCrossing.loading, account: () => ({ cosmetics: { loadout: undefined } }) };
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => window.__qaPads ?? [] }); });
   for (const direction of ['down', 'right', 'left']) {
    await run(direction => {
     window.__qaLease = __game.loading.begin({ kind: 'entry', direction, label: 'Opening the world', detail: 'Preparing the next area',
@@ -107,7 +115,11 @@ app.whenReady().then(async () => {
   // encounters only when the chosen opening remains reachable; the pure probe
   // separately exhausts calm routes; peak-speed layouts can be deliberately punishing.
   const choices = await run(async () => {
+   // A fixed encounter stream makes both current-placement checks reproducible.
+   const randomValues = crypto.getRandomValues.bind(crypto);
+   crypto.getRandomValues = array => { array.fill(57); return array; };
    window.__qaLease = __game.loading.begin({ kind: 'travel', direction: 'right', label: 'Following the wandering souls' });
+   crypto.getRandomValues = randomValues;
    const start = performance.now(), counts = new Set(), placements = new Set(), widths = new Map();
    let gateId, lane = 0, births = 0, releasedFlames = false;
    const flameChoices = new Map();
@@ -135,7 +147,7 @@ app.whenReady().then(async () => {
      return { snap, births, releasedFlames, flameChoices: [...flameChoices], counts: [...counts], placements: [...placements], widths: [...widths.values()] };
     }
     const g = snap.gates.find(g => !g.resolved);
-    const reach = distance => Math.max(0, distance) * 490 / (210 * 5.4);
+    const reach = distance => Math.max(0, distance) * 490 / (210 * Math.min(5.4, Math.max(1.8, snap.speed + 0.8)));
     if (g && gateId !== g.id) {
      gateId = g.id;
      const available = g.openings.filter(o => Math.abs(o.lane - snap.lane) < reach(g.u - 230 - 52));
@@ -164,6 +176,13 @@ app.whenReady().then(async () => {
   await pause(1000); await shot('narrow');
   await run(() => { if (document.querySelector('#mu-loading-screen').scrollWidth > innerWidth) throw Error('Loading cover overflows'); if (document.querySelector('#mu-loading-screen canvas').getBoundingClientRect().bottom > document.querySelector('#mu-loading-screen footer').getBoundingClientRect().top) throw Error('Footer overlaps crossing'); window.__qaLease.finish(); });
   win.setContentSize(1280, 850);
+  surfaceTarget = undefined;
+  await run(async () => { window.__hostLease.finish(); for (let i = 0; __game.loading.active && i < 100; i++) await new Promise(r => setTimeout(r, 10)); });
+  const toy = async (fn) => {
+    const target = win.webContents.mainFrame.frames.find(f => f.url === 'about:srcdoc');
+    if (!target) throw Error('Missing crossing frame');
+    return target.executeJavaScript('(' + fn + ')()');
+  };
   // Exercise the actual async entry wrapper; it must expose down BEFORE construction.
   const entry = await run(async () => {
    document.getElementById('sm-start').click(); __game.step(2);
@@ -198,8 +217,9 @@ app.whenReady().then(async () => {
   });
   assert.equal(gate.time, gate.held.time); assert.deepEqual(gate.pos, gate.held.pos); assert.ok(['left', 'right'].includes(gate.held.loading.direction));
   await shot('native-retry');
+  await toy(() => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true })); document.querySelector('#mu-loading-screen button').click(); });
   const recovered = await run(async () => {
-   document.querySelector('#mu-loading-screen button').click(); __game.step(1);
+   for (let i = 0; __game.loading.active && i < 100; i++) { __game.step(0); await new Promise(r => setTimeout(r, 10)); }
    const w = __game.world(), p = { ...w.player.pos };
    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true, repeat: true })); __game.step(2);
    const stayed = Math.hypot(p.x - w.player.pos.x, p.y - w.player.pos.y);
@@ -209,10 +229,15 @@ app.whenReady().then(async () => {
    return { stayed, retried: window.__qaRetried, active: __game.loading.active, inert: document.getElementById('game').inert };
   });
   assert.equal(recovered.stayed, 0); assert.equal(recovered.retried, 1); assert.equal(recovered.active, false); assert.equal(recovered.inert, false); report.checks.push('native pending/refused/retry gate holds world and releases without held-key movement');
-  const cancelledTravel = await run(async () => {
-   const w = __game.world(), m = w.massRuntime;
+  await run(async () => {
+   const m = __game.world().massRuntime;
    m.nativeReadiness = () => ({ status: 'pending', pending: 1, required: 1, retryable: false });
-   __game.step(1); document.querySelector('#mu-loading-screen button').click();
+   __game.step(1); await new Promise(r => setTimeout(r, 100));
+  });
+  await toy(() => document.querySelector('#mu-loading-screen button').click());
+  const cancelledTravel = await run(async () => {
+   const w = __game.world();
+   for (let i = 0; __game.loading.active && i < 100; i++) await new Promise(r => setTimeout(r, 10));
    for (let i = 0; document.getElementById('sm-continue')?.disabled && i < 100; i++) await new Promise(r => setTimeout(r, 25));
    const enabled = !document.getElementById('sm-continue').disabled;
    return { enabled, active: __game.loading.active, sameWorld: __game.world() === w };
@@ -221,13 +246,22 @@ app.whenReady().then(async () => {
   report.checks.push('cancelled in-game crossing restores the Continue menu without publishing or saving');
   // Cold Continue, then cancellation before its first async phase can publish.
   await win.loadURL('http://127.0.0.1:' + server.address().port);
-  const resumed = await run(async () => {
+  await run(async () => {
    for (let i = 0; !window.__game && i < 100; i++) await new Promise(r => setTimeout(r, 100)); await __game.hydrated();
-   const before = __game.world(); document.getElementById('sm-continue').click(); const first = __game.loading.snapshot;
-   document.querySelector('#mu-loading-screen button').click();
-   await new Promise(r => setTimeout(r, 150));
+   window.__beforeContinue = __game.world();
+  });
+  // Cancel in the foreground as soon as its action appears, before its first
+  // paint acknowledgement lets the game start preparation.
+  await toy(() => { const watch = new MutationObserver(() => {
+    const button = document.querySelector('#mu-loading-screen button');
+    if (button) { watch.disconnect(); button.click(); }
+   }); watch.observe(document.body, { childList: true, subtree: true }); });
+  await run(() => document.getElementById('sm-continue').click());
+  await pause(300);
+  const resumed = await run(async () => {
+   const before = window.__beforeContinue;
    if (__game.world() !== before || __game.loading.active) throw Error('Cancelled Continue published');
-   document.getElementById('sm-continue').click();
+   document.getElementById('sm-continue').click(); const first = __game.loading.snapshot;
    for (let i = 0; __game.loading.active && i < 400; i++) await new Promise(r => setTimeout(r, 25));
    return { first, active: __game.loading.active, replaced: __game.world() !== before, mass: !!__game.world().massRuntime, fatal: __game.crash().fatal, notice: document.getElementById('start-menu')?.innerText };
   });
@@ -236,7 +270,7 @@ app.whenReady().then(async () => {
   report.checks.push('cold Continue cancellation preserves the old world; subsequent Continue restores seamlessly');
   await win.loadURL('http://127.0.0.1:' + server.address().port + '/?loadingPreview=left');
   const preview = await run(async () => {
-   for (let i = 0; !window.__game?.loading.active && i < 100; i++) await new Promise(r => setTimeout(r, 50));
+   for (let i = 0; (!window.__game?.loading.active || __game.loading.snapshot.label !== 'Loading screen preview') && i < 100; i++) await new Promise(r => setTimeout(r, 50));
    return { active: __game.loading.active, direction: __game.loading.snapshot.direction, label: __game.loading.snapshot.label };
   });
   assert.deepEqual(preview, { active: true, direction: 'left', label: 'Loading screen preview' }); report.checks.push('playable preview URL');

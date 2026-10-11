@@ -16,6 +16,7 @@
 // ---------------------------------------------------------------------------
 
 import { defineConfig } from 'vite';
+import { loadingFramePlugin } from './scripts/loading-frame-plugin';
 import type { Connect, HmrContext, ViteDevServer, PreviewServer } from 'vite';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -134,7 +135,7 @@ export default defineConfig({
     __HOLLOW_WAKE_STORAGE_SCOPE__: JSON.stringify(process.env.HOLLOW_WAKE_STORAGE_SCOPE ?? ''),
     __HOLLOW_WAKE_WORLDMASS__: process.env.HOLLOW_WAKE_WORLDMASS === '1',
   },
-  plugins: [diskSavePlugin(), reloadTreesPlugin()],
+  plugins: [diskSavePlugin(), reloadTreesPlugin(), loadingFramePlugin()],
   // saves/ writes are DATA, not source — without this ignore, every zone-hop's
   // autosave tripped the watcher into a FULL RELOAD (killing the live world
   // mid-play and mid-QA; the long-standing "reload ate my test" gotcha).
