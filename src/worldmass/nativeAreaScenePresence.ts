@@ -20,6 +20,11 @@ export class NativeAreaScenePresence {
   // fixed cohort, and removed controlled bodies cannot continue receiving effects.
   return this.#birthSeats.filter(s=>this.scene.actors.includes(s.actor));
  }
+ /** Verify the exact existing admission without acquiring or replacing it. */
+ assertAuthority(authority:NativeAreaActorAuthority<object>):void{
+  if(this.#authority!==authority||this.#binding!==authority.bindingFor(this.scene))throw Error('Native presence authority differs');
+  authority.assertAdmitted(this.scene);
+ }
  activate(authority:NativeAreaActorAuthority<object>):void{
   if(authority.campaign!==this.campaign)throw Error('Native presence needs identical campaign authority');
   if(this.#authority&&this.#authority!==authority)throw Error('Native presence authority cannot be replaced');

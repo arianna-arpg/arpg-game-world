@@ -1,3 +1,4 @@
+import {beforeNativeSceneMemory} from './nativeSceneMemoryFixture';
 /** Exact reversal of the checked native progression extraction for historical receipts. */
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -16,6 +17,7 @@ export function beforeNativeProgressionController(text:string,file:string):strin
  const row=archive.controllerRows.find(r=>r.file===file);assert.ok(row,'known progression controller');assert.equal(text.replaceAll('\r\n','\n'),row.after,'checked complete progression controller '+file);return row.original;
 }
 export function beforeNativeSceneProgression(text:string):string {
+ text=beforeNativeSceneMemory(text);
  text=text.replaceAll('\r\n','\n');const sf=ts.createSourceFile('world.ts',text,99,true),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
  assert.ok(cl);const edits:{start:number;end:number;text:string}[]=[];
  for(const row of archive.rows){const matches=cl.members.filter(m=>m.name?.getText(sf)===row.name);assert.equal(matches.length,1,'single progression delegate '+row.name);const node=matches[0];assert.equal(node.getText(sf),row.after,'checked progression delegate '+row.name);edits.push({start:node.getStart(sf),end:node.end,text:row.before});}

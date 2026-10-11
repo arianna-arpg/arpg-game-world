@@ -1,3 +1,12 @@
+NativeAreaMemoryRegistry captures actual born, admitted area owners through the
+real character writer. Preserve source/namespace identity, one capture per save,
+native partial effects and original cold-memory rules. Never unregister the
+current writer area before an actual writer handoff. Verify nativeareamemory,
+persistence/resume, progression/watching, installed-source and historical probes,
+all types and boot. Same-process save/Continue evidence does not prove disk or
+browser restart durability. See docs/worldgen/native-area-memory.md. Combat,
+scheduling, spatial publication and complete persistence activation remain open.
+
 NativeAreaSceneOngoing composes native quests, progression and objective watching
 with exact actor authority and explicit physical admission. Preserve live campaign
 quest scope, real local stores, receiver identity, partial failures and original

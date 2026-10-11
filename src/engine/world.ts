@@ -1,4 +1,9 @@
 import './nativeSceneBootstrap';
+import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
+import {nativeAreaMemorySnapshot,captureNativeAreaMemories} from '../worldmass/nativeAreaMemoryRegistry';
+const nativeWorldInstances=new WeakSet<object>();
+/** True only for a body whose actual World constructor completed. */
+export function isNativeWorld(value:unknown):value is World{return typeof value==='object'&&value!==null&&nativeWorldInstances.has(value); }
 import {type NativeSceneProgressionHost,sceneRecalcSeat,sceneResyncMercenary,sceneMercTargetLevel,sceneApplyMercNormalization,sceneNormalizeMercMeta,sceneTrimAllocated,sceneRelevelActor,sceneBakeMinionOwnerStats,sceneSummonCrewSkills,sceneCompanionCapOf,sceneDeactivateAura,sceneDismissSummonToggle,sceneClearSummonReleaseFields,sceneMinionsOfSkill,sceneReleaseContract,sceneSettleLedger,sceneClearTreeFields,sceneClearTreeConstructs,sceneRetireOwnedZone,sceneExpireZone,sceneGuardArtCooldown,sceneStampSkillCooldown,sceneShowCompanionCue,sceneInheritedFlight,sceneReviveCompanion,sceneRecoverCompanion,sceneShowRecoveryCue,sceneEmergeBody,sceneEmergeGroundAt} from './nativeSceneProgression';
 import {type NativeSceneQuestHost,sceneOnQuestZoneFieldCleared,sceneDeedHand,sceneCompleteQuestField,sceneEnsureQuestCargo,sceneEnsureSeatCargo,sceneOnQuestZoneCleared,sceneQuestRewardItem,sceneClaimQuestReward,sceneQuestStanding,scenePendingTurnIns,sceneGiverPresent,sceneGetQuestGiver,sceneGrantVocation,sceneQuestHand,sceneWithQuestHand,sceneQuestLedger,sceneQuestStamp,sceneQuestRunLedger,sceneCreditedHands,sceneHandSeats,sceneNearestHand,sceneLocalHumanSeats,sceneFailNote,sceneLearnQuestDirections,scenePrepareOdysseyGround,sceneEnrollOdysseyQuest,sceneAcceptOdysseyCompatibleQuest,sceneQuestLocalAnchor,sceneFindBandCoord,sceneRevealQuestGround,sceneGraphWorkAvailable} from './nativeSceneQuests';
 import {sceneUpdateObjective,sceneLairAskView,scenePackageAskView,sceneVentureAskView,sceneMassHoldHost,sceneMassProcessionReachable,sceneNativeBeaconHost,sceneContestPressers,sceneResolveContest,sceneSetLure,sceneSpawnProcessionAmbush,sceneNativeProcessionBodies,sceneSurveyAround,sceneUpdateRiftPours,sceneDriveHoldFixtures,sceneDwellReachable,sceneStoryPair,sceneMassObjectiveBeaconTables,sceneMassObjectiveSpawnTable,type NativeSceneObjectiveWatchingHost} from './nativeSceneObjectiveWatching';
@@ -58,7 +63,7 @@ import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
 
 import { DeedTracker, type DeedEvent } from './deeds';
-import { ensureMovementTether, updateMovementTethers, refreshMovementTether, savedMovementTether, restoreMovementTether, type MovementTetherState } from './movementTether';
+import { ensureMovementTether, updateMovementTethers, refreshMovementTether,  restoreMovementTether, type MovementTetherState } from './movementTether';
 import { CompanionBonds } from './companionBonds';
 import { Assaults, assaultNode } from './assault';
 import { Challenges } from './challenges';
@@ -108,7 +113,7 @@ import { Party } from './party';
 import { HONEST_INPUT_CFG, NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
 import { reviveTargetsOfRow } from '../net/partyReads'; // THE PARTY THAT READS: a hosted shell's revive ring reads its row
 import { SkillInputOrder } from './skillInputOrder';
-import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
+import { ZONE_MEMORY_CFG,  restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
 import { WorldMassRuntime, type MassAdventureSave } from '../worldmass/runtime';
 import { compactMass, type MassCheckpointOptions, type MassWorldCheckpoint } from '../worldmass/checkpoint';
 import { MASS_ZONE } from '../worldmass/preset';
@@ -4778,6 +4783,7 @@ actors: Actor[] = [];
     // same guard: no woven road may cut ACROSS a Field expanse's core rect
     // (both-ends-outside — an incident spoke or a bay pocket's road passes).
     this.bindGlobalPolicies();
+    nativeWorldInstances.add(this);
   }
 
   private static policyOwner: World | undefined;
@@ -9258,8 +9264,8 @@ actors: Actor[] = [];
    *  autosave's own capture, never the leave verbs) written into the shared
    *  memory map, so the keeper's world save carries a zone awake in a unit. */
   captureLiveMemory(): void {
-    const m = this.zoneMemorySnapshot();
-    if (m) this.zoneMemory.set(this.zone.id, m);
+    const owner = this;
+    sceneCaptureLiveMemory({get zone(){return owner.zone;},get zoneMemory(){return owner.zoneMemory;},zoneMemorySnapshot:()=>owner.zoneMemorySnapshot()});
   }
 
   /** THE SLEEP (shard M1): a unit leaving play runs the departure's leave verbs
@@ -14701,92 +14707,10 @@ actors: Actor[] = [];
    *  never nudge overlays or ledgers; the leave-time verbs live in
    *  captureZoneMemory. */
   private zoneMemorySnapshot(): ZoneMemory | null {
-    const z = this.zone;
-    // Remember towns by policy; skip the streamed abyss and unvisited SURFACE
-    // ground (caves never chart, so they bypass the visited gate). WAVES zones
-    // are remembered like everything else now: the counter + mid-wave survivors
-    // ride the memo (wave/waveActive below; spawnWave flags its bodies
-    // fromZoneGen), so the old double-fight hazard — remembered camp enemies
-    // stacked on a reset counter — cannot arise: nothing about the fight resets
-    // while the memory lives.
-    if (!z || z.boundless || (z.objective.kind === 'safe' && !ZONE_MEMORY_CFG.rememberSafeZones)
-      || (!this.inCave && !this.visited.has(z.id))) return null;
-    const enemies: ZoneEnemyMemo[] = [];
-    for (const a of this.actors) {
-      if (a.dead || a.team !== 'enemy' || !a.fromZoneGen || !a.defId || a.doorId) continue;
-      enemies.push({
-        defId: a.defId, level: a.level, x: a.pos.x, y: a.pos.y,
-        life: a.life, faction: a.faction, rarity: a.rarity, tag: a.tag,
-        ...(a.magicPack ? { magicPack: JSON.parse(JSON.stringify(a.magicPack)) as MagicPackState } : {}),
-        movementTether: savedMovementTether(a),
-        ...(a.encounterGroup ? { encounterGroup: { ...a.encounterGroup } } : {}),
-        name: a.name, ...(a.tier ? { tier: a.tier } : {}),
-        ...(a.aiAwakened ? { aiAwakened: 1 as const } : {}),
-      });
-    }
-    // Structure-door states (id → open/broken): the doodads carry the live state;
-    // restore re-applies through the shared setDoorState path.
-    let doorState: Record<string, 'open' | 'broken'> | undefined;
-    for (const d of this.doodads) {
-      if (!d.door || (!d.door.open && !d.door.broken)) continue;
-      (doorState ??= {})[d.door.id] = d.door.broken ? 'broken' : 'open';
-    }
-    // PROCESSION rider: a lost escort stays lost for the memory's life; a live
-    // one re-waits where it stands (dormant on return — no off-screen march).
-    let procession: ZoneMemory['procession'];
-    if (z.objective.kind === 'procession' && !this.objectiveDone) {
-      const pr = this.procession;
-      const cart = pr?.cartId != null ? this.actorById(pr.cartId) : null;
-      if (this.objectiveLost || (pr && (!cart || cart.dead))) {
-        // A lost escort stays lost for the memory's life — even across a
-        // re-entry that never re-staged a cart (pr null, objectiveLost set).
-        procession = { lost: true, ...(pr?.destIdx != null ? { destIdx: pr.destIdx } : {}) };
-      } else if (pr && cart) {
-        procession = {
-          started: pr.started, x: cart.pos.x, y: cart.pos.y, life: cart.life,
-          sx: pr.startPos.x, sy: pr.startPos.y,
-          ...(pr.destIdx != null ? { destIdx: pr.destIdx } : {}),
-        };
-      }
-    }
-    return {
-      seed: this.currentZoneSeed, enemies, savedAt: this.time, doorState,
-      contents: captureZoneContents(this),
-      ...(this.openedHollows.size ? { hollows: [...this.openedHollows] } : {}),
-      ...(this.annexOpen.size ? { annexOpen: [...this.annexOpen] } : {}),
-      // Objective-progress riders, per kind: the wave gauntlet's position, the
-      // stones' banked charges, the escort's stand. Done-ness itself lives in
-      // completedObjectives; a LOSS rides the procession rider.
-      ...(z.objective.kind === 'waves' ? { wave: this.wave, waveActive: this.waveActive } : {}),
-      ...(z.objective.kind === 'beacon' && this.spires.length
-        ? { spireCharges: this.spires.map(s => s.charge) } : {}),
-      ...(z.objective.kind === 'rifts' && this.rifts.length
-        ? { riftCharges: this.rifts.map(s => s.charge) } : {}),
-      ...(z.objective.kind === 'pyres' && this.pyres.length
-        ? { pyreCharges: this.pyres.map(s => s.charge) } : {}),
-      ...(z.objective.kind === 'unearth' && this.digs.length
-        ? { digCharges: this.digs.map(s => s.charge) } : {}),
-      // Occurrence sprung flags in mint order (objective-independent — the
-      // fabric seats on tenant tables, not on the zone's ask).
-      ...(this.occs.length
-        ? { occSprung: this.occs.map(s => s.state === 'sprung' ? 1 : 0) } : {}),
-      // Harvest spent flags in placement order (objective-independent, the
-      // occSprung idiom — a shattered node stays shattered).
-      ...(this.harvestNodes.length
-        ? { harvestSpent: this.harvestNodes.map(n => n.spent ? 1 : 0) } : {}),
-      ...(procession ? { procession } : {}),
-      ...(z.objective.kind === 'offering' && this.offering
-        ? { altarOffered: this.offering.offered } : {}),
-      ...(z.objective.kind === 'clear' && this.cull
-        ? { cullKills: this.cull.kills, cullNeed: this.cull.need } : {}),
-      // Solved riddles stay solved for the memory's life (bootPuzzles
-      // re-enters them through kind.solved — proof, not homework).
-      ...(this.puzzles.some(r => r.done)
-        ? { puzzlesDone: this.puzzles.filter(r => r.done).map(r => r.id) } : {}),
-      // The regrowth cycle's authored clock (objective-independent; one
-      // number — the ground's age survives the leaving).
-      ...(this.charBorn !== undefined ? { charBorn: this.charBorn } : {}),
-    };
+    const retained = nativeAreaMemorySnapshot(this);
+    if (retained) return retained.memory;
+    const owner = this;
+    return sceneZoneMemorySnapshot({get zone(){return owner.zone;},get inCave(){return owner.inCave;},get visited(){return owner.visited;},get actors(){return owner.actors;},get doodads(){return owner.doodads;},get objectiveDone(){return owner.objectiveDone;},get procession(){return owner.procession;},get objectiveLost(){return owner.objectiveLost;},get currentZoneSeed(){return owner.currentZoneSeed;},get time(){return owner.time;},get openedHollows(){return owner.openedHollows;},get annexOpen(){return owner.annexOpen;},get wave(){return owner.wave;},get waveActive(){return owner.waveActive;},get spires(){return owner.spires;},get rifts(){return owner.rifts;},get pyres(){return owner.pyres;},get digs(){return owner.digs;},get occs(){return owner.occs;},get harvestNodes(){return owner.harvestNodes;},get offering(){return owner.offering;},get cull(){return owner.cull;},get puzzles(){return owner.puzzles;},get charBorn(){return owner.charBorn;},get chests(){return owner.chests;},get shrines(){return owner.shrines;},get altars(){return owner.altars;},get drops(){return owner.drops;},actorById:(...args:Parameters<World['actorById']>)=>owner.actorById(...args)});
   }
 
   /** Snapshot the zone we're LEAVING: its layout seed + the living base-population
@@ -15256,6 +15180,7 @@ actors: Actor[] = [];
     const prevMemRows = this.memoryRowMemo?.ageBucket === fold.ageBucket
       ? this.memoryRowMemo.rows : undefined;
     const memRows = new Map<string, { src: ZoneMemory; saved: SavedZoneMemory; json: string }>();
+    const retainedMemories = captureNativeAreaMemories(this);
     for (const [zid, m] of this.zoneMemory) {
       if (zid === this.zone.id) continue; // superseded by the live capture below
       if (!kept.has(zid) && !zid.startsWith('cave_')) continue;
@@ -15270,7 +15195,7 @@ actors: Actor[] = [];
       memory.push(row.saved);
       memParts.push(row.json);
     }
-    const live = this.zoneMemorySnapshot();
+    const live = retainedMemories?.has(this.zone.id) ? retainedMemories.get(this.zone.id)! : this.zoneMemorySnapshot();
     if (live) {
       const saved = memoRowOf(this.zone.id, live);
       memory.push(saved);
