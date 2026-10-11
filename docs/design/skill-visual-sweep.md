@@ -58,15 +58,18 @@ plus measured trails for Lightning, Chain Lightning and their two skeletal
 counterparts. See [strike skill visuals](strike-skill-visuals.md) for action
 silhouettes, safe openings, delayed repeats and recorded chain-turn previews.
 
+The movement pass covers all 21 dashes, 14 leaps, nine blinks and Caged Comet.
+Departure, measured travel, landing, delayed warp and actual bank moments retain
+their source identity. See [movement skill visuals](movement-skill-visuals.md).
+
 The generated census in `balance/reports/skill-visuals/resource-audit.json`
 enumerates native recovery users and delivery counts from the live catalogue.
 These counts describe delivery families, not a claim that every member lacks art.
 
 | Priority | Area | Remaining opportunity |
 | --- | --- | --- |
-| 1 | Dash (21), leap (14), blink (9), carom (1) | Distinct departure/travel/landing language without disguising actual relocation |
-| 2 | Self effects (106), marks and detonations (3) | Audit charge-up, readiness, interruption and release beyond the completed rites; avoid stacking interchangeable rings |
-| 3 | Storm (33), summon (61), construct (45) | Arrival, cadence and lifetime cues, coordinated with existing anatomy/companion art |
+| 1 | Self effects (106), marks and detonations (3) | Audit charge-up, readiness, interruption and release beyond the completed rites; avoid stacking interchangeable rings |
+| 2 | Storm (33), summon (61), construct (45) | Arrival, cadence and lifetime cues, coordinated with existing anatomy/companion art |
 
 Already authored on this branch: 109 novas, 172 projectiles, six native beams,
 163 ground skills and 42 auras. Continue reviewing their scale, busy-scene density

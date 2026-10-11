@@ -3,6 +3,8 @@ import { skillMergePlan } from './skillMerge';
 import { skillBurstVoice } from '../data/skillVisuals';
 import { skillBeamVoice } from '../data/skillFlightVisuals';
 import { skillStrikeVoice } from '../data/skillStrikeVisuals';
+import { movementProfile, skillMovementVoice, MOVEMENT_VISUAL_STYLE, type MovementPhase } from '../data/skillMovementVisuals';
+import { extendMovementTrail, type MovementTrail } from './skillMovementVisual';
 import { lightningProfile, LIGHTNING_STYLE } from '../data/lightningVisuals';
 import { extendLightningTrace, type LightningTrace } from './lightningVisual';
 import { skillTargetVoice, skillRiteVoice, TARGET_VISUAL_STYLE } from '../data/skillTargetVisuals';
@@ -1558,6 +1560,7 @@ export interface EmergeRecord {
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
+  movement?: MovementTrail;
   lightning?: LightningTrace;
   arcRad?: number;
   companionCue?: import('./companionCues').CompanionCueFlash;
@@ -1646,6 +1649,7 @@ interface PendingRespawn {
 /** A delayed displacement in flight (Warp's telegraphed blink). */
 interface PendingBlink {
   actor: Actor; dest: Vec2; timer: number; color: string;
+  visual?: Flash;
   /** The blinking skill (arrival Dive Bomb blasts / No Man's Land fields). */
   inst?: SkillInstance;
 }
@@ -2906,6 +2910,7 @@ export class World {
   remoteSkillFields?: SkillFieldVisual[];
   remoteSkillTethers?: SkillTetherVisual[];
   private lightningFlashes = new WeakMap<Projectile, Flash>();
+  private movementFlashes = new WeakMap<Actor, Flash>();
   /** Mints unique sheet-source keys for domain zones. */
   private domainSeq = 0;
   /** THE MADNESS BANKS, one per madden-grafted skill instance (maddenBankOf).
@@ -4661,6 +4666,7 @@ export class World {
     c.caromRung = undefined;
     a.endStatus(run.status);
     if (!opts?.quiet && inst && !a.dead) {
+      this.movementMoment(a, inst, 'arrive');
       this.moveBlast(a, inst, a.pos);
       this.dropLingerField(a, inst, a.pos);
     }
@@ -5940,6 +5946,7 @@ export class World {
     this.remoteSkillFields = undefined;
     this.remoteSkillTethers = undefined;
     this.lightningFlashes = new WeakMap();
+    this.movementFlashes = new WeakMap();
     this.tethers = [];
     this.texts = [];
     this.flashes = [];
@@ -30183,9 +30190,37 @@ export class World {
     this.sim.deadwakeField?.accrue('corpse', isDeathAligned(MONSTERS[c.defId]?.faction));
   }
 
+  /** Small identity cues are independent of movement damage/telegraphs. */
+  private movementMoment(a: Actor, inst: SkillInstance, phase: MovementPhase): void {
+    const fx = skillMovementVoice(inst.def.id, phase);
+    if (!fx || a.dead || a.downed || this.flashes.filter(f => f.movement || f.fx?.startsWith('skillMove:')).length >= 80) return;
+    this.flashes.push({ pos: { ...a.pos }, radius: a.radius * 1.8, facing: a.facing,
+      color: cosmeticSkillPaint(this, a, inst.def.id).color ?? inst.def.color,
+      life: .24, maxLife: .24, fx, recoveryCueTier: a.tier });
+  }
+
+  private noteMovementTravel(a: Actor, inst: SkillInstance, from: Vec2, progress: number): void {
+    const p = movementProfile(inst.def.id);
+    if (!p || p.family === 'blink' || a.dead || a.downed || dist(from, a.pos) < .01) return;
+    let flash = this.movementFlashes.get(a);
+    if (!flash || !this.flashes.includes(flash) || flash.movement?.skillId !== inst.def.id || flash.recoveryCueTier !== a.tier) {
+      if (this.flashes.filter(f => f.movement).length >= MOVEMENT_VISUAL_STYLE.maxTraces) return;
+      flash = { pos: { ...a.pos }, radius: a.radius, facing: a.facing,
+        color: cosmeticSkillPaint(this, a, inst.def.id).color ?? inst.def.color,
+        life: MOVEMENT_VISUAL_STYLE.fadeSeconds, maxLife: MOVEMENT_VISUAL_STYLE.fadeSeconds,
+        recoveryCueTier: a.tier, movement: { skillId: inst.def.id, clock: this.time, progress, points: [] } };
+      this.movementFlashes.set(a, flash); this.flashes.push(flash);
+    }
+    flash.pos = { ...a.pos }; flash.life = flash.maxLife;
+    extendMovementTrail(flash.movement!, from, a.pos, this.time, Math.max(0, Math.min(1, progress)));
+  }
+
   /** Displace an actor with departure/arrival flashes. */
-  teleportActor(actor: Actor, dest: Vec2, color = '#b8c8ff', disp?: DisplacementPolicy, story?: number): void {
-    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.6, color, life: 0.25, maxLife: 0.25 });
+  teleportActor(actor: Actor, dest: Vec2, color = '#b8c8ff', disp?: DisplacementPolicy, story?: number, movementSkillId?: string): void {
+    const depart = movementSkillId && skillMovementVoice(movementSkillId, 'depart');
+    const arrive = movementSkillId && skillMovementVoice(movementSkillId, 'arrive');
+    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.6, color, life: 0.25, maxLife: 0.25,
+      fx: depart || undefined, facing: actor.facing, recoveryCueTier: depart ? actor.tier : undefined });
     // A flicker/blink may carry a DisplacementPolicy ({ignoreConfine}) to land past
     // walls + across the void; default (no disp) = nearest-walkable snap as before.
     // `story` (the tier fabric's enclosure law): the STORY the arrival seats
@@ -30196,7 +30231,8 @@ export class World {
     actor.pos = this.clampPos(vec(dest.x, dest.y), actor.radius, undefined,
       story !== undefined ? { ...(disp ? { disp } : {}), mover: actor } : disp ? { disp } : undefined);
     actor.dash = null;
-    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.8, color, life: 0.3, maxLife: 0.3 });
+    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * (arrive ? 2.4 : 1.8), color, life: 0.3, maxLife: 0.3,
+      fx: arrive || undefined, facing: actor.facing, recoveryCueTier: arrive ? actor.tier : undefined });
   }
 
   /**
@@ -37181,6 +37217,8 @@ export class World {
         // comet travels SLOWER — remaining is TIME, so distance holds.
         const dashSpeed = d.speed * (opts.speedMult ?? 1);
         caster.dash = { dir: caster.facing, speed: dashSpeed, remaining: d.distance / dashSpeed };
+        this.movementFlashes.delete(caster);
+        this.movementMoment(caster, inst, 'depart');
         // PHASING dash (DashDelivery.phase — the Iai draw): the ordinary
         // 'phasing' STATUS for the flight plus a breath, so the body goes
         // THROUGH the crowd regardless of mass or poise (separateActors
@@ -37251,6 +37289,8 @@ export class World {
         const caromDur = d.duration * caster.sheet.get('effectDuration', tags, extra);
         const rideStatus = d.status ?? 'caroming';
         caster.caromRun = { dir: caster.facing, speed: caromSpeed, status: rideStatus };
+        this.movementFlashes.delete(caster);
+        this.movementMoment(caster, inst, 'depart');
         (caster as Actor & { caromSkill?: SkillInstance }).caromSkill = inst;
         (caster as Actor & { caromHits?: Map<number, number> }).caromHits = new Map();
         (caster as Actor & { caromRung?: Set<number> }).caromRung = new Set();
@@ -37315,10 +37355,12 @@ export class World {
         // Afterspray support — pays at this end alone).
         this.moveBlast(caster, inst, caster.pos, 'depart');
         if (d.delay && d.delay > 0) {
-          this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: cosmeticColor, inst });
-          this.flashes.push({ pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: cosmeticColor, life: d.delay, maxLife: d.delay });
+          const visual: Flash = { pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: cosmeticColor, life: d.delay, maxLife: d.delay,
+            fx: skillMovementVoice(def.id, 'wait'), facing: caster.facing, recoveryCueTier: caster.tier };
+          this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: cosmeticColor, inst, visual });
+          this.flashes.push(visual);
         } else {
-          this.teleportActor(caster, dest, def.color, undefined, caster.tier);
+          this.teleportActor(caster, dest, cosmeticColor, undefined, caster.tier, def.id);
           if (d.behindTarget && targetInfo?.actor) {
             caster.facing = angleTo(caster.pos, targetInfo.actor.pos);
           }
@@ -37345,6 +37387,7 @@ export class World {
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius,
             color: cosmeticColor, life: 0.3, maxLife: 0.3,
+            fx: skillMovementVoice(def.id, 'impact'), facing: caster.facing, recoveryCueTier: caster.tier,
           });
           break;
         }
@@ -37379,6 +37422,8 @@ export class World {
           vent: d.vent ? { columnR: d.vent.columnR * aoeScale } : undefined,
         };
         caster.untargetable = true; // airborne: nothing can touch them
+        this.movementFlashes.delete(caster);
+        this.movementMoment(caster, inst, 'depart');
         caster.dash = null;
         if (caster.caromRun) this.endCarom(caster, { quiet: true }); // wings beat the ball
 
@@ -42120,7 +42165,8 @@ export class World {
     const burstVoice = burstDelivery.type === 'nova'
       ? burstDelivery.fx ?? skillBurstVoice(inst.def.id)
       : burstDelivery.type === 'melee' ? burstDelivery.fx ?? skillStrikeVoice(inst.def.id)
-      : burstDelivery.type === 'cone' ? skillStrikeVoice(inst.def.id) : undefined;
+      : burstDelivery.type === 'cone' ? skillStrikeVoice(inst.def.id)
+      : burstDelivery.type === 'leap' ? skillMovementVoice(inst.def.id, 'impact') : undefined;
     const cadence = socketSpec(inst, 'cadence')?.intervalStep;
     const pPlan = instancePulsePlan(inst);
     const pSpec = pPlan.native;
@@ -42357,7 +42403,8 @@ export class World {
       if (dist(at, e.pos) - e.radius > radius) continue;
       this.resolveHit(caster, inst, e, scale, 1, undefined, true);
     }
-    this.flashes.push({ pos: vec(at.x, at.y), radius, color: inst.def.color, life: 0.3, maxLife: 0.3 });
+    this.flashes.push({ pos: vec(at.x, at.y), radius, color: cosmeticSkillPaint(this, caster, inst.def.id).color ?? inst.def.color, life: 0.3, maxLife: 0.3,
+      fx: skillMovementVoice(inst.def.id, 'impact'), facing: caster.facing, recoveryCueTier: caster.tier });
     // THE MALLET: the movement eruption is a blast — dive-bomb your bell.
     this.frontSplash(caster, inst, at, radius);
     this.strikeSurfaces(caster, at, radius);
@@ -49911,11 +49958,16 @@ export class World {
       if (a.dash) {
         const inst = (a as Actor & { dashSkill?: SkillInstance }).dashSkill;
         const hits = (a as Actor & { dashHits?: Set<number> }).dashHits;
+        const visualFrom = { ...a.pos }, visualTier = a.tier;
         const step = a.dash.speed * Math.min(dt, Math.max(0, a.dash.remaining));
         this.steppedClamp(a, vec(
           a.pos.x + Math.cos(a.dash.dir) * step,
           a.pos.y + Math.sin(a.dash.dir) * step,
         ), a.pos);
+        if (inst && a.tier === visualTier && dist(visualFrom, a.pos) <= step + .01) {
+          this.noteMovementTravel(a, inst, visualFrom, 1 - a.dash.remaining / Math.max(.01,
+            inst.def.delivery.type === 'dash' ? inst.def.delivery.distance / a.dash.speed : 1));
+        }
         if (inst && hits && inst.def.delivery.type === 'dash' && inst.def.delivery.width > 0) {
           for (const enemy of this.enemiesOf(a)) {
             if (hits.has(enemy.id)) continue;
@@ -50049,6 +50101,7 @@ export class World {
           });
           // Dive Bomb: the arrival erupts; No Man's Land fields drop here.
           if (inst) {
+            this.movementMoment(a, inst, 'arrive');
             this.moveBlast(a, inst, a.pos);
             this.dropLingerField(a, inst, a.pos);
             // THE ANSWERING CHARGE (guardBash beyond the stance,
@@ -50105,6 +50158,10 @@ export class World {
             run.dir = fw.dir;
           }
           a.facing = run.dir;
+          if (inst) {
+            if (dist({ x: beforeX, y: beforeY }, a.pos) <= step + .01) this.noteMovementTravel(a, inst, { x: beforeX, y: beforeY }, this.time % 1);
+            if (banked || fw) this.movementMoment(a, inst, 'bank');
+          }
           // CONTACT: the skill's whole payload through the one pipeline,
           // per victim on the rehit clock (segment-aware — coils are real
           // bodies; the corridor's noteBodyHit grammar verbatim).
@@ -52941,8 +52998,10 @@ export class World {
       // the interpolation below re-derives the same airborne point each frame.
       L.timer -= dt * this.timeflow.actorScale(a);
       const t = clamp(1 - L.timer / L.total, 0, 1);
+      const visualFrom = { ...a.pos };
       // Airborne: raw interpolation, no terrain collision — you're above it.
       a.pos = vec(L.from.x + (L.dest.x - L.from.x) * t, L.from.y + (L.dest.y - L.from.y) * t);
+      this.noteMovementTravel(a, L.inst, visualFrom, t);
       if (L.timer > 0) continue;
       a.pos = vec(L.dest.x, L.dest.y);
       a.untargetable = L.wasUntargetable;
@@ -52967,7 +53026,8 @@ export class World {
       this.strikeSurfaces(a, a.pos, L.radius);
       this.flashes.push({
         pos: vec(a.pos.x, a.pos.y), radius: L.radius,
-        color: L.inst.def.color, life: 0.3, maxLife: 0.3,
+        color: cosmeticSkillPaint(this, a, L.inst.def.id).color ?? L.inst.def.color, life: 0.3, maxLife: 0.3,
+        fx: skillMovementVoice(L.inst.def.id, 'impact'), recoveryCueTier: a.tier,
         shape: lShape, facing: a.facing,
       });
       // The cascade family reaches the SKYFALL: the landing's sequels
@@ -57373,11 +57433,12 @@ export class World {
   private updatePendingBlinks(dt: number): void {
     for (let i = this.pendingBlinks.length - 1; i >= 0; i--) {
       const pb = this.pendingBlinks[i];
-      if (pb.actor.dead) { this.pendingBlinks.splice(i, 1); continue; }
+      if (pb.actor.dead) { if (pb.visual) pb.visual.life = 0; this.pendingBlinks.splice(i, 1); continue; }
       pb.timer -= dt;
       if (pb.timer <= 0) {
         this.pendingBlinks.splice(i, 1);
-        this.teleportActor(pb.actor, pb.dest, pb.color, undefined, pb.actor.tier);
+        if (pb.visual) pb.visual.life = 0;
+        this.teleportActor(pb.actor, pb.dest, pb.color, undefined, pb.actor.tier, pb.inst?.def.id);
         // Delayed blinks (Warp) erupt on arrival too.
         if (pb.inst) {
           this.moveBlast(pb.actor, pb.inst, pb.actor.pos);
@@ -57590,7 +57651,11 @@ export class World {
       if (source?.caster === caster && source.inst === inst) actor.removeBuff(id);
     }
     this.pendingFuses = this.pendingFuses.filter(f => f.caster !== caster || !ownsTreePayload(f.inst));
-    this.pendingBlinks = this.pendingBlinks.filter(b => b.actor !== caster || !b.inst || !ownsTreePayload(b.inst));
+    this.pendingBlinks = this.pendingBlinks.filter(b => {
+      const keep = b.actor !== caster || !b.inst || !ownsTreePayload(b.inst);
+      if (!keep && b.visual) b.visual.life = 0;
+      return keep;
+    });
     // Scheduled repeats capture the old tree just as delayed fields do.
     this.pendingRepeats = this.pendingRepeats.filter(r => r.caster !== caster || !ownsTreePayload(r.inst));
     this.pendingSalvos = this.pendingSalvos.filter(r => r.caster !== caster || !ownsTreePayload(r.inst));
@@ -59974,7 +60039,7 @@ export class World {
             pos: vec(z.pos.x, z.pos.y), radius: pr, color: z.color,
             life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing, arcRad: z.arcRad,
             edgeFrac: z.edgeFrac,
-            fx: ['nova', 'melee', 'cone'].includes(instanceDelivery(z.inst).type) ? z.fx : undefined,
+            fx: ['nova', 'melee', 'cone', 'leap'].includes(instanceDelivery(z.inst).type) ? z.fx : undefined,
           });
           this.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth);
           z.pulse.dmgMult *= z.pulse.dmgStep;

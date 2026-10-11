@@ -10,7 +10,8 @@ The second pass adds all 172 native projectiles, six native cone beams, 163
 ground skills and 42 auras in `src/data/skillFlightVisuals.ts`. Together these
 cover 492 catalogue entries. Later passes add [targets, tethers and offerings](target-skill-visuals.md)
 and [melee, non-beam cones and measured lightning](strike-skill-visuals.md).
-Movement and summon bodies remain on their existing presentation.
+[Movement identities](movement-skill-visuals.md) now cover dashes, leaps, blinks
+and carom. Summon bodies remain on their existing presentation.
 
 ## Flights, beams and fields
 

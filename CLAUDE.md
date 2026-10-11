@@ -9,6 +9,15 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Movement identities use `data/skillMovementVisuals.ts` and
+`render/vis/skillMovementVoice.ts`: 21 dashes, 14 leaps, nine blinks and one carom.
+`engine/skillMovementVisual.ts` carries bounded actual-travel histories; blink
+endpoints and leap impacts reuse the effect-voice registry. No predicted travel.
+See `docs/design/movement-skill-visuals.md`. Verify movementvisuals, fourthwall,
+scaldkit, movementtether, devotedstartertrees, cosmetics, skillflights,
+strikevisuals, effectvoice, supportfabric, all types, sim smoke and hidden
+`balance/movement-visuals-ui.cjs` after the movement probe and build.
+
 Melee and non-beam cone identities use `data/skillStrikeVisuals.ts` and
 `render/vis/skillStrikeVoice.ts`, clipped to actual reach, angle and safe centers.
 Four lightning flights add bounded, measured travel afterimages through

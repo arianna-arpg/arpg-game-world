@@ -5,6 +5,7 @@ import { skillStrikeProfile } from '../../data/skillStrikeVisuals';
 import { drawSkillStrike } from './skillStrikeVoice';
 import { lightningProfile } from '../../data/lightningVisuals';
 import { drawLightningHead } from './lightningVoice';
+import { movementProfile } from '../../data/skillMovementVisuals';
 import type { SkillFieldVisual } from '../../engine/skillFieldVisual';
 import { drawSkillMark } from './skillBurstVoice';
 import { traceAoePath } from './aoeTrace';
@@ -107,6 +108,8 @@ export function drawSkillFlightHead(ctx: CanvasRenderingContext2D, p: SkillFligh
 }
 
 export function fieldProfile(id: string): SkillFieldProfile | undefined {
+  const movement = movementProfile(id);
+  if (movement) return { motif: movement.motif, layout: movement.motion === 'coil' ? 'spiral' : 'spokes', motion: 'out', count: movement.count + 2 };
   const strike = skillStrikeProfile(id);
   if (strike) return { motif: strike.motif, layout: 'spokes', motion: strike.motion === 'in' ? 'in' : 'out', count: strike.count, echo: strike.echo };
   if (Object.hasOwn(SKILL_FIELDS, id)) return SKILL_FIELDS[id];

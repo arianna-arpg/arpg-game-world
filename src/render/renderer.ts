@@ -173,6 +173,7 @@ import './vis/attackSequenceVoice';
 import './vis/skillBurstVoice';
 import './vis/skillStrikeVoice';
 import { drawLightningTrace } from './vis/lightningVoice';
+import { drawMovementTrail } from './vis/skillMovementVoice';
 import { drawSkillTether } from './vis/skillTargetVoice';
 import { skillTetherVisual } from '../engine/skillTetherVisual';
 import { drawSkillFlightWake, drawSkillFlightHead, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
@@ -851,6 +852,7 @@ export class Renderer {
       if (f.feedingCue && !this.feedingTransferVisible(f.pos, f.feedingCue, world)) continue;
       const recoveryCueTier = f.recoveryCueTier ?? f.companionCue?.tier;
       if (recoveryCueTier !== undefined && !this.companionCuePointVisible(f.pos, recoveryCueTier, world)) continue;
+      if (f.movement && f.movement.points.some(p => !this.companionCuePointVisible(p, recoveryCueTier ?? 0, world))) continue;
       if (f.companionCue?.from && !this.companionCuePointVisible(f.companionCue.from, f.companionCue.from.tier, world)) continue;
       this.drawFlash(f);
     }
@@ -4976,7 +4978,7 @@ export class Renderer {
     });
   }
 
-  private drawFlash(f: { lightning?: import('../engine/lightningVisual').LightningTrace; arcRad?: number; companionCue?: CompanionCueFlash; feedingCue?: FeedingTransfer; pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
+  private drawFlash(f: { movement?: import('../engine/skillMovementVisual').MovementTrail; lightning?: import('../engine/lightningVisual').LightningTrace; arcRad?: number; companionCue?: CompanionCueFlash; feedingCue?: FeedingTransfer; pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
     const { ctx } = this;
     // A big synchronous sim step (headless probes, background-tab catch-up)
     // can overshoot a flash's life below zero before the prune sweeps it —
@@ -4991,6 +4993,7 @@ export class Renderer {
     const t = f.maxLife > 0 ? Math.max(0, Math.min(1, f.life / f.maxLife)) : 0;
     if (t <= 0 || f.radius <= 0) return;
     if (f.lightning) { drawLightningTrace(ctx, f.lightning, f.color, t); return; }
+    if (f.movement) { drawMovementTrail(ctx, { ...f, movement: f.movement }, t); return; }
     if (f.companionCue) drawCompanionCueFlash(ctx, { ...f, companionCue: f.companionCue });
     if (f.feedingCue) { drawFeedingTransfer(ctx, { ...f, feedingCue: f.feedingCue }); return; }
     if (f.cosmeticMotif) {
