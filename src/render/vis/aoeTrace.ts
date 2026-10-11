@@ -70,6 +70,7 @@ export function traceAoePath(
 /** The narrow figure a FLASH carries (world.ts Flash rows satisfy it
  *  structurally): a faced shape, or the classic swing ARC. */
 export interface FlashFigure {
+  arcRad?: number;
   pos: { x: number; y: number };
   radius: number;
   shape?: number;
@@ -87,6 +88,6 @@ export function traceFlashFigure(ctx: CanvasRenderingContext2D, f: FlashFigure):
     ctx.arc(f.pos.x, f.pos.y, f.radius, f.arc.facing - f.arc.arcRad / 2, f.arc.facing + f.arc.arcRad / 2);
     ctx.closePath();
   } else {
-    traceAoePath(ctx, f.pos.x, f.pos.y, f.radius, f.shape, f.facing ?? 0);
+    traceAoePath(ctx, f.pos.x, f.pos.y, f.radius, f.shape, f.facing ?? 0, f.arcRad);
   }
 }

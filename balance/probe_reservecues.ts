@@ -79,6 +79,9 @@ function rig() {
   check('world cue uses the exact scoped damage radius and rate', near(poolCueRows(p)[0].radius, geo.radius) && near(poolCueRows(p)[0].rate, geo.rate) && geo.radius > 170);
   e.pos = { x: p.pos.x + geo.radius + e.radius - 0.1, y: p.pos.y };
   const outside = w.createMonster('zombie', 1, 'enemy'); outside.tier = p.tier; outside.pos = { x: p.pos.x + geo.radius + outside.radius + 0.1, y: p.pos.y }; w.actors.push(outside);
+  // The authored activation release is separate from the continuous vent.
+  // Clear that one-shot before asserting that damage ticks mint no flashes.
+  w.flashes = [];
   const farLife = outside.life, life = e.life; p.ventTick = 0; inner.updateVents(0.01);
   const spent = Math.min(100, geo.rate * 0.4);
   check('actual tick spends the same rate and reaches body-overlap at the drawn boundary', near(p.pools.get('venom')!, 100 - spent) && near(life - e.life, spent) && outside.life === farLife);

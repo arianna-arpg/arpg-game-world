@@ -27,10 +27,22 @@ import { skillMergePlan } from './skillMerge';
 import { updateCastAim } from './castAim';
 import { markBodyAction } from './bodyAction';
 import { markBodyWalk } from './bodyWalk';
+import { skillBurstVoice } from '../data/skillVisuals';
+import { skillBeamVoice } from '../data/skillFlightVisuals';
+import { skillStrikeVoice } from '../data/skillStrikeVisuals';
+import { movementProfile, skillMovementVoice, MOVEMENT_VISUAL_STYLE, type MovementPhase } from '../data/skillMovementVisuals';
+import { extendMovementTrail, type MovementTrail } from './skillMovementVisual';
+import { lightningProfile, LIGHTNING_STYLE } from '../data/lightningVisuals';
+import { extendLightningTrace, type LightningTrace } from './lightningVisual';
+import { skillTargetVoice, skillRiteVoice, TARGET_VISUAL_STYLE } from '../data/skillTargetVisuals';
+import { skillSelfVoice, SELF_VISUAL_STYLE } from '../data/skillSelfVisuals';
+import { presenceProfile, skillPresenceVoice, PRESENCE_STYLE, type PresencePhase } from '../data/skillPresenceVisuals';
+import type { SkillTetherVisual } from './skillTetherVisual';
+import type { SkillFieldVisual } from './skillFieldVisual';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
-import { feedingCueFlash, restorationCueFlash, noteRestoreGain } from './feedingCues';
+import { feedingCueFlash, restorationCueFlash, noteRestoreGain, noteResourceFlow } from './feedingCues';
 import { companionCueFlash, companionCueSpec, type CompanionCueEvent } from './companionCues';
 import { RECOVERY_CUES, type RecoveryCueKind } from '../data/companionCues';
 import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
@@ -1027,6 +1039,8 @@ const HAUNT_TAGS = new Set([
 ]);
 
 export interface Projectile {
+  /** Replica identity only; live flights resolve their originating instance. */
+  skillVisualId?: string;
   orbPaint?: ProjectileDelivery['orbPaint'];
   /** A parried flight carries a captured counter payload, not a new cast. */
   parryDamage?: ParryDamage;
@@ -1193,6 +1207,8 @@ type TetherLink = TetherSpec['link'] | 'pack' | 'zap';
  *  shared typed mitigation, so beams are real, dressable damage — the transient
  *  "bleed" that exists only while something touches the line. */
 interface Tether {
+  visual?: string;
+  visualAge?: number;
   a: Actor; b: Actor;
   /** Whose beam this is (team resolution + kill credit). */
   owner: Actor;
@@ -1335,6 +1351,8 @@ interface Zone {
   /** The telegraph's INITIAL countdown (stamped only when a drawn effect
    *  needs progress = 1 − delay/delay0; armed strikes never stamp it). */
   delay0?: number;
+  /** Paint-only retirement guard for storm afterlives and cancelled warnings. */
+  presenceRetired?: boolean;
   /** IMPACT DRESS (ImpactDressSpec): the detonation leaves a drying pock
    *  (runtime doodad + Doodad.evap; capped per zone — BOMBARD_CFG). */
   impactDress?: ImpactDressSpec;
@@ -1532,6 +1550,11 @@ export interface EmergeRecord {
 type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
+  /** Ground-qualified strike decoration is clipped to these real terrain kinds. */
+  onGround?: string[];
+  movement?: MovementTrail;
+  lightning?: LightningTrace;
+  arcRad?: number;
   companionCue?: import('./companionCues').CompanionCueFlash;
   recoveryCueTier?: number;
   feedingCue?: import('./feedingCues').FeedingTransfer;
@@ -1620,6 +1643,7 @@ interface PendingBlink {
   actor: Actor; dest: Vec2; timer: number; color: string;
   /** Rear-target blinks turn on arrival, including delayed variants. */
   faceTarget?: Actor;
+  visual?: Flash;
   /** The blinking skill (arrival Dive Bomb blasts / No Man's Land fields). */
   inst?: SkillInstance;
 }
@@ -1684,6 +1708,11 @@ export interface ResourceOrb {
   /** SIPHON orbs home to their owner and pour on arrival (nobody else can
    *  scoop them); cleared if the owner dies — the blood falls to the floor. */
   homeTo?: Actor;
+  /** Presentation only on a replica; never a simulated pickup destination. */
+  flowTo?: Vec2;
+  flowTier?: number;
+  /** The struck body's story while airborne; does not change pickup rules. */
+  flowFromTier?: number;
   /** THE SPOILS STORY (see GemDrop.tier): the story the orb lies on — only a
    *  same-story seat scoops it; stamped by the shedder, else derived at the
    *  sweep from the floor. */
@@ -2825,6 +2854,11 @@ export class World {
   readonly timeflow = new Timeflow();
   projectiles: Projectile[] = [];
   zones: Zone[] = [];
+  /** Replicated paint only. Never added to the simulation's damage zones. */
+  remoteSkillFields?: SkillFieldVisual[];
+  remoteSkillTethers?: SkillTetherVisual[];
+  private lightningFlashes = new WeakMap<Projectile, Flash>();
+  private movementFlashes = new WeakMap<Actor, Flash>();
   /** Mints unique sheet-source keys for domain zones. */
   private domainSeq = 0;
   /** Live tether bands (see TetherSpec). Host-simulated; coords cached per
@@ -2862,7 +2896,7 @@ export class World {
   corpses: Corpse[] = [];
   pendingSummons: PendingSummon[] = [];
   pendingRespawns: PendingRespawn[] = [];
-  pendingDetonations: { mine: Actor; timer: number }[] = [];
+  pendingDetonations: { mine: Actor; timer: number; visual?: Flash }[] = [];
   /** Scheduled follow-through casts (FollowUpSpec) counting down to fire. */
   pendingFollowUps: { caster: Actor; inst: SkillInstance; aim: Vec2; timer: number; dmgMult?: number }[] = [];
   /** Telegraphed enemy death-bursts mid-coalesce / mid-flight (the implode + tracking orb). */
@@ -4957,6 +4991,7 @@ export class World {
     c.caromRung = undefined;
     a.endStatus(run.status);
     if (!opts?.quiet && inst && !a.dead) {
+      this.movementMoment(a, inst, 'arrive');
       this.moveBlast(a, inst, a.pos);
       this.dropLingerField(a, inst, a.pos);
     }
@@ -6331,12 +6366,16 @@ export class World {
     for (const z of this.zones) this.expireZone(z);
     this.projectiles = [];
     this.zones = [];
+    this.remoteSkillFields = undefined;
+    this.remoteSkillTethers = undefined;
+    this.lightningFlashes = new WeakMap();
+    this.movementFlashes = new WeakMap();
     this.tethers = [];
     this.texts = [];
     this.flashes = [];
     for (const a of this.actors) {
       a.procCuePulses.length = 0; a.procPopEvents.length = 0;
-      a.restoreGains.length = 0; a.feedingMeal = undefined;
+      a.restoreGains.length = 0; a.resourceFlows.length = 0; a.feedingMeal = undefined;
     }
     this.dissolves = []; // THE DISSOLUTION GRAMMAR: motions are zone-local after-images
     this.emergences = []; // THE EMERGENCE GRAMMAR: arrivals are zone-local too
@@ -26338,9 +26377,37 @@ export class World {
     this.sim.deadwakeField?.accrue('corpse', isDeathAligned(MONSTERS[c.defId]?.faction));
   }
 
+  /** Small identity cues are independent of movement damage/telegraphs. */
+  private movementMoment(a: Actor, inst: SkillInstance, phase: MovementPhase): void {
+    const fx = skillMovementVoice(inst.def.id, phase);
+    if (!fx || a.dead || a.downed || this.flashes.filter(f => f.movement || f.fx?.startsWith('skillMove:')).length >= 80) return;
+    this.flashes.push({ pos: { ...a.pos }, radius: a.radius * 1.8, facing: a.facing,
+      color: cosmeticSkillPaint(this, a, inst.def.id).color ?? inst.def.color,
+      life: .24, maxLife: .24, fx, recoveryCueTier: a.tier });
+  }
+
+  private noteMovementTravel(a: Actor, inst: SkillInstance, from: Vec2, progress: number): void {
+    const p = movementProfile(inst.def.id);
+    if (!p || p.family === 'blink' || a.dead || a.downed || dist(from, a.pos) < .01) return;
+    let flash = this.movementFlashes.get(a);
+    if (!flash || !this.flashes.includes(flash) || flash.movement?.skillId !== inst.def.id || flash.recoveryCueTier !== a.tier) {
+      if (this.flashes.filter(f => f.movement).length >= MOVEMENT_VISUAL_STYLE.maxTraces) return;
+      flash = { pos: { ...a.pos }, radius: a.radius, facing: a.facing,
+        color: cosmeticSkillPaint(this, a, inst.def.id).color ?? inst.def.color,
+        life: MOVEMENT_VISUAL_STYLE.fadeSeconds, maxLife: MOVEMENT_VISUAL_STYLE.fadeSeconds,
+        recoveryCueTier: a.tier, movement: { skillId: inst.def.id, clock: this.time, progress, points: [] } };
+      this.movementFlashes.set(a, flash); this.flashes.push(flash);
+    }
+    flash.pos = { ...a.pos }; flash.life = flash.maxLife;
+    extendMovementTrail(flash.movement!, from, a.pos, this.time, Math.max(0, Math.min(1, progress)));
+  }
+
   /** Displace an actor with departure/arrival flashes. */
-  teleportActor(actor: Actor, dest: Vec2, color = '#b8c8ff', disp?: DisplacementPolicy, story?: number): void {
-    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.6, color, life: 0.25, maxLife: 0.25 });
+  teleportActor(actor: Actor, dest: Vec2, color = '#b8c8ff', disp?: DisplacementPolicy, story?: number, movementSkillId?: string): void {
+    const depart = movementSkillId && (skillMovementVoice(movementSkillId, 'depart') ?? skillSelfVoice(movementSkillId, 'depart'));
+    const arrive = movementSkillId && (skillMovementVoice(movementSkillId, 'arrive') ?? skillSelfVoice(movementSkillId, 'recall'));
+    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.6, color, life: 0.25, maxLife: 0.25,
+      fx: depart || undefined, facing: actor.facing, recoveryCueTier: depart ? actor.tier : undefined });
     // A flicker/blink may carry a DisplacementPolicy ({ignoreConfine}) to land past
     // walls + across the void; default (no disp) = nearest-walkable snap as before.
     // `story` (the tier fabric's enclosure law): the STORY the arrival seats
@@ -26351,7 +26418,8 @@ export class World {
     actor.pos = this.clampPos(vec(dest.x, dest.y), actor.radius, undefined,
       story !== undefined ? { ...(disp ? { disp } : {}), mover: actor } : disp ? { disp } : undefined);
     actor.dash = null;
-    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.8, color, life: 0.3, maxLife: 0.3 });
+    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * (arrive ? 2.4 : 1.8), color, life: 0.3, maxLife: 0.3,
+      fx: arrive || undefined, facing: actor.facing, recoveryCueTier: arrive ? actor.tier : undefined });
   }
 
   /**
@@ -29468,7 +29536,7 @@ export class World {
           this.recordIndirectDamage(v, a, deedLifeBefore);
           hold.dotAcc += taken;
           SIM_TAP.current?.onDot?.(v, taken, dot.type);
-          if (hold.spec.leech) a.healBy(taken * hold.spec.leech);
+          if (hold.spec.leech) noteResourceFlow(a, v, 'life', a.healBy(taken * hold.spec.leech));
           if (v.life <= 0 && !v.dead) {
             this.kill(v, false, a);
             this.grabRelease(a);
@@ -31033,6 +31101,7 @@ export class World {
           this.kill(pick2, true);
           const feedingCue = pick2.dead ? feedingCueFlash(pick2.pos, caster, def.feedingCue, 'ritual', pick2.tier, pick2.radius) : undefined;
           if (feedingCue) this.flashes.push(feedingCue);
+          if (pick2.dead) this.showSkillArrival(caster, inst, pick2.pos, pick2.radius + 12, pick2.tier, 'sacrifice');
         }
       }
     }
@@ -31088,13 +31157,15 @@ export class World {
           caster.venting.delete(def.pool.id);
         } else if (banked > 0) {
           caster.venting.add(def.pool.id);
+          this.showSelfRelease(caster, inst);
           // poolCues follows this held flag and its real bank/footprint.
         }
       } else {
         caster.pools.set(def.pool.id, 0);
         const radius = rel.radius * caster.sheet.get('aoeRadius', tags, extra);
         this.burstDamage(vec(caster.pos.x, caster.pos.y), radius,
-          banked * (rel.ratio ?? 1), def.pool.damageType, def.color, caster.team, caster.tier);
+          banked * (rel.ratio ?? 1), def.pool.damageType, cosmeticColor, caster.team, caster.tier, undefined, undefined,
+          banked > 0 ? skillSelfVoice(def.id, 'burst') : undefined);
       }
       return true;
     }
@@ -31113,6 +31184,7 @@ export class World {
       const count = runes.length;
       const last = runes[runes.length - 1] as RuneId;
       caster.runes = [];
+      this.showSelfRelease(caster, inst);
       const payload = makeInvocationPayload(inst, SKILLS[rule.skillId], last);
       noteProcCue(caster, rule.releaseCue === false ? false : {
         profile: 'rune', color: RUNE_INFO[last]?.color ?? def.color, ...rule.releaseCue,
@@ -31229,6 +31301,7 @@ export class World {
         }
         if (t.consumesCorpse !== false && def.delivery.type !== 'summon') {
           for (const c of feast) this.removeCorpse(c);
+          for (const c of feast) this.showSkillArrival(caster, inst, c.pos, 28, c.tier ?? this.spoilStoryAt(c.pos), true);
           corpseFeast = Math.max(0, feast.length - 1);
           // DEVOUR (corpseLifeRestore — Corpse Feast): each body eaten
           // returns a share of its life force, through the one restore path.
@@ -31236,8 +31309,8 @@ export class World {
             const rr = t.corpseLifeRestore;
             let meat = 0;
             for (const c of feast) meat += c.maxLife;
-            if (rr.life) noteRestoreGain(caster, 'life', this.applyRestore(caster, { resource: 'life', amount: meat * rr.life }, { tags: def.tags }), def.feedingCue);
-            if (rr.mana) noteRestoreGain(caster, 'mana', this.applyRestore(caster, { resource: 'mana', amount: meat * rr.mana }, { tags: def.tags }), def.feedingCue);
+            if (rr.life) this.applyRestore(caster, { resource: 'life', amount: meat * rr.life }, { tags: def.tags, feedingCue: def.feedingCue });
+            if (rr.mana) this.applyRestore(caster, { resource: 'mana', amount: meat * rr.mana }, { tags: def.tags, feedingCue: def.feedingCue });
             for (const corpse of feast) {
               const feedingCue = feedingCueFlash(corpse.pos, caster, def.feedingCue, 'flesh', corpse.tier);
               if (feedingCue) this.flashes.push(feedingCue);
@@ -31693,7 +31766,7 @@ export class World {
           });
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius: sweepR * 0.6, color: cosmeticColor,
-            life: 0.2, maxLife: 0.2, arc: { facing: caster.facing, arcRad: sweepArc },
+            life: 0.2, maxLife: 0.2, arc: { facing: caster.facing, arcRad: sweepArc }, fx: d.fx ?? skillStrikeVoice(inst.def.id),
           });
           // The wave's launch point is the sweep's area anchor.
           fieldAt = vec(caster.pos.x, caster.pos.y);
@@ -31758,16 +31831,16 @@ export class World {
           this.flashes.push(banded
             ? {
               pos: vec(bandC.x, bandC.y), radius: bandGeo!.halfWidth, color: cosmeticColor,
-              life: 0.18, maxLife: 0.18, shape: AOE_SHAPE.band, facing: caster.facing, fx: d.fx,
+              life: 0.18, maxLife: 0.18, shape: AOE_SHAPE.band, facing: caster.facing, fx: d.fx ?? skillStrikeVoice(inst.def.id),
             }
             : swingShape >= 1 && swingShape <= 2
             ? {
               pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: cosmeticColor,
-              life: 0.18, maxLife: 0.18, shape: swingShape, facing: caster.facing, fx: d.fx,
+              life: 0.18, maxLife: 0.18, shape: swingShape, facing: caster.facing, fx: d.fx ?? skillStrikeVoice(inst.def.id),
             }
             : {
               pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: cosmeticColor,
-              life: 0.18, maxLife: 0.18, arc: { facing: caster.facing, arcRad }, fx: d.fx,
+              life: 0.18, maxLife: 0.18, arc: { facing: caster.facing, arcRad }, fx: d.fx ?? skillStrikeVoice(inst.def.id),
             });
           // Melee 'aoe' swings have an area too (Cleave + No Man's Land
           // scorches where the blade passed) — the arc's centroid; a
@@ -31882,6 +31955,7 @@ export class World {
           pos: vec(origin.x, origin.y), radius, color: cosmeticColor,
           life: 0.3, maxLife: 0.3, shape, facing: caster.facing,
           edgeFrac: d.edgeOnly,
+          fx: d.fx ?? skillBurstVoice(inst.def.id),
         });
         this.spawnAftershocks(caster, inst, origin, radius, shape);
         // The cascade family beyond ground: the burst's sequels (armed
@@ -31937,10 +32011,7 @@ export class World {
               this.startRestoreStream(friendly, caster, inst, fx, opts.chargesSpent ?? 0, pourCrit);
             }
           }
-          this.flashes.push({
-            pos: vec(friendly.pos.x, friendly.pos.y), radius: friendly.radius + 10,
-            color: cosmeticColor, life: 0.25, maxLife: 0.25,
-          });
+          this.showSkillArrival(caster, inst, friendly.pos, friendly.radius + 14, friendly.tier);
           break;
         }
         if (targetInfo?.actor) {
@@ -31950,6 +32021,7 @@ export class World {
           const tameFx = def.effects.find((f): f is Extract<SkillEffect, { type: 'tame' }> => f.type === 'tame');
           if (tameFx) {
             this.tryTame(caster, inst, targetInfo.actor, tameFx);
+            if (targetInfo.actor.owner === caster) this.showSkillArrival(caster, inst, targetInfo.actor.pos, targetInfo.actor.radius + 14, targetInfo.actor.tier);
             break;
           }
           this.resolveHit(caster, inst, targetInfo.actor, useMult, 0, flatBonus);
@@ -31964,7 +32036,10 @@ export class World {
                 && (!need || e.statuses.some(s => need.includes(s.id))))
               .sort((a, b) => dist(targetInfo.pos, a.pos) - dist(targetInfo.pos, b.pos))
               .slice(0, extraTargets);
-            for (const e of more) this.resolveHit(caster, inst, e, useMult, 0, flatBonus);
+            for (const e of more) {
+              this.resolveHit(caster, inst, e, useMult, 0, flatBonus);
+              this.showSkillArrival(caster, inst, e.pos, e.radius + 14, e.tier);
+            }
           }
           if (d.splash) {
             const splash = d.splash * aoeScale;
@@ -31982,10 +32057,11 @@ export class World {
             this.strikeSurfaces(caster, targetInfo.pos, splash);
           }
         }
-        this.flashes.push({
-          pos: vec(origin.x, origin.y), radius: d.splash ? d.splash * aoeScale : 26,
-          color: cosmeticColor, life: 0.25, maxLife: 0.25,
-        });
+        if (!targetInfo?.corpse || targetSpec?.consumesCorpse === false || !skillRiteVoice(def.id)) {
+          this.showSkillArrival(caster, inst, targetInfo?.actor?.pos ?? origin,
+            d.splash ? d.splash * aoeScale : (targetInfo?.actor?.radius ?? 12) + 14,
+            targetInfo?.actor?.tier ?? caster.tier, false, !!d.splash);
+        }
         fieldAt = vec(origin.x, origin.y);
         break;
       }
@@ -32045,25 +32121,26 @@ export class World {
         // LASER presentation (beamFx): razor cones ARE hitscan — draw the
         // crystal-beam line instead of an invisible sliver of wedge. The
         // drawn ray CLIPS at the first wall (honest laser: the stone eats it).
-        if (d.beamFx) {
+        if (d.beamFx && !sigiled) {
           const beamLen = phase ? range : dist(caster.pos, this.clipShot(caster.pos,
             vec(caster.pos.x + Math.cos(caster.facing) * range,
                 caster.pos.y + Math.sin(caster.facing) * range), caster.tier));
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius: beamLen, color: cosmeticColor,
             life: 0.22, maxLife: 0.22, beam: true, facing: caster.facing,
+            fx: skillBeamVoice(inst.def.id), arc: { facing: caster.facing, arcRad },
           });
         } else if (sigiled) {
           // The sigil's figure IS the flash (drawn == tested).
           this.flashes.push({
             pos: vec(sigilC.x, sigilC.y), radius: sigilR, color: cosmeticColor,
-            life: 0.25, maxLife: 0.25, shape: coneSigil, facing: sigilF,
+            life: 0.25, maxLife: 0.25, shape: coneSigil, facing: sigilF, fx: skillStrikeVoice(inst.def.id),
           });
         } else {
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius: range, color: cosmeticColor,
             life: 0.25, maxLife: 0.25, arc: { facing: caster.facing, arcRad },
-            edgeFrac: d.edgeOnly,
+            edgeFrac: d.edgeOnly, fx: skillStrikeVoice(inst.def.id),
           });
         }
         // A cone's area is the wedge — the field settles on its centroid
@@ -32641,6 +32718,11 @@ export class World {
       }
 
       case 'self':
+        this.showSkillArrival(caster, inst, caster.pos, caster.radius + 18, caster.tier, true);
+        // Rites already receipt their real payment. Destructive orders speak
+        // at the body actually consumed below, never on an empty command.
+        if (!skillRiteVoice(def.id) && !instanceEffects(inst).some(f => f.type === 'detonateMinions' || f.type === 'shatterConstructs'))
+          this.showSelfRelease(caster, inst);
         // FIRE WALKER'S SPRINT (the moveTrail fabric on a movement BUFF —
         // stealth's burning wake): while the working holds, the runner
         // drops trail patches behind every stride, and the trail dies
@@ -32925,10 +33007,10 @@ export class World {
             // silently — no comet hangs in the air for a held channel.
             lobFrom: d.lob && !arming ? vec(caster.pos.x, caster.pos.y) : undefined,
             lobArc: d.lob?.arc,
-            delay0: d.lob && !arming ? zDelay : undefined,
+            delay0: !arming ? zDelay : undefined,
             impactDress: d.impactDress,
             birth: strikeBirth, // THE CLUTCH FABRIC: the landing is a womb
-            fx: d.fx, // THE EFFECT VOICE: the delivery names its landing
+            fx: skillPresenceVoice(def.id, 'pulse') ?? d.fx,
             onGround: d.onGround, // THE GROUNDED STRIKE: the water boils, the shore does not
 
             armed: arming || undefined,
@@ -32987,6 +33069,8 @@ export class World {
         // comet travels SLOWER — remaining is TIME, so distance holds.
         const dashSpeed = d.speed * (opts.speedMult ?? 1);
         caster.dash = { dir: caster.facing, speed: dashSpeed, remaining: d.distance / dashSpeed };
+        this.movementFlashes.delete(caster);
+        this.movementMoment(caster, inst, 'depart');
         // PHASING dash (DashDelivery.phase — the Iai draw): the ordinary
         // 'phasing' STATUS for the flight plus a breath, so the body goes
         // THROUGH the crowd regardless of mass or poise (separateActors
@@ -33057,6 +33141,8 @@ export class World {
         const caromDur = d.duration * caster.sheet.get('effectDuration', tags, extra);
         const rideStatus = d.status ?? 'caroming';
         caster.caromRun = { dir: caster.facing, speed: caromSpeed, status: rideStatus };
+        this.movementFlashes.delete(caster);
+        this.movementMoment(caster, inst, 'depart');
         (caster as Actor & { caromSkill?: SkillInstance }).caromSkill = inst;
         (caster as Actor & { caromHits?: Map<number, number> }).caromHits = new Map();
         (caster as Actor & { caromRung?: Set<number> }).caromRung = new Set();
@@ -33122,11 +33208,13 @@ export class World {
         // Afterspray support — pays at this end alone).
         this.moveBlast(caster, inst, caster.pos, 'depart');
         if (d.delay && d.delay > 0) {
-          this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: cosmeticColor, inst,
+          const visual: Flash = { pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: cosmeticColor, life: d.delay, maxLife: d.delay,
+            fx: skillMovementVoice(def.id, 'wait'), facing: caster.facing, recoveryCueTier: caster.tier };
+          this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: cosmeticColor, inst, visual,
             ...(d.behindTarget && targetInfo?.actor ? { faceTarget: targetInfo.actor } : {}) });
-          this.flashes.push({ pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: cosmeticColor, life: d.delay, maxLife: d.delay });
+          this.flashes.push(visual);
         } else {
-          this.teleportActor(caster, dest, def.color, undefined, caster.tier);
+          this.teleportActor(caster, dest, cosmeticColor, undefined, caster.tier, def.id);
           if (d.behindTarget && targetInfo?.actor) {
             // Arrival is an atomic turn; the ordinary turn-rate cap must not undo it.
             caster.facingPrev = caster.facing = angleTo(caster.pos, targetInfo.actor.pos);
@@ -33154,6 +33242,7 @@ export class World {
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius,
             color: cosmeticColor, life: 0.3, maxLife: 0.3,
+            fx: skillMovementVoice(def.id, 'impact'), facing: caster.facing, recoveryCueTier: caster.tier,
           });
           break;
         }
@@ -33188,6 +33277,8 @@ export class World {
           vent: d.vent ? { columnR: d.vent.columnR * aoeScale } : undefined,
         };
         caster.untargetable = true; // airborne: nothing can touch them
+        this.movementFlashes.delete(caster);
+        this.movementMoment(caster, inst, 'depart');
         caster.dash = null;
         if (caster.caromRun) this.endCarom(caster, { quiet: true }); // wings beat the ball
 
@@ -33238,7 +33329,7 @@ export class World {
         const st = (inst.state ??= {});
         if (st.markPos) {
           // Recall: one-way trip home, then re-arm Mark.
-          this.teleportActor(caster, vec(st.markPos.x, st.markPos.y), def.color);
+          this.teleportActor(caster, vec(st.markPos.x, st.markPos.y), cosmeticColor, undefined, undefined, def.id);
           st.markPos = null;
         } else {
           const dd = Math.min(dist(caster.pos, aim), d.castRange);
@@ -33246,7 +33337,8 @@ export class World {
             caster.pos.x + Math.cos(caster.facing) * dd,
             caster.pos.y + Math.sin(caster.facing) * dd), 10);
           st.markPos = { x: at.x, y: at.y };
-          this.flashes.push({ pos: vec(at.x, at.y), radius: 20, color: cosmeticColor, life: 0.4, maxLife: 0.4 });
+          this.flashes.push({ pos: vec(at.x, at.y), radius: 28, color: cosmeticColor, life: 0.4, maxLife: 0.4,
+            fx: skillSelfVoice(def.id), recoveryCueTier: caster.tier });
         }
         break;
       }
@@ -33357,6 +33449,7 @@ export class World {
         this.flashes.push({
           pos: at, radius, color: cosmeticColor,
           life: 0.35, maxLife: 0.35, shape, facing: caster.facing,
+          fx: skillSelfVoice(def.id, 'burst'), recoveryCueTier: caster.tier,
         });
         this.spawnAftershocks(caster, inst, at, radius, shape);
         // The cascade family beyond ground: the pop's sequels mint here.
@@ -33369,8 +33462,14 @@ export class World {
       case 'detonate': {
         const mines = this.actors.filter(a =>
           a.owner === caster && !a.dead && a.construct?.kind === 'mine');
-        mines.forEach((mine, i) =>
-          this.pendingDetonations.push({ mine, timer: 0.05 + i * 0.08 }));
+        mines.forEach((mine, i) => {
+          const timer = 0.05 + i * 0.08, fx = skillSelfVoice(def.id, 'prepare');
+          const visual: Flash | undefined = fx ? { pos: { ...mine.pos }, radius: mine.radius + 18,
+            color: cosmeticColor, life: timer, maxLife: timer, fx, recoveryCueTier: mine.tier } : undefined;
+          if (visual) this.flashes.push(visual);
+          this.pendingDetonations.push({ mine, timer, visual });
+        });
+        if (mines.length) this.showSelfRelease(caster, inst);
         if (!mines.length) this.text(caster.pos, 'no mines placed', '#8a8678', 11);
         break;
       }
@@ -33911,6 +34010,7 @@ export class World {
           stored: 0, cap: fx.cap * caster.sheet.get('poolCap', tags, extra),
           until: this.time + dur, ratio: fx.ratio,
           radius: fx.radius * aoeScale,
+          visualColor: cosmeticColor,
         };
         caster.addBuff({
           type: 'buff', id: 'iron_ward', duration: fx.duration,
@@ -33932,7 +34032,7 @@ export class World {
           if (m.manaReserved > 0) continue; // persistent contracts refuse
           const sd2 = m.summonInst?.def.delivery;
           if (sd2?.type === 'summon' && sd2.persistent) continue;
-          this.explodeActor(m, fx.fraction);
+          this.explodeActor(m, fx.fraction, { color: cosmeticColor, visual: skillSelfVoice(def.id, 'burst') });
           if (!m.dead) this.kill(m, false, caster);
           spent++;
         }
@@ -33990,13 +34090,14 @@ export class World {
           // rite-detonable too — their own deathBurst rides the kill
           // artery, so the rite is an ACTIVATION, not a second payload.
           if (t.construct.deathBurst) {
+            this.showSelfRelease(caster, inst, t.pos, t.radius + 18, t.tier);
             this.kill(t, true);
             blown++;
             continue;
           }
           if (!['totem', 'sentry', 'pylon'].includes(t.construct.kind)) continue;
           this.burstDamage(vec(t.pos.x, t.pos.y), fx.radius,
-            t.maxLife() * fx.fraction, 'physical', def.color, caster.team, caster.tier);
+            t.maxLife() * fx.fraction, 'physical', cosmeticColor, caster.team, caster.tier, undefined, undefined, skillSelfVoice(def.id, 'burst'));
           this.kill(t, true);
           blown++;
         }
@@ -34248,7 +34349,31 @@ export class World {
       this.echoToClones(caster, inst, aim, useMult,
         opts.targetInfo as ResolvedTarget | undefined);
     }
+    if (!caster.dead) this.presenceMoment(caster, 'pulse');
     return true;
+  }
+
+  private presencePulseAt = new WeakMap<Actor, number>();
+  /** Every visible beat is a real event. Rapid multi-payload actions share a
+   * compact source accent instead of piling up identical body flashes. */
+  private presenceMoment(a: Actor, phase: PresencePhase): boolean {
+    const badge = a.presenceBadge, fx = badge && skillPresenceVoice(badge.skillId, phase);
+    if (!badge || !fx) return false;
+    if (phase === 'pulse') {
+      if (this.time - (this.presencePulseAt.get(a) ?? -Infinity) < .12) return true;
+      this.presencePulseAt.set(a, this.time);
+    }
+    const life = PRESENCE_STYLE[phase];
+    this.flashes.push({ pos: { ...a.pos }, radius: Math.min(56, a.radius + (phase === 'pulse' ? 12 : 20)),
+      color: badge.color, life, maxLife: life, fx, recoveryCueTier: a.tier });
+    return true;
+  }
+
+  private presenceArrival(a: Actor, caster: Actor, inst: SkillInstance): boolean {
+    const p = presenceProfile(inst.def.id);
+    if (!p || p.family === 'storm') return false;
+    a.presenceBadge = { skillId: inst.def.id, color: cosmeticSkillPaint(this, caster, inst.def.id).color ?? inst.def.color };
+    return this.presenceMoment(a, 'arrive');
   }
 
   /** bankRune uses runeForCast for school or schoolless spell fuel — only while an
@@ -34550,6 +34675,27 @@ export class World {
     };
   }
 
+  private showSelfRelease(caster: Actor, inst: SkillInstance, at = caster.pos, radius = caster.radius + SELF_VISUAL_STYLE.radiusPad, tier = caster.tier): void {
+    const fx = skillSelfVoice(inst.def.id); if (!fx) return;
+    this.flashes.push({ pos: { ...at }, radius, color: cosmeticSkillPaint(this, caster, inst.def.id).color ?? inst.def.color,
+      life: SELF_VISUAL_STYLE.life, maxLife: SELF_VISUAL_STYLE.life, fx, facing: caster.facing, recoveryCueTier: tier });
+  }
+
+  /** A resolved cast signature; recovery receipts and status timers remain
+   * separate. Frozen at the actual recipient, with no new gameplay event. */
+  private showSkillArrival(caster: Actor, inst: SkillInstance, at: Vec2, radius: number, tier: number,
+    rite: boolean | string = false, splash = false): void {
+    const id = typeof rite === 'string' ? rite : inst.def.id;
+    let fx = rite ? skillRiteVoice(id) : skillTargetVoice(id);
+    if (rite && (!fx || inst.def.feedingCue === false)) return;
+    if (splash && fx) fx = fx.replace('skillTarget:', 'skillTargetSplash:');
+    // A multi-effect offering grants several buffs at the same instant.
+    if (fx && this.flashes.some(f => f.fx === fx && f.life === f.maxLife && f.pos.x === at.x && f.pos.y === at.y)) return;
+    const life = fx ? TARGET_VISUAL_STYLE.life : .25;
+    this.flashes.push({ pos: { ...at }, radius, color: cosmeticSkillPaint(this, caster, inst.def.id).color ?? inst.def.color,
+      life, maxLife: life, fx, recoveryCueTier: tier });
+  }
+
   /** Lay a tether band between two actors. Damage is scaled by the owner's
    *  damage stat and CONVERTED here, at attach time — a Flameforged build's
    *  tripwire bleeds fire. One band per endpoint-pair per skill: re-casting
@@ -34581,6 +34727,7 @@ export class World {
     }
     this.tethers.push({
       a, b, owner, skillId: inst.def.id, link: spec.link, inst,
+      visual: spec.visual, visualAge: 0,
       amounts, heal: spec.healPerSec ?? 0,
       affects: spec.affects ?? 'enemies',
       width,
@@ -34707,6 +34854,7 @@ export class World {
   private updateTethers(dt: number): void {
     for (let i = this.tethers.length - 1; i >= 0; i--) {
       const t = this.tethers[i];
+      t.visualAge = (t.visualAge ?? 0) + dt;
       t.remaining -= dt;
       if (t.a.dead || t.b.dead || t.remaining <= 0) { this.tethers.splice(i, 1); continue; }
       t.ax = t.a.pos.x; t.ay = t.a.pos.y; t.bx = t.b.pos.x; t.by = t.b.pos.y;
@@ -35740,7 +35888,8 @@ export class World {
     // THE DEADWAKE: raising a minion stirs the corpse tide (a heavier tick when the
     // thing raised is itself undead — a skeleton, a spectre). No-op until armed.
     this.sim.deadwakeField?.accrue('summon', isDeathAligned(minion.faction));
-    this.flashes.push({ pos: vec(minion.pos.x, minion.pos.y), radius: 20 + minion.radius, color: inst.def.color, life: 0.35, maxLife: 0.35 });
+    if (!this.presenceArrival(minion, caster, inst))
+      this.flashes.push({ pos: vec(minion.pos.x, minion.pos.y), radius: 20 + minion.radius, color: inst.def.color, life: 0.35, maxLife: 0.35 });
     return minion;
   }
 
@@ -36209,7 +36358,8 @@ export class World {
       }
       this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius, color: c.color, life: 0.25, maxLife: 0.25 });
     }
-    this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 22, color: c.color, life: 0.3, maxLife: 0.3 });
+    if (!this.presenceArrival(c, caster, sourceInst))
+      this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 22, color: c.color, life: 0.3, maxLife: 0.3 });
     return c;
   }
 
@@ -37384,6 +37534,7 @@ export class World {
     this.flashes.push({
       pos: vec(a.pos.x, a.pos.y), radius: reach, color: inst.def.color,
       life: 0.25, maxLife: 0.25,
+      fx: skillSelfVoice(inst.def.id, 'burst'), recoveryCueTier: a.tier,
       ...(fullCircle ? {} : { arc: { facing: a.facing, arcRad } }),
     });
     this.flashes.push(defenseCueFlash(a, 'guard', 'bash', inst.def.color, { arc: fullCircle ? Math.PI * 2 : arcRad }));
@@ -37806,6 +37957,13 @@ export class World {
     tags: Set<SkillTag>, extra: Modifier[], arcRad?: number, edgeFrac?: number,
     walkFacing?: number,
   ): void {
+    const burstDelivery = instanceDelivery(inst);
+    const burstVoice = burstDelivery.type === 'nova'
+      ? burstDelivery.fx ?? skillBurstVoice(inst.def.id)
+      : burstDelivery.type === 'melee' ? burstDelivery.fx ?? skillStrikeVoice(inst.def.id)
+      : burstDelivery.type === 'cone' ? skillStrikeVoice(inst.def.id)
+      : burstDelivery.type === 'leap' ? skillMovementVoice(inst.def.id, 'impact')
+      : burstDelivery.type === 'storm' ? skillPresenceVoice(inst.def.id, 'pulse') ?? burstDelivery.fx : undefined;
     const cadence = socketSpec(inst, 'cadence')?.intervalStep;
     const pPlan = instancePulsePlan(inst);
     const pSpec = pPlan.native;
@@ -37838,6 +37996,7 @@ export class World {
         linger: pulseSpan, linger0: pulseSpan,
         tickInterval: Infinity, tickTimer: Infinity,
         shape, facing, arcRad, edgeFrac,
+        fx: burstVoice,
         dmgMult: useMult, depth: 0,
         pulse: pulseFor(0),
       });
@@ -37893,6 +38052,7 @@ export class World {
           linger: 0, linger0: 0,
           tickInterval: Infinity, tickTimer: 0,
           shape, facing, arcRad, edgeFrac,
+          fx: burstVoice,
           dmgMult: baseMult * Math.pow(dmgStep, p.k), depth: 0,
         });
       }
@@ -37915,6 +38075,7 @@ export class World {
           linger: quakes ? pulseSpan : 0, linger0: quakes ? pulseSpan : 0,
           tickInterval: Infinity, tickTimer: quakes ? Infinity : 0,
           shape, facing, arcRad, edgeFrac,
+          fx: burstVoice,
           dmgMult: mult, depth: 0,
           pulse: pulseFor(delayBase),
         });
@@ -38025,7 +38186,8 @@ export class World {
       if (dist(at, e.pos) - e.radius > radius) continue;
       this.resolveHit(caster, inst, e, scale, 1, undefined, true);
     }
-    this.flashes.push({ pos: vec(at.x, at.y), radius, color: inst.def.color, life: 0.3, maxLife: 0.3 });
+    this.flashes.push({ pos: vec(at.x, at.y), radius, color: cosmeticSkillPaint(this, caster, inst.def.id).color ?? inst.def.color, life: 0.3, maxLife: 0.3,
+      fx: skillMovementVoice(inst.def.id, 'impact'), facing: caster.facing, recoveryCueTier: caster.tier });
     // THE MALLET: the movement eruption is a blast — dive-bomb your bell.
     this.frontSplash(caster, inst, at, radius);
     this.strikeSurfaces(caster, at, radius);
@@ -38076,7 +38238,7 @@ export class World {
   private applyRestore(
     target: Actor,
     fx: { resource: 'life' | 'mana' | 'es' | 'poise'; amount: number; resetEsDelay?: boolean },
-    opts?: { noEvent?: boolean; tags?: SkillTag[] },
+    opts?: { noEvent?: boolean; tags?: SkillTag[]; feedingCue?: import('../data/feedingCues').FeedingCueSpec | false },
   ): number {
     let landed = 0;
     if (fx.resource === 'life') {
@@ -38091,6 +38253,7 @@ export class World {
       landed = target.gainEs(fx.amount);
       if (fx.resetEsDelay) target.esDelay = 0;
     }
+    if (fx.resource !== 'poise') noteRestoreGain(target, fx.resource, landed, opts?.feedingCue);
     if (landed > 0 && !opts?.noEvent && target.gainEvents.length < 64) {
       target.gainEvents.push({
         kind: 'restore', id: fx.resource, depth: 0,
@@ -38311,12 +38474,14 @@ export class World {
       // A momentary mending arc (the discharge-zap visual pattern).
       this.tethers.push({
         a: from, b: next, owner: caster, skillId: inst.def.id, link: 'zap',
+        visual: 'healing_chain', visualAge: 0,
         amounts: {}, heal: 0, affects: 'allies', width: 5,
         remaining: 0.16, tickTimer: 99,
         color: '#7ec88a',
         ax: from.pos.x, ay: from.pos.y, bx: next.pos.x, by: next.pos.y,
       });
       this.applyHeal(caster, inst, next, fx, scale, quiet);
+      if (skillTargetVoice(inst.def.id)) this.showSkillArrival(caster, inst, next.pos, next.radius + 14, next.tier);
       visited.add(next);
       from = next;
     }
@@ -38424,12 +38589,12 @@ export class World {
    * A minion detonates (Martyrdom passive / Unstable Flesh support),
    * dealing a fraction of its max life as fire damage to nearby enemies.
    */
-  explodeActor(minion: Actor, fraction: number, opts?: { type?: DamageType; color?: string; recoveryCue?: string }): void {
+  explodeActor(minion: Actor, fraction: number, opts?: { type?: DamageType; color?: string; recoveryCue?: string; visual?: string }): void {
     // The sourceActor carries minion damage, conversion and kill credit.
     const type = opts?.type ?? 'fire';
     const dmg = minion.maxLife() * fraction * minion.sheet.get('damage', new Set<SkillTag>(['aoe', type]));
     const radius = 45 + minion.radius * 2;
-    this.burstDamage(vec(minion.pos.x, minion.pos.y), radius, dmg, type, opts?.color ?? DAMAGE_COLOR[type], minion.team, minion.tier, minion, opts?.recoveryCue);
+    this.burstDamage(vec(minion.pos.x, minion.pos.y), radius, dmg, type, opts?.color ?? DAMAGE_COLOR[type], minion.team, minion.tier, minion, opts?.recoveryCue, opts?.visual);
   }
 
   /** Direct radial BLAST (the shared payload for explodeActor + the death-burst detonations).
@@ -38438,7 +38603,7 @@ export class World {
    *  damageTaken, and the shield-soak chain) — never true damage, so the player can dress
    *  resistances/armor against it. State is pre-baked (pos/dmg/team) so it works after the
    *  source actor is gone; the colour IS the damage-type tell (DAMAGE_COLOR). */
-  private burstDamage(pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team, sourceTier = 0, sourceActor?: Actor, recoveryCue?: string): void {
+  private burstDamage(pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team, sourceTier = 0, sourceActor?: Actor, recoveryCue?: string, visual?: string): void {
     for (const e of this.actors) {
       if (!this.isBurstTarget(e, sourceTeam, sourceTier)) continue;
       if (sourceActor && !this.hostileTo(sourceActor, e)) continue;
@@ -38463,7 +38628,8 @@ export class World {
       if (e.life <= 0 && !e.dead) this.kill(e, false, sourceActor);
     }
     this.flashes.push(recoveryCue ? { ...combatCueFlash(pos, recoveryCue, radius, 0, color), recoveryCueTier: sourceTier }
-      : { pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35 });
+      : { pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35,
+        ...(visual ? { fx: visual, recoveryCueTier: sourceTier } : {}) });
     // THE MALLET, ownerless: a baked blast rings EVERY side's bells and
     // pops brittle scenery — the exploding corpse beside the bell already
     // damaged it without a toll; now the blast answers too.
@@ -39081,8 +39247,9 @@ export class World {
       // SIPHON (Lifedrain, Soul Volley): a fraction of the landed hit flows
       // home as HEALING — × healPower, gated by the caster's own healTaken.
       if (dealt > 0 && def.siphon && !caster.dead) {
-        caster.healBy(dealt * def.siphon
+        const gained = caster.healBy(dealt * def.siphon
           * caster.sheet.get('healPower', skillContextTags(def), extra));
+        noteResourceFlow(caster, target, 'life', gained, def.feedingCue);
       }
       // VAMPIRIC SHARE (the transferred leech): a slice of the landed hit
       // heals ALLIES around the striker — the WoW-VE shape, worn as a stat
@@ -39097,6 +39264,7 @@ export class World {
             if (ally.dead || ally.team !== caster.team || ally === caster) continue;
             if (dist(caster.pos, ally.pos) > DEFENSE_CFG.sustain.vampiricRadius) continue;
             const got = ally.healBy(heal);
+            noteResourceFlow(ally, target, 'life', got, def.feedingCue);
             if (got > 0.5) this.seatText(caster, ally.pos, '+' + Math.round(got), '#8ae0a8', 10); // THE WIRE'S EYES: the healer's seat
           }
         }
@@ -39908,7 +40076,7 @@ export class World {
         if (dealt > 0 && depth === 0 && !caster.construct) {
           this.shedOrb(fx.resource, target.pos, {
             scatter: 8, amount: fx.amount, life: 8,
-            homeTo: caster.owner ?? caster, clamp: false,
+            homeTo: caster.owner ?? caster, clamp: false, flowFromTier: target.tier ?? 0,
           });
         }
       } else if (fx.type === 'birth') {
@@ -41875,7 +42043,7 @@ export class World {
     },
   ];
 
-  kill(actor: Actor, silent = false, killer?: Actor): void {
+  kill(actor: Actor, silent = false, killer?: Actor, departure?: 'expire'): void {
     if (actor.dead) return;
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
@@ -42088,6 +42256,7 @@ export class World {
     }
 
     actor.dead = true;
+    this.presenceMoment(actor, departure ?? (silent ? 'expire' : 'break'));
     this.guardArts.clear(actor);
     if (actor.owner) this.strikeReleaseBodies.get(actor.owner)?.delete(actor);
     this.satellites.retire(actor);
@@ -45024,7 +45193,7 @@ export class World {
       if (a.lifespan > 0) {
         a.lifespan -= dt;
         if (a.lifespan <= 0) {
-          this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * 1.4, color: a.color, life: 0.3, maxLife: 0.3 });
+          if (!a.presenceBadge) this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * 1.4, color: a.color, life: 0.3, maxLife: 0.3 });
           // Explosive CONSTRUCTS go off even on natural expiry — a bone
           // prison under Unstable Flesh is a timed demolition charge.
           if (a.construct && a.explodeOnDeath > 0) {
@@ -45046,7 +45215,7 @@ export class World {
           // THE RAGING-SPIRITS LEVER (minionExpiryIsDeath): a flagged
           // minion's duration lapse IS a death — every on-death rite
           // (explosions, death heals, allyDeath taps) fires on schedule.
-          this.kill(a, !a.expiryTriggersDeath);
+          this.kill(a, !a.expiryTriggersDeath, undefined, 'expire');
           continue;
         }
       }
@@ -45180,7 +45349,7 @@ export class World {
         const sip = s.leechAcc;
         s.leechAcc = 0;
         const applier = this.actors.find(x => x.id === s.casterId && !x.dead);
-        if (applier) applier.healBy(sip);
+        if (applier) noteResourceFlow(applier, a, 'life', applier.healBy(sip));
       }
       // TERRAIN-BOUND upkeep: derive a missing confinement from the nearest
       // matching ground (zone-memory restores, summons — every path self-
@@ -45458,7 +45627,7 @@ export class World {
         const amount = Math.min(iw.cap, iw.stored) * iw.ratio;
         if (amount > 0 && !a.dead) {
           this.burstDamage(vec(a.pos.x, a.pos.y), iw.radius, amount,
-            'physical', '#c8c0a8', a.team);
+            'physical', iw.visualColor ?? '#c8c0a8', a.team, 0, undefined, undefined, skillSelfVoice('iron_ward', 'burst'));
         }
       }
       // weakPointBonus reads the live interval at each damage resolution; this
@@ -45495,11 +45664,16 @@ export class World {
       if (a.dash) {
         const inst = (a as Actor & { dashSkill?: SkillInstance }).dashSkill;
         const hits = (a as Actor & { dashHits?: Set<number> }).dashHits;
+        const visualFrom = { ...a.pos }, visualTier = a.tier;
         const step = a.dash.speed * Math.min(dt, Math.max(0, a.dash.remaining));
         this.steppedClamp(a, vec(
           a.pos.x + Math.cos(a.dash.dir) * step,
           a.pos.y + Math.sin(a.dash.dir) * step,
         ), a.pos);
+        if (inst && a.tier === visualTier && dist(visualFrom, a.pos) <= step + .01) {
+          this.noteMovementTravel(a, inst, visualFrom, 1 - a.dash.remaining / Math.max(.01,
+            inst.def.delivery.type === 'dash' ? inst.def.delivery.distance / a.dash.speed : 1));
+        }
         if (inst && hits && inst.def.delivery.type === 'dash' && inst.def.delivery.width > 0) {
           for (const enemy of this.enemiesOf(a)) {
             if (hits.has(enemy.id)) continue;
@@ -45633,6 +45807,7 @@ export class World {
           });
           // Dive Bomb: the arrival erupts; No Man's Land fields drop here.
           if (inst) {
+            this.movementMoment(a, inst, 'arrive');
             this.moveBlast(a, inst, a.pos);
             this.dropLingerField(a, inst, a.pos);
             // THE ANSWERING CHARGE (guardBash beyond the stance,
@@ -45689,6 +45864,10 @@ export class World {
             run.dir = fw.dir;
           }
           a.facing = run.dir;
+          if (inst) {
+            if (dist({ x: beforeX, y: beforeY }, a.pos) <= step + .01) this.noteMovementTravel(a, inst, { x: beforeX, y: beforeY }, this.time % 1);
+            if (banked || fw) this.movementMoment(a, inst, 'bank');
+          }
           // CONTACT: the skill's whole payload through the one pipeline,
           // per victim on the rehit clock (segment-aware — coils are real
           // bodies; the corridor's noteBodyHit grammar verbatim).
@@ -48321,6 +48500,7 @@ export class World {
           }
           if (struck) {
             this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius, color: c.color, life: 0.18, maxLife: 0.18 });
+            this.presenceMoment(c, 'pulse');
           }
         }
       }
@@ -48446,6 +48626,7 @@ export class World {
                 // The beam IS a moment-long tether (the discharge visual).
                 this.tethers.push({
                   a: c, b: kin, owner: c, skillId: '__embedbeam:' + c.id, link: 'zap',
+                  visual: 'embed', visualAge: 0,
                   amounts: {}, heal: 0, affects: 'enemies', width,
                   remaining: 0.15, tickTimer: 9, color: c.color,
                   ax: c.pos.x, ay: c.pos.y, bx: kin.pos.x, by: kin.pos.y,
@@ -48552,7 +48733,7 @@ export class World {
             (owner as Actor & { dashSkill?: SkillInstance }).dashSkill = undefined;
             (owner as Actor & { dashHits?: Set<number> }).dashHits = undefined;
             st.timer = 0.8;
-            this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 26, color: c.color, life: 0.25, maxLife: 0.25 });
+            if (!this.presenceMoment(c, 'pulse')) this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 26, color: c.color, life: 0.25, maxLife: 0.25 });
           }
           break;
         }
@@ -48567,6 +48748,7 @@ export class World {
             if (owner && !owner.dead
               && dist(c.pos, owner.pos) <= c.radius + owner.radius + 4) {
               this.teleportActor(owner, vec(partner.pos.x + 30, partner.pos.y), c.color);
+              this.presenceMoment(c, 'pulse'); this.presenceMoment(partner, 'pulse');
               // Anti-ping-pong: both ends close briefly.
               st.timer = 1.2;
               if (partner.construct) partner.construct.timer = 1.2;
@@ -48783,7 +48965,7 @@ export class World {
               e.life -= amount;
               this.accumulateDotText(e, amount, dt, bearer); // THE WIRE'S EYES: the aura's bearer
               if (aura.spec.siphonFraction) {
-                bearer.healBy(amount * aura.spec.siphonFraction);
+                noteResourceFlow(bearer, e, 'life', bearer.healBy(amount * aura.spec.siphonFraction), aura.inst.def.feedingCue);
               }
               // Aura deaths retain their bearer, including summoned halo carriers.
               if (e.life <= 0 && !e.dead) this.kill(e, false, bearer);
@@ -48801,6 +48983,7 @@ export class World {
           aura.pulseTimer -= dt;
           if (aura.pulseTimer <= 0) {
             aura.pulseTimer = aura.spec.pulse.interval;
+            this.presenceMoment(bearer, 'pulse');
             const heal = aura.spec.pulse.healAllies;
             if (heal) {
               for (const a of this.actors) {
@@ -48831,8 +49014,10 @@ export class World {
       // the interpolation below re-derives the same airborne point each frame.
       L.timer -= dt * this.timeflow.actorScale(a);
       const t = clamp(1 - L.timer / L.total, 0, 1);
+      const visualFrom = { ...a.pos };
       // Airborne: raw interpolation, no terrain collision — you're above it.
       a.pos = vec(L.from.x + (L.dest.x - L.from.x) * t, L.from.y + (L.dest.y - L.from.y) * t);
+      this.noteMovementTravel(a, L.inst, visualFrom, t);
       if (L.timer > 0) continue;
       a.pos = vec(L.dest.x, L.dest.y);
       a.untargetable = L.wasUntargetable;
@@ -48857,7 +49042,8 @@ export class World {
       this.strikeSurfaces(a, a.pos, L.radius);
       this.flashes.push({
         pos: vec(a.pos.x, a.pos.y), radius: L.radius,
-        color: L.inst.def.color, life: 0.3, maxLife: 0.3,
+        color: cosmeticSkillPaint(this, a, L.inst.def.id).color ?? L.inst.def.color, life: 0.3, maxLife: 0.3,
+        fx: skillMovementVoice(L.inst.def.id, 'impact'), recoveryCueTier: a.tier,
         shape: lShape, facing: a.facing,
       });
       // The cascade family reaches the SKYFALL: the landing's sequels
@@ -51823,9 +52009,14 @@ export class World {
   private updateDetonations(dt: number): void {
     for (let i = this.pendingDetonations.length - 1; i >= 0; i--) {
       const pd = this.pendingDetonations[i];
+      if (pd.visual) {
+        pd.visual.pos = { ...pd.mine.pos }; pd.visual.recoveryCueTier = pd.mine.tier;
+        if (pd.mine.dead || !pd.mine.construct?.castInst) pd.visual.life = 0;
+      }
       pd.timer -= dt;
       if (pd.timer > 0) continue;
       this.pendingDetonations.splice(i, 1);
+      if (pd.visual) pd.visual.life = 0;
       const mine = pd.mine;
       if (mine.dead || !mine.construct?.castInst) continue;
       mine.useLock = 0; mine.mana = mine.maxMana(); mine.cooldowns.clear();
@@ -52997,11 +53188,12 @@ export class World {
   private updatePendingBlinks(dt: number): void {
     for (let i = this.pendingBlinks.length - 1; i >= 0; i--) {
       const pb = this.pendingBlinks[i];
-      if (pb.actor.dead) { this.pendingBlinks.splice(i, 1); continue; }
+      if (pb.actor.dead) { if (pb.visual) pb.visual.life = 0; this.pendingBlinks.splice(i, 1); continue; }
       pb.timer -= dt;
       if (pb.timer <= 0) {
         this.pendingBlinks.splice(i, 1);
-        this.teleportActor(pb.actor, pb.dest, pb.color, undefined, pb.actor.tier);
+        if (pb.visual) pb.visual.life = 0;
+        this.teleportActor(pb.actor, pb.dest, pb.color, undefined, pb.actor.tier, pb.inst?.def.id);
         if (pb.faceTarget && sameStory(pb.actor, pb.faceTarget)) {
           pb.actor.facingPrev = pb.actor.facing = angleTo(pb.actor.pos, pb.faceTarget.pos);
         }
@@ -53184,11 +53376,13 @@ export class World {
     inst = inst.followUpHost ?? inst;
     if (!followUpHost && !inst.treeNodes?.some(id => treeNodeOf(inst.def, id)?.buffs?.length)) {
       target.addBuff(fx, durScale, 0, inst.def.tags);
+      if (target.buffs.has(fx.id)) this.showSkillArrival(caster, inst, target.pos, target.radius + 16, target.tier, true);
       return;
     }
     const tagged = { ...fx };
     this.treeBuffSources.set(tagged, { caster, inst });
     target.addBuff(tagged, durScale, 0, [...skillContextTags(inst)]);
+    if (target.buffs.has(fx.id)) this.showSkillArrival(caster, inst, target.pos, target.radius + 16, target.tier, true);
   }
 
   /** Retire fields that captured the previous allocation. */
@@ -53215,7 +53409,11 @@ export class World {
       if (source?.caster === caster && source.inst === inst) actor.removeBuff(id);
     }
     this.pendingFuses = this.pendingFuses.filter(f => f.caster !== caster || !ownsTreePayload(f.inst));
-    this.pendingBlinks = this.pendingBlinks.filter(b => b.actor !== caster || !b.inst || !ownsTreePayload(b.inst));
+    this.pendingBlinks = this.pendingBlinks.filter(b => {
+      const keep = b.actor !== caster || !b.inst || !ownsTreePayload(b.inst);
+      if (!keep && b.visual) b.visual.life = 0;
+      return keep;
+    });
     // Scheduled repeats capture the old tree just as delayed fields do.
     this.pendingRepeats = this.pendingRepeats.filter(r => r.caster !== caster || !ownsTreePayload(r.inst));
     this.pendingSalvos = this.pendingSalvos.filter(r => r.caster !== caster || !ownsTreePayload(r.inst));
@@ -53504,6 +53702,7 @@ export class World {
    *  chests, breakables, monster spills — funnels through here. */
   shedOrb(kind: string, at: Vec2, opts?: {
     scatter?: number; amount?: number; life?: number; homeTo?: Actor;
+    flowFromTier?: number;
     /** false: keep the raw scatter point (siphon orbs fly home anyway). */
     clamp?: boolean;
     /** THE SPOILS STORY: the shedder's story (a struck body's, a breakable's
@@ -53521,6 +53720,7 @@ export class World {
       kind, amount: opts?.amount ?? orbAmount(def, this.lootLevelAt(at)),
       bob: rand(0, Math.PI * 2), life: opts?.life ?? def.life ?? 12,
       homeTo: opts?.homeTo,
+      flowFromTier: opts?.flowFromTier,
       tier: story,
     });
     SIM_TAP.current?.onOrbShed?.(kind);
@@ -53910,6 +54110,7 @@ export class World {
         // (tickTimer > remaining, so it never deals a tick of its own).
         this.tethers.push({
           a, b: best, owner: a, skillId: '__discharge:' + inst!.def.id, link: 'zap',
+          visual: inst!.def.id, visualAge: 0,
           amounts: {}, heal: 0, affects: 'enemies', width: 5,
           remaining: 0.14, tickTimer: 9, color: inst!.def.color,
           ax: a.pos.x, ay: a.pos.y, bx: best.pos.x, by: best.pos.y,
@@ -54929,6 +55130,23 @@ export class World {
     return false;
   }
 
+  /** Bounded afterimages of actual travel, including turns. No new combat event. */
+  private noteLightningTravel(p: Projectile, from: Vec2): void {
+    if (!lightningProfile(p.inst.def.id) || p.dissolved) return;
+    const to = p.phase ? p.pos : this.clipShot(from, p.pos, p.tier);
+    if (dist(from, to) < .01) return;
+    let flash = this.lightningFlashes.get(p);
+    if (!flash || !this.flashes.includes(flash)) {
+      if (this.flashes.filter(f => f.lightning).length >= LIGHTNING_STYLE.maxTraces) return;
+      flash = { pos: { ...to }, radius: p.radius, color: p.color, life: LIGHTNING_STYLE.fadeSeconds, maxLife: LIGHTNING_STYLE.fadeSeconds,
+        recoveryCueTier: p.tier ?? 0, lightning: { skillId: p.inst.def.id, width: p.radius, clock: p.age, points: [] } };
+      this.lightningFlashes.set(p, flash); this.flashes.push(flash);
+    }
+    flash.pos = { ...to }; flash.color = p.color; flash.life = flash.maxLife;
+    flash.lightning!.width = p.radius;
+    extendLightningTrace(flash.lightning!, from, to, p.age);
+  }
+
   private updateProjectiles(dt: number): void {
     const guardianContext = this.guardians.active ? this.carriedEffectContext() : undefined;
     const flowDt = dt; // the world-scaled frame; each flight bends it below
@@ -55580,6 +55798,7 @@ export class World {
       }
       // The newly reflected flight starts its return on the next update;
       // never hit something on the stale, incoming movement segment.
+      this.noteLightningTravel(p, prev);
       if (p.parryDamage) {
         if (dead) this.projectiles.splice(i, 1);
         continue;
@@ -55875,6 +56094,7 @@ export class World {
           zs.forEach((z2, k) => {
             z2.armed = undefined;
             z2.delay = 0.05 + k * interval;
+            z2.delay0 = z2.delay;
           });
         }
       }
@@ -55929,14 +56149,12 @@ export class World {
           this.strikeZoneSurfaces(z);
           this.flashes.push({
             pos: vec(z.pos.x, z.pos.y), radius: z.radius, color: z.color,
-            life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
+            life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing, arcRad: z.arcRad,
             edgeFrac: z.edgeFrac,
-            // THE EFFECT VOICE: a keyed zone speaks its own painter at the
-            // landing; the bolt stays the DERIVED costume of unkeyed sky
-            // strikes (hitAll) — true lightning never needs a key, and a
-            // keyed mortar never wears the sky's jag (absent == identical).
+            // Native storms use their source silhouette. Unkeyed weather
+            // keeps its legacy sky bolt; keyed mortars never borrow it.
             bolt: !z.fx && z.hitAll && !z.meteor, meteor: z.meteor,
-            fx: z.fx,
+            fx: z.fx, onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier,
           });
           z.onImpact?.(); // a meteor crater spits a demon / leaves a corpse
           // THE CLUTCH FABRIC: a birth-bearing strike's landing is a womb —
@@ -56127,8 +56345,10 @@ export class World {
             z.seg ? undefined : z.pos, z.seg ? undefined : pr);
           this.flashes.push({
             pos: vec(z.pos.x, z.pos.y), radius: pr, color: z.color,
-            life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
+            life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing, arcRad: z.arcRad,
             edgeFrac: z.edgeFrac,
+            fx: ['nova', 'melee', 'cone', 'leap', 'storm'].includes(instanceDelivery(z.inst).type) ? z.fx : undefined,
+            onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier,
           });
           this.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth);
           z.pulse.dmgMult *= z.pulse.dmgStep;
@@ -56399,6 +56619,13 @@ export class World {
 
   /** A zone leaves play: strip every occupant its domain dressed. */
   private expireZone(z: Zone): void {
+    if (!z.presenceRetired && (!z.exploded || z.pulse) && presenceProfile(z.inst.def.id)?.family === 'storm') {
+      z.presenceRetired = true;
+      this.flashes.push({ pos: { ...z.pos }, radius: z.radius, color: z.color,
+        life: PRESENCE_STYLE.expire, maxLife: PRESENCE_STYLE.expire,
+        fx: skillPresenceVoice(z.inst.def.id, 'expire'), shape: z.shape, facing: z.facing,
+        arcRad: z.arcRad, edgeFrac: z.edgeFrac, onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier });
+    }
     if (z.fieldCue) {
       this.flashes.push({ ...combatCueFlash(z.pos, z.fieldCue.release ?? 'field_release', z.radius, 0, z.fieldCue.color ?? z.color), recoveryCueTier: z.tier ?? z.caster.tier ?? 0 });
       z.fieldCue = undefined; // One retirement, even when cleanup paths converge.
