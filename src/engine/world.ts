@@ -1,5 +1,6 @@
 import './nativeSceneBootstrap';
 import {sceneAddTether,sceneAttachObjectTethers,TETHER_TICK,type NativeSceneTetherHost} from './nativeSceneTethers';
+import {sceneRollSummonType,sceneForwardSummonSockets} from './nativeSceneSummonPreparation';
 import {sceneNearQuestGiver,sceneNearAnyQuestGiver,sceneQuestGiverPrompt,sceneActiveCategoryCounts,sceneQuestGateCtx,sceneQuestOfferLevel,sceneAcceptableQuests,sceneEligibleQuestCandidates,sceneVocationEngaged,sceneIsVocationChoice,sceneVocationChoiceOffers,sceneNextAcceptableQuest,sceneUpdateQuestGiver,sceneQuestGiverStep,sceneQuestOfferChoices,sceneAcceptQuestOffer,sceneAcceptVocationQuest,sceneVocationMenuOffers,sceneDeclineVocationOffer,sceneAcceptQuest,sceneQuestRewardOffers,sceneQuestImbueOffers,sceneClaimQuestImbue,sceneReliquaryLesson,sceneSeatIdle,scenePlayerIdle,QUESTGIVER_DWELL,type NativeSceneQuestInteractionHost} from './nativeSceneQuestInteraction';
 import {sceneSpawnProjectile,sceneSkillOcclusion,PROJ_CHILD_DEPTH_MAX,PROJ_AURA_TICK,type NativeSceneProjectileHost} from './nativeSceneProjectiles';
 import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
@@ -131,7 +132,7 @@ import { MASS_CFG, impactFrac, impactScale, shoveAuthority } from './mass';
 import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf, ROUSE_RULES } from './ai';
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
-import {convertRuleHolds,crewBoardingOpen,effectiveSkillLevel,grantedTags,grimoireForm,guardBashSpec,guardBashReady,hostSockets,instanceAim,instanceBrood,instanceCascadePlan,instanceChargeCost,instanceChargeGain,instanceConvert,instanceDelivery,instanceEchoes,instanceFollowUps,instanceFuse,instanceInnateMods,instanceMeta,instanceMetas,instanceMods,instanceOvercharge,instancePulsePlan,instanceSelfStack,instanceSizeOver,instanceStrikeTiming,instanceBirth,instanceSummon,instanceTameMod,instanceTargeting,instanceTethers,instanceTurret,instanceUseCharges,instanceVariance,instanceSequel,instanceContagion,instanceCurseField,instanceTrigger,instanceTriggerArmed,instanceTriggerLimit,instanceTriggerPermit,makeSkillGem,makeSkillInstance,rampValue,resolveSizeOver,rollCount,rollSkillRarityWeighted,socketSpec,treeNodeOf,treeNodeRefusal,instanceChannel,bandPointsAt,BASH_CFG,CLASS_KIT_RARITY,CONSTRUCT_FORWARD_CFG,UNLEASH_CFG,CONCENTRATION_CFG,CONSTRUCT_KIND_AIMS,ECHO_STRIKE_LIFE_MAX,META_CHAIN_INTERVAL,TRIGGER_CFG,SEQUEL_CFG,CONTAGION_CFG,REFLEX_CFG,TAME_CFG,type TriggerKind,type EchoRiderSpec,AOE_SHAPE,AOE_BAND_DEPTH,bandSwingGeo,skillContextTags,skillMaxLevel,SKILL_RARITIES,essenceTierForLevel,supportFitsInst,type SkillRarity,supportFitsInstOrCrew,supportMaxLevel,supportRidesMinions,type SummonCrew,BAR_SLOTS,SWAP_DISCIPLINE_CFG,BLOOM_CFG,GRANT_CFG,skillGrantStat,type AuraDelivery,type BuffEffect,type ChannelSpec,type ConstructDelivery,type GroundDelivery,type GroundCascadeSpec,type GroundPulseSpec,type GuardBashSpec,type LitePourEffect,type ProjectileDelivery,type ProjectileShape,type SkillDef,type SkillEffect,type ProjTrailSpec,type FissureTrailSpec,type DropZoneSpec,type LedgerSpec,type SkillInstance,type SummonDelivery,type SupportDef,type SupportInstance,type TetherSpec,type ImpactDressSpec} from './skills';
+import {convertRuleHolds,effectiveSkillLevel,grantedTags,grimoireForm,guardBashSpec,guardBashReady,hostSockets,instanceAim,instanceBrood,instanceCascadePlan,instanceChargeCost,instanceChargeGain,instanceConvert,instanceDelivery,instanceEchoes,instanceFollowUps,instanceFuse,instanceInnateMods,instanceMeta,instanceMetas,instanceMods,instanceOvercharge,instancePulsePlan,instanceSelfStack,instanceSizeOver,instanceStrikeTiming,instanceBirth,instanceSummon,instanceTameMod,instanceTargeting,instanceTethers,instanceTurret,instanceUseCharges,instanceVariance,instanceSequel,instanceContagion,instanceCurseField,instanceTrigger,instanceTriggerArmed,instanceTriggerLimit,instanceTriggerPermit,makeSkillGem,makeSkillInstance,rampValue,resolveSizeOver,rollCount,rollSkillRarityWeighted,socketSpec,treeNodeOf,treeNodeRefusal,instanceChannel,bandPointsAt,BASH_CFG,CLASS_KIT_RARITY,CONSTRUCT_FORWARD_CFG,UNLEASH_CFG,CONCENTRATION_CFG,CONSTRUCT_KIND_AIMS,ECHO_STRIKE_LIFE_MAX,META_CHAIN_INTERVAL,TRIGGER_CFG,SEQUEL_CFG,CONTAGION_CFG,REFLEX_CFG,TAME_CFG,type TriggerKind,type EchoRiderSpec,AOE_SHAPE,AOE_BAND_DEPTH,bandSwingGeo,skillContextTags,skillMaxLevel,SKILL_RARITIES,essenceTierForLevel,type SkillRarity,supportFitsInstOrCrew,supportMaxLevel,type SummonCrew,BAR_SLOTS,SWAP_DISCIPLINE_CFG,BLOOM_CFG,GRANT_CFG,skillGrantStat,type AuraDelivery,type BuffEffect,type ChannelSpec,type ConstructDelivery,type GroundDelivery,type GroundCascadeSpec,type GroundPulseSpec,type GuardBashSpec,type LitePourEffect,type ProjectileDelivery,type ProjectileShape,type SkillDef,type SkillEffect,type ProjTrailSpec,type FissureTrailSpec,type DropZoneSpec,type LedgerSpec,type SkillInstance,type SummonDelivery,type SupportDef,type SupportInstance,type TetherSpec,type ImpactDressSpec} from './skills';
 import { birthCount, CLUTCH_CFG, ORPHAN_FRENZY, type BirthEffect } from './clutch';
 import { mintSupportInstance, spawnVeinOf, SUPPORTBASE_CFG } from './supportbase';
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
@@ -33880,19 +33881,7 @@ actors: Actor[] = [];
   minionsOfSkill(owner: Actor, skillId: string): Actor[] { return sceneMinionsOfSkill(this.nativeSceneProgressionHost(),owner,skillId); }
 
   /** Pick a minion type: fixed id, or weighted roll from the pool. */
-  private rollSummonType(d: SummonDelivery): string {
-    if (d.pool && d.pool.length) {
-      let total = 0;
-      for (const p of d.pool) total += p.weight;
-      let roll = rand(0, total);
-      for (const p of d.pool) {
-        roll -= p.weight;
-        if (roll <= 0) return p.id;
-      }
-      return d.pool[d.pool.length - 1].id;
-    }
-    return d.monsterId!;
-  }
+  private rollSummonType(d: SummonDelivery): string { return sceneRollSummonType(d); }
 
   private dismissExclusiveSummons(owner: Actor, inst: SkillInstance, d: SummonDelivery): void {
     if (!d.exclusiveGroup) return;
@@ -33961,46 +33950,7 @@ actors: Actor[] = [];
        *  forwarded copy — its numeric mods fold ×scale (instanceMods).
        *  Minion-crew forwards pass none: Resonance's socket is their price. */
       scale?: number;
-    }): void {
-    if (!summonInst) return;
-    // THE RESONANCE GATE (CREW_CFG.boarding 'gated'): summon-delivery
-    // crews demand a resonance key riding the host before anything boards
-    // — the whole system priced at one socket. Non-summon hosts (Forgebound
-    // proc-conscripts, Hiveborn broods on a melee skill) board FREE: the
-    // proc/graft that minted them was the price of admission, and their
-    // hosts could never socket the summon-gated key anyway.
-    const summonHost = summonInst.def.delivery.type === 'summon' || !!instanceSummon(summonInst);
-    if (summonHost && !crewBoardingOpen(summonInst)) return;
-    // FIXPOINT passes: a forwarded gem's grantsTags can open the door for
-    // another (Faultfinder's 'fissure' admits Tectonic Echoes) regardless
-    // of how the player arranged the summon's sockets — arrangement
-    // independence, matching the gate and the lane router.
-    // GRAFTS forward exactly like socketed gems — a devotion bound onto a
-    // summon skill reaches the crew (the fantasy: your Hunt rides your
-    // skeletons). Same fixpoint, same fit gates, same forwarded stamping.
-    const carried = summonInst.grafts?.length
-      ? [...summonInst.sockets, ...summonInst.grafts] : summonInst.sockets;
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const socket of carried) {
-        if (!socket || !supportRidesMinions(socket.def)) continue;
-        for (const sk of skills) {
-          if (!sk || sk.sockets.some(x => x?.def.id === socket.def.id)) continue;
-          if (!supportFitsInst(socket.def, sk, socket.rolled)) continue;
-          sk.sockets.push({
-            def: socket.def, level: socket.level, forwarded: true,
-            // THE CUT rides the crew (the support base): a forwarded copy
-            // of a chassis gem keeps its vein roll — the keeper's cut is
-            // the whole gem's identity, aboard or at home.
-            ...(socket.rolled ? { rolled: { ...socket.rolled } } : {}),
-            ...(opts?.scale !== undefined && opts.scale !== 1 ? { forwardScale: opts.scale } : {}),
-          });
-          grew = true;
-        }
-      }
-    }
-  }
+    }): void { return sceneForwardSummonSockets(summonInst,skills,opts); }
 
   /**
    * Re-derive the forwarded sockets of every LIVING minion minted by

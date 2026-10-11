@@ -606,7 +606,9 @@ export function sceneTrimAllocated(nativeHost:NativeSceneProgressionHost,snapsho
     return out;
   }
 
-export function sceneRelevelActor(nativeHost:NativeSceneProgressionHost,a: Actor, level: number): void {
+export type NativeSceneRelevelHost=Pick<NativeSceneProgressionHost,'stampMonsterLevel'>;
+export type NativeSceneMinionOwnerStatsHost=Pick<NativeSceneProgressionHost,'account'|'localSeat'|'seatOf'|'relevelActor'>;
+export function sceneRelevelActor(nativeHost:NativeSceneRelevelHost,a: Actor, level: number): void {
     const def = a.defId ? MONSTERS[a.defId] : undefined;
     if (!def || a.level === level) return;
     const lifeFrac = a.life / Math.max(1, a.maxLife());
@@ -618,7 +620,7 @@ export function sceneRelevelActor(nativeHost:NativeSceneProgressionHost,a: Actor
     for (const s of a.skills) if (s) s.level = skillLevel;
   }
 
-export function sceneBakeMinionOwnerStats(nativeHost:NativeSceneProgressionHost,minion: Actor, caster: Actor, inst: SkillInstance, scale = 1): void {
+export function sceneBakeMinionOwnerStats(nativeHost:NativeSceneMinionOwnerStatsHost,minion: Actor, caster: Actor, inst: SkillInstance, scale = 1): void {
     const relic = !!inst.relicSource;
     const inherited = resolveMinionInheritance(caster, inst, minion.defId, scale);
     for (const source of minion.sheet.sourceNames()) if (source.startsWith('relic:')) minion.sheet.removeSource(source);

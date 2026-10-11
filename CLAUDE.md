@@ -1,3 +1,13 @@
+NativeAreaSceneSummonPreparation owns native factory preparation before physical
+insertion: summon selection, support forwarding, owner stats and releveling.
+Keep the actual admitted caster/registered progression, exact factory receiver,
+private synchronous creation scopes and native partial UID/RNG effects. Async
+results refuse immediately and are observed only after scope expiry. Verify
+nativesummonpreparation, nativesummonpreparationasync, authority/progression,
+support/companion/throng/relic/summon and historical/source checks, all types
+and boot. See docs/worldgen/native-area-summon-preparation.md. Full spawning,
+insertion/admission, damage/death, ticking and retained runtime activation remain open.
+
 NativeAreaSceneTethers owns native tether construction on an admitted area's
 actual queue. Preserve physical endpoints, registered queue ownership, reference
 identity, replacement order and partial failures. World shares TETHER_TICK and

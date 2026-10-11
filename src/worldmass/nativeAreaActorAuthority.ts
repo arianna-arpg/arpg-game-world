@@ -31,6 +31,8 @@ export class NativeAreaActorAuthority<S extends object> {
  bindingFor(scene:NativeSceneCensus):NativeAreaAuthorityBinding<S>{
   const binding=this.#scenes.get(scene);if(!binding)throw Error('Unregistered native scene authority');this.#entry(binding);return binding;
  }
+ /** Absence from this authority's exact physical bindings only; not a census scan. */
+ assertUnclaimed(actor:Actor):void{if(this.#actors.has(actor))throw Error('Native actor already has physical authority');}
  claim(binding:NativeAreaAuthorityBinding<S>,actors:readonly Actor[]):void{
   const entry=this.#entry(binding);if(new Set(actors).size!==actors.length)throw Error('Repeated actor in native authority claim');
   for(const actor of actors){if(!binding.scene.actors.includes(actor))throw Error('Native authority claim needs actual scene membership');const prior=this.#actors.get(actor);if(prior&&prior!==binding)throw Error('Native actor already belongs to another area');}
