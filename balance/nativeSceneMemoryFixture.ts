@@ -1,9 +1,10 @@
+import {beforeNativeSceneProjectiles} from './nativeSceneProjectileFixture';
 /** Reverse only the byte-checked memory extraction and explicit writer changes. */
 import assert from 'node:assert/strict';
 import ts from 'typescript';
 import {nativeSceneMemoryArchive as archive} from './nativeSceneMemoryArchive';
 export function beforeNativeSceneMemory(source:string):string {
- let text=source;
+ let text=beforeNativeSceneProjectiles(source);
  function replace(after:string,before:string){assert.equal(text.split(after).length,2,'unique exact native memory integration');text=text.replace(after,before);}
  replace(archive.imports,'');replace(archive.brand,'');
  for(const change of archive.integration)replace(change.after,change.before);

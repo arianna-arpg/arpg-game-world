@@ -4,6 +4,7 @@ import { COSMETICS, COSMETIC_SLOTS, emptyCosmetics, emptyCosmeticLoadout,
 import type { Account } from './account';
 import type { Actor } from '../engine/actor';
 import type { World } from '../engine/world';
+export type NativeCosmeticHost=Pick<World,'seats'|'localSeat'|'account'>;
 import { gateMet, gateRowLabel } from './gates';
 
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -56,7 +57,7 @@ export function cosmeticSkillColor(loadout: CosmeticLoadout | undefined, skill?:
 
 /** Follow summon attribution to its keeper. Possessed enemy bodies keep their identity.
  *  Wire appearances are already sanitized; only local/couch heroes read this account. */
-export function cosmeticLoadoutFor(world: World, actor: Actor): CosmeticLoadout | undefined {
+export function cosmeticLoadoutFor(world: NativeCosmeticHost, actor: Actor): CosmeticLoadout | undefined {
   if (actor.cosmeticLoadout) return actor.cosmeticLoadout;
   let root = actor;
   for (let depth = 0; root.owner && depth < 16; depth++) root = root.owner;
@@ -75,7 +76,7 @@ export function cosmeticSummonSkill(actor: Actor): string | undefined {
   return actor.companion && source?.startsWith('__companion:') ? source.slice('__companion:'.length) : source;
 }
 
-export function cosmeticSkillPaint(world: World, actor: Actor, skill: string) {
+export function cosmeticSkillPaint(world: NativeCosmeticHost, actor: Actor, skill: string) {
   const loadout = cosmeticLoadoutFor(world, actor);
   return { color: cosmeticSkillColor(loadout, skill),
     motif: cosmeticPick(loadout, 'skillSkin', skill)?.paint.motif,

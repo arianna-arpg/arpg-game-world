@@ -149,7 +149,10 @@ export class NativeAreaSceneAssembly {
   population=new NativeAreaScenePopulation({scene,geometry,campaign,sources:sources.population,populationSources:sources.populationResolution,sharedActors:raw.initialActors,
    context:{get time(){return campaign.time;},npcDialogues:residents.npcDialogues,
     applyPartyScale:a=>applyScenePartyScale({partyScaleCount:at=>scenePartyScaleCount({player:scene.player,seats:scenePresence.seats},at)},a),
-    opaqueAt:(x,y)=>geometry.opaqueAt(x,y),sanctuaryBlocksCombat:()=>scene.zone.objective.kind==='safe',
+    opaqueAt:(x,y)=>geometry.opaqueAt(x,y),
+    // Whole native areas have no mass settlement sanctuary. Native isSafeAt is
+    // a separate convenience rule; a safe objective never suppresses hostility.
+    sanctuaryBlocksCombat:()=>false,
     resolveHit:(...args)=>services.population.resolveHit(...args)},
    state:populationState});
   // Keep the native numeric squad namespace shared by every retained area.

@@ -1,3 +1,12 @@
+NativeAreaSceneProjectiles shares exact native launch and occlusion rules with
+World, using the registered progression owner's live queue and physical caster.
+Keep shared recursion/aura constants, method receivers, payload references and RNG.
+Whole native areas have no mass sanctuary: safe-objective convenience checks do
+not suppress hostility. Verify nativeprojectilelaunch, worldmass_sanctuary,
+projectilecull, adjacent native owners/source/birth, all types and boot. See
+docs/worldgen/native-area-projectiles.md. Launch parity is not projectile ticking,
+collision, cross-area effects or complete combat/runtime activation.
+
 NativeAreaMemoryRegistry captures actual born, admitted area owners through the
 real character writer. Preserve source/namespace identity, one capture per save,
 native partial effects and original cold-memory rules. Never unregister the

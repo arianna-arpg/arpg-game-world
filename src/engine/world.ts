@@ -1,4 +1,5 @@
 import './nativeSceneBootstrap';
+import {sceneSpawnProjectile,sceneSkillOcclusion,PROJ_CHILD_DEPTH_MAX,PROJ_AURA_TICK,type NativeSceneProjectileHost} from './nativeSceneProjectiles';
 import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
 import {nativeAreaMemorySnapshot,captureNativeAreaMemories} from '../worldmass/nativeAreaMemoryRegistry';
 const nativeWorldInstances=new WeakSet<object>();
@@ -128,7 +129,7 @@ import { MASS_CFG, impactFrac, impactScale, shoveAuthority } from './mass';
 import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf, ROUSE_RULES } from './ai';
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
-import {convertRuleHolds,crewBoardingOpen,effectiveSkillLevel,grantedTags,grimoireForm,guardBashSpec,guardBashReady,hostSockets,instanceAim,instanceBrood,instanceCascadePlan,instanceChargeCost,instanceChargeGain,instanceConvert,instanceDelivery,instanceEchoes,instanceFollowUps,instanceFuse,instanceInnateMods,instanceMeta,instanceMetas,instanceMods,instanceOvercharge,instancePulsePlan,instanceSelfStack,instanceSizeOver,instanceStrikeTiming,instanceBirth,instanceSummon,instanceTameMod,instanceTargeting,instanceTethers,instanceTrail,instanceTurret,instanceUseCharges,instanceVariance,instanceSequel,instanceContagion,instanceFissureTrail,instanceCurseField,instanceTrigger,instanceTriggerArmed,instanceTriggerLimit,instanceTriggerPermit,makeSkillGem,makeSkillInstance,rampValue,resolveSizeOver,rollCount,rollSkillRarityWeighted,socketSpec,treeNodeOf,treeNodeRefusal,instanceChannel,bandPointsAt,BASH_CFG,CLASS_KIT_RARITY,CONSTRUCT_FORWARD_CFG,UNLEASH_CFG,CONCENTRATION_CFG,CONSTRUCT_KIND_AIMS,ECHO_STRIKE_LIFE_MAX,META_CHAIN_INTERVAL,TRIGGER_CFG,SEQUEL_CFG,CONTAGION_CFG,REFLEX_CFG,TAME_CFG,type TriggerKind,type EchoRiderSpec,AOE_SHAPE,AOE_BAND_DEPTH,bandSwingGeo,skillContextTags,skillMaxLevel,SKILL_RARITIES,essenceTierForLevel,supportFitsInst,type SkillRarity,supportFitsInstOrCrew,supportMaxLevel,supportRidesMinions,type SummonCrew,BAR_SLOTS,SWAP_DISCIPLINE_CFG,BLOOM_CFG,GRANT_CFG,skillGrantStat,type AuraDelivery,type BuffEffect,type ChannelSpec,type ConstructDelivery,type GroundDelivery,type GroundCascadeSpec,type GroundPulseSpec,type GuardBashSpec,type LitePourEffect,type ProjectileDelivery,type ProjectileShape,type SkillDef,type SkillEffect,type ProjTrailSpec,type FissureTrailSpec,type DropZoneSpec,type LedgerSpec,type SkillInstance,type SummonDelivery,type SupportDef,type SupportInstance,type TetherSpec,type ImpactDressSpec} from './skills';
+import {convertRuleHolds,crewBoardingOpen,effectiveSkillLevel,grantedTags,grimoireForm,guardBashSpec,guardBashReady,hostSockets,instanceAim,instanceBrood,instanceCascadePlan,instanceChargeCost,instanceChargeGain,instanceConvert,instanceDelivery,instanceEchoes,instanceFollowUps,instanceFuse,instanceInnateMods,instanceMeta,instanceMetas,instanceMods,instanceOvercharge,instancePulsePlan,instanceSelfStack,instanceSizeOver,instanceStrikeTiming,instanceBirth,instanceSummon,instanceTameMod,instanceTargeting,instanceTethers,instanceTurret,instanceUseCharges,instanceVariance,instanceSequel,instanceContagion,instanceCurseField,instanceTrigger,instanceTriggerArmed,instanceTriggerLimit,instanceTriggerPermit,makeSkillGem,makeSkillInstance,rampValue,resolveSizeOver,rollCount,rollSkillRarityWeighted,socketSpec,treeNodeOf,treeNodeRefusal,instanceChannel,bandPointsAt,BASH_CFG,CLASS_KIT_RARITY,CONSTRUCT_FORWARD_CFG,UNLEASH_CFG,CONCENTRATION_CFG,CONSTRUCT_KIND_AIMS,ECHO_STRIKE_LIFE_MAX,META_CHAIN_INTERVAL,TRIGGER_CFG,SEQUEL_CFG,CONTAGION_CFG,REFLEX_CFG,TAME_CFG,type TriggerKind,type EchoRiderSpec,AOE_SHAPE,AOE_BAND_DEPTH,bandSwingGeo,skillContextTags,skillMaxLevel,SKILL_RARITIES,essenceTierForLevel,supportFitsInst,type SkillRarity,supportFitsInstOrCrew,supportMaxLevel,supportRidesMinions,type SummonCrew,BAR_SLOTS,SWAP_DISCIPLINE_CFG,BLOOM_CFG,GRANT_CFG,skillGrantStat,type AuraDelivery,type BuffEffect,type ChannelSpec,type ConstructDelivery,type GroundDelivery,type GroundCascadeSpec,type GroundPulseSpec,type GuardBashSpec,type LitePourEffect,type ProjectileDelivery,type ProjectileShape,type SkillDef,type SkillEffect,type ProjTrailSpec,type FissureTrailSpec,type DropZoneSpec,type LedgerSpec,type SkillInstance,type SummonDelivery,type SupportDef,type SupportInstance,type TetherSpec,type ImpactDressSpec} from './skills';
 import { birthCount, CLUTCH_CFG, ORPHAN_FRENZY, type BirthEffect } from './clutch';
 import { mintSupportInstance, spawnVeinOf, SUPPORTBASE_CFG } from './supportbase';
 import { BOMBARD_CFG, type BombardSpec } from './bombard';
@@ -803,7 +804,7 @@ const SHRAPNEL_SKILL = 'shrapnel_shard';
  *  spawn depth-1 children which may spawn depth-2 — and depth 2 is barren.
  *  The recursion guard that keeps a global projShrapnel passive (shards
  *  shattering into shards) from going geometric. */
-const PROJ_CHILD_DEPTH_MAX = 2;
+/* NativeSceneProjectiles owns PROJ_CHILD_DEPTH_MAX. */
 
 /** Every status id, in registry order — the canonical order of the generated
  *  apply_<status> / minionApply_<status> families. Handed to
@@ -1217,7 +1218,7 @@ interface Tether {
  *  per-frame crumbs). Healing runs continuously. */
 const TETHER_TICK = 0.4;
 /** Chunk cadence of a projectile-borne field's DoT (Soulflay's wake). */
-const PROJ_AURA_TICK = 0.3;
+/* NativeSceneProjectiles owns PROJ_AURA_TICK. */
 
 /** DropZoneSpec.durationBySpeed: the linger multiplier a flight's LIVE
  *  speed feeds its drop — clamp((speed/ref)^exp, min, max); exp < 0
@@ -33430,6 +33431,17 @@ actors: Actor[] = [];
    * chains / emitters from the caster's stats and the skill's data. Also
    * used by emitting projectiles (Frozen Orb's frostbolts).
    */
+  declare private nativeSceneProjectileView?:NativeSceneProjectileHost;
+  private nativeSceneProjectileHost():NativeSceneProjectileHost {
+    if(this.nativeSceneProjectileView)return this.nativeSceneProjectileView;
+    const world=this;
+    return this.nativeSceneProjectileView=Object.freeze({
+      get projectiles(){return world.projectiles;},get account(){return world.account;},get seats(){return world.seats;},get localSeat(){return world.localSeat;},
+      get enemiesOf(){const fn=world.enemiesOf;return(...args:Parameters<World['enemiesOf']>)=>fn.apply(world,args);},
+      get skillOcclusion(){const fn=world.skillOcclusion;return(...args:Parameters<World['skillOcclusion']>)=>fn.apply(world,args);}
+    });
+  }
+
   spawnProjectile(caster: Actor, inst: SkillInstance, origin: Vec2, dir: number,
     opts?: {
     // SOVEREIGNTY: targeting — the aim assist picks through hostility (the derived census, probe_tiers RIG T).
@@ -33439,163 +33451,7 @@ actors: Actor[] = [];
       dest?: Vec2;
       /** CAROMS: waypoints the flight cycles between for its whole life. */
       patrol?: Vec2[];
-    }): void {
-    const def = inst.def;
-    const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
-    // (Skill-mode audit: projectile-family fields — pierce/forks/fire —
-    // are off the M1 whitelist; the piercing_arrow/fireball waves adopt
-    // this read behind the view when they land.)
-    if (def.delivery.type !== 'projectile') return;
-    const d: ProjectileDelivery = def.delivery;
-    const tags = skillContextTags(def);
-    const extra = instanceMods(inst);
-    const depth = opts?.depth ?? 0;
-    const inh = opts?.inherit;
-
-    const speed = d.speed * caster.sheet.get('projectileSpeed', tags, extra);
-    const size = caster.sheet.get('projectileSize', tags, extra);
-    // DURATION-DRIVEN flight: the clock is the leash and RANGE FALLS OUT
-    // of speed × time — accel gathers distance, decel forfeits it.
-    const maxAge = d.duration !== undefined
-      ? d.duration * caster.sheet.get('effectDuration', tags, extra)
-      : undefined;
-    // Trajectory axes: the delivery's innate values are each stat query's
-    // BASE, so flat mods create an axis and increased/more scale or dampen it.
-    // An inherited flight (a Lineage'd parent's pre-scaled axes) ADDS on top,
-    // so a shard's own innate pattern and its heritage compose.
-    const t = d.trajectory;
-    // PROJECTILE-BORNE FIELD (Soulflay): scaled by the caster's damage stat
-    // and CONVERTED at launch — the tether discipline; the flight just wears it.
-    let auraAmounts: Partial<Record<DamageType, number>> | undefined;
-    if (d.aura) {
-      const aType: DamageType = d.aura.damageType ?? 'chaos';
-      const aTags = skillContextTags(def, [aType]);
-      auraAmounts = { [aType]: d.aura.dps * caster.sheet.get('damage', aTags, extra) };
-      applyConversion(caster, auraAmounts, aTags, extra);
-    }
-    const homing = caster.sheet.get('homingPower', tags, extra, t?.homing ?? 0) + (inh?.homing ?? 0);
-    const guide = caster.sheet.get('guidePower', tags, extra, t?.guide ?? 0);
-    const erratic = caster.sheet.get('erraticPower', tags, extra, t?.erratic ?? 0) + (inh?.erratic ?? 0);
-    const spiral = caster.sheet.get('spiralPower', tags, extra, t?.spiral ?? 0) + (inh?.spiral ?? 0);
-    const orbit = caster.sheet.get('orbitPower', tags, extra, t?.orbit ?? 0) + (inh?.orbit ?? 0);
-    const spin = caster.sheet.get('spinPower', tags, extra, t?.spin ?? 0) + (inh?.spin ?? 0);
-    const weave = caster.sheet.get('weavePower', tags, extra, t?.weave ?? 0) + (inh?.weave ?? 0);
-    const accel = caster.sheet.get('projAccel', tags, extra, t?.accel ?? 0);
-    // PULSATION (projPulse): the flight BREATHES — its hit radius swells
-    // and shrinks around the base on a fixed rhythm (a living missile;
-    // expansion-and-contraction as a projectile modifier).
-    const pulse = caster.sheet.get('projPulse', tags, extra);
-    // Kindred returns (see the literal below): native mode vs the gems'
-    // granted mode read separately — never one folded read, so a granted
-    // override can no longer re-aim a native catch.
-    const nativeReturn = d.returns === 'origin' ? 1 : d.returns === 'caster' ? 2 : 0;
-    const grantedReturn = Math.round(caster.sheet.get('projReturn', tags, extra));
-
-    this.projectiles.push({
-      pos: vec(origin.x, origin.y),
-      orbPaint: d.orbPaint,
-      // THE TIER LAW: a flight belongs to its caster's layer (chain children
-      // spread-copy it; hostility keeps victims same-tier).
-      tier: caster.tier,
-      dir, guideDir: dir,
-      guided: spiral > 0 || orbit > 0 || spin > 0 || weave > 0,
-      speed,
-      radius: d.radius * size,
-      pulse: pulse > 0 ? pulse : undefined,
-      radius0: pulse > 0 ? d.radius * size : undefined,
-      traveled: 0, range: maxAge !== undefined ? 1e9 : d.range, age: 0,
-      maxAge,
-      pierce: (d.pierce ?? 0) + Math.round(caster.sheet.get('pierceCount', tags, extra)),
-      chains: Math.round(caster.sheet.get('chainCount', tags, extra)),
-      hits: new Map(),
-      caster, inst, color: cosmeticPaint.color ?? def.color,
-      cosmeticMotif: cosmeticPaint.motif,
-      cosmeticProjectile: cosmeticPaint.projectile,
-      shape: d.shape ?? 'circle',
-      mult: opts?.mult ?? 1,
-      flat: opts?.flat,
-      rehit: d.rehit,
-      conductive: caster.sheet.get('conduction', tags, extra) > 0,
-      forks: (d.forks ?? 0) + Math.round(caster.sheet.get('forkCount', tags, extra)),
-      // KINDRED RETURNS (2026-07-22): the native lane owns the homeward
-      // TARGET — a socketed return gem on a native returner never re-aims
-      // the catch (the override-wins accident this replaces); it buys a
-      // SECOND full pass instead (the catch becomes a re-throw). On
-      // returnless hosts the gem grants the mode its own value names
-      // (Returning → origin, Boomerang → caster).
-      returnMode: nativeReturn > 0 ? nativeReturn : Math.min(2, Math.max(0, grantedReturn)),
-      returnPasses: nativeReturn > 0 && grantedReturn > 0 ? 2 : 1,
-      returnPhase: false,
-      origin: vec(origin.x, origin.y),
-      anchor: vec(origin.x, origin.y),
-      angle: dir,
-      orbRadius: orbit > 0 ? (t?.orbitRadius ?? inh?.orbitR0 ?? 50) : 0,
-      accel: accel !== 0 ? accel : undefined,
-      homing, guide, erratic, spiral, orbit, spin, weave,
-      amp: t?.amplitude ?? inh?.amp ?? (weave > 0 ? 45 : 35),
-      orbitR0: t?.orbitRadius ?? inh?.orbitR0 ?? 50,
-      hitDetonate: caster.sheet.get('projHitDetonate', tags, extra) > 0,
-      shrapnel: Math.round(caster.sheet.get('projShrapnel', tags, extra)),
-      trailSpec: instanceTrail(inst),
-      trailNext: instanceTrail(inst)?.every ?? Infinity,
-      // FISSURE TRAIL (innate or Sundering Flight's graft): the tear-head
-      // state — first segment rips at the muzzle (fisNext 0).
-      fisSpec: instanceFissureTrail(inst),
-      fisNext: 0,
-      // The borne field rides at aoe-scaled reach, chunk-ticked in flight.
-      auraAmounts,
-      auraRadius: d.aura ? d.aura.radius * caster.sheet.get('aoeRadius', tags, extra) : undefined,
-      auraTick: d.aura ? PROJ_AURA_TICK : undefined,
-      inheritFrac: Math.min(1, caster.sheet.get('projInherit', tags, extra)),
-      reShatter: caster.sheet.get('projReShatter', tags, extra) > 0,
-      depth,
-      // Emitters stop one generation short of the cap — a shard that happens
-      // to BE an emitter skill still emits, but its emissions are barren.
-      emit: d.emit && depth < PROJ_CHILD_DEPTH_MAX ? {
-        inst: makeSkillInstance(SKILLS[d.emit.skillId], effectiveSkillLevel(inst)),
-        interval: d.emit.interval, timer: d.emit.interval,
-        angle: dir, pattern: d.emit.pattern ?? 'rotating',
-      } : undefined,
-      // Batch-3 levers: zig-zag clocks, ricochet stock, recurve odds, the
-      // selective-pierce prey, arc-to destinations, carom patrols.
-      zig: t?.zigzag ? { timer: t.zigzag.interval, sign: chance(0.5) ? 1 : -1 } : undefined,
-      // Bounce and recurve are STAT AXES like the flight patterns: innate
-      // spec values seed the queries, so gems create them from nothing.
-      // Patrol shuttles (caroms) claim projBounce whole at the anchor cap
-      // — a shuttling flight never wall-bounces on top of its own weave.
-      bounces: opts?.patrol?.length ? undefined
-        : Math.round(caster.sheet.get('projBounce', tags, extra, t?.bounce ?? 0)) || undefined,
-      // FRAME REBOUNDS (the fourth wall) ride the same kindred shape —
-      // innate frameBounce seeds the projFrameBounce query, so Mirrored
-      // Bounds creates the lane from nothing. Patrol shuttles keep their
-      // authored geometry: no frame banking on a fixed weave.
-      frameBounces: opts?.patrol?.length ? undefined
-        : Math.round(caster.sheet.get('projFrameBounce', tags, extra, t?.frameBounce ?? 0)) || undefined,
-      // PHASING (occlusion 'free' / the phasing stat, support-graftable):
-      // terrain never stops this flight.
-      phase: this.skillOcclusion(caster, inst) === 'free' || undefined,
-      caromLock: t?.caromOnHit,
-      recurveChance: (() => {
-        const rc = caster.sheet.get('projRecurve', tags, extra, t?.recurve?.chance ?? 0);
-        return rc > 0 ? rc : undefined;
-      })(),
-      preyId: t?.selectivePierce
-        ? (() => {
-          let best: Actor | null = null, bd = 700;
-          for (const e of this.enemiesOf(caster)) {
-            const dd = dist(origin, e.pos);
-            if (dd < bd) { bd = dd; best = e; }
-          }
-          return best?.id;
-        })()
-        : undefined,
-      destAt: t?.arcTo && (opts?.dest || caster.aimPos)
-        ? vec((opts?.dest ?? caster.aimPos!).x, (opts?.dest ?? caster.aimPos!).y)
-        : undefined,
-      arcRate: t?.arcTo,
-      patrol: opts?.patrol?.length ? { points: opts.patrol.map(p2 => vec(p2.x, p2.y)), idx: 0 } : undefined,
-    });
-  }
+    }): void { return sceneSpawnProjectile(this.nativeSceneProjectileHost(),caster,inst,origin,dir,opts); }
 
   /** The parent's resolved axes × its effective inherit fraction (the
    *  projInherit stat + the spawning spec's own `inherit`) — or undefined
@@ -47914,13 +47770,7 @@ actors: Actor[] = [];
    *  passage (Wraith Passage conjures it from nothing, exactly like
    *  projBounce), which is also how a build BUYS the through-wall blink
    *  back on purpose. */
-  skillOcclusion(caster: Actor, inst: SkillInstance): 'blocked' | 'free' | 'travel' {
-    const d = inst.def.delivery as { type: string; occlusion?: 'blocked' | 'free' };
-    const base = d.occlusion ?? LOS_CFG.delivery[d.type] ?? 'free';
-    if (base === 'free') return 'free';
-    return caster.sheet.get('phasing', skillContextTags(inst, grantedTags(inst)),
-      instanceMods(inst)) > 0 ? 'free' : base;
-  }
+  skillOcclusion(caster: Actor, inst: SkillInstance): 'blocked' | 'free' | 'travel' { return sceneSkillOcclusion(this.nativeSceneProjectileHost(),caster,inst); }
 
   /** THE BAND LAW's attitude for one strung band — skillOcclusion's exact
    *  fold, keyed on the band's LINK lane (LOS_CFG.tetherLinks) instead of a
