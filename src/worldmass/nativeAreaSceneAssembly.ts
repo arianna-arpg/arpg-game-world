@@ -1,4 +1,5 @@
 import {makeNativeAreaArena} from '../engine/nativeAreaArena';
+import {NativeAreaTimeflow,type NativeAreaTimeflowHost} from './nativeAreaTimeflow';
 /** Fresh native area ownership and staged complete preparation. No World scene
  * transfer, arrival teleport, runtime publication or implicit service fallback. */
 import type {World} from '../engine/world';
@@ -76,15 +77,17 @@ export interface NativeAreaAssemblyServices {
  geometry:Omit<ConstructorParameters<typeof NativeAreaSceneGeometry>[2],'radianceCondHeld'|'createMonster'|'time'|'seats'|'ledger'>;
  population:Pick<Input<typeof NativeAreaScenePopulation>['context'],'resolveHit'>;
  residents:Pick<Input<typeof NativeResidentSession>['area']['local'],'viewRectFor'|'scene'|'clientActionHook'>;
- environment:Pick<Input<typeof NativeAreaSceneEnvironment>['services'],'timeflow'|'completePuzzle'>;
+ timeflow:NativeAreaTimeflowHost;
+ environment:Pick<Input<typeof NativeAreaSceneEnvironment>['services'],'completePuzzle'>;
  ecology:Pick<Input<typeof NativeAreaSceneEcology>['services'],'throngClaimed'>;
- occurrences:Omit<Input<typeof NativeAreaSceneOccurrences>['services'],'time'>;
  theater:Omit<Input<typeof NativeAreaSceneTheater>['services'],'radianceCondHeld'>;
  openings:Input<typeof NativeAreaSceneOpenings>['rewards'];
  history:Input<typeof NativeAreaSceneHistory>['services'];
 }
 export interface NativeAreaAssemblyInput {
- definition:ZoneDef;player:Actor;initialActors:readonly Actor[];
+ definition:ZoneDef;player:Actor;
+ /** Borrowed campaign party, never a transfer of another area's resident bodies. */
+ initialActors:readonly Actor[];
  campaign:NativeAreaAssemblyCampaign;sources:NativeAreaAssemblySources;
  services:NativeAreaAssemblyServices;
  carry:Pick<Transition,'inCave'|'entryFrom'|'voyage'|'charBorn'|'charRegrowAcc'> & {townTierIdx:World['townTierIdx']};
@@ -106,6 +109,7 @@ export class NativeAreaSceneAssembly {
  readonly boundaries:NativeAreaSceneBoundaries;
  readonly generation:NativeAreaSceneGeneration;
  readonly transition:Transition;
+ readonly timeflow:NativeAreaTimeflow;
  #phase:'fresh'|'preparing'|'prepared'|'birthing'|'born'|'failed'='fresh';
  #prepared?:{source:NativeAreaSource;session:NativeAreaSourceSession;layout:Readonly<Layout>;fingerprint:string;firstVisit:boolean;rngState:number;memoryState:string};
  constructor(raw:NativeAreaAssemblyInput){
@@ -116,6 +120,7 @@ export class NativeAreaSceneAssembly {
   if(!raw.initialActors.includes(raw.player)||new Set(raw.initialActors).size!==raw.initialActors.length)throw Error('Native assembly needs one complete initial census');
   if(raw.carry.inCave!==!campaign.zoneMap[definition.id])throw Error('Native assembly cave identity differs');
   const scene={zone:definition,player:raw.player,actors:[...raw.initialActors]};
+  const timeflow=this.timeflow=new NativeAreaTimeflow(services.timeflow);
   const environmentState=freshSceneEnvironmentState(),objectives=freshSceneObjectiveState(definition.id,campaign.completedObjectives);
   const sky=new NativeAreaSceneSky({scene,environment:environmentState,campaign});
   let population:NativeAreaScenePopulation;
@@ -128,7 +133,7 @@ export class NativeAreaSceneAssembly {
    localZoneAt:()=>scene.zone,isSafeAt:()=>scene.zone.objective.kind==='safe',lineOfSight:geometry.lineOfSight.bind(geometry)});
   const residents=new NativeResidentSession({campaign,area:{census:scene,local},history:campaign.nativeResidentHistory});
   const populationState={squadSequence:campaign.squadSeq,bombardMintRev:0,zoneGenTagging:false,magicPackEffects:[] as World['magicPackEffects'],magicPackResolving:false,magicPackRefreshPending:false};
-  population=new NativeAreaScenePopulation({scene,geometry,campaign,sources:sources.population,populationSources:sources.populationResolution,
+  population=new NativeAreaScenePopulation({scene,geometry,campaign,sources:sources.population,populationSources:sources.populationResolution,sharedActors:raw.initialActors,
    context:{get time(){return campaign.time;},npcDialogues:residents.npcDialogues,
     applyPartyScale:a=>applyScenePartyScale({partyScaleCount:()=>scenePartyScaleCount({player:scene.player,seats:campaign.seats})},a),
     opaqueAt:(x,y)=>geometry.opaqueAt(x,y),sanctuaryBlocksCombat:()=>scene.zone.objective.kind==='safe',
@@ -137,11 +142,12 @@ export class NativeAreaSceneAssembly {
   // Keep the native numeric squad namespace shared by every retained area.
   Object.defineProperty(populationState,'squadSequence',{enumerable:true,get:()=>campaign.squadSeq,set:(v:number)=>{campaign.squadSeq=v;}});
   const environment=new NativeAreaSceneEnvironment({scene,geometry,population,
-   services:bindNativeSceneObjectives(extendView(servicesView(services.environment,['timeflow','completePuzzle']),{get time(){return campaign.time;}}),objectives),sources:sources.environment,state:environmentState});
+   services:bindNativeSceneObjectives(extendView(servicesView(services.environment,['completePuzzle']),{timeflow,get time(){return campaign.time;}}),objectives),sources:sources.environment,state:environmentState});
   const ecology=new NativeAreaSceneEcology({scene,geometry,population,environment:environmentState,
    services:bindNativeSceneSky(extendView(servicesView(services.ecology,['throngClaimed']),{get time(){return campaign.time;},get seats(){return campaign.seats;}}),sky),sources:sources.ecology,state:freshSceneEcologyState()});
   const settlement=new NativeAreaSceneSettlement({scene,geometry,campaign,state:{townTierIdx:raw.carry.townTierIdx,mercOutpost:null}});
-  const occurrences=new NativeAreaSceneOccurrences({scene,geometry,population,services:extendView(servicesView(services.occurrences,['traceRuns','timeflow']),{get time(){return campaign.time;}}),state:freshSceneOccurrenceState()});
+  const traceState={traceRuns:[] as World['traceRuns'],timeflow,get time(){return campaign.time;}};
+  const occurrences=new NativeAreaSceneOccurrences({scene,geometry,population,services:traceState,state:freshSceneOccurrenceState()});
   const objectiveHost=sceneObjectiveServices(population,objectives,{
    get zoneEntry(){return geometry.zoneEntry;},get sim(){return campaign.sim;},get walk(){return geometry.walk;},
    get structures(){return geometry.structures;},get arena(){return geometry.arena;},get time(){return campaign.time;},
@@ -175,7 +181,7 @@ export class NativeAreaSceneAssembly {
   // Brandt's once-armed shelf is run state, including between counter areas.
   Object.defineProperty(this.input.state,'vendorStock',{enumerable:true,get:()=>campaign.vendorStock,set:(v:World['vendorStock'])=>{campaign.vendorStock=v;}});
   this.graph=new NativeAreaSceneGraph({coast,campaign});this.boundaries=new NativeAreaSceneBoundaries(this.graph);
-  for(const key of ['input','host','graph','boundaries','generation','transition'])Object.defineProperty(this,key,{writable:false,configurable:false});
+  for(const key of ['input','host','graph','boundaries','generation','transition','timeflow'])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
  get phase(){return this.#phase;}
  sourceSession(geography:MassNativeGeography){return new NativeAreaSourceSession(this.graph,geography);}

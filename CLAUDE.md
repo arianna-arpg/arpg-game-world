@@ -1,3 +1,13 @@
+NativeAreaCoexistence makes fresh assemblies borrow campaign party relays and
+own trace state plus scoped activity holds on the real shared clock. Never let
+neighbor preparation acquire shared actor callbacks or release another area's
+trace/harvest. This preserves current routing, not final spatial publication.
+Verify nativeareaisolation, nativeareasourcesession, full birth and adjacent
+owners, all types, generation and sim. docs/worldgen/native-area-coexistence.md
+records the bounded/open place direction and sequence: ongoing local ownership,
+complete publication/persistence, navigable layout variety, then hierarchy/zoom.
+Full-area client activation remains unfinished. Follow SeamlessOnlyContent below.
+
 The seamless foundation now includes the hosted-shard runtime and per-player
 roads. docs/engine/shard-runtime-foundation.md records the combined checkpoint,
 multi-focus reservation/dormancy contracts, exact validation and remaining
@@ -47,10 +57,11 @@ and registrations. Preserve original lazy reads, receivers, source caching and
 registration order; nativeSceneBootstrap excludes the two World-capturing save
 roots. Verify nativeinstalledsources (original receipt and strict no-World graph),
 nativeareasourcesession, full birth, adjacent owners, all types and generation.
-See docs/worldgen/native-installed-sources.md for evidence and the next boundary:
-shared-player relay ownership, per-area traces/holds, ongoing local services,
-whole-area publication/persistence and native hierarchy/map zoom. Source loading
-alone is not full-area client activation. Follow SeamlessOnlyContent below.
+See docs/worldgen/native-installed-sources.md for bootstrap evidence.
+NativeAreaCoexistence resolves preparation-time shared-party/trace interference.
+Next: authoritative live routing, ongoing local services, whole-area
+publication/persistence and native hierarchy/map zoom. Source loading alone
+is not full-area client activation. Follow SeamlessOnlyContent below.
 
 ExplorationPopulation fixes derived bombard census retention and settled native
 visual/AI query deadlines that prevented offscreen dormancy. Keep actual emitted

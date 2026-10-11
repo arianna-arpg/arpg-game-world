@@ -100,6 +100,12 @@ Installed sources are now concrete. Full-area activation, ongoing gameplay and
 persistence still need their own implementation and proof. The source factory
 has no active client call site that publishes a complete assembled area.
 
+The later [NativeAreaCoexistence checkpoint](native-area-coexistence.md) preserves
+borrowed party callbacks and supplies local trace state/scoped activity holds.
+That resolves preparation-time interference in items 1 and 2 below; authoritative
+spatial party routing and ongoing activity/persistence remain unfinished. The
+list records the original boundary identified at this source checkpoint.
+
 Before neighboring owners can be activated:
 
 1. Give shared actors authoritative area relay routing. The current population

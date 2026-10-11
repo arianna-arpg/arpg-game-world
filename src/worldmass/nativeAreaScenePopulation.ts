@@ -42,6 +42,8 @@ export interface NativeScenePopulationInput {
   campaign:NativeAreaPopulationCampaign; sources:NativeAreaAmbientSources;
   populationSources:NativePopulationSources; context:NativeAreaAmbientContext;
   state:NativeScenePopulationState;
+  /** Carried campaign actors keep their authoritative relay; this area only observes them. */
+  sharedActors?:readonly Actor[];
 }
 /** Forward a declared native capability lazily. Selection happens before argument
  * evaluation, and invocation retains its original explicit provider receiver. */
@@ -62,6 +64,7 @@ export class NativeAreaScenePopulation {
   private readonly relayHost={enemiesOf:(a:Actor)=>this.enemiesOf(a)};
   private readonly relay:NonNullable<Actor['statusRelay']>=(a,args)=>nativeRelayStatus(this.relayHost,this.input.sources.relay,a,args);
   readonly input:NativeScenePopulationInput;
+  readonly #sharedActors:ReadonlySet<Actor>;
   constructor(raw:NativeScenePopulationInput) {
     const bindings=Object.create(null);
     for(const key of ['scene','geometry','campaign','sources','populationSources','context','state']){
@@ -69,6 +72,13 @@ export class NativeAreaScenePopulation {
       if(!d||!Object.hasOwn(d,'value'))throw Error('Native scene population requires own binding: '+key);
       bindings[key]=d.value;
     }
+    const shared = Object.getOwnPropertyDescriptor(raw,'sharedActors');
+    if (shared && (!Object.hasOwn(shared,'value') || !Array.isArray(shared.value)))
+      throw Error('Native scene population requires an own shared actor list');
+    const sharedActors:Actor[] = shared ? [...shared.value] : [];
+    if (new Set(sharedActors).size !== sharedActors.length || sharedActors.some(a=>!bindings.scene.actors.includes(a)))
+      throw Error('Native scene shared actors must belong to the initial census');
+    this.#sharedActors = new Set(sharedActors);
     const input:NativeScenePopulationInput=this.input=Object.freeze(bindings);
     const callbacks={} as Pick<NativeAreaAmbientContext,'applyPartyScale'|'sanctuaryBlocksCombat'|'resolveHit'>;
     for(const key of ['applyPartyScale','sanctuaryBlocksCombat','resolveHit'] as const){
@@ -133,11 +143,13 @@ export class NativeAreaScenePopulation {
       Object.defineProperty(this,key,{writable:false,configurable:false});
     this.transferRelays(scene.actors);
   }
-  /** Explicit detached handoff. Never invoke for borrowed live World bodies. */
+  /** Detached local handoff. Campaign actors retain their existing routing,
+   * including when a later census transfer names them again. */
   transferRelays(actors:readonly Actor[]):void {
-    for(const a of actors){const d=Object.getOwnPropertyDescriptor(a,'statusRelay');
+    const local = actors.filter(a=>!this.#sharedActors.has(a));
+    for(const a of local){const d=Object.getOwnPropertyDescriptor(a,'statusRelay');
       if(d?(!Object.hasOwn(d,'value')||!d.writable):!Object.isExtensible(a))throw Error('Nontransferable scene actor relay');}
-    for(const a of actors)a.statusRelay=this.relay;
+    for(const a of local)a.statusRelay=this.relay;
   }
   get actors():Actor[]{return this.input.scene.actors;}
   set actors(v:Actor[]){this.input.scene.actors=v;}

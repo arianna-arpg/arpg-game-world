@@ -182,11 +182,14 @@ function verifySources(){
   internal!.rng.next();assert.throws(()=>owner.birth(),/continuation changed/);
   assert.equal(owner.phase,'prepared');assert.equal(atlasSeedInstalled(),991);
   const heldTime=w.timeflow;assert.ok(heldTime.holdSurface('trace'));assert.equal(heldTime.worldScale(),0);
-  const traced={traceRuns:[{held:true}] as any,timeflow:heldTime};
-  const serviceRaw=freshAssemblyInput(w,sibling,raw.campaign);serviceRaw.services.occurrences=traced;
+  const traced=[{held:true}];w.traceRuns=traced;
+  const serviceRaw=freshAssemblyInput(w,sibling,raw.campaign);
   class DynamicTheater {mode:any=w.geyserMode;get geyserMode(){return this.mode;}notice(){assert.equal(this,provider);}imminentThreatTo=serviceRaw.services.theater.imminentThreatTo;plantDressAt=serviceRaw.services.theater.plantDressAt;dropGemAt=serviceRaw.services.theater.dropGemAt;moveActor=serviceRaw.services.theater.moveActor;slipAway=serviceRaw.services.theater.slipAway;}
   const provider=new DynamicTheater();serviceRaw.services.theater=provider;
-  const servicesOwner=new NativeAreaSceneAssembly(serviceRaw);servicesOwner.input.occurrences.traceAbortAll();assert.equal(traced.traceRuns.length,0);assert.equal(heldTime.worldScale(),1);
+  const servicesOwner=new NativeAreaSceneAssembly(serviceRaw);servicesOwner.input.occurrences.traceAbortAll();assert.equal(w.traceRuns,traced);assert.equal(traced.length,1);assert.equal(heldTime.worldScale(),0);
+  assert.ok(servicesOwner.timeflow.holdSurface('trace'));servicesOwner.input.occurrences.input.services.traceRuns=[{held:true}] as any;
+  servicesOwner.input.occurrences.traceAbortAll();assert.equal(servicesOwner.input.occurrences.input.services.traceRuns.length,0);assert.equal(heldTime.worldScale(),0);
+  heldTime.release('trace');w.traceRuns=[];assert.equal(heldTime.worldScale(),1);
   servicesOwner.input.theater.input.services.notice('test');provider.mode='late-mode';assert.equal(servicesOwner.input.theater.input.services.geyserMode,'late-mode');
   assert.equal((servicesOwner.input.residents.npcDialogues as any).visits,raw.campaign.nativeResidentHistory.dialogueVisits);
   assert.equal(servicesOwner.input.state.theaterVisitSeq,raw.campaign.theaterVisitSeq);

@@ -21,8 +21,8 @@ export function freshAssemblyInput(w:any,definition:World['zone'],campaign?:any)
  campaign.notice??=w.notice.bind(w);campaign.text??=w.text.bind(w);campaign.continentFor??=(c:any)=>continentAt(c,continentSeedFrom(campaign.sim.biomeField.fieldSeed));
  return {definition,player:w.player,initialActors:[w.player],campaign,
  sources:installedNativeAreaSources(campaign),
- services:{geometry:{seasSeen:w.seasSeen,oceanBearing:w.oceanBearing.bind(w),seaNameOf:w.seaNameOf.bind(w),notice:campaign.notice,text:campaign.text,seatOf:w.seatOf.bind(w),drainSurvival:unavailable('drainSurvival')},population:{resolveHit:unavailable('resolveHit')},
- residents:{viewRectFor:unavailable('viewRectFor'),scene:w.scene,clientActionHook:w.clientActionHook},environment:{timeflow:w.timeflow,completePuzzle:unavailable('completePuzzle')},ecology:{throngClaimed:w.throngClaimed},occurrences:{traceRuns:w.traceRuns,timeflow:w.timeflow},
+ services:{timeflow:w.timeflow,geometry:{seasSeen:w.seasSeen,oceanBearing:w.oceanBearing.bind(w),seaNameOf:w.seaNameOf.bind(w),notice:campaign.notice,text:campaign.text,seatOf:w.seatOf.bind(w),drainSurvival:unavailable('drainSurvival')},population:{resolveHit:unavailable('resolveHit')},
+ residents:{viewRectFor:unavailable('viewRectFor'),scene:w.scene,clientActionHook:w.clientActionHook},environment:{completePuzzle:unavailable('completePuzzle')},ecology:{throngClaimed:w.throngClaimed},
  theater:{geyserMode:w.geyserMode,notice:campaign.notice,imminentThreatTo:unavailable('imminentThreatTo'),plantDressAt:unavailable('plantDressAt'),dropGemAt:unavailable('dropGemAt'),moveActor:unavailable('moveActor'),slipAway:unavailable('slipAway')},
  openings:{text:campaign.text,dropGemAt:unavailable('opening dropGemAt'),shedOrb:unavailable('shedOrb')},history:{notice:campaign.notice,text:campaign.text,events:w.events}},
  carry:{inCave:!campaign.zoneMap[definition.id],entryFrom:null,voyage:null,charBorn:w.charBorn,charRegrowAcc:w.charRegrowAcc,townTierIdx:w.townTierIdx},
