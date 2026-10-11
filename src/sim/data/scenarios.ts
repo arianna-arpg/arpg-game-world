@@ -388,11 +388,11 @@ add(matchupDuel('ironbell_burst_l12', 'primeval_ironbell',
 //   base      (arc 30/spread  90): solo  54.4 · pack 193.9 — 5/5 victims
 //   sprinkler (arc 30/spread 130): solo  32.2 · pack 171.3 — 5/5 victims
 //   duelist   (arc 16/spread  24): solo 108.7 · pack 108.7 — 1 victim
-// These rows exist for VISIBILITY (`run --suite smoke` prints them); the
-// hard pins live in balance/probe_skillmodes.ts (arc + sector measured
-// through the real engine), and the committed smoke BASELINE deliberately
-// does NOT know these ids — compareSuites skips unbaselined rows, so THE
-// TRANSPARENCY LAW stays gated on the standing scenarios alone.
+// These rows are included in the committed smoke baseline and use the
+// current strict gate tolerances, just like the standing scenarios. Their
+// preliminary trees and passive walks can move the measurements; explain
+// those changes with current evidence before updating any baseline. The
+// hard pins live in balance/probe_skillmodes.ts (arc + sector through the real engine).
 // M1 RE-PIN (2026-08-20): the rows now carry the FULL-TREE terminal
 // allocations (three rungs + the neutral — the exact cover's end state) at
 // gem level 20, the budget-true seat (bandPointsAt(20) = 4). The M0-era
@@ -449,8 +449,8 @@ export const SUITES: Record<string, string[]> = {
     'dummy_dps_warrior_l1',
     'ttk_parity_warrior_l5',
     'ttk_parity_magician_l5',
-    // THE SKILL-MODE SPIKE rows (M0): visibility, not gate — the committed
-    // baseline predates them and compareSuites skips unbaselined ids.
+    // THE SKILL-MODE SPIKE rows (M0): baselined and graded under the
+    // same current strict tolerances as the standing scenarios.
     'skillmode_sprinkler_pack_l20',
     'skillmode_duelist_solo_l20',
   ],
