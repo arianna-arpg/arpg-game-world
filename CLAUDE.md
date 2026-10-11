@@ -1,3 +1,12 @@
+NativeAreaSceneTethers owns native tether construction on an admitted area's
+actual queue. Preserve physical endpoints, registered queue ownership, reference
+identity, replacement order and partial failures. World shares TETHER_TICK and
+uses a nonenumerable adapter cache so dormancy retains real tether dependencies
+without retaining unrelated actors. Verify nativetetherconstruction, tetherecology,
+movementtether, dormancy/pinattribution, adjacent native/source checks, all types
+and boot. See docs/worldgen/native-area-tethers.md. Ticking, damage, healing,
+crossing and complete retained combat/runtime activation remain open.
+
 NativeAreaSceneQuestInteraction owns admitted quest giver dwell, offers, vocation
 choices and imbue claims beside the actual ongoing quest/progression owners.
 Preserve physical local/hosted attendance, transfer-invalidated dwell, native idle

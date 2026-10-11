@@ -1,4 +1,5 @@
 import './nativeSceneBootstrap';
+import {sceneAddTether,sceneAttachObjectTethers,TETHER_TICK,type NativeSceneTetherHost} from './nativeSceneTethers';
 import {sceneNearQuestGiver,sceneNearAnyQuestGiver,sceneQuestGiverPrompt,sceneActiveCategoryCounts,sceneQuestGateCtx,sceneQuestOfferLevel,sceneAcceptableQuests,sceneEligibleQuestCandidates,sceneVocationEngaged,sceneIsVocationChoice,sceneVocationChoiceOffers,sceneNextAcceptableQuest,sceneUpdateQuestGiver,sceneQuestGiverStep,sceneQuestOfferChoices,sceneAcceptQuestOffer,sceneAcceptVocationQuest,sceneVocationMenuOffers,sceneDeclineVocationOffer,sceneAcceptQuest,sceneQuestRewardOffers,sceneQuestImbueOffers,sceneClaimQuestImbue,sceneReliquaryLesson,sceneSeatIdle,scenePlayerIdle,QUESTGIVER_DWELL,type NativeSceneQuestInteractionHost} from './nativeSceneQuestInteraction';
 import {sceneSpawnProjectile,sceneSkillOcclusion,PROJ_CHILD_DEPTH_MAX,PROJ_AURA_TICK,type NativeSceneProjectileHost} from './nativeSceneProjectiles';
 import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
@@ -1216,7 +1217,7 @@ interface Tether {
 
 /** Seconds between tether damage ticks (chunked so typed mitigation isn't fed
  *  per-frame crumbs). Healing runs continuously. */
-const TETHER_TICK = 0.4;
+/* NativeSceneTethers owns TETHER_TICK. */
 /** Chunk cadence of a projectile-borne field's DoT (Soulflay's wake). */
 /* NativeSceneProjectiles owns PROJ_AURA_TICK. */
 
@@ -33273,63 +33274,24 @@ actors: Actor[] = [];
    *  damage stat and CONVERTED here, at attach time — a Flameforged build's
    *  tripwire bleeds fire. One band per endpoint-pair per skill: re-casting
    *  refreshes instead of stacking. */
-  private addTether(a: Actor, b: Actor, spec: TetherSpec, inst: SkillInstance, owner: Actor): void {
-    if (a === b || a.dead || b.dead) return;
-    this.tethers = this.tethers.filter(t => !(t.skillId === inst.def.id
-      && ((t.a === a && t.b === b) || (t.a === b && t.b === a))));
-    const extra = instanceMods(inst);
-    const type: DamageType = spec.damageType ?? 'physical';
-    const tags = skillContextTags(inst, [type]);
-    const amounts: Partial<Record<DamageType, number>> = {};
-    // Beam damage and width are INVESTABLE: damage × tetherDamage for the
-    // dps, aoeRadius × tetherWidth for the band (yes, Widening fits a wire).
-    if (spec.dps) {
-      amounts[type] = spec.dps
-        * owner.sheet.get('damage', tags, extra)
-        * owner.sheet.get('tetherDamage', tags, extra);
-    }
-    applyConversion(owner, amounts, tags, extra);
-    const width = (spec.width ?? 10)
-      * owner.sheet.get('aoeRadius', tags, extra)
-      * owner.sheet.get('tetherWidth', tags, extra);
-    // The band's colour follows its dominant POST-conversion type — the
-    // damage-type tell stays honest through any conversion chain.
-    let domType: DamageType | null = null, domAmt = 0;
-    for (const [k, v] of Object.entries(amounts)) {
-      if ((v ?? 0) > domAmt) { domAmt = v ?? 0; domType = k as DamageType; }
-    }
-    this.tethers.push({
-      a, b, owner, skillId: inst.def.id, link: spec.link, inst,
-      amounts, heal: spec.healPerSec ?? 0,
-      affects: spec.affects ?? 'enemies',
-      width,
-      remaining: spec.link === 'target'
-        ? (spec.duration ?? 8) * owner.sheet.get('effectDuration', tags, extra)
-        : Infinity,
-      tickTimer: TETHER_TICK,
-      color: spec.color ?? (domType ? DAMAGE_COLOR[domType] : '#7ec88a'),
-      ax: a.pos.x, ay: a.pos.y, bx: b.pos.x, by: b.pos.y,
+  declare private nativeSceneTetherView?:NativeSceneTetherHost;
+  private nativeSceneTetherHost():NativeSceneTetherHost {
+    if(this.nativeSceneTetherView)return this.nativeSceneTetherView;
+    const world=this;
+    const host:NativeSceneTetherHost=Object.freeze({
+      get tethers(){return world.tethers;},set tethers(value:World['tethers']){world.tethers=value;},
+      get actors(){return world.actors;},
+      get addTether(){const fn=world.addTether;return(...args:Parameters<World['addTether']>)=>fn.apply(world,args);}
     });
+    Object.defineProperty(this,'nativeSceneTetherView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
   }
+
+  private addTether(a: Actor, b: Actor, spec: TetherSpec, inst: SkillInstance, owner: Actor): void { return sceneAddTether(this.nativeSceneTetherHost(),a,b,spec,inst,owner); }
 
   /** Attach a freshly-spawned object's tethers: caster-links back to its
    *  owner, network-links to every living sibling of the same skill in range. */
-  private attachObjectTethers(spawned: Actor, inst: SkillInstance, caster: Actor): void {
-    // SOVEREIGNTY: self — a caster's own constructs (the derived census, probe_tiers RIG T).
-    for (const spec of instanceTethers(inst)) {
-      if (spec.link === 'caster') {
-        this.addTether(spawned, caster, spec, inst, caster);
-      } else if (spec.link === 'network') {
-        const reach = spec.radius ?? 360;
-        for (const other of this.actors) {
-          if (other === spawned || other.dead || other.owner !== caster) continue;
-          if (other.sourceSkillId !== inst.def.id) continue;
-          if (dist(spawned.pos, other.pos) > reach) continue;
-          this.addTether(spawned, other, spec, inst, caster);
-        }
-      }
-    }
-  }
+  private attachObjectTethers(spawned: Actor, inst: SkillInstance, caster: Actor): void { return sceneAttachObjectTethers(this.nativeSceneTetherHost(),spawned,inst,caster); }
 
   /** ENEMY PACK TETHERS (MonsterDef.tether): pack members arc a damaging
    *  band to their nearest unlinked kin on an intermittent cycle — the

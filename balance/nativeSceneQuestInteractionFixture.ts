@@ -1,3 +1,4 @@
+import {beforeNativeSceneTethers} from './nativeSceneTetherFixture';
 /** Restore only exact reviewed quest interaction changes before older source guards. */
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -9,5 +10,5 @@ function restore(source:string,changes:readonly {before:string;after:string}[]):
  for(const row of [...changes].reverse()){assert.equal(text.split(row.after).length,2,'unique exact native quest interaction integration');text=text.replace(row.after,row.before);}
  return text;
 }
-export function beforeNativeSceneQuestInteraction(source:string):string{return restore(source,archive.integration);}
+export function beforeNativeSceneQuestInteraction(source:string):string{return restore(beforeNativeSceneTethers(source),archive.integration);}
 export function beforeNativeQuestInteractionOdyssey(source:string):string{return restore(source,archive.odysseyIntegration);}
