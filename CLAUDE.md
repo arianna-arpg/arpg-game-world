@@ -25,10 +25,15 @@ The loading-screen art reuses Mu's abyss, pale soul-flames and the canonical
 RUNESCRIPT alphabet for stable gate inscriptions and the encoded Crossing title.
 Reuse the loading-screen lease for future disruptive preparations; integration
 handoff and candidate callers are in docs/ui/loading-screen.md. Never tie the
-pastime to progression or delay readiness. Synchronous generation is still
-synchronous: yield bounded work or use workers.
+pastime to progression or delay readiness. loadingScreen now prewarms a sandboxed
+foreground renderer; keep allow-same-origin absent and all input local to it.
+World/save authority stays in the game process. Await paint acknowledgements
+before work and retain the cover through first rendering. Desktop process/input
+isolation is verified by balance/loading-isolation-ui.cjs; other browser engines
+need their own process-boundary evidence. Do not substitute animation-only tests.
 Verify spiritrun, character resume probes, all types, sim smoke, boot smoke and
-the isolated balance/loading-screen-ui.cjs course after a scoped build.
+the isolated balance/loading-screen-ui.cjs and loading-isolation-ui.cjs courses
+after a scoped build.
 
 NativeAreaSourceSession and NativeAreaSceneAssembly now issue actual campaign
 content capabilities and construct fresh complete owners through one layout/birth.
