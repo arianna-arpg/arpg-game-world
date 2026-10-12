@@ -116,6 +116,69 @@ export function physicalAnchorForNative(spec:MassNativeMapping,native:MapCoord):
  return at;
 }
 
+/** A derived source anchor may need more precision than a raw physics offset.
+ * This separate JSON value never masquerades as a MassAddress and does not
+ * change the recorded mapping, its rounding policy, or authoritative native map. */
+export interface MassNativeRationalOffset {readonly numerator:string;readonly denominator:string}
+export interface MassNativeRationalAnchor {
+ readonly schema:1;readonly policy:'mass-native-rational-anchor';
+ readonly dimension:string;readonly cx:string;readonly cy:string;
+ readonly x:MassNativeRationalOffset;readonly y:MassNativeRationalOffset;
+}
+export type MassNativeSourceAnchor=MassAddress|MassNativeRationalAnchor;
+function rationalOffset(value:MassNativeRationalOffset,span:number):ExactFraction {
+ if(!value||typeof value!=='object')throw Error('Missing exact source offset');
+ exactKeys(value,['numerator','denominator'],'exact source offset');
+ // Binary64 origins/targets and the signed64 ratio need at most 360 decimal
+ // digits after reduction; reject unbounded serialized integers before BigInt.
+ const valid=(s:string,zero:boolean)=>typeof s==='string'&&s.length<=400&&(zero?/^(0|[1-9][0-9]*)$/:/^[1-9][0-9]*$/).test(s);
+ if(!valid(value.numerator,true)||!valid(value.denominator,false))throw Error('Exact source offset needs canonical integer strings');
+ const n=BigInt(value.numerator),d=BigInt(value.denominator);
+ if(gcd(n,d)!==1n||n>=d*BigInt(span))throw RangeError('Exact source offset must be reduced and within its cell');
+ return {n,d};
+}
+/** Preserve all representable v1 addresses byte-for-byte. Only an inverse which
+ * cannot survive its binary64 physical offset uses the separate exact schema. */
+export function sourceAnchorForNative(spec:MassNativeMapping,native:MapCoord):MassNativeSourceAnchor {
+ validateMapping(spec);inEnvelope(spec,{x:exactNumber(native.x),y:exactNumber(native.y)});
+ const [p,q]=positiveRatio(spec.physicalUnitsPerNativeUnit),span=BigInt(spec.addressSpan);
+ const axis=(value:number,nativeOrigin:number,originCell:string,originOffset:number)=>{
+  const delta=minus(exactNumber(value),exactNumber(nativeOrigin));
+  const absolute=plus(plus({n:cellInteger(originCell)*span,d:1n},exactNumber(originOffset)),fraction(delta.n*p,delta.d*q));
+  const cell=floorDiv(absolute.n,absolute.d*span),offset=fraction(absolute.n-cell*absolute.d*span,absolute.d);
+  cellInteger(cell.toString());return {cell,offset};
+ };
+ const x=axis(native.x,spec.nativeOrigin.x,spec.physicalOrigin.cx,spec.physicalOrigin.x),y=axis(native.y,spec.nativeOrigin.y,spec.physicalOrigin.cy,spec.physicalOrigin.y);
+ const rounded=(a:typeof x):readonly [string,number]|undefined=>{
+  const value=nativeNumber(a.offset);
+  if(value===spec.addressSpan){if(a.cell===(1n<<63n)-1n)return undefined;return [(a.cell+1n).toString(),0];}
+  return [a.cell.toString(),value];
+ };
+ const rx=rounded(x),ry=rounded(y);
+ if(rx&&ry){
+  const at=address(spec.physicalOrigin.dimension,rx[0],ry[0],rx[1],ry[1],spec.addressSpan),point=exactMappedPoint(spec,at),b=spec.nativeBounds;
+  if(within(point.x,b.minX,b.maxX)&&within(point.y,b.minY,b.maxY)&&nativeNumber(point.x)===native.x&&nativeNumber(point.y)===native.y)return at;
+ }
+ const data=(value:ExactFraction):MassNativeRationalOffset=>({numerator:value.n.toString(),denominator:value.d.toString()});
+ return {schema:1,policy:'mass-native-rational-anchor',dimension:spec.physicalOrigin.dimension,cx:x.cell.toString(),cy:y.cell.toString(),x:data(x.offset),y:data(y.offset)};
+}
+/** Explicit source-position projection. Raw physical point APIs remain strict.
+ * A rational anchor is data, not a source ticket or physical admission. */
+export function mappedSourceAnchor(spec:MassNativeMapping,at:MassNativeSourceAnchor):MapCoord {
+ if(!at||typeof at!=='object')throw Error('Missing source anchor');
+ if(!Object.hasOwn(at,'policy'))return mappedPoint(spec,at as MassAddress);
+ validateMapping(spec);exactKeys(at,['schema','policy','dimension','cx','cy','x','y'],'exact source anchor');
+ const exact=at as MassNativeRationalAnchor;
+ if(exact.schema!==1||exact.policy!=='mass-native-rational-anchor'||exact.dimension!==spec.physicalOrigin.dimension)throw Error('Unsupported exact source anchor policy or dimension');
+ const [p,q]=positiveRatio(spec.physicalUnitsPerNativeUnit),span=BigInt(spec.addressSpan);
+ const axis=(cell:string,offset:MassNativeRationalOffset,originCell:string,originOffset:number,nativeOrigin:number)=>{
+  const delta=plus({n:(cellInteger(cell)-cellInteger(originCell))*span,d:1n},minus(rationalOffset(offset,spec.addressSpan),exactNumber(originOffset)));
+  return plus(exactNumber(nativeOrigin),fraction(delta.n*q,delta.d*p));
+ };
+ const point={x:axis(exact.cx,exact.x,spec.physicalOrigin.cx,spec.physicalOrigin.x,spec.nativeOrigin.x),y:axis(exact.cy,exact.y,spec.physicalOrigin.cy,spec.physicalOrigin.y,spec.nativeOrigin.y)};
+ inEnvelope(spec,point);return {x:nativeNumber(point.x),y:nativeNumber(point.y)};
+}
+
 /** New opt-in policy only. Exact native bytes are saved once as a string so
  * parent manifest canonicalization cannot sort the native source's own keys. */
 export interface MassNativeGeographySpec {
@@ -191,6 +254,13 @@ export class MassNativeGeography {
  }
  physicalAnchor(native:MapCoord):MassAddress {
   const point=copyNativeGeographyData(native);this.reader.climateAt(point,this.spec.mapping.nativeDimension);return physicalAnchorForNative(this.spec.mapping,point);
+ }
+ /** Source-session candidate only; saved native graph coordinates remain authoritative. */
+ sourceAnchor(native:MapCoord):Readonly<MassNativeSourceAnchor> {
+  const point=copyNativeGeographyData(native);this.reader.climateAt(point,this.spec.mapping.nativeDimension);return freezeData(sourceAnchorForNative(this.spec.mapping,point));
+ }
+ nativeSourcePoint(at:MassNativeSourceAnchor):MapCoord {
+  const point=mappedSourceAnchor(this.spec.mapping,copyNativeGeographyData(at));this.reader.climateAt(point,this.spec.mapping.nativeDimension);return point;
  }
  ownerContext(ownerId:string,canonicalAnchor:MassAddress):Readonly<MassNativeOwnerContext> {
   stableId(ownerId,'native area owner');const anchor=copyNativeGeographyData(canonicalAnchor),requestedTarget=this.nativePoint(anchor),s=this.spec;

@@ -64,6 +64,9 @@ export type ProbeRow = ProbeInvocation & (
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: "probe_nativeexactanchors.ts", status: 'green', tier: 'fast', why: "Exact separately typed native source anchors preserve binary64 target coordinates, old raw addresses and mapping bounds." },
+  { probe: "probe_nativegeneratedanchors.ts", status: 'green', tier: 'fast', why: "Previously unrepresentable seed46114 performs genuine native birth, AI/frame, travel, save and staged exact graph restoration." },
+  { probe: "probe_nativeexactanchorsource.ts", status: 'green', tier: 'fast', why: "All original geography bodies remain exact while finite source-session seams reject mutations and duplicates." },
   { probe: "probe_nativeareamenucards.ts", status: 'green', tier: 'fast', why: "Actual populated journal, memory recall, live skill unlock, mercenary offer and bounty cards across travel." },
   { probe: "probe_nativeareamenudwell.ts", status: 'green', tier: 'fast', why: "Actual town dwell sets and consumes only the owning area request flag." },
   { probe: "probe_nativeareamenuqueries.ts", status: 'green', tier: 'fast', why: "Sixty-six actual retained menu roots, twenty-three local request slots and exact Seat ownership." },

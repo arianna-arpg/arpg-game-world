@@ -75,3 +75,11 @@ The retained client now publishes 66 actual menu queries, 23 area-owned request 
 The installed composition exercises A/B/Lastlight/A with populated quest and memory cards, actual bounty and station dwell, one shared frame, three resident AI owners and terminal restoration of all request descriptors. Both historical source lanes retain their original assertions and 23 complete parent reports. Direct UI action routes, character startup composition, late town refolding and cold Continue remain separate work.
 
 The phase46 integration rerun passes all four type configurations, the composed source guards and original menu/view guards, the actual installed menu course, the remote-travel admission course, and the 704-probe census.
+
+## Exact generated source coordinates
+
+Some authored native coordinates have no binary64 physical offset that maps back exactly under the recorded scale. Seed 46114 exposed one such generated area; neighboring physical values straddle its original coordinate. Source-session candidate positions now use MassNativeSourceAnchor: an unchanged raw address when representable, otherwise a separately discriminated, canonical rational coordinate. The original raw address, physical mapping, generation source and save policies remain unchanged. The exact representation preserves the native coordinate without moving or regenerating the area, and grants no generation or physical authority.
+
+Independent review verifies all 2,527 frozen inputs and passes seven focused courses plus all four types. The failing seed now completes genuine retained birth, AI/frame, A/B/A travel and a real save. Staged same-process native graph restoration preserves the same coordinate and source ticket with a separately supplied, byte-identical geography specification. This does not prove retained cold hydration or that character serialization already persists that geography; those remain required integration work.
+
+The integrated coordinate repair passes all four type configurations, the exact-source guard and actual failed-seed course, the 707-probe census, and 869 generation cases across three seeds (zero failures; four existing spacing warnings).

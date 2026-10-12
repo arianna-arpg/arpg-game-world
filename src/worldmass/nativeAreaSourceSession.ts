@@ -4,8 +4,7 @@ import type {ZoneDef} from '../data/zones';
 import {captureNativeGeographySource} from '../world/captureGeography';
 import {landmarkComplex} from '../world/landmarkComplexes';
 import type {MapCoord} from '../world/coords';
-import type {MassAddress} from './address';
-import {MassNativeGeography} from './nativeGeography';
+import {MassNativeGeography,type MassNativeSourceAnchor} from './nativeGeography';
 import {NativeAreaSceneGraph} from './nativeAreaSceneGraph';
 
 declare const sourceBrand:unique symbol;
@@ -16,7 +15,7 @@ export interface NativeAreaSourceView {
  /** Complete complex family in actual campaign insertion order; otherwise one member. */
  readonly members:readonly ZoneDef[];
  /** Current graph positions. These are candidates, never physical reservations. */
- readonly positions:readonly {readonly id:string;readonly native:Readonly<MapCoord>;readonly physical:Readonly<MassAddress>}[];
+ readonly positions:readonly {readonly id:string;readonly native:Readonly<MapCoord>;readonly physical:Readonly<MassNativeSourceAnchor>}[];
 }
 interface SourceBinding {definition:ZoneDef;members:readonly ZoneDef[]}
 
@@ -81,7 +80,7 @@ export class NativeAreaSourceSession {
   return binding;
  }
  private view(binding:SourceBinding):NativeAreaSourceView {
-  const positions=binding.members.map(z=>Object.freeze({id:z.id,native:Object.freeze({...z.map}),physical:this.geography.physicalAnchor(z.map)}));
+  const positions=binding.members.map(z=>Object.freeze({id:z.id,native:Object.freeze({...z.map}),physical:this.geography.sourceAnchor(z.map)}));
   return Object.freeze({definition:binding.definition,members:binding.members,positions:Object.freeze(positions)});
  }
  /** Takes only a campaign ID: no caller-supplied face, seed, mint or certificate. */

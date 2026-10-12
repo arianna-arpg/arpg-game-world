@@ -1,3 +1,10 @@
+MassNativeSourceAnchor preserves generated native coordinates that cannot fit a
+binary64 physical offset. Only derived source candidates use the discriminated
+exact rational value; raw address, source, mapping and save policies stay exact.
+Verify nativeexactanchors/source, nativegeneratedanchors, nativeareasourcesession
+and worldmass_nativegeography, all types and generation. Actual cold Continue
+still needs persisted recorded geography and retained hydration.
+
 NativeAreaMenuQueries publishes 66 real menu roots and 23 area-owned request
 slots through the retained client. Preserve actual local/explicit Seat identity,
 final actor attendance, quest/memory/bounty contents and native partial effects.

@@ -153,7 +153,7 @@ function verifySources(){
   const owner=new NativeAreaSceneAssembly(raw),session=owner.sourceSession(mapping),ticket=session.issue(z.id),view=session.read(ticket);
   assert.ok(view.members.length>1);assert.ok(view.members.includes(z));
   const sibling=view.members.find(m=>m!==z)!;assert.equal(session.read(session.issue(sibling.id)).members.find(m=>m.id===z.id),z);
-  for(const row of view.positions)assert.deepEqual(mapping.nativePoint(row.physical),row.native);
+  for(const row of view.positions)assert.deepEqual(mapping.nativeSourcePoint(row.physical),row.native);
   assert.throws(()=>session.read({id:z.id} as NativeAreaSource),/not issued/);
   const second=new NativeAreaSourceSession(owner.graph,mapping);assert.throws(()=>second.read(ticket),/another session/);
   const childId=sibling.id;delete raw.campaign.zoneMap[childId];assert.throws(()=>session.read(ticket),/incomplete/);raw.campaign.zoneMap[childId]=sibling;
