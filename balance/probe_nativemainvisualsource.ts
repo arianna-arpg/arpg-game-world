@@ -1,12 +1,14 @@
+import {beforeNativeSceneGroundFollowUps} from './nativeSceneGroundFollowUpsIntegrationFixture';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { nativeMainVisualSourceArchive as archive } from './nativeMainVisualSourceArchive';
-import { beforeNativeMainVisualSource } from './nativeMainVisualSourceFixture';
+import { beforeNativeMainVisualSourceOnly as beforeNativeMainVisualSource } from './nativeMainVisualSourceFixture';
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 let mutations = 0, duplicates = 0, reconstructions = 0;
 for (const row of archive.files) {
-  const current = fs.readFileSync(row.file, 'utf8').replaceAll('\r\n', '\n');
+  const raw = fs.readFileSync(row.file, 'utf8');
+  const current = (row.file==='src/engine/world.ts'?beforeNativeSceneGroundFollowUps(raw):raw).replaceAll('\r\n', '\n');
   assert.equal(hash(current), row.afterHash, row.file + ' selected current source');
   let lineIndex = 0;
   const sources = [current, current.replaceAll('\n', '\r\n'), current.replace(/\n/g, () => lineIndex++ % 2 ? '\r\n' : '\n')];
@@ -15,6 +17,7 @@ for (const row of archive.files) {
     reconstructions++;
   }
   for (const edit of row.edits) {
+    assert.equal(current.split(edit.after).length,2,'Each original visual mutation targets its exact source hunk');
     const midpoint = Math.floor(edit.after.length / 2);
     const changed = edit.after.slice(0, midpoint) + '/* undeclared main visual edit */' + edit.after.slice(midpoint);
     assert.throws(() => beforeNativeMainVisualSource(row.file, current.replace(edit.after, changed)), /unique exact native main visual source/);

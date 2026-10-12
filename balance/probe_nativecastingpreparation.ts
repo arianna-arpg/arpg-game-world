@@ -1,3 +1,5 @@
+import {beforeNativeSceneGroundFollowUps,groundFollowUpsHistoricalHunk} from './nativeSceneGroundFollowUpsIntegrationFixture';
+import {nativeSceneGroundFollowUpsIntegrationArchive as groundArchive} from './nativeSceneGroundFollowUpsIntegrationArchive';
 import {beforeNativeSceneDefensePreparation} from './nativeSceneDefensePreparationIntegrationFixture';
 import {nativeMainVisualSourceArchive} from './nativeMainVisualSourceArchive';
 /** Native casting preparation only; actor/construct state setup is explicit fixture input. */
@@ -186,12 +188,14 @@ integrationCheck('exact eleven delegates and full immutable World reverse preser
  // Preserve every original mutation byte and duplicate payload. A duplicate may
  // now repeat an exact visual hunk before the older casting guard is reached.
  const visualEdits=nativeMainVisualSourceArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits;
- for(const edit of visualEdits)assert.equal(current.replaceAll('\r\n','\n').split(edit.after).length,2);
+ for(const edit of visualEdits)assert.equal(beforeNativeSceneGroundFollowUps(current).split(edit.after).length,2);
  const refuse=(mutant:string)=>{
-  const overlaps=visualEdits.some(edit=>mutant.replaceAll('\r\n','\n').split(edit.after).length!==2);
+  const groundOverlap=groundArchive.integration.some(edit=>mutant.replaceAll('\r\n','\n').split(edit.after).length!==2);
+  if(groundOverlap){assert.throws(()=>beforeNativeSceneCastingPreparation(mutant),/unique exact native ground follow-up integration/);return;}
+  const overlaps=visualEdits.some(edit=>beforeNativeSceneGroundFollowUps(mutant).split(edit.after).length!==2);
   assert.throws(()=>beforeNativeSceneCastingPreparation(mutant),overlaps?/unique exact native main visual source src\/engine\/world\.ts/:/unique exact native casting preparation integration/);
  };
- for(const row of integrationArchive.integration){assert.equal(current.split(row.after).length,2);refuse(current.replace(row.after,row.after.replace(/[A-Za-z]/,'!')));refuse(current+'\n'+row.after);}
+ for(const row of integrationArchive.integration){const h=groundFollowUpsHistoricalHunk(current,row.after,row.after.replace(/[A-Za-z]/,'!'),/unique exact native casting preparation integration/);assert.equal(current.split(h.text).length,2);refuse(current.replace(h.text,h.mutated));refuse(current+'\n'+h.text);}
  assert.notEqual(hash(beforeNativeSceneCastingPreparation(current+'\n// unknown later change\n')),integrationArchive.sourceHash);
 });
 integrationCheck('ordinary World cached host reads actual replacement maps census and clock',()=>{

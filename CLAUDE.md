@@ -1,3 +1,14 @@
+NativeAreaSceneGroundFollowUps owns native ground/follow-up record construction
+on actual progression queues, with one nominal Madden ledger per campaign.
+World shares six bodies and flattenPulseQueue. Only expireZone uses the campaign
+physical lookup to preserve neighboring live credit; other lookups remain local.
+Preserve final physical validation, raw stores, lazy receivers, partial failures
+and conservative source guards. Verify nativegroundfollowups/source/integration,
+casting/defense/kill/progression/storage and installed-source, all types and boot.
+See docs/worldgen/native-area-ground-follow-ups.md. Complete retained combat,
+record/status lifetimes, ticking, scheduling and publication/persistence remain
+required before bounded/open navigable places and hierarchy/zoom.
+
 Main visual parity through origin/main ea56c7ac carries skill bursts, flights,
 resource returns, target rites, strikes, movement, self effects and presences
 into the seamless branch and its existing area owners. Preserve geographic

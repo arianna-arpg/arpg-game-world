@@ -1,3 +1,4 @@
+import {beforeNativeSceneGroundFollowUps,groundFollowUpsHistoricalHunk} from './nativeSceneGroundFollowUpsIntegrationFixture';
 import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
 import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
 import {skillMovementVoice} from '../src/data/skillMovementVisuals';
@@ -255,8 +256,16 @@ function visualWorldHunk(raw:string,historical:string,legacy:RegExp){
   if(stop<=start){start+=delta;end+=delta;}else if(at<end){start=Math.min(start,at);end=Math.max(end,stop)+delta;overlap=true;}
   text=text.slice(0,at)+edit.after+text.slice(stop);
  }
- assert.equal(text,raw.replaceAll('\r\n','\n'),'whole current source after exact forward mapping');
- return {text:text.slice(start,end),guard:overlap?/unique exact native main visual source/:legacy};
+ assert.equal(text,beforeNativeSceneGroundFollowUps(raw),'whole visual source after exact forward mapping');
+ const mapped=text.slice(start,end);
+ // An expanded overlap may begin in an unchanged older delegate. Mutate a
+ // byte inside an exact visual after-hunk, not merely the expanded prefix.
+ const visualEdit=overlap?visualArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits.find(edit=>mapped.includes(edit.after)):undefined;
+ if(overlap)assert.ok(visualEdit,'overlap includes a complete declared visual after-hunk');
+ const target=visualEdit?.after??mapped,at=mapped.indexOf(target),letter=target.search(/[A-Za-z]/);
+ assert.ok(letter>=0,'mutation has a source letter');
+ const changed=at+letter,mutated=mapped.slice(0,changed)+'!'+mapped.slice(changed+1);
+ return groundFollowUpsHistoricalHunk(raw,mapped,mutated,overlap?/unique exact native main visual source/:legacy);
 }
 
 const guardCore=(text:string)=>{
@@ -271,7 +280,7 @@ integrationCheck('all thirteen World delegates preserve original defaults and sh
  for(const [before,after]of [['export const PUSH_DAMPING = 5.5;','export const PUSH_DAMPING = 5.6;'],['export const PUSH_MAX_SPEED = 1500;','export const PUSH_MAX_SPEED = 1501;'],['if (target.heldBy !== undefined)','if (target.heldBy === undefined)'],["cause: 'shake' | 'drop' = 'drop'","cause: 'shake' | 'drop' = 'shake'"]]){const mutant=coreText.replace(before,after);assert.notEqual(mutant,coreText);assert.throws(()=>guardCore(mutant));}
 });
 integrationCheck('every integration hunk duplicate and cache mutation refuses while unrelated drift survives',()=>{
- for(const row of integrationArchive.integration){const h=visualWorldHunk(current,row.after,/unique exact native displacement integration/);assert.equal(current.split(h.text).length,2);const mutant=current.replace(h.text,h.text.replace(/[A-Za-z]/,'!'));assert.notEqual(mutant,current);assert.throws(()=>beforeNativeSceneDisplacement(mutant),h.guard);assert.throws(()=>beforeNativeSceneDisplacement(current+'\n'+h.text),h.guard);}
+ for(const row of integrationArchive.integration){const h=visualWorldHunk(current,row.after,/unique exact native displacement integration/);assert.equal(current.split(h.text).length,2);const mutant=current.replace(h.text,h.mutated);assert.notEqual(mutant,current);assert.throws(()=>beforeNativeSceneDisplacement(mutant),h.guard);assert.throws(()=>beforeNativeSceneDisplacement(current+'\n'+h.text),h.guard);}
  const host=integrationArchive.integration.find(row=>row.name==='pushActor')!,changed=current.replace(host.after,host.after.replace('enumerable:false','enumerable:true'));assert.notEqual(changed,current);assert.throws(()=>beforeNativeSceneDisplacement(changed),/unique exact native displacement integration/);
  const unrelated=current+'\n// unrelated-displacement-source-change\n';assert(beforeNativeSceneDisplacement(unrelated).endsWith('// unrelated-displacement-source-change\n'));assert.throws(()=>restoreDisplacement(unrelated),/complete displacement integration preimage/);
 });

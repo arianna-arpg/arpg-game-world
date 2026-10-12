@@ -27,7 +27,7 @@ export interface NativeSceneProgressionCombat {
  spawnConstruct:World['spawnConstruct'];spawnProjectile:World['spawnProjectile'];attackSequenceBurst:World['attackSequenceBurst'];challengeBurst:World['challengeBurst'];challengeHit:World['challengeHit'];
 }
 export interface NativeSceneProgressionRuntime {progression:NativeAreaSceneProgression;combat:NativeSceneProgressionCombat}
-export type NativeSceneProgressionAuthority=Pick<NativeAreaActorAuthority<NativeSceneProgressionRuntime>,'campaign'|'require'|'assertAdmitted'>;
+export type NativeSceneProgressionAuthority=Pick<NativeAreaActorAuthority<NativeSceneProgressionRuntime>,'campaign'|'require'|'assertAdmitted'|'physicalActorById'>;
 export interface NativeSceneProgressionState {
  pendingRespawns:World['pendingRespawns'];pendingSummons:World['pendingSummons'];projectiles:World['projectiles'];zones:World['zones'];
  pendingRepeats:World['pendingRepeats'];pendingFuses:World['pendingFuses'];pendingSalvos:World['pendingSalvos'];pendingSteps:World['pendingSteps'];
@@ -95,6 +95,7 @@ export class NativeAreaSceneProgression {
  get lite(){return this.input.ecology.input.state.lite;}
  readonly guardArts:GuardArts;readonly companionBonds:CompanionBonds;readonly attackSequences:AttackSequences;readonly challenges:Challenges;
  #subject:Actor|null=null;#nativeDepth=0;
+ readonly #expiryHost:Host;
  constructor(raw:NativeSceneProgressionInput){
   const bindings=Object.create(null);for(const key of ['scene','population','ecology','geometry','runtime','loot','campaign','state','authority']){
    const d=raw&&Object.getOwnPropertyDescriptor(raw,key);if(!d||!Object.hasOwn(d,'value')||!d.value||typeof d.value!=='object')throw Error('Native progression needs an own object binding: '+key);bindings[key]=d.value;
@@ -117,13 +118,19 @@ export class NativeAreaSceneProgression {
   }});
   for(const name of effectMethods)Object.defineProperty(host,name,{enumerable:true,get(){return (...args:unknown[])=>self.#effect(args[0] as Actor,name,args);}});
   for(const name of ['burstDamage','litePromoteNearest'] as const)Object.defineProperty(host,name,{enumerable:true,get(){return (...args:unknown[])=>self.#effect(self.#subject??input.scene.player,name,args);}});
-  this.host=Object.freeze(host);this.guardArts=new GuardArts(host);this.companionBonds=new CompanionBonds(host);this.attackSequences=new AttackSequences(host);this.challenges=new Challenges(host);
+  this.host=Object.freeze(host);
+  // Only madness cleanup inside native expireZone uses the session census.
+  // Every other progression lookup retains the original local runtime receiver.
+  const expiryHost=Object.create(host) as Host;
+  Object.defineProperty(expiryHost,'actorById',{enumerable:true,get(){const owner=input.authority,fn=owner.physicalActorById;return(...args:Parameters<typeof fn>)=>Reflect.apply(fn,owner,args);}});
+  this.#expiryHost=Object.freeze(expiryHost);
+  this.guardArts=new GuardArts(host);this.companionBonds=new CompanionBonds(host);this.attackSequences=new AttackSequences(host);this.challenges=new Challenges(host);
   Object.defineProperty(this,'lite',{enumerable:true,configurable:false,get:()=>input.ecology.input.state.lite});
   for(const key of ['input','host','companionGrants','guardArts','companionBonds','attackSequences','challenges'])Object.defineProperty(this,key,{writable:false,configurable:false});
   ownProgressionStorage(input.state);
  }
  #owner(actor:Actor){const owner=this.input.authority.require(actor);if(owner.progression.input.authority!==this.input.authority||owner.progression.input.scene!==owner.scene||owner.combat.scene!==owner.scene||owner.combat.state!==owner.progression.input.state)throw Error('Mismatched native progression runtime authority');return owner;}
- #native(name:string,args:unknown[]){this.#nativeDepth++;try{return (native as unknown as Record<string,Function>)['scene'+name[0].toUpperCase()+name.slice(1)](this.host,...args);}finally{this.#nativeDepth--;}}
+ #native(name:string,args:unknown[]){this.#nativeDepth++;try{return (native as unknown as Record<string,Function>)['scene'+name[0].toUpperCase()+name.slice(1)](name==='expireZone'?this.#expiryHost:this.host,...args);}finally{this.#nativeDepth--;}}
  #run(actor:Actor,name:string,args:unknown[]){const owner=this.#owner(actor),target=owner.progression;this.input.authority.assertAdmitted(owner.scene);const previous=target.#subject;target.#subject=actor;try{return target.#native(name,args);}finally{target.#subject=previous;}}
  #effect(actor:Actor,name:keyof Omit<NativeSceneProgressionCombat,'scene'|'state'>,args:unknown[]){const owner=this.#owner(actor);this.input.authority.assertAdmitted(owner.scene);const fn=owner.combat[name];return Reflect.apply(fn,owner.combat,args);}
  #seat(seat:Seat){if(!this.input.campaign.seats.includes(seat))throw Error('Foreign native progression seat');return this.input.campaign.seatHero(seat);}

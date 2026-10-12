@@ -85,6 +85,18 @@ export class NativeAreaActorAuthority<S extends object> {
   if(new Set(scene.actors).size!==scene.actors.length)throw Error('Repeated native body in admitted census');
   for(const actor of scene.actors)if(this.#actors.get(actor)!==binding)throw Error('Native area admission contains an unowned or borrowed body');
  }
+ /** Numeric ledger keys span every registered physical census in this campaign.
+  * No alive/seat/lineage filter: the native expiry caller decides dead pruning.
+  * Ambiguous IDs refuse instead of silently choosing an arbitrary area. */
+ physicalActorById(id:number):Actor|undefined {
+  const cohort=[...this.#bindings.keys()];let found:Actor|undefined;
+  for(const binding of cohort){this.#entry(binding);this.assertAdmitted(binding.scene);}
+  for(const binding of cohort)for(const actor of binding.scene.actors)if(actor.id===id){if(found&&found!==actor)throw Error('Ambiguous native physical actor ID');found=actor;}
+  if(cohort.length!==this.#bindings.size||cohort.some(binding=>!this.#bindings.has(binding)))throw Error('Native physical census changed during lookup');
+  for(const binding of cohort)this.assertAdmitted(binding.scene);
+  if(found){const binding=this.#actors.get(found);if(!binding||!cohort.includes(binding)||!binding.scene.actors.includes(found))throw Error('Stale native physical actor lookup');}
+  return found;
+ }
  seatsFor(binding:NativeAreaAuthorityBinding<S>):Seat[]{
   this.#entry(binding);
   // Presence follows the controlled body; keeper/merc/dead and party policies

@@ -1,3 +1,4 @@
+import {beforeNativeSceneGroundFollowUps,groundFollowUpsHistoricalHunk} from './nativeSceneGroundFollowUpsIntegrationFixture';
 import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
 import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
 import {noteRestoreGain} from '../src/engine/feedingCues';
@@ -218,8 +219,16 @@ function visualWorldHunk(raw:string,historical:string,legacy:RegExp){
   if(stop<=start){start+=delta;end+=delta;}else if(at<end){start=Math.min(start,at);end=Math.max(end,stop)+delta;overlap=true;}
   text=text.slice(0,at)+edit.after+text.slice(stop);
  }
- assert.equal(text,raw.replaceAll('\r\n','\n'),'whole current source after exact forward mapping');
- return {text:text.slice(start,end),guard:overlap?/unique exact native main visual source/:legacy};
+ assert.equal(text,beforeNativeSceneGroundFollowUps(raw),'whole visual source after exact forward mapping');
+ const mapped=text.slice(start,end);
+ // An expanded overlap may begin in an unchanged older delegate. Mutate a
+ // byte inside an exact visual after-hunk, not merely the expanded prefix.
+ const visualEdit=overlap?visualArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits.find(edit=>mapped.includes(edit.after)):undefined;
+ if(overlap)assert.ok(visualEdit,'overlap includes a complete declared visual after-hunk');
+ const target=visualEdit?.after??mapped,at=mapped.indexOf(target),letter=target.search(/[A-Za-z]/);
+ assert.ok(letter>=0,'mutation has a source letter');
+ const changed=at+letter,mutated=mapped.slice(0,changed)+'!'+mapped.slice(changed+1);
+ return groundFollowUpsHistoricalHunk(raw,mapped,mutated,overlap?/unique exact native main visual source/:legacy);
 }
 
 const integrationChecks:string[]=[];
@@ -230,7 +239,7 @@ integrationCheck('exact restoration source reverses the complete reviewed displa
  assert.equal(ts.createSourceFile('current.ts',current,99,true).statements[0].getText(),"import './nativeSceneBootstrap';");
  const parsed=ts.createSourceFile('current.ts',beforeNativeMainVisualSource('src/engine/world.ts',current),99,true),cl=parsed.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
  for(const row of archive.rows){const old=world.members.find(n=>n.name?.getText(sf)===row.name) as ts.MethodDeclaration,m=cl.members.find(n=>n.name?.getText(parsed)===row.name) as ts.MethodDeclaration;assert.deepEqual(m.parameters.map(p=>p.getText(parsed)),old.parameters.map(p=>p.getText(sf)));assert.equal(m.type?.getText(parsed),old.type?.getText(sf));assert.deepEqual(m.modifiers?.map(n=>n.getText(parsed)),old.modifiers?.map(n=>n.getText(sf)));}
- for(const row of integrationArchive.integration){const h=visualWorldHunk(current,row.after,/unique exact native restoration integration/);assert.equal(current.split(h.text).length,2);assert.throws(()=>beforeNativeSceneRestoration(current.replace(h.text,h.text.replace(/[A-Za-z]/,'!'))),h.guard);assert.throws(()=>beforeNativeSceneRestoration(current+'\n'+h.text),h.guard);}
+ for(const row of integrationArchive.integration){const h=visualWorldHunk(current,row.after,/unique exact native restoration integration/);assert.equal(current.split(h.text).length,2);assert.throws(()=>beforeNativeSceneRestoration(current.replace(h.text,h.mutated)),h.guard);assert.throws(()=>beforeNativeSceneRestoration(current+'\n'+h.text),h.guard);}
  const unrelated=current+'\n// unrelated restoration source drift\n';assert.ok(beforeNativeSceneRestoration(unrelated).endsWith('// unrelated restoration source drift\n'));assert.notEqual(hash(beforeNativeSceneRestoration(unrelated)),integrationArchive.sourceHash);
 });
 integrationCheck('actual World cached restoration host preserves live arrays and selected method receivers',()=>{

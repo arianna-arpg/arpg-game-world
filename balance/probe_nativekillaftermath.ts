@@ -1,3 +1,4 @@
+import {beforeNativeSceneGroundFollowUps,groundFollowUpsHistoricalHunk} from './nativeSceneGroundFollowUpsIntegrationFixture';
 import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
 import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
 import {beforeNativeSceneKillAftermath} from './nativeSceneKillAftermathIntegrationFixture';
@@ -75,7 +76,7 @@ function visualWorldHunk(raw:string,historical:string,legacy:RegExp){
   if(stop<=start){start+=delta;end+=delta;}else if(at<end){start=Math.min(start,at);end=Math.max(end,stop)+delta;overlap=true;}
   text=text.slice(0,at)+edit.after+text.slice(stop);
  }
- assert.equal(text,raw.replaceAll('\r\n','\n'),'whole current source after exact forward mapping');
+ assert.equal(text,beforeNativeSceneGroundFollowUps(raw),'whole visual source after exact forward mapping');
  const mapped=text.slice(start,end);
  // An expanded overlap may begin in an unchanged older delegate. Mutate a
  // byte inside an exact visual after-hunk, not merely the expanded prefix.
@@ -84,7 +85,7 @@ function visualWorldHunk(raw:string,historical:string,legacy:RegExp){
  const target=visualEdit?.after??mapped,at=mapped.indexOf(target),letter=target.search(/[A-Za-z]/);
  assert.ok(letter>=0,'mutation has a source letter');
  const changed=at+letter,mutated=mapped.slice(0,changed)+'!'+mapped.slice(changed+1);
- return {text:mapped,mutated,guard:overlap?/unique exact native main visual source/:legacy};
+ return groundFollowUpsHistoricalHunk(raw,mapped,mutated,overlap?/unique exact native main visual source/:legacy);
 }
 
 const integrationChecks:string[]=[],integrationCheck=(name:string,run:()=>void)=>{withSeededRandom(42200+integrationChecks.length,run);integrationChecks.push(name);console.log('PASS integration '+name);};

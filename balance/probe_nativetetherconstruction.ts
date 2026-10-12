@@ -1,3 +1,4 @@
+import {beforeNativeSceneGroundFollowUps,groundFollowUpsHistoricalHunk} from './nativeSceneGroundFollowUpsIntegrationFixture';
 import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
 import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
 /** Native tether construction only. Actual actors, population, queues and World
@@ -45,14 +46,22 @@ function visualWorldHunk(raw:string,historical:string,legacy:RegExp){
   if(stop<=start){start+=delta;end+=delta;}else if(at<end){start=Math.min(start,at);end=Math.max(end,stop)+delta;overlap=true;}
   text=text.slice(0,at)+edit.after+text.slice(stop);
  }
- assert.equal(text,raw.replaceAll('\r\n','\n'),'whole current source after exact forward mapping');
- return {text:text.slice(start,end),guard:overlap?/unique exact native main visual source/:legacy};
+ assert.equal(text,beforeNativeSceneGroundFollowUps(raw),'whole visual source after exact forward mapping');
+ const mapped=text.slice(start,end);
+ // An expanded overlap may begin in an unchanged older delegate. Mutate a
+ // byte inside an exact visual after-hunk, not merely the expanded prefix.
+ const visualEdit=overlap?visualArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits.find(edit=>mapped.includes(edit.after)):undefined;
+ if(overlap)assert.ok(visualEdit,'overlap includes a complete declared visual after-hunk');
+ const target=visualEdit?.after??mapped,at=mapped.indexOf(target),letter=target.search(/[A-Za-z]/);
+ assert.ok(letter>=0,'mutation has a source letter');
+ const changed=at+letter,mutated=mapped.slice(0,changed)+'!'+mapped.slice(changed+1);
+ return groundFollowUpsHistoricalHunk(raw,mapped,mutated,overlap?/unique exact native main visual source/:legacy);
 }
 
 const hostChange=archive.integration.find(row=>row.after.startsWith('declare private nativeSceneTetherView'))!;
 assert.ok(hostChange);
 const drift=integratedWorld.replace('get tethers(){return world.tethers;}','get tethers(){return [];}');assert.notEqual(drift,integratedWorld);assert.throws(()=>beforeNativeSceneTethers(drift),/unique exact native tether integration/);
-for(const row of archive.integration){const h=visualWorldHunk(integratedWorld,row.after,/unique exact native tether integration/),drift=integratedWorld.replace(h.text,h.text.replace(/[A-Za-z]/,'!'));assert.notEqual(drift,integratedWorld);assert.throws(()=>beforeNativeSceneTethers(drift),h.guard);}
+for(const row of archive.integration){const h=visualWorldHunk(integratedWorld,row.after,/unique exact native tether integration/),drift=integratedWorld.replace(h.text,h.mutated);assert.notEqual(drift,integratedWorld);assert.throws(()=>beforeNativeSceneTethers(drift),h.guard);}
 console.log('PASS exact integrated World reversal, byte-checked changes and complete historical chain');
 const source=execFileSync('git',['show',archive.commit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}).replaceAll('\r\n','\n');
 const src=ts.createSourceFile('world.ts',source,99,true),wc=src.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
