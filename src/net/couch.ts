@@ -23,9 +23,8 @@ import {
 } from '../core/gamepad';
 import { AIM_ASSIST, assistAim } from '../engine/aimassist';
 import type { Actor } from '../engine/actor';
-import type { World } from '../engine/world';
 import type { Settings } from '../meta/settings';
-import type { PlayerInput, PlayerInputSource } from './intent';
+import type { PlayerInput, PlayerInputSource, PlayerInputQuery } from './intent';
 
 /** Everything a guest source reads from the machine each frame — thunks so
  *  live Settings edits (options screen) land immediately, like the hero's. */
@@ -60,7 +59,7 @@ export class PadSeatInput implements PlayerInputSource {
     return this.lastAim ? { x: this.lastAim.x, y: this.lastAim.y, lockId: this.padLock } : null;
   }
 
-  poll(actor: Actor, world: World, dt: number): PlayerInput | null {
+  poll(actor: Actor, world: PlayerInputQuery, dt: number): PlayerInput | null {
     if (actor.dead || actor.downed) return null;
     if (this.deps.suspended()) return null;
     const pad = this.pad;

@@ -101,7 +101,7 @@ export function applyOwnReviveRow(world: World, snap: StateSnapshot): void {
 /** World.reviveTargetsView on a hosted shell: the downed body this seat's row says it stands
  *  in reach of (the ring where the reach is, the fill off the host's own clock: drawn == dwelt).
  *  Its own down is no target (a body cannot kneel by itself). */
-export function reviveTargetsOfRow(world: World): { pos: Vec2; frac: number; kind: string; name: string }[] {
+export function reviveTargetsOfRow(world: Pick<World, 'netRevive' | 'player' | 'clientSeatId' | 'party'>): { pos: Vec2; frac: number; kind: string; name: string }[] {
   const rv = world.netRevive, me = world.player;
   if (!rv || !rv.k || rv.s === world.clientSeatId || me.dead || me.downed) return [];
   const body = world.party.members.find(m => m.seat === rv.s)?.actor;

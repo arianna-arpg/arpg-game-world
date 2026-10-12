@@ -1,3 +1,6 @@
+import * as viewCore from '../engine/nativeSceneViewQueries';
+import type {NativeSceneViewHost} from '../engine/nativeSceneViewHost';
+import {isNativeAreaViewQuery,nativeAreaViewActorArgument,type NativeAreaViewQuery,type NativeAreaViewQueryMethods} from './nativeAreaViewQueries';
 import {NativeAreaSceneAI} from './nativeAreaSceneAI';
 import type {NativeSceneAIHost} from '../engine/nativeSceneAIHost';
 import type {NativeSceneAIPreparationHost} from '../engine/nativeSceneAIPreparation';
@@ -66,7 +69,7 @@ export interface NativeAreaCombatServices {readonly ai:NativeAreaSceneAI;readonl
 type TransferredBuff=Parameters<World['treeBuffSources']['get']>[0];
 interface ActorControllerPacket {source:NativeAreaSceneCombat;bond:unknown;grants:unknown;clocks:unknown;buffs:[TransferredBuff,NonNullable<ReturnType<World['treeBuffSources']['get']>>][];strike:ReturnType<World['strikeReleaseBodies']['get']>}
 const controllerTransfers=new WeakMap<object,WeakMap<Actor,ActorControllerPacket>>();
-type Host=NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
+type Host=NativeSceneViewHost&NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
 type Binding<T>={get:()=>T;set?:(value:T)=>void};type Bindings={[K in keyof Host]:Binding<Host[K]>};
 function field<O extends object,K extends keyof O>(owner:()=>O,key:K):Binding<O[K]>{return {get:()=>owner()[key],set:value=>{owner()[key]=value;}};}
 function method<O extends object,K extends keyof O>(owner:()=>O,key:K):{get:()=>O[K]}{return {get:()=>{const receiver=owner(),fn=receiver[key];return typeof fn==='function'?((...args:unknown[])=>Reflect.apply(fn,receiver,args)) as O[K]:fn;}};}
@@ -92,10 +95,24 @@ export class NativeAreaSceneCombat {
  readonly summonPreparation:NativeAreaSceneSummonPreparation;
  readonly #publishedArea:Function;
  readonly ai:NativeAreaSceneAI;
- readonly #operation:NativeAreaCombatOperation;readonly #host:Host;
+ readonly #operation:NativeAreaCombatOperation;readonly #host:Host;readonly #viewHost:NativeSceneViewHost;
  readonly #activationReady:()=>boolean;
  readonly #frameCallbacks:Pick<Host,'collectDeedDot'|'doodadEffects'|'incursionEvents'>;
  readonly #populationHost:NativeSceneServiceHost;
+ /** Actor-independent retained layout read, also valid for an empty keeper area. */
+ stationAnchor(...args:Parameters<World['stationAnchor']>):ReturnType<World['stationAnchor']>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>frameServices.sceneStationAnchor(this.#host,...args));}
+ /** Display queries use their published physical audience; a selected old-area
+  * query never borrows the departed representative. The original query may
+  * mutate its actual local dialogue, cache, boss-bar or frame state. */
+ queryView<K extends NativeAreaViewQuery>(key:K,...args:Parameters<NativeAreaViewQueryMethods[K]>):ReturnType<NativeAreaViewQueryMethods[K]> {
+  if(!isNativeAreaViewQuery(key)||!this.isPresentationArea())throw Error('Native view query needs its actual published physical area');
+  const seat=presentationData(this.input.characterWriter,'localSeat') as Seat,actor=presentationData(seat,'actor') as Actor;
+  const physical=[actor],seats=[{seat,actor}];if(nativeAreaViewActorArgument(key))physical.push(args[0] as Actor);
+  if((key==='seatModeDef'||key==='seatStageDef'||key==='speechFocusTarget')&&args[0]!==undefined){const selected=args[0] as Seat,body=presentationData(selected,'actor') as Actor;seats.push({seat:selected,actor:body});physical.push(body);}
+  const present=()=>{const roster=Reflect.apply(exactPhysicalSeats,this.input.authority,[this.scene]);return seats.every(row=>roster.includes(row.seat)&&presentationData(row.seat,'actor')===row.actor);};
+  if(!present())throw Error('Native view query needs its actual physical seat');
+  return this.#operation.enter({permission:'proc',physical,sources:[]},()=>{const fn=this.#viewHost[key],physicalSeats=present(),published=Reflect.apply(this.#publishedArea,this.input.coordinator,[]),attending=physical.every(body=>Reflect.apply(exactActorAttendance,this.input.authority,[this.scene,body]));if(!physicalSeats||published.combat!==this||!attending||presentationData(this.input.characterWriter,'localSeat')!==seat||seats.some(row=>presentationData(row.seat,'actor')!==row.actor))throw Error('Native view presentation changed during admission');return Reflect.apply(fn,this.#viewHost,args) as ReturnType<NativeAreaViewQueryMethods[K]>;});
+ }
  applyInputs(...args:Parameters<World['applyInputs']>):void{this.inputFrame.applyInputs(...args);}
  passInputTime(...args:Parameters<World['passInputTime']>):void{this.inputFrame.passInputTime(...args);}
  useMetaSkill(...args:Parameters<World['useMetaSkill']>):boolean{return this.#operation.enter({permission:'proc',sources:[args[0]]},()=>inputCore.sceneUseMetaSkill(this.#host,...args));}
@@ -143,6 +160,9 @@ export class NativeAreaSceneCombat {
   this.services=Object.freeze({ai:this.ai,inputFrame:this.inputFrame,campaignFrame:this.campaignFrame,control:this.control,campaignTransitions:this.campaignTransitions,combatArena:this.combatArena,combat:this,progression,loot:assembly.lootController,objective:assembly.objectiveController,geometry,maddenLedger,campaignOwner:this.campaignOwner,tethers:this.tethers,restoration:this.restoration,castingPreparation:this.castingPreparation,displacement:this.displacement,combatState:this.combatState,defensePreparation:this.defensePreparation,projectiles:this.projectiles,killAftermath:this.killAftermath,groundFollowUps:this.groundFollowUps,summonPreparation:this.summonPreparation});
   const bindings=this.bindings();
   for(const key of Object.keys(bindings) as (keyof Bindings)[])Object.defineProperty(host,key,{enumerable:true,...bindings[key]});
+  const viewDescriptors=Object.getOwnPropertyDescriptors(host);
+  viewDescriptors.seats={enumerable:true,get:()=>Reflect.apply(exactPhysicalSeats,authority,[scene])};
+  this.#viewHost=Object.freeze(Object.defineProperties({},viewDescriptors)) as NativeSceneViewHost;
   Object.freeze(host);for(const key of ['ai','input','runtimeState','services','campaignOwner','combatArena','control','campaignTransitions','campaignFrame','inputFrame',"tethers","restoration","castingPreparation","displacement","combatState","defensePreparation","projectiles","killAftermath","groundFollowUps","summonPreparation"])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
  register(binding:NativeAreaAuthorityBinding<NativeAreaCombatServices>):void{if(binding.scene!==this.scene)throw Error('Native combat registration has foreign scene');for(const key of Object.keys(this.services) as (keyof NativeAreaCombatServices)[])if(binding.services[key]!==this.services[key])throw Error('Native combat registration has mismatched actual owner');this.#operation.bind(binding,[this.ai,this,this.inputFrame,this.input.progression,this.input.assembly.lootController,this.input.assembly.objectiveController,this.campaignOwner,this.combatArena,this.control,this.campaignTransitions,this.campaignFrame,this.tethers,this.restoration,this.castingPreparation,this.displacement,this.combatState,this.defensePreparation,this.projectiles,this.killAftermath,this.groundFollowUps,this.summonPreparation,this.input.assembly.input.ecology]);}
@@ -152,6 +172,8 @@ export class NativeAreaSceneCombat {
  /** Actual scheduler endpoints supply operation context to their retained leaves.
   * Initial activation replaces native boot callbacks only for the admitted local hero;
   * adoption of an already wounded World tracker is not implemented here. */
+ /** Exact native canopy query, under the actual area's physical admission. */
+ isConcealedFrom(viewer:Actor,target:Actor):boolean {return this.#operation.enter({physical:[viewer,target],permission:'physical'},()=>this.#host.veilIndex().concealedFrom(viewer.pos,target.pos));}
  updateAI(dt:number):void {this.ai.update(dt);}
  updateAIActor(actor:Actor,dt:number):void {this.ai.updateActor(actor,dt);}
  updateObjective(dt:number):void {this.#operation.enter({physical:[],permission:'physical'},()=>this.input.watching.updateObjective(dt));}
@@ -500,6 +522,125 @@ export class NativeAreaSceneCombat {
  frameEffects(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameEffects(this.#host,dt));}
  frameLateBodies(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameLateBodies(this.#host,dt));}
  private bindings():Bindings {const {assembly,progression,campaign,quests,watching}=this.input;const bindings={
+  radiance:method(()=>assembly.sky,"radiance"),
+  sightClipD:method(()=>assembly.input.geometry,"sightClipD"),
+  getQuestGiver:method(()=>this.input.quests,"getQuestGiver"),
+  questGiverPrompt:method(()=>this.input.questInteraction,"questGiverPrompt"),
+  lairAskView:method(()=>this.input.watching,"lairAskView"),
+  packageAskView:method(()=>this.input.watching,"packageAskView"),
+  ventureAskView:method(()=>this.input.watching,"ventureAskView"),
+  livingSpawners:method(()=>this.input.watching,"livingSpawners"),
+  questGiverDwell:field(()=>this.input.questInteraction.input.state,"questGiverDwell"),
+  netRevive:field(()=>this.input.characterWriter,"netRevive"),
+  netRoadDwell:field(()=>this.input.characterWriter,"netRoadDwell"),
+  spires:field(()=>assembly.input.objectives,"spires"),
+  rifts:field(()=>assembly.input.objectives,"rifts"),
+  pyres:field(()=>assembly.input.objectives,"pyres"),
+  digs:field(()=>assembly.input.objectives,"digs"),
+  procession:field(()=>assembly.input.objectives,"procession"),
+  objectiveLost:field(()=>assembly.input.objectives,"objectiveLost"),
+  netHarvest:field(()=>this.input.characterWriter,"netHarvest"),
+  npcDialogues:field(()=>assembly.input.residents,"npcDialogues"),
+  speakerRows:field(()=>assembly.input.residents,"speakerRows"),
+  speechMemory:field(()=>assembly.input.residents,"speechMemory"),
+  speechFocus:field(()=>assembly.input.residents,"speechFocus"),
+  speechFocusSpeaker:field(()=>assembly.input.residents,"speechFocusSpeaker"),
+  newsLog:{get:()=>this.input.characterWriter['newsLog'],set:(value:World['newsLog'])=>{this.input.characterWriter['newsLog']=value;}},
+  slainLog:field(()=>this.campaignOwner.shared,"slainLog"),
+  objectiveLatch:field(()=>assembly.input.objectives,"objectiveLatch"),
+  cull:field(()=>assembly.input.objectives,"cull"),
+  wave:field(()=>assembly.input.objectives,"wave"),
+  heldFixture:field(()=>assembly.input.objectives,"heldFixture"),
+  offering:field(()=>assembly.input.objectives,"offering"),
+  party:field(()=>this.input.characterWriter,"party"),
+  clientSeatId:field(()=>this.input.characterWriter,"clientSeatId"),
+  skyBelow:field(()=>assembly.input.state,"skyBelow"),
+  amalgamPickView:{get:()=> (...args:Parameters<World['amalgamPickView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneAmalgamPickView(this.#viewHost,...args);}},
+  boardIntroduction:{get:()=> (...args:Parameters<World['boardIntroduction']>)=>{this.#operation.assertActiveScope();return viewCore.sceneBoardIntroduction(this.#viewHost,...args);}},
+  bountyLessonLive:{get:()=> (...args:Parameters<World['bountyLessonLive']>)=>{this.#operation.assertActiveScope();return viewCore.sceneBountyLessonLive(this.#viewHost,...args);}},
+  boroughHint:{get:()=> (...args:Parameters<World['boroughHint']>)=>{this.#operation.assertActiveScope();return viewCore.sceneBoroughHint(this.#viewHost,...args);}},
+  bossBarInfo:{get:()=> (...args:Parameters<World['bossBarInfo']>)=>{this.#operation.assertActiveScope();return viewCore.sceneBossBarInfo(this.#viewHost,...args);}},
+  bountyBoardHint:{get:()=> (...args:Parameters<World['bountyBoardHint']>)=>{this.#operation.assertActiveScope();return viewCore.sceneBountyBoardHint(this.#viewHost,...args);}},
+  campfireHint:{get:()=> (...args:Parameters<World['campfireHint']>)=>{this.#operation.assertActiveScope();return viewCore.sceneCampfireHint(this.#viewHost,...args);}},
+  couchActive:{get:()=> (...args:Parameters<World['couchActive']>)=>{this.#operation.assertActiveScope();return viewCore.sceneCouchActive(this.#viewHost,...args);}},
+  couchHeroes:{get:()=> (...args:Parameters<World['couchHeroes']>)=>{this.#operation.assertActiveScope();return viewCore.sceneCouchHeroes(this.#viewHost,...args);}},
+  couchSeats:{get:()=> (...args:Parameters<World['couchSeats']>)=>{this.#operation.assertActiveScope();return viewCore.sceneCouchSeats(this.#viewHost,...args);}},
+  deathBurstsView:{get:()=> (...args:Parameters<World['deathBurstsView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneDeathBurstsView(this.#viewHost,...args);}},
+  descentView:{get:()=> (...args:Parameters<World['descentView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneDescentView(this.#viewHost,...args);}},
+  dimGatesView:{get:()=> (...args:Parameters<World['dimGatesView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneDimGatesView(this.#viewHost,...args);}},
+  dwellRingsView:{get:()=> (...args:Parameters<World['dwellRingsView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneDwellRingsView(this.#viewHost,...args);}},
+  dwellTargetsView:{get:()=> (...args:Parameters<World['dwellTargetsView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneDwellTargetsView(this.#viewHost,...args);}},
+  reviveTargetsView:{get:()=> (...args:Parameters<World['reviveTargetsView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneReviveTargetsView(this.#viewHost,...args);}},
+  corpseTargetsView:{get:()=> (...args:Parameters<World['corpseTargetsView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneCorpseTargetsView(this.#viewHost,...args);}},
+  exitDwellView:{get:()=> (...args:Parameters<World['exitDwellView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneExitDwellView(this.#viewHost,...args);}},
+  caveDwellView:{get:()=> (...args:Parameters<World['caveDwellView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneCaveDwellView(this.#viewHost,...args);}},
+  realmDwellView:{get:()=> (...args:Parameters<World['realmDwellView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneRealmDwellView(this.#viewHost,...args);}},
+  doorDwellView:{get:()=> (...args:Parameters<World['doorDwellView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneDoorDwellView(this.#viewHost,...args);}},
+  holdfastDwellView:{get:()=> (...args:Parameters<World['holdfastDwellView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneHoldfastDwellView(this.#viewHost,...args);}},
+  descentDwellView:{get:()=> (...args:Parameters<World['descentDwellView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneDescentDwellView(this.#viewHost,...args);}},
+  wardDwellView:{get:()=> (...args:Parameters<World['wardDwellView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneWardDwellView(this.#viewHost,...args);}},
+  extractionDwellView:{get:()=> (...args:Parameters<World['extractionDwellView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneExtractionDwellView(this.#viewHost,...args);}},
+  boroughDwellView:{get:()=> (...args:Parameters<World['boroughDwellView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneBoroughDwellView(this.#viewHost,...args);}},
+  huntDwellView:{get:()=> (...args:Parameters<World['huntDwellView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneHuntDwellView(this.#viewHost,...args);}},
+  processionView:{get:()=> (...args:Parameters<World['processionView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneProcessionView(this.#viewHost,...args);}},
+  encountersView:{get:()=> (...args:Parameters<World['encountersView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneEncountersView(this.#viewHost,...args);}},
+  extractionHint:{get:()=> (...args:Parameters<World['extractionHint']>)=>{this.#operation.assertActiveScope();return viewCore.sceneExtractionHint(this.#viewHost,...args);}},
+  fractureView:{get:()=> (...args:Parameters<World['fractureView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneFractureView(this.#viewHost,...args);}},
+  frameLockFocus:{get:()=> (...args:Parameters<World['frameLockFocus']>)=>{this.#operation.assertActiveScope();return viewCore.sceneFrameLockFocus(this.#viewHost,...args);}},
+  gloamingView:{get:()=> (...args:Parameters<World['gloamingView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneGloamingView(this.#viewHost,...args);}},
+  harvestView:{get:()=> (...args:Parameters<World['harvestView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneHarvestView(this.#viewHost,...args);}},
+  holdfastTollPrompt:{get:()=> (...args:Parameters<World['holdfastTollPrompt']>)=>{this.#operation.assertActiveScope();return viewCore.sceneHoldfastTollPrompt(this.#viewHost,...args);}},
+  holdfastPocketPitch:{get:()=> (...args:Parameters<World['holdfastPocketPitch']>)=>{this.#operation.assertActiveScope();return viewCore.sceneHoldfastPocketPitch(this.#viewHost,...args);}},
+  huntFootprintView:{get:()=> (...args:Parameters<World['huntFootprintView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneHuntFootprintView(this.#viewHost,...args);}},
+  leylineView:{get:()=> (...args:Parameters<World['leylineView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneLeylineView(this.#viewHost,...args);}},
+  npcSpeechView:{get:()=> (...args:Parameters<World['npcSpeechView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneNpcSpeechView(this.#viewHost,...args);}},
+  speechCandidates:{get:()=> (...args:Parameters<World['speechCandidates']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSpeechCandidates(this.#viewHost,...args);}},
+  innkeepPrompt:{get:()=> (...args:Parameters<World['innkeepPrompt']>)=>{this.#operation.assertActiveScope();return viewCore.sceneInnkeepPrompt(this.#viewHost,...args);}},
+  nearMireille:{get:()=> (...args:Parameters<World['nearMireille']>)=>{this.#operation.assertActiveScope();return viewCore.sceneNearMireille(this.#viewHost,...args);}},
+  heroKnown:{get:()=> (...args:Parameters<World['heroKnown']>)=>{this.#operation.assertActiveScope();return viewCore.sceneHeroKnown(this.#viewHost,...args);}},
+  mireilleGiftLesson:{get:()=> (...args:Parameters<World['mireilleGiftLesson']>)=>{this.#operation.assertActiveScope();return viewCore.sceneMireilleGiftLesson(this.#viewHost,...args);}},
+  caravanPrompt:{get:()=> (...args:Parameters<World['caravanPrompt']>)=>{this.#operation.assertActiveScope();return viewCore.sceneCaravanPrompt(this.#viewHost,...args);}},
+  amalgamPrompt:{get:()=> (...args:Parameters<World['amalgamPrompt']>)=>{this.#operation.assertActiveScope();return viewCore.sceneAmalgamPrompt(this.#viewHost,...args);}},
+  delverPrompt:{get:()=> (...args:Parameters<World['delverPrompt']>)=>{this.#operation.assertActiveScope();return viewCore.sceneDelverPrompt(this.#viewHost,...args);}},
+  residentPrompt:{get:()=> (...args:Parameters<World['residentPrompt']>)=>{this.#operation.assertActiveScope();return viewCore.sceneResidentPrompt(this.#viewHost,...args);}},
+  composeSpeakerLine:{get:()=> (...args:Parameters<World['composeSpeakerLine']>)=>{this.#operation.assertActiveScope();return viewCore.sceneComposeSpeakerLine(this.#viewHost,...args);}},
+  speechContext:{get:()=> (...args:Parameters<World['speechContext']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSpeechContext(this.#viewHost,...args);}},
+  objectiveText:{get:()=> (...args:Parameters<World['objectiveText']>)=>{this.#operation.assertActiveScope();return viewCore.sceneObjectiveText(this.#viewHost,...args);}},
+  spireView:{get:()=> (...args:Parameters<World['spireView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSpireView(this.#viewHost,...args);}},
+  holdFixturesView:{get:()=> (...args:Parameters<World['holdFixturesView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneHoldFixturesView(this.#viewHost,...args);}},
+  riftsView:{get:()=> (...args:Parameters<World['riftsView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneRiftsView(this.#viewHost,...args);}},
+  pyresView:{get:()=> (...args:Parameters<World['pyresView']>)=>{this.#operation.assertActiveScope();return viewCore.scenePyresView(this.#viewHost,...args);}},
+  digsView:{get:()=> (...args:Parameters<World['digsView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneDigsView(this.#viewHost,...args);}},
+  oracleHint:{get:()=> (...args:Parameters<World['oracleHint']>)=>{this.#operation.assertActiveScope();return viewCore.sceneOracleHint(this.#viewHost,...args);}},
+  pingVisibleTo:{get:()=> (...args:Parameters<World['pingVisibleTo']>)=>{this.#operation.assertActiveScope();return viewCore.scenePingVisibleTo(this.#viewHost,...args);}},
+  publishViewFrame:{get:()=> (...args:Parameters<World['publishViewFrame']>)=>{this.#operation.assertActiveScope();return viewCore.scenePublishViewFrame(this.#viewHost,...args);}},
+  rampageActive:{get:()=> (...args:Parameters<World['rampageActive']>)=>{this.#operation.assertActiveScope();return viewCore.sceneRampageActive(this.#viewHost,...args);}},
+  realmGatesView:{get:()=> (...args:Parameters<World['realmGatesView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneRealmGatesView(this.#viewHost,...args);}},
+  reviveHint:{get:()=> (...args:Parameters<World['reviveHint']>)=>{this.#operation.assertActiveScope();return viewCore.sceneReviveHint(this.#viewHost,...args);}},
+  salvageHint:{get:()=> (...args:Parameters<World['salvageHint']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSalvageHint(this.#viewHost,...args);}},
+  seatIdOfActor:{get:()=> (...args:Parameters<World['seatIdOfActor']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSeatIdOfActor(this.#viewHost,...args);}},
+  seatStageDef:{get:()=> (...args:Parameters<World['seatStageDef']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSeatStageDef(this.#viewHost,...args);}},
+  selfStacksOf:{get:()=> (...args:Parameters<World['selfStacksOf']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSelfStacksOf(this.#viewHost,...args);}},
+  skillUsable:{get:()=> (...args:Parameters<World['skillUsable']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSkillUsable(this.#viewHost,...args);}},
+  slotFaceOf:{get:()=> (...args:Parameters<World['slotFaceOf']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSlotFaceOf(this.#viewHost,...args);}},
+  speechApproachHint:{get:()=> (...args:Parameters<World['speechApproachHint']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSpeechApproachHint(this.#viewHost,...args);}},
+  speechDwellTargetsView:{get:()=> (...args:Parameters<World['speechDwellTargetsView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSpeechDwellTargetsView(this.#viewHost,...args);}},
+  speechFocusTarget:{get:()=> (...args:Parameters<World['speechFocusTarget']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSpeechFocusTarget(this.#viewHost,...args);}},
+  storeyedStructures:{get:()=> (...args:Parameters<World['storeyedStructures']>)=>{this.#operation.assertActiveScope();return viewCore.sceneStoreyedStructures(this.#viewHost,...args);}},
+  survivalRowVisible:{get:()=> (...args:Parameters<World['survivalRowVisible']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSurvivalRowVisible(this.#viewHost,...args);}},
+  traceView:{get:()=> (...args:Parameters<World['traceView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneTraceView(this.#viewHost,...args);}},
+  trackerHint:{get:()=> (...args:Parameters<World['trackerHint']>)=>{this.#operation.assertActiveScope();return viewCore.sceneTrackerHint(this.#viewHost,...args);}},
+  unleashSealsOf:{get:()=> (...args:Parameters<World['unleashSealsOf']>)=>{this.#operation.assertActiveScope();return viewCore.sceneUnleashSealsOf(this.#viewHost,...args);}},
+  casterMidCastOf:{get:()=> (...args:Parameters<World['casterMidCastOf']>)=>{this.#operation.assertActiveScope();return viewCore.sceneCasterMidCastOf(this.#viewHost,...args);}},
+  voyageLandingView:{get:()=> (...args:Parameters<World['voyageLandingView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneVoyageLandingView(this.#viewHost,...args);}},
+  finishNpcDialogue:{get:()=> (...args:Parameters<World['finishNpcDialogue']>)=>{this.#operation.assertActiveScope();return viewCore.sceneFinishNpcDialogue(this.#viewHost,...args);}},
+  npcDialogueReachable:{get:()=> (...args:Parameters<World['npcDialogueReachable']>)=>{this.#operation.assertActiveScope();return viewCore.sceneNpcDialogueReachable(this.#viewHost,...args);}},
+  dissolveCrackView:{get:()=> (...args:Parameters<World['dissolveCrackView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneDissolveCrackView(this.#viewHost,...args);}},
+  dissolveFloorCrackView:{get:()=> (...args:Parameters<World['dissolveFloorCrackView']>)=>{this.#operation.assertActiveScope();return viewCore.sceneDissolveFloorCrackView(this.#viewHost,...args);}},
+  emergeOf:{get:()=> (...args:Parameters<World['emergeOf']>)=>{this.#operation.assertActiveScope();return viewCore.sceneEmergeOf(this.#viewHost,...args);}},
+  gloomDarkness:{get:()=> (...args:Parameters<World['gloomDarkness']>)=>{this.#operation.assertActiveScope();return viewCore.sceneGloomDarkness(this.#viewHost,...args);}},
+  sailPrompt:{get:()=> (...args:Parameters<World['sailPrompt']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSailPrompt(this.#viewHost,...args);}},
+  skyBelowDef:{get:()=> (...args:Parameters<World['skyBelowDef']>)=>{this.#operation.assertActiveScope();return viewCore.sceneSkyBelowDef(this.#viewHost,...args);}},
   account:field(()=>campaign,"account"),
   accountDirty:field(()=>campaign,"accountDirty"),
   accumulateDotText:method(()=>this,"accumulateDotText"),

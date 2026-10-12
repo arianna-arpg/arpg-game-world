@@ -280,3 +280,6 @@ export class NativeAreaCombatOperation {
  prepareBirth<T>(body:Actor,action:()=>T):T{const frame=this.#active();if(!this.#birth.isPending(body))throw Error('Native combat preparation needs its exact pending birth');const next:Frame={operation:this,parent:frame,sources:frame.sources,binding:frame.binding,active:true};return this.#native(next,action);}
 }
 export function createNativeAreaCombatOperation(owner:NativeAreaSceneCombat):NativeAreaCombatOperation{return new NativeAreaCombatOperation(create,owner);}
+
+/** Non-granting terminal-lifecycle preflight. Retirement never interrupts a native operation. */
+export function assertNativeCombatOperationsIdle():void {if(top)throw Error('Native combat operation is active');}

@@ -15,9 +15,14 @@ export class NativeAreaActorAuthority<S extends object> {
  #actors=new WeakMap<Actor,NativeAreaAuthorityBinding<S>>();
  #attendance=new WeakMap<Actor,number>();
  #attendanceSerial=0;
+ #retired=false;
+ #assertLive():void {if(this.#retired)throw Error('Native actor authority is retired');}
+ /** Revoke every binding and selection, including a partially prepared area. */
+ retire():void {this.#assertLive();this.#retired=true;this.#bindings.clear();this.#scenes.clear();this.#actors=new WeakMap();this.#attendance=new WeakMap();this.#selections=new WeakMap();}
  #selections=new WeakMap<NativeAreaActorSelection<S>,{seat:Seat|null;seats:readonly unknown[]}>();
  constructor(campaign:{readonly seats:readonly Seat[]}){this.campaign=campaign;Object.defineProperty(this,'campaign',{writable:false,configurable:false});}
  register(scene:NativeSceneCensus,services:S):NativeAreaAuthorityBinding<S>{
+  this.#assertLive();
   if(!scene||!Array.isArray(scene.actors)||!services||typeof services!=='object')throw Error('Native area authority needs real scene and services');
   if(this.#scenes.has(scene))throw Error('Native scene already has an authority binding');
   if(Object.hasOwn(services,'scene'))throw Error('Native authority services cannot replace the scene');
@@ -37,7 +42,7 @@ export class NativeAreaActorAuthority<S extends object> {
   const binding=this.#scenes.get(scene);if(!binding)throw Error('Unregistered native scene authority');this.#entry(binding);return binding;
  }
  /** Absence from this authority's exact physical bindings only; not a census scan. */
- assertUnclaimed(actor:Actor):void{if(this.#actors.has(actor))throw Error('Native actor already has physical authority');}
+ assertUnclaimed(actor:Actor):void{this.#assertLive();if(this.#actors.has(actor))throw Error('Native actor already has physical authority');}
  claim(binding:NativeAreaAuthorityBinding<S>,actors:readonly Actor[]):void{
   const entry=this.#entry(binding);if(new Set(actors).size!==actors.length)throw Error('Repeated actor in native authority claim');
   for(const actor of actors){if(!binding.scene.actors.includes(actor))throw Error('Native authority claim needs actual scene membership');const prior=this.#actors.get(actor);if(prior&&prior!==binding)throw Error('Native actor already belongs to another area');}
@@ -72,6 +77,7 @@ export class NativeAreaActorAuthority<S extends object> {
   this.#bindings.delete(binding);this.#scenes.delete(binding.scene);
  }
  require(actor:Actor):NativeAreaAuthorityOwner<S>{
+  this.#assertLive();
   // Carried shapeshift husks deliberately leave the census. Their exact live
   // seat/body relationship supplies authority, never a matching id or position.
   const carried=this.campaign.seats.filter(s=>s.home===actor&&s.actor!==actor&&s.actor.possession?.huskMode==='carried');
@@ -104,6 +110,7 @@ export class NativeAreaActorAuthority<S extends object> {
   * No alive/seat/lineage filter: the native expiry caller decides dead pruning.
   * Ambiguous IDs refuse instead of silently choosing an arbitrary area. */
  physicalActorById(id:number):Actor|undefined {
+  this.#assertLive();
   const cohort=[...this.#bindings.keys()];let found:Actor|undefined;
   for(const binding of cohort){this.#entry(binding);this.assertAdmitted(binding.scene);}
   for(const binding of cohort)for(const actor of binding.scene.actors)if(actor.id===id){if(found&&found!==actor)throw Error('Ambiguous native physical actor ID');found=actor;}
@@ -115,6 +122,7 @@ export class NativeAreaActorAuthority<S extends object> {
  /** Select actual physical or explicitly allowed carried bodies after campaign
   * callbacks. Call assertFinalSelections immediately before native effects. */
  selectActors(actors:readonly Actor[],allowCarried=false):readonly NativeAreaActorSelection<S>[] {
+  this.#assertLive();
   const seats=finalArray(this.campaign.seats),selected:NativeAreaActorSelection<S>[]=[];
   for(const actor of actors){let body=actor,seat:Seat|null=null;
    if(allowCarried){for(const candidate of seats){if(!candidate||typeof candidate!=='object')throw Error('Native authority needs actual seat objects');const home=finalOwn(candidate,'home'),controlled=finalOwn(candidate,'actor');if(home!==actor||controlled===actor)continue;if(!controlled||typeof controlled!=='object')throw Error('Native carried authority needs an actual body');const possession=finalOwn(controlled,'possession');if(!possession||typeof possession!=='object'||finalOwn(possession,'huskMode')!=='carried')continue;if(seat)throw Error('Ambiguous carried hero authority');if(finalOwn(possession,'seatId')!==finalOwn(candidate,'id'))throw Error('Stale carried hero authority');seat=candidate as Seat;body=controlled as Actor;}}
@@ -156,6 +164,7 @@ export class NativeAreaActorAuthority<S extends object> {
   const census=finalArray(finalOwn(scene,'actors'));for(let i=0;i<census.length;i++)if(finalOwn(census,i)===actor)return true;return false;
  }
  physicalSeats(scene:NativeSceneCensus):Seat[] {
+  this.#assertLive();
   const seats=finalArray(this.campaign.seats),binding=this.#scenes.get(scene);if(!binding)throw Error('Unregistered native physical seat cohort');
   const selected:Seat[]=[];for(let i=0;i<seats.length;i++){const seat=finalOwn(seats,i);if(!seat||typeof seat!=='object')throw Error('Native physical seats need actual own-data seats');const actor=finalOwn(seat,'actor') as Actor;if(this.#actors.get(actor)===binding)selected.push(seat as Seat);}
   Reflect.apply(finalPhysicalAttendance,this,[binding]);const census=finalArray(finalOwn(scene,'actors'));

@@ -1,0 +1,32 @@
+import '../src/engine/world';
+import assert from 'node:assert/strict';
+import {NativeClientRuntime} from '../src/worldmass/nativeClientRuntime';
+import {townStationFeatures} from '../src/data/townBuild';
+import {counterZoneOf} from '../src/net/journalWire';
+import {serializeZone} from '../src/net/snapshot';
+import {withSeededRandom} from '../src/core/rng';
+import {refuseWorldCombat,writeCombatProof,combatHash} from './probe_nativecombatcycle';
+import {clientSetup} from './nativeClientRuntimeFixture';
+const result=withSeededRandom(452122,()=>{
+ const {writer,definition,destination,geography}=clientSetup(452122),townId=writer.zone.id;
+ for(const feature of townStationFeatures())writer.account.features.add(feature);writer['refoldTownStations']();
+ const original=Object.getOwnPropertyDescriptors(writer);
+ return refuseWorldCombat([writer],worldDrivers=>{
+  const runtime=new NativeClientRuntime({writer,definition,geography:geography.spec});runtime.install();
+  const a=runtime.current,coordinator=a.combat.input.coordinator,hero=writer.localSeat.actor;
+  const run=()=>{const area=runtime.current;assert.equal(writer.actors,area.combat.scene.actors);assert.equal(writer.doodads,area.assembly.input.geometry.doodads);assert.equal(writer.vendorStock,area.combat.input.campaign.vendorStock);assert.deepEqual(Object.getOwnPropertyDescriptor(writer,'vendorStock'),original.vendorStock);assert.equal(writer.deathBurstsView(),area.combat.killAftermath.input.state.deathBursts);assert.deepEqual(writer.couchHeroes(),[hero]);writer.publishViewFrame(11,22,333,444);assert.deepEqual(area.combat.runtimeState.viewFrame,{x:11,y:22,w:333,h:444});assert.equal(writer.seatModeDef(writer.localSeat),area.combat.queryView('seatModeDef',writer.localSeat));return {id:area.combat.scene.zone.id,bodies:writer.actors.length,structures:area.assembly.input.geometry.structures.length,serialized:serializeZone(writer).zoneId};};
+  const visits=[run()];const heldA=writer.publishViewFrame,heldObjective=writer.objectiveText;
+  const originalQuery=a.combat.queryView;let selectedCalls=0,shadowCalls=0;
+  const selected:typeof originalQuery=function(this:typeof a.combat,...args){assert.equal(this,a.combat);selectedCalls++;return Reflect.apply(originalQuery,this,args);};Object.defineProperty(selected,'apply',{get(){shadowCalls++;throw Error('callback.apply must not be read');}});
+  a.combat.queryView=selected;const captured=writer.objectiveText;a.combat.queryView=originalQuery;captured();assert.equal(selectedCalls,1);assert.equal(shadowCalls,0);
+  coordinator.runFrom(a,()=>coordinator.loadZone(destination.id));const b=runtime.current;visits.push(run());assert.throws(()=>heldA(1,2,3,4),/published physical area/);assert.throws(()=>heldObjective(),/published physical area/);
+  const director=b.assembly.input.residents.npcDialogues,refresh=director.refreshAppearances,sentinel=Error('genuine published dialogue failure');director.refreshAppearances=()=>{throw sentinel;};assert.throws(()=>writer.npcSpeechView(),e=>e===sentinel);director.refreshAppearances=refresh;
+  coordinator.runFrom(b,()=>coordinator.loadZone(townId));const town=runtime.current;visits.push(run());assert.ok(town.assembly.input.geometry.structures.length);const townStation=writer.stationAnchor,anchor=townStation('campfire');assert.ok(anchor);writer.localSeat.keeper={reviveSec:8};const keeperAnchors=counterZoneOf(writer).anchors!.length;assert.ok(keeperAnchors);delete writer.localSeat.keeper;
+  coordinator.runFrom(town,()=>coordinator.loadZone(definition.id));assert.equal(runtime.current,a);visits.push(run());assert.deepEqual(townStation('campfire'),anchor);heldA(9,8,7,6);assert.deepEqual(a.combat.runtimeState.viewFrame,{x:9,y:8,w:7,h:6});
+  const before=writer.time;const tick=runtime.dispatch({dt:1/60,wallSeconds:1/60,inputs:new Map()});assert.equal(writer.time,before+1/60);assert.equal(tick.aiAreas.length,3);
+  const heldFinal=writer.objectiveText,retiredView={...a.combat.runtimeState.viewFrame};runtime.retire();assert.throws(()=>heldFinal(),/Native transition has no published actual area/);assert.throws(()=>heldA(1,1,1,1),/Native transition has no published actual area/);assert.deepEqual(a.combat.runtimeState.viewFrame,retiredView);assert.throws(()=>townStation('campfire'),/Unregistered native scene authority/);
+  for(const key of ['actors','doodads','zone','player','publishViewFrame','objectiveText','stationAnchor'])assert.deepEqual(Object.getOwnPropertyDescriptor(writer,key),original[key],key+' terminal descriptor restoration');
+  assert.deepEqual(worldDrivers,[]);return {visits,selectedCalls,shadowCalls,keeperAnchors,aiAreas:tick.aiAreas,terminal:true,worldDrivers};
+ });
+});
+const report={scope:'Genuine installer, selected query receivers, raw publication, native serialization, generated A/B and authored Lastlight/revisit, full resident AI/frame dispatch, terminal held-query refusal. No main flip, startup/prologue completion, browser or cold Continue claim.',result,receipt:combatHash(JSON.stringify(result))};writeCombatProof('native-client-publication-composition.json',report);console.log(JSON.stringify(report));

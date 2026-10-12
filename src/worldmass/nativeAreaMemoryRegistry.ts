@@ -4,16 +4,22 @@ import {isNativeWorld,type World} from '../engine/world';
 import type {NativeZoneMemory} from '../engine/nativeSceneMemory';
 import {NativeAreaSceneMemory} from './nativeAreaSceneMemory';
 const registries=new WeakMap<World,NativeAreaMemoryRegistry>();
+export function hasNativeAreaMemoryRegistry(writer:World):boolean{return registries.has(writer);}
 export class NativeAreaMemoryRegistry {
  readonly writer:World;
  #owners=new Map<string,NativeAreaSceneMemory>();
  #capturing=false;
+ #retired=false;
+ assertRetirable():void {if(this.#capturing)throw Error('Native memory registry is capturing');}
+ /** Cancellation discards registration, without capturing or writing a save. */
+ retire():void {if(this.#capturing)throw Error('Native memory registry is capturing');if(this.#retired)return;this.#retired=true;this.#owners.clear();if(registries.get(this.writer)===this)registries.delete(this.writer);}
  constructor(writer:World){
   if(!isNativeWorld(writer))throw Error('Native memory registration needs the real character writer');
   if(registries.has(writer))throw Error('Native campaign already has a memory registry');
   this.writer=writer;Object.defineProperty(this,'writer',{writable:false,configurable:false});registries.set(writer,this);
  }
  #guard<T>(run:()=>T):T {
+  if(this.#retired)throw Error('Native memory registry is retired');
   if(this.#capturing)throw Error('Native memory registry is capturing');
   this.#capturing=true;try{return run();}finally{this.#capturing=false;}
  }

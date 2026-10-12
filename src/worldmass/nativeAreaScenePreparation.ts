@@ -21,6 +21,8 @@ export class NativeAreaScenePreparation {
   const {session,coordinator,authority,maddenLedger}=raw;if(!isNativeAreaCampaignSession(session)||!isNativeAreaSceneTransitionCoordinator(coordinator)||coordinator.input.campaign!==session.campaign||coordinator.input.characterWriter!==session.writer||coordinator.input.authority!==authority||authority.campaign!==session.campaign)throw Error('Native preparation needs actual shared campaign roots');
   assertNativeRetainedMassState(session.writer);assertNativeMaddenLedger(maddenLedger,session.campaign,authority);this.input=Object.freeze({session,coordinator,authority,maddenLedger});Object.defineProperty(this,'input',{writable:false,configurable:false});preparations.add(this);coordinator.attachPreparation(this);
  }
+ /** Close preparation, including a failed destination never registered for play. */
+ retire():readonly NativeAreaSceneOngoing[]{const areas=Object.freeze([...this.#areas.values()]);this.#areas.clear();return areas;}
  /** Select only an actual campaign definition and recorded geography. No callback
   * can substitute a prebirthed scene, area, population, or landing coordinate. */
  prepare(zoneId:string,geography:MassNativeGeography,from?:string,representative?:Actor):NativeAreaSceneOngoing {

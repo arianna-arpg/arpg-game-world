@@ -11,6 +11,7 @@ import {isNativeAreaSceneCombat} from './nativeAreaSceneCombat';
 import {isNativeAreaSceneTransitionCoordinator,type NativeAreaSceneTransitionCoordinator} from './nativeAreaSceneTransitionCoordinator';
 import {nativeBirthAsyncResult} from './nativeAreaScenePopulation';
 const writers=new WeakSet<World>(),actualSessions=new WeakSet<object>();
+export function hasNativeAreaCampaignSession(writer:World):boolean{return writers.has(writer);}
 export function isNativeAreaCampaignSession(value:unknown):value is NativeAreaCampaignSession{return !!value&&typeof value==='object'&&actualSessions.has(value);}
 export class NativeAreaCampaignSession {
  readonly writer:World;readonly campaign:NativeAreaOngoingCampaign;
@@ -19,13 +20,13 @@ export class NativeAreaCampaignSession {
   if(!isNativeWorld(writer)||writers.has(writer))throw Error('Native campaign session requires its one actual writer');assertNativeRetainedMassState(writer);this.writer=writer;
   const view={} as NativeAreaOngoingCampaign,self=this;
   const fields=["partyRows","mintVeil","zoneMap","caveMap","sim","manifest","nextGenId","surveyed","visited","crossDimWarned","zoneMemory","time","account","accountDirty","dropRuleOf","questSeat","completedObjectives","localSeat","actingSeat","mireilleSeatBuff","mireilleXpBuff","ledger","vendorHolds","mercSheets","charDirty","seats","bountyHands","activeQuests","clientActionHook","massRuntime","annexFound","meta","charDeaths","hiredMercs","lastSagaFlushAt","manifestedThisRun","descentRun","descentStocks","questImbues","massSettlementDay","holdMissingWarned","vendorArmedBeat","chandlerStock","vendorRestockAt","stationArmed","discoveredWaypoints","squadSeq","vendorStock","theaterVisitSeq","ownQuestLedger","questLedgerOverride","seatNoteAt","journalDirty","netJournal","timeflow","mercSyncedLevel","kills"] as const;
-  for(const key of fields)Object.defineProperty(view,key,{enumerable:true,get:()=>Reflect.get(writer,key),set:value=>{if(!Reflect.set(writer,key,value))throw new TypeError('Native campaign field is not writable: '+key);}});
+  for(const key of fields)Object.defineProperty(view,key,{enumerable:true,get:()=>{assertNativeRetainedMassState(writer);return Reflect.get(writer,key);},set:value=>{assertNativeRetainedMassState(writer);if(!Reflect.set(writer,key,value))throw new TypeError('Native campaign field is not writable: '+key);}});
   // These original callables read campaign/writer state only. Selection stays
   // live and invocation preserves the real selected writer receiver.
   const globals=["sameParty","seatHero","accountSeat","continentFor","notice","mireilleLessonLived","mireilleGiftOwed","mireilleGiftLesson","seatHudOf","questLedgerOf","forechartSounding","invalidateZonesSaveMemo","keeperCampaign","heroKnown","bagItem"] as const;
-  for(const key of globals)Object.defineProperty(view,key,{enumerable:true,get(){const method=writer[key];return(...args:unknown[])=>Reflect.apply(method as Function,writer,args);}});
-  const method=<O extends object,K extends keyof O>(name:PropertyKey,owner:()=>O,key:K)=>Object.defineProperty(view,name,{enumerable:true,get(){const receiver=owner(),fn=receiver[key];return(...args:unknown[])=>Reflect.apply(fn as Function,receiver,args);}});
-  const queryHost=Object.freeze({get seatByActor(){return Reflect.get(writer,'seatByActor') as World['seatByActor'];},get metaDirty(){return Reflect.get(writer,'metaDirty') as World['metaDirty'];}});
+  for(const key of globals)Object.defineProperty(view,key,{enumerable:true,get(){assertNativeRetainedMassState(writer);const method=writer[key];return(...args:unknown[])=>{assertNativeRetainedMassState(writer);return Reflect.apply(method as Function,writer,args);};}});
+  const method=<O extends object,K extends keyof O>(name:PropertyKey,owner:()=>O,key:K)=>Object.defineProperty(view,name,{enumerable:true,get(){assertNativeRetainedMassState(writer);const receiver=owner(),fn=receiver[key];return(...args:unknown[])=>{assertNativeRetainedMassState(writer);return Reflect.apply(fn as Function,receiver,args);};}});
+  const queryHost=Object.freeze({get seatByActor(){assertNativeRetainedMassState(writer);return Reflect.get(writer,'seatByActor') as World['seatByActor'];},get metaDirty(){assertNativeRetainedMassState(writer);return Reflect.get(writer,'metaDirty') as World['metaDirty'];}});
   Object.defineProperties(view,{
    presentWorlds:{enumerable:true,value:()=>{if(!self.#coordinator)throw Error('Native campaign has no actual directory');return self.#coordinator.presentWorlds();}},
    seatOf:{enumerable:true,value:(...args:Parameters<World['seatOf']>)=>sceneSeatOf(queryHost,...args)},

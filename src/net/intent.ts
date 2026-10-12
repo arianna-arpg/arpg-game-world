@@ -118,6 +118,8 @@ export function mergeInputs(prev: PlayerInput | undefined, next: PlayerInput): P
 /** Produces a seat's intent each frame, or null when the seat is idle. The
  *  controlling actor + the world are enough for any source (OS read, follow-AI,
  *  network drain) — no Seat coupling, so this stays a clean leaf interface. */
+/** Exact read-only query surface used by the real browser seat controllers. */
+export type PlayerInputQuery=Pick<World,'player'|'enemiesOf'|'actorById'|'hostileTo'|'isConcealedFrom'|'losCached'>;
 export interface PlayerInputSource {
   poll(actor: Actor, world: World, dt: number): PlayerInput | null;
 }

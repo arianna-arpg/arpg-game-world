@@ -1,3 +1,14 @@
+NativeClientRuntime now installs the actual retained campaign, dispatches native
+input and area AI before one campaign frame, and terminally retires its writer.
+Finite renderer queries and physical publication use actual area owners; held
+queries recheck every selected actor after callback-capable roster reads.
+Preserve selected receivers, exact raw fields, saved area memories and original
+source assertions. Verify nativeclient*, nativeareapublication*, nativeareaview*,
+nativeview*, all four types, roster census, game and launcher boot.
+See docs/worldgen/native-area-combat-runtime.md. Menu/action composition, actual
+client startup and frame activation, cold Continue, hosted publication and party
+death remain open; this installer alone does not establish playable parity.
+
 NativeAreaSceneCombat and NativeAreaSceneCampaignFrame compose retained native
 combat, exact actor/record lifetimes and four local frame stages around the
 original campaign barriers. Preserve actual admission, selected receivers, raw

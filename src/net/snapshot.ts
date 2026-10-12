@@ -551,7 +551,7 @@ const skillInstW = (s: SkillInstance): SkillInstW => ({
 const ACTION_ECHOES = new WeakMap<Seat, number>();
 /** THE ECHO LAW: the host judged this seat's action `seq` (marks the seat's build dirty, so
  *  the echo rides the very next snapshot). A seq that is not a whole number is no echo. */
-export function noteActionEcho(world: World, seat: Seat, seq: unknown): void {
+export function noteActionEcho(world: Pick<World, 'markMetaDirty'>, seat: Seat, seq: unknown): void {
   if (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 0) return;
   ACTION_ECHOES.set(seat, Math.max(seq, ACTION_ECHOES.get(seat) ?? 0));
   world.markMetaDirty(seat);

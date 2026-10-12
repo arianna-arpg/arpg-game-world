@@ -157,6 +157,9 @@ export class NativeAreaSceneCombatCampaign {
   for(const key of ['input','shared','state','combatDeeds','worldKillRules','rouseRules'])Object.defineProperty(this,key,{writable:false,configurable:false,enumerable:false});
  }
 
+ /** Terminal callback retirement. Matching installed slots are cleared; newer
+  * owners are untouched, and held callback references lose their private receipt. */
+ retireCallbacks():void {const hero=this.#deeds.actor;if(hero){const callbacks=this.#deeds.callbacks.get(hero);if(callbacks)for(const slot of ['onLifeHealed','onLifeSpent'] as const){const receipt=callbacks[slot];if(!receipt)continue;receipt.active=false;delete callbacks[slot];const d=Object.getOwnPropertyDescriptor(hero,slot);if(d&&Object.hasOwn(d,'value')&&d.value===receipt.callback&&d.writable)Object.defineProperty(hero,slot,{...d,value:undefined});}}this.#deeds.actor=null;this.#deeds.owner=null;}
  #deedOwner():NativeAreaSceneCombatCampaign {const owner=this.#deeds.owner;if(!owner)throw Error('Native deeds need an admitted controlled hero');return owner;}
  /** A campaign callback receipt authorizes only its installed observation slot.
   * Ordinary travel preserves the callback and the native wound/combo history. */

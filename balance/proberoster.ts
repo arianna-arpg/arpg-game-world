@@ -64,6 +64,22 @@ export type ProbeRow = ProbeInvocation & (
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: "probe_nativeareapublication.ts", status: 'green', tier: 'fast', why: "Actual retained raw fields, controllers, A/B/town/A publication and genuine save ownership." },
+  { probe: "probe_nativeareapublicationsource.ts", status: 'green', tier: 'fast', why: "Exact finite local publication seams and preserved historical source guards." },
+  { probe: "probe_nativeareaviewqueries.ts", status: 'green', tier: 'fast', why: "Actual renderer and menu-adjacent reads across 79 roots with real town anchors and stale-area refusal." },
+  { probe: "probe_nativeareaviewqueriessource.ts", status: 'green', tier: 'fast', why: "Exact 86 extracted native query bodies and finite binding projections with mutation controls." },
+  { probe: "probe_nativeclientboundaries.ts", status: 'green', tier: 'fast', why: "Actual installer callback boundaries, receiver selection, reentry and original partial failures." },
+  { probe: "probe_nativeclientconstructorcleanup.ts", status: 'green', tier: 'fast', why: "Constructor failures retire only roots acquired by this installer and preserve original errors." },
+  { probe: "probe_nativeclientdispatch.ts", status: 'green', tier: 'fast', why: "Original native input sources, actions, area AI ordering and once-only retained frames." },
+  { probe: "probe_nativeclientlifecycle.ts", status: 'green', tier: 'fast', why: "Terminal writer retirement revokes held operations and restores only owned publication descriptors." },
+  { probe: "probe_nativeclientpublicationcomposition.ts", status: 'green', tier: 'fast', why: "Actual combined install, A/B/town/A queries and frames, save scope and terminal retirement." },
+  { probe: "probe_nativeclientpublicationcompositionsource.ts", status: 'green', tier: 'fast', why: "Exact composed installer and renderer source lanes preserve all original assertions and reject unrelated changes." },
+  { probe: "probe_nativeclientrole.ts", status: 'green', tier: 'fast', why: "Network shell and shard role changes refuse installation and each authoritative frame boundary." },
+  { probe: "probe_nativeclientruntime.ts", status: 'green', tier: 'fast', why: "Genuine writer-bound retained installation and actual source preparation without World frame fallback." },
+  { probe: "probe_nativeclientruntimesource.ts", status: 'green', tier: 'fast', why: "Exact installer adaptations with mutation, duplication, portable newline and historical controls." },
+  { probe: "probe_nativeviewfinalactors.ts", status: 'green', tier: 'fast', why: "Actual last-read remote travel remains applied while stale renderer reads refuse before foreign fields." },
+  { probe: "probe_nativeviewfinalseat.ts", status: 'green', tier: 'fast', why: "Final live roster and publication reads precede ordinary actual local seat checks." },
+  { probe: "probe_nativeviewseatidentity.ts", status: 'green', tier: 'fast', why: "Renderer entry requires the actual local seat and body rather than matching copied values." },
   { probe: 'probe_nativeaitargetcontinuity.ts', status: 'green', tier: 'fast', why: "Real held AI target departure across travel, xray and carried-body changes." },
   { probe: 'probe_nativeaitargetcontinuitysource.ts', status: 'green', tier: 'fast', why: "Exact target-presence source successor retaining original AI guards." },
   { probe: 'probe_nativecarriedadmissionfinal.ts', status: 'green', tier: 'fast', why: "Actual initial admission closes after its final live callback, with preserved native partial effects." },

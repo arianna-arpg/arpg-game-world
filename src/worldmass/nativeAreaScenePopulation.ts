@@ -92,7 +92,10 @@ export class NativeAreaScenePopulation {
   readonly promotion:NativeMonsterPromotionHost;
   readonly hostility:NativeHostilityHost;
   private readonly relayHost={enemiesOf:(a:Actor)=>this.enemiesOf(a)};
-  private readonly relay:NonNullable<Actor['statusRelay']>=(a,args)=>nativeRelayStatus(this.relayHost,this.input.sources.relay,a,args);
+  #retired=false;
+  private readonly relay:NonNullable<Actor['statusRelay']>=(a,args)=>{if(this.#retired)throw Error('Native population is retired');return nativeRelayStatus(this.relayHost,this.input.sources.relay,a,args);};
+  /** Revoke retained relay callbacks even if an external actor still holds one. */
+  retire():void {this.#retired=true;}
   readonly input:NativeScenePopulationInput;
   readonly #sharedActors:ReadonlySet<Actor>;
   readonly #birthMintFrames:Set<Actor>[]=[];
@@ -187,6 +190,7 @@ export class NativeAreaScenePopulation {
   set actors(v:Actor[]){this.input.scene.actors=v;}
   nextSquadId():number{return this.input.state.squadSequence++;}
   createMonster(...args:Parameters<NativeAreaBirthHost['createMonster']>):Actor{
+    if(this.#retired)throw Error('Native population is retired');
     const body=createNativeMonster(this.factory,this.input.sources.factory,...args);
     this.#factoryOwners.set(body,Object.freeze({owner:args[3]}));
     this.#birthMintFrames.at(-1)?.add(body);return body;

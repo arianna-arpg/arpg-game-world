@@ -1,3 +1,5 @@
+import {extendNativeAreaViewQueries} from './nativeAreaViewQueries';
+import {extendNativeAreaPublication} from './nativeAreaScenePublication';
 /** Retained-area selection and synchronous physical handoff. Unlike legacy
  * World.loadZone, revisits retain the area's actual stores and controllers.
  * Destination creation and complete frame/UI publication are separate duties. */
@@ -9,10 +11,12 @@ import type {Actor} from '../engine/actor';
 import type {TraversalState} from '../engine/traversal';
 import type {RoadTicket,ShardWorldLink,LandingSpot} from '../engine/shardUnits';
 import type {NativeAreaRoadDestination} from './nativeAreaRoadDestination';
-import {assertNativeCombatOwnerEntry,type NativeAreaCombatOwnerEntry} from './nativeAreaCombatOperation';
+import {assertNativeCombatOwnerEntry,assertNativeCombatOperationsIdle,type NativeAreaCombatOwnerEntry} from './nativeAreaCombatOperation';
+import {retireNativeRetainedWriter} from './nativeAreaRetainedLifetime';
 import {angleTo,vec,rand,type Vec2} from '../core/math';
 import {NativeAreaScenePreparation,isNativeAreaScenePreparation} from './nativeAreaScenePreparation';
-import {nativeBirthAsyncResult} from './nativeAreaScenePopulation';
+import {nativeBirthAsyncResult,NativeAreaScenePopulation} from './nativeAreaScenePopulation';
+import {NativeAreaSceneCombatCampaign} from './nativeAreaSceneCombatCampaign';
 import {harborLandPartyAt,type NativeSceneHarborHost} from '../engine/nativeSceneHarbor';
 import {NativeAreaSceneOngoing,type NativeAreaOngoingCampaign} from './nativeAreaSceneOngoing';
 import {NativeAreaSceneCombat,isNativeAreaSceneCombat} from './nativeAreaSceneCombat';
@@ -52,6 +56,7 @@ export function issueNativeTransitionOwnerBridge(coordinator:NativeAreaSceneTran
  for(const key of ['campaign','characterWriter','authority'] as const)if(combat.input[key]!==coordinator.input[key])throw Error('Native transition bridge roots differ: '+key);
  if(combatBridges.has(combat))throw Error('Native combat already issued its transition bridge');const bridge=bridgeIssuers.get(coordinator)!(owner,combat);combatBridges.set(combat,bridge);return bridge;
 }
+export function hasNativeAreaSceneTransitionCoordinator(writer:World):boolean{return coordinatedWriters.has(writer);}
 export function isNativeAreaSceneTransitionCoordinator(value:unknown):value is NativeAreaSceneTransitionCoordinator{return !!value&&typeof value==='object'&&actualCoordinators.has(value);}
 function own<T>(value:object,key:PropertyKey):T {const d=Object.getOwnPropertyDescriptor(value,key);if(!d||!Object.hasOwn(d,'value'))throw Error('Native transition requires an ordinary own-data field: '+String(key));return d.value as T;}
 function optionalOwn<T>(value:object,key:PropertyKey):T|undefined {const d=Object.getOwnPropertyDescriptor(value,key);if(!d)return undefined;if(!Object.hasOwn(d,'value'))throw Error('Native transition refuses an accessor field: '+String(key));return d.value as T;}
@@ -65,8 +70,11 @@ function finalSeats(capture:SeatCapture):void {if(capture.campaign.seats!==captu
 /** One coordinator is retained beside the one real character writer. */
 export class NativeAreaSceneTransitionCoordinator {
  readonly input:Readonly<NativeAreaTransitionInput>;
+ readonly #lifecycle={preparation:NativeAreaScenePreparation.prototype.retire,authority:NativeAreaActorAuthority.prototype.retire,memory:NativeAreaMemoryRegistry.prototype.retire,memoryIdle:NativeAreaMemoryRegistry.prototype.assertRetirable,population:NativeAreaScenePopulation.prototype.retire,deeds:NativeAreaSceneCombatCampaign.prototype.retireCallbacks};
  readonly #areas=new Map<string,Registered>();readonly #combats=new WeakMap<NativeAreaSceneCombat,Registered>();
  readonly #projection=new Map<string,PropertyDescriptor>();
+ readonly #previousProjection=new Map<string,PropertyDescriptor|undefined>();
+ #retired=false;#retirement:readonly string[]=Object.freeze([]);
  readonly #directories=new WeakMap<NativeAreaSceneCombat,NativeAreaSceneDirectory>();
  #published:Registered|null=null;#frame:Frame|null=null;#moving=false;#preparation:NativeAreaScenePreparation|null=null;
  readonly #traversals=new WeakMap<TraversalState,TraversalContinuation>();
@@ -90,9 +98,27 @@ export class NativeAreaSceneTransitionCoordinator {
   if(!isNativeAreaScenePreparation(preparation)||preparation.input.coordinator!==this||preparation.input.session.campaign!==this.input.campaign||preparation.input.authority!==this.input.authority||this.#preparation)throw Error('Native transition needs its one actual campaign preparer');this.#preparation=preparation;
  }
  /** Scheduler preflight is callback-free and runs before any clock write. */
- assertIdleFrame():void{assertNativeRetainedMassState(this.input.characterWriter);if(this.#frame||this.#moving||this.#traversalStep||this.#roadDraining)throw Error('Native campaign frame is busy');}
+ assertIdleFrame():void{if(this.#retired)throw Error('Native coordinator is retired');assertNativeRetainedMassState(this.input.characterWriter);if(this.#frame||this.#moving||this.#traversalStep||this.#roadDraining)throw Error('Native campaign frame is busy');}
  get current():NativeAreaSceneOngoing{const r=this.#frame?.current??this.#published;if(!r)throw Error('Native transition has no selected actual area');return r.ongoing;}
  get published():NativeAreaSceneOngoing{if(!this.#published)throw Error('Native transition has no published actual area');return this.#published.ongoing;}
+ /** Terminal retirement: no save/capture and no native gameplay rollback. */
+ retire():readonly string[] {
+  if(this.#retired)return this.#retirement;
+  if(this.#frame||this.#moving||this.#traversalStep||this.#roadDraining)throw Error('Native campaign frame is busy');assertNativeCombatOperationsIdle();Reflect.apply(this.#lifecycle.memoryIdle,this.input.memoryRegistry,[]);
+  const writer=this.input.characterWriter;
+  // Retire even if publication was corrupted. Restore only our still-installed
+  // configurable views; report newer/locked slots without overwriting them.
+  const restore=new Map<string,PropertyDescriptor|undefined>(),unrestored:string[]=[];
+  for(const [key,expected]of this.#projection){const current=Object.getOwnPropertyDescriptor(writer,key);if(current?.configurable&&current.get===expected.get&&current.set===expected.set)restore.set(key,this.#previousProjection.get(key));else unrestored.push(key);}
+  const areas=this.#preparation?Reflect.apply(this.#lifecycle.preparation,this.#preparation,[]):Object.freeze([...this.#areas.values()].map(row=>row.ongoing));
+  // No callback executes after this terminal revocation begins.
+  this.#retired=true;retireNativeRetainedWriter(writer);Reflect.apply(this.#lifecycle.authority,this.input.authority,[]);Reflect.apply(this.#lifecycle.memory,this.input.memoryRegistry,[]);
+  const traversal=this.#traversalValue;if(traversal){const continuation=this.#traversals.get(traversal);if(continuation)continuation.expired=true;}this.#traversalValue=null;
+  this.#roadQueue.length=0;this.#deferredRoadDispatch.length=0;this.#roadInstances.clear();this.#hostedRoads=false;this.#roadKeeper=null;
+  for(const area of areas){Reflect.apply(this.#lifecycle.population,area.assembly.input.population,[]);Reflect.apply(this.#lifecycle.deeds,area.combat.campaignOwner,[]);}
+  for(const [key,previous]of restore){if(previous)Object.defineProperty(writer,key,previous);else Reflect.deleteProperty(writer,key);}
+  this.#projection.clear();this.#previousProjection.clear();this.#areas.clear();this.#published=null;this.#preparation=null;this.#retirement=Object.freeze(unrestored);return this.#retirement;
+ }
  /** All real resident areas, including those continuing without an avatar. */
  residentAreas():readonly NativeAreaSceneOngoing[]{const rows=[...this.#areas.values()];for(const row of rows)this.#ready(row);return Object.freeze(rows.map(row=>row.ongoing));}
  /** Occupied audience and campaign-origin scans use actual controlled bodies. */
@@ -120,7 +146,7 @@ export class NativeAreaSceneTransitionCoordinator {
   finalSeats(capture);this.input.authority.assertFinalPhysical(row.binding,present.map(s=>s.body));
   return{seats:Object.freeze(present.map(s=>s.seat)),actor:selected?.body??null};
  }
- nativeWorldReady():boolean {if(!this.#published||this.#moving)return false;this.#ready(this.#published);this.#assertProjection();return true;}
+ nativeWorldReady():boolean {if(this.#retired)return false;if(!this.#published||this.#moving)return false;this.#ready(this.#published);this.#assertProjection();return true;}
  simView():ReturnType<World['devOverlayView']>{
   const area=this.current,row=this.#combat(area.combat),population=area.assembly.input.population.population,self=this;
   const host:NativePopulationHost={get zone(){return population.zone;},get actors(){return population.actors;},get player(){return population.player;},get zoneMap(){return population.zoneMap;},get time(){return population.time;},get sim(){return population.sim;},get visited(){return population.visited;},get surveyed(){return population.surveyed;},get continentFor(){const fn=population.continentFor;return(...args:Parameters<NativePopulationHost['continentFor']>)=>Reflect.apply(fn,population,args);},simView:()=>self.simView(),presence:()=>self.occupiedAreas().map(a=>({zone:a.assembly.input.scene.zone,actors:a.assembly.input.scene.actors}))};
@@ -146,6 +172,7 @@ export class NativeAreaSceneTransitionCoordinator {
  departureFor(combat:NativeAreaSceneCombat):NativeAreaSceneDepartureMemory{return this.#combat(combat).departure;}
  #combat(combat:NativeAreaSceneCombat):Registered{const r=this.#combats.get(combat);if(!r||r.combat!==combat)throw Error('Unregistered native transition combat owner');this.#ready(r);return r;}
  #ready(r:Registered):void{
+  if(this.#retired)throw Error('Native coordinator is retired');
   assertNativeRetainedMassState(this.input.characterWriter);
   const a=r.ongoing.assembly,input=a.input,authority=this.input.authority;
   if(a.phase!=='born'||input.scene.zone.id!==r.id||(this.input.campaign.zoneMap[r.id]??this.input.campaign.caveMap[r.id])!==input.scene.zone||r.ongoing.authority!==authority||authority.bindingFor(input.scene)!==r.binding||own(r.binding.services,'combat')!==r.combat)throw Error('Native transition registration changed');
@@ -185,6 +212,8 @@ export class NativeAreaSceneTransitionCoordinator {
   for(const key of ['projectiles','zones'])field(key,()=>area().progression.input.state);
   field('tethers',()=>this.#published!.combat.tethers.input.state);
   bindings.set('companionBonds',{get:()=>area().progression.companionBonds});
+  extendNativeAreaPublication(bindings,area);
+  extendNativeAreaViewQueries(bindings,area);
   field('adoptedZonePending',()=>this.#published!.departure);field('forgetMemoryOnLeave',()=>this.#published!.departure);
   field('caveExitGrace',()=>this.#published!.roads);field('entryFrom',()=>this.#published!.roads);field('caveReturn',()=>this.#published!.roads);field('caveStack',()=>this.#published!.roads);
   bindings.set('inCave',{get:()=>assembly().transition.inCave});field('scene',()=>area().quests.input.state);
@@ -193,7 +222,7 @@ export class NativeAreaSceneTransitionCoordinator {
   const writer=this.input.characterWriter,prepared=new Map<string,PropertyDescriptor>();
   this.#traversalValue=own<TraversalState|null>(writer,'traversal');bindings.set('traversal',{get:()=>this.#traversalValue,set:value=>this.#replaceTraversal(value as TraversalState|null)});
   for(const [key,b]of bindings){const d=Object.getOwnPropertyDescriptor(writer,key);if(d?(!d.configurable||!Object.hasOwn(d,'value')):!Object.isExtensible(writer))throw Error('Native publication requires configurable ordinary writer slots: '+key);prepared.set(key,{enumerable:d?.enumerable??false,configurable:true,...b});}
-  this.#projection.clear();for(const [key,value]of prepared)this.#projection.set(key,value);
+  this.#projection.clear();for(const [key,value]of prepared){this.#previousProjection.set(key,Object.getOwnPropertyDescriptor(writer,key));this.#projection.set(key,value);}
  }
  #assertProjection():void{if(!this.#published)return;for(const [key,expected]of this.#projection){const actual=Object.getOwnPropertyDescriptor(this.input.characterWriter,key);if(!actual||actual.get!==expected.get||actual.set!==expected.set)throw Error('Native writer publication changed: '+key);}}
  runFrom<T>(source:NativeAreaSceneOngoing,action:()=>T):T{
