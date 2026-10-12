@@ -1,3 +1,4 @@
+import {beforeNativeClientStartActions as projectActions} from './nativeClientStartActionsCompositionFixture';
 import {beforeNativeFrameHooks as originalFrameHooks} from './nativeFrameHooksFixture';
 import {nativeCombatPresentationArchive as presentation} from './nativeCombatPresentationArchive';
 import {beforeNativeCombatPresentation} from './nativeCombatPresentationFixture';
@@ -14,7 +15,7 @@ import {nativeSceneFrameInterfacesArchive as interfaces} from './nativeSceneFram
 const sha=(s:string|Buffer)=>crypto.createHash('sha256').update(s).digest('hex');
 function must(value:unknown,why:string):asserts value {if(!value)throw Error(why);}
 const parse=(text:string)=>ts.createSourceFile('source.ts',text,ts.ScriptTarget.Latest,true);
-const read=(file:string)=>beforeNativeFrameHooks(file,fs.readFileSync(path.join(process.cwd(),file),'utf8'));
+const read=(file:string)=>beforeNativeFrameHooks(file,projectActions('startMenus',file,fs.readFileSync(path.join(process.cwd(),file),'utf8')));
 const git=cp.execFileSync('git',['show',frame.pin+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20*1024*1024});
 must(sha(git)===frame.worldSha256&&frame.worldSha256===closure.worldSha256,'Exact immutable complete World');
 const gitAst=parse(git),world=gitAst.statements.find((n):n is ts.ClassDeclaration=>ts.isClassDeclaration(n)&&n.name?.text==='World')!;
@@ -72,7 +73,7 @@ for(const target of interfaces.targets)must(sha(read(target.file))===target.sha2
 const allNames=[...frame.groups.map(x=>x.fn),...methodRows.map(x=>x.fn),...callbacks.factories.map(x=>x.fn)];must(new Set(allNames).size===allNames.length,'No duplicate extracted body');
 let currentMutations=0,currentDuplicates=0;
 for(const row of presentation.filter(row=>row.file==='src/engine/nativeSceneCombatHost.ts')){
- const raw=fs.readFileSync(row.file,'utf8');
+ const raw=projectActions('startMenus',row.file,fs.readFileSync(row.file,'utf8'));
  for(const edit of row.edits){
   must(raw.split(edit.after).length===2,'Unique current presentation hunk');
   const mutated=raw.replace(edit.after,edit.after+'/* changed presentation */');must(mutated!==raw,'Nontrivial current mutation');

@@ -91,3 +91,11 @@ NativeClientStart now owns the actual account start boundary and installs fresh 
 Independent review verifies 2,557 frozen inputs, 35 targets and 149 evidence files, then passes ten source/behavior courses and all four type configurations. This composition preserves the reviewed startup and menu parents. Browser frame activation, direct UI action composition, cold retained Continue and late town upgrades remain open.
 
 The integrated startup/menu pass also clears all four type configurations, seven source/behavior/census checks, the prior generated-coordinate regression and the 716-probe inventory.
+
+## Fresh-client UI commands
+
+The retained fresh client now publishes the 12 reviewed UI command roots, including actual inventory actions, quest decline, stat refresh, town requests, waypoint travel, charting and sailing. Actual hired companion dismissal routes to the physical owner even when that companion occupies another area. Final local and explicit Seat identity, selected receivers and native partial effects remain guarded.
+
+Independent review verifies 2,574 inputs, 24 targets and 174 evidence files. Eleven focused courses plus all four type configurations pass, including genuine fresh A/B/A travel, generated sailing and the independent companion dismissal and callback courses. The two reviewed parents and prior assertion lanes are retained exactly. Run conclusions, hiring, cold retained Continue and browser activation remain required.
+
+The integrated UI/startup pass also clears all four type configurations, seven source/behavior/census checks, real remote companion dismissal and callback-travel refusal, and the 726-probe inventory.

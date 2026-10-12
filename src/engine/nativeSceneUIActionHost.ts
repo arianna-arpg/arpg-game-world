@@ -1,0 +1,33 @@
+import type {World} from './world';
+export interface NativeSceneUIActionHost {
+ readonly applyAction:World['applyAction'];
+ readonly canSail:World['canSail'];
+ readonly chartCourse:World['chartCourse'];
+ readonly continentFor:World['continentFor'];
+ readonly declineVocationOffer:World['declineVocationOffer'];
+ readonly dismissMercenary:World['dismissMercenary'];
+ readonly ensureOpenRealmRoots:World['ensureOpenRealmRoots'];
+ readonly ensureRealmRoots:World['ensureRealmRoots'];
+ readonly ensureSeaPorts:World['ensureSeaPorts'];
+ readonly harvestPauseRefused:World['harvestPauseRefused'];
+ readonly harvestSessions:World['harvestSessions'];
+ readonly landPartyAt:World['landPartyAt'];
+ readonly ledger:World['ledger'];
+ readonly loadZone:World['loadZone'];
+ readonly localSeat:World['localSeat'];
+ readonly markMetaDirty:World['markMetaDirty'];
+ readonly oceanBearing:World['oceanBearing'];
+ readonly player:World['player'];
+ readonly portDock:World['portDock'];
+ readonly recalcPlayer:World['recalcPlayer'];
+ readonly requestMeta:World['requestMeta'];
+ readonly sailGate:Pick<World['sailGate'],'consume'>;
+ readonly sailTo:World['sailTo'];
+ readonly seats:World['seats'];
+ readonly sim:World['sim'];
+ readonly text:World['text'];
+ readonly travelToWaypoint:World['travelToWaypoint'];
+ readonly zone:World['zone'];
+ readonly zoneMap:World['zoneMap'];
+}
+export type NativeSceneUITravelHost=Pick<NativeSceneUIActionHost,'chartCourse'|'canSail'|'continentFor'|'ensureSeaPorts'|'oceanBearing'|'player'|'sailTo'|'sim'|'text'|'zone'|'landPartyAt'|'loadZone'|'portDock'|'sailGate'|'zoneMap'>;

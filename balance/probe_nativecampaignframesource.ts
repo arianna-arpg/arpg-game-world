@@ -1,3 +1,4 @@
+import {beforeNativeClientStartActions as projectActions} from './nativeClientStartActionsCompositionFixture';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
@@ -46,7 +47,7 @@ function check(file:string,source:string):void{
 }
 let mutations=0,duplicates=0;
 for(const file of archive.files){
- const raw=fs.readFileSync(new URL('../'+file.file,import.meta.url),'utf8'),current=normalizeAttendance(file.file,normalizeRoadTypes(file.file,raw));check(file.file,current);check(file.file,normalizeAttendance(file.file,normalizeRoadTypes(file.file,lf(raw).replaceAll('\n','\r\n'))));
+ const raw=projectActions('startMenus',file.file,fs.readFileSync(new URL('../'+file.file,import.meta.url),'utf8')),current=normalizeAttendance(file.file,normalizeRoadTypes(file.file,raw));check(file.file,current);check(file.file,normalizeAttendance(file.file,normalizeRoadTypes(file.file,lf(raw).replaceAll('\n','\r\n'))));
  if(file.file===attendance.file){for(let index=0;index<attendance.edits.length;index++){const edit=attendance.edits[index];let mutant=current;for(let step=0;step<attendance.edits.length;step++){const row=attendance.edits[step];if(step!==index)mutant=mutant.replace(row.before,row.after);}assert.notEqual(mutant,lf(raw),'real omitted seam');assert.throws(()=>normalizeAttendance(file.file,mutant),/exact attendance successor/);assert.throws(()=>normalizeAttendance(file.file,raw+'\n'+edit.after),/exact attendance successor/);}}
  for(const row of file.functions){assert.equal(current.split(row.source).length,2);const changed=row.source.replace(/\b(nativeFrame|w|steps)\./,'unauthorizedNativeOwner.');assert.notEqual(changed,row.source);assert.throws(()=>check(file.file,current.replace(row.source,changed)),/exact native frame module/);mutations++;assert.throws(()=>check(file.file,current+'\n'+row.source),/exact native frame module/);duplicates++;}
 }

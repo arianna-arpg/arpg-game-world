@@ -64,6 +64,16 @@ export type ProbeRow = ProbeInvocation & (
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativeareauiactions.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: nativeareauiactions.' },
+  { probe: 'probe_nativeareauiactionssource.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: nativeareauiactionssource.' },
+  { probe: 'probe_nativeareauisailing.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: nativeareauisailing.' },
+  { probe: 'probe_nativeclientstartactionscomposition.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: nativeclientstartactionscomposition.' },
+  { probe: 'probe_nativeclientstartactionscompositionsource.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: nativeclientstartactionscompositionsource.' },
+  { probe: 'probe_nativeuifinalseat.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: nativeuifinalseat.' },
+  { probe: 'probe_nativeuipeertravel.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: nativeuipeertravel.' },
+  { probe: 'probe_uiactiondismissreview.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: uiactiondismissreview.' },
+  { probe: 'probe_uiactionreceiverreview.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: uiactionreceiverreview.' },
+  { probe: 'probe_uiactionremotedismissreview.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: uiactionremotedismissreview.' },
   { probe: 'probe_nativeclientstart.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstart.' },
   { probe: 'probe_nativeclientstartboundaries.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstartboundaries.' },
   { probe: 'probe_nativeclientstartmenucomposition.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstartmenucomposition.' },

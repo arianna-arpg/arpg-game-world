@@ -1,3 +1,6 @@
+import * as uiCore from '../engine/nativeSceneUIActions';
+import type {NativeSceneUIActionHost} from '../engine/nativeSceneUIActionHost';
+import {isNativeAreaUIAction,nativeAreaUISeatArgument,type NativeAreaUIAction,type NativeAreaUIActionMethods} from './nativeAreaUIActions';
 import * as menuCore from '../engine/nativeSceneMenuQueries';
 import type {NativeSceneMenuHost} from '../engine/nativeSceneMenuHost';
 import {isNativeAreaMenuQuery,nativeAreaMenuSeatArgument,type NativeAreaMenuQuery,type NativeAreaMenuQueryMethods} from './nativeAreaMenuQueries';
@@ -74,7 +77,7 @@ export interface NativeAreaCombatServices {readonly ai:NativeAreaSceneAI;readonl
 type TransferredBuff=Parameters<World['treeBuffSources']['get']>[0];
 interface ActorControllerPacket {source:NativeAreaSceneCombat;bond:unknown;grants:unknown;clocks:unknown;buffs:[TransferredBuff,NonNullable<ReturnType<World['treeBuffSources']['get']>>][];strike:ReturnType<World['strikeReleaseBodies']['get']>}
 const controllerTransfers=new WeakMap<object,WeakMap<Actor,ActorControllerPacket>>();
-type Host=Pick<characterCreation.NativeCharacterCreationHost,'veteranFlaskDeals'>&NativeSceneMenuHost&NativeSceneViewHost&NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
+type Host=NativeSceneUIActionHost&Pick<characterCreation.NativeCharacterCreationHost,'veteranFlaskDeals'>&NativeSceneMenuHost&NativeSceneViewHost&NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
 type Binding<T>={get:()=>T;set?:(value:T)=>void};type Bindings={[K in keyof Host]:Binding<Host[K]>};
 function field<O extends object,K extends keyof O>(owner:()=>O,key:K):Binding<O[K]>{return {get:()=>owner()[key],set:value=>{owner()[key]=value;}};}
 function method<O extends object,K extends keyof O>(owner:()=>O,key:K):{get:()=>O[K]}{return {get:()=>{const receiver=owner(),fn=receiver[key];return typeof fn==='function'?((...args:unknown[])=>Reflect.apply(fn,receiver,args)) as O[K]:fn;}};}
@@ -100,7 +103,7 @@ export class NativeAreaSceneCombat {
  readonly summonPreparation:NativeAreaSceneSummonPreparation;
  readonly #publishedArea:Function;
  readonly ai:NativeAreaSceneAI;
- readonly #operation:NativeAreaCombatOperation;readonly #host:Host;readonly #viewHost:NativeSceneViewHost;readonly #menuHost:NativeSceneMenuHost;
+ readonly #operation:NativeAreaCombatOperation;readonly #host:Host;readonly #viewHost:NativeSceneViewHost&NativeSceneUIActionHost;readonly #menuHost:NativeSceneMenuHost;
  readonly #activationReady:()=>boolean;
  readonly #frameCallbacks:Pick<Host,'collectDeedDot'|'doodadEffects'|'incursionEvents'>;
  readonly #populationHost:NativeSceneServiceHost;
@@ -125,6 +128,14 @@ export class NativeAreaSceneCombat {
   const seatIndex=nativeAreaMenuSeatArgument(key),selected=seatIndex===undefined||args[seatIndex]===undefined?local:args[seatIndex] as Seat,body=presentationData(selected,'actor') as Actor;
   const present=()=>{const roster=Reflect.apply(exactPhysicalSeats,this.input.authority,[this.scene]);return roster.includes(local)&&roster.includes(selected);};if(!present())throw Error('Native menu query needs its actual physical seat');
   return this.#operation.enter({permission:'proc',physical:[actor,body],sources:[]},()=>{const fn=this.#menuHost[key],physicalSeats=present(),published=Reflect.apply(this.#publishedArea,this.input.coordinator,[]),attending=[actor,body].every(selectedBody=>Reflect.apply(exactActorAttendance,this.input.authority,[this.scene,selectedBody]));if(!physicalSeats||published.combat!==this||!attending||presentationData(this.input.characterWriter,'localSeat')!==local||presentationData(local,'actor')!==actor||presentationData(selected,'actor')!==body)throw Error('Native menu presentation changed during admission');return Reflect.apply(fn,this.#menuHost,args) as ReturnType<NativeAreaMenuQueryMethods[K]>;});
+ }
+ /** Published UI commands route to the current admitted local owners. */
+ applyUIAction<K extends NativeAreaUIAction>(key:K,...args:Parameters<NativeAreaUIActionMethods[K]>):ReturnType<NativeAreaUIActionMethods[K]> {
+  if(!isNativeAreaUIAction(key)||!this.isPresentationArea())throw Error('Native UI action query needs its actual published physical area');
+  const local=presentationData(this.input.characterWriter,'localSeat') as Seat,actor=presentationData(local,'actor') as Actor;
+  const seatIndex=nativeAreaUISeatArgument(key),selected=seatIndex===undefined||args[seatIndex]===undefined?local:args[seatIndex] as Seat,body=presentationData(selected,'actor') as Actor;
+  const present=()=>{const roster=Reflect.apply(exactPhysicalSeats,this.input.authority,[this.scene]);return roster.includes(local)&&roster.includes(selected);};if(!present())throw Error('Native UI action query needs its actual physical seat');
+  return this.#operation.enter({permission:'proc',physical:[actor,body],sources:[]},()=>{const fn=(this.#viewHost)[key],physicalSeats=present(),published=Reflect.apply(this.#publishedArea,this.input.coordinator,[]),attending=[actor,body].every(selectedBody=>Reflect.apply(exactActorAttendance,this.input.authority,[this.scene,selectedBody]));if(!physicalSeats||published.combat!==this||!attending||presentationData(this.input.characterWriter,'localSeat')!==local||presentationData(local,'actor')!==actor||presentationData(selected,'actor')!==body)throw Error('Native UI action presentation changed during admission');return Reflect.apply(fn,this.#viewHost,args) as ReturnType<NativeAreaUIActionMethods[K]>;});
  }
  applyInputs(...args:Parameters<World['applyInputs']>):void{this.inputFrame.applyInputs(...args);}
  passInputTime(...args:Parameters<World['passInputTime']>):void{this.inputFrame.passInputTime(...args);}
@@ -175,7 +186,7 @@ export class NativeAreaSceneCombat {
   for(const key of Object.keys(bindings) as (keyof Bindings)[])Object.defineProperty(host,key,{enumerable:true,...bindings[key]});
   const viewDescriptors=Object.getOwnPropertyDescriptors(host);
   viewDescriptors.seats={enumerable:true,get:()=>Reflect.apply(exactPhysicalSeats,authority,[scene])};
-  const presentationHost=Object.freeze(Object.defineProperties({},viewDescriptors)) as NativeSceneViewHost&NativeSceneMenuHost;
+  const presentationHost=Object.freeze(Object.defineProperties({},viewDescriptors)) as NativeSceneViewHost&NativeSceneMenuHost&NativeSceneUIActionHost;
   this.#viewHost=presentationHost;this.#menuHost=presentationHost;
   Object.freeze(host);for(const key of ['ai','input','runtimeState','services','campaignOwner','combatArena','control','campaignTransitions','campaignFrame','inputFrame',"tethers","restoration","castingPreparation","displacement","combatState","defensePreparation","projectiles","killAftermath","groundFollowUps","summonPreparation"])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
@@ -543,6 +554,12 @@ export class NativeAreaSceneCombat {
  frameEffects(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameEffects(this.#host,dt));}
  frameLateBodies(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameLateBodies(this.#host,dt));}
  private bindings():Bindings {const {assembly,progression,campaign,quests,watching}=this.input;const bindings={
+  chartCourse:method(()=>this.campaignFrame,"chartCourse"),
+  sailTo:method(()=>this.campaignFrame,"sailTo"),
+  declineVocationOffer:method(()=>this.input.questInteraction,"declineVocationOffer"),
+  dismissMercenary:method(()=>this.campaignTransitions,"dismissMercenary"),
+  ensureOpenRealmRoots:this.native(uiCore.sceneEnsureOpenRealmRoots),
+  harvestPauseRefused:{get:()=>()=>{this.#operation.assertActiveScope();return uiCore.sceneHarvestPauseRefused(this.#viewHost);}},
   questDefOf:method(()=>this.input.quests,"questDefOf"),
   questStanding:method(()=>this.input.quests,"questStanding"),
   questOfferChoices:method(()=>this.input.questInteraction,"questOfferChoices"),

@@ -1,3 +1,4 @@
+import {extendNativeAreaUIActions} from './nativeAreaUIActions';
 import {extendNativeAreaMenuQueries} from './nativeAreaMenuQueries';
 import {extendNativeAreaMenuPublication} from './nativeAreaMenuPublication';
 import {extendNativeAreaViewQueries} from './nativeAreaViewQueries';
@@ -218,6 +219,7 @@ export class NativeAreaSceneTransitionCoordinator {
   extendNativeAreaViewQueries(bindings,area);
   extendNativeAreaMenuPublication(bindings,area);
   extendNativeAreaMenuQueries(bindings,area);
+  extendNativeAreaUIActions(bindings,area);
   field('adoptedZonePending',()=>this.#published!.departure);field('forgetMemoryOnLeave',()=>this.#published!.departure);
   field('caveExitGrace',()=>this.#published!.roads);field('entryFrom',()=>this.#published!.roads);field('caveReturn',()=>this.#published!.roads);field('caveStack',()=>this.#published!.roads);
   bindings.set('inCave',{get:()=>assembly().transition.inCave});field('scene',()=>area().quests.input.state);

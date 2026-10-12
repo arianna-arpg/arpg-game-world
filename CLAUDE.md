@@ -1,3 +1,10 @@
+NativeClientStart now composes 12 published UI actions with actual retained
+startup, town menus, inventory and physical travel. Preserve final local/explicit
+Seat identity and native command receivers, failures and area-owned request state.
+Verify nativeclientstartactions*, nativeareauiactions*, nativeui*, the three
+uiaction*review courses, all types and probe census. Run conclusions, hiring,
+cold Continue and browser activation remain open.
+
 NativeClientStart installs genuine fresh characters through private creation
 receipts, retained birth and published town/menu queries. Preserve exact native
 class gifts, account/roster writes, prologue/Mu gates, cancellation and retirement.
