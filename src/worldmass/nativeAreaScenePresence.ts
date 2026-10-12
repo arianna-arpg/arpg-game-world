@@ -1,3 +1,4 @@
+import {assertNativeCharacterReceipt,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 /** A fixed preparation cohort becomes physical attendance only after explicit admission. */
 import type {Seat} from '../engine/world';
 import type {NativeSceneCensus} from './nativeAreaScenePopulation';
@@ -6,7 +7,7 @@ const finalPresencePhysical=NativeAreaActorAuthority.prototype.assertFinalPhysic
 export class NativeAreaScenePresence {
  readonly scene:NativeSceneCensus;
  readonly campaign:{readonly seats:readonly Seat[]};
- readonly #birthSeats:readonly Seat[];
+ #birthSeats:readonly Seat[];
  #authority?:NativeAreaActorAuthority<object>;
  #binding?:NativeAreaAuthorityBinding<object>;
  constructor(scene:NativeSceneCensus,campaign:{readonly seats:readonly Seat[]},birthSeats:readonly Seat[]){
@@ -14,6 +15,8 @@ export class NativeAreaScenePresence {
   this.scene=scene;this.campaign=campaign;this.#birthSeats=Object.freeze([...birthSeats]);
   for(const key of ['scene','campaign'])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
+ /** Exactly the native-created seat joins the still-unadmitted birth cohort after its original census push. */
+ includeInitialCharacter(token:NativeCharacterCreationReceipt):void {const r=assertNativeCharacterReceipt(token,'birth');if(r.area?.assembly.scenePresence!==this||r.area.assembly.input.scene!==this.scene||r.preparation.input.session.campaign!==this.campaign||this.#authority||this.#birthSeats.length||this.campaign.seats.length!==1||this.campaign.seats[0]!==r.seat||this.scene.actors.length!==1||this.scene.actors[0]!==r.seat.actor)throw Error('Native character birth cohort differs');this.#birthSeats=Object.freeze([r.seat]);}
  get active():boolean{return !!this.#authority;}
  get seats():Seat[]{
   if(this.#authority)return this.#authority.seatsFor(this.#binding!);

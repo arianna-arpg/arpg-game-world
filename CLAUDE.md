@@ -1,3 +1,10 @@
+NativeClientStart installs genuine fresh characters through private creation
+receipts, retained birth and published town/menu queries. Preserve exact native
+class gifts, account/roster writes, prologue/Mu gates, cancellation and retirement.
+Verify nativeclientstart*, nativedirectorbirthsource, all types and probe census.
+Browser activation, UI action composition, retained cold Continue and later town
+refolding remain separate requirements.
+
 MassNativeSourceAnchor preserves generated native coordinates that cannot fit a
 binary64 physical offset. Only derived source candidates use the discriminated
 exact rational value; raw address, source, mapping and save policies stay exact.

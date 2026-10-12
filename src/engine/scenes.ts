@@ -551,7 +551,7 @@ function emptySceneField(w: NativeSceneDirectorHost): void {
 export function nativeSceneEmptyField(w: NativeSceneDirectorHost): void {
   for (let i = w.actors.length - 1; i >= 0; i--) {
     if (w.actors[i].team !== 'player') {
-      const token=observeNativeCombatRetirement(w,[w.actors[i]]);
+      const token=observeNativeCombatRetirement(w,w.actors);
       try { w.actors.splice(i,1); finishNativeCombatRetirement(w,token); }
       finally { cancelNativeCombatRetirement(w,token); }
     }

@@ -1,3 +1,4 @@
+import {assertNativeCharacterReceipt,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 /** Concrete native source preparation. A prepared area has no physical runtime authority. */
 import {assertNativeRetainedMassState} from './nativeAreaRetainedMassState';
 import {vec} from '../core/math';
@@ -26,9 +27,13 @@ export class NativeAreaScenePreparation {
  /** Select only an actual campaign definition and recorded geography. No callback
   * can substitute a prebirthed scene, area, population, or landing coordinate. */
  prepare(zoneId:string,geography:MassNativeGeography,from?:string,representative?:Actor):NativeAreaSceneOngoing {
-  const {session,coordinator,authority,maddenLedger}=this.input,campaign=session.campaign,writer=session.writer;assertNativeRetainedMassState(writer);
+  const {session}=this.input,campaign=session.campaign,writer=session.writer;assertNativeRetainedMassState(writer);
   const definition=campaign.zoneMap[zoneId]??campaign.caveMap[zoneId];if(!definition||definition.id!==zoneId||this.#areas.has(zoneId)||!(geography instanceof MassNativeGeography))throw Error('Native preparation needs one actual unresolved area');
   const player=representative??campaign.localSeat.actor;
+  const area=this.#construct(zoneId,geography,from,player);this.#layout(area,geography);return area;
+ }
+ #construct(zoneId:string,geography:MassNativeGeography,from:string|undefined,player:Actor,characterConstruction?:NativeCharacterCreationReceipt):NativeAreaSceneOngoing {
+  const {session,coordinator,authority,maddenLedger}=this.input,campaign=session.campaign,writer=session.writer,definition=campaign.zoneMap[zoneId]??campaign.caveMap[zoneId];
   const services:NativeAreaOngoingInput['services']={
    geometry:{get seasSeen(){return writer['seasSeen'];},oceanBearing:at=>sceneCampaignOceanBearing(campaign,at),seaNameOf:z=>sceneCampaignSeaNameOf(campaign,z),get notice(){return campaign.notice;},get seatOf(){return campaign.seatOf;}},
    residents:{get clientActionHook(){return campaign.clientActionHook;}},timeflow:campaign.timeflow,
@@ -36,8 +41,12 @@ export class NativeAreaScenePreparation {
    history:{get notice(){return campaign.notice;},get events(){return writer.events;}},
   };
   const carry={inCave:!campaign.zoneMap[zoneId],entryFrom:from??null,voyage:null,charBorn:writer['charBorn'],charRegrowAcc:writer['charRegrowAcc'],townTierIdx:writer['townTierIdx']};
-  const area=new NativeAreaSceneOngoing({definition,player,initialActors:[player],campaign,sources:installedNativeAreaSources(campaign),services,carry,config:installedNativeAreaConfig(),...freshAreaOngoingState(campaign.time),authority,maddenLedger,coordinator,characterWriter:writer});
+  const area=new NativeAreaSceneOngoing({definition,player,initialActors:characterConstruction?writer.actors:[player],characterConstruction,campaign,sources:installedNativeAreaSources(campaign),services,carry,config:installedNativeAreaConfig(),...freshAreaOngoingState(campaign.time),authority,maddenLedger,coordinator,characterWriter:writer});
   this.#areas.set(zoneId,area);this.#geography.set(area,geography);
+  return area;
+ }
+ #layout(area:NativeAreaSceneOngoing,geography:MassNativeGeography):void {
+  const {session}=this.input,campaign=session.campaign,definition=area.assembly.input.scene.zone,zoneId=definition.id,carry=area.assembly.transition;
   session.duringPreparation(area,()=>{
    const source=area.assembly.sourceSession(geography),ticket=source.issue(zoneId),firstVisit=!carry.inCave&&!campaign.visited.has(zoneId);
    // Exact visit/deed/concealment statements at the original pre-layout point.
@@ -45,8 +54,10 @@ export class NativeAreaScenePreparation {
    if(!carry.inCave){campaign.visited.add(zoneId);if(firstVisit&&area.assembly.objectiveController.metaProgressionActive()){campaign.account.ledger[LEDGER_ZONES_EXPLORED]=(campaign.account.ledger[LEDGER_ZONES_EXPLORED]??0)+1;campaign.accountDirty=true;}if(definition.concealed)definition.concealed=false;if(definition.veiled)definition.veiled=false;}
    area.assembly.prepare(source,ticket,vec(definition.size.w/2,definition.size.h/2),firstVisit);
   });
-  return area;
  }
+ constructInitialCharacter(token:NativeCharacterCreationReceipt,zoneId:string,geography:MassNativeGeography):NativeAreaSceneOngoing {const r=assertNativeCharacterReceipt(token,'construct');if(r.preparation!==this||this.#areas.size||zoneId!==r.writer.zoneMap[zoneId]?.id||geography.seed!==r.writer.manifest.seed)throw Error('Native character needs its exact unprepared first area');return this.#construct(zoneId,geography,undefined,r.seat.actor,token);}
+ prepareInitialCharacter(token:NativeCharacterCreationReceipt):void {const r=assertNativeCharacterReceipt(token,'birth'),area=r.area;if(r.preparation!==this||!area||this.#areas.get(area.assembly.input.scene.zone.id)!==area||area.assembly.phase!=='fresh')throw Error('Native character preparation differs');area.assembly.scenePresence.includeInitialCharacter(token);area.assembly.input.population.includeInitialCharacter(token);r.writer.zone=area.assembly.input.scene.zone;r.writer.zoneEnteredAt=r.writer.time;r.writer.arena=area.assembly.input.geometry.arena;this.#layout(area,this.#geography.get(area)!);}
+
  /** The coordinator selects this same source's recorded geography. Preparation
   * returns its exact real area; no caller supplies a prebirthed destination. */
  prepareDestination(source:NativeAreaSceneOngoing,zoneId:string,from:string|undefined,representative:Actor):NativeAreaSceneOngoing {

@@ -1,3 +1,4 @@
+import {assertNativeEmptyCharacterCensus,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 import {NativeAreaScenePresence} from './nativeAreaScenePresence';
 import type {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
 import {NativeAreaSceneObjectiveCompletion,freshSceneObjectiveCompletionState,type NativeSceneObjectiveCampaign,type NativeSceneObjectiveProgression,type NativeSceneObjectiveQuests} from './nativeAreaSceneObjectiveCompletion';
@@ -91,6 +92,7 @@ export interface NativeAreaAssemblyServices {
  objectiveQuests:Omit<NativeSceneObjectiveQuests,'activeQuests'>;
 }
 export interface NativeAreaAssemblyInput {
+ characterConstruction?:NativeCharacterCreationReceipt;
  definition:ZoneDef;player:Actor;
  /** Borrowed campaign party, never a transfer of another area's resident bodies. */
  initialActors:readonly Actor[];
@@ -131,9 +133,10 @@ export class NativeAreaSceneAssembly {
   if(!(campaign.theaterVisitSeq instanceof Map)||!Array.isArray(campaign.vendorStock)||!campaign.nativeResidentHistory)throw Error('Native assembly needs retained campaign histories and stock');
   if(campaign.manifest!==campaign.sim.manifest)throw Error('Native assembly needs identical campaign manifest');
   if((campaign.zoneMap[definition.id]??campaign.caveMap[definition.id])!==definition)throw Error('Native assembly needs an actual campaign definition');
-  if(!raw.initialActors.includes(raw.player)||new Set(raw.initialActors).size!==raw.initialActors.length)throw Error('Native assembly needs one complete initial census');
+  if(raw.characterConstruction)assertNativeEmptyCharacterCensus(raw.characterConstruction,campaign,raw.player,raw.initialActors);
+  else if(!raw.initialActors.includes(raw.player)||new Set(raw.initialActors).size!==raw.initialActors.length)throw Error('Native assembly needs one complete initial census');
   if(raw.carry.inCave!==!campaign.zoneMap[definition.id])throw Error('Native assembly cave identity differs');
-  const scene={zone:definition,player:raw.player,actors:[...raw.initialActors]};
+  const scene={zone:definition,player:raw.player,actors:raw.characterConstruction?raw.initialActors as Actor[]:[...raw.initialActors]};
   const scenePresence=this.scenePresence=new NativeAreaScenePresence(scene,campaign,campaign.seats.filter(s=>scene.actors.includes(s.actor)));
   const timeflow=this.timeflow=new NativeAreaTimeflow(services.timeflow);
   const environmentState=freshSceneEnvironmentState(),objectives=freshSceneObjectiveState(definition.id,campaign.completedObjectives);
@@ -147,9 +150,9 @@ export class NativeAreaSceneAssembly {
   const geometry=new NativeAreaSceneGeometry(scene,arena,geometryCampaign,config);
   const local=extendView(servicesView(services.residents,['viewRectFor','scene','clientActionHook','questStanding','questDefOf']),{census:scene,get exits(){return geometry.exits;},massRuntime:null,
    localZoneAt:()=>scene.zone,isSafeAt:()=>scene.zone.objective.kind==='safe',lineOfSight:geometry.lineOfSight.bind(geometry)});
-  const residents=new NativeResidentSession({campaign,area:{census:scene,local},history:campaign.nativeResidentHistory});
+  const residents=new NativeResidentSession({campaign,area:{census:scene,local},history:campaign.nativeResidentHistory,characterConstruction:raw.characterConstruction});
   const populationState={squadSequence:campaign.squadSeq,bombardMintRev:0,zoneGenTagging:false,magicPackEffects:[] as World['magicPackEffects'],magicPackResolving:false,magicPackRefreshPending:false};
-  population=new NativeAreaScenePopulation({scene,geometry,campaign,sources:sources.population,populationSources:sources.populationResolution,sharedActors:raw.initialActors,
+  population=new NativeAreaScenePopulation({scene,geometry,campaign,characterConstruction:raw.characterConstruction,sources:sources.population,populationSources:sources.populationResolution,sharedActors:raw.initialActors,
    context:{get time(){return campaign.time;},npcDialogues:residents.npcDialogues,
     applyPartyScale:a=>applyScenePartyScale({partyScaleCount:at=>scenePartyScaleCount({player:scene.player,seats:scenePresence.seats},at)},a),
     opaqueAt:(x,y)=>geometry.opaqueAt(x,y),

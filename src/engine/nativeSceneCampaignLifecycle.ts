@@ -161,7 +161,7 @@ export function sceneRecordNemesisFall(host:NativeSceneCampaignLifecycleHost): v
     host.sagaDirty(true);
   }
 
-export function sceneRestoreAccountRelics(host:NativeSceneCampaignLifecycleHost,seat: Seat): void {
+export function sceneRestoreAccountRelics(host:Pick<NativeSceneCampaignLifecycleHost,'localSeat'|'clientActionHook'|'account'|'manifest'>,seat: Seat): void {
     if (seat !== host.localSeat || host.clientActionHook) return;
     migrateRelicCarry(host.account, seat.meta, seat.meta.relicScope ?? (seat.meta.charId || 'run:' + host.manifest.seed), false);
     const held = accountRelicBoard(host.account);

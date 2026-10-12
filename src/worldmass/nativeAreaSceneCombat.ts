@@ -4,6 +4,8 @@ import {isNativeAreaMenuQuery,nativeAreaMenuSeatArgument,type NativeAreaMenuQuer
 import * as viewCore from '../engine/nativeSceneViewQueries';
 import type {NativeSceneViewHost} from '../engine/nativeSceneViewHost';
 import {isNativeAreaViewQuery,nativeAreaViewActorArgument,type NativeAreaViewQuery,type NativeAreaViewQueryMethods} from './nativeAreaViewQueries';
+import * as characterCreation from '../engine/nativeCharacterCreation';
+import {assertNativeCharacterReceipt,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 import {NativeAreaSceneAI} from './nativeAreaSceneAI';
 import type {NativeSceneAIHost} from '../engine/nativeSceneAIHost';
 import type {NativeSceneAIPreparationHost} from '../engine/nativeSceneAIPreparation';
@@ -72,7 +74,7 @@ export interface NativeAreaCombatServices {readonly ai:NativeAreaSceneAI;readonl
 type TransferredBuff=Parameters<World['treeBuffSources']['get']>[0];
 interface ActorControllerPacket {source:NativeAreaSceneCombat;bond:unknown;grants:unknown;clocks:unknown;buffs:[TransferredBuff,NonNullable<ReturnType<World['treeBuffSources']['get']>>][];strike:ReturnType<World['strikeReleaseBodies']['get']>}
 const controllerTransfers=new WeakMap<object,WeakMap<Actor,ActorControllerPacket>>();
-type Host=NativeSceneMenuHost&NativeSceneViewHost&NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
+type Host=Pick<characterCreation.NativeCharacterCreationHost,'veteranFlaskDeals'>&NativeSceneMenuHost&NativeSceneViewHost&NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
 type Binding<T>={get:()=>T;set?:(value:T)=>void};type Bindings={[K in keyof Host]:Binding<Host[K]>};
 function field<O extends object,K extends keyof O>(owner:()=>O,key:K):Binding<O[K]>{return {get:()=>owner()[key],set:value=>{owner()[key]=value;}};}
 function method<O extends object,K extends keyof O>(owner:()=>O,key:K):{get:()=>O[K]}{return {get:()=>{const receiver=owner(),fn=receiver[key];return typeof fn==='function'?((...args:unknown[])=>Reflect.apply(fn,receiver,args)) as O[K]:fn;}};}
@@ -186,6 +188,13 @@ export class NativeAreaSceneCombat {
   * adoption of an already wounded World tracker is not implemented here. */
  /** Exact native canopy query, under the actual area's physical admission. */
  isConcealedFrom(viewer:Actor,target:Actor):boolean {return this.#operation.enter({physical:[viewer,target],permission:'physical'},()=>this.#host.veilIndex().concealedFrom(viewer.pos,target.pos));}
+ rescaleEnemies():void {this.#operation.enter({permission:'physical'},()=>frameTravel.sceneRescaleEnemies(this.#host));}
+ rescaleInitialCharacter(token:NativeCharacterCreationReceipt):void {const r=assertNativeCharacterReceipt(token,'stats');if(r.area?.combat!==this||this.scene.actors.length!==1||this.scene.actors[0]!==r.seat.actor)throw Error('Native initial party event must contain only its created hero');frameTravel.sceneRescaleEnemies(this.#host);}
+ #initialGift<T>(token:NativeCharacterCreationReceipt,run:()=>T):T {const r=assertNativeCharacterReceipt(token,'gifts');if(r.area?.combat!==this||r.writer!==this.input.characterWriter||r.seat!==this.input.campaign.localSeat)throw Error('Native initial gift has a foreign area');return this.#operation.enter({physical:[r.seat.actor],permission:'physical'},run);}
+ grantInitialCharacterCompanions(token:NativeCharacterCreationReceipt):void {this.#initialGift(token,()=>characterCreation.sceneGrantStartingCompanions(this.#host));}
+ dealInitialCharacterFlasks(token:NativeCharacterCreationReceipt):void {this.#initialGift(token,()=>characterCreation.sceneDealVeteranFlasks(this.#host));}
+ dealInitialCharacterLabArts(token:NativeCharacterCreationReceipt,force:boolean):number {return this.#initialGift(token,()=>characterCreation.sceneDealLabArts(this.#host,force));}
+ applyInitialCharacterGraft(token:NativeCharacterCreationReceipt,id:string):boolean {return this.#initialGift(token,()=>characterCreation.sceneApplySkillGraft(this.#host,id));}
  updateAI(dt:number):void {this.ai.update(dt);}
  updateAIActor(actor:Actor,dt:number):void {this.ai.updateActor(actor,dt);}
  updateObjective(dt:number):void {this.#operation.enter({physical:[],permission:'physical'},()=>this.input.watching.updateObjective(dt));}
@@ -2190,6 +2199,7 @@ export class NativeAreaSceneCombat {
   ambientCamShift:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"ambientCamShift"),
   scanShardRoads:method(()=>this.campaignFrame,"scanShardRoads"),
   promoteRarityStacked:method(()=>this.input.assembly.input.population,"promoteRarityStacked"),
+  veteranFlaskDeals:{get:()=>this.input.characterWriter['veteranFlaskDeals']},
   provisioningFlaskSlots:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"provisioningFlaskSlots"),
   pullToLand:method(()=>this.input.assembly.graph,"pullToLand"),
   questHand:method(()=>this.input.quests,"questHand"),

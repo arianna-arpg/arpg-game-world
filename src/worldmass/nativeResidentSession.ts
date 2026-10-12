@@ -1,3 +1,4 @@
+import {assertNativeEmptyCharacterCensus,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 import type {World} from '../engine/world';
 import type {NativeSceneCensus,NativeAreaScenePopulation} from './nativeAreaScenePopulation';
 import type {NativeAreaResidentContext} from './nativeAreaAmbient';
@@ -26,14 +27,14 @@ export class NativeResidentSession {
  dialogueScene=0;
  readonly residentContext:NativeAreaResidentContext;
  readonly factoryService:{readonly npcDialogues:Pick<NpcDialogueDirector,'appearanceFor'>};
- constructor(raw:{campaign:NativeResidentCampaign;area:NativeResidentArea;history?:NativeResidentHistory}){
+ constructor(raw:{campaign:NativeResidentCampaign;area:NativeResidentArea;history?:NativeResidentHistory;characterConstruction?:NativeCharacterCreationReceipt}){
   if(raw.history&&(!(raw.history.dialogueVisits instanceof Map)||!Number.isSafeInteger(raw.history.dialogueScene)||raw.history.dialogueScene<0))throw Error('Native resident history needs retained visit data');
   const roots=Object.create(null);for(const key of ['campaign','area']){
    const d=raw&&Object.getOwnPropertyDescriptor(raw,key);
    if(!d||!Object.hasOwn(d,'value')||!d.value||typeof d.value!=='object')throw Error('Native residents need own object '+key);
    roots[key]=d.value;
   }
-  this.campaign=roots.campaign;this.area=this.checkedArea(roots.area);
+  this.campaign=roots.campaign;this.area=this.checkedArea(roots.area,raw.characterConstruction);
   const self=this,host={} as NativeNpcDialogueHost;
   function fields(provider:()=>object,keys:readonly string[]){for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){return (provider() as Record<string,unknown>)[key];},set(v){(provider() as Record<string,unknown>)[key]=v;}});}
   function methods(provider:()=>object,keys:readonly string[]){for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){const owner=provider() as Record<string,Function>,fn=owner[key];return (...args:unknown[])=>fn.apply(owner,args);}});}
@@ -54,7 +55,7 @@ export class NativeResidentSession {
   this.factoryService=Object.freeze({npcDialogues:this.npcDialogues});
   for(const key of ['campaign','host','npcDialogues','residentContext','factoryService','speakerRows','speechMemory','speechFocus'])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
- private checkedArea(raw:NativeResidentArea):NativeResidentArea {
+ private checkedArea(raw:NativeResidentArea,characterConstruction?:NativeCharacterCreationReceipt):NativeResidentArea {
   const out=Object.create(null);for(const key of ['census','local']){const d=raw&&Object.getOwnPropertyDescriptor(raw,key);if(!d||!Object.hasOwn(d,'value')||!d.value||typeof d.value!=='object')throw Error('Native resident area needs own object '+key);out[key]=d.value;}
   if(out.local.census!==out.census)throw Error('Native resident local/census identity differs');
   // The resident area's actual representative can be a remote arriving hero.
@@ -63,7 +64,7 @@ export class NativeResidentSession {
   const player=Object.getOwnPropertyDescriptor(out.census,'player'),actors=Object.getOwnPropertyDescriptor(out.census,'actors');
   if(!player||!Object.hasOwn(player,'value')||!actors||!Object.hasOwn(actors,'value')||!Array.isArray(actors.value))throw Error('Native resident representative/census identity differs');
   let found=false;for(let i=0;i<actors.value.length;i++){const d=Object.getOwnPropertyDescriptor(actors.value,String(i));if(!d||!Object.hasOwn(d,'value'))throw Error('Native resident census needs ordinary body entries');if(d.value===player.value)found=true;}
-  if(!found)throw Error('Native resident representative/census identity differs');
+  if(!found){if(characterConstruction)assertNativeEmptyCharacterCensus(characterConstruction,this.campaign,player.value,actors.value);else throw Error('Native resident representative/census identity differs');}
   return Object.freeze(out);
  }
  /** Birth composition checks this before any door or harbor mutation. */

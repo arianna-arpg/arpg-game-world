@@ -1,0 +1,10 @@
+import '../src/engine/world';
+import assert from 'node:assert/strict';
+import {makeAccount} from '../src/meta/account';
+import {NativeClientStart} from '../src/worldmass/nativeClientStart';
+import {CLASSES} from '../src/data/classes';
+import {buildManifest} from '../src/packages/manifest';
+import {freshClientSetup,refuseWorldStartup} from './nativeClientStartFixture';
+import {withSeededRandom} from '../src/core/rng';
+import {combatHash,writeCombatProof} from './probe_nativecombatcycle';
+const result=withSeededRandom(45411,()=>{const {geography}=freshClientSetup(1231,false),account=makeAccount(),mapping=structuredClone(geography.spec.mapping);let inner:NativeClientStart|undefined,reads=0;Object.defineProperty(mapping,'schema',{enumerable:true,configurable:true,get(){reads++;inner??=new NativeClientStart(account,geography.spec.mapping);return 1;}});return refuseWorldStartup([],worldDrivers=>{assert.throws(()=>new NativeClientStart(account,mapping),/already owns this account/);assert(inner);const start=inner.begin({kind:'run',classDef:CLASSES[0],manifest:buildManifest(account,1232),prologue:'skip'});assert(start?.runtime.ready,'rejected outer construction preserves actual acquired owner');assert.equal(inner.current,start);inner.cancel();assert(reads>=1);return{competingMappingRead:true,outerRefused:true,actualInnerStarts:true,worldDrivers};});});const report={scope:'Actual same-account constructor race at a mapping getter; refusing the outer constructor preserves the genuinely acquired inner start and its subsequent native birth.',result,receipt:combatHash(JSON.stringify(result))};writeCombatProof('native-client-start-ownership.json',report);console.log(JSON.stringify(report));

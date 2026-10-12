@@ -83,3 +83,11 @@ Some authored native coordinates have no binary64 physical offset that maps back
 Independent review verifies all 2,527 frozen inputs and passes seven focused courses plus all four types. The failing seed now completes genuine retained birth, AI/frame, A/B/A travel and a real save. Staged same-process native graph restoration preserves the same coordinate and source ticket with a separately supplied, byte-identical geography specification. This does not prove retained cold hydration or that character serialization already persists that geography; those remain required integration work.
 
 The integrated coordinate repair passes all four type configurations, the exact-source guard and actual failed-seed course, the 707-probe census, and 869 generation cases across three seeds (zero failures; four existing spacing warnings).
+
+## Genuine fresh startup with retained menus
+
+NativeClientStart now owns the actual account start boundary and installs fresh characters through narrow creation stages: the initial empty-census stat fold, real local-seat assignment, native birth and class gifts. Native roster/Mu/prologue policy and native partial writes on cancellation are preserved. The composed client exposes real town stations, populated quests and memories and one retained simulation frame; retiring it revokes held views and restores its descriptors.
+
+Independent review verifies 2,557 frozen inputs, 35 targets and 149 evidence files, then passes ten source/behavior courses and all four type configurations. This composition preserves the reviewed startup and menu parents. Browser frame activation, direct UI action composition, cold retained Continue and late town upgrades remain open.
+
+The integrated startup/menu pass also clears all four type configurations, seven source/behavior/census checks, the prior generated-coordinate regression and the 716-probe inventory.

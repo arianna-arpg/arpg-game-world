@@ -326,7 +326,7 @@ export function sceneSeatEmbody(host:NativeSceneCombatControlHost,
     host.events.emit('possess/embody', { seat: seat.id, body, hero, kind: ride.kind });
   }
 
-export function sceneIndexSeats(host:NativeSceneCombatControlHost): void {
+export function sceneIndexSeats(host:Pick<NativeSceneCombatControlHost,'seatByActor'|'seats'>): void {
     host.seatByActor.clear();
     for (const s of host.seats) host.seatByActor.set(s.actor, s);
   }

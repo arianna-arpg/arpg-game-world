@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {beforeNativeDirectorRetirement} from './nativeDirectorRetirementFixture';
 import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -11,7 +12,7 @@ const emit=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTa
 assert.equal(emit(archive.predecessor),emit(original),'type-only predecessor equals committed Mu Director');
 const inputSignature="export function sceneNoteCast(w: Pick<NativeSceneDirectorHost, 'scene'>): void {";
 const priorSignature='export function sceneNoteCast(w: NativeSceneDirectorHost): void {';
-function beforeInput(file:string,source:string):string {if(file!=='src/engine/scenes.ts')return source;assert.equal(source.split(inputSignature).length,2,'exact input sceneNoteCast type projection');return source.replace(inputSignature,priorSignature);}
+function beforeInput(file:string,source:string):string {if(file!=='src/engine/scenes.ts')return source;source=beforeNativeDirectorRetirement(source);assert.equal(source.split(inputSignature).length,2,'exact input sceneNoteCast type projection');return source.replace(inputSignature,priorSignature);}
 function reverse(file:typeof archive.files[number],source:string):string {
  assert.equal(hash(source),file.after,'exact Director successor '+file.file);
  for(const edit of [...file.edits].reverse()){assert.equal(source.split(edit.after).length,2,'exact extraction site');source=source.replace(edit.after,edit.before);}
@@ -19,7 +20,8 @@ function reverse(file:typeof archive.files[number],source:string):string {
 }
 let mutations=0,duplicates=0,currentMutations=0,currentDuplicates=0;
 for(const file of archive.files){const raw=fs.readFileSync(new URL('../'+file.file,import.meta.url),'utf8'),current=beforeInput(file.file,raw),before=reverse(file,current);if(file.file==='src/engine/scenes.ts'){
- assert.equal(before,archive.predecessor);assert.equal(emit(raw),emit(current),'Input signature projection emits identical Director JavaScript');
+ assert.equal(before,archive.predecessor);assert.equal(emit(beforeNativeDirectorRetirement(raw)),emit(current),'Input signature projection emits identical Director JavaScript');
+ const retired=raw.replace('observeNativeCombatRetirement(w,w.actors)','observeNativeCombatRetirement(w,[w.actors[i]])');assert.notEqual(retired,raw);assert.throws(()=>beforeInput(file.file,retired));currentMutations++;assert.throws(()=>beforeInput(file.file,raw+'\nconst token=observeNativeCombatRetirement(w,w.actors);'));currentDuplicates++;
  const mutated=raw.replace(inputSignature,inputSignature.replace("'scene'","'player'"));assert.notEqual(mutated,raw,'nontrivial current signature mutation');assert.throws(()=>reverse(file,beforeInput(file.file,mutated)));currentMutations++;
  assert.throws(()=>reverse(file,beforeInput(file.file,raw+'\n'+inputSignature)));currentDuplicates++;
  const outside=raw+'\n/* unknown outside change */';assert.ok(beforeInput(file.file,outside).endsWith('/* unknown outside change */'));assert.throws(()=>reverse(file,beforeInput(file.file,outside)),/exact Director successor/);

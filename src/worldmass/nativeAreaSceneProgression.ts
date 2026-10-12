@@ -1,3 +1,4 @@
+import {assertNativeCharacterReceipt,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 import {nativeAreaStoreClaims} from './nativeAreaStorageClaims';
 import {nativeCombatActorEntry} from './nativeAreaCombatOperation';
 /** Retained native progression. Every mutation enters through explicit admitted
@@ -136,6 +137,7 @@ export class NativeAreaSceneProgression {
  #run(actor:Actor,name:string,args:unknown[]){if(nativeCombatActorEntry(this,actor,name==='bakeMinionOwnerStats'||name==='relevelActor'?'prepare':'stats'))return this.#native(name,args);const owner=this.#owner(actor),target=owner.progression;this.input.authority.assertAdmitted(owner.scene);const previous=target.#subject;target.#subject=actor;try{return target.#native(name,args);}finally{target.#subject=previous;}}
  #effect(actor:Actor,name:keyof Omit<NativeSceneProgressionCombat,'scene'|'state'>,args:unknown[]){if(nativeCombatActorEntry(this,actor,'proc')){const combat=this.input.authority.bindingFor(this.input.scene).services.combat;return Reflect.apply(combat[name],combat,args);}const owner=this.#owner(actor);this.input.authority.assertAdmitted(owner.scene);const fn=owner.combat[name];return Reflect.apply(fn,owner.combat,args);}
  #seat(seat:Seat){if(!this.input.campaign.seats.includes(seat))throw Error('Foreign native progression seat');return this.input.campaign.seatHero(seat);}
+ recalcInitialCharacter(token:NativeCharacterCreationReceipt):void {const r=assertNativeCharacterReceipt(token,'stats');if(r.area?.progression!==this||r.area.assembly.input.scene!==this.input.scene||r.preparation.input.authority!==this.input.authority)throw Error('Native initial stats need this exact created area');this.input.authority.bindingFor(this.input.scene);r.preparation.input.authority.assertUnclaimed(r.seat.actor);this.#native('recalcSeat',[r.seat]);}
  recalcSeat(seat:Seat):void{this.#run(this.#seat(seat),'recalcSeat',[seat]);}
  resyncMercenary():void{this.#run(this.#seat(this.input.campaign.localSeat),'resyncMercenary',[]);}
  mercTargetLevel():number{return this.#run(this.#seat(this.input.campaign.localSeat),'mercTargetLevel',[]);}

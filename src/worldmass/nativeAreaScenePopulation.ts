@@ -1,3 +1,4 @@
+import {assertNativeEmptyCharacterCensus,assertNativeCharacterReceipt,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 /** Mutable local population owner. No World value, prototype borrowing,
  * published World field swap, census cap, reseeding, or controller substitute. */
 import type { Actor } from '../engine/actor';
@@ -68,6 +69,7 @@ export interface NativeScenePopulationState {
   magicPackEffects:MagicPackVisual[]; magicPackResolving:boolean; magicPackRefreshPending:boolean;
 }
 export interface NativeScenePopulationInput {
+ characterConstruction?:NativeCharacterCreationReceipt;
   scene:NativeSceneCensus; geometry:NativeScenePopulationGeometry;
   campaign:NativeAreaPopulationCampaign; sources:NativeAreaAmbientSources;
   populationSources:NativePopulationSources; context:NativeAreaAmbientContext;
@@ -97,9 +99,10 @@ export class NativeAreaScenePopulation {
   /** Revoke retained relay callbacks even if an external actor still holds one. */
   retire():void {this.#retired=true;}
   readonly input:NativeScenePopulationInput;
-  readonly #sharedActors:ReadonlySet<Actor>;
+  readonly #sharedActors:Set<Actor>;
   readonly #birthMintFrames:Set<Actor>[]=[];
   readonly #factoryOwners=new WeakMap<Actor,Readonly<{owner:Actor|undefined}>>();
+  includeInitialCharacter(token:NativeCharacterCreationReceipt):void {const r=assertNativeCharacterReceipt(token,'birth');if(r.area?.assembly.input.population!==this||this.#sharedActors.size||this.input.scene.actors.length!==1||this.input.scene.actors[0]!==r.seat.actor)throw Error('Native initial population needs its exact inserted hero');this.#sharedActors.add(r.seat.actor);}
   constructor(raw:NativeScenePopulationInput) {
     const bindings=Object.create(null);
     for(const key of ['scene','geometry','campaign','sources','populationSources','context','state']){
@@ -122,7 +125,8 @@ export class NativeAreaScenePopulation {
       callbacks[key]=d.value;
     }
     const area=this, scene=input.scene,geometry=input.geometry,state=input.state;
-    if(!Array.isArray(scene.actors)||!scene.actors.includes(scene.player))throw Error('Scene needs its detached complete census and player');
+    if(raw.characterConstruction)assertNativeEmptyCharacterCensus(raw.characterConstruction,input.campaign,scene.player,scene.actors);
+    else if(!Array.isArray(scene.actors)||!scene.actors.includes(scene.player))throw Error('Scene needs its detached complete census and player');
     // No defaults: the caller owns the actual prior-stage counters and refresh state.
     for(const key of ['squadSequence','bombardMintRev','zoneGenTagging','magicPackEffects','magicPackResolving','magicPackRefreshPending'])
       if(!Object.getOwnPropertyDescriptor(state,key)||!Object.hasOwn(Object.getOwnPropertyDescriptor(state,key)!,'value'))throw Error('Missing own-data scene population state: '+key);

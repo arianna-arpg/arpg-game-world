@@ -64,6 +64,15 @@ export type ProbeRow = ProbeInvocation & (
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativeclientstart.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstart.' },
+  { probe: 'probe_nativeclientstartboundaries.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstartboundaries.' },
+  { probe: 'probe_nativeclientstartmenucomposition.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstartmenucomposition.' },
+  { probe: 'probe_nativeclientstartmenucompositionsource.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstartmenucompositionsource.' },
+  { probe: 'probe_nativeclientstartowner.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstartowner.' },
+  { probe: 'probe_nativeclientstartownership.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstartownership.' },
+  { probe: 'probe_nativeclientstartscenes.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstartscenes.' },
+  { probe: 'probe_nativeclientstartsource.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstartsource.' },
+  { probe: 'probe_nativeclientstarttown.ts', status: 'green', tier: 'fast', why: 'Genuine retained fresh character creation, account boundaries and exact startup/menu source composition: nativeclientstarttown.' },
   { probe: "probe_nativeexactanchors.ts", status: 'green', tier: 'fast', why: "Exact separately typed native source anchors preserve binary64 target coordinates, old raw addresses and mapping bounds." },
   { probe: "probe_nativegeneratedanchors.ts", status: 'green', tier: 'fast', why: "Previously unrepresentable seed46114 performs genuine native birth, AI/frame, travel, save and staged exact graph restoration." },
   { probe: "probe_nativeexactanchorsource.ts", status: 'green', tier: 'fast', why: "All original geography bodies remain exact while finite source-session seams reject mutations and duplicates." },

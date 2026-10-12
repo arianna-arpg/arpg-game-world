@@ -1,3 +1,4 @@
+import {beforeNativeClientStartMenus as projectStartMenu} from './nativeClientStartMenuCompositionFixture';
 /** Native control/transition source closure, including exact callback lifetime seams. */
 import assert from 'node:assert/strict';
 import {beforeNativeCarriedControl} from './nativeCarriedControlFixture';
@@ -25,7 +26,7 @@ function check(file:string,text:string):void {
 let mutations=0,duplicates=0;const records=[];
 for(const row of archive.files){
  // Older controls run against the explicitly reconstructed predecessor; raw new seams have independent mutation controls.
- const raw=fs.readFileSync(new URL('../'+row.file,import.meta.url),'utf8'),current=beforeNativeCarriedControl(row.file,raw);check(row.file,current);check(row.file,lf(current).replaceAll('\n','\r\n'));
+ const raw=projectStartMenu('clientMenu',row.file,fs.readFileSync(new URL('../'+row.file,import.meta.url),'utf8')),current=beforeNativeCarriedControl(row.file,raw);check(row.file,current);check(row.file,lf(current).replaceAll('\n','\r\n'));
  for(const method of archive.methods.filter(r=>r.file===row.file)){
   assert.equal(current.split(method.after).length,2);
   const changed=method.after.replace('export function','export !unction');assert.notEqual(changed,method.after);

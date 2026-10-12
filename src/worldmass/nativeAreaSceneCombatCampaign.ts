@@ -1,3 +1,4 @@
+import {assertNativeCharacterReceipt,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 /** Real event-local kill/deed binding. Construct once with the actual aggregate;
  * source scene owners remain distinct from the campaign's single writer. */
 import {isNativeWorld,type World} from '../engine/world';
@@ -190,6 +191,7 @@ export class NativeAreaSceneCombatCampaign {
  noteNemesisKill(...args:Parameters<World["noteNemesisKill"]>):ReturnType<World["noteNemesisKill"]>{return this.#entry(this,{physical:[args[0]],permission:'physical'},()=>native.sceneNoteNemesisKill(this.#host,...args));}
  onSquadDeath(...args:Parameters<World["onSquadDeath"]>):ReturnType<World["onSquadDeath"]>{return this.#entry(this,{physical:[args[0]],permission:'physical'},()=>native.sceneOnSquadDeath(this.#host,...args));}
  feedEncounters(...args:Parameters<World["feedEncounters"]>):ReturnType<World["feedEncounters"]>{return this.#entry(this,{physical:[args[0]],permission:'physical'},()=>native.sceneFeedEncounters(this.#host,...args));}
+ bindInitialCharacterDeeds(token:NativeCharacterCreationReceipt):void {const r=assertNativeCharacterReceipt(token,'deeds');if(r.area?.combat.campaignOwner!==this||r.writer!==this.input.characterWriter||this.input.campaign.localSeat!==r.seat)throw Error('Native initial deeds need the exact created hero');this.input.authority.assertUnclaimed(r.seat.actor);this.#deeds.owner=this;native.sceneBindCombatDeeds(this.#deedHost);}
  bindCombatDeeds(...args:Parameters<World["bindCombatDeeds"]>):ReturnType<World["bindCombatDeeds"]>{
   const campaign=this.input.campaign,seat=campaign.localSeat,selected=Object.getOwnPropertyDescriptor(seat,'actor');
   if(!selected||!Object.hasOwn(selected,'value'))throw Error('Native deeds need an ordinary controlled hero');
