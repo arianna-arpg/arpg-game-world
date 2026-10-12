@@ -1,3 +1,12 @@
+NativeAreaSceneDefensePreparation owns admitted shell absorption, combat cues,
+guard-bash preparation, burst eligibility, rune banking and creature drives.
+Preserve actual physical authority, current anatomical/worn shield relationships,
+current casting identity and native partial effects. World shares seven exact
+bodies through a nonenumerable live actor/flash/time adapter. Verify
+nativedefensepreparation, adjacent defense/casting/tether/source checks, all types
+and boot. See docs/worldgen/native-area-defense-preparation.md. Full combat,
+death execution, actor/effect lifetimes, retained ticking and publication remain open.
+
 NativeRewardStorage gives each reward and physical owner exclusive state and
 raw orb/chest/shrine/altar/drop replacement slots. Preserve exact arrays, native
 methods, enumerability and partial failures; allow only same-slot history.

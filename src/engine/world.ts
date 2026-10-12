@@ -5,6 +5,7 @@ import {scenePushActor,sceneGrabRelease,sceneClingRelease,sceneTeleportActor,sce
 import {sceneGrantAbsorb,sceneApplyRestore,sceneStartRestoreStream,sceneCritMendMult,sceneApplyHeal,sceneApplyHealChained,sceneCleanseActor,sceneRingAfflictions,sceneHealAlliesInArea,sceneSeatText,sceneCreditFloat,type NativeSceneRestorationHost} from './nativeSceneRestoration';
 import {sceneApplyBuffEffect,sceneGrantTreeBuff,sceneTransplantStatus,sceneTapCharges,sceneTapFires,sceneIsEliteVictim,sceneBankPools,sceneVictimGate,sceneProcReady,sceneProcGates,sceneProcDepthAllowed,sceneRollTopMet,sceneProcChance,type NativeSceneCombatStateHost} from './nativeSceneCombatState';
 import {scenePaySkillCost,sceneConsumeChargeCost,sceneRefundCooldown,sceneConsumeAmmunition,sceneConsumeRemnants,sceneConsumeStealth,sceneComboCursorOf,sceneComboStepOf,sceneHeldSkillInst,sceneRelocationTarget,sceneMintMetaInstance,type NativeSceneCastingPreparationHost,type ComboCursor} from './nativeSceneCastingPreparation';
+import {sceneTryShellPool,sceneShowCombatOutcome,sceneRefreshGuardBash,sceneIsBurstTarget,sceneResolveDeathBurst,sceneBankRune,sceneBumpDrives,type NativeSceneDefensePreparationHost} from './nativeSceneDefensePreparation';
 import {sceneNearQuestGiver,sceneNearAnyQuestGiver,sceneQuestGiverPrompt,sceneActiveCategoryCounts,sceneQuestGateCtx,sceneQuestOfferLevel,sceneAcceptableQuests,sceneEligibleQuestCandidates,sceneVocationEngaged,sceneIsVocationChoice,sceneVocationChoiceOffers,sceneNextAcceptableQuest,sceneUpdateQuestGiver,sceneQuestGiverStep,sceneQuestOfferChoices,sceneAcceptQuestOffer,sceneAcceptVocationQuest,sceneVocationMenuOffers,sceneDeclineVocationOffer,sceneAcceptQuest,sceneQuestRewardOffers,sceneQuestImbueOffers,sceneClaimQuestImbue,sceneReliquaryLesson,sceneSeatIdle,scenePlayerIdle,QUESTGIVER_DWELL,type NativeSceneQuestInteractionHost} from './nativeSceneQuestInteraction';
 import {sceneSpawnProjectile,sceneSkillOcclusion,PROJ_CHILD_DEPTH_MAX,PROJ_AURA_TICK,type NativeSceneProjectileHost} from './nativeSceneProjectiles';
 import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
@@ -113,7 +114,6 @@ import { FOURTH_WALL_CFG, type ViewRect, fallbackRect, frameReflect, rectCenter 
 import { mod, type AttributeId, type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, bankFracOf, STATUS_DEFS, tuneAilmentChance, statusRuptureRadius, type ActiveStatus } from './status';
 import { armedCueProfile, armedCueStyle } from './armedCues';
-import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type MonsterPartDef, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
@@ -185,7 +185,7 @@ import { PROC_LIST, PROCS, procPowerStat, scaleProcEffect, PROC_RIDER_LIST, proc
 import { VICTIM_HOOKS, victimScopeArmed, victimTags } from './victim'; // THE VICTIM SCOPE
 import { DERIVED_GAUGES, GAUGE_CFG } from './gauges'; // DERIVED GAUGES
 import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
-import { instanceInvocation, runeForCast, makeInvocationPayload } from './invocation';
+import { instanceInvocation, makeInvocationPayload } from './invocation';
 import { applyGuardSurge } from './guardSurge';
 import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule, type ComboRuleDef } from './sequence';
 import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
@@ -25431,36 +25431,7 @@ actors: Actor[] = [];
    *  fallen in earshot. `share` echoes the jump to squad kin within earshot
    *  (the pack that eats together sates together). Early-outs keep this
    *  free for the driveless majority. */
-  bumpDrives(actor: Actor | null, kind: 'onKill' | 'onHurt' | 'onDealt' | 'onAllyDeath'): void {
-    // SOVEREIGNTY: sound — drives echo by earshot (the derived census, probe_tiers RIG T).
-    if (!actor || actor.dead || !actor.brain) return;
-    const drives = normalizeBrain(actor.brain).drives;
-    if (!drives) return;
-    for (const id in drives) {
-      const spec = drives[id];
-      // A KEPT body's stood-down appetite (DriveSpec.whileOwned false) takes
-      // no event jumps either: the AI tick DELETES the meter (delete-never-
-      // freeze, ai.ts), and a jump landing between ticks would flash a
-      // sub-tick value through every read until that tick swept it. The
-      // jump refuses to feed the dead meter; the tick stays the deleter.
-      if (spec.whileOwned === false && actor.isMinion()) continue;
-      const jump = spec[kind];
-      if (!jump) continue;
-      const v = (actor.drives.get(id) ?? 0) + jump;
-      actor.drives.set(id, Math.max(0, Math.min(1, v)));
-      const share = spec.share;
-      if (share && actor.squadId !== undefined) {
-        for (const kin of this.actors) {
-          if (kin === actor || kin.dead || kin.squadId !== actor.squadId) continue;
-          if (dist(kin.pos, actor.pos) > COMMAND_CFG.earshot) continue;
-          // The echoed row honors the same leash on the receiving body.
-          if (spec.whileOwned === false && kin.isMinion()) continue;
-          const kv = (kin.drives.get(id) ?? 0) + jump * share;
-          kin.drives.set(id, Math.max(0, Math.min(1, kv)));
-        }
-      }
-    }
-  }
+  bumpDrives(actor: Actor | null, kind: 'onKill' | 'onHurt' | 'onDealt' | 'onAllyDeath'): void { return sceneBumpDrives(this.nativeSceneDefensePreparationHost(),actor,kind); }
 
   // ------------------------------------------------------- tamed companions --
   // The Hunter's bond (TameEffect): a claimed beast fights at its keeper's
@@ -32943,17 +32914,7 @@ actors: Actor[] = [];
    *  stat) the OLDEST rune is forgotten: the weave stays live, and the
    *  closing runes — the ones that pick the payload — are always yours
    *  to re-sequence. */
-  private bankRune(caster: Actor, def: SkillDef): void {
-    if (caster.construct) return; // runeForCast never lets an autonomous device fuel its own invocation
-    const invoker = caster.skills.find(s => s?.def.invokes);
-    if (!invoker) return;
-    const rune = runeForCast(def, invoker, caster.runes);
-    if (!rune) return;
-    const cap = Math.max(1, Math.round(caster.sheet.get('runeCap',
-      skillContextTags(invoker.def), instanceMods(invoker))));
-    while (caster.runes.length >= cap) caster.runes.shift(); // runeForCast still appends exactly once
-    caster.runes.push(rune);
-  }
+  private bankRune(caster: Actor, def: SkillDef): void { return sceneBankRune(this.nativeSceneDefensePreparationHost(),caster,def); }
 
   /** THE COMBO GRAMMAR's record-and-settle (engine/sequence.ts): push the
    *  completed real use onto the caster's recent-cast ring, stamp the
@@ -35253,47 +35214,24 @@ actors: Actor[] = [];
     return false;
   }
 
-  private tryShellPool(victim: Actor, threatPos: Vec2, packet: DamagePacket, sg: Actor['shellGuard']): boolean {
-    if (!sg || sg.broken || sg.pool <= 0) return false;
-    if (sg.side !== 'all') {
-      const center = victim.facing + (sg.side === 'rear' ? Math.PI : 0);
-      // BREATHING shells (shellGuard.breathe): the covered arc swells and
-      // wanes on its period — the trough is the opening you time. The
-      // renderer's glyph draws the SAME live factor: read it, then strike.
-      const arc = (sg.arcDeg * Math.PI / 180) * shellArcFactor(sg, this.time);
-      if (Math.abs(angleDiff(center, angleTo(victim.pos, threatPos))) > arc / 2) return false;
-    }
-    const raw = Object.values(packet.amounts).reduce((s, v) => s + (v ?? 0), 0);
-    if (raw <= 0) return false;
-    sg.lastHitAt = this.time;
-    const absorb = Math.min(sg.pool, raw);
-    sg.pool -= absorb;
-    if (sg.pool <= 0) {
-      sg.broken = true;
-      this.flashes.push(defenseCueFlash(victim, 'shell', 'break', sg.color, { style: sg.shellVisual,
-        facing: victim.facing + (sg.side === 'rear' ? Math.PI : 0),
-        arc: sg.side === 'all' ? Math.PI * 2 : sg.arcDeg * Math.PI / 180 * shellArcFactor(sg, this.time) }));
-    }
-    if (!sg.broken) this.flashes.push(defenseCueFlash(victim, 'shell', 'impact', sg.color,
-      { style: sg.shellVisual, facing: angleTo(victim.pos, threatPos), arc: 0.85 }));
-    if (absorb >= raw) {
-      return true; // fully eaten — statuses and knockback with it
-    }
-    // The breaking blow: only the overflow lands.
-    const k = (raw - absorb) / raw;
-    for (const t of Object.keys(packet.amounts) as (keyof typeof packet.amounts)[]) {
-      packet.amounts[t]! *= k;
-    }
-    return false;
+  declare private nativeSceneDefensePreparationView?:NativeSceneDefensePreparationHost;
+  private nativeSceneDefensePreparationHost():NativeSceneDefensePreparationHost {
+    if(this.nativeSceneDefensePreparationView)return this.nativeSceneDefensePreparationView;
+    const world=this,host:NativeSceneDefensePreparationHost=Object.freeze({
+      get actors(){return world.actors;},
+      get flashes(){return world.flashes;},
+      get time(){return world.time;},
+    });
+    Object.defineProperty(this,'nativeSceneDefensePreparationView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
   }
+
+  private tryShellPool(victim: Actor, threatPos: Vec2, packet: DamagePacket, sg: Actor['shellGuard']): boolean { return sceneTryShellPool(this.nativeSceneDefensePreparationHost(),victim,threatPos,packet,sg); }
 
   private parryDamageWindow = new ParryDamageWindow();
 
   /** Resolved outcomes share one picture across hits, counters and area lanes. */
-  private showCombatOutcome(a: Actor, style: 'hit_cap' | 'culled' | 'last_gasp' | 'volatile_release', source?: Vec2, color?: string): void {
-    const facing = source ? Math.atan2(a.pos.y - source.y, a.pos.x - source.x) : 0;
-    this.flashes.push(combatCueFlash(a.pos, style, a.radius + REACTIVE_CUE_CFG.eventPad, facing, color));
-  }
+  private showCombatOutcome(a: Actor, style: 'hit_cap' | 'culled' | 'last_gasp' | 'volatile_release', source?: Vec2, color?: string): void { return sceneShowCombatOutcome(this.nativeSceneDefensePreparationHost(),a,style,source,color); }
 
   /** Captured counters use ordinary mitigation and attribution, without
    * re-casting the original skill's statuses, summons or proc chains. */
@@ -35469,25 +35407,7 @@ actors: Actor[] = [];
    * frame; the release check, the renderer's tic and the co-op wire all
    * read what this writes and can never disagree.
    */
-  private refreshGuardBash(a: Actor, cs: CastingState): void {
-    const bash = guardBashSpec(cs.inst);
-    if (!bash) { cs.bashAt = undefined; cs.bashLow = undefined; cs.bashArmAt = undefined; return; }
-    const tags = skillContextTags(cs.inst.def, grantedTags(cs.inst));
-    const extra = instanceMods(cs.inst);
-    const floor = clamp(
-      (bash.threshold ?? BASH_CFG.releaseFloor) * a.sheet.get('bashFloor', tags, extra),
-      0, 1);
-    const inverted = a.sheet.get('bashInvert', tags, extra) > 0;
-    cs.bashAt = inverted ? 1 - floor : floor;
-    cs.bashLow = inverted || undefined;
-    // THE ARM CLOCK: held seconds before the release may convert — the
-    // spec's armTime (default BASH_CFG.armTime) × the bashArmTime stat,
-    // live like the line (a buff landing mid-stance moves the clock the
-    // same frame). guardBashReady reads it beside the line for the
-    // release, the HUD's arm meter and the AI's hold alike.
-    cs.bashArmAt = Math.max(0,
-      (bash.armTime ?? BASH_CFG.armTime) * a.sheet.get('bashArmTime', tags, extra));
-  }
+  private refreshGuardBash(a: Actor, cs: CastingState): void { return sceneRefreshGuardBash(this.nativeSceneDefensePreparationHost(),a,cs); }
 
   /**
    * THE SHIELD HAND'S HOLD — the AI's effective hold on a held cast. The
@@ -36464,11 +36384,7 @@ actors: Actor[] = [];
 
   /** Resolve a dying enemy's burst: an explicit deathBurst, else the scalar explodeOnDeath
    *  auto-mapped to a default coalesce-implode (so every explode monster telegraphs). */
-  private resolveDeathBurst(a: Actor): DeathBurstDef | null {
-    if (a.deathBurst) return a.deathBurst;
-    if (a.explodeOnDeath > 0) return { mode: 'implode', damageFrac: a.explodeOnDeath, coalesce: 0.8 };
-    return null;
-  }
+  private resolveDeathBurst(a: Actor): DeathBurstDef | null { return sceneResolveDeathBurst(this.nativeSceneDefensePreparationHost(),a); }
 
   /** Spawn the telegraphed burst, BAKING the dead actor's pos/team/damage (the actor is
    *  removed before detonation). The orb's lifespan scales with the monster's increased-
@@ -36515,11 +36431,7 @@ actors: Actor[] = [];
    *  downed/revivable co-op body (matches the !downed convention in enemiesOf/targetsFor and
    *  the homing picker nearestSeatPos), and not untargetable/invulnerable. Shared by the
    *  contact test and the blast so the orb HOMES, STICKS, and DAMAGES the exact same set. */
-  private isBurstTarget(e: Actor, sourceTeam: Team, sourceTier = 0): boolean {
-    // `sourceTier`: the blast's own story (the sovereignty gate) — a burst
-    // on the deck scorches no valley body beneath it.
-    return !e.dead && !e.downed && e.team !== sourceTeam && e.tier === sourceTier && !e.untargetable && !e.invulnerable;
-  }
+  private isBurstTarget(e: Actor, sourceTeam: Team, sourceTier = 0): boolean { return sceneIsBurstTarget(this.nativeSceneDefensePreparationHost(),e,sourceTeam,sourceTier); }
 
   /** Does a contact orb's small body (radius `body`) touch a valid blast target at `pos`?
    *  Wall contact is handled separately by the caller via clampPos. */
