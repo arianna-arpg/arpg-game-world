@@ -229,6 +229,16 @@ new world, so the vessel swap is honest by construction. The scene runtime's
 `hudVeil` hides the run HUD cluster and the notice/pickup feeds while the
 stage plays (the scene's own channels — hero bar, prompt, card — stay live).
 
+The Reliquary is inert throughout Mu. The wisp's runtime-only
+`Actor.relicEffectsSuppressed` flag makes `relicPowerActive` exclude its entire
+modifier fold and XP penalty; the stage rebuilds the hero on entry to remove
+existing grants and retire Relic companions immediately. Later account
+restores and stat rebuilds obey the
+same exclusion. The account's equipped board, item rolls, empowerment and
+enabled toggle stay intact, so the next living vessel receives them normally.
+`balance/muReliquaryChecks.ts`, called by `probe_mu`, covers both entrances,
+all unique identities, repeated rebuilds and the next life's restoration.
+
 **THE PANEL SEAL** (her lever, 2026-09-11): `MU_CFG.sealPanels` lists the
 hero pages (menu-entry ids from `data/menu.ts`) the hub keeps shut while the
 wisp stands — all five today (bag, sheet, passives, map, journal: a spirit

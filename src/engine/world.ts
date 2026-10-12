@@ -161,7 +161,7 @@ import { chestInReach, CHEST_INTERACTION_CFG } from './chestInteraction';
 import { accountRelicBoard, bankRelic, isRelic, loseCarriedRelics, migrateRelicCarry, migrateRelicCorpses, planRelicStorage, reconcileRelicStash, reliquaryExperience } from './accountReliquary';
 import { emptyStash, personalStashEntries, planStashMove, type PersonalStash, type StashCell } from './stash';
 import { STASH_DEFS } from '../data/stashes';
-import { empowerRelicMods } from './relicPower';
+import { empowerRelicMods, relicPowerActive } from './relicPower';
 import { reliquaryPower } from '../meta/reliquary';
 import { RELIQUARY_CFG } from '../data/reliquary';
 import { syncTrainingYard } from './trainingYard';
@@ -18967,7 +18967,7 @@ export class World {
     for (const def of CONTAINER_DEFS) {
       const held = m.containers[def.id];
       if (!def.active || !held?.length) continue;
-      if (def.id === 'reliquary' && m.relicEnabled === false) continue;
+      if (def.id === 'reliquary' && !relicPowerActive(p, m.relicEnabled)) continue;
       const board = containerBoard(def);
       if (!board) continue;
       const misfit = new Set(containerMisfits(board, held));
@@ -19396,7 +19396,7 @@ export class World {
     // Mireille's Traveller's Rest blessing boosts experience while it lasts (a hosted
     // world's blessing is each seat's own: THE COUNTERS AND THE JOURNAL).
     if (this.localSeat.keeper ? (this.mireilleSeatBuff.get(seat) ?? 0) > this.time : this.mireilleXpBuff > 0) amount = Math.round(amount * (1 + MIREILLE_XP_BUFF_MULT));
-    amount *= reliquaryExperience(m.containers.reliquary ?? [], m.relicEnabled !== false);
+    amount *= reliquaryExperience(m.containers.reliquary ?? [], relicPowerActive(p, m.relicEnabled));
     m.xp += amount;
     // Any XP change re-replicates this seat's meta (xp bar + level + points). The
     // dirty Set coalesces, so a kill-storm still ships at most one meta/snapshot.

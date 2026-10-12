@@ -1098,6 +1098,10 @@ registerSceneStage('mu', {
     // lose, ethereal ink. Nothing here is ever restored: taking a vessel
     // builds a whole new world, so the swap is honest by construction.
     const p = w.player;
+    // Drop the Reliquary's stats and grants at entry, before filling vitals.
+    // recalcPlayer keeps them suppressed for every later rebuild in Mu.
+    p.relicEffectsSuppressed = true;
+    w.recalcPlayer();
     p.invulnerable = true;
     p.untargetable = true;
     p.downed = false; // the felled field's exit — a downed seat eats its own inputs (applyInputs)
