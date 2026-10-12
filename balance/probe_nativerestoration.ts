@@ -28,6 +28,7 @@ const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 import {nativeSceneRestorationArchive as archive,nativeSceneRestorationArchiveHash} from './nativeSceneRestorationArchive';
 import {beforeNativeSceneSummonPreparation} from './nativeSceneSummonPreparationIntegrationFixture';
 import {beforeNativeSceneRestoration} from './nativeSceneRestorationIntegrationFixture';
+import {beforeNativeSceneCombatState} from './nativeSceneCombatStateIntegrationFixture';
 import {nativeSceneRestorationIntegrationArchive as integrationArchive,nativeSceneRestorationIntegrationArchiveHash} from './nativeSceneRestorationIntegrationArchive';
 assert.equal(hash(JSON.stringify(archive)),nativeSceneRestorationArchiveHash);
 const source=execFileSync('git',['show',archive.commit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6});assert.equal(hash(source),archive.worldHash);
@@ -188,7 +189,7 @@ const integrationChecks:string[]=[];
 const integrationCheck=(name:string,fn:()=>void)=>{withSeededRandom(33701+integrationChecks.length,fn);integrationChecks.push(name);console.log('PASS '+name);};
 const nativeCall=(w:World,name:keyof core.NativeSceneRestorationApi,...args:any[])=>(Reflect.get(w,name) as Function).apply(w,args);
 integrationCheck('exact restoration source reverses the complete reviewed displacement preimage',()=>{
- assert.equal(hash(JSON.stringify(integrationArchive)),nativeSceneRestorationIntegrationArchiveHash);assert.equal(integrationArchive.originalArchiveHash,nativeSceneRestorationArchiveHash);assert.equal(hash(current),integrationArchive.afterHash);assert.equal(hash(beforeNativeSceneRestoration(current)),integrationArchive.sourceHash);assert.equal(beforeNativeSceneRestoration(current),execFileSync('git',['show',integrationArchive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}),'complete immutable displacement World preimage');
+ assert.equal(hash(JSON.stringify(integrationArchive)),nativeSceneRestorationIntegrationArchiveHash);assert.equal(integrationArchive.originalArchiveHash,nativeSceneRestorationArchiveHash);assert.equal(hash(beforeNativeSceneCombatState(current)),integrationArchive.afterHash);assert.equal(hash(beforeNativeSceneRestoration(current)),integrationArchive.sourceHash);assert.equal(beforeNativeSceneRestoration(current),execFileSync('git',['show',integrationArchive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}),'complete immutable displacement World preimage');
  assert.equal(ts.createSourceFile('current.ts',current,99,true).statements[0].getText(),"import './nativeSceneBootstrap';");
  const parsed=ts.createSourceFile('current.ts',current,99,true),cl=parsed.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
  for(const row of archive.rows){const old=world.members.find(n=>n.name?.getText(sf)===row.name) as ts.MethodDeclaration,m=cl.members.find(n=>n.name?.getText(parsed)===row.name) as ts.MethodDeclaration;assert.deepEqual(m.parameters.map(p=>p.getText(parsed)),old.parameters.map(p=>p.getText(sf)));assert.equal(m.type?.getText(parsed),old.type?.getText(sf));assert.deepEqual(m.modifiers?.map(n=>n.getText(parsed)),old.modifiers?.map(n=>n.getText(sf)));}

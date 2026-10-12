@@ -1,3 +1,12 @@
+NativeAreaSceneCombatState owns admitted buffs, status transplantation, charge
+and gauge taps, pools and proc eligibility on actual area stores. Preserve
+physical authority, live tree-buff maps and campaign time, native partial effects
+and conservative actor-free entry checks. World shares the exact native bodies
+through a nonenumerable live adapter. Verify nativecombatstate, restoration,
+progression/gauge/talents and historical/source checks, all types and boot. See
+docs/worldgen/native-area-combat-state.md. Cross-area status attribution, actor
+and payload lifetimes, full combat, ticking and publication remain open.
+
 NativeAreaSceneRestoration owns admitted healing, restoration, stream construction,
 cleansing and combat-text attribution over actual scene stores. Preserve physical
 caster/target authority, native partial effects, live campaign receivers and lazy

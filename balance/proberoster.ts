@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativecombatstate.ts', status: 'green', tier: 'fast', why: 'Exact native buff, status, tap, pool and proc parity; physical area admission, live maps and clocks, conservative actor-free exits, native partial effects and ordinary World wiring and dormancy.' },
   { probe: 'probe_nativerestoration.ts', status: 'green', tier: 'fast', why: 'Exact native healing, restoration, cleansing and attribution parity; admitted physical bodies, exclusive raw tether queues, lazy campaign receivers, native partial effects and ordinary World dormancy dependencies.' },
   { probe: 'probe_nativedisplacement.ts', status: 'green', tier: 'fast', why: 'Exact native impulse, grab/cling release, teleport, saddle and movement-policy parity; physical area authority, actual World receivers, shared damping, partial failures and genuine dormancy dependencies.' },
   { probe: 'probe_nativequestinteraction.ts', status: 'green', tier: 'fast', why: 'Exact native quest giver, offer, vocation, imbue and idle rules; actual World receiver/default/save parity, physical area attendance, transfer-invalidated dwell and continuous-country branches.' },

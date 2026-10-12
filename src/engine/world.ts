@@ -3,6 +3,7 @@ import {sceneAddTether,sceneAttachObjectTethers,TETHER_TICK,type NativeSceneTeth
 import {sceneRollSummonType,sceneForwardSummonSockets} from './nativeSceneSummonPreparation';
 import {scenePushActor,sceneGrabRelease,sceneClingRelease,sceneTeleportActor,sceneMountFreeSeat,sceneMountSeatRider,sceneMountUnlink,sceneMountUnhorse,sceneMountWidowed,sceneMovementLocked,sceneCastMoveFactor,sceneChannelMobility,sceneLevitating,PUSH_DAMPING,type NativeSceneDisplacementHost} from './nativeSceneDisplacement';
 import {sceneGrantAbsorb,sceneApplyRestore,sceneStartRestoreStream,sceneCritMendMult,sceneApplyHeal,sceneApplyHealChained,sceneCleanseActor,sceneRingAfflictions,sceneHealAlliesInArea,sceneSeatText,sceneCreditFloat,type NativeSceneRestorationHost} from './nativeSceneRestoration';
+import {sceneApplyBuffEffect,sceneGrantTreeBuff,sceneTransplantStatus,sceneTapCharges,sceneTapFires,sceneIsEliteVictim,sceneBankPools,sceneVictimGate,sceneProcReady,sceneProcGates,sceneProcDepthAllowed,sceneRollTopMet,sceneProcChance,type NativeSceneCombatStateHost} from './nativeSceneCombatState';
 import {sceneNearQuestGiver,sceneNearAnyQuestGiver,sceneQuestGiverPrompt,sceneActiveCategoryCounts,sceneQuestGateCtx,sceneQuestOfferLevel,sceneAcceptableQuests,sceneEligibleQuestCandidates,sceneVocationEngaged,sceneIsVocationChoice,sceneVocationChoiceOffers,sceneNextAcceptableQuest,sceneUpdateQuestGiver,sceneQuestGiverStep,sceneQuestOfferChoices,sceneAcceptQuestOffer,sceneAcceptVocationQuest,sceneVocationMenuOffers,sceneDeclineVocationOffer,sceneAcceptQuest,sceneQuestRewardOffers,sceneQuestImbueOffers,sceneClaimQuestImbue,sceneReliquaryLesson,sceneSeatIdle,scenePlayerIdle,QUESTGIVER_DWELL,type NativeSceneQuestInteractionHost} from './nativeSceneQuestInteraction';
 import {sceneSpawnProjectile,sceneSkillOcclusion,PROJ_CHILD_DEPTH_MAX,PROJ_AURA_TICK,type NativeSceneProjectileHost} from './nativeSceneProjectiles';
 import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
@@ -180,8 +181,8 @@ import {PASSIVE_CHOICE_CFG,choiceDealSpent,choiceLockReason,graftSourcesOf} from
 import { openRealms, realmOf, realmOpen, type PassiveRealmDef } from '../data/passiveRealms';
 import {VOCATIONS,VOCATION_CFG,vocationDiscoveryKey,vocationLedgerKey,type VocationSiteFilter} from '../data/vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
-import { PROC_LIST, PROCS, procStat, procPowerStat, scaleProcEffect, PROC_RIDER_LIST, procRiderStat, type ProcCastSpec, type ProcDef } from '../data/procs';
-import { VICTIM_CONDITIONS, VICTIM_HOOKS, victimScopeArmed, victimTags } from './victim'; // THE VICTIM SCOPE
+import { PROC_LIST, PROCS, procPowerStat, scaleProcEffect, PROC_RIDER_LIST, procRiderStat, type ProcCastSpec, type ProcDef } from '../data/procs';
+import { VICTIM_HOOKS, victimScopeArmed, victimTags } from './victim'; // THE VICTIM SCOPE
 import { DERIVED_GAUGES, GAUGE_CFG } from './gauges'; // DERIVED GAUGES
 import { resolveInvocation, RUNE_INFO, type RuneId } from '../data/invocations';
 import { instanceInvocation, runeForCast, makeInvocationPayload } from './invocation';
@@ -236,7 +237,7 @@ import './layoutRecipes'; // Preserve native registration order.
 import './genkit'; // Preserve native registration order.
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
 import {eyecatchElapsed,eyecatchHoldSec,ULT_CFG,ULT_QA,ultGlobalGapSec,ultThrottleSec,type EyecatchState} from './ultimates';
-import { gaugeAdd, gaugeShaveSec, gaugeSpend, type GaugeFeedSpec } from './gauge';
+import { gaugeSpend, type GaugeFeedSpec } from './gauge';
 import { gatherSympathyRecipients, SYMPATHY_CFG, SYMPATHY_LINKS, sympathyRelationOf, sympathyStat } from './sympathy';
 import { CHARGE_DEFS } from './charges';
 import { pushOutOfShape, shapeAabbHalf, shapeContains, type HitShape } from './shapes';
@@ -36783,54 +36784,25 @@ actors: Actor[] = [];
   /** Apply a skill's BUFF effect through the ONE routing (the minion
    *  war-cry lane, offering share, powerScaled magnitude) — shared by the
    *  live caster lane and the fuse sweep's late deliveries. */
+  declare private nativeSceneCombatStateView?:NativeSceneCombatStateHost;
+  private nativeSceneCombatStateHost():NativeSceneCombatStateHost {
+    if(this.nativeSceneCombatStateView)return this.nativeSceneCombatStateView;
+    const world=this,host:NativeSceneCombatStateHost={
+      get actors(){return world.actors;},
+      get treeBuffSources(){return world.treeBuffSources;},
+      get time(){return world.time;},
+      get grantTreeBuff(){const fn=world.grantTreeBuff;return(...args:Parameters<NativeSceneCombatStateHost['grantTreeBuff']>)=>fn.apply(world,args);},
+      get tapFires(){const fn=world.tapFires;return(...args:Parameters<NativeSceneCombatStateHost['tapFires']>)=>fn.apply(world,args);},
+      get isEliteVictim(){const fn=world.isEliteVictim;return(...args:Parameters<NativeSceneCombatStateHost['isEliteVictim']>)=>fn.apply(world,args);},
+    };
+    Object.defineProperty(this,'nativeSceneCombatStateView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
+  }
+
   private applyBuffEffect(
     caster: Actor, inst: SkillInstance, fx: BuffEffect,
     durScale: number, useMult = 1,
-  ): void {
-    // THE GAUGE's stack lane (BuffEffect.powerStacks — engine/gauge.ts):
-    // stacks per unit of the pressing use's gauge power, at least one
-    // while any power stands. A gauge-less skill reads power 1.
-    const gPow = inst.def.gauge ? (inst.state?.gaugePower ?? 1) : 1;
-    const stacked = fx.powerStacks !== undefined
-      ? { ...fx, stacksOnApply: Math.max(1, Math.round(fx.powerStacks * gPow)) }
-      : fx;
-    // POWER-SCALED (BuffEffect.powerScaled): the blessing's magnitude
-    // rides the use's power — a brim release at 40% fill grants a
-    // 40%-strength stride. Opt-in; ordinary buffs never wobble.
-    const scaled = stacked.powerScaled && useMult !== 1
-      ? { ...stacked, mods: stacked.mods.map(m => ({ ...m, value: m.value * useMult })) }
-      : stacked;
-    // The granting skill's tags ride the gain EVENT (addBuff's 4th arg) so
-    // tag-filtered sympathy links can hear it — the flask bond drinks only
-    // what carries 'flask'.
-    if (fx.affects === 'allies') {
-      const buffRadius = (fx.radius ?? 0) * caster.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst));
-      for (const ally of this.actors) {
-        if (ally.team === caster.team && !ally.dead && !ally.downed && !ally.construct
-          && ally.tier === caster.tier && dist(ally.pos, caster.pos) <= buffRadius + ally.radius) {
-          this.grantTreeBuff(caster, ally, inst, scaled, durScale);
-        }
-      }
-    } else if (fx.affects === 'minions') {
-      for (const m of this.actors) {
-        if (m.owner === caster && !m.dead && m.isMinion() && !m.construct) {
-          this.grantTreeBuff(caster, m, inst, scaled, durScale);
-        }
-      }
-      // OFFERING SHARE (Communal Rites): a fraction of the minions'
-      // blessing also dresses the officiant — same buff, scaled values.
-      const tags = skillContextTags(inst, grantedTags(inst));
-      const share = caster.sheet.get('offeringShare', tags, instanceMods(inst));
-      if (share > 0) {
-        this.grantTreeBuff(caster, caster, inst, {
-          ...scaled, id: scaled.id + '_shared', affects: 'caster',
-          mods: scaled.mods.map(m => ({ ...m, value: m.value * share })),
-        }, durScale);
-      }
-    } else {
-      this.grantTreeBuff(caster, caster, inst, scaled, durScale);
-    }
-  }
+  ): void { return sceneApplyBuffEffect(this.nativeSceneCombatStateHost(),caster,inst,fx,durScale,useMult); }
 
   private resolveHit(
     caster: Actor, inst: SkillInstance, target: Actor,
@@ -38398,64 +38370,19 @@ actors: Actor[] = [];
    *  the triggering event's position for radius-gated taps (enemyDeath);
    *  `victim` is the struck/slain body for victim-gated taps (eliteVictim). */
   private tapCharges(a: Actor, on: NonNullable<SkillDef['chargeGain']>[number]['on'],
-    at?: Vec2, orbKind?: string, victim?: Actor): void {
-    for (const inst of a.skills) {
-      if (!inst) continue;
-      // instanceChargeGain, not def.chargeGain: SOCKETED taps (Answering
-      // Steel's block-banked Riposte) merge with the skill's own — the
-      // schema's promise, honored at the event taps too.
-      for (const spec of instanceChargeGain(inst)) {
-        if (!this.tapFires(a, inst, spec, on, at, orbKind, victim)) continue;
-        a.gainCharge(spec.charge, spec.amount, spec.max, inst);
-      }
-      // THE GAUGE FABRIC (engine/gauge.ts): the SAME events feed a slotted
-      // skill's own bank through the same filter chain — the Vaal-soul
-      // shape. Two gauge arts on one bar each drink the same kill.
-      const gs = inst.def.gauge;
-      if (gs?.feeds) {
-        for (const spec of gs.feeds) {
-          if (!this.tapFires(a, inst, spec, on, at, orbKind, victim)) continue;
-          const eff = a.gaugeEff(inst)!;
-          // THE HASTENING (GaugeSpec.cooldownPer): while the skill's own
-          // clock runs, the point hurries it instead of banking — the
-          // two-phase art (shave now, grow later).
-          const cd = a.cooldowns.get(inst.def.id) ?? 0;
-          if (gs.cooldownPer && cd > 0) {
-            a.cooldowns.set(inst.def.id, Math.max(0, cd - gaugeShaveSec(gs, eff, spec.amount)));
-            continue;
-          }
-          gaugeAdd(inst, spec.amount, eff);
-        }
-      }
-    }
-  }
+    at?: Vec2, orbKind?: string, victim?: Actor): void { return sceneTapCharges(this.nativeSceneCombatStateHost(),a,on,at,orbKind,victim); }
 
   /** THE TAP PREDICATE — one filter chain for charge taps AND gauge feeds:
    *  the trigger match, toggle gating, the death radius, the orb kind, the
    *  elite victim, the chance roll (rolled last, so a filtered-out tap
    *  never moves the stream). */
   private tapFires(a: Actor, inst: SkillInstance, spec: GaugeFeedSpec,
-    on: GaugeFeedSpec['on'], at?: Vec2, orbKind?: string, victim?: Actor): boolean {
-    if (spec.on !== on) return false;
-    if (spec.whileToggled && !a.activeAuras.has(inst.def.id)
-      && !a.summonToggles.has(inst.def.id)) return false;
-    if (on === 'enemyDeath' && at && dist(a.pos, at) > (spec.radius ?? 360)) return false;
-    // Fount taps filter by orb kind (a Life Flask ignores mana orbs).
-    if (on === 'orbPickup' && spec.orbKind && spec.orbKind !== orbKind) return false;
-    // Elite-gated taps (Soul Harvest's boss lane): only a rare-or-better
-    // (or def-level boss) victim feeds the bank. No victim = no bank.
-    if (spec.eliteVictim && !(victim && this.isEliteVictim(victim))) return false;
-    if (spec.chance !== undefined && !chance(spec.chance)) return false;
-    return true;
-  }
+    on: GaugeFeedSpec['on'], at?: Vec2, orbKind?: string, victim?: Actor): boolean { return sceneTapFires(this.nativeSceneCombatStateHost(),a,inst,spec,on,at,orbKind,victim); }
 
   /** The canonical ELITE predicate for victim-gated payloads: rare-or-better
    *  rarity, or a def-level boss. (The same shape lives inline at the slayer
    *  and bounty folds — one named home for new consumers.) */
-  private isEliteVictim(a: Actor): boolean {
-    return a.rarity === 'rare' || a.rarity === 'champion' || a.rarity === 'crowned'
-      || !!(a.defId && MONSTERS[a.defId]?.boss);
-  }
+  private isEliteVictim(a: Actor): boolean { return sceneIsEliteVictim(this.nativeSceneCombatStateHost(),a); }
 
   /** Shed registry ORBS at a credited kill (orbOnKill_<id> stat family,
    *  rolled with the slaying skill's context). noBounty prey sheds nothing —
@@ -38538,20 +38465,7 @@ actors: Actor[] = [];
   private transplantStatus(
     to: Actor, s: ActiveStatus, sourceName: string,
     o?: { strengthScale?: number; duration?: 'remaining' | 'refresh'; durationScale?: number },
-  ): void {
-    if (s.challengeField !== undefined) return; // Field exposure cannot become a portable lasting wound.
-    const sdef = STATUS_DEFS[s.id];
-    if (!sdef || to.dead) return;
-    const baseDur = sdef.duration || 1;
-    const durScale = (o?.durationScale ?? 1)
-      * ((o?.duration ?? 'remaining') === 'remaining'
-        ? Math.max(0.05, s.remaining) / baseDur : 1);
-    const n = Math.max(1, s.stacks);
-    for (let i = 0; i < n; i++) {
-      to.applyStatus(s.id, s.dps * (o?.strengthScale ?? 1), durScale, sourceName,
-        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType, ruptureRadius: s.ruptureRadius });
-    }
-  }
+  ): void { return sceneTransplantStatus(this.nativeSceneCombatStateHost(),to,s,sourceName,o); }
 
   private rollStatusProcs(
     caster: Actor, inst: SkillInstance, target: Actor, statusId: string,
@@ -38581,16 +38495,7 @@ actors: Actor[] = [];
   /** THE VICTIM GATE (ProcDef.vs): every listed id must hold for `victim`
    *  against `attacker` — a registered victim condition (engine/victim.ts)
    *  or, failing that, a status the victim carries. */
-  private victimGate(ids: readonly string[], victim: Actor, attacker: Actor): boolean {
-    for (const id of ids) {
-      const def = VICTIM_CONDITIONS[id];
-      const holds = def
-        ? def.test(victim, attacker, { time: this.time })
-        : victim.statuses.some(st => st.id === id && st.stacks > 0);
-      if (!holds) return false;
-    }
-    return true;
-  }
+  private victimGate(ids: readonly string[], victim: Actor, attacker: Actor): boolean { return sceneVictimGate(this.nativeSceneCombatStateHost(),ids,victim,attacker); }
 
   /** THE TALENT FABRIC's per-actor sweep (docs/engine/talents.md), once per
    *  frame after the actor's own tick:
@@ -38665,47 +38570,19 @@ actors: Actor[] = [];
   /** ICD gate (ProcDef.icd): true when the proc may fire for this owner —
    *  and stamps the next-ready clock when it does. The hard frequency
    *  limit no amount of stacked proc-chance can beat. */
-  private procReady(owner: Actor, proc: ProcDef): boolean {
-    if (!proc.icd) return true;
-    if (this.time < (owner.procReadyAt.get(proc.id) ?? 0)) return false;
-    owner.procReadyAt.set(proc.id, this.time + proc.icd);
-    return true;
-  }
+  private procReady(owner: Actor, proc: ProcDef): boolean { return sceneProcReady(this.nativeSceneCombatStateHost(),owner,proc); }
 
   /** The shared pre-roll gates every proc site honours:
    *  - SKILL GATE (ProcDef.skills): the proc belongs to named skills only.
    *  - ONCE PER CAST (ProcDef.oncePerCast): one ROLL per world tick per
    *    owner — a whole swing's simultaneous contacts share that roll, so
    *    striking five targets never inflates a per-cast chance. */
-  private procGates(owner: Actor, proc: ProcDef, inst: SkillInstance | null): boolean {
-    if (proc.skills && (!inst || !proc.skills.includes(inst.def.id))) return false;
-    // THE TALENT FABRIC's owner gates (ProcDef.when/unless/requireBuff/
-    // requireStatus) and the def-level TAG LOCK (ProcDef.tags).
-    if (proc.when && !owner.sheet.hasCondition(proc.when)) return false;
-    if (proc.unless && owner.sheet.hasCondition(proc.unless)) return false;
-    if (proc.requireBuff !== undefined) {
-      const l = Array.isArray(proc.requireBuff) ? proc.requireBuff : [proc.requireBuff];
-      if (!l.some(b => owner.buffs.has(b))) return false;
-    }
-    if (proc.requireStatus !== undefined) {
-      const l = Array.isArray(proc.requireStatus) ? proc.requireStatus : [proc.requireStatus];
-      if (!owner.statuses.some(st => st.stacks > 0 && l.includes(st.id))) return false;
-    }
-    if (proc.tags && (!inst || !proc.tags.every(t => skillContextTags(inst).has(t)))) return false;
-    if (proc.oncePerCast) {
-      if (owner.procFiredAt.get(proc.id) === this.time) return false;
-      owner.procFiredAt.set(proc.id, this.time);
-    }
-    return true;
-  }
+  private procGates(owner: Actor, proc: ProcDef, inst: SkillInstance | null): boolean { return sceneProcGates(this.nativeSceneCombatStateHost(),owner,proc,inst); }
 
   /** How many proc LAYERS this owner may run: 1 (real actions only) plus
    *  the procDepth stat, under the absolute lid. An event at depth d rolls
    *  procs only while d < this. */
-  private procDepthAllowed(owner: Actor): number {
-    return 1 + Math.min(DEFENSE_CFG.procs.maxExtraDepth,
-      Math.floor(owner.sheet.get('procDepth')));
-  }
+  private procDepthAllowed(owner: Actor): number { return sceneProcDepthAllowed(this.nativeSceneCombatStateHost(),owner); }
 
   /** ROLL-TOP GATE (ProcDef.rollTop / TriggerSpec.rollTop): did the hit's
    *  damage dice land within the top `frac` of their range? The owner's
@@ -38716,12 +38593,7 @@ actors: Actor[] = [];
   private rollTopMet(
     owner: Actor, frac: number, rollT: number | undefined,
     tags?: Set<SkillTag>, extra?: readonly Modifier[],
-  ): boolean {
-    if (rollT === undefined) return false;
-    const window = frac
-      + owner.sheet.get('highRollWindow', tags, extra as Modifier[] | undefined);
-    return rollT >= 1 - window;
-  }
+  ): boolean { return sceneRollTopMet(this.nativeSceneCombatStateHost(),owner,frac,rollT,tags,extra); }
 
   /** The effective roll chance for one attempt, honouring the def's RATE
    *  DISCIPLINE and the depth falloff:
@@ -38733,23 +38605,7 @@ actors: Actor[] = [];
   private procChance(
     owner: Actor, proc: ProcDef, depth: number,
     tags?: Set<SkillTag>, extra?: readonly Modifier[],
-  ): number {
-    let c = owner.sheet.get(procStat(proc.id), tags, extra as Modifier[] | undefined);
-    if (c <= 0) return 0;
-    if (proc.ppm) {
-      const mean = 60 / proc.ppm;
-      const last = owner.procAttemptAt.get(proc.id);
-      const dt = Math.min(mean * DEFENSE_CFG.procs.ppmCatchup,
-        last === undefined ? mean : this.time - last);
-      owner.procAttemptAt.set(proc.id, this.time);
-      c = c * proc.ppm * dt / 60;
-    }
-    // LUCK: the universal proc-rate multiplier (never drop rates) — the
-    // proc-build's investment lane, tag-filterable via the query context.
-    c *= 1 + owner.sheet.get('luck', tags, extra as Modifier[] | undefined);
-    if (depth > 0) c *= Math.pow(DEFENSE_CFG.procs.depthFalloff, depth);
-    return Math.min(0.95, c);
-  }
+  ): number { return sceneProcChance(this.nativeSceneCombatStateHost(),owner,proc,depth,tags,extra); }
 
   /** Sweep an actor's GAIN EVENTS (charges/buffs gained since last frame)
    *  against the chargeGain / buffGain triggers. Each event carries its
@@ -50997,17 +50853,7 @@ actors: Actor[] = [];
 
   /** Per-application identity lets respec retire only this caster's blessing,
    * including allied recipients, without stripping another caster's refresh. */
-  private grantTreeBuff(caster: Actor, target: Actor, inst: SkillInstance, fx: BuffEffect, durScale: number): void {
-    const followUpHost = inst.followUpHost;
-    inst = inst.followUpHost ?? inst;
-    if (!followUpHost && !inst.treeNodes?.some(id => treeNodeOf(inst.def, id)?.buffs?.length)) {
-      target.addBuff(fx, durScale, 0, inst.def.tags);
-      return;
-    }
-    const tagged = { ...fx };
-    this.treeBuffSources.set(tagged, { caster, inst });
-    target.addBuff(tagged, durScale, 0, [...skillContextTags(inst)]);
-  }
+  private grantTreeBuff(caster: Actor, target: Actor, inst: SkillInstance, fx: BuffEffect, durScale: number): void { return sceneGrantTreeBuff(this.nativeSceneCombatStateHost(),caster,target,inst,fx,durScale); }
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void { return sceneClearTreeFields(this.nativeSceneProgressionHost(),caster,inst); }
@@ -51535,20 +51381,7 @@ actors: Actor[] = [];
    *  `type` banks hit damage by damage type, `status` banks a DoT payload at
    *  application. The cap rides each pool skill's own poolCap query, so
    *  supports socketed into the pool skill widen ITS bank. */
-  private bankPools(caster: Actor, feed: { type?: DamageType; status?: string }, amount: number): void {
-    if (amount <= 0) return;
-    for (const inst of caster.skills) {
-      const pl = inst?.def.pool;
-      if (!pl) continue;
-      const ratio = feed.type !== undefined
-        ? pl.fromDamage?.[feed.type] ?? 0
-        : pl.fromDot?.[feed.status!] ?? 0;
-      if (ratio <= 0) continue;
-      const cap = pl.cap * caster.sheet.get('poolCap',
-        skillContextTags(inst!.def), instanceMods(inst!));
-      caster.pools.set(pl.id, Math.min(cap, (caster.pools.get(pl.id) ?? 0) + amount * ratio));
-    }
-  }
+  private bankPools(caster: Actor, feed: { type?: DamageType; status?: string }, amount: number): void { return sceneBankPools(this.nativeSceneCombatStateHost(),caster,feed,amount); }
 
   /** Tick every VENTING pool (the leaking aura): drain on a chunked beat,
    *  each hostile in the ring taking the tick — pool empty ends the vent. */
