@@ -37,23 +37,26 @@ export class WildernessPaths {
   at(at:MassAddress):readonly WildernessPath[]{
     const steps = this.prepareSteps(at); let next = steps.next(); while (!next.done) next = steps.next(); return next.value;
   }
-  *prepareSteps(at:MassAddress):Generator<void,readonly WildernessPath[]>{
+  *prepareSteps(at:MassAddress,preparing=false):Generator<void,readonly WildernessPath[]>{
     const span=this.generator.spec.addressSpan,n=BigInt(this.spec.district/span);
     const cx=floorDiv(BigInt(at.cx),n)*n,cy=floorDiv(BigInt(at.cy),n)*n;
     const origin=address(at.dimension,cx.toString(),cy.toString(),0,0,span),key=canonical([at.dimension,cx.toString(),cy.toString()]);
     const hit=this.cache.get(key);if(hit){this.cache.delete(key);this.cache.set(key,hit);return hit;}
     // At the signed-address rim the incomplete district intentionally has no links.
     let result:readonly WildernessPath[]=[];
-    try{moveAddress(origin,{x:this.spec.district,y:this.spec.district},span);result=yield* this.planSteps(origin,key);}
+    try{moveAddress(origin,{x:this.spec.district,y:this.spec.district},span);result=yield* this.planSteps(origin,key,preparing);}
     catch(e){if(!(e instanceof RangeError))throw e;}
     this.cache.set(key,result);if(this.cache.size>32)this.cache.delete(this.cache.keys().next().value!);
     return result;
   }
-  private *planSteps(origin:MassAddress,key:string):Generator<void,readonly WildernessPath[]>{
+  private *planSteps(origin:MassAddress,key:string,preparing:boolean):Generator<void,readonly WildernessPath[]>{
     const {district,width}=this.spec,span=this.generator.spec.addressSpan,rng=massRandom(this.generator.run.seed,[this.spec.source,key]);
     if(!rng.chance(this.spec.chance))return [];
     const found=new Map((yield* this.generator.wildernessSiteSteps(origin,district)).map(p=>[p.id,p]));
-    if (this.prepareAdmission) for (const p of found.values()) yield* this.prepareAdmission(p.center);
+    // Extra admission warming belongs only to the held loading phase. Ordinary
+    // live queries retain their original lazy candidate footprint.
+    if (preparing && this.prepareAdmission) for (const p of found.values())
+      if (this.spec.destinations.some(d=>d.content===p.content)) yield* this.prepareAdmission(p.center);
     const sites=[...found.values()].filter(p=>{
       if(!this.spec.destinations.some(d=>d.content===p.content)||!this.admitted(p))return false;
       const q=localOffset(p.center,origin,span);

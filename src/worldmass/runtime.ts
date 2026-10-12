@@ -859,7 +859,7 @@ export class WorldMassRuntime {
       const wanted=new Set(cells.map(cellKey));
       for (const k of this.places.keys()) if (!wanted.has(k)) this.places.delete(k);
       for (const cell of cells) {
-        if (boot && this.wildernessPaths) yield* this.wildernessPaths.prepareSteps({ ...cell, x: 0, y: 0 });
+        if (boot && this.wildernessPaths) yield* this.wildernessPaths.prepareSteps({ ...cell, x: 0, y: 0 }, true);
         const k = cellKey(cell);
         if (!this.places.has(k)) this.places.set(k, this.placesInCell(cell));
         yield;

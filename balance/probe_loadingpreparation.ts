@@ -3,6 +3,7 @@ import { prepareMassOpening, type PreparedMassOpening } from '../src/worldmass/o
 import { MassGenerator, makeMassRun } from '../src/worldmass/generator';
 import { reserveMassOpening } from '../src/worldmass/patchReservations';
 import { massAdventure } from '../src/worldmass/preset';
+import { WildernessPaths } from '../src/worldmass/wildernessPaths';
 import { address, moveAddress } from '../src/worldmass/address';
 import { canonical } from '../src/worldmass/random';
 import { cooperativePreparation } from '../src/loading/cooperative';
@@ -26,6 +27,14 @@ assert.throws(() => new MassGenerator(forged.run, forged.config.terrain, forged)
 assert.throws(() => prepared.adoptOpeningCache(forged), /Foreign/);
 assert.throws(() => new MassGenerator({...opening.run,seed:714}, opening.config.terrain, opening), /Foreign/);
 await assert.rejects(prepareMassOpening({seed,runId,config:{...config,pageRadius:100000}},control), /page budget/);
+const pathsSpec = { ...config.wildernessPaths!, chance: 1 };
+let warmed = 0;
+const lazyPaths = new WildernessPaths(pathsSpec, direct, () => true, () => false, function*(){ warmed++; yield; });
+lazyPaths.at(center); assert.equal(warmed, 0, 'live queries must not gain loading-only admission work');
+const loadingPaths = new WildernessPaths(pathsSpec, direct, () => true, () => false, function*(){ warmed++; yield; });
+for (const _ of loadingPaths.prepareSteps(center, true)) {}
+assert.ok(warmed > 0, 'held preparation warms eligible admission queries');
+assert.equal(canonical(loadingPaths.at(center)),canonical(lazyPaths.at(center)));
 console.log('PASS worker-issued opening data preserves default terrain and refuses foreign/mutable cache admission');
 
 let current = true, closed = false, scoped = false, ticks = 0;
