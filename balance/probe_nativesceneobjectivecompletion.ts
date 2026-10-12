@@ -1,3 +1,4 @@
+import {beforeMuReliquary} from './muReliquarySourceFixture';
 /** Independent native completion proof. Actual native seat XP/meta/level/ledger, actor resource
  * restoration, local texts/flashes and saves run; required progression rebuild
  * and quest payout boundaries are explicitly recording test providers only. */
@@ -46,7 +47,7 @@ if(process.argv.includes('--provenance')){
  const constant=prior.statements.find(n=>ts.isVariableStatement(n)&&n.declarationList.declarations.some(d=>d.name.getText(prior)==='MIREILLE_XP_BUFF_MULT'));
  assert.equal(constant?.getText(prior).replaceAll('\r\n','\n'),archive.constant,'Git original XP constant');
 }
-const source=parse(read('src/engine/nativeSceneObjectiveCompletion.ts'));
+const source=parse(beforeMuReliquary(read('src/engine/nativeSceneObjectiveCompletion.ts'), 'xp'));
 const constant=source.statements.find(n=>ts.isVariableStatement(n)&&n.declarationList.declarations.some(d=>d.name.getText(source)==='MIREILLE_XP_BUFF_MULT'));assert.ok(constant);
 assert.equal(emit(constant.getText(source)),emit(archive.constant),'unchanged native XP blessing constant');
 for(const row of archive.rows){
@@ -158,6 +159,20 @@ pair('actual-place-order-and-fallback',f=>{
  assert.equal(f.controller.objectivePlaces()[0],f.state.objectiveFallAt.pos);f.state.objectiveFallAt.zone='neighbor';assert.deepEqual(f.controller.objectivePlaces(),[]);
  return {places:true};
 });
+// The Mu form is an intentional departure from the archived living actor:
+// no equipped-cell penalty, through each current execution surface.
+for (const lane of ['world', 'core', 'owner'] as Lane[]) {
+  const f = fixture(lane), s = f.local;
+  const baseId = Object.keys(ITEM_BASES).find(id => ITEM_BASES[id].category === 'relic')!;
+  s.meta.containers.reliquary = [{uid:731, baseId, rarity:'common', ilvl:1, tier:1, baseRoll:0,
+    affixes:[], implicitRolls:[], name:'Mu relic footprint'}];
+  s.meta.relicEnabled = true; s.actor.relicEffectsSuppressed = true;
+  f.controller.grantSeatXp(s, 1);
+  assert.equal(s.meta.xp, 1, lane + ' Mu has no Reliquary XP penalty');
+}
+console.log('PASS Mu XP exclusion through World, shared core and retained objective owner');
+
+
 for(const mode of ['small','multi-level','downed','possessed','cap','couch','remote','blessed','relic','relic-disabled'])pair('seat-xp:'+mode,f=>{
  const s=mode==='remote'||mode==='couch'?f.near:mode==='downed'?f.down:f.local;
  if(mode==='couch')s.couch={pad:1} as any;

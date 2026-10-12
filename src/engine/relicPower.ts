@@ -1,5 +1,11 @@
 import { RELIC_SCALABLE, RELIQUARY_CFG } from '../data/reliquary';
 import type { Modifier } from './stats';
+import type { Actor } from './actor';
+
+/** Account equipment stays saved while a kitless form suppresses its effects. */
+export function relicPowerActive(actor: Pick<Actor, 'relicEffectsSuppressed'>, enabled = true): boolean {
+  return enabled && !actor.relicEffectsSuppressed;
+}
 
 export function relicNumeric(m: Pick<Modifier, 'stat' | 'kind' | 'value' | 'fromStat'>): boolean {
   return m.stat in RELIC_SCALABLE && (m.kind === 'flat' || m.kind === 'increased')

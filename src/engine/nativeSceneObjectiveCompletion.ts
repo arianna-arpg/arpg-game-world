@@ -6,6 +6,7 @@ import {PROGRESSION} from '../data/classes';
 import {objectiveRewardXp} from '../data/objectiveRewards';
 import {saveAccountDurable} from '../meta/persistence';
 import {reliquaryExperience} from './accountReliquary';
+import {relicPowerActive} from './relicPower';
 import {bumpLedger} from '../packages/ledger';
 import {CLASS_LEVEL_MILESTONES,classLevelLedgerKey,reachedLevelKey} from '../meta/account';
 import {catalogClassLevelMilestones,catalogLevelMilestones} from '../meta/unlocks';
@@ -127,7 +128,7 @@ export function sceneGrantSeatXp(owner:NativeSceneObjectiveCompletionHost,seat: 
     // Mireille's Traveller's Rest blessing boosts experience while it lasts (a hosted
     // world's blessing is each seat's own: THE COUNTERS AND THE JOURNAL).
     if (owner.localSeat.keeper ? (owner.mireilleSeatBuff.get(seat) ?? 0) > owner.time : owner.mireilleXpBuff > 0) amount = Math.round(amount * (1 + MIREILLE_XP_BUFF_MULT));
-    amount *= reliquaryExperience(m.containers.reliquary ?? [], m.relicEnabled !== false);
+    amount *= reliquaryExperience(m.containers.reliquary ?? [], relicPowerActive(p, m.relicEnabled));
     m.xp += amount;
     // Any XP change re-replicates this seat's meta (xp bar + level + points). The
     // dirty Set coalesces, so a kill-storm still ships at most one meta/snapshot.

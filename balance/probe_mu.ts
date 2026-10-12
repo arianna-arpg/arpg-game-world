@@ -47,6 +47,7 @@ import { collectAttention } from '../src/world/attention';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 import { angleDiff } from '../src/core/math';
+import { runMuReliquaryChecks } from './muReliquaryChecks';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -519,6 +520,8 @@ check('C6b: a pending discovery stands as its own named background vessel, never
     TUTORIAL_FACTIONS.every(row =>
       MONSTERS[row.commander]?.parts?.some(p => p.breakDisables?.includes(row.verb))));
 }
+
+runMuReliquaryChecks(check);
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASS');
 process.exit(failed ? 1 : 0);

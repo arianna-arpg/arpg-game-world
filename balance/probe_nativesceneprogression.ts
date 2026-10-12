@@ -1,3 +1,4 @@
+import {beforeMuReliquary} from './muReliquarySourceFixture';
 import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
 import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
 import {presenceProfile,skillPresenceVoice,PRESENCE_STYLE} from '../src/data/skillPresenceVisuals';
@@ -36,7 +37,7 @@ const emit=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTa
 const read=(s:string)=>fs.readFileSync(new URL(s,import.meta.url),'utf8').replaceAll('\r\n','\n');
 function classOf(source:string){const sf=parse(source),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;return {sf,cl};}
 assert.equal(sha(JSON.stringify(archive)),nativeSceneProgressionArchiveHash,'immutable progression archive');
-const current=classOf(beforeNativeMainContent(read('../src/engine/world.ts'))),source=parse(beforeNativeMainVisualSource('src/engine/nativeSceneProgression.ts',read('../src/engine/nativeSceneProgression.ts')));
+const current=classOf(beforeNativeMainContent(read('../src/engine/world.ts'))),source=parse(beforeMuReliquary(beforeNativeMainVisualSource('src/engine/nativeSceneProgression.ts',read('../src/engine/nativeSceneProgression.ts')), 'fold'));
 assert.equal(sha(JSON.stringify(current.cl.members.map(m=>m.getText(current.sf)))),archive.worldHash,'all original World members after strict normalization');
 if(process.argv.includes('--provenance')){
  const git=execFileSync('git',['show',archive.commit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:12e6}).replaceAll('\r\n','\n'),prior=classOf(git);
@@ -138,6 +139,26 @@ function fixture(lane:Lane,shared?:{campaign:any;authority:NativeAreaActorAuthor
  function snapshot(){return {actors:scene.actors.map(a=>({id:a.id,state:captureNativeActorState(a)})),seats:campaign.seats.map((s:Seat)=>({id:s.id,meta:graph(s.meta),grants:graph(s.grantedSkills),insts:graph(s.grantedInsts)})),state:graph(state),flashes:graph(geometry.flashes),texts:graph(area.objectiveController.input.state.texts),dirty:[...dirty].map(s=>s.id),mercSyncedLevel:campaign.mercSyncedLevel};}
  return {w,raw,area,scene,geometry,population,state,campaign,authority,owner,combat,binding,effects,enroll,nativeMint,snapshot};
 }
+// Mu's explicit departure from the historical living-vessel contract also
+// holds through retained progression owners, without active-world lookups.
+for (const lane of ['world', 'core', 'owner'] as Lane[]) {
+  const {w, scene} = fixture(lane), seat = w.localSeat, p = w.player;
+  for (const rung of nativeArchiveBindings12.RELIQUARY.ladder) w.account.features.add(rung.feature);
+  const item = nativeArchiveBindings18.forgeItem({ilvl: 30, uniqueId: 'unquarried_idol', quality: 1})!;
+  item.x = 1; item.y = 1; item.relicKey = 'mu-native-idol';
+  seat.meta.containers.reliquary = [item];
+  w.recalcSeat(seat);
+  assert.ok(p.sheet.get(companionGrantStat('summon_stone_golem')) > 0, lane + ' living grant');
+  p.relicEffectsSuppressed = true;
+  w.recalcSeat(seat); w.recalcSeat(seat);
+  assert.ok(!p.sheet.hasSource('container:reliquary'), lane + ' Mu fold');
+  (w as any).companionGrants.update(p, scene.actors, 10, () => { throw Error(lane + ' granted a Mu companion'); }, () => {});
+  assert.equal(seat.meta.containers.reliquary[0], item);
+  assert.equal(w.account.reliquary.enabled, true);
+}
+console.log('PASS Mu Reliquary suppression through World, shared core and retained progression owner');
+
+
 const results:any[]=[];
 function parity(label:string,course:(f:ReturnType<typeof fixture>)=>any){let baseline:any;for(const lane of ['native','world','core','owner'] as Lane[]){let result:any;withSeededRandom(28018,()=>{const f=fixture(lane);const rng=new Rng(8891);let draws=0;const priorRandom=Math.random;Math.random=()=>{draws++;return rng.next();};try{const receipt=course(f);result={receipt,snapshot:f.snapshot(),draws,sentinel:rng.next()};}finally{Math.random=priorRandom;}});if(lane==='native')baseline=result;else try{assert.deepEqual(result,baseline,label+' '+lane);}catch(e){fs.writeFileSync(new URL('./reports/native-scene-progression-failure-'+lane+'.json',import.meta.url),JSON.stringify({label,baseline,result},null,2));throw e;}}results.push(label);console.log('PASS four-lane '+label);}
 parity('native attributes, granted skill identity, status routing and removal',f=>{const {w}=f,p=w.player,meta=w.localSeat.meta;const id='fireball';assert.ok(SKILLS[id]);meta.baseAttrs.strength+=17;meta.classDef={...meta.classDef,innate:[...(meta.classDef.innate??[]),mod(skillGrantStat(id),'flat',3),mod(relayStatusStat('grounding'),'flat',1)]};w.recalcSeat(w.localSeat);const inst=w.localSeat.grantedInsts!.get(id)!;assert.ok(inst);w.recalcSeat(w.localSeat);assert.equal(w.localSeat.grantedInsts!.get(id),inst);const foe=f.enroll(f.population.createMonster('zombie',3,'enemy'));foe.pos={x:p.pos.x+20,y:p.pos.y};const status=STATUS_RELAYS.grounding.status;p.applyStatus(status,8,1,'progression relay');assert.ok(foe.statuses.some(s=>s.id===status),JSON.stringify({relay:p.sheet.get(relayStatusStat('grounding')),enemies:f.population.enemiesOf(p).map(a=>a.id),status,p:p.statuses,foe:foe.statuses}));meta.classDef={...meta.classDef,innate:[]};w.recalcSeat(w.localSeat);assert.equal(w.localSeat.grantedInsts,undefined);return {grantedLevel:inst.level,relay:foe.statuses.map(s=>s.id),strength:meta.attrs.strength};});

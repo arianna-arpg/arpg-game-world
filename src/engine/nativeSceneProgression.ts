@@ -16,7 +16,7 @@ import {containerBoard,seatAmplification,containerMisfits} from './containers';
 import {CONTAINER_DEFS} from '../data/containers';
 import {amplifySeatMods} from './seatlaw';
 import {packGrantState,restoreGrantState} from './gemitems';
-import {empowerRelicMods} from './relicPower';
+import {empowerRelicMods,relicPowerActive} from './relicPower';
 import {reliquaryPower} from '../meta/reliquary';
 import {RELIQUARY_CFG} from '../data/reliquary';
 import {compileItemMods,itemLevelReq,rebuildItem} from './itemgen';
@@ -194,7 +194,7 @@ export function sceneRecalcSeat(nativeHost:NativeSceneProgressionHost,seat: Seat
     for (const def of CONTAINER_DEFS) {
       const held = m.containers[def.id];
       if (!def.active || !held?.length) continue;
-      if (def.id === 'reliquary' && m.relicEnabled === false) continue;
+      if (def.id === 'reliquary' && !relicPowerActive(p, m.relicEnabled)) continue;
       const board = containerBoard(def);
       if (!board) continue;
       const misfit = new Set(containerMisfits(board, held));
