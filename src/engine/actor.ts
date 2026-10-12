@@ -1492,6 +1492,8 @@ export class Actor {
   cosmeticSourceSkill?: string;
   /** Presentation identity independent of the provisional class under a Mu spirit. */
   cosmeticKind?: 'wisp';
+  /** Runtime-only form rule: Mu spirits cannot receive account Relic effects. */
+  relicEffectsSuppressed?: boolean;
   aiCooldown = 0;         // small delay between AI decisions
   hitFlash = 0;           // render feedback timer
   /** THE HIT TINT (engine/bodyVoices.ts): the dominant damage type of the last
