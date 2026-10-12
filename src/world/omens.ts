@@ -49,7 +49,8 @@ export interface Omen {
   dimension?: string;
 }
 
-export type OmenSource = (world: World) => Omen[];
+export type NativeOmenHost=Pick<World,"bountyOmens"|"harborholdOmens"|"sim"|"surveyed"|"time"|"visible"|"visited"|"zone"|"zoneMap">;
+export type OmenSource = (world: NativeOmenHost) => Omen[];
 
 /** Fabric levers — one place, never inline. */
 export const OMEN_CFG = {
@@ -76,7 +77,7 @@ export function registerOmenSource(s: OmenSource): void { SOURCES.push(s); }
 
 /** Resolve every source (a source that throws is skipped — one bad murmur
  *  never silences the rest). */
-export function collectOmens(world: World): Omen[] {
+export function collectOmens(world: NativeOmenHost): Omen[] {
   const out: Omen[] = [];
   for (const s of SOURCES) {
     try { out.push(...s(world)); } catch { /* hushed */ }

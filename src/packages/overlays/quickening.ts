@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from '../../world/bulletins';
 // ---------------------------------------------------------------------------
 // THE QUICKENING FIELD — spent ground runs quick again (pure overlay).
 //
@@ -400,7 +401,7 @@ export class QuickeningField implements WorldOverlay {
  *  REGISTERED dimension (world/dimensions.ts — never a hardcoded plane list;
  *  declaring `dimensions: [...]` on the package makes new instances appear
  *  here for free). */
-function quickeningFields(world: World): QuickeningField[] {
+function quickeningFields(world: Pick<World,"sim">): QuickeningField[] {
   return dimensionIds()
     .map(d => world.sim.overlayFor<QuickeningField>('quickening', d))
     .filter((f): f is QuickeningField => !!f);
@@ -442,7 +443,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   return [];
 });
 
-registerBulletinSource((world: World) => {
+registerBulletinSource((world: NativeBulletinHost) => {
   const out: WorldBulletin[] = [];
   for (const f of quickeningFields(world)) out.push(...f.drainBulletins());
   return out;

@@ -1,3 +1,4 @@
+import {withNativeRelayedStatus} from './nativeStatusProvenance';
 import type {Actor} from './actor';
 import type {STATUS_RELAY_IDS,STATUS_RELAYS,relayStatusStat} from './reception';
 import type {sameStory} from './tiers';
@@ -22,8 +23,8 @@ export function nativeRelayStatus(host:NativeStatusRelayHost,sources:NativeStatu
         if (d < reach) { reach = d; nearest = enemy; }
       }
       if (!nearest) continue; // No recipient: the original application lands normally.
-      nearest.applyStatus(args[0], args[1], args[2], owner.name,
-        { ...args[4], casterId: owner.id, relayed: true });
+      withNativeRelayedStatus(nearest,owner,()=>nearest.applyStatus(args[0], args[1], args[2], owner.name,
+        { ...args[4], casterId: owner.id, relayed: true }));
       return true;
     }
     return false;

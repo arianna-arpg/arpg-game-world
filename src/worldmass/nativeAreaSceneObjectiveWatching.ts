@@ -1,4 +1,5 @@
-import type {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
+import {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
+const exactPlayerAttendance=NativeAreaActorAuthority.prototype.isPresentPlayer;
 import {NativeAreaSceneBirthAdmission} from './nativeAreaSceneBirthAdmission';
 import {hasNativeSceneObjectiveBinding} from './nativeSceneObjectives';
 /** Native objective watching on retained physical state and actual local services. */
@@ -61,6 +62,7 @@ export class NativeAreaSceneObjectiveWatching {
   const fields=(provider:()=>object,keys:readonly string[],write=false)=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){return(provider() as Record<string,unknown>)[key];},...(write?{set(v:unknown){(provider() as Record<string,unknown>)[key]=v;}}:{})});};
   const methods=(provider:()=>object,keys:readonly string[])=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){const p=provider() as Record<string,Function>,fn=p[key];if(typeof fn!=='function')throw Error('Missing native objective watching capability: '+key);return(...a:unknown[])=>fn.apply(p,a);}});};
   fields(()=>input.scene,['zone','actors','player']);
+  Object.defineProperty(host,'isPresentLocalPlayer',{enumerable:true,value:()=>Reflect.apply(exactPlayerAttendance,input.authority,[input.scene])});
   fields(()=>input.geometry,['flashes','caveEntrances','waypointPos','walk','exits']);
   methods(()=>input.geometry,['clampPos','findFreeSpot','farPoint','pathField','roofedStructureAt','rayElev','doodadsAt','opaqueAt','markDoodadsChanged']);
   fields(()=>input.objectives,['objectiveDone','objectiveLost','spires','rifts','pyres','digs','cull','offering','procession','heldFixture','objectiveLatch','wave','waveActive','waveTimer','spireReinforceAt'],true);
@@ -87,11 +89,7 @@ export class NativeAreaSceneObjectiveWatching {
  spawnWave(){return this.birthAdmission.run(()=>spawnSceneWave(this.waveHost));}
  sidezoneIdFor(...a:Parameters<World['sidezoneIdFor']>){return sidezonePocketId(...a);}
  updateObjective(...a:Parameters<World['updateObjective']>){
-  return this.birthAdmission.run(()=>{
-   const {authority,scene}=this.input;
-   if(authority.require(scene.player).scene!==scene)throw Error('Objective attendance needs a present area player');
-   return native.sceneUpdateObjective(this.host,...a);
-  });
+  return this.birthAdmission.run(()=>native.sceneUpdateObjective(this.host,...a));
  }
 
  lairAskView(...a:Parameters<World['lairAskView']>){return native.sceneLairAskView(this.host,...a);}

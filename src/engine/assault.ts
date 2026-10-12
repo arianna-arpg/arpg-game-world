@@ -1,5 +1,5 @@
 import type { Actor } from './actor';
-import type { World } from './world';
+import type { NativeAssaultHost } from './nativeAssaultHost';
 import { dist, type Vec2 } from '../core/math';
 import { sameStory } from './tiers';
 import { issueCommand } from './ai';
@@ -29,7 +29,7 @@ export class Assaults {
   private courts = new Map<Actor, Court>();
   private recalls = new Map<Actor, { court: Court; at: number }>();
   private wards = new Map<Actor, Ward>();
-  constructor(private w: World) {}
+  constructor(private w: NativeAssaultHost) {}
   clearAll(): void { for (const c of [...this.courts.values()]) this.clear(c); }
   /** THE HAND-OFF (shard M1, engine/shardUnits.ts): one owner's court cleared now,
    *  in the World it leaves, so this World never tears down a body that walks another. */

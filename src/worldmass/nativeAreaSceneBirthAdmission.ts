@@ -1,15 +1,17 @@
+import {captureNativeActorConstruction} from '../engine/nativeActorConstruction';
 /** Admit only privately attested factory bodies at explicit native insertion points.
  * Raw census identity and native partial writes remain intact. */
 import type {Actor} from '../engine/actor';
-import type {NativeAreaActorAuthority,NativeAreaAuthorityBinding} from './nativeAreaActorAuthority';
+import {NativeAreaActorAuthority,type NativeAreaAuthorityBinding} from './nativeAreaActorAuthority';
 import {NativeAreaScenePopulation,nativeBirthAsyncResult,type NativeSceneCensus} from './nativeAreaScenePopulation';
 export interface NativeSceneBirthAdmissionInput {
  authority:NativeAreaActorAuthority<object>;scene:NativeSceneCensus;population:NativeAreaScenePopulation;
 }
-interface BirthFrame {active:boolean;pending:Set<Actor>;binding:NativeAreaAuthorityBinding<object>;parent:BirthFrame|null}
+interface BirthFrame {readonly finalAdmission:boolean;active:boolean;pending:Set<Actor>;binding:NativeAreaAuthorityBinding<object>;parent:BirthFrame|null}
 interface BirthScopes {population:NativeAreaScenePopulation;top:BirthFrame|null;binding:NativeAreaAuthorityBinding<object>|null}
 // Controllers in the same actual area share a stack, never an ambient depth permission.
 const scopes=new WeakMap<NativeAreaActorAuthority<object>,WeakMap<NativeSceneCensus,BirthScopes>>();
+const finalBirthBinding=NativeAreaActorAuthority.prototype.bindingFor,finalBirthPhysical=NativeAreaActorAuthority.prototype.assertFinalPhysical;
 const createMonsterForAdmission=NativeAreaScenePopulation.prototype.createMonsterForAdmission;
 export class NativeAreaSceneBirthAdmission {
  readonly input:NativeSceneBirthAdmissionInput;
@@ -32,7 +34,7 @@ export class NativeAreaSceneBirthAdmission {
  }
  #active(frame:BirthFrame|null):asserts frame is BirthFrame {
   if(!frame?.active||this.#scope.top!==frame)throw Error('Native population birth needs an active admission operation in its exact top frame');
-  if(this.input.authority.bindingFor(this.input.scene)!==frame.binding)throw Error('Native birth admission authority changed during operation');
+  if((frame.finalAdmission?Reflect.apply(finalBirthBinding,this.input.authority,[this.input.scene]):this.input.authority.bindingFor(this.input.scene))!==frame.binding)throw Error('Native birth admission authority changed during operation');
  }
  /** Select the live callable before arguments; retain its receiver without reading fn.apply. */
  get createMonster():NativeAreaScenePopulation['createMonster']{
@@ -46,34 +48,44 @@ export class NativeAreaSceneBirthAdmission {
    this.input.authority.assertUnclaimed(body);frame.pending.add(body);return body;
   };
  }
+ /** A non-granting exact-frame query for the aggregate's private pre-insertion
+  * stat scope. A matching body shape or another frame never suffices. */
+ isPending(body:Actor):boolean {const frame=this.#scope.top;this.#active(frame);return frame.pending.has(body)&&!this.input.scene.actors.includes(body);}
+ /** Direct native new-Actor expressions mint at the real constructor seam.
+  * The returned identity must be new in this precise synchronous capture. */
+ constructActor(construct:()=>Actor):Actor {const frame=this.#scope.top;this.#active(frame);const result=captureNativeActorConstruction(construct);if(nativeBirthAsyncResult(result.value))throw Error('Native direct birth requires a synchronous constructor');this.#active(frame);const body=result.value;if(!result.created.has(body)||frame.pending.has(body)||this.input.scene.actors.includes(body))throw Error('Native direct birth needs its exact new Actor construction');this.input.authority.assertUnclaimed(body);frame.pending.add(body);return body;}
  /** An explicit hook follows the native push, before any subsequent native effect. */
  admitInserted(body:Actor):void {
   const frame=this.#scope.top;this.#active(frame);
   if(!frame.pending.has(body))throw Error('Native birth insertion needs an unused body from its exact creation scope');
   if(!this.input.scene.actors.includes(body))throw Error('Native birth insertion needs its actual inserted body');
   this.input.authority.assertUnclaimed(body);
-  this.input.authority.claim(frame.binding,[body]);frame.pending.delete(body);
+  Reflect.apply(NativeAreaActorAuthority.prototype.claimInserted,this.input.authority,[frame.binding,body]);frame.pending.delete(body);
  }
  #publish(frame:BirthFrame):void{
   this.#active(frame);
   const born=[...frame.pending].filter(body=>this.input.scene.actors.includes(body));
   if(born.length){this.input.authority.claim(frame.binding,born);for(const body of born)frame.pending.delete(body);}
  }
- run<T>(operation:()=>T):T{
-  const {authority,scene}=this.input,scope=this.#scope,binding=authority.bindingFor(scene);
+ run<T>(operation:()=>T):T{return this.#run(operation,false);}
+ /** The complete aggregate already requires ordinary physical descriptors. Its
+  * admission checks cannot invoke selected census iterators around native work. */
+ runFinal<T>(operation:()=>T):T{return this.#run(operation,true);}
+ #run<T>(operation:()=>T,finalAdmission:boolean):T{
+  const {authority,scene}=this.input,scope=this.#scope,binding=finalAdmission?Reflect.apply(finalBirthBinding,authority,[scene]):authority.bindingFor(scene);
   if(scope.binding&&scope.binding!==binding)throw Error('Native birth admission cannot reuse a retired authority');
   scope.binding=binding;
   // A genuinely recorded outer birth may precede entry into another local driver.
   if(scope.top)this.#publish(scope.top);
-  authority.assertAdmitted(scene);
-  const frame:BirthFrame={active:true,pending:new Set(),binding,parent:scope.top};scope.top=frame;let completed=false;
+  if(finalAdmission)Reflect.apply(finalBirthPhysical,authority,[binding]);else authority.assertAdmitted(scene);
+  const frame:BirthFrame={finalAdmission,active:true,pending:new Set(),binding,parent:scope.top};scope.top=frame;let completed=false;
   try{
    const result=operation();
    if(nativeBirthAsyncResult(result))throw Error('Native birth admission requires a synchronous operation');
    completed=true;return result;
   }finally{
    let finalized=false;
-   try{this.#publish(frame);authority.assertAdmitted(scene);finalized=true;}
+   try{this.#publish(frame);if(finalAdmission)Reflect.apply(finalBirthPhysical,authority,[binding]);else authority.assertAdmitted(scene);finalized=true;}
    finally{
     frame.active=false;scope.top=frame.parent;
     // Native procession creation returns uninserted bodies to its active outer

@@ -6,7 +6,7 @@ import { QUESTS } from '../quests/defs';
 /** Authored rescue objectives use ordinary NPC bodies, dialogue and account
  * receipts. A return reward, a random kill or a developer-spawned boss cannot
  * free a prisoner: only the owning quest's completed ground can do so. */
-export interface NativeQuestRescueHost extends Pick<World,"account"|"accountDirty"|"activeQuests"|"actors"|"clientActionHook"|"completedObjectives"|"completedQuests"|"createMonster"|"findFreeSpot"|"ledger"|"localSeat"|"markMetaDirty"|"metaProgressionActive"|"notice"|"player"|"questDefOf"|"scene"|"seats"|"withQuestHand"|"zone"> {admitBirth?(body:World['player']):void;}
+export interface NativeQuestRescueHost extends Pick<World,"account"|"accountDirty"|"activeQuests"|"actors"|"clientActionHook"|"completedObjectives"|"completedQuests"|"createMonster"|"findFreeSpot"|"ledger"|"localSeat"|"markMetaDirty"|"metaProgressionActive"|"notice"|"player"|"questDefOf"|"scene"|"seats"|"withQuestHand"|"zone"> {admitBirth?(body:World['player']):void;isPresentLocalPlayer?():boolean;}
 export class QuestRescues {
   constructor(private readonly w: NativeQuestRescueHost) {}
 
@@ -75,6 +75,12 @@ export class QuestRescues {
     const tag = `quest_rescue:${q.id}`;
     let npc = w.actors.find(a => a.tag === tag && !a.dead);
     if (!npc) {
+      // A retained empty area may maintain its captive or use its real native
+      // boss anchor. It must not borrow a departed player's destination position.
+      if (w.isPresentLocalPlayer?.() === false) {
+        const bossId = w.zone.objective.kind === 'boss' ? w.zone.objective.id : undefined;
+        if (!w.actors.find(a => a.defId === bossId)) return;
+      }
       npc = w.createMonster(r.npc, 1, 'player');
       const bossId = w.zone.objective.kind === 'boss' ? w.zone.objective.id : undefined;
       const boss = w.actors.find(a => a.defId === bossId);

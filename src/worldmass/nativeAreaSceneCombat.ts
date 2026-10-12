@@ -1,0 +1,2212 @@
+import {NativeAreaSceneAI} from './nativeAreaSceneAI';
+import type {NativeSceneAIHost} from '../engine/nativeSceneAIHost';
+import type {NativeSceneAIPreparationHost} from '../engine/nativeSceneAIPreparation';
+import type {Seat} from '../engine/world';
+import * as inputCore from '../engine/nativeSceneInput';
+import {NativeAreaSceneInput} from './nativeAreaSceneInput';
+import {NativeAreaCampaignInputState} from './nativeAreaCampaignInputState';
+import {assertNativeRetainedMassState,readNativeRetainedMassRuntime,readNativeRetainedMassAway} from './nativeAreaRetainedMassState';
+import * as localControllers from '../engine/nativeSceneLocalControllers';
+import * as actorTick from '../engine/nativeSceneActorTick';
+import * as effectsTick from '../engine/nativeSceneEffectsTick';
+import * as frameCallbacks from '../engine/nativeSceneFrameCallbacks';
+import * as frameServices from '../engine/nativeSceneFrameServices';
+import * as frameAreaEvents from '../engine/nativeSceneFrameAreaEvents';
+import * as campaignEvents from '../engine/nativeSceneCampaignEvents';
+import * as frameTravel from '../engine/nativeSceneFrameTravel';
+import * as frameCore from '../engine/nativeSceneFrame';
+import * as directoryCore from '../engine/nativeSceneDirectory';
+import type {NativeSceneFrameHost} from '../engine/nativeSceneFrameHost';
+import {NativeAreaCampaignFrameState} from './nativeAreaCampaignFrameState';
+import {sceneIsAmbientTag,scenePartyScaleCount,type NativeSceneServiceHost} from '../engine/nativeScenePopulation';
+import * as motion from '../engine/nativeSceneCombatMotion';
+import {observeNativeSource} from '../engine/nativeCombatRecordObservation';
+/** The actual retained combat composition. Queue stepping and publication are explicit. */
+import {isNativeWorld,type World} from '../engine/world';
+import type {Actor} from '../engine/actor';
+import {NativeAreaSceneAssembly} from './nativeAreaSceneAssembly';
+import {NativeAreaScenePresence} from './nativeAreaScenePresence';
+import {NativeAreaSceneProgression} from './nativeAreaSceneProgression';
+import {NativeAreaSceneQuests} from './nativeAreaSceneQuests';
+import {NativeAreaSceneQuestInteraction} from './nativeAreaSceneQuestInteraction';
+import {NativeAreaSceneObjectiveWatching} from './nativeAreaSceneObjectiveWatching';
+import {NativeAreaActorAuthority,type NativeAreaAuthorityBinding} from './nativeAreaActorAuthority';
+import {NativeAreaMaddenLedger,assertNativeMaddenLedger} from './nativeAreaMaddenLedger';
+import type {NativeAreaOngoingCampaign} from './nativeAreaSceneOngoing';
+import {NativeAreaSceneCombatCampaign} from './nativeAreaSceneCombatCampaign';
+import {NativeAreaSceneCombatArena} from './nativeAreaSceneCombatArena';
+import {NativeAreaSceneCombatControl} from './nativeAreaSceneCombatControl';
+import {NativeAreaSceneCampaignTransitions} from './nativeAreaSceneCampaignTransitions';
+import {NativeAreaSceneCampaignFrame,type NativeAreaCampaignFrameHost} from './nativeAreaSceneCampaignFrame';
+import {isNativeAreaSceneTransitionCoordinator,NativeAreaSceneTransitionCoordinator} from './nativeAreaSceneTransitionCoordinator';
+import {NativeAreaSceneCombatRuntimeState} from './nativeAreaSceneCombatRuntimeState';
+import {createNativeAreaCombatOperation,type NativeAreaCombatOperation,type NativeCombatActivation} from './nativeAreaCombatOperation';
+import type {NativeSceneCombatHost} from '../engine/nativeSceneCombatHost';
+import type {NativeAssaultHost} from '../engine/nativeAssaultHost';
+import type {NativeSceneCombatContextHost} from '../engine/nativeSceneCombatContext';
+import {sceneForwardSummonSockets} from '../engine/nativeSceneSummonPreparation';
+import {sceneShowSkillArrival} from '../engine/nativeSceneSkillArrival';
+import {NativeAreaSceneTethers} from "./nativeAreaSceneTethers";
+import {NativeAreaSceneRestoration} from "./nativeAreaSceneRestoration";
+import {NativeAreaSceneCastingPreparation} from "./nativeAreaSceneCastingPreparation";
+import {NativeAreaSceneDisplacement} from "./nativeAreaSceneDisplacement";
+import {NativeAreaSceneCombatState} from "./nativeAreaSceneCombatState";
+import {NativeAreaSceneDefensePreparation} from "./nativeAreaSceneDefensePreparation";
+import {NativeAreaSceneProjectiles} from "./nativeAreaSceneProjectiles";
+import {NativeAreaSceneKillAftermath} from "./nativeAreaSceneKillAftermath";
+import {NativeAreaSceneGroundFollowUps} from "./nativeAreaSceneGroundFollowUps";
+import {NativeAreaSceneSummonPreparation} from "./nativeAreaSceneSummonPreparation";
+import * as core0 from '../engine/nativeSceneCombatCasting';
+import * as core1 from '../engine/nativeSceneCombatResolution';
+import * as core2 from '../engine/nativeSceneCombatSpawning';
+import * as core3 from '../engine/nativeSceneCombatContext';
+import * as core4 from '../engine/nativeSceneCombatEvents';
+export interface NativeAreaSceneCombatInput {assembly:NativeAreaSceneAssembly;progression:NativeAreaSceneProgression;quests:NativeAreaSceneQuests;questInteraction:NativeAreaSceneQuestInteraction;watching:NativeAreaSceneObjectiveWatching;authority:NativeAreaActorAuthority<NativeAreaCombatServices>;campaign:NativeAreaOngoingCampaign;characterWriter:World;maddenLedger:NativeAreaMaddenLedger;coordinator:NativeAreaSceneTransitionCoordinator}
+export interface NativeAreaCombatServices {readonly ai:NativeAreaSceneAI;readonly inputFrame:NativeAreaSceneInput;readonly combat:NativeAreaSceneCombat;readonly progression:NativeAreaSceneProgression;readonly loot:NativeAreaSceneAssembly['lootController'];readonly objective:NativeAreaSceneAssembly['objectiveController'];readonly geometry:NativeAreaSceneAssembly['input']['geometry'];readonly maddenLedger:NativeAreaMaddenLedger;readonly campaignOwner:NativeAreaSceneCombatCampaign;readonly combatArena:NativeAreaSceneCombatArena;readonly control:NativeAreaSceneCombatControl;readonly campaignTransitions:NativeAreaSceneCampaignTransitions;readonly campaignFrame:NativeAreaSceneCampaignFrame;readonly tethers:NativeAreaSceneTethers;readonly restoration:NativeAreaSceneRestoration;readonly castingPreparation:NativeAreaSceneCastingPreparation;readonly displacement:NativeAreaSceneDisplacement;readonly combatState:NativeAreaSceneCombatState;readonly defensePreparation:NativeAreaSceneDefensePreparation;readonly projectiles:NativeAreaSceneProjectiles;readonly killAftermath:NativeAreaSceneKillAftermath;readonly groundFollowUps:NativeAreaSceneGroundFollowUps;readonly summonPreparation:NativeAreaSceneSummonPreparation;}
+type TransferredBuff=Parameters<World['treeBuffSources']['get']>[0];
+interface ActorControllerPacket {source:NativeAreaSceneCombat;bond:unknown;grants:unknown;clocks:unknown;buffs:[TransferredBuff,NonNullable<ReturnType<World['treeBuffSources']['get']>>][];strike:ReturnType<World['strikeReleaseBodies']['get']>}
+const controllerTransfers=new WeakMap<object,WeakMap<Actor,ActorControllerPacket>>();
+type Host=NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
+type Binding<T>={get:()=>T;set?:(value:T)=>void};type Bindings={[K in keyof Host]:Binding<Host[K]>};
+function field<O extends object,K extends keyof O>(owner:()=>O,key:K):Binding<O[K]>{return {get:()=>owner()[key],set:value=>{owner()[key]=value;}};}
+function method<O extends object,K extends keyof O>(owner:()=>O,key:K):{get:()=>O[K]}{return {get:()=>{const receiver=owner(),fn=receiver[key];return typeof fn==='function'?((...args:unknown[])=>Reflect.apply(fn,receiver,args)) as O[K]:fn;}};}
+const actualCombats=new WeakSet<object>();
+const exactPlayerAttendance=NativeAreaActorAuthority.prototype.isPresentPlayer;
+const exactActorAttendance=NativeAreaActorAuthority.prototype.isPresentActor;
+function presentationData(owner:object,key:PropertyKey):unknown{const d=Object.getOwnPropertyDescriptor(owner,key);if(!d||!Object.hasOwn(d,'value'))throw Error('Native presentation needs actual ordinary writer/seat fields');return d.value;}
+const exactPhysicalSeats=NativeAreaActorAuthority.prototype.physicalSeats;
+export function isNativeAreaSceneCombat(value:unknown):value is NativeAreaSceneCombat{return !!value&&typeof value==='object'&&actualCombats.has(value);}
+export class NativeAreaSceneCombat {
+ readonly inputFrame:NativeAreaSceneInput;
+ readonly input:Readonly<NativeAreaSceneCombatInput>;readonly runtimeState:NativeAreaSceneCombatRuntimeState;
+ readonly services:NativeAreaCombatServices;readonly campaignOwner:NativeAreaSceneCombatCampaign;readonly combatArena:NativeAreaSceneCombatArena;readonly control:NativeAreaSceneCombatControl;readonly campaignTransitions:NativeAreaSceneCampaignTransitions;readonly campaignFrame:NativeAreaSceneCampaignFrame;
+  readonly tethers:NativeAreaSceneTethers;
+ readonly restoration:NativeAreaSceneRestoration;
+ readonly castingPreparation:NativeAreaSceneCastingPreparation;
+ readonly displacement:NativeAreaSceneDisplacement;
+ readonly combatState:NativeAreaSceneCombatState;
+ readonly defensePreparation:NativeAreaSceneDefensePreparation;
+ readonly projectiles:NativeAreaSceneProjectiles;
+ readonly killAftermath:NativeAreaSceneKillAftermath;
+ readonly groundFollowUps:NativeAreaSceneGroundFollowUps;
+ readonly summonPreparation:NativeAreaSceneSummonPreparation;
+ readonly #publishedArea:Function;
+ readonly ai:NativeAreaSceneAI;
+ readonly #operation:NativeAreaCombatOperation;readonly #host:Host;
+ readonly #activationReady:()=>boolean;
+ readonly #frameCallbacks:Pick<Host,'collectDeedDot'|'doodadEffects'|'incursionEvents'>;
+ readonly #populationHost:NativeSceneServiceHost;
+ applyInputs(...args:Parameters<World['applyInputs']>):void{this.inputFrame.applyInputs(...args);}
+ passInputTime(...args:Parameters<World['passInputTime']>):void{this.inputFrame.passInputTime(...args);}
+ useMetaSkill(...args:Parameters<World['useMetaSkill']>):boolean{return this.#operation.enter({permission:'proc',sources:[args[0]]},()=>inputCore.sceneUseMetaSkill(this.#host,...args));}
+ get scene(){return this.input.assembly.input.scene;}get state(){return this.input.progression.input.state;}
+ constructor(raw:NativeAreaSceneCombatInput){
+  const writerSlot=raw&&Object.getOwnPropertyDescriptor(raw,'characterWriter');if(!writerSlot||!Object.hasOwn(writerSlot,'value'))throw Error('Native combat needs its own actual character writer');assertNativeRetainedMassState(writerSlot.value);
+  const roots=Object.create(null);for(const key of ['assembly','progression','quests','questInteraction','watching','authority','campaign','characterWriter','maddenLedger','coordinator']){const d=raw&&Object.getOwnPropertyDescriptor(raw,key);if(!d||!Object.hasOwn(d,'value')||!d.value||typeof d.value!=='object')throw Error('Native combat needs own actual root: '+key);roots[key]=d.value;}
+  const input=this.input=Object.freeze(roots) as Readonly<NativeAreaSceneCombatInput>,{assembly,progression,quests,questInteraction,watching,authority,campaign,maddenLedger}=input;
+  if(!(assembly instanceof NativeAreaSceneAssembly)||!(progression instanceof NativeAreaSceneProgression)||!(quests instanceof NativeAreaSceneQuests)||!(watching instanceof NativeAreaSceneObjectiveWatching)||!(authority instanceof NativeAreaActorAuthority))throw Error('Native combat needs actual area owners');
+  if(!(questInteraction instanceof NativeAreaSceneQuestInteraction)||questInteraction.input.quests!==quests||questInteraction.input.campaign!==campaign)throw Error('Native combat needs its actual area quest interaction');
+  const {scene,geometry,population,registry}=assembly.input;
+  if(progression.input.scene!==scene||quests.input.scene!==scene||watching.input.scene!==scene||progression.input.authority!==authority||quests.input.authority!==authority||watching.input.authority!==authority||authority.campaign!==campaign||assembly.input.campaign!==campaign||progression.input.campaign!==campaign||quests.input.campaign!==campaign||watching.input.campaign!==campaign)throw Error('Native combat needs identical scene and campaign roots');
+  if(!isNativeWorld(input.characterWriter))throw Error('Native combat needs the actual character writer');
+  if(!isNativeAreaSceneTransitionCoordinator(input.coordinator)||input.coordinator.input.authority!==authority||input.coordinator.input.campaign!==campaign||input.coordinator.input.characterWriter!==input.characterWriter)throw Error('Native combat needs its actual campaign coordinator');
+  this.#publishedArea=Object.getOwnPropertyDescriptor(NativeAreaSceneTransitionCoordinator.prototype,'published')!.get!;
+  assertNativeMaddenLedger(maddenLedger,campaign,authority);
+  assertNativeRetainedMassState(input.characterWriter);
+  const phase=Object.getOwnPropertyDescriptor(NativeAreaSceneAssembly.prototype,'phase')!.get!,active=Object.getOwnPropertyDescriptor(NativeAreaScenePresence.prototype,'active')!.get!;
+  this.#activationReady=()=>Reflect.apply(phase,input.assembly,[])==='born'&&Reflect.apply(active,input.assembly.scenePresence,[]);
+  actualCombats.add(this);this.#operation=createNativeAreaCombatOperation(this);
+  const host=this.#host={} as Host;
+  this.runtimeState=new NativeAreaSceneCombatRuntimeState(host,campaign);
+  const serviceHost=Object.create(assembly.objectiveServices) as NativeSceneServiceHost;
+  Object.defineProperty(serviceHost,'seats',{get:()=>assembly.scenePresence.seats});
+  Object.defineProperty(serviceHost,'partyScaleCount',{value:(at?:Parameters<World['partyScaleCount']>[0])=>scenePartyScaleCount(serviceHost,at)});
+  this.#populationHost=Object.freeze(serviceHost);
+  this.#frameCallbacks={collectDeedDot:frameCallbacks.createNativeFrameCollectDeedDot(host),doodadEffects:frameCallbacks.createNativeFrameDoodadEffects(host),incursionEvents:frameCallbacks.createNativeFrameIncursionEvents(host)};
+  this.tethers=new NativeAreaSceneTethers({scene,campaign,authority,state:{tethers:[]}});
+  this.restoration=new NativeAreaSceneRestoration({scene,geometry,objective:assembly.objectiveController,tethers:this.tethers,campaign,authority});
+  this.castingPreparation=new NativeAreaSceneCastingPreparation({scene,campaign,authority,restoration:this.restoration,state:{comboCursors:new WeakMap(),relocationHosts:new WeakMap()}});
+  this.displacement=new NativeAreaSceneDisplacement({scene,geometry,runtimeBirth:registry.input.birth,campaign,authority});
+  this.combatState=new NativeAreaSceneCombatState({scene,population,progression,campaign,authority});
+  this.defensePreparation=new NativeAreaSceneDefensePreparation({scene,geometry,campaign,authority});
+  this.projectiles=new NativeAreaSceneProjectiles({scene,population,progression,campaign,authority});
+  this.killAftermath=new NativeAreaSceneKillAftermath({scene,geometry,loot:assembly.lootController,campaign,authority,state:{remnants:[],deathBursts:[]}});
+  this.groundFollowUps=new NativeAreaSceneGroundFollowUps({scene,progression,castingPreparation:this.castingPreparation,campaign,authority,ledger:maddenLedger});
+  this.summonPreparation=new NativeAreaSceneSummonPreparation({scene,population,progression,campaign,authority});
+  this.campaignOwner=new NativeAreaSceneCombatCampaign({...input,combat:this,entry:this.#operation.ownerEntry(),hooks:this.#operation.ownerHooks()});
+  this.combatArena=new NativeAreaSceneCombatArena({combat:this,campaignOwner:this.campaignOwner,entry:this.#operation.ownerEntry(),hooks:this.#operation.ownerHooks()});
+  this.control=new NativeAreaSceneCombatControl({combat:this,campaignOwner:this.campaignOwner,coordinator:input.coordinator,entry:this.#operation.ownerEntry(),hooks:this.#operation.ownerHooks()});
+  this.campaignTransitions=new NativeAreaSceneCampaignTransitions({combat:this,coordinator:input.coordinator,entry:this.#operation.ownerEntry()});
+  this.campaignFrame=new NativeAreaSceneCampaignFrame({combat:this,coordinator:input.coordinator,entry:this.#operation.ownerEntry(),fixedHost:host});
+  this.inputFrame=new NativeAreaSceneInput(this,this.#operation.ownerEntry(),host);
+  this.ai=new NativeAreaSceneAI(this,this.#operation.ownerEntry(),host);
+  this.services=Object.freeze({ai:this.ai,inputFrame:this.inputFrame,campaignFrame:this.campaignFrame,control:this.control,campaignTransitions:this.campaignTransitions,combatArena:this.combatArena,combat:this,progression,loot:assembly.lootController,objective:assembly.objectiveController,geometry,maddenLedger,campaignOwner:this.campaignOwner,tethers:this.tethers,restoration:this.restoration,castingPreparation:this.castingPreparation,displacement:this.displacement,combatState:this.combatState,defensePreparation:this.defensePreparation,projectiles:this.projectiles,killAftermath:this.killAftermath,groundFollowUps:this.groundFollowUps,summonPreparation:this.summonPreparation});
+  const bindings=this.bindings();
+  for(const key of Object.keys(bindings) as (keyof Bindings)[])Object.defineProperty(host,key,{enumerable:true,...bindings[key]});
+  Object.freeze(host);for(const key of ['ai','input','runtimeState','services','campaignOwner','combatArena','control','campaignTransitions','campaignFrame','inputFrame',"tethers","restoration","castingPreparation","displacement","combatState","defensePreparation","projectiles","killAftermath","groundFollowUps","summonPreparation"])Object.defineProperty(this,key,{writable:false,configurable:false});
+ }
+ register(binding:NativeAreaAuthorityBinding<NativeAreaCombatServices>):void{if(binding.scene!==this.scene)throw Error('Native combat registration has foreign scene');for(const key of Object.keys(this.services) as (keyof NativeAreaCombatServices)[])if(binding.services[key]!==this.services[key])throw Error('Native combat registration has mismatched actual owner');this.#operation.bind(binding,[this.ai,this,this.inputFrame,this.input.progression,this.input.assembly.lootController,this.input.assembly.objectiveController,this.campaignOwner,this.combatArena,this.control,this.campaignTransitions,this.campaignFrame,this.tethers,this.restoration,this.castingPreparation,this.displacement,this.combatState,this.defensePreparation,this.projectiles,this.killAftermath,this.groundFollowUps,this.summonPreparation,this.input.assembly.input.ecology]);}
+ prepareActivation(cohort:readonly Actor[]):NativeCombatActivation {return this.#operation.prepareActivation(cohort);}
+ assertActivation(token:NativeCombatActivation,cohort:readonly Actor[]):void {this.#operation.assertActivation(token,cohort);}
+ activate(cohort:readonly Actor[],token:NativeCombatActivation):void {if(!this.#activationReady())throw Error('Native combat activation needs actual born admitted area');const admitted=this.#operation.activate(this.#host,cohort,token);if(admitted.includes(this.input.campaign.localSeat.actor))this.campaignOwner.bindCombatDeeds();}
+ /** Actual scheduler endpoints supply operation context to their retained leaves.
+  * Initial activation replaces native boot callbacks only for the admitted local hero;
+  * adoption of an already wounded World tracker is not implemented here. */
+ updateAI(dt:number):void {this.ai.update(dt);}
+ updateAIActor(actor:Actor,dt:number):void {this.ai.updateActor(actor,dt);}
+ updateObjective(dt:number):void {this.#operation.enter({physical:[],permission:'physical'},()=>this.input.watching.updateObjective(dt));}
+ /** Single-writer presentation follows its physically present published audience. */
+ isPresentationArea():boolean {const seat=presentationData(this.input.characterWriter,'localSeat') as Seat,actor=presentationData(seat,'actor') as Actor;return Reflect.apply(this.#publishedArea,this.input.coordinator,[]).combat===this&&Reflect.apply(exactActorAttendance,this.input.authority,[this.scene,actor]);}
+ isLocalPresentationActor(actor:Actor):boolean {const seat=presentationData(this.input.characterWriter,'localSeat') as Seat;return actor===presentationData(seat,'actor')&&this.isPresentationArea();}
+ isPresentLocalPlayer():boolean {return Reflect.apply(exactPlayerAttendance,this.input.authority,[this.scene]);}
+ isPresentActor(actor:Actor):boolean {return Reflect.apply(exactActorAttendance,this.input.authority,[this.scene,actor]);}
+ frameSeats():World['seats'] {return Reflect.apply(exactPhysicalSeats,this.input.authority,[this.scene]);}
+ updateQuestGiver(dt:number):void {this.#operation.enter({permission:'physical'},()=>this.input.questInteraction.updateQuestGiver(dt));}
+ /** The coordinator passes the exact post-ejection physical cohort to both
+  * ends. Only actor-specific controller rows move; native queues stay local. */
+ transitionDeparture(cohort:readonly Actor[]):void {this.#operation.enter({physical:cohort,permission:'physical'},()=>{
+  let packets=controllerTransfers.get(this.input.authority);if(!packets)controllerTransfers.set(this.input.authority,packets=new WeakMap());
+  const p=this.input.progression,r=this.runtimeState;
+  for(const actor of cohort){const prior=packets.get(actor);if(prior&&prior.source!==this)throw Error('Native controller transfer already belongs to another departure');
+   const bond=p.companionBonds.exportBond(actor),grants=p.companionGrants.lift(actor),clocks=r.replenishment.lift(actor);
+   const packet:ActorControllerPacket=prior??{source:this,bond:undefined,grants:undefined,clocks:undefined,buffs:[],strike:undefined};if(bond!==undefined)packet.bond=bond;if(grants!==undefined)packet.grants=grants;if(clocks!==undefined)packet.clocks=clocks;
+   packets.set(actor,packet);
+   r.assaults.clearOwner(actor);p.challenges.clearOwner(actor);p.attackSequences.clearOwner(actor);p.guardArts.clearOwner(actor);
+   r.satellites.retire(actor);r.auroras.retire(actor);r.guardians.retire(actor);r.creepers.retire(actor);
+   for(const buff of actor.buffs.values()){const source=p.input.state.treeBuffSources.get(buff.def);if(source!==undefined){packet.buffs.push([buff.def,source]);p.input.state.treeBuffSources.delete(buff.def);}}
+   if(r.strikeReleaseBodies.has(actor)){packet.strike=r.strikeReleaseBodies.get(actor);r.strikeReleaseBodies.delete(actor);}
+   // Native travel clears queued meta commands. Retention cancels only the
+   // departing body's commands while other local actors keep their own queues.
+   this.#operation.discardPendingMetaCommands(actor);
+   this.castingPreparation.input.state.comboCursors.delete(actor);r.dotAccum.delete(actor.id);
+   
+  }
+ });}
+ transitionArrival(cohort:readonly Actor[]):void {this.#operation.enter({physical:cohort,permission:'physical'},()=>{
+  const packets=controllerTransfers.get(this.input.authority),p=this.input.progression,r=this.runtimeState;
+  for(const actor of cohort){const packet=packets?.get(actor);if(!packet||packet.source===this)throw Error('Native controller arrival needs an exact foreign departure receipt');
+   p.companionBonds.importBond(actor,packet.bond);p.companionGrants.seat(actor,packet.grants);r.replenishment.seat(actor,packet.clocks);
+   for(const [def,source]of packet.buffs)p.input.state.treeBuffSources.set(def,source);
+   if(packet.strike!==undefined)r.strikeReleaseBodies.set(actor,packet.strike);packets!.delete(actor);
+  }
+  const seats=this.input.authority.seatsFor(this.input.authority.bindingFor(this.scene));
+  for(const seat of seats)if(cohort.includes(seat.actor))p.recalcSeat(seat);
+  p.companionBonds.refresh();for(const actor of cohort)p.guardArts.sync(actor);
+  if(cohort.includes(this.input.campaign.localSeat.actor))this.campaignOwner.bindCombatDeeds();
+ });}
+ castReqRefusal(...args:Parameters<World['castReqRefusal']>):ReturnType<World['castReqRefusal']>{const owner=this.control,fn=owner.castReqRefusal;return Reflect.apply(fn,owner,args);}
+ grabHandoff(...args:Parameters<World['grabHandoff']>):ReturnType<World['grabHandoff']>{const owner=this.control,fn=owner.grabHandoff;return Reflect.apply(fn,owner,args);}
+ grabSeize(...args:Parameters<World['grabSeize']>):ReturnType<World['grabSeize']>{const owner=this.control,fn=owner.grabSeize;return Reflect.apply(fn,owner,args);}
+ possessSeize(...args:Parameters<World['possessSeize']>):ReturnType<World['possessSeize']>{const owner=this.control,fn=owner.possessSeize;return Reflect.apply(fn,owner,args);}
+ shapeshiftPress(...args:Parameters<World['shapeshiftPress']>):ReturnType<World['shapeshiftPress']>{const owner=this.control,fn=owner.shapeshiftPress;return Reflect.apply(fn,owner,args);}
+ openTownPortal(...args:Parameters<World['openTownPortal']>):ReturnType<World['openTownPortal']>{const owner=this.control,fn=owner.openTownPortal;return Reflect.apply(fn,owner,args);}
+ seatEject(...args:Parameters<World['seatEject']>):ReturnType<World['seatEject']>{const owner=this.control,fn=owner.seatEject;return Reflect.apply(fn,owner,args);}
+ onPlayerDown(...args:Parameters<World['onPlayerDown']>):ReturnType<World['onPlayerDown']>{const owner=this.campaignTransitions,fn=owner.onPlayerDown;return Reflect.apply(fn,owner,args);}
+ routePitFall(...args:Parameters<World['routePitFall']>):ReturnType<World['routePitFall']>{const owner=this.campaignTransitions,fn=owner.routePitFall;return Reflect.apply(fn,owner,args);}
+ routeSkyFalls(...args:Parameters<World['routeSkyFalls']>):ReturnType<World['routeSkyFalls']>{const owner=this.campaignTransitions,fn=owner.routeSkyFalls;return Reflect.apply(fn,owner,args);}
+ drainSurvival(...args:Parameters<World['drainSurvival']>):ReturnType<World['drainSurvival']>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>motion.sceneDrainSurvival(this.#host,...args));}
+ imminentThreatTo(...args:Parameters<World['imminentThreatTo']>):ReturnType<World['imminentThreatTo']>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>motion.sceneImminentThreatTo(this.#host,...args));}
+ plantDressAt(...args:Parameters<World['plantDressAt']>):ReturnType<World['plantDressAt']>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>motion.scenePlantDressAt(this.#host,...args));}
+ moveActor(...args:Parameters<World['moveActor']>):ReturnType<World['moveActor']>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>motion.sceneMoveActor(this.#host,...args));}
+ slipAway(...args:Parameters<World['slipAway']>):ReturnType<World['slipAway']>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>motion.sceneSlipAway(this.#host,...args));}
+ survivalDrainRate(...args:Parameters<World['survivalDrainRate']>):ReturnType<World['survivalDrainRate']>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>motion.sceneSurvivalDrainRate(this.#host,...args));}
+ despawnPartsOf(...args:Parameters<World['despawnPartsOf']>):ReturnType<World['despawnPartsOf']>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>motion.sceneDespawnPartsOf(this.#host,...args));}
+ markSeatMoved(...args:Parameters<World['markSeatMoved']>):ReturnType<World['markSeatMoved']>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>motion.sceneMarkSeatMoved(this.#host,...args));}
+ steppedClamp(...args:Parameters<World['steppedClamp']>):ReturnType<World['steppedClamp']>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>motion.sceneSteppedClamp(this.#host,...args));}
+ resolveBoundary(...args:Parameters<World['resolveBoundary']>):ReturnType<World['resolveBoundary']>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>motion.sceneResolveBoundary(this.#host,...args));}
+ windAt(...args:Parameters<World['windAt']>):ReturnType<World['windAt']>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>motion.sceneWindAt(this.#host,...args));}
+ zoneWind(...args:Parameters<World['zoneWind']>):ReturnType<World['zoneWind']>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>motion.sceneZoneWind(this.#host,...args));}
+ snowCoverAt(...args:Parameters<World['snowCoverAt']>):ReturnType<World['snowCoverAt']>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>motion.sceneSnowCoverAt(this.#host,...args));}
+ voyageShip(...args:Parameters<World['voyageShip']>):ReturnType<World['voyageShip']>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>motion.sceneVoyageShip(this.#host,...args));}
+ get sailing():World['sailing']{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>motion.sceneSailing(this.#host));}
+ noteActorInsertion(_body:Actor):void{this.runtimeState.actorGridRev++;}
+ castSealed(...args:Parameters<World["castSealed"]>):ReturnType<World["castSealed"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneCastSealed(this.#host,...args));}
+ resolveTargeting(...args:Parameters<World["resolveTargeting"]>):ReturnType<World["resolveTargeting"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneResolveTargeting(this.#host,...args));}
+ useSkill(...args:Parameters<World["useSkill"]>):ReturnType<World["useSkill"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneUseSkill(this.#host,...args));}
+ plantSpiritTotem(...args:Parameters<World["plantSpiritTotem"]>):ReturnType<World["plantSpiritTotem"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.scenePlantSpiritTotem(this.#host,...args));}
+ castPress(...args:Parameters<World["castPress"]>):ReturnType<World["castPress"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneCastPress(this.#host,...args));}
+ executeSkill(...args:Parameters<World["executeSkill"]>):ReturnType<World["executeSkill"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>this.#operation.withCastSource(args[0],()=>core0.sceneExecuteSkill(this.#host,...args)));}
+ recordCast(...args:Parameters<World["recordCast"]>):ReturnType<World["recordCast"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneRecordCast(this.#host,...args));}
+ clampGroundTarget(...args:Parameters<World["clampGroundTarget"]>):ReturnType<World["clampGroundTarget"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneClampGroundTarget(this.#host,...args));}
+ echoToClones(...args:Parameters<World["echoToClones"]>):ReturnType<World["echoToClones"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneEchoToClones(this.#host,...args));}
+ activateAura(...args:Parameters<World["activateAura"]>):ReturnType<World["activateAura"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneActivateAura(this.#host,...args));}
+ aiHoldOf(...args:Parameters<World["aiHoldOf"]>):ReturnType<World["aiHoldOf"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core0.sceneAiHoldOf(this.#host,...args));}
+ releasePrimedPours(...args:Parameters<World["releasePrimedPours"]>):ReturnType<World["releasePrimedPours"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneReleasePrimedPours(this.#host,...args));}
+ conjureGrantsFor(...args:Parameters<World["conjureGrantsFor"]>):ReturnType<World["conjureGrantsFor"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneConjureGrantsFor(this.#host,...args));}
+ affordedDest(...args:Parameters<World["affordedDest"]>):ReturnType<World["affordedDest"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneAffordedDest(this.#host,...args));}
+ aiNeedsFireLine(...args:Parameters<World["aiNeedsFireLine"]>):ReturnType<World["aiNeedsFireLine"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneAiNeedsFireLine(this.#host,...args));}
+ actorTurnRate(...args:Parameters<World["actorTurnRate"]>):ReturnType<World["actorTurnRate"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneActorTurnRate(this.#host,...args));}
+ castTurnRate(...args:Parameters<World["castTurnRate"]>):ReturnType<World["castTurnRate"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneCastTurnRate(this.#host,...args));}
+ updateCasting(...args:Parameters<World["updateCasting"]>):ReturnType<World["updateCasting"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneUpdateCasting(this.#host,...args));}
+ tickChannelSupports(...args:Parameters<World["tickChannelSupports"]>):ReturnType<World["tickChannelSupports"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneTickChannelSupports(this.#host,...args));}
+ triggerEligible(...args:Parameters<World["triggerEligible"]>):ReturnType<World["triggerEligible"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core0.sceneTriggerEligible(this.#host,...args));}
+ endCarom(...args:Parameters<World["endCarom"]>):ReturnType<World["endCarom"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneEndCarom(this.#host,...args));}
+ weightedPick(...args:Parameters<World["weightedPick"]>):ReturnType<World["weightedPick"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core1.sceneWeightedPick(this.#host,...args));}
+ throngEvolutionHit(...args:Parameters<World["throngEvolutionHit"]>):ReturnType<World["throngEvolutionHit"]>{return this.#operation.enter({permission:'proc',physical:[args[1]],sources:[args[0]]},()=>core1.sceneThrongEvolutionHit(this.#host,...args));}
+ throngEvolutionBurst(...args:Parameters<World["throngEvolutionBurst"]>):ReturnType<World["throngEvolutionBurst"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0],...(args[4]?[args[4]]:[])]},()=>core1.sceneThrongEvolutionBurst(this.#host,...args));}
+ assaultDoomCull(...args:Parameters<World["assaultDoomCull"]>):ReturnType<World["assaultDoomCull"]>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>core1.sceneAssaultDoomCull(this.#host,...args));}
+ throngOnHit(...args:Parameters<World["throngOnHit"]>):ReturnType<World["throngOnHit"]>{return this.#operation.enter({permission:'proc',physical:[args[1]],sources:[args[0]]},()=>core1.sceneThrongOnHit(this.#host,...args));}
+ throngOnKill(...args:Parameters<World["throngOnKill"]>):ReturnType<World["throngOnKill"]>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[...(args[1]?[args[1]]:[])]},()=>core1.sceneThrongOnKill(this.#host,...args));}
+ liteCarve(...args:Parameters<World["liteCarve"]>):ReturnType<World["liteCarve"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[...(args[0]?[args[0]]:[])]},()=>core1.sceneLiteCarve(this.#host,...args));}
+ litePromoteNearest(...args:Parameters<World["litePromoteNearest"]>):ReturnType<World["litePromoteNearest"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core1.sceneLitePromoteNearest(this.#host,...args));}
+ litePourAt(...args:Parameters<World["litePourAt"]>):ReturnType<World["litePourAt"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneLitePourAt(this.#host,...args));}
+ grabThrowRelease(...args:Parameters<World["grabThrowRelease"]>):ReturnType<World["grabThrowRelease"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneGrabThrowRelease(this.#host,...args));}
+ layFissure(...args:Parameters<World["layFissure"]>):ReturnType<World["layFissure"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneLayFissure(this.#host,...args));}
+ ringBell(...args:Parameters<World["ringBell"]>):ReturnType<World["ringBell"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneRingBell(this.#host,...args));}
+ strikeSurfaces(...args:Parameters<World["strikeSurfaces"]>):ReturnType<World["strikeSurfaces"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[...(args[0]?[args[0]]:[])]},()=>core1.sceneStrikeSurfaces(this.#host,...args));}
+ attuneCrystal(...args:Parameters<World["attuneCrystal"]>):ReturnType<World["attuneCrystal"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0],...(args[2]?[args[2]]:[])]},()=>core1.sceneAttuneCrystal(this.#host,...args));}
+ knockFixtures(...args:Parameters<World["knockFixtures"]>):ReturnType<World["knockFixtures"]>{return this.#operation.enter({permission:'proc',physical:[args[1]],sources:[args[0]]},()=>core1.sceneKnockFixtures(this.#host,...args));}
+ spawnAftershocks(...args:Parameters<World["spawnAftershocks"]>):ReturnType<World["spawnAftershocks"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneSpawnAftershocks(this.#host,...args));}
+ tryShellBlock(...args:Parameters<World["tryShellBlock"]>):ReturnType<World["tryShellBlock"]>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[...(args[3]?[args[3]]:[])]},()=>core1.sceneTryShellBlock(this.#host,...args));}
+ resolveParryDamage(...args:Parameters<World["resolveParryDamage"]>):ReturnType<World["resolveParryDamage"]>{return this.#operation.enter({permission:'proc',physical:[args[1]],sources:[args[0]]},()=>core1.sceneResolveParryDamage(this.#host,...args));}
+ tryGuardBlock(...args:Parameters<World["tryGuardBlock"]>):ReturnType<World["tryGuardBlock"]>{if(args[4])this.#operation.assertSelectedCombatRecord('projectiles',args[4]);return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[args[1]]},()=>core1.sceneTryGuardBlock(this.#host,...args));}
+ guardBash(...args:Parameters<World["guardBash"]>):ReturnType<World["guardBash"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneGuardBash(this.#host,...args));}
+ addTempGround(...args:Parameters<World["addTempGround"]>):ReturnType<World["addTempGround"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core1.sceneAddTempGround(this.#host,...args));}
+ moveBlast(...args:Parameters<World["moveBlast"]>):ReturnType<World["moveBlast"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneMoveBlast(this.#host,...args));}
+ applyThorns(...args:Parameters<World["applyThorns"]>):ReturnType<World["applyThorns"]>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[args[1]]},()=>core1.sceneApplyThorns(this.#host,...args));}
+ explodeActor(...args:Parameters<World["explodeActor"]>):ReturnType<World["explodeActor"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneExplodeActor(this.#host,...args));}
+ burstDamage(...args:Parameters<World["burstDamage"]>):ReturnType<World["burstDamage"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[...(args[7]?[args[7]]:[])]},()=>core1.sceneBurstDamage(this.#host,...args));}
+ resolveHit(...args:Parameters<World["resolveHit"]>):ReturnType<World["resolveHit"]>{return this.#operation.enter({permission:'proc',physical:[args[2]],sources:[args[0]]},()=>core1.sceneResolveHit(this.#host,...args));}
+ rollStatusProcs(...args:Parameters<World["rollStatusProcs"]>):ReturnType<World["rollStatusProcs"]>{return this.#operation.enter({permission:'proc',physical:[args[2]],sources:[args[0]]},()=>core1.sceneRollStatusProcs(this.#host,...args));}
+ rollOwnProcs(...args:Parameters<World["rollOwnProcs"]>):ReturnType<World["rollOwnProcs"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneRollOwnProcs(this.#host,...args));}
+ sweepDefenseEvents(...args:Parameters<World["sweepDefenseEvents"]>):ReturnType<World["sweepDefenseEvents"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneSweepDefenseEvents(this.#host,...args));}
+ executeProc(...args:Parameters<World["executeProc"]>):ReturnType<World["executeProc"]>{return this.#operation.enter({permission:'proc',physical:[...(args[3]?[args[3]]:[])],sources:[args[1]]},()=>core1.sceneExecuteProc(this.#host,...args));}
+ castProcPayload(...args:Parameters<World["castProcPayload"]>):ReturnType<World["castProcPayload"]>{return this.#operation.enter({permission:'proc',physical:[...(args[2]?[args[2]]:[])],sources:[args[0]]},()=>core1.sceneCastProcPayload(this.#host,...args));}
+ fireProcRiders(...args:Parameters<World["fireProcRiders"]>):ReturnType<World["fireProcRiders"]>{return this.#operation.enter({permission:'proc',physical:[...(args[3]?[args[3]]:[])],sources:[args[1]]},()=>core1.sceneFireProcRiders(this.#host,...args));}
+ ruptureBank(...args:Parameters<World["ruptureBank"]>):ReturnType<World["ruptureBank"]>{return this.#operation.enter({permission:'proc',physical:[args[1]],sources:[args[0]]},()=>core1.sceneRuptureBank(this.#host,...args));}
+ ruptureStatus(...args:Parameters<World["ruptureStatus"]>):ReturnType<World["ruptureStatus"]>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>core1.sceneRuptureStatus(this.#host,...args));}
+ killCtx(...args:Parameters<World["killCtx"]>):ReturnType<World["killCtx"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0],...(args[1]?[args[1]]:[])]},()=>core1.sceneKillCtx(this.#host,...args));}
+ kill(...args:Parameters<World["kill"]>):ReturnType<World["kill"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0],...(args[2]?[args[2]]:[])]},()=>this.#operation.withKillEvent(()=>core1.sceneKill(this.#host,...args)));}
+ onPartBroken(...args:Parameters<World["onPartBroken"]>):ReturnType<World["onPartBroken"]>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[...(args[1]?[args[1]]:[])]},()=>core1.sceneOnPartBroken(this.#host,...args));}
+ triggerAmbush(...args:Parameters<World["triggerAmbush"]>):ReturnType<World["triggerAmbush"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core1.sceneTriggerAmbush(this.#host,...args));}
+ rollTriggers(...args:Parameters<World["rollTriggers"]>):ReturnType<World["rollTriggers"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneRollTriggers(this.#host,...args));}
+ bankStatusTriggers(...args:Parameters<World["bankStatusTriggers"]>):ReturnType<World["bankStatusTriggers"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneBankStatusTriggers(this.#host,...args));}
+ bankDamageTakenTriggers(...args:Parameters<World["bankDamageTakenTriggers"]>):ReturnType<World["bankDamageTakenTriggers"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0],...(args[2]?[args[2]]:[])]},()=>core1.sceneBankDamageTakenTriggers(this.#host,...args));}
+ explodeProjectile(...args:Parameters<World["explodeProjectile"]>):ReturnType<World["explodeProjectile"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core1.sceneExplodeProjectile(this.#host,...args));}
+ rollSurfaceProcs(...args:Parameters<World["rollSurfaceProcs"]>):ReturnType<World["rollSurfaceProcs"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneRollSurfaceProcs(this.#host,...args));}
+ popBrittle(...args:Parameters<World["popBrittle"]>):ReturnType<World["popBrittle"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[...(args[1]?[args[1]]:[])]},()=>core1.scenePopBrittle(this.#host,...args));}
+ popBrittleNative(...args:Parameters<World["popBrittleNative"]>):ReturnType<World["popBrittleNative"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[...(args[1]?[args[1]]:[])]},()=>core1.scenePopBrittleNative(this.#host,...args));}
+ dissolveBreak(...args:Parameters<World["dissolveBreak"]>):ReturnType<World["dissolveBreak"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core1.sceneDissolveBreak(this.#host,...args));}
+ applyRecovery(...args:Parameters<World["applyRecovery"]>):ReturnType<World["applyRecovery"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneApplyRecovery(this.#host,...args));}
+ applyEnvDamage(...args:Parameters<World["applyEnvDamage"]>):ReturnType<World["applyEnvDamage"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core1.sceneApplyEnvDamage(this.#host,...args));}
+ minionsOf(...args:Parameters<World["minionsOf"]>):ReturnType<World["minionsOf"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneMinionsOf(this.#host,...args));}
+ minionsOfGroup(...args:Parameters<World["minionsOfGroup"]>):ReturnType<World["minionsOfGroup"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneMinionsOfGroup(this.#host,...args));}
+ removeCorpse(...args:Parameters<World["removeCorpse"]>):ReturnType<World["removeCorpse"]>{this.#operation.assertSelectedCombatRecord('corpses',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core2.sceneRemoveCorpse(this.#host,...args));}
+ companionsOfSkill(...args:Parameters<World["companionsOfSkill"]>):ReturnType<World["companionsOfSkill"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneCompanionsOfSkill(this.#host,...args));}
+ companionBondsOfSkill(...args:Parameters<World["companionBondsOfSkill"]>):ReturnType<World["companionBondsOfSkill"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneCompanionBondsOfSkill(this.#host,...args));}
+ minionServes(...args:Parameters<World["minionServes"]>):ReturnType<World["minionServes"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneMinionServes(this.#host,...args));}
+ tryTame(...args:Parameters<World["tryTame"]>):ReturnType<World["tryTame"]>{return this.#operation.enter({permission:'proc',physical:[args[2]],sources:[args[0]]},()=>core2.sceneTryTame(this.#host,...args));}
+ tameCompanion(...args:Parameters<World["tameCompanion"]>):ReturnType<World["tameCompanion"]>{return this.#operation.enter({permission:'proc',physical:[args[1]],sources:[args[0]]},()=>core2.sceneTameCompanion(this.#host,...args));}
+ throngRecruitCap(...args:Parameters<World["throngRecruitCap"]>):ReturnType<World["throngRecruitCap"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneThrongRecruitCap(this.#host,...args));}
+ throngGain(...args:Parameters<World["throngGain"]>):ReturnType<World["throngGain"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneThrongGain(this.#host,...args));}
+ throngKeepMinimum(...args:Parameters<World["throngKeepMinimum"]>):ReturnType<World["throngKeepMinimum"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneThrongKeepMinimum(this.#host,...args));}
+ hivecallRoster(...args:Parameters<World["hivecallRoster"]>):ReturnType<World["hivecallRoster"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneHivecallRoster(this.#host,...args));}
+ hivecallCap(...args:Parameters<World["hivecallCap"]>):ReturnType<World["hivecallCap"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneHivecallCap(this.#host,...args));}
+ hivecallPayload(...args:Parameters<World["hivecallPayload"]>):ReturnType<World["hivecallPayload"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneHivecallPayload(this.#host,...args));}
+ hivecallDeath(...args:Parameters<World["hivecallDeath"]>):ReturnType<World["hivecallDeath"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneHivecallDeath(this.#host,...args));}
+ hivecallTransform(...args:Parameters<World["hivecallTransform"]>):ReturnType<World["hivecallTransform"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneHivecallTransform(this.#host,...args));}
+ hivecallReturn(...args:Parameters<World["hivecallReturn"]>):ReturnType<World["hivecallReturn"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneHivecallReturn(this.#host,...args));}
+ syncHivecallFormDamage(...args:Parameters<World["syncHivecallFormDamage"]>):ReturnType<World["syncHivecallFormDamage"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneSyncHivecallFormDamage(this.#host,...args));}
+ hivecallMeta(...args:Parameters<World["hivecallMeta"]>):ReturnType<World["hivecallMeta"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneHivecallMeta(this.#host,...args));}
+ throngBodiesOf(...args:Parameters<World["throngBodiesOf"]>):ReturnType<World["throngBodiesOf"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneThrongBodiesOf(this.#host,...args));}
+ throngRosterCount(...args:Parameters<World["throngRosterCount"]>):ReturnType<World["throngRosterCount"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneThrongRosterCount(this.#host,...args));}
+ throngCapOf(...args:Parameters<World["throngCapOf"]>):ReturnType<World["throngCapOf"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneThrongCapOf(this.#host,...args));}
+ mintThrongFind(...args:Parameters<World["mintThrongFind"]>):ReturnType<World["mintThrongFind"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneMintThrongFind(this.#host,...args));}
+ mintThrongBody(...args:Parameters<World["mintThrongBody"]>):ReturnType<World["mintThrongBody"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneMintThrongBody(this.#host,...args));}
+ throngYieldCount(...args:Parameters<World["throngYieldCount"]>):ReturnType<World["throngYieldCount"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneThrongYieldCount(this.#host,...args));}
+ throngStandNear(...args:Parameters<World["throngStandNear"]>):ReturnType<World["throngStandNear"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core2.sceneThrongStandNear(this.#host,...args));}
+ throngDirect(...args:Parameters<World["throngDirect"]>):ReturnType<World["throngDirect"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneThrongDirect(this.#host,...args));}
+ liteNoteDeath(...args:Parameters<World["liteNoteDeath"]>):ReturnType<World["liteNoteDeath"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[...(args[2]?[args[2]]:[])]},()=>core2.sceneLiteNoteDeath(this.#host,...args));}
+ promoteLite(...args:Parameters<World["promoteLite"]>):ReturnType<World["promoteLite"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core2.scenePromoteLite(this.#host,...args));}
+ promoteCommandThrong(...args:Parameters<World["promoteCommandThrong"]>):ReturnType<World["promoteCommandThrong"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.scenePromoteCommandThrong(this.#host,...args));}
+ litePocketDisturb(...args:Parameters<World["litePocketDisturb"]>):ReturnType<World["litePocketDisturb"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core2.sceneLitePocketDisturb(this.#host,...args));}
+ conjurationLifeline(...args:Parameters<World["conjurationLifeline"]>):ReturnType<World["conjurationLifeline"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneConjurationLifeline(this.#host,...args));}
+ birthAt(...args:Parameters<World["birthAt"]>):ReturnType<World["birthAt"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneBirthAt(this.#host,...args));}
+ clutchOnDeath(...args:Parameters<World["clutchOnDeath"]>):ReturnType<World["clutchOnDeath"]>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>core2.sceneClutchOnDeath(this.#host,...args));}
+ corpseSpawn(...args:Parameters<World["corpseSpawn"]>):ReturnType<World["corpseSpawn"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneCorpseSpawn(this.#host,...args));}
+ hatchPod(...args:Parameters<World["hatchPod"]>):ReturnType<World["hatchPod"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneHatchPod(this.#host,...args));}
+ dismissExclusiveSummons(...args:Parameters<World["dismissExclusiveSummons"]>):ReturnType<World["dismissExclusiveSummons"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneDismissExclusiveSummons(this.#host,...args));}
+ minionAreaAvoidanceOf(...args:Parameters<World["minionAreaAvoidanceOf"]>):ReturnType<World["minionAreaAvoidanceOf"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneMinionAreaAvoidanceOf(this.#host,...args));}
+ spawnMinion(...args:Parameters<World["spawnMinion"]>):ReturnType<World["spawnMinion"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneSpawnMinion(this.#host,...args));}
+ spawnEchoRiders(...args:Parameters<World["spawnEchoRiders"]>):ReturnType<World["spawnEchoRiders"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneSpawnEchoRiders(this.#host,...args));}
+ mirageSource(...args:Parameters<World["mirageSource"]>):ReturnType<World["mirageSource"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core2.sceneMirageSource(this.#host,...args));}
+ hoverSlotPos(...args:Parameters<World["hoverSlotPos"]>):ReturnType<World["hoverSlotPos"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneHoverSlotPos(this.#host,...args));}
+ buildEchoRider(...args:Parameters<World["buildEchoRider"]>):ReturnType<World["buildEchoRider"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneBuildEchoRider(this.#host,...args));}
+ spawnConstruct(...args:Parameters<World["spawnConstruct"]>):ReturnType<World["spawnConstruct"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneSpawnConstruct(this.#host,...args));}
+ guardianFor(...args:Parameters<World["guardianFor"]>):ReturnType<World["guardianFor"]>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>core2.sceneGuardianFor(this.#host,...args));}
+ springAmbush(...args:Parameters<World["springAmbush"]>):ReturnType<World["springAmbush"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneSpringAmbush(this.#host,...args));}
+ releaseStruckSummons(...args:Parameters<World["releaseStruckSummons"]>):ReturnType<World["releaseStruckSummons"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneReleaseStruckSummons(this.#host,...args));}
+ guardArtHit(...args:Parameters<World["guardArtHit"]>):ReturnType<World["guardArtHit"]>{return this.#operation.enter({permission:'proc',physical:[args[2]],sources:[args[0]]},()=>core3.sceneGuardArtHit(this.#host,...args));}
+ companionPulseHit(...args:Parameters<World["companionPulseHit"]>):ReturnType<World["companionPulseHit"]>{return this.#operation.enter({permission:'proc',physical:[args[0],args[2]],sources:[]},()=>core3.sceneCompanionPulseHit(this.#host,...args));}
+ attackSequenceBurst(...args:Parameters<World["attackSequenceBurst"]>):ReturnType<World["attackSequenceBurst"]>{return this.#operation.enter({permission:'proc',physical:[args[2]],sources:[args[0]]},()=>core3.sceneAttackSequenceBurst(this.#host,...args));}
+ challengeBurst(...args:Parameters<World["challengeBurst"]>):ReturnType<World["challengeBurst"]>{return this.#operation.enter({permission:'proc',physical:[args[1]],sources:[args[0]]},()=>core3.sceneChallengeBurst(this.#host,...args));}
+ challengeHit(...args:Parameters<World["challengeHit"]>):ReturnType<World["challengeHit"]>{return this.#operation.enter({permission:'proc',physical:[args[2]],sources:[args[0]]},()=>core3.sceneChallengeHit(this.#host,...args));}
+ assaultBladeHit(...args:Parameters<World["assaultBladeHit"]>):ReturnType<World["assaultBladeHit"]>{return this.#operation.enter({permission:'proc',physical:[args[2]],sources:[args[0]]},()=>core3.sceneAssaultBladeHit(this.#host,...args));}
+ carriedEffectContext(...args:Parameters<World["carriedEffectContext"]>):ReturnType<World["carriedEffectContext"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneCarriedEffectContext(this.#host,...args));}
+ refreshSatellites(...args:Parameters<World["refreshSatellites"]>):ReturnType<World["refreshSatellites"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneRefreshSatellites(this.#host,...args));}
+ refreshGuardians(...args:Parameters<World["refreshGuardians"]>):ReturnType<World["refreshGuardians"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneRefreshGuardians(this.#host,...args));}
+ refreshAuroras(...args:Parameters<World["refreshAuroras"]>):ReturnType<World["refreshAuroras"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneRefreshAuroras(this.#host,...args));}
+ refreshCreepers(...args:Parameters<World["refreshCreepers"]>):ReturnType<World["refreshCreepers"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneRefreshCreepers(this.#host,...args));}
+ actorsNear(...args:Parameters<World["actorsNear"]>):ReturnType<World["actorsNear"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneActorsNear(this.#host,...args));}
+ castChrono(...args:Parameters<World["castChrono"]>):ReturnType<World["castChrono"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core3.sceneCastChrono(this.#host,...args));}
+ conjureCloud(...args:Parameters<World["conjureCloud"]>):ReturnType<World["conjureCloud"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneConjureCloud(this.#host,...args));}
+ creepEnsure(...args:Parameters<World["creepEnsure"]>):ReturnType<World["creepEnsure"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneCreepEnsure(this.#host,...args));}
+ cycleCompanionStance(...args:Parameters<World["cycleCompanionStance"]>):ReturnType<World["cycleCompanionStance"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneCycleCompanionStance(this.#host,...args));}
+ frontSplash(...args:Parameters<World["frontSplash"]>):ReturnType<World["frontSplash"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[...(args[0]?[args[0]]:[])]},()=>core3.sceneFrontSplash(this.#host,...args));}
+ markMetaDirty(...args:Parameters<World["markMetaDirty"]>):ReturnType<World["markMetaDirty"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneMarkMetaDirty(this.#host,...args));}
+ markSeatActed(...args:Parameters<World["markSeatActed"]>):ReturnType<World["markSeatActed"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core3.sceneMarkSeatActed(this.#host,...args));}
+ mintHazardCloud(...args:Parameters<World["mintHazardCloud"]>):ReturnType<World["mintHazardCloud"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneMintHazardCloud(this.#host,...args));}
+ movementMoment(...args:Parameters<World["movementMoment"]>):ReturnType<World["movementMoment"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core3.sceneMovementMoment(this.#host,...args));}
+ noiseAt(...args:Parameters<World["noiseAt"]>):ReturnType<World["noiseAt"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[...(args[2]?[args[2]]:[])]},()=>core3.sceneNoiseAt(this.#host,...args));}
+ pitPolicyFor(...args:Parameters<World["pitPolicyFor"]>):ReturnType<World["pitPolicyFor"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.scenePitPolicyFor(this.#host,...args));}
+ plantKindle(...args:Parameters<World["plantKindle"]>):ReturnType<World["plantKindle"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core3.scenePlantKindle(this.#host,...args));}
+ plantVent(...args:Parameters<World["plantVent"]>):ReturnType<World["plantVent"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.scenePlantVent(this.#host,...args));}
+ presenceArrival(...args:Parameters<World["presenceArrival"]>):ReturnType<World["presenceArrival"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0],args[1]]},()=>core3.scenePresenceArrival(this.#host,...args));}
+ presenceMoment(...args:Parameters<World["presenceMoment"]>):ReturnType<World["presenceMoment"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core3.scenePresenceMoment(this.#host,...args));}
+ reflectParriedProjectile(...args:Parameters<World["reflectParriedProjectile"]>):ReturnType<World["reflectParriedProjectile"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[args[1]]},()=>core3.sceneReflectParriedProjectile(this.#host,...args));}
+ releaseGarrison(...args:Parameters<World["releaseGarrison"]>):ReturnType<World["releaseGarrison"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core3.sceneReleaseGarrison(this.#host,...args));}
+ resonate(...args:Parameters<World["resonate"]>):ReturnType<World["resonate"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneResonate(this.#host,...args));}
+ rouseOnWound(...args:Parameters<World["rouseOnWound"]>):ReturnType<World["rouseOnWound"]>{return this.#operation.enter({permission:'proc',physical:[args[0]],sources:[]},()=>core3.sceneRouseOnWound(this.#host,...args));}
+ sanctuaryBlocksCombat(...args:Parameters<World["sanctuaryBlocksCombat"]>):ReturnType<World["sanctuaryBlocksCombat"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0],args[1]]},()=>core3.sceneSanctuaryBlocksCombat(this.#host,...args));}
+ seatHudOf(...args:Parameters<World["seatHudOf"]>):ReturnType<World["seatHudOf"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneSeatHudOf(this.#host,...args));}
+ seatOfRoot(...args:Parameters<World["seatOfRoot"]>):ReturnType<World["seatOfRoot"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[...(args[0]?[args[0]]:[])]},()=>core3.sceneSeatOfRoot(this.#host,...args));}
+ showSelfRelease(...args:Parameters<World["showSelfRelease"]>):ReturnType<World["showSelfRelease"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core3.sceneShowSelfRelease(this.#host,...args));}
+ spawnLightwell(...args:Parameters<World["spawnLightwell"]>):ReturnType<World["spawnLightwell"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneSpawnLightwell(this.#host,...args));}
+ spoilStoryAt(...args:Parameters<World["spoilStoryAt"]>):ReturnType<World["spoilStoryAt"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneSpoilStoryAt(this.#host,...args));}
+ stampSpoils(...args:Parameters<World["stampSpoils"]>):ReturnType<World["stampSpoils"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneStampSpoils(this.#host,...args));}
+ ultimateFlash(...args:Parameters<World["ultimateFlash"]>):ReturnType<World["ultimateFlash"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core3.sceneUltimateFlash(this.#host,...args));}
+ withMassReward<T>(level:number,action:()=>T):T{return this.#operation.enter({permission:"proc"},()=>core3.sceneWithMassReward(this.#host,level,action));}
+ companionStanceOf(...args:Parameters<World["companionStanceOf"]>):ReturnType<World["companionStanceOf"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneCompanionStanceOf(this.#host,...args));}
+ setCompanionStance(...args:Parameters<World["setCompanionStance"]>):ReturnType<World["setCompanionStance"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneSetCompanionStance(this.#host,...args));}
+ holdfastRouseRule(...args:Parameters<World["holdfastRouseRule"]>):ReturnType<World["holdfastRouseRule"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneHoldfastRouseRule(this.#host,...args));}
+ holdfastGuardian(...args:Parameters<World["holdfastGuardian"]>):ReturnType<World["holdfastGuardian"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneHoldfastGuardian(this.#host,...args));}
+ massOccurrencePitContext(...args:Parameters<World["massOccurrencePitContext"]>):ReturnType<World["massOccurrencePitContext"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core3.sceneMassOccurrencePitContext(this.#host,...args));}
+ viewRectFor(...args:Parameters<World["viewRectFor"]>):ReturnType<World["viewRectFor"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core4.sceneViewRectFor(this.#host,...args));}
+ plantImpactDress(...args:Parameters<World["plantImpactDress"]>):ReturnType<World["plantImpactDress"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.scenePlantImpactDress(this.#host,...args));}
+ liteProjectileSweep(...args:Parameters<World["liteProjectileSweep"]>):ReturnType<World["liteProjectileSweep"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneLiteProjectileSweep(this.#host,...args));}
+ zoneHas(...args:Parameters<World["zoneHas"]>):ReturnType<World["zoneHas"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneZoneHas(this.#host,...args));}
+ strikeZoneSurfaces(...args:Parameters<World["strikeZoneSurfaces"]>):ReturnType<World["strikeZoneSurfaces"]>{this.#operation.assertSelectedCombatRecord('zones',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneStrikeZoneSurfaces(this.#host,...args));}
+ detonateFissureSegment(...args:Parameters<World["detonateFissureSegment"]>):ReturnType<World["detonateFissureSegment"]>{this.#operation.assertSelectedCombatRecord('zones',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneDetonateFissureSegment(this.#host,...args));}
+ nearestSeatPos(...args:Parameters<World["nearestSeatPos"]>):ReturnType<World["nearestSeatPos"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneNearestSeatPos(this.#host,...args));}
+ burstContact(...args:Parameters<World["burstContact"]>):ReturnType<World["burstContact"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneBurstContact(this.#host,...args));}
+ updateDeathBursts(...args:Parameters<World["updateDeathBursts"]>):ReturnType<World["updateDeathBursts"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneUpdateDeathBursts(this.#host,...args));}
+ underRoofAt(...args:Parameters<World["underRoofAt"]>):ReturnType<World["underRoofAt"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneUnderRoofAt(this.#host,...args));}
+ updateFollowUps(...args:Parameters<World["updateFollowUps"]>):ReturnType<World["updateFollowUps"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneUpdateFollowUps(this.#host,...args));}
+ updatePendingSummons(...args:Parameters<World["updatePendingSummons"]>):ReturnType<World["updatePendingSummons"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneUpdatePendingSummons(this.#host,...args));}
+ accumulateDotText(...args:Parameters<World["accumulateDotText"]>):ReturnType<World["accumulateDotText"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core4.sceneAccumulateDotText(this.#host,...args));}
+ afflictionSeat(...args:Parameters<World["afflictionSeat"]>):ReturnType<World["afflictionSeat"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core4.sceneAfflictionSeat(this.#host,...args));}
+ returnTarget(...args:Parameters<World["returnTarget"]>):ReturnType<World["returnTarget"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneReturnTarget(this.#host,...args));}
+ enterReturn(...args:Parameters<World["enterReturn"]>):ReturnType<World["enterReturn"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneEnterReturn(this.#host,...args));}
+ forkProjectile(...args:Parameters<World["forkProjectile"]>):ReturnType<World["forkProjectile"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneForkProjectile(this.#host,...args));}
+ guidePointOf(...args:Parameters<World["guidePointOf"]>):ReturnType<World["guidePointOf"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneGuidePointOf(this.#host,...args));}
+ nearestProjTarget(...args:Parameters<World["nearestProjTarget"]>):ReturnType<World["nearestProjTarget"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneNearestProjTarget(this.#host,...args));}
+ kinkProjectile(...args:Parameters<World["kinkProjectile"]>):ReturnType<World["kinkProjectile"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneKinkProjectile(this.#host,...args));}
+ advanceProjectile(...args:Parameters<World["advanceProjectile"]>):ReturnType<World["advanceProjectile"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneAdvanceProjectile(this.#host,...args));}
+ projTouches(...args:Parameters<World["projTouches"]>):ReturnType<World["projTouches"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneProjTouches(this.#host,...args));}
+ projTouchesBody(...args:Parameters<World["projTouchesBody"]>):ReturnType<World["projTouchesBody"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[args[1]]},()=>core4.sceneProjTouchesBody(this.#host,...args));}
+ projNose(...args:Parameters<World["projNose"]>):ReturnType<World["projNose"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneProjNose(this.#host,...args));}
+ shedFlightShrapnel(...args:Parameters<World["shedFlightShrapnel"]>):ReturnType<World["shedFlightShrapnel"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneShedFlightShrapnel(this.#host,...args));}
+ interceptProjectileDomes(...args:Parameters<World["interceptProjectileDomes"]>):ReturnType<World["interceptProjectileDomes"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneInterceptProjectileDomes(this.#host,...args));}
+ noteLightningTravel(...args:Parameters<World["noteLightningTravel"]>):ReturnType<World["noteLightningTravel"]>{this.#operation.assertSelectedCombatRecord('projectiles',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneNoteLightningTravel(this.#host,...args));}
+ updateProjectiles(...args:Parameters<World["updateProjectiles"]>):ReturnType<World["updateProjectiles"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneUpdateProjectiles(this.#host,...args));}
+ updateZones(...args:Parameters<World["updateZones"]>):ReturnType<World["updateZones"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneUpdateZones(this.#host,...args));}
+ updateZoneDomain(...args:Parameters<World["updateZoneDomain"]>):ReturnType<World["updateZoneDomain"]>{this.#operation.assertSelectedCombatRecord('zones',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneUpdateZoneDomain(this.#host,...args));}
+ zoneVictims(...args:Parameters<World["zoneVictims"]>):ReturnType<World["zoneVictims"]>{this.#operation.assertSelectedCombatRecord('zones',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneZoneVictims(this.#host,...args));}
+ zoneSees(...args:Parameters<World["zoneSees"]>):ReturnType<World["zoneSees"]>{this.#operation.assertSelectedCombatRecord('zones',args[0]);return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>core4.sceneZoneSees(this.#host,...args));}
+ addTether(...args:Parameters<NativeAreaSceneTethers["addTether"]>):ReturnType<NativeAreaSceneTethers["addTether"]>{const owner=this.tethers,fn=owner.addTether;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ attachObjectTethers(...args:Parameters<NativeAreaSceneTethers["attachObjectTethers"]>):ReturnType<NativeAreaSceneTethers["attachObjectTethers"]>{const owner=this.tethers,fn=owner.attachObjectTethers;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ grantAbsorb(...args:Parameters<NativeAreaSceneRestoration["grantAbsorb"]>):ReturnType<NativeAreaSceneRestoration["grantAbsorb"]>{const owner=this.restoration,fn=owner.grantAbsorb;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ applyRestore(...args:Parameters<NativeAreaSceneRestoration["applyRestore"]>):ReturnType<NativeAreaSceneRestoration["applyRestore"]>{const owner=this.restoration,fn=owner.applyRestore;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ startRestoreStream(...args:Parameters<NativeAreaSceneRestoration["startRestoreStream"]>):ReturnType<NativeAreaSceneRestoration["startRestoreStream"]>{const owner=this.restoration,fn=owner.startRestoreStream;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ critMendMult(...args:Parameters<NativeAreaSceneRestoration["critMendMult"]>):ReturnType<NativeAreaSceneRestoration["critMendMult"]>{const owner=this.restoration,fn=owner.critMendMult;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ applyHeal(...args:Parameters<NativeAreaSceneRestoration["applyHeal"]>):ReturnType<NativeAreaSceneRestoration["applyHeal"]>{const owner=this.restoration,fn=owner.applyHeal;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ applyHealChained(...args:Parameters<NativeAreaSceneRestoration["applyHealChained"]>):ReturnType<NativeAreaSceneRestoration["applyHealChained"]>{const owner=this.restoration,fn=owner.applyHealChained;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ cleanseActor(...args:Parameters<NativeAreaSceneRestoration["cleanseActor"]>):ReturnType<NativeAreaSceneRestoration["cleanseActor"]>{const owner=this.restoration,fn=owner.cleanseActor;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ ringAfflictions(...args:Parameters<NativeAreaSceneRestoration["ringAfflictions"]>):ReturnType<NativeAreaSceneRestoration["ringAfflictions"]>{const owner=this.restoration,fn=owner.ringAfflictions;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ healAlliesInArea(...args:Parameters<NativeAreaSceneRestoration["healAlliesInArea"]>):ReturnType<NativeAreaSceneRestoration["healAlliesInArea"]>{const owner=this.restoration,fn=owner.healAlliesInArea;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ seatText(...args:Parameters<NativeAreaSceneRestoration["seatText"]>):ReturnType<NativeAreaSceneRestoration["seatText"]>{const owner=this.restoration,fn=owner.seatText;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ creditFloat(...args:Parameters<NativeAreaSceneRestoration["creditFloat"]>):ReturnType<NativeAreaSceneRestoration["creditFloat"]>{const owner=this.restoration,fn=owner.creditFloat;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ paySkillCost(...args:Parameters<NativeAreaSceneCastingPreparation["paySkillCost"]>):ReturnType<NativeAreaSceneCastingPreparation["paySkillCost"]>{const owner=this.castingPreparation,fn=owner.paySkillCost;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ consumeChargeCost(...args:Parameters<NativeAreaSceneCastingPreparation["consumeChargeCost"]>):ReturnType<NativeAreaSceneCastingPreparation["consumeChargeCost"]>{const owner=this.castingPreparation,fn=owner.consumeChargeCost;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ refundCooldown(...args:Parameters<NativeAreaSceneCastingPreparation["refundCooldown"]>):ReturnType<NativeAreaSceneCastingPreparation["refundCooldown"]>{const owner=this.castingPreparation,fn=owner.refundCooldown;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ consumeAmmunition(...args:Parameters<NativeAreaSceneCastingPreparation["consumeAmmunition"]>):ReturnType<NativeAreaSceneCastingPreparation["consumeAmmunition"]>{const owner=this.castingPreparation,fn=owner.consumeAmmunition;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ consumeRemnants(...args:Parameters<NativeAreaSceneCastingPreparation["consumeRemnants"]>):ReturnType<NativeAreaSceneCastingPreparation["consumeRemnants"]>{const owner=this.castingPreparation,fn=owner.consumeRemnants;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ consumeStealth(...args:Parameters<NativeAreaSceneCastingPreparation["consumeStealth"]>):ReturnType<NativeAreaSceneCastingPreparation["consumeStealth"]>{const owner=this.castingPreparation,fn=owner.consumeStealth;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ comboCursorOf(...args:Parameters<NativeAreaSceneCastingPreparation["comboCursorOf"]>):ReturnType<NativeAreaSceneCastingPreparation["comboCursorOf"]>{const owner=this.castingPreparation,fn=owner.comboCursorOf;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ comboStepOf(...args:Parameters<NativeAreaSceneCastingPreparation["comboStepOf"]>):ReturnType<NativeAreaSceneCastingPreparation["comboStepOf"]>{const owner=this.castingPreparation,fn=owner.comboStepOf;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ heldSkillInst(...args:Parameters<NativeAreaSceneCastingPreparation["heldSkillInst"]>):ReturnType<NativeAreaSceneCastingPreparation["heldSkillInst"]>{const owner=this.castingPreparation,fn=owner.heldSkillInst;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ relocationTarget(...args:Parameters<NativeAreaSceneCastingPreparation["relocationTarget"]>):ReturnType<NativeAreaSceneCastingPreparation["relocationTarget"]>{const owner=this.castingPreparation,fn=owner.relocationTarget;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ mintMetaInstance(...args:Parameters<NativeAreaSceneCastingPreparation["mintMetaInstance"]>):ReturnType<NativeAreaSceneCastingPreparation["mintMetaInstance"]>{const owner=this.castingPreparation,fn=owner.mintMetaInstance;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ pushActor(...args:Parameters<NativeAreaSceneDisplacement["pushActor"]>):ReturnType<NativeAreaSceneDisplacement["pushActor"]>{const owner=this.displacement,fn=owner.pushActor;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ grabRelease(...args:Parameters<NativeAreaSceneDisplacement["grabRelease"]>):ReturnType<NativeAreaSceneDisplacement["grabRelease"]>{const owner=this.displacement,fn=owner.grabRelease;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ clingRelease(...args:Parameters<NativeAreaSceneDisplacement["clingRelease"]>):ReturnType<NativeAreaSceneDisplacement["clingRelease"]>{const owner=this.displacement,fn=owner.clingRelease;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ teleportActor(...args:Parameters<NativeAreaSceneDisplacement["teleportActor"]>):ReturnType<NativeAreaSceneDisplacement["teleportActor"]>{const owner=this.displacement,fn=owner.teleportActor;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ mountFreeSeat(...args:Parameters<NativeAreaSceneDisplacement["mountFreeSeat"]>):ReturnType<NativeAreaSceneDisplacement["mountFreeSeat"]>{const owner=this.displacement,fn=owner.mountFreeSeat;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ mountSeatRider(...args:Parameters<NativeAreaSceneDisplacement["mountSeatRider"]>):ReturnType<NativeAreaSceneDisplacement["mountSeatRider"]>{const owner=this.displacement,fn=owner.mountSeatRider;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ mountUnlink(...args:Parameters<NativeAreaSceneDisplacement["mountUnlink"]>):ReturnType<NativeAreaSceneDisplacement["mountUnlink"]>{const owner=this.displacement,fn=owner.mountUnlink;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ mountUnhorse(...args:Parameters<NativeAreaSceneDisplacement["mountUnhorse"]>):ReturnType<NativeAreaSceneDisplacement["mountUnhorse"]>{const owner=this.displacement,fn=owner.mountUnhorse;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ mountWidowed(...args:Parameters<NativeAreaSceneDisplacement["mountWidowed"]>):ReturnType<NativeAreaSceneDisplacement["mountWidowed"]>{const owner=this.displacement,fn=owner.mountWidowed;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ movementLocked(...args:Parameters<NativeAreaSceneDisplacement["movementLocked"]>):ReturnType<NativeAreaSceneDisplacement["movementLocked"]>{const owner=this.displacement,fn=owner.movementLocked;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ castMoveFactor(...args:Parameters<NativeAreaSceneDisplacement["castMoveFactor"]>):ReturnType<NativeAreaSceneDisplacement["castMoveFactor"]>{const owner=this.displacement,fn=owner.castMoveFactor;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ channelMobility(...args:Parameters<NativeAreaSceneDisplacement["channelMobility"]>):ReturnType<NativeAreaSceneDisplacement["channelMobility"]>{const owner=this.displacement,fn=owner.channelMobility;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ levitating(...args:Parameters<NativeAreaSceneDisplacement["levitating"]>):ReturnType<NativeAreaSceneDisplacement["levitating"]>{const owner=this.displacement,fn=owner.levitating;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ applyBuffEffect(...args:Parameters<NativeAreaSceneCombatState["applyBuffEffect"]>):ReturnType<NativeAreaSceneCombatState["applyBuffEffect"]>{const owner=this.combatState,fn=owner.applyBuffEffect;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ grantTreeBuff(...args:Parameters<NativeAreaSceneCombatState["grantTreeBuff"]>):ReturnType<NativeAreaSceneCombatState["grantTreeBuff"]>{const owner=this.combatState,fn=owner.grantTreeBuff;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ transplantStatus(...args:Parameters<NativeAreaSceneCombatState["transplantStatus"]>):ReturnType<NativeAreaSceneCombatState["transplantStatus"]>{const owner=this.combatState,fn=owner.transplantStatus;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ tapCharges(...args:Parameters<NativeAreaSceneCombatState["tapCharges"]>):ReturnType<NativeAreaSceneCombatState["tapCharges"]>{const owner=this.combatState,fn=owner.tapCharges;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ tapFires(...args:Parameters<NativeAreaSceneCombatState["tapFires"]>):ReturnType<NativeAreaSceneCombatState["tapFires"]>{const owner=this.combatState,fn=owner.tapFires;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ isEliteVictim(...args:Parameters<NativeAreaSceneCombatState["isEliteVictim"]>):ReturnType<NativeAreaSceneCombatState["isEliteVictim"]>{const owner=this.combatState,fn=owner.isEliteVictim;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ bankPools(...args:Parameters<NativeAreaSceneCombatState["bankPools"]>):ReturnType<NativeAreaSceneCombatState["bankPools"]>{const owner=this.combatState,fn=owner.bankPools;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ victimGate(...args:Parameters<NativeAreaSceneCombatState["victimGate"]>):ReturnType<NativeAreaSceneCombatState["victimGate"]>{const owner=this.combatState,fn=owner.victimGate;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ procReady(...args:Parameters<NativeAreaSceneCombatState["procReady"]>):ReturnType<NativeAreaSceneCombatState["procReady"]>{const owner=this.combatState,fn=owner.procReady;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ procGates(...args:Parameters<NativeAreaSceneCombatState["procGates"]>):ReturnType<NativeAreaSceneCombatState["procGates"]>{const owner=this.combatState,fn=owner.procGates;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ procDepthAllowed(...args:Parameters<NativeAreaSceneCombatState["procDepthAllowed"]>):ReturnType<NativeAreaSceneCombatState["procDepthAllowed"]>{const owner=this.combatState,fn=owner.procDepthAllowed;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ rollTopMet(...args:Parameters<NativeAreaSceneCombatState["rollTopMet"]>):ReturnType<NativeAreaSceneCombatState["rollTopMet"]>{const owner=this.combatState,fn=owner.rollTopMet;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ procChance(...args:Parameters<NativeAreaSceneCombatState["procChance"]>):ReturnType<NativeAreaSceneCombatState["procChance"]>{const owner=this.combatState,fn=owner.procChance;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ tryShellPool(...args:Parameters<NativeAreaSceneDefensePreparation["tryShellPool"]>):ReturnType<NativeAreaSceneDefensePreparation["tryShellPool"]>{const owner=this.defensePreparation,fn=owner.tryShellPool;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ showCombatOutcome(...args:Parameters<NativeAreaSceneDefensePreparation["showCombatOutcome"]>):ReturnType<NativeAreaSceneDefensePreparation["showCombatOutcome"]>{const owner=this.defensePreparation,fn=owner.showCombatOutcome;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ refreshGuardBash(...args:Parameters<NativeAreaSceneDefensePreparation["refreshGuardBash"]>):ReturnType<NativeAreaSceneDefensePreparation["refreshGuardBash"]>{const owner=this.defensePreparation,fn=owner.refreshGuardBash;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ isBurstTarget(...args:Parameters<NativeAreaSceneDefensePreparation["isBurstTarget"]>):ReturnType<NativeAreaSceneDefensePreparation["isBurstTarget"]>{const owner=this.defensePreparation,fn=owner.isBurstTarget;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ resolveDeathBurst(...args:Parameters<NativeAreaSceneDefensePreparation["resolveDeathBurst"]>):ReturnType<NativeAreaSceneDefensePreparation["resolveDeathBurst"]>{const owner=this.defensePreparation,fn=owner.resolveDeathBurst;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ bankRune(...args:Parameters<NativeAreaSceneDefensePreparation["bankRune"]>):ReturnType<NativeAreaSceneDefensePreparation["bankRune"]>{const owner=this.defensePreparation,fn=owner.bankRune;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ bumpDrives(...args:Parameters<NativeAreaSceneDefensePreparation["bumpDrives"]>):ReturnType<NativeAreaSceneDefensePreparation["bumpDrives"]>{const owner=this.defensePreparation,fn=owner.bumpDrives;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ skillOcclusion(...args:Parameters<NativeAreaSceneProjectiles["skillOcclusion"]>):ReturnType<NativeAreaSceneProjectiles["skillOcclusion"]>{const owner=this.projectiles,fn=owner.skillOcclusion;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ spawnProjectile(...args:Parameters<NativeAreaSceneProjectiles["spawnProjectile"]>):ReturnType<NativeAreaSceneProjectiles["spawnProjectile"]>{const owner=this.projectiles,fn=owner.spawnProjectile;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ rollKillOrbs(...args:Parameters<NativeAreaSceneKillAftermath["rollKillOrbs"]>):ReturnType<NativeAreaSceneKillAftermath["rollKillOrbs"]>{const owner=this.killAftermath,fn=owner.rollKillOrbs;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ rollKillRemnants(...args:Parameters<NativeAreaSceneKillAftermath["rollKillRemnants"]>):ReturnType<NativeAreaSceneKillAftermath["rollKillRemnants"]>{const owner=this.killAftermath,fn=owner.rollKillRemnants;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ spawnDeathBurst(...args:Parameters<NativeAreaSceneKillAftermath["spawnDeathBurst"]>):ReturnType<NativeAreaSceneKillAftermath["spawnDeathBurst"]>{const owner=this.killAftermath,fn=owner.spawnDeathBurst;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ maddenBankOf(...args:Parameters<NativeAreaSceneGroundFollowUps["maddenBankOf"]>):ReturnType<NativeAreaSceneGroundFollowUps["maddenBankOf"]>{const owner=this.groundFollowUps,fn=owner.maddenBankOf;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ statTrailSpec(...args:Parameters<NativeAreaSceneGroundFollowUps["statTrailSpec"]>):ReturnType<NativeAreaSceneGroundFollowUps["statTrailSpec"]>{const owner=this.groundFollowUps,fn=owner.statTrailSpec;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ mintAftermath(...args:Parameters<NativeAreaSceneGroundFollowUps["mintAftermath"]>):ReturnType<NativeAreaSceneGroundFollowUps["mintAftermath"]>{const owner=this.groundFollowUps,fn=owner.mintAftermath;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ dropLingerField(...args:Parameters<NativeAreaSceneGroundFollowUps["dropLingerField"]>):ReturnType<NativeAreaSceneGroundFollowUps["dropLingerField"]>{const owner=this.groundFollowUps,fn=owner.dropLingerField;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ mintTrailPatch(...args:Parameters<NativeAreaSceneGroundFollowUps["mintTrailPatch"]>):ReturnType<NativeAreaSceneGroundFollowUps["mintTrailPatch"]>{const owner=this.groundFollowUps,fn=owner.mintTrailPatch;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ queueFollowUps(...args:Parameters<NativeAreaSceneGroundFollowUps["queueFollowUps"]>):ReturnType<NativeAreaSceneGroundFollowUps["queueFollowUps"]>{const owner=this.groundFollowUps,fn=owner.queueFollowUps;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ rollSummonType(...args:Parameters<NativeAreaSceneSummonPreparation["rollSummonType"]>):ReturnType<NativeAreaSceneSummonPreparation["rollSummonType"]>{const owner=this.summonPreparation,fn=owner.rollSummonType;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
+ forwardSummonSockets(...args:Parameters<World['forwardSummonSockets']>):ReturnType<World['forwardSummonSockets']>{return sceneForwardSummonSockets(...args);}
+ showSkillArrival(...args:Parameters<World['showSkillArrival']>):void{return this.#operation.enter({permission:'proc',sources:[args[0]]},()=>sceneShowSkillArrival(this.#host,...args));}
+ private native<A extends unknown[],R>(fn:(host:Host,...args:A)=>R):Binding<(...args:A)=>R>{return {get:()=> (...args:A)=>{this.#operation.assertActiveScope();return fn(this.#host,...args);}};}
+ get holdDefense():World['holdDefense'] {return this.input.assembly.input.registry.input.state.holdDefense;}
+ get seatQuests():World['seatQuests'] {return NativeAreaCampaignFrameState.forWriter(this.input.characterWriter).seatQuests;}
+ resealDoor(...args:Parameters<World['resealDoor']>):ReturnType<World['resealDoor']>{return this.#operation.enter({physical:[],permission:'proc'},()=>this.input.assembly.input.harbor.resealDoor(...args));}
+ refreshHoldDress(...args:Parameters<World['refreshHoldDress']>):ReturnType<World['refreshHoldDress']>{return this.#operation.enter({physical:[],permission:'proc'},()=>this.input.assembly.input.harbor.refreshHoldDress(...args));}
+ refreshHoldServices(...args:Parameters<World['refreshHoldServices']>):ReturnType<World['refreshHoldServices']>{return this.#operation.enter({physical:[],permission:'proc'},()=>this.input.assembly.input.harbor.refreshHoldServices(...args));}
+ spawnWarband(...args:Parameters<World['spawnWarband']>):ReturnType<World['spawnWarband']>{return this.#operation.enter({physical:[],permission:'proc'},()=>this.input.assembly.input.registry.input.birth.spawnWarband(...args));}
+ dissipateHauntSpawns(...args:Parameters<World['dissipateHauntSpawns']>):ReturnType<World['dissipateHauntSpawns']>{return this.#operation.enter({physical:[],permission:'proc'},()=>directoryCore.sceneDissipateHauntSpawns(this.#host,...args));}
+ clearWaypointLanding(...args:Parameters<World['clearWaypointLanding']>):ReturnType<World['clearWaypointLanding']>{return this.#operation.enter({physical:[args[0]],permission:'physical'},()=>directoryCore.sceneClearWaypointLanding(this.#host,...args));}
+ nearBountyBoard(...args:Parameters<World['nearBountyBoard']>):ReturnType<World['nearBountyBoard']>{return this.#operation.enter({physical:[],permission:'proc'},()=>frameServices.sceneNearBountyBoard(this.#host,...args));}
+ realmArenaWake(...args:Parameters<NativeAreaSceneCampaignFrame['realmArenaWake']>):ReturnType<NativeAreaSceneCampaignFrame['realmArenaWake']>{return this.campaignFrame.realmArenaWake(...args);}
+ framePreActors(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFramePreActors(this.#host,dt));}
+ frameActors(dt:number,rawDt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameActors(this.#host,dt,rawDt));}
+ frameEffects(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameEffects(this.#host,dt));}
+ frameLateBodies(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameLateBodies(this.#host,dt));}
+ private bindings():Bindings {const {assembly,progression,campaign,quests,watching}=this.input;const bindings={
+  account:field(()=>campaign,"account"),
+  accountDirty:field(()=>campaign,"accountDirty"),
+  accumulateDotText:method(()=>this,"accumulateDotText"),
+  actingSeat:field(()=>campaign,"actingSeat"),
+  activateAura:method(()=>this,"activateAura"),
+  actorById:method(()=>assembly.input.ecology,"actorById"),
+  actors:field(()=>this.scene,"actors"),
+  actorsNear:method(()=>this,"actorsNear"),
+  actorTurnRate:method(()=>this,"actorTurnRate"),
+  addTempGround:method(()=>this,"addTempGround"),
+  addTether:method(()=>this,"addTether"),
+  advanceProjectile:method(()=>this,"advanceProjectile"),
+  afflictionSeat:method(()=>this,"afflictionSeat"),
+  affordedDest:method(()=>this,"affordedDest"),
+  aiHoldOf:method(()=>this,"aiHoldOf"),
+  aiNeedsFireLine:method(()=>this,"aiNeedsFireLine"),
+  annexReveal:method(()=>assembly.input.openings,"annexReveal"),
+  applyBuffEffect:method(()=>this,"applyBuffEffect"),
+  applyEnvDamage:method(()=>this,"applyEnvDamage"),
+  applyHeal:method(()=>this,"applyHeal"),
+  applyHealChained:method(()=>this,"applyHealChained"),
+  applyRecovery:method(()=>this,"applyRecovery"),
+  applyRestore:method(()=>this,"applyRestore"),
+  applyThorns:method(()=>this,"applyThorns"),
+  arena:field(()=>assembly.input.geometry,"arena"),
+  assaultDoomCull:method(()=>this,"assaultDoomCull"),
+  assaultBladeHit:method(()=>this,"assaultBladeHit"),
+  assaults:field(()=>this.runtimeState,"assaults"),
+  attachObjectTethers:method(()=>this,"attachObjectTethers"),
+  attackSequences:field(()=>progression,"attackSequences"),
+  attuneCrystal:method(()=>this,"attuneCrystal"),
+  attuneScratch:field(()=>this.runtimeState,"attuneScratch"),
+  auroras:field(()=>this.runtimeState,"auroras"),
+  bakeMinionOwnerStats:method(()=>progression,"bakeMinionOwnerStats"),
+  bankDamageTakenTriggers:method(()=>this,"bankDamageTakenTriggers"),
+  bankEssenceSpill:method(()=>this.campaignOwner,"bankEssenceSpill"),
+  bankPools:method(()=>this,"bankPools"),
+  bankRune:method(()=>this,"bankRune"),
+  bankStatusTriggers:method(()=>this,"bankStatusTriggers"),
+  bindCombatDeeds:method(()=>this.campaignOwner,"bindCombatDeeds"),
+  birthAt:method(()=>this,"birthAt"),
+  blastPocks:field(()=>this.runtimeState,"blastPocks"),
+  blastPocksKey:field(()=>this.runtimeState,"blastPocksKey"),
+  bossRun:field(()=>assembly.input.geometry,"bossRun"),
+  bridges:field(()=>assembly.input.geometry,"bridges"),
+  buildEchoRider:method(()=>this,"buildEchoRider"),
+  bumpDrives:method(()=>this,"bumpDrives"),
+  burstContact:method(()=>this,"burstContact"),
+  burstDamage:method(()=>this,"burstDamage"),
+  carriedEffectContext:method(()=>this,"carriedEffectContext"),
+  castChrono:method(()=>this,"castChrono"),
+  castPress:method(()=>this,"castPress"),
+  castProcPayload:method(()=>this,"castProcPayload"),
+  castSealed:method(()=>this,"castSealed"),
+  castTurnRate:method(()=>this,"castTurnRate"),
+  challenges:field(()=>progression,"challenges"),
+  charDirty:field(()=>campaign,"charDirty"),
+  clampGroundTarget:method(()=>this,"clampGroundTarget"),
+  clampPos:method(()=>assembly.input.geometry,"clampPos"),
+  cleanseActor:method(()=>this,"cleanseActor"),
+  clingRelease:method(()=>this,"clingRelease"),
+  clipShot:method(()=>assembly.input.geometry,"clipShot"),
+  clutchOnDeath:method(()=>this,"clutchOnDeath"),
+  combatDeeds:field(()=>this.campaignOwner,"combatDeeds"),
+  comboCursorOf:method(()=>this,"comboCursorOf"),
+  comboStepOf:method(()=>this,"comboStepOf"),
+  companionBonds:field(()=>progression,"companionBonds"),
+  companionBondsOfSkill:method(()=>this,"companionBondsOfSkill"),
+  companionCapOf:method(()=>progression,"companionCapOf"),
+  companionsOfSkill:method(()=>this,"companionsOfSkill"),
+  conjurationLifeline:method(()=>this,"conjurationLifeline"),
+  conjureCloud:method(()=>this,"conjureCloud"),
+  conjureGrantsFor:method(()=>this,"conjureGrantsFor"),
+  consumeAmmunition:method(()=>this,"consumeAmmunition"),
+  consumeChargeCost:method(()=>this,"consumeChargeCost"),
+  consumeRemnants:method(()=>this,"consumeRemnants"),
+  consumeStealth:method(()=>this,"consumeStealth"),
+  corpses:{get:()=>this.#operation.captureRecordStorage("corpses",this.runtimeState.corpses),set:value=>{this.#operation.checkRecordStorage("corpses",value);this.runtimeState.corpses=value;this.#operation.captureRecordStorage("corpses",value);}},
+  corpseSpawn:method(()=>this,"corpseSpawn"),
+  createMonster:{get:()=>this.#operation.createMonster},
+  creditFloat:method(()=>this,"creditFloat"),
+  creep:field(()=>assembly.input.geometry,"creep"),
+  creepEnsure:method(()=>this,"creepEnsure"),
+  creepers:field(()=>this.runtimeState,"creepers"),
+  critMendMult:method(()=>this,"critMendMult"),
+  cycleCompanionStance:method(()=>this,"cycleCompanionStance"),
+  deactivateAura:method(()=>progression,"deactivateAura"),
+  deathBursts:{get:()=>this.#operation.captureRecordStorage("deathBursts",this.killAftermath.input.state.deathBursts),set:value=>{this.#operation.checkRecordStorage("deathBursts",value);this.killAftermath.input.state.deathBursts=value;this.#operation.captureRecordStorage("deathBursts",value);}},
+  deedEnemy:method(()=>this.campaignOwner,"deedEnemy"),
+  deedOwned:method(()=>this.campaignOwner,"deedOwned"),
+  detonateFissureSegment:method(()=>this,"detonateFissureSegment"),
+  dismissExclusiveSummons:method(()=>this,"dismissExclusiveSummons"),
+  dismissSummonToggle:method(()=>progression,"dismissSummonToggle"),
+  dissolveBreak:method(()=>this,"dissolveBreak"),
+  dissolveCracks:field(()=>this.runtimeState,"dissolveCracks"),
+  dissolveOverride:field(()=>this.runtimeState,"dissolveOverride"),
+  dissolves:field(()=>this.runtimeState,"dissolves"),
+  domainSeq:field(()=>this.runtimeState,"domainSeq"),
+  doodads:field(()=>assembly.input.geometry,"doodads"),
+  doodadsAt:method(()=>assembly.input.geometry,"doodadsAt"),
+  doodadsNear:method(()=>assembly.input.geometry,"doodadsNear"),
+  dotAccum:field(()=>this.runtimeState,"dotAccum"),
+  dropEssenceAt:method(()=>assembly.lootController,"dropEssenceAt"),
+  dropGemAt:method(()=>assembly.lootController,"dropGemAt"),
+  dropLingerField:method(()=>this,"dropLingerField"),
+  dropRuleOf:field(()=>campaign,"dropRuleOf"),
+  drops:field(()=>assembly.input.physical.input.state,"drops"),
+  echoToClones:method(()=>this,"echoToClones"),
+  emergeBody:method(()=>progression,"emergeBody"),
+  encounters:field(()=>assembly.transition,"encounters"),
+  endCarom:method(()=>this,"endCarom"),
+  enemiesOf:method(()=>assembly.input.population,"enemiesOf"),
+  enterReturn:method(()=>this,"enterReturn"),
+  evaporating:field(()=>assembly.input.geometry,"evaporating"),
+  executeProc:method(()=>this,"executeProc"),
+  executeSkill:method(()=>this,"executeSkill"),
+  expireZone:method(()=>progression,"expireZone"),
+  explodeActor:method(()=>this,"explodeActor"),
+  explodeProjectile:method(()=>this,"explodeProjectile"),
+  failNote:method(()=>quests,"failNote"),
+  feedEncounters:method(()=>this.campaignOwner,"feedEncounters"),
+  findFreeSpot:method(()=>assembly.input.geometry,"findFreeSpot"),
+  fireProcRiders:method(()=>this,"fireProcRiders"),
+  flashes:field(()=>assembly.input.geometry,"flashes"),
+  flightScratch:field(()=>this.runtimeState,"flightScratch"),
+  forkProjectile:method(()=>this,"forkProjectile"),
+  forwardSummonSockets:method(()=>this,"forwardSummonSockets"),
+  frontSplash:method(()=>this,"frontSplash"),
+  grabRelease:method(()=>this,"grabRelease"),
+  grabThrowRelease:method(()=>this,"grabThrowRelease"),
+  grantAbsorb:method(()=>this,"grantAbsorb"),
+  grantTreeBuff:method(()=>this,"grantTreeBuff"),
+  grantXp:method(()=>assembly.objectiveController,"grantXp"),
+  groundAt:method(()=>assembly.input.geometry,"groundAt"),
+  grounds:field(()=>assembly.input.geometry,"grounds"),
+  guardArts:field(()=>progression,"guardArts"),
+  guardBash:method(()=>this,"guardBash"),
+  guardianFor:method(()=>this,"guardianFor"),
+  guardians:field(()=>this.runtimeState,"guardians"),
+  guidePointOf:method(()=>this,"guidePointOf"),
+  hatchPod:method(()=>this,"hatchPod"),
+  healAlliesInArea:method(()=>this,"healAlliesInArea"),
+  heldSkillInst:method(()=>this,"heldSkillInst"),
+  hivecallCap:method(()=>this,"hivecallCap"),
+  hivecallDeath:method(()=>this,"hivecallDeath"),
+  hivecallMeta:method(()=>this,"hivecallMeta"),
+  hivecallPayload:method(()=>this,"hivecallPayload"),
+  hivecallRoster:method(()=>this,"hivecallRoster"),
+  hivecallTransform:method(()=>this,"hivecallTransform"),
+  hostileTo:method(()=>assembly.input.population,"hostileTo"),
+  hoverSlotPos:method(()=>this,"hoverSlotPos"),
+  inheritedFlight:method(()=>progression,"inheritedFlight"),
+  interceptProjectileDomes:method(()=>this,"interceptProjectileDomes"),
+  isBurstTarget:method(()=>this,"isBurstTarget"),
+  kill:method(()=>this,"kill"),
+  killCtx:method(()=>this,"killCtx"),
+  kills:field(()=>campaign,"kills"),
+  kinkProjectile:method(()=>this,"kinkProjectile"),
+  knockFixtures:method(()=>this,"knockFixtures"),
+  lastCombatAt:field(()=>this.runtimeState,"lastCombatAt"),
+  lastPlayerKiller:field(()=>this.campaignOwner.shared,"lastPlayerKiller"),
+  layFissure:method(()=>this,"layFissure"),
+  ledger:field(()=>campaign,"ledger"),
+  levitating:method(()=>this,"levitating"),
+  lightningFlashes:field(()=>this.runtimeState,"lightningFlashes"),
+  lineOfFire:method(()=>assembly.input.geometry,"lineOfFire"),
+  lineOfSight:method(()=>assembly.input.geometry,"lineOfSight"),
+  lite:field(()=>progression,"lite"),
+  liteCarve:method(()=>this,"liteCarve"),
+  liteKills:field(()=>assembly.input.ecology.input.state,"liteKills"),
+  liteKindOf:method(()=>assembly.input.ecology,"liteKindOf"),
+  liteKinds:field(()=>assembly.input.ecology.input.state,"liteKinds"),
+  liteMaxR:field(()=>assembly.input.ecology.input.state,"liteMaxR"),
+  liteNoteDeath:method(()=>this,"liteNoteDeath"),
+  liteOpenAt:method(()=>assembly.input.ecology,"liteOpenAt"),
+  liteOrders:field(()=>assembly.input.ecology.input.state,"liteOrders"),
+  litePocketDisturb:method(()=>this,"litePocketDisturb"),
+  litePockets:field(()=>assembly.input.ecology.input.state,"litePockets"),
+  litePourAt:method(()=>this,"litePourAt"),
+  liteProjectileSweep:method(()=>this,"liteProjectileSweep"),
+  litePromoteNearest:method(()=>this,"litePromoteNearest"),
+  liteVec:field(()=>this.runtimeState,"liteVec"),
+  liteXpAcc:field(()=>assembly.input.ecology.input.state,"liteXpAcc"),
+  localSeat:field(()=>campaign,"localSeat"),
+  lootLevelAt:method(()=>assembly.lootController,"lootLevelAt"),
+  lowLifeHitFlash:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"lowLifeHitFlash"),
+  maddenBankOf:method(()=>this,"maddenBankOf"),
+  markDoodadsChanged:method(()=>assembly.input.geometry,"markDoodadsChanged"),
+  markMetaDirty:method(()=>this,"markMetaDirty"),
+  markSeatActed:method(()=>this,"markSeatActed"),
+  massNativeBrittles:field(()=>this.runtimeState,"massNativeBrittles"),
+  massRuntime:{get:()=>readNativeRetainedMassRuntime(this.input.characterWriter,assembly.input.geometry)},
+  metaProgressionActive:method(()=>assembly.objectiveController,"metaProgressionActive"),
+  minionAreaAvoidanceOf:method(()=>this,"minionAreaAvoidanceOf"),
+  minionServes:method(()=>this,"minionServes"),
+  minionsOf:method(()=>this,"minionsOf"),
+  minionsOfGroup:method(()=>this,"minionsOfGroup"),
+  minionsOfSkill:method(()=>progression,"minionsOfSkill"),
+  mintAftermath:method(()=>this,"mintAftermath"),
+  mintHazardCloud:method(()=>this,"mintHazardCloud"),
+  mintLootResult:method(()=>assembly.lootController,"mintLootResult"),
+  mintMetaInstance:method(()=>this,"mintMetaInstance"),
+  mintThrongBody:method(()=>this,"mintThrongBody"),
+  mintThrongFind:method(()=>this,"mintThrongFind"),
+  mintThrongHusk:method(()=>assembly.input.ecology,"mintThrongHusk"),
+  mintTrailPatch:method(()=>this,"mintTrailPatch"),
+  mirageSource:method(()=>this,"mirageSource"),
+  moveBlast:method(()=>this,"moveBlast"),
+  movementFlashes:field(()=>this.runtimeState,"movementFlashes"),
+  movementMoment:method(()=>this,"movementMoment"),
+  nativeGridAt:method(()=>assembly.input.geometry,"nativeGridAt"),
+  nearestProjTarget:method(()=>this,"nearestProjTarget"),
+  nearestSeatPos:method(()=>this,"nearestSeatPos"),
+  noiseAt:method(()=>this,"noiseAt"),
+  noteLightningTravel:method(()=>this,"noteLightningTravel"),
+  noteNemesisKill:method(()=>this.campaignOwner,"noteNemesisKill"),
+  noteSeatKill:method(()=>this.campaignOwner,"noteSeatKill"),
+  noteSlain:method(()=>this.campaignOwner,"noteSlain"),
+  notice:method(()=>assembly.input.geometry,"notice"),
+  occDisturbs:field(()=>assembly.input.occurrences.input.state,"occDisturbs"),
+  occs:field(()=>assembly.input.occurrences,"occs"),
+  odyssey:field(()=>campaign,"odyssey"),
+  onPartBroken:method(()=>this,"onPartBroken"),
+  onSquadDeath:method(()=>this.campaignOwner,"onSquadDeath"),
+  openHollow:method(()=>assembly.input.openings,"openHollow"),
+  orbs:field(()=>assembly.lootController.input.state,"orbs"),
+  ownSpoils:method(()=>assembly.lootController,"ownSpoils"),
+  parryDamageWindow:field(()=>this.runtimeState,"parryDamageWindow"),
+  partyRows:field(()=>this.campaignOwner.shared,"partyRows"),
+  paySkillCost:method(()=>this,"paySkillCost"),
+  pendingAmbushes:{get:()=>this.#operation.captureRecordStorage("pendingAmbushes",this.runtimeState.pendingAmbushes),set:value=>{this.#operation.checkRecordStorage("pendingAmbushes",value);this.runtimeState.pendingAmbushes=value;this.#operation.captureRecordStorage("pendingAmbushes",value);}},
+  pendingBlinks:{get:()=>this.#operation.captureRecordStorage("pendingBlinks",progression.input.state.pendingBlinks),set:value=>{this.#operation.checkRecordStorage("pendingBlinks",value);progression.input.state.pendingBlinks=value;this.#operation.captureRecordStorage("pendingBlinks",value);}},
+  pendingBursts:{get:()=>this.#operation.captureRecordStorage("pendingBursts",this.runtimeState.pendingBursts),set:value=>{this.#operation.checkRecordStorage("pendingBursts",value);this.runtimeState.pendingBursts=value;this.#operation.captureRecordStorage("pendingBursts",value);}},
+  pendingContagions:{get:()=>this.#operation.captureRecordStorage("pendingContagions",this.runtimeState.pendingContagions),set:value=>{this.#operation.checkRecordStorage("pendingContagions",value);this.runtimeState.pendingContagions=value;this.#operation.captureRecordStorage("pendingContagions",value);}},
+  pendingDetonations:{get:()=>this.#operation.captureRecordStorage("pendingDetonations",this.runtimeState.pendingDetonations),set:value=>{this.#operation.checkRecordStorage("pendingDetonations",value);this.runtimeState.pendingDetonations=value;this.#operation.captureRecordStorage("pendingDetonations",value);}},
+  pendingFollowUps:{get:()=>this.#operation.captureRecordStorage("pendingFollowUps",progression.input.state.pendingFollowUps),set:value=>{this.#operation.checkRecordStorage("pendingFollowUps",value);progression.input.state.pendingFollowUps=value;this.#operation.captureRecordStorage("pendingFollowUps",value);}},
+  pendingFuses:{get:()=>this.#operation.captureRecordStorage("pendingFuses",progression.input.state.pendingFuses),set:value=>{this.#operation.checkRecordStorage("pendingFuses",value);progression.input.state.pendingFuses=value;this.#operation.captureRecordStorage("pendingFuses",value);}},
+  pendingPersists:{get:()=>this.#operation.captureRecordStorage("pendingPersists",this.runtimeState.pendingPersists),set:value=>{this.#operation.checkRecordStorage("pendingPersists",value);this.runtimeState.pendingPersists=value;this.#operation.captureRecordStorage("pendingPersists",value);}},
+  pendingRepeats:{get:()=>this.#operation.captureRecordStorage("pendingRepeats",progression.input.state.pendingRepeats),set:value=>{this.#operation.checkRecordStorage("pendingRepeats",value);progression.input.state.pendingRepeats=value;this.#operation.captureRecordStorage("pendingRepeats",value);}},
+  pendingRespawn:field(()=>this.campaignOwner.shared,"pendingRespawn"),
+  pendingRespawns:{get:()=>this.#operation.captureRecordStorage("pendingRespawns",progression.input.state.pendingRespawns),set:value=>{this.#operation.checkRecordStorage("pendingRespawns",value);progression.input.state.pendingRespawns=value;this.#operation.captureRecordStorage("pendingRespawns",value);}},
+  pendingSalvos:{get:()=>this.#operation.captureRecordStorage("pendingSalvos",progression.input.state.pendingSalvos),set:value=>{this.#operation.checkRecordStorage("pendingSalvos",value);progression.input.state.pendingSalvos=value;this.#operation.captureRecordStorage("pendingSalvos",value);}},
+  pendingSteps:{get:()=>this.#operation.captureRecordStorage("pendingSteps",progression.input.state.pendingSteps),set:value=>{this.#operation.checkRecordStorage("pendingSteps",value);progression.input.state.pendingSteps=value;this.#operation.captureRecordStorage("pendingSteps",value);}},
+  pendingSummons:{get:()=>this.#operation.captureRecordStorage("pendingSummons",progression.input.state.pendingSummons),set:value=>{this.#operation.checkRecordStorage("pendingSummons",value);progression.input.state.pendingSummons=value;this.#operation.captureRecordStorage("pendingSummons",value);}},
+  pitPolicyFor:method(()=>this,"pitPolicyFor"),
+  plantImpactDress:method(()=>this,"plantImpactDress"),
+  plantKindle:method(()=>this,"plantKindle"),
+  plantSpiritTotem:method(()=>this,"plantSpiritTotem"),
+  plantVent:method(()=>this,"plantVent"),
+  player:field(()=>this.scene,"player"),
+  pointInSolid:method(()=>assembly.input.geometry,"pointInSolid"),
+  popBrittle:method(()=>this,"popBrittle"),
+  popBrittleNative:method(()=>this,"popBrittleNative"),
+  presenceArrival:method(()=>this,"presenceArrival"),
+  presenceMoment:method(()=>this,"presenceMoment"),
+  procChance:method(()=>this,"procChance"),
+  procDepthAllowed:method(()=>this,"procDepthAllowed"),
+  procGates:method(()=>this,"procGates"),
+  procReady:method(()=>this,"procReady"),
+  projectiles:{get:()=>this.#operation.captureRecordStorage("projectiles",progression.input.state.projectiles),set:value=>{this.#operation.checkRecordStorage("projectiles",value);progression.input.state.projectiles=value;this.#operation.captureRecordStorage("projectiles",value);}},
+  projNose:method(()=>this,"projNose"),
+  projTouches:method(()=>this,"projTouches"),
+  projTouchesBody:method(()=>this,"projTouchesBody"),
+  promoteCommandThrong:method(()=>this,"promoteCommandThrong"),
+  promoteLite:method(()=>this,"promoteLite"),
+  provenanceOf:method(()=>this.campaignOwner,"provenanceOf"),
+  pushActor:method(()=>this,"pushActor"),
+  puzzles:field(()=>assembly.puzzleController.host,"puzzles"),
+  puzzleStruck:method(()=>assembly.puzzleController,"puzzleStruck"),
+  puzzleTuned:method(()=>assembly.puzzleController,"puzzleTuned"),
+  queueFollowUps:method(()=>this,"queueFollowUps"),
+  recallTreeSpears:field(()=>progression.input.state,"recallTreeSpears"),
+  recordCast:method(()=>this,"recordCast"),
+  recordDeed:method(()=>this.campaignOwner,"recordDeed"),
+  recordIndirectDamage:method(()=>this.campaignOwner,"recordIndirectDamage"),
+  recordSelfDamage:method(()=>this.campaignOwner,"recordSelfDamage"),
+  recoverCompanion:method(()=>progression,"recoverCompanion"),
+  reflectParriedProjectile:method(()=>this,"reflectParriedProjectile"),
+  refreshGuardBash:method(()=>this,"refreshGuardBash"),
+  refreshMagicPacks:method(()=>assembly.input.population,"refreshMagicPacks"),
+  refundCooldown:method(()=>this,"refundCooldown"),
+  releaseContract:method(()=>progression,"releaseContract"),
+  releaseGarrison:method(()=>this,"releaseGarrison"),
+  releasePrimedPours:method(()=>this,"releasePrimedPours"),
+  releaseStruckSummons:method(()=>this,"releaseStruckSummons"),
+  relocationHosts:field(()=>this.castingPreparation.input.state,"relocationHosts"),
+  relocationTarget:method(()=>this,"relocationTarget"),
+  remnants:{get:()=>this.#operation.captureRecordStorage("remnants",this.killAftermath.input.state.remnants),set:value=>{this.#operation.checkRecordStorage("remnants",value);this.killAftermath.input.state.remnants=value;this.#operation.captureRecordStorage("remnants",value);}},
+  removeCorpse:method(()=>this,"removeCorpse"),
+  replenishment:field(()=>this.runtimeState,"replenishment"),
+  resolveDeathBurst:method(()=>this,"resolveDeathBurst"),
+  resolveHit:method(()=>this,"resolveHit"),
+  resolveParryDamage:method(()=>this,"resolveParryDamage"),
+  resolveTargeting:method(()=>this,"resolveTargeting"),
+  resonate:method(()=>this,"resonate"),
+  returnTarget:method(()=>this,"returnTarget"),
+  reviveCompanion:method(()=>progression,"reviveCompanion"),
+  ringAfflictions:method(()=>this,"ringAfflictions"),
+  ringBell:method(()=>this,"ringBell"),
+  rollDrops:method(()=>this.campaignOwner,"rollDrops"),
+  rollKillOrbs:method(()=>this,"rollKillOrbs"),
+  rollKillRemnants:method(()=>this,"rollKillRemnants"),
+  rollOwnProcs:method(()=>this,"rollOwnProcs"),
+  rollStatusProcs:method(()=>this,"rollStatusProcs"),
+  rollSummonType:method(()=>this,"rollSummonType"),
+  rollSurfaceProcs:method(()=>this,"rollSurfaceProcs"),
+  rollTopMet:method(()=>this,"rollTopMet"),
+  rollTriggers:method(()=>this,"rollTriggers"),
+  roofedStructureAt:method(()=>assembly.input.geometry,"roofedStructureAt"),
+  rouseOnWound:method(()=>this,"rouseOnWound"),
+  ruptureBank:method(()=>this,"ruptureBank"),
+  ruptureStatus:method(()=>this,"ruptureStatus"),
+  sanctuaryBlocksCombat:method(()=>this,"sanctuaryBlocksCombat"),
+  satellites:field(()=>this.runtimeState,"satellites"),
+  scrambleLatch:field(()=>this.runtimeState,"scrambleLatch"),
+  seatHudOf:method(()=>this,"seatHudOf"),
+  seatOf:method(()=>assembly.input.geometry,"seatOf"),
+  seatOfRoot:method(()=>this,"seatOfRoot"),
+  seats:field(()=>campaign,"seats"),
+  seatText:method(()=>this,"seatText"),
+  setDoorState:method(()=>assembly.input.geometry,"setDoorState"),
+  setLure:method(()=>watching,"setLure"),
+  shake:field(()=>assembly.input.geometry,"shake"),
+  shedFlightShrapnel:method(()=>this,"shedFlightShrapnel"),
+  shedOrb:method(()=>assembly.lootController,"shedOrb"),
+  shotElev:method(()=>assembly.input.geometry,"shotElev"),
+  showCombatOutcome:method(()=>this,"showCombatOutcome"),
+  showCompanionCue:method(()=>progression,"showCompanionCue"),
+  showRecoveryCue:method(()=>progression,"showRecoveryCue"),
+  showSelfRelease:method(()=>this,"showSelfRelease"),
+  showSkillArrival:method(()=>this,"showSkillArrival"),
+  sim:field(()=>assembly.input.registry.input.birth.host,"sim"),
+  simView:method(()=>assembly.input.coast,"simView"),
+  skillOcclusion:method(()=>this,"skillOcclusion"),
+  sparkSeq:field(()=>this.runtimeState,"sparkSeq"),
+  spawnAftershocks:method(()=>this,"spawnAftershocks"),
+  spawnConstruct:method(()=>this,"spawnConstruct"),
+  spawnDeathBurst:method(()=>this,"spawnDeathBurst"),
+  spawnEchoRiders:method(()=>this,"spawnEchoRiders"),
+  spawnLightwell:method(()=>this,"spawnLightwell"),
+  spawnMinion:method(()=>this,"spawnMinion"),
+  spawnProjectile:method(()=>this,"spawnProjectile"),
+  spoilsSealed:method(()=>assembly.lootController,"spoilsSealed"),
+  spoilStory:field(()=>assembly.lootController.input.state,"spoilStory"),
+  spoilStoryAt:method(()=>this,"spoilStoryAt"),
+  springAmbush:method(()=>this,"springAmbush"),
+  stampSkillCooldown:method(()=>progression,"stampSkillCooldown"),
+  stampSpoils:method(()=>this,"stampSpoils"),
+  startRestoreStream:method(()=>this,"startRestoreStream"),
+  statTrailSpec:method(()=>this,"statTrailSpec"),
+  strikeReleaseBodies:field(()=>this.runtimeState,"strikeReleaseBodies"),
+  strikeSurfaces:method(()=>this,"strikeSurfaces"),
+  strikeZoneSurfaces:method(()=>this,"strikeZoneSurfaces"),
+  surfaceScratch:field(()=>this.runtimeState,"surfaceScratch"),
+  sweepDefenseEvents:method(()=>this,"sweepDefenseEvents"),
+  syncHivecallFormDamage:method(()=>this,"syncHivecallFormDamage"),
+  tameCompanion:method(()=>this,"tameCompanion"),
+  tapCharges:method(()=>this,"tapCharges"),
+  teleportActor:method(()=>this,"teleportActor"),
+  tempGrounds:field(()=>assembly.input.geometry,"tempGrounds"),
+  text:method(()=>assembly.input.geometry,"text"),
+  throngBodiesOf:method(()=>this,"throngBodiesOf"),
+  throngCapOf:method(()=>this,"throngCapOf"),
+  throngDirect:method(()=>this,"throngDirect"),
+  throngEvolutionBites:field(()=>this.runtimeState,"throngEvolutionBites"),
+  throngEvolutionBurst:method(()=>this,"throngEvolutionBurst"),
+  throngEvolutionHit:method(()=>this,"throngEvolutionHit"),
+  throngGain:method(()=>this,"throngGain"),
+  throngKeepMinimum:method(()=>this,"throngKeepMinimum"),
+  throngLastKill:field(()=>this.runtimeState,"throngLastKill"),
+  throngOnHit:method(()=>this,"throngOnHit"),
+  throngOnKill:method(()=>this,"throngOnKill"),
+  throngRecruitCap:method(()=>this,"throngRecruitCap"),
+  throngRosterCount:method(()=>this,"throngRosterCount"),
+  throngSources:method(()=>assembly.input.ecology,"throngSources"),
+  throngStandNear:method(()=>this,"throngStandNear"),
+  throngYieldCount:method(()=>this,"throngYieldCount"),
+  tickChannelSupports:method(()=>this,"tickChannelSupports"),
+  tierViews:field(()=>assembly.input.geometry,"tierViews"),
+  time:field(()=>campaign,"time"),
+  timeflow:field(()=>campaign,"timeflow"),
+  transplantStatus:method(()=>this,"transplantStatus"),
+  traversal:field(()=>this.campaignOwner.shared,"traversal"),
+  treeBuffSources:field(()=>progression.input.state,"treeBuffSources"),
+  triggerAmbush:method(()=>this,"triggerAmbush"),
+  triggerEligible:method(()=>this,"triggerEligible"),
+  tryGuardBlock:method(()=>this,"tryGuardBlock"),
+  tryShellBlock:method(()=>this,"tryShellBlock"),
+  tryShellPool:method(()=>this,"tryShellPool"),
+  tryTame:method(()=>this,"tryTame"),
+  ultimateFlash:method(()=>this,"ultimateFlash"),
+  underRoofAt:method(()=>this,"underRoofAt"),
+  updateZoneDomain:method(()=>this,"updateZoneDomain"),
+  useSkill:method(()=>this,"useSkill"),
+  victimGate:method(()=>this,"victimGate"),
+  viewFrame:field(()=>this.runtimeState,"viewFrame"),
+  viewFrameAt:field(()=>this.runtimeState,"viewFrameAt"),
+  viewRectFor:method(()=>this,"viewRectFor"),
+  walk:field(()=>assembly.input.geometry,"walk"),
+  waypointPos:field(()=>assembly.input.geometry,"waypointPos"),
+  weightedPick:method(()=>this,"weightedPick"),
+  withMassReward:method(()=>this,"withMassReward"),
+  withQuestHand:method(()=>quests,"withQuestHand"),
+  worldKillRules:field(()=>this.campaignOwner,"worldKillRules"),
+  zone:field(()=>this.scene,"zone"),
+  zoneHas:method(()=>this,"zoneHas"),
+  zones:{get:()=>this.#operation.captureRecordStorage("zones",progression.input.state.zones),set:value=>{this.#operation.checkRecordStorage("zones",value);progression.input.state.zones=value;this.#operation.captureRecordStorage("zones",value);}},
+  zoneSees:method(()=>this,"zoneSees"),
+  zoneVictims:method(()=>this,"zoneVictims"),
+  admitCombatBirth:method(()=>this.#operation,"admitCombatBirth"),
+  constructCombatActor:method(()=>this.#operation,"constructCombatActor"),
+  withCombatStatusSource:method(()=>this.#operation,"withCombatStatusSource"),
+  withCombatInheritedStatus:method(()=>this.#operation,"withCombatInheritedStatus"),
+  selectCombatStatusSource:method(()=>this.#operation,"selectCombatStatusSource"),
+  issueCombatRecord:method(()=>this.#operation,"issueCombatRecord"),
+  prepareCombatRecord:method(()=>this.#operation,"prepareCombatRecord"),
+  issuePreparedCombatRecord:method(()=>this.#operation,"issuePreparedCombatRecord"),
+  retireCombatBody:method(()=>this.#operation,"retireCombatBody"),
+  castMoveFactor:method(()=>this.displacement,"castMoveFactor"),
+  channelMobility:method(()=>this.displacement,"channelMobility"),
+  cScratch:field(()=>this.runtimeState.motion,"cScratch"),
+  devNoclip:field(()=>this.input.characterWriter,"devNoclip"),
+  geyserMode:field(()=>this.runtimeState.motion,"geyserMode"),
+  geysers:field(()=>assembly.input.environment.input.state,"geysers"),
+  movementLocked:method(()=>this.displacement,"movementLocked"),
+  ownWalk:field(()=>this.runtimeState.motion,"ownWalk"),
+  sailing:field(()=>this,"sailing"),
+  skyFront:method(()=>assembly.sky,"skyFront"),
+  snowCover:field(()=>assembly.input.geometry,"snowCover"),
+  tierCrossings:field(()=>assembly.input.geometry,"tierCrossings"),
+  tracks:field(()=>assembly.input.geometry,"tracks"),
+  voyage:field(()=>assembly.transition,"voyage"),
+  windCache:field(()=>this.runtimeState.motion,"windCache"),
+  survivalDrainRate:method(()=>this,"survivalDrainRate"),
+  despawnPartsOf:method(()=>this,"despawnPartsOf"),
+  markSeatMoved:method(()=>this,"markSeatMoved"),
+  steppedClamp:method(()=>this,"steppedClamp"),
+  resolveBoundary:method(()=>this,"resolveBoundary"),
+  windAt:method(()=>this,"windAt"),
+  zoneWind:method(()=>this,"zoneWind"),
+  snowCoverAt:method(()=>this,"snowCoverAt"),
+  voyageShip:method(()=>this,"voyageShip"),
+  combatEventCallback:method(()=>this.#operation,"combatEventCallback"),
+  createCombatKillContext:method(()=>this.#operation,"createCombatKillContext"),
+  assignCombatBirthOwner:method(()=>this.#operation,"assignCombatBirthOwner"),
+  withCombatRecord:method(()=>this.#operation,"withCombatRecord"),
+  reassignCombatRecordSource:method(()=>this.#operation,"reassignCombatRecordSource"),
+  beginCombatRecord:method(()=>this.#operation,"beginCombatRecord"),
+  endCombatRecord:method(()=>this.#operation,"endCombatRecord"),
+  arenaWash:field(()=>assembly.input.geometry,"arenaWash"),
+  claimGarrisonSlot:method(()=>this.combatArena,"claimGarrisonSlot"),
+  conjured:field(()=>assembly.input.geometry,"conjured"),
+  crackArena:method(()=>this.combatArena,"crackArena"),
+  flux:field(()=>assembly.input.geometry,"flux"),
+  fog:field(()=>assembly.input.geometry,"fog"),
+  mountFreeSeat:method(()=>this,"mountFreeSeat"),
+  mountSeatRider:method(()=>this,"mountSeatRider"),
+  mountUnlink:method(()=>this,"mountUnlink"),
+  onBrainPhaseEnter:method(()=>this.combatArena,"onBrainPhaseEnter"),
+  promoteMonster:method(()=>assembly.input.population,"promoteRarityStacked"),
+  restoreArena:method(()=>this.combatArena,"restoreArena"),
+  shrinkArenaPockets:method(()=>this.combatArena,"shrinkArenaPockets"),
+  sinkArena:method(()=>this.combatArena,"sinkArena"),
+  spawnSummonOffspring:method(()=>this.combatArena,"spawnSummonOffspring"),
+  castReqRefusal:method(()=>this,"castReqRefusal"),
+  grabHandoff:method(()=>this,"grabHandoff"),
+  grabSeize:method(()=>this,"grabSeize"),
+  possessSeize:method(()=>this,"possessSeize"),
+  shapeshiftPress:method(()=>this,"shapeshiftPress"),
+  openTownPortal:method(()=>this,"openTownPortal"),
+  seatEject:method(()=>this,"seatEject"),
+  onPlayerDown:method(()=>this,"onPlayerDown"),
+  routePitFall:method(()=>this,"routePitFall"),
+  routeSkyFalls:method(()=>this,"routeSkyFalls"),
+  startBurrow:method(()=>this.combatArena,"startBurrow"),
+  opaqueAt:method(()=>assembly.input.geometry,"opaqueAt"),
+  actorGrid:field(()=>this.runtimeState,"actorGrid"),
+  actorGridBuiltFor:field(()=>this.runtimeState,"actorGridBuiltFor"),
+  actorGridBuiltRev:field(()=>this.runtimeState,"actorGridBuiltRev"),
+  actorGridRev:field(()=>this.runtimeState,"actorGridRev"),
+  companionStanceOf:method(()=>this,"companionStanceOf"),
+  currentZoneSeed:field(()=>assembly.input.geometry,"currentZoneSeed"),
+  eyecatch:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"eyecatch"),
+  fogEnsure:method(()=>assembly.input.registry.input.birth,"fogEnsure"),
+  hazardCaster:{get:()=>observeNativeSource(this.#host,assembly.puzzleController.host.hazardCaster),set:value=>{assembly.puzzleController.host.hazardCaster=value;}},
+  holdfastGuardian:method(()=>this,"holdfastGuardian"),
+  holdfastRouseRule:method(()=>this,"holdfastRouseRule"),
+  holdfastSite:field(()=>assembly.input.registry.input.birth.host,"holdfastSite"),
+  installCreepFront:method(()=>assembly.input.geometry,"installCreepFront"),
+  massOccurrenceDecorSources:field(()=>this.runtimeState,"massOccurrenceDecorSources"),
+  massOccurrencePitContext:method(()=>this,"massOccurrencePitContext"),
+  massRewardLevel:field(()=>this.campaignOwner.shared,"massRewardLevel"),
+  metaDirty:field(()=>this.campaignOwner.shared,"metaDirty"),
+  pathField:method(()=>assembly.input.geometry,"pathField"),
+  presencePulseAt:field(()=>this.runtimeState,"presencePulseAt"),
+  resonanceRang:field(()=>this.runtimeState,"resonanceRang"),
+  rouseRules:field(()=>this.campaignOwner,"rouseRules"),
+  seatByActor:field(()=>this.campaignOwner.shared,"seatByActor"),
+  seatHero:method(()=>campaign,"seatHero"),
+  seatHud:field(()=>this.campaignOwner.shared,"seatHud"),
+  setCompanionStance:method(()=>this,"setCompanionStance"),
+  structures:field(()=>assembly.input.geometry,"structures"),
+  ultFlashAt:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"ultFlashAt"),
+  ultFlashLastAt:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"ultFlashLastAt"),
+  wellSeq:field(()=>assembly.input.ecology.input.state,"wellSeq"),
+
+  syncZoneExits:this.native(localControllers.sceneSyncZoneExits),
+  updateOccurrences:this.native(localControllers.sceneUpdateOccurrences),
+  updateEncounters:this.native(localControllers.sceneUpdateEncounters),
+  updateHunt:this.native(localControllers.sceneUpdateHunt),
+  updateFractures:this.native(localControllers.sceneUpdateFractures),
+  updateBoss:this.native(localControllers.sceneUpdateBoss),
+  updateRitualSite:this.native(localControllers.sceneUpdateRitualSite),
+  updateHoldfastSite:this.native(localControllers.sceneUpdateHoldfastSite),
+  updateIncursionEvents:this.native(localControllers.sceneUpdateIncursionEvents),
+  updateRampage:this.native(localControllers.sceneUpdateRampage),
+  updateDoodadEffects:this.native(localControllers.sceneUpdateDoodadEffects),
+  updateArenaCrowd:this.native(localControllers.sceneUpdateArenaCrowd),
+  updateAttunements:this.native(localControllers.sceneUpdateAttunements),
+  updateTerraforms:this.native(localControllers.sceneUpdateTerraforms),
+  updateTheater:this.native(localControllers.sceneUpdateTheater),
+  updateRepeats:this.native(localControllers.sceneUpdateRepeats),
+  updateAmbushes:this.native(localControllers.sceneUpdateAmbushes),
+  updatePendingMetas:this.native(localControllers.sceneUpdatePendingMetas),
+  updatePendingPersists:this.native(localControllers.sceneUpdatePendingPersists),
+  updateMinionMeta:this.native(localControllers.sceneUpdateMinionMeta),
+  updateThrongEvolution:this.native(localControllers.sceneUpdateThrongEvolution),
+  updateHivecall:this.native(localControllers.sceneUpdateHivecall),
+  updateThrong:this.native(localControllers.sceneUpdateThrong),
+  updateLite:this.native(localControllers.sceneUpdateLite),
+  separateOverlappingExits:this.native(localControllers.sceneSeparateOverlappingExits),
+  updateExtraction:this.native(localControllers.sceneUpdateExtraction),
+  updateBorough:this.native(localControllers.sceneUpdateBorough),
+  updateVeilCollapse:this.native(localControllers.sceneUpdateVeilCollapse),
+  updateVeil:this.native(localControllers.sceneUpdateVeil),
+  insideCount:this.native(localControllers.sceneInsideCount),
+  spawnInRadius:this.native(localControllers.sceneSpawnInRadius),
+  beginCollapse:this.native(localControllers.sceneBeginCollapse),
+  closeEncounter:this.native(localControllers.sceneCloseEncounter),
+  updateExtractionDepartures:this.native(localControllers.sceneUpdateExtractionDepartures),
+  updateBoroughRefugees:this.native(localControllers.sceneUpdateBoroughRefugees),
+  pickHuntDest:this.native(localControllers.scenePickHuntDest),
+  touchers:this.native(localControllers.sceneTouchers),
+  advanceFissure:this.native(localControllers.sceneAdvanceFissure),
+  fractureFoeCount:this.native(localControllers.sceneFractureFoeCount),
+  spawnFractureFoes:this.native(localControllers.sceneSpawnFractureFoes),
+  failFracture:this.native(localControllers.sceneFailFracture),
+  sealChasm:this.native(localControllers.sceneSealChasm),
+  openHoldfastExit:this.native(localControllers.sceneOpenHoldfastExit),
+  rampageCauseOf:this.native(localControllers.sceneRampageCauseOf),
+  rampageCrush:this.native(localControllers.sceneRampageCrush),
+  rampageBlockedStand:this.native(localControllers.sceneRampageBlockedStand),
+  wornThrongAnchored:this.native(localControllers.sceneWornThrongAnchored),
+  wornThrongAnchorsOf:this.native(localControllers.sceneWornThrongAnchorsOf),
+  minionNeedsFullDurability:this.native(localControllers.sceneMinionNeedsFullDurability),
+  claimThrongHusk:this.native(localControllers.sceneClaimThrongHusk),
+  throngMoteSpot:this.native(localControllers.sceneThrongMoteSpot),
+  driveUntamedThrong:this.native(localControllers.sceneDriveUntamedThrong),
+  liteDemoteSweep:this.native(localControllers.sceneLiteDemoteSweep),
+  liteRegenSweep:this.native(localControllers.sceneLiteRegenSweep),
+  liteSteerAndBite:this.native(localControllers.sceneLiteSteerAndBite),
+  liteFlushKills:this.native(localControllers.sceneLiteFlushKills),
+  armExtraction:this.native(localControllers.sceneArmExtraction),
+  settleExtraction:this.native(localControllers.sceneSettleExtraction),
+  extractionSwarmAlive:this.native(localControllers.sceneExtractionSwarmAlive),
+  spawnExtractionSwarm:this.native(localControllers.sceneSpawnExtractionSwarm),
+  extractTemperOf:this.native(localControllers.sceneExtractTemperOf),
+  startBoroughMuster:this.native(localControllers.sceneStartBoroughMuster),
+  boroughFolkAlive:this.native(localControllers.sceneBoroughFolkAlive),
+  settleBorough:this.native(localControllers.sceneSettleBorough),
+  updateBoroughArming:this.native(localControllers.sceneUpdateBoroughArming),
+  beginBoroughAssault:this.native(localControllers.sceneBeginBoroughAssault),
+  boroughSwarmAlive:this.native(localControllers.sceneBoroughSwarmAlive),
+  spawnBoroughWave:this.native(localControllers.sceneSpawnBoroughWave),
+  heroWithin:this.native(localControllers.sceneHeroWithin),
+  sealVeiled:this.native(localControllers.sceneSealVeiled),
+  activateKnot:this.native(localControllers.sceneActivateKnot),
+  openChasm:this.native(localControllers.sceneOpenChasm),
+  clearFractureRun:this.native(localControllers.sceneClearFractureRun),
+  removeFractureChasmDoodad:this.native(localControllers.sceneRemoveFractureChasmDoodad),
+  divertOrEndFracture:this.native(localControllers.sceneDivertOrEndFracture),
+  litePocketBirth:this.native(localControllers.sceneLitePocketBirth),
+  litePocketExtinct:this.native(localControllers.sceneLitePocketExtinct),
+  litePocketRecede:this.native(localControllers.sceneLitePocketRecede),
+  liteBiteVictim:this.native(localControllers.sceneLiteBiteVictim),
+  payExtraction:this.native(localControllers.scenePayExtraction),
+  disperseSwarmBodies:this.native(localControllers.sceneDisperseSwarmBodies),
+  extractionEntryPoint:this.native(localControllers.sceneExtractionEntryPoint),
+  nearestExitPos:this.native(localControllers.sceneNearestExitPos),
+  swarmEntryPoint:this.native(localControllers.sceneSwarmEntryPoint),
+  pickRovingDest:this.native(localControllers.scenePickRovingDest),
+  openFractureRift:this.native(localControllers.sceneOpenFractureRift),
+  litePooledHit:this.native(localControllers.sceneLitePooledHit),
+  syncPocketGrants:this.native(actorTick.sceneSyncPocketGrants),
+  updateGrantedTrails:this.native(actorTick.sceneUpdateGrantedTrails),
+  applyDeedDot:this.native(actorTick.sceneApplyDeedDot),
+  sweepTalentEvents:this.native(actorTick.sceneSweepTalentEvents),
+  rollGainProcs:this.native(actorTick.sceneRollGainProcs),
+  echoSympathy:this.native(actorTick.sceneEchoSympathy),
+  stepBurrow:this.native(actorTick.sceneStepBurrow),
+  updateActorLedgers:this.native(actorTick.sceneUpdateActorLedgers),
+  noteMovementTravel:this.native(actorTick.sceneNoteMovementTravel),
+  sweepBodySlam:this.native(actorTick.sceneSweepBodySlam),
+  rollCollisionProcs:this.native(actorTick.sceneRollCollisionProcs),
+  resolveImpactHit:this.native(actorTick.sceneResolveImpactHit),
+  grantedPocketsFor:this.native(actorTick.sceneGrantedPocketsFor),
+  insideGrantedPocket:this.native(actorTick.sceneInsideGrantedPocket),
+  sympathyPotency:this.native(actorTick.sceneSympathyPotency),
+  applySympathyEcho:this.native(actorTick.sceneApplySympathyEcho),
+  updateSummonShells:this.native(effectsTick.sceneUpdateSummonShells),
+  updateTempGrounds:this.native(effectsTick.sceneUpdateTempGrounds),
+  updateEvaporation:this.native(effectsTick.sceneUpdateEvaporation),
+  updatePendingBursts:this.native(effectsTick.sceneUpdatePendingBursts),
+  updatePendingContagions:this.native(effectsTick.sceneUpdatePendingContagions),
+  updateTerrainEffects:this.native(effectsTick.sceneUpdateTerrainEffects),
+  updateScorch:this.native(effectsTick.sceneUpdateScorch),
+  updateWindchill:this.native(effectsTick.sceneUpdateWindchill),
+  updateGaze:this.native(effectsTick.sceneUpdateGaze),
+  updateFog:this.native(effectsTick.sceneUpdateFog),
+  updateWetSky:this.native(effectsTick.sceneUpdateWetSky),
+  updateCreep:this.native(effectsTick.sceneUpdateCreep),
+  updateCollapse:this.native(effectsTick.sceneUpdateCollapse),
+  updateFlux:this.native(effectsTick.sceneUpdateFlux),
+  updateSpans:this.native(effectsTick.sceneUpdateSpans),
+  updateTracks:this.native(effectsTick.sceneUpdateTracks),
+  updateGeysers:this.native(effectsTick.sceneUpdateGeysers),
+  updateVentDwellers:this.native(effectsTick.sceneUpdateVentDwellers),
+  updateScaldHeat:this.native(effectsTick.sceneUpdateScaldHeat),
+  updateCharRegrowth:this.native(effectsTick.sceneUpdateCharRegrowth),
+  updateSoulriver:this.native(effectsTick.sceneUpdateSoulriver),
+  updateTrapworks:this.native(effectsTick.sceneUpdateTrapworks),
+  updateShrines:this.native(effectsTick.sceneUpdateShrines),
+  updateAltars:this.native(effectsTick.sceneUpdateAltars),
+  updateChests:this.native(effectsTick.sceneUpdateChests),
+  updateLeaps:this.native(effectsTick.sceneUpdateLeaps),
+  updateWorms:this.native(effectsTick.sceneUpdateWorms),
+  updateParts:this.native(effectsTick.sceneUpdateParts),
+  updateCreepHearts:this.native(effectsTick.sceneUpdateCreepHearts),
+  updateEnemyTethers:this.native(effectsTick.sceneUpdateEnemyTethers),
+  updateTethers:this.native(effectsTick.sceneUpdateTethers),
+  updateVents:this.native(effectsTick.sceneUpdateVents),
+  updateDischarges:this.native(effectsTick.sceneUpdateDischarges),
+  updateConstructs:this.native(effectsTick.sceneUpdateConstructs),
+  updateAuras:this.native(effectsTick.sceneUpdateAuras),
+  updateStrobes:this.native(effectsTick.sceneUpdateStrobes),
+  updateDetonations:this.native(effectsTick.sceneUpdateDetonations),
+  updatePendingRespawns:this.native(effectsTick.sceneUpdatePendingRespawns),
+  updateSummonContracts:this.native(effectsTick.sceneUpdateSummonContracts),
+  updateSummonReforms:this.native(effectsTick.sceneUpdateSummonReforms),
+  updateCompanionGrants:this.native(effectsTick.sceneUpdateCompanionGrants),
+  updateReplenishment:this.native(effectsTick.sceneUpdateReplenishment),
+  updatePendingBlinks:this.native(effectsTick.sceneUpdatePendingBlinks),
+  checkMinionDetonations:this.native(effectsTick.sceneCheckMinionDetonations),
+  separateActors:this.native(effectsTick.sceneSeparateActors),
+  updateSquish:this.native(effectsTick.sceneUpdateSquish),
+  updateWindPush:this.native(effectsTick.sceneUpdateWindPush),
+  updateBrittle:this.native(effectsTick.sceneUpdateBrittle),
+  updateSnow:this.native(effectsTick.sceneUpdateSnow),
+  updateWeatherDress:this.native(effectsTick.sceneUpdateWeatherDress),
+  updateDrops:this.native(effectsTick.sceneUpdateDrops),
+  updateOrbs:this.native(effectsTick.sceneUpdateOrbs),
+  updateRemnants:this.native(effectsTick.sceneUpdateRemnants),
+  updateCarriers:this.native(effectsTick.sceneUpdateCarriers),
+  updateClings:this.native(effectsTick.sceneUpdateClings),
+  updateGrabs:this.native(effectsTick.sceneUpdateGrabs),
+  updateMounts:this.native(effectsTick.sceneUpdateMounts),
+  updatePossessions:this.native(effectsTick.sceneUpdatePossessions),
+  updateWatch:this.native(effectsTick.sceneUpdateWatch),
+  updateReserves:this.native(effectsTick.sceneUpdateReserves),
+  updatePack:this.native(effectsTick.sceneUpdatePack),
+  updateTells:this.native(effectsTick.sceneUpdateTells),
+  applyCouchConfine:this.native(effectsTick.sceneApplyCouchConfine),
+  updateEmergences:this.native(effectsTick.sceneUpdateEmergences),
+  veilIndex:this.native(effectsTick.sceneVeilIndex),
+  douseSweep:this.native(effectsTick.sceneDouseSweep),
+  regenSurvival:this.native(effectsTick.sceneRegenSurvival),
+  applyRegionEffects:this.native(effectsTick.sceneApplyRegionEffects),
+  isShaded:this.native(effectsTick.sceneIsShaded),
+  douseRowAt:this.native(effectsTick.sceneDouseRowAt),
+  feedSurvival:this.native(effectsTick.sceneFeedSurvival),
+  syncSurvivalBands:this.native(effectsTick.sceneSyncSurvivalBands),
+  localZoneAt:this.native(effectsTick.sceneLocalZoneAt),
+  shedStatusStack:this.native(effectsTick.sceneShedStatusStack),
+  updateCreepRiders:this.native(effectsTick.sceneUpdateCreepRiders),
+  groundFallEligible:this.native(effectsTick.sceneGroundFallEligible),
+  wakeBodies:this.native(effectsTick.sceneWakeBodies),
+  sweepHazardSurface:this.native(effectsTick.sceneSweepHazardSurface),
+  geyserBurstFx:this.native(effectsTick.sceneGeyserBurstFx),
+  scorchFeed:this.native(effectsTick.sceneScorchFeed),
+  updateBask:this.native(effectsTick.sceneUpdateBask),
+  scorchOf:this.native(effectsTick.sceneScorchOf),
+  springTrapwork:this.native(effectsTick.sceneSpringTrapwork),
+  fireStrikeAt:this.native(effectsTick.sceneFireStrikeAt),
+  chestObjectiveDone:this.native(effectsTick.sceneChestObjectiveDone),
+  openChest:this.native(effectsTick.sceneOpenChest),
+  creepPumpBearing:this.native(effectsTick.sceneCreepPumpBearing),
+  tetherSees:this.native(effectsTick.sceneTetherSees),
+  brittleAccrue:this.native(effectsTick.sceneBrittleAccrue),
+  dressSpotOk:this.native(effectsTick.sceneDressSpotOk),
+  dropHolder:this.native(effectsTick.sceneDropHolder),
+  pickupSeat:this.native(effectsTick.scenePickupSeat),
+  grantVestige:this.native(effectsTick.sceneGrantVestige),
+  grantAbilityEssence:this.native(effectsTick.sceneGrantAbilityEssence),
+  tryMergeMemoryItem:this.native(effectsTick.sceneTryMergeMemoryItem),
+  noteMemoryPickup:this.native(effectsTick.sceneNoteMemoryPickup),
+  isBankedRelicEcho:this.native(effectsTick.sceneIsBankedRelicEcho),
+  pourOrb:this.native(effectsTick.scenePourOrb),
+  grabSpitDir:this.native(effectsTick.sceneGrabSpitDir),
+  mountPairSpawn:this.native(effectsTick.sceneMountPairSpawn),
+  watchScent:this.native(effectsTick.sceneWatchScent),
+  openVent:this.native(effectsTick.sceneOpenVent),
+  levelAt:this.native(effectsTick.sceneLevelAt),
+  inGrantedRefuge:this.native(effectsTick.sceneInGrantedRefuge),
+  syncBandSheet:this.native(effectsTick.sceneSyncBandSheet),
+  burnRain:this.native(effectsTick.sceneBurnRain),
+  pourRunoff:this.native(effectsTick.scenePourRunoff),
+  trapHost:this.native(effectsTick.sceneTrapHost),
+  chestOpener:this.native(effectsTick.sceneChestOpener),
+  tetherOcclusion:this.native(effectsTick.sceneTetherOcclusion),
+  refundOnOrb:this.native(effectsTick.sceneRefundOnOrb),
+  mountCrewSpawn:this.native(effectsTick.sceneMountCrewSpawn),
+  rainScorch:this.native(effectsTick.sceneRainScorch),
+  tracksEnsure:this.native(effectsTick.sceneTracksEnsure),
+  setTracksArmed:this.native(effectsTick.sceneSetTracksArmed),
+  collapseFloor:this.native(effectsTick.sceneCollapseFloor),
+  clearDoodadsNear:this.native(effectsTick.sceneClearDoodadsNear),
+  effectTentacleSwing:this.native(frameCallbacks.sceneEffectTentacleSwing),
+  effectCrystalBeam:this.native(frameCallbacks.sceneEffectCrystalBeam),
+  effectLavaOrb:this.native(frameCallbacks.sceneEffectLavaOrb),
+  effectHeatWash:this.native(frameCallbacks.sceneEffectHeatWash),
+  effectDescentTrap:this.native(frameCallbacks.sceneEffectDescentTrap),
+  effectSporePuff:this.native(frameCallbacks.sceneEffectSporePuff),
+  effectGrowthLash:this.native(frameCallbacks.sceneEffectGrowthLash),
+  effectThicketHeal:this.native(frameCallbacks.sceneEffectThicketHeal),
+  effectStatusWash:this.native(frameCallbacks.sceneEffectStatusWash),
+  effectMawReel:this.native(frameCallbacks.sceneEffectMawReel),
+  effectOrbSpring:this.native(frameCallbacks.sceneEffectOrbSpring),
+  eldritchCorruptMonsters:this.native(frameCallbacks.sceneEldritchCorruptMonsters),
+  eldritchTentacleField:this.native(frameCallbacks.sceneEldritchTentacleField),
+  eldritchMutateDoodads:this.native(frameCallbacks.sceneEldritchMutateDoodads),
+  eldritchSpawn:this.native(frameCallbacks.sceneEldritchSpawn),
+  nearestInReach:this.native(frameCallbacks.sceneNearestInReach),
+  isEffectTarget:this.native(frameCallbacks.sceneIsEffectTarget),
+  corruptActor:this.native(frameCallbacks.sceneCorruptActor),
+  updateHarvest:this.native(frameServices.sceneUpdateHarvest),
+  armBuyerShelves:this.native(frameServices.sceneArmBuyerShelves),
+  restockVendor:this.native(frameServices.sceneRestockVendor),
+  updateCampfire:this.native(frameServices.sceneUpdateCampfire),
+  updateCaravan:this.native(frameServices.sceneUpdateCaravan),
+  updateFont:this.native(frameServices.sceneUpdateFont),
+  updateHarborBoard:this.native(frameServices.sceneUpdateHarborBoard),
+  updateHoldDefense:this.native(frameServices.sceneUpdateHoldDefense),
+  updateMireille:this.native(frameServices.sceneUpdateMireille),
+  updateMusterHorn:this.native(frameServices.sceneUpdateMusterHorn),
+  updateOracle:this.native(frameServices.sceneUpdateOracle),
+  updateSalvage:this.native(frameServices.sceneUpdateSalvage),
+  updateTraces:this.native(frameServices.sceneUpdateTraces),
+  updateTracker:this.native(frameServices.sceneUpdateTracker),
+  updateTreePips:this.native(frameServices.sceneUpdateTreePips),
+  updateVendors:this.native(frameServices.sceneUpdateVendors),
+  updateAmalgamation:this.native(frameServices.sceneUpdateAmalgamation),
+  updateDescent:this.native(frameServices.sceneUpdateDescent),
+  updateDownedCompanions:this.native(frameServices.sceneUpdateDownedCompanions),
+  updateDownedSeats:this.native(frameServices.sceneUpdateDownedSeats),
+  updateGloaming:this.native(frameServices.sceneUpdateGloaming),
+  updateLightwells:this.native(frameServices.sceneUpdateLightwells),
+  updateMercOutpost:this.native(frameServices.sceneUpdateMercOutpost),
+  updatePlayerCorpses:this.native(frameServices.sceneUpdatePlayerCorpses),
+  updateVocationSites:this.native(frameServices.sceneUpdateVocationSites),
+  updateContagionInfection:this.native(frameServices.sceneUpdateContagionInfection),
+  updateWarbandMarches:this.native(frameServices.sceneUpdateWarbandMarches),
+  harvestSettle:this.native(frameServices.sceneHarvestSettle),
+  pressingFoeNear:this.native(frameServices.scenePressingFoeNear),
+  harvestArm:this.native(frameServices.sceneHarvestArm),
+  restockOrdinal:this.native(frameServices.sceneRestockOrdinal),
+  withBuyer:{get:()=> <T>(seat:Parameters<World['withBuyer']>[0],fn:()=>T):T=>{this.#operation.assertActiveScope();return frameServices.sceneWithBuyer(this.#host,seat,fn);}},
+  syncHoldIdx:this.native(frameServices.sceneSyncHoldIdx),
+  armVendorStock:this.native(frameServices.sceneArmVendorStock),
+  restockSeconds:this.native(frameServices.sceneRestockSeconds),
+  nearBountyBoard:this.native(frameServices.sceneNearBountyBoard),
+  watchBountyHands:this.native(frameServices.sceneWatchBountyHands),
+  bountyBoardsHere:this.native(frameServices.sceneBountyBoardsHere),
+  boardStateOf:this.native(frameServices.sceneBoardStateOf),
+  bountyBeat:this.native(frameServices.sceneBountyBeat),
+  armBountyBoard:this.native(frameServices.sceneArmBountyBoard),
+  stationDwellArmed:this.native(frameServices.sceneStationDwellArmed),
+  resolvedHandsAt:this.native(frameServices.sceneResolvedHandsAt),
+  nearCampfire:this.native(frameServices.sceneNearCampfire),
+  refreshZones:this.native(frameServices.sceneRefreshZones),
+  nearCaravan:this.native(frameServices.sceneNearCaravan),
+  nearFont:this.native(frameServices.sceneNearFont),
+  nearHarborBoard:this.native(frameServices.sceneNearHarborBoard),
+  resolveHoldDefense:this.native(frameServices.sceneResolveHoldDefense),
+  spawnHoldBesieger:this.native(frameServices.sceneSpawnHoldBesieger),
+  getMireille:this.native(frameServices.sceneGetMireille),
+  mireilleLessonLived:this.native(frameServices.sceneMireilleLessonLived),
+  mireilleLessonStep:this.native(frameServices.sceneMireilleLessonStep),
+  mireilleStampLived:this.native(frameServices.sceneMireilleStampLived),
+  mireilleSeatStep:this.native(frameServices.sceneMireilleSeatStep),
+  mireilleUnlocked:this.native(frameServices.sceneMireilleUnlocked),
+  mireilleGiftOwed:this.native(frameServices.sceneMireilleGiftOwed),
+  mireilleService:this.native(frameServices.sceneMireilleService),
+  nearMusterHorn:this.native(frameServices.sceneNearMusterHorn),
+  nearOracle:this.native(frameServices.sceneNearOracle),
+  portDock:this.native(frameServices.scenePortDock),
+  canSail:this.native(frameServices.sceneCanSail),
+  nearSalvage:this.native(frameServices.sceneNearSalvage),
+  nearTracker:this.native(frameServices.sceneNearTracker),
+  swapRefusal:this.native(frameServices.sceneSwapRefusal),
+  memorySecondaryRefusal:this.native(frameServices.sceneMemorySecondaryRefusal),
+  acceptAmalgamHunt:this.native(frameServices.sceneAcceptAmalgamHunt),
+  amalgamPickSpots:this.native(frameServices.sceneAmalgamPickSpots),
+  graftAmalgamPart:this.native(frameServices.sceneGraftAmalgamPart),
+  spawnDepthkin:this.native(frameServices.sceneSpawnDepthkin),
+  streamDescentTerrain:this.native(frameServices.sceneStreamDescentTerrain),
+  sameParty:this.native(frameServices.sceneSameParty),
+  reviveSeat:this.native(frameServices.sceneReviveSeat),
+  lightwellDoodads:this.native(frameServices.sceneLightwellDoodads),
+  lightCoverAt:this.native(frameServices.sceneLightCoverAt),
+  lightMeterHeld:this.native(frameServices.sceneLightMeterHeld),
+  mercParley:this.native(frameServices.sceneMercParley),
+  canReclaim:this.native(frameServices.sceneCanReclaim),
+  reclaimCorpse:this.native(frameServices.sceneReclaimCorpse),
+  updateWraithsailAtSea:this.native(frameServices.sceneUpdateWraithsailAtSea),
+  nearestShore:this.native(frameServices.sceneNearestShore),
+  landingSiteFor:this.native(frameServices.sceneLandingSiteFor),
+  witherGrafts:this.native(frameServices.sceneWitherGrafts),
+  isPressingFoe:this.native(frameServices.sceneIsPressingFoe),
+  buyerSettlementHost:this.native(frameServices.sceneBuyerSettlementHost),
+  reconcileBounties:this.native(frameServices.sceneReconcileBounties),
+  bountyBoardUnlocked:this.native(frameServices.sceneBountyBoardUnlocked),
+  townPresent:this.native(frameServices.sceneTownPresent),
+  stationAnchor:this.native(frameServices.sceneStationAnchor),
+  bountyBoardRoster:this.native(frameServices.sceneBountyBoardRoster),
+  bountyBeatSeconds:this.native(frameServices.sceneBountyBeatSeconds),
+  pickBountyGemId:this.native(frameServices.scenePickBountyGemId),
+  bountyApproaches:this.native(frameServices.sceneBountyApproaches),
+  bountyAppropriate:this.native(frameServices.sceneBountyAppropriate),
+  questCharKey:this.native(frameServices.sceneQuestCharKey),
+  gateAccountOf:this.native(frameServices.sceneGateAccountOf),
+  bountyBroaderBonus:this.native(frameServices.sceneBountyBroaderBonus),
+  bountyReach:this.native(frameServices.sceneBountyReach),
+  handOwns:this.native(frameServices.sceneHandOwns),
+  counterOwned:this.native(frameServices.sceneCounterOwned),
+  refreshHoldDress:this.native(frameServices.sceneRefreshHoldDress),
+  refreshHoldServices:this.native(frameServices.sceneRefreshHoldServices),
+  placeVocationSites:this.native(frameServices.scenePlaceVocationSites),
+  fillOrbFounts:this.native(frameServices.sceneFillOrbFounts),
+  grantSkillGemItem:this.native(frameServices.sceneGrantSkillGemItem),
+  hasOracle:this.native(frameServices.sceneHasOracle),
+  voyageZoneDef:this.native(frameServices.sceneVoyageZoneDef),
+  hasSalvage:this.native(frameServices.sceneHasSalvage),
+  swapReadiness:this.native(frameServices.sceneSwapReadiness),
+  pickAmalgamMinibossZone:this.native(frameServices.scenePickAmalgamMinibossZone),
+  sameSeatParty:this.native(frameServices.sceneSameSeatParty),
+  dropSavedLoot:this.native(frameServices.sceneDropSavedLoot),
+  islandDefIdOf:this.native(frameServices.sceneIslandDefIdOf),
+  shelfCharKey:this.native(frameServices.sceneShelfCharKey),
+  townSite:this.native(frameServices.sceneTownSite),
+  skillDropPool:this.native(frameServices.sceneSkillDropPool),
+  gemWeights:this.native(frameServices.sceneGemWeights),
+  seatNote:this.native(frameServices.sceneSeatNote),
+  salvageUnlocked:this.native(frameServices.sceneSalvageUnlocked),
+  isSafeAt:this.native(frameServices.sceneIsSafeAt),
+  maybeOpenCrusadePortal:this.native(frameAreaEvents.sceneMaybeOpenCrusadePortal),
+  maybeOpenDemonPortal:this.native(frameAreaEvents.sceneMaybeOpenDemonPortal),
+  pruneEngageTokens:this.native(frameAreaEvents.scenePruneEngageTokens),
+  updateBombardment:this.native(frameAreaEvents.sceneUpdateBombardment),
+  updateBrigandRaid:this.native(frameAreaEvents.sceneUpdateBrigandRaid),
+  updateClutch:this.native(frameAreaEvents.sceneUpdateClutch),
+  updateDeadwakeStream:this.native(frameAreaEvents.sceneUpdateDeadwakeStream),
+  updateDemonStorm:this.native(frameAreaEvents.sceneUpdateDemonStorm),
+  updateDroveScene:this.native(frameAreaEvents.sceneUpdateDroveScene),
+  updateHauntStream:this.native(frameAreaEvents.sceneUpdateHauntStream),
+  updateLongNight:this.native(frameAreaEvents.sceneUpdateLongNight),
+  updateLooters:this.native(frameAreaEvents.sceneUpdateLooters),
+  updateMigrationStream:this.native(frameAreaEvents.sceneUpdateMigrationStream),
+  updateNecropolis:this.native(frameAreaEvents.sceneUpdateNecropolis),
+  updateNeutralCooldown:this.native(frameAreaEvents.sceneUpdateNeutralCooldown),
+  updateQuickening:this.native(frameAreaEvents.sceneUpdateQuickening),
+  updateStorm:this.native(frameAreaEvents.sceneUpdateStorm),
+  updateStrayingScene:this.native(frameAreaEvents.sceneUpdateStrayingScene),
+  updateSwarmStream:this.native(frameAreaEvents.sceneUpdateSwarmStream),
+  updateWispScene:this.native(frameAreaEvents.sceneUpdateWispScene),
+  updateWorldBosses:this.native(frameAreaEvents.sceneUpdateWorldBosses),
+  updateWraithsailDock:this.native(frameAreaEvents.sceneUpdateWraithsailDock),
+  bombardTarget:this.native(frameAreaEvents.sceneBombardTarget),
+  spawnBrigandPack:this.native(frameAreaEvents.sceneSpawnBrigandPack),
+  updateBrigands:this.native(frameAreaEvents.sceneUpdateBrigands),
+  spawnDeadwakeLeader:this.native(frameAreaEvents.sceneSpawnDeadwakeLeader),
+  deadwakeHeadcount:this.native(frameAreaEvents.sceneDeadwakeHeadcount),
+  spawnDeadwakeStreamer:this.native(frameAreaEvents.sceneSpawnDeadwakeStreamer),
+  fireMeteor:this.native(frameAreaEvents.sceneFireMeteor),
+  evapDroveDress:this.native(frameAreaEvents.sceneEvapDroveDress),
+  pastureAnchor:this.native(frameAreaEvents.scenePastureAnchor),
+  plantDrovePen:this.native(frameAreaEvents.scenePlantDrovePen),
+  droveGapDir:this.native(frameAreaEvents.sceneDroveGapDir),
+  droveGathered:this.native(frameAreaEvents.sceneDroveGathered),
+  hauntHeadcount:this.native(frameAreaEvents.sceneHauntHeadcount),
+  longNightWorldChores:this.native(frameAreaEvents.sceneLongNightWorldChores),
+  longNightHeadcount:this.native(frameAreaEvents.sceneLongNightHeadcount),
+  updateMigrants:this.native(frameAreaEvents.sceneUpdateMigrants),
+  migrantHeadcount:this.native(frameAreaEvents.sceneMigrantHeadcount),
+  spawnMigrant:this.native(frameAreaEvents.sceneSpawnMigrant),
+  nearestSeatDist:this.native(frameAreaEvents.sceneNearestSeatDist),
+  fireLightning:this.native(frameAreaEvents.sceneFireLightning),
+  strayingRallySeat:this.native(frameAreaEvents.sceneStrayingRallySeat),
+  strayingRelief:this.native(frameAreaEvents.sceneStrayingRelief),
+  swarmHeadcount:this.native(frameAreaEvents.sceneSwarmHeadcount),
+  spawnSwarmFlier:this.native(frameAreaEvents.sceneSpawnSwarmFlier),
+  mintWispBody:this.native(frameAreaEvents.sceneMintWispBody),
+  kindleWisp:this.native(frameAreaEvents.sceneKindleWisp),
+  applyWispRide:this.native(frameAreaEvents.sceneApplyWispRide),
+  wispRideLands:this.native(frameAreaEvents.sceneWispRideLands),
+  wispSeekTarget:this.native(frameAreaEvents.sceneWispSeekTarget),
+  mintWorldBossZone:this.native(frameAreaEvents.sceneMintWorldBossZone),
+  updateWorldBossWalls:this.native(frameAreaEvents.sceneUpdateWorldBossWalls),
+  updateWorldBossPassing:this.native(frameAreaEvents.sceneUpdateWorldBossPassing),
+  bandFlow:this.native(frameAreaEvents.sceneBandFlow),
+  brigandWanderPoint:this.native(frameAreaEvents.sceneBrigandWanderPoint),
+  deadwakeEntryPoint:this.native(frameAreaEvents.sceneDeadwakeEntryPoint),
+  onMeteorImpact:this.native(frameAreaEvents.sceneOnMeteorImpact),
+  droveHash:this.native(frameAreaEvents.sceneDroveHash),
+  reconcileLongNightWarps:this.native(frameAreaEvents.sceneReconcileLongNightWarps),
+  wispRoute:this.native(frameAreaEvents.sceneWispRoute),
+  wyrmWallSpots:this.native(frameAreaEvents.sceneWyrmWallSpots),
+  demonHeadcount:this.native(frameAreaEvents.sceneDemonHeadcount),
+  updateHarborholds:this.native(campaignEvents.sceneUpdateHarborholds),
+  feedMyceliaActivity:this.native(campaignEvents.sceneFeedMyceliaActivity),
+  drainMyceliaLedger:this.native(campaignEvents.sceneDrainMyceliaLedger),
+  sweepClassClaims:this.native(campaignEvents.sceneSweepClassClaims),
+  updateDeedRecovery:this.native(campaignEvents.sceneUpdateDeedRecovery),
+  updateForechart:this.native(campaignEvents.sceneUpdateForechart),
+  updateOmens:this.native(campaignEvents.sceneUpdateOmens),
+  updateWebSettle:this.native(campaignEvents.sceneUpdateWebSettle),
+  reconcileDeepwinter:this.native(campaignEvents.sceneReconcileDeepwinter),
+  relocateToFactionBiome:this.native(campaignEvents.sceneRelocateToFactionBiome),
+  surfaceAnchor:this.native(campaignEvents.sceneSurfaceAnchor),
+  visible:this.native(campaignEvents.sceneVisible),
+  fellHold:this.native(campaignEvents.sceneFellHold),
+  eventActivityAt:this.native(campaignEvents.sceneEventActivityAt),
+  ledgerView:this.native(campaignEvents.sceneLedgerView),
+  forechartSounding:this.native(campaignEvents.sceneForechartSounding),
+  growSoundings:this.native(campaignEvents.sceneGrowSoundings),
+  breakArenaSeal:this.native(frameTravel.sceneBreakArenaSeal),
+  exitLockHint:this.native(frameTravel.sceneExitLockHint),
+  exitUnder:this.native(frameTravel.sceneExitUnder),
+  gateUnder:this.native(frameTravel.sceneGateUnder),
+  holdfastNear:this.native(frameTravel.sceneHoldfastNear),
+  mintSidezone:this.native(frameTravel.sceneMintSidezone),
+  mouthRefusalUnder:this.native(frameTravel.sceneMouthRefusalUnder),
+  mouthUnder:this.native(frameTravel.sceneMouthUnder),
+  openEncounter:this.native(frameTravel.sceneOpenEncounter),
+  triggerFracture:this.native(frameTravel.sceneTriggerFracture),
+  wardSealUnder:this.native(frameTravel.sceneWardSealUnder),
+  waypointBesieged:this.native(frameTravel.sceneWaypointBesieged),
+  applyWaveFrenzy:this.native(frameTravel.sceneApplyWaveFrenzy),
+  recalcPlayer:this.native(frameTravel.sceneRecalcPlayer),
+  shardRoadHost:this.native(frameTravel.sceneShardRoadHost),
+  shardMouthRoad:this.native(frameTravel.sceneShardMouthRoad),
+  shardExitRoad:this.native(frameTravel.sceneShardExitRoad),
+  sealedRoadUnder:this.native(frameTravel.sceneSealedRoadUnder),
+  bountyOmens:this.native(frameTravel.sceneBountyOmens),
+  harborholdOmens:this.native(frameTravel.sceneHarborholdOmens),
+  devOverlayView:this.native(frameTravel.sceneDevOverlayView),
+  vendorQualityPieces:this.native(frameTravel.sceneVendorQualityPieces),
+  mintAuthoredZone:this.native(frameTravel.sceneMintAuthoredZone),
+  questHandLevel:this.native(frameTravel.sceneQuestHandLevel),
+  spawnArenaBoss:this.native(frameTravel.sceneSpawnArenaBoss),
+  applySidezoneFurnish:this.native(frameTravel.sceneApplySidezoneFurnish),
+  isExitLocked:this.native(frameTravel.sceneIsExitLocked),
+  holdfastKeeper:this.native(frameTravel.sceneHoldfastKeeper),
+  mintMassSidearea:this.native(frameTravel.sceneMintMassSidearea),
+  sidezoneSealHolds:this.native(frameTravel.sceneSidezoneSealHolds),
+  onMouth:this.native(frameTravel.sceneOnMouth),
+  seedVeil:this.native(frameTravel.sceneSeedVeil),
+  spawnPartyEchoes:this.native(frameTravel.sceneSpawnPartyEchoes),
+  dimensionRoad:this.native(frameTravel.sceneDimensionRoad),
+  realmRoad:this.native(frameTravel.sceneRealmRoad),
+  shardRealmRoad:this.native(frameTravel.sceneShardRealmRoad),
+  demonRealmPlan:this.native(frameTravel.sceneDemonRealmPlan),
+  crusadeRealmPlan:this.native(frameTravel.sceneCrusadeRealmPlan),
+  necropolisRealmPlan:this.native(frameTravel.sceneNecropolisRealmPlan),
+  fractureRealmPlan:this.native(frameTravel.sceneFractureRealmPlan),
+  courtRealmPlan:this.native(frameTravel.sceneCourtRealmPlan),
+  landPartyAt:this.native(frameTravel.sceneLandPartyAt),
+  townPortalViews:this.native(frameTravel.sceneTownPortalViews),
+  allQuestHands:this.native(frameTravel.sceneAllQuestHands),
+  questLedgerOf:this.native(frameTravel.sceneQuestLedgerOf),
+  dimensionCrossing:this.native(frameTravel.sceneDimensionCrossing),
+  shardDimensionRoad:this.native(frameTravel.sceneShardDimensionRoad),
+  realmArenaMint:this.native(frameTravel.sceneRealmArenaMint),
+  castTownPortal:this.native(frameTravel.sceneCastTownPortal),
+  learnSkill:this.native(frameTravel.sceneLearnSkill),
+  unlearnSkill:this.native(frameTravel.sceneUnlearnSkill),
+  attuneSpectre:this.native(frameTravel.sceneAttuneSpectre),
+  mimicSelectFor:this.native(frameTravel.sceneMimicSelectFor),
+  pickTreeNode:this.native(frameTravel.scenePickTreeNode),
+  releaseCompanion:this.native(frameTravel.sceneReleaseCompanion),
+  placePing:this.native(frameTravel.scenePlacePing),
+  fontMergeSkill:this.native(frameTravel.sceneFontMergeSkill),
+  fontConvertEssence:this.native(frameTravel.sceneFontConvertEssence),
+  fontResetTree:this.native(frameTravel.sceneFontResetTree),
+  buyAbilityEssence:this.native(frameTravel.sceneBuyAbilityEssence),
+  buyVendorGem:this.native(frameTravel.sceneBuyVendorGem),
+  buyChandlerGem:this.native(frameTravel.sceneBuyChandlerGem),
+  buyDelverGem:this.native(frameTravel.sceneBuyDelverGem),
+  setVendorLock:this.native(frameTravel.sceneSetVendorLock),
+  setVendorCommission:this.native(frameTravel.sceneSetVendorCommission),
+  levelUpSkill:this.native(frameTravel.sceneLevelUpSkill),
+  bagItem:this.native(frameTravel.sceneBagItem),
+  levelUpSupport:this.native(frameTravel.sceneLevelUpSupport),
+  resyncMinionSupports:this.native(frameTravel.sceneResyncMinionSupports),
+  reacquireSkill:this.native(frameTravel.sceneReacquireSkill),
+  socketSupport:this.native(frameTravel.sceneSocketSupport),
+  unsocketSupport:this.native(frameTravel.sceneUnsocketSupport),
+  unsocketBagSkill:this.native(frameTravel.sceneUnsocketBagSkill),
+  allocateNode:this.native(frameTravel.sceneAllocateNode),
+  refundPassiveNode:this.native(frameTravel.sceneRefundPassiveNode),
+  bindGraft:this.native(frameTravel.sceneBindGraft),
+  bindSkill:this.native(frameTravel.sceneBindSkill),
+  swapSkillSlots:this.native(frameTravel.sceneSwapSkillSlots),
+  recallMemory:this.native(frameTravel.sceneRecallMemory),
+  buyHarborChart:this.native(frameTravel.sceneBuyHarborChart),
+  acceptBounty:this.native(frameTravel.sceneAcceptBounty),
+  abandonBounty:this.native(frameTravel.sceneAbandonBounty),
+  turnInBounty:this.native(frameTravel.sceneTurnInBounty),
+  setBountyLock:this.native(frameTravel.sceneSetBountyLock),
+  forgeBegin:this.native(frameTravel.sceneForgeBegin),
+  forgeCancel:this.native(frameTravel.sceneForgeCancel),
+  postHoldWrits:this.native(frameTravel.scenePostHoldWrits),
+  beginHoldMuster:this.native(frameTravel.sceneBeginHoldMuster),
+  buyHoldRestore:this.native(frameTravel.sceneBuyHoldRestore),
+  payHoldfastToll:this.native(frameTravel.scenePayHoldfastToll),
+  equipItem:this.native(frameTravel.sceneEquipItem),
+  unequipItem:this.native(frameTravel.sceneUnequipItem),
+  moveBagItem:this.native(frameTravel.sceneMoveBagItem),
+  sortBag:this.native(frameTravel.sceneSortBag),
+  dropGearFromBag:this.native(frameTravel.sceneDropGearFromBag),
+  oracleRelic:this.native(frameTravel.sceneOracleRelic),
+  reliquaryToggle:this.native(frameTravel.sceneReliquaryToggle),
+  withdrawRelic:this.native(frameTravel.sceneWithdrawRelic),
+  relicStashMove:this.native(frameTravel.sceneRelicStashMove),
+  personalStash:this.native(frameTravel.scenePersonalStash),
+  oracleAttune:this.native(frameTravel.sceneOracleAttune),
+  containerPlace:this.native(frameTravel.sceneContainerPlace),
+  containerTake:this.native(frameTravel.sceneContainerTake),
+  containerMove:this.native(frameTravel.sceneContainerMove),
+  harvestConsent:this.native(frameTravel.sceneHarvestConsent),
+  pickupNearestGear:this.native(frameTravel.scenePickupNearestGear),
+  salvageItem:this.native(frameTravel.sceneSalvageItem),
+  salvageBulk:this.native(frameTravel.sceneSalvageBulk),
+  salvageLockSet:this.native(frameTravel.sceneSalvageLockSet),
+  craftAffix:this.native(frameTravel.sceneCraftAffix),
+  rerollAffix:this.native(frameTravel.sceneRerollAffix),
+  socketVestige:this.native(frameTravel.sceneSocketVestige),
+  craftSocket:this.native(frameTravel.sceneCraftSocket),
+  armFolkWithItem:this.native(frameTravel.sceneArmFolkWithItem),
+  armFolkWithEssence:this.native(frameTravel.sceneArmFolkWithEssence),
+  meetsRequirements:this.native(frameTravel.sceneMeetsRequirements),
+  unlearnRefusal:this.native(frameTravel.sceneUnlearnRefusal),
+  rebindWornGrafts:this.native(frameTravel.sceneRebindWornGrafts),
+  restoreCompanions:this.native(frameTravel.sceneRestoreCompanions),
+  rememberSkillSlots:this.native(frameTravel.sceneRememberSkillSlots),
+  clearSummonTreeBodies:this.native(frameTravel.sceneClearSummonTreeBodies),
+  grantSupportGemItem:this.native(frameTravel.sceneGrantSupportGemItem),
+  spendAbilityEssence:this.native(frameTravel.sceneSpendAbilityEssence),
+  vendorTradeRefusal:this.native(frameTravel.sceneVendorTradeRefusal),
+  abilityEssTierRefusal:this.native(frameTravel.sceneAbilityEssTierRefusal),
+  canAffordEssence:this.native(frameTravel.sceneCanAffordEssence),
+  buysAsOwn:this.native(frameTravel.sceneBuysAsOwn),
+  nearSmith:this.native(frameTravel.sceneNearSmith),
+  vendorEntryAllowed:this.native(frameTravel.sceneVendorEntryAllowed),
+  vendorPrice:this.native(frameTravel.sceneVendorPrice),
+  vendorBought:this.native(frameTravel.sceneVendorBought),
+  nearChandler:this.native(frameTravel.sceneNearChandler),
+  delverShopOpen:this.native(frameTravel.sceneDelverShopOpen),
+  delverEntryRefusal:this.native(frameTravel.sceneDelverEntryRefusal),
+  vendorHoldKey:this.native(frameTravel.sceneVendorHoldKey),
+  vendorHoldFor:this.native(frameTravel.sceneVendorHoldFor),
+  vendorLockCap:this.native(frameTravel.sceneVendorLockCap),
+  commissionOdds:this.native(frameTravel.sceneCommissionOdds),
+  ensureRealmRoots:this.native(frameTravel.sceneEnsureRealmRoots),
+  refreshPassiveCompany:this.native(frameTravel.sceneRefreshPassiveCompany),
+  passiveRefundRefusal:this.native(frameTravel.scenePassiveRefundRefusal),
+  seatSkillById:this.native(frameTravel.sceneSeatSkillById),
+  resolveMemoryCut:this.native(frameTravel.sceneResolveMemoryCut),
+  caravanBandUnlocked:this.native(frameTravel.sceneCaravanBandUnlocked),
+  mintCaravanRoute:this.native(frameTravel.sceneMintCaravanRoute),
+  mortalValueOf:this.native(frameTravel.sceneMortalValueOf),
+  spendMortalValue:this.native(frameTravel.sceneSpendMortalValue),
+  refreshBountySlate:this.native(frameTravel.sceneRefreshBountySlate),
+  payBountyLanes:this.native(frameTravel.scenePayBountyLanes),
+  bountyLockCapacity:this.native(frameTravel.sceneBountyLockCapacity),
+  forgeBases:this.native(frameTravel.sceneForgeBases),
+  holdStateFor:this.native(frameTravel.sceneHoldStateFor),
+  spendEssence:this.native(frameTravel.sceneSpendEssence),
+  wornSlotOf:this.native(frameTravel.sceneWornSlotOf),
+  dropGemFromBag:this.native(frameTravel.sceneDropGemFromBag),
+  canManageAccountRelics:this.native(frameTravel.sceneCanManageAccountRelics),
+  seatAccountRelic:this.native(frameTravel.sceneSeatAccountRelic),
+  persistAccountRelics:this.native(frameTravel.scenePersistAccountRelics),
+  reliquaryRefusal:this.native(frameTravel.sceneReliquaryRefusal),
+  seatModeDef:this.native(frameTravel.sceneSeatModeDef),
+  containerHeld:this.native(frameTravel.sceneContainerHeld),
+  salvageLane:this.native(frameTravel.sceneSalvageLane),
+  lockedRefusal:this.native(frameTravel.sceneLockedRefusal),
+  breakOneGemItem:this.native(frameTravel.sceneBreakOneGemItem),
+  breakOneItem:this.native(frameTravel.sceneBreakOneItem),
+  stationReach:this.native(frameTravel.sceneStationReach),
+  craftSlots:this.native(frameTravel.sceneCraftSlots),
+  boroughOf:this.native(frameTravel.sceneBoroughOf),
+  boroughArmsOf:this.native(frameTravel.sceneBoroughArmsOf),
+  armBoroughFolk:this.native(frameTravel.sceneArmBoroughFolk),
+  raiseArenaWards:this.native(frameTravel.sceneRaiseArenaWards),
+  vendorMemoryServicesOpen:this.native(frameTravel.sceneVendorMemoryServicesOpen),
+  waresRungsOwned:this.native(frameTravel.sceneWaresRungsOwned),
+  nearDelver:this.native(frameTravel.sceneNearDelver),
+  delverDepthReached:this.native(frameTravel.sceneDelverDepthReached),
+  rescaleEnemies:this.native(frameTravel.sceneRescaleEnemies),
+  supportDropPool:this.native(frameTravel.sceneSupportDropPool),
+  memoryLeanOf:this.native(frameTravel.sceneMemoryLeanOf),
+  caravanDestName:this.native(frameTravel.sceneCaravanDestName),
+  payBountyComponent:this.native(frameTravel.scenePayBountyComponent),
+  nearScrapVendor:this.native(frameTravel.sceneNearScrapVendor),
+  stationNear:this.native(frameTravel.sceneStationNear),
+  suiteSummons:this.native(frameTravel.sceneSuiteSummons),
+  applyPartyScale:this.native(frameTravel.sceneApplyPartyScale),
+  suitesAt:this.native(frameTravel.sceneSuitesAt),
+  stationStands:this.native(frameTravel.sceneStationStands),
+  addTrack:method(()=>this.input.assembly.input.geometry,"addTrack"),
+  altars:field(()=>this.input.assembly.input.physical.input.state,"altars"),
+  arenaCrowd:field(()=>this.runtimeState.frame,"arenaCrowd"),
+  attuneTimer:field(()=>this.runtimeState.frame,"attuneTimer"),
+  baseTable:method(()=>this.input.assembly.input.population,"baseTable"),
+  boroughArmFolkId:field(()=>this.input.assembly.input.registry.input.state,"boroughArmFolkId"),
+  boroughArmRequested:field(()=>this.input.assembly.input.registry.input.state,"boroughArmRequested"),
+  boroughRefugees:field(()=>this.input.assembly.input.registry.input.state,"boroughRefugees"),
+  brittleDwell:field(()=>this.runtimeState.frame,"brittleDwell"),
+  brittleWarnAt:field(()=>this.runtimeState.frame,"brittleWarnAt"),
+  caveMap:field(()=>this.input.campaign,"caveMap"),
+  charBorn:field(()=>this.input.assembly.transition,"charBorn"),
+  charRegrowAcc:field(()=>this.input.assembly.transition,"charRegrowAcc"),
+  chartFrontier:method(()=>this.input.assembly.graph,"chartFrontier"),
+  chests:field(()=>this.input.assembly.input.physical.input.state,"chests"),
+  chillTimers:field(()=>this.runtimeState.frame,"chillTimers"),
+  clearOfDoors:method(()=>this.input.assembly.input.geometry,"clearOfDoors"),
+  clearTransitSpot:method(()=>this.input.assembly.input.geometry,"clearTransitSpot"),
+  clientActionHook:method(()=>this.input.campaign,"clientActionHook"),
+  collapse:field(()=>this.input.assembly.input.geometry,"collapse"),
+  companionGrants:field(()=>this.input.progression,"companionGrants"),
+  contactHazards:field(()=>this.input.assembly.input.geometry,"contactHazards"),
+  couchConfine:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"couchConfine"),
+  deedDotAmounts:field(()=>this.runtimeState.frame,"deedDotAmounts"),
+  dissolveFloorCracks:field(()=>this.runtimeState.frame,"dissolveFloorCracks"),
+  doodadFamilyRev:method(()=>this.input.assembly.input.geometry,"doodadFamilyRev"),
+  doodadsRev:field(()=>this.input.assembly.input.geometry,"doodadsRev"),
+  douseTimers:field(()=>this.runtimeState.frame,"douseTimers"),
+  drainSurvival:method(()=>this,"drainSurvival"),
+  dropGearAt:method(()=>this.input.assembly.lootController,"dropGearAt"),
+  dwellReachable:method(()=>this.input.assembly.input.geometry,"dwellReachable"),
+  effectiveSpawn:method(()=>this.input.assembly.input.population,"effectiveSpawn"),
+  emergences:field(()=>this.input.progression.input.state,"emergences"),
+  encRng:field(()=>this.input.assembly.transition,"encRng"),
+  enemyTetherScan:field(()=>this.runtimeState.frame,"enemyTetherScan"),
+  exits:field(()=>this.input.assembly.input.geometry,"exits"),
+  extractionDepartures:field(()=>this.input.assembly.input.registry.input.state,"extractionDepartures"),
+  farPoint:method(()=>this.input.assembly.input.geometry,"farPoint"),
+  farthestStand:method(()=>this.input.assembly.input.geometry,"farthestStand"),
+  fellDoodad:method(()=>this.input.assembly.input.geometry,"fellDoodad"),
+  fracturePoint:method(()=>this.input.assembly.input.registry.input.birth,"fracturePoint"),
+  fractureRng:field(()=>this.input.assembly.input.registry.input.birth.input.state,"fractureRng"),
+  fractureRun:field(()=>this.input.assembly.input.registry.input.birth.input.state,"fractureRun"),
+  frontRiders:field(()=>this.input.assembly.input.geometry,"frontRiders"),
+  gameOver:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"gameOver"),
+  gazeEyes:field(()=>this.runtimeState.frame,"gazeEyes"),
+  gazeEyesArr:field(()=>this.runtimeState.frame,"gazeEyesArr"),
+  gazeEyesLen:field(()=>this.runtimeState.frame,"gazeEyesLen"),
+  gazeEyesRev:field(()=>this.runtimeState.frame,"gazeEyesRev"),
+  gazeTimers:field(()=>this.runtimeState.frame,"gazeTimers"),
+  gearVacuum:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"gearVacuum"),
+  geyserPocks:field(()=>this.input.assembly.input.environment.input.state,"geyserPocks"),
+  geyserSweepAcc:field(()=>this.input.assembly.input.environment.input.state,"geyserSweepAcc"),
+  grabScratch:field(()=>this.runtimeState.frame,"grabScratch"),
+  graftPart:method(()=>this.input.assembly.input.registry.input.birth,"graftPart"),
+  grantedPocketCache:field(()=>this.input.assembly.input.geometry,"grantedPocketCache"),
+  grantedPocketZone:field(()=>this.runtimeState.frame,"grantedPocketZone"),
+  grantedTrailMemory:field(()=>this.input.assembly.input.geometry,"grantedTrailMemory"),
+  grantEssence:method(()=>this.campaignTransitions,"grantEssence"),
+  groundInsured:method(()=>this.input.assembly.input.geometry,"groundInsured"),
+  hasDeedEnemyNearby:method(()=>this.campaignOwner,"hasDeedEnemyNearby"),
+  hivecallHooks:field(()=>this.runtimeState.frame,"hivecallHooks"),
+  hivecallRedirecting:field(()=>this.runtimeState.frame,"hivecallRedirecting"),
+  huntBeast:field(()=>this.input.assembly.input.registry.input.birth.input.state,"huntBeast"),
+  huntFootprint:field(()=>this.input.assembly.input.registry.input.birth.input.state,"huntFootprint"),
+  huntFootprintDwell:field(()=>this.input.assembly.input.registry.input.state,"huntFootprintDwell"),
+  inCave:field(()=>this.input.assembly.transition,"inCave"),
+  incursionEventAcc:field(()=>this.runtimeState.frame,"incursionEventAcc"),
+  liteBeatAt:field(()=>this.input.assembly.input.ecology.input.state,"liteBeatAt"),
+  liteBurrows:field(()=>this.input.assembly.input.ecology.input.state,"liteBurrows"),
+  liteColonySeen:field(()=>this.input.assembly.input.ecology.input.state,"liteColonySeen"),
+  liteCondHeld:method(()=>this.input.assembly.input.ecology,"liteCondHeld"),
+  liteCounts:field(()=>this.runtimeState.frame,"liteCounts"),
+  liteDemoteClock:field(()=>this.runtimeState.frame,"liteDemoteClock"),
+  liteHasTrample:field(()=>this.input.assembly.input.ecology.input.state,"liteHasTrample"),
+  liteKeeperScratch:field(()=>this.runtimeState.frame,"liteKeeperScratch"),
+  liteMinTrampleSpeed:field(()=>this.input.assembly.input.ecology.input.state,"liteMinTrampleSpeed"),
+  litePocketPush:method(()=>this.input.assembly.input.ecology,"litePocketPush"),
+  litePromoteBudget:field(()=>this.input.assembly.input.ecology.input.state,"litePromoteBudget"),
+  liteRegenClock:field(()=>this.input.assembly.input.ecology.input.state,"liteRegenClock"),
+  liteVictimScratch:field(()=>this.runtimeState.frame,"liteVictimScratch"),
+  liteWhenCueDraws:field(()=>this.input.assembly.input.ecology.input.state,"liteWhenCueDraws"),
+  localHumanSeats:method(()=>this.input.quests,"localHumanSeats"),
+  lockHint:field(()=>this.runtimeState.frame,"lockHint"),
+  manifest:field(()=>this.input.campaign,"manifest"),
+  massNativeEffectInvokers:field(()=>this.runtimeState.frame,"massNativeEffectInvokers"),
+  materializeLiveZoneEvents:method(()=>this.input.assembly.input.registry,"materializeLiveZoneEvents"),
+  meta:field(()=>this.input.campaign,"meta"),
+  minionMetaScan:field(()=>this.runtimeState.frame,"minionMetaScan"),
+  modeStageDef:method(()=>this.input.assembly.input.history,"modeStageDef"),
+  mountUnhorse:method(()=>this,"mountUnhorse"),
+  moveActor:method(()=>this,"moveActor"),
+  nativeExitPreparationHost:method(()=>this.input.assembly.input.coast,"nativeExitPreparationHost"),
+  nativeExitPreparationSources:method(()=>this.input.assembly.input.coast,"nativeExitPreparationSources"),
+  notices:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"notices"),
+  objectiveDone:field(()=>this.input.assembly.input.objectives,"objectiveDone"),
+  occHost:method(()=>this.input.assembly.input.occurrences,"occHost"),
+  packNextAt:field(()=>this.runtimeState.frame,"packNextAt"),
+  pendingMetas:{get:()=>this.#operation.captureRecordStorage("pendingMetas",this.runtimeState.pendingMetas),set:value=>{this.#operation.checkRecordStorage("pendingMetas",value);this.runtimeState.pendingMetas=value;this.#operation.captureRecordStorage("pendingMetas",value);}},
+  pickupFeed:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"pickupFeed"),
+  placeExit:method(()=>this.input.assembly.input.coast,"placeExit"),
+  placeFractureRiftContent:method(()=>this.input.assembly.input.registry.input.birth,"placeFractureRiftContent"),
+  playerIdle:method(()=>this.input.questInteraction,"playerIdle"),
+  promoteRarity:method(()=>this.input.assembly.input.population,"promoteRarity"),
+  radianceCondHeld:method(()=>this.input.assembly.sky,"radianceCondHeld"),
+  rampageTimer:field(()=>this.input.assembly.input.geometry,"rampageTimer"),
+  refreshAuroras:method(()=>this,"refreshAuroras"),
+  refreshCreepers:method(()=>this,"refreshCreepers"),
+  refreshExitLabels:method(()=>this.input.assembly.input.coast,"refreshExitLabels"),
+  refreshGuardians:method(()=>this,"refreshGuardians"),
+  refreshSatellites:method(()=>this,"refreshSatellites"),
+  regrowing:field(()=>this.input.assembly.input.geometry,"regrowing"),
+  relayStatus:method(()=>this.input.assembly.input.population.factory,"relayStatus"),
+  ritualSite:field(()=>this.input.assembly.input.registry.input.birth.input.state,"ritualSite"),
+  scaldHeatAcc:field(()=>this.runtimeState.frame,"scaldHeatAcc"),
+  separateScratch:field(()=>this.runtimeState.frame,"separateScratch"),
+  settleLedger:method(()=>this.input.progression,"settleLedger"),
+  shrines:field(()=>this.input.assembly.input.physical.input.state,"shrines"),
+  slamScratch:field(()=>this.runtimeState.frame,"slamScratch"),
+  slipAway:method(()=>this,"slipAway"),
+  snowFloor:field(()=>this.input.assembly.input.geometry,"snowFloor"),
+  soulriverAcc:field(()=>this.runtimeState.frame,"soulriverAcc"),
+  spans:field(()=>this.input.assembly.input.state,"spans"),
+  squishScratch:field(()=>this.runtimeState.frame,"squishScratch"),
+  stormCaster:{get:()=>observeNativeSource(this.#host,this.runtimeState.frame.stormCaster),set:value=>{this.runtimeState.frame.stormCaster=value;}},
+  storyPair:method(()=>this.input.assembly.input.geometry,"storyPair"),
+  surveyed:field(()=>this.input.campaign,"surveyed"),
+  syncedGrantedPockets:field(()=>this.input.assembly.input.geometry,"syncedGrantedPockets"),
+  terrainDrainScratch:field(()=>this.runtimeState.frame,"terrainDrainScratch"),
+  terrainTick:field(()=>this.runtimeState.frame,"terrainTick"),
+  tethers:{get:()=>this.#operation.captureRecordStorage("tethers",this.tethers.input.state.tethers),set:value=>{this.#operation.checkRecordStorage("tethers",value);this.tethers.input.state.tethers=value;this.#operation.captureRecordStorage("tethers",value);}},
+  texts:field(()=>this.input.assembly.objectiveController.input.state,"texts"),
+  theaterBeatIdx:field(()=>this.runtimeState.frame,"theaterBeatIdx"),
+  theaterDwellSec:field(()=>this.runtimeState.frame,"theaterDwellSec"),
+  theaterQuiet:field(()=>this.input.assembly.input.state,"theaterQuiet"),
+  theaterRunBeat:method(()=>this.input.assembly.input.theater,"theaterRunBeat"),
+  theaterRuns:field(()=>this.input.assembly.input.theater.input.state,"theaterRuns"),
+  throngClaimed:field(()=>this.input.assembly.input.ecology.input.services,"throngClaimed"),
+  throngEvolutionActive:field(()=>this.runtimeState.frame,"throngEvolutionActive"),
+  throngRebake:field(()=>this.runtimeState.frame,"throngRebake"),
+  throngScan:field(()=>this.runtimeState.frame,"throngScan"),
+  trackSweepAcc:field(()=>this.input.assembly.input.geometry,"trackSweepAcc"),
+  transientDoodads:field(()=>this.runtimeState.frame,"transientDoodads"),
+  trapDeferred:field(()=>this.input.assembly.input.geometry,"trapDeferred"),
+  trapSweepAcc:field(()=>this.input.assembly.input.geometry,"trapSweepAcc"),
+  trapworks:field(()=>this.input.assembly.input.geometry,"trapworks"),
+  updateCasting:method(()=>this,"updateCasting"),
+  updateDeathBursts:method(()=>this,"updateDeathBursts"),
+  updateFollowUps:method(()=>this,"updateFollowUps"),
+  updateObjective:method(()=>this,"updateObjective"),
+  updatePendingSummons:method(()=>this,"updatePendingSummons"),
+  updateProjectiles:method(()=>this,"updateProjectiles"),
+  updatePuzzles:method(()=>this.input.assembly.puzzleController,"updatePuzzles"),
+  updateZones:method(()=>this,"updateZones"),
+  veilIdx:field(()=>this.runtimeState.frame,"veilIdx"),
+  veilIdxArr:field(()=>this.runtimeState.frame,"veilIdxArr"),
+  veilIdxLen:field(()=>this.runtimeState.frame,"veilIdxLen"),
+  veilIdxRev:field(()=>this.runtimeState.frame,"veilIdxRev"),
+  ventDwellAcc:field(()=>this.runtimeState.frame,"ventDwellAcc"),
+  ventDwellers:field(()=>this.runtimeState.frame,"ventDwellers"),
+  watchNextAt:field(()=>this.runtimeState.frame,"watchNextAt"),
+  weatherDressAcc:field(()=>this.input.assembly.input.geometry,"weatherDressAcc"),
+  wetSkyAcc:field(()=>this.runtimeState.frame,"wetSkyAcc"),
+  wetSkyStood:field(()=>this.runtimeState.frame,"wetSkyStood"),
+  wornThrongInsts:field(()=>this.runtimeState.frame,"wornThrongInsts"),
+  zoneMap:field(()=>this.input.campaign,"zoneMap"),
+  heatWashScratch:field(()=>this.runtimeState.frame,"heatWashScratch"),
+  statusWashScratch:field(()=>this.runtimeState.frame,"statusWashScratch"),
+  orbSpringScratch:field(()=>this.runtimeState.frame,"orbSpringScratch"),
+  orbSpringBreath:field(()=>this.runtimeState.frame,"orbSpringBreath"),
+  acceptQuestOffer:method(()=>this.input.questInteraction,"acceptQuestOffer"),
+  acceptVocationQuest:method(()=>this.input.questInteraction,"acceptVocationQuest"),
+  activeQuests:field(()=>this.input.campaign,"activeQuests"),
+  amalgamNecroDwell:field(()=>this.input.assembly.input.registry.input.state,"amalgamNecroDwell"),
+  amalgamPickDwell:field(()=>this.input.assembly.input.registry.input.state,"amalgamPickDwell"),
+  amalgamSite:field(()=>this.input.assembly.input.registry.input.birth.input.state,"amalgamSite"),
+  approachPass:field(()=>this.runtimeState.frame,"approachPass"),
+  arenaWard:field(()=>this.runtimeState.frame,"arenaWard"),
+  beginFissure:method(()=>this.input.assembly.input.registry.input.birth,"beginFissure"),
+  beginTraversal:method(()=>this.campaignTransitions,"beginTraversal"),
+  biomeDepthFor:method(()=>this.input.assembly.input.coast,"biomeDepthFor"),
+  biomeFor:method(()=>this.input.assembly.input.coast,"biomeFor"),
+  bombardKey:field(()=>this.runtimeState.frame,"bombardKey"),
+  bombardMintRev:field(()=>this.input.assembly.input.population.factory,"bombardMintRev"),
+  bombardPresent:field(()=>this.runtimeState.frame,"bombardPresent"),
+  bountyDwellBoardId:field(()=>this.runtimeState.frame,"bountyDwellBoardId"),
+  bountyDwellRequested:field(()=>this.runtimeState.frame,"bountyDwellRequested"),
+  bountyDwellSeatId:field(()=>this.runtimeState.frame,"bountyDwellSeatId"),
+  bountyGate:field(()=>this.runtimeState.frame,"bountyGate"),
+  bountyHands:field(()=>this.input.campaign,"bountyHands"),
+  bountyReceipt:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"bountyReceipt"),
+  bountyWatchAccum:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"bountyWatchAccum"),
+  breachPos:field(()=>this.input.assembly.input.geometry,"breachPos"),
+  brigandLingerLeft:field(()=>this.input.assembly.input.registry.input.state,"brigandLingerLeft"),
+  brigandsDrifting:field(()=>this.input.assembly.input.registry.input.state,"brigandsDrifting"),
+  campfireCd:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"campfireCd"),
+  campfireDwell:field(()=>this.runtimeState.frame,"campfireDwell"),
+  caravanDwellRequested:field(()=>this.runtimeState.frame,"caravanDwellRequested"),
+  caravanDwellSeatId:field(()=>this.runtimeState.frame,"caravanDwellSeatId"),
+  caravanGate:field(()=>this.runtimeState.frame,"caravanGate"),
+  caravanReturnRequested:field(()=>this.runtimeState.frame,"caravanReturnRequested"),
+  caveDwellIdx:field(()=>this.runtimeState.frame,"caveDwellIdx"),
+  caveDwellStart:field(()=>this.runtimeState.frame,"caveDwellStart"),
+  caveEntrances:field(()=>this.input.assembly.input.geometry,"caveEntrances"),
+  caveExitGrace:field(()=>this.input.coordinator.roadsFor(this),"caveExitGrace"),
+  caveReturn:field(()=>this.input.coordinator.roadsFor(this),"caveReturn"),
+  caveStack:field(()=>this.input.coordinator.roadsFor(this),"caveStack"),
+  chandlerStock:field(()=>this.input.campaign,"chandlerStock"),
+  chartNeighborsOf:method(()=>this.input.assembly.graph,"chartNeighborsOf"),
+  chartsBought:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"chartsBought"),
+  claimQuestImbue:method(()=>this.input.questInteraction,"claimQuestImbue"),
+  claimQuestReward:method(()=>this.input.quests,"claimQuestReward"),
+  clampNear:method(()=>this.input.assembly.input.theater,"clampNear"),
+  classClaimNextAt:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"classClaimNextAt"),
+  clearSummonReleaseFields:method(()=>this.input.progression,"clearSummonReleaseFields"),
+  clearTreeFields:method(()=>this.input.progression,"clearTreeFields"),
+  clientOptimistic:method(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"clientOptimistic"),
+  climateFor:method(()=>this.input.assembly.input.coast,"climateFor"),
+  clutchScan:field(()=>this.runtimeState.frame,"clutchScan"),
+  compassFrom:method(()=>this.input.assembly.input.registry.input.birth,"compassFrom"),
+  completedObjectives:field(()=>this.input.campaign,"completedObjectives"),
+  concludeWipe:method(()=>this.campaignTransitions,"concludeWipe"),
+  contagionLeans:field(()=>this.input.assembly.input.registry.input.birth.input.state,"contagionLeans"),
+  contagionSweepAt:field(()=>this.runtimeState.frame,"contagionSweepAt"),
+  continentFor:method(()=>this.input.assembly.input.coast,"continentFor"),
+  convexNav:field(()=>this.input.assembly.input.geometry,"convexNav"),
+  corpseRecords:method(()=>this.input.assembly.input.history,"corpseRecords"),
+  couchDirty:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"couchDirty"),
+  crusadePortals:field(()=>this.input.assembly.input.geometry,"crusadePortals"),
+  crusadeRealmContext:field(()=>this.campaignOwner.state,"crusadeRealmContext"),
+  deadwakeStreamTimer:field(()=>this.input.assembly.input.registry.input.state,"deadwakeStreamTimer"),
+  deathPresentation:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"deathPresentation"),
+  deepwinterEyeWarped:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"deepwinterEyeWarped"),
+  deepwinterWarped:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"deepwinterWarped"),
+  demonCaster:field(()=>this.runtimeState.frame,"demonCaster"),
+  demonPortals:field(()=>this.input.assembly.input.geometry,"demonPortals"),
+  descentDeepest:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"descentDeepest"),
+  descentRun:field(()=>this.input.campaign,"descentRun"),
+  descentShaftDwell:field(()=>this.input.assembly.input.registry.input.state,"descentShaftDwell"),
+  descentSite:field(()=>this.input.assembly.input.geometry,"descentSite"),
+  descentSpawnTimer:field(()=>this.input.assembly.transition,"descentSpawnTimer"),
+  descentSpent:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"descentSpent"),
+  descentStock:field(()=>this.input.assembly.transition,"descentStock"),
+  dimensionBiomeDepthFor:method(()=>this.input.assembly.graph,"dimensionBiomeDepthFor"),
+  dimensionBiomeFor:method(()=>this.input.assembly.input.coast,"dimensionBiomeFor"),
+  dimGates:field(()=>this.input.assembly.input.geometry,"dimGates"),
+  discoveredDimensions:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"discoveredDimensions"),
+  discoveredWaypoints:field(()=>this.input.campaign,"discoveredWaypoints"),
+  doorDwellId:field(()=>this.runtimeState.frame,"doorDwellId"),
+  doorDwellPos:field(()=>this.runtimeState.frame,"doorDwellPos"),
+  doorDwellStart:field(()=>this.runtimeState.frame,"doorDwellStart"),
+  doorPressIntents:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"doorPressIntents"),
+  doorRefusalAt:field(()=>this.runtimeState.frame,"doorRefusalAt"),
+  droveDressChecked:field(()=>this.input.assembly.input.registry.input.state,"droveDressChecked"),
+  droveScene:field(()=>this.input.assembly.input.registry.input.state,"droveScene"),
+  engageTokens:field(()=>this.runtimeState.frame,"engageTokens"),
+  ensureSeaPorts:method(()=>this.input.assembly.input.coast,"ensureSeaPorts"),
+  entryFrom:field(()=>this.input.coordinator.roadsFor(this),"entryFrom"),
+  eventLevel:method(()=>this.input.assembly.input.coast,"eventLevel"),
+  events:field(()=>this.campaignOwner.shared,"events"),
+  exitDwellIdx:field(()=>this.runtimeState.frame,"exitDwellIdx"),
+  exitDwellStart:field(()=>this.runtimeState.frame,"exitDwellStart"),
+  findBandCoord:method(()=>this.input.quests,"findBandCoord"),
+  fontDwellRequested:field(()=>this.runtimeState.frame,"fontDwellRequested"),
+  fontDwellSeatId:field(()=>this.runtimeState.frame,"fontDwellSeatId"),
+  fontGate:field(()=>this.runtimeState.frame,"fontGate"),
+  fonts:field(()=>this.input.assembly.input.state,"fonts"),
+  forechartNextAt:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"forechartNextAt"),
+  forechartTurn:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"forechartTurn"),
+  fractureRifts:field(()=>this.input.assembly.input.geometry,"fractureRifts"),
+  gloamPrevPhase:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"gloamPrevPhase"),
+  gloamWellTimer:field(()=>this.runtimeState.frame,"gloamWellTimer"),
+  gloomCur:field(()=>this.runtimeState.frame,"gloomCur"),
+  gloomZone:field(()=>this.runtimeState.frame,"gloomZone"),
+  graphWorkAvailable:method(()=>this.input.quests,"graphWorkAvailable"),
+  handSeats:method(()=>this.input.quests,"handSeats"),
+  handState:method(()=>this.input.assembly.input.bounty,"handState"),
+  harborDwellRequested:field(()=>this.runtimeState.frame,"harborDwellRequested"),
+  harborGate:field(()=>this.runtimeState.frame,"harborGate"),
+  harvestDwell:field(()=>this.input.assembly.input.environment.input.state,"harvestDwell"),
+  harvestNodes:field(()=>this.input.assembly.input.environment.input.state,"harvestNodes"),
+  harvestOffer:field(()=>this.input.assembly.input.environment.input.state,"harvestOffer"),
+  harvestSessions:field(()=>this.input.assembly.input.environment.input.state,"harvestSessions"),
+  hasNpcRole:method(()=>this.input.assembly.input.registry.input.birth,"hasNpcRole"),
+  hauntStreamTimer:field(()=>this.input.assembly.input.registry.input.state,"hauntStreamTimer"),
+  hiredMercs:field(()=>this.input.campaign,"hiredMercs"),
+  holdDefense:field(()=>this.input.assembly.input.registry.input.state,"holdDefense"),
+  holdDwellRequested:field(()=>this.input.assembly.input.registry.input.state,"holdDwellRequested"),
+  holdfastDwellKey:field(()=>this.input.assembly.input.registry.input.state,"holdfastDwellKey"),
+  holdfastDwellPos:field(()=>this.runtimeState.frame,"holdfastDwellPos"),
+  holdfastDwellStart:field(()=>this.runtimeState.frame,"holdfastDwellStart"),
+  holdGate:field(()=>this.runtimeState.frame,"holdGate"),
+  holdSweepAt:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"holdSweepAt"),
+  infectActorWith:method(()=>this.input.assembly.input.registry.input.birth,"infectActorWith"),
+  isIllegalCrossDim:method(()=>this.input.assembly.input.coast,"isIllegalCrossDim"),
+  journalDirty:field(()=>this.input.campaign,"journalDirty"),
+  lastRespawnPayout:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"lastRespawnPayout"),
+  levelFor:method(()=>this.input.assembly.input.coast,"levelFor"),
+  lightningTimer:field(()=>this.runtimeState.frame,"lightningTimer"),
+  loadZone:method(()=>this.input.coordinator,"loadZone"),
+  longNightStreamTimer:field(()=>this.input.assembly.input.registry.input.state,"longNightStreamTimer"),
+  longNightWarped:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"longNightWarped"),
+  massAway:{get:()=>readNativeRetainedMassAway(this.input.characterWriter)},
+  massCaveIds:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"massCaveIds"),
+  massSideareaRoots:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"massSideareaRoots"),
+  materializedBrigands:field(()=>this.input.assembly.input.registry.input.state,"materializedBrigands"),
+  materializedDeadwakes:field(()=>this.input.assembly.input.registry.input.state,"materializedDeadwakes"),
+  materializedDocks:field(()=>this.input.assembly.input.registry.input.state,"materializedDocks"),
+  materializedDroves:field(()=>this.input.assembly.input.registry.input.state,"materializedDroves"),
+  materializedHaunts:field(()=>this.input.assembly.input.registry.input.state,"materializedHaunts"),
+  materializedLongNights:field(()=>this.input.assembly.input.registry.input.state,"materializedLongNights"),
+  materializedMigrations:field(()=>this.input.assembly.input.registry.input.state,"materializedMigrations"),
+  materializedStrayings:field(()=>this.input.assembly.input.registry.input.state,"materializedStrayings"),
+  materializedSwarmings:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"materializedSwarmings"),
+  materializedWisplights:field(()=>this.input.assembly.input.registry.input.state,"materializedWisplights"),
+  materializedWorldBoss:field(()=>this.input.assembly.input.registry.input.birth.input.state,"materializedWorldBoss"),
+  memoryRecallLast:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"memoryRecallLast"),
+  mercDwell:field(()=>this.input.assembly.input.state,"mercDwell"),
+  mercDwellFired:field(()=>this.input.assembly.input.state,"mercDwellFired"),
+  mercHintAt:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"mercHintAt"),
+  mercOutpost:field(()=>this.input.assembly.input.settlement.input.state,"mercOutpost"),
+  mercOutpostRequested:field(()=>this.runtimeState.frame,"mercOutpostRequested"),
+  meteorTimer:field(()=>this.runtimeState.frame,"meteorTimer"),
+  migrantSquadId:field(()=>this.input.assembly.input.geometry,"migrantSquadId"),
+  migrationStreamTimer:field(()=>this.input.assembly.input.registry.input.state,"migrationStreamTimer"),
+  mintIslandZone:method(()=>this.input.assembly.input.coast,"mintIslandZone"),
+  mintVeil:field(()=>this.input.campaign,"mintVeil"),
+  mireilleAfterglow:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"mireilleAfterglow"),
+  mireilleCd:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"mireilleCd"),
+  mireilleDwell:field(()=>this.runtimeState.frame,"mireilleDwell"),
+  mireilleSeatBuff:field(()=>this.input.campaign,"mireilleSeatBuff"),
+  mireilleSeats:field(()=>this.runtimeState.frame,"mireilleSeats"),
+  mireilleXpBuff:field(()=>this.input.campaign,"mireilleXpBuff"),
+  modeDef:method(()=>this.campaignTransitions,"modeDef"),
+  nativeWorldReady:method(()=>this.input.coordinator,"nativeWorldReady"),
+  nearScaleDue:field(()=>this.runtimeState.frame,"nearScaleDue"),
+  necropolisPortals:field(()=>this.input.assembly.input.geometry,"necropolisPortals"),
+  necropolisRealmContext:field(()=>this.campaignOwner.state,"necropolisRealmContext"),
+  netCounters:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"netCounters"),
+  netJournal:field(()=>this.input.campaign,"netJournal"),
+  netMemoryAccess:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"netMemoryAccess"),
+  netStationAnchors:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"netStationAnchors"),
+  nextGenId:field(()=>this.input.campaign,"nextGenId"),
+  nextSquadId:method(()=>this.input.assembly.input.population,"nextSquadId"),
+  nodeFromSea:method(()=>this.input.assembly.input.coast,"nodeFromSea"),
+  notarizeRoad:method(()=>this.input.assembly.input.coast,"notarizeRoad"),
+  noteBountyReady:method(()=>this.input.quests,"noteBountyReady"),
+  noteGemDrop:method(()=>this.input.assembly.lootController,"noteGemDrop"),
+  objectiveDoneAt:method(()=>this.input.assembly.input.bounty,"objectiveDoneAt"),
+  oceanBearing:method(()=>this.input.assembly.input.geometry,"oceanBearing"),
+  omenNextAt:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"omenNextAt"),
+  omenRevealed:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"omenRevealed"),
+  omenWhisperedAt:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"omenWhisperedAt"),
+  omenWhisperN:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"omenWhisperN"),
+  onQuestZoneCleared:method(()=>this.input.quests,"onQuestZoneCleared"),
+  onQuestZoneFieldCleared:method(()=>this.input.quests,"onQuestZoneFieldCleared"),
+  openWritHand:method(()=>this.campaignOwner,"openWritHand"),
+  oracleDwellRequested:field(()=>this.runtimeState.frame,"oracleDwellRequested"),
+  oracleDwellSeatId:field(()=>this.runtimeState.frame,"oracleDwellSeatId"),
+  oracleGate:field(()=>this.runtimeState.frame,"oracleGate"),
+  ownQuestLedger:field(()=>this.input.campaign,"ownQuestLedger"),
+  partyDowns:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"partyDowns"),
+  partyMates:method(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"partyMates"),
+  pendingTreePips:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"pendingTreePips"),
+  pingClocks:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"pingClocks"),
+  pings:field(()=>this.runtimeState.frame,"pings"),
+  playerCorpses:field(()=>this.input.assembly.input.history.input.state,"playerCorpses"),
+  presentWorlds:method(()=>this.input.coordinator,"presentWorlds"),
+  atZone:{get:()=> <T>(zoneId:string,fn:(area:import('./nativeAreaDirectoryView').NativeAreaDirectoryView)=>T):T|undefined=>this.input.coordinator.atZone(zoneId,fn)},
+  occupiedAudience:method(()=>this.input.coordinator,"occupiedAudience"),
+  noticeOccupied:method(()=>this.input.coordinator,"noticeOccupied"),
+  fractureRealmContext:field(()=>this.campaignOwner.state,"fractureRealmContext"),
+  zoneEntry:field(()=>this.input.assembly.input.geometry,"zoneEntry"),
+  ambientCamShift:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"ambientCamShift"),
+  scanShardRoads:method(()=>this.campaignFrame,"scanShardRoads"),
+  promoteRarityStacked:method(()=>this.input.assembly.input.population,"promoteRarityStacked"),
+  provisioningFlaskSlots:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"provisioningFlaskSlots"),
+  pullToLand:method(()=>this.input.assembly.graph,"pullToLand"),
+  questHand:method(()=>this.input.quests,"questHand"),
+  questOnZone:method(()=>this.input.assembly.objectiveController,"questOnZone"),
+  questRunLedger:method(()=>this.input.quests,"questRunLedger"),
+  questStamp:method(()=>this.input.quests,"questStamp"),
+  quickenPulseAcc:field(()=>this.runtimeState.frame,"quickenPulseAcc"),
+  quickenSweepAcc:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"quickenSweepAcc"),
+  realmContext:field(()=>this.campaignOwner.state,"realmContext"),
+  realmDwellKey:field(()=>this.runtimeState.frame,"realmDwellKey"),
+  realmDwellKind:field(()=>this.runtimeState.frame,"realmDwellKind"),
+  realmDwellPos:field(()=>this.runtimeState.frame,"realmDwellPos"),
+  realmDwellStart:field(()=>this.runtimeState.frame,"realmDwellStart"),
+  recalcSeat:method(()=>this.input.progression,"recalcSeat"),
+  reliquaryLesson:method(()=>this.input.campaign,"reliquaryLesson"),
+  reqShortfall:method(()=>this.control,"reqShortfall"),
+  resurfaceFromDescent:method(()=>this.campaignTransitions,"resurfaceFromDescent"),
+  ringClaims:field(()=>this.runtimeState.frame,"ringClaims"),
+  riseAmalgamation:method(()=>this.input.assembly.input.registry.input.birth,"riseAmalgamation"),
+  roadIsWet:method(()=>this.input.assembly.input.coast,"roadIsWet"),
+  sailGate:field(()=>this.runtimeState.frame,"sailGate"),
+  salvageDwellRequested:field(()=>this.runtimeState.frame,"salvageDwellRequested"),
+  salvageDwellSeatId:field(()=>this.runtimeState.frame,"salvageDwellSeatId"),
+  salvageGate:field(()=>this.runtimeState.frame,"salvageGate"),
+  screenFade:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"screenFade"),
+  seaFromNode:method(()=>this.input.assembly.input.coast,"seaFromNode"),
+  seatIdle:method(()=>this.input.questInteraction,"seatIdle"),
+  seatQuests:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"seatQuests"),
+  shardRoadView:{get:()=>this.campaignFrame.shardRoadView},
+  shardWorld:{get:()=>this.input.coordinator.roadsFor(this).shardWorld},
+  shelfBuyer:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"shelfBuyer"),
+  sidezoneIdFor:method(()=>this.input.watching,"sidezoneIdFor"),
+  soundings:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"soundings"),
+  spawnEventActor:method(()=>this.input.assembly.input.theater,"spawnEventActor"),
+  spawnPatientZero:method(()=>this.input.assembly.input.registry.input.birth,"spawnPatientZero"),
+  spoilClamp:method(()=>this.input.assembly.lootController,"spoilClamp"),
+  stashedCompanions:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"stashedCompanions"),
+  stationArmed:field(()=>this.input.campaign,"stationArmed"),
+  strayScene:field(()=>this.input.assembly.input.registry.input.state,"strayScene"),
+  streamCoast:method(()=>this.input.assembly.input.coast,"streamCoast"),
+  summonCrewSkills:method(()=>this.input.progression,"summonCrewSkills"),
+  surveyAround:method(()=>this.input.watching,"surveyAround"),
+  swarmStreamTimer:field(()=>this.input.assembly.input.registry.input.state,"swarmStreamTimer"),
+  townLayoutChangedOnLoad:field(()=>this.runtimeState.frame,"townLayoutChangedOnLoad"),
+  townPortalArrival:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"townPortalArrival"),
+  townPortalClientViews:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"townPortalClientViews"),
+  townPortalDwell:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"townPortalDwell"),
+  townPortalRefusal:method(()=>this.control,"townPortalRefusal"),
+  townPortals:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"townPortals"),
+  townTierIdx:field(()=>this.input.assembly.input.settlement.input.state,"townTierIdx"),
+  traceRests:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"traceRests"),
+  traceRuns:field(()=>this.input.assembly.input.occurrences.input.services,"traceRuns"),
+  trackerDwellRequested:field(()=>this.runtimeState.frame,"trackerDwellRequested"),
+  trackerDwellSeatId:field(()=>this.runtimeState.frame,"trackerDwellSeatId"),
+  trackerGate:field(()=>this.runtimeState.frame,"trackerGate"),
+  treePopupRequested:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"treePopupRequested"),
+  treePopupSeatId:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"treePopupSeatId"),
+  treePopupSkillId:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"treePopupSkillId"),
+  uiActionSeatId:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"uiActionSeatId"),
+  updateQuestGiver:method(()=>this,"updateQuestGiver"),
+  updateTraversal:method(()=>this.campaignTransitions,"updateTraversal"),
+  vendorArmedBeat:field(()=>this.input.campaign,"vendorArmedBeat"),
+  vendorDwellRequested:field(()=>this.runtimeState.frame,"vendorDwellRequested"),
+  vendorDwellSeatId:field(()=>this.runtimeState.frame,"vendorDwellSeatId"),
+  vendorGate:field(()=>this.runtimeState.frame,"vendorGate"),
+  vendorHolds:field(()=>this.input.campaign,"vendorHolds"),
+  vendorRestockAt:field(()=>this.input.campaign,"vendorRestockAt"),
+  vendorStock:field(()=>this.input.assembly.input.state,"vendorStock"),
+  visited:field(()=>this.input.campaign,"visited"),
+  vocationSites:field(()=>this.input.assembly.input.sites.input.state,"vocationSites"),
+  warbandMarches:field(()=>this.input.assembly.input.registry.input.birth.input.state,"warbandMarches"),
+  wardDwellSeal:field(()=>this.runtimeState.frame,"wardDwellSeal"),
+  wardDwellStart:field(()=>this.runtimeState.frame,"wardDwellStart"),
+  warpSweepAcc:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"warpSweepAcc"),
+  wbBoss:field(()=>this.input.assembly.input.registry.input.birth.input.state,"wbBoss"),
+  wbBossKey:field(()=>this.input.assembly.input.registry.input.birth.input.state,"wbBossKey"),
+  wbPassing:field(()=>this.input.assembly.input.registry.input.state,"wbPassing"),
+  wbPassingGoal:field(()=>this.input.assembly.input.registry.input.state,"wbPassingGoal"),
+  wbPassingKey:field(()=>this.input.assembly.input.registry.input.state,"wbPassingKey"),
+  wbWalls:field(()=>this.input.assembly.input.registry.input.state,"wbWalls"),
+  webSettleNextAt:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"webSettleNextAt"),
+  webSettleSeenSeq:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"webSettleSeenSeq"),
+  wellArr:field(()=>this.runtimeState.frame,"wellArr"),
+  wellLen:field(()=>this.runtimeState.frame,"wellLen"),
+  wellRev:field(()=>this.runtimeState.frame,"wellRev"),
+  wells:field(()=>this.runtimeState.frame,"wells"),
+  wispScene:field(()=>this.input.assembly.input.registry.input.state,"wispScene"),
+  wpRefusedAt:field(()=>this.runtimeState.frame,"wpRefusedAt"),
+  wraithsailSeaStash:field(()=>this.input.assembly.input.state,"wraithsailSeaStash"),
+  wraithsailSighted:field(()=>NativeAreaCampaignFrameState.forWriter(this.input.characterWriter),"wraithsailSighted"),
+  zoneHasVendorCounter:field(()=>this.input.assembly.transition,"zoneHasVendorCounter"),
+  zoneMemory:field(()=>this.input.campaign,"zoneMemory"),
+  collectDeedDot:field(()=>this.#frameCallbacks,'collectDeedDot'),
+  doodadEffects:field(()=>this.#frameCallbacks,'doodadEffects'),
+  incursionEvents:field(()=>this.#frameCallbacks,'incursionEvents'),
+  bountyOffers:{get:()=>quests.questLedger().offers,set:value=>{quests.questLedger().offers=value;}},
+  bountyBoardState:{get:()=>quests.questLedger().boards,set:value=>{quests.questLedger().boards=value;}},
+  countedEnemies:method(()=>assembly.objectiveServices,'countedEnemies'),
+  isAmbientTag:{get:()=> (tag)=>sceneIsAmbientTag(assembly.objectiveServices,tag)},
+  nativeScenePopulationHost:{get:()=> ()=>this.#populationHost},
+  nativeSceneHarborHost:{get:()=> ()=>assembly.input.harbor.host},
+  nativeSceneSiteHost:{get:()=> ()=>assembly.input.sites.host},
+  nativeSettlementHost:{get:()=> ()=>assembly.input.settlement.host},
+  questRescues:{get:()=>quests.rescues},
+  titans:{get:()=>assembly.input.registry.input.titans.runtime},
+  forgetMemoryOnLeave:field(()=>this.input.coordinator.departureFor(this),'forgetMemoryOnLeave'),
+  scene:field(()=>quests.input.state,'scene'),
+  isPresentLocalPlayer:method(()=>this,'isPresentLocalPlayer'),
+  beginCombatActor:method(()=>this.#operation,"beginCombatActor"),
+  endCombatActor:method(()=>this.#operation,"endCombatActor"),
+  beginCombatStatus:method(()=>this.#operation,"beginCombatStatus"),
+  endCombatStatus:method(()=>this.#operation,"endCombatStatus"),
+  prepareCombatRetirement:method(()=>this.#operation,"prepareCombatRetirement"),
+  finishCombatRetirement:method(()=>this.#operation,"finishCombatRetirement"),
+  cancelCombatRetirement:method(()=>this.#operation,"cancelCombatRetirement"),
+  constructCombatSource:method(()=>this.#operation,"constructCombatSource"),
+  finishCombatExpiredStatuses:method(()=>this.#operation,"finishCombatExpiredStatuses"),
+  updateModeRespawn:method(()=>this.campaignFrame,"updateModeRespawn"),
+  updateBountyBoard:method(()=>this.campaignFrame,"updateBountyBoard"),
+  updateSail:method(()=>this.campaignFrame,"updateSail"),
+  updateDelver:method(()=>this.campaignFrame,"updateDelver"),
+  updateSailing:method(()=>this.campaignFrame,"updateSailing"),
+  performModeRespawn:method(()=>this.campaignFrame,"performModeRespawn"),
+  requestMeta:method(()=>this.campaignFrame,"requestMeta"),
+  enterSailing:method(()=>this.campaignFrame,"enterSailing"),
+  descend:method(()=>this.campaignFrame,"descend"),
+  landAshore:method(()=>this.campaignFrame,"landAshore"),
+  enterSidezone:method(()=>this.campaignFrame,"enterSidezone"),
+  onHoldfastDwell:method(()=>this.campaignFrame,"onHoldfastDwell"),
+  realmGates:method(()=>this.campaignFrame,"realmGates"),
+  travelThrough:method(()=>this.campaignFrame,"travelThrough"),
+  updateTownPortals:method(()=>this.campaignFrame,"updateTownPortals"),
+  applyAction:method(()=>this.campaignFrame,"applyAction"),
+  enterDimension:method(()=>this.campaignFrame,"enterDimension"),
+  enterDemonRealm:method(()=>this.campaignFrame,"enterDemonRealm"),
+  enterCrusadeSanctum:method(()=>this.campaignFrame,"enterCrusadeSanctum"),
+  enterNecropolis:method(()=>this.campaignFrame,"enterNecropolis"),
+  enterFractureRift:method(()=>this.campaignFrame,"enterFractureRift"),
+  enterCourtDomain:method(()=>this.campaignFrame,"enterCourtDomain"),
+  beginWraithsailBoarding:method(()=>this.campaignFrame,"beginWraithsailBoarding"),
+  resumeSpawn:method(()=>this.campaignFrame,"resumeSpawn"),
+  applyActionAs:method(()=>this.campaignFrame,"applyActionAs"),
+  enterRealmArena:method(()=>this.campaignFrame,"enterRealmArena"),
+  resumeCaveLadder:method(()=>this.campaignFrame,"resumeCaveLadder"),
+  startCaravan:method(()=>this.campaignFrame,"startCaravan"),
+  travelToWaypoint:method(()=>this.campaignFrame,"travelToWaypoint"),
+  realmArenaWake:method(()=>this.campaignFrame,"realmArenaWake"),
+  isPresentActor:method(()=>this,'isPresentActor'),
+  isPresentationArea:method(()=>this,'isPresentationArea'),
+  isLocalPresentationActor:method(()=>this,'isLocalPresentationActor'),
+  frameSeats:method(()=>this,'frameSeats'),
+  isCampaignFrameOwner:method(()=>this.campaignFrame,'isCampaignFrameOwner'),
+  cacheShardRoadHost:method(()=>this.campaignFrame,'cacheShardRoadHost'),
+  seatDoorOf:method(()=>this.input.coordinator.roadsFor(this),'seatDoorOf'),
+  seatLadderOf:method(()=>this.input.coordinator.roadsFor(this),'seatLadderOf'),
+  saveCharacter:method(()=>this.input.coordinator,'saveCharacter'),
+  nativeSceneGeometryHost:{get:()=> ()=>assembly.input.geometry},
+  claimRingSlot:method(()=>this.ai,"claimRingSlot"),
+  fallHazardAt:method(()=>this.ai,"fallHazardAt"),
+  fleeIntoRefuge:method(()=>this.ai,"fleeIntoRefuge"),
+  losCached:method(()=>this.ai,"losCached"),
+  lureFor:method(()=>this.ai,"lureFor"),
+  onFleeArrive:method(()=>this.ai,"onFleeArrive"),
+  pathProfileFor:method(()=>this.ai,"pathProfileFor"),
+  pressUsable:method(()=>this.ai,"pressUsable"),
+  recentTierCrossing:method(()=>this.ai,"recentTierCrossing"),
+  requestEngage:method(()=>this.ai,"requestEngage"),
+  sanctuaryRetreat:method(()=>this.ai,"sanctuaryRetreat"),
+  seekLoot:method(()=>this.ai,"seekLoot"),
+  tierLinkToward:method(()=>this.ai,"tierLinkToward"),
+  onBeastEscape:method(()=>this.ai,"onBeastEscape"),
+  comboQueuedStep:method(()=>this.ai,"comboQueuedStep"),
+  tierLinkSeats:method(()=>this.ai,"tierLinkSeats"),
+  seekPrey:method(()=>this.ai,"seekPrey"),
+  finalizeGarrison:method(()=>this.combatArena,"finalizeGarrison"),
+  garrisonSlotById:method(()=>this.combatArena,"garrisonSlotById"),
+  zonePits:method(()=>this.input.assembly.input.geometry,"zonePits"),
+  pitHomeKinds:method(()=>this.input.assembly.input.geometry,"pitHomeKinds"),
+  nativeSettlementGrid:method(()=>this.input.assembly.input.geometry,"nativeSettlementGrid"),
+  tierSeats:field(()=>this.input.assembly.input.geometry,"tierSeats"),
+  lures:field(()=>this.input.watching.input.state,"lures"),
+  imminentThreatTo:method(()=>this,"imminentThreatTo"),
+  losMemo:{get:()=>this.ai.losMemo},
+  pathProfiles:{get:()=>this.ai.pathProfiles},
+  farPointFrom:this.native(directoryCore.sceneFarPointFrom),
+  inputClock:field(()=>NativeAreaCampaignInputState.forWriter(this.input.characterWriter),'inputClock'),
+  lastInputSeq:field(()=>NativeAreaCampaignInputState.forWriter(this.input.characterWriter),'lastInputSeq'),
+  moveBudget:field(()=>NativeAreaCampaignInputState.forWriter(this.input.characterWriter),'moveBudget'),
+  spentPresses:field(()=>NativeAreaCampaignInputState.forWriter(this.input.characterWriter),'spentPresses'),
+  skillInputOrder:field(()=>NativeAreaCampaignInputState.forWriter(this.input.characterWriter),'skillInputOrder'),
+  noHeld:field(()=>NativeAreaCampaignInputState.forWriter(this.input.characterWriter),'noHeld'),
+  improvisedInst:field(()=>NativeAreaCampaignInputState.forWriter(this.input.characterWriter),'improvisedInst'),
+  improvisedHinted:field(()=>NativeAreaCampaignInputState.forWriter(this.input.characterWriter),'improvisedHinted'),
+  unspentHeld:this.native(inputCore.sceneUnspentHeld),
+  spendPresses:this.native(inputCore.sceneSpendPresses),
+  spendPress:this.native(inputCore.sceneSpendPress),
+  walkFrames:this.native(inputCore.sceneWalkFrames),
+  improvisedFor:this.native(inputCore.sceneImprovisedFor),
+  harvestFeed:this.native(inputCore.sceneHarvestFeed),
+  traceFeed:this.native(inputCore.sceneTraceFeed),
+  traceSettle:this.native(inputCore.sceneTraceSettle),
+  useMetaSkill:method(()=>this,'useMetaSkill'),
+ } satisfies Bindings;return bindings;}
+}

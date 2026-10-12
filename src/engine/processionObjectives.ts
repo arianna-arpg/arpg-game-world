@@ -139,6 +139,7 @@ export interface NativeProcessionAmbushHost {
 }
 
 export interface NativeProcessionHost extends NativeProcessionAmbushHost {
+  isPresentPlayer?():boolean;
   now: number;
   player: Actor;
   actorById(id: number): Actor | null;
@@ -214,7 +215,7 @@ export function driveNativeProcession(dt: number, state: NativeProcessionState,
   }
   if (!state.rolling) {
     if (host.now - state.enteredAt < config.entryGraceSec) { state.dwellStart = 0; return; }
-    const engaged = !host.player.dead && dist(host.player.pos, cart.pos) <= config.rallyRadius
+    const engaged = host.isPresentPlayer?.() !== false && !host.player.dead && dist(host.player.pos, cart.pos) <= config.rallyRadius
       && host.reachable(host.player, cart, config.rallyReach);
     if (!engaged) { state.dwellStart = 0; return; }
     if (state.dwellStart === 0) state.dwellStart = host.now;

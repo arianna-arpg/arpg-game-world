@@ -1,3 +1,4 @@
+import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
 /** Exact native ecology birth operations. Original World SHA ea6d4df5e016cb430d0d23ec7aa354423f843ae27543973ebd18aaa3aa18fb4e.
  * Installed source imports remain native; no immutable source issuer is claimed. */
 import type { World } from './world';
@@ -140,6 +141,7 @@ export function sceneMintThrongHusk(host:Pick<NativeSceneEcologyHost,'createMons
     if (opts?.ttl !== undefined) husk.throngExpiresAt = host.time + opts.ttl;
     husk.pos = host.clampPos(vec(pos.x, pos.y), husk.radius, undefined, { mover: husk });
     host.actors.push(husk);
+    observeNativeCombatBirth(host,husk);
     return husk;
   }
 

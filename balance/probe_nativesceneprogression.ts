@@ -1,5 +1,27 @@
 import {beforeMuReliquary} from './muReliquarySourceFixture';
-import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
+import {beforeNativeMainVisualSource as historicalMainVisualSource} from './nativeMainVisualSourceFixture';
+import {beforeNativeCombatLeafVisual} from './nativeCombatLeafVisualFixture';
+import {nativeCombatLeafVisualArchive as currentLeafArchive} from './nativeCombatLeafVisualArchive';
+import {createHash as currentLeafHash} from 'node:crypto';
+function beforeNativeMainVisualSource(file:string,source:string):string {
+ let prior=beforeNativeCombatLeafVisual(file,source);
+ // Preserve the separately committed Mu rule for the original HEAD guard.
+ if(file==='src/engine/nativeSceneProgression.ts'){
+  const mu=currentLeafArchive.files.find(row=>row.file===file)!.edits.filter(edit=>edit.after.includes('relicPowerActive')&&!edit.before.includes('relicPowerActive'));
+  assert.equal(mu.length,2,'exact committed Mu import and fold hunks');
+  for(const edit of mu){assert.equal(prior.split(edit.before).length,2,'unique prior Mu hunk');prior=prior.replace(edit.before,edit.after);}
+  assert.equal(prior,execFileSync('git',['show','484f926385acb033c36d084d14125b17a23f3be6:'+file],{encoding:'utf8',maxBuffer:20e6}).replaceAll('\r\n','\n'),'complete ownership reversal retains exact committed Mu source');
+ }
+ return historicalMainVisualSource(file,prior);
+}
+{
+ const file='src/engine/nativeSceneProgression.ts',raw=fs.readFileSync(new URL('../'+file,import.meta.url),'utf8').replaceAll('\r\n','\n'),row=currentLeafArchive.files.find(row=>row.file===file)!;
+ const hash=(text:string)=>currentLeafHash('sha256').update(text).digest('hex');
+ assert.equal(hash(raw),row.afterHash,'exact current reviewed leaf source');assert.equal(hash(beforeNativeCombatLeafVisual(file,raw)),row.beforeHash,'complete exact leaf predecessor');
+ for(const edit of row.edits){assert.equal(raw.split(edit.after).length,2,'unique current leaf hunk');const changed=raw.replace(edit.after,edit.after.replace(/[A-Za-z]/,'!'));assert.notEqual(changed,raw,'nontrivial current leaf mutation');assert.throws(()=>beforeNativeCombatLeafVisual(file,changed));assert.throws(()=>beforeNativeCombatLeafVisual(file,raw+'\n'+edit.after));}
+ const outside=raw+'\n/* unknown outside leaf change */';assert.ok(beforeNativeCombatLeafVisual(file,outside).endsWith('/* unknown outside leaf change */'));assert.notEqual(hash(beforeNativeCombatLeafVisual(file,outside)),row.beforeHash);
+ console.log('PASS current leaf source controls: '+row.edits.length+' mutations/duplicates; unrelated source remains visible');
+}
 import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
 import {presenceProfile,skillPresenceVoice,PRESENCE_STYLE} from '../src/data/skillPresenceVisuals';
 /** Native progression parity proof. Combat calls in this harness use an explicitly registered,
@@ -52,7 +74,55 @@ for(const row of archive.rows){
  const fn=source.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='scene'+cap(row.name)) as ts.FunctionDeclaration;
  assert.equal(emit('function f()'+fn.body!.getText(source)),emit('function f()'+receiverBody(method.body!,old)),'exact executable '+row.name);
 }
-for(const row of archive.controllerRows){const text=read('../src/engine/'+row.file+'.ts');assert.equal(beforeNativeProgressionController(text,row.file),row.original);const left=parse(row.original),right=parse(text);const a=left.statements.find(ts.isClassDeclaration)!,b=right.statements.find(ts.isClassDeclaration)!;assert.equal(emit(a.getText(left)),emit(b.getText(right)),'complete native controller '+row.file);}
+// Exact reviewed v15 status-observer layers; immutable original controllers remain checked below.
+const controllerOwnership=[
+  {
+    "file": "attackSequences",
+    "beforeHash": "2145123b0fb392aceac3f563aa0d5056ff32795fb68384655c07a3152e45fe4d",
+    "afterHash": "0383eb4ff4c4da3590b6f38a5e1fb4adada85517aeced21a72d13abca6c9e0ef",
+    "edits": [
+      {
+        "before": "",
+        "after": "import {observeNativeCombatStatus,observeNativeCombatStatusSource} from './nativeCombatRecordObservation';\n"
+      },
+      {
+        "before": "target.applyStatus(id, dps, duration, inst.def.name, { casterId: s.owner.id, sourceKey, holdDischarge,\n      rupture: rupture > 0 ? rupture : undefined, ruptureType: sd.element,\n      stacksBonus: Math.round(s.owner.sheet.get('ailmentStacks', tags, extra)),\n      leech: s.owner.sheet.get('dotLeech_' + id, tags, extra),\n      propagates: Math.random() < s.owner.sheet.get('dotPropagates', tags, extra) })",
+        "after": "observeNativeCombatStatus(this.w,target,()=>target.applyStatus(id, dps, duration, inst.def.name, { casterId: observeNativeCombatStatusSource(this.w,s.owner).id, sourceKey, holdDischarge,\n      rupture: rupture > 0 ? rupture : undefined, ruptureType: sd.element,\n      stacksBonus: Math.round(s.owner.sheet.get('ailmentStacks', tags, extra)),\n      leech: s.owner.sheet.get('dotLeech_' + id, tags, extra),\n      propagates: Math.random() < s.owner.sheet.get('dotPropagates', tags, extra) }))"
+      }
+    ]
+  },
+  {
+    "file": "challenges",
+    "beforeHash": "10e32f3f2c0859b96fd5ec657f7755779c55de3548f401440a8a58e8537504de",
+    "afterHash": "d77fc896488be3b0a218763982a0fad3e9e98c55f757b6424645fc909bb3c1c4",
+    "edits": [
+      {
+        "before": "",
+        "after": "import {observeNativeCombatStatus,observeNativeCombatStatusSource} from './nativeCombatRecordObservation';\n"
+      },
+      {
+        "before": "enemy.applyStatus('bleed', effigy.average * s.bleedingField.power, 1, 'Field of Wounds',\n            { casterId: effigy.cast.state.owner.id, challengeField: effigy.body.id })",
+        "after": "observeNativeCombatStatus(this.w,enemy,()=>enemy.applyStatus('bleed', effigy.average * s.bleedingField!.power, 1, 'Field of Wounds',\n            { casterId: observeNativeCombatStatusSource(this.w,effigy.cast.state.owner).id, challengeField: effigy.body.id }))"
+      },
+      {
+        "before": "other.applyStatus('impaled', 0, 1, 'Lodged Contagion', { casterId: effigy.cast.state.owner.id })",
+        "after": "observeNativeCombatStatus(this.w,other,()=>other.applyStatus('impaled', 0, 1, 'Lodged Contagion', { casterId: observeNativeCombatStatusSource(this.w,effigy.cast.state.owner).id }))"
+      },
+      {
+        "before": "target.applyStatus('hemorrhage', dealt * 0.45, 1, 'Reopening Challenge', { casterId: caster.id })",
+        "after": "observeNativeCombatStatus(this.w,target,()=>target.applyStatus('hemorrhage', dealt * 0.45, 1, 'Reopening Challenge', { casterId: observeNativeCombatStatusSource(this.w,caster).id }))"
+      }
+    ]
+  }
+] as const;
+function beforeControllerOwnership(file:string,text:string):string {const layer=controllerOwnership.find(row=>row.file===file);if(!layer)return text;for(const edit of [...layer.edits].reverse()){assert.equal(text.split(edit.after).length,2,'exact current controller ownership hunk');text=text.replace(edit.after,edit.before);}return text;}
+for(const row of archive.controllerRows){const raw=read('../src/engine/'+row.file+'.ts'),text=beforeControllerOwnership(row.file,raw),layer=controllerOwnership.find(item=>item.file===row.file);
+ if(layer){
+  assert.equal(sha(raw),layer.afterHash,'exact reviewed current controller');assert.equal(sha(text),layer.beforeHash,'exact committed controller predecessor');
+  for(const edit of layer.edits){const changed=raw.replace(edit.after,edit.after.replace(/[A-Za-z]/,'!'));assert.notEqual(changed,raw);assert.throws(()=>beforeControllerOwnership(row.file,changed));assert.throws(()=>beforeControllerOwnership(row.file,raw+'\n'+edit.after));}
+  const outside=beforeControllerOwnership(row.file,raw+'\n/* unknown outside controller change */');assert.ok(outside.endsWith('/* unknown outside controller change */'));assert.throws(()=>beforeNativeProgressionController(outside,row.file));
+ }
+ assert.equal(beforeNativeProgressionController(text,row.file),row.original);const left=parse(row.original),right=parse(text);const a=left.statements.find(ts.isClassDeclaration)!,b=right.statements.find(ts.isClassDeclaration)!;assert.equal(emit(a.getText(left)),emit(b.getText(right)),'complete native controller '+row.file);}
 const restoredCharacter=beforeNativeProgressionDeclarations(read('../src/meta/character.ts'),'src/meta/character.ts');
 for(const row of archive.globals){const sf=row.file==='src/engine/world.ts'?current.sf:parse(restoredCharacter);assert.equal(sf.statements.find(n=>(n as any).name?.text===row.name)?.getText(sf),row.before,'normalized global '+row.name);const meta=parse(read('../src/engine/nativeProgressionMeta.ts'));const node=meta.statements.find(n=>(n as any).name?.text===row.name)!;assert.equal(emit(node.getText(meta)),emit(row.before.startsWith('export ')?row.before:'export '+row.before),'pure executable global '+row.name);}
 console.log('PASS exact Git archive, 29 executable bodies, four unchanged controllers, six pure globals');

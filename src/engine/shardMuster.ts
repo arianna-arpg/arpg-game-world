@@ -21,14 +21,14 @@ import type { Seat, World } from './world';
  *  before it moves anyone: the road's identity and spot, and its ticket maker
  *  for ANY seat (the muster fires it once per member standing on the ring,
  *  each with its own door and ladder). */
-export interface MusterRoad {
+export interface MusterRoad<TDestination = World> {
   /** The scanner's dwell key (one road of the zone). */
   key: string;
   /** The road's transit kind (`zone_exit`, `sidezone:<kind>`, `realm_gate:<kind>`). */
   kind: string;
   /** Where the road stands: the ring's centre. */
   pos: Vec2;
-  make: (seat: Seat) => RoadTicket | null;
+  make: (seat: Seat) => RoadTicket<TDestination> | null;
 }
 
 /** THE MUSTER RING as drawn (World.musterRings; the snapshot's `mu` row, unit

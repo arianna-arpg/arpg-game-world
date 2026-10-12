@@ -3,6 +3,7 @@ import type { EncounterCue } from './warningCues';
 import { dist } from '../core/math';
 import type { Actor } from './actor';
 import type { World } from './world';
+export type NativeEncounterCombatHost=Pick<World,"actors"|"actorById"|"clientActionHook"|"gameOver"|"hostileTo"|"lineOfSight"|"time"|"timeflow"|"zone">;
 import { castRemaining, type BrainTuning } from './brain';
 import { ENCOUNTER_GROUPS } from '../data/encounterGroups';
 import { ENCOUNTER_TACTICS, ENCOUNTER_COMBAT_CFG } from '../data/encounterTactics';
@@ -65,9 +66,9 @@ interface PlanState {
   plan?: EncounterTactic; phase?: EncounterOrder['phase']; until: number;
   target?: Actor; leader?: Actor; participants: Actor[];
 }
-const worlds = new WeakMap<World,{zone: World['zone']; groups: Map<number,PlanState>}>();
+const worlds = new WeakMap<NativeEncounterCombatHost,{zone: World['zone']; groups: Map<number,PlanState>}>();
 const fit = (a: Actor) => !a.dead && !a.downed && !a.passive && !a.owner && a.team === 'enemy';
-const ready = (a: Actor, w: World) => fit(a) && !a.isStunned() && !a.burrow && !a.ambushArmed
+const ready = (a: Actor, w: NativeEncounterCombatHost) => fit(a) && !a.isStunned() && !a.burrow && !a.ambushArmed
   && (a.emergeUntil ?? 0) <= w.time && a.aiMoraleUntil <= w.time && w.timeflow.scaleFor(a) > 0;
 const roleMembers = (o: EncounterObservation, role?: string) => role ? o.members.filter(a=>o.roles.get(a)===role) : o.members;
 
@@ -89,7 +90,7 @@ export function scoreEncounterTactic(p: EncounterTactic, o: EncounterObservation
   if (p.when.some(c=>{ const v=encounterFact(c,o); return v<(c.min ?? -Infinity)||v>(c.max ?? Infinity); })) return -Infinity;
   return p.base+(p.score ?? []).reduce((s,c)=>s+encounterFact(c,o)*(c.weight ?? 1),0);
 }
-function observe(w: World, members: Actor[], spec: EncounterCombatSpec): EncounterObservation | undefined {
+function observe(w: NativeEncounterCombatHost, members: Actor[], spec: EncounterCombatSpec): EncounterObservation | undefined {
   const leader=members.find(a=>a.encounterGroup?.leader && ready(a,w));
   if (!leader) return;
   const radius=spec.radius ?? ENCOUNTER_COMBAT_CFG.radius;
@@ -117,7 +118,7 @@ function release(s: PlanState): void {
   for(const a of s.participants) if(a.encounterOrder?.plan===s.plan?.id) a.encounterOrder=undefined;
   s.participants=[];
 }
-function recovery(w: World,s: PlanState): void {
+function recovery(w: NativeEncounterCombatHost,s: PlanState): void {
   const p=s.plan!;
   s.phase='recover'; s.until=w.time+p.recovery;
   for(const a of s.participants) if(a.encounterOrder) a.encounterOrder={...a.encounterOrder,phase:'recover',until:s.until,use:p.recover,target:undefined,ward:undefined};
@@ -125,7 +126,7 @@ function recovery(w: World,s: PlanState): void {
 }
 /** One bounded utility planner per group; no direct casts, teleports, stat
  * bonuses, resource refunds or replacement damage rules. */
-export function updateEncounterCombat(w: World): void {
+export function updateEncounterCombat(w: NativeEncounterCombatHost): void {
   if(w.clientActionHook || w.gameOver) return;
   let runtime=worlds.get(w);
   if(!runtime || runtime.zone!==w.zone) {
@@ -186,7 +187,7 @@ export function updateEncounterCombat(w: World): void {
     // Presentation reads this bounded plan directly; no detached warning flash.
   }
 }
-function order(a: Actor,w: World): EncounterOrder | undefined {
+function order(a: Actor,w: NativeEncounterCombatHost): EncounterOrder | undefined {
   const o=a.encounterOrder;
   if(!o || !fit(a) || a.aiCommand || a.standingOrder || !a.encounterGroup || o.group!==a.encounterGroup.id || o.recipe!==a.encounterGroup.recipe || o.until<=w.time) return;
   const leader=w.actorById(o.leader);
@@ -194,16 +195,16 @@ function order(a: Actor,w: World): EncounterOrder | undefined {
   if(leader && (a.tier!==leader.tier || dist(a.pos,leader.pos)>(ENCOUNTER_GROUPS[o.recipe]?.encounterCombat?.radius ?? ENCOUNTER_COMBAT_CFG.radius))) return;
   return o;
 }
-export function encounterOrderTuning(a: Actor,w: World): BrainTuning | undefined {
+export function encounterOrderTuning(a: Actor,w: NativeEncounterCombatHost): BrainTuning | undefined {
   const o=order(a,w); return o && o.phase!=='warning' ? o.use : undefined;
 }
-export function encounterOrderTarget(a: Actor,w: World): Actor | undefined {
+export function encounterOrderTarget(a: Actor,w: NativeEncounterCombatHost): Actor | undefined {
   const o=order(a,w); if(o?.phase!=='commit' || o.target===undefined) return;
   const t=w.actorById(o.target);
   if(t && !t.dead && !t.downed && !t.passive && !t.untargetable && t.sheet.get('invisible')<=0 && t.tier===a.tier
     && w.hostileTo(a,t) && w.lineOfSight(a.pos,t.pos,a.tier,t.tier)) return t;
 }
-export function encounterOrderWard(a: Actor,w: World): Actor | undefined {
+export function encounterOrderWard(a: Actor,w: NativeEncounterCombatHost): Actor | undefined {
   const o=order(a,w); if(o?.phase!=='commit' || o.ward===undefined) return;
   const ward=w.actorById(o.ward);
   if(ward && fit(ward) && ward.encounterGroup?.id===o.group && ward.tier===a.tier
@@ -241,7 +242,7 @@ export function encounterCombatErrors(): string[] {
 
 /** Read the actual planner state without mutating AI. Leaders may conduct a
  * plan without receiving an assignment (e.g. the piper directing flankers). */
-export function encounterCueOf(a: Actor,w: World): EncounterCue | undefined {
+export function encounterCueOf(a: Actor,w: NativeEncounterCombatHost): EncounterCue | undefined {
   if(!a.encounterGroup && !a.encounterCue) return;
   if(a.dead || a.downed || a.isStunned()) return;
   if(a.encounterCue) return a.encounterCue;

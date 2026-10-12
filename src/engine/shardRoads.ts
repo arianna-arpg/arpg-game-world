@@ -79,27 +79,27 @@ export interface CaveMouthRow {
 
 /** A realm gate of the zone (World.realmGates, THE LIFT): its spot, transit
  *  kind and dwell key, the solo enter action, and the shard's road. */
-export interface RealmGateRow {
+export interface RealmGateRow<TDestination = World> {
   pos: Vec2; kind: string; key: string;
   enter: () => void;
   /** THE ROADS PER PLAYER: the road one seat takes through this gate (THE
    *  REALM ROADS, W4: the per-gate prep in the source, then a ticket whose
    *  first wake raises the realm). Absent = sealed on a hosted world, with its word. */
-  road?: (seat: Seat) => RoadTicket | null;
+  road?: (seat: Seat) => RoadTicket<TDestination> | null;
 }
 
 /** A pocket's way home, per seat (World.caveReturn + caveStack's shape). */
 export interface SeatLadder { caveReturn: CaveRung | null; caveStack: CaveRung[] }
 
 /** THE ROADS' host view (World.shardRoadHost): the private reaches the scanner needs. */
-export interface ShardRoadHost {
+export interface ShardRoadHost<TDestination = World> {
   readonly caveEntrances: readonly CaveMouthRow[];
   readonly caveStack: readonly CaveRung[];
   readonly currentZoneSeed: number;
   /** enterSidezone's shard twin: the mouth's source half, then its ticket. */
-  mouthRoad(seat: Seat, cm: CaveMouthRow): RoadTicket | null;
+  mouthRoad(seat: Seat, cm: CaveMouthRow): RoadTicket<TDestination> | null;
   /** travelThrough's shard twin: the exit's source half, then its ticket. */
-  exitRoad(seat: Seat, e: ZoneExit): RoadTicket | null;
+  exitRoad(seat: Seat, e: ZoneExit): RoadTicket<TDestination> | null;
   breakArenaSeal(seal: Doodad): void;
   failNote(a: Actor, key: string, msg: string): void;
   /** The sealed road a seat stands at (within its own dwell reach), or null. */

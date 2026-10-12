@@ -1,3 +1,5 @@
+import {nativeAreaStoreClaims} from './nativeAreaStorageClaims';
+import {nativeCombatActorEntry} from './nativeAreaCombatOperation';
 /** Area-owned native casting preparation. Exact native algorithms remain in core;
  * descriptor-only entry checks permit only proven actor-free no-op branches. */
 import type {World} from '../engine/world';
@@ -17,7 +19,7 @@ export function freshSceneCastingPreparationState():NativeSceneCastingPreparatio
 export interface NativeCastingPreparationRuntime {readonly castingPreparation:NativeAreaSceneCastingPreparation;readonly restoration:NativeAreaSceneRestoration;readonly tethers:NativeAreaSceneTethers}
 export type NativeCastingPreparationAuthority=Pick<NativeAreaActorAuthority<NativeCastingPreparationRuntime>,'campaign'|'require'|'assertAdmitted'|'bindingFor'>;
 export interface NativeCastingPreparationInput {scene:NativeSceneCensus;campaign:Pick<World,'seats'|'time'|'seatOf'>;state:NativeSceneCastingPreparationState;restoration:NativeAreaSceneRestoration;authority:NativeCastingPreparationAuthority}
-const ownedStates=new WeakSet<object>(),ownedMaps=new WeakSet<object>();
+const ownedStates=new WeakSet<object>(),ownedMaps=nativeAreaStoreClaims;
 const unknown=Symbol('non-static casting metadata');
 const nativeSome=Array.prototype.some,nativeFilter=Array.prototype.filter,nativeIterator=Array.prototype[Symbol.iterator],nativeWeakGet=WeakMap.prototype.get,nativeWeakHas=WeakMap.prototype.has;
 /** Never invoke optional metadata getters or coerce a value in owner preflight.
@@ -84,9 +86,9 @@ export class NativeAreaSceneCastingPreparation implements native.NativeSceneCast
   // No native operation replaces these maps. Pin the exact supplied slots; map
   // contents and keys stay raw and native. A failed constructor claims neither.
   for(const {key,d}of maps)Object.defineProperty(input.state,key,{...d,writable:false,configurable:false});
-  for(const {map}of maps)ownedMaps.add(map);ownedStates.add(input.state);
+  for(const {map}of maps)ownedMaps.set(map,{});ownedStates.add(input.state);
  }
- #admit(actor:Actor):void {const {scene,authority,restoration}=this.input,binding=authority.bindingFor(scene);if(binding.services.castingPreparation!==this||binding.services.restoration!==restoration||binding.services.tethers!==restoration.input.tethers)throw Error('Native casting preparation needs exact registered owners');if(!scene.actors.includes(actor)||authority.require(actor).scene!==scene)throw Error('Native casting preparation needs actual physical actor');authority.assertAdmitted(scene);}
+ #admit(actor:Actor):void {if(nativeCombatActorEntry(this,actor,'charge'))return;const {scene,authority,restoration}=this.input,binding=authority.bindingFor(scene);if(binding.services.castingPreparation!==this||binding.services.restoration!==restoration||binding.services.tethers!==restoration.input.tethers)throw Error('Native casting preparation needs exact registered owners');if(!scene.actors.includes(actor)||authority.require(actor).scene!==scene)throw Error('Native casting preparation needs actual physical actor');authority.assertAdmitted(scene);}
  paySkillCost(...args:Parameters<native.NativeSceneCastingPreparationApi['paySkillCost']>):void{this.#admit(args[0]);native.scenePaySkillCost(this.host,...args);}
  consumeChargeCost(...args:Parameters<native.NativeSceneCastingPreparationApi['consumeChargeCost']>):ReturnType<native.NativeSceneCastingPreparationApi['consumeChargeCost']>{if(!noChargeCost(args[1]))this.#admit(args[0]);return native.sceneConsumeChargeCost(this.host,...args);}
  refundCooldown(...args:Parameters<native.NativeSceneCastingPreparationApi['refundCooldown']>):void{this.#admit(args[0]);native.sceneRefundCooldown(this.host,...args);}

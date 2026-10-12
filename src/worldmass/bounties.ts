@@ -23,7 +23,7 @@ export function validateMassBounties(spec: MassBountySpec): void {
   if (!spec || typeof spec.source !== 'string' || !spec.source || !Number.isSafeInteger(spec.maxCandidates)
     || spec.maxCandidates < 16 || spec.maxCandidates > 256) throw Error('Invalid country bounty policy');
 }
-export function massBountiesAvailable(world: World, board: string = BOUNTY_BOARD_CFG.boardId): boolean {
+export function massBountiesAvailable(world: Pick<World,'massRuntime'>, board: string = BOUNTY_BOARD_CFG.boardId): boolean {
   return !!world.massRuntime?.config.bounties && board === BOUNTY_BOARD_CFG.boardId;
 }
 /** Save sanitation validates identity shape without creating a second runtime.
@@ -88,7 +88,7 @@ export function massBountyDone(world: Pick<World, 'massRuntime'>, p: BountyPosti
     default: return false;
   }
 }
-export function massBountyRoute(world:World,p:BountyPosting):string{
+export function massBountyRoute(world:Pick<World,'massRuntime'|'player'>,p:BountyPosting):string{
   const mass=world.massRuntime,d=mass&&massBountyDestination(mass,p.massBounty);
   if(!mass||!d)return 'Destination unavailable in this expedition';
   const at=localOffset(d.center,{...mass.origin,x:0,y:0},mass.config.terrain.addressSpan);
@@ -97,7 +97,7 @@ export function massBountyRoute(world:World,p:BountyPosting):string{
     ['east','southeast','south','southwest','west','northwest','north','northeast'][(Math.round(Math.atan2(dy,dx)/(Math.PI/4))+8)%8];
   return d.name+' · Lv '+d.level+' · '+direction;
 }
-export function massBountyAccept(world:World,p:BountyPosting):string|null{
+export function massBountyAccept(world:Pick<World,'massRuntime'>,p:BountyPosting):string|null{
   const mass=world.massRuntime,d=mass&&massBountyDestination(mass,p.massBounty);
   if(!mass||!massBountiesAvailable(world,p.boardId)||!d||!destinationCapable(mass,d,p.kind))
     return 'the country destination no longer belongs to this expedition';
@@ -106,7 +106,7 @@ export function massBountyAccept(world:World,p:BountyPosting):string|null{
 /** The candidate frontier contains the connected opening and places actually
  * reached in this life. No unbounded world scan, detached island promise, or
  * terrain discovery is caused by reading the board. */
-export function massBountyCandidates(world: World, slate = 'standing'): MassPlace[] {
+export function massBountyCandidates(world: Pick<World,'massRuntime'>, slate = 'standing'): MassPlace[] {
   const mass = world.massRuntime;
   if (!mass?.config.bounties) return [];
   const result = new Map<string, MassPlace>();
@@ -130,7 +130,7 @@ export function massBountyCandidates(world: World, slate = 'standing'): MassPlac
     return !!mass.config.content.find(c => c.id === p.content)?.site && !mass.settlement?.reserves(at.x, at.y, p.radius);
   }).sort((a, b) => a.id.localeCompare(b.id)).slice(0, mass.config.bounties.maxCandidates);
 }
-export function dealMassBounties(world: World, board: string, beat: number, sequence: number,
+export function dealMassBounties(world: Pick<World,'massRuntime'|'player'|'bountyOffers'|'bountyHands'>, board: string, beat: number, sequence: number,
   standing: boolean, pickGemId: (level: number, rng: Rng) => string | null): BountyPosting[] {
   const mass = world.massRuntime!;
   const current = world.bountyOffers.filter(p => p.boardId === board && p.massBounty);

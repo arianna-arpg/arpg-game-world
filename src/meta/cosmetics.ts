@@ -85,7 +85,7 @@ export function cosmeticSkillPaint(world: NativeCosmeticHost, actor: Actor, skil
 
 /** Portal presentation follows the caster's seat, including possession and peers.
  *  Only portal choices cross this view: no inventory, skill bindings or receipts. */
-export function cosmeticPortalLoadout(world: World, owner: string): CosmeticLoadout {
+export function cosmeticPortalLoadout(world: NativeCosmeticHost, owner: string): CosmeticLoadout {
   const seat = world.seats.find(s => s.id === owner);
   const loadout = seat ? cosmeticLoadoutFor(world, seat.home ?? seat.actor) : undefined;
   const out = emptyCosmeticLoadout();

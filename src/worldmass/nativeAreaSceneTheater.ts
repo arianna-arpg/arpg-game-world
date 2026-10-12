@@ -1,3 +1,4 @@
+import {observeNativeCombatFactory} from '../engine/nativeCombatRecordObservation';
 import type {World} from '../engine/world';
 import type {NativeSceneActorContext,NativeAreaSceneGeometry} from './nativeAreaSceneGeometry';
 import type {NativeAreaScenePopulation} from './nativeAreaScenePopulation';
@@ -45,10 +46,11 @@ export class NativeAreaSceneTheater {
   fields(()=>input.scene,['zone','actors']);fields(()=>input.geometry,['arena','walk','doodads','zoneEntry','exits']);
   fields(()=>input.campaign,['sim','zoneMap','manifest','time']);fields(()=>input.state,['theaterVisit','theaterSpots','theaterRuns','theaterPour','theaterAmbientBudget']);
   fields(()=>input.environment.input.state,['geysers']);fields(()=>input.services,['geyserMode']);
-  methods(()=>input.geometry,['clampPos','pathField']);methods(()=>input.population,['createMonster']);
+  methods(()=>input.geometry,['clampPos','pathField']);
   methods(()=>input.population.input.sources.ambient,['weightedPick']);methods(()=>input.ecology,['actorById']);
   methods(()=>input.services,['radianceCondHeld','imminentThreatTo','plantDressAt','dropGemAt','notice','moveActor','slipAway']);
   methods(()=>this,['theaterContextNow','theaterConcurrencyNow','theaterPourRoom','theaterSpawn','spawnEventActor','clampNear','anyAliveWithTag','zoneEntryPos']);
+  Object.defineProperty(host,'createMonster',{enumerable:true,get(){return observeNativeCombatFactory(host,()=>{const provider=input.population,fn=provider.createMonster;return(...args:Parameters<typeof fn>)=>Reflect.apply(fn,provider,args);});}});
   this.host=Object.freeze(host);for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false,enumerable:false});
  }
  theaterContextNow(...args:Parameters<World['theaterContextNow']>){return native.nativeTheaterContextNow(this.host,...args);}

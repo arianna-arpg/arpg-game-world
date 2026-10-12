@@ -199,7 +199,7 @@ interface Result extends Attempt { row: ProbeRow; attempts: number; firstFail: s
 function runOnce(row: ProbeRow, o: Options, live: boolean): Promise<Attempt> {
   return new Promise(resolve => {
     const started = Date.now();
-    const child = spawn(process.execPath, [TSX_CLI, path.join('balance', row.probe)], {
+    const child = spawn(process.execPath, [TSX_CLI, path.join('balance', row.probe), ...(row.args ?? [])], {
       cwd: REPO_ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, NO_COLOR: '1' },
@@ -351,7 +351,7 @@ async function main(): Promise<void> {
     for (const r of broke) {
       console.log(`  ${r.row.probe}${r.timedOut ? ' (TIMEOUT)' : ` (exit ${r.code})`}`);
       for (const l of failLines(r.output)) console.log(`      ${l}`);
-      console.log(`      re-run: npx tsx balance/${r.row.probe}`);
+      console.log(`      re-run: npx tsx balance/${r.row.probe}${r.row.args?.length ? ' ' + r.row.args.join(' ') : ''}`);
     }
     process.exit(1);
   }

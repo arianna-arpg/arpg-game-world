@@ -67,7 +67,8 @@ export const BULLETIN_CFG = {
 } as const;
 
 /** A drained producer of fresh bulletins — see DRAIN SEMANTICS above. */
-export type BulletinSource = (world: World) => WorldBulletin[];
+export type NativeBulletinHost=Pick<World,"occupiedAudience"|"sim"|"visited"|"zoneMap">;
+export type BulletinSource = (world: NativeBulletinHost) => WorldBulletin[];
 
 const SOURCES: BulletinSource[] = [];
 
@@ -76,7 +77,7 @@ export function registerBulletinSource(s: BulletinSource): void { SOURCES.push(s
 
 /** Drain every source. Called once per tick by World.update; each returned
  *  line lands in the notice feed. */
-export function collectBulletins(world: World): WorldBulletin[] {
+export function collectBulletins(world: NativeBulletinHost): WorldBulletin[] {
   const out: WorldBulletin[] = [];
   for (const s of SOURCES) {
     try { out.push(...s(world)); } catch { /* a bad source never silences the rest */ }

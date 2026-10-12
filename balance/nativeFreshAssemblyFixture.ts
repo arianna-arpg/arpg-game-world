@@ -22,7 +22,7 @@ export function freshAssemblyInput(w:any,definition:World['zone'],campaign?:any)
  return {definition,player:w.player,initialActors:[w.player],campaign,
  sources:installedNativeAreaSources(campaign),
  services:{timeflow:w.timeflow,geometry:{seasSeen:w.seasSeen,oceanBearing:w.oceanBearing.bind(w),seaNameOf:w.seaNameOf.bind(w),notice:campaign.notice,seatOf:w.seatOf.bind(w),drainSurvival:unavailable('drainSurvival')},population:{resolveHit:unavailable('resolveHit')},
- residents:{viewRectFor:unavailable('viewRectFor'),scene:w.scene,clientActionHook:w.clientActionHook},puzzleEffects:{executeSkill:unavailable('puzzle executeSkill')},ecology:{throngClaimed:w.throngClaimed},
+ residents:{viewRectFor:unavailable('viewRectFor'),scene:w.scene,clientActionHook:w.clientActionHook,get questStanding(){return campaign.questStanding;},get questDefOf(){return campaign.questDefOf;}},puzzleEffects:{executeSkill:unavailable('puzzle executeSkill')},ecology:{throngClaimed:w.throngClaimed},
  theater:{geyserMode:w.geyserMode,notice:campaign.notice,imminentThreatTo:unavailable('imminentThreatTo'),plantDressAt:unavailable('plantDressAt'),moveActor:unavailable('moveActor'),slipAway:unavailable('slipAway')},
  history:{notice:campaign.notice,events:w.events},
  objectiveProgression:{recalcSeat:unavailable('objective recalcSeat'),resyncMercenary:unavailable('objective resyncMercenary')},

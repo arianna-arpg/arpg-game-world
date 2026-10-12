@@ -536,10 +536,12 @@ export interface ConvertSpec {
   skillId: string;
 }
 
+import type { NativeSkillRuleHost } from './nativeSkillRuleHost';
+
 export type ConvertRule = (
   caster: import('./actor').Actor,
   inst: SkillInstance,
-  world: import('./world').World,
+  world: NativeSkillRuleHost,
 ) => boolean;
 
 /** The open conversion-rule registry — a new condition is a new entry
@@ -552,7 +554,7 @@ export function registerConvertRule(id: string, rule: ConvertRule): void {
 export function hasConvertRule(id: string): boolean { return !!CONVERT_RULES[id]; }
 export function convertRuleHolds(
   when: string, caster: import('./actor').Actor, inst: SkillInstance,
-  world: import('./world').World,
+  world: NativeSkillRuleHost,
 ): boolean {
   return CONVERT_RULES[when]?.(caster, inst, world) ?? false;
 }

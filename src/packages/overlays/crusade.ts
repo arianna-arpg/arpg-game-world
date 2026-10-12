@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from '../../world/bulletins';
 // ---------------------------------------------------------------------------
 // CRUSADE FIELD — a faction's holy war as a LIVING WARFRONT (pure overlay).
 //
@@ -937,7 +938,7 @@ export class CrusadeField implements WorldOverlay {
 // War news is DISCOVERY-GATED at the source (the overlay only pushes lines
 // about wars the player has found); the engine's single collectBulletins pump
 // drains us.
-registerBulletinSource((world: World) => {
+registerBulletinSource((world: NativeBulletinHost) => {
   const cf = world.sim.crusadeField;
   if (!cf || !cf.bulletins.length) return [];
   return cf.bulletins.splice(0);

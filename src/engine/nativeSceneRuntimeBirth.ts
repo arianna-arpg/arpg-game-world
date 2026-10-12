@@ -1,3 +1,4 @@
+import {observeNativeCombatBirth,observeNativeCombatStatus} from './nativeCombatRecordObservation';
 /** Complete native event births shared by classic World and local areas. Sources retain their installed identities. */
 import type {World} from './world';
 import type {ZoneDef} from '../data/zones';
@@ -195,7 +196,7 @@ export function birthSpawnHuntBeast(nativeHost:NativeSceneRuntimeBirthHost,sourc
     beast.pos = nativeHost.clampPos(nativeHost.farPoint(540, true), beast.radius);
     beast.fillResources();
     beast.life = Math.max(1, beast.maxLife() * (0,sources.clamp)(info.lifeFrac, 0.02, 1)); // PRESERVED health
-    nativeHost.actors.push(beast);
+    nativeHost.actors.push(beast); observeNativeCombatBirth(nativeHost, beast);
     nativeHost.huntBeast = beast;
     (0,sources.bumpLedger)(nativeHost.ledger, 'hunt_seen');
     nativeHost.flashes.push({ pos: (0,sources.vec)(beast.pos.x, beast.pos.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
@@ -232,7 +233,7 @@ export function birthSpawnWarband(nativeHost:NativeSceneRuntimeBirthHost,sources
       // Invasion hosts have a leader/retinue; magicPack rolls belong to ambient cohorts.
       if (k === 0) { const r = (0,sources.rollRarity)(crowned, false); if (r !== 'normal') nativeHost.promoteRarity(m, r, { distinctName: true }); leader = m; }
       m.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-70, 70), at.y + (0,sources.rand)(-70, 70)), m.radius);
-      nativeHost.actors.push(m);
+      nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
       pack.push(m);
     }
     // Give the warband a TASK: the champion marches the pack toward a destination
@@ -382,7 +383,7 @@ export function birthPlaceRitualSite(nativeHost:NativeSceneRuntimeBirthHost,sour
       const c = nativeHost.createMonster(cfg.cultistId, Math.max(1, def.level), 'enemy');
       c.tag = 'ritual_cultist'; // drives dormancy (ai.ts), rouse (resolveHit), eruption (kill)
       c.pos = nativeHost.clampPos((0,sources.vec)(center.x + Math.cos(ang) * cfg.pentagramRadius, center.y + Math.sin(ang) * cfg.pentagramRadius), c.radius);
-      nativeHost.actors.push(c);
+      nativeHost.actors.push(c); observeNativeCombatBirth(nativeHost, c);
       cultistIds.push(c.id);
     }
     nativeHost.ritualSite = { id: info.id, zoneId: def.id, center: (0,sources.vec)(center.x, center.y), cultistIds, subdued: false };
@@ -475,7 +476,7 @@ export function birthPlaceHoldfast(nativeHost:NativeSceneRuntimeBirthHost,source
     keeper.pos = nativeHost.clampPos((0,sources.vec)(standC.x + tx * (0,sources.rand)(-20, 20) + inward.x * (0,sources.rand)(0, 24),
       standC.y + ty * (0,sources.rand)(-20, 20) + inward.y * (0,sources.rand)(0, 24)), keeper.radius);
     stampPost(keeper);
-    nativeHost.actors.push(keeper); banditIds.push(keeper.id);
+    nativeHost.actors.push(keeper); observeNativeCombatBirth(nativeHost, keeper); banditIds.push(keeper.id);
     const pool = g.rosterIds?.length ? g.rosterIds : [g.keeperId];
     const guards = (0,sources.randInt)(g.count[0], g.count[1]);
     for (let i = 0; i < guards; i++) {
@@ -487,7 +488,7 @@ export function birthPlaceHoldfast(nativeHost:NativeSceneRuntimeBirthHost,source
         standC.x + tx * flank * (throat.mouthWidth / 2 + (0,sources.rand)(10, 62)) + inward.x * (0,sources.rand)(-16, 44),
         standC.y + ty * flank * (throat.mouthWidth / 2 + (0,sources.rand)(10, 62)) + inward.y * (0,sources.rand)(-16, 44)), c.radius);
       stampPost(c);
-      nativeHost.actors.push(c); banditIds.push(c.id);
+      nativeHost.actors.push(c); observeNativeCombatBirth(nativeHost, c); banditIds.push(c.id);
     }
     nativeHost.holdfastSite = { zoneId: def.id, lockId: info.lockId, defId: gdef.id, keeperId: keeper.id, banditIds, gateDoodads };
     nativeHost.flashes.push({ pos: (0,sources.vec)(standC.x, standC.y), radius: 120, color: gdef.marker?.color ?? '#c8a04a', life: 0.7, maxLife: 0.7 });
@@ -564,7 +565,7 @@ export function birthMaterializeUnsealing(nativeHost:NativeSceneRuntimeBirthHost
             g.postSpec = {};
             g.aiPost = (0,sources.vec)(g.pos.x, g.pos.y);
             g.aiPostFacing = toEntry; g.facing = toEntry;
-            nativeHost.actors.push(g);
+            nativeHost.actors.push(g); observeNativeCombatBirth(nativeHost, g);
           }
         }
         nativeHost.unsealingSite = { zoneId: def.id, doorPos: at, door, braziers, opened, woken: false };
@@ -581,12 +582,12 @@ export function birthMaterializeUnsealing(nativeHost:NativeSceneRuntimeBirthHost
             m.tag = 'canopic_seal';
             m.eventKey = wardId; // the kill row resolves the WARD from this
             nativeHost.promoteRarity(m, cfg.canopic.rarity, { distinctName: false });
-            nativeHost.actors.push(m);
+            nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
             const guards = (0,sources.randInt)(cfg.canopic.guards[0], cfg.canopic.guards[1]);
             for (let i = 0; i < guards; i++) {
               const g = nativeHost.createMonster(cfg.canopic.guardId, lvl, 'enemy');
               g.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-70, 70), at.y + (0,sources.rand)(-70, 70)), g.radius);
-              nativeHost.actors.push(g);
+              nativeHost.actors.push(g); observeNativeCombatBirth(nativeHost, g);
             }
             nativeHost.notice(`${m.name} · ${ward.label}`, cfg.gold, 15, 'events');
           }
@@ -622,7 +623,7 @@ export function birthMaterializeUnsealing(nativeHost:NativeSceneRuntimeBirthHost
         site.doorPos.y + Math.sin(toEntry) * (cfg.door.radius + r.radius + 12)), r.radius);
       r.tag = 'sand_regent';
       nativeHost.promoteRarity(r, cfg.regent.rarity, { distinctName: false });
-      nativeHost.actors.push(r);
+      nativeHost.actors.push(r); observeNativeCombatBirth(nativeHost, r);
       nativeHost.flashes.push({ pos: (0,sources.vec)(r.pos.x, r.pos.y), radius: 200, color: cfg.gold, life: 1, maxLife: 1 });
       nativeHost.text((0,sources.vec)(site.doorPos.x, site.doorPos.y - 70),
         'THE SAND REGENT WAKES — at full strength, as promised', '#ffd890', 18);
@@ -643,7 +644,7 @@ export function birthPlaceAmalgamation(nativeHost:NativeSceneRuntimeBirthHost,so
     const necro = nativeHost.createMonster(cfg.necromancerId, Math.max(1, def.level), 'enemy');
     necro.tag = 'amalgam_necromancer';
     necro.pos = nativeHost.clampPos((0,sources.vec)(center.x, center.y), necro.radius);
-    nativeHost.actors.push(necro);
+    nativeHost.actors.push(necro); observeNativeCombatBirth(nativeHost, necro);
     // A ring of graves — one per part to gather; the ones already grafted are CRACKED
     // open (a viscera pool), the visual countdown to the Amalgamation's rising.
     const tilt = rng.range(-0.3, 0.3);
@@ -671,7 +672,7 @@ export function birthPlaceAmalgamMiniboss(nativeHost:NativeSceneRuntimeBirthHost
     m.tag = 'amalgam_miniboss';
     nativeHost.promoteRarity(m, 'champion');
     m.pos = nativeHost.clampPos(nativeHost.farPoint(420, true), m.radius);
-    nativeHost.actors.push(m);
+    nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
     nativeHost.flashes.push({ pos: (0,sources.vec)(m.pos.x, m.pos.y), radius: 130, color: '#e8e0c8', life: 0.8, maxLife: 0.8 });
     nativeHost.text((0,sources.vec)(m.pos.x, m.pos.y - 50), `${m.name}`, '#e8e0c8', 16);
   }
@@ -710,7 +711,7 @@ export function birthRiseAmalgamation(nativeHost:NativeSceneRuntimeBirthHost,sou
     nativeHost.promoteRarity(boss, 'crowned'); // re-fills resources after mods land
     boss.pos = nativeHost.clampPos((0,sources.vec)(site.center.x, site.center.y - 44), boss.radius);
     boss.life = Math.max(1, boss.maxLife() * (0,sources.clamp)(info.bossLifeFrac, 0.02, 1)); // preserved health
-    nativeHost.actors.push(boss);
+    nativeHost.actors.push(boss); observeNativeCombatBirth(nativeHost, boss);
     site.bossId = boss.id;
     nativeHost.flashes.push({ pos: (0,sources.vec)(boss.pos.x, boss.pos.y), radius: 180, color: '#9ad0b0', life: 0.9, maxLife: 0.9 });
     nativeHost.text((0,sources.vec)(boss.pos.x, boss.pos.y - 64), `${boss.name} rises!`, '#9ad0b0', 20);
@@ -771,7 +772,7 @@ export function birthMaterializeObserver(nativeHost:NativeSceneRuntimeBirthHost,
     obs.tag = 'eldritch_observer';
     obs.xpValue = Math.max(obs.xpValue, 160);
     obs.pos = nativeHost.clampPos(nativeHost.farPoint(440, true), obs.radius);
-    nativeHost.actors.push(obs);
+    nativeHost.actors.push(obs); observeNativeCombatBirth(nativeHost, obs);
     nativeHost.flashes.push({ pos: (0,sources.vec)(obs.pos.x, obs.pos.y), radius: 150, color: '#7fce6a', life: 0.8, maxLife: 0.8 });
     nativeHost.text((0,sources.vec)(obs.pos.x, obs.pos.y - 50), 'The Observer turns its gaze upon you.', '#7fce6a', 18);
   }
@@ -800,14 +801,14 @@ export function birthSpawnEpicenter(nativeHost:NativeSceneRuntimeBirthHost,sourc
     if (nativeHost.sim.factionInvasionActive(facId, nativeHost.player.level)) nativeHost.promoteRarity(balor, 'crowned');
     balor.tag = 'balor_epicenter';
     balor.pos = nativeHost.clampPos((0,sources.vec)(at.x, at.y), balor.radius);
-    nativeHost.actors.push(balor);
+    nativeHost.actors.push(balor); observeNativeCombatBirth(nativeHost, balor);
     const pool = roster.table.filter(e => e.id !== champId);
     const n = (0,sources.randInt)(5, 8);
     for (let k = 0; k < n; k++) {
       const m = nativeHost.createMonster(nativeHost.weightedPick(pool.length ? pool : roster.table, lvl), lvl, 'enemy');
       m.faction = facId;
       m.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-90, 90), at.y + (0,sources.rand)(-90, 90)), m.radius);
-      nativeHost.actors.push(m);
+      nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
     }
     (0,sources.bumpLedger)(nativeHost.ledger, 'demon_invasion_seen'); // DISCOVERY — surfaces the Vault tiers
     nativeHost.flashes.push({ pos: (0,sources.vec)(at.x, at.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
@@ -851,13 +852,13 @@ export function birthSpawnHellMarshal(nativeHost:NativeSceneRuntimeBirthHost,sou
     // field commander wears the champion ring, not the marquee.
     nativeHost.promoteRarity(marshal, 'champion');
     marshal.pos = nativeHost.clampPos((0,sources.vec)(at.x, at.y), marshal.radius);
-    nativeHost.actors.push(marshal);
+    nativeHost.actors.push(marshal); observeNativeCombatBirth(nativeHost, marshal);
     const n = (0,sources.randInt)(3, 5);
     for (let k = 0; k < n; k++) {
       const m = nativeHost.createMonster(nativeHost.weightedPick(roster.table, lvl), lvl, 'enemy');
       m.faction = lord.faction;
       m.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-90, 90), at.y + (0,sources.rand)(-90, 90)), m.radius);
-      nativeHost.actors.push(m);
+      nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
     }
     nativeHost.text((0,sources.vec)(at.x, at.y - 40), `${lord.short}'s marshal drives the front!`, lord.color, 15);
   }
@@ -877,13 +878,13 @@ export function birthSpawnHellCourt(nativeHost:NativeSceneRuntimeBirthHost,sourc
     body.eventKey = `hellwar:${lord.id}`;
     nativeHost.promoteRarity(body, 'crowned');
     body.pos = nativeHost.clampPos((0,sources.vec)(at.x, at.y), body.radius);
-    nativeHost.actors.push(body);
+    nativeHost.actors.push(body); observeNativeCombatBirth(nativeHost, body);
     const n = (0,sources.randInt)(6, 9);
     for (let k = 0; k < n; k++) {
       const m = nativeHost.createMonster(nativeHost.weightedPick(roster.table, lvl), lvl, 'enemy');
       m.faction = lord.faction;
       m.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-110, 110), at.y + (0,sources.rand)(-110, 110)), m.radius);
-      nativeHost.actors.push(m);
+      nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
     }
     nativeHost.text((0,sources.vec)(at.x, at.y - 48),
       `${lord.name} MANIFESTS — this ground is ${lord.throne.name} now. ${lord.creed}`, lord.color, 17);
@@ -915,7 +916,7 @@ export function birthMaterializeCrusade(nativeHost:NativeSceneRuntimeBirthHost,s
         nativeHost.promoteRarity(m, info.leaderRarity === 'crowned' ? 'crowned' : 'champion');
         if (info.leaderTag) { m.tag = info.leaderTag; m.xpValue = Math.max(m.xpValue, 90); }
       }
-      nativeHost.actors.push(m);
+      nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
     }
     nativeHost.flashes.push({ pos: (0,sources.vec)(center.x, center.y), radius: 110, color: info.color, life: 0.6, maxLife: 0.6 });
     const fname = (roster.name ?? info.faction).replace(/^the /, '');
@@ -955,7 +956,7 @@ export function birthMaterializeContagion(nativeHost:NativeSceneRuntimeBirthHost
           m.faction = cfg.faction;
           m.tag = 'contagion';
           m.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-80, 80), at.y + (0,sources.rand)(-80, 80)), m.radius);
-          nativeHost.actors.push(m);
+          nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
           if (strain && !info.curing) nativeHost.infectActorWith(m, strain);
         }
       }
@@ -984,7 +985,7 @@ export function birthSpawnPatientZero(nativeHost:NativeSceneRuntimeBirthHost,sou
       boss.name = pz.name;
     }
     boss.pos = nativeHost.clampPos(nativeHost.farPoint(520, true), boss.radius);
-    nativeHost.actors.push(boss);
+    nativeHost.actors.push(boss); observeNativeCombatBirth(nativeHost, boss);
     nativeHost.flashes.push({ pos: (0,sources.vec)(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
     nativeHost.text((0,sources.vec)(boss.pos.x, boss.pos.y - 60),
       `${boss.name} festers here — cut out the source!`, cfg.color, 18);
@@ -999,7 +1000,7 @@ export function birthInfectActorWith(nativeHost:NativeSceneRuntimeBirthHost,sour
         riseSec: (a.watch?.riseSec ?? sources.WATCH_CFG.riseSec) * cfg.infection.dullMul,
       };
     }
-    a.applyStatus(strain.statusId, 0, 1, 'the contagion');
+    observeNativeCombatStatus(nativeHost, a, () => a.applyStatus(strain.statusId, 0, 1, 'the contagion'));
     // THE MUTANT'S GROWTH (Movement III): a strain that declares a graft
     // SPROUTS it on the taken body — once per infection (the leans entry is
     // the latch, so a killed tentacle STAYS killed; the cure's revert clears
@@ -1095,7 +1096,7 @@ export function birthMaterializeDeepwinter(nativeHost:NativeSceneRuntimeBirthHos
           m.faction = cfg.faction;
           m.tag = 'deepwinter';
           m.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-80, 80), at.y + (0,sources.rand)(-80, 80)), m.radius);
-          nativeHost.actors.push(m);
+          nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
         }
       }
     }
@@ -1122,7 +1123,7 @@ export function birthMaterializeDeepwinter(nativeHost:NativeSceneRuntimeBirthHos
         }
       }
       boss.pos = nativeHost.clampPos(daisAt ?? nativeHost.farPoint(520, true), boss.radius);
-      nativeHost.actors.push(boss);
+      nativeHost.actors.push(boss); observeNativeCombatBirth(nativeHost, boss);
       nativeHost.flashes.push({ pos: (0,sources.vec)(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
       nativeHost.text((0,sources.vec)(boss.pos.x, boss.pos.y - 60),
         `${boss.name} holds his court here — break the winter!`, cfg.color, 18);
@@ -1149,7 +1150,7 @@ export function birthMaterializeInfestation(nativeHost:NativeSceneRuntimeBirthHo
       nest.faction = cfg.faction;
       nest.tag = 'warren_nest';
       nest.pos = nativeHost.clampPos(nativeHost.farPoint(430), nest.radius);
-      nativeHost.actors.push(nest);
+      nativeHost.actors.push(nest); observeNativeCombatBirth(nativeHost, nest);
     }
     // THE TIDE: pack count lerps with how much of the warren still stands.
     const roster = sources.FACTIONS[cfg.faction];
@@ -1166,7 +1167,7 @@ export function birthMaterializeInfestation(nativeHost:NativeSceneRuntimeBirthHo
           m.faction = cfg.faction;
           m.tag = 'vermin';
           m.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-80, 80), at.y + (0,sources.rand)(-80, 80)), m.radius);
-          nativeHost.actors.push(m);
+          nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
         }
       }
     }
@@ -1176,7 +1177,7 @@ export function birthMaterializeInfestation(nativeHost:NativeSceneRuntimeBirthHo
       king.faction = cfg.faction;
       king.tag = 'rat_king_manifest';
       king.pos = nativeHost.clampPos(nativeHost.farPoint(520, true), king.radius);
-      nativeHost.actors.push(king);
+      nativeHost.actors.push(king); observeNativeCombatBirth(nativeHost, king);
       nativeHost.text((0,sources.vec)(king.pos.x, king.pos.y - 60),
         `${king.name} still walks the broken warren!`, cfg.color, 18);
     } else if (info.nestsRemaining > 0) {
@@ -1205,7 +1206,7 @@ export function birthMaterializeCandle(nativeHost:NativeSceneRuntimeBirthHost,so
           m.faction = facId;
           m.tag = tag;
           m.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-80, 80), at.y + (0,sources.rand)(-80, 80)), m.radius);
-          nativeHost.actors.push(m);
+          nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
         }
       }
     };
@@ -1217,7 +1218,7 @@ export function birthMaterializeCandle(nativeHost:NativeSceneRuntimeBirthHost,so
         shrine.faction = cfg.waxFaction;
         shrine.tag = 'candle_shrine';
         shrine.pos = nativeHost.clampPos(nativeHost.farPoint(430), shrine.radius);
-        nativeHost.actors.push(shrine);
+        nativeHost.actors.push(shrine); observeNativeCombatBirth(nativeHost, shrine);
       }
       muster(cfg.waxFaction, 'wax_vigil');
     }
@@ -1250,7 +1251,7 @@ export function birthMaterializeStarfall(nativeHost:NativeSceneRuntimeBirthHost,
           m.faction = cfg.faction;
           m.tag = 'starfall';
           m.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-80, 80), at.y + (0,sources.rand)(-80, 80)), m.radius);
-          nativeHost.actors.push(m);
+          nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
         }
       }
     }
@@ -1260,7 +1261,7 @@ export function birthMaterializeStarfall(nativeHost:NativeSceneRuntimeBirthHost,
       heart.faction = cfg.faction;
       heart.tag = 'fallen_star';
       heart.pos = nativeHost.clampPos(nativeHost.farPoint(500, true), heart.radius);
-      nativeHost.actors.push(heart);
+      nativeHost.actors.push(heart); observeNativeCombatBirth(nativeHost, heart);
     }
     nativeHost.notice('The sky is coming down in crystal — and something grew where it landed…', cfg.color, 15, 'events');
   }
@@ -1294,7 +1295,7 @@ export function birthMaterializeMycelia(nativeHost:NativeSceneRuntimeBirthHost,s
           m.faction = cfg.faction;
           m.tag = 'mycelia';
           m.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-50, 50), at.y + (0,sources.rand)(-50, 50)), m.radius);
-          nativeHost.actors.push(m);
+          nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
         }
       }
     }
@@ -1310,7 +1311,7 @@ export function birthMaterializeMycelia(nativeHost:NativeSceneRuntimeBirthHost,s
         nativeHost.promoteRarity(boss, crowned ? 'crowned' : 'champion');
       }
       boss.pos = nativeHost.clampPos(nativeHost.farPoint(520, true), boss.radius);
-      nativeHost.actors.push(boss);
+      nativeHost.actors.push(boss); observeNativeCombatBirth(nativeHost, boss);
       nativeHost.flashes.push({ pos: (0,sources.vec)(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
       nativeHost.text((0,sources.vec)(boss.pos.x, boss.pos.y - 60),
         `${boss.name} pulses at the bloom's heart — strike it to collapse the spread!`, cfg.color, 18);
@@ -1335,7 +1336,7 @@ export function birthMaterializeBrood(nativeHost:NativeSceneRuntimeBirthHost,sou
       node.faction = cfg.faction;
       node.tag = 'swarm_brood_node';
       node.pos = nativeHost.clampPos(nativeHost.farPoint(420), node.radius);
-      nativeHost.actors.push(node);
+      nativeHost.actors.push(node); observeNativeCombatBirth(nativeHost, node);
     }
     if (info.standing > 0) {
       nativeHost.notice(`The sand hums — ${info.standing} hive throat${info.standing === 1 ? '' : 's'} stand here (${info.tally}/${info.threshold} and the swarm wings)`, info.color, 15, 'events');
@@ -1354,7 +1355,7 @@ export function birthMaterializeSwarmWake(nativeHost:NativeSceneRuntimeBirthHost
       const cache = nativeHost.createMonster(cfg.cacheId, lvl, 'enemy');
       cache.tag = 'royal_cache';
       cache.pos = nativeHost.clampPos(nativeHost.farPoint(380), cache.radius);
-      nativeHost.actors.push(cache);
+      nativeHost.actors.push(cache); observeNativeCombatBirth(nativeHost, cache);
     }
     nativeHost.notice('Amber glistens in the swarm\'s wake…', '#f0c060', 14, 'events');
   }
@@ -1378,7 +1379,7 @@ export function birthMaterializeWorldBossFight(nativeHost:NativeSceneRuntimeBirt
     m.pos = (0,sources.vec)(at.x, at.y);
     m.tag = 'worldboss_boss';
     m.eventKey = fight.instanceId;
-    nativeHost.actors.push(m);
+    nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
     if (fight.bossLifeFrac < 1) m.life = Math.max(1, m.maxLife() * fight.bossLifeFrac);
     const esc = fight.def.escort;
     if (esc && esc.table.length) {
@@ -1386,7 +1387,7 @@ export function birthMaterializeWorldBossFight(nativeHost:NativeSceneRuntimeBirt
       for (let k = 0; k < n; k++) {
         const g = nativeHost.createMonster(nativeHost.weightedPick(esc.table, lvl), lvl, 'enemy');
         g.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-150, 150), at.y + (0,sources.rand)(-150, 150)), g.radius);
-        nativeHost.actors.push(g);
+        nativeHost.actors.push(g); observeNativeCombatBirth(nativeHost, g);
       }
     }
     if (fight.archetype === 'apparition') {
@@ -1407,7 +1408,7 @@ export function birthPlaceCaravanReturn(nativeHost:NativeSceneRuntimeBirthHost,s
     const c = nativeHost.createMonster(sources.FIXTURE_IDS.townsfolk_caravanner, 1, 'player');
     c.untargetable = true; // the band's monsters ignore the escort
     c.pos = nativeHost.clampPos((0,sources.vec)(nativeHost.player.pos.x + 54, nativeHost.player.pos.y + 28), c.radius);
-    nativeHost.actors.push(c);
+    nativeHost.actors.push(c); observeNativeCombatBirth(nativeHost, c);
   }
 export function birthActorById(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources, id: number): Actor | undefined {
     return nativeHost.actors.find(a => a.id === id);
@@ -1441,7 +1442,7 @@ export function birthGraftPart(nativeHost:NativeSceneRuntimeBirthHost,sources:Na
     part.pos.x = host.pos.x + (pd.dx * c - pd.dy * s) * host.radius;
     part.pos.y = host.pos.y + (pd.dx * s + pd.dy * c) * host.radius;
     (host.partActors ??= []).push(part);
-    nativeHost.actors.push(part);
+    nativeHost.actors.push(part); observeNativeCombatBirth(nativeHost, part);
     if (opts?.flash) {
       nativeHost.flashes.push({
         pos: (0,sources.vec)(part.pos.x, part.pos.y), radius: part.radius * 1.6,

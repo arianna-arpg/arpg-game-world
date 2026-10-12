@@ -40,6 +40,7 @@ import { ITEM_BASES } from './itembases';
 import { SKILLS } from './skills';
 import { UNIQUE_LIST } from './uniques';
 import { OBJECTIVE_READS, type ZoneDef } from './zones';
+import type {NativeOmenHost} from '../world/omens';
 
 /** ⚠ EVERY number here is UNBLESSED (2026-08-24) — the charter's open dials;
  *  her walks retune them. The offer count is HER walk-1 number (five). */
@@ -439,6 +440,7 @@ export interface BountyTargetRef {
 /** One live-census source — registered from the owning fabric's module. */
 export interface BountyReadContext extends Pick<World,'zoneMap'|'visited'|'ledger'|'sim'|'massRuntime'|'objectiveDoneAt'> {}
 
+export type NativeBountyActionHost=BountyReadContext & Pick<World,'manifest'|'devOverlayView'|'player'|'roadIsWet'|'questHandLevel'|'mintAuthoredZone'>;
 export interface BountySourceRow {
   id: string;
   /** The live census: every answerable ask this source stands behind right
@@ -466,10 +468,10 @@ export interface BountySourceRow {
     name: string;
     ask(zoneName: string, level: number): string;
     ledger: string;
-    headroom(world: World): boolean;
+    headroom(world: NativeBountyActionHost): boolean;
     /** The seat predicate — the package's own targetability (zone-pure). */
     fit?(def: ZoneDef): boolean;
-    ignite(world: World, zoneId: string): boolean;
+    ignite(world: NativeBountyActionHost, zoneId: string): boolean;
   };
 }
 
@@ -500,7 +502,7 @@ export interface BountyBandRow {
   board?: string;
   /** The live predicate — a pure read over the run's world; first live
    *  row wins the arm. */
-  while(world: World): boolean;
+  while(world: NativeBountyActionHost): boolean;
   /** Slate-size override (absent = BOUNTY_BOARD_CFG.offers). */
   offers?: number;
   /** Kind-weight overrides (0 = off this band's slate; an absent kind
@@ -535,7 +537,7 @@ export const BOUNTY_BANDS: BountyBandRow[] = [
 
 /** The arm's band resolve — first live row FOR THIS BOARD wins, none =
  *  the standing config. A pure read (bands never write). */
-export function liveBountyBand(world: World, boardId: string = BOUNTY_BOARD_CFG.boardId): BountyBandRow | null {
+export function liveBountyBand(world: NativeBountyActionHost, boardId: string = BOUNTY_BOARD_CFG.boardId): BountyBandRow | null {
   for (const b of BOUNTY_BANDS) {
     if (b.board !== undefined && b.board !== boardId) continue;
     if (b.while(world)) return b;
@@ -627,16 +629,16 @@ export interface BountyKindRow {
    *  the hand seats; a returned reason REFUSES the accept and strikes the
    *  posting with its courtesy (the stale-offer race law). May mutate the
    *  posting (the summons stamps its born key + at-accept baseline). */
-  accept?(world: World, p: BountyPosting): string | null;
+  accept?(world: NativeBountyActionHost, p: BountyPosting): string | null;
   /** Optional travel contract: null means the player chooses the destination. */
-  target?(world: World, p: BountyPosting): string | null;
-  route?(world: World, p: BountyPosting): string;
+  target?(world: NativeBountyActionHost, p: BountyPosting): string | null;
+  route?(world: NativeBountyActionHost, p: BountyPosting): string;
   arrival?(world: BountyReadContext, p: BountyPosting, zone: ZoneDef, firstVisit: boolean, from?: string): void;
   done(world: BountyReadContext, p: BountyPosting): boolean;
   failed?(world: BountyReadContext, p: BountyPosting): boolean;
   /** A reason string ANNULS the posting (the world moved on — the reconcile's
    *  honesty read); null = the ask still stands. */
-  annulled?(world: World, p: BountyPosting): string | null;
+  annulled?(world: NativeBountyActionHost, p: BountyPosting): string | null;
   /** Card copy — the precision register (names, reads; never captions). */
   copy(world: BountyReadContext, p: BountyPosting): { title: string; ask: string };
 }
@@ -1173,7 +1175,7 @@ registerBountyKind({
 // THE ERRAND'S OMEN (the findability guarantee without the veil lift): every
 // omen-face errand in hand whispers its bearing and finally reveals its seat
 // — the omen fabric verbatim, aging from the accept.
-registerOmenSource((world: World) => world.bountyOmens());
+registerOmenSource((world: NativeOmenHost) => world.bountyOmens());
 
 // THE CHEVRON PATRON (M4 — charter §8's coupling): the board's own edge
 // pointers in the target zone, through the standing attention fold. Today

@@ -1,3 +1,4 @@
+import {nativeCombatActorEntry} from './nativeAreaCombatOperation';
 import {sceneShowSkillArrival,type NativeSceneSkillArrivalHost} from '../engine/nativeSceneSkillArrival';
 /** Physical-area entry to exact combat-state rules. Payload execution remains separate. */
 import type {Actor} from '../engine/actor';
@@ -39,7 +40,7 @@ export class NativeAreaSceneCombatState {
   for(const key of ['grantTreeBuff','tapFires','isEliteVictim'] as const)Object.defineProperty(host,key,{enumerable:true,get(){const fn=self[key];return (...args:any[])=>Reflect.apply(fn,self,args);}});
   this.host=Object.freeze(host);for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
- #actors(...actors:Actor[]):void {const {scene,authority,progression}=this.input;for(const actor of actors){if(!scene.actors.includes(actor))throw Error('Native combat state needs actual physical actor');const registered=authority.require(actor);if(registered.scene!==scene||registered.progression!==progression)throw Error('Native combat state needs registered progression owner');}authority.assertAdmitted(scene);}
+ #actors(...actors:Actor[]):void {const {scene,authority,progression}=this.input;for(const actor of actors){if(nativeCombatActorEntry(this,actor,'status'))continue;if(!scene.actors.includes(actor))throw Error('Native combat state needs actual physical actor');const registered=authority.require(actor);if(registered.scene!==scene||registered.progression!==progression)throw Error('Native combat state needs registered progression owner');}authority.assertAdmitted(scene);}
  applyBuffEffect(...a:Args<typeof native.sceneApplyBuffEffect>):void{this.#actors(a[0]);native.sceneApplyBuffEffect(this.host,...a);}
  grantTreeBuff(...a:Args<typeof native.sceneGrantTreeBuff>):void{this.#actors(a[0],a[1]);native.sceneGrantTreeBuff(this.host,...a);}
  transplantStatus(...a:Args<typeof native.sceneTransplantStatus>):void{const field=data(a[1],'challengeField'),id=data(a[1],'id');if(!(field!==unknown&&field!==undefined)&&!(field===undefined&&typeof id==='string'&&data(STATUS_DEFS,id)!==unknown&&!data(STATUS_DEFS,id)))this.#actors(a[0]);native.sceneTransplantStatus(this.host,...a);}

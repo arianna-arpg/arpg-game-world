@@ -1,3 +1,4 @@
+import {observeNativeCombatRecord,observeNativeCombatSourceReassignment,observeNativeCombatInstanceReassignment} from './nativeCombatRecordObservation';
 import {skillMovementVoice} from '../data/skillMovementVisuals';
 import {skillSelfVoice} from '../data/skillSelfVisuals';
 /** Exact native impulse, release, teleport, saddle and movement-policy closure.
@@ -95,9 +96,11 @@ export function scenePushActor(host:NativeSceneDisplacementHost,target: Actor, d
       const sp = Math.hypot(p.vx, p.vy);
       if (sp > PUSH_MAX_SPEED) { p.vx *= PUSH_MAX_SPEED / sp; p.vy *= PUSH_MAX_SPEED / sp; }
       // The newest shover owns the collision procs; the crush re-arms.
-      if (caster && inst) { p.caster = caster; p.inst = inst; p.collided = false; }
+      if (caster && inst) { p.caster = caster; observeNativeCombatSourceReassignment(host,'push',p,caster); p.inst = inst; observeNativeCombatInstanceReassignment(host,'push',p,inst); p.collided = false; }
     } else {
-      target.push = { vx, vy, caster, inst };
+      let nativePush:NonNullable<Actor['push']>;
+      target.push = nativePush = { vx, vy, caster, inst };
+      observeNativeCombatRecord(host,'push',target,nativePush,caster,inst);
     }
   }
 

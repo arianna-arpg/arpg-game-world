@@ -1,5 +1,20 @@
 import {beforeNativeSceneGroundFollowUps,groundFollowUpsHistoricalHunk} from './nativeSceneGroundFollowUpsIntegrationFixture';
-import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
+import {beforeNativeMainVisualSource as historicalMainVisualSource} from './nativeMainVisualSourceFixture';
+import {beforeNativeCombatLeafVisual} from './nativeCombatLeafVisualFixture';
+import {nativeCombatLeafVisualArchive as currentLeafArchive} from './nativeCombatLeafVisualArchive';
+import {createHash as currentLeafHash} from 'node:crypto';
+function beforeNativeMainVisualSource(file:string,source:string):string {
+ let prior=beforeNativeCombatLeafVisual(file,source);
+ return historicalMainVisualSource(file,prior);
+}
+{
+ const file='src/engine/nativeSceneRestoration.ts',raw=fs.readFileSync(new URL('../'+file,import.meta.url),'utf8').replaceAll('\r\n','\n'),row=currentLeafArchive.files.find(row=>row.file===file)!;
+ const hash=(text:string)=>currentLeafHash('sha256').update(text).digest('hex');
+ assert.equal(hash(raw),row.afterHash,'exact current reviewed leaf source');assert.equal(hash(beforeNativeCombatLeafVisual(file,raw)),row.beforeHash,'complete exact leaf predecessor');
+ for(const edit of row.edits){assert.equal(raw.split(edit.after).length,2,'unique current leaf hunk');const changed=raw.replace(edit.after,edit.after.replace(/[A-Za-z]/,'!'));assert.notEqual(changed,raw,'nontrivial current leaf mutation');assert.throws(()=>beforeNativeCombatLeafVisual(file,changed));assert.throws(()=>beforeNativeCombatLeafVisual(file,raw+'\n'+edit.after));}
+ const outside=raw+'\n/* unknown outside leaf change */';assert.ok(beforeNativeCombatLeafVisual(file,outside).endsWith('/* unknown outside leaf change */'));assert.notEqual(hash(beforeNativeCombatLeafVisual(file,outside)),row.beforeHash);
+ console.log('PASS current leaf source controls: '+row.edits.length+' mutations/duplicates; unrelated source remains visible');
+}
 import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
 import {noteRestoreGain} from '../src/engine/feedingCues';
 import {skillTargetVoice} from '../src/data/skillTargetVisuals';

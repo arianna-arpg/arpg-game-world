@@ -1,7 +1,8 @@
 /** A fixed preparation cohort becomes physical attendance only after explicit admission. */
 import type {Seat} from '../engine/world';
 import type {NativeSceneCensus} from './nativeAreaScenePopulation';
-import type {NativeAreaActorAuthority,NativeAreaAuthorityBinding} from './nativeAreaActorAuthority';
+import {NativeAreaActorAuthority,type NativeAreaAuthorityBinding} from './nativeAreaActorAuthority';
+const finalPresencePhysical=NativeAreaActorAuthority.prototype.assertFinalPhysical;
 export class NativeAreaScenePresence {
  readonly scene:NativeSceneCensus;
  readonly campaign:{readonly seats:readonly Seat[]};
@@ -25,6 +26,15 @@ export class NativeAreaScenePresence {
   if(this.#authority!==authority||this.#binding!==authority.bindingFor(this.scene))throw Error('Native presence authority differs');
   authority.assertAdmitted(this.scene);
  }
+ /** Callback-free preparation for the exact admission's later presence commit. */
+ assertFinalActivation(authority:NativeAreaActorAuthority<object>,binding:NativeAreaAuthorityBinding<object>):void {
+  if(authority.campaign!==this.campaign||binding.scene!==this.scene)throw Error('Native final presence needs identical roots');
+  if(this.#authority&&this.#authority!==authority)throw Error('Native presence authority cannot be replaced');
+  if(this.#binding&&this.#binding!==binding)throw Error('Native presence binding cannot be replaced');
+ }
+ activateFinal(authority:NativeAreaActorAuthority<object>,binding:NativeAreaAuthorityBinding<object>):void {
+  Reflect.apply(finalPresenceValidation,this,[authority,binding]);Reflect.apply(finalPresencePhysical,authority,[binding]);this.#authority=authority;this.#binding=binding;
+ }
  activate(authority:NativeAreaActorAuthority<object>):void{
   if(authority.campaign!==this.campaign)throw Error('Native presence needs identical campaign authority');
   if(this.#authority&&this.#authority!==authority)throw Error('Native presence authority cannot be replaced');
@@ -33,3 +43,5 @@ export class NativeAreaScenePresence {
   this.#authority=authority;this.#binding=binding;
  }
 }
+
+const finalPresenceValidation=NativeAreaScenePresence.prototype.assertFinalActivation;

@@ -96,6 +96,7 @@ export class NativeAreaScenePopulation {
   readonly input:NativeScenePopulationInput;
   readonly #sharedActors:ReadonlySet<Actor>;
   readonly #birthMintFrames:Set<Actor>[]=[];
+  readonly #factoryOwners=new WeakMap<Actor,Readonly<{owner:Actor|undefined}>>();
   constructor(raw:NativeScenePopulationInput) {
     const bindings=Object.create(null);
     for(const key of ['scene','geometry','campaign','sources','populationSources','context','state']){
@@ -187,8 +188,11 @@ export class NativeAreaScenePopulation {
   nextSquadId():number{return this.input.state.squadSequence++;}
   createMonster(...args:Parameters<NativeAreaBirthHost['createMonster']>):Actor{
     const body=createNativeMonster(this.factory,this.input.sources.factory,...args);
+    this.#factoryOwners.set(body,Object.freeze({owner:args[3]}));
     this.#birthMintFrames.at(-1)?.add(body);return body;
   }
+  /** Non-granting provenance of the actual factory return and original owner argument. */
+  factoryOwnerOf(body:Actor):Readonly<{owner:Actor|undefined}>|undefined{return this.#factoryOwners.get(body);}
   /** Attest only actual factory returns made during this selected synchronous call.
    * The private set cannot be supplied by a wrapper, a caller or another population. */
   createMonsterForAdmission(fn:NativeAreaScenePopulation['createMonster'],args:Parameters<NativeAreaScenePopulation['createMonster']>):Actor {

@@ -385,7 +385,7 @@ export function sceneClaimQuestImbue(host:NativeSceneQuestInteractionHost,questI
     return true;
   }
 
-export function sceneReliquaryLesson(host:NativeSceneQuestInteractionHost):boolean {
+export function sceneReliquaryLesson(host:Pick<NativeSceneQuestInteractionHost,'account'>):boolean {
     return host.account.features.has(FEATURE.RELIQUARY)
       && (host.account.ledger[RELIQUARY_LESSON] ?? 0) < 1;
   }

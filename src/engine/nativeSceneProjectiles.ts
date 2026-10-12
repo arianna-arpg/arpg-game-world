@@ -1,3 +1,6 @@
+import {observeNativeCombatStorage,observeNativeCombatRecord} from './nativeCombatRecordObservation';
+import type {Actor as NativeRecordActor} from './actor';
+import type {SkillInstance as NativeRecordSkill} from './skills';
 /** Exact native projectile launch and occlusion fold; ticking stays with its actual combat owner. */
 import type {World} from './world';
 import {cosmeticSkillPaint} from '../meta/cosmetics';
@@ -80,7 +83,9 @@ export function sceneSpawnProjectile(host:NativeSceneProjectileHost,caster: Acto
     const nativeReturn = d.returns === 'origin' ? 1 : d.returns === 'caster' ? 2 : 0;
     const grantedReturn = Math.round(caster.sheet.get('projReturn', tags, extra));
 
-    host.projectiles.push({
+    {
+ let nativeQueue:typeof host.projectiles;let nativeRecord:(typeof host.projectiles)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
+ (nativeQueue=observeNativeCombatStorage(host,'projectiles',host.projectiles)).push(nativeRecord={
       pos: vec(origin.x, origin.y),
       orbPaint: d.orbPaint,
       // THE TIER LAW: a flight belongs to its caster's layer (chain children
@@ -97,7 +102,7 @@ export function sceneSpawnProjectile(host:NativeSceneProjectileHost,caster: Acto
       pierce: (d.pierce ?? 0) + Math.round(caster.sheet.get('pierceCount', tags, extra)),
       chains: Math.round(caster.sheet.get('chainCount', tags, extra)),
       hits: new Map(),
-      caster, inst, color: cosmeticPaint.color ?? def.color,
+      caster:(nativeSource=caster), inst:(nativeInstance=inst), color: cosmeticPaint.color ?? def.color,
       cosmeticMotif: cosmeticPaint.motif,
       cosmeticProjectile: cosmeticPaint.projectile,
       shape: d.shape ?? 'circle',
@@ -184,6 +189,8 @@ export function sceneSpawnProjectile(host:NativeSceneProjectileHost,caster: Acto
       arcRate: t?.arcTo,
       patrol: opts?.patrol?.length ? { points: opts.patrol.map(p2 => vec(p2.x, p2.y)), idx: 0 } : undefined,
     });
+ observeNativeCombatRecord(host,'projectiles',nativeQueue,nativeRecord,nativeSource,nativeInstance);
+}
   }
 
 export function sceneSkillOcclusion(host:NativeSceneProjectileHost,caster: Actor, inst: SkillInstance): 'blocked' | 'free' | 'travel' {

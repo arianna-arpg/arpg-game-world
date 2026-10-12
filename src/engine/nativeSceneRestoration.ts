@@ -1,3 +1,4 @@
+import {observeNativeCombatStorage,observeNativeCombatRecord} from './nativeCombatRecordObservation';
 import {noteRestoreGain} from './feedingCues';
 import {skillTargetVoice} from '../data/skillTargetVisuals';
 /** Exact native healing, resource gain, stream construction and float attribution.
@@ -223,7 +224,8 @@ export function sceneApplyHealChained(host:NativeSceneRestorationHost,
       if (!next) break;
       scale *= 0.75;
       // A momentary mending arc (the discharge-zap visual pattern).
-      host.tethers.push({
+      { let nativeTetherQueue:NativeSceneRestorationHost['tethers']; let nativeTetherRow:NativeSceneRestorationHost['tethers'][number];
+      (nativeTetherQueue=observeNativeCombatStorage(host,'tethers',host.tethers)).push(nativeTetherRow={
         a: from, b: next, owner: caster, skillId: inst.def.id, link: 'zap',
         visual: 'healing_chain', visualAge: 0,
         amounts: {}, heal: 0, affects: 'allies', width: 5,
@@ -231,6 +233,8 @@ export function sceneApplyHealChained(host:NativeSceneRestorationHost,
         color: '#7ec88a',
         ax: from.pos.x, ay: from.pos.y, bx: next.pos.x, by: next.pos.y,
       });
+      observeNativeCombatRecord(host,'tethers',nativeTetherQueue,nativeTetherRow,caster,inst);
+    }
       host.applyHeal(caster, inst, next, fx, scale, quiet);
       if (skillTargetVoice(inst.def.id)) host.showSkillArrival(caster, inst, next.pos, next.radius + 14, next.tier);
       visited.add(next);

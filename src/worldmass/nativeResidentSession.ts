@@ -4,9 +4,9 @@ import type {NativeAreaResidentContext} from './nativeAreaAmbient';
 import type {NativeNpcDialogueHost} from '../engine/nativeNpcDialogueHost';
 import {NpcDialogueDirector} from '../engine/npcDialogues';
 export type NativeResidentCampaign=Pick<NativeNpcDialogueHost,
- 'account'|'ledger'|'activeQuests'|'questStanding'|'questDefOf'|'manifest'|'metaProgressionActive'|'accountDirty'|'charDirty'|'time'|'localSeat'|'questImbues'|'reliquaryLesson'|'mireilleLessonLived'|'mireilleGiftOwed'|'mireilleGiftLesson'> & {massSettlementDay:World['massSettlementDay']};
+ 'account'|'ledger'|'activeQuests'|'manifest'|'metaProgressionActive'|'accountDirty'|'charDirty'|'time'|'localSeat'|'questImbues'|'reliquaryLesson'|'mireilleLessonLived'|'mireilleGiftOwed'|'mireilleGiftLesson'> & {massSettlementDay:World['massSettlementDay']};
 export type NativeResidentLocal=Pick<NativeNpcDialogueHost,
- 'localZoneAt'|'isSafeAt'|'viewRectFor'|'lineOfSight'|'exits'|'massRuntime'|'scene'|'clientActionHook'> & {readonly census:NativeSceneCensus};
+ 'questStanding'|'questDefOf'|'localZoneAt'|'isSafeAt'|'viewRectFor'|'lineOfSight'|'exits'|'massRuntime'|'scene'|'clientActionHook'> & {readonly census:NativeSceneCensus};
 /** Run-long variation survives local director/area construction. */
 export interface NativeResidentHistory {dialogueVisits:Map<string,number>;dialogueScene:number}
 export interface NativeResidentArea {census:NativeSceneCensus;local:NativeResidentLocal}
@@ -40,8 +40,8 @@ export class NativeResidentSession {
   fields(()=>self.campaign,['account','ledger','activeQuests','manifest','accountDirty','charDirty','time','localSeat','questImbues']);
   fields(()=>self.area.census,['actors','player']);
   fields(()=>self.area.local,['exits','massRuntime','scene','clientActionHook']);
-  methods(()=>self.campaign,['questStanding','questDefOf','metaProgressionActive','reliquaryLesson','mireilleLessonLived','mireilleGiftOwed','mireilleGiftLesson']);
-  methods(()=>self.area.local,['localZoneAt','isSafeAt','viewRectFor','lineOfSight']);
+  methods(()=>self.campaign,['metaProgressionActive','reliquaryLesson','mireilleLessonLived','mireilleGiftOwed','mireilleGiftLesson']);
+  methods(()=>self.area.local,['questStanding','questDefOf','localZoneAt','isSafeAt','viewRectFor','lineOfSight']);
   this.host=Object.freeze(host);this.npcDialogues=new NpcDialogueDirector(host,raw.history?.dialogueVisits);
   if(raw.history){const history=raw.history;Object.defineProperty(this,'dialogueScene',{enumerable:true,get:()=>history.dialogueScene,set:(v:number)=>{history.dialogueScene=v;}});}
   this.residentContext=Object.freeze({
@@ -57,7 +57,13 @@ export class NativeResidentSession {
  private checkedArea(raw:NativeResidentArea):NativeResidentArea {
   const out=Object.create(null);for(const key of ['census','local']){const d=raw&&Object.getOwnPropertyDescriptor(raw,key);if(!d||!Object.hasOwn(d,'value')||!d.value||typeof d.value!=='object')throw Error('Native resident area needs own object '+key);out[key]=d.value;}
   if(out.local.census!==out.census)throw Error('Native resident local/census identity differs');
-  if(out.census.player!==this.campaign.localSeat.actor)throw Error('Native resident shopper/seat identity differs');
+  // The resident area's actual representative can be a remote arriving hero.
+  // The campaign localSeat remains the genuine global shopper; this local
+  // census validation does not confer actor authority or change that seat.
+  const player=Object.getOwnPropertyDescriptor(out.census,'player'),actors=Object.getOwnPropertyDescriptor(out.census,'actors');
+  if(!player||!Object.hasOwn(player,'value')||!actors||!Object.hasOwn(actors,'value')||!Array.isArray(actors.value))throw Error('Native resident representative/census identity differs');
+  let found=false;for(let i=0;i<actors.value.length;i++){const d=Object.getOwnPropertyDescriptor(actors.value,String(i));if(!d||!Object.hasOwn(d,'value'))throw Error('Native resident census needs ordinary body entries');if(d.value===player.value)found=true;}
+  if(!found)throw Error('Native resident representative/census identity differs');
   return Object.freeze(out);
  }
  /** Birth composition checks this before any door or harbor mutation. */

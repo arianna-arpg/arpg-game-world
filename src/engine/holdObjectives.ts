@@ -20,6 +20,7 @@ export interface HoldObjectiveOptions {
   stirText?: string; onFill?: (s: HoldFixture) => void;
 }
 export interface HoldObjectiveHost {
+  isPresentPlayer?():boolean;
   player: { dead: boolean; pos: Vec2 };
   reachable(s: HoldFixture, reach: DwellReach): boolean;
   pressers(s: HoldFixture, contest: ContestSpec): number;
@@ -46,7 +47,7 @@ export function driveHoldObjectives(dt: number, opts: HoldObjectiveOptions, host
   const rec = opts.contest && opts.contest.recoup && opts.contest.recoup.boost > 1 ? opts.contest.recoup : null;
   const recCap = rec ? opts.need * rec.capFrac : 0;
   let held: HoldFixture | null = null;
-  if (!host.player.dead) {
+  if (host.isPresentPlayer?.() !== false && !host.player.dead) {
     let bd = Infinity;
     for (const s of opts.fixtures) {
       if (s.charge >= opts.need) continue;

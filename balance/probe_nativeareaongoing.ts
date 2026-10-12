@@ -3,7 +3,8 @@ import {SKILLS} from '../src/data/skills';
 import {makeSkillInstance} from '../src/engine/skills';
 import {STATUS_RELAYS,relayStatusStat} from '../src/engine/reception';
 /** Actual full birth -> admitted quest/progression/objective composition.
- * Combat death and movement remain explicit native-World test boundaries. */
+ * Actual session/coordinator/combat owners are constructed; the pre-existing
+ * controlled quest readiness and initial native World setup remain labeled fixtures. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 fs.mkdirSync(new URL('./reports/',import.meta.url),{recursive:true});
@@ -21,6 +22,11 @@ import {MassNativeGeography,makeMassNativeGeographySpec} from '../src/worldmass/
 import {address} from '../src/worldmass/address';
 import {placeZoneAt} from '../src/engine/worldgen';
 import {NativeAreaActorAuthority} from '../src/worldmass/nativeAreaActorAuthority';
+import {NativeAreaCampaignSession} from '../src/worldmass/nativeAreaCampaignSession';
+import {NativeAreaMemoryRegistry} from '../src/worldmass/nativeAreaMemoryRegistry';
+import {NativeAreaSceneMemory} from '../src/worldmass/nativeAreaSceneMemory';
+import {NativeAreaMaddenLedger} from '../src/worldmass/nativeAreaMaddenLedger';
+import {NativeAreaSceneTransitionCoordinator} from '../src/worldmass/nativeAreaSceneTransitionCoordinator';
 import {NativeAreaSceneOngoing,freshAreaOngoingState,type NativeAreaOngoingRuntime} from '../src/worldmass/nativeAreaSceneOngoing';
 import {freshAssemblyInput} from './nativeFreshAssemblyFixture';
 import {QUESTS} from '../src/quests/defs';
@@ -37,45 +43,40 @@ for(const carried of [false,true])withSeededRandom(28031,()=>{
  const target={x:-55,y:160},request=mapping.ownerContext('ongoing-course',mapping.physicalAnchor(target));
  const z=placeZoneAt(target,null,w.zoneMap,request.requestedSeed,{seed:request.requestedSeed,fieldBiome:true,biomeFor:reader.biomeAt,biomeDepthFor:reader.biomeDepth,climateFor:reader.climateAt,levelFor:w.levelFor,courseFor:w.courseMintFor('surface')});w.zoneMap[z.id]=z;z.objective={kind:'clear'};
  const other=w.addSeat('neighbor',CLASSES.find(c=>c.id==='warrior')!,new NullInput(),{startingCompanions:false,startingFlasks:false});
- const raw:any=freshAssemblyInput(w,z),campaign:any=raw.campaign;
- // Campaign state stays live; no local census, physical store or controller is copied.
- for(const key of [...Object.keys(campaign),'ownQuestLedger','questLedgerOverride','questSeat','seatNoteAt','actingSeat','odyssey','mercSyncedLevel','timeflow','kills','journalDirty','netJournal']){
-  if(typeof w[key]==='function'||key==='massRuntime'||key==='nativeResidentHistory')continue;
-  Object.defineProperty(campaign,key,{configurable:true,enumerable:true,get:()=>w[key],set:v=>{w[key]=v;}});
- }
- for(const key of ['notice','markMetaDirty','sameParty','seatHero','seatHudOf','seatOf','questLedgerOf','forechartSounding','invalidateZonesSaveMemo','presentWorlds','keeperCampaign','odysseyLeads','heroKnown','bagItem'])campaign[key]=(...args:any[])=>w[key](...args);
- const authority=new NativeAreaActorAuthority<NativeAreaOngoingRuntime>(campaign),states=freshAreaOngoingState(campaign.time);
- const combatNames=['kill','guardBash','executeSkill','burstDamage','guardArtHit','litePromoteNearest','companionPulseHit','useSkill','spawnConstruct','spawnProjectile','attackSequenceBurst','challengeBurst','challengeHit'];
- const combatFor=(assembly:any,progression:any)=>{const driver:any={scene:assembly.input.scene,state:progression.input.state};for(const name of combatNames)driver[name]=(...args:any[])=>(World.prototype as any)[name].apply(w,args);return driver;};
- const recipe={...raw,...states,authority,characterWriter:w,combatFor},run=new NativeAreaSceneOngoing(recipe);
+ const campaignSession=new NativeAreaCampaignSession(w),campaign=campaignSession.campaign;
+ const raw=freshAssemblyInput(w,z),authority=new NativeAreaActorAuthority<NativeAreaOngoingRuntime>(campaign),states=freshAreaOngoingState(campaign.time);
+ const memoryRegistry=new NativeAreaMemoryRegistry(w),coordinator=new NativeAreaSceneTransitionCoordinator({campaign,characterWriter:w,authority,memoryRegistry});campaignSession.bindCoordinator(coordinator);
+ const maddenLedger=new NativeAreaMaddenLedger({campaign,authority,banks:w['maddenBanks']});
+ const oldWorldActors=w.actors;
+ const recipe={...raw,...states,campaign,authority,characterWriter:w,coordinator,maddenLedger},run=new NativeAreaSceneOngoing(recipe);
  recipe.interactionState=freshAreaOngoingState(campaign.time).interactionState;
- recipe.questState={...states.questState,scene:{foreign:true}} as any;recipe.campaign={...campaign};recipe.services={...raw.services,residents:{...raw.services.residents,scene:{foreign:true}}};
+ recipe.questState={...states.questState,scene:{foreign:true}} as any;recipe.campaign=Object.create(Object.getPrototypeOf(campaign),Object.getOwnPropertyDescriptors(campaign));recipe.services={...raw.services,residents:{...raw.services.residents,scene:null}};
  assert.equal(run.assembly.input.residents.host.scene,states.questState.scene,'recipe rebinding cannot replace a retained provider');
  assert.equal(run.questInteraction.input.quests,run.quests);assert.equal(run.questInteraction.input.state,states.interactionState);assert.equal(run.questInteraction.input.campaign,campaign);assert.equal(run.quests.input.progression,run.progression);assert.equal(run.watching.input.quests,run.quests);
  assert.equal(run.quests.input.scenePresence,run.assembly.scenePresence);assert.equal(run.assembly.lootController.input.scenePresence,run.assembly.scenePresence);assert.equal(run.assembly.objectiveController.input.scenePresence,run.assembly.scenePresence);
  assert.throws(()=>run.admit(run.assembly.input.scene.actors),/completed area birth/);assert.throws(()=>run.updateObjective(.1),/admitted attendance/);assert.throws(()=>run.updateQuestGiver(.1),/admitted attendance/);
- const session=run.assembly.sourceSession(mapping),placement=run.assembly.prepare(session,session.issue(z.id),{x:z.size.w/2,y:z.size.h/2},false);
- w.player.pos=run.assembly.input.geometry.clampPos({...placement.spawnAt??placement.entry},w.player.radius);run.assembly.birth();
+ const session=run.assembly.sourceSession(mapping),placement=campaignSession.duringPreparation(run,()=>run.assembly.prepare(session,session.issue(z.id),{x:z.size.w/2,y:z.size.h/2},false));
+ w.player.pos=run.assembly.input.geometry.clampPos({...placement.spawnAt??placement.entry},w.player.radius);campaignSession.duringPreparation(run,()=>run.assembly.birth());
  flesh.pos={...w.player.pos};
  const {scene}=run.assembly.input;assert.ok(scene.actors.length>1,'actual native content born');
- assert.throws(()=>run.admit(scene.actors.slice(1)),/exact physical census/);run.admit([...scene.actors]);assert.equal(run.assembly.scenePresence.active,true);authority.assertAdmitted(scene);
+ assert.throws(()=>run.admit(scene.actors.slice(1)),/exact physical census/);run.admit([...scene.actors]);assert.equal(run.assembly.scenePresence.active,true);authority.assertAdmitted(scene);coordinator.register(run,new NativeAreaSceneMemory(run.assembly,authority));coordinator.publishInitial(run);
  // The neighbor is a real campaign player at identical local coordinates, owned elsewhere.
  other.actor.pos={...w.player.pos};const peerDef={...z,id:'ongoing-peer'};w.zoneMap[peerDef.id]=peerDef;
- const peerRaw=freshAssemblyInput(w,peerDef,campaign);peerRaw.initialActors=[w.player,other.actor];
- const peerStates=freshAreaOngoingState(campaign.time),peerRun=new NativeAreaSceneOngoing({...peerRaw,...peerStates,campaign,authority,characterWriter:w,combatFor});
+ const peerRaw=freshAssemblyInput(w,peerDef);peerRaw.player=other.actor;peerRaw.initialActors=[other.actor];
+ const peerStates=freshAreaOngoingState(campaign.time),peerRun=new NativeAreaSceneOngoing({...peerRaw,...peerStates,campaign,authority,characterWriter:w,coordinator,maddenLedger});
  const peerArea=peerRun.assembly,peerScene=peerArea.input.scene;
  assert.notEqual(peerRun.questInteraction,run.questInteraction);assert.notEqual(peerStates.interactionState,states.interactionState);assert.notEqual(peerStates.interactionState.questGiverDwells,states.interactionState.questGiverDwells);
  assert.equal(peerRun.questInteraction.input.quests,peerRun.quests);assert.equal(peerRun.watching.input.quests,peerRun.quests);
- const peerSession=peerArea.sourceSession(mapping);peerArea.prepare(peerSession,peerSession.issue(peerDef.id),{...w.player.pos},false);peerArea.birth();
- // Native preparation borrows the campaign observer; admission removes it
- // before the actual neighbor takes physical attendance.
+ const peerSession=peerArea.sourceSession(mapping);campaignSession.duringPreparation(peerRun,()=>{peerArea.prepare(peerSession,peerSession.issue(peerDef.id),{...w.player.pos},false);peerArea.birth();});
+ // The current actual runtime prepares around its arriving representative.
+ // The legacy borrowed-observer removal remains an explicit idempotent check.
  peerScene.actors=peerScene.actors.filter(a=>a!==w.player);peerScene.player=other.actor;
  // Both complete births own their actual retained controllers. Explicit
- // admission removes the borrowed observer; combat remains the stated test boundary.
- peerRun.admit([...peerScene.actors]);assert.equal(authority.require(other.actor).progression,peerRun.progression);
+ // admission selects the real independent census; combat is internally composed.
+ peerRun.admit([...peerScene.actors]);coordinator.register(peerRun,new NativeAreaSceneMemory(peerArea,authority));assert.equal(authority.require(other.actor).progression,peerRun.progression);
  assert.deepEqual(run.assembly.scenePresence.seats,[w.localSeat]);
  const foe=run.assembly.input.population.createMonster('zombie',1,'enemy');foe.pos={x:w.player.pos.x+15,y:w.player.pos.y};scene.actors.push(foe);authority.claim(run.binding,[foe]);
- const decoy=w.createMonster('zombie',1,'enemy');decoy.pos={...w.player.pos};w.actors.push(decoy);
+ const decoy=w.createMonster('zombie',1,'enemy');decoy.pos={...w.player.pos};oldWorldActors.push(decoy);
  assert.equal(w.player.statusRelay,run.assembly.input.population.factory.relayStatus,'admission acquires relay before a level-up');
  assert.equal(flesh.statusRelay,run.assembly.input.population.factory.relayStatus,'the carried hero acquires the same local relay before a level-up');
  assert.equal(authority.require(flesh).scene,scene);if(carried)assert.equal(scene.actors.includes(flesh),false,'the carried hero is not a second physical body');
@@ -124,6 +125,6 @@ for(const carried of [false,true])withSeededRandom(28031,()=>{
  console.log('PASS ongoing area '+(carried?'carried hero':'standing hero')+': full native birth, explicit admission, shared quest/progression/watch owners, native XP rebuild, quest receipt, neighbor exclusion and repeat completion');
 });
 
-const result={sourceBase:'8c7ab5fa',retainedActivation:false,count:receipts.length,receipts,receipt:createHash('sha256').update(JSON.stringify(receipts)).digest('hex'),boundaries:['Combat death/movement remain explicit native-World test boundaries as in the original course','Controlled authored turn-in readiness and settled action clocks are fixture setup','Two real assembly births and actual composed interaction/quest/progression/watcher/loot/authority owners run directly','External scheduler/menu routing and client publication remain unactivated']};
+const result={sourceBase:'8c7ab5fa',retainedActivation:true,count:receipts.length,receipts,receipt:createHash('sha256').update(JSON.stringify(receipts)).digest('hex'),boundaries:['Actual retained combat owners replace the removed World callback driver; initial transformation and old-census decoy remain explicit native-World fixture setup','Controlled authored turn-in readiness and settled action clocks are fixture setup','Two real assembly births and actual composed interaction/quest/progression/watcher/loot/authority owners run directly','This course does not exercise complete scheduler/menu/client publication; those require separate acceptance']};
 fs.writeFileSync(new URL('./reports/ongoing-interaction-proof.json',import.meta.url),JSON.stringify(result,null,2)+'\n');
 console.log(JSON.stringify({count:result.count,receipt:result.receipt}));

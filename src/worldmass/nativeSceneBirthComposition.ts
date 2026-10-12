@@ -41,7 +41,7 @@ export interface NativeSceneBirthCompositionInput {
  occurrences:NativeAreaSceneOccurrences;bounty:NativeAreaSceneBounty;physical:NativeAreaScenePhysical;
  residents:NativeResidentSession;objectives:NativeSceneObjectiveState;
  sources:Pick<NativeAreaBirthHost,'nativeInhabitantSources'>;
- campaign:Pick<NativeAreaBirthHost,'account'|'annexFound'|'time'|'zoneMemory'|'completedObjectives'|'stationArmed'|'discoveredWaypoints'|'sim'|'text'>;
+ campaign:Pick<NativeAreaBirthHost,'account'|'annexFound'|'time'|'zoneMemory'|'completedObjectives'|'stationArmed'|'discoveredWaypoints'|'sim'>;
  state:NativeSceneBirthState;
  harbor:NativeAreaSceneHarbor;
  openings:NativeAreaSceneOpenings;
@@ -84,7 +84,7 @@ export function composeNativeSceneBirth(raw:NativeSceneBirthCompositionInput):Na
  same(input.registry.input,'descentState',input.descent.input.state);
  if(!residents.ownsBirthPopulation(population))throw Error('Native birth composition needs identical resident factory');
  for(const key of stateKeys){const d=Object.getOwnPropertyDescriptor(input.state,key);if(!d||!Object.hasOwn(d,'value'))throw Error('Native birth composition needs carried state: '+key);}
- for(const key of ['account','annexFound','time','zoneMemory','completedObjectives','stationArmed','discoveredWaypoints','sim','text'])if(!Object.hasOwn(input.campaign,key))throw Error('Native birth composition needs campaign field: '+key);
+ for(const key of ['account','annexFound','time','zoneMemory','completedObjectives','stationArmed','discoveredWaypoints','sim'])if(!Object.hasOwn(input.campaign,key))throw Error('Native birth composition needs campaign field: '+key);
  const objective=sceneObjectiveServices(population,input.objectives,{
   get pathField(){const fn=geometry.pathField;return(...args:Parameters<typeof fn>)=>fn.apply(geometry,args);},
   get zoneEntry(){return geometry.zoneEntry;},get sim(){return input.campaign.sim;},
@@ -92,7 +92,7 @@ export function composeNativeSceneBirth(raw:NativeSceneBirthCompositionInput):Na
   get notice(){const fn=geometry.campaign.notice;return(...args:Parameters<typeof fn>)=>fn.apply(geometry.campaign,args);},
   get walk(){return geometry.walk;},get structures(){return geometry.structures;},get arena(){return geometry.arena;},get time(){return input.campaign.time;},
   get pointInSolid(){const fn=geometry.pointInSolid;return(...args:Parameters<typeof fn>)=>fn.apply(geometry,args);},
-  get text(){const fn=input.campaign.text;return(...args:Parameters<typeof fn>)=>fn.apply(input.campaign,args);},
+  get text(){const fn=geometry.text;return(...args:Parameters<typeof fn>)=>Reflect.apply(fn,geometry,args);},
   get farthestStand(){const fn=geometry.farthestStand;return(...args:Parameters<typeof fn>)=>fn.apply(geometry,args);},
  });
  const derived={zoneRuntimes:input.registry.rows,

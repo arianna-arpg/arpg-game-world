@@ -1,3 +1,4 @@
+import {nativeCombatActorEntry} from './nativeAreaCombatOperation';
 import {sceneShowSkillArrival,type NativeSceneSkillArrivalHost} from '../engine/nativeSceneSkillArrival';
 /** Physical native restoration and local presentation over the area's actual
  * actor state, objective text store and exclusively owned tether slot. */
@@ -43,7 +44,7 @@ export class NativeAreaSceneRestoration implements native.NativeSceneRestoration
  #admit(actors:readonly Actor[]):void{
   const {scene,authority,tethers}=this.input,binding=authority.bindingFor(scene);
   if(binding.services.restoration!==this||binding.services.tethers!==tethers)throw Error('Native restoration needs its exact registered owners');
-  for(const actor of actors){if(!scene.actors.includes(actor)||authority.require(actor).scene!==scene)throw Error('Native restoration needs actual physical source and target bodies');}
+  for(const actor of actors){if(nativeCombatActorEntry(this,actor,'refund'))continue;if(!scene.actors.includes(actor)||authority.require(actor).scene!==scene)throw Error('Native restoration needs actual physical source and target bodies');}
   authority.assertAdmitted(scene);
  }
  grantAbsorb(...args:Parameters<native.NativeSceneRestorationApi['grantAbsorb']>):ReturnType<native.NativeSceneRestorationApi['grantAbsorb']>{this.#admit([args[0]]);return native.sceneGrantAbsorb(this.host,...args);}

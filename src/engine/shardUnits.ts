@@ -69,13 +69,13 @@ export type CaveRung = NonNullable<World['caveReturn']>;
  *  its pin, after its wake (a far span mouth, the town portal's waypoint, the
  *  waypoint's own stone: spots only the destination knows). */
 export type LandingSpot = 'entry' | { at: Vec2; spread?: number; band?: [number, number]; tier?: number };
-export type RoadLanding = LandingSpot | ((w: World) => LandingSpot);
+export type RoadLanding<TDestination = World> = LandingSpot | ((w: TDestination) => LandingSpot);
 
 /** THE TICKET (plan 3.1): a road's decision for ONE seat, carried to the host.
  *  Roads, intents and the muster enqueue; the host executes every ticket after
  *  all units ticked (THE HAND-OFF QUEUE). W1 builds the executor and the direct
  *  `travel` door; the roads that emit tickets are W2's. */
-export interface RoadTicket {
+export interface RoadTicket<TDestination = World> {
   seatId: string;
   /** A zoneMap or caveMap id (the host resolves its unit). */
   dest: string;
@@ -91,15 +91,15 @@ export interface RoadTicket {
   ladder?: { caveReturn: CaveRung | null; caveStack: CaveRung[] };
   /** A realm arena's context (W4). */
   context?: unknown;
-  landing?: RoadLanding;
+  landing?: RoadLanding<TDestination>;
   /** The per-seat re-descent grace (W2's scanner). */
   grace?: 'caveExit';
   /** Runs once, in the destination, after a wake's load (W4: the realm's boss). */
-  onFirstWake?: (w: World) => void;
+  onFirstWake?: (w: TDestination) => void;
   /** THE ROADS PER PLAYER (W2): runs in the destination after the seat landed,
    *  under its pin (the escape's word over the arrival, the waypoint's clear
    *  bubble on a fresh wake). */
-  after?: (w: World, seat: Seat, woke: boolean) => void;
+  after?: (w: TDestination, seat: Seat, woke: boolean) => void;
   /** THE MUSTER RING (W4): a ticket a ring fired for one member standing on it
    *  (its party, and its slot: the landing spreads by it, so the party lands
    *  side by side). */
@@ -108,21 +108,21 @@ export interface RoadTicket {
 
 /** THE LINK (World.shardWorld, HOST class): published by the host into every
  *  World a shard runs. Its role is THE PRIMARY GATE's read. */
-export interface ShardWorldLink {
+export interface ShardWorldLink<TDestination = World,TView = TDestination> {
   role: 'keeper' | 'unit';
   key: UnitKey;
   /** THE HAND-OFF QUEUE's door: a road enqueues a ticket, never travels. */
-  enqueue(t: RoadTicket): void;
+  enqueue(t: RoadTicket<TDestination>): void;
   /** THE SPLIT DISPATCH's door (W3, World.atZone's shard branch): run `fn` on the
    *  World hosting `zoneId` under its pin and return its answer; undefined when
    *  no World is awake there. Called from inside another unit it is deferred to
    *  THE HAND-OFF QUEUE's drain (and answers undefined). */
-  dispatch<T>(zoneId: string, fn: (w: World) => T): T | undefined;
+  dispatch<T>(zoneId: string, fn: (w: TView) => T): T | undefined;
   /** THE OCCUPIED LAW's source (W3): every live World of the shard, the
    *  keeper's own first, then each awake unit's by key (a lingering unit, frozen
    *  or not, is awake ground). Read-only: a World read through it is never
    *  pinned, so it serves bodies, seats and zones, never the alias fields. */
-  worlds(): readonly World[];
+  worlds(): readonly TView[];
   /** THE ROADS PER PLAYER (W2): the live seed of the unit hosting `zoneId`, or
    *  undefined when none is awake (the town portal's faded check reads an
    *  awake source's live seed; its stored memory row is stale until it sleeps). */
@@ -136,7 +136,7 @@ export interface ShardWorldLink {
    *  at a ring (raised now, or the party's own already standing here); false =
    *  the seat travels alone now (an independent, a party with no other member
    *  standing in this unit, a non-leader under the 'leader' raise). */
-  muster?(seat: Seat, road: MusterRoad): boolean;
+  muster?(seat: Seat, road: MusterRoad<TDestination>): boolean;
   /** THE MUSTER RING (W4): does a ring of this seat's party stand in its unit?
    *  Then its roads wait for the party: standing on the ring is joining it. */
   mustering?(seatId: string): boolean;

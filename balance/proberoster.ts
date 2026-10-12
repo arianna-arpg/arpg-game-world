@@ -52,15 +52,88 @@ export type ProbeExcuse = 'red' | 'flaky';
  * One probe. The union FORCES a tier on every green row and an excuse on every
  * excluded one — "named with its reason" is a type error to skip, not a habit.
  */
-export type ProbeRow =
+/** Explicit probe lanes, passed as arguments without changing their assertions. */
+type ProbeInvocation = { readonly args?: readonly string[] };
+
+export type ProbeRow = ProbeInvocation & (
   | { probe: string; status: 'green'; tier: ProbeTier; why: string }
-  | { probe: string; status: 'excluded'; excuse: ProbeExcuse; why: string };
+  | { probe: string; status: 'excluded'; excuse: ProbeExcuse; why: string });
 
 /**
  * THE ROSTER. Alphabetical, one row per file in balance/. `why` is one line:
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativeaitargetcontinuity.ts', status: 'green', tier: 'fast', why: "Real held AI target departure across travel, xray and carried-body changes." },
+  { probe: 'probe_nativeaitargetcontinuitysource.ts', status: 'green', tier: 'fast', why: "Exact target-presence source successor retaining original AI guards." },
+  { probe: 'probe_nativecarriedadmissionfinal.ts', status: 'green', tier: 'fast', why: "Actual initial admission closes after its final live callback, with preserved native partial effects." },
+  { probe: 'probe_nativecarriedadmissionfinalsource.ts', status: 'green', tier: 'fast', why: "Exact final admission source and bounded composed input and AI controls." },
+  { probe: 'probe_nativecarriedbootstrap.ts', status: 'green', tier: 'fast', why: "Actual preexisting carried-body adoption, native travel and refusal before physical claims." },
+  { probe: 'probe_nativeaisource.ts', status: 'green', tier: 'slow', why: "Original AI rules and exact runtime seams, with current input and admission composition guards." },
+  { probe: 'probe_nativeareaai.ts', status: 'green', tier: 'fast', why: "Actual retained AI dispatch before frames, across travel and in empty source areas without World drivers." },
+  { probe: 'probe_nativeareaai_actions.ts', status: 'green', tier: 'fast', why: "Actual native AI summons, attack zones, carrion selection and actor retirement." },
+  { probe: 'probe_nativeareaai_gates.ts', status: 'green', tier: 'fast', why: "AI actor authority and invalid carrion refuse before tactical effects." },
+  { probe: 'probe_nativeareainput.ts', status: 'green', tier: 'fast', why: "Actual per-seat input routing, shared clocks and physical area ownership." },
+  { probe: 'probe_nativecampaignframeclosuresource.ts', status: 'green', tier: 'slow', why: "Exact campaign frame dependency extraction and ownership mutation controls." },
+  { probe: 'probe_nativecampaignframesource.ts', status: 'green', tier: 'slow', why: "Original campaign frame bodies and declared attendance seams." },
+  { probe: 'probe_nativecampaigntransitionssource.ts', status: 'green', tier: 'slow', why: "Original control and transition bodies with bounded callback lifetimes." },
+  { probe: 'probe_nativecarriedcastcontinuation.ts', status: 'green', tier: 'fast', why: "Original and retained transformation casts, synchronous withdrawal and delayed echo lifetimes." },
+  { probe: 'probe_nativecarriedcontrolsource.ts', status: 'green', tier: 'slow', why: "Exact carried-control physical check and mutation refusal." },
+  { probe: 'probe_nativecombatabsentobjective.ts', status: 'green', tier: 'fast', why: "Empty retained source completion with actual physical-seat reward attendance." },
+  { probe: 'probe_nativecombatacceptance.ts', status: 'green', tier: 'slow', why: "Actual born and admitted retained combat with legacy World drivers trapped." },
+  { probe: 'probe_nativecombatbuyerscope.ts', status: 'green', tier: 'fast', why: "Actual vendor buyer selection, shared writer state and callback failure restoration." },
+  { probe: 'probe_nativecombatcampaignarenasource.ts', status: 'green', tier: 'slow', why: "Exact original campaign and arena rules with source mutation controls." },
+  { probe: 'probe_nativecombatcarriedstats.ts', status: 'green', tier: 'fast', why: "Current carried-body stats and restoration follow the actual campaign actor." },
+  { probe: 'probe_nativecombatcarrytravel.ts', status: 'green', tier: 'fast', why: "Carried-body relationships across genuine retained-area travel." },
+  { probe: 'probe_nativecombatconstruction.ts', status: 'green', tier: 'fast', why: "Native aggregate construction and explicit owner dependency closure." },
+  { probe: 'probe_nativecombatcycle.ts', status: 'green', tier: 'slow', args: ["--oracle-development"], why: "Original World combat reference courses; retained acceptance is separately gated." },
+  { probe: 'probe_nativecombatdeparture.ts', status: 'green', tier: 'fast', why: "Actual departure cleanup preserves native ordering and source-area records." },
+  { probe: 'probe_nativecombatdetached.ts', status: 'green', tier: 'fast', why: "Issued detached combat records retain bounded source authority." },
+  { probe: 'probe_nativecombatdirector.ts', status: 'green', tier: 'fast', why: "Actual retained Director initiation and Mu scene behavior." },
+  { probe: 'probe_nativecombatdirectory.ts', status: 'green', tier: 'fast', why: "Campaign-wide area directory admission and current owner lookup." },
+  { probe: 'probe_nativecombatdirectorysave.ts', status: 'green', tier: 'fast', why: "Actual retained area directory capture through the current writer; same-process scope." },
+  { probe: 'probe_nativecombatentrybinding.ts', status: 'green', tier: 'fast', why: "Exact aggregate entry binding refuses foreign or expired authority." },
+  { probe: 'probe_nativecombatframelifetimes.ts', status: 'green', tier: 'slow', why: "Record and actor authority is confined to actual retained frame lifetimes." },
+  { probe: 'probe_nativecombatfullframe.ts', status: 'green', tier: 'fast', why: "Complete retained local frame dispatch with original stage ordering." },
+  { probe: 'probe_nativecombathostedframe.ts', status: 'green', tier: 'fast', why: "Actual hosted-seat frames over retained local owners without World drivers." },
+  { probe: 'probe_nativecombatkernelhooks.ts', status: 'green', tier: 'slow', why: "Exact combat kernel lifecycle hooks and source mutation refusal." },
+  { probe: 'probe_nativecombatkernelsource.ts', status: 'green', tier: 'slow', why: "Original combat kernel extraction with conservative source reconstruction." },
+  { probe: 'probe_nativecombatlifetimes.ts', status: 'green', tier: 'slow', args: ["--oracle-development"], why: "Original World lifetime reference courses; retained lifetime acceptance is separate." },
+  { probe: 'probe_nativecombatlocalframe.ts', status: 'green', tier: 'fast', why: "Actual retained local frame stages preserve native effects and ordering." },
+  { probe: 'probe_nativecombatmassguard.ts', status: 'green', tier: 'fast', why: "Real legacy mass behavior and explicit absence in retained areas." },
+  { probe: 'probe_nativecombatmotionsource.ts', status: 'green', tier: 'slow', why: "Exact original motion rules and bounded physical lifecycle seams." },
+  { probe: 'probe_nativecombatobservationbootstrap.ts', status: 'green', tier: 'fast', why: "Cold source boot stays independent; record registration fails closed before genuine initialization." },
+  { probe: 'probe_nativecombatongoingmass.ts', status: 'green', tier: 'fast', why: "Retained ongoing owners preserve explicit mass absence across runtime stages." },
+  { probe: 'probe_nativecombatoracleagreement.ts', status: 'green', tier: 'slow', why: "Actual retained combat agrees with original World on the authored reference courses." },
+  { probe: 'probe_nativecombatportalabsence.ts', status: 'green', tier: 'fast', why: "Unattended retained portals preserve native physical presence requirements." },
+  { probe: 'probe_nativecombatpresentation.ts', status: 'green', tier: 'fast', why: "Actual local and hosted presentation uses current physical audience." },
+  { probe: 'probe_nativecombatpresentationsource.ts', status: 'green', tier: 'slow', why: "Exact original presentation bodies and declared audience seams." },
+  { probe: 'probe_nativecombatqueuebinding.ts', status: 'green', tier: 'fast', why: "Actual combat queues have exclusive area bindings and issued records." },
+  { probe: 'probe_nativecombatrecordselection.ts', status: 'green', tier: 'fast', why: "Exact record selection, nominal issue receipts and unauthorized mutation refusal." },
+  { probe: 'probe_nativecombatrescueattendance.ts', status: 'green', tier: 'slow', why: "Actual rescue selection respects physical attendance and fallback behavior." },
+  { probe: 'probe_nativecombatroadcohort.ts', status: 'green', tier: 'fast', why: "Actual campaign road cohort is validated before retained travel." },
+  { probe: 'probe_nativecombatroadfinalcheck.ts', status: 'green', tier: 'fast', why: "Final road membership validation follows the last live campaign callback." },
+  { probe: 'probe_nativecombatroadidentity.ts', status: 'green', tier: 'fast', why: "Road entry preserves actual campaign seat identity under callback mutation." },
+  { probe: 'probe_nativecombatroadqueue.ts', status: 'green', tier: 'fast', why: "Actual queued road callbacks retain destination identity and scoped receivers." },
+  { probe: 'probe_nativecombatscenecarry.ts', status: 'green', tier: 'fast', why: "Actual scene state follows its campaign writer through retained travel." },
+  { probe: 'probe_nativecombatsharedstate.ts', status: 'green', tier: 'fast', why: "Shared campaign clocks and raw ledgers are updated once across retained areas." },
+  { probe: 'probe_nativecombattravel.ts', status: 'green', tier: 'fast', why: "Actual combat ownership, damage history and raw queues survive retained travel." },
+  { probe: 'probe_nativecombattravellifetimes.ts', status: 'green', tier: 'slow', why: "Travel retires old physical authority while preserving issued record lifetimes." },
+  { probe: 'probe_nativecombattraversal.ts', status: 'green', tier: 'fast', why: "Actual traversal callbacks keep native order, receiver and scoped travel authority." },
+  { probe: 'probe_nativedirectorbirthsource.ts', status: 'green', tier: 'slow', why: "Exact Director source extraction and synchronous birth admission controls." },
+  { probe: 'probe_nativeframeattendance.ts', status: 'green', tier: 'slow', why: "Exact local frame attendance seams and raw mutation controls." },
+  { probe: 'probe_nativeframecontactsource.ts', status: 'green', tier: 'slow', why: "Exact physical contact extraction and source mutation refusal." },
+  { probe: 'probe_nativeframehooks.ts', status: 'green', tier: 'slow', why: "Original frame dependency hooks after exact presentation reversal." },
+  { probe: 'probe_nativeframephysicalseats.ts', status: 'green', tier: 'fast', why: "Original physical-seat source guards after exact contact seam reversal." },
+  { probe: 'probe_nativeframesource.ts', status: 'green', tier: 'slow', why: "Exact original retained frame stages, interfaces and callbacks." },
+  { probe: 'probe_nativeinputcastcycle.ts', status: 'green', tier: 'fast', why: "Actual retained input and casting timelines match the original reference over 150 frames." },
+  { probe: 'probe_nativeinputmetaauthority.ts', status: 'green', tier: 'fast', why: "Focused meta-input caster authority with actual retained ownership." },
+  { probe: 'probe_nativeinputmetacases.ts', status: 'green', tier: 'slow', why: "All 14 meta-input, departure and reentrancy authority courses in cold processes." },
+  { probe: 'probe_nativeinputsources.ts', status: 'green', tier: 'slow', why: "Exact 11 input rules and frame partitions with raw mutation controls." },
+  { probe: 'probe_nativeruntimebirthlifetime.ts', status: 'green', tier: 'fast', why: "Original runtime birth lifetime guards composed with exact Titan attendance seams." },
+  { probe: 'probe_nativeruntimebirthtitanlifetime.ts', status: 'green', tier: 'fast', why: "Current-input original, controller and retained Titan lifetime agreement; historical golden stays separate." },
+  { probe: 'probe_nativetitanattendance.ts', status: 'green', tier: 'slow', args: ["--titan-lane=local"], why: "Actual retained Titan attendance across 18 local courses; historical golden stays separate." },
+  { probe: 'probe_nativetitanattendancesource.ts', status: 'green', tier: 'slow', why: "Exact Titan physical attendance seams and source mutation refusal." },
   { probe: 'probe_nativemainvisualparity.ts', status: 'green', tier: 'fast', why: 'Pinned main visual additions over actual World and retained owners, preserving explicit retained gameplay policies.' },
   { probe: 'probe_nativemainwirevisuals.ts', status: 'green', tier: 'fast', why: 'Canonical filtered multiplayer fields, interpolation, hotbar identity, keeper limits and quiet clearing.' },
   { probe: 'probe_nativemainterrainvisuals.ts', status: 'green', tier: 'fast', why: 'Circular field facing and ground-qualified fields and flashes on actual seamless terrain.' },

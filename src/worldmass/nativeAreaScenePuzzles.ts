@@ -1,3 +1,4 @@
+import {observeNativeSource} from '../engine/nativeCombatRecordObservation';
 /** Retained native puzzle lifecycle. Publication and whole-area scheduling remain external. */
 import type {Actor} from '../engine/actor';
 import type {World} from '../engine/world';
@@ -36,7 +37,7 @@ export class NativeAreaScenePuzzles {
   }});}
   fields(()=>input.environment.input.state,['puzzles','puzzleKnocks']);
   fields(()=>input.scene,['actors','zone']);fields(()=>input.geometry,['flashes']);fields(()=>input.campaign,['time']);
-  Object.defineProperty(host,'hazardCaster',{enumerable:true,get(){return self.#hazardCaster;},set(v:Actor|null){self.#hazardCaster=v;}});
+  Object.defineProperty(host,'hazardCaster',{enumerable:true,get(){return observeNativeSource(host,self.#hazardCaster);},set(v:Actor|null){self.#hazardCaster=v;}});
   methods(()=>input.geometry,['clampPos']);methods(()=>input.environment,['puzzleHost']);
   methods(()=>input.effects,['dropGemAt','mintLootResult','executeSkill']);methods(()=>self,['drainPuzzleKnocks']);
   host.spoilsSealed=()=>native.scenePuzzleSpoilsSealed(host);

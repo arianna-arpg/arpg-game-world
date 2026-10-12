@@ -1,3 +1,5 @@
+import {nativeAreaStoreClaims} from './nativeAreaStorageClaims';
+import {nativeCombatActorEntry} from './nativeAreaCombatOperation';
 /** Retained native progression. Every mutation enters through explicit admitted
  * actor authority; native cleanup keeps the area's actual persistent queues. */
 import type {World,Seat} from '../engine/world';
@@ -27,7 +29,7 @@ export interface NativeSceneProgressionCombat {
  spawnConstruct:World['spawnConstruct'];spawnProjectile:World['spawnProjectile'];attackSequenceBurst:World['attackSequenceBurst'];challengeBurst:World['challengeBurst'];challengeHit:World['challengeHit'];
 }
 export interface NativeSceneProgressionRuntime {progression:NativeAreaSceneProgression;combat:NativeSceneProgressionCombat}
-export type NativeSceneProgressionAuthority=Pick<NativeAreaActorAuthority<NativeSceneProgressionRuntime>,'campaign'|'require'|'assertAdmitted'|'physicalActorById'>;
+export type NativeSceneProgressionAuthority=Pick<NativeAreaActorAuthority<NativeSceneProgressionRuntime>,'campaign'|'require'|'assertAdmitted'|'physicalActorById'|'bindingFor'>;
 export interface NativeSceneProgressionState {
  pendingRespawns:World['pendingRespawns'];pendingSummons:World['pendingSummons'];projectiles:World['projectiles'];zones:World['zones'];
  pendingRepeats:World['pendingRepeats'];pendingFuses:World['pendingFuses'];pendingSalvos:World['pendingSalvos'];pendingSteps:World['pendingSteps'];
@@ -52,7 +54,7 @@ const effectMethods=['kill','guardBash','executeSkill','guardArtHit','companionP
 const progressionArraySlots=['pendingRespawns','pendingSummons','projectiles','zones','pendingRepeats','pendingFuses','pendingSalvos','pendingSteps','pendingFollowUps','pendingBlinks','emergences'] as const;
 const progressionMapSlots=['treeBuffSources','recallTreeSpears'] as const;
 const ownedProgressionStates=new WeakSet<NativeSceneProgressionState>();
-const ownedProgressionStores=new WeakMap<object,object>();
+const ownedProgressionStores=nativeAreaStoreClaims;
 const weakMapHas=WeakMap.prototype.has,weakMapBrandKey={};
 function progressionStore(value:unknown,map:boolean):object {
  if(map){
@@ -131,8 +133,8 @@ export class NativeAreaSceneProgression {
  }
  #owner(actor:Actor){const owner=this.input.authority.require(actor);if(owner.progression.input.authority!==this.input.authority||owner.progression.input.scene!==owner.scene||owner.combat.scene!==owner.scene||owner.combat.state!==owner.progression.input.state)throw Error('Mismatched native progression runtime authority');return owner;}
  #native(name:string,args:unknown[]){this.#nativeDepth++;try{return (native as unknown as Record<string,Function>)['scene'+name[0].toUpperCase()+name.slice(1)](name==='expireZone'?this.#expiryHost:this.host,...args);}finally{this.#nativeDepth--;}}
- #run(actor:Actor,name:string,args:unknown[]){const owner=this.#owner(actor),target=owner.progression;this.input.authority.assertAdmitted(owner.scene);const previous=target.#subject;target.#subject=actor;try{return target.#native(name,args);}finally{target.#subject=previous;}}
- #effect(actor:Actor,name:keyof Omit<NativeSceneProgressionCombat,'scene'|'state'>,args:unknown[]){const owner=this.#owner(actor);this.input.authority.assertAdmitted(owner.scene);const fn=owner.combat[name];return Reflect.apply(fn,owner.combat,args);}
+ #run(actor:Actor,name:string,args:unknown[]){if(nativeCombatActorEntry(this,actor,name==='bakeMinionOwnerStats'||name==='relevelActor'?'prepare':'stats'))return this.#native(name,args);const owner=this.#owner(actor),target=owner.progression;this.input.authority.assertAdmitted(owner.scene);const previous=target.#subject;target.#subject=actor;try{return target.#native(name,args);}finally{target.#subject=previous;}}
+ #effect(actor:Actor,name:keyof Omit<NativeSceneProgressionCombat,'scene'|'state'>,args:unknown[]){if(nativeCombatActorEntry(this,actor,'proc')){const combat=this.input.authority.bindingFor(this.input.scene).services.combat;return Reflect.apply(combat[name],combat,args);}const owner=this.#owner(actor);this.input.authority.assertAdmitted(owner.scene);const fn=owner.combat[name];return Reflect.apply(fn,owner.combat,args);}
  #seat(seat:Seat){if(!this.input.campaign.seats.includes(seat))throw Error('Foreign native progression seat');return this.input.campaign.seatHero(seat);}
  recalcSeat(seat:Seat):void{this.#run(this.#seat(seat),'recalcSeat',[seat]);}
  resyncMercenary():void{this.#run(this.#seat(this.input.campaign.localSeat),'resyncMercenary',[]);}

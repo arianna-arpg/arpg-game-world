@@ -1,3 +1,4 @@
+import {observeNativeHiddenSource} from './nativeCombatRecordObservation';
 /** Original native puzzle clocks, hit queue and completion; bound to an explicit owner. */
 import {dist,rand,vec} from '../core/math';
 import {Actor} from './actor';
@@ -136,7 +137,7 @@ export function sceneCompletePuzzle(owner:NativeScenePuzzleHost, run: PuzzleRun)
     }
     if (rw?.cast && SKILLS[rw.cast]) {
       if (!owner.hazardCaster) {
-        const c = new Actor('Resonance', 'player', vec(0, 0));
+        const c = observeNativeHiddenSource(owner,()=>new Actor('Resonance', 'player', vec(0, 0)));
         c.untargetable = true; c.invulnerable = true;
         owner.hazardCaster = c;
       }

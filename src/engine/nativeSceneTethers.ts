@@ -1,3 +1,4 @@
+import {observeNativeCombatStorage,observeNativeCombatRecord} from './nativeCombatRecordObservation';
 /** Exact native tether construction. Damage, healing, ticking and crossing retain their own runtime boundary. */
 import type {World} from './world';
 import {dist} from '../core/math';
@@ -37,7 +38,8 @@ export function sceneAddTether(host:NativeSceneTetherHost,a: Actor, b: Actor, sp
     for (const [k, v] of Object.entries(amounts)) {
       if ((v ?? 0) > domAmt) { domAmt = v ?? 0; domType = k as DamageType; }
     }
-    host.tethers.push({
+    { let nativeTetherQueue:NativeSceneTetherHost['tethers']; let nativeTetherRow:NativeSceneTetherHost['tethers'][number];
+      (nativeTetherQueue=observeNativeCombatStorage(host,'tethers',host.tethers)).push(nativeTetherRow={
       a, b, owner, skillId: inst.def.id, link: spec.link, inst,
       visual: spec.visual, visualAge: 0,
       amounts, heal: spec.healPerSec ?? 0,
@@ -50,6 +52,8 @@ export function sceneAddTether(host:NativeSceneTetherHost,a: Actor, b: Actor, sp
       color: spec.color ?? (domType ? DAMAGE_COLOR[domType] : '#7ec88a'),
       ax: a.pos.x, ay: a.pos.y, bx: b.pos.x, by: b.pos.y,
     });
+      observeNativeCombatRecord(host,'tethers',nativeTetherQueue,nativeTetherRow,owner,inst);
+    }
   }
 
 export function sceneAttachObjectTethers(host:NativeSceneTetherHost,spawned: Actor, inst: SkillInstance, caster: Actor): void {

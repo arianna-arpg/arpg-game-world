@@ -440,7 +440,7 @@ export function sceneGrantVocation(host:NativeSceneQuestHost,vocId: string,seat:
     return true;
   }
 
-export function sceneQuestHand(host:NativeSceneQuestHost):Seat {
+export function sceneQuestHand(host:Pick<NativeSceneQuestHost,'questSeat'|'actingSeat'|'localSeat'>):Seat {
     if (host.questSeat) return host.questSeat;
     const acting = host.actingSeat;
     return host.localSeat.keeper && acting && !acting.keeper && !acting.merc ? acting : host.localSeat;

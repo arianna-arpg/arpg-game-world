@@ -1,3 +1,4 @@
+import {observeNativeCombatStatus,observeNativeCombatStatusSource} from './nativeCombatRecordObservation';
 import { Actor } from './actor';
 import type { World } from './world';
 import { angleTo, dist, type Vec2 } from '../core/math';
@@ -80,7 +81,7 @@ export class Challenges {
         remaining += st.dps * st.stacks * Math.max(0, st.remaining); return false;
       });
       if (remaining > 0) this.w.challengeBurst(caster, target, remaining * s.bleedPop);
-      if (!target.dead) target.applyStatus('hemorrhage', dealt * 0.45, 1, 'Reopening Challenge', { casterId: caster.id });
+      if (!target.dead) observeNativeCombatStatus(this.w,target,()=>target.applyStatus('hemorrhage', dealt * 0.45, 1, 'Reopening Challenge', { casterId: observeNativeCombatStatusSource(this.w,caster).id }));
     }
   }
 
@@ -91,7 +92,7 @@ export class Challenges {
         || target.tier !== effigy.body.tier || dist(target.pos, effigy.body.pos) > effigy.radius) continue;
       for (const other of this.w.enemiesOf(effigy.body)) {
         if (other === target || dist(other.pos, target.pos) > f.radius) continue;
-        other.applyStatus('impaled', 0, 1, 'Lodged Contagion', { casterId: effigy.cast.state.owner.id });
+        observeNativeCombatStatus(this.w,other,()=>other.applyStatus('impaled', 0, 1, 'Lodged Contagion', { casterId: observeNativeCombatStatusSource(this.w,effigy.cast.state.owner).id }));
         const lodged = other.statuses.find(st => st.id === 'impaled');
         if (lodged) { lodged.rupture = (lodged.rupture ?? 0) + dealt * f.ratio; lodged.ruptureType = 'physical'; }
       }
@@ -190,8 +191,8 @@ export class Challenges {
       if (s.bleedingField) for (const enemy of enemies) {
         let wound = enemy.statuses.find(st => st.challengeField === effigy.body.id);
         if (!wound) {
-          enemy.applyStatus('bleed', effigy.average * s.bleedingField.power, 1, 'Field of Wounds',
-            { casterId: effigy.cast.state.owner.id, challengeField: effigy.body.id });
+          observeNativeCombatStatus(this.w,enemy,()=>enemy.applyStatus('bleed', effigy.average * s.bleedingField!.power, 1, 'Field of Wounds',
+            { casterId: observeNativeCombatStatusSource(this.w,effigy.cast.state.owner).id, challengeField: effigy.body.id }));
           wound = enemy.statuses.find(st => st.challengeField === effigy.body.id);
         }
         // No future bleed bank exists beyond this frame of exposure.

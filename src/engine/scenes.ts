@@ -36,7 +36,9 @@
 // Game re-launches the scene (the begun-key keeps it due).
 // ---------------------------------------------------------------------------
 
-import type { World } from './world';
+import type { World,Seat } from './world';
+import type {NativeSceneDirectorHost} from './nativeSceneDirectorHost';
+import {observeNativeCombatBirth,observeNativeCombatRetirement,finishNativeCombatRetirement,cancelNativeCombatRetirement} from './nativeCombatRecordObservation';
 import type { Actor } from './actor';
 import type { ZoneDef } from '../data/zones';
 import { START_ZONE } from '../data/zones';
@@ -158,8 +160,8 @@ export interface SceneDressState {
  *  fall's destination, the nearest one downstream (the card that narrates
  *  the wake). */
 export interface SceneStageHandler {
-  begin?(w: World, sc: SceneRuntime, spec: SceneStage): void;
-  update(w: World, sc: SceneRuntime, spec: SceneStage, dt: number): boolean;
+  begin?(w: NativeSceneDirectorHost, sc: SceneRuntime, spec: SceneStage): void;
+  update(w: NativeSceneDirectorHost, sc: SceneRuntime, spec: SceneStage, dt: number): boolean;
   onFell?: 'skip' | 'play' | 'land';
 }
 
@@ -198,7 +200,7 @@ export function sceneDue(account: Account, id: string): boolean {
 /** Begin a scene: stamp the gate, mint the staging ground OFF-GRAPH, and
  *  step through under black. Call with the hero standing in the zone the
  *  scene should return to (the prologue: the fresh run's town). */
-export function sceneBegin(w: World, id: string): boolean {
+export function sceneBegin(w: NativeSceneDirectorHost, id: string): boolean {
   const def = SCENES[id];
   if (!def || w.scene) return false;
   // THE RESOLVE SEAM: the runtime walks the EFFECTIVE def (the tutorial
@@ -243,9 +245,7 @@ export function sceneBegin(w: World, id: string): boolean {
   // a tileset's dress rows may mint as actors (a lea's gem cache, a den's
   // sleeper), the scene owns every body on its stage — only the party
   // remains, and every later arrival is a scene spawn by construction.
-  for (let i = w.actors.length - 1; i >= 0; i--) {
-    if (w.actors[i].team !== 'player') w.actors.splice(i, 1);
-  }
+  emptySceneField(w);
   // THE FAR-FIELD DRESS: a boundless stage learns its own heart's palette
   // so the streamer can keep the country coming past the minted rim.
   if (eff.zone.boundless) w.scene.dress = buildSceneDress(w, z);
@@ -284,7 +284,7 @@ function sealStageZone(z: ZoneDef, zone: SceneZoneSpec): void {
  *  clearway discs (a road to nowhere), structure surfaces, and portal-clear
  *  keepers. Density is the heart's own per kind, thinned by the dial — the
  *  far field reads as the same country's shoulders, never a second heart. */
-function buildSceneDress(w: World, z: ZoneDef): SceneDressState | undefined {
+function buildSceneDress(w: NativeSceneDirectorHost, z: ZoneDef): SceneDressState | undefined {
   const cfg = SCENE_CFG.dressStream;
   const skip = new Set<string>(cfg.skipKinds);
   const rows = new Map<string, { n: number; rMin: number; rMax: number; rot: boolean }>();
@@ -345,7 +345,7 @@ function seedDressChunk(sc: SceneRuntime, cx: number, cy: number): Doodad[] {
  *  losslessly (same salt → same pieces on return). Scene ground is
  *  local-by-construction (the prologue predates any remote wire; couch
  *  seats share this World and see the same doodads). */
-function streamSceneDress(w: World, sc: SceneRuntime): void {
+function streamSceneDress(w: NativeSceneDirectorHost, sc: SceneRuntime): void {
   const ds = sc.dress;
   if (!ds) return;
   const cfg = SCENE_CFG.dressStream;
@@ -396,7 +396,7 @@ function streamSceneDress(w: World, sc: SceneRuntime): void {
 /** The director tick — hooked in World.update on RAW dt, BEFORE the
  *  timeflow gate's early return (scenes own their holds and must breathe
  *  through them). Yields only to the true pause (a 'menu' hold). */
-export function updateScene(w: World, dt: number): void {
+export function updateScene(w: NativeSceneDirectorHost, dt: number): void {
   const sc = w.scene;
   if (!sc) return;
   if (w.timeflow.heldBy('menu')) return;
@@ -450,7 +450,7 @@ export function updateScene(w: World, dt: number): void {
 
 /** Stage list exhausted (the 'home' stage normally tears down; this is the
  *  belt under it). */
-function endScene(w: World, sc: SceneRuntime): void {
+function endScene(w: NativeSceneDirectorHost, sc: SceneRuntime): void {
   w.timeflow.release(SCENE_CFG.holdId);
   sc.focus = null;
   w.scene = null;
@@ -476,7 +476,7 @@ function endScene(w: World, sc: SceneRuntime): void {
  *  player who fell to the tide got everything the road had to teach. A
  *  scene with no landing keeps the old guard (stood up, invulnerable) —
  *  never a stranded party. */
-export function sceneInterceptFall(w: World, a: Actor): boolean {
+export function sceneInterceptFall(w: {scene:World["scene"];seats:readonly Seat[]}, a: Actor): boolean {
   const sc = w.scene;
   if (!sc) return false;
   a.dead = false;
@@ -514,15 +514,48 @@ export function sceneInterceptFall(w: World, a: Actor): boolean {
 }
 
 /** One seat-pressed cast landed (World.applyInputs) — the drill counts them. */
-export function sceneNoteCast(w: World): void {
+export function sceneNoteCast(w: Pick<NativeSceneDirectorHost, 'scene'>): void {
   if (w.scene) w.scene.casts++;
 }
 
 /** The DOM layer's card continue (probes call it directly — the engine
  *  never requires a DOM to finish a scene). */
-export function sceneCardAck(w: World): void {
+export function sceneCardAck(w: NativeSceneDirectorHost): void {
   const sc = w.scene;
   if (sc?.card) sc.cardAck = true;
+}
+
+
+function spawnSceneColossus(w: NativeSceneDirectorHost, sc: SceneRuntime, s: SceneReckoningStage): Actor {
+  return w.nativeSceneBodies ? w.nativeSceneBodies.spawnColossus(sc,s) : nativeSceneSpawnColossus(w,sc,s);
+}
+export function nativeSceneSpawnColossus(w: NativeSceneDirectorHost, sc: SceneRuntime, s: SceneReckoningStage): Actor {
+    const col = w.createMonster(s.def, s.level, 'enemy');
+    const at = w.swarmEntryPoint(w.player.pos, [s.spawnDist, s.spawnDist + 60]);
+    col.pos = w.clampPos(vec(at.x, at.y), col.radius);
+    col.noBounty = true;
+    col.eventKey = sc.eventKey;
+    col.aiPost = vec(col.pos.x, col.pos.y);
+    // THE MUSTER STANDS ALONE: the whole kit is banned from the AI picker —
+    // the commander freelances nothing while the director owns the beat (a
+    // direct useSkill never reads the bans, so the ordered verb still flies).
+    for (const inst of col.skills) if (inst) (col.aiSkillBans ??= new Set()).add(inst.def.id);
+    w.actors.push(col);
+    observeNativeCombatBirth(w,col);
+    return col;
+}
+
+function emptySceneField(w: NativeSceneDirectorHost): void {
+  if(w.nativeSceneBodies)w.nativeSceneBodies.emptyField();else nativeSceneEmptyField(w);
+}
+export function nativeSceneEmptyField(w: NativeSceneDirectorHost): void {
+  for (let i = w.actors.length - 1; i >= 0; i--) {
+    if (w.actors[i].team !== 'player') {
+      const token=observeNativeCombatRetirement(w,[w.actors[i]]);
+      try { w.actors.splice(i,1); finishNativeCombatRetirement(w,token); }
+      finally { cancelNativeCombatRetirement(w,token); }
+    }
+  }
 }
 
 // ---------------------------------------------------------- spawn plumbing --
@@ -530,7 +563,11 @@ export function sceneCardAck(w: World): void {
 /** One scene body: ringed off the hero, already hunting (the wave-frenzy
  *  overlay), and REWARDLESS — noBounty seals xp/loot/gems/orbs whole, the
  *  eventKey scopes it to the scene. */
-function spawnSceneBody(w: World, sc: SceneRuntime, defId: string, level: number): Actor {
+function spawnSceneBody(w: NativeSceneDirectorHost, sc: SceneRuntime, defId: string, level: number): Actor {
+  return w.nativeSceneBodies ? w.nativeSceneBodies.spawnBody(sc,defId,level) : nativeSceneSpawnBody(w,sc,defId,level);
+}
+
+export function nativeSceneSpawnBody(w: NativeSceneDirectorHost, sc: SceneRuntime, defId: string, level: number): Actor {
   const m = w.createMonster(defId, level, 'enemy');
   const at = w.swarmEntryPoint(w.player.pos, SCENE_CFG.entryBand);
   m.pos = w.clampPos(vec(at.x + rand(-30, 30), at.y + rand(-30, 30)), m.radius);
@@ -538,10 +575,11 @@ function spawnSceneBody(w: World, sc: SceneRuntime, defId: string, level: number
   m.noBounty = true;
   m.eventKey = sc.eventKey;
   w.actors.push(m);
+  observeNativeCombatBirth(w,m);
   return m;
 }
 
-function pourRows(w: World, sc: SceneRuntime, rows: SceneSpawnRow[], ids: number[]): void {
+function pourRows(w: NativeSceneDirectorHost, sc: SceneRuntime, rows: SceneSpawnRow[], ids: number[]): void {
   for (const r of rows) {
     for (let i = 0; i < r.count; i++) {
       ids.push(spawnSceneBody(w, sc, r.def, r.level ?? w.zone.level).id);
@@ -549,7 +587,7 @@ function pourRows(w: World, sc: SceneRuntime, rows: SceneSpawnRow[], ids: number
   }
 }
 
-function aliveOf(w: World, ids: number[]): number {
+function aliveOf(w: NativeSceneDirectorHost, ids: number[]): number {
   let n = 0;
   for (const a of w.actors) if (!a.dead && ids.includes(a.id)) n++;
   return n;
@@ -567,7 +605,7 @@ function aliveOf(w: World, ids: number[]): number {
  *  IS the death read). Called by the covenant the moment no seat stands
  *  and by the reckoning's blast (idempotent). The 'mu' and 'home' stages
  *  stand the slain back up by hand — "nobody truly dies" is intact. */
-function fellSeats(w: World, sc: SceneRuntime): void {
+function fellSeats(w: {seats:readonly Seat[]}, sc: SceneRuntime): void {
   for (const seat of w.seats) {
     const a = seat.actor;
     if (a.dead) continue;
@@ -758,17 +796,7 @@ registerSceneStage('reckoning', {
     // the world is NEVER held (release whatever a prior beat left standing:
     // the stage is self-sufficient wherever the fall fast-forwards from).
     w.timeflow.release(SCENE_CFG.holdId);
-    const col = w.createMonster(s.def, s.level, 'enemy');
-    const at = w.swarmEntryPoint(w.player.pos, [s.spawnDist, s.spawnDist + 60]);
-    col.pos = w.clampPos(vec(at.x, at.y), col.radius);
-    col.noBounty = true;
-    col.eventKey = sc.eventKey;
-    col.aiPost = vec(col.pos.x, col.pos.y);
-    // THE MUSTER STANDS ALONE: the whole kit is banned from the AI picker —
-    // the commander freelances nothing while the director owns the beat (a
-    // direct useSkill never reads the bans, so the ordered verb still flies).
-    for (const inst of col.skills) if (inst) (col.aiSkillBans ??= new Set()).add(inst.def.id);
-    w.actors.push(col);
+    const col = spawnSceneColossus(w, sc, s);
     w.text(vec(col.pos.x, col.pos.y - col.radius - 26), col.name, s.announceColor ?? '#e8c87a', 17);
     if (s.announce) {
       w.text(vec(w.player.pos.x, w.player.pos.y - 60), s.announce, s.announceColor ?? '#c8b070', 14);
@@ -998,7 +1026,11 @@ const muZoneId = (): string => `scene_${MU_SCENE_ID}`;
  *  re-entered Mu keeps its hand and its offers within a sitting); this only
  *  SEATS what it returns: three arcs of bodies, the rank markers, and the
  *  offered vessel's contract status (the drawn tell). */
-function muSpawnApparitions(w: World, sc: SceneRuntime, st: MuState): MuApp[] {
+function muSpawnApparitions(w: NativeSceneDirectorHost, sc: SceneRuntime, st: MuState): MuApp[] {
+  return w.nativeSceneBodies ? w.nativeSceneBodies.spawnApparitions(sc,st) : nativeSceneSpawnApparitions(w,sc,st);
+}
+
+export function nativeSceneSpawnApparitions(w: NativeSceneDirectorHost, sc: SceneRuntime, st: MuState): MuApp[] {
   const deal = muDeal(w.account);
   // THE RING LAW (engine/muRing.ts): where each rank STANDS is derived from
   // how many stand — a readable seat gap widens the crescent, closes it into
@@ -1026,6 +1058,7 @@ function muSpawnApparitions(w: World, sc: SceneRuntime, st: MuState): MuApp[] {
     const offerStatus = offer ? MODE_BY_ID[offer]?.muOffer?.status : undefined;
     if (offerStatus) m.applyStatus(offerStatus, 0, 1, 'Mu');
     w.actors.push(m);
+    observeNativeCombatBirth(w,m);
     apps.push({ id: m.id, classId, rank, offer, t: 0, noted: false }); // offer = the muDeal roll
   };
   // THE DEAL's three arcs (engine/muDeal.ts) on THE RING LAW's seats: the
@@ -1040,7 +1073,7 @@ function muSpawnApparitions(w: World, sc: SceneRuntime, st: MuState): MuApp[] {
 
 /** THE GAZE (MU_CFG.gaze): the bearing a vessel's eyes hold — toward the
  *  live wisp, the wake point, or due south (screen y grows downward). */
-function muGazeAngle(w: World, a: { pos: Vec2 }): number {
+function muGazeAngle(w: NativeSceneDirectorHost, a: { pos: Vec2 }): number {
   const g = MU_CFG.gaze;
   if (g.at === 'south') return Math.PI / 2;
   const t = g.at === 'wisp' ? w.player.pos : vec(w.arena.w / 2, w.arena.h / 2);
@@ -1083,9 +1116,7 @@ registerSceneStage('mu', {
       }
       w.loadZone(zid, w.zone.id);
       // THE EMPTY-FIELD LAW again at this door — Mu opens with nobody on it.
-      for (let i = w.actors.length - 1; i >= 0; i--) {
-        if (w.actors[i].team !== 'player') w.actors.splice(i, 1);
-      }
+      emptySceneField(w);
     }
     // COMPLETION AT THE THRESHOLD (the prologue): the tutorial is LIVED the
     // moment the spirit arrives — a quit from Mu re-opens Mu on the next
@@ -1227,13 +1258,13 @@ registerSceneStage('mu', {
 
 /** Is the running scene sitting on its Mu stage? (The shell's label/veil
  *  switches read this — one predicate, engine-owned.) */
-export function muStageLive(w: World): boolean {
+export function muStageLive(w: NativeSceneDirectorHost): boolean {
   return !!w.scene && w.scene.def.stages[w.scene.stageIx]?.kind === 'mu';
 }
 
 /** Take (and clear) the Mu stage's pending class request — the shell polls
  *  this beside the dwell flags and opens that class's card. */
-export function muTakeClassRequest(w: World): string | null {
+export function muTakeClassRequest(w: NativeSceneDirectorHost): string | null {
   const sc = w.scene;
   if (!sc) return null;
   const st = sc.state as MuState;
@@ -1247,7 +1278,7 @@ export function muTakeClassRequest(w: World): string | null {
  *  ordinary mortal waking. The shell hands it to the card beside the class
  *  request so the card opens pre-sworn; a pure read of the stage's seated
  *  deal — the same row whose marker status the body wears. */
-export function muOfferOf(w: World, classId: string): string | null {
+export function muOfferOf(w: NativeSceneDirectorHost, classId: string): string | null {
   const sc = w.scene;
   if (!sc || !muStageLive(w)) return null;
   const st = sc.state as MuState;
@@ -1257,7 +1288,7 @@ export function muOfferOf(w: World, classId: string): string | null {
 /** THE NEAREST LAW's read: the ONE vessel the wisp engages this frame (the
  *  nearest surface within the dwell reach), or null — the same row whose
  *  linger fills the bar; HUD, dev lanes and the probe read it here. */
-export function muEngagedVessel(w: World): { id: number; classId: string | null; rank: MuApp['rank']; offer: string | null } | null {
+export function muEngagedVessel(w: NativeSceneDirectorHost): { id: number; classId: string | null; rank: MuApp['rank']; offer: string | null } | null {
   const sc = w.scene;
   if (!sc || !muStageLive(w)) return null;
   const st = sc.state as MuState;
@@ -1268,7 +1299,7 @@ export function muEngagedVessel(w: World): { id: number; classId: string | null;
 // THE MARK — the attention fabric's chevron on whatever body the running
 // scene marks (the agency reckoning's commander). A source, never a draw:
 // the generic edge-pointer pass renders it, and skips it while on-screen.
-registerAttentionSource((w: World) => {
+registerAttentionSource((w: NativeSceneDirectorHost) => {
   const m = w.scene?.mark;
   if (!m) return [];
   const a = w.actors.find(x => x.id === m.id);

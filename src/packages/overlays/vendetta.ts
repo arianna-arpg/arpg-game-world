@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from '../../world/bulletins';
 // ---------------------------------------------------------------------------
 // VENDETTA FIELD — the world answering the PLAYER's own violence (pure overlay).
 //
@@ -402,7 +403,7 @@ function factionName(f: string): string {
 
 // --- bulletins + zone-info (registered on import — zero engine edits) ---------
 
-registerBulletinSource((world: World) => {
+registerBulletinSource((world: NativeBulletinHost) => {
   return world.sim.vendettaField?.drainNotices() ?? [];
 });
 

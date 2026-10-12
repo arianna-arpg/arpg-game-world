@@ -1,3 +1,5 @@
+import {nativeStatusCreated,nativeStatusSelectCaster,nativeStatusCasterAssigned,beginNativeStatusSelection,endNativeStatusSelection,nativeStatusExpired} from './nativeStatusProvenance';
+import {nativeActorConstructed} from './nativeActorConstruction';
 import { summonReservationUnit } from './companionGrants';
 import { tickAbsorbLayers, type AbsorbLayer } from './absorb';
 import { buffProcCue, noteProcCue, noteProcPop, tickProcCues } from './procCues';
@@ -2043,6 +2045,8 @@ export class Actor {
     this.pos = vec(pos.x, pos.y);
     this.life = 1;
     this.mana = 1;
+  
+    nativeActorConstructed(this);
   }
 
   maxLife(): number { return this.sheet.get('life'); }
@@ -2862,7 +2866,8 @@ export class Actor {
       if (!fixedFuse) existing.remaining = Math.max(existing.remaining, duration);
       existing.dps = Math.max(existing.dps, dps);
     } else {
-      this.statuses.push({
+      const nativeStatusArray=this.statuses, nativeStatusPush=nativeStatusArray.push;
+      const nativeStatusRow:ActiveStatus={
         id, remaining: duration, stacks: 1, dps, sourceName, challengeField: opts?.challengeField,
         sourceKey: opts?.sourceKey, holdDischarge: opts?.holdDischarge,
         power: power !== 1 ? power : undefined,
@@ -2883,7 +2888,9 @@ export class Actor {
           const hi = Math.max(0.02, frac - def.weakSpot.gap);
           return { hi, lo: Math.max(0, hi - def.weakSpot.size) };
         })() : undefined,
-      });
+      };
+      Reflect.apply(nativeStatusPush,nativeStatusArray,[nativeStatusRow]);
+      nativeStatusCreated(this,nativeStatusRow);
       if (def.mods) {
         this.sheet.setSource('status:' + id, power !== 1
           ? def.mods.map(m => ({ ...m, value: m.value * power }))
@@ -2903,9 +2910,8 @@ export class Actor {
       // FIRST APPLIER holds the credit by default (DoT attribution never
       // migrates mid-burn) — but refreshCaster statuses hand it to the
       // NEWEST applier: a taunt answered by a louder taunt must turn.
-      existing.casterId = def.refreshCaster && opts.casterId !== undefined
-        ? opts.casterId
-        : existing.casterId ?? opts.casterId;
+      existing.casterId = def.refreshCaster && opts.casterId !== undefined ? nativeStatusSelectCaster(this,existing,opts.casterId) : existing.casterId ?? nativeStatusSelectCaster(this,existing,opts.casterId);
+      nativeStatusCasterAssigned(this,existing);
       existing.brood = existing.brood ?? opts.brood;
       if (opts.leech) existing.leech = Math.max(existing.leech ?? 0, opts.leech);
     }
@@ -3132,13 +3138,17 @@ export class Actor {
   tickChronoStatuses(rawDt: number): void {
     for (let i = this.statuses.length - 1; i >= 0; i--) {
       const s = this.statuses[i];
+      const nativeStatusScope=beginNativeStatusSelection(this,s);
+      try {
       if (STATUS_DEFS[s.id]?.timeScale === undefined) continue;
       s.remaining -= rawDt;
       if (s.remaining <= 0) {
         this.statuses.splice(i, 1);
-        this.expiredStatuses.push(s); // world processes ruptures
+        this.expiredStatuses.push(s); nativeStatusExpired(this,s); // world processes ruptures
         if (!this.statuses.some(o => o.id === s.id)) this.sheet.removeSource('status:' + s.id);
       }
+    
+      } finally {endNativeStatusSelection(nativeStatusScope);}
     }
   }
 
@@ -3289,6 +3299,8 @@ export class Actor {
     let dot: Partial<Record<DamageType | 'untyped', number>> | null = null;
     for (let i = this.statuses.length - 1; i >= 0; i--) {
       const s = this.statuses[i];
+      const nativeStatusScope=beginNativeStatusSelection(this,s);
+      try {
       // Chrono statuses expire on the unbent clock (see chronoDt above).
       s.remaining -= STATUS_DEFS[s.id]?.timeScale !== undefined ? chronoDt : dt;
       if (s.dps > 0) {
@@ -3327,9 +3339,11 @@ export class Actor {
       }
       if (s.remaining <= 0) {
         this.statuses.splice(i, 1);
-        this.expiredStatuses.push(s); // world processes ruptures
+        this.expiredStatuses.push(s); nativeStatusExpired(this,s); // world processes ruptures
         if (!this.statuses.some(o => o.id === s.id)) this.sheet.removeSource('status:' + s.id);
       }
+    
+      } finally {endNativeStatusSelection(nativeStatusScope);}
     }
 
     // FLIGHT AS A STATE (StatusDef.flight): the flying flag — noclip

@@ -1,3 +1,4 @@
+import {nativeCombatActorEntry} from './nativeAreaCombatOperation';
 /** Physical-area entry to native kill pickups and deferred burst construction.
  * Death attribution, other remnant writers, ticking and retirement remain external. */
 import type {Actor} from '../engine/actor';
@@ -40,10 +41,10 @@ export class NativeAreaSceneKillAftermath implements native.NativeSceneKillAfter
   ownNativeRewardStorage(input.state,['remnants','deathBursts']);
   for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
- #actors(...actors:Actor[]):void {const {scene,authority,loot,geometry}=this.input;for(const actor of actors){if(!scene.actors.includes(actor))throw Error('Native kill aftermath needs actual physical actor');const registered=authority.require(actor);if(registered.scene!==scene||registered.killAftermath!==this||registered.loot!==loot||registered.geometry!==geometry)throw Error('Native kill aftermath needs exact registered owners');}authority.assertAdmitted(scene);}
+ #actors(...actors:Actor[]):void {const {scene,authority,loot,geometry}=this.input;for(const actor of actors){if(nativeCombatActorEntry(this,actor,'attribution'))continue;if(!scene.actors.includes(actor))throw Error('Native kill aftermath needs actual physical actor');const registered=authority.require(actor);if(registered.scene!==scene||registered.killAftermath!==this||registered.loot!==loot||registered.geometry!==geometry)throw Error('Native kill aftermath needs exact registered owners');}authority.assertAdmitted(scene);}
  /** No campaign callback may follow this final ownership check. A live seats
   * read while admitting a later subject can transfer an earlier subject. */
- #final(...actors:Actor[]):void {const {scene,authority,loot,geometry}=this.input,binding=authority.bindingFor(scene);if(binding.services.killAftermath!==this||binding.services.loot!==loot||binding.services.geometry!==geometry)throw Error('Native kill aftermath needs exact registered owners');for(const actor of actors)if(!scene.actors.includes(actor))throw Error('Native kill aftermath needs actual physical actor');authority.assertAdmitted(scene);}
+ #final(...actors:Actor[]):void {const {scene,authority,loot,geometry}=this.input,binding=authority.bindingFor(scene);if(binding.services.killAftermath!==this||binding.services.loot!==loot||binding.services.geometry!==geometry)throw Error('Native kill aftermath needs exact registered owners');for(const actor of actors)if(!nativeCombatActorEntry(this,actor,'attribution')&&!scene.actors.includes(actor))throw Error('Native kill aftermath needs actual physical actor');authority.assertAdmitted(scene);}
  rollKillOrbs(...a:Args<typeof native.sceneRollKillOrbs>):void {this.#actors(a[0]);const subjects=staticConstruct(a[0])?[a[0]]:[a[0],a[2]];if(subjects.length===2)this.#actors(a[2]);this.#final(...subjects);native.sceneRollKillOrbs(this.host,...a);}
  rollKillRemnants(...a:Args<typeof native.sceneRollKillRemnants>):void {this.#actors(a[0]);this.#final(a[0]);native.sceneRollKillRemnants(this.host,...a);}
  spawnDeathBurst(...a:Args<typeof native.sceneSpawnDeathBurst>):void {this.#actors(a[0]);this.#final(a[0]);native.sceneSpawnDeathBurst(this.host,...a);}

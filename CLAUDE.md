@@ -1,3 +1,18 @@
+NativeAreaSceneCombat and NativeAreaSceneCampaignFrame compose retained native
+combat, exact actor/record lifetimes and four local frame stages around the
+original campaign barriers. Preserve actual admission, selected receivers, raw
+stores, native partial effects and once-per-campaign simulation/queue drains.
+Shared writer state and published physical presentation have explicit owners.
+Retain historical source archives and enroll all focused proofs before promotion.
+See docs/worldgen/native-area-combat-runtime.md for architecture and evidence.
+NativeAreaSceneAI and NativeAreaSceneInput own local dispatch; held targets
+revalidate physical attendance before observation. Initial carried admission
+closes callback-capable infrastructure reads before final claims and presence.
+Client dispatch/publication, server publication, party death and disk restart
+remain open; bounded frame courses do not establish full parity. Complete
+these before bounded/open navigable places and hierarchy/zoom. Generated private
+quest entrances are recorded in docs/worldgen/generated-quest-side-zones.md.
+
 NativeAreaSceneGroundFollowUps owns native ground/follow-up record construction
 on actual progression queues, with one nominal Madden ledger per campaign.
 World shares six bodies and flattenPulseQueue. Only expireZone uses the campaign

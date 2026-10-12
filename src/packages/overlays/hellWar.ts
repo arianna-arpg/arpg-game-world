@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from '../../world/bulletins';
 // ---------------------------------------------------------------------------
 // THE WAR BELOW — the Underworld's eternal territorial struggle, as a field.
 //
@@ -763,7 +764,7 @@ export class HellWarField implements WorldOverlay {
 // War news is heard WHERE THE WAR IS: standing in the underworld you hear its
 // conquests, pacts, collapses; on the surface the queue drains silently —
 // the world above learns of the war only through its strikes (and the map).
-registerBulletinSource((world: World) => {
+registerBulletinSource((world: NativeBulletinHost) => {
   const hw = world.sim.hellWarField;
   if (!hw || !hw.bulletins.length) return [];
   const fresh = hw.bulletins.splice(0);

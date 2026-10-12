@@ -2,7 +2,8 @@
  * Campaign ledger scope and writer identity are shared; physical payout effects follow their actual recipient. */
 import type {World,Seat} from '../engine/world';
 import type {Actor} from '../engine/actor';
-import type {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
+import {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
+const rescuePresence=NativeAreaActorAuthority.prototype.isPresentPlayer;
 import {NativeAreaSceneBirthAdmission} from './nativeAreaSceneBirthAdmission';
 import type {NativeSceneCensus} from './nativeAreaScenePopulation';
 import type {NativeAreaScenePopulation} from './nativeAreaScenePopulation';
@@ -20,7 +21,8 @@ import * as native from '../engine/nativeSceneQuests';
 import {sceneNoteBountyReady,sceneHandState,sceneQuestDefOf} from '../engine/nativeSceneBounty';
 type Host=native.NativeSceneQuestHost;
 export type NativeQuestCampaign=Pick<Host,'account'|'accountDirty'|'actingSeat'|'charDirty'|'clientActionHook'|'ledger'|'localSeat'|'manifest'|'meta'|'ownQuestLedger'|'questLedgerOverride'|'questSeat'|'time'|'zoneMap'|'zoneMemory'|'nextGenId'|'sim'|'surveyed'|'visited'|'notice'|'markMetaDirty'|'sameParty'|'seatHero'|'seatHudOf'|'seatNoteAt'|'seatOf'|'questLedgerOf'|'forechartSounding'|'invalidateZonesSaveMemo'>
- & Pick<World,'presentWorlds'|'odyssey'|'keeperCampaign'|'odysseyLeads'|'completedObjectives'>;
+ & Pick<World,'odyssey'|'keeperCampaign'|'odysseyLeads'|'completedObjectives'>
+ & {presentWorlds():readonly {readonly seats:readonly Seat[]}[]};
 export interface NativeSceneQuestState {
  questRewardShown:Host['questRewardShown'];questRewardRequested:Host['questRewardRequested'];failNoteAt:Host['failNoteAt'];
  /** This area's scripted-scene controller, shared with its other native services. */
@@ -133,6 +135,7 @@ export class NativeAreaSceneQuests {
   const rescueHost=Object.create(host) as NativeQuestRescueHost;
   for(const key of ['scene'])Object.defineProperty(rescueHost,key,{get(){return input.state.scene;}});
   Object.defineProperty(rescueHost,'completedObjectives',{get(){return input.campaign.completedObjectives;}});
+  Object.defineProperty(rescueHost,'isPresentLocalPlayer',{value:()=>Reflect.apply(rescuePresence,input.authority,[input.scene])});
   Object.defineProperty(rescueHost,'createMonster',{get:()=>birthAdmission.createMonster});
   Object.defineProperty(rescueHost,'admitBirth',{value:(body:Parameters<NativeAreaSceneBirthAdmission['admitInserted']>[0])=>birthAdmission.admitInserted(body)});
   Object.defineProperty(rescueHost,'findFreeSpot',{get(){const provider=input.geometry,fn=provider.findFreeSpot;return (...a:Parameters<typeof fn>)=>fn.apply(provider,a);}});
@@ -201,6 +204,7 @@ onQuestZoneCleared:World['onQuestZoneCleared']=(...args)=>{
 };
 questRewardItem:World['questRewardItem']=(...args)=>native.sceneQuestRewardItem(this.host,...args);
 claimQuestReward:World['claimQuestReward']=(...args)=>native.sceneClaimQuestReward(this.host,...args);
+questDefOf:World['questDefOf']=(...args)=>sceneQuestDefOf(this.bountyHost,...args);
 questStanding:World['questStanding']=(...args)=>native.sceneQuestStanding(this.host,...args);
 pendingTurnIns:World['pendingTurnIns']=(...args)=>native.scenePendingTurnIns(this.host,...args);
 giverPresent:World['giverPresent']=(...args)=>native.sceneGiverPresent(this.host,...args);
@@ -238,9 +242,5 @@ graphWorkAvailable:World['graphWorkAvailable']=(...args)=>native.sceneGraphWorkA
 /** Keep the original rescue algorithms, including their nested hand scope. */
 class AdmittedQuestRescues extends QuestRescues {
  constructor(host:NativeQuestRescueHost,private readonly admission:NativeAreaSceneBirthAdmission){super(host);}
- override update():void{this.admission.run(()=>{
-  const {authority,scene}=this.admission.input;
-  if(authority.require(scene.player).scene!==scene)throw Error('Rescue attendance needs a present area player');
-  super.update();
- });}
+ override update():void{this.admission.run(()=>super.update());}
 }

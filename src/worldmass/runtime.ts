@@ -618,7 +618,7 @@ export class WorldMassRuntime {
   }
   /** Preserve the native lock/recovery fraction. An earned, quiet cache merely
    * progresses faster; opening and all loot remain in the native chest artery. */
-  cacheHoldRate(world: World, chest: Chest): number {
+  cacheHoldRate(world: Pick<World, 'actors' | 'isPressingFoe' | 'player'>, chest: Chest): number {
     if(chest.kind!=='timed' || chest.mimic || !chest.rewardSource)return 1;
     const place=this.placesInCell(this.walk.at(chest.pos.x,chest.pos.y))
       .find(p=>canonical([p.id,'cache'])===chest.rewardSource && this.state.claimed('site-cache',p.id));

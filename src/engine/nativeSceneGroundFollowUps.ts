@@ -1,3 +1,6 @@
+import {observeNativeCombatStorage,observeNativeCombatRecord} from './nativeCombatRecordObservation';
+import type {Actor as NativeRecordActor} from './actor';
+import type {SkillInstance as NativeRecordSkill} from './skills';
 /** Native ground/follow-up construction; no ticking or combat execution. */
 import type {World,MaddenBank,AoeShape} from './world';
 import type {Actor} from './actor';
@@ -99,8 +102,10 @@ export function sceneMintAftermath(nativeHost:NativeSceneGroundFollowUpsHost,cas
         queue: pQueue.length ? [...pQueue] : undefined,
       } : undefined;
     if (pulseN > 0) {
-      nativeHost.zones.push({
-        pos: vec(at.x, at.y), radius, caster, inst, color: inst.def.color,
+      {
+ let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
+        pos: vec(at.x, at.y), radius, caster:(nativeSource=caster), inst:(nativeInstance=inst), color: inst.def.color,
         delay: 0, exploded: true,
         linger: pulseSpan, linger0: pulseSpan,
         tickInterval: Infinity, tickTimer: Infinity,
@@ -109,6 +114,8 @@ export function sceneMintAftermath(nativeHost:NativeSceneGroundFollowUpsHost,cas
         dmgMult: useMult, depth: 0,
         pulse: pulseFor(0),
       });
+ observeNativeCombatRecord(nativeHost,'zones',nativeQueue,nativeRecord,nativeSource,nativeInstance);
+}
     }
     const plan = instanceCascadePlan(inst, 'forward');
     const nativeCount = (plan.native?.count ?? 0)
@@ -154,9 +161,11 @@ export function sceneMintAftermath(nativeHost:NativeSceneGroundFollowUpsHost,cas
       const scaleStep = spec?.scaleStep ?? 1;
       const dmgStep = spec?.dmgStep ?? 0.75;
       for (const p of walkPoints(spec, nativeCount, from)) {
-        nativeHost.zones.push({
+        {
+ let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
           pos: vec(p.x, p.y), radius: radius * Math.pow(scaleStep, p.k),
-          caster, inst, color: inst.def.color,
+          caster:(nativeSource=caster), inst:(nativeInstance=inst), color: inst.def.color,
           delay: delayBase + p.beatAt, exploded: false,
           linger: 0, linger0: 0,
           tickInterval: Infinity, tickTimer: 0,
@@ -164,6 +173,8 @@ export function sceneMintAftermath(nativeHost:NativeSceneGroundFollowUpsHost,cas
           fx: burstVoice,
           dmgMult: baseMult * Math.pow(dmgStep, p.k), depth: 0,
         });
+ observeNativeCombatRecord(nativeHost,'zones',nativeQueue,nativeRecord,nativeSource,nativeInstance);
+}
       }
     };
     mintMarch(at, useMult, 0.12);
@@ -177,9 +188,11 @@ export function sceneMintAftermath(nativeHost:NativeSceneGroundFollowUpsHost,cas
         const mult = useMult * Math.pow(rDmgStep, p.k);
         const delayBase = 0.12 + p.beatAt;
         const quakes = pulseN > 0;
-        nativeHost.zones.push({
+        {
+ let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
           pos: vec(p.x, p.y), radius: radius * Math.pow(rScaleStep, p.k),
-          caster, inst, color: inst.def.color,
+          caster:(nativeSource=caster), inst:(nativeInstance=inst), color: inst.def.color,
           delay: delayBase, exploded: false,
           linger: quakes ? pulseSpan : 0, linger0: quakes ? pulseSpan : 0,
           tickInterval: Infinity, tickTimer: quakes ? Infinity : 0,
@@ -188,6 +201,8 @@ export function sceneMintAftermath(nativeHost:NativeSceneGroundFollowUpsHost,cas
           dmgMult: mult, depth: 0,
           pulse: pulseFor(delayBase),
         });
+ observeNativeCombatRecord(nativeHost,'zones',nativeQueue,nativeRecord,nativeSource,nativeInstance);
+}
         mintMarch(vec(p.x, p.y), mult, delayBase);
       }
     }
@@ -212,10 +227,12 @@ export function sceneDropLingerField(nativeHost:NativeSceneGroundFollowUpsHost,c
     const radius = 80 * caster.sheet.get('aoeRadius', tags, extra);
     const linger = Math.max(fieldSecs, healField ? 4 : 0)
       * caster.sheet.get('effectDuration', tags, extra);
-    nativeHost.zones.push({
+    {
+ let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
       pos: vec(at.x, at.y),
       radius,
-      caster, inst, color: healField ? '#8ae0a8' : inst.def.color,
+      caster:(nativeSource=caster), inst:(nativeInstance=inst), color: healField ? '#8ae0a8' : inst.def.color,
       delay: 0, exploded: true,
       linger,
       tickInterval: 0.5, tickTimer: 0.5,
@@ -237,15 +254,19 @@ export function sceneDropLingerField(nativeHost:NativeSceneGroundFollowUpsHost,c
         ? { arc: pend.arcDeg * Math.PI / 180, period: pend.period, base: caster.facing }
         : undefined,
     });
+ observeNativeCombatRecord(nativeHost,'zones',nativeQueue,nativeRecord,nativeSource,nativeInstance);
+}
   }
 
 export function sceneMintTrailPatch(nativeHost:NativeSceneGroundFollowUpsHost,a: Actor,inst: SkillInstance,spec: DropZoneSpec,at: Vec2,facing: number,linger?: number): void {
     const dso = resolveSizeOver(spec.sizeOver);
     const hold = linger ?? spec.duration;
-    nativeHost.zones.push({
+    {
+ let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
       pos: vec(at.x, at.y), radius: spec.radius * (dso?.from ?? 1),
       tier: a.tier, // Trail patches retain their emission story when the caster changes floors.
-      caster: a, inst, color: inst.def.color,
+      caster:(nativeSource=a), inst:(nativeInstance=inst), color: inst.def.color,
       delay: 0, exploded: true,
       linger: hold, linger0: hold,
       tickInterval: spec.tickInterval ?? 0.4, tickTimer: 0.2,
@@ -254,6 +275,8 @@ export function sceneMintTrailPatch(nativeHost:NativeSceneGroundFollowUpsHost,a:
       sizeOver: dso,
       radius0: dso ? spec.radius : undefined,
     });
+ observeNativeCombatRecord(nativeHost,'zones',nativeQueue,nativeRecord,nativeSource,nativeInstance);
+}
   }
 
 export function sceneStatTrailSpec(nativeHost:NativeSceneGroundFollowUpsHost,mt: number): DropZoneSpec {
@@ -275,7 +298,11 @@ export function sceneQueueFollowUps(nativeHost:NativeSceneGroundFollowUpsHost,ca
         // boards the child. Generated hits cannot shed orbs or retap hit fuel.
         payload = { ...payload, extraMods: instanceMods(host), followUpHost: host, procChainDepth: 1 };
       }
-      nativeHost.pendingFollowUps.push({ caster, inst: payload, aim: vec(aim.x, aim.y),
+      {
+ let nativeQueue:typeof nativeHost.pendingFollowUps;let nativeRecord:(typeof nativeHost.pendingFollowUps)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'pendingFollowUps',nativeHost.pendingFollowUps)).push(nativeRecord={ caster:(nativeSource=caster), inst:(nativeInstance=payload), aim: vec(aim.x, aim.y),
         timer: fu.delay ?? 0.35, dmgMult: fu.perCharge ? Math.max(1, chargesSpent) : 1 });
+ observeNativeCombatRecord(nativeHost,'pendingFollowUps',nativeQueue,nativeRecord,nativeSource,nativeInstance);
+}
     }
   }

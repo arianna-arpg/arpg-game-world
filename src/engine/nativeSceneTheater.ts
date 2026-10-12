@@ -1,3 +1,4 @@
+import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
 /** Complete native theater birth and helpers; full native controller services remain required. */
 import type {World} from './world';
 import type {NativeTheaterHost} from './nativeTheaterHost';
@@ -99,7 +100,7 @@ export function nativeSpawnEventActor(scope:NativeSceneTheaterHost,table: PackTa
     const a = scope.createMonster(scope.weightedPick(table, level), level, team);
     a.faction = faction;
     a.tag = tag;
-    scope.actors.push(a);
+    scope.actors.push(a); observeNativeCombatBirth(scope, a);
     return a;
   }
 export function nativeClampNear(scope:NativeSceneTheaterHost,at: Vec2, r: number): Vec2 {

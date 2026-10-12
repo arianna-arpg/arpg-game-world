@@ -1,3 +1,4 @@
+import {observeNativeCombatFactory} from '../engine/nativeCombatRecordObservation';
 /** Birth-only mutable ecology owner. Local geometry and full actor census are
  * genuine owners; installed source and live campaign services remain explicit. */
 import type { World } from '../engine/world';
@@ -52,7 +53,7 @@ export class NativeAreaSceneEcology {
   fields(()=>input.geometry,['arena','arenaHull','walk','currentZoneSeed','doodads']);
   fields(()=>input.environment,['geysers']);fields(()=>input.services,['time','seats','throngClaimed']);
   methods(()=>input.geometry,['interactSpot','clampPos','markDoodadsChanged']);
-  methods(()=>input.population,['createMonster']);methods(()=>input.services,['radianceCondHeld']);
+  Object.defineProperty(host,'createMonster',{enumerable:true,get:()=>observeNativeCombatFactory(host,()=>{const owner=input.population,fn=owner.createMonster;return(...args:Parameters<typeof fn>)=>Reflect.apply(fn,owner,args);})});methods(()=>input.services,['radianceCondHeld']);
   methods(()=>self,['throngSources','mintThrongPocket','mintThrongHusk','liteKindOf','litePocketEnsure','liteOpenAt','liteCondHeld','litePocketPush','litePlantBurrow','geyserSurge','actorById']);
   this.host=Object.freeze(host);
   Object.defineProperty(this,'input',{value:input,writable:false,configurable:false,enumerable:false});

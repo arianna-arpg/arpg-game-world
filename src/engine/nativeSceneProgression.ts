@@ -1,3 +1,7 @@
+import {observeNativeCombatStatus} from './nativeCombatRecordObservation';
+import {observeNativeCombatStorage,observeNativeCombatRecord} from './nativeCombatRecordObservation';
+import type {Actor as NativeRecordActor} from './actor';
+import type {SkillInstance as NativeRecordSkill} from './skills';
 import {presenceProfile,skillPresenceVoice,PRESENCE_STYLE} from '../data/skillPresenceVisuals';
 /** Shared exact native stat, mercenary and teardown derivations. */
 import type {World,Seat,PlayerMeta,GrantedSkillRow,WornGraftRow,Projectile,EmergeRecord} from './world';
@@ -809,7 +813,11 @@ export function sceneReleaseContract(nativeHost:NativeSceneProgressionHost,minio
       const extra = instanceMods(inst);
       const timer = inst.def.delivery.persistent.respawnTime
         * owner.sheet.get('minionRespawnTime', tags, extra);
-      nativeHost.pendingRespawns.push({ caster: owner, inst, timer });
+      {
+ let nativeQueue:typeof nativeHost.pendingRespawns;let nativeRecord:(typeof nativeHost.pendingRespawns)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'pendingRespawns',nativeHost.pendingRespawns)).push(nativeRecord={ caster:(nativeSource=owner), inst:(nativeInstance=inst), timer });
+ observeNativeCombatRecord(nativeHost,'pendingRespawns',nativeQueue,nativeRecord,nativeSource,nativeInstance);
+}
     }
   }
 
@@ -1000,7 +1008,7 @@ export function sceneRecoverCompanion(nativeHost:NativeSceneProgressionHost,a: A
     // Reapplication refreshes one window, never adds or keeps a longer old
     // window when the pack grew. No effect-duration multiplier expands it.
     a.endStatus(cfg.status);
-    if (seconds > 0 && status?.duration > 0) a.applyStatus(cfg.status, 0, seconds / status.duration, a.owner.name);
+    if (seconds > 0 && status?.duration > 0) observeNativeCombatStatus(nativeHost,a,()=>a.applyStatus(cfg.status, 0, seconds / status.duration, a.owner!.name));
   }
 
 export function sceneShowRecoveryCue(nativeHost:NativeSceneProgressionHost,a: Actor, kind: RecoveryCueKind, inst?: SkillInstance): void {

@@ -31,6 +31,7 @@ export function nativeBeaconConfig(o: NativeBeaconSpec): NativeBeaconConfig {
 export interface NativeBeaconState { reinforceAt: number }
 export interface NativeBeaconTables { native: readonly PackTableEntry[]; mix: readonly PackTableEntry[] }
 export interface NativeBeaconHost {
+  isPresentPlayer?():boolean;
   now: number; level: number; player: Vec2; random: NativeHoldRandom;
   /** Native spire_drawn census over this entire physical objective zone. */
   born(): number;
@@ -51,6 +52,7 @@ export function driveNativeBeaconReinforce(fixtures: HoldFixture[], need: number
   state.reinforceAt = host.now + beat();
   const cap = Math.max(1, Math.round(config.cap * ramp)), drawn = host.born();
   if (drawn >= cap) return;
+  if (host.isPresentPlayer?.() === false) return;
   let at: HoldFixture | undefined, distance = Infinity;
   for (const s of fixtures) if (s.charge > 0 && s.charge < need) {
     const d = Math.hypot(s.pos.x - host.player.x, s.pos.y - host.player.y);

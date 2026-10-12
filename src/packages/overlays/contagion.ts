@@ -55,6 +55,7 @@ import { CONTAGION_COLORS } from '../../world/palette';
 import { rollStrain, strainOf } from '../contagionStrains';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
+import type {NativeOmenHost} from '../../world/omens';
 
 const STEP = 0.5;          // fixed ignition cadence (seconds)
 
@@ -932,7 +933,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
 // (widenPerMin — an uncaught quarry's shadow grows), and close in it surveys
 // the seat onto the map. The omen id is stable per OUTBREAK while `at` walks
 // with the quarry — the whisper memory follows one hunt, not one zone.
-registerOmenSource((world: World): Omen[] => {
+registerOmenSource((world: NativeOmenHost): Omen[] => {
   const cf = world.sim.contagionField;
   if (!cf) return [];
   const surge = cf.surge();

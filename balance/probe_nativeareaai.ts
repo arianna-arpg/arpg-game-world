@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {World} from '../src/engine/world';
+import {withSeededRandom} from '../src/core/rng';
+import {nativeCampaignFixture,birthActualNativeArea,mintAdditionalNativeArea} from './nativeCombatRetainedFixture';
+import {refuseWorldCombat,writeCombatProof,combatHash} from './probe_nativecombatcycle';
+const localNames=['claimRingSlot','fallHazardAt','finalizeGarrison','fleeIntoRefuge','garrisonSlotById','losCached','lureFor','onFleeArrive','pathProfileFor','pressUsable','recentTierCrossing','requestEngage','sanctuaryRetreat','seekLoot','seekPrey','tierLinkToward','onBeastEscape','comboQueuedStep','tierLinkSeats'];
+const result=withSeededRandom(46137,()=>{const setup=nativeCampaignFixture(),defB=mintAdditionalNativeArea(setup),saved=new Map<string,PropertyDescriptor>(),aiDrivers:string[]=[];for(const name of localNames){const descriptor=Object.getOwnPropertyDescriptor(World.prototype,name);assert(descriptor);saved.set(name,descriptor);Object.defineProperty(World.prototype,name,{...descriptor,value(){aiDrivers.push(name);throw Error('World AI provider used '+name);}});}try{return refuseWorldCombat([setup.writer],worldDrivers=>{
+ const {ongoing:a,coordinator,authority}=birthActualNativeArea(setup),hero=setup.writer.player;let updates=0;const step=(area:typeof a)=>{const beforeTime=setup.writer.time;coordinator.runFrom(area,()=>area.combat.updateAI(1/60));assert.equal(setup.writer.time,beforeTime);updates++;authority.assertAdmitted(area.assembly.input.scene);};
+ for(let i=0;i<8;i++){step(a);a.combat.campaignFrame.tick(1/60);}
+ const source=a.assembly.input.scene.zone.id;coordinator.runFrom(a,()=>coordinator.loadZone(defB.id,source));const b=coordinator.current;
+ const localA=a.assembly.input.scene.actors.find(x=>!x.dead&&!x.passive);assert(localA);assert.notEqual(a.combat.ai.losMemo,b.combat.ai.losMemo);assert.notEqual(a.combat.ai.pathProfiles,b.combat.ai.pathProfiles);const memoSize=a.combat.ai.losMemo.size,claims=a.combat.runtimeState.frame.ringClaims.size;assert.throws(()=>coordinator.runFrom(a,()=>a.combat.ai.losCached(localA,hero)));assert.throws(()=>coordinator.runFrom(a,()=>a.combat.ai.claimRingSlot(localA,hero,2)));assert.equal(a.combat.ai.losMemo.size,memoSize);assert.equal(a.combat.runtimeState.frame.ringClaims.size,claims);
+
+ const before={life:hero.life,mana:hero.mana,pos:{...hero.pos},feeding:hero.feedingMeal};step(a);assert.equal(hero.life,before.life);assert.equal(hero.mana,before.mana);assert.deepEqual(hero.pos,before.pos);assert.equal(hero.feedingMeal,before.feeding);
+ assert.throws(()=>coordinator.runFrom(a,()=>a.combat.updateAIActor(hero,1/60)),/actual local subject authority/);assert.deepEqual(hero.pos,before.pos);step(b);b.combat.campaignFrame.tick(1/60);assert.equal(authority.require(hero).combat,b.combat);assert.deepEqual(aiDrivers,[]);assert.deepEqual(worldDrivers,[]);
+ return{updates,areas:coordinator.residentAreas().length,sourceActors:a.assembly.input.scene.actors.length,destinationActors:b.assembly.input.scene.actors.length,aiDrivers,worldDrivers};
+ });}finally{for(const[name,descriptor]of saved)Object.defineProperty(World.prototype,name,descriptor);}});
+const report={scope:'Actual per-area native AI dispatch before genuine campaign frame, then departed source plus occupied destination; all World AI providers and combat drivers forbidden. Tactical/action branches separately pending.',result,receipt:combatHash(JSON.stringify(result))};writeCombatProof('native-area-ai.json',report);console.log(JSON.stringify(report));

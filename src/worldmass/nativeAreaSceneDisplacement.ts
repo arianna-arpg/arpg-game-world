@@ -1,3 +1,4 @@
+import {nativeCombatActorEntry,type NativeCombatPermission} from './nativeAreaCombatOperation';
 /** Physical native displacement on one admitted scene. Detached/staged bodies,
  * continuous movement, recovery and ticking are deliberately outside this owner. */
 import type {World} from '../engine/world';
@@ -32,9 +33,10 @@ export class NativeAreaSceneDisplacement implements native.NativeSceneDisplaceme
   methods(input.geometry,['clampPos']);methods(input.runtimeBirth,['actorById']);methods(this,["pushActor","grabRelease","clingRelease","teleportActor","mountFreeSeat","mountSeatRider","mountUnlink","mountUnhorse","mountWidowed","movementLocked","castMoveFactor","channelMobility","levitating"]);
   this.host=Object.freeze(host);for(const key of ['input','host'])Object.defineProperty(this,key,{enumerable:false,writable:false,configurable:false});
  }
- #admit(actors:readonly Actor[]):void{
+ #admit(actors:readonly Actor[],permission:NativeCombatPermission='physical'):void{
   const {scene,authority}=this.input;
   for(const actor of actors){
+   if(nativeCombatActorEntry(this,actor,permission))continue;
    if(!scene.actors.includes(actor))throw Error('Native displacement needs an actual physical body');
    const registered=authority.require(actor);
    if(registered.scene!==scene)throw Error('Native displacement needs an actual physical body');
@@ -42,7 +44,7 @@ export class NativeAreaSceneDisplacement implements native.NativeSceneDisplaceme
   }
   authority.assertAdmitted(scene);
  }
- pushActor(...args:Parameters<native.NativeSceneDisplacementApi['pushActor']>):ReturnType<native.NativeSceneDisplacementApi['pushActor']>{this.#admit([args[0],...(args[3]?[args[3]]:[])]);return native.scenePushActor(this.host,...args);}
+ pushActor(...args:Parameters<native.NativeSceneDisplacementApi['pushActor']>):ReturnType<native.NativeSceneDisplacementApi['pushActor']>{this.#admit([args[0]]);if(args[3])this.#admit([args[3]],'attribution');return native.scenePushActor(this.host,...args);}
  grabRelease(...args:Parameters<native.NativeSceneDisplacementApi['grabRelease']>):ReturnType<native.NativeSceneDisplacementApi['grabRelease']>{this.#admit([args[0]]);return native.sceneGrabRelease(this.host,...args);}
  clingRelease(...args:Parameters<native.NativeSceneDisplacementApi['clingRelease']>):ReturnType<native.NativeSceneDisplacementApi['clingRelease']>{this.#admit([args[0]]);return native.sceneClingRelease(this.host,...args);}
  teleportActor(...args:Parameters<native.NativeSceneDisplacementApi['teleportActor']>):ReturnType<native.NativeSceneDisplacementApi['teleportActor']>{this.#admit([args[0]]);return native.sceneTeleportActor(this.host,...args);}
@@ -51,8 +53,8 @@ export class NativeAreaSceneDisplacement implements native.NativeSceneDisplaceme
  mountUnlink(...args:Parameters<native.NativeSceneDisplacementApi['mountUnlink']>):ReturnType<native.NativeSceneDisplacementApi['mountUnlink']>{this.#admit([args[0]]);return native.sceneMountUnlink(this.host,...args);}
  mountUnhorse(...args:Parameters<native.NativeSceneDisplacementApi['mountUnhorse']>):ReturnType<native.NativeSceneDisplacementApi['mountUnhorse']>{this.#admit([args[0],args[1]]);return native.sceneMountUnhorse(this.host,...args);}
  mountWidowed(...args:Parameters<native.NativeSceneDisplacementApi['mountWidowed']>):ReturnType<native.NativeSceneDisplacementApi['mountWidowed']>{this.#admit([args[0]]);return native.sceneMountWidowed(this.host,...args);}
- movementLocked(...args:Parameters<native.NativeSceneDisplacementApi['movementLocked']>):ReturnType<native.NativeSceneDisplacementApi['movementLocked']>{this.#admit([args[0]]);return native.sceneMovementLocked(this.host,...args);}
- castMoveFactor(...args:Parameters<native.NativeSceneDisplacementApi['castMoveFactor']>):ReturnType<native.NativeSceneDisplacementApi['castMoveFactor']>{this.#admit([args[0]]);return native.sceneCastMoveFactor(this.host,...args);}
- channelMobility(...args:Parameters<native.NativeSceneDisplacementApi['channelMobility']>):ReturnType<native.NativeSceneDisplacementApi['channelMobility']>{this.#admit([args[0]]);return native.sceneChannelMobility(this.host,...args);}
- levitating(...args:Parameters<native.NativeSceneDisplacementApi['levitating']>):ReturnType<native.NativeSceneDisplacementApi['levitating']>{this.#admit([args[0]]);return native.sceneLevitating(this.host,...args);}
+ movementLocked(...args:Parameters<native.NativeSceneDisplacementApi['movementLocked']>):ReturnType<native.NativeSceneDisplacementApi['movementLocked']>{this.#admit([args[0]],'stats');return native.sceneMovementLocked(this.host,...args);}
+ castMoveFactor(...args:Parameters<native.NativeSceneDisplacementApi['castMoveFactor']>):ReturnType<native.NativeSceneDisplacementApi['castMoveFactor']>{this.#admit([args[0]],'stats');return native.sceneCastMoveFactor(this.host,...args);}
+ channelMobility(...args:Parameters<native.NativeSceneDisplacementApi['channelMobility']>):ReturnType<native.NativeSceneDisplacementApi['channelMobility']>{this.#admit([args[0]],'stats');return native.sceneChannelMobility(this.host,...args);}
+ levitating(...args:Parameters<native.NativeSceneDisplacementApi['levitating']>):ReturnType<native.NativeSceneDisplacementApi['levitating']>{this.#admit([args[0]],'stats');return native.sceneLevitating(this.host,...args);}
 }

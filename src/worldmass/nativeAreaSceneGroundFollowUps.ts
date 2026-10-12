@@ -1,3 +1,4 @@
+import {nativeCombatActorEntry} from './nativeAreaCombatOperation';
 /** Area-local record construction over actual progression queues. No tick,
  * damage, detached payload execution or actor retirement is supplied here. */
 import type {World} from '../engine/world';
@@ -29,7 +30,7 @@ export class NativeAreaSceneGroundFollowUps implements native.NativeSceneGroundF
   this.host=Object.freeze(host);for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false,enumerable:false});
  }
  #registered(){const {authority,scene,progression,castingPreparation,ledger}=this.input,binding=authority.bindingFor(scene),s=binding.services;if(s.groundFollowUps!==this||s.progression!==progression||s.castingPreparation!==castingPreparation||s.maddenLedger!==ledger||s.restoration!==castingPreparation.input.restoration||s.tethers!==castingPreparation.input.restoration.input.tethers)throw Error('Native ground construction needs exact registered owners');return binding;}
- #admit(actor:Actor):void{const {scene,authority}=this.input;this.#registered();if(!scene.actors.includes(actor)||authority.require(actor).scene!==scene)throw Error('Native ground construction needs actual physical actor');this.#registered();if(!scene.actors.includes(actor))throw Error('Native ground construction needs actual physical actor');authority.assertAdmitted(scene);}
+ #admit(actor:Actor):void{if(nativeCombatActorEntry(this,actor,'proc'))return;const {scene,authority}=this.input;this.#registered();if(!scene.actors.includes(actor)||authority.require(actor).scene!==scene)throw Error('Native ground construction needs actual physical actor');this.#registered();if(!scene.actors.includes(actor))throw Error('Native ground construction needs actual physical actor');authority.assertAdmitted(scene);}
  maddenBankOf(...args:Parameters<native.NativeSceneGroundFollowUpsApi['maddenBankOf']>):ReturnType<native.NativeSceneGroundFollowUpsApi['maddenBankOf']>{this.#registered();this.input.authority.assertAdmitted(this.input.scene);return native.sceneMaddenBankOf(this.host,...args);}
  statTrailSpec(...args:Parameters<native.NativeSceneGroundFollowUpsApi['statTrailSpec']>):ReturnType<native.NativeSceneGroundFollowUpsApi['statTrailSpec']>{return native.sceneStatTrailSpec(this.host,...args);}
  mintAftermath(...args:Parameters<native.NativeSceneGroundFollowUpsApi['mintAftermath']>):void{this.#admit(args[0]);native.sceneMintAftermath(this.host,...args);}

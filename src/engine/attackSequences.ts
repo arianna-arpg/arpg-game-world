@@ -1,3 +1,4 @@
+import {observeNativeCombatStatus,observeNativeCombatStatusSource} from './nativeCombatRecordObservation';
 import type { Actor } from './actor';
 import type { Projectile, World } from './world';
 import { dist, type Vec2 } from '../core/math';
@@ -259,11 +260,11 @@ export class AttackSequences {
     const critical = sd.dotType && Math.random() < s.owner.sheet.get('dotCrit', tags, extra) * s.owner.sheet.get('critChance', tags, extra);
     if (critical) dps *= s.owner.sheet.get('critMulti', tags, extra);
     const rupture = sd.dotType ? dps * sd.duration * duration * s.owner.sheet.get('dotRupture', tags, extra) : amount * power;
-    target.applyStatus(id, dps, duration, inst.def.name, { casterId: s.owner.id, sourceKey, holdDischarge,
+    observeNativeCombatStatus(this.w,target,()=>target.applyStatus(id, dps, duration, inst.def.name, { casterId: observeNativeCombatStatusSource(this.w,s.owner).id, sourceKey, holdDischarge,
       rupture: rupture > 0 ? rupture : undefined, ruptureType: sd.element,
       stacksBonus: Math.round(s.owner.sheet.get('ailmentStacks', tags, extra)),
       leech: s.owner.sheet.get('dotLeech_' + id, tags, extra),
-      propagates: Math.random() < s.owner.sheet.get('dotPropagates', tags, extra) });
+      propagates: Math.random() < s.owner.sheet.get('dotPropagates', tags, extra) }));
   }
   private burst(s: SequenceState, inst: SkillInstance, target: Actor, amount: number): void {
     this.w.attackSequenceBurst(s.owner, inst, target, amount);

@@ -38,6 +38,7 @@ import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOve
 import { eventTargetable } from '../../world/zonePolicy';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
+import type {NativeOmenHost} from '../../world/omens';
 
 const STEP = 0.5;
 const COURT_CRIMSON = '#b83a5a';
@@ -483,7 +484,7 @@ registerMarkerSource((world: World): MapMarker[] => {
 
 // The UNKNOWN ground's voice (world/omens.ts): a converted estate murmurs
 // louder than a fresh one — grounds deepen unseen, and the world lets it slip.
-registerOmenSource((world: World) => {
+registerOmenSource((world: NativeOmenHost) => {
   const lnf = world.sim.longNightField;
   const om = lnf?.surge().omen;
   if (!lnf || !om) return [];

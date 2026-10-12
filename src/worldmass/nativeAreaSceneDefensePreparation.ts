@@ -1,3 +1,4 @@
+import {nativeCombatActorEntry} from './nativeAreaCombatOperation';
 /** Admitted native defense preparation; no damage resolution or actor retirement. */
 import type {World} from '../engine/world';
 import type {Actor} from '../engine/actor';
@@ -24,7 +25,7 @@ export class NativeAreaSceneDefensePreparation implements native.NativeSceneDefe
   this.host=Object.freeze(Object.defineProperties({} as native.NativeSceneDefensePreparationHost,{actors:{enumerable:true,get:()=>input.scene.actors},flashes:{enumerable:true,get:()=>input.geometry.flashes},time:{enumerable:true,get:()=>input.campaign.time}}));
   for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false,enumerable:false});
  }
- #admit(actor:Actor):void {const {scene,authority,geometry}=this.input,b=authority.bindingFor(scene);if(b.services.defensePreparation!==this||b.services.geometry!==geometry)throw Error('Native defense preparation needs exact registered owners');if(!scene.actors.includes(actor)||authority.require(actor).scene!==scene)throw Error('Native defense preparation needs actual physical actor');authority.assertAdmitted(scene);}
+ #admit(actor:Actor):void {if(nativeCombatActorEntry(this,actor,'proc'))return;const {scene,authority,geometry}=this.input,b=authority.bindingFor(scene);if(b.services.defensePreparation!==this||b.services.geometry!==geometry)throw Error('Native defense preparation needs exact registered owners');if(!scene.actors.includes(actor)||authority.require(actor).scene!==scene)throw Error('Native defense preparation needs actual physical actor');authority.assertAdmitted(scene);}
  #pool(victim:Actor,sg:Actor['shellGuard']):void {
   this.#admit(victim);if(own(victim,'shellGuard')===sg)return;
   const shells=own(victim,'summonShells');let bodies:IterableIterator<Actor>;try{bodies=Reflect.apply(Set.prototype.values,shells,[]);}catch{throw Error('Native defense preparation needs a current anatomical or worn shell');}

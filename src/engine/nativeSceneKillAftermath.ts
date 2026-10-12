@@ -1,3 +1,6 @@
+import {observeNativeCombatStorage,observeNativeCombatRecord} from './nativeCombatRecordObservation';
+import type {Actor as NativeRecordActor} from './actor';
+import type {SkillInstance as NativeRecordSkill} from './skills';
 /** Exact native kill pickup rolls and deferred death-burst construction.
  * Attribution, death execution, pickup/burst ticking and retirement remain separate. */
 import type {World} from "./world";
@@ -52,10 +55,14 @@ export function sceneRollKillRemnants(host:NativeSceneKillAftermathHost,caster: 
       if (c <= 0 || !chance(Math.min(0.75, c))) continue;
       const ang = rand(0, Math.PI * 2);
       const r = rand(10, 40);
-      host.remnants.push({
+      {
+ let nativeQueue:typeof host.remnants;let nativeRecord:(typeof host.remnants)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
+ (nativeQueue=observeNativeCombatStorage(host,'remnants',host.remnants)).push(nativeRecord={
         pos: host.clampPos(vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 8),
         kind: kind.id, bob: rand(0, Math.PI * 2), life: 12,
       });
+ observeNativeCombatRecord(host,'remnants',nativeQueue,nativeRecord,nativeSource,nativeInstance);
+}
       if (host.remnants.length >= 14) break;
     }
   }
@@ -70,7 +77,9 @@ export function sceneSpawnDeathBurst(host:NativeSceneKillAftermathHost,a: Actor,
     // any retune; at base speed the orb is always escapable, and its sloppy turn keeps
     // it dodgeable even under slows.
     const escapeCap = STAT_DEFS.moveSpeed.base * 0.75;
-    host.deathBursts.push({
+    {
+ let nativeQueue:typeof host.deathBursts;let nativeRecord:(typeof host.deathBursts)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
+ (nativeQueue=observeNativeCombatStorage(host,'deathBursts',host.deathBursts)).push(nativeRecord={
       phase: 'gather', mode: cfg.mode,
       pos: vec(a.pos.x, a.pos.y), team: a.team, tier: a.tier,
       dmg: a.maxLife() * cfg.damageFrac,
@@ -84,4 +93,6 @@ export function sceneSpawnDeathBurst(host:NativeSceneKillAftermathHost,a: Actor,
       contact: cfg.detonateOnContact ?? false, stuck: false,
       contactFuse: cfg.contactFuse ?? 0.3, contactRadius: cfg.contactRadius ?? 12,
     });
+ observeNativeCombatRecord(host,'deathBursts',nativeQueue,nativeRecord,nativeSource,nativeInstance);
+}
   }

@@ -29,6 +29,8 @@ import type {ObjectiveReadContext} from '../data/objectives';
 import type {OccEnv} from './los';
 export interface NativeSceneObjectiveWatchingHost extends ObjectiveReadContext,OccEnv {
  admitBirth?(body:Actor):void;
+ /** Retained attendance only; ordinary finite callers retain their original player law. */
+ isPresentLocalPlayer?():boolean;
  actorById:World['actorById'];
  actors:World['actors'];
  altars:World['altars'];
@@ -190,6 +192,7 @@ export function sceneUpdateObjective(host:NativeSceneObjectiveWatchingHost, dt: 
         // host world). An engagement seen through by a LIVING player banks —
         // the frame order (driver before the fracture runtime) means we read
         // the end one tick after it landed, alive-now being the honest read.
+        if (host.isPresentLocalPlayer?.() === false) return;
         if (host.packageAskEngaged && !host.player.dead) {
           host.completeObjective(`${o.title} is seen through!`);
         } else {
@@ -427,7 +430,7 @@ export function sceneUpdateObjective(host:NativeSceneObjectiveWatchingHost, dt: 
         const pr=host.procession;if(!pr)return;
         const state:NativeProcessionState={...pr,enteredAt:host.zoneEnteredAt,done:host.objectiveDone,lost:host.objectiveLost};
         driveNativeProcession(dt,state,nativeProcessionConfig(o),{
-          now:host.time,player:host.player,random:{range:rand,int:randInt},actorById:id=>host.actorById(id)??null,
+          now:host.time,player:host.player,isPresentPlayer:host.isPresentLocalPlayer,random:{range:rand,int:randInt},actorById:id=>host.actorById(id)??null,
           reachable:(p,c,r)=>host.massProcessionReachable(p,c,r),enemiesOf:a=>host.enemiesOf(a),
           steering:(cart,to)=>nativeProcessionSteering(cart,to,host.pathField()),
           move:(a,dx,dy,step)=>host.moveActor(a,dx,dy,step),
@@ -449,7 +452,7 @@ export function sceneUpdateObjective(host:NativeSceneObjectiveWatchingHost, dt: 
         host.escapeTimer -= dt;
         if (host.escapeTimer <= 0) {
           host.escapeTimer = rand(o.interval[0], o.interval[1]);
-          if (host.countedEnemies().length < 24 && host.zone.packs) {
+          if (host.countedEnemies().length < 24 && host.zone.packs && host.isPresentLocalPlayer?.() !== false) {
             const at = host.farPoint(740);
             const { table } = host.effectiveSpawn(host.zone, host.baseTable(host.zone));
             const type = host.weightedPick(table, host.zone.level);
@@ -549,6 +552,7 @@ export function sceneVentureAskView(host:NativeSceneObjectiveWatchingHost): {
 export function sceneMassHoldHost(host:NativeSceneObjectiveWatchingHost, scoped = true): HoldObjectiveHost {
     return {
       player: host.player,
+      isPresentPlayer: host.isPresentLocalPlayer,
       reachable: (s, reach) => host.dwellReachable(host.player.pos, s.pos, reach, host.storyPair(host.player, s.doodad)),
       pressers: (s, contest) => host.contestPressers(s, contest),
       held: s => { if (!scoped || s) host.heldFixture = s; },
@@ -564,7 +568,7 @@ export function sceneMassProcessionReachable(host:NativeSceneObjectiveWatchingHo
   }
 
 export function sceneNativeBeaconHost(host:NativeSceneObjectiveWatchingHost): NativeBeaconHost {
-    return {now:host.time,level:host.zone.level,player:host.player.pos,random:{range:rand,int:randInt},
+    return {now:host.time,level:host.zone.level,player:host.player.pos,isPresentPlayer:host.isPresentLocalPlayer,random:{range:rand,int:randInt},
       born:()=>host.actors.filter(a=>!a.dead&&a.tag==='spire_drawn').length,
       tables:(at,cfg)=>host.massObjectiveBeaconTables(host.zone,at,cfg),
       spawn:(fixture,count,cfg,tables)=>{

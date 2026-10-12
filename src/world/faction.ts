@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from './bulletins';
 // ---------------------------------------------------------------------------
 // FACTION TERRITORY — who holds the ground, as an evolving field.
 //
@@ -26,7 +27,6 @@
 import { clamp } from '../core/math';
 import { FACTIONS, factionStance, MONSTERS } from '../data/monsters';
 import type { ZoneDef } from '../data/zones';
-import type { World } from '../engine/world';
 import { registerBulletinSource, type WorldBulletin } from './bulletins';
 import { patronFaction } from './biomes';
 import { factionAllowed } from './zonePolicy';
@@ -361,7 +361,7 @@ export class FactionField implements WorldOverlay {
 }
 
 // --- war bulletins (registered on import — the engine's collect drains us) ----
-registerBulletinSource((world: World) => {
+registerBulletinSource((world: NativeBulletinHost) => {
   const q = world.sim.faction.conquests;
   if (!q.length) return [];
   const out: WorldBulletin[] = [];

@@ -1,3 +1,5 @@
+import {nativeAreaStoreClaims} from './nativeAreaStorageClaims';
+import {nativeCombatActorEntry} from './nativeAreaCombatOperation';
 /** Native tether construction over one area's actual queue. Ticking, crossing,
  * damage and detached/staged endpoint lifetimes remain separate runtime work. */
 import type {World} from '../engine/world';
@@ -20,7 +22,7 @@ export interface NativeAreaSceneTetherInput {
 // construction replaces the slot; native restoration appends to its current
 // array. Both share the raw array, never a copied queue or an Array proxy.
 const ownedStates=new WeakSet<NativeSceneTetherState>();
-const ownedArrays=new WeakMap<World['tethers'],NativeAreaSceneTethers>();
+const ownedArrays=nativeAreaStoreClaims;
 export class NativeAreaSceneTethers {
  readonly input:NativeAreaSceneTetherInput;
  readonly host:NativeSceneTetherHost;
@@ -63,6 +65,7 @@ export class NativeAreaSceneTethers {
  #admit(actors:readonly Actor[]):void{
   const {scene,authority}=this.input;
   for(const actor of actors){
+   if(nativeCombatActorEntry(this,actor,'attribution'))continue;
    if(!scene.actors.includes(actor))throw Error('Native tether construction needs actual physical endpoints and owner');
    const registered=authority.require(actor);
    if(registered.scene!==scene)throw Error('Native tether construction needs actual physical endpoints and owner');
