@@ -28,6 +28,7 @@ import type {World} from './world';
 import type {ObjectiveReadContext} from '../data/objectives';
 import type {OccEnv} from './los';
 export interface NativeSceneObjectiveWatchingHost extends ObjectiveReadContext,OccEnv {
+ admitBirth?(body:Actor):void;
  actorById:World['actorById'];
  actors:World['actors'];
  altars:World['altars'];
@@ -381,7 +382,7 @@ export function sceneUpdateObjective(host:NativeSceneObjectiveWatchingHost, dt: 
                 for(let i=0;i<n;i++){
                   const m=host.createMonster(type,Math.max(1,host.zone.level+A.levelBonus),'enemy');
                   const ang=rand(0,Math.PI*2),rr=rand(A.radius[0],A.radius[1]);
-                  m.pos=host.clampPos(vec(pos.x+Math.cos(ang)*rr,pos.y+Math.sin(ang)*rr),m.radius);host.actors.push(m);
+                  m.pos=host.clampPos(vec(pos.x+Math.cos(ang)*rr,pos.y+Math.sin(ang)*rr),m.radius);host.actors.push(m);host.admitBirth?.(m);
                 }
               },text:()=>{}, // Turned earth, native flare and emerging creatures show the ambush.
             });
@@ -456,7 +457,7 @@ export function sceneUpdateObjective(host:NativeSceneObjectiveWatchingHost, dt: 
             for (let i = 0; i < n; i++) {
               const m = host.createMonster(type, host.zone.level, 'enemy');
               m.pos = host.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), m.radius);
-              host.actors.push(m);
+              host.actors.push(m);host.admitBirth?.(m);
             }
             host.flashes.push({ pos: vec(at.x, at.y), radius: 50, color: host.zone.theme.accent, life: 0.4, maxLife: 0.4 });
           }
@@ -573,7 +574,7 @@ export function sceneNativeBeaconHost(host:NativeSceneObjectiveWatchingHost): Na
           const m=host.createMonster(type,Math.max(1,host.zone.level+cfg.levelBonus),'enemy');
           const angle=rand(0,Math.PI*2),radius=rand(cfg.radius[0],cfg.radius[1]);
           m.pos=host.clampPos(vec(fixture.pos.x+Math.cos(angle)*radius,fixture.pos.y+Math.sin(angle)*radius),m.radius);
-          m.tag='spire_drawn';host.actors.push(m);
+          m.tag='spire_drawn';host.actors.push(m);host.admitBirth?.(m);
         }
         return count;
       },
@@ -605,7 +606,7 @@ export function sceneSetLure(host:NativeSceneObjectiveWatchingHost, id: string, 
 export function sceneSpawnProcessionAmbush(host:NativeSceneObjectiveWatchingHost, cart:Actor, heading:number, count:number, cfg:NativeProcessionConfig): number {
     const bodies=host.nativeProcessionBodies(cart,heading,count,host.zone,cfg,host.zone.id);
     for(const m of bodies){
-      host.actors.push(m);host.flashes.push({pos:{...m.pos},radius:cfg.ambushFlare.radius,color:cfg.smoke,life:cfg.ambushFlare.life,maxLife:cfg.ambushFlare.life});
+      host.actors.push(m);host.admitBirth?.(m);host.flashes.push({pos:{...m.pos},radius:cfg.ambushFlare.radius,color:cfg.smoke,life:cfg.ambushFlare.life,maxLife:cfg.ambushFlare.life});
     }
     return bodies.length;
   }
@@ -698,7 +699,7 @@ export function sceneUpdateRiftPours(host:NativeSceneObjectiveWatchingHost, o: E
           const m=host.createMonster(type,Math.max(1,host.zone.level+P.levelBonus),'enemy');
           const ang=rand(0,Math.PI*2),rr=rand(P.radius[0],P.radius[1]);
           m.pos=host.clampPos(vec(fixture.pos.x+Math.cos(ang)*rr,fixture.pos.y+Math.sin(ang)*rr),m.radius);
-          m.tag='rift_born';host.actors.push(m);
+          m.tag='rift_born';host.actors.push(m);host.admitBirth?.(m);
         }
         return count;
       },

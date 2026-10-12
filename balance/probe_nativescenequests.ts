@@ -1,3 +1,4 @@
+import {beforeNativeBirthLifetime} from './nativeBirthLifetimeFixture';
 import {beforeNativeQuestInteractionOdyssey} from './nativeSceneQuestInteractionFixture';
 import {NativeAreaActorAuthority} from '../src/worldmass/nativeAreaActorAuthority';
 import {beforeNativeMainContent} from './nativeMainContentFixture';
@@ -73,7 +74,7 @@ const original=new Function(...Object.keys(bindings),emit('class Archive{'+archi
 
 assert.equal(hash(JSON.stringify(aux)),nativeSceneQuestAuxArchiveHash);
 for(const [file,cls,rows] of [['src/engine/odyssey.ts','OdysseyRuntime',aux.odyssey.rows],['src/engine/questRescues.ts','QuestRescues',aux.rescues.rows]] as const){
- const src=file==='src/engine/odyssey.ts'?beforeNativeQuestInteractionOdyssey(read(file)):read(file),ast=parse(src),c=ast.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text===cls) as ts.ClassDeclaration;
+ const src=file==='src/engine/odyssey.ts'?beforeNativeQuestInteractionOdyssey(read(file)):beforeNativeBirthLifetime(file,read(file)),ast=parse(src),c=ast.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text===cls) as ts.ClassDeclaration;
  for(const row of rows){const m=c.members.find(m=>m.name?.getText(ast)===row.name);assert.equal(m?.getText(ast).replaceAll('\r\n','\n'),'after' in row?row.after:row.before,'auxiliary original/delegate '+row.name);}
  if(process.argv.includes('--provenance'))assert.equal(hash(execFileSync('git',['show',aux.commit+':'+file],{encoding:'utf8'}).replaceAll('\r\n','\n')),file.includes('odyssey')?aux.odyssey.sourceHash:aux.rescues.sourceHash);
 }

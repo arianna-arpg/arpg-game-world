@@ -134,6 +134,7 @@ export class NativeAreaSceneQuests {
   for(const key of ['scene'])Object.defineProperty(rescueHost,key,{get(){return input.state.scene;}});
   Object.defineProperty(rescueHost,'completedObjectives',{get(){return input.campaign.completedObjectives;}});
   Object.defineProperty(rescueHost,'createMonster',{get:()=>birthAdmission.createMonster});
+  Object.defineProperty(rescueHost,'admitBirth',{value:(body:Parameters<NativeAreaSceneBirthAdmission['admitInserted']>[0])=>birthAdmission.admitInserted(body)});
   Object.defineProperty(rescueHost,'findFreeSpot',{get(){const provider=input.geometry,fn=provider.findFreeSpot;return (...a:Parameters<typeof fn>)=>fn.apply(provider,a);}});
   this.rescues=new AdmittedQuestRescues(rescueHost,birthAdmission);Object.defineProperty(host,'questRescues',{enumerable:true,value:this.rescues});
   this.host=Object.freeze(host);

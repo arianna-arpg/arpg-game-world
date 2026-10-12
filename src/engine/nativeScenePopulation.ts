@@ -18,6 +18,7 @@ import { mod } from './stats';
 import { coopScale, COOP_SCALING } from '../data/coop';
 import { MERC_CFG } from '../meta/mercs';
 export interface NativeSceneServiceHost {
+  admitBirth?(body:Actor):void;
   actors:World['actors'];
   createMonster:World['createMonster'];
   nextSquadId:World['nextSquadId'];
@@ -160,7 +161,7 @@ export function spawnSceneContest(host:Pick<NativeSceneServiceHost,'sim'|'farPoi
     }
   }
 
-export function spawnSceneWave(host:Pick<NativeSceneServiceHost,'wave'|'waveActive'|'zone'|'effectiveSpawn'|'baseTable'|'weightedPick'|'player'|'spawnPoint'|'createMonster'|'walk'|'pointInSolid'|'structures'|'zoneEntry'|'clampPos'|'applyWaveFrenzy'|'actors'|'text' >):void {
+export function spawnSceneWave(host:Pick<NativeSceneServiceHost,'admitBirth'|'wave'|'waveActive'|'zone'|'effectiveSpawn'|'baseTable'|'weightedPick'|'player'|'spawnPoint'|'createMonster'|'walk'|'pointInSolid'|'structures'|'zoneEntry'|'clampPos'|'applyWaveFrenzy'|'actors'|'text' >):void {
     host.wave++;
     host.waveActive = true;
     // Leveled zones draw a WEIGHTED table so day/night, weather, and a faction
@@ -235,7 +236,7 @@ export function spawnSceneWave(host:Pick<NativeSceneServiceHost,'wave'|'waveActi
       // Wave bodies ARE this zone's population: flag them for Zone Memory so a
       // boundary cross remembers the mid-wave survivors alongside the counter.
       m.fromZoneGen = true;
-      host.actors.push(m);
+      host.actors.push(m);host.admitBirth?.(m);
     }
     // Boss cadence is the OBJECTIVE'S data (bossEveryWaves/bossId) — any
     // survival arena declares its own lord; nothing is keyed to a zone id.
@@ -244,7 +245,7 @@ export function spawnSceneWave(host:Pick<NativeSceneServiceHost,'wave'|'waveActi
       boss.pos = host.spawnPoint(boss.radius);
       if (frenzy) host.applyWaveFrenzy(boss, frenzy);
       boss.fromZoneGen = true; // the wave's lord is remembered like its rank and file
-      host.actors.push(boss);
+      host.actors.push(boss);host.admitBirth?.(boss);
       host.text(vec(host.player.pos.x, host.player.pos.y - 60), `${boss.name} emerges!`, '#ff5050', 20);
     }
   }

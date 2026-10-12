@@ -1,3 +1,12 @@
+NativeAreaSceneBirthAdmission binds ongoing births to private synchronous factory
+receipts and admits eight actual watcher, wave and rescue insertions before their
+next native effects. Preserve exact top-frame authority, selected receivers and
+native partial writes; expired factories and asynchronous results refuse without
+transferring unused receipts. Verify nativebirthlifetime, watching, quests, ongoing
+areas and installed sources plus all types. See
+docs/worldgen/native-area-birth-lifetime.md. Initial restore/contest admission, full
+spawning/retirement, detached records, retained ticking and publication remain open.
+
 NativeAreaSceneDefensePreparation owns admitted shell absorption, combat cues,
 guard-bash preparation, burst eligibility, rune banking and creature drives.
 Preserve actual physical authority, current anatomical/worn shield relationships,

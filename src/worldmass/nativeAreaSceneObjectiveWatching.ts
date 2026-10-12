@@ -70,6 +70,7 @@ export class NativeAreaSceneObjectiveWatching {
   fields(()=>input.campaign,['time','kills','ledger','completedObjectives','zoneMap','visited','surveyed','dropRuleOf']);fields(()=>input.campaign,['mintVeil'],true);
   fields(()=>input.adoption.context,['sim']);methods(()=>input.adoption.context,['fractureView']);
   Object.defineProperty(host,'createMonster',{enumerable:true,get:()=>this.birthAdmission.createMonster});
+  Object.defineProperty(host,'admitBirth',{enumerable:true,value:(body:Parameters<NativeAreaSceneBirthAdmission['admitInserted']>[0])=>this.birthAdmission.admitInserted(body)});
   methods(()=>input.population,['effectiveSpawn','baseTable','enemiesOf']);
   methods(()=>input.population.input.sources.ambient,['weightedPick']);
   methods(()=>input.theater,['clampNear']);methods(()=>input.theater.input.ecology,['actorById']);
@@ -79,7 +80,7 @@ export class NativeAreaSceneObjectiveWatching {
   methods(()=>input.quests,['nearestHand']);methods(()=>input.movement,['moveActor']);
   Object.defineProperty(host,'massRuntime',{enumerable:true,value:null});
   methods(()=>this,OWN_METHODS);
-  this.waveHost=Object.create(input.objectiveServices);Object.defineProperty(this.waveHost,'createMonster',{get:()=>host.createMonster});Object.freeze(this.waveHost);
+  this.waveHost=Object.create(input.objectiveServices);Object.defineProperty(this.waveHost,'createMonster',{get:()=>host.createMonster});Object.defineProperty(this.waveHost,'admitBirth',{value:host.admitBirth});Object.freeze(this.waveHost);
   this.host=Object.freeze(host);for(const key of ['input','host','waveHost','birthAdmission'])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
  livingSpawners(){return sceneLivingSpawners(this.host);}

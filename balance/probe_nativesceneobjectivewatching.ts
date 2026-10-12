@@ -1,3 +1,4 @@
+import {beforeNativeBirthLifetime} from './nativeBirthLifetimeFixture';
 import {beforeNativeSceneProgression} from './nativeSceneProgressionFixture';
 import {beforeNativeSceneQuest} from './nativeSceneQuestFixture';
 /** Objective watcher parity: native geometry/factories/holds/rewards execute;
@@ -51,7 +52,7 @@ const emit=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:99,module:9
 assert.equal(hash(JSON.stringify(archive)),nativeSceneObjectiveWatchingArchiveHash);
 const restored=beforeNativeSceneObjectiveWatching(beforeNativeSceneQuest(beforeNativeSceneProgression(read('src/engine/world.ts')))),sf=parse(restored),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
 assert.equal(hash(JSON.stringify(cl.members.map(m=>m.getText(sf).replaceAll('\r\n','\n')))),archive.worldHash,'complete pre-watcher World');
-const cs=parse(read('src/engine/nativeSceneObjectiveWatching.ts'));
+const cs=parse(beforeNativeBirthLifetime('src/engine/nativeSceneObjectiveWatching.ts',read('src/engine/nativeSceneObjectiveWatching.ts')));
 for(const row of archive.rows){const original=parse('class A{'+row.before+'}'),method=(original.statements[0] as ts.ClassDeclaration).members[0] as ts.MethodDeclaration;
  const current=cs.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===row.fn) as ts.FunctionDeclaration;
  const body=method.body!.getText(original).replace(row.prefix||'__no_prefix__','').replace(/\bthis\b/g,'host');
@@ -84,7 +85,7 @@ function fixture(lane:Lane){
  const owner=new NativeAreaSceneObjectiveWatching({authority,scene,geometry,population:i.population,objectives,state,birthState:i.state,environment:i.environment,physical:i.physical,completion:a.objectiveController,loot:a.lootController,graph:a.graph,coast:i.coast,theater:i.theater,adoption:i.adoption,objectiveServices:os,campaign,quests,movement});
  let driver:any=owner;
  if(lane!=='owner'){
-  const h:any={};const extracted=new Set(rows.map(r=>r.name));for(const key of Reflect.ownKeys(owner.host)){if(key==='createMonster'||key==='spawnWave'||typeof key==='string'&&extracted.has(key as any))continue;Object.defineProperty(h,key,Object.getOwnPropertyDescriptor(owner.host,key)!);}
+  const h:any={};const extracted=new Set(rows.map(r=>r.name));for(const key of Reflect.ownKeys(owner.host)){if(key==='admitBirth'||key==='createMonster'||key==='spawnWave'||typeof key==='string'&&extracted.has(key as any))continue;Object.defineProperty(h,key,Object.getOwnPropertyDescriptor(owner.host,key)!);}
   h.createMonster=i.population.createMonster.bind(i.population);h.spawnWave=()=>spawnSceneWave(os);
   h.nativeSceneObjectiveWatchingHost=lane==='world'?(World.prototype as any).nativeSceneObjectiveWatchingHost:()=>h;
   for(const row of rows)h[row.name]=lane==='original'?originals[row.name]:lane==='world'?(World.prototype as any)[row.name]:function(...args:any[]){return (core as any)[row.fn](h,...args);};driver=h;

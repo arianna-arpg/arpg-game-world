@@ -19,6 +19,36 @@ import type { NativeAreaBirthHost } from '../engine/nativeAreaBirth';
 import type { MagicPackVisual } from '../engine/magicPackMechanics';
 import { restoreSceneEnemies } from '../engine/nativeScenePopulation';
 
+const birthPromiseThen=Promise.prototype.then;
+const ignoreBirthRejection=()=>{};
+/** The public getter is selected once. A present then descriptor is conservatively
+ * asynchronous even when it hides the callable. This is not a universal Promise
+ * brand predicate: a prototype-stripped Promise with no then is unsupported.
+ * Intrinsic observation (including constructor/species lookup) runs only after
+ * the synchronous frame stack expires; hostile species are outside this contract. */
+export function nativeBirthAsyncResult(result:unknown):boolean {
+  const observe=(then:unknown)=>{
+    void Promise.resolve().then(()=>{
+      // The intrinsic handles actual Promises despite poisoned public then. Its
+      // successful invocation establishes the brand here, never during a frame.
+      try{Reflect.apply(birthPromiseThen,result,[ignoreBirthRejection,ignoreBirthRejection]);return;}catch{}
+      if(typeof then==='function')return Reflect.apply(then,result,[ignoreBirthRejection,ignoreBirthRejection]);
+    }).catch(ignoreBirthRejection);
+  };
+  // Remember ordinary descriptor presence before the public getter can remove
+  // itself or its prototype. Descriptor lookup does not invoke that getter.
+  let hasThen=false;
+  if(result!==null&&(typeof result==='object'||typeof result==='function')){
+    for(let at:object|null=result as object;at;at=Object.getPrototypeOf(at)){
+      if(Object.getOwnPropertyDescriptor(at,'then')){hasThen=true;break;}
+    }
+  }
+  let then:unknown;
+  try{then=result&&(result as {then?:unknown}).then;}catch(error){observe(undefined);throw error;}
+  if(typeof then==='function'||hasThen){observe(then);return true;}
+  return false;
+}
+
 export interface NativeSceneCensus {
   zone: ZoneDef;
   actors: Actor[];
@@ -65,6 +95,7 @@ export class NativeAreaScenePopulation {
   private readonly relay:NonNullable<Actor['statusRelay']>=(a,args)=>nativeRelayStatus(this.relayHost,this.input.sources.relay,a,args);
   readonly input:NativeScenePopulationInput;
   readonly #sharedActors:ReadonlySet<Actor>;
+  readonly #birthMintFrames:Set<Actor>[]=[];
   constructor(raw:NativeScenePopulationInput) {
     const bindings=Object.create(null);
     for(const key of ['scene','geometry','campaign','sources','populationSources','context','state']){
@@ -154,7 +185,23 @@ export class NativeAreaScenePopulation {
   get actors():Actor[]{return this.input.scene.actors;}
   set actors(v:Actor[]){this.input.scene.actors=v;}
   nextSquadId():number{return this.input.state.squadSequence++;}
-  createMonster(...args:Parameters<NativeAreaBirthHost['createMonster']>):Actor{return createNativeMonster(this.factory,this.input.sources.factory,...args);}
+  createMonster(...args:Parameters<NativeAreaBirthHost['createMonster']>):Actor{
+    const body=createNativeMonster(this.factory,this.input.sources.factory,...args);
+    this.#birthMintFrames.at(-1)?.add(body);return body;
+  }
+  /** Attest only actual factory returns made during this selected synchronous call.
+   * The private set cannot be supplied by a wrapper, a caller or another population. */
+  createMonsterForAdmission(fn:NativeAreaScenePopulation['createMonster'],args:Parameters<NativeAreaScenePopulation['createMonster']>):Actor {
+    const minted=new Set<Actor>();this.#birthMintFrames.push(minted);
+    try {
+      const body=Reflect.apply(fn,this,args);
+      if(!minted.has(body)){
+        nativeBirthAsyncResult(body);
+        throw Error('Native birth factory returned a foreign or reused body');
+      }
+      return body;
+    }finally{this.#birthMintFrames.pop();minted.clear();}
+  }
   hostileTo(a:Actor,b:Actor):boolean{return nativeHostileTo(this.hostility,this.input.sources.hostility,a,b);}
   enemiesOf(a:Actor):Actor[]{return nativeEnemiesOf(this.hostility,a);}
   promoteRarity(...args:Parameters<NativeMonsterPromotionHost['promoteRarity']>):void{promoteNativeRarity(this.promotion,this.input.sources.promotion,...args);}

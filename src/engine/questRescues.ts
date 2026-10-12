@@ -6,7 +6,7 @@ import { QUESTS } from '../quests/defs';
 /** Authored rescue objectives use ordinary NPC bodies, dialogue and account
  * receipts. A return reward, a random kill or a developer-spawned boss cannot
  * free a prisoner: only the owning quest's completed ground can do so. */
-export interface NativeQuestRescueHost extends Pick<World,"account"|"accountDirty"|"activeQuests"|"actors"|"clientActionHook"|"completedObjectives"|"completedQuests"|"createMonster"|"findFreeSpot"|"ledger"|"localSeat"|"markMetaDirty"|"metaProgressionActive"|"notice"|"player"|"questDefOf"|"scene"|"seats"|"withQuestHand"|"zone"> {}
+export interface NativeQuestRescueHost extends Pick<World,"account"|"accountDirty"|"activeQuests"|"actors"|"clientActionHook"|"completedObjectives"|"completedQuests"|"createMonster"|"findFreeSpot"|"ledger"|"localSeat"|"markMetaDirty"|"metaProgressionActive"|"notice"|"player"|"questDefOf"|"scene"|"seats"|"withQuestHand"|"zone"> {admitBirth?(body:World['player']):void;}
 export class QuestRescues {
   constructor(private readonly w: NativeQuestRescueHost) {}
 
@@ -80,7 +80,7 @@ export class QuestRescues {
       const boss = w.actors.find(a => a.defId === bossId);
       const anchor = boss?.pos ?? w.player.pos;
       npc.pos = w.findFreeSpot({ x: anchor.x + r.offset.x, y: anchor.y + r.offset.y }, npc.radius);
-      npc.tag = tag; npc.fromZoneGen = false; w.actors.push(npc);
+      npc.tag = tag; npc.fromZoneGen = false; w.actors.push(npc);w.admitBirth?.(npc);
     }
     npc.name = freed ? MONSTERS[r.npc].name : r.captiveName;
     npc.look = freed ? r.freeLook : r.captiveLook;
