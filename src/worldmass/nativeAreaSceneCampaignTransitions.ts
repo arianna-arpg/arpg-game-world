@@ -4,6 +4,8 @@ import type {Actor} from '../engine/actor';
 import * as transition from '../engine/nativeSceneCampaignTransitions';
 import * as lifecycle from '../engine/nativeSceneCampaignLifecycle';
 import * as death from '../engine/nativeSceneCampaignDeath';
+import * as conclusion from '../engine/nativeSceneRunConclusion';
+import {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
 import {isNativeAreaSceneCombat,type NativeAreaSceneCombat} from './nativeAreaSceneCombat';
 import {isNativeAreaSceneTransitionCoordinator,issueNativeTransitionOwnerBridge,type NativeTransitionOwnerBridge,type NativeAreaSceneTransitionCoordinator} from './nativeAreaSceneTransitionCoordinator';
 import {assertNativeCombatOwnerEntry,type NativeAreaCombatOwnerEntry,type NativeCombatSubjects} from './nativeAreaCombatOperation';
@@ -13,6 +15,9 @@ function field<O extends object,K extends keyof O>(owner:()=>O,key:K):Binding<O[
 function method<O extends object,K extends keyof O>(owner:()=>O,key:K):Binding<O[K]>{return{get:()=>{const receiver=owner(),fn=receiver[key];return((...args:unknown[])=>Reflect.apply(fn as Function,receiver,args)) as O[K];}};}
 function hostOf<H extends object>(bindings:{[K in keyof H]:Binding<H[K]>}):H{const host={} as H;for(const key of Object.keys(bindings) as (keyof H)[])Object.defineProperty(host,key,{enumerable:true,...bindings[key]});return Object.freeze(host);}
 function seatBody(seat:Seat):Actor{const d=Object.getOwnPropertyDescriptor(seat,'actor');if(!d||!Object.hasOwn(d,'value'))throw Error('Native transition needs ordinary controlled body');return d.value;}
+function conclusionData(object:object,key:PropertyKey):unknown {const d=Object.getOwnPropertyDescriptor(object,key);if(!d||!Object.hasOwn(d,'value'))throw Error('Native run conclusion needs ordinary own data: '+String(key));return d.value;}
+function conclusionRows<T>(value:unknown):T[] {if(!Array.isArray(value))throw Error('Native run conclusion needs the actual raw roster');const length=conclusionData(value,'length') as number,rows:T[]=[];for(let i=0;i<length;i++)rows.push(conclusionData(value,i) as T);return rows;}
+const selectConclusionActors=NativeAreaActorAuthority.prototype.selectActors,assertConclusionActors=NativeAreaActorAuthority.prototype.assertFinalSelections;
 export class NativeAreaSceneCampaignTransitions {
  readonly input:Readonly<Omit<NativeAreaSceneCampaignTransitionsInput,'entry'>>;readonly #entry:NativeAreaCombatOwnerEntry;readonly #bridge:NativeTransitionOwnerBridge;#removal:{seat:Seat;body:Actor}|null=null;
  constructor(raw:NativeAreaSceneCampaignTransitionsInput){
@@ -34,6 +39,38 @@ export class NativeAreaSceneCampaignTransitions {
   authority.assertFinalSelections(selected);authority.assertFinalPhysical(binding);if(scene.actors!==original||seatBody(seat)!==body)throw Error('Native seat selection changed during removal');
   const removed=original.filter(a=>!next.includes(a));scene.actors=next;this.#retire(combat,removed);this.input.coordinator.retireSeat(seat);
  }
+ /** Only run-wide conclusions use the whole actual roster. Area ticking retains its local cohort. */
+ #conclusionRoster():readonly Seat[]{
+  const {campaign,characterWriter,authority}=this.input.coordinator.input,raw=campaign.seats,seats=conclusionRows<Seat>(raw),bodies=seats.map(seatBody);
+  if(new Set(seats).size!==seats.length||new Set(bodies).size!==bodies.length)throw Error('Native run conclusion refuses repeated seats or bodies');
+  const selected=Reflect.apply(selectConclusionActors,authority,[bodies]);
+  if(conclusionData(characterWriter,'seats')!==raw)throw Error('Native run conclusion roster changed during selection');
+  const finalSeats=conclusionRows<Seat>(raw);if(finalSeats.length!==seats.length||finalSeats.some((seat,i)=>seat!==seats[i]||seatBody(seat)!==bodies[i]))throw Error('Native run conclusion seat changed during selection');
+  Reflect.apply(assertConclusionActors,authority,[selected]);return raw;
+ }
+ /** Preserve native live iteration, validating the actual yielded seat after iterator callbacks. */
+ #conclusionSeats():Iterable<Seat> {
+  const raw=this.#conclusionRoster(),self=this;
+  return { *[Symbol.iterator](){for(const seat of raw){const roster=self.#conclusionRoster();if(!Reflect.apply(Array.prototype.includes,roster,[seat]))throw Error('Native run conclusion iterator selected a foreign seat');yield seat;}} };
+ }
+ #conclusionEject(seat:Seat,reason:Parameters<World['seatEject']>[1]):void {
+  const {authority}=this.input.coordinator.input,body=seatBody(seat),home=Object.getOwnPropertyDescriptor(seat,'home');if(home&&!Object.hasOwn(home,'value'))throw Error('Native run conclusion needs ordinary home');
+  const selected=Reflect.apply(selectConclusionActors,authority,[[body]]),owner=selected[0].owner.combat.control,fn=owner.seatEject;
+  const seats=this.#conclusionRoster();if(!Reflect.apply(Array.prototype.includes,seats,[seat])||seatBody(seat)!==body||Object.getOwnPropertyDescriptor(seat,'home')?.value!==home?.value)throw Error('Native run conclusion ejection changed during selection');
+  Reflect.apply(assertConclusionActors,authority,[selected]);return Reflect.apply(fn,owner,[seat,reason]);
+ }
+ #conclusionHost():conclusion.NativeSceneRunConclusionHost {
+  const {coordinator}=this.input,{campaign,characterWriter:writer}=coordinator.input,area=()=>coordinator.current,combat=()=>area().combat;
+  return hostOf<conclusion.NativeSceneRunConclusionHost>({
+   account:field(()=>campaign,'account'),canRetireHere:{get:()=>()=>combat().queryMenu('canRetireHere')},
+   dismissMercenary:method(()=>combat().campaignTransitions,'dismissMercenary'),gameOver:field(()=>writer,'gameOver'),hiredMercs:field(()=>campaign,'hiredMercs'),
+   menuExitRequested:field(()=>writer,'menuExitRequested'),meta:field(()=>campaign,'meta'),modeDef:method(()=>combat().campaignTransitions,'modeDef'),onRunEnded:method(()=>combat().campaignTransitions,'onRunEnded'),pendingRespawn:field(()=>writer,'pendingRespawn'),
+   player:{get:()=>{const selected=area(),body=selected.assembly.input.scene.player;coordinator.input.authority.assertFinalPhysical(selected.binding,[body]);return body;}},
+   runEndReason:field(()=>writer,'runEndReason'),scene:field(()=>area().quests.input.state,'scene'),seatEject:{get:()=> (seat,reason)=>this.#conclusionEject(seat,reason)},seats:{get:()=>this.#conclusionSeats()},
+  });
+ }
+ endRun(...args:Parameters<World['endRun']>):ReturnType<World['endRun']>{return this.#run({permission:'physical'},()=>conclusion.sceneEndRun(this.#conclusionHost(),...args));}
+ retireCharacter(...args:Parameters<World['retireCharacter']>):ReturnType<World['retireCharacter']>{return this.#run({permission:'physical'},()=>conclusion.sceneRetireCharacter(this.#conclusionHost(),...args));}
  #transitionHost(fixed?:NativeAreaSceneCombat):transition.NativeSceneCampaignTransitionHost{
   const {coordinator}=this.input,{campaign,characterWriter:writer}=coordinator.input;
   const area=()=>fixed?coordinator.areaFor(fixed):coordinator.current,combat=()=>area().combat,scene=()=>area().assembly.input.scene,geometry=()=>area().assembly.input.geometry,roads=()=>coordinator.roadsFor(combat());

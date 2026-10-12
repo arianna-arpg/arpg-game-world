@@ -1,7 +1,7 @@
 import type {World} from '../engine/world';
 import type {NativeAreaSceneOngoing} from './nativeAreaSceneOngoing';
 import type {NativeAreaPublicationBinding} from './nativeAreaScenePublication';
-export const NATIVE_AREA_UI_ACTIONS=Object.freeze(["applyAction","chartCourse","declineVocationOffer","dismissMercenary","ensureOpenRealmRoots","harvestPauseRefused","markMetaDirty","recalcPlayer","requestMeta","sailTo","text","travelToWaypoint"] as const);
+export const NATIVE_AREA_UI_ACTIONS=Object.freeze(["endRun","retireCharacter","applyAction","chartCourse","declineVocationOffer","dismissMercenary","ensureOpenRealmRoots","harvestPauseRefused","markMetaDirty","recalcPlayer","requestMeta","sailTo","text","travelToWaypoint"] as const);
 export type NativeAreaUIAction=typeof NATIVE_AREA_UI_ACTIONS[number];
 export type NativeAreaUIActionMethods=Pick<World,NativeAreaUIAction>;
 const keys:ReadonlySet<string>=new Set(NATIVE_AREA_UI_ACTIONS);

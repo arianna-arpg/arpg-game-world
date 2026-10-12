@@ -1,5 +1,7 @@
 import type {World} from './world';
 export interface NativeSceneUIActionHost {
+ readonly endRun:World['endRun'];
+ readonly retireCharacter:World['retireCharacter'];
  readonly applyAction:World['applyAction'];
  readonly canSail:World['canSail'];
  readonly chartCourse:World['chartCourse'];

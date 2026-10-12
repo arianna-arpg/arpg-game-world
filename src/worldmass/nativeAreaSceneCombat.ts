@@ -554,6 +554,8 @@ export class NativeAreaSceneCombat {
  frameEffects(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameEffects(this.#host,dt));}
  frameLateBodies(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameLateBodies(this.#host,dt));}
  private bindings():Bindings {const {assembly,progression,campaign,quests,watching}=this.input;const bindings={
+  endRun:method(()=>this.campaignTransitions,'endRun'),
+  retireCharacter:method(()=>this.campaignTransitions,'retireCharacter'),
   chartCourse:method(()=>this.campaignFrame,"chartCourse"),
   sailTo:method(()=>this.campaignFrame,"sailTo"),
   declineVocationOffer:method(()=>this.input.questInteraction,"declineVocationOffer"),

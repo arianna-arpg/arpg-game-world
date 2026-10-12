@@ -1,3 +1,11 @@
+NativeSceneRunConclusion now publishes native endRun and retireCharacter
+through actual retained owners. Whole-run conclusions preserve the live campaign
+roster and route each shapeshift/mercenary to its physical owner. Fresh prologue
+and Mu exits, forfeit, and real wilderness retirement compose with startup/UI.
+Verify nativerunconclusion*, nativerunretirement, nativeclientconclusion*, source
+chains and all types. Party-death payout, hiring, Continue and browser activation
+remain separate integration requirements.
+
 NativeClientStart now composes 12 published UI actions with actual retained
 startup, town menus, inventory and physical travel. Preserve final local/explicit
 Seat identity and native command receivers, failures and area-owned request state.

@@ -64,6 +64,14 @@ export type ProbeRow = ProbeInvocation & (
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativeclientconclusioncomposition.ts', status: 'green', tier: 'fast', why: 'Actual retained run conclusion, live campaign roster and fresh scene/retirement composition.' },
+  { probe: 'probe_nativeclientconclusioncompositionsource.ts', status: 'green', tier: 'fast', why: 'Actual retained run conclusion, live campaign roster and fresh scene/retirement composition.' },
+  { probe: 'probe_nativerunconclusion.ts', status: 'green', tier: 'fast', why: 'Actual retained run conclusion, live campaign roster and fresh scene/retirement composition.' },
+  { probe: 'probe_nativerunconclusioniteratorreview.ts', status: 'green', tier: 'fast', why: 'Actual retained run conclusion, live campaign roster and fresh scene/retirement composition.' },
+  { probe: 'probe_nativerunconclusionpolicies.ts', status: 'green', tier: 'fast', why: 'Actual retained run conclusion, live campaign roster and fresh scene/retirement composition.' },
+  { probe: 'probe_nativerunconclusionroster.ts', status: 'green', tier: 'fast', why: 'Actual retained run conclusion, live campaign roster and fresh scene/retirement composition.' },
+  { probe: 'probe_nativerunconclusionsource.ts', status: 'green', tier: 'fast', why: 'Actual retained run conclusion, live campaign roster and fresh scene/retirement composition.' },
+  { probe: 'probe_nativerunretirement.ts', status: 'green', tier: 'fast', why: 'Actual retained run conclusion, live campaign roster and fresh scene/retirement composition.' },
   { probe: 'probe_nativeareauiactions.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: nativeareauiactions.' },
   { probe: 'probe_nativeareauiactionssource.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: nativeareauiactionssource.' },
   { probe: 'probe_nativeareauisailing.ts', status: 'green', tier: 'fast', why: 'Actual retained UI commands, physical travel, mercenary dismissal and exact startup/action composition: nativeareauisailing.' },

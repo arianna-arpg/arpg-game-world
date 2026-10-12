@@ -99,3 +99,9 @@ The retained fresh client now publishes the 12 reviewed UI command roots, includ
 Independent review verifies 2,574 inputs, 24 targets and 174 evidence files. Eleven focused courses plus all four type configurations pass, including genuine fresh A/B/A travel, generated sailing and the independent companion dismissal and callback courses. The two reviewed parents and prior assertion lanes are retained exactly. Run conclusions, hiring, cold retained Continue and browser activation remain required.
 
 The integrated UI/startup pass also clears all four type configurations, seven source/behavior/census checks, real remote companion dismissal and callback-travel refusal, and the 726-probe inventory.
+
+## Fresh client run conclusions
+
+The retained client now publishes the exact native endRun and retireCharacter bodies. These run-wide actions iterate the actual live campaign roster and route each controlled body to its physical owner. Ordinary frame and scene scopes remain local. A party departure during ejection is observed by the live iterator; a foreign yielded seat or changed body refuses before its conclusion writes, and native iterator closure and partial failures remain intact.
+
+Genuine fresh prologue and Mu exits request the menu without banking a death. Fresh shapeshift forfeiture returns the original body, and actual waypoint travel to a generated wilderness outpost records one retired build. Independent review replays 12 complete behavior/source reports identically and passes all four type configurations. Whole-party death/payout, hiring, cold Continue and browser activation remain separate integration work.
