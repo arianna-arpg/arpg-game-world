@@ -76,8 +76,10 @@ const changed = new ProcessionPlanWarmQueue(null); changed.offer([input]); chang
 assert.equal(changed.takeReady()!.preparation.inputHash, processionPlanIdentity(variants[1]).inputHash); assert.ok(changed.stats.discarded > 0); changed.dispose();
 console.log('PASS cooperative cancellation on source/reservation change and disposal');
 
-const worker = new Worker(`const {parentPort,workerData}=require('node:worker_threads');require('tsx/cjs');globalThis.self={postMessage:value=>parentPort.postMessage(value)};require(workerData.file);Math.random=()=>{throw Error('Worker consumed ambient RNG')};parentPort.on('message',data=>self.onmessage({data}));`,
-  { eval: true, workerData: { file: path.resolve('src/worldmass/processionPlan.worker.ts') } });
+// Browser worker self is the global object, including built-in constructors.
+// Compile the real entry cold so the transport shim cannot hide behind tsx cache.
+const worker = new Worker(`const {parentPort,workerData}=require('node:worker_threads');require('tsx/cjs');globalThis.self=globalThis;globalThis.postMessage=value=>parentPort.postMessage(value);require(workerData.file);Math.random=()=>{throw Error('Worker consumed ambient RNG')};parentPort.on('message',data=>self.onmessage({data}));`,
+  { eval: true, env: { ...process.env, TSX_DISABLE_CACHE: '1' }, workerData: { file: path.resolve('src/worldmass/processionPlan.worker.ts') } });
 try {
   const response = new Promise<ProcessionPlanReply>((resolve, reject) => { worker.once('message', resolve); worker.once('error', reject); });
   worker.postMessage(job()); const result = await response; assert.ok(result.preparation, result.error ?? 'missing real worker result');

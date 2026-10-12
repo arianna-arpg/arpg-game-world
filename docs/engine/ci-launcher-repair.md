@@ -53,6 +53,12 @@ visuals, or content admission. No unfinished seamless content is merged into Mai
   input refusals and saved-byte round trips remain. A one-millionth-unit radius
   change still fails the fingerprint; the corrected probe also runs under Node 22.
 
+- The real procession-worker fixture now aliases self to the worker global, as
+  browsers do. Its previous transport-only object hid Int8Array from tsx's cold
+  dynamic-import parser after loading preparation introduced a new import.
+  The fixture disables tsx's transform cache and retains exact worker/kernel
+  output equality, bounded queues, cancellation and ambient-RNG refusal.
+
 ## Verification
 
 Main's game/launcher/simulation type checks and all 32 launcher tests pass.
