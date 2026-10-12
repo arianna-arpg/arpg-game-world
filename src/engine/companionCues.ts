@@ -45,8 +45,10 @@ export function companionCueState(a: Actor, w: Pick<World, 'actorById'>): Compan
   }) };
   const links: CompanionCueLink[] = [], marks: CompanionCueState['marks'] = [];
   const spec = companionCueSpec(a);
-  if (spec !== false && a.owner && !a.construct && companionCueVisible(a.owner))
-    links.push({ kind: 'owner', to: point(a.owner), ...companionMaterial(spec, a.sourceSkillId?.startsWith('__dominate:') ? 'thrall' : 'bond') });
+  const keeper = a.companionReturnTo === undefined ? undefined : w.actorById(a.companionReturnTo);
+  if (spec !== false && a.owner && !a.construct && !a.downed && !a.isStunned()
+    && keeper && !keeper.downed && companionCueVisible(keeper))
+    links.push({ kind: 'owner', to: point(keeper), ...companionMaterial(spec, a.sourceSkillId?.startsWith('__dominate:') ? 'thrall' : 'bond') });
   if (!a.downed && a.bond) {
     const b = w.actorById(a.bond.targetId);
     if (b && companionCueVisible(b) && b.buffs.has(a.bond.buffId)) links.push({ kind: 'mend', to: point(b), ...companionMaterial(undefined, 'mend') });

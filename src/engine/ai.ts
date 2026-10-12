@@ -522,7 +522,10 @@ registerCommandKind({
     throngHeelOffset(actor, world.time, THRONG_HEEL_OFF);
     const goal = { x: keeper.pos.x + THRONG_HEEL_OFF.x,
       y: keeper.pos.y + THRONG_HEEL_OFF.y, tier: keeper.tier };
-    if (dist(actor.pos, goal) > 24) moveToward(actor, world, goal, dt);
+    if (dist(actor.pos, goal) > 24) {
+      actor.companionReturnTo = keeper.id;
+      moveToward(actor, world, goal, dt);
+    }
     return 'consumed';
   },
 });
@@ -551,6 +554,7 @@ const DEFAULT_BRAIN: BrainDef = {};
 // === THE PIPELINE ==============================================================
 
 export function updateAI(actor: Actor, world: World, dt: number): void {
+  actor.companionReturnTo = undefined; // no stale return line through any early exit
   actor.feedingMeal = undefined; // feedingCue posture ends even on an early AI refusal.
   if (actor.summonReform) return;
   ensureMovementTether(actor);
@@ -952,6 +956,8 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       // this branch only runs with NO target, and an armed bomber fuse
       // early-returns long before the heel.
       if (actor.isMinion() && updateRecall(actor, world, dt)) return;
+      // Small throng orbit corrections are idle formation, not a leash return.
+      if (!isThrongBody(actor) || dist(actor.pos, heelGoal) > 90) actor.companionReturnTo = actor.owner!.id;
       actor.facing = angleTo(actor.pos, heelGoal);
       moveToward(actor, world, heelGoal, dt);
     }

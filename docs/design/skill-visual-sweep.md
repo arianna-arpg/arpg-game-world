@@ -101,3 +101,10 @@ from distinct pixel signatures.
 
 Before transferring to seamless, re-run integration checks against its current
 head. Do not merge the entire content-divergent branch to carry these visuals.
+
+## Seamless preparation and return follow-up
+
+The [seamless in-game sweep](seamless-visual-sweep.md) records the 954-skill
+coverage census, 22 real cast courses, player-only preparation families, the
+saved Wardrobe switch and return-only summon links. It is a focused follow-up
+on a separate seamless-based branch; ongoing native-area work stays isolated.

@@ -160,6 +160,7 @@ import { reactiveCueOf, wardCueActive } from '../engine/combatReadability';
 import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { drawReactiveCue, drawGaspSpark, drawWardBody, drawWardLinks, drawWardBar } from './vis/combatReadabilityLayer';
 import { drawCastingCue, drawFocusFrame } from './vis/castingCueLayer';
+import { drawPlayerCastPreparation } from './vis/skillCastPreparation';
 import { castingCompletion } from '../engine/castingCues';
 import { chestReadout, drawChestReadout } from './vis/chestReadout';
 import { castMovementHeld, drawCastName, drawCastSlot } from './vis/castReadout';
@@ -6093,7 +6094,10 @@ export class Renderer {
       drawArmedCues(ctx, a.radius, armedCues, world.time); ctx.restore();
     }
     drawParryReady(ctx, a);
-    drawCastingCue(ctx, a);
+    const ownCastPreparation = !!a.casting && (a === world.localSeat.actor || world.seats.some(s => s.couch && s.actor === a))
+      && world.account.cosmetics.loadout.castingEffects !== false
+      && drawPlayerCastPreparation(ctx, a, cosmeticSkillPaint(world, a, a.casting?.inst.def.id ?? '').color ?? a.casting?.inst.def.color ?? a.color);
+    if (!ownCastPreparation) drawCastingCue(ctx, a);
     drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
     if (!a.dead) drawPresenceBadge(ctx, a.presenceBadge, a.radius);
     if (comboCueGround) {

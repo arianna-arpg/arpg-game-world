@@ -39,6 +39,8 @@ export interface CosmeticLoadout {
   /** Explicit null restores native visuals for this skill instead of inheriting. */
   skills: Record<string, Partial<Record<'skillSkin' | 'skillRecolor', string | null>>>;
   customColors?: Record<string, string>;
+  /** Local player preparation art; functional cast bars remain visible. Defaults on. */
+  castingEffects?: boolean;
 }
 export interface CosmeticGrant { id: string; source: string; reference: string }
 export interface CosmeticApplication extends CosmeticGrant { skill: string }

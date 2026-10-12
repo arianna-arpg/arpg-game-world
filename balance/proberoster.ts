@@ -242,6 +242,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_memoryunlocks.ts', status: 'green', tier: 'fast', why: 'Repeatable memory discovery, secondary access, payment, exhaustion, persistence, legendary mint and host gate' },
   { probe: 'probe_uniqueaccords.ts', status: 'green', tier: 'fast', why: 'Unique grant census, item-owned sockets, live companion investment, Cinder Conductor fuel, Breach Bell cries and Unspent Reply casting costs' },
   { probe: 'probe_firinglane.ts', status: 'green', tier: 'fast', why: 'native ranged bodies reopen visible blocked firing lanes at 30/60/120Hz; free, mixed, banned and phasing skills preserve their native policy' },
+  { probe: 'probe_playercastvisuals.ts', status: 'green', tier: 'fast', why: 'Player preparation families follow true clocks, interruption and birth; return-only summon links, own co-op casts, saved wardrobe toggle and tint-independent geometry.' },
   { probe: 'probe_castingcues.ts', status: 'green', tier: 'fast', why: 'GT-019 real interruption/fizzle, held completion geometry, focus recovery, brim crossing, generic opt-out and co-op parity' },
   { probe: 'probe_worldmass_roadside.ts', status: 'green', tier: 'slow', why: 'Seeded native route encounters, bounded separation, immutable plan, wounds, deaths, Continue and descriptor/schema compatibility' },
   { probe: 'probe_buffreadout.ts', status: 'green', tier: 'fast', why: 'Native temporary modifier quantities, labels, clocks, conditional scope and one-shot expiry' },

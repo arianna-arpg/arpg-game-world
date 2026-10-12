@@ -137,6 +137,7 @@ function heel(actor: Actor, world: World, dt: number): 'consumed' {
   const owner = actor.owner;
   if (owner && !owner.dead && dist(actor.pos, owner.pos) > COMPANION_STANCE_CFG.heelDist) {
     if (aiHeelRecall(actor, world, dt)) return 'consumed';
+    actor.companionReturnTo = owner.id;
     actor.facing = angleTo(actor.pos, owner.pos);
     aiMoveToward(actor, world, { x: owner.pos.x, y: owner.pos.y, tier: owner.tier }, dt);
   } else actor.lastProgress = undefined; // standing at heel is not being stuck
