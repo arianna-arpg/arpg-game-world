@@ -3,6 +3,7 @@ import type { MassPage, MassTerrain } from './contracts';
 import { MassGenerator } from './generator';
 import { MassState } from './state';
 import { canonical } from './random';
+import { ownedSampleEntry } from './ownedTerrain';
 
 interface Job { cell: MassCell; key: string; samples: MassTerrain[]; revision: number }
 export interface MassStreamConfig { maxPages: number; maxSamples: number }
@@ -81,7 +82,7 @@ export class MassStream {
     const patch = this.state.patchAt(p);
     const result: MassTerrain = patch ? Object.freeze({ ...base, region: patch.region, color: patch.color,
       source: Object.freeze({ ...base.source, rule: 'terrain-change', source: patch.cause }) }) : base;
-    this.samples.delete(key); this.samples.set(key, Object.freeze({ terrain: result, revision }));
+    this.samples.delete(key); this.samples.set(key, ownedSampleEntry(result, revision));
     if (this.samples.size > this.focusSampleBudget) this.samples.delete(this.samples.keys().next().value!);
     return this.overlay?.sample(at,result) ?? result;
   }

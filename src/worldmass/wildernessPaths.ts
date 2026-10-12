@@ -3,7 +3,7 @@ import { address, floorDiv, localOffset, moveAddress, type MassAddress } from '.
 import type { MassPlace, MassTerrain } from './contracts';
 import type { MassGenerator } from './generator';
 import { segmentDistance } from './journey';
-import { canonical, freezeData, massRandom } from './random';
+import { canonical, canonicalStringTriple, freezeData, massRandom } from './random';
 import { siteOffset } from './sites';
 
 export interface WildernessPathsSpec {
@@ -36,7 +36,7 @@ export class WildernessPaths {
   at(at:MassAddress):readonly WildernessPath[]{
     const span=this.generator.spec.addressSpan,n=BigInt(this.spec.district/span);
     const cx=floorDiv(BigInt(at.cx),n)*n,cy=floorDiv(BigInt(at.cy),n)*n;
-    const origin=address(at.dimension,cx.toString(),cy.toString(),0,0,span),key=canonical([at.dimension,cx.toString(),cy.toString()]);
+    const origin=address(at.dimension,cx.toString(),cy.toString(),0,0,span),key=canonicalStringTriple(at.dimension,cx.toString(),cy.toString());
     const hit=this.cache.get(key);if(hit){this.cache.delete(key);this.cache.set(key,hit);return hit;}
     // At the signed-address rim the incomplete district intentionally has no links.
     let result:readonly WildernessPath[]=[];

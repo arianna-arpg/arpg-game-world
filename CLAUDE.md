@@ -4038,6 +4038,16 @@ we verify changes.
   conservative fallback, full raster/RNG output and exact getter/error order. Serial soak
   comparisons can use --window-after-host for a common minimum host-age warm-up;
   record warm-up stalls and keep all load gates unchanged.
+  ShardPerformance reuses bounded string/seed hashes and shares oversized digest
+  traversal (worldmass_hashwork). Fixed terrain constructors (ownedTerrain,
+  worldmass_ownedterrain) allow direct own-value inspection while retaining
+  dependency recursion budgets, numeric references and unknown Proxy fallback.
+  Keep field records and painted/native/patch branches on their original paths;
+  verify actual sample-wrapper attribution plus full terrain/RNG and live courses.
+  ShardPerformance uses exact dense-string coordinate triples in five district
+  caches (worldmass_coordinatekeys); preserve escaping, signed coordinates and
+  original fallback/callback order. Compare incremental cold work separately
+  from the whole-candidate live course; unchanged density is mandatory.
   Preserve
   exact saved state, full signed addresses, every player's population and the
   unchanged load gates; verify the affected worldmass/native probes and shard

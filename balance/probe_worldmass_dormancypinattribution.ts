@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { massDormancyPins } from '../src/worldmass/dormancy';
+import { isOwnedTerrainRecord } from '../src/worldmass/ownedTerrain';
 import { Actor } from '../src/engine/actor';
 import type { World } from '../src/engine/world';
 import type { MassTerrain } from '../src/worldmass/contracts';
@@ -41,9 +42,9 @@ try {
   const resources=bodies.map(a=>({actor:a,life:a.life,mana:a.mana,es:a.es}));
   const unknownController={nested:{targetId:expected[0].id},direct:expected[1],weak:new WeakMap<Actor,boolean>([[expected[2],true]])};
   Reflect.set(w,'probeUnknownNativeController',unknownController);
-  const entries=Object.entries,descriptors=Object.getOwnPropertyDescriptors;
+  const entries=Object.entries,descriptors=Object.getOwnPropertyDescriptors,keys=Object.keys;
   const profile=(excluded:ReadonlySet<object>)=>{
-    let visited=0,walkVisits=0,streamVisits=0,generatorVisits=0,sampleEntryVisits=0,sampleDescriptorReads=0;
+    let visited=0,walkVisits=0,streamVisits=0,generatorVisits=0,sampleEntryVisits=0,sampleDescriptorReads=0,ownedRecordReads=0,sampleOwnedReads=0;
     const sampleWrappers=new Set((m.stream as unknown as {samples:Map<string,object>}).samples.values());
     const visitCounts=new Map<string,number>(),descriptorDictionaries=new WeakSet<object>();
     // Count each source inspection once, independently of whether a scanner
@@ -54,12 +55,20 @@ try {
       if(sampleWrappers.has(value))sampleDescriptorReads++;
       const result=descriptors(value);descriptorDictionaries.add(result);return result;
     }) as typeof Object.getOwnPropertyDescriptors;
+    Object.keys=((value:object)=>{
+      if(isOwnedTerrainRecord(value)){
+        visited++;ownedRecordReads++;
+        if(sampleWrappers.has(value))sampleOwnedReads++;
+        visitCounts.set('owned record inspection',(visitCounts.get('owned record inspection')??0)+1);
+      }
+      return keys(value);
+    }) as typeof Object.keys;
     Object.entries=((value:object)=>{if(descriptorDictionaries.has(value))return entries(value);
       visited++;if(sampleWrappers.has(value))sampleEntryVisits++;if(value===walk)walkVisits++;if(value===m.stream)streamVisits++;if(value===m.generator)generatorVisits++;
       const name=value?.constructor?.name??'null';visitCounts.set(name,(visitCounts.get(name)??0)+1);return entries(value);}) as typeof Object.entries;
     let pins:Set<Actor>;const before=performance.now();
-    try{pins=massDormancyPins(w,owned,excluded);}finally{Object.entries=entries;Object.getOwnPropertyDescriptors=descriptors;}
-    return {pins,diagnosticMs:performance.now()-before,visited,walkVisits,streamVisits,generatorVisits,sampleEntryVisits,sampleDescriptorReads,topKinds:[...visitCounts].sort((a,b)=>b[1]-a[1]).slice(0,10)};
+    try{pins=massDormancyPins(w,owned,excluded);}finally{Object.entries=entries;Object.getOwnPropertyDescriptors=descriptors;Object.keys=keys;}
+    return {pins,diagnosticMs:performance.now()-before,visited,walkVisits,streamVisits,generatorVisits,sampleEntryVisits,sampleDescriptorReads,ownedRecordReads,sampleOwnedReads,topKinds:[...visitCounts].sort((a,b)=>b[1]-a[1]).slice(0,10)};
   };
   const all=profile(new Set()),warm=profile(new Set()),withoutWalk=profile(new Set([walk]));
   const ids=(pins:ReadonlySet<Actor>)=>[...pins].map(a=>a.id).sort((a,b)=>a-b);
@@ -72,7 +81,7 @@ try {
   assert.ok(expected.every(a=>all.pins.has(a)&&withoutWalk.pins.has(a)),'unknown nested numeric/direct/weak owners must retain dependencies');
   assert.equal(all.walkVisits,1);assert.equal(all.streamVisits,1);assert.equal(all.generatorVisits,1);
   assert.equal(withoutWalk.walkVisits,0);assert.equal(withoutWalk.streamVisits,0);assert.equal(withoutWalk.generatorVisits,0);
-  assert.ok(all.visited>withoutWalk.visited+10000,'the actual warm terrain graph must account for substantial extra reflective traversal');
+  assert.ok(all.visited>withoutWalk.visited+10000,'the actual terrain graph must account for substantial extra source inspection');
   assert.deepEqual(w.actors,liveBefore);assert.ok(resources.every(r=>r.actor.life===r.life&&r.actor.mana===r.mana&&r.actor.es===r.es));
   assert.equal(w.massRuntime,m);assert.equal(w.walk,m.walk);
   console.log('PASS actual warmed native-world pin traversal includes derived MassWalk/stream/generator caches; unknown controllers and exact actor resources stay intact');
@@ -114,14 +123,18 @@ try {
   const samples=(m.stream as unknown as {samples:Map<string,Readonly<{terrain:MassTerrain;revision:number}>>}).samples;
   const wrappers=[...samples.values()];assert.equal(wrappers.length,32768);
   assert.ok(wrappers.every(Object.isFrozen),'all actual production sample entries must be frozen');
+  assert.ok(wrappers.every(isOwnedTerrainRecord),'all actual sample entries must come from the private fixed-shape constructor');
   const wrapperCold=profile(new Set()),wrapperWarm=profile(new Set());
   assert.deepEqual(ids(wrapperCold.pins),ids(referencePins(w,owned)));
   assert.deepEqual(ids(wrapperWarm.pins),ids(wrapperCold.pins));
   // Count the actual immutable entries, independently of unrelated native
   // scenery/controller growth elsewhere in this real-world object graph.
-  assert.ok(all.sampleDescriptorReads>0,'cold scan must actually certify production sample entries');
+  assert.ok(all.sampleOwnedReads>0,'cold scan must actually inspect owned production sample entries');
+  assert.ok(all.ownedRecordReads>=all.sampleOwnedReads,'sample ownership inspections belong to the counted direct path');
+  assert.equal(all.sampleDescriptorReads,0,'owned samples use direct own reads, preserving recursive dependency certification');
   assert.equal(wrapperWarm.sampleEntryVisits,0,'warm scan must not enumerate any immutable sample wrapper');
   assert.equal(wrapperWarm.sampleDescriptorReads,0,'warm scan must reuse certificates without reinspecting sample descriptors');
+  assert.equal(wrapperWarm.sampleOwnedReads,0,'warm scan must reuse certificates without reinspecting owned sample keys');
   const at={...m.origin,x:w.player.pos.x,y:w.player.pos.y},stateBefore=m.state.snapshot();
   m.stream.sample(at);const key=m.state.key(at),old=samples.get(key)!;assert.ok(Object.isFrozen(old));
   const oldRevision=old.revision,oldTerrain=old.terrain;m.stream.sample(at);assert.equal(samples.get(key),old);

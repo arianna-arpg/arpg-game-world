@@ -62,7 +62,10 @@ export type ProbeRow =
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_worldmass_canonicalwork.ts', status: 'green', tier: 'fast', why: 'Canonical serialization preserves archived bytes, iterators, ordered getter reads, validation, cycles, memoization and bundled output.' },
+  { probe: 'probe_worldmass_coordinatekeys.ts', status: 'green', tier: 'fast', why: 'Primitive district keys preserve archived canonical bytes, argument effects, exotic fallback and actual cache lookup/eviction behavior.' },
+  { probe: 'probe_worldmass_hashwork.ts', status: 'green', tier: 'fast', why: 'Bounded hashes and oversized digest traversal preserve Unicode bytes, coercion effects, exotic-input reads, random seeds and retention limits.' },
   { probe: 'probe_worldmass_dormancywork.ts', status: 'green', tier: 'fast', why: 'Descriptor traversal preserves archived ordered actor dependencies, late numeric owners, proxy traps, accessors, cycles and conservative fallback.' },
+  { probe: 'probe_worldmass_ownedterrain.ts', status: 'green', tier: 'fast', why: 'Fixed terrain records preserve exact archived dependency reads, pins, recursion limits, unknown Proxy fallback and mutable child ownership.' },
   { probe: 'probe_worldmass_latticework.ts', status: 'green', tier: 'fast', why: 'Closure-free lattice-axis evaluation preserves archived full signed coordinates, exact arithmetic, getter order, validation and bundled output.' },
   { probe: 'probe_worldmass_grammarwork.ts', status: 'green', tier: 'fast', why: 'Skipping terminal dry-floor samples preserves archived complete terrain rasters, children and RNG tapes across historical and current court families.' },
   { probe: 'probe_worldmass_surfaces.ts', status: 'green', tier: 'fast', why: 'Surface-only terrain and demanded candidate fields preserve archived terrain and complete encounters across inhibition, numeric edge cases, signed addresses, historical schemas and cache eviction.' },

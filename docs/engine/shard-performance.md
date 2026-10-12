@@ -1709,3 +1709,557 @@ archiving the temporary control checkout. Candidate receipts remain alongside
 the working checkout. Three independent critics found no remaining semantic
 blocker; their live-results audit explicitly retains the unresolved clustered
 latency concern. The ownership gate attributes all 19 staged hunks to this pass.
+
+## Seventh pass: repeated identity work and grouped-play reproduction
+
+The comparison baseline is `d4b96ef0`. A separate historical control at
+`a6f62a2d` investigates the preceding pass's grouped regression. These are
+different comparisons and must not be combined into one speed claim.
+
+The count-only cold replay reproduces all four uninstrumented state/content
+digests. Four-focus cold work performs 388,436 hashes over 9,138 distinct
+text/coerced-seed pairs; six-focus cold work performs 114,704 over 2,148 pairs.
+These are opportunity counts, not observed cache-hit rates. The same four-focus
+course queries the candidate map 256,990 times, including 253,998 hits. Its
+8,401 base-terrain source serializations produce only 127 distinct strings.
+The bundled diagnostic changes execution cost; its durations are not evidence.
+Receipts: `.claude/ownership.perf7-identity-counts.local.json` and
+`.claude/ownership.perf7-identity-course.identity-counts.timing.local.json`.
+
+A separate unchanged populated dependency fixture has 102 actors, 75 owned
+native identities and 32,768 terrain samples. The cold scanner constructs
+169,788 descriptor dictionaries, reads 746,241 descriptor properties, and
+allocates 42,714 active-set/budget pairs. Almost all certificate reflection is
+reached through `world.walk`. Warm repeated scans perform only one descriptor
+inspection but still visit 64,842 Map entries and 153,055 values. A blanket
+terrain exclusion would therefore be both unsafe and an inaccurate account of
+the remaining warm cost. Exact pins, actor/sample identities and getter/Proxy
+tapes match the pristine scanner. Receipt:
+`.claude/ownership.perf7-dependency-counts.local.json`.
+
+The candidate memoizes hash results by primitive string and freshly coerced
+uint32 seed. It retains at most 4,096 pairs and 1,048,576 logical UTF-16 units;
+inputs longer than 65,536 units bypass retention. These are logical retention
+limits, not an exact heap-byte promise. FIFO eviction only repeats arithmetic.
+Non-string inputs retain the original property reads; coercion runs even on a
+hit. Standard JavaScript arithmetic/string intrinsics are assumed stable, as
+in production generation. Arbitrary global intrinsic replacement is not part
+of this memo's equivalence claim. No source object identities are shared.
+
+A scan-local context reuse trial passed 45 exact comparisons, including
+reentrant scans, error recovery and work/depth boundaries. It reduced a 512-root
+fixture from 512 Set/budget pairs to one, with identical reflection. However,
+four alternating populated-world comparisons made cold scans slower in three
+pairs: three-scan totals 1141/1238, 1219/1275, 1156/1038 and 971/1074 ms
+(baseline/trial). Warm comparisons were mixed. The trial is rejected and the
+production scanner remains unchanged. Smaller allocation counts alone are not
+performance evidence. Receipt: `.claude/ownership.perf7-dependencycontext.local.log`.
+
+The actual bounded memo's count replay has 378,790 hits in 388,436 four-focus
+calls (97.52%), and 112,556 in 114,704 six-focus calls (98.13%). Four/six
+oversized-input bypass counts are four/two. The unchanged large-input work
+matters: hashed UTF-16 units fall from 17,185,144 to 9,808,869 and from
+9,731,785 to 7,461,062, much less than the call-count reduction. Resident
+replay has 169/169 hits. All count balances, actual private Map/ring entries,
+retained units, original content digests and runtime query counts pass. Receipt:
+`.claude/ownership.perf7-hash-counts.hash-counts.local.json`.
+
+The separate unbundled cold proof also matches all nine digests, including
+terrain/place/reservation outputs, captured object values and complete random
+draw/cursor tapes. Both fresh processes execute the original complete descriptor,
+population budgets and focus course. Its instrumentation excludes it from
+timing evidence: `.claude/ownership.perf7-cold-proof-series.local.json`.
+
+The first hash-only timing series uses fresh processes in C/A/A/C/C/A order.
+Each process checks its source fingerprints, the same four state/content
+digests and every measured query count. The complete course remains equal.
+
+| Hash-only pair | Four-focus cold, control→candidate | Six-focus cold | Six-focus resident |
+| --- | --- | --- | --- |
+| 1 | 2469.59→2744.04 ms | 1561.19→1339.46 ms | 186.59→147.94 ms |
+| 2 | 1916.07→1903.01 ms | 1288.73→1308.43 ms | 165.16→135.75 ms |
+| 3 | 2439.51→1890.16 ms | 1374.43→1322.34 ms | 191.41→191.65 ms |
+
+Both cold phases improve in two pairs, but this is mixed evidence. Four-focus
+paired changes are +11.1%, -0.7% and -22.5%; its worst recorded candidate is
+slower than the worst control. Comparing separately sorted medians would
+overstate the consistency. Six-focus changes are -14.2%, +1.5% and -3.8%.
+The high memo hit rate alone does not establish a reliable worst-stall win.
+Receipt: `.claude/ownership.perf7-cold-timing-series.local.json`.
+
+### Controlled historical grouped comparison
+
+The independent resident course compares `a6f62a2d` with `d4b96ef0`, before
+this pass's hash changes. It runs six ordinary seats through 3,600 warm-up
+steps and 600 measured steps at fixed 1/60 simulation time, with deterministic
+walk/strike inputs and no invulnerability or healing. All six remain standing.
+The separate proof matches all 4,200 inputs, 7,698 global random draws,
+169,546 stream draws, 19,568 stream initializations/cursors, 600 measured
+per-tick state/query tapes and three complete captured boundaries. Timing
+processes omit those detailed tapes and check inputs, aggregate query counts,
+boundaries and source/harness fingerprints against that proof instead.
+
+| Historical pair | Whole-step p95, a6→d4 | Whole-step p99 | Whole-step total over 600 steps |
+| --- | --- | --- | --- |
+| 1 | 38.80→35.21 ms | 74.54→62.45 ms | 8958→7931 ms |
+| 2 | 40.37→27.88 ms | 84.01→53.13 ms | 10117→6305 ms |
+| 3 | 30.28→44.52 ms | 58.07→89.80 ms | 7167→10446 ms |
+
+All six C/A/A/C/C/A timing runs pass captured-work equality. Results remain
+mixed: two pairs improve and one regresses substantially. In the third pair,
+input, AI and World phase sums rise together by 43.77%, 50.26% and 42.65%;
+World's share falls from 56.82% to 55.62%. This does not isolate the changed
+World helpers as the cause or exonerate them. Run medians improve, but neither
+a consistent regression nor a broad sustained-latency win is established.
+
+This simulation fixture disables expedition packages, uses the sim's count
+governor, has six ordinary seats, and omits sockets and async worker adoption.
+The real host retains its keeper, six remote seats, near-scale/party/vessel
+policies, wall-paced snapshot-driven bot inputs, input merging, snapshots and
+bounded catch-up/drop behavior. Matching this fixture is not proof of equal
+live-host work. The live grouped concern remains open. Analysis:
+`.claude/ownership.perf7-resident-analysis.result.local.json` in the d4 control;
+preserved source-specific receipts are indexed under
+`.claude/ownership.performance7-resident-evidence/manifest.sha256.json`.
+
+An additional actual-host historical diagnostic runs a6/d4/a6 serially with six
+grouped clients, the original drop/resume course and a window starting after
+60 host seconds. A bounded ledger observes every World, input application,
+nested runtime work, wire work, terrain query counts and GC overlap. All three
+ledgers are complete and agree with the ordinary soak tick census; unchanged
+sources/harnesses and fresh receipts are verified. Instrumentation overhead is
+present, so this is attribution evidence rather than an unprofiled comparison.
+
+| Historical live window | a6 | d4 | a6 repeat |
+| --- | --- | --- | --- |
+| Tick p95 | 25.70 ms | 20.58 ms | 31.51 ms |
+| Tick p99 | 94.22 ms | 65.00 ms | 66.89 ms |
+| Maximum tick | 141.72 ms | 104.21 ms | 186.45 ms |
+| Dropped ticks | 3.44% | 0.25% | 3.30% |
+| Warm-up maximum | 484.30 ms | 623.82 ms | 586.25 ms |
+
+All three fail only the p95 gate; errors, faults, reconnect/resume and party
+checks pass. No death-driven bot rejoins occur. The earlier grouped-window
+regression is not consistently reproduced, but d4's warm-up maximum is worse
+than both controls. Baseline repeat drift alone raises p95 22.6% and maximum
+31.6%, while reducing p99 29.0%. This does not establish a causal win.
+
+Live work differs materially. Window terrain generations are 1,192/1,031/5,280;
+mean actor counts are 69.11/70.96/75.27. The second a6 reaches 86 actors and
+1,364 doodads, versus 67/70 actors and 1,019 doodads in the other runs. Per-seat
+host input rates are 36.28/47.33/42.13 Hz. Zero recorded `moves` arrays are not
+zero movement: these bots use legacy dx/dy inputs, which this ledger does not
+record. An unrelated agent receipt search took approximately 11.4 seconds,
+followed by a 2.3-second extraction during the series; the UTC interval/lane is
+unknown. Preserve this possible contention rather than assigning false bounds.
+
+World/runtime dominates each largest window tick: total/World/runtime is
+141.71/137.47/125.59, 104.20/96.24/88.37 and 186.44/173.97/162.06 ms. Another
+second-a6 tick spends 172.83 of 178.78 ms in the unwrapped host remainder and
+performs 1,534 terrain generations. That remainder contains AI, other host
+work and observation overhead; it cannot be called AI time alone. Wire work
+does not dominate these maxima. GC-untouched p95 is still 19.96/14.63/23.16 ms;
+GC contributes but is not a complete explanation. Nested runtime GC overlap
+was not recorded and is explicitly unknown, not zero.
+
+Raw series and analysis v2 are
+`.claude/ownership.perf7-resident-live-series.2026-10-12T01-22-38-272Z.local.json`
+and the adjacent `.analysis-v2.local.json`. This evidence keeps the focus on
+authoritative CPU work and establishes why live before/after durations alone
+cannot isolate intrinsic grouped-play code cost.
+All raw historical live receipts and observer sources are also preserved under
+`.claude/ownership.performance7-resident-live-evidence/`; its manifest verifies
+13 files and 71,581,162 bytes against their source copies.
+
+### Further component trials
+
+A fresh-copy record factory permits direct own-value reads without trusting
+arbitrary frozen objects. Its scanner still spends the original recursive
+budget, discovers numeric references and records the same certificate entries.
+The oracle passes 31 cases/96 comparisons, including a negative control proving
+that an entire-subtree exemption suppresses an original Proxy error after the
+4,096-object limit. However, constructing and scanning clean terrain-shaped
+records is mixed: 83.6→79.7, 154.0→131.6, 84.0→90.4 and 100.0→283.5 ms.
+The copying design is rejected for the current clean-terrain workload. Faster
+mixed-reference synthetic scans do not establish a gameplay benefit. Receipt:
+`.claude/ownership.perf7-dependency-factory-bench.local.json`.
+
+An oversized-digest trial retains the original two hash arithmetic streams
+but visits each UTF-16 unit once. It applies only above the existing 65,536-unit
+memo bypass threshold and retains no input. All 576 independent comparisons
+pass, including Unicode, canonical getters/iterators/errors, the threshold and
+frozen-root memo behavior. Creator-inclusive large ASCII work improves in all
+four host-style and all four minified pairs; nested geography-shaped work
+improves in three/four host-style pairs and four/four minified pairs. Short and
+frozen workloads are mixed. These are component results, not live latency
+evidence: `.claude/ownership.perf7-digestpair-bench.local.json`.
+
+The subsequent constructor trial creates the original three fixed record
+shapes directly: default terrain provenance, default terrain, and a stream
+cache entry. A private WeakSet marks only these fresh ordinary records. It
+does not mark caller inputs, field records, or painted/native/patch outputs,
+and a Proxy around a marked object is not marked. No child is copied or
+certified by construction. Dependency recursion and fallback remain original.
+Construction-plus-first-scan clean pairs are 152.5→179.6, 99.3→83.0,
+140.6→104.6 and 163.8→65.4 ms; mixed-reference pairs improve four/four.
+These results justify testing the integrated path, not a live speed claim.
+Receipt: `.claude/ownership.perf7-ownedTerrain-bench.local.json`.
+
+The integrated hash/digest probe passes 37,371 comparisons and the integrated
+constructor/scanner probe passes 165. In the real populated attribution
+fixture, the first observed scan uses 46,430 owned-record inspections, including
+16,384 sample wrappers; those wrappers receive zero descriptor inspections.
+All 32,768 retained wrappers have the constructor brand. Warm scans perform
+zero wrapper descriptor/direct-key inspections. Ordered pins, unknown mutable
+children, future numeric owners, patch/restore replacement and old-entry
+immutability pass. Instrumented durations are not performance evidence.
+
+Pre-coordinate integrated verification passes all game/launcher/sim/shard type checks,
+31 of 32 focused probes, the 571-probe roster census, 2,607 generation cases
+(four warnings, zero failures), all 25 smoke episodes and the isolated client
+build. The remaining focused failure is the unchanged terrainvariation fixture:
+actual `f24109327cf6e53f`, expected `4225203d67bebfb4`, independently reproduced
+on the immutable d4 control. No expected value or gameplay fixture was weakened.
+The actual client walks the full generated path in 1,104 frames, performs eight
+distant arrivals with 600 simulation frames each, saves/continues, and restores
+the original saved survivor's species and life on return. Both rendered scenes
+were inspected. Client errors and fatal errors are empty.
+
+Verification receipts use `.claude/ownership.perf7-validation.local.json`,
+`.claude/perf7-checks.local.json` and `.claude/perf7-client.local.json`.
+The type-check evidence is specifically `ownership.perf7-check-actual.local.json`;
+the driver's initial PowerShell launch did not execute the compiler and its
+apparent exit zero is invalid. The corrected `npm.cmd run check` completed with
+exit zero after the driver finished.
+
+### Combined cold verification
+
+The pre-coordinate combined candidate passes the separate nine-digest proof. Six fresh
+timing processes in C/A/A/C/C/A order retain the same four shared digests,
+query counts, 107 requested cells and fixed source/harness fingerprints.
+The independent proof includes 9,239 generated terrain samples, 10,885 terrain
+outputs, 262 place returns, 112,020 reservation results and 43,426 random draws.
+
+| Combined pair | Four-focus cold, d4→candidate | Six-focus cold | Six-focus resident |
+| --- | --- | --- | --- |
+| 1 | 1380.16→1410.47 ms | 889.92→867.98 ms | 110.87→91.53 ms |
+| 2 | 1467.83→1461.98 ms | 811.46→916.93 ms | 92.57→100.51 ms |
+| 3 | 1504.01→1379.04 ms | 1152.53→927.62 ms | 118.75→98.44 ms |
+
+Whole-course totals, including deferred content, are 2383.72→2371.95,
+2373.46→2481.17 and 2777.08→2407.41 ms. The median is 0.99% slower: this
+does not establish an overall cold-work improvement. The largest recorded
+total falls 10.66%, but there are only three observations per version and
+the third control also has the slowest boot. Ecology is mixed, with paired
+total changes of -0.60%, +5.98% and -8.73%.
+
+Dependency-phase totals improve in all three pairs: 152.61→119.47,
+150.48→134.50 and 192.20→125.01 ms (median -18.09%). Both six-focus cold
+and resident dependency phases improve in all three pairs. This supports a
+repeatable reduction in the measured dependency work, not a general live-tick
+or scenery-stall claim. No phases are added twice: runtime subphase durations
+are inclusive. Receipts are
+`.claude/ownership.perf7-cold-combined-{proof,timing}-series.local.json`.
+
+### Exact coordinate-key refinement
+
+Five district caches repeatedly serialize fresh dense triples of primitive
+strings. `canonicalStringTriple` uses native JSON for exactly that shape;
+other values retain the original canonical visitor. Full signed coordinates,
+escaping, getter and conversion order, null cache entries, eviction and all
+generation rules remain unchanged. It adds no retained cache. As with the
+generation arithmetic, standard JavaScript intrinsics must remain stable.
+The independent coordinate probe passes 2,069 comparisons, including every
+UTF-16 unit, invalid/exotic inputs, reentrancy, actual candidate cache paths
+and the original wilderness-path method. Canonical and hash oracles also pass.
+
+The first complete coordinate candidate versus d4 proof matches all nine
+digests. Its six timing processes also match content and query counts, but
+total paired changes are +14.59%, -8.68% and -1.71%. Median complete work
+improves only 1.25%; the worst complete total is 5.97% slower and the worst
+single update is 9.0% slower. This series does not establish a repeatable
+whole-candidate cold-stall win. Baseline course medians changed substantially
+between series, so comparing candidates measured in separate series cannot
+isolate this helper. Receipts:
+`.claude/ownership.perf7-cold-coordinates-{proof,timing}-series.local.json`.
+
+A subsequent incremental comparison keeps the other seventh-pass changes
+identical and switches only the helper and its five call sites between fresh
+processes in baseline/coordinate/coordinate/baseline/baseline/coordinate order.
+Whole-source and replay hashes guard every switch and child; the original
+candidate is restored and verified afterward. The four timing digests,
+descriptor/run hashes and exact phase query counts match in all six runs.
+
+| Incremental pair | Four-focus cold, earlier→coordinate | Six-focus cold | Six-focus resident | Three updates + deferred content |
+| --- | --- | --- | --- | --- |
+| 1 | 1470.45→1265.93 ms | 918.27→785.07 ms | 103.43→90.62 ms | 2494.02→2142.72 ms |
+| 2 | 1506.54→1365.95 ms | 883.11→886.62 ms | 95.93→97.49 ms | 2487.97→2351.92 ms |
+| 3 | 1439.39→1355.18 ms | 914.52→861.45 ms | 103.63→98.00 ms | 2459.47→2315.70 ms |
+
+Complete work improves in all three pairs (-14.09%, -5.47%, -5.85%);
+the median falls 6.92% and the largest observed update falls 9.33%.
+Scenery-phase totals improve in all three pairs, with a 9.54% lower median.
+The six-focus cold and resident phases each improve only two of three pairs.
+The critic supports retaining this narrow incremental improvement, without
+turning it into a general live-tick claim. Source restoration succeeds with
+no run failures. Receipt:
+`.claude/ownership.perf7-coordinate-isolation.exact-01.local/series.json`.
+
+The retained coordinate candidate repeats the full validation: all four type
+checks, 32 of 33 focused probes, the 572-probe roster census, 2,607 generation
+cases (four warnings, zero failures), 25 simulation smoke episodes and the
+isolated client build pass. The sole probe failure remains the exact separately
+confirmed d4 terrainvariation mismatch described above. The actual-client
+fixture walks the generated route in 1,102 frames, completes all eight distant
+arrival courses and passes native Save/Continue and survivor return. Continue
+preserves the original identities, species, life and sleepers; it admits 15
+new identities and retires 13 more bodies, ending with 268 identities and 172
+sleepers. The returned gnoll prowler retains 38 life. Both images were inspected;
+no client/fatal errors occur. This established traversal fixture uses its
+existing invulnerability/untargetability guard; it is not an ordinary combat
+survival test. Receipts: `.claude/ownership.perf7-coordinate-validation.local.json`,
+`.claude/perf7-coordinate-checks.local.json` and
+`.claude/perf7-coordinate-client.local.json`.
+Final staging removes one extra terminal blank line from `ownedTerrain.ts` and
+its probe; TypeScript emission is byte-identical before/after. The original
+measurement fingerprints and this cosmetic transition are both preserved in
+`.claude/ownership.perf7-final-whitespace.local.json`.
+
+### Final repeated live comparisons
+
+The retained coordinate candidate and immutable d4 control each run three fresh
+processes per course in C/A/A/C/C/A order. Both use six ordinary bots, seed
+`0xddba11`, 60 measured seconds, 60 Hz, no roaming, original drop/resume policy
+and unchanged gates. The early course spreads seats by 3,500 units; the grouped
+course starts its measurement after 60 host seconds. All twelve reports have
+matching configuration/harness fingerprints, unchanged production hashes within
+each child, nonzero tick counts and no inspector profile. Existing diagnostics
+remain enabled. All genuine gate failures and child exit codes are retained.
+
+| Early pair | p95, d4→candidate | p99 | Window maximum | Warm-up maximum | Dropped ticks |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 166.09→202.13 ms | 288.98→305.32 ms | 539.54→656.83 ms | 899.50→777.40 ms | 82.18→84.66% |
+| 2 | 253.54→208.56 ms | 409.67→387.92 ms | 685.96→783.50 ms | 1444.45→2160.91 ms | 87.84→85.65% |
+| 3 | 180.65→203.01 ms | 344.38→357.42 ms | 890.69→1069.61 ms | 1267.80→940.12 ms | 83.49→84.64% |
+
+Early p95 worsens in two of three pairs and window maximum worsens in all
+three. The candidate's 2,160.91 ms outlier is during warm-up; its largest measured
+window tick is 1,069.61 ms. Every early run breaches both p95 and dropped-tick
+gates. Each engine breaches heap growth in two runs; control pair 2 also fails
+resume. Fault, error and party gates pass throughout. These results establish
+neither a repeatable early live improvement nor an acceptable latency result.
+
+| Grouped pair | p95, d4→candidate | p99 | Window maximum | Warm-up maximum | Dropped ticks |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 30.63→18.89 ms | 72.39→58.59 ms | 98.19→92.46 ms | 312.14→309.20 ms | 1.1398→0.0833% |
+| 2 | 19.80→22.00 ms | 54.93→83.02 ms | 101.00→192.32 ms | 356.55→288.97 ms | 0.0556→1.0318% |
+| 3 | 16.00→18.51 ms | 52.49→49.96 ms | 90.11→92.07 ms | 314.37→290.12 ms | 0.0278→0.0278% |
+
+Grouped warm-up maxima improve in all three pairs. Sustained p95 and window
+maximum nevertheless worsen in two of three; the largest candidate window
+stall is 192.32 ms versus 101.00 ms for the control. Median p95 improves
+19.80→18.89 ms while median p99 worsens 54.93→58.59 ms. Both engines pass all
+gates in two of three runs; only control pair 1 and candidate pair 2 breach
+p95. There are no grouped deaths/rejoins or resume, party, error, fault, heap
+or dropped-tick gate failures. Do not present the median or warm-up improvement
+alone as evidence that grouped play is fixed.
+
+The live courses preserve density settings, not identical emergent histories.
+Stepped ticks, actual input rate, nearby living counts and asynchronous content
+differ. Terrain counters in the ordinary diagnostic reports cover the initial
+keeper runtime only; the World/runtime timing wrappers cover all units. Those
+counters cannot establish equal aggregate terrain work across the six foci.
+The later diagnostic ledger adds explicit all-world counting separately.
+
+Machine CPU use ranges from 40.94% to 76.55% across these runs; process CPU
+averages 0.67–1.36 logical cores on a 20-logical-core machine. The user confirms
+other active seamless-branch sessions cannot presently be paused. This is an
+uncontrolled covariate, not a demonstrated cause of the regression: grouped
+pair 3 worsens despite lower candidate machine CPU use. Aggregate spare cores
+also do not establish spare capacity on the authoritative thread. No results
+are discarded or normalized for load. No consistent broad live gain is
+established; independent critics agree that only the scoped exact-work savings
+are supported. The percentages above use separate baselines and are not additive.
+
+Receipts: `.claude/perf7-{early,cluster}-coordinates-serial.local.json`,
+`.claude/ownership.perf7-live-coordinates-results.local.json` and the bounded
+`.claude/ownership.perf7-final-live-compact.local.json`. Raw child reports remain
+in their corresponding candidate/control worktrees. These serial series cover
+warm-up and measured windows, not every boot/forced-GC settling gap.
+
+### Rejected segment preparation trial
+
+A scratch woven-link variant prepares segment deltas and squared lengths once
+per link while retaining the same bounding tests, projection arithmetic,
+segment order, clamping, radius comparisons and random stream. Production code
+remains unchanged. The independent archived oracle plus actual raster closures
+pass 2,060 exact comparisons (180 generated, 15 refused, one thrown), including
+1,200 boundary/degenerate/port/overlap rasters. Current-weave counting retains
+227,328 distance evaluations while preparing 1,772 segments; fewer arithmetic
+operations alone do not establish lower latency.
+
+Complete creator-inclusive current-weave pairs are 217.28→223.38,
+221.47→222.95, 228.80→192.78 and 228.09→198.12 ms. Per-round largest queries
+are 37.43→40.94, 40.62→43.53, 39.18→36.55 and 34.59→36.51 ms.
+Only two of four total-time pairs and one of four maximum pairs improve.
+The largest observed query worsens 7.16%; unchanged historical paths also
+show substantial variation. The critic concurs with rejecting adoption for
+the worst-stall objective. Preserve the oracle and trial rather than treating
+the 6.34% lower total median as a production win. Receipt:
+`.claude/ownership.perf7-segment-summary.local.json`.
+
+### Rejected primitive-dispatch trial
+
+The grouped profile motivates removing no-op recursive calls for primitive
+values in the generic scanner loop. The scratch variant retains `Object.entries`
+and its eager getter snapshot, entry/pin order, exact numeric-ID lookups and
+every object, collection, Proxy and certificate path. It passes 20 independent
+cases/204 comparisons, including the original 4,096-object and depth-64
+boundaries, reentrancy, exceptions, all primitive types and unusual numeric IDs.
+
+On an actual unchanged populated world (102 actors, 75 owners, 32,768 cached
+samples), it avoids 66,087 cold and 66,076 warm primitive visitor calls. Object
+visits, 1,893 numeric lookups and 79,828 cold/four warm descriptor inspections
+are identical. Both variants retain the same ordered pins and fixture state.
+Timing includes fresh scanner/certificate construction; shared world setup is
+timed separately, and every warm lane includes a separately reported cold prime.
+
+| Pair | Three cold scans, earlier→trial | Largest cold scan | Fifteen warm scans | Largest warm scan |
+| --- | --- | --- | --- | --- |
+| 1 | 582.74→594.14 ms | 196.88→199.61 ms | 296.23→302.66 ms | 24.61→25.60 ms |
+| 2 | 630.73→670.44 ms | 221.89→269.87 ms | 289.00→277.38 ms | 24.68→20.74 ms |
+| 3 | 614.94→604.38 ms | 212.81→217.14 ms | 311.11→264.09 ms | 24.57→20.25 ms |
+| 4 | 686.76→623.21 ms | 245.96→222.17 ms | 306.29→291.53 ms | 28.54→24.94 ms |
+
+Three of four warm comparisons improve, but cold maximum worsens in three
+of four and the largest observed cold scan rises 245.96→269.87 ms. The trial
+is rejected for production in this checkpoint: this does not establish the
+required worst-stall improvement. The source and exact oracle remain available
+for later targeted investigation. Receipt:
+`.claude/ownership.perf7-primitive-result-exact-01.local.json`.
+
+### Final-candidate spike attribution
+
+Two separate bounded main-process captures use the unchanged all-world ledger
+with inspector sampling. The early capture records 690 ticks (126 before the
+window, 564 inside it); grouped records 7,103 (3,507 before, 3,596 inside).
+Both finish normally with unchanged source fingerprints, complete ledger
+censuses, no recorder errors/overflow and every tick fully inside capture.
+The original ordinary verdict is retained: early breaches p95, dropped ticks
+and heap growth; grouped passes. A profiled diagnostic verdict is not a new
+unprofiled comparison or evidence of a regression fix.
+
+Profiler timestamps are verified against monotonic-clock request brackets.
+The measured alignment envelopes are ±513.5 microseconds early and ±441
+microseconds grouped; interior drift is not separately sampled. Five tiny
+backward sample intervals in each trace are preserved in the raw evidence.
+Attribution omits backward intervals and trims subsequent overlap (42 and 50
+microseconds respectively), without shifting later timestamps; neither trace
+ends with an unrecovered reversal. Sampling gaps reach several milliseconds
+in the selected ticks. Interval weights locate stacks, not exact CPU costs:
+descheduling, JIT/GC and instrumentation overhead remain unresolved. Inclusive
+frames overlap and must not be added together. Workers and bot processes are
+not sampled.
+
+The early capture localizes distinct synchronous owners:
+
+| Tick / phase | Measured tick | Enclosing work | Approximate sampled stack |
+| --- | --- | --- | --- |
+| 96 / pre-window | 1656.6 ms | World 1652.0 ms, runtime 1579.8 ms | Ecology 895 ms; nested stream sampling 587 ms |
+| 127 / window | 804.2 ms | World 767.2 ms, runtime 726.4 ms | Ecology 393 ms; dependency pins 117 ms |
+| 248 / window | 605.4 ms | World 538.4 ms, runtime update 1.8 ms | Objective intel access → walkability → stream/path planning → native-country candidate, about 487 ms |
+| 129 / window | 348.7 ms | World 107.7 ms, host residual 240.4 ms | AI movement → path search, about 210 ms, including cold terrain |
+
+The 248 chain shows why few top-level terrain calls can still be expensive:
+six counted sample/generation calls trigger nested planning. Generic host
+residual is not automatically AI; the sampled stacks specifically identify
+AI in tick 129. The selected ticks implicate synchronous world work rather
+than wire encoding, without ruling out transport, GC or scheduling elsewhere.
+
+Grouped window dependency scans appear in seven of the eight largest ticks,
+with about 30–51 ms of sampled inclusive work. The largest tick is 107.64 ms
+(World 105.3 ms, runtime 97.2 ms, dependency pins about 51 ms); its report also
+records 21.85 ms of GC overlap. Another 86.87 ms tick spends about 75.5 ms in
+AI path search, including stream/terrain queries. Grouped pre-window stalls
+also include geographic preparation and validation that demand cold regional
+plans. This prioritizes generic dependency traversal and shared cold-query
+preparation; it does not establish which candidate change caused the mixed
+live results or explain the prior 192.32 ms unprofiled outlier.
+The seven scan-heavy tick indices are congruent modulo 31, consistent with a
+recurring scheduled cost; the scan cadence remains unchanged. Certificate
+inspection accounts for only about 4.5–10.2 ms in those selected stacks, not
+the entire scanner cost. GC overlap cannot simply be added to or subtracted
+from sampled function attribution.
+
+The grouped diagnostic additionally overlaps a critic's 2.07-second receipt
+read/output and 0.283-second projection; exact wall-clock placement is unknown.
+It is retained as a contended diagnostic, never a clean comparison. The early
+capture predates those reads. Subsequent critic review uses small projections.
+Independent review agrees that offloading ecology alone leaves objective,
+pathfinding and sight queries' synchronous terrain/planning work intact.
+
+Receipts: `.claude/ownership.perf7-final-profile-final-{early,cluster}-01.local.json`,
+their raw `.cpuprofile` and all-world ledger files, and
+`.claude/ownership.perf7-attribution-compact-final-{early,cluster}-01.local.json`.
+The full attribution files contain repeated stacks and should be parsed into
+bounded projections, not printed in full.
+
+### Architecture and networking review
+
+The severe measured gaps are synchronous authoritative CPU stalls. Existing
+code already supplies snapshot interest/delta filtering, 96 KiB snapshot
+backpressure, remote interpolation, bounded extrapolation and local movement
+reconciliation. Replacing the transport cannot remove the measured hundreds of
+milliseconds inside ecology and dependency discovery. At 60 Hz the simulation
+has 16.67 ms per step. Riot's server engineering account similarly measures
+individual CPU subsystems against a fixed frame budget:
+[VALORANT's 128-Tick Servers](https://www.riotgames.com/en/news/valorants-128-tick-servers).
+
+The MMO examples support separating work by responsibility, not copying a
+different game's tick rate. CCP describes precomputing character-derived state
+and transferring it between systems rather than rebuilding it on each entry;
+the same account makes the associated memory cost explicit:
+[No Downtime - Again!](https://www.eveonline.com/news/view/no-downtime-again).
+Its later Quasar account moves cosmetic serialization/fanout outside the
+physics simulation while retaining nearby-recipient tracking. The reported
+high-rate cosmetic test is not a higher-rate authoritative physics result:
+[Server Deep Dive - The Power of Pretty](https://www.eveonline.com/news/view/paint-your-ship-red-and-make-it-faster).
+For this game, the measured CPU placement and exact state-publication contract
+determine the useful boundary; neither a message-bus dependency nor a lower
+simulation rate follows from those examples.
+
+The next foundational boundary, if synchronous exact-work reductions remain
+insufficient, is detached deterministic terrain/scenery preparation with
+authoritative publication before native bodies spawn. Factorio describes
+background generation and deterministic parallel starting-area generation;
+Node recommends worker threads for CPU-heavy JavaScript:
+[Factorio FFF 201](https://www.factorio.com/blog/post/fff-201),
+[Node worker threads](https://nodejs.org/api/worker_threads.html).
+This supports the direction, not a claim that worker integration is complete.
+
+Keep one writer of live actor/scenery state and the existing random draw order.
+Scenery reservation rejection precedes rotation draws, so a worker cannot
+guess acceptance independently and return an approximate candidate list.
+Preparation needs complete detached inputs, revision checks, bounded queued
+bytes, deterministic publication order and complete collision geometry. Measure
+input construction, cloning, validation and publication as well as worker time.
+The existing shared compiler also needs fairness between job kinds. Late work
+cannot silently remove scenery, reduce encounters or admit bodies before their
+colliders; synchronous fallback preserves behavior but preserves some stalls.
+
+The architecture critic found that the apparent scenery query interface is not
+pure. `nativeResidency.sample`/`intersects` can call `ensure`, which compiles or
+refuses sources, records durable born entries, reapplies saved changes and evicts
+old owners. `geographicGameplay.reserves` can plan and cache a geographic owner;
+wilderness path admission calls those providers too. Stream overlays execute
+these queries even on sample-cache hits. A worker producing the same doodads
+could therefore still change collision, birth/refusal history and saves.
+
+The narrower first seam is only `generator.terrainAt(center)` inside
+`MassStream.sample`. Keep revision synchronization, current patches, cache
+publication, overlays and all ordered reservation queries on the host. A trial
+must compare complete birth/refusal/save receipts and random cursors, not just
+rendered scenery. It must also measure clone/adoption/validation cost and stale
+reply rejection. Best-effort preparation with synchronous fallback is a useful
+increment but cannot promise to remove first-visit or teleport stalls. No new
+worker path is implemented in this pass.

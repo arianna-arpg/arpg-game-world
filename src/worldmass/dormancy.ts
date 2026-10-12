@@ -2,6 +2,7 @@ import {nativeQuietAnatomy,nativeQuietAnatomyNear} from './nativeQuietAnatomy';
 import { MONSTERS } from '../data/monsters';
 import { tellSpecsOf } from '../engine/tells';
 import { canonical } from './random';
+import { isOwnedTerrainRecord } from './ownedTerrain';
 import { Actor } from '../engine/actor';
 import { MassObserverIndex } from './foci';
 import { StatSheet } from '../engine/stats';
@@ -59,6 +60,16 @@ function isDependencyFreeData(value:object,active?:Set<object>,budget?:{left:num
   if(--budget.left<0||active.size>=64||active.has(value))return false;
   active.add(value);
   try {
+    if(isOwnedTerrainRecord(value)){
+      // Only descriptors are avoided. Numeric references, recursive work limits,
+      // active depth and certificate memo effects remain exactly as before.
+      for(const key of Object.keys(value)){
+        const child:unknown=(value as Record<string,unknown>)[key];
+        if(typeof child==='number'&&dependencyKeys.has(key))return false;
+        if(child!==null&&typeof child==='object'&&!isDependencyFreeData(child,active,budget))return false;
+      }
+      dependencyFreeData.add(value);return true;
+    }
     // Keep descriptor inspection even for freezeData values: a frozen proxy
     // can still have effectful get traps. Avoid only the temporary entry pairs.
     const descriptors=Object.getOwnPropertyDescriptors(value);

@@ -9,6 +9,7 @@ import { Actor } from '../src/engine/actor';
 import type { World } from '../src/engine/world';
 import { massDormancyPins } from '../src/worldmass/dormancy';
 import { freezeData, isMassFrozenData } from '../src/worldmass/random';
+import { isOwnedTerrainRecord } from '../src/worldmass/ownedTerrain';
 
 // Exact scanner declarations from a6f62a2d. No runtime Git dependency; never
 // update this oracle to match an optimization.
@@ -76,8 +77,8 @@ assert.equal(sha(archivedSource),'93bbe3995f28790fe91517665e765243300d29408ee484
 type Scan=typeof massDormancyPins;
 function factory(source:string):()=>Scan {
   const js=ts.transpileModule(source.replace(/^export /gm,''),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
-  const build=Function('Actor','isMassFrozenData',js+';return massDormancyPins;');
-  return()=>build(Actor,isMassFrozenData) as Scan;
+  const build=Function('Actor','isMassFrozenData','isOwnedTerrainRecord',js+';return massDormancyPins;');
+  return()=>build(Actor,isMassFrozenData,isOwnedTerrainRecord) as Scan;
 }
 const archived=factory(archivedSource);
 const actors=Array.from({length:8},(_,i)=>new Actor('pin proof '+i,'enemy',{x:0,y:0}));

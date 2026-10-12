@@ -39,19 +39,76 @@ export function canonical(value: unknown): string {
   if(isMassFrozenData(value))massCanonicalMemo.set(value as object,text);
   return text;
 }
+/** Internal coordinate keys are dense triples of primitive strings. Under the
+ * same stable standard intrinsics as generation math, native JSON preserves
+ * their exact escaping without a recursive walk. Other inputs keep canonical's
+ * ordinary validation, getter, iterator and error behavior. */
+export function canonicalStringTriple(a: unknown, b: unknown, c: unknown): string {
+  const tuple = [a, b, c];
+  return typeof a === 'string' && typeof b === 'string' && typeof c === 'string'
+    ? JSON.stringify(tuple) : canonical(tuple);
+}
+// Immutable string inputs recur across independent terrain/reservation queries.
+// Bound both tuple count and retained UTF-16 units; this cache is never content
+// authority. Eviction only repeats the original arithmetic. Object-like inputs
+// retain the original reads, and seed coercion always precedes the lookup.
+// As with generated noise, arithmetic assumes stable standard JS intrinsics.
+const hashMemo = new Map<number, Map<string, number>>();
+const hashMemoOrder: ({ seed: number; text: string } | undefined)[] = new Array(4096);
+let hashMemoHead = 0, hashMemoCount = 0, hashMemoUnits = 0;
+function rememberHash(text: string, seed: number, value: number): void {
+  while (hashMemoCount === hashMemoOrder.length || hashMemoUnits + text.length > 1048576) {
+    const old = hashMemoOrder[hashMemoHead]!;
+    const bucket = hashMemo.get(old.seed)!;
+    bucket.delete(old.text);
+    if (!bucket.size) hashMemo.delete(old.seed);
+    hashMemoOrder[hashMemoHead] = undefined;
+    hashMemoHead = (hashMemoHead + 1) % hashMemoOrder.length;
+    hashMemoCount--; hashMemoUnits -= old.text.length;
+  }
+  let bucket = hashMemo.get(seed);
+  if (!bucket) { bucket = new Map(); hashMemo.set(seed, bucket); }
+  bucket.set(text, value);
+  hashMemoOrder[(hashMemoHead + hashMemoCount) % hashMemoOrder.length] = { seed, text };
+  hashMemoCount++; hashMemoUnits += text.length;
+}
 /** Sampling hash, not a unique ID or security digest. Full coordinate text is
  * hashed; coordinates are never narrowed to a 32-bit integer first. */
 export function massHash(text: string, seed = 0x811c9dc5): number {
   let h = seed >>> 0;
+  const initial = h, memoizable = typeof text === 'string' && text.length <= 65536;
+  if (memoizable) {
+    const hit = hashMemo.get(initial)?.get(text);
+    if (hit !== undefined) return hit;
+  }
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
   h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13;
   h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
-  return h >>> 0;
+  const result = h >>> 0;
+  if (memoizable) rememberHash(text, initial, result);
+  return result;
+}
+/** Oversized digest text bypasses both hash memo lookups. Share only its UTF-16
+ * traversal; keep both independent uint32 folds and final avalanche arithmetic.
+ * The caller supplies canonical's primitive string under stable JS intrinsics. */
+function oversizedMassDigestPair(text: string): string {
+  let first = 0x811c9dc5 >>> 0, second = 0x9e3779b9 >>> 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    first = Math.imul(first ^ code, 0x01000193) >>> 0;
+    second = Math.imul(second ^ code, 0x01000193) >>> 0;
+  }
+  first ^= first >>> 16; first = Math.imul(first, 0x85ebca6b); first ^= first >>> 13;
+  first = Math.imul(first, 0xc2b2ae35); first ^= first >>> 16;
+  second ^= second >>> 16; second = Math.imul(second, 0x85ebca6b); second ^= second >>> 13;
+  second = Math.imul(second, 0xc2b2ae35); second ^= second >>> 16;
+  return (first >>> 0).toString(16).padStart(8, '0') + (second >>> 0).toString(16).padStart(8, '0');
 }
 export function massDigest(value: unknown): string {
   if(isMassFrozenData(value)){const cached=massDigestMemo.get(value as object);if(cached)return cached;}
   const text = canonical(value);
-  const digest=massHash(text).toString(16).padStart(8, '0') + massHash(text, 0x9e3779b9).toString(16).padStart(8, '0');
+  const digest=text.length > 65536 ? oversizedMassDigestPair(text)
+    : massHash(text).toString(16).padStart(8, '0') + massHash(text, 0x9e3779b9).toString(16).padStart(8, '0');
   if(isMassFrozenData(value))massDigestMemo.set(value as object,digest);
   return digest;
 }

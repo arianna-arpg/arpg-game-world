@@ -6,6 +6,7 @@ import { address, cellKey, floorDiv, latticeAt, localOffset, moveAddress, validS
 import type { MassPlace, MassPlaceRecipe, MassRange, MassRun, MassSpec, MassTerrain } from './contracts';
 import { canonical, freezeData, massDigest, massRandom, streamSeed } from './random';
 import { massNoise } from './noise';
+import { ownedBaseTerrain, ownedTerrainSource } from './ownedTerrain';
 import { MassTerrainPatches, patchBoxIntersects, validateMassPatches, type MassPatchBox } from './terrainPatches';
 
 const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
@@ -228,9 +229,9 @@ export class MassGenerator {
         source: Object.freeze({ ...place.source, rule: recipe.id + '/surface' }),
       });
     }
-    return Object.freeze({ region: s.region, color: s.color, biome: s.biome, fields,
-      source: Object.freeze({ generator: this.spec.id, version: this.spec.version, rule: s.id,
-        source: s.source ?? s.biome, stream: canonical([this.run.seed, 'terrain', cellKey(at)]) }) });
+    return ownedBaseTerrain(s.region, s.color, s.biome, fields,
+      ownedTerrainSource(this.spec.id, this.spec.version, s.id,
+        s.source ?? s.biome, canonical([this.run.seed, 'terrain', cellKey(at)])));
   }
   private candidate(recipe: MassPlaceRecipe, dimension: string, gx: bigint, gy: bigint): MassPlace | null {
     const key = JSON.stringify([recipe.id, dimension, gx.toString(), gy.toString()]);
