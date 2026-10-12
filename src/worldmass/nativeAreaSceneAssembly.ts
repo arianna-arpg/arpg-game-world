@@ -1,4 +1,7 @@
 import {assertNativeEmptyCharacterCensus,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
+import {NativeTownBodyLedger} from './nativeTownBodyLedger';
+import {START_ZONE} from '../data/zones';
+import {hullOf} from '../world/shape';
 import {NativeAreaScenePresence} from './nativeAreaScenePresence';
 import type {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
 import {NativeAreaSceneObjectiveCompletion,freshSceneObjectiveCompletionState,type NativeSceneObjectiveCampaign,type NativeSceneObjectiveProgression,type NativeSceneObjectiveQuests} from './nativeAreaSceneObjectiveCompletion';
@@ -112,6 +115,8 @@ export interface NativeAreaPreparedPlacement {readonly entry:Readonly<Vec2>;read
  * calls preparation or birth again. Runtime publication remains separate. */
 export class NativeAreaSceneAssembly {
  readonly input:NativeSceneBirthCompositionInput;
+ readonly townBodies:NativeTownBodyLedger;
+ townLayoutSignature='';
  readonly host:ReturnType<typeof composeNativeSceneBirth>;
  readonly graph:NativeAreaSceneGraph;
  readonly boundaries:NativeAreaSceneBoundaries;
@@ -137,6 +142,7 @@ export class NativeAreaSceneAssembly {
   else if(!raw.initialActors.includes(raw.player)||new Set(raw.initialActors).size!==raw.initialActors.length)throw Error('Native assembly needs one complete initial census');
   if(raw.carry.inCave!==!campaign.zoneMap[definition.id])throw Error('Native assembly cave identity differs');
   const scene={zone:definition,player:raw.player,actors:raw.characterConstruction?raw.initialActors as Actor[]:[...raw.initialActors]};
+  const townBodies=this.townBodies=new NativeTownBodyLedger(scene);
   const scenePresence=this.scenePresence=new NativeAreaScenePresence(scene,campaign,campaign.seats.filter(s=>scene.actors.includes(s.actor)));
   const timeflow=this.timeflow=new NativeAreaTimeflow(services.timeflow);
   const environmentState=freshSceneEnvironmentState(),objectives=freshSceneObjectiveState(definition.id,campaign.completedObjectives);
@@ -170,7 +176,7 @@ export class NativeAreaSceneAssembly {
   const ecology=new NativeAreaSceneEcology({scene,geometry,population,environment:environmentState,
    services:bindNativeSceneSky(extendView(servicesView(services.ecology,['throngClaimed']),{get time(){return campaign.time;},get seats(){return scenePresence.seats;}}),sky),sources:sources.ecology,state:freshSceneEcologyState()});
   const settlement=new NativeAreaSceneSettlement({scene,geometry,campaign,state:{townTierIdx:raw.carry.townTierIdx,mercOutpost:null}});
-  const physical=new NativeAreaScenePhysical({scene,geometry,population,settlement,campaign,state:freshScenePhysicalState()});
+  const physical=new NativeAreaScenePhysical({scene,geometry,population,settlement,campaign,state:freshScenePhysicalState(),townBody:townBodies.record});
   const loot=this.lootController=new NativeAreaSceneLoot({scene,scenePresence,geometry,physical,settlement,campaign,state:freshSceneLootState()});
   this.puzzleController=puzzleController=new NativeAreaScenePuzzles({scene,geometry,environment,campaign,
    effects:extendView(servicesView(services.puzzleEffects,['executeSkill']),servicesView(loot,['dropGemAt','mintLootResult']))});
@@ -205,7 +211,7 @@ export class NativeAreaSceneAssembly {
   const runtimeBirth=new NativeAreaSceneRuntimeBirth({scene,geometry,population,generation:this.generation,theater,campaign,state:runtimeState,sources:sources.runtime});
   const titans=new NativeAreaSceneTitans({scene,geometry,population,campaign});
   const registry=new NativeAreaSceneRuntimeRegistry({scene,geometry,birth:runtimeBirth,titans,descentState:transition,state:freshSceneRuntimeRegistryState()});
-  this.input=Object.freeze({scene,geometry,population,environment,ecology,settlement,occurrences,bounty,physical,residents,objectives,
+  this.input=Object.freeze({townBody:townBodies.record,scene,geometry,population,environment,ecology,settlement,occurrences,bounty,physical,residents,objectives,
    sources:sources.inhabitants,campaign,state:{...freshSceneBirthState(),vendorStock:campaign.vendorStock,theaterVisitSeq:campaign.theaterVisitSeq},harbor,openings,theater,encounters,sites,history,descent,coast,arrival,adoption,registry,sky});
   this.host=composeNativeSceneBirth(this.input);
   // Brandt's once-armed shelf is run state, including between counter areas.
@@ -231,11 +237,25 @@ export class NativeAreaSceneAssembly {
    this.boundaries.prepare(this.input.scene.zone,firstVisit,this.transition.inCave);
    const layout=this.generation.generate({...entry});
    this.input.geometry.adopt(layout.layout,entry);
+   if(this.input.scene.zone.id===START_ZONE){this.townBodies.adopt(layout.layout);this.townLayoutSignature=this.townSignature();}
    const fingerprint=serializeNativeAreaData(session.read(source).members);
    Object.freeze(layout);
    this.#prepared={source,session,layout,fingerprint,firstVisit,rngState:layout.rng.snapshot(),memoryState:serializeNativeAreaData(layout.memory)};this.#phase='prepared';
    return this.#preparedPlacement=Object.freeze({entry:Object.freeze({...entry}),layoutSeed:layout.layoutSeed,...(layout.layout.spawnAt?{spawnAt:Object.freeze({...layout.layout.spawnAt})}:{})});
   });}catch(error){this.#phase='failed';throw error;}
+ }
+ townSignature():string {const d=this.input.scene.zone;return serializeNativeAreaData({size:d.size,fixtures:d.fixtures,layout:d.layout,layoutParams:d.layoutParams,exitSiting:d.exitSiting});}
+ /** Safe arrival only: retain the assembly/census/gameplay stores; replace native terrain at the new authored tier. */
+ refreshTownGeometry():ReturnType<NativeAreaSceneGeneration['generate']> {
+  if(this.#phase!=='born'||this.input.scene.zone.id!==START_ZONE)throw Error('Native town refresh needs the born town owner');
+  return this.graph.withGenerationPolicies(()=>{
+   const g=this.input.geometry,def=this.input.scene.zone;g.arena=makeNativeAreaArena(def);g.arenaHull=hullOf(g.arena);
+   this.boundaries.prepare(def,false,this.transition.inCave);
+   const entry={x:def.size.w/2,y:def.size.h/2},layout=this.generation.generate(entry);
+   g.adopt(layout.layout,entry);this.townBodies.adopt(layout.layout);
+   this.#preparedPlacement=Object.freeze({entry:Object.freeze({...entry}),layoutSeed:layout.layoutSeed,...(layout.layout.spawnAt?{spawnAt:Object.freeze({...layout.layout.spawnAt})}:{})});
+   return layout;
+  });
  }
  birth():void {
   if(this.#phase!=='prepared'||!this.#prepared)throw Error('Native assembly needs its one prepared layout');

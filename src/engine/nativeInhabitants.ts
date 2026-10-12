@@ -1,3 +1,4 @@
+import type {NativeTownBodyRecorder} from './nativeTownBody';
 import type { Actor, Team } from './actor';
 import type { Doodad, GeneratedLayout } from './levelgen';
 import type { MonsterRarity, RARITY_DEFS } from './rarity';
@@ -21,6 +22,7 @@ export interface NativeInhabitantSources {
  * Door/annex/memory replay must occur at the original boundary before these calls.
  * Field inhabitants occur much later, after the objective and scenery owners. */
 export interface NativeInhabitantHost {
+ readonly townBody?:NativeTownBodyRecorder;
  readonly actors:Actor[]; readonly doodads:readonly Doodad[];
  readonly account:{readonly ledger:Record<string,number>}; readonly ledger:Record<string,number>;
  readonly massSettlementDay:number|null; readonly time:number;
@@ -51,6 +53,7 @@ export function spawnNativeDoorGuards(host: NativeInhabitantHost, sources: Nativ
       c.doorId = dr.id;
       if (dr.life) c.life = Math.min(dr.life, c.maxLife()); // per-door data may weaken a rotten door
       host.actors.push(c);
+      host.townBody?.('door',d,c);
     }
 
 
@@ -63,6 +66,7 @@ export function spawnNativeFurniture(host: NativeInhabitantHost, sources: Native
       c.fromZoneGen = true; // furniture is part of the persistent population
       c.pos = host.clampPos((0, sources.vec)(b.pos.x, b.pos.y), c.radius);
       host.actors.push(c);
+      host.townBody?.('furniture',b,c);
     }
 
 }
@@ -76,69 +80,8 @@ export function spawnNativeResidents(host: NativeInhabitantHost, sources: Native
     host.speechFocusSpeaker = undefined;
     host.dialogueScene++;
     host.npcDialogues.leaveZone();
-    let npcSeat = 0; // THE SPEECH GRAMMAR's seat index — a stable speaker key per plan seat
-    for (const n of layout.npcs) {
-      const arrival = sources.MONSTERS[n.id]?.npcRequiresLedger;
-      if (arrival && !host.account.ledger[arrival] && !host.ledger[arrival]) continue;
-      // Mireille the Innkeep is ALWAYS present (she talks if her heal is locked).
-      const c = host.createMonster(n.id, 1, 'player');
-      // THE STOREY (engine/storeys.ts): a body seated on a structure's floor
-      // above wears that story from its first tick — clamped on the story's
-      // own view so it never spawns inside a hanging wall.
-      c.tier = n.tier ?? 0;
-      c.pos = c.tier >= 1 ? host.findFreeSpot((0, sources.vec)(n.pos.x, n.pos.y), c.radius, c.tier)
-        : host.clampPos((0, sources.vec)(n.pos.x, n.pos.y), c.radius);
-      host.actors.push(c);
-      // THE SPOKEN SEAT: a plan's npc row may carry a line — it rides the
-      // residents' bubble lane (residentPrompt reads npcRole 'resident') on
-      // the 'seat' lane of THE TRANSIENT TELLING (engine/speech.ts).
-      // THE SPEECH GRAMMAR (engine/speechGrammar.ts) speaks through the same
-      // row: the seat's structure is its COMPANY, MonsterDef.speechRoles its
-      // pools, the authored line its FIRST WORD (a def-named body is not
-      // NAMED — it never fills '{other}').
-      const speechRoles = sources.MONSTERS[n.id]?.speechRoles ?? [];
-      if (n.line || speechRoles.length) {
-        host.speakerRows.set(c.id, (0, sources.makeSpeakerRow)(c.id, n.line ?? '', 'seat', {
-          key: `${n.sid ?? def.id}:seat${npcSeat}:${n.id}`, company: n.sid ?? `zone:${def.id}`, name: null,
-          roles: speechRoles, own: n.line ? [n.line] : [],
-        }));
-      }
-      npcSeat++;
-    }
-    // THE FOLK SEATS (data/innfolk.ts): every seat a plan declared rolls its
-    // guest on a seed of (zone, seat, DAY) — the same company through one
-    // day, new faces at dawn; a seat's chance may leave it empty. The guest
-    // wears a rolled name, colour and line and its row's haunt.
-    const seated = new Set<string>(); // THE COMPANY LAW: no two seats deal the same guest in one house
-    for (const fk of layout.folk ?? []) {
-      const day = host.massSettlementDay ?? Math.floor(host.time / sources.DAY_LENGTH);
-      let roll: ReturnType<typeof rollFolk> = null;
-      for (let salt = 0; salt < 4; salt++) {
-        // THE COMPANY IS THE DAY'S, NOT THE RUN'S: seeded off the ZONE's own seed
-        // (the manifest's would deal a different head-count per world, and every
-        // actor id after the town's bodies with it — the hermetic-world law).
-        const seed = (((def.seed ?? 0) * 0x9e3779b1) ^ (0, sources.hashStr)(`folk:${def.id}:${fk.key}:${day}:${salt}`)) >>> 0;
-        roll = (0, sources.withSeededRandom)(seed, () => (sources.random.call(Math) < (fk.chance ?? 1) ? (0, sources.rollFolk)(fk.pool, sources.random) : null));
-        if (!roll || !seated.has(roll.name)) break; // an empty seat stays empty; a repeated face re-deals
-      }
-      if (!roll) continue;
-      seated.add(roll.name);
-      const c = host.createMonster(roll.defId, 1, 'player');
-      c.name = roll.name;
-      c.color = roll.color;
-      c.tier = fk.tier ?? 0;
-      c.pos = c.tier >= 1 ? host.findFreeSpot((0, sources.vec)(fk.pos.x, fk.pos.y), c.radius, c.tier)
-        : host.clampPos((0, sources.vec)(fk.pos.x, fk.pos.y), c.radius);
-      host.actors.push(c);
-      // THE TRANSIENT TELLING's 'folk' lane (speechTell) + THE SPEECH GRAMMAR's
-      // speaker row: the rolled line is its FIRST WORD, the row's other lines
-      // follow, its roles are the row's (FolkRow.roles), its company the house
-      // that seated it, its rolled name the one '{other}' may speak.
-      host.speakerRows.set(c.id, (0, sources.makeSpeakerRow)(c.id, roll.line, 'folk', {
-        key: fk.key, company: fk.sid ?? fk.key.replace(/:folk\d+$/, ''), name: roll.name,
-        roles: roll.row.roles ?? [], own: [roll.line, ...roll.row.lines.filter(l => l !== roll.line)].filter(l => !!l),
-      }));
-    }
+    spawnNativePlanResidents(host,sources,def,layout);
+    spawnNativeFolkResidents(host,sources,def,layout);
 
 }
 
@@ -206,4 +149,74 @@ export function spawnNativeFieldInhabitants(host: NativeInhabitantHost, sources:
       if (ls.rarity && ls.rarity !== 'normal' && ls.rarity in sources.RARITY_DEFS) host.promoteMonster(m, ls.rarity as MonsterRarity);
     }
 
+}
+/** Original resident seat stages, separately reusable on newly raised town seats. */
+export function spawnNativePlanResidents(host:NativeInhabitantHost,sources:NativeInhabitantSources,def:ZoneDef,layout:GeneratedLayout,seatIndex?:ReadonlyMap<GeneratedLayout['npcs'][number],number>){
+    let npcSeat = 0; // THE SPEECH GRAMMAR's seat index — a stable speaker key per plan seat
+    for (const n of layout.npcs) {
+      const arrival = sources.MONSTERS[n.id]?.npcRequiresLedger;
+      if (arrival && !host.account.ledger[arrival] && !host.ledger[arrival]) continue;
+      // Mireille the Innkeep is ALWAYS present (she talks if her heal is locked).
+      const c = host.createMonster(n.id, 1, 'player');
+      // THE STOREY (engine/storeys.ts): a body seated on a structure's floor
+      // above wears that story from its first tick — clamped on the story's
+      // own view so it never spawns inside a hanging wall.
+      c.tier = n.tier ?? 0;
+      c.pos = c.tier >= 1 ? host.findFreeSpot((0, sources.vec)(n.pos.x, n.pos.y), c.radius, c.tier)
+        : host.clampPos((0, sources.vec)(n.pos.x, n.pos.y), c.radius);
+      host.actors.push(c);
+      host.townBody?.('plan',n,c);
+      // THE SPOKEN SEAT: a plan's npc row may carry a line — it rides the
+      // residents' bubble lane (residentPrompt reads npcRole 'resident') on
+      // the 'seat' lane of THE TRANSIENT TELLING (engine/speech.ts).
+      // THE SPEECH GRAMMAR (engine/speechGrammar.ts) speaks through the same
+      // row: the seat's structure is its COMPANY, MonsterDef.speechRoles its
+      // pools, the authored line its FIRST WORD (a def-named body is not
+      // NAMED — it never fills '{other}').
+      const speechRoles = sources.MONSTERS[n.id]?.speechRoles ?? [];
+      if (n.line || speechRoles.length) {
+        host.speakerRows.set(c.id, (0, sources.makeSpeakerRow)(c.id, n.line ?? '', 'seat', {
+          key: `${n.sid ?? def.id}:seat${seatIndex?.get(n)??npcSeat}:${n.id}`, company: n.sid ?? `zone:${def.id}`, name: null,
+          roles: speechRoles, own: n.line ? [n.line] : [],
+        }));
+      }
+      npcSeat++;
+    }
+}
+export function spawnNativeFolkResidents(host:NativeInhabitantHost,sources:NativeInhabitantSources,def:ZoneDef,layout:GeneratedLayout,priorCompany?:ReadonlySet<string>){
+    // THE FOLK SEATS (data/innfolk.ts): every seat a plan declared rolls its
+    // guest on a seed of (zone, seat, DAY) — the same company through one
+    // day, new faces at dawn; a seat's chance may leave it empty. The guest
+    // wears a rolled name, colour and line and its row's haunt.
+    const seated = new Set<string>(priorCompany); // THE COMPANY LAW: no two seats deal the same guest in one house
+    for (const fk of layout.folk ?? []) {
+      const day = host.massSettlementDay ?? Math.floor(host.time / sources.DAY_LENGTH);
+      let roll: ReturnType<typeof rollFolk> = null;
+      for (let salt = 0; salt < 4; salt++) {
+        // THE COMPANY IS THE DAY'S, NOT THE RUN'S: seeded off the ZONE's own seed
+        // (the manifest's would deal a different head-count per world, and every
+        // actor id after the town's bodies with it — the hermetic-world law).
+        const seed = (((def.seed ?? 0) * 0x9e3779b1) ^ (0, sources.hashStr)(`folk:${def.id}:${fk.key}:${day}:${salt}`)) >>> 0;
+        roll = (0, sources.withSeededRandom)(seed, () => (sources.random.call(Math) < (fk.chance ?? 1) ? (0, sources.rollFolk)(fk.pool, sources.random) : null));
+        if (!roll || !seated.has(roll.name)) break; // an empty seat stays empty; a repeated face re-deals
+      }
+      if (!roll) continue;
+      seated.add(roll.name);
+      const c = host.createMonster(roll.defId, 1, 'player');
+      c.name = roll.name;
+      c.color = roll.color;
+      c.tier = fk.tier ?? 0;
+      c.pos = c.tier >= 1 ? host.findFreeSpot((0, sources.vec)(fk.pos.x, fk.pos.y), c.radius, c.tier)
+        : host.clampPos((0, sources.vec)(fk.pos.x, fk.pos.y), c.radius);
+      host.actors.push(c);
+      host.townBody?.('folk',fk,c);
+      // THE TRANSIENT TELLING's 'folk' lane (speechTell) + THE SPEECH GRAMMAR's
+      // speaker row: the rolled line is its FIRST WORD, the row's other lines
+      // follow, its roles are the row's (FolkRow.roles), its company the house
+      // that seated it, its rolled name the one '{other}' may speak.
+      host.speakerRows.set(c.id, (0, sources.makeSpeakerRow)(c.id, roll.line, 'folk', {
+        key: fk.key, company: fk.sid ?? fk.key.replace(/:folk\d+$/, ''), name: roll.name,
+        roles: roll.row.roles ?? [], own: [roll.line, ...roll.row.lines.filter(l => l !== roll.line)].filter(l => !!l),
+      }));
+    }
 }

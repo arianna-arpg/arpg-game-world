@@ -1,3 +1,11 @@
+NativeTownBodyLedger preserves actual retained town inhabitants, doors and
+station state while unlocked native layouts grow on a later unoccupied arrival.
+The initial character path folds account stations after party/join before its
+layout, preserving native timing and safe entry. Town growth now composes with
+fresh menus, physical travel and run conclusions. Verify nativetown*, source
+chains, generation and all types. Cold Continue, local-input routing, party
+death/payout and hosted/browser activation remain separate integration work.
+
 NativeSceneRunConclusion now publishes native endRun and retireCharacter
 through actual retained owners. Whole-run conclusions preserve the live campaign
 roster and route each shapeshift/mercenary to its physical owner. Fresh prologue

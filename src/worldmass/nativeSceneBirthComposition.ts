@@ -1,3 +1,4 @@
+import type {NativeTownBodyRecorder} from '../engine/nativeTownBody';
 /** Complete birth wiring over concrete native owners. This is not an installed
  * source issuer or permission to publish/stream the prepared scene. */
 import type {NativeAreaBirthHost} from '../engine/nativeAreaBirth';
@@ -36,6 +37,7 @@ export function freshSceneBirthState():NativeSceneBirthState{return {
  mercDwell:0,mercDwellFired:false,skyBelow:null,spans:null,wraithsailSeaStash:null,
 };}
 export interface NativeSceneBirthCompositionInput {
+ townBody?:NativeTownBodyRecorder;
  scene:NativeSceneCensus;geometry:NativeAreaSceneGeometry;population:NativeAreaScenePopulation;
  environment:NativeAreaSceneEnvironment;ecology:NativeAreaSceneEcology;settlement:NativeAreaSceneSettlement;
  occurrences:NativeAreaSceneOccurrences;bounty:NativeAreaSceneBounty;physical:NativeAreaScenePhysical;
@@ -60,6 +62,7 @@ const composedBirths=new WeakMap<object,NativeSceneBirthCompositionInput>();
 export function composeNativeSceneBirth(raw:NativeSceneBirthCompositionInput):NativeAreaBirthHost {
  const roots=Object.create(null);
  for(const key of ["scene","geometry","population","environment","ecology","settlement","occurrences","bounty","physical","residents","objectives","sources","campaign","state","harbor","openings","theater","encounters","sites","history","descent","coast","arrival","adoption","registry","sky"]){const d=raw&&Object.getOwnPropertyDescriptor(raw,key);if(!d||!Object.hasOwn(d,'value')||!d.value||typeof d.value!=='object')throw Error('Native birth composition needs own object binding: '+key);roots[key]=d.value;}
+ if(raw.townBody!==undefined)roots.townBody=raw.townBody;
  const input:NativeSceneBirthCompositionInput=Object.freeze(roots);
  const {scene,geometry,population,environment,ecology,settlement,occurrences,bounty,physical,residents}=input;
  const same=(o:object,k:string,value:unknown)=>{const d=Object.getOwnPropertyDescriptor(o,k);if(!d||!Object.hasOwn(d,'value')||d.value!==value)throw Error('Native birth composition needs identical '+k+' owner');};
@@ -96,11 +99,12 @@ export function composeNativeSceneBirth(raw:NativeSceneBirthCompositionInput):Na
   get farthestStand(){const fn=geometry.farthestStand;return(...args:Parameters<typeof fn>)=>fn.apply(geometry,args);},
  });
  const derived={zoneRuntimes:input.registry.rows,
-  get nativeInhabitantHost(){const fn=residents.inhabitants;return()=>fn.call(residents,population);},
+  get nativeInhabitantHost(){const fn=residents.inhabitants;return()=>{const selected=Reflect.apply(fn,residents,[population]);if(input.townBody)Object.defineProperty(selected,'townBody',{value:input.townBody});return selected;};},
   spawnContest:(...args:Parameters<NativeAreaBirthHost['spawnContest']>)=>spawnSceneContest(objective,...args),
   rollCullNeed:(...args:Parameters<NativeAreaBirthHost['rollCullNeed']>)=>sceneRollCullNeed(objective,...args),
  };
  const host=Object.create(null);
+ if(input.townBody)Object.defineProperty(host,'townBody',{value:input.townBody});
  function fields(provider:()=>object,names:readonly string[]){for(const name of names)Object.defineProperty(host,name,{enumerable:true,get(){return (provider() as Record<string,unknown>)[name];},set(value){(provider() as Record<string,unknown>)[name]=value;}});}
  function methods(provider:()=>object,names:readonly string[]){for(const name of names)Object.defineProperty(host,name,{enumerable:true,get(){const owner=provider() as Record<string,Function>,fn=owner[name];return(...args:unknown[])=>fn.apply(owner,args);}});}
  fields(()=>geometry,["doodads"]);

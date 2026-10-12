@@ -1,15 +1,16 @@
+import type {NativeTownBodyRecorder} from './nativeTownBody';
 import type { World } from './world';
 import { TRAINING_YARD } from '../data/trainingYard';
 import { START_ZONE } from '../data/zones';
 import type { Doodad } from './levelgen';
 
-export interface NativeTrainingYardHost extends Pick<World,'clientActionHook'|'zone'|'account'|'actors'|'createMonster'|'player'|'clampPos'|'townSeat'|'doodads'|'markDoodadsChanged'> {}
+export interface NativeTrainingYardHost extends Pick<World,'clientActionHook'|'zone'|'account'|'actors'|'createMonster'|'player'|'clampPos'|'townSeat'|'doodads'|'markDoodadsChanged'> {readonly townBody?:NativeTownBodyRecorder}
 
 // References expire naturally when loadZone replaces the town's scenery.
 const backstops = new WeakMap<NativeTrainingYardHost, Doodad[]>();
 
 /** Raise only missing range bodies. Never reload town or disturb the live run. */
-export function syncTrainingYard(w: NativeTrainingYardHost): number {
+export function syncTrainingYard(w: NativeTrainingYardHost, stateOwner:NativeTrainingYardHost=w): number {
   const def = TRAINING_YARD;
   if (w.clientActionHook || w.zone.id !== START_ZONE || !w.account.features.has(def.feature)) return 0;
   let spawned = 0;
@@ -20,15 +21,16 @@ export function syncTrainingYard(w: NativeTrainingYardHost): number {
     actor.tag = tag;
     actor.pos = w.clampPos(w.townSeat(def.site, row.x, row.y), actor.radius);
     w.actors.push(actor); spawned++;
+    w.townBody?.('training',row.id,actor);
   }
-  const previous = backstops.get(w) ?? [], added: Doodad[] = [];
+  const previous = backstops.get(stateOwner) ?? [], added: Doodad[] = [];
   // Seat the pair before publishing either rock, just like normal town minting.
   const current = def.backstops.map((row, i) => {
     if (previous[i] && w.doodads.includes(previous[i])) return previous[i];
     const rock: Doodad = { pos: w.clampPos(w.townSeat(def.site, row.x, row.y), row.radius), radius: row.radius, kind: 'rock' };
     added.push(rock); return rock;
   });
-  backstops.set(w, current);
+  backstops.set(stateOwner, current);
   for (const rock of added) { w.doodads.push(rock); w.markDoodadsChanged(rock); }
   return spawned;
 }

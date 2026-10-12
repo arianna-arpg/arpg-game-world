@@ -1,3 +1,4 @@
+import type {NativeTownBodyRecorder} from '../engine/nativeTownBody';
 import {ownNativeRewardStorage} from './nativeAreaSceneRewardStorage';
 import type {World} from '../engine/world';
 import type {NativeSceneCensus,NativeAreaScenePopulation} from './nativeAreaScenePopulation';
@@ -9,6 +10,7 @@ import {captureZoneContents,restoreZoneContents,type NativeZoneContentsHost,type
 export interface NativeScenePhysicalState extends NativeZoneContentsHost {}
 export function freshScenePhysicalState():NativeScenePhysicalState{return {chests:[],shrines:[],altars:[],drops:[]};}
 export interface NativeScenePhysicalInput {
+ townBody?:NativeTownBodyRecorder;
  scene:NativeSceneCensus;geometry:NativeAreaSceneGeometry;population:NativeAreaScenePopulation;settlement:NativeAreaSceneSettlement;
  campaign:Pick<World,'account'|'clientActionHook'>;state:NativeScenePhysicalState;
 }
@@ -25,6 +27,7 @@ export class NativeAreaScenePhysical {
    if(!d||!Object.hasOwn(d,'value')||!d.value||typeof d.value!=='object')throw Error('Native physical birth requires own object binding: '+key);
    bindings[key]=d.value;
   }
+  if(raw.townBody!==undefined)bindings.townBody=raw.townBody;
   const input:NativeScenePhysicalInput=this.input=Object.freeze(bindings);
   if(input.geometry.state!==input.scene||input.population.input.scene!==input.scene||input.population.input.geometry!==input.geometry
    ||input.settlement.input.scene!==input.scene||input.settlement.input.geometry!==input.geometry)
@@ -38,6 +41,7 @@ export class NativeAreaScenePhysical {
   fields(()=>input.scene,['zone','player','actors']);fields(()=>input.geometry,['doodads']);
   fields(()=>input.state,['chests','shrines','altars','drops']);fields(()=>input.campaign,['account','clientActionHook']);
   methods(()=>input.population,['createMonster']);methods(()=>input.geometry,['clampPos','markDoodadsChanged']);methods(()=>input.settlement,['townSeat']);
+  if(input.townBody)Object.defineProperty(host,'townBody',{value:input.townBody});
   this.host=Object.freeze(host);
   ownNativeRewardStorage(input.state,['chests','shrines','altars','drops']);
   for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false,enumerable:false});

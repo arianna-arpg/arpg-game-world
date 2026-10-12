@@ -240,6 +240,8 @@ export class NativeAreaSceneTransitionCoordinator {
   const state={source:row,current:row,seats,active:true} as Frame;state.view=Object.freeze({get source(){return state.source.ongoing;},get current(){if(!state.active)throw Error('Native transition frame is expired');return state.current.ongoing;},get seats(){if(!state.active)throw Error('Native transition frame is expired');return state.seats;},get active(){return state.active;}});this.#frame=state;
   try{const result=action();if(nativeBirthAsyncResult(result))throw Error('Native transition must be synchronous');return result;}finally{state.active=false;this.#frame=null;}
  }
+ #townArrival:NativeAreaSceneCombat|null=null;
+ assertTownArrival(combat:NativeAreaSceneCombat):void {if(!this.#moving||!this.#frame?.active||this.#townArrival!==combat)throw Error('Native town refresh needs its selected genuine arrival');}
  loadZone(zoneId:string,from?:string):void{
   assertNativeRetainedMassState(this.input.characterWriter);
   const frame=this.#frame;if(!frame?.active||this.#moving)throw Error('Native area handoff needs its current synchronous transition frame');
@@ -248,6 +250,7 @@ export class NativeAreaSceneTransitionCoordinator {
   if(!destination&&!this.#preparation)throw Error('Native destination needs the actual campaign preparation owner');
   this.#moving=true;
   try{
+   this.input.characterWriter['townLayoutChangedOnLoad']=false;if(destination)destination.combat.runtimeState.frame.townLayoutChangedOnLoad=false;
    for(const seat of frame.seats)if(optionalOwn<Actor>(seat,'home'))source.combat.control.seatEject(seat,'travel');
    const capture=captureSeats(this.input.campaign,frame.seats),bodies=capture.rows.map(r=>r.body),seatBodies=new Set(bodies),localSeat=this.input.campaign.localSeat,scene=source.ongoing.assembly.input.scene;
    const activeRoad=this.#activeRoad;if(activeRoad){if(activeRoad.frame!==frame||activeRoad.receipt.dest!==zoneId||frame.seats.length!==1||frame.seats[0]!==activeRoad.receipt.seat)throw Error('Native road handoff changed its exact ticket');activeRoad.body=bodies[0];}
@@ -270,6 +273,7 @@ export class NativeAreaSceneTransitionCoordinator {
     destination=Object.freeze({ongoing,combat:ongoing.combat,memory,roads,departure,binding:ongoing.binding,id:zoneId});
     const observers=ongoing.assembly.input.scene.actors;mutableCensus(observers);if(observers.length!==1||observers[0]!==incoming)throw Error('Native prepared destination observer changed');Reflect.apply(arraySplice,observers,[0,1]);
    }
+   if(!firstBirth){this.#townArrival=destination.combat;try{destination.combat.refreshTownStations(incoming);}finally{this.#townArrival=null;}}
    const destScene=destination.ongoing.assembly.input.scene,destCensus=own<Actor[]>(destScene,'actors'),relay=destination.ongoing.assembly.input.population.factory.relayStatus;mutableCensus(destCensus);
    const destinationScene=own<World['scene']>(destination.ongoing.quests.input.state,'scene');
    if(carriedScene){if(destinationScene&&destinationScene!==carriedScene)throw Error('Native destination already owns a distinct running scene');writable(source.ongoing.quests.input.state,'scene');writable(destination.ongoing.quests.input.state,'scene');}

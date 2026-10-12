@@ -1,3 +1,4 @@
+import type {NativeTownBodyRecorder} from './nativeTownBody';
 /** Complete original native birth ordering, after layout/environment adoption
  * and player arrival. A caller must bind every invoked state/controller service;
  * this operation neither swaps a standing World nor publishes an area. */
@@ -48,6 +49,7 @@ import { mintNemesisName } from '../meta/nemesis';
  * controller shapes, without requiring a World instance or importing it at runtime.
  * Read callbacks remain live. Memory restoration may replace the whole census. */
 export interface NativeAreaBirthHost {
+ readonly townBody?:NativeTownBodyRecorder;
   readonly doodads:World['doodads'];
   readonly account:World['account'];
   readonly annexFound:World['annexFound'];
@@ -853,6 +855,7 @@ export function birthNativeArea(host:NativeAreaBirthHost,def:ZoneDef,layout:Gene
       // old north-east stand overlapped a rock and got shoved off its seat).
       t.pos = host.clampPos(host.townSeat('tracker', 0, 34), t.radius);
       host.actors.push(t);
+      host.townBody?.('tracker','tracker',t);
     }
     // THE RECRUITER'S TABLE (FEATURE.MERC_RECRUITER): the Vault's officer
     // sets up in the east quarter — a PORT-identical counter (template
@@ -866,6 +869,7 @@ export function birthNativeArea(host:NativeAreaBirthHost,def:ZoneDef,layout:Gene
       officer.name = 'the Recruiting Officer';
       officer.pos = host.clampPos(host.townSeat('recruiter', 24, -18), officer.radius);
       host.actors.push(officer);
+      host.townBody?.('recruiter','recruiter',officer);
       host.doodads.push({
         pos: host.clampPos(host.townSeat('recruiter', -20, 14), 10),
         radius: 9, kind: 'merc_banner', rot: 0,
@@ -889,6 +893,7 @@ export function birthNativeArea(host:NativeAreaBirthHost,def:ZoneDef,layout:Gene
         r.name = row.name;
         r.pos = host.clampPos(vec(at.x, at.y), r.radius);
         host.actors.push(r);
+        host.townBody?.('ward',row.id,r);
         // THE TRANSIENT TELLING's 'resident' lane (speechTell) + THE SPEECH
         // GRAMMAR's WARD company: every family is one named speaker.
         host.speakerRows.set(r.id, makeSpeakerRow(r.id, row.line, 'resident', {

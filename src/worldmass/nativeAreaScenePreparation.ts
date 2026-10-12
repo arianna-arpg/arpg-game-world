@@ -1,4 +1,8 @@
+import {makeNativeAreaArena} from '../engine/nativeAreaArena';
+import {hullOf} from '../world/shape';
 import {assertNativeCharacterReceipt,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
+import {foldNativeTownStations} from './nativeAreaTownStations';
+import {START_ZONE} from '../data/zones';
 /** Concrete native source preparation. A prepared area has no physical runtime authority. */
 import {assertNativeRetainedMassState} from './nativeAreaRetainedMassState';
 import {vec} from '../core/math';
@@ -29,6 +33,7 @@ export class NativeAreaScenePreparation {
  prepare(zoneId:string,geography:MassNativeGeography,from?:string,representative?:Actor):NativeAreaSceneOngoing {
   const {session}=this.input,campaign=session.campaign,writer=session.writer;assertNativeRetainedMassState(writer);
   const definition=campaign.zoneMap[zoneId]??campaign.caveMap[zoneId];if(!definition||definition.id!==zoneId||this.#areas.has(zoneId)||!(geography instanceof MassNativeGeography))throw Error('Native preparation needs one actual unresolved area');
+  if(zoneId===START_ZONE){writer['townLayoutChangedOnLoad']=false;foldNativeTownStations(writer);}
   const player=representative??campaign.localSeat.actor;
   const area=this.#construct(zoneId,geography,from,player);this.#layout(area,geography);return area;
  }
@@ -42,6 +47,7 @@ export class NativeAreaScenePreparation {
   };
   const carry={inCave:!campaign.zoneMap[zoneId],entryFrom:from??null,voyage:null,charBorn:writer['charBorn'],charRegrowAcc:writer['charRegrowAcc'],townTierIdx:writer['townTierIdx']};
   const area=new NativeAreaSceneOngoing({definition,player,initialActors:characterConstruction?writer.actors:[player],characterConstruction,campaign,sources:installedNativeAreaSources(campaign),services,carry,config:installedNativeAreaConfig(),...freshAreaOngoingState(campaign.time),authority,maddenLedger,coordinator,characterWriter:writer});
+  area.combat.runtimeState.frame.townLayoutChangedOnLoad=zoneId===START_ZONE&&writer['townLayoutChangedOnLoad'];
   this.#areas.set(zoneId,area);this.#geography.set(area,geography);
   return area;
  }
@@ -56,7 +62,12 @@ export class NativeAreaScenePreparation {
   });
  }
  constructInitialCharacter(token:NativeCharacterCreationReceipt,zoneId:string,geography:MassNativeGeography):NativeAreaSceneOngoing {const r=assertNativeCharacterReceipt(token,'construct');if(r.preparation!==this||this.#areas.size||zoneId!==r.writer.zoneMap[zoneId]?.id||geography.seed!==r.writer.manifest.seed)throw Error('Native character needs its exact unprepared first area');return this.#construct(zoneId,geography,undefined,r.seat.actor,token);}
- prepareInitialCharacter(token:NativeCharacterCreationReceipt):void {const r=assertNativeCharacterReceipt(token,'birth'),area=r.area;if(r.preparation!==this||!area||this.#areas.get(area.assembly.input.scene.zone.id)!==area||area.assembly.phase!=='fresh')throw Error('Native character preparation differs');area.assembly.scenePresence.includeInitialCharacter(token);area.assembly.input.population.includeInitialCharacter(token);r.writer.zone=area.assembly.input.scene.zone;r.writer.zoneEnteredAt=r.writer.time;r.writer.arena=area.assembly.input.geometry.arena;this.#layout(area,this.#geography.get(area)!);}
+ prepareInitialCharacter(token:NativeCharacterCreationReceipt):void {const r=assertNativeCharacterReceipt(token,'birth'),area=r.area;if(r.preparation!==this||!area||this.#areas.get(area.assembly.input.scene.zone.id)!==area||area.assembly.phase!=='fresh')throw Error('Native character preparation differs');
+  // The original load follows party/join; account rewards acquired there belong in this first layout.
+  r.writer['townLayoutChangedOnLoad']=false;foldNativeTownStations(r.writer);assertNativeCharacterReceipt(token,'birth');
+  const {geometry,settlement,scene}=area.assembly.input;geometry.arena=makeNativeAreaArena(scene.zone);geometry.arenaHull=hullOf(geometry.arena);
+  settlement.input.state.townTierIdx=r.writer['townTierIdx'];area.combat.runtimeState.frame.townLayoutChangedOnLoad=r.writer['townLayoutChangedOnLoad'];
+  area.assembly.scenePresence.includeInitialCharacter(token);area.assembly.input.population.includeInitialCharacter(token);r.writer.zone=area.assembly.input.scene.zone;r.writer.zoneEnteredAt=r.writer.time;r.writer.arena=area.assembly.input.geometry.arena;this.#layout(area,this.#geography.get(area)!);}
 
  /** The coordinator selects this same source's recorded geography. Preparation
   * returns its exact real area; no caller supplies a prebirthed destination. */

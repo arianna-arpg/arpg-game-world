@@ -64,6 +64,17 @@ export type ProbeRow = ProbeInvocation & (
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativetownclientcomposition.ts', status: 'green', tier: 'fast', why: 'Actual retained town growth, initial account fold and fresh conclusion composition.' },
+  { probe: 'probe_nativetownclientcompositionsource.ts', status: 'green', tier: 'fast', why: 'Actual retained town growth, initial account fold and fresh conclusion composition.' },
+  { probe: 'probe_nativetownconclusioncomposition.ts', status: 'green', tier: 'fast', why: 'Actual retained town growth, initial account fold and fresh conclusion composition.' },
+  { probe: 'probe_nativetownconclusioncompositionsource.ts', status: 'green', tier: 'fast', why: 'Actual retained town growth, initial account fold and fresh conclusion composition.' },
+  { probe: 'probe_nativetownfreshfoldreview.ts', status: 'green', tier: 'fast', why: 'Actual retained town growth, initial account fold and fresh conclusion composition.' },
+  { probe: 'probe_nativetownfreshfoldsource.ts', status: 'green', tier: 'fast', why: 'Actual retained town growth, initial account fold and fresh conclusion composition.' },
+  { probe: 'probe_nativetownfreshfoldtiming.ts', status: 'green', tier: 'fast', why: 'Actual retained town growth, initial account fold and fresh conclusion composition.' },
+  { probe: 'probe_nativetownstationboundaries.ts', status: 'green', tier: 'fast', why: 'Actual retained town growth, initial account fold and fresh conclusion composition.' },
+  { probe: 'probe_nativetownstations.ts', status: 'green', tier: 'fast', why: 'Actual retained town growth, initial account fold and fresh conclusion composition.' },
+  { probe: 'probe_nativetownstationsource.ts', status: 'green', tier: 'fast', why: 'Actual retained town growth, initial account fold and fresh conclusion composition.' },
+  { probe: 'probe_nativetownunlock.ts', status: 'green', tier: 'fast', why: 'Actual retained town growth, initial account fold and fresh conclusion composition.' },
   { probe: 'probe_nativeclientconclusioncomposition.ts', status: 'green', tier: 'fast', why: 'Actual retained run conclusion, live campaign roster and fresh scene/retirement composition.' },
   { probe: 'probe_nativeclientconclusioncompositionsource.ts', status: 'green', tier: 'fast', why: 'Actual retained run conclusion, live campaign roster and fresh scene/retirement composition.' },
   { probe: 'probe_nativerunconclusion.ts', status: 'green', tier: 'fast', why: 'Actual retained run conclusion, live campaign roster and fresh scene/retirement composition.' },
