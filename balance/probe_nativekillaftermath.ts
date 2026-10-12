@@ -1,3 +1,5 @@
+import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
+import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
 import {beforeNativeSceneKillAftermath} from './nativeSceneKillAftermathIntegrationFixture';
 import {beforeNativeSceneDefensePreparation} from './nativeSceneDefensePreparationIntegrationFixture';
 import {nativeSceneKillAftermathIntegrationArchive as integrationArchive,nativeSceneKillAftermathIntegrationArchiveHash} from './nativeSceneKillAftermathIntegrationArchive';
@@ -58,12 +60,39 @@ withSeededRandom(42001,()=>{
 });
 const report={pin:archive.commit,sourceHash:archive.worldHash,scope:'Exact rolls/construction only. Four-lane World comparison mirrors raw queues/zone and uses retained clamp geometry; callback-specific courses additionally redirect the selected shedOrb receiver. No full death flow, other remnant writers, pickup/burst ticking, retirement or publication.',groups:checks.length,cases:receipts.length,receipt:hash(JSON.stringify(receipts)),checks,catalog:{orbs:Object.keys(ORB_DEFS),remnants:Object.keys(REMNANT_KINDS),bursts:burstCatalog.map(d=>d.id),supports:supportCatalog.map(d=>d.id),skills:skillCatalog.map(d=>d.id)},receipts};fs.mkdirSync(new URL('./reports',import.meta.url),{recursive:true});fs.writeFileSync(new URL('./reports/native-kill-aftermath.json',import.meta.url),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({groups:report.groups,cases:report.cases,receipt:report.receipt,catalog:Object.fromEntries(Object.entries(report.catalog).map(([k,v])=>[k,v.length]))}));
 // Ordinary World evidence is independent of the mirrored retained algorithm lanes.
+
+// Direct latest-layer views compose visual reversal exactly once. The older
+// defense fixture already includes both layers and still receives raw World.
+const beforeVisualKill=(source:string)=>beforeNativeSceneKillAftermath(beforeNativeMainVisualSource('src/engine/world.ts',source));
+// Map an older integration mutation through only the declared visual source
+// changes. Overlapping exact hunks now belong to the stricter visual guard;
+// every untouched hunk must still reach its original historical guard.
+function visualWorldHunk(raw:string,historical:string,legacy:RegExp){
+ let text=beforeNativeMainVisualSource('src/engine/world.ts',raw),start=text.indexOf(historical),end=start+historical.length,overlap=false;
+ assert.equal(text.split(historical).length,2,'unique historical mutation hunk');
+ for(const edit of [...visualArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits].reverse()){
+  const at=text.indexOf(edit.before),stop=at+edit.before.length,delta=edit.after.length-edit.before.length;assert.equal(text.split(edit.before).length,2,'exact visual forward context');
+  if(stop<=start){start+=delta;end+=delta;}else if(at<end){start=Math.min(start,at);end=Math.max(end,stop)+delta;overlap=true;}
+  text=text.slice(0,at)+edit.after+text.slice(stop);
+ }
+ assert.equal(text,raw.replaceAll('\r\n','\n'),'whole current source after exact forward mapping');
+ const mapped=text.slice(start,end);
+ // An expanded overlap may begin in an unchanged older delegate. Mutate a
+ // byte inside an exact visual after-hunk, not merely the expanded prefix.
+ const visualEdit=overlap?visualArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits.find(edit=>mapped.includes(edit.after)):undefined;
+ if(overlap)assert.ok(visualEdit,'overlap includes a complete declared visual after-hunk');
+ const target=visualEdit?.after??mapped,at=mapped.indexOf(target),letter=target.search(/[A-Za-z]/);
+ assert.ok(letter>=0,'mutation has a source letter');
+ const changed=at+letter,mutated=mapped.slice(0,changed)+'!'+mapped.slice(changed+1);
+ return {text:mapped,mutated,guard:overlap?/unique exact native main visual source/:legacy};
+}
+
 const integrationChecks:string[]=[],integrationCheck=(name:string,run:()=>void)=>{withSeededRandom(42200+integrationChecks.length,run);integrationChecks.push(name);console.log('PASS integration '+name);};
 const worldCall=(w:World,name:string,...args:any[])=>Reflect.apply(Reflect.get(w,name),w,args),burstCfg:DeathBurstDef={mode:'orb',damageFrac:.25},installedSkill=()=>makeSkillInstance(SKILLS.fireball,5);
 integrationCheck('exact three delegates and complete immutable World reversal preserve every older layer',()=>{
- assert.equal(hash(JSON.stringify(integrationArchive)),nativeSceneKillAftermathIntegrationArchiveHash);assert.equal(hash(current),integrationArchive.afterHash);const pinned=execFileSync('git',['show',integrationArchive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6});assert.equal(beforeNativeSceneKillAftermath(current),pinned);assert.equal(hash(pinned),integrationArchive.sourceHash);assert.equal(beforeNativeSceneDefensePreparation(current),source);assert.equal(beforeNativeSceneKillAftermath(current.replaceAll('\n','\r\n')),pinned);assert.equal(beforeNativeSceneKillAftermath(current.replace(/\n/g,(()=>{let i=0;return()=>i++%2?'\r\n':'\n';})())),pinned);
+ assert.equal(hash(JSON.stringify(integrationArchive)),nativeSceneKillAftermathIntegrationArchiveHash);assert.equal(hash(beforeNativeMainVisualSource('src/engine/world.ts',current)),integrationArchive.afterHash);const pinned=execFileSync('git',['show',integrationArchive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6});assert.equal(beforeVisualKill(current),pinned);assert.equal(hash(pinned),integrationArchive.sourceHash);assert.equal(beforeNativeSceneDefensePreparation(current),source);assert.equal(beforeVisualKill(current.replaceAll('\n','\r\n')),pinned);assert.equal(beforeVisualKill(current.replace(/\n/g,(()=>{let i=0;return()=>i++%2?'\r\n':'\n';})())),pinned);
  const sf=ts.createSourceFile('current.ts',current,99,true),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;assert.equal(sf.statements[0].getText(sf),"import './nativeSceneBootstrap';");for(const row of archive.rows){const old=ts.createSourceFile('old.ts','class Old{'+row.source+'}',99,true),m=(old.statements[0] as ts.ClassDeclaration).members[0] as ts.MethodDeclaration,next=cl.members.find(n=>n.name?.getText(sf)===row.name) as ts.MethodDeclaration;assert.deepEqual(next.parameters.map(p=>p.getText(sf)),m.parameters.map(p=>p.getText(old)));assert.equal(next.type?.getText(sf),m.type?.getText(old));assert.deepEqual(next.modifiers?.map(x=>x.getText(sf)),m.modifiers?.map(x=>x.getText(old)));}
- for(const row of integrationArchive.integration){assert.equal(current.split(row.after).length,2);assert.throws(()=>beforeNativeSceneKillAftermath(current.replace(row.after,row.after.replace(/[A-Za-z]/,'!'))),/unique exact native kill aftermath integration/);assert.throws(()=>beforeNativeSceneKillAftermath(current+'\n'+row.after),/unique exact native kill aftermath integration/);}assert.notEqual(hash(beforeNativeSceneKillAftermath(current+'\n// unknown source delta\n')),integrationArchive.sourceHash);
+ for(const row of integrationArchive.integration){const h=visualWorldHunk(current,row.after,/unique exact native kill aftermath integration/);assert.equal(current.split(h.text).length,2);assert.throws(()=>beforeVisualKill(current.replace(h.text,h.mutated)),h.guard);assert.throws(()=>beforeVisualKill(current+'\n'+h.text),h.guard);}assert.notEqual(hash(beforeVisualKill(current+'\n// unknown source delta\n')),integrationArchive.sourceHash);
 });
 integrationCheck('ordinary World cache follows actual replacement orb remnant and burst queues',()=>{
  const w=makeSimWorld('warrior',42211),a=w.player,v=w.createMonster('skeleton_warrior',5,'enemy');w.actors.push(v);a.sheet.setSource('actual-rewards',[...Object.keys(ORB_DEFS).map(id=>mod(orbOnKillStat(id),'override',1)),...Object.keys(REMNANT_KINDS).map(id=>mod(remnantDropStat(id),'override',1))]);const host=worldCall(w,'nativeSceneKillAftermathHost') as core.NativeSceneKillAftermathHost;assert.equal(host,worldCall(w,'nativeSceneKillAftermathHost'));assert.equal(Object.getOwnPropertyDescriptor(w,'nativeSceneKillAftermathView')?.enumerable,false);
@@ -85,4 +114,4 @@ integrationCheck('ordinary World quiet branches never read stores metadata or op
 integrationCheck('baked burst records and cache do not pin actors while genuine homing orbs do',()=>{
  const w=makeSimWorld('warrior',42261),dying=new Actor('dying','enemy',vec(500,500)),unlinked=new Actor('unlinked','enemy',vec(520,500));w.actors.push(dying,unlinked);const owned=new Map([['dying',dying],['unlinked',unlinked]]);assert.equal(massDormancyPins(w,owned).size,0);worldCall(w,'spawnDeathBurst',dying,burstCfg);assert.equal(Object.getOwnPropertyDescriptor(w,'nativeSceneKillAftermathView')?.enumerable,false);assert.equal(w.deathBursts.length,1);assert.equal(massDormancyPins(w,owned).size,0,'baked coordinates and stats retain no actor lease');w.shedOrb('life',dying.pos,{scatter:0,clamp:false,homeTo:dying});assert.ok(massDormancyPins(w,owned).has(dying));assert.equal(massDormancyPins(w,owned).has(unlinked),false);const old=w.orbs;w.orbs=[];assert.equal(old.length,1);assert.equal(massDormancyPins(w,owned).size,0,'cached adapter cannot retain replaced historical queue');
 });
-const integrationReport={pin:integrationArchive.integrationCommit,sourceHash:integrationArchive.sourceHash,afterHash:hash(current),checks:integrationChecks,receipt:hash(JSON.stringify(integrationChecks)),scope:'Ordinary World genuine stores, callback receivers, partial failures and dormancy; three delegates only. Retained pickup/burst ticking, death execution, actor retirement and publication remain separate.'};fs.writeFileSync(new URL('./reports/native-kill-aftermath-integration.json',import.meta.url),JSON.stringify(integrationReport,null,2)+'\n');console.log(JSON.stringify(integrationReport));
+const integrationReport={pin:integrationArchive.integrationCommit,sourceHash:integrationArchive.sourceHash,afterHash:hash(beforeNativeMainVisualSource('src/engine/world.ts',current)),checks:integrationChecks,receipt:hash(JSON.stringify(integrationChecks)),scope:'Ordinary World genuine stores, callback receivers, partial failures and dormancy; three delegates only. Retained pickup/burst ticking, death execution, actor retirement and publication remain separate.'};fs.writeFileSync(new URL('./reports/native-kill-aftermath-integration.json',import.meta.url),JSON.stringify(integrationReport,null,2)+'\n');console.log(JSON.stringify(integrationReport));

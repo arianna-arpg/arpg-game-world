@@ -282,8 +282,9 @@ export function sceneMintLootResult(host:NativeSceneLootHost, at: Vec2, result: 
     }
   }
 
-export function sceneShedOrb(host:NativeSceneLootHost, kind: string, at: Vec2, opts?: {
+export function sceneShedOrb(host:NativeSceneLootHost,kind: string, at: Vec2, opts?: {
     scatter?: number; amount?: number; life?: number; homeTo?: Actor;
+    flowFromTier?: number;
     /** false: keep the raw scatter point (siphon orbs fly home anyway). */
     clamp?: boolean;
     /** THE SPOILS STORY: the shedder's story (a struck body's, a breakable's
@@ -301,6 +302,7 @@ export function sceneShedOrb(host:NativeSceneLootHost, kind: string, at: Vec2, o
       kind, amount: opts?.amount ?? orbAmount(def, host.lootLevelAt(at)),
       bob: rand(0, Math.PI * 2), life: opts?.life ?? def.life ?? 12,
       homeTo: opts?.homeTo,
+      flowFromTier: opts?.flowFromTier,
       tier: story,
     });
     SIM_TAP.current?.onOrbShed?.(kind);

@@ -1,12 +1,20 @@
 import type { Actor } from '../../engine/actor';
 import { castingCueOf } from '../../engine/castingCues';
 import { CASTING_CUE_CFG as C, castingCueStyle } from '../../data/castingCues';
+import { selfProfile, SELF_VISUAL_STYLE as S } from '../../data/skillSelfVisuals';
+import { drawSelfGlyph } from './skillSelfVoice';
 
 /** Four separated corners close around held work, then form a steady seal.
  * No pulse oscillator: a readied hold stays visibly ready without flashing. */
 export function drawCastingCue(ctx: CanvasRenderingContext2D, a: Actor): void {
   const cue = castingCueOf(a);
   if (!cue) return;
+  const profile = cue.skillId && selfProfile(cue.skillId);
+  if (profile) {
+    ctx.save(); ctx.rotate(cue.facing); ctx.translate(a.radius + S.frontPad, 0);
+    ctx.globalAlpha *= .4 + .5 * cue.fill;
+    drawSelfGlyph(ctx, profile, S.prepareRadius, cue.color, cue.fill, true); ctx.restore(); return;
+  }
   const cfg = castingCueStyle(cue.style), r = cfg.radius;
   ctx.save(); ctx.rotate(cue.facing); ctx.translate(a.radius + cfg.frontPad, 0);
   ctx.globalAlpha *= C.emptyAlpha + (C.fullAlpha - C.emptyAlpha) * cue.fill;

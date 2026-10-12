@@ -1,3 +1,4 @@
+import {sceneShowSkillArrival,type NativeSceneSkillArrivalHost} from '../engine/nativeSceneSkillArrival';
 /** Physical-area entry to exact combat-state rules. Payload execution remains separate. */
 import type {Actor} from '../engine/actor';
 import {STATUS_DEFS} from '../engine/status';
@@ -32,6 +33,8 @@ export class NativeAreaSceneCombatState {
   const input:NativeCombatStateInput=this.input=Object.freeze(b),p=input.progression;
   if(!(p instanceof NativeAreaSceneProgression)||!(input.population instanceof NativeAreaScenePopulation)||p.input.scene!==input.scene||p.input.population!==input.population||p.input.campaign!==input.campaign||p.input.authority as object!==input.authority||input.population.input.scene!==input.scene||input.population.input.campaign as object!==input.campaign||input.authority.campaign!==input.campaign)throw Error('Native combat state needs identical concrete owners and campaign authority');
   const host={} as native.NativeSceneCombatStateHost,self=this;
+  const arrival:NativeSceneSkillArrivalHost=Object.freeze({get flashes(){return p.input.geometry.flashes;},get seats(){return input.campaign.seats;},get localSeat(){return input.campaign.localSeat;},get account(){return input.campaign.account;}});
+  Object.defineProperty(host,'showSkillArrival',{enumerable:true,value:(...args:Parameters<native.NativeSceneCombatStateHost['showSkillArrival']>)=>sceneShowSkillArrival(arrival,...args)});
   Object.defineProperties(host,{actors:{enumerable:true,get:()=>input.scene.actors},treeBuffSources:{enumerable:true,get:()=>input.progression.input.state.treeBuffSources},time:{enumerable:true,get:()=>input.campaign.time}});
   for(const key of ['grantTreeBuff','tapFires','isEliteVictim'] as const)Object.defineProperty(host,key,{enumerable:true,get(){const fn=self[key];return (...args:any[])=>Reflect.apply(fn,self,args);}});
   this.host=Object.freeze(host);for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false});

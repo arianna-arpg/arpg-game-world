@@ -1,3 +1,5 @@
+import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
+import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
 import {beforeNativeSceneKillAftermath} from './nativeSceneKillAftermathIntegrationFixture';
 import {beforeNativeSceneDefensePreparation} from './nativeSceneDefensePreparationIntegrationFixture';
 import {beforeNativeSceneCastingPreparation} from './nativeSceneCastingPreparationIntegrationFixture';
@@ -78,13 +80,40 @@ check('native born worn golem preserves original caller pool relationship',()=>{
 const report={pin:archive.commit,sourceHash:archive.worldHash,scope:'Exact preparation only; mirrored World census/flashes/clock algorithm lane; no damage/death execution, detached effects, ticking or publication.',groups:checks.length,cases:receipts.length,receipt:hash(JSON.stringify(receipts)),checks,catalog:{shells:shellCatalog.map(d=>d.id),bursts:burstCatalog.map(d=>d.id),drives:driveCatalog.map(d=>d.id),guards:guardCatalog.map(d=>d.id),bashSupports:bashSupports.map(d=>d.id),invokers:invokerCatalog.map(d=>d.id)},receipts};fs.mkdirSync(new URL('./reports',import.meta.url),{recursive:true});fs.writeFileSync(new URL('./reports/native-defense-preparation.json',import.meta.url),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({groups:report.groups,cases:report.cases,receipt:report.receipt,catalog:Object.fromEntries(Object.entries(report.catalog).map(([k,v])=>[k,v.length]))}));
 
 // Ordinary World integration evidence is separate from mirrored algorithm lanes.
+
+// Direct latest-layer views compose visual reversal exactly once. The older
+// defense fixture already includes both layers and still receives raw World.
+const beforeVisualKill=(source:string)=>beforeNativeSceneKillAftermath(beforeNativeMainVisualSource('src/engine/world.ts',source));
+// Map an older integration mutation through only the declared visual source
+// changes. Overlapping exact hunks now belong to the stricter visual guard;
+// every untouched hunk must still reach its original historical guard.
+function visualWorldHunk(raw:string,historical:string,legacy:RegExp){
+ let text=beforeNativeMainVisualSource('src/engine/world.ts',raw),start=text.indexOf(historical),end=start+historical.length,overlap=false;
+ assert.equal(text.split(historical).length,2,'unique historical mutation hunk');
+ for(const edit of [...visualArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits].reverse()){
+  const at=text.indexOf(edit.before),stop=at+edit.before.length,delta=edit.after.length-edit.before.length;assert.equal(text.split(edit.before).length,2,'exact visual forward context');
+  if(stop<=start){start+=delta;end+=delta;}else if(at<end){start=Math.min(start,at);end=Math.max(end,stop)+delta;overlap=true;}
+  text=text.slice(0,at)+edit.after+text.slice(stop);
+ }
+ assert.equal(text,raw.replaceAll('\r\n','\n'),'whole current source after exact forward mapping');
+ const mapped=text.slice(start,end);
+ // An expanded overlap may begin in an unchanged older delegate. Mutate a
+ // byte inside an exact visual after-hunk, not merely the expanded prefix.
+ const visualEdit=overlap?visualArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits.find(edit=>mapped.includes(edit.after)):undefined;
+ if(overlap)assert.ok(visualEdit,'overlap includes a complete declared visual after-hunk');
+ const target=visualEdit?.after??mapped,at=mapped.indexOf(target),letter=target.search(/[A-Za-z]/);
+ assert.ok(letter>=0,'mutation has a source letter');
+ const changed=at+letter,mutated=mapped.slice(0,changed)+'!'+mapped.slice(changed+1);
+ return {text:mapped,mutated,guard:overlap?/unique exact native main visual source/:legacy};
+}
+
 const integrationChecks:string[]=[],integrationCheck=(name:string,fn:()=>void)=>{withSeededRandom(39101+integrationChecks.length,fn);integrationChecks.push(name);console.log('PASS integration '+name);};
 const worldCall=(w:World,name:string,...args:any[])=>Reflect.apply(Reflect.get(w,name),w,args);
 integrationCheck('exact seven delegates and complete immutable World reversal preserve historical guards',()=>{
- assert.equal(hash(JSON.stringify(integrationArchive)),nativeSceneDefensePreparationIntegrationArchiveHash);assert.equal(hash(beforeNativeSceneKillAftermath(current)),integrationArchive.afterHash);const pinned=execFileSync('git',['show',integrationArchive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6});assert.equal(beforeNativeSceneDefensePreparation(current),pinned);assert.equal(hash(pinned),integrationArchive.sourceHash);assert.equal(beforeNativeSceneCastingPreparation(current),source);
+ assert.equal(hash(JSON.stringify(integrationArchive)),nativeSceneDefensePreparationIntegrationArchiveHash);assert.equal(hash(beforeVisualKill(current)),integrationArchive.afterHash);const pinned=execFileSync('git',['show',integrationArchive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6});assert.equal(beforeNativeSceneDefensePreparation(current),pinned);assert.equal(hash(pinned),integrationArchive.sourceHash);assert.equal(beforeNativeSceneCastingPreparation(current),source);
  assert.equal(beforeNativeSceneDefensePreparation(current.replaceAll('\n','\r\n')),pinned);assert.equal(beforeNativeSceneDefensePreparation(current.replace(/\n/g,(()=>{let i=0;return()=>i++%2?'\r\n':'\n';})())),pinned);
  const sf=ts.createSourceFile('current.ts',current,99,true),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;assert.equal(sf.statements[0].getText(sf),"import './nativeSceneBootstrap';");for(const row of archive.rows){const old=ts.createSourceFile('old.ts','class Old{'+row.source+'}',99,true),m=(old.statements[0] as ts.ClassDeclaration).members[0] as ts.MethodDeclaration,next=cl.members.find(n=>n.name?.getText(sf)===row.name) as ts.MethodDeclaration;assert.deepEqual(next.parameters.map(p=>p.getText(sf)),m.parameters.map(p=>p.getText(old)));assert.equal(next.type?.getText(sf),m.type?.getText(old));assert.deepEqual(next.modifiers?.map(x=>x.getText(sf)),m.modifiers?.map(x=>x.getText(old)));}
- for(const row of integrationArchive.integration){assert.equal(current.split(row.after).length,2);assert.throws(()=>beforeNativeSceneDefensePreparation(current.replace(row.after,row.after.replace(/[A-Za-z]/,'!'))),/unique exact native defense preparation integration/);assert.throws(()=>beforeNativeSceneDefensePreparation(current+'\n'+row.after),/unique exact native defense preparation integration/);}assert.notEqual(hash(beforeNativeSceneDefensePreparation(current+'\n// unknown source delta\n')),integrationArchive.sourceHash);
+ for(const row of integrationArchive.integration){const h=visualWorldHunk(current,row.after,/unique exact native defense preparation integration/);assert.equal(current.split(h.text).length,2);assert.throws(()=>beforeNativeSceneDefensePreparation(current.replace(h.text,h.mutated)),h.guard);assert.throws(()=>beforeNativeSceneDefensePreparation(current+'\n'+h.text),h.guard);}assert.notEqual(hash(beforeNativeSceneDefensePreparation(current+'\n// unknown source delta\n')),integrationArchive.sourceHash);
 });
 integrationCheck('ordinary World adapter reads real replacement census flashes and clock',()=>{
  const w=makeSimWorld('warrior',39111),a=w.createMonster('rockgrub',5,'enemy'),near=w.createMonster('skeleton_warrior',5,'enemy'),far=w.createMonster('skeleton_warrior',5,'enemy');w.actors.push(a,near,far);a.pos=vec(500,500);near.pos=vec(520,500);far.pos=vec(10000,10000);a.brain={drives:{hunger:{onHurt:.2,share:.5}}};a.squadId=near.squadId=far.squadId=333;
@@ -100,4 +129,4 @@ integrationCheck('ordinary World actor-free branch leaves lazy clock and visual 
 integrationCheck('nonenumerable cache does not pin unrelated census while real tethers still pin endpoints',()=>{
  const w=makeSimWorld('warrior',39131),linked=new Actor('linked','enemy',vec(500,500)),unlinked=new Actor('unlinked','enemy',vec(520,500));w.actors.push(linked,unlinked);const owned=new Map([['linked',linked],['unlinked',unlinked]]);assert.equal(massDormancyPins(w,owned).size,0);w.bumpDrives(null,'onKill');assert.equal(Object.getOwnPropertyDescriptor(w,'nativeSceneDefensePreparationView')?.enumerable,false);assert.equal(massDormancyPins(w,owned).size,0);worldCall(w,'addTether',w.player,linked,{link:'target',dps:20,damageType:'physical'},makeSkillInstance(SKILLS.fireball,5),w.player);assert.ok(massDormancyPins(w,owned).has(linked));assert.equal(massDormancyPins(w,owned).has(unlinked),false);w.tethers=[];assert.equal(massDormancyPins(w,owned).size,0);
 });
-const integrationReport={pin:integrationArchive.integrationCommit,sourceHash:integrationArchive.sourceHash,afterHash:hash(beforeNativeSceneKillAftermath(current)),checks:integrationChecks,receipt:hash(JSON.stringify(integrationChecks)),scope:'Ordinary World actual stores/cache/native partial effects. Retained full combat, ticking, detached lifetimes and publication remain outside this preparation closure.'};fs.writeFileSync(new URL('./reports/native-defense-preparation-integration.json',import.meta.url),JSON.stringify(integrationReport,null,2)+'\n');console.log(JSON.stringify(integrationReport));
+const integrationReport={pin:integrationArchive.integrationCommit,sourceHash:integrationArchive.sourceHash,afterHash:hash(beforeVisualKill(current)),checks:integrationChecks,receipt:hash(JSON.stringify(integrationChecks)),scope:'Ordinary World actual stores/cache/native partial effects. Retained full combat, ticking, detached lifetimes and publication remain outside this preparation closure.'};fs.writeFileSync(new URL('./reports/native-defense-preparation-integration.json',import.meta.url),JSON.stringify(integrationReport,null,2)+'\n');console.log(JSON.stringify(integrationReport));

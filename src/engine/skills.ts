@@ -146,6 +146,8 @@ export interface TrajectorySpec {
  * damage honours the conversion schema like any other typed source.
  */
 export interface TetherSpec {
+  /** Authored geometry, independent of damage conversion or wardrobe tint. */
+  visual?: string;
   /** 'caster': spawned object ↔ its caster. 'network': spawned object ↔
    *  every sibling object of the same skill within `radius` (a trap web).
    *  'target': caster ↔ the skill's resolved target (bond skills/supports —
@@ -1658,6 +1660,8 @@ export interface MeleeDelivery {
 
 export interface NovaDelivery {
   type: 'nova';           // circular burst centered on the caster
+  /** Optional burstVoice override; absent uses the authored skillVisuals profile. */
+  fx?: string;
   radius: number;         // (or on the resolved target, if the skill targets)
   /** 'all' also strikes allies AND the caster (Bloodlet);
    *  'allies' affects ONLY your side (blessing skills like Furor). */

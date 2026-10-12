@@ -1,3 +1,5 @@
+import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
+import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
 /** Exact native loot parity. Compact geometry/policy recorders are test boundaries;
  * physical contents, item allocation and settlement gem factories are native. */
 import assert from 'node:assert/strict';
@@ -51,7 +53,7 @@ if(process.argv.includes('--provenance')){
  for(const row of archive.leaves)assert.equal(node.members.find(m=>m.name?.getText(sf)===row.name)?.getText(sf).replaceAll('\r\n','\n'),row.text,'git original context '+row.name);
  for(const row of archive.rows)assert.equal(node.members.find(m=>m.name?.getText(sf)===row.name)?.getText(sf).replaceAll('\r\n','\n'),row.before,'git original '+row.name);
 }
-const source=parse(read('src/engine/nativeSceneLoot.ts'));
+const source=parse(beforeNativeMainVisualSource('src/engine/nativeSceneLoot.ts',read('src/engine/nativeSceneLoot.ts')));
 const cap=(s:string)=>s[0].toUpperCase()+s.slice(1);
 for(const row of archive.rows){
  const old=parse('class Archive{'+row.before+'}'),before=(old.statements[0] as ts.ClassDeclaration).members[0] as ts.MethodDeclaration;
@@ -66,8 +68,23 @@ assert.equal(archive.grace,'const DROP_PICKUP_GRACE = 0.8;');
 assert.ok(read('src/engine/nativeSceneLoot.ts').includes('export '+archive.grace));
 const bindings={chance,dist,rand,vec,ESSENCE_SPILL_CFG,abilityEssenceOfTier,VESTIGES,CONTAINER_DEFS,containerAccepts,ITEM_RARITIES,GEM_DROP_CFG,gemFloorFor,MEMORY_CFG,MEMORY_KINDS,makeMemoryItem,memoryFormOf,memoryKindForSeed,seedLaneFrac,SKILLS,SUPPORTS,makeSkillGem,rollSkillRarity,SKILL_RARITIES,mintSupportInstance,Rng,awakenMemoryFromDrop,gemDropKey,LEDGER_GEMDROP_TOTAL,LEDGER_LEGENDARY_SKILL_DROP,VENDOR_CFG,COOP_SCALING,DROP_PICKUP_GRACE,ORB_DEFS,ORB_CAP,orbAmount,SIM_TAP};
 const original=new Function(...Object.keys(bindings),emit('class Archive{'+archive.rows.map(r=>r.before).join('\n')+'}\nreturn Archive.prototype;'))(...Object.values(bindings)) as Record<string,Function>;
+// Historical source bodies remain immutable. Only these explicitly named
+// methods use the separately pinned main successor in the behavior lane.
+const visualMain='ea56c7ac4f5f4963dc6ad8ce3cb86bc12b66fa0b';
+assert.equal(visualArchive.main,visualMain);
+const visualMainText=execFileSync('git',['show',visualMain+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:30e6});
+const visualMainFile=ts.createSourceFile('main-world.ts',visualMainText,99,true),visualMainWorld=visualMainFile.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
+const visualReferenceEvidence:{name:string;sha256:string;projectedSha256:string;retainedPolicy?:string}[]=[];
+function visualReference(historical:Record<string,Function>,names:string[],bindings:Record<string,unknown>){
+ const rows=names.map(name=>{const m=visualMainWorld.members.find(n=>n.name?.getText(visualMainFile)===name);assert(m&&ts.isMethodDeclaration(m));const originalBody=m.getText(visualMainFile);let body=originalBody;if(name==='shedOrb'){assert.equal(body.split('orbAmount(def, this.zone.level)').length,2);assert(archive.rows.find(r=>r.name==='shedOrb')!.before.includes('orbAmount(def, this.lootLevelAt(at))'));body=body.replace('orbAmount(def, this.zone.level)','orbAmount(def, this.lootLevelAt(at))');}visualReferenceEvidence.push({name,sha256:hash(originalBody),projectedSha256:hash(body),retainedPolicy:name==='shedOrb'?'Preserve archived lootLevelAt(at); main adds only flowFromTier':undefined});return body;});
+ const js=ts.transpileModule('class VisualNative{'+rows.join('\n')+'}\nreturn VisualNative.prototype;',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+ const overrides=Function(...Object.keys(bindings),js)(...Object.values(bindings));return Object.defineProperties(Object.create(historical),Object.fromEntries(names.map(name=>[name,Object.getOwnPropertyDescriptor(overrides,name)!]))) as Record<string,Function>;
+}
+
+const nativeReference=visualReference(original,['shedOrb'],bindings);
+
 const factory=makeSimWorld('warrior',713);
-type Lane='original'|'world'|'core'|'owner';
+type Lane='native'|'world'|'core'|'owner';
 const methods=archive.rows.map(r=>r.name);
 let itemUidBase=0;
 function graph(value:any,seen=new Map<object,number>()):any{
@@ -116,7 +133,7 @@ function fixture(lane:Lane,failAt=''){
  if(lane==='owner')controller=new NativeAreaSceneLoot({scene,scenePresence:{scene,get seats(){return campaign.seats;}},geometry,physical,settlement,campaign,state} as any);
  else {
   controller=w;
-  if(lane==='original')for(const name of methods)w[name]=original[name];
+  if(lane==='native')for(const name of methods)w[name]=nativeReference[name];
   if(lane==='core')for(const name of methods)w[name]=function(...args:any[]){return (core as any)['scene'+cap(name)](w,...args);};
  }
  const host=lane==='owner'?controller.host:w;
@@ -136,7 +153,7 @@ function compare(label:string,course:(f:Fixture)=>unknown,seed=319,failAt=''){
    return {result:graph(result),error,snapshot:f.snapshot(),draws,sentinel:Math.random(),itemUidWitness:nextItemUid()-itemUidBase};
   }finally{Math.random=prior;console.warn=warn;SIM_TAP.current=tap;}
  }
- const expected=run('original');for(const lane of ['world','core','owner'] as const)assert.deepEqual(run(lane),expected,label+' '+lane);
+ const expected=run('native');for(const lane of ['world','core','owner'] as const)assert.deepEqual(run(lane),expected,label+' '+lane);
  if(failAt)assert.equal(expected.error,'injected '+failAt,label+' fault reached');else assert.equal(expected.error,undefined,label);
  receipts.push({label,seed,failAt,draws:expected.draws.length,hash:hash(JSON.stringify(expected))});return expected;
 }
@@ -287,4 +304,5 @@ try{
  const ownState=freshSceneLootState(),raw={...base,state:ownState},local=new NativeAreaSceneLoot(raw);raw.state={spoilStory:7,orbs:[]};assert.equal(local.input.state,ownState,'bindings snapshotted once');
  const borrowed=f.host.dropGemAt;rule(f);f.campaign.questHand=undefined;assert.throws(()=>borrowed(at,undefined,true,'lazy-error','rough'),/Missing native loot capability: questHand|undefined/);
 }
-console.log('PASS native loot parity',receipts.length,'original / World / core / owner courses',hash(JSON.stringify(receipts)));
+console.log('Pinned main visual reference',visualMain,visualReferenceEvidence);
+console.log('PASS native loot parity',receipts.length,'pinned-native / World / core / owner courses',hash(JSON.stringify(receipts)));

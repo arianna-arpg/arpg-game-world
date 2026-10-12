@@ -1,4 +1,5 @@
 import {beforeNativeSceneDefensePreparation} from './nativeSceneDefensePreparationIntegrationFixture';
+import {nativeMainVisualSourceArchive} from './nativeMainVisualSourceArchive';
 /** Native casting preparation only; actor/construct state setup is explicit fixture input. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -182,7 +183,15 @@ integrationCheck('exact eleven delegates and full immutable World reverse preser
  const before=beforeNativeSceneCastingPreparation(current),pinned=execFileSync('git',['show',integrationArchive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6});assert.equal(before,pinned);assert.equal(hash(before),integrationArchive.sourceHash);assert.equal(beforeNativeSceneRestoration(current),source);
  const sf=ts.createSourceFile('current.ts',current,99,true),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;assert.equal(sf.statements[0].getText(sf),"import './nativeSceneBootstrap';");
  for(const row of archive.rows){const old=ts.createSourceFile('old.ts','class Old{'+row.source+'}',99,true),m=(old.statements[0] as ts.ClassDeclaration).members[0] as ts.MethodDeclaration,next=cl.members.find(n=>n.name?.getText(sf)===row.name) as ts.MethodDeclaration;assert.deepEqual(next.parameters.map(p=>p.getText(sf)),m.parameters.map(p=>p.getText(old)));assert.equal(next.type?.getText(sf),m.type?.getText(old));assert.deepEqual(next.modifiers?.map(x=>x.getText(sf)),m.modifiers?.map(x=>x.getText(old)));}
- for(const row of integrationArchive.integration){assert.equal(current.split(row.after).length,2);assert.throws(()=>beforeNativeSceneCastingPreparation(current.replace(row.after,row.after.replace(/[A-Za-z]/,'!'))),/unique exact native casting preparation integration/);assert.throws(()=>beforeNativeSceneCastingPreparation(current+'\n'+row.after),/unique exact native casting preparation integration/);}
+ // Preserve every original mutation byte and duplicate payload. A duplicate may
+ // now repeat an exact visual hunk before the older casting guard is reached.
+ const visualEdits=nativeMainVisualSourceArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits;
+ for(const edit of visualEdits)assert.equal(current.replaceAll('\r\n','\n').split(edit.after).length,2);
+ const refuse=(mutant:string)=>{
+  const overlaps=visualEdits.some(edit=>mutant.replaceAll('\r\n','\n').split(edit.after).length!==2);
+  assert.throws(()=>beforeNativeSceneCastingPreparation(mutant),overlaps?/unique exact native main visual source src\/engine\/world\.ts/:/unique exact native casting preparation integration/);
+ };
+ for(const row of integrationArchive.integration){assert.equal(current.split(row.after).length,2);refuse(current.replace(row.after,row.after.replace(/[A-Za-z]/,'!')));refuse(current+'\n'+row.after);}
  assert.notEqual(hash(beforeNativeSceneCastingPreparation(current+'\n// unknown later change\n')),integrationArchive.sourceHash);
 });
 integrationCheck('ordinary World cached host reads actual replacement maps census and clock',()=>{

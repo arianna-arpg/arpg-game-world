@@ -1,3 +1,4 @@
+import {sceneShowSkillArrival,type NativeSceneSkillArrivalHost} from '../engine/nativeSceneSkillArrival';
 /** Physical native restoration and local presentation over the area's actual
  * actor state, objective text store and exclusively owned tether slot. */
 import type {World} from '../engine/world';
@@ -12,7 +13,7 @@ export interface NativeSceneRestorationRuntime {readonly restoration:NativeAreaS
 export type NativeSceneRestorationAuthority=Pick<NativeAreaActorAuthority<NativeSceneRestorationRuntime>,'campaign'|'require'|'assertAdmitted'|'bindingFor'>;
 export interface NativeAreaSceneRestorationInput {
  scene:NativeSceneCensus;geometry:NativeAreaSceneGeometry;objective:NativeAreaSceneObjectiveCompletion;tethers:NativeAreaSceneTethers;
- campaign:Pick<World,'seats'|'partyRows'|'seatOfRoot'>;authority:NativeSceneRestorationAuthority;
+ campaign:Pick<World,'seats'|'partyRows'|'seatOfRoot'|'account'|'localSeat'>;authority:NativeSceneRestorationAuthority;
 }
 export class NativeAreaSceneRestoration implements native.NativeSceneRestorationApi {
  readonly input:NativeAreaSceneRestorationInput;readonly host:native.NativeSceneRestorationHost;
@@ -26,8 +27,10 @@ export class NativeAreaSceneRestoration implements native.NativeSceneRestoration
   const input:NativeAreaSceneRestorationInput=this.input=Object.freeze(bindings),self=this;
   if(input.geometry.state!==input.scene||input.objective.input.scene!==input.scene||input.objective.input.geometry!==input.geometry||input.tethers.input.scene!==input.scene)throw Error('Native restoration needs identical local owners');
   if(!Object.is(input.objective.input.campaign,input.campaign)||input.tethers.input.campaign!==input.campaign||input.authority.campaign!==input.campaign||!Object.is(input.tethers.input.authority,input.authority))throw Error('Native restoration needs identical campaign authority and tether owner');
-  for(const key of ['seats','partyRows','seatOfRoot'])if(!(key in input.campaign))throw Error('Native restoration needs actual campaign capability: '+key);
+  for(const key of ['seats','partyRows','seatOfRoot','account','localSeat'])if(!(key in input.campaign))throw Error('Native restoration needs actual campaign capability: '+key);
   const host={} as native.NativeSceneRestorationHost;
+  const arrival:NativeSceneSkillArrivalHost=Object.freeze({get flashes(){return input.geometry.flashes;},get seats(){return input.campaign.seats;},get localSeat(){return input.campaign.localSeat;},get account(){return input.campaign.account;}});
+  Object.defineProperty(host,'showSkillArrival',{enumerable:true,value:(...args:Parameters<native.NativeSceneRestorationHost['showSkillArrival']>)=>sceneShowSkillArrival(arrival,...args)});
   const fields=(provider:()=>object,keys:readonly string[])=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){return(provider() as Record<string,unknown>)[key];}});};
   const methods=(provider:()=>object,keys:readonly string[])=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){const owner=provider() as Record<string,Function>,fn=owner[key];return(...args:unknown[])=>fn.apply(owner,args);}});};
   fields(()=>input.scene,['actors']);fields(()=>input.geometry,['flashes']);fields(()=>input.objective.input.state,['texts']);fields(()=>input.tethers.input.state,['tethers']);fields(()=>input.campaign,['partyRows','seats']);

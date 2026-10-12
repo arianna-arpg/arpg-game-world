@@ -1,3 +1,5 @@
+import {noteRestoreGain} from './feedingCues';
+import {skillTargetVoice} from '../data/skillTargetVisuals';
 /** Exact native healing, resource gain, stream construction and float attribution.
  * Ticking, aura/buff application, damage and complete combat remain separate. */
 import type {World} from './world';
@@ -14,7 +16,7 @@ grantAbsorb(target: Actor, amount: number, duration: number): void;
 applyRestore(
     target: Actor,
     fx: { resource: 'life' | 'mana' | 'es' | 'poise'; amount: number; resetEsDelay?: boolean },
-    opts?: { noEvent?: boolean; tags?: SkillTag[] },
+    opts?: { noEvent?: boolean; tags?: SkillTag[]; feedingCue?: import('../data/feedingCues').FeedingCueSpec | false },
   ): number;
 startRestoreStream(
     target: Actor, caster: Actor, inst: SkillInstance,
@@ -46,6 +48,7 @@ seatText(by: Actor | null | undefined, at: Vec2, text: string, color: string, si
 creditFloat(by: Actor | null | undefined, seatId?: string | null): void;
 }
 export interface NativeSceneRestorationHost extends NativeSceneRestorationApi {
+ showSkillArrival:World['showSkillArrival'];
  readonly actors:World['actors'];readonly flashes:World['flashes'];readonly texts:World['texts'];readonly tethers:World['tethers'];
  readonly partyRows:World['partyRows'];readonly seats:World['seats'];text:World['text'];seatOfRoot:World['seatOfRoot'];
 }
@@ -61,7 +64,7 @@ export function sceneGrantAbsorb(host:NativeSceneRestorationHost,target: Actor, 
 export function sceneApplyRestore(host:NativeSceneRestorationHost,
     target: Actor,
     fx: { resource: 'life' | 'mana' | 'es' | 'poise'; amount: number; resetEsDelay?: boolean },
-    opts?: { noEvent?: boolean; tags?: SkillTag[] },
+    opts?: { noEvent?: boolean; tags?: SkillTag[]; feedingCue?: import('../data/feedingCues').FeedingCueSpec | false },
   ): number {
     let landed = 0;
     if (fx.resource === 'life') {
@@ -76,6 +79,7 @@ export function sceneApplyRestore(host:NativeSceneRestorationHost,
       landed = target.gainEs(fx.amount);
       if (fx.resetEsDelay) target.esDelay = 0;
     }
+    if (fx.resource !== 'poise') noteRestoreGain(target, fx.resource, landed, opts?.feedingCue);
     if (landed > 0 && !opts?.noEvent && target.gainEvents.length < 64) {
       target.gainEvents.push({
         kind: 'restore', id: fx.resource, depth: 0,
@@ -221,12 +225,14 @@ export function sceneApplyHealChained(host:NativeSceneRestorationHost,
       // A momentary mending arc (the discharge-zap visual pattern).
       host.tethers.push({
         a: from, b: next, owner: caster, skillId: inst.def.id, link: 'zap',
+        visual: 'healing_chain', visualAge: 0,
         amounts: {}, heal: 0, affects: 'allies', width: 5,
         remaining: 0.16, tickTimer: 99,
         color: '#7ec88a',
         ax: from.pos.x, ay: from.pos.y, bx: next.pos.x, by: next.pos.y,
       });
       host.applyHeal(caster, inst, next, fx, scale, quiet);
+      if (skillTargetVoice(inst.def.id)) host.showSkillArrival(caster, inst, next.pos, next.radius + 14, next.tier);
       visited.add(next);
       from = next;
     }

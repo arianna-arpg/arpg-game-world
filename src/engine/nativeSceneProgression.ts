@@ -1,3 +1,4 @@
+import {presenceProfile,skillPresenceVoice,PRESENCE_STYLE} from '../data/skillPresenceVisuals';
 /** Shared exact native stat, mercenary and teardown derivations. */
 import type {World,Seat,PlayerMeta,GrantedSkillRow,WornGraftRow,Projectile,EmergeRecord} from './world';
 import {companionCueFlash,companionCueSpec,type CompanionCueEvent} from './companionCues';
@@ -861,7 +862,11 @@ export function sceneClearTreeFields(nativeHost:NativeSceneProgressionHost,caste
       if (source?.caster === caster && source.inst === inst) actor.removeBuff(id);
     }
     nativeHost.pendingFuses = nativeHost.pendingFuses.filter(f => f.caster !== caster || !ownsTreePayload(f.inst));
-    nativeHost.pendingBlinks = nativeHost.pendingBlinks.filter(b => b.actor !== caster || !b.inst || !ownsTreePayload(b.inst));
+    nativeHost.pendingBlinks = nativeHost.pendingBlinks.filter(b => {
+      const keep = b.actor !== caster || !b.inst || !ownsTreePayload(b.inst);
+      if (!keep && b.visual) b.visual.life = 0;
+      return keep;
+    });
     // Scheduled repeats capture the old tree just as delayed fields do.
     nativeHost.pendingRepeats = nativeHost.pendingRepeats.filter(r => r.caster !== caster || !ownsTreePayload(r.inst));
     nativeHost.pendingSalvos = nativeHost.pendingSalvos.filter(r => r.caster !== caster || !ownsTreePayload(r.inst));
@@ -908,6 +913,13 @@ export function sceneRetireOwnedZone(nativeHost:NativeSceneProgressionHost,zone:
   }
 
 export function sceneExpireZone(nativeHost:NativeSceneProgressionHost,z: Zone): void {
+    if (!z.presenceRetired && (!z.exploded || z.pulse) && presenceProfile(z.inst.def.id)?.family === 'storm') {
+      z.presenceRetired = true;
+      nativeHost.flashes.push({ pos: { ...z.pos }, radius: z.radius, color: z.color,
+        life: PRESENCE_STYLE.expire, maxLife: PRESENCE_STYLE.expire,
+        fx: skillPresenceVoice(z.inst.def.id, 'expire'), shape: z.shape, facing: z.facing,
+        arcRad: z.arcRad, edgeFrac: z.edgeFrac, onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier });
+    }
     if (z.fieldCue) {
       nativeHost.flashes.push({ ...combatCueFlash(z.pos, z.fieldCue.release ?? 'field_release', z.radius, 0, z.fieldCue.color ?? z.color), recoveryCueTier: z.tier ?? z.caster.tier ?? 0 });
       z.fieldCue = undefined; // One retirement, even when cleanup paths converge.

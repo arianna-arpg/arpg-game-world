@@ -1,3 +1,6 @@
+import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
+import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
+import {skillMovementVoice} from '../src/data/skillMovementVisuals';
 import {beforeNativeSceneRestoration} from './nativeSceneRestorationIntegrationFixture';
 /** Impulse/release/saddle/policy proof. Native creation and genuine area providers
  * are used. Controlled link setup courses are identified; ticking, damage,
@@ -38,7 +41,7 @@ const source=execFileSync('git',['show',archive.commit+':src/engine/world.ts'],{
 assert.equal(sha(source),archive.worldHash);
 const originalSource=ts.createSourceFile('world.ts',source,99,true),wc=originalSource.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
 const current=fs.readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8').replaceAll('\r\n','\n');assert.equal(beforeNativeSceneSummonPreparation(current),source,'exact displacement and summon restoration reaches immutable native World');
-const coreText=fs.readFileSync(new URL('../src/engine/nativeSceneDisplacement.ts',import.meta.url),'utf8'),sf=ts.createSourceFile('core.ts',coreText,99,true);
+const coreText=fs.readFileSync(new URL('../src/engine/nativeSceneDisplacement.ts',import.meta.url),'utf8'),sf=ts.createSourceFile('core.ts',beforeNativeMainVisualSource('src/engine/nativeSceneDisplacement.ts',coreText),99,true);
 const emit=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,removeComments:true}}).outputText;
 for(const row of archive.rows){
  const before=wc.members.find(m=>ts.isMethodDeclaration(m)&&m.name.getText(originalSource)===row.name) as ts.MethodDeclaration;
@@ -49,6 +52,21 @@ for(const row of archive.rows){
 for(const c of archive.config){assert.ok(source.includes(c));assert.ok(sf.statements.some(n=>n.getText(sf).replace(/^export /,'')===c));}
 const lexical={Actor,rand,vec,STATUS_DEFS,shoveAuthority,isDormant,instanceMods,instanceChannel,skillContextTags,MONSTERS,CLING_CFG,GRAB_CFG,MOUNT_CFG,seatCount};
 const original=Function(...Object.keys(lexical),emit(archive.config.join('\n')+'\nclass Original{'+archive.rows.map((r:any)=>r.before).join('\n')+'}\nreturn Original.prototype;'))(...Object.values(lexical));
+// Historical source bodies remain immutable. Only these explicitly named
+// methods use the separately pinned main successor in the behavior lane.
+const visualMain='ea56c7ac4f5f4963dc6ad8ce3cb86bc12b66fa0b';
+assert.equal(visualArchive.main,visualMain);
+const visualMainText=execFileSync('git',['show',visualMain+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:30e6});
+const visualMainFile=ts.createSourceFile('main-world.ts',visualMainText,99,true),visualMainWorld=visualMainFile.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
+const visualReferenceEvidence:{name:string;sha256:string}[]=[];
+function visualReference(historical:Record<string,Function>,names:string[],bindings:Record<string,unknown>){
+ const rows=names.map(name=>{const m=visualMainWorld.members.find(n=>n.name?.getText(visualMainFile)===name);assert(m&&ts.isMethodDeclaration(m));const body=m.getText(visualMainFile);visualReferenceEvidence.push({name,sha256:createHash('sha256').update(body).digest('hex')});return body;});
+ const js=ts.transpileModule('class VisualNative{'+rows.join('\n')+'}\nreturn VisualNative.prototype;',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+ const overrides=Function(...Object.keys(bindings),js)(...Object.values(bindings));return Object.defineProperties(Object.create(historical),Object.fromEntries(names.map(name=>[name,Object.getOwnPropertyDescriptor(overrides,name)!]))) as Record<string,Function>;
+}
+
+const nativeReference=visualReference(original,['teleportActor'],{...lexical,skillMovementVoice});
+
 const names=archive.rows.map((r:any)=>r.name) as (keyof core.NativeSceneDisplacementApi)[],checks:string[]=[],receipts:any[]=[];
 const checked=(name:string,fn:()=>void)=>{fn();checks.push(name);console.log('PASS '+name);};
 withSeededRandom(32013,()=>{
@@ -66,11 +84,11 @@ withSeededRandom(32013,()=>{
   labels.set(a,name);created.push(a);scene.actors.push(a);authority.claim(binding,[a]);return a;
  }
  const fire=makeSkillInstance(SKILLS.fireball,20);
- const makeHost=(lane:'original'|'core')=>{
+ const makeHost=(lane:'native'|'core')=>{
   const h:any={get actors(){return scene.actors;},get flashes(){return geometry.flashes;},get time(){return campaign.time;},actorById:(...a:Parameters<World['actorById']>)=>runtimeBirth.actorById(...a),clampPos:(...a:Parameters<World['clampPos']>)=>geometry.clampPos(...a)};
-  for(const name of names)h[name]=(...args:any[])=>lane==='original'?original[name].apply(h,args):(core as any)['scene'+name[0].toUpperCase()+name.slice(1)](h,...args);return h;
+  for(const name of names)h[name]=(...args:any[])=>lane==='native'?nativeReference[name].apply(h,args):(core as any)['scene'+name[0].toUpperCase()+name.slice(1)](h,...args);return h;
  };
- const hosts={original:makeHost('original'),core:makeHost('core')};
+ const hosts={native:makeHost('native'),core:makeHost('core')};
  // The World lane uses the actual native World methods and geometry adapter.
  // Matching geometric values are test inputs; no retained callback substitutes it.
  const geometryKeys=['walk','doodads','bridges','grounds','tierViews','tierCrossings','tierNavs','tierSeats','airPockets','structures','doodadsRev'] as const;
@@ -79,11 +97,11 @@ withSeededRandom(32013,()=>{
   try{w.actors=scene.actors;w.flashes=geometry.flashes;w.time=campaign.time;(w as any).arena=geometry.arena;for(const k of geometryKeys)(w as any)[k]=geometry[k];return fn();}
   finally{for(const [k,v]of saved)(w as any)[k]=v;}
  }
- type Lane='original'|'core'|'world'|'owner';
+ type Lane='native'|'core'|'world'|'owner';
  function invoke(lane:Lane,name:keyof core.NativeSceneDisplacementApi,args:any[]){return lane==='owner'?(owner[name] as Function).apply(owner,args):lane==='world'?worldScope(()=>((w as any)[name] as Function).apply(w,args)):(hosts[lane][name] as Function).apply(hosts[lane],args);}
  function snapshot(){return {actors:scene.actors.map(label),flashes:plain(geometry.flashes),bodies:created.map(a=>({name:label(a),pos:plain(a.pos),push:plain(a.push),grip:a.gripping?{...plain(a.gripping),id:id(a.gripping.id)}:null,heldBy:id(a.heldBy),cling:a.clingTo?{...plain(a.clingTo),id:id(a.clingTo.id)}:null,cooldown:a.clingCooldownUntil,proof:a.grabProofUntil,untargetable:a.untargetable,tier:a.tier,dash:plain(a.dash),mount:id(a.mountId),seat:a.mountSeat,riders:a.riderIds?.map(id),fromZoneGen:a.fromZoneGen,status:plain(a.statuses),sources:['seized','swallowed','burrowed','unhorsed','horrified'].map(s=>[s,plain(a.sheet.getSourceMods('status:'+s))])}))};}
  type Course={op:keyof core.NativeSceneDisplacementApi;args:any[];observe?:()=>any;verify?:(value:any)=>void;cleanup?:()=>void;error?:RegExp};
- function compare(name:string,prepare:(lane:Lane)=>Course){const results=[];for(const lane of ['original','core','world','owner'] as const){
+ function compare(name:string,prepare:(lane:Lane)=>Course){const results=[];for(const lane of ['native','core','world','owner'] as const){
   labels=new Map();created=[];scene.actors=[...initialActors];geometry.flashes=[];geometry.walk=null;geometry.doodads=[];geometry.doodadsRev++;(campaign as {time:number}).time=60;
   const outcome=withSeededRandom(9313,()=>{const c=prepare(lane);try{let value:any,error:string|undefined;try{value=invoke(lane,c.op,c.args);}catch(e){error=(e as Error).message;}if(c.error)assert.match(error??'',c.error,name+' '+lane);else assert.equal(error,undefined,name+' '+lane);c.verify?.(value);return {value:plain(value),error,state:snapshot(),observe:plain(c.observe?.()),next:Math.random()};}finally{c.cleanup?.();}});
   results.push(outcome);authority.release(binding,created);scene.actors=[...initialActors];
@@ -207,11 +225,12 @@ withSeededRandom(32013,()=>{
   authority.release(binding,[flesh]);scene.actors=scene.actors.filter(a=>a!==flesh);scene.actors.push(form);scene.player=form;authority.claim(binding,[form]);assert.equal(authority.require(flesh).scene,scene);
   assert.throws(()=>owner.pushActor(flesh,0,5),/physical body/);assert.throws(()=>owner.teleportActor(flesh,vec(10,10)),/physical body/);owner.pushActor(form,0,5);assert.ok(form.push);assert.equal(owner.movementLocked(form),false);
  });
- const report={archiveCommit:archive.commit,methods:names.length,catalog:{clingers:Object.values(MONSTERS).filter(d=>d.cling).length,mountSlots:Object.values(MONSTERS).filter(d=>d.mountSlot).length,installedWidowRout:Object.values(MONSTERS).filter(d=>d.mountSlot?.onRiderDeath==='rout').length,mobilitySkills:Object.values(SKILLS).filter(d=>d.channel||d.castMove!==undefined).length},checks,fourLaneCases:receipts.length,receipt:sha(JSON.stringify(receipts)),boundaries:'native impulses/releases/teleports/saddles/policy only; actual factory actors with explicit local admission; no movement stepping, boundary recovery, damage, scheduling, detached/staged lifetime or publication'};
+ const report={visualMain,visualReferenceEvidence,archiveCommit:archive.commit,methods:names.length,catalog:{clingers:Object.values(MONSTERS).filter(d=>d.cling).length,mountSlots:Object.values(MONSTERS).filter(d=>d.mountSlot).length,installedWidowRout:Object.values(MONSTERS).filter(d=>d.mountSlot?.onRiderDeath==='rout').length,mobilitySkills:Object.values(SKILLS).filter(d=>d.channel||d.castMove!==undefined).length},checks,fourLaneCases:receipts.length,receipt:sha(JSON.stringify(receipts)),boundaries:'native impulses/releases/teleports/saddles/policy only; actual factory actors with explicit local admission; no movement stepping, boundary recovery, damage, scheduling, detached/staged lifetime or publication'};
  fs.mkdirSync(new URL('./reports/',import.meta.url),{recursive:true});fs.writeFileSync(new URL('./reports/nativedisplacement.json',import.meta.url),JSON.stringify(report,null,2)+'\n');console.log('PASS native displacement',report);
 });
 
-// Integration checks remain outside the unchanged 210-case native receipt.
+// Separate adapter checks remain outside the 210-case successor receipt.
+// The original source and its historical receipt are not rewritten by this proof.
 const integrationChecks:string[]=[];
 const integrationCheck=(name:string,fn:()=>void)=>{withSeededRandom(32901+integrationChecks.length,fn);integrationChecks.push(name);console.log('PASS '+name);};
 const restoreDisplacement=(text:string)=>{const restored=beforeNativeSceneDisplacement(text);assert.equal(sha(restored),integrationArchive.sourceHash,'complete displacement integration preimage');return restored;};
@@ -224,19 +243,35 @@ integrationCheck('immutable archive restores the complete committed summon World
  assert.equal(statements[0].getText(),"import './nativeSceneBootstrap';");
  assert(beforeNativeSceneRestoration(current).startsWith("import './nativeSceneBootstrap';\nimport {sceneAddTether,sceneAttachObjectTethers,TETHER_TICK,type NativeSceneTetherHost} from './nativeSceneTethers';\nimport {sceneRollSummonType,sceneForwardSummonSockets} from './nativeSceneSummonPreparation';\n"));
 });
+
+// Map an older integration mutation through only the declared visual source
+// changes. Overlapping exact hunks now belong to the stricter visual guard;
+// every untouched hunk must still reach its original historical guard.
+function visualWorldHunk(raw:string,historical:string,legacy:RegExp){
+ let text=beforeNativeMainVisualSource('src/engine/world.ts',raw),start=text.indexOf(historical),end=start+historical.length,overlap=false;
+ assert.equal(text.split(historical).length,2,'unique historical mutation hunk');
+ for(const edit of [...visualArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits].reverse()){
+  const at=text.indexOf(edit.before),stop=at+edit.before.length,delta=edit.after.length-edit.before.length;assert.equal(text.split(edit.before).length,2,'exact visual forward context');
+  if(stop<=start){start+=delta;end+=delta;}else if(at<end){start=Math.min(start,at);end=Math.max(end,stop)+delta;overlap=true;}
+  text=text.slice(0,at)+edit.after+text.slice(stop);
+ }
+ assert.equal(text,raw.replaceAll('\r\n','\n'),'whole current source after exact forward mapping');
+ return {text:text.slice(start,end),guard:overlap?/unique exact native main visual source/:legacy};
+}
+
 const guardCore=(text:string)=>{
- const parsed=ts.createSourceFile('core.ts',text,99,true);
+ const parsed=ts.createSourceFile('core.ts',beforeNativeMainVisualSource('src/engine/nativeSceneDisplacement.ts',text),99,true);
  for(const row of archive.rows){const old=wc.members.find(n=>n.name?.getText(originalSource)===row.name) as ts.MethodDeclaration,fn=parsed.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='scene'+row.name[0].toUpperCase()+row.name.slice(1)) as ts.FunctionDeclaration;assert.ok(fn);assert.deepEqual(fn.parameters.slice(1).map(p=>p.getText(parsed)),old.parameters.map(p=>p.getText(originalSource)),row.name+' defaults/signature');assert.equal(fn.type?.getText(parsed),old.type?.getText(originalSource));const edits:{start:number;end:number}[]=[];const body=old.body!;function visit(n:ts.Node){if(n.kind===ts.SyntaxKind.ThisKeyword)edits.push({start:n.getStart(originalSource)-body.getStart(originalSource),end:n.end-body.getStart(originalSource)});ts.forEachChild(n,visit);}visit(body);let exact=body.getText(originalSource);for(const e of edits.reverse())exact=exact.slice(0,e.start)+'host'+exact.slice(e.end);assert.equal(fn.body!.getText(parsed),exact);}
  for(const constant of archive.config)assert(parsed.statements.some(n=>n.getText(parsed).replace(/^export /,'')===constant),'exact shared native push constant');
 };
 integrationCheck('all thirteen World delegates preserve original defaults and shared core source refuses mutation',()=>{
- const parsed=ts.createSourceFile('world.ts',current,99,true),worldClass=parsed.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
+ const parsed=ts.createSourceFile('world.ts',beforeNativeMainVisualSource('src/engine/world.ts',current),99,true),worldClass=parsed.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
  for(const row of archive.rows){const old=wc.members.find(n=>n.name?.getText(originalSource)===row.name) as ts.MethodDeclaration,method=worldClass.members.find(n=>n.name?.getText(parsed)===row.name) as ts.MethodDeclaration;assert.deepEqual(method.parameters.map(p=>p.getText(parsed)),old.parameters.map(p=>p.getText(originalSource)));assert.equal(method.type?.getText(parsed),old.type?.getText(originalSource));assert.deepEqual(method.modifiers?.map(m=>m.getText(parsed)),old.modifiers?.map(m=>m.getText(originalSource)));const signature=row.before.slice(0,old.body!.getStart(originalSource)-old.getStart(originalSource)),args=old.parameters.map(p=>p.name.getText(originalSource)).join(',');assert.equal(method.getText(parsed),signature+'{ return scene'+row.name[0].toUpperCase()+row.name.slice(1)+'(this.nativeSceneDisplacementHost(),'+args+'); }');}
  guardCore(coreText);
  for(const [before,after]of [['export const PUSH_DAMPING = 5.5;','export const PUSH_DAMPING = 5.6;'],['export const PUSH_MAX_SPEED = 1500;','export const PUSH_MAX_SPEED = 1501;'],['if (target.heldBy !== undefined)','if (target.heldBy === undefined)'],["cause: 'shake' | 'drop' = 'drop'","cause: 'shake' | 'drop' = 'shake'"]]){const mutant=coreText.replace(before,after);assert.notEqual(mutant,coreText);assert.throws(()=>guardCore(mutant));}
 });
 integrationCheck('every integration hunk duplicate and cache mutation refuses while unrelated drift survives',()=>{
- for(const row of integrationArchive.integration){assert.equal(current.split(row.after).length,2);const mutant=current.replace(row.after,row.after.replace(/[A-Za-z]/,'!'));assert.notEqual(mutant,current);assert.throws(()=>beforeNativeSceneDisplacement(mutant),/unique exact native displacement integration/);assert.throws(()=>beforeNativeSceneDisplacement(current+'\n'+row.after),/unique exact native displacement integration/);}
+ for(const row of integrationArchive.integration){const h=visualWorldHunk(current,row.after,/unique exact native displacement integration/);assert.equal(current.split(h.text).length,2);const mutant=current.replace(h.text,h.text.replace(/[A-Za-z]/,'!'));assert.notEqual(mutant,current);assert.throws(()=>beforeNativeSceneDisplacement(mutant),h.guard);assert.throws(()=>beforeNativeSceneDisplacement(current+'\n'+h.text),h.guard);}
  const host=integrationArchive.integration.find(row=>row.name==='pushActor')!,changed=current.replace(host.after,host.after.replace('enumerable:false','enumerable:true'));assert.notEqual(changed,current);assert.throws(()=>beforeNativeSceneDisplacement(changed),/unique exact native displacement integration/);
  const unrelated=current+'\n// unrelated-displacement-source-change\n';assert(beforeNativeSceneDisplacement(unrelated).endsWith('// unrelated-displacement-source-change\n'));assert.throws(()=>restoreDisplacement(unrelated),/complete displacement integration preimage/);
 });

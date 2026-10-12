@@ -1,3 +1,5 @@
+import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
+import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
 /** Native tether construction only. Actual actors, population, queues and World
  * methods are exercised; fixture census/source tags do not claim summon birth,
  * tether damage/healing/ticking, staged lifetimes or area publication. */
@@ -31,14 +33,30 @@ const integrationBefore=beforeNativeSceneTethers(integratedWorld);
 assert.equal(sha(integrationBefore),archive.sourceHash,'exact complete World reconstruction');
 assert.equal(integrationBefore,execFileSync('git',['show',archive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}).replaceAll('\r\n','\n'),'immutable integration source');
 assert.equal(sha(beforeNativeMainContent(integratedWorld)),archive.priorMainContentHash,'complete historical extraction chain');
+
+// Map an older integration mutation through only the declared visual source
+// changes. Overlapping exact hunks now belong to the stricter visual guard;
+// every untouched hunk must still reach its original historical guard.
+function visualWorldHunk(raw:string,historical:string,legacy:RegExp){
+ let text=beforeNativeMainVisualSource('src/engine/world.ts',raw),start=text.indexOf(historical),end=start+historical.length,overlap=false;
+ assert.equal(text.split(historical).length,2,'unique historical mutation hunk');
+ for(const edit of [...visualArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits].reverse()){
+  const at=text.indexOf(edit.before),stop=at+edit.before.length,delta=edit.after.length-edit.before.length;assert.equal(text.split(edit.before).length,2,'exact visual forward context');
+  if(stop<=start){start+=delta;end+=delta;}else if(at<end){start=Math.min(start,at);end=Math.max(end,stop)+delta;overlap=true;}
+  text=text.slice(0,at)+edit.after+text.slice(stop);
+ }
+ assert.equal(text,raw.replaceAll('\r\n','\n'),'whole current source after exact forward mapping');
+ return {text:text.slice(start,end),guard:overlap?/unique exact native main visual source/:legacy};
+}
+
 const hostChange=archive.integration.find(row=>row.after.startsWith('declare private nativeSceneTetherView'))!;
 assert.ok(hostChange);
 const drift=integratedWorld.replace('get tethers(){return world.tethers;}','get tethers(){return [];}');assert.notEqual(drift,integratedWorld);assert.throws(()=>beforeNativeSceneTethers(drift),/unique exact native tether integration/);
-for(const row of archive.integration){const drift=integratedWorld.replace(row.after,row.after.replace(/[A-Za-z]/,'!'));assert.notEqual(drift,integratedWorld);assert.throws(()=>beforeNativeSceneTethers(drift),/unique exact native tether integration/);}
+for(const row of archive.integration){const h=visualWorldHunk(integratedWorld,row.after,/unique exact native tether integration/),drift=integratedWorld.replace(h.text,h.text.replace(/[A-Za-z]/,'!'));assert.notEqual(drift,integratedWorld);assert.throws(()=>beforeNativeSceneTethers(drift),h.guard);}
 console.log('PASS exact integrated World reversal, byte-checked changes and complete historical chain');
 const source=execFileSync('git',['show',archive.commit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}).replaceAll('\r\n','\n');
 const src=ts.createSourceFile('world.ts',source,99,true),wc=src.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
-const text=fs.readFileSync(new URL('../src/engine/nativeSceneTethers.ts',import.meta.url),'utf8'),sf=ts.createSourceFile('core.ts',text,99,true);
+const text=fs.readFileSync(new URL('../src/engine/nativeSceneTethers.ts',import.meta.url),'utf8'),sf=ts.createSourceFile('core.ts',beforeNativeMainVisualSource('src/engine/nativeSceneTethers.ts',text),99,true);
 const emit=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,removeComments:true}}).outputText;
 for(const row of archive.rows){
  const before=wc.members.find(m=>ts.isMethodDeclaration(m)&&m.name.getText(src)===row.name) as ts.MethodDeclaration;
@@ -49,8 +67,23 @@ for(const row of archive.rows){
 for(const c of archive.config){assert.ok(source.includes(c));assert.ok(sf.statements.some(n=>n.getText(sf).replace(/^export /,'')===c));}
 const lexical={Actor,dist,instanceMods,instanceTethers,skillContextTags,applyConversion,DAMAGE_COLOR};
 const original=Function(...Object.keys(lexical),emit(archive.config.join('\n')+'\nclass Original{'+archive.rows.map((r:any)=>r.before).join('\n')+'}\nreturn Original.prototype;'))(...Object.values(lexical));
+// Historical source bodies remain immutable. Only these explicitly named
+// methods use the separately pinned main successor in the behavior lane.
+const visualMain='ea56c7ac4f5f4963dc6ad8ce3cb86bc12b66fa0b';
+assert.equal(visualArchive.main,visualMain);
+const visualMainText=execFileSync('git',['show',visualMain+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:30e6});
+const visualMainFile=ts.createSourceFile('main-world.ts',visualMainText,99,true),visualMainWorld=visualMainFile.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
+const visualReferenceEvidence:{name:string;sha256:string}[]=[];
+function visualReference(historical:Record<string,Function>,names:string[],bindings:Record<string,unknown>){
+ const rows=names.map(name=>{const m=visualMainWorld.members.find(n=>n.name?.getText(visualMainFile)===name);assert(m&&ts.isMethodDeclaration(m));const body=m.getText(visualMainFile);visualReferenceEvidence.push({name,sha256:createHash('sha256').update(body).digest('hex')});return body;});
+ const js=ts.transpileModule('class VisualNative{'+rows.join('\n')+'}\nreturn VisualNative.prototype;',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+ const overrides=Function(...Object.keys(bindings),js)(...Object.values(bindings));return Object.defineProperties(Object.create(historical),Object.fromEntries(names.map(name=>[name,Object.getOwnPropertyDescriptor(overrides,name)!]))) as Record<string,Function>;
+}
+
+const nativeReference=visualReference(original,['addTether'],{...lexical,TETHER_TICK:core.TETHER_TICK});
+
 function plain(v:any,seen=new Map<object,number>()):any{if(v instanceof Actor)return {actor:v.id};if(v===undefined)return {$undefined:1};if(typeof v==='number'&&!Number.isFinite(v))return {$number:String(v)};if(v===null||typeof v!=='object')return v;if(seen.has(v))return {$ref:seen.get(v)};seen.set(v,seen.size);if(v instanceof Map)return {$map:[...v].map(([k,x])=>[plain(k,seen),plain(x,seen)])};if(v instanceof Set)return {$set:[...v].map(x=>plain(x,seen))};if(Array.isArray(v))return v.map(x=>plain(x,seen));return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,plain(x,seen)]));}
-const checks:string[]=[],receipts:any[]=[];
+const checks:string[]=[],receipts:any[]=[],historicalReceipts:any[]=[];
 function checked(name:string,fn:()=>void){fn();checks.push(name);console.log('PASS '+name);}
 withSeededRandom(31671,()=>{
  const w=makeSimWorld('warrior',31671),raw=freshAssemblyInput(w,w.zone),campaign=raw.campaign,area=new NativeAreaSceneAssembly(raw),scene=area.input.scene;
@@ -65,13 +98,15 @@ withSeededRandom(31671,()=>{
  // native summon implementation. All bodies are created by the real factory.
  spawned.pos={x:100,y:100};near.pos={x:150,y:100};dead.pos={x:155,y:100};different.pos={x:160,y:100};unowned.pos={x:165,y:100};dead.dead=true;
  const hosts={
-  original:{get actors(){return scene.actors;},get tethers(){return state.tethers;},set tethers(v:World['tethers']){state.tethers=v;},addTether(...args:Parameters<World['addTether']>){original.addTether.apply(this,args);}},
+  historical:{get actors(){return scene.actors;},get tethers(){return state.tethers;},set tethers(v:World['tethers']){state.tethers=v;},addTether(...args:Parameters<World['addTether']>){original.addTether.apply(this,args);}},
+  native:{get actors(){return scene.actors;},get tethers(){return state.tethers;},set tethers(v:World['tethers']){state.tethers=v;},addTether(...args:Parameters<World['addTether']>){nativeReference.addTether.apply(this,args);}},
   core:{get actors(){return scene.actors;},get tethers(){return state.tethers;},set tethers(v:World['tethers']){state.tethers=v;},addTether(...args:Parameters<World['addTether']>){core.sceneAddTether(this,...args);}},
  };
  type Op='addTether'|'attachObjectTethers';
  type Args=Parameters<World['addTether']>|Parameters<World['attachObjectTethers']>;
  function invoke(op:Op,lane:string,args:Args){
-  if(lane==='original')return Reflect.apply(original[op],hosts.original,args);
+  if(lane==='historical')return Reflect.apply(original[op],hosts.historical,args);
+  if(lane==='native')return Reflect.apply(nativeReference[op],hosts.native,args);
   if(lane==='core')return Reflect.apply(op==='addTether'?core.sceneAddTether:core.sceneAttachObjectTethers,undefined,[hosts.core,...args]);
   if(lane==='owner')return Reflect.apply(owner[op],owner,args);
   const previousActors=w.actors,previousTethers=w.tethers;
@@ -80,16 +115,20 @@ withSeededRandom(31671,()=>{
  }
  function compare(label:string,op:Op,args:Args,initial:World['tethers']=[],expectError?:RegExp){
   const outcomes=[];
-  for(const lane of ['original','core','world','owner']){
+  for(const lane of ['historical','native','core','world','owner']){
    state.tethers=[...initial];const previousQueue=state.tethers;
    const outcome=withSeededRandom(4441,()=>{
     let error:string|undefined;try{invoke(op,lane,args);}catch(e){error=(e as Error).message;}
     if(expectError)assert.match(error??'',expectError,label+' '+lane);else assert.equal(error,undefined,label+' '+lane);
     return {queue:plain(state.tethers),oldQueue:plain(previousQueue),replaced:state.tethers!==previousQueue,next:Math.random(),error};
    });
-   outcomes.push(outcome);
+   if(lane==='historical')historicalReceipts.push([label,outcome]);else outcomes.push(outcome);
   }
   for(let i=1;i<outcomes.length;i++)assert.deepEqual(outcomes[i],outcomes[0],label+' lane '+i);
+  // Only two known new top-level tether-row fields are projected here.
+  // Full unprojected successor rows already match all four native lanes above.
+  const old=historicalReceipts.at(-1)![1],project=(o:any)=>({...o,queue:o.queue.map(({visual,visualAge,...row}:any)=>row),oldQueue:o.oldQueue.map(({visual,visualAge,...row}:any)=>row)});
+  assert.deepEqual(project(outcomes[0]),project(old),label+' unchanged native tether construction outside the two declared presentation fields');
   receipts.push([label,outcomes[0]]);return state.tethers;
  }
  const skills=Object.values(SKILLS),supportDefs=Object.values(SUPPORTS).filter(s=>s.tether),nativeDefs=skills.filter(s=>s.tether);
@@ -101,7 +140,7 @@ withSeededRandom(31671,()=>{
   for(const a of [spawned,near,edge,far,dead,unowned])a.sourceSkillId=inst.def.id;
   different.sourceSkillId=inst.def.id+':other';edge.pos={x:100+radius,y:100};far.pos={x:100+radius+.001,y:100};
  }
- checked('all native tether supports and innate specs match original/core/World/owner',()=>{
+ checked('all native tether supports and innate specs match pinned-native/core/World/owner',()=>{
   assert.ok(instances.length);
   for(const inst of instances)for(const rich of [false,true]){
    if(rich)player.sheet.setSource('tether-proof',[mod('damage','increased',.2),mod('tetherDamage','increased',.5),mod('aoeRadius','increased',.3),mod('tetherWidth','increased',.4),mod('effectDuration','increased',.25)]);
@@ -119,7 +158,7 @@ withSeededRandom(31671,()=>{
   }
  });
  const inst=makeSkillInstance(SKILLS.fireball,20),physical:TetherSpec={link:'target',dps:20,damageType:'physical'};
- const seed=(calls:Parameters<World['addTether']>[]):World['tethers']=>{state.tethers=[];for(const args of calls)original.addTether.apply(hosts.original,args);return state.tethers;};
+ const seed=(calls:Parameters<World['addTether']>[]):World['tethers']=>{state.tethers=[];for(const args of calls)nativeReference.addTether.apply(hosts.native,args);return state.tethers;};
  checked('native multi-support slot order replaces repeated pairs without losing network links',()=>{
   const defs=[SUPPORTS.tripwire,SUPPORTS.transient_inferno,SUPPORTS.tripwire_web];
   const def=skills.find(d=>defs.every(s=>supportFitsInst(s,makeSkillInstance(d,20))));assert.ok(def);
@@ -252,7 +291,11 @@ withSeededRandom(31671,()=>{
   // leases when ordinary native lifecycle work replaces it with an empty queue.
   dormant.tethers=[];assert.deepEqual([...massDormancyPins(dormant,owned)].map(actor=>actor.id),[],'cleared queue releases only real tether dependencies');
  });
- assert.equal(sha(JSON.stringify(receipts)),'7b7d745f20f2f8bbc824964b7ff104eb8809d1b133c4948f7ffeb9efd3e3aba7','frozen original four-way receipt');
- const report={integrationCommit:archive.integrationCommit,integrationSourceHash:archive.sourceHash,archiveCommit:archive.commit,innateSkills:nativeDefs.length,tetherSupports:supportDefs.length,fourLaneCases:receipts.length,checks,receipt:sha(JSON.stringify(receipts)),boundaries:'construction only; native actors with fixture census/source tags; no summon birth, damage, healing, ticking, crossing, staged/detached caster lifetime or runtime publication claim'};
+ // The historical golden included whole skill/support definitions. It remains
+ // immutable evidence for its original catalogue, not a replacement baseline.
+ const frozenOriginalReceipt='7b7d745f20f2f8bbc824964b7ff104eb8809d1b133c4948f7ffeb9efd3e3aba7';
+ const historicalProbe=execFileSync('git',['show','24738cdebae049ef9b5f263334bb4da6f84882bc:balance/probe_nativetetherconstruction.ts'],{encoding:'utf8'});
+ assert.ok(historicalProbe.includes("assert.equal(sha(JSON.stringify(receipts)),'"+frozenOriginalReceipt+"','frozen original four-way receipt');"),'exact immutable historical receipt assertion');
+ const report={frozenOriginalReceipt,historicalBodyCurrentCatalogueReceipt:sha(JSON.stringify(historicalReceipts)),visualMain,visualReferenceEvidence,integrationCommit:archive.integrationCommit,integrationSourceHash:archive.sourceHash,archiveCommit:archive.commit,innateSkills:nativeDefs.length,tetherSupports:supportDefs.length,fourLaneCases:receipts.length,checks,receipt:sha(JSON.stringify(receipts)),boundaries:'construction only; native actors with fixture census/source tags; no summon birth, damage, healing, ticking, crossing, staged/detached caster lifetime or runtime publication claim'};
  fs.mkdirSync(new URL('./reports/',import.meta.url),{recursive:true});fs.writeFileSync(new URL('./reports/native-tether-construction.json',import.meta.url),JSON.stringify(report,null,2)+'\n');console.log('PASS native tether construction',report);
 });

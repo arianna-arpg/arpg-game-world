@@ -58,7 +58,7 @@ course('actual projectile append and foreign field cleanup cannot cross area sto
  if(!process.argv.includes('--cleanup-only')){a.projectiles.spawnProjectile(a.scene.player,inst,a.scene.player.pos,0);
   assert.equal(a.state.projectiles.length,1);assert.equal(b.state.projectiles.length,0,'A launch must not enter B queue');}
  try{b.state.zones=a.state.zones;}catch(e){assert.match(String(e),/Native progression store belongs to another slot/);}
- const zone={caster:a.scene.player,reserved:7,pos:{x:0,y:0},radius:1,tier:0} as World['zones'][number];a.scene.player.reservedMana=13;a.state.zones.push(zone);
+ const zone={caster:a.scene.player,inst,reserved:7,pos:{x:0,y:0},radius:1,tier:0} as World['zones'][number];a.scene.player.reservedMana=13;a.state.zones.push(zone);
  try{b.owner.expireZone(zone);}catch(e){assert.match(String(e),/Foreign native progression zone/);}
  assert.equal(a.scene.player.reservedMana,13,'B cleanup must not refund A caster');assert.equal(zone.reserved,7);
  a.owner.expireZone(zone);assert.equal(a.scene.player.reservedMana,6);assert.equal(zone.reserved,0);assert.equal(a.calls.length+b.calls.length,0);cases+=4;

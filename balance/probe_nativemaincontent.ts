@@ -7,6 +7,7 @@ import ts from 'typescript';
 import {nativeMainContentArchive as archive,nativeMainContentArchiveHash} from './nativeMainContentArchive';
 import {beforeNativeMainContent,beforeNativeMainContentOnly} from './nativeMainContentFixture';
 import {nativeSceneProgressionArchive as progressionArchive} from './nativeSceneProgressionArchive';
+import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
 const hash=(text:string)=>createHash('sha256').update(text).digest('hex');
 const parse=(text:string)=>ts.createSourceFile('world.ts',text,99,true);
 const classOf=(sf:ts.SourceFile)=>sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
@@ -16,10 +17,20 @@ assert.equal(hash(JSON.stringify(archive)),nativeMainContentArchiveHash);
 assert.deepEqual(archive.rows.map(r=>r.name),['pendingRepeats','executeSkill','layFissure','dropLingerField','updateRepeats','updateZones','expireZone','maddenBanks','maddenBankOf']);
 assert.deepEqual(archive.declarations.map(r=>r.name),['Zone','MaddenBank','MADDEN_CFG']);
 const normalized=beforeNativeMainContent(source),sf=parse(normalized),cl=classOf(sf);
+// Strictly reverse only the declared visual hunks for the historical source
+// comparisons. Mutations below still exercise the complete chain on raw World.
+const historical=beforeNativeMainVisualSource('src/engine/world.ts',source),current=parse(source);
+const locate=(text:ts.SourceFile,name:string)=>{
+ const matches=[...classOf(text).members,...text.statements].filter(n=>
+  ('name' in n&&(n.name as ts.Node|undefined)?.getText(text)===name)||
+  ts.isVariableStatement(n)&&n.declarationList.declarations.some(d=>d.name.getText(text)===name));
+ assert.equal(matches.length,1,'one actual checked node '+name);return matches[0].getText(text);
+};
+const historicalSf=parse(historical);
 for(const row of archive.rows){const member=cl.members.find(m=>m.name?.getText(sf)===row.name);assert.equal(member?.getText(sf)??null,row.before,'exact archived integration restoration '+row.name);}
 for(const row of [...archive.rows,...archive.declarations]){
  let checked=row.after;
- if(!source.includes(checked)){
+ if(!historical.includes(checked)){
   // The original main expiry moved into the exactly checked progression core.
   // Require its exact delegate AND its original body; never skip the mutation.
   assert.equal(row.name,'expireZone','only the reviewed expiry was extracted');
@@ -29,15 +40,17 @@ for(const row of [...archive.rows,...archive.declarations]){
   const body=method.body!,start=body.getStart(original),edits:{start:number;end:number}[]=[];
   const visit=(n:ts.Node)=>{if(n.kind===ts.SyntaxKind.ThisKeyword)edits.push({start:n.getStart(original)-start,end:n.end-start});ts.forEachChild(n,visit);};visit(body);
   let expected=body.getText(original);for(const e of edits.reverse())expected=expected.slice(0,e.start)+'nativeHost'+expected.slice(e.end);
-  const core=parse(fs.readFileSync(new URL('../src/engine/nativeSceneProgression.ts',import.meta.url),'utf8').replaceAll('\r\n','\n'));
+  const core=parse(beforeNativeMainVisualSource('src/engine/nativeSceneProgression.ts',fs.readFileSync(new URL('../src/engine/nativeSceneProgression.ts',import.meta.url),'utf8')));
   const fn=core.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='sceneExpireZone') as ts.FunctionDeclaration;
   assert.equal(fn.body!.getText(core),expected,'exact relocated main expiry body');
  }
- assert.ok(source.includes(checked),'actual checked World member '+row.name);
- assert.throws(()=>beforeNativeMainContent(source.replace(checked,checked.slice(0,-1)+'/* altered checked member */'+checked.slice(-1))),'changed candidate refuses '+row.name);
+ assert.equal(locate(historicalSf,row.name),checked,'exact historical node after visual reversal '+row.name);
+ const actual=locate(current,row.name);assert.equal(source.split(actual).length,2,'unique current node '+row.name);
+ assert.equal(actual.slice(-1),checked.slice(-1),'same original closing mutation delimiter '+row.name);
+ assert.throws(()=>beforeNativeMainContent(source.replace(actual,actual.slice(0,-1)+'/* altered checked member */'+actual.slice(-1))),'changed candidate refuses '+row.name);
 }
 // An unlisted member survives normalization. Older whole-class guards still see it.
-const current=parse(source),close=classOf(current).end-1,alien=source.slice(0,close)+'\n private unlistedParityMutation=123;\n'+source.slice(close);
+const close=classOf(current).end-1,alien=source.slice(0,close)+'\n private unlistedParityMutation=123;\n'+source.slice(close);
 assert.ok(beforeNativeMainContent(alien).includes('private unlistedParityMutation=123;'));
 // Reapply the exact main Git patch to the immutable integration source in memory.
 function replay(text:string,patch:string):string {

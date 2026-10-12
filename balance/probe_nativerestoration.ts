@@ -1,3 +1,8 @@
+import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
+import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisualSourceArchive';
+import {noteRestoreGain} from '../src/engine/feedingCues';
+import {skillTargetVoice} from '../src/data/skillTargetVisuals';
+import {sceneShowSkillArrival} from '../src/engine/nativeSceneSkillArrival';
 /** Four-lane native restoration proof. No stream ticking or complete combat. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -34,15 +39,30 @@ assert.equal(hash(JSON.stringify(archive)),nativeSceneRestorationArchiveHash);
 const source=execFileSync('git',['show',archive.commit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6});assert.equal(hash(source),archive.worldHash);
 const current=fs.readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8');assert.equal(beforeNativeSceneSummonPreparation(current),source,'exact newer-layer reversal reaches immutable native World');
 const sf=ts.createSourceFile('world.ts',source,99,true),world=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
-const text=fs.readFileSync(new URL('../src/engine/nativeSceneRestoration.ts',import.meta.url),'utf8'),cf=ts.createSourceFile('core.ts',text,99,true);
+const text=fs.readFileSync(new URL('../src/engine/nativeSceneRestoration.ts',import.meta.url),'utf8'),cf=ts.createSourceFile('core.ts',beforeNativeMainVisualSource('src/engine/nativeSceneRestoration.ts',text),99,true);
 const emit=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,removeComments:true}}).outputText;
 for(const row of archive.rows){const m=world.members.find(n=>n.name?.getText(sf)===row.name) as ts.MethodDeclaration;assert.equal(m.getText(sf),row.source);assert.equal(hash(row.source),row.sha256);const body=m.body!,edits:{start:number;end:number}[]=[];function visit(n:ts.Node){if(n.kind===ts.SyntaxKind.ThisKeyword)edits.push({start:n.getStart(sf)-body.getStart(sf),end:n.end-body.getStart(sf)});ts.forEachChild(n,visit);}visit(body);let before=body.getText(sf);for(const e of edits.reverse())before=before.slice(0,e.start)+'host'+before.slice(e.end);const fn=cf.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='scene'+row.name[0].toUpperCase()+row.name.slice(1)) as ts.FunctionDeclaration;assert.equal(fn.body!.getText(cf),before,row.name+' exact token-only body');}
 const lexical={Actor,chance,dist,vec,STATUS_DEFS,normalizeBrain,effectiveSkillLevel,grantedTags,instanceMods,socketSpec,skillContextTags,sameStory,combatCueFlash};
 const original=Function(...Object.keys(lexical),emit('class Original{'+archive.rows.map((r:any)=>r.source).join('\n')+'}\nreturn Original.prototype;'))(...Object.values(lexical));
+// Historical source bodies remain immutable. Only these explicitly named
+// methods use the separately pinned main successor in the behavior lane.
+const visualMain='ea56c7ac4f5f4963dc6ad8ce3cb86bc12b66fa0b';
+assert.equal(visualArchive.main,visualMain);
+const visualMainText=execFileSync('git',['show',visualMain+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:30e6});
+const visualMainFile=ts.createSourceFile('main-world.ts',visualMainText,99,true),visualMainWorld=visualMainFile.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
+const visualReferenceEvidence:{name:string;sha256:string}[]=[];
+function visualReference(historical:Record<string,Function>,names:string[],bindings:Record<string,unknown>){
+ const rows=names.map(name=>{const m=visualMainWorld.members.find(n=>n.name?.getText(visualMainFile)===name);assert(m&&ts.isMethodDeclaration(m));const body=m.getText(visualMainFile);visualReferenceEvidence.push({name,sha256:createHash('sha256').update(body).digest('hex')});return body;});
+ const js=ts.transpileModule('class VisualNative{'+rows.join('\n')+'}\nreturn VisualNative.prototype;',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+ const overrides=Function(...Object.keys(bindings),js)(...Object.values(bindings));return Object.defineProperties(Object.create(historical),Object.fromEntries(names.map(name=>[name,Object.getOwnPropertyDescriptor(overrides,name)!]))) as Record<string,Function>;
+}
+
+const nativeReference=visualReference(original,['applyRestore','applyHealChained'],{...lexical,noteRestoreGain,skillTargetVoice});
+
 const oldTetherSource=execFileSync('git',['show',archive.commit+':src/worldmass/nativeAreaSceneTethers.ts'],{encoding:'utf8'}),tf=ts.createSourceFile('old.ts',oldTetherSource,99,true);
 const oldTetherCode=tf.statements.filter(n=>!ts.isImportDeclaration(n)).map(n=>n.getText(tf).replace(/^export /,'')).join('\n');
 const OldTethers=Function('sceneAddTether','sceneAttachObjectTethers',emit(oldTetherCode)+'\nreturn NativeAreaSceneTethers;')(sceneAddTether,sceneAttachObjectTethers);
-const names=archive.rows.map((r:any)=>r.name) as (keyof core.NativeSceneRestorationApi)[],checks:string[]=[],receipts:any[]=[];
+const names=archive.rows.map((r:any)=>r.name) as (keyof core.NativeSceneRestorationApi)[],checks:string[]=[],receipts:any[]=[],visualReceipts:any[]=[];
 const checked=(name:string,fn:()=>void)=>{fn();checks.push(name);console.log('PASS '+name);};
 withSeededRandom(33417,()=>{
  const w=makeSimWorld('warrior',33417),raw=freshAssemblyInput(w,w.zone);
@@ -64,15 +84,16 @@ withSeededRandom(33417,()=>{
   labels.set(a,name);created.push(a);scene.actors.push(a);authority.claim(binding,[a]);return a;
  }
  const skill=makeSkillInstance(Object.values(SKILLS).find(d=>d.effects.some(f=>f.type==='heal'))!,10),tags=skill.def.tags;
- const makeHost=(lane:'original'|'core')=>{const h:any={get actors(){return scene.actors;},get flashes(){return geometry.flashes;},get texts(){return objective.input.state.texts;},get tethers(){return state.tethers;},get partyRows(){return campaign.partyRows;},get seats(){return campaign.seats;},text:(...a:Parameters<World['text']>)=>objective.text(...a),seatOfRoot:(...a:Parameters<World['seatOfRoot']>)=>campaign.seatOfRoot(...a)};for(const name of names)h[name]=(...args:any[])=>lane==='original'?original[name].apply(h,args):(core as any)['scene'+name[0].toUpperCase()+name.slice(1)](h,...args);return h;};
- const hosts={original:makeHost('original'),core:makeHost('core')};type Lane='original'|'core'|'world'|'owner';
+ const arrival={get flashes(){return geometry.flashes;},get seats(){return campaign.seats;},get localSeat(){return campaign.localSeat;},get account(){return campaign.account;}};
+ const makeHost=(lane:'native'|'core')=>{const h:any={get actors(){return scene.actors;},get flashes(){return geometry.flashes;},get texts(){return objective.input.state.texts;},get tethers(){return state.tethers;},showSkillArrival:(...args:Parameters<World['showSkillArrival']>)=>sceneShowSkillArrival(arrival,...args),get partyRows(){return campaign.partyRows;},get seats(){return campaign.seats;},text:(...a:Parameters<World['text']>)=>objective.text(...a),seatOfRoot:(...a:Parameters<World['seatOfRoot']>)=>campaign.seatOfRoot(...a)};for(const name of names)h[name]=(...args:any[])=>lane==='native'?nativeReference[name].apply(h,args):(core as any)['scene'+name[0].toUpperCase()+name.slice(1)](h,...args);return h;};
+ const hosts={native:makeHost('native'),core:makeHost('core')};type Lane='native'|'core'|'world'|'owner';
  function worldScope<T>(fn:()=>T):T{const saved={actors:w.actors,texts:w.texts,tethers:w.tethers,flashes:w.flashes};try{w.actors=scene.actors;w.texts=objective.input.state.texts;w.tethers=state.tethers;w.flashes=geometry.flashes;return fn();}finally{Object.assign(w,saved);}}
  function invoke(lane:Lane,name:keyof core.NativeSceneRestorationApi,args:any[]){return lane==='owner'?(owner[name] as Function).apply(owner,args):lane==='world'?worldScope(()=>((w as any)[name] as Function).apply(w,args)):(hosts[lane][name] as Function).apply(hosts[lane],args);}
  function snapshot(){return {texts:plain(objective.input.state.texts),flashes:plain(geometry.flashes),tethers:plain(state.tethers),actors:created.map(a=>({name:label(a),life:a.life,mana:a.mana,es:a.es,poise:a.poise,esDelay:a.esDelay,absorb:a.absorb,absorbTimer:a.absorbTimer,streams:plain(a.restoreStreams),events:plain(a.gainEvents),statuses:plain(a.statuses),statusMods:a.statuses.map(s=>[s.id,plain(a.sheet.getSourceMods('status:'+s.id))]),threat:[...a.threat].map(([n,v])=>[id(n),v])}))};}
  type Course={op:keyof core.NativeSceneRestorationApi;args:any[];verify?:(v:any)=>void;observe?:()=>any;error?:RegExp;cleanup?:()=>void};
- function compare(name:string,prepare:(lane:Lane)=>Course){const outcomes=[];for(const lane of ['original','core','world','owner'] as const){created=[];labels=new Map();scene.actors=[...initial];state.tethers=[];objective.input.state.texts=[];geometry.flashes=[];w.partyRows=[];
-   const out=withSeededRandom(45137,()=>{const c=prepare(lane);try{let value:any,error:string|undefined;try{value=invoke(lane,c.op,c.args);}catch(e){error=(e as Error).message;}if(c.error)assert.match(error??'',c.error,name+' '+lane);else assert.equal(error,undefined,name+' '+lane);c.verify?.(value);return {value:plain(value),error,state:snapshot(),observe:plain(c.observe?.()),next:Math.random()};}finally{c.cleanup?.();}});outcomes.push(out);authority.release(binding,created);scene.actors=[...initial];}
-  for(let i=1;i<outcomes.length;i++)assert.deepEqual(outcomes[i],outcomes[0],name+' lane '+i);receipts.push([name,outcomes[0]]);return outcomes[0];
+ function compare(name:string,prepare:(lane:Lane)=>Course){const outcomes=[],visuals:any[]=[];for(const lane of ['native','core','world','owner'] as const){created=[];labels=new Map();scene.actors=[...initial];state.tethers=[];objective.input.state.texts=[];geometry.flashes=[];w.partyRows=[];
+   const out=withSeededRandom(45137,()=>{const c=prepare(lane);try{let value:any,error:string|undefined;try{value=invoke(lane,c.op,c.args);}catch(e){error=(e as Error).message;}if(c.error)assert.match(error??'',c.error,name+' '+lane);else assert.equal(error,undefined,name+' '+lane);c.verify?.(value);return {value:plain(value),error,state:snapshot(),observe:plain(c.observe?.()),next:Math.random()};}finally{c.cleanup?.();}});outcomes.push(out);visuals.push(created.map(a=>({name:label(a),restoreGains:plain(a.restoreGains),resourceFlows:plain(a.resourceFlows)})));authority.release(binding,created);scene.actors=[...initial];}
+  for(let i=1;i<outcomes.length;i++)assert.deepEqual(outcomes[i],outcomes[0],name+' lane '+i);for(let i=1;i<visuals.length;i++)assert.deepEqual(visuals[i],visuals[0],name+' restore cues lane '+i);visualReceipts.push([name,visuals[0]]);receipts.push([name,outcomes[0]]);return outcomes[0];
  }
  const cap=(a:Actor,n:number)=>{a.gainEvents=Array.from({length:n},()=>({kind:'restore' as const,id:'mana',depth:0,n:1}));};
  checked('all native resource ceilings, negative/zero amounts, event cap and noEvent preserve references',()=>{
@@ -180,20 +201,36 @@ withSeededRandom(33417,()=>{
   const flesh=w.localSeat.actor;w.executeSkill(flesh,makeSkillInstance(SKILLS.form_of_the_dire_wolf,1),flesh.pos);const form=w.localSeat.actor;assert.notEqual(form,flesh);assert.equal(form.possession?.huskMode,'carried');authority.release(binding,[flesh]);scene.actors=scene.actors.filter(a=>a!==flesh);scene.actors.push(form);scene.player=form;authority.claim(binding,[form]);assert.equal(authority.require(flesh).scene,scene);
   assert.throws(()=>owner.applyRestore(flesh,{resource:'life',amount:20}),/actual physical/);assert.throws(()=>owner.startRestoreStream(form,flesh,skill,{resource:'life',amount:10,duration:2},0),/actual physical/);form.life=form.maxLife()*.5;const before=form.life;owner.applyRestore(form,{resource:'life',amount:20});assert.ok(form.life>before);
  });
- const report={commit:archive.commit,methods:names.length,checks,cases:receipts.length,receipt:hash(JSON.stringify(receipts)),worldLane:'integrated actual World delegates with actors/texts/tethers/flashes temporarily bound to matched area stores for algorithm comparison; separate ordinary World courses prove adapter wiring',boundaries:'restoration application, stream construction, local arcs and attribution only; no stream ticking, sympathy replay, aura/buff application, full combat, detached caster lifetime or publication'};
- fs.mkdirSync(new URL('./reports/',import.meta.url),{recursive:true});fs.writeFileSync(new URL('./reports/nativerestoration.json',import.meta.url),JSON.stringify(report,null,2)+'\n');console.log('PASS native restoration',report);
+ const report={visualReceipt:hash(JSON.stringify(visualReceipts)),visualMain,visualReferenceEvidence,commit:archive.commit,methods:names.length,checks,cases:receipts.length,receipt:hash(JSON.stringify(receipts)),worldLane:'integrated actual World delegates with actors/texts/tethers/flashes temporarily bound to matched area stores for algorithm comparison; separate ordinary World courses prove adapter wiring',boundaries:'restoration application, stream construction, local arcs and attribution only; no stream ticking, sympathy replay, aura/buff application, full combat, detached caster lifetime or publication'};
+ fs.mkdirSync(new URL('./reports/',import.meta.url),{recursive:true});fs.writeFileSync(new URL('./reports/nativerestoration.json',import.meta.url),JSON.stringify(report,null,2)+'\n');fs.writeFileSync(new URL('./reports/nativerestoration-visuals.json',import.meta.url),JSON.stringify({visualMain,visualReferenceEvidence,cases:visualReceipts.length,receipt:report.visualReceipt,rows:visualReceipts},null,2)+'\n');console.log('PASS native restoration',report);
 });
 
 // Separate ordinary-World integration courses never mirror retained-area stores.
+
+// Map an older integration mutation through only the declared visual source
+// changes. Overlapping exact hunks now belong to the stricter visual guard;
+// every untouched hunk must still reach its original historical guard.
+function visualWorldHunk(raw:string,historical:string,legacy:RegExp){
+ let text=beforeNativeMainVisualSource('src/engine/world.ts',raw),start=text.indexOf(historical),end=start+historical.length,overlap=false;
+ assert.equal(text.split(historical).length,2,'unique historical mutation hunk');
+ for(const edit of [...visualArchive.files.find(r=>r.file==='src/engine/world.ts')!.edits].reverse()){
+  const at=text.indexOf(edit.before),stop=at+edit.before.length,delta=edit.after.length-edit.before.length;assert.equal(text.split(edit.before).length,2,'exact visual forward context');
+  if(stop<=start){start+=delta;end+=delta;}else if(at<end){start=Math.min(start,at);end=Math.max(end,stop)+delta;overlap=true;}
+  text=text.slice(0,at)+edit.after+text.slice(stop);
+ }
+ assert.equal(text,raw.replaceAll('\r\n','\n'),'whole current source after exact forward mapping');
+ return {text:text.slice(start,end),guard:overlap?/unique exact native main visual source/:legacy};
+}
+
 const integrationChecks:string[]=[];
 const integrationCheck=(name:string,fn:()=>void)=>{withSeededRandom(33701+integrationChecks.length,fn);integrationChecks.push(name);console.log('PASS '+name);};
 const nativeCall=(w:World,name:keyof core.NativeSceneRestorationApi,...args:any[])=>(Reflect.get(w,name) as Function).apply(w,args);
 integrationCheck('exact restoration source reverses the complete reviewed displacement preimage',()=>{
  assert.equal(hash(JSON.stringify(integrationArchive)),nativeSceneRestorationIntegrationArchiveHash);assert.equal(integrationArchive.originalArchiveHash,nativeSceneRestorationArchiveHash);assert.equal(hash(beforeNativeSceneCombatState(current)),integrationArchive.afterHash);assert.equal(hash(beforeNativeSceneRestoration(current)),integrationArchive.sourceHash);assert.equal(beforeNativeSceneRestoration(current),execFileSync('git',['show',integrationArchive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}),'complete immutable displacement World preimage');
  assert.equal(ts.createSourceFile('current.ts',current,99,true).statements[0].getText(),"import './nativeSceneBootstrap';");
- const parsed=ts.createSourceFile('current.ts',current,99,true),cl=parsed.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
+ const parsed=ts.createSourceFile('current.ts',beforeNativeMainVisualSource('src/engine/world.ts',current),99,true),cl=parsed.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
  for(const row of archive.rows){const old=world.members.find(n=>n.name?.getText(sf)===row.name) as ts.MethodDeclaration,m=cl.members.find(n=>n.name?.getText(parsed)===row.name) as ts.MethodDeclaration;assert.deepEqual(m.parameters.map(p=>p.getText(parsed)),old.parameters.map(p=>p.getText(sf)));assert.equal(m.type?.getText(parsed),old.type?.getText(sf));assert.deepEqual(m.modifiers?.map(n=>n.getText(parsed)),old.modifiers?.map(n=>n.getText(sf)));}
- for(const row of integrationArchive.integration){assert.equal(current.split(row.after).length,2);assert.throws(()=>beforeNativeSceneRestoration(current.replace(row.after,row.after.replace(/[A-Za-z]/,'!'))),/unique exact native restoration integration/);assert.throws(()=>beforeNativeSceneRestoration(current+'\n'+row.after),/unique exact native restoration integration/);}
+ for(const row of integrationArchive.integration){const h=visualWorldHunk(current,row.after,/unique exact native restoration integration/);assert.equal(current.split(h.text).length,2);assert.throws(()=>beforeNativeSceneRestoration(current.replace(h.text,h.text.replace(/[A-Za-z]/,'!'))),h.guard);assert.throws(()=>beforeNativeSceneRestoration(current+'\n'+h.text),h.guard);}
  const unrelated=current+'\n// unrelated restoration source drift\n';assert.ok(beforeNativeSceneRestoration(unrelated).endsWith('// unrelated restoration source drift\n'));assert.notEqual(hash(beforeNativeSceneRestoration(unrelated)),integrationArchive.sourceHash);
 });
 integrationCheck('actual World cached restoration host preserves live arrays and selected method receivers',()=>{

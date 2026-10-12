@@ -254,7 +254,11 @@ function tally(output: string): string {
 }
 
 function failLines(output: string): string[] {
-  return (output.split(/\r?\n/).filter(l => /^FAIL\b/.test(l)));
+  const lines = output.trimEnd().split(/\r?\n/);
+  const explicit = lines.filter(l => /^FAIL\b/.test(l));
+  // AssertionError/throws need their stack and actual/expected values too.
+  // A bounded tail avoids dumping large fixtures into parallel CI summaries.
+  return (explicit.length ? explicit : lines.slice(-28)).map(l => l.slice(0, 500));
 }
 
 const secs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;

@@ -1,5 +1,10 @@
 # Feeding and restoration cues
 
+The follow-up [skill visual sweep](skill-visual-sweep.md) normalizes flesh/life
+transfers into blood strands, gives each resource a color-independent shape,
+and adds bounded actual-gain traces for hit/status/aura/digestion leech. Ordinary
+regeneration remains quiet.
+
 GT-025 replaces `feeds`, Amalgam's `fed` counter, `devours`, sacrificial
 `consumed!` and ordinary stream `drinking...` / `sipping...` / `charging...`
 captions. Implementation complete; encounter acceptance remains open.
@@ -15,7 +20,7 @@ captions. Implementation complete; encounter acceptance remains open.
 - Amalgam accumulates a bounded cluster of ritual fragments while its real
   channel holds consumed mass. Releasing or interrupting the channel removes it.
 - Actual restoration ticks draw inward drops on the recipient and matching
-  life/mana orb. Energy-shield and overmend gains use diamonds at the life orb's
+  life/mana orb. Energy-shield and overmend gains use open plates at the life orb's
   shield crown. Full pools, blocked healing and capped shields have no refill
   effect. Primed pours retain GT-021's release and then show actual ticks.
 
@@ -35,7 +40,8 @@ with a six-row bound per actor. Gains use the value actually returned by healing
 or the change after clamping mana, energy shield and overmend. Reading the cue
 does not spend a stream, modify resources or draw randomness. Restoration
 amounts, durations, costs, caps, sympathy routing, kill credit and buffs keep
-their existing paths. Ordinary regeneration and leech do not create these cues.
+their existing paths. Ordinary regeneration stays quiet; measured leech uses
+bounded resource-flow receipts alongside these local gain marks.
 
 Consumption transfers are emitted after actual corpse removal or confirmed
 summon death. Devour still uses an attributed death; quiet Amalgam/sacrifice

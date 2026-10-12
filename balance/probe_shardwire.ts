@@ -439,7 +439,8 @@ let zoneId = -1;
   const ra = last.actors.find(a => a.seat === A.id)!, rb = last.actors.find(a => a.seat === B.id)!;
   applySnapshot(shell, { ...last, tethers: [{ ax: 1, ay: 2, bx: 3, by: 4, c: '#ffffff', w: 2, ai: ra.id, bi: rb.id }, { ax: 7, ay: 8, bx: 9, by: 10, c: '#ffffff', w: 2, ai: -5, bi: -6 }] });
   shell.player.pos.x += 37; // the prediction moves the own hero after the apply
-  const t0 = shell.tethers[0], t1 = shell.tethers[1];
+  const t0 = shell.remoteSkillTethers![0], t1 = shell.remoteSkillTethers![1];
+  check('H band: replicas expose paint without executable damage bands', shell.tethers.length === 0);
   check('H band: a band\'s ends follow the client\'s own (interpolated, predicted) bodies; coords stand in for an unknown end',
     t0.ax === shell.player.pos.x && t0.bx === rb.p[0] && t1.ax === 7 && t1.by === 10, `ax ${t0.ax} vs ${shell.player.pos.x}`);
   const owned = got.find(s => s.texts.some(t => t.o === A.id));

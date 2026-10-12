@@ -11,6 +11,7 @@ import {DEFENSE_CFG} from './defense';
 import {procStat,type ProcDef} from '../data/procs';
 import type {Modifier,SkillTag,DamageType} from './stats';
 export interface NativeSceneCombatStateHost {
+ showSkillArrival:World['showSkillArrival'];
  actors:World['actors'];treeBuffSources:World['treeBuffSources'];time:number;
  grantTreeBuff(caster: Actor, target: Actor, inst: SkillInstance, fx: BuffEffect, durScale: number): void;
  tapFires(a: Actor, inst: SkillInstance, spec: GaugeFeedSpec,
@@ -72,11 +73,13 @@ export function sceneGrantTreeBuff(nativeHost:NativeSceneCombatStateHost,caster:
     inst = inst.followUpHost ?? inst;
     if (!followUpHost && !inst.treeNodes?.some(id => treeNodeOf(inst.def, id)?.buffs?.length)) {
       target.addBuff(fx, durScale, 0, inst.def.tags);
+      if (target.buffs.has(fx.id)) nativeHost.showSkillArrival(caster, inst, target.pos, target.radius + 16, target.tier, true);
       return;
     }
     const tagged = { ...fx };
     nativeHost.treeBuffSources.set(tagged, { caster, inst });
     target.addBuff(tagged, durScale, 0, [...skillContextTags(inst)]);
+    if (target.buffs.has(fx.id)) nativeHost.showSkillArrival(caster, inst, target.pos, target.radius + 16, target.tier, true);
   }
 
 export function sceneTransplantStatus(nativeHost:NativeSceneCombatStateHost,

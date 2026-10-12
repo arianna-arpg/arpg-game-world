@@ -42,6 +42,7 @@ import { traceFlashFigure } from './aoeTrace';
 /** The narrow read surface a voice painter gets — structurally satisfied by
  *  the engine's Flash rows (world.ts) without importing the engine. */
 export interface EffectVoiceFlash {
+  arcRad?: number;
   combatCue?: import('../../engine/combatCues').CombatCue;
   defenseCue?: import('../../engine/defenseCues').DefenseCue;
   departure?: RefugeDeparture;
@@ -51,6 +52,8 @@ export interface EffectVoiceFlash {
   life: number;
   maxLife: number;
   facing?: number;
+  /** Safe circular center excluded from the flash's hit surface. */
+  edgeFrac?: number;
   /** The figure the flash tested (a registered AOE_SHAPE value, or the
    *  classic swing arc) — a voice that paints OVER its surface (the
    *  crossjab streak) traces exactly this through traceFlashFigure. */

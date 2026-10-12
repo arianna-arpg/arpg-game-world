@@ -39,6 +39,7 @@ export function sceneAddTether(host:NativeSceneTetherHost,a: Actor, b: Actor, sp
     }
     host.tethers.push({
       a, b, owner, skillId: inst.def.id, link: spec.link, inst,
+      visual: spec.visual, visualAge: 0,
       amounts, heal: spec.healPerSec ?? 0,
       affects: spec.affects ?? 'enemies',
       width,

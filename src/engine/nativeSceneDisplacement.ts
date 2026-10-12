@@ -1,3 +1,5 @@
+import {skillMovementVoice} from '../data/skillMovementVisuals';
+import {skillSelfVoice} from '../data/skillSelfVisuals';
 /** Exact native impulse, release, teleport, saddle and movement-policy closure.
  * Does not own moveActor, recovery, ticking, damage or scheduling. */
 import type {World} from './world';
@@ -24,7 +26,7 @@ pushActor(target: Actor, dir: number, strength: number, caster?: Actor, inst?: S
     }): void;
 grabRelease(a: Actor): void;
 clingRelease(a: Actor, cause?: 'shake' | 'drop'): void;
-teleportActor(actor: Actor, dest: Vec2, color?: string, disp?: DisplacementPolicy, story?: number): void;
+teleportActor(actor: Actor, dest: Vec2, color?: string, disp?: DisplacementPolicy, story?: number, movementSkillId?: string): void;
 mountFreeSeat(m: Actor, slot: MountSlotSpec | undefined): number;
 mountSeatRider(r: Actor, m: Actor): boolean;
 mountUnlink(r: Actor, riderDied?: boolean): void;
@@ -157,8 +159,11 @@ export function sceneClingRelease(host:NativeSceneDisplacementHost,a: Actor, cau
     }
   }
 
-export function sceneTeleportActor(host:NativeSceneDisplacementHost,actor: Actor, dest: Vec2, color = '#b8c8ff', disp?: DisplacementPolicy, story?: number): void {
-    host.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.6, color, life: 0.25, maxLife: 0.25 });
+export function sceneTeleportActor(host:NativeSceneDisplacementHost,actor: Actor, dest: Vec2, color = '#b8c8ff', disp?: DisplacementPolicy, story?: number, movementSkillId?: string): void {
+    const depart = movementSkillId && (skillMovementVoice(movementSkillId, 'depart') ?? skillSelfVoice(movementSkillId, 'depart'));
+    const arrive = movementSkillId && (skillMovementVoice(movementSkillId, 'arrive') ?? skillSelfVoice(movementSkillId, 'recall'));
+    host.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.6, color, life: 0.25, maxLife: 0.25,
+      fx: depart || undefined, facing: actor.facing, recoveryCueTier: depart ? actor.tier : undefined });
     // A flicker/blink may carry a DisplacementPolicy ({ignoreConfine}) to land past
     // walls + across the void; default (no disp) = nearest-walkable snap as before.
     // `story` (the tier fabric's enclosure law): the STORY the arrival seats
@@ -169,7 +174,8 @@ export function sceneTeleportActor(host:NativeSceneDisplacementHost,actor: Actor
     actor.pos = host.clampPos(vec(dest.x, dest.y), actor.radius, undefined,
       story !== undefined ? { ...(disp ? { disp } : {}), mover: actor } : disp ? { disp } : undefined);
     actor.dash = null;
-    host.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 1.8, color, life: 0.3, maxLife: 0.3 });
+    host.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * (arrive ? 2.4 : 1.8), color, life: 0.3, maxLife: 0.3,
+      fx: arrive || undefined, facing: actor.facing, recoveryCueTier: arrive ? actor.tier : undefined });
   }
 
 export function sceneMountFreeSeat(host:NativeSceneDisplacementHost,m: Actor, slot: MountSlotSpec | undefined): number {

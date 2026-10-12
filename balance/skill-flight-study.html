@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hollow Wake · Skill identities</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101719;color:#e4eeee;font:15px system-ui}
+header{max-width:1120px;margin:auto;padding:28px 22px 18px}small{color:#9bb5b7;letter-spacing:.12em}
+h1{font-size:30px;margin:12px 0}p{color:#adbec0;line-height:1.6;max-width:880px}
+button,input,select{font:inherit;color:inherit;background:#203239;border:1px solid #48636c;border-radius:7px;padding:10px 13px;margin:0 7px 10px 0}
+button{cursor:pointer}button[aria-pressed=true]{background:#315969;border-color:#83b9c9}
+main{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;max-width:1120px;margin:0 auto 40px;padding:0 22px}
+.card{min-width:0;background:#172328;border:1px solid #2d4045;border-radius:10px;overflow:hidden}
+.art{height:128px;width:180px;margin:auto;background-size:1440px 128px}
+.label{text-align:center;padding:0 6px 16px;font-size:13px}.family{color:#90a7ad;text-align:center;font-size:11px;padding:6px 0}
+.card[hidden]{display:none}#count{color:#8daeb5;margin-left:4px}input{max-width:220px}
+</style>
+<header>
+<small>HOLLOW WAKE / VISUAL CATALOGUE</small><h1>A skill should have a silhouette.</h1>
+<p>Projectiles carry their own heads and wakes. Beams use six distinct structures. Fields grow, turn, breathe, or rise. Switch every skill to the same color to compare its shape and motion. These are drawings from the game renderer; field reach is normalized here, and projectile heads are shown at a shared 9-pixel radius.</p>
+<button id="pause" aria-pressed="false">Pause</button>
+<button id="mono" aria-pressed="true">One shared color</button>
+<button id="labels" aria-pressed="false">Hide names</button>
+<select id="family" aria-label="Skill family"><option value="">All families</option><option value="projectile" selected>Projectiles</option><option value="beam">Beams</option><option value="field">Ground fields</option><option value="aura">Auras</option><option value="burst">Bursts</option></select>
+<input id="search" placeholder="Find a skill" aria-label="Find a skill"><span id="count"></span>
+</header><main></main>
+<script>
+const rows=/*__DATA__*/[];
+const featured=['firebolt','frostbolt','chain_lightning','essence_drain','vine_lash','spectral_helix',
+  'fireball','frozen_orb','web_shot','gyreblade','bone_arrow','galewright_twister',
+  'sunpiercer','umbral_lance','gaze_beam','stone_gaze','prismatic_ray','petrifying_gaze',
+  'toxic_cloud','entangle','consecration','earthquake','cold_vortex','flame_wall'];
+const rank=id=>featured.includes(id)?featured.indexOf(id):featured.length;
+rows.sort((a,b)=>rank(a.id)-rank(b.id)||a.name.localeCompare(b.name));
+const main=document.querySelector('main'),cards=[];
+let mono=true,paused=false,names=true,phase=0,last=performance.now();
+const observer=new IntersectionObserver(entries=>{
+  for(const e of entries){e.target.inView=e.isIntersecting;if(e.isIntersecting)load(e.target)}
+},{rootMargin:'160px'});
+function load(c){if(c.loaded!==mono){c.art.style.backgroundImage='url('+c.row.sheets[mono?1:0]+')';c.loaded=mono}}
+for(const row of rows){
+  const c=document.createElement('article');c.className='card';c.row=row;c.loaded=null;
+  const family=document.createElement('div');family.className='family';family.textContent=row.family;
+  const art=document.createElement('div');art.className='art';
+  const label=document.createElement('div');label.className='label';label.textContent=row.name;
+  c.art=art;c.label=label;c.append(family,art,label);main.append(c);cards.push(c);observer.observe(c);
+}
+function filter(){
+  const q=document.querySelector('#search').value.toLowerCase(),f=document.querySelector('#family').value;
+  let count=0;for(const c of cards){c.hidden=!!(f&&c.row.family!==f)||!c.row.name.toLowerCase().includes(q);if(!c.hidden)count++}
+  document.querySelector('#count').textContent=count+' skills';
+}
+filter();document.querySelector('#family').onchange=filter;document.querySelector('#search').oninput=filter;
+document.querySelector('#pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Play':'Pause';e.target.setAttribute('aria-pressed',paused)};
+document.querySelector('#mono').onclick=e=>{
+  mono=!mono;e.target.textContent=mono?'One shared color':'Skill colors';e.target.setAttribute('aria-pressed',mono);
+  for(const c of cards)if(c.inView)load(c);
+};
+document.querySelector('#labels').onclick=e=>{
+  names=!names;e.target.textContent=names?'Hide names':'Show names';e.target.setAttribute('aria-pressed',!names);
+  for(const c of cards)c.label.style.visibility=names?'visible':'hidden';
+};
+function frame(now){
+  if(!paused)phase+=Math.min(100,now-last);last=now;
+  for(const c of cards)if(!c.hidden&&c.inView){
+    const burst=c.row.family==='beam'||c.row.family==='burst',cycle=burst?phase%1500:phase%2240;
+    const n=Math.min(7,Math.floor(cycle/(burst?37.5:280)));
+    c.art.style.backgroundPosition=(-n*180)+'px 0';c.art.style.opacity=burst&&cycle>300?0:1;
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script></html>
