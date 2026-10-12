@@ -20,6 +20,9 @@ visuals, or content admission. No unfinished seamless content is merged into Mai
   history and Titans still pin archived code/fixtures and compare complete cold
   original/current/local outputs. A fixed hash of every shared Actor property
   was also freezing later pose/visual additions unrelated to those extractions.
+- Installed sources retain exact archived World delegates, original providers,
+  tunables, helpers, registration inventory/order and independent cold boots.
+  Its whole-World fingerprint also rejected unrelated visual changes.
 - Sky pins its three exact World delegates, the three original implementations,
   and all seven event source modules. It no longer freezes every unrelated World
   member count and body as an incidental sky requirement.

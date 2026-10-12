@@ -245,6 +245,12 @@ try {
 function naturalProcession(w:World,needChest:boolean){
  // Bounded actual-scene discovery. A route proposal grants no physical authority.
  const m=w.massRuntime!,g=m.geography!,b=g.caravans;
+ // Observe the real incremental checker even when a stale plan is evicted after refusal.
+ // Delegation preserves every yield, return value, frame budget and collision query.
+ const rejected=new Set<string>();
+ const scene=b as unknown as {checkScene(entry:{plan:{owner:{id:string}}},world:World):Generator<void,boolean,unknown>};
+ const checkScene=scene.checkScene;
+ scene.checkScene=function*(entry,world){const clear=yield*checkScene.call(this,entry,world);if(!clear)rejected.add(entry.plan.owner.id);return clear;};
  const local=(a:MassAddress)=>localOffset(a,{...m.origin,x:0,y:0},960);
  let candidate:ReturnType<typeof g.processionPlannedAt>=null;const attempts:{owner:number[];steps:number;admitted:boolean;available:number;required:number;currentPlan:boolean;collisions:{p:Vec2;radius:number;body:Doodad}[];stats:typeof b.warmStats}[]=[];
  const roadOwners:string[]=[],installRoad=w.installMassProcessionRoad.bind(w);
@@ -260,7 +266,7 @@ function naturalProcession(w:World,needChest:boolean){
   for(;n<5000&&!b.processions.actors(initial.owner.id).size;n++){
    w.time+=.02;m.update(w);b.update(w,0);
    // Stop when this exact owner has completed its real late-scene refusal.
-   if((b as unknown as {plans:Map<string,{refused?:unknown}>}).plans.get(initial.owner.id)?.refused)break;
+   if(rejected.has(initial.owner.id))break;
    if(n%100===0){const next=g.processionPlannedAt(at);if(next){const p=local(next.entry);if(Math.hypot(p.x-w.player.pos.x,p.y-w.player.pos.y)>1300)w.landPartyAt({x:p.x-300,y:p.y});}
     else if(n>=100)break;
    }
@@ -274,6 +280,7 @@ function naturalProcession(w:World,needChest:boolean){
   const evidence={owner:[x,y],steps:n,admitted,available:m.availablePopulation(initial.owner.id),required:1+initial.context.config.puffCap,currentPlan:!!g.processionPlannedAt(at),collisions,stats:b.warmStats};attempts.push(evidence);console.log('NATURAL_ROUTE_ATTEMPT',JSON.stringify(evidence));
   if(admitted){if(!needChest||initial.chestPosition)candidate=g.processionPlannedAt(at);}
   else{
+   assert.ok(rejected.has(initial.owner.id),'the real native scene checker rejects this exact owner');
    assert.ok(collisions.length,'refusal must have a real solid crossing the proposed road, not an unexplained admission failure');
    assert.equal(g.hierarchy.controller(initial.owner.id,'procession-access'),undefined);
    assert.equal(g.hierarchy.controller(initial.owner.id,'objective:procession'),undefined);
@@ -285,7 +292,7 @@ function naturalProcession(w:World,needChest:boolean){
  if(needChest)assert.ok(attempts.some(a=>!a.admitted&&a.collisions.length),'course must preserve a real late-scene refusal witness');
  assert.ok(candidate,'bounded natural route discovery must admit '+JSON.stringify(attempts));
  assert.ok(roadOwners.includes(candidate.owner.id),'accepted source publishes its native road');
- w.installMassProcessionRoad=installRoad;
+ w.installMassProcessionRoad=installRoad;scene.checkScene=checkScene;
  return candidate;
 }
 
