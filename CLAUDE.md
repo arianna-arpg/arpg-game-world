@@ -1,3 +1,13 @@
+NativeAreaSceneCastingPreparation owns admitted skill payments, charges, ammo,
+remnants, stealth, combo/meta instances and construct relocation targeting.
+Preserve native partial effects, physical authority, exact raw map identity and
+lazy receiver selection. World shares the eleven native bodies with a live
+nonenumerable adapter; genuine combo dependencies remain visible to dormancy.
+Verify nativecastingpreparation, combat-state/restoration, adjacent casting and
+source/history probes, all types and boot. See
+docs/worldgen/native-area-casting-preparation.md. Full casting, actor/record
+lifetimes, retained ticking, scheduling, map handoff and publication remain open.
+
 NativeAreaSceneProgression exclusively owns its actual state and thirteen raw
 queue/map replacement slots. Preserve native references, partial failures,
 enumerability and same-slot historical reassignment. Every ordinary slot is

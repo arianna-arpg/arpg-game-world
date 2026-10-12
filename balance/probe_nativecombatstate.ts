@@ -4,6 +4,7 @@ import '../src/engine/world';
 import type {World} from '../src/engine/world';
 import {massDormancyPins} from '../src/worldmass/dormancy';
 import {beforeNativeSceneDisplacement} from './nativeSceneDisplacementIntegrationFixture';
+import {beforeNativeSceneCastingPreparation} from './nativeSceneCastingPreparationIntegrationFixture';
 import {beforeNativeSceneCombatState} from './nativeSceneCombatStateIntegrationFixture';
 import {nativeSceneCombatStateIntegrationArchive as integrationArchive,nativeSceneCombatStateIntegrationArchiveHash} from './nativeSceneCombatStateIntegrationArchive';
 import assert from 'node:assert/strict';
@@ -79,7 +80,7 @@ const integrationCurrent=read('src/engine/world.ts');
 const worldCall=(w:World,name:string,...args:any[])=>Reflect.apply(Reflect.get(w,name) as Function,w,args);
 integrationCheck('exact thirteen delegates and full immutable World restoration preserve every prior source guard',()=>{
  assert.equal(sha(JSON.stringify(integrationArchive)),nativeSceneCombatStateIntegrationArchiveHash);
- assert.equal(sha(integrationCurrent),integrationArchive.afterHash);
+ assert.equal(sha(beforeNativeSceneCastingPreparation(integrationCurrent)),integrationArchive.afterHash);
  const restored=beforeNativeSceneCombatState(integrationCurrent),pinned=execFileSync('git',['show',integrationArchive.integrationCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}).replaceAll('\r\n','\n');
  assert.equal(restored,pinned);assert.equal(sha(restored),integrationArchive.sourceHash);
  assert.equal(beforeNativeSceneDisplacement(integrationCurrent),execFileSync('git',['show',archive.originalCommit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}).replaceAll('\r\n','\n'));

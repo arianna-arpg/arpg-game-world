@@ -4,6 +4,7 @@ import {sceneRollSummonType,sceneForwardSummonSockets} from './nativeSceneSummon
 import {scenePushActor,sceneGrabRelease,sceneClingRelease,sceneTeleportActor,sceneMountFreeSeat,sceneMountSeatRider,sceneMountUnlink,sceneMountUnhorse,sceneMountWidowed,sceneMovementLocked,sceneCastMoveFactor,sceneChannelMobility,sceneLevitating,PUSH_DAMPING,type NativeSceneDisplacementHost} from './nativeSceneDisplacement';
 import {sceneGrantAbsorb,sceneApplyRestore,sceneStartRestoreStream,sceneCritMendMult,sceneApplyHeal,sceneApplyHealChained,sceneCleanseActor,sceneRingAfflictions,sceneHealAlliesInArea,sceneSeatText,sceneCreditFloat,type NativeSceneRestorationHost} from './nativeSceneRestoration';
 import {sceneApplyBuffEffect,sceneGrantTreeBuff,sceneTransplantStatus,sceneTapCharges,sceneTapFires,sceneIsEliteVictim,sceneBankPools,sceneVictimGate,sceneProcReady,sceneProcGates,sceneProcDepthAllowed,sceneRollTopMet,sceneProcChance,type NativeSceneCombatStateHost} from './nativeSceneCombatState';
+import {scenePaySkillCost,sceneConsumeChargeCost,sceneRefundCooldown,sceneConsumeAmmunition,sceneConsumeRemnants,sceneConsumeStealth,sceneComboCursorOf,sceneComboStepOf,sceneHeldSkillInst,sceneRelocationTarget,sceneMintMetaInstance,type NativeSceneCastingPreparationHost,type ComboCursor} from './nativeSceneCastingPreparation';
 import {sceneNearQuestGiver,sceneNearAnyQuestGiver,sceneQuestGiverPrompt,sceneActiveCategoryCounts,sceneQuestGateCtx,sceneQuestOfferLevel,sceneAcceptableQuests,sceneEligibleQuestCandidates,sceneVocationEngaged,sceneIsVocationChoice,sceneVocationChoiceOffers,sceneNextAcceptableQuest,sceneUpdateQuestGiver,sceneQuestGiverStep,sceneQuestOfferChoices,sceneAcceptQuestOffer,sceneAcceptVocationQuest,sceneVocationMenuOffers,sceneDeclineVocationOffer,sceneAcceptQuest,sceneQuestRewardOffers,sceneQuestImbueOffers,sceneClaimQuestImbue,sceneReliquaryLesson,sceneSeatIdle,scenePlayerIdle,QUESTGIVER_DWELL,type NativeSceneQuestInteractionHost} from './nativeSceneQuestInteraction';
 import {sceneSpawnProjectile,sceneSkillOcclusion,PROJ_CHILD_DEPTH_MAX,PROJ_AURA_TICK,type NativeSceneProjectileHost} from './nativeSceneProjectiles';
 import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
@@ -89,7 +90,7 @@ import { NpcDialogueDirector } from './npcDialogues';
 import { siteZoneExits } from './exitSiting';
 import { fillFlaskChargeBanks } from './flaskState';
 import '../data/odyssey';
-import { instanceCastCycle, instanceTreeMods, instanceTreeOver } from './skills';
+import { instanceCastCycle, instanceTreeOver } from './skills';
 import { finishAIRecovery } from './handling';
 import { COMBAT_DEEDS, DEED_CFG } from '../data/classdeeds';
 import { selectContainerLoot } from '../data/containerloot';
@@ -99,7 +100,6 @@ import './fontPlacement';
 import { refugeDeparture, type RefugeDeparture } from './refugeDeparture';
 import { skillAbsorbAmount } from './absorb';
 import { instanceEffects } from './skills';
-import { costWard } from './costward';
 import { summonKitIds } from './skills';
 import '../world/escarpments'; // Preserve original registration order.
 import './worldgen'; // Preserve native registration order.
@@ -825,7 +825,6 @@ function statusReqs(req: string | string[] | undefined): string[] | null {
 
 /** The well-known STEALTH charge id (granted by gainCharge like any combo
  *  resource; the engine treats its bearer as shrouded — see ai.ts). */
-const STEALTH_CHARGE = 'stealth';
 
 /** Is the actor operating unseen — stealth charges banked or invisible? */
 function isStealthed(a: Actor): boolean {
@@ -1534,7 +1533,6 @@ export interface EmergeRecord {
 /** A combo chain's cursor (World.comboCursorOf): the step the NEXT press
  *  casts, the window clock, and THE REPEATED STEP's hand-off. The same
  *  shape SkillInstance.state carries for an instance on its own bar. */
-type ComboCursor = { comboIdx?: number; comboAt?: number; comboSelf?: number };
 
 interface Flash {
   companionCue?: import('./companionCues').CompanionCueFlash;
@@ -25554,14 +25552,7 @@ actors: Actor[] = [];
    *  its owner's rhythm and the owner's never walk the ghost's. Keyed per
    *  actor × host skill id; the map is combat-transient and never saved. */
   private comboCursors = new WeakMap<Actor, Map<string, ComboCursor>>();
-  comboCursorOf(caster: Actor, inst: SkillInstance): ComboCursor {
-    if (!caster.construct || caster.skills.includes(inst)) return (inst.state ??= {});
-    let m = this.comboCursors.get(caster);
-    if (!m) { m = new Map(); this.comboCursors.set(caster, m); }
-    let c = m.get(inst.def.id);
-    if (!c) { c = {}; m.set(inst.def.id, c); }
-    return c;
-  }
+  comboCursorOf(caster: Actor, inst: SkillInstance): ComboCursor { return sceneComboCursorOf(this.nativeSceneCastingPreparationHost(),caster,inst); }
 
   /** THE CHAIN STEP a press at cursor `idx` (1-based) would cast — minted
    *  once per host slot at the host's BASE level with the host's sockets
@@ -25573,25 +25564,7 @@ actors: Actor[] = [];
    *  for the base beat, for THE REPEATED STEP (the host itself plays that
    *  beat) and for an unknown id. ONE resolver for the press (useSkill),
    *  the face (slotFaceOf) and the judgment (pressUsable). */
-  comboStepOf(caster: Actor, inst: SkillInstance, idx: number): SkillInstance | null {
-    const chain = inst.def.comboChain;
-    if (!chain || idx <= 0 || idx > chain.skills.length) return null;
-    const sid = chain.skills[idx - 1];
-    if (sid === inst.def.id || !SKILLS[sid]) return null;
-    const key = inst.def.id + ':combo' + idx;
-    const level = inst.level + Math.floor(inst.bonusLevels ?? 0);
-    let step = caster.metaInsts.get(key);
-    if (!step || step.def.id !== sid || step.level !== level) {
-      step = makeSkillInstance(SKILLS[sid], level);
-      step.hostSkillId = inst.def.id;
-      step.chainOf = inst.def.id; // THE BEAT MARK — the ring records the host's beat
-      caster.metaInsts.set(key, step);
-    }
-    step.sockets = inst.sockets; // live references — re-socketing propagates
-    step.grafts = inst.grafts;
-    step.comboTreeMods = instanceTreeMods(inst);
-    return step;
-  }
+  comboStepOf(caster: Actor, inst: SkillInstance, idx: number): SkillInstance | null { return sceneComboStepOf(this.nativeSceneCastingPreparationHost(),caster,inst,idx); }
 
   /** The chain step the NEXT press of this slot would cast while the
    *  window still holds — null for the base beat, a repeated step, a
@@ -25688,10 +25661,7 @@ actors: Actor[] = [];
 
   /** Refund a just-stamped cooldown (a whistle with no bond must never burn
    *  its long clock). */
-  private refundCooldown(caster: Actor, skillId: string): void {
-    caster.cooldowns.delete(skillId);
-    caster.cooldownTotals.delete(skillId);
-  }
+  private refundCooldown(caster: Actor, skillId: string): void { return sceneRefundCooldown(this.nativeSceneCastingPreparationHost(),caster,skillId); }
 
   /** Stamp a skill's cooldown through the ONE formula every stamper shares:
    *  the addedCooldown levy joins the base, and tag-scoped cooldownRecovery
@@ -28659,43 +28629,13 @@ actors: Actor[] = [];
   /** Mint (or re-mint on level change) a meta payload against its host —
    *  stamped with hostSkillId so pack orders (minionCast) know whose
    *  minions they command. */
-  private mintMetaInstance(caster: Actor, host: SkillInstance, skillId: string): SkillInstance {
-    const key = host.def.id + ':' + skillId;
-    let inst = caster.metaInsts.get(key);
-    const relocateConstruct = SKILLS[skillId].effects.some(fx => fx.type === 'relocateConstruct');
-    if (!inst || inst.level !== effectiveSkillLevel(host)
-      || (relocateConstruct && this.relocationHosts.get(inst) !== host)) {
-      inst = makeSkillInstance(SKILLS[skillId], effectiveSkillLevel(host));
-      // minionCombat: a command's meta inherits its whole-court scope.
-      // Summon-hosted meta payloads still name their own roster anchor.
-      inst.hostSkillId = host.def.effects.some(e => e.type === 'commandMinions')
-        ? undefined : host.def.id;
-      caster.metaInsts.set(key, inst);
-      if (relocateConstruct) this.relocationHosts.set(inst, host);
-    }
-    return inst;
-  }
+  private mintMetaInstance(caster: Actor, host: SkillInstance, skillId: string): SkillInstance { return sceneMintMetaInstance(this.nativeSceneCastingPreparationHost(),caster,host,skillId); }
 
   private relocationHosts = new WeakMap<SkillInstance, SkillInstance>();
 
   /** The same eligibility read gates payment and execution. Instance identity
    * prevents a second copy or another caster from moving this roster. */
-  private relocationTarget(caster: Actor, inst: SkillInstance, radius: number): Actor | undefined {
-    const host = this.relocationHosts.get(inst);
-    if (!host || !caster.skills.includes(host) || caster.dead || caster.downed
-      || !instanceMetas(host).some(m => m.skillId === inst.def.id)) return;
-    const d = instanceDelivery(host);
-    if (d.type !== 'construct' || !['totem', 'sentry'].includes(d.kind) || !d.castSkillId) return;
-    let best: Actor | undefined, bestD = radius;
-    for (const c of this.actors) {
-      if (c.dead || c.downed || c.owner !== caster || c.summonInst !== host
-        || !c.construct || !['totem', 'sentry'].includes(c.construct.kind)
-        || !sameStory(c, caster) || c.team !== caster.team || !(c.lifespan! > 0)) continue;
-      const dd = dist(caster.pos, c.pos);
-      if (dd <= bestD && (!best || dd < bestD)) { best = c; bestD = dd; }
-    }
-    return best;
-  }
+  private relocationTarget(caster: Actor, inst: SkillInstance, radius: number): Actor | undefined { return sceneRelocationTarget(this.nativeSceneCastingPreparationHost(),caster,inst,radius); }
 
   useMetaSkill(caster: Actor, host: SkillInstance, aim: Vec2): boolean {
     // THE META CHAIN: one shift-press fires EVERY meta riding the slot —
@@ -28726,17 +28666,7 @@ actors: Actor[] = [];
   /** Consume a skill's charge cost — the innate economy or a socketed
    *  SPENDER graft (Ravening / Embargo); returns the damage multiplier
    *  earned and the count consumed (perCharge effects scale with it). */
-  private consumeChargeCost(caster: Actor, inst: SkillInstance): { mult: number; consumed: number } {
-    const cc = instanceChargeCost(inst);
-    if (!cc) return { mult: 1, consumed: 0 };
-    const have = caster.charges.get(cc.charge) ?? 0;
-    const consumed = cc.amount === 'all' ? have : Math.min(have, cc.amount);
-    caster.spendCharge(cc.charge, consumed);
-    return {
-      mult: cc.damagePerCharge && consumed > 0 ? 1 + cc.damagePerCharge * consumed : 1,
-      consumed,
-    };
-  }
+  private consumeChargeCost(caster: Actor, inst: SkillInstance): { mult: number; consumed: number } { return sceneConsumeChargeCost(this.nativeSceneCastingPreparationHost(),caster,inst); }
 
   /** Re-entrancy latch for THE ADDLED HAND (StatusDef.scrambleChance): the
    *  substitute cast must never roll a second scramble — one turn per
@@ -33107,19 +33037,7 @@ actors: Actor[] = [];
   /** Spend stealth on an offensive use: one charge off the bank, and every
    *  invisibility buff (any buff granting `invisible`) is EXHAUSTED — the
    *  strike from nowhere is the last act of being nowhere. */
-  private consumeStealth(caster: Actor, def: SkillDef): void {
-    if (def.effects.some(fx => fx.type === 'gainCharge' && fx.charge === STEALTH_CHARGE)) return;
-    const offensive = def.breaksStealth
-      ?? (!!def.baseDamage || def.effects.some(fx =>
-        fx.type === 'damage' || fx.type === 'knockback' || fx.type === 'pull'));
-    if (!offensive) return;
-    caster.concealmentExposedUntil = this.time + PERCEPTION_CFG.exposureSec;
-    const have = caster.charges.get(STEALTH_CHARGE) ?? 0;
-    if (have > 0) caster.spendCharge(STEALTH_CHARGE, 1);
-    for (const [id, b] of [...caster.buffs]) {
-      if (b.def.mods.some(m => m.stat === 'invisible')) caster.removeBuff(id);
-    }
-  }
+  private consumeStealth(caster: Actor, def: SkillDef): void { return sceneConsumeStealth(this.nativeSceneCastingPreparationHost(),caster,def); }
 
   /**
    * Launch one projectile, resolving size / speed / trajectory / pierce /
@@ -36268,16 +36186,22 @@ actors: Actor[] = [];
 
   /** Every real payment lane shares this award, including channel/wave bills.
    * Free execution has no payment, so echoes cannot mint a second shield. */
-  private paySkillCost(caster: Actor, inst: SkillInstance, cost: { mana: number; life: number }): void {
-    const paid = {
-      mana: Math.max(0, Math.min(caster.mana, cost.mana)),
-      life: caster.overdrive.life && caster.life <= cost.life ? 0 : Math.max(0, cost.life),
-    };
-    caster.payCost(cost);
-    if (caster.construct) return; // synthetic casting pools are not resources
-    const ward = costWard(caster, inst, paid);
-    if (ward.amount > 0 && ward.duration > 0) this.grantAbsorb(caster, ward.amount, ward.duration);
+  declare private nativeSceneCastingPreparationView?:NativeSceneCastingPreparationHost;
+  private nativeSceneCastingPreparationHost():NativeSceneCastingPreparationHost {
+    if(this.nativeSceneCastingPreparationView)return this.nativeSceneCastingPreparationView;
+    const world=this,host:NativeSceneCastingPreparationHost=Object.freeze({
+      get actors(){return world.actors;},
+      get time(){return world.time;},
+      get comboCursors(){return world.comboCursors;},
+      get relocationHosts(){return world.relocationHosts;},
+      get grantAbsorb(){const fn=world.grantAbsorb;return(...args:Parameters<NativeSceneCastingPreparationHost['grantAbsorb']>)=>Reflect.apply(fn,world,args);},
+      get seatOf(){const fn=world.seatOf;return(...args:Parameters<NativeSceneCastingPreparationHost['seatOf']>)=>Reflect.apply(fn,world,args);},
+    });
+    Object.defineProperty(this,'nativeSceneCastingPreparationView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
   }
+
+  private paySkillCost(caster: Actor, inst: SkillInstance, cost: { mana: number; life: number }): void { return scenePaySkillCost(this.nativeSceneCastingPreparationHost(),caster,inst,cost); }
 
   /** Grant an absorption shield (take the larger pool, refresh the clock). */
   declare private nativeSceneRestorationView?:NativeSceneRestorationHost;
@@ -39258,12 +39182,7 @@ actors: Actor[] = [];
    *  its bar first (monsters' kits, the player's seated skills), then the
    *  seat's granted lane then learned book. An unseated learned skill must
    *  not displace the item's free triggered copy. Null when it holds none. */
-  private heldSkillInst(actor: Actor, skillId: string): SkillInstance | null {
-    for (const s of actor.skills) if (s?.def.id === skillId) return s;
-    const seat = this.seatOf(actor);
-    if (!seat) return null;
-    return seat.grantedInsts?.get(skillId) ?? seat.meta.knownSkills.get(skillId) ?? null;
-  }
+  private heldSkillInst(actor: Actor, skillId: string): SkillInstance | null { return sceneHeldSkillInst(this.nativeSceneCastingPreparationHost(),actor,skillId); }
 
   /** THE ONE LOOKUP for "the skill this seat holds under this id": the
    *  learned book first, then the granted lane (THE LEGEND FABRIC) —
@@ -50971,25 +50890,11 @@ actors: Actor[] = [];
   }
 
   /** A remnant empowers exactly ONE cast of its element, then is spent. */
-  private consumeRemnants(caster: Actor, def: SkillDef): void {
-    for (const el of ELEMENTAL_TYPES) {
-      if (def.tags.includes(el) && caster.buffs.has('remnant_' + el)) {
-        noteProcCue(caster, caster.buffs.get('remnant_' + el)!.def.storedCue, 'release', 'remnant:' + el);
-        caster.removeBuff('remnant_' + el);
-      }
-    }
-  }
+  private consumeRemnants(caster: Actor, def: SkillDef): void { return sceneConsumeRemnants(this.nativeSceneCastingPreparationHost(),caster,def); }
 
   /** Imbuement rounds: every consumeOnUse buff whose tag gate matches this
    *  skill spends ONE stack per real use; the last round ends the buff. */
-  private consumeAmmunition(caster: Actor, def: SkillDef): void {
-    for (const [id, buff] of [...caster.buffs]) {
-      const c = (buff.def as BuffEffect).consumeOnUse;
-      if (!c) continue;
-      if (c.tags && !c.tags.some(t => def.tags.includes(t))) continue;
-      caster.consumeBuffStacks(id, 1);
-    }
-  }
+  private consumeAmmunition(caster: Actor, def: SkillDef): void { return sceneConsumeAmmunition(this.nativeSceneCastingPreparationHost(),caster,def); }
 
   /** Resource orbs bob, expire, and pour into whoever walks over them. */
   /** The nearest LIVING, non-downed seat within `reach` of a point — the pickup
