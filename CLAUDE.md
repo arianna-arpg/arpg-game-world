@@ -1,3 +1,12 @@
+NativeAreaSceneKillAftermath owns admitted kill-orb and remnant construction
+and deferred death-burst records on actual area stores. Preserve physical
+membership after the last campaign callback, exclusive raw queues, lazy native
+receivers and partial effects. World shares the same three native bodies.
+Verify nativekillaftermath/admission, reward/defense/casting, birth/summon/source
+checks, all types and boot. See docs/worldgen/native-area-kill-aftermath.md.
+Kill attribution, complete death processing, other remnant writers, pickup/burst
+ticking, actor retirement and retained publication remain open.
+
 NativeAreaSceneSummonPreparation shares the committed synchronous-result boundary
 with birth admission. Preserve one public then read, original errors, deferred
 observation after all scopes expire, exact generic callable receivers and native

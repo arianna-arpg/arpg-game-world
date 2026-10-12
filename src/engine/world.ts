@@ -6,6 +6,7 @@ import {sceneGrantAbsorb,sceneApplyRestore,sceneStartRestoreStream,sceneCritMend
 import {sceneApplyBuffEffect,sceneGrantTreeBuff,sceneTransplantStatus,sceneTapCharges,sceneTapFires,sceneIsEliteVictim,sceneBankPools,sceneVictimGate,sceneProcReady,sceneProcGates,sceneProcDepthAllowed,sceneRollTopMet,sceneProcChance,type NativeSceneCombatStateHost} from './nativeSceneCombatState';
 import {scenePaySkillCost,sceneConsumeChargeCost,sceneRefundCooldown,sceneConsumeAmmunition,sceneConsumeRemnants,sceneConsumeStealth,sceneComboCursorOf,sceneComboStepOf,sceneHeldSkillInst,sceneRelocationTarget,sceneMintMetaInstance,type NativeSceneCastingPreparationHost,type ComboCursor} from './nativeSceneCastingPreparation';
 import {sceneTryShellPool,sceneShowCombatOutcome,sceneRefreshGuardBash,sceneIsBurstTarget,sceneResolveDeathBurst,sceneBankRune,sceneBumpDrives,type NativeSceneDefensePreparationHost} from './nativeSceneDefensePreparation';
+import {sceneRollKillOrbs,sceneRollKillRemnants,sceneSpawnDeathBurst,type NativeSceneKillAftermathHost} from './nativeSceneKillAftermath';
 import {sceneNearQuestGiver,sceneNearAnyQuestGiver,sceneQuestGiverPrompt,sceneActiveCategoryCounts,sceneQuestGateCtx,sceneQuestOfferLevel,sceneAcceptableQuests,sceneEligibleQuestCandidates,sceneVocationEngaged,sceneIsVocationChoice,sceneVocationChoiceOffers,sceneNextAcceptableQuest,sceneUpdateQuestGiver,sceneQuestGiverStep,sceneQuestOfferChoices,sceneAcceptQuestOffer,sceneAcceptVocationQuest,sceneVocationMenuOffers,sceneDeclineVocationOffer,sceneAcceptQuest,sceneQuestRewardOffers,sceneQuestImbueOffers,sceneClaimQuestImbue,sceneReliquaryLesson,sceneSeatIdle,scenePlayerIdle,QUESTGIVER_DWELL,type NativeSceneQuestInteractionHost} from './nativeSceneQuestInteraction';
 import {sceneSpawnProjectile,sceneSkillOcclusion,PROJ_CHILD_DEPTH_MAX,PROJ_AURA_TICK,type NativeSceneProjectileHost} from './nativeSceneProjectiles';
 import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
@@ -190,7 +191,7 @@ import { applyGuardSurge } from './guardSurge';
 import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule, type ComboRuleDef } from './sequence';
 import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
-import {ATTRIBUTES,ELEMENTAL_TYPES,STAT_DEFS,DAMAGE_COLOR} from './stats';
+import { ATTRIBUTES, ELEMENTAL_TYPES, DAMAGE_COLOR } from './stats';
 import { skyOf, START_ZONE, ZONES, objectiveSeals, escapeExitAllowed, type ExitRoadSpec, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { SUITES, type SuiteDef, type SuiteStation } from '../data/suites';
 import { BEACON_CFG } from '../data/beacons';
@@ -492,11 +493,8 @@ import { dayCycle, inPhases, DAY_LENGTH } from '../world/daynight';
 import { hullOf, samplePoint, type Bounds } from '../world/shape';
 import { isDeathAligned, factionTemper } from '../world/traits';
 import { extractionLookFor } from '../data/extraction';
-import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
-import {
-  ORB_DEFS, ORB_CAP, orbAmount, orbOnHitStat, orbOnKillStat, orbOnHurtStat,
-  orbRefundStat, orbTrickleStat, ORB_TRICKLE,
-} from '../data/orbs';
+import { REMNANT_KINDS } from '../data/remnants';
+import { ORB_DEFS, ORB_CAP, orbAmount, orbOnHitStat, orbOnHurtStat, orbRefundStat, orbTrickleStat, ORB_TRICKLE } from '../data/orbs';
 import {
   ActiveTheaterRun, theaterKindDef, THEATER_CFG,
   type TheaterContext, type TheaterKindDef, type TheaterRow, type TheaterSpots,
@@ -36389,31 +36387,7 @@ actors: Actor[] = [];
   /** Spawn the telegraphed burst, BAKING the dead actor's pos/team/damage (the actor is
    *  removed before detonation). The orb's lifespan scales with the monster's increased-
    *  DURATION stat (effectDuration) — truly modifiable. */
-  private spawnDeathBurst(a: Actor, cfg: DeathBurstDef): void {
-    const type: DamageType = cfg.damageType ?? 'fire';
-    // The increased-DURATION stat rides BOTH timers: a longer coalesce (bigger escape
-    // window) and a longer-hounding orb. So `enduring` etc. lengthen every burst phase.
-    const dur = a.sheet.get('effectDuration');
-    const life = (cfg.orbDuration ?? 2.6) * dur;
-    // Outrun cap derived from the player's BASE move speed (not a literal) so it tracks
-    // any retune; at base speed the orb is always escapable, and its sloppy turn keeps
-    // it dodgeable even under slows.
-    const escapeCap = STAT_DEFS.moveSpeed.base * 0.75;
-    this.deathBursts.push({
-      phase: 'gather', mode: cfg.mode,
-      pos: vec(a.pos.x, a.pos.y), team: a.team, tier: a.tier,
-      dmg: a.maxLife() * cfg.damageFrac,
-      radius: cfg.radius ?? (45 + a.radius * 2),
-      type, color: cfg.color ?? DAMAGE_COLOR[type],
-      t: 0, coalesce: (cfg.coalesce ?? 0.8) * dur,
-      life, armAt: life * 0.25,
-      speed: Math.min(cfg.orbSpeed ?? 110, escapeCap),
-      turn: cfg.orbTurn ?? 2.0,
-      dir: 0, trail: [], arming: false,
-      contact: cfg.detonateOnContact ?? false, stuck: false,
-      contactFuse: cfg.contactFuse ?? 0.3, contactRadius: cfg.contactRadius ?? 12,
-    });
-  }
+  private spawnDeathBurst(a: Actor, cfg: DeathBurstDef): void { return sceneSpawnDeathBurst(this.nativeSceneKillAftermathHost(),a,cfg); }
 
   /** The nearest live (not dead/downed) player seat's position, or null. */
   private nearestSeatPos(p: Vec2): Vec2 | null {
@@ -38224,52 +38198,25 @@ actors: Actor[] = [];
    *  rolled with the slaying skill's context). noBounty prey sheds nothing —
    *  a conjurer's endless brood must not become an orb fountain (remnants
    *  stay ungated: short-lived buff fuel, not a banked economy). */
-  private rollKillOrbs(caster: Actor, inst: SkillInstance, victim: Actor): void {
-    if (caster.construct || victim.noBounty || this.orbs.length >= ORB_CAP) return;
-    const tags = skillContextTags(inst, grantedTags(inst));
-    const extra = instanceMods(inst);
-    const rate = caster.sheet.get('orbShedRate', tags, extra);
-    // THE GRANTED SHED (orbShedGraft — Abundant Harvest's mechanism
-    // unlock): where an orb kind has NO base at all, the graft's low
-    // floor stands the lane up — multiplied by GLOBAL orbShedRate
-    // sources only (the gem's own skill-local rate bonus deliberately
-    // never compounds its own floor). Kinds WITH a base keep the innate
-    // lane: floor added flat, every rate source multiplying as ever.
-    const graft = hostSockets(inst).map(s => s.def.orbShedGraft).find(g => g);
-    // No tags/extra on the floor's rate read: skill-local mods (the
-    // granting gem's own +rate) live in `extra`, so omitting it IS the
-    // no-self-compounding law — global passives/gear still multiply.
-    const globalRate = graft ? caster.sheet.get('orbShedRate') : 0;
-    for (const id of Object.keys(ORB_DEFS)) {
-      const base = caster.sheet.get(orbOnKillStat(id), tags, extra);
-      const grafted = graft?.orbs.includes(id) ? graft.chance : 0;
-      const c = base > 0
-        ? (base + grafted) * rate
-        : grafted * globalRate;
-      if (c > 0 && chance(Math.min(0.75, c))) {
-        this.shedOrb(id, victim.pos, { scatter: 26, tier: victim.tier });
-      }
-    }
+  declare private nativeSceneKillAftermathView?:NativeSceneKillAftermathHost;
+  private nativeSceneKillAftermathHost():NativeSceneKillAftermathHost {
+    if(this.nativeSceneKillAftermathView)return this.nativeSceneKillAftermathView;
+    const world=this,host:NativeSceneKillAftermathHost=Object.freeze({
+      get orbs(){return world.orbs;},
+      get remnants(){return world.remnants;},
+      get deathBursts(){return world.deathBursts;},
+      get shedOrb(){const fn=world.shedOrb;return (...args:Parameters<World['shedOrb']>)=>Reflect.apply(fn,world,args);},
+      get clampPos(){const fn=world.clampPos;return (...args:Parameters<World['clampPos']>)=>Reflect.apply(fn,world,args);},
+    });
+    Object.defineProperty(this,'nativeSceneKillAftermathView',{value:host,writable:true,configurable:true,enumerable:false});
+    return host;
   }
+
+  private rollKillOrbs(caster: Actor, inst: SkillInstance, victim: Actor): void { return sceneRollKillOrbs(this.nativeSceneKillAftermathHost(),caster,inst,victim); }
 
   /** Shed registry fragments at a kill (remnantDrop_<kind> stat family,
    *  rolled with the slaying skill's context so tag-filtered grants work). */
-  private rollKillRemnants(caster: Actor, inst: SkillInstance, at: Vec2): void {
-    if (caster.construct || this.remnants.length >= 14) return;
-    const tags = skillContextTags(inst, grantedTags(inst));
-    const extra = instanceMods(inst);
-    for (const kind of Object.values(REMNANT_KINDS)) {
-      const c = caster.sheet.get(remnantDropStat(kind.id), tags, extra);
-      if (c <= 0 || !chance(Math.min(0.75, c))) continue;
-      const ang = rand(0, Math.PI * 2);
-      const r = rand(10, 40);
-      this.remnants.push({
-        pos: this.clampPos(vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 8),
-        kind: kind.id, bob: rand(0, Math.PI * 2), life: 12,
-      });
-      if (this.remnants.length >= 14) break;
-    }
-  }
+  private rollKillRemnants(caster: Actor, inst: SkillInstance, at: Vec2): void { return sceneRollKillRemnants(this.nativeSceneKillAftermathHost(),caster,inst,at); }
 
   /** Roll the caster's 'collision' procs against an entity whose knockback was
    *  arrested by a wall/void — the knockback-collision-damage SUPPORT seam. Mirrors

@@ -1,3 +1,4 @@
+import {beforeNativeSceneKillAftermath} from './nativeSceneKillAftermathIntegrationFixture';
 import fs from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {createHash} from 'node:crypto';
@@ -68,7 +69,7 @@ course('whole original source provenance and exact explicit hook reversal',()=>{
  for(const row of archive.files){const prior=execFileSync('git',['show',archive.originalCommit+':'+row.file],{encoding:'utf8',maxBuffer:20e6}).replaceAll('\r\n','\n'),source=read(row.file);assert.equal(hash(prior),row.beforeHash);assert.equal(prior,row.beforeSource);assert.equal(hash(source),row.afterHash);assert.equal(beforeNativeBirthLifetime(row.file,source),prior);hooks+=(source.match(/\.admitBirth\?\./g)||[]).length;
   for(const edit of row.edits){assert.throws(()=>beforeNativeBirthLifetime(row.file,source.replace(edit.after,edit.after+'\n'+edit.after)),/Exact unique/);assert.throws(()=>beforeNativeBirthLifetime(row.file,source.replace(edit.after,edit.after.replace(/\S/,'~'))),/Exact unique/);}
  }
- assert.equal(hooks,8);const w=execFileSync('git',['show',nativeBirthLifetimeWorldPin+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}).replaceAll('\r\n','\n');assert.equal(read('src/engine/world.ts'),w,'World is unchanged by explicit local insertion hooks');
+ assert.equal(hooks,8);const w=execFileSync('git',['show',nativeBirthLifetimeWorldPin+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}).replaceAll('\r\n','\n');assert.equal(beforeNativeSceneKillAftermath(read('src/engine/world.ts')),w,'World is unchanged by explicit local insertion hooks after exact later extraction reversal');
 });
 course('expired selection refuses in later operation',escaped);
 course('foreign actual factory cannot mint into this area',foreign);

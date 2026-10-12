@@ -1,6 +1,6 @@
 /** Exclusive raw queues for the native area's rewards and physical contents.
  * Replacement keeps the caller's array and its native methods unchanged. */
-export type NativeRewardStorageSlot='orbs'|'chests'|'shrines'|'altars'|'drops';
+export type NativeRewardStorageSlot='orbs'|'chests'|'shrines'|'altars'|'drops'|'remnants'|'deathBursts';
 const ownedStates=new WeakSet<object>(),ownedQueues=new WeakMap<object,object>();
 function queue(value:unknown):unknown[]{
  if(!Array.isArray(value))throw Error('Native reward storage requires an actual array');

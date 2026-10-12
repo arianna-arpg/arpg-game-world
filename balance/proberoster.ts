@@ -61,6 +61,8 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativekillaftermath.ts', status: 'green', tier: 'fast', why: 'Exact native kill-orb, remnant and death-burst construction; physical retained owners, raw queues, callback identity, partial failures and ordinary World integration.' },
+  { probe: 'probe_nativekillaftermathadmission.ts', status: 'green', tier: 'fast', why: 'Refuse caster transfer or removal during later subject admission before native reads, random draws or reward writes.' },
   { probe: 'probe_nativedefensepreparation.ts', status: 'green', tier: 'fast', why: 'Exact native shells, guard-bash preparation, combat cues, death-burst eligibility, runes and drives; physical area authority, worn shield relationships, native partial effects and ordinary World wiring.' },
   { probe: 'probe_nativerewardstorage.ts', status: 'green', tier: 'fast', why: 'Exclusive reward and physical raw stores; actual two-area orb/essence isolation, cross-slot aliases, atomic ordinary refusal, exact native references and restoration partial failures.' },
   { probe: 'probe_nativecastingpreparation.ts', status: 'green', tier: 'fast', why: 'Exact native payment, charges, ammunition, remnants, stealth, combo/meta and relocation preparation; physical authority, exclusive raw maps, actual receivers, native partial effects and ordinary World wiring and dormancy.' },

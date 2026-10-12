@@ -1,6 +1,7 @@
 /** Rejected asynchronous misuse must expire the real preparation scope without
  * leaving an unhandled rejection. No full spawn or runtime admission is implied. */
 import '../src/engine/world';
+import {beforeNativeSceneKillAftermath} from './nativeSceneKillAftermathIntegrationFixture';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -19,7 +20,7 @@ function sourceProof(){
  for(const pin of [archive.pin,archive.originalOwnerPin])assert.equal(restored,execFileSync('git',['show',pin+':'+archive.file],{encoding:'utf8',maxBuffer:20e6}));
  assert.equal(createHash('sha256').update(current).digest('hex'),archive.afterSha256);assert.equal(createHash('sha256').update(restored).digest('hex'),archive.beforeSha256);
  for(const [name,from,to] of [['import','NativeAreaScenePopulation,nativeBirthAsyncResult','NativeAreaScenePopulation'],['observer','if(nativeBirthAsyncResult(result))','if(false)'],['error','requires a synchronous operation','unexpected asynchronous success'],['lifetime','frame.active=false','frame.active=true'],['unrelated','Creation-scoped native preparation','Changed unrelated preparation']] as const){assert(current.includes(from));assert.throws(()=>beforeNativeSummonAsyncBoundary(current.replace(from,to)),/source changed/,name);}
- const world=fs.readFileSync(new URL('../src/engine/world.ts',import.meta.url));assert(world.equals(execFileSync('git',['show',archive.pin+':src/engine/world.ts'],{maxBuffer:20e6})));
+ const world=beforeNativeSceneKillAftermath(fs.readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8'));assert.equal(world,execFileSync('git',['show',archive.pin+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:20e6}),'World unchanged after exact later kill aftermath reversal');
  console.log('PASS summon async boundary source: exact complete owner reversal, five mutation refusals, unchanged World');
 }
 if(!process.argv.includes('--runtime-only'))sourceProof();
