@@ -4048,6 +4048,16 @@ we verify changes.
   caches (worldmass_coordinatekeys); preserve escaping, signed coordinates and
   original fallback/callback order. Compare incremental cold work separately
   from the whole-candidate live course; unchanged density is mandatory.
+  ShardPerformance experiments with owned stream-cache dependency frontiers
+  (worldmass_dependencycache) and records sequence-service tails, lifecycle
+  censoring and snapshot silence (shardresponsiveness). Keep original callbacks,
+  certificate budgets and live mutation behavior. Both the frontier and detached
+  base terrain (worldmass_terrainpreparation/terrainwarm, shardworkers) are off
+  by default: HOLLOW_WAKE_DEPENDENCY_CACHE=1 selects frontiers for new streams;
+  HOLLOW_WAKE_TERRAIN_PREPARATION=1 independently enables the Node terrain lane.
+  Native/regional composition, patches, overlays, admission and immediate
+  fallback remain on the host. Repeated early/grouped trials must retain adverse
+  results; less component work alone does not prove better player response.
   Preserve
   exact saved state, full signed addresses, every player's population and the
   unchanged load gates; verify the affected worldmass/native probes and shard

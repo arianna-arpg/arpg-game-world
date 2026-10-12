@@ -3,6 +3,7 @@ import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { massDormancyPins } from '../src/worldmass/dormancy';
 import { isOwnedTerrainRecord } from '../src/worldmass/ownedTerrain';
+import { OwnedDependencyCache } from '../src/worldmass/ownedDependencyCache';
 import { Actor } from '../src/engine/actor';
 import type { World } from '../src/engine/world';
 import type { MassTerrain } from '../src/worldmass/contracts';
@@ -18,7 +19,7 @@ function referencePins(world:World,owned:ReadonlyMap<string,Actor>):Set<Actor>{
     if(!value||typeof value!=='object'||seen.has(value))return;
     if(value instanceof Actor){if(native.has(value))pins.add(value);return;}seen.add(value);
     if(value instanceof WeakMap||value instanceof WeakSet){for(const a of native)if(value.has(a))pins.add(a);return;}
-    if(value instanceof Map){for(const[k,v]of value){if(typeof k==='number'){const a=ids.get(k);if(a)pins.add(a);}else visit(k);visit(v);}return;}
+    if(value instanceof Map||value instanceof OwnedDependencyCache){for(const[k,v]of value){if(typeof k==='number'){const a=ids.get(k);if(a)pins.add(a);}else visit(k);visit(v);}return;}
     if(value instanceof Set){for(const v of value){if(typeof v==='number'){const a=ids.get(v);if(a)pins.add(a);}else visit(v);}return;}
     for(const[k,v]of Object.entries(value))visit(v,k);
   };

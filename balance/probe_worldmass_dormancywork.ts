@@ -10,6 +10,7 @@ import type { World } from '../src/engine/world';
 import { massDormancyPins } from '../src/worldmass/dormancy';
 import { freezeData, isMassFrozenData } from '../src/worldmass/random';
 import { isOwnedTerrainRecord } from '../src/worldmass/ownedTerrain';
+import { scanOwnedDependencyCache } from '../src/worldmass/ownedDependencyCache';
 
 // Exact scanner declarations from a6f62a2d. No runtime Git dependency; never
 // update this oracle to match an optimization.
@@ -77,8 +78,8 @@ assert.equal(sha(archivedSource),'93bbe3995f28790fe91517665e765243300d29408ee484
 type Scan=typeof massDormancyPins;
 function factory(source:string):()=>Scan {
   const js=ts.transpileModule(source.replace(/^export /gm,''),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
-  const build=Function('Actor','isMassFrozenData','isOwnedTerrainRecord',js+';return massDormancyPins;');
-  return()=>build(Actor,isMassFrozenData,isOwnedTerrainRecord) as Scan;
+  const build=Function('Actor','isMassFrozenData','isOwnedTerrainRecord','scanOwnedDependencyCache',js+';return massDormancyPins;');
+  return()=>build(Actor,isMassFrozenData,isOwnedTerrainRecord,scanOwnedDependencyCache) as Scan;
 }
 const archived=factory(archivedSource);
 const actors=Array.from({length:8},(_,i)=>new Actor('pin proof '+i,'enemy',{x:0,y:0}));
@@ -203,7 +204,7 @@ if(process.argv.includes('--bench')){
   const {seedGlobalRandom}=await import('../src/sim/rng');
   const current=readFileSync(new URL('../src/worldmass/dormancy.ts',import.meta.url),'utf8');
   const tree=ts.createSourceFile('dormancy.ts',current,ts.ScriptTarget.Latest,true);
-  const names=new Set(['entityKeys','dependencyKeys','dependencyFreeData','isDependencyFreeData','massDormancyPins']);
+  const names=new Set(['entityKeys','dependencyKeys','dependencyFreeData','hasDependencyFreeCertificate','isDependencyFreeData','massDormancyPins']);
   const currentSource=tree.statements.flatMap(s=>{
     if(ts.isFunctionDeclaration(s)&&s.name&&names.has(s.name.text))return[s.getText(tree)];
     if(ts.isVariableStatement(s)&&s.declarationList.declarations.some(d=>names.has(d.name.getText(tree))))return[s.getText(tree)];

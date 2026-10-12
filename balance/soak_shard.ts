@@ -53,7 +53,7 @@ import { ShardHost, SHARD_CFG } from '../server/shardHost';
 import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import { deriveSeed, seedGlobalRandom } from '../src/sim/rng';
 import { WIRE_DIET_CFG } from '../src/net/wireDiet'; // THE WIRE DIET's A/B switch (--diet off)
-import type { FleetBotStats, FleetCommand, FleetEvent } from './soak_bots';
+import type { FleetBotStats, FleetCommand, FleetEvent, FleetResponsiveness } from './soak_bots';
 import { ShardPerformance } from './shardPerformance';
 
 export const SOAK_CFG = {
@@ -335,7 +335,7 @@ async function main(): Promise<number> {
     drop: null as (Extract<Stamped, { t: 'dropped' }> & { rt: number }) | null,
     dropSkip: null as string | null,
     resume: null as (Extract<Stamped, { t: 'resumed' }> & { rt: number }) | null,
-    stats: null as { bots: FleetBotStats[]; stepHz: number; clock: string } | null,
+    stats: null as { bots: FleetBotStats[]; stepHz: number; clock: string; responsiveness: FleetResponsiveness } | null,
     deaths: 0, rejoins: 0, fleetExited: false, ending: false,
   };
   const fleetPath = fileURLToPath(new URL('./soak_bots.ts', import.meta.url));
@@ -374,7 +374,7 @@ async function main(): Promise<number> {
       case 'rejoined': ev.rejoins++; break;
       case 'lost': err(`bot ${e.bot} (${e.seat}) lost the shard without a cut`); break;
       case 'error': err(`fleet${e.bot === null ? '' : ` bot ${e.bot}`}: ${e.message}`); break;
-      case 'stats': ev.stats = { bots: e.bots, stepHz: e.stepHz, clock: e.clock }; break;
+      case 'stats': ev.stats = { bots: e.bots, stepHz: e.stepHz, clock: e.clock, responsiveness: e.responsiveness }; break;
     }
   });
   fleet.on('exit', code => { ev.fleetExited = true; if (!ev.ending) err(`the fleet exited before the end (code ${code})`); });
@@ -582,6 +582,7 @@ async function main(): Promise<number> {
     inputs: { fed: r2(fed), hostSeenHzPerSeat: r2(fed * dTicks / windowSec),
       nominalHzPerSeat: r2(fed * SHARD_CFG.tickHz), steppedHz: r2(dTicks / windowSec),
       fleetStepHz: fleetStats?.stepHz ?? null, fleetClock: fleetStats?.clock ?? null },
+    responsiveness: fleetStats?.responsiveness ?? { status: 'unavailable', reason: 'The fleet did not return responsiveness observations.' },
     performanceEvidence,
     conditions: { note: typeof args.conditions === 'string' ? args.conditions : null,
       windowAfterHostSec, hostElapsedAtWindowSec: r2((win.t0 - warm.t0) / 1000),
@@ -618,6 +619,8 @@ async function main(): Promise<number> {
   out.push(`  (heap MB = the window's trough; fed = seat-ticks that had a client input; living = live foes within ${popRadius} px of each standing seat, least / mean${samples.some(s => s.dormant) ? '; * a seat lay dormant' : ''})`);
   const k = report.wire.byKind;
   const slow = report.tick.slowest.map(x => `${x.ms} ms @ ${x.atSec} s${x.jumpPx ? ` (shadow jump ${x.jumpPx} px)` : ''}${x.gcMs >= 1 ? ` (gc ${x.gcMs})` : ''}`).join(', ');
+  const response = fleetStats?.responsiveness?.aggregate;
+  const responseUpper = (n: number | null, count: number): string => n === null ? count ? '>60000' : 'none' : '<=' + r2(n);
   const rows: [string, string][] = [
     ['tick p50 / p95 / p99 / max', `${report.tick.p50} / ${report.tick.p95} / ${report.tick.p99} / ${report.tick.max} ms over ${ticks.length} ticks (budget ${report.tick.budgetMs} ms)`],
     ['worst 5 s window', worst ? `p95 ${worst.tickP95} ms, max ${worst.tickMax} ms, ${worst.dropped} dropped (window ending ${worst.t} s)` : 'none'],
@@ -628,6 +631,8 @@ async function main(): Promise<number> {
     ['shadow jumps', host.worldmass ? `${report.shadow.jumps} (the keeper moved to another focus seat; those ticks averaged ${report.shadow.jumpTicksMeanMs} ms)` : 'n/a (classic)'],
     ['the living radius', `least ${report.living.minOfMins}, mean ${report.living.meanOfMeans} foes within ${popRadius} px of a standing seat${spread ? ` (bots spread ${spread} px)` : ''}${host.worldmass ? ` · rove ${SHARD_CFG.rove.sec ? SHARD_CFG.rove.sec + ' s, ' + ((host.status() as { rove?: { hops: number } }).rove?.hops ?? 0) + ' hops' : 'off'}` : ''}`],
     ['inputs fed', `${r2(fed * 100)}% of seat-ticks (${report.inputs.hostSeenHzPerSeat} Hz per seat; the fleet sent ${fleetStats?.stepHz ?? '?'} Hz on a ${fleetStats?.clock ?? '?'} clock)`],
+    ['sequence service (fleet lifetime)', response ? `p95 ${responseUpper(response.serviceRtt.p95UpperMs, response.serviceRtt.count)}, p99 ${responseUpper(response.serviceRtt.p99UpperMs, response.serviceRtt.count)}, max ${response.serviceRtt.maxMs === null ? 'none' : r2(response.serviceRtt.maxMs)} ms; ${response.counts.covered} covered, ${response.counts.censored} censored, ${response.pendingAtFinish} pending at end, ${response.counts.ringOverflow} overflow; ${response.status}` : 'unavailable'],
+    ['snapshot silence (fleet lifetime)', response ? `max ${r2(response.maxSnapshotSilenceMs)} ms; includes initial and unfinished gaps; service is not input-to-paint` : 'unavailable'],
     ['warm-up (not gated)', `${warm.tickMs.length} ticks, p95 ${report.warmup.tickP95} ms, max ${report.warmup.tickMax} ms, ${warmDropped} dropped`],
     ['snapshot bytes p50 / p95 / max', `${r2(pct(snaps, 0.5) / 1000)} / ${r2(pct(snaps, 0.95) / 1000)} / ${r2((snaps[snaps.length - 1] ?? 0) / 1000)} kB over ${snaps.length} snapshots`],
     ['outbound per client', `${report.wire.kBpsPerClient} kB/s (snapshots ${k.snapshots}, zone ${k.zone}, other ${k.other}); ${win.zoneSends} zone re-ships`],

@@ -2263,3 +2263,538 @@ rendered scenery. It must also measure clone/adoption/validation cost and stale
 reply rejection. Best-effort preparation with synchronous fallback is a useful
 increment but cannot promise to remove first-visit or teleport stalls. No new
 worker path is implemented in this pass.
+
+## Eighth pass: explicit terrain dependencies and detached base preparation
+
+The control is `9d0263e81a244cdd265a3f1b68543d21aea57c80`. This pass keeps
+population, encounter geometry, admission order, simulation cadence and input
+handling unchanged. Shared-machine CPU remains uncontrolled: other user
+sessions cannot be paused. A component saving is not a live latency result.
+
+### Owned cache dependency frontier
+
+`OwnedDependencyCache` privately owns the stream sample Map and its dependency
+frontier. Only an already-certified immutable owned terrain record can leave
+the frontier, after the original visitor succeeds at its original position.
+Numeric/object keys, mutable values, unknown values and Proxy values retain
+ordinary scanning. The scanner's stable certificate predicate identifies the
+certificate domain; a fresh domain starts with complete traversal.
+
+Normal get/delete/set promotion stores native values without per-hit row or
+insertion-counter allocation. If a callback mutates a frontier scan, its first
+mutation parks an actual native Map iterator immediately after the current
+entry. Original replacement, delete/reinsert, clear and reentry behavior then
+continues through that iterator. This rare path is linear in cache size. The
+private cache owner must be reached by its exact identity; a Proxy wrapping
+the owner is unsupported because reflection cannot discover private backing
+storage. Production does not wrap the stream cache. This limitation does not
+exclude Proxy keys or values from the ordinary fallback.
+
+`worldmass_dependencycache` compares a pinned archived scanner, the current
+certificate helper on ordinary Maps, the composed cache, and the actual
+production scanner. The v2 native-value variant passes 28 cases and 297
+comparisons, including pin order, traps/errors, live mutation, late actor IDs,
+fresh domains, reentry and the existing 4096/64 certificate limits.
+
+Four alternating populated-world component pairs preserve complete cache
+contents and ordered Actor pins. Map versus frontier timings in milliseconds:
+
+| Pair | Complete Map / frontier | Repeated scans Map / frontier | Worst repeated scan Map / frontier |
+| --- | ---: | ---: | ---: |
+| 1 | 496.55 / 431.01 | 291.94 / 217.84 | 26.11 / 21.97 |
+| 2 | 450.71 / 438.17 | 257.75 / 213.84 | 17.33 / 18.06 |
+| 3 | 456.47 / 421.57 | 262.85 / 208.19 | 18.01 / 13.91 |
+| 4 | 476.89 / 411.62 | 269.45 / 204.68 | 17.86 / 14.09 |
+
+Repeated work improves in all four, with roughly 22% less pooled scan time.
+Construction plus cold scanning worsens in three pairs, roughly 7.4% pooled.
+The separate resident-only synthetic cache improves total work in seven of
+eight cases; its frontier scan maxima are 0.02–0.04 ms. Contiguous
+admission-heavy synthetic cases worsen total and maximum scan time in three
+of four pairs. Those scans contain many fresh values and must not be called
+warm resident scans. The prior row/insertion-counter variant and all adverse
+rounds remain retained. Receipts:
+`.claude/ownership.perf8-dependencycache-{first-01,resident-01,native-values-01}.local.json`.
+
+### Correct preparation boundary
+
+The seventh-pass proposal to detach complete `terrainAt` was too broad.
+Independent review found a material-history counterexample: host regional
+admission can cache a refusal under registry state B, then the registry can
+return to A. Comparing current values with A does not prove equivalence to a
+fresh worker under A. Freezing the live registry would change existing behavior.
+
+Preparation therefore returns only `baseTerrainAt`. Native/regional terrain,
+landforms, patches, overlays, reservations, edits and publication remain in
+their original host order. A private WeakMap hook supplies exact prepared
+base records at the original call site. No worker changes a birth, readiness
+flag, encounter or stream sample before an ordinary host query consumes it.
+Every miss, obsolete row, unsupported shape or worker failure immediately uses
+the original synchronous calculation. This preserves behavior but cannot
+remove every cold admission or teleport stall.
+
+Only constructor-issued base generators can supply worker sources. Issuance
+records original base methods and relevant child identities before escape;
+actual ready hits check that binding. This is an internal capability contract,
+not equivalence for arbitrary private-cache tampering or temporary method
+corruption that poisons caches and is subsequently restored. Packets preserve
+ordered keys, ordinary/null prototypes, frozen descriptors, owned/frozen-data
+brands and special numbers, including negative zero. The source/version/job
+identity binds an internal trusted compiler; it is not a proof against an
+arbitrary worker inventing plausible terrain.
+
+Node has a separate terrain worker lane so terrain jobs cannot block the
+existing native/geographic/procession compiler queue. Each world permits one
+inflight batch of at most 64 exact sample centers, 4096 queued/ready addresses
+and an 8 MiB logical ready-payload budget. The complete batch remains charged
+until its last retained row leaves. This conservative accounting can strand
+capacity; it is not a heap-memory bound. All terrain ports share one worker
+lane, and each port retains its compiler caches. Last-port disposal terminates
+only that lane. Browsers retain their existing terrain path.
+
+The deterministic near-first shortlist interleaves current/ahead positions
+across foci. It performs arithmetic only, never terrain or reservation work.
+Stationary interest does not rebuild the shortlist. Arbitrary non-center
+regional queries are never rounded; they use synchronous base terrain.
+
+The terrain preparation proof passes 158 checks, including an A→B→A material
+history case with a differing fresh-A negative control. Queue proofs pass 46
+assertions covering immediate fallback, source changes, stale replies, logical
+bytes, fairness, disposal and final patched/overlaid stream values. The real
+worker proof exercises the second lane, full signed sample centers, event-loop
+progress, content-lane isolation and removal of both lane registrations with
+termination requested. The zero-thread counter does not await operating-system
+thread exit. Controlled queue failures are covered; a forced real Node-worker
+failure is not demonstrated by this probe.
+
+### Player-response observations
+
+Both engines use byte-identical soak harnesses. The new meter measures a client
+send attempt to the first inflated snapshot covering its sequence, using one
+client monotonic clock. This is a cumulative sequence-service proxy, not
+action success or input-to-paint latency. A server can acknowledge before a
+dead/action check; a later acknowledgement can cover merged inputs or a frame
+silently dropped by a closing transport. The meter does not change pacing.
+
+Per-bot bounded rings and fixed histograms retain covered, pending and censored
+inputs, lifecycle reasons, snapshot gaps, unfinished silence, invalid data and
+overflow. Quantiles are histogram upper bounds; maxima are exact. End-of-run
+pending inputs are censored, not counted as successful. Fleet observations
+include warm-up as well as the measured host window. Meter overhead is present
+in both engines and is not assumed to be zero. The independent raw-snapshot
+oracle passes 200 assertions. Worker clone/delivery and validation can occur
+outside `World.update`, making these observations necessary alongside ticks.
+
+### Combined-change live comparison: not accepted as a responsiveness win
+
+Each course runs three pairs in C/A/A/C/C/A order, six bots, seed `0x00ddba11`,
+60 Hz, 60 measured seconds, original input/drop/resume behavior, diagnostics,
+no inspector, and unchanged gates. Early exploration uses spread 3500; grouped
+play uses spread 0 and at least 60 host seconds before measurement. One task
+host/fleet runs at a time; no tests, builds or other task benchmarks overlap.
+Production and harness hashes are checked before/after every run. Both engines
+use identical measurement code. Other user sessions remain active.
+
+All pairs below are control → candidate, milliseconds. Sequence-service and
+silence observations include the complete fleet lifetime, unlike the tick window.
+
+| Course / pair | Tick p95 | Tick max | Service p95 upper bound | Service p99 upper bound | Service max | Snapshot silence max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Early 1 | 165.19 → 126.95 | 508.75 → 516.24 | 668 → 513 | 1520 → 962 | 1878.52 → 1404.02 | 1859.93 → 1360.21 |
+| Early 2 | 137.54 → 135.43 | 574.38 → 555.19 | 674 → 620 | 1670 → 1450 | 1992.69 → 2069.01 | 1332.25 → 2029.74 |
+| Early 3 | 118.56 → 160.13 | 540.06 → 903.58 | 504 → 779 | 833 → 1640 | 1145.13 → 2249.24 | 1118.52 → 1484.57 |
+| Grouped 1 | 17.63 → 20.19 | 81.68 → 89.46 | 73 → 74 | 97 → 103 | 230.86 → 205.76 | 245.58 → 312.84 |
+| Grouped 2 | 17.94 → 18.94 | 93.22 → 71.55 | 78 → 76 | 111 → 103 | 304.01 → 277.39 | 270.50 → 273.34 |
+| Grouped 3 | 12.38 → 19.94 | 90.10 → 91.57 | 79 → 87 | 112 → 137 | 290.84 → 323.58 | 321.11 → 272.33 |
+
+All six early runs breach gates. Grouped control passes 3/3, candidate 2/3;
+candidate tick p95 worsens 3/3, although tick p99 improves 3/3. All twelve have
+complete observations. Early covered/censored counts are respectively
+21696/370 → 21785/308, 22198/294 → 22418/291 and 21747/245 → 22383/236.
+Grouped counts are 42455/97 → 42405/121, 42413/102 → 42372/103 and
+42339/121 → 42295/103. Censoring includes deaths, intentional cuts and run end;
+more covered inputs do not offset latency regressions.
+
+Live workload is not identical: early nearby-foe means are
+35.52/35.97/33.10 for control and 33.91/35.37/40.60 for candidate; deaths/rejoins
+are 5/4/5 versus 5/4/3. Grouped means are 17.48/18.32/19.30 versus
+16.45/17.70/16.10 with zero deaths. Rules/density settings are unchanged, but
+wall-clock input delivery and simulation progress can diverge. Grouped machine
+CPU is 39.53/43.87/47.08% for control and 38.76/38.05/39.89% for candidate.
+Lower load or fewer nearby foes does not explain away the candidate regressions
+or identify a cause. Host CPU is roughly 0.63–0.70 logical cores in these
+grouped windows; this includes worker activity but is not per-thread attribution.
+
+The last grouped candidate records 15,273 rows accepted into ready, 546 adopted,
+1,329 still ready and 13,428 discarded. Thus 13,398 accepted rows left ready
+unused; completed means accepted rows, not all worker results. Repeated offers
+(435,371) are not unique jobs. The conservative batch charges occupy 7.42 MB
+with 1,684 pending addresses and no inflight batch. Source capture costs 68 ms;
+worker initialization takes 5.03 s including bootstrap and host event-loop delay.
+Reply validation totals 357 ms, maximum 6.49 ms, excluding clone delivery and
+other receive work. These are reasons to investigate wasted preparation and
+shortlist overhead, not proof that either causes the observed regression.
+
+Consequently terrain preparation is experimental and **off by default**.
+`HOLLOW_WAKE_TERRAIN_PREPARATION=1` enables the process-wide Node terrain lane
+for further controlled experiments. Existing content compilers stay enabled.
+The worker-disabled comparison retains constructor issuance and base lookup
+hooks, so it is not a perfectly pure dependency-only ablation. The real-worker
+proof checks explicit off refusal/no thread, explicit on operation, and release.
+
+Raw sources, reports and exact fingerprints remain in the candidate and
+`shard-perf8-control` worktrees under
+`.claude/ownership.perf8-{early,cluster}-base-v2-01-*`; compact projections use
+the same prefix ending `compact.local.json`. The enabled worker adapter sources
+are retained in `.claude/ownership.perf8-base-v2-enabled-source.local/`.
+
+The next early series (`dependency-only-01` in the raw filenames) explicitly
+sets the worker environment to zero in both engines. All six final terrain
+queue telemetry entries are null. As noted above, the candidate still includes
+issuance and base-query hook overhead. It is therefore a worker-disabled trial,
+not an isolated proof about the dependency index alone.
+
+| Early pair | Tick p95 | Tick p99 | Tick max | Service p95 upper bound | Service p99 upper bound | Service max | Snapshot silence max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 142.16 → 140.07 | 219.13 → 223.51 | 604.76 → 516.41 | 596 → 582 | 1480 → 1030 | 2081.73 → 1395.67 | 1204.27 → 1389.75 |
+| 2 | 130.01 → 142.67 | 198.82 → 252.65 | 572.68 → 697.28 | 646 → 687 | 1140 → 1080 | 1556.47 → 1371.12 | 1492.37 → 1343.96 |
+| 3 | 151.46 → 139.64 | 199.67 → 217.40 | 564.38 → 661.63 | 566 → 610 | 1120 → 1140 | 1660.88 → 1580.13 | 1176.85 → 1577.28 |
+
+All six runs breach gates. Maximum sequence service improves 3/3, but tick p99
+worsens 3/3, tick maximum worsens 2/3, service p95 worsens 2/3 and snapshot
+silence worsens 2/3. This is still not a reliable worst-stall win. Candidate
+nearby-foe means are 33.40/37.32/37.12 versus 35.52/36.21/35.52; candidate
+machine busy percentages are 47.31/43.81/47.47 versus 43.38/42.23/50.35.
+These live courses do not assign a causal cost to the cache, but their adverse
+tails, together with the component's cold overhead, motivate removing the
+cache's extra post-scan traversal before another live acceptance trial.
+
+### Cold-frontier and shortlist revision
+
+The v3b cache revision builds its next frontier during an unchanged outer
+scan and publishes it only after that original traversal succeeds. Any callback
+mutation or nested scan retains the full rebuild fallback. Earlier aliases
+certified by a later value may remain conservatively for one additional
+certificate hit. Post-approval pruning avoids redundant key/value lookups only
+when private storage cannot have changed. Independent static review found the
+mutation, domain, iterator and exception guards equivalent to the prior version.
+
+The v3b proof passes 33 cases and 357 comparisons. Its four alternating
+populated-world pairs preserve cache and ordered Actor-pin digests:
+
+| Pair | Complete Map / frontier | Construction + cold Map / frontier | Repeated scans Map / frontier | Worst repeated scan Map / frontier |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 471.62 / 422.08 | 205.34 / 211.48 | 266.24 / 210.57 | 20.32 / 19.55 |
+| 2 | 429.41 / 391.75 | 179.96 / 189.39 | 249.43 / 202.34 | 16.59 / 14.43 |
+| 3 | 437.86 / 398.31 | 189.16 / 195.00 | 248.68 / 203.29 | 16.73 / 14.63 |
+| 4 | 438.73 / 398.86 | 183.04 / 192.25 | 255.67 / 206.59 | 18.13 / 19.34 |
+
+Total work improves 4/4 (about 9.4% pooled), repeated scans improve about 19.3%,
+and the worst repeated scan improves 3/4. Construction plus cold work worsens
+4/4, about 4.0% pooled. Resident synthetic total work improves 7/8, but all
+eight maximum access blocks worsen. Contiguous admission-heavy total and
+maximum scan times worsen 4/4; interleaved admission worsens 3/4. These
+adverse results prevent a general responsiveness claim. V2, v3 and v3b ran
+in separate series; their absolute timings are not paired incremental gains.
+Receipts: `.claude/ownership.perf8-dependencycache-inline-cold-{v3,v3b}-01.local.json`.
+
+The optional worker shortlist also avoids normalizing an already-successful
+raw address twice within one call. All original argument reads and arithmetic
+still occur first. Only primitive numeric span/cell and string cell identities
+qualify; failures are never memoized, and normalized aliases retain the original
+final deduplication. A pinned independent original implementation checks exact
+ordered outputs, signed boundaries, getters, coercions and thrown errors.
+Together with the queue tests, this passes 168 assertions.
+
+Four alternating creator-inclusive component pairs per course include fresh
+focus creation and the complete ordered shortlist, up to 4096 rows. Median
+totals for 24 iterations are original / candidate: grouped 226.34 / 79.66 ms
+(-64.8%), spread 125.28 / 91.98 ms (-26.6%), equivalent origins 251.09 / 221.83 ms
+(-11.7%), and signed edges 5146.44 / 5387.23 ms (+4.7%). Every paired checksum
+and row count matches. Boundary exceptions remain expensive and the adverse
+edge result is retained. This is component evidence for an optional path,
+not a live responsiveness result. Receipt:
+`.claude/ownership.perf8-terrain-shortlist-first.local.log`.
+
+The complete initial 18-run response audit covers 108 bot records. Aggregate
+counts equal per-bot sums, conservation holds, and all actual completeness
+fault counters are zero. Fifty unmatched sequence acknowledgements correspond
+to fifty rejoins, including per-bot equality. Source inspection explains these
+as prior-life sequence echoes after the meter starts a new epoch; they cover
+no input. Raw event timestamps were not retained, so the lifecycle attribution
+is inferred from code and counters. Unmatched acknowledgements and inactive
+snapshots remain visible and are not treated as universal completeness faults.
+Receipt: `.claude/ownership.perf8-initial-response-audit-v2.local.json`.
+
+### V3b live exploration rejection
+
+The next complete early series keeps workers disabled and repeats the same
+six-run C/A/A/C/C/A protocol with the frozen v3b cache. All four type checks
+passed before measurement. All pairs below are control → candidate, milliseconds:
+
+| Pair | Tick p95 | Tick p99 | Tick max | Service p95 upper bound | Service p99 upper bound | Service max | Snapshot silence max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 142.71 → 139.48 | 230.41 → 201.41 | 506.16 → 623.37 | 583 → 637 | 1580 → 1560 | 2181.74 → 2000.39 | 1425.72 → 1079.68 |
+| 2 | 146.57 → 138.28 | 216.14 → 240.87 | 551.80 → 784.39 | 549 → 682 | 967 → 1420 | 1413.11 → 2014.62 | 1378.00 → 1076.50 |
+| 3 | 137.82 → 131.05 | 210.47 → 223.37 | 491.08 → 551.94 | 528 → 631 | 1090 → 1280 | 1650.67 → 1879.69 | 1610.22 → 1756.24 |
+
+Tick p95 improves 3/3, but worst tick and service p95 worsen 3/3. Service p99
+and maximum worsen 2/3. Independent per-bot review also finds service p95 worse
+for all 18 paired bot identities; the fleet result is not just an aggregation
+composition effect. All six runs breach the existing tick, dropped-tick and
+heap-growth gates; faults/errors are zero and party/resume gates pass. This
+variant is rejected as a default optimization. The planned grouped v3b-only
+series is not run: the complete early series already fails the required
+responsiveness acceptance. It supplies no claim about grouped v3b performance.
+
+Covered/censored counts are 22104/269 → 22076/238, 22018/287 → 21682/274 and
+22100/278 → 22280/282. The independent aggregate/per-bot conservation audit
+passes all six runs, with no invalid/overflow observations. Each has four
+unmatched acknowledgements and four rejoins. Nearby-foe means are
+35.53/34.84/35.76 versus 35.30/35.22/35.95. Machine busy percentages are
+46.83/48.29/44.37 versus 44.64/41.55/46.04. These are uncontrolled live
+workloads, not evidence assigning a causal cost to a particular helper.
+
+The narrower next trial replaces sample-hit delete/reinsert bookkeeping with
+an atomic cache promotion that retains existing dependency-frontier membership.
+The certificate domain, first-visit approval rule and cold fallback stay intact.
+Raw series: `.claude/ownership.perf8-early-cache-v3b-01-serial.local.json`;
+bounded projection: the same prefix ending `summary.local.jsonl`;
+audit: `.claude/ownership.perf8-cache-v3b-response-audit.local.json`.
+
+### Atomic promotion trial
+
+V4 adds `promote(key)` for an existing unchanged cache entry. It parks a native
+iterator before mutation, performs the original delete/reinsert, and moves the
+entry in the dependency frontier only if it was already retained there. It
+does not repeat eligibility or certificate checks. Missing keys and stored
+`undefined` remain distinct. The stream checks the frozen wrapper's revision
+before promotion, so failed regeneration of a stale entry keeps its old order.
+Overlay failures still occur after the same hit promotion as the original.
+
+The proof passes 54 cases and 554 comparisons, including an independently
+pinned original `MassStream.sample` method, live iterators, nested scans,
+numeric/object keys and conservative aliases. Independent static review found
+no semantic blocker. All four type checks pass. Four populated-world pairs:
+
+| Pair | Complete Map / frontier | Construction + cold Map / frontier | Repeated scans Map / frontier | Worst repeated scan Map / frontier |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 487.53 / 427.83 | 204.84 / 205.37 | 282.65 / 222.44 | 23.31 / 19.48 |
+| 2 | 503.33 / 440.45 | 207.39 / 225.46 | 295.93 / 214.97 | 26.69 / 16.66 |
+| 3 | 481.56 / 423.45 | 204.65 / 214.97 | 276.89 / 208.46 | 21.63 / 14.11 |
+| 4 | 487.33 / 475.07 | 201.34 / 238.24 | 285.96 / 236.81 | 24.86 / 22.28 |
+
+Complete and repeated work improve 4/4 (about 9.8% and 22.7% pooled), and
+worst repeated scan improves 4/4. Cold construction/scanning still worsens
+4/4, about 8.0% pooled. Resident synthetic total improves 6/8 and maximum
+access block improves 5/8; large outliers remain visible in the raw data.
+Admission-heavy contiguous total/maximum scan worsen 4/4; interleaved total
+and maximum scan worsen 3/4. Thus promotion does not resolve cold admission
+cost, and this component evidence alone cannot justify a default switch.
+This is another independent series against Map, not a paired v3b/v4 comparison.
+Receipt: `.claude/ownership.perf8-dependencycache-atomic-promote-v4-01.local.json`.
+
+The same six-run early protocol then tests v4 with the terrain worker disabled:
+
+| Pair | Tick p95 | Tick p99 | Tick max | Service p95 upper bound | Service p99 upper bound | Service max | Snapshot silence max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 142.43 → 131.24 | 226.76 → 179.63 | 537.07 → 493.75 | 636 → 541 | 1350 → 1190 | 1961.32 → 1667.94 | 1287.59 → 1644.01 |
+| 2 | 122.77 → 127.81 | 218.46 → 190.59 | 612.99 → 483.88 | 569 → 589 | 1030 → 1440 | 1300.58 → 1878.84 | 1271.54 → 1525.99 |
+| 3 | 118.92 → 119.23 | 181.97 → 184.65 | 515.60 → 511.66 | 509 → 558 | 855 → 1760 | 1170.26 → 2355.43 | 1161.07 → 1526.25 |
+
+Worst ticks improve 3/3, but service p95/p99/maximum worsen 2/3 and longest
+snapshot silence worsens 3/3. This fails the user's responsiveness requirement;
+v4 is not accepted as a default optimization. Grouped play is measured next
+to characterize the tradeoff, not to override the adverse early result.
+All six early runs again breach tick, dropped-tick and heap-growth gates;
+faults/errors remain zero and party/resume pass. Complete aggregate/per-bot
+response conservation passes without invalid/overflow observations.
+
+Covered/censored counts are 22201/280 → 21917/308, 22153/267 → 22264/235 and
+21995/279 → 21836/261. Nearby-foe means are 35.05/36.03/35.27 versus
+33.97/34.59/34.39. Machine busy percentages are 49.45/47.77/40.19 versus
+40.87/44.88/42.25. Deaths are 4/4/4 versus 5/4/5. These changing live workloads
+and shared CPU remain reasons to avoid causal or universal performance claims.
+Receipts: `.claude/ownership.perf8-early-cache-v4-01-serial.local.json` and
+`.claude/ownership.perf8-cache-v4-early-response-audit.local.json`.
+
+The complete grouped v4 course retains the same minimum host age of 60 seconds,
+followed by a 60-second measured window, and the same C/A/A/C/C/A order:
+
+| Pair | Tick p95 | Tick p99 | Tick max | Service p95 upper bound | Service p99 upper bound | Service max | Snapshot silence max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 14.82 → 15.65 | 45.11 → 48.53 | 88.72 → 89.90 | 77 → 76 | 109 → 103 | 295.61 → 247.49 | 279.17 → 288.35 |
+| 2 | 11.91 → 17.48 | 47.20 → 46.61 | 87.02 → 75.88 | 76 → 75 | 109 → 103 | 272.45 → 227.08 | 302.13 → 280.08 |
+| 3 | 20.75 → 19.02 | 59.05 → 45.15 | 107.65 → 112.02 | 80 → 76 | 111 → 105 | 272.52 → 248.08 | 291.64 → 244.33 |
+
+Grouped fleet service p95/p99/maximum improve 3/3, while tick p95 and maximum
+worsen 2/3. All 18 paired bot p99/maximum values improve; one bot's p95 worsens
+in pair 2. Candidate completed service samples above 250 ms are zero versus
+18/11/12, but end-censored waits still reach 292.67/295.99/251.63 ms. This does
+not establish elimination of waits over 250 ms. All three candidate runs pass;
+control passes 2/3, with the third breaching only tick p95. No faults/errors,
+deaths or rejoins occur, and party/resume gates pass throughout.
+
+Covered/censored counts are 42406/110 → 42437/111, 42364/115 → 42413/111 and
+42454/110 → 42341/97. Nearby-foe means are 17.50/18.09/17.43 versus
+16.95/16.41/19.78; machine busy percentages are 36.78/40.23/55.08 versus
+42.49/38.67/37.12. Independent review checks all 12 early/grouped rows and
+72 bot records: conservation, aggregate sums, completed observations and zero
+invalid/overflow counters pass. Early service p95/p99/maximum worsens for all
+six paired bots in pairs 2 and 3; all 18 early bot silence maxima worsen.
+Grouped benefits do not override that adverse cold-start response evidence.
+Receipts: `.claude/ownership.perf8-cluster-cache-v4-01-serial.local.json`, its
+`summary.local.jsonl`, and `.claude/ownership.perf8-cache-v4-cluster-response-audit.local.json`.
+
+### Independent experiments and ordinary defaults
+
+Both changes remain off by default. `HOLLOW_WAKE_DEPENDENCY_CACHE=1` selects
+the owned frontier when a new stream is constructed;
+`HOLLOW_WAKE_TERRAIN_PREPARATION=1` independently enables optional Node base
+terrain preparation. Explicit adapter options override each environment flag.
+Changing the default never replaces storage in an existing stream. Neither
+choice is written into world/run/save data. Browser streams keep native Maps.
+The proofs compare both actual sample branches with the original method and
+check defaults, independent flags, overrides and lazy worker installation.
+
+Default-off is not zero overhead or byte-identical baseline performance. It
+still includes the sample storage check, an unsuccessful owned-cache lookup
+on eligible scanner objects, the base-query hook lookup, runtime guards and
+generator capability issuance. It does avoid source capture, worker startup,
+shortlist/queue work and reply validation when terrain preparation is disabled.
+These residual costs require measurement, not an automatic rollback claim.
+
+### Terrain-only cold-start rejection
+
+After the independent switches, all four type checks pass, the dependency
+proof passes 55 cases/560 comparisons, and the real Node worker course passes
+including the independent policy matrix and lane cleanup. The next six-run
+early series sets terrain preparation to one and the dependency cache to zero.
+Both engines receive those flags; the unchanged control has no terrain lane.
+This tests the full candidate with native sample Maps, not the shortlist alone.
+
+| Pair | Tick p95 | Tick p99 | Tick max | Service p95 upper bound | Service p99 upper bound | Service max | Snapshot silence max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 129.80 → 128.82 | 214.84 → 215.67 | 538.04 → 556.88 | 562 → 576 | 1140 → 1210 | 1683.26 → 1735.66 | 1668.37 → 1689.33 |
+| 2 | 130.08 → 148.09 | 212.52 → 206.45 | 556.71 → 728.80 | 519 → 565 | 840 → 1090 | 1119.55 → 1644.24 | 1098.31 → 1158.46 |
+| 3 | 128.50 → 180.45 | 178.85 → 279.00 | 514.94 → 1033.69 | 527 → 943 | 958 → 1760 | 1210.28 → 2191.40 | 1199.02 → 2068.34 |
+
+Worst tick, service p95/p99/maximum and snapshot silence all worsen 3/3.
+All six runs breach tick p95, dropped-tick and heap-growth gates. Response
+conservation passes all six runs and 36 bots without invalid/overflow records.
+Covered/censored counts are 21854/297 → 22032/283, 21924/309 → 22079/292 and
+22005/327 → 21935/329. Nearby-foe means are 33.42/36.12/36.21 versus
+34.65/34.73/38.12; machine busy percentages are 40.71/39.67/41.10 versus
+41.64/40.82/53.85. Control deaths/rejoins are 5/5, 5/4, 4/4; candidate 5/5,
+4/4, 4/4. The third candidate also has higher observed CPU and nearby density;
+these are covariates, not grounds to discard the adverse result.
+
+Final sampled queue counters show completed/adopted/still-ready values of
+9314/731/951, 12424/948/1000 and 13835/940/1059. Thus accepted samples later
+discarded unused are 7632/10476/11836; these are distinct from the broader
+discard counter, which also includes replies never admitted. Ready-hit shares
+of `adopted + missed` queries are approximately 0.73%, 0.91% and 0.92%.
+Non-center queries are counted separately as ineligible. These are final sampled
+lifetime counters, not a trace restricted to the host measurement window.
+
+Source capture takes 57–62 ms and initialization 4.84–5.47 s. Accumulated reply
+validation costs 203/277/363 ms; maximum single validation costs 3.61/3.28/20.52
+ms. Final logical ready charges are about 7.4 MB with 951–1059 ready samples;
+whole-batch charging can strand capacity after other batch entries are consumed.
+No terrain queue reports an error. The current pure-base predictor is therefore
+not accepted as a default optimization. Its standalone grouped course is not
+run after this complete cold-start rejection; no grouped terrain-only claim is
+made. The earlier combined grouped regression remains retained above.
+
+Receipts: `.claude/ownership.perf8-early-terrain-only-v3-01-serial.local.json`,
+its `summary.local.jsonl`, and
+`.claude/ownership.perf8-terrain-only-v3-response-audit.local.json`.
+
+### Final ordinary-path comparison
+
+A separate six-run early series disables both switches in both processes and
+compares the final candidate's ordinary path with the unchanged production
+baseline. It retains the same input course, ordering, measurement and gates.
+All sampled terrain queues are null. This measures remaining dispatch and
+issuance costs together with the full live workload; it does not isolate any
+one residual check.
+
+| Pair | Tick p95 | Tick p99 | Tick max | Service p95 upper bound | Service p99 upper bound | Service max | Snapshot silence max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 132.37 → 140.08 | 199.29 → 216.24 | 500.67 → 550.96 | 590 → 612 | 1770 → 1090 | 2369.08 → 1560.80 | 1494.66 → 1512.29 |
+| 2 | 136.57 → 120.28 | 186.08 → 177.52 | 498.29 → 527.02 | 592 → 505 | 1780 → 876 | 2379.53 → 1207.36 | 1444.88 → 1208.35 |
+| 3 | 149.88 → 126.03 | 203.80 → 185.10 | 523.81 → 480.28 | 556 → 516 | 1260 → 1160 | 1632.55 → 1758.02 | 1455.40 → 1068.31 |
+
+Service p99 improves 3/3, while p95/maximum/silence improve 2/3. Tick p95/p99
+improve 2/3 and maximum improves 1/3. This is mixed evidence, not proof of zero
+overhead, performance equivalence or a repeatable worst-stall gain. All six
+breach tick p95 and dropped ticks; five also breach heap growth (control pair 2
+passes that gate). No gameplay timing gate is relaxed. No separate grouped
+default-off series is run, so its performance remains unmeasured.
+
+Covered/censored counts are 21868/317 → 22134/302, 22120/248 → 22045/248 and
+22104/215 → 22035/251. Response conservation passes every aggregate and all
+36 bots without invalid/overflow observations. Nearby-foe means are
+33.70/35.43/37.17 versus 35.60/34.72/34.57; machine busy percentages are
+38.55/39.74/42.67 versus 42.50/38.61/38.84. Control deaths/rejoins are 5/5,
+4/4, 3/3; candidate 5/5, 4/4, 4/4. These remain uncontrolled live workloads.
+Independent per-bot review finds all six pair-1 bots worsen service p95 and
+silence, and all six pair-3 bots worsen completed-service maximum. In pair 3,
+control bot 3 is downed at the end without a recorded death/rejoin, while its
+candidate has one death/rejoin. Candidate censoring also rises from 215 to 251,
+with maximum censored age 464.19 → 544.67 ms. Completed-tail benefits do not
+erase those unfinished waits or the lifecycle mismatch.
+Receipts: `.claude/ownership.perf8-early-defaults-v4-01-serial.local.json`, its
+`summary.local.jsonl`, and `.claude/ownership.perf8-defaults-v4-response-audit.local.json`.
+
+The pass therefore retains an experimental implementation and stronger
+response measurements, with both experiments disabled. It does not establish
+the requested flawless live experience. A future acceptance needs useful
+preparation that reaches the dominant synchronous work without adding response
+delay, plus repeatable cold and grouped results. The current broad base-only
+predictor's poor useful-hit rate and the cache's cold/admission costs are measured
+reasons to revise those boundaries before enabling either feature.
+
+### Final verification and review
+
+All four `npm run check` type checks pass after the independent switches.
+Twenty-eight affected probes pass: dependencycache, terrainpreparation,
+terrainwarm, shardresponsiveness, ownedterrain, dormancywork,
+dormancypinattribution, dormancy, foci, checkpoint, dirtyterrain, terrainpatches,
+landforms, regionalweave, nativeregional, nativesubstrate, nativegeography,
+wilderness, formations, nativepaging, nativeresume, resumeworld, nativeworker,
+geographicworker, processionworker, shardworkers, shardunits and sharddormant
+(worldmass-prefixed where applicable). The roster validates 576 entries;
+this is not a claim that every roster probe was rerun. The new proofs finish at
+55 dependency cases/560 comparisons, 158 terrain preparation checks, 168 queue/
+shortlist checks and 200 response-meter assertions.
+
+Generation QA passes 869 cases across three seeds with zero failures and four
+warnings. Simulation smoke and the isolated Vite build pass. The hidden actual
+client follows the complete 3213-unit native-cache path in 1102 manual frames,
+then exercises eight distant arrivals, Save/Continue and a saved-survivor return
+without console errors or fatal state. Nearby counts at those arrivals are
+40/67/20/19/8/0/3/2, mean 19.875; the final snapshot has 146 enemies and 53
+sleepers. Continue retains all earlier identities and reaches 162 identities,
+68 sleepers, with 15 newly retired. Both road-destination and distant-encounters
+screenshots were inspected. The client uses invulnerability, untargetability and
+manual frame stepping; this proves the exercised behavior, not combat balance,
+wall-clock frame rate or input-to-paint latency.
+
+Three critics independently reviewed cache semantics, worker/source boundaries
+and the retained live evidence. No correctness blocker remains in the supported
+internal contracts. They reject default enablement and retain the adverse cold,
+per-bot, censored-wait and lifecycle evidence. The eight complete live series
+contain 48 runs, or 24 pairs across distinct variants; they are not 24 repeats of
+one treatment. All adverse runs remain available. Final source auditing confirms
+1217 measured production/harness files still match the final default-series
+fingerprint after the completed checks.
+
+Receipts: `.claude/ownership.perf8-check-switches.local.log`,
+`.claude/ownership.perf8-switches-{dependencycache,shardworkers}.local.log`,
+`.claude/ownership.perf8-validation-defaults-v4-01.local.json` and its per-check
+logs, retained client JSON and two PNGs. The final audit is
+`.claude/ownership.perf8-finish-audit.local.log`; exact-baseline review context is
+`.claude/ownership.perf8-review-context-head.local.log`. This checkpoint remains
+on the isolated performance branch; the live acceptance failures above remain
+open.

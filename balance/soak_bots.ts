@@ -23,6 +23,7 @@ import type { PlayerInput } from '../src/net/intent';
 import type { SessionMsg } from '../src/net/transport';
 import type { StateSnapshot } from '../src/net/snapshot';
 import { SoakLifeInput } from './soak_bot_lifecycle';
+import { SOAK_RESPONSE_LIMITS, SoakResponsiveness, type SoakResponseReport } from './soakResponsiveness';
 
 export const FLEET_CFG = {
   /** Inputs each bot sends a second: THE FLEET'S CLOCK (below) steps every bot on each frame boundary. */
@@ -65,13 +66,18 @@ export type FleetEvent =
   | { t: 'rejoined'; bot: number; seat: string }
   | { t: 'lost'; bot: number; seat: string }
   | { t: 'error'; bot: number | null; message: string }
-  | { t: 'stats'; bots: FleetBotStats[]; stepHz: number; clock: 'spin' | 'timer' };
+  | { t: 'stats'; bots: FleetBotStats[]; stepHz: number; clock: 'spin' | 'timer'; responsiveness: FleetResponsiveness };
 export type FleetCommand = { t: 'drop' } | { t: 'end' };
+export interface FleetResponsiveness {
+  scope: string; method: string; limits: typeof SOAK_RESPONSE_LIMITS;
+  aggregate: SoakResponseReport;
+}
 export interface FleetBotStats {
   bot: number; seat: string; classId: string;
   inputs: number; snaps: number; zones: number;
   deaths: number; rejoins: number; lost: number;
   downedAtEnd: boolean;
+  responsiveness: SoakResponseReport;
 }
 
 interface Bot {
@@ -82,6 +88,7 @@ interface Bot {
   foe: { x: number; y: number; d: number } | null;
   awaitingRejoin: boolean; cutting: boolean;
   lifeInput: SoakLifeInput;
+  responsiveness: SoakResponsiveness;
   inputs: number; snaps: number; zones: number; deaths: number; rejoins: number; lost: number;
   timers: Set<ReturnType<typeof setTimeout>>;
   /** THE SPREAD: this bot's own roaming anchor (the hearth when the fleet is not spread). */
@@ -153,7 +160,10 @@ function step(b: Bot, now: number): void {
   const input: PlayerInput = foe && foe.d <= FLEET_CFG.strikePx
     ? { dx: 0, dy: 0, aim: { x: foe.x, y: foe.y }, held: [true], edge: [], seq: ++b.seq }
     : { dx: cx, dy: cy, aim: foe ? { x: foe.x, y: foe.y } : { x: at.x + cx * 100, y: at.y + cy * 100 }, held: [false], edge: [], seq: ++b.seq };
-  t.sendInput(b.self, input);
+  const sentAt = performance.now();
+  try { t.sendInput(b.self, input); }
+  catch (e) { b.responsiveness.sendFailed(); throw e; }
+  b.responsiveness.sent(input.seq, sentAt);
   b.lifeInput.sent(input);
   b.inputs++;
 }
@@ -161,6 +171,7 @@ function step(b: Bot, now: number): void {
 function onSnap(b: Bot, s: StateSnapshot): void {
   b.snaps++;
   const row = s.seats[b.self];
+  b.responsiveness.snapshot(s.tick, row?.seq, s.zoneId, performance.now());
   if (!row) { b.pos = null; return; } // not seated yet, or fallen and waiting on the class pick
   const at = { x: row.pos[0], y: row.pos[1] };
   b.pos = at;
@@ -188,11 +199,13 @@ function onWord(b: Bot, t: WsTransport, m: SessionMsg): void {
     if (b.awaitingRejoin) return;
     b.awaitingRejoin = true; b.deaths++; b.pos = null; b.foe = null;
     b.lifeInput.reset();
+    b.responsiveness.endEpoch('death', performance.now());
     emit({ t: 'death', bot: b.i, seat: b.self });
     later(b, FLEET_CFG.rejoinSec, () => { if (b.t === t && !ending) t.sendSession({ t: 'rejoin', classId: b.classId }); });
   } else if (m.t === 'newRun') {
     b.self = m.seat; b.awaitingRejoin = false; b.rejoins++;
     b.lifeInput.reset();
+    b.responsiveness.beginEpoch(performance.now());
     emit({ t: 'rejoined', bot: b.i, seat: m.seat });
   } else if (m.t === 'partyInvite') {
     if (b.i === 1 && m.from === bots[0]?.self) t.sendSession({ t: 'party', op: 'accept' });
@@ -209,6 +222,7 @@ function attach(b: Bot, t: WsTransport): void {
     if (b.t !== t || ending) return; // a transport the bot let go of, or the run's own end
     if (b.cutting) return; // THE DORMANT SEAT's own cut (the resume is already on its clock)
     b.lost++; b.t = null; b.pos = null;
+    b.responsiveness.endEpoch('host-lost', performance.now());
     emit({ t: 'lost', bot: b.i, seat: b.self });
   });
 }
@@ -221,6 +235,7 @@ function cutRaw(b: Bot): boolean {
   if (typeof WebSocket === 'undefined' || !(ws instanceof WebSocket)) return false;
   b.cutting = true;
   ws.close();
+  b.responsiveness.endEpoch('raw-cut', performance.now());
   return true;
 }
 
@@ -236,6 +251,7 @@ async function resume(b: Bot): Promise<void> {
     b.self = r.self; b.cutting = false;
     b.seq = 0; // the new shell counts its inputs from zero (the shard forgot the old count)
     b.lifeInput.reset();
+    b.responsiveness.beginEpoch(performance.now());
     const mem = shardResumeFor(url);
     b.resume = mem && mem.seat === r.self ? mem : null; // the resume minted a fresh token
     emit({ t: 'resumed', bot: b.i, seat, resumedSeat: r.self, resumed: r.resumed });
@@ -312,17 +328,26 @@ function end(): void {
   if (ending) return;
   ending = true; // the clock stops spinning
   for (const b of bots) {
+    b.responsiveness.finish(performance.now());
     for (const h of b.timers) clearTimeout(h);
     b.timers.clear();
     b.t?.leave(); // THE DELIBERATE LEAVE: the word, then the close (the seat ends at once)
   }
   setTimeout(() => {
+    // Keep response-summary allocation outside the existing fleet-rate sample.
+    const stepHz = +(steps / Math.max(1e-3, (performance.now() - clockT0) / 1000)).toFixed(1);
     const stats: FleetBotStats[] = bots.map(b => ({
       bot: b.i, seat: b.self, classId: b.classId, inputs: b.inputs, snaps: b.snaps, zones: b.zones,
       deaths: b.deaths, rejoins: b.rejoins, lost: b.lost, downedAtEnd: b.down,
+      responsiveness: b.responsiveness.report(),
     }));
     const bye = (): void => { setTimeout(() => process.exit(0), FLEET_CFG.exitSettleMs); };
-    const row = { t: 'stats', bots: stats, stepHz: +(steps / Math.max(1e-3, (performance.now() - clockT0) / 1000)).toFixed(1), clock: spin ? 'spin' : 'timer', at: Date.now() };
+    const responsiveness: FleetResponsiveness = {
+      scope: 'Client fleet lifetime from each join through receipt of the existing end command; includes warm-up, not the host measured window alone.',
+      method: 'One client monotonic clock: before a sendInput call that returns to the first inflated snapshot whose own-seat sequence covers it. The transport can silently drop a closing-socket send. Cumulative sequence coverage includes merged or superseded inputs, not proof each input arrived, movement/cast success, or input-to-paint. Death, cut, reconnect, zone and end boundaries censor unfinished observations. Censored ages are lower bounds, not successful round trips. Snapshot gaps are client receive gaps; unfinished silence is retained. Quantiles are bounded histogram upper bounds; tails and maxima are exact. Ring overflow retains oldest pending evidence and marks observations incomplete. No per-input IPC and no new gameplay gates.',
+      limits: SOAK_RESPONSE_LIMITS, aggregate: SoakResponsiveness.aggregate(bots.map(b => b.responsiveness)),
+    };
+    const row = { t: 'stats', bots: stats, stepHz, clock: spin ? 'spin' : 'timer', at: Date.now(), responsiveness };
     if (process.send) process.send(row, () => bye()); else bye();
   }, FLEET_CFG.leaveSettleMs);
 }
@@ -343,6 +368,7 @@ async function main(): Promise<void> {
       t: null, self: '', resume: null, rng: mulberry32(deriveSeed(seed, i + 1)), seq: 0, heading: 0, turnAt: 0,
       pos: null, down: false, seatedOnce: false, foe: null, awaitingRejoin: false, cutting: false,
       lifeInput: new SoakLifeInput(),
+      responsiveness: new SoakResponsiveness(),
       inputs: 0, snaps: 0, zones: 0, deaths: 0, rejoins: 0, lost: 0, timers: new Set(),
     };
     if (spread > 0) b.anchor = { x: hearth.x + Math.cos(2 * Math.PI * i / n) * spread, y: hearth.y + Math.sin(2 * Math.PI * i / n) * spread }; // THE SPREAD
@@ -353,6 +379,7 @@ async function main(): Promise<void> {
     try {
       const r = await t.connect(url, { name: b.name, classId: b.classId });
       b.self = r.self;
+      b.responsiveness.beginEpoch(performance.now());
       // THE REMEMBERED SESSION is one per page; N bots share this module, so each
       // keeps the copy its own welcome left (the connects are sequential).
       const mem = shardResumeFor(url);

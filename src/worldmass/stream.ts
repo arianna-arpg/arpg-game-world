@@ -4,9 +4,11 @@ import { MassGenerator } from './generator';
 import { MassState } from './state';
 import { canonical } from './random';
 import { ownedSampleEntry } from './ownedTerrain';
+import { OwnedDependencyCache, massDependencyCacheDefault } from './ownedDependencyCache';
 
 interface Job { cell: MassCell; key: string; samples: MassTerrain[]; revision: number }
-export interface MassStreamConfig { maxPages: number; maxSamples: number }
+type SampleEntry = Readonly<{ terrain: MassTerrain; revision: number }>;
+export interface MassStreamConfig { maxPages: number; maxSamples: number; dependencyCache?: boolean }
 
 /** Cooperative preparation, atomic publication, bounded residency. Sampling is
  * independent of the queue so physics never guesses that unknown ground is air. */
@@ -25,13 +27,15 @@ export class MassStream {
   private pages = new Map<string, MassPage>();
   private pending = new Map<string, Job>();
   private needed = new Map<string, MassCell>();
-  private samples = new Map<string, Readonly<{ terrain: MassTerrain; revision: number }>>();
+  private samples: Map<string, SampleEntry> | OwnedDependencyCache<string, SampleEntry>;
   private stateRevision = -1;
   readonly cols: number;
   constructor(readonly generator: MassGenerator, readonly state: MassState, readonly config: MassStreamConfig) {
     if (!Number.isSafeInteger(config.maxPages) || config.maxPages < 1
       || !Number.isSafeInteger(config.maxSamples) || config.maxSamples < 1) throw new Error('Invalid residency budget');
     this.config = Object.freeze({ ...config });
+    this.samples = (this.config.dependencyCache ?? massDependencyCacheDefault()) === true
+      ? new OwnedDependencyCache<string, SampleEntry>() : new Map<string, SampleEntry>();
     this.focusPageBudget = config.maxPages;
     this.focusSampleBudget = config.maxSamples;
     if (canonical(state.run) !== canonical(generator.run)) throw new Error('Stream state belongs to another run');
@@ -76,7 +80,11 @@ export class MassStream {
     this.syncChanges();
     const p = this.state.atCell(at), key = this.state.key(p);
     const revision = this.revisionAt(p), hit = this.samples.get(key);
-    if (hit?.revision === revision) { this.samples.delete(key); this.samples.set(key, hit); return this.overlay?.sample(at, hit.terrain) ?? hit.terrain; }
+    if (hit?.revision === revision) {
+      if (this.samples instanceof OwnedDependencyCache) this.samples.promote(key);
+      else { this.samples.delete(key); this.samples.set(key, hit); }
+      return this.overlay?.sample(at, hit.terrain) ?? hit.terrain;
+    }
     const half = this.generator.spec.terrainCell / 2;
     const base = this.generator.terrainAt({ ...p, x: p.x + half, y: p.y + half });
     const patch = this.state.patchAt(p);

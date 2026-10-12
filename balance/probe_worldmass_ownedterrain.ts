@@ -9,6 +9,7 @@ import { Actor } from '../src/engine/actor';
 import type { World } from '../src/engine/world';
 import { massDormancyPins } from '../src/worldmass/dormancy';
 import * as actual from '../src/worldmass/ownedTerrain';
+import { scanOwnedDependencyCache } from '../src/worldmass/ownedDependencyCache';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 // Exact independent d4b96ef0 declarations. Never update this archive to match an optimization.
@@ -71,7 +72,7 @@ export function massDormancyPins(world: World, owned: ReadonlyMap<string,Actor>,
 assert.equal(sha(archivedSource), 'cdefd768157d93d66e13b859def2bc60b490b5a1dd67a087728ef622db246acc');
 const currentSource = readFileSync(new URL('../src/worldmass/dormancy.ts', import.meta.url), 'utf8');
 const currentTree = ts.createSourceFile('dormancy.ts', currentSource, ts.ScriptTarget.Latest, true);
-const scannerNames = new Set(['entityKeys', 'dependencyKeys', 'dependencyFreeData', 'isDependencyFreeData', 'massDormancyPins']);
+const scannerNames = new Set(['entityKeys', 'dependencyKeys', 'dependencyFreeData', 'hasDependencyFreeCertificate', 'isDependencyFreeData', 'massDormancyPins']);
 const variantSource = currentTree.statements.flatMap(statement => {
   if (ts.isFunctionDeclaration(statement) && statement.name && scannerNames.has(statement.name.text)) return [statement.getText(currentTree)];
   if (ts.isVariableStatement(statement) && statement.declarationList.declarations.some(d => scannerNames.has(d.name.getText(currentTree))))
@@ -100,8 +101,8 @@ function js(source: string): string {
 }
 const exports = '\nreturn {scan:massDormancyPins,source:ownedTerrainSource,terrain:ownedBaseTerrain,entry:ownedSampleEntry,has:isOwnedTerrainRecord};';
 function compile(source: string, records: string): () => Api {
-  const build = new Function('Actor', js(records + '\n' + source) + exports);
-  return () => build(Actor) as Api;
+  const build = new Function('Actor', 'scanOwnedDependencyCache', js(records + '\n' + source) + exports);
+  return () => build(Actor, scanOwnedDependencyCache) as Api;
 }
 const factories = { archived: compile(archivedSource, referenceModule), owned: compile(variantSource, moduleSource) };
 function actualApi(): Api {
@@ -321,8 +322,8 @@ function count(kind: Kind) {
       'counter.descriptors++;const descriptors=Object.getOwnPropertyDescriptors(value);')
     .replace('if(isOwnedTerrainRecord(value)){', 'if(isOwnedTerrainRecord(value)){counter.direct++;');
   const counter = { descriptors: 0, direct: 0 };
-  const api = new Function('Actor', 'counter', js((kind === 'owned' ? moduleSource : referenceModule) + '\n' + source) + exports)
-    (Actor, counter) as Api;
+  const api = new Function('Actor', 'counter', 'scanOwnedDependencyCache', js((kind === 'owned' ? moduleSource : referenceModule) + '\n' + source) + exports)
+    (Actor, counter, scanOwnedDependencyCache) as Api;
   const world = fixture(api, kind, 512, false), pins = ids(api.scan(world, owners)), cold = { ...counter };
   counter.descriptors = counter.direct = 0;
   assert.deepEqual(ids(api.scan(world, owners)), pins);

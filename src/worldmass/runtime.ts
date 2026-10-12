@@ -12,6 +12,9 @@ import type { MassResidentResume } from '../meta/characterResume';
 import type { CharacterPageEntry } from '../meta/characterPages';
 import { stageNativeCohort, hydrateNativeCohortData } from './nativePaging';
 import { createNativeFeatureWarmQueue, type NativeFeatureWarmQueue } from './nativeWarm';
+import { createTerrainWarmQueue, terrainPreparationCenters, type TerrainWarmQueue } from './terrainWarm';
+import { createTerrainPreparationGenerator } from './terrainPreparation';
+import { installTerrainBasePreparation } from './terrainBasePreparation';
 import { MassStorm, type MassStormSave } from './storm';
 import { MassSnow, type MassSnowSave } from './snow';
 import { MassWeather, type MassWeatherSave } from './weather';
@@ -150,6 +153,11 @@ export class WorldMassRuntime {
   snow: MassSnow | null = null;
   storms: MassStorm | null = null;
   nativeWarm: NativeFeatureWarmQueue | null = null;
+  terrainWarm: TerrainWarmQueue | null = null;
+  private terrainWarmAttempted = false;
+  private nextTerrainWarm = 0;
+  private terrainWarmKey = '';
+  private terrainWarmFrom = new Map<string,{x:number;y:number}>();
   private nextNativeWarm = 0;
   private warmFrom = new Map<string,{x:number;y:number}>();
   private nativeHost: MassNativeHost | null = null;
@@ -228,7 +236,7 @@ export class WorldMassRuntime {
     this.puzzles = new MassPuzzles(save?.puzzles, config.puzzleResidency);
     if (config.dormancy) validateMassDormancy(config.dormancy, config.populationRadius);
     this.dormancy = config.dormancy ? new MassDormancy(config.dormancy) : null;
-    this.generator = new MassGenerator(save?.state.run ?? makeMassRun(seed, runId, config.terrain), config.terrain);
+    this.generator = createTerrainPreparationGenerator(save?.state.run ?? makeMassRun(seed, runId, config.terrain), config.terrain);
     if (config.settlement?.location !== undefined) validateMassOrigin(config.settlement.location, config.terrain);
     this.origin = Object.freeze(save ? { ...save.origin } : chooseMassOrigin(this.generator, config.settlement?.location).origin);
     address(this.origin.dimension, this.origin.cx, this.origin.cy, 0, 0, config.terrain.addressSpan);
@@ -788,7 +796,30 @@ export class WorldMassRuntime {
   }
   /** Worker descriptors are suggestions until the authoritative residency validates
    * them. Retire the worker whenever its owning world or surface is discarded. */
-  dispose():void { this.disposed=true;this.nativeWarm?.dispose();this.geography?.dispose(); }
+  dispose():void { this.disposed=true;this.nativeWarm?.dispose();this.terrainWarm?.dispose();installTerrainBasePreparation(this.generator);this.geography?.dispose(); }
+  private prepareTerrain(world:World,foci:readonly MassFocus[]):void {
+    if(world.massRenderPages||this.disposed)return;
+    if(!this.terrainWarmAttempted){
+      if(!foci.length)return;
+      this.terrainWarmAttempted=true;this.terrainWarm=createTerrainWarmQueue(this.generator);
+      if(this.terrainWarm)installTerrainBasePreparation(this.generator,at=>this.terrainWarm!.take(at));
+    }
+    const queue=this.terrainWarm;if(!queue||queue.disposed||world.time<this.nextTerrainWarm)return;
+    this.nextTerrainWarm=world.time+.5;
+    const centers=foci.map(f=>{
+      const before=this.terrainWarmFrom.get(f.id),dx=before?f.pos.x-before.x:0,dy=before?f.pos.y-before.y:0,length=Math.hypot(dx,dy);
+      this.terrainWarmFrom.set(f.id,{...f.pos});
+      const at=this.walk.at(f.pos.x,f.pos.y);let ahead=at;
+      if(length>1)try{ahead=this.walk.at(f.pos.x+dx/length*600,f.pos.y+dy/length*600);}catch(error){if(!(error instanceof RangeError))throw error;}
+      return {at,ahead};
+    });
+    for(const id of this.terrainWarmFrom.keys())if(!foci.some(f=>f.id===id))this.terrainWarmFrom.delete(id);
+    const cell=this.generator.spec.terrainCell,key=JSON.stringify(centers.map(row=>[row.at,row.ahead].map(at=>[at.dimension,at.cx,at.cy,Math.floor(at.x/cell),Math.floor(at.y/cell)])));
+    if(key!==this.terrainWarmKey){
+      this.terrainWarmKey=key;
+      queue.offer(terrainPreparationCenters(centers,this.generator.spec.addressSpan,cell,queue.config.maxQueued));
+    }else queue.advance();
+  }
   private prepareNativeCountry(world:World):void {
     const queue=this.nativeWarm,features=this.nativeFeatures,country=this.nativeCountry;
     if(!queue||!features||!country||queue.stats.disposed)return;
@@ -834,6 +865,7 @@ export class WorldMassRuntime {
     this.fields.massFocusCount=this.shrines.massFocusCount=this.puzzles.massFocusCount=Math.max(1,foci.length);
     if(this.geography){this.geography.objectives.massFocusCount=this.geography.caravans.processions.massFocusCount=Math.max(1,foci.length);}
     this.nativeFeatures?.setFocusCount(Math.max(1,foci.length));
+    this.prepareTerrain(world,foci);
     if(!foci.length){this.stream.request([]);this.places.clear();this.reservationCandidates=null;this.nearKey='';return;}
     if(boot||world.time>=this.nextPopulation)this.geography?.restoreResidentOwners(world);
     else this.geography?.restoreProcessions(world);

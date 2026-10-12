@@ -3,6 +3,7 @@ import { MONSTERS } from '../data/monsters';
 import { tellSpecsOf } from '../engine/tells';
 import { canonical } from './random';
 import { isOwnedTerrainRecord } from './ownedTerrain';
+import { scanOwnedDependencyCache } from './ownedDependencyCache';
 import { Actor } from '../engine/actor';
 import { MassObserverIndex } from './foci';
 import { StatSheet } from '../engine/stats';
@@ -52,6 +53,9 @@ const dependencyKeys = new Set([...entityKeys].filter(k=>!['aiHitById','lastFoeI
  * Weak membership neither retains terrain history nor needs a mutation epoch:
  * every property of a certified graph is a frozen data descriptor. */
 const dependencyFreeData=new WeakSet<object>();
+// One stable domain per scanner; independent proof scanners cannot share its
+// approvals. Cache rows are approved only after the ordinary visit succeeds.
+const hasDependencyFreeCertificate=(value:object):boolean=>dependencyFreeData.has(value);
 function isDependencyFreeData(value:object,active?:Set<object>,budget?:{left:number}):boolean {
   if(dependencyFreeData.has(value))return true;
   const proto=Object.getPrototypeOf(value);
@@ -330,6 +334,7 @@ export function massDormancyPins(world: World, owned: ReadonlyMap<string,Actor>,
   excludedOwners: ReadonlySet<object> = new Set()): Set<Actor> {
   const native=new Set(owned.values()), ids=new Map([...native].map(a=>[a.id,a]));
   const pinned=new Set<Actor>(), seen=new Set<object>([world]);
+  const visitCacheEntry=(k:unknown,v:unknown):void=>{if(typeof k==='number'){const a=ids.get(k);if(a)pinned.add(a);}else if(k!==null&&typeof k==='object')visit(k);if(v!==null&&typeof v==='object')visit(v);};
   const visit=(value:unknown,key=''):void=> {
     if(typeof value==='number' && dependencyKeys.has(key)) {const a=ids.get(value);if(a)pinned.add(a);return;}
     if(!value||typeof value!=='object'||seen.has(value)||excludedOwners.has(value))return;
@@ -338,6 +343,7 @@ export function massDormancyPins(world: World, owned: ReadonlyMap<string,Actor>,
     // Certified immutable graphs already have permanent cycle-free coverage;
     // only graphs we actually traverse need the per-query seen set.
     seen.add(value);
+    if(scanOwnedDependencyCache(value,visitCacheEntry,hasDependencyFreeCertificate))return;
     if(value instanceof WeakMap||value instanceof WeakSet){for(const a of native)if(value.has(a))pinned.add(a);return;}
     if(value instanceof Map){for(const [k,v]of value){if(typeof k==='number'){const a=ids.get(k);if(a)pinned.add(a);}else if(k!==null&&typeof k==='object')visit(k);if(v!==null&&typeof v==='object')visit(v);}return;}
     if(value instanceof Set){for(const v of value){if(typeof v==='number'){const a=ids.get(v);if(a)pinned.add(a);}else if(v!==null&&typeof v==='object')visit(v);}return;}

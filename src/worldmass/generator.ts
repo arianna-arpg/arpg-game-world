@@ -7,6 +7,7 @@ import type { MassPlace, MassPlaceRecipe, MassRange, MassRun, MassSpec, MassTerr
 import { canonical, freezeData, massDigest, massRandom, streamSeed } from './random';
 import { massNoise } from './noise';
 import { ownedBaseTerrain, ownedTerrainSource } from './ownedTerrain';
+import { preparedTerrainBase } from './terrainBasePreparation';
 import { MassTerrainPatches, patchBoxIntersects, validateMassPatches, type MassPatchBox } from './terrainPatches';
 
 const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
@@ -217,7 +218,9 @@ export class MassGenerator {
     return this.surfaces.find(row=>matchesMassRanges(row.when,fields))!.biome;
   }
   /** Original policy, deliberately patch-free to keep candidate proofs acyclic. */
-  private baseTerrainAt(at: MassAddress): MassTerrain {
+  baseTerrainAt(at: MassAddress): MassTerrain {
+    const prepared = preparedTerrainBase(this, at);
+    if (prepared !== undefined) return prepared;
     if (this.nativeSubstrate) return this.nativeSubstrate.sample(at);
     const fields = this.fieldsAt(at), s = this.surfaces.find(row => matchesMassRanges(row.when, fields))!;
     for (const place of this.surfaceRecipes.length ? this.surfacePlacesInCell(at) : []) {

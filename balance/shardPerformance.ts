@@ -71,7 +71,9 @@ export class ShardPerformance {
     const runtime = host.world.massRuntime;
     if (runtime) {
       this.count(runtime.stream, 'sample', 'terrain.sample');
-      this.count(runtime.generator, 'terrainAt', 'terrain.generate');
+      // A terrainAt wrapper changes the generator capability and correctly
+      // refuses worker adoption. Measure preparation through queue telemetry;
+      // these two legacy call counters cover only the keeper's runtime.
       this.count(runtime.walk, 'regionAt', 'terrain.region');
     }
   }
@@ -98,6 +100,7 @@ export class ShardPerformance {
     const runtime = host.world.massRuntime;
     this.samples.push({ sec: round((performance.now() - this.started) / 1000), workers: massWorkersStatus(),
       native: runtime?.nativeWarm?.stats, geographic: runtime?.geography?.warmStats,
+      terrainPreparation: [...new Set([host.world,...host.units.worlds()])].map(world=>world.massRuntime?.terrainWarm?.stats??null),
       paging: runtime?.nativePagingStats, resumePending: runtime?.resumePending,
       terrain: runtime?.stream.stats, terrainRevision: runtime?.stream.revision, nativeRevision: runtime?.nativeFeatures?.version,
       counts: { ...this.counts } });
