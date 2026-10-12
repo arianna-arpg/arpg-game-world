@@ -108,6 +108,8 @@ export class MassRegionalLandforms {
   private cache=new Map<string,Readonly<MassLandformPlan>|null>();
   private topologyReasons:Record<string,number>={};
   private counters={attempts:0,seats:0,accepted:0,opening:0,water:0,sites:0,ports:0,topology:0,baseReads:0};
+  openingCache() { return { cache: [...this.cache] }; }
+  adoptOpeningCache(cache: ReturnType<this['openingCache']>): void { this.cache.clear(); for (const [key, value] of cache.cache) this.cache.set(key, freezeData(value)); }
   constructor(private readonly spec:Readonly<MassSpec>,private readonly run:Readonly<MassRun>,
     private readonly baseAt:(at:MassAddress)=>MassTerrain,private readonly sites:RegionalLandformSites) {}
   private get policy():MassRegionalLandformPolicy{return this.spec.landforms!.regional!;}

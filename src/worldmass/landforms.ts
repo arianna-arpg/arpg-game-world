@@ -112,6 +112,11 @@ export class MassLandforms {
   }
   private get policy(): MassLandformPolicy { return this.spec.landforms!; }
   private get landformFrameCells(): number { return Math.ceil(Math.max(this.policy.spacing,this.policy.regional?.spacing??0)/this.spec.addressSpan)+1; }
+  openingCache() { return { cache: [...this.cache], regional: this.regionalLandforms?.openingCache() }; }
+  adoptOpeningCache(cache: ReturnType<this['openingCache']>): void {
+    this.cache.clear(); for (const [key, value] of cache.cache) this.cache.set(key, freezeData(value));
+    if (cache.regional) this.regionalLandforms?.adoptOpeningCache(cache.regional);
+  }
   private candidate(dimension:string,gx:bigint,gy:bigint): Readonly<MassLandformPlan>|null {
     const key=canonical([dimension,gx.toString(),gy.toString()]);
     if(this.cache.has(key))return this.cache.get(key)!;

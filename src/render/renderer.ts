@@ -579,6 +579,12 @@ export class Renderer {
   private falterW = 0;
   private falterH = 0;
 
+  async prepareLoadingFrame(world: World, control: import('../loading/cooperative').PreparationControl): Promise<void> {
+    if (!world.massRuntime) return;
+    const zoom = this.baseZoom * this.pixelScale, w = this.canvas.width / zoom, h = this.canvas.height / zoom;
+    const focus = world.scene?.focus ?? world.frameLockFocus() ?? world.player.pos;
+    await this.massPainter.prepareOpening(world.massRuntime, focus.x-w/2-30, focus.y-h/2-30, w+60, h+60, control);
+  }
   render(world: World): void {
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;

@@ -147,31 +147,46 @@ handshake. Callers can use the same lease API when those operations gain readine
 contracts. Routine seamless movement does not intentionally insert loading screens.
 
 The crossing is prewarmed at boot in an opaque-origin iframe with
-`sandbox="allow-scripts"` and explicit gamepad delegation. Do not add
-`allow-same-origin`: that would permit the game and crossing to share the very
-renderer thread this separation is meant to avoid. Desktop Electron/Chromium
-isolates this frame in a different renderer process. Its own DOM input, gamepad
-polling, simulation, native Mu painting and cosmetic cache continue while the
-game renderer constructs/restores its world or bakes terrain. No input is relayed
-through the blocked game thread. This is foreground isolation, not a migration of
-World authority into a worker or a render-only snapshot of the simulation.
-The first `paint()` also yields the embedding document's presentation before
-requesting the child's paint acknowledgement. Preserve that ordering on every
-reopen: otherwise Chromium can still treat the frame as hidden and throttle its
-animation during the subsequent game task. Hidden/background tabs use a bounded
-fallback so preparation never waits indefinitely for a display refresh.
+`sandbox="allow-scripts"` and explicit gamepad delegation. Keep
+`allow-same-origin` absent. Chromium can give this frame a separate renderer;
+Firefox can share scheduling with the parent even with this sandbox. An iframe
+alone does not make blocking world generation playable in every browser.
 
-`scripts/loading-frame-plugin.ts` bundles the existing Mu surface and painters
-into one cacheable classic-script asset for production and the dev server. The
-build refuses World/main/save imports and retained account authority (the shared
-immutable starter-class catalog is permitted). The iframe's CSP
-allows only that local script and its styles; there are no remote assets or new
-runtime dependencies. Browser process isolation is platform-dependent: the
-acceptance claim is for the desktop Electron/Chromium runtime. Browsers without
-isolated iframe processes can display the same surface but cannot guarantee
-responsiveness during blocking game work; do not claim mobile/WebView/WebKit
-parity without another execution boundary. See the
-[Chromium process model](https://chromium.googlesource.com/chromium/src/+/HEAD/docs/process_model_and_site_isolation.md).
+BrowserLoadingPreparation makes the actual entry and Continue paths await a
+visible crossing before starting work. `src/worldmass/opening.worker.ts` builds
+the native default descriptor, validates saved terrain and prepares natural terrain
+memo tables for the opening and its path districts. This one-job worker receives
+only seed/configuration/position data and returns immutable derived planning data.
+It never receives World, account, actor, save-store or publication authority.
+Only results issued by this preparation owner can enter the generator's cache
+admission path; cloned/foreign preparations are refused. Existing synchronous
+constructors still validate their inputs. Node's synchronous planning fallback is
+for headless hosts/probes; browser errors do not silently fall back to blocking work.
+
+Native settlement, routes, country reservations, actor restoration and save
+publication stay on the game thread. Their loading adapters yield real tasks
+between bounded steps, including path searches, terrain samples, ecology and first
+floor baking. The scheduler yields after a six-millisecond allowance between
+steps; this is not a hard limit on an individual native call. Candidate World
+policies are restored before every yield and re-entered only for the next step.
+The live synchronous APIs drain the same generators, preserving query/RNG order.
+Cancellation closes the iterator and terminates its worker; failed or superseded
+Continue cannot publish its staged account/world. The cover remains until the
+first complete world frame. No partial floor is presented.
+
+The first `paint()` waits for display opportunities in the embedding document
+before requesting the child's acknowledgement. A timer cannot claim that a visible
+crossing painted. Hiding the tab resolves that wait through visibility handling,
+so background preparation does not wait indefinitely for animation frames.
+
+`scripts/loading-frame-plugin.ts` bundles the Mu surface and painters into one
+cacheable classic-script asset. It refuses World/main/save imports and retained
+account authority. The iframe's CSP allows only that local script and its styles.
+No new external service or runtime dependency is needed. Firefox acceptance now
+measures actual entry and Continue, including steering during both worker planning
+and main-thread admission; other untested browser engines still need equivalent
+evidence. This does not promise that every native call or steady-state game frame
+is free of short hitches.
 
 The typed message protocol carries session tokens, status, cosmetics, action
 requests, paint acknowledgements and sampled diagnostics only. The parent checks
@@ -213,8 +228,8 @@ affect loading, inventory, progression or readiness, and never delay a ready wor
 The existing callers cover class entry, Continue and required native-page waits.
 Other uses are candidates, not automatic integrations. Keep disruptive work behind
 the same lease and await its first paint; keep the cover through all required
-construction and first rendering. Worker pipelines and bounded yielding remain
-useful for reducing game-thread stalls and for platforms without isolated frames.
+construction and first rendering. Worker pipelines and bounded yielding are required for CPU-heavy browser loads;
+the iframe alone is insufficient on Firefox.
 Ordinary seamless movement should stay seamless.
 
 Future contributors should start with the lease example above, the existing
@@ -226,6 +241,8 @@ cosmetic/body separation, and keyboard/controller quarantine on return to play.
 ## Verification
 
 - `npm run check`
+- `npm run probe -- loadingpreparation`, `resumeworld`, `wilderness` and affected terrain/native probes
+- `node balance/loading-browser-ui.cjs` with Firefox installed (`FIREFOX_BIN` may override its path)
 - `npm run probe -- spiritrun` and `npm run probe -- characterresume`
 - Scoped production build, then `electron balance/loading-screen-ui.cjs`
 - `electron balance/loading-isolation-ui.cjs` (actual distinct processes and input during busy work)
@@ -272,3 +289,28 @@ over 6.771 seconds. Both had a 50 ms maximum gap and restored/created a live
 seamless world without client errors. These are local desktop Electron results;
 the cross-platform limits above still apply. The report is generated by
 `balance/loading-isolation-ui.cjs` under `balance/reports/loading-isolation-ui.json`.
+
+### Firefox loading verification (2026-10-11)
+
+The original shared-thread Firefox course observed an 18.7-second entry freeze
+and a 6.2-second Continue freeze despite the earlier Electron isolation passes.
+The browser preparation course now cancels an outstanding real worker, enters a
+seamless world with the slow regression seed 230345636, flushes/reloads storage and
+uses the actual Continue button. It requires the same worldmass seed, no fatal
+error, terminated workers, at least 20 frames/second, no half-second stall, a
+99th-percentile frame gap below 100 ms, and steering in every two-second interval.
+These local acceptance thresholds are distinct from the stricter separate-process
+Electron course; they are not hardware-independent frame-rate guarantees.
+
+A measured Firefox run produced 1,350 frames on entry (70.5 FPS, 440 ms worst gap,
+46 ms p99) and 1,352 on Continue (67.2 FPS, 416 ms worst gap, 55 ms p99). Planning
+ran in the worker for 11.9 and 9.3 seconds respectively while input kept moving the
+wisp. The harness uses its own headless Firefox profile and injects only test
+instrumentation into served copies; it does not use personal browser saves.
+Reports retain per-frame samples under `balance/reports/loading-firefox-*/`.
+A second Firefox seed (713) also passed: entry 55.8 FPS / 327 ms maximum gap,
+Continue 57.8 FPS / 407 ms maximum gap. `HOLLOW_WAKE_QA_SEED` selects another
+uint32 seed for this course. Its boundary is the iframe actually becoming hidden,
+so the first live gameplay frame cannot be misreported as a loading freeze.
+Desktop UI entry/Continue waits now allow real asynchronous planning rather than
+counting only short timers around an otherwise blocking synchronous call.

@@ -70,6 +70,8 @@ export function validateNativeRegional(spec:MassSpec):void {
  * content never move/clip around protected sites. A failed seat is refused whole. */
 export class MassNativeRegional {
   private cache=new Map<string,NativeRegionalPlan|null>();
+  openingCache() { return { cache: [...this.cache] }; }
+  adoptOpeningCache(cache: ReturnType<this['openingCache']>): void { this.cache.clear(); for (const [key, value] of cache.cache) this.cache.set(key, freezeData(value)); }
   readonly counters={tried:0,accepted:0,opening:0,sites:0,siteBudget:0,biome:0,water:0,ports:0,reads:0,biomeReads:0,fallbackTried:0,fallbackAccepted:0};
   constructor(readonly spec:MassSpec,readonly run:MassRun,
     private read:(at:MassAddress)=>MassTerrain,

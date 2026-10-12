@@ -472,10 +472,13 @@ const RUN_END_FADE = { outSec: 1.15 };
 /** The booked epilogue; revealing it never re-books the death. */
 let pendingDeathScreen: { open: (revealSec?: number) => void; opened?: boolean } | null = null;
 
-function startGame(
+function startGame(...args: Parameters<typeof startGameWork>): void {
+  for (const candidate of startGameWork(...args)) candidate.startWorldMass();
+}
+function* startGameWork(
   classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string,
   graftSkillId?: string | null, kitPicks?: Record<string, string>,
-): void {
+): Generator<World, void> {
   couchReset(); // a new world seats no ghosts — guests re-join from the menu
   // THE PROLOGUE GATE (engine/scenes.ts), read FIRST — before a roster mode
   // pushes its vessel and muddies the virgin-account test: an account that
@@ -534,7 +537,7 @@ function startGame(
   // THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
   // deal the ultimate + gauge debuts into the fresh bag, unlearned.
   world.dealLabArts();
-  if (massExpedition && !serverBound) world.startWorldMass();
+  if (massExpedition && !serverBound) yield world;
   // THE SKILL GRAFT (meta/unlocks.ts kind 'graft'): the armed charge spends
   // HERE — where the run truly begins — before the baseline save, so the
   // snapshot carries the grafted gem from the first breath. A pick without
@@ -596,16 +599,23 @@ async function withLoadingScreen(...args: Parameters<typeof startGame>): Promise
   try {
     await lease.paint(); if (!lease.current) return false;
     wakeLease = lease; // THE ONE CROSSING: a server-bound wake keeps this cover to the far side
-    try { startGame(...args); } finally { wakeLease = null; }
+    try {
+      for (const candidate of startGameWork(...args)) {
+        await candidate.startWorldMassAsync({ isCurrent: () => lease.current });
+        if (!lease.current) return false;
+      }
+    } finally { wakeLease = null; }
     if (crossingLease === lease) return true;
     lease.update({ label: 'Opening the world' });
     await lease.paint(); if (!lease.current) return false;
+    await renderer.prepareLoadingFrame(world, { isCurrent: () => lease.current });
+    if (!lease.current) return false;
     renderer.render(world);
     // loadingScreen drains foreground actions before exposing the prepared world.
     await lease.paint(); if (!lease.current) return false;
     loadingGate = { world, lease };
     return true;
-  } catch (error) { lease.finish(); reportFatal(error, 'world entry'); return false; }
+  } catch (error) { const current = lease.current; lease.finish(); if (current) reportFatal(error, 'world entry'); return false; }
 }
 
 /** Class-select adapter: the picker hands back (class, sworn mode, name);
@@ -747,6 +757,7 @@ async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<
     // loadingScreen stays interactive through the actual first terrain/sprite bake.
     loading.update({ label: 'Opening the world' });
     await loading.paint();
+    if (current()) await renderer.prepareLoadingFrame(world, { isCurrent: current, signal: controller.signal });
     if (current()) { renderer.render(world); await loading.paint(); }
   } catch (error) {
     if (current()) ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar,

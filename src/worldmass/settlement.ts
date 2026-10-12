@@ -119,11 +119,15 @@ export class MassSettlement {
   /** Reserve complete native footprints BEFORE any wilderness population or
    * site scenery is admitted. A feathered verge hides the old arena rectangle. */
   reserve(state: MassState, walk: MassWalk): void {
+    for (const _ of this.reserveSteps(state, walk)) { /* synchronous host path */ }
+  }
+  *reserveSteps(state: MassState, walk: MassWalk): Generator<void, void> {
     const cs = walk.stream.generator.spec.terrainCell, pad = this.spec.apron + this.spec.blend;
     const color = this.zone.theme.ground?.palette?.[2] ?? this.zone.theme.floor;
     const rgb = (v: string) => [1, 3, 5].map(i => parseInt(v.slice(i, i + 2), 16));
     const town = rgb(color);
     for (let y = Math.floor(-pad / cs) * cs; y < this.zone.size.h + pad; y += cs) {
+      yield;
       for (let x = Math.floor(-pad / cs) * cs; x < this.zone.size.w + pad; x += cs) {
         const dist = this.distance(x + cs / 2, y + cs / 2);
         const edge = this.spec.apron + this.spec.blend * (.7 + .3 * massHash(x + ',' + y, 71) / 0x100000000);

@@ -69,6 +69,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_skillflights.ts', status: 'green', tier: 'fast', why: 'Authored flight/beam/field census, palette-independent geometry, real casts and render-only co-op fields.' },
   { probe: 'probe_resourcevisuals.ts', status: 'green', tier: 'fast', why: 'Actual-gain blood/mana/shield transfers, native siphons, delayed pickups, bounded density, palette independence and co-op.' },
   { probe: 'probe_targetvisuals.ts', status: 'green', tier: 'fast', why: 'Target/rite census, distinct tether geometry, true band bounds, actual recipients and fuel, lifecycle and paint-only co-op links.' },
+  { probe: 'probe_loadingpreparation.ts', status: 'green', tier: 'fast', why: 'Background opening terrain parity, private immutable cache admission and cancellation between scoped preparation tasks.' },
   { probe: 'probe_spiritrun.ts', status: 'green', tier: 'fast', why: 'Loading-screen directions, collision boundaries, streak speed, frame rates and bounded gates.' },
 
   { probe: 'probe_nativeinstalledsources.ts', status: 'green', tier: 'fast', why: 'Original installed native registry boot without World, complete lazy providers, native config and unchanged full World members.' },

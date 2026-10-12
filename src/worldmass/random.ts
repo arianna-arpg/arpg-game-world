@@ -48,6 +48,12 @@ export function streamSeed(seed: number, namespace: readonly (string | number)[]
 export function massRandom(seed: number, namespace: readonly (string | number)[]): Rng {
   return new Rng(streamSeed(seed, namespace));
 }
+/** Same immutable-data admission, spread across browser tasks by the caller. */
+export function* freezeDataSteps(data: unknown): Generator<void, void> {
+  if (!data || typeof data !== 'object' || massFrozenData.has(data)) return;
+  for (const value of Object.values(data)) yield* freezeDataSteps(value);
+  freezeData(data); yield;
+}
 export function freezeData<T>(data: T): Readonly<T> {
   if (data && typeof data === 'object') {
     if(massFrozenData.has(data))return data;

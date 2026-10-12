@@ -221,6 +221,12 @@ export class MassNativeCountry {
         ...(kind==='massif'&&row.rockMouth&&rng.chance(s.rockEntranceChance)?{rockEntrance:true}:{})}}});
   }
   at(at:MassAddress):readonly NativeFeaturePlacement[]{return this.near(at,0);}
+  *prepareSteps(at: MassAddress): Generator<void, void> {
+    const q = latticeAt(at, this.generator.spec.addressSpan, this.spec.spacing);
+    for (let y=-1;y<=1;y++) for (let x=-1;x<=1;x++) {
+      this.candidate(at.dimension,q.gx+BigInt(x),q.gy+BigInt(y)); yield;
+    }
+  }
   private neighborhood(dimension:string,gx:bigint,gy:bigint):readonly Candidate[]{
     const key=JSON.stringify([dimension,gx.toString(),gy.toString()]);
     const hit=this.neighborhoods.get(key);

@@ -91,6 +91,8 @@ export function generateRegionalDiscoveries(plan: Readonly<MassLandformPlan>, po
  * admission must not consult it: that would make terrain depend on its children. */
 export class MassRegionalDiscoveries {
   private cache = new Map<string, readonly RegionalDiscoveryPlace[]>();
+  openingCache() { return { cache: [...this.cache] }; }
+  adoptOpeningCache(cache: ReturnType<this['openingCache']>): void { this.cache.clear(); for (const [key, value] of cache.cache) this.cache.set(key, freezeData(value)); }
   constructor(private readonly generator: MassGenerator) {}
   forPlan(plan: Readonly<MassLandformPlan>): readonly RegionalDiscoveryPlace[] {
     const hit = this.cache.get(plan.id); if (hit) return hit;

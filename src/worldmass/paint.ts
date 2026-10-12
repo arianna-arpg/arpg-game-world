@@ -1,3 +1,4 @@
+import { cooperativePreparation, type PreparationControl } from '../loading/cooperative';
 import { WATER_SURFACE, ordinaryWater } from '../data/waterSurface';
 import { paintWaterSurface } from '../render/vis/waterSurface';
 import { cellKey, localOffset, neighborCell, type MassCell } from './address';
@@ -85,11 +86,31 @@ export class MassPainter {
     value.checkedRevision = mass.stream.revision;
     return true;
   }
-  draw(ctx: CanvasRenderingContext2D, mass: WorldMassRuntime, x: number, y: number, w: number, h: number): void {
+  /** Complete the first visible floor in bounded rows while the crossing owns
+   * the screen. Live drawing still refuses partial terrain. */
+  async prepareOpening(mass: WorldMassRuntime, x: number, y: number, w: number, h: number, control: PreparationControl): Promise<void> {
+    await cooperativePreparation(this.openingSteps(mass, x, y, w, h), control);
+  }
+  private *openingSteps(mass: WorldMassRuntime, x: number, y: number, w: number, h: number): Generator<void, void> {
+    this.bindRuntime(mass);
+    const span = mass.config.terrain.addressSpan;
+    for (let cy = Math.floor(y/span); cy <= Math.floor((y+h)/span); cy++) for (let cx = Math.floor(x/span); cx <= Math.floor((x+w)/span); cx++) {
+      const cell = mass.walk.at(cx*span, cy*span), key = cellKey(cell), old = this.baked.get(key);
+      if (old && this.current(mass, cell, old)) continue;
+      const canvas = yield* this.bakeSteps(mass, cell);
+      this.pending.delete(key);
+      this.baked.set(key, { canvas, revision: this.revision(mass, cell), checkedRevision: mass.stream.revision });
+      while (this.baked.size > mass.stream.config.maxPages) this.baked.delete(this.baked.keys().next().value!);
+    }
+  }
+  private bindRuntime(mass: WorldMassRuntime): void {
     if (this.runtime !== mass) {
       this.runtime = mass; this.baked.clear(); this.pending.clear();
       this.ground = new MassGround(mass.config.ground, mass.generator.run.seed, mass.config.terrain.addressSpan);
     }
+  }
+  draw(ctx: CanvasRenderingContext2D, mass: WorldMassRuntime, x: number, y: number, w: number, h: number): void {
+    this.bindRuntime(mass);
     const span = mass.config.terrain.addressSpan, visible = new Set<string>();
     let finishedVisible = false;
     const left = Math.floor(x/span), top = Math.floor(y/span), right = Math.floor((x+w)/span), bottom = Math.floor((y+h)/span);

@@ -64,6 +64,8 @@ export function validateMassPatches(spec: MassSpec): void {
  * No rejected pixels are cleared, and no neighboring acceptance is consulted. */
 export class MassTerrainPatches {
   private readonly cache = new Map<string, Readonly<MassPatchPlan> | null>();
+  openingCache() { return { cache: [...this.cache] }; }
+  adoptOpeningCache(cache: ReturnType<this['openingCache']>): void { this.cache.clear(); for (const [key, value] of cache.cache) this.cache.set(key, freezeData(value)); }
   constructor(private readonly spec: Readonly<MassSpec>, private readonly run: Readonly<MassRun>,
     private readonly baseAt: (at: MassAddress) => MassTerrain,
     private readonly sitesClear: (origin: MassAddress, box: MassPatchBox) => boolean,

@@ -110,6 +110,9 @@ export class MassEcology {
     }
   }
   sync(world: World, cells: readonly MassCell[]): void {
+    for (const _ of this.syncSteps(world, cells)) { /* synchronous live tick */ }
+  }
+  *syncSteps(world: World, cells: readonly MassCell[]): Generator<void, void> {
     const wanted = new Map(cells.map(c => [cellKey(c), c])), present = new Set(world.doodads), remove = new Set<Doodad>();
     const span = this.mass.config.terrain.addressSpan;
     for (const [key, g] of this.resident) {
@@ -132,6 +135,7 @@ export class MassEcology {
       world.doodads = world.doodads.filter(d => !remove.has(d));
     let changed = remove.size > 0;
     for (const [key, cell] of wanted) {
+      yield;
       if (this.resident.has(key))
         continue;
       const pieces: Grove['pieces'] = [], origin = localOffset({ ...cell, x: 0, y: 0 }, { ...this.mass.origin, x: 0, y: 0 }, span);

@@ -7,6 +7,8 @@ import { MassFoci, MassObserverIndex, massPlayerFoci, massFocusRoundRobin, type 
 import type { Vec2 } from '../core/math';
 import { massTerrainRegions } from './contracts';
 import { reserveMassOpening } from './patchReservations';
+import { isPreparedMassOpening, type PreparedMassOpening } from './openingPreparation';
+import { cooperativePreparation, type PreparationControl } from '../loading/cooperative';
 import { characterPagingAvailable, characterNativePages, commitCharacterNativeCohort, loadCharacterNativePage, forgetCharacterNativePage, resetCharacterNativePages, characterNativeSessionCurrent, characterNativeSessionToken, characterNativePageOrder } from '../meta/character';
 import type { MassResidentResume } from '../meta/characterResume';
 import type { CharacterPageEntry } from '../meta/characterPages';
@@ -202,18 +204,19 @@ export class WorldMassRuntime {
   private places = new Map<string, ReturnType<MassGenerator['placesInCell']>>();
   readonly origin: MassCell;
   readonly resumeTier: number;
-  constructor(seed: number, runId: string, config: MassAdventure = massAdventure(), input?: MassRuntimeRestore) {
+  constructor(seed: number, runId: string, config: MassAdventure = massAdventure(), input?: MassRuntimeRestore, opening?: PreparedMassOpening) {
+    if (opening && (!isPreparedMassOpening(opening, seed, runId) || opening.config !== config)) throw Error('Foreign opening preparation');
     // Consume one detached config: an accessor must not switch terrain after
     // NativeSubstrate admission. All following reads use these saved values.
-    config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
+    config = opening ? freezeData(config) : freezeData(JSON.parse(canonical(config)) as MassAdventure);
     // NativeSubstrate has real streamed terrain, but complete area/population
     // ownership must be installed before it can become a playable adventure.
     if (Object.hasOwn(config.terrain, 'nativeSubstrate')) throw Error('Native substrate requires complete native area and population runtime owners');
     const save=restoreData(input);
-    if (!save) config = reserveMassOpening(seed, runId, config);
+    if (!save && !opening) config = reserveMassOpening(seed, runId, config);
     this.resumeTier = save?.player.tier ?? 0;
     if (!Number.isInteger(this.resumeTier) || this.resumeTier < 0 || this.resumeTier > 6) throw new Error('Invalid worldmass player story');
-    this.config = freezeData(JSON.parse(canonical(config)) as MassAdventure);
+    this.config = opening ? config : freezeData(JSON.parse(canonical(config)) as MassAdventure);
     this.configHash = massDigest(this.config);
     this.births = new MassBirths(this.config.nativeBirthSource, seed);
     if (this.config.territory !== undefined) validateMassTerritory(this.config.territory);
@@ -226,9 +229,10 @@ export class WorldMassRuntime {
     this.puzzles = new MassPuzzles(save?.puzzles, config.puzzleResidency);
     if (config.dormancy) validateMassDormancy(config.dormancy, config.populationRadius);
     this.dormancy = config.dormancy ? new MassDormancy(config.dormancy) : null;
-    this.generator = new MassGenerator(save?.state.run ?? makeMassRun(seed, runId, config.terrain), config.terrain);
+    this.generator = new MassGenerator(save?.state.run ?? opening?.run ?? makeMassRun(seed, runId, config.terrain), config.terrain, opening);
+    if (opening) this.generator.adoptOpeningCache(opening);
     if (config.settlement?.location !== undefined) validateMassOrigin(config.settlement.location, config.terrain);
-    this.origin = Object.freeze(save ? { ...save.origin } : chooseMassOrigin(this.generator, config.settlement?.location).origin);
+    this.origin = Object.freeze(save ? { ...save.origin } : opening ? { ...opening.origin } : chooseMassOrigin(this.generator, config.settlement?.location).origin);
     address(this.origin.dimension, this.origin.cx, this.origin.cy, 0, 0, config.terrain.addressSpan);
     if (!Number.isSafeInteger(config.pageRadius) || config.pageRadius < 1 || config.pageRadius > 4
       || !Number.isSafeInteger(config.samplesPerTick) || config.samplesPerTick < 1 || config.samplesPerTick > 65536
@@ -402,6 +406,12 @@ export class WorldMassRuntime {
     }
   }
   attach(world: World, input?: MassRuntimeRestore, options:{restoreOnly?:boolean}={}): void {
+    for (const _ of this.attachSteps(world, input, options)) { /* synchronous host path */ }
+  }
+  async attachAsync(world: World, input: MassRuntimeRestore | undefined, control: PreparationControl): Promise<void> {
+    await cooperativePreparation(this.attachSteps(world, input, { restoreOnly: true }), control, step => world.withGlobalPolicies(step));
+  }
+  private *attachSteps(world: World, input?: MassRuntimeRestore, options:{restoreOnly?:boolean}={}): Generator<void, void> {
     const save=restoreData(input);
     this.restoring=!!options.restoreOnly;
     this.savedNativeOwners=new Set(save?.nativeFeatures?.born.filter(row=>row.changes.native!==undefined).map(row=>row.placement.id)??[]);
@@ -423,7 +433,7 @@ export class WorldMassRuntime {
       if (save && !save.settlement) throw new Error('Missing native settlement checkpoint');
       this.settlement = new MassSettlement(this.config.settlement, world, this.generator.run.seed, save?.settlement);
       this.walk.overlay = { grid: this.settlement.grid, contains: (x, y) => this.settlement!.contains(x, y) };
-      if (!save) this.settlement.reserve(this.state, this.walk);
+      if (!save) yield* this.settlement.reserveSteps(this.state, this.walk);
       const def = world.zoneMap[MASS_ZONE];
       def.tiers = this.settlement.zone.tiers;
       world.zone = def;
@@ -434,6 +444,7 @@ export class WorldMassRuntime {
       world.rebuildClientTerrain();
       world.actors = world.actors.filter(a => a.team !== 'enemy');
     }
+    yield;
     world.massRuntime = this;
     world.walk = this.walk;
     this.walk.obstacles = { blocked: (x, y) => !!world.pointInSolid(x, y, this.walk.cellSize / 2),
@@ -445,6 +456,7 @@ export class WorldMassRuntime {
       if (this.config.journey.roadside) this.roadside = new MassRoadside(this.config.journey.roadside,
         this.journey, this.settlement, this.generator, this.walk);
     }
+    yield;
     if(this.config.nativeCountry){
       const spec=this.config.nativeCountry;
       this.nativeCountry=new MassNativeCountry(this.generator,spec,(center,radius)=>{
@@ -480,6 +492,7 @@ export class WorldMassRuntime {
         population:()=>this.population,retainRadius:2400,quietSeconds:12,
         ...(this.geography?{zoneOwner:(pos:{x:number;y:number})=>this.geography!.hierarchy.at(this.walk.at(pos.x,pos.y)).zone.id}:{})},save?.nativeFeatures);
     }
+    yield;
     if(this.config.wildernessPaths){
       const inFrame=(at:import('./address').MassAddress)=>Math.abs(Number(BigInt(at.cx)-BigInt(this.origin.cx)))<4096&&Math.abs(Number(BigInt(at.cy)-BigInt(this.origin.cy)))<4096;
       this.wildernessPaths=new WildernessPaths(this.config.wildernessPaths,this.generator,(at,radius)=>{
@@ -493,12 +506,13 @@ export class WorldMassRuntime {
         if(!inFrame(p.center))return true;
         const q=localOffset(p.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
         return !(this.settlement?.reserves(q.x,q.y,p.radius)||this.journey?.reserves(q,p.radius)||this.roadside?.reserves(q,p.radius));
-      });
+      }, at => this.nativeCountry?.prepareSteps(at) ?? (function*(){})());
       const wildernessPaths=this.wildernessPaths,previous=this.stream.overlay;
       this.stream.overlay={sample:(at,base)=>previous?.sample(at,this.state.patchAt(at)?base:wildernessPaths.sample(at,base))
         ??(this.state.patchAt(at)?base:wildernessPaths.sample(at,base)),
         revisionAt:cell=>1+(previous?.revisionAt(cell)??0),get revision(){return 1+(previous?.revision??0);}};
     }
+    yield;
     if (this.config.ecology) {
       this.ecology = new MassEcology(this.config.ecology, this);
       this.ecology.restore(save?.ecology, world.time);
@@ -547,6 +561,15 @@ export class WorldMassRuntime {
     this.resumeCurrent=null;this.resumeSignal=undefined;this.restoring=false;
     try{this.update(world,true);}catch(error){this.restoring=true;throw error;}
     this.attached=true;this.nextPopulation=world.time;this.savedNativeOwners.clear();
+  }
+  async finishResumeAsync(world: World, control: PreparationControl): Promise<void> {
+    if (this.disposed || world.massRuntime !== this || world.zone.id !== MASS_ZONE) throw Error('Stale native resume runtime');
+    if (this.attached && !this.restoring) return;
+    if (this.nearNativePages(world, this.resumeReadRadius).length) throw Error('Native resume neighborhood is not ready');
+    this.resumeCurrent = null; this.resumeSignal = undefined; this.restoring = false;
+    try { await cooperativePreparation(this.updateSteps(world, true), control, step => world.withGlobalPolicies(step)); }
+    catch (error) { this.restoring = true; throw error; }
+    this.attached = true; this.nextPopulation = world.time; this.savedNativeOwners.clear();
   }
   private get resumeReadRadius():number{return (this.dormancy?.policy.wakeRadius??0)+this.config.populationRadius;}
   private nativeObservers(world:World):Actor[]{return world.actors.filter(a=>!a.dead&&a.team!=='enemy'&&!world.seats.some(s=>s.keeper&&s.actor===a));}
@@ -805,6 +828,9 @@ export class WorldMassRuntime {
   /** Survived-death wakes retain the run's land and consequences. */
   wake(world: World): void { world.landPartyAt(this.settlement?.spawn ?? { x: 12, y: 12 }); this.nearKey = ''; }
   update(world: World, boot = false, input?:readonly MassFocus[]): void {
+    for (const _ of this.updateSteps(world, boot, input)) { /* synchronous live tick */ }
+  }
+  private *updateSteps(world: World, boot = false, input?:readonly MassFocus[]): Generator<void, void> {
     if (world.zone.id !== MASS_ZONE || this.restoring) return;
     if(this.nativeReadiness(world).status!=='ready')return;
     const foci=input??massPlayerFoci(world,boot);this.explicitMassFoci=input!==undefined;
@@ -817,7 +843,9 @@ export class WorldMassRuntime {
     if(boot||world.time>=this.nextPopulation)this.geography?.restoreResidentOwners(world);
     else this.geography?.restoreProcessions(world);
     this.geography?.prepare(this.walk.at(foci[0].pos.x,foci[0].pos.y),world.time,foci.slice(1).map(f=>this.walk.at(f.pos.x,f.pos.y)));
+    yield;
     this.prepareNativeCountry(world);
+    yield;
     if(this.weather){
       this.weather.setScales(this.weather.time,world.sim.weatherScales(world.devOverlayView()));
       this.weather.advanceTo(Math.max(this.weather.time, world.time));
@@ -831,12 +859,17 @@ export class WorldMassRuntime {
       const wanted=new Set(cells.map(cellKey));
       for (const k of this.places.keys()) if (!wanted.has(k)) this.places.delete(k);
       for (const cell of cells) {
+        if (boot && this.wildernessPaths) yield* this.wildernessPaths.prepareSteps({ ...cell, x: 0, y: 0 });
         const k = cellKey(cell);
         if (!this.places.has(k)) this.places.set(k, this.placesInCell(cell));
+        yield;
       }
       for(const cell of focusCells)this.state.claim('explored',cellKey(cell));
     }
-    if(world.massRenderPages)this.stream.step(boot ? this.stream.cols ** 2 * 9 : this.config.samplesPerTick);
+    if(world.massRenderPages) {
+      let remaining = boot ? this.stream.cols ** 2 * 9 : this.config.samplesPerTick;
+      while (remaining > 0) { const batch = boot ? Math.min(32, remaining) : remaining; this.stream.step(batch); remaining -= batch; yield; }
+    }
     for (const [id, actor] of this.natives) if (actor.dead) {
       this.state.claim('fallen', id); this.natives.delete(id);
     }
@@ -859,6 +892,7 @@ export class WorldMassRuntime {
       if(!this.attached)this.nativeFeatures.sync(born.filter(p=>this.savedNativeOwners.has(p.id)),this.nativeHost);
       this.nativeFeatures.sync([...wanted.values()],this.nativeHost);
     }
+    yield;
     this.fields.sync(world);
     this.shrines.sync(world);
     this.puzzles.sync(world);
@@ -896,13 +930,16 @@ export class WorldMassRuntime {
       const cell = this.walk.at(actor.pos.x, actor.pos.y); sceneryCells.set(cellKey(cell), cell);
     }
     for (const cell of this.ecology?.pendingFellingCells() ?? []) sceneryCells.set(cellKey(cell), cell);
-    this.ecology?.sync(world, [...sceneryCells.values()]);
+    yield;
+    if (this.ecology) yield* this.ecology.syncSteps(world, [...sceneryCells.values()]);
+    yield;
     for(const f of foci)this.survey.observe(this.walk.at(f.pos.x,f.pos.y),target=>world.lineOfSight(f.pos,
       localOffset(target,{...this.origin,x:0,y:0},this.config.terrain.addressSpan),f.tier));
     this.geography?.sync(world);
     for(const f of foci)this.sites.discover(f.pos);
     const seen = new Set<string>();
     for (const p of this.massFoci.order([...this.places.values()].flat(),p=>localOffset(p.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan),p=>p.id)) {
+      yield;
       if (seen.has(p.id)) continue; seen.add(p.id);
       const q = localOffset(p.center, { ...this.origin, x: 0, y: 0 }, this.config.terrain.addressSpan);
       if (!q || (this.settlement ? this.settlement.reserves(q.x, q.y, p.radius)

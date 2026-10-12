@@ -108,6 +108,10 @@ app.whenReady().then(async () => {
    const result = await run(async kind => {
     const before = __game.world(), tasks = [];
     const observer = new PerformanceObserver(list => { for (const e of list.getEntries()) tasks.push({ at: performance.timeOrigin + e.startTime, duration: e.duration }); });
+    let closedAt=0;
+    const frame=document.getElementById('mu-loading-frame');
+    const visibility=new MutationObserver(()=>{if(frame.style.display==='none')closedAt=Date.now()});
+    visibility.observe(frame,{attributes:true,attributeFilter:['style']});
     observer.observe({ type: 'longtask' }); const start = Date.now();
     try {
      if (kind === 'entry') await __game.devStartLoadingRun();
@@ -119,9 +123,10 @@ app.whenReady().then(async () => {
      }
      for (let i = 0; __game.loading.active && i < 1200; i++) await new Promise(r => setTimeout(r, 25));
      await new Promise(r => setTimeout(r, 30));
-     return { start, end: Date.now(), tasks, mass: !!__game.world().massRuntime, active: __game.loading.active,
+     if(!closedAt)throw Error('Missing crossing visibility boundary');
+     return { start, end: closedAt, tasks: tasks.filter(t=>t.at>=start&&t.at+t.duration<=closedAt), mass: !!__game.world().massRuntime, active: __game.loading.active,
       replaced: __game.world() !== before, seed: __game.world().manifest.seed, fatal: __game.crash().fatal };
-    } finally { observer.disconnect(); }
+    } finally { observer.disconnect(); visibility.disconnect(); }
    }, kind);
    const live = await toy(() => __qaLive);
    assert.equal(result.mass, true); assert.equal(result.active, false); assert.equal(result.fatal, null); assert.equal(result.replaced, true);

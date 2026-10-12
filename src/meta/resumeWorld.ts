@@ -43,6 +43,7 @@ export async function prepareCharacterWorld(account: Account, resume: CharacterR
     discarded = true; candidate.massRuntime?.dispose(); rollback();
   };
   try {
+    let restoreMass: { seed: number; mass: Parameters<World['startWorldMassAsync']>[2]; ws: Pick<import('./worldstate').WorldStateSave, 'massSideareas' | 'player'> } | undefined;
     candidate.withGlobalPolicies(() => {
       candidate.createPlayer(cls, { ...options.roster, startingCompanions: false, startingFlasks: false });
       if (!applyCharacterResumeFields(candidate, resume)) throw Error('The saved character could not be restored');
@@ -60,19 +61,24 @@ export async function prepareCharacterWorld(account: Account, resume: CharacterR
       const mass = resume.kind === 'browser-native-pages' ? resume.mass : resume.save.world?.worldmass;
       if (mass) {
         const definition = 'definition' in mass ? mass.definition : mass;
-        candidate.startWorldMass(definition.state.run.seed, mass, { restoreOnly: true });
-        if (!candidate.restoreMassSideareas(ws.massSideareas, true)) candidate.resumeSpawn('exact', ws.player);
+        restoreMass = { seed: definition.state.run.seed, mass, ws };
       } else {
         candidate.reconcileSoulrivers(); candidate.reconcileSeaPorts(); candidate.reconcileWebLaws();
         candidate.resumeSpawn(options.spawn, ws.player);
       }
     });
+    if (restoreMass) {
+      await candidate.startWorldMassAsync({ isCurrent: current, signal: options.signal }, restoreMass.seed, restoreMass.mass);
+      const ws = restoreMass.ws;
+      candidate.withGlobalPolicies(() => { if (!candidate.restoreMassSideareas(ws.massSideareas, true)) candidate.resumeSpawn('exact', ws.player); });
+    }
     if (options.loadingStage) await options.loadingStage('Recalling nearby world pages');
     if (!current()) throw Error('Continue was superseded');
     // An active cave owns the player pose now. Its surface page claims remain
     // bound, but surface hydration waits for the actual mouth return.
     if (candidate.massRuntime) await candidate.massRuntime.prepareResumeNeighborhood(candidate,
       { isCurrent: current, signal: options.signal });
+    if (candidate.massRuntime) await candidate.massRuntime.finishResumeAsync(candidate, { isCurrent: current, signal: options.signal });
     if (!current() || !await characterResumeCurrent(resume) || !current()) throw Error('Continue was superseded');
     return { world: candidate, discard, publish: () => {
       if (discarded || published || !current()) throw Error('Continue was superseded');

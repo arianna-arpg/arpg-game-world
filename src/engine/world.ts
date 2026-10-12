@@ -570,6 +570,8 @@ import { sceneBootThrong, sceneThrongSources, sceneMintThrongPocket, sceneMintTh
 
 import { settlementArmVendorStock, settlementRestockOrdinal, settlementRestockSeconds, settlementSyncHoldIdx, settlementResolveCommission, settlementOverlayHold, settlementBuildVendorStock, settlementVendorEntryAllowed, settlementCurateVendorStock, settlementCommissionOdds, settlementMintCommissionEntry, settlementVendorMemoryCeiling, settlementVendorGemLevel, settlementVendorStockPolicy, settlementVendorGemsOpen, settlementVendorSize, settlementRollSupportDropGated, settlementRollSkillGem, settlementWaresBonus, settlementVendorQualityPieces, settlementCarriedGemIds, settlementSkillDropPool, settlementGemWeights, settlementSupportDropPool, settlementPickGem, settlementArmLastlightRecruiter, settlementTownSeat, settlementMercSheetFor, settlementDealTemplateOffers, type NativeSettlementHost } from './nativeSettlementServices';
 
+import { prepareMassOpening } from '../worldmass/openingPreparation';
+import { checkPreparation, type PreparationControl } from '../loading/cooperative';
 import { prepareNativeAreaBoundaries, type NativeAreaBoundaryHost } from './nativeAreaBoundaries';
 import {generateNativeAreaLayout,nativeZoneMemoryFresh,nativeCrusadeFixtureSpecs,type NativeLayoutGenerationHost} from './nativeLayoutGeneration';
 
@@ -3836,6 +3838,23 @@ export class World {
       if (this.massRuntime === runtime) this.massRuntime = null;
       throw error;
     }
+    if (!runtime.settlement) { this.grounds = []; this.bridges = []; }
+  }
+  async startWorldMassAsync(control: PreparationControl, seed = rollSeed(), save?: import('../worldmass/runtime').MassRuntimeRestore): Promise<void> {
+    const definition = save && ('definition' in save ? save.definition : save);
+    const opening = await prepareMassOpening({ seed, runId: 'expedition:' + seed,
+      ...(definition ? { config: definition.config, origin: definition.origin, position: definition.player } : {}) }, control);
+    checkPreparation(control);
+    const runtime = new WorldMassRuntime(seed, opening.runId, opening.config, save, opening);
+    checkPreparation(control);
+    this.massAway = null;
+    if (!save) { this.massSideareaRoots.clear(); this.massCaveIds.clear(); }
+    this.massRuntime?.dispose(); this.massRuntime = null;
+    try {
+      await runtime.attachAsync(this, save, control);
+      if (!save) await runtime.finishResumeAsync(this, control);
+    }
+    catch (error) { runtime.dispose(); if (this.massRuntime === runtime) this.massRuntime = null; throw error; }
     if (!runtime.settlement) { this.grounds = []; this.bridges = []; }
   }
   /** The continuous surface remains an expedition owner while a native pocket

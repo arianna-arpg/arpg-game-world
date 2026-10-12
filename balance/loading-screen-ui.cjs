@@ -196,7 +196,7 @@ app.whenReady().then(async () => {
    const wake = document.querySelector('#mu-wake'); if (!wake) throw Error('Mu vessel card did not open');
    wake.click(); await Promise.resolve();
    const first = __game.loading.snapshot;
-   for (let i = 0; __game.loading.active && i < 200; i++) await new Promise(r => setTimeout(r, 25));
+   for (let i = 0; __game.loading.active && i < 4800; i++) await new Promise(r => setTimeout(r, 25));
    const w = __game.world(); w.player.invulnerable = true;
    return { first, active: __game.loading.active, mass: !!w.massRuntime, fatal: __game.crash().fatal };
   });
@@ -262,7 +262,7 @@ app.whenReady().then(async () => {
    const before = window.__beforeContinue;
    if (__game.world() !== before || __game.loading.active) throw Error('Cancelled Continue published');
    document.getElementById('sm-continue').click(); const first = __game.loading.snapshot;
-   for (let i = 0; __game.loading.active && i < 400; i++) await new Promise(r => setTimeout(r, 25));
+   for (let i = 0; __game.loading.active && i < 4800; i++) await new Promise(r => setTimeout(r, 25));
    return { first, active: __game.loading.active, replaced: __game.world() !== before, mass: !!__game.world().massRuntime, fatal: __game.crash().fatal, notice: document.getElementById('start-menu')?.innerText };
   });
   report.checks.push({ continueResult: resumed });

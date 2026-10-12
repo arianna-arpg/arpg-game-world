@@ -32,23 +32,28 @@ export class WildernessPaths {
   private cache=new Map<string,readonly WildernessPath[]>();
   constructor(readonly spec:WildernessPathsSpec,private generator:MassGenerator,
     private blocked:(at:MassAddress,radius:number)=>boolean,
-    private admitted:(place:MassPlace)=>boolean=()=>true){validateWildernessPaths(spec,generator);}
+    private admitted:(place:MassPlace)=>boolean=()=>true,
+    private prepareAdmission?:(at:MassAddress)=>Generator<void,void>){validateWildernessPaths(spec,generator);}
   at(at:MassAddress):readonly WildernessPath[]{
+    const steps = this.prepareSteps(at); let next = steps.next(); while (!next.done) next = steps.next(); return next.value;
+  }
+  *prepareSteps(at:MassAddress):Generator<void,readonly WildernessPath[]>{
     const span=this.generator.spec.addressSpan,n=BigInt(this.spec.district/span);
     const cx=floorDiv(BigInt(at.cx),n)*n,cy=floorDiv(BigInt(at.cy),n)*n;
     const origin=address(at.dimension,cx.toString(),cy.toString(),0,0,span),key=canonical([at.dimension,cx.toString(),cy.toString()]);
     const hit=this.cache.get(key);if(hit){this.cache.delete(key);this.cache.set(key,hit);return hit;}
     // At the signed-address rim the incomplete district intentionally has no links.
     let result:readonly WildernessPath[]=[];
-    try{moveAddress(origin,{x:this.spec.district,y:this.spec.district},span);result=this.plan(origin,key);}
+    try{moveAddress(origin,{x:this.spec.district,y:this.spec.district},span);result=yield* this.planSteps(origin,key);}
     catch(e){if(!(e instanceof RangeError))throw e;}
     this.cache.set(key,result);if(this.cache.size>32)this.cache.delete(this.cache.keys().next().value!);
     return result;
   }
-  private plan(origin:MassAddress,key:string):readonly WildernessPath[]{
+  private *planSteps(origin:MassAddress,key:string):Generator<void,readonly WildernessPath[]>{
     const {district,width}=this.spec,span=this.generator.spec.addressSpan,rng=massRandom(this.generator.run.seed,[this.spec.source,key]);
     if(!rng.chance(this.spec.chance))return [];
-    const found=new Map(this.generator.wildernessSites(origin,district).map(p=>[p.id,p]));
+    const found=new Map((yield* this.generator.wildernessSiteSteps(origin,district)).map(p=>[p.id,p]));
+    if (this.prepareAdmission) for (const p of found.values()) yield* this.prepareAdmission(p.center);
     const sites=[...found.values()].filter(p=>{
       if(!this.spec.destinations.some(d=>d.content===p.content)||!this.admitted(p))return false;
       const q=localOffset(p.center,origin,span);
@@ -74,41 +79,48 @@ export class WildernessPaths {
     // Deterministic short detours are bounded even in impassable country. Failed
     // edges do not leave half-roads ending at a lake or a generated wall.
     for(const {a,b,d} of pairs.slice(0,12)){
+      yield;
       if(paths.length===2)break;
       if((degree.get(a.id)??0)>=2||(degree.get(b.id)??0)>=2)continue;
       const start=entry(a),end=entry(b);
       const outside=(p:MassPlace,e:Vec2)=>{const q=localOffset(p.center,origin,span),dx=e.x-q.x,dy=e.y-q.y,n=Math.hypot(dx,dy);return {x:q.x+dx/n*(p.radius+clearance+cs),y:q.y+dy/n*(p.radius+clearance+cs)};};
       const outA=outside(a,start),outB=outside(b,end),side={x:-(end.y-start.y)/d,y:(end.x-start.x)/d};
-      const edgeClear=(u:Vec2,v:Vec2,peers:MassPlace[])=>{
+      const edgeClear=function*(u:Vec2,v:Vec2,peers:MassPlace[]):Generator<void,boolean>{
         const centers=peers.map(p=>({q:localOffset(p.center,origin,span),r:p.radius}));
-        for(let y=Math.floor((Math.min(u.y,v.y)-clearance)/cs)*cs+cs/2;y<=Math.max(u.y,v.y)+clearance;y+=cs)
+        for(let y=Math.floor((Math.min(u.y,v.y)-clearance)/cs)*cs+cs/2;y<=Math.max(u.y,v.y)+clearance;y+=cs) {
+          yield;
           for(let x=Math.floor((Math.min(u.x,v.x)-clearance)/cs)*cs+cs/2;x<=Math.max(u.x,v.x)+clearance;x+=cs)
             if(segmentDistance({x,y},u,v)<=clearance&&(centers.some(p=>Math.hypot(p.q.x-x,p.q.y-y)<p.r)||!clear(x,y,a,b)))return false;
+        }
         return true;
       };
-      if(!edgeClear(start,outA,[b])||!edgeClear(outB,end,[a]))continue;
+      if(!(yield* edgeClear(start,outA,[b]))||!(yield* edgeClear(outB,end,[a])))continue;
       let link:Vec2[]|undefined;
       const candidates=[...([180,-420,780,-1200] as const).map(bend=>[outA,{x:(outA.x+outB.x)/2+side.x*bend,y:(outA.y+outB.y)/2+side.y*bend},outB]),
         [outA,{x:outA.x,y:outB.y},outB],[outA,{x:outB.x,y:outA.y},outB]];
-      for(const candidate of candidates)if(candidate.slice(1).every((p,i)=>edgeClear(candidate[i],p,[a,b]))){link=candidate;break;}
+      for(const candidate of candidates) {
+        let valid = true;
+        for (let i = 1; i < candidate.length; i++) if (!(yield* edgeClear(candidate[i-1],candidate[i],[a,b]))) { valid = false; break; }
+        if (valid) { link = candidate; break; }
+      }
       if(!link){
         // Bounded geographic detour search. Every accepted edge proves the full
         // raster ribbon, including diagonals; no corner cutting or water fill.
         const step=240,first={x:Math.round(outA.x/step)*step,y:Math.round(outA.y/step)*step};
-        if(edgeClear(outA,first,[a,b])){
+        if(yield* edgeClear(outA,first,[a,b])){
           type Node={p:Vec2;g:number;f:number;parent?:Node};
           const keyOf=(p:Vec2)=>p.x+','+p.y,dist=(p:Vec2)=>Math.hypot(p.x-outB.x,p.y-outB.y);
           const queue:Node[]=[{p:first,g:0,f:dist(first)}],best=new Map([[keyOf(first),0]]);
           for(let visits=0;queue.length&&visits<256;visits++){
             queue.sort((u,v)=>u.f-v.f||u.p.y-v.p.y||u.p.x-v.p.x);const node=queue.shift()!;
             if(node.g!==best.get(keyOf(node.p)))continue;
-            if(dist(node.p)<=step*2&&edgeClear(node.p,outB,[a,b])){
+            if(dist(node.p)<=step*2&&(yield* edgeClear(node.p,outB,[a,b]))){
               const reverse:Vec2[]=[];for(let n:Node|undefined=node;n;n=n.parent)reverse.push(n.p);
               link=[outA,...reverse.reverse(),outB];break;
             }
             for(const [dx,dy] of [[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]){
               const p={x:node.p.x+dx*step,y:node.p.y+dy*step},g=node.g+Math.hypot(dx,dy)*step;
-              if(g>= (best.get(keyOf(p))??Infinity)||g+dist(p)>d*1.8+1200||!edgeClear(node.p,p,[a,b]))continue;
+              if(g>= (best.get(keyOf(p))??Infinity)||g+dist(p)>d*1.8+1200||!(yield* edgeClear(node.p,p,[a,b])))continue;
               best.set(keyOf(p),g);queue.push({p,g,f:g+dist(p),parent:node});
             }
           }
@@ -117,7 +129,7 @@ export class WildernessPaths {
       if(!link)continue;
       // Remove grid stair-steps only after re-proving each shortcut's ribbon.
       const smooth=[link[0]];
-      for(let i=0;i<link.length-1;){let next=link.length-1;while(next>i+1&&!edgeClear(link[i],link[next],[a,b]))next--;smooth.push(link[next]);i=next;}
+      for(let i=0;i<link.length-1;){let next=link.length-1;while(next>i+1&&!(yield* edgeClear(link[i],link[next],[a,b])))next--;smooth.push(link[next]);i=next;}
       paths.push({id:canonical([this.generator.run.runId,this.spec.source,a.id,b.id]),origin,from:a,to:b,points:[start,...smooth,end],width});
       degree.set(a.id,(degree.get(a.id)??0)+1);degree.set(b.id,(degree.get(b.id)??0)+1);
     }

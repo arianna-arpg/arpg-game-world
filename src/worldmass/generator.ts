@@ -1,3 +1,4 @@
+import { isPreparedMassOpening, type PreparedMassOpening } from './openingPreparation';
 import { MassNativeRegional, validateNativeRegional } from './nativeRegional';
 import { MassRegionalDiscoveries, validateRegionalDiscoveries } from './regionalDiscoveries';
 import { MassLandforms, validateMassLandforms } from './landforms';
@@ -90,10 +91,11 @@ export class MassGenerator {
   private readonly candidates = new Map<string, MassPlace | null>();
   private readonly decisions = new Map<string, boolean>();
   private readonly placePages = new Map<string, readonly MassPlace[]>();
-  constructor(run: MassRun, spec: MassSpec) {
-    const expected = makeMassRun(run.seed, run.runId, spec);
+  constructor(run: MassRun, spec: MassSpec, opening?: PreparedMassOpening) {
+    if (opening && (!isPreparedMassOpening(opening, run.seed, run.runId) || opening.config.terrain !== spec)) throw Error('Foreign terrain preparation');
+    const expected = opening ? opening.run : makeMassRun(run.seed, run.runId, spec);
     if (canonical(run) !== canonical(expected)) throw new Error('World generator/content manifest mismatch');
-    this.spec = freezeData(JSON.parse(canonical(spec)) as MassSpec);
+    this.spec = opening ? freezeData(spec) : freezeData(JSON.parse(canonical(spec)) as MassSpec);
     this.run = freezeData({ ...run });
     this.nativeSubstrate = Object.hasOwn(this.spec, 'nativeSubstrate') ? new MassNativeSubstrate(this.run, this.spec) : null;
     this.surfaces = [...this.spec.surfaces].sort((a, b) => b.priority - a.priority || compare(a.id, b.id));
@@ -112,6 +114,19 @@ export class MassGenerator {
           Math.hypot(box.maxX-box.minX,box.maxY-box.minY)/2),
       this.nativeSubstrate ? (origin, size) => this.nativeSubstrate!.supportsPatchCell(origin, size) : undefined) : null;
   }
+  openingCache() { return { candidates: [...this.candidates], decisions: [...this.decisions], pages: [...this.placePages],
+    native: this.nativeRegional?.openingCache(), landforms: this.landforms?.openingCache(), patches: this.patches?.openingCache(), discoveries: this.regionalDiscoveries?.openingCache() }; }
+  adoptOpeningCache(opening: PreparedMassOpening): void {
+    if (!isPreparedMassOpening(opening, this.run.seed, this.run.runId) || opening.config.terrain !== this.spec) throw Error('Foreign terrain cache');
+    const cache = opening.terrainCache;
+    for (const [key, value] of cache.candidates) this.candidates.set(key, freezeData(value));
+    for (const [key, value] of cache.decisions) this.decisions.set(key, value);
+    for (const [key, value] of cache.pages) this.placePages.set(key, freezeData(value));
+    if (cache.native) this.nativeRegional?.adoptOpeningCache(cache.native);
+    if (cache.landforms) this.landforms?.adoptOpeningCache(cache.landforms);
+    if (cache.patches) this.patches?.adoptOpeningCache(cache.patches);
+    if (cache.discoveries) this.regionalDiscoveries?.adoptOpeningCache(cache.discoveries);
+  }
   /** Content consumers include nested owners; terrain admission uses placesInCell alone. */
   regionalPlacesInCell(cell: MassCell): readonly MassPlace[] {
     const ordinary=[...this.placesInCell(cell),...(this.nativeRegional?.inCell(cell)??[])];
@@ -120,6 +135,9 @@ export class MassGenerator {
   /** WildernessPaths query accepted site footprints once per bounded district;
    * population anchors cannot obstruct a path and need not be enumerated. */
   wildernessSites(origin:MassAddress,size:number):readonly MassPlace[]{
+    const steps = this.wildernessSiteSteps(origin, size); let next = steps.next(); while (!next.done) next = steps.next(); return next.value;
+  }
+  *wildernessSiteSteps(origin:MassAddress,size:number):Generator<void,readonly MassPlace[]>{
     if(!Number.isSafeInteger(size)||size<1||size>9600)throw Error('Invalid wildernessSites query');
     const span=this.spec.addressSpan,result:MassPlace[]=[];
     for(const recipe of this.spec.places){
@@ -128,6 +146,7 @@ export class MassGenerator {
       const hi=latticeAt(moveAddress(origin,{x:size+recipe.radius,y:size+recipe.radius},span),span,recipe.period);
       if((hi.gx-lo.gx+1n)*(hi.gy-lo.gy+1n)>4096n)throw Error('WildernessPaths site budget exceeded');
       for(let gy=lo.gy;gy<=hi.gy;gy++)for(let gx=lo.gx;gx<=hi.gx;gx++){
+        yield;
         const p=this.candidate(recipe,origin.dimension,gx,gy);if(!p||!this.accepted(p,recipe))continue;
         const q=localOffset(p.center,origin,span,64);
         if(Math.hypot(Math.max(0,-q.x,q.x-size),Math.max(0,-q.y,q.y-size))<=p.radius)result.push(p);
