@@ -1,3 +1,6 @@
+import * as menuCore from '../engine/nativeSceneMenuQueries';
+import type {NativeSceneMenuHost} from '../engine/nativeSceneMenuHost';
+import {isNativeAreaMenuQuery,nativeAreaMenuSeatArgument,type NativeAreaMenuQuery,type NativeAreaMenuQueryMethods} from './nativeAreaMenuQueries';
 import * as viewCore from '../engine/nativeSceneViewQueries';
 import type {NativeSceneViewHost} from '../engine/nativeSceneViewHost';
 import {isNativeAreaViewQuery,nativeAreaViewActorArgument,type NativeAreaViewQuery,type NativeAreaViewQueryMethods} from './nativeAreaViewQueries';
@@ -69,7 +72,7 @@ export interface NativeAreaCombatServices {readonly ai:NativeAreaSceneAI;readonl
 type TransferredBuff=Parameters<World['treeBuffSources']['get']>[0];
 interface ActorControllerPacket {source:NativeAreaSceneCombat;bond:unknown;grants:unknown;clocks:unknown;buffs:[TransferredBuff,NonNullable<ReturnType<World['treeBuffSources']['get']>>][];strike:ReturnType<World['strikeReleaseBodies']['get']>}
 const controllerTransfers=new WeakMap<object,WeakMap<Actor,ActorControllerPacket>>();
-type Host=NativeSceneViewHost&NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
+type Host=NativeSceneMenuHost&NativeSceneViewHost&NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
 type Binding<T>={get:()=>T;set?:(value:T)=>void};type Bindings={[K in keyof Host]:Binding<Host[K]>};
 function field<O extends object,K extends keyof O>(owner:()=>O,key:K):Binding<O[K]>{return {get:()=>owner()[key],set:value=>{owner()[key]=value;}};}
 function method<O extends object,K extends keyof O>(owner:()=>O,key:K):{get:()=>O[K]}{return {get:()=>{const receiver=owner(),fn=receiver[key];return typeof fn==='function'?((...args:unknown[])=>Reflect.apply(fn,receiver,args)) as O[K]:fn;}};}
@@ -95,7 +98,7 @@ export class NativeAreaSceneCombat {
  readonly summonPreparation:NativeAreaSceneSummonPreparation;
  readonly #publishedArea:Function;
  readonly ai:NativeAreaSceneAI;
- readonly #operation:NativeAreaCombatOperation;readonly #host:Host;readonly #viewHost:NativeSceneViewHost;
+ readonly #operation:NativeAreaCombatOperation;readonly #host:Host;readonly #viewHost:NativeSceneViewHost;readonly #menuHost:NativeSceneMenuHost;
  readonly #activationReady:()=>boolean;
  readonly #frameCallbacks:Pick<Host,'collectDeedDot'|'doodadEffects'|'incursionEvents'>;
  readonly #populationHost:NativeSceneServiceHost;
@@ -112,6 +115,14 @@ export class NativeAreaSceneCombat {
   const present=()=>{const roster=Reflect.apply(exactPhysicalSeats,this.input.authority,[this.scene]);return seats.every(row=>roster.includes(row.seat)&&presentationData(row.seat,'actor')===row.actor);};
   if(!present())throw Error('Native view query needs its actual physical seat');
   return this.#operation.enter({permission:'proc',physical,sources:[]},()=>{const fn=this.#viewHost[key],physicalSeats=present(),published=Reflect.apply(this.#publishedArea,this.input.coordinator,[]),attending=physical.every(body=>Reflect.apply(exactActorAttendance,this.input.authority,[this.scene,body]));if(!physicalSeats||published.combat!==this||!attending||presentationData(this.input.characterWriter,'localSeat')!==seat||seats.some(row=>presentationData(row.seat,'actor')!==row.actor))throw Error('Native view presentation changed during admission');return Reflect.apply(fn,this.#viewHost,args) as ReturnType<NativeAreaViewQueryMethods[K]>;});
+ }
+ /** Menu reads preserve actual physical seat records and the selected native owner. */
+ queryMenu<K extends NativeAreaMenuQuery>(key:K,...args:Parameters<NativeAreaMenuQueryMethods[K]>):ReturnType<NativeAreaMenuQueryMethods[K]> {
+  if(!isNativeAreaMenuQuery(key)||!this.isPresentationArea())throw Error('Native menu query needs its actual published physical area');
+  const local=presentationData(this.input.characterWriter,'localSeat') as Seat,actor=presentationData(local,'actor') as Actor;
+  const seatIndex=nativeAreaMenuSeatArgument(key),selected=seatIndex===undefined||args[seatIndex]===undefined?local:args[seatIndex] as Seat,body=presentationData(selected,'actor') as Actor;
+  const present=()=>{const roster=Reflect.apply(exactPhysicalSeats,this.input.authority,[this.scene]);return roster.includes(local)&&roster.includes(selected);};if(!present())throw Error('Native menu query needs its actual physical seat');
+  return this.#operation.enter({permission:'proc',physical:[actor,body],sources:[]},()=>{const fn=this.#menuHost[key],physicalSeats=present(),published=Reflect.apply(this.#publishedArea,this.input.coordinator,[]),attending=[actor,body].every(selectedBody=>Reflect.apply(exactActorAttendance,this.input.authority,[this.scene,selectedBody]));if(!physicalSeats||published.combat!==this||!attending||presentationData(this.input.characterWriter,'localSeat')!==local||presentationData(local,'actor')!==actor||presentationData(selected,'actor')!==body)throw Error('Native menu presentation changed during admission');return Reflect.apply(fn,this.#menuHost,args) as ReturnType<NativeAreaMenuQueryMethods[K]>;});
  }
  applyInputs(...args:Parameters<World['applyInputs']>):void{this.inputFrame.applyInputs(...args);}
  passInputTime(...args:Parameters<World['passInputTime']>):void{this.inputFrame.passInputTime(...args);}
@@ -162,7 +173,8 @@ export class NativeAreaSceneCombat {
   for(const key of Object.keys(bindings) as (keyof Bindings)[])Object.defineProperty(host,key,{enumerable:true,...bindings[key]});
   const viewDescriptors=Object.getOwnPropertyDescriptors(host);
   viewDescriptors.seats={enumerable:true,get:()=>Reflect.apply(exactPhysicalSeats,authority,[scene])};
-  this.#viewHost=Object.freeze(Object.defineProperties({},viewDescriptors)) as NativeSceneViewHost;
+  const presentationHost=Object.freeze(Object.defineProperties({},viewDescriptors)) as NativeSceneViewHost&NativeSceneMenuHost;
+  this.#viewHost=presentationHost;this.#menuHost=presentationHost;
   Object.freeze(host);for(const key of ['ai','input','runtimeState','services','campaignOwner','combatArena','control','campaignTransitions','campaignFrame','inputFrame',"tethers","restoration","castingPreparation","displacement","combatState","defensePreparation","projectiles","killAftermath","groundFollowUps","summonPreparation"])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
  register(binding:NativeAreaAuthorityBinding<NativeAreaCombatServices>):void{if(binding.scene!==this.scene)throw Error('Native combat registration has foreign scene');for(const key of Object.keys(this.services) as (keyof NativeAreaCombatServices)[])if(binding.services[key]!==this.services[key])throw Error('Native combat registration has mismatched actual owner');this.#operation.bind(binding,[this.ai,this,this.inputFrame,this.input.progression,this.input.assembly.lootController,this.input.assembly.objectiveController,this.campaignOwner,this.combatArena,this.control,this.campaignTransitions,this.campaignFrame,this.tethers,this.restoration,this.castingPreparation,this.displacement,this.combatState,this.defensePreparation,this.projectiles,this.killAftermath,this.groundFollowUps,this.summonPreparation,this.input.assembly.input.ecology]);}
@@ -522,6 +534,37 @@ export class NativeAreaSceneCombat {
  frameEffects(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameEffects(this.#host,dt));}
  frameLateBodies(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameLateBodies(this.#host,dt));}
  private bindings():Bindings {const {assembly,progression,campaign,quests,watching}=this.input;const bindings={
+  questDefOf:method(()=>this.input.quests,"questDefOf"),
+  questStanding:method(()=>this.input.quests,"questStanding"),
+  questOfferChoices:method(()=>this.input.questInteraction,"questOfferChoices"),
+  questRewardOffers:method(()=>this.input.questInteraction,"questRewardOffers"),
+  vocationMenuOffers:method(()=>this.input.questInteraction,"vocationMenuOffers"),
+  questImbueOffers:method(()=>this.input.questInteraction,"questImbueOffers"),
+  mercTargetLevel:method(()=>this.input.progression,"mercTargetLevel"),
+  bearingOf:method(()=>assembly.input.registry.input.birth,"bearingOf"),
+  completedQuests:{get:()=>this.input.quests.questLedger().completed},
+  boroughArmView:{get:()=> (...args:Parameters<World['boroughArmView']>)=>{this.#operation.assertActiveScope();return menuCore.sceneBoroughArmView(this.#menuHost,...args);}},
+  bountyBoardView:{get:()=> (...args:Parameters<World['bountyBoardView']>)=>{this.#operation.assertActiveScope();return menuCore.sceneBountyBoardView(this.#menuHost,...args);}},
+  canRetireHere:{get:()=> (...args:Parameters<World['canRetireHere']>)=>{this.#operation.assertActiveScope();return menuCore.sceneCanRetireHere(this.#menuHost,...args);}},
+  caravanMenuBands:{get:()=> (...args:Parameters<World['caravanMenuBands']>)=>{this.#operation.assertActiveScope();return menuCore.sceneCaravanMenuBands(this.#menuHost,...args);}},
+  continentAtMap:{get:()=> (...args:Parameters<World['continentAtMap']>)=>{this.#operation.assertActiveScope();return menuCore.sceneContinentAtMap(this.#menuHost,...args);}},
+  dimensionBiomeAtMap:{get:()=> (...args:Parameters<World['dimensionBiomeAtMap']>)=>{this.#operation.assertActiveScope();return menuCore.sceneDimensionBiomeAtMap(this.#menuHost,...args);}},
+  forgeWrits:{get:()=> (...args:Parameters<World['forgeWrits']>)=>{this.#operation.assertActiveScope();return menuCore.sceneForgeWrits(this.#menuHost,...args);}},
+  harborHearsay:{get:()=> (...args:Parameters<World['harborHearsay']>)=>{this.#operation.assertActiveScope();return menuCore.sceneHarborHearsay(this.#menuHost,...args);}},
+  harvestPauseLocked:{get:()=> (...args:Parameters<World['harvestPauseLocked']>)=>{this.#operation.assertActiveScope();return menuCore.sceneHarvestPauseLocked(this.#menuHost,...args);}},
+  holdPanelInfo:{get:()=> (...args:Parameters<World['holdPanelInfo']>)=>{this.#operation.assertActiveScope();return menuCore.sceneHoldPanelInfo(this.#menuHost,...args);}},
+  memoryRecallLesson:{get:()=> (...args:Parameters<World['memoryRecallLesson']>)=>{this.#operation.assertActiveScope();return menuCore.sceneMemoryRecallLesson(this.#menuHost,...args);}},
+  memoryRecallView:{get:()=> (...args:Parameters<World['memoryRecallView']>)=>{this.#operation.assertActiveScope();return menuCore.sceneMemoryRecallView(this.#menuHost,...args);}},
+  mercHireCap:{get:()=> (...args:Parameters<World['mercHireCap']>)=>{this.#operation.assertActiveScope();return menuCore.sceneMercHireCap(this.#menuHost,...args);}},
+  mercHireCost:{get:()=> (...args:Parameters<World['mercHireCost']>)=>{this.#operation.assertActiveScope();return menuCore.sceneMercHireCost(this.#menuHost,...args);}},
+  mercOfferBlocked:{get:()=> (...args:Parameters<World['mercOfferBlocked']>)=>{this.#operation.assertActiveScope();return menuCore.sceneMercOfferBlocked(this.#menuHost,...args);}},
+  mireilleLessonSkills:{get:()=> (...args:Parameters<World['mireilleLessonSkills']>)=>{this.#operation.assertActiveScope();return menuCore.sceneMireilleLessonSkills(this.#menuHost,...args);}},
+  nearAnyVendor:{get:()=> (...args:Parameters<World['nearAnyVendor']>)=>{this.#operation.assertActiveScope();return menuCore.sceneNearAnyVendor(this.#menuHost,...args);}},
+  questLog:{get:()=> (...args:Parameters<World['questLog']>)=>{this.#operation.assertActiveScope();return menuCore.sceneQuestLog(this.#menuHost,...args);}},
+  questHome:{get:()=> (...args:Parameters<World['questHome']>)=>{this.#operation.assertActiveScope();return menuCore.sceneQuestHome(this.#menuHost,...args);}},
+  sailMenuPorts:{get:()=> (...args:Parameters<World['sailMenuPorts']>)=>{this.#operation.assertActiveScope();return menuCore.sceneSailMenuPorts(this.#menuHost,...args);}},
+  seaNameOf:{get:()=> (...args:Parameters<World['seaNameOf']>)=>{this.#operation.assertActiveScope();return menuCore.sceneSeaNameOf(this.#menuHost,...args);}},
+  traceActive:{get:()=> (...args:Parameters<World['traceActive']>)=>{this.#operation.assertActiveScope();return menuCore.sceneTraceActive(this.#menuHost,...args);}},
   radiance:method(()=>assembly.sky,"radiance"),
   sightClipD:method(()=>assembly.input.geometry,"sightClipD"),
   getQuestGiver:method(()=>this.input.quests,"getQuestGiver"),

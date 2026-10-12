@@ -1,13 +1,14 @@
+import {beforeNativeClientMenus as projectClientMenu} from './nativeClientMenuCompositionFixture';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {nativeClientPublicationCompositionArchive as archive} from './nativeClientPublicationCompositionArchive';
-import {beforeNativeClientPublicationComposition as project} from './nativeClientPublicationCompositionFixture';
+import {beforeNativeClientPublicationCompositionOnly as project} from './nativeClientPublicationCompositionFixture';
 import {writeCombatProof} from './probe_nativecombatcycle';
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 const rows=[];let mutations=0,duplicates=0,portable=0,outside=0;
 for(const lane of ['runtime','view'] as const)for(const row of archive.lanes[lane]){
- const source=readFileSync(new URL('../'+row.file,import.meta.url),'utf8').replaceAll('\r\n','\n');
+ const source=projectClientMenu('client',row.file,readFileSync(new URL('../'+row.file,import.meta.url),'utf8')).replaceAll('\r\n','\n');
  assert.equal(hash(source),row.afterHash,'raw combined '+lane+':'+row.file);
  assert.equal(hash(project(lane,row.file,source)),row.beforeHash,'full frozen lane '+lane+':'+row.file);
  for(const variant of [source,source.replaceAll('\n','\r\n'),source.replace(/\n/g,(_match,index)=>index%2?'\r\n':'\n')]){

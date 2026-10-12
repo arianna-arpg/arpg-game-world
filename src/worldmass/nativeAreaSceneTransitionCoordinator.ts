@@ -1,3 +1,5 @@
+import {extendNativeAreaMenuQueries} from './nativeAreaMenuQueries';
+import {extendNativeAreaMenuPublication} from './nativeAreaMenuPublication';
 import {extendNativeAreaViewQueries} from './nativeAreaViewQueries';
 import {extendNativeAreaPublication} from './nativeAreaScenePublication';
 /** Retained-area selection and synchronous physical handoff. Unlike legacy
@@ -214,6 +216,8 @@ export class NativeAreaSceneTransitionCoordinator {
   bindings.set('companionBonds',{get:()=>area().progression.companionBonds});
   extendNativeAreaPublication(bindings,area);
   extendNativeAreaViewQueries(bindings,area);
+  extendNativeAreaMenuPublication(bindings,area);
+  extendNativeAreaMenuQueries(bindings,area);
   field('adoptedZonePending',()=>this.#published!.departure);field('forgetMemoryOnLeave',()=>this.#published!.departure);
   field('caveExitGrace',()=>this.#published!.roads);field('entryFrom',()=>this.#published!.roads);field('caveReturn',()=>this.#published!.roads);field('caveStack',()=>this.#published!.roads);
   bindings.set('inCave',{get:()=>assembly().transition.inCave});field('scene',()=>area().quests.input.state);

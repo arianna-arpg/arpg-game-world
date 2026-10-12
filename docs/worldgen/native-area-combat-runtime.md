@@ -67,3 +67,11 @@ Complete retained runtime, publication and persistence precede the next terrain 
 [Generated quest and event side zones](generated-quest-side-zones.md) records the requested Odyssey and crusade direction: visible owned entrances, player or party instance identity, independent placement, coherent return routes, and publication that keeps unrelated players free of invisible entrances or collision. Map hierarchy and zoom follow the same continuous world.
 
 The phase45 integration rerun passes all four type checks, all nine affected source suites, the combined installation/travel/frame/retirement course, final remote actor validation, lifecycle checks, simulation smoke and the 696-probe census. Generation passes 869 cases across three seeds with four existing warnings. Production build, game boot and launcher boot also pass. These boot courses still exercise the existing client entry; retained main activation remains open.
+
+## Area-owned menu publication
+
+The retained client now publishes 66 actual menu queries, 23 area-owned request slots and three additional local fields. Twenty-two unchanged native bodies read the real quest ledger, memory groups, station anchors, offers and objective state. Explicit Seat arguments in 26 positions require actual roster membership and final physical attendance. A real remote departure during the last roster read remains applied while its stale menu call refuses before foreign metadata is read.
+
+The installed composition exercises A/B/Lastlight/A with populated quest and memory cards, actual bounty and station dwell, one shared frame, three resident AI owners and terminal restoration of all request descriptors. Both historical source lanes retain their original assertions and 23 complete parent reports. Direct UI action routes, character startup composition, late town refolding and cold Continue remain separate work.
+
+The phase46 integration rerun passes all four type configurations, the composed source guards and original menu/view guards, the actual installed menu course, the remote-travel admission course, and the 704-probe census.

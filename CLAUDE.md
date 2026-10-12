@@ -1,3 +1,10 @@
+NativeAreaMenuQueries publishes 66 real menu roots and 23 area-owned request
+slots through the retained client. Preserve actual local/explicit Seat identity,
+final actor attendance, quest/memory/bounty contents and native partial effects.
+Verify nativeareamenu*, nativeclientmenu*, nativemenu*, and their source lanes,
+plus all types and the roster census. Direct actions, fresh-start composition,
+cold Continue and main activation remain separate work.
+
 NativeClientRuntime now installs the actual retained campaign, dispatches native
 input and area AI before one campaign frame, and terminally retires its writer.
 Finite renderer queries and physical publication use actual area owners; held

@@ -64,6 +64,14 @@ export type ProbeRow = ProbeInvocation & (
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: "probe_nativeareamenucards.ts", status: 'green', tier: 'fast', why: "Actual populated journal, memory recall, live skill unlock, mercenary offer and bounty cards across travel." },
+  { probe: "probe_nativeareamenudwell.ts", status: 'green', tier: 'fast', why: "Actual town dwell sets and consumes only the owning area request flag." },
+  { probe: "probe_nativeareamenuqueries.ts", status: 'green', tier: 'fast', why: "Sixty-six actual retained menu roots, twenty-three local request slots and exact Seat ownership." },
+  { probe: "probe_nativeareamenusource.ts", status: 'green', tier: 'fast', why: "Twenty-two original menu bodies and bounded ownership deltas retain historical assertions." },
+  { probe: "probe_nativeclientmenucomposition.ts", status: 'green', tier: 'fast', why: "Real installer, populated menus, A/B/town/A, once-only frame and descriptor retirement together." },
+  { probe: "probe_nativeclientmenucompositionsource.ts", status: 'green', tier: 'fast', why: "Exact installer and menu parent projections preserve both original assertion lanes." },
+  { probe: "probe_nativemenufinalseat.ts", status: 'green', tier: 'fast', why: "Last roster callbacks cannot replace the actual local Seat or controlled actor before a menu read." },
+  { probe: "probe_nativemenupeertravel.ts", status: 'green', tier: 'fast', why: "Actual remote travel at final menu admission remains applied while foreign metadata stays unread." },
   { probe: "probe_nativeareapublication.ts", status: 'green', tier: 'fast', why: "Actual retained raw fields, controllers, A/B/town/A publication and genuine save ownership." },
   { probe: "probe_nativeareapublicationsource.ts", status: 'green', tier: 'fast', why: "Exact finite local publication seams and preserved historical source guards." },
   { probe: "probe_nativeareaviewqueries.ts", status: 'green', tier: 'fast', why: "Actual renderer and menu-adjacent reads across 79 roots with real town anchors and stale-area refusal." },
