@@ -1,3 +1,11 @@
+NativeAreaSceneSummonPreparation shares the committed synchronous-result boundary
+with birth admission. Preserve one public then read, original errors, deferred
+observation after all scopes expire, exact generic callable receivers and native
+partial effects. Verify nativesummonpreparationboundary plus preparation, async,
+birth and installed-source checks and all types. See
+docs/worldgen/native-area-summon-async-boundary.md for tested descriptor limits.
+Full summon insertion, combat, retirement and retained ticking remain open.
+
 NativeAreaSceneBirthAdmission binds ongoing births to private synchronous factory
 receipts and admits eight actual watcher, wave and rescue insertions before their
 next native effects. Preserve exact top-frame authority, selected receivers and

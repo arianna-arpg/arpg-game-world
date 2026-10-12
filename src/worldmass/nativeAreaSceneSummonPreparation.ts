@@ -3,7 +3,7 @@
 import type {World} from '../engine/world';
 import type {Actor} from '../engine/actor';
 import type {SkillInstance} from '../engine/skills';
-import {NativeAreaScenePopulation,type NativeSceneCensus} from './nativeAreaScenePopulation';
+import {NativeAreaScenePopulation,nativeBirthAsyncResult,type NativeSceneCensus} from './nativeAreaScenePopulation';
 import {NativeAreaSceneProgression} from './nativeAreaSceneProgression';
 import type {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
 import {sceneRollSummonType,sceneForwardSummonSockets} from '../engine/nativeSceneSummonPreparation';
@@ -83,13 +83,7 @@ export class NativeAreaSceneSummonPreparation {
   frames.set(population,frame);
   try{
    const result=operation(scope);
-   const then=result&&(result as {then?:unknown}).then;
-   if(typeof then==='function'){
-    // Refuse synchronously. Observe the captured asynchronous result only after
-    // finally expires the frame, without a second then lookup or a live scope.
-    void Promise.resolve().then(()=>then.call(result,()=>{},()=>{})).catch(()=>{});
-    throw Error('Native summon preparation requires a synchronous operation');
-   }
+   if(nativeBirthAsyncResult(result))throw Error('Native summon preparation requires a synchronous operation');
    return result;
   }finally{frame.active=false;frame.bodies.clear();if(previous)frames.set(population,previous);else frames.delete(population);}
  }
