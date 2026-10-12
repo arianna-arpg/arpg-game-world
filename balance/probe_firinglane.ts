@@ -11,11 +11,12 @@ import {mod} from '../src/engine/stats';
 const restore=seedGlobalRandom(73617);
 const rig=(cover=true)=>{
  seedGlobalRandom(73617);
- const w=makeSimWorld('warrior',73617),c=structuredClone(massAdventure());
- delete c.settlement;delete c.journey;delete c.progression;delete c.ecology;
- delete c.terrain.patches;
- c.terrain.fields=[];c.terrain.places=[];c.content=[];c.populationRadius=0;c.startRadius=0;c.maxPopulation=0;
- c.terrain.surfaces=[{id:'floor',source:'qa/lane',priority:0,when:[],region:'ground',biome:'downs',color:'#454b32'}];
+ const w=makeSimWorld('warrior',73617),base=massAdventure();
+ // A fixed flat arena must not inherit new country recipes or their dependencies.
+ const c={theme:base.theme,pageRadius:base.pageRadius,samplesPerTick:base.samplesPerTick,
+  content:[],populationRadius:0,startRadius:0,maxPopulation:0,
+  terrain:{id:'qa-lane',version:1,addressSpan:960,terrainCell:30,fields:[],places:[],
+   surfaces:[{id:'floor',source:'qa/lane',priority:0,when:[],region:'ground',biome:'downs',color:'#454b32'}]}};
  const m=new WorldMassRuntime(42,'lane-inspection',c);m.attach(w);
  w.landPartyAt({x:-4016,y:-4016});m.update(w,true);w.actors=[w.player];w.player.invulnerable=true;
  if(cover)m.state.paint({address:m.walk.at(-3910,-4016),region:'arena_stands',color:'#7a6a4c',cause:'qa/cover'});

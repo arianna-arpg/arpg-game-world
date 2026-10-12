@@ -1,3 +1,5 @@
+import type { Actor } from '../src/engine/actor';
+import { awaitNativeFixtureReady } from './nativeFixtureReady';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -5,7 +7,7 @@ import { updateAI } from '../src/engine/ai';
 import { PROCESSION_CFG } from '../src/data/processions';
 import { SKILLS } from '../src/data/skills';
 import { makeSkillInstance } from '../src/engine/skills';
-import { massDormancyPins, nativeActorQuietRefusal, nativeDormancyRefusal } from '../src/worldmass/dormancy';
+import { MASS_DORMANCY_RETIRE_BUDGET, massDormancyPins, nativeActorQuietRefusal, nativeDormancyRefusal } from '../src/worldmass/dormancy';
 import { Rng } from '../src/core/rng';
 import type { Vec2 } from '../src/core/math';
 import { layTraveledWay, type Doodad } from '../src/engine/levelgen';
@@ -237,14 +239,61 @@ try {
 // Full authority boundary: real production lottery, source, terrain, scene
 // proof and native factories. Only initial arrival/cave travel and timing are
 // controlled here; the browser proves the physical multi-chunk escort.
+// New terrain/dressing can legitimately refuse a previously legal coordinate.
+// Discover a real admitted owner; every rejected road must retain its solid and
+// publish no actors, controllers, chest or painted road. No collision bypass.
+function naturalProcession(w:World,needChest:boolean){
+ // Bounded actual-scene discovery. A route proposal grants no physical authority.
+ const m=w.massRuntime!,g=m.geography!,b=g.caravans;
+ const local=(a:MassAddress)=>localOffset(a,{...m.origin,x:0,y:0},960);
+ let candidate:ReturnType<typeof g.processionPlannedAt>=null;const attempts:{owner:number[];steps:number;admitted:boolean;available:number;required:number;currentPlan:boolean;collisions:{p:Vec2;radius:number;body:Doodad}[];stats:typeof b.warmStats}[]=[];
+ const roadOwners:string[]=[],installRoad=w.installMassProcessionRoad.bind(w);
+ w.installMassProcessionRoad=(owner,...args)=>{roadOwners.push(owner);return installRoad(owner,...args);};
+ const coordinates:[number,number][]=needChest?[[4,-2]]:[]; // the former fixed route is a real blocked-road control
+ for(let r=0;r<=8;r++)for(let y=-r;y<=r;y++)for(let x=-r;x<=r;x++)
+  if(Math.max(Math.abs(x),Math.abs(y))===r&&!(needChest&&x===4&&y===-2))coordinates.push([x,y]);
+ for(const [x,y] of coordinates){
+  if(candidate||attempts.length>=8)break;
+  const at=address('surface','0','0',x*5400+2700,y*5400+2700,960),initial=g.processionPlannedAt(at);if(!initial || needChest&&!initial.chestPosition&&!(x===4&&y===-2))continue;
+  const entry=local(initial.entry);w.landPartyAt({x:entry.x-300,y:entry.y});m.update(w,true);
+  let n=0;
+  for(;n<5000&&!b.processions.actors(initial.owner.id).size;n++){
+   w.time+=.02;m.update(w);b.update(w,0);
+   // Stop when this exact owner has completed its real late-scene refusal.
+   if((b as unknown as {plans:Map<string,{refused?:unknown}>}).plans.get(initial.owner.id)?.refused)break;
+   if(n%100===0){const next=g.processionPlannedAt(at);if(next){const p=local(next.entry);if(Math.hypot(p.x-w.player.pos.x,p.y-w.player.pos.y)>1300)w.landPartyAt({x:p.x-300,y:p.y});}
+    else if(n>=100)break;
+   }
+  }
+  const admitted=b.processions.actors(initial.owner.id).size>0;
+  const collisions:{p:Vec2;radius:number;body:Doodad}[]=[];
+  for(let i=1;i<initial.route.points.length&&!collisions.length;i++){
+   const a=local(initial.route.points[i-1]),z=local(initial.route.points[i]),distance=Math.hypot(z.x-a.x,z.y-a.y),count=Math.ceil(distance/15),radius=Math.hypot(initial.route.corridorRadius,distance/count/2);
+   for(let k=0;k<=count;k++){const p={x:a.x+(z.x-a.x)*k/count,y:a.y+(z.y-a.y)*k/count},body=w.pointInSolid(p.x,p.y,radius);if(body){collisions.push({p,radius,body});break;}}
+  }
+  const evidence={owner:[x,y],steps:n,admitted,available:m.availablePopulation(initial.owner.id),required:1+initial.context.config.puffCap,currentPlan:!!g.processionPlannedAt(at),collisions,stats:b.warmStats};attempts.push(evidence);console.log('NATURAL_ROUTE_ATTEMPT',JSON.stringify(evidence));
+  if(admitted){if(!needChest||initial.chestPosition)candidate=g.processionPlannedAt(at);}
+  else{
+   assert.ok(collisions.length,'refusal must have a real solid crossing the proposed road, not an unexplained admission failure');
+   assert.equal(g.hierarchy.controller(initial.owner.id,'procession-access'),undefined);
+   assert.equal(g.hierarchy.controller(initial.owner.id,'objective:procession'),undefined);
+   assert.ok(!roadOwners.includes(initial.owner.id),'refused proposal cannot paint a road');
+   assert.ok(!w.chests.some(c=>c.massObjectiveOwner===initial.owner.id));assert.equal(b.processions.actors(initial.owner.id).size,0);
+   const blocked=collisions[0];assert.equal(w.pointInSolid(blocked.p.x,blocked.p.y,blocked.radius),blocked.body,'native solid remains after refusal');
+  }
+ }
+ if(needChest)assert.ok(attempts.some(a=>!a.admitted&&a.collisions.length),'course must preserve a real late-scene refusal witness');
+ assert.ok(candidate,'bounded natural route discovery must admit '+JSON.stringify(attempts));
+ assert.ok(roadOwners.includes(candidate.owner.id),'accepted source publishes its native road');
+ w.installMassProcessionRoad=installRoad;
+ return candidate;
+}
+
 const countryUndo=seedGlobalRandom(713);
 try{
  const fresh=(seed:number)=>makeSimWorld('warrior',seed); // native default settlement includes its cellar house
  let w=fresh(713);w.startWorldMass(713);let m=w.massRuntime!,g=m.geography!,binding=g.caravans;
- const location=address('surface','0','0',4*5400+2700,-2*5400+2700,960),candidate=g.processionPlannedAt(location);assert.ok(candidate);
- const local=(at:MassAddress)=>localOffset(at,{...m.origin,x:0,y:0},960),entry=local(candidate.entry);w.landPartyAt({x:entry.x-300,y:entry.y});m.update(w,true);
- for(let n=0;n<5000&&!binding.processions.actors(candidate.owner.id).size;n++){w.time+=.02;m.update(w);binding.update(w,0);if(n%100===0){const pending=g.processionPlannedAt(location);if(pending){const p=local(pending.entry);if(Math.hypot(p.x-w.player.pos.x,p.y-w.player.pos.y)>1300)w.landPartyAt({x:p.x-300,y:p.y});}}}
- const id=candidate.owner.id;assert.ok(binding.processions.actors(id).size,'real natural cart must pass current whole route admission '+JSON.stringify(binding.warmStats));
+ const candidate=naturalProcession(w,false),id=candidate.owner.id;
  const definition=canonical(binding.processions.definition(id)),cart=[...binding.processions.actors(id).values()].find(a=>a.tag==='procession_cart')!;assert.ok(cart);
  const step=(dt:number)=>{w.time+=dt;binding.update(w,0);};
  w.player.pos={...cart.pos};step(PROCESSION_CFG.entryGraceSec+.001);step(1);assert.ok(binding.processions.views().find(v=>v.owner===id)!.rolling);
@@ -254,7 +303,7 @@ try{
  const population=(world:World)=>{const geo=world.massRuntime!.geography!;geo.snapshot();return geo.hierarchy.controller(id,'objective:procession:population')!.state as MassProcessionPopulationSave;};
  const signature=(p:MassProcessionPopulationSave)=>p.births.map(b=>({kind:b.kind,sequence:b.sequence,seed:b.seed,bodies:b.bodies.map(a=>({key:a.key,monster:a.monster,dead:a.dead,at:a.at,life:a.life}))}));
  const before=signature(population(w)),save=serializeCharacter(w);assert.ok(save.world!.memory!.every(row=>row.zoneId!==MASS_ZONE));
- const resumed=fresh(714);assert.ok(applySavedCharacter(resumed,save));assert.ok(resumed.adoptWorldState(save.world));resumed.startWorldMass(713,save.world!.worldmass);w=resumed;m=w.massRuntime!;g=m.geography!;binding=g.caravans;
+ const resumed=fresh(714);assert.ok(applySavedCharacter(resumed,save));assert.ok(resumed.adoptWorldState(save.world));resumed.startWorldMass(713,save.world!.worldmass);await awaitNativeFixtureReady(resumed);w=resumed;m=w.massRuntime!;g=m.geography!;binding=g.caravans;
  assert.equal(canonical(binding.processions.definition(id)),definition);assert.deepEqual(signature(population(w)),before);
  const nextCart=[...binding.processions.actors(id).values()].find(a=>a.tag==='procession_cart')!,nextWave=[...binding.processions.actors(id).values()].filter(a=>a.tag==='procession_robber');
  assert.equal(nextCart.life,cartLife);assert.equal(nextWave[0].life,robberLife);assert.notEqual(nextCart.id,cart.id);assert.ok(nextWave.every(a=>a.aiTargetId===nextCart.id&&a.threat.has(nextCart.id)&&!a.threat.has(cart.id)));assert.equal(binding.processions.views().find(v=>v.owner===id)!.rolling,false);
@@ -262,9 +311,17 @@ try{
  const hatch=caves(w).caveEntrances.find(e=>e.kind==='cellar_hatch');assert.ok(hatch,'real native settlement hatch');w.landPartyAt(hatch.pos);m.update(w,true);caves(w).enterSidezone(hatch);assert.ok(w.inCave);assert.equal(w.massRuntime,null);
  const caveSave=serializeCharacter(w);assert.ok(caveSave.world!.massSideareas?.active);assert.ok(caveSave.world!.memory!.every(row=>row.zoneId!==MASS_ZONE));
  assert.ok(caveSave.world!.memory!.flatMap(row=>row.enemies).every(a=>a.tag!=='procession_robber'),'boundless native ambushes must not duplicate into finite ZoneMemory');
- const fromCave=fresh(715);assert.ok(applySavedCharacter(fromCave,caveSave));assert.ok(fromCave.adoptWorldState(caveSave.world));fromCave.startWorldMass(713,caveSave.world!.worldmass);assert.ok(fromCave.restoreMassSideareas(caveSave.world!.massSideareas));assert.ok(fromCave.inCave);assert.equal(fromCave.massRuntime,null);
+ const fromCave=fresh(715);assert.ok(applySavedCharacter(fromCave,caveSave));assert.ok(fromCave.adoptWorldState(caveSave.world));fromCave.startWorldMass(713,caveSave.world!.worldmass);await awaitNativeFixtureReady(fromCave);assert.ok(fromCave.restoreMassSideareas(caveSave.world!.massSideareas));assert.ok(fromCave.inCave);assert.equal(fromCave.massRuntime,null);
  const exit=fromCave.exits.find(e=>e.to===MASS_ZONE);assert.ok(exit);caves(fromCave).travelThrough(exit);assert.ok(fromCave.massRuntime);w=fromCave;m=w.massRuntime!;g=m.geography!;binding=g.caravans;
- w.landPartyAt(cartPosition);m.update(w,true);w.time+=.51;binding.sync(w);binding.update(w,0);
+ w.landPartyAt(cartPosition);await awaitNativeFixtureReady(w);
+ // A teleport back skips the ordinary frame-by-frame retirement budget.
+ const visitors=(m as unknown as {natives:ReadonlyMap<string,Actor>}).natives;
+ const state=()=>[...visitors.values()].map(a=>({id:a.id,pos:{...a.pos},life:a.life,mana:a.mana,es:a.es,dead:a.dead})),resources=state();
+ for(let i=0;i<=Math.ceil(visitors.size/MASS_DORMANCY_RETIRE_BUDGET);i++)m.dormancy!.update(w,visitors);
+ assert.deepEqual(state(),resources,'settling country visitors preserves every native resource');
+ // Cross the normal half-second admission cadence before population runs.
+ // Updating at the old clock would fill ambient seats while caravan sync is throttled.
+ w.time+=.51;m.update(w,true);binding.sync(w);binding.update(w,0);
  assert.deepEqual(signature(population(w)),before);assert.equal(canonical(binding.processions.definition(id)),definition);
  const owners=[...binding.processions.actors(id).values()],liveCart=owners.find(a=>a.tag==='procession_cart')!,liveWave=owners.filter(a=>a.tag==='procession_robber');assert.equal(liveCart.life,cartLife);assert.equal(liveWave[0].life,robberLife);
  assert.equal(w.actors.filter(a=>!a.dead&&a.eventKey==='procession:'+id).length,1+wave.length);assert.equal(new Set(owners.map(a=>a.id)).size,owners.length);assert.ok(liveWave.every(a=>a.aiTargetId===liveCart.id&&a.threat.has(liveCart.id)));
@@ -282,42 +339,8 @@ try{
 const chestUndo=seedGlobalRandom(713);
 try{
  const w=makeSimWorld('warrior',713);w.startWorldMass(713);const m=w.massRuntime!,g=m.geography!,b=g.caravans;
- // Bounded actual-scene discovery. A route proposal grants no physical authority.
+ const candidate=naturalProcession(w,true);
  const local=(a:MassAddress)=>localOffset(a,{...m.origin,x:0,y:0},960);
- let candidate:ReturnType<typeof g.processionPlannedAt>=null;const attempts:{owner:number[];steps:number;admitted:boolean;available:number;required:number;currentPlan:boolean;collisions:{p:Vec2;radius:number;body:Doodad}[];stats:typeof b.warmStats}[]=[];
- const roadOwners:string[]=[],installRoad=w.installMassProcessionRoad.bind(w);
- w.installMassProcessionRoad=(owner,...args)=>{roadOwners.push(owner);return installRoad(owner,...args);};
- for(let r=0;r<=8&&!candidate&&attempts.length<8;r++)for(let y=-r;y<=r&&!candidate&&attempts.length<8;y++)for(let x=-r;x<=r&&!candidate&&attempts.length<8;x++){
-  if(Math.max(Math.abs(x),Math.abs(y))!==r)continue;
-  const at=address('surface','0','0',x*5400+2700,y*5400+2700,960),initial=g.processionPlannedAt(at);if(!initial?.chestPosition)continue;
-  const entry=local(initial.entry);w.landPartyAt({x:entry.x-300,y:entry.y});m.update(w,true);
-  let n=0;
-  for(;n<5000&&!b.processions.actors(initial.owner.id).size;n++){
-   w.time+=.02;m.update(w);b.update(w,0);
-   if(n%100===0){const next=g.processionPlannedAt(at);if(next){const p=local(next.entry);if(Math.hypot(p.x-w.player.pos.x,p.y-w.player.pos.y)>1300)w.landPartyAt({x:p.x-300,y:p.y});}
-    else if(n>=100)break;
-   }
-  }
-  const admitted=b.processions.actors(initial.owner.id).size>0;
-  const collisions:{p:Vec2;radius:number;body:Doodad}[]=[];
-  for(let i=1;i<initial.route.points.length&&!collisions.length;i++){
-   const a=local(initial.route.points[i-1]),z=local(initial.route.points[i]),distance=Math.hypot(z.x-a.x,z.y-a.y),count=Math.ceil(distance/15),radius=Math.hypot(initial.route.corridorRadius,distance/count/2);
-   for(let k=0;k<=count;k++){const p={x:a.x+(z.x-a.x)*k/count,y:a.y+(z.y-a.y)*k/count},body=w.pointInSolid(p.x,p.y,radius);if(body){collisions.push({p,radius,body});break;}}
-  }
-  const evidence={owner:[x,y],steps:n,admitted,available:m.availablePopulation(initial.owner.id),required:1+initial.context.config.puffCap,currentPlan:!!g.processionPlannedAt(at),collisions,stats:b.warmStats};attempts.push(evidence);console.log('NATURAL_CHEST_ATTEMPT',JSON.stringify(evidence));
-  if(admitted)candidate=g.processionPlannedAt(at);
-  else{
-   assert.ok(collisions.length,'refusal must have a real solid crossing the proposed road, not an unexplained admission failure');
-   assert.equal(g.hierarchy.controller(initial.owner.id,'procession-access'),undefined);
-   assert.equal(g.hierarchy.controller(initial.owner.id,'objective:procession'),undefined);
-   assert.ok(!roadOwners.includes(initial.owner.id),'refused proposal cannot paint a road');
-   assert.ok(!w.chests.some(c=>c.massObjectiveOwner===initial.owner.id));assert.equal(b.processions.actors(initial.owner.id).size,0);
-   const blocked=collisions[0];assert.equal(w.pointInSolid(blocked.p.x,blocked.p.y,blocked.radius),blocked.body,'native solid remains after refusal');
-  }
- }
- assert.ok(attempts.some(a=>!a.admitted&&a.collisions.length),'course must preserve a real late-scene refusal witness');
- assert.ok(candidate,'bounded natural chest-bearing discovery must admit '+JSON.stringify(attempts));
- assert.ok(roadOwners.includes(candidate.owner.id),'accepted source publishes its native road');
  const id=candidate.owner.id,definition=b.processions.definition(id)!;
  const chest=w.chests.find(c=>c.massObjectiveOwner===id)!;assert.ok(chest);assert.equal(w.chestObjectiveDone(chest),false);const privateWorld=(world:World)=>world as unknown as{updateChests(dt:number):void};
  const dropsBefore=w.drops.length;w.landPartyAt(chest.pos);privateWorld(w).updateChests(1);assert.equal(chest.opened,false);assert.equal(w.drops.length,dropsBefore,'locked native chest cannot pay');
@@ -325,7 +348,7 @@ try{
  cart.pos=local(definition.route.destination);w.landPartyAt(cart.pos);b.update(w,0);assert.ok(b.processions.done(id));assert.equal(w.chestObjectiveDone(chest),true);assert.equal(g.chestContext(chest)!.level,definition.context.zone.level);assert.equal(chest.rewardLevel,definition.context.zone.level);
  w.landPartyAt(chest.pos);privateWorld(w).updateChests(1);assert.ok(chest.opened);assert.equal(chest.openedAt,w.time);assert.ok(w.drops.length>dropsBefore,'real native container loot minted');
  const saved=serializeCharacter(w),contents=saved.world!.worldmass!.contents,paid=canonical(g.hierarchy.controller(id,'objective:procession')),chestPaid=canonical(g.hierarchy.controller(id,'objective:procession:chest'));
- const n=makeSimWorld('warrior',718);assert.ok(applySavedCharacter(n,saved));assert.ok(n.adoptWorldState(saved.world));n.startWorldMass(713,saved.world!.worldmass);
+ const n=makeSimWorld('warrior',718);assert.ok(applySavedCharacter(n,saved));assert.ok(n.adoptWorldState(saved.world));n.startWorldMass(713,saved.world!.worldmass);await awaitNativeFixtureReady(n);
  const restored=n.chests.filter(c=>c.massObjectiveOwner===id);assert.equal(restored.length,1);assert.ok(restored[0].opened);assert.equal(restored[0].openedAt,chest.openedAt);assert.equal(n.meta.xp,w.meta.xp);
  privateWorld(n).updateChests(2);assert.deepEqual(n.massRuntime!.snapshot(n).contents.drops,contents.drops,'opened procession Continue cannot refill native loot');
  assert.equal(canonical(n.massRuntime!.geography!.hierarchy.controller(id,'objective:procession')),paid);assert.equal(canonical(n.massRuntime!.geography!.hierarchy.controller(id,'objective:procession:chest')),chestPaid);

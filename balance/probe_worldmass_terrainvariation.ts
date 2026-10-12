@@ -97,7 +97,11 @@ function flat(composition=true):MassSpec {
   return {id:'terrain-variation-proof',version:1,addressSpan:960,terrainCell:30,
     fields:[{id:'elevation',base:.1,layers:[]}],
     surfaces:[{id:'base',when:[],priority:0,region:'ground',color:'#445533',biome:'downs'}],places:[],
-    landforms:{...copy(small),chance:1,regional:policy}};
+    landforms:{...copy(small),...(!composition?{
+      // This is the archived schema-13 material list, before neutral firm sand.
+      interiorRegions:small.interiorRegions.filter(r=>r!=='firm_sand'),
+      bypassRegions:small.bypassRegions.filter(r=>r!=='firm_sand'),
+    }:{}),chance:1,regional:policy}};
 }
 const gen=(spec:MassSpec,seed=713)=>new MassGenerator(makeMassRun(seed,'terrain-variation-proof',spec),spec);
 

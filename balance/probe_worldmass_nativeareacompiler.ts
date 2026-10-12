@@ -83,9 +83,14 @@ const archiveJson=gunzipSync(Buffer.from('H4sIAAAAAAAACr2a667jOHKAX6XB/qsxxItu/j
 assert.equal(createHash('sha256').update(archiveJson).digest('hex'),'7a63567eaf7c75ed9fb91fd4207f658ce9ba5b070bccda646d2f1462fa58d0a0');
 const fullLoads=JSON.parse(archiveJson) as {seed:number;target:MapCoord;zone:ZoneDef;arena:Bounds;entry:Vec2;exits:Vec2[];outputHash:string;sidechannelsHash:string;structures:string[];doodads:number}[];
 const jsonHash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+// Node 22 and 24 differ by one ULP (3.6e-15) on one generated prop radius.
+// Only the cross-engine corrected-layout receipt rounds sub-pixel fractions;
+// direct/native equality, grids, saved byte round trips and original pins stay exact.
+const portableLayoutHash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v,(_key,value)=>
+  typeof value==='number'?Number(value.toFixed(10)):value)).digest('hex');
 // Preserve the original archive. Whole-plan approach validation moves this
 // watchtower 30px; the complete optional hollow and original prop count remain.
-const structureAccessCorrection={id:'gen_810204',originalHash:'86b8ae21c9f4540439399f43f262b986fff7c79cf9bd5a141e7f1e4e9e8a8493',outputHash:'b8afd9251dd1fd329ae3857712589d47f0654a4a9f450e4b14f414a50ed13e0c',doodads:246};
+const structureAccessCorrection={id:'gen_810204',originalHash:'86b8ae21c9f4540439399f43f262b986fff7c79cf9bd5a141e7f1e4e9e8a8493',outputHash:'4d9a4c078e6a5074298b57ff1b2cfada77d1802eed3dc72bed79a3f87677e567',doodads:246};
 for(const f of fullLoads){
   const world=withSeededRandom(f.seed,()=>makeSimWorld('warrior',f.seed));world.sim.bindGeographyPolicies();
   const source=captureNativeGeographySource(f.seed),zone=clone(f.zone);
@@ -104,7 +109,7 @@ for(const f of fullLoads){
   const compiled=withSeededRandom(zone.seed!,()=>compileNativeArea(input,lease));
   const correction=zone.id===structureAccessCorrection.id?structureAccessCorrection:undefined;
   if(correction){assert.equal(f.outputHash,correction.originalHash,'retained pre-correction archive');assert.equal(f.doodads,246);const tower=compiled.geometry.layout.structures?.find(st=>st.id==='watchtower#3');assert(tower);assert.deepEqual(tower.rect,{x:1260,y:900,w:150,h:150});assert.equal(compiled.geometry.layout.hollows?.length,1,'native optional hollow retained after exact grid clearance');}
-  assert.equal(jsonHash({layout:compiled.geometry.layout,grid:compiled.geometry.walk.kind==='grid'?compiled.geometry.walk.packed:null}),correction?.outputHash??f.outputHash,'complete native load output with explicit structure correction '+zone.id);
+  assert.equal((correction?portableLayoutHash:jsonHash)({layout:compiled.geometry.layout,grid:compiled.geometry.walk.kind==='grid'?compiled.geometry.walk.packed:null}),correction?.outputHash??f.outputHash,'complete native load output with explicit structure correction '+zone.id);
   assert.equal(jsonHash(compiled.sidechannels),f.sidechannelsHash);assert.deepEqual(compiled.geometry.layout.structures?.map(v=>v.id),f.structures);assert.equal(compiled.geometry.layout.doodads.length,correction?.doodads??f.doodads);
   const original=clone(zone),rng=new Rng(zone.seed!);
   const direct=withSeededRandom(zone.seed!,()=>captureNativeGeneration(original,()=>generateLayout(original,clone(f.arena),rng,clone(f.entry),clone(f.exits),[])));
