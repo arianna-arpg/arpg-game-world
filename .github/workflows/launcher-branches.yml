@@ -68,7 +68,8 @@ jobs:
       group: launcher-branch-${{ matrix.id }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Seamless probes take about an hour before build and Electron validation.
+    timeout-minutes: 120
     env:
       BUILD_BRANCH: ${{ matrix.branch }}
       BUILD_COMMIT: ${{ matrix.commit }}

@@ -63,7 +63,10 @@ Each build uses a detached checkout of the selected commit, installs its own
 dependencies, runs `npm run check` and `npm run probe`, builds the game, and
 boots the resulting bundle in hidden Electron. That smoke proves the start
 menu, disk saves, and browser-storage isolation. A failing branch cannot stop
-other successful branches from publishing.
+other successful branches from publishing. The build job allows 120 minutes:
+seamless's complete probe roster alone takes about an hour on hosted runners,
+so the former 25-minute limit expired before packaging. All validation gates
+remain required.
 
 The existing `scripts/browser-previews.json` supplies optional build flags:
 Seamless enables its worldmass setting. Every experimental build gets a
