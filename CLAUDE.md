@@ -1,3 +1,12 @@
+NativeAreaSceneProgression exclusively owns its actual state and thirteen raw
+queue/map replacement slots. Preserve native references, partial failures,
+enumerability and same-slot historical reassignment. Every ordinary slot is
+validated before installation; cross-area and cross-slot sharing refuse. Verify
+nativeprogressionstorage, progression/projectile/combat-state and adjacent owner
+checks plus all types. See docs/worldgen/native-area-progression-storage.md.
+Individual record provenance, birth/retirement, detached effects, full combat
+and retained scheduling/publication remain open.
+
 NativeAreaSceneCombatState owns admitted buffs, status transplantation, charge
 and gauge taps, pools and proc eligibility on actual area stores. Preserve
 physical authority, live tree-buff maps and campaign time, native partial effects

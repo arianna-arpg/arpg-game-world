@@ -46,6 +46,49 @@ const actorMethods=['relevelActor','bakeMinionOwnerStats','deactivateAura','dism
  * already admitted outer operation, never by guessing another live actor's ID. */
 const localCleanup=new Set(['clearTreeFields','clearTreeConstructs','deactivateAura','expireZone','retireOwnedZone']);
 const effectMethods=['kill','guardBash','executeSkill','guardArtHit','companionPulseHit','useSkill','spawnConstruct','spawnProjectile','attackSequenceBurst','challengeBurst','challengeHit'] as const;
+// The replacement state and each raw store have one lifetime owner. A retired
+// array/map may be reassigned only to its original slot; different slots must
+// never alias, even within one area. Native methods keep raw storage identity.
+const progressionArraySlots=['pendingRespawns','pendingSummons','projectiles','zones','pendingRepeats','pendingFuses','pendingSalvos','pendingSteps','pendingFollowUps','pendingBlinks','emergences'] as const;
+const progressionMapSlots=['treeBuffSources','recallTreeSpears'] as const;
+const ownedProgressionStates=new WeakSet<NativeSceneProgressionState>();
+const ownedProgressionStores=new WeakMap<object,object>();
+const weakMapHas=WeakMap.prototype.has,weakMapBrandKey={};
+function progressionStore(value:unknown,map:boolean):object {
+ if(map){
+  // Brand-check without reading or replacing the supplied map's methods.
+  try{Reflect.apply(weakMapHas,value,[weakMapBrandKey]);}
+  catch{throw Error('Native progression needs an actual WeakMap store');}
+ }else if(!Array.isArray(value))throw Error('Native progression needs an actual queue array');
+ return value as object;
+}
+function ownProgressionStorage(state:NativeSceneProgressionState):void {
+ if(ownedProgressionStates.has(state))throw Error('Native progression needs a fresh local storage state');
+ const rows:{key:keyof NativeSceneProgressionState;map:boolean;value:object;enumerable:boolean;token:object}[]=[],seen=new Set<object>();
+ for(const key of [...progressionArraySlots,...progressionMapSlots]){
+  const descriptor=Object.getOwnPropertyDescriptor(state,key);
+  if(!descriptor||!Object.hasOwn(descriptor,'value')||!descriptor.writable||!descriptor.configurable)throw Error('Native progression needs an own configurable mutable storage slot: '+key);
+  const map=(progressionMapSlots as readonly string[]).includes(key),value=progressionStore(descriptor.value,map);
+  if(seen.has(value)||ownedProgressionStores.has(value))throw Error('Native progression store already belongs to another slot');
+  seen.add(value);rows.push({key,map,value,enumerable:!!descriptor.enumerable,token:{}});
+ }
+ // All ordinary own-data validation and controller assembly have finished.
+ // Redefinition of these existing configurable slots does not require an
+ // extensible state. Adversarial Proxy traps/global intrinsic replacement are
+ // outside this ordinary supplied-state contract; no rollback is claimed there.
+ const descriptors:PropertyDescriptorMap={};
+ for(const row of rows){const {key,map,token}=row;let current=row.value;descriptors[key]={enumerable:row.enumerable,configurable:false,
+  get:()=>current,
+  set:(value:unknown)=>{
+   const next=progressionStore(value,map),prior=ownedProgressionStores.get(next);
+   if(prior&&prior!==token)throw Error('Native progression store belongs to another slot');
+   ownedProgressionStores.set(next,token);current=next;
+  },
+ };}
+ Object.defineProperties(state,descriptors);
+ for(const row of rows)ownedProgressionStores.set(row.value,row.token);
+ ownedProgressionStates.add(state);
+}
 export class NativeAreaSceneProgression {
  readonly input:NativeSceneProgressionInput;readonly host:Host & ControllerHost;
  readonly companionGrants=new CompanionGrants();
@@ -77,6 +120,7 @@ export class NativeAreaSceneProgression {
   this.host=Object.freeze(host);this.guardArts=new GuardArts(host);this.companionBonds=new CompanionBonds(host);this.attackSequences=new AttackSequences(host);this.challenges=new Challenges(host);
   Object.defineProperty(this,'lite',{enumerable:true,configurable:false,get:()=>input.ecology.input.state.lite});
   for(const key of ['input','host','companionGrants','guardArts','companionBonds','attackSequences','challenges'])Object.defineProperty(this,key,{writable:false,configurable:false});
+  ownProgressionStorage(input.state);
  }
  #owner(actor:Actor){const owner=this.input.authority.require(actor);if(owner.progression.input.authority!==this.input.authority||owner.progression.input.scene!==owner.scene||owner.combat.scene!==owner.scene||owner.combat.state!==owner.progression.input.state)throw Error('Mismatched native progression runtime authority');return owner;}
  #native(name:string,args:unknown[]){this.#nativeDepth++;try{return (native as unknown as Record<string,Function>)['scene'+name[0].toUpperCase()+name.slice(1)](this.host,...args);}finally{this.#nativeDepth--;}}
