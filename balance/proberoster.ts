@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativerewardstorage.ts', status: 'green', tier: 'fast', why: 'Exclusive reward and physical raw stores; actual two-area orb/essence isolation, cross-slot aliases, atomic ordinary refusal, exact native references and restoration partial failures.' },
   { probe: 'probe_nativecastingpreparation.ts', status: 'green', tier: 'fast', why: 'Exact native payment, charges, ammunition, remnants, stealth, combo/meta and relocation preparation; physical authority, exclusive raw maps, actual receivers, native partial effects and ordinary World wiring and dormancy.' },
   { probe: 'probe_nativeprogressionstorage.ts', status: 'green', tier: 'fast', why: 'Exclusive area progression state and raw queue/map slots; actual cross-area projectile/refund regression, complete alias matrix, atomic ordinary refusal and native replacement/partial failure.' },
   { probe: 'probe_nativecombatstate.ts', status: 'green', tier: 'fast', why: 'Exact native buff, status, tap, pool and proc parity; physical area admission, live maps and clocks, conservative actor-free exits, native partial effects and ordinary World wiring and dormancy.' },

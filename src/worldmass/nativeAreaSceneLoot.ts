@@ -1,3 +1,4 @@
+import {ownNativeRewardStorage} from './nativeAreaSceneRewardStorage';
 /** Actual retained native reward sink. Rendering, pickup and combat dispatch remain external. */
 import type {World} from '../engine/world';
 import type {NativeSceneCensus} from './nativeAreaScenePopulation';
@@ -49,6 +50,7 @@ export class NativeAreaSceneLoot {
   methods(()=>input.geometry,['clampPos']);methods(()=>input.settlement,['rollSkillGem','rollSupportDropGated']);
   methods(()=>self,["dropEssenceAt","dropAbilityEssenceAt","dropVestigeAt","dropGearAt","lootDropCue","spoilClamp","ownSpoils","dropGemAt","mintGemAt","dropPinnedGem","dropMemoryUnit","mintLootResult","shedOrb","noteContainerFind","noteGemDrop","spoilsSealed","zoneGemFloor","lootLevelAt"]);
   this.host=Object.freeze(host);
+  ownNativeRewardStorage(input.state,['orbs']);
   for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
  /** Full native areas use their own authored level; explicit contextZone still overrides at the mint. */

@@ -34,7 +34,7 @@ import {SIM_TAP} from '../src/engine/tap';
 import {nextItemUid,rollItem} from '../src/engine/itemgen';
 import {NativeAreaSceneSettlement} from '../src/worldmass/nativeAreaSceneSettlement';
 import {NativeAreaScenePhysical,freshScenePhysicalState} from '../src/worldmass/nativeAreaScenePhysical';
-import {NativeAreaSceneLoot} from '../src/worldmass/nativeAreaSceneLoot';
+import {NativeAreaSceneLoot,freshSceneLootState} from '../src/worldmass/nativeAreaSceneLoot';
 
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 const read=(path:string)=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
@@ -284,7 +284,7 @@ try{
  }
  const foreign=fixture('owner');
  for(const key of ['scene','geometry','physical','settlement','campaign'])assert.throws(()=>new NativeAreaSceneLoot({...base,[key]:foreign.controller.input[key]}),/identical/);
- const raw={...base},local=new NativeAreaSceneLoot(raw);raw.state={spoilStory:7,orbs:[]};assert.equal(local.input.state,base.state,'bindings snapshotted once');
+ const ownState=freshSceneLootState(),raw={...base,state:ownState},local=new NativeAreaSceneLoot(raw);raw.state={spoilStory:7,orbs:[]};assert.equal(local.input.state,ownState,'bindings snapshotted once');
  const borrowed=f.host.dropGemAt;rule(f);f.campaign.questHand=undefined;assert.throws(()=>borrowed(at,undefined,true,'lazy-error','rough'),/Missing native loot capability: questHand|undefined/);
 }
 console.log('PASS native loot parity',receipts.length,'original / World / core / owner courses',hash(JSON.stringify(receipts)));

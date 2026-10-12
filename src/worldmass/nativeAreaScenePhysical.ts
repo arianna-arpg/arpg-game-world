@@ -1,3 +1,4 @@
+import {ownNativeRewardStorage} from './nativeAreaSceneRewardStorage';
 import type {World} from '../engine/world';
 import type {NativeSceneCensus,NativeAreaScenePopulation} from './nativeAreaScenePopulation';
 import type {NativeAreaSceneGeometry} from './nativeAreaSceneGeometry';
@@ -38,6 +39,7 @@ export class NativeAreaScenePhysical {
   fields(()=>input.state,['chests','shrines','altars','drops']);fields(()=>input.campaign,['account','clientActionHook']);
   methods(()=>input.population,['createMonster']);methods(()=>input.geometry,['clampPos','markDoodadsChanged']);methods(()=>input.settlement,['townSeat']);
   this.host=Object.freeze(host);
+  ownNativeRewardStorage(input.state,['chests','shrines','altars','drops']);
   for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false,enumerable:false});
  }
  syncAltarBodies(){return syncAltarBodies(this.host);}

@@ -1,3 +1,12 @@
+NativeRewardStorage gives each reward and physical owner exclusive state and
+raw orb/chest/shrine/altar/drop replacement slots. Preserve exact arrays, native
+methods, enumerability and partial failures; allow only same-slot history.
+Validate all ordinary descriptors and owner bindings before storage claims.
+Verify nativerewardstorage, native loot/physical/memory/ongoing/completion, full
+birth/source-session and all types. See docs/worldgen/native-area-reward-storage.md.
+Individual record provenance, pickup ticking, complete retained combat, scheduling
+and publication remain open.
+
 NativeAreaSceneCastingPreparation owns admitted skill payments, charges, ammo,
 remnants, stealth, combo/meta instances and construct relocation targeting.
 Preserve native partial effects, physical authority, exact raw map identity and
