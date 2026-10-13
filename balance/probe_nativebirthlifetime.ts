@@ -1,3 +1,5 @@
+import '../src/engine/world';
+import {beforeNativeBirthLifetimeSource} from './nativeBirthLifetimeSourceFixture';
 import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
 import {beforeNativeSceneKillAftermath} from './nativeSceneKillAftermathIntegrationFixture';
 import fs from 'node:fs';
@@ -56,7 +58,7 @@ function fixture(){
 }
 
 type Fixture=ReturnType<typeof fixture>;
-const courses:string[]=[],hash=(s:string)=>createHash('sha256').update(s).digest('hex'),read=(file:string)=>fs.readFileSync(new URL('../'+file,import.meta.url),'utf8').replaceAll('\r\n','\n');
+const courses:string[]=[],hash=(s:string)=>createHash('sha256').update(s).digest('hex'),read=(file:string)=>beforeNativeBirthLifetimeSource(file,fs.readFileSync(new URL('../'+file,import.meta.url),'utf8').replaceAll('\r\n','\n'));
 function course(name:string,run:(f:Fixture)=>void){const only=process.argv.find(a=>a.startsWith('--only='))?.slice(7);if(process.argv.some(a=>a.startsWith('--descriptor-only')||a.startsWith('--boundary-only'))||process.argv.includes('--async-only')||(only&&!name.includes(only)))return;withSeededRandom(370001,()=>run(fixture()));courses.push(name);console.log('PASS birth lifetime: '+name);}
 const monster=(f:Fixture)=>f.admission.createMonster('goblin_skirmisher',1,'enemy');
 const inserted=(f:Fixture,body:Actor)=>{f.scene.actors.push(body);f.admission.admitInserted(body);assert.equal(f.authority.require(body).scene,f.scene);};
