@@ -1,3 +1,4 @@
+import {sceneResumeVoyageArrival} from '../engine/nativeSceneVoyageArrival';
 import {installNativeHostedSerializer} from './nativeHostedSerialization';
 import * as wireCore from '../engine/nativeSceneWireQueries';
 import type {NativeSnapshotHost} from '../net/nativeSnapshotHost';
@@ -440,6 +441,10 @@ nativeWireQueries:Object.freeze({encounterCue:(actor:Actor)=>encounterCueOf(acto
  refreshTownStations(representative:Actor):boolean {Reflect.apply(NativeAreaSceneTransitionCoordinator.prototype.assertTownArrival,this.input.coordinator,[this]);const thisHost=this.#host;return this.#operation.enter({permission:'physical',physical:[],sources:[]},()=>refreshNativeTownStations(this.input.assembly,this.input.characterWriter,this.input.authority,{
   get createMonster(){return thisHost.createMonster;},admit:body=>this.#operation.admitCombatBirth(body),retire:body=>this.#operation.retireCombatBody(body),layoutChanged:value=>{this.runtimeState.frame.townLayoutChangedOnLoad=value;}
  },representative));}
+ /** Bounty arrival is issued only by the actual destination handoff. */
+ arriveBounties():void {const from=Reflect.apply(NativeAreaSceneTransitionCoordinator.prototype.bountyArrivalFrom,this.input.coordinator,[this]);this.#operation.enter({permission:'physical'},()=>this.input.assembly.arriveBounties(from));}
+ resumeVoyageArrival():void {Reflect.apply(NativeAreaSceneTransitionCoordinator.prototype.assertVoyageArrival,this.input.coordinator,[this]);this.#operation.enter({permission:'physical',physical:[],sources:[]},()=>sceneResumeVoyageArrival(this.#host,this.scene.zone.id));}
+ refreshSidezoneFurnish():void {Reflect.apply(NativeAreaSceneTransitionCoordinator.prototype.assertFurnishArrival,this.input.coordinator,[this]);this.#operation.enter({permission:'physical'},()=>this.input.assembly.refreshSidezoneFurnish());}
  transitionArrival(cohort:readonly Actor[]):void {this.#operation.enter({physical:cohort,permission:'physical'},()=>{
   const packets=controllerTransfers.get(this.input.authority),p=this.input.progression,r=this.runtimeState;
   for(const actor of cohort){const packet=packets?.get(actor);if(!packet||packet.source===this)throw Error('Native controller arrival needs an exact foreign departure receipt');

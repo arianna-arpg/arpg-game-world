@@ -321,6 +321,7 @@ export function sceneBreakArenaSeal(nativeHost:NativeSceneCampaignFrameClosureHo
         m.faction = ward.boss.faction;
         m.pos = nativeHost.clampPos(vec(seal.pos.x + rand(-spread, spread), seal.pos.y + rand(-spread, spread)), m.radius);
         nativeHost.actors.push(m);
+        observeNativeCombatBirth(nativeHost,m);
       }
     }
     if (ward.seals.length > 0) {
@@ -1001,6 +1002,7 @@ export function sceneSpawnArenaBoss(nativeHost:NativeSceneCampaignFrameClosureHo
     if (spec.xpFloor) boss.xpValue = Math.max(boss.xpValue, spec.xpFloor);
     boss.pos = nativeHost.clampPos(vec(at.x, at.y), boss.radius);
     nativeHost.actors.push(boss);
+    observeNativeCombatBirth(nativeHost,boss);
     const g = spec.garrison ?? { count: [6, 10] as [number, number] };
     const pool = (spec.garrisonTable ?? FACTIONS[spec.faction]?.table ?? []).filter(e => e.id !== bossId);
     const n = randInt(g.count[0], g.count[1]);
@@ -1012,6 +1014,7 @@ export function sceneSpawnArenaBoss(nativeHost:NativeSceneCampaignFrameClosureHo
       if (squadId !== undefined) { m.squadId = squadId; m.squadLeader = k === 0; }
       m.pos = nativeHost.clampPos(vec(at.x + rand(-spread, spread), at.y + rand(-spread, spread)), m.radius);
       nativeHost.actors.push(m);
+      observeNativeCombatBirth(nativeHost,m);
     }
     if (spec.announce) {
       nativeHost.notice(spec.announce.replace('{name}', MONSTERS[bossId]?.name ?? boss.name), spec.announceColor ?? '#e86a4a', 18, 'events');

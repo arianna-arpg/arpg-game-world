@@ -2,6 +2,7 @@ import {assertNativeCharacterResume,type NativeCharacterResumeReceipt} from './n
 /** Retained-area memory registration on the genuine campaign character writer.
  * This grants no combat scheduling, scene publication, departure or retirement. */
 import {isNativeWorld,type World} from '../engine/world';
+import {nativeBirthAsyncResult} from './nativeAreaScenePopulation';
 import type {NativeZoneMemory} from '../engine/nativeSceneMemory';
 import {NativeAreaSceneMemory} from './nativeAreaSceneMemory';
 import {MassNativeGeography} from './nativeGeography';
@@ -50,12 +51,12 @@ export class NativeAreaMemoryRegistry {
  /** Final pure capture only. Runtime departure and actor/controller retirement
   * must be separately established by their actual lifecycle owners. The current
   * writer area stays observed until the real writer has handed off its scene. */
- unregister(owner:NativeAreaSceneMemory):void{
+ unregister(owner:NativeAreaSceneMemory,finalCheck?:()=>unknown):void{
   this.#guard(()=>{
    if(this.#owners.get(owner.id)!==owner)throw Error('Foreign native memory owner');
    this.#assertCampaign(owner);
    if(owner.id===this.writer.zone?.id)throw Error('Native current memory owner requires writer handoff before unregister');
-   owner.captureLiveMemory();this.#owners.delete(owner.id);
+   owner.captureLiveMemory();if(finalCheck&&nativeBirthAsyncResult(Reflect.apply(finalCheck,undefined,[])))throw Error('Native final memory validation must be synchronous');this.#owners.delete(owner.id);
   });
  }
  discardProvisionalRestore(owner:NativeAreaSceneMemory,token:NativeCharacterResumeReceipt):void {this.#guard(()=>{if(this.#owners.get(owner.id)!==owner)throw Error('Native provisional memory registration differs');const r=assertNativeCharacterResume(token,'arrival');if(r.writer!==this.writer||r.area?.assembly!==owner.assembly)throw Error('Foreign provisional restore memory');this.#owners.delete(owner.id);});}

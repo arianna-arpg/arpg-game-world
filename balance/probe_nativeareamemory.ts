@@ -1,3 +1,4 @@
+import {beforeNativeContinuity} from './nativeContinuityCompositionFixture';
 /** Real native birth/owners -> genuine character writer -> staged cold Continue.
  * Physics publication, transient combat checkpoints and departure are outside this proof. */
 import assert from 'node:assert/strict';
@@ -31,7 +32,7 @@ const memory=new Map<string,string>(),storage={getItem:(k:string)=>memory.get(k)
 Object.defineProperty(globalThis,'window',{value:{localStorage:storage},configurable:true});Object.defineProperty(globalThis,'fetch',{value:async()=>new Response('',{status:404}),configurable:true});
 const digest=(text:string)=>createHash('sha256').update(text).digest('hex');
 assert.equal(digest(JSON.stringify(nativeSceneMemoryArchive)),nativeSceneMemoryArchiveHash);
-const worldSource=readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8'),normalized=beforeNativeSceneMemory(worldSource);
+const worldSource=beforeNativeContinuity('production','src/engine/world.ts',readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8')),normalized=beforeNativeSceneMemory(worldSource);
 assert.equal(digest(normalized),nativeSceneMemoryArchive.sourceHash,'exact entire original source is restored');
 assert.ok(worldSource.startsWith("import './nativeSceneBootstrap';\n"),'native registration bootstrap remains first');
 const coreSource=ts.createSourceFile('nativeSceneMemory.ts',readFileSync(new URL('../src/engine/nativeSceneMemory.ts',import.meta.url),'utf8'),99,true);

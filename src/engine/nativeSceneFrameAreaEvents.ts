@@ -1,3 +1,4 @@
+import {observeNativeCombatBirth,observeNativeHiddenSource,observeNativeSource,observeNativeCombatStorage,observeNativeCombatRecord} from './nativeCombatRecordObservation';
 /** Exact original42 campaign/interleaved frame FrameAreaEvents closure.
  * Runtime ownership and native scheduling are separate concrete bindings. */
 import type {World} from "./world";
@@ -1448,17 +1449,18 @@ export function sceneFireMeteor(nativeHost:NativeSceneCampaignFrameClosureHost, 
     const skill = SKILLS[surge.meteorSkillId];
     if (!skill) return;
     if (!nativeHost.demonCaster) {
-      const c = new Actor('Demon Storm', 'player', vec(0, 0));
+      const c = observeNativeHiddenSource(nativeHost,()=>new Actor('Demon Storm', 'player', vec(0, 0)));
       c.untargetable = true;
       c.invulnerable = true;
       nativeHost.demonCaster = c;
     }
-    const caster = nativeHost.demonCaster;
+    const caster = observeNativeSource(nativeHost,nativeHost.demonCaster);
     caster.level = Math.max(1, nativeHost.zone.level + info.strengthBonus);
     const at = vec(rand(70, nativeHost.arena.w - 70), rand(70, nativeHost.arena.h - 70));
     caster.pos = vec(at.x, at.y);
     const inst = makeSkillInstance(skill, 1 + Math.floor(nativeHost.zone.level / 3) + info.strengthBonus);
-    nativeHost.zones.push({
+    let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];
+    (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
       pos: at, radius: surge.meteorRadius, caster, inst, color: skill.color,
       delay: surge.meteorTelegraph, exploded: false, linger: 0,
       tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
@@ -1466,6 +1468,7 @@ export function sceneFireMeteor(nativeHost:NativeSceneCampaignFrameClosureHost, 
       spareRoofed: true, // sky-borne: the roof takes the fire, not the family under it
       onImpact: () => nativeHost.onMeteorImpact(info, vec(at.x, at.y)),
     });
+    observeNativeCombatRecord(nativeHost,'zones',nativeQueue,nativeRecord,caster,inst);
   }
 
 export function sceneEvapDroveDress(nativeHost:NativeSceneCampaignFrameClosureHost, t: number, rate: number): void {
@@ -2009,10 +2012,13 @@ export function sceneOnMeteorImpact(nativeHost:NativeSceneCampaignFrameClosureHo
     if (surge && nativeHost.demonHeadcount(facId) >= surge.meteorHeadcountCap && m.defId) {
       // Zone already swarming → the crater leaves a raisable corpse instead of
       // another live demon (caps density; feeds necromancers — corpse compounding).
-      nativeHost.corpses.push({ pos: vec(at.x, at.y), defId: m.defId, level: m.level, maxLife: m.maxLife(), remaining: CORPSE_CFG.duration });
+      let nativeQueue:typeof nativeHost.corpses;let nativeRecord:(typeof nativeHost.corpses)[number];
+      (nativeQueue=observeNativeCombatStorage(nativeHost,'corpses',nativeHost.corpses)).push(nativeRecord={ pos: vec(at.x, at.y), defId: m.defId, level: m.level, maxLife: m.maxLife(), remaining: CORPSE_CFG.duration });
+      observeNativeCombatRecord(nativeHost,'corpses',nativeQueue,nativeRecord,undefined,undefined);
       if (nativeHost.corpses.length > CORPSE_CFG.max) nativeHost.corpses.shift();
     } else {
       nativeHost.actors.push(m);
+      observeNativeCombatBirth(nativeHost,m);
     }
   }
 

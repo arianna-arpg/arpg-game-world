@@ -1,3 +1,6 @@
+import {VOYAGE_ZONE_ID} from '../world/voyage';
+import {sceneAbandonVoyageAtSurface} from '../engine/nativeSceneVoyageArrival';
+import {sceneNecropolisSurfaceArrival} from '../engine/nativeSceneRealmArrival';
 import {installNativeHostedCoordinator} from './nativeHostedSerialization';
 import {extendNativeAreaUIActions} from './nativeAreaUIActions';
 import {extendNativeAreaMenuQueries} from './nativeAreaMenuQueries';
@@ -48,6 +51,18 @@ export function issueNativeRoadQueueBridge(coordinator:NativeAreaSceneTransition
  for(const key of ['campaign','characterWriter','authority'] as const)if(combat.input[key]!==coordinator.input[key])throw Error('Native road queue roots differ: '+key);
  if(roadQueueBridges.has(combat))throw Error('Native road queue bridge already issued');const bridge=roadQueueIssuers.get(coordinator)!(owner,combat);roadQueueBridges.set(combat,bridge);return bridge;
 }
+export type NativeRealmContextKey='realmContext'|'crusadeRealmContext'|'necropolisRealmContext'|'fractureRealmContext';
+export interface NativeRealmEntryBridge {enter<T>(key:NativeRealmContextKey,destination:string,action:()=>T):T;wake(action:()=>void):void}
+const realmEntryIssuers=new WeakMap<NativeAreaSceneTransitionCoordinator,(owner:object,combat:NativeAreaSceneCombat)=>NativeRealmEntryBridge>();
+const realmEntryBridges=new WeakMap<NativeAreaSceneCombat,NativeRealmEntryBridge>();
+/** This bridge is retained only by the genuine CampaignFrame with its private
+ * operation entry. A plan's original context write and stamp still run first. */
+export function issueNativeRealmEntryBridge(coordinator:NativeAreaSceneTransitionCoordinator,owner:object,combat:NativeAreaSceneCombat,entry:NativeAreaCombatOwnerEntry):NativeRealmEntryBridge{
+ if(!isNativeAreaSceneTransitionCoordinator(coordinator)||!isNativeAreaSceneCombat(combat)||!owner||typeof owner!=='object')throw Error('Native realm entry needs actual owners');assertNativeCombatOwnerEntry(combat,entry);
+ for(const key of ['campaign','characterWriter','authority'] as const)if(combat.input[key]!==coordinator.input[key])throw Error('Native realm entry roots differ');
+ if(realmEntryBridges.has(combat))throw Error('Native realm entry bridge already issued');const bridge=realmEntryIssuers.get(coordinator)!(owner,combat);realmEntryBridges.set(combat,bridge);return bridge;
+}
+interface RealmEntry {readonly frame:Frame;readonly source:Registered;readonly key:NativeRealmContextKey;readonly value:NonNullable<World[NativeRealmContextKey]>;readonly destination:string;prepared:NativeAreaSceneCombat|null;definition:World['zone']|null;previous:unknown;revisit:boolean;completed:boolean;wakeCalled:boolean;consumed:boolean}
 interface Registered {readonly ongoing:NativeAreaSceneOngoing;readonly combat:NativeAreaSceneCombat;readonly memory:NativeAreaSceneMemory;readonly departure:NativeAreaSceneDepartureMemory;readonly roads:NativeAreaRoadContext;readonly binding:NativeAreaAuthorityBinding<object>;readonly id:string}
 export interface NativeAreaTransitionFrame {readonly source:NativeAreaSceneOngoing;readonly current:NativeAreaSceneOngoing;readonly seats:readonly Seat[];readonly active:boolean}
 interface Frame {source:Registered;current:Registered;seats:readonly Seat[];active:boolean;view:NativeAreaTransitionFrame}
@@ -87,13 +102,17 @@ export function assertNativePackedTravel(token:NativePackedTravelReceipt,destina
 export function consumeNativePackedTravel(token:NativePackedTravelReceipt,destination:NativeAreaSceneEcology):NativeLiteCarryRow[]{const r=packedTravel.get(token);if(!r?.active||r.consumed||r.destination!==destination)throw Error('Native packed arrival is foreign or expired');Reflect.apply(authorityFinalClaimed,r.authority,[r.binding,r.actors]);for(let i=0;i<r.actors.length;i++)if(own(r.actors[i],'id')!==r.ids[i])throw Error('Native packed keeper identity changed');const state=r.source.input.state,pool=own<LitePool>(state,'lite'),kinds=own<World['liteKinds']>(state,'liteKinds');if(pool===own(destination.input.state,'lite')||kinds===own(destination.input.state,'liteKinds'))throw Error('Native packed areas cannot share source stores');if(!(pool instanceof LitePool)||!Array.isArray(kinds)||Object.getPrototypeOf(kinds)!==Array.prototype)throw Error('Native packed source stores differ');const selected=new Set(r.ids),rows=sceneCaptureLiteCarry(r.source.host,pool).filter(row=>selected.has(row.owner));Reflect.apply(authorityFinalClaimed,r.authority,[r.binding,r.actors]);if(own(state,'lite')!==pool||own(state,'liteKinds')!==kinds)throw Error('Native packed source changed during capture');for(let i=0;i<r.actors.length;i++)if(own(r.actors[i],'id')!==r.ids[i])throw Error('Native packed keeper changed during capture');r.consumed=true;for(let i=0;i<pool.used;i++)if(pool.alive[i]&&selected.has(pool.owner[i]))Reflect.apply(freePacked,pool,[i]);return rows;}
 export class NativeAreaSceneTransitionCoordinator {
  readonly input:Readonly<NativeAreaTransitionInput>;
- readonly #lifecycle={packed:NativeAreaSceneEcology.prototype.withPackedArrival,release:NativeAreaActorAuthority.prototype.release,unregister:NativeAreaActorAuthority.prototype.unregister,discardRestore:NativeAreaMemoryRegistry.prototype.discardProvisionalRestore,setRestore:NativeAreaScenePreparation.prototype.setProvisionalRestore,finishRestore:NativeAreaScenePreparation.prototype.finishProvisionalRestore,preparation:NativeAreaScenePreparation.prototype.retire,authority:NativeAreaActorAuthority.prototype.retire,memory:NativeAreaMemoryRegistry.prototype.retire,memoryIdle:NativeAreaMemoryRegistry.prototype.assertRetirable,population:NativeAreaScenePopulation.prototype.retire,deeds:NativeAreaSceneCombatCampaign.prototype.retireCallbacks};
+ readonly #lifecycle={packed:NativeAreaSceneEcology.prototype.withPackedArrival,release:NativeAreaActorAuthority.prototype.release,unregister:NativeAreaActorAuthority.prototype.unregister,discardRestore:NativeAreaMemoryRegistry.prototype.discardProvisionalRestore,setRestore:NativeAreaScenePreparation.prototype.setProvisionalRestore,finishRestore:NativeAreaScenePreparation.prototype.finishProvisionalRestore,preparation:NativeAreaScenePreparation.prototype.retire,authority:NativeAreaActorAuthority.prototype.retire,memory:NativeAreaMemoryRegistry.prototype.retire,memoryIdle:NativeAreaMemoryRegistry.prototype.assertRetirable,memoryUnregister:NativeAreaMemoryRegistry.prototype.unregister,releaseVoyage:NativeAreaScenePreparation.prototype.releaseVoyage,population:NativeAreaScenePopulation.prototype.retire,deeds:NativeAreaSceneCombatCampaign.prototype.retireCallbacks};
+ #voyageArea:Registered|null=null;#voyageCompleted:Registered|null=null;#retiringVoyage:Registered|null=null;readonly #retiredVoyages=new WeakSet<NativeAreaSceneCombat>();
+ #voyageCrossing:{source:Registered;destinationId:string;run:World['voyage'];stash:World['wraithsailSeaStash'];surface:boolean;surfaceHandled:boolean}|null=null;#voyageArrival:NativeAreaSceneCombat|null=null;
  readonly #areas=new Map<string,Registered>();readonly #combats=new WeakMap<NativeAreaSceneCombat,Registered>();
  readonly #projection=new Map<string,PropertyDescriptor>();
  readonly #previousProjection=new Map<string,PropertyDescriptor|undefined>();
  #retired=false;#retirement:readonly string[]=Object.freeze([]);
  readonly #directories=new WeakMap<NativeAreaSceneCombat,NativeAreaSceneDirectory>();
  #restore:{owner:NativeAreaCharacterResume;source:Registered;arriving:boolean;token?:NativeCharacterResumeReceipt}|null=null;
+ #realmEntry:RealmEntry|null=null;
+ readonly #realmContexts=new WeakMap<NativeAreaSceneCombat,{key:NativeRealmContextKey;definition:World['zone'];value:unknown}>();
  #published:Registered|null=null;#frame:Frame|null=null;#moving=false;#partyMoving=false;#preparation:NativeAreaScenePreparation|null=null;
  readonly #traversals=new WeakMap<TraversalState,TraversalContinuation>();
  #executingTraversalCallback:TraversalContinuation|null=null;
@@ -109,14 +128,18 @@ export class NativeAreaSceneTransitionCoordinator {
   if(characterWriter.account!==campaign.account||characterWriter.localSeat!==campaign.localSeat||characterWriter.sim!==campaign.sim||characterWriter.zoneMap!==campaign.zoneMap||characterWriter.caveMap!==campaign.caveMap)throw Error('Native transition campaign differs from its character writer');
   if(coordinatedWriters.has(characterWriter))throw Error('Native campaign already has a transition coordinator');
   this.input=Object.freeze({campaign,characterWriter,authority,memoryRegistry});Object.defineProperty(this,'input',{writable:false,configurable:false});coordinatedWriters.set(characterWriter,this);actualCoordinators.add(this);
+  realmEntryIssuers.set(this,(owner,combat)=>Object.freeze({enter:<T>(key:NativeRealmContextKey,destination:string,action:()=>T):T=>{if(own(combat,"campaignFrame")!==owner)throw Error("Native realm entry owner changed");const source=this.#combat(combat),frame=this.#frame;if(!frame?.active||frame.current!==source||this.#realmEntry)throw Error("Native realm entry needs its exact current frame");const value=own<World[NativeRealmContextKey]>(source.combat.campaignOwner.state,key);if(!value)throw Error("Native realm entry lost its original context");const receipt:RealmEntry={frame,source,key,value,destination,prepared:null,definition:null,previous:null,revisit:false,completed:false,wakeCalled:false,consumed:false};this.#realmEntry=receipt;try{return action();}finally{this.#realmEntry=null;}},wake:(action:()=>void):void=>{if(own(combat,"campaignFrame")!==owner)throw Error("Native realm wake owner changed");const r=this.#realmEntry;if(!r){action();return;}if(this.#frame!==r.frame||r.frame.current.combat!==combat||!r.consumed||r.wakeCalled||own(combat.campaignOwner.state,r.key)!==(r.completed?null:r.value))throw Error("Native realm wake differs from its exact arrival");r.wakeCalled=true;if(!r.revisit)action();}}));
   roadQueueIssuers.set(this,(owner,combat)=>{const current=()=>{if(own(combat,'campaignFrame')!==owner)throw Error('Native road queue owner changed');return this.#combat(combat);};return Object.freeze({enableHosted:()=>{current();this.#enableHostedRoads();},enqueue:(ticket:RoadTicket<NativeAreaRoadDestination>)=>this.#enqueueRoad(current(),ticket),drain:()=>{current();return this.#drainRoads();}});});
   bridgeIssuers.set(this,(owner,combat)=>{const current=()=>{if(own(combat,'campaignTransitions')!==owner||this.#combats.get(combat)?.combat!==combat)throw Error('Native transition bridge owner was replaced or unregistered');};return Object.freeze({selectDescentRecovery:(run:NonNullable<World['descentRun']>)=>{current();return this.#selectDescentRecovery(run);},partySeats:()=>{current();return this.#partySeats();},loadPartyZone:(zoneId:string,from?:string)=>{current();this.#loadPartyZone(zoneId,from);},bindTraversal:(record:TraversalState)=>{current();this.#bindTraversal(record);},finishTraversal:(record:TraversalState)=>{current();this.#finishTraversal(record);},runTraversalStep:(action:()=>void):void=>{current();this.#runTraversalStep(action);}});});
  }
- attachPreparation(preparation:NativeAreaScenePreparation):void {
+ attachPreparation(preparation:NativeAreaScenePreparation):(area:NativeAreaSceneOngoing)=>void {
   if(!isNativeAreaScenePreparation(preparation)||preparation.input.coordinator!==this||preparation.input.session.campaign!==this.input.campaign||preparation.input.authority!==this.input.authority||this.#preparation)throw Error('Native transition needs its one actual campaign preparer');this.#preparation=preparation;
+  // The constructor receives this private callback once. It stages context on
+  // the authentic unresolved destination before layout, without moving authority.
+  return area=>{const r=this.#realmEntry;if(!r)return;if(this.#preparation!==preparation||!this.#moving||this.#frame!==r.frame||r.frame.current!==r.source||r.prepared||area.assembly.input.scene.zone!==r.definition||area.assembly.input.scene.zone.id!==r.destination||area.assembly.phase!=='fresh'||!isNativeAreaSceneCombat(area.combat)||area.combat.input.coordinator!==this)throw Error('Native realm preparation differs from its exact entry');if(own(r.source.combat.campaignOwner.state,r.key)!==r.value)throw Error('Native realm context changed before preparation');const state=area.combat.campaignOwner.state;writable(state,r.key);if(own(state,r.key)!==null)throw Error('Native prepared realm already owns context');Reflect.set(state,r.key,r.value);r.prepared=area.combat;};
  }
  /** Scheduler preflight is callback-free and runs before any clock write. */
- assertIdleFrame():void{if(this.#retired)throw Error('Native coordinator is retired');assertNativeRetainedMassState(this.input.characterWriter);if(this.#frame||this.#moving||this.#traversalStep||this.#roadDraining)throw Error('Native campaign frame is busy');}
+ assertIdleFrame():void{this.#finishVoyage();if(this.#retired)throw Error('Native coordinator is retired');assertNativeRetainedMassState(this.input.characterWriter);if(this.#frame||this.#moving||this.#traversalStep||this.#roadDraining)throw Error('Native campaign frame is busy');}
  get current():NativeAreaSceneOngoing{const r=this.#frame?.current??this.#published;if(!r)throw Error('Native transition has no selected actual area');return r.ongoing;}
  get published():NativeAreaSceneOngoing{if(!this.#published)throw Error('Native transition has no published actual area');return this.#published.ongoing;}
  /** Terminal retirement: no save/capture and no native gameplay rollback. */
@@ -136,6 +159,29 @@ export class NativeAreaSceneTransitionCoordinator {
   for(const area of areas){Reflect.apply(this.#lifecycle.population,area.assembly.input.population,[]);Reflect.apply(this.#lifecycle.deeds,area.combat.campaignOwner,[]);}
   for(const [key,previous]of restore){if(previous)Object.defineProperty(writer,key,previous);else Reflect.deleteProperty(writer,key);}
   this.#projection.clear();this.#previousProjection.clear();this.#areas.clear();this.#published=null;this.#preparation=null;this.#retirement=Object.freeze(unrestored);return this.#retirement;
+ }
+ /** Only exact completed sea owners may be skipped by a previously captured barrier. */
+ isRetiredVoyage(combat:NativeAreaSceneCombat):boolean{return this.#retiredVoyages.has(combat);}
+ assertVoyageRetirement(area:NativeAreaSceneOngoing):void {if(this.#retiringVoyage?.ongoing!==area||this.#frame||this.#moving)throw Error('Native voyage retirement needs its exact completed episode');}
+ assertVoyageArrival(combat:NativeAreaSceneCombat):void {if(!this.#moving||!this.#frame?.active||this.#voyageArrival!==combat||this.#frame.current.combat!==combat)throw Error('Native voyage arrival needs its exact selected destination');}
+ /** Surface consequences precede preparation as one retained phase: native
+  * stash abandonment first, then Necropolis cull. Later layout only validates. */
+ #abandonVoyageSurface():void {
+  const crossing=this.#voyageCrossing;if(!crossing?.surface)return;
+  if(!this.#moving||!this.#frame?.active||this.#frame.current!==crossing.source||crossing.surfaceHandled)throw Error('Native voyage surface crossing changed');
+  if(own(crossing.source.ongoing.assembly.transition,'voyage')!==crossing.run||own(crossing.source.ongoing.assembly.input.state,'wraithsailSeaStash')!==crossing.stash)throw Error('Native voyage changed before surface abandonment');
+  crossing.surfaceHandled=true;sceneAbandonVoyageAtSurface(crossing.source.ongoing.assembly.host);
+  crossing.stash=own(crossing.source.ongoing.assembly.input.state,'wraithsailSeaStash');
+ }
+ prepareVoyageSurface(area:NativeAreaSceneOngoing):void {
+  Reflect.apply(NativeAreaScenePreparation.prototype.assertVoyagePreparation,this.#preparation!,[area]);const crossing=this.#voyageCrossing;if(!crossing?.surface)return;
+  if(!this.#moving||!this.#frame?.active||this.#frame.current!==crossing.source||!crossing.surfaceHandled||area.assembly.input.scene.zone.id!==crossing.destinationId||area.assembly.input.campaign!==this.input.campaign)throw Error('Native voyage surface preparation changed');
+  if(own(crossing.source.ongoing.assembly.transition,'voyage')!==crossing.run||own(crossing.source.ongoing.assembly.input.state,'wraithsailSeaStash')!==crossing.stash)throw Error('Native voyage changed after surface abandonment');
+ }
+ #finishVoyage():void {const row=this.#voyageCompleted;if(!row||this.#frame||this.#moving)return;if(this.#retiringVoyage)throw Error('Native voyage retirement cannot reenter');this.#retiringVoyage=row;try{assertNativeCombatOperationsIdle();this.#ready(row);if(this.#published===row||this.#voyageArea!==row)throw Error('Native voyage is still published or replaced');const captured=captureSeats(this.input.campaign),census=own<Actor[]>(row.binding.scene,'actors'),actors=rawValues<Actor>(census);if(captured.rows.some(r=>actors.includes(r.body)))throw Error('Native voyage retirement refuses occupied sea');mutableCensus(census);finalSeats(captured);Reflect.apply(authorityFinalPhysical,this.input.authority,[row.binding,actors]);
+  // Native boundless sea has no memory row; unregister before revoking the actual binding.
+  Reflect.apply(this.#lifecycle.memoryUnregister,this.input.memoryRegistry,[row.memory,()=>{finalSeats(captured);const finalRoster=rawValues<Seat>(captured.seats);if(finalRoster.length!==captured.rows.length||finalRoster.some((seat,i)=>seat!==captured.rows[i].seat))throw Error('Native voyage retirement cohort changed during final capture');Reflect.apply(authorityFinalPhysical,this.input.authority,[row.binding,actors]);if(own(row.binding.scene,'actors')!==census||rawValues<Actor>(census).some((a,i)=>a!==actors[i])||census.length!==actors.length)throw Error('Native voyage census changed during final capture');}]);
+  Reflect.apply(this.#lifecycle.releaseVoyage,this.#preparation!,[row.ongoing]);Reflect.apply(this.#lifecycle.release,this.input.authority,[row.binding,actors]);Reflect.apply(this.#lifecycle.unregister,this.input.authority,[row.binding]);Reflect.apply(this.#lifecycle.population,row.ongoing.assembly.input.population,[]);this.#areas.delete(row.id);this.#combats.delete(row.combat);this.#roadInstances.delete(row.id);this.#retiredVoyages.add(row.combat);this.#voyageArea=null;this.#voyageCompleted=null;}finally{this.#retiringVoyage=null;}
  }
  /** All real resident areas, including those continuing without an avatar. */
  residentAreas():readonly NativeAreaSceneOngoing[]{const rows=[...this.#areas.values()];for(const row of rows)this.#ready(row);return Object.freeze(rows.map(row=>row.ongoing));}
@@ -248,15 +294,20 @@ export class NativeAreaSceneTransitionCoordinator {
  }
  #assertProjection():void{if(!this.#published)return;for(const [key,expected]of this.#projection){const actual=Object.getOwnPropertyDescriptor(this.input.characterWriter,key);if(!actual||actual.get!==expected.get||actual.set!==expected.set)throw Error('Native writer publication changed: '+key);}}
  runFrom<T>(source:NativeAreaSceneOngoing,action:()=>T):T{
+  if(this.#retiringVoyage)throw Error('Native voyage retirement cannot enter gameplay');if(!this.#frame)this.#finishVoyage();
   assertNativeRetainedMassState(this.input.characterWriter);
   const row=this.#areas.get(source.assembly.input.scene.zone.id);if(!row||row.ongoing!==source)throw Error('Native transition source is not registered');this.#ready(row);this.#assertProjection();
   if(this.#frame){if(!this.#frame.active||this.#frame.current!==row||(this.#moving&&this.#roadCallback?.frame!==this.#frame))throw Error('Native transition cannot enter a foreign or moving frame');const result=action();if(nativeBirthAsyncResult(result))throw Error('Native transition must be synchronous');return result;}
   const capture=captureSeats(this.input.campaign),census=rawValues<Actor>(own(row.binding.scene,'actors')),local=capture.rows.filter(r=>census.includes(r.body)),seats=Object.freeze(local.map(r=>r.seat));
   finalSeats(capture);this.input.authority.assertFinalPhysical(row.binding,local.map(r=>r.body));
   const state={source:row,current:row,seats,active:true} as Frame;state.view=Object.freeze({get source(){return state.source.ongoing;},get current(){if(!state.active)throw Error('Native transition frame is expired');return state.current.ongoing;},get seats(){if(!state.active)throw Error('Native transition frame is expired');return state.seats;},get active(){return state.active;}});this.#frame=state;
-  try{const result=action();if(nativeBirthAsyncResult(result))throw Error('Native transition must be synchronous');return result;}finally{state.active=false;this.#frame=null;}
+  let result:T;try{result=action();if(nativeBirthAsyncResult(result))throw Error('Native transition must be synchronous');}finally{state.active=false;this.#frame=null;}this.#finishVoyage();return result;
  }
+ #bountyArrival:{combat:NativeAreaSceneCombat;from:string|undefined}|null=null;
+ bountyArrivalFrom(combat:NativeAreaSceneCombat):string|undefined {if(!this.#moving||!this.#frame?.active||this.#frame.current.combat!==combat||this.#bountyArrival?.combat!==combat)throw Error('Native bounty arrival needs its selected genuine revisit');return this.#bountyArrival.from;}
+ #furnishArrival:NativeAreaSceneCombat|null=null;
  #townArrival:NativeAreaSceneCombat|null=null;
+ assertFurnishArrival(combat:NativeAreaSceneCombat):void {if(!this.#moving||!this.#frame?.active||this.#furnishArrival!==combat)throw Error('Native furnishing needs its selected arrival');}
  assertTownArrival(combat:NativeAreaSceneCombat):void {if(!this.#moving||!this.#frame?.active||this.#townArrival!==combat)throw Error('Native town refresh needs its selected genuine arrival');}
  /** Campaign death policy sees every genuine admitted hand. The returned roster
   * is a finite identity snapshot; native alive/merc/account rules still decide. */
@@ -312,8 +363,10 @@ export class NativeAreaSceneTransitionCoordinator {
  loadZone(zoneId:string,from?:string):void{
   assertNativeRetainedMassState(this.input.characterWriter);
   const frame=this.#frame;if(!frame?.active||this.#moving)throw Error('Native area handoff needs its current synchronous transition frame');
+  const realm=this.#realmEntry;if(realm&&(realm.frame!==frame||realm.source!==frame.current||realm.destination!==zoneId||realm.consumed))throw Error('Native realm handoff differs from its selected entry');
   const source=frame.current,restoring=this.#restore?.source===frame.current&&this.#restore.arriving;let destination=this.#areas.get(zoneId);if(restoring&&destination===source)destination=undefined;
   this.#ready(source);if(destination)this.#ready(destination);this.#assertProjection();if(source===destination)return;
+  if(realm){realm.definition=own<World['zone']>(this.input.campaign.caveMap,zoneId);if(!realm.definition||realm.definition.id!==zoneId)throw Error('Native realm entry lost its minted definition');}
   if(!destination&&!this.#preparation)throw Error('Native destination needs the actual campaign preparation owner');
   this.#moving=true;
   try{
@@ -327,22 +380,31 @@ export class NativeAreaSceneTransitionCoordinator {
    Object.freeze(cohort);const selected=this.input.authority.selectActors(cohort),incoming=capture.rows.find(r=>r.seat===localSeat)?.body??bodies[0];
    if(selected.some(s=>s.binding!==source.binding))throw Error('Native transition cohort is foreign');
    const carriedScene=publish?own<World['scene']>(source.ongoing.quests.input.state,'scene'):null;
+   const run=own<World['voyage']>(source.ongoing.assembly.transition,'voyage'),stash=own<World['wraithsailSeaStash']>(source.ongoing.assembly.input.state,'wraithsailSeaStash');
+   if((run||stash||zoneId===VOYAGE_ZONE_ID||source===this.#voyageArea)&&!publish)throw Error('Native solo voyage needs its genuine campaign-local crossing');
+   const crossing=publish&&(run||stash||zoneId===VOYAGE_ZONE_ID||source===this.#voyageArea||onGraph&&this.#voyageArea)?{source,destinationId:zoneId,run,stash,surface:onGraph,surfaceHandled:false}:null;this.#voyageCrossing=crossing;
    const ladder={caveReturn:source.roads.caveReturn,caveStack:[...source.roads.caveStack]};
    source.combat.transitionDeparture(cohort);if(restoring){if(!source.departure.adoptedZonePending)throw Error('Native restored departure lost its adopted-world suppression');sceneCaptureZoneMemory(source.departure.host);}else source.departure.captureZoneMemory();
+   if(onGraph){this.#abandonVoyageSurface();sceneNecropolisSurfaceArrival(this.input.campaign);}
    // Native pre-layout cancellation. The source queues remain retained, while
    // actor-carried casting and marks cannot migrate into the destination.
    incoming.dash=null;incoming.casting=null;
    const meta=capture.rows.find(r=>r.body===incoming)!.seat.meta;
    for(const inst of meta.knownSkills.values())if(inst.state?.markPos)inst.state.markPos=null;
-   const firstBirth=!destination;
+   const firstBirth=!destination;if(realm)realm.revisit=!firstBirth;
    if(!destination){
     const ongoing=this.#preparation!.prepareDestination(source.ongoing,zoneId,from,incoming),memory=new NativeAreaSceneMemory(ongoing.assembly,this.input.authority),roads=new NativeAreaRoadContext(ongoing.assembly,this.input.authority,this.input.campaign),departure=new NativeAreaSceneDepartureMemory(ongoing,memory);
     destination=Object.freeze({ongoing,combat:ongoing.combat,memory,roads,departure,binding:ongoing.binding,id:zoneId});
     const observers=ongoing.assembly.input.scene.actors;mutableCensus(observers);if(observers.length!==1||observers[0]!==incoming)throw Error('Native prepared destination observer changed');Reflect.apply(arraySplice,observers,[0,1]);
    }
+   const destinationVoyage=crossing?own<World['voyage']>(destination.ongoing.assembly.transition,'voyage'):null,destinationStash=crossing?own<World['wraithsailSeaStash']>(destination.ongoing.assembly.input.state,'wraithsailSeaStash'):null;
+   if(crossing&&((destinationVoyage&&destinationVoyage!==crossing.run)||(destinationStash&&destinationStash!==crossing.stash)))throw Error('Native destination already owns a distinct voyage');
+   if(crossing){writable(source.ongoing.assembly.transition,'voyage');writable(source.ongoing.assembly.input.state,'wraithsailSeaStash');writable(destination.ongoing.assembly.transition,'voyage');writable(destination.ongoing.assembly.input.state,'wraithsailSeaStash');if(!firstBirth&&crossing.surface)this.prepareVoyageSurface(destination.ongoing);}
+   if(!firstBirth){this.#furnishArrival=destination.combat;try{destination.combat.refreshSidezoneFurnish();}finally{this.#furnishArrival=null;}}
    if(!firstBirth){this.#townArrival=destination.combat;try{destination.combat.refreshTownStations(incoming);}finally{this.#townArrival=null;}}
    const destScene=destination.ongoing.assembly.input.scene,destCensus=own<Actor[]>(destScene,'actors'),relay=destination.ongoing.assembly.input.population.factory.relayStatus;mutableCensus(destCensus);
    const destinationScene=own<World['scene']>(destination.ongoing.quests.input.state,'scene');
+   if(realm){writable(source.combat.campaignOwner.state,realm.key);writable(destination.combat.campaignOwner.state,realm.key);const existing=own(destination.combat.campaignOwner.state,realm.key),issued=this.#realmContexts.get(destination.combat);if(issued&&(issued.key!==realm.key||issued.definition!==realm.definition))throw Error('Native realm destination receipt differs');if(existing!==(realm.prepared===destination.combat?realm.value:null)&&!(issued&&issued.value===existing))throw Error('Native realm destination already owns an unissued or replaced context');realm.previous=existing;realm.completed=!!issued&&existing===null;}
    if(carriedScene){if(destinationScene&&destinationScene!==carriedScene)throw Error('Native destination already owns a distinct running scene');writable(source.ongoing.quests.input.state,'scene');writable(destination.ongoing.quests.input.state,'scene');}
    if(cohort.some(a=>Reflect.apply(arrayIncludes,destCensus,[a])))throw Error('Native transition destination already contains moving body');
    writable(destScene,'player');for(const a of cohort)writable(a,'statusRelay');
@@ -362,23 +424,37 @@ export class NativeAreaSceneTransitionCoordinator {
    finalSeats(capture);this.input.authority.assertFinalSelections(selected);this.input.authority.assertFinalPhysical(destination.binding);
    if(own(scene,'actors')!==sourceCensus||own(destScene,'actors')!==destCensus)throw Error('Native transition census changed during landing');mutableCensus(sourceCensus);mutableCensus(destCensus);
    if(carriedScene&&(own(source.ongoing.quests.input.state,'scene')!==carriedScene||own(destination.ongoing.quests.input.state,'scene')!==destinationScene))throw Error('Native scene identity changed during handoff');
+   if(crossing&&(own(source.ongoing.assembly.transition,'voyage')!==crossing.run||own(source.ongoing.assembly.input.state,'wraithsailSeaStash')!==crossing.stash))throw Error('Native voyage crossing state changed before transfer');
+   if(crossing&&(own(destination.ongoing.assembly.transition,'voyage')!==destinationVoyage||own(destination.ongoing.assembly.input.state,'wraithsailSeaStash')!==destinationStash))throw Error('Native destination voyage changed before transfer');
+   if(realm){
+    if(own(source.combat.campaignOwner.state,realm.key)!==realm.value||own(destination.combat.campaignOwner.state,realm.key)!==realm.previous)throw Error('Native realm context changed during handoff');
+    if(own(this.input.campaign.caveMap,zoneId)!==realm.definition||destScene.zone!==realm.definition)throw Error('Native realm destination definition changed during handoff');
+    writable(source.combat.campaignOwner.state,realm.key);writable(destination.combat.campaignOwner.state,realm.key);
+   }
    for(const a of cohort){const index=Reflect.apply(arrayIndexOf,sourceCensus,[a]);Reflect.apply(arraySplice,sourceCensus,[index,1]);Reflect.apply(arrayPush,destCensus,[a]);Reflect.apply(authorityTransfer,this.input.authority,[a,source.binding,destination.binding]);}
    // World.loadZone retains its exact scene record. Only the actual local
    // presentation cohort carries that record; remote travel cannot steal it.
    if(carriedScene){destination.ongoing.quests.input.state.scene=carriedScene;source.ongoing.quests.input.state.scene=null;}
+   if(crossing){destination.ongoing.assembly.transition.voyage=crossing.run;destination.ongoing.assembly.input.state.wraithsailSeaStash=crossing.stash;source.ongoing.assembly.transition.voyage=null;source.ongoing.assembly.input.state.wraithsailSeaStash=null;}
+   // The exact realm entry belongs to its destination, including during native
+   // birth. Empty source areas retain neither the reward nor its portal gate.
+   if(realm){const value=realm.completed?null:realm.value;if(!Reflect.set(destination.combat.campaignOwner.state,realm.key,value)||!Reflect.set(source.combat.campaignOwner.state,realm.key,null))throw Error('Native realm context is no longer writable');this.#realmContexts.set(destination.combat,{key:realm.key,definition:realm.definition!,value});realm.consumed=true;}
    destScene.player=incoming;for(const a of cohort)a.statusRelay=relay;frame.current=destination;if(publish)this.#published=destination;
    destination.roads.entryFrom=from??null;destination.roads.caveReturn=onGraph?null:ladder.caveReturn;destination.roads.caveStack=onGraph?[]:ladder.caveStack;
    if(activeRoad){activeRoad.destination=destination;const selectedLadder=activeRoad.receipt.ticket.ladder;if(selectedLadder){destination.roads.caveReturn=selectedLadder.caveReturn;destination.roads.caveStack=[...selectedLadder.caveStack];}}
    const arriving=destination;
    const packedToken=Object.freeze({}) as NativePackedTravelReceipt,packed:PackedTravel={active:true,consumed:false,source:source.ongoing.assembly.input.ecology,destination:arriving.ongoing.assembly.input.ecology,actors:cohort,ids:cohort.map(actor=>own<number>(actor,'id')),authority:this.input.authority,binding:arriving.binding};packedTravel.set(packedToken,packed);
    try{Reflect.apply(this.#lifecycle.packed,packed.destination,[packedToken,firstBirth,()=>{if(firstBirth){this.#preparation!.birthTransferred(arriving.ongoing);this.#ready(arriving);if(restoring)Reflect.apply(this.#lifecycle.discardRestore,this.input.memoryRegistry,[source.memory,this.#restore!.token!]);this.input.memoryRegistry.register(arriving.memory);this.#ready(arriving);this.#areas.set(zoneId,arriving);this.#combats.set(arriving.combat,arriving);this.#roadInstances.set(zoneId,activeRoad?.receipt.instance);if(this.#hostedRoads)this.#installRoadLink(arriving);}}]);if(!packed.consumed)throw Error('Native destination did not consume its packed arrival');}finally{packed.active=false;}
+   if(crossing&&zoneId===VOYAGE_ZONE_ID){if(this.#voyageArea&&this.#voyageArea!==destination)throw Error('Native voyage episode already owns another sea');this.#voyageArea=destination;if(!firstBirth){this.#voyageArrival=destination.combat;try{destination.combat.resumeVoyageArrival();}finally{this.#voyageArrival=null;}}}
+   if(crossing?.surface&&this.#voyageArea&&this.#voyageArea!==destination)this.#voyageCompleted=this.#voyageArea;
    if(activeRoad)this.#roadBeforeArrival(activeRoad,firstBirth);
    for(const seat of frame.seats){source.roads.depart(seat);destination.roads.arrive(seat,activeRoad?activeRoad.receipt.ticket:{seatId:own<string>(seat,'id'),dest:zoneId,...(!onGraph?{ladder}:{})},from??null);}
    destination.combat.transitionArrival(cohort);
+   if(!firstBirth){this.#bountyArrival={combat:destination.combat,from};try{destination.combat.arriveBounties();}finally{this.#bountyArrival=null;}}
 
 
    if(activeRoad){const after=activeRoad.receipt.ticket.after;if(after!==undefined)this.#invokeRoad(activeRoad,after,activeRoad.receipt.ticket,[activeRoad.receipt.seat,firstBirth]);this.#roadCheck(activeRoad);}
-  }finally{this.#moving=false;}
+  }finally{this.#voyageCrossing=null;this.#moving=false;}
  }
 
  /** Query only: an external structural link cannot acquire installation rights. */
@@ -440,7 +516,7 @@ export class NativeAreaSceneTransitionCoordinator {
   Object.defineProperty(view,'massRuntime',{enumerable:true,get(){check();return null;}});Object.defineProperty(view,'shardWorld',{enumerable:true,get(){return check().roads.shardWorld;}});
   Object.defineProperty(view,'findFreeSpot',{enumerable:true,get(){const geometry=check().ongoing.assembly.input.geometry,fn=geometry.findFreeSpot;check();return(...args:Parameters<World['findFreeSpot']>)=>{check();return Reflect.apply(fn,geometry,args);};}});
   Object.defineProperty(view,'seatHero',{enumerable:true,get(){check();const campaign=self.input.campaign,fn=campaign.seatHero;check();return(seat:Seat)=>{check();if(seat!==active.receipt.seat)throw Error('Native road cannot select another seat');return Reflect.apply(fn,campaign,[seat]);};}});
-  for(const key of ['realmContext','crusadeRealmContext','necropolisRealmContext','fractureRealmContext'] as const)Object.defineProperty(view,key,{enumerable:true,get(){return check().combat.campaignOwner.state[key];},set(value:unknown){const state=check().combat.campaignOwner.state;if(!Reflect.set(state,key,value))throw new TypeError('Native realm context is not writable');}});
+  for(const key of ['realmContext','crusadeRealmContext','necropolisRealmContext','fractureRealmContext'] as const)Object.defineProperty(view,key,{enumerable:true,get(){return check().combat.campaignOwner.state[key];},set(value:unknown){const selected=check(),state=selected.combat.campaignOwner.state;if(!Reflect.set(state,key,value))throw new TypeError('Native realm context is not writable');self.#realmContexts.set(selected.combat,{key,definition:selected.ongoing.assembly.input.scene.zone,value});}});
   return Object.freeze(view);
  }
  #invokeRoad(active:ActiveRoad,fn:unknown,receiver:unknown,rest:unknown[]=[]):unknown{

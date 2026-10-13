@@ -1,6 +1,7 @@
 /** Native bounty-generated site and entry owner. Campaign ledgers remain shared;
  * scene census, geometry and harvest collections belong to this actual area. */
 import type { World } from '../engine/world';
+import {observeNativeCombatFactory} from '../engine/nativeCombatRecordObservation';
 import type { NativeSceneCensus, NativeAreaScenePopulation } from '../worldmass/nativeAreaScenePopulation';
 import type { NativeAreaSceneEnvironment } from '../worldmass/nativeAreaSceneEnvironment';
 import * as native from '../engine/nativeSceneBounty';
@@ -39,7 +40,8 @@ export class NativeAreaSceneBounty {
   fields(()=>input.scene,['actors']);fields(()=>input.geometry,['currentZoneSeed','doodads']);
   fields(()=>input.environment.input.state,['harvestNodes']);
   fields(()=>input.campaign,['bountyHands','activeQuests','charDirty','clientActionHook','zoneMap','visited','ledger','sim','massRuntime','completedObjectives']);
-  methods(()=>input.population,['effectiveSpawn','baseTable','createMonster','promoteRarityStacked']);
+  methods(()=>input.population,['effectiveSpawn','baseTable','promoteRarityStacked']);
+  Object.defineProperty(host,'createMonster',{enumerable:true,get(){return observeNativeCombatFactory(host,()=>{const owner=input.population,fn=owner.createMonster;return(...args:Parameters<typeof fn>)=>Reflect.apply(fn,owner,args);});}});
   methods(()=>input.population.input.sources.ambient,['weightedPick']);
   methods(()=>input.objectives,['spawnPoint','countedEnemies']);
   methods(()=>input.environment,['harvestRowPick']);methods(()=>input.geometry,['interactSpot','clampPos','markDoodadsChanged']);

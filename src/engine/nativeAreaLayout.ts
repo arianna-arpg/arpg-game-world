@@ -2,7 +2,7 @@
  * owner-local state; no arrival, body birth, source issuance or publication. */
 import type { World } from './world';
 import type { ZoneDef } from '../data/zones';
-import type { GeneratedLayout } from './levelgen';
+import type { Doodad, GeneratedLayout } from './levelgen';
 import type { Vec2 } from '../core/math';
 import { rand, vec } from "../core/math";
 import { doodadRuleOf } from "./levelgen";
@@ -301,10 +301,7 @@ export function adoptNativeAreaLayout(host: NativeAreaLayoutHost, def: ZoneDef, 
     // divergence; the relocation now guarantees an in-shape duct seat, so
     // the bounds clamp is a no-op safety). Ground mouths keep the classic
     // byte-identical clamp.
-    const mouthSeat = (d: { pos: Vec2; tier?: number }): Vec2 =>
-      (d.tier ?? 0) >= 1
-        ? clampToBounds(vec(d.pos.x, d.pos.y), 28, host.arena)
-        : host.clampPos(vec(d.pos.x, d.pos.y), 28);
+    const mouthSeat = (d: { pos: Vec2; tier?: number }): Vec2 => nativeLayoutMouthSeat(host,d);
     const mouths = layout.doodads.filter(d => d.kind === 'cave_entrance');
     host.caveEntrances = mouths.map((d, i) => ({
       pos: mouthSeat(d),
@@ -322,13 +319,7 @@ export function adoptNativeAreaLayout(host: NativeAreaLayoutHost, def: ZoneDef, 
       const sz = sidezoneOf(d.kind);
       if (d.kind === 'cave_entrance' || !sz) continue;
       const pos = mouthSeat(d);
-      host.caveEntrances.push({
-        pos,
-        seed: hashStr(`${zoneId}:${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`),
-        kind: d.kind,
-        roof: sz.indoorsOnly ? host.roofedStructureAt(pos) : null,
-        mouthTier: d.tier,
-      });
+      host.caveEntrances.push(nativeRegisteredSidezoneMouth(host,d,zoneId,sz,pos));
     }
     // THE SPAN MOUTHS (the rooted web, data/underspans.ts): pair this zone's
     // spanMouth doodads with its span MEMBERSHIPS — mouths sorted by
@@ -367,3 +358,20 @@ export function adoptNativeAreaLayout(host: NativeAreaLayoutHost, def: ZoneDef, 
 }
 
 export type NativeAreaLayoutArguments=Parameters<typeof adoptNativeAreaLayout> extends [unknown,...infer A]?A:never;
+
+/** Exact native mouth position law, shared by first layout and bounded furnishing. */
+export function nativeLayoutMouthSeat(host:Pick<NativeAreaLayoutHost,'arena'|'clampPos'>,d:{pos:Vec2;tier?:number}):Vec2 {
+ return (d.tier ?? 0) >= 1
+        ? clampToBounds(vec(d.pos.x, d.pos.y), 28, host.arena)
+        : host.clampPos(vec(d.pos.x, d.pos.y), 28);
+}
+/** Keep the caller's native array/method selection before building this record. */
+export function nativeRegisteredSidezoneMouth(host:Pick<NativeAreaLayoutHost,'roofedStructureAt'>,d:Pick<Doodad,'kind'|'pos'|'tier'>,zoneId:string,sz:NonNullable<ReturnType<typeof sidezoneOf>>,pos:Vec2):World['caveEntrances'][number] {
+ return {
+        pos,
+        seed: hashStr(`${zoneId}:${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`),
+        kind: d.kind,
+        roof: sz.indoorsOnly ? host.roofedStructureAt(pos) : null,
+        mouthTier: d.tier,
+      };
+}

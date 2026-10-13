@@ -1,3 +1,14 @@
+Retained journeys now compose bounty acceptance after exploration, actual voyage
+transfer/retirement, four realm entry/completion/reentry paths, and delayed package
+sidezone furnishing. Preserve retained wounds, rewards, exact ownership and
+native partial effects; surface abandonment precedes Necropolis culling before
+destination preparation. Verify nativebountyarrival*, nativevoyage*, nativerealm*,
+nativesidezonefurnish*, combined source proofs, adjacent retained/hosted/Continue
+courses, generation and all four types. See
+docs/worldgen/native-retained-journey-parity.md. Odyssey birth/admission and Nemesis departure
+remain confirmed content-parity blockers; complete the content gate before dedicated
+ShardHost conversion. Shards is the multiplayer target; co-op is reusable support.
+
 Native browser sessions now compose per-area targeted WebRTC publication and
 saved local co-op join lifetime checks. Preserve actual recipient area authority,
 terrain-before-state on join/reseat, native metadata heartbeat and one campaign

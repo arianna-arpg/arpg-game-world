@@ -1,3 +1,4 @@
+import {NativeSidezoneFurnish} from './nativeSidezoneFurnish';
 import {assertNativeEmptyCharacterCensus,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 import {NativeTownBodyLedger} from './nativeTownBodyLedger';
 import {START_ZONE} from '../data/zones';
@@ -129,6 +130,7 @@ export class NativeAreaSceneAssembly {
  readonly objectiveController:NativeAreaSceneObjectiveCompletion;
  readonly scenePresence:NativeAreaScenePresence;
  readonly objectiveServices:ReturnType<typeof sceneObjectiveServices>;
+ readonly #sidezoneFurnish:NativeSidezoneFurnish;
  #phase:'fresh'|'preparing'|'prepared'|'birthing'|'born'|'failed'='fresh';
  #preparedPlacement:Readonly<NativeAreaPreparedPlacement>|undefined;
  get preparedPlacement():Readonly<NativeAreaPreparedPlacement>|undefined{return this.#preparedPlacement;}
@@ -154,6 +156,7 @@ export class NativeAreaSceneAssembly {
    createMonster:(...args:Parameters<World['createMonster']>)=>population.createMonster(...args)}),sky);
   const arena=makeNativeAreaArena(definition);
   const geometry=new NativeAreaSceneGeometry(scene,arena,geometryCampaign,config);
+  this.#sidezoneFurnish=new NativeSidezoneFurnish(geometry);
   const local=extendView(servicesView(services.residents,['viewRectFor','scene','clientActionHook','questStanding','questDefOf']),{census:scene,get exits(){return geometry.exits;},massRuntime:null,
    localZoneAt:()=>scene.zone,isSafeAt:()=>scene.zone.objective.kind==='safe',lineOfSight:geometry.lineOfSight.bind(geometry)});
   const residents=new NativeResidentSession({campaign,area:{census:scene,local},history:campaign.nativeResidentHistory,characterConstruction:raw.characterConstruction});
@@ -237,6 +240,7 @@ export class NativeAreaSceneAssembly {
    this.boundaries.prepare(this.input.scene.zone,firstVisit,this.transition.inCave);
    const layout=this.generation.generate({...entry});
    this.input.geometry.adopt(layout.layout,entry);
+   this.#sidezoneFurnish.adopt(layout.layout);
    if(this.input.scene.zone.id===START_ZONE){this.townBodies.adopt(layout.layout);this.townLayoutSignature=this.townSignature();}
    const fingerprint=serializeNativeAreaData(session.read(source).members);
    Object.freeze(layout);
@@ -257,6 +261,16 @@ export class NativeAreaSceneAssembly {
    return layout;
   });
  }
+ /** Revisit only: retain the actual layout, population and native RNG continuation.
+  * No generation or one-time birth work is replayed to post a newly accepted writ. */
+ arriveBounties(from?:string):void {
+  if(this.#phase!=='born'||!this.#prepared)throw Error('Native bounty arrival needs its born layout');
+  const {bounty,scene}=this.input,{layout}=this.#prepared;
+  bounty.seedCullMarks(scene.zone,layout.rng);
+  bounty.seedGatherNodes(scene.zone,layout.layout.pois);
+  bounty.noteBountyArrivals(scene.zone,false,from);
+ }
+ refreshSidezoneFurnish():void {if(this.#phase!=='born'||!this.#prepared)throw Error('Native furnishing needs its born owner');this.#sidezoneFurnish.refresh(this.#prepared.layout.rng,this.#prepared.layout.layout);}
  birth():void {
   if(this.#phase!=='prepared'||!this.#prepared)throw Error('Native assembly needs its one prepared layout');
   const prepared=this.#prepared;

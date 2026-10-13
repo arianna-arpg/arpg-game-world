@@ -26,7 +26,7 @@ import { BOUNTY_CFG } from '../data/bounties';
 import { OFFERING_CFG, maybeAdoptObjective } from '../data/objectives';
 import { type Doodad } from './levelgen';
 import { transitDwell } from '../data/transit';
-import { VOYAGE_CFG, VOYAGE_ZONE_ID } from '../world/voyage';
+import {sceneResumeVoyageArrival} from './nativeSceneVoyageArrival';
 import { Rng } from '../core/rng';
 import { ALTARS, INTERACT_PLACE_CFG, SHRINES, type AltarDef } from '../data/shrines';
 import { GridWalkField } from '../world/gridWalk';
@@ -1143,17 +1143,7 @@ export function birthNativeArea(host:NativeAreaBirthHost,def:ZoneDef,layout:Gene
     // nulled `voyage`, so the stash IS the crossing). Fresh cast-off grace so
     // the hull's shadow can't dwell you straight back aboard, and the ghost
     // ship releases her boarding hold (the re-board cooldown arms).
-    if (zoneId === VOYAGE_ZONE_ID && host.wraithsailSeaStash) {
-      const stash = host.wraithsailSeaStash;
-      host.wraithsailSeaStash = null;
-      host.voyage = stash.run;
-      host.voyage.grace = VOYAGE_CFG.castOffGrace;
-      host.voyage.landDwell = 0;
-      host.voyage.lastStreamAt = vec(Infinity, Infinity);
-      host.player.pos = vec(stash.pos.x, stash.pos.y);
-      host.sim.wraithsailField?.onBoardingLeft();
-      host.streamCoast(true);
-    }
+    sceneResumeVoyageArrival(host,zoneId);
     // POOLED-AMBIENT lightwells wake with the zone (after every doodad source
     // above — generation, memory restore, package dressing — has finished).
     host.attachZoneWells();

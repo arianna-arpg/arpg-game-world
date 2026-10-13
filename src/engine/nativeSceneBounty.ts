@@ -1,6 +1,7 @@
 /** Exact native bounty site creation and arrival/readiness operations.
  * Installed source callbacks use the complete explicit campaign read context. */
 import type { World } from './world';
+import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
 import { vec, type Vec2 } from '../core/math';
 import { Actor } from './actor';
 import { MONSTERS } from '../data/monsters';
@@ -68,6 +69,7 @@ export function sceneSeedCullMarks(host:NativeSceneBountyHost, def: ZoneDef, rng
           m = host.createMonster(type, Math.max(1, p.challengeLevel ?? def.level), 'enemy');
           m.pos = host.spawnPoint(24);
           host.actors.push(m);
+          observeNativeCombatBirth(host,m);
         } else {
           m = host.countedEnemies().find(a =>
             a.tag !== 'bounty_mark' && (a.rarity ?? 'normal') === 'normal') ?? null;
