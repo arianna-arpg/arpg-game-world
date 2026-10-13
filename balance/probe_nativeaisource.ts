@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import {beforeNativeClientPublicationComposition as projectClientPublication} from './nativeClientPublicationCompositionFixture';
 import {beforeNativeAreaViewQueries as originalBeforeNativeAreaViewQueries} from './nativeAreaViewQueryFixture';
 function beforeNativeAreaViewQueries(file:string,source:string):string {return originalBeforeNativeAreaViewQueries(file,projectClientPublication('view',file,source));}
@@ -5,13 +6,13 @@ import {nativeAICompositionArchive as composition} from './nativeAICompositionAr
 import {beforeNativeAIComposition} from './nativeAICompositionFixture';
 import {beforeNativeAITargetContinuity} from './nativeAITargetContinuityFixture';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {readNativeMainCastSource} from './nativeMainCastSourceFixture';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
 import {nativeSceneAIArchive as archive} from './nativeSceneAIArchive';
 import {beforeNativeAI} from './nativeAIExtractionFixture';
-const hash=(s:string)=>createHash('sha256').update(s).digest('hex'),read=(f:string)=>beforeNativeAITargetContinuity(f,beforeNativeAIComposition(f,beforeNativeAreaViewQueries(f,fs.readFileSync(new URL('../'+f,import.meta.url),'utf8')))),parse=(s:string)=>ts.createSourceFile('source.ts',s,ts.ScriptTarget.Latest,true),printer=ts.createPrinter({removeComments:true});
+const hash=(s:string)=>createHash('sha256').update(s).digest('hex'),read=(f:string)=>beforeNativeAITargetContinuity(f,beforeNativeAIComposition(f,beforeNativeAreaViewQueries(f,readNativeMainCastSource(new URL('../'+f,import.meta.url),'utf8')))),parse=(s:string)=>ts.createSourceFile('source.ts',s,ts.ScriptTarget.Latest,true),printer=ts.createPrinter({removeComments:true});
 const print=(n:ts.Node,sf:ts.SourceFile)=>printer.printNode(ts.EmitHint.Unspecified,n,sf);
 const emit=(source:string)=>ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,removeComments:true}}).outputText;
 const world=execFileSync('git',['show',archive.pin+':src/engine/world.ts'],{maxBuffer:20*1024*1024}).toString().replaceAll('\r\n','\n');assert.equal(hash(world),archive.worldHash);const wsf=parse(world),klass=wsf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
@@ -30,9 +31,9 @@ let mutations=0,duplicates=0;for(const row of archive.shared){const source=read(
 for(const row of archive.fresh)assert.equal(read(row.file),row.after);
 for(const row of archive.typeOnlyChanges){assert.equal(emit(row.before),emit(row.after),row.file+' type-only emit');if(row.file.endsWith('/perception.ts'))assert.equal(read(row.file),row.after);else{const lifetime=archive.lifetime.find(r=>r.file===row.file)!;assert.equal(lifetime.before,row.after);assert.equal(read(row.file),lifetime.after);}}
 const actions=archive.lifetime.find(r=>r.file.endsWith('/aiActions.ts'))!;assert.equal(read(actions.file),actions.after);for(const file of ['src/engine/ai.ts','src/engine/perception.ts','src/engine/aiActions.ts']){const original=execFileSync('git',['show',archive.pin+':'+file],{maxBuffer:10*1024*1024}).toString();const before=archive.shared.find(r=>r.file===file)!.before;assert.equal(emit(original),emit(before),'immutable runtime predecessor '+file);}
-assert.equal(hash(fs.readFileSync(new URL('./nativeAICompositionArchive.ts',import.meta.url),'utf8')),'9d04f472dd7e89ced1738e1f964fafad814366f3f2971649692209731157b14f','immutable declared AI composition');
+assert.equal(hash(readNativeMainCastSource(new URL('./nativeAICompositionArchive.ts',import.meta.url),'utf8')),'9d04f472dd7e89ced1738e1f964fafad814366f3f2971649692209731157b14f','immutable declared AI composition');
 let compositionMutations=0,compositionDuplicates=0;
-for(const row of composition){const raw=beforeNativeAreaViewQueries(row.file,fs.readFileSync(new URL('../'+row.file,import.meta.url),'utf8')).replaceAll('\r\n','\n');assert.equal(hash(raw),row.afterHash);const projected=beforeNativeAIComposition(row.file,raw);assert.equal(hash(projected),row.beforeHash);assert.equal(beforeNativeAIComposition(row.file,raw.replaceAll('\n','\r\n')),projected);
+for(const row of composition){const raw=beforeNativeAreaViewQueries(row.file,readNativeMainCastSource(new URL('../'+row.file,import.meta.url),'utf8')).replaceAll('\r\n','\n');assert.equal(hash(raw),row.afterHash);const projected=beforeNativeAIComposition(row.file,raw);assert.equal(hash(projected),row.beforeHash);assert.equal(beforeNativeAIComposition(row.file,raw.replaceAll('\n','\r\n')),projected);
  const check=(source:string)=>beforeNativeAI(row.file,beforeNativeAITargetContinuity(row.file,beforeNativeAIComposition(row.file,source)));check(raw);
  for(const edit of row.changes){const at=Math.floor(edit.after.length/2),changed=edit.after.slice(0,at)+(edit.after[at]==='X'?'Y':'X')+edit.after.slice(at+1);assert.notEqual(changed,edit.after);assert.throws(()=>check(raw.replace(edit.after,changed)));compositionMutations++;assert.throws(()=>check(raw+'\n'+edit.after));compositionDuplicates++;}
  const mark='\n/* unknown outside composition edit */';assert.equal(beforeNativeAIComposition(row.file,raw+mark),projected+mark);assert.throws(()=>check(raw+mark));

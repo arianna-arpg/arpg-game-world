@@ -1078,6 +1078,8 @@ export class Actor {
    *  dps0 × growth^t once t > 0 — a survival meter, not damage. */
   decay?: { t: number; dps0: number; growth: number };
   /** Leash-recall scratch: progress sampling + re-port cooldown. */
+  /** Paint-only return intent, refreshed by the real AI each tick; never saved. */
+  companionReturnTo?: number;
   recallTimer = 0;
   lastProgress?: { x: number; y: number; at: number };
   /** OVERDRIVE lanes (debt-as-reservation, the inverted energy shield):

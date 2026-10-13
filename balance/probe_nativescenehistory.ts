@@ -1,8 +1,11 @@
 import {beforeNativeCampaignRaw as rawCampaign} from './nativeCampaignCompositionFixture';
 import {beforeNativeHistoryArrival} from './nativeHistoryArrivalFixture';
-import {assertHistoricalActorSlots,beforeHistoricalActorSlots} from './nativeHistoricalActorReceipt';
+import {assertHistoricalActorSlots,beforeHistoricalActorSlots as originalBeforeHistoricalActorSlots} from './nativeHistoricalActorReceipt';
+import {beforeMainCastActorSlot,assertMainCastActorSlot} from './nativeMainCastActorReceipt';
+function beforeHistoricalActorSlots<T>(receipt:T):T{return originalBeforeHistoricalActorSlots(beforeMainCastActorSlot(receipt));}
 import {readFileSync as readActorSource} from 'node:fs';
 assertHistoricalActorSlots(readActorSource(new URL('../src/engine/actor.ts',import.meta.url),'utf8'));
+assertMainCastActorSlot(readActorSource(new URL('../src/engine/actor.ts',import.meta.url),'utf8'));
 import {assertHistoricalCleaveSource,beforeHistoricalCleaveReceipt} from './nativeHistoricalCleaveReceipt';
 import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
 import {gzipSync,gunzipSync} from 'node:zlib';import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';

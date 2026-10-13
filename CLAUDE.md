@@ -1,3 +1,12 @@
+Retained casting now carries main dc56030f spell preparation, optional Wardrobe
+settings and return-only companion links. Preserve actual body transforms, native
+cast/interruption/summon timing and per-area AI. Client own-cast identity resolves
+through the actual bar/book after accepted metadata, including equipment grants
+and supports while respecting optimistic pending actions. Verify playercastvisuals,
+nativemaincast*, companion/self visuals, source/history gates, shardshell, all
+types and native-main-cast-ui.cjs. See docs/worldgen/native-main-casting-parity.md.
+Dedicated Shards and remaining encounter/crown integration are still open.
+
 Retained campaign arrivals now preserve canonical Odyssey pressure, changed leader
 grounds, Nemesis departure/manifestation, delayed Delver/corpse/mercenary/Ascent
 content and harbor victory/services. Occupied Odyssey ground refreshes only after

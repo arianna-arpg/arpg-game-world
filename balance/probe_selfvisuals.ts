@@ -88,7 +88,9 @@ for (const id of ['war_cry', 'surgewind', 'shield_up', 'spiked_bulwark', 'cold_s
   const { w, p, skill } = rig(), inst = skill(id); p.skills = [inst];
   assert(w.useSkill(p, inst, { x: 820, y: 700 }), id);
   for (let i = 0; i < 8; i++) w.update(1 / 60);
-  const cue = castingCueOf(p); check(id + ': native held/charging signature', cue?.skillId === id);
+  const cue = castingCueOf(p);
+  if (id === 'war_cry') check('ordinary nonspell War Cry keeps its body animation without spell preparation', !cue);
+  else check(id + ': native spell/guard signature', cue?.skillId === id);
   if (id === 'surgewind') assert.equal(cue!.fill, castingCompletion(p));
   const peer = rig().w, snap = serializeSnapshot(w, 1); applySnapshot(peer, snap);
   const mirror = peer.actors[snap.actors.findIndex(a => a.id === p.id)];

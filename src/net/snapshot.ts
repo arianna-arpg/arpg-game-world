@@ -2401,6 +2401,11 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   // shell's gate holds back a build older than its own newest optimistic action.
   const myMeta = snap.seatMeta?.[world.clientSeatId];
   if (myMeta && (!opts?.metaGate || opts.metaGate(myMeta))) applySeatMeta(world, world.localSeat, myMeta);
+  // Local preparation uses the replicated build, after this packet's metadata.
+  // Remote actors and unknown/old-host casts retain their render-only stubs.
+  const ownCastId = snap.actors.find(row => row.seat === world.clientSeatId)?.cast?.sk;
+  const refreshedOwnCastInst = own?.casting && ownCastId ? ownCastInst(world, own, ownCastId) : undefined;
+  if (own?.casting && refreshedOwnCastInst) own.casting.inst = refreshedOwnCastInst;
   const me = snap.seats[world.clientSeatId];
   if (me) applyOwnClocks(world, snap, me); // THE WIRE'S EYES: the own hero's cooldown and gauge rows
   if (me) {
