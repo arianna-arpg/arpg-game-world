@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import '../src/engine/world';
 import { nativeSceneGroundAt, type NativeSceneGeometryHost } from '../src/engine/nativeSceneGeometry';
 import { hitSurfaceOf, blocksMovement, type Doodad, type GeneratedLayout } from '../src/engine/levelgen';

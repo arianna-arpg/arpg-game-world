@@ -31,6 +31,7 @@ export interface NativeSceneObjectiveWatchingHost extends ObjectiveReadContext,O
  admitBirth?(body:Actor):void;
  /** Retained attendance only; ordinary finite callers retain their original player law. */
  isPresentLocalPlayer?():boolean;
+ notice:World['notice'];
  actorById:World['actorById'];
  actors:World['actors'];
  altars:World['altars'];
@@ -429,6 +430,7 @@ export function sceneUpdateObjective(host:NativeSceneObjectiveWatchingHost, dt: 
       case 'procession': {
         const pr=host.procession;if(!pr)return;
         const state:NativeProcessionState={...pr,enteredAt:host.zoneEnteredAt,done:host.objectiveDone,lost:host.objectiveLost};
+        let justLost=false;
         driveNativeProcession(dt,state,nativeProcessionConfig(o),{
           now:host.time,player:host.player,isPresentPlayer:host.isPresentLocalPlayer,random:{range:rand,int:randInt},actorById:id=>host.actorById(id)??null,
           reachable:(p,c,r)=>host.massProcessionReachable(p,c,r),enemiesOf:a=>host.enemiesOf(a),
@@ -438,11 +440,13 @@ export function sceneUpdateObjective(host:NativeSceneObjectiveWatchingHost, dt: 
           flash:(pos,radius,color,life)=>host.flashes.push({pos,radius,color,life,maxLife:life}),
           robbersAlive:()=>host.actors.filter(a=>!a.dead&&a.tag==='procession_robber').length,
           spawnAmbush:(a,h,n,c)=>host.spawnProcessionAmbush(a,h,n,c),
-          wreck:cart=>host.dropGemAt(cart.pos),lose:()=>{host.objectiveLost=true;},
+          wreck:cart=>host.dropGemAt(cart.pos),lose:()=>{host.objectiveLost=true;justLost=true;},
           win:()=>host.completeObjective('The caravan arrives — the road held!'),
         });
         const {enteredAt:_enteredAt,done,lost,...progress}=state;
         Object.assign(pr,progress);host.objectiveDone=done;host.objectiveLost=lost;
+        // The original loss speaks after wreck effects and the cleared cart id.
+        if(justLost)host.notice('The caravan is lost — its bounty with it.', '#d05050', 16, 'events');
         return;
       }
 

@@ -2,7 +2,7 @@ import {assertNativeHistoricalWorld} from './nativeHistoricalWorldGuard';
 import {beforeNativeInstalledSources} from './nativeInstalledSourceFixture';
 /** Original/current/local native graph, complete boundary and continued layout/birth courses. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {gunzipSync} from 'node:zlib';
 import {spawnSync} from 'node:child_process';

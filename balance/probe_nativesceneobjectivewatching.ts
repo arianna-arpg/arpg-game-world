@@ -1,3 +1,6 @@
+import {beforeNativeBirthLifetimeSource} from './nativeBirthLifetimeSourceFixture';
+import {beforeNativeMainProofSource} from './nativeMainProofSourceFixture';
+import {beforeNativeCaravanNews} from './nativeCaravanNewsFixture';
 import {beforeNativeBirthLifetime} from './nativeBirthLifetimeFixture';
 import {beforeNativeSceneProgression} from './nativeSceneProgressionFixture';
 import {beforeNativeSceneQuest} from './nativeSceneQuestFixture';
@@ -50,9 +53,9 @@ const read=(p:string)=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
 const parse=(s:string)=>ts.createSourceFile('proof.ts',s,99,true);
 const emit=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:99,module:99,removeComments:true}}).outputText;
 assert.equal(hash(JSON.stringify(archive)),nativeSceneObjectiveWatchingArchiveHash);
-const restored=beforeNativeSceneObjectiveWatching(beforeNativeSceneQuest(beforeNativeSceneProgression(read('src/engine/world.ts')))),sf=parse(restored),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
+const restored=beforeNativeSceneObjectiveWatching(beforeNativeSceneQuest(beforeNativeSceneProgression(beforeNativeMainProofSource('content','src/engine/world.ts',beforeNativeCaravanNews('src/engine/world.ts',read('src/engine/world.ts')))))),sf=parse(restored),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
 assert.equal(hash(JSON.stringify(cl.members.map(m=>m.getText(sf).replaceAll('\r\n','\n')))),archive.worldHash,'complete pre-watcher World');
-const cs=parse(beforeNativeBirthLifetime('src/engine/nativeSceneObjectiveWatching.ts',read('src/engine/nativeSceneObjectiveWatching.ts')));
+const cs=parse(beforeNativeBirthLifetime('src/engine/nativeSceneObjectiveWatching.ts',beforeNativeBirthLifetimeSource('src/engine/nativeSceneObjectiveWatching.ts',beforeNativeCaravanNews('src/engine/nativeSceneObjectiveWatching.ts',read('src/engine/nativeSceneObjectiveWatching.ts')))));
 for(const row of archive.rows){const original=parse('class A{'+row.before+'}'),method=(original.statements[0] as ts.ClassDeclaration).members[0] as ts.MethodDeclaration;
  const current=cs.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===row.fn) as ts.FunctionDeclaration;
  const body=method.body!.getText(original).replace(row.prefix||'__no_prefix__','').replace(/\bthis\b/g,'host');
@@ -122,8 +125,8 @@ for(const mode of ['missing','dead','rally','rolling','robbed','arrival','ambush
 {
  const f=fixture('owner');f.scene.zone.objective={kind:'pyres',kindleSec:2,contest:false};const stone=f.fixture('pyres');
  const hero=f.scene.player,other={zone:{...f.scene.zone,id:'neighbor'},actors:[hero],player:hero};const binding=f.authority.register(other,{});
- f.scene.actors=f.scene.actors.filter(a=>a!==hero);f.authority.transfer(hero,f.binding,binding);const before=JSON.stringify(f.snapshot());
- assert.throws(()=>f.driver.updateObjective(3),/present area player/);assert.equal(stone.charge,0);assert.equal(JSON.stringify(f.snapshot()),before);
+ f.scene.actors=f.scene.actors.filter(a=>a!==hero);f.authority.transfer(hero,f.binding,binding);f.driver.updateObjective(0);assert.equal(stone.charge,0);assert.deepEqual(stone.holdRead,{contested:false,draining:false,recouping:false});const before=JSON.stringify(f.snapshot());
+ assert.doesNotThrow(()=>f.driver.updateObjective(3));assert.equal(stone.charge,0);assert.equal(JSON.stringify(f.snapshot()),before);
  f.scene.actors.push(hero);other.actors=[];f.authority.transfer(hero,binding,f.binding);f.driver.updateObjective(3);assert.equal(stone.charge,2);assert.equal(f.objectives.objectiveDone,true);
  const counterfeitPhysical={...f.i.physical,input:{...f.i.physical.input,state:{...f.i.physical.input.state,drops:[]}}};
  assert.throws(()=>new NativeAreaSceneObjectiveWatching({...f.owner.input,physical:counterfeitPhysical as any}),/physical and environment stores/);

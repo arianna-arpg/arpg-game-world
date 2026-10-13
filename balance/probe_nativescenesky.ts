@@ -2,7 +2,7 @@ import {assertNativeHistoricalWorld} from './nativeHistoricalWorldGuard';
 import {beforeNativeInstalledSources} from './nativeInstalledSourceFixture';
 /** Source-pinned original/current/local sky parity and positive installed event reads. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
 import {makeSimWorld} from '../src/sim/arena';

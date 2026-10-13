@@ -20,7 +20,7 @@
 // Run: npx tsx balance/probe_bodyvoices.ts
 // ---------------------------------------------------------------------------
 
-import { readFileSync } from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { BODY_VOICE_CFG, deathVoiceOf, hitVoiceOf, hitTintOf, dominantTypeOf, skillBaseTypeOf } from '../src/engine/bodyVoices';

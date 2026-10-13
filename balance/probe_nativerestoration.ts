@@ -21,7 +21,7 @@ import {skillTargetVoice} from '../src/data/skillTargetVisuals';
 import {sceneShowSkillArrival} from '../src/engine/nativeSceneSkillArrival';
 /** Four-lane native restoration proof. No stream ticking or complete combat. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';

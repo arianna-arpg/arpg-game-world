@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';import {createHash} from 'node:crypto';
+import {nativeCaravanGroundFS as fs} from './nativeCaravanLegacySourceFixture';import {createHash} from 'node:crypto';
 import {nativeGroundCurrentSourceArchive as archive} from './nativeGroundCurrentSourceArchive';
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 /** Reverse declared current hunks only; all unrelated edits survive to the old guards. */

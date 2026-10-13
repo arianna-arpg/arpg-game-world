@@ -77,6 +77,7 @@ export class NativeAreaSceneObjectiveWatching {
   methods(()=>input.population.input.sources.ambient,['weightedPick']);
   methods(()=>input.theater,['clampNear']);methods(()=>input.theater.input.ecology,['actorById']);
   methods(()=>input.objectiveServices,['countedEnemies','objectiveCountable']);
+  Object.defineProperty(host,'notice',{enumerable:true,get(){const p=input.objectiveServices,fn=p.notice;return(...args:Parameters<Host['notice']>)=>Reflect.apply(fn,p,args);}});
   methods(()=>input.completion,['completeObjective']);methods(()=>input.loot,['dropGemAt','ownSpoils']);
   methods(()=>input.graph,['chartNeighborsOf']);methods(()=>input.coast,['refreshExitLabels']);
   methods(()=>input.quests,['nearestHand']);methods(()=>input.movement,['moveActor']);

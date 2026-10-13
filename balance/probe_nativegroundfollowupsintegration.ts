@@ -1,5 +1,5 @@
 import '../src/engine/world';
-import assert from 'node:assert/strict';import fs from 'node:fs';import {execFileSync} from 'node:child_process';import {createHash} from 'node:crypto';import ts from 'typescript';
+import assert from 'node:assert/strict';import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';import {execFileSync} from 'node:child_process';import {createHash} from 'node:crypto';import ts from 'typescript';
 import {World,type MaddenBank} from '../src/engine/world';import {makeSimWorld} from '../src/sim/arena';import {withSeededRandom} from '../src/core/rng';import {chance,rand,vec} from '../src/core/math';import {mod} from '../src/engine/stats';
 import {grantedTags,hostSockets,instanceCascadePlan,instanceDelivery,instanceFollowUps,instanceMods,instancePulsePlan,instanceSizeOver,resolveSizeOver,skillContextTags,socketSpec,makeSkillInstance,supportFitsInst,type SkillInstance} from '../src/engine/skills';
 import {SKILLS} from '../src/data/skills';import {SUPPORTS} from '../src/data/supports';import {skillBurstVoice} from '../src/data/skillVisuals';import {skillStrikeVoice} from '../src/data/skillStrikeVisuals';import {skillMovementVoice} from '../src/data/skillMovementVisuals';import {skillPresenceVoice} from '../src/data/skillPresenceVisuals';import {massDormancyPins} from '../src/worldmass/dormancy';

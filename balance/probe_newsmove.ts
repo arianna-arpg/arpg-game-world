@@ -1,3 +1,4 @@
+import {countNativeNewsCarriers} from './nativeCaravanNewsFixture';
 // ---------------------------------------------------------------------------
 // ONE-OFF PROBE — M-NEWS, THE NEWS MOVE (docs/design/show-dont-tell.md §3h):
 // world news speaks on THE NOTICE FEED (world/bulletins.ts — screen-anchored,
@@ -49,7 +50,7 @@ const w = makeSimWorld('warrior', 0x9e3d5);
 // ------------------------------------------------- C. the move census (source-lint)
 {
   const src = readFileSync('src/engine/world.ts', 'utf8');
-  const moved = (src.match(/this\.notice\(/g) ?? []).length;
+  const moved = countNativeNewsCarriers(src, file => readFileSync(file, 'utf8'));
   check('C1 the world-news carriers speak through notice() (≥ 80 calls moved off the head)', moved >= 80, `${moved}`);
   const headNews = ['The Necropolis crumbles behind you', 'hunters spring the ambush!', 'An undead tide pours into', 'word comes: ${def.name} is under siege',
     'The brigands drift on', 'Quest complete: ${q.offerLabel}!', 'The chart is inked'];

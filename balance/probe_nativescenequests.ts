@@ -9,7 +9,7 @@ import {beforeNativeMainContent} from './nativeMainContentFixture';
  * Native campaign writer and item/XP/rescue/quest algorithms run; compact scene
  * publication and progress rebuild are explicitly controlled test boundaries. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeCaravanPriorFS as fs} from './nativeCaravanCompositionFixture';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import ts from 'typescript';

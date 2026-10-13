@@ -1,6 +1,6 @@
 /** Strict comparison reversals; full native receipts remain pinned in their three probes. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeCaravanPriorFS as fs} from './nativeCaravanCompositionFixture';
 import ts from 'typescript';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';

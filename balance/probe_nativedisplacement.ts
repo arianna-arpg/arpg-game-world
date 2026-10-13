@@ -22,7 +22,7 @@ import {beforeNativeSceneRestoration} from './nativeSceneRestorationIntegrationF
  * are used. Controlled link setup courses are identified; ticking, damage,
  * continuous movement, staged/detached actors and publication are not claimed. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';

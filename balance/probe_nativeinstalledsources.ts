@@ -1,7 +1,7 @@
 import {beforeNativeContinuity as projectContinuity} from './nativeContinuityCompositionFixture';
 /** Installed native source parity, direct cold bootstrap, and live provider scope. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeCaravanPriorFS as fs} from './nativeCaravanCompositionFixture';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';

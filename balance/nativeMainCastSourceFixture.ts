@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {readFileSync} from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {nativeMainCastSourceArchive as archive} from './nativeMainCastSourceArchive';

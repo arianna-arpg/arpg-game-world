@@ -2,7 +2,7 @@
  * explicitly admitted by the fixture; full birth, combat ticking and detached
  * caster lifetimes are not exercised or supplied by this course. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeCaravanExtractedFS as fs} from './nativeCaravanExtractedReadFixture';
 import ts from 'typescript';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';

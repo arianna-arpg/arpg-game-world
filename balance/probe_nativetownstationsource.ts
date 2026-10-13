@@ -1,7 +1,7 @@
 import {beforeNativeContinuity as projectContinuity} from './nativeContinuityCompositionFixture';
 import {beforeNativeTownClient as projectTownClient} from './nativeTownClientCompositionFixture';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} from 'node:url';import {execFileSync} from 'node:child_process';import ts from 'typescript';
+import {nativeArrivalMainCastFS as fs} from './nativeArrivalCompositionFixture';import path from 'node:path';import {fileURLToPath} from 'node:url';import {execFileSync} from 'node:child_process';import ts from 'typescript';
 import {nativeTownStationArchive as archive} from './nativeTownStationArchive';
 import {beforeNativeTownStations as reverse} from './nativeTownStationFixture';
 import {combatHash,writeCombatProof} from './probe_nativecombatcycle';

@@ -3,7 +3,7 @@ import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisual
 /** Exact native loot parity. Compact geometry/policy recorders are test boundaries;
  * physical contents, item allocation and settlement gem factories are native. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import ts from 'typescript';

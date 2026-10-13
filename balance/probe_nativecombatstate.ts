@@ -12,7 +12,7 @@ import {beforeNativeSceneCastingPreparation} from './nativeSceneCastingPreparati
 import {beforeNativeSceneCombatState} from './nativeSceneCombatStateIntegrationFixture';
 import {nativeSceneCombatStateIntegrationArchive as integrationArchive,nativeSceneCombatStateIntegrationArchiveHash} from './nativeSceneCombatStateIntegrationArchive';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';
 import ts from 'typescript';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';

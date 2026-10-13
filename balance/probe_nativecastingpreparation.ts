@@ -4,7 +4,7 @@ import {beforeNativeSceneDefensePreparation} from './nativeSceneDefensePreparati
 import {nativeMainVisualSourceArchive} from './nativeMainVisualSourceArchive';
 /** Native casting preparation only; actor/construct state setup is explicit fixture input. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';

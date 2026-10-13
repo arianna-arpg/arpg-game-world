@@ -2,7 +2,7 @@ import {beforeNativeClientStartMenus as projectStartMenu} from './nativeClientSt
 /** Native control/transition source closure, including exact callback lifetime seams. */
 import assert from 'node:assert/strict';
 import {beforeNativeCarriedControl} from './nativeCarriedControlFixture';
-import fs from 'node:fs';
+import {nativeCaravanPriorFS as fs} from './nativeCaravanCompositionFixture';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';

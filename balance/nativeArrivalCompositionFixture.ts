@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import fs,{readFileSync} from 'node:fs';
+import {nativeCaravanPriorFS as fs,readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {beforeNativeMainProofSource} from './nativeMainProofSourceFixture';

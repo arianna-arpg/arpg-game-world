@@ -75,7 +75,8 @@
 //      realm unit with its first wake applied there once and its context there alone, a
 //      way home at the gate, a second seat into the same realm, and the way out back home.
 import ts from 'typescript';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import { tmpdir } from 'node:os';
 import { join as joinPath, resolve } from 'node:path';
 import { ShardHost, SHARD_CFG, bootShardEngine, type ShardSave } from '../server/shardHost';

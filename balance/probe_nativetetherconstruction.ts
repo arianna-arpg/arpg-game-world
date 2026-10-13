@@ -20,7 +20,7 @@ import {nativeMainVisualSourceArchive as visualArchive} from './nativeMainVisual
  * methods are exercised; fixture census/source tags do not claim summon birth,
  * tether damage/healing/ticking, staged lifetimes or area publication. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';

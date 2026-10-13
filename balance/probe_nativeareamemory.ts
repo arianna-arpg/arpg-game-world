@@ -3,7 +3,7 @@ import {beforeNativeContinuity} from './nativeContinuityCompositionFixture';
 /** Real native birth/owners -> genuine character writer -> staged cold Continue.
  * Physics publication, transient combat checkpoints and departure are outside this proof. */
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import {createHash} from 'node:crypto';
 import {beforeNativeSceneMemory} from './nativeSceneMemoryFixture';
 import ts from 'typescript';

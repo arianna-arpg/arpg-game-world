@@ -975,6 +975,10 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_nativearrivalcompositionsource.ts', status: 'green', tier: 'fast', why: 'Retained native encounter and crown arrival ownership, original cold behavior, partial effects and exact source composition.' },
   { probe: 'probe_nativecoldfactory.ts', status: 'green', tier: 'fast', why: 'Cold native factory identity and preserved historical source gates after exact arrival composition.' },
   { probe: 'probe_nativemainproofsource.ts', status: 'green', tier: 'fast', why: 'Cold native factory identity and preserved historical source gates after exact arrival composition.' },
+  { probe: 'probe_nativearrivalactorreceipt.ts', status: 'green', tier: 'slow', why: 'Actual cold arrival receipt, exact five unused Actor slots, original golden and hostile graph/source controls.' },
+  { probe: 'probe_nativecaravannews.ts', status: 'green', tier: 'fast', why: 'Actual generated caravan loss, owner routing, native partial effects and selected callback identity.' },
+  { probe: 'probe_nativecaravannewssource.ts', status: 'green', tier: 'slow', why: 'All main notice call lineages in actual current operations and declared watcher policy provenance.' },
+  { probe: 'probe_nativecaravancompositionsource.ts', status: 'green', tier: 'fast', why: 'Exact caravan predecessor before unchanged historical source readers and archives.' },
 ];
 
 /** Green rows — the gate — optionally narrowed to one lane. */

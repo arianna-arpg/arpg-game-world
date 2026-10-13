@@ -1,4 +1,4 @@
-import * as fs from 'node:fs';
+import {nativeCaravanPriorFS as fs} from './nativeCaravanCompositionFixture';
 import * as cp from 'node:child_process';
 import * as crypto from 'node:crypto';
 import ts from 'typescript';

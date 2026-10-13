@@ -1,3 +1,12 @@
+Native caravan loss now announces after wreck/flash effects and cleared cart progress,
+through the actual objective owner. Preserve one-time loss, native partial effects,
+selected notice callbacks and remote-only retained areas. The news census follows
+actual extracted operations without lowering original thresholds; historical source
+readers retain exact predecessor checks. Verify nativecaravannews/source/compositionsource,
+newsmove, nativesceneobjectivewatching, prior arrival/source courses and all four types.
+See docs/worldgen/native-caravan-notice-parity.md. Dedicated Shards and broader
+content acceptance remain separate gates.
+
 Retained native arrivals now handle package encounters unlocked after first exploration
 and Warlord crowns created after a capital was visited. Preserve actual discovery,
 spent-epoch and crown identities; warm wounds/completion; native cold reconstruction;

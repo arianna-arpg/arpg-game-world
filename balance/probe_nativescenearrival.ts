@@ -1,9 +1,9 @@
-import {assertHistoricalConcealmentSource,beforeHistoricalArrivalGrounds} from './nativeHistoricalArrivalGrounds';
+import {assertHistoricalConcealmentSource,beforeHistoricalArrivalGrounds} from './nativeCaravanArrivalReceiptFixture';
 import {assertHistoricalCleaveSource,beforeHistoricalCleaveReceipt} from './nativeHistoricalCleaveReceipt';
 import {assertHistoricalArrivalPolicy} from './nativeHistoricalArrivalPolicy';
 /** Retained original-method oracle, complete native layouts, and real factory bodies. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeCaravanPriorFS as fs} from './nativeCaravanCompositionFixture';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';

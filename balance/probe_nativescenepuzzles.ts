@@ -1,7 +1,7 @@
 /** Native puzzle extraction parity. Geometry/effect recordings below are labeled
  * test boundaries, never runtime publication or neighboring-area loot adapters. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeCaravanExtractedFS as fs} from './nativeCaravanExtractedReadFixture';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import ts from 'typescript';

@@ -3,7 +3,7 @@ import {beforeNativeFrameHooks as originalFrameHooks} from './nativeFrameHooksFi
 import {nativeCombatPresentationArchive as presentation} from './nativeCombatPresentationArchive';
 import {beforeNativeCombatPresentation} from './nativeCombatPresentationFixture';
 function beforeNativeFrameHooks(file:string,source:string):string {return originalFrameHooks(file,beforeNativeCombatPresentation(file,source));}
-import * as fs from 'node:fs';
+import {nativeCaravanPriorFS as fs} from './nativeCaravanCompositionFixture';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import * as cp from 'node:child_process';

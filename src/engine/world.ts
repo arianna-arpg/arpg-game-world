@@ -55056,6 +55056,7 @@ actors: Actor[] = [];
       get nativeBeaconHost(){const fn=world.nativeBeaconHost;return(...args:Parameters<NativeSceneObjectiveWatchingHost['nativeBeaconHost']>)=>fn.apply(world,args);},
       get nativeProcessionBodies(){const fn=world.nativeProcessionBodies;return(...args:Parameters<NativeSceneObjectiveWatchingHost['nativeProcessionBodies']>)=>fn.apply(world,args);},
       get nearestHand(){const fn=world.nearestHand;return(...args:Parameters<NativeSceneObjectiveWatchingHost['nearestHand']>)=>fn.apply(world,args);},
+      get notice(){const fn=world.notice;return(...args:Parameters<NativeSceneObjectiveWatchingHost['notice']>)=>Reflect.apply(fn,world,args);},
       get objectiveCountable(){const fn=world.objectiveCountable;return(...args:Parameters<NativeSceneObjectiveWatchingHost['objectiveCountable']>)=>fn.apply(world,args);},
       get ownSpoils(){const fn=world.ownSpoils;return(...args:Parameters<NativeSceneObjectiveWatchingHost['ownSpoils']>)=>fn.apply(world,args);},
       get packageAskView(){const fn=world.packageAskView;return(...args:Parameters<NativeSceneObjectiveWatchingHost['packageAskView']>)=>fn.apply(world,args);},

@@ -1,6 +1,6 @@
 /** Real campaign tickets consumed by newly constructed native area owners. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeCaravanPriorFS as fs} from './nativeCaravanCompositionFixture';
 import {gunzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';

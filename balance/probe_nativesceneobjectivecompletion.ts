@@ -3,7 +3,7 @@ import {beforeMuReliquary} from './muReliquarySourceFixture';
  * restoration, local texts/flashes and saves run; required progression rebuild
  * and quest payout boundaries are explicitly recording test providers only. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import ts from 'typescript';

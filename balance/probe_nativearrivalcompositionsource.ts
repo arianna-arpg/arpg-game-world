@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
 import {nativeArrivalCompositionArchive as archive} from './nativeArrivalCompositionArchive';

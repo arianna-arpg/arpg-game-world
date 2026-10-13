@@ -29,7 +29,7 @@
 //
 //   npx tsx balance/probe_menubar.ts
 
-import { readFileSync } from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import { resolve } from 'node:path';
 import { bootSimEngine, classById } from '../src/sim/arena';
 import { resetActorIdCounter } from '../src/engine/actor';

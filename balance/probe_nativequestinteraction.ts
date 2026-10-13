@@ -11,7 +11,7 @@ import {canonical} from '../src/worldmass/random';
 import {PROGRESSION} from '../src/data/classes';
 import {nativeSceneQuestInteractionArchive as archive} from './nativeSceneQuestInteractionArchive';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeCaravanPriorFS as fs} from './nativeCaravanCompositionFixture';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
 import {fixture} from './questInteractionFixture';

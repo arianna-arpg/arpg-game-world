@@ -28,7 +28,7 @@ import {presenceProfile,skillPresenceVoice,PRESENCE_STYLE} from '../src/data/ski
  * genuine native World test driver with this area's actual census/queues. This is
  * test evidence for progression effects, not a production area-combat implementation. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
