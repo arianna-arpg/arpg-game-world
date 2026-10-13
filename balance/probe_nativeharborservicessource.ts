@@ -2,7 +2,7 @@ import {beforeNativeCampaignRaw as rawCampaign} from './nativeCampaignCompositio
 import {beforeNativeHarborArrival} from './nativeHarborArrivalFixture';
 import ts from 'typescript';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeHarborServicesArchive as archive} from './nativeHarborServicesArchive';
 import {beforeNativeHarborServices as project} from './nativeHarborServicesFixture';

@@ -11,6 +11,7 @@ export interface NativeSceneEncounterBirthInput {
  * census and factory. The retained winner RNG belongs to subsequent controllers;
  * this owner does not run those controllers or supply their reward execution. */
 export class NativeAreaSceneEncounterBirth {
+ #nativeBirthAttempted=false;#nativeBirthFailed=false;#nativeBirthWinner:World['encounters'][number]|undefined;
  readonly input:NativeSceneEncounterBirthInput;
  readonly host:native.NativeSceneEncounterBirthHost;
  constructor(raw:NativeSceneEncounterBirthInput){
@@ -36,7 +37,8 @@ export class NativeAreaSceneEncounterBirth {
   methods(()=>input.population.input.sources.ambient,['weightedPick']);methods(()=>this,['eventDensityFor','materializeExtractionNode','materializeBorough','rollExtractTemper']);
   this.host=Object.freeze(host);for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false,enumerable:false});
  }
- placeEncounters(...args:Parameters<World['placeEncounters']>){return native.encounterBirthPlaceEncounters(this.host,...args);}
+ initialDiscovery():Readonly<{attempted:boolean;failed:boolean;winner:World['encounters'][number]|undefined}>{return Object.freeze({attempted:this.#nativeBirthAttempted,failed:this.#nativeBirthFailed,winner:this.#nativeBirthWinner});}
+ placeEncounters(...args:Parameters<World['placeEncounters']>){if(this.#nativeBirthAttempted)throw Error('Native initial encounter birth cannot replay');this.#nativeBirthAttempted=true;const before=[...this.input.state.encounters];try{return native.encounterBirthPlaceEncounters(this.host,...args);}catch(error){this.#nativeBirthFailed=true;throw error;}finally{this.#nativeBirthWinner=this.input.state.encounters.find(e=>!before.includes(e));}}
  eventDensityFor(...args:Parameters<World['eventDensityFor']>){return native.encounterBirthEventDensityFor(this.host,...args);}
  materializeExtractionNode(...args:Parameters<World['materializeExtractionNode']>){return native.encounterBirthMaterializeExtractionNode(this.host,...args);}
  materializeBorough(...args:Parameters<World['materializeBorough']>){return native.encounterBirthMaterializeBorough(this.host,...args);}

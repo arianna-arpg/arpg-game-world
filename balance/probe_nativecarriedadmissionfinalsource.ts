@@ -4,7 +4,7 @@ function beforeNativeAreaViewQueries(file:string,source:string):string {return o
 import {nativeAdmissionCompositionArchive as composition} from './nativeAdmissionCompositionArchive';
 import {beforeNativeAdmissionComposition as projectComposition} from './nativeAdmissionCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeCarriedAdmissionFinalArchive as archive} from './nativeCarriedAdmissionFinalArchive';
 import {beforeNativeCarriedAdmissionFinal as before} from './nativeCarriedAdmissionFinalFixture';

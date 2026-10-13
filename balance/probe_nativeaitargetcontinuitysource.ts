@@ -1,4 +1,4 @@
-import {readNativeMainCastSource} from './nativeMainCastSourceFixture';
+import {readNativeArrivalMainCast as readNativeMainCastSource} from './nativeArrivalCompositionFixture';
 import {beforeNativeClientPublicationComposition as projectClientPublication} from './nativeClientPublicationCompositionFixture';
 import {beforeNativeAreaViewQueries as originalBeforeNativeAreaViewQueries} from './nativeAreaViewQueryFixture';
 function beforeNativeAreaViewQueries(file:string,source:string):string {return originalBeforeNativeAreaViewQueries(file,projectClientPublication('view',file,source));}

@@ -1,7 +1,7 @@
 import {beforeNativeClientMenus as projectClientMenu} from './nativeClientMenuCompositionFixture';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {nativeClientPublicationCompositionArchive as archive} from './nativeClientPublicationCompositionArchive';
 import {beforeNativeClientPublicationCompositionOnly as project} from './nativeClientPublicationCompositionFixture';
 import {writeCombatProof} from './probe_nativecombatcycle';

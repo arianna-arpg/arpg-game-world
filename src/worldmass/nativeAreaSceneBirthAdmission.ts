@@ -3,7 +3,7 @@ import {captureNativeActorConstruction} from '../engine/nativeActorConstruction'
  * Raw census identity and native partial writes remain intact. */
 import type {Actor} from '../engine/actor';
 import {NativeAreaActorAuthority,type NativeAreaAuthorityBinding} from './nativeAreaActorAuthority';
-import {NativeAreaScenePopulation,nativeBirthAsyncResult,type NativeSceneCensus} from './nativeAreaScenePopulation';
+import {NativeAreaScenePopulation,nativeBirthAsyncResult,nativePopulationCreateMonsterForAdmission as createMonsterForAdmission,type NativeSceneCensus} from './nativeAreaScenePopulation';
 export interface NativeSceneBirthAdmissionInput {
  authority:NativeAreaActorAuthority<object>;scene:NativeSceneCensus;population:NativeAreaScenePopulation;
 }
@@ -12,7 +12,7 @@ interface BirthScopes {population:NativeAreaScenePopulation;top:BirthFrame|null;
 // Controllers in the same actual area share a stack, never an ambient depth permission.
 const scopes=new WeakMap<NativeAreaActorAuthority<object>,WeakMap<NativeSceneCensus,BirthScopes>>();
 const finalBirthBinding=NativeAreaActorAuthority.prototype.bindingFor,finalBirthPhysical=NativeAreaActorAuthority.prototype.assertFinalPhysical;
-const createMonsterForAdmission=NativeAreaScenePopulation.prototype.createMonsterForAdmission;
+// The defining population module captures this exact method after initialization.
 export class NativeAreaSceneBirthAdmission {
  readonly input:NativeSceneBirthAdmissionInput;
  readonly #scope:BirthScopes;

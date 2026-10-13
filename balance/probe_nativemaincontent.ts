@@ -1,6 +1,7 @@
+import {beforeNativeMainProofSource} from './nativeMainProofSourceFixture';
 /** Narrow historical normalization must prove, never conceal, intentional main behavior ports. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalMainproofFS as fs} from './nativeArrivalCompositionFixture';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
@@ -12,7 +13,7 @@ const hash=(text:string)=>createHash('sha256').update(text).digest('hex');
 const parse=(text:string)=>ts.createSourceFile('world.ts',text,99,true);
 const classOf=(sf:ts.SourceFile)=>sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
 const emit=(text:string)=>ts.transpileModule(text,{compilerOptions:{target:99,module:99,removeComments:true}}).outputText;
-const source=fs.readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8').replaceAll('\r\n','\n');
+const source=beforeNativeMainProofSource('content','src/engine/world.ts',fs.readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8')).replaceAll('\r\n','\n');
 assert.equal(hash(JSON.stringify(archive)),nativeMainContentArchiveHash);
 assert.deepEqual(archive.rows.map(r=>r.name),['pendingRepeats','executeSkill','layFissure','dropLingerField','updateRepeats','updateZones','expireZone','maddenBanks','maddenBankOf']);
 assert.deepEqual(archive.declarations.map(r=>r.name),['Zone','MaddenBank','MADDEN_CFG']);
@@ -40,7 +41,7 @@ for(const row of [...archive.rows,...archive.declarations]){
   const body=method.body!,start=body.getStart(original),edits:{start:number;end:number}[]=[];
   const visit=(n:ts.Node)=>{if(n.kind===ts.SyntaxKind.ThisKeyword)edits.push({start:n.getStart(original)-start,end:n.end-start});ts.forEachChild(n,visit);};visit(body);
   let expected=body.getText(original);for(const e of edits.reverse())expected=expected.slice(0,e.start)+'nativeHost'+expected.slice(e.end);
-  const core=parse(beforeNativeMainVisualSource('src/engine/nativeSceneProgression.ts',fs.readFileSync(new URL('../src/engine/nativeSceneProgression.ts',import.meta.url),'utf8')));
+  const core=parse(beforeNativeMainVisualSource('src/engine/nativeSceneProgression.ts',beforeNativeMainProofSource('content','src/engine/nativeSceneProgression.ts',fs.readFileSync(new URL('../src/engine/nativeSceneProgression.ts',import.meta.url),'utf8'))));
   const fn=core.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='sceneExpireZone') as ts.FunctionDeclaration;
   assert.equal(fn.body!.getText(core),expected,'exact relocated main expiry body');
  }

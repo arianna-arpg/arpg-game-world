@@ -1,6 +1,6 @@
 import {beforeNativeBrowserEntry as projectBrowserEntry} from './nativeBrowserEntryCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
 import {nativeDimensionCatalogArchive as archive} from './nativeDimensionCatalogArchive';

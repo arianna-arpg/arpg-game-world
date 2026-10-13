@@ -4,7 +4,7 @@ import '../src/engine/world';
 import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
 import {beforeNativeSceneKillAftermath} from './nativeSceneKillAftermathIntegrationFixture';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalSummonBoundaryFS as fs} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {runInNewContext} from 'node:vm';
 import {setImmediate as nextTurn} from 'node:timers/promises';

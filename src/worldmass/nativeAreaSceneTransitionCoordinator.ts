@@ -342,10 +342,21 @@ export class NativeAreaSceneTransitionCoordinator {
   if(this.#historyArrival!==receipt||this.#frame!==frame||!frame.active||frame.current!==receipt.row||!Reflect.apply(arrayIncludes,frame.seats,[receipt.seat])||own(this.input.characterWriter,'localSeat')!==receipt.seat||own(receipt.seat,'actor')!==receipt.body||own(receipt.row.binding.scene,'player')!==receipt.body||own(receipt.row.binding.scene,'zone')!==receipt.definition||own(graph,receipt.row.id)!==receipt.definition)throw Error('Native history arrival lost its actual local hand or ground');
   return receipt.definition;
  }
+ #warlordArrival:{row:Registered;capture:SeatCapture;seat:Seat;body:Actor;meta:Seat['meta'];definition:World['zone'];arriving:readonly Actor[]}|null=null;
+ assertWarlordArrival(combat:NativeAreaSceneCombat):World['zone'] {
+  const r=this.#warlordArrival,frame=this.#frame;if(!r||!this.#moving||!frame?.active||frame.current!==r.row||r.row.combat!==combat)throw Error('Native crown needs its selected genuine revisit');
+  this.#ready(r.row);finalSeats(r.capture);Reflect.apply(authorityFinalPhysical,this.input.authority,[r.row.binding,[r.body]]);
+  if(this.#warlordArrival!==r||this.#frame!==frame||!frame.active||frame.current!==r.row||!Reflect.apply(arrayIncludes,frame.seats,[r.seat])||own(r.seat,'actor')!==r.body||own(r.seat,'meta')!==r.meta||own(r.row.binding.scene,'player')!==r.body||own(r.row.binding.scene,'zone')!==r.definition)throw Error('Native crown arrival lost its actual hand or ground');return r.definition;
+ }
+ /** The new arrival cohort has not occupied this fight; every other physical seat does, including downed hands. */
+ warlordOccupied(arrival:NativeAreaSceneCombat,target:NativeAreaSceneCombat):boolean {
+  this.assertWarlordArrival(arrival);const r=this.#warlordArrival!,presence=this.#presence(this.#combat(target));this.assertWarlordArrival(arrival);
+  return presence.seats.some(seat=>target!==arrival||!Reflect.apply(arrayIncludes,r.arriving,[own(seat,'actor')]));
+ }
  #bountyArrival:{combat:NativeAreaSceneCombat;from:string|undefined}|null=null;
  bountyArrivalFrom(combat:NativeAreaSceneCombat):string|undefined {if(!this.#moving||!this.#frame?.active||this.#frame.current.combat!==combat||this.#bountyArrival?.combat!==combat)throw Error('Native bounty arrival needs its selected genuine revisit');return this.#bountyArrival.from;}
- #delayedArrival:{combat:NativeAreaSceneCombat;kind:'corpse'|'delver'|'merc'|'ascent';capture:SeatCapture;seat:Seat;body:Actor;local:Seat;meta:Seat['meta']}|null=null;
- delayedArrivalBody(combat:NativeAreaSceneCombat,kind:'corpse'|'delver'|'merc'|'ascent'):Actor {
+ #delayedArrival:{combat:NativeAreaSceneCombat;kind:'corpse'|'delver'|'merc'|'ascent'|'encounter';capture:SeatCapture;seat:Seat;body:Actor;local:Seat;meta:Seat['meta']}|null=null;
+ delayedArrivalBody(combat:NativeAreaSceneCombat,kind:'corpse'|'delver'|'merc'|'ascent'|'encounter'):Actor {
   const r=this.#delayedArrival,frame=this.#frame;if(!r||r.kind!==kind||r.combat!==combat||!this.#moving||!frame?.active||frame.current.combat!==combat)throw Error('Native delayed arrival needs its exact selected destination');
   const row=this.#combat(combat);this.#ready(row);const local=this.input.campaign.localSeat;finalSeats(r.capture);
   if(local!==r.local||own(this.input.characterWriter,'localSeat')!==r.local||own(r.seat,'actor')!==r.body||own(r.seat,'meta')!==r.meta||!frame.seats.includes(r.seat)||own(row.binding.scene,'player')!==r.body||kind==='corpse'&&r.seat!==r.local)throw Error('Native delayed arrival character changed');
@@ -506,7 +517,9 @@ export class NativeAreaSceneTransitionCoordinator {
    for(const seat of frame.seats){source.roads.depart(seat);destination.roads.arrive(seat,activeRoad?activeRoad.receipt.ticket:{seatId:own<string>(seat,'id'),dest:zoneId,...(!onGraph?{ladder}:{})},from??null);}
    destination.combat.transitionArrival(cohort);
    if(!firstBirth){const selectedHarbor=capture.rows.find(row=>row.body===incoming);if(!selectedHarbor)throw Error('Native harbor arrival lost its selected seat');this.#harborArrival={row:destination,capture,seat:selectedHarbor.seat,body:incoming,meta:own(selectedHarbor.seat,'meta'),definition:destScene.zone};try{destination.combat.harborServices.arrive();}finally{this.#harborArrival=null;}}
+   if(!firstBirth){const selected=capture.rows.find(row=>row.body===incoming);if(!selected)throw Error('Native crown arrival lost its incoming seat');this.#warlordArrival={row:destination,capture,seat:selected.seat,body:incoming,meta:own(selected.seat,'meta'),definition:destScene.zone,arriving:Object.freeze([...cohort])};try{destination.combat.warlordArrival.arrive();}finally{this.#warlordArrival=null;}}
    if(!firstBirth){this.#bountyArrival={combat:destination.combat,from};try{destination.combat.arriveBounties();}finally{this.#bountyArrival=null;}}
+   if(!firstBirth){const selected=capture.rows.find(row=>row.body===incoming);if(!selected)throw Error('Native encounter arrival lost its incoming seat');this.#delayedArrival={combat:destination.combat,kind:'encounter',capture,seat:selected.seat,body:incoming,local:localSeat,meta:selected.seat.meta};try{destination.combat.encounterArrival.arrive();}finally{this.#delayedArrival=null;}}
    if(!firstBirth){const selected=capture.rows.find(row=>row.body===incoming);if(!selected)throw Error('Native surface arrival lost its incoming seat');this.#delayedArrival={combat:destination.combat,kind:'merc',capture,seat:selected.seat,body:incoming,local:localSeat,meta:selected.seat.meta};try{destination.combat.surfaceArrival.arriveMerc();}finally{this.#delayedArrival=null;}}
    if(!firstBirth&&publish&&onGraph){this.#historyArrival={row:destination,seat:localSeat,body:incoming,definition:destScene.zone};try{destination.combat.historyArrival.arrive();}finally{this.#historyArrival=null;}}
    if(!firstBirth){

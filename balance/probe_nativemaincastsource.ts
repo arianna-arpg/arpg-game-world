@@ -1,6 +1,6 @@
 import '../src/engine/world';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalProductionFS as fs} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeMainCastSourceArchive as archive} from './nativeMainCastSourceArchive';
 import {beforeNativeMainCastSource as project} from './nativeMainCastSourceFixture';

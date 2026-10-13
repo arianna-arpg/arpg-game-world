@@ -44,6 +44,7 @@ import { insideBounds } from '../world/shape';
 import { featureEnabled, FEATURE } from '../meta/account';
 import { allUnlockables, isUnlockOwned } from '../meta/unlocks';
 import { mintNemesisName } from '../meta/nemesis';
+import {birthNativeWarlord} from './nativeSceneWarlordBirth';
 
 /** Structural ports keep the original field/method types, including private
  * controller shapes, without requiring a World instance or importing it at runtime.
@@ -912,21 +913,7 @@ export function birthNativeArea(host:NativeAreaBirthHost,def:ZoneDef,layout:Gene
 
     // A faction's WARLORD rules its capital — walking in is a boss fight, and
     // cutting it down is how you break that faction's grip on the world.
-    const lord = host.sim.warlord.lordAt(def.id);
-    if (lord && o.kind !== 'boss' && host.sim.faction.owner(def.id).faction === lord.faction) {
-      const bossId = host.sim.warlord.bossId(lord.faction);
-      if (bossId && MONSTERS[bossId]) {
-        const wl = host.createMonster(bossId, def.level + 2, 'enemy');
-        wl.faction = lord.faction;
-        wl.xpValue = Math.max(wl.xpValue, 120); // a warlord's bounty (the top
-        // bar itself is the authored-boss contract — World.bossBarInfo)
-        wl.tag = 'warlord';
-        wl.pos = host.clampPos(host.farPoint(700), wl.radius);
-        host.actors.push(wl);
-        const wname = (FACTIONS[lord.faction]?.name ?? lord.faction).replace(/^the /, '');
-        host.text(vec(p.pos.x, p.pos.y - 116), `${wname} warlord rules ${def.name}!`, '#e85050', 16);
-      }
-    }
+    birthNativeWarlord(host, def, o, p);
 
     // THE THEATER FABRIC (engine/theater.ts): the zone's own life may already
     // be playing here — the owner's patrol on its beat, a siege at a camp,

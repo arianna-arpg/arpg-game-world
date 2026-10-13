@@ -2,7 +2,7 @@ import {beforeNativeClientPublicationComposition as projectClientPublication} fr
 import {beforeNativeAreaViewQueries as originalBeforeNativeAreaViewQueries} from './nativeAreaViewQueryFixture';
 function beforeNativeAreaViewQueries(file:string,source:string):string {return originalBeforeNativeAreaViewQueries(file,projectClientPublication('view',file,source));}
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeAreaPublicationArchive as archive} from './nativeAreaPublicationArchive';
 const hash=(text:string)=>createHash('sha256').update(text).digest('hex'),normalize=(text:string)=>text.replaceAll('\r\n','\n');

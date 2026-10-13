@@ -42,6 +42,24 @@ Combined acceptance also requires the previous bounty, voyage, realm, side-zone,
 
 Dedicated Shards remains the subsequent multiplayer target: one authoritative retained campaign, shared landscape and deliberately private side instances. Existing local/co-op hosting is reusable infrastructure; it does not establish dedicated-server parity. Bounded terrain, navigable points of interest and generated private quest entrances remain separate design and implementation work.
 
-## Confirmed successor gaps
+## Later encounter eligibility and resource renewal
 
-A subsequent native comparison found that a package encounter unlocked after an early visit remains absent on retained return. The concrete course discovers a dormant Mirrorkin rift in the original game after the level gate opens, while the retained encounter owner remains empty. A separate course visits generated capitals before the first campaign frame; after actual faction crowning, the original return creates the wild warlord and the retained return does not. These are confirmed remaining content-parity gaps and require their own area-owned arrival handling before the dedicated Shards conversion.
+An area explored before a package level gate opens now evaluates the unchanged native encounter placement rules on a genuine later arrival. Native package gates, fair winner selection and random draws remain authoritative. The installed encounter keeps its actual owner, actors, scenery and wounds across warm returns. Its discovery receipt consumes an ordinary winner for that retained area's lifetime, including after the native controller removes a completed row. This is a retained-world lifetime rule; it does not claim identical random schedules to regenerating the area on every visit.
+
+Extraction and Borough renewal follows their existing 600-second and 900-second spent ledgers. A new resource requires the exact successfully settled encounter, its privately observed spent epoch and the actual timed expiry. Removing a ledger row, malformed restored state, unfinished materialization or a surviving court door does not authorize renewal. Native cold Continue retains the original reconstruction policy and reroll behavior.
+
+If placement partially succeeds and later fails, completed native writes remain. That area's encounter controller refuses further placement until cold reconstruction; the rest of its campaign work stays live. Actual cold Continue reconstructs linked, admitted resource bodies instead of carrying orphan partial nodes or villagers into the new area. Raw array insertion keeps the original receiver, method selection before argument evaluation, and throwing partial effects. A selected character substitution refuses before any later stale callable runs.
+
+## Newly crowned Warlords
+
+A genuine return to a previously explored capital now materializes the native crowned boss through that area's admitted factory. A private identity binds the actual WarlordField crown epoch, body and physical owner. Repeated visits preserve the living body and its wounds. Capital movement keeps that epoch; a genuinely new crown creates a new identity.
+
+An occupied former capital preserves its current fight, including dormant or downed physical occupants. Once empty, the obsolete boss retires through the native removal path without a kill or an area-wide reset. An obsolete fight still yields its ordinary native kill effects, but cannot suppress a successor crown, satisfy its bounty or impersonate an authored Odyssey leader. Failed retirement preserves prior effects and can recover the same admitted body when that capital becomes current again.
+
+Cold Continue follows native transient crown behavior: the real post-hydration field update derives the crown, and a subsequent genuine capital arrival creates its body. No persisted crown or wound format is added.
+
+## Remaining integration
+
+These changes close the demonstrated later encounter and newly crowned capital arrival gaps. Combined regression still verifies the surrounding campaign, saved Continue, hosted travel, generation and browser paths. The full original cold outputs and source assertions remain separate gates. Original source archives stay intact; explicit outer projections restore each immutable predecessor, including its raw line endings, before its existing guard runs.
+
+Dedicated Shards remains the multiplayer successor. Shared authoritative landscapes, deliberate private quest instances, generated entrances and bounded terrain still require their own implementation and acceptance; local or hosted travel courses do not establish dedicated-server parity.

@@ -1,6 +1,6 @@
 import {beforeNativeCampaignRaw as rawCampaign} from './nativeCampaignCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeHarborArrivalArchive as archive} from './nativeHarborArrivalArchive';
 import {beforeNativeHarborArrival as project} from './nativeHarborArrivalFixture';

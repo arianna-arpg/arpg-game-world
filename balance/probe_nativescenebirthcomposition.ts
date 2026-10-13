@@ -1,6 +1,6 @@
 /** Whole native post-arrival birth, including retained RNG and partial failures. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalMainCastFS as fs} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';

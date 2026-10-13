@@ -1,6 +1,6 @@
 import {beforeNativeContinuity as projectContinuity} from './nativeContinuityCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeTownConclusionCompositionArchive as archive} from './nativeTownConclusionCompositionArchive';
 import {beforeNativeTownConclusionOnly as project} from './nativeTownConclusionCompositionFixture';

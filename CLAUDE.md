@@ -1,3 +1,14 @@
+Retained native arrivals now handle package encounters unlocked after first exploration
+and Warlord crowns created after a capital was visited. Preserve actual discovery,
+spent-epoch and crown identities; warm wounds/completion; native cold reconstruction;
+and partial writes without replay. Extraction/Borough renew only through their real
+600/900-second spent ledgers. Obsolete occupied capital fights retain ordinary kill
+effects without suppressing successor crowns. Verify nativelateencounter*,
+nativeencounterinsertion*, nativewarlord*, nativearrivalcompositionsource, original
+cold/source courses and surrounding Continue/hosted journeys. See
+docs/worldgen/native-campaign-arrival-parity.md. Dedicated Shards, private quest
+instances, generated entrances and bounded terrain remain subsequent work.
+
 Retained casting now carries main dc56030f spell preparation, optional Wardrobe
 settings and return-only companion links. Preserve actual body transforms, native
 cast/interruption/summon timing and per-area AI. Client own-cast identity resolves
@@ -5,7 +16,7 @@ through the actual bar/book after accepted metadata, including equipment grants
 and supports while respecting optimistic pending actions. Verify playercastvisuals,
 nativemaincast*, companion/self visuals, source/history gates, shardshell, all
 types and native-main-cast-ui.cjs. See docs/worldgen/native-main-casting-parity.md.
-Dedicated Shards and remaining encounter/crown integration are still open.
+Dedicated Shards remains open; retained encounter/crown arrivals are described above.
 
 Retained campaign arrivals now preserve canonical Odyssey pressure, changed leader
 grounds, Nemesis departure/manifestation, delayed Delver/corpse/mercenary/Ascent
@@ -18,8 +29,8 @@ nativesurfacecompletedtext, nativequay*, nativeholdvocation, strict source
 composition, adjacent journeys/Continue/hosted courses, four types, generation,
 browser and boot. See docs/worldgen/native-campaign-arrival-parity.md. Dedicated
 Shards remains the multiplayer successor, including private quest/side instances.
-New native courses confirm later-unlocked encounters and newly crowned warlords
-still need retained arrival handling; resolve both before the content gate closes.
+Later-unlocked encounters and newly crowned Warlords now have retained arrival
+owners; preserve their complete combined acceptance gates.
 
 Retained journeys now compose bounty acceptance after exploration, actual voyage
 transfer/retirement, four realm entry/completion/reentry paths, and delayed package

@@ -3,7 +3,7 @@
 import type {World} from '../engine/world';
 import type {Actor} from '../engine/actor';
 import type {SkillInstance} from '../engine/skills';
-import {NativeAreaScenePopulation,nativeBirthAsyncResult,type NativeSceneCensus} from './nativeAreaScenePopulation';
+import {NativeAreaScenePopulation,nativeBirthAsyncResult,nativePopulationCreateMonster as createMonster,type NativeSceneCensus} from './nativeAreaScenePopulation';
 import {NativeAreaSceneProgression} from './nativeAreaSceneProgression';
 import type {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
 import {sceneRollSummonType,sceneForwardSummonSockets} from '../engine/nativeSceneSummonPreparation';
@@ -25,7 +25,7 @@ interface PreparationFrame {owner:NativeAreaSceneSummonPreparation;caster:Actor;
 const frames=new WeakMap<NativeAreaScenePopulation,PreparationFrame>();
 // Capture the concrete class operation, not an overridable caller-provided mint.
 // It invokes createNativeMonster with this population's frozen real factory.
-const createMonster=NativeAreaScenePopulation.prototype.createMonster;
+// The defining module captures this intrinsic after its class initialization.
 export class NativeAreaSceneSummonPreparation {
  readonly input:NativeAreaSceneSummonPreparationInput;
  constructor(raw:NativeAreaSceneSummonPreparationInput){

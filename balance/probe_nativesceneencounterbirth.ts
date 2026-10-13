@@ -1,5 +1,5 @@
 /** Full pinned native encounter birth oracle. Archive, actual World and local area run in separate cold processes. */
-import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
+import assert from 'node:assert/strict';import {nativeArrivalMainCastFS as fs} from './nativeArrivalCompositionFixture';import ts from 'typescript';
 import {gzipSync,gunzipSync} from 'node:zlib';import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
 import * as native from '../src/engine/nativeSceneEncounterBirth';
 import {makeSimWorld} from '../src/sim/arena';import {massDormancyPins} from '../src/worldmass/dormancy';

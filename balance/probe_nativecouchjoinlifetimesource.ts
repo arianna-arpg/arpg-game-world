@@ -1,6 +1,6 @@
 import {beforeNativeBrowserHosted as projectBrowserHosted} from './nativeBrowserHostedCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeCouchJoinLifetimeArchive as archive,nativeCouchJoinProofAdapter as adapter} from './nativeCouchJoinLifetimeArchive';
 import {beforeNativeCouchJoinLifetime as before} from './nativeCouchJoinLifetimeFixture';

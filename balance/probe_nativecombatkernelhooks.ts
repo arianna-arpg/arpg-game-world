@@ -1,4 +1,4 @@
-import * as fs from 'node:fs';
+import {nativeArrivalMainCastFS as fs} from './nativeArrivalCompositionFixture';
 import * as crypto from 'node:crypto';
 import ts from 'typescript';
 import {nativeSceneCombatKernelArchive as pure} from './nativeSceneCombatKernelArchive';

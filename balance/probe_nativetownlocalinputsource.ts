@@ -1,6 +1,6 @@
 import {beforeNativeClientContinuity as projectClientContinuity} from './nativeClientContinuityCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeTownLocalInputCompositionArchive as archive} from './nativeTownLocalInputCompositionArchive';
 import {beforeNativeTownLocalInputOnly as project} from './nativeTownLocalInputCompositionFixture';

@@ -240,3 +240,7 @@ export class NativeAreaScenePopulation {
     methods(host,()=>area.input.sources.ambient,['weightedPick']);return host;
   }
 }
+
+/** Immutable original operation, captured after this class initializes even on a cold cycle. */
+export const nativePopulationCreateMonster=NativeAreaScenePopulation.prototype.createMonster;
+export const nativePopulationCreateMonsterForAdmission=NativeAreaScenePopulation.prototype.createMonsterForAdmission;

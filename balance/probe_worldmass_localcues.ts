@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import { createRequire } from 'node:module';
 import ts from 'typescript';
 import { LitePool, type LiteSwarmRow } from '../src/engine/lite';

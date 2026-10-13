@@ -1,6 +1,6 @@
 import {beforeNativeTownConclusion as projectTownConclusion} from './nativeTownConclusionCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {combatHash,writeCombatProof} from './probe_nativecombatcycle';
 import {nativeTownFreshFoldArchive as archive} from './nativeTownFreshFoldArchive';
 import {beforeNativeTownFreshFoldOnly as project} from './nativeTownFreshFoldFixture';

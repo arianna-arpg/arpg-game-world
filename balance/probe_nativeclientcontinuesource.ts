@@ -1,6 +1,6 @@
 import {beforeNativeContinuity as projectContinuity} from './nativeContinuityCompositionFixture';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalMainCastFS as fs} from './nativeArrivalCompositionFixture';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';

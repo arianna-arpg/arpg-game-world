@@ -2,7 +2,7 @@ import {beforeNativeContinuity as projectContinuity} from './nativeContinuityCom
 import {beforeNativeClientStartMenuProof} from './nativeClientStartMenuCompositionFixture';
 import {beforeNativeClientStartMenus as projectStartMenu} from './nativeClientStartMenuCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
 import {nativeClientMenuCompositionArchive as archive} from './nativeClientMenuCompositionArchive';

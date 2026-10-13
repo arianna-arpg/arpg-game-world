@@ -1,6 +1,6 @@
 import {beforeNativeCampaignRaw as rawCampaign} from './nativeCampaignCompositionFixture';
 import assert from 'node:assert/strict';
-import {readNativeMainCastSource as readFileSync} from './nativeMainCastSourceFixture';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeJourneyCompositionArchive as archive} from './nativeJourneyCompositionArchive';
 import {beforeNativeJourneyOnly as project,beforeNativeJourneyRawOnly as rawProject,type NativeJourneyLane} from './nativeJourneyCompositionFixture';

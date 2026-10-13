@@ -6,7 +6,7 @@ import {nativeAICompositionArchive as composition} from './nativeAICompositionAr
 import {beforeNativeAIComposition} from './nativeAICompositionFixture';
 import {beforeNativeAITargetContinuity} from './nativeAITargetContinuityFixture';
 import assert from 'node:assert/strict';
-import {readNativeMainCastSource} from './nativeMainCastSourceFixture';
+import {readNativeArrivalMainCast as readNativeMainCastSource} from './nativeArrivalCompositionFixture';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';

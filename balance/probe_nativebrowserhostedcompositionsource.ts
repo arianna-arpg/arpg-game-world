@@ -1,6 +1,6 @@
 import {beforeNativeJourney as projectJourney} from './nativeJourneyCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeBrowserHostedCompositionArchive as archive} from './nativeBrowserHostedCompositionArchive';
 import {beforeNativeBrowserHostedOnly as project} from './nativeBrowserHostedCompositionFixture';

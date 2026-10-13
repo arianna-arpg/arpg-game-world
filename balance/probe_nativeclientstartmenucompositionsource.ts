@@ -1,6 +1,6 @@
 import {beforeNativeClientStartActions as projectActions} from './nativeClientStartActionsCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeClientStartMenuCompositionArchive as archive} from './nativeClientStartMenuCompositionArchive';
 import {beforeNativeClientStartMenusOnly as project,beforeNativeClientStartMenuProof as proof} from './nativeClientStartMenuCompositionFixture';

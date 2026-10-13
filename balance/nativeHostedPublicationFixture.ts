@@ -1,5 +1,5 @@
 import {beforeNativeBrowserHosted as projectBrowserHosted} from './nativeBrowserHostedCompositionFixture';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {NATIVE_HOSTED_PUBLICATION_ARCHIVE as archive} from './nativeHostedPublicationArchive';
 export const hostedLF=(source:string):string=>source.replace(/\r\n/g,'\n');

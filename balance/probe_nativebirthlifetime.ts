@@ -2,7 +2,7 @@ import '../src/engine/world';
 import {beforeNativeBirthLifetimeSource} from './nativeBirthLifetimeSourceFixture';
 import {beforeNativeMainVisualSource} from './nativeMainVisualSourceFixture';
 import {beforeNativeSceneKillAftermath} from './nativeSceneKillAftermathIntegrationFixture';
-import fs from 'node:fs';
+import {nativeArrivalMainCastFS as fs} from './nativeArrivalCompositionFixture';
 import {runInNewContext} from 'node:vm';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';

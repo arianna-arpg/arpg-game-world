@@ -1,0 +1,4 @@
+/** Exact two inert native birth observations; original cold assertions remain intact. */
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+export function nativeEncounterArrivalSourceRead(raw:string):string {const source=raw.replaceAll('\r\n','\n'),sha=(s:string)=>createHash('sha256').update(s).digest('hex'),reference='ee0a1ecaa4e7b08ceba35f2fce52a916e9fda0f96c5efc15b2c0c902a658dff3';if(sha(source)===reference)return source;let original=source;for(const line of ["import {observeNativeCombatBirth} from './nativeCombatRecordObservation';\n",'    observeNativeCombatBirth(host,node);\n','      observeNativeCombatBirth(host,f);\n']){assert.equal(original.split(line).length,2,'exact native encounter observation');original=original.replace(line,'');}assert.equal(sha(original),reference,'unchanged complete native encounter source');return original;}

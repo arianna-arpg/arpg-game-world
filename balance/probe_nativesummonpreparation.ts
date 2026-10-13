@@ -1,8 +1,9 @@
+import {beforeNativeMainProofSource} from './nativeMainProofSourceFixture';
 /** Four independent native preparation lanes. This is pre-insertion evidence;
  * manual actor admission is fixture setup, and full combat/spawn is absent. */
 import '../src/engine/world';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeArrivalMainproofFS as fs} from './nativeArrivalCompositionFixture';
 import ts from 'typescript';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -31,13 +32,13 @@ import * as core from '../src/engine/nativeSceneSummonPreparation';
 import {sceneRelevelActor,sceneBakeMinionOwnerStats} from '../src/engine/nativeSceneProgression';
 import {nativeSceneProgressionArchive as progressionArchive} from './nativeSceneProgressionArchive';
 import {nativeSceneSummonPreparationArchive as archive,nativeSceneSummonPreparationArchiveHash} from './nativeSceneSummonPreparationArchive';
-import {beforeNativeSceneTethers} from './nativeSceneTetherFixture';
-import {beforeNativeSceneDisplacement} from './nativeSceneDisplacementIntegrationFixture';
-import {beforeNativeSceneSummonPreparation} from './nativeSceneSummonPreparationIntegrationFixture';
+import {beforeNativeSceneTethers} from './nativeMainProofHistoricalFixture';
+import {beforeNativeSceneDisplacement} from './nativeMainProofHistoricalFixture';
+import {beforeNativeSceneSummonPreparation} from './nativeMainProofHistoricalFixture';
 import {nativeSceneSummonPreparationIntegrationArchive as integrationArchive,nativeSceneSummonPreparationIntegrationArchiveHash} from './nativeSceneSummonPreparationIntegrationArchive';
 const sha=(s:string)=>createHash('sha256').update(s).digest('hex'),checks:string[]=[],expanded:any[]=[];
 function check(name:string,fn:()=>void){fn();checks.push(name);console.log('PASS '+name);}
-const read=(f:string)=>fs.readFileSync(new URL('../'+f,import.meta.url),'utf8').replaceAll('\r\n','\n');
+const read=(f:string)=>beforeNativeMainProofSource('summon',f,fs.readFileSync(new URL('../'+f,import.meta.url),'utf8')).replaceAll('\r\n','\n');
 const bindings={rand,crewBoardingOpen,instanceSummon,supportRidesMinions,supportFitsInst,MONSTERS,monsterSkillLevelOf,resolveMinionInheritance,RELIQUARY_CFG,reliquaryPower,mod,syncAttributeBequests,applyMinionPlyBonus,throngEvolution,throngClusterPlies};
 const nativeStats=progressionArchive.rows.filter(r=>['relevelActor','bakeMinionOwnerStats'].includes(r.name));
 const original:any=Function(...Object.keys(bindings),ts.transpileModule('class Original{'+[...archive.rows,...nativeStats].map(x=>x.before).join('\n')+'}\nreturn Original.prototype;',{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText)(...Object.values(bindings));

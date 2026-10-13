@@ -1,6 +1,6 @@
 import {beforeNativeTownConclusion as projectTownConclusion} from './nativeTownConclusionCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeClientConclusionCompositionArchive as archive} from './nativeClientConclusionCompositionArchive';
 import {beforeNativeClientConclusionOnly as project} from './nativeClientConclusionCompositionFixture';

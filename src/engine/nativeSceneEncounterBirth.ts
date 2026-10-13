@@ -1,3 +1,4 @@
+import {selectNativeEncounterPush} from './nativeCombatRecordObservation';
 /** Complete native encounter placement and extraction/village births. Full controllers remain required. */
 import type {World} from '../engine/world';
 import {clamp,vec} from '../core/math';
@@ -102,7 +103,7 @@ export function encounterBirthPlaceEncounters(host:NativeSceneEncounterBirthHost
         def.id, chosen.def.court.lords);
       if (lord) enc.lordId = lord.id;
     }
-    host.encounters.push(enc);
+    selectNativeEncounterPush(host,host.encounters)(enc);
     // An EXTRACT encounter stands its node the moment the zone does — the seam
     // is scenery you can find, not a diamond that pops on approach.
     if (enc.def.extract) host.materializeExtractionNode(enc);
@@ -127,9 +128,9 @@ export function encounterBirthMaterializeExtractionNode(host:NativeSceneEncounte
     node.invulnerable = true;   // — no ambient wanderer chews the prize early
     node.tag = 'extraction_node';
     node.eventKey = `extraction:${host.zone.id}`;
-    host.actors.push(node);
+    selectNativeEncounterPush(host,host.actors)(node);
     const well: Doodad = { pos: vec(e.pos.x, e.pos.y + 6), radius: 26, kind: look.well ?? 'marrow_well' };
-    host.doodads.push(well);
+    selectNativeEncounterPush(host,host.doodads)(well);
     // THE TEMPER ROLL (ExtractSwarmSpec.tempers, her ask 2026-09-11): one row
     // per seam on the encounter stream — who the swarm comes for first.
     const temper = host.rollExtractTemper(spec);
@@ -141,7 +142,7 @@ export function encounterBirthMaterializeExtractionNode(host:NativeSceneEncounte
         const ang = host.encRng.range(0, Math.PI * 2);
         const r = host.encRng.range(row.ring[0], row.ring[1]);
         const spot = host.findFreeSpot(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), 14);
-        if (spot) host.doodads.push({ pos: spot, radius: host.encRng.range(9, 14), kind: row.kind });
+        if (spot) selectNativeEncounterPush(host,host.doodads)({ pos: spot, radius: host.encRng.range(9, 14), kind: row.kind });
       }
     }
   }
@@ -150,14 +151,14 @@ export function encounterBirthMaterializeBorough(host:NativeSceneEncounterBirthH
     const lvl = Math.max(1, host.zone.level + spec.folk.levelBonus);
     // The hearth + ring dressing (small kinds only — a runtime stamp must
     // never wall a path; the extraction ring-scatter idiom).
-    host.doodads.push({ pos: vec(e.pos.x, e.pos.y + 6), radius: 18, kind: spec.site.center.kind });
+    selectNativeEncounterPush(host,host.doodads)({ pos: vec(e.pos.x, e.pos.y + 6), radius: 18, kind: spec.site.center.kind });
     for (const row of spec.site.dressing) {
       const n = host.encRng.int(row.count[0], row.count[1]);
       for (let i = 0; i < n; i++) {
         const ang = host.encRng.range(0, Math.PI * 2);
         const r = host.encRng.range(row.ring[0], row.ring[1]);
         const spot = host.findFreeSpot(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), 14);
-        if (spot) host.doodads.push({ pos: spot, radius: host.encRng.range(10, 14), kind: row.kind });
+        if (spot) selectNativeEncounterPush(host,host.doodads)({ pos: spot, radius: host.encRng.range(10, 14), kind: row.kind });
       }
     }
     const bo: BoroughRuntime = {
@@ -178,7 +179,7 @@ export function encounterBirthMaterializeBorough(host:NativeSceneEncounterBirthH
       f.invulnerable = true;
       f.eventKey = `borough:${host.zone.id}`;
       bo.folkIds.push(f.id);
-      host.actors.push(f);
+      selectNativeEncounterPush(host,host.actors)(f);
     }
     e.bo = bo;
   }

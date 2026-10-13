@@ -6,6 +6,7 @@ import {captureNativeActorConstruction} from './nativeActorConstruction';
 import {isNativeAreaSceneTitans,type NativeAreaSceneTitans} from '../worldmass/nativeAreaSceneTitans';
 import type {NativeCombatRecordKind,NativeCombatRecordTypes} from './nativeSceneCombatHost';
 export interface NativeCombatRecordObserver {
+ encounterInsertion(target:unknown[],inserted?:readonly unknown[]):void;
  delverArrival():import('../data/zones').ZoneDef;
  selected<T>(kind:NativeCombatRecordKind,record:object,action:()=>T):T;
  factory():import('../worldmass/nativeAreaScenePopulation').NativeAreaScenePopulation['createMonster'];
@@ -88,3 +89,11 @@ export function observeNativeCombatSelection<T>(host:object,kind:NativeCombatRec
 
 /** A retained Delver continuation requires the actual privately selected arrival. */
 export function requireNativeDelverArrival(host:object):import('../data/zones').ZoneDef {const observer=observers.get(host);if(!observer)throw Error('Native Delver continuation needs its bound actual arrival');return observer.delverArrival();}
+
+/** Retain native member-selection/argument/call order and raw array identity.
+ * Only a bound late-arrival observer checks authority around the selected call. */
+export function selectNativeEncounterPush<T>(host:object,target:T[]):(...items:T[])=>number {
+ const observer=observers.get(host);observer?.encounterInsertion(target);
+ const selected=target.push;observer?.encounterInsertion(target);
+ return(...items:T[]):number=>{observer?.encounterInsertion(target);const result=Reflect.apply(selected,target,items);observer?.encounterInsertion(target,items);return result;};
+}

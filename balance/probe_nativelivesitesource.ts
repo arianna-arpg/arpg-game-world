@@ -1,7 +1,7 @@
 import {beforeNativeCampaignRaw as rawCampaign} from './nativeCampaignCompositionFixture';
 import ts from 'typescript';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeLiveSiteArchive as archive} from './nativeLiveSiteArchive';
 import {beforeNativeLiveSite as project} from './nativeLiveSiteFixture';

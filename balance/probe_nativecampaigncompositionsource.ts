@@ -1,5 +1,5 @@
 import {nativeJourneyCompositionArchive as journeyArchive} from './nativeJourneyCompositionArchive';import {beforeNativeJourney,beforeNativeJourneyRaw,beforeNativeJourneyRawOnly} from './nativeJourneyCompositionFixture';
-import {readNativeMainCastSource as readFileSync} from './nativeMainCastSourceFixture';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import assert from 'node:assert/strict';import {createHash} from 'node:crypto';import ts from 'typescript';
 import {nativeCampaignCompositionArchive as archive} from './nativeCampaignCompositionArchive';import {beforeNativeCampaign as project,beforeNativeCampaignRaw as rawProject} from './nativeCampaignCompositionFixture';import {nativeCampaignReaderAssertions as readerAudit} from './nativeCampaignReaderAssertions';import {writeCombatProof} from './probe_nativecombatcycle';
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');let mutations=0,duplicates=0,portable=0,outside=0,rawChecks=0;const rows=[];

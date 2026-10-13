@@ -1,6 +1,6 @@
 import {beforeNativeJourneyRaw as rawJourney} from './nativeJourneyCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeSurfaceArrivalOrderArchive as row} from './nativeSurfaceArrivalOrderArchive';
 import {beforeNativeSurfaceArrivalOrder as before} from './nativeSurfaceArrivalOrderFixture';
