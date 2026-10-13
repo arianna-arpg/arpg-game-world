@@ -1,3 +1,4 @@
+import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
 /** Exact original42 campaign/interleaved frame FrameServices closure.
  * Runtime ownership and native scheduling are separate concrete bindings. */
 import type {World} from "./world";
@@ -1911,6 +1912,7 @@ export function sceneResolveHoldDefense(nativeHost:NativeSceneCampaignFrameClosu
         const c = nativeHost.createMonster(FIXTURE_IDS.harbor_cache, lvl, 'enemy');
         c.pos = nativeHost.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-50, 50)), c.radius);
         nativeHost.actors.push(c);
+        observeNativeCombatBirth(nativeHost,c);
       }
       bumpLedger(nativeHost.ledger, 'ports_defended');
       if (def.portTier === 'haven') bumpLedger(nativeHost.ledger, 'havens_defended');

@@ -1,4 +1,5 @@
 import './nativeSceneBootstrap';
+import {sceneScanNemesisSurvivors} from './nativeSceneCampaignTransitions';
 import {sceneAddTether,sceneAttachObjectTethers,TETHER_TICK,type NativeSceneTetherHost} from './nativeSceneTethers';
 import {sceneRollSummonType,sceneForwardSummonSockets} from './nativeSceneSummonPreparation';
 import {scenePushActor,sceneGrabRelease,sceneClingRelease,sceneTeleportActor,sceneMountFreeSeat,sceneMountSeatRider,sceneMountUnlink,sceneMountUnhorse,sceneMountWidowed,sceneMovementLocked,sceneCastMoveFactor,sceneChannelMobility,sceneLevitating,PUSH_DAMPING,type NativeSceneDisplacementHost} from './nativeSceneDisplacement';
@@ -536,7 +537,7 @@ import { MERC_TEMPLATE_BY_ID, type MercTemplateDef } from '../data/mercenaries';
 import { MercInput } from './mercbrain';
 import {
   NEMESIS_CFG, bumpGrudge, formNemesis, mintNemesisName, nemesisTitle,
-  promoteNemesis, recordDeed, resolveNemesisSlain, sagaKey, touchSaga,
+  promoteNemesis, resolveNemesisSlain, sagaKey, touchSaga,
   type NemesisRecord,
 } from '../meta/nemesis';
 import { NEMESIS_RANKS } from '../data/nemesis';
@@ -24014,37 +24015,7 @@ actors: Actor[] = [];
 
   /** Zone-leave: an already-manifested nemesis left standing ESCAPES (and may
    *  promote); and the world may remember ONE bloodied ordinary survivor. */
-  private scanNemesisSurvivors(): void {
-    if (!this.localSeat || this.gameOver || !this.nemesisActive()) return;
-    let formed = 0;
-    for (const a of this.actors) {
-      if (a.dead || !this.nemesisEligible(a)) continue;
-      const tag = a.nemesis;
-      if (tag) {
-        const holder = this.account.sagas[tag.sagaKey];
-        const rec = holder?.nemeses.find(n => n.id === tag.id);
-        if (rec && holder) {
-          rec.encounters++;
-          recordDeed(rec, 'escaped', `slipped away from ${holder.name}`);
-          if (Math.random() < NEMESIS_CFG.escapePromoteChance) {
-            promoteNemesis(rec, 'escaped');
-            this.events.emit('nemesis/promoted', { saga: tag.sagaKey, nemesis: rec.name, rank: rec.rank });
-          }
-          this.sagaDirty(true);
-        }
-        continue;
-      }
-      if (formed >= NEMESIS_CFG.survivorPerZone || !a.grudgeMark) continue;
-      if (Math.random() >= NEMESIS_CFG.survivorChance) continue;
-      const saga = touchSaga(this.account, this.meta.name);
-      const n = formNemesis(saga, a.defId!, a.faction ?? '', 'escaped', Math.random,
-        { name: this.distinctNameOf(a), bornRarity: a.rarity });
-      formed++;
-      this.notice(`Something you left alive will remember the name ${this.meta.name}.`, '#c8a84b', 13, 'events');
-      this.events.emit('nemesis/formed', { saga: sagaKey(this.meta.name), nemesis: n.name, deed: 'escaped' });
-      this.sagaDirty(true);
-    }
-  }
+  private scanNemesisSurvivors(): void { const owner=this; return sceneScanNemesisSurvivors({get localSeat(){return owner.localSeat;},get gameOver(){return owner.gameOver;},get nemesisActive(){const fn=owner.nemesisActive;return (...args:Parameters<typeof fn>)=>Reflect.apply(fn,owner,args);},get actors(){return owner.actors;},get nemesisEligible(){const fn=owner.nemesisEligible;return (...args:Parameters<typeof fn>)=>Reflect.apply(fn,owner,args);},get account(){return owner.account;},get sagaDirty(){const fn=owner.sagaDirty;return (...args:Parameters<typeof fn>)=>Reflect.apply(fn,owner,args);},get events(){return owner.events;},get meta(){return owner.meta;},get distinctNameOf(){const fn=owner.distinctNameOf;return (...args:Parameters<typeof fn>)=>Reflect.apply(fn,owner,args);},get notice(){const fn=owner.notice;return (...args:Parameters<typeof fn>)=>Reflect.apply(fn,owner,args);}}); }
 
   /** loadZone tail: one remembered foe may STEP OUT of the memory into this
    *  zone, hunting whichever watched name it holds a grudge against. Zone

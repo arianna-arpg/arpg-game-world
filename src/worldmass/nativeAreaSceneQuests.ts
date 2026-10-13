@@ -1,3 +1,5 @@
+import type {NativeAreaSceneTransitionCoordinator} from './nativeAreaSceneTransitionCoordinator';
+import {nativeGroundCoordinatorCalls} from './nativeOdysseyGroundRegistration';
 /** Native field completion and quest rewards over retained area state.
  * Campaign ledger scope and writer identity are shared; physical payout effects follow their actual recipient. */
 import type {World,Seat} from '../engine/world';
@@ -47,6 +49,8 @@ export interface NativeSceneQuestInput {
 }
 export class NativeAreaSceneQuests {
  readonly input:NativeSceneQuestInput;readonly host:Host;
+ #groundReset:((definition:World['zone'])=>void)|undefined;
+ bindGroundReset(coordinator:NativeAreaSceneTransitionCoordinator,callback:(definition:World['zone'])=>void):void {nativeGroundCoordinatorCalls(coordinator).assertQuests(this);if(this.#groundReset)throw Error('Native ground reset observer already bound');this.#groundReset=callback;}
  readonly odyssey:NativeQuestOdyssey;readonly rescues:QuestRescues;
  #rewardSubject:(()=>Actor)|null=null;
  #failHost!:Host;
@@ -230,7 +234,7 @@ nearestHand:World['nearestHand']=(...args)=>native.sceneNearestHand(this.host,..
 localHumanSeats:World['localHumanSeats']=(...args)=>native.sceneLocalHumanSeats(this.host,...args);
 failNote:World['failNote']=(...args)=>this.#withRewardSubject(()=>args[0],()=>native.sceneFailNote(this.#failHost,...args));
 learnQuestDirections:World['learnQuestDirections']=(...args)=>native.sceneLearnQuestDirections(this.host,...args);
-prepareOdysseyGround:World['prepareOdysseyGround']=(...args)=>native.scenePrepareOdysseyGround(this.host,...args);
+prepareOdysseyGround:World['prepareOdysseyGround']=(...args)=>native.scenePrepareOdysseyGround(this.host,...args,this.#groundReset);
 enrollOdysseyQuest:World['enrollOdysseyQuest']=(...args)=>this.input.graph.withGenerationPolicies(()=>native.sceneEnrollOdysseyQuest(this.host,...args));
 acceptOdysseyCompatibleQuest:World['acceptOdysseyCompatibleQuest']=(...args)=>this.input.graph.withGenerationPolicies(()=>native.sceneAcceptOdysseyCompatibleQuest(this.host,...args));
 questLocalAnchor:World['questLocalAnchor']=(...args)=>this.input.graph.withGenerationPolicies(()=>native.sceneQuestLocalAnchor(this.host,...args));

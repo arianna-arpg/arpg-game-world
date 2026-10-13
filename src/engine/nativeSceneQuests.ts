@@ -527,7 +527,7 @@ export function sceneLearnQuestDirections(host:NativeSceneQuestHost,zoneId: stri
     for (const q of host.activeQuests) if (q.zoneId === zoneId) q.directionsKnown = true;
   }
 
-export function scenePrepareOdysseyGround(host:NativeSceneQuestHost,faction: string,level: number,prepared: boolean,act: number):void {
+export function scenePrepareOdysseyGround(host:NativeSceneQuestHost,faction: string,level: number,prepared: boolean,act: number,afterDelete?:(definition:World['zone'])=>void):void {
     const z = host.zoneMap[`quest_${odysseyQuestId(faction, 'leader')}`];
     if (!z) return;
     const count = prepared ? 0 : ODYSSEY_CFG.escortPerAct[Math.min(3, act)];
@@ -535,6 +535,7 @@ export function scenePrepareOdysseyGround(host:NativeSceneQuestHost,faction: str
     z.level = level;
     z.packs = { count: [count, count], size: [1, 1], table: [{ id: odysseyFaction(faction).escort, weight: 1 }] };
     host.zoneMemory.delete(z.id);
+    afterDelete?.(z);
     host.invalidateZonesSaveMemo();
   }
 

@@ -1,3 +1,6 @@
+import {beforeNativeCampaignRaw as rawCampaign} from './nativeCampaignCompositionFixture';
+import {beforeNativeRuntimeBirthLifetime as beforeRuntimeLifetime} from './nativeRuntimeBirthLifetimeFixture';
+import {beforeNativeSurfaceArrival as projectSurface} from './nativeSurfaceArrivalSourceFixture';
 /** Whole native event births; shared retained fixtures also exercise registry dispatch. */
 import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
 import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
@@ -16,7 +19,7 @@ for(const f of fixtures)for(const method of [...methods,'ventGeyser']){
 digest.update(']');bytes++;console.log('NATIVE_RUNTIME_BIRTH_COLD='+JSON.stringify({count,bytes,bodies,draws,partialErrors,sha256:digest.digest('hex')}));
 }else{
  const norm=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:99,module:99,removeComments:true}}).outputText;
- const core=ts.createSourceFile('core.ts',fs.readFileSync(new URL('../src/engine/nativeSceneRuntimeBirth.ts',import.meta.url),'utf8'),99,true);
+ const core=ts.createSourceFile('core.ts',beforeRuntimeLifetime(projectSurface('src/engine/nativeSceneRuntimeBirth.ts',rawCampaign("mercAccepted62","src/engine/nativeSceneRuntimeBirth.ts",fs.readFileSync(new URL('../src/engine/nativeSceneRuntimeBirth.ts',import.meta.url),'utf8'))),'src/engine/nativeSceneRuntimeBirth.ts'),99,true);
  for(const r of archive.methods){const original=ts.createSourceFile('old.ts','class Old{'+r.source+'}',99,true),m=(original.statements[0] as ts.ClassDeclaration).members[0] as ts.MethodDeclaration,f=core.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='birth'+r.name[0].toUpperCase()+r.name.slice(1)) as ts.FunctionDeclaration;assert(f?.body);const restored=f.body.getText(core).replaceAll('nativeHost.','this.').replace(/\(0,\s*sources\.(\w+)\)/g,'$1').replace(/\bsources\.(\w+)/g,'$1');assert.equal(norm(restored),norm(m.body!.getText(original)),r.name+' complete original body');assert.equal(norm(f.parameters.slice(2).map(p=>p.getText(core)).join(',')),norm(m.parameters.map(p=>p.getText(original)).join(',')),r.name+' original parameters/defaults');}
  withSeededRandom(997,()=>{const w:any=makeSimWorld('warrior',997),keys=Object.keys(w),host=w.nativeRuntimeBirthHost(),src=w.nativeRuntimeBirthSources();assert.equal(w.nativeRuntimeBirthHost(),host);assert.equal(w.nativeRuntimeBirthSources(),src);assert(Object.isFrozen(host)&&Object.isFrozen(src));assert.deepEqual(Object.keys(w),keys);for(const key of ['nativeRuntimeBirthView','nativeRuntimeBirthSourceView'])assert.equal(Object.getOwnPropertyDescriptor(w,key)?.enumerable,false);
   for(let i=0;i<originalNames.length;i++)assert.equal(src[originalNames[i]],originalValues[i],originalNames[i]+' exact lexical source');

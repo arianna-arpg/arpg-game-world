@@ -1,3 +1,5 @@
+import {beforeNativeCampaignRaw as rawCampaign} from './nativeCampaignCompositionFixture';
+import {beforeNativeDelayedArrival as projectDelayed} from './nativeDelayedArrivalSourceFixture';
 /** Complete pinned native cave-keeper stock and descent-entry oracle, run in independent cold processes. */
 import {gzipSync,gunzipSync} from 'node:zlib';import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
@@ -19,7 +21,7 @@ assert.equal(digest(fixtureBytes),'48932b4fcfff90bb7fc8cf80a39bd25d79c7c812b5c88
 const archive=JSON.parse(archiveBytes.toString('utf8')),fixtures=JSON.parse(fixtureBytes.toString('utf8'));
 const lexical={Rng,withSeededRandom,randInt,vec,delverMulAt,FIXTURE_IDS,bumpLedger,featureEnabled,FEATURE,VENDOR_CFG,VENDOR_ITEM_CFG,mintSupportInstance,DESCENT_AFFIX_FAMILIES,rollItem},originals:any={};
 for(const [name,text]of Object.entries(archive.methods)){const code=ts.transpileModule(archive.hash+'\nreturn function'+String(text).slice(String(text).indexOf('(')),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;originals[name]=Function(...Object.keys(lexical),code)(...Object.values(lexical));}
-const core=ts.createSourceFile('core.ts',fs.readFileSync(new URL('../src/engine/nativeSceneDescent.ts',import.meta.url),'utf8'),ts.ScriptTarget.Latest,true),norm=(x:string)=>ts.transpileModule(x,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None,removeComments:true}}).outputText;
+const core=ts.createSourceFile('core.ts',projectDelayed('src/engine/nativeSceneDescent.ts',rawCampaign("delayed59","src/engine/nativeSceneDescent.ts",fs.readFileSync(new URL('../src/engine/nativeSceneDescent.ts',import.meta.url),'utf8'))),ts.ScriptTarget.Latest,true),norm=(x:string)=>ts.transpileModule(x,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None,removeComments:true}}).outputText;
 for(const [name,fname]of Object.entries(archive.mapping)){const fn=core.statements.find(x=>ts.isFunctionDeclaration(x)&&x.name?.text===fname) as ts.FunctionDeclaration;const old=ts.createSourceFile('old.ts','class Original{'+archive.methods[name]+'}',ts.ScriptTarget.Latest,true),body=((old.statements[0] as ts.ClassDeclaration).members[0] as ts.MethodDeclaration).body!;assert.equal(norm('function f()'+fn.body!.getText(core).replaceAll('host.','this.')),norm('function f()'+body.getText(old)),name+' entire original body');}
 
 const hash=core.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='hashStr') as ts.FunctionDeclaration;assert.ok(hash?.body);assert.equal(norm(hash.getText(core)),norm(archive.hash),'complete pinned native hash helper');

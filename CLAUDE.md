@@ -1,3 +1,17 @@
+Retained campaign arrivals now preserve canonical Odyssey pressure, changed leader
+grounds, Nemesis departure/manifestation, delayed Delver/corpse/mercenary/Ascent
+content and harbor victory/services. Occupied Odyssey ground refreshes only after
+its last real occupant leaves; Continue validates native-restored state before
+staging. Preserve completed native effects, selected character identity, actual
+factory ownership and original source assertions. Verify nativeodyssey*,
+nativenemesis*, nativehistoryarrival*, nativedelayed*, nativemercascent*,
+nativesurfacecompletedtext, nativequay*, nativeholdvocation, strict source
+composition, adjacent journeys/Continue/hosted courses, four types, generation,
+browser and boot. See docs/worldgen/native-campaign-arrival-parity.md. Dedicated
+Shards remains the multiplayer successor, including private quest/side instances.
+New native courses confirm later-unlocked encounters and newly crowned warlords
+still need retained arrival handling; resolve both before the content gate closes.
+
 Retained journeys now compose bounty acceptance after exploration, actual voyage
 transfer/retirement, four realm entry/completion/reentry paths, and delayed package
 sidezone furnishing. Preserve retained wounds, rewards, exact ownership and
@@ -5,9 +19,8 @@ native partial effects; surface abandonment precedes Necropolis culling before
 destination preparation. Verify nativebountyarrival*, nativevoyage*, nativerealm*,
 nativesidezonefurnish*, combined source proofs, adjacent retained/hosted/Continue
 courses, generation and all four types. See
-docs/worldgen/native-retained-journey-parity.md. Odyssey birth/admission and Nemesis departure
-remain confirmed content-parity blockers; complete the content gate before dedicated
-ShardHost conversion. Shards is the multiplayer target; co-op is reusable support.
+docs/worldgen/native-retained-journey-parity.md. The campaign-arrival follow-up covers Odyssey birth/admission and Nemesis departure;
+complete the combined content gate before dedicated ShardHost conversion. Shards is the multiplayer target; co-op is reusable support.
 
 Native browser sessions now compose per-area targeted WebRTC publication and
 saved local co-op join lifetime checks. Preserve actual recipient area authority,

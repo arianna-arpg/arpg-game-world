@@ -1,3 +1,4 @@
+import {beforeNativeCampaignRaw as rawCampaign} from './nativeCampaignCompositionFixture';
 import {beforeNativeContinuity} from './nativeContinuityCompositionFixture';
 /** Real native birth/owners -> genuine character writer -> staged cold Continue.
  * Physics publication, transient combat checkpoints and departure are outside this proof. */
@@ -32,10 +33,10 @@ const memory=new Map<string,string>(),storage={getItem:(k:string)=>memory.get(k)
 Object.defineProperty(globalThis,'window',{value:{localStorage:storage},configurable:true});Object.defineProperty(globalThis,'fetch',{value:async()=>new Response('',{status:404}),configurable:true});
 const digest=(text:string)=>createHash('sha256').update(text).digest('hex');
 assert.equal(digest(JSON.stringify(nativeSceneMemoryArchive)),nativeSceneMemoryArchiveHash);
-const worldSource=beforeNativeContinuity('production','src/engine/world.ts',readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8')),normalized=beforeNativeSceneMemory(worldSource);
+const worldSource=beforeNativeContinuity('production','src/engine/world.ts',rawCampaign("journey58","src/engine/world.ts",readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8'))),normalized=beforeNativeSceneMemory(worldSource);
 assert.equal(digest(normalized),nativeSceneMemoryArchive.sourceHash,'exact entire original source is restored');
 assert.ok(worldSource.startsWith("import './nativeSceneBootstrap';\n"),'native registration bootstrap remains first');
-const coreSource=ts.createSourceFile('nativeSceneMemory.ts',readFileSync(new URL('../src/engine/nativeSceneMemory.ts',import.meta.url),'utf8'),99,true);
+const coreSource=ts.createSourceFile('nativeSceneMemory.ts',rawCampaign("journey58","src/engine/nativeSceneMemory.ts",readFileSync(new URL('../src/engine/nativeSceneMemory.ts',import.meta.url),'utf8')),99,true);
 for(const row of nativeSceneMemoryArchive.rows){assert.equal(digest(row.before),row.hash);const sf=ts.createSourceFile('method.ts','class Native{'+row.before+'}',99,true),member=(sf.statements[0] as ts.ClassDeclaration).members[0] as ts.MethodDeclaration;const name='scene'+row.name[0].toUpperCase()+row.name.slice(1),fn=coreSource.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name) as ts.FunctionDeclaration;assert.ok(fn);assert.equal(fn.body!.getText(coreSource).replace(/\bhost\b/g,'this'),member.body!.getText(sf),'exact original shared body '+row.name);}
 assert.throws(()=>beforeNativeSceneMemory(worldSource.replace('nativeWorldInstances.add(this);','nativeWorldInstances.add(Object.create(this));')),/unique exact/);
 console.log('PASS strict entire-source reversal, archive hash and two exact original shared memory bodies');

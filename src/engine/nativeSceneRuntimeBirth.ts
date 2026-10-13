@@ -716,7 +716,11 @@ export function birthRiseAmalgamation(nativeHost:NativeSceneRuntimeBirthHost,sou
     nativeHost.flashes.push({ pos: (0,sources.vec)(boss.pos.x, boss.pos.y), radius: 180, color: '#9ad0b0', life: 0.9, maxLife: 0.9 });
     nativeHost.text((0,sources.vec)(boss.pos.x, boss.pos.y - 64), `${boss.name} rises!`, '#9ad0b0', 20);
   }
-export function birthPlaceAscentGeyser(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources, def: ZoneDef): void {
+declare const nativeAscentPlacement:unique symbol;
+export interface NativeAscentPlacement {readonly [nativeAscentPlacement]:true}
+interface AscentPlacement {host:NativeSceneRuntimeBirthHost;sources:NativeSceneRuntimeBirthSources;def:ZoneDef;at:Vec2;step:number}
+const ascentPlacements=new WeakMap<NativeAscentPlacement,AscentPlacement>();
+export function birthPrepareAscentPlacement(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources,def:ZoneDef):NativeAscentPlacement|undefined {
     const af = nativeHost.sim.ascentField;
     if (!af || nativeHost.inCave || def.caveDepth != null) return;
     if ((def.dimension ?? 'surface') !== 'surface') return; // geysers vent from the world's own ground
@@ -738,26 +742,28 @@ export function birthPlaceAscentGeyser(nativeHost:NativeSceneRuntimeBirthHost,so
       at = nativeHost.clearTransitSpot(p);
     }
     if (!at) return;
-    nativeHost.ventGeyser(at, (0,sources.hashStr)(`${def.id}:sky_geyser`));
-    (0,sources.bumpLedger)(nativeHost.ledger, 'geysers_seen'); // DISCOVERY — surfaces the Vault unlock
-  }
-export function birthVentGeyser(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources, at: Vec2, pocketSeed: number): void {
-    nativeHost.doodads.push({ pos: (0,sources.vec)(at.x, at.y), radius: 30, kind: 'sky_geyser' });
-    // The spring's pool: warm water lapping the terrace (ground overlay —
-    // wading, wake rings, the works ride the ordinary region machinery).
-    for (let i = 0; i < 3; i++) {
-      const a = (0,sources.rand)(0, Math.PI * 2);
-      const pool = { pos: (0,sources.vec)(at.x + Math.cos(a) * 26, at.y + Math.sin(a) * 26), radius: (0,sources.rand)(22, 32), kind: 'water' as const };
-      nativeHost.doodads.push(pool);
-      nativeHost.grounds.push(pool);
-    }
-    nativeHost.caveEntrances.push({
-      pos: nativeHost.clampPos((0,sources.vec)(at.x, at.y), 28),
-      seed: pocketSeed,
-      kind: 'sky_geyser',
-    });
-    nativeHost.text((0,sources.vec)(at.x, at.y - 36), 'A geyser roars toward the sky…', '#9fd8ff', 15);
-  }
+    const token=Object.freeze({}) as NativeAscentPlacement;ascentPlacements.set(token,{host:nativeHost,sources,def,at,step:0});return token;
+}
+export function birthResumeAscentPlacement(nativeHost:NativeSceneRuntimeBirthHost,token:NativeAscentPlacement):void {const r=ascentPlacements.get(token);if(!r||r.host!==nativeHost)throw Error('Native Ascent placement needs its exact host');const {at,def,sources}=r;if(r.step===0){nativeHost.ventGeyser(at,(0,sources.hashStr)(`${def.id}:sky_geyser`));r.step++;}if(r.step===1){(0,sources.bumpLedger)(nativeHost.ledger,'geysers_seen');r.step++;}}
+export function birthPlaceAscentGeyser(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources,def:ZoneDef):void {const token=birthPrepareAscentPlacement(nativeHost,sources,def);if(token)birthResumeAscentPlacement(nativeHost,token);}
+declare const nativeGeyserVent:unique symbol;
+export interface NativeGeyserVent {readonly [nativeGeyserVent]:true}
+interface GeyserVent {host:NativeSceneRuntimeBirthHost;sources:NativeSceneRuntimeBirthSources;at:Vec2;pocketSeed:number;step:number;pool?:{pos:Vec2;radius:number;kind:'water'};a?:number;pools:number;failedInsertion?:boolean;entrance?:World['caveEntrances'][number];mouths?:World['caveEntrances'];push?:World['caveEntrances']['push']}
+const geyserVents=new WeakMap<NativeGeyserVent,GeyserVent>();
+export function birthPrepareGeyserVent(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources,at:Vec2,pocketSeed:number):NativeGeyserVent {const token=Object.freeze({}) as NativeGeyserVent;geyserVents.set(token,{host:nativeHost,sources,at,pocketSeed,step:0,pools:0});return token;}
+export function birthResumeGeyserVent(nativeHost:NativeSceneRuntimeBirthHost,token:NativeGeyserVent):void {const r=geyserVents.get(token);if(!r||r.host!==nativeHost)throw Error('Native geyser vent needs its exact host');if(r.failedInsertion)throw Error('Native geyser insertion failed before completion');const {at,pocketSeed,sources}=r;
+ while(r.step<8){switch(r.step){
+  case 0:try{nativeHost.doodads.push({pos:(0,sources.vec)(at.x,at.y),radius:30,kind:'sky_geyser'});}catch(error){r.failedInsertion=true;throw error;}break;
+  case 1:r.a=(0,sources.rand)(0,Math.PI*2);break;
+  case 2:r.pool={pos:(0,sources.vec)(at.x+Math.cos(r.a!)*26,at.y+Math.sin(r.a!)*26),radius:(0,sources.rand)(22,32),kind:'water'};break;
+  case 3:try{nativeHost.doodads.push(r.pool!);}catch(error){r.failedInsertion=true;throw error;}break;
+  case 4:try{nativeHost.grounds.push(r.pool!);}catch(error){r.failedInsertion=true;throw error;}if(++r.pools<3)r.step=0;break;
+  case 5:r.mouths=nativeHost.caveEntrances;r.push=r.mouths.push;r.entrance={pos:nativeHost.clampPos((0,sources.vec)(at.x,at.y),28),seed:pocketSeed,kind:'sky_geyser'};break;
+  case 6:try{Reflect.apply(r.push!,r.mouths!,[r.entrance!]);}catch(error){r.failedInsertion=true;throw error;}break;
+  case 7:nativeHost.text((0,sources.vec)(at.x,at.y-36),'A geyser roars toward the sky…','#9fd8ff',15);break;
+ }r.step++;}
+}
+export function birthVentGeyser(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources,at:Vec2,pocketSeed:number):void {birthResumeGeyserVent(nativeHost,birthPrepareGeyserVent(nativeHost,sources,at,pocketSeed));}
 export function birthMaterializeObserver(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources, def: ZoneDef): void {
     const inc = nativeHost.sim.incursionField;
     if (!inc || nativeHost.inCave || nativeHost.materializedObservers.has(def.id)) return;

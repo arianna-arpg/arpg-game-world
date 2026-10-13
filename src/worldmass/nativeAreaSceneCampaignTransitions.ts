@@ -82,6 +82,15 @@ export class NativeAreaSceneCampaignTransitions {
  }
  endRun(...args:Parameters<World['endRun']>):ReturnType<World['endRun']>{return this.#run({permission:'physical'},()=>conclusion.sceneEndRun(this.#conclusionHost(),...args));}
  retireCharacter(...args:Parameters<World['retireCharacter']>):ReturnType<World['retireCharacter']>{return this.#run({permission:'physical'},()=>conclusion.sceneRetireCharacter(this.#conclusionHost(),...args));}
+ /** Only the exact selected local story departure may scan retained survivors. */
+ scanNemesisSurvivors():void {const body=this.#bridge.nemesisDeparture();return this.#entry(this,{physical:[body],permission:'physical'},()=>{const host=this.#nemesisHost();if(this.#bridge.nemesisDeparture()!==body)throw Error('Native Nemesis departure changed during admission');return transition.sceneScanNemesisSurvivors(host);});}
+ #nemesisHost():transition.NativeNemesisDepartureHost {
+  const {combat,coordinator}=this.input,{campaign,characterWriter:writer}=coordinator.input,area=coordinator.areaFor(combat),history=area.assembly.input.history,leaf=this.#lifecycleHost(combat);
+  return hostOf<transition.NativeNemesisDepartureHost>({
+   localSeat:field(()=>campaign,'localSeat'),gameOver:field(()=>writer,'gameOver'),actors:field(()=>area.assembly.input.scene,'actors'),account:field(()=>campaign,'account'),meta:field(()=>campaign,'meta'),events:field(()=>combat.campaignOwner.shared,'events'),notice:method(()=>campaign,'notice'),nemesisActive:method(()=>history,'nemesisActive'),sagaDirty:method(()=>history,'sagaDirty'),
+   nemesisEligible:{get:()=>actor=>lifecycle.sceneNemesisEligible(leaf,actor)},distinctNameOf:{get:()=>actor=>lifecycle.sceneDistinctNameOf(leaf,actor)},
+  });
+ }
  #transitionHost(fixed?:NativeAreaSceneCombat,party:boolean|'outsideScene'=false,recoveryPlayer?:Actor):transition.NativeSceneCampaignTransitionHost{
   const {coordinator}=this.input,{campaign,characterWriter:writer}=coordinator.input;
   const area=()=>fixed?coordinator.areaFor(fixed):coordinator.current,combat=()=>area().combat,scene=()=>area().assembly.input.scene,geometry=()=>area().assembly.input.geometry,roads=()=>coordinator.roadsFor(combat());

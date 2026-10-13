@@ -1,3 +1,4 @@
+import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
 /** Exact native cave Delver placement, locked stock and abyss entry. No dive update/interaction or source issuer is implied. */
 import type {World,VendorEntry} from './world';
 import type {ZoneDef} from '../data/zones';
@@ -45,7 +46,13 @@ export interface NativeSceneDescentHost {
  notice:World['notice'];
 }
 
-export function descentPlaceDescentDelver(host:NativeSceneDescentHost,def: ZoneDef): void {
+/** A private original native placement continuation. Retained arrivals keep only
+ * completed statement boundaries; no error or prior gameplay write is rolled back. */
+declare const nativeDelverPlacement:unique symbol;
+export interface NativeDelverPlacement {readonly [nativeDelverPlacement]:true}
+interface DelverPlacement {host:NativeSceneDescentHost;def:ZoneDef;roll:Rng;step:number;inserting?:boolean;failedInsertion?:boolean;center?:import('../core/math').Vec2;delver?:World['player'];ang?:number;platform?:import('../core/math').Vec2}
+const delverPlacements=new WeakMap<NativeDelverPlacement,DelverPlacement>();
+export function descentPrepareDelverPlacement(host:NativeSceneDescentHost,def:ZoneDef):NativeDelverPlacement|undefined {
     const df = host.sim.descentField;
     if (!df || !host.inCave || def.id.startsWith('cave_descent_')) return;
     // Delvers haunt COMBAT caves. A safe pocket (the town cellar) and a waves
@@ -73,24 +80,38 @@ export function descentPlaceDescentDelver(host:NativeSceneDescentHost,def: ZoneD
     // more than the near-dark), so the Vault weight, the rate crank, and the
     // world's vertical ladder all reach the abyss like any ignition roll.
     if (!roll.chance(df.delverChanceNow() * delverMulAt(def.caveDepth ?? 0))) return;
-    const center = host.clampPos(host.farPoint(360, true), 30);
-    const delver = host.createMonster(FIXTURE_IDS.descent_delver, Math.max(1, def.level), 'enemy');
-    delver.tag = 'descent_delver';
-    delver.pos = host.clampPos(vec(center.x, center.y), delver.radius);
-    host.actors.push(delver);
-    const ang = roll.range(0, Math.PI * 2);
-    const platform = host.clearTransitSpot(
-      host.clampPos(vec(center.x + Math.cos(ang) * 92, center.y + Math.sin(ang) * 92), 24));
-    host.doodads.push({ pos: vec(platform.x, platform.y), radius: 30, kind: 'descent_platform' });
-    host.descentSite = { delverId: delver.id, platform: vec(platform.x, platform.y) };
-    // THE LOCKED SHELF: minted ONCE per shaft per run (seeded per cave) and
-    // re-PROJECTED on every re-entry — purchases stay spliced, the roll never
-    // repeats, so there is no refresh to scum. The counter itself stays
-    // sealed until the dive resolves (THE PROVING LAW — delverShopOpen).
-    host.descentStock = host.descentStocks.get(def.id) ?? host.mintDelverStock(def);
-    bumpLedger(host.ledger, 'delvers_seen'); // DISCOVERY — surfaces the Vault unlock
-    host.text(vec(center.x, center.y - 30), 'A Delver lingers by a gaping shaft…', '#7fe0d8', 15);
-  }
+
+    const token=Object.freeze({}) as NativeDelverPlacement;
+    delverPlacements.set(token,{host,def,roll,step:0});
+    return token;
+}
+export function descentResumeDelverPlacement(host:NativeSceneDescentHost,token:NativeDelverPlacement):void {
+    const r=delverPlacements.get(token);if(!r||r.host!==host)throw Error('Native Delver placement needs its exact host');
+    if(r.failedInsertion)throw Error('Native Delver selected insertion failed before completion');
+    const {def,roll}=r;
+    while(r.step<12){switch(r.step){
+      case 0:r.center=host.clampPos(host.farPoint(360, true), 30);break;
+      case 1:r.delver=host.createMonster(FIXTURE_IDS.descent_delver, Math.max(1, def.level), 'enemy');break;
+      case 2:r.delver!.tag='descent_delver';break;
+      case 3:r.delver!.pos=host.clampPos(vec(r.center!.x,r.center!.y),r.delver!.radius);break;
+      case 4:r.inserting=true;try{host.actors.push(r.delver!);observeNativeCombatBirth(host,r.delver!);}catch(error){r.failedInsertion=true;throw error;}finally{r.inserting=false;}break;
+      case 5:r.ang=roll.range(0, Math.PI * 2);break;
+      case 6:r.platform=host.clearTransitSpot(host.clampPos(vec(r.center!.x+Math.cos(r.ang!)*92,r.center!.y+Math.sin(r.ang!)*92),24));break;
+      case 7:try{host.doodads.push({pos:vec(r.platform!.x,r.platform!.y),radius:30,kind:'descent_platform'});}catch(error){r.failedInsertion=true;throw error;}break;
+      case 8:host.descentSite={delverId:r.delver!.id,platform:vec(r.platform!.x,r.platform!.y)};break;
+      case 9:host.descentStock=host.descentStocks.get(def.id)??host.mintDelverStock(def);break;
+      case 10:bumpLedger(host.ledger,'delvers_seen');break;
+      case 11:host.text(vec(r.center!.x,r.center!.y-30),'A Delver lingers by a gaping shaft…','#7fe0d8',15);break;
+    }r.step++;}
+}
+export function descentDelverPlacementRetryable(host:NativeSceneDescentHost,token:NativeDelverPlacement):boolean {
+    const r=delverPlacements.get(token);if(!r||r.host!==host)throw Error('Native Delver placement needs its exact host');
+    return r.step>=4;
+}
+export function descentPlaceDescentDelver(host:NativeSceneDescentHost,def:ZoneDef):void {
+    const placement=descentPrepareDelverPlacement(host,def);
+    if(placement)descentResumeDelverPlacement(host,placement);
+}
 
 export function descentMintDelverStock(host:NativeSceneDescentHost,def: ZoneDef): VendorEntry[] {
     const st = host.sim.descentField?.surge().stock;

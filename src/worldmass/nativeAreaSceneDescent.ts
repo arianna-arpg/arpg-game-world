@@ -1,3 +1,4 @@
+import {observeNativeCombatFactory,requireNativeDelverArrival} from '../engine/nativeCombatRecordObservation';
 /** Birth-time cave keeper, its immutable-once shelf and entry lamp. */
 import type {World} from '../engine/world';
 import type {NativeSceneCensus,NativeAreaScenePopulation} from './nativeAreaScenePopulation';
@@ -16,6 +17,7 @@ export interface NativeSceneDescentInput {
  * the one current descentSite. No duplicate site, copied stock or per-area run. */
 export class NativeAreaSceneDescent {
  readonly input:NativeSceneDescentInput;readonly host:native.NativeSceneDescentHost;
+ #placement:native.NativeDelverPlacement|undefined;#installed=false;#placing=false;
  constructor(raw:NativeSceneDescentInput){
   const roots=Object.create(null);
   for(const key of ['scene','geometry','population','settlement','campaign','state','services']){
@@ -29,14 +31,23 @@ export class NativeAreaSceneDescent {
   for(const key of ['inCave','descentStock','descentSpawnTimer']){const d=Object.getOwnPropertyDescriptor(input.state,key);if(!d||!Object.hasOwn(d,'value'))throw Error('Native descent needs explicit '+key+' state');}
   const host={} as native.NativeSceneDescentHost;
   const fields=(provider:()=>object,keys:readonly string[],write=false)=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){return(provider() as Record<string,unknown>)[key];},...(write?{set(value){(provider() as Record<string,unknown>)[key]=value;}}:{})});};
-  const methods=(provider:()=>object,keys:readonly string[])=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){const p=provider() as Record<string,Function>,f=p[key];return(...args:unknown[])=>f.apply(p,args);}});};
+  const methods=(provider:()=>object,keys:readonly string[])=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){const p=provider() as Record<string,Function>,f=p[key];return(...args:unknown[])=>Reflect.apply(f,p,args);}});};
   fields(()=>input.scene,['zone','actors','player']);fields(()=>input.geometry,['doodads']);fields(()=>input.geometry,['descentSite'],true);
   fields(()=>input.campaign,['sim','manifest','account','ledger','descentRun','descentStocks']);fields(()=>input.state,['inCave']);fields(()=>input.state,['descentStock','descentSpawnTimer'],true);
-  methods(()=>input.geometry,['clampPos','farPoint','clearTransitSpot']);methods(()=>input.population,['createMonster']);
+  methods(()=>input.geometry,['clampPos','farPoint','clearTransitSpot']);
+  Object.defineProperty(host,'createMonster',{enumerable:true,get(){return observeNativeCombatFactory(host,()=>{const provider=input.population,fn=provider.createMonster;return(...args:Parameters<typeof fn>)=>Reflect.apply(fn,provider,args);});}});
   methods(()=>input.settlement,['vendorGemLevel','vendorGemsOpen','rollSupportDropGated','rollSkillGem']);methods(()=>input.services,['text','notice']);methods(()=>this,['mintDelverStock']);
   this.host=Object.freeze(host);for(const key of ['input','host'])Object.defineProperty(this,key,{enumerable:false,writable:false,configurable:false});
  }
- placeDescentDelver(...a:Parameters<World['placeDescentDelver']>){return native.descentPlaceDescentDelver(this.host,...a);}
+ placeDescentDelver(def:World['zone']):void {
+  const placement=native.descentPrepareDelverPlacement(this.host,def);if(placement){native.descentResumeDelverPlacement(this.host,placement);this.#installed=true;}
+ }
+ /** Retained revisit only. The original placement endpoint remains repeatable. */
+ arriveDelayedDelver(def:World['zone']):void {
+  if(requireNativeDelverArrival(this.host)!==def)throw Error('Native Delver continuation definition changed');
+  if(this.#installed)return;if(this.#placing)throw Error('Native Delver placement cannot reenter');this.#placing=true;
+  try{this.#placement??=native.descentPrepareDelverPlacement(this.host,def);if(!this.#placement)return;native.descentResumeDelverPlacement(this.host,this.#placement);this.#installed=true;}catch(error){if(this.#placement&&!native.descentDelverPlacementRetryable(this.host,this.#placement))this.#placement=undefined;throw error;}finally{this.#placing=false;}
+ }
  mintDelverStock(...a:Parameters<World['mintDelverStock']>){return native.descentMintDelverStock(this.host,...a);}
  enterDescentZone(){return native.descentEnterDescentZone(this.host);}
 }

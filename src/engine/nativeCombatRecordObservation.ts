@@ -6,6 +6,7 @@ import {captureNativeActorConstruction} from './nativeActorConstruction';
 import {isNativeAreaSceneTitans,type NativeAreaSceneTitans} from '../worldmass/nativeAreaSceneTitans';
 import type {NativeCombatRecordKind,NativeCombatRecordTypes} from './nativeSceneCombatHost';
 export interface NativeCombatRecordObserver {
+ delverArrival():import('../data/zones').ZoneDef;
  selected<T>(kind:NativeCombatRecordKind,record:object,action:()=>T):T;
  factory():import('../worldmass/nativeAreaScenePopulation').NativeAreaScenePopulation['createMonster'];
  admit(body:Actor):void;
@@ -84,3 +85,6 @@ export function observeNativeCombatActorPresence(host:object,actor:Actor):boolea
 
 /** Selects only a previously issued exact row; never supplies new source credentials. */
 export function observeNativeCombatSelection<T>(host:object,kind:NativeCombatRecordKind,record:object,action:()=>T):T {const observer=observers.get(host);return observer?observer.selected(kind,record,action):action();}
+
+/** A retained Delver continuation requires the actual privately selected arrival. */
+export function requireNativeDelverArrival(host:object):import('../data/zones').ZoneDef {const observer=observers.get(host);if(!observer)throw Error('Native Delver continuation needs its bound actual arrival');return observer.delverArrival();}

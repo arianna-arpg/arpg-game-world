@@ -35,7 +35,7 @@ export class NativeAreaSceneHistory {
   if(!corpses||!Object.hasOwn(corpses,'value')||!Array.isArray(corpses.value))throw Error('Native history needs explicit area corpse state');
   const host={} as native.NativeSceneHistoryHost;
   const fields=(o:()=>object,keys:readonly string[],write=false)=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){return (o() as Record<string,unknown>)[key];},...(write?{set(v:unknown){(o() as Record<string,unknown>)[key]=v;}}:{})});};
-  const methods=(o:()=>object,keys:readonly string[])=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){const provider=o() as Record<string,Function>,fn=provider[key];if(typeof fn!=='function')throw Error('Missing native history capability: '+key);return (...args:unknown[])=>fn.apply(provider,args);}});};
+  const methods=(o:()=>object,keys:readonly string[])=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){const provider=o() as Record<string,Function>,fn=provider[key];if(typeof fn!=='function')throw Error('Missing native history capability: '+key);return (...args:unknown[])=>Reflect.apply(fn,provider,args);}});};
   fields(()=>input.scene,['actors']);fields(()=>input.geometry,['arena']);
   fields(()=>input.campaign,['meta','charDeaths','account','hiredMercs','time','localSeat','sim','manifestedThisRun','zoneMap']);
   fields(()=>input.campaign,['lastSagaFlushAt','accountDirty'],true);fields(()=>input.state,['playerCorpses'],true);

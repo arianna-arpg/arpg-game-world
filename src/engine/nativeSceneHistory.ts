@@ -1,4 +1,5 @@
 /** Exact native birth-time history operations. No kill, reclaim or save dispatcher is implied. */
+import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
 import type {World} from './world';
 import type {ZoneDef} from '../data/zones';
 import {stageOf,type ModeStageDef} from '../meta/modes';
@@ -105,6 +106,7 @@ export function historySpawnNemesisActor(host:NativeSceneHistoryHost, rec: Nemes
       host.arena.w * (0.25 + Math.random() * 0.5),
       host.arena.h * (0.25 + Math.random() * 0.5)), a.radius);
     host.actors.push(a);
+    observeNativeCombatBirth(host,a);
     host.manifestedThisRun.add(rec.id);
     rec.encounters++;
     rec.lastSeenAt = Date.now();

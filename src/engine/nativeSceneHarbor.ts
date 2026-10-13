@@ -1,5 +1,6 @@
 /** Exact harbor/quay birth closure; siege update/rewards are not supplied. */
 import type {World} from './world';
+import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
 import type {ZoneDef} from '../data/zones';
 import type {Actor} from './actor';
 import {vec,dist,rand,type Vec2} from '../core/math';
@@ -266,6 +267,7 @@ export function harborRefreshHoldServices(host:NativeSceneHarborHost,def: ZoneDe
         n.pos = host.clampPos(vec(seat.x, seat.y), n.radius);
         n.tag = tag;
         host.actors.push(n);
+        observeNativeCombatBirth(host,n);
         if (s.id === 'mercs') host.armPortMercs(n);
       } else if (!wants.has(s.id) && standing) {
         standing.dead = true; // the per-frame sweep retires the body quietly

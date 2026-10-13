@@ -1,3 +1,4 @@
+import {nativeGroundCoordinatorCalls} from './nativeOdysseyGroundRegistration';
 import {makeNativeAreaArena} from '../engine/nativeAreaArena';
 import {hullOf} from '../world/shape';
 import {assertNativeCharacterResume,type NativeCharacterResumeReceipt,type NativeAreaCharacterResume} from './nativeAreaCharacterResume';
@@ -34,6 +35,7 @@ export class NativeAreaScenePreparation {
  }
  assertVoyagePreparation(area:NativeAreaSceneOngoing):void {if(this.#areas.get(area.assembly.input.scene.zone.id)!==area||!this.#geography.has(area))throw Error('Native voyage needs its actual prepared owner');}
  releaseVoyage(area:NativeAreaSceneOngoing):void {Reflect.apply(NativeAreaSceneTransitionCoordinator.prototype.assertVoyageRetirement,this.input.coordinator,[area]);if(this.#areas.get(area.assembly.input.scene.zone.id)!==area)throw Error('Native voyage preparation owner changed');this.#areas.delete(area.assembly.input.scene.zone.id);this.#geography.delete(area);}
+ releaseGround(area:NativeAreaSceneOngoing):void {nativeGroundCoordinatorCalls(this.input.coordinator).areaRetirement(area);if(this.#areas.get(area.assembly.input.scene.zone.id)!==area)throw Error('Native ground preparation owner changed');this.#areas.delete(area.assembly.input.scene.zone.id);this.#geography.delete(area);}
  /** Close preparation, including a failed destination never registered for play. */
  retire():readonly NativeAreaSceneOngoing[]{const areas=Object.freeze([...this.#areas.values()]);this.#areas.clear();return areas;}
  /** Select only an actual campaign definition and recorded geography. No callback

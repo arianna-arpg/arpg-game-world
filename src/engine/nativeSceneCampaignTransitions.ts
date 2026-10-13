@@ -11,7 +11,7 @@ import {bumpLedger,mergeLedger} from '../packages/ledger';
 import {applyCredits,LEDGER_ACCOUNT_DEATHS} from '../meta/account';
 import {modeById,stageOf} from '../meta/modes';
 import {MERC_CFG} from '../meta/mercs';
-import {NEMESIS_CFG,formNemesis,nemesisTitle,sagaKey,touchSaga} from '../meta/nemesis';
+import {NEMESIS_CFG,formNemesis,nemesisTitle,sagaKey,touchSaga,recordDeed,promoteNemesis} from '../meta/nemesis';
 import {hashStr} from './nativeSceneConfig';
 import {emptyEssences} from './nativeProgressionMeta';
 import {emptyAbilityEssences} from './nativeProgressionMeta';
@@ -490,4 +490,38 @@ export function sceneRoutePitFall(host:NativeSceneCampaignTransitionHost,a: Acto
     const shover = a.push?.caster && !a.push.caster.dead ? a.push.caster : undefined;
     host.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius + 14, color: '#141019', life: 0.4, maxLife: 0.4 });
     host.kill(a, false, shover);
+  }
+
+/** Original zone-leave survivor law; the actual owner selects its story subject. */
+export type NativeNemesisDepartureHost=Pick<NativeSceneCampaignTransitionHost,"localSeat"|"gameOver"|"nemesisActive"|"actors"|"nemesisEligible"|"account"|"sagaDirty"|"events"|"meta"|"distinctNameOf"|"notice">;
+export function sceneScanNemesisSurvivors(host:NativeNemesisDepartureHost):void {
+    if (!host.localSeat || host.gameOver || !host.nemesisActive()) return;
+    let formed = 0;
+    for (const a of host.actors) {
+      if (a.dead || !host.nemesisEligible(a)) continue;
+      const tag = a.nemesis;
+      if (tag) {
+        const holder = host.account.sagas[tag.sagaKey];
+        const rec = holder?.nemeses.find(n => n.id === tag.id);
+        if (rec && holder) {
+          rec.encounters++;
+          recordDeed(rec, 'escaped', `slipped away from ${holder.name}`);
+          if (Math.random() < NEMESIS_CFG.escapePromoteChance) {
+            promoteNemesis(rec, 'escaped');
+            host.events.emit('nemesis/promoted', { saga: tag.sagaKey, nemesis: rec.name, rank: rec.rank });
+          }
+          host.sagaDirty(true);
+        }
+        continue;
+      }
+      if (formed >= NEMESIS_CFG.survivorPerZone || !a.grudgeMark) continue;
+      if (Math.random() >= NEMESIS_CFG.survivorChance) continue;
+      const saga = touchSaga(host.account, host.meta.name);
+      const n = formNemesis(saga, a.defId!, a.faction ?? '', 'escaped', Math.random,
+        { name: host.distinctNameOf(a), bornRarity: a.rarity });
+      formed++;
+      host.notice(`Something you left alive will remember the name ${host.meta.name}.`, '#c8a84b', 13, 'events');
+      host.events.emit('nemesis/formed', { saga: sagaKey(host.meta.name), nemesis: n.name, deed: 'escaped' });
+      host.sagaDirty(true);
+    }
   }

@@ -1,3 +1,6 @@
+import {beforeNativeCampaignRaw as rawCampaign} from './nativeCampaignCompositionFixture';
+import {beforeNativeContinuity as projectContinuity} from './nativeContinuityCompositionFixture';
+import {beforeNativeOdysseyPressure as projectOdysseyPressure} from './nativeOdysseyPressureFixtureSource';
 import {World} from '../src/engine/world';
 import {makeSimWorld} from '../src/sim/arena';
 import {execFileSync} from 'node:child_process';
@@ -182,7 +185,7 @@ fs.mkdirSync(new URL('./reports/',import.meta.url),{recursive:true});fs.writeFil
 // 49-course proof above remains immutable and independently comparable.
 const integrationChecks:string[]=[];
 function integrated(name:string,fn:()=>void){fn();integrationChecks.push(name);console.log('PASS '+name);}
-const sha=(s:string)=>createHash('sha256').update(s).digest('hex'),read=(p:string)=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8').replaceAll('\r\n','\n');
+const sha=(s:string)=>createHash('sha256').update(s).digest('hex'),read=(p:string)=>((source:string)=>p==='src/engine/world.ts'?projectContinuity('production',p,source):source)(projectOdysseyPressure(p,rawCampaign("pressure59",p,fs.readFileSync(new URL('../'+p,import.meta.url),'utf8')))).replaceAll('\r\n','\n');
 integrated('exact archived whole World and Odyssey restoration',()=>{
  assert.equal(sha(JSON.stringify(archive)),nativeSceneQuestInteractionArchiveHash);
  const current=read('src/engine/world.ts'),restored=beforeNativeSceneQuestInteraction(current);

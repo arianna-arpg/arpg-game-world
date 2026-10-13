@@ -1,3 +1,5 @@
+import type {NativeAreaSceneTransitionCoordinator} from './nativeAreaSceneTransitionCoordinator';
+import {nativeGroundCoordinatorCalls,type NativeGroundCoordinatorCalls} from './nativeOdysseyGroundRegistration';
 import {assertNativeCharacterResume,type NativeCharacterResumeReceipt} from './nativeAreaCharacterResume';
 /** Retained-area memory registration on the genuine campaign character writer.
  * This grants no combat scheduling, scene publication, departure or retirement. */
@@ -6,7 +8,7 @@ import {nativeBirthAsyncResult} from './nativeAreaScenePopulation';
 import type {NativeZoneMemory} from '../engine/nativeSceneMemory';
 import {NativeAreaSceneMemory} from './nativeAreaSceneMemory';
 import {MassNativeGeography} from './nativeGeography';
-import {makeNativeRetainedSave,makeNativeCatalogRetainedSave} from './nativeRetainedSave';
+import {makeNativeRetainedSave,makeNativeCatalogRetainedSave,withNativeOdysseyGroundRefresh} from './nativeRetainedSave';
 import {NativeGeographyCatalog} from './nativeGeographyCatalog';
 import {canonical,freezeData} from './random';
 import {copyNativeGeographyData} from '../world/geographySource';
@@ -16,12 +18,17 @@ const registries=new WeakMap<World,NativeAreaMemoryRegistry>();
 export function hasNativeAreaMemoryRegistry(writer:World):boolean{return registries.has(writer);}
 export class NativeAreaMemoryRegistry {
  readonly writer:World;
+ #ground:NativeAreaSceneTransitionCoordinator|undefined;
+ #groundCalls:NativeGroundCoordinatorCalls|undefined;
+ bindGroundRefresh(coordinator:NativeAreaSceneTransitionCoordinator):void{const calls=nativeGroundCoordinatorCalls(coordinator);if(this.#ground||coordinator.input.memoryRegistry!==this||coordinator.input.characterWriter!==this.writer)throw Error('Native ground save needs its actual coordinator');this.#ground=coordinator;this.#groundCalls=calls;}
+ #captureGround(owner:NativeAreaSceneMemory):boolean {return !this.#ground||this.#groundCalls!.capture(owner);}
+ unregisterGround(owner:NativeAreaSceneMemory,finalCheck:()=>unknown):void {this.#guard(()=>{if(!this.#ground||this.#owners.get(owner.id)!==owner)throw Error('Foreign pending ground memory');this.#groundCalls!.retirement(owner);this.#assertCampaign(owner);if(owner.id===this.writer.zone?.id)throw Error('Published ground requires handoff');if(nativeBirthAsyncResult(Reflect.apply(finalCheck,undefined,[])))throw Error('Native ground final validation must be synchronous');Reflect.apply(Map.prototype.delete,this.writer['zoneMemory'],[owner.id]);this.#owners.delete(owner.id);});}
  #owners=new Map<string,NativeAreaSceneMemory>();
  #capturing=false;
  #retired=false;
  #recorded:Readonly<{geography:MassNativeGeography;manifest:ExpeditionManifest;catalog?:NativeGeographyCatalog}>|undefined;
  bindRecordedGeography(geography:MassNativeGeography,catalog?:NativeGeographyCatalog):void {this.#guard(()=>{if(this.#recorded)throw Error('Retained save geography was already bound');const recorded=new MassNativeGeography(geography.spec),manifest=copyNativeGeographyData(this.writer.manifest);if(recorded.seed!==manifest.seed)throw Error('Retained save source belongs to another writer');if(catalog)catalog.initial.assertCompatible(recorded.spec);this.#recorded=Object.freeze({geography:recorded,manifest:freezeData(manifest),...catalog?{catalog:new NativeGeographyCatalog(catalog.spec)}:{}});});}
- sealWorldSave<T extends MassWorldCheckpoint>(world:T):T {return this.#guard(()=>{const r=this.#recorded;if(!r)return world;if(canonical(copyNativeGeographyData(this.writer.manifest))!==canonical(r.manifest))throw Error('Retained writer manifest changed');world.nativeRetained=r.catalog?makeNativeCatalogRetainedSave(r.catalog,r.manifest,{classId:this.writer.meta.classDef.id,charId:this.writer.meta.charId,modeId:this.writer.meta.modeId},world):makeNativeRetainedSave(r.geography,r.manifest,{classId:this.writer.meta.classDef.id,charId:this.writer.meta.charId,modeId:this.writer.meta.modeId},world);return world;});}
+ sealWorldSave<T extends MassWorldCheckpoint>(world:T):T {return this.#guard(()=>{const r=this.#recorded;if(!r)return world;if(canonical(copyNativeGeographyData(this.writer.manifest))!==canonical(r.manifest))throw Error('Retained writer manifest changed');const base=r.catalog?makeNativeCatalogRetainedSave(r.catalog,r.manifest,{classId:this.writer.meta.classDef.id,charId:this.writer.meta.charId,modeId:this.writer.meta.modeId},world):makeNativeRetainedSave(r.geography,r.manifest,{classId:this.writer.meta.classDef.id,charId:this.writer.meta.charId,modeId:this.writer.meta.modeId},world);const pending=this.#ground?this.#groundCalls!.save():undefined;world.nativeRetained=pending?withNativeOdysseyGroundRefresh(base,world,pending):base;return world;});}
  assertRetirable():void {if(this.#capturing)throw Error('Native memory registry is capturing');}
  /** Cancellation discards registration, without capturing or writing a save. */
  retire():void {if(this.#capturing)throw Error('Native memory registry is capturing');if(this.#retired)return;this.#retired=true;this.#owners.clear();if(registries.get(this.writer)===this)registries.delete(this.writer);}
@@ -61,14 +68,14 @@ export class NativeAreaMemoryRegistry {
  }
  discardProvisionalRestore(owner:NativeAreaSceneMemory,token:NativeCharacterResumeReceipt):void {this.#guard(()=>{if(this.#owners.get(owner.id)!==owner)throw Error('Native provisional memory registration differs');const r=assertNativeCharacterResume(token,'arrival');if(r.writer!==this.writer||r.area?.assembly!==owner.assembly)throw Error('Foreign provisional restore memory');this.#owners.delete(owner.id);});}
  snapshot(zoneId:string):{memory:NativeZoneMemory|null}|undefined{
-  return this.#guard(()=>{const owner=this.#owners.get(zoneId);if(!owner)return;this.#assertCampaign(owner);return {memory:owner.snapshot()};});
+  return this.#guard(()=>{const owner=this.#owners.get(zoneId);if(!owner)return;this.#assertCampaign(owner);return {memory:this.#captureGround(owner)?owner.snapshot():null};});
  }
  /** Replace each successful row immediately, just like native captureLiveMemory.
   * A later failure retains earlier captures and refuses the character write. */
  captureAll():ReadonlyMap<string,NativeZoneMemory|null>{
   return this.#guard(()=>{
    const cohort=[...this.#owners],captured=new Map<string,NativeZoneMemory|null>();
-   for(const [id,owner] of cohort){if(id!==owner.id)throw Error('Native memory registry key differs');this.#assertCampaign(owner);const memory=owner.snapshot();if(memory)this.writer['zoneMemory'].set(id,memory);captured.set(id,memory);}return captured;
+   for(const [id,owner] of cohort){if(id!==owner.id)throw Error('Native memory registry key differs');this.#assertCampaign(owner);if(!this.#captureGround(owner)){Reflect.apply(Map.prototype.delete,this.writer['zoneMemory'],[id]);captured.set(id,null);continue;}const memory=owner.snapshot();if(memory)this.writer['zoneMemory'].set(id,memory);captured.set(id,memory);}return captured;
   });
  }
 }

@@ -1,5 +1,6 @@
 /** One real writer supplies campaign state. Local effects resolve their actual
  * retained owner; no World combat or local scene adapter is a fallback. */
+import {NativeAreaCampaignOdyssey} from './nativeAreaCampaignOdyssey';
 import {assertNativeRetainedMassState} from './nativeAreaRetainedMassState';
 import {isNativeWorld,type World} from '../engine/world';
 import {sceneSeatOf,sceneSeatOfRoot,sceneMarkMetaDirty} from '../engine/nativeSceneCombatContext';
@@ -14,7 +15,7 @@ const writers=new WeakSet<World>(),actualSessions=new WeakSet<object>();
 export function hasNativeAreaCampaignSession(writer:World):boolean{return writers.has(writer);}
 export function isNativeAreaCampaignSession(value:unknown):value is NativeAreaCampaignSession{return !!value&&typeof value==='object'&&actualSessions.has(value);}
 export class NativeAreaCampaignSession {
- readonly writer:World;readonly campaign:NativeAreaOngoingCampaign;
+ readonly writer:World;readonly campaign:NativeAreaOngoingCampaign;readonly odyssey:NativeAreaCampaignOdyssey;
  #coordinator:NativeAreaSceneTransitionCoordinator|null=null;#preparing:NativeAreaSceneOngoing|null=null;
  constructor(writer:World){
   if(!isNativeWorld(writer)||writers.has(writer))throw Error('Native campaign session requires its one actual writer');assertNativeRetainedMassState(writer);this.writer=writer;
@@ -38,15 +39,16 @@ export class NativeAreaCampaignSession {
    odysseyLeads:{enumerable:true,value:(...args:Parameters<World['odysseyLeads']>)=>sceneCampaignOdysseyLeads(view,...args)},
    // Preserve the actual campaign Odyssey state owner. Local quest effects
    // use their separate scoped facade; native saving still uses this controller.
-   odyssey:{enumerable:true,value:writer.odyssey},
+   odyssey:{enumerable:true,get:()=>self.odyssey},
    nativeResidentHistory:{enumerable:true,value:{dialogueVisits:writer.npcDialogues['visits'],get dialogueScene(){return writer.dialogueScene;},set dialogueScene(value:number){writer.dialogueScene=value;}}},
   });
   method('text',()=>self.current.assembly.objectiveController,'text');
   method('questStanding',()=>self.current.quests,'questStanding');
   method('questDefOf',()=>self.current.assembly.input.bounty,'questDefOf');
   const expected=["account","accountDirty","accountSeat","actingSeat","activeQuests","annexFound","bagItem","bountyHands","caveMap","chandlerStock","charDeaths","charDirty","clientActionHook","completedObjectives","continentFor","crossDimWarned","descentRun","descentStocks","discoveredWaypoints","dropRuleOf","forechartSounding","heroKnown","hiredMercs","holdMissingWarned","invalidateZonesSaveMemo","journalDirty","keeperCampaign","kills","lastSagaFlushAt","ledger","localSeat","manifest","manifestedThisRun","markMetaDirty","massRuntime","massSettlementDay","mercSheets","mercSyncedLevel","meta","metaProgressionActive","mintVeil","mireilleGiftLesson","mireilleGiftOwed","mireilleLessonLived","mireilleSeatBuff","mireilleXpBuff","nativeResidentHistory","netJournal","nextGenId","notice","odyssey","odysseyLeads","ownQuestLedger","partyRows","presentWorlds","questDefOf","questHand","questImbues","questLedgerOf","questLedgerOverride","questSeat","questStanding","reliquaryLesson","sameParty","seatHero","seatHudOf","seatNoteAt","seatOf","seatOfRoot","seats","sim","squadSeq","stationArmed","surveyed","text","theaterVisitSeq","time","timeflow","vendorArmedBeat","vendorHolds","vendorRestockAt","vendorStock","visited","zoneMap","zoneMemory"];if(JSON.stringify(Object.keys(view).sort())!==JSON.stringify(expected))throw Error('Native campaign projection does not cover its exact audited contract');
-  this.campaign=Object.freeze(view);for(const key of ['writer','campaign'])Object.defineProperty(this,key,{writable:false,configurable:false});writers.add(writer);actualSessions.add(this);
+  this.campaign=Object.freeze(view);for(const key of ['writer','campaign'])Object.defineProperty(this,key,{writable:false,configurable:false});writers.add(writer);actualSessions.add(this);try{this.odyssey=new NativeAreaCampaignOdyssey(this);}catch(error){writers.delete(writer);actualSessions.delete(this);throw error;}Object.defineProperty(this,'odyssey',{writable:false,configurable:false});
  }
+ residentAreas():readonly NativeAreaSceneOngoing[]{if(!this.#coordinator)return [];return this.#coordinator.residentAreas();}
  bindCoordinator(coordinator:NativeAreaSceneTransitionCoordinator):void {if(this.#coordinator||!isNativeAreaSceneTransitionCoordinator(coordinator)||coordinator.input.campaign!==this.campaign||coordinator.input.characterWriter!==this.writer)throw Error('Native campaign selection needs its identical actual coordinator');this.#coordinator=coordinator;}
  get current():NativeAreaSceneOngoing {if(this.#preparing)return this.#preparing;if(!this.#coordinator)throw Error('Native campaign has no selected actual area');return this.#coordinator.current;}
  /** The concrete preparation owner selects its newly constructed actual local

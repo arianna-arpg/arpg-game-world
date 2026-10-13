@@ -37,6 +37,7 @@ const hostKeys=["realmContext","crusadeRealmContext","necropolisRealmContext","f
 function own<T>(o:object,k:PropertyKey):T{const d=Object.getOwnPropertyDescriptor(o,k);if(!d||!Object.hasOwn(d,'value'))throw Error('Native campaign frame needs ordinary concrete input: '+String(k));return d.value as T;}
 export class NativeAreaSceneCampaignFrame {
  readonly #retiredVoyage=NativeAreaSceneTransitionCoordinator.prototype.isRetiredVoyage;
+ readonly #retiredGround=NativeAreaSceneTransitionCoordinator.prototype.isRetiredGround;
  readonly input:Readonly<Pick<NativeAreaSceneCampaignFrameInput,'combat'|'coordinator'>>;
  readonly #realm:NativeRealmEntryBridge;#realmKind:NativeRealmContextKey|null=null;
  readonly #entry:NativeAreaCombatOwnerEntry;readonly #fixed:Host & NativeSceneRoadScanHost;readonly #road:NativeRoadOwnerBridge;readonly #scanHost:NativeSceneRoadScanHost;
@@ -84,8 +85,8 @@ export class NativeAreaSceneCampaignFrame {
  #owner(combat:NativeAreaSceneCombat):NativeAreaSceneCampaignFrame {const owner=own<NativeAreaSceneCampaignFrame>(combat,'campaignFrame');if(!actualFrames.has(owner)||owner.input.coordinator!==this.input.coordinator)throw Error('Native frame selected a foreign retained owner');owner.#assertInstalled();return owner;}
  #published():NativeAreaSceneCampaignFrame{return this.#owner(this.input.coordinator.published.combat);}
  #currentStep<T>(step:(host:Host)=>T):T {const owner=this.#published();return owner.#run(()=>step(owner.#fixed));}
- #areaStep(step:(host:Host)=>void):void {const {coordinator}=this.input,rows=coordinator.residentAreas().map(area=>this.#owner(area.combat));const anchor=coordinator.published.combat;campaignPhaseOwner.set(coordinator,anchor);try{for(const owner of rows){if(Reflect.apply(this.#retiredVoyage,coordinator,[owner.input.combat]))continue;owner.#run(()=>step(owner.#fixed));}}finally{campaignPhaseOwner.delete(coordinator);}}
- #combatStep(step:(combat:NativeAreaSceneCombat)=>void):void {const rows=this.input.coordinator.residentAreas().map(area=>this.#owner(area.combat));for(const owner of rows){if(Reflect.apply(this.#retiredVoyage,this.input.coordinator,[owner.input.combat]))continue;owner.#run(()=>step(owner.input.combat));}}
+ #areaStep(step:(host:Host)=>void):void {const {coordinator}=this.input,rows=coordinator.residentAreas().map(area=>this.#owner(area.combat));const anchor=coordinator.published.combat;campaignPhaseOwner.set(coordinator,anchor);try{for(const owner of rows){if((Reflect.apply(this.#retiredVoyage,coordinator,[owner.input.combat])||Reflect.apply(this.#retiredGround,coordinator,[owner.input.combat])))continue;owner.#run(()=>step(owner.#fixed));}}finally{campaignPhaseOwner.delete(coordinator);}}
+ #combatStep(step:(combat:NativeAreaSceneCombat)=>void):void {const rows=this.input.coordinator.residentAreas().map(area=>this.#owner(area.combat));for(const owner of rows){if((Reflect.apply(this.#retiredVoyage,this.input.coordinator,[owner.input.combat])||Reflect.apply(this.#retiredGround,this.input.coordinator,[owner.input.combat])))continue;owner.#run(()=>step(owner.input.combat));}}
  #dynamicHost(keys:readonly (keyof Host)[]):Host {const issued=this.input.coordinator.frame,host={} as Host;for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get:()=>{this.#assertFrame(issued);return this.#read(key,issued);},set:value=>{this.#assertFrame(issued);this.#write(key,value);}});return host;}
  #directorHost():NativeSceneDirectorHost {const issued=this.input.coordinator.frame,host=this.#dynamicHost(directorKeys);const bodies={} as NativeSceneDirectorBodies;
   const bind=<K extends keyof NativeSceneDirectorBodies>(key:K,fn:(fixed:Host,...args:never[])=>unknown):void=>{Object.defineProperty(bodies,key,{enumerable:true,get:()=>{this.#assertFrame(issued);const owner=this.#selected();return(...args:never[])=>{this.#assertFrame(issued);if(this.#selected()!==owner)throw Error('Native Director birth receiver changed');return owner.#inSelected(()=>fn(owner.#fixed,...args));};}});};
@@ -187,8 +188,8 @@ export class NativeAreaSceneCampaignFrame {
    this.#combatStep(combat=>combat.frameActors(dt,rawDt));
    this.#combatStep(combat=>combat.frameEffects(dt));
    this.#combatStep(combat=>combat.frameLateBodies(dt));
-   const rows=coordinator.residentAreas().map(area=>this.#owner(area.combat));for(const owner of rows){if(Reflect.apply(this.#retiredVoyage,coordinator,[owner.input.combat]))continue;owner.#run(()=>frameCore.sceneNativeFrameRoadTail(Object.freeze(owner.#dynamicHost(roadFrameKeys)),dt,doorPressIntents));}
-   const roadOwner=Reflect.apply(this.#retiredVoyage,coordinator,[this.input.combat])?this.#published():this;if(roadOwner.#road.link)roadOwner.drainShardRoads();
+   const rows=coordinator.residentAreas().map(area=>this.#owner(area.combat));for(const owner of rows){if((Reflect.apply(this.#retiredVoyage,coordinator,[owner.input.combat])||Reflect.apply(this.#retiredGround,coordinator,[owner.input.combat])))continue;owner.#run(()=>frameCore.sceneNativeFrameRoadTail(Object.freeze(owner.#dynamicHost(roadFrameKeys)),dt,doorPressIntents));}
+   const roadOwner=(Reflect.apply(this.#retiredVoyage,coordinator,[this.input.combat])||Reflect.apply(this.#retiredGround,coordinator,[this.input.combat]))?this.#published():this;if(roadOwner.#road.link)roadOwner.drainShardRoads();
   } finally {campaignPhaseOwner.delete(coordinator);ticking.delete(coordinator);}
  }
 

@@ -1,7 +1,8 @@
-import {NativeQuestOdyssey} from './nativeQuestOdyssey';
+import {NativeQuestOdyssey,type NativeQuestOdysseyHost} from './nativeQuestOdyssey';
+import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
 import type { Actor } from './actor';
 import type { Seat, World } from './world';
-import { OdysseyRisings } from './odysseyRisings';
+import { OdysseyRisings,type NativeOdysseyRisingHost } from './odysseyRisings';
 import { issueCommand } from './ai';
 import { angleDiff, angleTo, dist, vec } from '../core/math';
 import { START_ZONE } from '../data/zones';
@@ -15,6 +16,8 @@ import { odysseyPressureTier, retimeOdysseyPressure } from '../world/odysseyPres
 import { newOdyssey, restoreOdyssey, clearDormantOdysseyPressure, odysseyAct, odysseyReadiness, odysseySurvives,
   type OdysseyState, type OdysseyBody } from '../world/odyssey';
 
+export interface NativeOdysseyHost extends NativeQuestOdysseyHost,NativeOdysseyRisingHost,Pick<World,"account"|"activeQuests"|"actors"|"arena"|"clientActionHook"|"completedQuests"|"createMonster"|"dropGemAt"|"enrollOdysseyQuest"|"exits"|"findFreeSpot"|"gateAccountOf"|"graphWorkAvailable"|"ledger"|"localSeat"|"losCached"|"manifest"|"meta"|"pathField"|"player"|"questHand"|"questLedger"|"questRescues"|"questRunLedger"|"scene"|"seats"|"sim"|"slipAway"|"text"|"time"|"withQuestHand"|"zone"|"zoneMap"> {presentWorlds():readonly {readonly seats:readonly Seat[];readonly zone:World['zone']}[];}
+
 /** Host-owned campaign state; bodies use ordinary combat, collision and flee AI.
  * Pressure bodies have their own exact save rows, never duplicate zone memory. */
 export class OdysseyRuntime {
@@ -25,7 +28,10 @@ export class OdysseyRuntime {
   private scoutActor?: Actor;
   private bodies = new Map<string, Actor>();
   private readonly risings: OdysseyRisings;
-  constructor(private readonly w: World) { this.risings = new OdysseyRisings(w); }
+  constructor(private readonly w: NativeOdysseyHost,stateOwner?:Pick<OdysseyRuntime,'state'>) { this.risings = new OdysseyRisings(w);if(stateOwner)Object.defineProperty(this,'state',{enumerable:true,configurable:false,get:()=>stateOwner.state,set:value=>{stateOwner.state=value;}}); }
+  /** Retained areas keep actual pressure bodies across departure; only native warning cues end. */
+  protected clearLocalWarnings():void {this.risings.clear();}
+  protected clearLocalBodyCache():void {this.scoutActor=undefined;this.bodies.clear();}
 
   restore(raw: OdysseyState | undefined): void {
     this.risings.clear();
@@ -346,7 +352,7 @@ export class OdysseyRuntime {
     a.pos = w.findFreeSpot(at, a.radius); a.tag = tag; a.fromZoneGen = false;
     a.life = a.maxLife() * Math.max(0.001, Math.min(1, saved?.life ?? 1));
     a.aiTargetId = w.player.id;
-    w.actors.push(a); return a;
+    w.actors.push(a); observeNativeCombatBirth(w,a); return a;
   }
   private spawnGroup(ids: string[], saved: OdysseyBody[] | undefined, roster: string[], level: number, goal: { x: number; y: number }): void {
     ids.forEach(tag => {

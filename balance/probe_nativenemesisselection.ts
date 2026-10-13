@@ -1,0 +1,13 @@
+import '../src/engine/world';
+import assert from 'node:assert/strict';
+import {clientSetup} from '../balance/nativeClientRuntimeFixture';
+import {NativeClientRuntime} from '../src/worldmass/nativeClientRuntime';
+import {withSeededRandom} from '../src/core/rng';
+import {formNemesis,touchSaga,sagaKey} from '../src/meta/nemesis';
+import {MONSTERS} from '../src/data/monsters';
+import {CLASSES} from '../src/data/classes';
+import {NullInput} from '../src/net/intent';
+import {refuseWorldCombat,combatHash,writeCombatProof} from '../balance/probe_nativecombatcycle';
+const result=withSeededRandom(59595,()=>{const setup=clientSetup(45927),w=setup.writer;return refuseWorldCombat([w],worldDrivers=>{const runtime=new NativeClientRuntime({writer:w,definition:setup.definition,geography:setup.geography.spec});runtime.install();const a=runtime.current,c=a.combat.input.coordinator,local=w.localSeat,remote=w.addSeat('story-peer',CLASSES[0],new NullInput(),{startingCompanions:false,startingFlasks:false}),body=w.actors.find(a=>!a.dead&&a.team==='enemy'&&!a.passive&&!a.untargetable&&!a.owner&&!a.doorId&&a.defId&&!MONSTERS[a.defId].noNemesis);assert(body?.defId);const saga=touchSaga(w.account,w.meta.name),rec=formNemesis(saga,body.defId,body.faction??'','escaped',Math.random);body.nemesis={sagaKey:sagaKey(w.meta.name),id:rec.id,tint:'#fff'};w['manifestedThisRun'].add(rec.id);const before=rec.encounters,owner=a.combat.campaignTransitions,scan=owner.scanNemesisSurvivors,memory=c.departureFor(a.combat).memory,ready=memory.assertReady;let selected=false,callbacks=0,error:unknown;owner.scanNemesisSurvivors=function(){selected=true;try{return Reflect.apply(scan,this,[]);}finally{selected=false;}};memory.assertReady=function(){if(selected&&callbacks===0){callbacks++;w.localSeat=remote;}return Reflect.apply(ready,this,[]);};try{c.runFrom(a,()=>c.loadZone(setup.destination.id));}catch(e){error=e;}finally{owner.scanNemesisSurvivors=scan;memory.assertReady=ready;}const result={callbacks,encounterDelta:rec.encounters-before,localChanged:w.localSeat===remote,error:String(error),worldDrivers};console.log(JSON.stringify(result));w.localSeat=local;runtime.retire();assert.equal(callbacks,1);assert.equal(result.encounterDelta,0,'late infrastructure callback must refuse before scan');assert.match(String(error),/actual local story subject/);return result;});});
+
+const report={scope:'Actual selected departure owner invokes a real memory-read callback while constructing its scan host. Changed local Seat remains visible, but final story revalidation refuses before any encounter write.',result,receipt:combatHash(JSON.stringify(result))};writeCombatProof('native-nemesis-selection.json',report);console.log(JSON.stringify(report));

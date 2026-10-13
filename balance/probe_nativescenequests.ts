@@ -1,3 +1,6 @@
+import {beforeNativeCampaignRaw as rawCampaign} from './nativeCampaignCompositionFixture';
+import {beforeNativeContinuity as projectContinuity} from './nativeContinuityCompositionFixture';
+import {beforeNativeOdysseyPressure as projectOdysseyPressure,beforeNativeOdysseyHistoricalRescue} from './nativeOdysseyPressureFixtureSource';
 import {beforeNativeBirthLifetime} from './nativeBirthLifetimeFixture';
 import {beforeNativeQuestInteractionOdyssey} from './nativeSceneQuestInteractionFixture';
 import {NativeAreaActorAuthority} from '../src/worldmass/nativeAreaActorAuthority';
@@ -53,7 +56,7 @@ import {questDoneKey,LEDGER_BOUNTY_DONE,bountyDoneKindKey} from "../src/meta/acc
 import {saveCharacter,charKeyFor,CHAR_SLOT,applySavedCharacter} from "../src/meta/character";
 import {saveAccount} from "../src/meta/persistence";
 import {hashStr} from "../src/engine/nativeSceneConfig";
-const hash=(s:string)=>createHash('sha256').update(s).digest('hex'),read=(p:string)=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
+const hash=(s:string)=>createHash('sha256').update(s).digest('hex'),read=(p:string)=>((source:string)=>p==='src/engine/world.ts'?projectContinuity('production',p,source):beforeNativeOdysseyHistoricalRescue(p,source))(projectOdysseyPressure(p,rawCampaign("pressure59",p,fs.readFileSync(new URL('../'+p,import.meta.url),'utf8'))));
 const parse=(s:string)=>ts.createSourceFile('p.ts',s,99,true),emit=(s:string)=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,removeComments:true}}).outputText;
 assert.equal(hash(JSON.stringify(archive)),nativeSceneQuestArchiveHash);
 const source=read('src/engine/world.ts'),sf=parse(source),cl=sf.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;

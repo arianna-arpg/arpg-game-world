@@ -1,5 +1,6 @@
 /** Complete native field service-site births. No update, hiring or quest transaction. */
 import type {World} from './world';
+import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
 import {vec,type Vec2} from '../core/math';
 import {FIXTURE_IDS,MONSTERS} from '../data/monsters';
 import {VOCATIONS,type VocationSiteFilter} from '../data/vocations';
@@ -76,6 +77,7 @@ export function siteSpawnVocationSite(host:NativeSceneSiteHost,vocId: string, at
     const npc = host.createMonster(v.secret.site.npc, Math.max(1, host.zone.level), 'enemy');
     npc.pos = host.findFreeSpot(at, npc.radius);
     host.actors.push(npc);
+    observeNativeCombatBirth(host,npc);
     host.vocationSites.push({ vocId, npc });
     for (const dress of v.secret.site.doodads ?? []) {
       for (let i = 0; i < dress.count; i++) {
@@ -91,7 +93,11 @@ export function siteSpawnVocationSite(host:NativeSceneSiteHost,vocId: string, at
     }
     return true;
   }
-export function sitePlaceMercOutpost(host:NativeSceneSiteHost,def: ZoneDef): void {
+declare const nativeMercPlacement:unique symbol;
+export interface NativeMercPlacement {readonly [nativeMercPlacement]:true}
+interface MercPlacement {host:NativeSceneSiteHost;def:ZoneDef;rng:Rng;step:number;failedInsertion?:boolean;captain?:World['player'];at?:Vec2;a?:number;r?:number;radius?:number;rot?:number;bedroll:number;doodads?:World['doodads'];push?:World['doodads']['push']}
+const mercPlacements=new WeakMap<NativeMercPlacement,MercPlacement>();
+export function sitePrepareMercPlacement(host:NativeSceneSiteHost,def:ZoneDef):NativeMercPlacement|undefined {
     const cfg = MERC_CFG.outpost;
     // ONE OFFICER PER ZONE, by construction: an already-armed counter (the
     // quay boot's captain, the town recruiter's table) holds the ground —
@@ -115,26 +121,25 @@ export function sitePlaceMercOutpost(host:NativeSceneSiteHost,def: ZoneDef): voi
     if (!MONSTERS[FIXTURE_IDS.merc_captain]) return;
     const rng = new Rng((host.manifest.seed ^ hashStr(`mercpost_${def.id}`)) >>> 0);
     if (rng.range(0, 1) >= cfg.chance) return;
-    const captain = host.createMonster(FIXTURE_IDS.merc_captain, Math.max(1, def.level), 'enemy');
-    captain.pos = host.findFreeSpot(vec(
-      host.arena.w * rng.range(0.25, 0.75),
-      host.arena.h * rng.range(0.25, 0.75)), captain.radius);
-    host.actors.push(captain);
-    // Camp dressing: a banner and a ring of bedrolls (generic-disc fallback
-    // renders unknown kinds — dedicated art can come later without data changes).
-    host.doodads.push({ pos: host.findFreeSpot(vec(captain.pos.x + 34, captain.pos.y - 26), 10), radius: 9, kind: 'merc_banner', rot: 0 });
-    for (let i = 0; i < 3; i++) {
-      const a = rng.range(0, Math.PI * 2), r = rng.range(46, 84);
-      host.doodads.push({
-        pos: host.findFreeSpot(vec(captain.pos.x + Math.cos(a) * r, captain.pos.y + Math.sin(a) * r), 14),
-        radius: rng.range(11, 15), kind: 'merc_bedroll', rot: rng.range(0, Math.PI * 2),
-      });
-    }
-    host.mercOutpost = {
-      captain,
-      offers: host.mercSheetFor(def.id, () => host.buildMercOffers(rng)),
-    };
-  }
+    const token=Object.freeze({}) as NativeMercPlacement;mercPlacements.set(token,{host,def,rng,step:0,bedroll:0});return token;
+}
+export function siteResumeMercPlacement(host:NativeSceneSiteHost,token:NativeMercPlacement):void {
+ const r=mercPlacements.get(token);if(!r||r.host!==host)throw Error('Native merc placement needs its exact host');if(r.failedInsertion)throw Error('Native merc insertion failed before completion');const {def,rng}=r;
+ while(r.step<10){switch(r.step){
+  case 0:r.captain=host.createMonster(FIXTURE_IDS.merc_captain,Math.max(1,def.level),'enemy');break;
+  case 1:r.captain!.pos=host.findFreeSpot(vec(host.arena.w*rng.range(0.25,0.75),host.arena.h*rng.range(0.25,0.75)),r.captain!.radius);break;
+  case 2:try{host.actors.push(r.captain!);observeNativeCombatBirth(host,r.captain!);}catch(error){r.failedInsertion=true;throw error;}break;
+  case 3:r.doodads=host.doodads;r.push=r.doodads.push;r.at=host.findFreeSpot(vec(r.captain!.pos.x+34,r.captain!.pos.y-26),10);break;
+  case 4:try{Reflect.apply(r.push!,r.doodads!,[{pos:r.at!,radius:9,kind:'merc_banner',rot:0}]);}catch(error){r.failedInsertion=true;throw error;}break;
+  case 5:r.a=rng.range(0,Math.PI*2);r.r=rng.range(46,84);break;
+  case 6:r.doodads=host.doodads;r.push=r.doodads.push;r.at=host.findFreeSpot(vec(r.captain!.pos.x+Math.cos(r.a!)*r.r!,r.captain!.pos.y+Math.sin(r.a!)*r.r!),14);break;
+  case 7:r.radius=rng.range(11,15);r.rot=rng.range(0,Math.PI*2);break;
+  case 8:try{Reflect.apply(r.push!,r.doodads!,[{pos:r.at!,radius:r.radius!,kind:'merc_bedroll',rot:r.rot!}]);}catch(error){r.failedInsertion=true;throw error;}if(++r.bedroll<3)r.step=4;break;
+  case 9:host.mercOutpost={captain:r.captain!,offers:host.mercSheetFor(def.id,()=>host.buildMercOffers(rng))};break;
+ }r.step++;}
+}
+export function siteMercPlacementRetryable(host:NativeSceneSiteHost,token:NativeMercPlacement):boolean {const r=mercPlacements.get(token);if(!r||r.host!==host)throw Error('Native merc placement needs its exact host');return r.step>=2;}
+export function sitePlaceMercOutpost(host:NativeSceneSiteHost,def:ZoneDef):void {const token=sitePrepareMercPlacement(host,def);if(token)siteResumeMercPlacement(host,token);}
 export function siteBuildMercOffers(host:NativeSceneSiteHost,rng: Rng): MercOffer[] {
     const { min, max } = MERC_CFG.offers;
     const count = min + Math.floor(rng.range(0, max - min + 1));
