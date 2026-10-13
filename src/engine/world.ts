@@ -507,6 +507,7 @@ import { hullOf, samplePoint, type Bounds } from '../world/shape';
 import { isDeathAligned, factionTemper } from '../world/traits';
 import { extractionLookFor } from '../data/extraction';
 import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
+import { orbHitChance } from './orbGeneration';
 import {
   ORB_DEFS, ORB_CAP, orbAmount, orbOnHitStat, orbOnKillStat, orbOnHurtStat,
   orbRefundStat, orbTrickleStat, ORB_TRICKLE,
@@ -40290,8 +40291,9 @@ export class World {
     if (dealt > 0 && depth === 0 && this.orbs.length < ORB_CAP) {
       const rate = caster.sheet.get('orbShedRate', tags, extra);
       for (const id of Object.keys(ORB_DEFS)) {
-        const c = caster.sheet.get(orbOnHitStat(id), tags, extra) * rate;
-        if (c > 0 && chance(Math.min(0.5, c))) {
+        const c = orbHitChance(caster, id,
+          caster.sheet.get(orbOnHitStat(id), tags, extra) * rate, this.time);
+        if (c > 0 && chance(c)) {
           this.shedOrb(id, target.pos, { scatter: 18, tier: target.tier });
         }
       }

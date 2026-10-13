@@ -697,6 +697,11 @@ See docs/ui/quiet-icons.md for the independent debuff presentation contract.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Minion critter targeting, Charge's ground wake and life/mana orb pacing are
+documented in [combat-polish](docs/design/combat-polish.md). Verify
+probe_miniontargets, probe_orbgeneration, companionstance, flasktrees and
+movementvisuals; build before the hidden movement-visuals UI harness.
+
 Storm, summon and construct identities use `data/skillPresenceVisuals.ts`
 and `render/vis/skillPresenceVoice.ts`: 139 explicit source profiles.
 Births, completed actions, real aura/construct pulses and actual retirement

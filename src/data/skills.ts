@@ -5,6 +5,7 @@ import { GOAD_SKILLS } from './goadSkills';
 import { COMPANION_SKILLS } from './companionSkills';
 import { FLASK_TREES } from './flaskTrees';
 import { FLASK_SKILLS } from './flaskSkills';
+import { ORB_HIT_CADENCE_TEXT } from './orbs';
 import { DISCIPLINE_STARTER_TREES } from './disciplineStarterTrees';
 import { BOND_STARTER_TREES } from './bondStarterTrees';
 import { RUNEWEAVER_STARTER_TREES } from './runeweaverStarterTrees';
@@ -16366,6 +16367,12 @@ for (const def of Object.values(SKILLS)) {
 // honestly, never socketing into a skill with no roster to grow.
 for (const def of Object.values(SKILLS)) {
   if (def.throng && !def.tags.includes('throng')) def.tags.push('throng');
+}
+
+for (const def of Object.values(SKILLS)) {
+  if (def.equipMods?.some(m => m.stat === 'orbOnHit_life' || m.stat === 'orbOnHit_mana')) {
+    def.description += ORB_HIT_CADENCE_TEXT;
+  }
 }
 
 export const SKILL_LIST: SkillDef[] = Object.values(SKILLS);

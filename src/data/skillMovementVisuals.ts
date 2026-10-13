@@ -5,13 +5,14 @@ export type MovementPhase = 'depart' | 'arrive' | 'impact' | 'wait' | 'bank';
 export interface MovementProfile {
   family: 'dash' | 'leap' | 'blink' | 'carom'; form: MovementForm;
   motif: BurstMotif; count: number; motion: 'drive' | 'split' | 'coil' | 'scatter';
+  groundWake?: boolean;
 }
 const p = (family: MovementProfile['family'], form: MovementForm, motif: BurstMotif, count: number,
   motion: MovementProfile['motion'] = 'drive'): MovementProfile => ({ family, form, motif, count, motion });
 /** Source identity is independent of tint and movement distance. */
 export const SKILL_MOVEMENTS: Readonly<Record<string, MovementProfile>> = {
   dash: p('dash', 'stride', 'arcs', 2),
-  charge: p('dash', 'ram', 'cracks', 3),
+  charge: { ...p('dash', 'ram', 'cracks', 3), groundWake: true },
   shield_charge: p('dash', 'ram', 'shields', 4, 'split'),
   gore_charge: p('dash', 'talon', 'teeth', 2),
   dash_strike: p('dash', 'blade', 'blades', 3, 'split'),
@@ -56,6 +57,7 @@ export const SKILL_MOVEMENTS: Readonly<Record<string, MovementProfile>> = {
   riftstorm: p('blink', 'orbit', 'blades', 5, 'coil'),
   caged_comet: p('carom', 'orbit', 'sparks', 3, 'coil'),
 };
+export const CHARGE_WAKE_STYLE = { railOffset: .58, dustOffset: .84, alpha: .55, width: 1.7, dustWidth: 1.1 };
 export const MOVEMENT_VISUAL_STYLE = { maxTraces: 40, maxPoints: 16, tailSeconds: .22, fadeSeconds: .2, maxMarks: 6, outline: '#17232b' };
 export function movementProfile(id: string) { return Object.hasOwn(SKILL_MOVEMENTS, id) ? SKILL_MOVEMENTS[id] : undefined; }
 export function skillMovementVoice(id: string, phase: MovementPhase): string | undefined {

@@ -1,4 +1,4 @@
-import { SKILL_MOVEMENTS, MOVEMENT_VISUAL_STYLE as C, movementProfile, skillMovementVoice,
+import { SKILL_MOVEMENTS, MOVEMENT_VISUAL_STYLE as C, CHARGE_WAKE_STYLE as W, movementProfile, skillMovementVoice,
   type MovementProfile, type MovementPhase } from '../../data/skillMovementVisuals';
 import type { MovementTrail } from '../../engine/skillMovementVisual';
 import { registerEffectVoice, type EffectVoiceFlash } from './effectVoice';
@@ -110,6 +110,23 @@ export function drawMovementTrail(ctx: CanvasRenderingContext2D, f: { radius: nu
     ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(Math.atan2(dy, dx));
     ctx.beginPath(); ctx.rect(0, -width, length, width * 2); ctx.clip();
     ctx.globalAlpha *= life * (.15 + age * .65);
+    if (p.groundWake) {
+      // Two low skid lines and outward dust ticks persist across tiny frame
+      // segments. No airborne swell, predicted path or additional particles.
+      ctx.globalAlpha *= W.alpha;
+      ctx.lineCap = 'round'; ctx.strokeStyle = shade(f.color, .2); ctx.lineWidth = W.width;
+      ctx.beginPath();
+      for (const side of [-1, 1]) {
+        ctx.moveTo(0, side * width * W.railOffset);
+        ctx.lineTo(length, side * width * W.railOffset);
+      }
+      ctx.stroke(); ctx.lineWidth = W.dustWidth; ctx.beginPath();
+      for (const side of [-1, 1]) {
+        ctx.moveTo(length * .2, side * width * W.dustOffset);
+        ctx.lineTo(length * .8, side * width * W.railOffset);
+      }
+      ctx.stroke(); ctx.restore(); continue;
+    }
     // Long frames need at most three marks; high-rate histories stay capped.
     const count = Math.min(3, Math.max(1, Math.ceil(length / (width * 2))));
     for (let j = 0; j < count; j++) {

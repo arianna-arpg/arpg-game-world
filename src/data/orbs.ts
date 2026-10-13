@@ -11,7 +11,8 @@
 // fragments whose payload is a buff; orbs are the resource lane.
 //
 // SHEDDING rides GENERATED stat families, one per kind and trigger:
-//   orbOnHit_<id>   chance per landed top-level hit (the Harvest lane)
+//   orbOnHit_<id>   chance on landed top-level damage (the Harvest lane;
+//                  life/mana share a per-bearer attempt clock, below)
 //   orbOnKill_<id>  chance per credited kill (noBounty prey sheds nothing)
 //   orbOnHurt_<id>  chance per landed hit TAKEN (the bruised-loose valve)
 // each rolled with the acting skill's tags + instance mods, so "melee kills
@@ -27,6 +28,8 @@ export interface OrbDef {
   color: string;
   /** Instant pour: restore this pool by the orb's rolled amount. */
   restore?: 'life' | 'mana' | 'es';
+  /** Shared per-bearer hit-roll cadence and low-reserve assistance. */
+  hitRecovery?: boolean;
   /** Pickup banks charges (fixed per scoop — level scaling belongs to
    *  restores; a charge is a charge). CHARGE_DEFS personalities apply. */
   charge?: { charge: string; amount: number; max: number };
@@ -50,11 +53,11 @@ export const ORB_DEFS: Record<string, OrbDef> = {
   // founts drink them, chests and breakables spill them.
   life: {
     id: 'life', label: 'life', color: '#d04848',
-    restore: 'life', amount: { base: 12, perLevel: 2 },
+    restore: 'life', amount: { base: 12, perLevel: 2 }, hitRecovery: true,
   },
   mana: {
     id: 'mana', label: 'mana', color: '#4a78d8',
-    restore: 'mana', amount: { base: 9, perLevel: 1 },
+    restore: 'mana', amount: { base: 9, perLevel: 1 }, hitRecovery: true,
   },
   es: {
     id: 'es', label: 'shield', color: '#5ad8d8',
@@ -73,6 +76,11 @@ export const ORB_DEFS: Record<string, OrbDef> = {
     light: 46,
   },
 };
+
+/** An attempt consumes the interval even when its roll fails. Assistance is
+ * internal tuning, only for a positive grant, and never bypasses this cadence. */
+export const ORB_HIT_RECOVERY = { interval: 0.75, resourceBelow: 0.6, maxBonus: 3, chanceCap: 0.5 };
+export const ORB_HIT_CADENCE_TEXT = ' Life and mana orb hit rolls share a ' + ORB_HIT_RECOVERY.interval + 's interval per kind.';
 
 /** Hard ceiling on live orbs in a zone — every shed path respects it. */
 export const ORB_CAP = 40;
@@ -94,6 +102,7 @@ export function orbAmount(def: OrbDef, level: number): number {
 for (const [id, def] of Object.entries(ORB_DEFS)) {
   STAT_DEFS['orbOnHit_' + id] = {
     label: `${def.label} Orb on Hit`, base: 0, min: 0, max: 1, percent: true,
+    ...(def.hitRecovery ? { desc: ORB_HIT_CADENCE_TEXT.trim() } : {}),
   };
   STAT_DEFS['orbOnKill_' + id] = {
     label: `${def.label} Orb on Kill`, base: 0, min: 0, max: 1, percent: true,
