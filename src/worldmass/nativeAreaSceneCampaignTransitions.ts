@@ -6,6 +6,8 @@ import * as lifecycle from '../engine/nativeSceneCampaignLifecycle';
 import * as death from '../engine/nativeSceneCampaignDeath';
 import * as conclusion from '../engine/nativeSceneRunConclusion';
 import {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
+import {scenePerformModeRespawn} from '../engine/nativeSceneFrameServices';
+const selectPartyActors=NativeAreaActorAuthority.prototype.selectActors,finalPartyActors=NativeAreaActorAuthority.prototype.assertFinalSelections;
 import {isNativeAreaSceneCombat,type NativeAreaSceneCombat} from './nativeAreaSceneCombat';
 import {isNativeAreaSceneTransitionCoordinator,issueNativeTransitionOwnerBridge,type NativeTransitionOwnerBridge,type NativeAreaSceneTransitionCoordinator} from './nativeAreaSceneTransitionCoordinator';
 import {assertNativeCombatOwnerEntry,type NativeAreaCombatOwnerEntry,type NativeCombatSubjects} from './nativeAreaCombatOperation';
@@ -29,6 +31,15 @@ export class NativeAreaSceneCampaignTransitions {
   this.input=Object.freeze({combat,coordinator});this.#entry=entry;this.#bridge=issueNativeTransitionOwnerBridge(coordinator,this,combat,entry);Object.defineProperty(this,'input',{writable:false,configurable:false});
  }
  #run<T>(subjects:NativeCombatSubjects,action:()=>T):T{const {combat,coordinator}=this.input;return coordinator.runFrom(coordinator.areaFor(combat),()=>this.#entry(this,subjects,action));}
+ /** A remote native seat effect enters that seat's actual owner without
+  * changing the outer death/transition frame. Campaign ledgers remain shared. */
+ #seatRun<T>(seat:Seat,action:(owner:NativeAreaSceneCampaignTransitions,combat:NativeAreaSceneCombat)=>T):T{
+  const {coordinator}=this.input,{authority,campaign}=coordinator.input,body=seatBody(seat),roster=campaign.seats;
+  const members=(rows:readonly Seat[])=>{if(!Array.isArray(rows))throw Error('Native party effect needs raw seats');const count=Object.getOwnPropertyDescriptor(rows,'length')!.value;let found=false;for(let i=0;i<count;i++){const d=Object.getOwnPropertyDescriptor(rows,i);if(!d||!Object.hasOwn(d,'value'))throw Error('Native party effect needs ordinary seat entries');if(d.value===seat)found=true;}return found;};if(!members(roster))throw Error('Native party effect needs an actual campaign seat');
+  const selected=Reflect.apply(selectPartyActors,authority,[[body]]),combat=selected[0].owner.combat as NativeAreaSceneCombat,owner=combat.campaignTransitions;
+  if(coordinator.areaFor(combat).binding!==selected[0].binding)throw Error('Native party effect has a foreign owner');
+  return owner.#entry(owner,{physical:[body],permission:'physical'},()=>{if(campaign.seats!==roster)throw Error('Native party effect campaign roster changed');const present=members(roster);Reflect.apply(finalPartyActors,authority,[selected]);if(seatBody(seat)!==body||!present)throw Error('Native party effect seat changed during admission');return action(owner,combat);});
+ }
  #selectedSeats():readonly Seat[]{const {coordinator}=this.input,area=coordinator.current,seats=coordinator.frame.seats;coordinator.input.authority.assertFinalPhysical(area.binding,seats.map(seatBody));return seats;}
  #retire(combat:NativeAreaSceneCombat,bodies:readonly Actor[]):void{const {authority,assembly}=combat.input,binding=authority.bindingFor(assembly.input.scene);for(const body of bodies)if(assembly.input.scene.actors.includes(body))throw Error('Native retirement needs the actual completed removal');authority.release(binding,bodies);if(bodies.length)combat.noteActorInsertion(bodies[0]);}
  #removeSeatActors(combat:NativeAreaSceneCombat,seat:Seat):void{
@@ -71,7 +82,7 @@ export class NativeAreaSceneCampaignTransitions {
  }
  endRun(...args:Parameters<World['endRun']>):ReturnType<World['endRun']>{return this.#run({permission:'physical'},()=>conclusion.sceneEndRun(this.#conclusionHost(),...args));}
  retireCharacter(...args:Parameters<World['retireCharacter']>):ReturnType<World['retireCharacter']>{return this.#run({permission:'physical'},()=>conclusion.sceneRetireCharacter(this.#conclusionHost(),...args));}
- #transitionHost(fixed?:NativeAreaSceneCombat):transition.NativeSceneCampaignTransitionHost{
+ #transitionHost(fixed?:NativeAreaSceneCombat,party:boolean|'outsideScene'=false,recoveryPlayer?:Actor):transition.NativeSceneCampaignTransitionHost{
   const {coordinator}=this.input,{campaign,characterWriter:writer}=coordinator.input;
   const area=()=>fixed?coordinator.areaFor(fixed):coordinator.current,combat=()=>area().combat,scene=()=>area().assembly.input.scene,geometry=()=>area().assembly.input.geometry,roads=()=>coordinator.roadsFor(combat());
   const bindings:{[K in keyof transition.NativeSceneCampaignTransitionHost]:Binding<transition.NativeSceneCampaignTransitionHost[K]>}={
@@ -111,7 +122,7 @@ export class NativeAreaSceneCampaignTransitions {
    landPartyAt:method(()=>coordinator,'landPartyAt'),
    lastRespawnPayout:{get:()=>writer['lastRespawnPayout'],set:value=>{writer['lastRespawnPayout']=value;}},
    ledger:field(()=>campaign,'ledger'),
-   loadZone:method(()=>coordinator,'loadZone'),
+   loadZone:party?method(()=>this.#bridge,'loadPartyZone'):method(()=>coordinator,'loadZone'),
    localSeat:field(()=>campaign,'localSeat'),
    loseBagRelicsOnDeath:method(()=>combat().campaignTransitions,'loseBagRelicsOnDeath'),
    markMetaDirty:method(combat,'markMetaDirty'),
@@ -125,7 +136,7 @@ export class NativeAreaSceneCampaignTransitions {
    onRunEnded:method(()=>combat().campaignTransitions,'onRunEnded'),
    pendingRespawn:field(()=>writer,'pendingRespawn'),
    pitPolicyFor:method(combat,'pitPolicyFor'),
-   player:{get:()=>{const selected=area(),body=selected.assembly.input.scene.player;coordinator.input.authority.assertFinalPhysical(selected.binding,[body]);return body;}},
+   player:{get:()=>{if(recoveryPlayer){const selected=Reflect.apply(selectPartyActors,coordinator.input.authority,[[recoveryPlayer]]);Reflect.apply(finalPartyActors,coordinator.input.authority,[selected]);const local=Object.getOwnPropertyDescriptor(writer,'localSeat');if(!local||!Object.hasOwn(local,'value')||seatBody(local.value)!==recoveryPlayer)throw Error('Native descent local hand changed');return recoveryPlayer;}const selected=area(),body=selected.assembly.input.scene.player;coordinator.input.authority.assertFinalPhysical(selected.binding,[body]);return body;}},
    recalcSeat:method(()=>area().progression,'recalcSeat'),
    reckonRunEssence:method(()=>combat().campaignTransitions,'reckonRunEssence'),
    recordDeath:method(()=>combat().campaignTransitions,'recordDeath'),
@@ -139,7 +150,7 @@ export class NativeAreaSceneCampaignTransitions {
    scatterPitArrival:method(()=>combat().campaignTransitions,'scatterPitArrival'),
    scene:field(()=>area().quests.input.state,'scene'),
    seatOf:method(()=>campaign,'seatOf'),
-   seats:{get:()=>this.#selectedSeats()},
+   seats:{get:()=>party===true||(party==='outsideScene'&&!area().quests.input.state.scene)?this.#bridge.partySeats():this.#selectedSeats()},
    showCompanionCue:method(()=>area().progression,'showCompanionCue'),
    sim:field(()=>campaign,'sim'),
    skyBelow:field(()=>area().assembly.input.state,'skyBelow'),
@@ -154,7 +165,7 @@ export class NativeAreaSceneCampaignTransitions {
    zoneMap:field(()=>campaign,'zoneMap'),
   };return hostOf(bindings);
  }
- #lifecycleHost(fixed?:NativeAreaSceneCombat):lifecycle.NativeSceneCampaignLifecycleHost{
+ #lifecycleHost(fixed?:NativeAreaSceneCombat,party=false):lifecycle.NativeSceneCampaignLifecycleHost{
   const {coordinator}=this.input,{campaign,characterWriter:writer}=coordinator.input;
   const area=()=>fixed?coordinator.areaFor(fixed):coordinator.current,combat=()=>area().combat,scene=()=>area().assembly.input.scene,geometry=()=>area().assembly.input.geometry;
   const bindings:{[K in keyof lifecycle.NativeSceneCampaignLifecycleHost]:Binding<lifecycle.NativeSceneCampaignLifecycleHost[K]>}={
@@ -186,7 +197,7 @@ export class NativeAreaSceneCampaignTransitions {
    pointInSolid:method(geometry,'pointInSolid'),
    runEndReason:field(()=>writer,'runEndReason'),
    sagaDirty:method(()=>area().assembly.input.history,'sagaDirty'),
-   seats:{get:()=>this.#selectedSeats()},
+   seats:{get:()=>party?this.#bridge.partySeats():this.#selectedSeats()},
    shake:field(()=>writer,'shake'),
    text:method(()=>area().assembly.objectiveController,'text'),
    time:field(()=>campaign,'time'),
@@ -232,33 +243,39 @@ export class NativeAreaSceneCampaignTransitions {
    actors:field(scene,'actors'),
   };return hostOf(bindings);
  }
- onPlayerDown(...args:Parameters<World['onPlayerDown']>):ReturnType<World['onPlayerDown']>{return this.#run({physical:[args[0]],sources:args[1]?[args[1]]:[],permission:'attribution'},()=>transition.sceneOnPlayerDown(this.#transitionHost(),...args));}
- concludeWipe(...args:Parameters<World['concludeWipe']>):ReturnType<World['concludeWipe']>{return this.#run({permission:'physical'},()=>transition.sceneConcludeWipe(this.#transitionHost(),...args));}
- beginModeFall(...args:Parameters<World['beginModeFall']>):ReturnType<World['beginModeFall']>{return this.#run({permission:'physical'},()=>transition.sceneBeginModeFall(this.#transitionHost(),...args));}
- beginModeRespawn(...args:Parameters<World['beginModeRespawn']>):ReturnType<World['beginModeRespawn']>{return this.#run({permission:'physical'},()=>transition.sceneBeginModeRespawn(this.#transitionHost(),...args));}
+ onPlayerDown(...args:Parameters<World['onPlayerDown']>):ReturnType<World['onPlayerDown']>{return this.#run({physical:[args[0]],sources:args[1]?[args[1]]:[],permission:'attribution'},()=>transition.sceneOnPlayerDown(this.#transitionHost(undefined,'outsideScene'),...args));}
+ concludeWipe(...args:Parameters<World['concludeWipe']>):ReturnType<World['concludeWipe']>{return this.#run({permission:'physical'},()=>transition.sceneConcludeWipe(this.#transitionHost(undefined,true),...args));}
+ partySeats():readonly Seat[]{return this.#run({permission:'physical'},()=>this.#bridge.partySeats());}
+ performModeRespawn():void{return this.#run({permission:'physical'},()=>scenePerformModeRespawn(this.#transitionHost(undefined,true)));}
+ beginModeFall(...args:Parameters<World['beginModeFall']>):ReturnType<World['beginModeFall']>{return this.#run({permission:'physical'},()=>transition.sceneBeginModeFall(this.#transitionHost(undefined,true),...args));}
+ beginModeRespawn(...args:Parameters<World['beginModeRespawn']>):ReturnType<World['beginModeRespawn']>{return this.#run({permission:'physical'},()=>transition.sceneBeginModeRespawn(this.#transitionHost(undefined,true),...args));}
  stripCarryOnDeath(...args:Parameters<World['stripCarryOnDeath']>):ReturnType<World['stripCarryOnDeath']>{return this.#run({permission:'physical'},()=>transition.sceneStripCarryOnDeath(this.#transitionHost(),...args));}
- stripCarryOf(...args:Parameters<World['stripCarryOf']>):ReturnType<World['stripCarryOf']>{return this.#run({physical:[seatBody(args[0])],permission:'physical'},()=>transition.sceneStripCarryOf(this.#transitionHost(),...args));}
- bankCouchWipe(...args:Parameters<World['bankCouchWipe']>):ReturnType<World['bankCouchWipe']>{return this.#run({permission:'physical'},()=>transition.sceneBankCouchWipe(this.#transitionHost(),...args));}
- resurfaceFromDescent(...args:Parameters<World['resurfaceFromDescent']>):ReturnType<World['resurfaceFromDescent']>{return this.#run({permission:'physical'},()=>transition.sceneResurfaceFromDescent(this.#transitionHost(),...args));}
+ stripCarryOf(...args:Parameters<World['stripCarryOf']>):ReturnType<World['stripCarryOf']>{return this.#seatRun(args[0],(owner,combat)=>transition.sceneStripCarryOf(owner.#transitionHost(combat),...args));}
+ bankCouchWipe(...args:Parameters<World['bankCouchWipe']>):ReturnType<World['bankCouchWipe']>{return this.#run({permission:'physical'},()=>transition.sceneBankCouchWipe(this.#transitionHost(undefined,true),...args));}
+ resurfaceFromDescent(...args:Parameters<World['resurfaceFromDescent']>):ReturnType<World['resurfaceFromDescent']>{return this.#run({permission:'physical'},()=>{
+  const campaign=this.input.coordinator.input.campaign,run=campaign.descentRun;if(!run||!campaign.sim.descentField)return transition.sceneResurfaceFromDescent(this.#transitionHost(),...args);
+  const selected=this.#bridge.selectDescentRecovery(run),owner=selected.combat.campaignTransitions;
+  return owner.#entry(owner,{permission:'physical'},()=>{if(campaign.descentRun!==run)throw Error('Native descent run changed during owner entry');return transition.sceneResurfaceFromDescent(owner.#transitionHost(undefined,true,selected.player),...args);});
+ });}
  beginSkyfall(...args:Parameters<World['beginSkyfall']>):ReturnType<World['beginSkyfall']>{return this.#run({permission:'physical'},()=>transition.sceneBeginSkyfall(this.#transitionHost(),...args));}
  routeSkyFalls(...args:Parameters<World['routeSkyFalls']>):ReturnType<World['routeSkyFalls']>{return this.#run({physical:args[0] as readonly Actor[],permission:'physical'},()=>transition.sceneRouteSkyFalls(this.#transitionHost(),...args));}
  beginPitDescent(...args:Parameters<World['beginPitDescent']>):ReturnType<World['beginPitDescent']>{return this.#run({permission:'physical'},()=>transition.sceneBeginPitDescent(this.#transitionHost(),...args));}
  routePitFall(...args:Parameters<World['routePitFall']>):ReturnType<World['routePitFall']>{return this.#run({physical:[args[0]],permission:'physical'},()=>transition.sceneRoutePitFall(this.#transitionHost(),...args));}
  beginTraversal(...args:Parameters<World['beginTraversal']>):ReturnType<World['beginTraversal']>{return this.#run({permission:'physical'},()=>lifecycle.sceneBeginTraversal(this.#lifecycleHost(),...args));}
  distinctNameOf(...args:Parameters<World['distinctNameOf']>):ReturnType<World['distinctNameOf']>{return this.#run({sources:[args[0]],permission:'stats'},()=>lifecycle.sceneDistinctNameOf(this.#lifecycleHost(),...args));}
- grantEssence(...args:Parameters<World['grantEssence']>):ReturnType<World['grantEssence']>{return this.#run({physical:[seatBody(args[0])],permission:'physical'},()=>lifecycle.sceneGrantEssence(this.#lifecycleHost(),...args));}
+ grantEssence(...args:Parameters<World['grantEssence']>):ReturnType<World['grantEssence']>{return this.#seatRun(args[0],(owner,combat)=>lifecycle.sceneGrantEssence(owner.#lifecycleHost(combat),...args));}
  modeDef(...args:Parameters<World['modeDef']>):ReturnType<World['modeDef']>{return this.#run({permission:'physical'},()=>lifecycle.sceneModeDef(this.#lifecycleHost(),...args));}
  nemesisEligible(...args:Parameters<World['nemesisEligible']>):ReturnType<World['nemesisEligible']>{return this.#run({sources:[args[0]],permission:'stats'},()=>lifecycle.sceneNemesisEligible(this.#lifecycleHost(),...args));}
  onRunEnded(...args:Parameters<World['onRunEnded']>):ReturnType<World['onRunEnded']>{return this.#run({permission:'physical'},()=>lifecycle.sceneOnRunEnded(this.#lifecycleHost(),...args));}
- reckonRunEssence(...args:Parameters<World['reckonRunEssence']>):ReturnType<World['reckonRunEssence']>{return this.#run({permission:'physical'},()=>lifecycle.sceneReckonRunEssence(this.#lifecycleHost(),...args));}
+ reckonRunEssence(...args:Parameters<World['reckonRunEssence']>):ReturnType<World['reckonRunEssence']>{return this.#run({permission:'physical'},()=>lifecycle.sceneReckonRunEssence(this.#lifecycleHost(undefined,true),...args));}
  recordNemesisFall(...args:Parameters<World['recordNemesisFall']>):ReturnType<World['recordNemesisFall']>{return this.#run({permission:'physical'},()=>lifecycle.sceneRecordNemesisFall(this.#lifecycleHost(),...args));}
- restoreAccountRelics(...args:Parameters<World['restoreAccountRelics']>):ReturnType<World['restoreAccountRelics']>{return this.#run({physical:[seatBody(args[0])],permission:'physical'},()=>lifecycle.sceneRestoreAccountRelics(this.#lifecycleHost(),...args));}
+ restoreAccountRelics(...args:Parameters<World['restoreAccountRelics']>):ReturnType<World['restoreAccountRelics']>{return this.#seatRun(args[0],(owner,combat)=>lifecycle.sceneRestoreAccountRelics(owner.#lifecycleHost(combat),...args));}
  scatterPitArrival(...args:Parameters<World['scatterPitArrival']>):ReturnType<World['scatterPitArrival']>{return this.#run({permission:'physical'},()=>lifecycle.sceneScatterPitArrival(this.#lifecycleHost(),...args));}
- recordDeath(...args:Parameters<World['recordDeath']>):ReturnType<World['recordDeath']>{return this.#run({permission:'physical'},()=>death.sceneRecordDeath(this.#deathHost(),...args));}
- recordSeatDeath(...args:Parameters<World['recordSeatDeath']>):ReturnType<World['recordSeatDeath']>{return this.#run({physical:[seatBody(args[0])],permission:'physical'},()=>death.sceneRecordSeatDeath(this.#deathHost(),...args));}
- fellVessel(...args:Parameters<World['fellVessel']>):ReturnType<World['fellVessel']>{return this.#run({permission:'physical'},()=>death.sceneFellVessel(this.#deathHost(),...args));}
+ recordDeath(...args:Parameters<World['recordDeath']>):ReturnType<World['recordDeath']>{return this.#seatRun(this.input.coordinator.input.campaign.localSeat,(owner,combat)=>death.sceneRecordDeath(owner.#deathHost(combat),...args));}
+ recordSeatDeath(...args:Parameters<World['recordSeatDeath']>):ReturnType<World['recordSeatDeath']>{return this.#seatRun(args[0],(owner,combat)=>death.sceneRecordSeatDeath(owner.#deathHost(combat),...args));}
+ fellVessel(...args:Parameters<World['fellVessel']>):ReturnType<World['fellVessel']>{return this.#seatRun(args[0],(owner,combat)=>death.sceneFellVessel(owner.#deathHost(combat),...args));}
  dismissMercenary(...args:Parameters<World['dismissMercenary']>):ReturnType<World['dismissMercenary']>{return this.#run({permission:'physical'},()=>death.sceneDismissMercenary(this.#deathHost(),...args));}
- loseBagRelicsOnDeath(...args:Parameters<World['loseBagRelicsOnDeath']>):ReturnType<World['loseBagRelicsOnDeath']>{return this.#run({permission:'physical'},()=>death.sceneLoseBagRelicsOnDeath(this.#deathHost(),...args));}
+ loseBagRelicsOnDeath(...args:Parameters<World['loseBagRelicsOnDeath']>):ReturnType<World['loseBagRelicsOnDeath']>{return this.#seatRun(args[0],(owner,combat)=>death.sceneLoseBagRelicsOnDeath(owner.#deathHost(combat),...args));}
  removeSeat(...args:Parameters<World['removeSeat']>):ReturnType<World['removeSeat']>{
   const {combat,coordinator}=this.input,{campaign}=coordinator.input,{authority}=combat.input,seat=campaign.seats.find(s=>s.id===args[0]);if(!seat||seat===campaign.localSeat)return;
   const body=seatBody(seat),owner=authority.require(body).combat;if(owner!==combat)return owner.campaignTransitions.removeSeat(...args);

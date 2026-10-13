@@ -1,3 +1,5 @@
+import {assertNativeAddedSeat,type NativeAddedSeatReceipt} from './nativeAreaParty';
+import {assertNativeCharacterResume,type NativeCharacterResumeReceipt} from './nativeAreaCharacterResume';
 import {assertNativeCharacterReceipt,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 import {nativeAreaStoreClaims} from './nativeAreaStorageClaims';
 import {nativeCombatActorEntry} from './nativeAreaCombatOperation';
@@ -10,7 +12,7 @@ import type {NativeAreaSceneEcology} from './nativeAreaSceneEcology';
 import type {NativeAreaSceneGeometry} from './nativeAreaSceneGeometry';
 import type {NativeAreaSceneRuntimeBirth} from './nativeAreaSceneRuntimeBirth';
 import type {NativeAreaSceneLoot} from './nativeAreaSceneLoot';
-import type {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
+import {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
 import {CompanionGrants} from '../engine/companionGrants';
 import {GuardArts,type NativeGuardArtsHost} from '../engine/guardArts';
 import {CompanionBonds,type NativeCompanionBondsHost} from '../engine/companionBonds';
@@ -42,6 +44,7 @@ export interface NativeSceneProgressionInput {
  geometry:NativeAreaSceneGeometry;runtime:Pick<NativeAreaSceneRuntimeBirth,'input'|'actorById'>;
  loot:Pick<NativeAreaSceneLoot,'input'|'shedOrb'>;campaign:NativeSceneProgressionCampaign;state:NativeSceneProgressionState;authority:NativeSceneProgressionAuthority;
 }
+const restoredUnclaimed=NativeAreaActorAuthority.prototype.assertUnclaimed;
 const localMethods=['normalizeMercMeta','trimAllocated','summonCrewSkills','companionCapOf','inheritedFlight','emergeGroundAt'] as const;
 const actorMethods=['relevelActor','bakeMinionOwnerStats','deactivateAura','dismissSummonToggle','clearSummonReleaseFields','minionsOfSkill','releaseContract','settleLedger','clearTreeFields','clearTreeConstructs','guardArtCooldown','stampSkillCooldown','showCompanionCue','reviveCompanion','recoverCompanion','showRecoveryCue','emergeBody'] as const;
 /** Cleanup may reference a retired payload caster no longer present in the census.
@@ -138,6 +141,8 @@ export class NativeAreaSceneProgression {
  #effect(actor:Actor,name:keyof Omit<NativeSceneProgressionCombat,'scene'|'state'>,args:unknown[]){if(nativeCombatActorEntry(this,actor,'proc')){const combat=this.input.authority.bindingFor(this.input.scene).services.combat;return Reflect.apply(combat[name],combat,args);}const owner=this.#owner(actor);this.input.authority.assertAdmitted(owner.scene);const fn=owner.combat[name];return Reflect.apply(fn,owner.combat,args);}
  #seat(seat:Seat){if(!this.input.campaign.seats.includes(seat))throw Error('Foreign native progression seat');return this.input.campaign.seatHero(seat);}
  recalcInitialCharacter(token:NativeCharacterCreationReceipt):void {const r=assertNativeCharacterReceipt(token,'stats');if(r.area?.progression!==this||r.area.assembly.input.scene!==this.input.scene||r.preparation.input.authority!==this.input.authority)throw Error('Native initial stats need this exact created area');this.input.authority.bindingFor(this.input.scene);r.preparation.input.authority.assertUnclaimed(r.seat.actor);this.#native('recalcSeat',[r.seat]);}
+ recalcRestoredSeat(token:NativeCharacterResumeReceipt):void {const r=assertNativeCharacterResume(token,'seat');if(r.area?.progression!==this||!r.seat||r.preparation.input.authority!==this.input.authority)throw Error('Native saved-seat stats need the exact actual factory');Reflect.apply(restoredUnclaimed,r.preparation.input.authority,[r.seat.actor]);assertNativeCharacterResume(token,'seat');this.#native('recalcSeat',[r.seat]);}
+ recalcAddedSeat(token:NativeAddedSeatReceipt):void {const r=assertNativeAddedSeat(token);if(r.combat.input.progression!==this||r.combat.input.authority!==this.input.authority||r.combat.scene!==this.input.scene)throw Error('Native added-seat stats need their actual area');Reflect.apply(restoredUnclaimed,r.combat.input.authority,[r.body]);assertNativeAddedSeat(token);this.#native('recalcSeat',[r.seat]);}
  recalcSeat(seat:Seat):void{this.#run(this.#seat(seat),'recalcSeat',[seat]);}
  resyncMercenary():void{this.#run(this.#seat(this.input.campaign.localSeat),'resyncMercenary',[]);}
  mercTargetLevel():number{return this.#run(this.#seat(this.input.campaign.localSeat),'mercTargetLevel',[]);}

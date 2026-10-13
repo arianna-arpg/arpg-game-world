@@ -140,6 +140,14 @@ export class NativeAreaActorAuthority<S extends object> {
   for(let i=0;i<census.length;i++){const actor=finalOwn(census,i) as Actor;if(seen.has(actor))throw Error('Repeated native body in admitted census');seen.add(actor);if(this.#actors.get(actor)!==binding||!entry.actors.has(actor))throw Error('Native area admission contains an unowned or borrowed body');}
   const requested=finalArray(actors);for(let i=0;i<requested.length;i++){const actor=finalOwn(requested,i) as Actor;if(!seen.has(actor)||this.#actors.get(actor)!==binding)throw Error('Stale native final physical actor');}
  }
+ /** Validate only named bodies already claimed by this area during native birth.
+  * Pending population in the census receives no authority through this check. */
+ assertFinalClaimed(binding:NativeAreaAuthorityBinding<S>,actors:readonly Actor[]):void {
+  const entry=this.#entry(binding);if(this.#scenes.get(binding.scene)!==binding)throw Error('Stale native claimed scene binding');
+  const census=finalArray(finalOwn(binding.scene,'actors')),members=new Set<unknown>();
+  for(let i=0;i<census.length;i++){const actor=finalOwn(census,i);if(members.has(actor))throw Error('Repeated native body in claimed census');members.add(actor);}
+  const requested=finalArray(actors),seen=new Set<unknown>();for(let i=0;i<requested.length;i++){const actor=finalOwn(requested,i) as Actor;if(seen.has(actor)||!members.has(actor)||this.#actors.get(actor)!==binding||!entry.actors.has(actor))throw Error('Stale native final claimed actor');seen.add(actor);}
+ }
  /** Immediate native insertion: only the named fresh body may be unclaimed.
   * The invoking private birth/carried receipt supplies provenance. */
  claimInserted(binding:NativeAreaAuthorityBinding<S>,body:Actor,physical:readonly Actor[]=[]):void {

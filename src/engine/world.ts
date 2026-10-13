@@ -11,7 +11,7 @@ import {sceneMaddenBankOf,sceneMintAftermath,sceneDropLingerField,sceneMintTrail
 import {sceneNearQuestGiver,sceneNearAnyQuestGiver,sceneQuestGiverPrompt,sceneActiveCategoryCounts,sceneQuestGateCtx,sceneQuestOfferLevel,sceneAcceptableQuests,sceneEligibleQuestCandidates,sceneVocationEngaged,sceneIsVocationChoice,sceneVocationChoiceOffers,sceneNextAcceptableQuest,sceneUpdateQuestGiver,sceneQuestGiverStep,sceneQuestOfferChoices,sceneAcceptQuestOffer,sceneAcceptVocationQuest,sceneVocationMenuOffers,sceneDeclineVocationOffer,sceneAcceptQuest,sceneQuestRewardOffers,sceneQuestImbueOffers,sceneClaimQuestImbue,sceneReliquaryLesson,sceneSeatIdle,scenePlayerIdle,QUESTGIVER_DWELL,type NativeSceneQuestInteractionHost} from './nativeSceneQuestInteraction';
 import {sceneSpawnProjectile,sceneSkillOcclusion,PROJ_CHILD_DEPTH_MAX,PROJ_AURA_TICK,type NativeSceneProjectileHost} from './nativeSceneProjectiles';
 import {sceneZoneMemorySnapshot,sceneCaptureLiveMemory} from './nativeSceneMemory';
-import {nativeAreaMemorySnapshot,captureNativeAreaMemories} from '../worldmass/nativeAreaMemoryRegistry';
+import {nativeAreaMemorySnapshot,captureNativeAreaMemories,sealNativeAreaWorldSave} from '../worldmass/nativeAreaMemoryRegistry';
 const nativeWorldInstances=new WeakSet<object>();
 /** True only for a body whose actual World constructor completed. */
 export function isNativeWorld(value:unknown):value is World{return typeof value==='object'&&value!==null&&nativeWorldInstances.has(value); }
@@ -15255,7 +15255,7 @@ actors: Actor[] = [];
         && typeof r.seed === 'number' && Number.isFinite(r.seed));
     const p = this.player;
     const vfrac = (cur: number, max: number): number => max > 0 ? clamp(cur / max, 0, 1) : 1;
-    return {
+    return sealNativeAreaWorldSave(this, {
       schemaVersion: WORLD_SCHEMA_VERSION,
       ...(this.massRuntime ? { worldmass: options ? this.massRuntime.snapshot(this, options) : this.massRuntime.snapshot(this) }
         : this.massAway ? { worldmass: copyMassSidearea(options ? compactMass(this.massAway.surface) : this.massAway.surface) } : {}),
@@ -15329,7 +15329,7 @@ actors: Actor[] = [];
               .map(([k, v]) => [k, { armedBeat: v.armedBeat, ...(v.refreshSeq > 0 ? { refreshSeq: v.refreshSeq } : {}) }])) } : {}),
         },
       } : {}),
-    };
+    });
   }
 
   /** Adopt a saved worldstate onto this (freshly-built, already-seated)

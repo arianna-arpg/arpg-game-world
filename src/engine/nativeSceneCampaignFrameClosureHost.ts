@@ -13,6 +13,8 @@ export type NativeFrameMethod<F>=F extends (host:infer _H,...args:infer A)=>infe
 export interface NativeSceneCampaignFrameCommonHost {
  zoneEntry:World['zoneEntry'];
  isPresentLocalPlayer():boolean;
+ admitCombatBirth(body:import('./actor').Actor):void;
+ retireCombatBody(body:import('./actor').Actor):void;
  isPresentActor(actor:import('./actor').Actor):boolean;
  isCampaignFrameOwner():boolean;
  frameSeats():readonly import('./world').Seat[];

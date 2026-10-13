@@ -1,3 +1,4 @@
+import {assertNativeCharacterResume,type NativeCharacterResumeReceipt} from './nativeAreaCharacterResume';
 /** Actual native character construction. Receipts exist only at the private synchronous factory boundaries. */
 import type {World,Seat} from '../engine/world';
 import type {Actor} from '../engine/actor';
@@ -25,7 +26,7 @@ export class NativeAreaCharacterCreation {
  readonly preparation:NativeAreaScenePreparation;readonly definition:ZoneDef;readonly geography:MassNativeGeography;
  readonly #writer:World;readonly #previousScale:PropertyDescriptor|undefined;
  readonly #scale:()=>void;
- #seat:Seat|undefined;#actor:Actor|undefined;#area:NativeAreaSceneOngoing|undefined;#running=false;#attempted=false;#retired=false;#signal:AbortSignal|undefined;
+ #resume=false;#seat:Seat|undefined;#actor:Actor|undefined;#area:NativeAreaSceneOngoing|undefined;#running=false;#attempted=false;#retired=false;#signal:AbortSignal|undefined;
  constructor(preparation:NativeAreaScenePreparation,definition:ZoneDef,geography:MassNativeGeography){
   if(!isNativeAreaScenePreparation(preparation)||factories.has(preparation))throw Error('Native character needs one actual preparation owner');this.preparation=preparation;this.definition=definition;this.geography=geography;this.#writer=preparation.input.session.writer;
   if(definition.id!==START_ZONE||this.#writer.zoneMap[START_ZONE]!==definition)throw Error('Native fresh character requires the actual recorded starting town');this.#empty();
@@ -42,7 +43,9 @@ export class NativeAreaCharacterCreation {
   if(this.#seat!==seat)throw Error('Native character stats selected a different seat');
   this.#with('stats',token=>this.#area!.progression.recalcInitialCharacter(token));
  }
- create(spec:NativeFreshCharacter,signal?:AbortSignal):NativeAreaSceneOngoing {
+ createResume(token:NativeCharacterResumeReceipt,signal?:AbortSignal):NativeAreaSceneOngoing {const r=assertNativeCharacterResume(token,'shell');if(r.preparation!==this.preparation||r.writer!==this.#writer)throw Error('Native resume shell belongs to another factory');this.#resume=true;try{return this.#create({classDef:r.owner.classDef},signal);}finally{this.#resume=false;}}
+ create(spec:NativeFreshCharacter,signal?:AbortSignal):NativeAreaSceneOngoing {return this.#create(spec,signal);}
+ #create(spec:NativeFreshCharacter,signal?:AbortSignal):NativeAreaSceneOngoing {
   this.#live();if(this.#attempted||!CLASSES.includes(spec.classDef))throw Error('Native character creation needs a fresh catalog class');this.#empty();if(spec.provisionalMu&&spec.scene!=='mu')throw Error('Native provisional character belongs to Mu');this.#attempted=true;this.#running=true;this.#signal=signal;
   const self=this,writer=this.#writer;
   const host:Parameters<typeof creation.sceneCreatePlayer>[0]={
@@ -55,7 +58,7 @@ export class NativeAreaCharacterCreation {
    grantStartingCompanions:()=>self.#with('gifts',token=>self.#area!.combat.grantInitialCharacterCompanions(token)),
    dealVeteranFlasks:()=>self.#with('gifts',token=>self.#area!.combat.dealInitialCharacterFlasks(token)),
   };
-  try{creation.sceneCreatePlayer(host,spec.classDef,spec.provisionalMu?{...spec.options,startingCompanions:false,startingFlasks:false}:spec.options);if(!this.#area||this.#area.assembly.phase!=='born')throw Error('Native character did not complete its real birth');if(!spec.provisionalMu){const labArts=spec.labArts??false;this.#with('gifts',token=>this.#area!.combat.dealInitialCharacterLabArts(token,labArts));if(spec.graft&&writer.account.skillGraft&&this.#with('gifts',token=>this.#area!.combat.applyInitialCharacterGraft(token,spec.graft!))){writer.account.skillGraft=false;saveAccount(writer.account);}}if(spec.scene)this.#area.combat.campaignFrame.beginScene(spec.scene);this.#live();return this.#area;}finally{this.#running=false;this.#signal=undefined;}
+  try{creation.sceneCreatePlayer(host,spec.classDef,(spec.provisionalMu||this.#resume)?{...spec.options,startingCompanions:false,startingFlasks:false}:spec.options);if(!this.#area||this.#area.assembly.phase!=='born')throw Error('Native character did not complete its real birth');if(!spec.provisionalMu&&!this.#resume){const labArts=spec.labArts??false;this.#with('gifts',token=>this.#area!.combat.dealInitialCharacterLabArts(token,labArts));if(spec.graft&&writer.account.skillGraft&&this.#with('gifts',token=>this.#area!.combat.applyInitialCharacterGraft(token,spec.graft!))){writer.account.skillGraft=false;saveAccount(writer.account);}}if(spec.scene)this.#area.combat.campaignFrame.beginScene(spec.scene);this.#live();return this.#area;}finally{this.#running=false;this.#signal=undefined;}
  }
  retire():void {if(this.#retired)return;this.#retired=true;const current=Object.getOwnPropertyDescriptor(this.#writer,'rescaleEnemies');if(current?.configurable&&current.value===this.#scale){if(this.#previousScale)Object.defineProperty(this.#writer,'rescaleEnemies',this.#previousScale);else Reflect.deleteProperty(this.#writer,'rescaleEnemies');}}
 }

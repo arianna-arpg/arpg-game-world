@@ -1,3 +1,4 @@
+import type {NativeSnapshotHost} from './nativeSnapshotHost';
 // ---------------------------------------------------------------------------
 // THE COUNTERS AND THE JOURNAL on the wire (docs/engine/shard.md "The pieces"):
 // the rows of a hosted world's snapshot that carry one seat's quests, boards
@@ -44,7 +45,7 @@ export const COUNTER_SITES: readonly TownSiteId[] = ['salvage', 'bounty_board', 
  *  counters the host owns. Absent everywhere else. */
 export type CounterZoneW = Pick<ZoneMsg, 'anchors' | 'fonts' | 'counters'>;
 const r2 = (n: number): number => Math.round(n * 100) / 100;
-export function counterZoneOf(world: World): CounterZoneW {
+export function counterZoneOf(world: NativeSnapshotHost): CounterZoneW {
   if (!world.localSeat.keeper) return {};
   const anchors: NonNullable<ZoneMsg['anchors']> = [];
   for (const s of COUNTER_SITES) {
@@ -131,7 +132,7 @@ export interface JournalW {
 export type HarvestW = NonNullable<ReturnType<World['harvestView']>>;
 
 /** The journal as the host judges it for one seat (THE QUEST HAND's scope). */
-export function journalViewOf(world: World, seat: Seat): JournalW {
+export function journalViewOf(world: NativeSnapshotHost, seat: Seat): JournalW {
   return world.withQuestHand(seat, () => {
     const boards: Record<string, BoardViewW> = {};
     for (const b of world.bountyBoardsHere()) {
@@ -177,7 +178,7 @@ const JOURNAL_MEMOS = new WeakMap<Seat, JournalMemo>();
  *  act, and on the beat. An empty journal is absent (a shell starts empty, and a quiet
  *  snapshot keeps its shape): an emptied one rides JOURNAL_WIRE_CFG.emptyBeats beats more,
  *  then rests. Hosted worlds alone. */
-export function journalRowOf(world: World, seat: Seat, tick: number): JournalW | undefined {
+export function journalRowOf(world: NativeSnapshotHost, seat: Seat, tick: number): JournalW | undefined {
   if (!world.localSeat.keeper || seat.keeper) return undefined;
   const cfg = JOURNAL_WIRE_CFG;
   let memo = JOURNAL_MEMOS.get(seat);
@@ -198,7 +199,7 @@ export function journalRowOf(world: World, seat: Seat, tick: number): JournalW |
 }
 
 /** The seat's rite view for this snapshot (SeatW.hv), or undefined. Hosted worlds alone. */
-export function harvestRowOf(world: World, seat: Seat): HarvestW | undefined {
+export function harvestRowOf(world: NativeSnapshotHost, seat: Seat): HarvestW | undefined {
   if (!world.localSeat.keeper || seat.keeper) return undefined;
   return world.seatHarvestView(seat, JOURNAL_WIRE_CFG.harvestReach) ?? undefined;
 }

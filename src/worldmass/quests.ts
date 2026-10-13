@@ -1,9 +1,9 @@
+import type {NativeSnapshotHost} from '../net/nativeSnapshotHost';
 import { massBountyDestination } from './bounties';
 import { localOffset } from './address';
 import { MASS_ZONE, type MassAdventure } from './preset';
 import type { WorldMassRuntime, MassAdventureSave } from './runtime';
 import type { SavedQuestEntry } from '../meta/worldstate';
-import type { World } from '../engine/world';
 import type { MassPlace } from './contracts';
 import { QUESTS } from '../quests/defs';
 import { massJourneyPlaceId } from './journey';
@@ -92,7 +92,7 @@ export function massQuestTarget(mass: WorldMassRuntime, entry: SavedQuestEntry, 
 }
 /** Directions identify only the named destination or a present return giver;
  * reading pins never surveys terrain, spawns bodies or completes objectives. */
-export function massQuestPins(world: World): MassQuestPin[] {
+export function massQuestPins(world: NativeSnapshotHost): MassQuestPin[] {
   // THE COUNTERS AND THE JOURNAL (docs/engine/shard.md): a hosted world's shell reads its own
   // seat's pins off its journal row; the host reads them under THE QUEST HAND (World.handOwns).
   if (world.clientActionHook && world.netJournal) return world.netJournal.mpins ?? [];

@@ -853,9 +853,11 @@ export function sceneUpdateDelver(nativeHost:NativeSceneCampaignFrameClosureHost
   }
 
 export function sceneUpdateDescent(nativeHost:NativeSceneCampaignFrameClosureHost, dt: number): void {
-    if (!nativeHost.isCampaignFrameOwner()) return;
     const run = nativeHost.descentRun, df = nativeHost.sim.descentField;
     if (!run || !df) return;
+    // A retained dive owns its pressure and terrain. Native waypoint departure
+    // leaves the run intact; pause this singular-hero work while that hero is away.
+    if (nativeHost.zone.id !== run.caveId || !nativeHost.isPresentLocalPlayer()) return;
     const cfg = df.surge();
     if (nativeHost.player.dead || nativeHost.player.downed) return; // death → onPlayerDown → resurface
     const p = nativeHost.player.pos;
@@ -898,6 +900,7 @@ export function sceneUpdateDescent(nativeHost:NativeSceneCampaignFrameClosureHos
       const a = nativeHost.actors[i];
       if (a.team === 'enemy' && a.faction === cfg.faction && !a.dead && dist(a.pos, p) > cfg.cullRadius) {
         nativeHost.actors.splice(i, 1);
+        nativeHost.retireCombatBody(a);
       }
     }
   }
@@ -1441,7 +1444,7 @@ export function sceneHarvestArm(nativeHost:NativeSceneCampaignFrameClosureHost, 
     });
   }
 
-export function scenePerformModeRespawn(nativeHost:NativeSceneCampaignFrameClosureHost): void {
+export function scenePerformModeRespawn(nativeHost:Pick<NativeSceneCampaignFrameClosureHost,'modeStageDef'|'loadZone'|'player'|'clampPos'|'text'|'lastRespawnPayout'|'flashes'>&{seats:readonly import('../engine/world').Seat[]}): void {
     const stage = nativeHost.modeStageDef();
     for (const s of nativeHost.seats) {
       s.actor.dead = false;
@@ -2271,6 +2274,7 @@ export function sceneSpawnDepthkin(nativeHost:NativeSceneCampaignFrameClosureHos
       const dr = rand(cfg.spawnDist[0], cfg.spawnDist[1]);
       m.pos = vec(nativeHost.player.pos.x + Math.cos(ang) * dr, nativeHost.player.pos.y + Math.sin(ang) * dr);
       nativeHost.actors.push(m);
+      nativeHost.admitCombatBirth(m);
       live++;
     }
   }

@@ -15,7 +15,7 @@ import type { Actor } from '../engine/actor';
 import { MONSTERS } from '../data/monsters';
 import { setSimTap } from '../engine/tap';
 import type { World } from '../engine/world';
-import type { PlayerInputSource } from '../net/intent';
+import type { HeroInputSource } from '../agent/perception';
 import type { Renderer } from '../render/renderer';
 import { setBakeScale } from '../render/vis/bakeScale';
 import { applyBuild } from '../sim/builds';
@@ -52,7 +52,7 @@ export interface DirectorHost {
   /** One whole game tick of `dtMs` (input, sim, render). */
   step(dtMs: number): void;
   /** The local seat's input source (null = the keyboard and mouse). */
-  setPilot(src: PlayerInputSource | null): void;
+  setPilot(src: HeroInputSource | null): void;
   /** Hold the live rAF loop so only step() advances the game. */
   hold(on: boolean): void;
   /** Mutable account ledger (the capture account skips the prologue). */
@@ -584,7 +584,7 @@ function emptyEvents(): FrameEvents {
 }
 
 /** A pilot that holds still (the hero stands; the keyboard cannot reach it). */
-const idlePilot: PlayerInputSource = {
+const idlePilot: HeroInputSource = {
   poll(actor) { return { dx: 0, dy: 0, aim: { x: actor.pos.x + Math.cos(actor.facing) * 80, y: actor.pos.y + Math.sin(actor.facing) * 80 }, held: actor.skills.map(() => false), edge: actor.skills.map(() => false) }; },
 };
 

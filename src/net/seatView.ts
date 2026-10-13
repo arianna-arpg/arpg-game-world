@@ -1,3 +1,4 @@
+import type {NativeSnapshotHost} from './nativeSnapshotHost';
 // ---------------------------------------------------------------------------
 // THE ACTING SEAT on the wire (docs/engine/shard.md "The pieces"): the rows of
 // a snapshot that belong to one party's ears, and the client's own seat rows.
@@ -49,7 +50,7 @@ declare module './snapshot' {
 export const SEAT_VIEW_CFG = { noteLife: 1, noteRise: 28, noteLift: 16, noteColor: '#8a8678', noteSize: 11 };
 
 /** The host's half (after serializeSnapshot, before the send): audiences, on a hosted world alone. */
-export function stampAudiences(world: World, snap: StateSnapshot): void {
+export function stampAudiences(world: NativeSnapshotHost, snap: StateSnapshot): void {
   if (!world.localSeat.keeper) return;
   const no = snap.no;
   if (no) {
@@ -67,7 +68,7 @@ export function stampAudiences(world: World, snap: StateSnapshot): void {
 /** Who sees a super art's banner on a hosted world: the caster's party and
  *  every player within the near radius of the caster. Undefined (everyone)
  *  when the caster is gone. */
-function eyecatchAudience(world: World, casterId: number): string[] | undefined {
+function eyecatchAudience(world: NativeSnapshotHost, casterId: number): string[] | undefined {
   const caster = world.actorById(casterId);
   if (!caster) return undefined;
   const from = world.seatOfRoot(caster);

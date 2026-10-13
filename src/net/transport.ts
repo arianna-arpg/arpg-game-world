@@ -154,11 +154,14 @@ export interface NetTransport {
 
   /** Host→clients: broadcast a state snapshot (no-op locally). */
   sendState(snapshot: StateSnapshot): void;
+  /** Targeted retained-area delivery. False keeps the zone pending for retry. */
+  sendStateToSeat?(snapshot:StateSnapshot,to:PlayerId):boolean;
   /** Client: subscribe to incoming state. Returns a disposer. */
   onState(cb: (snapshot: StateSnapshot) => void): () => void;
 
   /** Host→clients: send the one-time per-zone terrain message. */
   sendZone(zone: ZoneMsg): void;
+  sendZoneToSeat?(zone:ZoneMsg,to:PlayerId):boolean;
   /** Client: subscribe to incoming zone terrain. Returns a disposer. */
   onZone(cb: (zone: ZoneMsg) => void): () => void;
 

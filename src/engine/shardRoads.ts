@@ -121,7 +121,7 @@ interface RoadState {
   /** The holdfast's consumed parley, per seat (re-armed once it steps out). */
   parley: Set<string>;
 }
-const STATE = new WeakMap<World, RoadState>();
+const STATE = new WeakMap<object, RoadState>();
 function roadState(w: World): RoadState {
   let st = STATE.get(w);
   if (!st) STATE.set(w, st = { dwell: new Map(), door: new Map(), ladder: new Map(), grace: new Set(), heard: new Map(), parley: new Set() });
@@ -169,7 +169,7 @@ export function shardRoadDepart(w: World, seatId: string): void {
 
 /** THE ROAD RING (SeatW.rd, THE OWN ENTRY): the dwell the host is filling for
  *  this seat as [x, y, fill, transit kind], or undefined (the common case). */
-export function roadDwellRow(w: World, seat: Seat): [number, number, number, string] | undefined {
+export function roadDwellRow(w: Pick<World, 'time'>, seat: Seat): [number, number, number, string] | undefined {
   const d = STATE.get(w)?.dwell.get(seat.id);
   if (!d) return undefined;
   const frac = Math.min(1, Math.max(0, (w.time - d.start) / Math.max(0.01, d.need)));

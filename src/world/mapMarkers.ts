@@ -1,3 +1,4 @@
+import type {NativeSnapshotHost} from '../net/nativeSnapshotHost';
 // ---------------------------------------------------------------------------
 // MAP MARKER REGISTRY — generic per-zone (or per-coordinate) world-map icons.
 //
@@ -80,7 +81,7 @@ export function collectMarkers(world: World): MapMarker[] {
  *  THE COUNTERS AND THE JOURNAL: exported, so a hosted world reads one seat's
  *  pins under THE QUEST HAND (net/journalWire.ts), a taken posting another
  *  seat holds never pinned (World.handOwns). */
-export function questMarkers(world: World): MapMarker[] {
+export function questMarkers(world: NativeSnapshotHost): MapMarker[] {
   const out: MapMarker[] = [];
   // Resolved rows grouped by their HOME node (a quay board's writ walks home
   // to the quay, Lastlight's to town) — one pin per counter, never a stack.

@@ -5,7 +5,6 @@ import {assertNativeRetainedMassState} from './nativeAreaRetainedMassState';
  * stable area host; travel-capable native bodies select actual retained owners
  * after each handoff. No World local driver or public host escapes this owner. */
 import type {Seat} from '../engine/world';
-import {MERC_CFG} from '../meta/mercs';
 import type {Actor} from '../engine/actor';
 import type {NativeSceneRetainedCampaignFrameHost as ClosureHost,NativeFrameMethod} from '../engine/nativeSceneCampaignFrameClosureHost';
 import type {NativeSceneRoadScanHost} from '../engine/nativeSceneRoadScan';
@@ -97,15 +96,7 @@ export class NativeAreaSceneCampaignFrame {
   updateModeRespawn(step){current().updateModeRespawn(step);},updateTraversal(step){current().input.combat.campaignTransitions.updateTraversal(step);},nativeWorldReady(){return coordinator.nativeWorldReady();}
  };return frameCore.sceneNativeFramePendingTransitions(host,dt);}
  #wipe():void {this.#currentStep(fixed=>{
-  if(!fixed.localSeat.keeper&&!fixed.gameOver&&!fixed.pendingRespawn&&!fixed.scene){
-   const {coordinator}=this.input,rows=members(coordinator.input.campaign.seats),local=members(coordinator.frame.seats);
-   // A standing hand in another retained area must prevent a solo/couch wipe.
-   const foreign=rows.filter(seat=>!local.includes(seat));if(foreign.some(seat=>{const body=own<Actor>(seat,'actor');return !body.dead&&!body.downed&&(!seat.merc||MERC_CFG.mercsCanRevive);}))return;
-   // The existing native death owner controls only its physical source cohort.
-   // Refuse before marking bodies rather than grant it remote death authority.
-   if(foreign.length&&!rows.some(seat=>{const body=own<Actor>(seat,'actor');return !body.dead&&!body.downed&&(!seat.merc||MERC_CFG.mercsCanRevive);}))throw Error('Scattered all-down party requires its actual multi-area death coordinator');
-  }
-  const host=Object.create(null) as frameCore.NativeFrameWipeHost;for(const key of ['gameOver','pendingRespawn','scene','concludeWipe'] as const)Object.defineProperty(host,key,{get:()=>Reflect.get(fixed,key,fixed)});Object.defineProperty(host,'seats',{get:()=>this.#selectedFrameSeats()});frameCore.sceneNativeFrameWipe(host);
+  const host=Object.create(null) as frameCore.NativeFrameWipeHost;for(const key of ['gameOver','pendingRespawn','scene','concludeWipe'] as const)Object.defineProperty(host,key,{get:()=>Reflect.get(fixed,key,fixed)});Object.defineProperty(host,'seats',{get:()=>this.input.coordinator.current.combat.campaignTransitions.partySeats()});frameCore.sceneNativeFrameWipe(host);
  });}
  /** One native campaign frame, with a fresh finite resident cohort at every
   * original statement boundary. Shared clocks and sweeps run once. */
@@ -209,7 +200,7 @@ export class NativeAreaSceneCampaignFrame {
  updateSail(...args:Parameters<NativeFrameMethod<typeof services.sceneUpdateSail>>):ReturnType<NativeFrameMethod<typeof services.sceneUpdateSail>>{return this.#run(()=>{return services.sceneUpdateSail(this.#host(),...args);});}
  updateDelver(...args:Parameters<NativeFrameMethod<typeof services.sceneUpdateDelver>>):ReturnType<NativeFrameMethod<typeof services.sceneUpdateDelver>>{return this.#run(()=>{return services.sceneUpdateDelver(this.#host(),...args);});}
  updateSailing(...args:Parameters<NativeFrameMethod<typeof services.sceneUpdateSailing>>):ReturnType<NativeFrameMethod<typeof services.sceneUpdateSailing>>{return this.#run(()=>{return services.sceneUpdateSailing(this.#host(),...args);});}
- performModeRespawn(...args:Parameters<NativeFrameMethod<typeof services.scenePerformModeRespawn>>):ReturnType<NativeFrameMethod<typeof services.scenePerformModeRespawn>>{return this.#run(()=>{return services.scenePerformModeRespawn(this.#host(true),...args);});}
+ performModeRespawn(...args:Parameters<NativeFrameMethod<typeof services.scenePerformModeRespawn>>):ReturnType<NativeFrameMethod<typeof services.scenePerformModeRespawn>>{return this.#run(()=>{return this.input.coordinator.current.combat.campaignTransitions.performModeRespawn(...args);});}
  requestMeta(...args:Parameters<NativeFrameMethod<typeof services.sceneRequestMeta>>):ReturnType<NativeFrameMethod<typeof services.sceneRequestMeta>>{return this.#run(()=>{return services.sceneRequestMeta(this.#host(),...args);});}
  enterSailing(...args:Parameters<NativeFrameMethod<typeof services.sceneEnterSailing>>):ReturnType<NativeFrameMethod<typeof services.sceneEnterSailing>>{return this.#run(()=>{return services.sceneEnterSailing(this.#host(),...args);});}
  descend(...args:Parameters<NativeFrameMethod<typeof services.sceneDescend>>):ReturnType<NativeFrameMethod<typeof services.sceneDescend>>{return this.#run(()=>{return services.sceneDescend(this.#host(),...args);});}

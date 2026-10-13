@@ -9,6 +9,10 @@
 import { AGENT_CFG } from '../data/agent';
 import type { Actor } from '../engine/actor';
 import type { World } from '../engine/world';
+import type {PlayerInput,PlayerInputQuery} from '../net/intent';
+export type HeroInputQuery=PlayerInputQuery & Pick<World,'actors'|'corpses'|'imminentThreatTo'|'skillUsable'|'castReqRefusal'|'pointInSolid'>;
+/** A local pilot receives only the physical area's finite input reads. */
+export interface HeroInputSource {poll(actor:Actor,query:HeroInputQuery,dt:number):PlayerInput|null}
 import { MONSTERS } from '../data/monsters';
 
 export interface Pt { x: number; y: number }
@@ -37,7 +41,7 @@ const RARITY_THREAT: Record<string, number> = { normal: 1, magic: 1.6, rare: 2.4
 /** An authored boss (MonsterDef.boss) outranks every rarity. */
 const BOSS_THREAT = 6;
 
-export function perceive(world: World, self: Actor, sight: number): Percept {
+export function perceive(world: HeroInputQuery, self: Actor, sight: number): Percept {
   const foes: FoeRead[] = [];
   for (const e of world.enemiesOf(self)) {
     if (e.passive) continue;

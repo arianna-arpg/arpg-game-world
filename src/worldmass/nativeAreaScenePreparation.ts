@@ -1,5 +1,6 @@
 import {makeNativeAreaArena} from '../engine/nativeAreaArena';
 import {hullOf} from '../world/shape';
+import {assertNativeCharacterResume,type NativeCharacterResumeReceipt,type NativeAreaCharacterResume} from './nativeAreaCharacterResume';
 import {assertNativeCharacterReceipt,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 import {foldNativeTownStations} from './nativeAreaTownStations';
 import {START_ZONE} from '../data/zones';
@@ -16,15 +17,19 @@ import {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
 import {NativeAreaMaddenLedger,assertNativeMaddenLedger} from './nativeAreaMaddenLedger';
 import {NativeAreaSceneMemory} from './nativeAreaSceneMemory';
 import {MassNativeGeography} from './nativeGeography';
+import {NativeGeographyCatalog} from './nativeGeographyCatalog';
 import {installedNativeAreaSources,installedNativeAreaConfig} from './nativeAreaInstalledSources';
-export interface NativeAreaPreparationInput {session:NativeAreaCampaignSession;coordinator:NativeAreaSceneTransitionCoordinator;authority:NativeAreaActorAuthority<NativeAreaOngoingRuntime>;maddenLedger:NativeAreaMaddenLedger}
+export interface NativeAreaPreparationInput {session:NativeAreaCampaignSession;coordinator:NativeAreaSceneTransitionCoordinator;authority:NativeAreaActorAuthority<NativeAreaOngoingRuntime>;maddenLedger:NativeAreaMaddenLedger;catalog?:NativeGeographyCatalog}
 const preparations=new WeakSet<object>();
 export function isNativeAreaScenePreparation(value:unknown):value is NativeAreaScenePreparation{return !!value&&typeof value==='object'&&preparations.has(value);}
 export class NativeAreaScenePreparation {
+ #resumeOwner:NativeAreaCharacterResume|undefined;
+ setProvisionalRestore(token:NativeCharacterResumeReceipt):void {const r=assertNativeCharacterResume(token,'graph');if(r.preparation!==this||this.#resumeOwner)throw Error('Native preparer already has a restore owner');this.#resumeOwner=r.owner;}
+ finishProvisionalRestore(source:NativeAreaSceneOngoing,token:NativeCharacterResumeReceipt):void {const r=assertNativeCharacterResume(token,'arrival');if(r.preparation!==this||r.area!==source)throw Error('Foreign provisional restore completion');this.input.coordinator.assertProvisionalRestoreSource(r.owner,source);if(this.#areas.get(source.assembly.input.scene.zone.id)===source)this.#areas.delete(source.assembly.input.scene.zone.id);this.#geography.delete(source);}
  readonly input:Readonly<NativeAreaPreparationInput>;readonly #areas=new Map<string,NativeAreaSceneOngoing>();readonly #geography=new WeakMap<NativeAreaSceneOngoing,MassNativeGeography>();
  constructor(raw:NativeAreaPreparationInput){
   const {session,coordinator,authority,maddenLedger}=raw;if(!isNativeAreaCampaignSession(session)||!isNativeAreaSceneTransitionCoordinator(coordinator)||coordinator.input.campaign!==session.campaign||coordinator.input.characterWriter!==session.writer||coordinator.input.authority!==authority||authority.campaign!==session.campaign)throw Error('Native preparation needs actual shared campaign roots');
-  assertNativeRetainedMassState(session.writer);assertNativeMaddenLedger(maddenLedger,session.campaign,authority);this.input=Object.freeze({session,coordinator,authority,maddenLedger});Object.defineProperty(this,'input',{writable:false,configurable:false});preparations.add(this);coordinator.attachPreparation(this);
+  assertNativeRetainedMassState(session.writer);assertNativeMaddenLedger(maddenLedger,session.campaign,authority);const catalogSlot=Object.getOwnPropertyDescriptor(raw,'catalog');if(catalogSlot&&!Object.hasOwn(catalogSlot,'value'))throw Error('Native preparation catalog needs actual data');const catalog=catalogSlot?.value as NativeGeographyCatalog|undefined;if(catalog!==undefined){if(!(catalog instanceof NativeGeographyCatalog)||catalog.initial.seed!==session.writer.manifest.seed)throw Error('Native preparation catalog belongs to another campaign');}this.input=Object.freeze({session,coordinator,authority,maddenLedger,...catalog?{catalog}:{}});Object.defineProperty(this,'input',{writable:false,configurable:false});preparations.add(this);coordinator.attachPreparation(this);
  }
  /** Close preparation, including a failed destination never registered for play. */
  retire():readonly NativeAreaSceneOngoing[]{const areas=Object.freeze([...this.#areas.values()]);this.#areas.clear();return areas;}
@@ -33,12 +38,14 @@ export class NativeAreaScenePreparation {
  prepare(zoneId:string,geography:MassNativeGeography,from?:string,representative?:Actor):NativeAreaSceneOngoing {
   const {session}=this.input,campaign=session.campaign,writer=session.writer;assertNativeRetainedMassState(writer);
   const definition=campaign.zoneMap[zoneId]??campaign.caveMap[zoneId];if(!definition||definition.id!==zoneId||this.#areas.has(zoneId)||!(geography instanceof MassNativeGeography))throw Error('Native preparation needs one actual unresolved area');
+  if(this.input.catalog){const selected=this.input.catalog.select(definition.dimension??'surface');selected.assertCompatible(geography.spec);geography=selected;}
   if(zoneId===START_ZONE){writer['townLayoutChangedOnLoad']=false;foldNativeTownStations(writer);}
   const player=representative??campaign.localSeat.actor;
   const area=this.#construct(zoneId,geography,from,player);this.#layout(area,geography);return area;
  }
  #construct(zoneId:string,geography:MassNativeGeography,from:string|undefined,player:Actor,characterConstruction?:NativeCharacterCreationReceipt):NativeAreaSceneOngoing {
   const {session,coordinator,authority,maddenLedger}=this.input,campaign=session.campaign,writer=session.writer,definition=campaign.zoneMap[zoneId]??campaign.caveMap[zoneId];
+  if(this.input.catalog){const selected=this.input.catalog.select(definition.dimension??'surface');selected.assertCompatible(geography.spec);geography=selected;}
   const services:NativeAreaOngoingInput['services']={
    geometry:{get seasSeen(){return writer['seasSeen'];},oceanBearing:at=>sceneCampaignOceanBearing(campaign,at),seaNameOf:z=>sceneCampaignSeaNameOf(campaign,z),get notice(){return campaign.notice;},get seatOf(){return campaign.seatOf;}},
    residents:{get clientActionHook(){return campaign.clientActionHook;}},timeflow:campaign.timeflow,
@@ -73,7 +80,11 @@ export class NativeAreaScenePreparation {
   * returns its exact real area; no caller supplies a prebirthed destination. */
  prepareDestination(source:NativeAreaSceneOngoing,zoneId:string,from:string|undefined,representative:Actor):NativeAreaSceneOngoing {
   const geography=this.#geography.get(source);if(!geography||this.#areas.get(source.assembly.input.scene.zone.id)!==source||this.input.coordinator.current!==source)throw Error('Native destination requires this preparer and exact current source');
-  return this.prepare(zoneId,geography,from,representative);
+  if(this.#areas.has(zoneId)&&this.#areas.get(zoneId)!==source)throw Error('Native destination already has another prepared owner');
+  const same=this.#areas.get(zoneId)===source;if(same)this.input.coordinator.assertProvisionalRestoreSource(this.#resumeOwner!,source);
+  const definition=this.input.session.campaign.zoneMap[zoneId]??this.input.session.campaign.caveMap[zoneId];if(!definition||definition.id!==zoneId)throw Error('Native destination definition is absent');
+  const selected=this.input.catalog?this.input.catalog.select(definition.dimension??'surface'):geography;
+  if(same)this.#areas.delete(zoneId);return this.prepare(zoneId,selected,from,representative);
  }
  birthTransferred(area:NativeAreaSceneOngoing):void {
   assertNativeRetainedMassState(this.input.session.writer);

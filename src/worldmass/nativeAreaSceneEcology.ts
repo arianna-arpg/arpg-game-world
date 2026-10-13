@@ -1,3 +1,4 @@
+import {assertNativePackedTravel,consumeNativePackedTravel,type NativePackedTravelReceipt} from './nativeAreaSceneTransitionCoordinator';
 import {observeNativeCombatFactory} from '../engine/nativeCombatRecordObservation';
 /** Birth-only mutable ecology owner. Local geometry and full actor census are
  * genuine owners; installed source and live campaign services remain explicit. */
@@ -29,6 +30,8 @@ export interface NativeSceneEcologyInput {
  services:NativeSceneEcologyServices; sources:native.NativeSceneEcologySources; state:NativeSceneEcologyState;
 }
 export class NativeAreaSceneEcology {
+ #arriving:NativePackedTravelReceipt|undefined;
+ withPackedArrival<T>(token:NativePackedTravelReceipt,firstBirth:boolean,action:()=>T):T{if(this.#arriving)throw Error('Native packed arrival cannot reenter');assertNativePackedTravel(token,this);this.#arriving=token;try{if(!firstBirth)native.sceneArriveLiteCarry(this.host,consumeNativePackedTravel(token,this),this.input.state.lite);return action();}finally{this.#arriving=undefined;}}
  readonly input:NativeSceneEcologyInput;
  readonly host:native.NativeSceneEcologyHost;
  constructor(raw:NativeSceneEcologyInput) {
@@ -63,7 +66,7 @@ export class NativeAreaSceneEcology {
  throngSources(...a:Parameters<World['throngSources']>){return native.sceneThrongSources(this.host,...a);}
  mintThrongPocket(...a:Parameters<World['mintThrongPocket']>){return native.sceneMintThrongPocket(this.host,...a);}
  mintThrongHusk(...a:Parameters<World['mintThrongHusk']>){return native.sceneMintThrongHusk(this.host,...a);}
- bootLite(...a:Parameters<World['bootLite']>){return native.sceneBootLite(this.host,...a);}
+ bootLite(...a:Parameters<World['bootLite']>){return native.sceneBootLite(this.host,...a,this.#arriving?()=>consumeNativePackedTravel(this.#arriving!,this):undefined);}
  liteKindOf(...a:Parameters<World['liteKindOf']>){return native.sceneLiteKindOf(this.host,this.input.sources,...a);}
  liteOpenAt(...a:Parameters<World['liteOpenAt']>){return native.sceneLiteOpenAt(this.host,...a);}
  litePocketEnsure(...a:Parameters<World['litePocketEnsure']>){return native.sceneLitePocketEnsure(this.host,...a);}

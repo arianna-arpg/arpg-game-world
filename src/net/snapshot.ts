@@ -1,3 +1,4 @@
+import type {NativeSnapshotHost} from './nativeSnapshotHost';
 import { empowermentRank, skillInstanceName } from '../engine/skillEmpowerment';
 import { afflictionPressureOf } from '../engine/afflictionPressure';
 import { armedStatusCues } from '../engine/armedCues';
@@ -639,7 +640,7 @@ export type VendorEntryW = (
   lk?: 1 | 2;
 };
 
-const vendorEntryW = (e: VendorEntry, world: World): VendorEntryW => {
+const vendorEntryW = (e: VendorEntry, world: NativeSnapshotHost): VendorEntryW => {
   const base: VendorEntryW =
     e.kind === 'skill' ? { kind: 'skill', s: skillInstW(e.inst) }
       : e.kind === 'support' ? { kind: 'support', g: supW(e.gem) }
@@ -887,7 +888,7 @@ const v2 = (p: { x: number; y: number }): Vec2W => [Math.round(p.x * 100) / 100,
 const hitTypeW = (t: DamageType | undefined): number | undefined => { const i = t ? DAMAGE_TYPES.indexOf(t) : -1; return i >= 0 ? i : undefined; };
 const hitTypeOfW = (i: number | undefined): DamageType | undefined => (i === undefined ? undefined : DAMAGE_TYPES[i]);
 
-function actorToW(a: Actor, world: World): ActorW {
+function actorToW(a: Actor, world: NativeSnapshotHost): ActorW {
   const inv = a.sheet.get('invisible');
   const det = a.sheet.get('detectability');
   const w: ActorW = {
@@ -962,7 +963,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.extraParts?.length) w.ep = a.extraParts;
   if (a.rarity) w.rarity = a.rarity;
   if (a.magicPack) w.magicPack = { ...a.magicPack, runtime: undefined };
-  w.encounterCue = encounterCueOf(a, world);
+  w.encounterCue = nativeWireEncounter(world,a);
   if (a.kind === 'player' && a.statuses.length) w.afflictionPressure = afflictionPressureOf(a);
   const armedCues = armedStatusCues(a);
   if (armedCues.length) w.armedCues = armedCues.map(cue => ({ ...cue }));
@@ -1105,8 +1106,8 @@ let WATCH_V_OF: (a: Actor) => number = () => 0;
  *  44 KB on the wire was); it ships on its beat, or on any tick it differs from the last
  *  shipped view, so a graduation reaches every client on the next snapshot while an
  *  unchanged view rides only the beat (the first snapshot a joiner sees ships it). */
-const lastShippedMemoryAccess = new WeakMap<World, string>();
-export function serializeSnapshot(world: World, tick: number): StateSnapshot {
+const lastShippedMemoryAccess = new WeakMap<NativeSnapshotHost, string>();
+export function serializeSnapshot(world: NativeSnapshotHost, tick: number): StateSnapshot {
   const seatById = new Map<Actor, string>();
   for (const s of world.seats) seatById.set(s.actor, s.id);
   SEAT_OF = (a) => seatById.get(a);
@@ -1269,12 +1270,12 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
 // clocks, and the shelf on its beat. Each is absent in its common case.
 
 /** THE SHELF BEAT's ledger: the vendor rows this world last shipped, as the JSON they went out as. */
-const lastShippedVendor = new WeakMap<World, string>();
+const lastShippedVendor = new WeakMap<NativeSnapshotHost, string>();
 
 /** THE SHELF BEAT (WIRE_CFG.vendorBeat): the three vendor rows ride together whenever any
  *  of them differs from what this world last shipped (a purchase, a restock, a hold, the
  *  cap) and on the beat however still; between, they are absent and a client keeps its last. */
-function vendorRowsOf(world: World, tick: number): Pick<StateSnapshot, 'vendor' | 'vendorRestockAt' | 'vendorCap'> {
+function vendorRowsOf(world: NativeSnapshotHost, tick: number): Pick<StateSnapshot, 'vendor' | 'vendorRestockAt' | 'vendorCap'> {
   if (world.localSeat.keeper) return {}; // THE SHELF PER BUYER: a hosted world ships each buyer its own (SeatW.vd)
   const rows = {
     vendor: world.vendorStock.map(e => vendorEntryW(e, world)),
@@ -1299,7 +1300,7 @@ const lastShippedShelf = new WeakMap<Seat, string>();
  *  in its own buyer's scope, shipped when it differs from what the seat last heard (a
  *  purchase, a restock, a hold, the cap) and on THE SHELF BEAT; absent between, and
  *  absent while the seat has never stood at a counter. Hosted worlds alone. */
-function ownShelfOf(world: World, s: Seat, tick: number): ShelfW | undefined {
+function ownShelfOf(world: NativeSnapshotHost, s: Seat, tick: number): ShelfW | undefined {
   if (!world.localSeat.keeper || s.keeper || s.merc) return undefined;
   const row = world.withBuyer(s, (): ShelfW => ({
     v: world.vendorStock.map(e => vendorEntryW(e, world)), at: world.vendorRestockAt, cap: world.vendorLockCap(),
@@ -1372,7 +1373,7 @@ function zoneGap(z: ZoneT, viewers: readonly { x: number; y: number }[]): number
  *  (WIRE_CFG.eyes.zoneReach, else THE NEAR LAW's radius; 0 = every zone), the nearest first
  *  past WIRE_CFG.eyes.zoneMax. The keeper is never a viewer: it watches nothing. Undefined
  *  while none stand near anyone (the common case ships zero bytes). */
-function zonesOf(world: World): ZoneW[] | undefined {
+function zonesOf(world: NativeSnapshotHost): ZoneW[] | undefined {
   if (!world.zones.length) return undefined;
   const eyes = WIRE_CFG.eyes;
   const reach = eyes.zoneReach > 0 ? eyes.zoneReach : COOP_SCALING.shareRadius;
@@ -1392,7 +1393,7 @@ function zonesOf(world: World): ZoneW[] | undefined {
 }
 
 /** One zone as its painter reads it (ZoneW). Gameplay state never crosses. */
-function zoneW(z: ZoneT, world: World, heroes: ReadonlySet<Actor>): ZoneW {
+function zoneW(z: ZoneT, world: NativeSnapshotHost, heroes: ReadonlySet<Actor>): ZoneW {
   let m = ZONE_MEMOS.get(z);
   if (!m) { m = { id: ++zoneSeq }; ZONE_MEMOS.set(z, m); }
   const w: ZoneW = { id: m.id, p: v2(z.pos), r: Math.round(z.radius * 10) / 10, c: z.color };
@@ -1469,18 +1470,18 @@ export const SEAT_OWN_ROWS: readonly (keyof SeatW)[] = ['cd', 'gg', 'fn', 'lh', 
 (SEAT_OWN_ROWS as (keyof SeatW)[]).push('vd');
 
 /** THE ACTING SEAT (World.seatHudWire): the seat's refusal note while it is fresh. */
-function ownNoteOf(s: Seat, world: World): { fn?: { text: string; at: number } } {
+function ownNoteOf(s: Seat, world: NativeSnapshotHost): { fn?: { text: string; at: number } } {
   const fn = world.seatHudWire(s)?.fn;
   return fn ? { fn } : {};
 }
 /** THE ACTING SEAT (World.seatHudWire): the seconds left on the seat's low-life surge. */
-function ownSurgeOf(s: Seat, world: World): { lh?: number } {
+function ownSurgeOf(s: Seat, world: NativeSnapshotHost): { lh?: number } {
   const lh = world.seatHudWire(s)?.lh;
   return lh !== undefined ? { lh } : {};
 }
 /** THE ROADS PER PLAYER (engine/shardRoads.ts): the road dwell the host fills for the seat (a hosted world alone). */
-function ownRoadOf(s: Seat, world: World): { rd?: [number, number, number, string] } {
-  const rd = world.shardWorld ? roadDwellRow(world, s) : undefined;
+function ownRoadOf(s: Seat, world: NativeSnapshotHost): { rd?: [number, number, number, string] } {
+  const rd = world.shardWorld ? nativeWireRoad(world,s) : undefined;
   return rd ? { rd } : {};
 }
 /** THE PARTY THAT READS: the revive row (SeatW.rv) rides THE OWN ENTRY too (its own statement). */
@@ -1572,7 +1573,7 @@ export function ownEntryJson(s: StateSnapshot): OwnEntrySplit | null {
 /** The rampage fabric's felled rows (undefined while the ground stands whole
  *  — the common case). Progress is resolved host-side so guests need no
  *  clock agreement: they draw and test the shipped fraction verbatim. */
-function fellOf(world: World): { x: number; y: number; p: number }[] | undefined {
+function fellOf(world: NativeSnapshotHost): { x: number; y: number; p: number }[] | undefined {
   if (!world.rampageActive()) return undefined;
   let out: { x: number; y: number; p: number }[] | undefined;
   for (const d of world.doodads) {
@@ -1593,7 +1594,7 @@ function fellOf(world: World): { x: number; y: number; p: number }[] | undefined
  *  wake, weather dress) can mint client-side — the zone list only ships once.
  *  Pooled wells are excluded: they ride the wells channel exclusively (the
  *  serializeZone precedent — one driver per doodad). */
-function evapOf(world: World): EvapW[] | undefined {
+function evapOf(world: NativeSnapshotHost): EvapW[] | undefined {
   let out: EvapW[] | undefined;
   for (const d of world.doodads) {
     if (!d.evap || d.gone || d.well) continue;
@@ -1610,7 +1611,7 @@ function evapOf(world: World): EvapW[] | undefined {
  *  (kindIdx, x, y) triples — positions only, the wells idiom (this 20 Hz
  *  reconcile IS the pool's client existence; a dropped packet self-heals).
  *  Undefined while the pool is empty (the common case ships zero bytes). */
-function liteOf(world: World): { k: string[]; b: number[] } | undefined {
+function liteOf(world: NativeSnapshotHost): { k: string[]; b: number[] } | undefined {
   const pool = world.lite;
   if (!pool.liveCount) return undefined;
   const k = world.liteKinds.map(x => x.defId);
@@ -1625,7 +1626,7 @@ function liteOf(world: World): { k: string[]; b: number[] } | undefined {
 /** The complete tag→armed map (undefined when no tagged lane stands). The
  *  FULL map ships — trapworks toggles run both ways, so a lane flipped back
  *  to its authored state must still converge on the client. */
-function laneArmOf(world: World): Record<string, 0 | 1> | undefined {
+function laneArmOf(world: NativeSnapshotHost): Record<string, 0 | 1> | undefined {
   let out: Record<string, 0 | 1> | undefined;
   for (const tr of world.tracks) {
     if (!tr.spec.tag) continue;
@@ -1635,7 +1636,7 @@ function laneArmOf(world: World): Record<string, 0 | 1> | undefined {
 }
 
 /** Every live once-lane spec (undefined when none — the common case). */
-function laneOnceOf(world: World): TrackSpec[] | undefined {
+function laneOnceOf(world: NativeSnapshotHost): TrackSpec[] | undefined {
   let out: TrackSpec[] | undefined;
   for (const tr of world.tracks) {
     if (tr.spec.mode === 'once') (out ??= []).push(tr.spec);
@@ -1644,7 +1645,7 @@ function laneOnceOf(world: World): TrackSpec[] | undefined {
 }
 
 /** Live pooled lightwells (undefined when none stand — the common case). */
-function wellsOf(world: World): WellW[] | undefined {
+function wellsOf(world: NativeSnapshotHost): WellW[] | undefined {
   let out: WellW[] | undefined;
   for (const d of world.lightwellDoodads()) {
     if (!d.well) continue;
@@ -1659,7 +1660,7 @@ function wellsOf(world: World): WellW[] | undefined {
 
 /** Live structure-door states (id → state), or undefined when every door in the
  *  zone is still pristine (the common case ships zero bytes). */
-function doorStatesOf(world: World): Record<string, 'open' | 'broken'> | undefined {
+function doorStatesOf(world: NativeSnapshotHost): Record<string, 'open' | 'broken'> | undefined {
   let out: Record<string, 'open' | 'broken'> | undefined;
   for (const d of world.doodads) {
     if (!d.door || (!d.door.open && !d.door.broken)) continue;
@@ -1668,7 +1669,7 @@ function doorStatesOf(world: World): Record<string, 'open' | 'broken'> | undefin
   return out;
 }
 
-function seatW(s: Seat, world: World): SeatW {
+function seatW(s: Seat, world: NativeSnapshotHost): SeatW {
   const a = s.actor;
   const seq = world.lastInputSeq.get(s.id);
   const surv = survivalOf(a);
@@ -2711,7 +2712,7 @@ export interface ZoneMsg {
   counters?: string[];
 }
 
-export function serializeZone(world: World): ZoneMsg {
+export function serializeZone(world: NativeSnapshotHost): ZoneMsg {
   return {
     zoneId: world.zone.id, name: world.zone.name, level: world.zone.level,
     ...(world.zone.locale ? { locale: structuredClone(world.zone.locale) } : {}),
@@ -2821,3 +2822,7 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   // world's message alone carries them).
   applyCounterZone(world, msg);
 }
+
+/** The retained adapter supplies the real identity-keyed planner and road owner. */
+function nativeWireEncounter(world:NativeSnapshotHost,a:Actor):ReturnType<typeof encounterCueOf>{const queries=world.nativeWireQueries;return queries?queries.encounterCue(a):encounterCueOf(a,world);}
+function nativeWireRoad(world:NativeSnapshotHost,seat:Seat):ReturnType<typeof roadDwellRow>{const queries=world.nativeWireQueries;return queries?queries.roadDwell(seat):roadDwellRow(world,seat);}

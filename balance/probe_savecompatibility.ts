@@ -32,7 +32,7 @@ let available = true;
 const fetchBefore = globalThis.fetch;
 globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
   if (!available) throw new Error('offline QA endpoint');
-  const slot = String(url).split('/').pop()!;
+  const slot = new URL(String(url), 'http://fixture.invalid').pathname.split('/').pop()!;
   if (init?.method === 'POST') { disk.set(slot, JSON.parse(String(init.body))); writes.push(slot); }
   return { ok: disk.has(slot), status: disk.has(slot) ? 200 : 404,
     json: async () => structuredClone(disk.get(slot) ?? null) } as Response;

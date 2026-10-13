@@ -1,3 +1,4 @@
+import {beforeNativeContinuity as projectContinuity} from './nativeContinuityCompositionFixture';
 import {beforeNativeClientStart} from './nativeClientStartFixtureSource';
 import {beforeNativeClientPublicationComposition as projectClientPublication} from './nativeClientPublicationCompositionFixture';
 import assert from 'node:assert/strict';
@@ -15,4 +16,4 @@ for(const row of archive.files){const raw=projectClientPublication('runtime',row
  if(typeOnly.has(row.file)){const emit=(source:string)=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;assert.equal(emit(raw),emit(old),row.file+' type-only JS');emits++;}
  if(process.argv.includes('--provenance'))assert.equal(execFileSync('git',['show',archive.pin+':'+row.file],{encoding:'utf8',maxBuffer:20e6}).replaceAll('\r\n','\n'),old,row.file+' immutable commit');
 }
-for(const row of archive.newFiles)assert.equal(combatHash(beforeNativeClientStart(row.file,fs.readFileSync(path.join(root,row.file),'utf8')).replaceAll('\r\n','\n')),row.sha256,row.file+' new runtime');assert.equal(emits,7);const result={pin:archive.pin,files:archive.files.length,newRuntime:archive.newFiles.length,mutations,duplicates,typeOnlyEmits:emits,fullSource:true,CRLF:true,outsidePreserved:true};writeCombatProof('native-client-runtime-source.json',result);console.log(JSON.stringify(result));
+for(const row of archive.newFiles)assert.equal(combatHash(beforeNativeClientStart(row.file,projectContinuity('production',row.file,fs.readFileSync(path.join(root,row.file),'utf8'))).replaceAll('\r\n','\n')),row.sha256,row.file+' new runtime');assert.equal(emits,7);const result={pin:archive.pin,files:archive.files.length,newRuntime:archive.newFiles.length,mutations,duplicates,typeOnlyEmits:emits,fullSource:true,CRLF:true,outsidePreserved:true};writeCombatProof('native-client-runtime-source.json',result);console.log(JSON.stringify(result));

@@ -1,5 +1,8 @@
 import type {World} from './world';
 export interface NativeSceneUIActionHost {
+ readonly addSeat:World['addSeat'];
+ readonly adoptSeatMeta:World['adoptSeatMeta'];
+ readonly hireMercenary:World['hireMercenary'];
  readonly endRun:World['endRun'];
  readonly retireCharacter:World['retireCharacter'];
  readonly applyAction:World['applyAction'];

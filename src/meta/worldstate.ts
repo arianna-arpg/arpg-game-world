@@ -1,3 +1,4 @@
+import type {NativeRetainedSave} from '../worldmass/nativeRetainedSave';
 import { savedMassBounty, MASS_BOUNTY_KINDS } from '../worldmass/bounties';
 import { empowermentRank } from '../engine/skillEmpowerment';
 // ---------------------------------------------------------------------------
@@ -301,6 +302,8 @@ export type WorldStateRestore = Omit<WorldStateSave, 'worldmass'> & {
 };
 
 export interface WorldStateSave {
+  /** Exact retained source/manifest authority; absent older saves require migration. */
+  nativeRetained?: NativeRetainedSave;
   massSideareas?: import('../worldmass/sideareas').MassSideareaSave;
   worldmass?: import('../worldmass/runtime').MassAdventureSave;
   odyssey?: import('../world/odyssey').OdysseyState;

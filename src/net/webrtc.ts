@@ -238,6 +238,9 @@ export class WebRtcTransport implements NetTransport {
     if (!this.isHost) return;
     this.fanOut(JSON.stringify({ t: 'snap', snap: s } satisfies NetMsg));
   }
+  sendStateToSeat(s:StateSnapshot,to:PlayerId):boolean {if(!this.isHost)return false;return this.sendTo(to,JSON.stringify({t:'snap',snap:s} satisfies NetMsg));}
+  sendZoneToSeat(z:ZoneMsg,to:PlayerId):boolean {if(!this.isHost)return false;return this.sendTo(to,JSON.stringify({t:'zone',zone:z} satisfies NetMsg));}
+  private sendTo(to:PlayerId,data:string):boolean {const channel=this.conns.get(to);if(!channel||channel.readyState!=='open'||channel.bufferedAmount>=1_000_000)return false;try{channel.send(data);return true;}catch{return false;}}
   onState(cb: (s: StateSnapshot) => void): () => void { this.stateCbs.add(cb); return () => { this.stateCbs.delete(cb); }; }
 
   sendZone(z: ZoneMsg): void {

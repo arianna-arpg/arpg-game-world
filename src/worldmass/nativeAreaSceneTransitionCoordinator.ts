@@ -1,8 +1,14 @@
+import {installNativeHostedCoordinator} from './nativeHostedSerialization';
 import {extendNativeAreaUIActions} from './nativeAreaUIActions';
 import {extendNativeAreaMenuQueries} from './nativeAreaMenuQueries';
 import {extendNativeAreaMenuPublication} from './nativeAreaMenuPublication';
 import {extendNativeAreaViewQueries} from './nativeAreaViewQueries';
 import {extendNativeAreaPublication} from './nativeAreaScenePublication';
+import {NativeAreaSceneEcology} from './nativeAreaSceneEcology';
+import {LitePool} from '../engine/lite';
+import {sceneCaptureLiteCarry,type NativeLiteCarryRow} from '../engine/nativeSceneEcology';
+import {assertNativeCharacterResume,type NativeCharacterResumeReceipt,type NativeAreaCharacterResume} from './nativeAreaCharacterResume';
+import {sceneCaptureZoneMemory} from '../engine/nativeSceneDepartureMemory';
 /** Retained-area selection and synchronous physical handoff. Unlike legacy
  * World.loadZone, revisits retain the area's actual stores and controllers.
  * Destination creation and complete frame/UI publication are separate duties. */
@@ -46,10 +52,11 @@ interface Registered {readonly ongoing:NativeAreaSceneOngoing;readonly combat:Na
 export interface NativeAreaTransitionFrame {readonly source:NativeAreaSceneOngoing;readonly current:NativeAreaSceneOngoing;readonly seats:readonly Seat[];readonly active:boolean}
 interface Frame {source:Registered;current:Registered;seats:readonly Seat[];active:boolean;view:NativeAreaTransitionFrame}
 const arrayPush=Array.prototype.push,arraySplice=Array.prototype.splice,arrayIncludes=Array.prototype.includes,arrayIndexOf=Array.prototype.indexOf;
-const authorityTransfer=NativeAreaActorAuthority.prototype.transfer,authorityFinalPhysical=NativeAreaActorAuthority.prototype.assertFinalPhysical;
+const authorityTransfer=NativeAreaActorAuthority.prototype.transfer,authorityFinalPhysical=NativeAreaActorAuthority.prototype.assertFinalPhysical,authorityFinalClaimed=NativeAreaActorAuthority.prototype.assertFinalClaimed;
+const partySelectActors=NativeAreaActorAuthority.prototype.selectActors,partyFinalSelections=NativeAreaActorAuthority.prototype.assertFinalSelections;
 const coordinatedWriters=new WeakMap<World,NativeAreaSceneTransitionCoordinator>();
 const actualCoordinators=new WeakSet<object>();
-export interface NativeTransitionOwnerBridge {bindTraversal(record:TraversalState):void;finishTraversal(record:TraversalState):void;runTraversalStep(action:()=>void):void}
+export interface NativeTransitionOwnerBridge {selectDescentRecovery(run:NonNullable<World['descentRun']>):{combat:NativeAreaSceneCombat;player:Actor};partySeats():readonly Seat[];loadPartyZone(zoneId:string,from?:string):void;bindTraversal(record:TraversalState):void;finishTraversal(record:TraversalState):void;runTraversalStep(action:()=>void):void}
 const bridgeIssuers=new WeakMap<NativeAreaSceneTransitionCoordinator,(owner:object,combat:NativeAreaSceneCombat)=>NativeTransitionOwnerBridge>();
 const combatBridges=new WeakMap<NativeAreaSceneCombat,NativeTransitionOwnerBridge>();
 /** The privately issued operation entry, not structural shape, authorizes this
@@ -71,15 +78,23 @@ function rawValues<T>(value:unknown):T[]{if(!Array.isArray(value))throw Error('N
 function captureSeats(campaign:NativeAreaOngoingCampaign,seats?:readonly Seat[]):SeatCapture {const original=campaign.seats,all=rawValues<Seat>(original),ids=new Set<string>(),selected=seats??all,rows:{seat:Seat;id:string;body:Actor}[]=[];for(const seat of all){const id=own<string>(seat,'id');if(typeof id!=='string'||ids.has(id))throw Error('Native transition needs unique actual seat IDs');ids.add(id);}for(const seat of selected){if(!all.includes(seat))throw Error('Native transition cohort seat left campaign');rows.push({seat,id:own<string>(seat,'id'),body:own<Actor>(seat,'actor')});}return {campaign,seats:original,rows};}
 function finalSeats(capture:SeatCapture):void {if(capture.campaign.seats!==capture.seats)throw Error('Native transition campaign seats replaced during admission');const members=rawValues<Seat>(capture.seats);for(const row of capture.rows)if(!members.includes(row.seat)||own(row.seat,'id')!==row.id||own(row.seat,'actor')!==row.body)throw Error('Native transition seat changed during admission');}
 /** One coordinator is retained beside the one real character writer. */
+declare const packedTravelReceipt:unique symbol;
+export interface NativePackedTravelReceipt {readonly [packedTravelReceipt]:true}
+interface PackedTravel {active:boolean;consumed:boolean;source:NativeAreaSceneEcology;destination:NativeAreaSceneEcology;actors:readonly Actor[];ids:readonly number[];authority:NativeAreaTransitionInput['authority'];binding:Registered['binding']}
+const packedTravel=new WeakMap<object,PackedTravel>();
+const freePacked=LitePool.prototype.free;
+export function assertNativePackedTravel(token:NativePackedTravelReceipt,destination:NativeAreaSceneEcology):void{const r=packedTravel.get(token);if(!r?.active||r.consumed||r.destination!==destination)throw Error('Native packed arrival is foreign or expired');}
+export function consumeNativePackedTravel(token:NativePackedTravelReceipt,destination:NativeAreaSceneEcology):NativeLiteCarryRow[]{const r=packedTravel.get(token);if(!r?.active||r.consumed||r.destination!==destination)throw Error('Native packed arrival is foreign or expired');Reflect.apply(authorityFinalClaimed,r.authority,[r.binding,r.actors]);for(let i=0;i<r.actors.length;i++)if(own(r.actors[i],'id')!==r.ids[i])throw Error('Native packed keeper identity changed');const state=r.source.input.state,pool=own<LitePool>(state,'lite'),kinds=own<World['liteKinds']>(state,'liteKinds');if(pool===own(destination.input.state,'lite')||kinds===own(destination.input.state,'liteKinds'))throw Error('Native packed areas cannot share source stores');if(!(pool instanceof LitePool)||!Array.isArray(kinds)||Object.getPrototypeOf(kinds)!==Array.prototype)throw Error('Native packed source stores differ');const selected=new Set(r.ids),rows=sceneCaptureLiteCarry(r.source.host,pool).filter(row=>selected.has(row.owner));Reflect.apply(authorityFinalClaimed,r.authority,[r.binding,r.actors]);if(own(state,'lite')!==pool||own(state,'liteKinds')!==kinds)throw Error('Native packed source changed during capture');for(let i=0;i<r.actors.length;i++)if(own(r.actors[i],'id')!==r.ids[i])throw Error('Native packed keeper changed during capture');r.consumed=true;for(let i=0;i<pool.used;i++)if(pool.alive[i]&&selected.has(pool.owner[i]))Reflect.apply(freePacked,pool,[i]);return rows;}
 export class NativeAreaSceneTransitionCoordinator {
  readonly input:Readonly<NativeAreaTransitionInput>;
- readonly #lifecycle={preparation:NativeAreaScenePreparation.prototype.retire,authority:NativeAreaActorAuthority.prototype.retire,memory:NativeAreaMemoryRegistry.prototype.retire,memoryIdle:NativeAreaMemoryRegistry.prototype.assertRetirable,population:NativeAreaScenePopulation.prototype.retire,deeds:NativeAreaSceneCombatCampaign.prototype.retireCallbacks};
+ readonly #lifecycle={packed:NativeAreaSceneEcology.prototype.withPackedArrival,release:NativeAreaActorAuthority.prototype.release,unregister:NativeAreaActorAuthority.prototype.unregister,discardRestore:NativeAreaMemoryRegistry.prototype.discardProvisionalRestore,setRestore:NativeAreaScenePreparation.prototype.setProvisionalRestore,finishRestore:NativeAreaScenePreparation.prototype.finishProvisionalRestore,preparation:NativeAreaScenePreparation.prototype.retire,authority:NativeAreaActorAuthority.prototype.retire,memory:NativeAreaMemoryRegistry.prototype.retire,memoryIdle:NativeAreaMemoryRegistry.prototype.assertRetirable,population:NativeAreaScenePopulation.prototype.retire,deeds:NativeAreaSceneCombatCampaign.prototype.retireCallbacks};
  readonly #areas=new Map<string,Registered>();readonly #combats=new WeakMap<NativeAreaSceneCombat,Registered>();
  readonly #projection=new Map<string,PropertyDescriptor>();
  readonly #previousProjection=new Map<string,PropertyDescriptor|undefined>();
  #retired=false;#retirement:readonly string[]=Object.freeze([]);
  readonly #directories=new WeakMap<NativeAreaSceneCombat,NativeAreaSceneDirectory>();
- #published:Registered|null=null;#frame:Frame|null=null;#moving=false;#preparation:NativeAreaScenePreparation|null=null;
+ #restore:{owner:NativeAreaCharacterResume;source:Registered;arriving:boolean;token?:NativeCharacterResumeReceipt}|null=null;
+ #published:Registered|null=null;#frame:Frame|null=null;#moving=false;#partyMoving=false;#preparation:NativeAreaScenePreparation|null=null;
  readonly #traversals=new WeakMap<TraversalState,TraversalContinuation>();
  #executingTraversalCallback:TraversalContinuation|null=null;
  #traversalStep:{continuation:TraversalContinuation;finished:boolean}|null=null;
@@ -95,7 +110,7 @@ export class NativeAreaSceneTransitionCoordinator {
   if(coordinatedWriters.has(characterWriter))throw Error('Native campaign already has a transition coordinator');
   this.input=Object.freeze({campaign,characterWriter,authority,memoryRegistry});Object.defineProperty(this,'input',{writable:false,configurable:false});coordinatedWriters.set(characterWriter,this);actualCoordinators.add(this);
   roadQueueIssuers.set(this,(owner,combat)=>{const current=()=>{if(own(combat,'campaignFrame')!==owner)throw Error('Native road queue owner changed');return this.#combat(combat);};return Object.freeze({enableHosted:()=>{current();this.#enableHostedRoads();},enqueue:(ticket:RoadTicket<NativeAreaRoadDestination>)=>this.#enqueueRoad(current(),ticket),drain:()=>{current();return this.#drainRoads();}});});
-  bridgeIssuers.set(this,(owner,combat)=>{const current=()=>{if(own(combat,'campaignTransitions')!==owner||this.#combats.get(combat)?.combat!==combat)throw Error('Native transition bridge owner was replaced or unregistered');};return Object.freeze({bindTraversal:(record:TraversalState)=>{current();this.#bindTraversal(record);},finishTraversal:(record:TraversalState)=>{current();this.#finishTraversal(record);},runTraversalStep:(action:()=>void):void=>{current();this.#runTraversalStep(action);}});});
+  bridgeIssuers.set(this,(owner,combat)=>{const current=()=>{if(own(combat,'campaignTransitions')!==owner||this.#combats.get(combat)?.combat!==combat)throw Error('Native transition bridge owner was replaced or unregistered');};return Object.freeze({selectDescentRecovery:(run:NonNullable<World['descentRun']>)=>{current();return this.#selectDescentRecovery(run);},partySeats:()=>{current();return this.#partySeats();},loadPartyZone:(zoneId:string,from?:string)=>{current();this.#loadPartyZone(zoneId,from);},bindTraversal:(record:TraversalState)=>{current();this.#bindTraversal(record);},finishTraversal:(record:TraversalState)=>{current();this.#finishTraversal(record);},runTraversalStep:(action:()=>void):void=>{current();this.#runTraversalStep(action);}});});
  }
  attachPreparation(preparation:NativeAreaScenePreparation):void {
   if(!isNativeAreaScenePreparation(preparation)||preparation.input.coordinator!==this||preparation.input.session.campaign!==this.input.campaign||preparation.input.authority!==this.input.authority||this.#preparation)throw Error('Native transition needs its one actual campaign preparer');this.#preparation=preparation;
@@ -178,8 +193,8 @@ export class NativeAreaSceneTransitionCoordinator {
   if(this.#retired)throw Error('Native coordinator is retired');
   assertNativeRetainedMassState(this.input.characterWriter);
   const a=r.ongoing.assembly,input=a.input,authority=this.input.authority;
-  if(a.phase!=='born'||input.scene.zone.id!==r.id||(this.input.campaign.zoneMap[r.id]??this.input.campaign.caveMap[r.id])!==input.scene.zone||r.ongoing.authority!==authority||authority.bindingFor(input.scene)!==r.binding||own(r.binding.services,'combat')!==r.combat)throw Error('Native transition registration changed');
-  r.memory.assertReady();r.roads.assertReady();authority.assertFinalPhysical(r.binding);assertNativeRetainedMassState(this.input.characterWriter);
+  if(a.phase!=='born'||input.scene.zone.id!==r.id||((this.input.campaign.zoneMap[r.id]??this.input.campaign.caveMap[r.id])!==input.scene.zone&&this.#restore?.source!==r)||r.ongoing.authority!==authority||authority.bindingFor(input.scene)!==r.binding||own(r.binding.services,'combat')!==r.combat)throw Error('Native transition registration changed');
+  if(this.#restore?.source!==r)r.memory.assertReady();r.roads.assertReady();authority.assertFinalPhysical(r.binding);assertNativeRetainedMassState(this.input.characterWriter);
  }
  register(ongoing:NativeAreaSceneOngoing,memory:NativeAreaSceneMemory,roads?:NativeAreaRoadContext):void{
   if(this.#moving)throw Error('Native transition registration is busy');
@@ -220,6 +235,7 @@ export class NativeAreaSceneTransitionCoordinator {
   extendNativeAreaMenuPublication(bindings,area);
   extendNativeAreaMenuQueries(bindings,area);
   extendNativeAreaUIActions(bindings,area);
+  for(const key of ['reckonRunEssence','recordDeath'] as const){if(bindings.has(key))throw Error('Duplicate native death publication: '+key);bindings.set(key,{get:()=>{const selected=area(),owner=selected.combat.campaignTransitions,fn=owner[key];return(...args:unknown[])=>{this.#assertProjection();this.#ready(this.#combat(selected.combat));if(this.#published?.ongoing!==selected)throw Error('Native death publication selection expired');return Reflect.apply(fn,owner,args);};}});}
   field('adoptedZonePending',()=>this.#published!.departure);field('forgetMemoryOnLeave',()=>this.#published!.departure);
   field('caveExitGrace',()=>this.#published!.roads);field('entryFrom',()=>this.#published!.roads);field('caveReturn',()=>this.#published!.roads);field('caveStack',()=>this.#published!.roads);
   bindings.set('inCave',{get:()=>assembly().transition.inCave});field('scene',()=>area().quests.input.state);
@@ -242,10 +258,61 @@ export class NativeAreaSceneTransitionCoordinator {
  }
  #townArrival:NativeAreaSceneCombat|null=null;
  assertTownArrival(combat:NativeAreaSceneCombat):void {if(!this.#moving||!this.#frame?.active||this.#townArrival!==combat)throw Error('Native town refresh needs its selected genuine arrival');}
+ /** Campaign death policy sees every genuine admitted hand. The returned roster
+  * is a finite identity snapshot; native alive/merc/account rules still decide. */
+ /** The shared dive identifies its actual source even when the final down was elsewhere.
+  * Its one player cleanup still belongs to the genuine campaign-local controlled body. */
+ #selectDescentRecovery(run:NonNullable<World['descentRun']>):{combat:NativeAreaSceneCombat;player:Actor}{
+  const frame=this.#frame,writer=this.input.characterWriter;if(!frame?.active||this.#moving||this.#partyMoving||this.#activeRoad||own(writer,'descentRun')!==run)throw Error('Native descent recovery needs its actual active campaign run');
+  const caveId=own<string>(run,'caveId'),source=this.#areas.get(caveId);if(!source)throw Error('Native descent recovery needs its registered abyss');this.#ready(source);
+  const capture=captureSeats(this.input.campaign),local=own<Seat>(writer,'localSeat'),selections=Reflect.apply(partySelectActors,this.input.authority,[capture.rows.map(r=>r.body)]);
+  for(const selected of selections){const area=[...this.#areas.values()].find(row=>row.binding===selected.binding);if(!area)throw Error('Native descent party has no registered physical owner');this.#ready(area);}
+  const hero=capture.rows.find(row=>row.seat===local)?.body;if(!hero)throw Error('Native descent lost the actual local hand');finalSeats(capture);Reflect.apply(partyFinalSelections,this.input.authority,[selections]);
+  if(own(writer,'descentRun')!==run||own(run,'caveId')!==caveId||own(writer,'localSeat')!==local)throw Error('Native descent run changed during selection');
+  frame.current=source;frame.seats=Object.freeze(capture.rows.filter((_,i)=>selections[i].binding===source.binding).map(row=>row.seat));return{combat:source.combat,player:hero};
+ }
+ #partySeats():readonly Seat[]{
+  const frame=this.#frame;if(!frame?.active||this.#moving)throw Error('Native party policy needs its active transition');
+  const capture=captureSeats(this.input.campaign);if(new Set(capture.rows.map(r=>r.body)).size!==capture.rows.length)throw Error('Native party has duplicate controlled bodies');const selected=Reflect.apply(partySelectActors,this.input.authority,[capture.rows.map(r=>r.body)]);
+  for(const row of selected){const registered=[...this.#areas.values()].find(area=>area.binding===row.binding);if(!registered||registered.binding!==row.binding)throw Error('Native party seat lacks its actual registered area');this.#ready(registered);}
+  finalSeats(capture);Reflect.apply(partyFinalSelections,this.input.authority,[selected]);
+  return Object.freeze(capture.rows.map(r=>r.seat));
+ }
+ /** Death/respawn uses the ordinary physical handoff for each actual source.
+  * This private bridge neither creates road tickets nor borrows another frame. */
+ #loadPartyZone(zoneId:string,from?:string):void{
+  const frame=this.#frame;if(!frame?.active||this.#moving||this.#partyMoving||this.#activeRoad)throw Error('Native party handoff needs an idle current transition');
+  const seats=this.#partySeats(),capture=captureSeats(this.input.campaign,seats),selected=Reflect.apply(partySelectActors,this.input.authority,[capture.rows.map(r=>r.body)]);
+  if(new Set(capture.rows.map(r=>r.body)).size!==capture.rows.length)throw Error('Native party handoff has duplicate bodies');const groups=new Map<Registered,Seat[]>();for(let i=0;i<capture.rows.length;i++){const row=[...this.#areas.values()].find(area=>area.binding===selected[i].binding)!;const group=groups.get(row)??[];group.push(capture.rows[i].seat);groups.set(row,group);}
+  finalSeats(capture);Reflect.apply(partyFinalSelections,this.input.authority,[selected]);this.#partyMoving=true;
+  try{
+   for(const [source,cohort]of groups){this.#ready(source);const now=captureSeats(this.input.campaign,cohort),current=Reflect.apply(partySelectActors,this.input.authority,[now.rows.map(r=>r.body)]);finalSeats(now);Reflect.apply(partyFinalSelections,this.input.authority,[current]);if(current.some(r=>r.binding!==source.binding))throw Error('Native party handoff source changed');frame.current=source;frame.seats=Object.freeze([...cohort]);this.loadZone(zoneId,from??source.id);}
+   const destination=this.#areas.get(zoneId);if(!destination)throw Error('Native party handoff has no completed destination');
+   const now=captureSeats(this.input.campaign,seats),current=Reflect.apply(partySelectActors,this.input.authority,[now.rows.map(r=>r.body)]);finalSeats(now);Reflect.apply(partyFinalSelections,this.input.authority,[current]);if(current.some(r=>r.binding!==destination.binding))throw Error('Native party did not reach its destination');
+   const local=own<Seat>(this.input.characterWriter,'localSeat'),hero=now.rows.find(r=>r.seat===local)?.body;if(!hero)throw Error('Native party handoff lost its local hand');writable(destination.binding.scene,'player');
+   destination.binding.scene.player=hero;frame.current=destination;frame.seats=Object.freeze([...seats]);this.#published=destination;
+  }finally{this.#partyMoving=false;}
+ }
+
+ /** A Continue shell alone may replace its entire recorded graph. Its old row
+  * stays physically scoped until native arrival transfers the real cohort. */
+ restoreCharacterGraph(token:NativeCharacterResumeReceipt,world:Parameters<World['adoptWorldState']>[0]):void {
+  const r=assertNativeCharacterResume(token,'graph');this.assertIdleFrame();const source=this.#published;if(!source||source.ongoing!==r.area||r.preparation!==this.#preparation||r.writer!==this.input.characterWriter||this.#areas.size!==1||this.#restore||this.#hostedRoads||this.#roadQueue.length)throw Error('Native Continue requires its only provisional local area');this.#ready(source);this.#restore={owner:r.owner,source,arriving:false};Reflect.apply(this.#lifecycle.setRestore,this.#preparation!,[token]);
+  if(!source.combat.restoreCharacterGraph(token,world))throw Error('Native recorded world could not be restored');
+ }
+ resumeCharacterArrival(token:NativeCharacterResumeReceipt,...args:Parameters<World['resumeSpawn']>):void {
+  const r=assertNativeCharacterResume(token,'arrival'),restore=this.#restore;this.assertIdleFrame();if(!restore||restore.owner!==r.owner||restore.source.ongoing!==r.area||r.preparation!==this.#preparation||restore.arriving)throw Error('Native Continue arrival lost its provisional receipt');restore.arriving=true;restore.token=token;
+  restore.source.combat.campaignFrame.resumeSpawn(...args);
+  if(this.#published===restore.source)throw Error('Native Continue did not replace its provisional area');
+  // The original source operation must finish its native finally before its
+  // binding can be revoked. No source driver remains active beyond this point.
+  assertNativeCombatOperationsIdle();const source=restore.source,remaining=rawValues<Actor>(own(source.binding.scene,'actors'));Reflect.apply(authorityFinalPhysical,this.input.authority,[source.binding]);Reflect.apply(this.#lifecycle.release,this.input.authority,[source.binding,remaining]);Reflect.apply(this.#lifecycle.unregister,this.input.authority,[source.binding]);Reflect.apply(this.#lifecycle.population,source.ongoing.assembly.input.population,[]);Reflect.apply(this.#lifecycle.deeds,source.combat.campaignOwner,[]);this.#combats.delete(source.combat);if(this.#areas.get(source.id)===source)this.#areas.delete(source.id);Reflect.apply(this.#lifecycle.finishRestore,this.#preparation!,[source.ongoing,token]);this.#restore=null;
+ }
+ assertProvisionalRestoreSource(owner:NativeAreaCharacterResume,area:NativeAreaSceneOngoing):void {if(this.#restore?.owner!==owner||this.#restore.source.ongoing!==area||!this.#restore.arriving)throw Error('Native provisional restore source is not selected');}
  loadZone(zoneId:string,from?:string):void{
   assertNativeRetainedMassState(this.input.characterWriter);
   const frame=this.#frame;if(!frame?.active||this.#moving)throw Error('Native area handoff needs its current synchronous transition frame');
-  const source=frame.current;let destination=this.#areas.get(zoneId);
+  const source=frame.current,restoring=this.#restore?.source===frame.current&&this.#restore.arriving;let destination=this.#areas.get(zoneId);if(restoring&&destination===source)destination=undefined;
   this.#ready(source);if(destination)this.#ready(destination);this.#assertProjection();if(source===destination)return;
   if(!destination&&!this.#preparation)throw Error('Native destination needs the actual campaign preparation owner');
   this.#moving=true;
@@ -261,7 +328,7 @@ export class NativeAreaSceneTransitionCoordinator {
    if(selected.some(s=>s.binding!==source.binding))throw Error('Native transition cohort is foreign');
    const carriedScene=publish?own<World['scene']>(source.ongoing.quests.input.state,'scene'):null;
    const ladder={caveReturn:source.roads.caveReturn,caveStack:[...source.roads.caveStack]};
-   source.combat.transitionDeparture(cohort);source.departure.captureZoneMemory();
+   source.combat.transitionDeparture(cohort);if(restoring){if(!source.departure.adoptedZonePending)throw Error('Native restored departure lost its adopted-world suppression');sceneCaptureZoneMemory(source.departure.host);}else source.departure.captureZoneMemory();
    // Native pre-layout cancellation. The source queues remain retained, while
    // actor-carried casting and marks cannot migrate into the destination.
    incoming.dash=null;incoming.casting=null;
@@ -302,10 +369,14 @@ export class NativeAreaSceneTransitionCoordinator {
    destScene.player=incoming;for(const a of cohort)a.statusRelay=relay;frame.current=destination;if(publish)this.#published=destination;
    destination.roads.entryFrom=from??null;destination.roads.caveReturn=onGraph?null:ladder.caveReturn;destination.roads.caveStack=onGraph?[]:ladder.caveStack;
    if(activeRoad){activeRoad.destination=destination;const selectedLadder=activeRoad.receipt.ticket.ladder;if(selectedLadder){destination.roads.caveReturn=selectedLadder.caveReturn;destination.roads.caveStack=[...selectedLadder.caveStack];}}
-   if(firstBirth){this.#preparation!.birthTransferred(destination.ongoing);this.#ready(destination);this.input.memoryRegistry.register(destination.memory);this.#ready(destination);this.#areas.set(zoneId,destination);this.#combats.set(destination.combat,destination);this.#roadInstances.set(zoneId,activeRoad?.receipt.instance);if(this.#hostedRoads)this.#installRoadLink(destination);}
+   const arriving=destination;
+   const packedToken=Object.freeze({}) as NativePackedTravelReceipt,packed:PackedTravel={active:true,consumed:false,source:source.ongoing.assembly.input.ecology,destination:arriving.ongoing.assembly.input.ecology,actors:cohort,ids:cohort.map(actor=>own<number>(actor,'id')),authority:this.input.authority,binding:arriving.binding};packedTravel.set(packedToken,packed);
+   try{Reflect.apply(this.#lifecycle.packed,packed.destination,[packedToken,firstBirth,()=>{if(firstBirth){this.#preparation!.birthTransferred(arriving.ongoing);this.#ready(arriving);if(restoring)Reflect.apply(this.#lifecycle.discardRestore,this.input.memoryRegistry,[source.memory,this.#restore!.token!]);this.input.memoryRegistry.register(arriving.memory);this.#ready(arriving);this.#areas.set(zoneId,arriving);this.#combats.set(arriving.combat,arriving);this.#roadInstances.set(zoneId,activeRoad?.receipt.instance);if(this.#hostedRoads)this.#installRoadLink(arriving);}}]);if(!packed.consumed)throw Error('Native destination did not consume its packed arrival');}finally{packed.active=false;}
    if(activeRoad)this.#roadBeforeArrival(activeRoad,firstBirth);
    for(const seat of frame.seats){source.roads.depart(seat);destination.roads.arrive(seat,activeRoad?activeRoad.receipt.ticket:{seatId:own<string>(seat,'id'),dest:zoneId,...(!onGraph?{ladder}:{})},from??null);}
    destination.combat.transitionArrival(cohort);
+
+
    if(activeRoad){const after=activeRoad.receipt.ticket.after;if(after!==undefined)this.#invokeRoad(activeRoad,after,activeRoad.receipt.ticket,[activeRoad.receipt.seat,firstBirth]);this.#roadCheck(activeRoad);}
   }finally{this.#moving=false;}
  }
@@ -453,3 +524,5 @@ export class NativeAreaSceneTransitionCoordinator {
   Object.defineProperty(host,'seats',{get:()=>frame.seats});harborLandPartyAt(host,at,opts);
  }
 }
+
+installNativeHostedCoordinator({is:isNativeAreaSceneTransitionCoordinator,idle:NativeAreaSceneTransitionCoordinator.prototype.assertIdleFrame,ready:NativeAreaSceneTransitionCoordinator.prototype.nativeWorldReady,areaFor:NativeAreaSceneTransitionCoordinator.prototype.areaFor});

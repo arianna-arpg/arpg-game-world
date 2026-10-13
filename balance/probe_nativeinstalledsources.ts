@@ -1,3 +1,4 @@
+import {beforeNativeContinuity as projectContinuity} from './nativeContinuityCompositionFixture';
 /** Installed native source parity, direct cold bootstrap, and live provider scope. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -30,7 +31,7 @@ if(cold){
  console.log('INSTALLED_COLD '+JSON.stringify({data,warnings}));
 }else{
  assert.equal(hash(JSON.stringify(archive)),nativeInstalledSourcesArchiveHash);
- const world=read('src/engine/world.ts');const before=ts.createSourceFile('world.ts',beforeNativeInstalledSources(world),99,true),oldWorld=before.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
+ const world=projectContinuity('production','src/engine/world.ts',read('src/engine/world.ts'));const before=ts.createSourceFile('world.ts',beforeNativeInstalledSources(world),99,true),oldWorld=before.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration;
  const worldHash=hash(JSON.stringify(oldWorld.members.map(m=>m.getText(before).replaceAll('\r\n','\n'))));
  assert.ok([nativeInstalledOtherWorldHash,nativeInstalledShardWorldHash].includes(worldHash),'World must match the original extraction or its reviewed shard integration: '+worldHash);
  const rootFile=parse('src/engine/nativeSceneBootstrap.ts');const roots=rootFile.statements.filter(ts.isImportDeclaration).map(n=>(n.moduleSpecifier as ts.StringLiteral).text);assert.deepEqual(roots,nativeInstalledBootstrapRoots.filter(p=>!['../meta/character','../worldmass/runtime'].includes(p)),'complete original import roots except the explicit save-restoration owners');

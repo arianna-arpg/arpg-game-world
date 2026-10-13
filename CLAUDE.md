@@ -1,3 +1,38 @@
+Native browser sessions now compose per-area targeted WebRTC publication and
+saved local co-op join lifetime checks. Preserve actual recipient area authority,
+terrain-before-state on join/reseat, native metadata heartbeat and one campaign
+frame. A cancelled or replaced saved guest selection cannot mint into a newer
+run or dismiss its ceremony. Verify nativehosted*, nativecouchjoinlifetimesource,
+the real browser rigs, adjacent retained courses and all types. See
+docs/worldgen/native-browser-hosted-sessions.md. Dedicated ShardHost/SimUnits
+conversion and broader server parity remain open before terrain and map work.
+
+Local browser play now composes actual retained Begin/Mu/Wake, fresh starts,
+recorded Continue, area input/frame dispatch, native hiring, dimension catalogs,
+ordered saves and active descent. Preserve initial guest admission before the
+baseline save, finite selected pilot reads, account hydration generations and
+terminal runtime retirement. Verify nativebrowserstarthook, the browser entry
+and delayed-hydration UI rigs, all parent native/source courses, four types,
+probe census and game/launcher boot. See docs/worldgen/native-client-browser-entry.md.
+Hosted per-recipient publication remains a required successor; bounded/open
+terrain, private generated quest entrances and hierarchy/zoom remain open.
+
+Retained Continue/party/town now composes with scoped local aiming and HeroAgent
+input, same-page save request ordering and active Descent ownership. Preserve
+final physical checks after callbacks, native fetch/beacon payloads and genuine
+dive birth/cull hooks. Verify nativeclientcontinuity*, nativelocalinput*,
+nativesavewriteorder*, nativeorderedcontinue, nativeactivedescent*, source lanes
+and all types. Later joining/hiring, recorded per-dimension catalogs, hosted
+recipient publication and main/browser activation remain open.
+
+Native recorded Continue now composes with retained town growth and party
+recovery. Preserve genuine account/slot leases, exact saved geography, native
+companion/mercenary restoration, party-wide policy and per-body physical effects.
+Verify nativeclientcontinue*, nativeparty*, nativecontinuitycomposition*, all
+source lanes and all types. Save transport ordering, active descent scheduling,
+local-input composition, later joining/hiring, per-dimension mapping and browser
+activation remain separate successor work.
+
 NativeTownBodyLedger preserves actual retained town inhabitants, doors and
 station state while unlocked native layouts grow on a later unoccupied arrival.
 The initial character path folds account stations after party/join before its

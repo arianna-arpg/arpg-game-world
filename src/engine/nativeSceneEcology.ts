@@ -145,14 +145,10 @@ export function sceneMintThrongHusk(host:Pick<NativeSceneEcologyHost,'createMons
     return husk;
   }
 
-export function sceneBootLite(host:Pick<NativeSceneEcologyHost,'lite'|'liteKinds'|'arena'|'liteKindIdxMap'|'liteMaxR'|'liteBeatAt'|'liteOrders'|'liteXpAcc'|'liteKills'|'litePromoteBudget'|'litePockets'|'liteBurrows'|'liteWhenCueDraws'|'liteColonySeen'|'liteRegenClock'|'liteHasTrample'|'liteMinTrampleSpeed'|'liteVentRows'|'currentZoneSeed'|'liteCondHeld'|'interactSpot'|'liteKindOf'|'litePocketEnsure'|'liteOpenAt'|'seats'|'actorById'>, def: ZoneDef, pois: Vec2[]):void {
+export function sceneBootLite(host:Pick<NativeSceneEcologyHost,'lite'|'liteKinds'|'arena'|'liteKindIdxMap'|'liteMaxR'|'liteBeatAt'|'liteOrders'|'liteXpAcc'|'liteKills'|'litePromoteBudget'|'litePockets'|'liteBurrows'|'liteWhenCueDraws'|'liteColonySeen'|'liteRegenClock'|'liteHasTrample'|'liteMinTrampleSpeed'|'liteVentRows'|'currentZoneSeed'|'liteCondHeld'|'interactSpot'|'liteKindOf'|'litePocketEnsure'|'liteOpenAt'|'seats'|'actorById'>, def: ZoneDef, pois: Vec2[],nativeArriving?:()=>readonly NativeLiteCarryRow[]):void {
     const pool = host.lite;
-    const carried: { owner: number; defId: string; plies: number }[] = [];
-    for (let i = 0; i < pool.used; i++) {
-      if (!pool.alive[i] || !pool.owner[i]) continue;
-      const k = host.liteKinds[pool.kind[i]];
-      if (k) carried.push({ owner: pool.owner[i], defId: k.defId, plies: pool.plies[i] });
-    }
+    const carried=sceneCaptureLiteCarry(host,pool);
+    if(nativeArriving)carried.push(...nativeArriving());
     pool.reset(host.arena.w, host.arena.h);
     host.liteKinds = [];
     host.liteKindIdxMap.clear();
@@ -222,20 +218,7 @@ export function sceneBootLite(host:Pick<NativeSceneEcologyHost,'lite'|'liteKinds
         }
       }
     }
-    for (let c = 0; c < carried.length; c++) {
-      const row = carried[c];
-      const keeper = host.actorById(row.owner);
-      if (!keeper || keeper.dead) continue;
-      if (!keeper.skills.some(s =>
-        s?.def.throng?.tier === 'lite' && s.def.throng.monsterId === row.defId)) continue;
-      const kindIdx = host.liteKindOf(row.defId);
-      if (kindIdx < 0) continue;
-      const ang = (c / Math.max(1, carried.length)) * Math.PI * 2;
-      const bx = keeper.pos.x + Math.cos(ang) * 46, by = keeper.pos.y + Math.sin(ang) * 46;
-      const open = host.liteOpenAt(bx, by);
-      pool.spawn(kindIdx, open ? bx : keeper.pos.x, open ? by : keeper.pos.y,
-        1, keeper.id, row.plies);
-    }
+    sceneArriveLiteCarry(host,carried,pool);
   }
 
 export function sceneLiteKindOf(host:Pick<NativeSceneEcologyHost,'liteKindIdxMap'|'zone'|'liteKinds'|'liteMaxR'|'liteHasTrample'|'liteMinTrampleSpeed'>, sources:NativeSceneEcologySources, defId: string):number {
@@ -387,3 +370,31 @@ export function sceneGeyserSurge(host:Pick<NativeSceneEcologyHost,'geysers'|'tim
 export function sceneActorById(host:Pick<NativeSceneEcologyHost,'actors'>, id: number):Actor | undefined {
     return host.actors.find(a => a.id === id);
   }
+
+export interface NativeLiteCarryRow {owner:number;defId:string;plies:number}
+/** Exact original boot capture and placement; retained travel supplies only its selected cohort. */
+export function sceneCaptureLiteCarry(host:Pick<NativeSceneEcologyHost,'liteKinds'>,pool:NativeSceneEcologyHost['lite']):NativeLiteCarryRow[]{
+    const carried: { owner: number; defId: string; plies: number }[] = [];
+    for (let i = 0; i < pool.used; i++) {
+      if (!pool.alive[i] || !pool.owner[i]) continue;
+      const k = host.liteKinds[pool.kind[i]];
+      if (k) carried.push({ owner: pool.owner[i], defId: k.defId, plies: pool.plies[i] });
+    }
+    return carried;
+}
+export function sceneArriveLiteCarry(host:Pick<NativeSceneEcologyHost,'actorById'|'liteKindOf'|'liteKinds'|'liteOpenAt'>,carried:readonly NativeLiteCarryRow[],pool:NativeSceneEcologyHost['lite']):void {
+    for (let c = 0; c < carried.length; c++) {
+      const row = carried[c];
+      const keeper = host.actorById(row.owner);
+      if (!keeper || keeper.dead) continue;
+      if (!keeper.skills.some(s =>
+        s?.def.throng?.tier === 'lite' && s.def.throng.monsterId === row.defId)) continue;
+      const kindIdx = host.liteKindOf(row.defId);
+      if (kindIdx < 0) continue;
+      const ang = (c / Math.max(1, carried.length)) * Math.PI * 2;
+      const bx = keeper.pos.x + Math.cos(ang) * 46, by = keeper.pos.y + Math.sin(ang) * 46;
+      const open = host.liteOpenAt(bx, by);
+      pool.spawn(kindIdx, open ? bx : keeper.pos.x, open ? by : keeper.pos.y,
+        1, keeper.id, row.plies);
+    }
+}

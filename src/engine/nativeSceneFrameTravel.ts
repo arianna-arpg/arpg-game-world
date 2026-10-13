@@ -1,3 +1,4 @@
+import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
 /** Exact original42 campaign/interleaved frame FrameTravel closure.
  * Runtime ownership and native scheduling are separate concrete bindings. */
 import type {NativeAreaRoadDestination,NativeAreaRealmContextTarget} from '../worldmass/nativeAreaRoadDestination';
@@ -3933,6 +3934,7 @@ export function sceneRestoreCompanions(nativeHost:NativeSceneCampaignFrameClosur
         keeper.pos.x + rand(-60, 60), keeper.pos.y + rand(40, 80)), beast.radius);
       if (c.downed) { beast.downed = true; beast.life = 0; }
       nativeHost.actors.push(beast);
+      observeNativeCombatBirth(nativeHost,beast);
     }
     nativeHost.companionBonds.refresh();
   }

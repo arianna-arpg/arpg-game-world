@@ -1,3 +1,10 @@
+import {installNativeHostedSerializer} from './nativeHostedSerialization';
+import * as wireCore from '../engine/nativeSceneWireQueries';
+import type {NativeSnapshotHost} from '../net/nativeSnapshotHost';
+import {serializeSnapshot,serializeZone,type StateSnapshot,type ZoneMsg} from '../net/snapshot';
+import {stampAudiences} from '../net/seatView';
+import {encounterCueOf} from '../engine/encounterCombat';
+import {NativeAreaParty,type NativeAreaPartyBaseHost} from './nativeAreaParty';
 import * as uiCore from '../engine/nativeSceneUIActions';
 import type {NativeSceneUIActionHost} from '../engine/nativeSceneUIActionHost';
 import {isNativeAreaUIAction,nativeAreaUISeatArgument,type NativeAreaUIAction,type NativeAreaUIActionMethods} from './nativeAreaUIActions';
@@ -8,6 +15,12 @@ import {refreshNativeTownStations} from './nativeAreaTownStationRefresh';
 import * as viewCore from '../engine/nativeSceneViewQueries';
 import type {NativeSceneViewHost} from '../engine/nativeSceneViewHost';
 import {isNativeAreaViewQuery,nativeAreaViewActorArgument,type NativeAreaViewQuery,type NativeAreaViewQueryMethods} from './nativeAreaViewQueries';
+import * as characterRestore from '../engine/nativeCharacterRestoration';
+import {applyCharacterFields,type NativeCharacterRestoreHost} from '../meta/character';
+import type {CharacterFields} from '../meta/characterResume';
+import {sceneIndexSeats} from '../engine/nativeSceneCombatControl';
+import {sceneRestoreAccountRelics} from '../engine/nativeSceneCampaignLifecycle';
+import {NativeAreaCharacterResume,assertNativeCharacterResume,type NativeCharacterResumeReceipt} from './nativeAreaCharacterResume';
 import * as characterCreation from '../engine/nativeCharacterCreation';
 import {assertNativeCharacterReceipt,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
 import {NativeAreaSceneAI} from './nativeAreaSceneAI';
@@ -78,10 +91,15 @@ export interface NativeAreaCombatServices {readonly ai:NativeAreaSceneAI;readonl
 type TransferredBuff=Parameters<World['treeBuffSources']['get']>[0];
 interface ActorControllerPacket {source:NativeAreaSceneCombat;bond:unknown;grants:unknown;clocks:unknown;buffs:[TransferredBuff,NonNullable<ReturnType<World['treeBuffSources']['get']>>][];strike:ReturnType<World['strikeReleaseBodies']['get']>}
 const controllerTransfers=new WeakMap<object,WeakMap<Actor,ActorControllerPacket>>();
-type Host=NativeSceneUIActionHost&Pick<characterCreation.NativeCharacterCreationHost,'veteranFlaskDeals'>&NativeSceneMenuHost&NativeSceneViewHost&NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
+type Host=wireCore.NativeSceneWireQueryHost&Pick<World,"frostHeld"|"gloom"|"harvestHolds"|"livePings"|"seatHudWire"|"smithCounterHere"|"vendorEntryHold"|"withApproachPass"|"seatHarvestView"|"vendorGemsOpen">&Pick<World,'addSeat'|'adoptSeatMeta'|'hireMercenary'>&NativeSceneUIActionHost&Pick<characterCreation.NativeCharacterCreationHost,'veteranFlaskDeals'>&NativeSceneMenuHost&NativeSceneViewHost&NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
 type Binding<T>={get:()=>T;set?:(value:T)=>void};type Bindings={[K in keyof Host]:Binding<Host[K]>};
 function field<O extends object,K extends keyof O>(owner:()=>O,key:K):Binding<O[K]>{return {get:()=>owner()[key],set:value=>{owner()[key]=value;}};}
 function method<O extends object,K extends keyof O>(owner:()=>O,key:K):{get:()=>O[K]}{return {get:()=>{const receiver=owner(),fn=receiver[key];return typeof fn==='function'?((...args:unknown[])=>Reflect.apply(fn,receiver,args)) as O[K]:fn;}};}
+function wireAbsent<K extends 'musterRings'|'seatCorpseMarks'>(writer:World,key:K):World[K]{const value=presentationData(writer,key);if(value!==null)throw Error('Native hosted wire cannot adopt a legacy shard-only provider: '+key);return value;}
+function wireValues<T>(rows:readonly T[]):T[]{if(!Array.isArray(rows))throw Error('Native wire needs an ordinary array');const length=Object.getOwnPropertyDescriptor(rows,'length');if(!length||!Object.hasOwn(length,'value'))throw Error('Native wire needs ordinary length');const out:T[]=[];for(let i=0;i<length.value;i++){const d=Object.getOwnPropertyDescriptor(rows,i);if(!d||!Object.hasOwn(d,'value'))throw Error('Native wire needs actual own array entries');out.push(d.value as T);}return out;}
+let wireSerializing=false;
+const wireFinalPhysical=NativeAreaActorAuthority.prototype.assertFinalPhysical;
+const wireBindingFor=NativeAreaActorAuthority.prototype.bindingFor;
 const actualCombats=new WeakSet<object>();
 const exactPlayerAttendance=NativeAreaActorAuthority.prototype.isPresentPlayer;
 const exactActorAttendance=NativeAreaActorAuthority.prototype.isPresentActor;
@@ -89,6 +107,7 @@ function presentationData(owner:object,key:PropertyKey):unknown{const d=Object.g
 const exactPhysicalSeats=NativeAreaActorAuthority.prototype.physicalSeats;
 export function isNativeAreaSceneCombat(value:unknown):value is NativeAreaSceneCombat{return !!value&&typeof value==='object'&&actualCombats.has(value);}
 export class NativeAreaSceneCombat {
+ readonly party:NativeAreaParty;
  readonly inputFrame:NativeAreaSceneInput;
  readonly input:Readonly<NativeAreaSceneCombatInput>;readonly runtimeState:NativeAreaSceneCombatRuntimeState;
  readonly services:NativeAreaCombatServices;readonly campaignOwner:NativeAreaSceneCombatCampaign;readonly combatArena:NativeAreaSceneCombatArena;readonly control:NativeAreaSceneCombatControl;readonly campaignTransitions:NativeAreaSceneCampaignTransitions;readonly campaignFrame:NativeAreaSceneCampaignFrame;
@@ -104,10 +123,27 @@ export class NativeAreaSceneCombat {
  readonly summonPreparation:NativeAreaSceneSummonPreparation;
  readonly #publishedArea:Function;
  readonly ai:NativeAreaSceneAI;
+ readonly #resumeFactory={make:NativeAreaCharacterResume.prototype.makeSeat,admit:NativeAreaCharacterResume.prototype.admitSeat};
+ #restoreToken:NativeCharacterResumeReceipt|undefined;
  readonly #operation:NativeAreaCombatOperation;readonly #host:Host;readonly #viewHost:NativeSceneViewHost&NativeSceneUIActionHost;readonly #menuHost:NativeSceneMenuHost;
+ readonly #wireHost:NativeSnapshotHost;
+ #wireSeats:Seat[]|undefined;
  readonly #activationReady:()=>boolean;
  readonly #frameCallbacks:Pick<Host,'collectDeedDot'|'doodadEffects'|'incursionEvents'>;
  readonly #populationHost:NativeSceneServiceHost;
+ /** Serialize the exact retained area, without changing the published writer. */
+ serializeHostedArea(tick:number):{zone:ZoneMsg;snapshot:StateSnapshot}{
+  if(wireSerializing||this.#wireSeats||!Number.isSafeInteger(tick)||tick<0)throw Error('Native wire needs a non-reentrant finite tick');
+  wireSerializing=true;try{
+  const {authority}=this.input,scene=this.scene,raw=presentationData(scene,'actors') as Actor[],actors=wireValues(raw),initial=Reflect.apply(exactPhysicalSeats,authority,[scene]) as Seat[],rows=initial.map(seat=>({seat,actor:presentationData(seat,'actor')}));
+  if(!initial.length)throw Error('Native wire area needs a physical audience');
+  const check=()=>{if(presentationData(scene,'actors')!==raw)throw Error('Native wire census changed');const live=wireValues(raw);if(live.length!==actors.length||live.some((actor,i)=>actor!==actors[i]))throw Error('Native wire physical cohort changed');for(const row of rows)if(presentationData(row.seat,'actor')!==row.actor)throw Error('Native wire Seat body changed');const binding=Reflect.apply(wireBindingFor,authority,[scene]);Reflect.apply(wireFinalPhysical,authority,[binding,actors]);};
+  return this.#operation.enter({permission:'proc',physical:actors,sources:[]},()=>{
+   const selected=Reflect.apply(exactPhysicalSeats,authority,[scene]) as Seat[];if(selected.length!==initial.length||selected.some((seat,i)=>seat!==initial[i]))throw Error('Native wire seats changed');check();this.#wireSeats=initial;Object.freeze(initial);
+   try{const zone=serializeZone(this.#wireHost),snapshot=serializeSnapshot(this.#wireHost,tick);stampAudiences(this.#wireHost,snapshot);check();return{zone,snapshot};}finally{this.#wireSeats=undefined;}
+  });
+  }finally{wireSerializing=false;}
+ }
  /** Actor-independent retained layout read, also valid for an empty keeper area. */
  stationAnchor(...args:Parameters<World['stationAnchor']>):ReturnType<World['stationAnchor']>{return this.#operation.enter({permission:'proc',physical:[],sources:[]},()=>frameServices.sceneStationAnchor(this.#host,...args));}
  /** Display queries use their published physical audience; a selected old-area
@@ -158,7 +194,7 @@ export class NativeAreaSceneCombat {
   const phase=Object.getOwnPropertyDescriptor(NativeAreaSceneAssembly.prototype,'phase')!.get!,active=Object.getOwnPropertyDescriptor(NativeAreaScenePresence.prototype,'active')!.get!;
   this.#activationReady=()=>Reflect.apply(phase,input.assembly,[])==='born'&&Reflect.apply(active,input.assembly.scenePresence,[]);
   actualCombats.add(this);this.#operation=createNativeAreaCombatOperation(this);
-  const host=this.#host={} as Host;
+  const self=this,host=this.#host={} as Host;
   this.runtimeState=new NativeAreaSceneCombatRuntimeState(host,campaign);
   const serviceHost=Object.create(assembly.objectiveServices) as NativeSceneServiceHost;
   Object.defineProperty(serviceHost,'seats',{get:()=>assembly.scenePresence.seats});
@@ -182,6 +218,15 @@ export class NativeAreaSceneCombat {
   this.campaignFrame=new NativeAreaSceneCampaignFrame({combat:this,coordinator:input.coordinator,entry:this.#operation.ownerEntry(),fixedHost:host});
   this.inputFrame=new NativeAreaSceneInput(this,this.#operation.ownerEntry(),host);
   this.ai=new NativeAreaSceneAI(this,this.#operation.ownerEntry(),host);
+  const partyHost=Object.create(host) as NativeAreaPartyBaseHost;
+  Object.defineProperties(partyHost,{
+   charDeaths:{get:()=>input.characterWriter.charDeaths},
+   indexSeats:{value:()=>sceneIndexSeats({get seatByActor(){return input.characterWriter['seatByActor'];},get seats(){return input.characterWriter.seats;}})},
+   restoreAccountRelics:{value:(seat:Seat)=>sceneRestoreAccountRelics(host,seat)},
+   grantStartingCompanions:{value:(...args:Parameters<World['grantStartingCompanions']>)=>characterCreation.sceneGrantStartingCompanions(host,...args)},
+   dealVeteranFlasks:{value:(...args:Parameters<World['dealVeteranFlasks']>)=>characterCreation.sceneDealVeteranFlasks(host,...args)},
+  });
+  this.party=new NativeAreaParty(this,this.#operation.ownerEntry(),Object.freeze(partyHost));
   this.services=Object.freeze({ai:this.ai,inputFrame:this.inputFrame,campaignFrame:this.campaignFrame,control:this.control,campaignTransitions:this.campaignTransitions,combatArena:this.combatArena,combat:this,progression,loot:assembly.lootController,objective:assembly.objectiveController,geometry,maddenLedger,campaignOwner:this.campaignOwner,tethers:this.tethers,restoration:this.restoration,castingPreparation:this.castingPreparation,displacement:this.displacement,combatState:this.combatState,defensePreparation:this.defensePreparation,projectiles:this.projectiles,killAftermath:this.killAftermath,groundFollowUps:this.groundFollowUps,summonPreparation:this.summonPreparation});
   const bindings=this.bindings();
   for(const key of Object.keys(bindings) as (keyof Bindings)[])Object.defineProperty(host,key,{enumerable:true,...bindings[key]});
@@ -189,9 +234,123 @@ export class NativeAreaSceneCombat {
   viewDescriptors.seats={enumerable:true,get:()=>Reflect.apply(exactPhysicalSeats,authority,[scene])};
   const presentationHost=Object.freeze(Object.defineProperties({},viewDescriptors)) as NativeSceneViewHost&NativeSceneMenuHost&NativeSceneUIActionHost;
   this.#viewHost=presentationHost;this.#menuHost=presentationHost;
-  Object.freeze(host);for(const key of ['ai','input','runtimeState','services','campaignOwner','combatArena','control','campaignTransitions','campaignFrame','inputFrame',"tethers","restoration","castingPreparation","displacement","combatState","defensePreparation","projectiles","killAftermath","groundFollowUps","summonPreparation"])Object.defineProperty(this,key,{writable:false,configurable:false});
+  this.#wireHost=Object.freeze({get account(){return method(()=>host,"account").get();},
+get activeQuests(){return method(()=>host,"activeQuests").get();},
+get actorById(){return method(()=>host,"actorById").get();},
+get actors(){return method(()=>host,"actors").get();},
+get annexOpen(){return assembly.input.openings.input.state.annexOpen;},
+get arena(){return method(()=>host,"arena").get();},
+get auroras(){return method(()=>host,"auroras").get();},
+get bossBarInfo(){return method(()=>host,"bossBarInfo").get();},
+get bountyBoardView(){return method(()=>host,"bountyBoardView").get();},
+get bountyBoardsHere(){return method(()=>host,"bountyBoardsHere").get();},
+get bountyHands(){return method(()=>host,"bountyHands").get();},
+get clientActionHook(){return method(()=>host,"clientActionHook").get();},
+get completedQuests(){return method(()=>host,"completedQuests").get();},
+get creepers(){return method(()=>host,"creepers").get();},
+get deathBurstsView(){return method(()=>host,"deathBurstsView").get();},
+get devOverlayView(){return method(()=>host,"devOverlayView").get();},
+get doodads(){return method(()=>host,"doodads").get();},
+get drops(){return method(()=>host,"drops").get();},
+get dwellReachable(){return method(()=>host,"dwellReachable").get();},
+get emergences(){return method(()=>host,"emergences").get();},
+get exits(){return method(()=>host,"exits").get();},
+get eyecatch(){return method(()=>host,"eyecatch").get();},
+get flashes(){return method(()=>host,"flashes").get();},
+get fonts(){return method(()=>host,"fonts").get();},
+get frostHeld(){return method(()=>host,"frostHeld").get();},
+get gameOver(){return method(()=>host,"gameOver").get();},
+get gloom(){return method(()=>host,"gloom").get();},
+get grantedPocketsFor(){return method(()=>host,"grantedPocketsFor").get();},
+get guardArts(){return method(()=>host,"guardArts").get();},
+get guardians(){return method(()=>host,"guardians").get();},
+get handOwns(){return method(()=>host,"handOwns").get();},
+get handState(){return method(()=>host,"handState").get();},
+get harvestHolds(){return method(()=>host,"harvestHolds").get();},
+get hostileTo(){return method(()=>host,"hostileTo").get();},
+get journalDirty(){return method(()=>host,"journalDirty").get();},
+get lastInputSeq(){return method(()=>host,"lastInputSeq").get();},
+get ledger(){return method(()=>host,"ledger").get();},
+get lightwellDoodads(){return method(()=>host,"lightwellDoodads").get();},
+get lineOfSight(){return method(()=>host,"lineOfSight").get();},
+get lite(){return method(()=>host,"lite").get();},
+get liteKinds(){return method(()=>host,"liteKinds").get();},
+get livePings(){return method(()=>host,"livePings").get();},
+get localSeat(){return method(()=>host,"localSeat").get();},
+get magicPackEffects(){return assembly.input.population.input.state.magicPackEffects;},
+get manifest(){return method(()=>host,"manifest").get();},
+get massRuntime(){return method(()=>host,"massRuntime").get();},
+get metaDirty(){return method(()=>host,"metaDirty").get();},
+get minionsOfSkill(){return method(()=>host,"minionsOfSkill").get();},
+get mintAuthoredZone(){return method(()=>host,"mintAuthoredZone").get();},
+get movementLocked(){return method(()=>host,"movementLocked").get();},
+get musterRings(){return wireAbsent(input.characterWriter,'musterRings');},
+get netJournal(){return method(()=>host,"netJournal").get();},
+get notices(){return method(()=>host,"notices").get();},
+get objectiveDoneAt(){return method(()=>host,"objectiveDoneAt").get();},
+get openedHollows(){return geometry.openedHollows;},
+get orbs(){return method(()=>host,"orbs").get();},
+get partyDowns(){return method(()=>host,"partyDowns").get();},
+get partyRows(){return method(()=>host,"partyRows").get();},
+get pendingAmbushes(){return method(()=>host,"pendingAmbushes").get();},
+get pickupFeed(){return method(()=>host,"pickupFeed").get();},
+get player(){return method(()=>host,"player").get();},
+get projectiles(){return method(()=>host,"projectiles").get();},
+get questDefOf(){return method(()=>host,"questDefOf").get();},
+get questHandLevel(){return method(()=>host,"questHandLevel").get();},
+get questHome(){return method(()=>host,"questHome").get();},
+get questImbueOffers(){return method(()=>host,"questImbueOffers").get();},
+get questLog(){return method(()=>host,"questLog").get();},
+get questOfferChoices(){return method(()=>host,"questOfferChoices").get();},
+get questRewardOffers(){return method(()=>host,"questRewardOffers").get();},
+get questStanding(){return method(()=>host,"questStanding").get();},
+get rampageActive(){return method(()=>host,"rampageActive").get();},
+get roadIsWet(){return method(()=>host,"roadIsWet").get();},
+get sameParty(){return method(()=>host,"sameParty").get();},
+get satellites(){return method(()=>host,"satellites").get();},
+get seatCorpseMarks(){return wireAbsent(input.characterWriter,'seatCorpseMarks');},
+get seatHarvestView(){return method(()=>host,"seatHarvestView").get();},
+get seatHero(){return method(()=>host,"seatHero").get();},
+get seatHudWire(){return method(()=>host,"seatHudWire").get();},
+get seatOf(){return method(()=>host,"seatOf").get();},
+get seatOfRoot(){return method(()=>host,"seatOfRoot").get();},
+get sim(){return method(()=>host,"sim").get();},
+get smithCounterHere(){return method(()=>host,"smithCounterHere").get();},
+get stationAnchor(){return method(()=>host,"stationAnchor").get();},
+get storyPair(){return method(()=>host,"storyPair").get();},
+get structures(){return method(()=>host,"structures").get();},
+get tethers(){return method(()=>host,"tethers").get();},
+get texts(){return method(()=>host,"texts").get();},
+get throngRosterCount(){return method(()=>host,"throngRosterCount").get();},
+get time(){return method(()=>host,"time").get();},
+get timeflow(){return method(()=>host,"timeflow").get();},
+get titans(){return method(()=>host,"titans").get();},
+get townPortalViews(){return method(()=>host,"townPortalViews").get();},
+get tracks(){return method(()=>host,"tracks").get();},
+get trapworks(){return method(()=>host,"trapworks").get();},
+get vendorEntryHold(){return method(()=>host,"vendorEntryHold").get();},
+get vendorGemsOpen(){return method(()=>host,"vendorGemsOpen").get();},
+get vendorLockCap(){return method(()=>host,"vendorLockCap").get();},
+get vendorRestockAt(){return method(()=>host,"vendorRestockAt").get();},
+get vendorStock(){return method(()=>host,"vendorStock").get();},
+get vendorTradeRefusal(){return method(()=>host,"vendorTradeRefusal").get();},
+get visited(){return method(()=>host,"visited").get();},
+get walk(){return method(()=>host,"walk").get();},
+get waypointPos(){return method(()=>host,"waypointPos").get();},
+get withApproachPass(){return method(()=>host,"withApproachPass").get();},
+get withBuyer(){return method(()=>host,"withBuyer").get();},
+get withQuestHand(){return method(()=>host,"withQuestHand").get();},
+get zone(){return method(()=>host,"zone").get();},
+get zoneAnnexSpecs(){return geometry.zoneAnnexSpecs;},
+get zoneHollows(){return geometry.zoneHollows;},
+get zoneMap(){return method(()=>host,"zoneMap").get();},
+get zones(){return method(()=>host,"zones").get();},
+get seats(){if(!self.#wireSeats)throw Error('Native wire cohort is outside serialization');return self.#wireSeats;},
+get shardWorld(){return host.shardWorld;},
+nativeWireQueries:Object.freeze({encounterCue:(actor:Actor)=>encounterCueOf(actor,host),roadDwell:(seat:Seat)=>input.coordinator.roadsFor(self).roadDwellRow(seat)})});
+  Object.freeze(host);for(const key of ['party','ai','input','runtimeState','services','campaignOwner','combatArena','control','campaignTransitions','campaignFrame','inputFrame',"tethers","restoration","castingPreparation","displacement","combatState","defensePreparation","projectiles","killAftermath","groundFollowUps","summonPreparation"])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
- register(binding:NativeAreaAuthorityBinding<NativeAreaCombatServices>):void{if(binding.scene!==this.scene)throw Error('Native combat registration has foreign scene');for(const key of Object.keys(this.services) as (keyof NativeAreaCombatServices)[])if(binding.services[key]!==this.services[key])throw Error('Native combat registration has mismatched actual owner');this.#operation.bind(binding,[this.ai,this,this.inputFrame,this.input.progression,this.input.assembly.lootController,this.input.assembly.objectiveController,this.campaignOwner,this.combatArena,this.control,this.campaignTransitions,this.campaignFrame,this.tethers,this.restoration,this.castingPreparation,this.displacement,this.combatState,this.defensePreparation,this.projectiles,this.killAftermath,this.groundFollowUps,this.summonPreparation,this.input.assembly.input.ecology]);}
+ register(binding:NativeAreaAuthorityBinding<NativeAreaCombatServices>):void{if(binding.scene!==this.scene)throw Error('Native combat registration has foreign scene');for(const key of Object.keys(this.services) as (keyof NativeAreaCombatServices)[])if(binding.services[key]!==this.services[key])throw Error('Native combat registration has mismatched actual owner');this.#operation.bind(binding,[this.party,this.ai,this,this.inputFrame,this.input.progression,this.input.assembly.lootController,this.input.assembly.objectiveController,this.campaignOwner,this.combatArena,this.control,this.campaignTransitions,this.campaignFrame,this.tethers,this.restoration,this.castingPreparation,this.displacement,this.combatState,this.defensePreparation,this.projectiles,this.killAftermath,this.groundFollowUps,this.summonPreparation,this.input.assembly.input.ecology]);}
  prepareActivation(cohort:readonly Actor[]):NativeCombatActivation {return this.#operation.prepareActivation(cohort);}
  assertActivation(token:NativeCombatActivation,cohort:readonly Actor[]):void {this.#operation.assertActivation(token,cohort);}
  activate(cohort:readonly Actor[],token:NativeCombatActivation):void {if(!this.#activationReady())throw Error('Native combat activation needs actual born admitted area');const admitted=this.#operation.activate(this.#host,cohort,token);if(admitted.includes(this.input.campaign.localSeat.actor))this.campaignOwner.bindCombatDeeds();}
@@ -201,6 +360,46 @@ export class NativeAreaSceneCombat {
  /** Exact native canopy query, under the actual area's physical admission. */
  isConcealedFrom(viewer:Actor,target:Actor):boolean {return this.#operation.enter({physical:[viewer,target],permission:'physical'},()=>this.#host.veilIndex().concealedFrom(viewer.pos,target.pos));}
  rescaleEnemies():void {this.#operation.enter({permission:'physical'},()=>frameTravel.sceneRescaleEnemies(this.#host));}
+
+ #restoreHost(token:NativeCharacterResumeReceipt,stage:'fields'|'graph'):characterRestore.NativeCharacterRestorationHost & NativeCharacterRestoreHost {
+  const r=assertNativeCharacterResume(token,stage);if(r.area?.combat!==this||r.writer!==this.input.characterWriter)throw Error('Native restore host belongs to another area');
+  const host=Object.create(this.#host) as characterRestore.NativeCharacterRestorationHost & NativeCharacterRestoreHost,writer=r.writer,check=()=>{assertNativeCharacterResume(token,stage);this.#operation.assertActiveScope();};
+  const method=(key:keyof typeof host,provider:()=>object,name:string)=>Object.defineProperty(host,key,{enumerable:true,get:()=>{check();const receiver=provider(),fn=Reflect.get(receiver,name);return typeof fn==='function'?(...args:unknown[])=>{check();return Reflect.apply(fn,receiver,args);}:fn;}});
+  const bind=<K extends keyof typeof host>(key:K,value:typeof host[K])=>Object.defineProperty(host,key,{enumerable:true,value});
+  const field=<K extends keyof typeof host>(key:K)=>Object.defineProperty(host,key,{enumerable:true,get:()=>{check();return Reflect.get(writer,key);},set:(value:(typeof host)[K])=>{check();if(!Reflect.set(writer,key,value))throw new TypeError('Native restore writer field refused: '+String(key));}});
+  for(const key of ['charDeaths','charVendorHolds','mercSheets','townStationKey','townPortalDestination','ledger','annexFound','throngClaimed'] as const)field(key);
+  Object.defineProperty(host,'adoptedZonePending',{enumerable:true,get:()=>this.input.coordinator.departureFor(this).adoptedZonePending,set:value=>{this.input.coordinator.departureFor(this).adoptedZonePending=value;}});
+  Object.defineProperty(host,'completedQuests',{enumerable:true,get:()=>this.input.quests.questLedger().completed,set:value=>{this.input.quests.questLedger().completed=value;}});
+  Object.defineProperty(host,'questImbues',{enumerable:true,get:()=>this.input.quests.questLedger().imbues,set:value=>{this.input.quests.questLedger().imbues=value;}});
+  method('questDefOf',()=>this.input.quests,'questDefOf');
+  method('spawnPlayerCorpses',()=>this.input.assembly.input.history,'spawnPlayerCorpses');
+  bind('restoreAccountRelics',seat=>sceneRestoreAccountRelics(this.#host,seat));
+  bind('indexSeats',()=>sceneIndexSeats({get seatByActor(){return writer['seatByActor'];},get seats(){return writer.seats;}}));
+  method('applyMercNormalization',()=>this.input.progression,'applyMercNormalization');
+  method('removeSeat',()=>this.campaignTransitions,'removeSeat');
+  bind('grantStartingCompanions',(...args)=>characterCreation.sceneGrantStartingCompanions(this.#host,...args));
+  bind('dealVeteranFlasks',(...args)=>characterCreation.sceneDealVeteranFlasks(this.#host,...args));
+  bind('makePlayerSeat',(...args)=>Reflect.apply(this.#resumeFactory.make,r.owner,[token,...args]));
+  bind('admitRestoredSeat',seat=>Reflect.apply(this.#resumeFactory.admit,r.owner,[token,seat]));
+  bind('addSeat',(...args)=>characterRestore.sceneAddSeat(host,...args));
+  method('linkBackTo',()=>this.input.assembly.input.coast,'linkBackTo');
+  method('nearestRiverPort',()=>this.input.assembly.graph,'nearestRiverPort');
+  method('soulriverPorts',()=>this.input.assembly.graph,'soulriverPorts');
+  method('severFootprintCrossers',()=>this.input.assembly.graph,'severFootprintCrossers');
+  bind('adoptSavedMeta',(...args:Parameters<World['adoptSavedMeta']>)=>characterRestore.sceneAdoptSavedMeta(host,...args));
+  bind('adoptSeatMeta',(...args:Parameters<World['adoptSeatMeta']>)=>characterRestore.sceneAdoptSeatMeta(host,...args));
+  bind('reconcileContainers',(...args:Parameters<World['reconcileContainers']>)=>characterRestore.sceneReconcileContainers(host,...args));
+  bind('spawnMercSeat',(...args:Parameters<World['spawnMercSeat']>)=>characterRestore.sceneSpawnMercSeat(host,...args));
+  bind('restoreHiredMerc',(...args:Parameters<World['restoreHiredMerc']>)=>characterRestore.sceneRestoreHiredMerc(host,...args));
+  bind('restoreThrong',(...args:Parameters<World['restoreThrong']>)=>characterRestore.sceneRestoreThrong(host,...args));
+  bind('scrubStaleObjectives',(...args:Parameters<World['scrubStaleObjectives']>)=>characterRestore.sceneScrubStaleObjectives(host,...args));
+  bind('rebuildVendorHolds',(...args:Parameters<World['rebuildVendorHolds']>)=>characterRestore.sceneRebuildVendorHolds(host,...args));
+  bind('vendorLootToEntry',(...args:Parameters<World['vendorLootToEntry']>)=>characterRestore.sceneVendorLootToEntry(host,...args));
+  return Object.freeze(host);
+ }
+ restoreCharacterFields(token:NativeCharacterResumeReceipt,save:CharacterFields):boolean {const r=assertNativeCharacterResume(token,'fields');if(r.area?.combat!==this)throw Error('Native saved fields need their actual provisional area');if(this.scene.actors.some(a=>a.companion&&a.owner===r.writer.player))throw Error('Native resume shell unexpectedly received fresh companions');return this.#operation.enter({permission:'physical',physical:[r.writer.player]},()=>{if(this.#restoreToken)throw Error('Native saved fields cannot reenter');this.#restoreToken=token;try{return applyCharacterFields(this.#restoreHost(token,'fields'),save);}finally{this.#restoreToken=undefined;}});}
+ restoreCharacterGraph(token:NativeCharacterResumeReceipt,world:Parameters<World['adoptWorldState']>[0]):boolean {const r=assertNativeCharacterResume(token,'graph');if(r.area?.combat!==this)throw Error('Native saved graph needs its actual provisional area');return this.#operation.enter({permission:'physical',physical:[r.writer.player]},()=>{const host=this.#restoreHost(token,'graph');return characterRestore.sceneAdoptWorldState(host,world);});}
+ reconcileRestoredGraph(token:NativeCharacterResumeReceipt):void {const r=assertNativeCharacterResume(token,'graph');if(r.area?.combat!==this)throw Error('Native restored graph reconciliation is foreign');this.#operation.enter({permission:'physical',physical:[r.writer.player]},()=>{const host=this.#restoreHost(token,'graph');characterRestore.sceneReconcileSoulrivers(host);characterRestore.sceneReconcileSeaPorts(host);characterRestore.sceneReconcileWebLaws(host);});}
  rescaleInitialCharacter(token:NativeCharacterCreationReceipt):void {const r=assertNativeCharacterReceipt(token,'stats');if(r.area?.combat!==this||this.scene.actors.length!==1||this.scene.actors[0]!==r.seat.actor)throw Error('Native initial party event must contain only its created hero');frameTravel.sceneRescaleEnemies(this.#host);}
  #initialGift<T>(token:NativeCharacterCreationReceipt,run:()=>T):T {const r=assertNativeCharacterReceipt(token,'gifts');if(r.area?.combat!==this||r.writer!==this.input.characterWriter||r.seat!==this.input.campaign.localSeat)throw Error('Native initial gift has a foreign area');return this.#operation.enter({physical:[r.seat.actor],permission:'physical'},run);}
  grantInitialCharacterCompanions(token:NativeCharacterCreationReceipt):void {this.#initialGift(token,()=>characterCreation.sceneGrantStartingCompanions(this.#host));}
@@ -355,7 +554,7 @@ export class NativeAreaSceneCombat {
  companionBondsOfSkill(...args:Parameters<World["companionBondsOfSkill"]>):ReturnType<World["companionBondsOfSkill"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneCompanionBondsOfSkill(this.#host,...args));}
  minionServes(...args:Parameters<World["minionServes"]>):ReturnType<World["minionServes"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneMinionServes(this.#host,...args));}
  tryTame(...args:Parameters<World["tryTame"]>):ReturnType<World["tryTame"]>{return this.#operation.enter({permission:'proc',physical:[args[2]],sources:[args[0]]},()=>core2.sceneTryTame(this.#host,...args));}
- tameCompanion(...args:Parameters<World["tameCompanion"]>):ReturnType<World["tameCompanion"]>{return this.#operation.enter({permission:'proc',physical:[args[1]],sources:[args[0]]},()=>core2.sceneTameCompanion(this.#host,...args));}
+ tameCompanion(...args:Parameters<World["tameCompanion"]>):ReturnType<World["tameCompanion"]>{if(this.#restoreToken&&this.#operation.isRestoredCompanionPending(this.#restoreToken,args[1]))return this.#operation.withRestoredCompanion(this.#restoreToken,args[0],args[1],()=>core2.sceneTameCompanion(this.#host,...args));return this.#operation.enter({permission:'proc',physical:[args[1]],sources:[args[0]]},()=>core2.sceneTameCompanion(this.#host,...args));}
  throngRecruitCap(...args:Parameters<World["throngRecruitCap"]>):ReturnType<World["throngRecruitCap"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneThrongRecruitCap(this.#host,...args));}
  throngGain(...args:Parameters<World["throngGain"]>):ReturnType<World["throngGain"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneThrongGain(this.#host,...args));}
  throngKeepMinimum(...args:Parameters<World["throngKeepMinimum"]>):ReturnType<World["throngKeepMinimum"]>{return this.#operation.enter({permission:'proc',physical:[],sources:[args[0]]},()=>core2.sceneThrongKeepMinimum(this.#host,...args));}
@@ -559,6 +758,10 @@ export class NativeAreaSceneCombat {
  frameEffects(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameEffects(this.#host,dt));}
  frameLateBodies(dt:number):void {this.#operation.enter({physical:[],permission:'proc'},()=>frameCore.sceneFrameLateBodies(this.#host,dt));}
  private bindings():Bindings {const {assembly,progression,campaign,quests,watching}=this.input;const bindings={
+  addSeat:method(()=>this.party,'addSeat'),
+  adoptSeatMeta:method(()=>this.party,'adoptSeatMeta'),
+  hireMercenary:method(()=>this.party,'hireMercenary'),
+
   endRun:method(()=>this.campaignTransitions,'endRun'),
   retireCharacter:method(()=>this.campaignTransitions,'retireCharacter'),
   chartCourse:method(()=>this.campaignFrame,"chartCourse"),
@@ -566,6 +769,16 @@ export class NativeAreaSceneCombat {
   declineVocationOffer:method(()=>this.input.questInteraction,"declineVocationOffer"),
   dismissMercenary:method(()=>this.campaignTransitions,"dismissMercenary"),
   ensureOpenRealmRoots:this.native(uiCore.sceneEnsureOpenRealmRoots),
+  frostHeld:{get:()=> (...args:Parameters<World["frostHeld"]>)=>{this.#operation.assertActiveScope();return wireCore.sceneFrostHeld(this.#host,...args);}},
+gloom:{get:()=> (...args:Parameters<World["gloom"]>)=>{this.#operation.assertActiveScope();return wireCore.sceneGloom(this.#host,...args);}},
+harvestHolds:{get:()=> (...args:Parameters<World["harvestHolds"]>)=>{this.#operation.assertActiveScope();return wireCore.sceneHarvestHolds(this.#host,...args);}},
+livePings:{get:()=> (...args:Parameters<World["livePings"]>)=>{this.#operation.assertActiveScope();return wireCore.sceneLivePings(this.#host,...args);}},
+seatHudWire:{get:()=> (...args:Parameters<World["seatHudWire"]>)=>{this.#operation.assertActiveScope();return wireCore.sceneSeatHudWire(this.#host,...args);}},
+smithCounterHere:{get:()=> (...args:Parameters<World["smithCounterHere"]>)=>{this.#operation.assertActiveScope();return wireCore.sceneSmithCounterHere(this.#host,...args);}},
+vendorEntryHold:{get:()=> (...args:Parameters<World["vendorEntryHold"]>)=>{this.#operation.assertActiveScope();return wireCore.sceneVendorEntryHold(this.#host,...args);}},
+withApproachPass:{get:()=> <T>(fn:()=>T):T=>{this.#operation.assertActiveScope();return wireCore.sceneWithApproachPass(this.#host,fn);}},
+seatHarvestView:{get:()=> (...args:Parameters<World["seatHarvestView"]>)=>{this.#operation.assertActiveScope();return wireCore.sceneSeatHarvestView(this.#host,...args);}},
+vendorGemsOpen:method(()=>this.input.assembly.input.settlement,'vendorGemsOpen'),
   harvestPauseRefused:{get:()=>()=>{this.#operation.assertActiveScope();return uiCore.sceneHarvestPauseRefused(this.#viewHost);}},
   questDefOf:method(()=>this.input.quests,"questDefOf"),
   questStanding:method(()=>this.input.quests,"questStanding"),
@@ -2428,3 +2641,5 @@ export class NativeAreaSceneCombat {
   useMetaSkill:method(()=>this,'useMetaSkill'),
  } satisfies Bindings;return bindings;}
 }
+
+installNativeHostedSerializer(NativeAreaSceneCombat.prototype.serializeHostedArea);

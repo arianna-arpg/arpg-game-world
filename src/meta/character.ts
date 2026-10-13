@@ -486,7 +486,8 @@ export function applyCharacterResumeFields(world: World, resume: CharacterResume
     : resume.character;
   return applyCharacterFields(world, structuredClone(fields));
 }
-function applyCharacterFields(world: World, save: CharacterFields): boolean {
+export type NativeCharacterRestoreHost = Pick<World,"actors"|"adoptSavedMeta"|"annexFound"|"charDeaths"|"companionBonds"|"completedObjectives"|"ledger"|"localSeat"|"player"|"rememberSkillSlots"|"restoreCompanions"|"restoreHiredMerc"|"restoreThrong"|"seatHero"|"stashedCompanions"|"throngClaimed">;
+export function applyCharacterFields(world: NativeCharacterRestoreHost, save: CharacterFields): boolean {
   if (!isCurrentCharacterSave(save)) return false;
   const built = rebuildSavedMeta(save);
   if (!built) return false;

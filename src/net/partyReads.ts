@@ -1,3 +1,4 @@
+import type {NativeSnapshotHost} from './nativeSnapshotHost';
 // ---------------------------------------------------------------------------
 // THE PARTY THAT READS (docs/engine/shard.md, the player's first hour): what a
 // hosted world's party SHOWS its players, both halves of the wire. Browser-safe.
@@ -36,14 +37,14 @@ function reviveRow(): { radius: number; dwell: number } {
 }
 
 /** A seat standing in the revive's reach of a downed body (updateDownedSeats' own test). */
-function inReviveReach(world: World, a: Seat['actor'], down: Seat['actor']): boolean {
+function inReviveReach(world: NativeSnapshotHost, a: Seat['actor'], down: Seat['actor']): boolean {
   return dist(a.pos, down.pos) <= reviveRow().radius
     && world.dwellReachable(a.pos, down.pos, transitReach('revive'), world.storyPair(a, down));
 }
 
 /** The revive's progress on a downed seat: the best kneeler's dwell over the revive's own
  *  clock, or THE MERCY's clock over the warden's reviveSec (the body rises when it fills). */
-function reviveFill(world: World, down: Seat): number {
+function reviveFill(world: NativeSnapshotHost, down: Seat): number {
   let built = 0;
   for (const [id, t] of down.reviveDwellBy) {
     const by = world.seats.find(s => s.id === id);
@@ -54,7 +55,7 @@ function reviveFill(world: World, down: Seat): number {
 }
 
 /** One downed seat's row as `viewer` reads it. */
-function downRowOf(world: World, down: Seat, viewer: Seat, knee: boolean): ReviveW {
+function downRowOf(world: NativeSnapshotHost, down: Seat, viewer: Seat, knee: boolean): ReviveW {
   const b = down.actor, own = down === viewer;
   const row: ReviveW = { s: down.id, p: [Math.round(b.pos.x), Math.round(b.pos.y)], f: reviveFill(world, down) };
   const view = world.partyDowns?.view(down.id) ?? null;
@@ -72,7 +73,7 @@ function downRowOf(world: World, down: Seat, viewer: Seat, knee: boolean): Reviv
  *  nearest downed body in its revive reach (`k`), else the nearest party mate's down its own
  *  standing holds. Hosted worlds alone (World.shardWorld), never the warden: every other lane
  *  ships byte-identical snapshots (THE SOLO INVARIANT). */
-export function reviveRowOf(world: World, seat: Seat): ReviveW | undefined {
+export function reviveRowOf(world: NativeSnapshotHost, seat: Seat): ReviveW | undefined {
   if (!world.shardWorld || seat.keeper) return undefined;
   const a = seat.actor;
   if (a.dead) return undefined;
