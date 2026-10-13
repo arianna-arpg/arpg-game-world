@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_miniontargets.ts', status: 'green', tier: 'fast', why: 'Harmless critter contact-only fallback, threat priority, cached chase expiry, dangerous wildlife, natural predation and companion orders.' },
   { probe: 'probe_presencevisuals.ts', status: 'green', tier: 'fast', why: '139 storm/summon/construct identities, real births/actions/expiration, armed storms, terrain filters, spawn caps, undying, combat/RNG parity and copied co-op paint.' },
   { probe: 'probe_selfvisuals.ts', status: 'green', tier: 'fast', why: '109 self/mark/detonation identities, actual charge and cancellation, destructive fuel gates, combat/RNG parity and copied co-op cues.' },
   { probe: 'probe_movementvisuals.ts', status: 'green', tier: 'fast', why: '45 movement identities, real path/hit/invulnerability parity, blocked travel, delayed arrival cancellation, wardrobe color and paint-only co-op trails.' },
