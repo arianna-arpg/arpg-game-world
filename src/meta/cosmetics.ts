@@ -135,6 +135,7 @@ export function sanitizeCosmeticLoadout(raw: unknown, owned: (id: string, skill?
     }
     if (Object.keys(row).length) out.skills[skill] = row;
   }
+  if (raw.castingEffects === false) out.castingEffects = false;
   if (record(raw.customColors)) for (const [skill, color] of Object.entries(raw.customColors).slice(0, 512)) {
     if (word(skill) && colorHex(color) && colorAllowed(skill)) (out.customColors ??= {})[skill] = color.toLowerCase();
   }

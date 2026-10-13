@@ -220,6 +220,8 @@ export interface StatusW { id: string; stacks: number; bk?: number; dot?: 1; }
 export interface AuraW { c: string; r: number; sh: number; skillId?: string; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW { parryCue?: number;
+  /** Optional player skill identity; older hosts keep their plain cast bar. */
+  sk?: string;
   castingCompletion?: number;
   castingCue?: import('../engine/castingCues').CastingCue;
   focusBroken?: boolean;
@@ -825,6 +827,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.casting) {
     const cs = a.casting;
     const cw: CastW = { c: cs.inst.def.color, mode: cs.mode, total: cs.total, elapsed: cs.elapsed };
+    if (a.kind === 'player') cw.sk = cs.inst.def.id;
     // THE VENT-RIDE's broil rides the cast wire (the client draws the roil).
     const cd = cs.inst.def.delivery;
     if (cd.type === 'leap' && cd.vent) cw.vent = cd.vent.columnR;
@@ -1615,6 +1618,11 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   // resource maxes + derived stats before the per-frame patch runs.
   const myMeta = snap.seatMeta?.[world.clientSeatId];
   if (myMeta) applySeatMeta(world, world.localSeat, myMeta);
+  // Local preparation uses the replicated build, after this packet's metadata.
+  // Remote actors and unknown/old-host casts retain their render-only stubs.
+  const ownCastId = snap.actors.find(row => row.seat === world.clientSeatId)?.cast?.sk;
+  const ownCastInst = ownCastId ? world.localSeat.meta.knownSkills.get(ownCastId) : undefined;
+  if (own?.casting && ownCastInst) own.casting.inst = ownCastInst;
   const me = snap.seats[world.clientSeatId];
   if (me) {
     const p = world.player;

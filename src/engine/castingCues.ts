@@ -3,6 +3,7 @@ import { guardBashReady, instanceChannel, instanceMods, skillContextTags } from 
 import { selfProfile, SELF_VISUAL_STYLE as S } from '../data/skillSelfVisuals';
 import { castingCueStyle } from '../data/castingCues';
 import { combatCueFlash } from './combatCues';
+import { hasDecorativeCast } from '../data/skillCastVisuals';
 
 export interface CastingCue { fill: number; facing: number; style: string; color: string; skillId?: string; }
 const unit = (v: number) => Math.max(0, Math.min(1, v));
@@ -31,7 +32,8 @@ export function castingCueOf(a: Actor): CastingCue | undefined {
   // Client stubs cannot derive identities or finite-channel clocks. The host
   // supplies the whole resolved cue, including ordinary casts and guards.
   if (cs.castingCue) return cs.castingCue;
-  const skillId = selfProfile(cs.inst.def.id) ? cs.inst.def.id : undefined;
+  const decorative = hasDecorativeCast(cs.inst.def) || cs.mode === 'guard';
+  const skillId = decorative && selfProfile(cs.inst.def.id) ? cs.inst.def.id : undefined;
   let fill = castingCompletion(a);
   if (fill === undefined && skillId) {
     if (cs.mode === 'guard') {
