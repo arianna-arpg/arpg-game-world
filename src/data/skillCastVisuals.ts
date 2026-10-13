@@ -29,4 +29,4 @@ export function skillCastProfile(def: SkillDef): CastProfile | undefined {
   return { family, skillId: id, gathering: flight?.wake === 'fork' || flight?.wake === 'links' ? flight.wake : undefined, motif: presence?.motif ?? self?.motif ?? target?.motif
     ?? strike?.motif ?? movement?.motif ?? flight?.head ?? field?.motif ?? burst?.motif ?? 'runes' };
 }
-export const CAST_PREPARATION_STYLE = { radius: 30, glyph: 15, width: 1.5, outline: '#111a23', alpha: .72 };
+export const CAST_PREPARATION_STYLE = { width: 1.15, alpha: .85, outline: '#111a23' };

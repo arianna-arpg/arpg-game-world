@@ -45,6 +45,14 @@ function rig() {
   p.skills = [inst]; w.meta.knownSkills.set(inst.def.id, inst);
   assert(w.useSkill(p, inst, { x: 810, y: 700 }, true)); assert(p.casting);
   w['updateCasting'](p, p.casting.total * .4);
+  // Body-facing is authoritative even when a self cast has coincident aim,
+  // or a locked target remains elsewhere while the body changes direction.
+  const savedAim = { ...p.casting.aim };
+  p.facing = Math.PI / 2; p.casting.aim = { ...p.pos };
+  assert.equal(playerCastPreparation(p)?.facing, p.facing);
+  p.casting.aim = savedAim;
+  assert.equal(playerCastPreparation(p)?.facing, p.facing);
+  assert.equal(playerCastPreparation(p)?.radius, p.radius);
   const cue = playerCastPreparation(p)!; assert.equal(cue.profile.family, 'summon');
   assert(Math.abs(cue.fill! - .4) < 1e-8); assert(!w.actors.some(a => a.owner === p));
   const client = rig().w; client.clientSeatId = w.localSeat.id;
@@ -52,6 +60,7 @@ function rig() {
   applySnapshot(client, serializeSnapshot(w, 1));
   assert.equal(playerCastPreparation(client.player)?.profile.family, 'summon');
   assert.equal(playerCastPreparation(client.player)?.fill, cue.fill);
+  assert.equal(playerCastPreparation(client.player)?.facing, client.player.facing);
   p.applyStatus('stun', 0, 1, 'qa'); assert.equal(playerCastPreparation(p), undefined);
   w['updateCasting'](p, .01); assert(!p.casting); assert(!w.actors.some(a => a.owner === p));
   p.statuses = []; p.useLock = 0; p.cooldowns.clear();
@@ -95,7 +104,7 @@ function trace(id: string, fill: number, color: string) {
       calls.push([k, ...args]);
     }, set: (o, k, v) => { o[String(k)] = v; return true; },
   }) as unknown as CanvasRenderingContext2D;
-  drawCastPreparation(ctx, { profile: skillCastProfile(SKILLS[id])!, fill, age: 1, facing: .2 }, color);
+  drawCastPreparation(ctx, { profile: skillCastProfile(SKILLS[id])!, fill, age: 1, facing: .2, radius: 14 }, color);
   assert.equal(depth, 0); assert(calls.length < 800); return JSON.stringify(calls);
 }
 for (const r of rows.filter(r => r.cast)) for (const fill of [0, .5, 1])

@@ -160,7 +160,8 @@ import { reactiveCueOf, wardCueActive } from '../engine/combatReadability';
 import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { drawReactiveCue, drawGaspSpark, drawWardBody, drawWardLinks, drawWardBar } from './vis/combatReadabilityLayer';
 import { drawCastingCue, drawFocusFrame } from './vis/castingCueLayer';
-import { drawPlayerCastPreparation } from './vis/skillCastPreparation';
+import { drawCastPreparation } from './vis/skillCastPreparation';
+import { playerCastPreparation } from '../engine/playerCastVisual';
 import { castingCompletion } from '../engine/castingCues';
 import { chestReadout, drawChestReadout } from './vis/chestReadout';
 import { castMovementHeld, drawCastName, drawCastSlot } from './vis/castReadout';
@@ -5884,6 +5885,11 @@ export class Renderer {
       if (!actionPose) applyWalkBodyPose(ctx, a.radius, lookDef.walk, walkPose);
     }
     applyBodyActionPose(ctx, actionPose, a.radius);
+    const ownCastPreparation = a.casting && (a === world.localSeat.actor || world.seats.some(s => s.couch && s.actor === a))
+      && world.account.cosmetics.loadout.castingEffects !== false ? playerCastPreparation(a) : undefined;
+    const castPreparationColor = ownCastPreparation
+      ? cosmeticSkillPaint(world, a, ownCastPreparation.profile.skillId).color ?? a.casting!.inst.def.color ?? a.color : a.color;
+    if (ownCastPreparation) drawCastPreparation(ctx, ownCastPreparation, castPreparationColor, 'behind');
     if (rot !== 0) ctx.rotate(rot);
     this.drawCombatBodyEdge(a, world, look);
     ctx.drawImage(bodySprite(look), -half, -half);
@@ -5915,6 +5921,7 @@ export class Renderer {
       if (flashA > 0) drawAdornHitFlash(ctx, look, baseAlpha * flashA);
       ctx.rotate(-a.facing);
     }
+    if (ownCastPreparation) drawCastPreparation(ctx, ownCastPreparation, castPreparationColor, 'front');
     ctx.restore();
     if (a.construct?.kind === 'echo') {
       ctx.setLineDash([4, 3]);
@@ -6094,9 +6101,6 @@ export class Renderer {
       drawArmedCues(ctx, a.radius, armedCues, world.time); ctx.restore();
     }
     drawParryReady(ctx, a);
-    const ownCastPreparation = !!a.casting && (a === world.localSeat.actor || world.seats.some(s => s.couch && s.actor === a))
-      && world.account.cosmetics.loadout.castingEffects !== false
-      && drawPlayerCastPreparation(ctx, a, cosmeticSkillPaint(world, a, a.casting?.inst.def.id ?? '').color ?? a.casting?.inst.def.color ?? a.color);
     if (!ownCastPreparation) drawCastingCue(ctx, a);
     drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
     if (!a.dead) drawPresenceBadge(ctx, a.presenceBadge, a.radius);

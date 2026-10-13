@@ -5,6 +5,9 @@ Branch: `codex/seamless-cast-visuals`, based on the published seamless checkpoin
 has additional unpublished native-area work; do not publish or merge that whole
 line merely to transfer these visuals.
 
+The body-centered casting revision continues in `codex/seamless-visuals-publish`
+from the integrated published checkpoint `d9864520`.
+
 ## Findings and changes
 
 The catalogue census found **954 skills**, each with an authored delivery
@@ -20,29 +23,40 @@ families now share existing source signatures and materials:
 
 | Family | Preparation motion |
 | --- | --- |
-| Summon | Open cradle arcs and rising ribs gather beneath the caster |
-| Construct | Upright brackets and stacked strokes assemble |
-| Storm | Rising strokes gather beneath a canopy |
-| Projectile | Converging curves collect at the casting edge |
-| Beam | Parallel rails close around the held source |
-| Field / nova | Two open arms grow outward |
-| Target / offering | Opposing brackets draw inward |
-| Melee / cone | A short winding stroke follows preparation |
-| Movement | Forward strokes draw together |
-| Self | Three open corners accompany the existing source glyph |
+| Summon | Ribs cradle the torso; golems assemble heavier shoulder facets |
+| Construct | Broken circuits close from shoulders toward the hands |
+| Storm | A broken vortex gathers around the body with coursing current |
+| Projectile | Rear intake converges through the torso into a connected hand focus |
+| Beam | Parallel channels feed a narrow forward focus |
+| Field / nova | An open mantle contracts toward the body |
+| Target / offering | Braided strands draw inward through the caster |
+| Melee / cone | A compact winding stroke follows the existing body windup |
+| Movement | Short intake strokes gather against the moving body |
+| Self | An open mantle and small material fragments settle into the caster |
 
-Lightning gathers branching strokes; Chain Lightning gathers separated links.
-Those accents reuse the authored flight grammar. Summoning/construct/storm art
-sits below the cast bar after the first grayscale review exposed overlap.
-Source glyphs distinguish materials/forms within a family without adding
-individual full-screen casting effects.
+The caster-vessel revision (2026-10-13) replaces the offset casting glyphs with
+body-centered intake and hand concentration. Two passes sit behind and over the
+native body, inside its existing breathing, action, traversal and emergence
+transforms. All families use the actor's facing, including self-targeted casts
+with coincident aim; summoning no longer stays fixed in screen orientation.
+This changes presentation only, not cast duration, aiming or body mechanics.
+
+The initial pass established body attachment. A second grayscale review separated
+soft fire curls from angular frost facets and skeletal ribs from golem fragments.
+Lightning branches through the shoulders; Chain Lightning gathers separate links.
+A few material fragments spiral inward while the stored power grows with actual
+completion. The hands retain charge on a completed hold, while endless channels
+have steady concentration with flowing particles. No particle loop resets the
+cast's completion, and native delivery alone owns release. Thin dark edging keeps
+energy legible over pale clothing without hiding the silhouette.
 
 Only the local controlled player and local couch seats receive the additional
 art. It follows the actual cast's progress, concentration, charge and channel
 clock. Infinite channels have a steady form with gentle motion, not a fictitious
 completion cycle. Guards retain their existing functional warnings/readiness.
 Instant casts invent no preparation phase. Interruptions, release, death,
-downing, concealment and unavailable bodies end the art with the real cast.
+downing and unavailable bodies end the art with the real cast. Concealment and
+other body fades also apply to its casting layers.
 Existing payloads own release cues; there is no predicted successful summon.
 
 **Wardrobe → Casting effects** is a free saved account preference, default on.
@@ -81,12 +95,18 @@ Checks:
   geometry for all 954 profiles.
 - Existing `castingcues`, `companioncues`, `cosmetics`, `companionstance`,
   `throngcombat` and `movementtether` probes (one filter per command).
+- `npx electron balance/caster-vessel-ui.cjs`: 15 real skill preparations,
+  25 motion samples, four facings, player Wardrobe toggle and stunned interruption.
+  Run with `HOLLOW_WAKE_QA_CLASS=necromancer`, `magician`, and `warrior` for
+  different bodies. `caster-vessel-study.cjs` assembles a portable review page from
+  these actual-client frames; it is not an alternate implementation of the art.
 - `npx electron balance/seamless-visual-sweep-ui.cjs`: actual seamless renderer,
   22 native casts, preparation/release frames, native summon bodies, minion
   return/arrival, player-versus-enemy rendering, Wardrobe toggle and reload.
 
 Ignored evidence lives in `balance/reports/skill-visuals/`: census, live-course
 JSON, color/monochrome contact sheets, summon return images and Wardrobe capture.
+The caster-vessel study adds motion/facing frames and a portable HTML viewer.
 The original dark-room captures were reviewed before the final outdoor course;
 the final run overwrites the contact sheets. Render comparison uses real payloads,
 but controlled placement/resources and short courses. This is not an exhaustive
