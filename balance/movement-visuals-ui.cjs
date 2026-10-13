@@ -97,7 +97,7 @@ app.whenReady().then(async () => {
       w.loadZone('qa_movement'); p.pos = { x: 700, y: 600 }; w.actors = [p]; w.doodads = []; w.markDoodadsChanged();
       __game.hold(false); __game.step(90); window.movementUpdate = w.update.bind(w); w.update = () => {};
     });
-    for (const [id, frames] of [['surge', 5], ['shield_charge', 10], ['crushing_leap', 35], ['phoenix_dive', 32], ['teleport', 1], ['warp', 30], ['caged_comet', 35]]) {
+    for (const [id, frames] of [['charge', 18], ['surge', 5], ['shield_charge', 10], ['crushing_leap', 35], ['phoenix_dive', 32], ['teleport', 1], ['warp', 30], ['caged_comet', 35]]) {
       await win.webContents.executeJavaScript('window.moveCase=' + JSON.stringify({ id, frames }));
       const facts = await run(() => {
         const w = __game.world(), p = w.player; __game.devGrantSkill(moveCase.id, 1, 2); const inst = p.skills[2];
@@ -130,6 +130,6 @@ app.whenReady().then(async () => {
     await new Promise(r => setTimeout(r, 650)); await run(() => document.querySelector('#pause').click());
     fs.writeFileSync(path.join(dir, 'movement-monochrome.png'), (await win.webContents.capturePage()).toPNG());
     assert.equal(await run(() => document.querySelector('#pause').textContent), 'Play');
-    console.log(`PASS ${output.checks} pixel checks, 7 live casts, co-op and ${output.rows.length} animated identities`);
+    console.log(`PASS ${output.checks} pixel checks, 8 live casts, co-op and ${output.rows.length} animated identities`);
   } finally { clearTimeout(timer); win.destroy(); server.server.close(); app.quit(); }
 }).catch(e => { console.error(e); app.exit(1); });
