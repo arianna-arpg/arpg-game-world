@@ -8,7 +8,8 @@ import { SKILL_SELFS } from '../src/data/skillSelfVisuals';
 import { SKILL_STRIKES } from '../src/data/skillStrikeVisuals';
 import { SKILL_TARGETS, SKILL_RITES } from '../src/data/skillTargetVisuals';
 import { SKILL_MOVEMENTS } from '../src/data/skillMovementVisuals';
-import { skillCastProfile } from '../src/data/skillCastVisuals';
+import { CAST_STYLES, CAST_OVERRIDES, skillCastProfile } from '../src/data/skillCastVisuals';
+import { castingCueOf, castingCompletion } from '../src/engine/castingCues';
 import { playerCastPreparation } from '../src/engine/playerCastVisual';
 import { drawCastPreparation } from '../src/render/vis/skillCastPreparation';
 import { makeSimWorld } from '../src/sim/arena';
@@ -24,6 +25,7 @@ import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 const registries = { burst: SKILL_BURSTS, flight: SKILL_FLIGHTS, field: SKILL_FIELDS, beam: SKILL_BEAMS,
   presence: SKILL_PRESENCES, self: SKILL_SELFS, strike: SKILL_STRIKES, target: SKILL_TARGETS, rite: SKILL_RITES, movement: SKILL_MOVEMENTS };
 const rows = Object.values(SKILLS).map(s => ({ id: s.id, name: s.name, delivery: s.delivery.type, noDrop: !!s.noDrop,
+  tags: s.tags, decision: skillCastProfile(s) ? 'covered' : s.castingCue === false ? 'disabled' : 'nonspell',
   useTime: s.useTime, mode: s.castMode ?? 'cast', cast: skillCastProfile(s),
   voices: Object.entries(registries).filter(([, r]) => Object.hasOwn(r, s.id)).map(([k]) => k) }));
 mkdirSync('balance/reports/skill-visuals', { recursive: true });
@@ -110,6 +112,64 @@ function trace(id: string, fill: number, color: string) {
 for (const r of rows.filter(r => r.cast)) for (const fill of [0, .5, 1])
   assert.equal(trace(r.id, fill, '#888888'), trace(r.id, fill, '#ef1234'));
 assert.notEqual(trace('lightning_bolt', .5, '#888888'), trace('chain_lightning', .5, '#888888'));
-const families = new Map(rows.filter(r => r.cast).map(r => [r.cast!.family, r.id]));
+const families = new Map(rows.filter(r => r.cast && !r.cast.legacyMantle).map(r => [r.cast!.style, r.id]));
+assert.equal(families.size, Object.keys(CAST_STYLES).length);
 assert.equal(new Set([...families.values()].map(id => trace(id, .5, '#888888'))).size, families.size);
 console.log('PASS native summon preparation/interruption/birth, own co-op cast, return-only links, endless channel, saved toggle and palette-independent geometry for ' + rows.filter(r => r.cast).length + ' skills in ' + families.size + ' casting families');
+
+// Catalogue-wide contract: no registry entry or finished-effect profile required.
+for (const def of Object.values(SKILLS)) {
+  const exception = Object.hasOwn(CAST_OVERRIDES, def.id) ? CAST_OVERRIDES[def.id] : undefined;
+  const expected = def.castingCue !== false && exception !== false
+    && (!!exception?.allowNonSpell || (def.tags.includes('spell') && !def.tags.includes('attack')));
+  assert.equal(!!skillCastProfile(def), expected, def.id);
+}
+for (const id of Object.keys(CAST_OVERRIDES)) assert(SKILLS[id], 'stale override: ' + id);
+const future = { ...SKILLS.firebolt, id: 'unregistered_future_spell', tags: ['spell'] as const };
+const fresh = { ...future, tags: [...future.tags], baseDamage: undefined };
+assert.equal(skillCastProfile(fresh)?.style, 'arcane');
+assert.equal(skillCastProfile({ ...fresh, id: '__proto__' })?.style, 'arcane');
+for (const school of ['fire', 'cold', 'lightning', 'chaos', 'physical'] as const) {
+  for (const delivery of [SKILLS.firebolt.delivery, SKILLS.frost_nova.delivery, SKILLS.meteor_storm.delivery]) {
+    assert.equal(skillCastProfile({ ...fresh, tags: ['spell', school], delivery })?.style, school);
+  }
+  assert.equal(skillCastProfile({ ...fresh, baseDamage: { [school]: [1, 2] } })?.style, school);
+}
+assert.equal(skillCastProfile({ ...fresh, tags: ['spell', 'cold', 'fire'] })?.style, 'arcane');
+assert.equal(skillCastProfile({ ...fresh, tags: ['fire', 'spell', 'cold'] })?.style, 'arcane');
+assert.equal(skillCastProfile({ ...fresh, tags: ['attack', 'spell', 'fire'] }), undefined);
+assert.equal(skillCastProfile({ ...fresh, castingCue: false }), undefined);
+assert.equal(skillCastProfile({ ...fresh, tags: ['spell', 'heal'] })?.style, 'life');
+for (const [id, style] of Object.entries({ summon_skeleton: 'summon-undead', summon_skeleton_mage: 'summon-undead',
+  summon_fire_golem: 'summon-golem', summon_sporeling: 'summon-nature', summon_flame_sprite: 'summon-elemental',
+  summon_cherub: 'summon', raise_dead: 'summon-undead', chain_lightning: 'lightning', siphon_blood: 'blood' }))
+  assert.equal(skillCastProfile(SKILLS[id])?.style, style, id);
+for (const pool of [[{ id: 'future_creature', weight: 1 }],
+  [{ id: 'skeleton_warrior', weight: 1 }, { id: 'fungal_sporeling', weight: 1 }]]) {
+  assert.equal(skillCastProfile({ ...fresh, delivery: { type: 'summon', pool, count: 1, maxActive: 1 } })?.style, 'summon');
+}
+// Nonspells lose decoration only: charged attacks retain their actual readiness.
+for (const id of ['cleave', 'heavy_strike', 'stone_skin', 'quickstep']) {
+  const { w, p } = rig(), inst = makeSkillInstance({ ...SKILLS[id], requirements: undefined });
+  assert(w.useSkill(p, inst, { x: 810, y: 700 }, true)); assert(p.casting);
+  w['updateCasting'](p, p.casting.total * .5);
+  assert.equal(!!playerCastPreparation(p), id === 'quickstep');
+  assert.equal(!!castingCueOf(p), id === 'quickstep');
+  p.casting!.mode = 'charge'; p.casting!.total = 1; p.casting!.elapsed = .5;
+  assert.equal(castingCompletion(p), .5); assert.equal(castingCueOf(p)?.fill, .5);
+}
+const counts = Object.fromEntries(Object.keys(CAST_STYLES).map(style => [style, rows.filter(r => r.cast?.style === style).length]));
+console.log('PASS complete spell/attack split, Quickstep exception, future spells, mixed schools/pools, opt-out and native readiness: ' + JSON.stringify(counts));
+// Other players/enemies use bare wire stubs, not the local seat's real instance.
+// Missing decorative identity must never crash their cast or invent spell art.
+for (const id of ['firebolt', 'cleave', 'stone_skin']) {
+  const { w, p } = rig(), inst = makeSkillInstance({ ...SKILLS[id], requirements: undefined });
+  assert(w.useSkill(p, inst, { x: 810, y: 700 }, true)); assert(p.casting);
+  const peer = rig().w; peer.clientSeatId = 'other-seat';
+  const snap = serializeSnapshot(w, 1); applySnapshot(peer, snap);
+  const remote = peer.actors[snap.actors.findIndex(a => a.id === p.id)]; assert(remote.casting);
+  assert.equal(remote.casting.inst.def.tags, undefined);
+  assert.equal(castingCueOf(remote), undefined);
+  assert.equal(playerCastPreparation(remote), undefined);
+}
+console.log('PASS bare remote casting stubs remain render-safe');

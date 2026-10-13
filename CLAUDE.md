@@ -707,6 +707,15 @@ selfvisuals, effectvoice, cosmetics, payloadcues, companioncues,
 companioninheritance, summonfill, clutch, cistern, scaldkit, supportfabric,
 all types and sim smoke; after build, run hidden `balance/presence-visuals-ui.cjs`.
 
+Spell preparation uses `data/skillCastVisuals.ts`: shared school/summon styles,
+semantic fallbacks and explicit exceptions (Quickstep is intentionally retained).
+Every spell resolves without a finished-effect registry entry; attacks keep their
+native animations and functional readiness. Body-centered art is local-player/
+couch only, respects the saved Wardrobe toggle, and follows the real cast clock.
+See `docs/design/seamless-visual-sweep.md`; verify playercastvisuals, castingcues,
+cosmetics, all types and sim smoke, then the hidden caster-vessel-ui and
+seamless-visual-sweep-ui client courses after an isolated build.
+
 Self, mark and detonation identities use `data/skillSelfVisuals.ts` and
 `render/vis/skillSelfVoice.ts`: 106 self skills and three dedicated deliveries.
 Casting cues carry optional host-resolved source identity; stored power uses

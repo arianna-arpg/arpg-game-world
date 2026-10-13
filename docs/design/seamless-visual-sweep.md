@@ -17,22 +17,50 @@ Lightning/Chain Lightning, beams, fire/frost bolts and novas, two melee attacks,
 Bone Offering and the Amalgam. Actual seamless interior and outdoor captures use
 disposable accounts and saves; grayscale frames remove hue as a recognition aid.
 
-The largest omission was ordinary preparation: earlier supplemental casting
-art primarily covered finite held casts and self skills. Ten reusable preparation
-families now share existing source signatures and materials:
+The shared-family revision (2026-10-13) covers all **661 spell definitions** in
+this integrated catalogue with **14 reusable casting styles**. One deliberate
+nonspell exception preserves Quickstep's existing mantle and hand accents.
+Decorative preparation otherwise requires the spell tag and excludes attacks;
+Cleave, Heavy Strike and Stone Skin retain native action animation. Functional
+charge/channel/guard readiness and actual release effects are unchanged.
 
-| Family | Preparation motion |
+| Shared style | Preparation shape and motion |
 | --- | --- |
-| Summon | Ribs cradle the torso; golems assemble heavier shoulder facets |
-| Construct | Broken circuits close from shoulders toward the hands |
-| Storm | A broken vortex gathers around the body with coursing current |
-| Projectile | Rear intake converges through the torso into a connected hand focus |
-| Beam | Parallel channels feed a narrow forward focus |
-| Field / nova | An open mantle contracts toward the body |
-| Target / offering | Braided strands draw inward through the caster |
-| Melee / cone | A compact winding stroke follows the existing body windup |
-| Movement | Short intake strokes gather against the moving body |
-| Self | An open mantle and small material fragments settle into the caster |
+| Arcane / universal fallback | Broken sigils fold inward |
+| Fire | Soft flame tongues curl through the shoulders |
+| Cold | Rigid splinters travel along straight crystal seams |
+| Lightning | Branching current flickers; Chain Lightning keeps linked gathering |
+| Chaos | Counter-winding strands braid through the torso |
+| Physical spell | Heavy chevrons compress inward slowly |
+| Life | Soft fans breathe toward the palms |
+| Blood | Paired liquid threads pulse toward the hands |
+| Summon, general | Open cradles close around the conjuration |
+| Summon, undead | Ribs cradle the torso; bone fragments gather |
+| Summon, nature | Tendrils and paired leaf forks unfurl inward |
+| Summon, elemental | Broken spirals condense into two cores |
+| Summon, golem | Weighty facets assemble around the shoulders |
+| Construct | Separate elbows assemble into a precise frame |
+
+The family is independent of color and finished-effect registry coverage.
+School controls the main shape and cadence; delivery controls the final hand
+focus. Spells in the same family deliberately share casting art, while native
+projectiles, fields, summons and releases keep their more specific identities.
+
+Resolution is explicit override, then summon-body taxonomy, then semantic school
+tags (authored base damage only when school tags are absent), then healing or
+construct defaults, then universal arcane. Mixed elemental schools resolve to
+arcane; mixed/unknown summon pools resolve to general summon. Pool order, RNG,
+recoloring and damage conversion never pick the style. All possible summon bodies
+must share a subtype. Golem and skeleton memberships reuse the existing data;
+other mappings are visual-only and do not change gameplay taxonomy.
+
+Author unusual choices in `CAST_OVERRIDES`. Ordinary new spell IDs need no entry.
+An override may choose a shared style, preserve a signature such as linked
+lightning, or explicitly permit a nonspell exception. False suppresses decoration;
+`castingCue: false` remains the broader native opt-out. The existing Wardrobe
+Casting effects toggle remains the only player-facing choice. There are no new
+unlocks, menus, or save/schema fields. Instant spells receive a family but never
+invent a preparation phase.
 
 The caster-vessel revision (2026-10-13) replaces the offset casting glyphs with
 body-centered intake and hand concentration. Two passes sit behind and over the
@@ -47,7 +75,7 @@ Lightning branches through the shoulders; Chain Lightning gathers separate links
 A few material fragments spiral inward while the stored power grows with actual
 completion. The hands retain charge on a completed hold, while endless channels
 have steady concentration with flowing particles. No particle loop resets the
-cast's completion, and native delivery alone owns release. Thin dark edging keeps
+cast's completion, and native delivery alone owns release. A faint neutral core keeps dark recolors legible; thin dark edging keeps
 energy legible over pale clothing without hiding the silhouette.
 
 Only the local controlled player and local couch seats receive the additional
@@ -92,14 +120,18 @@ Checks:
 - `npm run probe -- playercastvisuals --retries 0`: full catalogue census,
   actual summon preparation/interruption/birth, own co-op cast, return/arrival/
   combat, endless channel, account round trip and finite palette-independent
-  geometry for all 954 profiles.
+  geometry across the complete catalogue, future unregistered spell fallbacks,
+  mixed schools/pools, Quickstep preservation, and ordinary/charged attack cues.
 - Existing `castingcues`, `companioncues`, `cosmetics`, `companionstance`,
   `throngcombat` and `movementtether` probes (one filter per command).
-- `npx electron balance/caster-vessel-ui.cjs`: 15 real skill preparations,
-  25 motion samples, four facings, player Wardrobe toggle and stunned interruption.
+- `npx electron balance/caster-vessel-ui.cjs`: 39 real skill/action preparations covering every shared style,
+  25 motion samples, four facings, normal-world and pale-background views,
+  player Wardrobe toggle, attack exclusion and stunned interruption.
   Run with `HOLLOW_WAKE_QA_CLASS=necromancer`, `magician`, and `warrior` for
   different bodies. `caster-vessel-study.cjs` assembles a portable review page from
-  these actual-client frames; it is not an alternate implementation of the art.
+  these actual-client frames; motion/facing recordings use compact WebP while
+  visibility assertions retain lossless PNG. The viewer is not an alternate
+  implementation of the art.
 - `npx electron balance/seamless-visual-sweep-ui.cjs`: actual seamless renderer,
   22 native casts, preparation/release frames, native summon bodies, minion
   return/arrival, player-versus-enemy rendering, Wardrobe toggle and reload.
@@ -114,4 +146,4 @@ playthrough of every build/support combination or a busy-fight acceptance claim.
 
 Follow-up candidates: recognition among close skeleton/golem relatives at normal
 zoom, field density in full parties, and optional authored Wardrobe casting styles.
-The new family/motif seam supports that work without changing cast mechanics.
+The shared style registry supports that work without changing cast mechanics.
