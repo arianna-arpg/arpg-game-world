@@ -12,6 +12,7 @@
 import { conversionStat, gaugeGateMod, gaugeMod, mod, STAT_DEFS } from '../engine/stats';
 import { AOE_SHAPE, PROJ_RETURN, GUARD_CAST_CFG, BAR_SLOTS, MAX_SUPPORT_LEVEL, slotGraftStat } from '../engine/skills';
 import type { SupportDef } from '../engine/skills';
+import { ORB_HIT_CADENCE_TEXT } from './orbs';
 
 export const SUPPORTS: Record<string, SupportDef> = {
 
@@ -5900,6 +5901,12 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6, minDropLevel: 3,
   },
 };
+
+for (const def of Object.values(SUPPORTS)) {
+  if (def.mods.some(m => m.stat === 'orbOnHit_life' || m.stat === 'orbOnHit_mana')) {
+    def.description += ORB_HIT_CADENCE_TEXT;
+  }
+}
 
 export const SUPPORT_LIST: SupportDef[] = Object.values(SUPPORTS);
 
