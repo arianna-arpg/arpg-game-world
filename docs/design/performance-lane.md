@@ -130,3 +130,88 @@ Paste this into a fresh session rooted at the repo:
 > the letter: concurrent control pairs, digest proofs, a protocol bump for any
 > wire change, no probe ever loosened. Start with §5 step 1 and report every
 > measurement into the charter before you cut anything.
+
+## 7. The lane's record (branch `perf-lane`, off `shard-world` af891eb7)
+
+Every row here is a measurement on the dev machine (i9-10900K, 20 threads,
+Windows 10, Node 24.9) with co-sessions holding most of the CPU (82 percent
+busy at the lane's start); pairs are CONCURRENT (both hosts and both fleets
+at once), so both halves see the same load. Nothing here is a capacity claim.
+
+### 7.1 THE PHASE METER, finished (2026-10-13)
+
+- Ported from `codex/shard-performance` verbatim: `balance/shardPerformance.ts`
+  (the inclusive prototype wraps, the inspector profile of the window, machine
+  busy percent, the checkpoint timed outside the window), the soak's
+  `--diagnostics`, `--profile`, `--window-at`, `--window-after-host`,
+  `--conditions` and its corrected input-service rows, and the fleet's
+  sequence-service meter (`soakResponsiveness.ts`, `soak_bot_lifecycle.ts`,
+  `probe_shardresponsiveness`). One line adapted: the runtime's `terrainWarm`
+  read (a perf-branch field) is a typed optional read until that lane lands.
+- Built on the host (`server/phaseMeter.ts`, `server/distanceCensus.ts`): the
+  marks inside `ShardHost.tick` per unit (input, inputs.apply, actions, the AI
+  loop with `#ai.ran`, update with the mass runtime's share through an
+  own-property wrap on the runtime instance, settle, drain, desks, wire.zone,
+  wire.serialize, wire.send, persist, sweep), one sample per tick per phase in
+  a 600-tick ring, the status page's `phases` and `census` rows, the soak's two
+  per-sample tables and window rows, `balance/profile_summary.ts` (bottom-up
+  and watched-root reads of a .cpuprofile), `balance/soak_compare.ts` (the
+  pair read). Probe `probe_phasemeter` (A the ring, B the wrap, C a real host's
+  frame, D the census classes and bands, E the cost: ten thousand marks in
+  about 8 ms, so about 12 microseconds a tick for the fifteen marks a tick
+  carries, 0.1 percent of an 11 ms tick).
+- Not built here: the foundation's pump yield (`setImmediate` between slow
+  catch-up ticks) stays on its branch for the merge (§5 step 3).
+
+### 7.2 Pair M1: the meter against the base (4 bots, 30 s, together)
+
+Candidate = this branch with the meter and the ported harness; control = the
+untouched base in a second worktree; launched within a second of each other.
+
+| | control | candidate |
+|---|---|---|
+| tick p50 / p95 / p99 / max ms | 10.94 / 20.32 / 79.64 / 413 | 11.40 / 23.07 / 89.65 / 512 |
+| dropped | 6.92% | 10.29% |
+| living least / mean | 21 / 22.9 | 19 / 21.6 |
+| fed / input batches per seat per s | 67% / 40.1 | 63% / 33.7 |
+| GC inside ticks ms | 99.6 | 205.9 |
+| heap growth MB | 11.7 | 11.5 |
+| boot s | 16.1 | 15.5 |
+
+Both breach the 20 ms and 5 percent gates on this loaded machine. The 3 ms
+p95 gap is inside the pair noise of a shared box (the foundation's own
+clustered pairs reversed sign between repeats; the candidate's worst window
+carried a 62 ms runtime admission spike and a 512 ms GC-marked tick), and the
+meter's deterministic cost is bounded by the probe at about 12 microseconds a
+tick. The candidate's harness also does more work a tick (the per-tick phase
+copy into the window's arrays), which no control can share. Pair M2 below
+repeats it reversed and longer.
+
+The meter's first read of the hearth course (4 bots together, the window's
+shares): `update` 71 percent of tick time (the mass runtime 24 percent inside
+it, with one 62 ms admission spike), the `ai` loop 20 percent (p95 5.0 ms over
+74 bodies), the wire 7 percent (serialize 5, send 2), inputs 1 percent, the
+desks, drain, settle and sweep under 1 percent together. The census: 74
+bodies, 42 of them scenery, 5 seats (the parked keeper among them), about 24
+idle, of which about 24 stand beyond 600 px of every seat: THE THINKING
+EDGE's candidates are a third of the hearth roster, and the AI loop they
+would leave is a fifth of the tick there.
+
+### 7.3 Pair M2: the same, reversed and longer (4 bots, 60 s, control launched first)
+
+| | control | candidate |
+|---|---|---|
+| tick p50 / p95 / p99 / max ms | 10.77 / 43.87 / 78.70 / 495 | 10.44 / 35.64 / 79.38 / 459 |
+| dropped | 6.48% | 5.27% |
+| living least / mean | 18 / 20.6 | 17 / 20.2 |
+| fed / input batches per seat per s | 64% / 38.5 | 66% / 37.3 |
+| GC inside ticks ms | 338 | 235 |
+| heap growth MB | 16.7 | 16.8 |
+
+The sign reverses (M1 read the candidate 3 ms worse at p95, M2 reads it 8 ms
+better): the meter's cost is inside the pair noise of this machine, which is
+what the probe's 12 microseconds a tick predicts. The 4-bot hearth course
+breaches the 20 ms gate on both sides under the co-sessions' load (the
+foundation's clustered pairs read p95 21 to 45 ms on the same box). The
+candidate's window shares: `update` 70 percent (the runtime 20 percent inside
+it), `ai` 22 percent (p95 4.0 ms), the wire 7 percent.

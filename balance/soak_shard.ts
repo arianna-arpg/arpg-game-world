@@ -55,6 +55,7 @@ import { deriveSeed, seedGlobalRandom } from '../src/sim/rng';
 import { WIRE_DIET_CFG } from '../src/net/wireDiet'; // THE WIRE DIET's A/B switch (--diet off)
 import type { FleetBotStats, FleetCommand, FleetEvent, FleetResponsiveness } from './soak_bots';
 import { ShardPerformance } from './shardPerformance';
+import { BODY_STATES, CENSUS_CFG, distanceCensus, type DistanceCensus } from '../server/distanceCensus'; // THE DISTANCE CENSUS per sample
 
 export const SOAK_CFG = {
   bots: 10,
@@ -204,7 +205,13 @@ interface Sample {
   livingMin: number; livingMean: number;
   /** THE SPREAD as it stands: the widest distance between two standing seats (px). */
   fleetSpreadPx: number;
+  /** THE PHASE METER's slice of this sample per phase (server/phaseMeter.ts): ms p50 / p95 / max over
+   *  the ticks the phase ran in, and its share of the sample's tick time ('#' rows are counts, share 0). */
+  phases: Record<string, PhaseSlice>;
+  /** THE DISTANCE CENSUS at the sample's edge (server/distanceCensus.ts). */
+  census: DistanceCensus;
 }
+interface PhaseSlice { calls: number; p50: number; p95: number; max: number; share: number }
 type Stamped = FleetEvent & { at: number };
 
 let fleetRef: ChildProcess | null = null;
@@ -269,6 +276,8 @@ async function main(): Promise<number> {
     tickMs: [] as number[], tickAt: [] as number[], wakes: 0,
     snapBytes: [] as number[], bytesSnap: 0, bytesZone: 0, zoneSends: 0, zoneToSends: 0,
     inputs: 0, seatTicks: 0,
+    /** THE PHASE METER's rows per tick of the window (the host's `phases.last` after each tick), per phase. */
+    phases: new Map<string, number[]>(),
   };
   const warm = { on: false, t0: 0, tickMs: [] as number[], tickAt: [] as number[], wakes: 0 };
   const realTick = host.tick.bind(host);
@@ -286,8 +295,36 @@ async function main(): Promise<number> {
         lane.tickMs.push(t1 - t0); lane.tickAt.push(t0); if (wake) lane.wakes++;
         const kp = host.keeper.actor.pos, px = Math.hypot(kp.x - kx, kp.y - ky);
         if (px > SOAK_CFG.shadowJumpPx) jumps.push({ at: t0, px });
+        if (lane === win) for (const [name, v] of host.phases.last) { // THE PHASE METER: this tick's rows into the window
+          let rows = win.phases.get(name);
+          if (!rows) win.phases.set(name, rows = []);
+          rows.push(v);
+        }
       }
     }
+  };
+  // THE PHASE METER's slices: a sample's ticks per phase, and the whole window's.
+  const prevPhase = new Map<string, number>();
+  const phaseRows = (rows: number[], tickSum: number, count: boolean): PhaseSlice => {
+    const part = sorted(rows), sum = part.reduce((a, b) => a + b, 0);
+    return { calls: part.length, p50: r2(pct(part, 0.5)), p95: r2(pct(part, 0.95)), max: r2(part[part.length - 1] ?? 0),
+      share: count ? 0 : Math.round(sum / Math.max(1e-6, tickSum) * 1e4) / 1e4 };
+  };
+  const phaseSlice = (sinceTick: number): Record<string, PhaseSlice> => {
+    const tickSum = win.tickMs.slice(sinceTick).reduce((a, b) => a + b, 0);
+    const out: Record<string, PhaseSlice> = {};
+    for (const [name, rows] of [...win.phases].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const from = prevPhase.get(name) ?? 0;
+      prevPhase.set(name, rows.length);
+      if (rows.length > from) out[name] = phaseRows(rows.slice(from), tickSum, name.startsWith('#'));
+    }
+    return out;
+  };
+  const phaseWindow = (): Record<string, PhaseSlice> => {
+    const tickSum = win.tickMs.reduce((a, b) => a + b, 0);
+    const out: Record<string, PhaseSlice> = {};
+    for (const [name, rows] of [...win.phases].sort((a, b) => a[0].localeCompare(b[0]))) out[name] = phaseRows(rows, tickSum, name.startsWith('#'));
+    return out;
   };
   // Per-snapshot size from the transport's own counters around the send: the
   // frame is written once per socket, so bytes ÷ frames is one snapshot's size.
@@ -441,6 +478,7 @@ async function main(): Promise<number> {
     let fleetSpreadPx = 0;
     for (const a of standingNow) for (const b of standingNow) fleetSpreadPx = Math.max(fleetSpreadPx, Math.hypot(a.actor.pos.x - b.actor.pos.x, a.actor.pos.y - b.actor.pos.y));
     samples.push({
+      phases: phaseSlice(prev.tick), census: distanceCensus(host.units.worlds()), // THE PHASE METER + THE DISTANCE CENSUS
       livingMin: living.min, livingMean: r2(living.mean), fleetSpreadPx: Math.round(fleetSpreadPx),
       t: r2(ms / 1000), seats: st.seats.length, dormant, connections: st.connections, actors: st.actors,
       ticks: ticks.length, wakes: win.wakes - prev.wakes,
@@ -565,6 +603,15 @@ async function main(): Promise<number> {
       slowest: slowest(win.tickMs, win.tickAt, win.t0, SOAK_CFG.slowestTicks, winGcs, jumps),
     },
     living: { radiusPx: popRadius, spreadPx: spread, roveSec: SHARD_CFG.rove.sec, minOfMins: samples.length ? Math.min(...samples.map(x => x.livingMin)) : 0, meanOfMeans: r2(mean(samples.map(x => x.livingMean))) }, // THE LIVING RADIUS
+    phases: phaseWindow(), // THE PHASE METER over the whole window: ms p50 / p95 / max per phase and its share of the tick time ('<unit>/<phase>' rows per unit)
+    census: { // THE DISTANCE CENSUS: the samples' means (each sample's own rows ride `samples`)
+      idleSec: CENSUS_CFG.idleSec, nearPx: CENSUS_CFG.nearPx, bandEdges: CENSUS_CFG.bands,
+      actors: r2(mean(samples.map(x => x.census.actors))),
+      states: Object.fromEntries(BODY_STATES.map(st => [st, r2(mean(samples.map(x => x.census.states[st])))])),
+      bands: CENSUS_CFG.bands.map((_, i) => r2(mean(samples.map(x => x.census.bands[i])))).concat([r2(mean(samples.map(x => x.census.bands[CENSUS_CFG.bands.length])))]),
+      idleBands: CENSUS_CFG.bands.map((_, i) => r2(mean(samples.map(x => x.census.idleBands[i])))).concat([r2(mean(samples.map(x => x.census.idleBands[CENSUS_CFG.bands.length])))]),
+      edgeable: { mean: r2(mean(samples.map(x => x.census.edgeable))), min: samples.length ? Math.min(...samples.map(x => x.census.edgeable)) : 0, max: samples.length ? Math.max(...samples.map(x => x.census.edgeable)) : 0 },
+    },
     shadow: { jumps: winJumps.length, jumpTicksMeanMs: r2(mean(winJumps.map(j => win.tickMs[win.tickAt.indexOf(j.at)] ?? 0))), at: winJumps.map(j => ({ sec: rel(j.at), px: Math.round(j.px) })) },
     gc: gcSummary,
     pump: { wakesPerSec: r2(win.wakes / windowSec), ticksPerWake: r2(win.tickMs.length / Math.max(1, win.wakes)) },
@@ -617,6 +664,19 @@ async function main(): Promise<number> {
   for (const s of samples)
     out.push(`${L(s.t.toFixed(1), 6)} ${L(s.seats + (s.dormant ? '*' : ''), 5)} ${L(s.connections, 4)} ${L(s.actors, 6)}   ${L(s.tickP50.toFixed(2), 8)} ${L(s.tickP95.toFixed(2), 6)} ${L(s.tickMax.toFixed(1), 6)} ${L(s.dropped, 4)} ${L((s.wakes / SOAK_CFG.sampleSec).toFixed(1), 6)} ${L(Math.round(s.fed * 100) + '%', 4)}   ${L(s.snapKBp95.toFixed(1), 11)} ${L(s.outKBpsPerClient.toFixed(1), 11)}   ${L(s.heapTroughMB.toFixed(1), 7)}   ${L(s.livingMin + '/' + s.livingMean.toFixed(1), 9)} ${L(s.fleetSpreadPx, 6)}`);
   out.push(`  (heap MB = the window's trough; fed = seat-ticks that had a client input; living = live foes within ${popRadius} px of each standing seat, least / mean${samples.some(s => s.dormant) ? '; * a seat lay dormant' : ''})`);
+  // THE PHASE METER per sample: every unit summed; ms p50/p95 over the ticks the phase ran in; % = share of the sample's tick time.
+  const phv = (s: Sample, name: string): string => { const p = s.phases[name]; return p ? `${p.p50.toFixed(1)}/${p.p95.toFixed(1)}` : '-'; };
+  const phs = (s: Sample, ...names: string[]): string => { let sum = 0, any = false; for (const n of names) { const p = s.phases[n]; if (p) { sum += p.share; any = true; } } return any ? Math.round(sum * 100) + '%' : '-'; };
+  out.push('', `${L('t s', 6)}   ${L('input', 9)} ${L('apply', 9)} ${L('ai', 11)} ${L('update', 11)} ${L('runtime', 11)} ${L('settle', 9)} ${L('drain', 9)} ${L('desks', 9)} ${L('serialize', 9)} ${L('send', 9)}   ${L('ai%', 4)} ${L('upd%', 4)} ${L('rt%', 4)} ${L('wire%', 5)}   ${L('ai ran', 6)}`);
+  for (const s of samples)
+    out.push(`${L(s.t.toFixed(1), 6)}   ${L(phv(s, 'input'), 9)} ${L(phv(s, 'inputs.apply'), 9)} ${L(phv(s, 'ai'), 11)} ${L(phv(s, 'update'), 11)} ${L(phv(s, 'runtime'), 11)} ${L(phv(s, 'settle'), 9)} ${L(phv(s, 'drain'), 9)} ${L(phv(s, 'desks'), 9)} ${L(phv(s, 'wire.serialize'), 9)} ${L(phv(s, 'wire.send'), 9)}   ${L(phs(s, 'ai'), 4)} ${L(phs(s, 'update'), 4)} ${L(phs(s, 'runtime'), 4)} ${L(phs(s, 'wire.serialize', 'wire.send', 'wire.zone'), 5)}   ${L(s.phases['#ai.ran'] ? Math.round(s.phases['#ai.ran'].p50) : '-', 6)}`);
+  out.push(`  (THE PHASE METER: ms p50/p95 per phase of the host tick, every unit summed; % = the phase's share of the sample's tick time; runtime = the mass runtime's update, inside update; ai ran = bodies the AI loop walked, p50)`);
+  // THE DISTANCE CENSUS per sample: bodies by state, then bodies / idle bodies per distance band to the nearest standing seat.
+  const bandLabels = CENSUS_CFG.bands.map(b => `<${b}`).concat([`${CENSUS_CFG.bands[CENSUS_CFG.bands.length - 1]}+`]);
+  out.push('', `${L('t s', 6)} ${L('bodies', 6)}   ${BODY_STATES.map(st => L(st.slice(0, 6), 6)).join(' ')}   ${bandLabels.map(b => L(b, 8)).join(' ')}   ${L('edge', 5)}`);
+  for (const s of samples)
+    out.push(`${L(s.t.toFixed(1), 6)} ${L(s.census.actors, 6)}   ${BODY_STATES.map(st => L(s.census.states[st], 6)).join(' ')}   ${s.census.bands.map((n, i) => L(n + '/' + s.census.idleBands[i], 8)).join(' ')}   ${L(s.census.edgeable, 5)}`);
+  out.push(`  (THE DISTANCE CENSUS: one class per body in its own World (a seat's own body, a seat's minion, dead, scenery, dormant, held by a state machine, engaged, casting, alerted, struck or striking within ${CENSUS_CFG.idleSec} s, a busy squad, idle); bands = bodies/idle by distance to the nearest standing seat; edge = idle bodies beyond ${CENSUS_CFG.nearPx} px of every seat, THE THINKING EDGE's candidates)`);
   const k = report.wire.byKind;
   const slow = report.tick.slowest.map(x => `${x.ms} ms @ ${x.atSec} s${x.jumpPx ? ` (shadow jump ${x.jumpPx} px)` : ''}${x.gcMs >= 1 ? ` (gc ${x.gcMs})` : ''}`).join(', ');
   const response = fleetStats?.responsiveness?.aggregate;
@@ -631,6 +691,8 @@ async function main(): Promise<number> {
     ['shadow jumps', host.worldmass ? `${report.shadow.jumps} (the keeper moved to another focus seat; those ticks averaged ${report.shadow.jumpTicksMeanMs} ms)` : 'n/a (classic)'],
     ['the living radius', `least ${report.living.minOfMins}, mean ${report.living.meanOfMeans} foes within ${popRadius} px of a standing seat${spread ? ` (bots spread ${spread} px)` : ''}${host.worldmass ? ` · rove ${SHARD_CFG.rove.sec ? SHARD_CFG.rove.sec + ' s, ' + ((host.status() as { rove?: { hops: number } }).rove?.hops ?? 0) + ' hops' : 'off'}` : ''}`],
     ['inputs fed', `${r2(fed * 100)}% of seat-ticks (${report.inputs.hostSeenHzPerSeat} Hz per seat; the fleet sent ${fleetStats?.stepHz ?? '?'} Hz on a ${fleetStats?.clock ?? '?'} clock)`],
+    ['the phases (window)', Object.entries(report.phases).filter(([n]) => !n.includes('/') && !n.startsWith('#')).map(([n, p]) => `${n} ${Math.round(p.share * 100)}% (p95 ${p.p95} ms)`).join(' · ') || 'none'],
+    ['the census (mean)', `${report.census.actors} bodies: ${BODY_STATES.map(st => `${st} ${report.census.states[st]}`).join(', ')}; idle beyond ${CENSUS_CFG.nearPx} px of every seat ${report.census.edgeable.mean} (least ${report.census.edgeable.min})`],
     ['sequence service (fleet lifetime)', response ? `p95 ${responseUpper(response.serviceRtt.p95UpperMs, response.serviceRtt.count)}, p99 ${responseUpper(response.serviceRtt.p99UpperMs, response.serviceRtt.count)}, max ${response.serviceRtt.maxMs === null ? 'none' : r2(response.serviceRtt.maxMs)} ms; ${response.counts.covered} covered, ${response.counts.censored} censored, ${response.pendingAtFinish} pending at end, ${response.counts.ringOverflow} overflow; ${response.status}` : 'unavailable'],
     ['snapshot silence (fleet lifetime)', response ? `max ${r2(response.maxSnapshotSilenceMs)} ms; includes initial and unfinished gaps; service is not input-to-paint` : 'unavailable'],
     ['warm-up (not gated)', `${warm.tickMs.length} ticks, p95 ${report.warmup.tickP95} ms, max ${report.warmup.tickMax} ms, ${warmDropped} dropped`],

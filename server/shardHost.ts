@@ -56,6 +56,8 @@ import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { WORLD_SCHEMA_VERSION, type WorldStateSave } from '../src/meta/worldstate';
 import { ShardTransport, type ShardJoin } from './shardTransport';
 import { ShardDiet } from './wireDiet'; // THE WIRE DIET (shard sync pass C): interest, the codec, the dress ledger, the carry
+import { PhaseMeter, meterMethod } from './phaseMeter'; // THE PHASE METER (performance-lane.md §5): where a tick goes
+import { distanceCensus } from './distanceCensus'; // THE DISTANCE CENSUS: what the bodies do, how far from a player
 import { VesselDesk } from './vessel';
 import { ShardCorpses, shardRecordsPath } from './corpses';
 import { UnitRegistry, type SimUnit } from './simUnits';
@@ -326,6 +328,9 @@ export class ShardHost {
   private readonly bootAt = Date.now();
   private readonly tickMs: number[] = [];
   private tickMsAt = 0;
+  /** THE PHASE METER (server/phaseMeter.ts): every phase of tick() per unit, on the status page
+   *  (`phases`) and the soak's columns; `last` is the tick just ended, for the soak's per-tick read. */
+  readonly phases = new PhaseMeter();
   private lastFaultLogAt = 0;
   private faultsSinceLog = 0;
 
@@ -854,6 +859,12 @@ export class ShardHost {
   tick(dt: number): void {
     if (this.wildsResuming) return; // THE RESUME LAW: no frame meets a half-stood world (wildsSave)
     const k = this.world;
+    // THE PHASE METER: two clock reads around each phase below, per unit; the
+    // whole tick lands at the end. The marks cost a microsecond a tick in all.
+    const meter = this.phases;
+    const meterStart = performance.now();
+    let meterMark = meterStart;
+    meter.begin();
     // THE ONE CLOCK (shard M1): every unit enters its step at the keeper's
     // tick-start readings, so each lands where the keeper lands (and so does a
     // dispatch from the keeper's sweeps into a unit that has not stepped yet).
@@ -873,17 +884,30 @@ export class ShardHost {
       inputs = this.net.drainInputs(); // one drain: a World reads only its own seats' rows
       this.endGraces(inputs);
     } catch (e) { this.noteFault('the input phase', e); }
+    meter.add('input', performance.now() - meterMark);
     for (const u of this.units.each()) {
       if (u.broken || this.units.frozen(u)) continue; // THE LINGER FREEZE (W3): a seatless unit stands still
+      const meterUnit = u.role === 'keeper' ? 'keeper' : u.key; // the meter's per-unit row
       try {
         this.units.run(u, w => {
           this.wardenStand(u);
           if (u.role === 'keeper') { if (this.worldmass) this.shadowFocus(); } else this.unitShadow(u);
+          let meterT0 = performance.now();
           w.applyInputs(inputs, dt);
+          let meterT1 = performance.now(); meter.add('inputs.apply', meterT1 - meterT0, meterUnit); meterT0 = meterT1;
           this.drainMetaActions(u, w, actions);
+          meterT1 = performance.now(); meter.add('actions', meterT1 - meterT0, meterUnit); meterT0 = meterT1;
+          // THE AI LOOP (the meter's first question: the M6 plan §1.2 row 1).
+          const meterRan = w.gameOver ? 0 : w.actors.length;
           if (!w.gameOver) for (const a of w.actors) updateAI(a, w, dt);
+          meterT1 = performance.now(); meter.add('ai', meterT1 - meterT0, meterUnit); meter.add('#ai.ran', meterRan, meterUnit); meterT0 = meterT1;
+          // THE RUNTIME'S SHARE of update: an own-property wrap on the mass runtime
+          // instance (the foundation's file untouched; re-wrapped if the runtime is re-seated).
+          if (w.massRuntime) meterMethod(meter, w.massRuntime, 'update', 'runtime', meterUnit);
           w.update(dt);
+          meterT1 = performance.now(); meter.add('update', meterT1 - meterT0, meterUnit); meterT0 = meterT1;
           w.settleNearScale(); // keeperSeat: THE NEAR LAW where this tick's mints stand
+          meter.add('settle', performance.now() - meterT0, meterUnit);
         }, clocks);
         if (u.role === 'keeper') this.consecutiveFaults = 0; else u.faults = 0;
       } catch (e) {
@@ -899,6 +923,7 @@ export class ShardHost {
         }
       }
     }
+    meterMark = performance.now();
     // THE MUSTER RING: the rings judged after every unit ticked; a fired party's tickets join this drain.
     try { this.musters.judge(k.time); } catch (e) { this.noteFault('the muster', e); }
     try {
@@ -906,10 +931,12 @@ export class ShardHost {
       this.parties.sweep(k.time); // THE PARTY: lapsed invites fall away
       this.publishParties();
     } catch (e) { this.noteFault('the hand-off queue', e); }
+    let meterNow = performance.now(); meter.add('drain', meterNow - meterMark); meterMark = meterNow;
     this.ticks++;
     this.vessels.tick(dt); // THE VESSEL: THE DEATH COVENANT (before THE MERCY could answer) + the mirror beat
     this.corpses.tick(dt); // THE CORPSE RETURNS: each seat's own standing bodies + the reclaim dwell
     this.sweepDormancy(); // THE DORMANT SEAT: a clock run out (or a fall that took the body) ends the seat
+    meterNow = performance.now(); meter.add('desks', meterNow - meterMark); meterMark = meterNow;
 
     if (this.net.connectionCount() > 0) {
       this.metaHeartbeat -= dt;
@@ -925,9 +952,17 @@ export class ShardHost {
     }
     if (this.savePath) {
       this.persistTimer -= dt;
-      if (this.persistTimer <= 0) { this.persistTimer = SHARD_CFG.worldSaveSec; this.persist(); } // THE WORLD SAVE BEAT (the mirrors keep persistSec)
+      if (this.persistTimer <= 0) { // THE WORLD SAVE BEAT (the mirrors keep persistSec)
+        this.persistTimer = SHARD_CFG.worldSaveSec;
+        meterMark = performance.now();
+        this.persist();
+        meter.add('persist', performance.now() - meterMark);
+      }
     }
+    meterMark = performance.now();
     this.units.sweep(k.time); // THE LINGER and THE SOFT CAP
+    meterNow = performance.now(); meter.add('sweep', meterNow - meterMark);
+    meter.end(meterNow - meterStart);
   }
 
   /** THE WIRE PER UNIT (plan 5.1-5.3): a unit's zone message (a change, THE DRESS
@@ -937,11 +972,14 @@ export class ShardHost {
     const w = u.world;
     u.dressTimer -= dt;
     if (!ids.length) { u.lastSentZone = w.zone.id; u.lastSentDoodadRev = w.doodadsVersion(); return; }
+    const meter = this.phases, meterUnit = u.role === 'keeper' ? 'keeper' : u.key;
     if (w.zone.id !== u.lastSentZone) {
       u.lastSentZone = w.zone.id;
       u.lastSentDoodadRev = w.doodadsVersion();
       u.dressTimer = SHARD_CFG.dressSec;
+      const meterT0 = performance.now();
       this.net.sendZoneToMany(serializeZone(w), ids);
+      meter.add('wire.zone', performance.now() - meterT0, meterUnit);
     } else if (u.dressTimer <= 0 && w.doodadsVersion() !== u.lastSentDoodadRev) {
       // THE DRESS BEAT: the roster moved (the wilds grew, a tree fell, a swap
       // kept the count) — the engine's own doodad revision is the signal.
@@ -949,17 +987,22 @@ export class ShardHost {
       u.dressTimer = SHARD_CFG.dressSec;
       // THE WIRE DIET: the dress itself rides each socket's `dd` rows on the next snapshot; the
       // whole message re-ships only when the zone's own frame (theme, exits, lanes, walk) moved.
+      const meterT0 = performance.now();
       const z = serializeZone(w);
       if (!WIRE_DIET_CFG.enabled || this.diet.frameMoved(w, z)) this.net.sendZoneToMany(z, ids);
+      meter.add('wire.zone', performance.now() - meterT0, meterUnit);
     }
     if (heartbeat) for (const s of w.seats) w.markMetaDirty(s);
     if (!beat) return;
     this.units.run(u, uw => {
+      const meterT0 = performance.now();
       const snap = serializeSnapshot(uw, this.snapTick);
       stampAudiences(uw, snap); // THE ACTING SEAT: the notices' and the eyecatch's audiences (the transport ships each to its own)
       stampDropOwners(uw, snap); // THE SPOILS' OWNER (card 27): DropW.o / fa, the hosted wire alone
       this.diet.bind(snap, uw); // THE WIRE DIET: the transport builds each socket's frame from this World
+      const meterT1 = performance.now(); meter.add('wire.serialize', meterT1 - meterT0, meterUnit);
       this.net.sendStateTo(snap, ids);
+      meter.add('wire.send', performance.now() - meterT1, meterUnit);
       uw.metaDirty.clear();
     });
   }
@@ -1188,6 +1231,8 @@ export class ShardHost {
       droppedTicks: this.droppedTicks,
       faults: this.faults + this.net.faults,
       actors: this.units.each().reduce((n, u) => n + u.world.actors.length, 0),
+      phases: this.phases.summary(), // THE PHASE METER: p50 / p95 / max / share per phase, per unit as `<unit>/<phase>`
+      census: distanceCensus(this.units.worlds()), // THE DISTANCE CENSUS: bodies by state and by distance to the nearest player
       rove: { on: this.worldmass && SHARD_CFG.rove.sec > 0, hops: this.roveHops, visiting: this.roveAnchorId }, // THE ROVING SHADOW
       saving: this.savePath ? basename(this.savePath) : 'ephemeral',
       broken: this.broken,

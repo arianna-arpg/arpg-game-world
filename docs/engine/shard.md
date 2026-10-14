@@ -371,9 +371,41 @@ The run has three phases:
 | `--diet off` | THE WIRE DIET switched off (`WIRE_DIET_CFG.enabled`): the pre-diet frames, so one build measures both sides of the A/B under the same load |
 | `--report <path>` | the JSON report (default `balance/reports/soak_<stamp>.json`, gitignored) |
 | `--thresholds <path>` | the gates (default `balance/soak.config.json`) |
+| `--diagnostics` | the foundation's inclusive evidence (`balance/shardPerformance.ts`, ported from `codex/shard-performance` 2026-10-13): prototype wraps around `World.update`, `applyInputs`, `settleNearScale`, `serializeWorldState`, the mass runtime's `update`, `attach` and `nativeReadiness`, the host's wire phase and the desks; terrain sample and region-read counts; worker, paging and resume samples; machine busy percent and the process's CPU cores over the window; a compact checkpoint timed OUTSIDE the window (no disk). Phase durations overlap; never sum them |
+| `--profile <path>` | a CPU profile of the measured window alone through `node:inspector` (1 ms sampling); never compare a profiled run's timings with unprofiled ones. `npx tsx balance/profile_summary.ts <path>` reads it bottom-up (self time per function and per file) and top-down for a watch list of engine roots (`updateAI`, `World.update`, the runtime, the snapshot, GC) |
+| `--window-at <ms>` | the earliest window start as Unix milliseconds: a concurrent pair opens both windows at one future moment after their warm-ups (the report records the realized delay) |
+| `--window-after-host <s>` | a minimum host age before the window opens, for serial repeats that align by host age |
+| `--conditions <text>` | the machine and concurrency conditions, recorded verbatim in the report |
 
 Exit 0 means every gate held, 2 a breach (each one named), 1 that the harness
 itself failed.
+
+**THE PHASE METER and THE DISTANCE CENSUS** (`server/phaseMeter.ts`,
+`server/distanceCensus.ts`; docs/design/performance-lane.md §5 step 1). The
+host itself stamps two clock reads around every phase of `ShardHost.tick`
+(the input poll and drain; per unit: `inputs.apply`, the meta `actions`, the
+`ai` loop with its body count `#ai.ran`, `update` with the mass `runtime`'s
+own share inside it through an own-property wrap on the runtime instance,
+the near-law `settle`; then the hand-off `drain`, the `desks`, the wire's
+`wire.zone`, `wire.serialize` and `wire.send` on the beats, `persist` on the
+world save beat, the unit `sweep`) and keeps one sample per tick per phase
+in a 600-tick ring, the per-unit rows beside the summed ones as
+`<unit>/<phase>`. The status page serves them as `phases` (p50 / p95 / max /
+mean and each phase's share of the window's tick time; a phase absent in a
+tick stays out of its percentiles) and `census`. The census classes every
+body once, in order: a seat's own body, a seat's minion, dead, scenery,
+dormant, held by a state machine (emerging, ambush-armed, burrowed,
+airborne, a fuse, reforming, tethered, latched, gripped, mounted, vacated,
+throng-driven, a construct, under a command, wheeled), engaged (aggroed, a
+target, threat), casting, alerted, struck or striking within 3 s, a busy
+squad's member, idle; and bands each living body by its distance to the
+nearest standing seat in its own World (< 600, < 1,000, < 1,300, < 1,600 px,
+beyond). An idle body beyond 600 px of every seat is EDGEABLE: THE THINKING
+EDGE's candidate. The soak prints both per sample (two tables under the
+main one: ms p50/p95 per phase with the shares, then the census by state and
+band) and over the whole window (`phases` and `census` in the JSON, two
+summary rows); its per-tick read is the host's `phases.last`. The meter
+costs about a microsecond a tick (`probe_phasemeter` E) and is always on.
 
 **What it reads.** One seam in the shard's own code: `ShardTransport.bytesOut`
 and `framesOut`, bumped in `write()` for every frame handed a socket. The
