@@ -737,7 +737,10 @@ async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<
     && r.charId === roster.charId && r.modeId === roster.modeId && !r.fallen
     && modeById(r.modeId).save === 'roster');
   const loading = loadingScreen.begin({ kind: 'entry', label: 'Recalling your vessel', loadout: account.cosmetics.loadout,
-    cancel: () => { cancelCharacterResume(); loading.finish(); } });
+    cancel: () => {
+      if (!current() && !(published && world === published && running && loading.current)) return;
+      cancelLoadingToMenu();
+    } });
   let prepared: Awaited<ReturnType<typeof prepareNativeCharacterContinue>> | undefined;
   let published: World | undefined;
   try {

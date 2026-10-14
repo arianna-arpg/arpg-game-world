@@ -97,6 +97,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_nativevendettacold.ts', status: 'green', tier: 'slow', why: 'Retained Vendetta visit renewal, native writ selection, actual surviving cohorts and cold reconstruction.' },
   { probe: 'probe_nativevendettareturn.ts', status: 'green', tier: 'slow', why: 'Retained Vendetta visit renewal, native writ selection, actual surviving cohorts and cold reconstruction.' },
   { probe: 'probe_nativevendettaspawnerboundaries.ts', status: 'green', tier: 'slow', why: 'Retained Vendetta visit renewal, native writ selection, actual surviving cohorts and cold reconstruction.' },
+  { probe: 'probe_nativemainrostercancellationsource.ts', status: 'green', tier: 'fast', why: 'Exact retained roster cancellation source repair; all historical source assertions and filesystem boundaries preserved.' },
   { probe: 'probe_nativevendettacompositionsource.ts', status: 'green', tier: 'slow', why: 'Retained Vendetta visit renewal, native writ selection, actual surviving cohorts and cold reconstruction.' },
   { probe: 'probe_nativeconclavecompositionsource.ts', status: 'green', tier: 'slow', why: 'Retained Conclave event lifetime, last real occupant, native callback effects and original departure readiness.' },
   { probe: 'probe_nativecrusadeterrainsource.ts', status: 'green', tier: 'slow', why: 'Retained Crusade works renewal, exact fixture ownership and original source assertions.' },

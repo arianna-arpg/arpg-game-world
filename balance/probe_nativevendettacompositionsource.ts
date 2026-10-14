@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import * as fs from './nativeMainRosterCancellationFS';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
