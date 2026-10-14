@@ -370,6 +370,7 @@ The run has three phases:
 | `--rove <sec>` | THE ROVING SHADOW's visit length (`SHARD_CFG.rove.sec`; 0 = the focus alone, the shipped law) |
 | `--diet off` | THE WIRE DIET switched off (`WIRE_DIET_CFG.enabled`): the pre-diet frames, so one build measures both sides of the A/B under the same load |
 | `--think off` | THE THINKING EDGE switched off (`THINKING_EDGE_CFG.enabled`): every body thinks every tick, so one build measures both sides of that A/B too |
+| `--govern off` | THE GOVERNOR switched off (`GOVERNOR_CFG.enabled`): no dial moves, today's admission law and the base tick rate throughout, the third A/B |
 | `--report <path>` | the JSON report (default `balance/reports/soak_<stamp>.json`, gitignored) |
 | `--thresholds <path>` | the gates (default `balance/soak.config.json`) |
 | `--diagnostics` | the foundation's inclusive evidence (`balance/shardPerformance.ts`, ported from `codex/shard-performance` 2026-10-13): prototype wraps around `World.update`, `applyInputs`, `settleNearScale`, `serializeWorldState`, the mass runtime's `update`, `attach` and `nativeReadiness`, the host's wire phase and the desks; terrain sample and region-read counts; worker, paging and resume samples; machine busy percent and the process's CPU cores over the window; a compact checkpoint timed OUTSIDE the window (no disk). Phase durations overlap; never sum them |
@@ -425,6 +426,41 @@ and `#ai.edged` (the bodies that skipped) ride the meter. `--think off` is
 the A/B. Clients only ever see beat-tick states, so an edged body's shipped
 path differs only by its decisions landing on the beat (at most 50 ms late
 at 60 Hz with a 20 Hz wire). Probe `probe_shardthink`.
+
+**THE NEIGHBORHOOD GOVERNOR** (`server/governor.ts`; W1 of
+docs/design/shard-m6-plan.md §3.4; her numbers, charter card 32). A
+controller over the measured tick that spends the shard's cost dials,
+cheapest player impact first. Its signal is the pump's own tick cost, an
+EWMA and a rolling 2 s p95 on the world clock, fed per tick and judged once a
+world second. The ladder: dial 1, THE THINKING EDGE, ships on and is only
+ever asserted on; dial 2, THE POPULATION BUDGET through the foundation's F1
+seam (`WorldMassRuntime.setPopulationBudget({ total, floor } | null)` and
+`populationStats()`): down ten percent a beat while the p95 stands above 90
+percent of the 20 ms gate, never below the floor of 24 natives a group, up
+eight natives a beat while the p95 stays under 60 percent of the gate for
+five seconds, and withdrawn (`null`) at the ceiling of 96 a group so today's
+admission law stands byte for byte; lowering never retires a body, by the
+runtime's own law; dial 3, THE TICK DIAL, 60 to 40 Hz after ten seconds at
+the floor still over the gate (the wire keeps 20 Hz: round(40 / 20) is 2),
+back to the base rate after thirty seconds under half the gate. The gate
+scales with the rate it holds (20 ms is 1.2 budgets at 60 Hz, so 30 ms at
+40 Hz), since a tick that simulates more time costs more. Every dial holds
+five seconds before it reverses. The seam is detected on the keeper's
+runtime of the moment (pockets re-seat it); a foundation without it runs the
+governor cost-only. THE DOOR (joins held at the lobby) does not exist, by her
+word. The status page carries `governor` (the signal, the standing budget and
+its per-group limit, the rate, the state: calm, thinning, floor, slow,
+recovering); the soak prints a governor table per sample with `seen`, the
+live foes within the view (1,000 px) of each seat, because a dial acting
+beyond the view is invisible by design. IT SHIPS OFF: on the spread course
+it halves the tick for a third of the living radius, but on a clustered
+course that passed the gate its 2 s signal still read the warm-up's join
+spikes and the machine's wobble as a breach and spent both dials, which
+fails W1's own gate ("the clustered course: no dial moves"); the signal's
+robustness (a longer window, consecutive beats, the EWMA beside the p95) is
+the next tuning and its numbers are hers (docs/design/performance-lane.md
+§8.2). `--govern on` is the switch, `--govern off` the A/B's other half.
+Probe `probe_shardgovernor`.
 
 **What it reads.** One seam in the shard's own code: `ShardTransport.bytesOut`
 and `framesOut`, bumped in `write()` for every frame handed a socket. The

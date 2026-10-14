@@ -31,6 +31,7 @@
 //   --tick-hz <n>       the host tick rate for this run (SHARD_CFG.tickHz; 60 ships) — a cost experiment
 //   --diet off          THE WIRE DIET switched off (WIRE_DIET_CFG.enabled): the pre-diet frames, the A/B
 //   --think off         THE THINKING EDGE switched off (THINKING_EDGE_CFG.enabled): every body thinks every tick, the A/B
+//   --govern on|off     THE GOVERNOR (GOVERNOR_CFG.enabled; it ships off): on, the cost dials move against the measured tick; off, today's admission law and the base rate, the A/B
 //   --report <path>     the JSON report (default balance/reports/soak_<stamp>.json, gitignored)
 //   --diagnostics       inclusive phase, worker, machine-load and checkpoint measurements
 //   --profile <path>    CPU profile of the measured window (diagnostic timing only)
@@ -58,6 +59,7 @@ import type { FleetBotStats, FleetCommand, FleetEvent, FleetResponsiveness } fro
 import { ShardPerformance } from './shardPerformance';
 import { BODY_STATES, CENSUS_CFG, distanceCensus, type DistanceCensus } from '../server/distanceCensus'; // THE DISTANCE CENSUS per sample
 import { THINKING_EDGE_CFG } from '../server/thinkingEdge'; // THE THINKING EDGE's A/B switch (--think off)
+import { GOVERNOR_CFG, type GovernorStatus } from '../server/governor'; // THE GOVERNOR's A/B switch (--govern off) and its row
 
 export const SOAK_CFG = {
   bots: 10,
@@ -68,6 +70,8 @@ export const SOAK_CFG = {
   sampleSec: 5,
   /** The live heap is polled this often inside the window; each sample keeps its trough. */
   heapPollMs: 250,
+  /** THE SEEN RADIUS (px): the view a player can see across (CAMERA_CFG.zoom at 1080p to 1440p reads about 1,000 to 1,350 world units; the M6 plan §3.4). */
+  seenPx: 1000,
   /** Ticks closer than this to the previous tick's end ran inside the same pump wake. */
   wakeGapMs: 0.5,
   /** The slowest ticks listed (with when they landed) for the window and the warm-up. */
@@ -196,6 +200,7 @@ interface StatusView {
   seats: { id: string; dormant?: boolean }[];
   connections: number; actors: number;
   tickMsP50: number; tickMsP95: number;
+  governor: GovernorStatus;
 }
 interface Sample {
   t: number; seats: number; dormant: number; connections: number; actors: number;
@@ -212,6 +217,11 @@ interface Sample {
   phases: Record<string, PhaseSlice>;
   /** THE DISTANCE CENSUS at the sample's edge (server/distanceCensus.ts). */
   census: DistanceCensus;
+  /** THE GOVERNOR's row at the sample's edge (server/governor.ts): the signal, the standing budget, the rate, the state. */
+  governor: GovernorStatus;
+  /** THE SEEN RADIUS: live foes within the view radius (SOAK_CFG.seenPx) of each standing seat — the least and the mean;
+   *  a dial acting beyond the view is invisible by design, so the living radius alone would under-read it. */
+  seenMin: number; seenMean: number;
 }
 interface PhaseSlice { calls: number; p50: number; p95: number; max: number; share: number }
 type Stamped = FleetEvent & { at: number };
@@ -238,6 +248,7 @@ async function main(): Promise<number> {
   if (tickHzArg !== undefined && tickHzArg > 0) SHARD_CFG.tickHz = tickHzArg; // THE TICK RATE experiment (SHARD_CFG.tickHz; 60 ships)
   if (roveArg !== undefined) SHARD_CFG.rove.sec = Math.max(0, roveArg); // THE ROVING SHADOW's dial, before the host stands
   if (typeof args.think === 'string' && /^(0|off|false|no)$/i.test(args.think)) THINKING_EDGE_CFG.enabled = false; // THE THINKING EDGE's A/B (--think off)
+  if (typeof args.govern === 'string') GOVERNOR_CFG.enabled = !/^(0|off|false|no)$/i.test(args.govern); // THE GOVERNOR's A/B (--govern on | off; it ships off)
   if (typeof args.diet === 'string' && /^(0|off|false|no)$/i.test(args.diet)) WIRE_DIET_CFG.enabled = false; // THE WIRE DIET's A/B
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const reportPath = typeof args.report === 'string' ? args.report : `${SOAK_CFG.reportDir}/soak_${stamp}.json`;
@@ -457,13 +468,16 @@ async function main(): Promise<number> {
   // THE LIVING RADIUS: how alive the world is around EACH player (the premise the
   // focus law breaks: a seat far from the shadow meets no births).
   const popRadius = host.world.massRuntime?.config.populationRadius ?? 1300;
-  const livingRadius = (): { min: number; mean: number } => {
+  const foesWithin = (radius: number): { min: number; mean: number } => {
     const standing = host.units.allSeats().filter(s => !s.actor.dead && !s.actor.downed && !net.isDormant(s.id));
     if (!standing.length) return { min: 0, mean: 0 };
     const counts = standing.map(s => (host.units.worldOf(s.id) ?? host.world).actors.filter(a => a.team === 'enemy' && !a.dead
-      && Math.hypot(a.pos.x - s.actor.pos.x, a.pos.y - s.actor.pos.y) <= popRadius).length);
+      && Math.hypot(a.pos.x - s.actor.pos.x, a.pos.y - s.actor.pos.y) <= radius).length);
     return { min: Math.min(...counts), mean: counts.reduce((a, b) => a + b, 0) / counts.length };
   };
+  const livingRadius = (): { min: number; mean: number } => foesWithin(popRadius);
+  // THE SEEN RADIUS: the same count inside the view (the governor's receipt: a dial acting beyond the view is invisible by design).
+  const seenRadius = (): { min: number; mean: number } => foesWithin(SOAK_CFG.seenPx);
   const partyStands = (): boolean => {
     const p = ev.party;
     return !!p && host.parties.rows().some(r => r.members.includes(p.seats[0]) && r.members.includes(p.seats[1]));
@@ -476,12 +490,13 @@ async function main(): Promise<number> {
     pollHeap();
     const dormant = st.seats.filter(s => s.dormant).length;
     const bytes = net.bytesOut - prev.bytes, seatTicks = win.seatTicks - prev.seatTicks;
-    const living = livingRadius();
+    const living = livingRadius(), seen = seenRadius();
     const standingNow = host.units.allSeats().filter(x => !x.actor.dead && !x.actor.downed);
     let fleetSpreadPx = 0;
     for (const a of standingNow) for (const b of standingNow) fleetSpreadPx = Math.max(fleetSpreadPx, Math.hypot(a.actor.pos.x - b.actor.pos.x, a.actor.pos.y - b.actor.pos.y));
     samples.push({
       phases: phaseSlice(prev.tick), census: distanceCensus(host.units.worlds()), // THE PHASE METER + THE DISTANCE CENSUS
+      governor: st.governor, seenMin: seen.min, seenMean: r2(seen.mean), // THE GOVERNOR's row + THE SEEN RADIUS
       livingMin: living.min, livingMean: r2(living.mean), fleetSpreadPx: Math.round(fleetSpreadPx),
       t: r2(ms / 1000), seats: st.seats.length, dormant, connections: st.connections, actors: st.actors,
       ticks: ticks.length, wakes: win.wakes - prev.wakes,
@@ -591,7 +606,7 @@ async function main(): Promise<number> {
 
   const cpu = cpus();
   const report = {
-    soak: { version: 1, at: new Date().toISOString(), world, seed: seedHex, bots, seconds, windowSec: r2(windowSec), classes: SOAK_CFG.classes, drop: dropOn, diet: WIRE_DIET_CFG.enabled, think: THINKING_EDGE_CFG.enabled },
+    soak: { version: 1, at: new Date().toISOString(), world, seed: seedHex, bots, seconds, windowSec: r2(windowSec), classes: SOAK_CFG.classes, drop: dropOn, diet: WIRE_DIET_CFG.enabled, think: THINKING_EDGE_CFG.enabled, govern: GOVERNOR_CFG.enabled },
     machine: { platform: process.platform, release: release(), node: process.version, cpus: cpu.length, cpuModel: cpu[0]?.model.trim() ?? '?', memGB: Math.round(totalmem() / 1024 ** 3) },
     host: { bootSec: r2(bootSec), tickHz: SHARD_CFG.tickHz, stateHz: SHARD_CFG.stateHz, wireCaps: { maxSeats: SHARD_WIRE_CFG.maxSeats, maxConnections: SHARD_WIRE_CFG.maxConnections, maxPerIp: 'unbounded' } },
     warmup: {
@@ -606,6 +621,15 @@ async function main(): Promise<number> {
       slowest: slowest(win.tickMs, win.tickAt, win.t0, SOAK_CFG.slowestTicks, winGcs, jumps),
     },
     living: { radiusPx: popRadius, spreadPx: spread, roveSec: SHARD_CFG.rove.sec, minOfMins: samples.length ? Math.min(...samples.map(x => x.livingMin)) : 0, meanOfMeans: r2(mean(samples.map(x => x.livingMean))) }, // THE LIVING RADIUS
+    seen: { radiusPx: SOAK_CFG.seenPx, minOfMins: samples.length ? Math.min(...samples.map(x => x.seenMin)) : 0, meanOfMeans: r2(mean(samples.map(x => x.seenMean))) }, // THE SEEN RADIUS
+    governor: { // THE GOVERNOR over the window: her floor, the dials' extremes and the final row (each sample's own row rides `samples`)
+      enabled: GOVERNOR_CFG.enabled, floor: GOVERNOR_CFG.floor, gateMs: GOVERNOR_CFG.gateMs,
+      budgetLeast: samples.reduce<number | null>((m, x) => x.governor.budget === null ? m : m === null ? x.governor.budget.total : Math.min(m, x.governor.budget.total), null),
+      perGroupLeast: samples.reduce<number | null>((m, x) => x.governor.budget === null ? m : m === null ? x.governor.budget.perGroup : Math.min(m, x.governor.budget.perGroup), null),
+      hzLeast: samples.length ? Math.min(...samples.map(x => x.governor.tickHz)) : SHARD_CFG.tickHz,
+      states: samples.map(x => x.governor.state), moves: samples.length ? samples[samples.length - 1].governor.moves : 0,
+      final: host.governor.status(),
+    },
     phases: phaseWindow(), // THE PHASE METER over the whole window: ms p50 / p95 / max per phase and its share of the tick time ('<unit>/<phase>' rows per unit)
     census: { // THE DISTANCE CENSUS: the samples' means (each sample's own rows ride `samples`)
       idleSec: CENSUS_CFG.idleSec, nearPx: CENSUS_CFG.nearPx, bandEdges: CENSUS_CFG.bands,
@@ -661,7 +685,7 @@ async function main(): Promise<number> {
   const L = (s: string | number, w: number): string => String(s).padStart(w);
   const R = (s: string | number, w: number): string => String(s).padEnd(w);
   const out: string[] = [];
-  out.push('', `THE SOAK  ${world} ${seedHex}  ·  ${bots} bots${spread ? ` spread ${spread} px` : ''}${host.worldmass ? `  ·  rove ${SHARD_CFG.rove.sec ? SHARD_CFG.rove.sec + ' s' : 'off'}` : ''}  ·  diet ${WIRE_DIET_CFG.enabled ? 'on' : 'off'}  ·  edge ${THINKING_EDGE_CFG.enabled ? 'on' : 'off'}  ·  ${r2(windowSec)} s window  ·  warm-up ${r2(warmSec)} s  ·  boot ${r2(bootSec)} s`);
+  out.push('', `THE SOAK  ${world} ${seedHex}  ·  ${bots} bots${spread ? ` spread ${spread} px` : ''}${host.worldmass ? `  ·  rove ${SHARD_CFG.rove.sec ? SHARD_CFG.rove.sec + ' s' : 'off'}` : ''}  ·  diet ${WIRE_DIET_CFG.enabled ? 'on' : 'off'}  ·  edge ${THINKING_EDGE_CFG.enabled ? 'on' : 'off'}  ·  govern ${GOVERNOR_CFG.enabled ? 'on' : 'off'}  ·  ${r2(windowSec)} s window  ·  warm-up ${r2(warmSec)} s  ·  boot ${r2(bootSec)} s`);
   out.push(`  ${report.machine.cpuModel} × ${cpu.length}  ·  ${process.platform} ${release()}  ·  node ${process.version}  ·  the fleet in its own process`);
   out.push('', `${L('t s', 6)} ${L('seats', 5)} ${L('conn', 4)} ${L('actors', 6)}   ${L('tick p50', 8)} ${L('p95', 6)} ${L('max', 6)} ${L('drop', 4)} ${L('wake/s', 6)} ${L('fed', 4)}   ${L('snap kB p95', 11)} ${L('out kB/s/cl', 11)}   ${L('heap MB', 7)}   ${L('living', 9)} ${L('spread', 6)}`);
   for (const s of samples)
@@ -680,6 +704,13 @@ async function main(): Promise<number> {
   for (const s of samples)
     out.push(`${L(s.t.toFixed(1), 6)} ${L(s.census.actors, 6)}   ${BODY_STATES.map(st => L(s.census.states[st], 6)).join(' ')}   ${s.census.bands.map((n, i) => L(n + '/' + s.census.idleBands[i], 8)).join(' ')}   ${L(s.census.edgeable, 5)}`);
   out.push(`  (THE DISTANCE CENSUS: one class per body in its own World (a seat's own body, a seat's minion, dead, scenery, dormant, held by a state machine, engaged, casting, alerted, struck or striking within ${CENSUS_CFG.idleSec} s, a busy squad, idle); bands = bodies/idle by distance to the nearest standing seat; edge = idle bodies beyond ${CENSUS_CFG.nearPx} px of every seat, THE THINKING EDGE's candidates)`);
+  // THE GOVERNOR per sample: the signal it read, the budget it holds, the rate it set, and what the players could see.
+  out.push('', `${L('t s', 6)} ${L('state', 10)} ${L('ewma', 7)} ${L('p95 2s', 7)}   ${L('budget', 7)} ${L('/group', 6)} ${L('groups', 6)} ${L('live', 5)} ${L('hz', 3)}   ${L('seen', 9)} ${L('moves', 5)}`);
+  for (const s of samples) {
+    const gv = s.governor;
+    out.push(`${L(s.t.toFixed(1), 6)} ${L(gv.state, 10)} ${L(gv.ewmaMs.toFixed(1), 7)} ${L(gv.p95Ms.toFixed(1), 7)}   ${L(gv.budget ? gv.budget.total : 'law', 7)} ${L(gv.budget ? gv.budget.perGroup : '-', 6)} ${L(gv.budget ? gv.budget.groups : '-', 6)} ${L(gv.live ?? '-', 5)} ${L(gv.tickHz, 3)}   ${L(s.seenMin + '/' + s.seenMean.toFixed(1), 9)} ${L(gv.moves, 5)}`);
+  }
+  out.push(`  (THE GOVERNOR: ewma and the 2 s p95 of tick ms are its signal; budget = the standing population budget over every neighborhood group ("law" = today's admission law, none set) and its per-group limit; hz = the tick rate it holds; seen = live foes within ${SOAK_CFG.seenPx} px of each standing seat, least / mean; moves = dial moves so far${GOVERNOR_CFG.enabled ? '' : '; the governor is OFF (--govern off)'})`);
   const k = report.wire.byKind;
   const slow = report.tick.slowest.map(x => `${x.ms} ms @ ${x.atSec} s${x.jumpPx ? ` (shadow jump ${x.jumpPx} px)` : ''}${x.gcMs >= 1 ? ` (gc ${x.gcMs})` : ''}`).join(', ');
   const response = fleetStats?.responsiveness?.aggregate;
@@ -696,6 +727,10 @@ async function main(): Promise<number> {
     ['inputs fed', `${r2(fed * 100)}% of seat-ticks (${report.inputs.hostSeenHzPerSeat} Hz per seat; the fleet sent ${fleetStats?.stepHz ?? '?'} Hz on a ${fleetStats?.clock ?? '?'} clock)`],
     ['the phases (window)', Object.entries(report.phases).filter(([n]) => !n.includes('/') && !n.startsWith('#')).map(([n, p]) => `${n} ${Math.round(p.share * 100)}% (p95 ${p.p95} ms)`).join(' · ') || 'none'],
     ['the census (mean)', `${report.census.actors} bodies: ${BODY_STATES.map(st => `${st} ${report.census.states[st]}`).join(', ')}; idle beyond ${CENSUS_CFG.nearPx} px of every seat ${report.census.edgeable.mean} (least ${report.census.edgeable.min})`],
+    ['the seen radius', `least ${report.seen.minOfMins}, mean ${report.seen.meanOfMeans} foes within ${SOAK_CFG.seenPx} px of a standing seat (the view)`],
+    ['the governor', GOVERNOR_CFG.enabled
+      ? `floor ${GOVERNOR_CFG.floor} a group, gate ${GOVERNOR_CFG.gateMs} ms; budget least ${report.governor.budgetLeast ?? 'none set (today\'s law)'}${report.governor.perGroupLeast !== null ? ` (${report.governor.perGroupLeast} a group)` : ''}, rate least ${report.governor.hzLeast} Hz, ${report.governor.moves} moves; states ${[...new Set(report.governor.states)].join('/')}; at the end ${report.governor.final.state}, ${report.governor.final.budget ? report.governor.final.budget.total : 'law'}, ${report.governor.final.tickHz} Hz${report.governor.final.seam ? '' : ' (no seam: cost-only)'}`
+      : 'OFF (--govern off): today\'s law and the base rate throughout'],
     ['sequence service (fleet lifetime)', response ? `p95 ${responseUpper(response.serviceRtt.p95UpperMs, response.serviceRtt.count)}, p99 ${responseUpper(response.serviceRtt.p99UpperMs, response.serviceRtt.count)}, max ${response.serviceRtt.maxMs === null ? 'none' : r2(response.serviceRtt.maxMs)} ms; ${response.counts.covered} covered, ${response.counts.censored} censored, ${response.pendingAtFinish} pending at end, ${response.counts.ringOverflow} overflow; ${response.status}` : 'unavailable'],
     ['snapshot silence (fleet lifetime)', response ? `max ${r2(response.maxSnapshotSilenceMs)} ms; includes initial and unfinished gaps; service is not input-to-paint` : 'unavailable'],
     ['warm-up (not gated)', `${warm.tickMs.length} ticks, p95 ${report.warmup.tickP95} ms, max ${report.warmup.tickMax} ms, ${warmDropped} dropped`],

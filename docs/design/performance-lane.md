@@ -484,3 +484,194 @@ its own baseline (main re-baked the duelist at 269c2e1c on 2026-09-30; the
 foundation's merges moved the warrior's wave). The lane re-bakes nothing:
 the baseline is the owner's deliberate act (`npm run sim -- baseline write
 --suite smoke` once the drift is adjudicated).
+
+## 8. The merge, the push and the merged tree (2026-10-13, her word)
+
+Her rulings: push the lane; merge whatever is ready; THE LOCAL ROSTER if it
+is real optimization; a deep dive into whatever makes the hosted world
+playable; the long road is one seamless branch as the core, with an online
+shard beside a server-free offline game.
+
+- Codex's reconciliation `d025d99f` (local `shard-world`, in
+  `D:/Games/Claude/arpg-shard`) merged `codex/shard-performance` into
+  af891eb7: the restored projected goldens, compact `ZoneW` + `zonePaint` at
+  wire protocol 6, the browser opening worker beside the terrain preparation
+  generator, the derived caches capped at twice single-focus capacity, F1
+  (`setPopulationBudget`, `populationStats`) and F3 delivered. Its own serial
+  soaks: clustered p95 34.2 ms, spread 250.7 ms, heap growth 18.1 and 54.2 MB.
+- The lane merged it (`4d22bb50`): three conflicts, all harness files
+  (`shardPerformance.ts` takes the foundation's whole; the soak keeps the
+  lane's census and edge rows beside the ported harness; the roster keeps
+  the incoming pacing row with the lane's two and drops its duplicate
+  responsiveness row); `server/shardHost.ts` auto-merged (the pump yield and
+  the meter marks in different regions). Gates on the merge: four type-check
+  lanes clean, 24 of 24 `probe_shard*` rigs green (the four digest rigs, the
+  foundation's pacing rig and the lane's edge rig among them), `probe_phasemeter`,
+  `probe_shardthink` and `probe_loskey` green, the smoke episodes identical to
+  d025d99f line for line (the three standing baseline drifts unchanged).
+- `shard-world` fast-forwarded to 4d22bb50 in Codex's worktree and pushed;
+  `perf-lane` pushed as a new remote branch.
+
+### 8.1 Pair S2: the merged lane against d025d99f alone (spread, 6 bots, 60 s, together)
+
+| | d025d99f alone | the lane on it (4d22bb50) |
+|---|---|---|
+| tick p50 / p95 / p99 / max ms | 83.5 / 189.8 / 303.9 / 693 | 32.3 / 80.7 / 186.4 / 284 |
+| ticks stepped in the window | 635 | 1,483 |
+| dropped | 82.9% | 57.4% |
+| living least / mean | 24 / 38.4 | 20 / 25.1 |
+| actors, mean | 356 | 241 |
+| fleet stepped Hz / fed | 10.6 / 80% | 24.7 / 80% |
+| deaths / rejoins | 5 / 4 | 5 / 5 |
+| heap growth MB | 61.0 | 25.1 |
+| the lane's rows: AI loop share, thought / edged (p50) | | 43%, 155 / 89 |
+
+The course-level receipt of the lane on the cached tree: the tick halves
+and more, 2.3 times the ticks stepped, dropped from 83 to 57 percent. The
+pair is confounded the way E1b was and more so: the faster host let its
+fleet kill the roster down to 241 bodies against the control's 356, which
+feeds the gap. The lane's own rows on the cached tree: the AI loop 43
+percent of the tick (p95 39 ms over 155 thought bodies), `update` 51 (the
+runtime 12 inside it, down from 19 to 24 before the caches). Both halves
+breach by an order of magnitude still. WATCH, the foundation's: the
+control's heap grew 61 MB in 60 s against the 64 MB gate (Codex's own
+spread run read 54 MB), the capped caches' residency; a byte budget for
+them is owed (§2).
+
+### 8.2 W1 THE NEIGHBORHOOD GOVERNOR, built and measured
+
+Built on the delivered F1 seam as `server/governor.ts` (the ladder and its
+numbers in docs/engine/shard.md "THE NEIGHBORHOOD GOVERNOR"; her card 32:
+floor 24 a group, 40 Hz allowed, no door), fed by the pump, judged once a
+world second, detecting the seam on the keeper's runtime of the moment and
+running cost-only without it. `probe_shardgovernor` is green on 25 checks:
+the synthetic ladder down to the floor and back to the withdrawn budget
+with every hold, no seam, the switch, a classic host on its pump, and a
+real wilds host whose per-group limit follows the seam's clamp while the
+setter retires no body. Two findings on the way: a calm world must never be
+written to, not even a null (fixed: a runtime that never held a budget has
+nothing to restore), and a budget thinned under fewer groups goes stale when
+the players spread into more (fixed by a re-base to the new floor total; the
+seam's clamp held the per-group floor throughout).
+
+**G1, the spread course, one tree, `--govern off` against on (6 bots, 60 s,
+3,500 px, no drop, together):**
+
+| | governor off | governor on |
+|---|---|---|
+| tick p50 / p95 / p99 / max ms | 73.4 / 153.8 / 259.7 / 629 | 34.5 / 112.0 / 157.6 / 208 |
+| ticks stepped in the window | 714 | 1,374 |
+| dropped | 80.0% | 44.4% |
+| the governor's path | law, 60 Hz throughout | at the floor by the first sample (budget 55 over 4, then 3 groups: 24 a group), 40 Hz from 10 s to the end, 6 moves |
+| actors, mean | 309 | 145 |
+| living least / mean (1,300 px) | 20 / 30.3 | 11 / 17.2 |
+| seen least / mean (1,000 px, the view) | 8 / 16.7 | 7 / 10.3 |
+| the AI loop p95 ms, thought / edged (p50) | 78, 183 / 143 | 54, 124 / 39 |
+| fleet stepped Hz / fed | 11.9 / 80% | 22.9 / 63% |
+| heap growth MB | 27.9 | 18.3 |
+
+The governor halves the spread tick's p50 and cuts the dropped share from
+four ticks in five to fewer than one in two, and the price is visible in the
+census: the world thins to 145 bodies, the living least to 11 and the seen
+least to 7. THE FLOOR IS A CAP, not a delivered count: 24 natives a group is
+the most the runtime admits, the fleet kills them faster than births refill
+under the cap, so the delivered least settles under half the floor. The M6
+plan's gate "living least at or above the floor" cannot hold with the floor
+set at the delivered least of the ungoverned world; the gate must name the
+delivered count the floor is meant to protect, and the floor be set above it.
+The tick still breaches both gates on this machine (p95 112 ms at 40 Hz,
+dropped 44 percent); the hundred busy bodies of §7.6 became about seventy
+and still cost 35 ms a tick.
+
+CARD for her word (unblessed): THE FLOOR'S MEANING. A: keep the floor at 24
+as the admission cap (today's receipt: a thin world, the tick halved). B: a
+floor of 48 a group, so the delivered least under kills lands near today's
+ungoverned least of about 20 (less relief for the tick). C: the floor as a
+DELIVERED count the governor holds by reading `populationStats().groups[].live`
+and raising the cap while a group's live count stands under it (a second
+controller; needs the runtime's live-per-group read, delivered with F1).
+Rec: C, with 24 as the delivered floor; B meanwhile.
+
+**G2, the clustered course, one tree, `--govern off` against on (4 bots
+together, 30 s, no drop, together), with the gate still fixed at 60 Hz's
+budget:**
+
+| | governor off | governor on |
+|---|---|---|
+| tick p50 / p95 / p99 ms | 9.2 / 29.6 / 76.1 | 11.1 / 48.8 / 78.2 |
+| ticks stepped in the window | 1,766 | 1,194 |
+| dropped | 1.83% | 0.42% |
+| tick time per wall second | 54% | 44% |
+| fed | 69% | 87% |
+| the governor's path | law, 60 Hz | budget 24 (one group, the floor) and 40 Hz from the first sample, 13 moves |
+| living least / mean | 18 / 21.2 | 20 / 21.6 |
+| seen least / mean | 8 / 11.8 | 9 / 13.3 |
+
+The M6 plan's clustered gate ("the governor moves no dial") assumed a
+machine where the clustered course passes the 20 ms gate, as it did on
+2026-10-09 (p95 11.6 ms at four bots). On this loaded box the course
+breaches by itself (p95 29.6 ms with the governor off), so the governor
+read the breach and spent both dials, and the course's one group sat at
+the floor with the living radius unchanged (the hearth's world is 70
+bodies either way). The rate dial's effect reads two ways: the per-tick
+cost ROSE (a 40 Hz tick simulates 25 ms of world and costs more) while the
+tick time per wall second fell from 54 to 44 percent and the players'
+inputs landed in 87 percent of ticks against 69, with fewer dropped. The
+governor was judging that heavier tick against a gate fixed at 60 Hz's
+budget, so it could never read its own rate dial as relief: the gate now
+SCALES WITH THE RATE (20 ms is 1.2 budgets at 60 Hz, so 30 ms at 40 Hz),
+the probe re-run green, and both pairs were run again on the scaled gate
+(G2b, G1b below), so the receipts match the shipped code.
+
+FINDING for the soak's own gate: `tickP95Ms` is 20 ms whatever rate the
+host holds, so a governed host at 40 Hz is judged against 60 Hz's budget.
+The gate should be stated in budgets (1.2 of the held rate's) or the soak
+should read the governed rate; that is a gate change and waits for her word.
+
+**G2b and G1b, both pairs again on the rate-scaled gate** (the shipped
+arithmetic; a calmer minute of the machine than G1 and G2):
+
+| G2b clustered, 4 bots, 30 s | governor off | governor on |
+|---|---|---|
+| tick p50 / p95 / p99 ms | 8.8 / 16.4 / 71.7 | 9.8 / 36.3 / 73.5 |
+| dropped | 0.17% | 2.61% |
+| verdict against the soak's gates | PASS | BREACH (tick p95) |
+| the governor's path | law, 60 Hz | thinned to the floor during the warm-up's joins, at the floor from the first sample, 40 Hz from 20 s, 13 moves |
+| living least / mean | 16 / 18.0 | 14 / 15.3 |
+| seen least / mean | 8 / 10.7 | 7 / 8.4 |
+
+| G1b spread, 6 bots, 60 s, 3,500 px | governor off | governor on |
+|---|---|---|
+| tick p50 / p95 / p99 ms | 66.9 / 157.6 / 239.6 | 24.8 / 87.6 / 152.6 |
+| ticks stepped | 769 | 1,729 |
+| dropped | 78.6% | 45.3% |
+| the governor's path | law, 60 Hz | thinning from 5 s (104 over 4 groups), the floor by 10 s, re-based as the groups fell to 3 (72), 40 Hz from 45 s, 13 moves |
+| actors, mean | 300 | 157 |
+| living least / mean | 20 / 30.2 | 13 / 20.3 |
+| seen least / mean | 7 / 16.9 | 9 / 12.6 |
+| the AI loop p95 ms, share | 88.9, 52% | 43.5, 40% |
+| fleet stepped Hz / fed | 12.8 / 80% | 28.8 / 63% |
+
+**W1's verdict, honestly.** The spread gate's direction holds twice (the
+tick's p50 down 53 and 63 percent, the dropped share from four in five to
+under one in two, 2.2 times the ticks) at the price the floor's semantics
+set (the living mean a third lower; the seen least unchanged within noise).
+The clustered gate ("the governor moves no dial") FAILS: in G2 the course
+itself breached and the move was right; in G2b the control passed the 20 ms
+gate and the governor's half still thinned to the floor during the warm-up's
+join spikes (a 2 s p95 window reads every spike) and never found five calm
+seconds under this machine's wobble to climb back, then dropped the rate and
+read p95 36 against the control's 16. A governor that can make a passing
+course worse does not ship on. DECISION: `GOVERNOR_CFG.enabled` ships
+false; `--govern on` is the switch; the code, the probe (26 checks, the
+default pinned first) and the receipts land, and the signal's robustness is
+the next tuning, its numbers hers.
+
+CARD for her word (unblessed): THE SIGNAL. A: a longer p95 window (5 s) and
+a breach that must stand for three beats before a dial moves, with the EWMA
+(a smoother read) required above half the gate beside the p95; the climb on
+the EWMA under 60 percent of the gate for five seconds rather than the p95.
+B: arm the governor only once the warm-up is over (no dial inside the first
+30 s after a join) and otherwise as A. C: the governor only ever thins and
+never slows the rate (the rate dial read worse per tick on the clustered
+course), as A. Rec: B with A's signal, measured on the same two courses.
