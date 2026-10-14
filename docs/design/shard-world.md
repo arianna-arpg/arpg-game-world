@@ -896,6 +896,23 @@ in Mu first.**
     seeded without the character limb and filtered at `world.player`'s level
     (the keeper's), so two heroes at one settlement board read one draw; the
     seat is the seed's `questCharKey()` and the level's `questHandLevel()`.
+    **EXTENDED 2026-10-13 (W12, branch shard-w12-spoken):** THE SPOKEN QUESTS
+    (docs/engine/shard.md) closes W9's three findings. A hosted hero hears the
+    quest-gated lines its own quests, ledger and gate account earn: the journal
+    row carries what the dialogue conditions read (`JournalW.sq`, the key list
+    derived from the dialogue data) and `questDialogueView` is the one resolver
+    the director reads through (the World itself on solo and the co-op host). A
+    secret vocation site is found by each standing seat into its own ledger (the
+    keeper's parked body never discovers) and its calling menu opens for that
+    seat alone (`JournalW.voc`; the pick is its own `vocationQuest` word). An
+    absent hero's quest ground stays claimed through a save and a restart (the
+    save's `:questGround` claim ledger, published by the vessel desk) until its
+    quest ends, its run falls or it is gone `VESSEL_CFG.groundKeptDays`; the claim
+    is the engine's, so no foundation ask was needed. Still owed to M2: the
+    turn-in's quest-done account key and a vocation's unlock write the World's
+    account (the shard's); the discovery's account copy and the dialogue's
+    account view read `gateAccountOf` (the shard's account today), which M2's
+    one line re-points.
 25. **POCKET TENANCY** (M1's first question) — A: shared pockets (whoever
     walks into a cave meets the same cave, her "generated for any player
     that simultaneously ran across it"). B: one instance per party.

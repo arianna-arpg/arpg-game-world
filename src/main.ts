@@ -2501,6 +2501,9 @@ function pollClientCounters(dt: number): void {
   if (world.oracleDwellRequested) { world.oracleDwellRequested = false; if (!ui.oracleOpen) ui.showOracle(world.oracleDwellSeatId); }
   if (world.trackerDwellRequested) { world.trackerDwellRequested = false; if (!ui.bestiaryOpen) ui.showBestiary(world.trackerDwellSeatId); }
   if (world.vendorDwellRequested) { world.vendorDwellRequested = false; if (!ui.vendorOpen) ui.showVendor(world.vendorDwellSeatId); }
+  // THE VOCATION SITES PER SEAT (W12): the host's ask for this seat's calling (its journal row)
+  // opens the same menu the solo dwell opens; the pick is this seat's own `vocationQuest` word.
+  if (world.vocationOfferRequested) { world.vocationOfferRequested = false; if (!ui.vocationOpen) ui.showVocationMenu(); }
   if (world.questRewardRequested) {
     world.questRewardRequested = false;
     if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();

@@ -20,7 +20,9 @@ import { SAVE_COMPATIBILITY } from '../meta/saveCompatibility';
  *     stub's foresight (the crash on every enemy wind-up) and never reads the tint. */
 // 5: presence badges ride the per-socket identity dictionary.
 // 6: skill fields use quantized ZoneW identity/geometry, reconstructed by zonePaint.
-export const SHARD_WIRE_PROTOCOL = 6;
+// 7: THE SPOKEN QUESTS (W12): the journal row carries the seat's dialogue reads (JournalW.sq) and its
+//    calling (JournalW.voc); an older client hears only the ungated lines and never opens a hosted calling.
+export const SHARD_WIRE_PROTOCOL = 7;
 
 /** This build's stamp, as the join and the welcome carry it. */
 export function shardBuildStamp(): string {

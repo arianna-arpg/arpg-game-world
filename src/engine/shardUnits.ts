@@ -235,6 +235,7 @@ export const SHARD_UNIT_FIELDS: Readonly<Record<string, UnitFieldRow>> = {
   timeflow: { cls: 'host', note: 'each World\'s own; the host sets allowHold and chronoScope' },
   seatCorpseMarks: { cls: 'host', note: 'THE CORPSE ON THE CHART: a seat\'s own remembered bodies for its journal row' },
   musterRings: { cls: 'host', note: 'THE MUSTER RING: the rings the host\'s muster desk publishes into each unit (W4)' },
+  heldQuestGround: { cls: 'host', note: 'THE OFFLINE HERO\'S GROUND: the vessel desk\'s held quest ground, read by the keeper\'s world save (W12)' },
   // ---- SEAT: moved or dropped by THE HAND-OFF (the seat-keyed reason)
   lastInputSeq: S('move-seat-id', 'the ack continues'), spentPresses: S('move-seat-id', 'a press a gate spent never fires in B'),
   seatKillTally: S('move-seat', 'the fall\'s reckoning'), townPortalArrival: S('move-seat-id'),
@@ -253,6 +254,7 @@ export const SHARD_UNIT_FIELDS: Readonly<Record<string, UnitFieldRow>> = {
   dotAccum: S('drop-actor-id'), comboCursors: S('drop-actor'),
   journalDirty: S('drop-seat-id', 'THE JOURNAL ROW: marked again in B, so the arrival hears its new zone at once'),
   questGiverDwells: S('drop-seat', 'a giver linger never crosses Worlds'),
+  vocationAsks: S('drop-seat', 'THE VOCATION SITES PER SEAT: a calling ask is one visit\'s and never crosses Worlds (W12)'),
   seatQuests: S('move-seat-id', 'THE CHARACTER\'S QUESTS: the hero\'s own quest ledger travels with it'),
   seatShelves: S('move-seat-id', 'THE SHELF PER BUYER: the buyer\'s standing shelves travel with it'),
   // ---- UNIT: dies with its unit (a row only where a detector looks)
