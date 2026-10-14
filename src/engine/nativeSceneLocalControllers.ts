@@ -1,5 +1,7 @@
 /** Exact original42 complete local-frame LocalControllers closure.
  * Runtime ownership and native scheduling are separate concrete bindings. */
+import {nativeFractureBirthCalls,type NativeFractureBirthReceipt} from './nativeSceneRuntimeBirth';
+import {nativeFractureLifetimeCalls,type FractureField,type NativeFractureLifetime} from '../packages/overlays/fractures';
 import type {NativeSceneFrameHost} from "./nativeSceneFrameHost";
 import { separateNativeExits } from './nativeExitPreparation';
 import { feedingCueFlash, noteRestoreGain } from './feedingCues';
@@ -2381,6 +2383,13 @@ export function sceneRemoveFractureChasmDoodad(nativeHost:NativeSceneFrameHost):
     run.chasmDoodad = null;
   }
 
+export interface NativeFractureCompletionScope {readonly host:NativeSceneFrameHost;readonly field:FractureField;readonly run:NonNullable<NativeSceneFrameHost['fractureRun']>;readonly birth:NativeFractureBirthReceipt|undefined;readonly lifetime:NativeFractureLifetime|undefined}
+const nativeFractureCompletions=new WeakMap<object,NativeFractureCompletionScope>();
+export const nativeFractureCompletionCalls=Object.freeze({read(host:object):NativeFractureCompletionScope|undefined{return nativeFractureCompletions.get(host);}});
+function beginNativeFractureClear(host:NativeSceneFrameHost,field:FractureField,run:NonNullable<NativeSceneFrameHost['fractureRun']>):()=>void {
+ const prior=nativeFractureCompletions.get(host),scope=Object.freeze({host,field,run,birth:nativeFractureBirthCalls.read(run),lifetime:Reflect.apply(nativeFractureLifetimeCalls.read,field,[])});nativeFractureCompletions.set(host,scope);
+ return()=>{if(nativeFractureCompletions.get(host)===scope){if(prior)nativeFractureCompletions.set(host,prior);else nativeFractureCompletions.delete(host);}};
+}
 export function sceneDivertOrEndFracture(nativeHost:NativeSceneFrameHost, at: Vec2): void {
     const ff = nativeHost.sim.fractureField;
     const run = nativeHost.fractureRun;
@@ -2400,7 +2409,10 @@ export function sceneDivertOrEndFracture(nativeHost:NativeSceneFrameHost, at: Ve
         nativeHost.text(vec(at.x, at.y - 30),
           `The fracture tears toward ${nativeHost.zoneMap[dest]?.name ?? dest}! (M)`, run.color, 16);
         run.phase = 'done';
+        const nativeFractureClearEnd=beginNativeFractureClear(nativeHost,ff,run);
+        try{
         nativeHost.clearFractureRun(false);
+        }finally{nativeFractureClearEnd();}
         return;
       }
     }
@@ -2421,7 +2433,10 @@ export function sceneDivertOrEndFracture(nativeHost:NativeSceneFrameHost, at: Ve
     }
     ff.endFracture();
     run.phase = 'done';
+    const nativeFractureClearEnd=beginNativeFractureClear(nativeHost,ff,run);
+    try{
     nativeHost.clearFractureRun(false);
+    }finally{nativeFractureClearEnd();}
   }
 
 export function sceneLitePocketBirth(nativeHost:NativeSceneFrameHost, pk: number, p: LitePocket): void {

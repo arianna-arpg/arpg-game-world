@@ -1,4 +1,5 @@
 import {placeNativeVendetta,createNativeVendettaBody} from './nativeVendettaIdentity';
+import {nativeFractureLifetimeCalls,type FractureField,type NativeFractureLifetime} from '../packages/overlays/fractures';
 import {nativeConclaveLifetimeCalls,type ConclaveField} from '../packages/overlays/conclave';
 import {observeNativeCombatBirth,observeNativeCombatStatus} from './nativeCombatRecordObservation';
 /** Complete native event births shared by classic World and local areas. Sources retain their installed identities. */
@@ -18,6 +19,10 @@ export interface NativeConclaveBirthReceipt {readonly host:NativeSceneRuntimeBir
 const nativeConclaveBirths=new WeakMap<object,NativeConclaveBirthReceipt>();
 export const nativeConclaveBirthCalls=Object.freeze({read(host:object):NativeConclaveBirthReceipt|undefined{return nativeConclaveBirths.get(host);}});
 type FractureRun=NonNullable<World['fractureRun']>;
+export interface NativeFractureBirthReceipt {readonly host:NativeSceneRuntimeBirthHost;readonly field:FractureField;readonly lifetime:NativeFractureLifetime;readonly run:FractureRun;readonly marker:Set<string>;readonly key:string;readonly definition:ZoneDef}
+const nativeFractureBirths=new WeakMap<FractureRun,NativeFractureBirthReceipt>();
+const latestNativeFractureBirths=new WeakMap<object,NativeFractureBirthReceipt>();
+export const nativeFractureBirthCalls=Object.freeze({read(run:FractureRun):NativeFractureBirthReceipt|undefined{return nativeFractureBirths.get(run);},current(host:object):NativeFractureBirthReceipt|undefined{return latestNativeFractureBirths.get(host);}});
 export interface NativeSceneRuntimeBirthSources {
  readonly bumpLedger:typeof import('../packages/ledger').bumpLedger;
  readonly vec:typeof import('../core/math').vec;
@@ -300,9 +305,11 @@ export function birthCompassFrom(nativeHost:NativeSceneRuntimeBirthHost,sources:
 export function birthPlaceFractureContent(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources, def: ZoneDef): void {
     const ff = nativeHost.sim.fractureField;
     if (!ff || nativeHost.inCave) return;
+    const nativeFractureStart=Reflect.apply(nativeFractureLifetimeCalls.read,ff,[]);
     const info = ff.fractureIn(def.id);
     if (!info) return;
     const key = `${info.id}@${def.id}`;
+    const nativeFractureMarker=nativeHost.materializedFractures;
     if (nativeHost.materializedFractures.has(key)) return;
     nativeHost.materializedFractures.add(key);
     nativeHost.fractureRng = new sources.Rng(((0,sources.packageSeed)(nativeHost.manifest.seed, 'fractures') ^ (0,sources.hashStr)(`${info.id}:${def.id}`)) >>> 0);
@@ -319,6 +326,11 @@ export function birthPlaceFractureContent(nativeHost:NativeSceneRuntimeBirthHost
       chasmsTarget: nativeHost.fractureRng.int(surge.chasmsPerZone[0], surge.chasmsPerZone[1]),
       stuck: 0, grace: 0,
     };
+    const nativeFractureAfter=Reflect.apply(nativeFractureLifetimeCalls.read,ff,[]),nativeFractureRun=nativeHost.fractureRun;
+    if(nativeFractureStart&&!nativeFractureStart.ended&&nativeFractureAfter?.epoch===nativeFractureStart.epoch&&nativeFractureAfter.hop===nativeFractureStart.hop&&!nativeFractureAfter.ended&&nativeFractureAfter.id===info.id&&nativeFractureAfter.zoneId===def.id&&nativeHost.sim.fractureField===ff&&nativeHost.zone===def&&nativeHost.materializedFractures===nativeFractureMarker&&nativeFractureRun?.id===info.id){
+      const receipt=Object.freeze({host:nativeHost,field:ff,lifetime:nativeFractureAfter,run:nativeFractureRun,marker:nativeFractureMarker,key,definition:def});
+      nativeFractureBirths.set(nativeFractureRun,receipt);latestNativeFractureBirths.set(nativeHost,receipt);
+    }
     // A DIVERTED fracture arrives ALREADY LIVE (the map marker raced you here) —
     // but under its ARRIVAL GRACE: the collapse clock holds until you first close
     // in (or the grace runs out), so surfacing across a zone you haven't crossed

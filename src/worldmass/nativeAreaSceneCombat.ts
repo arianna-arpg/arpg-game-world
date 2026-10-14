@@ -1,5 +1,8 @@
 import {NativeAreaSceneVendettaLifetime} from './nativeAreaSceneVendettaLifetime';
+import {nativeFractureLifetimeCalls} from '../packages/overlays/fractures';
+import {nativeFractureBirthCalls} from '../engine/nativeSceneRuntimeBirth';
 import {NativeAreaSceneConclaveLifetime} from './nativeAreaSceneConclaveLifetime';
+const nativeCompletedFractureDelete=Set.prototype.delete;
 import {NativeAreaSceneCrusadeLifetime} from './nativeAreaSceneCrusadeLifetime';
 import {sceneReconcileRetainedRealmGates,type NativeRetainedRealmKind} from '../engine/nativeSceneRetainedRealmGates';
 import {nativeAreaHostedPresentation} from './nativeAreaHostedPresentation';
@@ -153,6 +156,7 @@ export class NativeAreaSceneCombat {
  readonly ai:NativeAreaSceneAI;
  readonly #resumeFactory={make:NativeAreaCharacterResume.prototype.makeSeat,admit:NativeAreaCharacterResume.prototype.admitSeat};
  #restoreToken:NativeCharacterResumeReceipt|undefined;
+ #pendingFractureClear:localControllers.NativeFractureCompletionScope|undefined;
  readonly #operation:NativeAreaCombatOperation;readonly #host:Host;readonly #viewHost:NativeSceneViewHost&NativeSceneUIActionHost;readonly #menuHost:NativeSceneMenuHost;
  readonly #wireHost:NativeSnapshotHost;
  #wireSeats:Seat[]|undefined;
@@ -812,6 +816,30 @@ nativeWireQueries:Object.freeze({encounterCue:(actor:Actor)=>encounterCueOf(acto
   const census=presentationData(this.scene,'actors') as Actor[],physical:Actor[]=[];
   for(let i=0,n=presentationData(census,'length') as number;i<n;i++)physical.push(presentationData(census,i) as Actor);
   sceneReconcileRetainedRealmGates(this.#host,kind,()=>this.#operation.enter({permission:'physical',physical,sources:[]},()=>{}));
+ }
+ #clearCompletedFracture(host:Host,despawnFoes:boolean):void {
+  const scope=localControllers.nativeFractureCompletionCalls.read(host);
+  if(!scope){localControllers.sceneClearFractureRun(host,despawnFoes);return;}
+  const owner=this.input.assembly.input.registry.input.birth,state=owner.input.state,issued=scope.birth;
+  const data=(object:object,key:PropertyKey):unknown=>{const d=Object.getOwnPropertyDescriptor(object,key);if(!d||!Object.hasOwn(d,'value'))throw Error('Fracture completion needs actual retained data');return d.value;};
+  const valid=()=>{const current=Reflect.apply(nativeFractureLifetimeCalls.read,scope.field,[]),done=scope.lifetime;
+   return !!issued&&nativeFractureBirthCalls.read(scope.run)===issued&&issued.host===owner.host&&issued.run===scope.run&&issued.field===scope.field&&data(this.input.campaign.sim,'fractureField')===scope.field&&data(state,'materializedFractures')===issued.marker&&data(this.scene,'zone')===issued.definition&&data(scope.run,'phase')==='done'&&!!done&&done.epoch===issued.lifetime.epoch&&(done.ended?done.hop===issued.lifetime.hop:done.hop===issued.lifetime.hop+1)&&current?.epoch===done.epoch&&current.hop===done.hop&&current.ended===done.ended&&current.id===done.id&&current.zoneId===done.zoneId;
+  };
+  if(data(state,'fractureRun')!==scope.run||!valid())throw Error('Fracture completed clear changed its actual run or event');
+  this.#pendingFractureClear=scope;
+  try{localControllers.sceneClearFractureRun(host,despawnFoes);}
+  finally{this.#retryCompletedFracture();}
+ }
+ #retryCompletedFracture():void {
+  const scope=this.#pendingFractureClear;if(!scope)return;
+  try{
+   const issued=scope.birth,done=scope.lifetime,owner=this.input.assembly.input.registry.input.birth,state=owner.input.state;
+   const data=(o:object,key:PropertyKey):unknown=>{const d=Object.getOwnPropertyDescriptor(o,key);if(!d||!Object.hasOwn(d,'value'))throw Error('Fracture release needs actual retained data');return d.value;};
+   const currentRun=data(state,'fractureRun');if(currentRun===scope.run)return;
+   const current=Reflect.apply(nativeFractureLifetimeCalls.read,scope.field,[]);
+   if(currentRun!==null||!issued||!done||nativeFractureBirthCalls.current(owner.host)!==issued||issued.host!==owner.host||data(state,'materializedFractures')!==issued.marker||data(this.scene,'zone')!==issued.definition||data(this.input.campaign.sim,'fractureField')!==scope.field||data(scope.run,'phase')!=='done'||current?.epoch!==done.epoch||current.hop<done.hop){this.#pendingFractureClear=undefined;return;}
+   Reflect.apply(nativeCompletedFractureDelete,issued.marker,[issued.key]);this.#pendingFractureClear=undefined;
+  }catch{/* A completed native clear/error survives bookkeeping refusal; retry only this authentic completed receipt next frame. */}
  }
  private native<A extends unknown[],R>(fn:(host:Host,...args:A)=>R):Binding<(...args:A)=>R>{return {get:()=> (...args:A)=>{this.#operation.assertActiveScope();return fn(this.#host,...args);}};}
  get holdDefense():World['holdDefense'] {return this.input.assembly.input.registry.input.state.holdDefense;}
@@ -1511,7 +1539,7 @@ vendorGemsOpen:method(()=>this.input.assembly.input.settlement,'vendorGemsOpen')
   updateOccurrences:this.native(localControllers.sceneUpdateOccurrences),
   updateEncounters:this.native((host,dt:number)=>{if(this.encounterArrival.canUpdateFrame())localControllers.sceneUpdateEncounters(host,dt);else{host.updateExtractionDepartures(dt);host.updateBoroughRefugees(dt);}}),
   updateHunt:this.native(localControllers.sceneUpdateHunt),
-  updateFractures:this.native(localControllers.sceneUpdateFractures),
+  updateFractures:this.native((host,dt:number)=>{this.#retryCompletedFracture();localControllers.sceneUpdateFractures(host,dt);}),
   updateBoss:this.native(localControllers.sceneUpdateBoss),
   updateRitualSite:this.native(localControllers.sceneUpdateRitualSite),
   updateHoldfastSite:this.native(localControllers.sceneUpdateHoldfastSite),
@@ -1579,7 +1607,7 @@ vendorGemsOpen:method(()=>this.input.assembly.input.settlement,'vendorGemsOpen')
   sealVeiled:this.native(localControllers.sceneSealVeiled),
   activateKnot:this.native(localControllers.sceneActivateKnot),
   openChasm:this.native(localControllers.sceneOpenChasm),
-  clearFractureRun:this.native(localControllers.sceneClearFractureRun),
+  clearFractureRun:this.native((host,despawnFoes:boolean)=>this.#clearCompletedFracture(host,despawnFoes)),
   removeFractureChasmDoodad:this.native(localControllers.sceneRemoveFractureChasmDoodad),
   divertOrEndFracture:this.native(localControllers.sceneDivertOrEndFracture),
   litePocketBirth:this.native(localControllers.sceneLitePocketBirth),

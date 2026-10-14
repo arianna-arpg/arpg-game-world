@@ -180,7 +180,18 @@ interface ActiveFracture {
   travel: { from: { x: number; y: number }; to: { x: number; y: number }; toZoneId: string; t: number } | null;
 }
 
+export interface NativeFractureLifetime { readonly epoch:object; readonly hop:number; readonly id:string; readonly zoneId:string; readonly ended:boolean }
 export class FractureField implements WorldOverlay {
+  #nativeLifetime:{event:ActiveFracture;epoch:object;hop:number;id:string;ended:boolean}|undefined;
+  #rememberNativeFracture():void {const event=this.fracture;if(event)this.#nativeLifetime={event,epoch:Object.freeze({}),hop:0,id:event.id,ended:false};}
+  /** Defining-module receipt; raw field replacement never acquires an issued hop. */
+  nativeFractureLifetime():NativeFractureLifetime|undefined {
+    if(typeof this!=='object'||this===null||!(#nativeLifetime in this))return undefined;
+    const record=this.#nativeLifetime;if(!record||this.fracture!==(record.ended?null:record.event))return undefined;
+    const zone=Object.getOwnPropertyDescriptor(record.event,'zoneId'),id=Object.getOwnPropertyDescriptor(record.event,'id');
+    if(!zone||!Object.hasOwn(zone,'value')||typeof zone.value!=='string'||!id||!Object.hasOwn(id,'value')||id.value!==record.id)return undefined;
+    return Object.freeze({epoch:record.epoch,hop:record.hop,id:record.id,zoneId:zone.value,ended:record.ended});
+  }
   readonly id = 'fractures';
   /** Durable: a fracture mid-chase spans zones, and an EARNED capstone rift
    *  "persists until its boss is slain" — a relaunch must resume both. */
@@ -257,10 +268,11 @@ export class FractureField implements WorldOverlay {
     f.hopsRemaining = Math.max(0, f.hopsRemaining - 1);
     f.idle = 0;
     f.travel = { from: { x: from.x, y: from.y }, to: { x: to.x, y: to.y }, toZoneId, t: 0 };
+    if(this.#nativeLifetime?.event===f)this.#nativeLifetime.hop++;
   }
 
   /** End the fracture — collapsed (timer ran out) or run through to the end. */
-  endFracture(): void { this.fracture = null; }
+  endFracture(): void { if(this.#nativeLifetime?.event===this.fracture)this.#nativeLifetime.ended=true;this.fracture = null; }
 
   // --- capstone rift (persists until its boss is slain) ----------------------
 
@@ -339,6 +351,7 @@ export class FractureField implements WorldOverlay {
     if (!s || typeof s !== 'object') return;
     if (typeof s.seq === 'number' && Number.isFinite(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
     this.fracture = null;
+    this.#nativeLifetime=undefined;
     this.rift = null;
     const f = s.fracture as Partial<ActiveFracture> | null;
     if (f && typeof f === 'object'
@@ -357,6 +370,7 @@ export class FractureField implements WorldOverlay {
         span: Math.max(1, Math.floor(f.span as number)),
         travel: null, // transit never persists — snapshot() already landed it
       };
+      this.#rememberNativeFracture();
     }
     const r = s.rift as Partial<RiftInfo> | null;
     if (r && typeof r === 'object'
@@ -402,6 +416,7 @@ export class FractureField implements WorldOverlay {
       id: `fracture_${this.seq++}`, faction: v.faction, color: FACTION_COLORS[v.faction] ?? FRACTURE_VIOLET,
       variant: v.variant, zoneId, hopsRemaining: Math.max(0, total - 1), diverted: false, idle: 0, span: total, travel: null,
     };
+    this.#rememberNativeFracture();
     return true;
   }
 
@@ -422,6 +437,7 @@ export class FractureField implements WorldOverlay {
       zoneId: spot.id, hopsRemaining: Math.max(0, total - 1), diverted: false, idle: 0,
       span: total, travel: null,
     };
+    this.#rememberNativeFracture();
   }
 
   private pickVariant(): FractureVariant | null {
@@ -434,6 +450,8 @@ export class FractureField implements WorldOverlay {
     return pool[pool.length - 1];
   }
 }
+
+export const nativeFractureLifetimeCalls=Object.freeze({read:FractureField.prototype.nativeFractureLifetime});
 
 // --- map marker (registered on import — zero panels.ts edits) -----------------
 //
