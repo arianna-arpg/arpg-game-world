@@ -19,9 +19,10 @@
 //   C  THE KEYS ARE THE DATA'S: the read list equals an independent walk of the dialogue data's
 //      conditions by scope, and with every named key held beside a decoy exactly the named keys
 //      and features ride.
-//   D  THE VOCATION SITES PER SEAT: a secret site at the keeper's own feet is never discovered
-//      by the parked body; a Warrior standing on it hears its own silence (its note row) and
-//      keeps no key; a Ranger standing on it discovers it into its own ledger (the world's run
+//   D  THE VOCATION SITES PER SEAT: a calling every class hears (the Stillmind's basin, never
+//      class-locked) at the keeper's own feet is never discovered by the parked body; a Warrior
+//      standing on the Ranger's heartwood hears its own silence (its note row) and keeps no
+//      key; a Ranger standing on it discovers it into its own ledger (the world's run
 //      ledger, the keeper's and the other heroes' untouched) with the account stamp through its
 //      own gate and its own note; its linger at the spirit asks its own calling menu
 //      (JournalW.voc) on its socket alone; its render shell opens the menu off the row; the pick
@@ -423,19 +424,24 @@ const shA = makeShell(A), shB = makeShell(B);
   const sR = seatOf(R.id);
   w.seatHero(sR).level = 28; // the Greenwarden's own offer level
   const keeper = host.keeper;
-  // The heartwood stands at the keeper's own feet first, every player seat far from it.
+  // A calling every class hears (the Stillmind's basin is never class-locked) stands at the
+  // keeper's own feet, every player seat far from it: the parked body never discovers it.
   standAt(sR, smith.pos, () => atBrandt(sR) || dist(sR.actor.pos, smith.pos) > 60);
-  wx.spawnVocationSite(SITE_VOC, vec(keeper.actor.pos.x + 30, keeper.actor.pos.y), new Rng(0x51e7));
-  const site = (wx.vocationSites as { vocId: string; npc: { pos: Vec2 } }[]).find(s => s.vocId === SITE_VOC)!;
-  const far = (s: Seat): boolean => dist(s.actor.pos, site.npc.pos) > VOCATION_CFG.discoveryRadius + 50;
+  const sites = wx.vocationSites as { vocId: string; npc: { pos: Vec2 } }[];
+  const STILL = 'stillmind', STILL_KEY = vocationDiscoveryKey(STILL);
+  wx.spawnVocationSite(STILL, vec(keeper.actor.pos.x + 30, keeper.actor.pos.y), new Rng(0x57111));
+  const basin = sites.find(s => s.vocId === STILL)!;
+  const far = (s: Seat): boolean => dist(s.actor.pos, basin.npc.pos) > VOCATION_CFG.discoveryRadius + 50;
   await runTicks(sec(1));
-  check('D keeper: the keeper\'s parked body never discovers a site at its feet (no key in the world\'s run ledger, the keeper\'s own or any hero\'s)',
-    !!site && dist(keeper.actor.pos, site.npc.pos) <= VOCATION_CFG.discoveryRadius && [sA, sB, sR].every(far)
-      && !w.ledger[KEY] && !w.ownQuestLedger.keys[KEY] && [sA, sB, sR].every(s => !ledgerOf(s).keys[KEY]) && !w.account.ledger[KEY],
-    `keeper ${dist(keeper.actor.pos, site.npc.pos).toFixed(0)} px from the site`);
-  // The site moves to a quiet stretch of town (no other giver's work in reach).
-  const spot = quietSpot(w, 320);
-  site.npc.pos.x = spot.x; site.npc.pos.y = spot.y;
+  check('D keeper: the keeper\'s parked body never discovers a calling every class hears at its own feet (no key in the world\'s run ledger, the keeper\'s own, any hero\'s or the account)',
+    !!basin && dist(keeper.actor.pos, basin.npc.pos) <= VOCATION_CFG.discoveryRadius && [sA, sB, sR].every(far)
+      && !w.ledger[STILL_KEY] && !w.ownQuestLedger.keys[STILL_KEY] && [sA, sB, sR].every(s => !ledgerOf(s).keys[STILL_KEY]) && !w.account.ledger[STILL_KEY],
+    `keeper ${dist(keeper.actor.pos, basin.npc.pos).toFixed(0)} px from the basin`);
+  // The Ranger's heartwood (class-locked) stands on a quiet stretch of town (no other giver's work in reach).
+  wx.spawnVocationSite(SITE_VOC, quietSpot(w, 320), new Rng(0x51e7));
+  const site = sites.find(s => s.vocId === SITE_VOC)!;
+  /** Stand a seat aside: out of every giver's and every site's reach. */
+  const aside = (s: Seat): void => { const p = quietSpot(w, 320); s.actor.pos.x = p.x; s.actor.pos.y = p.y; s.actor.tier = 0; };
   // A stranger first: the Warrior hears nothing and the silence is its own row.
   check('D stranger: B (a Warrior) stands by the heartwood', standAt(sB, site.npc.pos, () => dist(sB.actor.pos, site.npc.pos) <= 90));
   await runTicks(sec(1));
@@ -443,7 +449,7 @@ const shA = makeShell(A), shB = makeShell(B);
   check('D stranger: a seat the calling is not for hears its own silence (its own note row) and keeps no key',
     noteB === STRANGER && !ledgerOf(sB).keys[KEY] && ![...A.snaps, ...R.snaps].some(s => s.seats[A.id]?.fn?.text === STRANGER || s.seats[R.id]?.fn?.text === STRANGER),
     `B note ${noteB}`);
-  toHearth(sB, 80);
+  aside(sB);
   // The Ranger finds it: its own ledger, never the keeper's or another hero's.
   check('D found: R (a Ranger) stands by the heartwood', standAt(sR, site.npc.pos, () => dist(sR.actor.pos, site.npc.pos) <= 90
     && w.withQuestHand(sR, () => w.nearAnyQuestGiver())));
@@ -476,7 +482,7 @@ const shA = makeShell(A), shB = makeShell(B);
   check('D choice: the pick comes home as R\'s own word and the host applies it to R (B\'s and the keeper\'s ledgers hold none of it)',
     took && !ledgerOf(sB).active.some(q => q.questId === step) && !ledgerOf(sA).active.some(q => q.questId === step)
       && !w.ownQuestLedger.active.some(q => q.questId === step), `R ${ledgerOf(sR).active.map(q => q.questId).filter(id => id.startsWith('voc_')).join(',')}`);
-  toHearth(sR, -80);
+  aside(sR);
   await runTicks(sec(0.5));
   check('D visit: stepping away ends the ask (the row\'s calling rests)', !jnOf(R)?.voc);
 }
