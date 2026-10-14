@@ -477,3 +477,103 @@ the three known world-suite failures remain unresolved. Prioritize the shared
 population governor / simulation scaling, then the continuity failures and
 stale extraction receipts before treating this as a release-ready MMO baseline.
 No live server restart or separate deployment is performed by this audit.
+
+### ShardPerformanceReceipt — follow-up from consolidated 7799af63
+
+The isolated `codex/shard-performance` course is recorded in
+[the performance receipt](shard-performance.md). It profiles the unchanged
+foundation and compares bounded terrain caches, native restoration layout and
+event-loop service between complete host ticks against an unchanged-engine
+control. It includes exact terrain replay, real six-bot measurements, memory,
+input delivery, reconnect and the actual-client Save/Continue course. The
+original audit numbers above remain historical evidence. This follow-up does
+not resolve the three known worldmass failures or the stale native sky guard,
+and does not approve a population governor or change the shipped tick rate.
+
+## Foundation/shard reconciliation — 2026-10-13
+
+The local shard merge combines `af891eb7` with performance tip `f967869c`.
+The durable counterpart reply is shard-world §7g. Its F1/F3/F6/F7/F8 decisions
+and explicit red regressions supersede earlier statements that the removed
+historical guards were repaired.
+
+`WorldMassRuntime.setPopulationBudget({ total, floor } | null)` accepts
+nonnegative safe integer values, with floor at most the authored maxPopulation.
+It copies the caller's row. Each connected group receives
+`max(floor, min(maxPopulation, floor(total / groups)))`; no-focus admission is
+zero and lowering never kills existing bodies. Reservations, native restoration
+and dormancy retain their original policy. The floor can make the sum exceed
+total; total is a requested admission budget, not a destructive actor ceiling.
+Null restores the old full-per-group law. No budget field enters config, land
+digest, checkpoint or portable saves; the host reapplies its budget after boot.
+`populationStats()` returns total and groups of {members, live, limit}, exactly
+as the M6 governor asks. Unlocated legacy ownership is conservatively charged by
+the existing admission logic; the per-group live counts describe located slots.
+No residency-radius override or adaptive host controller is added here.
+
+The derived terrain sample and walk-region memos use at most two times their
+single-focus capacity, even at sixteen foci, and shrink when players leave.
+Terrain-page residency still serves all neighborhoods. Eviction recomputes the
+same authoritative answers and never drops terrain or actors. The opening
+worker's issued immutable config, adopted cache and preparation yields survive
+the merge; its generator can also issue the optional Node base-terrain source.
+That lane remains opt-in and applies only after the original validation.
+
+Wilds bounty seeds and posting IDs include the hosted character identity;
+null identity leaves solo and ordinary co-op bytes unchanged. Challenge and
+manageable destination gates both read the acting quest hand's level. Existing
+held and standing postings remain frozen in their character ledger.
+
+The field wire uses compact ZoneW with vi/ar and zonePaint at protocol 6.
+The protocol-5 identity dictionary is preserved. The full legacy skillFields
+array is read-only compatibility; new snapshots never emit it or ZoneW.visual.
+
+**Validation receipts.** All game, launcher and simulation types pass
+(`npm run check`), as does the production build. The shard family is 23/23
+green with retries disabled. All 139 green worldmass probes pass: 27 from the
+affected-change batch, the foci/cache/bounty-character courses, and the 109
+remaining probes. The original required procession route is separately red.
+The affected batch initially passed 35/37; its coordinate-key fake was missing
+the shard's cooperative preparation method, and the presence fixture expected
+raw instead of normalized wire timing. Both fixtures were reconciled and pass,
+with their archive, gameplay and RNG assertions retained.
+
+The original arrival/history/Titan goldens all pass, plus 33 historical receipt
+mutation refusals and 18 Actor-slot projection refusals. All five red rows were
+run and their original failures observed; they are not counted as green.
+Generation QA passes 2,607 cases with four existing warnings, and simulation
+smoke completes five scenarios / 25 episodes. The hidden production renderer
+passes 249 flight pixel checks / four live casts and 564 presence pixel checks /
+eight live lifecycles, co-op and 139 animated presence identities. The generated
+contact sheets were visually inspected.
+
+Game and launcher boot smoke pass. The first normal-profile game boot reported
+that the start menu never appeared; an isolated-profile run and an unchanged
+normal-profile rerun both pass. Its first failure is retained in the local log;
+the transient's cause is not established and user data was not reset.
+
+**Post-merge measurements.** Two serial six-bot, 60-second measured windows,
+clustered and spread 3,500 units, use the default seed, 60 Hz, roving off,
+reconnect enabled and the original thresholds. This session's probe/build/UI
+work had finished before either soak. Other desktop activity was not controlled.
+The optional Node terrain-preparation and dependency-cache lanes are explicitly
+off; the new host population budget remains unset, as W1 is not installed.
+These are integration receipts, not a controlled comparison attributing a
+performance change to the cache cap or wire design, nor server-capacity approval.
+
+| Course | Tick p50 / p95 / p99 | Maximum tick | Dropped ticks | Heap growth | Reconnect | Snapshot p95 |
+|---|---|---|---|---|---|---|
+| Clustered | 13.52 / 34.22 / 95.54 ms | 295.08 ms | 10.77% | 18.11 MB | pass | 10705 B |
+| Spread 3,500 | 121.92 / 250.7 / 526.95 ms | 937.68 ms | 88.39% | 54.21 MB | pass | 18460 B |
+
+Clustered verdict: **BREACH**; breached gates:
+tick p95, dropped ticks. Faults 0, harness errors
+0, host-observed input batches 29.43
+per seat per second. Spread verdict: **BREACH**; breached gates:
+tick p95, dropped ticks. Faults 0, harness errors
+0, host-observed input batches 5.57
+per seat per second. Reconnect detail is retained verbatim in each JSON report,
+alongside deaths/rejoins and the complete host log. No threshold was loosened.
+Reports: `.claude/reconcile-soak-{clustered,spread}.local.{json,log}`.
+The five original red assertions and any soak breaches remain follow-up work.
+The ownership gate must pass after final staging; this merge is local only.

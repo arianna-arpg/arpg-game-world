@@ -1809,6 +1809,19 @@ function acquireTarget(
     // Scenery is not prey: nobody dedicates their life to a barrel,
     // and the townsfolk are not on the menu.
     if (e.passive) continue;
+    // Reject only beyond the widest CURRENT sense reach before paying for
+    // diplomacy. Use both cone outcomes so mutable stealth/rear/alert values
+    // keep their exact fold. Long detection, NaNs and distant heads whose
+    // hittable coils are nearby fall through to the standing checks below.
+    const farDx = Math.abs(actor.pos.x - e.pos.x), farDy = Math.abs(actor.pos.y - e.pos.y);
+    if ((farDx > detect || farDy > detect) && !segsHittable(e)) {
+      const farDetectability = e.sheet.get('detectability');
+      const farConcealed = concealmentActive(e, world.time);
+      const farReach = Math.max(
+        senseReach(detect, farDetectability, farConcealed, alerted, true, rearMul),
+        senseReach(detect, farDetectability, farConcealed, alerted, false, rearMul));
+      if (Math.max(farDx, farDy) > farReach) continue;
+    }
     if (!(world.hostileTo(actor, e)
       || (e.construct?.breakable !== undefined && e.owner === actor))) continue;
     if (e.sheet.get('invisible') > 0) continue;

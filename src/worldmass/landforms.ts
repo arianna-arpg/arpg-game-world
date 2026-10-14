@@ -1,7 +1,7 @@
 import { MassRegionalLandforms, validateRegionalLandforms, type MassRegionalLandformPolicy, type RegionalLandformSites } from './regionalLandforms';
 import { address, floorDiv, latticeAt, localOffset, moveAddress, type MassAddress } from './address';
 import type { MassPatchPolicy, MassRange, MassRun, MassSpec, MassTerrain } from './contracts';
-import { canonical, freezeData, massRandom } from './random';
+import { canonical, canonicalStringTriple, freezeData, massRandom } from './random';
 import { regionKind } from '../world/regions';
 import { patchBoxIntersects, type MassPatchBox } from './terrainPatches';
 
@@ -118,7 +118,7 @@ export class MassLandforms {
     if (cache.regional) this.regionalLandforms?.adoptOpeningCache(cache.regional);
   }
   private candidate(dimension:string,gx:bigint,gy:bigint): Readonly<MassLandformPlan>|null {
-    const key=canonical([dimension,gx.toString(),gy.toString()]);
+    const key=canonicalStringTriple(dimension,gx.toString(),gy.toString());
     if(this.cache.has(key))return this.cache.get(key)!;
     const plan=this.make(key,dimension,gx,gy);
     this.cache.set(key,plan);if(this.cache.size>128)this.cache.delete(this.cache.keys().next().value!);

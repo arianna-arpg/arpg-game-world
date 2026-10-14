@@ -124,9 +124,15 @@ function attemptGrammar(grammar: RegionalTerrainGrammar, pinned: readonly MassLa
   const cells = new Uint8Array(n * n), wetChance = rng.range(...grammar.waterChance);
   const paint = (minX: number, minY: number, maxX: number, maxY: number,
     sample: (x: number, y: number) => number): void => {
-    for (let y = Math.max(1, Math.floor(minY)); y <= Math.min(n - 2, Math.ceil(maxY)); y++)
-      for (let x = Math.max(1, Math.floor(minX)); x <= Math.min(n - 2, Math.ceil(maxX)); x++) {
-        const k = y * n + x, value = sample(x, y);
+    const fromX = Math.max(1, Math.floor(minX)), toX = Math.min(n - 2, Math.ceil(maxX));
+    const fromY = Math.max(1, Math.floor(minY)), toY = Math.min(n - 2, Math.ceil(maxY));
+    for (let y = fromY; y <= toY; y++)
+      for (let x = fromX; x <= toX; x++) {
+        const k = y * n + x;
+        // Both samplers are pure geometry. Dry floor wins every later paint,
+        // so overlapping courts/links cannot change an already dry cell.
+        if (cells[k] === 1) continue;
+        const value = sample(x, y);
         if (value && (value === 1 || cells[k] !== 1)) cells[k] = value;
       }
   };

@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { installNodeMassWorkers, massWorkersStatus } from '../server/massWorkers';
+import { massDependencyCacheDefault } from '../src/worldmass/ownedDependencyCache';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { address } from '../src/worldmass/address';
 import { createNativeFeatureWarmQueue } from '../src/worldmass/nativeWarm';
 import { createGeographicPlanWarmQueue } from '../src/worldmass/geographicWarm';
 import { createProcessionPlanWarmQueue } from '../src/worldmass/processionWarm';
+import { createTerrainWarmQueue } from '../src/worldmass/terrainWarm';
+import { prepareTerrainPacket } from '../src/worldmass/terrainPreparation';
 import { resolveNativeFeature, type NativeFeatureRequest } from '../src/worldmass/nativeFeatures';
 import { compileGeographicPlan } from '../src/worldmass/geographicPlan';
 import { compileProcessionPlan, PROCESSION_PLAN_COMPILER, PROCESSION_ROUTE_POLICY, type ProcessionPlanInput } from '../src/worldmass/processionPlan';
@@ -14,7 +17,7 @@ import { MASS_HIERARCHY_DEFAULT, MassHierarchy } from '../src/worldmass/hierarch
 import { nativeGeographicSelectionReceipt } from '../src/worldmass/geographicObjectiveChoice';
 import { nativeMassProcessionSources, resolveMassProcessionContext } from '../src/worldmass/processionSources';
 import { canonical, freezeData, isMassFrozenData, massDigest } from '../src/worldmass/random';
-import { massCompileInput } from '../src/worldmass/compilePort';
+import { massCompileInput, massCompilePort } from '../src/worldmass/compilePort';
 import { TILESETS } from '../src/data/tilesets';
 import type { ZoneDef } from '../src/data/zones';
 
@@ -23,7 +26,43 @@ async function ready<T>(take:()=>T|undefined,error:()=>string|null):Promise<T>{
   while(Date.now()<end){assert.equal(error(),null);const value=take();if(value)return value;await new Promise(r=>setTimeout(r,5));}
   throw Error('Node preparation timed out');
 }
-const undo=seedGlobalRandom(901743);installNodeMassWorkers();
+const undo=seedGlobalRandom(901743);
+// Installing independent experiment policies must stay lazy. Environment
+// changes affect only this probe process, and all original values are restored.
+const priorTerrainFlag=process.env.HOLLOW_WAKE_TERRAIN_PREPARATION;
+const priorDependencyFlag=process.env.HOLLOW_WAKE_DEPENDENCY_CACHE;
+const checkInstallation=(options:Parameters<typeof installNodeMassWorkers>[0],dependency:boolean,terrain:boolean)=>{
+  installNodeMassWorkers(options);
+  assert.equal(massDependencyCacheDefault(),dependency,'independent dependency-cache construction policy');
+  const port=massCompilePort('terrain');
+  try{assert.equal(port!==undefined,terrain,'independent terrain-port policy');}
+  finally{port?.terminate();}
+  const content=massCompilePort('native');
+  try{assert.ok(content,'ordinary content preparation remains available');}
+  finally{content?.terminate();}
+  assert.equal(massWorkersStatus().threads,0,'installing/selecting policies never starts a worker');
+  assert.equal(massWorkersStatus().ports,0,'unsubmitted test ports are released');
+};
+try{
+  delete process.env.HOLLOW_WAKE_TERRAIN_PREPARATION;delete process.env.HOLLOW_WAKE_DEPENDENCY_CACHE;
+  checkInstallation({},false,false);
+  process.env.HOLLOW_WAKE_DEPENDENCY_CACHE='1';checkInstallation({},true,false);
+  delete process.env.HOLLOW_WAKE_DEPENDENCY_CACHE;process.env.HOLLOW_WAKE_TERRAIN_PREPARATION='1';
+  checkInstallation({},false,true);
+  process.env.HOLLOW_WAKE_DEPENDENCY_CACHE='1';
+  checkInstallation({terrainPreparation:false,dependencyCache:false},false,false);
+  process.env.HOLLOW_WAKE_TERRAIN_PREPARATION='0';process.env.HOLLOW_WAKE_DEPENDENCY_CACHE='0';
+  checkInstallation({terrainPreparation:true,dependencyCache:true},true,true);
+}finally{
+  if(priorTerrainFlag===undefined)delete process.env.HOLLOW_WAKE_TERRAIN_PREPARATION;
+  else process.env.HOLLOW_WAKE_TERRAIN_PREPARATION=priorTerrainFlag;
+  if(priorDependencyFlag===undefined)delete process.env.HOLLOW_WAKE_DEPENDENCY_CACHE;
+  else process.env.HOLLOW_WAKE_DEPENDENCY_CACHE=priorDependencyFlag;
+}
+installNodeMassWorkers({terrainPreparation:false,dependencyCache:false});
+assert.equal(massCompilePort('terrain'),undefined,'ordinary hosts do not activate the experimental terrain lane');
+assert.equal(massWorkersStatus().threads,0,'declining preparation does not start a compiler');
+installNodeMassWorkers({terrainPreparation:true,dependencyCache:false});
 const world=makeSimWorld('warrior',901743);
 world.startWorldMass(901743);const mass=world.massRuntime!;
 const native=createNativeFeatureWarmQueue()!,geographic=createGeographicPlanWarmQueue()!,procession=createProcessionPlanWarmQueue();
@@ -63,6 +102,20 @@ try{
   assert.equal(canonical(prepared.preparation),canonical(compileProcessionPlan(route)));
   assert.equal(procession.stats.fallbackSteps,0);assert.equal(massWorkersStatus().threads,1,'all compiler queues share one thread');
   assert.equal(massWorkersStatus().failed,0);
+  const terrainQueue=createTerrainWarmQueue(mass.generator);assert.ok(terrainQueue,'ordinary production generator supports background preparation');
+  try{
+    const half=mass.generator.spec.terrainCell/2;
+    const center=address('surface','-9007199254740993','0',half,half,mass.generator.spec.addressSpan);
+    terrainQueue.offer([center]);
+    assert.equal(massWorkersStatus().threads,2,'terrain has a separate lazy lane');
+    let terrainBeats=0;const pulse=setInterval(()=>terrainBeats++,5);
+    let value:NonNullable<ReturnType<typeof terrainQueue.take>>;
+    try{value=await ready(()=>terrainQueue.stats.ready?terrainQueue.take(center):undefined,()=>terrainQueue.error);}finally{clearInterval(pulse);}
+    assert.ok(terrainBeats>0,'host remains available during real terrain compiler work');
+    assert.deepEqual(prepareTerrainPacket(value),prepareTerrainPacket(mass.generator.baseTerrainAt(center)),'real worker preserves exact base values, prototypes, frozen/owned brands and key order');
+    assert.equal(terrainQueue.stats.adopted,1);
+  }finally{terrainQueue.dispose();}
+  assert.equal(massWorkersStatus().threads,1,'terrain disposal preserves the content lane');
   const dynamic={nested:{value:1}},shallow=Object.freeze(dynamic),first=massDigest(shallow);dynamic.nested.value=2;
   assert.notEqual(massDigest(shallow),first,'shallow freeze cannot conceal changed children');
   const frozen=freezeData({nested:{value:1}});assert.equal(canonical(frozen),'{"nested":{"value":1}}');

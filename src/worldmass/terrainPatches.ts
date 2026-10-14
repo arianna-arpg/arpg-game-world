@@ -1,7 +1,7 @@
 import { pourLobes, pourContains } from '../engine/genkit';
 import { address, floorDiv, latticeAt, localOffset, moveAddress, type MassAddress } from './address';
 import type { MassPatchChoice, MassPatchPolicy, MassRange, MassRun, MassSpec, MassTerrain } from './contracts';
-import { canonical, freezeData, massRandom } from './random';
+import { canonical, canonicalStringTriple, freezeData, massRandom } from './random';
 
 export interface MassPatchBox { minX: number; minY: number; maxX: number; maxY: number }
 export interface MassPatchPlan {
@@ -83,7 +83,7 @@ export class MassTerrainPatches {
     return address(dimension, cx, cy, x, y, this.spec.addressSpan);
   }
   private candidate(dimension: string, gx: bigint, gy: bigint): Readonly<MassPatchPlan> | null {
-    const key = canonical([dimension, gx.toString(), gy.toString()]);
+    const key = canonicalStringTriple(dimension, gx.toString(), gy.toString());
     if (this.cache.has(key)) return this.cache.get(key)!;
     const origin = this.origin(dimension, gx, gy);
     const plan = origin ? this.make(key, origin) : null;

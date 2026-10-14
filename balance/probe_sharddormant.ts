@@ -52,6 +52,7 @@ import type { ItemCategory } from '../src/engine/items';
 import type { Seat } from '../src/engine/world';
 import { ensureAccountId, makeAccount, type Account } from '../src/meta/account';
 import { serializeCouchGuest, type CharacterSave } from '../src/meta/character';
+import { SoakLifeInput } from './soak_bot_lifecycle';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -481,6 +482,93 @@ const gone = (id: string): Promise<boolean> => waitFor(() => !seatOf(id) && seen
   check('G cable: a client-side TCP drop (no close frame at all) leaves the hero dormant',
     cableActed && host.net.isDormant(cable.self) && !!seatOf(cable.self) && !seen.leaves.includes(cable.self));
   sleepers.push(quiet.self, cable.self);
+}
+
+// ============================= G: SOAK CUT AFTER A REAL REJOIN ==
+{
+  const life = new SoakLifeInput(), client = new WsTransport();
+  let self = '', ended = false, rejoined = false;
+  const received = { latest: null as StateSnapshot | null };
+  const currentSeat = () => received.latest?.seats[self];
+  client.onState(s => { received.latest = s; life.observe(s.seats[self]?.seq); });
+  client.onSession(m => {
+    if (m.t === 'runEnd') { ended = true; life.reset(); }
+    if (m.t === 'newRun') { rejoined = true; life.reset(); }
+  });
+  const joined = await client.connect(url, { name: 'Soak rejoin', classId: 'magician' });
+  self = joined.self;
+  const token = shardResumeFor(url)!;
+  const firstSeq = 10001, firstInput = step(self, firstSeq);
+  life.sent(firstInput); client.sendInput(self, firstInput);
+  check('G soak setup: current life acted and its input is acknowledged',
+    await waitFor(() => life.canCut, host, 120) && seatOf(self)?.actor.untargetable === false);
+  const hero = seatOf(self)!.actor;
+  hero.downed = true; hero.life = 0;
+  check('G soak setup: the ordinary fresh-hero death ends before its class-pick rejoin',
+    await waitFor(() => ended && !seatOf(self), host, Math.ceil(VESSEL_CFG.deathBeatSec * SHARD_CFG.tickHz) + 120));
+  client.sendSession({ t: 'rejoin', classId: 'magician' });
+  check('G soak setup: the same connection rejoins a fresh hero', await waitMs(() => rejoined && !!seatOf(self)));
+  received.latest = null;
+  await runTicks(host, 3);
+  await waitMs(() => !!currentSeat());
+  const standing = currentSeat();
+  check('G soak: a standing rejoin with the old life ack is not eligible for a planned cut',
+    !!standing && !standing.dead && !standing.downed && standing.seq === firstSeq
+    && seatOf(self)?.actor.untargetable === true && !life.canCut);
+  const nextInput = step(self, firstSeq + 1);
+  life.sent(nextInput); client.sendInput(self, nextInput);
+  life.observe(firstSeq); // A stale snapshot cannot acknowledge the newly sent life.
+  check('G soak: sending a new willed input is not enough until that life is acknowledged', !life.canCut);
+  // Reproduce the old fleet order: send, close, and let I/O run without another
+  // simulation tick. The deliberate untried-seat rule releases this hero.
+  (client as unknown as { ws: WebSocket }).ws.close();
+  await waitMs(() => !seatOf(self) && !host.net.isDormant(self));
+  check('G soak reproduction: an unacknowledged rejoin is released by the existing untried-seat law',
+    !seatOf(self) && !host.net.isDormant(self));
+
+  const nextLife = new SoakLifeInput(), returned = new WsTransport();
+  let nextSelf = '', nextEnded = false, nextRejoined = false;
+  const nextReceived = { latest: null as StateSnapshot | null };
+  const nextCurrentSeat = () => nextReceived.latest?.seats[nextSelf];
+  returned.onState(s => { nextReceived.latest = s; nextLife.observe(s.seats[nextSelf]?.seq); });
+  returned.onSession(m => {
+    if (m.t === 'runEnd') { nextEnded = true; nextLife.reset(); }
+    if (m.t === 'newRun') { nextRejoined = true; nextLife.reset(); }
+  });
+  const fresh = await returned.connect(url, { name: 'Soak rejoin', classId: 'magician' }, undefined, token);
+  nextSelf = fresh.self;
+  const nextToken = shardResumeFor(url)!;
+  check('G soak reproduction: the released token joins fresh, matching the early-load failure', !fresh.resumed && fresh.self !== self);
+  const idle = { ...step(nextSelf, 1), dx: 0, dy: 0 };
+  nextLife.sent(idle); nextLife.observe(1);
+  check('G soak: an idle acknowledgment never qualifies as a willed step', !nextLife.canCut);
+  const acted = step(nextSelf, 2);
+  nextLife.sent(acted); returned.sendInput(nextSelf, acted);
+  check('G soak: the replacement hero becomes eligible only after its own willed input ack',
+    await waitFor(() => nextLife.canCut, host, 120) && seatOf(nextSelf)?.actor.untargetable === false);
+  const nextHero = seatOf(nextSelf)!.actor;
+  nextHero.downed = true; nextHero.life = 0;
+  check('G soak setup: the positive control also ends its first life',
+    await waitFor(() => nextEnded && !seatOf(nextSelf), host, Math.ceil(VESSEL_CFG.deathBeatSec * SHARD_CFG.tickHz) + 120));
+  returned.sendSession({ t: 'rejoin', classId: 'magician' });
+  check('G soak setup: the positive control receives a real newRun', await waitMs(() => nextRejoined && !!seatOf(nextSelf)));
+  nextReceived.latest = null;
+  await runTicks(host, 3);
+  await waitMs(() => !!nextCurrentSeat());
+  check('G soak: the positive control loses its previous life eligibility on newRun',
+    nextCurrentSeat()?.seq === acted.seq && !nextLife.canCut);
+  const rejoinedInput = step(nextSelf, 3);
+  nextLife.sent(rejoinedInput); returned.sendInput(nextSelf, rejoinedInput);
+  check('G soak: a real rejoin becomes eligible after its new life willed input ack',
+    await waitFor(() => nextLife.canCut, host, 120) && seatOf(nextSelf)?.actor.untargetable === false);
+  const returnedHero = seatOf(nextSelf)!.actor;
+  (returned as unknown as { ws: WebSocket }).ws.close();
+  check('G soak: an eligible cut is held dormant without changing any grace or timer', await waitMs(() => host.net.isDormant(nextSelf)));
+  const resumed = new WsTransport();
+  const back = await resumed.connect(url, { name: 'Soak rejoin', classId: 'magician' }, undefined, nextToken);
+  check('G soak: an acknowledged life resumes the same seat and exact actor',
+    back.resumed && back.self === nextSelf && seatOf(nextSelf)?.actor === returnedHero);
+  resumed.leave(); await gone(nextSelf);
 }
 
 // ========================================== H: THE CLOSING SHARD ==

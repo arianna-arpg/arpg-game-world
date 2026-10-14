@@ -100,7 +100,7 @@ export class ShardPerformance {
     const runtime = host.world.massRuntime;
     this.samples.push({ sec: round((performance.now() - this.started) / 1000), workers: massWorkersStatus(),
       native: runtime?.nativeWarm?.stats, geographic: runtime?.geography?.warmStats,
-      terrainPreparation: [...new Set([host.world,...host.units.worlds()])].map(world=>(world.massRuntime as { terrainWarm?: { stats?: unknown } } | null)?.terrainWarm?.stats??null),
+      terrainPreparation: [...new Set([host.world,...host.units.worlds()])].map(world=>world.massRuntime?.terrainWarm?.stats??null),
       paging: runtime?.nativePagingStats, resumePending: runtime?.resumePending,
       terrain: runtime?.stream.stats, terrainRevision: runtime?.stream.revision, nativeRevision: runtime?.nativeFeatures?.version,
       counts: { ...this.counts } });

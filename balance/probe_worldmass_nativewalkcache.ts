@@ -43,6 +43,44 @@ const make=(terrain:MassSpec=spec)=>{
  console.log('PASS bounded hot native queries, exact mixed24/30 and negative edges, native/base revisions, restore and equal-revision provider replacement');
 }
 const restore=seedGlobalRandom(713);
+{
+ const {walk}=make();let cellSize=30,reads=0,solid=true;
+ walk.native={get cellSize(){reads++;return cellSize;},revision:0,regionAt:()=>solid?'crag':'ground'};
+ assert.equal(walk.cellSize,6);assert.equal(walk.regionAt(1,1),'crag');
+ for(let i=0;i<2000;i++)assert.equal(walk.cellSize,6);
+ assert.ok(reads>=2000,'memoized lattice still reads live provider sizes');
+ cellSize=20;solid=false;
+ assert.equal(walk.cellSize,4);assert.equal(walk.regionAt(1,1),'ground','in-place lattice change clears hot region answers at equal revision');
+ const grid={cellSize:9,version:0,regionAt:()=> 'ground'} as unknown as NonNullable<MassWalk['overlay']>['grid'];
+ walk.overlay={grid,contains:()=>false};assert.equal(walk.cellSize,1);
+ grid.cellSize=12;assert.equal(walk.cellSize,4,'overlay mutation invalidates the size memo without replacement');
+ walk.native=undefined;assert.equal(walk.cellSize,12);walk.overlay=undefined;assert.equal(walk.cellSize,24);
+ console.log('PASS common-lattice memo observes size mutation, removal and hot region invalidation');
+}
+{
+ const {walk,stream,state}=make();let generated=0;
+ const original=stream.generator.terrainAt.bind(stream.generator);
+ stream.generator.terrainAt=at=>{generated++;return original(at);};
+ walk.setFocusCount(6);stream.setFocusCount(6);
+ const points=Array.from({length:180},(_,i)=>({x:(i%30)*24+1+Math.floor(i/30)*4000,y:1}));
+ const expected=points.map(p=>walk.regionAt(p.x,p.y));const cold=generated;
+ for(const p of [...points].reverse())walk.regionAt(p.x,p.y);
+ assert.equal(generated,cold,'recent terrain remains reusable within the capped sample budget');
+ assert.ok((walk as unknown as {regions:Map<string,string>}).regions.size<=64,'six foci cannot multiply the region memo beyond two neighborhoods');
+ assert.ok(stream.stats.samples<=256,'terrain sample memo is capped at two neighborhoods');
+ walk.setFocusCount(16);stream.setFocusCount(16);
+ for(let i=0;i<600;i++)walk.regionAt(i*24+1,24001);
+ assert.ok((walk as unknown as {regions:Map<string,string>}).regions.size<=64);
+ assert.ok(stream.stats.samples<=256,'sixteen foci use the same finite sample ceiling');
+ state.paint({address:moveAddress(origin,points[90],960),region:'wall',color:'#123456',cause:'cache-probe'});
+ assert.equal(walk.regionAt(points[90].x,points[90].y),'wall','sparse edits still invalidate immediately');
+ walk.setFocusCount(1);stream.setFocusCount(1);
+ assert.ok((walk as unknown as {regions:Map<string,string>}).regions.size<=32);
+ assert.ok(stream.stats.samples<=128,'leaving players release derived cache capacity');
+ for(let i=0;i<points.length;i++)assert.equal(walk.regionAt(points[i].x,points[i].y),i===90?'wall':expected[i]);
+ for(const n of [-1,17,1.5,NaN]){assert.throws(()=>walk.setFocusCount(n));assert.throws(()=>stream.setFocusCount(n));}
+ console.log('PASS bounded multi-focus terrain caches, exact edits, shrink and replay');
+}
 try{
  makeSimWorld('warrior',713);
  const {walk,stream}=make({...spec,terrainCell:30});
