@@ -2,6 +2,17 @@
 
 The foundation now supplies F1 and F3 requested by the shard lane in `docs/design/shard-world.md` §7g and `docs/design/shard-m6-plan.md` §3.3. The shard lane still owns governor policy, its host integration and its branch conflict resolutions.
 
+## Foundation checkpoint — 2026-10-14
+
+The audited main reconciliation is committed as `d94f36c73c7d3179b96088e6bf42025dfd923ab4`, with the foundation and pinned main `a2fa42917262e9229140b6364b6d5e461b32f50e` as its parents. The 46 formerly main-only commits now have genuine merged ancestry; behind that pinned main is zero. Runtime/content auditing and the retained roster cancellation repair accompanied the merge. This ancestry result does not claim complete playable-content acceptance.
+
+Retained Fracture completed-hop lifetime is independently accepted, committed as `9e50d2f2ecbe44900cc09969a34c6f3c06988918`, and pushed to `codex/seamless-parity-checkpoint-20261014`. Actual return/capstone, callback, occupancy, successor and cold Continue courses pass. The bounded Amalgamation stage follow-up is documented in `docs/worldgen/native-amalgamation-stage-lifetime.md`; its composition remains subject to independent source review before promotion.
+
+The current original `nativeinstalledsources` assertion is red. Diagnostic 228 identifies two retained-owner bridges: `nativeCrusadeFixtureMemory` → `nativeCrusadeTerrain`, and `nativeVendettaIdentity` → `nativeAreaSceneVendettaLifetime`; both ultimately reach `World`. A static cut is only an architectural diagnosis, not an implemented or accepted repair. The older `0c1d154c` replay table below remains its historical observation, including its then-passing installed-source result; it is not the current result. No assertion, baseline or tolerance has been relaxed.
+
+Private quest/party instances, generated entrances and bounded terrain, server capacity and scheduler acceptance remain open. Firefox/cooperative loading changes need adaptation to the actual retained entry and original guard contracts. The shared `origin/codex/seamless-world-foundation` tip `cbafcc5b` has 13 separate remote-only commits still requiring deliberate reconciliation; merging main does not settle that divergence. Shard-owned integration and conflict resolutions remain with the shard lane.
+
+This document is the written cross-lane relay. It does not claim direct Claude IPC or delivery to another running session. Notify and coordinate with the shard lane before resolving its files.
 ## F1: host population allowance
 
 `WorldMassRuntime.setPopulationBudget({ total, floor } | null)` changes future population admissions. Each connected focus group receives `max(floor, min(config.maxPopulation, floor(total / groupCount)))`. A floor can make the sum exceed the requested total; the caller must report that condition rather than silently reducing its floor. Existing bodies, wounds and reservations remain intact. Passing `null` restores the original policy.

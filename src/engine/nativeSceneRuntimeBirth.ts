@@ -698,7 +698,7 @@ export function birthPlaceAmalgamMiniboss(nativeHost:NativeSceneRuntimeBirthHost
     if (!af || nativeHost.inCave) return;
     const mb = af.minibossIn(def.id);
     if (!mb || !sources.MONSTERS[mb.defId]) return;
-    const key = `${mb.id}@${def.id}`;
+    const key = `${mb.id}:${mb.stage}@${def.id}`;
     if (nativeHost.materializedAmalgamMobs.has(key)) return;
     nativeHost.materializedAmalgamMobs.add(key);
     const cfg = af.surge();
