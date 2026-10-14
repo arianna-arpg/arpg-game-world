@@ -114,7 +114,12 @@ for (const id of ['summon_skeleton', 'summon_stone_golem', 'flame_totem', 'bone_
   p.casting = { mode: 'channel', inst, aim: { x: 820, y: 700 }, remaining: 1, total: 1, held: true, elapsed: 0, baseMult: 1 } as NonNullable<typeof p.casting>;
   w.executeSkill(p, inst, { x: 820, y: 700 }); const z = w.zones[0]; assert(z.armed);
   const visual = skillFieldVisual(z, w.time); check('release-armed storm holds without pretending to count down', visual.armed && z.delay > 9000);
-  const peer = rig().w; applySnapshot(peer, serializeSnapshot(w, 1)); assert.deepEqual(peer.remoteSkillFields?.[0], visual);
+  const peer = rig().w, snap = serializeSnapshot(w, 1); applySnapshot(peer, snap);
+  const paint = peer.remoteSkillFields![0]; assert(paint.armed);
+  assert.equal(paint.skillId, visual.skillId); assert.equal(paint.radius, snap.zones![0].r);
+  assert.deepEqual(paint.pos, {x:snap.zones![0].p[0],y:snap.zones![0].p[1]});
+  assert.equal(paint.telegraph, 1); assert.equal(paint.delay, 1, 'armed warning stays at normalized hold until release');
+  assert.equal(snap.skillFields, undefined, 'no duplicate unfiltered fields');
   p.casting = null; api.updateZones(.01); check('released storm warning adopts its real per-strike clock', !z.armed && z.delay0 === .05 && z.delay < .05);
   api.updateZones(.1); check('released storm fires at that deadline', w.flashes.some(f => f.fx === skillPresenceVoice('sparklattice', 'pulse')));
 }

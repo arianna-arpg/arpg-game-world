@@ -7,12 +7,26 @@ import { prepareNativeFeature, type NativeCompileJob } from '../src/worldmass/na
 import { prepareGeographicPlan, type GeographicPlanJob } from '../src/worldmass/geographicPlan';
 import { prepareProcessionPlan, type ProcessionPlanJob } from '../src/worldmass/processionPlan';
 import type { MassCompiler } from '../src/worldmass/compilePort';
+import { createTerrainPreparationCompiler, type TerrainPreparationJob } from '../src/worldmass/terrainPreparation';
+import type { TerrainPreparationInit } from '../src/worldmass/terrainWarm';
 
 const generators = new Map<number, { key: string; generator: MassGenerator }>();
-parentPort!.on('message', (message: { port: number; kind: MassCompiler; job?: NativeCompileJob | GeographicPlanJob | ProcessionPlanJob }) => {
+const terrainCompilers = new Map<number, ReturnType<typeof createTerrainPreparationCompiler>>();
+parentPort!.on('message', (message: { port: number; kind: MassCompiler; job?: NativeCompileJob | GeographicPlanJob | ProcessionPlanJob | TerrainPreparationJob | TerrainPreparationInit }) => {
   const { port, kind, job } = message;
-  if (!job) { generators.delete(port); return; }
+  if (!job) { generators.delete(port); terrainCompilers.delete(port); return; }
   try {
+    if (kind === 'terrain') {
+      if ('source' in job) {
+        if (terrainCompilers.has(port) || job.protocol !== 1 || job.token !== 1) throw Error('Invalid terrain compiler initialization');
+        terrainCompilers.set(port, createTerrainPreparationCompiler(job.source));
+        parentPort!.postMessage({ port, reply: { protocol: 1, token: job.token, sourceId: job.source.sourceId, ready: true } });
+      } else {
+        const compiler = terrainCompilers.get(port); if (!compiler) throw Error('Terrain compiler is not initialized');
+        parentPort!.postMessage({ port, reply: compiler.prepare(job as TerrainPreparationJob) });
+      }
+      return;
+    }
     if (kind === 'native') {
       parentPort!.postMessage({ port, reply: prepareNativeFeature(job as NativeCompileJob) }); return;
     }

@@ -239,6 +239,7 @@ try {
 // Full authority boundary: real production lottery, source, terrain, scene
 // proof and native factories. Only initial arrival/cave travel and timing are
 // controlled here; the browser proves the physical multi-chunk escort.
+// Refusal controls supplement the fixed must-admit route below; they never replace it.
 // New terrain/dressing can legitimately refuse a previously legal coordinate.
 // Discover a real admitted owner; every rejected road must retain its solid and
 // publish no actors, controllers, chest or painted road. No collision bypass.
@@ -300,7 +301,10 @@ const countryUndo=seedGlobalRandom(713);
 try{
  const fresh=(seed:number)=>makeSimWorld('warrior',seed); // native default settlement includes its cellar house
  let w=fresh(713);w.startWorldMass(713);let m=w.massRuntime!,g=m.geography!,binding=g.caravans;
- const candidate=naturalProcession(w,false),id=candidate.owner.id;
+ const location=address('surface','0','0',4*5400+2700,-2*5400+2700,960),candidate=g.processionPlannedAt(location);assert.ok(candidate);
+ const local=(at:MassAddress)=>localOffset(at,{...m.origin,x:0,y:0},960),entry=local(candidate.entry);w.landPartyAt({x:entry.x-300,y:entry.y});m.update(w,true);
+ for(let n=0;n<5000&&!binding.processions.actors(candidate.owner.id).size;n++){w.time+=.02;m.update(w);binding.update(w,0);if(n%100===0){const pending=g.processionPlannedAt(location);if(pending){const p=local(pending.entry);if(Math.hypot(p.x-w.player.pos.x,p.y-w.player.pos.y)>1300)w.landPartyAt({x:p.x-300,y:p.y});}}}
+ const id=candidate.owner.id;assert.ok(binding.processions.actors(id).size,'real natural cart must pass current whole route admission '+JSON.stringify(binding.warmStats));
  const definition=canonical(binding.processions.definition(id)),cart=[...binding.processions.actors(id).values()].find(a=>a.tag==='procession_cart')!;assert.ok(cart);
  const step=(dt:number)=>{w.time+=dt;binding.update(w,0);};
  w.player.pos={...cart.pos};step(PROCESSION_CFG.entryGraceSec+.001);step(1);assert.ok(binding.processions.views().find(v=>v.owner===id)!.rolling);

@@ -14,7 +14,7 @@ import { meleeReachCueOf } from '../engine/meleeReach';
 import type { TitanScenePiece } from '../engine/titans';
 import { cosmeticStyle, COSMETIC_PROJECTILES } from '../data/cosmeticStyles';
 import { cosmeticLoadoutFor, cosmeticSummonSkill, cosmeticSkillPaint, sanitizeCosmeticLoadout } from '../meta/cosmetics';
-import { skillFieldVisual, cloneSkillFieldVisual, type SkillFieldVisual } from '../engine/skillFieldVisual';
+import { cloneSkillFieldVisual, type SkillFieldVisual } from '../engine/skillFieldVisual';
 import { skillTetherVisual } from '../engine/skillTetherVisual';
 import { cloneLightningTrace, type LightningTrace } from '../engine/lightningVisual';
 import { cloneMovementTrail, type MovementTrail } from '../engine/skillMovementVisual';
@@ -376,8 +376,10 @@ export interface DeathBurstW { p: Vec2W; ph: 0 | 1; r: number; c: string; arm: 0
  *  victims, clocks of ticks or domains cross). Sparse: every optional row is absent
  *  in its common case. Rebuilt as render stubs by applySnapshot (the cast-stub idiom). */
 export interface ZoneW {
-  /** Authored paint data shares the existing near-player and per-seat wire gates. */
-  visual?: SkillFieldVisual;
+  /** Skill identity for a field whose caster is not a seated hero. */
+  vi?: string;
+  /** A release-armed warning holds preparation until its host releases it. */
+  ar?: 1;
   /** The zone's wire id (stable for its life): the client glides p/r/f/fill by it. */
   id: number;
   p: Vec2W; r: number; c: string;
@@ -1394,12 +1396,15 @@ function zonesOf(world: World): ZoneW[] | undefined {
 function zoneW(z: ZoneT, world: World, heroes: ReadonlySet<Actor>): ZoneW {
   let m = ZONE_MEMOS.get(z);
   if (!m) { m = { id: ++zoneSeq }; ZONE_MEMOS.set(z, m); }
-  const w: ZoneW = { visual: skillFieldVisual(z, world.time), id: m.id, p: v2(z.pos), r: Math.round(z.radius * 10) / 10, c: z.color };
+  const w: ZoneW = { id: m.id, p: v2(z.pos), r: Math.round(z.radius * 10) / 10, c: z.color };
+  // Circular skill motifs also rotate; identity does not depend on hit shape.
+  if (z.shape || z.facing) w.f = Math.round(z.facing * 1000) / 1000;
+  if (z.onGround?.length) w.og = [...z.onGround];
   if (z.shape) {
     w.sh = z.shape;
-    w.f = Math.round(z.facing * 1000) / 1000;
     if (z.arcRad !== undefined) w.arc = Math.round(z.arcRad * 1000) / 1000;
   }
+  if (z.armed) w.ar = 1;
   const tier = z.tier ?? z.caster.tier ?? 0;
   if (tier) w.tier = tier;
   if (z.exploded) {
@@ -1410,8 +1415,7 @@ function zoneW(z: ZoneT, world: World, heroes: ReadonlySet<Actor>): ZoneW {
     if (z.pulse && z.pulse.left > 0) w.pr = [Math.round(Math.max(0, z.pulse.next - world.time) * 100) / 100, Math.round(z.pulse.radiusMult * 1000) / 1000];
   } else {
     if (!z.armed && m.span === undefined) m.span = z.delay0 !== undefined && z.delay0 > 0 && z.delay0 < 100 ? z.delay0 : z.delay;
-    w.fill = z.armed || !m.span ? 0 : Math.round(Math.max(0, Math.min(1, 1 - z.delay / m.span)) * 100) / 100;
-    if (z.onGround?.length) w.og = [...z.onGround];
+    w.fill = z.armed ? 0 : !m.span ? (z.delay <= 0 ? 1 : 0) : Math.round(Math.max(0, Math.min(1, 1 - z.delay / m.span)) * 100) / 100;
     if (z.edgeFrac) w.ef = Math.round(z.edgeFrac * 1000) / 1000;
     if (z.lobFrom) { w.lf = v2(z.lobFrom); if (z.lobArc !== undefined) w.la = z.lobArc; }
   }
@@ -1419,6 +1423,7 @@ function zoneW(z: ZoneT, world: World, heroes: ReadonlySet<Actor>): ZoneW {
   const rider = z.anchor ?? (z.follow ? z.caster : undefined);
   if (rider) w.ri = rider.id;
   if (heroes.has(z.caster)) { w.ci = z.caster.id; w.sk = z.inst.def.id; if (z.toggled) w.tg = 1; }
+  else if (z.inst.def.id) w.vi = z.inst.def.id;
   return w;
 }
 
@@ -1826,8 +1831,23 @@ function zoneStub(z: ZoneW, time: number): ZoneStub {
     toggled: z.tg ? true : undefined,
   } as ZoneStub;
 }
-/** THE SPLIT's per-frame half of a zone stub: its row `z` glided from `pz` (the same zone in
- *  `prev`) by `alpha`; with no `pz` the row's own values stand. */
+/** Paint-only view of the same compact, filtered and interpolated field row. */
+function zonePaint(stub: ZoneStub, z: ZoneW, time: number): SkillFieldVisual {
+  return {
+    skillId: z.sk ?? z.vi ?? '', get pos() { return stub.pos; },
+    get radius() { return stub.radius; }, get facing() { return stub.facing; },
+    get delay() { return stub.delay; }, color: z.c, shape: z.sh ?? 0,
+    exploded: !!z.ex, linger: z.ex ? 1 : 0, tier: z.tier ?? 0, telegraph: 1,
+    arcRad: z.arc, delay0: z.lf ? 1 : undefined, onGround: z.og?.slice(),
+    edgeFrac: z.ef, edge: z.ed,
+    seg: z.seg ? { ax: z.seg[0], ay: z.seg[1], bx: z.seg[2], by: z.seg[3] } : undefined,
+    armed: !!(z.ar || z.sa), volatile: !!z.sv,
+    lobFrom: z.lf ? { x: z.lf[0], y: z.lf[1] } : undefined, lobArc: z.la,
+    pulse: z.pr ? { left: 1, next: time + z.pr[0], radiusMult: z.pr[1] } : undefined,
+  };
+}
+
+/** Reset a field to its row, then glide toward it from the preceding snapshot. */
 function glideZoneStub(stub: ZoneStub, z: ZoneW, pz: ZoneW | undefined, alpha: number): void {
   if (!pz) {
     stub.at.x = z.p[0]; stub.at.y = z.p[1]; stub.radius = z.r; stub.facing = z.f ?? 0;
@@ -2273,19 +2293,10 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     adopted.zones.set(z.id, stub);
     return stub;
   }) as unknown as World['zones'];
-  // Legacy visual packets remain readable; new shard packets carry art in the
-  // bounded ZoneW row so visibility filtering and interpolation remain authoritative.
+  // Older visual-only co-op packets remain readable. New hosts publish one
+  // filtered compact row, shared by interpolated paint and the hotbar stub.
   world.remoteSkillFields = snap.zones !== undefined
-    ? snap.zones.map(z => {
-      const stub = adopted.zones.get(z.id)!;
-      const v = z.visual ? cloneSkillFieldVisual(z.visual) : skillFieldVisual(stub as unknown as World['zones'][number], snap.time);
-      const rawDelay = v.delay, normalizedDelay = 1 - (z.ex ? 1 : z.fill ?? 0);
-      const span = normalizedDelay > 0 ? rawDelay / normalizedDelay : 1;
-      return { ...v, get pos() { return { x: v.pos.x + (stub.pos.x - z.p[0]), y: v.pos.y + (stub.pos.y - z.p[1]) }; },
-        get radius() { return v.radius + (stub.radius - z.r); },
-        get facing() { return v.facing + (stub.facing - (z.f ?? 0)); },
-        get delay() { return rawDelay + (stub.delay - normalizedDelay) * span; } };
-    })
+    ? snap.zones.map(z => zonePaint(adopted.zones.get(z.id)!, z, snap.time))
     : (snap.skillFields ?? []).map(cloneSkillFieldVisual);
   ADOPTED.set(world, adopted);
   world.townPortalClientViews = (snap.townPortalViews ?? []).map(p => ({ ...p,

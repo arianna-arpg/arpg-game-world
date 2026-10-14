@@ -1,3 +1,11 @@
+ShardReconciliation (2026-10-13) joins the performance lane to shard-world.
+WorldMassRuntime exposes the transient M6 population budget/stats seam; null
+preserves the old law and lowering never despawns. Derived terrain/region memos
+cap at 2x while all focus pages remain resident. Wilds bounties use character
+identity and hand level. Compact field wire is protocol 6. See shard-world §7g
+and docs/engine/shard-runtime-foundation.md for exact goldens, five named red
+regressions and the validation receipt; no weakened assertion is a green fix.
+
 NativeAreaCoexistence makes fresh assemblies borrow campaign party relays and
 own trace state plus scoped activity holds on the real shared clock. Never let
 neighbor preparation acquire shared actor callbacks or release another area's
@@ -4093,6 +4101,55 @@ we verify changes.
   logged out. Verify `probe_sharddoor.ts`.
   THE ONE CROSSING (`src/net/crossing.ts`, `docs/engine/shard.md`, charter §7e): a hosted world's arrival (a server-bound wake, a direct join, a reload's return) and its pocket hand-offs ride one Mu crossing cover until the hero stands on streamed ground; the wake mints its vessel on a World that loads no zone, and a wilds shell parks its runtime across pockets (THE RUNTIME SURVIVES POCKETS), keeps its explored map per account and world (THE KEPT MAP) and carves the shard's open doors into its own grid; verify `probe_shardcrossing.ts`.
   THE FORESIGHT ON THE WIRE (W11, `docs/engine/shard.md`, charter §7e A7): an enemy wind-up's ring or wedge is one pure resolve (`engine/foresight.ts` `foresightOf`) painted from the geometry alone (`render/vis/foresightLayer.ts`); the host ships it on the cast row (`CastW.fg`, `net/foresightWire.ts`, both lanes) and a client's stub wears it, so the painter never resolves a stub (the crash on every hosted and co-op client); THE HIT TINT rides beside the flash (`ActorW.ht`) and THE WIRE DIET's carry holds the buyer's shelf row (`SeatW.vd`); verify `probe_shardforesight.ts`.
+- ShardPerformance (`balance/shardPerformance.ts`) supplies opt-in phase,
+  worker, checkpoint and window-only CPU evidence for `soak:shard`.
+  `docs/engine/shard-performance.md` records the controlled performance course,
+  native restoration layout and bounded multi-focus terrain caches. ShardPerformance
+  also covers exact search-work rejection, live-input lattice memoization,
+  bounded native candidate LRU and page-invalidated reservation candidates;
+  verify searchwork, reservationwork, nativewalkcache and nativeobstaclecache.
+  ShardPerformance also records conservative far-target rejection and closure-free
+  stat folds (targetwork, statfold), plus per-life acknowledged soak reconnects
+  (sharddormant). Live sensing and modifier order stay exact; soak gates stay fixed.
+  ShardPerformance traces cold intel terrain planning and dependency reflection;
+  surface-only terrain work and demanded candidate fields (worldmass_surfaces)
+  retain all-family inhibition, exact noise folds and complete content pages,
+  while dormancypinattribution pins exact owner identities and insertion order.
+  ShardPerformance also narrows compatible landform reservation queries to the
+  existing surface-page cache (worldmass_sitework) and removes per-sample noise
+  closures (worldmass_noisework); retain full content, exact hashes and arithmetic.
+  ShardPerformance removes temporary descriptor pairs during dependency scans
+  (worldmass_dormancywork), skips terminal dry-floor grammar samples
+  (worldmass_grammarwork), and evaluates lattice axes without closure/tuple setup
+  (worldmass_latticework), and shares canonical serialization's recursive visitor
+  (worldmass_canonicalwork). Preserve proxy traps, numeric late-owner references,
+  conservative fallback, full raster/RNG output and exact getter/error order. Serial soak
+  comparisons can use --window-after-host for a common minimum host-age warm-up;
+  record warm-up stalls and keep all load gates unchanged.
+  ShardPerformance reuses bounded string/seed hashes and shares oversized digest
+  traversal (worldmass_hashwork). Fixed terrain constructors (ownedTerrain,
+  worldmass_ownedterrain) allow direct own-value inspection while retaining
+  dependency recursion budgets, numeric references and unknown Proxy fallback.
+  Keep field records and painted/native/patch branches on their original paths;
+  verify actual sample-wrapper attribution plus full terrain/RNG and live courses.
+  ShardPerformance uses exact dense-string coordinate triples in five district
+  caches (worldmass_coordinatekeys); preserve escaping, signed coordinates and
+  original fallback/callback order. Compare incremental cold work separately
+  from the whole-candidate live course; unchanged density is mandatory.
+  ShardPerformance experiments with owned stream-cache dependency frontiers
+  (worldmass_dependencycache) and records sequence-service tails, lifecycle
+  censoring and snapshot silence (shardresponsiveness). Keep original callbacks,
+  certificate budgets and live mutation behavior. Both the frontier and detached
+  base terrain (worldmass_terrainpreparation/terrainwarm, shardworkers) are off
+  by default: HOLLOW_WAKE_DEPENDENCY_CACHE=1 selects frontiers for new streams;
+  HOLLOW_WAKE_TERRAIN_PREPARATION=1 independently enables the Node terrain lane.
+  Native/regional composition, patches, overlays, admission and immediate
+  fallback remain on the host. Repeated early/grouped trials must retain adverse
+  results; less component work alone does not prove better player response.
+  Preserve
+  exact saved state, full signed addresses, every player's population and the
+  unchanged load gates; verify the affected worldmass/native probes and shard
+  suites, all types, generation QA and simulation smoke before a checkpoint.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer. THE FOLIO (`ui/folio.ts` — docs
   `docs/ui/folio.md`, probe `balance/probe_folio.ts`): dwell dialogs that

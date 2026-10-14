@@ -5,6 +5,9 @@ import { cellKey, neighborCell, type MassCell } from './address';
 export interface MassFocus { id: string; pos: Vec2; tier: number }
 export interface MassPopulationSlot { pos: Vec2; count: number }
 export const MASS_FOCUS_LIMIT = 16;
+/** Derived terrain/region memo capacity is bounded independently of seat count.
+ * Residency still serves every focus; evicted answers are recomputed exactly. */
+export const MASS_FOCUS_CACHE_MULTIPLIER = 2;
 /** Per-sweep broad phase for player/companion observers. Distance remains exact;
  * splitting players across the map no longer multiplies every cohort scan. */
 export class MassObserverIndex {

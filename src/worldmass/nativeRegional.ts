@@ -8,7 +8,7 @@ import { address, floorDiv, latticeAt, localOffset, moveAddress, type MassAddres
 import type { MassPlace, MassRun, MassSpec, MassTerrain } from './contracts';
 import type { RegionalLandformSite } from './regionalLandformComposition';
 import type { MassPatchBox } from './terrainPatches';
-import { canonical, freezeData, massDigest, massRandom } from './random';
+import { canonical, canonicalStringTriple, freezeData, massDigest, massRandom } from './random';
 import { nativeRegionalCircle, nativeRegionalMaterial, nativeRegionalRoutes, type NativeRegionalGeometry } from './nativeRegionalGeometry';
 
 export interface NativeRegionalSource {
@@ -84,7 +84,7 @@ export class MassNativeRegional {
   }
   get policy():NativeRegionalPolicy{return this.spec.nativeRegional!;}
   candidate(dimension:string,gx:bigint,gy:bigint):NativeRegionalPlan|null {
-    const key=canonical([dimension,gx.toString(),gy.toString()]);
+    const key=canonicalStringTriple(dimension,gx.toString(),gy.toString());
     if(this.cache.has(key))return this.cache.get(key)!;
     const p=this.policy,rng=massRandom(this.run.seed,[p.source,p.version,key]),span=this.spec.addressSpan;
     let result:NativeRegionalPlan|null=null;
