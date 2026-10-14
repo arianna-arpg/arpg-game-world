@@ -67,6 +67,7 @@ import type { ShardStand } from '../src/net/vesselWire';
 import { readWildsSave, resumeWilds, setAsideWildsSave } from './wildsSave';
 import { installNodeMassWorkers } from './massWorkers';
 import { hydrateMassWorld, massCheckpointLand, type MassWorldCheckpoint } from '../src/worldmass/checkpoint';
+import { QUEST_GROUND_LEDGER } from '../src/engine/questLedger'; // THE OFFLINE HERO'S GROUND (W12)
 
 export const SHARD_CFG = {
   /** The fixed engine step (the sim harness's cadence; the live host's cap is 0.05). */
@@ -343,6 +344,9 @@ export class ShardHost {
   private resuming: Promise<void> = Promise.resolve();
   /** THE RUN ROW a saved wilds carried (adopted once the surface stood). */
   private wildsRun: unknown = undefined;
+  /** THE OFFLINE HERO'S GROUND (W12): the resumed save's claim ledger, handed to the vessel desk
+   *  once it stands (the resume runs before the desk is built). */
+  private groundSaved: unknown = undefined;
 
   constructor(opts: ShardOptions = {}) {
     installNodeMassWorkers();
@@ -376,7 +380,7 @@ export class ShardHost {
       // own order: createPlayer, then startWorldMass) — or THE WILDS SAVE stands
       // a saved surface back up in the mass lane's own resume order (wildsSave).
       const saved = this.savePath ? readWildsSave(this.savePath, SHARD_CFG.saveSchema, this.seed) : null;
-      if (saved && 'ws' in saved) { this.wildsRun = saved.run; this.resuming = this.resumeWildsSave(saved.ws); }
+      if (saved && 'ws' in saved) { this.wildsRun = saved.run; this.groundSaved = saved.ws.overlays?.[QUEST_GROUND_LEDGER]; this.resuming = this.resumeWildsSave(saved.ws); }
       else this.standFreshWilds(saved?.refused);
     } else {
       if (this.savePath && existsSync(this.savePath)) this.restore();
@@ -421,6 +425,9 @@ export class ShardHost {
       wake: seat => this.wakeAtHearth(seat),
       connected: id => !this.net.isDormant(id),
     });
+    // THE OFFLINE HERO'S GROUND (W12): the heroes' held ground a resumed save carried stands back up.
+    this.vessels.adoptGround(this.groundSaved);
+    this.groundSaved = undefined;
     this.units.onArrive = (seat, to, from, woke) => this.onArrive(seat, to, from, woke);
     // THE IDENTITY (THE SMOOTH SHELL): a join carrying a dormant vessel's account and character
     // takes that seat back without its token, never the twin refusal.
@@ -821,6 +828,8 @@ export class ShardHost {
     // THE COUNTERS AND THE JOURNAL: a seat's own remembered bodies ride its journal row's pins (the corpse on the chart).
     w.seatCorpseMarks = seat => this.corpses.forSeat(this.vessels.accountOf(seat.id), seat) // card 30: the bodies this seat may see
       .map(c => ({ zoneId: c.zoneId, ...(c.map ? { map: { ...c.map } } : {}), name: c.name, classId: c.classId, level: c.level }));
+    // THE OFFLINE HERO'S GROUND (W12): the keeper's world save claims every hero's quest ground.
+    w.heldQuestGround = u.role === 'keeper' ? () => this.vessels.groundLedger() : null;
     if (this.partyRevSeen >= 0) { w.partyRows = this.parties.rows(); w.partyRev++; }
     w.shardWorld = {
       role: u.role, key: u.key,
@@ -1245,6 +1254,7 @@ export class ShardHost {
       return;
     }
     adoptRunRow(this.world, save.run); // THE RUN ROW (absent = today)
+    this.groundSaved = ws.overlays?.[QUEST_GROUND_LEDGER]; // THE OFFLINE HERO'S GROUND: the desk adopts it once built
     this.world.reconcileSoulrivers();
     this.world.reconcileSeaPorts();
     this.world.reconcileWebLaws();

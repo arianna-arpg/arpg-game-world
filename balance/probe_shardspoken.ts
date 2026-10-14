@@ -27,10 +27,20 @@
 //      (JournalW.voc) on its socket alone; its render shell opens the menu off the row; the pick
 //      comes home as its own `vocationQuest` word and lands in its ledger alone; stepping away
 //      ends the ask.
+//   E  THE OFFLINE HERO'S GROUND: on a shard that writes its world, a vessel holding a quest on
+//      event ground (the Unmade's sealed vault) logs out; the desk keeps its ground, the world
+//      save keeps the vault and claims it in the ground ledger, a restarted shard keeps it
+//      through the transience scrub, and the hero logs back in holding its quest; the quest
+//      ended, the ground is released and the vault leaves the save; a copy whose hero has been
+//      gone longer than VESSEL_CFG.groundKeptDays releases its ground at its next save.
 import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, join as pathJoin } from 'node:path';
+import { tmpdir } from 'node:os';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { ShardHost, SHARD_CFG } from '../server/shardHost';
+import { ShardHost, SHARD_CFG, type ShardSave } from '../server/shardHost';
+import { VESSEL_CFG } from '../server/vessel';
 import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import { WsTransport } from '../src/net/ws';
 import type { SessionMsg } from '../src/net/transport';
@@ -40,7 +50,9 @@ import { BRANDT_CFG, BRANDT_HAMMER_QUEST, BRANDT_TROPHY_QUEST } from '../src/dat
 import { NPC_DIALOGUES } from '../src/data/npcDialogues';
 import { VOCATION_CFG, vocationDiscoveryKey } from '../src/data/vocations';
 import { QUESTS, ZONE_QUEST_GIVER_IDS } from '../src/quests/defs';
-import { FEATURE, makeAccount, questDoneKey } from '../src/meta/account';
+import { FEATURE, ensureAccountId, makeAccount, questDoneKey } from '../src/meta/account';
+import { serializeCouchGuest, type CharacterSave } from '../src/meta/character';
+import { QUEST_GROUND_LEDGER, type QuestGroundSave } from '../src/engine/questLedger';
 import { buildManifest } from '../src/packages/manifest';
 import { NullInput } from '../src/net/intent';
 import { adoptSnapshot, applyZone, interpolateSnapshot, serializeSnapshot, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
@@ -471,5 +483,111 @@ const shA = makeShell(A), shB = makeShell(B);
 
 await host.stop();
 restoreShardRandom();
+
+// ============================================== E: THE OFFLINE HERO'S GROUND ==
+// A classic shard that writes its world: a vessel holds a quest on event ground (the Unmade's
+// sealed vault, a special arena), logs out, the shard saves and restarts.
+{
+  const restoreGroundRandom = seedGlobalRandom(0x6e0d);
+  const SEED = 0x5e7e5e7, CHAR = 'c-probe-vesper', QID = 'unmade_l20';
+  const dir = mkdtempSync(pathJoin(tmpdir(), 'hw-spoken-')), dir2 = mkdtempSync(pathJoin(tmpdir(), 'hw-spoken-aged-'));
+  const tickH = async (h: ShardHost, cond: () => boolean, maxTicks: number): Promise<boolean> => {
+    for (let i = 0; i < maxTicks; i++) { if (cond()) return true; h.tick(DT); await yieldIO(); }
+    return cond();
+  };
+  const joinTo = async (h: ShardHost, port: number, name: string, accountId: string, vessel: CharacterSave): Promise<Client> => {
+    const c = new WsTransport();
+    const cl: Client = { c, id: '', heard: [], snaps: [], zones: [] };
+    c.onSession(m => { cl.heard.push(m); });
+    c.onState(s => { cl.snaps.push(s); });
+    c.onZone(z => { cl.zones.push(z); });
+    const welcome = await c.connect(`ws://127.0.0.1:${port}`, { name, classId: 'warrior', accountId }, vessel);
+    cl.id = welcome.self;
+    await tickH(h, () => !!h.units.seatOf(cl.id) && cl.snaps.length > 0, 120);
+    return cl;
+  };
+  const savedOf = (h: ShardHost): ShardSave => JSON.parse(readFileSync(h.savePath!, 'utf-8')) as ShardSave;
+  const ledgerIn = (s: ShardSave): QuestGroundSave | undefined => s.world.overlays?.[QUEST_GROUND_LEDGER] as QuestGroundSave | undefined;
+  try {
+    const h1 = new ShardHost({ seed: SEED, saveDir: dir, open: true, log: () => {} });
+    await h1.ready();
+    const port1 = await h1.listen(0, '127.0.0.1');
+    const w1 = h1.world;
+    const acct = makeAccount(); ensureAccountId(acct);
+    // The vessel: forged on a scratch seat in the couch guest's shape, as the wire carries it.
+    const forge = w1.addSeat('forge', warrior, new NullInput(), { startingCompanions: false, startingFlasks: false });
+    w1.seatHero(forge).level = 20;
+    forge.meta.name = 'Vesper'; forge.meta.charId = CHAR;
+    const vessel = JSON.parse(JSON.stringify(serializeCouchGuest(w1, forge, {}))) as CharacterSave;
+    w1.removeSeat('forge');
+    vessel.ledger = { mireille_flasks_given: 1 };
+    const V = await joinTo(h1, port1, 'Vesper', acct.accountId, vessel);
+    const sV = h1.units.seatOf(V.id)!;
+    w1.withQuestHand(sV, () => (w1 as unknown as Record<string, any>).acceptQuest(QUESTS[QID]));
+    const vault = w1.questLedgerOf(sV).active.find(q => q.questId === QID)?.zoneId ?? '';
+    check('E held: the hero takes a quest on event ground (the Unmade\'s sealed vault, a special arena)',
+      !!vault && !!w1.zoneMap[vault]?.eventOwned, `vault ${vault}`);
+    // Its mirror home, then it logs out on its feet.
+    const n0 = V.heard.length;
+    h1.vessels.mirror(V.id);
+    await tickH(h1, () => V.heard.slice(n0).some(m => m.t === 'heroSave'), 120);
+    const home = (V.heard.slice(n0).find(m => m.t === 'heroSave') as { save: CharacterSave } | undefined)?.save;
+    V.c.leave();
+    await tickH(h1, () => !h1.units.seatOf(V.id), 240);
+    check('E away: the desk keeps the absent hero\'s ground (its vault, noted at its leave)',
+      !h1.units.seatOf(V.id) && !!h1.vessels.heldGround(acct.accountId, CHAR)?.zones.includes(vault));
+    h1.persist();
+    const save1 = savedOf(h1), led1 = ledgerIn(save1);
+    check('E save: the world save keeps the absent hero\'s vault and claims it in the ground ledger (THE ZONE-CLAIM CONVENTION)',
+      save1.world.zones.some(z => z.id === vault) && !!led1?.ownedZones.includes(vault)
+        && !!led1?.heroes[`${acct.accountId}:${CHAR}`]?.zones.includes(vault),
+      `owned ${JSON.stringify(led1?.ownedZones)}`);
+    await h1.stop({ persist: false });
+    // A copy of that save, its hero gone longer than the dial (the expiry lane, below).
+    const aged = JSON.parse(JSON.stringify(save1)) as ShardSave;
+    const agedRow = ledgerIn(aged)!.heroes[`${acct.accountId}:${CHAR}`];
+    agedRow.at = Date.now() - (VESSEL_CFG.groundKeptDays + 1) * 86_400_000;
+    writeFileSync(pathJoin(dir2, basename(h1.savePath!)), JSON.stringify(aged));
+    // THE RESUME: the vault survives the transience scrub, and the hero comes back holding its quest.
+    const h2 = new ShardHost({ seed: SEED, saveDir: dir, open: true, log: () => {} });
+    await h2.ready();
+    check('E resume: a restarted shard keeps the absent hero\'s vault through the scrub, and its desk the hero\'s ground',
+      !!h2.world.zoneMap[vault]?.eventOwned && !!h2.vessels.heldGround(acct.accountId, CHAR)?.zones.includes(vault));
+    const port2 = await h2.listen(0, '127.0.0.1');
+    const V2 = await joinTo(h2, port2, 'Vesper', acct.accountId, JSON.parse(JSON.stringify(home)) as CharacterSave);
+    const sV2 = h2.units.seatOf(V2.id)!;
+    const back = h2.world.questLedgerOf(sV2).active.find(q => q.questId === QID);
+    check('E return: the hero logs back in holding its quest (its graft finds the vault standing)',
+      !!home && !!back && back.zoneId === vault, `active ${h2.world.questLedgerOf(sV2).active.map(q => q.questId).filter(id => !id.startsWith('odyssey_') && !id.startsWith('revenge_')).join(',')}`);
+    // The quest ends: its ground is released.
+    if (back) {
+      back.fieldDone = true;
+      h2.world.withQuestHand(sV2, () => (h2.world as unknown as Record<string, any>).onQuestZoneCleared(back));
+    }
+    h2.vessels.mirror(V2.id);
+    h2.persist();
+    const save2 = savedOf(h2);
+    check('E released: the quest ended, its ground is released (no hero holds it, no claim, the vault left the save)',
+      h2.world.questLedgerOf(sV2).completed.has(QID) && !h2.vessels.heldGround(acct.accountId, CHAR)
+        && !(ledgerIn(save2)?.ownedZones ?? []).includes(vault) && !save2.world.zones.some(z => z.id === vault));
+    V2.c.leave();
+    await tickH(h2, () => !h2.units.seatOf(V2.id), 240);
+    await h2.stop({ persist: false });
+    // THE EXPIRY: the aged copy resumes (its claim read by the scrub), and the next save releases it.
+    const h3 = new ShardHost({ seed: SEED, saveDir: dir2, open: true, log: () => {} });
+    await h3.ready();
+    const stood = !!h3.world.zoneMap[vault];
+    h3.persist();
+    const save3 = savedOf(h3);
+    check('E aged: a hero gone longer than VESSEL_CFG.groundKeptDays releases its ground at the next save (the vault left it)',
+      stood && !ledgerIn(save3) && !save3.world.zones.some(z => z.id === vault) && !h3.vessels.heldGround(acct.accountId, CHAR));
+    await h3.stop({ persist: false });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir2, { recursive: true, force: true });
+    restoreGroundRandom();
+  }
+}
+
 console.log(failed ? `\n${failed} FAIL` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

@@ -152,3 +152,37 @@ export function withQuestWorld(worlds: Record<string, QuestLedgerSave> | undefin
 export function charKeyOf(seat: { id: string; meta: { charId?: string } }): string {
   return seat.meta.charId || seat.id;
 }
+
+// ---- THE OFFLINE HERO'S GROUND (shard W12; docs/engine/shard.md "THE SPOKEN QUESTS") ----
+// A hosted world's save carries, under this reserved key of its overlay bag, the event
+// ground its heroes' quests name. `ownedZones` is THE ZONE-CLAIM CONVENTION's claim
+// (world/overlay.ts claimedZonesFromBag): the transience scrub keeps every such zone on
+// both sides of the save, so a hero who logs out holding a quest on event ground meets
+// it again after a restart. `heroes` keeps whose ground it is (server/vessel.ts
+// VesselDesk): a hero gone too long, a quest ended or a mortal fall releases it.
+
+/** The overlay bag's reserved key (no overlay id may start with ':'). */
+export const QUEST_GROUND_LEDGER = ':questGround';
+
+/** One hero's held ground: the event zones its quests named when last noted, and when (wall-clock ms). */
+export interface QuestGroundRow { zones: string[]; at: number }
+
+/** The ledger as the world save carries it. */
+export interface QuestGroundSave {
+  /** THE ZONE-CLAIM CONVENTION: every zone a kept hero's quest holds. */
+  ownedZones: string[];
+  /** By hero (`account:character`). */
+  heroes: Record<string, QuestGroundRow>;
+}
+
+/** A saved ledger's hero rows, structure alone (an unreadable row drops; never throws). */
+export function sanitizeQuestGround(raw: unknown): Record<string, QuestGroundRow> {
+  const out: Record<string, QuestGroundRow> = {};
+  const heroes = plain(raw) && plain(raw.heroes) ? raw.heroes : undefined;
+  for (const [key, row] of Object.entries(heroes ?? {})) {
+    if (!key || !plain(row) || !finite(row.at) || !Array.isArray(row.zones)) continue;
+    const zones = row.zones.filter((id): id is string => typeof id === 'string' && !!id);
+    if (zones.length) out[key] = { zones, at: row.at };
+  }
+  return out;
+}

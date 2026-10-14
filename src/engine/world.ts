@@ -309,7 +309,7 @@ import { massQuestDestination, massQuestSatisfied, massQuestTarget, validMassQue
 import { RELIQUARY_LESSON, resolveQuestZone } from '../quests/reliquary';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { imbuedItem, imbueOptions, mintQuestImbue, restoreQuestImbues, type QuestImbue } from './questImbue';
-import { charKeyOf, newQuestLedger, packQuestLedger, type QuestLedger, type QuestLedgerSave } from './questLedger'; // THE CHARACTER'S QUESTS (card 24)
+import { charKeyOf, newQuestLedger, packQuestLedger, QUEST_GROUND_LEDGER, type QuestGroundSave, type QuestLedger, type QuestLedgerSave } from './questLedger'; // THE CHARACTER'S QUESTS (card 24), THE OFFLINE HERO'S GROUND (W12)
 import { QuestRescues } from './questRescues';
 import { questRewardChoices } from './questRewardChoices';
 import { passiveRefund } from './passiveRefund';
@@ -15082,6 +15082,11 @@ export class World {
     // Snapshot the overlays FIRST: their bags carry the ownedZones claims
     // (world/overlay.ts convention) that decide which event ground rides.
     const overlays = this.sim.snapshotOverlays();
+    // THE OFFLINE HERO'S GROUND (shard W12): the event ground every hero's quests hold rides the
+    // bag as a claim ledger (THE ZONE-CLAIM CONVENTION), so the scrub keeps it on both sides of
+    // the save, absent heroes' too; null off a shard (the bag is what it was).
+    const held = this.heldQuestGround?.();
+    if (held) overlays[QUEST_GROUND_LEDGER] = held;
     // THE CHARACTER'S QUESTS: the world half saves the local seat's ledger (the run's quest
     // state; the keeper's sink on a hosted world), and every standing hero's held ground rides.
     const own = this.ownQuestLedger;
@@ -54595,6 +54600,10 @@ export class World {
   /** THE CORPSE ON THE CHART (installed by the shard): a seat's own remembered
    *  bodies, by zone and map coordinate, for its journal row's pins. */
   seatCorpseMarks: ((seat: Seat) => { zoneId: string; map?: { x: number; y: number }; name: string; classId: string; level: number }[]) | null = null;
+  /** THE OFFLINE HERO'S GROUND (installed by the shard, server/vessel.ts groundLedger): the
+   *  event ground every hero's quests hold, standing or away, for the world save's claim
+   *  (serializeWorldState). Null off a shard. */
+  heldQuestGround: (() => QuestGroundSave | undefined) | null = null;
 
   /** THE CLIENT'S COUNTERS: a render shell runs no sim, so main.ts drives its
    *  own seat's station lingers here the way it drives the Caravanner
