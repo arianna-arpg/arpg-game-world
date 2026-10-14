@@ -1158,6 +1158,23 @@ in Mu first.**
     (`docs/design/odyssey.md`: leader receipts, Vocation income, faction
     elimination tiers).
     **RULED (2026-10-13, her word): A.**
+45. **M2, THE ACCOUNT GATE** (raised by W9, W10 and W12: every account read on
+    a shard goes through `World.gateAccountOf`, which answers the shard's one
+    open account today, so the trade gate, the wares and rush rungs, the
+    posting-pin capacity, the account-scoped dialogue lines, vocation stamps
+    and vendor counters read and write one shared account for every hero) — A:
+    THE TRAVELLING ACCOUNT: the hero's own account travels with its vessel
+    (the Vault's unlocks, features, the account ledger and counters), the
+    shard reads them per seat through `gateAccountOf` and every earned stamp
+    goes home in the mirror; the client stays the account's truth (card 6's
+    own law) and the shard never persists an account. B: SERVER ACCOUNTS: the
+    shard keeps an authoritative per-account ledger keyed by a login identity,
+    the client's account becomes a view; bends card 6 and needs a sign-in. C:
+    A plus a per-account SHADOW the shard keeps only to refuse impossible
+    claims (a hero asserting a feature its own ledger never earned). Rec: A
+    now (one resolver to re-point, the mirror already carries the ledger); C
+    when the shard is public; B only if the product ever wants the server to
+    own progression.
 
 ---
 
