@@ -21,5 +21,7 @@ export class NativeAreaSceneDepartureMemory {
   };
   this.host=Object.freeze(host);for(const key of ['ongoing','memory','host'])Object.defineProperty(this,key,{writable:false,configurable:false,enumerable:false});owners.add(ongoing);
  }
+ /** Coordinator-only selection preserves the direct native owner contract above. */
+ captureConclaveDeparture():void {this.memory.assertReady();this.ongoing.authority.assertFinalPhysical(this.ongoing.binding);this.ongoing.combat.conclaveLifetime.capture(this);}
  captureZoneMemory():void {this.memory.assertReady();this.ongoing.authority.assertFinalPhysical(this.ongoing.binding);sceneCaptureZoneMemory(this.host);}
 }

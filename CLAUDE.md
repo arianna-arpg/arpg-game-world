@@ -1,3 +1,9 @@
+Retained Conclave rites now settle on the last actual occupant departure.
+Preserve native incubation/disruption, successor event identity, peer wounds,
+completed callback effects and the original memory-readiness prefix. Verify
+nativeconclave*, original departure and source proofs, hosted keeper/save/travel,
+all four types and boot. See docs/worldgen/native-conclave-lifetime.md.
+
 Retained Crusade works now renew on a genuine unoccupied arrival when their
 event, tier or resolved plan changes. Preserve unrelated terrain and bodies,
 opened doors, native callback failures, partial insertion, cold fixture

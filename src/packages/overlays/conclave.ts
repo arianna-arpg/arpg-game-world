@@ -119,6 +119,10 @@ export class ConclaveField implements WorldOverlay {
   private readonly cfg: ConclaveSurge;
   /** zoneId → the ritual currently sitting in that zone. */
   private rituals = new Map<string, ActiveRitual>();
+  readonly #settledRituals = new WeakSet<object>();
+  /** Identity belongs to the real field allocation, including across same-ID restores. */
+  nativeRitualEpoch(zoneId: string): object | undefined { return this.rituals.get(zoneId); }
+  nativeRitualSettled(epoch: object): boolean { return this.#settledRituals.has(epoch); }
   private acc = 0;
   private seq = 0;
 
@@ -170,7 +174,7 @@ export class ConclaveField implements WorldOverlay {
 
   /** Remove a ritual from a zone — SUBDUED (all cultists slain) or DISRUPTED (the
    *  player left after thinning, but not clearing, them). No counter change. */
-  clearRitual(zoneId: string): void { this.rituals.delete(zoneId); }
+  clearRitual(zoneId: string): void { const epoch = this.rituals.get(zoneId); this.rituals.delete(zoneId); if (epoch) this.#settledRituals.add(epoch); }
 
   /** DEV: force an Occult ritual site into the given (current) zone. Mirrors the
    *  production maybeOpen filter (+ the sibling dev seams): rejects safe/waves/cave/
@@ -194,8 +198,10 @@ export class ConclaveField implements WorldOverlay {
   /** The player LEFT with every cultist still alive — the rite INCUBATES: tick the
    *  hidden counter, then disperse the site (the cultists migrate onward). */
   incubate(zoneId: string): void {
+    const epoch = this.rituals.get(zoneId);
     this.incubationCounter++;
     this.rituals.delete(zoneId);
+    if (epoch) this.#settledRituals.add(epoch);
   }
 
   /** The engine drains a pending Eldritch ignition once (the counter maxed) and
@@ -287,6 +293,12 @@ export class ConclaveField implements WorldOverlay {
     this.rituals.set(z.id, { id: `ritual_${this.seq++}`, zoneId: z.id });
   }
 }
+
+export const nativeConclaveLifetimeCalls = Object.freeze({
+  epoch: ConclaveField.prototype.nativeRitualEpoch,
+  settled: ConclaveField.prototype.nativeRitualSettled,
+  ritualIn: ConclaveField.prototype.ritualIn,
+});
 
 // --- map marker (registered on import — zero panels.ts edits) -----------------
 //

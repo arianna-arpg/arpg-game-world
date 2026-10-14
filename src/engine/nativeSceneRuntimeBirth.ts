@@ -1,3 +1,4 @@
+import {nativeConclaveLifetimeCalls,type ConclaveField} from '../packages/overlays/conclave';
 import {observeNativeCombatBirth,observeNativeCombatStatus} from './nativeCombatRecordObservation';
 /** Complete native event births shared by classic World and local areas. Sources retain their installed identities. */
 import type {World} from './world';
@@ -11,6 +12,10 @@ import type {InvasionInfo} from '../packages/overlays/demonInvasion';
 import type {CrusadeInfo} from '../packages/overlays/crusade';
 import type {StrainDef} from '../packages/contagionStrains';
 import type {FogField} from './fog';
+/** Read-only evidence of the exact completed native allocation, never a registrar. */
+export interface NativeConclaveBirthReceipt {readonly host:NativeSceneRuntimeBirthHost;readonly field:ConclaveField;readonly epoch:object|undefined;readonly definition:ZoneDef;readonly id:string;readonly zoneId:string;readonly bodyIds:readonly number[];readonly cultistIds:readonly number[];readonly site:NonNullable<World['ritualSite']>;readonly pentagram:Doodad;readonly bodies:readonly Actor[]}
+const nativeConclaveBirths=new WeakMap<object,NativeConclaveBirthReceipt>();
+export const nativeConclaveBirthCalls=Object.freeze({read(host:object):NativeConclaveBirthReceipt|undefined{return nativeConclaveBirths.get(host);}});
 type FractureRun=NonNullable<World['fractureRun']>;
 export interface NativeSceneRuntimeBirthSources {
  readonly bumpLedger:typeof import('../packages/ledger').bumpLedger;
@@ -365,6 +370,7 @@ export function birthPlaceRitualSite(nativeHost:NativeSceneRuntimeBirthHost,sour
     if (!cf || nativeHost.inCave) return;
     const info = cf.ritualIn(def.id);
     if (!info) return;
+    const epoch = Reflect.apply(nativeConclaveLifetimeCalls.epoch, cf, [def.id]);
     const key = `${info.id}@${def.id}`;
     if (nativeHost.materializedRituals.has(key)) return;
     nativeHost.materializedRituals.add(key);
@@ -377,6 +383,7 @@ export function birthPlaceRitualSite(nativeHost:NativeSceneRuntimeBirthHost,sour
     const dood: Doodad = { pos: (0,sources.vec)(center.x, center.y), radius: cfg.pentagramRadius, kind: 'ritual_pentagram', rot: rng.range(-0.15, 0.15) };
     nativeHost.doodads.push(dood);
     const cultistIds: number[] = [];
+    const cultistBodies: Actor[] = [];
     const n = Math.max(1, cfg.cultistCount);
     for (let i = 0; i < n; i++) {
       const ang = -Math.PI / 2 + (dood.rot ?? 0) + (i / n) * Math.PI * 2; // matches the drawn star's tilt
@@ -385,8 +392,17 @@ export function birthPlaceRitualSite(nativeHost:NativeSceneRuntimeBirthHost,sour
       c.pos = nativeHost.clampPos((0,sources.vec)(center.x + Math.cos(ang) * cfg.pentagramRadius, center.y + Math.sin(ang) * cfg.pentagramRadius), c.radius);
       nativeHost.actors.push(c); observeNativeCombatBirth(nativeHost, c);
       cultistIds.push(c.id);
+      cultistBodies.push(c);
     }
-    nativeHost.ritualSite = { id: info.id, zoneId: def.id, center: (0,sources.vec)(center.x, center.y), cultistIds, subdued: false };
+    const site = { id: info.id, zoneId: def.id, center: (0,sources.vec)(center.x, center.y), cultistIds, subdued: false };
+    nativeHost.ritualSite = site;
+    // Selected native query effects remain; only an exact field event grants cleanup.
+    const actual = Reflect.apply(nativeConclaveLifetimeCalls.ritualIn, cf, [def.id]);
+    if (epoch && Reflect.apply(nativeConclaveLifetimeCalls.epoch, cf, [def.id]) === epoch
+      && actual?.id === site.id && actual.zoneId === site.zoneId
+      && Object.getOwnPropertyDescriptor(info, 'id')?.value === site.id
+      && Object.getOwnPropertyDescriptor(info, 'zoneId')?.value === site.zoneId)
+      nativeConclaveBirths.set(nativeHost, Object.freeze({host:nativeHost,field:cf,epoch,definition:def,id:site.id,zoneId:site.zoneId,bodyIds:Object.freeze([...cultistIds]),cultistIds,site,pentagram:dood,bodies:Object.freeze(cultistBodies)}));
     (0,sources.bumpLedger)(nativeHost.ledger, 'rituals_seen'); // DISCOVERY — surfaces the Vault unlock
     nativeHost.text((0,sources.vec)(center.x, center.y - cfg.pentagramRadius - 14), 'An Occult ritual is underway…', '#a86ad8', 15);
   }

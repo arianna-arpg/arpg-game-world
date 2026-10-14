@@ -88,6 +88,9 @@ const authorityTransfer=NativeAreaActorAuthority.prototype.transfer,authorityFin
 const partySelectActors=NativeAreaActorAuthority.prototype.selectActors,partyFinalSelections=NativeAreaActorAuthority.prototype.assertFinalSelections;
 const coordinatedWriters=new WeakMap<World,NativeAreaSceneTransitionCoordinator>();
 const actualCoordinators=new WeakSet<object>();
+const conclaveSelections=new WeakMap<NativeAreaSceneTransitionCoordinator,(combat:NativeAreaSceneCombat)=>boolean>();
+/** Non-granting inspection of a currently selected real coordinator departure. */
+export function selectedNativeConclaveDeparture(coordinator:NativeAreaSceneTransitionCoordinator,combat:NativeAreaSceneCombat):boolean {const select=conclaveSelections.get(coordinator);if(!select)throw Error('Native ritual requires its actual coordinator');return select(combat);}
 export interface NativeTransitionOwnerBridge {nemesisDeparture():Actor;selectDescentRecovery(run:NonNullable<World['descentRun']>):{combat:NativeAreaSceneCombat;player:Actor};partySeats():readonly Seat[];loadPartyZone(zoneId:string,from?:string):void;bindTraversal(record:TraversalState):void;finishTraversal(record:TraversalState):void;runTraversalStep(action:()=>void):void}
 const bridgeIssuers=new WeakMap<NativeAreaSceneTransitionCoordinator,(owner:object,combat:NativeAreaSceneCombat)=>NativeTransitionOwnerBridge>();
 const combatBridges=new WeakMap<NativeAreaSceneCombat,NativeTransitionOwnerBridge>();
@@ -153,12 +156,14 @@ export class NativeAreaSceneTransitionCoordinator {
  readonly #offeredMusterRoads=new WeakMap<object,HostedMusterContinuation>();
  #hostedHooks:NativeHostedRoadHooks|null=null;#musterContinuation:{record:HostedMusterContinuation;frame:Frame;seat:Seat;check:()=>void}|null=null;
  #hostedRoads=false;#roadKeeper:Registered|null=null;#roadDraining=false;#activeRoad:ActiveRoad|null=null;#roadCallback:ActiveRoad|null=null;
+ #conclaveDeparture:{source:Registered;frame:Frame;capture:SeatCapture;cohort:readonly Actor[];metas:readonly Seat['meta'][]}|null=null;
  constructor(raw:NativeAreaTransitionInput){
   const campaign=own<NativeAreaOngoingCampaign>(raw,'campaign'),characterWriter=own<World>(raw,'characterWriter'),authority=own<NativeAreaActorAuthority<object>>(raw,'authority'),memoryRegistry=own<NativeAreaMemoryRegistry>(raw,'memoryRegistry');
   if(!isNativeWorld(characterWriter)||!(authority instanceof NativeAreaActorAuthority)||!(memoryRegistry instanceof NativeAreaMemoryRegistry)||memoryRegistry.writer!==characterWriter||authority.campaign!==campaign)throw Error('Native transition needs the actual writer, memory registry and campaign authority');
   assertNativeRetainedMassState(characterWriter);
   if(characterWriter.account!==campaign.account||characterWriter.localSeat!==campaign.localSeat||characterWriter.sim!==campaign.sim||characterWriter.zoneMap!==campaign.zoneMap||characterWriter.caveMap!==campaign.caveMap)throw Error('Native transition campaign differs from its character writer');
   if(coordinatedWriters.has(characterWriter))throw Error('Native campaign already has a transition coordinator');
+  conclaveSelections.set(this,combat=>this.#selectedConclaveDeparture(combat));
   this.input=Object.freeze({campaign,characterWriter,authority,memoryRegistry});Object.defineProperty(this,'input',{writable:false,configurable:false});coordinatedWriters.set(characterWriter,this);actualCoordinators.add(this);Reflect.apply(this.#groundCalls.registryBind,this.input.memoryRegistry,[this]);
   realmEntryIssuers.set(this,(owner,combat)=>Object.freeze({enter:<T>(key:NativeRealmContextKey,destination:string,action:()=>T):T=>{if(own(combat,"campaignFrame")!==owner)throw Error("Native realm entry owner changed");const source=this.#combat(combat),frame=this.#frame;if(!frame?.active||frame.current!==source||this.#realmEntry)throw Error("Native realm entry needs its exact current frame");const value=own<World[NativeRealmContextKey]>(source.combat.campaignOwner.state,key);if(!value)throw Error("Native realm entry lost its original context");const receipt:RealmEntry={frame,source,key,value,destination,prepared:null,definition:null,previous:null,revisit:false,completed:false,wakeCalled:false,consumed:false};this.#realmEntry=receipt;try{return action();}finally{this.#realmEntry=null;}},wake:(action:()=>void):void=>{if(own(combat,"campaignFrame")!==owner)throw Error("Native realm wake owner changed");const r=this.#realmEntry;if(!r){action();return;}if(this.#frame!==r.frame||r.frame.current.combat!==combat||!r.consumed||r.wakeCalled||own(combat.campaignOwner.state,r.key)!==(r.completed?null:r.value))throw Error("Native realm wake differs from its exact arrival");r.wakeCalled=true;if(!r.revisit)action();}}));
   roadQueueIssuers.set(this,(owner,combat)=>{const current=()=>{if(own(combat,'campaignFrame')!==owner)throw Error('Native road queue owner changed');return this.#combat(combat);};return Object.freeze({enableHosted:()=>{current();this.#enableHostedRoads();},enqueue:(ticket:RoadTicket<NativeAreaRoadDestination>)=>this.#enqueueRoad(current(),ticket),drain:()=>{current();return this.#drainRoads();}});});
@@ -484,6 +489,14 @@ export class NativeAreaSceneTransitionCoordinator {
   assertNativeCombatOperationsIdle();const source=restore.source,remaining=rawValues<Actor>(own(source.binding.scene,'actors'));Reflect.apply(authorityFinalPhysical,this.input.authority,[source.binding]);Reflect.apply(this.#lifecycle.release,this.input.authority,[source.binding,remaining]);Reflect.apply(this.#lifecycle.unregister,this.input.authority,[source.binding]);Reflect.apply(this.#lifecycle.population,source.ongoing.assembly.input.population,[]);Reflect.apply(this.#lifecycle.deeds,source.combat.campaignOwner,[]);this.#combats.delete(source.combat);if(this.#areas.get(source.id)===source)this.#areas.delete(source.id);Reflect.apply(this.#lifecycle.finishRestore,this.#preparation!,[source.ongoing,token]);this.#restore=null;
  }
  assertProvisionalRestoreSource(owner:NativeAreaCharacterResume,area:NativeAreaSceneOngoing):void {if(this.#restore?.owner!==owner||this.#restore.source.ongoing!==area||!this.#restore.arriving)throw Error('Native provisional restore source is not selected');}
+ #selectedConclaveDeparture(combat:NativeAreaSceneCombat):boolean {
+  const r=this.#conclaveDeparture;if(!r||!this.#moving||this.#frame!==r.frame||!r.frame.active||r.frame.current!==r.source||r.source.combat!==combat)throw Error('Native ritual requires its selected actual departure');
+  finalSeats(r.capture);for(let i=0;i<r.capture.rows.length;i++)if(own(r.capture.rows[i].seat,'meta')!==r.metas[i])throw Error('Native ritual departing seat changed');
+  const all=captureSeats(this.input.campaign),actors=rawValues<Actor>(own(r.source.binding.scene,'actors'));
+  if(r.capture.rows.some(row=>!actors.includes(row.body)||!r.cohort.includes(row.body)))throw Error('Native ritual departing body changed');
+  const remaining=all.rows.some(row=>{const home=optionalOwn<Actor>(row.seat,'home');return actors.includes(row.body)&&!r.cohort.includes(row.body)||!!home&&actors.includes(home)&&!r.cohort.includes(home);});
+  finalSeats(all);Reflect.apply(nativeReadyAuthority.physical,this.input.authority,[r.source.binding]);return !remaining;
+ }
  #selectNemesisDeparture(combat:NativeAreaSceneCombat):Actor {
   const r=this.#nemesisDeparture;if(!r||!this.#moving||!r.frame.active||this.#frame!==r.frame||r.frame.current!==r.source||r.source.combat!==combat)throw Error('Native Nemesis scan needs its actual selected departure');
   const local=this.input.campaign.localSeat;finalSeats(r.capture);
@@ -516,7 +529,10 @@ export class NativeAreaSceneTransitionCoordinator {
    const ladder={caveReturn:source.roads.caveReturn,caveStack:[...source.roads.caveStack]};
    source.combat.transitionDeparture(cohort);
    if(publish){const story=capture.rows.find(row=>row.seat===localSeat);if(!story)throw Error('Native Nemesis departure lost its selected local seat');this.#nemesisDeparture={frame,source,capture,seat:story.seat,body:story.body};try{source.combat.campaignTransitions.scanNemesisSurvivors();}finally{this.#nemesisDeparture=null;}}
-   if(restoring){if(!source.departure.adoptedZonePending)throw Error('Native restored departure lost its adopted-world suppression');sceneCaptureZoneMemory(source.departure.host);}else source.departure.captureZoneMemory();
+   if(restoring){if(!source.departure.adoptedZonePending)throw Error('Native restored departure lost its adopted-world suppression');sceneCaptureZoneMemory(source.departure.host);}else {
+    this.#conclaveDeparture={source,frame,capture,cohort,metas:Object.freeze(capture.rows.map(row=>own<Seat['meta']>(row.seat,'meta')))};
+    try{const fn=source.departure.captureConclaveDeparture;this.#selectedConclaveDeparture(source.combat);Reflect.apply(fn,source.departure,[]);}finally{this.#conclaveDeparture=null;}
+   }
    if(onGraph){this.#abandonVoyageSurface();sceneNecropolisSurfaceArrival(this.input.campaign);}
    // Native pre-layout cancellation. The source queues remain retained, while
    // actor-carried casting and marks cannot migrate into the destination.
