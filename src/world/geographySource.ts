@@ -54,7 +54,17 @@ function lookupKey(value: string, path: string): string {
 /** Copy descriptors before reading their values. JSON must not get a chance to
  * invoke getters/toJSON or silently erase undefined, holes, symbols or -0.
  * Shared acyclic objects may be copied twice; object identity is not source data. */
-export function copyNativeGeographyData<T>(input: T): T {
+export function copyNativeGeographyData<T>(input: T): T { return copyGeographyData(input, false); }
+/** Immutable source snapshot only. Live inputs are fully traversed on every call:
+ * own keys, descriptors, prototypes, order, finite values and every child. Reuse
+ * a frozen subtree only when that complete current snapshot equals its predecessor.
+ * Ordinary copyNativeGeographyData keeps returning independent mutable copies. */
+// This brand proves only an immutable JSON-data copy, never semantic validation.
+// Hydration validates semantics separately and guards its own cache admission.
+const geographySnapshots = new WeakSet<object>();
+const geographySnapshotCopies = new WeakMap<object, object>();
+export function snapshotNativeGeographyData<T>(input: T): T { return copyGeographyData(input, true); }
+function copyGeographyData<T>(input: T, immutable: boolean): T {
   const visiting = new Set<object>();
   const copy = (value: unknown, path: string): unknown => {
     if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
@@ -63,6 +73,7 @@ export function copyNativeGeographyData<T>(input: T): T {
       return value;
     }
     if (!value || typeof value !== 'object') fail(path, 'unsupported non-JSON value');
+    if (immutable && geographySnapshots.has(value) && geographyPrototypeClean()) return value;
     if (visiting.has(value)) fail(path, 'cycle');
     const array = Array.isArray(value), proto = Object.getPrototypeOf(value);
     if (array ? proto !== Array.prototype : proto !== Object.prototype) fail(path, 'non-plain prototype');
@@ -81,7 +92,11 @@ export function copyNativeGeographyData<T>(input: T): T {
           if (!d || !d.enumerable || !('value' in d)) fail(`${path}[${i}]`, 'array slots must be own enumerable data');
           out.push(copy(d.value, `${path}[${i}]`));
         }
-        return out;
+        if (!immutable) return out;
+        const previous = geographySnapshotCopies.get(value);
+        const result = previous && Array.isArray(previous) && previous.length === out.length && out.every((entry, index) => Object.is(entry, previous[index])) ? previous : Object.freeze(out);
+        geographySnapshotCopies.set(value, result); geographySnapshots.add(result);
+        return result;
       }
       const entries: [string, unknown][] = [];
       for (const key of keys as string[]) {
@@ -90,7 +105,12 @@ export function copyNativeGeographyData<T>(input: T): T {
         if (!d.enumerable || !('value' in d)) fail(`${path}.${key}`, 'fields must be own enumerable data');
         entries.push([key, copy(d.value, `${path}.${key}`)]);
       }
-      return Object.fromEntries(entries);
+      if (!immutable) return Object.fromEntries(entries);
+      const previous = geographySnapshotCopies.get(value), previousKeys = previous && Object.keys(previous);
+      const same = previous && !Array.isArray(previous) && previousKeys!.length === entries.length && entries.every(([key, entry], index) => previousKeys![index] === key && Object.is(Object.getOwnPropertyDescriptor(previous, key)!.value, entry));
+      const result = same ? previous : Object.freeze(Object.fromEntries(entries));
+      geographySnapshotCopies.set(value, result); geographySnapshots.add(result);
+      return result;
     } finally { visiting.delete(value); }
   };
   return copy(input, '$') as T;
@@ -305,17 +325,81 @@ function validateExecutionDomain(source:NativeGeographySource):void {
 
 /** Exact serialized bytes are the source identity at this boundary. Nested
  * property order is retained; no canonical sorting or partial sampling hash. */
+// Only our fully validated, deeply frozen output can take this shortcut. Caller
+// objects, even frozen lookalikes, always pass the complete descriptor/domain
+// checks. Readers still build independent execution views and derived memos.
+type HydratedGeography = Readonly<{source: Readonly<NativeGeographySource>; identity: string}>;
+const hydratedGeography = new WeakMap<object, HydratedGeography>();
+const restoredGeography = new Map<string, HydratedGeography>();
+let restoredGeographyBytes = 0;
+const RESTORED_GEOGRAPHY_MAX_BYTES = 2 * 1024 * 1024;
+// Frozen plain data still inherits the realm's prototypes. Validation also uses
+// non-enumerable inherited optional keys and JSON may consult toJSON. Compare
+// complete descriptors without invoking getters before reusing any validation.
+const geographyPrototypes = [Object.prototype, Array.prototype].map(value => ({
+  value, parent: Object.getPrototypeOf(value), descriptors: Object.getOwnPropertyDescriptors(value), keys: Reflect.ownKeys(value),
+}));
+function geographyPrototypeClean(): boolean {
+  for (const row of geographyPrototypes) {
+    if (Object.getPrototypeOf(row.value) !== row.parent) return false;
+    const keys = Reflect.ownKeys(row.value);
+    if (keys.length !== row.keys.length || keys.some((key, index) => key !== row.keys[index])) return false;
+    for (const key of keys) {
+      const before = Object.getOwnPropertyDescriptor(row.descriptors, key)!.value as PropertyDescriptor;
+      const after = Object.getOwnPropertyDescriptor(row.value, key)!;
+      for (const field of ['value','writable','get','set','enumerable','configurable'] as const)
+        if (Object.hasOwn(before, field) !== Object.hasOwn(after, field) || before[field] !== after[field]) return false;
+    }
+  }
+  return true;
+}
 export function hydrateNativeGeographySource(input: unknown) {
-  const source = copyNativeGeographyData(input); validateSource(source); validateExecutionDomain(source);
-  const identity = JSON.stringify(source);
+  const clean = geographyPrototypeClean();
+  if (input && typeof input === 'object' && clean) {
+    const known = hydratedGeography.get(input); if (known) return known;
+  }
+  const source = snapshotNativeGeographyData(input);
+  const copiedClean = geographyPrototypeClean();
+  let exactIdentity: string | undefined;
+  if (clean && copiedClean && geographyPrototypeClean()) {
+    exactIdentity = JSON.stringify(source);
+    const known = restoredGeography.get(exactIdentity); if (known) return known;
+  }
+  // With changed prototypes keep original ordering: semantic refusal must occur
+  // before JSON could invoke an inherited toJSON on invalid source data.
+  validateSource(source); validateExecutionDomain(source);
+  const identity = exactIdentity ?? JSON.stringify(source);
   freezeData(source);
-  return Object.freeze({ source, identity });
+  const hydrated = Object.freeze({ source, identity });
+  if (clean && copiedClean && geographyPrototypeClean()) {
+    // Complete structural snapshot plus exact prior semantic identity, or fresh full validation.
+    const known = restoredGeography.get(identity);
+    if (known) return known;
+    hydratedGeography.set(source, hydrated); rememberGeography(hydrated);
+  }
+  return hydrated;
 }
 export function restoreNativeGeographySource(bytes: string): Readonly<NativeGeographySource> {
   if (typeof bytes !== 'string') fail('$','source bytes must be a string');
+  if (geographyPrototypeClean()) {
+    const known = restoredGeography.get(bytes);
+    if (known) { restoredGeography.delete(bytes); restoredGeography.set(bytes, known); return known.source; }
+  }
   const hydrated = hydrateNativeGeographySource(JSON.parse(bytes) as unknown);
   if (hydrated.identity !== bytes) fail('$','source bytes must be the exact native serialization');
   return hydrated.source;
+}
+function rememberGeography(hydrated: HydratedGeography): void {
+  // Full bytes, never a sampling checksum. Bound entries and UTF-16 key storage.
+  // Larger inputs stay valid; existing reader lifetimes own their weak entries.
+  const bytes = hydrated.identity;
+  if (bytes.length * 2 > RESTORED_GEOGRAPHY_MAX_BYTES) return;
+  if (restoredGeography.has(bytes)) restoredGeographyBytes -= bytes.length * 2;
+  restoredGeography.delete(bytes); restoredGeography.set(bytes, hydrated); restoredGeographyBytes += bytes.length * 2;
+  while (restoredGeography.size > 4 || restoredGeographyBytes > RESTORED_GEOGRAPHY_MAX_BYTES) {
+    const oldest = restoredGeography.keys().next().value!;
+    restoredGeography.delete(oldest); restoredGeographyBytes -= oldest.length * 2;
+  }
 }
 /** Private execution views have own-only lookup, insulating native operations
  * from later Object.prototype data changes. Source bytes remain ordinary JSON.
@@ -330,25 +414,40 @@ function ownData<T>(value: T): T {
   }
   return value;
 }
-/** Every native reader and memo belongs to this complete immutable instance. */
+// Only immutable execution data is shared. Climate home-cell/warning state,
+// field-choice memo tables, continent readers and query closures remain per reader.
+function makeGeographyExecution(source: Readonly<NativeGeographySource>) {
+  const runtime = freezeData(ownData(source));
+  const climateData = freezeData(ownData(hydrateNativeClimateSource(source.climate)));
+  const biomes = freezeData(ownData(Object.fromEntries(runtime.biomes)));
+  const dimensions = freezeData(ownData(Object.fromEntries(runtime.dimensions)));
+  const dimensionSource = freezeData(Object.assign(Object.create(null) as Record<string,DimensionDef>,Object.fromEntries(source.dimensions)));
+  const tilesets = freezeData(ownData(Object.fromEntries(runtime.tilesets)));
+  return Object.freeze({ runtime, climateData, biomes, dimensions, dimensionSource, tilesets });
+}
+const geographyExecution = new WeakMap<object, ReturnType<typeof makeGeographyExecution>>();
+function executionFor(source: Readonly<NativeGeographySource>) {
+  const clean = geographyPrototypeClean();
+  const known = clean ? geographyExecution.get(source) : undefined;
+  if (known) return known;
+  const result = makeGeographyExecution(source);
+  if (clean && geographyPrototypeClean() && hydratedGeography.has(source)) geographyExecution.set(source, result);
+  return result;
+}
+/** Every native reader and mutable memo belongs to this complete immutable instance. */
 export function createNativeGeographyReader(input: unknown) {
   const {source,identity} = hydrateNativeGeographySource(input), seed = source.seed;
-  const runtime = freezeData(ownData(source));
+  const { runtime, climateData, biomes, dimensions, dimensionSource, tilesets } = executionFor(source);
+  // Pool arrays can reach a selected caller RNG; preserve their per-reader identity.
+  const shared = freezeData(ownData(Object.fromEntries(runtime.pools.shared)));
+  const realms = freezeData(ownData(Object.fromEntries(runtime.pools.realms.map(([realm,pools])=>[realm,Object.fromEntries(pools)]))));
   const continent = createNativeContinentReader(runtime.continent), continentSeed = continent.continentSeedFrom(seed);
-  const hydratedClimate = hydrateNativeClimateSource(source.climate);
-  const climateData = freezeData(ownData(hydratedClimate));
   const climate = new NativeClimate({...climateData,
     continentCellAt:continent.continentCellAt,continentSeedFrom:continent.continentSeedFrom});
   // Native unknown-band fallback is an ordinary empty object. Convert that
   // result too, before presenceMul can see inherited envelope properties.
   const nativeEnvelope=climate.envelope.bind(climate);
   climate.envelope=(axis,spec)=>ownData(nativeEnvelope(axis,spec));
-  const biomes = freezeData(ownData(Object.fromEntries(runtime.biomes)));
-  const dimensions = freezeData(ownData(Object.fromEntries(runtime.dimensions)));
-  const dimensionSource = Object.assign(Object.create(null) as Record<string,DimensionDef>,Object.fromEntries(source.dimensions));
-  const tilesets = freezeData(ownData(Object.fromEntries(runtime.tilesets)));
-  const shared = freezeData(ownData(Object.fromEntries(runtime.pools.shared)));
-  const realms = freezeData(ownData(Object.fromEntries(runtime.pools.realms.map(([realm,pools])=>[realm,Object.fromEntries(pools)]))));
   const {field} = runtime;
   const point=(at:MapCoord)=>{const clean=pointData(at,'coordinate');checkPoint(runtime,clean,'coordinate');return clean;};
   const cell=(gx:number,gy:number)=>{

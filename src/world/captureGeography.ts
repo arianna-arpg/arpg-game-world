@@ -5,15 +5,15 @@ import { CONTINENT_CFG } from './continents';
 import { captureNativeClimateSource } from './climate';
 import { captureDimensionDefinitions } from './dimensions';
 import { TILESETS, TILESETS_BY_BIOME, REALM_TILESETS_BY_BIOME } from '../data/tilesets';
-import { copyNativeGeographyData, hydrateNativeGeographySource, type NativeGeographySource } from './geographySource';
+import { snapshotNativeGeographyData, hydrateNativeGeographySource, type NativeGeographySource } from './geographySource';
 
 export function captureNativeGeographySource(seed: number): Readonly<NativeGeographySource> {
   // Copy registry containers before Object.entries can discard unsupported own
   // descriptors, symbols or inherited state. The climate owner does the same
   // before copying its private effective dimension overrides.
-  const biomes = copyNativeGeographyData(BIOMES), tilesets = copyNativeGeographyData(TILESETS);
-  const shared = copyNativeGeographyData(TILESETS_BY_BIOME), realms = copyNativeGeographyData(REALM_TILESETS_BY_BIOME);
-  const dimensions = captureDimensionDefinitions(copyNativeGeographyData);
+  const biomes = snapshotNativeGeographyData(BIOMES), tilesets = snapshotNativeGeographyData(TILESETS);
+  const shared = snapshotNativeGeographyData(TILESETS_BY_BIOME), realms = snapshotNativeGeographyData(REALM_TILESETS_BY_BIOME);
+  const dimensions = captureDimensionDefinitions(snapshotNativeGeographyData);
   return hydrateNativeGeographySource({ schema:1,algorithm:'native-geography-v1',seed,
     continent:CONTINENT_CFG,climate:captureNativeClimateSource(),biomes:Object.entries(biomes),
     field:{table:BIOME_FIELD,bands:BIOME_FIELD_BANDS,floors:BIOME_FLOORS,geometry:BIOME_FIELD_CFG,

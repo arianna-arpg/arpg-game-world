@@ -1,3 +1,21 @@
+Seamless consolidation (2026-10-14): codex/seamless-world-foundation is the
+canonical branch. Local 5a7eac00 and remote cbafcc5b join through genuine merge
+ancestry; the pinned main a2fa4291 is already merged. Read
+docs/engine/seamless-consolidation-20261014.md and its per-path ledger before
+extending this lane or retiring any backup refs. Preserve original assertions,
+source receipts, synchronous borrowed scopes, reader state, Solar Brand/Madden,
+wire negatives and roster args. Loading presentation and bounded immutable
+geography reuse are integrated, but actual Firefox responsiveness remains red.
+Verify geographysource*, worldmass_nativegeography, retained Begin/Continue,
+all four types, generation and real browser/boot checks. Also run the standalone
+checks explicitly: npx tsx balance/check_geographysourcememo.ts and
+npx tsx balance/check_loadingpresentation.ts, then
+npx tsx balance/check_seamlessconsolidationsource.ts. Historical source proofs
+use a finite exact predecessor view; their assertions stay unchanged.
+The original probe roster is an
+exact historical source contract and remains byte-for-byte at the local parent.
+Do not describe this as full playable parity, Shards integration or 60 Hz.
+
 Retained Vendetta ambushes now renew through genuine unoccupied returns.
 Preserve native writ choices and cooldowns, real surviving cohorts and wounds,
 selected callbacks, partial births and cold reconstruction. Verify nativevendetta*,

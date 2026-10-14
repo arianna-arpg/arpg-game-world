@@ -1,3 +1,4 @@
+import { loadingPresentation } from '../loading/presentation';
 import loadingScript from 'virtual:mu-loading-script';
 import { spiritDirection } from '../loading/spiritRun';
 import { Z_LADDER } from './zorder';
@@ -76,12 +77,7 @@ export class LoadingScreen {
     this.frame.style.display = 'block'; this.frame.focus({ preventScroll: true });
     // Publish the embedding frame's visibility before blocking the game. A child
     // paint alone can acknowledge its old hidden state and remain throttled.
-    this.presented = new Promise(resolve => {
-      let done = false;
-      const finish = (): void => { if (!done) { done = true; resolve(); } };
-      const fallback = setTimeout(finish, 100);
-      requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(fallback); finish(); }));
-    });
+    this.presented = loadingPresentation();
     const { cancel, ...wire } = options;
     this.beginCommand = this.command({ type: 'begin', options: { ...wire, direction: wire.direction ?? spiritDirection(wire.kind) }, cancel: !!cancel });
     if (this.ready) this.send(this.beginCommand);

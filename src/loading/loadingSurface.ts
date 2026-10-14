@@ -1,3 +1,4 @@
+import { loadingPresentation } from './presentation';
 import { encipher } from '../data/runescript';
 import type { CosmeticLoadout } from '../engine/cosmetics';
 import { SpiritRun, spiritDirection, spiritLayout } from '../loading/spiritRun';
@@ -95,12 +96,7 @@ export class LoadingSurface {
     const current = (): boolean => this.active && this.token === token;
     return { get current() { return current(); },
       update: status => { if (current()) { this.retry = undefined; this.update(status); this.buttons(); } },
-      paint: () => new Promise(resolve => {
-        // Background tabs throttle rAF. Never strand a preparation on visibility.
-        let done = false; const finish = (): void => { if (!done) { done = true; resolve(); } };
-        const fallback = setTimeout(finish, 100);
-        requestAnimationFrame(() => setTimeout(() => { clearTimeout(fallback); finish(); }, 0));
-      }),
+      paint: loadingPresentation,
       fail: (message, retry) => { if (current()) { this.retry = retry; this.update({ label: 'The crossing is interrupted', detail: message }); this.buttons(); } },
       finish: () => { if (current()) this.close(); },
     };

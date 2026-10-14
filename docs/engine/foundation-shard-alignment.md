@@ -2,7 +2,23 @@
 
 The foundation now supplies F1 and F3 requested by the shard lane in `docs/design/shard-world.md` §7g and `docs/design/shard-m6-plan.md` §3.3. The shard lane still owns governor policy, its host integration and its branch conflict resolutions.
 
-## Foundation checkpoint — 2026-10-14
+## Canonical seamless branch — 2026-10-14
+
+`codex/seamless-world-foundation` consolidates local `5a7eac00` and the
+previously divergent remote `cbafcc5b` through a real merge. The pinned main
+`a2fa4291` remains genuine ancestry through `d94f36c7`. See
+[the consolidation record](seamless-consolidation-20261014.md) and its complete
+per-path ledger for the current branch map, backup recovery, verification,
+preview and publication receipt. The 13-commit remote divergence described
+below is the pre-consolidation state, not remaining ancestry debt.
+
+The reviewed retained visual adaptations and original guards are preserved.
+Loading presentation and bounded immutable geography reuse are integrated,
+while actual Firefox responsiveness is still unaccepted. Shards/perf-lane
+remain active and untouched; private quest instances, generated terrain,
+installed-source bridges and capacity acceptance remain open.
+
+## Before consolidation — 2026-10-14
 
 The audited main reconciliation is committed as `d94f36c73c7d3179b96088e6bf42025dfd923ab4`, with the foundation and pinned main `a2fa42917262e9229140b6364b6d5e461b32f50e` as its parents. The 46 formerly main-only commits now have genuine merged ancestry; behind that pinned main is zero. Runtime/content auditing and the retained roster cancellation repair accompanied the merge. This ancestry result does not claim complete playable-content acceptance.
 
