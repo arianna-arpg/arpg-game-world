@@ -343,11 +343,46 @@ unattributed `set filename` 2.8.
 Built as `server/thinkingEdge.ts` on the meter build (the law and the probe
 in docs/engine/shard.md "THE THINKING EDGE"; `probe_shardthink` green: the
 wander clock falls by exactly three ticks on the beat and not at all between,
-the near and busy bodies never bank, a struck body thinks at once, 24 far
-wanderers walk 7.1 px/s with the edge against 6.0 without, inside the pinned
-20 percent, and the off-beat ticks walk the roster less the edged bodies).
+the near and busy bodies never bank, a struck body thinks at once, the
+walkers of a 24-body ring cover the same distance per tick of held wander
+direction with the edge on, and the off-beat ticks walk the roster less the
+edged bodies; §7.6a records how the walk rig was re-posed).
 Both halves of every pair below run the same tree and the same harness; only
 the switch differs, so the pair noise is the course's own.
+
+**7.6a THE PINNED CLOCK and THE STROLL REACH (2026-10-14, the shard lane's
+ask on 4d22bb50).** Rig E as first cut compared the raw mean distance a
+second of 24 far wanderers over two boots of one seed, edge off against on,
+within 20 percent. It failed once under a parallel probe lane (5.58 against
+7.13 px/s) and passed on the retry. The cause is not the edge: the mass
+runtime's preparation, intel and cold slices break on `performance.now()`
+at 2 ms, and the forechart's beat on `FORECHART_CFG.beatBudgetMs`, so a
+hand-ticked, seeded boot still does different work per tick under machine
+load, and that work draws the global stream, so two boots of one seed drift
+apart. THE PINNED CLOCK: the rig runs every arm under a monotone counter in
+place of `performance.now` (real timers untouched), every slice breaks on
+its call count, and the course is a pure function of the seed: a third boot
+of the off arm walks the identical distance (7.15829252511243 px/s, byte for
+byte, in two processes run at once under the foundation's full probe lane).
+What determinism showed: the raw means are 7.16 off against 4.98 on, every
+run, and that is two realizations of a random process, not the edge's
+kinematics. Fifteen of the ring's 24 bodies never move (minted against
+solids); the nine walkers' legs are random draws (a 35 percent dead stop and
+a 1.5 to 4.5 s clock at each expiry) off the GLOBAL stream, and the edge
+changes the order every body draws in, so the two arms hold a wander
+direction for 5,097 against 3,802 body-ticks. The raw mean was never a law
+of the edge; the old rig passed on a quiet machine by luck. THE STROLL
+REACH is the law the edge controls: over the bodies that walk in both arms,
+the distance covered per tick of held wander direction, 0.5056 off against
+0.4715 on, within 10 percent. THE STEP RESIDUAL is the honest remainder: a
+three-tick stroll step covers 1.22 px against three one-tick steps' 1.317
+(about 7 percent short) although `moveActor` is linear in `dt` on solid
+ground; the candidates are the wander clock's expiry read up to two ticks
+late, the tether's return read once per call, and position-sampled speed
+scales. It is bounded by the law and a card for her word, not a fix taken
+in the dark. The recipe is the scratch rig in the session (per-body
+distance, held-direction ticks, moved ticks for both arms); a future ring
+should mint its walkers on free ground.
 
 **E1, the spread course** (6 bots, 60 s, 3,500 px, no drop; the control
 launched first; the windows opened at one shared moment, 2.9 s late each):

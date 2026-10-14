@@ -11,9 +11,27 @@
 //   C  THE ROUSE: a body struck mid-beat thinks at once, its bank paid
 //   D  THE SOLO INVARIANT: solo play (main.ts) and the balance harness
 //      (sim/runner.ts) call updateAI themselves and never import the edge
-//   E  THE WALK: twenty-four far wanderers over fifteen seconds walk the same
-//      mean distance a second with the edge on and off (same seed, two boots),
-//      while the AI loop with the edge on walks far fewer bodies off the beat
+//   E  THE WALK: twenty-four far wanderers over fifteen seconds (same seed, two
+//      boots, the edge off and on): THE STROLL'S REACH — over the bodies that
+//      walk at all in both arms, the distance covered per tick of held wander
+//      direction is the same within 10% — while the AI loop with the edge on
+//      walks far fewer bodies off the beat. The RAW mean distance a second is
+//      printed, never asserted: a wanderer's legs are random draws (a 35% dead
+//      stop and a 1.5-4.5 s clock at each expiry) off the GLOBAL stream, and
+//      the edge changes the order every body draws in, so the two arms are two
+//      realizations of that process (measured 7.16 against 4.98 px/s with nine
+//      of the ring's twenty-four bodies ever moving, the rest minted against
+//      solids), not two measurements of the edge. THE PINNED CLOCK makes the
+//      course a pure function of the seed (a third boot of the off arm walks
+//      the identical distance): performance.now is a monotone counter for every
+//      arm, because the mass runtime's preparation, intel and cold slices and
+//      the forechart's beat break on the wall clock (2 ms, FORECHART_CFG.
+//      beatBudgetMs) and under machine load two boots of one seed did
+//      different work per tick (5.58 against 7.13 px/s once under a parallel
+//      probe lane). THE STEP RESIDUAL (open, performance-lane.md §7.6): a
+//      three-tick stroll step covers about 7% less than three one-tick steps
+//      on solid ground (1.22 px a beat against 3 × 0.439) — the law's band
+//      holds it, the cause is a card.
 //   F  THE SWITCH: with the edge off, every body thinks every tick
 // ---------------------------------------------------------------------------
 import { readFileSync } from 'node:fs';
@@ -129,13 +147,27 @@ const isBeatNext = (r: Rig): boolean => (r.host.ticks + 1) % BEAT === 0;
 
 // ================================================== E: the walk ==
 {
-  const walk = async (edge: boolean): Promise<{ pxPerSec: number; ranOffBeat: number; ranBeat: number; roster: number; edged: number }> => {
+  // THE PINNED CLOCK (the header's note): the sim is hand-ticked and seeded, but
+  // the wall-clock-sliced work inside a tick is not a function of the seed under
+  // load; a monotone counter in place of performance.now makes every slice break
+  // on its call count, so both arms do identical work per tick. Real timers
+  // (the client's sleep, the host's stop) are untouched.
+  const realNow = performance.now;
+  const pinClock = (): (() => void) => {
+    let t = 0;
+    performance.now = (): number => (t += 0.001);
+    return () => { performance.now = realNow; };
+  };
+  const walk = async (edge: boolean): Promise<{ pxPerSec: number; dist: number[]; dirTicks: number[]; ranOffBeat: number; ranBeat: number; roster: number; edged: number }> => {
     THINKING_EDGE_CFG.enabled = edge;
+    const unpin = pinClock();
+    try {
     const r = await boot(0x00c0ffee);
     const bodies: Actor[] = [];
     for (let i = 0; i < 24; i++) { const ang = i / 24 * Math.PI * 2; bodies.push(mint(r, Math.cos(ang) * 850, Math.sin(ang) * 850)); }
     toBeat(r);
     const last = bodies.map(b => ({ x: b.pos.x, y: b.pos.y }));
+    const dist = bodies.map(() => 0), dirTicks = bodies.map(() => 0);
     let walked = 0, ranOff = 0, offTicks = 0, ranBeat = 0, beatTicks = 0, edgedSum = 0;
     const ticks = 15 * SHARD_CFG.tickHz;
     for (let i = 0; i < ticks; i++) {
@@ -145,17 +177,33 @@ const isBeatNext = (r: Rig): boolean => (r.host.ticks + 1) % BEAT === 0;
       const ran = r.host.phases.last.get('#ai.ran') ?? 0;
       if (beat) { ranBeat += ran; beatTicks++; } else { ranOff += ran; offTicks++; }
       edgedSum += r.host.phases.last.get('#ai.edged') ?? 0;
-      bodies.forEach((b, k) => { walked += Math.hypot(b.pos.x - last[k].x, b.pos.y - last[k].y); last[k].x = b.pos.x; last[k].y = b.pos.y; });
+      bodies.forEach((b, k) => {
+        const d = Math.hypot(b.pos.x - last[k].x, b.pos.y - last[k].y);
+        walked += d; dist[k] += d; if (b.wanderDir !== undefined) dirTicks[k]++;
+        last[k].x = b.pos.x; last[k].y = b.pos.y;
+      });
     }
     const roster = r.host.world.actors.length;
     await down(r);
-    return { pxPerSec: walked / bodies.length / (ticks * DT), ranOffBeat: ranOff / offTicks, ranBeat: ranBeat / beatTicks, roster, edged: edgedSum / ticks };
+    return { pxPerSec: walked / bodies.length / (ticks * DT), dist, dirTicks, ranOffBeat: ranOff / offTicks, ranBeat: ranBeat / beatTicks, roster, edged: edgedSum / ticks };
+    } finally { unpin(); }
   };
   const off = await walk(false);
   const on = await walk(true);
+  const again = await walk(false);
   THINKING_EDGE_CFG.enabled = true;
+  check('E pinned clock: a second boot of the off arm walks the identical distance (the course is a pure function of the seed)',
+    again.pxPerSec === off.pxPerSec && again.ranOffBeat === off.ranOffBeat && again.roster === off.roster,
+    `${again.pxPerSec} vs ${off.pxPerSec} px/s, rosters ${again.roster}/${off.roster}`);
   check('E walk: the wanderers walk (the course moves them)', off.pxPerSec > 2, `${off.pxPerSec.toFixed(2)} px/s off`);
-  check('E walk: with the edge on they walk the same mean distance a second within 20%', Math.abs(on.pxPerSec - off.pxPerSec) <= 0.2 * off.pxPerSec, `${on.pxPerSec.toFixed(2)} on vs ${off.pxPerSec.toFixed(2)} off px/s`);
+  // THE STROLL'S REACH: the walkers (moved in both arms) and their distance per tick of held direction.
+  const walkers = off.dist.map((d, k) => (d > 0 && on.dist[k] > 0 ? k : -1)).filter(k => k >= 0);
+  const reach = (arm: typeof off): number => walkers.reduce((a, k) => a + arm.dist[k], 0) / Math.max(1, walkers.reduce((a, k) => a + arm.dirTicks[k], 0));
+  const reachOff = reach(off), reachOn = reach(on);
+  check('E walk: at least six of the ring walk in both arms (the others stand against solids)', walkers.length >= 6, `${walkers.length} walkers`);
+  check('E walk: THE STROLL REACH: with the edge on a walker covers the same distance per tick of held direction within 10%',
+    Math.abs(reachOn - reachOff) <= 0.1 * reachOff,
+    `${reachOn.toFixed(4)} on vs ${reachOff.toFixed(4)} off px per direction tick (raw means ${on.pxPerSec.toFixed(2)} on vs ${off.pxPerSec.toFixed(2)} off px/s: two realizations of the stop-or-walk draws, never the law)`);
   check('E walk: with the edge off the loop walks the whole roster every tick', near(off.ranOffBeat, off.roster, 1) && near(off.ranBeat, off.roster, 1) && off.edged === 0, `${off.ranOffBeat.toFixed(1)} of ${off.roster}`);
   check('E walk: with the edge on the off-beat ticks walk the roster less the edged bodies, the beat the whole roster', on.ranOffBeat <= on.roster - 20 && near(on.ranBeat, on.roster, 2) && on.edged >= 12, `off-beat ${on.ranOffBeat.toFixed(1)}, beat ${on.ranBeat.toFixed(1)}, roster ${on.roster}, edged/tick ${on.edged.toFixed(1)}`);
 }

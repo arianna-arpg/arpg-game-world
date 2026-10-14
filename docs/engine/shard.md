@@ -428,7 +428,15 @@ D reads the sources). The loop's rows `#ai.ran` (the bodies that thought)
 and `#ai.edged` (the bodies that skipped) ride the meter. `--think off` is
 the A/B. Clients only ever see beat-tick states, so an edged body's shipped
 path differs only by its decisions landing on the beat (at most 50 ms late
-at 60 Hz with a 20 Hz wire). Probe `probe_shardthink`.
+at 60 Hz with a 20 Hz wire). Probe `probe_shardthink`; its walk rig runs
+under THE PINNED CLOCK (a monotone counter in place of `performance.now`,
+so the mass runtime's wall-clock slices and the forechart's beat budget break
+on call counts and two boots of one seed are byte-identical) and states the
+edge's walking law as THE STROLL REACH, the distance a walker covers per tick
+of held wander direction, within 10 percent (measured 6.7 percent short: THE
+STEP RESIDUAL, an open card in docs/design/performance-lane.md §7.6a); the
+raw mean distance of a wander ring is two realizations of its random legs,
+printed and never asserted.
 
 **THE NEIGHBORHOOD GOVERNOR** (`server/governor.ts`; W1 of
 docs/design/shard-m6-plan.md §3.4; her numbers, charter card 32). A
