@@ -1,4 +1,5 @@
 {
+  "remoteEnv": { "NODE_OPTIONS": "--max-old-space-size=5120" },
   // THE HOSTED SHARD ON CODESPACES (docs/engine/shard.md "Hosting on Codespaces",
   // charter card 11): a codespace on this branch is a SESSION HOST — Node 22
   // (CI's), `npm ci` + the web client built on create, port 8787 forwarded, the

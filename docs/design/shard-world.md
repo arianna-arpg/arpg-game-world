@@ -1030,61 +1030,117 @@ in Mu first.**
     in messages, still one thread) and W3 (THE THREAD HOST) once the
     foundation commits to the island runtime. B: all four now. C: W0 and W1,
     then decide from the profile and the player counts she expects. Rec: A.
+    **RULED (2026-10-13, her word): A now, and B eventually: the order that
+    reaches the most optimized state wins, the lift is hers to pay; THE
+    PERFORMANCE LANE (`docs/design/performance-lane.md`) carries W0 and W1 and
+    takes W2 and W3 when ready.**
 32. **THE GOVERNOR'S NUMBERS** — the per-group floor (Rec: 24, today's
     delivered least); whether the tick may drop to 40 Hz under the heaviest
     load (the wire stays 20 Hz; 30 Hz would halve it); whether THE DOOR (new
     joins held at the lobby under overload) exists at all. Rec: 24, 40 Hz
     allowed, no door until a real host is measured.
+    **RULED (2026-10-13, her word): as recommended: floor 24, 40 Hz allowed
+    under the heaviest load, no door until a real host is measured.**
 33. **THE HARDWARE** — threads need cores and the codespace has two. Rec: a 4
     to 8 core host before W3 lands; W0 and W1 run anywhere.
+    **RULED (2026-10-13, her word): she asked for recommendations; the
+    codespace may be all that is available. THE ROADS: (1) the same codespace
+    on a bigger machine (`gh codespace edit -c NAME --machine
+    standardLinux32gb` for 4 cores and 16 GB, this repo is offered only `basicLinux32gb` and `standardLinux32gb` today, so 8 cores need another host; the free quota is 120 core-hours a month, so 4 cores idle-out at
+    240 min burns it in 30 hours of play); (2) a free always-on host: Oracle
+    Cloud's always-free Ampere A1 (4 ARM cores, 24 GB; Node runs the shard
+    there, no AppImage involved); (3) a rented box for a standing shard:
+    Hetzner CPX41 (8 vCPU, about 30 EUR a month) or a dedicated AX41 (6 cores
+    and 12 threads, about 40 EUR); (4) the dev machine itself (10 cores)
+    behind a Cloudflare or Tailscale tunnel for play tests, free and the
+    fastest CPU of the four but it ties up the desk. Rec: (1) for the next
+    play tests at 4 cores; (2) or (3) when W3 lands and the shard should stand
+    all day.**
 34. **A WORKER'S DEATH** — A: its players wake at the hearth from their last
     mirror (up to `persistSec` 20 s of progress lost). B: a seat checkpoint
     beat (2 s, a few kB a seat). Rec: B.
+    **RULED (2026-10-13, her word): B, the 2 s seat checkpoint.**
 35. **ONE CLOCK** — A: lockstep across threads, every thread stepping the same
     tick with the same start time and inputClock, so the slowest thread sets
     the shard's tick. B: a clock per thread with a rebase law at every
     hand-off. Rec: A.
+    **RULED (2026-10-13, her word): A, lockstep across the server's threads.
+    Her question answered: this card is the SERVER's own clock (its worker
+    threads step one tick together), not the client's network mode; the client
+    already runs the predicted-and-corrected model (THE HONEST INPUT, THE
+    SMOOTH SHELL, THE PREDICTED ROOT: the host's row always wins and a desync
+    corrects itself within a snapshot), which is the reconciled shape Path of
+    Exile moved to, never the old predictive mode that needed /oos.**
 36. **THE ISLAND SEPARATION** — islands split where no player can see across
     (about 3,200 px: the 1,600 px awake radius plus the view) with hysteresis;
     a merge costs a short hold (up to about 100 ms) for the merging players
     only; THE NEAR LAW (1,600 px) and the group merge (2,600 px) never cross
     an island by arithmetic. Rec: as stated; the number is unblessed.
+    **RULED (2026-10-13, her word): as stated, about 3,200 px, to be tuned in
+    play; the lane takes the best estimate meanwhile.**
 37. **THE TRAVELLING COURT** — A: exact capture of every carried body on a
     cross-thread hand-off (the couch guest's build plus live state, the court
     captured exactly). B: timed summons re-minted at their life fraction. Rec:
     A.
+    **RULED (2026-10-13, her word): A, exact capture.**
 38. **THE RELEASE FROM A WORLD** (W7's finding, 2026-10-10) — a hero bound to
     a world that is gone for good (a deleted codespace) has no road back to
     solo play: a bound save only ever returns. A: a deliberate "release this
     hero from its world" act on the roster card (clears `CharacterSave.shard`
     and `stand` after one confirm; the hero stands in Lastlight as a solo
     save). B: leave it bound; a new hero is the road. Rec: A.
+    **RULED (2026-10-13, her word): A, the release act on the roster card.**
 39. **THE SERVER-HELD MIRROR** (W7's finding) — a closed tab cannot hear its
     last mirror, so up to one beat (20 s) of progress is lost. A: the shard
     keeps each hero's latest mirror and hands it back at the next login (bends
     card 6: the hero is the client's). B: keep card 6 whole; THE UNLOAD GRACE
     and Exit's farewell already bound the loss. Rec: B now, A folded into M2's
     account gate when the server holds the account anyway.
+    **RULED (2026-10-13, her word): B now, A with M2; tweak as play tells.**
 40. **THE BOUND HERO AT ANOTHER DOOR** (W7's finding) — the lobby's
     lone-vessel read takes a hero bound to another world into this one without
     a word (its binding moves with it). A: refuse until the player confirms,
     the solo guard's own shape ("this hero stands in <world>; travel
     anyway?"). B: silent, as today. Rec: A.
+    **RULED (2026-10-13, her word): A, confirm first; tweak as play tells.**
 41. **EXIT'S FAREWELL CAP** (W7's dial) — `WS_TRANSPORT_CFG.farewellMs` is
     1,500 ms today: Exit waits that long for the farewell mirror's ack before
     it reads "quiet"; THE UNLOAD GRACE is `SHARD_CFG.unloadGraceSec` 15 s.
     Rec: as set; both numbers are unblessed.
+    **RULED (2026-10-13, her word): as set.**
 42. **WHICH POCKETS ARE INSTANCED** (card 25's first question, M1-W4) — the
     `tenancy: 'party'` flag exists on sidezone defs, arena specs and pocket
     ZoneDefs and nothing carries it yet. A: the arena boss courts and the
     Odyssey's authored set-piece maps (card 25's own words: authored dungeons
     and arena seals). B: nothing; every pocket shared. C: a wider list she
     names. Rec: A.
+    **RULED (2026-10-13, her word): A, built as a REUSABLE FRAMEWORK so that C
+    (a wider list) is a data row, never new code. She read B as shared Odyssey
+    pockets for everyone and judged it unworkable as stated (two players
+    killing the Odyssey's leaders in different orders), which raised card 44,
+    THE FIRST SLAYER'S CHAIN, as the shared end state to aim for.**
 43. **AN INSTANCE'S CLEAR AND THE WORLD** (card 25's second question) — a
     party's instance keeps its own clears and never counts for the world's. A:
     keep it the instance's own (one party can never clear a shared place for
     everyone). B: an instance's clear also stamps the world's clears (about
     ten lines in the registry). Rec: A.
+44. **THE FIRST SLAYER'S CHAIN** (her idea, 2026-10-13, raised by card 42) —
+    the Odyssey's world half is shared on a shard (card 24): its leaders fall
+    once for everyone. A: the FIRST player to slay an Odyssey leader on a
+    shard LOCKS THE CHAIN: the order that player meets the leaders in becomes
+    the shard's order, every later hero's Odyssey leads follow it, a
+    deliberate shard reset rerolls the leaders and hands the next first slayer
+    the same power (a meta-game of progression: one player's choice cements
+    the future of everyone on the shard; standardized play; no two-order edge
+    cases). B: every hero walks its own order against shared leaders (the edge
+    cases she named: A then B then C against B then A then C). C: leaders per
+    character (no shared Odyssey at all; contradicts card 24's shared world
+    half). Rec: A, as the Odyssey's end state on a shard; the first build
+    keeps the leaders shared and the order per hero's own leads until the
+    chain lock is designed with the Odyssey's own rules
+    (`docs/design/odyssey.md`: leader receipts, Vocation income, faction
+    elimination tiers).
+    **RULED (2026-10-13, her word): A.**
 
 ---
 
@@ -1274,7 +1330,7 @@ place the shard lane keeps its asks, so either session can see what stands.
 | F6 | THE REVIEW OF `codex/shard-performance` before it merges into shard-world. | DONE 2026-10-13 (an Opus critic, read-only, its own worktrees). VERDICT: the branch's claims hold on the default path (the far-target rejection in `ai.ts` can only reject bodies the old check rejected; the stat fold keeps order and arithmetic; the path search skips only neighbours the cost check rejects; the terrain and reservation caches key on immutable identities; sim smoke episodes byte-identical across base, perf and shard; the four digest rigs, `probe_loskey` and the old World guard all pass on it; 23/23 shard rigs; concurrent-pair soaks perf vs base 12.1 vs 15.3 and 15.3 vs 15.0 ms p95 with 0.6/1.1% vs 3.5/3.3% dropped; boot 8 s vs 11 s; spread 3,500 px p95 106 vs 159 ms, both breaching). WATCH: the per-focus terrain and region caches grow the heap 51 vs 34 MB in 30 s spread (under the 64 MB gate; cap the multiplier or set a byte budget). Its W0 half: THE PHASE METER as `balance/shardPerformance.ts` behind soak `--diagnostics/--profile/--window-*`, without the AI loop, per-unit marks or THE DISTANCE CENSUS; THE THINKING EDGE, THE LOCAL ROSTER, THE TICK DIAL and W1 are unbuilt; the governor's seam survives (`populationLimitFor` holds both `maxPopulation` reads). MERGE: three conflicts into shard-world (the roster, `generator.ts`'s constructor taking both `opening?` and `surfacePages`, and `runtime.ts`'s `createTerrainPreparationGenerator` needing the `opening` parameter plus `adoptOpeningCache`; the two prepared-terrain schemes, the browser opening worker and the Node terrain lane, must be reconciled) — the foundation's files, so the foundation merges it. |
 
 | F7 | THE LOOSENED GATE (the critic's finding 2, HIGH): the "CI repairs" on shard-world (58fc7f1a, 22e8f1da) turned red probes green partly by loosening them: the whole-World hash assertion cut from `probe_nativeinstalledsources.ts` and the member count from `probe_nativescenesky.ts` (about 380 lines of World edits in 6de071f8, 38a8f601 and aa569d0e landed with no re-pin and no review note); goldens removed from `probe_nativescenearrival.ts` (b7aca130), `probe_nativescenehistory.ts` (af9d74cc, now `stages.length>0`) and `probe_nativescenetitans.ts` (540dc241); `probe_nerverecovery.ts` 100-102 and `probe_foragercommitment.ts` 40-44 weakened; `probe_worldmass_processioncontinuity.ts` 245-297 flipped a must-admit route into a refusal control. The foundation tip keeps every golden by PROJECTING named reviewed changes out before comparing (`beforeHistoricalActorSlots`, `beforeHistoricalCleaveReceipt`, `beforeHistoricalArrivalGrounds`, `projectContinuity`, `assertNativeHistoricalWorld`). The fixture-only repairs (firinglane's landform recipe, terrainvariation's schema-13 materials, the court and procession readiness waits, arrival's config read, worker globals, the siphon evasion pin, Node 22 rounding) are legitimate. A merge of shard-world into the foundation auto-takes nine of the weaker files with no conflict. | OPEN, the foundation's files: adopt the foundation's projected goldens on shard-world, restore the forager, nerve and procession assertions or mark those rows red with a named reason, and hand-review the nine files at the merge. |
-| F8 | THE WIRE DESIGN SPLIT (finding 4, MEDIUM): 6de071f8 grew the shard wire for the skill visuals (`ActorW.selfBankCues`/`presenceBadge`, `AuraW.skillId`, `ProjW.skillId`, six `TetherW`, four `OrbW` and ten `FlashW` fields, a whole unquantized `ZoneW.visual`, `delay0` on ground zones) without bumping `SHARD_WIRE_PROTOCOL`, while the foundation built the same feature as compact `ZoneW` rows (`sk/vi/arc/tier/ef/ed/seg/lf/la/og` plus `zonePaint`) and asserts `skillFields === undefined`; snapshot p95 grew 8 to 9 percent clustered and 17 percent spread, `presenceBadge` riding every minion row every frame the likely cause. | The shard lane moved `presenceBadge` into THE IDENTITY ONCE and bumped the protocol (2026-10-13); the DESIGN PICK is the merge's: the critic recommends the foundation's compact rows with the shard's reach, interpolation and legacy checks ported onto them, then protocol 5. |
+| F8 | THE WIRE DESIGN SPLIT (finding 4, MEDIUM): 6de071f8 grew the shard wire for the skill visuals (`ActorW.selfBankCues`/`presenceBadge`, `AuraW.skillId`, `ProjW.skillId`, six `TetherW`, four `OrbW` and ten `FlashW` fields, a whole unquantized `ZoneW.visual`, `delay0` on ground zones) without bumping `SHARD_WIRE_PROTOCOL`, while the foundation built the same feature as compact `ZoneW` rows (`sk/vi/arc/tier/ef/ed/seg/lf/la/og` plus `zonePaint`) and asserts `skillFields === undefined`; snapshot p95 grew 8 to 9 percent clustered and 17 percent spread, `presenceBadge` riding every minion row every frame the likely cause. | The shard lane moved `presenceBadge` into THE IDENTITY ONCE and bumped the protocol to 5 (2026-10-13, f41c9181); a concurrent 4-bot pair measured no byte change from it (8.0 vs 8.2 kB p95), so the growth lies in the flash, tether and zone-visual rows, not the badge; the DESIGN PICK is the merge's: the critic recommends the foundation's compact rows with the shard's reach, interpolation and legacy checks ported onto them, then protocol 5. |
 
 What the shard lane offers the foundation in return: W0 THE ONE-THREAD DIET's
 profile and phase meter are the foundation's now (the performance branch);
