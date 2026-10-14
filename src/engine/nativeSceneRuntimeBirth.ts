@@ -1,3 +1,4 @@
+import {placeNativeVendetta,createNativeVendettaBody} from './nativeVendettaIdentity';
 import {nativeConclaveLifetimeCalls,type ConclaveField} from '../packages/overlays/conclave';
 import {observeNativeCombatBirth,observeNativeCombatStatus} from './nativeCombatRecordObservation';
 /** Complete native event births shared by classic World and local areas. Sources retain their installed identities. */
@@ -154,12 +155,17 @@ export function birthSpringVendettaAmbush(nativeHost:NativeSceneRuntimeBirthHost
     if (nativeHost.materializedWrits.has(def.id)) return;
     const spec = vf.wantsAmbush(def);
     if (!spec) return;
+    placeNativeVendetta(nativeHost,vf,def,spec,()=>{
     nativeHost.materializedWrits.add(def.id);
     const level = Math.max(1, def.level + spec.levelBonus);
     const at = nativeHost.clampPos(nativeHost.farPoint(430, true), 24);
     let warrant: Actor | null = null;
     for (let i = 0; i < spec.size; i++) {
-      const h = nativeHost.spawnEventActor(spec.roster, level, 'enemy', spec.faction, 'vendetta_hunter');
+      const h = createNativeVendettaBody(nativeHost,()=>{
+        const spawn=nativeHost.spawnEventActor;
+        const args:Parameters<NativeSceneRuntimeBirthHost['spawnEventActor']>=[spec.roster, level, 'enemy', spec.faction, 'vendetta_hunter'];
+        return ()=>Reflect.apply(spawn,nativeHost,args);
+      });
       h.pos = nativeHost.clampNear(at, 70);
       h.eventKey = spec.writId;
       h.aiAwakened = true; // hunters arrive HUNTING — no dormancy gate
@@ -172,6 +178,7 @@ export function birthSpringVendettaAmbush(nativeHost:NativeSceneRuntimeBirthHost
       warrant.xpValue = Math.max(warrant.xpValue, spec.warrant.xpFloor);
     }
     nativeHost.notice(`${spec.tierLabel} — hunters spring the ambush!`, spec.color, 16, 'events');
+    });
   }
 export function birthPlaceHuntContent(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources, def: ZoneDef): void {
     const hf = nativeHost.sim.huntField;

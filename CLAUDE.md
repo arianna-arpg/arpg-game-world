@@ -1,3 +1,9 @@
+Retained Vendetta ambushes now renew through genuine unoccupied returns.
+Preserve native writ choices and cooldowns, real surviving cohorts and wounds,
+selected callbacks, partial births and cold reconstruction. Verify nativevendetta*,
+Conclave/Crusade/Hunt source chains, retained travel and host/save courses, all
+four types and boot. See docs/worldgen/native-vendetta-lifetime.md.
+
 Retained Conclave rites now settle on the last actual occupant departure.
 Preserve native incubation/disruption, successor event identity, peer wounds,
 completed callback effects and the original memory-readiness prefix. Verify
