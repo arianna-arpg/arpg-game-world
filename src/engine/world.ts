@@ -3073,7 +3073,7 @@ export class World {
   private attuneTimer = 0;
   /** SECRET-vocation shrines standing in THIS zone (spirit NPC + which calling).
    *  Zone-local, re-placed deterministically each load — never serialized. */
-  private vocationSites: { vocId: string; npc: Actor; silentNoted?: boolean }[] = [];
+  private vocationSites: { vocId: string; npc: Actor; silentNoted?: boolean; /** THE VOCATION SITES PER SEAT: the hosted seats it stayed silent for. */ silentSeats?: Set<string> }[] = [];
   /** Prior-run death spots present in THIS zone (coord-matched from account.deaths
    *  each loadZone). Reclaimed by dwelling. Distinct from necromancy corpses[]. */
   playerCorpses: PlayerCorpse[] = [];
@@ -24845,16 +24845,29 @@ export class World {
   /** One hosted seat's linger at the giver (updateQuestGiver's own law, per seat): a
    *  finished quest turns in first (a reward to choose waits in the seat's journal),
    *  else the next acceptable quest is taken, and THE CHARACTER'S QUESTS: the giver
-   *  marks the hero's own Odyssey leads as it does for the solo hero. A calling (a
-   *  fresh vocation chain) waits for a hosted menu that does not open yet. */
+   *  marks the hero's own Odyssey leads as it does for the solo hero. THE VOCATION
+   *  SITES PER SEAT (shard W12): a calling (a fresh vocation chain) asks the seat's
+   *  own menu, once per visit (the solo dwell's one request: a pick or a decline closes
+   *  it until the dwell breaks); the ask rides its journal row (JournalW.voc) and the
+   *  pick comes back as its own `vocationQuest` word. */
   private questGiverDwells = new WeakMap<Seat, number>();
+  /** THE VOCATION SITES PER SEAT: each hosted seat's standing calling ask (the world time it
+   *  was made), from the linger that made it until the seat's dwell breaks. */
+  private readonly vocationAsks = new WeakMap<Seat, number>();
+  /** The world time of the seat's standing calling ask (its journal row's `voc`), if any. */
+  vocationAskOf(seat: Seat): number | undefined { return this.vocationAsks.get(seat); }
   private questGiverStep(seat: Seat, dt: number): void {
     this.withQuestHand(seat, () => {
-      if (!this.seatIdle(seat) || !this.nearAnyQuestGiver()) { this.questGiverDwells.delete(seat); return; }
+      if (!this.seatIdle(seat) || !this.nearAnyQuestGiver()) {
+        this.questGiverDwells.delete(seat);
+        if (this.vocationAsks.delete(seat)) this.journalDirty.add(seat.id); // the visit ends: the ask with it
+        return;
+      }
       const turnIns = this.pendingTurnIns();
       const next = turnIns.length ? null : this.nextAcceptableQuest();
       const leads = this.graphWorkAvailable() && this.odyssey.hasLocalLeads() && this.nearQuestGiver();
-      if (!turnIns.length && !next && !leads) { this.questGiverDwells.delete(seat); return; }
+      const calls = !turnIns.length && !next && !this.vocationAsks.has(seat) ? this.vocationChoiceOffers() : [];
+      if (!turnIns.length && !next && !leads && !calls.length) { this.questGiverDwells.delete(seat); return; }
       const t = (this.questGiverDwells.get(seat) ?? 0) + dt;
       if (t < QUESTGIVER_DWELL) { this.questGiverDwells.set(seat, t); return; }
       this.questGiverDwells.delete(seat);
@@ -24864,6 +24877,7 @@ export class World {
         if (leads) this.odyssey.localLeads();
         if (turnIns.length) this.onQuestZoneCleared(turnIns[0]);
         else if (next) this.acceptQuest(next);
+        else if (calls.length) this.vocationAsks.set(seat, this.time); // the seat's own calling menu (its row asks its client)
       } finally { this.actingSeat = was; }
       this.journalDirty.add(seat.id); // THE JOURNAL ROW: the act re-ships at once
     });
@@ -24925,12 +24939,13 @@ export class World {
     className: string; ownClass: boolean; steps: number; offerLabel: string;
     secret: boolean; flavor?: string;
   }[] {
+    if (this.clientActionHook && this.netJournal) return this.netJournal.voc?.offers ?? []; // THE VOCATION SITES PER SEAT: the host's cards for this seat
     return this.vocationChoiceOffers().map(q => {
       const v = VOCATIONS[q.vocation!];
       return {
         questId: q.id, vocationId: v.id, name: v.name, blurb: v.blurb, color: v.color,
         className: CLASSES.find(c => c.id === v.classId)?.name ?? v.classId,
-        ownClass: v.classId === this.meta.classDef.id,
+        ownClass: v.classId === this.questHand().meta.classDef.id, // THE QUEST HAND: the asking seat's class
         steps: v.quest.steps.length, offerLabel: q.offerLabel,
         secret: v.secret !== undefined, flavor: v.secret?.offerFlavor,
       };
@@ -24995,27 +25010,41 @@ export class World {
   /** Proximity DISCOVERY: walking into a site's aura RECEIVES the calling —
    *  for a qualifying character — via the run-ledger discovery key the chain's
    *  gates require. A non-qualifying visitor gets one quiet line instead. */
+  //  THE VOCATION SITES PER SEAT (shard W12): on a hosted world every standing player
+  //  seat's own body seeks (THE ACTING SEAT's toucher law: never the keeper's parked
+  //  body, never a hired blade), and the calling is the seeker's own: its own ledger
+  //  (THE CHARACTER'S QUESTS' keys, mirrored home), the account stamp its run's end
+  //  would have paid (solo merges the run ledger then) through its own gate
+  //  (World.gateAccountOf), its own note row. Solo and the co-op host: the hero alone.
   private updateVocationSites(): void {
+    const hosted = this.localSeat.keeper;
+    const seekers = hosted ? this.handSeats() : [this.localSeat];
     for (const site of this.vocationSites) {
       const v = VOCATIONS[site.vocId];
       if (!v?.secret || site.npc.dead) continue;
-      if ((this.ledger[vocationDiscoveryKey(site.vocId)] ?? 0) >= 1) continue;
-      if (dist(site.npc.pos, this.player.pos) > VOCATION_CFG.discoveryRadius) continue;
-      const unlocked = (this.account.ledger[vocationLedgerKey(site.vocId)] ?? 0) >= 1;
-      const heard = unlocked || !(v.secret.classLockedDiscovery ?? true)
-        || this.meta.classDef.id === v.classId;
-      if (!heard) {
-        if (!site.silentNoted) {
-          site.silentNoted = true;
-          this.text(vec(site.npc.pos.x, site.npc.pos.y - 40),
-            'It does not stir for you.', '#8a8678', 13);
+      const key = vocationDiscoveryKey(site.vocId);
+      for (const seat of seekers) {
+        if ((this.withQuestHand(seat, () => this.questRunLedger())[key] ?? 0) >= 1) continue;
+        if (dist(site.npc.pos, seat.actor.pos) > VOCATION_CFG.discoveryRadius) continue;
+        const unlocked = (this.gateAccountOf(seat).ledger[vocationLedgerKey(site.vocId)] ?? 0) >= 1;
+        const heard = unlocked || !(v.secret.classLockedDiscovery ?? true)
+          || seat.meta.classDef.id === v.classId;
+        if (!heard) {
+          const silent = hosted ? (site.silentSeats ??= new Set()).has(seat.id) : site.silentNoted;
+          if (!silent) {
+            if (hosted) site.silentSeats!.add(seat.id); else site.silentNoted = true;
+            this.seatNote(seat, vec(site.npc.pos.x, site.npc.pos.y - 40),
+              'It does not stir for you.', '#8a8678', 13);
+          }
+          continue;
         }
-        continue;
+        this.withQuestHand(seat, () => this.questStamp(key)); // the seeker's own ledger (solo: the run ledger)
+        if (hosted && this.seatStageDef(seat).metaProgression) bumpLedger(this.gateAccountOf(seat).ledger, key);
+        this.seatNote(seat, vec(site.npc.pos.x, site.npc.pos.y - 44),
+          v.secret.discoveryText ?? `A calling takes notice of you. (${v.name})`, v.color, 16);
+        this.markMetaDirty(seat);
+        if (hosted) this.journalDirty.add(seat.id); // THE JOURNAL ROW: its offers may have changed
       }
-      bumpLedger(this.ledger, vocationDiscoveryKey(site.vocId));
-      this.text(vec(site.npc.pos.x, site.npc.pos.y - 44),
-        v.secret.discoveryText ?? `A calling takes notice of you. (${v.name})`, v.color, 16);
-      this.markMetaDirty(this.localSeat);
     }
   }
 
