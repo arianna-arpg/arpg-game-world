@@ -1257,6 +1257,27 @@ What W7's build found beyond the audit (for her word where marked):
   see it. (A7 in the table above: W11 built THE FORESIGHT ON THE WIRE, and
   `balance/probe_shardforesight.ts` now reads the painter's own geometry.)
 
+## §7g Asks to the foundation session (the open ledger, 2026-10-13)
+
+The shard lane and the foundation (Codex) work the same tree: the shard merges
+the foundation down daily and lands up at green milestones (§7c). The foundation
+reads this charter and `docs/design/shard-m6-plan.md`; this table is the one
+place the shard lane keeps its asks, so either session can see what stands.
+
+| # | Ask (the shard lane cannot build it: `src/worldmass/**` is the foundation's) | Status on 2026-10-13 |
+|---|---|---|
+| F1 | THE POPULATION BUDGET SEAM for THE NEIGHBORHOOD GOVERNOR (§6.6 ask 4, the M6 plan §3.3): `WorldMassRuntime.setPopulationBudget({ total, floor } | null)` + `populationStats()`, host state outside the config, the land digest, the checkpoint and every save; a group's limit becomes `clamp(floor, config.maxPopulation, floor(total / groups))`; `null` restores today byte for byte. Optional `setResidencyRadius(r | null)`. | OPEN. `codex/shard-performance` (f967869c) builds the one-thread diet instead (terrain and navigation caches per focus, fewer repeated worldmass queries, the host yielding to Node between expensive ticks, fast-property native restores); no budget setter exists on any tip. The shard's W1 THE GOVERNOR waits on this seam. |
+| F2 | THE WORLD MEMBER-COUNT PIN in `probe_nativescenesky.ts` (2,351 against 2,450 at the foundation's own tip) | RESOLVED upstream: the foundation's CI repairs (58fc7f1a, 22e8f1da) retired the whole-World pins; `probe_nativeinstalledsources` now checks only the extracted delegates' archived bodies and `nativescenesky` carries no member count. The shard lane's re-pin of 2026-10-10 is moot and harmless. |
+| F3 | THE WILDS BOARDS PER CHARACTER (card 24): `dealMassBounties` in `src/worldmass/bounties.ts` seeds without the character and filters at the keeper's level, so two heroes at one settlement board read one draw. One line each: fold `questCharKey()` into the seed and read `questHandLevel()` (both in `src/engine/questLedger.ts`). | OPEN on every tip. |
+| F4 | DICTIONARY-MODE NATIVES: `restoreNativeActorState` deleted every property before reassigning (the M6 plan §1.4). | BUILT on `codex/shard-performance` ("Native actor restoration retains the factory object's already matching property layout"); unmerged into shard-world as of aa569d0e. |
+| F5 | THE ATTACH BLOCK: the wilds shell's attach is one synchronous block of seconds (the wisp freezes under THE ONE CROSSING's cover). | PARTLY ANSWERED upstream: the Mu crossing now plays in an isolated foreground renderer during world preparation (4dad1dbf, 38a8f601, `probe_loadingpreparation.ts`, `docs/ui/loading-screen.md`), so the freeze is covered rather than chunked; the synchronous block itself stands. |
+| F6 | THE REVIEW OF `codex/shard-performance` before it merges into shard-world: the shard lane audits it as a critic (correctness of the shard laws, probe honesty, the solo invariant, the protocol number, a concurrent-pair soak) and records the verdict here. | IN FLIGHT 2026-10-13. |
+
+What the shard lane offers the foundation in return: W0 THE ONE-THREAD DIET's
+profile and phase meter are the foundation's now (the performance branch);
+the shard will build W1 THE GOVERNOR the day F1 lands, and takes M6 W2/W3
+(the glass unit, the thread host) once cards 31 to 37 are ruled.
+
 ## §8 M0 receipts (2026-10-07, this pass)
 
 **Built** (every file new unless named): `src/net/wsframe.ts` (the RFC 6455
