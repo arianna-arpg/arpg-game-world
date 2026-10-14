@@ -64,6 +64,16 @@ export type ProbeRow = ProbeInvocation & (
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativerealmgateboundaries.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },
+  { probe: 'probe_nativerepeatcrusade.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },
+  { probe: 'probe_nativerepeatdemon.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },
+  { probe: 'probe_nativecrusadeepochwitness.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },
+  { probe: 'probe_nativecrusadeoldcommander.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },
+  { probe: 'probe_nativecrusadecommanderparity.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },
+  { probe: 'probe_nativecrusadeepochboundaries.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },
+  { probe: 'probe_nativecrusadecold.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },
+  { probe: 'probe_nativerepeateventsource.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },
+  { probe: 'probe_criticcrusadecoldcapture.ts', status: 'green', tier: 'fast', why: 'Original cold-capture witness; nativecrusadecold also runs both modes in fresh processes.' },
   { probe: 'probe_worldmass_bountycharacters.ts', status: 'green', tier: 'fast', why: 'Reviewed foundation population allowance and character bounty contracts; exact original source assertions retained.' },
   { probe: 'probe_worldmass_populationbudget.ts', status: 'green', tier: 'fast', why: 'Reviewed foundation population allowance and character bounty contracts; exact original source assertions retained.' },
   { probe: 'probe_nativeshardfoundationsource.ts', status: 'green', tier: 'fast', why: 'Reviewed foundation population allowance and character bounty contracts; exact original source assertions retained.' },

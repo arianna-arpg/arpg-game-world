@@ -1,3 +1,12 @@
+Retained repeat events now renew Crusade/Demon entrances and tie Crusade garrisons
+and commander rewards to the issuing campaign event. Preserve occupied old realms,
+actual body ownership, wounds, once-only rewards, selected callbacks and partial
+native effects. Verify nativerepeateventsource, nativecrusadecold, repeat boss/gate/
+commander courses, parent source proofs and F1/F3, all four types and generation.
+Terrain/structure renewal and scheduler performance remain separate; no branch merge
+is part of this change. See docs/worldgen/native-crusade-event-lifetime.md and
+docs/engine/foundation-shard-alignment.md.
+
 Foundation F1/F3 now supplies host-only setPopulationBudget/populationStats and
 character-seeded seamless bounty boards through questCharKey/questHandLevel.
 Preserve null-budget behavior, existing bodies and reservations, unchanged land/save

@@ -1,3 +1,4 @@
+import {observeNativeCrusadePlacement,observeNativeCrusadeCreation} from '../engine/nativeCrusadeIdentity';
 import {observeNativeCombatFactory} from '../engine/nativeCombatRecordObservation';
 import type {World} from '../engine/world';
 import {Rng} from '../core/rng';
@@ -69,13 +70,13 @@ export class NativeAreaSceneRuntimeBirth {
   const methods=(get:()=>object,keys:readonly string[])=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){const provider=get() as Record<string,Function>,fn=provider[key];if(typeof fn!=='function')throw Error('Missing native event capability: '+key);return(...args:unknown[])=>fn.apply(provider,args);}});};
   fields(()=>input.scene,["zone","actors","player"]);fields(()=>input.geometry,["arena","zoneEntry","flashes","doodads","snowCover","snowFloor","tracks","exits","walk","fractureRifts","doodadsRev","fog","currentZoneSeed","grounds","caveEntrances"]);fields(()=>input.generation.input.state,["inCave","crusadeWorksAt"]);fields(()=>input.campaign,["sim","ledger","manifest","zoneMap"]);fields(()=>input.state,stateKeys);
   methods(()=>input.geometry,['clampPos','clearTransitSpot','farPoint','markDoodadsChanged']);methods(()=>input.population,['promoteRarity']);methods(()=>input.population.input.sources.ambient,['weightedPick']);methods(()=>input.theater,['spawnEventActor','clampNear']);methods(()=>input.campaign,['text','notice']);methods(()=>owner,["ventGeyser","warbandEntryPoint","warbandDestination","compassFrom","infectActorWith","spawnPatientZero","freezeStandingWater","fogEnsure","findUnsealingSpot","spawnHuntBeast","beginFissure","bearingOf","riseAmalgamation","hasNpcRole","graftPart","fracturePoint","actorById"]);
-  Object.defineProperty(host,'createMonster',{enumerable:true,get(){return observeNativeCombatFactory(host,()=>{const provider=input.population,fn=provider.createMonster;return(...args:Parameters<typeof fn>)=>Reflect.apply(fn,provider,args);});}});
+  Object.defineProperty(host,'createMonster',{enumerable:true,get(){const fn=observeNativeCombatFactory(host,()=>{const provider=input.population,fn=provider.createMonster;return(...args:Parameters<typeof fn>)=>Reflect.apply(fn,provider,args);});return(...args:Parameters<typeof fn>)=>observeNativeCrusadeCreation(host,()=>Reflect.apply(fn,host,args));}});
   this.host=Object.freeze(host);for(const key of ['input','host'])Object.defineProperty(this,key,{enumerable:false,writable:false,configurable:false});
  }
  placeAscentGeyser(...args:Parameters<World['placeAscentGeyser']>):ReturnType<World['placeAscentGeyser']>{return native.birthPlaceAscentGeyser(this.host,this.input.sources,...args);}
  spawnWarband(...args:Parameters<World['spawnWarband']>):ReturnType<World['spawnWarband']>{return native.birthSpawnWarband(this.host,this.input.sources,...args);}
  spawnEpicenter(...args:Parameters<World['spawnEpicenter']>):ReturnType<World['spawnEpicenter']>{return native.birthSpawnEpicenter(this.host,this.input.sources,...args);}
- materializeCrusade(...args:Parameters<World['materializeCrusade']>):ReturnType<World['materializeCrusade']>{return native.birthMaterializeCrusade(this.host,this.input.sources,...args);}
+ materializeCrusade(...args:Parameters<World['materializeCrusade']>):ReturnType<World['materializeCrusade']>{return observeNativeCrusadePlacement(this.host,args[0],()=>native.birthMaterializeCrusade(this.host,this.input.sources,...args));}
  spawnHellCourt(...args:Parameters<World['spawnHellCourt']>):ReturnType<World['spawnHellCourt']>{return native.birthSpawnHellCourt(this.host,this.input.sources,...args);}
  spawnHellMarshal(...args:Parameters<World['spawnHellMarshal']>):ReturnType<World['spawnHellMarshal']>{return native.birthSpawnHellMarshal(this.host,this.input.sources,...args);}
  materializeWorldBossFight(...args:Parameters<World['materializeWorldBossFight']>):ReturnType<World['materializeWorldBossFight']>{return native.birthMaterializeWorldBossFight(this.host,this.input.sources,...args);}

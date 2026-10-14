@@ -1,3 +1,5 @@
+import {NativeAreaSceneCrusadeLifetime} from './nativeAreaSceneCrusadeLifetime';
+import {sceneReconcileRetainedRealmGates,type NativeRetainedRealmKind} from '../engine/nativeSceneRetainedRealmGates';
 import {nativeAreaHostedPresentation} from './nativeAreaHostedPresentation';
 import {stampDropOwners} from '../net/spoils';
 import {sceneSettleNearScale} from '../engine/nativeSceneNearScale';
@@ -99,7 +101,7 @@ import * as core3 from '../engine/nativeSceneCombatContext';
 import * as core4 from '../engine/nativeSceneCombatEvents';
 import {NativeAreaSceneWarlordArrival} from './nativeAreaSceneWarlordArrival';
 export interface NativeAreaSceneCombatInput {assembly:NativeAreaSceneAssembly;progression:NativeAreaSceneProgression;quests:NativeAreaSceneQuests;questInteraction:NativeAreaSceneQuestInteraction;watching:NativeAreaSceneObjectiveWatching;authority:NativeAreaActorAuthority<NativeAreaCombatServices>;campaign:NativeAreaOngoingCampaign;characterWriter:World;maddenLedger:NativeAreaMaddenLedger;coordinator:NativeAreaSceneTransitionCoordinator}
-export interface NativeAreaCombatServices {readonly serverSeats:NativeAreaServerSeats;readonly warlordArrival:NativeAreaSceneWarlordArrival;readonly encounterArrival:NativeAreaSceneEncounterArrival;readonly surfaceArrival:NativeAreaSceneSurfaceArrival;readonly harborServices:NativeAreaSceneHarborServices;readonly siteBirths:NativeAreaSceneSiteBirths;readonly historyArrival:NativeAreaSceneHistoryArrival;readonly odyssey:NativeAreaSceneOdyssey;readonly ai:NativeAreaSceneAI;readonly inputFrame:NativeAreaSceneInput;readonly combat:NativeAreaSceneCombat;readonly progression:NativeAreaSceneProgression;readonly loot:NativeAreaSceneAssembly['lootController'];readonly objective:NativeAreaSceneAssembly['objectiveController'];readonly geometry:NativeAreaSceneAssembly['input']['geometry'];readonly maddenLedger:NativeAreaMaddenLedger;readonly campaignOwner:NativeAreaSceneCombatCampaign;readonly combatArena:NativeAreaSceneCombatArena;readonly control:NativeAreaSceneCombatControl;readonly campaignTransitions:NativeAreaSceneCampaignTransitions;readonly campaignFrame:NativeAreaSceneCampaignFrame;readonly tethers:NativeAreaSceneTethers;readonly restoration:NativeAreaSceneRestoration;readonly castingPreparation:NativeAreaSceneCastingPreparation;readonly displacement:NativeAreaSceneDisplacement;readonly combatState:NativeAreaSceneCombatState;readonly defensePreparation:NativeAreaSceneDefensePreparation;readonly projectiles:NativeAreaSceneProjectiles;readonly killAftermath:NativeAreaSceneKillAftermath;readonly groundFollowUps:NativeAreaSceneGroundFollowUps;readonly summonPreparation:NativeAreaSceneSummonPreparation;}
+export interface NativeAreaCombatServices {readonly serverSeats:NativeAreaServerSeats;readonly crusadeLifetime:NativeAreaSceneCrusadeLifetime;readonly warlordArrival:NativeAreaSceneWarlordArrival;readonly encounterArrival:NativeAreaSceneEncounterArrival;readonly surfaceArrival:NativeAreaSceneSurfaceArrival;readonly harborServices:NativeAreaSceneHarborServices;readonly siteBirths:NativeAreaSceneSiteBirths;readonly historyArrival:NativeAreaSceneHistoryArrival;readonly odyssey:NativeAreaSceneOdyssey;readonly ai:NativeAreaSceneAI;readonly inputFrame:NativeAreaSceneInput;readonly combat:NativeAreaSceneCombat;readonly progression:NativeAreaSceneProgression;readonly loot:NativeAreaSceneAssembly['lootController'];readonly objective:NativeAreaSceneAssembly['objectiveController'];readonly geometry:NativeAreaSceneAssembly['input']['geometry'];readonly maddenLedger:NativeAreaMaddenLedger;readonly campaignOwner:NativeAreaSceneCombatCampaign;readonly combatArena:NativeAreaSceneCombatArena;readonly control:NativeAreaSceneCombatControl;readonly campaignTransitions:NativeAreaSceneCampaignTransitions;readonly campaignFrame:NativeAreaSceneCampaignFrame;readonly tethers:NativeAreaSceneTethers;readonly restoration:NativeAreaSceneRestoration;readonly castingPreparation:NativeAreaSceneCastingPreparation;readonly displacement:NativeAreaSceneDisplacement;readonly combatState:NativeAreaSceneCombatState;readonly defensePreparation:NativeAreaSceneDefensePreparation;readonly projectiles:NativeAreaSceneProjectiles;readonly killAftermath:NativeAreaSceneKillAftermath;readonly groundFollowUps:NativeAreaSceneGroundFollowUps;readonly summonPreparation:NativeAreaSceneSummonPreparation;}
 type TransferredBuff=Parameters<World['treeBuffSources']['get']>[0];
 interface ActorControllerPacket {source:NativeAreaSceneCombat;bond:unknown;grants:unknown;clocks:unknown;buffs:[TransferredBuff,NonNullable<ReturnType<World['treeBuffSources']['get']>>][];strike:ReturnType<World['strikeReleaseBodies']['get']>}
 const controllerTransfers=new WeakMap<object,WeakMap<Actor,ActorControllerPacket>>();
@@ -120,6 +122,7 @@ const exactPhysicalSeats=NativeAreaActorAuthority.prototype.physicalSeats;
 export function isNativeAreaSceneCombat(value:unknown):value is NativeAreaSceneCombat{return !!value&&typeof value==='object'&&actualCombats.has(value);}
 export class NativeAreaSceneCombat {
  readonly serverSeats:NativeAreaServerSeats;
+ readonly crusadeLifetime:NativeAreaSceneCrusadeLifetime;
  readonly warlordArrival:NativeAreaSceneWarlordArrival;
  readonly harborServices:NativeAreaSceneHarborServices;
  readonly encounterArrival:NativeAreaSceneEncounterArrival;
@@ -243,6 +246,7 @@ export class NativeAreaSceneCombat {
   this.siteBirths=new NativeAreaSceneSiteBirths(this,this.#operation.ownerEntry(),host);
   this.harborServices=new NativeAreaSceneHarborServices(this,this.#operation.ownerEntry(),host);
   this.surfaceArrival=new NativeAreaSceneSurfaceArrival(this,this.#operation.ownerEntry());
+  this.crusadeLifetime=new NativeAreaSceneCrusadeLifetime(this,this.#operation.ownerEntry(),this.#operation.ownerHooks());
   this.warlordArrival=new NativeAreaSceneWarlordArrival(this,this.#operation.ownerEntry(),this.#operation.ownerHooks(),host);
   this.encounterArrival=new NativeAreaSceneEncounterArrival(this,this.#operation.ownerEntry(),host as unknown as NativeSceneFrameHost);
   const partyHost=Object.create(host) as NativeAreaPartyBaseHost;
@@ -261,7 +265,7 @@ export class NativeAreaSceneCombat {
    tameCompanion:{value:(...args:Parameters<World['tameCompanion']>)=>this.#operation.withServerCompanion(this.serverSeats,args[0],args[1],()=>core2.sceneTameCompanion(host,...args))},
   });
   this.serverSeats=new NativeAreaServerSeats(this,this.#operation.ownerEntry(),Object.freeze(vesselHost));
-  this.services=Object.freeze({serverSeats:this.serverSeats,warlordArrival:this.warlordArrival,encounterArrival:this.encounterArrival,surfaceArrival:this.surfaceArrival,harborServices:this.harborServices,siteBirths:this.siteBirths,historyArrival:this.historyArrival,odyssey:this.odyssey,ai:this.ai,inputFrame:this.inputFrame,campaignFrame:this.campaignFrame,control:this.control,campaignTransitions:this.campaignTransitions,combatArena:this.combatArena,combat:this,progression,loot:assembly.lootController,objective:assembly.objectiveController,geometry,maddenLedger,campaignOwner:this.campaignOwner,tethers:this.tethers,restoration:this.restoration,castingPreparation:this.castingPreparation,displacement:this.displacement,combatState:this.combatState,defensePreparation:this.defensePreparation,projectiles:this.projectiles,killAftermath:this.killAftermath,groundFollowUps:this.groundFollowUps,summonPreparation:this.summonPreparation});
+  this.services=Object.freeze({serverSeats:this.serverSeats,crusadeLifetime:this.crusadeLifetime,warlordArrival:this.warlordArrival,encounterArrival:this.encounterArrival,surfaceArrival:this.surfaceArrival,harborServices:this.harborServices,siteBirths:this.siteBirths,historyArrival:this.historyArrival,odyssey:this.odyssey,ai:this.ai,inputFrame:this.inputFrame,campaignFrame:this.campaignFrame,control:this.control,campaignTransitions:this.campaignTransitions,combatArena:this.combatArena,combat:this,progression,loot:assembly.lootController,objective:assembly.objectiveController,geometry,maddenLedger,campaignOwner:this.campaignOwner,tethers:this.tethers,restoration:this.restoration,castingPreparation:this.castingPreparation,displacement:this.displacement,combatState:this.combatState,defensePreparation:this.defensePreparation,projectiles:this.projectiles,killAftermath:this.killAftermath,groundFollowUps:this.groundFollowUps,summonPreparation:this.summonPreparation});
   const bindings=this.bindings();
   for(const key of Object.keys(bindings) as (keyof Bindings)[])Object.defineProperty(host,key,{enumerable:true,...bindings[key]});
   const viewDescriptors=Object.getOwnPropertyDescriptors(host);
@@ -382,9 +386,9 @@ get zones(){return method(()=>host,"zones").get();},
 get seats(){if(!self.#wireSeats)throw Error('Native wire cohort is outside serialization');return self.#wireSeats;},
 get shardWorld(){return host.shardWorld;},
 nativeWireQueries:Object.freeze({encounterCue:(actor:Actor)=>encounterCueOf(actor,host),roadDwell:(seat:Seat)=>input.coordinator.roadsFor(self).roadDwellRow(seat)})});
-  Object.freeze(host);for(const key of ['serverSeats','warlordArrival','encounterArrival','surfaceArrival','harborServices','siteBirths','historyArrival','odyssey','party','ai','input','runtimeState','services','campaignOwner','combatArena','control','campaignTransitions','campaignFrame','inputFrame',"tethers","restoration","castingPreparation","displacement","combatState","defensePreparation","projectiles","killAftermath","groundFollowUps","summonPreparation"])Object.defineProperty(this,key,{writable:false,configurable:false});
+  Object.freeze(host);for(const key of ['serverSeats','crusadeLifetime','warlordArrival','encounterArrival','surfaceArrival','harborServices','siteBirths','historyArrival','odyssey','party','ai','input','runtimeState','services','campaignOwner','combatArena','control','campaignTransitions','campaignFrame','inputFrame',"tethers","restoration","castingPreparation","displacement","combatState","defensePreparation","projectiles","killAftermath","groundFollowUps","summonPreparation"])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
- register(binding:NativeAreaAuthorityBinding<NativeAreaCombatServices>):void{if(binding.scene!==this.scene)throw Error('Native combat registration has foreign scene');for(const key of Object.keys(this.services) as (keyof NativeAreaCombatServices)[])if(binding.services[key]!==this.services[key])throw Error('Native combat registration has mismatched actual owner');this.#operation.bind(binding,[this.serverSeats,this.warlordArrival,this.encounterArrival,this.surfaceArrival,this.harborServices,this.siteBirths,this.historyArrival,this.odyssey,this.party,this.ai,this,this.inputFrame,this.input.progression,this.input.assembly.lootController,this.input.assembly.objectiveController,this.campaignOwner,this.combatArena,this.control,this.campaignTransitions,this.campaignFrame,this.tethers,this.restoration,this.castingPreparation,this.displacement,this.combatState,this.defensePreparation,this.projectiles,this.killAftermath,this.groundFollowUps,this.summonPreparation,this.input.assembly.input.ecology]);}
+ register(binding:NativeAreaAuthorityBinding<NativeAreaCombatServices>):void{if(binding.scene!==this.scene)throw Error('Native combat registration has foreign scene');for(const key of Object.keys(this.services) as (keyof NativeAreaCombatServices)[])if(binding.services[key]!==this.services[key])throw Error('Native combat registration has mismatched actual owner');this.#operation.bind(binding,[this.serverSeats,this.crusadeLifetime,this.warlordArrival,this.encounterArrival,this.surfaceArrival,this.harborServices,this.siteBirths,this.historyArrival,this.odyssey,this.party,this.ai,this,this.inputFrame,this.input.progression,this.input.assembly.lootController,this.input.assembly.objectiveController,this.campaignOwner,this.combatArena,this.control,this.campaignTransitions,this.campaignFrame,this.tethers,this.restoration,this.castingPreparation,this.displacement,this.combatState,this.defensePreparation,this.projectiles,this.killAftermath,this.groundFollowUps,this.summonPreparation,this.input.assembly.input.ecology]);}
  prepareActivation(cohort:readonly Actor[]):NativeCombatActivation {return this.#operation.prepareActivation(cohort);}
  assertActivation(token:NativeCombatActivation,cohort:readonly Actor[]):void {this.#operation.assertActivation(token,cohort);}
  activate(cohort:readonly Actor[],token:NativeCombatActivation):void {if(!this.#activationReady())throw Error('Native combat activation needs actual born admitted area');const admitted=this.#operation.activate(this.#host,cohort,token);if(admitted.includes(this.input.campaign.localSeat.actor))this.campaignOwner.bindCombatDeeds();}
@@ -795,6 +799,12 @@ nativeWireQueries:Object.freeze({encounterCue:(actor:Actor)=>encounterCueOf(acto
  rollSummonType(...args:Parameters<NativeAreaSceneSummonPreparation["rollSummonType"]>):ReturnType<NativeAreaSceneSummonPreparation["rollSummonType"]>{const owner=this.summonPreparation,fn=owner.rollSummonType;return this.#operation.enter({permission:'proc'},()=>Reflect.apply(fn,owner,args));}
  forwardSummonSockets(...args:Parameters<World['forwardSummonSockets']>):ReturnType<World['forwardSummonSockets']>{return sceneForwardSummonSockets(...args);}
  showSkillArrival(...args:Parameters<World['showSkillArrival']>):void{return this.#operation.enter({permission:'proc',sources:[args[0]]},()=>sceneShowSkillArrival(this.#host,...args));}
+ private reconcileRealmGates(kind:NativeRetainedRealmKind):void {
+  this.#operation.assertActiveScope();
+  const census=presentationData(this.scene,'actors') as Actor[],physical:Actor[]=[];
+  for(let i=0,n=presentationData(census,'length') as number;i<n;i++)physical.push(presentationData(census,i) as Actor);
+  sceneReconcileRetainedRealmGates(this.#host,kind,()=>this.#operation.enter({permission:'physical',physical,sources:[]},()=>{}));
+ }
  private native<A extends unknown[],R>(fn:(host:Host,...args:A)=>R):Binding<(...args:A)=>R>{return {get:()=> (...args:A)=>{this.#operation.assertActiveScope();return fn(this.#host,...args);}};}
  get holdDefense():World['holdDefense'] {return this.input.assembly.input.registry.input.state.holdDefense;}
  get seatQuests():World['seatQuests'] {return NativeAreaCampaignFrameState.forWriter(this.input.characterWriter).seatQuests;}
@@ -1847,8 +1857,8 @@ vendorGemsOpen:method(()=>this.input.assembly.input.settlement,'vendorGemsOpen')
   seatNote:this.native(frameServices.sceneSeatNote),
   salvageUnlocked:this.native(frameServices.sceneSalvageUnlocked),
   isSafeAt:this.native(frameServices.sceneIsSafeAt),
-  maybeOpenCrusadePortal:this.native(frameAreaEvents.sceneMaybeOpenCrusadePortal),
-  maybeOpenDemonPortal:this.native(frameAreaEvents.sceneMaybeOpenDemonPortal),
+  maybeOpenCrusadePortal:this.native(host=>{this.reconcileRealmGates('crusade');frameAreaEvents.sceneMaybeOpenCrusadePortal(host);}),
+  maybeOpenDemonPortal:this.native(host=>{this.reconcileRealmGates('demon');frameAreaEvents.sceneMaybeOpenDemonPortal(host);}),
   pruneEngageTokens:this.native(frameAreaEvents.scenePruneEngageTokens),
   updateBombardment:this.native(frameAreaEvents.sceneUpdateBombardment),
   updateBrigandRaid:this.native(frameAreaEvents.sceneUpdateBrigandRaid),
@@ -2199,7 +2209,7 @@ vendorGemsOpen:method(()=>this.input.assembly.input.settlement,'vendorGemsOpen')
   lockHint:field(()=>this.runtimeState.frame,"lockHint"),
   manifest:field(()=>this.input.campaign,"manifest"),
   massNativeEffectInvokers:field(()=>this.runtimeState.frame,"massNativeEffectInvokers"),
-  materializeLiveZoneEvents:method(()=>this.input.assembly.input.registry,"materializeLiveZoneEvents"),
+  materializeLiveZoneEvents:method(()=>this.crusadeLifetime,"materializeLiveZoneEvents"),
   meta:field(()=>this.input.campaign,"meta"),
   minionMetaScan:field(()=>this.runtimeState.frame,"minionMetaScan"),
   modeStageDef:method(()=>this.input.assembly.input.history,"modeStageDef"),
