@@ -30,6 +30,7 @@ import type { TownSiteId } from '../data/townBuild';
 import { FEATURE } from '../meta/account';
 import { questMarkers, registerMarkerSource, type MapMarker } from '../world/mapMarkers';
 import { massQuestPins, type MassQuestPin } from '../worldmass/quests';
+import { spokenEmpty, spokenRowOf, type SpokenW } from './spokenQuests'; // THE SPOKEN QUESTS (W12)
 import type { StateSnapshot, ZoneMsg } from './snapshot';
 
 /** THE KEEPER'S GATE for a client's counters: the station features whose verdict a render
@@ -124,6 +125,10 @@ export interface JournalW {
   /** On the Unbroken Wilds: the seat's own quest and bounty pins on the surface (the map's
    *  pins and the HUD's quest compass, worldmass/quests.ts massQuestPins). */
   mpins?: MassQuestPin[];
+  /** THE SPOKEN QUESTS (W12, net/spokenQuests.ts): what the seat's dialogue conditions read
+   *  (its held quests with their standing, the named run and account keys, the named
+   *  features); the shell's dialogue answers from it (questDialogueView). */
+  sq: SpokenW;
 }
 
 /** The seat's rite view (SeatW.hv): World.harvestView's own shape, cut to the nodes in
@@ -159,6 +164,7 @@ export function journalViewOf(world: World, seat: Seat): JournalW {
       done: [...world.completedQuests],
       pins,
       ...(Object.keys(boards).length ? { boards } : {}),
+      sq: spokenRowOf(world, seat), // THE SPOKEN QUESTS: the hearer's own reads, judged by its hand
     };
   });
 }
@@ -166,7 +172,7 @@ export function journalViewOf(world: World, seat: Seat): JournalW {
 /** Nothing to tell: no quest held or done, nothing offered or owed, no pin, no board near. */
 function journalEmpty(j: JournalW): boolean {
   return !j.log.active.length && !j.log.completed.length && !j.offers.length && !j.rewards.length
-    && !j.imbues.length && !j.done.length && !j.pins.length && !j.boards && !j.mpins;
+    && !j.imbues.length && !j.done.length && !j.pins.length && !j.boards && !j.mpins && spokenEmpty(j.sq);
 }
 
 interface JournalMemo { json: string; row: JournalW; at: number; empty: boolean; emptySince: number }

@@ -17,8 +17,11 @@ import { SAVE_COMPATIBILITY } from '../meta/saveCompatibility';
  *     THE SPOILS' OWNER's (card 27) drop rows and party words ride beside them.
  *  4: THE FORESIGHT ON THE WIRE (W11): an enemy cast row's foresight (`CastW.fg`, laid on the
  *     diet's grid) and the body row's hit tint (`ActorW.ht`); an older client resolves a cast
- *     stub's foresight (the crash on every enemy wind-up) and never reads the tint. */
-export const SHARD_WIRE_PROTOCOL = 5;
+ *     stub's foresight (the crash on every enemy wind-up) and never reads the tint.
+ *  6: THE SPOKEN QUESTS (W12): the journal row carries the seat's dialogue reads (`JournalW.sq`)
+ *     and its calling (`JournalW.voc`); an older client hears only the ungated lines and never
+ *     opens a hosted vocation menu. */
+export const SHARD_WIRE_PROTOCOL = 6;
 
 /** This build's stamp, as the join and the welcome carry it. */
 export function shardBuildStamp(): string {
