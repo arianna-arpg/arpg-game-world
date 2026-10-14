@@ -675,3 +675,69 @@ B: arm the governor only once the warm-up is over (no dial inside the first
 30 s after a join) and otherwise as A. C: the governor only ever thins and
 never slows the rate (the rate dial read worse per tick on the clustered
 course), as A. Rec: B with A's signal, measured on the same two courses.
+
+### 8.3 E10: the edge's long soak (the heap watch §7.6 owed), 2026-10-14
+
+One tree (beb1d978), `--think off` against on, both hosts at once, the
+spread course for a 600 s window:
+
+| | edge off | edge on |
+|---|---|---|
+| tick p50 / p95 / p99 ms | 28.2 / 106.6 / 181.3 | 19.4 / 90.0 / 183.4 |
+| ticks stepped in the window | 15,164 | 19,587 |
+| dropped | 56.4% | 43.8% |
+| living least / mean | 10 / 20.1 | 13 / 18.8 |
+| actors, mean | 193 | 173 |
+| live heap, forced GC at both edges, MB | 520 to 580, +59.6 | 525 to 582, +56.8 |
+| trough slope MB a minute | 6.7 | 11.3 (one transient to 946 at the ninth minute, back to 627) |
+| deaths / rejoins | 6 / 6 | 6 / 6 |
+
+The edge is clean of retention: ten minutes grow the live heap the same on
+both halves, so the short pairs' gaps were the course's kills and spoils,
+and the edge's one WeakMap entry per edged body is all it keeps. The gain
+holds over the long window (a third off the p50, a quarter fewer dropped
+ticks, the living least higher). WATCH, the world's own: both halves grow
+about 6 MB of live heap a minute on the spread course (the allowance is 320
+MB for 600 s, so the gate passes), which is 360 MB an hour of a standing
+shard; the capped caches (F9), zone memory and spoils are the suspects, and
+the real host needs an hours-long soak before a session length is promised.
+
+### 8.4 THE OBSTACLE MEMO (the walk's blocked() answered once per point per revision), 2026-10-14
+
+The callers view of the profile (`balance/profile_summary.ts --callers`)
+put 99 percent of `pointInSolid`'s 3.2 s under one lambda in the mass
+runtime: the walk field's obstacle predicate, asked at every cell the A* and
+the line tests touch. THE DOODAD CHURN measured on the spread course: the
+global doodad revision moves 0.6 to 1.0 times a second and every one of those
+moves is a nav-block family move (scenery grows as the focus walks), the
+predicate is asked about 3,000 times a tick (p95 of samples 4,700). Built as
+`server/walkMemo.ts` (docs/engine/shard.md "THE OBSTACLE MEMO"): the host
+wraps the walk's obstacles object with an exact-point memo keyed on the
+nav-block family's counter, the doodad count, the bridge count and the native
+features' version; `probe_shardwalkmemo` green (two thousand probes answer as
+the predicate beneath; a blocking doodad's report clears it and a campfire's
+leaves it; a doodad added clears it; a full memo clears itself; off, the walk
+is untouched; solo and the sim never import it).
+
+**M3, the spread course, one tree, `--walkmemo off` against on (6 bots, 60 s,
+3,500 px, no drop, together):**
+
+| | memo off | memo on |
+|---|---|---|
+| tick p50 / p95 / p99 ms | 37.1 / 91.4 / 132.2 | 27.2 / 59.1 / 176.3 |
+| ticks stepped in the window | 1,336 | 1,765 |
+| dropped | 61.6% | 49.1% |
+| the predicate's calls a tick | 3,078 (p95 4,731) | 107 misses of about 3,000 (92% served) |
+| the AI loop p95 ms, share | 52.6, 50% | 25.0, 34% |
+| living least / mean | 16 / 20.6 | 18 / 21.4 |
+| actors, mean | 230 | 216 |
+| heap growth MB | 13.8 | 9.5 |
+
+A quarter off the p50 and a third off the p95, a third more ticks stepped,
+the living radius unchanged. The memo's first-touch profile (P2, 30 s, no
+diagnostics wrappers) reads the AI loop at 48 percent of the tick and the
+runtime at 10 with the memo serving 93 percent of 2.4 million asks in 30 s.
+The engine-side half, keying the walk's own path cache on the same family
+revision instead of the global one (every scenery birth clears it today) and
+memoizing per cell inside the walk field so solo play gains too, is the
+foundation's: ask F14.

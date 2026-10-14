@@ -32,6 +32,7 @@
 //   --diet off          THE WIRE DIET switched off (WIRE_DIET_CFG.enabled): the pre-diet frames, the A/B
 //   --think off         THE THINKING EDGE switched off (THINKING_EDGE_CFG.enabled): every body thinks every tick, the A/B
 //   --govern on|off     THE GOVERNOR (GOVERNOR_CFG.enabled; it ships off): on, the cost dials move against the measured tick; off, today's admission law and the base rate, the A/B
+//   --walkmemo off      THE OBSTACLE MEMO switched off (WALK_MEMO_CFG.enabled): the mass walk's blocked() unmemoized, the A/B
 //   --report <path>     the JSON report (default balance/reports/soak_<stamp>.json, gitignored)
 //   --diagnostics       inclusive phase, worker, machine-load and checkpoint measurements
 //   --profile <path>    CPU profile of the measured window (diagnostic timing only)
@@ -60,6 +61,7 @@ import { ShardPerformance } from './shardPerformance';
 import { BODY_STATES, CENSUS_CFG, distanceCensus, type DistanceCensus } from '../server/distanceCensus'; // THE DISTANCE CENSUS per sample
 import { THINKING_EDGE_CFG } from '../server/thinkingEdge'; // THE THINKING EDGE's A/B switch (--think off)
 import { GOVERNOR_CFG, type GovernorStatus } from '../server/governor'; // THE GOVERNOR's A/B switch (--govern off) and its row
+import { WALK_MEMO_CFG } from '../server/walkMemo'; // THE OBSTACLE MEMO's A/B switch (--walkmemo off)
 
 export const SOAK_CFG = {
   bots: 10,
@@ -219,6 +221,9 @@ interface Sample {
   census: DistanceCensus;
   /** THE GOVERNOR's row at the sample's edge (server/governor.ts): the signal, the standing budget, the rate, the state. */
   governor: GovernorStatus;
+  /** THE DOODAD CHURN: moves of the global doodad revision and of the nav-block family's revision in this sample,
+   *  the doodad count, and the mass walk's obstacle-predicate calls per stepped tick (the pointInSolid lane). */
+  doodadRevMoves: number; navBlockRevMoves: number; doodads: number; blockedPerTick: number;
   /** THE SEEN RADIUS: live foes within the view radius (SOAK_CFG.seenPx) of each standing seat — the least and the mean;
    *  a dial acting beyond the view is invisible by design, so the living radius alone would under-read it. */
   seenMin: number; seenMean: number;
@@ -249,6 +254,7 @@ async function main(): Promise<number> {
   if (roveArg !== undefined) SHARD_CFG.rove.sec = Math.max(0, roveArg); // THE ROVING SHADOW's dial, before the host stands
   if (typeof args.think === 'string' && /^(0|off|false|no)$/i.test(args.think)) THINKING_EDGE_CFG.enabled = false; // THE THINKING EDGE's A/B (--think off)
   if (typeof args.govern === 'string') GOVERNOR_CFG.enabled = !/^(0|off|false|no)$/i.test(args.govern); // THE GOVERNOR's A/B (--govern on | off; it ships off)
+  if (typeof args.walkmemo === 'string' && /^(0|off|false|no)$/i.test(args.walkmemo)) WALK_MEMO_CFG.enabled = false; // THE OBSTACLE MEMO's A/B (--walkmemo off)
   if (typeof args.diet === 'string' && /^(0|off|false|no)$/i.test(args.diet)) WIRE_DIET_CFG.enabled = false; // THE WIRE DIET's A/B
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const reportPath = typeof args.report === 'string' ? args.report : `${SOAK_CFG.reportDir}/soak_${stamp}.json`;
@@ -369,6 +375,23 @@ async function main(): Promise<number> {
     for (const e of list.getEntries()) gcs.push({ start: e.startTime, dur: e.duration, kind: (e as unknown as { detail?: { kind?: number } }).detail?.kind ?? 0 }); // node's entry (the DOM lib's type lacks detail)
   });
   gcObs.observe({ entryTypes: ['gc'] });
+  // THE DOODAD CHURN + THE OBSTACLE PREDICATE (harness-side, like the diagnostics): count the mass walk's
+  // `obstacles.blocked` calls through an own-property wrap on the walk field's obstacles object, re-wrapped if the
+  // runtime re-seats it, and read the doodad revisions per sample. The predicate funnels into World.pointInSolid
+  // (10 percent of the spread tick in the lane's profile), and the walk's path cache keys on the GLOBAL doodad
+  // revision, so the churn says how often that cache can hold.
+  const churn = { blocked: 0, wrapped: null as object | null };
+  const wrapObstacles = (): void => {
+    const walk = host.world.walk as unknown as { obstacles?: { blocked(x: number, y: number): boolean; revision(): string } } | null;
+    const obs = walk?.obstacles;
+    if (!obs || obs === churn.wrapped) return;
+    const inner = obs.blocked.bind(obs);
+    obs.blocked = (x: number, y: number): boolean => { if (win.open) churn.blocked++; return inner(x, y); };
+    churn.wrapped = obs;
+  };
+  wrapObstacles();
+  const navBlockRev = (): number => host.world.doodadFamilyRev('nav-block');
+  const churnPrev = { doodadRev: host.world.doodadRev, navBlockRev: navBlockRev(), blocked: 0 };
   // THE DORMANT SEAT, as the shard saw it (the host's own ears run first).
   const dormantSeen: { id: string; at: number; held: boolean }[] = [];
   const resumeSeen: { id: string; at: number }[] = [];
@@ -494,7 +517,13 @@ async function main(): Promise<number> {
     const standingNow = host.units.allSeats().filter(x => !x.actor.dead && !x.actor.downed);
     let fleetSpreadPx = 0;
     for (const a of standingNow) for (const b of standingNow) fleetSpreadPx = Math.max(fleetSpreadPx, Math.hypot(a.actor.pos.x - b.actor.pos.x, a.actor.pos.y - b.actor.pos.y));
+    wrapObstacles(); // a re-seated runtime hands the walk a fresh obstacles object
+    const churnNow = { doodadRev: host.world.doodadRev, navBlockRev: navBlockRev(), blocked: churn.blocked };
+    const churnRow = { doodadRevMoves: churnNow.doodadRev - churnPrev.doodadRev, navBlockRevMoves: churnNow.navBlockRev - churnPrev.navBlockRev,
+      doodads: host.world.doodads.length, blockedPerTick: r2((churnNow.blocked - churnPrev.blocked) / Math.max(1, ticks.length)) };
+    Object.assign(churnPrev, churnNow);
     samples.push({
+      ...churnRow, // THE DOODAD CHURN + the obstacle predicate's calls per tick
       phases: phaseSlice(prev.tick), census: distanceCensus(host.units.worlds()), // THE PHASE METER + THE DISTANCE CENSUS
       governor: st.governor, seenMin: seen.min, seenMean: r2(seen.mean), // THE GOVERNOR's row + THE SEEN RADIUS
       livingMin: living.min, livingMean: r2(living.mean), fleetSpreadPx: Math.round(fleetSpreadPx),
@@ -606,7 +635,7 @@ async function main(): Promise<number> {
 
   const cpu = cpus();
   const report = {
-    soak: { version: 1, at: new Date().toISOString(), world, seed: seedHex, bots, seconds, windowSec: r2(windowSec), classes: SOAK_CFG.classes, drop: dropOn, diet: WIRE_DIET_CFG.enabled, think: THINKING_EDGE_CFG.enabled, govern: GOVERNOR_CFG.enabled },
+    soak: { version: 1, at: new Date().toISOString(), world, seed: seedHex, bots, seconds, windowSec: r2(windowSec), classes: SOAK_CFG.classes, drop: dropOn, diet: WIRE_DIET_CFG.enabled, think: THINKING_EDGE_CFG.enabled, govern: GOVERNOR_CFG.enabled, walkmemo: WALK_MEMO_CFG.enabled },
     machine: { platform: process.platform, release: release(), node: process.version, cpus: cpu.length, cpuModel: cpu[0]?.model.trim() ?? '?', memGB: Math.round(totalmem() / 1024 ** 3) },
     host: { bootSec: r2(bootSec), tickHz: SHARD_CFG.tickHz, stateHz: SHARD_CFG.stateHz, wireCaps: { maxSeats: SHARD_WIRE_CFG.maxSeats, maxConnections: SHARD_WIRE_CFG.maxConnections, maxPerIp: 'unbounded' } },
     warmup: {
@@ -737,6 +766,8 @@ async function main(): Promise<number> {
     ['snapshot bytes p50 / p95 / max', `${r2(pct(snaps, 0.5) / 1000)} / ${r2(pct(snaps, 0.95) / 1000)} / ${r2((snaps[snaps.length - 1] ?? 0) / 1000)} kB over ${snaps.length} snapshots`],
     ['outbound per client', `${report.wire.kBpsPerClient} kB/s (snapshots ${k.snapshots}, zone ${k.zone}, other ${k.other}); ${win.zoneSends} zone re-ships`],
     ['heap (live, forced GC)', `${r2(heapStartMB)} -> ${r2(heapEndMB)} MB (${heapGrowth >= 0 ? '+' : ''}${r2(heapGrowth)} MB; trough slope ${r2(troughSlope)} MB/min)${fullGc ? '' : ' [no forced GC: raw readings]'}`],
+    ['the obstacle memo', WALK_MEMO_CFG.enabled ? (() => { const m = host.walkMemo.status(); return `${m.installed ? 'installed' : 'NOT installed'}: ${m.hits} hits, ${m.misses} misses (${m.hits + m.misses ? Math.round(m.hits / (m.hits + m.misses) * 100) : 0}% hit), ${m.clears} clears, ${m.entries} entries at the end`; })() : 'OFF (--walkmemo off): the walk\'s blocked() unmemoized'],
+    ['the doodad churn', `global revision +${samples.reduce((a, s) => a + s.doodadRevMoves, 0)} over the window (${r2(samples.reduce((a, s) => a + s.doodadRevMoves, 0) / Math.max(1e-3, windowSec))}/s), nav-block family +${samples.reduce((a, s) => a + s.navBlockRevMoves, 0)} (${r2(samples.reduce((a, s) => a + s.navBlockRevMoves, 0) / Math.max(1e-3, windowSec))}/s); ${samples.length ? samples[samples.length - 1].doodads : 0} doodads at the end; the walk's obstacle predicate ${r2(mean(samples.map(s => s.blockedPerTick)))} calls a tick (p95 of samples ${r2(pct(sorted(samples.map(s => s.blockedPerTick)), 0.95))})`],
     ['faults', String(faults)],
     ['dormant seat', resumeNote],
     ['party', partyNote],

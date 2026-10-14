@@ -373,6 +373,7 @@ The run has three phases:
 | `--diet off` | THE WIRE DIET switched off (`WIRE_DIET_CFG.enabled`): the pre-diet frames, so one build measures both sides of the A/B under the same load |
 | `--think off` | THE THINKING EDGE switched off (`THINKING_EDGE_CFG.enabled`): every body thinks every tick, so one build measures both sides of that A/B too |
 | `--govern off` | THE GOVERNOR switched off (`GOVERNOR_CFG.enabled`): no dial moves, today's admission law and the base tick rate throughout, the third A/B |
+| `--walkmemo off` | THE OBSTACLE MEMO switched off (`WALK_MEMO_CFG.enabled`): the mass walk's `blocked()` unmemoized, the fourth A/B |
 | `--report <path>` | the JSON report (default `balance/reports/soak_<stamp>.json`, gitignored) |
 | `--thresholds <path>` | the gates (default `balance/soak.config.json`) |
 | `--diagnostics` | the foundation's inclusive evidence (`balance/shardPerformance.ts`, ported from `codex/shard-performance` 2026-10-13): prototype wraps around `World.update`, `applyInputs`, `settleNearScale`, `serializeWorldState`, the mass runtime's `update`, `attach` and `nativeReadiness`, the host's wire phase and the desks; terrain sample and region-read counts; worker, paging and resume samples; machine busy percent and the process's CPU cores over the window; a compact checkpoint timed OUTSIDE the window (no disk). Phase durations overlap; never sum them |
@@ -464,6 +465,27 @@ robustness (a longer window, consecutive beats, the EWMA beside the p95) is
 the next tuning and its numbers are hers (docs/design/performance-lane.md
 §8.2). `--govern on` is the switch, `--govern off` the A/B's other half.
 Probe `probe_shardgovernor`.
+
+**THE OBSTACLE MEMO** (`server/walkMemo.ts`; docs/design/performance-lane.md
+§8.3). The mass walk's A* and line tests ask `obstacles.blocked(x, y)` at
+every cell they touch, and that predicate is `World.pointInSolid` at the
+cell's centre with a fixed margin: the native obstacle lookup plus the
+engine's doodad shape tests, ten percent of the spread tick in the lane's
+profile, 99 percent of it from this one caller. The answers repeat tick after
+tick and change only when a movement-blocking doodad changes, a doodad is
+added or removed, a bridge is laid or the native features move. The host
+wraps the walk's `obstacles` object (an own-property wrap; the foundation's
+wiring in `src/worldmass/runtime.ts` stays untouched) with a memo keyed on
+the EXACT query point under a revision of the nav-block doodad family's
+counter, the doodad count, the bridge count and the native features'
+version; a changed revision clears it, a full memo clears itself, and the
+host re-installs it each tick if the runtime re-seated the walk. Only the
+host installs it (THE SOLO INVARIANT); the engine-side keying of the walk's
+own path cache on the same family revision is the foundation's ask F14. The
+status page carries `walkMemo` (installed, entries, hits, misses, clears);
+the soak prints its hit rate and THE DOODAD CHURN (the global and nav-block
+revisions' moves a second, the predicate's calls a tick). Probe
+`probe_shardwalkmemo`.
 
 **What it reads.** One seam in the shard's own code: `ShardTransport.bytesOut`
 and `framesOut`, bumped in `write()` for every frame handed a socket. The

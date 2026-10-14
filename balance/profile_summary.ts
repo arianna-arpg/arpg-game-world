@@ -45,9 +45,12 @@ export interface ProfileSummary {
   self: { key: string; ms: number; share: number }[];
   inclusive: { name: string; ms: number; share: number; sites: number }[];
   files: { file: string; ms: number; share: number }[];
+  /** THE CALLERS VIEW (`--callers name`): the named function's inclusive time split by its direct caller frame,
+   *  a stack counting once at its innermost occurrence of the name. */
+  callers?: { name: string; ms: number; rows: { caller: string; ms: number; share: number }[] };
 }
 
-export function summarizeProfile(path: string, opts: { top?: number; watch?: string[] } = {}): ProfileSummary {
+export function summarizeProfile(path: string, opts: { top?: number; watch?: string[]; callers?: string } = {}): ProfileSummary {
   const prof = JSON.parse(readFileSync(path, 'utf8')) as CpuProfile;
   const top = opts.top ?? 40;
   const watch = new Set(opts.watch ?? PROFILE_WATCH);
@@ -96,12 +99,36 @@ export function summarizeProfile(path: string, opts: { top?: number; watch?: str
     }
   }
   const share = (us: number): number => totalUs ? Math.round(us / totalUs * 1e4) / 1e4 : 0;
+  // THE CALLERS VIEW: walk up from each sample to the innermost frame named `callers`, then one more
+  // step to its direct caller; the sample's time lands on that caller's key.
+  let callers: ProfileSummary['callers'];
+  if (opts.callers) {
+    const byCaller = new Map<string, number>();
+    let total = 0;
+    for (const [id, us] of selfUs) {
+      let cur: number | undefined = id;
+      while (cur !== undefined) {
+        const n = byId.get(cur)!;
+        if (n.callFrame.functionName === opts.callers) {
+          const p = parent.get(cur);
+          const key = p === undefined ? '(root)' : frameKey(byId.get(p)!.callFrame);
+          byCaller.set(key, (byCaller.get(key) ?? 0) + us);
+          total += us;
+          break;
+        }
+        cur = parent.get(cur);
+      }
+    }
+    callers = { name: opts.callers, ms: r2(total / 1000),
+      rows: [...byCaller].sort((a, b) => b[1] - a[1]).slice(0, top).map(([caller, us]) => ({ caller, ms: r2(us / 1000), share: total ? Math.round(us / total * 1e4) / 1e4 : 0 })) };
+  }
   return {
     file: basename(path),
     sampledMs: r2(totalUs / 1000), samples: prof.samples.length,
     self: [...selfByKey].sort((a, b) => b[1] - a[1]).slice(0, top).map(([key, us]) => ({ key, ms: r2(us / 1000), share: share(us) })),
     inclusive: [...inclUs].sort((a, b) => b[1] - a[1]).map(([name, us]) => ({ name, ms: r2(us / 1000), share: share(us), sites: inclSites.get(name)?.size ?? 0 })),
     files: [...selfByFile].sort((a, b) => b[1] - a[1]).slice(0, top).map(([file, us]) => ({ file, ms: r2(us / 1000), share: share(us) })),
+    ...(callers ? { callers } : {}),
   };
 }
 
@@ -116,16 +143,21 @@ export function printProfileSummary(s: ProfileSummary): string {
   for (const r of s.self) out.push(`  ${R(r.key.slice(0, 70), 70)} ${L(r.ms, 10)} ${L((r.share * 100).toFixed(1) + '%', 7)}`);
   out.push('', `  ${R('SELF BY FILE', 70)} ${L('ms', 10)} ${L('share', 7)}`);
   for (const r of s.files) out.push(`  ${R(r.file.slice(0, 70), 70)} ${L(r.ms, 10)} ${L((r.share * 100).toFixed(1) + '%', 7)}`);
+  if (s.callers) {
+    out.push('', `  ${R(`CALLERS OF ${s.callers.name} (${s.callers.ms} ms inclusive; by direct caller)`, 70)} ${L('ms', 10)} ${L('share', 7)}`);
+    for (const r of s.callers.rows) out.push(`  ${R(r.caller.slice(0, 70), 70)} ${L(r.ms, 10)} ${L((r.share * 100).toFixed(1) + '%', 7)}`);
+  }
   return out.join('\n');
 }
 
-function parseArgs(argv: string[]): { file?: string; top?: number; watch?: string[]; json?: string } {
-  const out: { file?: string; top?: number; watch?: string[]; json?: string } = {};
+function parseArgs(argv: string[]): { file?: string; top?: number; watch?: string[]; json?: string; callers?: string } {
+  const out: { file?: string; top?: number; watch?: string[]; json?: string; callers?: string } = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--top') out.top = Number(argv[++i]);
     else if (a === '--watch') out.watch = [...PROFILE_WATCH, ...String(argv[++i]).split(',')];
     else if (a === '--json') out.json = argv[++i];
+    else if (a === '--callers') out.callers = argv[++i];
     else if (!a.startsWith('--')) out.file = a;
   }
   return out;
@@ -135,7 +167,7 @@ const invokedDirectly = process.argv[1] && /profile_summary\.(ts|js)$/.test(proc
 if (invokedDirectly) {
   const args = parseArgs(process.argv.slice(2));
   if (!args.file) { console.error('usage: npx tsx balance/profile_summary.ts <file.cpuprofile> [--top N] [--watch a,b] [--json out.json]'); process.exit(1); }
-  const s = summarizeProfile(args.file, { top: args.top, watch: args.watch });
+  const s = summarizeProfile(args.file, { top: args.top, watch: args.watch, callers: args.callers });
   if (args.json) writeFileSync(args.json, JSON.stringify(s, null, 2));
   console.log(printProfileSummary(s));
 }

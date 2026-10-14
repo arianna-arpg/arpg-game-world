@@ -60,6 +60,7 @@ import { PhaseMeter, meterMethod } from './phaseMeter'; // THE PHASE METER (perf
 import { distanceCensus } from './distanceCensus'; // THE DISTANCE CENSUS: what the bodies do, how far from a player
 import { THINKING_EDGE_CFG, edgeContext, thinkDt } from './thinkingEdge'; // THE THINKING EDGE: idle far bodies think on the beat alone
 import { Governor } from './governor'; // THE NEIGHBORHOOD GOVERNOR (W1): the cost dials against the measured tick
+import { WalkMemo } from './walkMemo'; // THE OBSTACLE MEMO: the mass walk's blocked() answered once per point per revision
 import { VesselDesk } from './vessel';
 import { ShardCorpses, shardRecordsPath } from './corpses';
 import { UnitRegistry, type SimUnit } from './simUnits';
@@ -337,6 +338,9 @@ export class ShardHost {
   /** THE NEIGHBORHOOD GOVERNOR (server/governor.ts): fed every tick's own measured cost at the tick's end, beating once a
    *  world second in tick(); its hooks read the tick rate and the keeper's runtime live. */
   readonly governor: Governor;
+  /** THE OBSTACLE MEMO (server/walkMemo.ts): installed on the mass walk's obstacles object once the world
+   *  stands, re-installed each tick if the runtime re-seated it; the status page carries its counters. */
+  readonly walkMemo: WalkMemo;
   private lastFaultLogAt = 0;
   private faultsSinceLog = 0;
 
@@ -408,6 +412,7 @@ export class ShardHost {
       setTickHz: hz => { SHARD_CFG.tickHz = hz; },
       runtime: () => this.world.massRuntime,
     });
+    this.walkMemo = new WalkMemo(this.world);
     this.net.diet = this.diet;
     this.net.log = this.log;
     this.net.worldmass = this.worldmass;
@@ -882,6 +887,7 @@ export class ShardHost {
   tick(dt: number): void {
     if (this.wildsResuming) return; // THE RESUME LAW: no frame meets a half-stood world (wildsSave)
     const k = this.world;
+    this.walkMemo.ensure(); // THE OBSTACLE MEMO: wrap the walk's obstacles object if the runtime re-seated it (one identity check)
     // THE PHASE METER: two clock reads around each phase below, per unit; the
     // whole tick lands at the end. The marks cost a microsecond a tick in all.
     const meter = this.phases;
@@ -1291,6 +1297,7 @@ export class ShardHost {
       phases: this.phases.summary(), // THE PHASE METER: p50 / p95 / max / share per phase, per unit as `<unit>/<phase>`
       census: distanceCensus(this.units.worlds()), // THE DISTANCE CENSUS: bodies by state and by distance to the nearest player
       governor: this.governor.status(), // THE GOVERNOR: the signal, the standing budget, the tick rate, the state
+      walkMemo: this.walkMemo.status(), // THE OBSTACLE MEMO: installed, entries, hits, misses, clears, the revision
       rove: { on: this.worldmass && SHARD_CFG.rove.sec > 0, hops: this.roveHops, visiting: this.roveAnchorId }, // THE ROVING SHADOW
       saving: this.savePath ? basename(this.savePath) : 'ephemeral',
       broken: this.broken,
