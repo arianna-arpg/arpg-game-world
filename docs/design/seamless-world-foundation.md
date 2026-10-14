@@ -4768,3 +4768,37 @@ Complete native source/controller persistence must support the original populati
 budgets; neither extracted birth methods nor decorative source counts establish
 content parity. MassJourney remains a finite opening circuit. The continuing
 road network and measured encounter-cadence gates in that audit remain unfinished.
+
+## Convergence cutover checklist and owners (2026-10-14)
+
+This checklist governs new parity work under
+[the shared convergence plan](convergence-20261014.md). The hosting boundary is
+[the retained-area contract](../engine/retained-area-host-contract.md). The
+existing giant-zone terrain mode and the zone-backed retained campaign are
+transitional. A retained area owns its scene/controller stores beside one
+campaign writer; it is not a new full legacy World per area.
+
+No row below is implied complete by the presence of a class, a merged branch or
+a passing source digest. The owner records the exact revision and reproducible
+course before checking a row off.
+
+| Gate | Accountable owner; collaborating lane | Completion evidence | Status |
+| --- | --- | --- | --- |
+| Loading repair and honest CI | Foundation; performance reproduces | Five regressions repaired with original assertions; complete probe gate and four type lanes; older reds individually resolved or explicitly adjudicated. | Repair in verification; full green not established. |
+| Single integration branch | Foundation and shard | Exact-parent conflict ledger, joint resolutions, ownership gate, both native and shard courses, full probe gate; retire old branches only after merged history is verified. | Planned; no merge performed. |
+| Geographic area identity | Foundation; shard tenancy review | Durable place/dimension/instance keys independent of zone adjacency, worker and renderer page; private instances do not share stores or claims. | Open. |
+| Native export/adopt | Foundation; shard W2 | Complete dependency graph capture and reconstruction, exact body state, epoch-fenced commit, unsupported-state refusal and fault cases. | Contract written; implementation open. |
+| Main gameplay/content parity | Foundation; main content owners | Versioned main baseline and feature census; quests, factions, encounters, progression, rewards, services, death/recovery and repeat-event lifetimes exercised through real retained play. New main content enters the census before adoption. | Partial; broad acceptance open. |
+| Continuous terrain and authored places | Foundation | Place-first geography; towns, ruins, routes and interiors keep identity and content; a visible seam supports pursuit, combat, projectiles and consequences with no zone reset or coordinate jump. | Open. |
+| Generated entrances and bounded/open navigation | Foundation | Real side-area entrance/return placement, ownership, discoverability, collisions and pathfinding; movement/rebase checks over long routes. | Open. |
+| Persistence and recovery | Foundation; shard persistence owner | Exact supported save/Continue, private namespace and offline-ground retention, interrupted-write safety, transfer journal and restart tests. Save limitations declared; no arbitrary legacy fallback. | Recorded native saves exist; transfer/recovery gates open. |
+| Hosted retained units and one clock | Shard; foundation | W2 equivalence first, then W3 barrier and worker failure courses against retained owners; per-seat account, party, corpse, quest and publication authority. | Single-thread native host exists; W2/W3 open. |
+| Server-free offline core | Foundation; shard regression review | Begin, Continue, travel, combat and saves with no server/network dependency; same content and ownership rules as hosted mode. | Existing offline path; cutover regression still required. |
+| Loading, crossing and sustained performance | Performance; foundation renderer/runtime | Real Firefox/Chromium entry and sustained play, controlled retained-area hosted soaks, frame/input/memory measurements and per-phase crossing cost. Governor choices remain separate user decisions. | Open; loading success is not 60 Hz acceptance. |
+| Remove transitional spatial machinery | Foundation; shard and content review | Replacement gates above green; inventory remaining zone-graph/giant-zone call sites and consumers; remove obsolete routing/layout in the same cutover that promotes foundation to main, retaining authored place content. | Last gate; do not remove early. |
+
+The current merge dispositions and older-red ledger live in
+[the convergence repair record](../engine/foundation-convergence-repair-20261014.md).
+Source archives and regression thresholds remain intact. This checklist supplies
+owners and review criteria; it does not silently approve branch retirement,
+change the governor settings, or declare unresolved work finished.
