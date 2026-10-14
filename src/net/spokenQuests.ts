@@ -160,7 +160,7 @@ function shellView(world: World, jn: JournalW | undefined): NativeNpcDialogueHos
   };
   return new Proxy({} as NativeNpcDialogueHost, {
     get: (_t, k) => {
-      if (typeof k === 'string' && k in own) return own[k as keyof NativeNpcDialogueHost];
+      if (typeof k === 'string' && Object.hasOwn(own, k)) return own[k as keyof NativeNpcDialogueHost];
       const v = Reflect.get(world, k);
       return typeof v === 'function' ? (v as (...args: unknown[]) => unknown).bind(world) : v;
     },
