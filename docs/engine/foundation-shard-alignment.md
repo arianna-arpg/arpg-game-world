@@ -22,7 +22,7 @@ The actual-host course compares the solo reward/slate digest with the unchanged 
 
 The separate reconciliation lane has now merged `codex/shard-performance` (`f967869c`) into `shard-world` as `d025d99fa167692405403e4106c04d4379542b1c`. This supersedes the earlier unmerged status. Its recorded handoff is `docs/design/shard-world.md` §7g and `docs/engine/shard-runtime-foundation.md` on that branch.
 
-That lane restored the arrival/history/Titan projected goldens, adopted compact ZoneW/zonePaint with protocol 6, reconciled browser opening and optional Node terrain preparation, and capped derived per-focus caches at twice their single-focus capacity. It separately supplies F1/F3; the two implementations require deliberate reconciliation when the foundation lands, rather than assuming byte identity. Its host governor remains separate work. The alignment review recommends keeping the foundation's single-read/private budget storage and one-pass statistics, as well as the narrow World input signatures needed by retained-area callers. Shards additionally salts hosted posting IDs with the character key while the foundation currently salts the draw. Preserve existing held/standing postings during that identity reconciliation; this is a merge contract choice, not a demonstrated broken current slate.
+That lane restored the arrival/history/Titan projected goldens, adopted compact ZoneW/zonePaint with protocol 6, reconciled browser opening and optional Node terrain preparation, and capped derived per-focus caches at twice their single-focus capacity. It separately supplies F1/F3; the two implementations require deliberate reconciliation when the foundation lands, rather than assuming byte identity. The later pinned shard update below records its governor integration. The alignment review recommends keeping the foundation's single-read/private budget storage and one-pass statistics, as well as the narrow World input signatures needed by retained-area callers. Shards additionally salts hosted posting IDs with the character key while the foundation currently salts the draw. Preserve existing held/standing postings during that identity reconciliation; this is a merge contract choice, not a demonstrated broken current slate.
 
 The lane records 23/23 shard probes, 139 green worldmass probes, types, build, generation, simulation smoke, boot and renderer courses. Five restored checks remain explicitly red: foragercommitment, nerverecovery, worldmass_processioncontinuity, nativeinstalledsources and nativescenesky. These are unresolved original assertions, not part of the green count. The first boot-menu failure and unchanged successful reruns are documented.
 
@@ -35,6 +35,22 @@ Its post-merge measurements use two serial six-bot, 60-second measured windows, 
 
 Both runs breach the unchanged tick-p95 and dropped-tick gates, with zero faults or harness errors and same-seat reconnect passing. These are the other lane's recorded integration results, not a new foundation rerun or a controlled comparison attributing an improvement/regression. The older concurrent-control results remain in that lane's history; none establish deployed capacity or 60 Hz.
 
+## Latest shard asks and foundation replay
+
+Read-only inspection of shard-world at `beb1d978855035cb86e3b1bf4b0120a55449303c` records that W1 now feeds the host governor from the actual tick and uses its population-budget API. F9 asks for a cache byte/count budget and a 600-second soak; F13 asks for per-actor terrain/solid memoization. W2/W3 worker hosting still needs an agreed foundation runtime boundary. Those performance requests remain separate from content acceptance.
+
+The foundation replay pins `0c1d154c3b0e2b40748497a897979e9f18a79224` (the accepted Hunt composition), with every source file checked before and after all six courses. It observes:
+
+| Original check | Foundation result |
+| --- | --- |
+| foragercommitment | Fails the seed 451 melee-cast increase assertion; seed 42 passes. |
+| nerverecovery | Fails the old-rule generated-country negative control; the earlier three-rate panic/recovery and courage cases pass. |
+| worldmass_processioncontinuity | First 12 courses pass; natural seed 713 reaches 5000 steps without an admitted cart. |
+| nativeinstalledsources / nativescenesky | Both pass unchanged. The shard lane's failures require review of its integration delta. |
+| smoke baseline comparison | Three metrics exceed the original bands: warrior wave time 20.97 to 15.26; duelist output and dummy DPS 235.61 to 274.07. |
+
+The three behavioral probe rows are explicitly red debt; their original assertions remain unchanged. These failures do not yet distinguish a gameplay regression from a stale comparative oracle. Simulation smoke execution passing is separate from its baseline comparison. No golden, baseline or tolerance was updated. This relay reports observed foundation results and recorded shard requests; it does not claim direct delivery to Claude or a current shard rerun.
+
 ## Foundation merge coordination
 
 This foundation session has not performed a merge or resolved conflicts. A fresh dry run of foundation `a00566963438a19e7d437e0f75f02623be8e3faf` into shard-world `d025d99fa167692405403e4106c04d4379542b1c` found **32** conflicting files. The original 24-file estimate and the later 27-file inventory were from older tips. The shard lane has independently completed its performance-branch merge, as recorded above. Later commits require another dry run.
@@ -43,7 +59,7 @@ Before resolving that merge, notify the shard lane and agree ownership; shard-ow
 
 ## Remaining scope
 
-The foundation now includes F1/F3, repeat Crusade/Demon entrance renewal, and event-owned Crusade garrisons/commander attribution. Existing realm occupants, wounds and ordinary death effects remain intact. Crusade terrain/structure renewal is a separate known parity gap. Dedicated retained-area scheduling remains excluded pending the correction described below.
+The foundation now includes F1/F3, repeat Crusade/Demon entrance renewal, and event-owned Crusade garrisons/commander attribution. Existing realm occupants, wounds and ordinary death effects remain intact. Hunt quarries now retain their wounds and flee phase when returning to visited ground. This successor supplies bounded Crusade works renewal, with independent lifecycle review and exact source composition required before promotion. A separate confirmed Conclave gap retains five cultists and advances incubation twice on repeated departure; its repair is not included here. Dedicated retained-area scheduling remains excluded pending the correction described below.
 
 The retained scheduler candidate was measured against foundation `2f9d4cbb` with equal actual populations, two real TCP clients (eight in the last case), 40 warm-up and 80 measured frames per host, and alternating host order. This is a same-process diagnostic, not a concurrent deployment soak:
 

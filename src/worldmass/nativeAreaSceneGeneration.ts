@@ -2,6 +2,7 @@
 import type { NativeSceneActorContext, NativeAreaSceneGeometry } from './nativeAreaSceneGeometry';
 import type { Vec2 } from '../core/math';
 import * as native from '../engine/nativeLayoutGeneration';
+import {nativeCrusadeCaptureCalls,NativeCrusadeLayoutCapture} from './nativeCrusadeLayoutCapture';
 export type NativeLayoutGenerationState=Pick<native.NativeLayoutGenerationHost,'inCave'|'charBorn'|'charRegrowAcc'|'crusadeWorksAt'>;
 export type NativeLayoutGenerationCampaign=Pick<native.NativeLayoutGenerationHost,'zoneMemory'|'time'|'sim'>;
 export interface NativeLayoutGenerationInput {
@@ -11,6 +12,7 @@ export interface NativeLayoutGenerationInput {
  campaign:NativeLayoutGenerationCampaign;
 }
 export class NativeAreaSceneGeneration {
+ readonly crusadeLayout=new NativeCrusadeLayoutCapture();
  readonly input:NativeLayoutGenerationInput;
  readonly host:native.NativeLayoutGenerationHost;
  constructor(raw:NativeLayoutGenerationInput){
@@ -32,11 +34,13 @@ export class NativeAreaSceneGeneration {
   for(const key of ['zoneMemoryFresh','crusadeFixtureSpecs'])Object.defineProperty(host,key,{enumerable:true,get(){
    const owner=self as unknown as Record<string,Function>,fn=owner[key];return(...args:unknown[])=>fn.apply(owner,args);
   }});
+  Object.defineProperties(host,{observeCrusadeLayout:{value:(info:Parameters<NativeCrusadeLayoutCapture['select']>[1])=>Reflect.apply(nativeCrusadeCaptureCalls.select,this.crusadeLayout,[input.campaign.sim.crusadeField,info,input.scene.zone])},extraFixturePass:{value:this.crusadeLayout.pass}});
   this.host=Object.freeze(host);
   Object.defineProperty(this,'host',{enumerable:false,writable:false,configurable:false});
   Object.defineProperty(this,'input',{enumerable:false,writable:false,configurable:false});
+  Object.defineProperty(this,'crusadeLayout',{writable:false,configurable:false});
  }
  zoneMemoryFresh(...args:Parameters<typeof native.nativeZoneMemoryFresh> extends [unknown,...infer A]?A:never){return native.nativeZoneMemoryFresh(this.host,...args);}
  crusadeFixtureSpecs(...args:Parameters<typeof native.nativeCrusadeFixtureSpecs> extends [unknown,...infer A]?A:never){return native.nativeCrusadeFixtureSpecs(this.host,...args);}
- generate(entry:Vec2){const def=this.input.scene.zone;return native.generateNativeAreaLayout(this.host,def,entry,def.id);}
+ generate(entry:Vec2){const def=this.input.scene.zone;Reflect.apply(nativeCrusadeCaptureCalls.reset,this.crusadeLayout,[]);let result;try{result=native.generateNativeAreaLayout(this.host,def,entry,def.id);}catch(error){Reflect.apply(nativeCrusadeCaptureCalls.reset,this.crusadeLayout,[]);throw error;}Reflect.apply(nativeCrusadeCaptureCalls.complete,this.crusadeLayout,[this.input.campaign.sim.crusadeField,result.layout]);return result;}
 }

@@ -62,6 +62,12 @@ export const WALK_CFG = {
  *  the packed bytes identically regardless of its own registration order. */
 export interface PackedWalk { cols: number; rows: number; cell: number; kinds: string[]; kbits: string; }
 
+let nativePaints:Map<GridWalkField,Set<number>>|undefined;
+export function beginNativeGridPaintReceipt(){const prior=nativePaints,rows=new Map<GridWalkField,Set<number>>();nativePaints=rows;let done=false;return Object.freeze({finish(){if(!done){if(nativePaints!==rows)throw Error('Native grid receipt nesting changed');nativePaints=prior;done=true;}return rows;}});}
+export function inheritNativeGridPaintReceipt(from:GridWalkField,to:GridWalkField):void {if(!nativePaints)return;const next=new Set<number>();for(const i of nativePaints.get(from)??[]){const y=Math.floor(i/from.cols),x=i%from.cols;if(x<to.cols&&y<to.rows)next.add(y*to.cols+x);}nativePaints.set(to,next);}
+function recordNativePaint(g:GridWalkField,a:number,b:number,c:number,d:number,circle?:{x:number;y:number;r2:number}){if(!nativePaints)return;let rows=nativePaints.get(g);if(!rows){rows=new Set();nativePaints.set(g,rows);}for(let y=c;y<=d;y++)for(let x=a;x<=b;x++){if(circle&&Math.pow((x+.5)*g.cell-circle.x,2)+Math.pow((y+.5)*g.cell-circle.y,2)>circle.r2)continue;rows.add(y*g.cols+x);}}
+/** Temporary open-door topology restores the same cells; it creates no terrain owner. */
+export function withoutNativeGridPaintReceipt<T>(run:()=>T):T {const prior=nativePaints;nativePaints=undefined;try{return run();}finally{nativePaints=prior;}}
 export class GridWalkField implements WalkField {
   readonly cellOcclusion = true; // shared finite-grid / worldmass ray contract
   readonly cols: number;
@@ -209,6 +215,7 @@ export class GridWalkField implements WalkField {
     const walkable = regionKind(id)?.walkable ? 1 : 0;
     const a = this.cx(Math.min(x0, x1)), b = this.cx(Math.max(x0, x1));
     const c = this.cy(Math.min(y0, y1)), d = this.cy(Math.max(y0, y1));
+    if(nativePaints)recordNativePaint(this,a,b,c,d);
     for (let cy = c; cy <= d; cy++) for (let cx = a; cx <= b; cx++) {
       const i = cy * this.cols + cx;
       this.kind[i] = byte; this.mask[i] = walkable;
@@ -232,6 +239,7 @@ export class GridWalkField implements WalkField {
     const walkable = regionKind(id)?.walkable ? 1 : 0;
     const a = this.cx(cx - r), b = this.cx(cx + r), c = this.cy(cy - r), d = this.cy(cy + r);
     const r2 = r * r;
+    if(nativePaints)recordNativePaint(this,a,b,c,d,{x:cx,y:cy,r2});
     for (let gy = c; gy <= d; gy++) for (let gx = a; gx <= b; gx++) {
       const px = (gx + 0.5) * this.cell - cx, py = (gy + 0.5) * this.cell - cy;
       if (px * px + py * py > r2) continue;

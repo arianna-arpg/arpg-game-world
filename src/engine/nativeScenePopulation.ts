@@ -1,5 +1,6 @@
 /** Exact native scene census, birth and objective services.
  * Complete originals are pinned in probe_nativescenepopulation.ts. Current installed native sources are intentional. No source issuer is claimed. */
+import {restoreNativeCrusadeFixtureMemory,completeNativeCrusadeFixtureMemory} from './nativeCrusadeFixtureMemory';
 import type { World } from './world';
 import type { Actor } from './actor';
 import type { NativeAreaBirthMemory as ZoneMemory } from './nativeAreaBirth';
@@ -53,8 +54,11 @@ export interface NativeSceneServiceHost {
   seats:World['seats'];
   partyScaleCount:World['partyScaleCount'];
 }
+const nativeRestorationReceipts=new WeakMap<object,Readonly<{host:object;actors:Actor[];memory:ZoneMemory}>>();
+/** Non-granting receipt of this exact completed native census replacement. */
+export function consumeNativeSceneRestoration(token:object):Readonly<{host:object;actors:Actor[];memory:ZoneMemory}> {const r=nativeRestorationReceipts.get(token);if(!r)throw Error('Native restoration needs its actual one-use completion receipt');nativeRestorationReceipts.delete(token);return r;}
 export function restoreSceneEnemies(host:Pick<NativeSceneServiceHost,'actors'|'createMonster'|'nextSquadId'|'promoteRarity'|'clampPos'|'refreshMagicPacks' >, memory: ZoneMemory):void {
-    host.actors = host.actors.filter(a => !(a.fromZoneGen && a.team === 'enemy'));
+    const restoredActors = host.actors = host.actors.filter(a => !(a.fromZoneGen && a.team === 'enemy'));
     const magicPackIds = new Map<number, number>();
     const encounterGroupIds = new Map<number, number>();
     for (const e of memory.enemies) {
@@ -84,8 +88,10 @@ export function restoreSceneEnemies(host:Pick<NativeSceneServiceHost,'actors'|'c
       m.life = Math.max(1, Math.min(m.maxLife(), e.life));
       m.movementTether = restoreMovementTether(e.movementTether);
       host.actors.push(m);
+      restoreNativeCrusadeFixtureMemory(host,m,e.crusadeFixture);
     }
     host.refreshMagicPacks();
+    const receipt=Object.freeze({});nativeRestorationReceipts.set(receipt,Object.freeze({host,actors:restoredActors,memory}));completeNativeCrusadeFixtureMemory(receipt);
   }
 
 export function sceneCountedEnemies(host:Pick<NativeSceneServiceHost,'actors'|'objectiveCountable' >):Actor[] {

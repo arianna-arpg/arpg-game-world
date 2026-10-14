@@ -244,3 +244,6 @@ export class NativeAreaScenePopulation {
 /** Immutable original operation, captured after this class initializes even on a cold cycle. */
 export const nativePopulationCreateMonster=NativeAreaScenePopulation.prototype.createMonster;
 export const nativePopulationCreateMonsterForAdmission=NativeAreaScenePopulation.prototype.createMonsterForAdmission;
+
+/** Non-granting original factory provenance for fixture insertion receipts. */
+export const nativePopulationFactoryOwner=NativeAreaScenePopulation.prototype.factoryOwnerOf;

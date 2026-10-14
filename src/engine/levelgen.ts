@@ -46,7 +46,7 @@ import type { VeilSpec } from './veil';
 import type { TrapGenSpec, TrapGeo } from './interiorGen';
 import type { DamageType, Modifier } from './stats';
 import type { WalkField } from '../world/walk';
-import { GridWalkField } from '../world/gridWalk';
+import { inheritNativeGridPaintReceipt,withoutNativeGridPaintReceipt,GridWalkField } from '../world/gridWalk';
 import { boundsOf, gridSpanOf, insideBounds, type BoundsPiece, type ZoneShape } from '../world/shape';
 import { regionKind } from '../world/regions';
 import { isFieldPixel } from '../world/fieldRegion';
@@ -3073,6 +3073,7 @@ export type Reservation =
   | { rect: { x: number; y: number; w: number; h: number }; margin?: number };
 
 export interface GenCtx {
+  retainedFixtureFit?:boolean;
   structurePlans?: import('./structurePlans').StructurePlanOverrides;
   rng: Rng;
   /** The zone box. `shape`/`boundless` ride along (generateLayout normalizes
@@ -4818,6 +4819,7 @@ function regrowWalkGrid(g: GridWalkField, w: number, h: number): GridWalkField {
       }
     }
   }
+  inheritNativeGridPaintReceipt(g,ng);
   return ng;
 }
 
@@ -4977,7 +4979,7 @@ export function generateLayout(
   // reserve), never mutating the def. Omitted everywhere else = byte-identical.
   extraFixtures?: { structure: string; x: number; y: number }[],
   // LITE (GenCtx.lite): the understory's aerial pass — geometry only.
-  opts?: { lite?: boolean },
+  opts?: { lite?: boolean; extraFixturePass?: (ctx:GenCtx, run:()=>void)=>void },
 ): GeneratedLayout {
   validateStructurePlans(def.structurePlans);
   const ctx: GenCtx = {
@@ -5070,13 +5072,15 @@ export function generateLayout(
   // which would wipe a plan fixture's painted walls into ghost geometry (roofs
   // over open rock, unenforced ramparts) if it painted first. Placing here, the
   // fixture carves into whatever grid the layout built (or ensures one).
-  for (const [fixtureIndex, f] of allFixtures.entries()) {
-    const s = STRUCTURES[f.structure];
-    if (s && (s.plan || s.generator)) {
+  const placeFixtures=(start:number,end:number):void=>{for(let fixtureIndex=start;fixtureIndex<end;fixtureIndex++){
+    const f=allFixtures[fixtureIndex],s=STRUCTURES[f.structure];
+    if(s&&(s.plan||s.generator)){
       const placed=placeStructurePlan(ctx,s,vec(f.x,f.y));
       if(placed){const expected=plannedRect(vec(f.x,f.y),placed.rect.w,placed.rect.h);fixturePlacements.push({fixtureIndex,structureId:placed.id,requested:vec(f.x,f.y),center:vec(placed.rect.x+placed.rect.w/2,placed.rect.y+placed.rect.h/2),rect:{...placed.rect},reseated:expected.x!==placed.rect.x||expected.y!==placed.rect.y});}
     }
-  }
+  }};
+  if(opts?.extraFixturePass){const split=def.fixtures?.length??0;placeFixtures(0,split);opts.extraFixturePass(ctx,()=>placeFixtures(split,allFixtures.length));}
+  else placeFixtures(0,allFixtures.length);
   // LANDMARK ROLLS first (they're TERRAIN — the ground-before-solids
   // convention: a structure sites around a lake, never under it), then
   // STRUCTURE ROLLS — both the zone's data-declared chances (merged from
@@ -5348,7 +5352,7 @@ function ensureReachability(ctx: GenCtx): void {
       }
     }
   }
-  for (const c of doorRects) grid.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'ground');
+  withoutNativeGridPaintReceipt(()=>{for (const c of doorRects) grid.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'ground');});
 
   const required: Vec2[] = [
     ...ctx.exits,
@@ -5412,7 +5416,7 @@ function ensureReachability(ctx: GenCtx): void {
 
   // Restore the door cells to their pre-check kinds (a plan structure's seal
   // comes back rampart; an interior door's floor stays floor).
-  for (const pc of priorCells) grid.fillRegion(pc.x - 1, pc.y - 1, pc.x + 1, pc.y + 1, pc.kind);
+  withoutNativeGridPaintReceipt(()=>{for (const pc of priorCells) grid.fillRegion(pc.x - 1, pc.y - 1, pc.x + 1, pc.y + 1, pc.kind);});
 }
 
 /** A flat int deque (head/tail window over a growable Int32Array) with the
@@ -6028,7 +6032,7 @@ function fitResolvedStructure(ctx: GenCtx, at: Vec2, w: number, h: number, apron
     }
     return true;
   });
-  if(inBounds(original,center)&&(explicit||grounded(center)))return at;
+  if(inBounds(original,center)&&(explicit||grounded(center))&&(!ctx.retainedFixtureFit||!rectReserved(ctx,original)&&grounded(center)))return at;
   const minRelX=Math.min(0,...edge.map(a=>w/2+a.dx)),maxRelX=Math.max(w,...edge.map(a=>w/2+a.dx));
   const minRelY=Math.min(0,...edge.map(a=>h/2+a.dy)),maxRelY=Math.max(h,...edge.map(a=>h/2+a.dy));
   // No native arena rim: search the real finite backing, not an artificial base box.
@@ -10200,3 +10204,6 @@ function stampRuin(ctx: GenCtx, spec: StampSpec): void {
   }
   ctx.pois.push(center);
 }
+
+/** Native final guarantees for an already staged retained fixture delta. */
+export function finishNativeRetainedFixtures(ctx:GenCtx):void {ensureReachability(ctx);ensureDoodadNavigability(ctx);}

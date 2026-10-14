@@ -120,6 +120,7 @@ export function resolveResumeSpawn(
 
 /** One remembered enemy (mirrors the engine's ZoneEnemyMemo — plain JSON). */
 export interface SavedEnemyMemo {
+  crusadeFixture?:import('../engine/nativeCrusadeFixtureMemory').NativeCrusadeFixtureMemo;
   magicPack?: import('../engine/magicPacks').MagicPackState;
   movementTether?: import('../engine/movementTether').MovementTetherState;
   encounterGroup?: import('../engine/encounterGroups').EncounterGroupState;

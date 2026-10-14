@@ -1,3 +1,4 @@
+import {nativeCrusadeMemoryDoor} from './nativeCrusadeFixtureMemory';
 import type {NativeTownBodyRecorder} from './nativeTownBody';
 /** Complete original native birth ordering, after layout/environment adoption
  * and player arrival. A caller must bind every invoked state/controller service;
@@ -186,7 +187,7 @@ export function birthNativeArea(host:NativeAreaBirthHost,def:ZoneDef,layout:Gene
     // memory's life): the layout regenerated pristine doors above; the shared
     // setDoorState path flips + repaints them silently.
     for (const [doorId, st] of Object.entries(memory?.doorState ?? {})) {
-      host.setDoorState(doorId, st, { silent: true });
+      host.setDoorState(nativeCrusadeMemoryDoor(host,doorId), st, { silent: true });
     }
     // LESSON DOORS mint open for GRADUATED accounts (DoodadDoor.lesson names
     // an account-ledger key; the first dwell-open stamped it). Applied before

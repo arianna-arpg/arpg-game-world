@@ -1,3 +1,11 @@
+Retained Crusade works now renew on a genuine unoccupied arrival when their
+event, tier or resolved plan changes. Preserve unrelated terrain and bodies,
+opened doors, native callback failures, partial insertion, cold fixture
+correspondence and the complete current-zone restored enemy census. Verify nativecrusadeterrain*, original epoch/cold/gate courses,
+all source proofs, generation, all four types and boot. Saved fixture metadata
+is correspondence, not proof of origin. See
+docs/worldgen/native-crusade-terrain-lifetime.md.
+
 Retained Hunt departures now release only their own completed migration marker,
 so a wounded quarry can return to visited ground and finish once. Preserve actual
 retirement, event identity, cornered bodies, native failures and original source

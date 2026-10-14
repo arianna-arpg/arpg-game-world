@@ -1,4 +1,5 @@
 import {sceneSettleNearScale} from './nativeSceneNearScale';
+import {parseNativeCrusadeFixtureMemory} from './nativeCrusadeFixtureMemory';
 import {sceneDealTravellerFlasks,sceneAdoptQuestLedger} from './nativeSceneServerVessel';
 import './nativeSceneBootstrap';
 import {sceneScanNemesisSurvivors} from './nativeSceneCampaignTransitions';
@@ -2498,6 +2499,7 @@ export interface BossRun {
  *  createMonster + these fields on re-entry — enough to restore who/where/how-hurt
  *  without serializing full combat state). */
 interface ZoneEnemyMemo {
+  crusadeFixture?:import('./nativeCrusadeFixtureMemory').NativeCrusadeFixtureMemo;
   encounterGroup?: EncounterGroupState;
   magicPack?: MagicPackState;
   movementTether?: MovementTetherState;
@@ -15413,6 +15415,7 @@ actors: Actor[] = [];
           ...(memo.name ? { name: memo.name } : {}),
           ...(memo.tier ? { tier: memo.tier } : {}),
           ...(memo.aiAwakened ? { aiAwakened: 1 as const } : {}),
+          ...(parseNativeCrusadeFixtureMemory(memo.crusadeFixture)?{crusadeFixture:parseNativeCrusadeFixtureMemory(memo.crusadeFixture)}:{}),
           movementTether: restoreMovementTether(memo.movementTether),
           ...(readEncounterGroup(memo.encounterGroup) ? { encounterGroup: readEncounterGroup(memo.encounterGroup) } : {}),
         });

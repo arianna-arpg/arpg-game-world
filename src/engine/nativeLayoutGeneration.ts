@@ -5,10 +5,13 @@ import type { ZoneDef } from '../data/zones';
 import type { Vec2 } from '../core/math';
 import { vec, clamp, dist } from '../core/math';
 import { Rng, rollSeed } from '../core/rng';
-import { generateLayout } from './levelgen';
+import { generateLayout, type GenCtx } from './levelgen';
+import type {CrusadeInfo} from '../packages/overlays/crusade';
 import { ZONE_MEMORY_CFG } from './zonecontents';
 import { STRUCTURES } from '../data/structures';
 export interface NativeLayoutGenerationHost {
+  observeCrusadeLayout?: (info:CrusadeInfo|null|undefined)=>void;
+  extraFixturePass?: (ctx:GenCtx,run:()=>void)=>void;
   zoneMemory: World['zoneMemory'];
   time: World['time'];
   inCave: World['inCave'];
@@ -30,6 +33,7 @@ export function nativeZoneMemoryFresh(host:NativeLayoutGenerationHost,zoneId: st
 export function nativeCrusadeFixtureSpecs(host:NativeLayoutGenerationHost,def: ZoneDef, entry: Vec2): { fixtures: { structure: string; x: number; y: number }[]; center: Vec2 } | null {
     if (host.inCave || def.caveDepth != null || def.special || def.objective.kind === 'safe') return null;
     const info = host.sim.crusadeField?.crusadeOn(def.id);
+    host.observeCrusadeLayout?.(info);
     if (!info?.structure || !STRUCTURES[info.structure]) return null;
     const rng = new Rng((((def.seed ?? 0) ^ 0xc205) + info.tier * 0x9e37) >>> 0);
     const { w, h } = host.arena;
@@ -104,7 +108,7 @@ export function generateNativeAreaLayout(host:NativeLayoutGenerationHost,def:Zon
     // stamped over portals, never ghost-geometry.
     const crusadeWorks = host.crusadeFixtureSpecs(def, entry);
     host.crusadeWorksAt = crusadeWorks ? vec(crusadeWorks.center.x, crusadeWorks.center.y) : null;
-    const layout = generateLayout(def, host.arena, rng, entry, host.exits.map(e => e.pos), crusadeWorks?.fixtures);
+    const layout = generateLayout(def, host.arena, rng, entry, host.exits.map(e => e.pos), crusadeWorks?.fixtures, host.extraFixturePass?{extraFixturePass:host.extraFixturePass}:undefined);
     const main=layout.fixturePlacements?.find(f=>f.fixtureIndex===(def.fixtures?.length??0));
     if(crusadeWorks&&main?.reseated)host.crusadeWorksAt=vec(main.center.x,main.center.y);
     return {memory,layoutSeed,rng,layout};

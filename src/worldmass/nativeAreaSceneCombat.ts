@@ -76,7 +76,8 @@ import {NativeAreaSceneCombatArena} from './nativeAreaSceneCombatArena';
 import {NativeAreaSceneCombatControl} from './nativeAreaSceneCombatControl';
 import {NativeAreaSceneCampaignTransitions} from './nativeAreaSceneCampaignTransitions';
 import {NativeAreaSceneCampaignFrame,type NativeAreaCampaignFrameHost} from './nativeAreaSceneCampaignFrame';
-import {isNativeAreaSceneTransitionCoordinator,NativeAreaSceneTransitionCoordinator} from './nativeAreaSceneTransitionCoordinator';
+import {nativeCrusadeTerrainCalls} from './nativeCrusadeTerrain';
+import {nativeCrusadeTerrainArrival,isNativeAreaSceneTransitionCoordinator,NativeAreaSceneTransitionCoordinator} from './nativeAreaSceneTransitionCoordinator';
 import {NativeAreaSceneCombatRuntimeState} from './nativeAreaSceneCombatRuntimeState';
 import {createNativeAreaCombatOperation,type NativeAreaCombatOperation,type NativeCombatActivation} from './nativeAreaCombatOperation';
 import type {NativeSceneCombatHost} from '../engine/nativeSceneCombatHost';
@@ -487,6 +488,7 @@ nativeWireQueries:Object.freeze({encounterCue:(actor:Actor)=>encounterCueOf(acto
   }
  });}
  /** Arrival-owned station growth; no arbitrary callback or factory capability is exposed. */
+ refreshCrusadeTerrain():boolean {const entry=Reflect.apply(nativeCrusadeTerrainArrival,this.input.coordinator,[this]),host=this.#host;return this.#operation.enter({permission:'physical',physical:[],sources:[]},()=>Reflect.apply(nativeCrusadeTerrainCalls.refresh,this.input.assembly.crusadeTerrain,[this,this.input.assembly,this.input.authority,{get createMonster(){return host.createMonster;},admit:body=>this.#operation.admitCombatBirth(body),retire:body=>this.#operation.retireCombatBody(body),release:body=>this.releaseGarrison(body),validate:()=>{if(Reflect.apply(nativeCrusadeTerrainArrival,this.input.coordinator,[this])!==entry)throw Error('Crusade arrival changed');}},entry]));}
  refreshTownStations(representative:Actor):boolean {Reflect.apply(NativeAreaSceneTransitionCoordinator.prototype.assertTownArrival,this.input.coordinator,[this]);const thisHost=this.#host;return this.#operation.enter({permission:'physical',physical:[],sources:[]},()=>refreshNativeTownStations(this.input.assembly,this.input.characterWriter,this.input.authority,{
   get createMonster(){return thisHost.createMonster;},admit:body=>this.#operation.admitCombatBirth(body),retire:body=>this.#operation.retireCombatBody(body),layoutChanged:value=>{this.runtimeState.frame.townLayoutChangedOnLoad=value;}
  },representative));}

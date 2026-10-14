@@ -947,7 +947,7 @@ export class CrusadeField implements WorldOverlay {
 }
 
 /** Authentic retained lifetime calls are captured before this defining module is exposed. */
-export const nativeCrusadeLifetimeCalls=Object.freeze({
+export const nativeCrusadeLifetimeCalls=Object.freeze({query:CrusadeField.prototype.crusadeOn,
   epoch:CrusadeField.prototype.nativeCrusadeEpoch,
   resolve:CrusadeField.prototype.withCrusadeZoneKill,
 });

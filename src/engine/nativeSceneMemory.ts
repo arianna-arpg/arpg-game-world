@@ -1,4 +1,5 @@
 /** Exact native memory capture. This is cold-resume policy, not a combat checkpoint. */
+import {readNativeCrusadeFixtureMemory} from './nativeCrusadeFixtureMemory';
 import type {World} from './world';
 import type {MagicPackState} from './magicPacks';
 import {savedMovementTether} from './movementTether';
@@ -53,6 +54,7 @@ export function sceneZoneMemorySnapshot(host:NativeSceneMemorySnapshotHost):Nati
       if (a.dead || a.team !== 'enemy' || !a.fromZoneGen || !a.defId || a.doorId) continue;
       enemies.push({
         defId: a.defId, level: a.level, x: a.pos.x, y: a.pos.y,
+        ...(readNativeCrusadeFixtureMemory(a)?{crusadeFixture:{...readNativeCrusadeFixtureMemory(a)!}}:{}),
         life: a.life, faction: a.faction, rarity: a.rarity, tag: a.tag,
         ...(a.magicPack ? { magicPack: JSON.parse(JSON.stringify(a.magicPack)) as MagicPackState } : {}),
         movementTether: savedMovementTether(a),

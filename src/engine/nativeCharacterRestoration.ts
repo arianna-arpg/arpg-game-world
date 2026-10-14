@@ -1,4 +1,5 @@
 /** Exact native restore/add-seat bodies. Real ownership and staged publication are composed separately. */
+import {parseNativeCrusadeFixtureMemory} from './nativeCrusadeFixtureMemory';
 import type {World,Seat,PlayerMeta,VendorEntry,VendorHoldRow,VendorHold} from './world';
 import {restoreMovementTether} from './movementTether';
 import {rand,vec} from '../core/math';
@@ -334,6 +335,7 @@ export function sceneAdoptWorldState(nativeHost:Pick<NativeCharacterRestorationH
           ...(memo.name ? { name: memo.name } : {}),
           ...(memo.tier ? { tier: memo.tier } : {}),
           ...(memo.aiAwakened ? { aiAwakened: 1 as const } : {}),
+          ...(parseNativeCrusadeFixtureMemory(memo.crusadeFixture)?{crusadeFixture:parseNativeCrusadeFixtureMemory(memo.crusadeFixture)}:{}),
           movementTether: restoreMovementTether(memo.movementTether),
           ...(readEncounterGroup(memo.encounterGroup) ? { encounterGroup: readEncounterGroup(memo.encounterGroup) } : {}),
         });

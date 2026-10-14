@@ -1,5 +1,7 @@
 import {NativeSidezoneFurnish} from './nativeSidezoneFurnish';
 import {assertNativeEmptyCharacterCensus,type NativeCharacterCreationReceipt} from './nativeAreaCharacterCreation';
+import {nativeCrusadeCaptureCalls} from './nativeCrusadeLayoutCapture';
+import {nativeCrusadeTerrainCalls,NativeCrusadeTerrain} from './nativeCrusadeTerrain';
 import {NativeTownBodyLedger} from './nativeTownBodyLedger';
 import {START_ZONE} from '../data/zones';
 import {hullOf} from '../world/shape';
@@ -117,6 +119,7 @@ export interface NativeAreaPreparedPlacement {readonly entry:Readonly<Vec2>;read
 export class NativeAreaSceneAssembly {
  readonly input:NativeSceneBirthCompositionInput;
  readonly townBodies:NativeTownBodyLedger;
+ readonly crusadeTerrain:NativeCrusadeTerrain;
  townLayoutSignature='';
  readonly host:ReturnType<typeof composeNativeSceneBirth>;
  readonly graph:NativeAreaSceneGraph;
@@ -145,6 +148,8 @@ export class NativeAreaSceneAssembly {
   if(raw.carry.inCave!==!campaign.zoneMap[definition.id])throw Error('Native assembly cave identity differs');
   const scene={zone:definition,player:raw.player,actors:raw.characterConstruction?raw.initialActors as Actor[]:[...raw.initialActors]};
   const townBodies=this.townBodies=new NativeTownBodyLedger(scene);
+  const crusadeTerrain=this.crusadeTerrain=new NativeCrusadeTerrain(scene);
+  const townBody:typeof townBodies.record=(kind,row,body)=>{townBodies.record(kind,row,body);crusadeTerrain.record(kind,row,body);};
   const scenePresence=this.scenePresence=new NativeAreaScenePresence(scene,campaign,campaign.seats.filter(s=>scene.actors.includes(s.actor)));
   const timeflow=this.timeflow=new NativeAreaTimeflow(services.timeflow);
   const environmentState=freshSceneEnvironmentState(),objectives=freshSceneObjectiveState(definition.id,campaign.completedObjectives);
@@ -170,6 +175,7 @@ export class NativeAreaSceneAssembly {
     sanctuaryBlocksCombat:()=>false,
     resolveHit:(...args)=>services.population.resolveHit(...args)},
    state:populationState});
+  Reflect.apply(nativeCrusadeTerrainCalls.bindMemory,crusadeTerrain,[population]);
   // Keep the native numeric squad namespace shared by every retained area.
   Object.defineProperty(populationState,'squadSequence',{enumerable:true,get:()=>campaign.squadSeq,set:(v:number)=>{campaign.squadSeq=v;}});
   let puzzleController:NativeAreaScenePuzzles;
@@ -179,7 +185,7 @@ export class NativeAreaSceneAssembly {
   const ecology=new NativeAreaSceneEcology({scene,geometry,population,environment:environmentState,
    services:bindNativeSceneSky(extendView(servicesView(services.ecology,['throngClaimed']),{get time(){return campaign.time;},get seats(){return scenePresence.seats;}}),sky),sources:sources.ecology,state:freshSceneEcologyState()});
   const settlement=new NativeAreaSceneSettlement({scene,geometry,campaign,state:{townTierIdx:raw.carry.townTierIdx,mercOutpost:null}});
-  const physical=new NativeAreaScenePhysical({scene,geometry,population,settlement,campaign,state:freshScenePhysicalState(),townBody:townBodies.record});
+  const physical=new NativeAreaScenePhysical({scene,geometry,population,settlement,campaign,state:freshScenePhysicalState(),townBody});
   const loot=this.lootController=new NativeAreaSceneLoot({scene,scenePresence,geometry,physical,settlement,campaign,state:freshSceneLootState()});
   this.puzzleController=puzzleController=new NativeAreaScenePuzzles({scene,geometry,environment,campaign,
    effects:extendView(servicesView(services.puzzleEffects,['executeSkill']),servicesView(loot,['dropGemAt','mintLootResult']))});
@@ -214,13 +220,14 @@ export class NativeAreaSceneAssembly {
   const runtimeBirth=new NativeAreaSceneRuntimeBirth({scene,geometry,population,generation:this.generation,theater,campaign,state:runtimeState,sources:sources.runtime});
   const titans=new NativeAreaSceneTitans({scene,geometry,population,campaign});
   const registry=new NativeAreaSceneRuntimeRegistry({scene,geometry,birth:runtimeBirth,titans,descentState:transition,state:freshSceneRuntimeRegistryState()});
-  this.input=Object.freeze({townBody:townBodies.record,scene,geometry,population,environment,ecology,settlement,occurrences,bounty,physical,residents,objectives,
+  this.input=Object.freeze({townBody,scene,geometry,population,environment,ecology,settlement,occurrences,bounty,physical,residents,objectives,
    sources:sources.inhabitants,campaign,state:{...freshSceneBirthState(),vendorStock:campaign.vendorStock,theaterVisitSeq:campaign.theaterVisitSeq},harbor,openings,theater,encounters,sites,history,descent,coast,arrival,adoption,registry,sky});
   this.host=composeNativeSceneBirth(this.input);
+  Reflect.apply(nativeCrusadeTerrainCalls.bindDoorMemory,crusadeTerrain,[this.host]);
   // Brandt's once-armed shelf is run state, including between counter areas.
   Object.defineProperty(this.input.state,'vendorStock',{enumerable:true,get:()=>campaign.vendorStock,set:(v:World['vendorStock'])=>{campaign.vendorStock=v;}});
   this.graph=new NativeAreaSceneGraph({coast,campaign});this.boundaries=new NativeAreaSceneBoundaries(this.graph);
-  for(const key of ['input','host','graph','boundaries','generation','transition','timeflow','sky','puzzleController','lootController','objectiveController','scenePresence','objectiveServices'])Object.defineProperty(this,key,{writable:false,configurable:false});
+  for(const key of ['crusadeTerrain','input','host','graph','boundaries','generation','transition','timeflow','sky','puzzleController','lootController','objectiveController','scenePresence','objectiveServices'])Object.defineProperty(this,key,{writable:false,configurable:false});
  }
  /** Admission is a separate runtime operation, after birth and explicit observer removal. */
  activatePresence(authority:NativeAreaActorAuthority<object>):void{
@@ -241,6 +248,7 @@ export class NativeAreaSceneAssembly {
    const layout=this.generation.generate({...entry});
    this.input.geometry.adopt(layout.layout,entry);
    this.#sidezoneFurnish.adopt(layout.layout);
+   Reflect.apply(nativeCrusadeTerrainCalls.adopt,this.crusadeTerrain,[Reflect.apply(nativeCrusadeCaptureCalls.read,this.generation.crusadeLayout,[]),layout.layout]);
    if(this.input.scene.zone.id===START_ZONE){this.townBodies.adopt(layout.layout);this.townLayoutSignature=this.townSignature();}
    const fingerprint=serializeNativeAreaData(session.read(source).members);
    Object.freeze(layout);
@@ -281,7 +289,7 @@ export class NativeAreaSceneAssembly {
    const {scene}=this.input,{layout}=prepared;
    runComposedNativeBirth(this.host,scene.zone,layout.layout,scene.zone.id,layout.memory,layout.rng,
     prepared.firstVisit,this.transition.entryFrom??undefined,this.transition.inCave,scene.player);
-  });this.#phase='born';}catch(error){this.#phase='failed';throw error;}
+  });Reflect.apply(nativeCrusadeTerrainCalls.finishBirth,this.crusadeTerrain,[]);this.#phase='born';}catch(error){this.#phase='failed';throw error;}
  }
 }
 

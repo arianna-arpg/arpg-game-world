@@ -428,6 +428,8 @@ export class NativeAreaSceneTransitionCoordinator {
  }
  #furnishArrival:NativeAreaSceneCombat|null=null;
  #townArrival:NativeAreaSceneCombat|null=null;
+ #crusadeTerrainArrival:{combat:NativeAreaSceneCombat;entry:Readonly<Vec2>;check:()=>void}|null=null;
+ crusadeTerrainEntry(combat:NativeAreaSceneCombat):Readonly<Vec2> {const row=this.#crusadeTerrainArrival;if(!this.#moving||!this.#frame?.active||row?.combat!==combat)throw Error('Crusade works need the actual retained arrival');row.check();return row.entry;}
  assertFurnishArrival(combat:NativeAreaSceneCombat):void {if(!this.#moving||!this.#frame?.active||this.#furnishArrival!==combat)throw Error('Native furnishing needs its selected arrival');}
  assertTownArrival(combat:NativeAreaSceneCombat):void {if(!this.#moving||!this.#frame?.active||this.#townArrival!==combat)throw Error('Native town refresh needs its selected genuine arrival');}
  /** Campaign death policy sees every genuine admitted hand. The returned roster
@@ -543,6 +545,7 @@ export class NativeAreaSceneTransitionCoordinator {
    mutableCensus(sourceCensus);mutableCensus(destCensus);
    const geometry=destination.ongoing.assembly.input.geometry,prepared=destination.ongoing.assembly.preparedPlacement;if(!prepared)throw Error('Native destination lost its actual prepared placement');
    const back=from?geometry.exits.find(e=>e.to===from):undefined,center=vec(geometry.arena.w/2,geometry.arena.h/2);let entry:Vec2=vec(prepared.entry.x,prepared.entry.y);if(back){const angle=angleTo(back.pos,center);entry=vec(back.pos.x+Math.cos(angle)*120,back.pos.y+Math.sin(angle)*120);}const landing=!back&&prepared.spawnAt?prepared.spawnAt:entry;
+   if(!firstBirth){this.#crusadeTerrainArrival={combat:destination.combat,entry:Object.freeze({...entry}),check:()=>{finalSeats(capture);Reflect.apply(nativeReadyAuthority.selections,this.input.authority,[selected]);Reflect.apply(nativeReadyAuthority.physical,this.input.authority,[destination!.binding]);if(own(scene,'actors')!==sourceCensus||own(destScene,'actors')!==destCensus)throw Error('Crusade arrival replaced its actual census');}};try{destination.combat.refreshCrusadeTerrain();}finally{this.#crusadeTerrainArrival=null;}}
    // Exact native motion/tier reset statements, before destination birth. Quiet
    // carom teardown uses the real source operation while the body is still
    // physically source-owned; that native branch touches only the actor.
@@ -769,3 +772,5 @@ export function tryNativeOrdinaryCampaignArea(coordinator:NativeAreaSceneTransit
 export function tryNativeOrdinaryResidentAreas(coordinator:NativeAreaSceneTransitionCoordinator):readonly NativeAreaSceneOngoing[]|undefined{return Reflect.apply(ordinaryRouteMethods.cohort,coordinator,[]);}
 
 export function tryRunNativeOrdinaryCampaign<T>(coordinator:NativeAreaSceneTransitionCoordinator,combat:NativeAreaSceneCombat,action:()=>T):{value:T}|undefined{return Reflect.apply(ordinaryRouteMethods.invoke,coordinator,[combat,action]) as {value:T}|undefined;}
+
+export const nativeCrusadeTerrainArrival=NativeAreaSceneTransitionCoordinator.prototype.crusadeTerrainEntry;
