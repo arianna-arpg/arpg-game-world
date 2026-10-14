@@ -1,3 +1,13 @@
+Foundation F1/F3 now supplies host-only setPopulationBudget/populationStats and
+character-seeded seamless bounty boards through questCharKey/questHandLevel.
+Preserve null-budget behavior, existing bodies and reservations, unchanged land/save
+identity and solo/co-op draws. Verify worldmass_foci, worldmass_populationbudget,
+worldmass_bountycharacters, adjacent bounty/checkpoint/character courses, historical
+source proofs and all four types. The shard owns governor policy and integration.
+Scheduler performance and repeat-event parity remain separate work; no merge or
+conflict resolution is authorized by this handoff. See
+docs/engine/foundation-shard-alignment.md.
+
 Retained Shards entry composition now carries exact corrected108 physical census,
 owner-entry and readiness work over accepted120/main a2fa4291. Preserve native
 selected callbacks, cold capture, partial effects and all historical source assertions.

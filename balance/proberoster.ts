@@ -64,6 +64,9 @@ export type ProbeRow = ProbeInvocation & (
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_worldmass_bountycharacters.ts', status: 'green', tier: 'fast', why: 'Reviewed foundation population allowance and character bounty contracts; exact original source assertions retained.' },
+  { probe: 'probe_worldmass_populationbudget.ts', status: 'green', tier: 'fast', why: 'Reviewed foundation population allowance and character bounty contracts; exact original source assertions retained.' },
+  { probe: 'probe_nativeshardfoundationsource.ts', status: 'green', tier: 'fast', why: 'Reviewed foundation population allowance and character bounty contracts; exact original source assertions retained.' },
   { probe: 'probe_nativebrowserentrycompositionsource.ts', status: 'green', tier: 'fast', why: 'Retained browser startup, dimension persistence, native party hiring and exact source composition.' },
   { probe: 'probe_nativebrowserstarthook.ts', status: 'green', tier: 'fast', why: 'Retained browser startup, dimension persistence, native party hiring and exact source composition.' },
   { probe: 'probe_nativedimensionboundaries.ts', status: 'green', tier: 'fast', why: 'Retained browser startup, dimension persistence, native party hiring and exact source composition.' },

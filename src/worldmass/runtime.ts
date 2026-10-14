@@ -118,6 +118,10 @@ function restoreData(input?: MassRuntimeRestore): MassRestoreData | undefined {
   const {enemies,dormancy,...definition}=input;
   return {...definition,residentEnemies:enemies,residentDormancy:dormancy};
 }
+/** Host-only birth allowance shared equally by connected player neighborhoods.
+ * This policy never enters terrain identity, checkpoints or character saves. */
+export interface MassPopulationBudget { total:number; floor:number }
+export interface MassPopulationStats { total:number; groups:{members:readonly string[];live:number;limit:number}[] }
 export interface NativeReadiness {
   readonly status:'ready'|'pending'|'refused'; readonly pending:number; readonly required:number;
   readonly retryable:boolean; readonly error?:string;
@@ -132,6 +136,27 @@ export class WorldMassRuntime {
   readonly massFoci = new MassFoci();
   private massFociInitialized = false;
   private explicitMassFoci = false;
+  #populationBudget:Readonly<MassPopulationBudget>|null = null;
+  /** Change future admissions only. Existing bodies and reservations stay intact. */
+  setPopulationBudget(budget:MassPopulationBudget|null):void {
+    if(budget===null){this.#populationBudget=null;return;}
+    const total=budget?.total,floor=budget?.floor;
+    if(!Number.isSafeInteger(total)||total<0||!Number.isSafeInteger(floor)||floor<0||floor>this.config.maxPopulation)
+      throw Error('Invalid worldmass population budget');
+    this.#populationBudget=Object.freeze({total,floor});
+  }
+  private populationGroupLimit(groups:number):number {
+    const budget=this.#populationBudget;
+    return !budget||groups===0?this.config.maxPopulation:
+      Math.max(budget.floor,Math.min(this.config.maxPopulation,Math.floor(budget.total/groups)));
+  }
+  /** A fresh observation of live admission counts; no residency or terrain work. */
+  populationStats():MassPopulationStats {
+    const groups=this.massFoci.groups,live=groups.map(()=>0);
+    for(const row of this.massPopulationSlots()){const group=this.massFoci.groupAt(row.pos);if(group>=0)live[group]+=row.count;}
+    const limit=this.populationGroupLimit(groups.length);
+    return {total:this.population,groups:groups.map((group,i)=>({members:group.map(f=>f.id),live:live[i],limit}))};
+  }
   focusPoints(world: World): readonly MassFocus[] { return this.explicitMassFoci ? this.massFoci.members : massPlayerFoci(world, !this.massFociInitialized); }
   focusDistance(world: World, pos: {x:number;y:number}, tier?:number): number {
     if(this.explicitMassFoci)return this.massFoci.distance(pos,tier);
@@ -759,12 +784,12 @@ export class WorldMassRuntime {
   availablePopulation(exceptOwner='',at?:{x:number;y:number}):number{return Math.max(0,this.populationLimit(exceptOwner,at)-this.population);}
   populationLimit(exceptOwner='',at?:{x:number;y:number}):number{
     const groups=this.massFociInitialized?this.massFoci.groups.length:1,total=this.population;
-    const global=this.config.maxPopulation*groups;
+    const limit=this.populationGroupLimit(groups),global=limit*groups;
     if(groups<=1||!at)return global-this.reservedPopulation(exceptOwner);
     const slots=this.massPopulationSlots(),unlocated=Math.max(0,total-slots.reduce((n,r)=>n+r.count,0));
     // Each distant group funds its own destinations. Charging every other
     // group's unissued reservations here can deadlock all neighborhoods.
-    return Math.min(global,total+this.config.maxPopulation-this.massFoci.populationAt(at,slots)-unlocated-this.reservedPopulation(exceptOwner,at));
+    return Math.min(global,total+limit-this.massFoci.populationAt(at,slots)-unlocated-this.reservedPopulation(exceptOwner,at));
   }
   /** Worker descriptors are suggestions until the authoritative residency validates
    * them. Retire the worker whenever its owning world or surface is discarded. */
