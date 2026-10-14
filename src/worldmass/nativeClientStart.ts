@@ -1,3 +1,4 @@
+import {serializeAccount} from '../meta/account';
 /** Account policy for a genuine local retained start. Browser menu/render shell and
  * cold Continue are separate entrypoints. Native prior writes survive failure. */
 import {World} from '../engine/world';
@@ -18,7 +19,7 @@ import {createNativeGeographyReader} from '../world/geographySource';
 import {makeMassNativeGeographySpec,validateMapping,type MassNativeMapping} from './nativeGeography';
 import {makeNativeGeographyCatalogSpec,NativeGeographyCatalog} from './nativeGeographyCatalog';
 import {NativeClientRuntime,type NativeClientInstallation} from './nativeClientRuntime';
-export type NativeClientStartRequest={readonly kind:'mu';readonly manifest?:ExpeditionManifest}|{
+export type NativeClientStartRequest={readonly kind:'mu';readonly manifest?:ExpeditionManifest;readonly onReady?:(started:NativeClientStarted)=>void}|{
  readonly kind:'run';readonly classDef:ClassDef;readonly manifest?:ExpeditionManifest;readonly modeId?:string;
  readonly name?:string;readonly graftSkillId?:string|null;readonly kitPicks?:Record<string,string>;
  /** Native profile may deliberately suppress the tutorial. This is a client policy, not geography. */
@@ -28,6 +29,7 @@ export type NativeClientStartRequest={readonly kind:'mu';readonly manifest?:Expe
 };
 export interface NativeClientStarted {readonly writer:World;readonly runtime:NativeClientRuntime;readonly provisional:boolean;readonly prologue:boolean}
 const starts=new WeakMap<Account,NativeClientStart>();
+const installLoading=NativeClientRuntime.prototype.installLoading;
 const install=NativeClientRuntime.prototype.install,retire=NativeClientRuntime.prototype.retire;
 const installedReady=Object.getOwnPropertyDescriptor(NativeClientRuntime.prototype,'ready')!.get!;
 /** One loading generation for this actual account. A cancel during native work
@@ -39,6 +41,55 @@ export class NativeClientStart {
  get current():NativeClientStarted|undefined{return this.#current;}
  get pending():boolean{return this.#busy;}
  cancel():void {this.#generation++;this.#controller?.abort();if(!this.#busy&&this.#current){Reflect.apply(retire,this.#current.runtime,[]);this.#current=undefined;}}
+
+ /** Browser entry owns a single pending generation. Pauses occur only after
+  * synchronous work has returned and restored the previous global policies. */
+ async beginLoading(request:NativeClientStartRequest,pause:(label:string)=>Promise<void>):Promise<NativeClientStarted|null> {
+  if(this.#busy)throw Error('Native client start cannot reenter');this.#busy=true;
+  const generation=++this.#generation,controller=this.#controller=new AbortController();let runtime:NativeClientRuntime|undefined;
+  const check=()=>{if(generation!==this.#generation||controller.signal.aborted)throw Error('Native client start cancelled');};
+  const wait=async(label:string)=>{check();const baseline=JSON.stringify(serializeAccount(this.#account));await pause(label);check();if(JSON.stringify(serializeAccount(this.#account))!==baseline)throw Error('The account changed during native loading');};
+  try {
+   const account=this.#account,provisional=request.kind==='mu';
+   const classDef=provisional?(CLASSES.find(c=>c.id===MU_CFG.provisionalClass)??CLASSES[0]):request.classDef;
+   if(!CLASSES.includes(classDef))throw Error('Native client start requires an installed class');
+   const prologue=!provisional&&(request.prologue==='force'||(request.prologue!=='skip'&&sceneDue(account,'prologue')));
+   check();let character:NonNullable<NativeClientInstallation['fresh']>;
+   if(provisional)character={classDef,options:{modeId:DEFAULT_MODE_ID},scene:MU_SCENE_ID,provisionalMu:true};
+   else {
+    const mode=modeById(request.modeId),charName=request.name?.trim()||classDef.name,charId=mintCharId();
+    if(mode.save==='roster'){
+     const slot=freeRosterSlot(account,mode);if(slot==null)return null;
+     account.roster.push({charId,modeId:mode.id,slot,classId:classDef.id,name:charName,level:1,stage:0,savedAt:Date.now()});saveAccount(account);
+    }else{const previousPatron=savedCharacterPatronId();if(previousPatron&&releaseMercsOf(account,previousPatron)>0)saveAccount(account);}
+    character={classDef,options:{modeId:mode.id,charId,name:charName},graft:request.graftSkillId??undefined,scene:prologue?'prologue':undefined};
+   }
+   check();const manifest=structuredClone(request.manifest??buildManifest(account,rollSeed())),writer=World.staged(account,Object.freeze(manifest));
+   if(this.#current){Reflect.apply(retire,this.#current.runtime,[]);this.#current=undefined;}
+   if(!provisional){if(request.kitPicks){rememberKitPicks(account,classDef,request.kitPicks);saveAccount(account);}character={...character,options:{...character.options,kit:resolveClassKit(account,classDef,request.kitPicks)}};}
+   await wait('Reading the world geography');
+   const source=writer.withGlobalPolicies(()=>createNativeGeographyReader(captureNativeGeographySource(writer.manifest.seed)));
+   await wait('Preparing the world charts');
+   const catalogSpec=this.#mapping?undefined:makeNativeGeographyCatalogSpec(source.identity);
+   await wait('Preparing your world');
+   const catalog=catalogSpec?new NativeGeographyCatalog(catalogSpec):undefined;
+   const geography=this.#mapping?makeMassNativeGeographySpec(source.identity,this.#mapping):catalog!.initial.spec;
+   await wait('Preparing your vessel');
+   runtime=writer.withGlobalPolicies(()=>new NativeClientRuntime({writer,definition:writer.zoneMap[START_ZONE],geography,...catalog?{catalog:catalog.spec}:{},fresh:character}));
+   await wait('Taking form');
+   await Reflect.apply(installLoading,runtime,[wait,controller.signal]);check();
+   const checkInstalled=()=>{check();if(!Reflect.apply(installedReady,runtime!,[]))throw Error('Native client start runtime is no longer ready');check();};
+   const result=Object.freeze({writer,runtime,provisional,prologue});
+   // Final publication adopts the new policy owner permanently; restoring a
+   // borrowed predecessor here would overwrite onReady's actual adoption.
+   writer.bindGlobalPolicies();
+   const ready=request.onReady;checkInstalled();if(ready)ready(result);checkInstalled();
+   if(!provisional&&!prologue)persistRun(account,writer);checkInstalled();
+   this.#current=result;return result;
+  }catch(error){if(runtime)Reflect.apply(retire,runtime,[]);throw error;}
+  finally{this.#busy=false;if(this.#controller===controller)this.#controller=undefined;}
+ }
+
  begin(request:NativeClientStartRequest):NativeClientStarted|null {
   if(this.#busy)throw Error('Native client start cannot reenter');this.#busy=true;const generation=++this.#generation,controller=this.#controller=new AbortController();
   let runtime:NativeClientRuntime|undefined;

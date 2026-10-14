@@ -1,3 +1,4 @@
+import {quoteCanonicalString} from './canonicalString';
 import { Rng } from '../core/rng';
 // Only plain data recursively frozen HERE can be memoized. Object.freeze on an
 // outer record alone says nothing about its children or live accessor values.
@@ -9,7 +10,8 @@ export function isMassFrozenData(value:unknown):boolean{return !!value&&typeof v
 export function canonical(value: unknown): string {
   const seen = new Set<object>();
   const visit = (v: unknown): string => {
-    if (v === null || typeof v === 'boolean' || typeof v === 'string') return JSON.stringify(v);
+    if (typeof v === 'string') return v.length < 4096 ? JSON.stringify(v) : quoteCanonicalString(v);
+    if (v === null || typeof v === 'boolean') return JSON.stringify(v);
     if (typeof v === 'number' && Number.isFinite(v)) return JSON.stringify(v);
     if (typeof v !== 'object' || v === null) throw new Error('Manifest must contain finite JSON data');
     if(massFrozenData.has(v)){const cached=massCanonicalMemo.get(v);if(cached!==undefined)return cached;}

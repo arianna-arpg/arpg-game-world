@@ -1,3 +1,4 @@
+import {copyNativeLoadingCharacter} from './nativeCharacterLoading';
 import {assertNativeCharacterResume,type NativeCharacterResumeReceipt} from './nativeAreaCharacterResume';
 /** Actual native character construction. Receipts exist only at the private synchronous factory boundaries. */
 import type {World,Seat} from '../engine/world';
@@ -26,6 +27,8 @@ export class NativeAreaCharacterCreation {
  readonly preparation:NativeAreaScenePreparation;readonly definition:ZoneDef;readonly geography:MassNativeGeography;
  readonly #writer:World;readonly #previousScale:PropertyDescriptor|undefined;
  readonly #scale:()=>void;
+ #loading:Generator<string,NativeAreaSceneOngoing,void>|undefined;
+ #loadingResumeOwner:ReturnType<typeof assertNativeCharacterResume>['owner']|undefined;
  #resume=false;#seat:Seat|undefined;#actor:Actor|undefined;#area:NativeAreaSceneOngoing|undefined;#running=false;#attempted=false;#retired=false;#signal:AbortSignal|undefined;
  constructor(preparation:NativeAreaScenePreparation,definition:ZoneDef,geography:MassNativeGeography){
   if(!isNativeAreaScenePreparation(preparation)||factories.has(preparation))throw Error('Native character needs one actual preparation owner');this.preparation=preparation;this.definition=definition;this.geography=geography;this.#writer=preparation.input.session.writer;
@@ -62,5 +65,70 @@ export class NativeAreaCharacterCreation {
   };
   try{creation.sceneCreatePlayer(host,spec.classDef,(spec.provisionalMu||this.#resume||keeper)?{...spec.options,startingCompanions:false,startingFlasks:false}:spec.options);if(!this.#area||this.#area.assembly.phase!=='born')throw Error('Native character did not complete its real birth');if(!spec.provisionalMu&&!this.#resume&&!keeper){const labArts=spec.labArts??false;this.#with('gifts',token=>this.#area!.combat.dealInitialCharacterLabArts(token,labArts));if(spec.graft&&writer.account.skillGraft&&this.#with('gifts',token=>this.#area!.combat.applyInitialCharacterGraft(token,spec.graft!))){writer.account.skillGraft=false;saveAccount(writer.account);}}if(spec.scene)this.#area.combat.campaignFrame.beginScene(spec.scene);this.#live();return this.#area;}finally{this.#running=false;this.#signal=undefined;}
  }
- retire():void {if(this.#retired)return;this.#retired=true;const current=Object.getOwnPropertyDescriptor(this.#writer,'rescaleEnemies');if(current?.configurable&&current.value===this.#scale){if(this.#previousScale)Object.defineProperty(this.#writer,'rescaleEnemies',this.#previousScale);else Reflect.deleteProperty(this.#writer,'rescaleEnemies');}}
+
+ get loadingActive():boolean {return this.#running;}
+ /** Cooperative admission owns an inert copy; the original synchronous API
+  * keeps its exact caller-read and partial-effect semantics. Each advance ends
+  * every factory receipt and restores ambient policies before returning. */
+ async createLoading(spec:NativeFreshCharacter,pause:(label:string)=>Promise<void>,signal?:AbortSignal):Promise<NativeAreaSceneOngoing> {
+  this.#beginLoading(spec,signal);
+  try { for(;;){const step=this.#advanceLoading();if(step.done)return step.value;await pause(step.value);this.#live();} }
+  finally {this.#closeLoading();}
+ }
+ /** The resume owner must issue a fresh shell receipt for every advance. No
+  * shell token, caller action or borrowed policy survives an outer pause. */
+ advanceResumeLoading(token:NativeCharacterResumeReceipt,signal?:AbortSignal):IteratorResult<string,NativeAreaSceneOngoing> {
+  const r=assertNativeCharacterResume(token,'shell');
+  if(r.preparation!==this.preparation||r.writer!==this.#writer)throw Error('Native resume shell belongs to another factory');
+  if(!this.#loading){if(this.#loadingResumeOwner)throw Error('Native resume creation already completed');this.#loadingResumeOwner=r.owner;this.#beginLoading({classDef:r.owner.classDef},signal,true);}
+  if(this.#loadingResumeOwner!==r.owner)throw Error('Native loading shell owner changed');
+  return this.#advanceLoading();
+ }
+ #beginLoading(spec:NativeFreshCharacter,signal?:AbortSignal,resume=false):void {
+  this.#live();if(this.#attempted||this.#running)throw Error('Native character creation was already attempted');
+  this.#attempted=true;this.#signal=signal;
+  const copied=copyNativeLoadingCharacter(spec);this.#live();this.#empty();
+  if(!CLASSES.includes(copied.classDef)||copied.provisionalMu&&copied.scene!=='mu')throw Error('Invalid native loading character');
+  this.#loading=this.#loadingStages(copied,resume);
+ }
+ #advanceLoading():IteratorResult<string,NativeAreaSceneOngoing> {
+  this.#live();if(!this.#loading||this.#running)throw Error('Native character loading is absent or reentrant');
+  this.#running=true;
+  try {const step=this.#writer.withGlobalPolicies(()=>this.#loading!.next());this.#live();if(step.done)this.#closeLoading();return step;}
+  catch(error){this.#closeLoading();throw error;}
+  finally{this.#running=false;}
+ }
+ #closeLoading():void {const steps=this.#loading;this.#loading=undefined;this.#signal=undefined;steps?.return(undefined as never);}
+ *#loadingStages(spec:NativeFreshCharacter,resume:boolean):Generator<string,NativeAreaSceneOngoing,void> {
+  const writer=this.#writer,self=this;
+  const host:Parameters<typeof creation.sceneCreatePlayer>[0]={
+   get localSeat(){return writer.localSeat;},set localSeat(value){writer.localSeat=value;},get seats(){return writer.seats;},set seats(value){writer.seats=value;},get actors(){return writer.actors;},get arena(){return writer.arena;},get events(){return writer.events;},
+   makePlayerSeat:(...args)=>creation.sceneMakePlayerSeat({recalcSeat:seat=>self.#recalc(seat)},...args),
+   recalcSeat:seat=>self.#recalc(seat),bindCombatDeeds:()=>self.#with('deeds',token=>self.#area!.combat.campaignOwner.bindInitialCharacterDeeds(token)),
+   indexSeats:()=>sceneIndexSeats({get seatByActor(){return writer['seatByActor'];},get seats(){return writer.seats;}}),
+   restoreAccountRelics:seat=>sceneRestoreAccountRelics({get localSeat(){return writer.localSeat;},get clientActionHook(){return writer.clientActionHook;},get account(){return writer.account;},get manifest(){return writer.manifest;}},seat),
+   loadZone:()=>{throw Error('Cooperative character layout belongs to its next stage');},
+   grantStartingCompanions:()=>{throw Error('Cooperative character gifts belong to their next stage');},
+   dealVeteranFlasks:()=>{throw Error('Cooperative character flasks belong to their next stage');},
+  };
+  creation.sceneCreatePlayer(host,spec.classDef,{...spec.options,load:false,startingCompanions:false,startingFlasks:false});
+  yield 'Preparing your starting ground';
+  if(this.#with('birth',token=>this.preparation.advanceInitialCharacterLoading(token)))throw Error('Native loading preparation skipped its source stage');
+  yield 'Laying out your starting ground';
+  if(!this.#with('birth',token=>this.preparation.advanceInitialCharacterLoading(token)))throw Error('Native loading preparation did not finish');
+  yield 'Bringing the starting ground to life';
+  this.preparation.birthInitial(this.#area!);
+  yield 'Preparing your companions';
+  if(!spec.provisionalMu&&!resume){
+   this.#with('gifts',token=>this.#area!.combat.grantInitialCharacterCompanions(token));
+   this.#with('gifts',token=>this.#area!.combat.dealInitialCharacterFlasks(token));
+   this.#with('gifts',token=>this.#area!.combat.dealInitialCharacterLabArts(token,spec.labArts??false));
+   if(spec.graft&&writer.account.skillGraft&&this.#with('gifts',token=>this.#area!.combat.applyInitialCharacterGraft(token,spec.graft!))){writer.account.skillGraft=false;saveAccount(writer.account);}
+  }
+  if(spec.scene)this.#area!.combat.campaignFrame.beginScene(spec.scene);
+  if(!this.#area||this.#area.assembly.phase!=='born')throw Error('Native character did not complete its real birth');
+  this.#live();return this.#area;
+ }
+
+ retire():void {if(this.#retired)return;if(this.#running&&this.#loading)throw Error('Native character cannot retire during loading dispatch');this.#retired=true;this.#closeLoading();const current=Object.getOwnPropertyDescriptor(this.#writer,'rescaleEnemies');if(current?.configurable&&current.value===this.#scale){if(this.#previousScale)Object.defineProperty(this.#writer,'rescaleEnemies',this.#previousScale);else Reflect.deleteProperty(this.#writer,'rescaleEnemies');}}
 }

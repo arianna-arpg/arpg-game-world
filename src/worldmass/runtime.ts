@@ -20,6 +20,7 @@ import type { MassHierarchySave } from './hierarchy';
 import { MassNativeCountry } from './nativeCountry';
 import { MassNativeHost, nativeWorldCapabilities } from './nativeHost';
 import type { MassOccurrenceDisturbance } from './occurrences';
+import { recordRuntimeError } from '../core/runtimeDiagnostics';
 import { MassNativeResidency, type NativeResidencySave } from './nativeResidency';
 import { validateMassBounties } from './bounties';
 import { validateStructurePlans } from '../engine/structurePlans';
@@ -1166,6 +1167,8 @@ export class WorldMassRuntime {
       })();
       this.pagingReads.set(page.ref.key,task);
       void task.catch(error=>{if(this.pagingCurrent(world)&&characterNativeSessionToken(world)===session){
+        recordRuntimeError('native page restore',error,{run:this.generator.run.runId,seed:this.generator.run.seed,
+          page:page.ref.key,config:this.configHash,zone:world.zone.id,x:player.pos.x,y:player.pos.y,bodies:page.ids.length});
         this.pagingRetry.set(page.ref.key,Date.now()+5000);this.pagingErrors.set(page.ref.key,String(error instanceof Error?error.message:error));
       }}).finally(()=>{if(this.pagingReads.get(page.ref.key)===task)this.pagingReads.delete(page.ref.key);});
     }
@@ -1196,7 +1199,12 @@ export class WorldMassRuntime {
     let lease;
     try{lease=stageNativeCohort(this.generator.run.runId,'native/'+crypto.randomUUID(),this.origin,this.config.terrain.addressSpan,
       world,this.natives,selected,this.dormancy,(id,a)=>({id,monster:a.defId!,level:a.level,provenance:{birth:this.births.of(a)}}));}
-    catch(error){this.pagingRefusal=String(error);return;} // Unsupported dependencies retain their exact live owners.
+    catch(error){
+      const refusal=String(error);
+      if(this.pagingRefusal!==refusal)recordRuntimeError('native page staging',error,{run:this.generator.run.runId,
+        seed:this.generator.run.seed,zone:world.zone.id,x:world.player.pos.x,y:world.player.pos.y,bodies:selected.length});
+      this.pagingRefusal=refusal;return;
+    } // Unsupported dependencies retain their exact live owners.
     this.pagingRefusal="";
     const held=lease,valid=()=>this.pagingCurrent(world)&&held.revalidate()
       &&selected.every(id=>{const a=this.natives.get(id);return !!a&&!near(a,this.dormancy!.policy.sleepRadius);});
@@ -1208,7 +1216,8 @@ export class WorldMassRuntime {
       world.actorGridRev++;
     });
     this.pagingWrite=task;
-    void task.catch(error=>console.error('[worldmass] page commit failed; natives retained:',error)).finally(()=>{this.pagingWrite=null;});
+    void task.catch(error=>recordRuntimeError('native page commit',error,{run:this.generator.run.runId,
+      seed:this.generator.run.seed,zone:world.zone.id,bodies:selected.length})).finally(()=>{this.pagingWrite=null;});
   }
   private orderNativeBodies(world:World):void {
     const order=characterNativePageOrder(world);if(!order.length)return;

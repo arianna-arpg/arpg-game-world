@@ -1,4 +1,5 @@
 import {nativeGroundCoordinatorCalls} from './nativeOdysseyGroundRegistration';
+import type {NativeAreaSource,NativeAreaSourceSession} from './nativeAreaSourceSession';
 import {makeNativeAreaArena} from '../engine/nativeAreaArena';
 import {hullOf} from '../world/shape';
 import {assertNativeCharacterResume,type NativeCharacterResumeReceipt,type NativeAreaCharacterResume} from './nativeAreaCharacterResume';
@@ -24,6 +25,8 @@ export interface NativeAreaPreparationInput {session:NativeAreaCampaignSession;c
 const preparations=new WeakSet<object>();
 export function isNativeAreaScenePreparation(value:unknown):value is NativeAreaScenePreparation{return !!value&&typeof value==='object'&&preparations.has(value);}
 export class NativeAreaScenePreparation {
+ #loadingInitialAttempted=false;
+ #loadingInitial:{area:NativeAreaSceneOngoing;source:NativeAreaSourceSession;ticket:NativeAreaSource;firstVisit:boolean;visited:boolean;definition:NativeAreaSceneOngoing['assembly']['input']['scene']['zone'];actor:Actor;inCave:boolean}|undefined;
  readonly #prepareRealm:(area:NativeAreaSceneOngoing)=>void;
  #resumeOwner:NativeAreaCharacterResume|undefined;
  setProvisionalRestore(token:NativeCharacterResumeReceipt):void {const r=assertNativeCharacterResume(token,'graph');if(r.preparation!==this||this.#resumeOwner)throw Error('Native preparer already has a restore owner');this.#resumeOwner=r.owner;}
@@ -37,7 +40,7 @@ export class NativeAreaScenePreparation {
  releaseVoyage(area:NativeAreaSceneOngoing):void {Reflect.apply(NativeAreaSceneTransitionCoordinator.prototype.assertVoyageRetirement,this.input.coordinator,[area]);if(this.#areas.get(area.assembly.input.scene.zone.id)!==area)throw Error('Native voyage preparation owner changed');this.#areas.delete(area.assembly.input.scene.zone.id);this.#geography.delete(area);}
  releaseGround(area:NativeAreaSceneOngoing):void {nativeGroundCoordinatorCalls(this.input.coordinator).areaRetirement(area);if(this.#areas.get(area.assembly.input.scene.zone.id)!==area)throw Error('Native ground preparation owner changed');this.#areas.delete(area.assembly.input.scene.zone.id);this.#geography.delete(area);}
  /** Close preparation, including a failed destination never registered for play. */
- retire():readonly NativeAreaSceneOngoing[]{const areas=Object.freeze([...this.#areas.values()]);this.#areas.clear();return areas;}
+ retire():readonly NativeAreaSceneOngoing[]{const areas=Object.freeze([...this.#areas.values()]);this.#areas.clear();this.#loadingInitial=undefined;return areas;}
  /** Select only an actual campaign definition and recorded geography. No callback
   * can substitute a prebirthed scene, area, population, or landing coordinate. */
  prepare(zoneId:string,geography:MassNativeGeography,from?:string,representative?:Actor):NativeAreaSceneOngoing {
@@ -82,6 +85,35 @@ export class NativeAreaScenePreparation {
   const {geometry,settlement,scene}=area.assembly.input;geometry.arena=makeNativeAreaArena(scene.zone);geometry.arenaHull=hullOf(geometry.arena);
   settlement.input.state.townTierIdx=r.writer['townTierIdx'];area.combat.runtimeState.frame.townLayoutChangedOnLoad=r.writer['townLayoutChangedOnLoad'];
   area.assembly.scenePresence.includeInitialCharacter(token);area.assembly.input.population.includeInitialCharacter(token);r.writer.zone=area.assembly.input.scene.zone;r.writer.zoneEnteredAt=r.writer.time;r.writer.arena=area.assembly.input.geometry.arena;this.#layout(area,this.#geography.get(area)!);}
+
+ /** Only the loading factory uses these two advances. Source tickets are owned
+  * session handles; no factory receipt or borrowed campaign scope is retained. */
+ advanceInitialCharacterLoading(token:NativeCharacterCreationReceipt):boolean {
+  const r=assertNativeCharacterReceipt(token,'birth'),area=r.area;
+  if(r.preparation!==this||!area||this.#areas.get(area.assembly.input.scene.zone.id)!==area||area.assembly.phase!=='fresh')throw Error('Native character preparation differs');
+  const {session}=this.input,campaign=session.campaign,definition=area.assembly.input.scene.zone,zoneId=definition.id,carry=area.assembly.transition;
+  if(!this.#loadingInitialAttempted){
+   this.#loadingInitialAttempted=true;
+   r.writer['townLayoutChangedOnLoad']=false;foldNativeTownStations(r.writer);assertNativeCharacterReceipt(token,'birth');
+   const {geometry,settlement,scene}=area.assembly.input;geometry.arena=makeNativeAreaArena(scene.zone);geometry.arenaHull=hullOf(geometry.arena);
+   settlement.input.state.townTierIdx=r.writer['townTierIdx'];area.combat.runtimeState.frame.townLayoutChangedOnLoad=r.writer['townLayoutChangedOnLoad'];
+   area.assembly.scenePresence.includeInitialCharacter(token);area.assembly.input.population.includeInitialCharacter(token);r.writer.zone=area.assembly.input.scene.zone;r.writer.zoneEnteredAt=r.writer.time;r.writer.arena=area.assembly.input.geometry.arena;
+   session.duringPreparation(area,()=>{
+    const source=area.assembly.sourceSession(this.#geography.get(area)!),ticket=source.issue(zoneId),visited=campaign.visited.has(zoneId),firstVisit=!carry.inCave&&!visited;
+    this.#loadingInitial={area,source,ticket,firstVisit,visited,definition,actor:r.actor,inCave:carry.inCave};
+   });
+   return false;
+  }
+  const pending=this.#loadingInitial;this.#loadingInitial=undefined;
+  if(!pending||pending.area!==area||pending.definition!==definition||(campaign.zoneMap[zoneId]??campaign.caveMap[zoneId])!==pending.definition||pending.actor!==r.actor||pending.inCave!==carry.inCave||pending.visited!==campaign.visited.has(zoneId))throw Error('Native loading preparation is completed, changed or foreign');
+  const {source,ticket,firstVisit}=pending;
+  session.duringPreparation(area,()=>{
+   if(!carry.inCave){campaign.visited.add(zoneId);if(firstVisit&&area.assembly.objectiveController.metaProgressionActive()){campaign.account.ledger[LEDGER_ZONES_EXPLORED]=(campaign.account.ledger[LEDGER_ZONES_EXPLORED]??0)+1;campaign.accountDirty=true;}if(definition.concealed)definition.concealed=false;if(definition.veiled)definition.veiled=false;}
+   Reflect.apply(NativeAreaSceneTransitionCoordinator.prototype.prepareVoyageSurface,this.input.coordinator,[area]);
+   area.assembly.prepare(source,ticket,vec(definition.size.w/2,definition.size.h/2),firstVisit);
+  });
+  return true;
+ }
 
  /** The coordinator selects this same source's recorded geography. Preparation
   * returns its exact real area; no caller supplies a prebirthed destination. */

@@ -1,4 +1,6 @@
 import { loadingPresentation } from '../loading/presentation';
+import { recordRuntimeError } from '../core/runtimeDiagnostics';
+import { mountRuntimeErrorReport } from './runtimeErrorReport';
 import loadingScript from 'virtual:mu-loading-script';
 import { spiritDirection } from '../loading/spiritRun';
 import { Z_LADDER } from './zorder';
@@ -10,6 +12,7 @@ export type { LoadingOptions, LoadingStatus, LoadingLease } from '../loading/pro
  * all minigame input and painting. Do not add allow-same-origin: it would put
  * the crossing back on the game's blocked renderer thread in desktop Chromium. */
 export class LoadingScreen {
+  private errorReport?: HTMLElement;
   private frame: HTMLIFrameElement;
   private ready = false;
   private startupError?: string;
@@ -64,6 +67,7 @@ export class LoadingScreen {
     return { ...message, channel: LOADING_CHANNEL, token: this.token } as LoadingCommand;
   }
   begin(options: LoadingOptions): LoadingLease {
+    this.errorReport?.remove(); this.errorReport = undefined;
     if (!this.visible) {
       this.focus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
       this.inert = Array.from(document.body.children).filter((el): el is HTMLElement => el instanceof HTMLElement && el !== this.frame)
@@ -84,6 +88,7 @@ export class LoadingScreen {
     const current = (): boolean => this.visible && !this.closing && token === this.token;
     return { get current() { return current(); },
       update: status => { if (current()) {
+        this.errorReport?.remove(); this.errorReport = undefined;
         const key = JSON.stringify(status); if (key === this.statusKey) return;
         this.statusKey = key; this.retry = undefined; this.failure = undefined;
         if (this.beginCommand?.type === 'begin') Object.assign(this.beginCommand.options, { label: status.label, detail: status.detail, completed: status.completed, total: status.total });
@@ -102,6 +107,8 @@ export class LoadingScreen {
       },
       fail: (message, retry) => { if (current()) { this.retry = retry;
         const key = 'fail:' + message + ':' + !!retry; if (key === this.statusKey) return; this.statusKey = key;
+        recordRuntimeError('crossing refused', message);
+        this.errorReport ??= mountRuntimeErrorReport();
         this.failure = { message, retry: !!retry };
         if (this.ready) this.send(this.command({ type: 'fail', ...this.failure })); } },
       finish: () => { if (current()) this.close(); },
@@ -120,6 +127,7 @@ export class LoadingScreen {
     else this.hide();
   }
   private hide(): void {
+    this.errorReport?.remove(); this.errorReport = undefined;
     clearTimeout(this.closeTimer);
     for (const key of this.heldKeys) this.releasedKeys.add(key);
     this.heldKeys.clear(); this.padHeld = true; this.clearWorldInput();
@@ -159,9 +167,11 @@ export class LoadingScreen {
     }
   };
   private keyDown = (event: KeyboardEvent): void => {
+    if (event.target instanceof Node && this.errorReport?.contains(event.target)) return;
     if (this.visible || this.releasedKeys.has(event.code)) { event.preventDefault(); event.stopImmediatePropagation(); }
   };
   private keyUp = (event: KeyboardEvent): void => {
+    if (event.target instanceof Node && this.errorReport?.contains(event.target)) return;
     const quarantined = this.releasedKeys.delete(event.code);
     if (this.visible || quarantined) event.stopImmediatePropagation();
   };

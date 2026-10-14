@@ -56,6 +56,10 @@ export function stageNativeCohort(run:string,page:string,frame:MassCell,addressS
   const bodies=[...members].map(([id,a])=>{const d=describe(id,a);
     if(d.id!==id||d.monster!==a.defId||d.level!==a.level)throw Error('Native paging descriptor disagrees with actor');return copy(d);});
   const data:NativeCohortPage={schema:1,run,page,frame:copy(frame),addressSpan,policy:copy(dormancy.policy),bodies,checkpoint};
+  // The reader's exact gate must pass BEFORE any durable page or root can be
+  // published and the only live bodies released. Quiet is not codec validity:
+  // a settled enemy can still retain a reference to a departed target.
+  validateNativeDormancyCheckpoint(checkpoint,bodies,true);
   const signature=fingerprint(),body=canonical(data);
   return {body,ids:[...ids],revalidate:()=>eligible()&&signature===fingerprint()};
 }

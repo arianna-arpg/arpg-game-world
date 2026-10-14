@@ -50,6 +50,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Retained-native source proofs read pinned ancestor blobs with git show.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -67,6 +70,11 @@ jobs:
       # what it refuses to run. About a second; no Electron, no network.
       - name: Launcher update laws
         run: npm run test:launcher
+
+      - name: Checkpoint and error-report regressions
+        run: |
+          npx tsx balance/check_nativecheckpointdiagnostics.ts
+          npx tsx balance/check_runtimediagnostics.ts
 
       - name: Probes (green roster, fast lane)
         run: npm run probe

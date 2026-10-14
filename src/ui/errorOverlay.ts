@@ -21,6 +21,7 @@
 // ---------------------------------------------------------------------------
 
 import { GAME_TITLE } from '../config';
+import { recordRuntimeError, runtimeErrorReport } from '../core/runtimeDiagnostics';
 import { Z_LADDER } from './zorder'; // dependency-free constants — safe for a crashed frame
 
 /** One captured error — the shape both traps push into window.__bootErrors. */
@@ -54,7 +55,7 @@ function detailsText(fatal: CrashEntry, ring: readonly CrashEntry[]): string {
     lines.push(`[${new Date(e.t).toISOString()}] ${e.kind}: ${e.msg}`);
     if (e.stack) lines.push(e.stack);
   }
-  return lines.join('\n');
+  return lines.join('\n') + '\n\n--- persistent runtime diagnostics ---\n' + runtimeErrorReport();
 }
 
 /** Copy via the async clipboard, falling back to a select+execCommand
@@ -87,6 +88,7 @@ function copyDetails(text: string, host: HTMLElement, done: (ok: boolean) => voi
  *  ring keeps collecting behind it either way). `ring` is held by reference so
  *  Copy Details always reports the current state. */
 export function showErrorOverlay(fatal: CrashEntry, ring: readonly CrashEntry[]): void {
+  recordRuntimeError('fatal ' + fatal.kind, { message: fatal.msg, stack: fatal.stack });
   if (shown) return;
   shown = true;
 

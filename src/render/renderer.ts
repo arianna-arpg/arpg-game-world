@@ -527,7 +527,11 @@ export class Renderer {
     this.resize();
   }
 
+  private resizeEpoch = 0;
+  private loadingRenderActive = false;
+
   resize(): void {
+    this.resizeEpoch++;
     const w = this.frameW, h = this.frameH;
     // Buffer at the scaled size; the ELEMENT stays window-sized (CSS pins it
     // — with no explicit style the element would shrink to the buffer).
@@ -602,6 +606,60 @@ export class Renderer {
   private falterH = 0;
 
   render(world: World): void {
+    if (this.loadingRenderActive) throw Error('A loading frame already owns the renderer');
+    const stages = this.renderStages(world, false);
+    while (!stages.next().done) { /* Ordinary frames stay entirely synchronous. */ }
+  }
+
+  /** Local entry holds simulation and input under its loading lease. A complete
+   * world pass releases its canvas scope before yielding to the cover; the word
+   * and HUD passes then finish that same frame. Resizing/settings changes start
+   * a new frame, never a suffix over an erased or differently projected buffer. */
+  async renderLoading(world: World, pause: () => Promise<void>, current: () => boolean): Promise<boolean> {
+    if (this.loadingRenderActive) throw Error('A loading frame already owns the renderer');
+    this.loadingRenderActive = true;
+    let stages: Generator<void, void, unknown> | undefined;
+    let completed = false;
+    try {
+      const zone = world.zone, player = world.player, time = world.time, walk = world.walk, arena = world.arena;
+      const ownerCurrent = (): boolean => current() && world.zone === zone && world.player === player &&
+        world.time === time && world.walk === walk && world.arena === arena;
+      while (ownerCurrent()) {
+        const stamp = this.loadingPresentationStamp(), settings = this.getSettings, follow = this.cameraFollow;
+        stages = this.renderStages(world, true);
+        const first = stages.next();
+        if (first.done) throw Error('The loading frame did not release its world pass');
+        await pause();
+        if (!ownerCurrent()) return false;
+        if (stamp !== this.loadingPresentationStamp() || settings !== this.getSettings || follow !== this.cameraFollow) {
+          stages.return(); stages = undefined; this.clearLoadingWords();
+          continue;
+        }
+        if (!stages.next().done) throw Error('The loading frame has an unexpected extra stage');
+        stages = undefined;
+        completed = ownerCurrent();
+        return completed;
+      }
+      return false;
+    } finally {
+      stages?.return();
+      if (!completed) this.clearLoadingWords();
+      this.loadingRenderActive = false;
+    }
+  }
+
+  private loadingPresentationStamp(): string {
+    return JSON.stringify([this.resizeEpoch, this.frameW, this.frameH, this.pixelScale, this.captureBaseZoom,
+      this.captureViewport, this.worldOnly, this.directorFocus, this.directorClean, this.directorNoSightVeil,
+      this.directorCinematic, this.linkStrain, this.getSettings?.()]);
+  }
+
+  private clearLoadingWords(): void {
+    this.labels.length = 0; this.speeches.length = 0;
+    this.speechFocusLines.clear(); this.speechApproach = null; this.dialogueVisibleSpeaker = null;
+  }
+
+  private *renderStages(world: World, cooperative: boolean): Generator<void, void, unknown> {
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
 
@@ -635,7 +693,7 @@ export class Renderer {
     this.falterW = w; this.falterH = h;
     const falterK = (this.getSettings?.().statusFalter ?? true)
       ? collectFalterK(this.frameFx) : 0;
-    if (falterK <= 0 || boundary || resized) {
+    if (falterK <= 0 || boundary || resized || cooperative) {
       // Not faltering (or must draw): disarm so the NEXT activation gets a
       // fresh firstDelaySec beat instead of a mid-schedule leftover.
       this.falterArmed = false;
@@ -986,6 +1044,7 @@ export class Renderer {
     this.drawRoofs(world);         // structure roofs: interiors reveal only when you're inside
 
     ctx.restore();
+    if (cooperative) yield;
 
     // THE ROOM VEIL: interior confinement — inside a confining structure the
     // world beyond the room is unseen (labels gate through veiledAt; the

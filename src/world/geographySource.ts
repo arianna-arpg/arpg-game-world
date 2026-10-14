@@ -63,53 +63,77 @@ export function copyNativeGeographyData<T>(input: T): T { return copyGeographyDa
 // Hydration validates semantics separately and guards its own cache admission.
 const geographySnapshots = new WeakSet<object>();
 const geographySnapshotCopies = new WeakMap<object, object>();
+const geographySnapshotKeys = new WeakMap<object, readonly string[]>();
 export function snapshotNativeGeographyData<T>(input: T): T { return copyGeographyData(input, true); }
+// Shared validation avoids one closure per live object. Both checks still run
+// at their original boundaries, including after caller-controlled child traps.
+function assertInheritedGeography(value: object, proto: object, path: string): void {
+  if (Object.getPrototypeOf(value) !== proto) fail(path, 'prototype changed during copy');
+  for (const key in proto) if (!Object.hasOwn(value, key)) fail(path, 'inherited enumerable field');
+}
 function copyGeographyData<T>(input: T, immutable: boolean): T {
   const visiting = new Set<object>();
-  const copy = (value: unknown, path: string): unknown => {
+  const copy = (value: unknown, parent: string, key?: string | number): unknown => {
     if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
-    if (typeof value === 'number') {
-      if (!Number.isFinite(value) || Object.is(value, -0)) fail(path, 'number must be finite and not negative zero');
-      return value;
-    }
+    // Valid primitive leaves do not need a diagnostic path allocation.
+    if (typeof value === 'number' && Number.isFinite(value) && !Object.is(value, -0)) return value;
+    const path = key === undefined ? parent : typeof key === 'number' ? parent + '[' + key + ']' : parent + '.' + key;
+    if (typeof value === 'number') fail(path, 'number must be finite and not negative zero');
     if (!value || typeof value !== 'object') fail(path, 'unsupported non-JSON value');
     if (immutable && geographySnapshots.has(value) && geographyPrototypeClean()) return value;
     if (visiting.has(value)) fail(path, 'cycle');
     const array = Array.isArray(value), proto = Object.getPrototypeOf(value);
     if (array ? proto !== Array.prototype : proto !== Object.prototype) fail(path, 'non-plain prototype');
-    // Even Object.prototype can acquire inherited enumerable state. It must not
-    // influence native for-in affinity multiplication outside the source bytes.
-    for (const key in value) if (!Object.hasOwn(value, key)) fail(path, 'inherited enumerable field');
     const keys = Reflect.ownKeys(value);
-    if (keys.some(k => typeof k !== 'string')) fail(path, 'symbol field');
+    for (let i = 0; i < keys.length; i++) if (typeof keys[i] !== 'string') fail(path, 'symbol field');
+    assertInheritedGeography(value, proto, path);
     visiting.add(value);
     try {
+      const previous = immutable ? geographySnapshotCopies.get(value) : undefined;
       if (array) {
         if (keys.length !== value.length + 1 || !keys.includes('length')) fail(path, 'sparse array or non-index array property');
-        const out: unknown[] = [];
+        const prior = previous && Array.isArray(previous) && previous.length === value.length ? previous : undefined;
+        let out: unknown[] | undefined = prior ? undefined : [];
         for (let i = 0; i < value.length; i++) {
           const d = Object.getOwnPropertyDescriptor(value, String(i));
           if (!d || !d.enumerable || !('value' in d)) fail(`${path}[${i}]`, 'array slots must be own enumerable data');
-          out.push(copy(d.value, `${path}[${i}]`));
+          const raw = d.value;
+          // Primitive leaves need no recursive frame or diagnostic path.
+          const child = raw === null || typeof raw === 'string' || typeof raw === 'boolean'
+            || typeof raw === 'number' && Number.isFinite(raw) && !Object.is(raw, -0) ? raw : copy(raw, path, i);
+          if (!out && !Object.is(child, prior![i])) { out = []; for (let j = 0; j < i; j++) out.push(prior![j]); }
+          if (out) out.push(child);
         }
-        if (!immutable) return out;
-        const previous = geographySnapshotCopies.get(value);
-        const result = previous && Array.isArray(previous) && previous.length === out.length && out.every((entry, index) => Object.is(entry, previous[index])) ? previous : Object.freeze(out);
-        geographySnapshotCopies.set(value, result); geographySnapshots.add(result);
+        assertInheritedGeography(value, proto, path);
+        if (!immutable) return out!;
+        const result = out ? Object.freeze(out) : prior!;
+        if (out) { geographySnapshotCopies.set(value, result); geographySnapshots.add(result); }
         return result;
       }
-      const entries: [string, unknown][] = [];
-      for (const key of keys as string[]) {
-        lookupKey(key,path);
+      const names = keys as string[], priorKeys = previous && geographySnapshotKeys.get(previous);
+      let same = !!previous && !Array.isArray(previous) && priorKeys?.length === names.length;
+      let out: Record<string, unknown> | undefined = same ? undefined : {};
+      for (let i = 0; i < names.length; i++) {
+        const key = names[i];lookupKey(key,path);
         const d = Object.getOwnPropertyDescriptor(value, key)!;
         if (!d.enumerable || !('value' in d)) fail(`${path}.${key}`, 'fields must be own enumerable data');
-        entries.push([key, copy(d.value, `${path}.${key}`)]);
+        const raw = d.value;
+        // Primitive leaves need no recursive frame or diagnostic path.
+        const child = raw === null || typeof raw === 'string' || typeof raw === 'boolean'
+          || typeof raw === 'number' && Number.isFinite(raw) && !Object.is(raw, -0) ? raw : copy(raw, path, key);
+        if (same && (priorKeys![i] !== key || !Object.is((previous as Record<string, unknown>)[key], child))) {
+          same = false;out = {};
+          for (let j = 0; j < i; j++) Object.defineProperty(out,names[j],{value:(previous as Record<string, unknown>)[names[j]],enumerable:true,writable:true,configurable:true});
+        }
+        if (out) Object.defineProperty(out,key,{value:child,enumerable:true,writable:true,configurable:true});
       }
-      if (!immutable) return Object.fromEntries(entries);
-      const previous = geographySnapshotCopies.get(value), previousKeys = previous && Object.keys(previous);
-      const same = previous && !Array.isArray(previous) && previousKeys!.length === entries.length && entries.every(([key, entry], index) => previousKeys![index] === key && Object.is(Object.getOwnPropertyDescriptor(previous, key)!.value, entry));
-      const result = same ? previous : Object.freeze(Object.fromEntries(entries));
-      geographySnapshotCopies.set(value, result); geographySnapshots.add(result);
+      assertInheritedGeography(value, proto, path);
+      if (!immutable) return out!;
+      const result = same ? previous! : Object.freeze(out!);
+      if (!same) {
+        geographySnapshotKeys.set(result, names);
+        geographySnapshotCopies.set(value, result); geographySnapshots.add(result);
+      }
       return result;
     } finally { visiting.delete(value); }
   };
@@ -329,7 +353,17 @@ function validateExecutionDomain(source:NativeGeographySource):void {
 // objects, even frozen lookalikes, always pass the complete descriptor/domain
 // checks. Readers still build independent execution views and derived memos.
 type HydratedGeography = Readonly<{source: Readonly<NativeGeographySource>; identity: string}>;
+const geographyStringify = JSON.stringify;
+const serializedGeography = new WeakMap<object, string>();
 const hydratedGeography = new WeakMap<object, HydratedGeography>();
+/** Exact serialization of an owned, fully validated immutable source. Changed
+ * prototypes or serializer use the original JSON operation and its effects. */
+export function serializeNativeGeographySource(source: Readonly<NativeGeographySource>): string {
+  if (JSON.stringify === geographyStringify && geographyPrototypeClean()) {
+    const known = serializedGeography.get(source); if (known !== undefined) return known;
+  }
+  return JSON.stringify(source);
+}
 const restoredGeography = new Map<string, HydratedGeography>();
 let restoredGeographyBytes = 0;
 const RESTORED_GEOGRAPHY_MAX_BYTES = 2 * 1024 * 1024;
@@ -340,15 +374,24 @@ const geographyPrototypes = [Object.prototype, Array.prototype].map(value => ({
   value, parent: Object.getPrototypeOf(value), descriptors: Object.getOwnPropertyDescriptors(value), keys: Reflect.ownKeys(value),
 }));
 function geographyPrototypeClean(): boolean {
-  for (const row of geographyPrototypes) {
+  for (let i = 0; i < geographyPrototypes.length; i++) {
+    const row = geographyPrototypes[i];
     if (Object.getPrototypeOf(row.value) !== row.parent) return false;
     const keys = Reflect.ownKeys(row.value);
-    if (keys.length !== row.keys.length || keys.some((key, index) => key !== row.keys[index])) return false;
-    for (const key of keys) {
-      const before = Object.getOwnPropertyDescriptor(row.descriptors, key)!.value as PropertyDescriptor;
+    if (keys.length !== row.keys.length) return false;
+    for (let j = 0; j < keys.length; j++) if (keys[j] !== row.keys[j]) return false;
+    for (let j = 0; j < keys.length; j++) {
+      const key = keys[j];
+      const before = Reflect.get(row.descriptors, key) as PropertyDescriptor;
       const after = Object.getOwnPropertyDescriptor(row.value, key)!;
-      for (const field of ['value','writable','get','set','enumerable','configurable'] as const)
-        if (Object.hasOwn(before, field) !== Object.hasOwn(after, field) || before[field] !== after[field]) return false;
+      if (before.enumerable !== after.enumerable || before.configurable !== after.configurable) return false;
+      // Intrinsic descriptors have exactly one of the two standard shapes.
+      // Compare only own fields so polluted optional descriptor names cannot
+      // execute inherited getters during this guard.
+      const data = Object.hasOwn(before, 'value');
+      if (data !== Object.hasOwn(after, 'value')) return false;
+      if (data ? before.value !== after.value || before.writable !== after.writable
+        : before.get !== after.get || before.set !== after.set) return false;
     }
   }
   return true;
@@ -360,15 +403,19 @@ export function hydrateNativeGeographySource(input: unknown) {
   }
   const source = snapshotNativeGeographyData(input);
   const copiedClean = geographyPrototypeClean();
-  let exactIdentity: string | undefined;
+  let exactIdentity: string | undefined, nativeIdentity = false;
   if (clean && copiedClean && geographyPrototypeClean()) {
+    const native = JSON.stringify === geographyStringify;
     exactIdentity = JSON.stringify(source);
+    nativeIdentity = native && JSON.stringify === geographyStringify;
     const known = restoredGeography.get(exactIdentity); if (known) return known;
   }
   // With changed prototypes keep original ordering: semantic refusal must occur
   // before JSON could invoke an inherited toJSON on invalid source data.
   validateSource(source); validateExecutionDomain(source);
+  const native = JSON.stringify === geographyStringify;
   const identity = exactIdentity ?? JSON.stringify(source);
+  if (exactIdentity === undefined) nativeIdentity = native && JSON.stringify === geographyStringify;
   freezeData(source);
   const hydrated = Object.freeze({ source, identity });
   if (clean && copiedClean && geographyPrototypeClean()) {
@@ -376,6 +423,7 @@ export function hydrateNativeGeographySource(input: unknown) {
     const known = restoredGeography.get(identity);
     if (known) return known;
     hydratedGeography.set(source, hydrated); rememberGeography(hydrated);
+    if (nativeIdentity) serializedGeography.set(source, identity);
   }
   return hydrated;
 }
@@ -419,10 +467,10 @@ function ownData<T>(value: T): T {
 function makeGeographyExecution(source: Readonly<NativeGeographySource>) {
   const runtime = freezeData(ownData(source));
   const climateData = freezeData(ownData(hydrateNativeClimateSource(source.climate)));
-  const biomes = freezeData(ownData(Object.fromEntries(runtime.biomes)));
-  const dimensions = freezeData(ownData(Object.fromEntries(runtime.dimensions)));
+  const biomes = Object.freeze(Object.assign(Object.create(null), Object.fromEntries(runtime.biomes)));
+  const dimensions = Object.freeze(Object.assign(Object.create(null), Object.fromEntries(runtime.dimensions)));
   const dimensionSource = freezeData(Object.assign(Object.create(null) as Record<string,DimensionDef>,Object.fromEntries(source.dimensions)));
-  const tilesets = freezeData(ownData(Object.fromEntries(runtime.tilesets)));
+  const tilesets = Object.freeze(Object.assign(Object.create(null), Object.fromEntries(runtime.tilesets)));
   return Object.freeze({ runtime, climateData, biomes, dimensions, dimensionSource, tilesets });
 }
 const geographyExecution = new WeakMap<object, ReturnType<typeof makeGeographyExecution>>();

@@ -128,26 +128,32 @@ export function validateNativeActorState(saved: NativeActorState, expected: {
   monster: string; team: string; actors: ReadonlySet<number>; squads: ReadonlySet<number>;
   level?: number; life?: number; position?: { x: number; y: number };
 }): void {
-  const fail = (): never => { throw Error('Invalid native actor checkpoint'); };
+  let checkpointPath = 'header';
+  const fail = (reason = 'invalid structure or value'): never => {
+    throw Error(`Invalid native actor checkpoint: ${expected.monster} at ${checkpointPath}: ${reason}`);
+  };
   if (saved?.version !== 1 || !Array.isArray(saved.nodes) || !saved.nodes.length || saved.nodes.length > 16384) fail();
   const value = (v: Value, key = ''): void => {
     if (v === null || typeof v === 'string' || typeof v === 'boolean') return;
     if (typeof v === 'number') { if (!Number.isFinite(v)) fail(); return; }
     if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).length !== 1) fail();
     if ('ref' in v) { if (!Number.isSafeInteger(v.ref) || v.ref < 0 || v.ref >= saved.nodes.length) fail(); return; }
-    if ('actor' in v) { if (!Number.isSafeInteger(v.actor) || !expected.actors.has(v.actor)) fail(); return; }
+    if ('actor' in v) { if (!Number.isSafeInteger(v.actor) || !expected.actors.has(v.actor)) fail(`unresolved actor ${v.actor}`); return; }
     // Unresolved historical numeric IDs intentionally become negative sentinels.
-    if ('entity' in v) { if (!Number.isSafeInteger(v.entity) || v.entity < 0 || dependencyKeys.has(key) && !expected.actors.has(v.entity)) fail(); return; }
-    if ('squad' in v) { if (!Number.isSafeInteger(v.squad) || !expected.squads.has(v.squad)) fail(); return; }
+    if ('entity' in v) { if (!Number.isSafeInteger(v.entity) || v.entity < 0 || dependencyKeys.has(key) && !expected.actors.has(v.entity)) fail(`unresolved entity ${v.entity}`); return; }
+    if ('squad' in v) { if (!Number.isSafeInteger(v.squad) || !expected.squads.has(v.squad)) fail(`unresolved squad ${v.squad}`); return; }
     if ('special' in v && ['undefined', 'nan', 'positive', 'negative'].includes(v.special)) return;
     fail();
   };
-  for (const node of saved.nodes) {
+  for (const [nodeIndex, node] of saved.nodes.entries()) {
+    checkpointPath = `nodes[${nodeIndex}]`;
     if (!node || !['object', 'array', 'map', 'set', 'float64', 'sheet'].includes(node.kind) || !Array.isArray(node.entries)) fail();
     const properties = new Set<string>();
     for (let i = 0; i < node.entries.length; i++) {
       const pair = node.entries[i];
+      checkpointPath = `nodes[${nodeIndex}].entries[${i}]`;
       if (!Array.isArray(pair) || pair.length !== 2) fail();
+      if (typeof pair[0] === 'string') checkpointPath += ` (${pair[0]})`;
       const [key, v] = pair; value(v, typeof key === 'string' ? key : '');
       if (node.kind === 'map') value(key);
       else if (node.kind === 'set') { if (key !== null) fail(); }
@@ -167,25 +173,31 @@ export function validateNativeActorState(saved: NativeActorState, expected: {
       }
     }
   }
+  checkpointPath = 'root';
   value(saved.root);
   if (!saved.root || typeof saved.root !== 'object' || !('ref' in saved.root)) fail();
   const root = saved.nodes[(saved.root as { ref: number }).ref];
   if (root.kind !== 'object') fail();
   const fields = new Map(root.entries.map(([k, v]) => [String(k), v]));
+  checkpointPath = 'root identity/life/level';
   if (fields.size !== root.entries.length || fields.get('defId') !== expected.monster || fields.get('team') !== expected.team
     || typeof fields.get('life') !== 'number' || !Number.isFinite(fields.get('life')) || (fields.get('life') as number) <= 0
     || expected.level !== undefined && fields.get('level') !== expected.level
     || expected.life !== undefined && fields.get('life') !== expected.life) fail();
   const sheet = fields.get('sheet');
+  checkpointPath = 'root.sheet';
   if (!sheet || typeof sheet !== 'object' || !('ref' in sheet) || saved.nodes[sheet.ref]?.kind !== 'sheet') fail();
   if (expected.position) {
+    checkpointPath = 'root.pos';
     const pos = fields.get('pos');
     if (!pos || typeof pos !== 'object' || !('ref' in pos) || saved.nodes[pos.ref]?.kind !== 'object') fail();
     const point = new Map(saved.nodes[(pos as { ref: number }).ref].entries);
     if (!Number.isFinite(expected.position.x) || !Number.isFinite(expected.position.y)
       || point.get('x') !== expected.position.x || point.get('y') !== expected.position.y) fail();
   }
-  for (const key of fields.keys()) if (rootExcluded.has(key) || nativePrototypeProperty(Actor.prototype, key)) fail();
+  for (const key of fields.keys()) if (rootExcluded.has(key) || nativePrototypeProperty(Actor.prototype, key)) {
+    checkpointPath = `root.${key}`; fail('cannot replace native identity or behavior');
+  }
 }
 
 export function unpackNativeCheckpoint(saved: MassDormancySave, state: PackedActorState): NativeActorState {

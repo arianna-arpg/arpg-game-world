@@ -1,5 +1,6 @@
 /** Explicit saved mapping from durable physical addresses to one frozen native source.
  * This module does not select a face, activate a preset or alter historical country policy. */
+import {nativeSourceDigest} from './nativeSourceDigest';
 import {address,cellInteger,floorDiv,validSpan,type MassAddress} from './address';
 import type {MapCoord} from '../world/coords';
 import {copyNativeGeographyData,createNativeGeographyReader,restoreNativeGeographySource,type NativeGeographyReader} from '../world/geographySource';
@@ -220,12 +221,12 @@ function mappingChecksum(mapping:MassNativeMapping):string{return massDigest({al
 function checkedSpec(input:MassNativeGeographySpec):MassNativeGeographySpec {
  const spec=copyNativeGeographyData(input);exactKeys(spec,SPEC_KEYS,'native geography spec');
  if(spec.schema!==1||spec.policy!=='mass-native-geography'||spec.version!==1||spec.mintNamespace!=='mass-native-area-mint-v1')throw Error('Unsupported native geography policy');
- if(typeof spec.sourceJson!=='string'||massDigest(spec.sourceJson)!==spec.sourceHash)throw Error('Native source checksum mismatch');
+ if(typeof spec.sourceJson!=='string'||nativeSourceDigest(spec.sourceJson)!==spec.sourceHash)throw Error('Native source checksum mismatch');
  mappingShape(spec.mapping);if(mappingChecksum(spec.mapping)!==spec.mappingHash)throw Error('Native mapping checksum mismatch');return spec;
 }
 export function makeMassNativeGeographySpec(sourceJson:string,mapping:MassNativeMapping):Readonly<MassNativeGeographySpec> {
  const cleanMapping=copyNativeGeographyData(mapping);
- const spec:MassNativeGeographySpec={schema:1,policy:'mass-native-geography',version:1,sourceJson,sourceHash:massDigest(sourceJson),mapping:cleanMapping,mappingHash:mappingChecksum(cleanMapping),mintNamespace:'mass-native-area-mint-v1'};
+ const spec:MassNativeGeographySpec={schema:1,policy:'mass-native-geography',version:1,sourceJson,sourceHash:nativeSourceDigest(sourceJson),mapping:cleanMapping,mappingHash:mappingChecksum(cleanMapping),mintNamespace:'mass-native-area-mint-v1'};
  // Construct once to verify exact serialized native source and both origins.
  return new MassNativeGeography(spec).spec;
 }

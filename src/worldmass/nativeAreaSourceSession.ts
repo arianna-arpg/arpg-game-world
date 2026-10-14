@@ -2,6 +2,7 @@
  * provenance only; they do not reserve terrain or authorize runtime publication. */
 import type {ZoneDef} from '../data/zones';
 import {captureNativeGeographySource} from '../world/captureGeography';
+import {serializeNativeGeographySource} from '../world/geographySource';
 import {landmarkComplex} from '../world/landmarkComplexes';
 import type {MapCoord} from '../world/coords';
 import {MassNativeGeography,type MassNativeSourceAnchor} from './nativeGeography';
@@ -42,7 +43,7 @@ export class NativeAreaSourceSession {
   if(c.manifest!==c.sim.manifest)throw Error('Native source needs identical campaign manifest');
   if(c!==this.#campaign||this.graph.input.coast.input.campaign!==c||c.zoneMap!==this.#zoneMap||c.caveMap!==this.#caveMap||c.sim!==this.#sim||c.manifest!==this.#manifest)throw Error('Native source campaign binding changed');
   if(this.geography.seed!==c.sim.biomeField.fieldSeed)throw Error('Native source campaign seed differs from geography');
-  if(JSON.stringify(captureNativeGeographySource(this.geography.seed))!==this.geography.spec.sourceJson)throw Error('Native source installed geography differs from recorded source');
+  if(serializeNativeGeographySource(captureNativeGeographySource(this.geography.seed))!==this.geography.spec.sourceJson)throw Error('Native source installed geography differs from recorded source');
  }
  private definition(id:string):ZoneDef {
   if(typeof id!=='string'||!id||id==='?')throw Error('Native source needs a resolved campaign identity');

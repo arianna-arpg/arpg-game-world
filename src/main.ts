@@ -111,7 +111,7 @@ import {
 import { resolveResumeSpawn } from './meta/worldstate';
 import { characterResumeFields } from './meta/characterResume';
 import { prepareNativeCharacterContinue } from './worldmass/nativeClientContinue';
-import { NativeClientStart } from './worldmass/nativeClientStart';
+import { NativeClientStart, type NativeClientStarted, type NativeClientStartRequest } from './worldmass/nativeClientStart';
 import { nativeClientRuntimeFor, type NativeClientRuntime } from './worldmass/nativeClientRuntime';
 import type { HeroInputQuery, HeroInputSource } from './agent/perception';
 import { DEFAULT_MODE_ID, freeRosterSlot, mintCharId, modeById, rosterCapacity, type RosterEntry } from './meta/modes';
@@ -503,10 +503,13 @@ const RUN_END_FADE = { outSec: 1.15 };
 /** The booked epilogue; revealing it never re-books the death. */
 let pendingDeathScreen: { open: (revealSec?: number) => void; opened?: boolean } | null = null;
 
+type StartGameArguments = [classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string, graftSkillId?: string | null, kitPicks?: Record<string, string>];
 function startGame(
   classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string,
   graftSkillId?: string | null, kitPicks?: Record<string, string>,
-): void {
+  loadingStage?: (label: string) => Promise<void>,
+  loadingCurrent?: () => boolean,
+): void | Promise<void> {
   couchReset(); // a new world seats no ghosts — guests re-join from the menu
   // THE PROLOGUE GATE (engine/scenes.ts), read FIRST — before a roster mode
   // pushes its vessel and muddies the virgin-account test: an account that
@@ -522,14 +525,25 @@ function startGame(
   const door = readDoor();
   const serverBound = !!door && !prologueDue;
   if (!serverBound) {
-    const started = nativeStartFor(account).begin({ kind: 'run', classDef, manifest, modeId, name,
+    const request: NativeClientStartRequest = { kind: 'run', classDef, manifest, modeId, name,
       graftSkillId, kitPicks, prologue: prologueDue ? 'force' : 'skip',
       onReady: made => { world = adoptWorld(made.writer); if (COOP_ALLY) spawnCoopAlly(); },
-    });
+    };
+    const finish = (started: NativeClientStarted | null): void => {
     if (!started) { toStartMenu(); return; }
     lastSentZone = '';
     if (modeById(modeId).save !== 'roster') ui.setContinueSave(null);
     ui.resetRunView(); deathShown = false; pendingDeathScreen = null; running = true;
+    };
+    if (loadingStage) {
+      const start = nativeStartFor(account);
+      return start.beginLoading(request, loadingStage).then(started => {
+        // A queued cancellation can run between adoption and Promise completion.
+        if (loadingCurrent?.() === false) return;
+        if (!started || start.current === started && world === started.writer && started.runtime.ready) finish(started);
+      });
+    }
+    finish(nativeStartFor(account).begin(request));
     return;
   }
   // The LIFE-CONTRACT (meta/modes.ts): class select passes the sworn mode.
@@ -631,22 +645,28 @@ function cancelLoadingToMenu(): void {
 /** loadingScreen owns an independent foreground renderer. Await its first paint
  * before starting CPU work, and drain its input before exposing the ready world.
  * Native construction and save authority stay in their existing game process. */
-async function withLoadingScreen(...args: Parameters<typeof startGame>): Promise<boolean> {
+async function withLoadingScreen(...args: StartGameArguments): Promise<boolean> {
   const lease = loadingScreen.begin({ kind: 'entry', label: 'Taking form', loadout: account.cosmetics.loadout,
     cancel: cancelLoadingToMenu });
   try {
     await lease.paint(); if (!lease.current) return false;
     wakeLease = lease; // THE ONE CROSSING: a server-bound wake keeps this cover to the far side
-    try { startGame(...args); } finally { wakeLease = null; }
+    try { await startGame(args[0], args[1], args[2], args[3], args[4], args[5], async label => {
+      if (!lease.current) throw Error('Native client start cancelled');
+      lease.update({ label }); await lease.paint();
+      if (!lease.current) throw Error('Native client start cancelled');
+    }, () => lease.current); } finally { wakeLease = null; }
     if (crossingLease === lease) return true;
     lease.update({ label: 'Opening the world' });
     await lease.paint(); if (!lease.current) return false;
-    renderer.render(world);
+    const presenting = world;
+    if (!await renderer.renderLoading(presenting, () => lease.paint(),
+      () => lease.current && world === presenting && running && crossingLease !== lease)) return false;
     // loadingScreen drains foreground actions before exposing the prepared world.
     await lease.paint(); if (!lease.current) return false;
     loadingGate = { world, lease };
     return true;
-  } catch (error) { lease.finish(); reportFatal(error, 'world entry'); return false; }
+  } catch (error) { const active = lease.current; lease.finish(); if (active) reportFatal(error, 'world entry'); return false; }
 }
 
 /** Class-select adapter: the picker hands back (class, sworn mode, name);
@@ -677,16 +697,34 @@ const startPicked = async (d: ClassDef, modeId?: string, name?: string, kitPicks
  *  ever exists for it (the scene stand-down covers every chokepoint) and no
  *  roster vessel is minted. The wisp strips the provisional class to nothing;
  *  taking a vessel calls startPicked, which discards this world wholesale. */
-function startMu(): void {
+async function startMu(notice?: string): Promise<void> {
   couchReset();
-  const started = nativeStartFor(account).begin({ kind: 'mu' });
-  if (!started) throw Error('The provisional vessel could not be prepared');
-  world = adoptWorld(started.writer);
-  lastSentZone = '';
-  ui.resetRunView();
-  deathShown = false;
-  pendingDeathScreen = null; // the dead run's fade is over — Mu owns the screen now
-  running = true;
+  const lease = loadingScreen.begin({ kind: 'entry', label: 'Finding your way', loadout: account.cosmetics.loadout,
+    cancel: cancelLoadingToMenu });
+  try {
+    await lease.paint(); if (!lease.current) return;
+    const started = await nativeStartFor(account).beginLoading({ kind: 'mu', onReady: made => {
+      if (!lease.current) throw Error('Native client start cancelled');
+      world = adoptWorld(made.writer); lastSentZone = ''; ui.resetRunView();
+      deathShown = false; pendingDeathScreen = null; running = true;
+      if (notice) world.text(world.player.pos, notice, '#d8b87a', 13, undefined, 6);
+    } }, async label => {
+      if (!lease.current) throw Error('Native client start cancelled');
+      lease.update({ label }); await lease.paint();
+      if (!lease.current) throw Error('Native client start cancelled');
+    });
+    if (!lease.current) return;
+    if (!started || world !== started.writer || nativeStartFor(account).current !== started || !started.runtime.ready)
+      throw Error('The provisional vessel could not be prepared');
+    lease.update({ label: 'Opening the crossing' });
+    await lease.paint(); if (!lease.current) return;
+    if (world !== started.writer || nativeStartFor(account).current !== started || !started.runtime.ready)
+      throw Error('The provisional vessel changed before presentation');
+    if (!await renderer.renderLoading(started.writer, () => lease.paint(), () => lease.current &&
+      world === started.writer && running && nativeStartFor(account).current === started && started.runtime.ready)) return;
+    await lease.paint();
+  } catch (error) { if (lease.current) reportFatal(error, 'Mu entry'); }
+  finally { lease.finish(); }
 }
 
 /** THE BEGIN PRESS (the start menu's one primary button): a virgin account —
@@ -705,7 +743,7 @@ async function beginPressed(): Promise<void> {
     await startPicked(CLASSES.find(c => c.id === MU_CFG.provisionalClass) ?? CLASSES[0]);
     return;
   }
-  startMu();
+  await startMu();
 }
 // THE DOOR (W7): the menu's Begin is a solo road chosen; the tab forgets the world it was bound for.
 ui.onBeginRun = () => { forgetDoor(); void beginPressed(); };
@@ -789,7 +827,11 @@ async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<
     // loadingScreen stays interactive through the actual first terrain/sprite bake.
     loading.update({ label: 'Opening the world' });
     await loading.paint();
-    if (world === resumed.writer && running && loading.current) { renderer.render(world); await loading.paint(); }
+    if (world === resumed.writer && running && loading.current) {
+      if (!await renderer.renderLoading(resumed.writer, () => loading.paint(),
+        () => world === resumed.writer && running && loading.current && resumed.runtime.ready)) return;
+      await loading.paint();
+    }
   } catch (error) {
     if (published && world === published && running) reportFatal(error, 'continued world entry');
     else if (current()) ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar,
@@ -2937,7 +2979,7 @@ function onClientRunEnd(): void {
   // is a walk, and its wake travels. (Card 14 C: the fall is the run's end.)
   if (net instanceof WsTransport) {
     const url = lastShardUrl, name = lastShardWorld;
-    const toMu = (): void => { resetToLocal(); if (url) writeDoor({ url, ...(name ? { world: name } : {}) }); startMu(); }; // THE DOOR stays bound
+    const toMu = (): void => { resetToLocal(); if (url) writeDoor({ url, ...(name ? { world: name } : {}) }); void startMu(); }; // THE DOOR stays bound
     const fell = shardVessel?.takeDeath(net, world);
     const open = (revealSec = 0): void => { if (fell) ui.showDeath(fell.reck, toMu, revealSec); else toMu(); };
     if (presenting) clientDeath = { open, opened: false }; // clientDeathBeat opens it at the presentation's reveal
@@ -3023,8 +3065,7 @@ function onClientRefused(word: string, mu: boolean): void {
   running = false;
   if (!mu) { toStartMenu(doorWord(word, 'the world would not seat this hero')); return; }
   const url = lastShardUrl, name = lastShardWorld;
-  resetToLocal(); if (url) writeDoor({ url, ...(name ? { world: name } : {}) }); startMu(); // THE DOOR stays bound
-  if (word) world.text(world.player.pos, word, '#d8b87a', 13, undefined, 6);
+  resetToLocal(); if (url) writeDoor({ url, ...(name ? { world: name } : {}) }); void startMu(word); // THE DOOR stays bound
 }
 
 /** CLIENT: the host re-seated us in its new run — rebuild our render shell and
@@ -3044,7 +3085,7 @@ function onDeathDismiss(): void {
     // THE LOOP CLOSES IN MU (data/mu.ts): a solo run's end drifts the player
     // back into the hub between lives — the next vessel is a walk, not a
     // menu. The main menu stays one Esc away from inside Mu.
-    startMu();
+    void startMu();
   }
 }
 

@@ -1,3 +1,17 @@
+Firefox loading follow-up (2026-10-14): local retained fresh/Continue/Mu entry
+now advances between completed native stages under the loading screen. Private
+factory/resume receipts, campaign frames and borrowed policies stay synchronous;
+final adoption and saving have no intervening await. Keep exact account/slot
+leases and cancellation fences, native partial effects, full live geography
+descriptor checks, independent reader state, and original synchronous APIs.
+Immutable geography reuse is bounded and must retain full prototype and native
+serializer provenance checks. Read docs/engine/native-loading-followup-20261014.md
+for measured Firefox acceptance and remaining parity gates. Run its standalone
+checks, original affected native/source probes, all four types, generation and
+real browser/boot courses. Do not edit the historical probe roster, assertions,
+archives, thresholds or negative controls; the exact predecessor adapter preserves
+their original source boundary. No new branch or Shards integration is implied.
+
 Seamless consolidation (2026-10-14): codex/seamless-world-foundation is the
 canonical branch. Local 5a7eac00 and remote cbafcc5b join through genuine merge
 ancestry; the pinned main a2fa4291 is already merged. Read

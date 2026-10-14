@@ -28,6 +28,7 @@ import {NativeAreaSceneTransitionCoordinator,hasNativeAreaSceneTransitionCoordin
 import {NativeAreaScenePreparation} from './nativeAreaScenePreparation';
 import type {NativeAreaOngoingRuntime,NativeAreaSceneOngoing} from './nativeAreaSceneOngoing';
 const serializeHosted=NativeAreaHostedSnapshots.prototype.serialize;
+const creationLoadingActive=Object.getOwnPropertyDescriptor(NativeAreaCharacterCreation.prototype,'loadingActive')!.get!,resumeLoadingActive=Object.getOwnPropertyDescriptor(NativeAreaCharacterResume.prototype,'loadingActive')!.get!;
 const installed=new WeakMap<World,NativeClientRuntime>(),handles=new WeakSet<object>();
 const select=NativeAreaActorAuthority.prototype.selectActors,final=NativeAreaActorAuthority.prototype.assertFinalSelections,present=NativeAreaActorAuthority.prototype.isPresentActor,finalPhysical=NativeAreaActorAuthority.prototype.assertFinalPhysical;
 function own<T>(o:object,key:PropertyKey):T {const d=Object.getOwnPropertyDescriptor(o,key);if(!d||!Object.hasOwn(d,'value'))throw Error('Native client needs ordinary actual data: '+String(key));return d.value as T;}
@@ -48,6 +49,8 @@ export class NativeClientRuntime {
  readonly hosted:NativeAreaHostedSnapshots;
  readonly writer:World;readonly geography:MassNativeGeography;readonly definition:ZoneDef;
  readonly #session:NativeAreaCampaignSession;readonly #authority:NativeAreaActorAuthority<NativeAreaOngoingRuntime>;readonly #coordinator:NativeAreaSceneTransitionCoordinator;readonly #preparation:NativeAreaScenePreparation;
+ readonly #installResumeLoading=NativeAreaCharacterResume.prototype.installLoading;
+ readonly #createCharacterLoading=NativeAreaCharacterCreation.prototype.createLoading;
  readonly #installResume=NativeAreaCharacterResume.prototype.install;readonly #discardResume=NativeAreaCharacterResume.prototype.discard;
  readonly #resume:NativeAreaCharacterResume|undefined;readonly #resumePolicy:ResumeSpawn;
  readonly #creation:NativeAreaCharacterCreation|undefined;readonly #fresh:NativeFreshCharacter|undefined;
@@ -89,10 +92,26 @@ export class NativeClientRuntime {
   try{if(signal?.aborted)throw Error('Native client installation cancelled');this.#live();if(this.#creation&&this.#resume)Reflect.apply(this.#installResume,this.#resume,[this.#preparation,this.#creation,this.#resumePolicy,signal]);else if(this.#creation&&this.#fresh)Reflect.apply(this.#createCharacter,this.#creation,[this.#fresh,signal]);else{const area=this.#preparation.prepare(this.definition.id,this.geography);if(signal?.aborted)throw Error('Native client installation cancelled');this.#live();this.#preparation.birthInitial(area);}if(signal?.aborted)throw Error('Native client installation cancelled');this.#live();this.#state='ready';}
   catch(error){this.#busy=false;this.#retire();throw error;}finally{this.#busy=false;}
  }
+
+ /** Browser preparation yields only after real native stages have returned.
+  * The installer remains unready and rejects a second installation throughout. */
+ async installLoading(pause:(label:string)=>Promise<void>,signal?:AbortSignal):Promise<void> {
+  this.#idle();if(this.#state!=='prepared')throw Error('Native client initial installation was already attempted');this.#state='installing';
+  const check=()=>{this.#live();if(signal?.aborted)throw Error('Native client installation cancelled');};
+  const wait=async(label:string)=>{check();await pause(label);check();};
+  try {
+   check();
+   if(this.#creation&&this.#resume)await Reflect.apply(this.#installResumeLoading,this.#resume,[this.#preparation,this.#creation,this.#resumePolicy,wait,signal]);
+   else if(this.#creation&&this.#fresh)await Reflect.apply(this.#createCharacterLoading,this.#creation,[this.#fresh,wait,signal]);
+   else throw Error('Cooperative initial installation requires its fresh or resumed character owner');
+   check();this.#state='ready';
+  }catch(error){this.#retire();throw error;}
+ }
+
  /** Terminal: retained bindings, tickets, callbacks and memory registrations are
   * revoked by their owners. Raw native gameplay state is not rolled back. */
  retire():readonly string[] {return this.#retire();}
- #retire():readonly string[] {if(this.#state==='retired')return Reflect.apply(this.#close,this.#coordinator,[]);if(this.#busy)throw Error('Native client runtime cannot retire during dispatch');const unrestored=Reflect.apply(this.#close,this.#coordinator,[]);if(this.#creation)Reflect.apply(this.#retireCharacter,this.#creation,[]);if(this.#resume)Reflect.apply(this.#discardResume,this.#resume,[]);this.#state='retired';return unrestored;}
+ #retire():readonly string[] {if(this.#state==='retired')return Reflect.apply(this.#close,this.#coordinator,[]);if(this.#busy||this.#creation&&Reflect.apply(creationLoadingActive,this.#creation,[])||this.#resume&&Reflect.apply(resumeLoadingActive,this.#resume,[]))throw Error('Native client runtime cannot retire during dispatch');const unrestored=Reflect.apply(this.#close,this.#coordinator,[]);if(this.#creation)Reflect.apply(this.#retireCharacter,this.#creation,[]);if(this.#resume)Reflect.apply(this.#discardResume,this.#resume,[]);this.#state='retired';return unrestored;}
  #seat(seat:Seat):SeatSelection {
   this.#live();const rows=roster(this.writer);if(!member(rows,seat))throw Error('Native client input seat left campaign');const body=own<Actor>(seat,'actor'),id=own<string>(seat,'id');
   const selection=Reflect.apply(select,this.#authority,[[body],false]);if(selection.length!==1)throw Error('Native client input requires one physical owner');const area=this.#coordinator.areaFor(selection[0].owner.combat);
