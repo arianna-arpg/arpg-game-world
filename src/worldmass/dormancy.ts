@@ -2,6 +2,8 @@ import {nativeQuietAnatomy,nativeQuietAnatomyNear} from './nativeQuietAnatomy';
 import { MONSTERS } from '../data/monsters';
 import { tellSpecsOf } from '../engine/tells';
 import { canonical } from './random';
+import { isOwnedTerrainRecord } from './ownedTerrain';
+import { scanOwnedDependencyCache } from './ownedDependencyCache';
 import { Actor } from '../engine/actor';
 import { MassObserverIndex } from './foci';
 import { StatSheet } from '../engine/stats';
@@ -51,6 +53,9 @@ const dependencyKeys = new Set([...entityKeys].filter(k=>!['aiHitById','lastFoeI
  * Weak membership neither retains terrain history nor needs a mutation epoch:
  * every property of a certified graph is a frozen data descriptor. */
 const dependencyFreeData=new WeakSet<object>();
+// One stable domain per scanner; independent proof scanners cannot share its
+// approvals. Cache rows are approved only after the ordinary visit succeeds.
+const hasDependencyFreeCertificate=(value:object):boolean=>dependencyFreeData.has(value);
 function isDependencyFreeData(value:object,active?:Set<object>,budget?:{left:number}):boolean {
   if(dependencyFreeData.has(value))return true;
   const proto=Object.getPrototypeOf(value);
@@ -59,7 +64,21 @@ function isDependencyFreeData(value:object,active?:Set<object>,budget?:{left:num
   if(--budget.left<0||active.size>=64||active.has(value))return false;
   active.add(value);
   try {
-    for(const [key,descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))){
+    if(isOwnedTerrainRecord(value)){
+      // Only descriptors are avoided. Numeric references, recursive work limits,
+      // active depth and certificate memo effects remain exactly as before.
+      for(const key of Object.keys(value)){
+        const child:unknown=(value as Record<string,unknown>)[key];
+        if(typeof child==='number'&&dependencyKeys.has(key))return false;
+        if(child!==null&&typeof child==='object'&&!isDependencyFreeData(child,active,budget))return false;
+      }
+      dependencyFreeData.add(value);return true;
+    }
+    // Keep descriptor inspection even for freezeData values: a frozen proxy
+    // can still have effectful get traps. Avoid only the temporary entry pairs.
+    const descriptors=Object.getOwnPropertyDescriptors(value);
+    for(const key of Object.keys(descriptors)){
+      const descriptor=descriptors[key];
       if(!descriptor.enumerable)continue;
       // Inspection never invokes getters. Fallback keeps the original scanner
       // semantics, including one ordinary read of an enumerable accessor.
@@ -294,7 +313,16 @@ export function restoreNativeActorState(actor: Actor, saved: NativeActorState,
     throw Error('Invalid native checkpoint body');
   for(const key of Object.keys(next))if(rootExcluded.has(key)||typeof Reflect.get(actor,key)==='function')
     throw Error('Native checkpoint cannot replace identity or behavior');
-  for(const key of Object.keys(actor))if(!rootExcluded.has(key))Reflect.deleteProperty(actor,key);
+  // Keep the factory body's property layout for fields the checkpoint replaces.
+  // Deleting and re-adding those fields needlessly puts every restored native
+  // into dictionary mode. Keep only an already ordered prefix so assignment
+  // also reproduces the checkpoint's enumeration order. Absent/out-of-order
+  // fields still disappear, including absence versus an own undefined field.
+  const nativeRestoreKeys=Object.keys(next);let nativeRestorePrefix=0;
+  for(const key of Object.keys(actor))if(!rootExcluded.has(key)){
+    if(key===nativeRestoreKeys[nativeRestorePrefix])nativeRestorePrefix++;
+    else Reflect.deleteProperty(actor,key);
+  }
   Object.assign(actor,next);
 }
 
@@ -306,15 +334,19 @@ export function massDormancyPins(world: World, owned: ReadonlyMap<string,Actor>,
   excludedOwners: ReadonlySet<object> = new Set()): Set<Actor> {
   const native=new Set(owned.values()), ids=new Map([...native].map(a=>[a.id,a]));
   const pinned=new Set<Actor>(), seen=new Set<object>([world]);
+  const visitCacheEntry=(k:unknown,v:unknown):void=>{if(typeof k==='number'){const a=ids.get(k);if(a)pinned.add(a);}else if(k!==null&&typeof k==='object')visit(k);if(v!==null&&typeof v==='object')visit(v);};
   const visit=(value:unknown,key=''):void=> {
     if(typeof value==='number' && dependencyKeys.has(key)) {const a=ids.get(value);if(a)pinned.add(a);return;}
     if(!value||typeof value!=='object'||seen.has(value)||excludedOwners.has(value))return;
     if(value instanceof Actor){if(native.has(value))pinned.add(value);return;}
-    seen.add(value);
     if(isDependencyFreeData(value))return;
+    // Certified immutable graphs already have permanent cycle-free coverage;
+    // only graphs we actually traverse need the per-query seen set.
+    seen.add(value);
+    if(scanOwnedDependencyCache(value,visitCacheEntry,hasDependencyFreeCertificate))return;
     if(value instanceof WeakMap||value instanceof WeakSet){for(const a of native)if(value.has(a))pinned.add(a);return;}
-    if(value instanceof Map){for(const [k,v]of value){if(typeof k==='number'){const a=ids.get(k);if(a)pinned.add(a);}else visit(k);visit(v);}return;}
-    if(value instanceof Set){for(const v of value){if(typeof v==='number'){const a=ids.get(v);if(a)pinned.add(a);}else visit(v);}return;}
+    if(value instanceof Map){for(const [k,v]of value){if(typeof k==='number'){const a=ids.get(k);if(a)pinned.add(a);}else if(k!==null&&typeof k==='object')visit(k);if(v!==null&&typeof v==='object')visit(v);}return;}
+    if(value instanceof Set){for(const v of value){if(typeof v==='number'){const a=ids.get(v);if(a)pinned.add(a);}else if(v!==null&&typeof v==='object')visit(v);}return;}
     for(const [k,v]of Object.entries(value))visit(v,k);
   };
   for(const [key,value] of Object.entries(world)) {

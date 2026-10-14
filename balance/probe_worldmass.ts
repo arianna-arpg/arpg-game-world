@@ -48,6 +48,16 @@ test('generation lattice does not depend on address-page representation', () => 
     assert.deepEqual(latticeAt(a, 240, 557), latticeAt(b, 960, 557));
   }
 });
+
+test('validated cell cache preserves the full domain and rejects malformed inputs after churn', () => {
+  const edges = ['0', '-9223372036854775808', '9223372036854775807', '9007199254740993'];
+  for (let pass = 0; pass < 2; pass++) {
+    for (const text of edges) assert.equal(cellInteger(text), BigInt(text));
+    for (let i = -5000; i < 5000; i++) assert.equal(cellInteger(String(i)), BigInt(i));
+    for (const bad of ['-0', '00', '+1', '1.0', ' 1', '1e3', '9223372036854775808', '-9223372036854775809', 0, null, {}, new String('0')])
+      assert.throws(() => cellInteger(bad as string));
+  }
+});
 test('manifest validation and stream isolation', () => {
   assert.equal(canonical({ b: 1, a: [2, 3] }), canonical({ a: [2, 3], b: 1 }));
   for (const v of [undefined, NaN, Infinity, new Map(), { a: undefined }, [undefined]]) assert.throws(() => canonical(v));

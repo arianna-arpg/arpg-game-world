@@ -7,6 +7,8 @@ import { WildernessPaths } from '../src/worldmass/wildernessPaths';
 import { address, moveAddress } from '../src/worldmass/address';
 import { canonical } from '../src/worldmass/random';
 import { cooperativePreparation } from '../src/loading/cooperative';
+import { WorldMassRuntime } from '../src/worldmass/runtime';
+import { captureTerrainPreparationSource, createTerrainPreparationCompiler, validateTerrainPreparationReply, terrainPreparationGeneratorMatches } from '../src/worldmass/terrainPreparation';
 
 const seed = 713, runId = 'expedition:713', control = { isCurrent: () => true };
 const opening = await prepareMassOpening({ seed, runId }, control);
@@ -35,7 +37,21 @@ const loadingPaths = new WildernessPaths(pathsSpec, direct, () => true, () => fa
 for (const _ of loadingPaths.prepareSteps(center, true)) {}
 assert.ok(warmed > 0, 'held preparation warms eligible admission queries');
 assert.equal(canonical(loadingPaths.at(center)),canonical(lazyPaths.at(center)));
-console.log('PASS worker-issued opening data preserves default terrain and refuses foreign/mutable cache admission');
+const integrated=new WorldMassRuntime(seed,runId,opening.config,undefined,opening);
+try {
+ assert.equal(integrated.generator.spec,opening.config.terrain,'runtime retains the issued browser opening identity');
+ const at=address(opening.origin.dimension,opening.origin.cx,opening.origin.cy,config.terrain.terrainCell/2,config.terrain.terrainCell/2,config.terrain.addressSpan);
+ assert.equal(canonical(integrated.generator.terrainAt(at)),canonical(direct.terrainAt(at)));
+ const adopted=integrated.generator.openingCache();
+ for(const [key,value] of opening.terrainCache.candidates)assert.deepEqual(adopted.candidates.find(([k])=>k===key)?.[1],value,'runtime adopts opening candidate memo');
+ const source=captureTerrainPreparationSource(integrated.generator);assert(source,'browser-prepared generator can issue the optional Node base-terrain source');
+ assert(terrainPreparationGeneratorMatches(integrated.generator,source));
+ const job={protocol:1 as const,sourceId:source.sourceId,token:1,addresses:[at]};
+ const reply=createTerrainPreparationCompiler(source).prepare(job),values=validateTerrainPreparationReply(source,job,reply);assert(values?.[0]);
+ assert.equal(canonical(values[0]),canonical(direct.baseTerrainAt(at)),'both preparation paths resolve the exact same base terrain');
+ assert.throws(()=>new WorldMassRuntime(seed,runId,forged.config,undefined,forged),/Foreign/);
+} finally {integrated.dispose();}
+console.log('PASS browser opening caches and optional Node terrain source coexist with exact terrain and foreign-proof refusal');
 
 let current = true, closed = false, scoped = false, ticks = 0;
 const ticker = setInterval(() => { assert.equal(scoped, false, 'global policies must be released before yielding'); ticks++; current=false; }, 0);

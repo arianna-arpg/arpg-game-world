@@ -139,7 +139,9 @@ export function dealMassBounties(world: World, board: string, beat: number, sequ
   const offers = current.filter(p => p.locked && p.massBounty);
   const preserved = new Set(offers.map(p => p.id));
   const occupied = new Set([...offers, ...hands].map(p => p.massBounty?.id));
-  const rng = new Rng(massHash(canonical([mass.generator.run.seed, mass.config.bounties!.source, board, beat, sequence])));
+  const who = world.questCharKey(), handLevel = world.questHandLevel();
+  const character = who ? [who] : [];
+  const rng = new Rng(massHash(canonical([mass.generator.run.seed, mass.config.bounties!.source, board, beat, sequence, ...character])));
   const weights = BOUNTY_BOARD_CFG.lanes.weights;
   const slate=canonical([beat,sequence]),limit=mass.config.bounties!.maxCandidates;
   const destinations=massBountyCandidates(world,slate).map(place=>massBountyDestination(mass,targetOf(mass,place))!);
@@ -148,7 +150,7 @@ export function dealMassBounties(world: World, board: string, beat: number, sequ
       objective:{kind:row.kind,definitionHash:row.definitionHash}};
     const d=massBountyDestination(mass,target);if(d)destinations.push(d);
   }
-  const candidates=destinations.filter(d=>!occupied.has(d.target.id)&&d.level<=world.player.level+BOUNTY_BOARD_CFG.routes.challengeAbove)
+  const candidates=destinations.filter(d=>!occupied.has(d.target.id)&&d.level<=handLevel+BOUNTY_BOARD_CFG.routes.challengeAbove)
     .sort((a,b)=>massHash(slate+a.target.id)-massHash(slate+b.target.id)||a.target.id.localeCompare(b.target.id)).slice(0,limit);
   // Rotate ask families per slate, then take distinct physical destinations.
   const kinds: Kind[] = [...MASS_BOUNTY_KINDS];
@@ -158,11 +160,11 @@ export function dealMassBounties(world: World, board: string, beat: number, sequ
     const pool=candidates.filter(d=>!occupied.has(d.target.id)&&destinationCapable(mass,d,kind)
       &&!massBountyDone(world,{kind,massBounty:d.target} as BountyPosting));
     if (!pool.length) continue;
-    const manageable = pool.filter(p => p.level <= world.player.level);
+    const manageable = pool.filter(p => p.level <= handLevel);
     const place = rng.pick(offers.length < BOUNTY_BOARD_CFG.routes.manageableSeats && manageable.length ? manageable : pool);
     const level = place.level;
     const massBounty = place.target;
-    offers.push({ id: 'country_bounty:' + canonical([mass.generator.run.runId, board, beat, sequence, kind, place.target.id]),
+    offers.push({ id: 'country_bounty:' + canonical([mass.generator.run.runId, board, beat, sequence, kind, place.target.id, ...character]),
       boardId: board, zoneId: MASS_ZONE, beat, kind, massBounty,
       pay: rollBudgetBountyPay({ pickGemId }, rng, level, weights) });
     occupied.add(place.target.id);

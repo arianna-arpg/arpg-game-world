@@ -37,15 +37,8 @@ const approach=(seed:number,side:number,prior:boolean)=>{
 };
 for(const [seed,side] of [[42,1],[451,0],[7108,3]]){
  const before=approach(seed,side,true),after=approach(seed,side,false);
- if(seed===451){
-  // Current country placement already commits this approach under the old rule.
-  // Keep it as a neutral control: the authored muster must not impair engagement.
-  assert.ok(before.meleeCasts>=4&&before.closeSec>6,'neutral approach already sustains native melee');
-  assert.ok(after.meleeCasts>=before.meleeCasts&&after.closeSec>=before.closeSec,'already-committed approach does not regress');
- }else{
-  assert.ok(after.meleeCasts>=before.meleeCasts+4,'native hunters answer with attacks instead of repeated circling');
-  assert.ok(after.closeSec>before.closeSec+2,'melee engagement is sustained, not merely one earlier cast');
- }
+ assert.ok(after.meleeCasts>=before.meleeCasts+4,'native hunters answer with attacks instead of repeated circling');
+ assert.ok(after.closeSec>before.closeSec+2,'melee engagement is sustained, not merely one earlier cast');
  assert.ok(after.shots>=1,'the ordinary bone-thrower still contributes');
  console.log('PASS generated camp '+seed+': melee casts '+before.meleeCasts+' → '+after.meleeCasts
   +'; close time '+before.closeSec.toFixed(2)+' → '+after.closeSec.toFixed(2)+' seconds');

@@ -14,6 +14,9 @@ import type { MassResidentResume } from '../meta/characterResume';
 import type { CharacterPageEntry } from '../meta/characterPages';
 import { stageNativeCohort, hydrateNativeCohortData } from './nativePaging';
 import { createNativeFeatureWarmQueue, type NativeFeatureWarmQueue } from './nativeWarm';
+import { createTerrainWarmQueue, terrainPreparationCenters, type TerrainWarmQueue } from './terrainWarm';
+import { createTerrainPreparationGenerator } from './terrainPreparation';
+import { installTerrainBasePreparation } from './terrainBasePreparation';
 import { MassStorm, type MassStormSave } from './storm';
 import { MassSnow, type MassSnowSave } from './snow';
 import { MassWeather, type MassWeatherSave } from './weather';
@@ -127,9 +130,10 @@ export interface NativeReadiness {
 export interface MassResumePreparation {
   isCurrent():boolean|Promise<boolean>; signal?:AbortSignal;
 }
-/** First engine adapter. Residency NEVER tears down the World, its actors, or
- * in-flight skills. The population cap is deliberately conservative until full
- * dependency-aware dormancy exists: wounded/engaged bodies are never discarded. */
+/** A transient host admission budget, excluded from config, digests and saves. */
+export interface MassPopulationBudget { total: number; floor: number }
+/** First engine adapter. Residency never tears down the world or in-flight skills;
+ * wounded and engaged bodies remain owned even when admission is over budget. */
 export class WorldMassRuntime {
   readonly massFoci = new MassFoci();
   private massFociInitialized = false;
@@ -152,6 +156,11 @@ export class WorldMassRuntime {
   snow: MassSnow | null = null;
   storms: MassStorm | null = null;
   nativeWarm: NativeFeatureWarmQueue | null = null;
+  terrainWarm: TerrainWarmQueue | null = null;
+  private terrainWarmAttempted = false;
+  private nextTerrainWarm = 0;
+  private terrainWarmKey = '';
+  private terrainWarmFrom = new Map<string,{x:number;y:number}>();
   private nextNativeWarm = 0;
   private warmFrom = new Map<string,{x:number;y:number}>();
   private nativeHost: MassNativeHost | null = null;
@@ -190,6 +199,25 @@ export class WorldMassRuntime {
   }
   private hasNative(id:string):boolean{return this.natives.has(id)||this.paged.has(id);}
   private cacheOpened: (source: string) => boolean = () => false;
+  private populationBudget: Readonly<MassPopulationBudget> | null = null;
+  /** Host-only admission limit; lowering never retires an existing body. */
+  setPopulationBudget(budget: MassPopulationBudget | null): void {
+    if (budget !== null && (!Number.isSafeInteger(budget.total) || budget.total < 0
+      || !Number.isSafeInteger(budget.floor) || budget.floor < 0 || budget.floor > this.config.maxPopulation))
+      throw Error('Invalid population budget');
+    this.populationBudget = budget === null ? null : Object.freeze({ total: budget.total, floor: budget.floor });
+  }
+  private populationPerGroup(groups: number): number {
+    const budget = this.populationBudget;
+    return budget === null ? this.config.maxPopulation
+      : Math.max(budget.floor, Math.min(this.config.maxPopulation, Math.floor(budget.total / Math.max(1, groups))));
+  }
+  populationStats(): { total: number; groups: { members: readonly string[]; live: number; limit: number }[] } {
+    const slots = this.massPopulationSlots(), total = this.population;
+    const groups = this.massFoci.groups, limit = this.populationPerGroup(this.massFociInitialized ? groups.length : 1);
+    return { total, groups: groups.map((group, index) => ({ members: group.map(f => f.id),
+      live: slots.reduce((n, row) => n + (this.massFoci.groupAt(row.pos) === index ? row.count : 0), 0), limit })) };
+  }
   private nearKey = '';
   private dangerCache = new Map<string, number>();
   private nextPopulation = 0;
@@ -202,6 +230,8 @@ export class WorldMassRuntime {
   private readiness:Readonly<NativeReadiness>=Object.freeze({status:'ready',pending:0,required:0,retryable:false});
   get resumePending():boolean{return this.restoring;}
   private places = new Map<string, ReturnType<MassGenerator['placesInCell']>>();
+  private reservationCandidates: { journey: MassJourney | null; places: readonly MassPlace[] | undefined;
+    reserve: boolean; nearby: boolean; rows: ReadonlyMap<string, MassPlace> } | null = null;
   readonly origin: MassCell;
   readonly resumeTier: number;
   constructor(seed: number, runId: string, config: MassAdventure = massAdventure(), input?: MassRuntimeRestore, opening?: PreparedMassOpening) {
@@ -229,7 +259,7 @@ export class WorldMassRuntime {
     this.puzzles = new MassPuzzles(save?.puzzles, config.puzzleResidency);
     if (config.dormancy) validateMassDormancy(config.dormancy, config.populationRadius);
     this.dormancy = config.dormancy ? new MassDormancy(config.dormancy) : null;
-    this.generator = new MassGenerator(save?.state.run ?? opening?.run ?? makeMassRun(seed, runId, config.terrain), config.terrain, opening);
+    this.generator = createTerrainPreparationGenerator(save?.state.run ?? opening?.run ?? makeMassRun(seed, runId, config.terrain), config.terrain, opening);
     if (opening) this.generator.adoptOpeningCache(opening);
     if (config.settlement?.location !== undefined) validateMassOrigin(config.settlement.location, config.terrain);
     this.origin = Object.freeze(save ? { ...save.origin } : opening ? { ...opening.origin } : chooseMassOrigin(this.generator, config.settlement?.location).origin);
@@ -737,37 +767,50 @@ export class WorldMassRuntime {
     return content.levels.find(row => row.level === level)!;
   }
   private populationCount(place: Pick<MassPlace,'id'|'content'|'center'>): number {
-    return massFormation(this.populationFor(place).encounters,this.generator.run.seed,place.id)?.seats.length
-      ?? ambientCohort(this.config.content.find(c=>c.id===place.content)!.ambientPack,this.populationFor(place),this.generator.run.seed,place.id)?.length
+    const population=this.populationFor(place);
+    return massFormation(population.encounters,this.generator.run.seed,place.id)?.seats.length
+      ?? ambientCohort(this.config.content.find(c=>c.id===place.content)!.ambientPack,population,this.generator.run.seed,place.id)?.length
       ?? this.config.content.find(c=>c.id===place.content)!.count;
+  }
+  /** Cache only immutable candidate identities, never live missing-seat counts.
+   * The map is bounded by current pages plus the finite opening journey. */
+  private populationReservations(): ReadonlyMap<string, MassPlace> {
+    const journey=this.journey,places=journey?.places;
+    const reserve=!!journey?.spec.reservePopulation,nearby=!!journey?.spec.nearbyReservations;
+    const cached=this.reservationCandidates;
+    if(cached&&cached.journey===journey&&cached.places===places&&cached.reserve===reserve&&cached.nearby===nearby)return cached.rows;
+    const rows=new Map((reserve?places??[]:[]).map(p=>[p.id,p]));
+    if(nearby)for(const page of this.places.values())for(const p of page)
+      if(this.config.content.find(c=>c.id===p.content)?.site)rows.set(p.id,p);
+    this.reservationCandidates={journey,places,reserve,nearby,rows};return rows;
   }
   /** Only still-needed seats reserve space: never evict, respawn or heal a body. */
   private reservedPopulation(except: string, at?:Vec2): number {
     let missing = at&&this.massFoci.groups.length>1 ? this.massFoci.populationAt(at,this.geography?.massReservationSlots(except)??[])
       : this.geography?.reservedPopulation(except)??0;
     const focusDistance=(q:Vec2)=>this.massFoci.distance(q);
-    const nearbyReservations=new Map((this.journey?.spec.reservePopulation?this.journey.places:[]).map(p=>[p.id,p]));
-    if(this.journey?.spec.nearbyReservations)for(const rows of this.places.values())for(const p of rows)
-      if(this.config.content.find(c=>c.id===p.content)?.site)nearbyReservations.set(p.id,p);
-    const distance=(place:MassPlace)=>{
-      const q=localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
-      return Math.max(0,focusDistance(q)-place.radius);
-    };
+    const nearbyReservations=this.populationReservations();
     const current=this.journey?.spec.nearbyReservations?nearbyReservations.get(except):undefined;
     // Existing native geographic owners have first claim on their own complete
     // admission. Ordinary nearbyReservations cannot deadlock that admission.
     if(this.journey?.spec.nearbyReservations&&except&&!current)return missing;
+    const origin={...this.origin,x:0,y:0},span=this.config.terrain.addressSpan;
+    const atGroup=at&&this.massFoci.groups.length>1?this.massFoci.groupAt(at):undefined;
+    const currentPos=current?localOffset(current.center,origin,span):undefined;
+    const currentGroup=currentPos?this.massFoci.groupAt(currentPos):undefined;
+    const currentDistance=current?Math.max(0,focusDistance(currentPos!)-current.radius):0;
     for (const place of nearbyReservations.values()) {
       if (place.id === except) continue;
-      const pos=localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
-      if(at&&this.massFoci.groups.length>1&&this.massFoci.groupAt(at)!==this.massFoci.groupAt(pos))continue;
+      const pos=localOffset(place.center,origin,span);
+      const group=atGroup!==undefined||current?this.massFoci.groupAt(pos):undefined;
+      if(atGroup!==undefined&&atGroup!==group)continue;
+      const focusRange=current||this.journey?.spec.nearbyReservations?focusDistance(pos):0,distance=Math.max(0,focusRange-place.radius);
       // nearbyReservations fund the closest real destination first. Two large
       // neighboring courts must not reserve one another out of existence.
-      if(current&&this.massFoci.groupAt(pos)===this.massFoci.groupAt(localOffset(current.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan))
-        &&(distance(place)>distance(current)||distance(place)===distance(current)&&place.id>current.id))continue;
+      if(current&&group===currentGroup
+        &&(distance>currentDistance||distance===currentDistance&&place.id>current.id))continue;
       if(this.journey?.spec.nearbyReservations){
-        const q=localOffset(place.center,{...this.origin,x:0,y:0},this.config.terrain.addressSpan);
-        if(focusDistance(q)>(this.dormancy?.policy.sleepRadius??this.config.populationRadius)+this.config.populationRadius+place.radius)continue;
+        if(focusRange>(this.dormancy?.policy.sleepRadius??this.config.populationRadius)+this.config.populationRadius+place.radius)continue;
       }
       const site = this.config.content.find(c=>c.id===place.content)!.site;
       const ids = [...Array.from({length:this.populationCount(place)},(_,i)=>canonical([place.id,i])),
@@ -779,19 +822,47 @@ export class WorldMassRuntime {
     return missing;
   }
   /** Actual free seats, including every other funded activity's future needs. */
-  availablePopulation(exceptOwner='',at?:{x:number;y:number}):number{return Math.max(0,this.populationLimit(exceptOwner,at)-this.population);}
+  availablePopulation(exceptOwner='',at?:{x:number;y:number}):number{
+    const total=this.population;return Math.max(0,this.populationLimitFor(exceptOwner,at,total)-total);
+  }
   populationLimit(exceptOwner='',at?:{x:number;y:number}):number{
-    const groups=this.massFociInitialized?this.massFoci.groups.length:1,total=this.population;
-    const global=this.config.maxPopulation*groups;
+    return this.populationLimitFor(exceptOwner,at,this.population);
+  }
+  private populationLimitFor(exceptOwner:string,at:Vec2|undefined,total:number):number{
+    const groups=this.massFociInitialized?this.massFoci.groups.length:1;
+    const perGroup=this.populationPerGroup(groups),global=perGroup*groups;
     if(groups<=1||!at)return global-this.reservedPopulation(exceptOwner);
     const slots=this.massPopulationSlots(),unlocated=Math.max(0,total-slots.reduce((n,r)=>n+r.count,0));
     // Each distant group funds its own destinations. Charging every other
     // group's unissued reservations here can deadlock all neighborhoods.
-    return Math.min(global,total+this.config.maxPopulation-this.massFoci.populationAt(at,slots)-unlocated-this.reservedPopulation(exceptOwner,at));
+    return Math.min(global,total+perGroup-this.massFoci.populationAt(at,slots)-unlocated-this.reservedPopulation(exceptOwner,at));
   }
   /** Worker descriptors are suggestions until the authoritative residency validates
    * them. Retire the worker whenever its owning world or surface is discarded. */
-  dispose():void { this.disposed=true;this.nativeWarm?.dispose();this.geography?.dispose(); }
+  dispose():void { this.disposed=true;this.nativeWarm?.dispose();this.terrainWarm?.dispose();installTerrainBasePreparation(this.generator);this.geography?.dispose(); }
+  private prepareTerrain(world:World,foci:readonly MassFocus[]):void {
+    if(world.massRenderPages||this.disposed)return;
+    if(!this.terrainWarmAttempted){
+      if(!foci.length)return;
+      this.terrainWarmAttempted=true;this.terrainWarm=createTerrainWarmQueue(this.generator);
+      if(this.terrainWarm)installTerrainBasePreparation(this.generator,at=>this.terrainWarm!.take(at));
+    }
+    const queue=this.terrainWarm;if(!queue||queue.disposed||world.time<this.nextTerrainWarm)return;
+    this.nextTerrainWarm=world.time+.5;
+    const centers=foci.map(f=>{
+      const before=this.terrainWarmFrom.get(f.id),dx=before?f.pos.x-before.x:0,dy=before?f.pos.y-before.y:0,length=Math.hypot(dx,dy);
+      this.terrainWarmFrom.set(f.id,{...f.pos});
+      const at=this.walk.at(f.pos.x,f.pos.y);let ahead=at;
+      if(length>1)try{ahead=this.walk.at(f.pos.x+dx/length*600,f.pos.y+dy/length*600);}catch(error){if(!(error instanceof RangeError))throw error;}
+      return {at,ahead};
+    });
+    for(const id of this.terrainWarmFrom.keys())if(!foci.some(f=>f.id===id))this.terrainWarmFrom.delete(id);
+    const cell=this.generator.spec.terrainCell,key=JSON.stringify(centers.map(row=>[row.at,row.ahead].map(at=>[at.dimension,at.cx,at.cy,Math.floor(at.x/cell),Math.floor(at.y/cell)])));
+    if(key!==this.terrainWarmKey){
+      this.terrainWarmKey=key;
+      queue.offer(terrainPreparationCenters(centers,this.generator.spec.addressSpan,cell,queue.config.maxQueued));
+    }else queue.advance();
+  }
   private prepareNativeCountry(world:World):void {
     const queue=this.nativeWarm,features=this.nativeFeatures,country=this.nativeCountry;
     if(!queue||!features||!country||queue.stats.disposed)return;
@@ -836,10 +907,12 @@ export class WorldMassRuntime {
     const foci=input??massPlayerFoci(world,boot);this.explicitMassFoci=input!==undefined;
     this.massFoci.set(foci,this.config.populationRadius);this.massFociInitialized=true;
     this.stream.setFocusCount(foci.length);
+    this.walk.setFocusCount(foci.length);
     this.fields.massFocusCount=this.shrines.massFocusCount=this.puzzles.massFocusCount=Math.max(1,foci.length);
     if(this.geography){this.geography.objectives.massFocusCount=this.geography.caravans.processions.massFocusCount=Math.max(1,foci.length);}
     this.nativeFeatures?.setFocusCount(Math.max(1,foci.length));
-    if(!foci.length){this.stream.request([]);this.places.clear();this.nearKey='';return;}
+    this.prepareTerrain(world,foci);
+    if(!foci.length){this.stream.request([]);this.places.clear();this.reservationCandidates=null;this.nearKey='';return;}
     if(boot||world.time>=this.nextPopulation)this.geography?.restoreResidentOwners(world);
     else this.geography?.restoreProcessions(world);
     this.geography?.prepare(this.walk.at(foci[0].pos.x,foci[0].pos.y),world.time,foci.slice(1).map(f=>this.walk.at(f.pos.x,f.pos.y)));
@@ -857,11 +930,11 @@ export class WorldMassRuntime {
       const cells=this.massFoci.pages(p=>this.walk.at(p.x,p.y),this.config.pageRadius);
       this.stream.request(cells);
       const wanted=new Set(cells.map(cellKey));
-      for (const k of this.places.keys()) if (!wanted.has(k)) this.places.delete(k);
+      for (const k of this.places.keys()) if (!wanted.has(k)) {this.places.delete(k);this.reservationCandidates=null;}
       for (const cell of cells) {
         if (boot && this.wildernessPaths) yield* this.wildernessPaths.prepareSteps({ ...cell, x: 0, y: 0 }, true);
         const k = cellKey(cell);
-        if (!this.places.has(k)) this.places.set(k, this.placesInCell(cell));
+        if (!this.places.has(k)) {this.places.set(k, this.placesInCell(cell));this.reservationCandidates=null;}
         yield;
       }
       for(const cell of focusCells)this.state.claim('explored',cellKey(cell));

@@ -2,16 +2,16 @@
  * Browser builds never import Node; a dedicated host installs its adapter before
  * constructing a runtime. A port belongs to one queue and dies with that queue. */
 import { canonical, freezeData, isMassFrozenData } from './random';
-export type MassCompiler = 'native' | 'geographic' | 'procession';
+export type MassCompiler = 'native' | 'geographic' | 'procession' | 'terrain';
 export interface MassCompilePort {
   onmessage: ((event: MessageEvent<any>) => void) | null;
   onerror: ((event: ErrorEvent) => void) | null;
   postMessage(job: any): void;
   terminate(): void;
 }
-let factory: ((kind: MassCompiler) => MassCompilePort) | undefined;
+let factory: ((kind: MassCompiler) => MassCompilePort | undefined) | undefined;
 const massCompileInputs=new WeakMap<object,Map<string,object>>();
-export function installMassCompilePort(create: (kind: MassCompiler) => MassCompilePort): void { factory = create; }
+export function installMassCompilePort(create: (kind: MassCompiler) => MassCompilePort | undefined): void { factory = create; }
 export function massCompilePort(kind: MassCompiler): MassCompilePort | undefined { return factory?.(kind); }
 /** Snapshot dynamic input while sharing a genuinely immutable terrain source.
  * Untrusted/mutable callers still receive the ordinary deep-detached copy. */

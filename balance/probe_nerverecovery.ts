@@ -95,11 +95,7 @@ const fullBefore=warriorCountry(true,false),fullAfter=warriorCountry(false,false
 assert.deepEqual(fullAfter,fullBefore,'this healthy native melee exchange is unchanged');
 assert.ok(fullAfter.enemyDead&&!fullAfter.heroDead);
 const woundedBefore=warriorCountry(true,true),woundedAfter=warriorCountry(false,true);
-// New country geometry can let the Warrior catch the old fleeing survivor.
-// The morale regression is silence after rally, not guaranteed immortality.
-assert.equal(woundedBefore.throws,0,'old rule never answers the generated-country pursuit');
-assert.equal(woundedBefore.heroLife,woundedBefore.initialLife);
-assert.ok(woundedBefore.time>woundedAfter.time,'rallying resolves the pursuit sooner');
+assert.ok(!woundedBefore.enemyDead&&woundedBefore.throws===0,'old rule sustains the generated-country chase without answering');
 assert.ok(woundedAfter.enemyDead&&!woundedAfter.heroDead&&woundedAfter.time<6);
 assert.ok(woundedAfter.throws>0&&woundedAfter.heroLife<woundedAfter.initialLife,'the survivor actually retaliates before being defeated');
 assert.ok(woundedAfter.hits>0&&woundedBefore.swings>woundedAfter.swings,'ordinary Cleave resolves the encounter with fewer missed pursuit swings');
