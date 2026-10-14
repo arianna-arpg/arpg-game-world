@@ -20,8 +20,8 @@ export async function prepareNativeCharacterContinue(account:Account,resume:Char
  if(resume.kind!=='inline')throw Error('This save has no recorded retained geography envelope; migration is required and the save was not changed');
  const bound=soloResumeRefusal(resume.save);if(bound)throw Error(bound);
  const wait=async(label:string)=>{if(!current())throw Error('Continue was superseded');if(options.loadingStage)await options.loadingStage(label);if(!current())throw Error('Continue was superseded');};
- await wait('Reading the recorded world');
  const record=readNativeRetainedSave(resume.save);
+ await wait('Reading the recorded world');
  if(options.loadingStage)await options.loadingStage('Restoring the recorded world');if(!current())throw Error('Continue was superseded');
  const writer=World.staged(structuredClone(account),Object.freeze(record.manifest));let runtime:NativeClientRuntime|undefined,published=false,discarded=false;
  const discard=()=>{if(published||discarded)return;discarded=true;if(runtime)Reflect.apply(retire,runtime,[]);};
@@ -31,7 +31,7 @@ export async function prepareNativeCharacterContinue(account:Account,resume:Char
   runtime=new NativeClientRuntime({writer,definition:writer.zoneMap[START_ZONE],geography:record.geography.spec,...record.catalog?{catalog:record.catalog.spec}:{},resume:restore,resumePolicy:options.spawn});
   if(options.loadingStage){await wait('Restoring your starting ground');await Reflect.apply(installLoading,runtime,[wait,options.signal]);}
   else writer.withGlobalPolicies(()=>Reflect.apply(install,runtime!,[options.signal]));
-  if(options.loadingStage)await options.loadingStage('Restoring your journey');
+  if(options.loadingStage)await wait('Restoring retained area ownership');
   if(!current()||!await characterResumeCurrent(resume)||!current())throw Error('Continue was superseded');
   const ready=runtime;
   return {writer,runtime:ready,discard,publish:()=>{if(discarded||published||!current())throw Error('Continue was superseded');if(!writer.publishResumeAccount(account,baseline))throw Error('The account changed during Continue');published=true;return Object.freeze({writer,runtime:ready});}};
