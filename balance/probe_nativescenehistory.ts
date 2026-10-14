@@ -7,7 +7,7 @@ import {readFileSync as readActorSource} from 'node:fs';
 assertHistoricalActorSlots(readActorSource(new URL('../src/engine/actor.ts',import.meta.url),'utf8'));
 assertMainCastActorSlot(readActorSource(new URL('../src/engine/actor.ts',import.meta.url),'utf8'));
 import {assertHistoricalCleaveSource,beforeHistoricalCleaveReceipt} from './nativeHistoricalCleaveReceipt';
-import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
+import assert from 'node:assert/strict';import * as fs from './nativeMainHostCompositionFS';import ts from 'typescript';
 import {gzipSync,gunzipSync} from 'node:zlib';import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
 import {makeSimWorld} from '../src/sim/arena';import {World,NAV_CFG} from '../src/engine/world';import {Actor,resetActorIdCounter} from '../src/engine/actor';
 import {Rng,withSeededRandom} from '../src/core/rng';import {vec} from '../src/core/math';import {GridWalkField} from '../src/world/gridWalk';import {hullOf} from '../src/world/shape';

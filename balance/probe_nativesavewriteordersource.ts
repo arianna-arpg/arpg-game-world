@@ -1,6 +1,6 @@
 import {beforeNativeClientContinuity as projectClientContinuity} from './nativeClientContinuityCompositionFixture';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeShardsCaravanFS as fs} from './nativeShardsCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeSaveWriteOrderArchive as archive} from './nativeSaveWriteOrderArchive';
 import {beforeNativeSaveWriteOrder} from './nativeSaveWriteOrderFixture';

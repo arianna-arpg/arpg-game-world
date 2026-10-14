@@ -1,3 +1,5 @@
+import {sceneSettleNearScale} from './nativeSceneNearScale';
+import {sceneDealTravellerFlasks,sceneAdoptQuestLedger} from './nativeSceneServerVessel';
 import './nativeSceneBootstrap';
 import {sceneScanNemesisSurvivors} from './nativeSceneCampaignTransitions';
 import {sceneAddTether,sceneAttachObjectTethers,TETHER_TICK,type NativeSceneTetherHost} from './nativeSceneTethers';
@@ -509,6 +511,7 @@ import { isDeathAligned, factionTemper } from '../world/traits';
 import { extractionLookFor } from '../data/extraction';
 import { REMNANT_KINDS } from '../data/remnants';
 import { ORB_DEFS, ORB_CAP, orbAmount, orbOnHitStat, orbOnHurtStat, orbRefundStat, orbTrickleStat, ORB_TRICKLE } from '../data/orbs';
+import { orbHitChance } from './orbGeneration';
 import {
   ActiveTheaterRun, theaterKindDef, THEATER_CFG,
   type TheaterContext, type TheaterKindDef, type TheaterRow, type TheaterSpots,
@@ -5887,14 +5890,8 @@ actors: Actor[] = [];
    *  wilds save must resume "the same wounds", so the shard's settle is the one that clamps).
    *  Off a shard the radius is 0 and the queue never fills: solo is byte-identical. */
   settleNearScale(every = false): void {
-    const due = every ? this.actors : this.nearScaleDue.splice(0);
-    if (every) this.nearScaleDue.length = 0;
-    for (const a of due) {
-      if (a.dead || a.team !== 'enemy' || a.owner) continue;
-      const frac = a.maxLife() > 0 ? a.life / a.maxLife() : 1;
-      applyScenePartyScale(this.nativeScenePopulationHost(), a);
-      a.life = Math.min(a.maxLife(), Math.max(1, Math.round(a.maxLife() * frac)));
-    }
+    const owner=this;
+    return sceneSettleNearScale({get actors(){return owner.actors;},get nearScaleDue(){return owner.nearScaleDue;},nativeScenePopulationHost:()=>owner.nativeScenePopulationHost()},every);
   }
 
   /** Re-scale all LIVING enemies after a join/leave, PRESERVING each one's current
@@ -20259,15 +20256,7 @@ actors: Actor[] = [];
    *  neither knows nor carries a flask, is dealt them as a graduate is:
    *  learned, seated, brimming. When dealt, the gift and its fill are stamped
    *  onto that ledger (it rides home with the mirror). True when dealt. */
-  dealTravellerFlasks(seat: Seat, ledger: Record<string, number>): boolean {
-    if (ledger[MIREILLE_GIFT_LEDGER] || ledger[MIREILLE_FILL_LEDGER] || ledger[MIREILLE_LESSON_LEDGER]) return false;
-    if (MIREILLE_GIFT_SKILLS.some(sid => seat.meta.knownSkills.has(sid) || findBagGem(seat.meta.items, 'skill', sid))) return false;
-    this.dealVeteranFlasks(seat, true);
-    if (!this.veteranFlaskDeals.has(seat)) return false;
-    ledger[MIREILLE_GIFT_LEDGER] = 1;
-    ledger[MIREILLE_FILL_LEDGER] = 1;
-    return true;
-  }
+  dealTravellerFlasks(seat: Seat, ledger: Record<string, number>): boolean { const owner=this;return sceneDealTravellerFlasks({get dealVeteranFlasks(){const fn=owner.dealVeteranFlasks;return(...args:Parameters<World['dealVeteranFlasks']>)=>Reflect.apply(fn,owner,args);},get veteranFlaskDeals(){return owner.veteranFlaskDeals;}},seat,ledger); }
 
   /** THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
    *  deal every droppable ultimate + gauge debut into the fresh bag at
@@ -37871,8 +37860,9 @@ actors: Actor[] = [];
     if (dealt > 0 && depth === 0 && this.orbs.length < ORB_CAP) {
       const rate = caster.sheet.get('orbShedRate', tags, extra);
       for (const id of Object.keys(ORB_DEFS)) {
-        const c = caster.sheet.get(orbOnHitStat(id), tags, extra) * rate;
-        if (c > 0 && chance(Math.min(0.5, c))) {
+        const c = orbHitChance(caster, id,
+          caster.sheet.get(orbOnHitStat(id), tags, extra) * rate, this.time);
+        if (c > 0 && chance(c)) {
           this.shedOrb(id, target.pos, { scatter: 18, tier: target.tier });
         }
       }
@@ -51436,37 +51426,7 @@ actors: Actor[] = [];
    *  the live chart and registries (adoptWorldState's own tolerance: a posting
    *  whose ground or kind left drops, a held quest whose def or zone left
    *  drops, the hands re-stamped to the seat they now ride). */
-  adoptQuestLedger(seat: Seat, saved: QuestLedgerSave | undefined): void {
-    if (!this.localSeat.keeper || seat.keeper) return;
-    const l = newQuestLedger();
-    this.seatQuests.set(seat.id, l);
-    if (!saved) return;
-    // A country posting (the Unbroken Wilds' board) stands while its run stands (the
-    // claim tier: a well-formed vessel is believed); every other posting re-validates.
-    const run = this.massRuntime?.generator.run.runId;
-    const country = (p: BountyPosting): boolean => !!p?.massBounty;
-    const ours = (ps: BountyPosting[] | undefined): BountyPosting[] =>
-      run === undefined ? [] : (ps ?? []).filter(p => country(p) && p.massBounty!.run === run).map(p => structuredClone(p));
-    const bb = sanitizeBountyBoard({ armedBeat: -1, offers: (saved.offers ?? []).filter(p => !country(p)),
-      hands: (saved.hands ?? []).filter(p => !country(p)), boards: saved.boards }, this.zoneMap);
-    for (const [k, v] of Object.entries(saved.boards ?? {})) {
-      if (v && Number.isFinite(v.armedBeat)) l.boards[k] = { armedBeat: Math.floor(v.armedBeat), refreshSeq: Math.max(0, Math.floor(v.refreshSeq ?? 0)) };
-    }
-    l.offers = [...(bb?.offers ?? []), ...ours(saved.offers)];
-    l.hands = [...(bb?.hands ?? []), ...ours(saved.hands)]
-      .map(h => ({ ...h, holder: seat.id, ...(seat.meta.charId ? { holderChar: seat.meta.charId } : {}) }));
-    this.withQuestHand(seat, () => {
-      l.active = saved.active.filter(q => this.questDefOf(q.questId)
-        && (q.placeId === undefined ? !!this.zoneMap[q.zoneId]
-          : !!this.massRuntime && massQuestDestination(this.massRuntime, q.questId)?.id === q.placeId))
-        .map(q => ({ ...q }));
-      for (const h of l.hands) if (!l.active.some(e => e.questId === h.id)) l.active.push({ questId: h.id, zoneId: h.zoneId, fieldDone: this.handState(h) !== 'afield' });
-    });
-    l.completed = new Set(saved.completed);
-    l.imbues = restoreQuestImbues(saved.imbues).filter(r => !!QUESTS[r.questId]?.reward.imbue && l.completed.has(r.questId));
-    l.keys = { ...(saved.keys ?? {}) };
-    l.leads = [...new Set(saved.leads ?? [])];
-  }
+  adoptQuestLedger(seat: Seat, saved: QuestLedgerSave | undefined): void { return sceneAdoptQuestLedger(this,seat,saved); }
 
   /** The seat's ledger, save-shaped for its vessel's mirror (THE CHARACTER'S QUESTS). */
   packQuestLedger(seat: Seat, at: number): QuestLedgerSave {

@@ -47,7 +47,7 @@
 //                kept stand before the upload's own (ShardHost.returnLanding).
 // ---------------------------------------------------------------------------
 
-import { emptyAbilityEssences, emptyEssences, MAX_LEARNED_SKILLS, type Seat, type World } from '../src/engine/world';
+import { emptyAbilityEssences, emptyEssences, MAX_LEARNED_SKILLS, type Seat } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 import { recentIndex } from '../src/engine/recency';
 import { COOP_SCALING } from '../src/data/coop';
@@ -66,7 +66,6 @@ import { RemoteInput } from '../src/net/remote';
 import type { PeerInfo } from '../src/net/transport';
 import { sanitizeStand, type ShardCorpseNote, type ShardReckoning, type ShardStand } from '../src/net/vesselWire';
 import { SHARD_VESSEL_MAX_CHARS } from '../src/net/shardBuild';
-import { seatLadderOf, shardSpotOf } from '../src/engine/shardRoads';
 import { isCurrentCharacterSave } from '../src/meta/saveCompatibility';
 import { rebuildSavedMeta, serializeCouchGuest, throngRowsOf, type CharacterSave } from '../src/meta/character';
 import { questWorldKey, withQuestWorld } from '../src/engine/questLedger'; // THE CHARACTER'S QUESTS (card 24)
@@ -75,6 +74,7 @@ import { modeById, stageOf } from '../src/meta/modes';
 import { isAccountId, renownForRun } from '../src/meta/account';
 import type { SeatSend, ShardCorpses } from './corpses';
 import type { SeatWorlds } from './simUnits';
+import {vesselSeatAreas,type VesselArea,type VesselSeatAreas} from './nativeVesselAreas';
 
 export const VESSEL_CFG = {
   /** The largest vessel (JSON characters) a join may graft. The wire's own
@@ -323,9 +323,10 @@ export class VesselDesk {
   /** THE RELEASE: downed seats whose player gave up the wait (the interact press). */
   private readonly released = new Set<string>();
 
+  private readonly units:VesselSeatAreas;
   constructor(
     /** THE DESKS PER UNIT (shard M1): every read that was the one World reads the seat's own unit. */
-    private readonly units: SeatWorlds,
+    units: SeatWorlds | VesselSeatAreas,
     private readonly send: SeatSend,
     private readonly corpses: ShardCorpses,
     private readonly opts: {
@@ -343,6 +344,7 @@ export class VesselDesk {
       connected?: (seatId: string) => boolean;
     },
   ) {
+    this.units=vesselSeatAreas(units);
     this.beat = opts.beatSec;
   }
 
@@ -506,7 +508,7 @@ export class VesselDesk {
     // THE DESKS PER UNIT: the vessel mirrors home from the unit it stands in, its companions with it.
     return this.units.within(seatId, w => this.serializeIn(w, seat, rec)) ?? null;
   }
-  private serializeIn(w: World, seat: Seat, rec: VesselSeat): CharacterSave {
+  private serializeIn(w: VesselArea, seat: Seat, rec: VesselSeat): CharacterSave {
     const hero = w.seatHero(seat), up = rec.upload;
     const save: CharacterSave = {
       ...serializeCouchGuest(w, seat, { companions: [], throng: [], throngClaimed: up.throngClaimed ?? [] }),
@@ -596,12 +598,12 @@ export class VesselDesk {
    *  anchor with the pocket's descent), the story there, the pocket itself when it
    *  stands under ground, its unit, and THE HOSTED SEED. Undefined where no spot can
    *  be named (a realm arena, the decks): such a hero wakes at the hearth. */
-  private standIn(w: World, seat: Seat): ShardStand | undefined {
-    const spot = shardSpotOf(w, seat);
+  private standIn(w: VesselArea, seat: Seat): ShardStand | undefined {
+    const spot = w.shardSpotOf(seat);
     if (!spot) return undefined;
     const a = seat.actor, story = Math.max(0, Math.floor(a.tier ?? 0));
     const under = !w.zoneMap[w.zone.id];
-    const ladder = under ? seatLadderOf(w, seat) : null, outer = ladder ? ladder.caveStack[0] ?? ladder.caveReturn : null;
+    const ladder = under ? w.seatLadderOf(seat) : null, outer = ladder ? ladder.caveStack[0] ?? ladder.caveReturn : null;
     return {
       seed: this.units.keeperWorld().manifest.seed >>> 0, spot,
       tier: under ? Math.max(0, Math.floor(outer?.tier ?? 0)) : story,

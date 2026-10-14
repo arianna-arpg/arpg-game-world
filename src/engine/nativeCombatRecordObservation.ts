@@ -6,6 +6,7 @@ import {captureNativeActorConstruction} from './nativeActorConstruction';
 import {isNativeAreaSceneTitans,type NativeAreaSceneTitans} from '../worldmass/nativeAreaSceneTitans';
 import type {NativeCombatRecordKind,NativeCombatRecordTypes} from './nativeSceneCombatHost';
 export interface NativeCombatRecordObserver {
+ vesselInsertion(target:unknown[],inserted?:readonly unknown[]):void;
  encounterInsertion(target:unknown[],inserted?:readonly unknown[]):void;
  delverArrival():import('../data/zones').ZoneDef;
  selected<T>(kind:NativeCombatRecordKind,record:object,action:()=>T):T;
@@ -96,4 +97,10 @@ export function selectNativeEncounterPush<T>(host:object,target:T[]):(...items:T
  const observer=observers.get(host);observer?.encounterInsertion(target);
  const selected=target.push;observer?.encounterInsertion(target);
  return(...items:T[]):number=>{observer?.encounterInsertion(target);const result=Reflect.apply(selected,target,items);observer?.encounterInsertion(target,items);return result;};
+}
+
+/** Selected insertion for actual server vessel restoration; ordinary callers keep native order. */
+export function selectNativeVesselPush<T>(host:object,target:T[]):(...items:T[])=>number {
+ const observer=observers.get(host);observer?.vesselInsertion(target);const selected=target.push;observer?.vesselInsertion(target);
+ return(...items:T[]):number=>{observer?.vesselInsertion(target);const result=Reflect.apply(selected,target,items);observer?.vesselInsertion(target,items);return result;};
 }

@@ -325,7 +325,7 @@ export function serializeCharacter(world: World): CharacterSave {
  *  their anchor's count so the roster resumes at full strength either way.
  *  The local save and THE SHARD's vessel mirror (server/vessel.ts) both read
  *  their hero's rosters through this one fold. */
-export function throngRowsOf(world: World, hero: Actor): { skillId: string; defId: string; level: number; count: number }[] {
+export function throngRowsOf(world: Pick<World,'actors'|'liteKindOf'>&{lite:Pick<World['lite'],'countOwned'>}, hero: Actor): { skillId: string; defId: string; level: number; count: number }[] {
   const rows = new Map<string, { skillId: string; defId: string; level: number; count: number }>();
   for (const a of world.actors) {
     if (a.dead || a.owner !== hero || !a.defId) continue;
@@ -1064,7 +1064,7 @@ export function persistRunDurable(account: Account, world: World): void {
  *  session verbatim (companions/throng are not fielded beside a guest yet —
  *  they must not be lost to a session they slept through). */
 export function serializeCouchGuest(
-  world: World, seat: Seat,
+  world: Pick<World,'seatHero'|'manifest'|'ledger'|'annexFound'>, seat: Seat,
   dormant: Pick<CharacterSave, 'companions' | 'throng' | 'throngClaimed'>,
 ): CharacterSave {
   const m = seat.meta;

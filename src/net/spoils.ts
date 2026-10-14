@@ -59,7 +59,7 @@ export const SPOILS_CFG = {
  *  stampAudiences): each drop row wears its holder (`o`) and, under a timer, the whole seconds
  *  until it is anyone's (`fa`, rounded up). A free or absent owner leaves the row as it was.
  *  Inert off a hosted world (no rule hook), so no other lane's rows ever carry either field. */
-export function stampDropOwners(world: World, snap: StateSnapshot): void {
+export function stampDropOwners(world: Pick<World,'dropRuleOf'|'drops'|'dropHolder'|'time'>, snap: StateSnapshot): void {
   if (!world.dropRuleOf) return;
   const n = Math.min(snap.drops.length, world.drops.length);
   for (let i = 0; i < n; i++) {

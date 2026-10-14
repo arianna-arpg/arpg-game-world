@@ -284,3 +284,6 @@ export class NativeAreaSceneAssembly {
   });this.#phase='born';}catch(error){this.#phase='failed';throw error;}
  }
 }
+
+/** Defining-module capture; never read a cyclic class before initialization. */
+export const nativeReadyAssemblyPhase=Object.getOwnPropertyDescriptor(NativeAreaSceneAssembly.prototype,'phase')!.get!;

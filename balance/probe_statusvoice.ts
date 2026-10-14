@@ -15,7 +15,7 @@
 // Run: npx tsx balance/probe_statusvoice.ts
 // ---------------------------------------------------------------------------
 
-import { readFileSync } from 'node:fs';
+import {readNativeShardsCaravan as readFileSync} from './nativeShardsCompositionFixture';
 import {nativeStatusVoiceSources} from './nativeCaravanLegacySourceFixture';
 import { bootSimEngine } from '../src/sim/arena';
 import { STATUS_DEFS, type StatusDef } from '../src/engine/status';

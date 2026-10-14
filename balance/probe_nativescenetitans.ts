@@ -1,6 +1,6 @@
 import {beforeNativeTitanAttendance} from './nativeTitanAttendanceFixture';
 import {beforeNativeRuntimeBirthLifetime} from './nativeRuntimeBirthLifetimeFixture';
-import {assertHistoricalCleaveSource,beforeHistoricalCleaveReceipt} from './nativeHistoricalCleaveReceipt';
+import {assertHistoricalCleaveSource,beforeHistoricalCleaveReceipt} from './nativeTitanReceiptFixture';
 /** Full native Titan controller oracle: no geometry stripping, capped census or World callbacks in local lanes. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

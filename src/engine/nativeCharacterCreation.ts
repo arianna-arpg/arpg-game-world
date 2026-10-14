@@ -159,7 +159,7 @@ export function sceneGrantStartingCompanions(nativeHost:Pick<NativeCharacterCrea
     }
   }
 
-export function sceneDealVeteranFlasks(nativeHost:Pick<NativeCharacterCreationHost,'veteranFlaskDeals'|'localSeat'|'ledger'|'account'|'provisioningFlaskSlots'|'grantSkillGemItem'|'learnSkill'|'bindSkill'|'rememberSkillSlots'|'charDirty'|'markMetaDirty'>,seat: Seat = nativeHost.localSeat, owed = !!(nativeHost.account.ledger[LEDGER_FLASK_LESSON] ?? 0)): void {
+export function sceneDealVeteranFlasks(nativeHost:Pick<NativeCharacterCreationHost,'localSeat'|'ledger'|'account'|'grantSkillGemItem'|'learnSkill'|'bindSkill'|'rememberSkillSlots'|'charDirty'|'markMetaDirty'>&{veteranFlaskDeals:Pick<NativeCharacterCreationHost['veteranFlaskDeals'],'has'|'add'>;provisioningFlaskSlots:Pick<NativeCharacterCreationHost['provisioningFlaskSlots'],'add'|'delete'>},seat: Seat = nativeHost.localSeat, owed = !!(nativeHost.account.ledger[LEDGER_FLASK_LESSON] ?? 0)): void {
     if (!owed || nativeHost.veteranFlaskDeals.has(seat)) return;
     if (seat === nativeHost.localSeat && nativeHost.ledger[MIREILLE_FILL_LEDGER]) return;
     const p = seat.actor, m = seat.meta;

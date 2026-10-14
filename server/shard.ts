@@ -8,6 +8,8 @@
 //   --seed <n>       the manifest seed (hex with 0x, else decimal; default the newest
 //                    saved world of its kind, else a fresh roll)
 //   --class <id>     the keeper's class (default warrior)
+//   --native         host the retained native campaign and its area-owned simulation
+//                    with separate saves/shard_<seed>_native.json persistence
 //   --worldmass      THE UNBROKEN WILDS: host the seamless foundation's continuous
 //                    surface, persisted to its own saves/shard_<seed>_wilds.json
 //                    and resumed in the mass lane's order (server/wildsSave.ts)
@@ -32,6 +34,7 @@
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { ShardHost } from './shardHost';
+import { NativeShardHost } from './nativeShardHost';
 import { SHARD_WIRE_CFG } from './shardTransport';
 
 function parseArgs(argv: string[]): Record<string, string | true> {
@@ -61,7 +64,9 @@ async function main(): Promise<void> {
   const perIp = num(args['per-ip']);
   if (perIp !== undefined) SHARD_WIRE_CFG.maxPerIp = perIp > 0 ? perIp : Number.POSITIVE_INFINITY;
   const host = typeof args.host === 'string' ? args.host : '0.0.0.0';
-  const shard = new ShardHost({
+  if (args.native === true && args.worldmass === true) throw Error('Choose one hosted world mode: --native or --worldmass');
+  const Host = args.native === true ? NativeShardHost : ShardHost;
+  const shard = new Host({
     seed: num(args.seed),
     keeperClass: typeof args.class === 'string' ? args.class : undefined,
     open: args.open === true,
@@ -77,7 +82,7 @@ async function main(): Promise<void> {
   // is handed out on plain GETs, so a hosted world is one link; '/status' keeps THE STATUS PAGE.
   const clientDir = typeof args.client === 'string' ? args.client : existsSync('site/play/index.html') ? 'site/play' : null;
   shard.net.clientDir = clientDir ? resolve(clientDir) : null;
-  console.log(`[shard] ${shard.worldmass ? 'the Unbroken Wilds' : 'world'} 0x${shard.seed.toString(16).padStart(8, '0')} — listening on ws://${host === '0.0.0.0' ? 'localhost' : host}:${bound}`
+  console.log(`[shard] ${shard instanceof NativeShardHost ? 'retained native world' : shard.worldmass ? 'the Unbroken Wilds' : 'world'} 0x${shard.seed.toString(16).padStart(8, '0')} — listening on ws://${host === '0.0.0.0' ? 'localhost' : host}:${bound}`
     + (shard.savePath ? ` — saving to ${shard.savePath}` : ' — ephemeral'));
   shard.start();
   // THE ONE ENDING: a latch (every signal and throw funnels here once), a

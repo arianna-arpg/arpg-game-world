@@ -152,6 +152,15 @@ for (const id of ['surge', 'crushing_leap', 'teleport', 'warp']) {
   const draw = (color: string) => trace(ctx => drawMovementTrail(ctx, { radius: 15, color, movement: t }, .7));
   assert.equal(draw('#abc'), draw('#543')); check('high-rate histories stay bounded and palette independent', true);
 }
+{
+  const charge = run('charge'), leap = run('crushing_leap');
+  check('Charge stays grounded through its measured journey', charge.frames.every(f => f.leap === null));
+  check('leaps retain their airborne body arc', leap.frames.some(f => f.leap !== null));
+  const trail: MovementTrail = { skillId: 'charge', clock: .1, progress: .2,
+    points: [{ x: 0, y: 0, at: .08 }, { x: 7, y: 0, at: .1 }] };
+  const draw = (skillId: string) => trace(ctx => drawMovementTrail(ctx, { radius: 16, color: '#d89858', movement: { ...trail, skillId } }, 1));
+  check('Charge has a distinct low wake even on a seven-pixel travel beat', draw('charge') !== draw('crushing_leap') && draw('charge') !== draw('dash'));
+}
 mkdirSync('balance/reports/skill-visuals', { recursive: true });
 writeFileSync('balance/reports/skill-visuals/movement.json', JSON.stringify({ checks, rows: recordings }));
 console.log(`PASS ${checks} movement visual checks`);

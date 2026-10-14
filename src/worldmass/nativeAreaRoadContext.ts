@@ -1,3 +1,4 @@
+import {nativeReadyPresence} from './nativeAreaScenePresence';
 /** Actual retained area's door and cave-ladder context. The native World-keyed
  * road directory is not reused with a structural facade. */
 import type {World,Seat} from '../engine/world';
@@ -80,6 +81,12 @@ export class NativeAreaRoadContext {
   if(assembly.phase!=='born'||authority.bindingFor(assembly.input.scene)!==this.#binding)throw Error('Native road context registration changed');
   assembly.scenePresence.assertAuthority(authority);
  }
+ /** Identity half of readiness; its caller must perform the census check. */
+ assertReadyIdentity():void{
+  const {assembly,authority}=this.input;
+  if(assembly.phase!=='born'||authority.bindingFor(assembly.input.scene)!==this.#binding)throw Error('Native road context registration changed');
+  Reflect.apply(nativeReadyPresence.identity,assembly.scenePresence,[authority,this.#binding]);
+ }
  #seat(seat:Seat,physical:boolean):void{
   // Entry policy inspects identity descriptors only. It does not invoke a seat
   // accessor before the unchanged native road derivation reads that seat.
@@ -113,3 +120,7 @@ export class NativeAreaRoadContext {
   * does not authorize touching the seat or its new area. */
  depart(seat:Seat):void{this.#seat(seat,false);native.nativeRoadShardRoadDepart(this.#host,this.#state,seat.id);}
 }
+
+export const nativeReadyRoadContext=NativeAreaRoadContext.prototype.assertReady;
+
+export const nativeReadyRoadIdentity=NativeAreaRoadContext.prototype.assertReadyIdentity;

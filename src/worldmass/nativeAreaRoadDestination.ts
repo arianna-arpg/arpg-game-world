@@ -5,6 +5,7 @@ import type {World} from '../engine/world';
 import type {ShardWorldLink} from '../engine/shardUnits';
 import type {NativeAreaDirectoryView} from './nativeAreaDirectoryView';
 export interface NativeAreaRoadDestination extends NativeAreaDirectoryView {
+ readonly entryLanding:(from?:string|null)=>import('../core/math').Vec2;
  readonly waypointPos:World['waypointPos'];
  readonly caveEntrances:World['caveEntrances'];
  readonly massRuntime:null;

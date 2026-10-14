@@ -221,7 +221,7 @@ export function sceneRestoreHiredMerc(nativeHost:Pick<NativeCharacterRestoration
     if (seat) nativeHost.hiredMercs.push({ seat, name: m.name, snapshot: m.snapshot, mercId: m.mercId, templateId: m.templateId });
   }
 
-export function sceneRestoreThrong(nativeHost:Pick<NativeCharacterRestorationHost,"lite"|"liteKindOf"|"liteKinds"|"liteOpenAt"|"minionNeedsFullDurability"|"mintThrongBody"|"player"|"throngRecruitCap"|"throngRosterCount"|"wornThrongAnchorsOf">,
+export function sceneRestoreThrong(nativeHost:Pick<NativeCharacterRestorationHost,"liteKindOf"|"liteKinds"|"liteOpenAt"|"minionNeedsFullDurability"|"mintThrongBody"|"player"|"throngRecruitCap"|"throngRosterCount"|"wornThrongAnchorsOf">&{lite:Pick<NativeCharacterRestorationHost["lite"],"spawn">},
     list: { skillId: string; defId: string; level: number; count: number }[],
     keeper: Actor = nativeHost.player,
   ): void {

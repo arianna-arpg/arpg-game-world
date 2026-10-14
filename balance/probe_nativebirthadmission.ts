@@ -1,6 +1,7 @@
 /** Actual local population births and native retained drivers; identity admission
  * only. Movement/progression remain explicitly unavailable test boundaries. */
 import assert from 'node:assert/strict';
+import {refuseWorldCombat} from './probe_nativecombatcycle';
 import {Actor} from '../src/engine/actor';
 import {makeSimWorld} from '../src/sim/arena';
 import {freshAssemblyInput,NativeAreaSceneAssembly} from './nativeFreshAssemblyFixture';
@@ -87,7 +88,33 @@ course('factory scope and exact identities are mandatory',f=>{
 });
 course('rescue attendance cannot follow a player transferred to another area',f=>{
  f.rescue();const player=f.scene.player,other={zone:{...f.scene.zone,id:'other'},actors:[player],player},binding=f.authority.register(other,f.binding.services);f.scene.actors=f.scene.actors.filter(a=>a!==player);f.authority.transfer(player,f.binding,binding);
- assert.throws(()=>f.quests.rescues.update(),/present area player/);assert.equal(f.scene.actors.length,0);f.authority.assertAdmitted(f.scene);
+ // e0600ae8 made an empty retained rescue area inert after player departure.
+ // Preserve the stronger containment contract, including the selected hand and
+ // both physical owners; legitimate maintenance still has a separate course.
+ const sourceActors=f.scene.actors,destinationActors=other.actors,owner=f.authority.require(player),revision=f.authority.attendanceRevision(player);
+ const hand=f.w.localSeat,handMeta=hand.meta,book=f.w.questLedgerOf(hand),active=book.active,pending=active[active.length-1];
+ const state=()=>structuredClone({book,runLedger:f.w.ledger,accountLedger:f.w.account.ledger,features:f.w.account.features,completed:f.w.completedObjectives,
+  accountDirty:f.w.accountDirty,charDirty:f.w.charDirty,questState:f.quests.input.state,player:{pos:player.pos,life:player.life,mana:player.mana,es:player.es,dead:player.dead,downed:player.downed},
+  doodads:f.geometry.doodads,drops:f.i.physical.input.state.drops});
+ const before=state(),factory=Object.getOwnPropertyDescriptor(f.i.population,'createMonster'),spot=Object.getOwnPropertyDescriptor(f.geometry,'findFreeSpot'),random=Math.random;
+ let factories=0,spots=0,draws=0;
+ Object.defineProperty(f.i.population,'createMonster',{configurable:true,get(){factories++;throw Error('Absent rescue selected a factory');}});
+ Object.defineProperty(f.geometry,'findFreeSpot',{configurable:true,get(){spots++;throw Error('Absent rescue selected destination geometry');}});
+ Math.random=()=>{draws++;throw Error('Absent rescue advanced randomness');};
+ try{refuseWorldCombat([f.w],calls=>{assert.doesNotThrow(()=>f.quests.rescues.update());assert.doesNotThrow(()=>f.quests.rescues.update());assert.deepEqual(calls,[]);});}
+ finally{if(factory)Object.defineProperty(f.i.population,'createMonster',factory);else Reflect.deleteProperty(f.i.population,'createMonster');if(spot)Object.defineProperty(f.geometry,'findFreeSpot',spot);else Reflect.deleteProperty(f.geometry,'findFreeSpot');Math.random=random;}
+ assert.deepEqual({factories,spots,draws},{factories:0,spots:0,draws:0});assert.deepEqual(state(),before);
+ assert.equal(f.scene.actors,sourceActors);assert.equal(other.actors,destinationActors);assert.deepEqual(other.actors,[player]);assert.equal(f.scene.player,player);
+ assert.equal(f.w.localSeat,hand);assert.equal(hand.actor,player);assert.equal(hand.meta,handMeta);assert.equal(f.w.questLedgerOf(hand),book);assert.equal(book.active,active);assert.equal(active[active.length-1],pending);
+ assert.equal(f.authority.require(player),owner);assert.equal(owner.scene,other);assert.equal(f.authority.attendanceRevision(player),revision);assert.equal(f.authority.isPresentPlayer(f.scene),false);
+ assert.equal(f.authority.bindingFor(f.scene),f.binding);assert.equal(f.authority.bindingFor(other),binding);f.authority.assertAdmitted(other);
+ assert.equal(f.scene.actors.length,0);f.authority.assertAdmitted(f.scene);
+ // A real physical return restores the native fallback and creates one owned
+ // captive; a subsequent update preserves that exact NPC and quest receipt.
+ other.actors.splice(other.actors.indexOf(player),1);f.scene.actors.push(player);f.authority.transfer(player,binding,f.binding);
+ const born=refuseWorldCombat([f.w],()=>f.checkBirth(()=>f.quests.rescues.update(),'quest_rescue:'+pending.questId).born);assert.equal(born.length,1);
+ const npc=born[0];f.quests.rescues.update();assert.equal(f.scene.actors.filter(a=>a.tag==='quest_rescue:'+pending.questId).length,1);assert.equal(f.scene.actors.find(a=>a.tag==='quest_rescue:'+pending.questId),npc);
+ assert.equal(f.authority.require(player).scene,f.scene);assert.equal(f.authority.require(npc).scene,f.scene);assert.equal(book.active[book.active.length-1],pending);assert.equal(pending.fieldDone,false);f.authority.assertAdmitted(other);f.authority.assertAdmitted(f.scene);
 });
 course('retired controller does not attach itself to a replacement binding',f=>{
  f.admission.run(()=>{});f.authority.release(f.binding,[...f.scene.actors]);f.authority.unregister(f.binding);const next=f.authority.register(f.scene,f.binding.services);f.authority.claim(next,f.scene.actors);assert.throws(()=>f.admission.run(()=>{}),/retired authority/);

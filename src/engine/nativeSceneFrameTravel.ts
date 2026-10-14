@@ -1,4 +1,4 @@
-import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
+import {observeNativeCombatBirth,selectNativeVesselPush} from './nativeCombatRecordObservation';
 /** Exact original42 campaign/interleaved frame FrameTravel closure.
  * Runtime ownership and native scheduling are separate concrete bindings. */
 import type {NativeAreaRoadDestination,NativeAreaRealmContextTarget} from '../worldmass/nativeAreaRoadDestination';
@@ -3910,7 +3910,7 @@ export function sceneRebindWornGrafts(nativeHost:NativeSceneCampaignFrameClosure
     }
   }
 
-export function sceneRestoreCompanions(nativeHost:NativeSceneCampaignFrameClosureHost, 
+export function sceneRestoreCompanions(nativeHost:Pick<NativeSceneCampaignFrameClosureHost,'player'|'meta'|'stashedCompanions'|'createMonster'|'tameCompanion'|'clampPos'|'actors'>&{companionBonds:Pick<NativeSceneCampaignFrameClosureHost['companionBonds'],'refresh'>}, 
     list: CompanionSaved[],
     keeper: Actor = nativeHost.player,
   ): void {
@@ -3936,7 +3936,7 @@ export function sceneRestoreCompanions(nativeHost:NativeSceneCampaignFrameClosur
       beast.pos = nativeHost.clampPos(vec(
         keeper.pos.x + rand(-60, 60), keeper.pos.y + rand(40, 80)), beast.radius);
       if (c.downed) { beast.downed = true; beast.life = 0; }
-      nativeHost.actors.push(beast);
+      selectNativeVesselPush(nativeHost,nativeHost.actors)(beast);
       observeNativeCombatBirth(nativeHost,beast);
     }
     nativeHost.companionBonds.refresh();

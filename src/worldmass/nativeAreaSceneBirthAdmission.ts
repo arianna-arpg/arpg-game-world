@@ -1,8 +1,9 @@
+import {consumeNativeFinalEntryPlan} from './nativeAreaCombatOperation';
 import {captureNativeActorConstruction} from '../engine/nativeActorConstruction';
 /** Admit only privately attested factory bodies at explicit native insertion points.
  * Raw census identity and native partial writes remain intact. */
 import type {Actor} from '../engine/actor';
-import {NativeAreaActorAuthority,type NativeAreaAuthorityBinding} from './nativeAreaActorAuthority';
+import {NativeAreaActorAuthority,nativeReadyAuthority,type NativeAreaAuthorityBinding,type NativeAreaActorSelection} from './nativeAreaActorAuthority';
 import {NativeAreaScenePopulation,nativeBirthAsyncResult,nativePopulationCreateMonsterForAdmission as createMonsterForAdmission,type NativeSceneCensus} from './nativeAreaScenePopulation';
 export interface NativeSceneBirthAdmissionInput {
  authority:NativeAreaActorAuthority<object>;scene:NativeSceneCensus;population:NativeAreaScenePopulation;
@@ -11,7 +12,7 @@ interface BirthFrame {readonly finalAdmission:boolean;active:boolean;pending:Set
 interface BirthScopes {population:NativeAreaScenePopulation;top:BirthFrame|null;binding:NativeAreaAuthorityBinding<object>|null}
 // Controllers in the same actual area share a stack, never an ambient depth permission.
 const scopes=new WeakMap<NativeAreaActorAuthority<object>,WeakMap<NativeSceneCensus,BirthScopes>>();
-const finalBirthBinding=NativeAreaActorAuthority.prototype.bindingFor,finalBirthPhysical=NativeAreaActorAuthority.prototype.assertFinalPhysical;
+const finalBirthBinding=NativeAreaActorAuthority.prototype.bindingFor,finalBirthPhysical=NativeAreaActorAuthority.prototype.assertFinalPhysical,finalBirthSelections=nativeReadyAuthority.localSelections,finalEntrySelect=nativeReadyAuthority.ordinaryEntry;
 // The defining population module captures this exact method after initialization.
 export class NativeAreaSceneBirthAdmission {
  readonly input:NativeSceneBirthAdmissionInput;
@@ -71,13 +72,30 @@ export class NativeAreaSceneBirthAdmission {
  /** The complete aggregate already requires ordinary physical descriptors. Its
   * admission checks cannot invoke selected census iterators around native work. */
  runFinal<T>(operation:()=>T):T{return this.#run(operation,true);}
- #run<T>(operation:()=>T,finalAdmission:boolean):T{
+ /** Only this private empty final scope permits fusing the aggregate's final
+  * subject check with admission. Ordinary/pending publication keeps its old path. */
+ #canCombineFinalEntry():boolean {const parent=this.#scope.top;return finalBirthBinding===nativeReadyAuthority.binding&&finalBirthPhysical===nativeReadyAuthority.physical&&(!parent||(parent.finalAdmission&&parent.pending.size===0));}
+ canCombineFinalEntry():boolean {return this.#canCombineFinalEntry();}
+ runFinalSelected<T>(rows:readonly NativeAreaActorSelection<object>[],operation:()=>T):T {
+  if(!this.#canCombineFinalEntry())throw Error('Native combined entry needs callback-free pending publication');
+  return this.#run(operation,true,rows);
+ }
+ /** A plan is minted and consumed inside the actual operation's one call.
+  * Its private invoker cannot yield a reusable validated census to callers. */
+ runFinalEntryPlan(token:object):unknown {
+  const plan=consumeNativeFinalEntryPlan(token,this);if(!this.#canCombineFinalEntry())throw Error('Native combined entry needs callback-free pending publication');
+  const {authority,scene}=this.input,binding=Reflect.apply(finalBirthBinding,authority,[scene]);if(this.#scope.binding&&this.#scope.binding!==binding)throw Error('Native birth admission cannot reuse a retired authority');
+  const rows=Reflect.apply(finalEntrySelect,authority,[binding,plan.physical]);let active=true,used=false;
+  try{return plan.invoke(rows,action=>{if(!active||used)throw Error('Native final entry continuation expired');used=true;return this.#run(action,true,undefined,true);});}finally{active=false;}
+ }
+ #run<T>(operation:()=>T,finalAdmission:boolean,selections?:readonly NativeAreaActorSelection<object>[],selectedHere=false):T{
   const {authority,scene}=this.input,scope=this.#scope,binding=finalAdmission?Reflect.apply(finalBirthBinding,authority,[scene]):authority.bindingFor(scene);
   if(scope.binding&&scope.binding!==binding)throw Error('Native birth admission cannot reuse a retired authority');
   scope.binding=binding;
+  if(selections)Reflect.apply(finalBirthSelections,authority,[binding,selections]);
   // A genuinely recorded outer birth may precede entry into another local driver.
   if(scope.top)this.#publish(scope.top);
-  if(finalAdmission)Reflect.apply(finalBirthPhysical,authority,[binding]);else authority.assertAdmitted(scene);
+  if(!selections&&!selectedHere){if(finalAdmission)Reflect.apply(finalBirthPhysical,authority,[binding]);else authority.assertAdmitted(scene);}
   const frame:BirthFrame={finalAdmission,active:true,pending:new Set(),binding,parent:scope.top};scope.top=frame;let completed=false;
   try{
    const result=operation();
@@ -96,3 +114,10 @@ export class NativeAreaSceneBirthAdmission {
   }
  }
 }
+
+// Captured in the defining module after its class initializes. Importers call
+// these hoisted functions only at runtime; cold import order cannot capture TDZ.
+const nativeFinalEntryMethods=Object.freeze({combine:NativeAreaSceneBirthAdmission.prototype.canCombineFinalEntry,selected:NativeAreaSceneBirthAdmission.prototype.runFinalSelected,plan:NativeAreaSceneBirthAdmission.prototype.runFinalEntryPlan});
+export function canCombineNativeFinalEntry(birth:NativeAreaSceneBirthAdmission):boolean{return Reflect.apply(nativeFinalEntryMethods.combine,birth,[]);}
+export function runNativeFinalSelected<T>(birth:NativeAreaSceneBirthAdmission,rows:readonly NativeAreaActorSelection<object>[],action:()=>T):T{return Reflect.apply(nativeFinalEntryMethods.selected,birth,[rows,action]) as T;}
+export function runNativeFinalEntryPlan(birth:NativeAreaSceneBirthAdmission,token:object):unknown{return Reflect.apply(nativeFinalEntryMethods.plan,birth,[token]);}

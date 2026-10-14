@@ -12,7 +12,7 @@ import {countNativeNewsCarriers} from './nativeCaravanNewsFixture';
 // Run: npx tsx balance/probe_newsmove.ts
 // ---------------------------------------------------------------------------
 
-import { readFileSync } from 'node:fs';
+import {readNativeShardsCaravan as readFileSync} from './nativeShardsCompositionFixture';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { NOTICE_CFG } from '../src/world/bulletins';

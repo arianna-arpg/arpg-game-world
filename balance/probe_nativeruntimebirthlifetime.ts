@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';import fs from 'node:fs';import {runtimeBirthLifetimeArchive} from './nativeRuntimeBirthLifetimeArchive';import {beforeNativeRuntimeBirthLifetime as originalLifetime} from './nativeRuntimeBirthLifetimeFixture';
+import assert from 'node:assert/strict';import {nativeShardsLifetimeFS as fs} from './nativeShardsLegacySourceFixture';import {runtimeBirthLifetimeArchive} from './nativeRuntimeBirthLifetimeArchive';import {beforeNativeRuntimeBirthLifetime as originalLifetime} from './nativeRuntimeBirthLifetimeFixture';
 import {titanAttendanceArchive} from './nativeTitanAttendanceArchive';
 import {beforeNativeTitanAttendance} from './nativeTitanAttendanceFixture';
 function beforeNativeRuntimeBirthLifetime(source:string,file:string):string {return originalLifetime(titanAttendanceArchive.some(row=>row.file===file)?beforeNativeTitanAttendance(source,file):source,file);}

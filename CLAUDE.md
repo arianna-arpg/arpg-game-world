@@ -1,3 +1,41 @@
+Retained Shards entry composition now carries exact corrected108 physical census,
+owner-entry and readiness work over accepted120/main a2fa4291. Preserve native
+selected callbacks, cold capture, partial effects and all historical source assertions.
+Verify nativehostperformancesource, all six entry/readiness probes, affected retained
+server courses, all four types and generation. Performance/capacity acceptance,
+empty-area scheduling, real eviction/private namespaces and generated terrain remain
+open; this composition is not 60 Hz or whole-parity acceptance. See
+docs/worldgen/native-host-entry-performance.md.
+
+Retained host proof closure carries the accepted absent-player rescue expectation,
+requires a defined boss id before a peer can anchor a missing captive, and keeps
+the original Titan golden through exact unused Actor-slot comparison. Preserve
+actual rescue ownership, unchanged raw Titan lane equality, all original source
+assertions and finite predecessor checks. Verify nativehostclosuresource,
+nativebirthadmission, nativerescueanchor/source, nativescenequests, nativecombatrescueattendance, oraclerescue,
+nativetitanreceiptsource, full nativescenetitans, earlier composition proofs and
+all types. See docs/worldgen/native-host-proof-closure.md. Server performance
+and broader multiplayer/content acceptance remain separate gates.
+
+Main follow-up a2fa4291 preserves incidental minion prey priority, Charge's
+grounded wake, and paced life/mana orb attempts in actual retained gameplay.
+The shared hit owner uses its campaign clock and exact acting body, preserving
+cadence across skill swaps, builds and area travel. Verify miniontargets,
+orbgeneration, movementvisuals, nativemainorbs/minions, four types, simulation
+smoke, historical source gates and movement-visuals-ui. See
+docs/worldgen/native-main-followup-parity.md. Shards composition, private quest
+instances, generated entrances and bounded/open terrain retain separate gates.
+
+Dedicated retained Shards compose actual server input, per-area publication,
+party musters, vessels, corpses and native checkpoint ownership through --native.
+Preserve current socket/character identity, one campaign frame, native road
+continuations, original near scaling and keeper maintenance. Fault breakers
+precede saves; partial startup subscriptions and pending listeners retire fully.
+Verify nativeshardhost*, actual native CLI and served two-client browser course,
+all parent server/retained source lanes and all four types before promotion.
+See docs/worldgen/native-dedicated-shards.md. Complete broader main content
+acceptance, private quest instances and generated/bounded terrain separately.
+
 Native caravan loss now announces after wreck/flash effects and cleared cart progress,
 through the actual objective owner. Preserve one-time loss, native partial effects,
 selected notice callbacks and remote-only retained areas. The news census follows
@@ -1772,6 +1810,11 @@ version 2 adds persistent discovery, supplies, caches and scenery consequences.
 Continue retains older terrain descriptors. Verify `probe_worldmass_sites.ts` and
 hidden `balance/worldmass-sites-ui.cjs` against a scoped preview build. See
 `docs/design/seamless-world-foundation.md` for the admitted lifecycle and limits.
+Minion critter targeting, Charge's ground wake and life/mana orb pacing are
+documented in [combat-polish](docs/design/combat-polish.md). Verify
+probe_miniontargets, probe_orbgeneration, companionstance, flasktrees and
+movementvisuals; build before the hidden movement-visuals UI harness.
+
 Storm, summon and construct identities use `data/skillPresenceVisuals.ts`
 and `render/vis/skillPresenceVoice.ts`: 139 explicit source profiles.
 Births, completed actions, real aura/construct pulses and actual retirement

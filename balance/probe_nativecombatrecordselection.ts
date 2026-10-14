@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+import {nativeShardsCaravanFS as fs} from './nativeShardsCompositionFixture';
 import assert from 'node:assert/strict';
 import {nativeSceneCombatRecordSelectionArchive as a} from './nativeSceneCombatRecordSelectionArchive';
 import {beforeNativeCombatRecordSelection as reverse} from './nativeCombatRecordSelectionFixture';

@@ -1,3 +1,11 @@
+import {isNativeCampaignViewOf} from './nativeAreaCampaignSession';
+import {nativeReadyAssemblyPhase} from './nativeAreaSceneAssembly';
+import {nativeReadyPresence} from './nativeAreaScenePresence';
+import {nativeReadyMemory,nativeReadyMemoryFinal,nativeReadyMemoryInputs} from './nativeAreaSceneMemory';
+import {nativeReadyRoadContext,nativeReadyRoadIdentity} from './nativeAreaRoadContext';
+import {nativeReadyAuthority} from './nativeAreaActorAuthority';
+import {landNativeHostedSeat,nativeHostedEntryLanding} from './nativeAreaHostedRoadSupport';
+import type {MusterRoad} from '../engine/shardMuster';
 import type {NativeZoneMemory} from '../engine/nativeSceneMemory';
 import {installNativeGroundCoordinatorResolver,type NativeGroundCoordinatorCalls} from './nativeOdysseyGroundRegistration';
 import {NativeAreaSceneQuests} from './nativeAreaSceneQuests';
@@ -45,9 +53,11 @@ import {NativeAreaMemoryRegistry} from './nativeAreaMemoryRegistry';
 import {NativeAreaRoadContext,installNativeRoadLink} from './nativeAreaRoadContext';
 import {NativeAreaSceneDirectory} from './nativeAreaSceneDirectory';
 import type {NativeAreaDirectoryView} from './nativeAreaDirectoryView';
+export interface NativeHostedRoadHooks {muster?(seat:Seat,road:MusterRoad<NativeAreaRoadDestination>):boolean;mustering?(seatId:string):boolean;afterArrival?(seat:Seat,to:NativeAreaSceneOngoing,from:NativeAreaSceneOngoing,woke:boolean):void}
+interface HostedMusterContinuation {source:Registered;origin:NativeAreaTransitionFrame;road:MusterRoad<NativeAreaRoadDestination>;used:WeakSet<Seat>;accepted:boolean}
 export interface NativeAreaTransitionInput {campaign:NativeAreaOngoingCampaign;characterWriter:World;authority:NativeAreaActorAuthority<object>;memoryRegistry:NativeAreaMemoryRegistry}
 export interface NativeRoadDrainResult {readonly seatId:string;readonly dest:string;readonly outcome:'moved'|'same-area'|'duplicate'|'failed';readonly error?:unknown}
-interface RoadReceipt {readonly ticket:RoadTicket<NativeAreaRoadDestination>;readonly source:Registered;readonly capture:SeatCapture;readonly seat:Seat;readonly id:string;readonly dest:string;readonly instance:string|undefined;readonly origin:NativeAreaTransitionFrame|null;used:boolean}
+interface RoadReceipt {readonly ticket:RoadTicket<NativeAreaRoadDestination>;readonly source:Registered;readonly capture:SeatCapture;readonly seat:Seat;readonly id:string;readonly meta:Seat['meta'];readonly dest:string;readonly instance:string|undefined;readonly origin:NativeAreaTransitionFrame|null;used:boolean}
 interface ActiveRoad {readonly receipt:RoadReceipt;readonly frame:Frame;body:Actor;destination:Registered|null;readonly woke:boolean}
 export interface NativeRoadQueueBridge {enableHosted():void;enqueue(ticket:RoadTicket<NativeAreaRoadDestination>):void;drain():readonly NativeRoadDrainResult[]}
 const roadQueueIssuers=new WeakMap<NativeAreaSceneTransitionCoordinator,(owner:object,combat:NativeAreaSceneCombat)=>NativeRoadQueueBridge>();
@@ -94,6 +104,14 @@ function own<T>(value:object,key:PropertyKey):T {const d=Object.getOwnPropertyDe
 function optionalOwn<T>(value:object,key:PropertyKey):T|undefined {const d=Object.getOwnPropertyDescriptor(value,key);if(!d)return undefined;if(!Object.hasOwn(d,'value'))throw Error('Native transition refuses an accessor field: '+String(key));return d.value as T;}
 function writable(value:object,key:PropertyKey):void {const d=Object.getOwnPropertyDescriptor(value,key);if(d?(!Object.hasOwn(d,'value')||!d.writable):!Object.isExtensible(value))throw Error('Native transition needs writable ordinary field: '+String(key));}
 function mutableCensus(value:unknown):asserts value is Actor[]{if(!Array.isArray(value)||Object.getPrototypeOf(value)!==Array.prototype||Object.hasOwn(value,'includes')||Object.getOwnPropertyDescriptor(Array.prototype,'includes')?.value!==arrayIncludes)throw Error('Native transition needs an ordinary raw census');const length=Object.getOwnPropertyDescriptor(value,'length');if(!length?.writable||!Object.isExtensible(value))throw Error('Native transition needs a mutable raw census');for(let i=0;i<value.length;i++){const d=Object.getOwnPropertyDescriptor(value,i);if(!d||!Object.hasOwn(d,'value')||!d.writable||!d.configurable)throw Error('Native transition needs mutable census elements');}}
+// These probes inspect descriptors only. Any selectable callback uses the
+// original route instead; no readiness result crosses a field read or call.
+const readyUnknown=Symbol('native-ready-callback'),readyArrayIterator=Array.prototype[Symbol.iterator];
+function readyOwn(value:unknown,key:PropertyKey):unknown{if(!value||(typeof value!=='object'&&typeof value!=='function'))return readyUnknown;const d=Object.getOwnPropertyDescriptor(value,key);return d&&Object.hasOwn(d,'value')?d.value:readyUnknown;}
+function readySlot(value:unknown,key:PropertyKey):PropertyDescriptor|undefined{if(!value||(typeof value!=='object'&&typeof value!=='function'))return;let at:object|null=value as object;while(at){const d=Object.getOwnPropertyDescriptor(at,key);if(d)return d;at=Object.getPrototypeOf(at);}return;}
+function readyRead(value:unknown,key:PropertyKey):unknown{const d=readySlot(value,key);return !d?undefined:Object.hasOwn(d,'value')?d.value:readyUnknown;}
+function readyMethod(value:unknown,key:PropertyKey,fn:unknown):boolean{const d=readySlot(value,key);return !!d&&Object.hasOwn(d,'value')&&d.value===fn;}
+function readyGetter(value:unknown,key:PropertyKey,fn:unknown):boolean{const d=readySlot(value,key);return !!d&&!Object.hasOwn(d,'value')&&d.get===fn;}
 interface SeatCapture {readonly campaign:NativeAreaOngoingCampaign;readonly seats:readonly Seat[];readonly rows:readonly {seat:Seat;id:string;body:Actor}[]}
 interface TraversalContinuation {readonly origin:NativeAreaTransitionFrame;readonly record:TraversalState;readonly source:Registered;current:Registered;seats:readonly Seat[];readonly swap:(()=>void)|undefined;readonly done:(()=>void)|undefined;swapWrapper:(()=>void)|undefined;doneWrapper:(()=>void)|undefined;swapUsed:boolean;doneUsed:boolean;expired:boolean}
 function rawValues<T>(value:unknown):T[]{if(!Array.isArray(value))throw Error('Native transition needs a raw array');const n=own<number>(value,'length'),out:T[]=[];for(let i=0;i<n;i++)out.push(own<T>(value,i));return out;}
@@ -132,6 +150,8 @@ export class NativeAreaSceneTransitionCoordinator {
  #traversalValue:TraversalState|null=null;
  readonly #roadQueue:RoadReceipt[]=[];readonly #deferredRoadDispatch:{source:Registered;zoneId:string;fn:(view:NativeAreaDirectoryView)=>unknown}[]=[];
  readonly #roadLinks=new WeakMap<NativeAreaSceneCombat,ShardWorldLink<NativeAreaRoadDestination,NativeAreaDirectoryView>>();readonly #roadInstances=new Map<string,string|undefined>();
+ readonly #offeredMusterRoads=new WeakMap<object,HostedMusterContinuation>();
+ #hostedHooks:NativeHostedRoadHooks|null=null;#musterContinuation:{record:HostedMusterContinuation;frame:Frame;seat:Seat;check:()=>void}|null=null;
  #hostedRoads=false;#roadKeeper:Registered|null=null;#roadDraining=false;#activeRoad:ActiveRoad|null=null;#roadCallback:ActiveRoad|null=null;
  constructor(raw:NativeAreaTransitionInput){
   const campaign=own<NativeAreaOngoingCampaign>(raw,'campaign'),characterWriter=own<World>(raw,'characterWriter'),authority=own<NativeAreaActorAuthority<object>>(raw,'authority'),memoryRegistry=own<NativeAreaMemoryRegistry>(raw,'memoryRegistry');
@@ -253,17 +273,61 @@ export class NativeAreaSceneTransitionCoordinator {
  allowsTraversalContinuation(originalFrame:NativeAreaTransitionFrame):boolean {const c=this.#executingTraversalCallback;return !!c&&c.origin===originalFrame&&!c.expired&&this.#traversalStep?.continuation===c&&this.#frame?.active===true;}
  /** The exact originating dynamic host may resume only inside its selected
   * real queued ticket callback, never during a whole drain or unrelated road. */
+ allowsMusterMaker(combat:NativeAreaSceneCombat):boolean {const r=this.#musterContinuation;if(!r||r.record.source.combat!==combat||r.frame!==this.#frame||!r.frame.active)return false;r.check();return true;}
+ allowsMusterContinuation(originalFrame:NativeAreaTransitionFrame,seat?:Seat):boolean {const r=this.#musterContinuation;if(!r||r.record.origin!==originalFrame||r.frame!==this.#frame||!r.frame.active||(seat!==undefined&&r.seat!==seat))return false;r.check();return true;}
  allowsRoadContinuation(originalFrame:NativeAreaTransitionFrame):boolean {const road=this.#roadCallback;return !!road&&road===this.#activeRoad&&road.receipt.origin===originalFrame&&road.frame===this.#frame&&road.frame.active;}
  get frame():NativeAreaTransitionFrame{if(!this.#frame?.active)throw Error('Native transition frame is expired');return this.#frame.view;}
  areaFor(combat:NativeAreaSceneCombat):NativeAreaSceneOngoing{return this.#combat(combat).ongoing;}
  roadsFor(combat:NativeAreaSceneCombat):NativeAreaRoadContext{return this.#combat(combat).roads;}
  departureFor(combat:NativeAreaSceneCombat):NativeAreaSceneDepartureMemory{return this.#combat(combat).departure;}
  #combat(combat:NativeAreaSceneCombat):Registered{const r=this.#combats.get(combat);if(!r||r.combat!==combat)throw Error('Unregistered native transition combat owner');this.#ready(r);return r;}
- #ready(r:Registered):void{
+ /** A conservative proof that the complete original readiness path has no
+  * selectable callbacks. It admits nothing and invokes no user-selected code. */
+ #ordinaryReady(r:Registered):boolean{
+  const {campaign,characterWriter:writer,authority}=this.input,a=readyOwn(r.ongoing,'assembly'),input=readyOwn(a,'input'),scene=readyOwn(input,'scene'),zone=readyOwn(scene,'zone'),transition=readyOwn(a,'transition'),presence=readyOwn(a,'scenePresence'),coast=readyOwn(input,'coast'),coastInput=readyOwn(coast,'input'),roadsInput=readyOwn(r.roads,'input'),memory=nativeReadyMemoryInputs(r.memory);
+  if(!isNativeCampaignViewOf(campaign,writer)||!memory||memory.definition!==zone||memory.id!==r.id||readyOwn(r.ongoing,'combat')!==r.combat||readyOwn(r.ongoing,'authority')!==authority||readyOwn(input,'campaign')!==campaign||readyOwn(coastInput,'campaign')!==campaign||readyOwn(r.memory,'assembly')!==a||readyOwn(r.memory,'authority')!==authority||readyOwn(roadsInput,'assembly')!==a||readyOwn(roadsInput,'authority')!==authority||readyOwn(presence,'scene')!==scene||readyOwn(zone,'id')===readyUnknown||readyOwn(transition,'inCave')===readyUnknown)return false;
+  if(!readyGetter(a,'phase',nativeReadyAssemblyPhase)||!readyGetter(presence,'active',nativeReadyPresence.active)||!readyMethod(r.memory,'assertReady',nativeReadyMemory)||!readyMethod(r.roads,'assertReady',nativeReadyRoadContext)||!readyMethod(presence,'assertAuthority',nativeReadyPresence.assert)||!readyMethod(authority,'bindingFor',nativeReadyAuthority.binding)||!readyMethod(authority,'assertAdmitted',nativeReadyAuthority.admitted)||!readyMethod(authority,'assertFinalPhysical',nativeReadyAuthority.physical))return false;
+  const zoneMap=readyOwn(writer,'zoneMap'),caveMap=readyOwn(writer,'caveMap');if(zoneMap===readyUnknown||caveMap===readyUnknown||readyRead(zoneMap,r.id)===readyUnknown||readyRead(caveMap,r.id)===readyUnknown)return false;
+  const actors=readyOwn(scene,'actors');if(!Array.isArray(actors)||!readyMethod(actors,Symbol.iterator,readyArrayIterator))return false;const length=readyOwn(actors,'length');if(typeof length!=='number')return false;for(let i=0;i<length;i++)if(readyOwn(actors,i)===readyUnknown)return false;return true;
+ }
+ /** Synchronous finite route selection. Undefined preserves the full original
+  * path; the returned owner is never a validity token for a later callback. */
+ tryOrdinaryResidentAreas():readonly NativeAreaSceneOngoing[]|undefined {
+  if(!readyMethod(this,'residentAreas',ordinaryRouteMethods.residents)||!readyMethod(this,'areaFor',ordinaryRouteMethods.areaFor))return undefined;const rows=[...this.#areas.values()];if(rows.some(row=>!this.#ordinaryReady(row)))return undefined;
+  // Every original cohort check remains, once. The caller may only finish its
+  // private owner-identity mapping before any selected field or callback.
+  for(const row of rows)this.#ready(row,true);return Object.freeze(rows.map(row=>row.ongoing));
+ }
+ tryOrdinaryCampaignArea(combat:NativeAreaSceneCombat):NativeAreaSceneOngoing|undefined {const source=this.#combats.get(combat);if(!source||!readyMethod(this,'areaFor',ordinaryRouteMethods.areaFor)||!this.#ordinaryReady(source))return undefined;this.#ready(source,true);return source.ongoing;}
+ tryOrdinaryCampaignRoute(combat:NativeAreaSceneCombat):NativeAreaSceneOngoing|undefined {
+  const source=this.#combats.get(combat),frame=this.#frame,current=frame?.current;if(!source||!frame?.active||!current||!readyMethod(this,'areaFor',ordinaryRouteMethods.areaFor)||!readyGetter(this,'frame',ordinaryRouteMethods.frame)||!this.#ordinaryReady(source)||(current!==source&&!this.#ordinaryReady(current)))return undefined;
+  this.#ready(source,true);if(current!==source)this.#ready(current,true);if(this.#frame!==frame||!frame.active||frame.current!==current||this.#combats.get(combat)!==source||this.#combats.get(current.combat)!==current)throw Error('Native ordinary campaign route changed');return current.ongoing;
+ }
+ /** Invoke the unchanged runFrom immediately under an ordinary route proof.
+  * There is no cached receipt: selected callbacks and pending retirement keep
+  * the original surrounding owner checks, and native action still enters its
+  * separately validated combat operation before any effect. */
+ tryRunOrdinaryCampaign<T>(combat:NativeAreaSceneCombat,action:()=>T):{value:T}|undefined {
+  const row=this.#combats.get(combat),frame=this.#frame,writer=this.input.characterWriter;
+  if(!row||this.#retired||this.#retiringVoyage||this.#retiringGround||this.#moving||!readyMethod(this,'runFrom',ordinaryRouteMethods.run)||!readyMethod(this,'areaFor',ordinaryRouteMethods.areaFor)||!readyGetter(this,'frame',ordinaryRouteMethods.frame)||!this.#ordinaryReady(row))return undefined;
+  if(frame){if(!frame.active||frame.current!==row)return undefined;}
+  else{if(this.#voyageCompleted||this.#grounds.size)return undefined;const odyssey=readyOwn(writer,'odyssey');if(odyssey===readyUnknown||readyRead(odyssey,'state')===readyUnknown)return undefined;}
+  const seats=readyOwn(writer,'seats');if(!Array.isArray(seats))return undefined;
+  // Original runFrom performs its complete readiness, publication, captured
+  // roster and physical checks. Their ordinary fields cannot execute a callback
+  // between the proof above and the immediate private entry supplied by caller.
+  return {value:Reflect.apply(ordinaryRouteMethods.run,this,[row.ongoing,action]) as T};
+ }
+ #ready(r:Registered,ordinary=false):void{
   if(this.#retired)throw Error('Native coordinator is retired');
   assertNativeRetainedMassState(this.input.characterWriter);
   const a=r.ongoing.assembly,input=a.input,authority=this.input.authority;
   if(a.phase!=='born'||input.scene.zone.id!==r.id||((this.input.campaign.zoneMap[r.id]??this.input.campaign.caveMap[r.id])!==input.scene.zone&&this.#restore?.source!==r)||r.ongoing.authority!==authority||authority.bindingFor(input.scene)!==r.binding||own(r.binding.services,'combat')!==r.combat)throw Error('Native transition registration changed');
+  if(ordinary||this.#ordinaryReady(r)){
+   if(this.#restore?.source!==r){Reflect.apply(nativeReadyMemoryFinal,r.memory,[]);Reflect.apply(nativeReadyRoadIdentity,r.roads,[]);}
+   else{Reflect.apply(nativeReadyRoadIdentity,r.roads,[]);authority.assertFinalPhysical(r.binding);}
+   assertNativeRetainedMassState(this.input.characterWriter);return;
+  }
   if(this.#restore?.source!==r)r.memory.assertReady();r.roads.assertReady();authority.assertFinalPhysical(r.binding);assertNativeRetainedMassState(this.input.characterWriter);
  }
  register(ongoing:NativeAreaSceneOngoing,memory:NativeAreaSceneMemory,roads?:NativeAreaRoadContext):void{
@@ -532,7 +596,7 @@ export class NativeAreaSceneTransitionCoordinator {
 
 
    if(!firstBirth){const selected=capture.rows.find(row=>row.body===incoming);if(!selected)throw Error('Native surface arrival lost its incoming seat');this.#delayedArrival={combat:destination.combat,kind:'ascent',capture,seat:selected.seat,body:incoming,local:localSeat,meta:selected.seat.meta};try{destination.combat.surfaceArrival.arriveAscent();}finally{this.#delayedArrival=null;}}
-   if(activeRoad){const after=activeRoad.receipt.ticket.after;if(after!==undefined)this.#invokeRoad(activeRoad,after,activeRoad.receipt.ticket,[activeRoad.receipt.seat,firstBirth]);this.#roadCheck(activeRoad);}
+   if(activeRoad){const after=activeRoad.receipt.ticket.after;if(after!==undefined)this.#invokeRoad(activeRoad,after,activeRoad.receipt.ticket,[activeRoad.receipt.seat,firstBirth]);this.#roadCheck(activeRoad);this.#hostedArrived(activeRoad);}
   }finally{this.#voyageCrossing=null;this.#moving=false;}
  }
 
@@ -542,24 +606,34 @@ export class NativeAreaSceneTransitionCoordinator {
   this.assertIdleFrame();this.#assertProjection();if(this.#hostedRoads)return;if(!this.#published)throw Error('Native hosted roads need a published campaign');
   for(const row of this.#areas.values())this.#ready(row);this.#hostedRoads=true;this.#roadKeeper=this.#published;for(const row of this.#areas.values())this.#installRoadLink(row);
  }
+ installHostedRoadHooks(hooks:NativeHostedRoadHooks):void {this.assertIdleFrame();this.#assertProjection();if(!this.#hostedRoads||this.#hostedHooks||!hooks||typeof hooks!=='object')throw Error('Native hosted hooks need one idle hosted coordinator');for(const key of ['muster','mustering','afterArrival'] as const){const value=optionalOwn<Function>(hooks,key);this.assertIdleFrame();if(value!==undefined&&typeof value!=='function')throw Error('Native hosted hook is not callable');}this.#hostedHooks=hooks;}
+ #hostedSeat(row:Registered,seat:Seat):()=>void {this.#ready(row);const capture=captureSeats(this.input.campaign,[seat]),selected=capture.rows[0],meta=own<Seat['meta']>(seat,'meta');if(optionalOwn(seat,'keeper'))throw Error('Native hosted operation cannot select its keeper');const check=()=>{this.#ready(row);finalSeats(capture);if(own(seat,'meta')!==meta)throw Error('Native hosted selected character changed');Reflect.apply(authorityFinalPhysical,this.input.authority,[row.binding,[selected.body]]);};check();return check;}
+ #offerHostedMuster(row:Registered,seat:Seat,road:MusterRoad<NativeAreaRoadDestination>):boolean {const hooks=this.#hostedHooks,frame=this.#frame;if(!hooks||!frame?.active||frame.current!==row||!frame.seats.includes(seat))throw Error('Native muster needs its actual offered road frame');const check=this.#hostedSeat(row,seat),fn=hooks.muster;check();if(!fn)return false;const make=road.make;check();if(typeof make!=='function')throw Error('Native muster road is not callable');const record:HostedMusterContinuation={source:row,origin:frame.view,road,used:new WeakSet(),accepted:false},self=this;
+ const issued=Object.freeze({key:own<string>(road,'key'),kind:own<string>(road,'kind'),pos:Object.freeze({x:own<number>(road.pos,'x'),y:own<number>(road.pos,'y')}),make(member:Seat){if(!record.accepted)throw Error('Native muster road was not accepted');return self.#makeHostedMuster(record,make,this,member);}});this.#offeredMusterRoads.set(issued,record);check();const result=Reflect.apply(fn,hooks,[seat,issued]);check();if(this.#hostedHooks!==hooks||this.#frame!==frame||!frame.active)throw Error('Native muster hook selection expired');record.accepted=result===true;return result;}
+ ownsHostedMusterRoad(road:object,seat:Seat):boolean {const r=this.#offeredMusterRoads.get(road),frame=this.#frame;if(!r||!frame?.active||frame.current!==r.source||r.origin!==frame.view||!frame.seats.includes(seat))return false;this.#hostedSeat(r.source,seat)();return true;}
+ #makeHostedMuster(record:HostedMusterContinuation,make:MusterRoad<NativeAreaRoadDestination>['make'],receiver:unknown,seat:Seat):RoadTicket<NativeAreaRoadDestination>|null {const frame=this.#frame;if(!frame?.active||frame.current!==record.source||this.#moving||this.#musterContinuation||record.used.has(seat))throw Error('Native muster maker needs its actual source member frame');const check=this.#hostedSeat(record.source,seat);if(!frame.seats.includes(seat))throw Error('Native muster member is outside its current frame');record.used.add(seat);this.#musterContinuation={record,frame,seat,check};try{check();const owner=record.source.combat.campaignFrame,enter=owner.resumeHostedMuster;check();const result=Reflect.apply(enter,owner,[()=>Reflect.apply(make,receiver,[seat])]) as RoadTicket<NativeAreaRoadDestination>|null;check();if(nativeBirthAsyncResult(result))throw Error('Native muster maker must be synchronous');if(result&&own(result,'seatId')!==own(seat,'id'))throw Error('Native muster ticket belongs to another member');return result;}finally{this.#musterContinuation=null;}}
+ #hostedMustering(row:Registered,id:string):boolean {const hooks=this.#hostedHooks;if(!hooks)return false;if(!this.#frame?.active||this.#frame.current!==row)throw Error('Native mustering needs its actual source frame');const capture=captureSeats(this.input.campaign),seat=capture.rows.find(r=>r.id===id)?.seat;if(!seat)return false;finalSeats(capture);const check=this.#hostedSeat(row,seat),fn=hooks.mustering;check();if(!fn)return false;const result=Reflect.apply(fn,hooks,[id]);check();return result;}
+ #hostedArrived(active:ActiveRoad):void {const hooks=this.#hostedHooks;if(!hooks)return;const row=this.#roadCheck(active),check=this.#hostedSeat(row,active.receipt.seat),fn=hooks.afterArrival;check();if(!fn)return;const result=Reflect.apply(fn,hooks,[active.receipt.seat,row.ongoing,active.receipt.source.ongoing,active.woke]);check();if(nativeBirthAsyncResult(result))throw Error('Native hosted arrival must be synchronous');this.#roadCheck(active);}
  #installRoadLink(row:Registered):void{
   if(this.#roadLinks.has(row.combat))return;const self=this;
   const link:ShardWorldLink<NativeAreaRoadDestination,NativeAreaDirectoryView>=Object.freeze({role:row===this.#roadKeeper?'keeper':'unit',key:row.id,
    enqueue(ticket:RoadTicket<NativeAreaRoadDestination>){self.#enqueueRoad(row,ticket);},
+   get muster(){return self.#hostedHooks?(seat:Seat,road:MusterRoad<NativeAreaRoadDestination>)=>self.#offerHostedMuster(row,seat,road):undefined;},
+   get mustering(){return self.#hostedHooks?(id:string)=>self.#hostedMustering(row,id):undefined;},
    dispatch<T>(zoneId:string,fn:(view:NativeAreaDirectoryView)=>T):T|undefined{self.#ready(row);if(self.#frame||self.#moving){self.#deferredRoadDispatch.push({source:row,zoneId,fn});return undefined;}return self.atZone(zoneId,fn);},
    worlds(){self.#ready(row);return Object.freeze(self.residentAreas().map(area=>self.#directory(self.#combat(area.combat))));},
    liveSeed(zoneId:string,seatId?:string){self.#ready(row);const dest=self.#areas.get(zoneId);if(!dest)return undefined;if(seatId!==undefined){const capture=captureSeats(self.input.campaign);if(!capture.rows.some(r=>r.id===seatId))return undefined;finalSeats(capture);}self.#ready(dest);return dest.ongoing.assembly.input.geometry.currentZoneSeed;},
   });
   this.#roadLinks.set(row.combat,link);installNativeRoadLink(this,row.combat,link);
  }
- #ticketIdentity(receipt:RoadReceipt):void{const t=receipt.ticket;if(own(t,'seatId')!==receipt.id||own(t,'dest')!==receipt.dest||optionalOwn(t,'instance')!==receipt.instance)throw Error('Native queued ticket identity changed');}
+ #ticketIdentity(receipt:RoadReceipt):void{const t=receipt.ticket;if(own(receipt.seat,'meta')!==receipt.meta)throw Error('Native queued character changed');if(own(t,'seatId')!==receipt.id||own(t,'dest')!==receipt.dest||optionalOwn(t,'instance')!==receipt.instance)throw Error('Native queued ticket identity changed');}
  #enqueueRoad(source:Registered,ticket:RoadTicket<NativeAreaRoadDestination>):void{
   if(!this.#hostedRoads)throw Error('Native hosted roads are not enabled');if(!ticket||typeof ticket!=='object')throw Error('Native road needs an actual ticket');
   const id=own<string>(ticket,'seatId'),dest=own<string>(ticket,'dest'),instance=optionalOwn<string>(ticket,'instance');if(typeof id!=='string'||typeof dest!=='string'||(instance!==undefined&&typeof instance!=='string'))throw Error('Native road needs primitive ticket identity');
   const campaignCapture=captureSeats(this.input.campaign),selectedSeat=campaignCapture.rows.find(row=>row.id===id);if(!selectedSeat||optionalOwn(selectedSeat.seat,'keeper'))throw Error('Native road needs an actual travelling seat');
   this.#ready(source);const capture=captureSeats(this.input.campaign,[selectedSeat.seat]),body=capture.rows[0].body,selections=this.input.authority.selectActors([body]);
   if(selections[0].binding!==source.binding)throw Error('Native ticket seat is not in its source');finalSeats(campaignCapture);finalSeats(capture);this.input.authority.assertFinalSelections(selections);
-  const receipt:RoadReceipt={ticket,source,capture,seat:selectedSeat.seat,id,dest,instance,origin:this.#frame?.view??null,used:false};this.#ticketIdentity(receipt);this.#roadQueue.push(receipt);
+  const receipt:RoadReceipt={ticket,source,capture,seat:selectedSeat.seat,id,meta:own<Seat['meta']>(selectedSeat.seat,'meta'),dest,instance,origin:this.#frame?.view??null,used:false};this.#ticketIdentity(receipt);this.#roadQueue.push(receipt);
  }
  #drainRoads():readonly NativeRoadDrainResult[]{
   this.assertIdleFrame();if(!this.#hostedRoads)throw Error('Native hosted roads are not enabled');this.#roadDraining=true;const out:NativeRoadDrainResult[]=[],moved=new Set<Seat>();
@@ -593,6 +667,7 @@ export class NativeAreaSceneTransitionCoordinator {
   const check=()=>{if(self.#roadCallback!==active)throw Error('Native road callback capability expired');return self.#roadCheck(active);};
   for(const key of Reflect.ownKeys(directory))Object.defineProperty(view,key,{enumerable:true,get(){check();const value=Reflect.get(directory,key);check();return typeof value==='function'?(...args:unknown[])=>{check();return Reflect.apply(value,directory,args);}:value;}});
   for(const key of ['waypointPos','caveEntrances'] as const)Object.defineProperty(view,key,{enumerable:true,get(){return check().ongoing.assembly.input.geometry[key];}});
+  Object.defineProperty(view,'entryLanding',{get(){check();return(from?:string|null)=>{check();const geometry=row.ongoing.assembly.input.geometry,host={get exits(){check();const value=geometry.exits;check();return value;},get arena(){check();const value=geometry.arena;check();return value;},get zoneEntry(){check();const value=geometry.zoneEntry;check();return value;}};const value=nativeHostedEntryLanding(host,from);check();return value;};}});
   Object.defineProperty(view,'massRuntime',{enumerable:true,get(){check();return null;}});Object.defineProperty(view,'shardWorld',{enumerable:true,get(){return check().roads.shardWorld;}});
   Object.defineProperty(view,'findFreeSpot',{enumerable:true,get(){const geometry=check().ongoing.assembly.input.geometry,fn=geometry.findFreeSpot;check();return(...args:Parameters<World['findFreeSpot']>)=>{check();return Reflect.apply(fn,geometry,args);};}});
   Object.defineProperty(view,'seatHero',{enumerable:true,get(){check();const campaign=self.input.campaign,fn=campaign.seatHero;check();return(seat:Seat)=>{check();if(seat!==active.receipt.seat)throw Error('Native road cannot select another seat');return Reflect.apply(fn,campaign,[seat]);};}});
@@ -672,6 +747,7 @@ export class NativeAreaSceneTransitionCoordinator {
   try{const result=Reflect.apply(callback!,receiver,[]);if(nativeBirthAsyncResult(result))throw Error('Native traversal callback must be synchronous');}
   finally{this.#executingTraversalCallback=previous;continuation.current=frame.current;if(kind==='done')continuation.expired=true;}
  }
+ landHostedSeat(seat:Seat,at:Vec2,opts?:Parameters<World['landPartyAt']>[1]):void {this.assertIdleFrame();assertNativeCombatOperationsIdle();if(!this.#hostedRoads)throw Error('Native hosted landing needs hosted roads');const binding=this.input.authority.require(own<Actor>(seat,'actor')),row=this.#combat(own<NativeAreaSceneCombat>(binding,'combat')),check=this.#hostedSeat(row,seat),frame={source:row,current:row,seats:Object.freeze([seat]),active:true} as Frame;frame.view=Object.freeze({get source(){return row.ongoing;},get current(){if(!frame.active)throw Error('Native hosted landing expired');return row.ongoing;},get seats(){if(!frame.active)throw Error('Native hosted landing expired');return frame.seats;},get active(){return frame.active;}});this.#frame=frame;this.#moving=true;try{landNativeHostedSeat(row.ongoing,seat,at,opts,()=>{if(this.#frame!==frame||!frame.active)throw Error('Native hosted landing expired');check();});}finally{frame.active=false;this.#frame=null;this.#moving=false;}}
  landPartyAt(at:Vec2,opts?:Parameters<World['landPartyAt']>[1]):void{
   const frame=this.#frame;if(!frame?.active)throw Error('Native party landing needs its exact transition cohort');const row=frame.current;this.#ready(row);
   const capture=captureSeats(this.input.campaign,frame.seats),subjects=capture.rows.map(r=>r.body),selected=this.input.authority.selectActors(subjects);
@@ -684,3 +760,12 @@ export class NativeAreaSceneTransitionCoordinator {
 installNativeHostedCoordinator({is:isNativeAreaSceneTransitionCoordinator,idle:NativeAreaSceneTransitionCoordinator.prototype.assertIdleFrame,ready:NativeAreaSceneTransitionCoordinator.prototype.nativeWorldReady,areaFor:NativeAreaSceneTransitionCoordinator.prototype.areaFor});
 
 const groundMethods=Object.freeze({assertQuests:NativeAreaSceneTransitionCoordinator.prototype.assertGroundRegistration,capture:NativeAreaSceneTransitionCoordinator.prototype.shouldCaptureGround,save:NativeAreaSceneTransitionCoordinator.prototype.groundRefreshForSave,retirement:NativeAreaSceneTransitionCoordinator.prototype.assertGroundMemoryRetirement,areaRetirement:NativeAreaSceneTransitionCoordinator.prototype.assertGroundRetirement});
+
+const ordinaryRouteMethods=Object.freeze({run:NativeAreaSceneTransitionCoordinator.prototype.runFrom,invoke:NativeAreaSceneTransitionCoordinator.prototype.tryRunOrdinaryCampaign,areaFor:NativeAreaSceneTransitionCoordinator.prototype.areaFor,frame:Object.getOwnPropertyDescriptor(NativeAreaSceneTransitionCoordinator.prototype,'frame')!.get!,select:NativeAreaSceneTransitionCoordinator.prototype.tryOrdinaryCampaignRoute,area:NativeAreaSceneTransitionCoordinator.prototype.tryOrdinaryCampaignArea,residents:NativeAreaSceneTransitionCoordinator.prototype.residentAreas,cohort:NativeAreaSceneTransitionCoordinator.prototype.tryOrdinaryResidentAreas});
+export function tryNativeOrdinaryCampaignRoute(coordinator:NativeAreaSceneTransitionCoordinator,combat:NativeAreaSceneCombat):NativeAreaSceneOngoing|undefined{return Reflect.apply(ordinaryRouteMethods.select,coordinator,[combat]);}
+
+export function tryNativeOrdinaryCampaignArea(coordinator:NativeAreaSceneTransitionCoordinator,combat:NativeAreaSceneCombat):NativeAreaSceneOngoing|undefined{return Reflect.apply(ordinaryRouteMethods.area,coordinator,[combat]);}
+
+export function tryNativeOrdinaryResidentAreas(coordinator:NativeAreaSceneTransitionCoordinator):readonly NativeAreaSceneOngoing[]|undefined{return Reflect.apply(ordinaryRouteMethods.cohort,coordinator,[]);}
+
+export function tryRunNativeOrdinaryCampaign<T>(coordinator:NativeAreaSceneTransitionCoordinator,combat:NativeAreaSceneCombat,action:()=>T):{value:T}|undefined{return Reflect.apply(ordinaryRouteMethods.invoke,coordinator,[combat,action]) as {value:T}|undefined;}

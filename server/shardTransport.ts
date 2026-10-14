@@ -34,7 +34,10 @@ import { extname, resolve, sep } from 'node:path';
 import type { ServerResponse } from 'node:http';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import type { Duplex } from 'node:stream';
+import { Duplex } from 'node:stream';
+// Upgrade sockets are genuine Node Duplexes; this final state read bypasses
+// shadowed surface accessors after callback-capable socket selection.
+const nativeSocketWritable=Object.getOwnPropertyDescriptor(Duplex.prototype,'writable')!.get!;
 import type { AddressInfo } from 'node:net';
 import { WS_GUID, WsMessageAssembler, encodeClose, encodePing, encodePong, encodeText } from '../src/net/wsframe';
 import { SHARD_SERVED_MARK, type ShardResume, type WireMsg } from '../src/net/ws';
@@ -43,8 +46,8 @@ import { HONEST_INPUT_CFG, mergeInputs, type PlayerId, type PlayerInput } from '
 import { sanitizeCosmeticLoadout } from '../src/meta/cosmetics';
 import { isAccountId } from '../src/meta/account';
 import { SHARD_REFUSAL, SHARD_UNLOAD_BEACON_PATH, shardBuildStamp } from '../src/net/shardBuild';
-import { ownEntryJson, serializeZone } from '../src/net/snapshot'; // THE WIRE'S EYES: THE OWN ENTRY (+ THE WIRE DIET's self-heal zone)
-import { seatAudienceBody, seatAudienceFrame, seatAudienceSplit } from '../src/net/seatView'; // THE ACTING SEAT: the audiences
+import { ownEntryJson, ownEntryView, serializeZone } from '../src/net/snapshot'; // THE WIRE'S EYES: THE OWN ENTRY (+ THE WIRE DIET's self-heal zone)
+import { seatAudienceBody, seatAudienceFrame, seatAudienceSplit, seatAudienceFor } from '../src/net/seatView'; // THE ACTING SEAT: the audiences
 import { WIRE_DIET_CFG } from '../src/net/wireDiet'; // THE WIRE DIET: the flow control's dial
 import type { DietSeat, ShardDiet } from './wireDiet'; // THE WIRE DIET: the per-socket frames
 
@@ -94,6 +97,9 @@ export function cleanId(raw: unknown): string {
 }
 
 interface Conn {
+  /** Every replacement socket must receive its own retained terrain. */
+  readonly publicationEpoch:object;
+  nativeZoneId?:string;
   sock: Duplex;
   seat: PlayerId | null;
   asm: WsMessageAssembler;
@@ -350,7 +356,7 @@ export class ShardTransport implements NetTransport {
       `Sec-WebSocket-Accept: ${accept}`,
       '', '',
     ].join('\r\n'));
-    const conn: Conn = { sock, seat: null, asm: new WsMessageAssembler(SHARD_WIRE_CFG.maxClientMessage, true), lastSeen: this.now(), closed: false, ip, openedAt: this.now(), congestedSince: 0, token: '', leaving: false,
+    const conn: Conn = { publicationEpoch:Object.freeze({}), sock, seat: null, asm: new WsMessageAssembler(SHARD_WIRE_CFG.maxClientMessage, true), lastSeen: this.now(), closed: false, ip, openedAt: this.now(), congestedSince: 0, token: '', leaving: false,
       ackTick: -1, sentTick: -1, inflight: [], diet: null };
     this.conns.add(conn);
     (sock as Duplex & { setNoDelay?: (on: boolean) => void }).setNoDelay?.(true);
@@ -680,6 +686,36 @@ export class ShardTransport implements NetTransport {
    *  a seat's own rows (its clocks, its refusal note, its surge) reach its own socket and never
    *  another's, a notice with an audience reaches that audience alone and an eyecatch the seats
    *  that may see it; a snapshot carrying none of these is the one broadcast frame it was. */
+  /** Retained publication binds both terrain and state to this actual socket. */
+  deliveryEpochForSeat(to:PlayerId):object|null {
+    const c=this.bySeat.get(to);return c&&this.nativeConnection(c,to)?c.publicationEpoch:null;
+  }
+  private nativeConnection(c:Conn,to:PlayerId,epoch?:object|null):boolean {
+    const sock=c.sock,usable=sock.writable&&!sock.destroyed;
+    return usable&&Reflect.apply(nativeSocketWritable,sock,[])&&c.sock===sock&&this.bySeat.get(to)===c&&c.seat===to&&!c.closed
+      &&(epoch===undefined||epoch===c.publicationEpoch);
+  }
+  private writeNative(c:Conn,to:PlayerId,epoch:object|null|undefined,frame:Uint8Array):boolean {
+    const sock=c.sock,write=sock.write,buffered=sock.writableLength;
+    if(buffered>=SHARD_WIRE_CFG.sendBufferCap||!this.nativeConnection(c,to,epoch)||c.sock!==sock)return false;
+    try{Reflect.apply(write,sock,[frame]);this.bytesOut+=frame.length;this.framesOut++;return true;}
+    catch{return false;}
+  }
+  sendZoneToSeat(z:ZoneMsg,to:PlayerId,epoch?:object|null):boolean {
+    const c=this.bySeat.get(to);if(!c||!this.nativeConnection(c,to,epoch))return false;
+    const zoneId=z.zoneId,frame=encodeText(JSON.stringify({t:'zone',zone:z} satisfies WireMsg));
+    if(!this.nativeConnection(c,to,epoch)||!this.writeNative(c,to,epoch,frame))return false;
+    if(!this.nativeConnection(c,to,epoch))return false;c.nativeZoneId=zoneId;return true;
+  }
+  sendStateToSeat(s:StateSnapshot,to:PlayerId,epoch?:object|null):boolean {
+    const c=this.bySeat.get(to);if(!c||!this.nativeConnection(c,to,epoch)||c.nativeZoneId!==s.zoneId)return false;
+    // The retained serializer has already selected an area. Never bind this
+    // snapshot to a legacy World diet or send another recipient's own rows.
+    const audience=seatAudienceSplit(s),snapshot=audience?{...audience.shared,...seatAudienceFor(audience,to)}:ownEntryView(s,to);
+    const frame=encodeText(JSON.stringify({t:'snap',snap:snapshot} satisfies WireMsg));
+    if(!this.nativeConnection(c,to,epoch)||c.nativeZoneId!==s.zoneId||!this.writeNative(c,to,epoch,frame))return false;
+    if(!this.nativeConnection(c,to,epoch))return false;c.sentTick=s.tick;return true;
+  }
   sendState(s: StateSnapshot): void { this.sendStateTo(s, this.bySeat.keys()); }
   /** THE WIRE PER UNIT (shard M1): a unit's snapshot to its own seats' sockets alone (a
    *  seat with no socket, the warden or a dormant seat, is skipped). sendState's laws, per

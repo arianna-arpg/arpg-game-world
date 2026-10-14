@@ -155,13 +155,16 @@ export interface NetTransport {
   /** Host→clients: broadcast a state snapshot (no-op locally). */
   sendState(snapshot: StateSnapshot): void;
   /** Targeted retained-area delivery. False keeps the zone pending for retry. */
-  sendStateToSeat?(snapshot:StateSnapshot,to:PlayerId):boolean;
+  sendStateToSeat?(snapshot:StateSnapshot,to:PlayerId,epoch?:object|null):boolean;
   /** Client: subscribe to incoming state. Returns a disposer. */
   onState(cb: (snapshot: StateSnapshot) => void): () => void;
 
   /** Host→clients: send the one-time per-zone terrain message. */
   sendZone(zone: ZoneMsg): void;
-  sendZoneToSeat?(zone:ZoneMsg,to:PlayerId):boolean;
+  sendZoneToSeat?(zone:ZoneMsg,to:PlayerId,epoch?:object|null):boolean;
+  /** Opaque live connection identity; null means no connected recipient.
+   * Targeted sends with this token refuse a replaced connection. */
+  deliveryEpochForSeat?(to:PlayerId):object|null;
   /** Client: subscribe to incoming zone terrain. Returns a disposer. */
   onZone(cb: (zone: ZoneMsg) => void): () => void;
 

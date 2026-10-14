@@ -7,7 +7,7 @@ import {beforeNativeSceneQuest} from './nativeSceneQuestFixture';
 /** Objective watcher parity: native geometry/factories/holds/rewards execute;
  * movement and quest-attribution boundaries are explicit recording test ports. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeShardsCaravanFS as fs} from './nativeShardsCompositionFixture';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import ts from 'typescript';

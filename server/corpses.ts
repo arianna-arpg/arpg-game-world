@@ -31,7 +31,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { dist, vec, type Vec2 } from '../src/core/math';
-import type { Seat, World } from '../src/engine/world';
+import type { Seat } from '../src/engine/world';
 import type { ZoneDef } from '../src/data/zones';
 import { SUPPORTS } from '../src/data/supports';
 import { transitDwell, transitRadius, transitReach, transitRing } from '../src/data/transit';
@@ -48,6 +48,7 @@ import {
   sanitizeCorpseNote, sanitizeReckoning, type ShardBodyRow, type ShardCorpseNote, type ShardReckoning,
 } from '../src/net/vesselWire';
 import type { SeatWorlds } from './simUnits';
+import {vesselSeatAreas,type VesselArea,type VesselSeatAreas} from './nativeVesselAreas';
 
 export const SHARD_CORPSE_CFG = {
   /** Bodies a shard remembers per account: the account ring's own size
@@ -195,14 +196,16 @@ export class ShardCorpses {
   /** Bodies reclaimed since boot (the probe's read). */
   reclaims = 0;
 
+  private readonly units:VesselSeatAreas;
   constructor(
     /** THE DESKS PER UNIT (shard M1): each seat's bodies stand in the seat's own unit. */
-    private readonly units: SeatWorlds,
+    units: SeatWorlds | VesselSeatAreas,
     private readonly send: SeatSend,
     readonly path: string | null,
     private readonly seed: number,
     private readonly log: (line: string) => void,
   ) {
+    this.units=vesselSeatAreas(units);
     this.load();
   }
 
@@ -384,7 +387,7 @@ export class ShardCorpses {
     return Math.hypot(zone.map.x - c.map.x, zone.map.y - c.map.y) <= CORPSE_MATCH_RADIUS;
   }
 
-  private stand(sb: SeatBodies, w: World, seat: Seat): void {
+  private stand(sb: SeatBodies, w: VesselArea, seat: Seat): void {
     const prior = new Map(sb.bodies.map(b => [b.corpse.id, b.dwell]));
     const sameZone = sb.zoneId === w.zone.id;
     sb.bodies = this.forSeat(sb.accountId, seat).filter(c => this.liesIn(c, w.zone)).map(c => ({ // card 30: the stage's own ring
@@ -418,7 +421,7 @@ export class ShardCorpses {
 
   /** THE RECLAIM DWELL: the 'corpse_reclaim' transit row's reach, discipline
    *  and clock (updatePlayerCorpses' own), read for the owning seat. */
-  private dwell(seat: Seat, sb: SeatBodies, dt: number, w: World): void {
+  private dwell(seat: Seat, sb: SeatBodies, dt: number, w: VesselArea): void {
     const a = seat.actor;
     const radius = transitRadius('corpse_reclaim', SHARD_CORPSE_CFG.reclaimRadius);
     const need = transitDwell('corpse_reclaim', SHARD_CORPSE_CFG.reclaimDwell);
@@ -435,7 +438,7 @@ export class ShardCorpses {
   /** The gear comes home into the claimant's own bag (a full bag spills at its
    *  feet as OWED property), each piece a pickup-feed row; the body's flash;
    *  the record clears and the file writes. */
-  private reclaim(seat: Seat, sb: SeatBodies, b: Standing, w: World): void {
+  private reclaim(seat: Seat, sb: SeatBodies, b: Standing, w: VesselArea): void {
     const hero = w.seatHero(seat);
     for (const it of b.corpse.loot.items) {
       const item = lootItem(it);
@@ -449,7 +452,7 @@ export class ShardCorpses {
     }
     w.markMetaDirty(seat);
     const { radius, life, color } = SHARD_CORPSE_CFG.flash;
-    w.flashes.push({ pos: vec(b.pos.x, b.pos.y), radius, color: transitRing('corpse_reclaim').color ?? color, life, maxLife: life });
+    w.addCorpseFlash({ pos: vec(b.pos.x, b.pos.y), radius, color: transitRing('corpse_reclaim').color ?? color, life, maxLife: life });
     // THE OBJECTIVE WEB's corpse deed belongs to the claimant's account: it
     // rides the next row home, stage-gated like every account feed.
     if (stageOf(seat.meta.modeId, seat.meta.modeStage).metaProgression) sb.reclaimed++;
@@ -458,7 +461,7 @@ export class ShardCorpses {
     this.remove(b.corpse.id); // every seat of this account re-stands
   }
 
-  private ship(seat: Seat, sb: SeatBodies, w: World): void {
+  private ship(seat: Seat, sb: SeatBodies, w: VesselArea): void {
     const bodies: ShardBodyRow[] = sb.bodies.map(b => ({
       id: b.corpse.id, x: b.pos.x, y: b.pos.y, classId: b.corpse.classId, level: b.corpse.level, dwell: b.dwell,
     }));

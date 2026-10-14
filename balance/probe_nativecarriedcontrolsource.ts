@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import {nativeShardsCarriedFS as fs} from './nativeShardsLegacySourceFixture';
 import {createHash} from 'node:crypto';
 import {nativeCarriedControlArchive as archive} from './nativeCarriedControlArchive';
 import {beforeNativeCarriedControl} from './nativeCarriedControlFixture';

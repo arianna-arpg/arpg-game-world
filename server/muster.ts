@@ -36,8 +36,10 @@
 
 import type { Seat, World } from '../src/engine/world';
 import type { MusterRingRow, MusterRoad } from '../src/engine/shardMuster';
-import { entryLanding, type LandingSpot, type RoadLanding } from '../src/engine/shardUnits';
-import type { SimUnit, UnitRegistry } from './simUnits';
+import { type LandingSpot, type RoadLanding } from '../src/engine/shardUnits';
+import type { UnitRegistry } from './simUnits';
+import {musterAreas,type MusterArea,type MusterAreas} from './musterAreas';
+import type {Vec2} from '../src/core/math';
 import type { PartyDesk } from './party';
 
 /** The muster's dials (card 15 B's detail, RULED 2026-10-10; docs/engine/shard.md "Dials"). */
@@ -55,13 +57,13 @@ export const MUSTER_CFG = {
 };
 
 /** One standing ring: a party's road waiting in one unit. */
-interface Ring {
+interface Ring<TDestination> {
   party: string;
-  unit: SimUnit;
+  unit: MusterArea;
   /** The unit's zone when it was raised (a unit that changed zones lapses it). */
   zoneId: string;
   raiser: string;
-  road: MusterRoad;
+  road: MusterRoad<TDestination>;
   raisedAt: number;
 }
 
@@ -76,8 +78,8 @@ const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 
 /** THE FIRE's landing: the road's own landing, resolved in the destination,
  *  then the member's slot out along the spiral (the landing law clamps it). */
-function spreadLanding(inner: RoadLanding | undefined, from: string | null, slot: number): RoadLanding {
-  return (w: World): LandingSpot => {
+function spreadLanding<TDestination>(inner: RoadLanding<TDestination> | undefined, from: string | null, slot: number, entryLanding:(w:TDestination,from:string|null)=>Vec2): RoadLanding<TDestination> {
+  return (w: TDestination): LandingSpot => {
     const spot = typeof inner === 'function' ? inner(w) : inner ?? 'entry';
     const base = spot === 'entry' ? { at: entryLanding(w, from) } : spot;
     const ang = slot * GOLDEN, r = MUSTER_CFG.landSpreadPx * Math.sqrt(slot);
@@ -85,22 +87,23 @@ function spreadLanding(inner: RoadLanding | undefined, from: string | null, slot
   };
 }
 
-export class MusterDesk {
+export class MusterDesk<TDestination=World> {
   /** The standing rings, keyed `${party}@${unit}`. */
-  private readonly rings = new Map<string, Ring>();
+  private readonly rings = new Map<string, Ring<TDestination>>();
   /** Ledgers since boot (the status page's and the probe's read). */
   raised = 0;
   fired = 0;
   lapsed = 0;
   moved = 0;
 
-  constructor(private readonly units: UnitRegistry, private readonly parties: PartyDesk, private readonly hooks: MusterHooks) {}
+  private readonly units:MusterAreas<TDestination>;
+  constructor(units: UnitRegistry|MusterAreas<TDestination>, private readonly parties: Pick<PartyDesk,'partyOf'>, private readonly hooks: MusterHooks) {this.units=musterAreas(units);}
 
   get size(): number { return this.rings.size; }
 
   /** THE RAISE (ShardWorldLink.muster, inside the seat's unit's run): true when
    *  the road waits at its party's ring, false when the seat travels alone now. */
-  offer(seat: Seat, road: MusterRoad): boolean {
+  offer(seat: Seat, road: MusterRoad<TDestination>): boolean {
     const party = this.parties.partyOf(seat.id);
     if (!party) return false; // an independent travels alone
     const u = this.units.unitOf(seat.id);
@@ -148,7 +151,7 @@ export class MusterDesk {
 
   // ---- internals ------------------------------------------------------------
   /** The party's members standing in a unit, in the party's own order. */
-  private standingIn(members: readonly string[], u: SimUnit): Seat[] {
+  private standingIn(members: readonly string[], u: MusterArea): Seat[] {
     const out: Seat[] = [];
     for (const id of members) {
       const s = u.world.seats.find(x => x.id === id && !x.keeper);
@@ -156,18 +159,18 @@ export class MusterDesk {
     }
     return out;
   }
-  private inside(seat: Seat, ring: Ring): boolean {
+  private inside(seat: Seat, ring: Ring<TDestination>): boolean {
     const p = seat.actor.pos;
     return Math.hypot(p.x - ring.road.pos.x, p.y - ring.road.pos.y) <= MUSTER_CFG.radiusPx;
   }
   /** The members standing in the ring's unit, and those standing on the ring. */
-  private count(ring: Ring): { standing: Seat[]; on: Seat[] } {
+  private count(ring: Ring<TDestination>): { standing: Seat[]; on: Seat[] } {
     const party = this.parties.partyOf(ring.raiser);
     const standing = party && party.id === ring.party ? this.standingIn(party.members, ring.unit) : [];
     return { standing, on: standing.filter(s => this.inside(s, ring)) };
   }
 
-  private verdict(ring: Ring, now: number): 'stand' | 'lapse' | Seat[] {
+  private verdict(ring: Ring<TDestination>, now: number): 'stand' | 'lapse' | Seat[] {
     const u = ring.unit;
     if (this.units.unit(u.key) !== u || u.broken || u.world.zone.id !== ring.zoneId) return 'lapse'; // its ground is gone
     const party = this.parties.partyOf(ring.raiser);
@@ -182,13 +185,13 @@ export class MusterDesk {
 
   /** One ticket per member on the ring, each made by the road for that member
    *  inside the ring's unit (under its pin), queued for this tick's drain. */
-  private fire(ring: Ring, members: Seat[]): void {
+  private fire(ring: Ring<TDestination>, members: Seat[]): void {
     let slot = 0;
     for (const seat of members) {
       const t = this.units.run(ring.unit, () => ring.road.make(seat));
       if (!t) continue;
       t.muster = { party: ring.party, slot };
-      if (slot > 0) t.landing = spreadLanding(t.landing, t.from === undefined ? ring.zoneId : t.from, slot);
+      if (slot > 0) t.landing = spreadLanding(t.landing, t.from === undefined ? ring.zoneId : t.from, slot, (w,from)=>this.units.entryLanding(w,from));
       this.units.enqueue(t);
       slot++;
     }
@@ -199,7 +202,7 @@ export class MusterDesk {
 
   /** The rings as drawn, into every unit's World (null where none stands). */
   private publish(now: number): void {
-    const rows = new Map<SimUnit, MusterRingRow[]>();
+    const rows = new Map<MusterArea, MusterRingRow[]>();
     for (const ring of this.rings.values()) {
       const { standing, on } = this.count(ring);
       const row: MusterRingRow = {
@@ -212,7 +215,7 @@ export class MusterDesk {
     }
     for (const u of this.units.each()) {
       const r = rows.get(u) ?? null;
-      if (r || u.world.musterRings) u.world.musterRings = r;
+      if (r || u.world.musterRings) this.units.publish(u,r);
     }
   }
 }

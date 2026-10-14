@@ -79,7 +79,7 @@ export class QuestRescues {
       // boss anchor. It must not borrow a departed player's destination position.
       if (w.isPresentLocalPlayer?.() === false) {
         const bossId = w.zone.objective.kind === 'boss' ? w.zone.objective.id : undefined;
-        if (!w.actors.find(a => a.defId === bossId)) return;
+        if (bossId === undefined || !w.actors.find(a => a.defId === bossId)) return;
       }
       npc = w.createMonster(r.npc, 1, 'player');
       const bossId = w.zone.objective.kind === 'boss' ? w.zone.objective.id : undefined;

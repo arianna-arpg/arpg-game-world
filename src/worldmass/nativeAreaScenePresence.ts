@@ -29,6 +29,8 @@ export class NativeAreaScenePresence {
   if(this.#authority!==authority||this.#binding!==authority.bindingFor(this.scene))throw Error('Native presence authority differs');
   authority.assertAdmitted(this.scene);
  }
+ /** Private admission identity only; no census check and no acquisition. */
+ assertAuthorityIdentity(authority:NativeAreaActorAuthority<object>,binding:NativeAreaAuthorityBinding<object>):void {if(this.#authority!==authority||this.#binding!==binding)throw Error('Native presence authority differs');}
  /** Callback-free preparation for the exact admission's later presence commit. */
  assertFinalActivation(authority:NativeAreaActorAuthority<object>,binding:NativeAreaAuthorityBinding<object>):void {
   if(authority.campaign!==this.campaign||binding.scene!==this.scene)throw Error('Native final presence needs identical roots');
@@ -48,3 +50,5 @@ export class NativeAreaScenePresence {
 }
 
 const finalPresenceValidation=NativeAreaScenePresence.prototype.assertFinalActivation;
+
+export const nativeReadyPresence=Object.freeze({active:Object.getOwnPropertyDescriptor(NativeAreaScenePresence.prototype,'active')!.get!,assert:NativeAreaScenePresence.prototype.assertAuthority,identity:NativeAreaScenePresence.prototype.assertAuthorityIdentity});

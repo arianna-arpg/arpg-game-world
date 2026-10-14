@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {NativeShardHost} from '../server/nativeShardHost';
+import {WsTransport} from '../src/net/ws';
+import {CLASSES} from '../src/data/classes';
+import {RemoteInput} from '../src/net/remote';
+import {serializeCouchGuest,throngRowsOf,type CharacterSave} from '../src/meta/character';
+import {judgeVessel} from '../server/vessel';
+import {rollItem} from '../src/engine/itemgen';
+import {captureLoot} from '../src/meta/death';
+import {World,type Seat} from '../src/engine/world';
+import type {SessionMsg} from '../src/net/transport';
+import {COMBAT_WORLD_METHODS,combatHash,writeCombatProof} from './probe_nativecombatcycle';
+const dir=fs.mkdtempSync(path.resolve('balance/reports/native-host-save-')),hosts:NativeShardHost[]=[],clients:WsTransport[]=[],drivers:string[]=[],traps:{name:string;descriptor:PropertyDescriptor}[]=[],logs:string[]=[];
+for(const name of COMBAT_WORLD_METHODS){const descriptor=Object.getOwnPropertyDescriptor(World.prototype,name);if(!descriptor||(typeof descriptor.value!=='function'&&typeof descriptor.get!=='function'))continue;traps.push({name,descriptor});const refuse=()=>{drivers.push(name);throw Error('World local driver invoked: '+name);};Object.defineProperty(World.prototype,name,Object.hasOwn(descriptor,'value')?{...descriptor,value:refuse}:{...descriptor,get:refuse});}
+const wait=async(fn:()=>boolean,word:string)=>{const until=Date.now()+8000;while(!fn()&&Date.now()<until)await new Promise(r=>setTimeout(r,10));assert(fn(),word+' '+logs.slice(-4).join('\n'));};
+const accountId='11111111111111111111111111111111';
+const start=(seed?:number)=>{const h=new NativeShardHost({seed,saveDir:dir,log:line=>logs.push(line)});hosts.push(h);return h;};
+const join=async(h:NativeShardHost,save?:CharacterSave)=>{const port=await h.listen(0,'127.0.0.1'),wire=new WsTransport(),messages:SessionMsg[]=[];clients.push(wire);wire.onSession(m=>messages.push(m));const welcome=await wire.connect(`ws://127.0.0.1:${port}`,{name:save?'Returning traveller':'Claimant',classId:save?.classId??'warrior',accountId},save);await wait(()=>!!h.seats.seatOf(welcome.self),'actual uploaded/fresh join');return {wire,messages,seat:h.seats.seatOf(welcome.self)!};};
+const move=(h:NativeShardHost,seat:Seat,dest:string)=>{const area=h.areaOf(seat);h.coordinator.roadsFor(area.combat).shardWorld!.enqueue({seatId:seat.id,dest});const result=area.combat.campaignFrame.drainShardRoads()[0];if(result.outcome==='failed')throw result.error;assert.equal(result.outcome,'moved');};
+try {
+ const first=start(1231),service=first.seats,original=service.keeperWorld().addSeat('source-save',CLASSES.find(c=>c.id==='tamer')!,new RemoteInput('source-save'));
+ original.meta.charId='host-native-vessel';original.meta.modeId='mortal';original.meta.modeStage=0;
+ const source=service.worldOf(original.id)!,companions=source.actors.filter(a=>a.companion&&a.owner===original.actor).map(a=>source.companionBonds.saved(a));
+ const save=serializeCouchGuest(source,original,{companions,throng:throngRowsOf(source,original.actor),throngClaimed:[]});assert(!('refused' in judgeVessel(save)));service.within(original.id,w=>w.removeSeat(original.id));
+ const joined=await join(first,save),dest=Object.values(first.world.zoneMap).find(z=>z.id!==first.runtime.current.combat.scene.zone.id&&z.objective.kind!=='safe')!;
+ move(first,joined.seat,dest.id);const remote=first.areaOf(joined.seat);
+ assert.equal(remote.combat.scene.actors.filter(a=>a.companion&&a.owner===joined.seat.actor).length,companions.length);
+ const enemy=remote.combat.scene.actors.find(a=>a.team==='enemy'&&!a.dead);assert(enemy);enemy.life=enemy.maxLife()*.43;const wound={def:enemy.defId,pos:{...enemy.pos},life:enemy.life};
+ remote.assembly.lootController.dropAbilityEssenceAt({x:joined.seat.actor.pos.x+80,y:joined.seat.actor.pos.y},1,13,()=>.25);
+ first.world.ledger.host_restart_course=7;first.world.completedObjectives.add(dest.id);
+ const mirror=first.vessels.serialize(joined.seat.id)!;assert(mirror);assert.equal(mirror.stand?.spot.zoneId,dest.id);assert.equal(mirror.companions?.length,companions.length);
+ first.persist();const disk=JSON.parse(fs.readFileSync(first.savePath!,'utf8'));assert.equal(disk.kind,'retained-native-shard');assert.equal(disk.seed,1231);const catalog=first.runtime.catalog.spec;
+ await first.stop();
+ const second=start();assert.equal(second.seed,1231);assert.equal(second.world.seats.length,1);assert.deepEqual(second.runtime.catalog.spec,catalog);assert.equal(second.world.ledger.host_restart_course,7);assert(second.world.completedObjectives.has(dest.id));
+ const returned=await join(second,mirror),area=second.areaOf(returned.seat);assert.equal(area.combat.scene.zone.id,dest.id,'actual return desk lands uploaded vessel in its saved area');
+ const restored=area.combat.scene.actors.find(a=>a.team==='enemy'&&a.defId===wound.def&&Math.hypot(a.pos.x-wound.pos.x,a.pos.y-wound.pos.y)<.01);assert(restored);assert.equal(restored.life,Math.min(restored.maxLife(),Math.max(1,Math.round(Math.min(restored.maxLife(),wound.life)))),'native absolute cold life followed by original near-scale arrival rounding');assert(area.assembly.input.physical.input.state.drops.some(d=>d.item.kind==='abilityEssence'&&d.item.count===13));
+ const item=rollItem({ilvl:8,category:'chest',rarity:'common',rng:()=>.25});assert(item);returned.seat.meta.equipped.chest=item;assert.equal(captureLoot(returned.seat.meta).items.length,1,'fixture wears one real non-relic item eligible for its corpse');
+ const body=returned.seat.actor;area.combat.kill(body);assert(body.downed);
+ assert.deepEqual(second.tick(.05).faults,[]);assert(body.dead);assert.deepEqual(second.tick(2).faults,[]);
+ await wait(()=>returned.messages.some(m=>m.t==='runEnd'),'actual remote death message');assert.equal(second.seats.seatOf(returned.seat.id),undefined);assert(!area.combat.scene.actors.includes(body));
+ assert.equal(second.corpses.all().length,1);const corpse=second.corpses.all()[0];assert.equal(corpse.zoneId,dest.id);assert(corpse.loot.items.length>0);assert.equal(second.faults,0,logs.join('\n'));assert.equal(second.net.faults,0,logs.join('\n'));await second.stop();
+ const third=start();assert.equal(third.corpses.all().length,1,'native records survive server restart');
+ const claimant=await join(third);move(third,claimant.seat,dest.id);const finalArea=third.areaOf(claimant.seat),home=third.runtime.current;claimant.seat.actor.pos={...corpse.pos};const items=claimant.seat.meta.items.length,homeFlashes=home.assembly.input.geometry.flashes.length;
+ // Existing corpse law: a newly arrived body is stood before its own dwell.
+ third.corpses.tick(2);assert.equal(third.corpses.all().length,0);assert(claimant.seat.meta.items.length>items);assert.equal(home.assembly.input.geometry.flashes.length,homeFlashes);assert(finalArea.assembly.input.geometry.flashes.length>0);
+ assert.equal(third.faults,0,logs.join('\n'));assert.equal(third.net.faults,0,logs.join('\n'));assert.deepEqual(drivers,[]);await third.stop();
+ const result={actualHostRestarts:2,newestNativeSeed:true,actualUploadedVessel:true,companions:companions.length,returnToSavedArea:dest.id,catalogRetained:true,ledgerAndObjectiveRetained:true,nativeAbsoluteEnemyWoundAndArrivalRounding:true,remoteDropRetained:13,actualRemoteDeath:true,deathMessage:true,remoteActorRemoved:true,corpseRecordsPersisted:true,actualCorpseReclaim:true,keeperAreaUnaffected:true,worldDrivers:drivers};writeCombatProof('native-shard-host-save.json',{scope:'Actual dedicated host, socket vessel upload, native save restart/return, remote death, records restart and original corpse dwell.',result,receipt:combatHash(JSON.stringify(result))});console.log(JSON.stringify(result));
+}finally {for(const h of hosts.reverse())await h.stop({persist:false}).catch(error=>console.error('cleanup',error));for(const client of clients)client.leave();for(const row of traps.reverse())Object.defineProperty(World.prototype,row.name,row.descriptor);}

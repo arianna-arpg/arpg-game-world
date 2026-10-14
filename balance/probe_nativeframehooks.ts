@@ -1,7 +1,7 @@
 import {nativeCombatPresentationArchive as presentation} from './nativeCombatPresentationArchive';
 import {beforeNativeCombatPresentation} from './nativeCombatPresentationFixture';
 import {beforeNativeFrameAttendance} from './nativeFrameAttendanceFixture';
-import * as fs from 'node:fs';
+import {nativeShardsCaravanFS as fs} from './nativeShardsCompositionFixture';
 import * as crypto from 'node:crypto';
 import ts from 'typescript';
 import {nativeSceneFrameHooksArchive as archive} from './nativeSceneFrameHooksArchive';

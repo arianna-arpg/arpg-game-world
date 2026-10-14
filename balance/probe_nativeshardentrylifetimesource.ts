@@ -1,6 +1,7 @@
 import {beforeNativeBrowserHosted as projectBrowserHosted} from './nativeBrowserHostedCompositionFixture';
 import assert from 'node:assert/strict';
-import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {readNativeShardsCaravan as readFileSync} from './nativeShardsCompositionFixture';
 import {createHash} from 'node:crypto';
 import {nativeShardEntryLifetimeArchive as archive} from './nativeShardEntryLifetimeArchive';
 import {beforeNativeShardEntryLifetime as before} from './nativeShardEntryLifetimeFixture';

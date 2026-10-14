@@ -1,3 +1,4 @@
+import { orbHitChance } from './orbGeneration';
 /** Exact native combat resolution algorithms from Git 42f95716294995cbdd83785f0a0782ddda971f76.
  * Extraction is not an admitted runtime: all capabilities must be bound by the actual area aggregate. */
 import type { MassNativeBrittlePopContext } from '../worldmass/nativeBrittles';
@@ -2458,8 +2459,9 @@ nativeHost.issueCombatRecord("pendingContagions", nativeStorage, nativeRecord, n
     if (dealt > 0 && depth === 0 && nativeHost.orbs.length < ORB_CAP) {
       const rate = caster.sheet.get('orbShedRate', tags, extra);
       for (const id of Object.keys(ORB_DEFS)) {
-        const c = caster.sheet.get(orbOnHitStat(id), tags, extra) * rate;
-        if (c > 0 && chance(Math.min(0.5, c))) {
+        const c = orbHitChance(caster, id,
+          caster.sheet.get(orbOnHitStat(id), tags, extra) * rate, nativeHost.time);
+        if (c > 0 && chance(c)) {
           nativeHost.shedOrb(id, target.pos, { scatter: 18, tier: target.tier });
         }
       }
