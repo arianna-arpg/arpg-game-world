@@ -45,7 +45,7 @@ import { makeAccount } from '../src/meta/account';
 import { buildManifest } from '../src/packages/manifest';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { applySnapshot, applyZone, interpolateSnapshot, serializeZone, WIRE_CFG, type ActorW, type StateSnapshot, type ZoneMsg } from '../src/net/snapshot';
-import { WIRE_DIET_CFG, dressKey, glideLite, type LiteWire } from '../src/net/wireDiet';
+import { WIRE_DIET_CFG, DIET_IDENTITY, dietIdentity, dietKept, dressKey, glideLite, type LiteWire } from '../src/net/wireDiet';
 import { WireShell } from '../src/net/shell';
 
 let failed = 0;
@@ -464,6 +464,17 @@ const rowOf = (s: StateSnapshot, id: number): ActorW | undefined => s.actors.fin
   const frames = [...A.got, ...B.got, ...C.got].slice(-60);
   const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
   info(`bytes: the diet's shared bodies were encoded ${host.diet.encodings} times; ${host.diet.skipped} frames skipped under flow control; ${frames.length} recent frames inflated to ${Math.round(mean(frames.map(s => JSON.stringify(s).length)))} B mean (canonical form)`);
+}
+
+// ------------------------------------------------ H. THE PRESENCE BADGE rides once
+{
+  const badge = { skillId: 'summon_skeleton', color: '#8fa8d8' };
+  const row = { id: 7, p: [1, 2], r: 12, c: '#fff', team: 'player', mn: 1, hf: 0.5, presenceBadge: badge } as Record<string, unknown>;
+  const kept = dietKept(row);
+  check('H badge: presenceBadge is an identity field', (DIET_IDENTITY as readonly string[]).includes('presenceBadge'));
+  check('H badge: a kept row strikes the badge and keeps the per-frame fields', kept.presenceBadge === undefined && kept.hf === 0.5 && kept.k === 1);
+  check('H badge: a changed badge is a changed identity (a change resends it)',
+    dietIdentity(row) !== dietIdentity({ ...row, presenceBadge: { ...badge, color: '#c8a84b' } }) && dietIdentity(row) === dietIdentity({ ...row, hf: 0.1 }));
 }
 
 for (const cl of [A, B, C]) cl.c.leave();
