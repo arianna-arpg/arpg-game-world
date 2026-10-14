@@ -15,12 +15,16 @@
 //                     account view and the named features through THE SEAT'S GATE
 //                     (World.gateAccountOf: the shard's account today, the seat's
 //                     own once M2 re-points the one line).
-//   questDialogueView THE ONE RESOLVER the dialogue director evaluates through
-//                     (engine/npcDialogues.ts): on a hosted world's shell, for its
-//                     own seat, the shell's World with the seat's rows standing in
-//                     for the quest state, the named keys and the named features;
-//                     everywhere else the World itself (THE SOLO INVARIANT: solo,
-//                     the co-op host and a co-op client read exactly what they read).
+//   questDialogueView THE ONE RESOLVER the dialogue conditions read through: on a
+//                     hosted world's shell, for its own seat, the shell's World with
+//                     the seat's rows standing in for the quest state, the named
+//                     keys and the named features; everywhere else the World itself
+//                     (THE SOLO INVARIANT: solo, the co-op host and a co-op client
+//                     read exactly what they read).
+//   spokenDialogueHost the World's own dialogue director's host (World.npcDialogues):
+//                     each read resolves through questDialogueView at the moment it is
+//                     made, so the director (engine/npcDialogues.ts, pinned verbatim
+//                     by the foundation's native resident probe) never changes.
 //
 // NPC_APPEARANCES never ride: an NPC's look is one body every hearer sees, the
 // host's to resolve and ship on the actor. A key no condition names never rides.
@@ -110,6 +114,21 @@ export function spokenRowOf(world: World, seat: Seat): SpokenW {
 /** Nothing for the dialogue to read (an empty row never rides on its own). */
 export function spokenEmpty(row: SpokenW): boolean {
   return !row.q.length && !row.r && !row.a && !row.ft && row.lv === undefined;
+}
+
+/** The World's own dialogue director's host (World.npcDialogues): every read the director and
+ *  the facts make resolves through THE ONE RESOLVER for the local seat at the moment it is made
+ *  (questDialogueView: the World itself off a hosted world's shell), and every write lands on
+ *  the World. The director's own source stays the foundation's pinned original. */
+export function spokenDialogueHost(world: World): NativeNpcDialogueHost {
+  return new Proxy({} as NativeNpcDialogueHost, {
+    get: (_t, k) => {
+      const view = questDialogueView(world, world.clientSeatId);
+      const v = Reflect.get(view, k);
+      return view === world && typeof v === 'function' ? (v as (...args: unknown[]) => unknown).bind(world) : v;
+    },
+    set: (_t, k, v) => Reflect.set(world, k, v),
+  });
 }
 
 const VIEWS = new WeakMap<World, { jn: JournalW | undefined; view: NativeNpcDialogueHost }>();

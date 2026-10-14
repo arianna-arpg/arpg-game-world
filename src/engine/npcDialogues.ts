@@ -44,13 +44,7 @@ export class NpcDialogueDirector {
   private armed = new Set<string>();
   private admittedVisits = new Map<number, string>();
   private calling?: { def: NpcDialogueDef; line: NpcSpeechLine; until: number };
-  constructor(private readonly w: NativeNpcDialogueHost, visits:Map<string,number>=new Map(),
-    /** THE SPOKEN QUESTS (shard W12, net/spokenQuests.ts questDialogueView): the host a
-     *  condition reads for the local seat: on a hosted world's shell its own seat's rows,
-     *  else the World itself. Absent = `w` (a native resident session's director). */
-    private readonly reads?: () => NativeNpcDialogueHost) { this.visits=visits; }
-  /** The host the conditions read (THE SPOKEN QUESTS' one resolver, else `w`). */
-  private ask(): NativeNpcDialogueHost { return this.reads?.() ?? this.w; }
+  constructor(private readonly w: NativeNpcDialogueHost, visits:Map<string,number>=new Map()) { this.visits=visits; }
 
   appearanceFor(defId: string): string | undefined {
     const rule = NPC_APPEARANCES[defId];
@@ -89,9 +83,8 @@ export class NpcDialogueDirector {
   }
 
   dwell(a: Actor): { def: NpcDialogueDef; text: string; radius: number; seconds: number } | null {
-    const host = this.ask(); // THE SPOKEN QUESTS: the hearer's own quests, keys and features
     const defs = NPC_DIALOGUES.filter(d => d.trigger.kind === 'dwell' && this.matches(a, d)
-      && npcDialogueEligible(host, this.admittedVisits.get(a.id) === d.id ? { ...d, once: undefined } : d))
+      && npcDialogueEligible(this.w, this.admittedVisits.get(a.id) === d.id ? { ...d, once: undefined } : d))
       .sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
     const radiusFor = (d: NpcDialogueDef) => d.trigger.kind === 'dwell'
       ? npcDwellRadius(MONSTERS[a.defId!]?.npcRole ?? '', d.trigger.radius) : 0;
@@ -136,7 +129,7 @@ export class NpcDialogueDirector {
       .flatMap(def => {
         const guide = def.guide;
         if (!guide?.label.trim() || !Number.isFinite(guide.radius) || guide.radius <= 0
-          || !npcDialogueEligible(this.ask(), { ...def, once: undefined })) return [];
+          || !npcDialogueEligible(w, { ...def, once: undefined })) return [];
         const speaker = w.actors.find(a => this.matches(a, def) && w.isSafeAt(a.pos));
         return speaker ? [{ ...speaker.pos, radius: guide.radius, label: guide.label, ready: false }] : [];
       });
@@ -150,11 +143,11 @@ export class NpcDialogueDirector {
       // Ignore only the receipt we just wrote; a completed lesson or departed
       // speaker still withdraws a stale invitation immediately.
       if (w.time < until && this.matches(line.a, def) && w.actors.includes(line.a)
-        && npcDialogueEligible(this.ask(), { ...def, once: undefined })) return admit ? line : null;
+        && npcDialogueEligible(w, { ...def, once: undefined })) return admit ? line : null;
       this.calling = undefined;
     }
     for (const def of [...NPC_DIALOGUES].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))) {
-      if (def.trigger.kind === 'dwell' || !npcDialogueEligible(this.ask(), def)) continue;
+      if (def.trigger.kind === 'dwell' || !npcDialogueEligible(w, def)) continue;
       const trigger = def.trigger;
       // boundaryApproach shares native visibility/admission/receipt rules with
       // graph exits, but refers to physical routes rather than a loading gate.

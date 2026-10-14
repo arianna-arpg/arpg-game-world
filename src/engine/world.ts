@@ -113,7 +113,7 @@ import { EventBus } from './eventbus';
 import { Party } from './party';
 import { HONEST_INPUT_CFG, NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
 import { reviveTargetsOfRow } from '../net/partyReads'; // THE PARTY THAT READS: a hosted shell's revive ring reads its row
-import { questDialogueView } from '../net/spokenQuests'; // THE SPOKEN QUESTS: a hosted shell's dialogue reads its own seat's rows
+import { spokenDialogueHost } from '../net/spokenQuests'; // THE SPOKEN QUESTS: a hosted shell's dialogue reads its own seat's rows
 import { SkillInputOrder } from './skillInputOrder';
 import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
 import { WorldMassRuntime, type MassAdventureSave } from '../worldmass/runtime';
@@ -20870,7 +20870,7 @@ export class World {
   dialogueScene = 0;
   // THE SPOKEN QUESTS (shard W12): the conditions read the local seat's own rows on a hosted
   // world's shell (net/spokenQuests.ts questDialogueView), the World itself everywhere else.
-  readonly npcDialogues = new NpcDialogueDirector(this, new Map(), () => questDialogueView(this, this.clientSeatId));
+  readonly npcDialogues = new NpcDialogueDirector(spokenDialogueHost(this));
 
   speechFocusTarget(seat: Seat = this.localSeat): Readonly<DwellFocus> | undefined {
     return this.speechFocus.get(seat);
