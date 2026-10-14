@@ -64,6 +64,8 @@ export type ProbeRow = ProbeInvocation & (
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_nativehuntmigration.ts', status: 'green', tier: 'fast', why: 'Retained Hunt migration and once-only completion; original source assertions preserved.' },
+  { probe: 'probe_nativehuntmigrationsource.ts', status: 'green', tier: 'fast', why: 'Retained Hunt migration and once-only completion; original source assertions preserved.' },
   { probe: 'probe_nativerealmgateboundaries.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },
   { probe: 'probe_nativerepeatcrusade.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },
   { probe: 'probe_nativerepeatdemon.ts', status: 'green', tier: 'fast', why: 'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.' },

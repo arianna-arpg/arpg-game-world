@@ -1,0 +1,9 @@
+# Retained Hunt migration
+
+A quarry that flees back into previously visited ground must be able to finish its Hunt. The retained departure owner now releases that event's spawn marker only after the actual native escape has migrated the same live event, retired its exact physical body and cleared the area's Hunt pointer. A cornered beast keeps its existing body, wounds, spent flee phase and marker. Repeated ordinary frames cannot create a duplicate quarry.
+
+The native escape algorithm stays unchanged. Its selected migration, array, flash and text operations keep their effects and failures. A later flash or text error after the completed departure still releases the marker. Migration failure, raw array removal without actual authority release, a replaced area/field/marker or a restored event with a reused id cannot authorize cleanup. The original field observations and non-granting authority check are captured in their defining modules. This adds no save fields or terrain identity.
+
+The independent negative course on the parent used natural Hunt ignition, actual footprint dwell and both authored flee phases. Ordinary World restored one quarry on A-to-B-to-A return; retained World restored none despite the living field and 30% remaining health. The positive nativehuntmigration course preserves those actual gameplay operations, checks phase and wounds, then kills the returned quarry through the actual kill owner and verifies one completion payout. Body positions and wounds are selected at real exits for reproducibility; this is a headless owner course, not TCP, browser navigation or natural combat acceptance.
+
+Broader terrain renewal, content parity and Shards capacity remain separate acceptance work. Historical source assertions are preserved by the subsequent strict composition.

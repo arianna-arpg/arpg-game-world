@@ -1,3 +1,10 @@
+Retained Hunt departures now release only their own completed migration marker,
+so a wounded quarry can return to visited ground and finish once. Preserve actual
+retirement, event identity, cornered bodies, native failures and original source
+assertions. Verify nativehuntmigration/source, independent departure boundaries,
+retained AI/travel, all four types and boot. Terrain and scheduler work remain
+separate. See docs/worldgen/native-hunt-migration.md.
+
 Retained repeat events now renew Crusade/Demon entrances and tie Crusade garrisons
 and commander rewards to the issuing campaign event. Preserve occupied old realms,
 actual body ownership, wounds, once-only rewards, selected callbacks and partial

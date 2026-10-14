@@ -293,6 +293,9 @@ export class HuntField implements WorldOverlay {
     if (this.hunt && !has(this.hunt.currentZoneId)) this.hunt = null;
   }
 
+  /** Nominal retained lifetime; restoring or replacing a hunt creates a new identity. */
+  nativeHuntEpoch(id:string):object|undefined {return this.hunt?.id===id?this.hunt:undefined;}
+
   /** Read-only snapshot for markers / tests. */
   peek(): { id: string; beastDefId: string; faction: string; color: string; lairZoneId: string; coord: MapCoord; currentZoneId: string; revealed: boolean; lifeFrac: number; phaseIdx: number; waneSec: number } | null {
     const h = this.hunt;
@@ -363,6 +366,9 @@ export class HuntField implements WorldOverlay {
     return pool[pool.length - 1];
   }
 }
+
+/** Authentic observations are captured here before a consumer can replace the prototype. */
+export const nativeHuntLifetimeCalls=Object.freeze({peek:HuntField.prototype.peek,epoch:HuntField.prototype.nativeHuntEpoch});
 
 // --- THE BEAST'S GROUND (registered on import — the transience doctrine) ------
 //

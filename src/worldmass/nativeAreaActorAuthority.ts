@@ -216,4 +216,6 @@ export class NativeAreaActorAuthority<S extends object> {
 }
 
 
+/** Non-granting original absence check, captured in the defining module. */
+export const nativeUnclaimedActor=NativeAreaActorAuthority.prototype.assertUnclaimed;
 export const nativeReadyAuthority=Object.freeze({select:NativeAreaActorAuthority.prototype.selectActors,selections:NativeAreaActorAuthority.prototype.assertFinalSelections,localSelections:NativeAreaActorAuthority.prototype.assertFinalLocalSelections,ordinaryEntry:NativeAreaActorAuthority.prototype.selectOrdinaryEntryRows,binding:NativeAreaActorAuthority.prototype.bindingFor,admitted:NativeAreaActorAuthority.prototype.assertAdmitted,physical:NativeAreaActorAuthority.prototype.assertFinalPhysical});
