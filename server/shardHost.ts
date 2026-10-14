@@ -334,7 +334,7 @@ export class ShardHost {
   /** THE PHASE METER (server/phaseMeter.ts): every phase of tick() per unit, on the status page
    *  (`phases`) and the soak's columns; `last` is the tick just ended, for the soak's per-tick read. */
   readonly phases = new PhaseMeter();
-  /** THE NEIGHBORHOOD GOVERNOR (server/governor.ts): fed every tick's cost by the pump, beating once a
+  /** THE NEIGHBORHOOD GOVERNOR (server/governor.ts): fed every tick's own measured cost at the tick's end, beating once a
    *  world second in tick(); its hooks read the tick rate and the keeper's runtime live. */
   readonly governor: Governor;
   private lastFaultLogAt = 0;
@@ -1000,6 +1000,9 @@ export class ShardHost {
     this.governor.beat(k.time); // THE GOVERNOR: once a world second, the dials against the measured tick
     meterNow = performance.now(); meter.add('sweep', meterNow - meterMark);
     meter.end(meterNow - meterStart);
+    // THE GOVERNOR's signal is the tick's own measured cost on the world clock (the meter's whole-tick
+    // span, a few microseconds short of the pump's), fed here so the pump stays the foundation's.
+    this.governor.observe(meterNow - meterStart, k.time);
   }
 
   /** THE WIRE PER UNIT (plan 5.1-5.3): a unit's zone message (a change, THE DRESS
@@ -1238,7 +1241,6 @@ export class ShardHost {
         const ms = performance.now() - t0;
         if (this.tickMs.length < SHARD_CFG.telemetryTicks) this.tickMs.push(ms);
         else { this.tickMs[this.tickMsAt] = ms; this.tickMsAt = (this.tickMsAt + 1) % SHARD_CFG.telemetryTicks; }
-        this.governor.observe(ms, this.world.time); // THE GOVERNOR's signal: this tick's cost on the world clock
         this.accum -= dt;
         n++;
         if (!this.pumping) return; // stop() cancels the remaining batch too.

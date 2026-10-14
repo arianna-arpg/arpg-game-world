@@ -5,8 +5,8 @@
 // real wilds host (the F1 seam): the ladder goes down and comes back with
 // hysteresis, the runtime's per-group limits follow the budget, nothing is
 // ever despawned by a dial, and `--govern off` leaves today's law standing.
-// The signal is the pump's: the host feeds observe() from its wall-clock
-// pump, so a host ticked by hand sees no signal unless the probe feeds it,
+// The signal is the tick's own measured cost on the world clock: the host feeds observe() at
+// the end of every tick (a hand-ticked host observes too; E feeds heavier costs on top),
 // and the 2 s window lags a change in the ticks by two seconds.
 //   A  synthetic: calm ticks write nothing (not even a null); heavy ticks thin
 //      the budget ten percent a beat to the floor × groups and never below;
@@ -138,7 +138,7 @@ function drive(g: Governor, clock: { t: number }, sec: number, ms: number): void
   const restore = seedGlobalRandom(0x5a4d);
   const host = new ShardHost({ seed: 0x00c0ffee, saveDir: null, open: true, log: () => { /* quiet */ } });
   await host.listen(0, '127.0.0.1');
-  host.start(); // THE PUMP feeds the governor; a hand-ticked host never does
+  host.start(); // the tick feeds the governor its own cost; the pump drives the ticks here as in play
   await sleep(1500);
   const st = host.status() as { governor?: { enabled: boolean; seam: boolean; budget: unknown; ticksInWindow: number; tickHz: number; ewmaMs: number } };
   check('D host: the governor rides the pump and the status page carries its row', !!st.governor && st.governor.enabled && st.governor.ticksInWindow > 0 && st.governor.ewmaMs > 0, JSON.stringify(st.governor));

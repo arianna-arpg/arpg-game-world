@@ -432,9 +432,10 @@ at 60 Hz with a 20 Hz wire). Probe `probe_shardthink`.
 **THE NEIGHBORHOOD GOVERNOR** (`server/governor.ts`; W1 of
 docs/design/shard-m6-plan.md §3.4; her numbers, charter card 32). A
 controller over the measured tick that spends the shard's cost dials,
-cheapest player impact first. Its signal is the pump's own tick cost, an
-EWMA and a rolling 2 s p95 on the world clock, fed per tick and judged once a
-world second. The ladder: dial 1, THE THINKING EDGE, ships on and is only
+cheapest player impact first. Its signal is the tick's own measured cost
+(the meter's whole-tick span, fed at the end of every tick so the pump stays
+the foundation's), an EWMA and a rolling 2 s p95 on the world clock, judged
+once a world second. The ladder: dial 1, THE THINKING EDGE, ships on and is only
 ever asserted on; dial 2, THE POPULATION BUDGET through the foundation's F1
 seam (`WorldMassRuntime.setPopulationBudget({ total, floor } | null)` and
 `populationStats()`): down ten percent a beat while the p95 stands above 90

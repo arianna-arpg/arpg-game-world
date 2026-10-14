@@ -18,7 +18,7 @@
 //   dial 3  THE TICK DIAL: 60 to 40 Hz after lowAfterSec at the floor still
 //           over the gate (the wire keeps 20 Hz: round(40/20) = 2), back to
 //           the base rate after restoreAfterSec under half the gate.
-// The signal is the pump's own tick cost: an EWMA and a rolling p95 over
+// The signal is the tick's own measured cost (the host feeds it at the end of every tick): an EWMA and a rolling p95 over
 // windowSec of world time, fed per tick by the host. Every dial holds at
 // least holdSec before it reverses. Without the seam (an older foundation)
 // the governor runs cost-only: the edge and the tick dial alone. The host
