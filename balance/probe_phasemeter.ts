@@ -87,7 +87,8 @@ for (let i = 0; i < 12; i++) { host.tick(DT); await yieldIO(); }
   const want = ['tick', 'input', 'inputs.apply', 'actions', 'ai', 'update', 'settle', 'drain', 'desks', 'sweep', '#ai.ran', 'keeper/ai', 'keeper/update', 'wire.serialize', 'wire.send'];
   check('C tick: every phase of the frame lands on the status page, the keeper\'s own rows beside the summed ones', want.every(k => ph[k] !== undefined), want.filter(k => ph[k] === undefined).join(','));
   check('C tick: the simulate phases ran every tick, the wire on the beats alone', ph.ai.calls === 12 && ph.update.calls === 12 && ph.tick.calls === 12 && ph['wire.serialize'].calls === 4 && ph['wire.send'].calls === 4, `${ph.ai.calls} ${ph['wire.serialize'].calls}`);
-  check('C tick: the AI loop\'s count is the roster the loop walked', ph['#ai.ran'].p50 === st.actors && ph['#ai.ran'].share === 0, `${ph['#ai.ran'].p50} vs ${st.actors}`);
+  const lastRan = (host.phases.last.get('#ai.ran') ?? 0) + (host.phases.last.get('#ai.edged') ?? 0); // the tick just ended: thought + edged
+  check('C tick: the AI loop\'s counts (the bodies that thought plus the edged ones) are the roster the loop walked', lastRan === host.world.actors.length && ph['#ai.ran'].share === 0 && ph['#ai.edged'] !== undefined, `${lastRan} vs ${host.world.actors.length}`);
   const shares = Object.entries(ph).filter(([n]) => n !== 'tick' && !n.includes('/') && !isCountPhase(n) && n !== 'runtime').reduce((a, [, p]) => a + p.share, 0);
   check('C tick: the phases\' shares sum to no more than the tick (the rest is the frame\'s own glue)', shares > 0.5 && shares <= 1.0001, shares.toFixed(3));
   check('C tick: a classic world has no mass runtime row', ph.runtime === undefined);

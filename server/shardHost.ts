@@ -58,6 +58,7 @@ import { ShardTransport, type ShardJoin } from './shardTransport';
 import { ShardDiet } from './wireDiet'; // THE WIRE DIET (shard sync pass C): interest, the codec, the dress ledger, the carry
 import { PhaseMeter, meterMethod } from './phaseMeter'; // THE PHASE METER (performance-lane.md §5): where a tick goes
 import { distanceCensus } from './distanceCensus'; // THE DISTANCE CENSUS: what the bodies do, how far from a player
+import { THINKING_EDGE_CFG, edgeContext, thinkDt } from './thinkingEdge'; // THE THINKING EDGE: idle far bodies think on the beat alone
 import { VesselDesk } from './vessel';
 import { ShardCorpses, shardRecordsPath } from './corpses';
 import { UnitRegistry, type SimUnit } from './simUnits';
@@ -865,6 +866,9 @@ export class ShardHost {
     const meterStart = performance.now();
     let meterMark = meterStart;
     meter.begin();
+    // THE BEAT: the tick whose state ships (the wire block below reads this after ticks++, the
+    // same test); under THE THINKING EDGE (server/thinkingEdge.ts) an edged body thinks there alone.
+    const beat = (this.ticks + 1) % Math.max(1, Math.round(SHARD_CFG.tickHz / SHARD_CFG.stateHz)) === 0;
     // THE ONE CLOCK (shard M1): every unit enters its step at the keeper's
     // tick-start readings, so each lands where the keeper lands (and so does a
     // dispatch from the keeper's sweeps into a unit that has not stepped yet).
@@ -897,10 +901,19 @@ export class ShardHost {
           let meterT1 = performance.now(); meter.add('inputs.apply', meterT1 - meterT0, meterUnit); meterT0 = meterT1;
           this.drainMetaActions(u, w, actions);
           meterT1 = performance.now(); meter.add('actions', meterT1 - meterT0, meterUnit); meterT0 = meterT1;
-          // THE AI LOOP (the meter's first question: the M6 plan §1.2 row 1).
-          const meterRan = w.gameOver ? 0 : w.actors.length;
-          if (!w.gameOver) for (const a of w.actors) updateAI(a, w, dt);
-          meterT1 = performance.now(); meter.add('ai', meterT1 - meterT0, meterUnit); meter.add('#ai.ran', meterRan, meterUnit); meterT0 = meterT1;
+          // THE AI LOOP (the meter's first question: the M6 plan §1.2 row 1) under THE THINKING
+          // EDGE: an idle body far from every seat thinks on the beat alone, with the seconds it
+          // skipped (thinkDt banks and pays them); everything else thinks every tick as before,
+          // and with the edge off the loop is the old loop to the call.
+          let meterRan = 0, meterEdged = 0;
+          if (!w.gameOver) {
+            const edge = THINKING_EDGE_CFG.enabled ? edgeContext(w) : null;
+            for (const a of w.actors) {
+              const think = edge ? thinkDt(a, w, edge, dt, beat) : dt;
+              if (think > 0) { updateAI(a, w, think); meterRan++; } else meterEdged++;
+            }
+          }
+          meterT1 = performance.now(); meter.add('ai', meterT1 - meterT0, meterUnit); meter.add('#ai.ran', meterRan, meterUnit); meter.add('#ai.edged', meterEdged, meterUnit); meterT0 = meterT1;
           // THE RUNTIME'S SHARE of update: an own-property wrap on the mass runtime
           // instance (the foundation's file untouched; re-wrapped if the runtime is re-seated).
           if (w.massRuntime) meterMethod(meter, w.massRuntime, 'update', 'runtime', meterUnit);
@@ -945,8 +958,9 @@ export class ShardHost {
       // THE WIRE RATE on integer ticks (60 / 20 = every 3rd): a reset timer
       // under a fixed step fired every 4th tick — 15 Hz wearing a 20 Hz name.
       // ONE snapTick per beat stamps every unit's snapshot (a client's tick
-      // stays monotonic across a hand-off).
-      const beat = this.ticks % Math.max(1, Math.round(SHARD_CFG.tickHz / SHARD_CFG.stateHz)) === 0;
+      // stays monotonic across a hand-off). `beat` was read at the tick's
+      // head for THE THINKING EDGE (server/thinkingEdge.ts) as (ticks + 1) % n,
+      // the same test after the ticks++ above.
       if (beat) this.snapTick++;
       for (const u of this.units.each()) this.wire(u, dt, heartbeat, beat);
     }

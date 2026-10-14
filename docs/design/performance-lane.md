@@ -215,3 +215,272 @@ breaches the 20 ms gate on both sides under the co-sessions' load (the
 foundation's clustered pairs read p95 21 to 45 ms on the same box). The
 candidate's window shares: `update` 70 percent (the runtime 20 percent inside
 it), `ai` 22 percent (p95 4.0 ms), the wire 7 percent.
+
+### 7.4 Pair S1: the spread course (6 bots, 60 s, 3,500 px, roving off, no drop, together)
+
+Candidate = the meter build (560662a1); control = the base; the candidate's
+window opened 3.2 s after the shared `--window-at` moment, the control's at
+its own warm-up's end (the base soak has no such flag).
+
+| | control | candidate |
+|---|---|---|
+| tick p50 / p95 / p99 / max ms | 137.0 / 353.7 / 724.9 / 2,068 | 116.4 / 249.5 / 492.5 / 835 |
+| ticks stepped in the window | 360 | 450 |
+| dropped | 90.1% | 87.5% |
+| actors, mean of samples | 344 | 312 |
+| living least / mean | 21 / 41.0 | 22 / 33.9 |
+| deaths / rejoins | 2 / 1 | 4 / 4 |
+| heap growth MB | 23.3 | 11.5 |
+
+Both breach by a wide margin, as every spread run has. The candidate read
+faster, but it also carried fewer bodies through the window (four deaths
+and rejoins against two and one; the fleet's combat is not deterministic
+across hosts), so this pair says nothing about the meter's cost beyond what
+M1 and M2 said; it is the course's own receipt. (The control's input-service
+row prints the old nominal `fed × 60`; the ported harness prints drained
+batches per seat per wall second, so those two rows do not compare.)
+
+**The meter's first read of the spread course** (the candidate's window):
+
+| phase | share of tick time | p50 / p95 ms |
+|---|---|---|
+| the AI loop (`ai`) | 63% | about 95 / 174 over about 340 bodies |
+| `update` (the per-actor loop, projectiles, the sweeps) | 34% | about 40 / 57 |
+| of which the mass runtime (`runtime`) | 8% | 0.5 / 2.3, with two admission spikes of 131 and 216 ms |
+| the wire (`wire.serialize` + `wire.send` + `wire.zone`) | 3% | 11 / 13 and 3.5 / 5 |
+| inputs, actions, settle, drain, desks, sweep | under 0.2% together | |
+
+The AI loop costs about 0.28 ms per body per tick at 340 bodies against
+0.034 at the hearth's 74: eight times the per-body price at 4.6 times the
+roster, the superlinear curve the M6 plan predicted, and it lives in the
+AI loop, not in `update` or the runtime. The census (means over the window,
+the roster thinning from 341 to 234 as the bots killed): 312 bodies, 63
+scenery, about 44 engaged, 17 alerted, 37 busy by their squad, 145 idle, of
+which 142 stand beyond 600 px of every seat (least 68, at the window's end).
+THE THINKING EDGE would therefore lift about 140 of 340 bodies out of two
+ticks in three; if the loop's cost were uniform per body that is about 28
+percent of the AI phase and 18 percent of the tick. The remaining 100 busy
+bodies pay the N-squared walks whatever the edge does, which is THE LOCAL
+ROSTER's case; the profile in 7.5 names the kernels.
+
+### 7.5 P1: the attributed profile of the spread course (the meter build, alone)
+
+`npm run soak:shard -- --bots 6 --seconds 30 --spread 3500 --rove 0 --no-drop
+--diagnostics --profile <window.cpuprofile>` on 560662a1, the inspector
+sampling every millisecond over the 30 s window alone (the first 30 s after
+the warm-up, so colder ground than S1's 60 s), then
+`npx tsx balance/profile_summary.ts <window.cpuprofile>`. Profiled timings
+are attribution, never a benchmark: the window read tick p50 121 ms, p95 414,
+344 bodies, the machine 64 percent busy, the host holding 1.34 cores.
+
+The meter's own rows of that window agree with the sampled tree: `ai` 49.7
+percent of tick time (p50 65 ms over 341 bodies), `update` 47.4 (the mass
+runtime 18.8 inside it, p95 227 ms: the cold window's admission; 2.18 million
+region reads and 23,227 terrain samples in 30 s), the wire 2.6. The census:
+197 idle of 344, 190 of them beyond 600 px of every seat (least 188).
+
+Inclusive, by watched root (a stack counts once per name; 31.0 s sampled,
+95.6 percent inside ticks):
+
+| root | s | share | reading |
+|---|---|---|---|
+| `updateAI` | 14.5 | 46.8% | the AI loop |
+| `update` (every method of that name: World, the runtime, others) | 13.9 | 44.6% | the per-actor loop and the runtime |
+| `regionAt` (worldmass/walk.ts, 3 sites) | 6.0 | 19.4% | region lookup under movement and the runtime |
+| `moveToward` | 6.0 | 19.3% | movement and pathing, mostly idle wanderers' steps |
+| `sample` (terrain samples, 8 sites) | 5.5 | 17.6% | terrain sampling |
+| `acquireTarget` | 4.6 | 14.7% | the target scan over the roster |
+| `losCached` / `castRay` | 3.0 / 2.9 | 9.8% / 9.3% | the sight rays inside the scan |
+| `terrainAt` | 2.9 | 9.4% | terrain under movement |
+| `updateProjectiles` | 0.8 | 2.5% | |
+| `enemiesOf` | 0.7 | 2.2% | the filtered roster copy |
+| `serializeSnapshot` / `sendStateTo` | 0.6 / 0.2 | 1.8% / 0.6% | the wire |
+| GC | 0.5 | 1.6% | |
+| `separateActors`, `actorsNear`, `resolveHit`, `applyInputs`, `useSkill` | under 0.15 each | under 0.5% | |
+
+Self time, bottom-up: the mass runtime's query modules carry the largest
+share (address.ts 9.7 percent, generator.ts 7.3, random.ts 5.6, walk.ts 4.7,
+nativeResidency.ts 4.6, noise.ts 3.9, dormancy.ts 3.2, runtime.ts 3.1,
+sanctuary.ts 1.8, stream.ts 1.4: about 46 percent of self time together,
+led by `cellInteger` 1.33 s, the deterministic draws 1.17 s,
+`cachedObstacleCandidates` 1.14 s, generator `candidate` 0.96 s, `regionAt`
+0.82 s, `reservedPopulation` 0.68 s, `isDependencyFreeData` 0.53 s); the
+engine's own lane next (world.ts 11.5 percent with `World.update` self 0.77
+s, `pointInSolid` 0.38, `hostileTo` 0.29; ai.ts 5.4 with `updateAI` self
+0.70 and `acquireTarget` 0.26; stats.ts 3.4 with `compute` 0.75;
+nativeSceneGeometry 2.8; levelgen `doodadRule` 1.4; `factionStance` 1.4;
+nativeHostility 1.2; brain `mergeTuning` 0.7); the profiler's own cost shows
+as `node:inspector` 2.1 percent, the ported diagnostics wraps 1.2 and an
+unattributed `set filename` 2.8.
+
+**What the profile decides.**
+
+1. The mass runtime's repeated terrain, region, obstacle and reservation
+   queries are the largest self cost on this tree (about 46 percent), and
+   they are exactly what the foundation's performance branch already attacks
+   (per-focus terrain and region caches, the obstacle LRU, the reservation
+   candidate map, the random and hash memos: §2). Step 3, merging that
+   branch, is worth more than any engine cut the lane could make alone; the
+   lane's work must compose with it, not duplicate it.
+2. THE THINKING EDGE's case is stronger than the census alone says: idle
+   wanderers pay `moveToward` (19 percent) through the runtime's region and
+   obstacle queries on every step, and a step costs per call, not per pixel.
+   Thinking on the beat alone removes two steps in three for about 190 of 344
+   bodies. Expected (unblessed): a fifth to a third of the tick on the spread
+   course, confined to the AI phase; measured in 7.6.
+3. THE LOCAL ROSTER's case: `acquireTarget` is 14.7 percent inclusive, two
+   thirds of it the sight rays (`losCached` 9.8) that only run on candidates
+   the distance check did not reject, and `enemiesOf` 2.2 percent; the
+   formation and squad walks do not surface as named roots (they are inlined
+   into `updateAI`'s 0.70 s self and the idle ladder). The whole-roster
+   walks are real but second to movement and the runtime's queries; the
+   foundation's far-target rejection (kept, §2) takes the cheapest half of
+   the scan. The lane takes the roster walks after the edge, with the squad
+   index, and measures them against this attribution.
+
+### 7.6 THE THINKING EDGE, measured (one tree, `--think off` against the edge on, together)
+
+Built as `server/thinkingEdge.ts` on the meter build (the law and the probe
+in docs/engine/shard.md "THE THINKING EDGE"; `probe_shardthink` green: the
+wander clock falls by exactly three ticks on the beat and not at all between,
+the near and busy bodies never bank, a struck body thinks at once, 24 far
+wanderers walk 7.1 px/s with the edge against 6.0 without, inside the pinned
+20 percent, and the off-beat ticks walk the roster less the edged bodies).
+Both halves of every pair below run the same tree and the same harness; only
+the switch differs, so the pair noise is the course's own.
+
+**E1, the spread course** (6 bots, 60 s, 3,500 px, no drop; the control
+launched first; the windows opened at one shared moment, 2.9 s late each):
+
+| | edge off | edge on |
+|---|---|---|
+| tick p50 / p95 / p99 / max ms | 167.4 / 531.1 / 831.8 / 2,483 | 145.1 / 566.9 / 956.7 / 2,576 |
+| the AI loop: p50 / p95 ms, share | 106.2 / 261.7, 58.7% | 86.1 / 320.8, 58.0% |
+| bodies thought / edged per tick (p50) | 343 / 0 | 168 / 155 |
+| `update` p50 / p95 ms | 51.8 / 183.2 | 49.0 / 124.1 |
+| dropped | 92.1% | 91.7% |
+| living least / mean | 23 / 40.1 | 20 / 39.2 |
+| actors, mean | 336 | 339 |
+| census: idle / engaged / squad / alerted | 156 / 59 / 39 / 10 | 180 / 39 / 26 / 15 |
+| deaths / rejoins | 2 / 2 | 3 / 3 |
+| heap growth MB | 7.1 | 7.5 |
+
+The edge skipped 155 of 340 bodies on every off-beat tick and the tick's p50
+fell 13 percent (the AI loop's p50 19 percent); the tail did not move. The
+per-sample rows disagree with each other more than the halves do: the edge's
+window opened on three samples of 158 to 243 ms AI p50 (the control's first
+three read 93 to 152) and closed on 37 to 43 ms against the control's 86 to
+127 at a similar roster, so a 60 s window on this machine resolves a
+difference of this size only in aggregate. Read: the idle bodies the edge
+lifts are the CHEAP ones; the AI loop's cost is in the hundred busy bodies
+(engaged, squad-busy, alerted) that chase, scan and ray, exactly the profile's
+`moveToward`, `acquireTarget` and `losCached` roots. Every one of those still
+thinks every tick, by the edge's own law.
+
+**E2, the clustered course** (4 bots together, 30 s, no drop):
+
+| | edge off | edge on |
+|---|---|---|
+| tick p50 / p95 / p99 / max ms | 7.22 / 28.27 / 52.27 / 133 | 6.87 / 30.19 / 55.60 / 174 |
+| bodies thought / edged per tick (p50) | 71 / 0 | 54 / 12 |
+| dropped | 0.33% | 0.72% |
+| living least / mean | 21 / 22.3 | 14 / 15.8 |
+| heap growth MB | 1.5 | 6.4 |
+
+No worse within the pair's noise (the two halves fought different fights:
+the edge's fleet killed its roster down to 67 bodies and 16 living against
+72 and 22). The heap gap is one 30 s reading; E1 read 7.1 against 7.5 MB
+and the edge keeps one WeakMap entry per edged body, so the gap is the
+course's, to be watched in longer soaks.
+
+### 7.7 THE LOCAL ROSTER: the profile's verdict on the walks (no engine cut)
+
+The charter made this cut conditional ("if the profile points at the
+whole-roster scans"). On this tree the profile and E1 point elsewhere:
+
+- The squad walks (`formationPost`, `surroundGoal`, the focus-fire `find`,
+  the muster count) each read the whole roster once per call with two
+  property reads a body; at 340 bodies and about 60 squad members that is
+  about 20,000 reads a tick, a fraction of a millisecond, and none of them
+  surfaces as a root in P1 (they sit inside `updateAI`'s 0.70 s self time).
+- The target rescan is the one walk with weight (`acquireTarget` 14.7
+  percent inclusive), and two thirds of it is the sight rays
+  (`losCached` 9.8) on candidates already inside reach: a local roster cuts
+  the walk, never the rays. The walk's own cheap distance cut is the
+  foundation's far-target rejection, kept on `codex/shard-performance` and
+  verified by the critic (§2); it arrives with the merge (§5 step 3) and
+  must not be built twice.
+- `enemiesOf` (the filtered roster copy) is 2.2 percent inclusive, the
+  largest allocation among the walks; it is the only roster-walk lever
+  worth an engine line on its own, and it is small.
+
+Decision: THE LOCAL ROSTER is not built in this pass. The squad index would
+change `ai.ts`, shared by every lane and gated on the smoke baseline, for a
+measured ceiling under 3 percent of the spread tick. The lane records it as
+the first candidate AFTER the foundation's merge re-profiles the tree: if
+the walks rise into the top roots once the runtime's queries are cached,
+the squad index and a padded `actorsNear` scan in `gridSeq` order (byte-
+identical picks, the M6 plan §1.4) are the recipe, with `probe_localroster`
+as the equivalence gate.
+
+What the measured tree says the next levers are (unblessed, for her word):
+the foundation's branch for the runtime's queries (46 percent of self time,
+§7.5); the per-actor `World.update` loop (38 to 47 percent of the spread
+tick, p50 44 to 52 ms over 340 bodies: about 0.14 ms a body in bookkeeping,
+with `pointInSolid`, `nativeScenePointInSolid`, levelgen's `doodadRule` and
+sanctuary's `blocks` among its self costs, terrain and solid checks per body
+per tick that look memoizable per cell and revision); and the busy bodies'
+own thinking (the rays and the chase), which the governor's population dial
+thins and the islands parallelize.
+
+**E1b, the spread course reversed** (the edge's host launched first; the
+machine calmer than E1's hour: the control itself read half E1's p50):
+
+| | edge off | edge on |
+|---|---|---|
+| tick p50 / p95 / p99 / max ms | 83.4 / 199.1 / 274.6 / 414 | 54.3 / 162.5 / 269.5 / 480 |
+| ticks stepped in the window (60.5 s) | 625 | 875 |
+| the AI loop: p50 / p95 ms, share | 53.8 / 138.7, 65.4% | 28.6 / 105.7, 58.4% |
+| bodies thought / edged per tick (p50) | 266 / 0 | 187 / 83 |
+| `update` p50 / p95 ms | 24.2 / 40.3 | 19.8 / 38.8 |
+| dropped | 82.5% | 75.2% |
+| living least / mean | 19 / 26.2 | 19 / 25.8 |
+| actors, mean (342 falling to 240; 353 to 205) | 280 | 266 |
+| deaths / rejoins | 5 / 4 | 4 / 4 |
+| heap growth MB | 7.9 | 14.8 |
+
+**The edge's aggregate, three pairs.** The spread tick's p50 falls 13 percent
+under heavy machine load (E1) and 35 percent on a calmer machine (E1b), with
+the p95 unmoved in E1 and 18 percent lower in E1b, and the shard stepping 40
+percent more ticks in E1b; the AI loop's p50 falls 19 and 47 percent; the
+clustered course is unchanged within noise (E2); the living radius holds on
+every pair (least 20 against 23, 19 against 19, mean within one body). The
+gates still breach by an order of magnitude on this machine: the edge lifts
+the cheap bodies, and the hundred busy ones keep the tick far above 20 ms.
+A faster tick serves the bots better (stepped 14.5 against 10.3 Hz in E1b),
+so the edge's fleet kills more and its roster thins faster, which flatters
+its late samples and probably explains its larger heap growth (14.8 against
+7.9 MB in E1b, 6.4 against 1.5 in E2, 7.5 against 7.1 in E1: more kills,
+more spoils retained); the edge itself holds one WeakMap entry per edged
+body and nothing else. WATCH: a long soak (`--seconds 600`) on both halves
+before the edge is called clean of retention.
+
+Kept: the edge ships ON (`THINKING_EDGE_CFG.enabled`), nearPx 600,
+unblessed; `--think off` is the A/B; the governor's first dial (§3 W1) is
+this switch.
+
+**The digest proofs on the edge tree.** All 23 `probe_shard*` rigs green
+(the four digest rigs `probe_shardunits`, `probe_shardcharacter`,
+`probe_shardspoils`, `probe_shardforesight` among them, `probe_shardthink`
+beside them; 192.9 s wall clock). `npm run sim -- baseline check --suite
+smoke` prints the identical five episode lines on the base worktree and on
+this tree (dps_out 17.21 / 27.63 / 50.51 / 68.42 / 274.07, kills 0 / 5.7 / 6
+/ 0 / 0): the sim never meets the edge, byte for byte. FINDING, not this
+lane's: both trees report the same three metrics beyond tolerance against
+the committed `balance/baselines/smoke.json` (ttk_parity_warrior_l5
+ttk_wave_mean 20.97 to 15.26; skillmode_duelist_solo_l20 dps_out and
+dps_dummy 235.61 to 274.07), a standing drift of `shard-world`'s base against
+its own baseline (main re-baked the duelist at 269c2e1c on 2026-09-30; the
+foundation's merges moved the warrior's wave). The lane re-bakes nothing:
+the baseline is the owner's deliberate act (`npm run sim -- baseline write
+--suite smoke` once the drift is adjudicated).

@@ -369,6 +369,7 @@ The run has three phases:
 | `--spread <px>` | THE SPREAD: the harness seats each bot at its own anchor on a ring of this radius about the hearth and the bot roams around that anchor (a party that split up; 0 = everyone around the hearth). The table's `spread` column is the widest distance between two standing seats, `living` the live foes within the population radius of each standing seat, least / mean (THE LIVING RADIUS, the premise the one-focus law breaks) |
 | `--rove <sec>` | THE ROVING SHADOW's visit length (`SHARD_CFG.rove.sec`; 0 = the focus alone, the shipped law) |
 | `--diet off` | THE WIRE DIET switched off (`WIRE_DIET_CFG.enabled`): the pre-diet frames, so one build measures both sides of the A/B under the same load |
+| `--think off` | THE THINKING EDGE switched off (`THINKING_EDGE_CFG.enabled`): every body thinks every tick, so one build measures both sides of that A/B too |
 | `--report <path>` | the JSON report (default `balance/reports/soak_<stamp>.json`, gitignored) |
 | `--thresholds <path>` | the gates (default `balance/soak.config.json`) |
 | `--diagnostics` | the foundation's inclusive evidence (`balance/shardPerformance.ts`, ported from `codex/shard-performance` 2026-10-13): prototype wraps around `World.update`, `applyInputs`, `settleNearScale`, `serializeWorldState`, the mass runtime's `update`, `attach` and `nativeReadiness`, the host's wire phase and the desks; terrain sample and region-read counts; worker, paging and resume samples; machine busy percent and the process's CPU cores over the window; a compact checkpoint timed OUTSIDE the window (no disk). Phase durations overlap; never sum them |
@@ -406,6 +407,24 @@ main one: ms p50/p95 per phase with the shares, then the census by state and
 band) and over the whole window (`phases` and `census` in the JSON, two
 summary rows); its per-tick read is the host's `phases.last`. The meter
 costs about a microsecond a tick (`probe_phasemeter` E) and is always on.
+
+**THE THINKING EDGE** (`server/thinkingEdge.ts`; docs/design/performance-lane.md
+§3 W0, the M6 plan §1.4). An IDLE body (the census's class) standing at
+least `THINKING_EDGE_CFG.nearPx` (600) from every standing seat in its World
+thinks only on the wire's beat ticks, the ticks whose state ships, and
+thinks there with every second it skipped: `thinkDt` banks the skipped `dt`
+per body and pays it on the next think, so every clock a brain integrates
+(the wander timer, the fuse, threat decay, the kite wind) runs the same
+seconds, while clocks that read `world.time` never noticed. A body that stops
+being idle mid-beat (struck, roused, a mate engaged) thinks at once on that
+tick with its bank, so nothing waits for the beat. Only the shard host's AI
+loop asks the edge; solo play, the co-op host and the balance harness call
+`updateAI` themselves (THE SOLO INVARIANT by construction; `probe_shardthink`
+D reads the sources). The loop's rows `#ai.ran` (the bodies that thought)
+and `#ai.edged` (the bodies that skipped) ride the meter. `--think off` is
+the A/B. Clients only ever see beat-tick states, so an edged body's shipped
+path differs only by its decisions landing on the beat (at most 50 ms late
+at 60 Hz with a 20 Hz wire). Probe `probe_shardthink`.
 
 **What it reads.** One seam in the shard's own code: `ShardTransport.bytesOut`
 and `framesOut`, bumped in `write()` for every frame handed a socket. The
