@@ -15,9 +15,9 @@ main or Shards, and no new development branch was created.
 | `codex/seamless-world-foundation` | Canonical seamless work and this reviewed reconciliation. |
 | `main` / `origin/main` | Main line; unchanged by this task. The local `118b510f` range has 24 patch-equivalent commits already represented in the accepted remote baseline. |
 | `shard-world`, `perf-lane` | Active Shards work at the inspected `beb1d978855035cb86e3b1bf4b0120a55449303c`; preserved. Shards owns its integration and performance work. |
-| `codex/seamless-parity-checkpoint-20261014` | Backup at `5a7eac003607edd65a4d30ec96a14543752a1177`; retirement follows verified canonical publication. No local branch existed. |
-| `codex/seamless-main-reconciliation-20261014` | Backup at `d94f36c73c7d3179b96088e6bf42025dfd923ab4`; retire only the branch, preserving the checkout, ignored evidence and preview fallback assets. |
-| `codex/seamless-fracture-wip-20261014` | Backup draft at `5c4441d63bd6ee7a1a2c10834edcb574bcd02bb5`; adapted by accepted `9e50d2f2ecbe44900cc09969a34c6f3c06988918`. Preserve its archived worktree recovery state. |
+| `codex/seamless-parity-checkpoint-20261014` | Retired remote backup at `5a7eac003607edd65a4d30ec96a14543752a1177`; history is in the canonical merge and recovery bundle. No local branch existed. |
+| `codex/seamless-main-reconciliation-20261014` | Retired local/remote backup at `d94f36c73c7d3179b96088e6bf42025dfd923ab4`; checkout retained at the same detached commit, including ignored evidence and preview fallback assets. |
+| `codex/seamless-fracture-wip-20261014` | Retired local/remote draft at `5c4441d63bd6ee7a1a2c10834edcb574bcd02bb5`; adapted by accepted `9e50d2f2ecbe44900cc09969a34c6f3c06988918`. Original draft is in the verified bundle; archived worktree recovery state is preserved. |
 
 The complete-history recovery bundle is
 `.claude/seamless-consolidation-20261014.local.work/backup-recovery.bundle`
@@ -203,5 +203,23 @@ published commit and source/build metadata. Old chunk roots remain available
 so already-open tabs can finish lazy imports; this task does not reload a
 user tab or reset saved characters.
 
-The exact merge publication and scoped retirement receipt will be recorded
-after ordinary publication and verified cleanup.
+Merge `5909ddf60a25bef4fdd202fbeb1f9f5e27f1f99c` was published by an ordinary fast-forward push to
+`origin/codex/seamless-world-foundation` on 2026-10-14 after refreshing origin.
+Its exact parents are the two foundation tips above. The canonical remote was
+verified before retiring the three exact backup refs, and their absence was
+verified afterward. Local backup refs were deleted with ordinary `branch -d`;
+the three remote deletions were atomic. Main, shard-world and perf-lane refs
+were unchanged.
+
+The reconciliation checkout remains at detached `d94f36c7`. All 3,540 tracked
+raw files and 7,140 recorded ignored evidence files were verified unchanged
+through that same-commit detach. The original Fracture worktree archive remains
+available. No user save or foreign working file was included in cleanup.
+
+Exact local receipts are `MERGE-COMMIT.json`, `PUBLICATIONS.jsonl` and
+`RETIREMENT.json` in the evidence directory above. The final narrow critic's
+`final-review/final/METADATA.json` has SHA-256
+`dd781e4b0d9583494c2857ca09a23079af1de124dd85d5cb06548c6615b2efdb`;
+it confirms all 144 dispositions, 10 adaptations and 46 verification-log
+hashes. This publication/retirement receipt is a documentation-only follow-up
+to the tested merge. The source manifest and runtime inputs remain unchanged.
