@@ -790,3 +790,50 @@ The engine-side half, keying the walk's own path cache on the same family
 revision instead of the global one (every scenery birth clears it today) and
 memoizing per cell inside the walk field so solo play gains too, is the
 foundation's: ask F14.
+
+### 8.5 THE NATIVE HOST'S OWN TICK (2026-10-14, a contended exploratory baseline of the end-state host)
+
+Her rulings tonight made the retained-area host (`server/nativeShardHost.ts`,
+`npm run shard -- --native`) the host the shard keeps, so the lane measured
+it before the merge, read-only: a detached worktree at the foundation's pushed
+tip 65021420 (`D:/Games/Claude/arpg-native`, no branch, nothing committed), a
+scratch driver that boots `NativeShardHost({ seed: 0x1231, saveDir: null,
+open: true })`, listens on loopback, forks the foundation's own
+`balance/soak_bots.ts` with four bots at the keeper's hearth (spread 0), runs
+the host's own pump and wraps the host's own `tick` for wall cost. Node 24.9
+on Windows under tsx. CONTENDED: Codex's sealed full gate ran beside it (six
+probe workers, the machine near 90 percent), so every absolute number here
+is pessimistic and only the attribution shares are the finding; the same
+course repeats on a quiet machine at the repaired merge candidate, as Codex
+asked, before any number is an acceptance.
+
+**The numbers (four bots idle in Lastlight, 49 actors, 42 s of wall):** tick
+p50 76.2 ms, p95 98.4 ms, p99 112 ms, max 321 ms against the 16.7 ms budget at
+60 Hz; 511 ticks stepped and 1,854 dropped; the world advanced 8.5 simulated
+seconds in 42 (status: clock 8.5, droppedTicks 1854). The classic giant-zone
+host runs the clustered course at 5 to 10 ms and the far heavier six-bot
+spread course at 27 to 37 ms on this machine.
+
+**The attribution (a 30 s profile of the same course, 84.5 s sampled, `tick`
+29.7 s inclusive):** the engine's own work is about 7 s of the 29.7
+(`World.update` 3.3 s, `updateAI` 2.6 s, `applyInputs` 0.8 s,
+`serializeSnapshot` 0.4 s). The rest is the native ownership bookkeeping, per
+tick, in an idle town: `worldmass/nativeAreaActorAuthority.ts` 13.8 s self,
+of which `#finalMembers` 11.0 s (13 percent of every sample taken), called
+from `assertFinalPhysical` (62 percent), `#finalSelections` (20 percent) and
+`selectOrdinaryEntryRows` (15 percent); `nativeAreaSceneTransitionCoordinator.ts`
+5.3 s self (`readyOwn` 2.1 s, all of it from `#ordinaryReady`;
+`#assertProjection` 1.0 s); `nativeAreaCombatOperation.ts` `enter` 0.8 s;
+`nativeAreaSceneCombat.ts` 0.8 s; the campaign frame 1.2 s. The tsx module
+loader and `readdir` (about 7 s) are start-up, not steady state.
+
+**Ask F16 (docs/design/shard-world.md §7g, the mailbox 2026-10-15):** a
+revision-keyed memo of the final membership, computed once per membership
+change and never per call per tick, and the projection and final-physical
+assertions run at ownership transitions and on a cadence under a flag rather
+than on every frame of a quiet town: the shape THE OBSTACLE MEMO and the
+doodad families use on the classic host, keeping every authority law. Until
+F16 lands, no edge, memo or governor work on the classic host can move the
+end-state host by more than the engine's seven seconds in thirty. The lane
+runs the concurrent pairs on the native host the day a candidate exists; the
+scratch driver becomes the `--native` soak lane after the merge.
