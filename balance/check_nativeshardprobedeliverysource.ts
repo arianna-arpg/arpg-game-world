@@ -1,6 +1,6 @@
 /** Mutation, byte identity and filesystem controls for the shard probe delivery source boundary. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import * as fs from './nativeDesktopPerfFS';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';

@@ -87,5 +87,10 @@ jobs:
           npx tsx balance/check_nativecanvasreleasesource.ts
           npx tsx balance/check_nativeshardprobedeliverysource.ts
 
+      - name: Retained desktop performance travel regressions
+        run: |
+          npx tsx balance/check_nativeperftravel.ts
+          npx tsx balance/check_nativedesktopperfsource.ts
+
       - name: Probes (green roster, fast lane)
         run: npm run probe

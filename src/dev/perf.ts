@@ -3,7 +3,7 @@
 //
 // Measures what the PLAYER'S frame does: a fresh run is started through the
 // real startGame path, one zone per tileset is minted through the real
-// placeZoneAt → loadZone pipeline (World.devMintTileset), and the hero WALKS
+// placeZoneAt recipe and retained preparation/transfer, and the hero WALKS
 // each zone under real requestAnimationFrame pacing — steered by the fake pad
 // through the true input path, invulnerable but TARGETABLE so combat pressure
 // stays honest. Telemetry comes from the main-loop ring buffers
@@ -19,6 +19,7 @@
 // boundless), so new biomes join the sweep the day they're authored.
 // ---------------------------------------------------------------------------
 
+import { retainedPerfTravel, withPerfProfile, assertPerfWalk, assertPerfFrames } from './nativePerfTravel';
 import { sidezoneOf } from '../data/sidezones';
 import { TILESETS } from '../data/tilesets';
 import { skyOf, START_ZONE } from '../data/zones';
@@ -79,6 +80,9 @@ export interface PerfZoneStats {
   layout: string;
   doodads: number;
   actors: number;
+  /** Whole retained campaign census, sampled after this window. */
+  residentAreas: number; residentActors: number;
+  worldSeconds: number; walkDistance: number; pausedFrames: number;
   /** Live LITE-TIER pool rows when the window closed (engine/lite.ts —
    *  the tide's census beside the actor count it undercuts). */
   lite: number;
@@ -182,6 +186,7 @@ export interface PerfSkipRow {
 }
 
 export interface PerfSweepReport {
+  runtime: 'retained-native';
   control: PerfZoneStats;
   /** THE AGED CONTROL: the SAME town, re-sampled after the last matrix row
    *  (the 2026-08-01 acquittal: a run-global stall GROWS with sweep age and
@@ -359,6 +364,8 @@ type FrameDump = {
 function reduceFrames(f: FrameDump, entryWorstGap: number, meta: {
   tileset: string; zone: string; variant: string | null; layout: string;
   doodads: number; actors: number; lite: number;
+  residentAreas: number; residentActors: number;
+  worldSeconds: number; walkDistance: number; pausedFrames: number;
   snowBakes: number; groundBakes: number; snowCover: number;
   taskMax: number; offTask40: number; ltCount: number; ltWorst: number;
   slabName: string; slabMs: number; entryNote: string; attempts: number;
@@ -452,8 +459,14 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     ltLedger.count = 0; ltLedger.worst = 0;
   };
 
+  try {
   // A fresh probe run through the REAL start path (menus dismissed).
-  g.devStartRun(opts.classId);
+  await g.hydrated();
+  withPerfProfile(g.account(), () => g.devStartRun(opts.classId), () => g.saveAccount());
+  const runtime = g.retained();
+  if (!runtime) throw new Error('perfSweep: retained native startup is missing');
+  const travel = retainedPerfTravel(runtime);
+  if (g.world().scene) throw new Error('perfSweep: a cinematic is still active');
   beat('start');
 
   // THE GATE PINS SCALE 1 (render/renderScale.ts): the sweep judges the
@@ -511,6 +524,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
    *  stayed home; the caller owns the travel back and the restart. */
   const walkPhase = async (ms: number, dir0 = 0.6): Promise<{
     worst: number; held: boolean; taskMax: number; offTask40: number;
+    worldSeconds: number; walkDistance: number; pausedFrames: number;
     /** The OWN-work mark of the frame that owned the worst gap — the entry
      *  annotation's discriminator (foreign freeze vs honest heavy frame). */
     worstOwn: number;
@@ -523,6 +537,9 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   }> => {
     const homeZid = g.world().zone.id;
     let dir = dir0, worst = 0, worstOwn = Infinity;
+    const worldStart = g.world().time;
+    let walkDistance = 0, pausedFrames = 0;
+    let walkPrevious = { ...g.world().player.pos };
     // THE STALL LEDGER (the 2026-08-01 triad acquittal): the run-global
     // stall lived AFTER perfPush by position — in neither the sim nor the
     // ren bracket — and the meta pass then moved the autosave into idle
@@ -608,6 +625,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       // one-way collapse melt to the zone guard, the single fabric whose
       // future no pure clock can read.
       const zw = g.world();
+      const fallHazardAt = travel.hazards();
       const at = zw.player.pos;
       // THE RHYTHM WHISKER (see FLUX_CROSS_SEC): flux ground answers for
       // its FUTURE, not just its present — a pad must read walkable at
@@ -686,7 +704,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
         const mx = at.x + Math.cos(a) * reach * 0.5, my = at.y + Math.sin(a) * reach * 0.5;
         const ex = at.x + Math.cos(a) * reach, ey = at.y + Math.sin(a) * reach;
         return inField(mx, my) && inField(ex, ey)
-          && !zw.fallHazardAt(zw.player, mx, my) && !zw.fallHazardAt(zw.player, ex, ey)
+          && !fallHazardAt(zw.player, mx, my) && !fallHazardAt(zw.player, ex, ey)
           && fluxHolds(mx, my, reach * 0.5 / strideNow)
           && fluxHolds(ex, ey, reach / strideNow)
           && spanHolds(mx, my, reach * 0.5 / strideNow)
@@ -747,7 +765,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
         // least stays out of the void — along the fading span toward its
         // end is exactly what a player caught mid-crossing does.
         const ownSafe = fluxHolds(at.x, at.y, 0) && spanHolds(at.x, at.y, 0)
-          && !zw.fallHazardAt(zw.player, at.x, at.y)
+          && !fallHazardAt(zw.player, at.x, at.y)
           && !streakThreat(at.x, at.y, STREAK_HORIZON_SEC) // never stand in a comet's path
           && !mouthNear(at.x, at.y); // never PARK inside a door's dwell disc
         if (ownSafe) {
@@ -759,7 +777,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
             const mx = at.x + Math.cos(a2) * r * 0.5, my = at.y + Math.sin(a2) * r * 0.5;
             const ex = at.x + Math.cos(a2) * r, ey = at.y + Math.sin(a2) * r;
             if (inField(mx, my) && inField(ex, ey)
-              && !zw.fallHazardAt(zw.player, mx, my) && !zw.fallHazardAt(zw.player, ex, ey)) {
+              && !fallHazardAt(zw.player, mx, my) && !fallHazardAt(zw.player, ex, ey)) {
               dir = a2;
               break;
             }
@@ -796,6 +814,10 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       // only true obstruction — a pack wall, a shoreline press — reads as a
       // shorter stride, and the whisker's etas lengthen to match.
       const w2 = g.world();
+      if (w2.timeflow.worldScale() <= 0) pausedFrames++;
+      if (w2.zone.id === homeZid && moving)
+        walkDistance += Math.hypot(w2.player.pos.x - walkPrevious.x, w2.player.pos.y - walkPrevious.y);
+      walkPrevious = { ...w2.player.pos };
       if (moving && stridePrev) {
         const dtSim = w2.time - stridePrev.t;
         if (dtSim > 1e-3) {
@@ -808,6 +830,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       if (w2.zone.id !== homeZid) {
         return {
           worst, held: false, taskMax, offTask40, worstOwn,
+          worldSeconds: w2.time - worldStart, walkDistance, pausedFrames,
           exit: {
             atMs: performance.now() - t0, zone: w2.zone.name,
             tileset: w2.zone.tileset ?? '?', time: w2.time,
@@ -839,7 +862,8 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
         lastSnap = { x: Math.round(p2.pos.x), y: Math.round(p2.pos.y), push: !!p2.push, foes, streak };
       }
     }
-    return { worst, held: true, taskMax, offTask40, worstOwn };
+    return { worst, held: true, taskMax, offTask40, worstOwn,
+      worldSeconds: g.world().time - worldStart, walkDistance, pausedFrames };
   };
 
   // THE MID-WALK EXIT + THE RESTART LAW (aether_vesper 2026-07-28: a
@@ -888,7 +912,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       return `a${attempt + 1} ${phase}+${(e.atMs / 1000).toFixed(1)}s -> '${e.zone}' (${e.tileset}) wheel ${wheel.toFixed(2)} ${e.snap}`;
     };
     const returnHome = (): boolean => {
-      const ok = g.world().devTravelTo(homeZid); // false only off-graph — cannot happen for minted/START zones
+      const ok = travel.travelTo(homeZid); // false only off-graph — cannot happen for minted/START zones
       if (ok) pinWeather(); // the pinned front re-parks on the home node
       return ok;
     };
@@ -899,7 +923,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       // burst and the steady window carry the full crowd. Re-poured after a
       // guard restart (the travel back reloads the zone); lite.spawn refuses
       // past the pool cap, so a surviving tide tops up instead of doubling.
-      if (opts.lite) zw.devLitePour('vermin_tide', opts.lite);
+      if (opts.lite) travel.pourLite('vermin_tide', opts.lite);
       const dir0 = 0.6 + attempt * RETRY_TURN;
       const entry = await walkPhase(settleMs, dir0);
       if (entry.worst > entryWorst) {
@@ -934,14 +958,19 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
         if (!returnHome()) break;
         continue;
       }
+
       ltDrain(); // pending in-window entries, folded before the snapshot
       const zw2 = g.world();
       const dump = g.perfFrames(false); // rings + the PHASE LEDGER's window slab
+      assertPerfFrames(dump.gap.length, g.crash().fatal);
+      assertPerfWalk(steady.worldSeconds, steady.walkDistance, steady.pausedFrames);
       return reduceFrames(dump, entryWorst, {
         tileset: tilesetId, zone: zw2.zone.name,
         variant: zw2.zone.variantName ?? null,
         layout: zw2.zone.layoutType ?? 'plains',
         doodads: zw2.doodads.length, actors: zw2.actors.length,
+        ...travel.census(),
+        worldSeconds: steady.worldSeconds, walkDistance: steady.walkDistance, pausedFrames: steady.pausedFrames,
         lite: zw2.lite.liveCount,
         snowBakes: VIS_TELEMETRY.snowBakes, groundBakes: VIS_TELEMETRY.groundBakes,
         snowCover: +zw2.snowCover.toFixed(2),
@@ -960,7 +989,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   // verdict travels across machines (a slow laptop slows both sides). A
   // pinned sky applies here too: the control must not be hostage to a front
   // that happened to drift over town.
-  g.world().devTravelTo(START_ZONE);
+  travel.travelTo(START_ZONE);
   pinWeather();
   const control = await sampleCurrentZone('(town)');
   if (!control) throw new Error('perfSweep: the town control could not hold its window — sweep aborted');
@@ -996,7 +1025,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     // path itself then wears the right tileset in the deadman's row.
     beatTileset = id;
     beat('mint');
-    const zid = g.world().devMintTileset(id, PERF_SPREAD_BASE + idx, 8, {
+    const zid = travel.mintTileset(id, PERF_SPREAD_BASE + idx, 8, {
       ...(pin?.seed !== undefined ? { seed: pin.seed }
         : opts.mintSeed !== undefined ? { seed: mintSeedFor(opts.mintSeed, id) } : {}),
       ...(pin?.variant ? { variant: pin.variant } : {}),
@@ -1047,17 +1076,14 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   // acquittal had to reconstruct this bracket by hand from seat medians to
   // exonerate three zones; now every report carries it. Evidence only —
   // the launcher prints both rows and their delta, and gates nothing on it.
-  g.world().devTravelTo(START_ZONE);
+  travel.travelTo(START_ZONE);
   pinWeather();
   const controlEnd = await sampleCurrentZone('(town aged)');
   beat('aged', { row: controlEnd });
 
-  g.fakePad(null);
-  setVisAblate([]);
-  ltObs?.disconnect();
-
   const cv = document.getElementById('game') as HTMLCanvasElement | null;
   return {
+    runtime: 'retained-native',
     control, controlEnd, zones,
     canvas: { w: cv?.width ?? 0, h: cv?.height ?? 0 },
     dpr: window.devicePixelRatio || 1,
@@ -1066,4 +1092,9 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     weather: opts.weather ?? '',
     ablate: opts.ablate ?? [],
   };
+  } finally {
+    g.fakePad(null);
+    setVisAblate([]);
+    ltObs?.disconnect();
+  }
 }
