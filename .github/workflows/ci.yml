@@ -85,6 +85,7 @@ jobs:
         run: |
           npx tsx balance/check_masspainterpixels.ts
           npx tsx balance/check_nativecanvasreleasesource.ts
+          npx tsx balance/check_nativeshardprobedeliverysource.ts
 
       - name: Probes (green roster, fast lane)
         run: npm run probe

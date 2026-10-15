@@ -333,15 +333,25 @@ const near = (p: Vec2, at: Vec2, r: number): boolean => dist(p, at) <= r;
   check('D board: only the holder turns a hand in (B cannot turn in A\'s)', ledgerOf(sA).hands.some(h => h.id === offersA[0]));
   // A writ pays at the turning seat's feet; essence vacuums into that seat's own wallet, a pouch into its own bag.
   const take = (s: Seat): number => essOf(s) * 1000 + memUnits(s) * 10 + s.meta.items.length;
+  // Currency scatters at payout and can land outside a stationary hero's touch.
+  // Approach only newly paid packets owned by this seat; the ordinary tick must
+  // still collect them into its wallet and all original payment checks remain.
+  const priorPayDrops = new Set(w.drops);
+  const collectPay = (s: Seat): (() => void) => () => {
+    const drop = w.drops.find(d => !priorPayDrops.has(d) && d.owner === s.id && d.item.kind === 'essence');
+    if (!drop) return;
+    const at = w.clampPos(drop.pos, s.actor.radius);
+    s.actor.pos.x = at.x; s.actor.pos.y = at.y;
+  };
   const p0 = { a: take(sA), b: take(sB), k: take(host.keeper) };
   act(A, { t: 'bountyTurnIn', id: offersA[0] });
-  await waitFor(() => take(sA) > p0.a, sec(2)); // the turn-in rides a real socket: wait on the pay, never on a tick count
+  await waitFor(() => take(sA) > p0.a, sec(2), collectPay(sA)); // the turn-in rides a real socket: wait on the pay, never on a tick count
   check('D board: A\'s writ pays A (never the keeper, never B)',
     !ledgerOf(sA).hands.some(h => h.id === offersA[0]) && take(sA) > p0.a && take(sB) === p0.b && take(host.keeper) === p0.k,
     `A ${p0.a}->${take(sA)}, B ${p0.b}->${take(sB)}, keeper ${p0.k}->${take(host.keeper)}`);
   const p1 = { a: take(sA), b: take(sB) };
   act(B, { t: 'bountyTurnIn', id: offersB[0] });
-  await waitFor(() => take(sB) > p1.b, sec(2));
+  await waitFor(() => take(sB) > p1.b, sec(2), collectPay(sB));
   check('D board: B\'s writ pays B', !ledgerOf(sB).hands.some(h => h.id === offersB[0]) && take(sB) > p1.b && take(sA) === p1.a,
     `B ${p1.b}->${take(sB)}, A ${p1.a}->${take(sA)}`);
   for (const [kind, done] of restore) (BOUNTY_KINDS[kind] as { done: unknown }).done = done;

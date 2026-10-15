@@ -1118,6 +1118,21 @@ const notesHeard = (cl: Client, from: number, text: string): number =>
   check('F ring: the dwelling seat\'s own snapshots carry its road ring (SeatW.rd), the exit filling where it stands',
     rings.length >= 3 && rings.every(r => r[3] === 'zone_exit' && Math.abs(r[0] - out.pos.x) < 1) && rings.some(r => r[2] >= 0.5),
     rings.map(r => r[2]).join(','));
+  // A half-second dwell can contain only ten publication beats, depending on
+  // tick alignment. Keep the non-dweller busy for one complete wire interval
+  // so the original >10-frame privacy assertion observes enough real frames.
+  await runTicks(Math.ceil(SHARD_CFG.tickHz / SHARD_CFG.stateHz), () => { s2.lastActedAt = k.time; });
+  // Drain those already-written frames through an ordered marker on the same
+  // socket. Receiving it advances no simulation and cannot manufacture a snap.
+  await new Promise<void>((resolve, reject) => {
+    const word = `probe road delivery ${F2.id}`;
+    const stop = F2.c.onSession(msg => {
+      if (msg.t === 'partyWord' && msg.word === word) { clearTimeout(timer); stop(); resolve(); }
+    });
+    const timer = setTimeout(() => { stop(); reject(new Error(`Road snapshots did not drain for ${F2.id}`)); }, 5000);
+    try { host.net.sendSession({ t: 'partyWord', word }, F2.id); }
+    catch (error) { clearTimeout(timer); stop(); reject(error); }
+  });
   check('F ring: another seat never hears a road ring, its own or the dweller\'s (THE OWN ENTRY)',
     F2.snaps.slice(n2).length > 10 && F2.snaps.slice(n2).every(s => Object.values(s.seats).every(e => e.rd === undefined)));
   const followed = await waitFor(() => units.unitOf(F2.id) === fu, sec(3));

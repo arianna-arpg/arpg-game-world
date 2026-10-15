@@ -1,6 +1,6 @@
 /** Mutation, byte identity and filesystem controls for the canvas release source boundary. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import * as fs from './nativeShardProbeDeliveryFS';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
