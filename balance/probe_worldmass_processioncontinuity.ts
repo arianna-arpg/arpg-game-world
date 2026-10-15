@@ -237,6 +237,7 @@ try {
 // Full authority boundary: real production lottery, source, terrain, scene
 // proof and native factories. Only initial arrival/cave travel and timing are
 // controlled here; the browser proves the physical multi-chunk escort.
+// Refusal controls supplement the fixed must-admit route below; they never replace it.
 const countryUndo=seedGlobalRandom(713);
 try{
  const fresh=(seed:number)=>makeSimWorld('warrior',seed); // native default settlement includes its cellar house

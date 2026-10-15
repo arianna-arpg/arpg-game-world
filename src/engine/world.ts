@@ -137,6 +137,7 @@ import { EventBus } from './eventbus';
 import { Party } from './party';
 import { HONEST_INPUT_CFG, NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
 import { reviveTargetsOfRow } from '../net/partyReads'; // THE PARTY THAT READS: a hosted shell's revive ring reads its row
+import { spokenDialogueHost } from '../net/spokenQuests'; // THE SPOKEN QUESTS: a hosted shell's dialogue reads its own seat's rows
 import { SkillInputOrder } from './skillInputOrder';
 import { ZONE_MEMORY_CFG,  restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
 import { WorldMassRuntime, type MassAdventureSave } from '../worldmass/runtime';
@@ -312,8 +313,8 @@ import { QUEST_GIVER_IDS, ZONE_QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
 import { massQuestDestination, massQuestSatisfied, massQuestTarget, validMassQuestEntry } from '../worldmass/quests';
 import {RELIQUARY_LESSON} from '../quests/reliquary';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
-import {restoreQuestImbues,type QuestImbue} from './questImbue';
-import { charKeyOf, newQuestLedger, packQuestLedger, type QuestLedger, type QuestLedgerSave } from './questLedger'; // THE CHARACTER'S QUESTS (card 24)
+import { restoreQuestImbues, type QuestImbue } from './questImbue';
+import { charKeyOf, newQuestLedger, packQuestLedger, QUEST_GROUND_LEDGER, type QuestGroundSave, type QuestLedger, type QuestLedgerSave } from './questLedger'; // THE CHARACTER'S QUESTS (card 24)
 import { QuestRescues } from './questRescues';
 import { passiveRefund } from './passiveRefund';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, questStandingLine, type QuestCategory, type QuestStanding } from '../quests/types';
@@ -2816,6 +2817,7 @@ export class World {
    const world=this;
    const host:NativeSceneQuestInteractionHost={
   get time(){return world.time;},
+  get vocationAsks(){return world.vocationAsks;},
   get acceptOdysseyCompatibleQuest(){const fn=world.acceptOdysseyCompatibleQuest;return(...args:Parameters<NativeSceneQuestInteractionHost['acceptOdysseyCompatibleQuest']>)=>fn.apply(world,args);},
   get acceptQuest(){const fn=world.acceptQuest;return(...args:Parameters<NativeSceneQuestInteractionHost['acceptQuest']>)=>fn.apply(world,args);},
   get acceptableQuests(){const fn=world.acceptableQuests;return(...args:Parameters<NativeSceneQuestInteractionHost['acceptableQuests']>)=>fn.apply(world,args);},
@@ -3309,7 +3311,7 @@ actors: Actor[] = [];
   private attuneTimer = 0;
   /** SECRET-vocation shrines standing in THIS zone (spirit NPC + which calling).
    *  Zone-local, re-placed deterministically each load — never serialized. */
-  private vocationSites: { vocId: string; npc: Actor; silentNoted?: boolean }[] = [];
+  private vocationSites: { vocId: string; npc: Actor; silentNoted?: boolean; /** THE VOCATION SITES PER SEAT: the hosted seats it stayed silent for. */ silentSeats?: Set<string> }[] = [];
   /** Prior-run death spots present in THIS zone (coord-matched from account.deaths
    *  each loadZone). Reclaimed by dwelling. Distinct from necromancy corpses[]. */
   playerCorpses: PlayerCorpse[] = [];
@@ -15109,6 +15111,11 @@ actors: Actor[] = [];
     // Snapshot the overlays FIRST: their bags carry the ownedZones claims
     // (world/overlay.ts convention) that decide which event ground rides.
     const overlays = this.sim.snapshotOverlays();
+    // THE OFFLINE HERO'S GROUND (shard W12): the event ground every hero's quests hold rides the
+    // bag as a claim ledger (THE ZONE-CLAIM CONVENTION), so the scrub keeps it on both sides of
+    // the save, absent heroes' too; null off a shard (the bag is what it was).
+    const held = this.heldQuestGround?.();
+    if (held) overlays[QUEST_GROUND_LEDGER] = held;
     // THE CHARACTER'S QUESTS: the world half saves the local seat's ledger (the run's quest
     // state; the keeper's sink on a hosted world), and every standing hero's held ground rides.
     const own = this.ownQuestLedger;
@@ -20432,7 +20439,9 @@ actors: Actor[] = [];
   /** Zone-load generation, including reloading the same zone. UI readers
    * must never carry a conversation into newly minted actors. */
   dialogueScene = 0;
-  readonly npcDialogues = new NpcDialogueDirector(this);
+  // THE SPOKEN QUESTS (shard W12): the conditions read the local seat's own rows on a hosted
+  // world's shell (net/spokenQuests.ts questDialogueView), the World itself everywhere else.
+  readonly npcDialogues = new NpcDialogueDirector(spokenDialogueHost(this));
 
   speechFocusTarget(seat: Seat = this.localSeat): Readonly<DwellFocus> | undefined {
     return this.speechFocus.get(seat);
@@ -24132,9 +24141,18 @@ actors: Actor[] = [];
   /** One hosted seat's linger at the giver (updateQuestGiver's own law, per seat): a
    *  finished quest turns in first (a reward to choose waits in the seat's journal),
    *  else the next acceptable quest is taken, and THE CHARACTER'S QUESTS: the giver
-   *  marks the hero's own Odyssey leads as it does for the solo hero. A calling (a
-   *  fresh vocation chain) waits for a hosted menu that does not open yet. */
+   *  marks the hero's own Odyssey leads as it does for the solo hero. THE VOCATION
+   *  SITES PER SEAT (shard W12): a calling (a fresh vocation chain) asks the seat's
+   *  own menu, once per visit (the solo dwell's one request: a pick or a decline closes
+   *  it until the dwell breaks); the ask rides its journal row (JournalW.voc) and the
+   *  pick comes back as its own `vocationQuest` word. */
   private questGiverDwells = new WeakMap<Seat, number>();
+  /** THE VOCATION SITES PER SEAT (W12): each hosted seat's standing calling ask (the world time
+   *  it was made), from the linger that made it until the seat's dwell breaks. The owner
+   *  (engine/nativeSceneQuestInteraction.ts) writes it; the journal row ships it. */
+  readonly vocationAsks = new WeakMap<Seat, number>();
+  /** The world time of the seat's standing calling ask (its journal row's `voc`), if any. */
+  vocationAskOf(seat: Seat): number | undefined { return this.vocationAsks.get(seat); }
   private questGiverStep(seat: Seat, dt: number): void { return sceneQuestGiverStep(this.nativeSceneQuestInteractionHost(),seat,dt); }
 
   /** Optional contracts reuse native eligibility and the exact destination binding.
@@ -24193,27 +24211,41 @@ actors: Actor[] = [];
   /** Proximity DISCOVERY: walking into a site's aura RECEIVES the calling —
    *  for a qualifying character — via the run-ledger discovery key the chain's
    *  gates require. A non-qualifying visitor gets one quiet line instead. */
+  //  THE VOCATION SITES PER SEAT (shard W12): on a hosted world every standing player
+  //  seat's own body seeks (THE ACTING SEAT's toucher law: never the keeper's parked
+  //  body, never a hired blade), and the calling is the seeker's own: its own ledger
+  //  (THE CHARACTER'S QUESTS' keys, mirrored home), the account stamp its run's end
+  //  would have paid (solo merges the run ledger then) through its own gate
+  //  (World.gateAccountOf), its own note row. Solo and the co-op host: the hero alone.
   private updateVocationSites(): void {
+    const hosted = this.localSeat.keeper;
+    const seekers = hosted ? this.handSeats() : [this.localSeat];
     for (const site of this.vocationSites) {
       const v = VOCATIONS[site.vocId];
       if (!v?.secret || site.npc.dead) continue;
-      if ((this.ledger[vocationDiscoveryKey(site.vocId)] ?? 0) >= 1) continue;
-      if (dist(site.npc.pos, this.player.pos) > VOCATION_CFG.discoveryRadius) continue;
-      const unlocked = (this.account.ledger[vocationLedgerKey(site.vocId)] ?? 0) >= 1;
-      const heard = unlocked || !(v.secret.classLockedDiscovery ?? true)
-        || this.meta.classDef.id === v.classId;
-      if (!heard) {
-        if (!site.silentNoted) {
-          site.silentNoted = true;
-          this.text(vec(site.npc.pos.x, site.npc.pos.y - 40),
-            'It does not stir for you.', '#8a8678', 13);
+      const key = vocationDiscoveryKey(site.vocId);
+      for (const seat of seekers) {
+        if ((this.withQuestHand(seat, () => this.questRunLedger())[key] ?? 0) >= 1) continue;
+        if (dist(site.npc.pos, seat.actor.pos) > VOCATION_CFG.discoveryRadius) continue;
+        const unlocked = (this.gateAccountOf(seat).ledger[vocationLedgerKey(site.vocId)] ?? 0) >= 1;
+        const heard = unlocked || !(v.secret.classLockedDiscovery ?? true)
+          || seat.meta.classDef.id === v.classId;
+        if (!heard) {
+          const silent = hosted ? (site.silentSeats ??= new Set()).has(seat.id) : site.silentNoted;
+          if (!silent) {
+            if (hosted) site.silentSeats!.add(seat.id); else site.silentNoted = true;
+            this.seatNote(seat, vec(site.npc.pos.x, site.npc.pos.y - 40),
+              'It does not stir for you.', '#8a8678', 13);
+          }
+          continue;
         }
-        continue;
+        this.withQuestHand(seat, () => this.questStamp(key)); // the seeker's own ledger (solo: the run ledger)
+        if (hosted && this.seatStageDef(seat).metaProgression) bumpLedger(this.gateAccountOf(seat).ledger, key);
+        this.seatNote(seat, vec(site.npc.pos.x, site.npc.pos.y - 44),
+          v.secret.discoveryText ?? `A calling takes notice of you. (${v.name})`, v.color, 16);
+        this.markMetaDirty(seat);
+        if (hosted) this.journalDirty.add(seat.id); // THE JOURNAL ROW: its offers may have changed
       }
-      bumpLedger(this.ledger, vocationDiscoveryKey(site.vocId));
-      this.text(vec(site.npc.pos.x, site.npc.pos.y - 44),
-        v.secret.discoveryText ?? `A calling takes notice of you. (${v.name})`, v.color, 16);
-      this.markMetaDirty(this.localSeat);
     }
   }
 
@@ -51498,6 +51530,10 @@ actors: Actor[] = [];
   /** THE CORPSE ON THE CHART (installed by the shard): a seat's own remembered
    *  bodies, by zone and map coordinate, for its journal row's pins. */
   seatCorpseMarks: ((seat: Seat) => { zoneId: string; map?: { x: number; y: number }; name: string; classId: string; level: number }[]) | null = null;
+  /** THE OFFLINE HERO'S GROUND (installed by the shard, server/vessel.ts groundLedger): the
+   *  event ground every hero's quests hold, standing or away, for the world save's claim
+   *  (serializeWorldState). Null off a shard. */
+  heldQuestGround: (() => QuestGroundSave | undefined) | null = null;
 
   /** THE CLIENT'S COUNTERS: a render shell runs no sim, so main.ts drives its
    *  own seat's station lingers here the way it drives the Caravanner

@@ -59,6 +59,11 @@ interface Cached {
   born: Born; blueprint: NativeFeatureBlueprint; gridVersion: number;
   instance?: NativeFeatureInstance; binding?: NativeFeatureBinding;
 }
+interface ObstacleCandidates {
+  key:string; rows:readonly NativeFeaturePlacement[];
+  older?:ObstacleCandidates; newer?:ObstacleCandidates;
+}
+const NO_OBSTACLE_CANDIDATES:readonly NativeFeaturePlacement[]=Object.freeze([]);
 const clone = <T>(v:T):T => JSON.parse(JSON.stringify(v)) as T;
 const translationRefusals = (b:NativeFeatureBlueprint):string[] =>
   ['tracks','trapworks','annexes'].filter(key => (b.layout[key as keyof GeneratedLayout] as unknown[]|undefined)?.length)
@@ -135,7 +140,9 @@ export class MassNativeResidency {
   private cache=new Map<string,Cached>();
   private refused=new Map<string,readonly string[]>();
   private revisions=new Map<string,number>();
-  private obstacleCandidates=new Map<string,readonly NativeFeaturePlacement[]>();
+  private obstacleCandidates=new Map<string,ObstacleCandidates>();
+  private obstacleOldest?:ObstacleCandidates;
+  private obstacleNewest?:ObstacleCandidates;
   private obstacleLookupStats={hits:0,misses:0,invalidations:0};
   /** Only privately cloned/deep-frozen placements enter this identity memo. */
   private placementIdentities=new WeakMap<NativeFeaturePlacement,string>();
@@ -184,7 +191,7 @@ export class MassNativeResidency {
     row.placement=this.freezePlacement(row.placement);
     // A saved/prepared birth can become authoritative where a prior provider
     // lookup returned nothing. No cached negative may hide that ownership.
-    this.obstacleCandidates.clear();this.obstacleLookupStats.invalidations++;
+    this.obstacleCandidates.clear();this.obstacleOldest=this.obstacleNewest=undefined;this.obstacleLookupStats.invalidations++;
     if(row.metadataStatus)this.legacySidechannels++;
     if(row.accessStatus==='legacy-unverified-access')this.legacyAccess++;
     if(row.accessStatus==='legacy-unverified-reservation')this.legacyReservation++;
@@ -366,11 +373,33 @@ export class MassNativeResidency {
     // number conversion, radius approximation, or cross-dimension aliasing.
     const key=JSON.stringify([at.dimension,at.cx,at.cy,at.x,at.y]);
     const hit=this.obstacleCandidates.get(key);
-    if(hit){this.obstacleLookupStats.hits++;this.obstacleCandidates.delete(key);this.obstacleCandidates.set(key,hit);return hit;}
+    if(hit){
+      this.obstacleLookupStats.hits++;
+      // Preserve exact LRU order without deleting/reinserting hot Map keys.
+      // That churn otherwise repeatedly rebuilds the hash table during rays.
+      if(hit!==this.obstacleNewest){
+        if(hit.older)hit.older.newer=hit.newer;else this.obstacleOldest=hit.newer;
+        if(hit.newer)hit.newer.older=hit.older;
+        hit.older=this.obstacleNewest;hit.newer=undefined;
+        if(this.obstacleNewest)this.obstacleNewest.newer=hit;
+        this.obstacleNewest=hit;
+      }
+      return hit.rows;
+    }
     this.obstacleLookupStats.misses++;
-    const rows=Object.freeze(this.candidates(at).map(p=>this.placementIdentities.has(p)?p:this.freezePlacement(p)));
-    this.obstacleCandidates.set(key,rows);
-    if(this.obstacleCandidates.size>NATIVE_OBSTACLE_CANDIDATE_CACHE)this.obstacleCandidates.delete(this.obstacleCandidates.keys().next().value!);
+    const candidates=this.candidates(at);
+    const rows=candidates.length?Object.freeze(candidates.map(p=>this.placementIdentities.has(p)?p:this.freezePlacement(p))):NO_OBSTACLE_CANDIDATES;
+    // A provider may synchronously query this same point. Match Map.set's
+    // replacement semantics without duplicating its node or moving its order.
+    const nested=this.obstacleCandidates.get(key);
+    if(nested){nested.rows=rows;return rows;}
+    const entry:ObstacleCandidates={key,rows,older:this.obstacleNewest};
+    if(this.obstacleNewest)this.obstacleNewest.newer=entry;else this.obstacleOldest=entry;
+    this.obstacleNewest=entry;this.obstacleCandidates.set(key,entry);
+    if(this.obstacleCandidates.size>NATIVE_OBSTACLE_CANDIDATE_CACHE){
+      const oldest=this.obstacleOldest!;this.obstacleCandidates.delete(oldest.key);this.obstacleOldest=oldest.newer;
+      if(this.obstacleOldest)this.obstacleOldest.older=undefined;else this.obstacleNewest=undefined;
+    }
     return rows;
   }
   /** Same native shape solver used by World.pointInSolid, available cold.

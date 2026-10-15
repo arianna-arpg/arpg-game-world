@@ -376,6 +376,7 @@ export interface DeathBurstW { p: Vec2W; ph: 0 | 1; r: number; c: string; arm: 0
  *  victims, clocks of ticks or domains cross). Sparse: every optional row is absent
  *  in its common case. Rebuilt as render stubs by applySnapshot (the cast-stub idiom). */
 export interface ZoneW {
+
   /** The zone's wire id (stable for its life): the client glides p/r/f/fill by it. */
   id: number;
   /** Paint identity for fields without a seated caster; own fields reuse sk. */
@@ -2295,7 +2296,7 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   }) as unknown as World['zones'];
   // Paint reads the same filtered, interpolated fields used by the local hotbar.
   // Older snapshots carrying raw paint are accepted only without canonical zone rows.
-  world.remoteSkillFields = snap.zones
+  world.remoteSkillFields = snap.zones !== undefined
     ? snap.zones.map(z => zonePaint(adopted.zones.get(z.id)!, z, snap.time))
     : (snap.skillFields ?? []).map(cloneSkillFieldVisual);
   ADOPTED.set(world, adopted);

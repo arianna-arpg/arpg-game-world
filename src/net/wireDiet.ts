@@ -110,7 +110,11 @@ const DIET_ZERO = ['es', 'maxEs'] as const;
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 /** THE IDENTITY ONCE: the row fields that hold still from frame to frame (a change resends them). */
 export const DIET_IDENTITY = ['r', 'c', 'sh', 'team', 'name', 'maxLife', 'maxEs', 'mn', 'passive', 'mat', 'lk', 'ep', 'rarity',
-  'defId', 'cosmeticSourceSkill', 'faction', 'cosmeticKind', 'cosmeticLoadout', 'adorn', 'bv', 'encounterGroup'] as const;
+  'defId', 'cosmeticSourceSkill', 'faction', 'cosmeticKind', 'cosmeticLoadout', 'adorn', 'bv', 'encounterGroup',
+  // THE PRESENCE BADGE (2026-10-13): a summon's badge names its source skill and paint for its whole
+  // life, so it rides once per socket like the look it decorates (it rode every frame on every
+  // minion row before; the critic measured 8 to 17 percent on the snapshot's p95).
+  'presenceBadge'] as const;
 
 /** THE IDENTITY ONCE, the shard's half: an encoded row's identity as one comparable string
  *  (primitives as they are, objects as JSON; each field keeps its one type, and no field's

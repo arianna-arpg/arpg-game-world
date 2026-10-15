@@ -140,6 +140,7 @@ export function dealMassBounties(world: Pick<World,'massRuntime'|'bountyOffers'|
   const preserved = new Set(offers.map(p => p.id));
   const occupied = new Set([...offers, ...hands].map(p => p.massBounty?.id));
   const who=world.questCharKey();
+  const character=who?[who]:[];
   const seed=[mass.generator.run.seed,mass.config.bounties!.source,board,beat,sequence];
   const rng = new Rng(massHash(canonical(who?[...seed,who]:seed)));
   const weights = BOUNTY_BOARD_CFG.lanes.weights;
@@ -164,7 +165,7 @@ export function dealMassBounties(world: Pick<World,'massRuntime'|'bountyOffers'|
     const place = rng.pick(offers.length < BOUNTY_BOARD_CFG.routes.manageableSeats && manageable.length ? manageable : pool);
     const level = place.level;
     const massBounty = place.target;
-    offers.push({ id: 'country_bounty:' + canonical([mass.generator.run.runId, board, beat, sequence, kind, place.target.id]),
+    offers.push({ id: 'country_bounty:' + canonical([mass.generator.run.runId, board, beat, sequence, kind, place.target.id, ...character]),
       boardId: board, zoneId: MASS_ZONE, beat, kind, massBounty,
       pay: rollBudgetBountyPay({ pickGemId }, rng, level, weights) });
     occupied.add(place.target.id);

@@ -9,6 +9,10 @@
 # Flags ride SHARD_ARGS (a Codespaces secret, or export it in a terminal); the
 # default stands the Unbroken Wilds with the open account on port 8787. Every
 # player arrives from the forwarder's one address, so the per-address cap is off.
+# THE BUILD HEAP (2026-10-13): the served client build needs about 5 GB of heap; the 2-core
+# codespace has 8 GB and Node defaults lower, so a missing client rebuilt here used to die.
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=5120}"
+
 set -u
 trap '' HUP
 cd "$(dirname "$0")/.." || exit 1

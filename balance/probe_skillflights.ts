@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { makeSimWorld } from '../src/sim/arena';
+import { Actor } from '../src/engine/actor';
+import { SHARD_WIRE_PROTOCOL } from '../src/net/shardBuild';
 import { SKILLS } from '../src/data/skills';
 import { SKILL_FLIGHTS, SKILL_FIELDS, SKILL_BEAMS, skillBeamVoice } from '../src/data/skillFlightVisuals';
 import { drawSkillFlightWake, drawSkillFlightHead, drawSkillField, drawSkillBeam, fieldProfile } from '../src/render/vis/skillFlightVoice';
 import { makeSkillInstance } from '../src/engine/skills';
-import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
+import { serializeSnapshot, applySnapshot, WIRE_CFG } from '../src/net/snapshot';
+import {historicalSkillFieldsProtocol} from './nativeMergeWireReceiptFixture';
 import { skillFieldVisual, type SkillFieldVisual } from '../src/engine/skillFieldVisual';
 
 const all = Object.values(SKILLS);
@@ -104,10 +107,51 @@ assert.equal(paint.lobArc, row.la);
 assert(!('caster' in paint) && !('inst' in paint), 'paint exposes no actor or skill instance');
 assert.equal(stub.inst.def.id, row.sk ?? '', 'retained hotbar stub keeps own-field identity');
 assert(!('damage' in stub) && !('hit' in stub), 'hotbar stub has no damage payload');
+assert(snap.zones!.every(z => !('visual' in z)), 'compact rows carry no duplicate unquantized visual');
+assert.equal(client.zones.length, snap.zones!.length, 'shard keeps hotbar and interpolation render stubs');
+assert(client.zones.every(z => !('tick' in z) && !('victims' in z)), 'replica fields carry no damage execution state');
 const replica = client.actors.find(a => a.activeAuras.size)!;
 assert.equal([...replica.activeAuras.values()][0].inst.def.id, 'righteous_fire');
 assert.notEqual(client.remoteSkillFields![0].pos, host.zones[0].pos);
 assert.notEqual(client.remoteSkillFields![0].seg, host.zones[0].seg);
+// Integration: art rides the same bounded and interpolated rows as shard fields.
+const previous = JSON.parse(JSON.stringify(snap)), next = JSON.parse(JSON.stringify(snap));
+const nextZone = next.zones[0];
+nextZone.p[0] += 80;
+nextZone.r += 20;
+nextZone.f = (nextZone.f ?? 0) + .4;
+applySnapshot(client, next, previous, .5);
+assert(Math.abs(client.remoteSkillFields![0].pos.x - (previous.zones[0].p[0] + 40)) < 1e-8);
+assert(Math.abs(client.remoteSkillFields![0].radius - (previous.zones[0].r + 10)) < 1e-8);
+assert(Math.abs(client.remoteSkillFields![0].facing - (previous.zones[0].f + .2)) < .001);
+const far = { ...host.zones[0], pos: { x: 1e9, y: 1e9 }, seg: undefined };
+host.zones.push(far);
+const oldReach = WIRE_CFG.eyes.zoneReach; WIRE_CFG.eyes.zoneReach = 2000;
+let bounded;
+try { bounded = serializeSnapshot(host, 2); } finally { WIRE_CFG.eyes.zoneReach = oldReach; }
+assert.equal(bounded.skillFields, undefined, 'no unfiltered parallel field payload');
+assert(!bounded.zones?.some(z => z.p[0] === 1e9), 'far visual fields obey the existing wire reach');
+host.zones.pop();
+// The unchanged assertion belongs to the exact compact-field predecessor.
+{ const SHARD_WIRE_PROTOCOL=historicalSkillFieldsProtocol();
+assert.equal(SHARD_WIRE_PROTOCOL,6,'protocol 5 is already assigned to identity-once badges');
+}
+assert.equal(SHARD_WIRE_PROTOCOL,7,'the composed live grammar retains spoken quest wire 7');
+const authored=host.zones[0],held={...authored,caster:new Actor('field owner','enemy',{...host.player.pos}),shape:0,facing:.76543,armed:true,exploded:false,seg:undefined,onGround:['ground']};
+host.zones=[held];
+const heldSnap=serializeSnapshot(host,3),heldRow=heldSnap.zones![0];
+assert.equal(heldRow.vi,held.inst.def.id);assert.equal(heldRow.sk,undefined,'non-seat skill identity grants no hotbar ownership');
+assert.equal(heldRow.ar,1);assert.equal(heldRow.f,.765,'circular authored motifs keep quantized facing');
+applySnapshot(client,JSON.parse(JSON.stringify(heldSnap)));
+assert.equal(client.remoteSkillFields![0].skillId,held.inst.def.id);assert.equal(client.remoteSkillFields![0].armed,true);
+assert.deepEqual(client.remoteSkillFields![0].onGround,['ground']);assert.equal(client.zones[0].inst.def.id,'');
+held.armed=false;held.delay=0;held.delay0=0;
+const immediate=serializeSnapshot(host,4);assert.equal(immediate.zones![0].fill,1,'a zero-fuse warning is fully prepared');
+host.zones=[authored];
+const legacy = JSON.parse(JSON.stringify(snap)); delete legacy.zones;
+legacy.skillFields = host.zones.map(z => skillFieldVisual(z, host.time));
+applySnapshot(client, legacy);
+assert.deepEqual(client.remoteSkillFields, legacy.skillFields, 'older visual-only hosts remain readable');
 delete snap.skillFields; delete snap.zones; delete snap.projectiles[0].skillId;
 applySnapshot(client, snap);
 assert.deepEqual(client.remoteSkillFields, []);

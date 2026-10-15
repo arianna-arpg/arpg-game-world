@@ -5,11 +5,18 @@ export interface MassPoint { x: number; y: number }
 
 const CELL_MIN = -(1n << 63n), CELL_MAX = (1n << 63n) - 1n;
 const DECIMAL = /^(0|-?[1-9][0-9]*)$/;
+// Coordinates repeat across physics/noise queries. Cache only fully validated
+// immutable strings; never narrow the signed 64-bit domain to Number.
+const cellIntegers = new Map<string, bigint>();
 export function cellInteger(value: string): bigint {
+  const cached = cellIntegers.get(value);
+  if (cached !== undefined) return cached;
   if (typeof value !== 'string' || value.length > 20 || !DECIMAL.test(value))
     throw new Error('World cell must be a canonical decimal integer');
   const n = BigInt(value);
   if (n < CELL_MIN || n > CELL_MAX) throw new RangeError('World cell exceeds signed 64-bit address range');
+  cellIntegers.set(value, n);
+  if (cellIntegers.size > 4096) cellIntegers.delete(cellIntegers.keys().next().value!);
   return n;
 }
 export function validSpan(span: number): void {
@@ -63,13 +70,19 @@ export function floorDiv(a: bigint, b: bigint): bigint {
 export function latticeAt(at: MassAddress, span: number, period: number): { gx: bigint; gy: bigint; fx: number; fy: number } {
   validSpan(span); validSpan(period);
   const p = BigInt(period);
-  const one = (c: string, off: number): [bigint, number] => {
-    if (!Number.isFinite(off)) throw new RangeError('Invalid lattice offset');
-    const whole = Math.floor(off), fractional = off - whole;
-    if (!Number.isSafeInteger(whole)) throw new RangeError('Imprecise lattice offset');
-    const n = cellInteger(c) * BigInt(span) + BigInt(whole), g = floorDiv(n, p);
-    return [g, (Number(n - g * p) + fractional) / period];
-  };
-  const [gx, fx] = one(at.cx, at.x), [gy, fy] = one(at.cy, at.y);
+  // Keep each axis's reads and validation in order, without a per-query closure
+  // or intermediate tuples on this generation hot path.
+  const cx = at.cx, x = at.x;
+  if (!Number.isFinite(x)) throw new RangeError('Invalid lattice offset');
+  const wholeX = Math.floor(x), fractionalX = x - wholeX;
+  if (!Number.isSafeInteger(wholeX)) throw new RangeError('Imprecise lattice offset');
+  const nx = cellInteger(cx) * BigInt(span) + BigInt(wholeX), gx = floorDiv(nx, p);
+  const fx = (Number(nx - gx * p) + fractionalX) / period;
+  const cy = at.cy, y = at.y;
+  if (!Number.isFinite(y)) throw new RangeError('Invalid lattice offset');
+  const wholeY = Math.floor(y), fractionalY = y - wholeY;
+  if (!Number.isSafeInteger(wholeY)) throw new RangeError('Imprecise lattice offset');
+  const ny = cellInteger(cy) * BigInt(span) + BigInt(wholeY), gy = floorDiv(ny, p);
+  const fy = (Number(ny - gy * p) + fractionalY) / period;
   return { gx, gy, fx, fy };
 }

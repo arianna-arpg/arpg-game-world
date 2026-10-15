@@ -6,11 +6,11 @@ import * as native from '../engine/nativeSceneQuestInteraction';
 type Host=native.NativeSceneQuestInteractionHost;
 export type NativeQuestInteractionCampaign=NativeQuestCampaign & Pick<Host,'journalDirty'|'netJournal'|'heroKnown'|'bagItem'>;
 export interface NativeSceneQuestInteractionState {
- questGiverDwell:number;questGiverDwells:WeakMap<Seat,number>;
+ questGiverDwell:number;questGiverDwells:WeakMap<Seat,number>;vocationAsks:WeakMap<Seat,number>;
  vocationOfferRequested:boolean;vocationOfferDeclined:boolean;
 }
 export function freshSceneQuestInteractionState():NativeSceneQuestInteractionState {
- return {questGiverDwell:0,questGiverDwells:new WeakMap(),vocationOfferRequested:false,vocationOfferDeclined:false};
+ return {questGiverDwell:0,questGiverDwells:new WeakMap(),vocationAsks:new WeakMap(),vocationOfferRequested:false,vocationOfferDeclined:false};
 }
 export interface NativeSceneQuestInteractionInput {
  quests:NativeAreaSceneQuests;campaign:NativeQuestInteractionCampaign;state:NativeSceneQuestInteractionState;
@@ -35,7 +35,7 @@ export class NativeAreaSceneQuestInteraction {
    const owner=provider() as Record<string,Function>,fn=owner[key];if(typeof fn!=='function')throw Error('Missing native quest interaction capability: '+key);
    return (...args:unknown[])=>fn.apply(owner,args);
   }});};
-  fields(()=>input.state,['questGiverDwell','questGiverDwells','vocationOfferRequested','vocationOfferDeclined'],true);
+  fields(()=>input.state,['questGiverDwell','questGiverDwells','vocationAsks','vocationOfferRequested','vocationOfferDeclined'],true);
   fields(()=>input.campaign,['journalDirty','netJournal']);fields(()=>input.campaign,['actingSeat'],true);
   Object.defineProperty(host,'player',{get:()=>input.campaign.localSeat.actor});
   Object.defineProperty(host,'odyssey',{value:quests.odyssey});
@@ -51,6 +51,7 @@ export class NativeAreaSceneQuestInteraction {
  #present(seat:Seat):boolean {const {authority,scene}=this.input.quests.input;return authority.seatsFor(authority.bindingFor(scene)).includes(seat);}
  #reset(seat:Seat):void {
   this.input.state.questGiverDwells.delete(seat);
+  if(this.input.state.vocationAsks.delete(seat))this.input.campaign.journalDirty.add(seat.id);
   if(seat===this.input.campaign.localSeat){this.input.state.questGiverDwell=0;this.input.state.vocationOfferDeclined=false;this.input.state.vocationOfferRequested=false;}
  }
  #sync(seat:Seat):boolean {
@@ -78,6 +79,13 @@ export class NativeAreaSceneQuestInteraction {
   const local=this.input.campaign.localSeat;
   if(!local.keeper&&!this.#sync(local))return;
   return native.sceneUpdateQuestGiver(this.host,...args);
+ };
+ /** A standing ask belongs to this exact body attendance in this area. */
+ vocationAskOf:World['vocationAskOf']=(seat)=>{
+  const prior=this.#attendance.get(seat),{authority}=this.input.quests.input;
+  if(!this.#present(seat)||!prior||prior.actor!==seat.actor||prior.revision!==authority.attendanceRevision(seat.actor))return undefined;
+  authority.assertAdmitted(this.input.quests.input.scene);
+  return this.input.state.vocationAsks.get(seat);
  };
  questGiverStep:World['questGiverStep']=(seat,...args)=>{
   const {authority,scene}=this.input.quests.input;

@@ -84,6 +84,7 @@ export interface NativeSceneQuestInteractionHost {
  settleHeroMassQuests:World["settleHeroMassQuests"];
  storyPair:World["storyPair"];
  vocationChoiceOffers:World["vocationChoiceOffers"];
+ vocationAsks:World["vocationAsks"];
  vocationEngaged:World["vocationEngaged"];
  vocationOfferDeclined:World["vocationOfferDeclined"];
  vocationOfferRequested:World["vocationOfferRequested"];
@@ -232,11 +233,17 @@ export function sceneUpdateQuestGiver(host:NativeSceneQuestInteractionHost,dt: n
 
 export function sceneQuestGiverStep(host:NativeSceneQuestInteractionHost,seat: Seat,dt: number):void {
     host.withQuestHand(seat, () => {
-      if (!host.seatIdle(seat) || !host.nearAnyQuestGiver()) { host.questGiverDwells.delete(seat); return; }
+      if (!host.seatIdle(seat) || !host.nearAnyQuestGiver()) {
+        host.questGiverDwells.delete(seat);
+        if (host.vocationAsks.delete(seat)) host.journalDirty.add(seat.id); // W12: the visit ends, the ask with it
+        return;
+      }
       const turnIns = host.pendingTurnIns();
       const next = turnIns.length ? null : host.nextAcceptableQuest();
       const leads = host.graphWorkAvailable() && host.odyssey.hasLocalLeads() && host.nearQuestGiver();
-      if (!turnIns.length && !next && !leads) { host.questGiverDwells.delete(seat); return; }
+      // W12 THE VOCATION SITES PER SEAT: a seat with nothing to turn in or take and no standing ask may be asked its calling.
+      const calls = !turnIns.length && !next && !host.vocationAsks.has(seat) ? host.vocationChoiceOffers() : [];
+      if (!turnIns.length && !next && !leads && !calls.length) { host.questGiverDwells.delete(seat); return; }
       const t = (host.questGiverDwells.get(seat) ?? 0) + dt;
       if (t < QUESTGIVER_DWELL) { host.questGiverDwells.set(seat, t); return; }
       host.questGiverDwells.delete(seat);
@@ -246,6 +253,7 @@ export function sceneQuestGiverStep(host:NativeSceneQuestInteractionHost,seat: S
         if (leads) host.odyssey.localLeads();
         if (turnIns.length) host.onQuestZoneCleared(turnIns[0]);
         else if (next) host.acceptQuest(next);
+        else if (calls.length) host.vocationAsks.set(seat, host.time); // W12: the seat's own calling menu (its row asks its client)
       } finally { host.actingSeat = was; }
       host.journalDirty.add(seat.id); // THE JOURNAL ROW: the act re-ships at once
     });
@@ -298,12 +306,13 @@ export function sceneVocationMenuOffers(host:NativeSceneQuestInteractionHost):{
     className: string; ownClass: boolean; steps: number; offerLabel: string;
     secret: boolean; flavor?: string;
   }[] {
+    if (host.clientActionHook && host.netJournal) return host.netJournal.voc?.offers ?? []; // W12: the host's cards for this seat
     return host.vocationChoiceOffers().map(q => {
       const v = VOCATIONS[q.vocation!];
       return {
         questId: q.id, vocationId: v.id, name: v.name, blurb: v.blurb, color: v.color,
         className: CLASSES.find(c => c.id === v.classId)?.name ?? v.classId,
-        ownClass: v.classId === host.meta.classDef.id,
+        ownClass: v.classId === host.questHand().meta.classDef.id, // W12 THE QUEST HAND: the asking seat's class
         steps: v.quest.steps.length, offerLabel: q.offerLabel,
         secret: v.secret !== undefined, flavor: v.secret?.offerFlavor,
       };

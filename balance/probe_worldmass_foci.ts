@@ -33,6 +33,18 @@ try{
     assert.ok(m.survey.known(m.walk.at(focus.pos.x,focus.pos.y)),'each actual focus reveals its own survey cell');
     assert.equal(m.availablePopulation('',focus.pos),0);
   }
+  const originalSave=canonical(m.snapshot(w)), limits=[m.populationLimit(),m.populationLimit('',a.pos),m.populationLimit('',b.pos)];
+  const hostBudget={total:6,floor:1};m.setPopulationBudget(hostBudget);hostBudget.total=0;
+  assert.deepEqual(m.populationStats(),{total:8,groups:[{members:['a'],live:4,limit:3},{members:['b'],live:4,limit:3}]});
+  assert.equal(m.populationLimit(),6);assert.equal(m.availablePopulation('',a.pos),0);
+  assert.equal(canonical(m.snapshot(w)),originalSave,'host budget neither mutates land/digest nor serializes into a save');
+  m.setPopulationBudget({total:0,floor:2});assert(m.populationStats().groups.every(g=>g.limit===2),'floor wins below the total budget');
+  assert.equal(m.population,8,'lowering only refuses future births, never removes existing actors');
+  m.setPopulationBudget({total:10000,floor:0});assert(m.populationStats().groups.every(g=>g.limit===4),'authored population remains the ceiling');
+  for(const budget of [{total:NaN,floor:1},{total:-1,floor:0},{total:2.5,floor:0},{total:8,floor:5},{total:8,floor:-1}])assert.throws(()=>m.setPopulationBudget(budget),/Invalid population/);
+  m.setPopulationBudget(null);
+  assert.deepEqual([m.populationLimit(),m.populationLimit('',a.pos),m.populationLimit('',b.pos)],limits,'null restores original admission exactly');
+  assert.equal(canonical(m.snapshot(w)),originalSave,'null returns the exact original full save');
   assert.equal(m.stream.stats.requested,18,'both disjoint nine-page neighborhoods remain requested');
   assert.equal(m.sites.discovered.length,2,'each distant player discovers their own clearing');
   const remote=w.addSeat('remote',CLASSES[0],new NullInput(),{startingCompanions:false,startingFlasks:false});
@@ -117,6 +129,20 @@ try{
     console.log('PASS schema-19 destination reservations preserve complete distant player budgets and identities');
   }finally{rm.dispose();}
 
+  { // Independent incoming population-budget course.
+  const bw=makeSimWorld('warrior',25),bm=new WorldMassRuntime(19,'foci:budget',cfg);
+  try {
+    bm.setPopulationBudget({total:4,floor:1});bm.attach(bw);bw.player.pos={...a.pos};bm.update(bw,true,[a,b]);
+    assert.equal(bm.population,0,'complete four-body cohorts cannot enter two-body group budgets');
+    bm.setPopulationBudget({total:8,floor:1});bm.update(bw,true,[a,b]);assert.equal(bm.population,8,'raising restores admission to both groups');
+    bm.setPopulationBudget({total:2,floor:1});bm.update(bw,true,[a,{...b,pos:{x:950,y:900}}]);
+    assert.equal(bm.populationStats().groups.length,1);assert.equal(bm.populationStats().groups[0].limit,2);
+    bm.update(bw,true,[a,b]);assert.equal(bm.snapshot(bw).enemies.length,8,'merge and split preserve all existing identities under a lower budget');
+    bm.update(bw,true,[]);assert.deepEqual(bm.populationStats().groups,[]);assert.equal(bm.availablePopulation(),0,'empty world admits no new population');
+    bm.setPopulationBudget(null);
+  } finally {bm.dispose();}
+  console.log('PASS transient host population limits, floors, ceiling, validation, exact reset, full cohorts and no despawn');
+  }
   const groups=new MassFoci();groups.set([a,b],600);
   assert.throws(()=>groups.set([a,a],600));
   const observers=[a.pos,b.pos,{x:-1200,y:-2200}],index=new MassObserverIndex(observers,600);

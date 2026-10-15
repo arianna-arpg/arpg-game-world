@@ -45,6 +45,14 @@
 //                desk keeps the stand of a leave its client never heard (the
 //                dormant release, a closed tab), and the next login reads the
 //                kept stand before the upload's own (ShardHost.returnLanding).
+//   THE OFFLINE  (W12, docs/engine/shard.md "THE SPOKEN QUESTS") the event ground
+//   HERO'S       a vessel's quests name stays claimed while the hero is away: the
+//   GROUND       desk notes each vessel's ground at its mirror and its leave, and
+//                the world save carries every hero's under its claim ledger
+//                (World.heldQuestGround, engine/questLedger.ts QUEST_GROUND_LEDGER),
+//                so the transience scrub keeps it through a save and a resume; a
+//                hero gone longer than VESSEL_CFG.groundKeptDays, a quest ended (its
+//                next mirror names it no more) or a mortal fall releases it.
 // ---------------------------------------------------------------------------
 
 import { emptyAbilityEssences, emptyEssences, MAX_LEARNED_SKILLS, type Seat } from '../src/engine/world';
@@ -68,7 +76,7 @@ import { sanitizeStand, type ShardCorpseNote, type ShardReckoning, type ShardSta
 import { SHARD_VESSEL_MAX_CHARS } from '../src/net/shardBuild';
 import { isCurrentCharacterSave } from '../src/meta/saveCompatibility';
 import { rebuildSavedMeta, serializeCouchGuest, throngRowsOf, type CharacterSave } from '../src/meta/character';
-import { questWorldKey, withQuestWorld } from '../src/engine/questLedger'; // THE CHARACTER'S QUESTS (card 24)
+import { questWorldKey, sanitizeQuestGround, withQuestWorld, type QuestGroundRow, type QuestGroundSave } from '../src/engine/questLedger'; // THE CHARACTER'S QUESTS (card 24), THE OFFLINE HERO'S GROUND (W12)
 import { captureLoot } from '../src/meta/death';
 import { modeById, stageOf } from '../src/meta/modes';
 import { isAccountId, renownForRun } from '../src/meta/account';
@@ -127,6 +135,10 @@ export const VESSEL_CFG = {
    *  is a surface cell this wide, about a classic zone's span; elsewhere a
    *  place is a zone. */
   placeCellPx: 2000,
+  /** THE OFFLINE HERO'S GROUND (W12): days (wall clock, since its last mirror or leave) an
+   *  absent hero's quests keep their event ground claimed in the world save; past it the
+   *  ground is released and the world's transience scrub may take it. */
+  groundKeptDays: 30,
 };
 
 /** THE ACTING SEAT (a refused hero): the refusals that are the player's door
@@ -322,6 +334,10 @@ export class VesselDesk {
   private readonly bleeds = new Map<string, number>();
   /** THE RELEASE: downed seats whose player gave up the wait (the interact press). */
   private readonly released = new Set<string>();
+  /** THE OFFLINE HERO'S GROUND (W12): by hero (THE RETURN's key, `account:character`), the event
+   *  ground its quests named at its last mirror or leave, and when (wall-clock ms). Persisted in
+   *  the world save (groundLedger), adopted back at a resume (adoptGround). */
+  private readonly ground = new Map<string, QuestGroundRow>();
 
   private readonly units:VesselSeatAreas;
   constructor(
@@ -559,6 +575,7 @@ export class VesselDesk {
     this.send({ t: 'heroSave', save }, seatId);
     const rec = this.vessels.get(seatId)!;
     rec.mirrors++;
+    this.noteGround(rec); // THE OFFLINE HERO'S GROUND: the ground this mirror's quests name
     // THE OWED CROSSING (card 30): a mirror its client hears carries home the crossing it never
     // heard (a dormant socket's), its word after it, once.
     const owed = this.opts.connected?.(seatId) === false ? undefined : this.corpses.owedCrossing(rec.accountId, rec.charId);
@@ -590,6 +607,45 @@ export class VesselDesk {
     if (!rec || now - rec.askedAt < VESSEL_CFG.farewellEverySec) return false;
     rec.askedAt = now;
     return this.mirror(seatId);
+  }
+
+  // ---- THE OFFLINE HERO'S GROUND (W12) -----------------------------------------
+  /** Note a standing vessel's held event ground off its live ledger (pure reads: no unit is
+   *  entered, so the world save may ask mid-write): the zones its quests on this world name
+   *  that the chart holds as event ground, stamped now; none = the hero holds no ground. */
+  private noteGround(rec: VesselSeat, now = Date.now()): void {
+    const book = this.units.worldOf(rec.seatId)?.seatQuests.get(rec.seatId);
+    if (!book) return;
+    const chart = this.units.keeperWorld().zoneMap; // THE CHART IS THE SERVER'S
+    const zones = [...new Set(book.active.map(q => q.zoneId))].filter(id => !!chart[id]?.eventOwned).sort();
+    if (zones.length) this.ground.set(standKey(rec), { zones, at: now });
+    else this.ground.delete(standKey(rec));
+  }
+  /** THE OFFLINE HERO'S GROUND as the world save carries it (World.heldQuestGround): every
+   *  standing vessel's ground read now, every absent hero's as it was last noted; a hero gone
+   *  longer than VESSEL_CFG.groundKeptDays releases its ground here, and a zone the chart no
+   *  longer holds drops. `ownedZones` is THE ZONE-CLAIM CONVENTION's claim. Undefined: none held. */
+  groundLedger(now = Date.now()): QuestGroundSave | undefined {
+    for (const rec of this.vessels.values()) if (!this.beats.has(rec.seatId)) this.noteGround(rec, now);
+    const chart = this.units.keeperWorld().zoneMap, keepMs = VESSEL_CFG.groundKeptDays * 86_400_000;
+    const owned = new Set<string>();
+    for (const [key, row] of [...this.ground]) {
+      const zones = row.zones.filter(id => !!chart[id]);
+      if (now - row.at > keepMs || !zones.length) { this.ground.delete(key); continue; }
+      if (zones.length !== row.zones.length) this.ground.set(key, { zones, at: row.at });
+      for (const id of zones) owned.add(id);
+    }
+    if (!owned.size) return undefined;
+    return { ownedZones: [...owned].sort(), heroes: Object.fromEntries([...this.ground].map(([k, r]) => [k, { zones: [...r.zones], at: r.at }])) };
+  }
+  /** A resumed world's ledger (the save's QUEST_GROUND_LEDGER row): every hero's ground stands
+   *  back up as it was written (the resume's scrub already kept its zones). */
+  adoptGround(raw: unknown): void {
+    for (const [key, row] of Object.entries(sanitizeQuestGround(raw))) this.ground.set(key, row);
+  }
+  /** THE OFFLINE HERO'S GROUND, for the probe: one hero's held ground (never consumed here). */
+  heldGround(accountId: string, charId: string): Readonly<QuestGroundRow> | undefined {
+    return this.ground.get(standKey({ accountId, charId }));
   }
 
   // ---- THE RETURN (card 26 B, W7) ---------------------------------------------
@@ -654,6 +710,7 @@ export class VesselDesk {
     else if (rec && seat && !this.beats.has(seatId)) {
       const stand = this.units.within(seatId, w => this.standIn(w, seat));
       if (stand) this.keepStand(rec, stand);
+      this.noteGround(rec); // THE OFFLINE HERO'S GROUND: its quests keep their ground while it is away
     }
     this.beats.delete(seatId);
     this.vessels.delete(seatId);
@@ -920,6 +977,7 @@ export class VesselDesk {
     //    the word stays owed beside it (re-spoken at a stale re-upload).
     this.corpses.markFallen(rec.accountId, rec.charId, { note, reckoning });
     this.stands.delete(standKey(rec)); // THE RETURN: a fallen hero wakes nowhere (the next hero, the hearth)
+    this.ground.delete(standKey(rec)); // THE OFFLINE HERO'S GROUND: its run is over, and every quest with it
     // 5. The record closes; the seat leaves the world after THE DEATH BEAT
     //    (heard) or at once, and the body stands instead.
     this.vessels.delete(seat.id);

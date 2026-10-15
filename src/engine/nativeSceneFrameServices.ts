@@ -1292,6 +1292,8 @@ export function sceneUpdateSailing(nativeHost:NativeSceneCampaignFrameClosureHos
   }
 
 export function sceneUpdateVocationSites(nativeHost:NativeSceneCampaignFrameClosureHost): void {
+  // Solo keeps the exact native local-player body; hosted discoveries belong to each admitted hand.
+  if(!nativeHost.localSeat.keeper){
     for (const site of nativeHost.vocationSites) {
       const v = VOCATIONS[site.vocId];
       if (!v?.secret || site.npc.dead) continue;
@@ -1313,7 +1315,40 @@ export function sceneUpdateVocationSites(nativeHost:NativeSceneCampaignFrameClos
         v.secret.discoveryText ?? `A calling takes notice of you. (${v.name})`, v.color, 16);
       nativeHost.markMetaDirty(nativeHost.localSeat);
     }
+  
+    return;
   }
+    const hosted = nativeHost.localSeat.keeper;
+    const seekers = nativeHost.handSeats();
+    for (const site of nativeHost.vocationSites) {
+      const v = VOCATIONS[site.vocId];
+      if (!v?.secret || site.npc.dead) continue;
+      const key = vocationDiscoveryKey(site.vocId);
+      for (const seat of seekers) {
+        if ((nativeHost.withQuestHand(seat, () => nativeHost.questRunLedger())[key] ?? 0) >= 1) continue;
+        if (dist(site.npc.pos, seat.actor.pos) > VOCATION_CFG.discoveryRadius) continue;
+        const unlocked = (nativeHost.gateAccountOf(seat).ledger[vocationLedgerKey(site.vocId)] ?? 0) >= 1;
+        const heard = unlocked || !(v.secret.classLockedDiscovery ?? true)
+          || seat.meta.classDef.id === v.classId;
+        if (!heard) {
+          const silent = hosted ? (site.silentSeats ??= new Set()).has(seat.id) : site.silentNoted;
+          if (!silent) {
+            if (hosted) site.silentSeats!.add(seat.id); else site.silentNoted = true;
+            nativeHost.seatNote(seat, vec(site.npc.pos.x, site.npc.pos.y - 40),
+              'It does not stir for you.', '#8a8678', 13);
+          }
+          continue;
+        }
+        nativeHost.withQuestHand(seat, () => nativeHost.questStamp(key)); // the seeker's own ledger (solo: the run ledger)
+        if (hosted && nativeHost.seatStageDef(seat).metaProgression) bumpLedger(nativeHost.gateAccountOf(seat).ledger, key);
+        nativeHost.seatNote(seat, vec(site.npc.pos.x, site.npc.pos.y - 44),
+          v.secret.discoveryText ?? `A calling takes notice of you. (${v.name})`, v.color, 16);
+        nativeHost.markMetaDirty(seat);
+        if (hosted) nativeHost.journalDirty.add(seat.id); // THE JOURNAL ROW: its offers may have changed
+      }
+    }
+  }
+
 
 export function sceneUpdateContagionInfection(nativeHost:NativeSceneCampaignFrameClosureHost): void {
     const cf = nativeHost.sim.contagionField;

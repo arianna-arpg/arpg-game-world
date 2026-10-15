@@ -85,7 +85,8 @@ try {
   // A prior cached empty provider result cannot mask a later authoritative born
   // feature (e.g. prepared adoption or restored ownership outside the provider).
   const bornLater=new MassNativeResidency(cfg,()=>[],caps,()=>zero);
-  assert.equal(bornLater.obstacleAt(doorAt,12),null);bornLater.sync([placements[0]],host);
+  assert.equal(bornLater.obstacleAt(doorAt,12),null);bornLater.obstacleAt(clear,0);bornLater.obstacleAt(doorAt,0);
+  bornLater.sync([placements[0]],host);
   assert.ok(bornLater.obstacleAt(doorAt,12));assert.ok(bornLater.stats.obstacleLookup.invalidations>0);
   bornLater.sync([],host);
   const far=address('surface','9007199254740993','-9007199254740994',0,0,span);
@@ -98,11 +99,73 @@ try {
   const malformedR=new MassNativeResidency(cfg,()=>[malformed],caps,()=>zero);
   assert.throws(()=>malformedR.obstacleAt(doorAt,12),/Manifest/,'memo freezing must not normalize invalid authored input');
   const empty=new MassNativeResidency(cfg,()=>[],new Set(),()=>zero);
-  for(let i=0;i<NATIVE_OBSTACLE_CANDIDATE_CACHE+71;i++)assert.equal(empty.obstacleAt(moveAddress(zero,{x:-30*i,y:-960},span),0),null);
+  // Independent insertion-ordered Map models the original LRU exactly. Touch
+  // oldest/middle/newest entries, overflow, and check every hit/miss decision.
+  const model=new Map<string,true>();let lookups=0;
+  const query=(at:MassAddress)=>{
+    const key=JSON.stringify([at.dimension,at.cx,at.cy,at.x,at.y]),hit=model.has(key),before=empty.stats.obstacleLookup;
+    model.delete(key);model.set(key,true);
+    if(model.size>NATIVE_OBSTACLE_CANDIDATE_CACHE)model.delete(model.keys().next().value!);
+    assert.equal(empty.obstacleAt(at,0),null);const after=empty.stats.obstacleLookup;
+    assert.equal(after.misses-before.misses,hit?0:1);assert.equal(after.hits-before.hits,hit?1:0);
+    assert.equal(after.cached,model.size);lookups++;
+  };
+  const point=(i:number)=>moveAddress(zero,{x:-30*i,y:-960},span);
+  for(let i=0;i<NATIVE_OBSTACLE_CANDIDATE_CACHE+71;i++)query(point(i));
   assert.equal(empty.stats.obstacleLookup.cached,NATIVE_OBSTACLE_CANDIDATE_CACHE);
-  const misses=empty.stats.obstacleLookup.misses;empty.obstacleAt(moveAddress(zero,{x:0,y:-960},span),0);
+  const misses=empty.stats.obstacleLookup.misses;query(point(0));
   assert.equal(empty.stats.obstacleLookup.misses,misses+1,'old exact points retire at the explicit cache bound');
+  for(const i of [72,500,32768+70,72,900,500])query(point(i));
+  for(let i=0;i<300;i++){query(point(32839+i));query(point(500));query(point(900));}
+  for(const i of [72,73,500,900,32768+70])query(point(i));
+  for(const dimension of ['surface','surface,0','surface\u0000','"surface"','a]b,c'])
+    for(const [cx,cy]of [['0','0'],['-9223372036854775808','9223372036854775807'],['9007199254740992','9007199254740993']])
+      for(const x of [0,-0,.0000001,31.25,959.9999])query(address(dimension,cx,cy,x,17,span));
   assert.equal(empty.stats.born,0);assert.equal(empty.stats.blueprints,0);
+  {
+    // A provider can query the same point before the outer miss is inserted.
+    // Map.set originally replaced that inner result in place; the linked LRU
+    // must neither retain a duplicate node nor promote the outer replacement.
+    let inProvider=false,interleave=true;
+    const companion=point(-1),firstPoint=point(-2);
+    const nested=new MassNativeResidency(cfg,at=>{
+      if(!inProvider){
+        inProvider=true;
+        try{
+          assert.equal(nested.obstacleAt(at,0),null);
+          if(interleave)assert.equal(nested.obstacleAt(companion,0),null);
+        }finally{inProvider=false;}
+      }
+      return [];
+    },new Set(),()=>zero);
+    interface CacheNode {key:string;older?:CacheNode;newer?:CacheNode}
+    const links=nested as unknown as {obstacleCandidates:Map<string,CacheNode>;obstacleOldest?:CacheNode;obstacleNewest?:CacheNode};
+    const inspectLinks=()=>{
+      const keys:string[]=[],seen=new Set<CacheNode>();let older:CacheNode|undefined;
+      for(let node=links.obstacleOldest;node;node=node.newer){
+        assert.ok(!seen.has(node),'nested lookup must not leave a linked-list cycle');seen.add(node);
+        assert.equal(node.older,older,'retained nodes must not point back into evicted history');
+        assert.equal(links.obstacleCandidates.get(node.key),node,'each retained list node must be the unique mapped node for its key');
+        keys.push(node.key);older=node;
+        assert.ok(keys.length<=NATIVE_OBSTACLE_CANDIDATE_CACHE,'retained graph must obey the public cache bound');
+      }
+      assert.equal(older,links.obstacleNewest);assert.equal(keys.length,links.obstacleCandidates.size);
+      assert.equal(new Set(keys).size,keys.length,'nested lookups cannot retain duplicate exact-address nodes');
+      return keys;
+    };
+    const key=(at:MassAddress)=>JSON.stringify([at.dimension,at.cx,at.cy,at.x,at.y]);
+    nested.obstacleAt(firstPoint,0);
+    assert.deepEqual(inspectLinks(),[key(firstPoint),key(companion)],'outer replacement preserves the original Map.set order');
+    interleave=false;
+    for(let i=0;i<NATIVE_OBSTACLE_CANDIDATE_CACHE+71;i++){
+      assert.equal(nested.obstacleAt(point(i),0),null);
+      if(i%1024===0)inspectLinks();
+    }
+    assert.equal(inspectLinks().length,NATIVE_OBSTACLE_CANDIDATE_CACHE);
+    nested.obstacleAt(firstPoint,0);inspectLinks();
+    assert.equal(nested.stats.born,0);assert.equal(nested.stats.blueprints,0);
+    console.log('PASS reentrant same-point replacement, unchanged LRU order and unique bounded retained graph after nested eviction');
+  }
   console.log('PASS negative-cache birth invalidation, 64-bit negative/far addresses, frame translation and exact bounded LRU churn');
-  console.log(JSON.stringify({comparisons,providerCalls,lookup:r.stats.obstacleLookup,bounded:empty.stats.obstacleLookup}));
+  console.log(JSON.stringify({comparisons,providerCalls,lookups,lookup:r.stats.obstacleLookup,bounded:empty.stats.obstacleLookup}));
 } finally { restore(); }

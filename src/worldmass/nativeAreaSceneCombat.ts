@@ -111,7 +111,7 @@ export interface NativeAreaCombatServices {readonly vendettaLifetime:NativeAreaS
 type TransferredBuff=Parameters<World['treeBuffSources']['get']>[0];
 interface ActorControllerPacket {source:NativeAreaSceneCombat;bond:unknown;grants:unknown;clocks:unknown;buffs:[TransferredBuff,NonNullable<ReturnType<World['treeBuffSources']['get']>>][];strike:ReturnType<World['strikeReleaseBodies']['get']>}
 const controllerTransfers=new WeakMap<object,WeakMap<Actor,ActorControllerPacket>>();
-type Host=wireCore.NativeSceneWireQueryHost&Pick<World,"frostHeld"|"gloom"|"harvestHolds"|"livePings"|"seatHudWire"|"smithCounterHere"|"vendorEntryHold"|"withApproachPass"|"seatHarvestView"|"vendorGemsOpen">&Pick<World,'addSeat'|'adoptSeatMeta'|'hireMercenary'>&NativeSceneUIActionHost&Pick<characterCreation.NativeCharacterCreationHost,'veteranFlaskDeals'>&NativeSceneMenuHost&NativeSceneViewHost&NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
+type Host=wireCore.NativeSceneWireQueryHost&Pick<World,"frostHeld"|"gloom"|"harvestHolds"|"livePings"|"seatHudWire"|"smithCounterHere"|"vendorEntryHold"|"withApproachPass"|"seatHarvestView"|"vendorGemsOpen">&Pick<World,'addSeat'|'adoptSeatMeta'|'hireMercenary'|'vocationAskOf'>&NativeSceneUIActionHost&Pick<characterCreation.NativeCharacterCreationHost,'veteranFlaskDeals'>&NativeSceneMenuHost&NativeSceneViewHost&NativeSceneAIHost&NativeSceneAIPreparationHost&NativeSceneCombatHost&NativeSceneCombatContextHost&NativeAssaultHost&motion.NativeSceneCombatMotionHost&NativeSceneFrameHost&NativeAreaCampaignFrameHost&directoryCore.NativeSceneDirectoryHost&inputCore.NativeSceneInputHost;
 type Binding<T>={get:()=>T;set?:(value:T)=>void};type Bindings={[K in keyof Host]:Binding<Host[K]>};
 function field<O extends object,K extends keyof O>(owner:()=>O,key:K):Binding<O[K]>{return {get:()=>owner()[key],set:value=>{owner()[key]=value;}};}
 function method<O extends object,K extends keyof O>(owner:()=>O,key:K):{get:()=>O[K]}{return {get:()=>{const receiver=owner(),fn=receiver[key];return typeof fn==='function'?((...args:unknown[])=>Reflect.apply(fn,receiver,args)) as O[K]:fn;}};}
@@ -295,6 +295,7 @@ get bountyBoardView(){return method(()=>host,"bountyBoardView").get();},
 get bountyBoardsHere(){return method(()=>host,"bountyBoardsHere").get();},
 get bountyHands(){return method(()=>host,"bountyHands").get();},
 get clientActionHook(){return method(()=>host,"clientActionHook").get();},
+get clientSeatId(){return method(()=>host,"clientSeatId").get();},
 get completedQuests(){return method(()=>host,"completedQuests").get();},
 get creepers(){return method(()=>host,"creepers").get();},
 get deathBurstsView(){return method(()=>host,"deathBurstsView").get();},
@@ -309,6 +310,7 @@ get flashes(){return method(()=>host,"flashes").get();},
 get fonts(){return method(()=>host,"fonts").get();},
 get frostHeld(){return method(()=>host,"frostHeld").get();},
 get gameOver(){return method(()=>host,"gameOver").get();},
+get gateAccountOf(){return method(()=>host,"gateAccountOf").get();},
 get gloom(){return method(()=>host,"gloom").get();},
 get grantedPocketsFor(){return method(()=>host,"grantedPocketsFor").get();},
 get guardArts(){return method(()=>host,"guardArts").get();},
@@ -352,6 +354,7 @@ get questImbueOffers(){return method(()=>host,"questImbueOffers").get();},
 get questLog(){return method(()=>host,"questLog").get();},
 get questOfferChoices(){return method(()=>host,"questOfferChoices").get();},
 get questRewardOffers(){return method(()=>host,"questRewardOffers").get();},
+get questRunLedger(){return method(()=>host,"questRunLedger").get();},
 get questStanding(){return method(()=>host,"questStanding").get();},
 get rampageActive(){return method(()=>host,"rampageActive").get();},
 get roadIsWet(){return method(()=>host,"roadIsWet").get();},
@@ -382,7 +385,9 @@ get vendorGemsOpen(){return method(()=>host,"vendorGemsOpen").get();},
 get vendorLockCap(){return method(()=>host,"vendorLockCap").get();},
 get vendorRestockAt(){return method(()=>host,"vendorRestockAt").get();},
 get vendorStock(){return method(()=>host,"vendorStock").get();},
+get vocationAskOf(){return method(()=>host,"vocationAskOf").get();},
 get vendorTradeRefusal(){return method(()=>host,"vendorTradeRefusal").get();},
+get vocationMenuOffers(){return method(()=>host,"vocationMenuOffers").get();},
 get visited(){return method(()=>host,"visited").get();},
 get walk(){return method(()=>host,"walk").get();},
 get waypointPos(){return method(()=>host,"waypointPos").get();},
@@ -883,6 +888,7 @@ vendorGemsOpen:method(()=>this.input.assembly.input.settlement,'vendorGemsOpen')
   questStanding:method(()=>this.input.quests,"questStanding"),
   questOfferChoices:method(()=>this.input.questInteraction,"questOfferChoices"),
   questRewardOffers:method(()=>this.input.questInteraction,"questRewardOffers"),
+  vocationAskOf:method(()=>this.input.questInteraction,"vocationAskOf"),
   vocationMenuOffers:method(()=>this.input.questInteraction,"vocationMenuOffers"),
   questImbueOffers:method(()=>this.input.questInteraction,"questImbueOffers"),
   mercTargetLevel:method(()=>this.input.progression,"mercTargetLevel"),

@@ -1,3 +1,7 @@
+import {Actor} from '../src/engine/actor';
+import {beforeNativeArrivalActorSlots,nativeArrivalUnusedActorSlots,assertNativeArrivalActorSlots} from './nativeCaravanArrivalReceiptFixture';
+import {beforeNativeTitanActorSlots} from './nativeTitanReceiptFixture';
+import {readFileSync as readCurrentSource} from 'node:fs';
 /** Strict comparison reversals; full native receipts remain pinned in their three probes. */
 import assert from 'node:assert/strict';
 import {nativeCaravanPriorFS as fs} from './nativeCaravanCompositionFixture';
@@ -72,6 +76,21 @@ const expectedRowsHash=hash(expectedRows);
 const mutations:Record<string,(v:any)=>void>={missing:v=>v[0].before.grounds.shift(),duplicate:v=>v[0].before.grounds.push(v[0].before.grounds[0]),reference:v=>v[0].before.grounds[0].$ref++,doodad:v=>v[0].before.doodads[0].radius++,actor:v=>v[0].before.actors[0].life++,addition:v=>v[0].before.unknownTerrainField=1};
 for(const [label,mutate] of Object.entries(mutations)){const copy=structuredClone(rows);mutate(copy);refuses('arrival receipt '+label,()=>assert.equal(hash(beforeHistoricalArrivalGrounds(copy)),expectedRowsHash));}
 assert.deepEqual(rows,[{before:state,after:structuredClone(state)}],'comparison helpers never mutate raw receipts');
+
+const actor=new Actor('inline receipt witness','enemy',{x:0,y:0});
+assertNativeArrivalActorSlots(readCurrentSource(new URL('../src/engine/actor.ts',import.meta.url),'utf8'));
+const omitted=new Set<string>(nativeArrivalUnusedActorSlots.map(s=>s.name));
+const prior=Object.fromEntries(Object.entries(actor).filter(([key])=>!omitted.has(key)));
+const arrivalState=(body:unknown)=>({actors:[body],doodads:[],grounds:[],sameActor:body,tail:new Set([1,2])});
+const currentArrival=[{before:snap(arrivalState(actor)),after:snap(arrivalState(actor))}];
+const expectedArrival=[{before:snap(arrivalState(prior)),after:snap(arrivalState(prior))}];
+assert.deepEqual(beforeNativeArrivalActorSlots(currentArrival),expectedArrival,'arrival removes only four exact unused slots and remaps later references');
+const titanState=(body:unknown)=>({runtime:{sources:new Map([['source',body]]),heads:new Map([['head',body]]),pieces:new Map()},actors:[body],doodads:[{contactSource:body}],bridges:[],grounds:[],regrowing:[],flashes:[],shake:0,hazards:[],field:{},ledger:{},messages:[]});
+const currentTitan={stages:[{state:snap(titanState(actor))}]},expectedTitan={stages:[{state:snap(titanState(prior))}]};
+assert.deepEqual(beforeNativeTitanActorSlots(currentTitan),expectedTitan,'Titan census/controller/contact references retain the same actor');
+for(const slot of nativeArrivalUnusedActorSlots){const bad=structuredClone(currentArrival);bad[0].before.actors[0][slot.name]=true;refuses('active inline actor '+slot.name,()=>beforeNativeArrivalActorSlots(bad));}
+const alias=snap({...arrivalState(actor),borrowed:actor.resourceFlows});refuses('aliased removed inline array',()=>beforeNativeArrivalActorSlots([{before:alias,after:alias}]));
+const changedActor=structuredClone(currentArrival);changedActor[0].before.actors[0].life++;assert.notEqual(hash(beforeNativeArrivalActorSlots(changedActor)),hash(expectedArrival),'unexplained gameplay change survives projection');
 
 const provenance=process.argv.includes('--provenance');
 if(provenance){

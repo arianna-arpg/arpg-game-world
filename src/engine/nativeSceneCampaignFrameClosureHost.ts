@@ -651,6 +651,7 @@ export interface NativeSceneCampaignFrameCommonHost {
  readonly seatIdle:World["seatIdle"];
  readonly seatModeDef:World["seatModeDef"];
  readonly seatNote:World["seatNote"];
+ readonly seatStageDef:World["seatStageDef"];
  readonly seatQuests:World["seatQuests"];
  readonly seats:World["seats"];
  readonly seatSkillById:World["seatSkillById"];

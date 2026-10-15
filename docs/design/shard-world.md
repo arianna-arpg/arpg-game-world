@@ -896,6 +896,23 @@ in Mu first.**
     seeded without the character limb and filtered at `world.player`'s level
     (the keeper's), so two heroes at one settlement board read one draw; the
     seat is the seed's `questCharKey()` and the level's `questHandLevel()`.
+    **EXTENDED 2026-10-13 (W12, branch shard-w12-spoken):** THE SPOKEN QUESTS
+    (docs/engine/shard.md) closes W9's three findings. A hosted hero hears the
+    quest-gated lines its own quests, ledger and gate account earn: the journal
+    row carries what the dialogue conditions read (`JournalW.sq`, the key list
+    derived from the dialogue data) and `questDialogueView` is the one resolver
+    the director reads through (the World itself on solo and the co-op host). A
+    secret vocation site is found by each standing seat into its own ledger (the
+    keeper's parked body never discovers) and its calling menu opens for that
+    seat alone (`JournalW.voc`; the pick is its own `vocationQuest` word). An
+    absent hero's quest ground stays claimed through a save and a restart (the
+    save's `:questGround` claim ledger, published by the vessel desk) until its
+    quest ends, its run falls or it is gone `VESSEL_CFG.groundKeptDays`; the claim
+    is the engine's, so no foundation ask was needed. Still owed to M2: the
+    turn-in's quest-done account key and a vocation's unlock write the World's
+    account (the shard's); the discovery's account copy and the dialogue's
+    account view read `gateAccountOf` (the shard's account today), which M2's
+    one line re-points.
 25. **POCKET TENANCY** (M1's first question) — A: shared pockets (whoever
     walks into a cave meets the same cave, her "generated for any player
     that simultaneously ran across it"). B: one instance per party.
@@ -1030,61 +1047,134 @@ in Mu first.**
     in messages, still one thread) and W3 (THE THREAD HOST) once the
     foundation commits to the island runtime. B: all four now. C: W0 and W1,
     then decide from the profile and the player counts she expects. Rec: A.
+    **RULED (2026-10-13, her word): A now, and B eventually: the order that
+    reaches the most optimized state wins, the lift is hers to pay; THE
+    PERFORMANCE LANE (`docs/design/performance-lane.md`) carries W0 and W1 and
+    takes W2 and W3 when ready.**
 32. **THE GOVERNOR'S NUMBERS** — the per-group floor (Rec: 24, today's
     delivered least); whether the tick may drop to 40 Hz under the heaviest
     load (the wire stays 20 Hz; 30 Hz would halve it); whether THE DOOR (new
     joins held at the lobby under overload) exists at all. Rec: 24, 40 Hz
     allowed, no door until a real host is measured.
+    **RULED (2026-10-13, her word): as recommended: floor 24, 40 Hz allowed
+    under the heaviest load, no door until a real host is measured.**
 33. **THE HARDWARE** — threads need cores and the codespace has two. Rec: a 4
     to 8 core host before W3 lands; W0 and W1 run anywhere.
+    **RULED (2026-10-13, her word): she asked for recommendations; the
+    codespace may be all that is available. THE ROADS: (1) the same codespace
+    on a bigger machine (`gh codespace edit -c NAME --machine
+    standardLinux32gb` for 4 cores and 16 GB, this repo is offered only `basicLinux32gb` and `standardLinux32gb` today, so 8 cores need another host; the free quota is 120 core-hours a month, so 4 cores idle-out at
+    240 min burns it in 30 hours of play); (2) a free always-on host: Oracle
+    Cloud's always-free Ampere A1 (4 ARM cores, 24 GB; Node runs the shard
+    there, no AppImage involved); (3) a rented box for a standing shard:
+    Hetzner CPX41 (8 vCPU, about 30 EUR a month) or a dedicated AX41 (6 cores
+    and 12 threads, about 40 EUR); (4) the dev machine itself (10 cores)
+    behind a Cloudflare or Tailscale tunnel for play tests, free and the
+    fastest CPU of the four but it ties up the desk. Rec: (1) for the next
+    play tests at 4 cores; (2) or (3) when W3 lands and the shard should stand
+    all day.**
 34. **A WORKER'S DEATH** — A: its players wake at the hearth from their last
     mirror (up to `persistSec` 20 s of progress lost). B: a seat checkpoint
     beat (2 s, a few kB a seat). Rec: B.
+    **RULED (2026-10-13, her word): B, the 2 s seat checkpoint.**
 35. **ONE CLOCK** — A: lockstep across threads, every thread stepping the same
     tick with the same start time and inputClock, so the slowest thread sets
     the shard's tick. B: a clock per thread with a rebase law at every
     hand-off. Rec: A.
+    **RULED (2026-10-13, her word): A, lockstep across the server's threads.
+    Her question answered: this card is the SERVER's own clock (its worker
+    threads step one tick together), not the client's network mode; the client
+    already runs the predicted-and-corrected model (THE HONEST INPUT, THE
+    SMOOTH SHELL, THE PREDICTED ROOT: the host's row always wins and a desync
+    corrects itself within a snapshot), which is the reconciled shape Path of
+    Exile moved to, never the old predictive mode that needed /oos.**
 36. **THE ISLAND SEPARATION** — islands split where no player can see across
     (about 3,200 px: the 1,600 px awake radius plus the view) with hysteresis;
     a merge costs a short hold (up to about 100 ms) for the merging players
     only; THE NEAR LAW (1,600 px) and the group merge (2,600 px) never cross
     an island by arithmetic. Rec: as stated; the number is unblessed.
+    **RULED (2026-10-13, her word): as stated, about 3,200 px, to be tuned in
+    play; the lane takes the best estimate meanwhile.**
 37. **THE TRAVELLING COURT** — A: exact capture of every carried body on a
     cross-thread hand-off (the couch guest's build plus live state, the court
     captured exactly). B: timed summons re-minted at their life fraction. Rec:
     A.
+    **RULED (2026-10-13, her word): A, exact capture.**
 38. **THE RELEASE FROM A WORLD** (W7's finding, 2026-10-10) — a hero bound to
     a world that is gone for good (a deleted codespace) has no road back to
     solo play: a bound save only ever returns. A: a deliberate "release this
     hero from its world" act on the roster card (clears `CharacterSave.shard`
     and `stand` after one confirm; the hero stands in Lastlight as a solo
     save). B: leave it bound; a new hero is the road. Rec: A.
+    **RULED (2026-10-13, her word): A, the release act on the roster card.**
 39. **THE SERVER-HELD MIRROR** (W7's finding) — a closed tab cannot hear its
     last mirror, so up to one beat (20 s) of progress is lost. A: the shard
     keeps each hero's latest mirror and hands it back at the next login (bends
     card 6: the hero is the client's). B: keep card 6 whole; THE UNLOAD GRACE
     and Exit's farewell already bound the loss. Rec: B now, A folded into M2's
     account gate when the server holds the account anyway.
+    **RULED (2026-10-13, her word): B now, A with M2; tweak as play tells.**
 40. **THE BOUND HERO AT ANOTHER DOOR** (W7's finding) — the lobby's
     lone-vessel read takes a hero bound to another world into this one without
     a word (its binding moves with it). A: refuse until the player confirms,
     the solo guard's own shape ("this hero stands in <world>; travel
     anyway?"). B: silent, as today. Rec: A.
+    **RULED (2026-10-13, her word): A, confirm first; tweak as play tells.**
 41. **EXIT'S FAREWELL CAP** (W7's dial) — `WS_TRANSPORT_CFG.farewellMs` is
     1,500 ms today: Exit waits that long for the farewell mirror's ack before
     it reads "quiet"; THE UNLOAD GRACE is `SHARD_CFG.unloadGraceSec` 15 s.
     Rec: as set; both numbers are unblessed.
+    **RULED (2026-10-13, her word): as set.**
 42. **WHICH POCKETS ARE INSTANCED** (card 25's first question, M1-W4) — the
     `tenancy: 'party'` flag exists on sidezone defs, arena specs and pocket
     ZoneDefs and nothing carries it yet. A: the arena boss courts and the
     Odyssey's authored set-piece maps (card 25's own words: authored dungeons
     and arena seals). B: nothing; every pocket shared. C: a wider list she
     names. Rec: A.
+    **RULED (2026-10-13, her word): A, built as a REUSABLE FRAMEWORK so that C
+    (a wider list) is a data row, never new code. She read B as shared Odyssey
+    pockets for everyone and judged it unworkable as stated (two players
+    killing the Odyssey's leaders in different orders), which raised card 44,
+    THE FIRST SLAYER'S CHAIN, as the shared end state to aim for.**
 43. **AN INSTANCE'S CLEAR AND THE WORLD** (card 25's second question) — a
     party's instance keeps its own clears and never counts for the world's. A:
     keep it the instance's own (one party can never clear a shared place for
     everyone). B: an instance's clear also stamps the world's clears (about
     ten lines in the registry). Rec: A.
+44. **THE FIRST SLAYER'S CHAIN** (her idea, 2026-10-13, raised by card 42) —
+    the Odyssey's world half is shared on a shard (card 24): its leaders fall
+    once for everyone. A: the FIRST player to slay an Odyssey leader on a
+    shard LOCKS THE CHAIN: the order that player meets the leaders in becomes
+    the shard's order, every later hero's Odyssey leads follow it, a
+    deliberate shard reset rerolls the leaders and hands the next first slayer
+    the same power (a meta-game of progression: one player's choice cements
+    the future of everyone on the shard; standardized play; no two-order edge
+    cases). B: every hero walks its own order against shared leaders (the edge
+    cases she named: A then B then C against B then A then C). C: leaders per
+    character (no shared Odyssey at all; contradicts card 24's shared world
+    half). Rec: A, as the Odyssey's end state on a shard; the first build
+    keeps the leaders shared and the order per hero's own leads until the
+    chain lock is designed with the Odyssey's own rules
+    (`docs/design/odyssey.md`: leader receipts, Vocation income, faction
+    elimination tiers).
+    **RULED (2026-10-13, her word): A.**
+45. **M2, THE ACCOUNT GATE** (raised by W9, W10 and W12: every account read on
+    a shard goes through `World.gateAccountOf`, which answers the shard's one
+    open account today, so the trade gate, the wares and rush rungs, the
+    posting-pin capacity, the account-scoped dialogue lines, vocation stamps
+    and vendor counters read and write one shared account for every hero) — A:
+    THE TRAVELLING ACCOUNT: the hero's own account travels with its vessel
+    (the Vault's unlocks, features, the account ledger and counters), the
+    shard reads them per seat through `gateAccountOf` and every earned stamp
+    goes home in the mirror; the client stays the account's truth (card 6's
+    own law) and the shard never persists an account. B: SERVER ACCOUNTS: the
+    shard keeps an authoritative per-account ledger keyed by a login identity,
+    the client's account becomes a view; bends card 6 and needs a sign-in. C:
+    A plus a per-account SHADOW the shard keeps only to refuse impossible
+    claims (a hero asserting a feature its own ledger never earned). Rec: A
+    now (one resolver to re-point, the mirror already carries the ledger); C
+    when the shard is public; B only if the product ever wants the server to
+    own progression.
 
 ---
 
@@ -1256,6 +1346,115 @@ What W7's build found beyond the audit (for her word where marked):
   at the hearth; the probes and the soak draw nothing, so none of them can
   see it. (A7 in the table above: W11 built THE FORESIGHT ON THE WIRE, and
   `balance/probe_shardforesight.ts` now reads the painter's own geometry.)
+
+## §7g Asks to the foundation session (the open ledger, 2026-10-13)
+
+The shard lane and the foundation (Codex) work the same tree: the shard merges
+the foundation down daily and lands up at green milestones (§7c). The foundation
+reads this charter and `docs/design/shard-m6-plan.md`; this table is the one
+place the shard lane keeps its asks, so either session can see what stands.
+
+| # | Ask (the shard lane cannot build it: `src/worldmass/**` is the foundation's) | Status on 2026-10-13 |
+|---|---|---|
+| F1 | THE POPULATION BUDGET SEAM for THE NEIGHBORHOOD GOVERNOR (§6.6 ask 4, the M6 plan §3.3): `WorldMassRuntime.setPopulationBudget({ total, floor } \| null)` + `populationStats()`, host state outside the config, the land digest, the checkpoint and every save; a group's limit becomes `clamp(floor, config.maxPopulation, floor(total / groups))`; `null` restores today byte for byte. Optional `setResidencyRadius(r \| null)`. | DELIVERED in the Codex reconciliation of `f967869c` into `af891eb7`. The exact M6 setter/stats signatures are live; both limit branches use the clamped per-group share. Budget is copied transient host state, excluded from saves and land digests; null restores the original law. `probe_worldmass_foci` pins floors, ceilings, whole-cohort admission, merge/split, no despawn and exact saved bytes. Optional residency-radius control is not added. W1 can now bind this seam. BOUND by the performance lane 2026-10-13: `server/governor.ts` (W1 THE NEIGHBORHOOD GOVERNOR, her numbers on card 32: floor 24, 40 Hz under the heaviest load, no door) detects the seam on the keeper's runtime of the moment and spends it as dial 2 of its ladder, ten percent a beat down to floor × groups and eight a beat up to the ceiling where the budget is withdrawn (null); `probe_shardgovernor` walks the ladder synthetically and on a real wilds host (the per-group limit follows the clamp, the setter retires no body, today's law returns); the receipts are in `performance-lane.md` §8. The residency radius (ask 4b) stays open as a second dial if the budget thins neighborhoods too far. |
+| F2 | THE WORLD MEMBER-COUNT PIN in `probe_nativescenesky.ts` (2,351 against 2,450 at the foundation's own tip) | REOPENED AS EXPLICIT DEBT under F7. Removing the complete receipt was not a repair. The original/projected World guard and count are restored; `nativescenesky` and `nativeinstalledsources` are named red until the visual/loading/relic World changes have an independently reviewed source projection. No new World hash is accepted here. |
+| F3 | THE WILDS BOARDS PER CHARACTER (card 24): `dealMassBounties` in `src/worldmass/bounties.ts` seeds without the character and filters at the keeper's level, so two heroes at one settlement board read one draw. One line each: fold `questCharKey()` into the seed and read `questHandLevel()` (both in `src/engine/questLedger.ts`). | DELIVERED in the same reconciliation. The seed and posting identity include `questCharKey()` only when non-null; solo/co-op seed bytes stay unchanged. Both challenge and manageable-destination filtering use `questHandLevel()`. `probe_worldmass_bountycharacters` covers two distinct hands, repeat draws, new socket identity, keeper independence, level gates, standing offers and saved character slates. |
+| F4 | DICTIONARY-MODE NATIVES: `restoreNativeActorState` deleted every property before reassigning (the M6 plan §1.4). | INTEGRATED from `codex/shard-performance`: native restores preserve the factory property layout; its exact dependency/restoration probes remain in the gate. |
+| F5 | THE ATTACH BLOCK: the wilds shell's attach is one synchronous block of seconds (the wisp freezes under THE ONE CROSSING's cover). | PARTLY ANSWERED upstream: the Mu crossing now plays in an isolated foreground renderer during world preparation (4dad1dbf, 38a8f601, `probe_loadingpreparation.ts`, `docs/ui/loading-screen.md`), so the freeze is covered rather than chunked; the synchronous block itself stands. |
+| F6 | THE REVIEW OF `codex/shard-performance` before it merges into shard-world. | INTEGRATED by Codex in this reconciliation: all three conflicts retain both lanes, the browser opening identity/cache and cooperative yields survive, and derived sample/region memo growth is capped at 2x while residency serves all foci. The joint preparation probe passes. Original critic receipt: DONE 2026-10-13 (an Opus critic, read-only, its own worktrees). VERDICT: the branch's claims hold on the default path (the far-target rejection in `ai.ts` can only reject bodies the old check rejected; the stat fold keeps order and arithmetic; the path search skips only neighbours the cost check rejects; the terrain and reservation caches key on immutable identities; sim smoke episodes byte-identical across base, perf and shard; the four digest rigs, `probe_loskey` and the old World guard all pass on it; 23/23 shard rigs; concurrent-pair soaks perf vs base 12.1 vs 15.3 and 15.3 vs 15.0 ms p95 with 0.6/1.1% vs 3.5/3.3% dropped; boot 8 s vs 11 s; spread 3,500 px p95 106 vs 159 ms, both breaching). WATCH: the per-focus terrain and region caches grow the heap 51 vs 34 MB in 30 s spread (under the 64 MB gate; cap the multiplier or set a byte budget). Its W0 half: THE PHASE METER as `balance/shardPerformance.ts` behind soak `--diagnostics/--profile/--window-*`, without the AI loop, per-unit marks or THE DISTANCE CENSUS; THE THINKING EDGE, THE LOCAL ROSTER, THE TICK DIAL and W1 are unbuilt; the governor's seam survives (`populationLimitFor` holds both `maxPopulation` reads). MERGE: three conflicts into shard-world (the roster, `generator.ts`'s constructor taking both `opening?` and `surfacePages`, and `runtime.ts`'s `createTerrainPreparationGenerator` needing the `opening` parameter plus `adoptOpeningCache`; the two prepared-terrain schemes, the browser opening worker and the Node terrain lane, must be reconciled) — the foundation's files, so the foundation merges it. |
+| F7 | THE LOOSENED GATE (the critic's finding 2, HIGH): the "CI repairs" on shard-world (58fc7f1a, 22e8f1da) turned red probes green partly by loosening them: the whole-World hash assertion cut from `probe_nativeinstalledsources.ts` and the member count from `probe_nativescenesky.ts` (about 380 lines of World edits in 6de071f8, 38a8f601 and aa569d0e landed with no re-pin and no review note); goldens removed from `probe_nativescenearrival.ts` (b7aca130), `probe_nativescenehistory.ts` (af9d74cc, now `stages.length>0`) and `probe_nativescenetitans.ts` (540dc241); `probe_nerverecovery.ts` 100-102 and `probe_foragercommitment.ts` 40-44 weakened; `probe_worldmass_processioncontinuity.ts` 245-297 flipped a must-admit route into a refusal control. The foundation tip keeps every golden by PROJECTING named reviewed changes out before comparing (`beforeHistoricalActorSlots`, `beforeHistoricalCleaveReceipt`, `beforeHistoricalArrivalGrounds`, `projectContinuity`, `assertNativeHistoricalWorld`). The fixture-only repairs (firinglane's landform recipe, terrainvariation's schema-13 materials, the court and procession readiness waits, arrival's config read, worker globals, the siphon evasion pin, Node 22 rounding) are legitimate. A merge of shard-world into the foundation auto-takes nine of the weaker files with no conflict. | RECONCILED. Original arrival `b7aca130`, history `af9d74cc` and Titan `540dc241` goldens are restored and pass through strict named foundation projections; raw original/current/local comparisons remain complete. Original forager, nerve and fixed-route procession assertions are restored. Those three and the two whole-World guards are explicitly red with individual reasons in the roster. The fixture-only repairs remain; see the response below. |
+| F8 | THE WIRE DESIGN SPLIT (finding 4, MEDIUM): 6de071f8 grew the shard wire for the skill visuals (`ActorW.selfBankCues`/`presenceBadge`, `AuraW.skillId`, `ProjW.skillId`, six `TetherW`, four `OrbW` and ten `FlashW` fields, a whole unquantized `ZoneW.visual`, `delay0` on ground zones) without bumping `SHARD_WIRE_PROTOCOL`, while the foundation built the same feature as compact `ZoneW` rows (`sk/vi/arc/tier/ef/ed/seg/lf/la/og` plus `zonePaint`) and asserts `skillFields === undefined`; snapshot p95 grew 8 to 9 percent clustered and 17 percent spread, `presenceBadge` riding every minion row every frame the likely cause. | DECIDED AND BUILT: compact `ZoneW` plus `zonePaint`, with no emitted `ZoneW.visual` or parallel `skillFields`; shard reach, interpolation and legacy-array checks are retained. Non-seat `vi`, armed `ar`, facing, terrain filters and immediate fuses are checked. `SHARD_WIRE_PROTOCOL = 6`; protocol 5 remains the already-landed identity-once change. Flash/tether/orb art and per-socket presence identity stay intact. |
+| F9 | THE CAPPED CACHES' RESIDENCY (the critic's WATCH in `performance-lane.md` §2, now measured on d025d99f): the per-focus terrain and region caches, capped at twice single-focus capacity, grow the live heap 61 MB in a 60 s spread window on the reconciliation alone (Codex's own serial run read 54 MB) against the soak's 64 MB gate; the lane's tree on it read 25 MB with fewer bodies. Ask: a byte budget or a count cap per focus that holds the window's growth well under the gate, and a long soak (`--seconds 600`) receipt. | OPEN 2026-10-13 (the lane's pair S2, `performance-lane.md` §8.1). |
+| F10 | THE THREE RED BEHAVIORAL PROBES Codex named in d025d99f (`foragercommitment` seed 451 short of four melee casts; `nerverecovery`'s old-rule wounded-country survivor dying; `worldmass_processioncontinuity` seed 713 at cell (4,-2) admitting no cart in 5,000 steps): every one lives in the foundation's native and worldmass lanes and was green before the loosened gate (F7) was restored. The lane does not substitute easier controls; it asks the foundation to diagnose them against its own archived oracles and to mark each row red with a named reason in `balance/proberoster.ts` until it does. | OPEN, the foundation's files. |
+| F11 | THE TWO SOURCE GUARDS (`probe_nativeinstalledsources`, `probe_nativescenesky`) reject the visual, loading and relic World changes pending reviewed projections (F2/F7). Ask: the foundation reviews those World changes and adds strict named projections the way `beforeHistoricalActorSlots` and its kin project the reviewed changes out, never a blind repin. | OPEN, the foundation's files. |
+| F12 | THE SMOKE BASELINE DRIFT: `npm run sim -- baseline check --suite smoke` reports three metrics beyond tolerance on af891eb7, d025d99f and the lane's merge alike (ttk_parity_warrior_l5 ttk_wave_mean 20.97 to 15.26; skillmode_duelist_solo_l20 dps_out and dps_dummy 235.61 to 274.07): the base's own standing drift against `balance/baselines/smoke.json` (main re-baked the duelist on 2026-09-30 at 269c2e1c; the foundation's merges moved the warrior's wave). The episodes are byte-identical across all three trees, so the lane's law holds; the re-bake (`npm run sim -- baseline write --suite smoke`) is the owner's deliberate act once the warrior's wave is adjudicated. | OPEN, an adjudication for her or the foundation. |
+| F13 | THE PER-ACTOR UPDATE LOOP'S TERRAIN AND SOLID CHECKS: the lane's profile of the spread course (`performance-lane.md` §7.5) puts `World.update`'s per-actor loop at 38 to 47 percent of the tick, with `nativeScenePointInSolid` (0.45 s self of 31), sanctuary's `blocks` (0.38), levelgen's `doodadRule` (0.42) and `pointInSolid` (0.38) among its self costs: per-body, per-tick solid and terrain reads that look memoizable per cell and revision. Two of the four are the foundation's (`engine/nativeSceneGeometry.ts`, `worldmass/sanctuary.ts`). Ask: a cell-keyed memo under the existing terrain and native revisions, or the seam the lane may use to build one, measured by the lane's pairs. | OPEN 2026-10-13. |
+| F14 | THE WALK'S OBSTACLE PREDICATE AND ITS REVISION: `MassWalk.search` and `line` ask `obstacles.blocked` at every cell they touch, about 3,000 asks a tick on the spread course, each one `World.pointInSolid` at a cell centre (99 percent of that function's 10 percent of the tick); the path cache keys on the GLOBAL doodad revision plus the doodad count, which moves about once a second on the wilds (every scenery birth), so it rarely holds. The lane answers it on the shard with an exact-point memo installed by the host (`server/walkMemo.ts`: the nav-block family's counter, the doodad count, the bridge count and the native features' version as the key; p50 37 to 27 ms, p95 91 to 59 on the spread pair, `performance-lane.md` §8.4). Ask: the engine-side half in the foundation's files so solo play gains too: key the walk's path cache and a per-cell `blocked` memo on `world.doodadFamilyRev('nav-block')` (plus the counts) in `src/worldmass/walk.ts` / `runtime.ts:480`, and consider a family counter for the bridge roster. | OPEN 2026-10-14. |
+
+<!-- cross-model-review:v1 -->
+### Foundation response, 2026-10-13
+
+**Reviewer/implementer:** Codex. **Performance commit reviewed:**
+`f967869c84a41f5ac774e72775142dbaf8efb508`. **Integration base:**
+`shard-world @ af891eb72e7c86d443e05650d26c887d7adf5a13`.
+The merge keeps the performance ancestry and the shard opening-worker path.
+The per-group host budget is the M6 §3.3 interface, not the adaptive W1
+controller. Claude can now implement its once-per-second governor against it.
+
+**Observed strict receipts.** The foundation's exact Cleave and concealment
+projections plus its checked unused Actor-slot projections restore all three
+requested historical hashes. Arrival covers 12 triples/120 bodies; history
+retains its original 52 complete results and eight supplemental courses;
+Titans cover 42 triples/78 births. Arrival/Titan inline graphs remap references
+after removing only four exact unused Actor slots. The later foundation-only
+`companionReturnTo` slot is absent on this shard and is not projected.
+Mutation controls reject active fields, changed declarations, duplicate fields,
+aliased removed arrays and changed gameplay. No historical hash is repinned.
+
+**Observed remaining reds (original assertions retained).**
+
+| Probe | Named reason / next action |
+|---|---|
+| foragercommitment | Seed 451 fails the original gain of at least four native melee casts. Review that actual approach; a neutral control cannot replace the promised improvement. |
+| nerverecovery | The old-rule wounded-country survivor dies, violating the must-survive chase control. Reconcile the fixture or the behavior with evidence. |
+| worldmass_processioncontinuity | Seed 713, cell (4,-2), admits zero cart actors after the original 5,000-step course; the warm report contains cold scene refusals. Preserve this required route while diagnosing admission. New blocked-road controls remain supplemental. |
+| nativeinstalledsources / nativescenesky | Complete World receipts reject the 314 added/68 removed lines since the performance base, including visual, loading and relic-power changes. Exact provider/sky source checks remain, but those World changes still need reviewed projections. |
+
+**Hand review of the CI repairs.** The three golden removals, the two complete
+World-guard removals, the forager neutral substitution, the nerve survival
+relaxation and the procession route substitution are undone. Original archive
+data and hashes stay fixed. The court and procession readiness waits keep their
+exact survivor/ownership assertions; court retirement settles the real bounded
+dormancy sweep. The firing-lane fixture selects its intended landform recipe;
+terrain variation explicitly supplies the archived schema-13 materials. The
+compiler's Node-22 portability correction rounds only its named corrected
+layout receipt, retaining the old pin and exact direct/native comparisons.
+Worker environment declarations, the siphon evasion fixture and runner failure
+diagnostics are retained. No automatic merge is trusted to adjudicate these.
+
+**Wire decision.** One compact field row owns geometry and paint identity.
+Paint reads the interpolated stub (including body following) and receives no
+Actor or executable skill. Legacy visual-only co-op arrays remain readable;
+hosted protocol-5 clients must use the normal build-stamp refusal. The existing
+identity-once badge optimization remains in place. This does not claim that all
+of the earlier flash/tether byte increase has been eliminated.
+
+**Validation and limits.** Final run receipts are appended in
+`docs/engine/shard-runtime-foundation.md`; ignored logs use
+`.claude/reconcile-*.local.log`. The original five red rows are explicit debt,
+not an all-green foundation claim. The cap is an entry-count multiplier, not a
+measured byte ceiling. W1, later multi-core work and capacity certification
+remain separate. The two serial six-bot integration soaks both still breach
+the original tick-p95 and dropped-tick gates: clustered 34.22 ms / 10.77%,
+spread 3,500 units 250.70 ms / 88.39%. Both retain same-seat reconnect,
+stay below the heap-growth gate and report zero faults/harness errors. These
+are baseline integration receipts, not a controlled performance comparison.
+W1 can now use the delivered budget seam; capacity remains unproven.
+No push or deployment is part of this local merge.
+
+What the shard lane offers the foundation in return: W0 THE ONE-THREAD DIET's
+profile and phase meter are the foundation's now (the performance branch);
+the shard will build W1 THE GOVERNOR the day F1 lands, and takes M6 W2/W3
+(the glass unit, the thread host) once cards 31 to 37 are ruled.
+
+**The performance lane's response, 2026-10-13 (her word: push, merge what
+is ready, dive deep).** The reconciliation d025d99f was merged into the lane
+(4d22bb50: three harness-file conflicts, every gate green, the smoke
+episodes identical line for line), `shard-world` fast-forwarded to it in
+the foundation's worktree and PUSHED with the new `perf-lane` branch. W1 THE
+GOVERNOR is built on the delivered F1 seam (`server/governor.ts`,
+`probe_shardgovernor`; the F1 row above); its receipts and the merged tree's
+pairs are in `docs/design/performance-lane.md` §8. The lane's own W0 is
+landed: THE PHASE METER and THE DISTANCE CENSUS on the host, THE THINKING
+EDGE (idle far bodies think on the beat alone), THE LOCAL ROSTER recorded
+and not built on the profile's verdict. The foundation's four asks are
+answered in place: ask 1 (W1 against F1) built; ask 2 (profile and
+comparable soaks) in `performance-lane.md` §7.5 and §8.1; asks 3 and 4 are
+the foundation's own files and stand here as F10 and F11, with F9, F12 and
+F13 the lane's new requests. Cards 31 to 37 are ruled (31 A now and B
+eventually, 32 floor 24 and 40 Hz with no door, 34 the 2 s checkpoint, 35
+lockstep, 36 about 3,200 px, 37 exact capture), so the lane takes W2 and W3
+once the foundation commits to the island runtime.
 
 ## §8 M0 receipts (2026-10-07, this pass)
 

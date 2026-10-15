@@ -31,6 +31,7 @@ import type { TownSiteId } from '../data/townBuild';
 import { FEATURE } from '../meta/account';
 import { questMarkers, registerMarkerSource, type MapMarker } from '../world/mapMarkers';
 import { massQuestPins, type MassQuestPin } from '../worldmass/quests';
+import { spokenEmpty, spokenRowOf, type SpokenW } from './spokenQuests'; // THE SPOKEN QUESTS (W12)
 import type { StateSnapshot, ZoneMsg } from './snapshot';
 
 /** THE KEEPER'S GATE for a client's counters: the station features whose verdict a render
@@ -106,6 +107,8 @@ export interface JournalImbueW {
   items: { uid: number; name: string; current: string[]; options: { id: string; lines: string[]; unstudied: boolean }[] }[];
 }
 type BoardView = ReturnType<World['bountyBoardView']>;
+/** One calling card this seat may undertake (World.vocationMenuOffers under its hand). */
+export type VocationOfferW = ReturnType<World['vocationMenuOffers']>[number];
 /** A bounty board as this seat reads it (World.bountyBoardView): the countdown rides as the
  *  host's absolute restock time, so a client's ticker runs it down on the shared clock. */
 export type BoardViewW = Omit<BoardView, 'countdown'> & { restockAt: number };
@@ -125,6 +128,14 @@ export interface JournalW {
   /** On the Unbroken Wilds: the seat's own quest and bounty pins on the surface (the map's
    *  pins and the HUD's quest compass, worldmass/quests.ts massQuestPins). */
   mpins?: MassQuestPin[];
+  /** THE SPOKEN QUESTS (W12, net/spokenQuests.ts): what the seat's dialogue conditions read
+   *  (its held quests with their standing, the named run and account keys, the named
+   *  features); the shell's dialogue answers from it (questDialogueView). */
+  sq: SpokenW;
+  /** THE VOCATION SITES PER SEAT (W12): the seat's standing calling ask (the host world time
+   *  its linger made it) and the cards it may undertake; a new ask opens its client's menu
+   *  and the pick comes home as its own `vocationQuest` word. Absent = no ask stands. */
+  voc?: { at: number; offers: VocationOfferW[] };
 }
 
 /** The seat's rite view (SeatW.hv): World.harvestView's own shape, cut to the nodes in
@@ -151,6 +162,7 @@ export function journalViewOf(world: NativeSnapshotHost, seat: Seat): JournalW {
       });
     }
     const mpins = massQuestPins(world);
+    const ask = world.vocationAskOf(seat); // THE VOCATION SITES PER SEAT: the seat's own calling menu
     return {
       ...(mpins.length ? { mpins } : {}),
       log: world.questLog(),
@@ -160,6 +172,8 @@ export function journalViewOf(world: NativeSnapshotHost, seat: Seat): JournalW {
       done: [...world.completedQuests],
       pins,
       ...(Object.keys(boards).length ? { boards } : {}),
+      sq: spokenRowOf(world, seat), // THE SPOKEN QUESTS: the hearer's own reads, judged by its hand
+      ...(ask !== undefined ? { voc: { at: ask, offers: world.vocationMenuOffers() } } : {}),
     };
   });
 }
@@ -167,7 +181,7 @@ export function journalViewOf(world: NativeSnapshotHost, seat: Seat): JournalW {
 /** Nothing to tell: no quest held or done, nothing offered or owed, no pin, no board near. */
 function journalEmpty(j: JournalW): boolean {
   return !j.log.active.length && !j.log.completed.length && !j.offers.length && !j.rewards.length
-    && !j.imbues.length && !j.done.length && !j.pins.length && !j.boards && !j.mpins;
+    && !j.imbues.length && !j.done.length && !j.pins.length && !j.boards && !j.mpins && spokenEmpty(j.sq) && !j.voc;
 }
 
 interface JournalMemo { json: string; row: JournalW; at: number; empty: boolean; emptySince: number }
@@ -213,9 +227,12 @@ export function applyCounterRows(world: World, snap: StateSnapshot): void {
   if (!own) return;
   if (own.jn) {
     const was = new Set(world.netJournal?.rewards.map(r => r.questId) ?? []);
+    const asked = world.netJournal?.voc?.at;
     world.netJournal = own.jn;
     world.completedQuests = new Set(own.jn.done);
     if (own.jn.rewards.some(r => !was.has(r.questId))) world.questRewardRequested = true;
+    // THE VOCATION SITES PER SEAT: a new calling ask opens this seat's menu, as the solo dwell asks.
+    if (own.jn.voc && own.jn.voc.at !== asked) world.vocationOfferRequested = true;
   }
   if (world.netCounters) world.netHarvest = own.hv ?? null; // a hosted world's shell (its zone message shipped the counters)
 }

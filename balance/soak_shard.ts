@@ -30,7 +30,15 @@
 //   --rove <sec>        THE ROVING SHADOW's visit length (SHARD_CFG.rove.sec; 0 = the focus alone)
 //   --tick-hz <n>       the host tick rate for this run (SHARD_CFG.tickHz; 60 ships) — a cost experiment
 //   --diet off          THE WIRE DIET switched off (WIRE_DIET_CFG.enabled): the pre-diet frames, the A/B
+//   --think off         THE THINKING EDGE switched off (THINKING_EDGE_CFG.enabled): every body thinks every tick, the A/B
+//   --govern on|off     THE GOVERNOR (GOVERNOR_CFG.enabled; it ships off): on, the cost dials move against the measured tick; off, today's admission law and the base rate, the A/B
+//   --walkmemo off      THE OBSTACLE MEMO switched off (WALK_MEMO_CFG.enabled): the mass walk's blocked() unmemoized, the A/B
 //   --report <path>     the JSON report (default balance/reports/soak_<stamp>.json, gitignored)
+//   --diagnostics       inclusive phase, worker, machine-load and checkpoint measurements
+//   --profile <path>    CPU profile of the measured window (diagnostic timing only)
+//   --window-at <ms>    earliest window start as Unix milliseconds, for paired runs
+//   --window-after-host <s> minimum host-running warm-up before the window, for serial repeats
+//   --conditions <s>    machine/concurrency conditions recorded verbatim in the report
 //   --thresholds <path> the gates (default balance/soak.config.json)
 //
 // Exit 0 = every gate held, 2 = a breach (each one named), 1 = the harness failed.
@@ -48,7 +56,12 @@ import { ShardHost, SHARD_CFG } from '../server/shardHost';
 import { SHARD_WIRE_CFG } from '../server/shardTransport';
 import { deriveSeed, seedGlobalRandom } from '../src/sim/rng';
 import { WIRE_DIET_CFG } from '../src/net/wireDiet'; // THE WIRE DIET's A/B switch (--diet off)
-import type { FleetBotStats, FleetCommand, FleetEvent } from './soak_bots';
+import type { FleetBotStats, FleetCommand, FleetEvent, FleetResponsiveness } from './soak_bots';
+import { ShardPerformance } from './shardPerformance';
+import { BODY_STATES, CENSUS_CFG, distanceCensus, type DistanceCensus } from '../server/distanceCensus'; // THE DISTANCE CENSUS per sample
+import { THINKING_EDGE_CFG } from '../server/thinkingEdge'; // THE THINKING EDGE's A/B switch (--think off)
+import { GOVERNOR_CFG, type GovernorStatus } from '../server/governor'; // THE GOVERNOR's A/B switch (--govern off) and its row
+import { WALK_MEMO_CFG } from '../server/walkMemo'; // THE OBSTACLE MEMO's A/B switch (--walkmemo off)
 
 export const SOAK_CFG = {
   bots: 10,
@@ -59,6 +72,8 @@ export const SOAK_CFG = {
   sampleSec: 5,
   /** The live heap is polled this often inside the window; each sample keeps its trough. */
   heapPollMs: 250,
+  /** THE SEEN RADIUS (px): the view a player can see across (CAMERA_CFG.zoom at 1080p to 1440p reads about 1,000 to 1,350 world units; the M6 plan §3.4). */
+  seenPx: 1000,
   /** Ticks closer than this to the previous tick's end ran inside the same pump wake. */
   wakeGapMs: 0.5,
   /** The slowest ticks listed (with when they landed) for the window and the warm-up. */
@@ -187,6 +202,7 @@ interface StatusView {
   seats: { id: string; dormant?: boolean }[];
   connections: number; actors: number;
   tickMsP50: number; tickMsP95: number;
+  governor: GovernorStatus;
 }
 interface Sample {
   t: number; seats: number; dormant: number; connections: number; actors: number;
@@ -198,7 +214,21 @@ interface Sample {
   livingMin: number; livingMean: number;
   /** THE SPREAD as it stands: the widest distance between two standing seats (px). */
   fleetSpreadPx: number;
+  /** THE PHASE METER's slice of this sample per phase (server/phaseMeter.ts): ms p50 / p95 / max over
+   *  the ticks the phase ran in, and its share of the sample's tick time ('#' rows are counts, share 0). */
+  phases: Record<string, PhaseSlice>;
+  /** THE DISTANCE CENSUS at the sample's edge (server/distanceCensus.ts). */
+  census: DistanceCensus;
+  /** THE GOVERNOR's row at the sample's edge (server/governor.ts): the signal, the standing budget, the rate, the state. */
+  governor: GovernorStatus;
+  /** THE DOODAD CHURN: moves of the global doodad revision and of the nav-block family's revision in this sample,
+   *  the doodad count, and the mass walk's obstacle-predicate calls per stepped tick (the pointInSolid lane). */
+  doodadRevMoves: number; navBlockRevMoves: number; doodads: number; blockedPerTick: number;
+  /** THE SEEN RADIUS: live foes within the view radius (SOAK_CFG.seenPx) of each standing seat — the least and the mean;
+   *  a dial acting beyond the view is invisible by design, so the living radius alone would under-read it. */
+  seenMin: number; seenMean: number;
 }
+interface PhaseSlice { calls: number; p50: number; p95: number; max: number; share: number }
 type Stamped = FleetEvent & { at: number };
 
 let fleetRef: ChildProcess | null = null;
@@ -219,14 +249,21 @@ async function main(): Promise<number> {
   const spread = Math.max(0, num(args.spread) ?? 0); // THE SPREAD (the fleet's anchors)
   const roveArg = num(args.rove);
   const tickHzArg = num(args['tick-hz']);
+  const windowAfterHostSec = Math.max(0, num(args['window-after-host']) ?? 0);
   if (tickHzArg !== undefined && tickHzArg > 0) SHARD_CFG.tickHz = tickHzArg; // THE TICK RATE experiment (SHARD_CFG.tickHz; 60 ships)
   if (roveArg !== undefined) SHARD_CFG.rove.sec = Math.max(0, roveArg); // THE ROVING SHADOW's dial, before the host stands
+  if (typeof args.think === 'string' && /^(0|off|false|no)$/i.test(args.think)) THINKING_EDGE_CFG.enabled = false; // THE THINKING EDGE's A/B (--think off)
+  if (typeof args.govern === 'string') GOVERNOR_CFG.enabled = !/^(0|off|false|no)$/i.test(args.govern); // THE GOVERNOR's A/B (--govern on | off; it ships off)
+  if (typeof args.walkmemo === 'string' && /^(0|off|false|no)$/i.test(args.walkmemo)) WALK_MEMO_CFG.enabled = false; // THE OBSTACLE MEMO's A/B (--walkmemo off)
   if (typeof args.diet === 'string' && /^(0|off|false|no)$/i.test(args.diet)) WIRE_DIET_CFG.enabled = false; // THE WIRE DIET's A/B
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const reportPath = typeof args.report === 'string' ? args.report : `${SOAK_CFG.reportDir}/soak_${stamp}.json`;
   const gatesPath = typeof args.thresholds === 'string' ? args.thresholds : SOAK_CFG.thresholds;
   const gates = readGates(gatesPath);
   const seedHex = '0x' + seed.toString(16).padStart(8, '0');
+  // Optional phase/worker/save evidence; --profile captures only the load window.
+  const shardPerformance = args.diagnostics || typeof args.profile === 'string'
+    ? new ShardPerformance(typeof args.profile === 'string' ? args.profile : undefined) : null;
 
   // ---- the host -------------------------------------------------------------
   const hostLog: string[] = [];
@@ -249,6 +286,7 @@ async function main(): Promise<number> {
   const url = `ws://127.0.0.1:${port}`;
   const hearth = host.hearthSeat();
   const net = host.net;
+  shardPerformance?.bind(host);
   const world = host.worldmass ? 'the Unbroken Wilds' : 'classic';
   console.log(`[soak] ${world} ${seedHex} stood in ${bootSec.toFixed(1)} s on ${url}; ${bots} bots, a ${seconds} s window`);
 
@@ -258,6 +296,8 @@ async function main(): Promise<number> {
     tickMs: [] as number[], tickAt: [] as number[], wakes: 0,
     snapBytes: [] as number[], bytesSnap: 0, bytesZone: 0, zoneSends: 0, zoneToSends: 0,
     inputs: 0, seatTicks: 0,
+    /** THE PHASE METER's rows per tick of the window (the host's `phases.last` after each tick), per phase. */
+    phases: new Map<string, number[]>(),
   };
   const warm = { on: false, t0: 0, tickMs: [] as number[], tickAt: [] as number[], wakes: 0 };
   const realTick = host.tick.bind(host);
@@ -275,8 +315,36 @@ async function main(): Promise<number> {
         lane.tickMs.push(t1 - t0); lane.tickAt.push(t0); if (wake) lane.wakes++;
         const kp = host.keeper.actor.pos, px = Math.hypot(kp.x - kx, kp.y - ky);
         if (px > SOAK_CFG.shadowJumpPx) jumps.push({ at: t0, px });
+        if (lane === win) for (const [name, v] of host.phases.last) { // THE PHASE METER: this tick's rows into the window
+          let rows = win.phases.get(name);
+          if (!rows) win.phases.set(name, rows = []);
+          rows.push(v);
+        }
       }
     }
+  };
+  // THE PHASE METER's slices: a sample's ticks per phase, and the whole window's.
+  const prevPhase = new Map<string, number>();
+  const phaseRows = (rows: number[], tickSum: number, count: boolean): PhaseSlice => {
+    const part = sorted(rows), sum = part.reduce((a, b) => a + b, 0);
+    return { calls: part.length, p50: r2(pct(part, 0.5)), p95: r2(pct(part, 0.95)), max: r2(part[part.length - 1] ?? 0),
+      share: count ? 0 : Math.round(sum / Math.max(1e-6, tickSum) * 1e4) / 1e4 };
+  };
+  const phaseSlice = (sinceTick: number): Record<string, PhaseSlice> => {
+    const tickSum = win.tickMs.slice(sinceTick).reduce((a, b) => a + b, 0);
+    const out: Record<string, PhaseSlice> = {};
+    for (const [name, rows] of [...win.phases].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const from = prevPhase.get(name) ?? 0;
+      prevPhase.set(name, rows.length);
+      if (rows.length > from) out[name] = phaseRows(rows.slice(from), tickSum, name.startsWith('#'));
+    }
+    return out;
+  };
+  const phaseWindow = (): Record<string, PhaseSlice> => {
+    const tickSum = win.tickMs.reduce((a, b) => a + b, 0);
+    const out: Record<string, PhaseSlice> = {};
+    for (const [name, rows] of [...win.phases].sort((a, b) => a[0].localeCompare(b[0]))) out[name] = phaseRows(rows, tickSum, name.startsWith('#'));
+    return out;
   };
   // Per-snapshot size from the transport's own counters around the send: the
   // frame is written once per socket, so bytes ÷ frames is one snapshot's size.
@@ -307,6 +375,23 @@ async function main(): Promise<number> {
     for (const e of list.getEntries()) gcs.push({ start: e.startTime, dur: e.duration, kind: (e as unknown as { detail?: { kind?: number } }).detail?.kind ?? 0 }); // node's entry (the DOM lib's type lacks detail)
   });
   gcObs.observe({ entryTypes: ['gc'] });
+  // THE DOODAD CHURN + THE OBSTACLE PREDICATE (harness-side, like the diagnostics): count the mass walk's
+  // `obstacles.blocked` calls through an own-property wrap on the walk field's obstacles object, re-wrapped if the
+  // runtime re-seats it, and read the doodad revisions per sample. The predicate funnels into World.pointInSolid
+  // (10 percent of the spread tick in the lane's profile), and the walk's path cache keys on the GLOBAL doodad
+  // revision, so the churn says how often that cache can hold.
+  const churn = { blocked: 0, wrapped: null as object | null };
+  const wrapObstacles = (): void => {
+    const walk = host.world.walk as unknown as { obstacles?: { blocked(x: number, y: number): boolean; revision(): string } } | null;
+    const obs = walk?.obstacles;
+    if (!obs || obs === churn.wrapped) return;
+    const inner = obs.blocked.bind(obs);
+    obs.blocked = (x: number, y: number): boolean => { if (win.open) churn.blocked++; return inner(x, y); };
+    churn.wrapped = obs;
+  };
+  wrapObstacles();
+  const navBlockRev = (): number => host.world.doodadFamilyRev('nav-block');
+  const churnPrev = { doodadRev: host.world.doodadRev, navBlockRev: navBlockRev(), blocked: 0 };
   // THE DORMANT SEAT, as the shard saw it (the host's own ears run first).
   const dormantSeen: { id: string; at: number; held: boolean }[] = [];
   const resumeSeen: { id: string; at: number }[] = [];
@@ -324,7 +409,7 @@ async function main(): Promise<number> {
     drop: null as (Extract<Stamped, { t: 'dropped' }> & { rt: number }) | null,
     dropSkip: null as string | null,
     resume: null as (Extract<Stamped, { t: 'resumed' }> & { rt: number }) | null,
-    stats: null as { bots: FleetBotStats[]; stepHz: number; clock: string } | null,
+    stats: null as { bots: FleetBotStats[]; stepHz: number; clock: string; responsiveness: FleetResponsiveness } | null,
     deaths: 0, rejoins: 0, fleetExited: false, ending: false,
   };
   const fleetPath = fileURLToPath(new URL('./soak_bots.ts', import.meta.url));
@@ -332,7 +417,7 @@ async function main(): Promise<number> {
     '--url', url, '--bots', String(bots), '--hearth', `${hearth.x},${hearth.y}`, '--seed', String(seed), '--spread', String(spread),
     '--classes', SOAK_CFG.classes.join(','), '--stagger-ms', String(SOAK_CFG.staggerMs),
     '--drop-bot', String(dropOn ? bots - 1 : -1),
-    '--life-sec', String(Math.ceil(seconds + SOAK_CFG.warmupTimeoutSec + SOAK_CFG.partyWaitSec + 120)),
+    '--life-sec', String(Math.ceil(seconds + Math.max(SOAK_CFG.warmupTimeoutSec + SOAK_CFG.partyWaitSec, windowAfterHostSec) + 120)),
   ], { execArgv: process.execArgv, stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
   fleetRef = fleet;
   const tell = (c: FleetCommand): void => { try { fleet.send(c); } catch (e) { err(`the fleet did not hear '${c.t}': ${String(e)}`); } };
@@ -363,7 +448,7 @@ async function main(): Promise<number> {
       case 'rejoined': ev.rejoins++; break;
       case 'lost': err(`bot ${e.bot} (${e.seat}) lost the shard without a cut`); break;
       case 'error': err(`fleet${e.bot === null ? '' : ` bot ${e.bot}`}: ${e.message}`); break;
-      case 'stats': ev.stats = { bots: e.bots, stepHz: e.stepHz, clock: e.clock }; break;
+      case 'stats': ev.stats = { bots: e.bots, stepHz: e.stepHz, clock: e.clock, responsiveness: e.responsiveness }; break;
     }
   });
   fleet.on('exit', code => { ev.fleetExited = true; if (!ev.ending) err(`the fleet exited before the end (code ${code})`); });
@@ -377,14 +462,24 @@ async function main(): Promise<number> {
     err(`the warm-up seated ${seated.size} of ${bots} bots in ${SOAK_CFG.warmupTimeoutSec} s`);
   if (bots >= 2) await until(() => ev.party !== null || ev.fleetExited, SOAK_CFG.partyWaitSec * 1000);
   await sleep(SOAK_CFG.settleSec * 1000);
+  // ShardPerformance serial comparisons align by host age, excluding unequal
+  // module-load and boot times. Keep recording every tick through this warm-up.
+  if (windowAfterHostSec > 0) {
+    const readyAt = warm.t0 + windowAfterHostSec * 1000;
+    await until(() => performance.now() >= readyAt, Math.max(0, readyAt - performance.now()) + 1000);
+  }
   warm.on = false;
   const warmSec = (performance.now() - warm.t0) / 1000, warmDropped = host.droppedTicks - warmDropped0;
 
   // ---- the window -----------------------------------------------------------
   // The forced collection stalls the loop; the pump's catch-up (and any drop it
   // books) settles before the window opens, so the soak never bills its own GC.
+  const windowAt = num(args['window-at']);
+  if (windowAt !== undefined) await until(() => Date.now() >= windowAt, Math.max(0, windowAt - Date.now()) + 1000);
   const heapStartMB = liveHeapMB();
   await sleep(100);
+  await shardPerformance?.start();
+  const windowStartedAt = Date.now();
   win.t0 = performance.now();
   win.open = true;
   const base = { ticks: host.ticks, dropped: host.droppedTicks, bytes: net.bytesOut, frames: net.framesOut };
@@ -396,29 +491,41 @@ async function main(): Promise<number> {
   // THE LIVING RADIUS: how alive the world is around EACH player (the premise the
   // focus law breaks: a seat far from the shadow meets no births).
   const popRadius = host.world.massRuntime?.config.populationRadius ?? 1300;
-  const livingRadius = (): { min: number; mean: number } => {
+  const foesWithin = (radius: number): { min: number; mean: number } => {
     const standing = host.units.allSeats().filter(s => !s.actor.dead && !s.actor.downed && !net.isDormant(s.id));
     if (!standing.length) return { min: 0, mean: 0 };
     const counts = standing.map(s => (host.units.worldOf(s.id) ?? host.world).actors.filter(a => a.team === 'enemy' && !a.dead
-      && Math.hypot(a.pos.x - s.actor.pos.x, a.pos.y - s.actor.pos.y) <= popRadius).length);
+      && Math.hypot(a.pos.x - s.actor.pos.x, a.pos.y - s.actor.pos.y) <= radius).length);
     return { min: Math.min(...counts), mean: counts.reduce((a, b) => a + b, 0) / counts.length };
   };
+  const livingRadius = (): { min: number; mean: number } => foesWithin(popRadius);
+  // THE SEEN RADIUS: the same count inside the view (the governor's receipt: a dial acting beyond the view is invisible by design).
+  const seenRadius = (): { min: number; mean: number } => foesWithin(SOAK_CFG.seenPx);
   const partyStands = (): boolean => {
     const p = ev.party;
     return !!p && host.parties.rows().some(r => r.members.includes(p.seats[0]) && r.members.includes(p.seats[1]));
   };
   const sample = (): void => {
+    shardPerformance?.sample(host);
     const ms = performance.now() - win.t0, sec = Math.max(1e-3, (ms - prev.ms) / 1000);
     const ticks = sorted(win.tickMs.slice(prev.tick)), snaps = sorted(win.snapBytes.slice(prev.snap));
     const st = host.status() as unknown as StatusView;
     pollHeap();
     const dormant = st.seats.filter(s => s.dormant).length;
     const bytes = net.bytesOut - prev.bytes, seatTicks = win.seatTicks - prev.seatTicks;
-    const living = livingRadius();
+    const living = livingRadius(), seen = seenRadius();
     const standingNow = host.units.allSeats().filter(x => !x.actor.dead && !x.actor.downed);
     let fleetSpreadPx = 0;
     for (const a of standingNow) for (const b of standingNow) fleetSpreadPx = Math.max(fleetSpreadPx, Math.hypot(a.actor.pos.x - b.actor.pos.x, a.actor.pos.y - b.actor.pos.y));
+    wrapObstacles(); // a re-seated runtime hands the walk a fresh obstacles object
+    const churnNow = { doodadRev: host.world.doodadRev, navBlockRev: navBlockRev(), blocked: churn.blocked };
+    const churnRow = { doodadRevMoves: churnNow.doodadRev - churnPrev.doodadRev, navBlockRevMoves: churnNow.navBlockRev - churnPrev.navBlockRev,
+      doodads: host.world.doodads.length, blockedPerTick: r2((churnNow.blocked - churnPrev.blocked) / Math.max(1, ticks.length)) };
+    Object.assign(churnPrev, churnNow);
     samples.push({
+      ...churnRow, // THE DOODAD CHURN + the obstacle predicate's calls per tick
+      phases: phaseSlice(prev.tick), census: distanceCensus(host.units.worlds()), // THE PHASE METER + THE DISTANCE CENSUS
+      governor: st.governor, seenMin: seen.min, seenMean: r2(seen.mean), // THE GOVERNOR's row + THE SEEN RADIUS
       livingMin: living.min, livingMean: r2(living.mean), fleetSpreadPx: Math.round(fleetSpreadPx),
       t: r2(ms / 1000), seats: st.seats.length, dormant, connections: st.connections, actors: st.actors,
       ticks: ticks.length, wakes: win.wakes - prev.wakes,
@@ -445,6 +552,7 @@ async function main(): Promise<number> {
     if (b >= seconds || ev.fleetExited) break;
   }
   win.open = false;
+  shardPerformance?.close();
   clearInterval(heapPoller);
   const winEnd = performance.now();
   const windowSec = (winEnd - win.t0) / 1000;
@@ -452,6 +560,7 @@ async function main(): Promise<number> {
   const partyAtEnd = partyStands();
   const heapEndMB = liveHeapMB();
   if (host.broken) err('THE BREAKER tripped: the simulate phase faulted every tick');
+  const performanceEvidence = await shardPerformance?.finish(host);
 
   // ---- teardown -------------------------------------------------------------
   ev.ending = true;
@@ -526,7 +635,7 @@ async function main(): Promise<number> {
 
   const cpu = cpus();
   const report = {
-    soak: { version: 1, at: new Date().toISOString(), world, seed: seedHex, bots, seconds, windowSec: r2(windowSec), classes: SOAK_CFG.classes, drop: dropOn, diet: WIRE_DIET_CFG.enabled },
+    soak: { version: 1, at: new Date().toISOString(), world, seed: seedHex, bots, seconds, windowSec: r2(windowSec), classes: SOAK_CFG.classes, drop: dropOn, diet: WIRE_DIET_CFG.enabled, think: THINKING_EDGE_CFG.enabled, govern: GOVERNOR_CFG.enabled, walkmemo: WALK_MEMO_CFG.enabled },
     machine: { platform: process.platform, release: release(), node: process.version, cpus: cpu.length, cpuModel: cpu[0]?.model.trim() ?? '?', memGB: Math.round(totalmem() / 1024 ** 3) },
     host: { bootSec: r2(bootSec), tickHz: SHARD_CFG.tickHz, stateHz: SHARD_CFG.stateHz, wireCaps: { maxSeats: SHARD_WIRE_CFG.maxSeats, maxConnections: SHARD_WIRE_CFG.maxConnections, maxPerIp: 'unbounded' } },
     warmup: {
@@ -541,6 +650,24 @@ async function main(): Promise<number> {
       slowest: slowest(win.tickMs, win.tickAt, win.t0, SOAK_CFG.slowestTicks, winGcs, jumps),
     },
     living: { radiusPx: popRadius, spreadPx: spread, roveSec: SHARD_CFG.rove.sec, minOfMins: samples.length ? Math.min(...samples.map(x => x.livingMin)) : 0, meanOfMeans: r2(mean(samples.map(x => x.livingMean))) }, // THE LIVING RADIUS
+    seen: { radiusPx: SOAK_CFG.seenPx, minOfMins: samples.length ? Math.min(...samples.map(x => x.seenMin)) : 0, meanOfMeans: r2(mean(samples.map(x => x.seenMean))) }, // THE SEEN RADIUS
+    governor: { // THE GOVERNOR over the window: her floor, the dials' extremes and the final row (each sample's own row rides `samples`)
+      enabled: GOVERNOR_CFG.enabled, floor: GOVERNOR_CFG.floor, gateMs: GOVERNOR_CFG.gateMs,
+      budgetLeast: samples.reduce<number | null>((m, x) => x.governor.budget === null ? m : m === null ? x.governor.budget.total : Math.min(m, x.governor.budget.total), null),
+      perGroupLeast: samples.reduce<number | null>((m, x) => x.governor.budget === null ? m : m === null ? x.governor.budget.perGroup : Math.min(m, x.governor.budget.perGroup), null),
+      hzLeast: samples.length ? Math.min(...samples.map(x => x.governor.tickHz)) : SHARD_CFG.tickHz,
+      states: samples.map(x => x.governor.state), moves: samples.length ? samples[samples.length - 1].governor.moves : 0,
+      final: host.governor.status(),
+    },
+    phases: phaseWindow(), // THE PHASE METER over the whole window: ms p50 / p95 / max per phase and its share of the tick time ('<unit>/<phase>' rows per unit)
+    census: { // THE DISTANCE CENSUS: the samples' means (each sample's own rows ride `samples`)
+      idleSec: CENSUS_CFG.idleSec, nearPx: CENSUS_CFG.nearPx, bandEdges: CENSUS_CFG.bands,
+      actors: r2(mean(samples.map(x => x.census.actors))),
+      states: Object.fromEntries(BODY_STATES.map(st => [st, r2(mean(samples.map(x => x.census.states[st])))])),
+      bands: CENSUS_CFG.bands.map((_, i) => r2(mean(samples.map(x => x.census.bands[i])))).concat([r2(mean(samples.map(x => x.census.bands[CENSUS_CFG.bands.length])))]),
+      idleBands: CENSUS_CFG.bands.map((_, i) => r2(mean(samples.map(x => x.census.idleBands[i])))).concat([r2(mean(samples.map(x => x.census.idleBands[CENSUS_CFG.bands.length])))]),
+      edgeable: { mean: r2(mean(samples.map(x => x.census.edgeable))), min: samples.length ? Math.min(...samples.map(x => x.census.edgeable)) : 0, max: samples.length ? Math.max(...samples.map(x => x.census.edgeable)) : 0 },
+    },
     shadow: { jumps: winJumps.length, jumpTicksMeanMs: r2(mean(winJumps.map(j => win.tickMs[win.tickAt.indexOf(j.at)] ?? 0))), at: winJumps.map(j => ({ sec: rel(j.at), px: Math.round(j.px) })) },
     gc: gcSummary,
     pump: { wakesPerSec: r2(win.wakes / windowSec), ticksPerWake: r2(win.tickMs.length / Math.max(1, win.wakes)) },
@@ -552,7 +679,17 @@ async function main(): Promise<number> {
       byKind: { snapshots: perClient(win.bytesSnap), zone: perClient(win.bytesZone), other: perClient(bytes - win.bytesSnap - win.bytesZone) },
       zoneBroadcasts: win.zoneSends, zoneToOne: win.zoneToSends,
     },
-    inputs: { fed: r2(fed), hostSeenHzPerSeat: r2(fed * SHARD_CFG.tickHz), fleetStepHz: fleetStats?.stepHz ?? null, fleetClock: fleetStats?.clock ?? null },
+    // A nominal 60 Hz multiplier overstates service when most ticks are dropped.
+    // This is drained input batches per seat per wall second, not client frames
+    // or accepted movement seconds (a batch can contain several honest frames).
+    inputs: { fed: r2(fed), hostSeenHzPerSeat: r2(fed * dTicks / windowSec),
+      nominalHzPerSeat: r2(fed * SHARD_CFG.tickHz), steppedHz: r2(dTicks / windowSec),
+      fleetStepHz: fleetStats?.stepHz ?? null, fleetClock: fleetStats?.clock ?? null },
+    responsiveness: fleetStats?.responsiveness ?? { status: 'unavailable', reason: 'The fleet did not return responsiveness observations.' },
+    performanceEvidence,
+    conditions: { note: typeof args.conditions === 'string' ? args.conditions : null,
+      windowAfterHostSec, hostElapsedAtWindowSec: r2((win.t0 - warm.t0) / 1000),
+      windowAt: windowAt ?? null, windowStartedAt, startDelayMs: windowAt === undefined ? null : windowStartedAt - windowAt },
     heap: { startMB: r2(heapStartMB), endMB: r2(heapEndMB), growthMB: r2(heapGrowth), allowanceMB: r2(heapAllowance), forcedGc: !!fullGc, troughSlopeMBPerMin: r2(troughSlope) },
     faults,
     dormant: {
@@ -577,14 +714,36 @@ async function main(): Promise<number> {
   const L = (s: string | number, w: number): string => String(s).padStart(w);
   const R = (s: string | number, w: number): string => String(s).padEnd(w);
   const out: string[] = [];
-  out.push('', `THE SOAK  ${world} ${seedHex}  ·  ${bots} bots${spread ? ` spread ${spread} px` : ''}${host.worldmass ? `  ·  rove ${SHARD_CFG.rove.sec ? SHARD_CFG.rove.sec + ' s' : 'off'}` : ''}  ·  diet ${WIRE_DIET_CFG.enabled ? 'on' : 'off'}  ·  ${r2(windowSec)} s window  ·  warm-up ${r2(warmSec)} s  ·  boot ${r2(bootSec)} s`);
+  out.push('', `THE SOAK  ${world} ${seedHex}  ·  ${bots} bots${spread ? ` spread ${spread} px` : ''}${host.worldmass ? `  ·  rove ${SHARD_CFG.rove.sec ? SHARD_CFG.rove.sec + ' s' : 'off'}` : ''}  ·  diet ${WIRE_DIET_CFG.enabled ? 'on' : 'off'}  ·  edge ${THINKING_EDGE_CFG.enabled ? 'on' : 'off'}  ·  govern ${GOVERNOR_CFG.enabled ? 'on' : 'off'}  ·  ${r2(windowSec)} s window  ·  warm-up ${r2(warmSec)} s  ·  boot ${r2(bootSec)} s`);
   out.push(`  ${report.machine.cpuModel} × ${cpu.length}  ·  ${process.platform} ${release()}  ·  node ${process.version}  ·  the fleet in its own process`);
   out.push('', `${L('t s', 6)} ${L('seats', 5)} ${L('conn', 4)} ${L('actors', 6)}   ${L('tick p50', 8)} ${L('p95', 6)} ${L('max', 6)} ${L('drop', 4)} ${L('wake/s', 6)} ${L('fed', 4)}   ${L('snap kB p95', 11)} ${L('out kB/s/cl', 11)}   ${L('heap MB', 7)}   ${L('living', 9)} ${L('spread', 6)}`);
   for (const s of samples)
     out.push(`${L(s.t.toFixed(1), 6)} ${L(s.seats + (s.dormant ? '*' : ''), 5)} ${L(s.connections, 4)} ${L(s.actors, 6)}   ${L(s.tickP50.toFixed(2), 8)} ${L(s.tickP95.toFixed(2), 6)} ${L(s.tickMax.toFixed(1), 6)} ${L(s.dropped, 4)} ${L((s.wakes / SOAK_CFG.sampleSec).toFixed(1), 6)} ${L(Math.round(s.fed * 100) + '%', 4)}   ${L(s.snapKBp95.toFixed(1), 11)} ${L(s.outKBpsPerClient.toFixed(1), 11)}   ${L(s.heapTroughMB.toFixed(1), 7)}   ${L(s.livingMin + '/' + s.livingMean.toFixed(1), 9)} ${L(s.fleetSpreadPx, 6)}`);
   out.push(`  (heap MB = the window's trough; fed = seat-ticks that had a client input; living = live foes within ${popRadius} px of each standing seat, least / mean${samples.some(s => s.dormant) ? '; * a seat lay dormant' : ''})`);
+  // THE PHASE METER per sample: every unit summed; ms p50/p95 over the ticks the phase ran in; % = share of the sample's tick time.
+  const phv = (s: Sample, name: string): string => { const p = s.phases[name]; return p ? `${p.p50.toFixed(1)}/${p.p95.toFixed(1)}` : '-'; };
+  const phs = (s: Sample, ...names: string[]): string => { let sum = 0, any = false; for (const n of names) { const p = s.phases[n]; if (p) { sum += p.share; any = true; } } return any ? Math.round(sum * 100) + '%' : '-'; };
+  out.push('', `${L('t s', 6)}   ${L('input', 9)} ${L('apply', 9)} ${L('ai', 11)} ${L('update', 11)} ${L('runtime', 11)} ${L('settle', 9)} ${L('drain', 9)} ${L('desks', 9)} ${L('serialize', 9)} ${L('send', 9)}   ${L('ai%', 4)} ${L('upd%', 4)} ${L('rt%', 4)} ${L('wire%', 5)}   ${L('ai ran', 6)}`);
+  for (const s of samples)
+    out.push(`${L(s.t.toFixed(1), 6)}   ${L(phv(s, 'input'), 9)} ${L(phv(s, 'inputs.apply'), 9)} ${L(phv(s, 'ai'), 11)} ${L(phv(s, 'update'), 11)} ${L(phv(s, 'runtime'), 11)} ${L(phv(s, 'settle'), 9)} ${L(phv(s, 'drain'), 9)} ${L(phv(s, 'desks'), 9)} ${L(phv(s, 'wire.serialize'), 9)} ${L(phv(s, 'wire.send'), 9)}   ${L(phs(s, 'ai'), 4)} ${L(phs(s, 'update'), 4)} ${L(phs(s, 'runtime'), 4)} ${L(phs(s, 'wire.serialize', 'wire.send', 'wire.zone'), 5)}   ${L(s.phases['#ai.ran'] ? Math.round(s.phases['#ai.ran'].p50) : '-', 6)}`);
+  out.push(`  (THE PHASE METER: ms p50/p95 per phase of the host tick, every unit summed; % = the phase's share of the sample's tick time; runtime = the mass runtime's update, inside update; ai ran = bodies the AI loop walked, p50)`);
+  // THE DISTANCE CENSUS per sample: bodies by state, then bodies / idle bodies per distance band to the nearest standing seat.
+  const bandLabels = CENSUS_CFG.bands.map(b => `<${b}`).concat([`${CENSUS_CFG.bands[CENSUS_CFG.bands.length - 1]}+`]);
+  out.push('', `${L('t s', 6)} ${L('bodies', 6)}   ${BODY_STATES.map(st => L(st.slice(0, 6), 6)).join(' ')}   ${bandLabels.map(b => L(b, 8)).join(' ')}   ${L('edge', 5)}`);
+  for (const s of samples)
+    out.push(`${L(s.t.toFixed(1), 6)} ${L(s.census.actors, 6)}   ${BODY_STATES.map(st => L(s.census.states[st], 6)).join(' ')}   ${s.census.bands.map((n, i) => L(n + '/' + s.census.idleBands[i], 8)).join(' ')}   ${L(s.census.edgeable, 5)}`);
+  out.push(`  (THE DISTANCE CENSUS: one class per body in its own World (a seat's own body, a seat's minion, dead, scenery, dormant, held by a state machine, engaged, casting, alerted, struck or striking within ${CENSUS_CFG.idleSec} s, a busy squad, idle); bands = bodies/idle by distance to the nearest standing seat; edge = idle bodies beyond ${CENSUS_CFG.nearPx} px of every seat, THE THINKING EDGE's candidates)`);
+  // THE GOVERNOR per sample: the signal it read, the budget it holds, the rate it set, and what the players could see.
+  out.push('', `${L('t s', 6)} ${L('state', 10)} ${L('ewma', 7)} ${L('p95 2s', 7)}   ${L('budget', 7)} ${L('/group', 6)} ${L('groups', 6)} ${L('live', 5)} ${L('hz', 3)}   ${L('seen', 9)} ${L('moves', 5)}`);
+  for (const s of samples) {
+    const gv = s.governor;
+    out.push(`${L(s.t.toFixed(1), 6)} ${L(gv.state, 10)} ${L(gv.ewmaMs.toFixed(1), 7)} ${L(gv.p95Ms.toFixed(1), 7)}   ${L(gv.budget ? gv.budget.total : 'law', 7)} ${L(gv.budget ? gv.budget.perGroup : '-', 6)} ${L(gv.budget ? gv.budget.groups : '-', 6)} ${L(gv.live ?? '-', 5)} ${L(gv.tickHz, 3)}   ${L(s.seenMin + '/' + s.seenMean.toFixed(1), 9)} ${L(gv.moves, 5)}`);
+  }
+  out.push(`  (THE GOVERNOR: ewma and the 2 s p95 of tick ms are its signal; budget = the standing population budget over every neighborhood group ("law" = today's admission law, none set) and its per-group limit; hz = the tick rate it holds; seen = live foes within ${SOAK_CFG.seenPx} px of each standing seat, least / mean; moves = dial moves so far${GOVERNOR_CFG.enabled ? '' : '; the governor is OFF (--govern off)'})`);
   const k = report.wire.byKind;
   const slow = report.tick.slowest.map(x => `${x.ms} ms @ ${x.atSec} s${x.jumpPx ? ` (shadow jump ${x.jumpPx} px)` : ''}${x.gcMs >= 1 ? ` (gc ${x.gcMs})` : ''}`).join(', ');
+  const response = fleetStats?.responsiveness?.aggregate;
+  const responseUpper = (n: number | null, count: number): string => n === null ? count ? '>60000' : 'none' : '<=' + r2(n);
   const rows: [string, string][] = [
     ['tick p50 / p95 / p99 / max', `${report.tick.p50} / ${report.tick.p95} / ${report.tick.p99} / ${report.tick.max} ms over ${ticks.length} ticks (budget ${report.tick.budgetMs} ms)`],
     ['worst 5 s window', worst ? `p95 ${worst.tickP95} ms, max ${worst.tickMax} ms, ${worst.dropped} dropped (window ending ${worst.t} s)` : 'none'],
@@ -595,10 +754,20 @@ async function main(): Promise<number> {
     ['shadow jumps', host.worldmass ? `${report.shadow.jumps} (the keeper moved to another focus seat; those ticks averaged ${report.shadow.jumpTicksMeanMs} ms)` : 'n/a (classic)'],
     ['the living radius', `least ${report.living.minOfMins}, mean ${report.living.meanOfMeans} foes within ${popRadius} px of a standing seat${spread ? ` (bots spread ${spread} px)` : ''}${host.worldmass ? ` · rove ${SHARD_CFG.rove.sec ? SHARD_CFG.rove.sec + ' s, ' + ((host.status() as { rove?: { hops: number } }).rove?.hops ?? 0) + ' hops' : 'off'}` : ''}`],
     ['inputs fed', `${r2(fed * 100)}% of seat-ticks (${report.inputs.hostSeenHzPerSeat} Hz per seat; the fleet sent ${fleetStats?.stepHz ?? '?'} Hz on a ${fleetStats?.clock ?? '?'} clock)`],
+    ['the phases (window)', Object.entries(report.phases).filter(([n]) => !n.includes('/') && !n.startsWith('#')).map(([n, p]) => `${n} ${Math.round(p.share * 100)}% (p95 ${p.p95} ms)`).join(' · ') || 'none'],
+    ['the census (mean)', `${report.census.actors} bodies: ${BODY_STATES.map(st => `${st} ${report.census.states[st]}`).join(', ')}; idle beyond ${CENSUS_CFG.nearPx} px of every seat ${report.census.edgeable.mean} (least ${report.census.edgeable.min})`],
+    ['the seen radius', `least ${report.seen.minOfMins}, mean ${report.seen.meanOfMeans} foes within ${SOAK_CFG.seenPx} px of a standing seat (the view)`],
+    ['the governor', GOVERNOR_CFG.enabled
+      ? `floor ${GOVERNOR_CFG.floor} a group, gate ${GOVERNOR_CFG.gateMs} ms; budget least ${report.governor.budgetLeast ?? 'none set (today\'s law)'}${report.governor.perGroupLeast !== null ? ` (${report.governor.perGroupLeast} a group)` : ''}, rate least ${report.governor.hzLeast} Hz, ${report.governor.moves} moves; states ${[...new Set(report.governor.states)].join('/')}; at the end ${report.governor.final.state}, ${report.governor.final.budget ? report.governor.final.budget.total : 'law'}, ${report.governor.final.tickHz} Hz${report.governor.final.seam ? '' : ' (no seam: cost-only)'}`
+      : 'OFF (--govern off): today\'s law and the base rate throughout'],
+    ['sequence service (fleet lifetime)', response ? `p95 ${responseUpper(response.serviceRtt.p95UpperMs, response.serviceRtt.count)}, p99 ${responseUpper(response.serviceRtt.p99UpperMs, response.serviceRtt.count)}, max ${response.serviceRtt.maxMs === null ? 'none' : r2(response.serviceRtt.maxMs)} ms; ${response.counts.covered} covered, ${response.counts.censored} censored, ${response.pendingAtFinish} pending at end, ${response.counts.ringOverflow} overflow; ${response.status}` : 'unavailable'],
+    ['snapshot silence (fleet lifetime)', response ? `max ${r2(response.maxSnapshotSilenceMs)} ms; includes initial and unfinished gaps; service is not input-to-paint` : 'unavailable'],
     ['warm-up (not gated)', `${warm.tickMs.length} ticks, p95 ${report.warmup.tickP95} ms, max ${report.warmup.tickMax} ms, ${warmDropped} dropped`],
     ['snapshot bytes p50 / p95 / max', `${r2(pct(snaps, 0.5) / 1000)} / ${r2(pct(snaps, 0.95) / 1000)} / ${r2((snaps[snaps.length - 1] ?? 0) / 1000)} kB over ${snaps.length} snapshots`],
     ['outbound per client', `${report.wire.kBpsPerClient} kB/s (snapshots ${k.snapshots}, zone ${k.zone}, other ${k.other}); ${win.zoneSends} zone re-ships`],
     ['heap (live, forced GC)', `${r2(heapStartMB)} -> ${r2(heapEndMB)} MB (${heapGrowth >= 0 ? '+' : ''}${r2(heapGrowth)} MB; trough slope ${r2(troughSlope)} MB/min)${fullGc ? '' : ' [no forced GC: raw readings]'}`],
+    ['the obstacle memo', WALK_MEMO_CFG.enabled ? (() => { const m = host.walkMemo.status(); return `${m.installed ? 'installed' : 'NOT installed'}: ${m.hits} hits, ${m.misses} misses (${m.hits + m.misses ? Math.round(m.hits / (m.hits + m.misses) * 100) : 0}% hit), ${m.clears} clears, ${m.entries} entries at the end`; })() : 'OFF (--walkmemo off): the walk\'s blocked() unmemoized'],
+    ['the doodad churn', `global revision +${samples.reduce((a, s) => a + s.doodadRevMoves, 0)} over the window (${r2(samples.reduce((a, s) => a + s.doodadRevMoves, 0) / Math.max(1e-3, windowSec))}/s), nav-block family +${samples.reduce((a, s) => a + s.navBlockRevMoves, 0)} (${r2(samples.reduce((a, s) => a + s.navBlockRevMoves, 0) / Math.max(1e-3, windowSec))}/s); ${samples.length ? samples[samples.length - 1].doodads : 0} doodads at the end; the walk's obstacle predicate ${r2(mean(samples.map(s => s.blockedPerTick)))} calls a tick (p95 of samples ${r2(pct(sorted(samples.map(s => s.blockedPerTick)), 0.95))})`],
     ['faults', String(faults)],
     ['dormant seat', resumeNote],
     ['party', partyNote],
