@@ -433,6 +433,13 @@ export class Renderer {
     const idle: (f: () => void) => unknown =
       typeof requestIdleCallback !== 'undefined' ? requestIdleCallback : (f) => setTimeout(f, 400);
     idle(() => { try { canvasCapsReport(); } catch { /* probe failure = default verdicts */ } });
+    // Procedural floor pixels share the ordinary run/zone trim and memory census.
+    registerVisCache({
+      id: 'massPainter',
+      count: () => this.massPainter.pixelStats().count,
+      bytes: () => this.massPainter.pixelStats().bytes,
+      onZoneSwap: () => this.massPainter.dispose(),
+    });
     // THE LITE TIER's per-kind composite bakes (drawLite) join the cache
     // steward: tiny (a handful of kinds), dropped at every zone boundary.
     registerVisCache({
@@ -2824,6 +2831,7 @@ export class Renderer {
       this.massPainter.drawWater(ctx, mass, this.cam.x, this.cam.y, vw, vh, world.time);
       return;
     }
+    this.massPainter.dispose(); // Leaving procedural ground releases its cached pixel buffers.
     // BOUNDLESS (the Descent): no edges — stream baked chunks around the
     // camera forever, and draw NO border.
     if (world.arena.boundless) {

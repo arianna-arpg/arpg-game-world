@@ -76,5 +76,15 @@ jobs:
           npx tsx balance/check_nativecheckpointdiagnostics.ts
           npx tsx balance/check_runtimediagnostics.ts
 
+      - name: Retained hosted calling and discovery regressions
+        run: |
+          npx tsx balance/check_nativemergevocation.ts
+          npx tsx balance/check_nativemergesites.ts
+
+      - name: Floor canvas lifetime and exact source regressions
+        run: |
+          npx tsx balance/check_masspainterpixels.ts
+          npx tsx balance/check_nativecanvasreleasesource.ts
+
       - name: Probes (green roster, fast lane)
         run: npm run probe

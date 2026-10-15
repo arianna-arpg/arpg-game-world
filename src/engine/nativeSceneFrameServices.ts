@@ -1315,7 +1315,7 @@ export function sceneUpdateVocationSites(nativeHost:NativeSceneCampaignFrameClos
         v.secret.discoveryText ?? `A calling takes notice of you. (${v.name})`, v.color, 16);
       nativeHost.markMetaDirty(nativeHost.localSeat);
     }
-  
+
     return;
   }
     const hosted = nativeHost.localSeat.keeper;

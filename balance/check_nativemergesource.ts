@@ -1,6 +1,6 @@
 /** Mutation, byte identity and filesystem controls for the deliberate merge source boundary. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import * as fs from './nativeCanvasReleaseFS';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';

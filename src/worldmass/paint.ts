@@ -1,3 +1,4 @@
+import { releaseCanvas } from '../render/vis/sprites';
 import { WATER_SURFACE, ordinaryWater } from '../data/waterSurface';
 import { paintWaterSurface } from '../render/vis/waterSurface';
 import { cellKey, localOffset, neighborCell, type MassCell } from './address';
@@ -30,6 +31,19 @@ export const MASS_FLOOR_VIEW: MassFloorPreparation = { enabled: true, stepsPerDr
 export class MassPainter {
   private readonly preparation: Readonly<MassFloorPreparation>;
   private pending = new Map<string, FloorJob>();
+  private readonly pixels = new Set<HTMLCanvasElement>();
+  private createCanvas(): HTMLCanvasElement {
+    const canvas = document.createElement('canvas'); this.pixels.add(canvas); return canvas;
+  }
+  private releasePixels(canvas: HTMLCanvasElement): void {
+    this.pixels.delete(canvas); releaseCanvas(canvas);
+  }
+  /** Owned backing pixels, including suspended work and scratch; excludes GPU copies. */
+  pixelStats(): {count: number; bytes: number} {
+    let bytes = 0;
+    for (const canvas of this.pixels) bytes += canvas.width * canvas.height * 4;
+    return {count:this.pixels.size,bytes};
+  }
   constructor(preparation: MassFloorPreparation = MASS_FLOOR_VIEW,
     private readonly now: () => number = () => performance.now()) {
     if (typeof preparation.enabled !== 'boolean'
@@ -48,7 +62,7 @@ export class MassPainter {
     x: number, y: number, w: number, h: number, draw: (layer: CanvasRenderingContext2D) => void): void {
     const town = mass.settlement;
     if (!town || x > town.zone.size.w || y > town.zone.size.h || x + w < 0 || y + h < 0) return;
-    const canvas = this.settlementLayer ?? (this.settlementLayer = document.createElement('canvas'));
+    const canvas = this.settlementLayer ?? (this.settlementLayer = this.createCanvas());
     const width = Math.ceil(w), height = Math.ceil(h);
     if (canvas.width !== width) canvas.width = width;
     if (canvas.height !== height) canvas.height = height;
@@ -72,6 +86,27 @@ export class MassPainter {
   private runtime: WorldMassRuntime | null = null;
   private ground: MassGround | null = null;
   private baked = new Map<string, Baked>();
+  private dropBaked(key: string): void {
+    const value = this.baked.get(key);
+    if (!value) return;
+    this.baked.delete(key); this.releasePixels(value.canvas);
+  }
+  private cancelPending(key: string): void {
+    const job = this.pending.get(key);
+    if (!job) return;
+    this.pending.delete(key);
+    // Cancellation has no published return value; return unwinds the canvas owner's finally.
+    job.work.return(undefined as never);
+  }
+  private clearPending(): void { for (const key of this.pending.keys()) this.cancelPending(key); }
+  /** Release renderer-owned pixel buffers immediately; safe to call more than once. */
+  dispose(): void {
+    if (!this.runtime && !this.settlementLayer && !this.baked.size && !this.pending.size) return;
+    this.clearPending();
+    for (const key of this.baked.keys()) this.dropBaked(key);
+    if (this.settlementLayer) { this.releasePixels(this.settlementLayer); this.settlementLayer = null; }
+    this.runtime = null; this.ground = null;
+  }
   private revision(mass: WorldMassRuntime, cell: MassCell): number {
     // Palette blending and solid contours include the neighboring-cell halo.
     let revision = 0;
@@ -87,7 +122,7 @@ export class MassPainter {
   }
   draw(ctx: CanvasRenderingContext2D, mass: WorldMassRuntime, x: number, y: number, w: number, h: number): void {
     if (this.runtime !== mass) {
-      this.runtime = mass; this.baked.clear(); this.pending.clear();
+      this.dispose(); this.runtime = mass;
       this.ground = new MassGround(mass.config.ground, mass.generator.run.seed, mass.config.terrain.addressSpan);
     }
     const span = mass.config.terrain.addressSpan, visible = new Set<string>();
@@ -100,15 +135,22 @@ export class MassPainter {
       let bake = this.baked.get(key);
       if (!bake || !this.current(mass, at, bake)) {
         finishedVisible = true;
+        this.dropBaked(key);
         const job = this.pending.get(key);
-        const canvas = job && this.current(mass, at, job) ? this.finish(job.work) : this.bake(mass, at);
-        bake = {canvas, revision:this.revision(mass, at), checkedRevision:mass.stream.revision};
+        let canvas: HTMLCanvasElement;
+        if (job && this.current(mass, at, job)) {
+          this.pending.delete(key); canvas = this.finish(job.work);
+        } else {
+          this.cancelPending(key); canvas = this.bake(mass, at);
+        }
+        try { bake = {canvas, revision:this.revision(mass, at), checkedRevision:mass.stream.revision}; }
+        catch (error) { this.releasePixels(canvas); throw error; }
       }
-      this.pending.delete(key);
+      this.cancelPending(key);
       this.baked.delete(key); this.baked.set(key, bake);
       ctx.drawImage(bake.canvas, cx*span, cy*span, span, span);
     }
-    while (this.baked.size > mass.stream.config.maxPages) this.baked.delete(this.baked.keys().next().value!);
+    while (this.baked.size > mass.stream.config.maxPages) this.dropBaked(this.baked.keys().next().value!);
     this.prepare(mass, visible, {left, top, right, bottom}, {x:x+w/2,y:y+h/2}, !finishedVisible);
   }
   /** Live motion never invalidates or rebakes the geographic floor. */
@@ -126,7 +168,7 @@ export class MassPainter {
     bounds: {left:number;top:number;right:number;bottom:number}, center: {x:number;y:number}, advance: boolean): void {
     const cfg=this.preparation, span=mass.config.terrain.addressSpan, cap=mass.stream.config.maxPages;
     if (!cfg.enabled || !cfg.stepsPerDraw || !cfg.halo || !cfg.maxPending || cfg.maxWorkMs === 0 || visible.size>=cap) {
-      this.pending.clear(); return;
+      this.clearPending(); return;
     }
     const candidates: {key:string;cell:MassCell;distance:number}[]=[];
     for (let cy=bounds.top-cfg.halo;cy<=bounds.bottom+cfg.halo;cy++)
@@ -144,11 +186,11 @@ export class MassPainter {
       const bake=this.baked.get(key);
       return !bake || !this.current(mass,cell,bake);
     }).slice(0,cfg.maxPending);
-    for (const key of this.pending.keys()) if (!selected.some(c=>c.key===key)) this.pending.delete(key);
+    for (const key of this.pending.keys()) if (!selected.some(c=>c.key===key)) this.cancelPending(key);
     for (const {key,cell} of selected) {
       const job=this.pending.get(key);
       if (job && this.current(mass,cell,job)) continue;
-      this.baked.delete(key);
+      this.cancelPending(key); this.dropBaked(key);
       this.pending.set(key,{work:this.bakeSteps(mass,cell),revision:this.revision(mass,cell),checkedRevision:mass.stream.revision});
     }
     // Pending and completed canvases share one residency budget. Never evict
@@ -157,7 +199,7 @@ export class MassPainter {
       const keys=[...this.baked.keys()];
       const key=keys.find(k=>!visible.has(k)&&!wanted.has(k)) ?? keys.find(k=>!visible.has(k));
       if (key===undefined) break;
-      this.baked.delete(key);
+      this.dropBaked(key);
     }
     // Do not stack speculative painting onto a frame already paying for a
     // visible cold bake or partial completion. Queue bookkeeping still bounds memory.
@@ -176,7 +218,9 @@ export class MassPainter {
       if (!job) continue;
       while (budget>0 && withinTime()) {
         budget--;
-        const result=job.work.next();
+        let result: IteratorResult<void, HTMLCanvasElement>;
+        try { result=job.work.next(); }
+        catch (error) { this.pending.delete(key); throw error; }
         if (result.done) {
           this.baked.set(key,{canvas:result.value,revision:job.revision,checkedRevision:job.checkedRevision});
           this.pending.delete(key); break;
@@ -193,7 +237,10 @@ export class MassPainter {
   }
   private *bakeSteps(mass: WorldMassRuntime, cell: MassCell): Generator<void, HTMLCanvasElement> {
     const { addressSpan: span, terrainCell: cs } = mass.config.terrain;
-    const canvas = document.createElement('canvas'); canvas.width = span; canvas.height = span;
+    const canvas = this.createCanvas();
+    let small: HTMLCanvasElement | null = null, published = false;
+    try {
+    canvas.width = span; canvas.height = span;
     const ctx = canvas.getContext('2d')!, cols = span / cs, page = mass.stream.page(cell);
     const salt = massHash(cellKey(cell), mass.generator.run.seed);
     // Blend the sampled palette across cell centres. Physics retains its exact
@@ -210,7 +257,7 @@ export class MassPainter {
         : ground.color(sample, { ...cell, x: (x + .5) * cs, y: (y + .5) * cs }).map(v => v * lift);
       colors.push(rgb);
     } yield; }
-    const step = 4, small = document.createElement('canvas'); small.width = span / step; small.height = span / step;
+    const step = 4; small = this.createCanvas(); small.width = span / step; small.height = span / step;
     const sc = small.getContext('2d')!, pixels = sc.createImageData(small.width, small.height);
     const atColor = (x: number, y: number): number[] => colors[(y + 1) * (cols + 2) + x + 1];
     for (let y = 0; y < small.height; y++) { for (let x = 0; x < small.width; x++) {
@@ -223,7 +270,8 @@ export class MassPainter {
       pixels.data[i + 3] = 255;
     } yield; }
     sc.putImageData(pixels, 0, 0);
-    ctx.drawImage(small, 0, 0, span, span); yield;
+    ctx.drawImage(small, 0, 0, span, span);
+    this.releasePixels(small); small = null; yield;
     const solid = new Path2D(), trailSurface = new Path2D();
     // Renderer texture phase uses the durable address, never the movable hero
     // frame. This bounded visual period is divisible by native courses (15),
@@ -326,7 +374,11 @@ export class MassPainter {
       }
     yield; }
     ctx.restore();
-    return canvas;
+    published = true; return canvas;
+    } finally {
+      if (small) this.releasePixels(small);
+      if (!published) this.releasePixels(canvas);
+    }
   }
 }
 
