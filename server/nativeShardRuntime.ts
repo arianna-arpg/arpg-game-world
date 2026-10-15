@@ -7,6 +7,7 @@ import {serializeAccount,type Account,type AccountSave} from '../src/meta/accoun
 import {serializeCharacter,type CharacterSave} from '../src/meta/character';
 import {NativeAreaCharacterResume} from '../src/worldmass/nativeAreaCharacterResume';
 import {readNativeRetainedSave} from '../src/worldmass/nativeRetainedSave';
+import {QUEST_GROUND_LEDGER} from '../src/engine/questLedger';
 import {CLASSES,type ClassDef} from '../src/data/classes';
 import {START_ZONE,type ZoneDef} from '../src/data/zones';
 import {buildManifest} from '../src/packages/manifest';
@@ -43,7 +44,7 @@ export function isNativeShardRuntime(value:unknown):value is NativeShardRuntime{
 export class NativeShardRuntime {
  readonly writer:World;readonly geography:MassNativeGeography;readonly catalog:NativeGeographyCatalog;readonly definition:ZoneDef;readonly hosted:NativeAreaHostedSnapshots;
  readonly #session:NativeAreaCampaignSession;readonly #authority:NativeAreaActorAuthority<NativeAreaOngoingRuntime>;readonly #coordinator:NativeAreaSceneTransitionCoordinator;readonly #creation:NativeAreaCharacterCreation;
- readonly #preparation:NativeAreaScenePreparation;readonly #resume:NativeAreaCharacterResume|undefined;readonly #restore=NativeAreaCharacterResume.prototype.install;readonly #discardResume=NativeAreaCharacterResume.prototype.discard;
+ readonly #preparation:NativeAreaScenePreparation;readonly #resume:NativeAreaCharacterResume|undefined;readonly #startupGround:unknown;readonly #restore=NativeAreaCharacterResume.prototype.install;readonly #discardResume=NativeAreaCharacterResume.prototype.discard;
  readonly #keeperClass:ClassDef;readonly #keeperName:string;readonly #reviveSec:number;readonly #controller=new AbortController();
  readonly #allowHold=()=>false;readonly #chronoScope:{radius:number};readonly #timeflow:World['timeflow'];readonly #previousHold:PropertyDescriptor|undefined;readonly #previousScope:PropertyDescriptor|undefined;
  readonly #close=NativeAreaSceneTransitionCoordinator.prototype.retire;readonly #retireAuthority=NativeAreaActorAuthority.prototype.retire;readonly #retireMemory=NativeAreaMemoryRegistry.prototype.retire;
@@ -60,7 +61,7 @@ export class NativeShardRuntime {
   if(!isNativeWorld(writer)||installed.has(writer)||hasNativeAreaCampaignSession(writer)||hasNativeAreaMemoryRegistry(writer)||hasNativeAreaSceneTransitionCoordinator(writer))throw Error('Native shard needs its one empty actual campaign writer');assertNativeRetainedMassState(writer);
   if(own(writer,'clientActionHook')!==undefined||own(writer,'shardWorld')!==undefined||own<Seat[]>(writer,'seats').length||own<unknown[]>(writer,'actors').length||own(writer,'localSeat')!==undefined)throw Error('Native shard cannot adopt a render shell, legacy unit or already-created character');
   bindNativeRetainedWriterCancellation(writer,this.#controller.signal);
-  this.writer=writer;this.#resume=save?new NativeAreaCharacterResume(writer,save):undefined;this.#keeperClass=keeperClass;this.#keeperName=SHARD_CFG.keeper.name;this.#reviveSec=SHARD_CFG.keeper.reviveSec;
+  this.writer=writer;this.#resume=save?new NativeAreaCharacterResume(writer,save):undefined;this.#startupGround=this.#resume?structuredClone(this.#resume.record.world.overlays?.[QUEST_GROUND_LEDGER]):undefined;this.#keeperClass=keeperClass;this.#keeperName=SHARD_CFG.keeper.name;this.#reviveSec=SHARD_CFG.keeper.reviveSec;
   this.catalog=record?.catalog??Reflect.apply(this.#policies,writer,[()=>new NativeGeographyCatalog(makeNativeGeographyCatalogSpec(createNativeGeographyReader(captureNativeGeographySource(seed)).identity))]);this.geography=this.catalog.initial;this.definition=writer.zoneMap[START_ZONE];
   this.#timeflow=own<World['timeflow']>(writer,'timeflow');this.#previousHold=Object.getOwnPropertyDescriptor(this.#timeflow,'allowHold');this.#previousScope=Object.getOwnPropertyDescriptor(this.#timeflow,'chronoScope');this.#chronoScope=Object.freeze({radius:SHARD_CFG.chronoRadius});
   if(this.#previousHold&&!this.#previousHold.configurable||this.#previousScope&&!this.#previousScope.configurable)throw Error('Native shard timeflow policy slots must be replaceable');
@@ -96,6 +97,11 @@ export class NativeShardRuntime {
    const tag={reviveSec:this.#reviveSec};keeper.keeper=tag;body.untargetable=true;body.passive=true;body.invulnerable=true;this.#keeper=keeper;this.#keeperBody=body;this.#keeperTag=tag;this.#live();this.#state='ready';
   }catch(error){this.#busy=false;this.#retire();throw error;}finally{this.#busy=false;if(signal)Reflect.apply(EventTarget.prototype.removeEventListener,signal,['abort',abort]);}
  }
+ /** THE OFFLINE HERO'S GROUND (shard W12): the reserved ground row of the startup record alone
+  * (NativeAreaCharacterResume.record, the one validated record the graph restore reads), read once at
+  * construction, never from the file again, never from the rebuilt overlay registry; undefined on a
+  * fresh world. A copy each read: the record stays private. The host adopts it into its vessel desk. */
+ get startupQuestGround():unknown{return structuredClone(this.#startupGround);}
  /** Capture the real native world memories and keeper build under one idle owner. */
  capture():NativeShardState{this.#idle();this.#busy=true;try{if(this.#state!=='ready')throw Error('Native shard capture needs an installed keeper');return Reflect.apply(this.#policies,this.writer,[()=>{this.#live();const keeper=serializeCharacter(this.writer);this.#live();const account=serializeAccount(this.writer.account);this.#live();return structuredClone({account,keeper});}]);}finally{this.#busy=false;if(this.#controller.signal.aborted)this.#retire();}}
  /** Original server warden maintenance, restricted to this actual idle keeper. */

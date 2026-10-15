@@ -92,5 +92,11 @@ jobs:
           npx tsx balance/check_nativeperftravel.ts
           npx tsx balance/check_nativedesktopperfsource.ts
 
+      - name: Retained offline quest ground regression
+        run: |
+          npx tsx balance/check_nativeshardground.ts
+          npx tsx balance/check_nativeshardgroundsource.ts
+          npx tsx balance/check_nativefullgaterepairsource.ts
+
       - name: Probes (green roster, fast lane)
         run: npm run probe

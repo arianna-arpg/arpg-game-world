@@ -128,6 +128,10 @@ export class NativeShardHost {
   this.world.partyMates=id=>this.parties.membersOf(id);
   this.world.dropRuleOf=id=>this.#dropRuleOf(id);
   this.world.partyDowns={release:id=>this.vessels.release(id),waitEnded:id=>this.vessels.waitEnded(id),view:id=>this.vessels.downView(id)};
+  // THE OFFLINE HERO'S GROUND (W12, server/vessel.ts): the startup record's held ground stands back up in the desk, and the
+  // keeper writer's checkpoint claims every hero's quest ground through the one serializeWorldState hook (capture reads it
+  // live: the desk's reads ride NativeShardSeats, never the runtime's own door, so the busy capture is never re-entered).
+  this.vessels.adoptGround(this.runtime.startupQuestGround);this.world.heldQuestGround=()=>this.vessels.groundLedger();
   this.net.reclaim=(account,char)=>this.vessels.dormantSeatOf(account,char,id=>this.net.isDormant(id));
   this.net.identitySeat=(account,char)=>this.vessels.seatOfIdentity(account,char);
   this.net.leaveHolds=id=>this.vessels.inCombat(id);
