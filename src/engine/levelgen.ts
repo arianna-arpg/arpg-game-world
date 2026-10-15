@@ -5992,6 +5992,8 @@ function* structureSeatCandidates(original: {x:number;y:number},loX:number,hiX:n
   }
 }
 
+/** A complete structure cannot be seated without changing protected ground. */
+export class ResolvedStructureSeatError extends Error {}
 function fitResolvedStructure(ctx: GenCtx, at: Vec2, w: number, h: number, aprons: ApronOffset[], explicit: boolean): Vec2 {
   const original=plannedRect(at,w,h), center=vec(original.x+w/2,original.y+h/2), edge=aprons.filter(a=>a.edge);
   // Generation owns the native convex BASE arena (annex union admission is later).
@@ -6039,7 +6041,7 @@ function fitResolvedStructure(ctx: GenCtx, at: Vec2, w: number, h: number, apron
   const span=ctx.arena.boundless?backing:ctx.arena,margin=ctx.arena.boundless?0:BORDER;
   const loX=Math.ceil((margin-minRelX)/WALK_CELL)*WALK_CELL,hiX=Math.floor((span.w-margin-maxRelX)/WALK_CELL)*WALK_CELL;
   const loY=Math.ceil((margin-minRelY)/WALK_CELL)*WALK_CELL,hiY=Math.floor((span.h-margin-maxRelY)/WALK_CELL)*WALK_CELL;
-  if(loX>hiX||loY>hiY)throw Error('resolved structure cannot fit whole arena');
+  if(loX>hiX||loY>hiY)throw new ResolvedStructureSeatError('resolved structure cannot fit whole arena');
   const candidates=structureSeatCandidates(original,loX,hiX,loY,hiY);
   const severs=severanceTest(ctx);
   for(const p of candidates){
@@ -6054,7 +6056,7 @@ function fitResolvedStructure(ctx: GenCtx, at: Vec2, w: number, h: number, apron
     if(severs&&severs(r))continue;
     return c;
   }
-  throw Error('resolved structure has no whole admissible seat');
+  throw new ResolvedStructureSeatError('resolved structure has no whole admissible seat');
 }
 
 function findStructureSpot(

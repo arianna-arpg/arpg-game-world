@@ -44,8 +44,10 @@ Everything the shard hosts was built on the giant-zone adapter: the keeper's
 World holds the whole surface (THE WILDS LAW), pockets wake as sim units, the
 neighborhood groups are the runtime's foci, and the M6 plan's ISLANDS were
 drawn as surface Worlds split where no player can see across. Under the end
-state the shard's unit of hosting becomes the retained area: an area with its
-own persistent actors, objectives, simulation and ownership IS an island.
+state the shard's unit of hosting becomes the retained area: a scene and controller
+owner under one campaign writer in NativeShardHost (--native), never a World
+per area. W2 adapts those owners. The agreed contract is
+[retained-area-host-contract](../engine/retained-area-host-contract.md).
 The two plans converge if:
 
 - the retained-area contract (export, adopt, the identity-preserving native
@@ -55,15 +57,15 @@ The two plans converge if:
 - the one clock (card 35, lockstep) and the travelling body (card 37, exact
   capture) are stated on areas, so a hand-off between areas is the same act
   offline (a walk) and hosted (a unit crossing);
-- the performance lane's measured wins stay per World and carry over: THE
-  THINKING EDGE and THE OBSTACLE MEMO are per-World mechanisms, THE
-  GOVERNOR's budget seam is per runtime, THE PHASE METER and THE DISTANCE
-  CENSUS read any World. They are not an investment in the giant zone.
+- THE PHASE METER and THE DISTANCE CENSUS use the native host's phases and
+  retained-area views. THE THINKING EDGE and THE OBSTACLE MEMO stay disabled
+  in the native host until measured against its actual owner lifetimes. The
+  first performance integration is an actual --native soak lane.
 
 What the shard lane stops doing until the contract is written: building more
 hosting that assumes one surface World (W2's PIN replacement, the island
 scheduler). What it keeps doing: the measured diet of the one-thread cost,
-which every area-World pays the same.
+with native-host applicability established by measured integration evidence.
 
 ## 3. The branch plan (for her word)
 

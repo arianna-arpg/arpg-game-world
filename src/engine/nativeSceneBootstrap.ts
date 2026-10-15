@@ -359,10 +359,10 @@ import "../meta/persistence";
 import "./tap";
 import "../meta/death";
 import "../meta/worldstate";
-import "./nativeAreaBirth";
+// nativeAreaBirth is an area controller, initialized by its actual owner.
 import "./nativeSceneGeometry";
 import "./nativeAreaLayout";
-import "./nativeScenePopulation";
+// nativeScenePopulation is an area controller, initialized by its actual owner.
 import "./nativeSceneEnvironment";
 import "./nativeSceneEcology";
 import "./nativeSettlementServices";
@@ -379,7 +379,7 @@ import "./nativeSceneHarbor";
 import "./nativeSceneTheater";
 import "./nativeSceneSky";
 import "./nativeSceneRuntimeRegistry";
-import "./nativeSceneRuntimeBirth";
+// nativeSceneRuntimeBirth is an area controller, initialized by its actual owner.
 import "./nativeSceneTerrain";
 import "./nativeSceneArrival";
 import "./nativeSceneCoast";

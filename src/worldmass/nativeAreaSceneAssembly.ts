@@ -216,7 +216,7 @@ export class NativeAreaSceneAssembly {
   const arrival=new NativeAreaSceneArrival({scene,geometry,campaign,policy:config});
   const runtimeState=freshSceneRuntimeBirthState();
   const adoption=new NativeAreaSceneAdoption({scene,geometry,campaign,state:runtimeState});
-  this.generation=new NativeAreaSceneGeneration({scene,geometry,campaign,state:transition});
+  this.generation=new NativeAreaSceneGeneration({scene,geometry,campaign,state:transition},true);
   const runtimeBirth=new NativeAreaSceneRuntimeBirth({scene,geometry,population,generation:this.generation,theater,campaign,state:runtimeState,sources:sources.runtime});
   const titans=new NativeAreaSceneTitans({scene,geometry,population,campaign});
   const registry=new NativeAreaSceneRuntimeRegistry({scene,geometry,birth:runtimeBirth,titans,descentState:transition,state:freshSceneRuntimeRegistryState()});

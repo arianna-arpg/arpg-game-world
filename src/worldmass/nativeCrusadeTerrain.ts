@@ -6,7 +6,7 @@ import type {World} from '../engine/world';
 import type {Vec2} from '../core/math';
 import {Rng} from '../core/rng';
 import {GridWalkField} from '../world/gridWalk';
-import {plannedRect,finishNativeRetainedFixtures,raiseStructure,doodadRuleOf,type GenCtx,type GeneratedLayout,type Doodad,type PlacedStructure} from '../engine/levelgen';
+import {plannedRect,finishNativeRetainedFixtures,raiseStructure,ResolvedStructureSeatError,doodadRuleOf,type GenCtx,type GeneratedLayout,type Doodad,type PlacedStructure} from '../engine/levelgen';
 import {nativeCrusadeFixtureSpecs} from '../engine/nativeLayoutGeneration';
 import {nativeCrusadeLifetimeCalls,type CrusadeInfo,type CrusadeField} from '../packages/overlays/crusade';
 import {spawnNativeDoorGuards,spawnNativeFurniture,spawnNativePlanResidents,spawnNativeFolkResidents,type NativeInhabitantHost} from '../engine/nativeInhabitants';
@@ -100,7 +100,11 @@ export class NativeCrusadeTerrain {
    // works cut into a mountain or wetland. Retirement may not bury that stand.
    if(grid)for(const stand of stands)if(grid.isWalkable(stand.pos.x,stand.pos.y)&&!clone.isWalkable(stand.pos.x,stand.pos.y))clone.fillRegion(stand.pos.x-stand.radius,stand.pos.y-stand.radius,stand.pos.x+stand.radius,stand.pos.y+stand.radius,'ground');
    const before=captureNativeCrusadeTerrain(ctx);
-   if(key&&specs)for(const fixture of specs.fixtures)raiseStructure(ctx,fixture.structure,{x:fixture.x,y:fixture.y});
+   // New works are optional on an already occupied backing. A spatial refusal
+   // leaves the entire old patch, bodies and resources intact and retries on a
+   // later arrival. Other generation or selected-callback errors still escape.
+   try{if(key&&specs)for(const fixture of specs.fixtures)raiseStructure(ctx,fixture.structure,{x:fixture.x,y:fixture.y});}
+   catch(error){if(!(error instanceof ResolvedStructureSeatError))throw error;assertEvent();return false;}
    if(serializeNativeAreaData(ctx.structures?.slice(0,baseS.length))!==serializeNativeAreaData(baseS))throw Error('Crusade works would change an unrelated structure');
    finishNativeRetainedFixtures(ctx);
    const open=GridWalkField.unpack(clone.pack()),priorOpen=rawGrid?GridWalkField.unpack(rawGrid):null;

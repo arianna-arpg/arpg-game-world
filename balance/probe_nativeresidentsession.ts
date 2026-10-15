@@ -85,7 +85,7 @@ geometry.currentZoneSeed=world.currentZoneSeed;geometry.exits=exits;geometry.zon
 for(const key of ['walk','tierViews','doodads','grounds','bridges','structures','fog'])world[key]=(geometry as any)[key];world.doodadsRev++;world.convexNav=null;world.tierNavs.clear();world.actors=census.actors;
 const spatial:any={massRuntime:world.massRuntime,zone,player:hero,time:world.time,viewFrame:world.viewFrame,viewFrameAt:world.viewFrameAt};
 Object.defineProperty(spatial,'time',{get(){return world.time;}});
-const localProvider:any={census,scene:world.scene,clientActionHook:world.clientActionHook,exits,massRuntime:world.massRuntime};
+const localProvider:any={census,scene:world.scene,clientActionHook:world.clientActionHook,exits,massRuntime:world.massRuntime,questStanding:campaign.questStanding,questDefOf:campaign.questDefOf};
 for(const key of ['localZoneAt','isSafeAt','viewRectFor'] as const)localProvider[key]=wrapMethod(key,residentSpatial[key],spatial);
 localProvider.lineOfSight=wrapMethod('lineOfSight',geometry.lineOfSight,geometry);
 const observedCensus=observed(census);localProvider.census=observedCensus;
@@ -177,7 +177,7 @@ try{
   const replacementCensus={...census,actors:[...census.actors]},replacementLocal={...localProvider,census:replacementCensus};
   const savedVisits=[...director.visits];session.bindArea({census:replacementCensus,local:replacementLocal});assert.equal(session.host.actors,replacementCensus.actors);assert.equal(session.host.player,replacementCensus.player);assert.deepEqual([...director.visits],savedVisits);assert.throws(()=>session.inhabitants(population!),/same local census/);session.bindArea(good.area);bindingGuards++;
   for(const key of [...campaignMethods,'localZoneAt','isSafeAt','viewRectFor','lineOfSight']){
-   const provider:any=campaignMethods.includes(key)?session.campaign:(session as any).area.local,old=provider[key],token={key};let hit=0;
+   const provider:any=campaignMethods.includes(key)&&!['questStanding','questDefOf'].includes(key)?session.campaign:(session as any).area.local,old=provider[key],token={key};let hit=0;
    provider[key]=function(arg:unknown){assert.equal(this,provider);assert.equal(arg,token);hit++;return token;};
    try{const out:unknown=(session.host as any)[key]((()=>{provider[key]=()=>{throw Error('late provider selection');};return token;})());assert.equal(out,token);assert.equal(hit,1);selectionGuards++;}finally{provider[key]=old;}
   }

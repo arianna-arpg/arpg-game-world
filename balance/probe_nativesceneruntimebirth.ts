@@ -2,11 +2,13 @@ import {beforeNativeCampaignRaw as rawCampaign} from './nativeCampaignCompositio
 import {beforeNativeRuntimeBirthLifetime as beforeRuntimeLifetime} from './nativeRuntimeBirthLifetimeFixture';
 import {beforeNativeSurfaceArrival as projectSurface} from './nativeSurfaceArrivalSourceFixture';
 /** Whole native event births; shared retained fixtures also exercise registry dispatch. */
-import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
+import assert from 'node:assert/strict';import * as fs from './nativeCrusadeTerrainFS';import ts from 'typescript';
 import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
 import {makeSimWorld} from '../src/sim/arena';import {withSeededRandom} from '../src/core/rng';
 import {massDormancyPins} from '../src/worldmass/dormancy';
-import {archive,originalNames,originalValues,fixtures,run} from './nativeRuntimeFixture';
+import {archive,originalNames,originalValues,fixtures,run as actualRun} from './nativeRuntimeFixture';
+import {beforeNativeRuntimeBirthStageZero} from './nativeRuntimeBirthReceiptFixture';
+const run:typeof actualRun=(fixture,lane,course,...rest)=>{const output=actualRun(fixture,lane,course,...rest);return lane==='archive'?output:beforeNativeRuntimeBirthStageZero(output);};
 const lane=process.argv.find(a=>a.startsWith('--runtime-birth-lane='))?.slice('--runtime-birth-lane='.length);
 if(lane){assert(['archive','current','local'].includes(lane));const digest=createHash('sha256');let count=0,bytes=0,bodies=0,draws=0,partialErrors=0;digest.update('[');bytes++;
 const append=(out:any)=>{const text=(count?',':'')+JSON.stringify(out);digest.update(text);bytes+=Buffer.byteLength(text);count++;bodies+=out.bodies;draws+=out.drawCount;if(out.error)partialErrors++;};

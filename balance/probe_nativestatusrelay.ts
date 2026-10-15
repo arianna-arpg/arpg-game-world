@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync} from './nativeLegacySourceRepairFS';
 import {createHash} from 'node:crypto';
 import ts from 'typescript';
 import {bootSimEngine,makeSimWorld} from '../src/sim/arena';

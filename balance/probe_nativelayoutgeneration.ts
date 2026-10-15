@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import * as fs from './nativeCrusadeTerrainFS';
 import {gunzipSync} from 'node:zlib';import {createHash} from 'node:crypto';
 import {nativeZoneMemoryFresh,nativeCrusadeFixtureSpecs} from '../src/engine/nativeLayoutGeneration';
 import {CRUSADE_SURGE} from '../src/packages/defs/crusade';

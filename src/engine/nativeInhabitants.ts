@@ -53,7 +53,7 @@ export function spawnNativeDoorGuards(host: NativeInhabitantHost, sources: Nativ
       c.doorId = dr.id;
       if (dr.life) c.life = Math.min(dr.life, c.maxLife()); // per-door data may weaken a rotten door
       host.actors.push(c);
-      host.townBody?.('door',d,c);
+      if('townBody' in host)host.townBody?.('door',d,c);
     }
 
 
@@ -66,7 +66,7 @@ export function spawnNativeFurniture(host: NativeInhabitantHost, sources: Native
       c.fromZoneGen = true; // furniture is part of the persistent population
       c.pos = host.clampPos((0, sources.vec)(b.pos.x, b.pos.y), c.radius);
       host.actors.push(c);
-      host.townBody?.('furniture',b,c);
+      if('townBody' in host)host.townBody?.('furniture',b,c);
     }
 
 }
@@ -165,7 +165,7 @@ export function spawnNativePlanResidents(host:NativeInhabitantHost,sources:Nativ
       c.pos = c.tier >= 1 ? host.findFreeSpot((0, sources.vec)(n.pos.x, n.pos.y), c.radius, c.tier)
         : host.clampPos((0, sources.vec)(n.pos.x, n.pos.y), c.radius);
       host.actors.push(c);
-      host.townBody?.('plan',n,c);
+      if('townBody' in host)host.townBody?.('plan',n,c);
       // THE SPOKEN SEAT: a plan's npc row may carry a line — it rides the
       // residents' bubble lane (residentPrompt reads npcRole 'resident') on
       // the 'seat' lane of THE TRANSIENT TELLING (engine/speech.ts).
@@ -209,7 +209,7 @@ export function spawnNativeFolkResidents(host:NativeInhabitantHost,sources:Nativ
       c.pos = c.tier >= 1 ? host.findFreeSpot((0, sources.vec)(fk.pos.x, fk.pos.y), c.radius, c.tier)
         : host.clampPos((0, sources.vec)(fk.pos.x, fk.pos.y), c.radius);
       host.actors.push(c);
-      host.townBody?.('folk',fk,c);
+      if('townBody' in host)host.townBody?.('folk',fk,c);
       // THE TRANSIENT TELLING's 'folk' lane (speechTell) + THE SPEECH GRAMMAR's
       // speaker row: the rolled line is its FIRST WORD, the row's other lines
       // follow, its roles are the row's (FolkRow.roles), its company the house

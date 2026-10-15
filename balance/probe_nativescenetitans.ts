@@ -1,3 +1,4 @@
+import {beforeNativeTitanLifetimeActorSlots,beforeLifetimeCleaveReceipt} from './nativeTitanLifetimeReceiptFixture';
 import {beforeNativeTitanAttendance} from './nativeTitanAttendanceFixture';
 import {beforeNativeRuntimeBirthLifetime} from './nativeRuntimeBirthLifetimeFixture';
 import {assertHistoricalCleaveSource,beforeHistoricalCleaveReceipt} from './nativeTitanReceiptFixture';
@@ -114,7 +115,7 @@ if(mode){
  // retaining all 96 MB or transporting that corpus between cold processes.
  const rawDigest=createHash('sha256').update('['),digest=createHash('sha256').update('[');let triples=0,created=0,partialErrors=0,draws=0,felled=false;
  for(const f of fixtures)for(const id of ['vhorun','cindergait','istral'])for(const test of ['scar','body','head','occupied','reset-live','factory-failure','terrain-failure']){
-  const r=run(f,id,test);if(triples){digest.update(',');rawDigest.update(',');}rawDigest.update(JSON.stringify(r));digest.update(JSON.stringify(beforeHistoricalCleaveReceipt(r)));triples++;created+=r.created;partialErrors+=r.error?1:0;draws+=r.draws.length;felled ||= r.stages.some((s:any)=>s.state.regrowing.length>0);
+  const r=run(f,id,test);if(triples){digest.update(',');rawDigest.update(',');}const lifetime=process.argv.includes('--titan-runtime-lifetime'),receipt=lifetime?beforeNativeTitanLifetimeActorSlots(r):r;rawDigest.update(JSON.stringify(receipt));digest.update(JSON.stringify(lifetime?beforeLifetimeCleaveReceipt(receipt):beforeHistoricalCleaveReceipt(receipt)));triples++;created+=r.created;partialErrors+=r.error?1:0;draws+=r.draws.length;felled ||= r.stages.some((s:any)=>s.state.regrowing.length>0);
  }
  console.log('NATIVE_TITANS_COLD='+JSON.stringify({rawSha256:rawDigest.update(']').digest('hex'),sha256:digest.update(']').digest('hex'),triples,created,partialErrors,draws,felled}));
 }else{

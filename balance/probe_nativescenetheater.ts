@@ -1,6 +1,6 @@
 /** Whole native theater birth, complete retained layouts and real native actor/random oracles. */
 import {gzipSync,gunzipSync} from 'node:zlib';import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
-import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
+import assert from 'node:assert/strict';import * as fs from './nativeLegacySourceRepairFS';import ts from 'typescript';
 import {makeSimWorld} from '../src/sim/arena';import {World,NAV_CFG} from '../src/engine/world';
 import {installHeadlessShims} from '../src/sim/shims';import {registerAllPackageFactions} from '../src/packages/factionGen';import {validateContent} from '../src/data/validate';
 import {makeAccount} from '../src/meta/account';import {buildManifest} from '../src/packages/manifest';import {CLASSES} from '../src/data/classes';

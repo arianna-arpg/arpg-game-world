@@ -1,7 +1,7 @@
+import './nativeSceneBootstrap';
 import {sceneSettleNearScale} from './nativeSceneNearScale';
 import {parseNativeCrusadeFixtureMemory} from './nativeCrusadeFixtureMemory';
 import {sceneDealTravellerFlasks,sceneAdoptQuestLedger} from './nativeSceneServerVessel';
-import './nativeSceneBootstrap';
 import {sceneScanNemesisSurvivors} from './nativeSceneCampaignTransitions';
 import {sceneAddTether,sceneAttachObjectTethers,TETHER_TICK,type NativeSceneTetherHost} from './nativeSceneTethers';
 import {sceneRollSummonType,sceneForwardSummonSockets} from './nativeSceneSummonPreparation';

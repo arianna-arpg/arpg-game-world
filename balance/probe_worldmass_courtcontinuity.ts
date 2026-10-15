@@ -19,6 +19,10 @@ type Hooks={mintLootResult(at:{x:number;y:number},result:LootResult,owed:boolean
 const hooks=(w:World)=>w as unknown as Hooks;
 const nativeHost=(w:World)=>(w.massRuntime! as unknown as {nativeHost:MassNativeHost}).nativeHost;
 const fresh=(seed=42)=>{const w=makeSimWorld('warrior',seed);w.startWorldMass(seed);w.time=100;return w;};
+// This fixture drives puzzles directly. After Continue, return the real traveler
+// and let the native dormancy owner settle the distant ordinary population before
+// asking for the complete retained ring; never override admission or delete bodies.
+function settleCountryAt(w:World,at:{x:number;y:number}):void {w.player.pos={...at};const m=w.massRuntime!,bodies=(m as unknown as {natives:ReadonlyMap<string,Actor>}).natives;for(let i=0;i<=Math.ceil(bodies.size/MASS_DORMANCY_RETIRE_BUDGET);i++)m.dormancy!.update(w,bodies);}
 const request=(kind:Inner,seed:number)=>({id:'court-continuity/'+kind,seed,source:{kind:'massif' as const,id:'well_court',tileset:'courtland',scope:'landform' as const,poolIndex:1},level:11});
 const same=(a:unknown,b:unknown):void=>{
   if(typeof a==='number'&&typeof b==='number'){assert.ok(Math.abs(a-b)<1e-8);return;}
@@ -74,7 +78,7 @@ try {
       // At an unchanged world clock actual CharacterSave Continue preserves
       // native state, wounded node and wrapped source without a second ring.
       const save=serializeCharacter(w);let next=makeSimWorld('warrior',84331);assert.ok(applySavedCharacter(next,save));assert.ok(next.adoptWorldState(save.world));next.startWorldMass(42,save.world!.worldmass);
-      w=next;m=w.massRuntime!;host=nativeHost(w);m.nativeFeatures!.sync([placement],host);run=court(w,placement.id);geometry();same(w.capturePlacedPuzzle(run),exact);assert.equal(run.nodes[0].life,wound);assert.equal(hooks(w).puzzles.filter(r=>r.owner===placement.id).length,1);spoken=observe(w);
+      w=next;m=w.massRuntime!;host=nativeHost(w);settleCountryAt(w,run.at);m.nativeFeatures!.sync([placement],host);run=court(w,placement.id);geometry();same(w.capturePlacedPuzzle(run),exact);assert.equal(run.nodes[0].life,wound);assert.equal(hooks(w).puzzles.filter(r=>r.owner===placement.id).length,1);spoken=observe(w);
       // A remote foreign target also owns an outstanding claim on this ring.
       const foreign=w.createMonster('zombie',1,'enemy');foreign.pos={x:-70000,y:70000};foreign.aiTargetId=run.nodes[0].id;w.actors.push(foreign);
       w.player.pos={x:-80000,y:-80000};assert.ok(m.nativeFeatures!.sync([],host).deferred.includes(placement.id));foreign.aiTargetId=undefined;w.actors=w.actors.filter(a=>a!==foreign);
@@ -96,7 +100,7 @@ try {
       const before=structuredClone(w.capturePlacedPuzzle(run));assert.ok(m.nativeFeatures!.sync([],host).retired.includes(placement.id));assert.ok(run.nodes.every(n=>!w.actors.includes(n)));assert.ok(!hooks(w).puzzles.includes(run));
       const gap=kind==='refrain'?((before.state as {left:number}).left+5):20;w.time+=gap;
       const sleeping=serializeCharacter(w);next=makeSimWorld('warrior',84332);assert.ok(applySavedCharacter(next,sleeping));assert.ok(next.adoptWorldState(sleeping.world));next.startWorldMass(42,sleeping.world!.worldmass);
-      w=next;m=w.massRuntime!;host=nativeHost(w);m.nativeFeatures!.sync([placement],host);run=court(w,placement.id);geometry();assert.equal(run.nodes[0].life,wound);
+      w=next;m=w.massRuntime!;host=nativeHost(w);settleCountryAt(w,run.at);m.nativeFeatures!.sync([placement],host);run=court(w,placement.id);geometry();assert.equal(run.nodes[0].life,wound);
       const after=w.capturePlacedPuzzle(run);assert.equal(after.done,false);assert.deepEqual(after.hums,[],'elapsed native hum expires instead of pinning the first returning blow');
       assert.ok(before.kindles&&after.kindles,'literal native display clocks are saved');
       same(after.kindles,kind==='refrain'?before.kindles.map(()=>0):before.kindles.map(t=>Math.max(0,t-gap)));
@@ -117,9 +121,9 @@ try {
       assert.ok(w.drops.length>0,'authored court table pays actual native loot');const drops=JSON.stringify(w.drops),count=w.drops.length;
       strike(w,run,0);assert.equal(w.drops.length,count);
       const settled=w.capturePlacedPuzzle(run).kindles;assert.ok(settled);
-      w.player.pos={x:-80000,y:-80000};assert.ok(m.nativeFeatures!.sync([],host).retired.includes(placement.id));w.time+=2;
+      settleCountryAt(w,{x:-80000,y:-80000});assert.ok(m.nativeFeatures!.sync([],host).retired.includes(placement.id));w.time+=2;
       const done=serializeCharacter(w);next=makeSimWorld('warrior',84333);assert.ok(applySavedCharacter(next,done));assert.ok(next.adoptWorldState(done.world));next.startWorldMass(42,done.world!.worldmass);
-      w=next;m=w.massRuntime!;host=nativeHost(w);m.nativeFeatures!.sync([placement],host);run=court(w,placement.id);geometry();assert.ok(run.done);same(w.capturePlacedPuzzle(run).kindles,settled.map(t=>Math.max(0,t-2)));assert.equal(JSON.stringify(w.drops),drops);strike(w,run,0);assert.equal(JSON.stringify(w.drops),drops);
+      w=next;m=w.massRuntime!;host=nativeHost(w);settleCountryAt(w,run.at);m.nativeFeatures!.sync([placement],host);run=court(w,placement.id);geometry();assert.ok(run.done);same(w.capturePlacedPuzzle(run).kindles,settled.map(t=>Math.max(0,t-2)));assert.equal(JSON.stringify(w.drops),drops);strike(w,run,0);assert.equal(JSON.stringify(w.drops),drops);
       console.log('PASS native '+kind+' court wrapper/spec/node geometry, queued/foreign pins, exact partial Continue, native timed absence and once-only authored reward');
     } finally {if(oldRegistry)PUZZLES[row.id]=oldRegistry;else delete PUZZLES[row.id];}
   }
@@ -163,11 +167,11 @@ try {
     const expected=bodySummary(receipts()),groups=affiliations(guards),progress=g.capturePlacedPuzzle(r);
     g.player.pos={x:-80000,y:-80000};assert.ok(mass.nativeFeatures!.sync([],h).retired.includes(id));assert.ok([...guards,...r.nodes].every(a=>!g.actors.includes(a)));
     const save=serializeCharacter(g),resumed=makeSimWorld('warrior',84334);assert.ok(applySavedCharacter(resumed,save));assert.ok(resumed.adoptWorldState(save.world));resumed.startWorldMass(42,save.world!.worldmass);
-    const country=resumed.massRuntime!,owner=nativeHost(resumed);assert.ok(country.nativeFeatures!.sync([place],owner).admitted.includes(id));
+    const country=resumed.massRuntime!,owner=nativeHost(resumed);settleCountryAt(resumed,r.at);assert.ok(country.nativeFeatures!.sync([place],owner).admitted.includes(id));
     const saved=(country.nativeFeatures!.snapshot(resumed.time).born.find(b=>b.placement.id===id)!.changes.native) as {bodies:GuardReceipt[]};
     same(bodySummary(saved.bodies),expected);same(affiliations(saved.bodies.filter(b=>b.slot.startsWith('garrison/')&&!b.dead).map(b=>resumed.actors.find(a=>a.id===b.actorId)!)),groups);same(resumed.capturePlacedPuzzle(court(resumed,id)),progress);
     assert.equal(owner.courts.views().filter(run=>run.owner===id).length,1);assert.equal(saved.bodies.filter(b=>!b.dead).length,first.filter(b=>!b.dead).length);
-    resumed.player.pos={x:-80000,y:-80000};assert.ok(country.nativeFeatures!.sync([],owner).retired.includes(id),'restored siblings do not pin one another forever');
+    settleCountryAt(resumed,{x:-80000,y:-80000});assert.ok(country.nativeFeatures!.sync([],owner).retired.includes(id),'restored siblings do not pin one another forever');
     console.log('PASS actual garrison-bearing refrain preserves guard wounds, native affiliations and partial court through composite retirement/Continue; newly owned burial-urn court retains its whole composition');
   }
 } finally {undo();}
