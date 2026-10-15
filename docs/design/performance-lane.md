@@ -626,6 +626,12 @@ DELIVERED count the governor holds by reading `populationStats().groups[].live`
 and raising the cap while a group's live count stands under it (a second
 controller; needs the runtime's live-per-group read, delivered with F1).
 Rec: C, with 24 as the delivered floor; B meanwhile.
+**RULED (2026-10-14, her word): as recommended. C, the floor as a DELIVERED
+count of 24 held by reading the runtime's live-per-group census, with B (48
+as the admission cap) standing until that read exists on the host the shard
+will keep (the retained-area host; the giant-zone runtime's
+`populationStats` is the transitional seam). The governor keeps shipping
+OFF until the pairs on that host pass W1's gate.**
 
 **G2, the clustered course, one tree, `--govern off` against on (4 bots
 together, 30 s, no drop, together), with the gate still fixed at 60 Hz's
@@ -662,6 +668,9 @@ FINDING for the soak's own gate: `tickP95Ms` is 20 ms whatever rate the
 host holds, so a governed host at 40 Hz is judged against 60 Hz's budget.
 The gate should be stated in budgets (1.2 of the held rate's) or the soak
 should read the governed rate; that is a gate change and waits for her word.
+**RULED (2026-10-14, her word): in budgets. `tickP95Ms` becomes 1.2 budgets
+of the rate the host actually held, so a governed 40 Hz host is judged
+against its own 25 ms and never against 60 Hz's.**
 
 **G2b and G1b, both pairs again on the rate-scaled gate** (the shipped
 arithmetic; a calmer minute of the machine than G1 and G2):
@@ -710,6 +719,11 @@ B: arm the governor only once the warm-up is over (no dial inside the first
 30 s after a join) and otherwise as A. C: the governor only ever thins and
 never slows the rate (the rate dial read worse per tick on the clustered
 course), as A. Rec: B with A's signal, measured on the same two courses.
+**RULED (2026-10-14, her word): B with A's signal: no dial inside the first
+30 s after a join; a 5 s p95 window; a breach must stand three beats before a
+dial moves, with the EWMA above half the gate beside the p95; the climb on
+the EWMA under 60 percent of the gate for five seconds. Measured on the same
+two courses before the governor may ship on.**
 
 ### 8.3 E10: the edge's long soak (the heap watch §7.6 owed), 2026-10-14
 
