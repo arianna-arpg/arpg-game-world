@@ -107,5 +107,10 @@ jobs:
           npx tsx balance/check_nativeverminfallsource.ts
           npx tsx balance/check_nativeframeattendancesourceview.ts
 
+      - name: Development watcher and save-fixture source regressions
+        run: |
+          npx tsx balance/check_devwatchconfig.ts
+          npx tsx balance/check_nativesaveorderwatchsource.ts
+
       - name: Probes (green roster, fast lane)
         run: npm run probe

@@ -154,7 +154,10 @@ export default defineConfig({
   // autosave tripped the watcher into a FULL RELOAD (killing the live world
   // mid-play and mid-QA; the long-standing "reload ate my test" gotcha).
   server: {
-    watch: { ignored: ['**/saves/**', '**/*.bak'] },
+    // Local agent scratch and generated reports are not live source inputs.
+    // They remain readable/servable, but edits there no longer trigger HMR or
+    // transformed-module cache invalidation; restart Vite for edited modules.
+    watch: { ignored: ['**/saves/**', '**/*.bak', '**/.claude/**', '**/balance/reports/**'] },
     // Enables the JS Self-Profiling API (`new Profiler(...)`) in dev — the
     // sampling profiler perf passes lean on; inert for normal play.
     headers: { 'Document-Policy': 'js-profiling' },
