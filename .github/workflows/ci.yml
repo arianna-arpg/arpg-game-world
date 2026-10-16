@@ -101,10 +101,12 @@ jobs:
       - name: Retained Verminfall event lifetime regressions
         run: |
           npx tsx balance/check_nativeverminfall.ts
-          npx tsx balance/check_nativeverminfallboundaries.ts
+          npx tsx balance/check_nativeverminfallarrival.ts
+          npx tsx balance/check_nativeverminfallarrivalboundaries.ts
           npx tsx balance/check_nativeverminfallcold.ts
           npx tsx balance/check_nativeverminfallcold.ts --king
           npx tsx balance/check_nativeverminfallsource.ts
+          npx tsx balance/check_nativeverminfallarrivalsource.ts
           npx tsx balance/check_nativeframeattendancesourceview.ts
 
       - name: Development watcher and save-fixture source regressions
