@@ -76,10 +76,19 @@ The original `check_nativeverminfallboundaries.ts` source and its 35-case result
 remain historical evidence. Two expectations in it were incorrect for visit
 parity: a remote occupant received a successor without leaving, and the active
 direct-Crusade case required another nest cohort during that visit. Its standalone
-CI invocation is superseded by `check_nativeverminfallarrivalboundaries.ts`:
+CI invocation was first superseded by `check_nativeverminfallarrivalboundaries.ts`:
 25 trigger-independent cases, eight placement faults staged at genuine warm
 arrivals, two corrected timing expectations, and eleven additional arrival
 controls. The sealed probe roster and older source archives remain unchanged.
+
+The current CI entry is `check_nativeverminfallcrusadeboundaries.ts` (48 cases).
+Its committed contract in `balance/probesupersessioncontracts.ts` maps all 46
+previous cases, preserves the first 45 case bodies and all five original final
+assertions, and records the actual fixture-order failure digest. The final fault
+now observes Crusade post-return validation before entering the intended
+Verminfall stage; two additional controls cover both leaves' post-return windows.
+`check_probesupersessionscurrent.ts` checks source identities, this mapping and
+the exact CI invocation. The older 46-case source is historical evidence.
 
 `check_nativeverminfallarrival.ts` covers visit timing against current gameplay;
 `check_nativeverminfall.ts` retains the ordinary/retained natural successor and

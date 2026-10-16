@@ -90,12 +90,19 @@ const coordinatedWriters=new WeakMap<World,NativeAreaSceneTransitionCoordinator>
 const actualCoordinators=new WeakSet<object>();
 const vendettaVisitTokens=new WeakMap<object,object>();
 const vendettaArrivals=new WeakMap<NativeAreaSceneTransitionCoordinator,(combat:NativeAreaSceneCombat)=>{token:object;occupied:boolean}>();
-type EventArrivalKey='crusadeLifetime'|'verminfallLifetime';
+type EventArrivalKey='warlordArrival'|'crusadeLifetime'|'verminfallLifetime'|'vendettaLifetime';
+function eventArrivalName(key:EventArrivalKey):string {return key==='warlordArrival'?'Warlord':key==='crusadeLifetime'?'Crusade':key==='verminfallLifetime'?'Verminfall':'Vendetta';}
 type EventArrivalOwner=NativeAreaSceneCombat[EventArrivalKey];
 interface EventArrivalStage {key:EventArrivalKey;combat:NativeAreaSceneCombat;owner:EventArrivalOwner;visit:object|undefined;active:boolean;entered:boolean}
+const warlordArrivals=new WeakMap<NativeAreaSceneTransitionCoordinator,(combat:NativeAreaSceneCombat,owner:NativeAreaSceneCombat['warlordArrival'])=>(()=>World['zone'])>();
+/** Only the exact selected crown owner may claim its private invocation once. */
+export function claimNativeWarlordArrival(coordinator:NativeAreaSceneTransitionCoordinator,combat:NativeAreaSceneCombat,owner:NativeAreaSceneCombat['warlordArrival']):()=>World['zone'] {const claim=warlordArrivals.get(coordinator);if(!claim)throw Error('Native crown needs its actual arrival coordinator');return claim(combat,owner);}
+const vendettaInvocations=new WeakMap<NativeAreaSceneTransitionCoordinator,(combat:NativeAreaSceneCombat,owner:NativeAreaSceneCombat['vendettaLifetime'])=>(()=>{token:object;occupied:boolean})>();
+/** A read-only visit token is not this exact selected owner's entry claim. */
+export function claimNativeVendettaArrival(coordinator:NativeAreaSceneTransitionCoordinator,combat:NativeAreaSceneCombat,owner:NativeAreaSceneCombat['vendettaLifetime']):()=>{token:object;occupied:boolean} {const claim=vendettaInvocations.get(coordinator);if(!claim)throw Error('Native Vendetta needs its actual arrival coordinator');return claim(combat,owner);}
 const crusadeArrivals=new WeakMap<NativeAreaSceneTransitionCoordinator,(combat:NativeAreaSceneCombat,owner:NativeAreaSceneCombat['crusadeLifetime'])=>(()=>{token:object;occupied:boolean})>();
 const pendingCrusadeArrivals=new WeakMap<NativeAreaSceneTransitionCoordinator,(combat:NativeAreaSceneCombat,owner:NativeAreaSceneCombat['crusadeLifetime'])=>boolean>();
-/** Non-granting refusal during either private event-leaf selection/invocation. */
+/** Non-granting refusal during any private warm-arrival selection/invocation. */
 export function nativeCrusadeArrivalPending(coordinator:NativeAreaSceneTransitionCoordinator,combat:NativeAreaSceneCombat,owner:NativeAreaSceneCombat['crusadeLifetime']):boolean{return pendingCrusadeArrivals.get(coordinator)?.(combat,owner)??false;}
 /** Only the exact selected Crusade leaf may claim the private invocation once. */
 export function claimNativeCrusadeArrival(coordinator:NativeAreaSceneTransitionCoordinator,combat:NativeAreaSceneCombat,owner:NativeAreaSceneCombat['crusadeLifetime']):()=>{token:object;occupied:boolean} {const claim=crusadeArrivals.get(coordinator);if(!claim)throw Error('Native Crusade needs its actual arrival coordinator');return claim(combat,owner);}
@@ -106,7 +113,7 @@ export function nativeVerminfallArrivalPending(coordinator:NativeAreaSceneTransi
 /** Claim the owner's currently selected invocation once. The returned validator
  * remains readable by that entered leaf until the coordinator revokes it. */
 export function claimNativeVerminfallArrival(coordinator:NativeAreaSceneTransitionCoordinator,combat:NativeAreaSceneCombat,owner:NativeAreaSceneCombat['verminfallLifetime']):()=>{token:object;occupied:boolean} {const claim=verminfallArrivals.get(coordinator);if(!claim)throw Error('Native Verminfall needs its actual arrival coordinator');return claim(combat,owner);}
-/** Read-only selection of an actual warm arrival; no caller can create a visit. */
+/** Read-only inspection inside the entered Vendetta stage; no entry is granted. */
 export function selectedNativeVendettaArrival(coordinator:NativeAreaSceneTransitionCoordinator,combat:NativeAreaSceneCombat):{token:object;occupied:boolean} {const select=vendettaArrivals.get(coordinator);if(!select)throw Error('Native Vendetta needs its actual coordinator');return select(combat);}
 const conclaveSelections=new WeakMap<NativeAreaSceneTransitionCoordinator,(combat:NativeAreaSceneCombat)=>boolean>();
 /** Non-granting inspection of a currently selected real coordinator departure. */
@@ -185,6 +192,8 @@ export class NativeAreaSceneTransitionCoordinator {
   if(coordinatedWriters.has(characterWriter))throw Error('Native campaign already has a transition coordinator');
   conclaveSelections.set(this,combat=>this.#selectedConclaveDeparture(combat));
   vendettaArrivals.set(this,combat=>this.#selectedVendettaArrival(combat));
+  warlordArrivals.set(this,(combat,owner)=>this.#claimWarlordArrival(combat,owner));
+  vendettaInvocations.set(this,(combat,owner)=>this.#claimEventArrival('vendettaLifetime',combat,owner));
   crusadeArrivals.set(this,(combat,owner)=>this.#claimEventArrival('crusadeLifetime',combat,owner));
   verminfallArrivals.set(this,(combat,owner)=>this.#claimEventArrival('verminfallLifetime',combat,owner));
   pendingCrusadeArrivals.set(this,(combat,owner)=>!!this.#eventArrival&&this.#eventArrival.combat===combat&&own(combat,'crusadeLifetime')===owner);
@@ -438,11 +447,18 @@ export class NativeAreaSceneTransitionCoordinator {
  }
  #warlordArrival:{row:Registered;capture:SeatCapture;seat:Seat;body:Actor;meta:Seat['meta'];definition:World['zone'];arriving:readonly Actor[]}|null=null;
  #eventArrival:EventArrivalStage|null=null;
- assertWarlordArrival(combat:NativeAreaSceneCombat):World['zone'] {
-  if(this.#eventArrival)throw Error('Native arrival leaf is selected for '+(this.#eventArrival.key==='crusadeLifetime'?'Crusade':'Verminfall'));
+ #arrivalVisit(receipt:object):object {let token=vendettaVisitTokens.get(receipt);if(!token){token=Object.freeze({});vendettaVisitTokens.set(receipt,token);}return token;}
+ #enteredOlderArrival(key:'warlordArrival'|'vendettaLifetime',combat:NativeAreaSceneCombat):void {
+  const stage=this.#eventArrival,label=key==='warlordArrival'?'Native crown':'Native Vendetta';
+  if(!stage)throw Error(label+' needs its selected genuine revisit');
+  if(stage.key!==key)throw Error('Native arrival leaf is selected for '+eventArrivalName(stage.key));
+  if(!stage.active||!stage.entered||stage.combat!==combat||own(combat,key)!==stage.owner)throw Error(label+' needs its entered arrival invocation');
+ }
+ assertWarlordArrival(combat:NativeAreaSceneCombat):World['zone'] {this.#enteredOlderArrival('warlordArrival',combat);return this.#selectedWarlordArrival(combat).definition;}
+ #selectedWarlordArrival(combat:NativeAreaSceneCombat):{token:object;definition:World['zone']} {
   const r=this.#warlordArrival,frame=this.#frame;if(!r||!this.#moving||!frame?.active||frame.current!==r.row||r.row.combat!==combat)throw Error('Native crown needs its selected genuine revisit');
   this.#ready(r.row);finalSeats(r.capture);Reflect.apply(authorityFinalPhysical,this.input.authority,[r.row.binding,[r.body]]);
-  if(this.#warlordArrival!==r||this.#frame!==frame||!frame.active||frame.current!==r.row||!Reflect.apply(arrayIncludes,frame.seats,[r.seat])||own(r.seat,'actor')!==r.body||own(r.seat,'meta')!==r.meta||own(r.row.binding.scene,'player')!==r.body||own(r.row.binding.scene,'zone')!==r.definition)throw Error('Native crown arrival lost its actual hand or ground');return r.definition;
+  if(this.#warlordArrival!==r||this.#frame!==frame||!frame.active||frame.current!==r.row||!Reflect.apply(arrayIncludes,frame.seats,[r.seat])||own(r.seat,'actor')!==r.body||own(r.seat,'meta')!==r.meta||own(r.row.binding.scene,'player')!==r.body||own(r.row.binding.scene,'zone')!==r.definition)throw Error('Native crown arrival lost its actual hand or ground');return{token:this.#arrivalVisit(r),definition:r.definition};
  }
  /** The new arrival cohort has not occupied this fight; every other physical seat does, including downed hands. */
  warlordOccupied(arrival:NativeAreaSceneCombat,target:NativeAreaSceneCombat):boolean {
@@ -450,38 +466,53 @@ export class NativeAreaSceneTransitionCoordinator {
   return presence.seats.some(seat=>target!==arrival||!Reflect.apply(arrayIncludes,r.arriving,[own(seat,'actor')]));
  }
  #selectedVendettaArrival(combat:NativeAreaSceneCombat):{token:object;occupied:boolean} {
-  if(this.#eventArrival)throw Error('Native arrival leaf is selected for '+(this.#eventArrival.key==='crusadeLifetime'?'Crusade':'Verminfall'));
-  return this.#selectedEventArrival(combat);
+  this.#enteredOlderArrival('vendettaLifetime',combat);return this.#selectedEventArrival(combat);
  }
  #selectedEventArrival(combat:NativeAreaSceneCombat):{token:object;occupied:boolean} {
   const r=this.#warlordArrival,frame=this.#frame;if(!r||!this.#moving||!frame?.active||frame.current!==r.row||r.row.combat!==combat)throw Error('Native Vendetta needs its selected genuine revisit');
   this.#ready(r.row);finalSeats(r.capture);Reflect.apply(authorityFinalPhysical,this.input.authority,[r.row.binding,[r.body]]);
   const presence=this.#presence(r.row),occupied=presence.seats.some(seat=>!Reflect.apply(arrayIncludes,r.arriving,[own(seat,'actor')]));
-  if(this.#warlordArrival!==r||this.#frame!==frame||!frame.active||frame.current!==r.row||!Reflect.apply(arrayIncludes,frame.seats,[r.seat])||own(r.seat,'actor')!==r.body||own(r.seat,'meta')!==r.meta||own(r.row.binding.scene,'player')!==r.body||own(r.row.binding.scene,'zone')!==r.definition)throw Error('Native Vendetta arrival lost its actual hand or ground');let token=vendettaVisitTokens.get(r);if(!token){token=Object.freeze({});vendettaVisitTokens.set(r,token);}return{token,occupied};
+  if(this.#warlordArrival!==r||this.#frame!==frame||!frame.active||frame.current!==r.row||!Reflect.apply(arrayIncludes,frame.seats,[r.seat])||own(r.seat,'actor')!==r.body||own(r.seat,'meta')!==r.meta||own(r.row.binding.scene,'player')!==r.body||own(r.row.binding.scene,'zone')!==r.definition)throw Error('Native Vendetta arrival lost its actual hand or ground');return{token:this.#arrivalVisit(r),occupied};
  }
- #claimEventArrival(key:EventArrivalKey,combat:NativeAreaSceneCombat,owner:EventArrivalOwner):()=>{token:object;occupied:boolean} {
-  const stage=this.#eventArrival,label=key==='crusadeLifetime'?'Native Crusade':'Native Verminfall';
+ #reserveArrival(key:EventArrivalKey,combat:NativeAreaSceneCombat,owner:EventArrivalOwner):EventArrivalStage {
+  const stage=this.#eventArrival,label='Native '+eventArrivalName(key);
+  if(key==='warlordArrival'||key==='vendettaLifetime'){
+   if(!stage)throw Error((key==='warlordArrival'?'Native crown':'Native Vendetta')+' needs its selected genuine revisit');
+   if(stage.key!==key)throw Error('Native arrival leaf is selected for '+eventArrivalName(stage.key));
+  }
   if(!stage||!stage.active||stage.entered||stage.key!==key||stage.combat!==combat||stage.owner!==owner||own(combat,key)!==owner)throw Error(label+' needs its selected unclaimed arrival invocation');
   // Reserve entry before selected readiness/physical validation can reenter.
-  stage.entered=true;const initial=this.#selectedEventArrival(combat);if(initial.token!==stage.visit)throw Error(label+' arrival visit changed');
+  stage.entered=true;return stage;
+ }
+ #claimWarlordArrival(combat:NativeAreaSceneCombat,owner:NativeAreaSceneCombat['warlordArrival']):()=>World['zone'] {
+  const stage=this.#reserveArrival('warlordArrival',combat,owner),initial=this.#selectedWarlordArrival(combat);
+  if(initial.token!==stage.visit)throw Error('Native crown arrival visit changed');
+  return()=>{
+   if(this.#eventArrival!==stage||!stage.active||!stage.entered||own(combat,'warlordArrival')!==owner)throw Error('Native crown arrival invocation expired');
+   const current=this.#selectedWarlordArrival(combat);if(current.token!==stage.visit)throw Error('Native crown arrival visit changed');return current.definition;
+  };
+ }
+ #claimEventArrival(key:Exclude<EventArrivalKey,'warlordArrival'>,combat:NativeAreaSceneCombat,owner:EventArrivalOwner):()=>{token:object;occupied:boolean} {
+  const stage=this.#reserveArrival(key,combat,owner),label='Native '+eventArrivalName(key),initial=this.#selectedEventArrival(combat);if(initial.token!==stage.visit)throw Error(label+' arrival visit changed');
   return()=>{
    if(this.#eventArrival!==stage||!stage.active||!stage.entered||own(combat,key)!==owner)throw Error(label+' arrival invocation expired');
    const current=this.#selectedEventArrival(combat);if(current.token!==stage.visit)throw Error(label+' arrival visit changed');return current;
   };
  }
+ #selectedArrivalVisit(key:EventArrivalKey,combat:NativeAreaSceneCombat):object {return key==='warlordArrival'?this.#selectedWarlordArrival(combat).token:this.#selectedEventArrival(combat).token;}
  #invokeEventArrival(key:EventArrivalKey,combat:NativeAreaSceneCombat):void {
-  const label=key==='crusadeLifetime'?'Native Crusade':'Native Verminfall';if(this.#eventArrival)throw Error(label+' arrival invocation cannot reenter');
+  const label='Native '+eventArrivalName(key);if(this.#eventArrival)throw Error(label+' arrival invocation cannot reenter');
   const owner=own<EventArrivalOwner>(combat,key),stage:EventArrivalStage={key,combat,owner,visit:undefined,active:false,entered:false};
-  // Selection grants no entry. Both event leaves and the older siblings refuse
-  // borrowing this stage, before the first selected readiness callback.
+  // Selection grants no entry. Every sibling and both live registry seams
+  // refuse borrowing this stage, through the final post-return validation.
   this.#eventArrival=stage;
   try{
-   stage.visit=this.#selectedEventArrival(combat).token;
-   const selected=owner.arrive,current=this.#selectedEventArrival(combat);
-   if(current.token!==stage.visit||own(combat,key)!==owner||typeof selected!=='function')throw Error(label+' selected arrival callable changed');
+   stage.visit=this.#selectedArrivalVisit(key,combat);
+   const selected=owner.arrive,current=this.#selectedArrivalVisit(key,combat);
+   if(current!==stage.visit||own(combat,key)!==owner||typeof selected!=='function')throw Error(label+' selected arrival callable changed');
    stage.active=true;const result=Reflect.apply(selected,owner,[]);if(nativeBirthAsyncResult(result))throw Error(label+' arrival must be synchronous');
    if(!stage.entered)throw Error(label+' selected arrival did not claim its invocation');
-   if(this.#selectedEventArrival(combat).token!==stage.visit)throw Error(label+' arrival visit changed');
+   if(this.#selectedArrivalVisit(key,combat)!==stage.visit)throw Error(label+' arrival visit changed');
   }finally{stage.active=false;this.#eventArrival=null;}
  }
  #bountyArrival:{combat:NativeAreaSceneCombat;from:string|undefined}|null=null;
@@ -662,7 +693,7 @@ export class NativeAreaSceneTransitionCoordinator {
    for(const seat of frame.seats){source.roads.depart(seat);destination.roads.arrive(seat,activeRoad?activeRoad.receipt.ticket:{seatId:own<string>(seat,'id'),dest:zoneId,...(!onGraph?{ladder}:{})},from??null);}
    destination.combat.transitionArrival(cohort);
    if(!firstBirth){const selectedHarbor=capture.rows.find(row=>row.body===incoming);if(!selectedHarbor)throw Error('Native harbor arrival lost its selected seat');this.#harborArrival={row:destination,capture,seat:selectedHarbor.seat,body:incoming,meta:own(selectedHarbor.seat,'meta'),definition:destScene.zone};try{destination.combat.harborServices.arrive();}finally{this.#harborArrival=null;}}
-   if(!firstBirth){const selected=capture.rows.find(row=>row.body===incoming);if(!selected)throw Error('Native crown arrival lost its incoming seat');this.#warlordArrival={row:destination,capture,seat:selected.seat,body:incoming,meta:own(selected.seat,'meta'),definition:destScene.zone,arriving:Object.freeze([...cohort])};try{destination.combat.warlordArrival.arrive();this.#invokeEventArrival('crusadeLifetime',destination.combat);this.#invokeEventArrival('verminfallLifetime',destination.combat);destination.combat.vendettaLifetime.arrive();}finally{this.#warlordArrival=null;}}
+   if(!firstBirth){const selected=capture.rows.find(row=>row.body===incoming);if(!selected)throw Error('Native crown arrival lost its incoming seat');this.#warlordArrival={row:destination,capture,seat:selected.seat,body:incoming,meta:own(selected.seat,'meta'),definition:destScene.zone,arriving:Object.freeze([...cohort])};try{this.#invokeEventArrival('warlordArrival',destination.combat);this.#invokeEventArrival('crusadeLifetime',destination.combat);this.#invokeEventArrival('verminfallLifetime',destination.combat);this.#invokeEventArrival('vendettaLifetime',destination.combat);}finally{this.#warlordArrival=null;}}
    if(!firstBirth){this.#bountyArrival={combat:destination.combat,from};try{destination.combat.arriveBounties();}finally{this.#bountyArrival=null;}}
    if(!firstBirth){const selected=capture.rows.find(row=>row.body===incoming);if(!selected)throw Error('Native encounter arrival lost its incoming seat');this.#delayedArrival={combat:destination.combat,kind:'encounter',capture,seat:selected.seat,body:incoming,local:localSeat,meta:selected.seat.meta};try{destination.combat.encounterArrival.arrive();}finally{this.#delayedArrival=null;}}
    if(!firstBirth){const selected=capture.rows.find(row=>row.body===incoming);if(!selected)throw Error('Native surface arrival lost its incoming seat');this.#delayedArrival={combat:destination.combat,kind:'merc',capture,seat:selected.seat,body:incoming,local:localSeat,meta:selected.seat.meta};try{destination.combat.surfaceArrival.arriveMerc();}finally{this.#delayedArrival=null;}}

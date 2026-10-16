@@ -7,7 +7,7 @@ import {assertNativeCombatOwnerEntry,type NativeAreaCombatOwnerEntry} from './na
 import {isNativeAreaSceneCombat,type NativeAreaSceneCombat} from './nativeAreaSceneCombat';
 import {nativePopulationFactoryOwner} from './nativeAreaScenePopulation';
 import {nativeReadyAuthority,nativeUnclaimedActor} from './nativeAreaActorAuthority';
-import {selectedNativeVendettaArrival} from './nativeAreaSceneTransitionCoordinator';
+import {claimNativeVendettaArrival} from './nativeAreaSceneTransitionCoordinator';
 const registrations=new WeakMap<object,NativeVendettaRegistration>();
 /** Consumes only a private one-use token issued by the actual owner below. */
 export function consumeNativeVendettaRegistration(token:object):NativeVendettaRegistration {const r=registrations.get(token);if(!r)throw Error('Native Vendetta needs its private actual-owner registration');registrations.delete(token);return r;}
@@ -18,7 +18,7 @@ interface Cohort {field:VendettaField;definition:ZoneDef;id:string;bodies:Actor[
 interface Placement {field:VendettaField;definition:ZoneDef;id:string;actors:Actor[];marker:Set<string>;initial:boolean;cohort:Cohort}
 export class NativeAreaSceneVendettaLifetime {
  readonly #combat:NativeAreaSceneCombat;readonly #entry:NativeAreaCombatOwnerEntry;readonly #definition:ZoneDef;
- readonly #visits=new WeakSet<object>();readonly #cohorts:Cohort[]=[];#active:Placement|undefined;
+ readonly #visits=new WeakSet<object>();readonly #cohorts:Cohort[]=[];#active:Placement|undefined;#arriving=false;
  constructor(combat:NativeAreaSceneCombat,entry:NativeAreaCombatOwnerEntry){
   if(!isNativeAreaSceneCombat(combat))throw Error('Native Vendetta needs its actual combat owner');assertNativeCombatOwnerEntry(combat,entry);this.#combat=combat;this.#entry=entry;this.#definition=combat.scene.zone;
   const token=Object.freeze({});registrations.set(token,{host:combat.input.assembly.input.registry.input.birth.host,place:(field,definition,spec,run)=>this.#place(field,definition,spec,run),create:select=>this.#create(select)});bindNativeVendettaIdentity(token);
@@ -60,14 +60,17 @@ export class NativeAreaSceneVendettaLifetime {
  /** Only an actual unoccupied warm return starts a new visit. Field rolls,
   * cooldown writes and native partial births still occur in their original order. */
  arrive():void {
-  const c=this.#combat,selection=selectedNativeVendettaArrival(c.input.coordinator,c);if(selection.occupied||this.#visits.has(selection.token))return;
-  const scene=c.scene,definition=this.#definition,actors=scene.actors,birth=c.input.assembly.input.registry.input.birth,marker=birth.input.state.materializedWrits,field=c.input.campaign.sim.vendettaField;
-  const check=()=>{const current=selectedNativeVendettaArrival(c.input.coordinator,c);if(current.token!==selection.token||current.occupied||c.scene!==scene||scene.zone!==definition||scene.actors!==actors||birth.input.state.materializedWrits!==marker||c.input.campaign.sim.vendettaField!==field)throw Error('Native Vendetta selected arrival changed');};
-  this.#entry(this,{permission:'physical',physical:[],sources:[]},()=>{
-   check();this.#prune(actors);const selectedDelete=marker.delete;check();let failed=false;
-   try{Reflect.apply(selectedDelete,marker,[definition.id]);}catch(error){failed=true;throw error;}finally{if(!Reflect.apply(has,marker,[definition.id]))this.#visits.add(selection.token);if(failed){try{check();}catch{ /* Preserve the native callback error and completed marker effect. */ }}else check();}
-   if(Reflect.apply(has,marker,[definition.id]))throw Error('Native Vendetta selected guard was not released');
-   const selected=birth.springVendettaAmbush;check();Reflect.apply(selected,birth,[definition]);check();
-  });
+  if(this.#arriving||this.#active)throw Error('Native Vendetta arrival cannot reenter');this.#arriving=true;
+  try{
+   const c=this.#combat,validate=claimNativeVendettaArrival(c.input.coordinator,c,this),selection=validate();if(selection.occupied||this.#visits.has(selection.token))return;
+   const scene=c.scene,definition=this.#definition,actors=scene.actors,birth=c.input.assembly.input.registry.input.birth,marker=birth.input.state.materializedWrits,field=c.input.campaign.sim.vendettaField;
+   const check=()=>{const current=validate();if(current.token!==selection.token||current.occupied||c.scene!==scene||scene.zone!==definition||scene.actors!==actors||birth.input.state.materializedWrits!==marker||c.input.campaign.sim.vendettaField!==field)throw Error('Native Vendetta selected arrival changed');};
+   this.#entry(this,{permission:'physical',physical:[],sources:[]},()=>{
+    check();this.#prune(actors);const selectedDelete=marker.delete;check();let failed=false;
+    try{Reflect.apply(selectedDelete,marker,[definition.id]);}catch(error){failed=true;throw error;}finally{if(!Reflect.apply(has,marker,[definition.id]))this.#visits.add(selection.token);if(failed){try{check();}catch{ /* Preserve the native callback error and completed marker effect. */ }}else check();}
+    if(Reflect.apply(has,marker,[definition.id]))throw Error('Native Vendetta selected guard was not released');
+    const selected=birth.springVendettaAmbush;check();Reflect.apply(selected,birth,[definition]);check();
+   });
+  }finally{this.#arriving=false;}
  }
 }

@@ -112,7 +112,9 @@ jobs:
       - name: Retained Crusade arrival source and current probe dispatch
         run: |
           npx tsx balance/check_nativecrusadearrivalsource.ts
-          npx tsx balance/check_probesupersessions.ts
+          npx tsx balance/check_probesupersessionscurrent.ts
+          npx tsx balance/check_nativearrivalwindowboundaries.ts
+          npx tsx balance/check_nativearrivalinvocationsource.ts
 
       - name: Development watcher and save-fixture source regressions
         run: |

@@ -1,11 +1,13 @@
 /** Explicit current-runtime replacements for preserved historical contracts.
- * The sealed roster and original probe bytes are still checked. Neither a
+ * The exact superseded row and original probe bytes are still checked. Neither a
  * source check nor a predecessor replay counts as current gameplay execution. */
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import type {ProbeRow} from './proberoster';
+import {CRUSADE_HISTORICAL_SOURCE_SEAL,CRUSADE_CURRENT_ASSERTION_SUPERSESSION} from './probesupersessioncontracts';
+export {VERMINFALL_CRUSADE_CI_SUPERSESSION} from './probesupersessioncontracts';
 
 /** Committed one-to-one migration evidence. The exact current-source digest below
  * binds this ordered entry map to the reviewed source; runtime supervisors compare
@@ -64,10 +66,10 @@ export const CRUSADE_ARRIVAL_HISTORICAL_CASES:readonly CrusadeHistoricalCase[]=O
  Object.freeze({"historicalIndex":3,"historicalName":"expired event commander keeps ordinary kill rewards only","disposition":"unchanged course body","currentIndex":3,"currentCase":"expired event commander keeps ordinary kill rewards only","rationale":"Retain the original course body and every assertion; this instance needs no timing change."}),
  Object.freeze({"historicalIndex":4,"historicalName":"live older event commander can suppress only its own campaign","disposition":"explicit timing supersession","currentIndex":4,"currentCase":"live older event commander suppresses only its campaign while successor muster waits","rationale":"Pre-kill discovery remains 1, replacing 2. Exact older issuing-event power nick, successor power, modifier attribution, event ledger and ordinary XP assertions retained."}),
  Object.freeze({"historicalIndex":5,"historicalName":"query-throw","disposition":"same fault relocated to selected genuine arrival","currentIndex":5,"currentCase":"arrival query-throw","rationale":"Fault installed after transfer; original exact exception and receiver assertions preserved."}),
- Object.freeze({"historicalIndex":6,"historicalName":"query-remove-body","disposition":"same fault relocated to selected genuine arrival","currentIndex":6,"currentCase":"arrival query-remove-body","rationale":"Actual incoming hand removed from selected census, refusal asserted and hand restored before transition completes."}),
- Object.freeze({"historicalIndex":7,"historicalName":"query-replace-marker","disposition":"same fault relocated to selected genuine arrival","currentIndex":7,"currentCase":"arrival query-replace-marker","rationale":"Captured marker replaced by selected query; original receiver and unchanged old guard assertions retained."}),
- Object.freeze({"historicalIndex":8,"historicalName":"query-reenter","disposition":"same fault relocated to selected genuine arrival","currentIndex":8,"currentCase":"arrival query-reenter","rationale":"Selected query attempts actual live entry; new arrival guard must refuse it."}),
- Object.freeze({"historicalIndex":9,"historicalName":"delete-getter-replace","disposition":"same fault relocated to selected genuine arrival","currentIndex":9,"currentCase":"arrival delete-getter-replace","rationale":"Selected getter swaps marker; returned callable must remain uncalled."}),
+ Object.freeze({"historicalIndex":6,"historicalName":"query-remove-body","disposition":"same fault relocated to selected genuine arrival","currentIndex":6,"currentCase":"arrival query-remove-body","rationale":"Actual incoming hand removed from selected census; current refusal is the observed exact Error/Stale native final physical actor, then hand restored. Prior33 used a broader regex; explicit33-to33 map records this strengthening."}),
+ Object.freeze({"historicalIndex":7,"historicalName":"query-replace-marker","disposition":"same fault relocated to selected genuine arrival","currentIndex":7,"currentCase":"arrival query-replace-marker","rationale":"Captured marker replaced by selected query; original receiver and unchanged old guard assertions retained, with observed exact Error/Native Crusade selected arrival changed replacing the prior33 broader regex."}),
+ Object.freeze({"historicalIndex":8,"historicalName":"query-reenter","disposition":"same fault relocated to selected genuine arrival","currentIndex":8,"currentCase":"arrival query-reenter","rationale":"Selected query attempts actual live entry; observed exact Error/Native Crusade live registry cannot reenter replaces the prior33 broader regex."}),
+ Object.freeze({"historicalIndex":9,"historicalName":"delete-getter-replace","disposition":"same fault relocated to selected genuine arrival","currentIndex":9,"currentCase":"arrival delete-getter-replace","rationale":"Selected getter swaps marker; returned callable remains uncalled, with observed exact Error/Native Crusade selected arrival changed replacing the prior33 broader regex."}),
  Object.freeze({"historicalIndex":10,"historicalName":"delete-partial","disposition":"same fault relocated to selected genuine arrival","currentIndex":10,"currentCase":"arrival delete-partial","rationale":"Immediate exact deletion and sentinel retained. Retry only after actual transition completes, requiring discovery 2."}),
  Object.freeze({"historicalIndex":11,"historicalName":"add-partial","disposition":"same fault relocated to selected genuine arrival","currentIndex":11,"currentCase":"arrival add-partial","rationale":"Immediate exact add and sentinel retained. Idle retry still requires discovery 1 and no replay."}),
  Object.freeze({"historicalIndex":12,"historicalName":"notice-partial","disposition":"same fault relocated to selected genuine arrival","currentIndex":12,"currentCase":"arrival notice-partial","rationale":"Immediate exact discovery and full body census retained; idle retry compares the same current census identity and exact bodies."}),
@@ -92,13 +94,12 @@ export const CRUSADE_ARRIVAL_SUPERSESSION=Object.freeze({
  historicalCases:CRUSADE_ARRIVAL_HISTORICAL_CASES,
  currentCases:CRUSADE_ARRIVAL_CURRENT_CASES,
  historicalProbe:'probe_nativecrusadeepochboundaries.ts',
- currentCheck:'check_nativecrusadearrivalboundaries.ts',
+ currentCheck:CRUSADE_CURRENT_ASSERTION_SUPERSESSION.currentCheck,
  predecessor:'82c516cedb474e6da6e0b0bc1d4a879bcdf52fb6',
- historicalLfSha256:'4c3a892667d2d4625db2a55080d129ffae4e167c115ebc6723fcfc10652a45ea',
- rosterLfSha256:'63700ea35d9b3726ceef55aa297ac4b40b718ca871e9f53ed543e698b0aa56ed',
- currentLfSha256:'366844bf6d068fe7a3809fdd01494e09f91a65d26f4e8bb5cf194694223a195d',
+ historicalLfSha256:CRUSADE_HISTORICAL_SOURCE_SEAL.parentBlobSha256,
+ currentLfSha256:CRUSADE_CURRENT_ASSERTION_SUPERSESSION.currentLfSha256,
  expectedWhy:'Reviewed repeat-event gate, garrison and commander ownership; original assertions preserved.',
- reason:'Visit timing supersedes two historical expectations and relocates eight selected faults; all 13 original instances map to 33 current assertions.',
+ reason:'Visit timing supersedes two historical expectations and relocates eight selected faults; all 13 original instances map to 33 current assertions, with four observed refusals explicitly tightened in the named current check.',
 });
 export interface ProbeExecution {
  readonly file:string;
@@ -119,7 +120,6 @@ export function resolveProbeExecution(row:ProbeRow,root:string):ProbeExecution{
  assertCrusadeCaseMap();
  assert.deepEqual(Object.keys(row).sort(),['probe','status','tier','why'],'Superseded roster row shape changed');
  assert.equal(row.status,'green');assert('tier'in row);assert.equal(row.tier,'fast');assert.equal(row.why,s.expectedWhy);
- exactSource(root,'proberoster.ts',s.rosterLfSha256);
  exactSource(root,s.historicalProbe,s.historicalLfSha256);
  exactSource(root,s.currentCheck,s.currentLfSha256);
  return Object.freeze({file:s.currentCheck,args:Object.freeze([]),label:row.probe+' [CURRENT-SUCCESSOR -> '+s.currentCheck+']',historicalSourceOnly:true});
@@ -138,7 +138,7 @@ export function probeExecutionLabel(row:ProbeRow):string{
 /** Rendering/filtering never throws due to later source drift. Only invocation
  * resolution grants execution after validating the real current files. */
 export function probeExecutionFile(row:ProbeRow):string{return row.probe===CRUSADE_ARRIVAL_SUPERSESSION.historicalProbe?CRUSADE_ARRIVAL_SUPERSESSION.currentCheck:row.probe;}
-export function probeMatchesFilter(row:ProbeRow,filter:string):boolean{return row.probe.includes(filter)||probeExecutionFile(row).includes(filter);}
+export function probeMatchesFilter(row:ProbeRow,filter:string):boolean{return row.probe.includes(filter)||probeExecutionFile(row).includes(filter)||(row.probe===CRUSADE_ARRIVAL_SUPERSESSION.historicalProbe&&CRUSADE_CURRENT_ASSERTION_SUPERSESSION.historicalCheck.includes(filter));}
 export function probeRerunCommand(row:ProbeRow):string{
  const args=row.probe===CRUSADE_ARRIVAL_SUPERSESSION.historicalProbe?[]:row.args??[];
  return 'npx tsx balance/'+probeExecutionFile(row)+(args.length?' '+args.join(' '):'');

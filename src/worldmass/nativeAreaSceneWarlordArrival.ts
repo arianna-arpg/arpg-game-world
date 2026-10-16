@@ -11,7 +11,7 @@ import {assertNativeCombatOwnerEntry,assertNativeCombatOwnerHooks,type NativeAre
 import {isNativeAreaSceneCombat,type NativeAreaSceneCombat} from './nativeAreaSceneCombat';
 import {NativeAreaScenePopulation} from './nativeAreaScenePopulation';
 import {NativeAreaActorAuthority} from './nativeAreaActorAuthority';
-import {NativeAreaSceneTransitionCoordinator} from './nativeAreaSceneTransitionCoordinator';
+import {NativeAreaSceneTransitionCoordinator,claimNativeWarlordArrival} from './nativeAreaSceneTransitionCoordinator';
 const registrations=new WeakMap<object,NativeWarlordRegistration>();
 installNativeWarlordRegistration(token=>{const r=registrations.get(token);if(!r)throw Error('Native crown needs its private one-use registration');registrations.delete(token);return r;});
 function bind(r:NativeWarlordRegistration):void {const token=Object.freeze({});registrations.set(token,r);bindNativeWarlordIdentity(token);}
@@ -23,13 +23,13 @@ interface Placement {initial:boolean;definition:ZoneDef;lord:WarlordState;crown:
 export class NativeAreaSceneWarlordArrival {
  readonly host:NativeWarlordHost;
  readonly #crownOf=WarlordField.prototype.crownOf;readonly #withCrownKill=WarlordField.prototype.withCrownKill;readonly #factoryOwner=NativeAreaScenePopulation.prototype.factoryOwnerOf;
- readonly #seatsFor:NativeAreaSceneTransitionCoordinator['seatsFor'];readonly #selected:NativeAreaSceneTransitionCoordinator['assertWarlordArrival'];readonly #occupiedQuery:NativeAreaSceneTransitionCoordinator['warlordOccupied'];
+ readonly #seatsFor:NativeAreaSceneTransitionCoordinator['seatsFor'];readonly #occupiedQuery:NativeAreaSceneTransitionCoordinator['warlordOccupied'];
  readonly #bindingFor=NativeAreaActorAuthority.prototype.bindingFor;readonly #finalPhysical=NativeAreaActorAuthority.prototype.assertFinalPhysical;readonly #unclaimed=NativeAreaActorAuthority.prototype.assertUnclaimed;
  readonly #combat:NativeAreaSceneCombat;readonly #entry:NativeAreaCombatOwnerEntry;readonly #hooks:NativeAreaCombatOwnerHooks;readonly #physical:NativeWarlordHost&NativeSceneCombatMotionHost;readonly #campaign:Campaign;
- #placement:Placement|undefined;#arriving:ZoneDef|undefined;#busy=false;
+ #placement:Placement|undefined;#arriving:ZoneDef|undefined;#arrivalCheck:(()=>ZoneDef)|undefined;#entering=false;#busy=false;
  constructor(combat:NativeAreaSceneCombat,entry:NativeAreaCombatOwnerEntry,hooks:NativeAreaCombatOwnerHooks,physical:NativeWarlordHost&NativeSceneCombatMotionHost){
   if(!isNativeAreaSceneCombat(combat))throw Error('Native crown needs its actual aggregate');assertNativeCombatOwnerEntry(combat,entry);assertNativeCombatOwnerHooks(combat,hooks);this.#combat=combat;this.#entry=entry;this.#hooks=hooks;this.#physical=physical;
-  this.#seatsFor=NativeAreaSceneTransitionCoordinator.prototype.seatsFor;this.#selected=NativeAreaSceneTransitionCoordinator.prototype.assertWarlordArrival;this.#occupiedQuery=NativeAreaSceneTransitionCoordinator.prototype.warlordOccupied;
+  this.#seatsFor=NativeAreaSceneTransitionCoordinator.prototype.seatsFor;this.#occupiedQuery=NativeAreaSceneTransitionCoordinator.prototype.warlordOccupied;
   let campaign=campaigns.get(combat.input.coordinator);if(!campaign){campaign={bodies:new Set(),crowns:new Map(),consumed:new WeakSet()};campaigns.set(combat.input.coordinator,campaign);}this.#campaign=campaign;
   const host=Object.create(combat.input.assembly.host) as NativeWarlordHost;
   for(const key of ['sim','actors'] as const)Object.defineProperty(host,key,{enumerable:true,get:()=>{this.#arrival();const value=Reflect.get(physical,key);this.#arrival();return value;}});
@@ -38,7 +38,7 @@ export class NativeAreaSceneWarlordArrival {
   const observer=(initial:boolean):NativeWarlordObserver=>({place:(lord,run)=>this.#place(initial,lord,run),create:run=>this.#create(run),beforePush:(actors,body)=>this.#beforePush(actors,body),push:body=>this.#push(body)});
   bind({host:combat.input.assembly.host,observer:observer(true)});bind({host:this.host,observer:observer(false)});
  }
- #arrival():ZoneDef {const def=this.#arriving;if(!def||Reflect.apply(this.#selected,this.#combat.input.coordinator,[this.#combat])!==def||this.#combat.scene.zone!==def)throw Error('Native crown needs its unchanged arrival definition');return def;}
+ #arrival():ZoneDef {const def=this.#arriving,check=this.#arrivalCheck;if(!def||!check||check()!==def||this.#combat.scene.zone!==def)throw Error('Native crown needs its unchanged arrival definition');return def;}
  #check(p:Placement):void {
   const combat=this.#combat;if(this.#placement!==p||combat.scene.zone!==p.definition)throw Error('Native crown placement changed');
   if(p.initial){if(combat.input.assembly.phase!=='birthing')throw Error('Native crown initial placement escaped actual birth');}else this.#arrival();
@@ -114,8 +114,12 @@ export class NativeAreaSceneWarlordArrival {
   row.state='spent';this.#campaign.consumed.add(row.crown);this.#forget(row);return Reflect.apply(this.#withCrownKill,field,[row.lord,row.crown,()=>Reflect.apply(fn,field,[faction,time,view])]);
  }
  arrive():void {
-  if(this.#arriving||this.#busy)throw Error('Native crown arrival cannot reenter');const def=Reflect.apply(this.#selected,this.#combat.input.coordinator,[this.#combat]);this.#arriving=def;
-  try{this.#entry(this,{permission:'physical'},()=>{this.#arrival();birthNativeWarlord(this.host,def,def.objective,this.#combat.scene.player);});}finally{this.#arriving=undefined;}
+  if(this.#entering||this.#arriving||this.#busy)throw Error('Native crown arrival cannot reenter');this.#entering=true;
+  try{
+   const check=claimNativeWarlordArrival(this.#combat.input.coordinator,this.#combat,this);this.#arrivalCheck=check;
+   const def=check();this.#arriving=def;
+   this.#entry(this,{permission:'physical'},()=>{this.#arrival();birthNativeWarlord(this.host,def,def.objective,this.#combat.scene.player);});
+  }finally{this.#arrivalCheck=undefined;this.#arriving=undefined;this.#entering=false;}
  }
 }
 
