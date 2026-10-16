@@ -20,10 +20,12 @@
 // ---------------------------------------------------------------------------
 
 import { retainedPerfTravel, withPerfProfile, assertPerfWalk, assertPerfFrames } from './nativePerfTravel';
+import { heapMB, rampListFor, rampSlopes, regimeOf, validateResidencyCourse, validateResidencyMatrix, residencyError, residencyWindowIssues, residencyRowIssues, type PerfResidencyBoundary, type PerfResidencyWindow, RAMP_DEFAULT_STEPS, RESIDENCY_COURSE_NOTES, type PerfCourse, type PerfFreshRow, type PerfMintReceipt, type PerfRampReport, type PerfRampStep, type PerfRuntimeIdentity } from './perfResidency';
 import { sidezoneOf } from '../data/sidezones';
 import { TILESETS } from '../data/tilesets';
 import { skyOf, START_ZONE } from '../data/zones';
 import { FluxPhase } from '../engine/flux';
+import { suppressSaves } from '../meta/persistence';
 import { setVisAblate, VIS_TELEMETRY } from '../render/vis/visConfig';
 import { quantile } from '../sim/metrics';
 import { DAY_LENGTH } from '../world/daynight';
@@ -71,6 +73,30 @@ export interface PerfSweepOpts {
    *  rolls no dice); compare against a bare run of the same filter for the
    *  pool's true frame cost. Never one of the gate's own settings. */
   lite?: number;
+  /** THE RESIDENCY INSTRUMENT (src/dev/perfResidency.ts; docs/design/
+   *  desktop-residency.md): 'fresh' = one fresh run per matrix row (the town
+   *  control at one resident area, the zone at two: an UNMATCHED residency
+   *  contrast, read from the actual census, recorded as such, never judged
+   *  against the cumulative caps); 'ramp' = one run, the town re-sampled
+   *  after each visit while the residency grows. Both are report-only and
+   *  run in their own launcher invocation; the request is validated before
+   *  any start. Undefined = the original cumulative course, untouched. */
+  course?: PerfCourse;
+  /** THE MATCHED START: the manifest seed every fresh start of an additive
+   *  course uses (devStartRun(classId, seed)), so each row's world deals the
+   *  same town. Required with a course; undefined = today's rolled seed (the
+   *  original course). */
+  seed?: number;
+  /** Ramp length in steps, step 0 (the town alone) included; default 8. */
+  rampSteps?: number;
+  /** The ramp's visited order (steps 1..K-1); default rampListFor: the
+   *  pinned heavy faces first, then light tilesets in matrix order, or the
+   *  whole matrix in sweep order when K covers it. */
+  rampList?: string[];
+  /** THE AGE CONTROL: a ramp that visits nothing, so the residency stays at
+   *  one while the run ages. A comparison under unmatched ages, not an
+   *  isolation (the report says so beside its steps). */
+  rampAgeControl?: boolean;
 }
 
 export interface PerfZoneStats {
@@ -163,6 +189,8 @@ export interface PerfZoneStats {
    *  ledger for the flap class the 2026-08-03 close retired — a row that
    *  keeps arriving on attempt 3 is a flap the skip gate cannot see. */
   attempts: number;
+  /** Additive instrument only: all attempts, including discarded windows. */
+  residency?: { windows: PerfResidencyWindow[]; issues: string[]; valid: boolean };
 }
 
 /** One row the sweep could not measure — and WHY, as data the gate can
@@ -206,6 +234,15 @@ export interface PerfSweepReport {
   /** Forensics provenance: the pinned sky ('' = natural) + ablated passes. */
   weather: string;
   ablate: string[];
+  /** THE RESIDENCY INSTRUMENT's fields (src/dev/perfResidency.ts): absent on
+   *  the original cumulative course, whose report is unchanged. */
+  course?: PerfCourse;
+  startSeed?: number | null;
+  saves?: { suppressed: boolean; reason: string | null };
+  fresh?: PerfFreshRow<PerfZoneStats>[];
+  ramp?: PerfRampReport<PerfZoneStats>;
+  residencyWindows?: PerfResidencyWindow[];
+  selectedMatrix?: { ids: string[]; explicitOverride: boolean };
 }
 
 const PERF_SPREAD_BASE = 11; // staggers mint coordinates across the sweep
@@ -461,11 +498,61 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
 
   try {
   // A fresh probe run through the REAL start path (menus dismissed).
+  // THE REQUEST VALIDATION (src/dev/perfResidency.ts): a malformed or
+  // contradictory residency request is refused here, before any start and
+  // before the save suppression; the original course carries no residency
+  // option and passes untouched.
+  // THE MATRIX: frontier-eligible tilesets first (registry order — their
+  // mint-seed indices are calibration state and must not shift), then the
+  // perfProbe OPT-INS appended (caves and minted interiors: walkable steady
+  // states the frontier:false proxy was hiding from the gate). Realm
+  // tilesets stay out BY THE REGISTRY's own word: a launch-gated melting
+  // shelf has no steady state for a blind probe walk (the floor dissolves,
+  // the walker falls into a random zone, and the row measures the stitch);
+  // boundless streamers need package context a bare mint cannot supply. An
+  // explicit opts.tilesets override can still name anything for forensics.
+  const wants = (opts.filter ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const registry = Object.values(TILESETS);
+  const fullMatrix = opts.tilesets ?? [
+    ...registry.filter(t => t.frontier !== false && !t.boundless),
+    ...registry.filter(t => t.frontier === false && t.perfProbe && !t.boundless),
+  ].map(t => t.id);
+  // The filter selects WHICH rows run; seed and spread always derive from
+  // the FULL matrix position, so a filtered run mints the exact zones the
+  // full sweep gates (any subset reproduces, not just index-preserving
+  // prefixes).
+  const matrix = fullMatrix.filter(id => !wants.length || wants.some(f => id.includes(f)));
+
+  const courseFaults = [...validateResidencyCourse(opts), ...validateResidencyMatrix(opts, fullMatrix, registry.map(t => t.id))];
+  if (courseFaults.length) throw new Error('perfSweep: residency course refused: ' + courseFaults.join('; '));
   await g.hydrated();
-  withPerfProfile(g.account(), () => g.devStartRun(opts.classId), () => g.saveAccount());
+  const course: PerfCourse = opts.course ?? 'cumulative';
+  // THE SUPPRESSION (the residency instrument's one side effect, taken away):
+  // an additive course runs in ITS OWN launcher invocation and writes nothing
+  // durable: every later account/run save is refused with one console line
+  // (meta/persistence.ts); the original course is untouched by construction.
+  if (course !== 'cumulative') suppressSaves(RESIDENCY_COURSE_NOTES.saveReason);
+  const sweepStartedAt = { wall: performance.now(), iso: new Date().toISOString() };
+  withPerfProfile(g.account(), () => g.devStartRun(opts.classId, opts.seed), () => g.saveAccount());
+  const initialStartupMs = +(performance.now() - sweepStartedAt.wall).toFixed(1);
   const runtime = g.retained();
   if (!runtime) throw new Error('perfSweep: retained native startup is missing');
-  const travel = retainedPerfTravel(runtime);
+  let travel = retainedPerfTravel(runtime);
+  let selectedRuntime = runtime;
+  let startOrdinal = 0;
+  const residencyWindows: PerfResidencyWindow[] = [];
+  const objectIds = new WeakMap<object, number>();
+  let nextObjectId = 1;
+  const objectId = (value: object): number => { let id = objectIds.get(value); if (id === undefined) { id = nextObjectId++; objectIds.set(value, id); } return id; };
+  const residencyBoundary = (): PerfResidencyBoundary => {
+    const actual = g.retained();
+    if (!actual) throw new Error('perfSweep: residency boundary has no retained runtime');
+    const area = actual.current; // preserve the native readiness/current ownership check
+    const census = travel.census(); // retains the selected receiver's native check
+    return { wallMs: performance.now(), wallAt: new Date().toISOString(), campaignSec: g.world().time,
+      runtime: objectId(actual), expectedRuntime: objectId(selectedRuntime), writer: objectId(actual.writer), area: objectId(area),
+      zone: area.assembly.input.scene.zone.id, writerMatchesWorld: actual.writer === g.world(), ready: actual.ready, census };
+  };
   if (g.world().scene) throw new Error('perfSweep: a cinematic is still active');
   beat('start');
 
@@ -985,39 +1072,337 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     return null;
   };
 
+  // Additive-only boundary instrumentation. Each callback keeps its original
+  // exception; a failed egress read is separate evidence and cannot replace it.
+  const recordResidencyWindow = <T extends { held: boolean }>(tileset: string, attempt: number,
+    phase: PerfResidencyWindow['phase'], ingress: PerfResidencyBoundary, value: T | undefined,
+    failed: boolean, firstError: unknown): void => {
+    let egress: PerfResidencyBoundary | null = null, egressError: PerfResidencyWindow['egressError'] = null;
+    let readFailure: unknown;
+    try { egress = residencyBoundary(); } catch (error) { readFailure = error; egressError = residencyError(error); }
+    const row: PerfResidencyWindow = { index: residencyWindows.length, tileset, attempt, phase, ingress, egress,
+      held: value?.held ?? null, error: failed ? residencyError(firstError) : null, egressError, issues: [], valid: false };
+    row.issues = residencyWindowIssues(row); row.valid = row.issues.length === 0;
+    residencyWindows.push(row); beat('residency-window', { window: row });
+    if (failed) throw firstError;
+    if (egressError) throw readFailure;
+  };
+  const residencyWalk = async (tileset: string, attempt: number, phase: 'entry' | 'steady' | 'visit-entry', ms: number, dir: number): Promise<Awaited<ReturnType<typeof walkPhase>>> => {
+    const ingress = residencyBoundary();
+    let value: Awaited<ReturnType<typeof walkPhase>> | undefined, failed = false, firstError: unknown;
+    try { value = await walkPhase(ms, dir); } catch (error) { failed = true; firstError = error; }
+    recordResidencyWindow(tileset, attempt, phase, ingress, value, failed, firstError);
+    return value!;
+  };
+  const residencyRetryReturn = (tileset: string, attempt: number, operation: () => boolean): boolean => {
+    const ingress = residencyBoundary();
+    let value: boolean | undefined, failed = false, firstError: unknown;
+    try { value = operation(); } catch (error) { failed = true; firstError = error; }
+    recordResidencyWindow(tileset, attempt, 'retry-return', ingress, value === undefined ? undefined : { held: value }, failed, firstError);
+    return value!;
+  };
+  const sampleResidencyZone = async (tilesetId: string): Promise<PerfZoneStats | null> => {
+    const windowStart = residencyWindows.length;
+    beatTileset = tilesetId; // the deadman's holder: who owns the window now
+    beat('sample');
+    const homeZid = g.world().zone.id;
+    // Worst entry gap across ALL attempts: the first attempt carries the
+    // mint's true load burst — a retry's cheaper re-entry must not launder
+    // the row's entry-burst verdict. The annotation follows the worst gap
+    // (the value the gate judges), so the note always explains the number
+    // on the row.
+    let entryWorst = 0;
+    let entryNote = '';
+    // THE EXIT STORIES (hold forensics): one line per unheld phase — where
+    // the walker landed, how deep into the phase, and the day wheel's
+    // position (world.time is the global clock; travel never resets it, so
+    // the exit's own timestamp carries the phase). A hold skip's note now
+    // NAMES its three deaths instead of shrugging.
+    const holdStories: string[] = [];
+    lastHoldStories = holdStories; // visible to the caller's skip row
+    const storyOf = (attempt: number, phase: string, e: { atMs: number; zone: string; tileset: string; time: number; snap: string }): string => {
+      const wheel = (((e.time % DAY_LENGTH) + DAY_LENGTH) % DAY_LENGTH) / DAY_LENGTH;
+      return `a${attempt + 1} ${phase}+${(e.atMs / 1000).toFixed(1)}s -> '${e.zone}' (${e.tileset}) wheel ${wheel.toFixed(2)} ${e.snap}`;
+    };
+    const returnHome = (): boolean => {
+      const ok = travel.travelTo(homeZid); // false only off-graph — cannot happen for minted/START zones
+      if (ok) pinWeather(); // the pinned front re-parks on the home node
+      return ok;
+    };
+    for (let attempt = 0; attempt < HOLD_ATTEMPTS; attempt++) {
+      const zw = g.world();
+      zw.player.invulnerable = true; // unkillable but TARGETABLE: combat stays real
+      // THE LITE STRESS: the tide pours before the entry walk, so both the
+      // burst and the steady window carry the full crowd. Re-poured after a
+      // guard restart (the travel back reloads the zone); lite.spawn refuses
+      // past the pool cap, so a surviving tide tops up instead of doubling.
+      if (opts.lite) travel.pourLite('vermin_tide', opts.lite);
+      const dir0 = 0.6 + attempt * RETRY_TURN;
+      const entry = await residencyWalk(tilesetId, attempt + 1, 'entry', settleMs, dir0);
+      if (entry.worst > entryWorst) {
+        entryWorst = entry.worst;
+        entryNote = entryStallNote(entry);
+      }
+      if (!entry.held) {
+        if (entry.exit) holdStories.push(storyOf(attempt, 'entry', entry.exit));
+        if (!residencyRetryReturn(tilesetId, attempt + 1, returnHome)) break;
+        continue;
+      }
+      // Drain the zone-hop garbage NOW, inside the discarded window: a sweep
+      // hops zones at a rate no player ever will, and V8's collection storm
+      // otherwise lands mid-sample on whichever zone holds the window when
+      // the threshold trips — the breach wears an innocent zone's name
+      // (tundra 2026-07-12; gutworks 2026-07-16, clean twice solo). The
+      // launcher exposes gc for --perf-test only; normal play never has it.
+      (window as unknown as { gc?: () => void }).gc?.();
+      // One discarded frame between the gc and the window: a longtask entry
+      // is minted when its TASK ends, and the gc above runs inside OUR
+      // current task — resetting the ledger in the same task would let our
+      // own window-opening pause deliver INTO the fresh window. The raf
+      // closes our task first; its entry (if any) dies in ltReset's drain.
+      await raf();
+      ltReset();
+      g.perfFrames(true); // discard the entry burst; the steady window begins
+      VIS_TELEMETRY.snowBakes = 0;
+      VIS_TELEMETRY.groundBakes = 0;
+      const steady = await residencyWalk(tilesetId, attempt + 1, 'steady', sampleMs, dir0);
+      if (!steady.held) {
+        if (steady.exit) holdStories.push(storyOf(attempt, 'steady', steady.exit));
+        if (!residencyRetryReturn(tilesetId, attempt + 1, returnHome)) break;
+        continue;
+      }
+
+      ltDrain(); // pending in-window entries, folded before the snapshot
+      const zw2 = g.world();
+      const dump = g.perfFrames(false); // rings + the PHASE LEDGER's window slab
+      assertPerfFrames(dump.gap.length, g.crash().fatal);
+      assertPerfWalk(steady.worldSeconds, steady.walkDistance, steady.pausedFrames);
+      const stats = reduceFrames(dump, entryWorst, {
+        tileset: tilesetId, zone: zw2.zone.name,
+        variant: zw2.zone.variantName ?? null,
+        layout: zw2.zone.layoutType ?? 'plains',
+        doodads: zw2.doodads.length, actors: zw2.actors.length,
+        ...travel.census(),
+        worldSeconds: steady.worldSeconds, walkDistance: steady.walkDistance, pausedFrames: steady.pausedFrames,
+        lite: zw2.lite.liveCount,
+        snowBakes: VIS_TELEMETRY.snowBakes, groundBakes: VIS_TELEMETRY.groundBakes,
+        snowCover: +zw2.snowCover.toFixed(2),
+        taskMax: +steady.taskMax.toFixed(1), offTask40: steady.offTask40,
+        ltCount: ltObs ? ltLedger.count : -1,
+        ltWorst: ltObs ? +ltLedger.worst.toFixed(1) : -1,
+        slabName: dump.phase.name, slabMs: +dump.phase.ms.toFixed(1),
+        entryNote,
+        attempts: attempt + 1,
+      });
+      const windows = residencyWindows.slice(windowStart);
+      const issues = residencyRowIssues(windows);
+      return { ...stats, residency: { windows, issues, valid: issues.length === 0 } };
+    }
+    return null;
+  };
+
   // CONTROL: the town — every relative budget compares against this, so the
   // verdict travels across machines (a slow laptop slows both sides). A
   // pinned sky applies here too: the control must not be hostage to a front
   // that happened to drift over town.
+  const initialReturnStartedAt = performance.now();
   travel.travelTo(START_ZONE);
   pinWeather();
-  const control = await sampleCurrentZone('(town)');
+  const initialReturnSyncMs = +(performance.now() - initialReturnStartedAt).toFixed(1);
+  const control = await (course === 'cumulative' ? sampleCurrentZone('(town)') : sampleResidencyZone('(town)'));
   if (!control) throw new Error('perfSweep: the town control could not hold its window — sweep aborted');
   beat('control', { row: control });
 
-  // THE MATRIX: frontier-eligible tilesets first (registry order — their
-  // mint-seed indices are calibration state and must not shift), then the
-  // perfProbe OPT-INS appended (caves and minted interiors: walkable steady
-  // states the frontier:false proxy was hiding from the gate). Realm
-  // tilesets stay out BY THE REGISTRY's own word: a launch-gated melting
-  // shelf has no steady state for a blind probe walk (the floor dissolves,
-  // the walker falls into a random zone, and the row measures the stitch);
-  // boundless streamers need package context a bare mint cannot supply. An
-  // explicit opts.tilesets override can still name anything for forensics.
-  const wants = (opts.filter ?? '').split(',').map(s => s.trim()).filter(Boolean);
-  const registry = Object.values(TILESETS);
-  const fullMatrix = opts.tilesets ?? [
-    ...registry.filter(t => t.frontier !== false && !t.boundless),
-    ...registry.filter(t => t.frontier === false && t.perfProbe && !t.boundless),
-  ].map(t => t.id);
-  // The filter selects WHICH rows run; seed and spread always derive from
-  // the FULL matrix position, so a filtered run mints the exact zones the
-  // full sweep gates (any subset reproduces, not just index-preserving
-  // prefixes).
-  const matrix = fullMatrix.filter(id => !wants.length || wants.some(f => id.includes(f)));
 
   const zones: PerfZoneStats[] = [];
   const skipped: PerfSkipRow[] = [];
+  // ---- THE RESIDENCY INSTRUMENT (src/dev/perfResidency.ts; docs/design/desktop-residency.md) ----
+  // Her ruling (2026-10-16, policy D): the original cumulative course above
+  // and below keeps its control, matrix, aged bracket, budgets and gate; two
+  // ADDITIVE courses measure the residency itself, each in its own launcher
+  // invocation (THE SUPPRESSION at the start: nothing durable is written),
+  // each REPORT-ONLY (no cap is applied to these rows and no verdict is
+  // implied; the launcher prints them as their own tables). They reuse the
+  // sweep's own walker, windows, mint levers and census through the closures
+  // above; the course branch returns before the original matrix loop runs.
+  const heapNow = (): number | null => heapMB(performance as unknown as { memory?: { usedJSHeapSize?: unknown } });
+  /** THE RUNTIME IDENTITY of the run a sample belongs to: its ordinal (0 = the
+   *  sweep's own start), wall start, startup cost and manifest seed. */
+  const identity = (startupMs: number, startedAt: string): PerfRuntimeIdentity => ({ ordinal: startOrdinal, startedAt, startupMs, manifestSeed: g.world().manifest.seed });
+  /** THE MATCHED START (every fresh run after the sweep's own): the same call
+   *  sequence as the start above under the one seed, then the PREVIOUS
+   *  runtime proven retired (NativeClientStart.begin retires it synchronously;
+   *  a stale callback reaching it latches the fatal, so resurrection is loud,
+   *  never silent), no cinematic, the fatal latch read. The travel receiver
+   *  re-binds to the new runtime; walkPhase and sampleCurrentZone read it
+   *  live. Returns the new run's identity. */
+  const freshStart = (): PerfRuntimeIdentity => {
+    const previous = g.retained();
+    const t0 = performance.now();
+    const startedAt = new Date().toISOString();
+    withPerfProfile(g.account(), () => g.devStartRun(opts.classId, opts.seed), () => g.saveAccount());
+    // Same endpoint as first start: timestamp + native call/profile restoration.
+    const startupMs = +(performance.now() - t0).toFixed(1);
+    const next = g.retained();
+    if (!next) throw new Error('perfSweep: retained native startup is missing after a fresh start');
+    if (previous === next) throw new Error('perfSweep: the fresh start returned the previous runtime');
+    if (previous && previous.ready) throw new Error('perfSweep: the previous retained runtime was not retired by the fresh start');
+    travel = retainedPerfTravel(next);
+    selectedRuntime = next;
+    if (g.world().scene) throw new Error('perfSweep: a cinematic is still active after a fresh start');
+    const fatal = g.crash().fatal;
+    if (fatal) throw new Error('perfSweep: game failed during a fresh start: ' + fatal.msg + (fatal.stack ? ' | ' + fatal.stack : ''));
+    beat('start');
+    startOrdinal++;
+    return identity(startupMs, startedAt);
+  };
+  /** THE MINT RECEIPT: one tileset minted through the original course's own
+   *  levers (FULL-matrix spread index, id-stable seed, committed pins, the
+   *  load guard, the weather re-pin), with the exact seed and pins recorded
+   *  on the row and the synchronous mint + load cost measured apart from the
+   *  rAF entry burst that follows it. */
+  const mintRow = (id: string): { zid: string; mint: PerfMintReceipt; mintSyncMs: number } | PerfSkipRow => {
+    const idx = fullMatrix.indexOf(id);
+    if (idx < 0) throw new Error('perfSweep: residency mint id is outside the selected matrix: ' + id);
+    const pin = opts.mintPins?.[id] ?? opts.mintPins?.['*'];
+    beatTileset = id;
+    beat('mint');
+    const mint: PerfMintReceipt = {
+      seed: pin?.seed !== undefined ? pin.seed : opts.mintSeed !== undefined ? mintSeedFor(opts.mintSeed, id) : null,
+      variant: pin?.variant || null,
+      layout: pin?.layout || null,
+    };
+    const t0 = performance.now();
+    const zid = travel.mintTileset(id, PERF_SPREAD_BASE + idx, 8, {
+      ...(mint.seed !== null ? { seed: mint.seed } : {}),
+      ...(mint.variant ? { variant: mint.variant } : {}),
+      ...(mint.layout ? { layoutType: mint.layout } : {}),
+    });
+    const mintSyncMs = +(performance.now() - t0).toFixed(1);
+    if (!zid) return { id, class: 'unmintable', note: 'the registry has no such tileset' };
+    if (g.world().zone.id !== zid) return { id, class: 'load-fallback', note: `load fell back to '${g.world().zone.name}'` };
+    pinWeather();
+    return { zid, mint, mintSyncMs };
+  };
+  /** The synchronous travel home (the mint's own landing recipe), its cost measured apart from the town window. */
+  const returnHome = (): number => {
+    const t0 = performance.now();
+    travel.travelTo(START_ZONE);
+    pinWeather();
+    return +(performance.now() - t0).toFixed(1);
+  };
+  const holdSkip = (id: string): PerfSkipRow => ({
+    id, class: 'hold',
+    note: `walker could not hold the zone in ${HOLD_ATTEMPTS} attempts` + (lastHoldStories.length ? `: ${lastHoldStories.join('; ')}` : ''),
+  });
+  const skipRow = (skip: PerfSkipRow): void => { skipped.push(skip); beat('skip', { skip }); };
+  const courseReport = (ctl: PerfZoneStats): PerfSweepReport => {
+    const cv = document.getElementById('game') as HTMLCanvasElement | null;
+    const suppressed = g.crash().suppressed;
+    return {
+      runtime: 'retained-native', control: ctl, controlEnd: null, zones: [],
+      canvas: { w: cv?.width ?? 0, h: cv?.height ?? 0 }, dpr: window.devicePixelRatio || 1,
+      sampleSeconds: opts.seconds ?? 6, matrix, skipped,
+      weather: opts.weather ?? '', ablate: opts.ablate ?? [],
+      course, startSeed: opts.seed ?? null,
+      saves: { suppressed: suppressed !== null, reason: suppressed },
+      residencyWindows: [...residencyWindows], selectedMatrix: { ids: [...fullMatrix], explicitOverride: opts.tilesets !== undefined },
+    };
+  };
+  /** THE FRESH-SESSION ROWS: one fresh run per matrix row, its town CONTROL
+   *  (the first row rides the sweep's own start and the control already
+   *  sampled), then the zone. The regime is READ from the census each held
+   *  window carried (expected 1 then 2) and recorded, unexpected or not; the
+   *  row is never judged against the cumulative caps. */
+  const freshCourse = async (first: PerfZoneStats): Promise<PerfSweepReport> => {
+    const fresh: PerfFreshRow<PerfZoneStats>[] = [];
+    let firstRow = true;
+    for (const id of matrix) {
+      let runtimeId: PerfRuntimeIdentity, controlReturnSyncMs = initialReturnSyncMs;
+      let ctl: PerfZoneStats | null;
+      if (firstRow) { firstRow = false; ctl = first; runtimeId = identity(initialStartupMs, sweepStartedAt.iso); }
+      else {
+        runtimeId = freshStart();
+        controlReturnSyncMs = returnHome();
+        ctl = await sampleResidencyZone('(town)');
+      }
+      const afterControl = heapNow();
+      if (!ctl) { skipRow({ id, class: 'hold', note: 'the fresh town control could not hold its window' }); continue; }
+      const minted = mintRow(id);
+      if ('class' in minted) { skipRow(minted); continue; }
+      const stats = await sampleResidencyZone(id);
+      if (!stats) { skipRow(holdSkip(id)); continue; }
+      const controlCensus = { residentAreas: ctl.residentAreas, residentActors: ctl.residentActors };
+      const zoneCensus = { residentAreas: stats.residentAreas, residentActors: stats.residentActors };
+      const regime = regimeOf(controlCensus, zoneCensus);
+      const issues = [...residencyRowIssues(ctl.residency?.windows ?? [], 1), ...residencyRowIssues(stats.residency?.windows ?? [], 2)];
+      if (!regime.expected) issues.push(regime.regime);
+      const row: PerfFreshRow<PerfZoneStats> = {
+        tileset: id, runtime: runtimeId,
+        control: ctl, controlCensus, controlReturnSyncMs,
+        mint: minted.mint, mintSyncMs: minted.mintSyncMs,
+        zone: stats, zoneCensus,
+        heapMB: { afterControl, afterZone: heapNow() },
+        valid: issues.length === 0, issues,
+        regime: issues.length ? `${regime.regime} INVALID (${issues.join('; ')})` : regime.regime, expectedRegime: regime.expected && issues.length === 0,
+        contrast: RESIDENCY_COURSE_NOTES.freshContrast,
+      };
+      fresh.push(row);
+      beat('fresh', { row });
+    }
+    return { ...courseReport(first), fresh };
+  };
+  /** THE RESIDENCY RAMP: one run; step 0 is the control already sampled; each
+   *  later step mints and ENTERS one more tileset (its synchronous mint + load
+   *  cost and its rAF load burst recorded apart, never a steady row), travels
+   *  home and re-samples the TOWN with the full window pair, the census that
+   *  window carried, THE AGES (wall and campaign) and THE COMPLETED HISTORY
+   *  beside it. THE AGE CONTROL (opts.rampAgeControl) visits nothing: each
+   *  step walks the town's own entry window and reloads it, so the residency
+   *  stays one while the run ages; it is a comparison under unmatched ages,
+   *  not an isolation, and its report says so. */
+  const rampCourse = async (first: PerfZoneStats): Promise<PerfSweepReport> => {
+    const stepsWanted = Math.max(1, Math.floor(opts.rampSteps ?? RAMP_DEFAULT_STEPS));
+    const pinnedIds = Object.keys(opts.mintPins ?? {}).filter(k => k !== '*');
+    const list = opts.rampAgeControl ? [] : (opts.rampList ?? rampListFor(fullMatrix, pinnedIds, stepsWanted - 1));
+    const steps: PerfRampStep<PerfZoneStats>[] = [];
+    const visitedSoFar: string[] = [], skippedSoFar: string[] = [];
+    const ages = (): { wallMs: number; campaignSec: number } => ({ wallMs: +(performance.now() - sweepStartedAt.wall).toFixed(0), campaignSec: +g.world().time.toFixed(1) });
+    const push = (step: PerfRampStep<PerfZoneStats>): void => { steps.push(step); beat('ramp', { step }); };
+    const initialIssues = residencyRowIssues(first.residency?.windows ?? [], opts.rampAgeControl ? 1 : undefined);
+    push({ valid: initialIssues.length === 0, issues: initialIssues, step: 0, visited: null, mint: null, mintSyncMs: null, visitEntryWorstGap: null, visitHeld: null, returnSyncMs: initialReturnSyncMs, town: first, residentAreas: first.residentAreas, residentActors: first.residentActors, heapMB: heapNow(), ...ages(), history: { visited: [], skipped: [] } });
+    const count = opts.rampAgeControl ? stepsWanted - 1 : list.length;
+    for (let i = 1; i <= count; i++) {
+      let visited: string | null = null, mint: PerfMintReceipt | null = null, mintSyncMs: number | null = null;
+      if (!opts.rampAgeControl) {
+        const id = list[i - 1];
+        const minted = mintRow(id);
+        if ('class' in minted) { skipRow(minted); skippedSoFar.push(id); continue; }
+        visited = id; mint = minted.mint; mintSyncMs = minted.mintSyncMs; visitedSoFar.push(id);
+      }
+      beatTileset = visited ?? '(town)';
+      g.world().player.invulnerable = true;
+      const visitWindowStart = residencyWindows.length;
+      const entry = await residencyWalk(visited ?? '(town)', 1, 'visit-entry', settleMs, 0.6);
+      const returnSyncMs = returnHome();
+      const town = await sampleResidencyZone('(town)');
+      const fatal = g.crash().fatal;
+      if (fatal) throw new Error(`perfSweep: game failed at ramp step ${i}: ` + fatal.msg + (fatal.stack ? ' | ' + fatal.stack : ''));
+      const census = town ? { residentAreas: town.residentAreas, residentActors: town.residentActors } : travel.census();
+      const issues = residencyRowIssues(residencyWindows.slice(visitWindowStart), opts.rampAgeControl ? 1 : undefined);
+      if (!town) issues.push('town window not held');
+      push({ valid: issues.length === 0, issues, step: i, visited, mint, mintSyncMs, visitEntryWorstGap: +entry.worst.toFixed(1), visitHeld: entry.held, returnSyncMs, town, ...census, heapMB: heapNow(), ...ages(), history: { visited: [...visitedSoFar], skipped: [...skippedSoFar] } });
+    }
+    const held = steps.filter(s => s.town !== null && s.valid);
+    const ramp: PerfRampReport<PerfZoneStats> = {
+      steps, ageControl: !!opts.rampAgeControl, list,
+      slopes: rampSlopes(held.map(s => ({ residentAreas: s.residentAreas, residentActors: s.residentActors, gapP50: s.town!.gapP50, gapP99: s.town!.gapP99, simP99: s.town!.simP99, taskMax: s.town!.taskMax }))),
+      slopesNote: RESIDENCY_COURSE_NOTES.slopes,
+      comparisonNote: opts.rampAgeControl ? RESIDENCY_COURSE_NOTES.ageControl : null,
+    };
+    return { ...courseReport(first), matrix: list, ramp };
+  };
+  if (course !== 'cumulative') return course === 'fresh' ? await freshCourse(control) : await rampCourse(control);
   for (const id of matrix) {
     const idx = fullMatrix.indexOf(id);
     const pin = opts.mintPins?.[id] ?? opts.mintPins?.['*'];

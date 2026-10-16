@@ -882,7 +882,7 @@ declare global {
       pilot: (src: HeroInputSource | null) => void;
       hold: (on: boolean) => void;
       director: () => Director;
-      devStartRun: (classId?: string) => string;
+      devStartRun: (classId?: string, seed?: number) => string;
       loading: LoadingScreen;
       devStartLoadingRun: (classId?: string) => Promise<void>;
       devGrantSkill: (skillId: string, level?: number, slot?: number) => number;
@@ -983,11 +983,13 @@ window.__game = {
   // startGame path under the first (or named) class, menus dismissed.
   loading: loadingScreen,
   devStartLoadingRun: async (classId?: string) => { if (await withLoadingScreen(CLASSES.find(c => c.id === classId) ?? CLASSES[0])) ui.hideAll(); },
-  devStartRun: (classId?: string) => {
+  devStartRun: (classId?: string, seed?: number) => {
     const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
     document.getElementById('start-menu')?.classList.add('hidden');
     document.getElementById('class-select')?.classList.add('hidden');
-    startGame(cls);
+    // THE MATCHED START (src/dev/perf.ts residency courses): an explicit seed
+    // deals the same world every start; undefined keeps today's rolled seed.
+    startGame(cls, seed === undefined ? undefined : buildManifest(account, seed));
     return cls.id;
   },
   // DEV/QA: seat any catalog skill by id straight onto a bar slot as THE DEV

@@ -92,6 +92,14 @@ jobs:
           npx tsx balance/check_nativeperftravel.ts
           npx tsx balance/check_nativedesktopperfsource.ts
 
+      - name: Retained residency measurement instrument regressions
+        run: |
+          npx tsx balance/check_perfresidency.ts
+          npx tsx balance/check_perfresidencyboundaries.ts
+          node balance/check_perfresidencystarttiming.cjs
+          node --test scripts/test-launcher-residency.mjs scripts/test-launcher-residency-boundaries.mjs scripts/test-residency-launcher-course.mjs
+          npx tsx balance/check_nativeresidencysource.ts
+
       - name: Retained offline quest ground regression
         run: |
           npx tsx balance/check_nativeshardground.ts
