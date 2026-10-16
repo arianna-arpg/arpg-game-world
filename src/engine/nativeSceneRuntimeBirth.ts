@@ -1,3 +1,4 @@
+import {markNativeCrusadePlacement} from './nativeCrusadeIdentity';
 import {queryNativeVerminfall,placeNativeVerminfall,nativeVerminfallStep,markNativeVerminfallPlacement,createNativeVerminfallBody,insertNativeVerminfallBody} from './nativeVerminfallIdentity';
 import {placeNativeVendetta,createNativeVendettaBody} from './nativeVendettaIdentity';
 import {nativeFractureLifetimeCalls,type FractureField,type NativeFractureLifetime} from '../packages/overlays/fractures';
@@ -933,7 +934,7 @@ export function birthSpawnHellCourt(nativeHost:NativeSceneRuntimeBirthHost,sourc
   }
 export function birthMaterializeCrusade(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources, info: CrusadeInfo): void {
     if (nativeHost.materializedCrusades.has(nativeHost.zone.id)) return;
-    nativeHost.materializedCrusades.add(nativeHost.zone.id);
+    markNativeCrusadePlacement(nativeHost,()=>{const marker=nativeHost.materializedCrusades,selected=marker.add,id=nativeHost.zone.id;return()=>{Reflect.apply(selected,marker,[id]);};});
     const roster = sources.FACTIONS[info.faction];
     if (!roster?.table?.length) return;
     (0,sources.bumpLedger)(nativeHost.ledger, 'crusade_seen'); // DISCOVERY — surfaces the Vault tuning

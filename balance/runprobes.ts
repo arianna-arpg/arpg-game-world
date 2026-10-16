@@ -5,6 +5,8 @@
 // PASS/FAIL, exit 0/1). This drives the GREEN ones off balance/proberoster.ts
 // and fails loudly when any of them regresses — the standing gate the probes
 // were always written to be, run by machine instead of by hand.
+// Explicit CURRENT-SUCCESSOR mappings preserve historical source/roster identity
+// while dispatching the separately pinned, visibly named current-runtime check.
 //
 // THE CENSUS runs first, ALWAYS: the roster and the balance/ directory must
 // agree exactly. An unenrolled probe or a row naming a missing file is a hard
@@ -35,6 +37,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { PROBE_ROSTER, excludedProbes, greenProbes, type ProbeRow, type ProbeTier } from './proberoster';
+import {validateProbeSupersessions,resolveProbeExecution,probeExecutionLabel,probeRerunCommand,probeMatchesFilter} from './probesupersessions';
 
 const BALANCE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.dirname(BALANCE_DIR);
@@ -178,7 +181,7 @@ function select(o: Options): ProbeRow[] {
   // alike (you asked for that rig by name — excluded rows still never gate).
   // Without one, the lanes decide: fast by default, + slow, + excluded.
   if (o.filter) {
-    const named = PROBE_ROSTER.filter(r => r.probe.includes(o.filter!));
+    const named = PROBE_ROSTER.filter(r => probeMatchesFilter(r,o.filter!));
     if (!named.length) {
       console.error(`probe: --filter "${o.filter}" matches no probe. Try --list.`);
       process.exit(2);
@@ -198,8 +201,16 @@ interface Result extends Attempt { row: ProbeRow; attempts: number; firstFail: s
 
 function runOnce(row: ProbeRow, o: Options, live: boolean): Promise<Attempt> {
   return new Promise(resolve => {
+    let selected:ReturnType<typeof resolveProbeExecution>;
+    try { selected = resolveProbeExecution(row, REPO_ROOT); }
+    catch (error) {
+      // A pin changing after preflight is this attempt's refusal, not a rejected
+      // worker Promise that abandons other already-running probe children.
+      resolve({code:2,timedOut:false,ms:0,output:'CURRENT-SUCCESSOR refused before launch: '+String(error)});
+      return;
+    }
     const started = Date.now();
-    const child = spawn(process.execPath, [TSX_CLI, path.join('balance', row.probe), ...(row.args ?? [])], {
+    const child = spawn(process.execPath, [TSX_CLI, path.join('balance', selected.file), ...selected.args], {
       cwd: REPO_ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, NO_COLOR: '1' },
@@ -239,7 +250,7 @@ async function runProbe(row: ProbeRow, o: Options, live: boolean): Promise<Resul
   if (row.status === 'green') {
     while (!passed(a) && attempts <= o.retries) {
       attempts++;
-      if (live) console.log(`\n───── ${row.probe} — re-run ${attempts}/${o.retries + 1} ─────`);
+      if (live) console.log(`\n───── ${probeExecutionLabel(row)} — re-run ${attempts}/${o.retries + 1} ─────`);
       a = await runOnce(row, o, live);
     }
   }
@@ -266,15 +277,18 @@ const secs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 async function main(): Promise<void> {
   const o = parseArgs(process.argv.slice(2));
   census();
+  try { validateProbeSupersessions(PROBE_ROSTER, REPO_ROOT); }
+  catch (error) { die('current-runtime supersession refused: ' + String(error)); }
 
   if (o.list) {
     for (const r of PROBE_ROSTER) {
       const lane = r.status === 'green' ? `green/${r.tier}`.padEnd(12) : `EXCL/${r.excuse}`.padEnd(12);
-      console.log(`${lane} ${r.probe.padEnd(30)} ${r.why}`);
+      console.log(`${lane} ${probeExecutionLabel(r).padEnd(30)} ${r.why}`);
     }
     console.log(`\n${PROBE_ROSTER.length} probes — ${greenProbes('fast').length} green/fast, `
       + `${greenProbes('slow').length} green/slow, ${excludedProbes('red').length} excluded/red, `
       + `${excludedProbes('flaky').length} excluded/flaky`);
+    console.log('CURRENT-SUCCESSOR entries execute their named current checks; original probe/roster bytes are historical source checks only.');
     return;
   }
 
@@ -289,7 +303,7 @@ async function main(): Promise<void> {
   const worker = async (): Promise<void> => {
     while (next < chosen.length) {
       const row = chosen[next++];
-      if (live) console.log(`\n───── ${row.probe} ─────`);
+      if (live) console.log(`\n───── ${probeExecutionLabel(row)} ─────`);
       const r = await runProbe(row, o, live);
       results.push(r);
       const ok = passed(r);
@@ -299,7 +313,7 @@ async function main(): Promise<void> {
         ? (ok ? (r.row.excuse === 'red' ? 'HEALED' : 'flaky ') : 'known ')
         : (ok ? (r.attempts > 1 ? 'FLAKY ' : 'PASS  ') : 'FAIL  ');
       const note = r.timedOut ? `TIMEOUT after ${o.timeoutSec}s` : tally(r.output);
-      console.log(`${mark} ${secs(r.ms).padStart(6)}  ${r.row.probe.padEnd(30)} ${note}`
+      console.log(`${mark} ${secs(r.ms).padStart(6)}  ${probeExecutionLabel(r.row).padEnd(30)} ${note}`
         + (ok && r.attempts > 1 ? `  (passed on attempt ${r.attempts})` : ''));
       if (!ok && !live) for (const l of failLines(r.output)) console.log(`         ${l}`);
       if (r.code === 127) console.log(`         could not launch: ${r.output.trim()}`);
@@ -318,12 +332,18 @@ async function main(): Promise<void> {
   console.log(`\n${'─'.repeat(64)}`);
   console.log(`${green.length - broke.length}/${green.length} green probes passed in ${secs(Date.now() - started)} wall clock.`);
 
+  const currentSuccessors = results.filter(r => probeExecutionLabel(r.row) !== r.row.probe);
+  if (currentSuccessors.length) {
+    console.log('CURRENT-SUCCESSOR: ' + currentSuccessors.length + ' roster row(s) selected named current checks; launch refusals count as failed attempts. Preserved historical source was not executed or counted as gameplay acceptance.');
+    for (const r of currentSuccessors) console.log('  ' + probeExecutionLabel(r.row) + ': ' + (passed(r) ? 'current PASS' : 'current FAIL'));
+  }
+
   if (flaked.length) {
     console.log(`\nFLAKY — ${flaked.length} green probe(s) failed then PASSED on a re-run.`
       + ` Not a build failure, but not nothing: re-run each ~20× to put a rate on it,`
       + ` then give it an 'excluded'/'flaky' row in balance/proberoster.ts.`);
     for (const r of flaked) {
-      console.log(`  ${r.row.probe} — first attempt said:`);
+      console.log(`  ${probeExecutionLabel(r.row)} — first attempt said:`);
       console.log(`      ${r.firstFail}`);
     }
   }
@@ -349,9 +369,9 @@ async function main(): Promise<void> {
     console.log(`\nREGRESSED — ${broke.length} green probe(s) failed`
       + `${o.retries ? ` every one of ${o.retries + 1} attempts` : ''}:`);
     for (const r of broke) {
-      console.log(`  ${r.row.probe}${r.timedOut ? ' (TIMEOUT)' : ` (exit ${r.code})`}`);
+      console.log(`  ${probeExecutionLabel(r.row)}${r.timedOut ? ' (TIMEOUT)' : ` (exit ${r.code})`}`);
       for (const l of failLines(r.output)) console.log(`      ${l}`);
-      console.log(`      re-run: npx tsx balance/${r.row.probe}${r.row.args?.length ? ' ' + r.row.args.join(' ') : ''}`);
+      console.log(`      re-run: ${probeRerunCommand(r.row)}`);
     }
     process.exit(1);
   }

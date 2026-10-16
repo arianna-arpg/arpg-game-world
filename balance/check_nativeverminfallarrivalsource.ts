@@ -1,6 +1,6 @@
 /** Mutation, byte identity and filesystem controls for the verminfall arrival source boundary. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import * as fs from './nativeCrusadeArrivalSourceFS';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
