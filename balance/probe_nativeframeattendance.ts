@@ -1,7 +1,7 @@
-import {nativeShardsCaravanFS as fs} from './nativeShardsCompositionFixture';
+import {nativeFrameAttendanceSourceFS as fs} from './nativeFrameAttendanceSourceView';
 import * as crypto from 'node:crypto';
 import {nativeSceneFrameAttendanceArchive as archive} from './nativeSceneFrameAttendanceArchive';
-import {beforeNativeFrameAttendance} from './nativeFrameAttendanceFixture';
+import {beforeNativeFrameAttendance} from './nativeFrameAttendanceSourceView';
 const sha=(s:string)=>crypto.createHash('sha256').update(s).digest('hex');
 function must(ok:unknown,why:string):asserts ok {if(!ok)throw Error(why);}
 function refuses(fn:()=>unknown,label:string):void{let refused=false;try{fn();}catch{refused=true;}must(refused,'Must refuse '+label);}

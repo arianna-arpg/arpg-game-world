@@ -1,3 +1,4 @@
+import {nativeVerminfallLiveRegistryActive} from './nativeAreaSceneVerminfallLifetime';
 /** A retained area's garrison guard belongs to the actual campaign event.
  * Existing bodies/terrain survive. Repeated frames and native partial births cannot replay. */
 import type {Actor} from '../engine/actor';
@@ -35,6 +36,8 @@ export class NativeAreaSceneCrusadeLifetime {
  #current(row:Body,ctx:KillCtx):boolean {if(row.spent||ctx.actor!==row.body||ctx.zone!==row.definition||ctx.sim.crusadeField!==row.field||Reflect.apply(this.#epoch,row.field,[row.id])!==row.epoch)return false;return this.#entry(this,{permission:'physical',physical:[row.body]},()=>{this.#hooks.assertCombatKillContext(this,ctx);return this.#combat.scene.zone===row.definition&&Reflect.apply(this.#epoch,row.field,[row.id])===row.epoch;});}
  #settle(row:Body,ctx:KillCtx):number {if(!this.#current(row,ctx))return 1;const field=row.field,fn=field.resolveCrusadeZone;if(!this.#current(row,ctx))return 1;row.spent=true;const check=()=>this.#entry(this,{permission:'physical',physical:[row.body]},()=>{this.#hooks.assertCombatKillContext(this,ctx);if(this.#combat.scene.zone!==row.definition||ctx.sim.crusadeField!==field)throw Error('Native Crusade kill owner changed');});return Reflect.apply(this.#resolve,field,[row.epoch,row.id,row.definition.id,row.rewardMul,check,()=>Reflect.apply(fn,field,[row.definition.id])]);}
  materializeLiveZoneEvents():void {
+  // Existing direct callers enter the same outer event scope; the delegated call runs this registry body once.
+  if(!nativeVerminfallLiveRegistryActive(this.#combat)){this.#combat.verminfallLifetime.materializeLiveZoneEvents();return;}
   if(this.#busy)throw Error('Native Crusade live registry cannot reenter');const c=this.#combat,registry=c.input.assembly.input.registry,census=own<Actor[]>(c.scene,'actors'),physical=rows(census),definition=this.#definition,sim=c.input.campaign.sim,marker=registry.input.birth.input.state.materializedCrusades;
   const check=()=>this.#entry(this,{permission:'physical',physical,sources:[]},()=>{if(own(c.scene,'zone')!==definition||own(c.scene,'actors')!==census||c.input.campaign.sim!==sim||registry.input.birth.input.state.materializedCrusades!==marker)throw Error('Native Crusade registry owner changed');});
   this.#busy=true;this.#liveCheck=check;

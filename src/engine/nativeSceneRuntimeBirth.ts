@@ -1,3 +1,4 @@
+import {queryNativeVerminfall,placeNativeVerminfall,nativeVerminfallStep,markNativeVerminfallPlacement,createNativeVerminfallBody,insertNativeVerminfallBody} from './nativeVerminfallIdentity';
 import {placeNativeVendetta,createNativeVendettaBody} from './nativeVendettaIdentity';
 import {nativeFractureLifetimeCalls,type FractureField,type NativeFractureLifetime} from '../packages/overlays/fractures';
 import {nativeConclaveLifetimeCalls,type ConclaveField} from '../packages/overlays/conclave';
@@ -1176,22 +1177,23 @@ export function birthMaterializeDeepwinter(nativeHost:NativeSceneRuntimeBirthHos
 export function birthMaterializeInfestation(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources, def: ZoneDef): void {
     const vf = nativeHost.sim.verminfallField;
     if (!vf) return;
-    const info = vf.infestOn(def.id);
+    const info = queryNativeVerminfall(nativeHost,vf,def,()=>{const selected=vf.infestOn,args=[def.id];return()=>Reflect.apply(selected,vf,args);});
     if (!info) return;
-    if (nativeHost.materializedInfestation.has(def.id)) return;
-    nativeHost.materializedInfestation.add(def.id);
+    return placeNativeVerminfall(nativeHost,vf,def,info,()=>{
+    if (nativeVerminfallStep(nativeHost,()=>{const marker=nativeHost.materializedInfestation,selected=marker.has,args=[def.id];return()=>Reflect.apply(selected,marker,args);})) return;
+    markNativeVerminfallPlacement(nativeHost,()=>{const marker=nativeHost.materializedInfestation,selected=marker.add,args=[def.id];return()=>Reflect.apply(selected,marker,args);});
     // DISCOVERY — walking a claimed zone surfaces the Vault tuning (one-shot per
     // infestation), exactly like the Contagion "you've stumbled in" bump.
-    if (vf.markDiscovered(def.id)) (0,sources.bumpLedger)(nativeHost.ledger, 'infestation_seen');
-    const cfg = vf.surge();
+    if (nativeVerminfallStep(nativeHost,()=>{const selected=vf.markDiscovered,args=[def.id];return()=>Reflect.apply(selected,vf,args);})) (0,sources.bumpLedger)(nativeHost.ledger, 'infestation_seen');
+    const cfg = nativeVerminfallStep(nativeHost,()=>{const selected=vf.surge;return()=>Reflect.apply(selected,vf,[]);});
     const lvl = Math.max(1, def.level);
     // THE NESTS: exactly the standing count — a broken warren stays broken.
     for (let i = 0; i < info.nestsRemaining; i++) {
-      const nest = nativeHost.createMonster(sources.FIXTURE_IDS.warren_nest, lvl, 'enemy');
+      const nest = createNativeVerminfallBody(nativeHost,'nest',()=>{const selected=nativeHost.createMonster,args=[sources.FIXTURE_IDS.warren_nest,lvl,'enemy'] as const;return()=>Reflect.apply(selected,nativeHost,args);});
       nest.faction = cfg.faction;
       nest.tag = 'warren_nest';
       nest.pos = nativeHost.clampPos(nativeHost.farPoint(430), nest.radius);
-      nativeHost.actors.push(nest); observeNativeCombatBirth(nativeHost, nest);
+      insertNativeVerminfallBody(nativeHost,nest,()=>{const actors=nativeHost.actors,selected=actors.push;return()=>{Reflect.apply(selected,actors,[nest]); observeNativeCombatBirth(nativeHost, nest);};});
     }
     // THE TIDE: pack count lerps with how much of the warren still stands.
     const roster = sources.FACTIONS[cfg.faction];
@@ -1204,26 +1206,27 @@ export function birthMaterializeInfestation(nativeHost:NativeSceneRuntimeBirthHo
         const type = nativeHost.weightedPick(roster.table, lvl);
         const n = (0,sources.randInt)(cfg.packSize[0], cfg.packSize[1]);
         for (let k = 0; k < n; k++) {
-          const m = nativeHost.createMonster(type, lvl, 'enemy');
+          const m = createNativeVerminfallBody(nativeHost,'vermin',()=>{const selected=nativeHost.createMonster,args=[type,lvl,'enemy'] as const;return()=>Reflect.apply(selected,nativeHost,args);});
           m.faction = cfg.faction;
           m.tag = 'vermin';
           m.pos = nativeHost.clampPos((0,sources.vec)(at.x + (0,sources.rand)(-80, 80), at.y + (0,sources.rand)(-80, 80)), m.radius);
-          nativeHost.actors.push(m); observeNativeCombatBirth(nativeHost, m);
+          insertNativeVerminfallBody(nativeHost,m,()=>{const actors=nativeHost.actors,selected=actors.push;return()=>{Reflect.apply(selected,actors,[m]); observeNativeCombatBirth(nativeHost, m);};});
         }
       }
     }
     // THE KING, if he was left walking (all nests broken, the ground unclaimed).
     if (info.kingArmed && sources.MONSTERS[cfg.kingDefId]) {
-      const king = nativeHost.createMonster(cfg.kingDefId, Math.max(1, lvl + cfg.kingLevelBonus), 'enemy');
+      const king = createNativeVerminfallBody(nativeHost,'king',()=>{const selected=nativeHost.createMonster,args=[cfg.kingDefId,Math.max(1,lvl+cfg.kingLevelBonus),'enemy'] as const;return()=>Reflect.apply(selected,nativeHost,args);});
       king.faction = cfg.faction;
       king.tag = 'rat_king_manifest';
       king.pos = nativeHost.clampPos(nativeHost.farPoint(520, true), king.radius);
-      nativeHost.actors.push(king); observeNativeCombatBirth(nativeHost, king);
+      insertNativeVerminfallBody(nativeHost,king,()=>{const actors=nativeHost.actors,selected=actors.push;return()=>{Reflect.apply(selected,actors,[king]); observeNativeCombatBirth(nativeHost, king);};});
       nativeHost.text((0,sources.vec)(king.pos.x, king.pos.y - 60),
         `${king.name} still walks the broken warren!`, cfg.color, 18);
     } else if (info.nestsRemaining > 0) {
       nativeHost.notice('The ground here is riddled with warrens…', cfg.color, 15, 'events');
     }
+    });
   }
 export function birthMaterializeCandle(nativeHost:NativeSceneRuntimeBirthHost,sources:NativeSceneRuntimeBirthSources, def: ZoneDef): void {
     const lc = nativeHost.sim.longCandleField;

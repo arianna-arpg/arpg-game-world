@@ -6,6 +6,8 @@ export interface NativeWarlordObserver {place(lord:WarlordState,run:()=>void):vo
 export type NativeWarlordRegistration={host:object;observer:NativeWarlordObserver}|{body:Actor;current:(ctx:KillCtx)=>boolean;break:(ctx:KillCtx)=>boolean};
 let consume:((token:object)=>NativeWarlordRegistration)|undefined;
 const retainedKills=new WeakSet<KillCtx>();
+/** Read-only recognition of the genuine combat-operation receipt; grants no context. */
+export function isNativeRetainedKillContext(ctx:KillCtx):boolean {return retainedKills.has(ctx);}
 let consumeKill:((token:object)=>KillCtx)|undefined;
 export function installNativeWarlordKillRegistration(reader:NonNullable<typeof consumeKill>):void {if(consumeKill)throw Error('Native crown kill registrar already installed');consumeKill=reader;}
 export function bindNativeWarlordKillContext(token:object):void {if(!consumeKill)throw Error('Native crown kill registrar missing');const ctx=consumeKill(token);if(retainedKills.has(ctx))throw Error('Native crown kill context already bound');retainedKills.add(ctx);}

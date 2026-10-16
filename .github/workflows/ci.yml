@@ -98,5 +98,14 @@ jobs:
           npx tsx balance/check_nativeshardgroundsource.ts
           npx tsx balance/check_nativefullgaterepairsource.ts
 
+      - name: Retained Verminfall event lifetime regressions
+        run: |
+          npx tsx balance/check_nativeverminfall.ts
+          npx tsx balance/check_nativeverminfallboundaries.ts
+          npx tsx balance/check_nativeverminfallcold.ts
+          npx tsx balance/check_nativeverminfallcold.ts --king
+          npx tsx balance/check_nativeverminfallsource.ts
+          npx tsx balance/check_nativeframeattendancesourceview.ts
+
       - name: Probes (green roster, fast lane)
         run: npm run probe
