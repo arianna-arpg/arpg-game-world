@@ -99,6 +99,7 @@ jobs:
           node balance/check_perfresidencystarttiming.cjs
           node --test scripts/test-launcher-residency.mjs scripts/test-launcher-residency-boundaries.mjs scripts/test-residency-launcher-course.mjs
           npx tsx balance/check_nativeresidencysource.ts
+          npx tsx balance/check_nativeholdfastsource.ts
 
       - name: Retained offline quest ground regression
         run: |

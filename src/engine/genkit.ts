@@ -401,7 +401,8 @@ export function spiralPath(
 // --- PAINT / MATERIALS ---------------------------------------------------------------
 
 /** Paint a mask's cells as a walk-grid REGION (per-row runs → exact fills). */
-export function paintRegion(grid: GridWalkField, m: Mask, regionId: string): void {
+export function paintRegion(grid: GridWalkField, m: Mask, regionId: string,
+  recipePaint?: (x0: number, y0: number, x1: number, y1: number) => void): void {
   for (let cy = 0; cy < m.rows; cy++) {
     let run = -1;
     for (let cx = 0; cx <= m.cols; cx++) {
@@ -409,7 +410,8 @@ export function paintRegion(grid: GridWalkField, m: Mask, regionId: string): voi
       if (on && run < 0) run = cx;
       else if (!on && run >= 0) {
         const y0 = m.oy + cy * m.cell;
-        grid.fillRegion(m.ox + run * m.cell, y0, m.ox + cx * m.cell - 0.01, y0 + m.cell - 0.01, regionId);
+        if (recipePaint) recipePaint(m.ox + run * m.cell, y0, m.ox + cx * m.cell - 0.01, y0 + m.cell - 0.01);
+        else grid.fillRegion(m.ox + run * m.cell, y0, m.ox + cx * m.cell - 0.01, y0 + m.cell - 0.01, regionId);
         run = -1;
       }
     }

@@ -21,7 +21,7 @@ import { structurePlanOf, validateStructurePlans } from './structurePlans';
 
 import type { Actor } from './actor';
 import { dist, vec, type Vec2 } from '../core/math';
-import { shapeBoundR, shapeDistance, type HitShape } from './shapes';
+import { shapeBoundR, shapeAabbHalf, shapeDistance, type HitShape } from './shapes';
 import type { TrackSpec, TrackPayload } from './tracks';
 import type { TrapworkSpec } from './trapworks';
 import type { GeyserSpec } from './geysers'; // authoredVents — the geyser fabric's authoring seam
@@ -54,6 +54,14 @@ import { isFieldPixel } from '../world/fieldRegion';
 // erased at runtime — no actual module cycle exists.
 import { Mask, GEN_CELL, disc, radial, bearingNoise, pourLobes, paintLiquid, valueNoise2, wanderPath } from './genkit';
 import { blendDither, compileBlendField } from './blend';
+import { closeRecipeGround, recoverRecipeGround } from './nativeRecipeGround';
+import {
+  RequiredStructureSeatError, requireStructure, completeRequiredStructure, verifyRequiredStructures,
+  closeRequiredStructures, nativeStructureCursor, nativeStructureGeneration, nativeStructureRoll,
+  endNativeStructureRoll, nativeStructureAttempt, nativeStructureContext, nativeStructureReturned,
+  type NativeStructureAttempt,
+} from './nativeStructureProof';
+export { beginNativeRequiredStructureReceipt } from './nativeStructureProof';
 
 export type KnownDoodadKind =
   | 'rock' | 'cliff' | 'chasm' | 'bridge' | 'wall'
@@ -3497,9 +3505,14 @@ function plainsLayout(ctx: GenCtx, def: ZoneDef): void {
   const mul = layoutParam(def, 'dressTryMul', 1) as number;
   if (mul !== 1) ctx.siteTryMul = mul;
   try {
+    let rowIndex = 0;
     for (const spec of def.layout) {
+      const index = rowIndex++, isStructure = spec.kind === 'structure';
+      const before = isStructure ? nativeStructureCursor(ctx) : undefined;
       const n = ctx.rng.int(spec.count[0], spec.count[1]);
-      for (let i = 0; i < n; i++) stamp(ctx, spec);
+      const prior = isStructure ? nativeStructureRoll(ctx, 'layout', index, spec.structure, before, true, n) : undefined;
+      try { for (let i = 0; i < n; i++) stamp(ctx, spec); }
+      finally { if (isStructure) endNativeStructureRoll(ctx, prior); }
     }
   } finally {
     ctx.siteTryMul = prevMul;
@@ -5000,6 +5013,8 @@ export function generateLayout(
     aquatic: def.aquatic,
     overgrowth: overgrowthOf(def),
   };
+  try {
+  nativeStructureGeneration(ctx);
   // THE BLEND FIELD (engine/blend.ts): compiled ONCE per generation from the
   // def's resolved blend — findSpot's dither gate and the 'blend' WHERE field
   // both sample it. Pure math off (arena, seed): zero rng, zero cost when
@@ -5093,10 +5108,18 @@ export function generateLayout(
     const n = roll.count ? ctx.rng.int(roll.count[0], roll.count[1]) : 1;
     for (let i = 0; i < n; i++) stamp(ctx, { kind: 'landmark', landmark: roll.landmark, count: [1, 1] });
   }
+  let structureRollIndex = 0;
   for (const roll of ctx.lite ? [] : def.structures ?? []) {
-    if (!ctx.rng.chance(roll.chance)) continue;
+    const index = structureRollIndex++, before = nativeStructureCursor(ctx);
+    if (!ctx.rng.chance(roll.chance)) {
+      const prior = nativeStructureRoll(ctx, 'structures', index, roll.structure, before, false, 0);
+      endNativeStructureRoll(ctx, prior);
+      continue;
+    }
     const n = roll.count ? ctx.rng.int(roll.count[0], roll.count[1]) : 1;
-    for (let i = 0; i < n; i++) stamp(ctx, { kind: 'structure', structure: roll.structure, count: [1, 1] });
+    const prior = nativeStructureRoll(ctx, 'structures', index, roll.structure, before, true, n);
+    try { for (let i = 0; i < n; i++) stamp(ctx, { kind: 'structure', structure: roll.structure, count: [1, 1] }); }
+    finally { endNativeStructureRoll(ctx, prior); }
   }
   // COMPOSITION POST entries: after the base layout + landmark/structure rolls
   // so their shore bands measure EVERY liquid (authored and landmark-poured)
@@ -5298,6 +5321,8 @@ export function generateLayout(
   if (ctx.storeyLevels && !def.tiers) {
     def.tiers = { kind: 'over', exposure: 'open', levels: ctx.storeyLevels, packSplit: 0, interior: true };
   }
+  verifyRequiredStructures(ctx, def);
+  nativeStructureReturned(ctx);
   return {
     ...(fixturePlacements.length ? {fixturePlacements} : {}),
     doodads: ctx.doodads, pois: ctx.pois, camps: ctx.camps,
@@ -5317,6 +5342,10 @@ export function generateLayout(
     bossSeat: ctx.bossSeat,
     localeReport: ctx.localeReport,
   };
+  } finally {
+    closeRecipeGround(ctx);
+    closeRequiredStructures(ctx);
+  }
 }
 
 /** The universal invariant's engine (grid zones; convex zones stay guaranteed
@@ -5994,7 +6023,10 @@ function* structureSeatCandidates(original: {x:number;y:number},loX:number,hiX:n
 
 /** A complete structure cannot be seated without changing protected ground. */
 export class ResolvedStructureSeatError extends Error {}
-function fitResolvedStructure(ctx: GenCtx, at: Vec2, w: number, h: number, aprons: ApronOffset[], explicit: boolean): Vec2 {
+/** Only this native function can return a refusal; arbitrary callback throws
+ * are never caught, inspected, message-matched or treated as recovery rights. */
+function nativeResolvedStructureSeat(ctx: GenCtx, at: Vec2, w: number, h: number,
+  aprons: ApronOffset[], explicit: boolean): Vec2 | 'whole-arena' | 'no-seat' {
   const original=plannedRect(at,w,h), center=vec(original.x+w/2,original.y+h/2), edge=aprons.filter(a=>a.edge);
   // Generation owns the native convex BASE arena (annex union admission is later).
   // Convexity makes corner containment a whole rectangular footprint proof and
@@ -6041,7 +6073,7 @@ function fitResolvedStructure(ctx: GenCtx, at: Vec2, w: number, h: number, apron
   const span=ctx.arena.boundless?backing:ctx.arena,margin=ctx.arena.boundless?0:BORDER;
   const loX=Math.ceil((margin-minRelX)/WALK_CELL)*WALK_CELL,hiX=Math.floor((span.w-margin-maxRelX)/WALK_CELL)*WALK_CELL;
   const loY=Math.ceil((margin-minRelY)/WALK_CELL)*WALK_CELL,hiY=Math.floor((span.h-margin-maxRelY)/WALK_CELL)*WALK_CELL;
-  if(loX>hiX||loY>hiY)throw new ResolvedStructureSeatError('resolved structure cannot fit whole arena');
+  if(loX>hiX||loY>hiY)return 'whole-arena';
   const candidates=structureSeatCandidates(original,loX,hiX,loY,hiY);
   const severs=severanceTest(ctx);
   for(const p of candidates){
@@ -6056,14 +6088,138 @@ function fitResolvedStructure(ctx: GenCtx, at: Vec2, w: number, h: number, apron
     if(severs&&severs(r))continue;
     return c;
   }
-  throw new ResolvedStructureSeatError('resolved structure has no whole admissible seat');
+  return 'no-seat';
+}
+
+/** The only inherited entry overlap recovery accepts: one actual unrotated
+ * door slab, with both centers strictly outside the SAME face and a linear
+ * outward escape. Native pushOutOfShape projects an outside-face overlap in
+ * this direction. No door state/position or portal ground is changed here. */
+function recipeEntryDoorEscape(ctx: GenCtx, from: Vec2, to: Vec2,
+  bodyRadius: number, paddedRadius: number): Doodad | null {
+  if (![from.x, from.y, to.x, to.y, bodyRadius, paddedRadius].every(Number.isFinite)
+    || bodyRadius <= 0 || paddedRadius < bodyRadius) return null;
+  let inherited: Doodad | null = null;
+  for (let i = 0; i < ctx.doodads.length; i++) {
+    const d = ctx.doodads[i];
+    if ((d.tier ?? 0) !== 0 || d.kind !== 'door' || !d.door) continue;
+    const shape = hitSurfaceOf(d, 'move');
+    // Shipped doorSurfaceOf slabs are unrotated rectangles. Refuse unsupported
+    // authored door geometry instead of inferring an escape through a corner.
+    if (shape.kind !== 'rect' || (shape.rot ?? 0) !== 0
+      || ![shape.hw, shape.hh, d.pos.x, d.pos.y].every(Number.isFinite)
+      || shape.hw <= 0 || shape.hh <= 0) return null;
+    if (shapeDistance(shape, d.pos.x, d.pos.y, from.x, from.y) >= bodyRadius) continue;
+    if (inherited) return null;
+    const fx = from.x - d.pos.x, fy = from.y - d.pos.y;
+    const tx = to.x - d.pos.x, ty = to.y - d.pos.y;
+    const face = (a: number, b: number, tangentA: number, tangentB: number,
+      halfDepth: number, halfBreadth: number): boolean => {
+      const gap = a - halfDepth, endGap = b - halfDepth;
+      return gap > 0 && gap < bodyRadius && endGap > gap && endGap >= paddedRadius
+        && Math.abs(tangentA) <= halfBreadth && Math.abs(tangentB) <= halfBreadth;
+    };
+    // The tangent stays within the face for the whole linear stub; its signed
+    // clearance is therefore linear and strictly increasing, not merely clear
+    // at sampled points. Inside-center, corner, parallel and reversed stubs fail.
+    if (!face(fx, tx, fy, ty, shape.hw, shape.hh)
+      && !face(-fx, -tx, fy, ty, shape.hw, shape.hh)
+      && !face(fy, ty, fx, tx, shape.hh, shape.hw)
+      && !face(-fy, -ty, fx, tx, shape.hh, shape.hw)) return null;
+    inherited = d;
+  }
+  return inherited;
+}
+
+function repairStructureGround(ctx: GenCtx, at: Vec2, w: number, h: number,
+  aprons: ApronOffset[], audit?: NativeStructureAttempt): Vec2 | null {
+  const facts = audit ? { terminal: 'declined', considered: 0, routeCells: 0,
+    paintedCells: 0, firstRefusals: {} as Record<string, number> } : undefined;
+  if (audit) audit.recovery = facts;
+  return recoverRecipeGround(ctx, at, w, h, aprons, {
+    cell: WALK_CELL, border: BORDER, entryClear: ENTRY_CLEAR, exitClear: EXIT_CLEAR,
+    rectReserved, inReserved, candidates: structureSeatCandidates, entryDoorEscape: recipeEntryDoorEscape,
+    // Interior-only physical topology: all doors stay barriers regardless of
+    // open/broken state. Current ground-level movement blockers (including
+    // functional passage plugs) also separate the OLD floor components.
+    barrierRects: cx => {
+      const rects: { x: number; y: number; w: number; h: number }[] = [];
+      for (const d of cx.doodads) if (d.door || (d.tier ?? 0) === 0 && blocksMovement(d)) {
+        if (d.door) {
+          if (!d.door.cells) return null;
+          rects.push(d.door.cells);
+        }
+        const { ex, ey } = shapeAabbHalf(hitSurfaceOf(d, 'move'));
+        rects.push({ x: d.pos.x - ex, y: d.pos.y - ey, w: ex * 2, h: ey * 2 });
+      }
+      for (const structure of cx.structures ?? []) {
+        if (!Array.isArray(structure.doors)) return null;
+        for (const placed of structure.doors) {
+          if (!placed.door.cells) return null;
+          rects.push(placed.door.cells);
+        }
+      }
+      return rects;
+    },
+    // This is the original site-clear predicate on ALL tiers. Recovery has
+    // no provenance to delete even a nonblocking foreign doodad.
+    erases: (cx, rect) => cx.doodads.some(d => !Number.isFinite(d.radius)
+      || !Number.isFinite(d.pos.x) || !Number.isFinite(d.pos.y)
+      || d.pos.x > rect.x - d.radius * .4 && d.pos.x < rect.x + rect.w + d.radius * .4
+        && d.pos.y > rect.y - d.radius * .4 && d.pos.y < rect.y + rect.h + d.radius * .4),
+    // AABB overlap is a conservative WHOLE-shape exclusion, not sampled
+    // circles. Reject every tier/record whose shape can touch a repainted cell;
+    // the original live-body route check below remains a separate tier-0 gate.
+    paintBlocked: (cx, rect) => cx.doodads.some(d => {
+      const { ex, ey } = shapeAabbHalf(hitSurfaceOf(d, 'move'));
+      if (![ex, ey, d.pos.x, d.pos.y].every(Number.isFinite) || ex < 0 || ey < 0) return true;
+      return d.pos.x + ex > rect.x && d.pos.x - ex < rect.x + rect.w
+        && d.pos.y + ey > rect.y && d.pos.y - ey < rect.y + rect.h;
+    }) || [...cx.pois, ...cx.camps, ...cx.garrisons.map(g => g.pos), ...cx.npcs.map(n => n.pos),
+      ...cx.breakables.map(b => b.pos), ...(cx.mustReach ?? [])].some(p =>
+      !Number.isFinite(p.x) || !Number.isFinite(p.y) || dist(p, vec(
+        Math.max(rect.x, Math.min(p.x, rect.x + rect.w)),
+        Math.max(rect.y, Math.min(p.y, rect.y + rect.h)))) < WALK_CELL / 2),
+    blocked: (cx, p, r) => cx.doodads.some(d => (d.tier ?? 0) === 0
+      && (d.keep || d.door || blocksMovement(d) || hazardGrounds().includes(d.kind))
+      && shapeDistance(hitSurfaceOf(d, 'move'), d.pos.x, d.pos.y, p.x, p.y) < r)
+      || [...cx.pois, ...cx.camps, ...cx.garrisons.map(g => g.pos), ...cx.npcs.map(n => n.pos),
+        ...cx.breakables.map(b => b.pos), ...(cx.mustReach ?? [])].some(q => dist(p, q) < r + WALK_CELL / 2),
+    admit: (cx, p, sw, sh, as) => {
+      const result = nativeResolvedStructureSeat(cx, p, sw, sh, as, false);
+      return typeof result === 'string' ? null : result;
+    },
+    way: (cx, points) => {
+      const roll = wayRoller(cx, 0);
+      const reserved: Reservation[] = [];
+      for (const p of points) {
+        const before = cx.doodads.length;
+        roll(p, WALK_CELL / 2, 'road');
+        if (cx.doodads.length === before) throw Error('Native recipe clearway refused its ground');
+        reserved.push({ pos: p, radius: WALK_CELL / 2 + COHERENCE_CFG.wayReservePad });
+      }
+      return reserved;
+    },
+  }, facts);
+}
+function fitResolvedStructure(ctx: GenCtx, at: Vec2, w: number, h: number,
+  aprons: ApronOffset[], explicit: boolean, audit?: NativeStructureAttempt): Vec2 {
+  const result = nativeResolvedStructureSeat(ctx, at, w, h, aprons, explicit);
+  if (typeof result !== 'string') return result;
+  if (audit) { audit.nativeTerminal = result; audit.context = nativeStructureContext(ctx); }
+  const recovered = explicit ? null : repairStructureGround(ctx, at, w, h, aprons, audit);
+  if (recovered) return recovered;
+  if (audit) audit.terminal = 'native-refusal';
+  throw new ResolvedStructureSeatError(result === 'whole-arena'
+    ? 'resolved structure cannot fit whole arena' : 'resolved structure has no whole admissible seat');
 }
 
 function findStructureSpot(
-  ctx: GenCtx, w: number, h: number, aprons: ApronOffset[],
+  ctx: GenCtx, w: number, h: number, aprons: ApronOffset[], audit?: { tries: number },
 ): Vec2 | null {
   const severs = severanceTest(ctx);
   for (let tries = 0; tries < 18; tries++) {
+    if (audit) audit.tries++;
     const c = vec(
       ctx.rng.range(BORDER + w / 2, Math.max(BORDER + w / 2, ctx.arena.w - BORDER - w / 2)),
       ctx.rng.range(BORDER + h / 2, Math.max(BORDER + h / 2, ctx.arena.h - BORDER - h / 2)));
@@ -6144,9 +6300,15 @@ function findStructureSpot(
  *  window + prop doodads, record roofs/slots/doors on a PlacedStructure, stamp
  *  fx layers, and guarantee every door an open apron reachable from the entry. */
 function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): PlacedStructure | undefined {
+  const audit = nativeStructureAttempt(ctx, def, at);
   def = structurePlanOf(def, ctx.structurePlans);
+  const required = requireStructure(ctx, def);
   const resolved = resolvePlan(ctx, def);
-  if (!resolved) return;
+  if (!resolved) {
+    if (audit) audit.terminal = 'no-plan';
+    if (required) throw new RequiredStructureSeatError('required structure has no plan: ' + def.id);
+    return;
+  }
   const { rows, cells } = resolved;
   // QUANTIZE the plan cell to a multiple of the WALK cell (WALK_CELL), and
   // later snap the footprint origin to the walk lattice (plannedRect): every
@@ -6249,9 +6411,25 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): PlacedSt
     return { dx: gx + n.x * cell * APRON_CELLS, dy: gy + n.y * cell * APRON_CELLS, ox: gx, oy: gy, n, cell, edge };
   });
 
-  const selected = at ?? findStructureSpot(ctx, w, h, apronOffsets);
-  if (!selected) return;
-  const sited = fitResolvedStructure(ctx, selected, w, h, apronOffsets, at !== undefined);
+  if (audit) audit.resolved = { w, h, cell, aprons: apronOffsets.map(a => ({ ...a, n: { ...a.n } })) };
+  const finder = audit && at === undefined ? { tries: 0 } : undefined;
+  const beforeFinder = finder ? ctx.rng.snapshot() : 0;
+  const selected = at ?? findStructureSpot(ctx, w, h, apronOffsets, finder);
+  if (audit && finder) audit.finder = { tries: finder.tries, before: beforeFinder,
+    after: ctx.rng.snapshot(), selected: selected ? { ...selected } : null };
+  let sited: Vec2;
+  if (!selected) {
+    if (audit) { audit.nativeTerminal = 'finder-null'; audit.context = nativeStructureContext(ctx); }
+    if (!required) { if (audit) audit.terminal = 'no-spot'; return; }
+    // The original finder exhausted all 18 tries and their 36 draws. Only the
+    // selected required feature gets a draw-free annex attempt from this stop.
+    const recovered = repairStructureGround(ctx, ctx.entry, w, h, apronOffsets, audit);
+    if (!recovered) {
+      if (audit) audit.terminal = 'required-no-spot';
+      throw new RequiredStructureSeatError('required structure has no whole admissible seat: ' + def.id);
+    }
+    sited = recovered;
+  } else sited = fitResolvedStructure(ctx, selected, w, h, apronOffsets, at !== undefined, audit);
   // Snap the footprint origin onto the walk lattice (see the quantization
   // note) — the SAME derivation the siting gates judged the candidate by.
   const rect = plannedRect(sited, w, h);
@@ -6856,6 +7034,11 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): PlacedSt
   ctx.pois.push(center);
   if (def.garrison) {
     ctx.garrisons.push({ pos: center, faction: def.garrison, size: def.garrisonSize ?? [3, 5] });
+  }
+  completeRequiredStructure(ctx, required, placed);
+  if (audit) {
+    audit.terminal = 'placed'; audit.after = ctx.rng.snapshot();
+    audit.placed = { id: placed.id, defId: placed.defId, rect: { ...placed.rect } };
   }
   return placed;
 }
