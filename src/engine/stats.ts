@@ -2009,40 +2009,44 @@ export class StatSheet {
     let override: number | undefined;
     let links: Modifier[] | undefined;
 
-    const apply = (m: Modifier): void => {
-      if (m.stat !== stat) return;
-      if (m.when && !this.conditions.has(m.when)) return;
-      if (m.tags && m.tags.length) {
-        if (!contextTags) return;
-        for (const t of m.tags) if (!contextTags.has(t)) return;
-      }
-      // Gauge-scaled modifiers ride a live quantity (status stacks, charge
-      // counts) — a zero gauge is an inert modifier.
-      let v = m.value;
-      if (m.gauge) {
-        const g = this.gauges.get(m.gauge) ?? 0;
-        // THE GAUGE GATE (Modifier.gaugeAt): a threshold, not a scale —
-        // the full value at or above the line, nothing below it.
-        if (m.gaugeAt !== undefined) {
-          if (g < m.gaugeAt) return;
-        } else {
-          if (g === 0) return;
-          v *= g;
+    // Fold sources, then skill-local extras in the original order, without
+    // allocating an apply closure on every uncached stat read.
+    const sourceMods = this.sourceModsFor(stat);
+    for (let phase = 0; phase < 2; phase++) {
+      const mods = phase === 0 ? sourceMods : extra;
+      if (!mods) continue;
+      modifier: for (const m of mods) {
+        if (m.stat !== stat) continue;
+        if (m.when && !this.conditions.has(m.when)) continue;
+        if (m.tags && m.tags.length) {
+          if (!contextTags) continue;
+          for (const t of m.tags) if (!contextTags.has(t)) continue modifier;
+        }
+        // Gauge-scaled modifiers ride a live quantity (status stacks, charge
+        // counts) — a zero gauge is an inert modifier.
+        let v = m.value;
+        if (m.gauge) {
+          const g = this.gauges.get(m.gauge) ?? 0;
+          // THE GAUGE GATE (Modifier.gaugeAt): a threshold, not a scale —
+          // the full value at or above the line, nothing below it.
+          if (m.gaugeAt !== undefined) {
+            if (g < m.gaugeAt) continue;
+          } else {
+            if (g === 0) continue;
+            v *= g;
+          }
+        }
+        switch (m.kind) {
+          case 'flat': flat += v; break;
+          case 'increased': increased += v; break;
+          case 'more': moreMult *= 1 + v; break;
+          case 'override': override = v; break;
+          case 'link':
+            if (!noLinks && m.fromStat) (links ??= []).push({ ...m, value: v });
+            break;
         }
       }
-      switch (m.kind) {
-        case 'flat': flat += v; break;
-        case 'increased': increased += v; break;
-        case 'more': moreMult *= 1 + v; break;
-        case 'override': override = v; break;
-        case 'link':
-          if (!noLinks && m.fromStat) (links ??= []).push({ ...m, value: v });
-          break;
-      }
-    };
-    const sourceMods = this.sourceModsFor(stat);
-    if (sourceMods) for (const m of sourceMods) apply(m);
-    if (extra) for (const m of extra) apply(m);
+    }
 
     // STAT LINKS: each siphon adds ratio × the source's baseline into the
     // BASE layer (before increased/more), read with the same context and

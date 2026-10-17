@@ -34,7 +34,7 @@ import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
 import { registerBountySource } from '../../data/bountyboard';
 import { FACTIONS, MONSTERS } from '../../data/monsters';
-import { registerEventFront } from '../../engine/eventWeather';
+import { registerEventFront, type EventWeatherHost } from '../../engine/eventWeather';
 import type { World } from '../../engine/world';
 import { registerAttentionSource, type AttentionPoint } from '../../world/attention';
 import type { MapCoord } from '../../world/coords';
@@ -293,6 +293,9 @@ export class HuntField implements WorldOverlay {
     if (this.hunt && !has(this.hunt.currentZoneId)) this.hunt = null;
   }
 
+  /** Nominal retained lifetime; restoring or replacing a hunt creates a new identity. */
+  nativeHuntEpoch(id:string):object|undefined {return this.hunt?.id===id?this.hunt:undefined;}
+
   /** Read-only snapshot for markers / tests. */
   peek(): { id: string; beastDefId: string; faction: string; color: string; lairZoneId: string; coord: MapCoord; currentZoneId: string; revealed: boolean; lifeFrac: number; phaseIdx: number; waneSec: number } | null {
     const h = this.hunt;
@@ -364,6 +367,9 @@ export class HuntField implements WorldOverlay {
   }
 }
 
+/** Authentic observations are captured here before a consumer can replace the prototype. */
+export const nativeHuntLifetimeCalls=Object.freeze({peek:HuntField.prototype.peek,epoch:HuntField.prototype.nativeHuntEpoch});
+
 // --- THE BEAST'S GROUND (registered on import — the transience doctrine) ------
 //
 // The quarry FLAVORS the land it borrows and hands every piece back: two
@@ -405,7 +411,7 @@ registerWeather('hunt_nest', {
 // dead or ended hunt pins nothing, so the dress evaporates with the chase.
 registerEventFront({
   id: 'hunt',
-  sample: (world: World, zone) => {
+  sample: (world: EventWeatherHost, zone) => {
     const hf = world.sim.huntField;
     if (!hf) return null;
     const h = hf.peek();
@@ -449,7 +455,7 @@ registerMarkerSource((world: World): MapMarker[] => {
 // migrating beast's card follows it live (the kind's copy re-reads here).
 registerBountySource({
   id: 'hunt',
-  census(world: World) {
+  census(world: import('../../data/bountyboard').BountyReadContext) {
     const h = world.sim.huntField?.peek();
     if (!h || !h.revealed || h.lifeFrac <= 0) return [];
     const z = world.zoneMap[h.currentZoneId];

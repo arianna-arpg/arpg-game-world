@@ -6,6 +6,58 @@
 // ---------------------------------------------------------------------------
 
 export const VIS_CFG = {
+  /** Compact Life-adjacent debuffs; one detailed readout only while hovered. */
+  statusIcons: { size:24, gap:3, columns:4, orbClearance:44,
+    background:'rgba(12,16,20,.35)', ink:'#f4ebd7', margin:8, cardWidth:250, lineHeight:16 },
+  /** The selected speaker explains the idle gesture before native dialogue opens. */
+  speechApproach: { enabled: true, font: '10px Verdana', color: '#e4ded0', dy: 22, maxCharacters: 64 },
+  /** Outline screen-space status/route text without changing its layout or authored color. */
+  hudText: { enabled: true, edge: '#10151a', outline: 3 },
+  /** Public activity instructions share a bounded, responsive HUD column. */
+  objectiveReadout: { minWidth: 48, maxWidth: 560, maxRows: 4, maxCharacters: 2048, lineHeight: 17, gap: 18, font: '12px Verdana' },
+  /** Actual temporary modifier payload, on demand at its native buff pip. */
+  buffReadout: { maxWidth: 360, maxRows: 10, margin: 8, pad: 9, lineHeight: 17, ascent: 12,
+    font: '12px Verdana', background: 'rgba(8,8,12,.94)', edge: '#575368', title: '#f0d99c', detail: '#d8d4c8' },
+  /** Native active effects: stable names, expiry clocks and shared pressure. */
+  statusReadout: { enabled: true, maxRows: 3, maxWidth: 240, minWidth: 110,
+    focusOffset: 76, bodyClearance: 44, margin: 12, bottomReserve: 140,
+    rowHeight: 34, lineHeight: 20, ascent: 13, detailOffset: 14, gap: 3, pad: 8, stripe: 3,
+    font: 'bold 11px Verdana', detailFont: '10px Verdana',
+    background: 'rgba(12,16,20,.82)', text: '#e9e6dc', detail: '#b9c3c8' },
+  /** Known contract bearings, independent of terrain survey and pathfinding. */
+  questCompass: { enabled: true, maxRows: 2, maxWidth: 360, lineHeight: 17,
+    font: '11px Verdana', active: '#b7c9d0', ready: '#e4c47e' },
+  /** Unassigned controls keep their hit areas and key labels while leaving
+   * the battlefield visible. Filled skills retain their native readability. */
+  hotbar: { emptyFillAlpha: .12, emptyBorderAlpha: .5 },
+  /** Current player cast: actual work clock and owner, separate from cooldowns. */
+  castReadout: { enabled: true, width: 104, height: 6, nameHeight: 14,
+    showName: false, showMovement: false, plantedText: 'Feet planted', movementHeight: 12,
+    movementFont: '10px Verdana', movementText: '#cad3d4',
+    font: 'bold 11px Verdana', text: '#f1ecdd', edge: '#121719', outline: 3,
+    slotEdge: '#f1ecdd', slotWidth: 2, slotPad: 2 },
+  meleeReach: { enabled:true, color:'#dcebd6', edge:'#17201b', alpha:.34, progressAlpha:.25,
+    fillAlpha:.025, width:1.3, outline:1.5 },
+  /** Local body identity and numeric clutter share one configurable presentation
+   * contract. Neither changes damage, attack geometry or saved actor state. */
+  combatFocus: {
+    player: { enabled: true, pad: 7, corner: 6, nose: 7, width: 1.5, outline: 1.25,
+      color: '#edf9e9', edge: '#18201f', crowdAlpha: .95, restAlpha: .4, crowdReach: 130 },
+    numbers: { enabled: true, kinds: ['dmg','gains','xp','drop','pickup','progression'] as readonly string[],
+      bodyPad: 12, barRise: 34, gap: 3, step: 16, rings: 12 },
+    names: { enabled: true, garrisons: true, formations: true, garrisonWidth: 220, gap: 4, step: 12, rings: 20, nameFont: 'bold 12px Verdana',
+      subFont: '10px Verdana', nameHeight: 14, subHeight: 12, outline: 3, edge: '#151712',
+      contrast: { minGap: .60, margin: .05 } },
+    threats: { enabled: true, radius: 280, minWidth: 22 },
+    bodies: { enabled: true, radius: 280, fade: 60, halfAngle: Math.PI / 3, angleFade: Math.PI / 18, width: 1.15, color: '#ddd5b8', alpha: .62 },
+    meters: { enabled: false, bodyScale: 1.15, bodyPad: 3, gap: 2, step: 10, rings: 8,
+      settleSec: .35, linkGap: 2, linkWidth: 1, linkColor: '#adbaa9', linkEdge: '#172019' },
+  },
+  altar: { mendRuneRadius: 8.5, mendRuneWidth: 2, mendRuneAlpha: .9,
+    influence: { enabled: true, maxSources: 3, pad: 9, spacing: 9, motes: 2,
+      period: 1.4, travel: 10, sigil: 4, width: 1.8, outline: '#10121a', contrast: { minGap: .65, margin: .05 } },
+    label: { outline: '#10121a', contrast: { minGap: .65, margin: .05 }, width: 3 },
+  },
   /** Where the key light sits (radians, screen space). Volume shading, gloss
    *  bands and long doodad shadows all agree on this one sun. */
   lightAngle: -2.35, // up-left
@@ -375,6 +427,13 @@ export const VIS_CFG = {
     labelPadX: 4,
     labelPillH: 14,
     labelLift: 30,
+    /** Keep reward names clear of hostile bodies and their immediate action.
+     * Zero restores unconditional labels. Item glyphs and the pickup feed stay. */
+    rewardClearance: 52,
+    /** Persistent labels share bounded space, with a tether to the actual item.
+     * Only an exactly attributed, drawn name replaces its transient twin. */
+    rewardLabels: { enabled: true, collapseAnnouncements: true, gap: 3, step: 16, rings: 12,
+      maxLabels: 32, maxWidth: 240, linkWidth: 1, linkColor: '#b5aca0', linkAlpha: .55 },
     /** Currency glyph type sizes (vestige sigils, essence trail). */
     vestigeFont: 13,
     essenceFont: 11,
@@ -733,6 +792,9 @@ export const VIS_CFG = {
     clusterBin: 176,
     /** How dark deep night gets (0 = untouched, 1 = pitch black). */
     nightDark: 0.66,
+    /** Temper ambient wash over already-visible bodies and combat readouts.
+     * This is not a light source and never alters the sight/room veil. */
+    readability: { enabled: true, maxDark: .28, feather: 18 },
     /** Ambient darkness floor applied even at noon in lightless interiors. */
     duskDark: 0.22,
     /** Additive emissive bloom pass strength. */
@@ -1241,7 +1303,8 @@ export const VIS_CFG = {
   infoFeeds: {
     /** The world-news stack: edge pads per anchor + the line gap. maxRows
      *  bounds a bulletin storm to a readable column. */
-    notice: { topPad: 64, bottomPad: 96, sidePad: 18, rowGap: 4, maxRows: 8 },
+    notice: { topPad: 64, bottomPad: 96, sidePad: 18, rowGap: 4, maxRows: 8,
+      maxWidth: 640, hudGap: 12, cacheEntries: 64 },
     /** The right-flank pickup ledger ("Warcry (Common) x1") — seated over
      *  the ground the inventory panel opens onto. */
     pickup: { rightPad: 14, topFrac: 0.34, rowH: 17, font: 12, maxRows: 10 },
@@ -1428,6 +1491,9 @@ export const VIS_CFG = {
   /** The chest lid's swing on open: seconds, the lift (px) it rises before
    *  settling open. */
   chestLid: { seconds: 0.35, lift: 7 },
+  chestReadout: { enabled:true, range:180, hoverRadius:28, width:150, y:39,
+    searching:'Searching…', approach:'Move closer to search', font:'11px Verdana',
+    text:'#f1e7cd', edge:'#171510', outline:3 },
 
   /** THE STATUS VOICE's render dials (vis/statusVoiceLayer.ts — the drawn
    *  half of engine/statusVoice.ts; the life / reach / cap live THERE as

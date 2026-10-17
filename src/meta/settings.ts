@@ -17,12 +17,13 @@
 
 import { PAD_CFG, AIM_ASSIST_MODES, padDisplay, type AimAssistMode } from '../core/gamepad';
 import { NOTICE_CFG, NOTICE_ANCHORS, PICKUP_FEED_CFG, type NoticeAnchorId } from '../world/bulletins';
+import { FLOAT_OWNER_MODES } from '../world/bulletins'; // THE FLOAT'S OWNER (THE WIRE'S EYES)
 import { normalizeCursorOptions, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
 import { MAP_CFG, MAP_LABEL_MODES, type MapLabelMode, MAP_CHART_MODES, type MapChartMode } from '../ui/mapConfig';
 import { UI_SCALE_CFG } from '../ui/uiScale';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
-import { CAMERA_CFG, CAMERA_MODES, type CameraModeId } from '../render/camera';
+import { CAMERA_CFG, CAMERA_MODES, cameraZoomOf, type CameraModeId } from '../render/camera';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 import { MENU_ANCHORS, MENU_CFG, type MenuAnchorId } from '../ui/menuConfig';
 import { ESCAPE_CFG, ESCAPE_MODES, type EscapeCloseMode } from '../ui/escapeConfig';
@@ -35,7 +36,8 @@ export type ActionId =
   | 'skillSlot2' | 'skillSlot3' | 'skillSlot4' | 'skillSlot5' | 'skillSlot6' | 'skillSlot7'
   | 'metaModifier' | 'pickup'
   | 'panelChar' | 'panelTree' | 'panelSkills' | 'panelMap' | 'panelInv'
-  | 'panelMenu' | 'townPortal' | 'itemLock' | 'companionStance' | 'dialogueAdvance';
+  | 'panelMenu' | 'townPortal' | 'itemLock' | 'companionStance' | 'dialogueAdvance'
+  | 'ping'; // THE PING (card 17 A — engine/pings.ts, data/identityCues.ts PING_CUE): mark the ground for your party
 
 /** Pad-bindable actions: everything the keyboard binds, PLUS bar slots 0/1
  *  (fixed to LMB/RMB on mouse, free to live on any button on a pad). */
@@ -86,6 +88,18 @@ export interface Settings {
   lowLifePulse: boolean;
   /** Independent ailment layers: gentle motion, still, or disabled. Icons stay visible. */
   afflictionOverlays: import('../data/afflictionCues').AfflictionOverlayMode;
+  /** Keep native meter anchors unless crowd avoidance is explicitly requested. */
+  crowdedMeters: boolean;
+  /** Optional name of the skill currently being cast. */
+  castNameHint: boolean;
+  /** Optional affirmative support-readiness message in Skills. Refusals stay visible. */
+  supportReadyHint: boolean;
+  /** Optional movement-lock caption, independent of the cast name. */
+  castMovementHint: boolean;
+  /** Text is independent of ailment screen effects. */
+  statusReadout: 'hover' | 'focus' | 'corner' | 'off';
+  /** Unique skill illustrations; acronyms remain an explicit accessibility preference. */
+  skillArtwork: boolean;
   /** THE FALTER (render/screenFx.ts ScreenFxDef.falter): faintness and the
    *  swoon deliberately HOLD presented frames — a simulated lag spike, the
    *  vasovagal skip. Designed and documented (docs/render/falter.md); the
@@ -183,11 +197,16 @@ export interface Settings {
    *  — the bar slot's blooming pip, the SKILLS drawer's pip, the Menu
    *  button's roll-up — and the drawer or the tree spends it. */
   treePrompt: boolean;
+  /** Optional passive text lists; the authored graph is the default view. */
+  passiveAvailableList: boolean;
+  passiveAllocatedList: boolean;
   /** THE CAMERA MODE (render/camera.ts registry): 'hero' locks the view to
    *  your hero everywhere — zone edges simply reveal the void frame — while
    *  'zone' is the classic frame that never leaves the zone. A ZoneDef.camera
    *  pin overrides this per-zone; boundless zones always free-follow. */
   cameraMode: CameraModeId;
+  /** World framing, independent of interface size and buffer resolution. */
+  cameraZoom: number;
   /** THE RENDER SCALE (render/renderScale.ts): internal resolution as a
    *  dial — the same world view rasterized into a smaller buffer, CSS-
    *  stretched to the window (zoom rides the scale, so framing/camera/aim
@@ -246,6 +265,11 @@ export interface Settings {
    *  writes this OFF. Settings persist beside the account (disk slot +
    *  portage), so the choice survives every run. */
   confirmMemorySale: boolean;
+  /** THE NAME OVER THE HERO (data/identityCues.ts HERO_NAME_CUE.mode when unset): 'all' | 'party' | 'off'. */
+  heroNames?: import('../data/identityCues').HeroNameMode;
+  /** THE FLOAT'S OWNER (world/bulletins.ts FLOAT_OWNER_CFG.mode when unset): on a hosted world,
+   *  whose damage and heal numbers draw: 'all' | 'party' | 'mine'. */
+  floatOwners?: import('../world/bulletins').FloatOwnerMode;
 }
 
 /** THE MENU BAR options (ui/menuConfig.ts owns the dials + anchors). */
@@ -282,6 +306,14 @@ export interface SettingsSave {
   cursor?: Partial<CursorOptions>;
   lowLifePulse?: boolean;
   afflictionOverlays?: import('../data/afflictionCues').AfflictionOverlayMode;
+  crowdedMeters?: boolean;
+  castNameHint?: boolean;
+  supportReadyHint?: boolean;
+  castMovementHint?: boolean;
+  statusReadout?: 'hover' | 'focus' | 'corner' | 'off';
+  /** 2 migrates the former automatic near-hero readout to icons. */
+  statusReadoutVersion?: number;
+  skillArtwork?: boolean;
   statusFalter?: boolean;
   invertMove?: boolean;
   gearPickup?: 'vacuum' | 'key';
@@ -300,7 +332,10 @@ export interface SettingsSave {
   destinationLabels?: 'near' | 'always';
   escapeCloses?: EscapeCloseMode;
   treePrompt?: boolean;
+  passiveAvailableList?: boolean;
+  passiveAllocatedList?: boolean;
   cameraMode?: CameraModeId;
+  cameraZoom?: number;
   renderScale?: number | 'auto';
   veilDarkness?: number;
   noticeSec?: number;
@@ -317,6 +352,10 @@ export interface SettingsSave {
   portalButton?: { anchor?: string; visibility?: string };
   /** THE SALE PROMPT (additive — a pre-dial save reads ON). */
   confirmMemorySale?: boolean;
+  /** THE NAME OVER THE HERO (additive — data/identityCues.ts HERO_NAME_CUE.mode when absent): 'all' | 'party' | 'off'. */
+  heroNames?: import('../data/identityCues').HeroNameMode;
+  /** THE FLOAT'S OWNER (additive: FLOAT_OWNER_CFG.mode when absent): 'all' | 'party' | 'mine'. */
+  floatOwners?: import('../world/bulletins').FloatOwnerMode;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -333,6 +372,8 @@ export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
   // THE COMPANION STANCE (engine/companionStances.ts): cycles every bonded
   // beast's conduct on the bar — the hunter's whistle-and-hand-signal key.
   companionStance: 'x',
+  // THE PING (engine/pings.ts, PING_CUE): mark the ground under the aim for your party — the MMO's G.
+  ping: 'g',
   dialogueAdvance: 'enter',
 };
 
@@ -343,7 +384,7 @@ export const ACTION_IDS = Object.keys(DEFAULT_KEYBINDS) as ActionId[];
 export function bindingContextsOverlap(a: string, b: string): boolean {
   if (a === 'dialogueAdvance' || b === 'dialogueAdvance') return false;
   const other = a === 'itemLock' ? b : b === 'itemLock' ? a : null;
-  return !other || !/^(skillSlot\d+|moveUp|moveDown|moveLeft|moveRight|townPortal|companionStance)$/.test(other);
+  return !other || !/^(skillSlot\d+|moveUp|moveDown|moveLeft|moveRight|townPortal|companionStance|ping)$/.test(other); // ping: a combat control (PING_CUE)
 }
 
 /** Default controller layout. The left stick IS movement (an axis, not a
@@ -360,6 +401,7 @@ export const DEFAULT_PAD_BINDS: Record<PadActionId, string> = {
   panelMenu: 'pad:l3',
   townPortal: '', itemLock: 'pad:a',
   companionStance: '', // pad buttons are scarce — bindable, ships unbound
+  ping: '', // THE PING (PING_CUE): bindable, ships unbound on the pad
   dialogueAdvance: 'pad:a',
 };
 
@@ -387,6 +429,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   panelInv: 'Inventory', panelMenu: 'Menu',
   townPortal: 'Town Portal', itemLock: 'Hold to Lock / Reserve (menus)',
   companionStance: 'Companion Stance (cycle)',
+  ping: 'Ping (mark the ground for your party)', // THE PING (PING_CUE)
   dialogueAdvance: 'Advance Dialogue',
 };
 
@@ -445,6 +488,12 @@ export const makeSettings = (): Settings => ({
   cursor: { ...DEFAULT_CURSOR_OPTIONS },
   lowLifePulse: true,
   afflictionOverlays: 'gentle',
+  crowdedMeters: false,
+  castNameHint: false,
+  supportReadyHint: false,
+  castMovementHint: false,
+  statusReadout: 'hover',
+  skillArtwork: true,
   statusFalter: true,
   invertMove: false,
   gearPickup: 'vacuum',
@@ -463,7 +512,10 @@ export const makeSettings = (): Settings => ({
   destinationLabels: 'near',
   escapeCloses: ESCAPE_CFG.default,
   treePrompt: false,
+  passiveAvailableList: false,
+  passiveAllocatedList: false,
   cameraMode: CAMERA_CFG.default,
+  cameraZoom: CAMERA_CFG.zoom.default,
   renderScale: 'auto',
   veilDarkness: 1,
   noticeSec: NOTICE_CFG.defaultSec,
@@ -486,6 +538,13 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   cursor: { ...s.cursor },
   lowLifePulse: s.lowLifePulse,
   afflictionOverlays: s.afflictionOverlays,
+  crowdedMeters: s.crowdedMeters,
+  castNameHint: s.castNameHint,
+  supportReadyHint: s.supportReadyHint,
+  castMovementHint: s.castMovementHint,
+  statusReadout: s.statusReadout,
+  statusReadoutVersion: 2,
+  skillArtwork: s.skillArtwork,
   statusFalter: s.statusFalter,
   invertMove: s.invertMove,
   gearPickup: s.gearPickup,
@@ -504,7 +563,10 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   destinationLabels: s.destinationLabels,
   escapeCloses: s.escapeCloses,
   treePrompt: s.treePrompt,
+  passiveAvailableList: s.passiveAvailableList,
+  passiveAllocatedList: s.passiveAllocatedList,
   cameraMode: s.cameraMode,
+  cameraZoom: cameraZoomOf(s.cameraZoom),
   renderScale: s.renderScale,
   veilDarkness: s.veilDarkness,
   noticeSec: s.noticeSec,
@@ -517,6 +579,8 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   menuBar: { ...s.menuBar },
   portalButton: { ...s.portalButton },
   confirmMemorySale: s.confirmMemorySale,
+  ...(s.heroNames ? { heroNames: s.heroNames } : {}), // HERO_NAME_CUE: the overhead-name dial rides the save only when set
+  ...(s.floatOwners ? { floatOwners: s.floatOwners } : {}), // THE FLOAT'S OWNER: rides the save only when set
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -579,6 +643,13 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     cursor: normalizeCursorOptions(s.cursor),
     lowLifePulse: s.lowLifePulse ?? true,
     afflictionOverlays: s.afflictionOverlays === 'off' || s.afflictionOverlays === 'still' ? s.afflictionOverlays : 'gentle',
+    crowdedMeters: s.crowdedMeters === true,
+    castNameHint: s.castNameHint === true,
+    supportReadyHint: s.supportReadyHint === true,
+    castMovementHint: s.castMovementHint === true,
+    statusReadout: s.statusReadout === 'corner' || s.statusReadout === 'off' ? s.statusReadout
+      : s.statusReadoutVersion === 2 && s.statusReadout === 'focus' ? 'focus' : 'hover',
+    skillArtwork: s.skillArtwork !== false,
     statusFalter: s.statusFalter ?? true,
     invertMove: s.invertMove ?? false,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
@@ -611,9 +682,12 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     escapeCloses: ESCAPE_MODES.some(m => m.id === s.escapeCloses) ? s.escapeCloses! : ESCAPE_CFG.default,
     // The chooser popup is opt-in: a pre-dial save reads OFF (the shown tells stand regardless).
     treePrompt: s.treePrompt === true,
+    passiveAvailableList: s.passiveAvailableList === true,
+    passiveAllocatedList: s.passiveAllocatedList === true,
     // Unknown values (a renamed mode, a pre-dial save) fall back to the
     // registry default — currently the hero-locked frame.
     cameraMode: CAMERA_MODES.some(m => m.id === s.cameraMode) ? s.cameraMode! : CAMERA_CFG.default,
+    cameraZoom: cameraZoomOf(s.cameraZoom),
     // 'auto' passes whole; numbers re-clamp into the fabric's rails; anything
     // else (a pre-dial save) falls back to the governor.
     renderScale: s.renderScale === 'auto' ? 'auto'
@@ -649,6 +723,8 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     // THE SALE PROMPT (additive): a pre-dial save reads ON — the guard is
     // the default, the opt-out is the player's own click.
     confirmMemorySale: s.confirmMemorySale ?? true,
+    ...(s.heroNames ? { heroNames: s.heroNames } : {}), // HERO_NAME_CUE: absent = the shipped default (no key, so deep-equal settings stay equal)
+    ...(FLOAT_OWNER_MODES.includes(s.floatOwners!) ? { floatOwners: s.floatOwners } : {}), // THE FLOAT'S OWNER: a known mode or the default
     // THE TOWN PORTAL BUTTON (additive): an unknown anchor (a renamed row,
     // a pre-dial save) falls back to the registry default.
     portalButton: {

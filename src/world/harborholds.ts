@@ -22,6 +22,7 @@ import type { World } from '../engine/world';
 import { registerMarkerSource, type MapMarker } from './mapMarkers';
 import type { Omen } from './omens';
 import { registerOmenSource } from './omens';
+import type {NativeOmenHost} from './omens';
 
 export interface Vec2Like { x: number; y: number }
 
@@ -141,7 +142,7 @@ export function holdStructureIn(structures: readonly PlacedStructure[], structur
 // murmurs — and ages louder — until found or fallen. First-found besieged
 // holds stay silent: an unfound harbor never nags (the crusade's discipline,
 // softened — the deadline is the one moment the world genuinely needs you).
-registerOmenSource((world: World): Omen[] => world.harborholdOmens());
+registerOmenSource((world: NativeOmenHost): Omen[] => world.harborholdOmens());
 
 // --- THE CAMP WATCH (the sentry fabric) --------------------------------------
 // Dormant besiegers PLANTED at a besieged hold's camp: texture that wakes —

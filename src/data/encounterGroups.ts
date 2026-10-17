@@ -9,6 +9,9 @@ const rooted: BrainTuning = {squad:{focusLeader:true,formation:'ring',idle:{styl
 const m=(slot:string,monster:string,forward:number,side:number,extra:Partial<EncounterMember>={}):EncounterMember=>
   ({slot,role:slot,monster,at:{forward,side},...extra});
 const lead={leader:true};
+// A small foraging party commits once its two hunters have gathered. The
+// bone-thrower may keep its own range; a straggler cannot postpone the blades.
+const foragerMuster: BrainTuning = {squad:{muster:{count:2,radius:380,bloodiedAt:0.9,patience:2.2}}};
 const pair={count:[2,2] as [number,number]};
 const bandit=['farmland','metropolis','townhouse','sewerworks','highland','foothills','stonecrown'];
 const goblin=['tundra','cinderlands','magma_gallery','highland','foothills','snowcrown','pinnacle'];
@@ -30,6 +33,19 @@ const crew=(id:string,name:string,faction:string,minLevel:number,tilesets:string
 /** Ordinary pack replacements. No rare-stat multiplication is implicit. Each
  * recipe guarantees its defining roles and carries its own hard debut floor. */
 export const ENCOUNTER_GROUPS: Record<string,EncounterGroupDef> = {...Object.fromEntries([
+  // Explicitly selected teaching patrol; ordinary ambient pools remain unchanged.
+  {...crew('gnoll_road_foragers','Road Foragers','gnoll',1,gnoll,
+    'A prowler leads another hunter and a bone-thrower. Break the leader to shake their borrowed courage.',[
+      m('leader','gnoll_prowler',65,0,{...lead,tactics:foragerMuster}),
+      m('hunter','gnoll_prowler',-10,-90,{tactics:foragerMuster}),
+      m('scavenger','gnoll_bonepicker',-75,80)],
+    {squad:{focusLeader:true,formation:'wedge',spacing:65,idle:{style:'drill'},onLeaderDeath:'scatter'}}),ambient:false},
+  {...crew('undead_caravan_watch','Caravan Watch','undead',2,['downs'],
+    'Two swords screen a bone mender while an archer watches the wreck. Pressure the cluster or break its healing.',[
+      m('mender','skeletal_cleric',-65,-35,lead),
+      m('swords','skeleton_warrior',50,0,{...pair,spacing:58}),
+      m('archer','skeleton_archer',-65,85)],
+    {squad:{focusLeader:true,formation:'wedge',spacing:58,idle:{style:'mixed'},onLeaderDeath:'none'}}),ambient:false},
   crew('wayward_expedition','Wayward Expedition','bandit',8,bandit,
     'A shield and challenge in front, a mender behind, and two damage dealers. Interrupt healing or flank the guard.',[
       m('vanguard','wayward_vanguard',75,0,lead),m('mender','wayward_mender',-65,0),

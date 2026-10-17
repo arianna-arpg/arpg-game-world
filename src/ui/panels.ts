@@ -1,5 +1,10 @@
+import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
+import { massMap } from '../worldmass/paint';
+import { massQuestPins } from '../worldmass/quests';
+import { roadGuideHtml } from './roadGuide';
+import { storedSupportsHtml } from './storedSupports';
 import { SKILL_EMPOWERMENT } from '../data/skillEmpowerment';
 import { oracleReliquaryHtml } from './reliquary';
 import { planRelicStorage } from '../engine/accountReliquary';
@@ -10,6 +15,7 @@ import { renderWardrobe } from './wardrobe';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 import { ServiceWorkspace } from './serviceWorkspace';
 import { supportCompatibilityHtml } from './supportCompatibility';
+import { swapReadinessText } from './swapReadiness';
 // ---------------------------------------------------------------------------
 // DOM panels: class selection, character sheet, skill book (unlock / level /
 // socket support gems), passive tree, death screen.
@@ -23,6 +29,7 @@ import { tellPortraitDress } from '../engine/tells';
 import { replenishingDelivery } from '../engine/replenishment';
 import { instanceBaseTags } from '../engine/skills';
 import { DEV, GAME_TITLE } from '../config';
+import { passiveFrontierHtml, passiveOwnedHtml } from './passiveFrontier';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
   type AttributeId, type DamageType,
@@ -36,10 +43,10 @@ import {
   type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
 import { EQUIP_SLOTS, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
-import { findBagGem, gemInitials, packSkillGemPayload, packSupportGemPayload, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
+import { findBagGem, packSkillGemPayload, packSupportGemPayload, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
 import { veinLines } from '../engine/supportbase';
 import {
-  MEMORY_FOUND_SOURCES, MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE, memoryFacets,
+  memoryProvenanceLabel, MEMORY_CFG, MEMORY_KINDS, memoryFacets,
   memoryGroups, memoryKindOf, type MemoryKind, type MemoryRecallResult,
 } from '../engine/memories';
 import { GEM_DROP_CFG } from '../engine/loot';
@@ -50,6 +57,8 @@ import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engi
 import { ContainerPane } from './containerPane';
 import { InventoryPages, type InventoryPage, type InventoryPageRequest } from './inventoryPages';
 import { questRewardHtml, questImbueHtml } from './questRewards';
+import { questOfferHtml } from './questOffers';
+import { skillPreparationHtml } from './skillPreparation';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
@@ -58,6 +67,7 @@ import { PortalButton } from './portalbutton';
 import { ItemHoldController, type ItemHoldTarget } from './itemhold';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, itemLevelReq, type ModCompareRow } from '../engine/itemgen';
+import { itemProcReferences } from '../engine/procReference';
 import { ITEM_BASES } from '../data/itembases';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier, ESSENCES, ESSENCE_IDS,
@@ -83,7 +93,7 @@ import { bindFolioKeys, FolioCore, FolioStrip, FOLIO_SHELVED_CLASS, installFolio
 import type { TownSiteId } from '../data/townBuild';
 import type { SuiteStation } from '../data/suites';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
-import { CAMERA_MODES, cameraModeOf } from '../render/camera';
+import { CAMERA_CFG, CAMERA_MODES, cameraZoomOf, cameraModeOf } from '../render/camera';
 import { FACTIONS, MONSTERS, defDensity, type MonsterDef } from '../data/monsters';
 import { heftTierOf } from '../engine/mass';
 import { DEFENSE_CFG } from '../engine/defense';
@@ -148,7 +158,8 @@ import {
   type ActionId, type PadActionId, type Settings,
 } from '../meta/settings';
 import { PAD_CFG, padDisplay, AIM_ASSIST_MODES, connectedPadIndices } from '../core/gamepad';
-import { wipeRosterSlot, type CharacterSave } from '../meta/character';
+import { wipeRosterSlot } from '../meta/character';
+import type { CharacterContinueSummary } from '../meta/characterResume';
 import {
   applySaveImport, buildSaveEnvelope, planSaveImport, saveEnvelopeName,
   type SaveImportPlan,
@@ -165,8 +176,9 @@ import { objectiveRead, objectiveSeals, type ZoneDef } from '../data/zones';
 import { underSpanPolicyOf } from '../data/underspans';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
-import { bindTooltips, configureTooltipDetail, installTooltipHints, hideTooltip, tooltipSweep, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
 import { skillShowcaseMarkup } from '../showcase/host';
+import { sameWorld, shardHomeOf, worldNameOf } from '../net/shardDoor';
+import { bindTooltips, configureTooltipDetail, installTooltipHints, hideTooltip, tooltipSweep, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
 import { VENDORS, VENDOR_CFG, fmtRestock, type VendorDef } from '../data/vendors';
 import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
@@ -333,8 +345,7 @@ const gemTileColorOf = (item: ItemInstance): string => {
 };
 
 /** THE ICON LAW (walk-1): the tile face IS the hotbar icon at 1×1 — the
- *  skill's color swatch wearing its initials (one icon truth, no second
- *  art). Supports wear the same face in their def color. */
+ *  shared visual face. Supports retain their def color. */
 const gemTileFaceHtml = (item: ItemInstance): string => {
   const sp = skillGemPayloadOf(item);
   const gp = supportGemPayloadOf(item);
@@ -344,7 +355,7 @@ const gemTileFaceHtml = (item: ItemInstance): string => {
   const lvl = sp?.level ?? gp?.level ?? 1;
   return `<span style="display:flex;align-items:center;justify-content:center;
       width:22px;height:22px;border-radius:3px;background:${color};opacity:0.9;
-      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${gemInitials(def.name)}</span>
+      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${sp ? skillIconSvg(SKILLS[sp.skillId],22) : skillIconSvg({color,name:def.name,icon:'support'},22)}</span>
     <span style="position:absolute;bottom:0;left:2px;font-size:8px;line-height:9px;color:#e8dcc8;text-shadow:0 0 2px #000">${lvl}</span>
     ${gp ? `<span title="Support Memory" aria-label="Support Memory" style="position:absolute;top:0;left:0;
       font-size:10px;line-height:11px;padding:0 1px;border-radius:2px;
@@ -512,7 +523,8 @@ export class UI {
   private expeditionSetup = document.getElementById('expedition-setup')!;
 
   /** The resumable character save, if any (set after the async boot load). */
-  private continueSave: CharacterSave | null = null;
+  private continueSave: CharacterContinueSummary | null = null;
+  private continuePending = false;
   /** The rolled class roster for the CURRENT new-run offer. Cached so menu
    *  navigation (Vault, Event Weights, Back) doesn't re-roll it; reset only when
    *  a run ends (resetClassRoster, called on death) so each new run deals fresh. */
@@ -549,7 +561,7 @@ export class UI {
   /** Start-menu callbacks, retained so Vault/Keybinds sub-views can return. */
   private startHandlers: {
     onStart: (d: ClassDef, modeId?: string) => void;
-    onContinue: (s?: CharacterSave | null) => void;
+    onContinue: () => void;
     onCoop?: () => void;
     onRoster?: (e: RosterEntry) => void;
     /** Why we landed here (a co-op session that ended under the player). Shown
@@ -619,6 +631,9 @@ export class UI {
    *  (generated families still surface only once touched — see sheet.ts). */
   private charShowAll = false;
   inventoryOpen = false;
+  /** THE PARTY PANEL (ui/party.ts): installed by the shell (main.ts) — null until it is. */
+  partyPanel: import('./party').PartyPanel | null = null;
+  setPartyPanel(p: import('./party').PartyPanel): void { this.partyPanel = p; }
   /** The essence SATCHEL flap on the inventory panel (persists across
    *  re-renders — a satchel stays however you left it). */
   private satchelOpen = false;
@@ -727,7 +742,7 @@ export class UI {
   private recallKind: MemoryKind = 'rough';
   private recallFacet: string | null = null;
   /** THE REVEAL rows: dropper id → the grant its row last flipped to. */
-  private recallReveals = new Map<string, { name: string; color: string; sockets: number }>();
+  private recallReveals = new Map<string, { name: string; color: string; sockets: number; itemUid: number; id: string; kind: string }>();
   /** Found-flash marks: freshly-recalled bag uids → flash-until (ms). */
   private memFlash = new Map<number, number>();
   /** The Tracker's book: which leaf is open, and which page is under the thumb. */
@@ -772,9 +787,10 @@ export class UI {
    *  the fitted centre). Persist across opens; reset via the map's % button. As
    *  the charted map grows and the fixed-size text shrinks, zoom in to read it. */
   private mapZoom = 1;
+  private massSurveyGrain = 48;
   private mapPan = { x: 0, y: 0 };
   /** Which view the world-map panel shows: the map, or the quest journal. */
-  private mapTab: 'map' | 'quests' = 'map';
+  private mapTab: 'map' | 'quests' | 'roads' = 'map';
   /** Which DIMENSION the map tab shows (surface / underworld / …) — tabs
    *  appear once a run breaches a second dimension (the PoE Acts pattern). */
   private mapDimension = 'surface';
@@ -860,7 +876,11 @@ export class UI {
   private readonly folio = new FolioCore(() => performance.now() / 1000);
   private readonly folioStrip = new FolioStrip(this.folio);
   private readonly folioSurfaces = new Map<HTMLElement, { id: string; isOpen: () => boolean; kind: string }>();
+  conversationWorkspaceActive = false;
+  conversationSpeakerId: number | null = null;
   private readonly serviceWorkspace = new ServiceWorkspace({
+    conversationWorkspace: () => this.conversationWorkspaceActive,
+    conversationCompanion: () => this.conversationSpeakerId !== null,
     inventory: this.inventory,
     inventoryOpen: () => this.inventoryOpen && this.panelSeat(this.inventory) === this.getWorld().localSeat,
     inventoryOwned: () => this.panelSeat(this.inventory) === this.getWorld().localSeat,
@@ -922,6 +942,17 @@ export class UI {
    *  the virgin lane walks the tutorial, everyone else drifts into Mu. The
    *  legacy screen stays whole beneath it (co-op rejoin still uses it). */
   onBeginRun: (() => void) | null = null;
+  /** THE FRONT DOOR (W7, net/shardDoor.ts): the world the start menu leads into (the
+   *  tab's binding, or the world that served this page); null on a plain page. The menu's
+   *  primary row becomes "Enter the world" (onEnterWorld), the solo rows one row down. */
+  serverDoor: (() => { url: string; world?: string } | null) | null = null;
+  onEnterWorld: ((door: { url: string; world?: string }) => void) | null = null;
+  /** THE HONEST LEAVING (W7): the hosted world this client stands in (its name), or null
+   *  off one: the pause menu says "world" there and "co-op" on the WebRTC lane. */
+  hostedWorld: (() => string | null) | null = null;
+  /** THE HONEST LEAVING (W7): Exit Game on a hosted world (the deliberate leave, the
+   *  farewell awaited, then the exit screen with the truth). */
+  onExitWorld: (() => void) | null = null;
 
   constructor(
     private getWorld: () => World,
@@ -936,6 +967,7 @@ export class UI {
     private onLeaveCoop: () => void = () => { /* default no-op */ },
   ) {
     configureTooltipDetail(() => this.getSettings().tooltipDetail);
+    configureSkillArtwork(() => this.getSettings().skillArtwork);
     installTooltipHints();
     this.portalButton = new PortalButton(this.getWorld, this.getSettings,
       () => this.menuBar.buttonRect(), () => this.menuBar.controls);
@@ -961,11 +993,13 @@ export class UI {
         : el.dataset.tip === 'vgem' ? this.vendorGemTooltip(el.dataset.vgem!, ext)
         : el.dataset.tip === 'gem-overview' ? this.gemOverviewTooltip(el.dataset.gemKind, el.dataset.gemId, this.panelSeat(this.vendorMenu)) : null,
     { extend: true });
-    bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
+    bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!)
+      : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null);
     // THE MU CARD (data/mu.ts) speaks the same chip tongue: its skill chips
     // carry data-tip="cskill" exactly like the class screen's — tooltips are
     // bound PER PANEL ROOT, so the card needs its own delegation row.
-    bindTooltips(this.muCard, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
+    bindTooltips(this.muCard, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!)
+      : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null);
     // THE VAULT reads compact — name and price on the card, the kind on the
     // section header above it — and keeps each unlock's full story in the
     // shared tooltip behind a HOVER-INTENT dwell: the wall of text speaks
@@ -1494,6 +1528,8 @@ export class UI {
     });
     return {
       wardrobe: { open: () => this.showWardrobe(), isOpen: () => this.escapeMenuOpen && !!this.escapeMenu.querySelector('.wardrobe') },
+      // THE PARTY (ui/party.ts, card 23): the hosted world's social unit — a page the shell installs.
+      party: { open: () => this.partyPanel?.toggle(), isOpen: () => this.partyPanel?.isOpen() ?? false },
       inventory: { open: id => this.toggleInventory(id), isOpen: () => this.inventoryOpen },
       // THE CONTAINER FABRIC: one host row per registered side board — the
       // menu's 'container:<id>' verb opens the inventory on that face.
@@ -2226,6 +2262,15 @@ export class UI {
     return { title: a.label, description: `Each point: ${perPoint}`, meta: a.description };
   }
 
+  /** Starting spreads use the same live attribute explanations as the sheet. */
+  private startingAttributesHtml(def: ClassDef): string {
+    const rows = ATTRIBUTE_IDS.filter(id => (def.attributes[id] ?? 0) > 0).map(id =>
+      `<span data-tip="attr" data-attr-id="${esc(id)}"
+        style="display:inline-block;white-space:nowrap;margin:2px 6px;cursor:var(--cursor-help, help);border-bottom:1px dotted var(--text-dim)">
+        ${esc(ATTRIBUTES[id].label)} ${def.attributes[id]}</span>`).join('');
+    return rows ? `<div class="cattrs"><div style="margin:5px 0 2px">Starting attributes</div>${rows}</div>` : '';
+  }
+
   /** Tooltip for a learned skill row (full description + key stats). */
   /** THE COMPUTED BLOCK (engine/skillPreview.ts): what this skill does for
    *  THIS build, read off the live sheet through the engine's own resolvers.
@@ -2396,6 +2441,10 @@ export class UI {
   /** One enrollment governs service coexistence as well as folio membership.
    * Shelved leaves cannot suppress a conversation; visible modals/pages can.
    * Inventory accompanies a service only for that service's local owner. */
+  conversationTopFloor(): number { return this.serviceWorkspace.conversationTopFloor; }
+
+  conversationSlotLabels(): string[] { return this.slotLabels(); }
+
   dialogueContext(): { available: boolean } {
     const local = this.getWorld().localSeat?.id;
     if (!local) return { available: false };
@@ -2409,7 +2458,7 @@ export class UI {
       || this.couchJoinOpen || this.muCardOpen || this.storyCardOpen()
       || !this.startMenu.classList.contains('hidden') || this.charSheetOpen || this.mapOpen
       || drawn.some(([el, row]) => row.kind !== 'station' || this.panelSeat(el).id !== local)
-      || (this.inventoryOpen && (!services.length || this.panelSeat(this.inventory).id !== local));
+      || (this.inventoryOpen && (!services.length && this.conversationSpeakerId === null || this.panelSeat(this.inventory).id !== local));
     return { available: !blocked };
   }
 
@@ -2667,8 +2716,7 @@ export class UI {
       ${offerHead}
       <div class="cname" style="color:${def.color};font-size:22px;letter-spacing:1px">${def.name}</div>
       <div class="cdesc" style="margin:6px 0 8px 0">${def.description}</div>
-      <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (def.attributes[a] ?? 0) > 0).map(a =>
-    `${ATTRIBUTES[a].short} ${def.attributes[a]}`).join(' &nbsp; ')}</div>
+      ${this.startingAttributesHtml(def)}
       ${chips ? `<div style="margin-top:4px">${chips}</div>` : ''}
       ${def.innateText ? `<div class="cskills" style="margin-top:4px">Innate: ${def.innateText}</div>` : ''}
       <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:14px 0 4px 0">
@@ -2866,8 +2914,7 @@ export class UI {
         ${note ? 'style="opacity:.5"' : ''}>
         <div class="cname" style="color:${c.color}">${c.name}</div>
         <div class="cdesc">${c.description}</div>
-        <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (c.attributes[a] ?? 0) > 0).map(a =>
-          `${ATTRIBUTES[a].short} ${c.attributes[a]}`).join(' &nbsp; ')}</div>
+        ${this.startingAttributesHtml(c)}
         ${note ? skillChips(c) : this.kitRowHtml(c)}
         ${c.innateText ? `<div class="cskills">Innate: ${c.innateText}</div>` : ''}
         ${note ? `<div class="class-lock">${note}</div>` : ''}
@@ -3953,6 +4000,10 @@ export class UI {
       for (const s of d.epitaph.lines) lines.push(`<div style="color:#ffe9a8">${s}</div>`);
       if (d.epitaph.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic">${d.epitaph.flavor}</div>`);
     }
+    const procReferences = itemProcReferences(item);
+    if (procReferences.length) lines.push(`<section data-proc-reference style="margin-top:7px;padding-top:6px;border-top:1px solid #48404e;font-size:11px;line-height:1.5">
+      <div style="color:#aaa18e">Triggered effects · base values</div>
+      ${procReferences.map(r=>`<p style="margin:4px 0;color:#c9c1b1"><strong>${esc(r.name)}</strong> — ${esc(r.text)}</p>`).join('')}</section>`);
     if (d.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic;margin-top:4px">${d.flavor}</div>`);
     // Full tooltipDetail includes the comparison immediately; the compact
     // card points to the preference without promising a timed expansion.
@@ -3989,15 +4040,14 @@ export class UI {
     const k = MEMORY_KINDS[kind];
     const groups = memoryGroups(units);
     const dropperName = (d: string): string =>
-      MONSTERS[d]?.name ?? (d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : MEMORY_FOUND_SOURCES[d] ?? d);
+      memoryProvenanceLabel(d, MONSTERS[d]?.name);
     const lines: string[] = [];
     if (item.locked) {
       lines.push(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
     }
-    lines.push(`<div style="color:#9a94a8;font-size:10px">${k.name} · <span style="color:${k.color}">×${units.length} held</span></div>`);
-    if (k.facets) {
-      lines.push('<div style="color:#c8bce0;font-size:10px">committed before the recall: choose a FACET (one attribute triad) — the grant is a skill of that facet</div>');
-    }
+    lines.push(`<div data-memory-purpose style="color:#d8cce8;font-size:11px;line-height:1.5;margin:4px 0">${esc(k.recallDescription)}</div>`);
+    lines.push(`<div style="color:#9a94a8;font-size:10px">${esc(k.rewardLabel)} · <span style="color:${k.color}">×${units.length} held</span></div>`);
+    // recallDescription carries each kind's choice and result without duplicating it.
     const top = groups.slice(0, MEMORY_CFG.tooltipGroups);
     for (const g of top) {
       // THE PROMISE reads on the card: a pinned group names the gem it is
@@ -4396,7 +4446,8 @@ export class UI {
       // it (the engine refuses too), and a locked tile keeps still.
       if (i.mem) {
         const mk = MEMORY_KINDS[memoryKindOf(i) ?? 'rough'];
-        return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+        const memoryRecallLesson = !breaking && world.memoryRecallLesson(invSeat);
+        return `<div class="${memoryRecallLesson ? 'tut-glow' : ''}" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${breaking ? (salv === 'sell' && !i.locked ? `data-salv-uid="${i.uid}"` : '') : `data-drag="gearItem:${i.uid}"`} data-drop="gearTile:${i.uid}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
           width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;
@@ -4532,6 +4583,7 @@ export class UI {
             <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
             ${sortStrip}
           </div>
+          ${invSeat === world.localSeat ? skillPreparationHtml(world, this.slotLabels(), true) : ''}
           <div data-bag-grid="1" style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
             ${salv === 'break'
@@ -4574,6 +4626,14 @@ export class UI {
     if (scrollEl) scrollEl.scrollTop = prevScroll;
     const buildEl = this.buildPanel.querySelector<HTMLElement>('.build-scroll');
     if (buildEl) buildEl.scrollTop = prevBuildScroll;
+    // Update the clock text independently: changing tenths must not replace a
+    // dragged skill, its event handlers, scroll position or focused control.
+    const swapReadout = this.buildPanel.querySelector<HTMLElement>('[data-socket-readiness]');
+    if (swapReadout) {
+      const text = swapReadinessText(world.swapReadiness(invSeat, 'socket'), !world.clientActionHook, this.getSettings().supportReadyHint);
+      if (swapReadout.textContent !== text) swapReadout.textContent = text;
+      swapReadout.hidden = !text;
+    }
     if (inventoryChanged) this.wireInventory();
     if (buildChanged && this.skillsOpen) this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
     if (inventoryChanged) this.fitBuildRail();
@@ -5021,6 +5081,7 @@ export class UI {
   // teaching, walk-2 ruled) before the RECALL buttons arm.
 
   showRecall(uid: number, seatId?: string): void {
+    hideTooltip(); // Retire the pouch card before opening its recall choice.
     this.ownPanel(this.recallMenu, this.couchSeatFor(seatId));
     this.recallOpen = true;
     this.recallUid = uid;
@@ -5074,11 +5135,12 @@ export class UI {
         : 'commit to a FACET: the recall grants a skill asking those attributes (skills only — supports hold no attribute)'}</div>` : '';
     const chipStyle = 'display:inline-flex;align-items:center;gap:3px;padding:1px 5px;margin:1px 2px;'
       + 'background:#241d2e;border:1px solid #4a3a5a;border-radius:8px;font-size:9px';
-    const revealHtml = (reveal: { name: string; color: string; sockets: number }): string =>
+    const revealHtml = (reveal: { name: string; color: string; sockets: number; itemUid: number; id: string; kind: string }): string =>
       `<div style="margin-top:2px;font-size:10px;color:${reveal.color}">
         <span style="display:inline-flex;width:14px;height:14px;border-radius:2px;background:${reveal.color}33;border:1px solid ${reveal.color};
-          align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${gemInitials(reveal.name)}</span>
-        ${reveal.name}${reveal.sockets ? ` <span style="color:#9a94a8">${'◆'.repeat(reveal.sockets)}</span>` : ''}</div>`;
+          align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${skillIconSvg((reveal.kind === 'skill' ? SKILLS[reveal.id] : undefined) ?? {color:reveal.color,name:reveal.name,icon:'support'},14)}</span>
+        ${esc(reveal.name)}${reveal.sockets ? ` <span style="color:#9a94a8">${'◆'.repeat(reveal.sockets)}</span>` : ''}
+        ${seat.meta.items.some(i=>i.uid===reveal.itemUid && i.gem) ? `<button data-mem-find="${reveal.itemUid}" style="margin-left:6px;padding:3px 7px;font-size:10px">View in bag</button>` : ''}</div>`;
     const portraitOf = (def: MonsterDef | undefined): string => def
       ? this.monsterPortraitHtml(def, false, 30)
       : '<span style="width:30px;text-align:center;color:#5a5668">?</span>';
@@ -5095,14 +5157,14 @@ export class UI {
         // grant itself (and its pinned grade where the spoil named one).
         ? `<span style="${chipStyle}" title="${esc(g.pin.name)} — ${MEMORY_CFG.strings.pinned} this very memory">
             <span style="width:12px;height:12px;border-radius:2px;background:${g.pin.color}33;border:1px solid ${g.pin.color};
-              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${g.pin.color}">${gemInitials(g.pin.name)}</span>
+              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${g.pin.color}">${skillIconSvg((g.pin.kind === 'skill' ? SKILLS[g.pin.id] : undefined) ?? {color:g.pin.color,name:g.pin.name,icon:'support'},12)}</span>
             <span style="color:${g.pin.rarity ? SKILL_RARITIES[g.pin.rarity].color : '#c8bce0'}">${esc(g.pin.name)}${g.pin.rarity ? ` · ${SKILL_RARITIES[g.pin.rarity].label}` : ''}</span></span>`
         : needsFacet
         ? `<span style="color:#5a5668;font-size:9px">the committed facet decides</span>`
         : g.rung === 'kit'
           ? g.kit.map(c => `<span style="${chipStyle}" title="${c.name} — ×${c.mult} lean">
               <span style="width:12px;height:12px;border-radius:2px;background:${c.color}33;border:1px solid ${c.color};
-                display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${gemInitials(c.name)}</span>
+                display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${skillIconSvg(SKILLS[c.id] ?? {color:c.color,name:c.name,icon:'support'},12)}</span>
               <span style="color:#c8bce0">×${c.mult}</span></span>`).join('')
           : g.rung === 'bias'
             ? g.tags.map(t => `<span style="${chipStyle}" title="tag lean — ×${GEM_DROP_CFG.biasMult}">
@@ -5115,7 +5177,7 @@ export class UI {
       return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634">
         ${portraitOf(def)}
         <div style="flex:1;min-width:0">
-          <div style="font-size:11px;color:#e0d8c8">${g.name} <span style="color:#9a94a8">×${g.count}</span></div>
+          <div style="font-size:11px;color:#e0d8c8">${esc(g.name)} <span style="color:#9a94a8">×${g.count}</span></div>
           <div>${chips}</div>${revealLine}
         </div>
         <button data-mem-recall="${esc(g.key)}" ${canRecall ? '' : 'disabled'}
@@ -5138,17 +5200,25 @@ export class UI {
         return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634;opacity:0.8">
           ${portraitOf(def)}
           <div style="flex:1;min-width:0">
-            <div style="font-size:11px;color:#8a8678">${def?.name ?? d} <span style="color:#5a5668">— spent</span></div>
+            <div style="font-size:11px;color:#8a8678">${esc(memoryProvenanceLabel(d, def?.name))} <span style="color:#5a5668">— spent</span></div>
             ${revealHtml(reveal)}
           </div>
         </div>`;
       }).join('');
     this.recallMenu.innerHTML = `${this.closeGlyphHtml()}
       <h3 style="margin:2px 0 2px;color:${mk.color}">${mk.name.replace(/Memory$/, 'Memories')} <span style="color:#9a94a8;font-size:11px">×${total} held</span></h3>
-      <div style="font-size:10px;color:#8a8678;margin-bottom:4px">each recall returns ONE memory of that body — oldest first, sealed at the drop</div>
+      <div data-memory-purpose style="font-size:11px;line-height:1.5;color:#c8bce0;margin-bottom:6px">${esc(mk.recallDescription)}</div>
       ${facetStrip}
       ${refusal ? `<div style="color:#c08a68;font-size:11px;margin-bottom:4px">${refusal}</div>` : ''}
       ${rows || '<div style="color:#5a5668;font-size:11px">nothing held</div>'}${spent}`;
+    this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-find]').forEach(el => {
+      el.addEventListener('click', () => {
+        const owner=this.panelSeat(this.recallMenu), uid=Number(el.dataset.memFind);
+        if (!owner.meta.items.some(i=>i.uid===uid && i.gem) || !this.openInventory(owner.id)) return;
+        this.closeRecall(); this.serviceWorkspace.select('inventory');
+        this.memFlash.set(uid,Date.now()+1700); this.refreshInventory();
+      });
+    });
     this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-facet]').forEach(el => {
       el.addEventListener('click', () => {
         this.recallFacet = el.dataset.memFacet!;
@@ -5169,7 +5239,7 @@ export class UI {
         const got = w.memoryRecallLast as (MemoryRecallResult & { seat: string }) | null;
         if (got && got.seat === this.panelSeat(this.recallMenu).id) {
           this.recallReveals.set(dropper, {
-            name: got.name,
+            name: got.name, itemUid: got.itemUid, id: got.id, kind: got.kind,
             color: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].color : (SUPPORTS[got.id]?.color ?? '#b8b8b8'),
             sockets: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].sockets : 0,
           });
@@ -6564,7 +6634,7 @@ export class UI {
               display:flex;align-items:center;justify-content:center;
               ${e.kind === 'skill' && e.inst.rarity === 'legendary' ? `box-shadow:0 0 10px ${col};` : ''}${canBuy ? '' : 'opacity:0.55;'}">
               <span style="width:22px;height:22px;border-radius:4px;background:${col}33;border:1px solid ${col};
-                display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${gemInitials(name)}</span>
+                display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${skillIconSvg(e.kind === 'skill' ? e.inst.def : {color:col,name:e.gem.def.name,icon:'support'},22)}</span>
               ${priceTag}${lockPip}${badge}</div>`;
             return;
           }
@@ -6918,7 +6988,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
       }
       const sd = seated.def;
       // THE ICON LAW (M1): the seat wears the skill's hotbar face — the
-      // color swatch + initials the canvas bar prints, at seat scale.
+      // shared visual icon the canvas bar prints, at seat scale.
       return `<div data-drag="rackSeat:${slot}" data-drop="rackSeat:${slot}"
         data-tip="skill" data-skill-id="${sd.id}"
         style="--unlearn-size:${BUILD_PANEL_CFG.unlearnSize}px;position:relative;height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px solid ${sd.color};border-radius:5px;
@@ -6935,7 +7005,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
         <div style="display:flex;align-items:center;gap:4px">
           <span style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;
             width:15px;height:15px;border-radius:2px;background:${sd.color};opacity:0.9;
-            color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${gemInitials(sd.name)}</span>
+            color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${skillIconSvg(sd,15)}</span>
           <span style="min-width:0">
             <span style="display:block;font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${skillInstanceName(seated)}</span>
             <span style="display:block;font-size:8px;color:#8a8678">Lv ${seated.level}</span>
@@ -6957,6 +7027,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
     // THE FIELD DISCIPLINE, spoken at the button (the engine gate's words):
     // unsocket shares one verdict; unlearn adds its per-skill clock below.
     const unsocketWhy = world.swapRefusal(seat, 'unsocket');
+    const socketWhy = world.swapRefusal(seat, 'socket');
     // The book lists what the seat WIELDS: the learned residence plus the
     // GRANTED lane (THE LEGEND FABRIC) — a granted row sockets and picks
     // its tree like any other, but carries no level-up and no unlearn.
@@ -6992,7 +7063,7 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
             title="Level up for ${supportLevelAbilityCost(s.level + 1).count}× ${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).label}">+${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).glyph}</button>
           <button data-unsocket="${def.id}:${i}" ${unsocketWhy ? `disabled title="${unsocketWhy}"` : ''}>✕</button>
         </span>` : `<span class="gem-chip empty support-slot" aria-label="Empty support socket"
-          title="Socket a support here by dragging a Support Memory onto this skill.">
+          title="${esc(socketWhy ?? 'Socket a support here by dragging a Support Memory onto this skill.')}">
           <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 2 22 12 12 22 2 12Z M12 6 18 12 12 18 6 12Z M12 2V6 M22 12H18 M12 22V18 M2 12H6"
               fill="none" stroke="currentColor" stroke-width="1"/>
@@ -7121,7 +7192,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           ${modeRow}
         </div>`;
     }).join('');
-    return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${graftBank}${rows
+    return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${socketWhy
+      ? `<div data-socket-readiness data-socket-refusal role="status" style="color:#e4b58b;font-size:11px;line-height:1.5;padding:8px">Socket changes unavailable: ${esc(socketWhy)}.</div>` : `<div data-socket-readiness role="status" ${this.getSettings().supportReadyHint ? '' : 'hidden'} style="color:#a9bc9d;font-size:11px;line-height:1.5;padding:8px">${esc(swapReadinessText({ reason: null }, !world.clientActionHook, this.getSettings().supportReadyHint))}</div>`}${graftBank}${storedSupportsHtml(m.items, unsocketWhy)}${rows
       || '<div style="color:#8a8678;font-size:11px">Nothing seated. Skill Memories drop from monsters — press one from your pack into an empty seat above.</div>'}</div>`;
   }
 
@@ -7175,6 +7247,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     q<HTMLButtonElement>('button[data-unsocket]').forEach(btn => btn.addEventListener('click', () => {
       const [skillId, sock] = btn.dataset.unsocket!.split(':');
       world.requestMeta({ t: 'unsocket', skillId, socket: Number(sock) });
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-unsocket-bag]').forEach(btn => btn.addEventListener('click', () => {
+      const [uid, socket] = btn.dataset.unsocketBag!.split(':').map(Number);
+      world.requestMeta({ t: 'unsocketBagSkill', uid, socket });
       refresh();
     }));
     // GRAFTS: lift a bank chip → land it on a skill (click-lift twins, the
@@ -7408,6 +7485,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // search, zoom, the tips) in a tools row beneath it.
     const realmChip = activeRealm && this.treeRealm !== MAIN_REALM
       ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b> · ` : '';
+    const passiveOwned = !this.getSettings().passiveAllocatedList || refundMode || DEV.passiveTreeEditor ? '' : passiveOwnedHtml(
+      [...m.allocated].reverse().map(id=>PASSIVE_NODES[id]).filter(n=>n && visibleNode(n) && n.kind!=='start')
+        .map(n=>({id:n.id,title:n.name,description:this.passiveNodeTooltip(n.id)?.description ?? esc(n.description),action:''})));
+    const passiveFrontier = !this.getSettings().passiveAvailableList || refundMode || DEV.passiveTreeEditor ? '' : passiveFrontierHtml(
+      Object.values(PASSIVE_NODES).filter(n => visibleNode(n) && this.nodeAllocatable(n, m))
+        .map(n => ({ id: n.id, title: n.name, description: this.passiveNodeTooltip(n.id)?.description ?? esc(n.description),
+          action: n.choice && !choiceDealSpent(n, m.choices, PASSIVE_NODES) ? 'Review choices' : 'Allocate · 1 ' + (n.vocation ? 'vocation' : realmOf(n)?.currency ?? 'passive') + ' point' })));
     this.passiveTree.innerHTML = `
       ${this.closeGlyphHtml()}<h2>✧ Passive Tree</h2>
       ${realmTabs}
@@ -7429,6 +7513,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : refundMode ? 'Refund mode · click a lit node · choices refund together · keep every path connected'
           : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
       </div>
+      ${passiveFrontier}${passiveOwned}
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${edges}${circles}</svg>`;
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
@@ -7458,11 +7543,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       });
     });
     if (!DEV.passiveTreeEditor) {
-      this.passiveTree.querySelectorAll<SVGCircleElement>(refundMode ? '.tree-node.allocated' : '.tree-node.available').forEach(el => {
+      this.passiveTree.querySelectorAll<SVGCircleElement | HTMLButtonElement>(refundMode ? '.tree-node.allocated' : '.tree-node.available, [data-passive-choice]').forEach(el => {
         el.addEventListener('click', () => {
-          const node = PASSIVE_NODES[el.dataset.node!];
+          const frontierNodeId = el.dataset.node ?? el.dataset.passiveChoice!;
+          const node = PASSIVE_NODES[frontierNodeId];
           if (refundMode) {
-            world.requestMeta({ t: 'refundPassive', nodeId: el.dataset.node! });
+            world.requestMeta({ t: 'refundPassive', nodeId: frontierNodeId });
             this.refreshTree();
             this.refreshCharSheet();
             hideTooltip();
@@ -7473,7 +7559,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           // THE DEAL LAW: a 'first' group spent at a sibling leaves this a
           // grant-less shortcut — no popup, the plain allocate intent below.
           if (node?.choice && !choiceDealSpent(node, m.choices, PASSIVE_NODES)) { this.openChoicePopup(node, el); return; }
-          world.requestMeta({ t: 'allocate', nodeId: el.dataset.node! });
+          world.requestMeta({ t: 'allocate', nodeId: frontierNodeId });
           this.refreshTree();
           this.refreshCharSheet();
         });
@@ -7512,6 +7598,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!svg) return;
     const q = this.treeSearch.trim().toLowerCase();
     svg.classList.toggle('tree-searching', q.length > 0);
+    this.passiveTree.querySelectorAll<HTMLElement>('[data-passive-choice], [data-passive-owned-node]').forEach(frontierNode => {
+      const node = PASSIVE_NODES[frontierNode.dataset.passiveChoice ?? frontierNode.dataset.passiveOwnedNode ?? ''];
+      frontierNode.hidden = !!q && (!node || !this.passiveNodeSearchText(node).includes(q));
+    });
     let hits = 0;
     const searchRouteIds = new Set<string>();
     svg.querySelectorAll<SVGCircleElement>('.tree-node').forEach(el => {
@@ -7656,7 +7746,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  legality labels come from the SAME rule the engine enforces
    *  (choiceLockReason), so the popup can never promise what the host would
    *  refuse. Multi-pick nodes re-open until their deal is spent. */
-  private openChoicePopup(node: PassiveNode, el: SVGCircleElement): void {
+  private openChoicePopup(node: PassiveNode, el: SVGCircleElement | HTMLButtonElement): void {
     this.closeChoicePopup();
     const world = this.getWorld();
     const m = this.panelSeat(this.passiveTree).meta;
@@ -8358,7 +8448,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // direction line teaches the take; while the FIRST writ is in hand, one
     // closing line points the way out and back. The first accept's standing
     // ledger stamp closes the lesson forever — no new key.
-    const lessonTake = world.bountyLessonLive();
+    const lessonTake = !v.unavailable && world.bountyLessonLive();
     const lessonReturn = !lessonTake && v.hands.length > 0
       && (world.ledger.bounties_accepted ?? 0) + (world.account.ledger.bounties_accepted ?? 0) === 1;
     // THE TAKEN HAND(s): state speaks plainly — afield / ready / failed.
@@ -8397,9 +8487,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div class="bind-btns"><button data-bounty-accept="${esc(o.id)}"${handFull ? ' disabled title="One bounty in hand at a time."' : ''}${lessonTake && !handFull ? ' class="tut-glow"' : ''}>Accept</button>${
             pinCap > 0 ? `<button data-bounty-lock="${esc(o.id)}" data-locked="${o.locked ? '1' : ''}"${!o.locked && pinned >= pinCap ? ' disabled title="Every reserve pin is spoken for — release one first."' : ` title="${o.locked ? 'Release the pin — the next deal may replace this posting.' : 'Pin this posting — it holds its seat through fresh deals until taken or released.'}"`}>${o.locked ? 'Release' : `Pin (${pinCap - pinned} free)`}</button>` : ''}</div>
         </div>`).join('')
-      : `<div class="skill-entry"><div class="desc">No postings available.</div></div>`;
+      : `<div class="skill-entry"><div class="desc">${esc(v.unavailable ?? 'No postings available.')}</div></div>`;
     this.bountyMenu.innerHTML = `${this.closeGlyphHtml()}<h2>The Bounty Board</h2>`
-      + `<div class="desc" style="margin:-4px 0 8px 0;font-style:italic">Choose a bounty. Return here for your reward.</div>`
+      + (v.unavailable ? '' : `<div class="desc" style="margin:-4px 0 8px 0;font-style:italic">Choose a bounty. Return here for your reward.</div>`)
       + (lessonTake ? `<div class="bounty-lesson">Accept one bounty at a time per board.</div>` : '')
       + (lessonReturn ? `<div class="bounty-lesson">Track your bounty in the journal and map.</div>` : '')
       // THE RECEIPT (the counter laws): what the linger just settled, printed
@@ -8408,7 +8498,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         ? `Handed back: <b>${esc(v.receipt.title)}</b> — no reward.`
         : `Collected: <b>${esc(v.receipt.title)}</b> — paid ${esc(v.receipt.pay)}.`}</div>` : '')
       + handsHtml
-      + `<h3 style="margin:10px 0 4px 0">Available (${v.offers.length}) · refresh in <span data-bounty-countdown>${fmtRestock(v.countdown)}</span></h3>`
+      + `<h3 style="margin:10px 0 4px 0">Available (${v.offers.length})${v.unavailable ? '' : ` · refresh in <span data-bounty-countdown>${fmtRestock(v.countdown)}</span>`}</h3>`
       + offersHtml
       // THE COAST WRITS (a quay board only): the harborhold writ lane's
       // button — the board posts named marks on the coast's living foes,
@@ -8757,6 +8847,25 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // clicks"); deliberate refreshes fire on click, after release, unharmed.
     if (this.mapDragging || this.mapWashDragging || this.pressHeld.has(this.worldMap)) return;
     const world = this.getWorld();
+    if (this.mapTab === 'roads') {
+      if (world.massRuntime?.journey?.spec.notices?.length) {
+        if (this.setPanelHtml(this.worldMap, this.closeGlyphHtml() + this.mapTabsHtml() + roadGuideHtml(world.massRuntime))) this.wireMapTabs();
+        return;
+      }
+      this.mapTab = 'map';
+    }
+    if (world.massRuntime && this.mapTab !== 'quests') {
+      if (this.setPanelHtml(this.worldMap, this.closeGlyphHtml() + this.mapTabsHtml() + massMap(world.massRuntime, world.player.pos, this.massSurveyGrain, world.doodads, massQuestPins(world)))) {
+        this.wireMapTabs();
+        this.worldMap.querySelectorAll<HTMLButtonElement>('[data-mass-zoom]').forEach(button => {
+          button.addEventListener('click', () => {
+            this.massSurveyGrain = Math.max(24, Math.min(192, this.massSurveyGrain * (button.dataset.massZoom === 'in' ? .5 : 2)));
+            this.refreshMap();
+          });
+        });
+      }
+      return;
+    }
     if (this.mapTab === 'quests') { this.renderQuestsTab(world); return; }
     const visited = world.visited;
     // ONE DIMENSION PER VIEW: the map shows the active dimension's worldmass;
@@ -9424,7 +9533,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** The Map | Quests tab row (shared by both views of the world-map panel). */
   private mapTabsHtml(): string {
-    const tab = (id: 'map' | 'quests', label: string): string =>
+    const tab = (id: 'map' | 'quests' | 'roads', label: string): string =>
       `<button class="book-tab ${this.mapTab === id ? 'active' : ''}" data-mtab="${id}">${label}</button>`;
     // DIMENSION TABS (the PoE Acts pattern): appear once a run has breached a
     // second worldmass — each tab is its own explorable map to flip through.
@@ -9438,12 +9547,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       }).join('');
       dims = `<span style="margin-left:14px;border-left:1px solid #3a3a4e;padding-left:10px">${dims}</span>`;
     }
-    return `<div class="book-tabs" style="margin:2px 0 6px 0">${tab('map', 'Map')}${tab('quests', 'Quests')}${dims}</div>`;
+    return `<div class="book-tabs" style="margin:2px 0 6px 0">${tab('map', 'Map')}${tab('quests', 'Quests')}${world.massRuntime?.journey?.spec.notices?.length ? tab('roads', 'Roads') : ''}${dims}</div>`;
   }
 
   private wireMapTabs(root: ParentNode = this.worldMap): void {
     root.querySelectorAll<HTMLButtonElement>('.book-tab[data-mtab]').forEach(btn => {
-      btn.addEventListener('click', () => { this.mapTab = btn.dataset.mtab as 'map' | 'quests'; this.refreshMap(); });
+      btn.addEventListener('click', () => { this.mapTab = btn.dataset.mtab as 'map' | 'quests' | 'roads'; this.refreshMap(); });
     });
     root.querySelectorAll<HTMLButtonElement>('.book-tab[data-mdim]').forEach(btn => {
       btn.addEventListener('click', () => { this.mapDimension = btn.dataset.mdim!; this.refreshMap(); });
@@ -9521,7 +9630,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div style="font-size:12px;color:#d8d4c8">${esc(e.label)}${badge(e.category)}</div>
           <div style="font-size:10px;color:${ink};margin-top:2px">${sub}</div></div>`;
       }).join('')
-      : '<div style="color:#8a8678;font-size:11px;padding:6px 2px">No active quests. Linger by the quartermaster for work.</div>';
+      : `<div style="color:#8a8678;font-size:11px;padding:6px 2px">No active quests.${world.massRuntime ? '' : ' Linger by the quartermaster for work.'}</div>`;
     const doneHtml = log.completed.length
       ? log.completed.map(e => `<div style="padding:6px 9px;margin:0 0 4px 0;background:#13130f;border-left:3px solid #4a4a40;border-radius:4px;opacity:0.7">
           <div style="font-size:12px;color:#9a968a;text-decoration:line-through">${esc(e.label)}${badge(e.category)}</div></div>`).join('')
@@ -9532,20 +9641,34 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const html = `
       ${this.closeGlyphHtml()}<h2>Quest Journal</h2>
       ${this.mapTabsHtml()}
-      <div style="color:#6ad8c0;font-size:12px;padding:8px">${esc(world.odyssey.status())}</div>
+      ${world.massRuntime ? '' : `<div style="color:#6ad8c0;font-size:12px;padding:8px">${esc(world.odyssey.status())}</div>`}
       <div id="quest-scroll" style="overflow-y:auto;max-height:64vh;padding:2px 4px 8px 2px">
+        ${skillPreparationHtml(world, this.slotLabels())}
         ${questRewardHtml(world)}
         ${questImbueHtml(world)}
+        ${questOfferHtml(world)}
         <h3 style="font-size:12px;color:#c8a8e8;margin:4px 0 6px 0">Active (${log.active.length})</h3>
         ${activeHtml}
         <h3 style="font-size:12px;color:#8a8678;margin:14px 0 6px 0">Completed (${log.completed.length})</h3>
         ${doneHtml}
-        ${world.odyssey.clues().map(line => `<p style="color:#9ebdb5;font-size:11px">${esc(line)}</p>`).join('')}
+        ${(world.massRuntime ? [] : world.odyssey.clues()).map(line => `<p style="color:#9ebdb5;font-size:11px">${esc(line)}</p>`).join('')}
       </div>`;
     // Same skip-if-unchanged discipline as the map view (setPanelHtml).
     if (!this.setPanelHtml(this.worldMap, html)) return;
     const qs = this.worldMap.querySelector<HTMLElement>('#quest-scroll');
     if (qs) qs.scrollTop = prevScroll;
+    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-prepare-inventory]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (this.mapOpen) this.toggleMap();
+        this.toggleInventory();
+      });
+    });
+    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-quest-accept]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'questAccept', questId: btn.dataset.questAccept! });
+        this.refreshMap();
+      });
+    });
     this.worldMap.querySelectorAll<HTMLButtonElement>('[data-quest-reward]').forEach(btn => {
       btn.addEventListener('click', () => {
         world.requestMeta({ t: 'questReward', questId: btn.dataset.questReward!, choiceId: btn.dataset.rewardChoice! });
@@ -10147,7 +10270,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // (world.endRun mid-scene reroutes to the menu), and the exit door
       // speaks only the account truth.
       const sceneLive = !this.isCoopClient() && !!this.getWorld().scene;
-      const endTitle = this.isCoopClient() ? '' : sceneLive
+      // THE HONEST LEAVING (W7): a hosted world speaks of the world, the WebRTC lane of co-op.
+      const hosted = this.isCoopClient() ? this.hostedWorld?.() ?? null : null;
+      const endTitle = hosted ? ` title="Leave ${esc(hosted)}: your hero logs back in where it stands"` : this.isCoopClient() ? '' : sceneLive
         ? ' title="Return to the main menu (nothing here is lost — the account is already saved)"'
         : rosterMode
           ? ' title="Save the vessel and return to the main menu"'
@@ -10161,7 +10286,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
           <button id="esc-keys">Options</button>
-          <button id="esc-end"${endTitle}>${this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
+          <button id="esc-end"${endTitle}>${hosted ? 'Leave the World' : this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
           <button id="esc-close"${closeTitle}>${this.isCoopClient() || sceneLive ? 'Exit Game' : 'Save & Exit'}</button>
         </div>`;
       document.getElementById('esc-resume')!.addEventListener('click', () => this.hideEscapeMenu());
@@ -10178,7 +10303,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         // CLIENT: world is a render SHELL — never run host-authoritative endRun()
         // (it would corrupt the shell with no effect). Leave the session instead.
         if (this.isCoopClient()) {
-          if (window.confirm('Leave this co-op session?')) { this.hideEscapeMenu(); this.onLeaveCoop(); }
+          if (window.confirm(hosted ? 'Leave this world?' : 'Leave this co-op session?')) { this.hideEscapeMenu(); this.onLeaveCoop(); }
           return;
         }
         if (sceneLive || rosterMode) {
@@ -10194,6 +10319,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         }
       });
       document.getElementById('esc-close')!.addEventListener('click', () => {
+        // THE HONEST LEAVING (W7): on a hosted world Exit says goodbye first (the farewell
+        // awaited), then the exit screen carries the truth; it never just says "close the tab".
+        if (hosted && this.onExitWorld) {
+          root.innerHTML = `<h1>Leaving</h1><div class="acct-head">Saying goodbye to ${esc(hosted)}…</div>`;
+          this.onExitWorld();
+          return;
+        }
         try { window.close(); } catch { /* browsers block closing non-script-opened tabs */ }
         root.innerHTML = `
           ${this.closeGlyphHtml('Resume (Esc)')}<h1>Progress Saved</h1>
@@ -10349,6 +10481,18 @@ ${ESCAPE_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${escapeModeOf(s.e
         <button id="opt-treeprompt" title="When a skill completes a level band and mints an Ability point. OFF: the bar slot's gold pip blooms and keeps breathing, the SKILLS drawer and the Menu button wear the pip, and you spend it from the drawer or the tree whenever you like. ON: the chooser popup also opens at the next calm moment.">${s.treePrompt ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Support ready message</span>
+        <button id="opt-supportready" title="Show a message in Skills when supports can be changed. Restrictions remain visible either way.">${s.supportReadyHint ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Passive tree: available choices</span>
+        <button id="opt-passiveavailable" title="Show the Available now list above the passive graph. OFF keeps the original graph view.">${s.passiveAvailableList ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Passive tree: allocated choices</span>
+        <button id="opt-passiveallocated" title="Show the Your choices list above the passive graph. Allocated nodes remain visible in the graph either way.">${s.passiveAllocatedList ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
         <span>UI Scale</span>
         <span class="pad-opt"><input type="range" id="opt-uiscale" min="${Math.round(UI_SCALE_CFG.min * 100)}" max="${Math.round(UI_SCALE_CFG.max * 100)}" step="${Math.round(UI_SCALE_CFG.step * 100)}"
           value="${Math.round(s.uiScale * 100)}"
@@ -10489,6 +10633,14 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       ${savePortImportRow}`;
     const visualsTab = `
       <div class="rebind-row">
+        <span>World zoom</span>
+        <span class="pad-opt"><input type="range" id="opt-camerazoom" aria-label="World zoom"
+          min="${Math.round(CAMERA_CFG.zoom.min * 100)}" max="${Math.round(CAMERA_CFG.zoom.max * 100)}"
+          step="${Math.round(CAMERA_CFG.zoom.step * 100)}" value="${Math.round(s.cameraZoom * 100)}"
+          title="A closer view makes characters and terrain larger. A wider view shows more surrounding country.">
+          <b id="val-camerazoom">${Math.round(s.cameraZoom * 100)}%</b></span>
+      </div>
+      <div class="rebind-row">
         <span>Line-of-Sight Shade</span>
         <span class="pad-opt"><input type="range" id="opt-veildark" min="0" max="100" step="5"
           value="${Math.round(s.veilDarkness * 100)}"
@@ -10504,7 +10656,27 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Ailment Screen Effects</span>
-        <button id="opt-affliction" title="Blood drips, rising kindling, poison haze and curse effects appear together, each scaling with its own severity. STILL stops their motion; OFF hides these layers. Status icons, body effects, frost, stun and the separate low-life pulse keep their own behavior.">${s.afflictionOverlays.toUpperCase()}</button>
+        <button id="opt-affliction" title="Blood drips, rising kindling, poison haze, mire and befuddlement appear together, each scaling with its own severity. STILL stops their motion; OFF hides these layers. Status icons, body effects, frost, stun and the separate low-life pulse keep their own behavior.">${s.afflictionOverlays.toUpperCase()}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Debuff Names &amp; Durations</span>
+        <button id="opt-statusreadout" title="Hover an icon near Life for details. Optional standing text can appear near your hero or in the upper corner. OFF hides the details; icons and screen effects keep their own behavior.">${s.statusReadout === 'hover' ? 'ON HOVER' : s.statusReadout === 'focus' ? 'NEAR HERO' : s.statusReadout === 'corner' ? 'UPPER CORNER' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Skill Faces</span>
+        <button id="opt-skillartwork" title="ARTWORK gives each skill its own illustration. ACRONYMS restores classic colored tiles and small initials.">${s.skillArtwork ? 'ARTWORK' : 'ACRONYMS'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Health &amp; Cast Bar Placement</span>
+        <button id="opt-crowdedmeters" title="FIXED keeps bars at their usual position above each body. AVOID CROWD moves overlapping groups with a line to their owner.">${s.crowdedMeters ? 'AVOID CROWD' : 'FIXED'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Skill Cast Name</span>
+        <button id="opt-castname" title="Show the skill name above your hero while casting.">${s.castNameHint ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Feet Planted Caption</span>
+        <button id="opt-castmovement" title="Show a caption during casts that hold your hero in place.">${s.castMovementHint ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>Faintness Frame-Falter</span>
@@ -10520,7 +10692,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Hover Nameplates</span>
-        <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
+        <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
     root.innerHTML = `
       <h1>Options</h1>
@@ -10553,6 +10725,21 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       s.afflictionOverlays = s.afflictionOverlays === 'gentle' ? 'still' : s.afflictionOverlays === 'still' ? 'off' : 'gentle';
       this.saveSettings();
       this.renderOptions(root, onBack);
+    });
+    for (const [id, key] of [['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
+      root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
+        const settings = this.getSettings(); settings[key] = !settings[key];
+        this.saveSettings(); this.renderOptions(root, onBack);
+      });
+    }
+    root.querySelector<HTMLElement>('#opt-skillartwork')?.addEventListener('click', () => {
+      const settings = this.getSettings(); settings.skillArtwork = !settings.skillArtwork;
+      this.saveSettings(); this.refreshInventory(true); if (this.vendorOpen) this.refreshVendor(); this.renderOptions(root, onBack);
+    });
+    root.querySelector<HTMLElement>('#opt-statusreadout')?.addEventListener('click', () => {
+      const settings = this.getSettings();
+      settings.statusReadout = settings.statusReadout === 'hover' ? 'focus' : settings.statusReadout === 'focus' ? 'corner' : settings.statusReadout === 'corner' ? 'off' : 'hover';
+      this.saveSettings(); this.renderOptions(root, onBack);
     });
     // THE FALTER is deliberate fake lag (docs/render/falter.md) — a comfort
     // switch, never a graphics-quality one: OFF loses no information (the
@@ -10731,6 +10918,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       });
       el.addEventListener('change', () => this.saveSettings());
     };
+    slider('camerazoom', v => { this.getSettings().cameraZoom = cameraZoomOf(v / 100); }, v => `${v}%`);
     slider('deadzone', v => { this.getSettings().pad.deadzone = v / 100; }, v => `${v}%`);
     slider('aimreach', v => { this.getSettings().pad.aimRadius = v; }, v => String(v));
     slider('padspeed', v => { this.getSettings().pad.pointerSpeed = v; }, v => String(v));
@@ -10875,6 +11063,19 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
+    root.querySelector<HTMLElement>('#opt-supportready')?.addEventListener('click', () => {
+      const st = this.getSettings(); st.supportReadyHint = !st.supportReadyHint;
+      this.saveSettings(); this.refreshInventory(true); this.renderOptions(root, onBack);
+    });
+    for (const [id, key] of [['opt-passiveavailable', 'passiveAvailableList'], ['opt-passiveallocated', 'passiveAllocatedList']] as const) {
+      root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
+        const st = this.getSettings();
+        st[key] = !st[key];
+        this.saveSettings();
+        this.refreshTree();
+        this.renderOptions(root, onBack);
+      });
+    }
     // THE ABILITY POINT PROMPT: the chooser popup is opt-in — the shown
     // tells (the slot's bloom, the pips) carry the milestone either way.
     root.querySelector<HTMLElement>('#opt-treeprompt')?.addEventListener('click', () => {
@@ -11000,12 +11201,19 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
 
   // ------------------------------------------------------------ start menu
 
-  /** Cache the resumable character save (from the async disk/local load) so the
+  /** Cache only the resumable character summary (from the authoritative load) so the
    *  start menu can enable Continue. Null disables it. */
-  setContinueSave(save: CharacterSave | null): void {
-    this.continueSave = save;
+  setContinueSave(save: CharacterContinueSummary | null): void {
+    this.continueSave = save ? { classId: save.classId, name: save.name, level: save.level,
+      charId: save.charId, modeId: save.modeId, ...(shardHomeOf(save) ? { shard: shardHomeOf(save)! } : {}) } : null; // HOME SLOTS (W7)
     // Refresh only the menu PROPER (startMenuBack null): re-rendering while a
     // subscreen (Options, the Immortal roster) is up would yank the reader out.
+    if (!this.startMenu.classList.contains('hidden') && this.startHandlers && !this.startMenuBack) this.renderStartMenu();
+  }
+
+  /** Async storage retains the existing menu so New Run can cancel a read. */
+  setContinuePending(pending: boolean): void {
+    this.continuePending = pending;
     if (!this.startMenu.classList.contains('hidden') && this.startHandlers && !this.startMenuBack) this.renderStartMenu();
   }
 
@@ -11020,7 +11228,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
    *  Chronicle / Options / Exit (+ Co-op). Subscreens render into the pane. */
   showStartMenu(
     onStart: (d: ClassDef, modeId?: string) => void,
-    onContinue: (s?: CharacterSave | null) => void,
+    onContinue: () => void,
     onCoop?: () => void,
     onRoster?: (e: RosterEntry) => void,
     notice?: string,
@@ -11042,6 +11250,12 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       ? `${cont.name ?? CLASSES.find(c => c.id === cont.classId)?.name ?? 'the character'}, Level ${cont.level}`
       : '';
     const canContinue = !!cont;
+    // THE FRONT DOOR (W7): on a page a world served (or a tab bound for one) the primary row
+    // leads into that world; HOME SLOTS: a hero bound to a world reads "Return to <world>".
+    const door = this.serverDoor?.() ?? null;
+    const home = cont?.shard ?? null;
+    const homeHere = !!home && !!door && sameWorld(home.url, door.url);
+    const primary = ' style="border-color:var(--gold)"';
     // THE IMMORTAL SHELF: however many vessels the account swears, the menu
     // proper spends ONE button on them — the roster lives in its own pane
     // (renderImmortalRoster), so the option count here stays flat and no
@@ -11062,10 +11276,13 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         ? ` · <b style="color:var(--gold)">${acc.credits}</b> ${META_CURRENCY_LABEL} awaiting the Reckoning` : ''}</div>
       ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
       <div class="esc-btns">
-        <button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>
-        <button id="sm-continue" ${canContinue
-          ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${canContinue
-          ? 'Continue Run' : 'No Run to Continue'}</button>
+        ${door && !homeHere ? `<button id="sm-door"${primary} title="${esc(worldNameOf(door))}">Enter the world</button>` : ''}
+        ${homeHere ? '' : `<button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>`}
+        <button id="sm-continue"${homeHere ? primary : ''} ${this.continuePending ? 'disabled' : ''} ${home
+          ? `title="${esc(contWho)} lives in ${esc(worldNameOf(home))}, and logs back in where it left"`
+          : canContinue ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${home
+          ? `Return to ${esc(worldNameOf(home))}` : canContinue ? 'Continue Run' : 'No Run to Continue'}</button>
+        ${homeHere ? `<button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>` : ''}
         ${immortalsBtn}
         ${isVaultAvailable(acc) ? `<button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
           ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>` : ''}
@@ -11086,9 +11303,15 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.showClassSelect(h.onStart, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster));
     });
     if (h.onCoop) document.getElementById('sm-coop')!.addEventListener('click', () => h.onCoop!());
+    document.getElementById('sm-door')?.addEventListener('click', (ev) => {
+      if (!door || !this.onEnterWorld) return;
+      const b = ev.currentTarget as HTMLButtonElement;
+      b.disabled = true; b.textContent = 'Entering the world…';
+      this.onEnterWorld(door);
+    });
     document.getElementById('sm-continue')!.addEventListener('click', () => {
-      if (!this.continueSave) return;
-      this.startMenu.classList.add('hidden'); h.onContinue(this.continueSave);
+      if (!this.continueSave || this.continuePending) return;
+      h.onContinue();
     });
     document.getElementById('sm-immortals')?.addEventListener('click', () => this.renderImmortalRoster());
     document.getElementById('sm-vault')?.addEventListener('click', () =>
@@ -11119,14 +11342,38 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
    *  refused): everything is already saved at the menu, so say so and let the
    *  player close the window by hand — or step Back. The desktop shell closes
    *  before this ever shows. */
-  private renderExitScreen(): void {
+  private renderExitScreen(line?: string): void {
     this.startMenuBack = () => this.renderStartMenu();
     this.startMenu.innerHTML = `
       ${this.closeGlyphHtml('Back')}
       <h1>SAFE TO CLOSE</h1>
+      ${line ? `<div class="acct-head">${esc(line)}</div>` : ''}
       <div class="acct-head">Your account is saved — close this window or tab to exit.</div>
       <div class="esc-btns"><button id="sm-exit-back">Back</button></div>`;
     document.getElementById('sm-exit-back')!.addEventListener('click', () => this.renderStartMenu());
+  }
+
+  /** THE HONEST LEAVING (W7): the exit screen after a hosted world's goodbye, wearing the
+   *  farewell's line (saved, or the hero standing its ground in a fight). */
+  showExitScreen(line?: string): void {
+    if (!this.startHandlers) return;
+    this.startMenu.classList.remove('hidden');
+    this.renderExitScreen(line);
+  }
+
+  /** THE SOLO GUARD at the front door (W7): a plain line and a confirm, never a modal:
+   *  the hero's own solo world stays behind for good if it travels. */
+  showTravelConfirm(line: string, onYes: () => void): void {
+    if (!this.startHandlers) return;
+    this.startMenu.classList.remove('hidden');
+    this.startMenuBack = () => this.renderStartMenu();
+    this.startMenu.innerHTML = `
+      ${this.closeGlyphHtml('Back')}
+      <h1>LEAVE A WORLD BEHIND?</h1>
+      <div class="acct-head">${esc(line)}</div>
+      <div class="esc-btns"><button id="sm-travel-yes">Travel</button><button id="sm-travel-back">Back</button></div>`;
+    document.getElementById('sm-travel-yes')!.addEventListener('click', () => { this.renderStartMenu(); onYes(); });
+    document.getElementById('sm-travel-back')!.addEventListener('click', () => this.renderStartMenu());
   }
 
   /** THE IMMORTAL ROSTER PANE: account-owned characters (Immortal vessels),

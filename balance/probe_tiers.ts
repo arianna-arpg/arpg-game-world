@@ -53,7 +53,7 @@ import '../src/data/lairs';
 import '../src/data/merelake';
 
 import { Rng } from '../src/core/rng';
-import { readFileSync } from 'node:fs'; // (RIG T — THE SOVEREIGNTY ROSTER's source census)
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture'; // (RIG T — THE SOVEREIGNTY ROSTER's source census)
 import { resolve } from 'node:path';
 import { mixHex, vec } from '../src/core/math';
 import { severedBandGoal, updateAI, type KernelCtx } from '../src/engine/ai';

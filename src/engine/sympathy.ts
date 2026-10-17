@@ -41,6 +41,8 @@
 
 import type { Actor } from './actor';
 import type { World } from './world';
+/** Actual installed relation-gatherer scene capabilities. */
+export type NativeSympathyHost = Pick<World, 'seats' | 'actors' | 'enemiesOf'>;
 import { STAT_DEFS, type SkillTag } from './stats';
 import { dist } from '../core/math';
 
@@ -162,7 +164,7 @@ export const SYMPATHY_HOOKS = {
 /** The relation OTHER holds toward HOLDER, restricted to the kinds a link's
  *  `from` may listen to (see SympathyLinkDef.from). Most specific wins:
  *  a tamed beast is 'companions', never merely 'minions'. */
-export function sympathyRelationOf(holder: Actor, other: Actor, w: World): SympathyRelation | null {
+export function sympathyRelationOf(holder: Actor, other: Actor, w: NativeSympathyHost): SympathyRelation | null {
   if (holder === other) return 'self';
   if (other.owner === holder) return other.companion ? 'companions' : 'minions';
   if (holder.owner === other) return 'owner';
@@ -180,7 +182,7 @@ export const SYMPATHY_LISTENABLE: readonly SympathyRelation[] =
 export const SYMPATHY_RADIUS_REQUIRED: readonly SympathyRelation[] =
   ['allies', 'npcs', 'pack', 'enemies'];
 
-type RelationGather = (w: World, holder: Actor) => Actor[];
+type RelationGather = (w: NativeSympathyHost, holder: Actor) => Actor[];
 
 /** One gatherer per relation kind — an OPEN registry: a new kind of kinship
  *  is one entry here plus the union member. Gatherers return candidates;
@@ -218,7 +220,7 @@ export function registerSympathyRelation(kind: string, gather: RelationGather): 
  *  fabric allows), clamp to the link radius around the GAINER (the echo
  *  travels from the event), nearest-to-the-gainer first, capped. */
 export function gatherSympathyRecipients(
-  w: World, holder: Actor, link: SympathyLinkDef, gainer: Actor,
+  w: NativeSympathyHost, holder: Actor, link: SympathyLinkDef, gainer: Actor,
 ): Actor[] {
   const seen = new Set<Actor>();
   const out: Actor[] = [];

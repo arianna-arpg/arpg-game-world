@@ -29,7 +29,7 @@
 //
 //   npx tsx balance/probe_menubar.ts
 
-import { readFileSync } from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import { resolve } from 'node:path';
 import { bootSimEngine, classById } from '../src/sim/arena';
 import { resetActorIdCounter } from '../src/engine/actor';
@@ -64,7 +64,7 @@ function check(name: string, ok: boolean, detail = ''): void {
   if (ok) { pass++; console.log(`  ok  ${name}`); }
   else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ''}`); }
 }
-const src = (p: string): string => readFileSync(resolve(process.cwd(), p), 'utf8');
+const src = (p: string): string => readFileSync(resolve(process.cwd(), p), 'utf8').replace(/\r\n/g, '\n');
 
 // --- A. THE REGISTRY -----------------------------------------------------------
 console.log('A. THE REGISTRY');

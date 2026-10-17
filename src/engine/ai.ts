@@ -1,3 +1,4 @@
+import {observeNativeCombatSelection,observeNativeCombatActorPresence} from './nativeCombatRecordObservation';
 import { feedingCueFlash, feedingMaterial, noteRestoreGain } from './feedingCues';
 // ---------------------------------------------------------------------------
 // AI RUNTIME — drives monsters AND player minions through the same skill
@@ -51,7 +52,7 @@ import { concealmentActive, investigateLoss, perceiveTarget, PERCEPTION_CFG } fr
 import { skillContextTags, instanceMods, socketSpec, type SkillDef, type SkillInstance } from './skills';
 import { TIER_CFG, tierFloorAt } from './tiers';
 import { doodadRuleOf } from './levelgen';
-import type { World } from './world';
+import type {NativeSceneAIHost} from './nativeSceneAIHost';
 import { PATH_CFG } from '../world/regions';
 
 /** Scratch for the throng heel-ring offset (single-threaded AI loop). */
@@ -103,7 +104,7 @@ const RECALL = {
 };
 
 /** Returns true when the minion was just recalled (skip normal heeling). */
-function updateRecall(actor: Actor, world: World, dt: number): boolean {
+function updateRecall(actor: Actor, world: NativeSceneAIHost, dt: number): boolean {
   if (refreshMovementTether(actor, world)) return false;
   const owner = actor.owner;
   if (!owner || MONSTERS[actor.defId ?? '']?.noRecall) return false;
@@ -217,6 +218,11 @@ function wearColors(actor: Actor, roused: boolean): void {
 registerAICondition('nerveBelow', (actor, _t, _ctx, arg) =>
   actor.aiNerve < (typeof arg === 'number' ? arg : 0.5));
 
+/** The lower end of a courage band. Pair with nerveBelow to distinguish
+ * fraying courage from the routed floor without duplicating life thresholds. */
+registerAICondition('nerveAbove', (actor, _t, _ctx, arg) =>
+  typeof arg === 'number' && Number.isFinite(arg) && actor.aiNerve > arg);
+
 /** WARDS NEAR: at least `arg` warded bodies (MoraleSpec.wardTo) are huddled
  *  at this one. THE MATRIARCH's trigger — "I am standing over my young" as
  *  something she can act on. Reads the pack sweep's own count, the same one
@@ -264,7 +270,7 @@ function postOf(actor: Actor): Vec2 | undefined {
  *  spec's slack and ENDS at POST_CFG.arrive (never jitters at the line);
  *  arriving re-plants the posted facing. Returns true while the walk owns
  *  the tick. Runs for dormant AND awake bodies — anchored ones never walk. */
-function updatePostReturn(actor: Actor, world: World, dt: number): boolean {
+function updatePostReturn(actor: Actor, world: NativeSceneAIHost, dt: number): boolean {
   const home = postOf(actor);
   if (!home || actor.anchored) return false;
   const spec = actor.postSpec!;
@@ -287,7 +293,7 @@ function updatePostReturn(actor: Actor, world: World, dt: number): boolean {
  *  spec (the default) consumes the tick standing the watch — posted facing
  *  held, no wander, no squad drill — while hold:false falls through (the
  *  body merely ORBITS home, milling like anyone else until it strays). */
-function updatePost(actor: Actor, world: World, dt: number): boolean {
+function updatePost(actor: Actor, world: NativeSceneAIHost, dt: number): boolean {
   if (!actor.postSpec) return false;
   if (updatePostReturn(actor, world, dt)) return true;
   if (actor.postSpec.hold === false) return false;
@@ -328,7 +334,7 @@ function hauntRoll(actor: Actor): number {
 const hauntRange = (actor: Actor, lo: number, hi: number): number => lo + hauntRoll(actor) * (hi - lo);
 
 /** True while the haunt owns the tick (walking to a seat, or lingering). */
-function updateHaunt(actor: Actor, world: World, spec: HauntSpec, dt: number): boolean {
+function updateHaunt(actor: Actor, world: NativeSceneAIHost, spec: HauntSpec, dt: number): boolean {
   if (actor.anchored) return false;
   const home = actor.aiPost ?? actor.aiAnchor;
   if (!home) return false;
@@ -440,7 +446,7 @@ export interface CommandKindDef {
    *  - an Actor:   fight THIS through the normal pipeline (the kernels own
    *                the cast/move interleave — the order only aims them);
    *  - undefined:  nothing to impose this tick — fall through unaimed. */
-  step(actor: Actor, world: World, cmd: CommandState, dt: number):
+  step(actor: Actor, world: NativeSceneAIHost, cmd: CommandState, dt: number):
     'consumed' | 'done' | Actor | undefined;
 }
 
@@ -474,7 +480,7 @@ export function obedienceOf(actor: Actor): number {
 }
 
 /** Nearest live foe within `r` of `at` — what "whatever holds the mark" means. */
-function foeNear(actor: Actor, world: World, at: Vec2, r: number): Actor | undefined {
+function foeNear(actor: Actor, world: NativeSceneAIHost, at: Vec2, r: number): Actor | undefined {
   let best: Actor | undefined, bd = r, prey: Actor | undefined, preyD = r;
   for (const e of world.enemiesOf(actor)) {
     if (e.passive || !minionPreyInReach(actor, e)
@@ -552,7 +558,7 @@ const DEFAULT_BRAIN: BrainDef = {};
 
 // === THE PIPELINE ==============================================================
 
-export function updateAI(actor: Actor, world: World, dt: number): void {
+export function updateAI(actor: Actor, world: NativeSceneAIHost, dt: number): void {
   actor.companionReturnTo = undefined; // no stale return line through any early exit
   actor.feedingMeal = undefined; // feedingCue posture ends even on an early AI refusal.
   if (actor.summonReform) return;
@@ -638,6 +644,18 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
     return;
   }
   if (actor.leap) return; // airborne
+
+  const sanctuaryHome = world.sanctuaryRetreat(actor);
+  if (sanctuaryHome) {
+    const cs = actor.casting;
+    if (cs?.mode === 'guard') world.guardArts.lower(actor,cs.inst);
+    if (cs && actor.shellGuard?.fromAura === cs.inst.def.id) actor.shellGuard = undefined;
+    actor.casting = null; actor.bodyAction = undefined;
+    actor.aiTargetId = undefined; actor.aggroed = false; actor.threat.clear();
+    actor.facing = angleTo(actor.pos,sanctuaryHome);
+    moveToward(actor,world,sanctuaryHome,dt);
+    return;
+  }
 
   // WARD WATCHER (the add-gate): the moment no live actor carries the ward
   // tag, the ward SHATTERS — the visible links use this exact membership.
@@ -889,7 +907,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // tether they drop the lock and walk home (with hysteresis, so the edge
   // reads as straining at the chain, not flip-flop) — mending en route when
   // the data says so.
-  const leash = tuning.target?.leash;
+  const leash = tuning.target?.leash ?? (tuning.target?.relentless ? undefined : actor.aiTerritory);
   if (leash && actor.aiAnchor && !actor.isMinion()) {
     const dHome = dist(actor.pos, actor.aiAnchor);
     if (actor.aiPhase === 'leash_home') {
@@ -1230,7 +1248,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
 // rules (condition→behavior), impulses (periodic sugar) — resolved into ONE
 // effective tuning per tick; scripted beats fire from in here.
 
-function aiCtxOf(world: World): AICtx {
+function aiCtxOf(world: NativeSceneAIHost): AICtx {
   return {
     time: world.time,
     actors: world.actors,
@@ -1240,7 +1258,7 @@ function aiCtxOf(world: World): AICtx {
   };
 }
 
-function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): BrainTuning {
+function resolveMachines(actor: Actor, world: NativeSceneAIHost, norm: NormalizedBrain): BrainTuning {
   const t = world.time;
   const lastTarget = actor.aiTargetId !== undefined
     ? (world.actorById(actor.aiTargetId) ?? null) : null;
@@ -1376,7 +1394,7 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
 }
 
 function enterScriptPhase(
-  actor: Actor, world: World, norm: NormalizedBrain, idx: number, lastTarget: Actor | null,
+  actor: Actor, world: NativeSceneAIHost, norm: NormalizedBrain, idx: number, lastTarget: Actor | null,
 ): void {
   const ph = norm.script![idx];
   actor.aiScriptIdx = idx;
@@ -1393,7 +1411,7 @@ function resetCadences(actor: Actor, cadences: PhaseCadence[] | undefined, t: nu
 }
 
 function tickCadences(
-  actor: Actor, world: World, cadences: PhaseCadence[] | undefined, lastTarget: Actor | null,
+  actor: Actor, world: NativeSceneAIHost, cadences: PhaseCadence[] | undefined, lastTarget: Actor | null,
 ): void {
   if (!cadences || !actor.aiCadenceAt) return;
   for (let i = 0; i < cadences.length && i < actor.aiCadenceAt.length; i++) {
@@ -1407,7 +1425,7 @@ function tickCadences(
 // === MORALE ====================================================================
 
 /** Whether it dares. Returns true while ROUTING (the tick is consumed: run). */
-function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: number): boolean {
+function updateMorale(actor: Actor, world: NativeSceneAIHost, tuning: BrainTuning, dt: number): boolean {
   const m = tuning.morale;
   /** The nearest thing worth fleeing: enemies normally; for the SKITTISH,
    *  ANY non-kin body counts — a hare doesn't check allegiances. */
@@ -1541,7 +1559,7 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
  *  the tick. Deliberately un-cached: guardians MOVE, and a stale goal is
  *  exactly the bug that would make a den read as a spawn point. */
 function wardStep(
-  actor: Actor, world: World, ward: { kin: string; seek?: number }, dt: number,
+  actor: Actor, world: NativeSceneAIHost, ward: { kin: string; seek?: number }, dt: number,
 ): boolean {
   const reach = ward.seek ?? PACK_CFG.ward.seek;
   let best: Actor | null = null;
@@ -1573,7 +1591,7 @@ function wardStep(
  *  waits out the reaction, then DIVES radially clear. The dive owns the tick
  *  (no casting, no scheming — dodging is a commitment); a body mid-cast of
  *  its own never dives. Returns true while it consumed the tick. */
-function updateDodge(actor: Actor, world: World, tuning: BrainTuning, dt: number): boolean {
+function updateDodge(actor: Actor, world: NativeSceneAIHost, tuning: BrainTuning, dt: number): boolean {
   // A dive in progress runs to its exit (or its window's end).
   if (actor.aiDodgeExit) {
     if (world.time >= actor.aiDodgeUntil || dist(actor.pos, actor.aiDodgeExit) < 14) {
@@ -1668,7 +1686,7 @@ function attendSpanOf(
 }
 
 function acquireTarget(
-  actor: Actor, world: World, tuning: BrainTuning,
+  actor: Actor, world: NativeSceneAIHost, tuning: BrainTuning,
 ): { target: Actor | null; d: number } {
   // Sight is a CONE: full detection range inside the frontal arc, a short
   // all-around HEARING radius behind it — so flanking and backstabs are real
@@ -1754,7 +1772,7 @@ function acquireTarget(
   if (!scanDue && !dazed) {
     if (actor.aiTargetId === undefined) return { target: null, d: Infinity };
     const e = actor.aiTargetRef;
-    if (e && e.id === actor.aiTargetId
+    if (e && observeNativeCombatActorPresence(world,e) && e.id === actor.aiTargetId
       && !e.dead && !e.untargetable && !e.downed && !e.passive
       && minionPreyInReach(actor, e)
       && (world.hostileTo(actor, e)
@@ -1806,6 +1824,19 @@ function acquireTarget(
     // Scenery is not prey: nobody dedicates their life to a barrel,
     // and the townsfolk are not on the menu.
     if (e.passive || !minionPreyInReach(actor, e)) continue;
+    // Reject only beyond the widest CURRENT sense reach before paying for
+    // diplomacy. Use both cone outcomes so mutable stealth/rear/alert values
+    // keep their exact fold. Long detection, NaNs and distant heads whose
+    // hittable coils are nearby fall through to the standing checks below.
+    const farDx = Math.abs(actor.pos.x - e.pos.x), farDy = Math.abs(actor.pos.y - e.pos.y);
+    if ((farDx > detect || farDy > detect) && !segsHittable(e)) {
+      const farDetectability = e.sheet.get('detectability');
+      const farConcealed = concealmentActive(e, world.time);
+      const farReach = Math.max(
+        senseReach(detect, farDetectability, farConcealed, alerted, true, rearMul),
+        senseReach(detect, farDetectability, farConcealed, alerted, false, rearMul));
+      if (Math.max(farDx, farDy) > farReach) continue;
+    }
     if (!(world.hostileTo(actor, e)
       || (e.construct?.breakable !== undefined && e.owner === actor))) continue;
     if (e.sheet.get('invisible') > 0) continue;
@@ -2054,7 +2085,7 @@ function skillAIRange(actor: Actor, inst: SkillInstance): number {
 }
 
 function pickSkill(
-  actor: Actor, world: World, best: number, tuning: BrainTuning,
+  actor: Actor, world: NativeSceneAIHost, best: number, tuning: BrainTuning,
   target?: Actor,
 ): SkillInstance | null {
   if (actor.aiCooldown > 0) return null;
@@ -2214,7 +2245,7 @@ function pickSkill(
 }
 
 function useOn(
-  actor: Actor, world: World, inst: SkillInstance, target: Actor, tuning?: BrainTuning,
+  actor: Actor, world: NativeSceneAIHost, inst: SkillInstance, target: Actor, tuning?: BrainTuning,
 ): void {
   // Resolved tuning never carries a null axis (mergeTuning clears it), but a
   // RAW layer can — coalesce for the aim path's plain-optional signature.
@@ -2310,7 +2341,7 @@ function aimPointFor(
  *  most wounded friend in reach (below 85%) before any fighting; reserved
  *  skills fire the moment their declared condition holds. Returns true when
  *  a cast was made this tick. */
-function tryReserves(actor: Actor, world: World, tuning: BrainTuning): boolean {
+function tryReserves(actor: Actor, world: NativeSceneAIHost, tuning: BrainTuning): boolean {
   if (actor.aiCooldown > 0 || !actor.canAct()) return false;
   const reserves = tuning.skillUse?.reserve;
   const reservedIds = reserves?.length ? new Set(reserves.map(r => r.skill)) : undefined;
@@ -2358,7 +2389,7 @@ function tryReserves(actor: Actor, world: World, tuning: BrainTuning): boolean {
 }
 
 function mostWoundedAlly(
-  actor: Actor, world: World, inst: SkillInstance, below: number,
+  actor: Actor, world: NativeSceneAIHost, inst: SkillInstance, below: number,
 ): Actor | null {
   const reach = inst.def.targeting?.castRange ?? inst.def.ai!.range;
   let sick: Actor | null = null;
@@ -2407,7 +2438,7 @@ export const CARRION_CFG = {
  *  call and requires carrion.combat — the glutton that keeps feeding under
  *  fire, paying for the meal with the fight it isn't fighting.
  *  Returns true while the meal (or the walk to it) owns this tick. */
-function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false): boolean {
+function updateCarrion(actor: Actor, world: NativeSceneAIHost, dt: number, inCombat = false): boolean {
   const spec = actor.defId ? MONSTERS[actor.defId]?.carrion : undefined;
   if (!spec || (inCombat && !spec.combat)) { if (!spec) actor.carrionEatT = 0; return false; }
   const lifeHungry = actor.life < actor.maxLife() - 0.5;
@@ -2425,7 +2456,8 @@ function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false)
     if (d < bd) { bd = d; best = c; }
   }
   if (!best) { actor.carrionEatT = 0; return false; }
-  actor.facing = angleTo(actor.pos, best.pos);
+  return observeNativeCombatSelection(world,'corpses',best,()=>{
+  actor.facing = angleTo(actor.pos, best!.pos);
   if (bd > actor.radius + CARRION_CFG.biteReach) {
     actor.carrionEatT = 0;
     // STALL GUARD: a meal it cannot actually close on (across water, behind
@@ -2443,7 +2475,7 @@ function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false)
       actor.carrionStallT = 0;
       actor.carrionStallD = bd;
     }
-    moveToward(actor, world, best.pos, dt * CARRION_CFG.pace);
+    moveToward(actor, world, best!.pos, dt * CARRION_CFG.pace);
     return true;
   }
   actor.carrionStallT = 0;
@@ -2453,7 +2485,7 @@ function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false)
   actor.life = Math.min(actor.maxLife(),
     actor.life + (spec.rate ?? CARRION_CFG.rate) * actor.maxLife() * dt);
   noteRestoreGain(actor, 'life', actor.life - restoreGainBefore, spec.feedingCue);
-  if (spec.feedingCue !== false) actor.feedingMeal = { from: { ...best.pos },
+  if (spec.feedingCue !== false) actor.feedingMeal = { from: { ...best!.pos },
     progress: Math.min(1, actor.carrionEatT / (spec.time ?? CARRION_CFG.time)),
     ...feedingMaterial(spec.feedingCue, 'carrion') };
   if (actor.carrionEatT >= (spec.time ?? CARRION_CFG.time)) {
@@ -2468,11 +2500,12 @@ function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false)
     }
     actor.feedingMeal = undefined;
     if (i !== -1) {
-      const feedingCue = feedingCueFlash(best.pos, actor, spec.feedingCue, 'carrion', best.tier);
+      const feedingCue = feedingCueFlash(best!.pos, actor, spec.feedingCue, 'carrion', best!.tier);
       if (feedingCue) world.flashes.push(feedingCue);
     }
   }
   return true;
+  });
 }
 
 // === SHARED MOVEMENT HELPERS =====================================================
@@ -2488,7 +2521,7 @@ function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false)
  *  fall, re-orient, fall, ~18% max life a pop). 'lemming' minds
  *  (MoveSpec.hazards) opt out — authored self-destruction, one word away
  *  and machine-shiftable (bait a charge phase off a cliff by DESIGN). */
-function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: number): void {
+function steerMove(actor: Actor, world: NativeSceneAIHost, dx: number, dy: number, dt: number): void {
   // THE MURMURATION (BehaviorSpec.flock, stamped as aiFlock): boid steering
   // folded into the desire BEFORE the self-preservation veto — the flock
   // bends the mind's bearing, the veto still refuses the rim. Composable
@@ -2522,7 +2555,7 @@ function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: numbe
  *  and so do we. moveActor normalizes the result: direction is all that
  *  leaves here. */
 function flockSteer(
-  actor: Actor, world: World, dx: number, dy: number, dt: number,
+  actor: Actor, world: NativeSceneAIHost, dx: number, dy: number, dt: number,
 ): { x: number; y: number } {
   const fl = actor.aiFlock!;
   const R = fl.radius ?? FLOCK_CFG.radius;
@@ -2604,7 +2637,7 @@ function flockSteer(
   return { x: ux, y: uy };
 }
 
-function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier?: number }, dt: number): void {
+function moveToward(actor: Actor, world: NativeSceneAIHost, to: { x: number; y: number; tier?: number }, dt: number): void {
   // Steer toward the next cell along the zone's walkable flow-field instead
   // of straight at the target — around warren walls AND plains cliff pockets
   // alike (World.pathField lazily rakes a nav grid over a convex zone's
@@ -2696,7 +2729,7 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier
  *  breath returns; otherwise the retreat runs AND drains the budget. This
  *  is what turns kiters from an exercise in futility into a rhythm: chase,
  *  wind them, capitalize. Returns true when movement actually happened. */
-function retreatMove(actor: Actor, world: World, dx: number, dy: number, dt: number): boolean {
+function retreatMove(actor: Actor, world: NativeSceneAIHost, dx: number, dy: number, dt: number): boolean {
   // A planted artillery body must fall through to its firing lane.
   if (dt <= 0) return false;
   // THE ROOTED TRUTH: a body with no legs cannot retreat AT ALL — rooted
@@ -2731,7 +2764,7 @@ function retreatMove(actor: Actor, world: World, dx: number, dy: number, dt: num
 
 /** Retreat straight away from a point. Returns retreatMove's verdict — true
  *  only when legs actually answered — so kernels can honor refusals. */
-function moveAway(actor: Actor, world: World, from: { x: number; y: number }, dt: number): boolean {
+function moveAway(actor: Actor, world: NativeSceneAIHost, from: { x: number; y: number }, dt: number): boolean {
   return retreatMove(actor, world, actor.pos.x - from.x, actor.pos.y - from.y, dt);
 }
 
@@ -2742,7 +2775,7 @@ function moveAway(actor: Actor, world: World, from: { x: number; y: number }, dt
  *  faster-than-you creature fair). Used by the 'juke' kernel in combat and
  *  by the morale rout when the mover's style is 'juke'. */
 function jukeAway(
-  actor: Actor, world: World, from: { x: number; y: number }, dt: number, spec: MoveSpec,
+  actor: Actor, world: NativeSceneAIHost, from: { x: number; y: number }, dt: number, spec: MoveSpec,
 ): void {
   const t = world.time;
   if (actor.aiWindedUntil > t) return;       // panting — the catch window
@@ -2802,7 +2835,7 @@ function setShroud(actor: Actor, on: boolean): void {
  *  goal + the speed/damage-reduction mods). On arrival the world removes the
  *  actor from the zone (and, for the Hunt beast, migrates it to the next zone
  *  with its health preserved). */
-function fleeStep(actor: Actor, world: World, dt: number): void {
+function fleeStep(actor: Actor, world: NativeSceneAIHost, dt: number): void {
   const goal = actor.aiFleeGoal;
   if (!goal) return; // the world assigns it when the flee phase opens
   actor.facing = angleTo(actor.pos, goal);
@@ -2814,7 +2847,7 @@ function fleeStep(actor: Actor, world: World, dt: number): void {
  *  the nearest matching doodad, found ONCE and cached (ponds don't move) —
  *  and SLIPS AWAY on reaching its rim. Returns false when none is in seek
  *  range, letting the ordinary rout run. */
-function refugeStep(actor: Actor, world: World, dt: number): boolean {
+function refugeStep(actor: Actor, world: NativeSceneAIHost, dt: number): boolean {
   const r = actor.refuge;
   if (!r) return false;
   if (actor.refugeGoal === undefined) {
@@ -2844,20 +2877,22 @@ function refugeStep(actor: Actor, world: World, dt: number): boolean {
  *  Returns true while the lane is blocked (the tick is consumed). */
 function losStrafe(ctx: KernelCtx): boolean {
   const { a, world, target, dt } = ctx;
-  // IMPLICIT LOS-seek in GRID zones for kits with ANY projectile: once masonry
-  // can stop shots (rampart walls), a basic-brained shooter must reposition
-  // instead of dumping arrows into a wall forever. Mixed kits strafe too — a
-  // blocked archer-with-a-dagger rounding the corner beats one idling at the
-  // wall (LOS regained exits the strafe instantly, so the melee answer still
-  // fires the moment the lane opens). Pure-melee kits keep their old conduct;
-  // data losSeek behaves exactly as before; convex zones (no grid) untouched.
-  const implicit = !ctx.spec.losSeek && !!world.walk
-    && a.skills.some(s => s?.def.delivery.type === 'projectile');
-  if (!ctx.spec.losSeek && !implicit) return false;
-  if (world.lineOfSight(a.pos, target.pos, a.tier, target.tier)) {
-    a.aiLosTimer = rand(1.4, 2.2); // LOS regained: reset the patience clock
+  // Seeing a target is not a firing lane: low cover and elevation may pass
+  // eyes while stopping a shot. Use the native delivery policy, including
+  // rays and phasing, rather than guessing from one projectile type.
+  if(ctx.spec.losSeek===false)return false;
+  const needsFire=a.skills.some(s=>s?.def.ai && world.aiNeedsFireLine(a,s));
+  const implicit=!ctx.spec.losSeek && !!world.walk && needsFire;
+  if(!ctx.spec.losSeek && !implicit)return false;
+  const clear=needsFire ? world.lineOfFire(a.pos,target.pos,a.tier)
+    : world.lineOfSight(a.pos,target.pos,a.tier,target.tier);
+  if(clear){
+    a.aiLosTimer = rand(1.4, 2.2); // Lane regained: reset the patience clock
     return false;
   }
+  // A legal free/nearby/support answer still belongs to the kernel's normal
+  // cadence. One memoized native pick keeps its policy, bans and random roll.
+  if(needsFire && ctx.pick())return false;
   // The strafe patience clock lives on ITS OWN field — a.aiTimer is owned by
   // the kernels' phase machines (slideCast's slide/withdraw), and stomping it
   // on every LOS-clear tick froze strafers solid after their first cast.
@@ -2877,7 +2912,7 @@ function losStrafe(ctx: KernelCtx): boolean {
 /** The SURROUND slot: squadmates fan their approach bearings around the prey
  *  instead of forming a conga line. Stable world-absolute slots by member
  *  order, so the ring doesn't churn. */
-function surroundGoal(actor: Actor, world: World, target: Actor, ring: number): Vec2 {
+function surroundGoal(actor: Actor, world: NativeSceneAIHost, target: Actor, ring: number): Vec2 {
   const mates: number[] = [];
   for (const a of world.actors) {
     if (!a.dead && a.squadId === actor.squadId) mates.push(a.id);
@@ -2899,7 +2934,7 @@ function stableRoll(id: number, salt: number): number {
 /** SQUAD IDLE DEMEANOR (SquadSpec.idle): the group's out-of-combat carriage.
  *  Returns true when it consumed this member's idle tick (moved it into
  *  place, or deliberately stilled it); false lets the generic wander run. */
-function squadIdle(actor: Actor, world: World, tuning: BrainTuning, dt: number): boolean {
+function squadIdle(actor: Actor, world: NativeSceneAIHost, tuning: BrainTuning, dt: number): boolean {
   const sq = tuning.squad;
   if (!sq || actor.squadId === undefined) return false;
   // Legacy sugar: a formation with no idle spec drills (the old behavior).
@@ -3008,7 +3043,7 @@ function squadIdle(actor: Actor, world: World, tuning: BrainTuning, dt: number):
 /** A follower's drilled post relative to its leader (null = no formation).
  *  `fallback` names the shape when the squad drills but declares none. */
 function formationPost(
-  actor: Actor, world: World, lead: Actor, tuning: BrainTuning,
+  actor: Actor, world: NativeSceneAIHost, lead: Actor, tuning: BrainTuning,
   fallback?: 'ring' | 'line' | 'wedge' | 'column' | 'loose',
 ): Vec2 | null {
   const f = tuning.squad?.formation ?? fallback;
@@ -3059,7 +3094,7 @@ function formationPost(
 
 export interface KernelCtx {
   a: Actor;
-  world: World;
+  world: NativeSceneAIHost;
   target: Actor;
   /** Distance to the target this tick. */
   d: number;
@@ -3077,6 +3112,7 @@ export interface KernelCtx {
    *  crosses law): a quarry on a both-floor cell over or under the hunter
    *  elects the crossing instead of the spot beneath it. */
   goal: Vec2 & { tier?: number };
+  /** One native selection per decision; lane-seeking may consult it first. */
   pick(): SkillInstance | null;
   cast(inst: SkillInstance): void;
 }
@@ -3084,7 +3120,7 @@ export interface KernelCtx {
 export type MoveKernel = (ctx: KernelCtx) => void;
 
 function makeCtx(
-  actor: Actor, world: World, target: Actor, d: number, dt: number,
+  actor: Actor, world: NativeSceneAIHost, target: Actor, d: number, dt: number,
   tuning: BrainTuning, norm: NormalizedBrain, noCast: boolean, paused = false,
   engaged = false,
 ): KernelCtx {
@@ -3122,9 +3158,12 @@ function makeCtx(
     goal = segsHittable(target) ? nearestBody(target, actor.pos).pos : target.pos;
   }
   goal = { x: goal.x, y: goal.y, tier: target.tier }; // the goal carries its story
+  let picked: SkillInstance | null | undefined;
   return {
     a: actor, world, target, d, dt, spec, tuning, norm, noCast, paused, goal,
     pick: () => {
+      if(picked!==undefined)return picked;
+      picked=null;
       if (noCast) return null;
       // REACTION: the first cast of a fresh engagement waits out the wits.
       if (world.time < actor.aiReactAt) return null;
@@ -3134,7 +3173,7 @@ function makeCtx(
       if (beh?.castArc !== undefined && Math.abs(angleDiff(
         actor.facingPrev ?? actor.facing,
         angleTo(actor.pos, target.pos))) > beh.castArc) return null;
-      return pickSkill(actor, world, d, tuning, target);
+      return picked=pickSkill(actor, world, d, tuning, target);
     },
     cast: inst => {
       // THE FEINT (kernel casts only — reserves/menders never bluff): the
@@ -3729,6 +3768,19 @@ function lurkKernel(ctx: KernelCtx): void {
   const unseenArc = spec.unseenArc ?? 1.75;
   const unseen = Math.abs(angleDiff(target.facing, angleTo(target.pos, a.pos))) > unseenArc;
   const commit = spec.commitRange ?? 260;
+  if (spec.lurkMeleeRange !== undefined) {
+    const reach = Math.max(a.radius + target.radius + 2, spec.lurkMeleeRange);
+    if (d <= reach) a.aiPhase = 'lurk_melee';
+    if (a.aiPhase === 'lurk_melee') {
+      if (d > commit) a.aiPhase = '';
+      else {
+        // A landed ambush becomes a close fight, not another lap through prey.
+        if (d > reach) moveToward(a, world, ctx.goal, dt);
+        a.facing = angleTo(a.pos, target.pos);
+        return;
+      }
+    }
+  }
   if (a.aiPhase === 'lurk_rush') {
     if (!unseen && d > commit) {
       a.aiPhase = ''; // stared down at range: break off, resume the watch

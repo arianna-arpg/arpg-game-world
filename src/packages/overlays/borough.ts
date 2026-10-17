@@ -52,6 +52,13 @@ export class BoroughField implements WorldOverlay {
   resolved = 0;
   /** zoneId → world time the settlement resolved (held or lost). */
   private spent: Record<string, number> = {};
+  // Private warm-area renewal receipts observe the original durable ledger.
+  #nativeGeneration:object={};
+  readonly #nativeEpochs=new Map<string,object>();
+  readonly #nativeEpochRows=new WeakMap<object,{generation:object;zoneId:string;at:number;renewed:boolean}>();
+  nativeSpentEpoch(zoneId:string,at:number):object|undefined {const token=this.#nativeEpochs.get(zoneId),row=token&&this.#nativeEpochRows.get(token);return token&&row&&row.generation===this.#nativeGeneration&&row.at===at&&Number.isFinite(at)&&this.spent[zoneId]===at?token:undefined;}
+  nativeSpentEpochRenewed(token:object,zoneId:string,at:number):boolean {const row=this.#nativeEpochRows.get(token);return !!row&&row.generation===this.#nativeGeneration&&row.zoneId===zoneId&&row.at===at&&row.renewed&&this.#nativeEpochs.get(zoneId)===token&&!(zoneId in this.spent);}
+
   /** Fresh arrival toasts, drained by the bulletin source (transient —
    *  deliberately outside the snapshot; a toast is not world memory). */
   private pending: WorldBulletin[] = [];
@@ -65,7 +72,7 @@ export class BoroughField implements WorldOverlay {
     // Resettlement: spent ground quietly reopens once its clock lapses.
     if (this.cfg.resettleSec <= 0) return;
     for (const [zid, at] of Object.entries(this.spent)) {
-      if (view.time - at >= this.cfg.resettleSec) delete this.spent[zid];
+      if (view.time - at >= this.cfg.resettleSec) {delete this.spent[zid];const token=this.#nativeEpochs.get(zid),row=token&&this.#nativeEpochRows.get(token);if(row&&row.generation===this.#nativeGeneration&&row.at===at&&Number.isFinite(at)&&Number.isFinite(view.time))row.renewed=true;}
     }
   }
 
@@ -90,6 +97,7 @@ export class BoroughField implements WorldOverlay {
   /** A settlement resolved (held or lost) — rest the ground until it resettles. */
   markSpent(zoneId: string, atTime: number): void {
     this.spent[zoneId] = atTime;
+    const token=Object.freeze({});this.#nativeEpochs.set(zoneId,token);this.#nativeEpochRows.set(token,{generation:this.#nativeGeneration,zoneId,at:atTime,renewed:false});
     this.resolved++;
   }
 
@@ -131,6 +139,7 @@ export class BoroughField implements WorldOverlay {
       this.resolved = Math.max(0, Math.floor(s.resolved));
     }
     this.spent = {};
+    this.#nativeGeneration={};this.#nativeEpochs.clear();
     if (s.spent && typeof s.spent === 'object') {
       for (const [zid, at] of Object.entries(s.spent)) {
         if (typeof zid !== 'string' || !zid) continue;

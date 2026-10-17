@@ -1,5 +1,7 @@
 // One common walk grid, independent district builders, then shared connections.
 // No builder knows a particular landmark or program id.
+import { ADVENTURE_DISTRICTS } from './adventureDistricts';
+import { EXPLORATION_DISTRICTS } from './explorationDistricts';
 import { registerGenPin } from './genPins';
 import { Rng } from '../core/rng';
 import { vec, dist, type Vec2 } from '../core/math';
@@ -20,7 +22,7 @@ export interface DistrictBuild {
   fragment?: LocaleFragment;
 }
 export type DistrictBuilder = (ctx: DistrictBuild) => void;
-const BUILDERS: Record<string, DistrictBuilder> = {};
+const BUILDERS: Record<string, DistrictBuilder> = { ...ADVENTURE_DISTRICTS, ...EXPLORATION_DISTRICTS };
 export function registerDistrictBuilder(id: string, builder: DistrictBuilder): void { BUILDERS[id] = builder; }
 export const hasDistrictBuilder = (id: string): boolean => !!BUILDERS[id];
 
@@ -120,7 +122,9 @@ function pointDistance(p: Vec2, a: Vec2, b: Vec2): number {
   const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
   return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t);
 }
-function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): void {
+/** Shared complete locale build used by nativeRegional source capture. */
+export type LocaleBuildContext = Pick<GenCtx, 'arena' | 'walk' | 'gridEnsured' | 'entry' | 'exits' | 'pois' | 'bossSeat' | 'doodads' | 'caveSeeds' | 'lite' | 'localeReport'>;
+export function generateLocale(ctx: LocaleBuildContext, plan: LocalePlan, riverSides?: string[]): void {
   const grid = new GridWalkField(ctx.arena.w, ctx.arena.h, 30);
   ctx.walk = grid; ctx.gridEnsured = true;
   if (plan.terrain) grid.fillRegion(0, 0, ctx.arena.w, ctx.arena.h, plan.terrain.background);

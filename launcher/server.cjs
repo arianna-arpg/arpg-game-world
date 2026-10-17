@@ -27,6 +27,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const {createSaveWriteOrder} = require('./saveWriteOrder.cjs');
 
 /** Content types for everything a vite build can emit (fallback: octet-stream). */
 const MIME = /** @type {Record<string, string>} */ ({
@@ -65,6 +66,7 @@ const MAX_SAVE_BYTES = 128 * 1024 * 1024;
 function startGameServer(opts) {
   const root = path.resolve(opts.root);
   const savesDir = path.resolve(opts.savesDir);
+  const saveWriteOrder = createSaveWriteOrder();
   fs.mkdirSync(savesDir, { recursive: true });
   /** @param {string} slot */
   const slotPath = (slot) => path.join(savesDir, `save_${slot}.json`);
@@ -84,6 +86,9 @@ function startGameServer(opts) {
         return;
       }
       if (req.method === 'POST') {
+        let selected;
+        try { selected = saveWriteOrder.select(m[1], url); }
+        catch { res.statusCode = 400; res.end('{"ok":false}'); return; }
         let body = '';
         let size = 0;
         req.on('data', (c) => {
@@ -93,7 +98,7 @@ function startGameServer(opts) {
         });
         req.on('end', () => {
           if (res.writableEnded) return;
-          try { JSON.parse(body); fs.writeFileSync(file, body); res.statusCode = 200; res.end('{"ok":true}'); }
+          try { JSON.parse(body); const written = saveWriteOrder.commit(selected, () => fs.writeFileSync(file, body)); res.statusCode = 200; res.end(JSON.stringify({ok:true, written})); }
           catch { res.statusCode = 400; res.end('{"ok":false}'); }
         });
         return;

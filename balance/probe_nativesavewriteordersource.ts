@@ -1,0 +1,10 @@
+import {beforeNativeClientContinuity as projectClientContinuity} from './nativeClientContinuityCompositionFixture';
+import assert from 'node:assert/strict';
+import {nativeShardsCaravanFS as fs} from './nativeShardsCompositionFixture';
+import {createHash} from 'node:crypto';
+import {nativeSaveWriteOrderArchive as archive} from './nativeSaveWriteOrderArchive';
+import {beforeNativeSaveWriteOrder} from './nativeSaveWriteOrderFixture';
+const hash=(s:string)=>createHash('sha256').update(s).digest('hex'),read=(f:string)=>projectClientContinuity('save',f,fs.readFileSync(new URL('../'+f,import.meta.url),'utf8')).replaceAll('\r\n','\n');
+let mutations=0,duplicates=0;for(const row of archive.files){const source=read(row.file);assert.equal(hash(source),row.afterSha256);const before=beforeNativeSaveWriteOrder(row.file,source);assert.equal(hash(before),row.beforeSha256);assert.equal(beforeNativeSaveWriteOrder(row.file,source.replaceAll('\n','\r\n')),before);assert.equal(beforeNativeSaveWriteOrder(row.file,source+'\n// outside source\n'),before+'\n// outside source\n');for(const h of row.hunks){assert.equal(source.split(h.after).length,2);const mutated=source.replace(h.after,'/*mutant*/'+h.after.slice(2));assert.notEqual(mutated,source);assert.throws(()=>beforeNativeSaveWriteOrder(row.file,mutated),/exact save-order hunk refused/);mutations++;assert.throws(()=>beforeNativeSaveWriteOrder(row.file,source+h.after),/exact save-order hunk refused/);duplicates++;}}
+assert.equal(hash(read(archive.newFile.file)),archive.newFile.sha256);for(const row of archive.unchanged)assert.equal(hash(read(row.file)),row.sha256,row.file+' unchanged caller authority and payload');
+const result={files:archive.files.length,mutations,duplicates,newHelper:1,unchangedAuthorityAndPayload:archive.unchanged.length,wholeSource:true,CRLF:true,outsidePreserved:true};fs.mkdirSync(new URL('./reports/',import.meta.url),{recursive:true});fs.writeFileSync(new URL('./reports/native-save-write-order-source.json',import.meta.url),JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));

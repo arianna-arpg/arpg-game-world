@@ -34,6 +34,7 @@ import { FEATURE } from '../meta/account';
 import { LEDGER_MERC_OUTPOST_FOUND } from '../meta/mercs';
 import { VENDORS } from './vendors';
 import { CONTAINER_DEFS } from './containers';
+import { PARTY_INBOX, clientGrouped } from '../net/partyReads';
 
 registerMenuGroup({ id: 'hero', label: 'Character', order: 0 });
 registerMenuGroup({ id: 'town', label: 'Stations', order: 1 });
@@ -87,6 +88,13 @@ registerMenuEntry({
   id: 'map', label: 'World Map', icon: 'map', group: 'hero', verb: 'map', bind: 'panelMap', order: 3,
   blurb: 'The charted world — roads, waypoints, the ground still veiled.',
   ...sealed('map'),
+});
+registerMenuEntry({
+  // THE PARTY (docs/design/shard-world.md card 23): the hosted world's social unit — sealed off a shard.
+  id: 'party', label: 'Party', icon: 'swords', group: 'hero', verb: 'party', order: 3.6,
+  blurb: 'Group with the players around you: one unit, with co-op\'s own downs and revives.',
+  usable: r => r.world.partyRows !== null,
+  sealedHint: () => 'Only on a hosted world.',
 });
 registerMenuEntry({
   id: 'journal', label: 'Journal', icon: 'journal', group: 'hero', verb: 'journal', order: 4,
@@ -211,6 +219,25 @@ export function bankedTreePoints(r: MenuReads): number {
   return n;
 }
 registerMenuAttention({ id: 'tree_points', entry: 'inventory', kind: 'pip', read: bankedTreePoints });
+
+/** A nearby optional contract advertises the journal without accepting work. */
+registerMenuAttention({
+  id: 'quest_offers', entry: 'journal', kind: 'pip',
+  read: r => r.seat === r.world.localSeat ? r.world.questOfferChoices().length : 0,
+});
+
+/** THE INVITE TELL (THE PARTY THAT READS, net/partyReads.ts): an invitation standing on this
+ *  client wears a pip on the Party page (and the button's roll-up) until it is answered or
+ *  lapses; off a hosted world the inbox is empty and the pip quiet. */
+registerMenuAttention({
+  id: 'party_invites', entry: 'party', kind: 'pip',
+  read: r => r.seat === r.world.localSeat && r.world.partyRows !== null ? PARTY_INBOX.standing(r.world.time, clientGrouped(r.world)).length : 0,
+});
+
+registerMenuAttention({
+  id: 'memory_recall_lesson', entry: 'inventory', kind: 'lesson',
+  read: r => r.world.memoryRecallLesson(r.seat),
+});
 
 /** Mireille's flask lesson: her gift waits unseated in the pack. The engine
  *  read is latched and lived-aware (World.mireilleGiftLesson), so the glow

@@ -69,7 +69,7 @@ registerBountyKind({
     if (!path) return 'route unavailable';
     // Check each prescribed edge, not merely an alternate route to the end.
     for (let i = 1; i < path.length; i++) {
-      if (!bountyRoutes(world, path[i - 1], { maxLevel: world.player.level + BOUNTY_BOARD_CFG.routes.demanding.above,
+      if (!bountyRoutes(world, path[i - 1], { maxLevel: world.questHandLevel() + BOUNTY_BOARD_CFG.routes.demanding.above, // THE BOARD PER CHARACTER: the taker's own reach
         maxSteps: 1, maxDistance: Infinity }).has(path[i])) {
         return 'a required crossing is blocked';
       }

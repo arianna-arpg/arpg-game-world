@@ -1004,8 +1004,14 @@ export interface ZoneTiers {
 }
 
 export interface ZoneDef {
+  /** Saved plan variants retain each native building's services and identity. */
+  structurePlans?: import('../engine/structurePlans').StructurePlanOverrides;
   /** Explicitly seal player-created town travel for authored encounters. */
   townPortals?: boolean;
+  /** TENANCY (card 25, RULED 2026-10-10): the pocket's word, stamped at its
+   *  mint from SidezoneDef.tenancy / ArenaSpec.tenancy; a hosted world keys a
+   *  'party' pocket's unit per party (server/simUnits.ts). Absent = shared. */
+  tenancy?: 'shared' | 'party';
   id: string;
   name: string;
   /** Monster level for everything spawned here (waves may ramp beyond it). */
@@ -1050,6 +1056,9 @@ export interface ZoneDef {
    *  cellar's roaches — texture the zone asked for by name), so the validator
    *  requires safe-zone rows to be 'critter'-tagged. Absent = the biome list. */
   fauna?: WildlifeRow[];
+  /** Resolved ambient source retained by native pocket saves. This is NOT
+   * authored fauna: sanctuary, special/cohort and density gates still apply. */
+  faunaProvenance?: WildlifeRow[];
   /** THE COHORT LAW — 'authored': this zone's entity MEMBERSHIP is closed.
    *  Its authored packs (+ authored fauna, if any) are the whole cohort:
    *  the ambient injection lanes skip it — no faction-contest rosters, no

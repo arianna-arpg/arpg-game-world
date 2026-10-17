@@ -31,10 +31,11 @@ import {
 } from '../engine/authoredMaps';
 import { WORKSHOP_PREFIX } from './workshop';
 import { diskGet, diskPut } from './persistence';
+import { storageKey } from '../buildProfile';
 
 export const ATLAS_PREFIX = WORKSHOP_PREFIX;
 export const ATLAS_SLOT = 'atlas';
-const KEY = 'arpg_atlas_v1';
+const KEY = storageKey('arpg_atlas_v1');
 const SCHEMA_VERSION = 1;
 
 export interface AtlasSave {

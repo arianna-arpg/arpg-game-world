@@ -57,24 +57,35 @@ host.drops.push({ pos: { x: 320, y: 80 }, bob: 0, item: { kind: 'vestige', id: v
 
 // Run the actual drop painter with a recording Canvas surface. This catches
 // missing shell fields at the consumption point, rather than testing a copy.
-function paint(w: World, drops = w.drops): { text: string[]; shapes: unknown[][] } {
-  const text: string[] = [], shapes: unknown[][] = [];
+function paint(w: World, drops = w.drops): { text: string[]; labels: unknown[][]; shapes: unknown[][] } {
+  const text: string[] = [], labels: unknown[][] = [], shapes: unknown[][] = [];
   const ctx = new Proxy({
-    fillText: (s: string) => text.push(s),
+    fillText: (s: string, x: number, y: number) => { text.push(s); labels.push([s, x, y]); },
     measureText: (s: string) => ({ width: s.length * 7 }),
   }, { get: (o, key) => key in o ? o[key as keyof typeof o]
     : (...args: unknown[]) => shapes.push([String(key), ...args]) });
-  const renderer = Object.create(Renderer.prototype) as { ctx: unknown; drawDrops(w: World): void };
-  renderer.ctx = ctx;
-  renderer.drawDrops({ drops } as World);
-  return { text, shapes };
+  // Classic labels are painted beside their native symbols before the veils.
+  const renderer = Object.assign(Object.create(Renderer.prototype), {ctx}) as {drawDrops(w:World):void};
+  const frame=Object.assign(Object.create(w),{drops}) as World;
+  renderer.drawDrops(frame);
+  return { text, labels, shapes };
 }
 const hostPaint = paint(host);
 const gear = host.drops.filter(d => d.item.kind === 'gear').map(d => paint(host, [d]));
 const paths = gear.map(p => JSON.stringify(p.shapes.filter(s => ['moveTo','lineTo','arc'].includes(String(s[0])))));
 check('equipment categories have distinct low-detail silhouettes', new Set(paths).size === gear.length && paths.every(p => p !== '[]'));
-check('equipment symbols have no tile frames (only the existing name label)', gear.every(p =>
+check('equipment symbols have no tile frames (only the classic name label)', gear.every(p =>
   !p.shapes.some(s => s[0] === 'strokeRect') && p.shapes.filter(s => s[0] === 'fillRect').length === 1));
+const gearDrops=host.drops.filter(d=>d.item.kind==='gear');
+check('the native drop painter draws every equipment name exactly once', gearDrops.every(d=>{
+  const p=paint(host,[d]);return d.item.kind==='gear'&&p.text.length===1&&p.text[0]===d.item.item.name;
+}));
+check('classic equipment labels follow the original drop position and bob', gearDrops.every(d=>{
+  const shifted={...d,pos:{x:d.pos.x+37,y:d.pos.y-19},bob:Math.PI/2}, p=paint(host,[shifted]);
+  const D=VIS_CFG.drops, y=shifted.pos.y+D.bobAmp;
+  return p.labels[0][1]===shifted.pos.x && p.labels[0][2]===y-D.labelLift+D.labelPillH-4
+    && p.shapes.some(s=>s[0]==='fillRect' && s[2]===y-D.labelLift && s[4]===D.labelPillH);
+}));
 check('every equipment category has a ground symbol', Object.values(ITEM_BASES).every(b => !!GROUND_ITEM_SYMBOLS[b.category]));
 const gems = host.drops.filter(d => d.item.kind === 'skill' || d.item.kind === 'support').map(d => paint(host,[d]));
 check('skill/support gems use diamonds without initials or inventory badges', gems.every(p =>

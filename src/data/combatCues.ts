@@ -7,6 +7,7 @@ export interface CombatCueStyle {
   life: number; color: string; pieces: number; travel: number; width: number;
 }
 export const COMBAT_CUE_STYLES: Record<string, CombatCueStyle> = {
+  rear_hit: { shape:'sever', life:.36, color:'#e5d1ff', pieces:2, travel:.75, width:3 },
   companion_bind: { shape: 'snap', life: .6, color: '#afd7aa', pieces: 3, travel: .7, width: 2.2 },
   companion_reject: { shape: 'fracture', life: .5, color: '#d29679', pieces: 3, travel: 1.1, width: 2 },
   companion_sever: { shape: 'fracture', life: .6, color: '#d5ab87', pieces: 3, travel: 1.2, width: 2 },

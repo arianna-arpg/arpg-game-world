@@ -1,3 +1,5 @@
+import {nativeStatusCreated,nativeStatusSelectCaster,nativeStatusCasterAssigned,beginNativeStatusSelection,endNativeStatusSelection,nativeStatusExpired} from './nativeStatusProvenance';
+import {nativeActorConstructed} from './nativeActorConstruction';
 import { summonReservationUnit } from './companionGrants';
 import { tickAbsorbLayers, type AbsorbLayer } from './absorb';
 import { buffProcCue, noteProcCue, noteProcPop, tickProcCues } from './procCues';
@@ -14,7 +16,7 @@ import type { EncounterOrder } from './encounterCombat';
 // controls them (input vs AI) and which team they fight for.
 // ---------------------------------------------------------------------------
 
-import { chance, vec, type Vec2 } from '../core/math';
+import { chance, clamp, vec, type Vec2 } from '../core/math';
 import {
   FULL_ES_FRAC, FULL_LIFE_FRAC, FULL_MANA_FRAC,
   LOW_ES_FRAC, LOW_MANA_FRAC, StatSheet, attributeModifiers, CONDITION_IDS,
@@ -82,6 +84,14 @@ export interface CastingState {
   castingCue?: import('./castingCues').CastingCue;
   /** Resolved host-only presentation read on a co-op render shell. */
   parryCue?: number;
+  /** Host-resolved radians on render-only shells; live guards derive their arc. */
+  resolvedGuardArc?: number;
+  /** Host-resolved local weapon footprint; null means deliberately absent. */
+  resolvedMeleeReach?: import('./meleeReach').MeleeReachCue | null;
+  /** THE FORESIGHT ON THE WIRE: a render shell's stub carries the host's own wind-up
+   *  geometry (engine/foresight.ts; null = the host draws none) and never resolves one.
+   *  Absent on every cast the World runs. */
+  foresight?: import('./foresight').ForesightGeo | null;
   inst: SkillInstance;
   mode: CastMode;
   aim: Vec2;               // updated each frame when the mode tracks aim
@@ -442,7 +452,7 @@ export interface AmbushSpec {
 // lives in brain.ts — re-exported here so the bestiary and the world keep
 // their historical import path.
 export type { BrainDef, BrainType, BrainPhase, BrainImpulse, PostSpec, FlockSpec } from './brain';
-import type { BrainDef, BrainType, BrainTuning, CommandState, FlockSpec, PostSpec } from './brain';
+import type { BrainDef, BrainType, BrainTuning, CommandState, FlockSpec, PostSpec, TargetSpec } from './brain';
 import type { EmergeSpec } from './emerge'; // THE EMERGENCE GRAMMAR — AmbushSpec.emerge
 
 /** A worm/snake body: trailing segments that follow the head. The base
@@ -894,6 +904,9 @@ export class Actor {
   /** Spawn anchor for arena-relative choreography (stamped on the first AI
    *  tick, so it reflects the PLACED position, not the factory's 0,0). */
   aiAnchor?: Vec2;
+  /** Encounter-owned fallback territory. Authored leashes take precedence;
+   * relentless phases ignore this fallback. It never teleports or resets vitals. */
+  aiTerritory?: NonNullable<TargetSpec['leash']> & { source: string };
   /** Minted skill instances for scripted casts (aiActions), by skill id. */
   aiActionInsts?: Map<string, SkillInstance>;
   /** Skill ids SILENCED on this body. onPartBroken's breakDisables writes
@@ -1410,6 +1423,8 @@ export class Actor {
   /** CO-OP MIRROR ONLY (net/snapshot.ts): host-computed comboHud rows for
    *  body completion and bar chips; [] explicitly clears pooled mirrors. */
   comboHud?: { id: string; lit: number; len: number; glow: number }[];
+  /** Host-resolved native combo conditions; client histories are absent. */
+  comboConditionHud?: import('./comboConditions').ComboConditionRow[];
   /** THE MIMIC BANK (engine/mimic.ts): captured enemy arts — the skill,
    *  the kind that taught it, the capture clock. Ramp state exactly like
    *  the castRing: null until the first capture, cold on a fresh session,
@@ -1476,6 +1491,13 @@ export class Actor {
   slamIcdUntil = 0;
   /** Set while a cast bar is running / a channel is held. */
   casting: CastingState | null = null;
+  /** Completed-use presentation stamp; transient, never a gameplay clock. */
+  bodyAction?: import('./bodyAction').BodyActionStamp;
+  /** Resolved co-op pose; null explicitly clears a pooled render shell. */
+  bodyActionPose?: import('./bodyAction').BodyActionPose | null;
+  /** Post-collision voluntary walking; cosmetic and deliberately unsaved. */
+  bodyWalk?: import('./bodyWalk').BodyWalkStamp;
+  bodyWalkPose?: import('./bodyWalk').BodyWalkPose | null;
 
   /** Role axis (player / minion / mercenary / monster). undefined ⇒ 'monster'.
    *  Orthogonal to `team`; see UnitKind. Set only at spawn, never per-frame. */
@@ -2025,6 +2047,8 @@ export class Actor {
     this.pos = vec(pos.x, pos.y);
     this.life = 1;
     this.mana = 1;
+  
+    nativeActorConstructed(this);
   }
 
   maxLife(): number { return this.sheet.get('life'); }
@@ -2035,6 +2059,15 @@ export class Actor {
     const sc = this.stanceRead();
     return this.sheet.get('poise', sc?.tags, sc?.extra);
   }
+  /** THE HONEST INPUT's walk fold (docs/engine/shard.md): the moveSpeed stat with
+   *  every status source and a held stance's kit. World.moveActor walks it, and a
+   *  seat's row ships it (SeatW spd) so a predicting client walks the same pace. */
+  walkSpeed(): number {
+    const sc = this.stanceRead();
+    return this.sheet.get('moveSpeed', sc?.tags, sc?.extra);
+  }
+  /** Traction underfoot as World.moveActor reads it (the slippery family lowers it). */
+  walkTraction(): number { return clamp(this.sheet.get('traction'), 0.05, 1); }
   maxInsight(): number { return this.sheet.get('insight'); }
   maxEndurance(): number { return this.sheet.get('endurance'); }
 
@@ -2773,6 +2806,7 @@ export class Actor {
     const baseDur = banking && def.bank!.duration !== undefined ? def.bank!.duration : def.duration;
     const duration = baseDur * durationScale / expiry;
     const existing = this.statuses.find(s => s.id === id && s.challengeField === opts?.challengeField && s.sourceKey === opts?.sourceKey);
+    const previousRemaining = existing?.remaining;
     // ARMED (rupture-bearing) statuses run a FIXED FUSE: re-application never
     // postpones the blast — the timer set when the keg was armed runs down no
     // matter how often the victim is re-struck. Fresh rupture payloads PUMP
@@ -2834,7 +2868,8 @@ export class Actor {
       if (!fixedFuse) existing.remaining = Math.max(existing.remaining, duration);
       existing.dps = Math.max(existing.dps, dps);
     } else {
-      this.statuses.push({
+      const nativeStatusArray=this.statuses, nativeStatusPush=nativeStatusArray.push;
+      const nativeStatusRow:ActiveStatus={
         id, remaining: duration, stacks: 1, dps, sourceName, challengeField: opts?.challengeField,
         sourceKey: opts?.sourceKey, holdDischarge: opts?.holdDischarge,
         power: power !== 1 ? power : undefined,
@@ -2845,7 +2880,7 @@ export class Actor {
         casterId: opts?.casterId,
         brood: opts?.brood,
         leech: opts?.leech,
-        total: duration,
+        total: duration, statusDuration: duration,
         // THE BANK's first deposit: this blow is the peak, the read 1/capMul.
         bankPeak: banking ? dps : undefined,
         bankFrac: banking && def.bank ? bankFracOf({ dps, bankPeak: dps }, def) : undefined,
@@ -2855,7 +2890,9 @@ export class Actor {
           const hi = Math.max(0.02, frac - def.weakSpot.gap);
           return { hi, lo: Math.max(0, hi - def.weakSpot.size) };
         })() : undefined,
-      });
+      };
+      Reflect.apply(nativeStatusPush,nativeStatusArray,[nativeStatusRow]);
+      nativeStatusCreated(this,nativeStatusRow);
       if (def.mods) {
         this.sheet.setSource('status:' + id, power !== 1
           ? def.mods.map(m => ({ ...m, value: m.value * power }))
@@ -2863,6 +2900,7 @@ export class Actor {
       }
       return;
     }
+    if (existing && existing.remaining !== previousRemaining) existing.statusDuration = existing.remaining;
     if (existing && opts) {
       existing.propagates = existing.propagates || opts.propagates || def.propagateOnDeath;
       // Rupture payloads ADD (pumping the keg on its fixed fuse) rather than
@@ -2874,9 +2912,8 @@ export class Actor {
       // FIRST APPLIER holds the credit by default (DoT attribution never
       // migrates mid-burn) — but refreshCaster statuses hand it to the
       // NEWEST applier: a taunt answered by a louder taunt must turn.
-      existing.casterId = def.refreshCaster && opts.casterId !== undefined
-        ? opts.casterId
-        : existing.casterId ?? opts.casterId;
+      existing.casterId = def.refreshCaster && opts.casterId !== undefined ? nativeStatusSelectCaster(this,existing,opts.casterId) : existing.casterId ?? nativeStatusSelectCaster(this,existing,opts.casterId);
+      nativeStatusCasterAssigned(this,existing);
       existing.brood = existing.brood ?? opts.brood;
       if (opts.leech) existing.leech = Math.max(existing.leech ?? 0, opts.leech);
     }
@@ -3103,13 +3140,17 @@ export class Actor {
   tickChronoStatuses(rawDt: number): void {
     for (let i = this.statuses.length - 1; i >= 0; i--) {
       const s = this.statuses[i];
+      const nativeStatusScope=beginNativeStatusSelection(this,s);
+      try {
       if (STATUS_DEFS[s.id]?.timeScale === undefined) continue;
       s.remaining -= rawDt;
       if (s.remaining <= 0) {
         this.statuses.splice(i, 1);
-        this.expiredStatuses.push(s); // world processes ruptures
+        this.expiredStatuses.push(s); nativeStatusExpired(this,s); // world processes ruptures
         if (!this.statuses.some(o => o.id === s.id)) this.sheet.removeSource('status:' + s.id);
       }
+    
+      } finally {endNativeStatusSelection(nativeStatusScope);}
     }
   }
 
@@ -3260,6 +3301,8 @@ export class Actor {
     let dot: Partial<Record<DamageType | 'untyped', number>> | null = null;
     for (let i = this.statuses.length - 1; i >= 0; i--) {
       const s = this.statuses[i];
+      const nativeStatusScope=beginNativeStatusSelection(this,s);
+      try {
       // Chrono statuses expire on the unbent clock (see chronoDt above).
       s.remaining -= STATUS_DEFS[s.id]?.timeScale !== undefined ? chronoDt : dt;
       if (s.dps > 0) {
@@ -3298,9 +3341,11 @@ export class Actor {
       }
       if (s.remaining <= 0) {
         this.statuses.splice(i, 1);
-        this.expiredStatuses.push(s); // world processes ruptures
+        this.expiredStatuses.push(s); nativeStatusExpired(this,s); // world processes ruptures
         if (!this.statuses.some(o => o.id === s.id)) this.sheet.removeSource('status:' + s.id);
       }
+    
+      } finally {endNativeStatusSelection(nativeStatusScope);}
     }
 
     // FLIGHT AS A STATE (StatusDef.flight): the flying flag — noclip

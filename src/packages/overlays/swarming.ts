@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from '../../world/bulletins';
 // ---------------------------------------------------------------------------
 // SWARMING FIELD — the Chitin's HIVE-CYCLE world event (pure overlay).
 //
@@ -924,5 +925,5 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
 
 // --- bulletins (registered on import) ------------------------------------------
 // Tagged at the drain: every hive-cycle line rides the WORLD EVENTS channel.
-registerBulletinSource((world: World): WorldBulletin[] =>
+registerBulletinSource((world: NativeBulletinHost): WorldBulletin[] =>
   (world.sim.swarmingField?.drainBulletins() ?? []).map(b => ({ ...b, channel: 'events' })));

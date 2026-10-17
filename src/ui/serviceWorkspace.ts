@@ -11,6 +11,8 @@ export const SERVICE_WORKSPACE_CFG = {
 };
 type WorkspaceTab = 'services' | 'inventory';
 interface WorkspaceHost {
+  conversationWorkspace?: () => boolean;
+  conversationCompanion?: () => boolean;
   inventory: HTMLElement;
   inventoryOpen(): boolean;
   inventoryOwned(): boolean;
@@ -30,6 +32,7 @@ export class ServiceWorkspace {
   private selected: WorkspaceTab = 'services';
   compact = false;
   contentBottom: number | undefined;
+  conversationTopFloor = 0;
 
   constructor(private host: WorkspaceHost) {
     const style = document.createElement('style');
@@ -112,21 +115,26 @@ export class ServiceWorkspace {
     const services = offered.some(el => this.host.front(el) || this.managed.has(el)) ? offered : [];
     const ownsBag = this.host.inventoryOwned();
     const companions = ownsBag ? [bag, ...this.host.pages()] : [];
-    const active = new Set([...services, ...(services.length ? companions : [])]);
+    const conversationCompanion = !!this.host.conversationCompanion?.() && this.host.inventoryOpen();
+    const active = new Set([...services, ...(services.length || conversationCompanion ? companions : [])]);
     for (const el of this.managed) if (!active.has(el)) this.release(el);
     this.managed = active;
-    if (!services.length) {
-      this.tabs.hidden = true; this.compact = false; this.contentBottom = undefined;
+    if (!services.length && !conversationCompanion) {
+      this.tabs.hidden = true; this.compact = false; this.contentBottom = undefined; this.conversationTopFloor = 0;
       this.selected = 'services'; return;
     }
     const scale = uiScaleNow(), c = SERVICE_WORKSPACE_CFG, metrics = this.inventoryMetrics(), inv = metrics.rect;
-    const reader = dialogueBounds(this.host.hudTop());
+    // The bag header and one usable scroll row must fit above an expanded action.
+    this.conversationTopFloor = Math.max(
+      this.host.inventoryOpen() && ownsBag ? inv.top + (metrics.inset + c.minInventoryHeight) * scale + c.gap : 0,
+      ...services.map(el => (panelSeatOf(el)?.top ?? DIALOGUE_CFG.workspaceTop * scale) + c.minHeight * scale + c.gap));
+    const reader = dialogueBounds(this.host.hudTop(), this.host.conversationWorkspace?.(), this.conversationTopFloor);
     this.contentBottom = reader.top - c.gap;
     const edge = c.edge * scale;
     const beside = inv.left - BUILD_PANEL_CFG.railWidth * scale - c.gap - edge;
     // A user-positioned bag keeps its home too; narrow layouts change only
     // which surface is drawn, never its coordinates or saved settings.
-    this.compact = beside < c.minWidth * scale;
+    this.compact = services.length > 0 && beside < c.minWidth * scale;
     if (!this.host.inventoryOpen()) this.selected = 'services';
     const width = this.compact ? Math.min(c.width * scale, window.innerWidth - edge * 2)
       : Math.min(c.width * scale, beside);

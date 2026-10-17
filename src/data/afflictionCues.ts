@@ -32,6 +32,13 @@ export interface AfflictionMotif {
  * selects a family/color/intensity; unknown profiles use the neutral fallback. */
 export const AFFLICTION_MOTIFS: Record<string, AfflictionMotif> = {
   impale: IMPALE_EDGE_MOTIF,
+  // statusPresentation's non-damaging fallback: a restrained authored-color edge.
+  soft: { gesture:'vignette',alphaFloor:.12,alphaCeil:.25,
+    reachQuiet:.48,reachUrgent:.42,count:0,period:12,order:0 },
+  mire: { gesture: 'vignette', alphaFloor: 0.16, alphaCeil: 0.24,
+    reachQuiet: 0.48, reachUrgent: 0.40, count: 0, period: 14, order: 0 },
+  befuddlement: { gesture: 'clasp', alphaFloor: 0.24, alphaCeil: 0.40,
+    reachQuiet: 0.06, reachUrgent: 0.08, count: 3, period: 8, order: 1 },
   wound: { gesture: 'drip', alphaFloor: 0.13, alphaCeil: 0.65,
     reachQuiet: 0.025, reachUrgent: 0.065, count: 6, period: 7.5, order: 2 },
   fire: { gesture: 'ember', alphaFloor: 0.16, alphaCeil: 0.70,

@@ -10,8 +10,9 @@
 // ---------------------------------------------------------------------------
 
 import { SAVE_COMPATIBILITY, noteSaveReset } from './saveCompatibility';
+import { BUILD_PROFILE, storageKey } from '../buildProfile';
 import {
-  deserializeAccount, makeAccount, serializeAccount,
+  deserializeAccount, ensureAccountId, isAccountId, makeAccount, serializeAccount,
   type Account, type AccountSave,
 } from './account';
 import {
@@ -19,8 +20,8 @@ import {
   type Settings, type SettingsSave,
 } from './settings';
 
-const KEY = 'arpg_account_v1';
-const SETTINGS_KEY = 'arpg_settings_v1';
+const KEY = storageKey('arpg_account_v1');
+const SETTINGS_KEY = storageKey('arpg_settings_v1');
 
 // --- THE SAVE STAND-DOWN (the crash trap's fatal latch) ----------------------
 // One page-lifetime latch: after main.ts's crash trap reports a FATAL error,
@@ -70,6 +71,7 @@ export type SaveSlot = number | string;
 
 /** Read a save slot from disk; null on 404 / network error / no endpoint. */
 export async function diskGet<T>(slot: SaveSlot): Promise<T | null> {
+  if (BUILD_PROFILE.storageScope) return null; // preview builds use their browser namespace only
   try {
     const res = await fetch(`/__save/${slot}`, { method: 'GET' });
     if (!res.ok) return null;
@@ -82,6 +84,24 @@ export function diskPut(slot: SaveSlot, body: string): void {
   void diskPutRaw(slot, body);
 }
 
+// One page identity and one sequence per slot cover both fetch and beacon.
+// They do not claim authority over another page/session or change save bytes.
+let diskWriter: string | undefined;
+const diskSequences = new Map<string, number>();
+function orderedSaveUrl(slot: SaveSlot): string {
+  if (!diskWriter) diskWriter = Array.from(crypto.getRandomValues(new Uint32Array(4)), n => n.toString(16).padStart(8, '0')).join('');
+  const key = String(slot), sequence = (diskSequences.get(key) ?? 0) + 1;
+  if (!Number.isSafeInteger(sequence)) throw Error('Save write sequence exhausted');
+  diskSequences.set(key, sequence);
+  return `/__save/${slot}?writer=${diskWriter}&sequence=${sequence}`;
+}
+function postDiskSave(url: string, body: string): Promise<void> {
+  try {
+    return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
+      .then(() => undefined)
+      .catch(() => { /* endpoint absent — localStorage is the fallback */ });
+  } catch { return Promise.resolve(); }
+}
 /** AWAITED, latch-FREE disk write — the save-import lane's primitive
  *  (meta/portage.ts): import stands the ordinary writers down FIRST
  *  (suppressSaves, so a mid-import autosave can't clobber the incoming
@@ -90,31 +110,42 @@ export function diskPut(slot: SaveSlot, body: string): void {
  *  resurrect the pre-import state from a POST the reload dropped. Nothing
  *  else should route here: the stand-down latch exists for a reason. */
 export function diskPutRaw(slot: SaveSlot, body: string): Promise<void> {
-  return fetch(`/__save/${slot}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
-    .then(() => undefined)
-    .catch(() => { /* endpoint absent — localStorage is the fallback */ });
+  if (BUILD_PROFILE.storageScope) return Promise.resolve();
+  try { return postDiskSave(orderedSaveUrl(slot), body); }
+  catch { return Promise.resolve(); } // keep the established no-throw disk boundary
 }
 
-/** DURABLE disk write for writes that must survive the tab closing immediately
- *  (the PERMADEATH wipe — a fire-and-forget fetch can be dropped mid-flight when
- *  the player closes the game on the death screen, and the disk-first loader
- *  would then resurrect the dead character). sendBeacon is queued by the browser
- *  and flushed even on unload; we fall back to the plain POST when it's absent. */
+/** DURABLE disk write: its sequence is selected before sendBeacon, so a late
+ * older fetch cannot overwrite a newer unload write. A rejected beacon falls
+ * back to fetch with the same sequence and body. */
 export function diskBeacon(slot: SaveSlot, body: string): void {
-  if (saveRefused(`disk slot ${slot}`)) return; // stand-down: the durable lane refuses too
+  if (BUILD_PROFILE.storageScope) return;
+  if (saveRefused(`disk slot ${slot}`)) return;
+  let url: string;
+  try { url = orderedSaveUrl(slot); } catch { return; }
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-      // A string body is sent as text/plain; the middleware JSON.parses it
-      // regardless of content-type, so '{}' lands correctly.
-      if (navigator.sendBeacon(`/__save/${slot}`, body)) return;
+      if (navigator.sendBeacon(url, body)) return;
     }
-  } catch { /* fall through to the fetch path */ }
-  diskPut(slot, body);
+  } catch { /* fall through with the exact selected write */ }
+  void postDiskSave(url, body);
 }
 
 // --- ACCOUNT ----------------------------------------------------------------
 
+/** THE IDENTITY (accountId): the id the synchronous boot load minted IN
+ *  MEMORY (its cache held none). It writes nothing (the disk-first load must
+ *  still judge the cached save for reset notices); that load adopts this id,
+ *  so one profile keeps one id, and persists it. */
+let bootAccountId: string | null = null;
+
 export function loadAccount(): Account {
+  const acc = cachedAccount();
+  if (ensureAccountId(acc)) bootAccountId = acc.accountId;
+  return acc;
+}
+
+function cachedAccount(): Account {
   let raw: string | null = null;
   try { raw = window.localStorage.getItem(KEY); } catch { return makeAccount(); }
   if (!raw) return makeAccount();
@@ -140,6 +171,14 @@ export async function loadAccountAsync(): Promise<Account> {
   if (accountReset) noteSaveReset('account');
   else if (runReset && (data?.roster?.length ?? 0) > 0) noteSaveReset('run');
   const fresh = acc ?? makeAccount();
+  // THE IDENTITY (accountId): a profile's first load mints it, keeping the id
+  // its cache or the synchronous boot load already holds. The cache carries
+  // it from this line on (every later boot adopts it); the disk takes it with
+  // the account's next ordinary write, since a compatible boot never writes
+  // the disk (a shard connection saves the account before any record keys by it).
+  let cachedId: unknown;
+  try { cachedId = (JSON.parse(window.localStorage.getItem(KEY) ?? 'null') as AccountSave | null)?.accountId; } catch { /* none */ }
+  ensureAccountId(fresh, isAccountId(cachedId) ? cachedId : bootAccountId);
   const body = JSON.stringify(serializeAccount(fresh));
   try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
   if (disk !== null && (accountReset || runReset)) diskPut(ACCOUNT_SLOT, body);

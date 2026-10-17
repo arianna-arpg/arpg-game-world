@@ -15,7 +15,7 @@
 // Run: npx tsx balance/probe_tollspill.ts
 // ---------------------------------------------------------------------------
 
-import { readFileSync } from 'node:fs';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { doodadRuleKinds, doodadRuleOf, normalizeDoodadBound, registerDoodadRule, type Doodad, type DoodadKind } from '../src/engine/levelgen';

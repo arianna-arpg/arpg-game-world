@@ -1,10 +1,10 @@
 # Stealth, cover and enemy knowledge
 
-Personal concealment and terrain cover are separate systems. A tree crown is overhead art and shade; its trunk blocks sight and projectiles. Bushes, reeds, berry bushes and tall crops obscure sight through their foliage, without applying a stealth buff to their occupants.
+Personal concealment and terrain cover are separate systems. A tree crown is overhead art and shade; its trunk blocks sight and projectiles. Bushes, reeds and berry bushes grant their original standing Concealed status: 50% detectability, a translucent body and a 0.7-second exit linger. Their foliage also obscures sight. Tall crops obscure sight without adding this standing status.
 
 ## Terrain
 
-`DoodadRule.sightCover` is optical density. The shared sight ray measures its exact chord through each foliage disc, sums the depth along the ray, and stops when it reaches `SIGHT_COVER_CFG.depth` (48). Overlapping foliage uses the strongest density, so overlapping decorative copies cannot multiply cover. Bush density is 1; tall crops use 1.2. A shallow leaf margin can remain transparent, nearby bodies can see each other inside a stand, and deep foliage can break sight in either direction. Gaps do not replenish the ray's depth budget. Felling or removing the foliage removes its contribution; foliage is restricted to its own story.
+`DoodadRule.sightCover` is optical density. The shared sight ray measures its exact chord through each foliage disc, sums the depth along the ray, and stops when it reaches `SIGHT_COVER_CFG.depth` (48). Overlapping foliage uses the strongest density, so overlapping decorative copies cannot multiply cover. Bush density is 1; tall crops use 1.2. A shallow leaf margin can remain transparent, nearby bodies can see each other inside a stand, and deep foliage can break sight in either direction. Gaps do not replenish the ray's depth budget. Felling or removing foliage removes its sight contribution and standing cover; foliage is restricted to its own story.
 
 This is the same ray used by AI, line-of-sight queries and watcher fans. It does not stop movement or projectiles. Solid blockers and opaque fog retain their own rules. `PerceptionSpec.xray` explicitly bypasses the sight gate.
 

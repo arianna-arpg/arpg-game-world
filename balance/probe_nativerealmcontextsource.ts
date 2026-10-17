@@ -1,0 +1,16 @@
+import {beforeNativeJourneyRaw as rawJourney} from './nativeJourneyCompositionFixture';
+import assert from 'node:assert/strict';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
+import {createHash} from 'node:crypto';
+import ts from 'typescript';
+import {nativeRealmContextArchive as archive} from './nativeRealmContextArchive';
+import {beforeNativeRealmContext as before} from './nativeRealmContextFixture';
+import {writeCombatProof} from './probe_nativecombatcycle';
+const hash=(s:string)=>createHash('sha256').update(s).digest('hex');let reversals=0,mutations=0,duplicates=0,outside=0;
+for(const row of archive){const raw=rawJourney('realm58',row.file,readFileSync(new URL('../'+row.file,import.meta.url),'utf8')),source=raw.replace(/\r\n?/g,'\n');assert.equal(hash(raw),row.afterHash);assert.equal(hash(row.before),row.beforeHash);assert.equal(hash(row.after),row.afterHash);let line=0;for(const text of [source,source.replace(/\n/g,'\r\n'),source.replace(/\n/g,()=>++line%2?'\r\n':'\n')]){assert.equal(hash(before(row.file,text)),row.beforeNormalizedHash);reversals++;}for(const h of row.hunks){const at=Math.floor(h.after.length/2),changed=h.after.slice(0,at)+(h.after[at]==='X'?'Y':'X')+h.after.slice(at+1);assert.notEqual(changed,h.after);assert.throws(()=>before(row.file,source.replace(h.after,changed)));mutations++;assert.throws(()=>before(row.file,source+'\n'+h.after));duplicates++;}const mark='\n// unknown realm source delta survives\n';assert.equal(before(row.file,source+mark),before(row.file,source)+mark);outside++;}
+const travel=archive.find(r=>r.file==='src/engine/nativeSceneFrameTravel.ts')!;
+const names=['sceneEnterDemonRealm','sceneDemonRealmPlan','sceneEnterCrusadeSanctum','sceneCrusadeRealmPlan','sceneEnterNecropolis','sceneNecropolisRealmPlan','sceneEnterFractureRift','sceneFractureRealmPlan','sceneEnterRealmArena','sceneRealmArenaMint','sceneRealmArenaWake'];
+function functions(text:string){const ast=ts.createSourceFile('native.ts',text,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);return new Map(ast.statements.filter(ts.isFunctionDeclaration).map(n=>[n.name?.text,n.getText(ast)]));}
+const b=functions(travel.before),a=functions(travel.after);for(const name of names){assert(b.has(name),name);assert.equal(a.get(name),b.get(name),'unchanged original plan/entry/wake body');}
+const world=readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8').replace(/\r\n?/g,'\n');const tree=ts.createSourceFile('world.ts',world,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);let nativeBranch:string|undefined;function visit(n:ts.Node){if(ts.isIfStatement(n)&&n.expression.getText(tree)==='this.sim.deadwakeField?.necropolisInfo()?.defeated')nativeBranch=n.getText(tree);ts.forEachChild(n,visit);}visit(tree);assert(nativeBranch);const arrival=archive.find(r=>r.file==='src/engine/nativeSceneRealmArrival.ts')!.after,actual=functions(arrival).get('sceneNecropolisSurfaceArrival');assert(actual);assert(actual.includes(nativeBranch.replace(/\bthis\b/g,'nativeHost')),'exact original cull/notice order');
+const report={files:archive.length,hunks:archive.reduce((n,r)=>n+r.hunks.length,0),reversals,mutations,duplicates,outside,unchangedPlans:names.length,nativeArrivalBranches:1};writeCombatProof('native-realm-context-source.json',report);console.log(JSON.stringify(report));

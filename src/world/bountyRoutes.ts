@@ -6,7 +6,7 @@ import { travelRoutes, type TravelPolicy } from './travelRoutes';
 /** The same live lock sources as portal travel, evaluated without loading a zone.
  * Conservative land routes: no undiscovered sailing, purchases, or dimensional
  * shortcuts are assumed. Safe board interiors may lead out through their real door. */
-export function bountyRoutes(w: World, home: string, policy: TravelPolicy) {
+export function bountyRoutes(w: Pick<World,'zoneMap'|'sim'|'roadIsWet'|'objectiveDoneAt'>, home: string, policy: TravelPolicy) {
   return travelRoutes(w.zoneMap, home, policy, (a, e, b) => {
     if (b.floating || b.concealed || b.pocket || b.caveDepth != null || e.crossDim
       || (a.dimension ?? 'surface') !== (b.dimension ?? 'surface')) return false;

@@ -33,6 +33,8 @@ export interface PathProfile {
 }
 
 export interface WalkField {
+  /** Opt in to the shared cell-ray and sight-veil contract (including worldmass). */
+  cellOcclusion?: true;
   /** Grid cell size if grid-based — the granularity a swept collision check steps
    *  at (so it can't skip over a thin wall). Optional: a non-grid impl may omit it
    *  and the sweeper falls back to a safe default. */
@@ -81,4 +83,18 @@ export interface WalkField {
    *  tick-scoped caches simply omits it. Tick-driven, never wall-clock, so
    *  the deterministic sim harness sees identical behavior. */
   beginFrame?(): void;
+}
+
+/** Cell geometry need not live in a finite, eagerly allocated array. */
+export interface RegionGrid extends WalkField {
+  cellSize: number;
+  version: number;
+  cols?: number;
+  rows?: number;
+  regionAt(x: number, y: number): string;
+}
+export function regionGrid(field: unknown): RegionGrid | null {
+  const grid = field as RegionGrid | null | undefined;
+  return grid?.cellOcclusion && grid.cellSize > 0 && typeof grid.regionAt === 'function'
+    && Number.isFinite(grid.version) ? grid : null;
 }

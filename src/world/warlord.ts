@@ -82,6 +82,8 @@ export class WarlordField implements WorldOverlay {
   readonly mapLabel = 'Warlords';
   readonly lords = new Map<string, WarlordState>();
   private faction: FactionField;
+  readonly #crowns = new WeakMap<WarlordState, object>();
+  #crownKill: { lord: WarlordState; crown: object; applied: boolean } | undefined;
 
   constructor(faction: FactionField) {
     this.faction = faction;
@@ -130,13 +132,19 @@ export class WarlordField implements WorldOverlay {
         : (e?.capital ?? null);
       if (e && e.count >= RISE_ZONES && seat) {
         if (!lord) {
-          this.lords.set(f, { faction: f, capitalId: seat, alive: true, suppressUntil: 0 });
+          const crowned = { faction: f, capitalId: seat, alive: true, suppressUntil: 0 };
+          this.lords.set(f, crowned);
+          this.#crowns.set(crowned, Object.freeze({}));
         } else {
           lord.capitalId = seat;
-          if (!lord.alive && now >= lord.suppressUntil) lord.alive = true; // a new warlord rises
+          if (!lord.alive && now >= lord.suppressUntil) {
+            lord.alive = true; // a new warlord rises, even though its public row is reused
+            this.#crowns.set(lord, Object.freeze({}));
+          }
         }
       } else if (lord && (lord.alive || now >= lord.suppressUntil)) {
         // No realm left to rule (and not mid-mourning) — the line dies out.
+        this.#crowns.delete(lord);
         this.lords.delete(f);
       }
     }
@@ -157,6 +165,20 @@ export class WarlordField implements WorldOverlay {
     return null;
   }
 
+  /** Identity is minted only by actual crowning above, never by a tag or saved row. */
+  crownOf(lord: WarlordState): object | undefined {
+    return lord.alive && this.lords.get(lord.faction) === lord ? this.#crowns.get(lord) : undefined;
+  }
+
+  /** A selected native callback may change the world before invoking its original
+   * method. Only that original method can acknowledge this exact crown break. */
+  withCrownKill(lord: WarlordState, crown: object, run: () => void): boolean {
+    if (!lord.alive || this.lords.get(lord.faction) !== lord || this.#crowns.get(lord) !== crown) return false;
+    const previous = this.#crownKill, receipt = { lord, crown, applied: false };
+    this.#crownKill = receipt;
+    try { run(); return receipt.applied; } finally { this.#crownKill = previous; }
+  }
+
   bossId(faction: string): string | undefined {
     return WARLORD_OF[faction];
   }
@@ -164,8 +186,10 @@ export class WarlordField implements WorldOverlay {
   /** The warlord is slain: its faction falls quiet for a spell and its grip on
    *  the land loosens everywhere at once. */
   onWarlordKilled(faction: string, now: number, view: OverlayView): void {
-    const l = this.lords.get(faction);
-    if (l) { l.alive = false; l.suppressUntil = now + SUPPRESS; }
+    const l = this.lords.get(faction), selected = this.#crownKill;
+    if (selected && (selected.applied || l !== selected.lord || !l.alive || this.#crowns.get(l) !== selected.crown)) return;
+    if (selected) selected.applied = true;
+    if (l) { this.#crowns.delete(l); l.alive = false; l.suppressUntil = now + SUPPRESS; }
     // The lands it took rise up again — conquered zones revert to their old
     // holders, so a wiped-out frontier faction always has a way home.
     this.faction.releaseConquests(faction);

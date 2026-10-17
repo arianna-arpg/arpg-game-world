@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {nativeNearScaleSelectionFS as fs} from './nativeNearScaleSelectionFixture';
+import {execFileSync} from 'node:child_process';
+import ts from 'typescript';
+const commit='76492093a820b2fd8383cb7055da61630f4f9765';
+const original=execFileSync('git',['show',commit+':src/engine/world.ts'],{encoding:'utf8',maxBuffer:30e6});
+const oldAst=ts.createSourceFile('world.ts',original,99,true),oldClass=oldAst.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration,oldMethod=oldClass.members.find(n=>n.name?.getText(oldAst)==='settleNearScale') as ts.MethodDeclaration;
+assert(oldMethod?.body);const source=fs.readFileSync(new URL('../src/engine/nativeSceneNearScale.ts',import.meta.url),'utf8'),ast=ts.createSourceFile('near.ts',source,99,true),fn=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='sceneSettleNearScale') as ts.FunctionDeclaration;assert(fn?.body);
+const recovered=fn.body.getText(ast).replace('(nativeHost.drainNearScaleDue ? nativeHost.drainNearScaleDue() : nativeHost.nearScaleDue.splice(0))','nativeHost.nearScaleDue.splice(0)').replaceAll('      nativeHost.assertNearScaleActor?.(a);\n','').replace('      const life = Math.min(a.maxLife(), Math.max(1, Math.round(a.maxLife() * frac)));\n      a.life = life;','      a.life = Math.min(a.maxLife(), Math.max(1, Math.round(a.maxLife() * frac)));');assert.equal(recovered,oldMethod.body.getText(oldAst).replaceAll('this.','nativeHost.'));
+assert.equal(fn.parameters[1].name.getText(ast),'every');assert.equal(fn.parameters[1].initializer?.getText(ast),'false');
+const current=fs.readFileSync(new URL('../src/engine/world.ts',import.meta.url),'utf8'),cs=ts.createSourceFile('current.ts',current,99,true),cc=cs.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='World') as ts.ClassDeclaration,method=cc.members.find(n=>n.name?.getText(cs)==='settleNearScale') as ts.MethodDeclaration;
+assert.equal(method.body!.getText(cs),"{\n    const owner=this;\n    return sceneSettleNearScale({get actors(){return owner.actors;},get nearScaleDue(){return owner.nearScaleDue;},nativeScenePopulationHost:()=>owner.nativeScenePopulationHost()},every);\n  }");
+assert.deepEqual(method.parameters.map(n=>n.getText(cs)),oldMethod.parameters.map(n=>n.getText(oldAst)));
+assert.equal(method.type?.getText(cs),oldMethod.type?.getText(oldAst));
+const combat=fs.readFileSync(new URL('../src/worldmass/nativeAreaSceneCombat.ts',import.meta.url),'utf8'),ca=ts.createSourceFile('combat.ts',combat,99,true),cl=ca.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='NativeAreaSceneCombat') as ts.ClassDeclaration,near=cl.members.find(n=>n.name?.getText(ca)==='settleNearScale') as ts.MethodDeclaration;assert(near?.body);
+assert(near.body.getText(ca).includes('Reflect.apply(splice,queue,[0])'));assert(near.body.getText(ca).includes('checkRows(result)'));assert(near.body.getText(ca).includes('if(owner.runtimeState.frame.nearScaleDue!==queue)'));assert(near.body.getText(ca).includes('assertNearScaleActor:{value:check}'));
+console.log(JSON.stringify({originalCommit:commit,completeOriginalBody:true,exactWorldDelegate:true,finiteActualAreaAdmission:true,originalDeadOwnedNonenemySkip:true,roundingAndClampUnchanged:true}));

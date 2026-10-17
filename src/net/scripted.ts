@@ -10,15 +10,14 @@
 
 import { dist } from '../core/math';
 import type { Actor } from '../engine/actor';
-import type { World } from '../engine/world';
-import type { PlayerInput, PlayerInputSource } from './intent';
+import type { PlayerInput, PlayerInputSource, PlayerInputQuery } from './intent';
 
 const FOLLOW_DIST = 110;   // stay at least this close to the leader
 const ENGAGE_RANGE = 260;  // start swinging at an enemy within this range
 const STRIKE_GAP = 70;     // close to about this before holding position
 
 export class ScriptedInput implements PlayerInputSource {
-  poll(actor: Actor, world: World): PlayerInput | null {
+  poll(actor: Actor, world: PlayerInputQuery): PlayerInput | null {
     const leader = world.player;
     const held = new Array(actor.skills.length).fill(false);
     const edge = new Array(actor.skills.length).fill(false);
@@ -53,7 +52,7 @@ export class ScriptedInput implements PlayerInputSource {
  *  Constructed with the live Input.keys set, so it reads the keyboard each frame. */
 export class LocalCoopInput implements PlayerInputSource {
   constructor(private readonly keys: Set<string>) {}
-  poll(actor: Actor, world: World): PlayerInput {
+  poll(actor: Actor, world: PlayerInputQuery): PlayerInput {
     const k = this.keys;
     let dx = 0, dy = 0;
     if (k.has('arrowup')) dy -= 1;

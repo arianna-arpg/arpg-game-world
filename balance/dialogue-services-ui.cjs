@@ -9,7 +9,7 @@ app.setPath('userData', path.join(dir, 'dialogue-services-profile-' + process.pi
 app.disableHardwareAcceleration(); app.commandLine.appendSwitch('disable-gpu');
 app.whenReady().then(async () => {
   const timeout = setTimeout(() => { log('TIMEOUT'); app.exit(1); }, 180000);
-  const server = await startGameServer({ root: path.resolve(__dirname, '../dist'), savesDir: path.join(dir, 'dialogue-services-saves-' + process.pid) });
+  const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'), savesDir: path.join(dir, 'dialogue-services-saves-' + process.pid) });
   const win = new BrowserWindow({ show: false, width: 1400, height: 1000, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const js = async code => {
     const r = await win.webContents.executeJavaScript(`(async()=>{try{return await (0,eval)(${JSON.stringify(code)});}catch(e){return {qaError:String(e.stack??e)};}})()`);

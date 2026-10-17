@@ -112,4 +112,3 @@ test('real packager round-trips nested assets and large bundles', t => {
   const installed = b.installBundle({home:path.join(tmp,'cache'),branch,commit:first,compressed:fs.readFileSync(file)});
   assert.equal(fs.statSync(path.join(installed.root,'assets','game.js')).size,12*1024*1024);
 });
-

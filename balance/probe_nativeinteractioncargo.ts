@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+fs.mkdirSync(new URL('./reports/',import.meta.url),{recursive:true});
+import {freshAssemblyInput,NativeAreaSceneAssembly} from './nativeFreshAssemblyFixture';
+import {fixture} from './questInteractionFixture';
+import {NativeAreaSceneQuestInteraction,freshSceneQuestInteractionState} from '../src/worldmass/nativeAreaSceneQuestInteraction';
+import {QUESTS} from '../src/quests/defs';
+import {dist} from '../src/core/math';
+const f=fixture(),campaign:any=f.campaign;
+for(const key of ['journalDirty','netJournal'])Object.defineProperty(campaign,key,{configurable:true,get:()=>f.w[key],set:v=>{f.w[key]=v;}});
+for(const key of ['heroKnown','bagItem'])campaign[key]=(...args:any[])=>f.w[key](...args);
+
+const owner=new NativeAreaSceneQuestInteraction({quests:f.owner,campaign,state:freshSceneQuestInteractionState()});
+const hero=f.w.localSeat.actor,peer=f.seat('peer-representative',500).actor;f.scene.player=peer;
+const q=Object.values(QUESTS).find(q=>q.collect)!;f.add(q).fieldDone=true;owner.updateQuestGiver(0);
+const drop=f.physical.input.state.drops.find(d=>d.item.kind==='gear'&&d.item.item.questId===q.id)!;assert(drop);
+const observed={hero:hero.pos,peer:peer.pos,drop:drop.pos,distanceHero:dist(drop.pos,hero.pos),distancePeer:dist(drop.pos,peer.pos)};
+fs.writeFileSync(new URL('./reports/cargo-observed.json',import.meta.url),JSON.stringify(observed,null,2)+'\n');
+assert(observed.distanceHero<40,'interaction cargo must land at the actual local hero, not scene representative');
+console.log('PASS solo interaction cargo retains actual local hero position',observed);
+
+f.physical.input.state.drops.splice(0);f.owner.ensureQuestCargo();
+const fieldDrop=f.physical.input.state.drops.find(d=>d.item.kind==='gear'&&d.item.item.questId===q.id)!;assert(fieldDrop);assert(dist(fieldDrop.pos,peer.pos)<40,'field completion retains source representative fallback');
+f.physical.input.state.drops.splice(0);
+const other=new NativeAreaSceneAssembly(freshAssemblyInput(f.w,f.w.zone,campaign)),away=other.input.scene;away.actors.splice(0);const shell=other.input.population.createMonster('townsfolk_questgiver',1,'player');shell.pos={...hero.pos};shell.possession={seatId:f.w.localSeat.id,huskMode:'carried'} as any;away.actors.push(shell);
+const awayBinding=f.authority.register(away,{loot:other.lootController,objective:other.objectiveController});f.authority.claim(awayBinding,[shell]);
+f.scene.actors.splice(f.scene.actors.indexOf(hero),1);f.w.localSeat.home=hero;f.w.localSeat.actor=shell;
+f.owner.ensureSoloInteractionQuestCargo();owner.updateQuestGiver(1);assert.equal(f.physical.input.state.drops.length,0,'an absent controlled body never interacts from its carried home');assert.equal(owner.playerIdle(),false);assert.equal(owner.seatIdle(f.w.localSeat),false);
+console.log('PASS ordinary field cargo remains local; foreign carried-home interaction and idle reads refuse');
+fs.writeFileSync(new URL('./reports/cargo-proof.json',import.meta.url),JSON.stringify({contract:'Actual interaction cargo follows the local hand; ordinary field cargo retains its source representative',after:observed,fieldDistanceToRepresentative:dist(fieldDrop.pos,peer.pos),foreignControlledBodyRefused:true,originalEnsureQuestCargoUnchanged:true},null,2)+'\n');

@@ -14,7 +14,7 @@
 // Run: npx tsx balance/probe_cryvoices.ts
 // ---------------------------------------------------------------------------
 
-import { readFileSync } from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { effectVoiceOf } from '../src/render/vis/effectVoice';

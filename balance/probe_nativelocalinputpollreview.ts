@@ -1,0 +1,8 @@
+import '../src/engine/world';
+import assert from 'node:assert/strict';
+import {NativeClientRuntime} from '../src/worldmass/nativeClientRuntime';
+import {LocalCoopInput} from '../src/net/scripted';
+import {clientSetup} from './nativeClientRuntimeFixture';
+import {refuseWorldCombat} from './probe_nativecombatcycle';
+import {withSeededRandom} from '../src/core/rng';
+const result=withSeededRandom(451503,()=>{const {writer,definition,destination,geography}=clientSetup(1503);return refuseWorldCombat([writer],worldDrivers=>{const runtime=new NativeClientRuntime({writer,definition,geography:geography.spec});runtime.install();const area=runtime.current,coordinator=area.combat.input.coordinator,seat=writer.localSeat,oldInput=seat.input,keys=new Set<string>(),source=new LocalCoopInput(keys),nativePoll=LocalCoopInput.prototype.poll;let selected=0,keyReads=0,error:unknown=null;Object.defineProperty(keys,'has',{configurable:true,value:function(key:string){keyReads++;return Reflect.apply(Set.prototype.has,this,[key]);}});Object.defineProperty(source,'poll',{configurable:true,get(){selected++;coordinator.runFrom(area,()=>coordinator.loadZone(destination.id));return nativePoll;}});seat.input=source;try{runtime.pollSeat(seat,1/60);}catch(e){error=e;}const dest=runtime.current;assert.notEqual(dest,area);assert.equal(dest.assembly.input.scene.zone.id,destination.id);seat.input=oldInput;runtime.retire();assert.deepEqual(worldDrivers,[]);return{selected,keyReads,error:String(error),actualTravel:true,sameSelectedNativeFunction:true,worldDrivers};});});console.log(JSON.stringify(result));assert.equal(result.keyReads,0,'Native selected poll must not run after its getter moves the captured body to a different owner');

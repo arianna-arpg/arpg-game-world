@@ -1,14 +1,14 @@
 # Mu loading screen
 
-`src/ui/loadingScreen.ts` owns the reusable loading surface. `src/loading/spiritRun.ts`
+`src/ui/loadingScreen.ts` owns the reusable loading lease and foreground frame.
+`src/loading/loadingSurface.ts` owns the presentation inside that isolated frame. `src/loading/spiritRun.ts`
 is a rewardless, isolated simulation; `spiritView.ts` paints the Mu body through the
 existing `cosmeticBody`, body sprite, live parts and adorn system. The selected
 `wispSkin` and `playerEffect` travel with the wisp. No skin changes collision size.
 The toy never uses World state, combat RNG, progression, inventory or persistence.
 
-Entry after a vessel/class choice, and Continue, travel from top to bottom.
-Travel leases choose left-to-right or right-to-left once per wait. On the seamless
-foundation, native-page readiness opens those travel leases automatically.
+Entry after a vessel/class choice, and Continue, travel from top to bottom. A
+native-page wait during play chooses left-to-right or right-to-left once per wait.
 The wisp arrives from the entry edge, then the scenery and gates stream toward it.
 Mouse/touch steer across the travel direction; WASD/arrows and the first connected
 controller's left stick/D-pad provide the same axis. Pass through gate openings.
@@ -95,7 +95,7 @@ const lease = loadingScreen.begin({
   cancel: () => controller.abort(),
 });
 try {
-  await lease.paint(); // allow the cover to paint before starting bounded work
+  await lease.paint(); // wait for the independent foreground to paint and accept input
   const result = await loadArea(controller.signal);
   if (!lease.current) return; // an older job cannot publish into a new crossing
   // Publish through the caller's own authority checks.
@@ -112,18 +112,16 @@ describes the actual preparation phase; the toy never implies loading speed.
 Cancel actions. Stale `update`, `fail` and `finish` calls do nothing. A fatal error
 closes the toy before the crash overlay takes ownership.
 
-On `main`, `withLoadingScreen` wraps the existing class/vessel entry, run-slot
-Continue and roster-slot Continue owners. It yields a paint before preparation
-and before the first render, waits for boot hydration, and checks lease ownership
-after asynchronous reads. A cancelled roster read cannot publish its world.
-The current world’s simulation, rendering and input stay held while the cover is
-active; the minigame owns an independent rAF. Existing save formats are unchanged.
-
-On `codex/seamless-world-foundation`, `prepareCharacterWorld` also reports stages
-through `loadingStage`, and `loadingGate` observes native-page readiness/refusal.
-Those adapters belong to that branch's staged-world and paging owners; main does
-not import the seamless subsystem. Callers on either branch retain cancellation
-and retry ownership, and only their current lease may close the cover.
+`main.ts` wraps player-facing starts with `withLoadingScreen`, and Continue retains
+its original staged-world publication/cancellation checks. Optional `loadingStage`
+callbacks in `prepareCharacterWorld` yield between stages. The frame loop observes
+`massRuntime.nativeReadiness`: required page reads display the toy; refused reads
+offer Retry/Cancel; ready removes it automatically. The loading gate does not step
+World time, AI, menus, world rendering or autosaves. The minigame has its own
+renderer process, event loop, input listeners and rAF on desktop Chromium. Entry
+and Continue retain the cover through the first terrain/sprite render.
+The existing durable quit handler retains its normal policy. A cancellation returns
+to the menu with the last save available, without discarding missing page claims.
 
 The cover is above game UI and below fatal errors. Existing roots become inert
 while it owns focus, then recover their previous inert state. Keyboard, mouse and
@@ -139,23 +137,64 @@ performance requirement delays entry into a ready world.
 ## Scope and performance
 
 This is a loading presentation and async-work foundation, not an MMO scheduler.
-Main covers class entry and Continue; the seamless foundation also covers its
-authoritative native-page waits.
+It covers class entry, Continue and the existing authoritative native-page waits.
+A hosted world's arrival (a server-bound wake, a direct join, a reload's return)
+and its pocket hand-offs ride THE ONE CROSSING (`src/net/crossing.ts`,
+`docs/engine/shard.md`): one lease from the vessel's flush to the first page
+ring around the hero, the world held beneath it.
 It does not automatically detect every cold asset, interior transition, or network
 handshake. Callers can use the same lease API when those operations gain readiness
 contracts. Routine seamless movement does not intentionally insert loading screens.
 
-Synchronous `new World`, native construction, restore/publication and renderer bakes
-still occupy the browser's main thread. `paint()` gives the cover a frame before
-such work; it cannot keep keyboard input or animation running *during* an unyielding
-task. Long work must move into existing worker pipelines or be split into bounded
-cooperative stages. Never replace honest readiness with a timer or fake percentage.
-The toy loads no external assets and introduces no runtime dependencies.
+The crossing is prewarmed at boot in an opaque-origin iframe with
+`sandbox="allow-scripts"` and explicit gamepad delegation. Do not add
+`allow-same-origin`: that would permit the game and crossing to share the very
+renderer thread this separation is meant to avoid. Desktop Electron/Chromium
+isolates this frame in a different renderer process. Its own DOM input, gamepad
+polling, simulation, native Mu painting and cosmetic cache continue while the
+game renderer constructs/restores its world or bakes terrain. No input is relayed
+through the blocked game thread. This is foreground isolation, not a migration of
+World authority into a worker or a render-only snapshot of the simulation.
+The first `paint()` also yields the embedding document's presentation before
+requesting the child's paint acknowledgement. Preserve that ordering on every
+reopen: otherwise Chromium can still treat the frame as hidden and throttle its
+animation during the subsequent game task. Hidden/background tabs use a bounded
+fallback so preparation never waits indefinitely for a display refresh.
+
+`scripts/loading-frame-plugin.ts` bundles the existing Mu surface and painters
+into one cacheable classic-script asset for production and the dev server. The
+build refuses World/main/save imports and retained account authority (the shared
+immutable starter-class catalog is permitted). The iframe's CSP
+allows only that local script and its styles; there are no remote assets or new
+runtime dependencies. Browser process isolation is platform-dependent: the
+acceptance claim is for the desktop Electron/Chromium runtime. Browsers without
+isolated iframe processes can display the same surface but cannot guarantee
+responsiveness during blocking game work; do not claim mobile/WebView/WebKit
+parity without another execution boundary. See the
+[Chromium process model](https://chromium.googlesource.com/chromium/src/+/HEAD/docs/process_model_and_site_isolation.md).
+
+The typed message protocol carries session tokens, status, cosmetics, action
+requests, paint acknowledgements and sampled diagnostics only. The parent checks
+the exact source frame and opaque origin; stale sessions cannot close or update
+new ones. Diagnostic snapshots are requested by the game when it can receive
+them, preventing a queue of full snapshots during a long CPU task. The frame is
+retained between crossings and does no minigame simulation while hidden.
+
+`paint()` waits for the foreground acknowledgement before heavy work begins.
+The final acknowledgement also lets queued foreground input reach its owner.
+Cancel immediately changes the foreground status while keeping it playable;
+an already-running synchronous game task cannot be interrupted mid-instruction,
+so the existing cancellation owner runs at its next event-loop boundary. Continue
+keeps its original staged-world authority checks. Closing returns held keys before
+releasing the world's input; loss of the foreground cannot hold input forever.
+Readiness still controls completion with no artificial minimum duration, fake
+percentage, score requirement or gameplay reward. This does not shorten world
+preparation or fix unrelated steady-state world performance.
 
 ## Handoff for future integration
 
-The reusable Mu crossing originated on `codex/mu-loading-screen` and is integrated
-into `main` and `codex/seamless-world-foundation`. Its files
+The reusable Mu crossing is integrated into `codex/seamless-world-foundation`
+and `shard-world`; the completed `codex/mu-loading-screen` branch is retired. Its files
 are the loading UI/controller, the isolated SpiritRun model and its canvas view.
 Preview any direction with `?loadingPreview=down`, `right` or `left`; Cancel
 returns to the menu without creating a run. Preserve the player's equipped wisp
@@ -171,12 +210,12 @@ retry/cancel ownership, and finish only the current lease once the world is read
 Keep the world and its actions held behind the cover. Never make toy performance
 affect loading, inventory, progression or readiness, and never delay a ready world.
 
-The existing callers cover class entry and Continue on both branches, plus
-required native-page waits on the seamless foundation.
-Other uses are candidates, not automatic integrations. Synchronous world creation,
-restore and rendering bakes can still stall the toy; move heavy work into workers
-or bounded yielding stages as those paths are updated. The screen itself does not
-make blocking work asynchronous. Ordinary seamless movement should stay seamless.
+The existing callers cover class entry, Continue and required native-page waits.
+Other uses are candidates, not automatic integrations. Keep disruptive work behind
+the same lease and await its first paint; keep the cover through all required
+construction and first rendering. Worker pipelines and bounded yielding remain
+useful for reducing game-thread stalls and for platforms without isolated frames.
+Ordinary seamless movement should stay seamless.
 
 Future contributors should start with the lease example above, the existing
 `withLoadingScreen` / `loadingGate` adapters in `main.ts`, and the isolated UI
@@ -187,20 +226,49 @@ cosmetic/body separation, and keyboard/controller quarantine on return to play.
 ## Verification
 
 - `npm run check`
-- `npm run probe -- spiritrun` (both); `savecompatibility` on main, `characterresume` on seamless
+- `npm run probe -- spiritrun` and `npm run probe -- characterresume`
 - Scoped production build, then `electron balance/loading-screen-ui.cjs`
+- `electron balance/loading-isolation-ui.cjs` (actual distinct processes and input during busy work)
 - `npm run smoke` after a normal production build
 
 The UI course uses isolated browser storage and a hidden Electron window. It checks
 all directions, keyboard/pointer/controller steering, no numeric readouts, branching
 apertures, currents in/between gates, acceleration, stale leases, cancellation,
-input release, failed loads/retry, world holds, real entry/Continue and delayed
-roster cancellation. The seamless
-version additionally checks its native-page readiness adapter; it saves
-screenshots under `balance/reports/`. The debug surface is `__game.loading` and
+input release, failed loads/retry, world holds and real entry/Continue; it saves
+screenshots under `balance/reports/`. The isolation course blocks the game thread
+for 1.8 seconds and proves keyboard, pointer and controller steering in the
+foreground before that task ends. It also measures frames and steering inside
+actual fresh-world construction and a cold Continue through the real menu button,
+tests deferred Cancel and held-key handoff, and rejects an accidental return to a
+shared renderer process or hidden-frame throttling on reopen. Continue reloads
+the browser after flushing the run save and must restore that same world seed.
+Both the longest CPU stage and the entire observed crossing must sustain at least
+20 frames per second with no gap of 250 ms; the CPU check includes its boundaries.
+Steering must change during the heavy stage, not only before or after loading. A measured combined
+seamless/shard entry had a 7.07-second game task with 423 foreground frames and a
+32 ms maximum gap; the synthetic busy course had 108 frames with an 18 ms maximum
+gap. These are local acceptance observations, not hardware-wide frame-rate promises. The debug surface is `__game.loading` and
 `__game.devStartLoadingRun()`. Open `?loadingPreview=down`, `?loadingPreview=right`
 or `?loadingPreview=left` for an extended playable preview with the equipped skin.
 Cancel returns to the menu; preview creates no run or save. Use a manual lease
 for status/error art review; actual
 loads close as soon as ready. Minigame mechanics take inspiration from the requested
 [Revenant Run reference](https://spagato.itch.io/revenant-run); code and art are native.
+
+### Seamless/shard integration verification (2026-10-11)
+
+The isolated integration combines the loading runtime commit `4dad1dbf` with
+the current native-area foundation `c35ee8ab` (on the combined shard checkpoint
+`7799af63`). The merge preserves the native-area coexistence change and all
+existing shard arrival/hand-off adapters. No world, save or network authority
+is moved into the crossing.
+
+In the integrated actual-client course, fresh entry's longest game-thread task
+was 11.163 seconds, with 662 foreground frames and steering throughout. The whole
+observed entry crossing had 693 frames over 11.675 seconds. A fresh browser load
+then restored the persisted run through Continue: its longest task was 3.523
+seconds with 209 foreground frames; the complete observed crossing had 404 frames
+over 6.771 seconds. Both had a 50 ms maximum gap and restored/created a live
+seamless world without client errors. These are local desktop Electron results;
+the cross-platform limits above still apply. The report is generated by
+`balance/loading-isolation-ui.cjs` under `balance/reports/loading-isolation-ui.json`.

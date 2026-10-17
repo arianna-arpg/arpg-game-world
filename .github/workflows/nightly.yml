@@ -64,6 +64,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Source proofs require their pinned ancestor blobs.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -75,6 +77,10 @@ jobs:
       # law) — a launcher that cannot update can never be sent its own fix.
       - name: Launcher update laws
         run: npm run test:launcher
+      - name: Checkpoint and error-report regressions
+        run: |
+          npx tsx balance/check_nativecheckpointdiagnostics.ts
+          npx tsx balance/check_runtimediagnostics.ts
       - name: Probes (green roster, fast + slow lanes)
         run: npm run probe -- --slow
 

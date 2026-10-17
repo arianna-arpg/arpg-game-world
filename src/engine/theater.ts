@@ -65,7 +65,7 @@ import type { PackTableEntry } from '../data/zones';
 import { eventAllowed } from '../world/zonePolicy';
 import type { RadianceCond } from '../world/radiance';
 import type { Actor } from './actor';
-import type { World } from './world';
+import type {NativeTheaterHost} from './nativeTheaterHost';
 
 /** The zone's STANDING truth — everything a row may gate on, and the whole
  *  of it (THE LOCAL GATE is this type's narrowness). Built fresh per beat:
@@ -131,7 +131,7 @@ export interface TheaterKindDef {
    *  and a declined beat costs nothing: every kind's stream is keyed per
    *  beat, so the next kind in priority draws exactly what it always would
    *  (a rows-eligible kind that could not form no longer eats the seat). */
-  ready?(world: World, ctx: TheaterContext): boolean;
+  ready?(world: NativeTheaterHost, ctx: TheaterContext): boolean;
   /** Default per-kind dials; row.params spread over these. */
   params?: Record<string, unknown>;
   /** Additive kinds: default per-visit pour cap (row.pourCap overrides;
@@ -151,9 +151,9 @@ export interface TheaterKindDef {
    *  singleton (sameKindMax) still caps it. */
   offstage?: boolean;
   /** Lay the run onto the zone (set run.done if it can't form). */
-  spawn(world: World, run: ActiveTheaterRun, spots: TheaterSpots): void;
+  spawn(world: NativeTheaterHost, run: ActiveTheaterRun, spots: TheaterSpots): void;
   /** Advance it each frame; set run.done when its life is over. */
-  tick(world: World, run: ActiveTheaterRun, dt: number): void;
+  tick(world: NativeTheaterHost, run: ActiveTheaterRun, dt: number): void;
 }
 
 /** One authored occurrence — WHERE/WHEN/HOW OFTEN a kind plays. Pure data:
@@ -265,9 +265,9 @@ export function swapTheaterRows(rows: TheaterRow[]): TheaterRow[] {
 // ground's own law. The seam ships proven (probe QA writer); no consumer
 // ships with it — the Odyssey stays design-gated.
 
-const CONCURRENCY_WRITERS = new Map<string, (world: World) => number | null>();
+const CONCURRENCY_WRITERS = new Map<string, (world: NativeTheaterHost) => number | null>();
 
-export function registerTheaterConcurrency(id: string, fn: (world: World) => number | null): void {
+export function registerTheaterConcurrency(id: string, fn: (world: NativeTheaterHost) => number | null): void {
   CONCURRENCY_WRITERS.set(id, fn);
 }
 
@@ -276,7 +276,7 @@ export function unregisterTheaterConcurrency(id: string): void {
 }
 
 /** Fold the ground default with every registered writer (max wins). */
-export function theaterConcurrencyFold(world: World, groundDefault: number): number {
+export function theaterConcurrencyFold(world: NativeTheaterHost, groundDefault: number): number {
   let n = groundDefault;
   for (const fn of CONCURRENCY_WRITERS.values()) {
     const v = fn(world);
@@ -352,7 +352,7 @@ export class ActiveTheaterRun {
   data: Record<string, unknown> = {};
 
   constructor(
-    private world: World,
+    private world: NativeTheaterHost,
     readonly kind: string,
     readonly row: TheaterRow,
     readonly primary: string,
@@ -429,7 +429,7 @@ export interface TheaterBeatOpts {
  *  whose draw wins; a spawn that can't form still resolves the beat, as
  *  the old entry did). Returns the seated run (caller keeps it if it
  *  formed), or null. */
-export function runTheaterBeat(world: World, o: TheaterBeatOpts): ActiveTheaterRun | null {
+export function runTheaterBeat(world: NativeTheaterHost, o: TheaterBeatOpts): ActiveTheaterRun | null {
   // OFFSTAGE runs (bodiless leans) hold no seat in the fold — a standing
   // watch change must not starve the ground's one texture seat all night.
   const liveCount = o.live.filter(r => !r.done && !theaterKindDef(r.kind)?.offstage).length;
@@ -541,7 +541,7 @@ function runMarches(run: ActiveTheaterRun): MarchState[] {
  *  tick — a march that already passed through. Pure geometry, draw-free:
  *  a route head already clear of the arrival seats byte-identically at
  *  pts[0]. */
-export function marchSeat(world: World, pts: Vec2[]): { pos: Vec2; nextIdx: number } {
+export function marchSeat(world: NativeTheaterHost, pts: Vec2[]): { pos: Vec2; nextIdx: number } {
   const entry = world.zoneEntryPos();
   const grace = THEATER_CFG.march.seatGrace;
   const d0 = Math.hypot(pts[0].x - entry.x, pts[0].y - entry.y);
@@ -570,7 +570,7 @@ export function marchSeat(world: World, pts: Vec2[]): { pos: Vec2; nextIdx: numb
  *  several columns). Returns the lead (null when the pour ledger refuses
  *  even the lead — the beat's seat-gate makes that rare). Seats honor THE
  *  BOOT-SEAT LAW above. */
-export function marchSpawn(world: World, run: ActiveTheaterRun, spec: MarchSpec): Actor | null {
+export function marchSpawn(world: NativeTheaterHost, run: ActiveTheaterRun, spec: MarchSpec): Actor | null {
   const tag = spec.tag ?? run.kind;
   const level = spec.level ?? Math.max(1, world.zone.level);
   const lead = world.theaterSpawn(run, spec.leadTable ?? spec.table, level, run.primary, tag);
@@ -609,7 +609,7 @@ export function marchSpawn(world: World, run: ActiveTheaterRun, spec: MarchSpec)
  *  lead dissolves its column (pace lifted, the stragglers mill and fight
  *  as ordinary bodies until spent). Sets run.done when every column's
  *  ground is clear either way. */
-export function marchTick(world: World, run: ActiveTheaterRun): void {
+export function marchTick(world: NativeTheaterHost, run: ActiveTheaterRun): void {
   const marches = runMarches(run);
   if (!marches.length) { run.done = true; return; }
   let allDone = true;
@@ -648,7 +648,7 @@ export function marchTick(world: World, run: ActiveTheaterRun): void {
  *  pairs), else one exit + the far side of the arena, else two opposed
  *  arena-edge points (the warbandDestination idiom's fallback ladder).
  *  Spawn-phase: draws ride the live die, like every cast placement. */
-export function marchEndpoints(world: World): { from: Vec2; to: Vec2 } {
+export function marchEndpoints(world: NativeTheaterHost): { from: Vec2; to: Vec2 } {
   const exits = world.exits;
   const edge = (ang: number): Vec2 => {
     const cx = world.arena.w / 2, cy = world.arena.h / 2;
@@ -677,7 +677,7 @@ export function marchEndpoints(world: World): { from: Vec2; to: Vec2 } {
  *  two farthest-apart discs are the ends, the discs between (ordered by
  *  projection along the span, thinned to a stride) are the way. Pure
  *  geometry, draw-free; null when no road worth walking stands. */
-export function roadWaypoints(world: World, kind = 'road'): { from: Vec2; to: Vec2; via: Vec2[] } | null {
+export function roadWaypoints(world: NativeTheaterHost, kind = 'road'): { from: Vec2; to: Vec2; via: Vec2[] } | null {
   const discs = world.doodads.filter(d => d.kind === kind && !d.gone).map(d => d.pos);
   if (discs.length < 6) return null;
   let ai = 0, bi = 0, best = -1;

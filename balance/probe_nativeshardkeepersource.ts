@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {readNativeSeatsRaw as readFileSync} from './nativeShardSeatCompositionFixture';
+import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
+import {nativeShardKeeperArchive as row} from './nativeShardKeeperArchive';
+import {beforeNativeShardKeeper as before} from './nativeShardKeeperFixture';
+const root=fileURLToPath(new URL('../',import.meta.url)),hash=(s:string|Buffer)=>createHash('sha256').update(s).digest('hex'),norm=(s:string)=>s.replace(/\r\n/g,'\n'),read=(f:string)=>readFileSync(root+f,'utf8');
+const current=read(row.file),runtime=read(row.runtimeFile);assert.equal(hash(runtime),row.runtimeHash);assert.equal(before(row.file,current),row.before);assert.equal(before(row.file,row.before),row.before);for(const text of [norm(current),norm(current).replace(/\n/g,'\r\n'),norm(row.before),norm(row.before).replace(/\n/g,'\r\n')])assert.equal(before(row.file,text),row.before);
+let mutations=0;for(const text of [norm(current),norm(row.before)])for(const offset of [0,1,Math.floor(text.length/3),Math.floor(text.length/2),text.length-1,text.length]){assert.throws(()=>before(row.file,text.slice(0,offset)+' unauthorized '+text.slice(offset)),/differs/);mutations++;}for(const edit of row.edits){assert.throws(()=>before(row.file,norm(current)+edit.after),/differs/);mutations++;}
+for(const item of row.untouched)assert.equal(hash(readFileSync(root+item.file)),item.sha256,'untouched original '+item.file);
+assert.equal(before('outside/nativeAreaCharacterCreation.ts',current),current);assert(!runtime.includes('NativeClientRuntime'),'dedicated runtime cannot wrap or subclass the client');assert(runtime.includes('new NativeAreaCampaignSession(writer)'));assert(runtime.includes('new NativeAreaScenePreparation('));assert(runtime.includes('new NativeAreaHostedSnapshots('));
+console.log(JSON.stringify({scope:'Exact keeper-only creation delta; original client/resume/preparation/native creation/server host and every prior archive remain byte-identical.',parent:row.parentInput,creation:hash(current),runtime:row.runtimeHash,untouched:row.untouched.length,mutations,EOL:4,receipt:hash(JSON.stringify([row.runtimeHash,hash(current),row.untouched,mutations]))}));

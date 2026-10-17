@@ -14,8 +14,9 @@ app.whenReady().then(async () => {
  await new Promise(r => server.listen(0, '127.0.0.1', r));
  const win = new BrowserWindow({ show: false, width: 1280, height: 850, webPreferences: { offscreen: true, backgroundThrottling: false } });
  win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message); });
+ let surfaceTarget;
  const run = async (fn, ...args) => {
-  const result = await win.webContents.executeJavaScript('(async()=>{try{return {ok:true,value:await (' + fn + ')(' + args.map(a => JSON.stringify(a)).join(',') + ')}}catch(e){return {ok:false,error:e.stack||String(e)}}})()');
+  const result = await (surfaceTarget ?? win.webContents).executeJavaScript('(async()=>{try{return {ok:true,value:await (' + fn + ')(' + args.map(a => JSON.stringify(a)).join(',') + ')}}catch(e){return {ok:false,error:e.stack||String(e)}}})()');
   if (!result.ok) throw Error(result.error); return result.value;
  };
  const pause = ms => new Promise(r => setTimeout(r, ms));
@@ -29,6 +30,13 @@ app.whenReady().then(async () => {
    if (!window.__game) throw Error('Missing game'); await __game.hydrated();
    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => window.__qaPads ?? [] });
   });
+  // Surface mechanics run inside the actual isolated renderer. Host lease and
+  // busy-game-thread behavior are covered by loading-isolation-ui.cjs.
+  await run(async () => { window.__hostLease = __game.loading.begin({ kind: 'entry', label: 'Surface acceptance' }); await __hostLease.paint(); });
+  surfaceTarget = win.webContents.mainFrame.frames.find(f => f.url === 'about:srcdoc');
+  assert.ok(surfaceTarget && surfaceTarget.processId !== win.webContents.mainFrame.processId);
+  await run(() => { window.__game = { loading: __muCrossing.loading, account: () => ({ cosmetics: { loadout: undefined } }) };
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => window.__qaPads ?? [] }); });
   for (const direction of ['down', 'right', 'left']) {
    await run(direction => {
     window.__qaLease = __game.loading.begin({ kind: 'entry', direction, label: 'Opening the world', detail: 'Preparing the next area',
@@ -107,7 +115,11 @@ app.whenReady().then(async () => {
   // encounters only when the chosen opening remains reachable; the pure probe
   // separately exhausts calm routes; peak-speed layouts can be deliberately punishing.
   const choices = await run(async () => {
+   // A fixed encounter stream makes both current-placement checks reproducible.
+   const randomValues = crypto.getRandomValues.bind(crypto);
+   crypto.getRandomValues = array => { array.fill(57); return array; };
    window.__qaLease = __game.loading.begin({ kind: 'travel', direction: 'right', label: 'Following the wandering souls' });
+   crypto.getRandomValues = randomValues;
    const start = performance.now(), counts = new Set(), placements = new Set(), widths = new Map();
    let gateId, lane = 0, births = 0, releasedFlames = false;
    const flameChoices = new Map();
@@ -135,7 +147,7 @@ app.whenReady().then(async () => {
      return { snap, births, releasedFlames, flameChoices: [...flameChoices], counts: [...counts], placements: [...placements], widths: [...widths.values()] };
     }
     const g = snap.gates.find(g => !g.resolved);
-    const reach = distance => Math.max(0, distance) * 490 / (210 * 5.4);
+    const reach = distance => Math.max(0, distance) * 490 / (210 * Math.min(5.4, Math.max(1.8, snap.speed + 0.8)));
     if (g && gateId !== g.id) {
      gateId = g.id;
      const available = g.openings.filter(o => Math.abs(o.lane - snap.lane) < reach(g.u - 230 - 52));
@@ -164,17 +176,23 @@ app.whenReady().then(async () => {
   await pause(1000); await shot('narrow');
   await run(() => { if (document.querySelector('#mu-loading-screen').scrollWidth > innerWidth) throw Error('Loading cover overflows'); if (document.querySelector('#mu-loading-screen canvas').getBoundingClientRect().bottom > document.querySelector('#mu-loading-screen footer').getBoundingClientRect().top) throw Error('Footer overlaps crossing'); window.__qaLease.finish(); });
   win.setContentSize(1280, 850);
+  surfaceTarget = undefined;
+  await run(async () => { window.__hostLease.finish(); for (let i = 0; __game.loading.active && i < 100; i++) await new Promise(r => setTimeout(r, 10)); });
+  const toy = async (fn) => {
+    const target = win.webContents.mainFrame.frames.find(f => f.url === 'about:srcdoc');
+    if (!target) throw Error('Missing crossing frame');
+    return target.executeJavaScript('(' + fn + ')()');
+  };
   // Exercise the actual async entry wrapper; it must expose down BEFORE construction.
   const entry = await run(async () => {
-   __game.account().ledger.prologue_lived = 1; __game.saveAccount();
    document.getElementById('sm-start').click(); __game.step(2);
    const mu = __game.world(), apps = mu.scene?.state.apps?.filter(a => a.rank === 'awake');
    if (!apps?.length) throw Error('Begin did not enter Mu');
    const vessel = mu.actors.find(a => a.id === apps[0].id), target = { ...vessel.pos };
-   __game.pilot({ poll: () => { const p = __game.world().player.pos, d = Math.hypot(target.x-p.x, target.y-p.y);
-     return { dx: d>45?target.x-p.x:0, dy: d>45?target.y-p.y:0, aim: target, held: [], edge: [] }; } });
+   __game.devInput(() => { const p = __game.world().player.pos, d = Math.hypot(target.x-p.x, target.y-p.y);
+     return { dx: d>45?target.x-p.x:0, dy: d>45?target.y-p.y:0, aim: target, held: [], edge: [] }; });
    try { for (let i = 0; i < 300 && !document.querySelector('#mu-wake'); i++) __game.step(1); }
-   finally { __game.pilot(null); }
+   finally { __game.devInput(null); }
    const wake = document.querySelector('#mu-wake'); if (!wake) throw Error('Mu vessel card did not open');
    wake.click(); await Promise.resolve();
    const first = __game.loading.snapshot;
@@ -182,76 +200,77 @@ app.whenReady().then(async () => {
    const w = __game.world(); w.player.invulnerable = true;
    return { first, active: __game.loading.active, mass: !!w.massRuntime, fatal: __game.crash().fatal };
   });
-  assert.equal(entry.first.direction, 'down'); assert.equal(entry.active, false); assert.equal(entry.mass, false); assert.equal(entry.fatal, null); report.checks.push('real Mu vessel dwell and Wake paint descent and complete without a score gate');
-  // Main has no native-page subsystem. The reusable travel lease still owns
-  // the world and held input while an asynchronous caller prepares its work.
-  const heldWorld = await run(async () => {
-   const w = __game.world(), time = w.time, pos = { ...w.player.pos };
-   const lease = __game.loading.begin({ kind: 'travel', label: 'Crossing the veil' });
+  assert.equal(entry.first.direction, 'down'); assert.equal(entry.active, false); assert.equal(entry.mass, true); assert.equal(entry.fatal, null); report.checks.push('real Mu vessel dwell and Wake paint descent and complete without a score gate');
+  // Controlled readiness reports test the UI adapter; nativepaging probe owns I/O truth.
+  const gate = await run(async () => {
+   const w = __game.world(), m = w.massRuntime; window.__qaReadiness = m.nativeReadiness.bind(m);
+   window.__qaRetryPages = m.retryNativePages.bind(m);
+   window.__qaPageState = 'pending'; window.__qaRetried = 0;
+   m.nativeReadiness = () => ({ status: window.__qaPageState, pending: 1, required: 1, retryable: window.__qaPageState === 'refused', error: 'Controlled missing page' });
+   m.retryNativePages = () => { window.__qaRetried++; window.__qaPageState = 'ready'; return m.nativeReadiness(); };
+   __game.step(1); const time = w.time, pos = { ...w.player.pos };
    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true }));
    await new Promise(r => setTimeout(r, 400));
-   const held = { time: w.time, pos: { ...w.player.pos } };
-   lease.finish();
-   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true, repeat: true })); __game.step(2);
-   const stayed = Math.hypot(pos.x - w.player.pos.x, pos.y - w.player.pos.y);
-   window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w', code: 'KeyW', bubbles: true }));
-   __game.save(); return { time, pos, held, stayed, inert: document.getElementById('game').inert };
+   const held = { time: w.time, pos: { ...w.player.pos }, loading: __game.loading.snapshot };
+   window.__qaPageState = 'refused'; __game.step(1);
+   return { time, pos, held };
   });
-  assert.equal(heldWorld.time, heldWorld.held.time); assert.deepEqual(heldWorld.pos, heldWorld.held.pos);
-  assert.equal(heldWorld.stayed, 0); assert.equal(heldWorld.inert, false);
-  report.checks.push('main travel lease holds the world and releases without held-key movement');
+  assert.equal(gate.time, gate.held.time); assert.deepEqual(gate.pos, gate.held.pos); assert.ok(['left', 'right'].includes(gate.held.loading.direction));
+  await shot('native-retry');
+  await toy(() => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true })); document.querySelector('#mu-loading-screen button').click(); });
+  const recovered = await run(async () => {
+   for (let i = 0; __game.loading.active && i < 100; i++) { __game.step(0); await new Promise(r => setTimeout(r, 10)); }
+   const w = __game.world(), p = { ...w.player.pos };
+   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true, repeat: true })); __game.step(2);
+   const stayed = Math.hypot(p.x - w.player.pos.x, p.y - w.player.pos.y);
+   window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w', code: 'KeyW', bubbles: true }));
+   w.massRuntime.nativeReadiness = window.__qaReadiness; w.massRuntime.retryNativePages = window.__qaRetryPages;
+   __game.save(); await __game.flushRunSave();
+   return { stayed, retried: window.__qaRetried, active: __game.loading.active, inert: document.getElementById('game').inert };
+  });
+  assert.equal(recovered.stayed, 0); assert.equal(recovered.retried, 1); assert.equal(recovered.active, false); assert.equal(recovered.inert, false); report.checks.push('native pending/refused/retry gate holds world and releases without held-key movement');
+  await run(async () => {
+   const m = __game.world().massRuntime;
+   m.nativeReadiness = () => ({ status: 'pending', pending: 1, required: 1, retryable: false });
+   __game.step(1); await new Promise(r => setTimeout(r, 100));
+  });
+  await toy(() => document.querySelector('#mu-loading-screen button').click());
+  const cancelledTravel = await run(async () => {
+   const w = __game.world();
+   for (let i = 0; __game.loading.active && i < 100; i++) await new Promise(r => setTimeout(r, 10));
+   for (let i = 0; document.getElementById('sm-continue')?.disabled && i < 100; i++) await new Promise(r => setTimeout(r, 25));
+   const enabled = !document.getElementById('sm-continue').disabled;
+   return { enabled, active: __game.loading.active, sameWorld: __game.world() === w };
+  });
+  assert.deepEqual(cancelledTravel, { enabled: true, active: false, sameWorld: true });
+  report.checks.push('cancelled in-game crossing restores the Continue menu without publishing or saving');
   // Cold Continue, then cancellation before its first async phase can publish.
   await win.loadURL('http://127.0.0.1:' + server.address().port);
+  await run(async () => {
+   for (let i = 0; !window.__game && i < 100; i++) await new Promise(r => setTimeout(r, 100)); await __game.hydrated();
+   window.__beforeContinue = __game.world();
+  });
+  // Cancel in the foreground as soon as its action appears, before its first
+  // paint acknowledgement lets the game start preparation.
+  await toy(() => { const watch = new MutationObserver(() => {
+    const button = document.querySelector('#mu-loading-screen button');
+    if (button) { watch.disconnect(); button.click(); }
+   }); watch.observe(document.body, { childList: true, subtree: true }); });
+  await run(() => document.getElementById('sm-continue').click());
+  await pause(300);
   const resumed = await run(async () => {
-   for (let i = 0; !window.__game && i < 100; i++) await new Promise(r => setTimeout(r, 100)); await __game.hydrated();
-   const before = __game.world(); document.getElementById('sm-continue').click(); const first = __game.loading.snapshot;
-   document.querySelector('#mu-loading-screen button').click();
-   await new Promise(r => setTimeout(r, 150));
+   const before = window.__beforeContinue;
    if (__game.world() !== before || __game.loading.active) throw Error('Cancelled Continue published');
-   document.getElementById('sm-continue').click();
+   document.getElementById('sm-continue').click(); const first = __game.loading.snapshot;
    for (let i = 0; __game.loading.active && i < 400; i++) await new Promise(r => setTimeout(r, 25));
-   return { first, active: __game.loading.active, replaced: __game.world() !== before, mass: !!__game.world().massRuntime, fatal: __game.crash().fatal };
+   return { first, active: __game.loading.active, replaced: __game.world() !== before, mass: !!__game.world().massRuntime, fatal: __game.crash().fatal, notice: document.getElementById('start-menu')?.innerText };
   });
-  assert.equal(resumed.first.direction, 'down'); assert.equal(resumed.active, false); assert.equal(resumed.replaced, true); assert.equal(resumed.mass, false); assert.equal(resumed.fatal, null);
-  report.checks.push('cold Continue cancellation preserves the old world; subsequent Continue restores main’s saved world');
-  // Exercise main's disk-first roster owner with a delayed read, cancellation,
-  // a newer cover, and then a real successful restore of the same vessel.
-  await win.loadURL('http://127.0.0.1:' + server.address().port);
-  const roster = await run(async () => {
-   for (let i = 0; !window.__game && i < 100; i++) await new Promise(r => setTimeout(r, 100)); await __game.hydrated();
-   const saved = JSON.parse(localStorage.getItem('arpg_character_v1'));
-   if (!saved) throw Error('Missing main run save for roster fixture');
-   const copy = { ...saved, charId: 'loading-qa-vessel', modeId: 'immortal' };
-   const entry = { charId: copy.charId, modeId: copy.modeId, slot: 100, classId: copy.classId, name: 'Loading QA vessel', level: 1, stage: 0, savedAt: Date.now() };
-   __game.account().roster.push(entry); __game.saveAccount(); __game.ui.setContinueSave(saved);
-   const before = __game.world(), original = window.fetch;
-   let release;
-   window.fetch = (resource, options) => String(resource) === '/__save/100' && options?.method === 'GET'
-     ? new Promise(resolve => { release = () => resolve(new Response(JSON.stringify(copy), { status: 200, headers: { 'content-type': 'application/json' } })); })
-     : original(resource, options);
-   try {
-    document.getElementById('sm-immortals').click(); document.querySelector('.sm-roster-go[data-cid="loading-qa-vessel"]').click();
-    const direction = __game.loading.snapshot.direction;
-    for (let i = 0; !release && i < 100; i++) await new Promise(r => setTimeout(r, 20));
-    if (!release) throw Error('Roster read was never requested');
-    document.querySelector('#mu-loading-screen button').click();
-    const newer = __game.loading.begin({ kind: 'travel', label: 'Newer preparation' });
-    release(); await new Promise(r => setTimeout(r, 150));
-    const stale = __game.world() === before && __game.loading.active && __game.loading.snapshot.label === 'Newer preparation';
-    newer.finish();
-    window.fetch = (resource, options) => String(resource) === '/__save/100' && options?.method === 'GET'
-      ? Promise.resolve(new Response(JSON.stringify(copy), { status: 200, headers: { 'content-type': 'application/json' } })) : original(resource, options);
-    document.getElementById('sm-immortals').click(); document.querySelector('.sm-roster-go[data-cid="loading-qa-vessel"]').click();
-    for (let i = 0; __game.loading.active && i < 400; i++) await new Promise(r => setTimeout(r, 25));
-    return { direction, stale, active: __game.loading.active, replaced: __game.world() !== before,
-      charId: __game.world().meta.charId, modeId: __game.world().meta.modeId, fatal: __game.crash().fatal };
-   } finally { window.fetch = original; }
-  });
-  assert.deepEqual(roster, { direction: 'down', stale: true, active: false, replaced: true, charId: 'loading-qa-vessel', modeId: 'immortal', fatal: null });
-  report.checks.push('main delayed roster cancellation cannot publish or dismiss a newer cover; subsequent roster Continue restores the vessel');
+  report.checks.push({ continueResult: resumed });
+  assert.equal(resumed.first.direction, 'down'); assert.equal(resumed.active, false); assert.equal(resumed.replaced, true); assert.equal(resumed.mass, true); assert.equal(resumed.fatal, null);
+  report.checks.push('cold Continue cancellation preserves the old world; subsequent Continue restores seamlessly');
   await win.loadURL('http://127.0.0.1:' + server.address().port + '/?loadingPreview=left');
   const preview = await run(async () => {
-   for (let i = 0; !window.__game?.loading.active && i < 100; i++) await new Promise(r => setTimeout(r, 50));
+   for (let i = 0; (!window.__game?.loading.active || __game.loading.snapshot.label !== 'Loading screen preview') && i < 100; i++) await new Promise(r => setTimeout(r, 50));
    return { active: __game.loading.active, direction: __game.loading.snapshot.direction, label: __game.loading.snapshot.label };
   });
   assert.deepEqual(preview, { active: true, direction: 'left', label: 'Loading screen preview' }); report.checks.push('playable preview URL');

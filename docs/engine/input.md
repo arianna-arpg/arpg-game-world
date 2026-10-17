@@ -68,6 +68,11 @@ element belongs to that element.**
 
 ## Standing kin
 
+- THE HONEST INPUT (`net/intent.ts HONEST_INPUT_CFG`, docs/engine/shard.md): a wire
+  client's frame carries its own `dt`; a host folds a tick's frames into one input
+  whose `moves` walk each at its dt under THE TIME BUDGET, and THE QUICK TAP holds a
+  slot pressed anywhere in that batch for the tick. A local seat sends no dt and walks
+  the tick's dt exactly as before.
 - THE SWAP-ON-CONFLICT keybind law (`ui/panels.ts`): one key drives ONE
   action, so an interact press can never double as a slot press by binding.
 - THE PRESSABLE BAR (`main.ts`): a mouse press on a HUD slot lands as that
@@ -97,3 +102,59 @@ element belongs to that element.**
 
 Probes: `balance/probe_harvest.ts` rig K, `balance/probe_trace.ts` rig D,
 `balance/probe_typingguard.ts`.
+
+## Held-skill priority
+
+`engine/skillInputOrder.ts` orders the ordinary host skill attempts after the
+interaction and timeflow gates. `SKILL_INPUT_CFG.priority = 'recent-held'`
+gives a newly pressed, still-held slot the next available native opportunity
+before an older repeat. For example, holding Cleave and then holding Shield Up
+finishes the current swing and raises the guard, instead of letting Cleave's
+lower slot restart forever. The priority belongs to the seat and disappears on
+release. It is transient and is neither saved nor sent over the wire.
+
+This changes attempt order only: casts retain their commitment, each running
+mode keeps its own button's held state, and every attempt still goes through
+useSkill/useMetaSkill. A refused or cooling-down skill lets another held action
+try. A tap released while the body remains committed is not queued. Toggles
+still require edges; meta presses retain their own lane. Edges in one input
+frame tie by slot index because PlayerInput has no within-frame timestamps.
+Legacy holds without edges retain slot order until a fresh choice arrives.
+
+`priority = 'slot'` restores the previous ordering for comparison. Verify
+`probe_skillinputorder.ts`, native harvest/trace/meta/typing probes and
+`balance/held-priority-ui.cjs`. The client uses real mouse button events in an
+isolated profile; `HOLLOW_WAKE_QA_LEGACY=1` with the prior fixed build reproduces
+the held-shield starvation. This is independent of movement lock during casts.
+
+### Walking before an older repeat
+
+With `SKILL_INPUT_CFG.movement = 'recent-walk'`, beginning a walk takes the
+next opportunity ahead of skills already held. The running cast still finishes
+under its own movement lock; after it finishes, an older attack cannot keep
+restarting and rooting the hero. Ending the walk restores a still-held skill.
+A fresh skill press while walking wins again. This also applies to mobile
+repeat casts: their current mobility is unchanged, but a newly requested walk
+supersedes their older repeat until the player presses the skill again.
+
+A walk is its zero-to-nonzero intent transition. Steering an existing walk does
+not continually steal priority from an attack. Same-frame walk/skill presses
+favor the explicit skill. While walking, a newly observed held slot without an
+edge bit is also admitted, preserving older scripted/remote intent producers;
+an already observed hold is an older repeat. Outside walking the prior
+edge/slot ordering remains intact.
+
+The running cast's held state is fed before arbitration, so a later walk never
+releases a guard or channel. Native channel/gather mobility, charge/release,
+cooldown, cost and reflex rules still run through their existing gates.
+The history belongs to each seat, is transient, and changes no wire/save format.
+`movement = 'ignore'` restores skill-only precedence; `priority = 'slot'`
+restores the original attempt order altogether.
+
+Verify the input probe, interaction/meta/typing gates, native skillmodes/couch,
+and `balance/movement-priority-ui.cjs`. Its real mouse and keyboard comparison
+against the prior build (`HOLLOW_WAKE_QA_LEGACY=1`) reproduces repeated Firebolts
+during a requested walk. The new build starts moving at the same frame after
+the original cast and then continues walking, until movement ends or a fresh
+attack is pressed. The controlled flat arena tests input semantics, not whether
+ordinary combat is enjoyable.

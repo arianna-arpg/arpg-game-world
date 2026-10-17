@@ -21,6 +21,7 @@ import { FEATURE } from '../meta/account';
 import type { GateRow } from '../meta/gates';
 import { BRANDT_CFG } from './brandt';
 import type { ItemRarity } from '../engine/items';
+export type NativeVendorHost=Pick<World,"chandlerStock"|"delverDepthReached"|"delverEntryRefusal"|"delverShopOpen"|"descentStock"|"nearChandler"|"nearSmith"|"time"|"vendorPrice"|"vendorQualityPieces"|"vendorRestockAt"|"vendorStock"|"zone">;
 
 export interface VendorStockPolicy {
   baseRarities: readonly ItemRarity[];
@@ -223,30 +224,30 @@ export interface VendorDef {
   accent: string;
   bg: string;
   /** Is this counter at hand for the seat? */
-  near(w: World, seat: Seat): boolean;
+  near(w: NativeVendorHost, seat: Seat): boolean;
   /** THE KEEPER — the npcRole of the body behind this counter: THE DWELL
    *  TELL seats the counter's linger ring on that body (World.dwellTargetsView),
    *  and its 'npc:<role>' transit row tints it. */
   npcRole: string;
-  stock(w: World): VendorEntry[];
-  priceOf(w: World, entry: VendorEntry): VendorPrice;
+  stock(w: NativeVendorHost): VendorEntry[];
+  priceOf(w: NativeVendorHost, entry: VendorEntry): VendorPrice;
   /** Which META intent buys stock index N. */
   buyT: 'buyVendor' | 'buyChandler' | 'buyDelver';
   /** This counter also buys scrap (the SELL lane: anything → coarse essence)
    *  — WHEN the predicate holds. A gate as data: Brandt's opens with the
    *  Vault's Salvage Station; a future fence could open on reputation. */
-  salvage?: (w: World) => boolean;
+  salvage?: (w: NativeVendorHost) => boolean;
   /** Shown in place of the scrap wheel while `salvage` says no — the counter
    *  explains its own lock (and where the key is sold). */
   salvageLocked?: string;
   /** Contextual header line (restock countdown, deepest depth …). */
-  headline?(w: World): string;
+  headline?(w: NativeVendorHost): string;
   /** THE ENTRY LOCK lane: why stock entry `e` refuses purchase (a short
    *  refusal string), or null when open — a PER-ENTRY gate as data. The
    *  panel disables + badges through it and the engine buy handler refuses
    *  through the same predicate (one truth). The Delver's DEPTH LOCKS are
    *  the debut; any future counter may lock entries behind anything. */
-  entryLock?(w: World, e: VendorEntry): string | null;
+  entryLock?(w: NativeVendorHost, e: VendorEntry): string | null;
   /** THE PATRON'S HOLD capabilities (absent = plain counter, nothing persists). */
   holds?: VendorHoldCaps;
   /** The Wares grid dims (absent = VENDOR_CFG.gearGrid). */
@@ -263,7 +264,7 @@ export interface VendorDef {
    *  per-site counter (a future delver hold) would scope itself
    *  `${id}@${w.zone.id}`; the worldstate sanitizer already tolerates both
    *  spellings. */
-  holdKey?(w: World): string;
+  holdKey?(w: NativeVendorHost): string;
 }
 
 /** The countdown's clock face — m:ss above a minute, bare seconds below.

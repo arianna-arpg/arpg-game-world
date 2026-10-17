@@ -38,6 +38,10 @@ export interface PeerInfo {
   name: string;
   classId: string;
   isHost: boolean;
+  /** THE IDENTITY (accountId, THE SHARD): the joiner's account id, carried on
+   *  its `join` and seen by the HOST alone (never re-broadcast in a roster).
+   *  It only ever keys this player's own records. */
+  accountId?: string;
 }
 
 /** Session-control (run LIFECYCLE) messages — distinct from the per-tick state.
@@ -57,7 +61,54 @@ export type SessionMsg =
   | { t: 'cosmetics'; loadout: import('../engine/cosmetics').CosmeticLoadout }
   | { t: 'newRun'; seat: PlayerId; seed: number }
   | { t: 'hostLeft' }
-  | { t: 'action'; action: MetaAction };
+  // THE ECHO LAW (net/shell.ts): a client action's rising seq; the host echoes the newest it
+  // judged on the seat's own build (SeatMetaW.as). Absent from a lane that keeps no echo.
+  | { t: 'action'; action: MetaAction; seq?: number }
+  // THE VESSEL + THE DEATH COVENANT (THE SHARD: docs/engine/shard.md "The
+  // vessel and the corpse"; the rows are typed and sanitized in vesselWire.ts):
+  //   heroSave (shard→a seat): the vessel's mirror, a CharacterSave with NO
+  //            world half, on the persistence beat and at the farewell.
+  //   corpse   (shard→a seat): a MORTAL vessel fell: where its body lies and
+  //            the reckoning the shard appraised (`runEnd` follows).
+  //   corpses  (shard→a seat): the seat's OWN standing bodies in its zone,
+  //            plus the reclaims it completed since the last row.
+  //   leaving  (seat→shard):  the farewell: mirror me before my socket closes;
+  //            and THE DELIBERATE LEAVE: that close ends my seat at once,
+  //            never dormant (card 16 B: a close without it leaves the hero),
+  //            unless said mid-fight (THE ACTING SEAT: it sleeps like a lost socket).
+  //            `unload` (W7, THE UNLOAD WORD): the page is going away (a closed
+  //            tab or a reload); an out-of-fight hero sleeps untargetable for the
+  //            short reload grace instead (SHARD_CFG.unloadGraceSec).
+  | { t: 'heroSave'; save: import('../meta/character').CharacterSave }
+  | { t: 'corpse'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning }
+  | { t: 'corpses'; zoneId: string; bodies: import('./vesselWire').ShardBodyRow[]; reclaimed?: number }
+  | { t: 'leaving'; unload?: boolean }
+  // THE IMMORTAL'S COVENANT ON A SHARD (card 30, RULED A 2026-10-10; vesselWire.ts sanitizes):
+  //   stageDeath (shard→a seat): THE CROSSING, a stage that survives death died on the shard:
+  //            where its body lies, the tithe the shard appraised at the dying stage's rate
+  //            and the stage it reached; the client books it as a solo crossing books it and
+  //            plays the fade (the hero wakes at the hearth on the shard).
+  //   fell     (shard→a seat): THE FALL, an Undying died: where its body lies, the appraisal,
+  //            the vessel's level and the fall record's time; the client stamps its own
+  //            roster card fallen (the fee frozen at receipt) and keeps the slot; `runEnd`
+  //            follows. Re-spoken at a stale upload of the fallen vessel (THE LATE WORD's shape).
+  | { t: 'stageDeath'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning; stage: number }
+  | { t: 'fell'; note: import('./vesselWire').ShardCorpseNote; reckoning: import('./vesselWire').ShardReckoning; level: number; at: number }
+  // THE PARTY (docs/design/shard-world.md card 23 — net/partyWire.ts): a client's word to its
+  // party desk (client→host), an invite landing on its target, and a refusal's one line.
+  // THE PARTY THAT READS: an invite names the inviter's party only when it stands (an
+  // ungrouped inviter's party founds on the accept) and carries `until`, the world time it
+  // lapses, so the client drops it then.
+  // THE SPOILS' OWNER (card 27): the 'rule' op carries the leader's choice (net/spoils.ts).
+  | { t: 'party'; op: import('./partyWire').PartyOp; seat?: PlayerId; rule?: import('./spoils').DropRuleKind; allocation?: import('./spoils').DropAllocation }
+  | { t: 'partyInvite'; from: PlayerId; name: string; party?: string; until: number }
+  | { t: 'partyWord'; word: string }
+  // THE ACTING SEAT (a refused hero, shard→a seat): the shard would not seat the
+  // vessel this join carried, and never seats a fresh hero in its place. `mu`:
+  // the hero cannot travel, so the client goes back to Mu bound for this world
+  // to wake one that can; absent, the word is a door (the hero already walks
+  // here) and the client goes home with it.
+  | { t: 'refused'; word: string; mu?: boolean };
 
 /** THE SEED THREAD — a client's World must be minted from the HOST's run seed,
  *  never one of its own. `manifest.seed` drives the shared map (the starter web
@@ -103,11 +154,17 @@ export interface NetTransport {
 
   /** Host→clients: broadcast a state snapshot (no-op locally). */
   sendState(snapshot: StateSnapshot): void;
+  /** Targeted retained-area delivery. False keeps the zone pending for retry. */
+  sendStateToSeat?(snapshot:StateSnapshot,to:PlayerId,epoch?:object|null):boolean;
   /** Client: subscribe to incoming state. Returns a disposer. */
   onState(cb: (snapshot: StateSnapshot) => void): () => void;
 
   /** Host→clients: send the one-time per-zone terrain message. */
   sendZone(zone: ZoneMsg): void;
+  sendZoneToSeat?(zone:ZoneMsg,to:PlayerId,epoch?:object|null):boolean;
+  /** Opaque live connection identity; null means no connected recipient.
+   * Targeted sends with this token refuse a replaced connection. */
+  deliveryEpochForSeat?(to:PlayerId):object|null;
   /** Client: subscribe to incoming zone terrain. Returns a disposer. */
   onZone(cb: (zone: ZoneMsg) => void): () => void;
 

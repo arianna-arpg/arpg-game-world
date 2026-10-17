@@ -173,7 +173,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   cleave: {
     tree: STARTER_SKILL_TREES.cleave,
-    id: 'cleave', name: 'Cleave',
+    id: 'cleave', name: 'Cleave', icon: 'sweep',
     description: 'A wide melee swing that deals physical damage to every enemy in the arc in'
       + ' front of you.',
     tags: ['attack', 'melee', 'physical', 'aoe'], color: '#d8b06a',
@@ -290,7 +290,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   war_cry: {
     tree: STARTER_SKILL_TREES.war_cry,
-    id: 'war_cry', name: 'War Cry',
+    id: 'war_cry', name: 'War Cry', icon: 'rally',
     description: 'Bellow a war cry: 40% increased damage and 15% increased attack speed for 6'
       + ' seconds.',
     tags: ['warcry', 'buff', 'duration'], color: '#e8d44a',
@@ -627,7 +627,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   firebolt: {
     tree: STARTER_SKILL_TREES.firebolt,
-    id: 'firebolt', name: 'Firebolt',
+    id: 'firebolt', name: 'Firebolt', icon: 'ember',
     description: 'Loose an orb of flame: a projectile dealing fire damage, with a 12% chance to'
       + ' set the victim burning.',
     tags: ['spell', 'projectile', 'fire'], color: '#ff7a2a',
@@ -1092,7 +1092,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   frost_nova: {
     tree: STARTER_SKILL_TREES.frost_nova,
-    id: 'frost_nova', name: 'Frost Nova',
+    id: 'frost_nova', name: 'Frost Nova', icon: 'frost',
     description: 'Rime bursts outward in a nova around you, dealing cold damage and CHILLING'
       + ' everything it catches.',
     tags: ['spell', 'cold', 'aoe'], color: '#a8e4ff',
@@ -2978,7 +2978,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   shadow_step: {
     tree: STARTER_SKILL_TREES.shadow_step,
-    id: 'shadow_step', name: 'Shadow Step',
+    id: 'shadow_step', name: 'Shadow Step', icon: 'step',
     description: 'Melt into shadow and reappear directly BEHIND a targeted enemy, blade already turning.',
     tags: ['movement'], color: '#6a6a8a',
     manaCost: 9, cooldown: 5, useTime: 0,
@@ -3013,7 +3013,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   cloak: {
     tree: STARTER_SKILL_TREES.cloak,
-    id: 'cloak', name: 'Cloak',
+    id: 'cloak', name: 'Cloak', icon: 'veil',
     description: 'Wrap yourself in obscuring shadow for 8 seconds: enemies must come 65% closer'
       + ' to notice you, and you move 10% faster. Approach from behind to avoid their gaze.'
       + ' Attacking briefly exposes you; lose their sight to leave them searching your last known position.',
@@ -3929,7 +3929,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   shield_up: {
     tree: STARTER_SKILL_TREES.shield_up,
-    id: 'shield_up', name: 'Shield Up',
+    id: 'shield_up', name: 'Shield Up', icon: 'guard',
     description: 'Raise a frontal guard with its own health: hits and projectiles from the'
       + ' facing arc break against it instead of you, while you move at 40% speed and turn'
       + ' heavily. Hold it for a second and the bash readies; release then to bash: a short'
@@ -4594,7 +4594,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   backstab: {
     tree: STARTER_SKILL_TREES.backstab,
-    id: 'backstab', name: 'Backstab',
+    id: 'backstab', name: 'Backstab', icon: 'knife',
     description: 'A precise melee thrust that deals 150% more damage from behind the target,'
       + ' with a 35% chance to open a bleed. Pairs viciously with Shadow Step.',
     tags: ['attack', 'melee', 'physical'], color: '#b8a8e8',
@@ -4685,7 +4685,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   chain_lightning: {
     tree: STARTER_SKILL_TREES.chain_lightning,
-    id: 'chain_lightning', name: 'Chain Lightning',
+    id: 'chain_lightning', name: 'Chain Lightning', icon: 'chain',
     description: 'A bolt that leaps to the nearest unstruck enemy on every hit, chaining 3'
       + ' times innately with a 30% chance to shock each victim. Chain supports stack on top of'
       + ' the innate count.',
@@ -10025,7 +10025,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   life_flask: {
     tree: FLASK_TREES.life_flask,
-    id: 'life_flask', name: 'Life Flask',
+    id: 'life_flask', name: 'Life Flask', icon: 'lifeFlask',
     // Copy FLAGGED for Arianna's word (the two-stream rewrite, 2026-08-08).
     description: 'Holds up to 3 charges; every life orb you pick up banks one. Drinking spends'
       + ' a charge to pour TWO streams at once: a SURGE of 15% of your maximum life over 0.4'
@@ -10063,7 +10063,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mana_flask: {
     tree: FLASK_TREES.mana_flask,
-    id: 'mana_flask', name: 'Mana Flask',
+    id: 'mana_flask', name: 'Mana Flask', icon: 'manaFlask',
     description: 'Banks one charge per mana orb you pick up, holding up to 3. Drinking spends a'
       + ' charge to restore mana over 3 seconds, deeper as the skill levels; a REFLEX press'
       + ' works even mid-cast but is refused at full mana. While slotted, your hits have a 5%'
@@ -10090,7 +10090,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   catalyst_flask: {
     tree: FLASK_TREES.catalyst_flask,
-    id: 'catalyst_flask', name: 'Catalyst Flask',
+    id: 'catalyst_flask', name: 'Catalyst Flask', icon: 'catalystFlask',
     description: 'Any orb you pick up feeds this flask, banking up to 6 charges. Drinking'
       + ' consumes the whole bank (at least 2): every charge adds to a pour of life and mana'
       + ' over 3.5 seconds, and the rush grants 15% increased damage and 10% increased move'

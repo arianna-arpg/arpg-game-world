@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from '../../world/bulletins';
 // ---------------------------------------------------------------------------
 // THE QUICKENING FIELD — spent ground runs quick again (pure overlay).
 //
@@ -40,7 +41,7 @@
 import { Rng } from '../../core/rng';
 import type { ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
-import { registerEventFront } from '../../engine/eventWeather';
+import { registerEventFront, type EventWeatherHost } from '../../engine/eventWeather';
 import type { WorldBulletin } from '../../world/bulletins';
 import { registerBulletinSource } from '../../world/bulletins';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
@@ -400,7 +401,7 @@ export class QuickeningField implements WorldOverlay {
  *  REGISTERED dimension (world/dimensions.ts — never a hardcoded plane list;
  *  declaring `dimensions: [...]` on the package makes new instances appear
  *  here for free). */
-function quickeningFields(world: World): QuickeningField[] {
+function quickeningFields(world: Pick<World,"sim">): QuickeningField[] {
   return dimensionIds()
     .map(d => world.sim.overlayFor<QuickeningField>('quickening', d))
     .filter((f): f is QuickeningField => !!f);
@@ -442,7 +443,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   return [];
 });
 
-registerBulletinSource((world: World) => {
+registerBulletinSource((world: NativeBulletinHost) => {
   const out: WorldBulletin[] = [];
   for (const f of quickeningFields(world)) out.push(...f.drainBulletins());
   return out;
@@ -453,7 +454,7 @@ registerBulletinSource((world: World) => {
 // easing off through the window's last breath so the fade never pops.
 registerEventFront({
   id: 'quickening',
-  sample: (world: World, zone: ZoneDef) => {
+  sample: (world: EventWeatherHost, zone: ZoneDef) => {
     const f = world.sim.overlayFor<QuickeningField>('quickening', zone.dimension);
     const info = f?.quickeningOn(zone.id);
     const kind = f?.surge().weatherKind;

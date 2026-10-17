@@ -108,7 +108,8 @@ export interface MoveSpec {
    *  chance the reroll actually flips (default 0.4). */
   flipEvery?: [number, number];
   flipChance?: number;
-  /** Strafe to reopen a blocked firing lane before anything else (casters). */
+  /** Seek a usable firing lane; native free casts retain their cadence. Grid
+   * ranged kits default to seeking. Explicit false preserves planted conduct. */
   losSeek?: boolean;
   /** HOW the feet find the way (the pathfinding lever, machine-shiftable
    *  like every move knob): 'route' (default) follows the zone's walkable
@@ -136,6 +137,9 @@ export interface MoveSpec {
   /** charge/lurk: begin the committed rush within this range (default 320;
    *  lurk defaults 260). */
   commitRange?: number;
+  /** lurk: finish the rush at this center distance and trade blows; stay in
+   * pursuit until the prey escapes commitRange. Omitted keeps the old watch. */
+  lurkMeleeRange?: number;
   /** charge: sprint speed multiplier (default 2.4) and the recovery window
    *  before the next charge (default [2.5, 4.5]). */
   chargeSpeed?: number;

@@ -1,4 +1,5 @@
 import { sanitizeCosmeticLoadout } from './meta/cosmetics';
+import { storageKey } from './buildProfile';
 // ---------------------------------------------------------------------------
 // Entry point: boots the world, runs the loop, and routes player input into
 // the same skill pipeline the AI uses.
@@ -14,6 +15,7 @@ import { DEATH_PRESENTATION } from './data/deathPresentation';
 import { deathPresentationPose } from './engine/deathPresentation';
 import { Input } from './core/input';
 import { LoadingScreen, type LoadingLease } from './ui/loadingScreen';
+import { assertScriptedInput } from './core/scriptedInput';
 import { PAD_CFG, PadState, connectedPadIndices, padIdAt, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
 import { COUCH_CFG } from './data/couch';
 import { CouchClaimSession, findRebindSlot, PadSeatInput } from './net/couch';
@@ -21,6 +23,8 @@ import { CouchJoinOverlay, type CouchJoinChoice, type CouchJoinView } from './ui
 import { applyCursor } from './core/cursor';
 import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
+import { DIALOGUE_CFG } from './data/dialogue';
+import { NpcConversationUI, conversationHasRewards } from './ui/npcConversation';
 import { DialogueUI, type DialogueActionContext } from './ui/dialogue';
 import { DialogueActions } from './engine/dialogueActions';
 import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
@@ -28,62 +32,48 @@ import { installUiStack } from './ui/zorder';
 import { escapeModeOf } from './ui/escapeConfig';
 import { rollSeed } from './core/rng';
 import { validateContent } from './data/validate';
-import './data/clusters'; // side-effect: registers the data-driven cluster stamps
-import './data/formations'; // side-effect: registers the patterned formation stamps
-import './engine/landmarkBuilders'; // side-effect: registers the landmark shape builders
-import './data/landmarks'; // side-effect: registers the geographic landmark recipes
-import './data/lairs'; // side-effect: the true natives claim their ground (the lair fabric)
-import './engine/layoutRecipes'; // side-effect: registers the composed layout recipes
-import './engine/interiorGen'; // side-effect: registers the interior layouts (dungeon/labyrinth/edifice) + room roles
-import './data/massifs'; // side-effect: registers the massif mass kinds (+ the 'massif' recipe via engine/massif)
-import './data/watchposts'; // side-effect: registers the 'watch_post' ring tenant (the posted-watcher court)
-import './data/occurrences'; // side-effect: registers the 'occurrence' ring tenant + the occurrence shelf (court tables name it)
-import './data/settled'; // side-effect: the settled-belt kit (+ the 'fields'/'district' recipes via engine/settled)
-import './data/garden'; // side-effect: the Garden country kit (kinds, formations, compositions, the nest role pool)
-import './data/catacombs'; // side-effect: the second under-country kit (the crypts lane, the lych way's span row)
-import './data/merelake'; // side-effect: the moonlit mere kit (the meadow's grotto lane, the mere court)
-import './data/cistern'; // side-effect: the cistern kit (the scald lake's grotto lane, the crone's court)
-import './data/lonecrypt'; // side-effect: the lone crypt kit (the exhumation's door, the resident pool, the unquiet yard)
-import './data/grove'; // side-effect: the Grove country kit (lantern flora, the hollow way down)
-import './data/theater'; // side-effect: THE THEATER FABRIC's default kinds+rows (siege/patrol re-founded — BEFORE warfront so kind priority stays sieges-first, as ever)
-import './data/warfront'; // side-effect: the Warfront country kit (siege furniture, the war column)
-import './data/scald'; // side-effect: the Scald Basin country kit (pool rows, mineral furniture, the meld, the basin's weather)
-import './data/greatgeyser'; // side-effect: THE GREAT GEYSER den lane (the mouth, the lair seat, the Geysermaw's ledger)
-import './data/scaldkit'; // side-effect: THE SCALD KIT K1 (the steam bank, the lacksStatus condition, the kit census)
-import './data/pilgrimage'; // side-effect: THE TERRACE PILGRIMAGE theater kind + rows (after data/theater — kind priority is registration order)
-import './data/compositions'; // side-effect: registers the whole-zone composition bundles
-import './data/fog'; // side-effect: registers the living fog bank kinds
-import './data/creeps'; // side-effect: registers the living creep kinds
-import './data/traversals'; // side-effect: registers the vertical-crossing kinds (sky launch/fall)
-import './data/glyphParts'; // side-effect: registers the shipped hand-drawn part kinds (the glyph roster)
-import './data/commanders'; // side-effect: the tutorial factions (the Fathers) + the prologue's resolve seam
-import './data/locales';
-import './data/authoredMaps'; // side-effect: THE AUTHORED-MAP FABRIC's shipped maps (+ the 'authored' layout via engine/authoredMaps)
-import './data/bountyJourneys';
-import './data/bountyExpeditions'; // side-effect: the bounty board's 'expedition' kind (an authored map minted at the take)
+import './worldmass/nativeBootstrap'; // identical registration order in play and the compiler worker
 import { updateAI } from './engine/ai';
 import { World, type Seat } from './engine/world';
 import { applyLab, ULT_QA } from './engine/ultimates'; // THE LAB LEVER — the dev panel's Lab tab; __game.ultqa is its console twin
 import { sceneBegin, sceneCardAck, sceneDue, muTakeClassRequest, muOfferOf } from './engine/scenes';
-import { MU_CFG, MU_SCENE_ID } from './data/mu';
-import { buildManifest, reconcileManifest, type ExpeditionManifest } from './packages/manifest';
+import { MU_CFG } from './data/mu';
+import { buildManifest, type ExpeditionManifest } from './packages/manifest';
 import { bumpLedger, mergeLedger } from './packages/ledger';
 import { registerAllPackageFactions } from './packages/factionGen';
 import { Renderer } from './render/renderer';
+import { installSkillShowcases } from './showcase/host';
+import { Director } from './director/director';
+import { dayCycle as clipDayCycle, DAY_LENGTH as CLIP_DAY_LENGTH } from './world/daynight';
 import { RENDER_SCALE_CFG, nextNotch } from './render/renderScale';
 import { UI } from './ui/panels';
-import { installSkillShowcases } from './showcase/host';
 import { errorOverlayShown, showErrorOverlay, type CrashEntry } from './ui/errorOverlay';
 import { LocalTransport } from './net/local';
+import { makeAccount } from './meta/account'; // the wilds shell's fresh account (startAsClient)
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
-import type { PlayerInput, MetaAction, PlayerInputSource } from './net/intent';
-import { Director } from './director/director';
+import type { PlayerInput, MetaAction } from './net/intent';
 import { wireSeed } from './net/transport';
 import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from './net/transport';
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
+import { noteActionEcho } from './net/snapshot'; // THE ECHO LAW: the WebRTC host echoes a client's judged action
+import { WireShell } from './net/shell'; // THE SMOOTH SHELL: the client's timeline (adopt, place, predict, watch)
+import { CAMERA_FOLLOW_CFG, newCameraFollow } from './render/camera'; // THE SMOOTH SHELL's follow
 import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
+import { NativeHostedPublication } from './net/nativeHostedPublication';
+import { WsTransport, defaultShardUrl, normalizeShardUrl, servedShardUrl, servedWorldName, shardResumeFor, rememberedShardSession, WS_TRANSPORT_CFG } from './net/ws';
+import {
+  continueRoute, doorWord, farewellLine, forgetDoor, readDoor, reloadOnceFor, returnWord, sameWorld,
+  vesselTooLarge, worldNameOf, writeDoor, type ShardDoor,
+} from './net/shardDoor';
+import { SHARD_REFUSAL, shardBuildStamp } from './net/shardBuild';
+import { wildsShellActive, wildsShellAttach, wildsShellDetach, wildsShellRemember, wildsShellRing, wildsShellStream, wildsShellZone } from './net/wildsClient';
+import { ShardCrossing } from './net/crossing'; // THE ONE CROSSING: one cover over a hosted world's arrival
+import { readTravelingVessel, ShardVesselLink, soloWorldStands, travelNote } from './meta/shardVessel';
 import { openCoopLobby } from './ui/lobby';
+import { PartyPanel } from './ui/party';
+import { PARTY_INBOX, clientGrouped, partyPanelModel } from './net/partyReads'; // THE PARTY THAT READS
+import { PARTY_WIRE_CFG, type PartyInviteNote } from './net/partyWire';
 import { CLASSES, type ClassDef } from './data/classes';
 import { SKILLS as CLIP_SKILLS } from './data/skills';
 import { makeSkillGem as clipSkillGem } from './engine/skills';
@@ -112,12 +102,18 @@ import {
   saveSuppressed, suppressSaves,
 } from './meta/persistence';
 import {
-  applySavedCharacter, clearCharacter, loadCharacter, loadCharacterAsync,
-  loadRosterSave, persistRun, persistRunDurable,
+  clearCharacter, loadCharacter, savedCharacterPatronId, CHAR_SLOT,
+  readCharacterContinueSummary, readCharacterResume,
+  loadRosterSave, persistRun, persistRunDurable, flushCharacterSaves,
   rebuildSavedMeta, saveCouchGuest,
   type CharacterSave,
 } from './meta/character';
 import { resolveResumeSpawn } from './meta/worldstate';
+import { characterResumeFields } from './meta/characterResume';
+import { prepareNativeCharacterContinue } from './worldmass/nativeClientContinue';
+import { NativeClientStart, type NativeClientStarted, type NativeClientStartRequest } from './worldmass/nativeClientStart';
+import { nativeClientRuntimeFor, type NativeClientRuntime } from './worldmass/nativeClientRuntime';
+import type { HeroInputQuery, HeroInputSource } from './agent/perception';
 import { DEFAULT_MODE_ID, freeRosterSlot, mintCharId, modeById, rosterCapacity, type RosterEntry } from './meta/modes';
 import { healMercEngagements, releaseMercsOf } from './meta/mercs';
 import type { Settings } from './meta/settings';
@@ -125,6 +121,7 @@ import type { Settings } from './meta/settings';
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const input = new Input(canvas);
 const loadingScreen = new LoadingScreen(() => { input.clearForLoading(); barPress = null; });
+let loadingGate: { world: World; lease: LoadingLease } | undefined;
 
 // ---------------------------------------------------------------------------
 // THE CRASH TRAP (game half — the early half is inline in index.html and owns
@@ -309,24 +306,18 @@ let crashTestAt = COOP_PARAMS.has('crashtest') ? performance.now() + 1000 : Infi
 // render FPS), only ever while real peers are connected — single-player/local-only
 // never builds one, so SP stays byte-identical.
 const STATE_HZ = 20;
-const SNAP_INTERVAL = 1 / STATE_HZ;   // seconds between host snapshots (interp basis)
 let stateTimer = 0;
 let snapTick = 0;
-/** Latest + previous snapshots from the host (client only). The client renders
- *  entity positions interpolated PREV→LATEST over one snapshot interval, so motion
- *  is smooth ~60fps instead of stepping at the 20Hz wire rate. */
-let latestSnapshot: StateSnapshot | null = null;
-let prevSnapshot: StateSnapshot | null = null;
-/** Seconds since the latest snapshot arrived — drives the interpolation alpha. */
-let snapAccum = 0;
+/** THE SMOOTH SHELL (net/shell.ts, client only): the client's whole timeline. Each arriving
+ *  snapshot is ADOPTED once (state, the own build under THE ECHO LAW); each frame places it
+ *  (remote bodies on THE JITTER BUFFER's delayed clock, flights and telegraphs on the newest
+ *  pair), predicts the own hero (THE HONEST INPUT, THE SOFT CORRECTION, THE PREDICTED ROOT)
+ *  and watches the link (THE WATCHDOG). Reset per session. */
+const shell = new WireShell();
 /** CLIENT: set when a newly-arrived snapshot carried OUR replicated seat meta, so
  *  the client re-renders its open build panels (skill book / tree / char sheet)
  *  exactly when the data changes — the HUD is always live via the renderer. */
 let clientMetaDirty = false;
-/** CLIENT: false while the latest snapshot's seatMeta delta hasn't been applied by
- *  a frame yet — so if a NEWER snapshot arrives first (coalescing), it carries the
- *  un-applied delta forward instead of dropping it. Set true once a frame applies. */
-let metaApplied = true;
 /** CLIENT: JSON of the last OWN-seat meta we triggered a panel re-render for — so
  *  the 1.5s heartbeat (which re-ships IDENTICAL meta) doesn't perpetually re-render
  *  the open build panels (which would yank a scrolled list back to the top). */
@@ -335,20 +326,13 @@ let lastMetaJson = '';
  *  delta-replicated meta snapshot that was dropped (congested channel) or coalesced. */
 const META_HEARTBEAT = 1.5;
 let metaHeartbeat = 0;
-/** CLIENT movement PREDICTION (Layer 3): a monotonic input seq + a ring of recent
- *  {seq,dx,dy,dt}. Each frame the own hero is anchored to the host's last-acked
- *  authoritative position and our UNACKED inputs are replayed forward — so the
- *  local player moves with ~zero input latency instead of waiting on the 20Hz
- *  snapshot round-trip. Reset per client session so seq realigns with the host. */
-let inputSeq = 0;
-const predictHistory: Array<{ seq: number; dx: number; dy: number; dt: number }> = [];
-const PREDICT_BUFFER = 240;        // ~4s @ 60fps — caps replay cost + runaway
-let predZoneId = '';               // zone change → discard stale (old-zone) inputs
 /** Disposers for the client's onState / onZone subscriptions. */
 let snapshotDispose: (() => void) | null = null;
 let zoneDispose: (() => void) | null = null;
 /** Host: the last zone id whose terrain we broadcast (resend on change). */
 let lastSentZone = '';
+/** A new transport or client shell needs terrain before its first state. */
+const hostedPublications = new WeakMap<NativeClientRuntime, { transport: NetTransport; publication: NativeHostedPublication }>();
 /** Run-lifecycle (co-op) plumbing. sessionDispose tears down the onSession
  *  subscription on leave. HOST: pendingRejoins = peers who chose a class for the
  *  next run while the host wasn't yet in one (reseated when it starts). CLIENT:
@@ -361,10 +345,13 @@ let sessionDispose: (() => void) | null = null;
 let hostLostDispose: (() => void) | null = null;
 const pendingRejoins = new Map<string, string>();
 let pendingRejoinClass: ClassDef | null = null;
+/** CLIENT, THE SHARD: the vessel link of the last shard session (heroSave
+ *  mirrors, THE DEATH COVENANT's word, our own bodies' rows — meta/shardVessel.ts). */
+let shardVessel: ShardVesselLink | null = null;
 /** HOST: meta intents (point-spends, gem ops, drops) received from clients this
  *  frame, tagged with the sender's seat. Drained + applied just before world.update
  *  (so the change replicates in the SAME tick's snapshot). */
-const pendingActions: Array<{ seat: string; action: MetaAction }> = [];
+const pendingActions: Array<{ seat: string; action: MetaAction; seq?: number }> = []; // seq: THE ECHO LAW
 
 /** A LIVE over-the-wire co-op session with at least one connected peer. Gates the
  *  run-end broadcast + the keep-the-transport-alive restart path. */
@@ -377,7 +364,40 @@ function coopActive(): boolean {
  *  Today: the timeflow's menu-hold gate — menus hard-pause the sim only when
  *  this machine owns the one real sim AND no live peer shares it (a co-op
  *  world is never one player's to stop; a client render-shell never holds). */
+let resumeRequest = 0;
+let resumeController: AbortController | null = null;
+/** Only the still-pending connection is owned by this entry generation. */
+let pendingShardEntry: { readonly request: number; readonly transport: WsTransport } | undefined;
+function cancelCharacterResume(): void {
+  resumeRequest++;
+  if (resumeController) { resumeController.abort(); ui.setContinuePending(false); }
+  resumeController = null;
+  const pending = pendingShardEntry;
+  if (pending) {
+    pendingShardEntry = undefined;
+    if (net === pending.transport) resetToLocal(); else pending.transport.leave();
+  }
+}
+const nativeStarts = new WeakMap<Account, NativeClientStart>();
+function nativeStartFor(owner: Account): NativeClientStart {
+  let start = nativeStarts.get(owner);
+  if (!start) { start = new NativeClientStart(owner); nativeStarts.set(owner, start); }
+  return start;
+}
+function clientReadiness(w: World): { status: 'ready' | 'pending' | 'refused'; required?: number; error?: string } | undefined {
+  const retained = nativeClientRuntimeFor(w);
+  return retained ? { status: retained.ready ? 'ready' : 'pending' } : w.massRuntime?.nativeReadiness(w);
+}
+let previousAdoptedWorld: World | undefined;
 function adoptWorld(w: World): World {
+  if (loadingGate && loadingGate.world !== w) { loadingGate.lease.finish(); loadingGate = undefined; }
+  cancelCharacterResume();
+  w.bindGlobalPolicies();
+  if (previousAdoptedWorld && previousAdoptedWorld !== w) {
+    const previous = nativeClientRuntimeFor(previousAdoptedWorld);
+    if (previous) previous.retire(); else previousAdoptedWorld.massRuntime?.dispose();
+  }
+  previousAdoptedWorld=w;
   // (Couch guests count as live players too — a shared screen is never one
   // player's to stop, so a seated guest waives the menu hold like a peer.)
   w.timeflow.allowHold = () => net.isHost && !coopActive() && !w.couchActive();
@@ -448,13 +468,23 @@ dialogueActions.register('menu', {
   refusal: (context, action) => context.world === world ? ui.dialogueMenuRefusal(action.target) : 'This conversation has ended.',
   run: (_context, action) => ui.activateDialogueMenu(action.target),
 });
-const dialogue = new DialogueUI({
+const dialogue: DialogueUI = new DialogueUI({
+  conversationTopFloor: () => ui.conversationTopFloor(),
+  ownerChanged: (id, active) => { ui.conversationSpeakerId = id; ui.conversationWorkspaceActive = id !== null && active; },
+  createWorkspace: (root, changed) => new NpcConversationUI(root, {
+    world: () => world,
+    available: () => renderer.npcDialogueAvailable() && dialogue.open,
+    inventory: () => { if (!ui.inventoryOpen) ui.toggleInventory(); },
+    slotLabels: () => ui.conversationSlotLabels(),
+    changed: () => ui.refreshInventory(),
+  }, changed),
   settings: () => settings, padActive: padActiveNow,
   hudTop: () => ui.hudCluster?.()?.y,
   resolveText: text => renderer.resolveText(text),
   actions: dialogueActions,
   available: () => renderer.npcDialogueAvailable(),
 });
+renderer.npcDialogueOwner = () => dialogue.session.reading?.offer.speakerId ?? null;
 renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && ui.dialogueContext().available;
 renderer.onNpcDialogue = (w, line, focusId) => {
   dialogue.setAvailable(renderer.npcDialogueAvailable());
@@ -473,10 +503,13 @@ const RUN_END_FADE = { outSec: 1.15 };
 /** The booked epilogue; revealing it never re-books the death. */
 let pendingDeathScreen: { open: (revealSec?: number) => void; opened?: boolean } | null = null;
 
+type StartGameArguments = [classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string, graftSkillId?: string | null, kitPicks?: Record<string, string>];
 function startGame(
   classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string,
   graftSkillId?: string | null, kitPicks?: Record<string, string>,
-): void {
+  loadingStage?: (label: string) => Promise<void>,
+  loadingCurrent?: () => boolean,
+): void | Promise<void> {
   couchReset(); // a new world seats no ghosts — guests re-join from the menu
   // THE PROLOGUE GATE (engine/scenes.ts), read FIRST — before a roster mode
   // pushes its vessel and muddies the virgin-account test: an account that
@@ -486,6 +519,33 @@ function startGame(
   // opening, or a dev testing it, without touching the account gate.
   const prologueDue = sceneDue(account, 'prologue')
     || new URLSearchParams(location.search).has('prologue');
+  // THE ONE CROSSING (net/crossing.ts): a server-bound wake mints its vessel on a World that
+  // stands no local town (no zone loads, nothing is drawn); the shard's hearth is the far side.
+  // THE DOOR (W7): the tab's persisted binding is what a wake travels to.
+  const door = readDoor();
+  const serverBound = !!door && !prologueDue;
+  if (!serverBound) {
+    const request: NativeClientStartRequest = { kind: 'run', classDef, manifest, modeId, name,
+      graftSkillId, kitPicks, prologue: prologueDue ? 'force' : 'skip',
+      onReady: made => { world = adoptWorld(made.writer); if (COOP_ALLY) spawnCoopAlly(); },
+    };
+    const finish = (started: NativeClientStarted | null): void => {
+    if (!started) { toStartMenu(); return; }
+    lastSentZone = '';
+    if (modeById(modeId).save !== 'roster') ui.setContinueSave(null);
+    ui.resetRunView(); deathShown = false; pendingDeathScreen = null; running = true;
+    };
+    if (loadingStage) {
+      const start = nativeStartFor(account);
+      return start.beginLoading(request, loadingStage).then(started => {
+        // A queued cancellation can run between adoption and Promise completion.
+        if (loadingCurrent?.() === false) return;
+        if (!started || start.current === started && world === started.writer && started.runtime.ready) finish(started);
+      });
+    }
+    finish(nativeStartFor(account).begin(request));
+    return;
+  }
   // The LIFE-CONTRACT (meta/modes.ts): class select passes the sworn mode.
   // A roster mode binds an account VESSEL at creation — the character saves
   // cross-session into its own slot from its first breath.
@@ -509,8 +569,8 @@ function startGame(
   // contract that run held (its patron ceases to exist right here, not at
   // the next boot's self-heal).
   if (mode.save !== 'roster') {
-    const prev = loadCharacter();
-    if (prev?.charId && releaseMercsOf(account, prev.charId) > 0) saveAccount(account);
+    const previousPatron = savedCharacterPatronId();
+    if (previousPatron && releaseMercsOf(account, previousPatron) > 0) saveAccount(account);
   }
   // The manifest is the run-LOCKED package config. Phase 4's Expedition screen
   // passes a configured one; otherwise build it from the account's saved prefs.
@@ -525,7 +585,7 @@ function startGame(
   // skips the re-walk: the flasks arrive learned, barred, and brimming at
   // first breath. No-op until that first graduation — and placed BEFORE
   // persistRun so the baseline snapshot already carries them.
-  world.createPlayer(classDef, { modeId: mode.id, charId, name: charName, kit: resolveClassKit(account, classDef, kitPicks) });
+  world.createPlayer(classDef, { modeId: mode.id, charId, name: charName, kit: resolveClassKit(account, classDef, kitPicks), load: !serverBound });
   // THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
   // deal the ultimate + gauge debuts into the fresh bag, unlearned.
   world.dealLabArts();
@@ -554,31 +614,59 @@ function startGame(
   // played once, ever — and its staging ground lives off-graph, so even a
   // mid-scene autosave resumes at the ordinary wake.
   if (prologueDue) sceneBegin(world, 'prologue');
-  running = true;
+  running = !serverBound; // THE ONE CROSSING: the minting world is no run; the shard's shell starts the loop
+  // THE LOGIN THROUGH MU (card 22): a server-bound wake travels at once — the vessel
+  // just saved at the bedside is the one the shard seats, and this run stays its home.
+  // THE DOOR (W7) is the tab's persisted binding, so a reload or the menu in between
+  // never drops it; a hero woken for a world consents to leave its bedside world behind.
+  if (door && serverBound) {
+    crossingWake(); // THE ONE CROSSING: this wake's cover stands from the flush to the hero's streamed ground
+    const request = resumeRequest;
+    void (async () => {
+      try {
+        await flushCharacterSaves();
+        if (request !== resumeRequest || crossing.phase !== 'wake') return; // a cancelled/replaced wake never connects
+        await connectToShard(door.url, classDef.id, { charId }, { replaceSolo: true }, request); // THE WAKE'S WORD: this charId, mortal or roster
+      } catch (e) { if (request === resumeRequest && !crossingCancelled(e)) toStartMenu(doorWord(e)); }
+    })();
+  }
 }
 
-/** Loading cancellation returns to the current save without writing the toy. */
+/** Loading cancellation does not save a partially prepared world. Reread only
+ * the menu summary, which was cleared when a fresh run started. */
 function cancelLoadingToMenu(): void {
   toStartMenu('The crossing was cancelled.');
-  ui.setContinueSave(loadCharacter());
+  const request = resumeRequest;
+  void readCharacterContinueSummary().then(summary => {
+    if (request === resumeRequest && !running) ui.setContinueSave(summary);
+  }).catch(() => { /* The menu stays available; a later Continue rereads storage. */ });
 }
 
-/** Main retains its existing world/save owners. Paint around their bounded
- * stages; the shared loading lease guards every asynchronous publication seam.
- * Synchronous construction still needs cooperative work or workers to animate. */
-async function withLoadingScreen(work: (loading: LoadingLease) => void | Promise<void>, label = 'Taking form'): Promise<boolean> {
-  const loading = loadingScreen.begin({ kind: 'entry', label, loadout: account.cosmetics.loadout, cancel: cancelLoadingToMenu });
+/** loadingScreen owns an independent foreground renderer. Await its first paint
+ * before starting CPU work, and drain its input before exposing the ready world.
+ * Native construction and save authority stay in their existing game process. */
+async function withLoadingScreen(...args: StartGameArguments): Promise<boolean> {
+  const lease = loadingScreen.begin({ kind: 'entry', label: 'Taking form', loadout: account.cosmetics.loadout,
+    cancel: cancelLoadingToMenu });
   try {
-    await loading.paint(); await diskHydrated;
-    if (!loading.current) return false;
-    await work(loading);
-    if (!loading.current || !running) return false;
-    loading.update({ label: 'Opening the world' });
-    await loading.paint(); if (!loading.current) return false;
-    renderer.render(world);
+    await lease.paint(); if (!lease.current) return false;
+    wakeLease = lease; // THE ONE CROSSING: a server-bound wake keeps this cover to the far side
+    try { await startGame(args[0], args[1], args[2], args[3], args[4], args[5], async label => {
+      if (!lease.current) throw Error('Native client start cancelled');
+      lease.update({ label }); await lease.paint();
+      if (!lease.current) throw Error('Native client start cancelled');
+    }, () => lease.current); } finally { wakeLease = null; }
+    if (crossingLease === lease) return true;
+    lease.update({ label: 'Opening the world' });
+    await lease.paint(); if (!lease.current) return false;
+    const presenting = world;
+    if (!await renderer.renderLoading(presenting, () => lease.paint(),
+      () => lease.current && world === presenting && running && crossingLease !== lease)) return false;
+    // loadingScreen drains foreground actions before exposing the prepared world.
+    await lease.paint(); if (!lease.current) return false;
+    loadingGate = { world, lease };
     return true;
-  } catch (error) { if (loading.current) reportFatal(error, 'world loading'); return false; }
-  finally { loading.finish(); }
+  } catch (error) { const active = lease.current; lease.finish(); if (active) reportFatal(error, 'world entry'); return false; }
 }
 
 /** Class-select adapter: the picker hands back (class, sworn mode, name);
@@ -587,12 +675,21 @@ async function withLoadingScreen(work: (loading: LoadingLease) => void | Promise
  *  pick between the class choice and the world's first breath — the
  *  deliberate selection rides into startGame and spends there; declining
  *  keeps the charge armed for a later run. */
-const startPicked = (d: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>): void => {
-  if (account.skillGraft) {
-    ui.showSkillGraftPick(pick => { void withLoadingScreen(() => startGame(d, undefined, modeId, name, pick, kitPicks)); });
-    return;
-  }
-  void withLoadingScreen(() => startGame(d, undefined, modeId, name, undefined, kitPicks));
+let startPickPending = false;
+const startPicked = async (d: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>): Promise<void> => {
+  if (startPickPending) return;
+  startPickPending = true;
+  cancelCharacterResume();
+  try {
+    // A browser root may live only in IndexedDB. Resolve the existing boot
+    // load before replacing its patron or mutating the authoritative account.
+    await diskHydrated;
+    if (account.skillGraft) {
+      ui.showSkillGraftPick(pick => { void withLoadingScreen(d, undefined, modeId, name, pick, kitPicks); });
+      return;
+    }
+    await withLoadingScreen(d, undefined, modeId, name, undefined, kitPicks);
+  } finally { startPickPending = false; }
 };
 
 /** THE MU BOOT (data/mu.ts): stand a PROVISIONAL world up and drift into the
@@ -600,17 +697,34 @@ const startPicked = (d: ClassDef, modeId?: string, name?: string, kitPicks?: Rec
  *  ever exists for it (the scene stand-down covers every chokepoint) and no
  *  roster vessel is minted. The wisp strips the provisional class to nothing;
  *  taking a vessel calls startPicked, which discards this world wholesale. */
-function startMu(): void {
+async function startMu(notice?: string): Promise<void> {
   couchReset();
-  world = adoptWorld(new World(account, Object.freeze(buildManifest(account, rollSeed()))));
-  const cls = CLASSES.find(c => c.id === MU_CFG.provisionalClass) ?? CLASSES[0];
-  world.createPlayer(cls, { modeId: DEFAULT_MODE_ID, startingCompanions: false, startingFlasks: false });
-  lastSentZone = '';
-  ui.resetRunView();
-  deathShown = false;
-  pendingDeathScreen = null; // the dead run's fade is over — Mu owns the screen now
-  sceneBegin(world, MU_SCENE_ID);
-  running = true;
+  const lease = loadingScreen.begin({ kind: 'entry', label: 'Finding your way', loadout: account.cosmetics.loadout,
+    cancel: cancelLoadingToMenu });
+  try {
+    await lease.paint(); if (!lease.current) return;
+    const started = await nativeStartFor(account).beginLoading({ kind: 'mu', onReady: made => {
+      if (!lease.current) throw Error('Native client start cancelled');
+      world = adoptWorld(made.writer); lastSentZone = ''; ui.resetRunView();
+      deathShown = false; pendingDeathScreen = null; running = true;
+      if (notice) world.text(world.player.pos, notice, '#d8b87a', 13, undefined, 6);
+    } }, async label => {
+      if (!lease.current) throw Error('Native client start cancelled');
+      lease.update({ label }); await lease.paint();
+      if (!lease.current) throw Error('Native client start cancelled');
+    });
+    if (!lease.current) return;
+    if (!started || world !== started.writer || nativeStartFor(account).current !== started || !started.runtime.ready)
+      throw Error('The provisional vessel could not be prepared');
+    lease.update({ label: 'Opening the crossing' });
+    await lease.paint(); if (!lease.current) return;
+    if (world !== started.writer || nativeStartFor(account).current !== started || !started.runtime.ready)
+      throw Error('The provisional vessel changed before presentation');
+    if (!await renderer.renderLoading(started.writer, () => lease.paint(), () => lease.current &&
+      world === started.writer && running && nativeStartFor(account).current === started && started.runtime.ready)) return;
+    await lease.paint();
+  } catch (error) { if (lease.current) reportFatal(error, 'Mu entry'); }
+  finally { lease.finish(); }
 }
 
 /** THE BEGIN PRESS (the start menu's one primary button): a virgin account —
@@ -618,122 +732,115 @@ function startMu(): void {
  *  class screen at all; everyone else drifts into Mu, where the class roster
  *  stands IN the world. The legacy class screen remains beneath (co-op
  *  rejoin offers still call it directly). */
-function beginPressed(): void {
+async function beginPressed(): Promise<void> {
+  cancelCharacterResume();
+  const request = resumeRequest;
+  await diskHydrated;
+  if (request !== resumeRequest) return;
   const prologueDue = sceneDue(account, 'prologue')
     || new URLSearchParams(location.search).has('prologue');
   if (prologueDue) {
-    startPicked(CLASSES.find(c => c.id === MU_CFG.provisionalClass) ?? CLASSES[0]);
+    await startPicked(CLASSES.find(c => c.id === MU_CFG.provisionalClass) ?? CLASSES[0]);
     return;
   }
-  startMu();
+  await startMu();
 }
-ui.onBeginRun = beginPressed;
+// THE DOOR (W7): the menu's Begin is a solo road chosen; the tab forgets the world it was bound for.
+ui.onBeginRun = () => { forgetDoor(); void beginPressed(); };
+// THE FRONT DOOR (W7): the menu's primary row on a page a world served (or a tab bound for one).
+ui.serverDoor = frontDoor;
+ui.onEnterWorld = door => { void enterTheWorld(door); };
+// THE HONEST LEAVING (W7): a hosted world's words and its Exit (the pause menu reads these).
+ui.hostedWorld = () => (net instanceof WsTransport ? lastShardWorld ?? 'the world' : null);
+ui.onExitWorld = () => { void exitWorld(); };
 
-/** THE WAKEFUL WORLD: stand the saved world back up around a freshly-resumed
- *  character — adopt the save's world section (zone graph, discovery, clock,
- *  quests, zone memory, overlay snapshots), then wake per the resolved policy
- *  (mode pin ▷ player setting ▷ engine default). A save with NO adoptable
- *  world resumes fresh exactly as before worldstate existed — with its
- *  generated objective keys scrubbed, so a re-rolled world can't wake
- *  pre-cleared ground. Shared by both resume paths (run slot + roster). */
-function restoreWorldState(world: World, save: CharacterSave): void {
-  if (!save.world || !world.adoptWorldState(save.world)) {
-    world.scrubStaleObjectives(); // fresh reroll — createPlayer already stood us in town
-    return;
-  }
-  // THE SEALED SHORES reconcile: restored rivers rebuild their exits to the
-  // dealt landings only and re-stamp their berths (an older save's
-  // accumulated discovery roads rewire to the nearest port and heal away).
-  world.reconcileSoulrivers();
-  // …and the SURFACE waters: port zones rebuild to notarized deeds, hold
-  // anchors re-seal their causeway locks, and the DRY-ROAD heal drops any
-  // saved road that walks across the sea (the voyage is the only crossing).
-  world.reconcileSeaPorts();
-  // …and THE WEB LAWS: a pre-budget save's Field expanses stamp their map
-  // berths and shed hub spokes past the biome road budget (the degree trim
-  // precedent, applied to the land's own hubs).
-  world.reconcileWebLaws();
-  const mode = modeById(world.meta.modeId);
-  world.resumeSpawn(resolveResumeSpawn(mode.resume, settings.resumeSpawn), save.world.player);
-}
-
-/** Resume an account-roster character (an Immortal vessel) from its own slot.
- *  Async (disk-first load); a missing/corrupt slot just returns to the menu —
- *  the entry stays listed, deletion is only ever the player's deliberate call. */
+/** Both Continue buttons reread their slot. The menu holds a label only; an
+ * old cached character cannot replace a newer save or a reassigned vessel. */
 function resumeRosterChar(entry: RosterEntry): void {
-  // THE FALLEN LOCK (the resurrection covenant): a fallen vessel cannot be
-  // played — the menu row already refuses, this is the belt behind it (and
-  // behind any stale handler holding an old card).
   if (entry.fallen) {
     ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar,
       `${entry.name} lies fallen — resurrect them in the Vault (${entry.fallen.fee} ${META_CURRENCY_LABEL}).`);
     return;
   }
-  void withLoadingScreen(async loading => {
-    const save = await loadRosterSave(entry.slot);
-    // A cancelled or superseded disk read cannot replace the current world.
-    if (!loading.current) return;
-    const card = account.roster.find(r => r.slot === entry.slot && r.charId === entry.charId && r.modeId === entry.modeId && !r.fallen);
-    if (!card) { toStartMenu('The selected vessel changed during Continue.'); return; }
+  void resumeCharacterSlot(entry.slot, { ...entry });
+}
+function resumeGame(): void { void resumeCharacterSlot(CHAR_SLOT); }
+async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<void> {
+  cancelCharacterResume();
+  const request = resumeRequest, controller = new AbortController();
+  resumeController = controller;
+  ui.setContinuePending(true);
+  const current = (): boolean => request === resumeRequest && !controller.signal.aborted && loading.current;
+  const cardCurrent = (): boolean => !roster || !!account.roster.find(r => r.slot === slot
+    && r.charId === roster.charId && r.modeId === roster.modeId && !r.fallen
+    && modeById(r.modeId).save === 'roster');
+  const loading = loadingScreen.begin({ kind: 'entry', label: 'Recalling your vessel', loadout: account.cosmetics.loadout,
+    cancel: () => {
+      if (!current() && !(published && world === published && running && loading.current)) return;
+      cancelLoadingToMenu();
+    } });
+  let prepared: Awaited<ReturnType<typeof prepareNativeCharacterContinue>> | undefined;
+  let published: World | undefined;
+  try {
+    await loading.paint();
+    await diskHydrated;
+    if (!current()) return;
+    if (!cardCurrent()) throw Error('The selected vessel changed during Continue');
+    const read = await readCharacterResume(slot, { signal: controller.signal });
+    if (!current()) return;
+    if (!cardCurrent()) throw Error('The selected vessel changed during Continue');
+    if (read.status !== 'ready') {
+      if (read.status === 'stale') throw Error('The saved character changed. Please try Continue again');
+      throw Error(read.status === 'refused' ? read.reason : 'The saved character is unavailable');
+    }
+    const fields = characterResumeFields(read.resume);
+    if (roster && (fields.charId && fields.charId !== roster.charId
+      || fields.modeId && fields.modeId !== roster.modeId)
+      || !roster && modeById(fields.modeId ?? DEFAULT_MODE_ID).save === 'roster')
+      throw Error('The saved character belongs to a different slot');
+    // HOME SLOTS (W7): a hero bound to a hosted world RETURNS there (THE LOGIN THROUGH MU
+    // naming it); its world-less mirror never builds a solo world.
+    const route = continueRoute(fields);
+    if (route.kind === 'return') {
+      loading.update({ label: `Returning to ${worldNameOf(route.home)}` });
+      await loading.paint();
+      if (!current()) return;
+      await returnToWorld(route.home, route.charId ?? roster?.charId);
+      return;
+    }
+    forgetDoor(); // a solo road chosen at the menu: the tab is bound for no world
+    prepared = await prepareNativeCharacterContinue(account, read.resume, {
+      isCurrent: () => current() && cardCurrent(), signal: controller.signal,
+      loadingStage: async label => { loading.update({ label }); await loading.paint(); },
+      spawn: resolveResumeSpawn(modeById(fields.modeId ?? DEFAULT_MODE_ID).resume, settings.resumeSpawn),
+    });
+    if (!current() || !cardCurrent()) return;
+    const resumed = prepared.publish();
     couchReset();
-    const classDef = save && CLASSES.find(c => c.id === save.classId);
-    if (!save || !classDef) {
-      ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
-      return;
-    }
-    const manifest = reconcileManifest(save.expedition, account, rollSeed());
-    world = adoptWorld(new World(account, Object.freeze(manifest)));
-    world.createPlayer(classDef, { modeId: entry.modeId, charId: entry.charId, startingCompanions: false, startingFlasks: false });
-    if (!applySavedCharacter(world, save)) {
-      ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
-      return;
-    }
-    // Identity drift heal: the save is the authority on mode/stage, the roster
-    // card on charId — an old save missing its id re-adopts the card's.
-    if (!world.meta.charId) world.meta.charId = entry.charId;
-    restoreWorldState(world, save); // the vessel's world wakes with it
+    world = adoptWorld(resumed.writer);
+    published = world;
     lastSentZone = '';
     if (COOP_ALLY) spawnCoopAlly();
     ui.resetRunView();
-    deathShown = false;
-    running = true;
-    ui.hideAll();
-  }, 'Recalling your vessel');
-}
-
-/** Resume the saved in-progress character, or fall back to the start menu.
- *  `preloaded` is the disk/local save fetched at boot; without it we read sync. */
-function resumeGame(preloaded?: CharacterSave | null): void {
-  void withLoadingScreen(() => resumeGameNow(preloaded), 'Recalling your vessel');
-}
-
-/** The existing synchronous restore owner, called only by the current loading lease. */
-function resumeGameNow(preloaded?: CharacterSave | null): void {
-  couchReset();
-  const save = preloaded ?? loadCharacter();
-  const classDef = save && CLASSES.find(c => c.id === save.classId);
-  // A saved character is always resumable — resume must NOT depend on the
-  // (now random, slot-based) class-select roll. Only a missing/invalid save bails.
-  if (!save || !classDef) {
-    clearCharacter();
-    ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
-    return;
+    deathShown = false; pendingDeathScreen = null;
+    running = true; ui.hideAll();
+    // loadingScreen stays interactive through the actual first terrain/sprite bake.
+    loading.update({ label: 'Opening the world' });
+    await loading.paint();
+    if (world === resumed.writer && running && loading.current) {
+      if (!await renderer.renderLoading(resumed.writer, () => loading.paint(),
+        () => world === resumed.writer && running && loading.current && resumed.runtime.ready)) return;
+      await loading.paint();
+    }
+  } catch (error) {
+    if (published && world === published && running) reportFatal(error, 'continued world entry');
+    else if (current()) ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar,
+      error instanceof Error ? error.message : 'The saved world could not be read');
+  } finally {
+    loading.finish();
+    prepared?.discard();
+    if (resumeController === controller) { resumeController = null; ui.setContinuePending(false); }
   }
-  // Rebuild the run-locked manifest from the save (tolerant of removed packages);
-  // its stored seed makes the resumed world deterministic.
-  const manifest = reconcileManifest(save.expedition, account, rollSeed());
-  world = adoptWorld(new World(account, Object.freeze(manifest)));
-  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });          // builds a valid skeleton in town…
-  if (!applySavedCharacter(world, save)) { // …then the save overwrites the build
-    clearCharacter();
-    ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
-    return;
-  }
-  restoreWorldState(world, save);        // …and the world wakes around it
-  if (COOP_ALLY) spawnCoopAlly();
-  ui.resetRunView();        // same rule as startGame: fresh World, fresh view state
-  deathShown = false;
-  running = true;
 }
 
 // Dev/debug handle (also keeps headless testing possible when rAF is paused).
@@ -746,14 +853,18 @@ declare global {
     /** Set the moment this module evaluates — the early fallback's stand-down. */
     __gameBooted?: boolean;
     __game?: {
-      world: () => World; ui: UI; ai: typeof updateAI; renderer: Renderer;
-      account: () => Account; saveAccount: () => void; save: () => void;
+      world: () => World; retained: () => NativeClientRuntime | undefined; ui: UI; ai: typeof updateAI; renderer: Renderer;
+      account: () => Account; saveAccount: () => void; save: () => void; flushRunSave: () => Promise<void>;
       settings: () => Settings; saveSettings: () => void;
       addAlly: () => void;
       net: () => NetTransport;
       snapshot: () => StateSnapshot;
       applySnap: (s: StateSnapshot, prev?: StateSnapshot | null, alpha?: number) => void;
       subscribeToHost: () => void;
+      /** THE SMOOTH SHELL (net/shell.ts): the client timeline, for QA reads. */
+      wireShell: () => WireShell;
+      /** THE ONE CROSSING (net/crossing.ts): the hosted arrival's cover, for QA reads. */
+      crossing: () => ShardCrossing;
       unsubscribeFromHost: () => void;
       fakeJoin: (classId?: string) => string;
       fakeLeave: (id: string) => void;
@@ -768,16 +879,22 @@ declare global {
       padPointer: () => PadPointer;
       fakePad: (p: FakePad | null) => void;
       step: (frames?: number, dtMs?: number) => void;
-      /** THE AGENT SEAT: drive the local hero from a PlayerInputSource (null = keyboard/mouse). */
-      pilot: (src: PlayerInputSource | null) => void;
-      /** Hold the rAF pump: only step() advances the game while held. */
+      pilot: (src: HeroInputSource | null) => void;
       hold: (on: boolean) => void;
-      /** THE DIRECTOR (src/director/): staged, frame-stepped captures of real play. */
       director: () => Director;
+      devStartRun: (classId?: string, seed?: number) => string;
       loading: LoadingScreen;
       devStartLoadingRun: (classId?: string) => Promise<void>;
-      devStartRun: (classId?: string) => string;
       devGrantSkill: (skillId: string, level?: number, slot?: number) => number;
+      devInput: (source: ((dt: number) => PlayerInput | null) | null) => void;
+      clipCatalog: () => {
+        skills: {
+          id: string; name: string; tags: string[]; castMode: string; aiRange?: number;
+          concentration: boolean; delivery: unknown; targeting?: unknown;
+        }[];
+        classes: { id: string; bar: string[] }[];
+        noon: number;
+      };
       hydrated: () => Promise<void>;
       perfFrames: (reset?: boolean) => {
         gap: number[]; sim: number[]; ren: number[];
@@ -803,15 +920,18 @@ declare global {
 document.title = GAME_TITLE; // the one constant names every surface
 
 window.__game = {
-  world: () => world, ui, ai: updateAI, renderer,
+  world: () => world, retained: () => nativeClientRuntimeFor(world), ui, ai: updateAI, renderer,
   account: () => account, saveAccount: () => saveAccount(account),
   save: () => persistRun(account, world),
+  flushRunSave: flushCharacterSaves,
   settings: () => settings, saveSettings: () => saveSettings(settings),
   addAlly: () => spawnCoopAlly(),
   net: () => net,
   snapshot: () => serializeSnapshot(world, 0),
   applySnap: (s: StateSnapshot, prev?: StateSnapshot | null, alpha = 1) => applySnapshot(world, s, prev, alpha),
   subscribeToHost, unsubscribeFromHost,
+  wireShell: () => shell,
+  crossing: () => crossing,
   fakeJoin: (classId) => {
     const id = 'p' + world.seats.length;
     onRemoteJoin({ id, name: 'Remote', classId: classId ?? CLASSES[0].id, isHost: false });
@@ -835,32 +955,41 @@ window.__game = {
   // per pass; a doubled drive double-steps its frame counter and snaps
   // stale actorShade fades early).
   step: (frames = 1, dtMs = 16.7) => { for (let i = 0; i < frames; i++) tick(last + dtMs); },
-  pilot: (src) => { localPilot = src; },
+  pilot: (src) => { localPilot = src; if (src) devInputSource = null; },
   hold: (on) => { directorHold = on; },
   director: () => director ??= new Director({
-    world: () => world,
-    renderer,
-    startRun: (classId) => {
-      const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
-      document.getElementById('start-menu')?.classList.add('hidden');
-      document.getElementById('class-select')?.classList.add('hidden');
-      startGame(cls);
+    world: () => world, renderer,
+    startRun: async (classId, signal) => {
+      await diskHydrated;
+      signal.throwIfAborted();
+      // The disk reconcile owns the ledger until hydration resolves.
+      account.ledger.prologue_lived = 1;
+      const cancel = () => { if (loadingScreen.active) cancelLoadingToMenu(); };
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        const started = await withLoadingScreen(CLASSES.find(c => c.id === classId) ?? CLASSES[0]);
+        signal.throwIfAborted();
+        if (!started) throw new Error('Director entry was cancelled or failed.');
+        ui.hideAll();
+      } finally { signal.removeEventListener('abort', cancel); }
     },
+    ready: waitDirectorReady,
     step: (dtMs) => tick(last + dtMs),
-    setPilot: (src) => { localPilot = src; },
+    setPilot: (src) => { localPilot = src; if (src) devInputSource = null; },
     hold: (on) => { directorHold = on; },
-    ledger: () => account.ledger,
-    ui: () => ui,
+    ledger: () => account.ledger, ui: () => ui,
   }),
   // DEV/QA: start a run headlessly (the perf harness's ignition) — the real
   // startGame path under the first (or named) class, menus dismissed.
   loading: loadingScreen,
-  devStartLoadingRun: async (classId?: string) => { if (await withLoadingScreen(() => startGame(CLASSES.find(c => c.id === classId) ?? CLASSES[0]))) ui.hideAll(); },
-  devStartRun: (classId?: string) => {
+  devStartLoadingRun: async (classId?: string) => { if (await withLoadingScreen(CLASSES.find(c => c.id === classId) ?? CLASSES[0])) ui.hideAll(); },
+  devStartRun: (classId?: string, seed?: number) => {
     const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
     document.getElementById('start-menu')?.classList.add('hidden');
     document.getElementById('class-select')?.classList.add('hidden');
-    startGame(cls);
+    // THE MATCHED START (src/dev/perf.ts residency courses): an explicit seed
+    // deals the same world every start; undefined keeps today's rolled seed.
+    startGame(cls, seed === undefined ? undefined : buildManifest(account, seed));
     return cls.id;
   },
   // DEV/QA: seat any catalog skill by id straight onto a bar slot as THE DEV
@@ -882,6 +1011,24 @@ window.__game = {
     world.charDirty = true;
     world.recalcPlayer();
     return slot;
+  },
+  devInput: (source) => { devInputSource = source; if (source) localPilot = null; },
+  // DEV/QA: the skill-clip capture's catalog: every player skill (the
+  // database page's list; noDrop rows are monster kit), each class's
+  // opening bar (the body that films a skill) and the brightest hour.
+  clipCatalog: () => {
+    let noon = 0;
+    for (let t = 0; t < CLIP_DAY_LENGTH; t++) if (clipDayCycle(t).light > clipDayCycle(noon).light) noon = t;
+    return {
+      skills: Object.values(CLIP_SKILLS).filter(d => !d.noDrop).map(d => ({
+        id: d.id, name: d.name, tags: [...d.tags], castMode: d.castMode ?? 'cast',
+        aiRange: d.ai?.range, concentration: !!d.concentration,
+        delivery: JSON.parse(JSON.stringify(d.delivery)) as unknown,
+        targeting: d.targeting ? JSON.parse(JSON.stringify(d.targeting)) as unknown : undefined,
+      })),
+      classes: CLASSES.map(c => ({ id: c.id, bar: c.bar.filter((b): b is string => !!b) })),
+      noon,
+    };
   },
   // Resolves once the boot's disk reconcile below has landed: a harness
   // starts its run after it, or the reconcile re-seats the account under it.
@@ -937,7 +1084,7 @@ validateContent();
 const devPanelOptIn = ((): boolean => {
   try {
     return new URLSearchParams(location.search).has('dev')
-      || localStorage.getItem('dev_panel') === '1';
+      || localStorage.getItem(storageKey('dev_panel')) === '1';
   } catch { return false; }
 })();
 if (DEV.panel || devPanelOptIn) mountDevPanel(() => world);
@@ -965,12 +1112,13 @@ if (DEV.mapForge || devPanelOptIn) mountMapForge(ui, () => world);
 ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
 ui.setContinueSave(loadCharacter());          // instant: localStorage cache
 const diskHydrated = (async (): Promise<void> => {
-  const [a, s, c] = await Promise.all([loadAccountAsync(), loadSettingsAsync(), loadCharacterAsync()]);
+  const bootRequest = resumeRequest;
+  const [a, s, c] = await Promise.all([loadAccountAsync(), loadSettingsAsync(), readCharacterContinueSummary()]);
   Object.assign(account, a);                  // mutate-in-place: shared refs stay valid
   reconcileClassBundleGems(account);
   Object.assign(settings, s);
   applyUiScale(settings.uiScale);             // the disk save may carry a different dial
-  ui.setContinueSave(c);                       // disk save wins (re-renders the menu)
+  if (bootRequest === resumeRequest) ui.setContinueSave(c); // a newer start/Continue owns the menu
   ui.setStartMenuNotice(saveResetNotice());
   // Workshop disk reconcile: the save file is the cross-session authority
   // (another machine, a cleared browser profile). When it changed anything,
@@ -985,19 +1133,74 @@ const diskHydrated = (async (): Promise<void> => {
   }
 })();
 
+// THE RETURN after a reload (THE SMOOTH SHELL): a tab reloaded inside a hosted session's
+// window goes straight back to its seat (the token the page kept in sessionStorage) instead
+// of the start menu and a fresh join; a seat the world no longer holds lands on the menu.
+{
+  const back = rememberedShardSession();
+  if (back) {
+    const request = resumeRequest;
+    void (async () => {
+      await diskHydrated;
+      if (running || request !== resumeRequest) return; // a newer explicit route owns entry
+      try { await connectToShard(back.url, CLASSES[0].id, undefined, { resumeOnly: true }, request); }
+      catch (e) {
+        if (request !== resumeRequest || crossingCancelled(e)) return;
+        // THE RETURN (card 26 B, W7): the seat is gone (the reload grace ran out, a restart);
+        // a hero bound to this world logs back in where it logged out instead.
+        const route = continueRoute(await readCharacterContinueSummary().catch(() => null));
+        if (request !== resumeRequest) return;
+        if (route.kind === 'return' && sameWorld(route.home.url, back.url) && !running) { await returnToWorld(route.home, route.charId, request); return; }
+        toStartMenu(returnWord(worldNameOf(readDoor() ?? { url: back.url }), e instanceof Error ? e.message : ''));
+      }
+    })();
+  }
+}
+
 /** Read the OS into the LOCAL seat's intent for this frame (or null when there's
  *  nothing to drive — dead/downed, or the pause menu is up). Pure input capture;
  *  it no longer touches the world directly — World.applyInputs does that, for
  *  every seat uniformly. `aim` is converted to WORLD space here so it's
  *  camera-independent (the one value that must survive the wire). */
+/** DEV/QA: a scripted source for the LOCAL seat's intent (__game.devInput).
+ *  While set it replaces the device read wholesale, so a harness drives
+ *  casts through the real frame (the skill-clip capture's hands); null
+ *  restores the devices. */
+let devInputSource: ((dt: number) => PlayerInput | null) | null = null;
 function readLocalInput(dt: number): PlayerInput | null {
   if (loadingScreen.active || loadingScreen.padQuarantined) return null;
-  const p = world.player;
+  if (!devInputSource && (world.player.dead || world.player.downed || ui.escapeMenuOpen || ui.couchJoinOpen)) return null;
+  // Select a pilot method before opening the finite query. A callback-capable
+  // method read may travel; the ensuing query belongs to the resulting body.
+  const pilot = devInputSource ? null : localPilot, poll = pilot?.poll;
+  const retained = net.isHost ? nativeClientRuntimeFor(world) : undefined;
+  return retained ? retained.readLocalInput((body, query) => readLocalInputFor(dt, body, query, pilot, poll))
+    : readLocalInputFor(dt, world.player, world, pilot, poll);
+}
+function readLocalInputFor(dt: number, p: World['player'], query: HeroInputQuery,
+  pilot: HeroInputSource | null, poll: HeroInputSource['poll'] | undefined): PlayerInput | null {
+  if (devInputSource) {
+    try {
+      const intent=devInputSource(dt);
+      assertScriptedInput(intent);
+      return intent;
+    } catch(error) {
+      devInputSource=null; // A failed harness read cannot poison later native frames.
+      throw error;
+    }
+  }
   if (p.dead || p.downed) return null;
   // The pause menu AND the couch join ceremony both take the hero's hands
   // out of play (the world holds under either, solo — the timeflow law).
   if (ui.escapeMenuOpen || ui.couchJoinOpen) return null;
 
+  if (pilot && poll) {
+    try {
+      const intent = Reflect.apply(poll, pilot, [p, query, dt]);
+      assertScriptedInput(intent);
+      return intent;
+    } catch (error) { localPilot = null; throw error; }
+  }
   const kb = settings.keybinds;
   const pb = settings.padBinds;
   // While the menu pointer owns the pad, its buttons/sticks are UI gestures,
@@ -1078,7 +1281,7 @@ function readLocalInput(dt: number): PlayerInput | null {
       const strength = (mode === 'cursor' && pad.aimMag === 0 && sBase < 1)
         ? 1 - Math.pow(1 - sBase, dt * AIM_ASSIST.glideRefHz)
         : sBase;
-      const assisted = assistAim(world, p, raw, padLock, strength);
+      const assisted = assistAim(query, p, raw, padLock, strength);
       padLock = assisted.targetId;
       aim = { x: assisted.x, y: assisted.y };
       if (mode === 'cursor' && padLock !== null) {
@@ -1107,7 +1310,7 @@ function readLocalInput(dt: number): PlayerInput | null {
     const t = padTuning();
     const reach = pad.aimReach(0.5, t);
     const raw = { x: p.pos.x + Math.cos(p.facing) * reach, y: p.pos.y + Math.sin(p.facing) * reach };
-    const assisted = assistAim(world, p, raw, barPress.lock, 1);
+    const assisted = assistAim(query, p, raw, barPress.lock, 1);
     barPress.lock = assisted.targetId;
     aim = { x: assisted.x, y: assisted.y };
   }
@@ -1192,6 +1395,7 @@ function readLocalInput(dt: number): PlayerInput | null {
 /** LOCAL-only UI input (the pause menu + panel toggles). Kept out of the intent
  *  pipeline — these are this client's screen, never gameplay sent to the host. */
 function handleLocalPanels(): void {
+  pressTheRelease(); // THE RELEASE (card 28): a downed hero on a hosted world gives up the wait
   // Dead/downed suppresses ALL local UI input, exactly as the old single input
   // handler did (`if (p.dead) return`) — so escape/panels can't pop over the
   // death screen. (A downed local hero in co-op likewise can't toggle panels.)
@@ -1284,6 +1488,14 @@ function handleLocalPanels(): void {
     || (!padPointer.active && pad.justPressed(settings.padBinds.companionStance)))) {
     world.requestMeta({ t: 'companionStance' });
   }
+  // THE PING (card 17 A — engine/pings.ts, data/identityCues.ts PING_CUE): mark the
+  // ground under the aim for your party — host-judged like every meta intent; the
+  // pad's reticle when it owns the aim, else the mouse.
+  if (!ui.blockingFor(world.localSeat.id) && (input.justPressed(kb.ping)
+    || (!padPointer.active && pad.justPressed(settings.padBinds.ping)))) {
+    const at = renderer.padAim ?? renderer.toWorld(input.mouse);
+    world.requestMeta({ t: 'ping', x: at.x, y: at.y });
+  }
   // Panel toggles answer to key OR pad bind — and the pad ones deliberately
   // stay live in pointer mode (the D-pad flips panels while browsing them).
   const pb = settings.padBinds;
@@ -1348,6 +1560,9 @@ const couchPadSet = new Set<number>();
 const couchClaim = new CouchClaimSession(pad);
 const couchOverlay = new CouchJoinOverlay();
 let couchClaimPad: number | null = null;
+let couchClaimId: string | null = null;
+/** A saved pick belongs to this ceremony, controller claim and run. */
+let couchJoinGeneration = 0;
 let couchSeatSerial = 0;
 /** Last frame's connected-pad census — the pause menu's couch row re-renders
  *  the moment it moves (a controller is invisible to the browser until its
@@ -1463,7 +1678,9 @@ function couchJoinView(): CouchJoinView {
 function openCouchJoin(): void {
   if (!running || !net.isHost || !(net instanceof LocalTransport)) return;
   if (world.couchSeats().length >= COUCH_CFG.join.maxLocal - 1) return;
+  couchJoinGeneration++;
   couchClaimPad = null;
+  couchClaimId = null;
   // Freeze the hero's roaming read where it stands: the claim scan and the
   // roam must never race for the joining pad's first press (the Deck bug —
   // the roam adopted the press and the scan then excluded it, forever).
@@ -1476,8 +1693,10 @@ function openCouchJoin(): void {
 }
 
 function closeCouchJoin(): void {
+  couchJoinGeneration++;
   ui.couchJoinOpen = false;
   couchClaimPad = null;
+  couchClaimId = null;
   couchClaim.release();
   world.timeflow.release('menu:couchJoin');
   couchOverlay.hide();
@@ -1525,12 +1744,35 @@ function couchJoin(pick: string): void {
   const charId = pick.slice('vessel:'.length);
   const entry = account.roster.find(r => r.charId === charId);
   if (!entry) { closeCouchJoin(); return; }
+  const request = ++couchJoinGeneration;
+  const joiningWorld = world, joiningNet = net;
+  const slot = entry.slot, modeId = entry.modeId, classId = entry.classId;
+  const hostCharId = joiningWorld.meta.charId, claimId = couchClaimId;
+  const ceremonyCurrent = (): boolean => request === couchJoinGeneration
+    && running && world === joiningWorld && net === joiningNet
+    && joiningNet instanceof LocalTransport && ui.couchJoinOpen
+    && couchClaimPad === padIdx && claimId !== null && couchClaimId === claimId
+    && padIdAt(padIdx) === claimId && !couchPadSet.has(padIdx);
+  const vesselCurrent = (): boolean => account.roster.includes(entry)
+    && entry.charId === charId && entry.slot === slot && entry.modeId === modeId
+    && entry.classId === classId && !entry.fallen
+    && joiningWorld.meta.charId === hostCharId && charId !== hostCharId
+    && joiningWorld.meta.modeId === modeId && modeById(modeId).save === 'roster'
+    && rosterCapacity(account, modeById(modeId)) >= COUCH_CFG.join.immortalSlotsNeeded
+    && joiningWorld.couchSeats().length < COUCH_CFG.join.maxLocal - 1;
+  if (!ceremonyCurrent() || !vesselCurrent()) { closeCouchJoin(); return; }
   void (async (): Promise<void> => {
-    const save = await loadRosterSave(entry.slot);
+    const save = await loadRosterSave(slot);
+    // A retired/replaced ceremony may not mint a seat OR close its successor.
+    if (!ceremonyCurrent()) return;
+    if (!vesselCurrent()) { closeCouchJoin(); return; }
     const built = save && rebuildSavedMeta(save);
     const cls = save && CLASSES.find(c => c.id === save.classId);
-    if (!save || !built || !cls) { closeCouchJoin(); return; }
-    const seat = mintCouchSeat(padIdx, cls, { slot: entry.slot, save });
+    if (!save || !built || !cls || save.classId !== classId || built.meta.modeId !== modeId
+      || (save.charId && save.charId !== charId)) { closeCouchJoin(); return; }
+    if (!ceremonyCurrent()) return;
+    if (!vesselCurrent()) { closeCouchJoin(); return; }
+    const seat = mintCouchSeat(padIdx, cls, { slot, save });
     if (seat) {
       world.adoptSeatMeta(seat, built.meta, save.bar, save.level);
       seat.couchDeaths = built.deaths;
@@ -1571,6 +1813,7 @@ function couchLeave(id: string): void {
 /** Tear the whole couch session down (run end / menu). Persistence is the
  *  CALLER's duty first — this only drops the session machinery. */
 function couchReset(): void {
+  couchJoinGeneration++;
   for (const g of couchGuests.values()) g.pointer.dispose();
   couchGuests.clear();
   couchPadSet.clear();
@@ -1608,9 +1851,18 @@ function couchTick(dt: number, nowSec: number): void {
     if (ui.escapeMenuOpen) ui.refreshEscapeCouchRow();
   }
   if (ui.couchJoinOpen) {
+    if (couchClaimPad !== null && (padIdAt(couchClaimPad) !== couchClaimId
+      || couchPadSet.has(couchClaimPad))) {
+      // Losing the selected device ends its pending pick, even if the same
+      // controller later returns at that slot. Its next press must claim anew.
+      couchJoinGeneration++;
+      couchClaimPad = null;
+      couchClaimId = null;
+      couchClaim.arm(couchPadSet);
+    }
     if (couchClaimPad === null) {
       const hit = couchClaim.scan(COUCH_CFG.join.claimButton, couchPadSet);
-      if (hit !== null) couchClaimPad = hit;
+      if (hit !== null) { couchClaimPad = hit; couchClaimId = padIdAt(hit); }
     }
     couchOverlay.update(couchJoinView());
   }
@@ -1804,12 +2056,33 @@ function renderScaleTick(nowMs: number): void {
 let last = performance.now();
 // THE AGENT SEAT + THE DIRECTOR (src/agent/, src/director/): a capture rig or
 // a playtest bot may drive the local seat through the same artery the
-// keyboard does (the pilot replaces readLocalInput on the host), and HOLD the
+// keyboard does (the pilot is read inside the guarded local-input path), and HOLD the
 // rAF pump so only __game.step() advances the game (deterministic takes).
 // Both are null/false in ordinary play — the classic loop, byte for byte.
-let localPilot: PlayerInputSource | null = null;
+let localPilot: HeroInputSource | null = null;
 let directorHold = false;
 let director: Director | null = null;
+/** A held capture still waits on the actual loading lease and native page I/O.
+ * Tick only through the loading gate; no scripted hand is installed yet. */
+async function waitDirectorReady(signal: AbortSignal): Promise<void> {
+  const prepared = world;
+  const deadline = performance.now() + 60000;
+  const cancel = () => { if (loadingScreen.active && world === prepared) cancelLoadingToMenu(); };
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    for (;;) {
+      signal.throwIfAborted();
+      if (world !== prepared || !running) throw new Error('Director world entry was replaced or cancelled.');
+      if (crashFatal) throw new Error('Director world entry failed: ' + crashFatal.msg);
+      const readiness = clientReadiness(world);
+      if (readiness?.status === 'refused') throw new Error(readiness.error ?? 'Director native pages were refused.');
+      if (!loadingScreen.active && (!readiness || readiness.status === 'ready')) return;
+      if (performance.now() >= deadline) throw new Error('Director world entry did not become ready.');
+      tick(last + 1000 / 60);
+      await new Promise<void>(resolve => setTimeout(resolve, 16));
+    }
+  } finally { signal.removeEventListener('abort', cancel); }
+}
 /** The rAF pump: one tick, then re-arm. All work lives in tick() so tests can
  *  drive frames SYNCHRONOUSLY via __game.step() — a hidden tab freezes rAF
  *  entirely (the tab-throttle gotcha), which would otherwise freeze input
@@ -1838,7 +2111,30 @@ function tick(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
-  // Loading owns simulation, rendering and input while its independent toy runs.
+  // loading-screen: hold simulation, world rendering, menus and input while
+  // the independent toy frame continues. Native I/O advances in real time.
+  if (running && net.isHost && !world.gameOver && (!loadingScreen.active || loadingGate)) {
+    const readiness = clientReadiness(world);
+    if (readiness && readiness.status !== 'ready' && !loadingGate) {
+      loadingGate = { world, lease: loadingScreen.begin({ kind: 'travel', label: 'Crossing the veil',
+        loadout: account.cosmetics.loadout, cancel: cancelLoadingToMenu }) };
+    }
+    if (loadingGate) {
+      if (!readiness || readiness.status === 'ready') { loadingGate.lease.finish(); loadingGate = undefined; }
+      else if (readiness.status === 'refused') loadingGate.lease.fail(readiness.error ?? 'World pages are unavailable.',
+        () => { world.massRuntime?.retryNativePages(world); });
+      else loadingGate.lease.update({ label: 'Crossing the veil',
+        ...(readiness.required === undefined ? {} : { detail: readiness.required + ' nearby world pages remaining' }) });
+    }
+  }
+  // THE ONE CROSSING (net/crossing.ts): a hosted arrival or hand-off holds the world (no input
+  // leaves, nothing of it is drawn) while the shell places and streams beneath the cover; a
+  // hand-off's grace keeps the last frame and the hands' keys, then the screen rises. The
+  // frame that releases it is held too, so the shell places once a frame.
+  if (crossing.covered) {
+    crossingFrame(dt);
+    if (!loadingScreen.active) { pad.poll(now / 1000); pad.endFrame(); input.endFrame(); return; }
+  }
   if (loadingScreen.active) { input.clearForLoading(); pad.poll(now / 1000); pad.endFrame(); net.drainInputs(); return; }
 
   // THE RENDER SCALE: apply the dial/governor, and keep the pointer seam
@@ -1853,6 +2149,7 @@ function tick(now: number): void {
   const nowSec = now / 1000;
   pad.poll(nowSec);
   if (loadingScreen.padQuarantined) {
+    // Include panel toggles and the pad pointer, not only combat reads.
     pad.move.x = pad.move.y = pad.aimStick.x = pad.aimStick.y = 0;
     pad.moveMag = pad.aimMag = 0; pad.down.clear(); pad.pressed.clear();
   }
@@ -1927,30 +2224,49 @@ function tick(now: number): void {
       //    guests' panel toggles ride their own pads right behind.
       handleLocalPanels();
       handleCouchPanels();
-      // 2. Gather this frame's per-seat intent into the transport. The local seat
-      //    reads the OS; other LOCAL seats (the scripted ally) poll their source.
-      //    A REMOTE seat's intent arrives through the transport's own pump.
-      const li = localPilot && world.player ? localPilot.poll(world.player, world, dt) : readLocalInput(dt);
-      if (li) net.sendInput(net.self, li);
-      for (const seat of world.seats) {
-        if (seat.id === net.self) continue;
-        const intent = seat.input.poll(seat.actor, world, dt);
-        if (intent) net.sendInput(seat.id, intent);
-      }
-      // 3. Apply all seat intents (single path for every player-kind hero).
-      world.applyInputs(net.drainInputs(), dt);
-      // 3.5. Apply clients' META intents (point-spends, gem ops, drops) to their
-      //      OWN seats BEFORE the sim ticks — so the change lands in this tick's
-      //      drops/orbs pass and re-replicates in the same broadcast.
-      drainMetaActions();
+      // Missing nearby native pages hold the whole simulation before input or
+      // AI can step. Rendering, menus and durable saves remain available.
+      const retained = nativeClientRuntimeFor(world);
+      if (world.gameOver || (retained ? retained.ready : world.nativeWorldReady())) {
+        // 2. Gather this frame's per-seat intent into the transport. The local seat
+        //    reads the OS; other LOCAL seats (the scripted ally) poll their source.
+        //    A REMOTE seat's intent arrives through the transport's own pump.
+        const li = readLocalInput(dt);
+        if (li) net.sendInput(net.self, li);
+        for (const seat of world.seats) {
+          if (seat.id === net.self) continue;
+          const intent = retained ? retained.pollSeat(seat, dt) : seat.input.poll(seat.actor, world, dt);
+          if (intent) net.sendInput(seat.id, intent);
+        }
+        if (retained) {
+          const result = retained.dispatch({ dt, wallSeconds: frameGapMs / 1000, inputs: net.drainInputs(),
+            actions: pendingActions.splice(0).map(({ seat, action, seq }) => ({ seatId: seat, action, seq })),
+            gearVacuum: settings.gearPickup !== 'key',
+          });
+          for (const dropped of result.droppedActions) console.warn('[coop] dropped malformed meta action', dropped.seatId, dropped.error);
+        } else {
+          // 3. Apply all seat intents (single path for every player-kind hero).
+          // THE TIME BUDGET runs on the wall: the seconds this frame's dt clamp cut off
+          // still passed for a remote client's hands (World.passInputTime; a local seat
+          // sends no dt, so nothing of single player reads it).
+          world.passInputTime(frameGapMs / 1000 - dt);
+          world.applyInputs(net.drainInputs(), dt);
+          // 3.5. Apply clients' META intents (point-spends, gem ops, drops) to their
+          //      OWN seats BEFORE the sim ticks — so the change lands in this tick's
+          //      drops/orbs pass and re-replicates in the same broadcast.
+          drainMetaActions();
 
-      // The deathPresentation keeps ambience alive, but the settled run must
-      // never gain a late AI kill, cast, or reward behind its epilogue.
-      if (!world.gameOver) for (const a of world.actors) updateAI(a, world, dt);
-      // Mirror the gear-pickup feel preference onto the sim (Settings is a
-      // UI concern the World can't import; a boolean crosses the seam).
-      world.gearVacuum = settings.gearPickup !== 'key';
-      world.update(dt);
+          // The deathPresentation keeps ambience alive, but the settled run must
+          // never gain a late AI kill, cast, or reward behind its epilogue.
+          if (!world.gameOver) for (const a of world.actors) updateAI(a, world, dt);
+          // Mirror the gear-pickup feel preference onto the sim (Settings is a
+          // UI concern the World can't import; a boolean crosses the seam).
+          world.gearVacuum = settings.gearPickup !== 'key';
+          world.update(dt);
+        }
+      } else {
+        net.drainInputs(); // do not replay accumulated movement/casts on recovery
+      }
       // DWELL → MENU polls. The world keeps simulating under the pause menu,
       // so a dwell can fire while it's up — HOLD the request (don't clear)
       // until the pause menu closes, else a station menu pops OVER the pause
@@ -2016,7 +2332,8 @@ function tick(now: number): void {
       }
       if (world.questRewardRequested && !ui.escapeMenuOpen) {
         world.questRewardRequested = false;
-        ui.showQuestReward();
+        // The speaker owns local rewards in reader mode; bubble mode keeps its journal fallback.
+        if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();
       }
       // The mercenary outpost's calm parley asks to open the hire/retire menu.
       if (world.mercOutpostRequested && !ui.escapeMenuOpen) {
@@ -2069,7 +2386,7 @@ function tick(now: number): void {
       // never serialize anything — byte-identical SP / no wasted work.
       if (!(net instanceof LocalTransport) && net.peers().length > 1) {
         // Terrain: ship the (heavier) zone message ONCE per zone change.
-        if (world.zone.id !== lastSentZone) {
+        if (!nativeClientRuntimeFor(world) && world.zone.id !== lastSentZone) {
           lastSentZone = world.zone.id;
           net.sendZone(serializeZone(world));
         }
@@ -2097,14 +2414,10 @@ function tick(now: number): void {
       // ---- CLIENT: run NO sim. Send local input, render the host's snapshot. ----
       handleLocalPanels();
       const li = readLocalInput(dt);
-      if (li) {
-        // Stamp + buffer the input for prediction, THEN send it. The host echoes
-        // the last-applied seq; predictOwnHero replays everything newer locally.
-        li.seq = ++inputSeq;
-        predictHistory.push({ seq: li.seq, dx: li.dx, dy: li.dy, dt });
-        if (predictHistory.length > PREDICT_BUFFER) predictHistory.shift();
-        net.sendInput(net.self, li);
-      }
+      // Stamp + buffer the input for prediction, THEN send it (THE SMOOTH SHELL: the seq and
+      // dt of THE HONEST INPUT, THE WATCHDOG's still walk, THE PREDICTED ROOT's press). The
+      // host echoes the last-applied seq; the shell replays everything newer locally.
+      if (li) net.sendInput(net.self, shell.stampInput(li, dt, performance.now()));
       clientApplyAndRender(dt);
     }
   }
@@ -2214,9 +2527,11 @@ function hostTail(dt: number): void {
     // and the next New Game re-launches the scene from its first card.
     if (!world.scene) { persistRun(account, world); persistCouchGuests(); }
     toStartMenu();
+    return;
   }
 
   if (world.gameOver && !deathShown) {
+    cancelCharacterResume();
     deathShown = true;
     // CO-OP: tell connected clients the run ended so they leave their (now-frozen)
     // render shell and offer a fresh class pick — no reload, the session lives on.
@@ -2326,31 +2641,51 @@ function hostTail(dt: number): void {
   }
 }
 
-/** Host: serialize the world and broadcast it to every connected client. */
+/** Reset delivery history when a peer receives a fresh render shell. */
+function resetHostedPublication(): void {
+  const runtime = nativeClientRuntimeFor(world);
+  if (runtime) hostedPublications.delete(runtime);
+}
+
+/** Each native recipient sees its actual area; the campaign writer stays put. */
+function publishHostedSnapshot(): boolean {
+  const runtime = nativeClientRuntimeFor(world);
+  if (!runtime) return false;
+  if (!runtime.ready) throw new Error('Native hosted publication needs a ready client runtime');
+  let cached = hostedPublications.get(runtime);
+  if (!cached || cached.transport !== net) {
+    cached = { transport: net, publication: new NativeHostedPublication(runtime.hosted, net) };
+    hostedPublications.set(runtime, cached);
+  }
+  const recipients = new Set(net.peers().filter(peer => !peer.isHost && peer.id !== net.self).map(peer => peer.id));
+  cached.publication.publish(++snapTick, world.seats.filter(seat => recipients.has(seat.id)));
+  return true;
+}
+
+/** Host: serialize actual recipient areas, or the original non-retained world. */
 function broadcastSnapshot(): void {
+  if (publishHostedSnapshot()) return;
   net.sendState(serializeSnapshot(world, ++snapTick));
   // Per-seat META rides the snapshot only when its dirty flag is set; once a
   // snapshot carries it, the change is on the wire — clear so we don't re-ship it.
   world.metaDirty.clear();
 }
 
-/** Client: apply the latest host snapshot — INTERPOLATED prev→latest over one
- *  snapshot interval — to the render-shell world and draw it (no sim runs here;
- *  the host owns the simulation). Actor POSITIONS + facing are smoothed via the
- *  prev→latest lerp; renderer effects keyed on performance.now() (aura/dome/font
- *  pulses, spins) advance locally; everything else sampled from the snapshot
- *  (cast-bar fill, item/orb bobs) steps at the 20Hz wire rate — acceptable for MVP. */
+/** Client: place the host's adopted snapshots and draw (no sim runs here; the host owns
+ *  the simulation). THE SMOOTH SHELL (net/shell.ts) does the frame's whole half: the own
+ *  clocks run down, remote bodies glide on THE JITTER BUFFER's delayed clock, flights and
+ *  telegraphs on the newest pair, the own seat's note and surge, and the own hero PREDICTED
+ *  (anchored to the host's ack, every unacked input replayed, corrections glided out).
+ *  Each snapshot was adopted once, when it arrived (subscribeToHost). */
 function clientApplyAndRender(dt: number): void {
-  snapAccum += dt;
-  const alpha = Math.min(1, snapAccum / SNAP_INTERVAL);
-  if (latestSnapshot) applySnapshot(world, latestSnapshot, prevSnapshot, alpha);
-  // PREDICTION: override the own hero's interpolated position with the locally
-  // predicted one (anchor to the host's ack + replay unacked input) for responsive
-  // movement. Other actors keep snapshot interpolation.
-  predictOwnHero();
-  // The latest snapshot's seatMeta delta (if any) is now applied — let the next
-  // arriving snapshot stop carrying it forward (coalescing guard in onState).
-  metaApplied = true;
+  const now = performance.now();
+  shell.frame(dt, now);
+  // THE WATCHDOG: a silent link strains the frame; past its patience THE RETURN begins.
+  renderer.linkStrain = shell.strain(now);
+  if (shell.phase(now) === 'lost') startReturn();
+  clientDeathBeat(dt); // THE ACTING SEAT: the death beat's presentation (hosted worlds)
+  // THE WILDS ON THE WIRE: stream the ground around our own hero every frame.
+  if (clientWilds && wildsShellActive(world)) wildsShellStream(world, world.player.pos);
   // Our replicated build changed (point spend, learn, drop, level-up) → re-render
   // any OPEN build panels now (they're not live like the HUD). refresh* methods
   // no-op when their panel is closed, so this is cheap.
@@ -2372,71 +2707,123 @@ function clientApplyAndRender(dt: number): void {
   world.updateCaravan(dt);
   pollCaravanMenu();
   pollCaravanReturn();
+  pollClientCounters(dt); // THE CLIENT'S COUNTERS: the bench, the board, the Font, the Tracker, the Oracle, the counters
   feedRendererAim();
   renderer.render(world);
 }
 
-/** CLIENT: position the OWN hero by PREDICTION instead of snapshot interpolation —
- *  anchor to the host's last-acked authoritative position, then REPLAY every input
- *  the host hasn't applied yet (moveActor, the SAME integrator + collision the host
- *  runs). The local player then moves with ~zero input latency; the reconciliation
- *  happens every frame, so a misprediction self-corrects on the next snapshot. The
- *  `rooted` flag (host says we're stun/cast/dash-locked) stops forward replay so the
- *  hero doesn't drift ahead while actually held in place. Other actors + ally seats
- *  keep snapshot interpolation. No-op for the host / single-player (never called). */
-function predictOwnHero(): void {
-  if (!latestSnapshot) return;
-  const me = latestSnapshot.seats[world.clientSeatId];
-  if (!me) return;
-  const p = world.player;
-  if (p.dead || p.downed) return;     // downed → the interpolated snapshot pos stands
-  // A zone change teleports us; the buffered inputs are from the old zone → drop them.
-  if (latestSnapshot.zoneId !== predZoneId) { predZoneId = latestSnapshot.zoneId; predictHistory.length = 0; }
-  // Forget inputs the host has already applied.
-  const ack = me.seq ?? 0;
-  while (predictHistory.length && predictHistory[0].seq <= ack) predictHistory.shift();
-  // Anchor to the authoritative position, then replay our unacked inputs forward.
-  // Skip the replay while ROOTED (stun/cast/dash) or on SLIPPERY ground (ice momentum
-  // the client can't reproduce) — anchor-only there avoids a prediction rubber-band.
-  p.pos.x = me.pos[0]; p.pos.y = me.pos[1];
-  if (!me.rooted && !me.slippery) {
-    for (const h of predictHistory) world.moveActor(p, h.dx, h.dy, h.dt);
+/** THE CLIENT'S COUNTERS (docs/engine/shard.md, THE COUNTERS AND THE JOURNAL): a hosted world's
+ *  render shell lingers at its own stations the way it lingers at the Caravanner, and opens the
+ *  same panels the host's own loop opens; every act inside them is a host-judged request. A
+ *  reward waiting in its journal row opens the journal, as the host's dwell asks. */
+function pollClientCounters(dt: number): void {
+  world.updateClientCounters(dt);
+  if (ui.escapeMenuOpen) return;
+  if (world.salvageDwellRequested) { world.salvageDwellRequested = false; if (!ui.salvageOpen) ui.showSalvage(world.salvageDwellSeatId); }
+  if (world.fontDwellRequested) { world.fontDwellRequested = false; if (!ui.fontOpen) ui.showFont(world.fontDwellSeatId); }
+  if (world.bountyDwellRequested) { world.bountyDwellRequested = false; if (!ui.bountiesOpen) ui.showBounties(world.bountyDwellSeatId, world.bountyDwellBoardId); }
+  if (world.oracleDwellRequested) { world.oracleDwellRequested = false; if (!ui.oracleOpen) ui.showOracle(world.oracleDwellSeatId); }
+  if (world.trackerDwellRequested) { world.trackerDwellRequested = false; if (!ui.bestiaryOpen) ui.showBestiary(world.trackerDwellSeatId); }
+  if (world.vendorDwellRequested) { world.vendorDwellRequested = false; if (!ui.vendorOpen) ui.showVendor(world.vendorDwellSeatId); }
+  // THE VOCATION SITES PER SEAT (W12): the host's ask for this seat's calling (its journal row)
+  // opens the same menu the solo dwell opens; the pick is this seat's own `vocationQuest` word.
+  if (world.vocationOfferRequested) { world.vocationOfferRequested = false; if (!ui.vocationOpen) ui.showVocationMenu(); }
+  if (world.questRewardRequested) {
+    world.questRewardRequested = false;
+    if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();
   }
 }
 
-/** Client: start applying the host's broadcasts (set up at join, torn down on Leave). */
+/** Client: start applying the host's broadcasts (set up at join, torn down on Leave).
+ *  THE SMOOTH SHELL: each snapshot is ADOPTED once, on arrival (the shell's arrive: the
+ *  ring, the render clock's line, the echo, the state); a frame only places it. */
 function subscribeToHost(): void {
   snapshotDispose = net.onState(s => {
-    // COALESCING GUARD: seatMeta is a delta shipped once. If an earlier snapshot's
-    // delta hasn't been applied by a frame yet and a newer snapshot arrives first
-    // (rAF slower than the 20Hz wire, GC hitch, backgrounded tab), carry the
-    // un-applied delta forward onto this one so it isn't silently dropped.
-    if (latestSnapshot?.seatMeta && !metaApplied) {
-      s.seatMeta = { ...latestSnapshot.seatMeta, ...(s.seatMeta ?? {}) };
-    }
-    if (s.seatMeta) metaApplied = false;
+    const { metaApplied } = shell.arrive(s, performance.now());
+    crossingSnapshot(s); // THE ONE CROSSING: the first snapshot holding the hero in its zone
     // Re-render the open build panels ONLY when our meta actually CHANGED — not on
     // the periodic heartbeat re-send of identical meta (which would churn the panel
     // and reset any scroll). Compare the serialized own-seat meta to the last one.
-    const myMeta = s.seatMeta?.[world.clientSeatId];
+    const myMeta = metaApplied ? s.seatMeta?.[world.clientSeatId] : undefined;
     if (myMeta) {
       const json = JSON.stringify(myMeta);
       if (json !== lastMetaJson) { lastMetaJson = json; clientMetaDirty = true; }
     }
-    prevSnapshot = latestSnapshot ?? s; latestSnapshot = s; snapAccum = 0;
   });
-  zoneDispose = net.onZone(z => { applyZone(world, z); });
+  // THE ONE CROSSING: a zone message that beats the shell's standing waits for it (connectToShard
+  // paints the cover first), then lands in startAsClient.
+  zoneDispose = net.onZone(z => { if (shellRising && shellRising === net) crossingZoneHeld = z; else clientZone(z); });
+}
+/** Client: the host's zone message on the shell (the wilds shell's routing, else the classic
+ *  one), and THE ONE CROSSING's word on it: a new zone on a live shell is a hand-off. */
+function clientZone(z: ZoneMsg): void {
+  const shown = world.appliedZoneId;
+  const surface = clientWilds ? wildsShellZone(world, z, clientWilds.seed) : (applyZone(world, z), false);
+  if (net instanceof WsTransport) { crossing.zoneMsg(z.zoneId, surface, shown, performance.now()); crossingCover(); }
+}
+
+/** THE ONE CROSSING (net/crossing.ts, docs/engine/shard.md): one cover over a hosted world's
+ *  arrival (a server-bound wake, a direct join, a reload's return) and its hand-offs (a pocket
+ *  and back), mirrored onto the Mu crossing until the hero stands on streamed ground. */
+const crossing = new ShardCrossing();
+/** The screen the crossing shows: a wake's own entry cover, adopted, else its own. */
+let crossingLease: LoadingLease | null = null;
+/** withLoadingScreen's cover while startGame runs (a server-bound wake adopts it). */
+let wakeLease: LoadingLease | null = null;
+/** The transport whose shell is still rising (welcomed, startAsClient not yet run) and a
+ *  zone message that landed meanwhile (applied the moment the shell stands). */
+let shellRising: WsTransport | null = null;
+let crossingZoneHeld: ZoneMsg | null = null;
+const CROSSING_CANCELLED = 'the crossing was cancelled';
+function crossingCancelled(e: unknown): boolean { return e instanceof Error && e.message === CROSSING_CANCELLED; }
+/** Mirror the crossing's view onto the loading screen (begin, update or finish its lease). */
+function crossingCover(): void {
+  const v = crossing.view(performance.now());
+  if (!v.covered) { crossingLease?.finish(); crossingLease = null; return; }
+  if (!v.shown) return; // a hand-off's grace: the last frame stands
+  const status = { label: v.label, ...(v.detail ? { detail: v.detail } : {}),
+    ...(v.total ? { completed: v.completed, total: v.total } : {}) }; // the ring's pages: measured, never faked
+  if (crossingLease?.current) crossingLease.update(status);
+  else crossingLease = loadingScreen.begin({ kind: v.kind, ...status, loadout: account.cosmetics.loadout, cancel: cancelLoadingToMenu });
+}
+function crossingWake(): void {
+  crossing.wake(performance.now());
+  if (wakeLease?.current) crossingLease = wakeLease;
+  crossingCover();
+}
+function crossingEnd(): void {
+  crossing.end(); shellRising = null; crossingZoneHeld = null;
+  crossingCover();
+}
+/** The first snapshot holding our hero in the crossing's zone moves it on. */
+function crossingSnapshot(s: StateSnapshot): void {
+  if (crossing.covered && shell.world === world && net instanceof WsTransport) {
+    crossing.snapshot(s.zoneId, !!s.seats[world.clientSeatId]);
+    crossingCover();
+  }
+}
+/** One held frame: the shell places the hero where the shard has it and streams the ground
+ *  around it, and the page ring may release the cover. */
+function crossingFrame(dt: number): void {
+  if (running && shell.world === world && net instanceof WsTransport) {
+    shell.frame(dt, performance.now());
+    if (clientWilds && wildsShellActive(world)) wildsShellStream(world, world.player.pos);
+    if (crossing.phase === 'ring') { const r = wildsShellRing(world); crossing.ring(r.ready, r.pending, r.total); }
+  }
+  crossingCover();
 }
 /** Client: stop applying broadcasts. */
 function unsubscribeFromHost(): void {
   if (snapshotDispose) { snapshotDispose(); snapshotDispose = null; }
   if (zoneDispose) { zoneDispose(); zoneDispose = null; }
-  latestSnapshot = null; prevSnapshot = null; snapAccum = 0; metaApplied = true; lastMetaJson = '';
+  shell.reset(); lastMetaJson = ''; // THE SMOOTH SHELL: the session's timeline goes with it
+  crossingEnd(); // THE ONE CROSSING: and its cover
 }
 
 /** HOST: a peer joined — spawn a wire-fed seat for them (their class, a
  *  RemoteInput drained from the transport). Idempotent on the seat id. */
 function onRemoteJoin(peer: PeerInfo): void {
+  resetHostedPublication();
   if (world.seats.some(s => s.id === peer.id)) return;
   // A peer arriving ends any solo menu-pause mid-hold: the shared world is
   // never one player's to stop (the allowHold policy refuses NEW holds in
@@ -2445,9 +2832,8 @@ function onRemoteJoin(peer: PeerInfo): void {
   const cls = CLASSES.find(c => c.id === peer.classId) ?? CLASSES[0];
   const cosmeticSeat = world.addSeat(peer.id, cls, new RemoteInput(peer.id));
   cosmeticSeat.actor.cosmeticLoadout = sanitizeCosmeticLoadout(peer.cosmeticLoadout);
-  // The joiner needs the current terrain immediately (not just on the next zone
-  // change); re-broadcast it (harmless re-apply for existing peers).
-  net.sendZone(serializeZone(world));
+  // The joiner needs its actual area before state; existing split peers keep theirs.
+  if (!publishHostedSnapshot()) net.sendZone(serializeZone(world));
 }
 
 /** HOST: a peer left — despawn their seat (and its minions). */
@@ -2464,7 +2850,44 @@ function wireSession(): void {
   // Wired for host and client alike (a host's transport never fires it) so the
   // two subscriptions live and die together.
   hostLostDispose?.();
-  hostLostDispose = net.onHostLost(() => onHostGone('Connection to the host was lost.'));
+  // THE RETURN (THE SMOOTH SHELL): a hosted world's lost socket is reconnected in place first;
+  // only a return that fails lands on the start menu, with the same one word.
+  hostLostDispose = net.onHostLost(() => { if (net instanceof WsTransport) startReturn(); else onHostGone(HOST_LOST_WORD); });
+}
+
+/** The one word a lost session leaves on the start menu. */
+const HOST_LOST_WORD = 'Connection to the host was lost.';
+/** THE RETURN in flight (one at a time). */
+let returning = false;
+/** THE RETURN (THE SMOOTH SHELL, docs/engine/shard.md): the socket under a hosted world
+ *  closed, or THE WATCHDOG lost patience with a silent one. Reconnect IN PLACE with THE
+ *  RECONNECT TOKEN (WsTransport.resumeInPlace), the shell standing and straining meanwhile,
+ *  retrying until the dormant window closes; only then the start menu, with the one word. */
+function startReturn(): void {
+  if (returning || !(net instanceof WsTransport)) return;
+  // THE RETURN'S WORD (W7): a hosted world's menu line names the world and carries the shard's own word.
+  const place = lastShardWorld ?? 'the world';
+  if (!running) { onHostGone(returnWord(place, '')); return; } // no shell to keep: the old road
+  const ws = net;
+  const deadline = performance.now() + WS_TRANSPORT_CFG.resumeWindowMs - Math.max(0, performance.now() - shell.lastArrivalMs);
+  returning = true;
+  void (async () => {
+    let word = '';
+    try {
+      for (let tries = 0; net === ws; tries++) {
+        const r = await ws.resumeInPlace();
+        if (net !== ws) return; // the player left meanwhile
+        if (r.ok) { shell.resumed(performance.now()); return; } // the same seat: the shell never left
+        word = r.word;
+        if (r.final || performance.now() >= deadline) break;
+        await new Promise(res => setTimeout(res, Math.min(2000, 250 * 2 ** tries)));
+      }
+      if (net !== ws) return;
+      // THE BUILD MISMATCH on a served page: the world was updated under us; the page reloads once.
+      if (lastShardUrl && reloadForBuild(lastShardUrl, new Error(word))) return;
+      onHostGone(returnWord(place, word)); // THE DOOR stays: the menu offers the way back
+    } finally { returning = false; }
+  })();
 }
 
 /** Dispatch a run-lifecycle message. HOST handles `rejoin`; CLIENT handles
@@ -2486,10 +2909,18 @@ function onSessionMsg(msg: SessionMsg, from: string): void {
       // A client's meta intent for its OWN seat — queue for this frame's drain
       // (applyAction runs host-side with the channel-bound `from` seat, so a
       // client can only ever mutate its own build).
-      pendingActions.push({ seat: from, action: msg.action });
+      pendingActions.push({ seat: from, action: msg.action, seq: msg.seq }); // THE ECHO LAW: the client's seq rides along
     }
   } else if (msg.t === 'runEnd') {
     onClientRunEnd();
+  } else if (msg.t === 'refused') {
+    onClientRefused(typeof msg.word === 'string' ? msg.word : '', msg.mu === true); // THE ACTING SEAT: a refused hero
+  } else if (msg.t === 'partyInvite') {
+    // THE PARTY: an invitation lands (one standing per inviter); THE PARTY THAT READS: it stands
+    // until its `until` (the shard's clock), wearing the Party pip and the beckon over the inviter.
+    PARTY_INBOX.land(msg, world.time);
+  } else if (msg.t === 'partyWord') {
+    partyWord = msg.word; // THE PARTY: the shard's one-line refusal, shown on the panel
   } else if (msg.t === 'newRun') {
     onClientNewRun(msg.seat, msg.seed);
   } else if (msg.t === 'hostLeft') {
@@ -2501,13 +2932,14 @@ function onSessionMsg(msg: SessionMsg, from: string): void {
  *  that has since left is simply skipped. applyAction validates + re-replicates. */
 function drainMetaActions(): void {
   if (!pendingActions.length) return;
-  for (const { seat: seatId, action } of pendingActions) {
+  for (const { seat: seatId, action, seq } of pendingActions) {
     const seat = world.seats.find(s => s.id === seatId);
     if (!seat) continue;
     // A client controls the action payload entirely — a malformed/hostile one
     // (bad index, prototype-chain key) must NEVER throw out of the frame loop
     // (that would permanently halt the host sim + freeze every client). One bad
     // action just no-ops. world.applyAction also validates before dispatch.
+    noteActionEcho(world, seat, seq); // THE ECHO LAW: judged this tick (applied or refused), echoed on its build
     try { world.applyAction(seat, action); }
     catch (e) { console.warn('[coop] dropped malformed meta action', action, e); }
   }
@@ -2517,6 +2949,7 @@ function drainMetaActions(): void {
 /** HOST: (re)seat an already-connected peer into the CURRENT run and tell them to
  *  spin up their render shell for it (`newRun`) + ship the terrain. */
 function reseatPeer(peerId: string, classId: string): void {
+  resetHostedPublication();
   const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
   if (!world.seats.some(s => s.id === peerId)) {
     const cosmeticSeat = world.addSeat(peerId, cls, new RemoteInput(peerId));
@@ -2527,7 +2960,7 @@ function reseatPeer(peerId: string, classId: string): void {
   // with a freshly rolled manifest, so a client re-using the join-time seed
   // would build the PREVIOUS run's map; the seed rides every seating message.
   net.sendSession({ t: 'newRun', seat: peerId, seed: world.manifest.seed }, peerId);
-  net.sendZone(serializeZone(world));
+  if (!publishHostedSnapshot()) net.sendZone(serializeZone(world));
 }
 
 /** HOST: after a fresh co-op run begins, seat every peer that already picked a
@@ -2540,15 +2973,104 @@ function flushRejoins(): void {
 /** CLIENT: the host's run ended — leave the (now-stale) render shell and offer a
  *  fresh class pick; choosing one asks the host to re-seat us in its next run. */
 function onClientRunEnd(): void {
-  running = false;          // stop rendering the dead run
+  // THE ACTING SEAT (the death beat): a hosted world's fall plays its presentation
+  // from the first dead frame; the rendering runs on, frozen, until it completes.
+  const presenting = net instanceof WsTransport && !!world.deathPresentation;
+  if (!presenting) running = false; // stop rendering the dead run
   unsubscribeFromHost();    // drop the dead run's snapshot/zone subs + stale interp state
   pendingRejoinClass = null;
+  // THE LOGIN THROUGH MU (card 22): on a hosted world a fallen player reads the
+  // reckoning, then drifts back into Mu bound for the same server — the next vessel
+  // is a walk, and its wake travels. (Card 14 C: the fall is the run's end.)
+  if (net instanceof WsTransport) {
+    const url = lastShardUrl, name = lastShardWorld;
+    const toMu = (): void => { resetToLocal(); if (url) writeDoor({ url, ...(name ? { world: name } : {}) }); void startMu(); }; // THE DOOR stays bound
+    const fell = shardVessel?.takeDeath(net, world);
+    const open = (revealSec = 0): void => { if (fell) ui.showDeath(fell.reck, toMu, revealSec); else toMu(); };
+    if (presenting) clientDeath = { open, opened: false }; // clientDeathBeat opens it at the presentation's reveal
+    else open();
+    return;
+  }
   ui.resetClassRoster();    // deal a fresh class hand for the rejoin pick
-  ui.showClassSelect(cls => {
+  const pickNextHero = (): void => ui.showClassSelect(cls => {
     pendingRejoinClass = cls;
     net.sendSession({ t: 'rejoin', classId: cls.id });
     ui.hideAll();           // the class pick is sent; wait for the host's newRun
   });
+  // THE DEATH COVENANT (THE SHARD — shardVessel): a vessel that fell on a
+  // hosted world reads its reckoning first (the death screen, the Vault),
+  // then picks the next hero; its body waits where it fell.
+  const fell = shardVessel?.takeDeath(net, world);
+  if (fell) ui.showDeath(fell.reck, pickNextHero); else pickNextHero();
+}
+
+/** THE IMMORTAL'S COVENANT ON A SHARD (card 30): presentation only, the shard decided and
+ *  banked everything (and the link booked its word). THE CROSSING (a `stageDeath` word, then our
+ *  body dead on the wire) plays the solo fade: the dark falls at the mode's own pace while the
+ *  body lies dead, goes whole the frame the wake lands (our hero standing again, at the hearth,
+ *  so the move is never seen), holds, then lifts. THE FALL (an Undying's body dead) plays the
+ *  solo fall's dark, never the mortal's shatter; `runEnd` opens the screen over it. A crossing
+ *  word with no death on screen (a late word at a join) is booked and never shown. True while it
+ *  owns the frame. */
+const COVENANT_FADE_CFG = {
+  /** A crossing word this old with no death on screen is a late word: booked, never shown (ms). */
+  staleMs: 3000,
+};
+let clientCovenant: { kind: 'cross' | 'fall'; t: number; woke: number | null; fx: { fadeOutSec: number; holdSec: number; fadeInSec: number } } | null = null;
+function clientCovenantBeat(dt: number): boolean {
+  if (!(net instanceof WsTransport) || !shardVessel || shardVessel.net !== net) return false;
+  const me = shell.latest?.seats[world.clientSeatId];
+  const dead = !!me?.dead && world.player.dead;
+  if (!clientCovenant) {
+    const pending = shardVessel.crossingPending();
+    if (pending && dead) {
+      shardVessel.takeCrossing();
+      clientCovenant = { kind: 'cross', t: 0, woke: null, fx: shardVessel.fadePacing() };
+    } else if (pending && Date.now() - pending.at > COVENANT_FADE_CFG.staleMs) shardVessel.takeCrossing();
+    else if (dead && shardVessel.fallsOnDeath()) clientCovenant = { kind: 'fall', t: 0, woke: null, fx: shardVessel.fadePacing() };
+    if (!clientCovenant) return false;
+  }
+  const c = clientCovenant;
+  c.t += dt;
+  if (c.kind === 'fall') { world.screenFade = Math.min(1, c.t / RUN_END_FADE.outSec); return true; } // the solo fall's dark; runEnd opens the screen
+  if (c.woke === null && me && !me.dead) c.woke = c.t; // THE WAKE landed: the dark goes whole at once
+  if (c.woke === null) { world.screenFade = Math.min(1, c.t / Math.max(0.01, c.fx.fadeOutSec)); return true; }
+  const lift = Math.max(c.woke, c.fx.fadeOutSec) + c.fx.holdSec;
+  world.screenFade = c.t < lift ? 1 : Math.max(0, 1 - (c.t - lift) / Math.max(0.01, c.fx.fadeInSec));
+  if (c.t >= lift + c.fx.fadeInSec) { clientCovenant = null; world.screenFade = 0; }
+  return true;
+}
+
+/** THE ACTING SEAT (the death beat, docs/render/player-death.md): on a hosted world
+ *  a fallen hero's body stands dead on the wire for VESSEL_CFG.deathBeatSec before
+ *  `runEnd`, so the blow is seen. The presentation starts at the first frame our own
+ *  seat reads dead, as in single player; `runEnd` hands onClientRunEnd's screen in
+ *  (clientDeath), which opens at the presentation's reveal (at once if past it), and
+ *  the frozen world stops rendering when the presentation completes. */
+let clientDeath: { open: (revealSec?: number) => void; opened: boolean } | null = null;
+function clientDeathBeat(dt: number): void {
+  if (clientCovenantBeat(dt)) return; // THE IMMORTAL'S COVENANT ON A SHARD (card 30): the crossing's fade, the fall's dark
+  if (!(net instanceof WsTransport) || !DEATH_PRESENTATION.enabled) return;
+  if (!world.deathPresentation && world.player.dead && shell.latest?.seats[world.clientSeatId]?.dead) world.deathPresentation = { elapsed: 0 };
+  const dp = world.deathPresentation;
+  if (!dp) return;
+  dp.elapsed += dt;
+  const pose = deathPresentationPose(dp.elapsed);
+  world.screenFade = pose.fade;
+  if (clientDeath && pose.reveal && !clientDeath.opened) { clientDeath.opened = true; clientDeath.open(DEATH_PRESENTATION.revealSec); }
+  if (clientDeath?.opened && pose.complete) { clientDeath = null; running = false; }
+}
+
+/** CLIENT (THE ACTING SEAT, a refused hero): the shard would not seat the vessel we
+ *  carried, and never seats a fresh hero in its place. A hero that cannot travel
+ *  drifts back into Mu bound for the same world (wake another and it travels); a
+ *  door word (this hero already walks there) lands on the start menu. */
+function onClientRefused(word: string, mu: boolean): void {
+  if (!(net instanceof WsTransport)) return;
+  running = false;
+  if (!mu) { toStartMenu(doorWord(word, 'the world would not seat this hero')); return; }
+  const url = lastShardUrl, name = lastShardWorld;
+  resetToLocal(); if (url) writeDoor({ url, ...(name ? { world: name } : {}) }); void startMu(word); // THE DOOR stays bound
 }
 
 /** CLIENT: the host re-seated us in its new run — rebuild our render shell and
@@ -2563,18 +3085,19 @@ function onClientNewRun(seat: string, seed: number): void {
  *  flushRejoins); single-player returns to the start menu. */
 function onDeathDismiss(): void {
   if (coopActive()) {
-    ui.showClassSelect(cls => { void withLoadingScreen(() => startGame(cls)).then(started => { if (started) flushRejoins(); }); });
+    ui.showClassSelect(cls => { void withLoadingScreen(cls).then(started => { if (started) flushRejoins(); }); });
   } else {
     // THE LOOP CLOSES IN MU (data/mu.ts): a solo run's end drifts the player
     // back into the hub between lives — the next vessel is a walk, not a
     // menu. The main menu stays one Esc away from inside Mu.
-    startMu();
+    void startMu();
   }
 }
 
 /** Open the co-op lobby (copy-paste WebRTC signaling). HOST keeps running the sim
  *  and accepts joiners; a JOINER becomes a render-only client of the host. */
 function openLobby(): void {
+  cancelCharacterResume();
   // Class choice is restricted to what THIS player has unlocked in their own
   // Vault (the host gates by the host's account, each joiner by their own) — a
   // real gameplay choice, not a free pick of every class.
@@ -2595,8 +3118,8 @@ function openLobby(): void {
         const invite = await rtc.createInvite();   // fallible WebRTC work FIRST
         net = rtc;                                 // commit globals only on success
         wireSession();                             // run-lifecycle channel (runEnd/rejoin/newRun)
-        if (!await withLoadingScreen(() => startGame(CLASSES.find(c => c.id === classId) ?? CLASSES[0])))
-          throw Error('World entry cancelled'); // loading cancellation cannot return a stale invite
+        if (!await withLoadingScreen(CLASSES.find(c => c.id === classId) ?? CLASSES[0]))
+          throw Error('World entry cancelled'); // loading-screen cancellation must not return a stale invite
         // newInvite mints a FRESH offer for the NEXT joiner (star topology — each
         // peer gets its own RTCPeerConnection), so >2-player co-op actually works.
         return { invite, accept: (resp: string) => rtc.acceptAnswer(resp), newInvite: () => rtc.createInvite() };
@@ -2614,6 +3137,21 @@ function openLobby(): void {
         return { answer, connected };
       } catch (e) { resetToLocal(); throw e; }     // a bad paste must revert net to LocalTransport
     },
+    // THE SHARD (docs/design/shard-world.md M0): a hosted world is a host
+    // that never leaves — the joiner's road is the WebRTC join's, with the
+    // socket where the copy-paste dance was (WsTransport, same grammar).
+    // THE LOGIN THROUGH MU (card 22): the vessel travels, or Mu picks one first (connectToShard).
+    // THE FRONT DOOR (W7): a server join is class-free (the saved hero, else Mu), and the
+    // lobby's confirm is THE SOLO GUARD's word for a hero whose slot holds a solo world.
+    connect: (url, o) => { cancelCharacterResume(); return connectToShard(url, CLASSES[0].id, undefined, { replaceSolo: o.replaceSolo }, resumeRequest); },
+    connectDefault: defaultShardUrl(), // THE SERVED MARK: a page a world served offers that world (WS_TRANSPORT_CFG.defaultUrl elsewhere)
+    connectServed: servedShardUrl() ?? undefined, // ... and offers it before a remembered address
+    serverHero: async () => { // the account names THE LONE VESSEL
+      const v = await readTravelingVessel(account);
+      const solo = v ? await soloWorldStands(account, v) : false;
+      return { note: travelNote(v), ...(v && solo ? { leaveBehind: leaveBehindLine(v, 'this world') } : {}) };
+    },
+    word: doorWord, // one plain line per failure
     onClose: () => { /* host keeps playing; a non-started joiner just closes */ },
   });
 }
@@ -2621,26 +3159,258 @@ function openLobby(): void {
 /** Become a render-only CLIENT of a host: a shell World backs the camera/HUD/
  *  getters, but it never simulates — the frame loop's client branch applies the
  *  host's snapshots and renders. clientSeatId anchors the camera on OUR hero. */
-function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number): void {
+/** THE WILDS ON THE WIRE (src/net/wildsClient.ts): set while the shell shows
+ *  a hosted Unbroken Wilds — the zone handler and the frame loop route
+ *  through the wilds shell instead of the classic client lanes. */
+let clientWilds: { seed: number; land?: string } | null = null; // THE LAND DIGEST rides from the welcome to the attach
+/** THE LOGIN THROUGH MU (docs/design/shard-world.md card 22, her ruling 2026-10-08): the
+ *  server a vessel-less join was bound for — Mu picks the vessel and the bedside wake
+ *  travels it (connectToShard). THE DOOR (W7, net/shardDoor.ts) keeps it in sessionStorage,
+ *  so a reload and the main menu keep it; only a deliberate leave (Leave or Exit on a
+ *  world, or a solo road chosen at the menu) forgets it, and a fall re-arms it. */
+/** The last shard this client was seated on: a fall drifts back into Mu bound for it. */
+let lastShardUrl: string | null = null;
+/** THE FRONT DOOR (W7): the name its welcome gave (the menu's "Return to <world>"). */
+let lastShardWorld: string | null = null;
+
+/** THE FRONT DOOR (W7): the world the start menu leads into: the tab's own binding (THE
+ *  DOOR), else the world that served this page (THE SERVED MARK); null on a plain page. */
+function frontDoor(): ShardDoor | null {
+  const bound = readDoor();
+  if (bound) return bound;
+  const served = servedShardUrl(), name = servedWorldName();
+  return served ? { url: served, ...(name ? { world: name } : {}) } : null;
+}
+
+/** THE SOLO GUARD's line (W7): what traveling costs a hero whose slot holds a solo world. */
+function leaveBehindLine(v: CharacterSave, world: string): string {
+  const name = v.name?.trim() || CLASSES.find(c => c.id === v.classId)?.name || 'This hero';
+  return `${name}'s own world stays behind for good: once ${name} travels, ${name} lives in ${world} and the menu returns ${name} there.`;
+}
+
+/** THE FRONT DOOR (W7): the start menu's primary row. The traveling hero goes (THE LOGIN
+ *  THROUGH MU: Mu picks one when there is none); a hero whose slot holds a solo world asks
+ *  first (the travel confirm), never silently. */
+async function enterTheWorld(door: ShardDoor, opts: { replaceSolo?: boolean } = {}): Promise<void> {
+  cancelCharacterResume();
+  const request = resumeRequest;
+  writeDoor(door);
+  try {
+    const v = await readTravelingVessel(account);
+    if (request !== resumeRequest) return;
+    const confirm = v && !opts.replaceSolo && !shardResumeFor(door.url) && await soloWorldStands(account, v);
+    if (request !== resumeRequest) return;
+    if (confirm) {
+      ui.showTravelConfirm(leaveBehindLine(v!, worldNameOf(door)), () => { if (request === resumeRequest) void enterTheWorld(door, { replaceSolo: true }); });
+      return;
+    }
+    await connectToShard(door.url, CLASSES[0].id, undefined, opts, request);
+  } catch (e) { if (request === resumeRequest && !crossingCancelled(e)) toStartMenu(doorWord(e)); }
+}
+
+/** HOME SLOTS (W7): Continue on a hero bound to a hosted world is a RETURN, THE LOGIN
+ *  THROUGH MU naming the hero by its charId, never a solo world built from its mirror. */
+async function returnToWorld(home: { url: string; world?: string }, charId: string | undefined, request = resumeRequest): Promise<void> {
+  if (request !== resumeRequest) return;
+  writeDoor({ url: home.url, ...(home.world ? { world: home.world } : {}) });
+  try { await connectToShard(home.url, CLASSES[0].id, charId ? { charId } : undefined, undefined, request); }
+  catch (e) { if (request === resumeRequest && !crossingCancelled(e)) toStartMenu(doorWord(e)); }
+}
+
+/** THE BUILD MISMATCH on a served page (W7): the client is not the build its world runs,
+ *  so the page reloads once (a served client updates with its shard); true = reloading. */
+function reloadForBuild(url: string, e: unknown): boolean {
+  const word = e instanceof Error ? e.message : String(e ?? '');
+  const served = servedShardUrl();
+  if (word !== SHARD_REFUSAL.build || !served || !sameWorld(served, url) || !reloadOnceFor(url, shardBuildStamp())) return false;
+  try { location.reload(); } catch { return false; }
+  return true;
+}
+
+/** THE PARTY PANEL (card 23 — ui/party.ts): what landed on me (invitations, the shard's
+ *  last word) and the reads the panel draws from; its words go over the session wire.
+ *  THE PARTY THAT READS (net/partyReads.ts): the invitations live in PARTY_INBOX, each standing
+ *  until it lapses or its inviter leaves; the panel draws one model (partyPanelModel: your
+ *  party, the invitations, the players near you within THE NEAR LAW's radius, the far roster)
+ *  and patches only what changed. */
+const partyInvites = PARTY_INBOX.invites;
+let partyWord: string | null = null;
+/** THE INVITE TELL's standing invitations: a lapsed one, or one whose inviter left the world, falls away. */
+const partyInvitesStanding = (): readonly PartyInviteNote[] => {
+  const here = new Set(net.peers().map(p => p.id));
+  return PARTY_INBOX.standing(world.time, clientGrouped(world), from => here.has(from));
+};
+const partyPanel = new PartyPanel(
+  () => partyPanelModel({
+    me: world.clientSeatId,
+    at: world.player?.pos ?? null,
+    bodies: world.party.members.map(m => ({ seat: m.seat, name: m.actor.name, pos: m.actor.pos })), // the heroes on my wire
+    peers: net.peers().filter(p => !p.isHost).map(p => ({ id: p.id, name: p.name })), // the host row is the keeper: no seat to group with
+    rows: world.partyRows,
+    invites: partyInvitesStanding(),
+    word: partyWord,
+    radius: PARTY_WIRE_CFG.nearRadius,
+  }),
+  {
+    // THE SPOILS' OWNER (card 27): the 'rule' word carries the leader's choice.
+    send: (op, seat, spoils) => { if (net instanceof WsTransport) net.sendSession({ t: 'party', op, ...(seat ? { seat } : {}), ...(spoils ?? {}) }); },
+    settleInvite: from => PARTY_INBOX.settle(from),
+  },
+);
+ui.setPartyPanel(partyPanel);
+// THE INVITE TELL in the world (THE PARTY THAT READS): a beckon over each inviter whose
+// invitation stands, in its class color (renderer drawPartyMarks); none off a hosted world.
+renderer.partyBeckons = () => world.partyRows === null ? [] : partyInvitesStanding().map(i => i.from);
+
+/** THE RELEASE (card 28, RULED B 2026-10-10; THE PARTY THAT READS): a downed hero on a hosted
+ *  world may give up the wait on its mates with the interact key (the pickup bind), the
+ *  player's own choice; the shard's desk takes the press (World.applyAction's pickupItem while
+ *  downed): a mortal falls by the covenant at once, a life that survives death goes to THE MERCY. */
+function pressTheRelease(): void {
+  const p = world.player;
+  if (!p?.downed || p.dead || world.partyRows === null || !(net instanceof WsTransport)) return;
+  if (input.justPressed(settings.keybinds.pickup) || pad.justPressed(settings.padBinds.pickup)) world.requestMeta({ t: 'pickupItem' });
+}
+
+/** THE SHARD's door (card 22 — THE LOGIN THROUGH MU): the traveling hero goes when there
+ *  is one (THE VESSEL: the run slot's hero, else THE LONE VESSEL — the one standing roster
+ *  card; its class over the lobby card, keyed home by this account's id); with none, Mu
+ *  picks a vessel first and the bedside wake comes back through here to travel it ('mu'),
+ *  NAMING it (`wake.charId` — THE WAKE'S WORD: that hero travels, a mortal from the run
+ *  slot or an Immortal from its roster card's slot). The tutorial stays LOCAL: a virgin
+ *  account walks it before Mu, still bound for the same server. From the wake, a hero
+ *  that cannot travel is an error (never a second trip into Mu). `opts.resumeOnly` (THE
+ *  RETURN after a reload): the seat back or a refusal, never a fresh join. THE FRONT DOOR
+ *  (W7): THE DOOR binds the tab to the world; a hero too large to travel hears so before
+ *  any upload; THE SOLO GUARD lets a hero whose slot holds a solo world travel only with
+ *  `opts.replaceSolo` (the lobby's confirm, the menu's, or a hero woken for this world);
+ *  the welcome's world tags every write home (HOME SLOTS); a served page whose build the
+ *  world refuses reloads once (reloadForBuild). */
+async function connectToShard(url: string, classId: string, wake?: { charId: string },
+  opts?: { resumeOnly?: boolean; replaceSolo?: boolean }, request = resumeRequest): Promise<'connected' | 'mu'> {
+  const current = (): boolean => request === resumeRequest;
+  const check = (): void => { if (!current()) throw new Error(CROSSING_CANCELLED); };
+  check();
+  const vessel = await readTravelingVessel(account, wake?.charId); // THE IMMORTAL TRAVELS: the wake names its hero
+  check();
+  // THE RECONNECT TOKEN (card 16 B — THE DORMANT SEAT): a session lost on this address
+  // inside the window asks for its dormant seat back first; the hero that stood there is
+  // the one to reclaim, vessel or not, so no Mu detour precedes a resume.
+  const resume = shardResumeFor(url) ?? undefined;
+  if (opts?.resumeOnly && !resume) throw new Error('there is no seat to return to');
+  if (!vessel && !resume) {
+    if (wake) throw new Error('this hero cannot travel to a server (its saved vessel could not be read)');
+    writeDoor({ url, ...(lastShardUrl && sameWorld(lastShardUrl, url) && lastShardWorld ? { world: lastShardWorld } : {}) }); // THE DOOR
+    ui.hideAll(); // the menu (and a lobby's start menu beneath it) gives the screen to Mu, as Begin's own press does
+    await beginPressed();
+    return 'mu';
+  }
+  // THE FRONT DOOR (W7): a hero larger than a world carries hears so here, never a silent close.
+  if (vessel && vesselTooLarge(vessel)) throw new Error(SHARD_REFUSAL.heroTooLarge);
+  // THE SOLO GUARD (W7): its first write home would replace a standing solo world.
+  const soloWorld = !!vessel && !resume && await soloWorldStands(account, vessel);
+  check();
+  if (soloWorld && !opts?.replaceSolo) throw new Error(`${vessel!.name?.trim() || 'this hero'}'s own world would be left behind; confirm it first`);
+  const ws = new WsTransport();
+  const cls = CLASSES.find(c => c.id === (vessel?.classId ?? classId)) ?? CLASSES[0];
+  // THE ONE CROSSING: a direct join, a reload's return and a wake's connect ride one cover.
+  crossing.connect(performance.now()); crossingCover();
+  const pending = { request, transport: ws };
+  pendingShardEntry = pending;
+  let committing = false;
+  try {
+    check();
+    net = ws;
+    shellRising = ws; // THE ONE CROSSING: zone messages wait for the shell that rises below
+    subscribeToHost();
+    wireSession();                             // run-lifecycle channel (newRun/hostLeft)
+    shardVessel = new ShardVesselLink(ws, account, vessel, () => (net === ws ? world : null),
+      { runWiped: () => ui.setContinueSave(null), mayWrite: () => net === ws || !running, soloWorld, consent: !!opts?.replaceSolo });
+    const { self, seed, worldmass, features, land, resumed, world: worldName } = await ws.connect(url, { name: vessel?.name ?? 'Joiner', classId: cls.id,
+      cosmeticLoadout: account.cosmetics.loadout, accountId: account.accountId }, vessel ?? undefined, resume, { resumeOnly: opts?.resumeOnly });
+    // THE ONE CROSSING: the shell's synchronous build waits a painted "Laying the land".
+    check();
+    if (net !== ws) throw new Error(CROSSING_CANCELLED);
+    crossing.welcome(); crossingCover();
+    await crossingLease?.paint();
+    check();
+    if (net !== ws) throw new Error(CROSSING_CANCELLED);
+    // A resumed seat is the hero that stood there: its class is its roster row's, never this card's.
+    const seated = resumed ? CLASSES.find(c => c.id === ws.peers().find(p => p.id === self)?.classId) ?? cls : cls;
+    // The synchronous shell adoption consumes this entry; adoptWorld then advances
+    // the generation intentionally. Later cancellation must not close the seated socket.
+    if (pendingShardEntry === pending) pendingShardEntry = undefined;
+    committing = true;
+    startAsClient(seated, self, seed, worldmass ? { features, land } : undefined);
+    // HOME SLOTS (W7): the hero lives on this world now; every write home names it.
+    const home = { url: normalizeShardUrl(url), seed: seed >>> 0, ...(worldName ? { world: worldName } : {}) };
+    shardVessel.bindHome(home);
+    writeDoor({ url: home.url, ...(worldName ? { world: worldName } : {}) });
+    lastShardUrl = url;
+    lastShardWorld = worldNameOf(home);
+    return 'connected';
+  } catch (e) {                                // an unreachable server must revert net to LocalTransport
+    const cancelled = (!committing && !current()) || net !== ws;
+    if (pendingShardEntry === pending) pendingShardEntry = undefined;
+    // A late failure owns its old transport only, never a newer run's globals.
+    if (net === ws) resetToLocal(); else ws.leave();
+    if (cancelled) throw new Error(CROSSING_CANCELLED);
+    if (reloadForBuild(url, e)) return new Promise<'connected'>(() => { /* the page reloads (THE BUILD MISMATCH, W7) */ });
+    throw e;
+  }
+}
+
+function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number, wilds?: { features: string[]; land?: string }): void { // wilds.land = THE LAND DIGEST
   couchReset(); // a render shell hosts no couch — the pads are free again
+  wildsShellDetach(world); // a previous shell's runtime never outlives its World
+  clientWilds = null;
   // THE SEED THREAD: build the shell from the HOST's run seed, never a local
   // roll — manifest.seed drives randomizeStarterWeb and every `manifest.seed ^ …`
   // mint derivation, so our own seed would put us on a different map from frame
   // one (the shell's zone graph, gate seeds and vendor shelves would all
   // disagree with the authority we render). wireSeed normalizes the untrusted
   // wire value; ONE seam covers both seating roads (welcome and newRun).
-  world = adoptWorld(new World(account, Object.freeze(buildManifest(account, wireSeed(hostSeed, rollSeed())))));
-  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false });   // a local shell (getters/camera/HUD) — not the authority
-  world.clientSeatId = selfSeat;
+  // A WILDS shell builds its World with the SHARD's town features: the mass
+  // runtime lays the hearth from townTier(account), and the seed alone cannot
+  // pin that — the welcome's feature list can (wildsClient.ts).
+  // A WILDS shell's account is a FRESH one wearing the shard's features alone
+  // — the client's own ledger must not lay its rescues (an Oracle, a
+  // Reliquary) into a hearth the shard never grew.
+  const shellAccount = wilds ? { ...makeAccount(), features: new Set(wilds.features) } : account;
+  world = adoptWorld(new World(shellAccount, Object.freeze(buildManifest(account, wireSeed(hostSeed, rollSeed())))));
   // META mutations on a client are INTENTS: ship them to the host (which owns every
   // mutation) instead of applying to the throwaway render shell. requestMeta routes
   // through this; the host applies it to our seat and replicates the result back.
-  world.clientActionHook = (action) => net.sendSession({ t: 'action', action });
-  // Reset movement-prediction state so our input seq realigns with the host's fresh
-  // per-seat ack (a new run = a fresh World on the host = an empty lastInputSeq).
-  inputSeq = 0; predictHistory.length = 0; predZoneId = '';
+  // Installed BEFORE the player stands: every save path in the engine gates on it.
+  // THE ECHO LAW (net/shell.ts): each intent carries a rising seq the host echoes on our
+  // own build, and one ALSO applied locally holds that state against older snapshots.
+  world.clientActionHook = (action) => net.sendSession({ t: 'action', action, seq: shell.noteAction(performance.now()) });
+  world.clientOptimistic = (action) => shell.noteOptimistic(action, performance.now());
+  world.clientSeatId = selfSeat;
+  // A local shell (getters/camera/HUD), not the authority. THE ONE CROSSING: a wilds shell
+  // stands no local town (load: false); the seed's own hearth is laid by the runtime below.
+  world.createPlayer(classDef, { startingCompanions: false, startingFlasks: false, load: !wilds });
+  if (wilds) {
+    clientWilds = { seed: world.manifest.seed, land: wilds.land };
+    wildsShellAttach(world, clientWilds.seed, clientWilds.land); // inert: the land from the seed, the life from the wire; THE LAND DIGEST proves the preset
+    wildsShellRemember(world, account.accountId, clientWilds.seed, clientWilds.land); // THE KEPT MAP: this account's explored cells come back
+  }
+  // THE ONE CROSSING: the shell stands; a zone message that landed while it rose applies now.
+  if (shellRising && shellRising === net) {
+    const held = crossingZoneHeld;
+    shellRising = null; crossingZoneHeld = null;
+    if (held) clientZone(held);
+  }
+  // THE SMOOTH SHELL: the timeline binds to this shell (its prediction and echo restart, so
+  // our input seq realigns with the host's fresh per-seat ack, and the newest snapshot
+  // already here is adopted at once); the camera chases the hero on its spring.
+  shell.attach(world);
+  if (shell.latest) crossingSnapshot(shell.latest); // THE ONE CROSSING: a snapshot that landed while the shell rose
+  renderer.cameraFollow = CAMERA_FOLLOW_CFG.omega > 0 ? newCameraFollow() : null;
   ui.resetRunView();        // the client's shell world is new too — reset the view state
   deathShown = false;
+  clientDeath = null; // THE ACTING SEAT: a new shell owes no screen to a death beat of the last one
+  clientCovenant = null; // card 30: nor a fade to the last one's crossing or fall
   running = true;
   ui.hideAll();
 }
@@ -2658,6 +3428,10 @@ function resetToLocal(): void {
   net.leave();
   net = new LocalTransport();
   lastSentZone = '';
+  renderer.cameraFollow = null; renderer.linkStrain = 0; // THE SMOOTH SHELL: the hard lock and a calm frame again
+  if (clientWilds) wildsShellDetach(world); // THE KEPT MAP is written; a pocket's parked runtime goes with its session
+  clientWilds = null; // a wilds shell's zone routing never outlives its session (the runtime dies with the World on the next adopt)
+  partyInvites.length = 0; partyWord = null; partyPanel.close(); // THE PARTY: a session's invitations die with it
 }
 
 /** Return to the start menu, always resetting the transport to local first — so
@@ -2665,7 +3439,9 @@ function resetToLocal(): void {
  *  `notice` is the reason we landed here, shown on the menu (a session that ended
  *  under the player must say so — an unexplained menu reads as a crash). */
 function toStartMenu(notice?: string): void {
-  loadingScreen.close();
+  loadingScreen.close(); loadingGate = undefined;
+  cancelCharacterResume();
+  // THE DOOR (W7) survives the menu: only a deliberate leave or a solo road forgets it.
   // A HOST SAYS GOODBYE FIRST — and says it HERE rather than in leaveCoop, so
   // that every road to the menu carries it (the Leave button, "Save & Main
   // Menu", any future exit), never just the one that remembered. The ordering is
@@ -2676,14 +3452,45 @@ function toStartMenu(notice?: string): void {
   if (net.isHost && coopActive()) net.sendSession({ t: 'hostLeft' });
   resetToLocal();
   couchReset(); // guest seats die with the world; the pads are free again
+  nativeStarts.get(account)?.cancel();
+  nativeClientRuntimeFor(world)?.retire();
+  pendingActions.length = 0; net.drainInputs(); input.clearForLoading(); barPress = null;
+  localPilot = null; devInputSource = null;
   running = false;
   pendingDeathScreen = null; // the menu is the screen now — no fade owes a debt
   ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar, notice);
 }
 
 /** Leave a co-op session and return to the menu (client or host). The host's
- *  goodbye rides toStartMenu, which every exit road already shares. */
-function leaveCoop(): void { toStartMenu(); }
+ *  goodbye rides toStartMenu, which every exit road already shares. THE HONEST LEAVING
+ *  (W7): a hosted world's Leave waits for its farewell and lands with the truth. */
+function leaveCoop(): void {
+  if (net instanceof WsTransport) { void leaveWorld().then(line => toStartMenu(line)); return; }
+  toStartMenu();
+}
+
+/** THE HONEST LEAVING (W7): a deliberate leave of a hosted world. THE DOOR is forgotten,
+ *  the word is said (`net.leave()`), and the farewell is awaited: the mirror's ack (the
+ *  save written and flushed), the shard's word that the hero stands its ground in a fight,
+ *  or the cap (WS_TRANSPORT_CFG.farewellMs). Resolves with the one line to show. */
+async function leaveWorld(): Promise<string> {
+  const ws = net instanceof WsTransport ? net : null;
+  const hero = world.meta.name?.trim() || 'Your hero', place = lastShardWorld ?? 'the world';
+  forgetDoor();
+  if (!ws) return '';
+  ws.leave();
+  const end = await (ws.farewellEnd ?? Promise.resolve({ end: 'quiet' as const }));
+  if (end.end === 'saved') { try { await flushCharacterSaves(); } catch { /* the slot keeps its last committed write */ } }
+  return farewellLine(end, hero, place);
+}
+
+/** THE HONEST LEAVING (W7): Exit Game on a hosted world: the deliberate leave, the
+ *  farewell's line, then the exit screen ("close this tab") with the truth on it. */
+async function exitWorld(): Promise<void> {
+  const line = await leaveWorld();
+  toStartMenu();
+  ui.showExitScreen(line);
+}
 
 /** CLIENT: the session is OVER — the host said goodbye (`hostLeft`) or its
  *  connection died silently (onHostLost). There is no host migration, so the one
@@ -2721,9 +3528,17 @@ function quitFlush(): void {
 }
 window.addEventListener('pagehide', quitFlush);
 window.addEventListener('beforeunload', quitFlush);
+// THE UNLOAD WORD (W7, THE HONEST LEAVING, best effort): a page going away tells its world
+// over the socket (`leaving` with `unload`, then the close frame): a reload takes the same
+// seat back, a closed tab's hero leaves soon (net/ws.ts unloadLeave). pagehide alone: a
+// beforeunload a page may still cancel must never cost the session.
+window.addEventListener('pagehide', () => { if (net instanceof WsTransport) net.unloadLeave(); });
+// A page the browser kept in its back-forward cache comes back with that socket closed: reload
+// it, and the reload takes the seat back (THE REMEMBERED SESSION) instead of a silent shell.
+window.addEventListener('pageshow', ev => { if (ev.persisted && net instanceof WsTransport) location.reload(); });
 requestAnimationFrame(frame);
-
-// Explicit loading art/feel preview. It creates no run or save, and never delays a real load.
+// Explicit art/feel preview: no timer, run creation or persistence. Cancel returns
+// to the ordinary menu. Real loading never waits for a minigame result.
 const loadingPreview = new URLSearchParams(location.search).get('loadingPreview');
 if (loadingPreview === 'down' || loadingPreview === 'left' || loadingPreview === 'right') {
   void diskHydrated.then(() => {

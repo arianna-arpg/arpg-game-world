@@ -5,12 +5,16 @@ export const DIALOGUE_CFG = {
   pageChars: 210,
   width: 880,
   portraitSize: 72,
+  /** Short responses share rows; longer answers retain the reader scroll. */
+  choiceMinWidth: 160,
   edge: 18,
   hudGap: 18,
   fontSize: 18,
   lineHeight: 1.65,
   /** Stable reading band, used with and without a service. Sizes pre-scale. */
   height: 190,
+  /** Deliberate actions need room for actual reward/item choices. */
+  conversationWorkspaceHeight: 380,
   heightMaxFraction: 0.36,
   heightLimitFraction: 0.6,
   minHeight: 130,

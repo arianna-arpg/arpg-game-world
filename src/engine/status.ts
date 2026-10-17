@@ -1038,6 +1038,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   },
   befuddlement: {
     label: 'Befuddled', color: '#c878b8', duration: 7,
+    screenCue: { motif: 'befuddlement', intensity: 0.85 },
     interruptChance: 0.35,
   },
   // The behavior fabric turned into a HEX: aiAimLead/aiAimJitter are stats
@@ -1609,6 +1610,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // curse skill is one data entry away.
   mired: {
     label: 'Mired', color: '#8a7440', duration: 0.6,
+    screenCue: { motif: 'mire', intensity: 0.85 },
     mods: [mod('moveSpeed', 'more', -0.4)],
   },
   sodden: {
@@ -1859,6 +1861,10 @@ export interface ActiveStatus {
   challengeField?: number;
   id: string;
   remaining: number;
+  /** False on legacy co-op mirrors whose wire supplied presence but no clock. */
+  remainingKnown?: boolean;
+  /** Presentation span for the latest accepted clock; never used for damage. */
+  statusDuration?: number;
   stacks: number;
   /** DoT damage per second per stack (locked in at application time). */
   dps: number;

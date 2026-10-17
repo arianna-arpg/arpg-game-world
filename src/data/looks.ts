@@ -1,3 +1,4 @@
+import { SETTLEMENT_DEFENSE_LOOKS } from './settlementDefenses';
 // ---------------------------------------------------------------------------
 // LOOKS — top-down portraits as data. Each entry assembles a monster (or
 // class, or NPC) from the part grammar (render/vis/parts.ts): a skeleton IS
@@ -12,6 +13,8 @@
 // ---------------------------------------------------------------------------
 
 import type { LookDef } from '../render/vis/parts';
+import { CLASSES } from './classes';
+import { playerBodyLook } from './playerBody';
 import { CASTER_LOOKS } from './casterLooks';
 import { DEMON_LOOKS } from './demonLooks';
 import { COURT_LOOKS } from './courtLooks';
@@ -34,6 +37,7 @@ import { STALKER_LOOKS } from './stalkerLooks';
 import { RUBBLEKIN_LOOKS } from './rubblekin';
 
 export const LOOKS: Record<string, LookDef> = {
+  ...SETTLEMENT_DEFENSE_LOOKS,
   ...GOLEM_LOOKS,
   ...SUMMON_LOOKS,
   ...SKELETAL_MAGE_LOOKS,
@@ -58,13 +62,22 @@ export const LOOKS: Record<string, LookDef> = {
   // ============================================== THE DEAD (the flagship set)
   /** Bare bones and a blade: ribs radiating off a spine, skull forward. */
   skeleton_warrior: {
+    walk: { cycle: 6, swing: 0.6, sway: 0.045, lift: 0.07, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'bone', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'bone', phase: -1 },
+    ] },
     parts: [
       { kind: 'ribs', params: { under: true } },
-      { kind: 'sword', y: 0, params: { len: 0.95 } },
+      { kind: 'sword', y: 0, params: { len: 0.95 },
+        action: { pivotX: .1, pivotY: .62, windTurn: -.95, strikeTurn: .85, reach: .12 } },
       { kind: 'skull', x: 0.5 },
     ],
   },
   skeleton_archer: {
+    walk: { cycle: 5.8, swing: 0.6, sway: 0.04, lift: 0.065, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'bone', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'bone', phase: -1 },
+    ] },
     parts: [
       { kind: 'ribs', params: { under: true } },
       { kind: 'bow' },
@@ -266,36 +279,56 @@ export const LOOKS: Record<string, LookDef> = {
 
   // ============================================================ GREENSKINS
   goblin: {
+    walk: { cycle: 5.2, swing: 0.6, sway: 0.06, lift: 0.08, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'wood', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'wood', phase: -1 },
+    ] },
     parts: [
-      { kind: 'disc' },
-      { kind: 'ears' },
+      { kind: 'torso', scale: .9, params: { head: .46 } },
+      { kind: 'ears', x: .28, scale: .8 },
       { kind: 'daggers', params: { len: 0.45 } },
       { kind: 'eyes', params: { spread: 0.42, dist: 0.55, size: 0.09 } },
     ],
   },
   goblin_shaman: {
+    walk: { cycle: 5.8, swing: 0.5, sway: 0.04, lift: 0.065, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'wood', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'wood', phase: -1 },
+    ] },
     parts: [
-      { kind: 'robe', scale: 0.95 },
-      { kind: 'ears' },
-      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'tatters', scale: .85, params: { n: 3 } },
+      { kind: 'robe', scale: .85 },
+      { kind: 'torso', scale: .8 },
+      { kind: 'ears', x: .28, scale: .8 },
+      { kind: 'staff', scale: 1.15, params: { orb: 'glow' } },
       { kind: 'eyes', params: { spread: 0.42, dist: 0.5, size: 0.09 } },
     ],
   },
   goblin_brute: {
+    walk: { cycle: 6.5, swing: 0.6, sway: 0.045, lift: 0.07, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'wood', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'wood', phase: -1 },
+    ] },
     parts: [
-      { kind: 'disc' },
-      { kind: 'ears' },
-      { kind: 'mace' },
-      { kind: 'pauldrons', scale: 0.85, role: 'wood' },
+      { kind: 'torso', scale: 1.02 },
+      { kind: 'ears', x: .3, scale: .82 },
+      { kind: 'mace', scale: 1.1 },
+      { kind: 'pauldrons', scale: .95, role: 'wood' },
       { kind: 'eyes', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
     ],
   },
   goblin_chief: {
+    walk: { cycle: 6, swing: 0.6, sway: 0.04, lift: 0.065, parts: [
+      { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'metal', phase: 1 },
+      { kind: 'boot', x: -.5, y: .55, hip: { x: -.12, y: .42, width: .21 }, role: 'metal', phase: -1 },
+    ] },
     parts: [
-      { kind: 'disc' },
-      { kind: 'ears' },
-      { kind: 'sword' },
-      { kind: 'crown', x: 0.1, scale: 0.7 },
+      { kind: 'cape', scale: .95, role: 'cloth' },
+      { kind: 'torso' },
+      { kind: 'ears', x: .3, scale: .8 },
+      { kind: 'pauldrons', scale: .7, role: 'wood' },
+      { kind: 'sword', scale: 1.1 },
+      { kind: 'crown', x: .38, scale: .7 },
       { kind: 'eyes', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
     ],
   },
@@ -1523,25 +1556,37 @@ export const LOOKS: Record<string, LookDef> = {
   // ========================================================= PLAYER CLASSES
   class_warrior: {
     parts: [
-      { kind: 'torso' },
+      { kind: 'cape', scale: .95, role: 'cloth' },
+      { kind: 'torso', role: 'cloth' },
+      { kind: 'armorPlates', scale: .6, params: { n: 2 } },
       { kind: 'pauldrons' },
-      { kind: 'sword' },
+      { kind: 'helm', scale: .85 },
+      { kind: 'sword', action: { pivotX: .1, pivotY: .62, windTurn: -1.05, strikeTurn: .95, reach: .12 } },
       { kind: 'shield' },
     ],
   },
   class_magician: {
     parts: [
-      { kind: 'robe' },
-      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'cape', scale: .95, role: 'cloth' },
+      { kind: 'robe', scale: .85 },
+      { kind: 'torso', scale: .75, role: 'cloth' },
+      { kind: 'hood', x: .38, scale: .78, role: 'accent' },
+      { kind: 'book', y: -1, scale: .65 },
+      { kind: 'staff', scale: 1.15, params: { orb: 'glow' },
+        action: { pivotX: 0, pivotY: .62, windTurn: -.4, strikeTurn: .35, reach: .18 } },
       { kind: 'runes', params: { n: 3 } },
     ],
   },
   class_rogue: {
     parts: [
-      { kind: 'torso' },
-      { kind: 'hood', x: 0.32, scale: 0.9 },
-      { kind: 'daggers', params: { len: 0.5 } },
-      { kind: 'tatters', scale: 0.6, params: { n: 3 } },
+      { kind: 'tatters', scale: .6, params: { n: 3 } },
+      { kind: 'cape', scale: .8, role: 'dark' },
+      { kind: 'torso', scale: .9, role: 'cloth' },
+      { kind: 'hood', x: .32, scale: .8 },
+      { kind: 'daggers', params: { len: 0.5, side: 1 },
+        action: { pivotX: .1, pivotY: .62, windTurn: -.7, strikeTurn: .22, reach: .26 } },
+      { kind: 'daggers', params: { len: 0.5, side: -1 },
+        action: { pivotX: .1, pivotY: -.62, windTurn: .7, strikeTurn: -.22, reach: .26 } },
     ],
   },
   class_cleric: {
@@ -2063,15 +2108,6 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#dff4ff', params: { spread: 0.42, dist: 0.5, size: 0.09 } },
     ],
   },
-  /** Stone sentinel: plated guardian with a burning core. */
-  sentinel: {
-    parts: [
-      { kind: 'disc' },
-      { kind: 'armorPlates' },
-      { kind: 'gem' },
-      { kind: 'eyes', params: { spread: 0.35, dist: 0.6, size: 0.08 } },
-    ],
-  },
   menhir: {
     parts: [
       { kind: 'disc', role: 'dark', scale: 0.95 },
@@ -2081,9 +2117,10 @@ export const LOOKS: Record<string, LookDef> = {
   },
   sylvan_warden: {
     parts: [
-      { kind: 'disc', scale: 0.95 },
       { kind: 'fronds', params: { n: 5 } },
-      { kind: 'staff', params: { orb: '#9fe07a' } },
+      { kind: 'torso', scale: .95, role: 'wood' },
+      { kind: 'pauldrons', scale: .85, role: 'wood' },
+      { kind: 'staff', scale: 1.15, params: { orb: '#9fe07a' } },
       { kind: 'eyes', params: { spread: 0.45, dist: 0.55, size: 0.08 } },
     ],
   },
@@ -2097,8 +2134,9 @@ export const LOOKS: Record<string, LookDef> = {
   },
   grove_singer: {
     parts: [
-      { kind: 'robe' },
-      { kind: 'fronds', scale: 0.8, params: { n: 4 } },
+      { kind: 'fronds', scale: 1.1, params: { n: 4 } },
+      { kind: 'robe', scale: .85 },
+      { kind: 'hood', x: .35, scale: .7, role: 'wood' },
       { kind: 'halo', scale: 0.9, alpha: 0.5 },
     ],
   },
@@ -4670,6 +4708,7 @@ export const LOOKS: Record<string, LookDef> = {
   },
   /** A lattice cell: a squat faceted stud — the board's tile, not a jewel. */
   lattice_crystal: {
+    toneTint: 1,
     parts: [
       { kind: 'disc', scale: 0.85 },
       { kind: 'crystalGrowths', scale: 0.8, params: { n: 4 } },
@@ -9721,6 +9760,11 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 0.6,
   },
 };
+
+// Class registry membership, not a hand-picked class list, grants player anatomy.
+for (const cls of CLASSES) if (cls.look && LOOKS[cls.look]) {
+  LOOKS[cls.look] = playerBodyLook(LOOKS[cls.look]);
+}
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look
  *  overrides per skill). Kinds absent here keep the legacy square: a decoy

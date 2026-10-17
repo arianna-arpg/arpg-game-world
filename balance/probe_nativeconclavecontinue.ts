@@ -1,0 +1,35 @@
+import '../src/engine/world';
+import assert from 'node:assert/strict';
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+import {spawn} from 'node:child_process';
+import {bootSimEngine} from '../src/sim/arena';
+import {makeAccount,serializeAccount,deserializeAccount} from '../src/meta/account';
+import {serializeCharacter,writeCharacterMirrorRaw,readCharacterResume,CHAR_SLOT} from '../src/meta/character';
+import {prepareCharacterWorld} from '../src/meta/resumeWorld';
+import {CLASSES} from '../src/data/classes';
+import {buildManifest} from '../src/packages/manifest';
+import {NativeClientStart} from '../src/worldmass/nativeClientStart';
+import type {NativeClientRuntime} from '../src/worldmass/nativeClientRuntime';
+import {prepareNativeCharacterContinue} from '../src/worldmass/nativeClientContinue';
+import {nativeConclaveBirthCalls} from '../src/engine/nativeSceneRuntimeBirth';
+import {refuseWorldContinue} from './nativeClientContinueFixture';
+import {seedGlobalRandom} from '../src/sim/rng';
+import {combatHash,writeCombatProof} from './probe_nativecombatcycle';
+bootSimEngine();const restoreRandom=seedGlobalRandom(17431),memory=new Map<string,string>();
+Object.defineProperty(globalThis,'window',{configurable:true,value:{localStorage:{getItem:(k:string)=>memory.get(k)??null,setItem:(k:string,v:string)=>{memory.set(k,v);},removeItem:(k:string)=>{memory.delete(k);}}}});
+Object.defineProperty(globalThis,'fetch',{configurable:true,value:async()=>new Response('',{status:404})});
+function travel(r:NativeClientRuntime,id:string){const from=r.current,c=from.combat.input.coordinator;c.runFrom(from,()=>c.loadZone(id,from.assembly.input.scene.zone.id));}
+const arg=process.argv.indexOf('--bytes'),out=arg>=0?resolve(process.argv[arg+1]):(()=>{const reports=resolve('balance/reports');mkdirSync(reports,{recursive:true});return join(mkdtempSync(join(reports,'native-conclave-continue-')),'bytes.json');})();
+if(process.argv.includes('--child')){
+ const saved=JSON.parse(readFileSync(out,'utf8'));assert.equal(memory.size,0);const account=()=>{const value=deserializeAccount(saved.account);assert(value);return value;};
+ async function lease(){await writeCharacterMirrorRaw(CHAR_SLOT,JSON.stringify(saved.character));const l=await readCharacterResume();assert.equal(l.status,'ready');if(l.status!=='ready')throw Error('Living ritual save refused');return l.resume;}
+ const oracle=await prepareCharacterWorld(account(),await lease(),{spawn:'exact',fallbackSeed:17431,isCurrent:()=>true}),ordinary=oracle.publish();
+ const nativeSite=ordinary.ritualView();assert(nativeSite);const nativeBodies=nativeSite.cultistIds.map(id=>ordinary.actors.find(a=>a.id===id)!);assert.equal(nativeBodies.length,5);assert(nativeBodies.every(a=>a&&!a.fromZoneGen));const baseline={count:nativeBodies.length,wounds:nativeBodies.map(a=>a.life/a.maxLife()),counter:ordinary.sim.conclaveField!.incubationCounter};ordinary.loadZone('lastlight',ordinary.zone.id);ordinary.loadZone(saved.zone,'lastlight');assert.equal(ordinary.ritualView(),null);assert.equal(ordinary.sim.conclaveField!.incubationCounter,baseline.counter+1);
+ const result=await refuseWorldContinue(async worldDrivers=>{const prepared=await prepareNativeCharacterContinue(account(),await lease(),{spawn:'exact',isCurrent:()=>true}),made=prepared.publish(),w=made.writer,r=made.runtime,area=r.current,birth=area.combat.input.assembly.input.registry.input.birth,site=birth.input.state.ritualSite;assert.equal(w.zone.id,saved.zone);assert(site);assert.equal(site.id,saved.ritualId);const receipt=nativeConclaveBirthCalls.read(birth.host);assert(receipt);assert.equal(receipt.site,site);const bodies=site.cultistIds.map(id=>area.combat.scene.actors.find(a=>a.id===id)!);assert.equal(bodies.length,baseline.count);assert(bodies.every(a=>a&&!a.fromZoneGen));assert.deepEqual(bodies.map(a=>a.life/a.maxLife()),baseline.wounds,'cold native reconstruction policy retained');assert.equal(bodies[0].life/bodies[0].maxLife(),1,'ordinary policy rebuilds transient cultists rather than saving their wound');const before=w.sim.conclaveField!.incubationCounter;travel(r,'lastlight');assert.equal(birth.input.state.ritualSite,null);assert(bodies.every(a=>!area.combat.scene.actors.includes(a)));travel(r,saved.zone);assert.equal(r.current,area);assert.equal(birth.input.state.ritualSite,null);travel(r,'lastlight');assert.equal(w.sim.conclaveField!.incubationCounter,before+1);assert.deepEqual(worldDrivers,[]);const facts={freshProcess:true,savedCurrentZone:true,actualLease:true,ritualId:site.id,rebuiltCultists:bodies.length,nativeColdWoundPolicy:true,actualBirthReceipt:true,incubatedOnce:true,worldDrivers};r.retire();prepared.discard();return facts;});writeFileSync(out+'.result.json',JSON.stringify(result));console.log(JSON.stringify(result));
+}else{
+ await refuseWorldContinue(async worldDrivers=>{const account=makeAccount(),start=new NativeClientStart(account),made=start.begin({kind:'run',classDef:CLASSES.find(c=>c.id==='warrior')!,manifest:buildManifest(account,17431),prologue:'skip'});assert(made);const r=made.runtime,w=made.writer;w.player.level=15;const cf=w.sim.conclaveField;assert(cf);let steps=0;while(!cf.peek().length&&steps++<15000)cf.update(.5,w.devOverlayView());const event=cf.peek()[0];assert(event);travel(r,event.zoneId);r.current.combat.campaignFrame.tick(1/60);const state=r.current.combat.input.assembly.input.registry.input.birth.input.state,site=state.ritualSite;assert(site);const bodies=site.cultistIds.map(id=>r.current.combat.scene.actors.find(a=>a.id===id)!);assert.equal(bodies.length,5);bodies[0].life=bodies[0].maxLife()*.37;const save=serializeCharacter(w),memo=save.world!.memory!.find(m=>m.zoneId===event.zoneId);assert(memo);assert(!memo.enemies.some(a=>a.tag==='ritual_cultist'),'transient native cultists are not memory enemies');writeFileSync(out,JSON.stringify({account:serializeAccount(account),character:save,zone:event.zoneId,ritualId:site.id,steps,worldDrivers}));start.cancel();});
+ await new Promise<void>((ok,fail)=>{const child=spawn(process.execPath,[createRequire(import.meta.url).resolve('tsx/cli'),fileURLToPath(import.meta.url),'--child','--bytes',out],{cwd:process.cwd(),stdio:['ignore','pipe','pipe'],windowsHide:true});let log='';child.stdout.on('data',b=>log+=b);child.stderr.on('data',b=>log+=b);child.on('error',fail);child.on('close',code=>{writeFileSync(out+'.child.log',log);if(code)fail(Error('Conclave Continue child '+code+': '+log));else ok();});});const result=JSON.parse(readFileSync(out+'.result.json','utf8'));writeCombatProof('native-conclave-continue.json',{result,receipt:combatHash(JSON.stringify(result))});console.log(JSON.stringify(result));
+}restoreRandom();

@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import fs from 'node:fs';
+import {nativeCampaignFixture,birthActualNativeArea,mintAdditionalNativeArea} from './nativeCombatRetainedFixture';
+import {withSeededRandom} from '../src/core/rng';
+const message='The caravan is lost — its bounty with it.';
+type Mode='dead'|'missing'|'living'|'wreck-throws'|'notice-throws'|'notice-partial';
+function course(retained:boolean,mode:Mode){return withSeededRandom(0x7731,()=>{
+ const s=nativeCampaignFixture(0x7731),w=s.writer;s.definition=mintAdditionalNativeArea(s,{x:4025,y:1180});assert.equal(s.definition.objective.kind,'procession');
+ const traps:string[]=[],saved:Map<string,PropertyDescriptor|undefined>=new Map();
+ if(retained)for(const key of ['loadZone','update','updateObjective','applyInputs','applyAction','spawnWave','createMonster','dropGemAt']){saved.set(key,Object.getOwnPropertyDescriptor(w,key));Object.defineProperty(w,key,{configurable:true,value:()=>{traps.push(key);throw Error('Unexpected World local driver '+key);}});}
+ try{
+ const n=retained?birthActualNativeArea(s):null;if(!n)w.loadZone(s.definition.id);const area=n?.ongoing,state=area?area.assembly.input.objectives:w,pr=area?area.assembly.input.objectives.procession:w['procession'];assert(pr,'genuine native procession birth');const actors=area?area.assembly.input.scene.actors:w.actors,cart=actors.find(a=>a.id===pr.cartId);assert(cart,'genuine native cart');
+ const flash=area?area.assembly.input.geometry.flashes:w.flashes,loot=area?area.assembly.lootController:w;
+ const oldDrop=loot.dropGemAt;let wrecks=0;const tape:unknown[]=[];
+ Object.defineProperty(loot,'dropGemAt',{configurable:true,value:(...args:Parameters<typeof oldDrop>)=>{wrecks++;tape.push(['wreck',state.objectiveLost,pr.cartId===cart.id]);if(mode==='wreck-throws')throw Error('wreck failed');return Reflect.apply(oldDrop,loot,args);}});
+ const oldNotice=w.notice;let attempts=0;Object.defineProperty(w,'notice',{configurable:true,value:(...args:Parameters<typeof oldNotice>)=>{assert.equal(args[0],message);attempts++;tape.push(['notice',state.objectiveLost,pr.cartId,wrecks,flash.some(f=>f.radius===90)]);if(mode==='notice-throws')throw Error('notice failed');const result=Reflect.apply(oldNotice,w,args);if(mode==='notice-partial')throw Error('notice returned effect then failed');return result;}});
+ if(mode==='missing'){if(area)area.combat.slipAway(cart,'');else w.slipAway(cart,'');assert(!actors.includes(cart));}
+ else if(mode!=='living'){if(area)area.combat.kill(cart,true,w.player);else w['kill'](cart,true,w.player);assert(cart.dead);}
+ const before=w.notices.length,watch=()=>area?area.watching.updateObjective(.1):w['updateObjective'](.1);
+ const fault=mode==='wreck-throws'||mode==='notice-throws'||mode==='notice-partial';if(fault)assert.throws(watch,/failed/);else watch();
+ const notices=w.notices.slice(before).filter(n=>n.text===message);assert.equal(state.objectiveLost,mode!=='living');assert.equal(state.objectiveDone,false);
+ assert.equal(wrecks,['living','missing'].includes(mode)?0:1);assert.equal(attempts,['living','wreck-throws'].includes(mode)?0:1);
+ assert.equal(pr.cartId,mode==='living'||mode==='wreck-throws'?cart.id:null);
+ assert.equal(notices.length,['dead','missing','notice-partial'].includes(mode)?1:0);
+ if(notices.length)assert.deepEqual({text:notices[0].text,color:notices[0].color,size:notices[0].size,channel:notices[0].channel},{text:message,color:'#d05050',size:16,channel:'events'});
+ for(let i=0;i<3;i++)watch();assert.equal(w.notices.length,before+notices.length);assert.equal(wrecks,['living','missing'].includes(mode)?0:1);assert.equal(attempts,['living','wreck-throws'].includes(mode)?0:1);assert.deepEqual(traps,[]);
+ if(attempts)assert.deepEqual(tape.at(-1),['notice',true,null,mode==='missing'?0:1,mode!=='missing']);
+ return{mode,retained,lost:state.objectiveLost,cartCleared:pr.cartId===null,wrecks,attempts,notices:notices.map(({text,color,size,channel})=>({text,color,size,channel})),tape,traps};
+ }finally{for(const [key,d]of saved){if(d)Object.defineProperty(w,key,d);else Reflect.deleteProperty(w,key);}}
+});}
+const rows=[];for(const mode of ['dead','missing','living','wreck-throws','notice-throws','notice-partial'] as const){const native=course(false,mode),retained=course(true,mode);assert.deepEqual({...retained,retained:false},native);rows.push({native,retained});}
+const selectedCallables=[false,true].map(retained=>withSeededRandom(0x7731,()=>{const s=nativeCampaignFixture(0x7731),w=s.writer;s.definition=mintAdditionalNativeArea(s,{x:4025,y:1180});assert.equal(s.definition.objective.kind,'procession');const n=retained?birthActualNativeArea(s):null;if(!n)w.loadZone(s.definition.id);const area=n?.ongoing,pr=area?area.assembly.input.objectives.procession:w['procession'];assert(pr);const actors=area?area.assembly.input.scene.actors:w.actors,cart=actors.find(a=>a.id===pr.cartId);assert(cart);if(area)area.combat.kill(cart,true,w.player);else w['kill'](cart,true,w.player);const provider=area?area.watching.input.objectiveServices:w,old=provider.notice;let calls=0,applyReads=0,shadowCalls=0;const fn=function(this:typeof provider,...args:Parameters<typeof old>){assert.equal(this,provider);calls++;return Reflect.apply(old,provider,args);};Object.defineProperty(fn,'apply',{get(){applyReads++;return function(){shadowCalls++;return undefined;};}});Object.defineProperty(provider,'notice',{configurable:true,get(){return fn;}});const before=w.notices.filter(n=>n.text===message).length;if(area)area.watching.updateObjective(.1);else w['updateObjective'](.1);const result={retained,calls,applyReads,shadowCalls,noticeDelta:w.notices.filter(n=>n.text===message).length-before,lost:area?area.assembly.input.objectives.objectiveLost:w.objectiveLost,cartId:pr.cartId};assert.equal(calls,1);assert.equal(applyReads,0);assert.equal(shadowCalls,0);assert.equal(result.noticeDelta,1);assert.equal(result.lost,true);assert.equal(result.cartId,null);return result;}));
+const report={selectedCallables,scope:'Actual born native procession cart; actual kill/slip-away produces watcher condition. No forged completion/loss flag. Ordinary World and actual retained owner; repeated loss, wreck/notice partial failures and zero World local-driver fallback.',rows,receipt:createHash('sha256').update(JSON.stringify(rows)).digest('hex')};fs.mkdirSync('balance/reports',{recursive:true});fs.writeFileSync('balance/reports/native-caravan-news.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({courses:rows.length*2+selectedCallables.length,receipt:report.receipt}));

@@ -1,3 +1,4 @@
+import { WATER_SURFACE } from './waterSurface';
 // ---------------------------------------------------------------------------
 // DOODAD VISUALS — every doodad kind's look, as data. Each entry names a
 // painter from the render library (render/vis/painters.ts) plus its params;
@@ -22,13 +23,15 @@ import { TITAN_DOODAD_VISUALS } from './titans';
 // row: the pad pass is coastline-derived and lush-biome-gated, so a desert
 // pool grows none either way — the fake stays faithful where it matters.)
 const WATER_LOOK = {
-  rim: { color: '#9ab8cc', alpha: 0.5, grow: 4 },
-  core: { color: 'theme:water|#1d4264', alpha: 0.85 },
+  rim: { color: WATER_SURFACE.rim, alpha: 0.5, grow: 4 },
+  core: { color: WATER_SURFACE.deep, alpha: 0.95 },
   fords: { lighten: 0.3, alpha: 0.55 },
-  sheen: { color: '#d8f0fa' },
+  sheen: { color: WATER_SURFACE.highlight },
+  waterMotion: true,
 };
 
 export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
+  altar_plinth: { painter: 'altarBody', order: 58 }, // the native altar pass paints its physical slab
   service_sign_oracle: { painter: 'serviceSign', order: 59, params: { name: 'Oracle’s House', glyph: '◉', color: '#c7adeb' } },
   service_sign_inn: { painter: 'serviceSign', order: 59, params: { name: 'Mireille’s Inn', glyph: '☾', color: '#e4c580' } },
   service_sign_smith: { painter: 'serviceSign', order: 59, params: { name: 'Brandt’s Blacksmithery', glyph: '⚒', color: '#eba977' } },
@@ -52,9 +55,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // --- Liquid + ground overlays (merged blob silhouettes) -----------------
   // WATER — one hue family, depth told by tone: fords DERIVE from the deep
   // color and meld in as soft gradients (no second water, no cut line). The
-  // surface is STILL until disturbed — rings come only from moving bodies
-  // (renderer motion-FX wakes) — with just the slow sheen drifting over the
-  // deep. Lily pads grow on true coastline, in randomized clumps.
+  // surface carries gentle shared ripples; larger rings come from moving
+  // bodies (renderer motion-FX wakes). Lily pads follow the true coastline.
   water: {
     painter: 'liquid', order: 10,
     params: {
@@ -654,8 +656,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   // The wayfarer kit — roadside & village-story furniture.
   weathered_statue: {
-    painter: 'statue', order: 54, shadow: 0.6, longShadow: 1.5,
-    params: { stone: 'theme:obstacle|#8a8578', moss: '#5a6e42' },
+    painter: 'statue', order: 54, shadow: 0.6, longShadow: 1.5, raisedSurface: .92,
+    params: { stone: '#aca28e', moss: '#5a6e42', relief: .32, weathering: .55 },
   },
   wayshrine: {
     painter: 'wayshrine', order: 55, shadow: 0.45, longShadow: 0.9,
@@ -770,7 +772,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   tree: {
     longShadow: 0.85,
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.3, roots: 4 },
-    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424' } },
+    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424',
+      broadleaf: {boughs:7,leaflets:22,irregularity:.3} } },
   },
   thicket: {
     longShadow: 0.7,
@@ -882,12 +885,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   conifer: {
     longShadow: 0.9,
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.26, roots: 3, color: '#4a3826' },
-    canopy: { painter: 'pineCrown', params: { fill: 'theme:tree|#1e3a28' } },
+    canopy: { painter: 'pineCrown', params: { fill: 'theme:tree|#1e3a28',
+      needles: {layers:3,boughs:9,needlePairs:7,irregularity:.22} } },
   },
   ancient_tree: {
     longShadow: 0.9,
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.22, roots: 6 },
-    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424' } },
+    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424',
+      broadleaf: {boughs:7,leaflets:22,irregularity:.3} } },
   },
   // The FOREST's canopy body: a broad-crowned oak, one shade deeper than the
   // common tree so a sealed forest roof reads as ITS OWN mass, not a smear of
@@ -896,7 +901,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   forest_oak: {
     longShadow: 0.95,
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.22, roots: 5, color: '#41321f' },
-    canopy: { painter: 'leafCrown', params: { fill: '#274f1d' } },
+    canopy: { painter: 'leafCrown', params: { fill: '#274f1d',
+      broadleaf: {boughs:9,leaflets:28,irregularity:.22} } },
   },
   // The GLOAMWOOD's canopy body: the same knitting oak gone grey-dark — a
   // desaturated blue-green crown over a near-black crooked bole, so the
@@ -2468,12 +2474,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'campfire', order: 53,
     light: { radius: -5, color: '#ffae52', intensity: 0.6, flicker: 6 },
   },
-  // Geology, not an icon: the mouth form-rolls its portal (browed arch or
-  // rockfall ring) from the biome's own stone, with chance-rolled stalactite
-  // fangs, threshold rubble, and theme-gated hanging vines.
+  // A horizontal passage cut into a standing rock face. Pits below retain
+  // their circular descending throat; native entry geometry and seeds stay fixed.
   cave_entrance: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
       glow: '#caa860', teeth: {}, rubble: {}, vines: { color: 'theme:tree' },
     },
@@ -2509,6 +2515,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   frostmaw_maw: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: '#3a4a58', edge: '#7a98ac', material: 'stone',
       glow: '#8ac8e8', throat: '#0a1016', teeth: {},
     },
@@ -2543,6 +2550,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   wyrm_barrow_mouth: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: '#2e2018', edge: '#5a3c2a', material: 'stone',
       glow: '#ff8a2a', throat: '#140a04', teeth: {},
     },
@@ -2573,6 +2581,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   roost_crag: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: '#4a4238', edge: '#786a54', material: 'stone',
       glow: '#ff9a3a', throat: '#120c06', teeth: {}, rubble: {},
     },
@@ -2628,6 +2637,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   glacier_mouth: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: '#2a4150', edge: '#487086', material: 'ice',
       glow: '#8ed0ec', throat: '#04080c', teeth: {},
     },
@@ -2646,6 +2656,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   tide_hollow: {
     painter: 'caveMouth', order: 55,
     params: {
+      rockFace: true,
       color: '#1e4038', edge: '#3a6c5c', material: 'stone',
       glow: '#9fe8d8', throat: '#04100c', teeth: {},
     },

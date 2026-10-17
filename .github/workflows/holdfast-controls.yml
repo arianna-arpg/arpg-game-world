@@ -1,0 +1,27 @@
+name: Holdfast recovery controls
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: holdfast-controls-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  holdfast-controls:
+    # Same-repo pull requests already receive the branch push run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Native ownership, entry and barrier regressions
+        run: node balance/check_nativeholdfastcontrols.mjs

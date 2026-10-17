@@ -33,7 +33,7 @@ import {
 import { FACTIONS } from './monsters';
 import type { PackTableEntry } from './zones';
 import type { PostSpec } from '../engine/brain';
-import type { World } from '../engine/world';
+import type {NativeTheaterHost} from '../engine/nativeTheaterHost';
 
 function shortName(f: string): string {
   return (FACTIONS[f]?.name ?? f).replace(/^the /, '');
@@ -58,7 +58,7 @@ registerTheaterKind({
     attackers: 5, attackerRing: 220, attackerJitter: 30,
     defenders: 4, defenderJitter: 60,
   } satisfies SiegeParams,
-  spawn: (w: World, run: ActiveTheaterRun, spots: TheaterSpots) => {
+  spawn: (w: NativeTheaterHost, run: ActiveTheaterRun, spots: TheaterSpots) => {
     const p = run.params<SiegeParams>();
     const camp = spots.camps[0];
     const atkRoster = FACTIONS[run.primary];
@@ -84,7 +84,7 @@ registerTheaterKind({
     }
     w.notice(`${shortName(run.primary)} besiege ${shortName(run.secondary!)}!`, '#e85050', 15, 'world');
   },
-  tick: (w: World, run: ActiveTheaterRun) => {
+  tick: (w: NativeTheaterHost, run: ActiveTheaterRun) => {
     // ARCLESS: either side spent = the fight is over. No payout, no toast —
     // the bodies were the bounty (the old "Siege broken!" arc died here).
     const attackersLeft = w.anyAliveWithTag('siege_atk', run.primary);
@@ -113,7 +113,7 @@ registerTheaterKind({
   params: {
     maxWaypoints: 5, followers: 3, leadJitter: 30, followJitter: 60,
   } satisfies PatrolParams,
-  spawn: (w: World, run: ActiveTheaterRun, spots: TheaterSpots) => {
+  spawn: (w: NativeTheaterHost, run: ActiveTheaterRun, spots: TheaterSpots) => {
     const p = run.params<PatrolParams>();
     const roster = FACTIONS[run.primary];
     const route = [...spots.camps, ...spots.pois].slice(0, p.maxWaypoints);
@@ -135,7 +135,7 @@ registerTheaterKind({
     }
     w.notice(`a ${shortName(run.primary)} patrol`, '#c8b06b', 14, 'world');
   },
-  tick: (w: World, run: ActiveTheaterRun) => {
+  tick: (w: NativeTheaterHost, run: ActiveTheaterRun) => {
     // The patrol is simply faction troops; clearing them ends it quietly.
     if (!w.anyAliveWithTag('patrol', run.primary)) run.done = true;
   },
@@ -176,7 +176,7 @@ registerTheaterKind({
   needs: { owner: true, nearHome: true },
   cast: ctx => ({ primary: ctx.owner! }),
   params: { followers: 4, leadJitter: 30, followJitter: 60 } satisfies TroopMarchParams,
-  spawn: (w: World, run: ActiveTheaterRun) => {
+  spawn: (w: NativeTheaterHost, run: ActiveTheaterRun) => {
     const p = run.params<TroopMarchParams>();
     const roster = FACTIONS[run.primary];
     if (!roster) { run.done = true; return; }
@@ -193,7 +193,7 @@ registerTheaterKind({
     if (!lead) return;
     w.notice(`a ${shortName(run.primary)} column passes through`, '#c8b06b', 14, 'world');
   },
-  tick: (w: World, run: ActiveTheaterRun) => { marchTick(w, run); },
+  tick: (w: NativeTheaterHost, run: ActiveTheaterRun) => { marchTick(w, run); },
 });
 
 registerTheaterRow({ id: 'troop_march_night', kind: 'troop_march', when: { phases: ['night'] }, chance: 0.35 });
@@ -230,7 +230,7 @@ registerTheaterKind({
     return f && FUNERAL_CORTEGE[f] ? { primary: f } : null;
   },
   params: { mourners: 4, speedMul: 0.55 } satisfies FuneralParams,
-  spawn: (w: World, run: ActiveTheaterRun) => {
+  spawn: (w: NativeTheaterHost, run: ActiveTheaterRun) => {
     const p = run.params<FuneralParams>();
     const cortege = FUNERAL_CORTEGE[run.primary];
     if (!cortege) { run.done = true; return; }
@@ -246,7 +246,7 @@ registerTheaterKind({
     if (!lead) return;
     w.notice('a funeral procession winds past', '#b0a8d0', 14, 'world');
   },
-  tick: (w: World, run: ActiveTheaterRun) => { marchTick(w, run); },
+  tick: (w: NativeTheaterHost, run: ActiveTheaterRun) => { marchTick(w, run); },
 });
 
 registerTheaterRow({
@@ -277,7 +277,7 @@ registerTheaterKind({
   pourCap: 10,
   cast: (_ctx, row) => ({ primary: (row?.params?.faction as string | undefined) ?? 'beast' }),
   params: { faction: 'beast', prey: [], hunters: [], preyCount: 4, hunterCount: 2 } satisfies HuntParams,
-  spawn: (w: World, run: ActiveTheaterRun) => {
+  spawn: (w: NativeTheaterHost, run: ActiveTheaterRun) => {
     const p = run.params<HuntParams>();
     if (!p.prey.length) { run.done = true; return; }
     const ends = marchEndpoints(w);
@@ -295,7 +295,7 @@ registerTheaterKind({
     }
     w.notice('a hunted herd breaks past — something follows', '#c8a850', 14, 'world');
   },
-  tick: (w: World, run: ActiveTheaterRun) => { marchTick(w, run); },
+  tick: (w: NativeTheaterHost, run: ActiveTheaterRun) => { marchTick(w, run); },
 });
 
 registerTheaterRow({
@@ -335,7 +335,7 @@ registerTheaterKind({
     guards: 3, speedMul: 0.5, cartPace: 0.9, trail: 64,
     roadKind: 'road', cartId: 'caravan_cart',
   } satisfies CartGuardParams,
-  spawn: (w: World, run: ActiveTheaterRun) => {
+  spawn: (w: NativeTheaterHost, run: ActiveTheaterRun) => {
     const p = run.params<CartGuardParams>();
     const route = roadWaypoints(w, p.roadKind);
     if (!route) { run.done = true; return; }
@@ -364,7 +364,7 @@ registerTheaterKind({
     }
     w.notice('a freehold cart takes the lane', '#d8b46a', 14, 'world');
   },
-  tick: (w: World, run: ActiveTheaterRun, dt: number) => {
+  tick: (w: NativeTheaterHost, run: ActiveTheaterRun, dt: number) => {
     const p = run.params<CartGuardParams>();
     const m = (run.data.marches as MarchState[] | undefined)?.[0];
     const cartId = run.data.cartId as number | undefined;
@@ -443,7 +443,7 @@ registerTheaterKind({
     return f ? { primary: f } : null;
   },
   params: { sweepSec: 1.5, leans: [] } satisfies WatchParams,
-  spawn: (_w: World, run: ActiveTheaterRun, spots: TheaterSpots) => {
+  spawn: (_w: NativeTheaterHost, run: ActiveTheaterRun, spots: TheaterSpots) => {
     // Bodiless: nothing spawns, ever. Stash the spot lists for the tick's
     // post assignment (spots are handed only here).
     run.data.spots = {
@@ -451,7 +451,7 @@ registerTheaterKind({
       pois: spots.pois.map(c => vec(c.x, c.y)),
     };
   },
-  tick: (w: World, run: ActiveTheaterRun) => {
+  tick: (w: NativeTheaterHost, run: ActiveTheaterRun) => {
     const ledger = (run.data.leans ??= []) as LeanEntry[];
     if (run.done) {
       // THE CLOSING TICK (endWhen 'rowCond'): the hour turned — revert

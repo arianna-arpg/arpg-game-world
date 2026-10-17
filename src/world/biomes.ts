@@ -20,8 +20,10 @@
 
 import { continentAt, continentSeedFrom } from './continents';
 import { CLIMATE_CFG, climateAt, climateAffinity, registerClimateInvalidation, validateClimateSpecs, type ClimateSpec } from './climate';
-import { presenceMul, type LevelEnvelope } from '../engine/presence';
+import type { LevelEnvelope } from '../engine/presence';
 import type { MapCoord } from './coords';
+import { regionGeometry, regionCellHash as hashCell } from './regionGeometry';
+import { NativeFieldChoice } from './fieldChoice';
 
 export interface BiomeInfo {
   /** The faction that springs from this land (must exist in FACTIONS). */
@@ -1174,32 +1176,6 @@ export function registerFieldBand(band: BiomeFieldBand): void {
   BIOME_FIELD_BANDS.push(band);
 }
 
-/** The first band whose stratum holds at this climate reading (surface pick
- *  path only), or null for the global table. */
-function bandFor(climate: Record<string, number>): BiomeFieldBand | null {
-  for (const b of BIOME_FIELD_BANDS) {
-    const v = climate[b.when.axis];
-    if (v !== undefined && presenceMul(b.when.env, v) >= 0.5) return b;
-  }
-  return null;
-}
-
-/** Resolve a band against the global table per its mode: 'replace' hands the
- *  band's own table over; 'tilt' multiplies matching global weights by the
- *  band rows' weights (absent biomes append as new candidates). */
-function bandCandidates(band: BiomeFieldBand, table: readonly BiomeSeedDef[]): readonly BiomeSeedDef[] {
-  if ((band.mode ?? 'replace') === 'replace') return band.table;
-  const mul = new Map(band.table.map(r => [r.biome, r.weight ?? 1]));
-  const out: BiomeSeedDef[] = table.map(r => {
-    const m = mul.get(r.biome);
-    if (m === undefined) return r;
-    mul.delete(r.biome);
-    return { biome: r.biome, weight: (r.weight ?? 1) * m };
-  });
-  for (const [biome, weight] of mul) out.push({ biome, weight });
-  return out;
-}
-
 // THE CAPITAL POLE (world/civics.ts): civilization's structure WITHOUT the
 // fixed start. The old civic rings forced metropolis/farmland around HOME —
 // every run opened walled inside the same city belt. The same layered
@@ -1409,142 +1385,20 @@ export interface BiomeFieldModifier {
   label?: string;
 }
 
-/** Integer hash (Rng's family) → deterministic across host / client / reload. */
-function hashCell(a: number, b: number, seed: number): number {
-  let h = (seed ^ 0x9e3779b9) >>> 0;
-  h = Math.imul(h ^ (a | 0), 0x85ebca6b) >>> 0;
-  h = Math.imul(h ^ (b | 0), 0xc2b2ae35) >>> 0;
-  h ^= h >>> 13; h = Math.imul(h, 0x27d4eb2f) >>> 0; h ^= h >>> 15;
-  return h >>> 0;
-}
-
-// Cell-pick memo: the pick is pure per (dimension, seed, cell), and floods /
-// map washes hammer the same cells thousands of times. Bounded — cleared
-// wholesale at the cap (a re-fill is cheap; correctness never depends on it).
-const pickMemo = new Map<string, string>();
-const PICK_MEMO_CAP = 16384;
-
-// Existence-floor seats per fieldSeed (lazy; flushed with the pick memo — a
-// seat bakes the anchor geometry of its moment exactly like the picks do).
-const floorSeatMemo = new Map<number, { gx: number; gy: number; biome: string }[]>();
-const FLOOR_MEMO_CAP = 64;
-
-/** Drop every memoized cell pick. Called when a NEW world constructs (a fresh
- *  BiomeField) — the seed in the key already isolates worlds, but a hard reset
- *  also kills any stale entries a dev-session module swap (HMR duality) or a
- *  climate-origin change could otherwise carry across runs. */
-export function resetFieldPickMemo(): void { pickMemo.clear(); floorSeatMemo.clear(); }
+// Classic memo lifetime stays tied to native geography invalidation. Frozen
+// consumers construct their own instance with complete source-owned readers.
+const nativeFieldChoice = new NativeFieldChoice({
+  table: BIOME_FIELD, bands: BIOME_FIELD_BANDS, floors: BIOME_FLOORS, biomes: BIOMES,
+  geometry: BIOME_FIELD_CFG, climate: CLIMATE_CFG,
+  climateAt, climateAffinity, continentAt, continentSeedFrom,
+});
+export function resetFieldPickMemo(): void { nativeFieldChoice.reset(); }
 
 // A pick bakes the climate GEOMETRY of its moment (bands read the origin +
 // anchors through climateAt) — so any re-anchor (the capital pole install,
 // an origin move, probes cycling seeds) must flush it, or a re-anchored
 // world serves picks computed under the old geometry.
 registerClimateInvalidation(resetFieldPickMemo);
-
-/** The ORDINARY roll — the pick machinery minus memo and floor consult, ONE
- *  source shared by fieldBiomePick and the existence-floor scan (no drift by
- *  construction). Never writes the pick memo: the scan's reads must not bake
- *  pre-floor values under the keys real sampling will ask for. */
-function ordinaryFieldPick(
-  table: readonly BiomeSeedDef[], gx: number, gy: number, site: MapCoord,
-  fieldSeed: number, dimension: string,
-): string {
-  const climate = climateAt(site, fieldSeed, dimension);
-  // FIELD BANDS (surface only): a claimed climate stratum swaps in (or
-  // tilts) the candidate table — the capital's structure. Biome affinities
-  // still multiply inside the band; the all-zero fallback below floors it.
-  const band = dimension === 'surface' ? bandFor(climate) : null;
-  const src = band ? bandCandidates(band, table) : table;
-  const weights: number[] = new Array(src.length);
-  let total = 0;
-  for (let i = 0; i < src.length; i++) {
-    const s = src[i];
-    const w = (s.weight ?? 1) * climateAffinity(BIOMES[s.biome]?.climate, climate);
-    weights[i] = w; total += w;
-  }
-  const h = hashCell(gx, gy, (fieldSeed ^ 0x5bd1e995) >>> 0);
-  let picked = src[src.length - 1].biome;
-  if (total <= 0) {
-    let raw = 0;
-    for (const s of src) raw += s.weight ?? 1;
-    let r = (h / 0x100000000) * raw;
-    for (const s of src) { r -= s.weight ?? 1; if (r <= 0) { picked = s.biome; break; } }
-  } else {
-    let r = (h / 0x100000000) * total;
-    for (let i = 0; i < src.length; i++) {
-      r -= weights[i];
-      if (r <= 0) { picked = src[i].biome; break; }
-    }
-  }
-  return picked;
-}
-
-/** The existence-floor seats for one world — pure f(fieldSeed, anchors),
- *  computed whole on first consult (the foreordained tenet). A floor whose
- *  viable ground already grows its biome seats NOTHING — the satisfied world
- *  is byte-identical because every cell falls through to the ordinary roll. */
-function computeFloorSeats(fieldSeed: number): { gx: number; gy: number; biome: string }[] {
-  const seats: { gx: number; gy: number; biome: string }[] = [];
-  if (floorSeatMemo.size >= FLOOR_MEMO_CAP) floorSeatMemo.clear();
-  floorSeatMemo.set(fieldSeed, seats); // set-first: reentrancy-proof by construction
-  const span = BIOME_FIELD_CFG.cellSpan, jit = BIOME_FIELD_CFG.jitter;
-  const contSeed = continentSeedFrom(fieldSeed);
-  for (const floor of BIOME_FLOORS) {
-    if (!BIOMES[floor.biome]) continue; // authoring hole — registerBiomeFloor warned, the floor stands down
-    // The candidate cells: every lattice cell whose jittered SITE stands on
-    // land inside any declared disc (range padded one cell — jitter can pull
-    // an outside-centred cell's site in).
-    const cells = new Map<string, { gx: number; gy: number; site: MapCoord }>();
-    for (const disc of floor.discs) {
-      const at = disc.anchor === 'origin' ? CLIMATE_CFG.origin : CLIMATE_CFG.anchors[disc.anchor];
-      if (!at) continue; // uninstalled anchor — this disc does not exist yet
-      const g0x = Math.floor((at.x - disc.r) / span) - 1, g1x = Math.floor((at.x + disc.r) / span) + 1;
-      const g0y = Math.floor((at.y - disc.r) / span) - 1, g1y = Math.floor((at.y + disc.r) / span) + 1;
-      for (let gx = g0x; gx <= g1x; gx++) {
-        for (let gy = g0y; gy <= g1y; gy++) {
-          const h = hashCell(gx, gy, fieldSeed);
-          const px = (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span;
-          const py = (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span;
-          if (Math.hypot(px - at.x, py - at.y) > disc.r) continue;
-          if (continentAt({ x: px, y: py }, contSeed).kind !== 'land') continue; // the sea grows no belt
-          cells.set(`${gx}|${gy}`, { gx, gy, site: { x: px, y: py } });
-        }
-      }
-    }
-    if (!cells.size) continue;
-    // Satisfied = some candidate cell already picks the biome ordinarily —
-    // the floor then claims nothing (the fix is not reached).
-    let satisfied = false;
-    for (const c of cells.values()) {
-      if (ordinaryFieldPick(BIOME_FIELD, c.gx, c.gy, c.site, fieldSeed, 'surface') === floor.biome) { satisfied = true; break; }
-    }
-    if (satisfied) continue;
-    // The seat: the most-hospitable candidate — affinity, then the wetter
-    // site, then the cell hash. All pure; host/clients/reloads agree.
-    let best: { gx: number; gy: number } | null = null;
-    let bestAff = -1, bestMoist = -1, bestH = -1;
-    for (const c of cells.values()) {
-      const cl = climateAt(c.site, fieldSeed);
-      const aff = climateAffinity(BIOMES[floor.biome]?.climate, cl);
-      const moist = cl.moisture ?? 0;
-      const hh = hashCell(c.gx, c.gy, (fieldSeed ^ 0x600dfa2) >>> 0);
-      if (aff > bestAff || (aff === bestAff && (moist > bestMoist || (moist === bestMoist && hh > bestH)))) {
-        best = c; bestAff = aff; bestMoist = moist; bestH = hh;
-      }
-    }
-    if (best) seats.push({ gx: best.gx, gy: best.gy, biome: floor.biome });
-  }
-  return seats;
-}
-
-/** The floor's claim on a surface cell, or null (the overwhelmingly common
- *  read: no floors registered, a satisfied world, or a foreign cell). */
-function floorClaimAt(gx: number, gy: number, fieldSeed: number): string | null {
-  if (!BIOME_FLOORS.length) return null;
-  const seats = floorSeatMemo.get(fieldSeed) ?? computeFloorSeats(fieldSeed);
-  for (const s of seats) if (s.gx === gx && s.gy === gy) return s.biome;
-  return null;
-}
 
 /** Weighted biome for a Voronoi cell: seed weight × CLIMATE AFFINITY sampled
  *  at the cell's SITE (one climate reading per blob — regions stay coherent).
@@ -1557,14 +1411,7 @@ export function fieldBiomePick(
   table: readonly BiomeSeedDef[], gx: number, gy: number, site: MapCoord,
   fieldSeed: number, dimension = 'surface',
 ): string {
-  const memoKey = `${dimension}|${fieldSeed}|${gx}|${gy}`;
-  const hit = pickMemo.get(memoKey);
-  if (hit !== undefined) return hit;
-  const picked = (dimension === 'surface' ? floorClaimAt(gx, gy, fieldSeed) : null)
-    ?? ordinaryFieldPick(table, gx, gy, site, fieldSeed, dimension);
-  if (pickMemo.size >= PICK_MEMO_CAP) pickMemo.clear();
-  pickMemo.set(memoKey, picked);
-  return picked;
+  return nativeFieldChoice.pick(table, gx, gy, site, fieldSeed, dimension);
 }
 
 /** Multiplicatively weighted Voronoi: every seed retains its own center,
@@ -1574,26 +1421,13 @@ export function fieldBiomePick(
  * Depth compares the nearest DIFFERENT biome in this bounded neighborhood;
  * it saturates at one when no opposing biome is nearby. */
 export function regionWinner(coord: MapCoord, seed: number): { biome: string; gx: number; gy: number; scale: number; score: number; depth: number } {
-  const span = BIOME_FIELD_CFG.cellSpan, cfg = BIOME_FIELD_CFG.regionScale;
-  const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
-  let best = { biome: 'grove', gx: cx, gy: cy, scale: 1, score: Infinity };
-  let other = Infinity;
-  for (let dx = -cfg.search; dx <= cfg.search; dx++) for (let dy = -cfg.search; dy <= cfg.search; dy++) {
-    const gx = cx + dx, gy = cy + dy, h = hashCell(gx, gy, seed);
-    const x = (gx + 0.5 + ((h & 0xffff) / 0xffff - 0.5) * BIOME_FIELD_CFG.jitter) * span;
-    const y = (gy + 0.5 + ((h >>> 16) / 0xffff - 0.5) * BIOME_FIELD_CFG.jitter) * span;
-    const distance = (x - coord.x) ** 2 + (y - coord.y) ** 2;
-    if (distance / (cfg.max ** 2) >= other) continue;
-    const biome = fieldBiomePick(BIOME_FIELD, gx, gy, { x, y }, seed);
-    const band = BIOMES[biome]?.regionScale ?? cfg.default;
-    const scale = Math.max(cfg.min, Math.min(cfg.max, band[0] + (band[1] - band[0]) * hashCell(gx, gy, seed ^ 0x72ad1) / 0x100000000));
-    const score = distance / (scale * scale);
-    if (score < best.score) {
-      if (biome !== best.biome) other = best.score;
-      best = { biome, gx, gy, scale, score };
-    } else if (biome !== best.biome && score < other) other = score;
-  }
-  return { ...best, depth: Number.isFinite(other) ? Math.max(0, 1 - Math.sqrt(best.score / Math.max(other, 1e-9))) : 1 };
+  return regionGeometry(coord, seed, {
+    cellSpan: BIOME_FIELD_CFG.cellSpan,
+    jitter: BIOME_FIELD_CFG.jitter,
+    regionScale: BIOME_FIELD_CFG.regionScale,
+    biomeAtCell: (gx, gy, site, fieldSeed) => fieldBiomePick(BIOME_FIELD, gx, gy, site, fieldSeed),
+    scaleForBiome: biome => BIOMES[biome]?.regionScale,
+  });
 }
 
 /** The current biome at a map coordinate, with the ocean mask authoritative. */

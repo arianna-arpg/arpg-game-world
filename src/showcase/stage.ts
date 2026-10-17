@@ -349,4 +349,3 @@ export function buildStage(world: World, plan: StagePlan, spec: ShowcaseSpec): S
     },
   };
 }
-
