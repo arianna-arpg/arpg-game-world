@@ -220,8 +220,10 @@ requires both startup fields to remain 31ms. It does not execute a native start.
   disposed-object rejection. The earlier synchronous expectation was incorrect;
   its original failed run remains separate evidence. This actual case proves no
   synchronous native refusal. Existing pure adapter refusal tests retain that
-  separate synchronous-boundary scope. The corrected disposed case is unrun at
-  this handoff.
+  separate synchronous-boundary scope. The retained corrected-disposal run showed
+  its native rejection, but its boot log also exposed a later fixture trace-close
+  error; the earlier second-start run had the same teardown error. Those old
+  receipts remain separate and do not establish error-free full lifecycle cleanup.
   Both load the exact candidate launcher module unchanged in a separately built,
   SHA-pinned `capsule-*` checkout with independent Git metadata. Rebuild/update
   spawns are refused. The actual launcher writes its failed partial and owns its
@@ -231,8 +233,14 @@ requires both startup fields to remain 31ms. It does not execute a native start.
   and inner broker. It never launches a process. Verification requires actual
   launcher exit1, inner helper0, outer helper0 with actual externally observed
   outer close, fresh empty accounting and closed owned handles, plus the original
-  error, exact banked rows, all windows closed, server close requested, former
-  loopback port refusing connections and machine lock absent. The fixture exit1
+  error, exact banked rows, all windows closed, an actual bound server-close
+  callback, a fatal-free boot log, the former loopback port refusing connections
+  and machine lock absent. The fixture trace stays writable through real process
+  termination; each row is synchronously written and fsynced. `app.exit` retains
+  its original timing, and only that one server-close row may follow its snapshot.
+  The independent native owner establishes actual process termination and trace
+  retirement; no in-process descriptor-close callback is claimed. This trace
+  lifetime correction remains unrun at handoff. The fixture exit1
   policy does not change the measured pair's 0/2 policy. Missing evidence fails.
   Both wrappers use process-only `-ExecutionPolicy RemoteSigned`; no persistent
   policy is changed. Exact native acceptance, a pinned external observer/loader

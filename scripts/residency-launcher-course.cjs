@@ -195,7 +195,13 @@ function inspectTrace(trace, mode, input, closure) {
   const one = kind => { const values = trace.filter(row => row.kind === kind); same(values.length, 1, 'Exactly one ' + kind); return values[0]; };
   const boot = one('bootstrap'), selected = one('selected-sweep'), rejection = one('selected-rejection'), exit = one('app-exit');
   same(boot.mode, mode); same(boot.inputSha256, input.sha256); same(boot.pid, closure.launcherPid); same(selected.mode, mode);
-  same(trace.at(-1).kind, 'app-exit', 'Trace must close at actual app.exit');
+  same(boot.traceLifetime, 'until-actual-process-exit', 'Trace must remain writable through actual process exit');
+  const closed = one('server-closed'), exitIndex = trace.indexOf(exit), closeIndex = trace.indexOf(closed);
+  need(trace.indexOf(selected) < trace.indexOf(rejection) && trace.indexOf(rejection) < exitIndex, 'Selected failure must precede actual exit request');
+  // app.exit preserves the original synchronous callsite. Only the one actual,
+  // bound server-close callback may follow its snapshot. Native root exit/close
+  // and empty job accounting are separately required before this file is read.
+  need(trace.slice(exitIndex + 1).every(row => row === closed), 'Unexpected post-exit-request trace event');
   need(!trace.some(row => row.kind.startsWith('unexpected-')), 'Unexpected actual launcher behavior');
   same(exit.code, 1); same(exit.firstRejection, rejection.error); same(exit.lockExists, false); same(exit.remainingPerfBeatListeners, 1, 'Only fixture observer remains after main removes its beat listener');
   need(exit.windows.length === (mode === 'second-start' ? 1 : 2) && exit.windows.every(win => win.closed), 'All actual windows must close');
@@ -204,6 +210,13 @@ function inspectTrace(trace, mode, input, closure) {
   same(exit.servers[0].writes.filter(row => row.phase === 'course'), [], 'No course persistence requests');
   const listening = one('server-listening'); same(listening.lock.pid, boot.pid, 'Actual machine lock ownership');
   same(listening.port, exit.servers[0].port); need(Number.isInteger(listening.port) && listening.port > 0 && listening.port <= 65535, 'Actual listener port required');
+  same(closed.port, listening.port, 'Server-close callback must belong to the actual listener');
+  same(closed.closeRequested, true); same(closed.closeObserved, true, 'Real server-close callback required');
+  const requests = trace.filter(row => row.kind === 'server-close-requested');
+  need(requests.length > 0 && requests.every(row => row.port === listening.port && trace.indexOf(listening) < trace.indexOf(row) && trace.indexOf(row) < closeIndex && trace.indexOf(row) < exitIndex), 'Actual bound close requests must precede callback and exit request');
+  same(exit.servers[0].closeObserved, closeIndex < exitIndex, 'Keep the actual exit-request server snapshot unchanged');
+  same(closed.writes, exit.servers[0].writes, 'Late server writes must not disappear');
+  same(closed.writes.filter(row => row.phase === 'course'), [], 'No late course persistence requests');
   if (mode === 'second-start') {
     const beats = trace.filter(row => row.kind === 'beat' && row.payload.at === 'fixture-second-start'); same(beats.length, 1);
     const beat = beats[0].payload; same(beat.calls, 2); same(beat.previousRetired, true); same(beat.nextReady, true);
@@ -219,7 +232,7 @@ function inspectTrace(trace, mode, input, closure) {
     same(rejection.error.name, 'TypeError'); same(rejection.error.message, 'Object has been destroyed', 'Expected actual native disposed receiver rejection');
     same(rejection.banked.fresh, []); same(rejection.banked.residencyWindows, []);
   }
-  return { rejection, port: listening.port, exit };
+  return { rejection, port: listening.port, exit, serverClose: closed, serverCloseAfterExitRequest: closeIndex > exitIndex };
 }
 function inspectReport(report, mode, rejection) {
   same(report.status, 'failed-partial'); same(report.validMeasurement, false); same(report.course, 'fresh');
@@ -228,6 +241,16 @@ function inspectReport(report, mode, rejection) {
   for (const [field, source] of Object.entries({ zones: 'rows', skipped: 'skipped', control: 'control', controlEnd: 'controlEnd', fresh: 'fresh', residencyWindows: 'residencyWindows' })) same(report[field], banked[source], 'Banked raw ' + source + ' changed');
   same(report.ramp.steps, banked.ramp); same(report.ramp.slopes, [], 'Failed partial cannot accept slopes');
   need(mode !== 'second-start' || report.fresh.length === 1, 'First real row disappeared');
+}
+function inspectBootLog(bytes, port, projectRoot) {
+  need(Buffer.isBuffer(bytes), 'Raw boot-log bytes required');
+  const log = bytes.toString('utf8');
+  need(log.length > 0 && log.endsWith('\n'), 'Missing or truncated launcher boot log');
+  need(!/FATAL|render-process-gone|child-process-gone/.test(log), 'Launcher boot log records a fatal error or lost native process');
+  const lines = log.split(/\r?\n/).filter(Boolean);
+  need(lines.some(line => /^\[[^\]]+\] start v=43\.0\.0 packaged=false platform=win32 /.test(line)), 'Actual pinned Electron fixture boot required');
+  const server = 'game server on http://127.0.0.1:' + port + '/ (dist=' + path.join(projectRoot, 'dist') + ')';
+  same(lines.filter(line => line.endsWith('] ' + server)).length, 1, 'Boot log must bind the actual listener and pinned dist');
 }
 async function portClosed(port) {
   return new Promise((resolve, reject) => {
@@ -249,8 +272,11 @@ async function verifyCase(planPath, planSha256, witnessPath, witnessSha256) {
   for (const [field, relative] of Object.entries({ innerReceipt: 'inner/receipt.jsonl', outerReceipt: 'outer/outer-receipt.jsonl', innerStdout: 'inner/stdout.bin', innerStderr: 'inner/stderr.bin', outerSubjectStdout: 'outer/subject-stdout.bin', outerSubjectStderr: 'outer/subject-stderr.bin' })) same(witness[field].path, path.join(value.outputRoot, relative), 'Raw output path mismatch');
   const inner = journal(pinned(witness.innerReceipt), 'native-job-broker-receipt-v1'), outer = journal(pinned(witness.outerReceipt), 'native-outer-owner-receipt-v1');
   const closure = cleanOwnership(inner, outer, witness, plan, inputs);
-  const trace = journal(readBounded(path.join(value.outputRoot, 'launcher-trace.jsonl')), 'residency-launcher-fixture-trace-v1');
+  const tracePath = path.join(value.outputRoot, 'launcher-trace.jsonl'), traceBytes = readBounded(tracePath);
+  const trace = journal(traceBytes, 'residency-launcher-fixture-trace-v1');
   const actual = inspectTrace(trace, value.mode, value.input, closure);
+  const bootLogPath = path.join(value.outputRoot, 'profile/launcher.log'), bootLogBytes = readBounded(bootLogPath);
+  inspectBootLog(bootLogBytes, actual.port, inputs.projectRoot);
   const now = reportInventory(inputs.projectRoot);
   for (const [rel, hash] of Object.entries(value.baselineReports)) same(now[rel], hash, 'Pre-existing report changed');
   const added = Object.keys(now).filter(rel => !(rel in value.baselineReports));
@@ -265,9 +291,9 @@ async function verifyCase(planPath, planSha256, witnessPath, witnessSha256) {
   need(!fs.existsSync(lockPath()), 'Machine perf lock remains or another owner started; do not unlink it');
   const serverClosure = await portClosed(actual.port);
   verifyInputs(inputs); // Detect source/index mutation during evidence inspection too.
-  return writeJson(path.join(value.outputRoot, 'verification.json'), { schema: 'residency-launcher-fixture-verdict-v1', status: 'pass-lifecycle-only', mode: value.mode, planSha256, witnessSha256, closure, serverClosure, report: { path: reportPath, sha256: digest(reportBytes) }, originalError: actual.rejection.error, bankedFreshRows: actual.rejection.banked.fresh.length, bankedWindows: actual.rejection.banked.residencyWindows.length, bootWrites: actual.exit.servers[0].writes.filter(row => row.phase === 'boot'), measurementAccepted: false });
+  return writeJson(path.join(value.outputRoot, 'verification.json'), { schema: 'residency-launcher-fixture-verdict-v1', status: 'pass-lifecycle-only', mode: value.mode, planSha256, witnessSha256, closure, serverClosure, serverCallback: { sequence: actual.serverClose.sequence, port: actual.port, afterExitRequest: actual.serverCloseAfterExitRequest }, trace: { path: tracePath, sha256: digest(traceBytes), retirementBasis: 'independently observed actual root exit; no in-process fd-close callback claimed' }, bootLog: { path: bootLogPath, sha256: digest(bootLogBytes) }, report: { path: reportPath, sha256: digest(reportBytes) }, originalError: actual.rejection.error, bankedFreshRows: actual.rejection.banked.fresh.length, bankedWindows: actual.rejection.banked.residencyWindows.length, bootWrites: actual.exit.servers[0].writes.filter(row => row.phase === 'boot'), measurementAccepted: false });
 }
-module.exports = { digest, loadJsonPinned, verifyInputs, errorRecord, prepareCase, verifyCase, journal, cleanOwnership, inspectTrace, inspectReport };
+module.exports = { digest, loadJsonPinned, verifyInputs, errorRecord, prepareCase, verifyCase, journal, cleanOwnership, inspectTrace, inspectReport, inspectBootLog };
 if (require.main === module) {
   const [command, ...args] = process.argv.slice(2);
   Promise.resolve().then(() => {

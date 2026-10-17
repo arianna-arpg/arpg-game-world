@@ -25,16 +25,20 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 app.setPath('userData', path.join(input.outputRoot, 'profile'));
 const tracePath = path.join(input.outputRoot, 'launcher-trace.jsonl');
 const traceFd = fs.openSync(tracePath, 'wx');
-let sequence = 0, traceClosed = false, firstRejection = null, primary = null, primaryContents = null, injected = false, creatingAuxiliary = false;
+let sequence = 0, firstRejection = null, primary = null, primaryContents = null, injected = false, creatingAuxiliary = false;
 const windows = [], servers = [], children = [];
 const banked = { rows: [], skipped: [], control: null, controlEnd: null, fresh: [], ramp: [], residencyWindows: [] };
 const lockPath = path.join(os.tmpdir(), 'hollow-wake-perf.lock');
 const record = (kind, data = {}) => {
-  if (traceClosed) throw new Error('Fixture trace was already closed');
   const row = { schema: 'residency-launcher-fixture-trace-v1', sequence: ++sequence, at: new Date().toISOString(), kind, ...data };
   fs.writeSync(traceFd, JSON.stringify(row) + '\n'); fs.fsyncSync(traceFd);
 };
-record('bootstrap', { mode: input.mode, inputSha256, pid: process.pid, executable: process.execPath, fixtureSha256: digest(fs.readFileSync(__filename)), projectRoot: input.inputs.projectRoot });
+// Every row is synchronously written and fsynced. Keep this descriptor live
+// through the real process lifetime: app.exit is an exit request, not proof that
+// already-scheduled native server callbacks have drained. The independent owner
+// observes actual root exit; Windows then retires this process-owned descriptor.
+// Do not delay app.exit, suppress a late callback or invent a JS close receipt.
+record('bootstrap', { traceLifetime: 'until-actual-process-exit', mode: input.mode, inputSha256, pid: process.pid, executable: process.execPath, fixtureSha256: digest(fs.readFileSync(__filename)), projectRoot: input.inputs.projectRoot });
 const observeRejection = (error, channel) => {
   if (firstRejection) throw new Error('Fixture observed more than one selected rejection');
   firstRejection = errorRecord(error);
@@ -74,7 +78,7 @@ serverModule.startGameServer = async function (options) {
   });
   const close = server.close;
   server.close = function (...args) { receipt.closeRequested = true; record('server-close-requested', { port: receipt.port }); return Reflect.apply(close, this, args); };
-  server.once('close', () => { receipt.closeObserved = true; record('server-closed', { port: receipt.port }); });
+  server.once('close', () => { receipt.closeObserved = true; record('server-closed', { port: receipt.port, closeRequested: receipt.closeRequested, closeObserved: receipt.closeObserved, writes: receipt.writes }); });
   return started;
 };
 ipcMain.on('perf:beat', (event, payload) => {
@@ -160,7 +164,7 @@ app.on('browser-window-created', (_event, win) => {
 const realExit = app.exit;
 app.exit = function (code) {
   record('app-exit', { code, firstRejection, windows, servers, children, lockExists: fs.existsSync(lockPath), remainingPerfBeatListeners: ipcMain.listenerCount('perf:beat') });
-  fs.closeSync(traceFd); traceClosed = true;
+  // The descriptor stays open for real late callbacks until actual process exit.
   return Reflect.apply(realExit, this, [code]);
 };
 // app.quit is intentionally not intercepted/prevented. If automatic quit races

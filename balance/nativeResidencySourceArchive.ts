@@ -854,7 +854,7 @@ export const nativeResidencySourceArchive:{parent:string;rows:readonly NativeRes
     },
     {
       "file": "docs/design/desktop-residency.md",
-      "normalSha256": "6f0dde378d974252ce5a1a8f7d4eddcadade9edeb0799da757c6fb71c1917b04"
+      "normalSha256": "c4e118fcd8c76acb55f3427bae763adf9d37c601f5416946a2a0ff8e1d98a75d"
     },
     {
       "file": "launcher/main.cjs",
@@ -866,11 +866,11 @@ export const nativeResidencySourceArchive:{parent:string;rows:readonly NativeRes
     },
     {
       "file": "scripts/residency-launcher-course.cjs",
-      "normalSha256": "16765cb372a1f9632d238ae1beadfe5d86037060a51990de8906226efab250bd"
+      "normalSha256": "d563cf1335db0dc97a13af44cb55a1bc497cf7c591f26a7a8e2edea163b61234"
     },
     {
       "file": "scripts/residency-launcher-fixture.cjs",
-      "normalSha256": "011838809b641ec07a261855e1b5901c9236637bf60c5736c5232773d6de8403"
+      "normalSha256": "26607f82e177ee9624bb3fd75dd9c125777a0c23853d2596243f50eb2793ffc9"
     },
     {
       "file": "scripts/test-launcher-residency-boundaries.mjs",
@@ -882,7 +882,7 @@ export const nativeResidencySourceArchive:{parent:string;rows:readonly NativeRes
     },
     {
       "file": "scripts/test-residency-launcher-course.mjs",
-      "normalSha256": "96d91e88ff0fe4d882b7f9de354df9692b4bbaf7a6d91510b38381f996ba1611"
+      "normalSha256": "de1ef33a6feef87e2bfd3259a81dbea5044677615b021e759de517d95b8428e7"
     },
     {
       "file": "src/dev/perf.ts",

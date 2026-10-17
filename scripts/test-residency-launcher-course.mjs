@@ -2,6 +2,7 @@
 // only refusal/report-comparison behavior. They are not native cleanup evidence.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import course from './residency-launcher-course.cjs';
 const clone = value => JSON.parse(JSON.stringify(value));
 const error = { name: 'Error', message: 'original first rejection', stack: 'first exact stack' };
@@ -58,29 +59,33 @@ function disposedTrace() {
   const empty = { fresh: [], residencyWindows: [] };
   const error = { name: 'TypeError', message: 'Object has been destroyed', stack: 'actual native stack control' };
   const rows = [
-    { kind: 'bootstrap', mode: 'disposed-webcontents', inputSha256: 'input', pid: 10 },
+    { kind: 'bootstrap', traceLifetime: 'until-actual-process-exit', mode: 'disposed-webcontents', inputSha256: 'input', pid: 10 },
     { kind: 'server-listening', lock: { pid: 10 }, port: 12345 },
     { kind: 'selected-sweep', mode: 'disposed-webcontents' },
     { kind: 'auxiliary-webcontents-destroyed', id: 22 },
     { kind: 'disposed-receiver', id: 22, disposed: true },
     { kind: 'disposed-native-call-returned', id: 22, thenable: true },
     { kind: 'selected-rejection', channel: 'rejection', error, display: 'TypeError: Object has been destroyed', banked: empty },
+    { kind: 'server-close-requested', port: 12345 },
     { kind: 'app-exit', code: 1, firstRejection: error, lockExists: false, remainingPerfBeatListeners: 1,
       windows: [{ webContentsId: 21, auxiliary: false, closed: true }, { webContentsId: 22, auxiliary: true, closed: true }],
       children: Array.from({ length: 3 }, () => ({ closeObserved: true, exitCode: 0 })),
       servers: [{ port: 12345, closeRequested: true, closeObserved: false, writes: [] }] },
+    { kind: 'server-closed', port: 12345, closeRequested: true, closeObserved: true, writes: [] },
   ];
   return rows;
 }
-test('disposed branch requires actual disposal followed by native async rejection; server close event remains raw', () => {
+test('disposed branch requires actual async rejection and observes the late bound server close', () => {
   const trace = disposedTrace();
   const inspected = course.inspectTrace(trace, 'disposed-webcontents', { sha256: 'input' }, { launcherPid: 10 });
   assert.equal(inspected.exit.servers[0].closeObserved, false);
+  assert.equal(inspected.serverClose.closeObserved, true);
+  assert.equal(inspected.serverCloseAfterExitRequest, true);
   trace.find(row => row.kind === 'selected-rejection').channel = 'synchronous';
   assert.throws(() => course.inspectTrace(trace, 'disposed-webcontents', { sha256: 'input' }, { launcherPid: 10 }));
 });
 test('disposed branch refuses a still-live actual receiver or residual primary window', () => {
-  const trace = disposedTrace(); trace.at(-1).windows[1].closed = false;
+  const trace = disposedTrace(); trace.find(row => row.kind === 'app-exit').windows[1].closed = false;
   assert.throws(() => course.inspectTrace(trace, 'disposed-webcontents', { sha256: 'input' }, { launcherPid: 10 }));
 });
 
@@ -94,4 +99,45 @@ for (const [label, mutate] of [
 ]) test('disposed consumer refuses ' + label, () => {
   const trace = disposedTrace(); mutate(trace);
   assert.throws(() => course.inspectTrace(trace, 'disposed-webcontents', { sha256: 'input' }, { launcherPid: 10 }));
+});
+
+// These are synthetic consumer controls, not evidence of actual callback order.
+test('consumer permits an actually observed server close before exit without rewriting its snapshot', () => {
+  const trace = disposedTrace(), closed = trace.pop();
+  trace.splice(trace.findIndex(row => row.kind === 'app-exit'), 0, closed);
+  trace.find(row => row.kind === 'app-exit').servers[0].closeObserved = true;
+  assert.equal(course.inspectTrace(trace, 'disposed-webcontents', { sha256: 'input' }, { launcherPid: 10 }).serverCloseAfterExitRequest, false);
+});
+for (const [label, mutate] of [
+  ['missing actual server close', trace => { trace.pop(); }],
+  ['duplicated server callback', trace => { trace.push(clone(trace.at(-1))); }],
+  ['unbound late server callback', trace => { trace.at(-1).port = 54321; }],
+  ['unobserved callback', trace => { trace.at(-1).closeObserved = false; }],
+  ['callback without request', trace => { trace.splice(trace.findIndex(row => row.kind === 'server-close-requested'), 1); }],
+  ['close before its request', trace => { const closed = trace.pop(); trace.splice(trace.findIndex(row => row.kind === 'server-close-requested'), 0, closed); }],
+  ['late request after exit', trace => { trace.push({ kind: 'server-close-requested', port: 12345 }); }],
+  ['late persistence callback', trace => { trace.at(-1).writes.push({ phase: 'course', method: 'POST', url: '/api/save' }); }],
+  ['arbitrary late event', trace => { trace.push({ kind: 'beat', payload: { at: 'row' } }); }],
+  ['rewritten exit snapshot', trace => { trace.find(row => row.kind === 'app-exit').servers[0].closeObserved = true; }],
+  ['old premature trace retirement policy', trace => { delete trace[0].traceLifetime; }],
+]) test('teardown consumer refuses ' + label, () => {
+  const trace = disposedTrace(); mutate(trace);
+  assert.throws(() => course.inspectTrace(trace, 'disposed-webcontents', { sha256: 'input' }, { launcherPid: 10 }));
+});
+const logRoot = path.resolve('fixture-capsule');
+const goodLog = '[2026-10-16T00:00:00.000Z] start v=43.0.0 packaged=false platform=win32 gamescope=false argv=[fixture]\n'
+  + '[2026-10-16T00:00:01.000Z] game server on http://127.0.0.1:12345/ (dist=' + path.join(logRoot, 'dist') + ')\n';
+test('boot-log control binds the real listener/dist and contains no fatal teardown', () => {
+  course.inspectBootLog(Buffer.from(goodLog), 12345, logRoot);
+});
+for (const [label, log] of [
+  ['known premature trace retirement', goodLog + '[2026-10-16T00:00:02.000Z] FATAL uncaught: Error: Fixture trace was already closed\n'],
+  ['other fatal rejection', goodLog + '[2026-10-16T00:00:02.000Z] FATAL unhandled rejection: secondary error\n'],
+  ['renderer loss', goodLog + '[2026-10-16T00:00:02.000Z] render-process-gone reason=crashed exitCode=1\n'],
+  ['native child loss', goodLog + '[2026-10-16T00:00:02.000Z] child-process-gone type=GPU reason=crashed exitCode=1\n'],
+  ['wrong listener', goodLog.replace(':12345/', ':54321/')],
+  ['truncated final record', goodLog.slice(0, -1)],
+  ['missing boot', goodLog.split('\n').slice(1).join('\n')],
+]) test('boot-log consumer refuses ' + label, () => {
+  assert.throws(() => course.inspectBootLog(Buffer.from(log), 12345, logRoot));
 });
