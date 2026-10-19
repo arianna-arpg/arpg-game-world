@@ -643,7 +643,7 @@ export class UI {
       this.folio.sync();
       this.folioStrip.update();
     },
-    selected: () => { this.serviceWorkspace.select('inventory'); this.folioStrip.update(); },
+    selected: () => { this.serviceWorkspace.select('services'); this.folioStrip.update(); },
     folio: () => this.folio,
   });
   /** THE CONTAINER FABRIC's face (ui/containerPane.ts): the bag column's
@@ -870,6 +870,7 @@ export class UI {
       const id = this.folioSurfaces.get(el)?.id;
       return !!id && this.folio.bookFor(id)?.front === id;
     },
+    title: el => this.folio.leaf(this.folioSurfaces.get(el)?.id ?? '')?.title() ?? 'Panel',
     pages: () => this.inventoryPages.entries().map(page => page.el),
     hudTop: () => this.hudCluster?.()?.y,
     frontService: () => {
@@ -1216,7 +1217,7 @@ export class UI {
     });
     this.folio.enroll(this.folioLeaf(page.id, page.el, page.title,
       () => this.inventoryPages.isOpen(page.id), () => this.inventoryPages.close(page.id), {
-        kind: 'page', selectionGroup: 'inventory', bay: () => 'build',
+        kind: 'page', selectionGroup: 'inventory',
         refresh: page.refresh,
       }));
   }
@@ -2394,22 +2395,20 @@ export class UI {
   }
 
   /** One enrollment governs service coexistence as well as folio membership.
-   * Shelved leaves cannot suppress a conversation; visible modals/pages can.
-   * Inventory accompanies a service only for that service's local owner. */
+   * Inventory and all its pages accompany local speech, whether they opened
+   * before or after it. Genuine modal decisions still suspend the reader. */
   dialogueContext(): { available: boolean } {
     const local = this.getWorld().localSeat?.id;
     if (!local) return { available: false };
     const open = [...this.folioSurfaces].filter(([, row]) => row.isOpen());
     const drawn = open.filter(([el]) => !el.classList.contains('hidden') && this.folioDrawn(el)
       && el.getBoundingClientRect().width > 0);
-    // A service visit survives shelving and compact Inventory selection.
-    // Admission must not oscillate when only its presentation changes.
-    const services = open.filter(([el, row]) => row.kind === 'station' && this.panelSeat(el).id === local);
     const blocked = this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen || this.storyCardOpen()
       || !this.startMenu.classList.contains('hidden') || this.charSheetOpen || this.mapOpen
-      || drawn.some(([el, row]) => row.kind !== 'station' || this.panelSeat(el).id !== local)
-      || (this.inventoryOpen && (!services.length || this.panelSeat(this.inventory).id !== local));
+      || drawn.some(([el, row]) => this.panelSeat(el).id !== local
+        || row.kind !== 'station' && !el.classList.contains('inventory-page'))
+      || (this.inventoryOpen && this.panelSeat(this.inventory).id !== local);
     return { available: !blocked };
   }
 

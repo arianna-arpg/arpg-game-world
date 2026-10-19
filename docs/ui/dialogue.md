@@ -49,7 +49,9 @@ owning systems; the reader does not award items or replace station/quest gates.
   crafting tabs and their selling inventory. A station opening or changing
   tabs never interrupts its conversation or requires it to be finished first.
   A service with no eligible speech opens without an empty dialogue box.
-- Visible personal pages, modal decisions, minigames and pause suspend the
+- Inventory and all its pages permit local dialogue admission before and after
+  an NPC conversation begins, including when the NPC has no station panel.
+  Other personal screens, modal decisions, minigames and pause suspend the
   reader and new dialogue admission. Shelved tabs cannot suppress speech.
   Closing the blocking surface resumes the page if its speaker remains in
   focus. Death, run exit,

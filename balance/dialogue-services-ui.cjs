@@ -8,8 +8,8 @@ const log = v => fs.appendFileSync(logfile, JSON.stringify(v) + '\n');
 app.setPath('userData', path.join(dir, 'dialogue-services-profile-' + process.pid));
 app.disableHardwareAcceleration(); app.commandLine.appendSwitch('disable-gpu');
 app.whenReady().then(async () => {
-  const timeout = setTimeout(() => { log('TIMEOUT'); app.exit(1); }, 180000);
-  const server = await startGameServer({ root: path.resolve(__dirname, '../dist'), savesDir: path.join(dir, 'dialogue-services-saves-' + process.pid) });
+  const timeout = setTimeout(() => { log('TIMEOUT'); app.exit(1); }, process.env.HOLLOW_WAKE_QA_PARITY ? 360000 : 180000);
+  const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'), savesDir: path.join(dir, 'dialogue-services-saves-' + process.pid) });
   const win = new BrowserWindow({ show: false, width: 1400, height: 1000, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const js = async code => {
     const r = await win.webContents.executeJavaScript(`(async()=>{try{return await (0,eval)(${JSON.stringify(code)});}catch(e){return {qaError:String(e.stack??e)};}})()`);
@@ -18,6 +18,14 @@ app.whenReady().then(async () => {
   const capture = async name => {
     await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     fs.writeFileSync(path.join(dir, `dialogue-services-${name}.png`), (await win.webContents.capturePage()).toPNG());
+  };
+  const click = async selector => {
+    const point=await js(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)throw Error('Missing button');
+      el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect();if(!r.width||!r.height)throw Error('Hidden button');
+      const x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2);if(!el.contains(document.elementFromPoint(x,y)))throw Error('Obscured button');return {x,y};})()`);
+    win.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...point});
+    win.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...point});
+    await new Promise(resolve=>setTimeout(resolve,40));await js('serviceQA.run(2)');
   };
   const fits = box => {
     assert.equal(box.open, true, 'reader stays visible beside services');
@@ -65,6 +73,61 @@ app.whenReady().then(async () => {
       q.bagHome=q.rect(document.getElementById('inventory'));
       __game.ui.toggleInventory();
     })()`);
+    if (process.env.HOLLOW_WAKE_QA_PARITY) {
+      const rows = [];
+      for (const [width,height,scale] of [[1400,1000,100],[820,650,100],[820,650,175]]) {
+        win.setContentSize(width,height); await new Promise(resolve=>setTimeout(resolve,100));
+        await js(`serviceQA.scale(${scale})`);
+        for (const page of ['skills','passives','container:reliquary']) for (const arrival of ['remembered','open']) {
+          const row = await js(`(() => {
+            const q=serviceQA,w=q.w,ui=__game.ui,away={x:q.home.x+700,y:q.home.y};
+            ui.hideAll();q.run(3,away);
+            for(const page of ui.inventoryPages.entries())ui.inventoryPages.close(page.id);
+            w.account.features.add('reliquary');ui.toggleInventory();ui.refreshInventory();
+            if('${page}'==='container:reliquary')ui.containerPane.toggle('reliquary',w.localSeat.id,'show');
+            ui.inventoryPages.request('${page}',w.localSeat.id,'show');q.run(3,away);
+            const bagBefore=ui.serviceWorkspace.inventoryMetrics().rect.toJSON();
+            if('${arrival}'==='remembered'){ui.toggleInventory();q.run(3,away);}
+            q.run(120);
+            const r=el=>{const x=el.getBoundingClientRect();return {id:el.id,left:x.left,top:x.top,right:x.right,bottom:x.bottom,width:x.width,height:x.height};};
+            return {page:'${page}',arrival:'${arrival}',width:innerWidth,height:innerHeight,scale:${scale},
+              context:ui.dialogueContext(),open:q.box().open,bagBefore,bagAfter:r(document.getElementById('inventory')),
+              books:ui.folio.views(),panels:[...document.querySelectorAll('.panel')].map(r).filter(x=>x.width>0&&x.height>0),
+              tabs:[...document.querySelectorAll('.folio-strip')].map(r).filter(x=>x.width>0&&x.height>0)};
+          })()`);
+          rows.push(row);
+          await capture(`parity-${process.env.HOLLOW_WAKE_QA_PARITY}-${page.replace(':','-')}-${arrival}-${width}-${scale}`);
+          if(process.env.HOLLOW_WAKE_QA_PARITY!=='before'){
+            assert.ok(row.panels.some(p=>p.id==='vendor-menu'),'arrival selects the actual vendor surface');
+            await click('[data-folio-tab="'+page+'"]');
+            row.selected=await js(`(()=>{const q=serviceQA,ui=__game.ui;return {open:q.box().open,front:ui.folio.bookFor('${page}').front,
+              page:q.rect(ui.inventoryPages.entries().find(p=>p.id==='${page}').el)};})()`);
+            assert.equal(row.selected.front,page);assert.ok(row.selected.open);
+            const selected=row.selected.page;
+            assert.ok(selected.left>=0&&selected.right<=width+1&&selected.top>=0&&selected.bottom<=height+1,'selected page fits viewport');
+            if(await js('!document.getElementById("service-workspace-tabs").hidden'))await click('[data-workspace-tab="inventory"]');
+            row.bagSelected=await js('serviceQA.rect(document.getElementById("inventory"))');
+            for(const edge of ['left','top','right','bottom'])assert.equal(row.bagSelected[edge],row.bagBefore[edge],'bag stays fixed through service/page selection: '+edge);
+          }
+        }
+        rows.push(await js(`(() => {
+          const q=serviceQA,w=q.w,ui=__game.ui;ui.hideAll();q.run(3,{x:q.home.x+700,y:q.home.y});
+          for(const page of ui.inventoryPages.entries())ui.inventoryPages.close(page.id);
+          ui.toggleInventory();const inn=w.actors.find(a=>a.defId==='townsfolk_innkeep');q.run(140,inn.pos);
+          return {case:'mireille-open-bag',width:innerWidth,scale:${scale},context:ui.dialogueContext(),box:q.box()};
+        })()`));
+      }
+      fs.writeFileSync(path.join(dir,`dialogue-parity-${process.env.HOLLOW_WAKE_QA_PARITY}.json`),JSON.stringify(rows,null,2));
+      if(process.env.HOLLOW_WAKE_QA_PARITY!=='before')for(const row of rows){
+        assert.ok(row.case?row.box.open:row.open,JSON.stringify(row));
+        if(row.case)continue;
+        assert.ok(row.books.some(b=>b.front==='vendor'&&b.tabs.some(t=>t.id===row.page)),'vendor and page share one book');
+        for(let i=0;i<row.panels.length;i++)for(const b of row.panels.slice(i+1)){
+          const a=row.panels[i];assert.ok(a.right<=b.left||b.right<=a.left||a.bottom<=b.top||b.bottom<=a.top,'overlap '+a.id+' / '+b.id);
+        }
+      }
+      log('PARITY '+process.env.HOLLOW_WAKE_QA_PARITY); return;
+    }
     let box = await js('serviceQA.run(110)'); log({stage:'dwell',...box}); fits(box);
     const trace = await js('serviceQA.trace');
     const began = trace.findIndex(f=>f.open);
@@ -128,11 +191,12 @@ app.whenReady().then(async () => {
     const pause = await js('(() => {const before=serviceQA.box();__game.ui.showEscapeMenu();const hidden=serviceQA.run(2);__game.ui.hideEscapeMenu();return {before,hidden,after:serviceQA.run(2)};})()');
     assert.equal(pause.hidden.open, false); assert.deepEqual(pause.hidden.panels,pause.before.panels);
     assert.deepEqual(pause.after.panels,pause.before.panels);assert.equal(pause.after.text, pause.before.text); fits(pause.after);
-    // A remembered Skills drawer behind the shop is quiet; an explicit front
-    // page suspends conversation, then restores it when the station returns.
+    // Every local Inventory page accompanies the same conversation, whether
+    // restored or explicitly selected. Selection never changes admission.
     const page = await js(`(() => {const q=serviceQA,before=q.box().text;__game.ui.toggleBuildPanel();const hidden=q.run(2);
       q.tab('vendor');return {before,hidden,after:q.box()};})()`);
-    assert.equal(page.hidden.open,false); assert.equal(page.after.text,page.before); fits(page.after);
+    assert.equal(page.hidden.open,true); assert.equal(page.hidden.text,page.before);
+    assert.equal(page.after.text,page.before); fits(page.after);
     win.setContentSize(820, 650); await new Promise(resolve=>setTimeout(resolve,150));
     box = await js('serviceQA.run(5)'); fits(box); await capture('compact');
     assert.equal(box.compact,true,'narrow screens offer Inventory/Services tabs');
