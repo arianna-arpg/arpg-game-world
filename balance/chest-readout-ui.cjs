@@ -16,7 +16,7 @@ app.whenReady().then(async()=>{
  };
 
  const timer=setTimeout(()=>app.exit(1),180000),results=[];
- const frame=async(name,expected)=>{
+ const frame=async(name,_expected)=>{
   const r=await run(()=>{
    const w=__game.world(),ctx=__game.renderer.ctx,fill=ctx.fillText,texts=[];
    const state=()=>JSON.stringify([w.time,w.player.pos,w.player.life,w.chests,w.drops.length]);
@@ -29,7 +29,7 @@ app.whenReady().then(async()=>{
     fatal:__game.crash().fatal,png:document.getElementById('game').toDataURL()};
   });
   assert.equal(r.same,true);assert.equal(r.fatal,null);
-  assert.deepEqual(r.texts.map(t=>t.text),expected&&!legacy?[expected]:[]);
+  assert.deepEqual(r.texts, [], 'searching is shown without instructional captions');
   for(const t of r.texts)assert.ok(t.width<=150&&t.x>0&&t.x<r.width&&t.y>0&&t.y<r.height);
   fs.writeFileSync(path.join(dir,tag+'-'+name+'-canvas.png'),Buffer.from(r.png.split(',')[1],'base64'));
   win.webContents.invalidate();await new Promise(r=>setTimeout(r,100));
@@ -43,7 +43,7 @@ app.whenReady().then(async()=>{
  },toward,frames);
  try{
   await win.loadURL('http://127.0.0.1:'+server.address().port);
-  await run(async()=>{window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});await new Promise(r=>setTimeout(r,200));});
+  await run(async()=>{while(!window.__game)await new Promise(r=>setTimeout(r,40));await __game.hydrated();__game.hold(true);Object.defineProperty(navigator,'getGamepads',{value:()=>[]});});
   await run(()=>{
    __game.devStartRun('magician');__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);
    const m=w.massRuntime,p=m.journey.places.find(p=>p.content==='cinderwatch');w.landPartyAt(m.journey.local(p));m.update(w,true);

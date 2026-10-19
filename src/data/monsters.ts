@@ -16228,18 +16228,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['hurl_debris'],
     xp: 18,
     faction: 'gnoll', adorn: 'ears',
-    // THE CRAVEN (engine/pack.ts). The bonepicker is the pack's coward and
-    // always has been in prose — a loner working the edge of a fight it
-    // never joins. Give it real courage terms and the collapse rows, and
-    // the prose becomes a mechanic you can play against: it breaks on
-    // WOUNDS or on ODDS, both of which you can apply deliberately, and the
-    // nerve tell shows the meter moving the entire way down. Pressure, not
-    // damage, is the answer to this body — and the answer is now visible.
+    // Wounds can cause one brief rout; then this skirmisher resumes throwing.
+    // Low nerve and surrounding bodies must not restart endless flight.
     brain: {
       type: 'skirmish', withdraw: 1.5, obedience: 0.5,
       morale: {
         breakAtLife: 0.6,
-        breakOutnumbered: { deficit: 2, radius: 300 },
         rallyAfter: 3.5,
         // Courage is BORROWED: while its own squad leader stands close it
         // cannot break, and the nerve tell pins bright to say so. Drop the
@@ -16247,14 +16241,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
         // one kill, a whole flank's worth of read, no new machinery.
         boldNearLeader: 380,
       },
-      // Fraying courage lengthens its escape between throws. It still
-      // commits to attacks, giving pursuit a counterplay window BEFORE
-      // the break instead of an attack-free retreat until its wounds heal.
-      // At zero nerve the finite morale clock owns flight and rallying.
-      rules: [{
-        when: { ext: { nerveAbove: 0, nerveBelow: 0.45 } },
-        use: { move: { style: 'hitAndRun', withdraw: [1.8, 2.4] }, tempo: { pauseFor: [0.4, 0.9] } },
-      }],
+      // Wounds trigger one bounded rout. Low nerve otherwise keeps the
+      // ordinary throwing cadence; being outnumbered must not restart flight.
     },
     tells: CRAVEN_COLLAPSE,
   },

@@ -29,7 +29,6 @@ import { tellPortraitDress } from '../engine/tells';
 import { replenishingDelivery } from '../engine/replenishment';
 import { instanceBaseTags } from '../engine/skills';
 import { DEV, GAME_TITLE } from '../config';
-import { passiveFrontierHtml, passiveOwnedHtml } from './passiveFrontier';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
   type AttributeId, type DamageType,
@@ -7487,13 +7486,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // search, zoom, the tips) in a tools row beneath it.
     const realmChip = activeRealm && this.treeRealm !== MAIN_REALM
       ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b> · ` : '';
-    const passiveOwned = !this.getSettings().passiveAllocatedList || refundMode || DEV.passiveTreeEditor ? '' : passiveOwnedHtml(
-      [...m.allocated].reverse().map(id=>PASSIVE_NODES[id]).filter(n=>n && visibleNode(n) && n.kind!=='start')
-        .map(n=>({id:n.id,title:n.name,description:this.passiveNodeTooltip(n.id)?.description ?? esc(n.description),action:''})));
-    const passiveFrontier = !this.getSettings().passiveAvailableList || refundMode || DEV.passiveTreeEditor ? '' : passiveFrontierHtml(
-      Object.values(PASSIVE_NODES).filter(n => visibleNode(n) && this.nodeAllocatable(n, m))
-        .map(n => ({ id: n.id, title: n.name, description: this.passiveNodeTooltip(n.id)?.description ?? esc(n.description),
-          action: n.choice && !choiceDealSpent(n, m.choices, PASSIVE_NODES) ? 'Review choices' : 'Allocate · 1 ' + (n.vocation ? 'vocation' : realmOf(n)?.currency ?? 'passive') + ' point' })));
     this.passiveTree.innerHTML = `
       ${this.closeGlyphHtml()}<h2>✧ Passive Tree</h2>
       ${realmTabs}
@@ -7515,7 +7507,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : refundMode ? 'Refund mode · click a lit node · choices refund together · keep every path connected'
           : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
       </div>
-      ${passiveFrontier}${passiveOwned}
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${edges}${circles}</svg>`;
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
@@ -7545,12 +7536,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       });
     });
     if (!DEV.passiveTreeEditor) {
-      this.passiveTree.querySelectorAll<SVGCircleElement | HTMLButtonElement>(refundMode ? '.tree-node.allocated' : '.tree-node.available, [data-passive-choice]').forEach(el => {
+      this.passiveTree.querySelectorAll<SVGCircleElement>(refundMode ? '.tree-node.allocated' : '.tree-node.available').forEach(el => {
         el.addEventListener('click', () => {
-          const frontierNodeId = el.dataset.node ?? el.dataset.passiveChoice!;
-          const node = PASSIVE_NODES[frontierNodeId];
+          const node = PASSIVE_NODES[el.dataset.node!];
           if (refundMode) {
-            world.requestMeta({ t: 'refundPassive', nodeId: frontierNodeId });
+            world.requestMeta({ t: 'refundPassive', nodeId: el.dataset.node! });
             this.refreshTree();
             this.refreshCharSheet();
             hideTooltip();
@@ -7561,7 +7551,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           // THE DEAL LAW: a 'first' group spent at a sibling leaves this a
           // grant-less shortcut — no popup, the plain allocate intent below.
           if (node?.choice && !choiceDealSpent(node, m.choices, PASSIVE_NODES)) { this.openChoicePopup(node, el); return; }
-          world.requestMeta({ t: 'allocate', nodeId: frontierNodeId });
+          world.requestMeta({ t: 'allocate', nodeId: el.dataset.node! });
           this.refreshTree();
           this.refreshCharSheet();
         });
@@ -7600,10 +7590,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (!svg) return;
     const q = this.treeSearch.trim().toLowerCase();
     svg.classList.toggle('tree-searching', q.length > 0);
-    this.passiveTree.querySelectorAll<HTMLElement>('[data-passive-choice], [data-passive-owned-node]').forEach(frontierNode => {
-      const node = PASSIVE_NODES[frontierNode.dataset.passiveChoice ?? frontierNode.dataset.passiveOwnedNode ?? ''];
-      frontierNode.hidden = !!q && (!node || !this.passiveNodeSearchText(node).includes(q));
-    });
     let hits = 0;
     const searchRouteIds = new Set<string>();
     svg.querySelectorAll<SVGCircleElement>('.tree-node').forEach(el => {
@@ -7748,7 +7734,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  legality labels come from the SAME rule the engine enforces
    *  (choiceLockReason), so the popup can never promise what the host would
    *  refuse. Multi-pick nodes re-open until their deal is spent. */
-  private openChoicePopup(node: PassiveNode, el: SVGCircleElement | HTMLButtonElement): void {
+  private openChoicePopup(node: PassiveNode, el: SVGCircleElement): void {
     this.closeChoicePopup();
     const world = this.getWorld();
     const m = this.panelSeat(this.passiveTree).meta;
@@ -10487,14 +10473,6 @@ ${ESCAPE_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${escapeModeOf(s.e
         <button id="opt-supportready" title="Show a message in Skills when supports can be changed. Restrictions remain visible either way.">${s.supportReadyHint ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
-        <span>Passive tree: available choices</span>
-        <button id="opt-passiveavailable" title="Show the Available now list above the passive graph. OFF keeps the original graph view.">${s.passiveAvailableList ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Passive tree: allocated choices</span>
-        <button id="opt-passiveallocated" title="Show the Your choices list above the passive graph. Allocated nodes remain visible in the graph either way.">${s.passiveAllocatedList ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
         <span>UI Scale</span>
         <span class="pad-opt"><input type="range" id="opt-uiscale" min="${Math.round(UI_SCALE_CFG.min * 100)}" max="${Math.round(UI_SCALE_CFG.max * 100)}" step="${Math.round(UI_SCALE_CFG.step * 100)}"
           value="${Math.round(s.uiScale * 100)}"
@@ -10677,6 +10655,18 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-castname" title="Show the skill name above your hero while casting.">${s.castNameHint ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Active Cast Slot Outline</span>
+        <button id="opt-castslot" title="Outline the hotbar slot owning the current cast.">${s.castSlotHint ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Floating Number Placement</span>
+        <button id="opt-floatavoid" title="FIXED keeps original positions. AVOID BODIES shifts numbers away from visible bodies.">${s.floatingTextAvoidance ? 'AVOID BODIES' : 'FIXED'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Ground Item Label Placement</span>
+        <button id="opt-rewardavoid" title="FIXED keeps classic item names. AVOID BODIES packs names around visible bodies and links them to their items.">${s.rewardLabelAvoidance ? 'AVOID BODIES' : 'FIXED'}</button>
+      </div>
+      <div class="rebind-row">
         <span>Feet Planted Caption</span>
         <button id="opt-castmovement" title="Show a caption during casts that hold your hero in place.">${s.castMovementHint ? 'ON' : 'OFF'}</button>
       </div>
@@ -10728,7 +10718,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
-    for (const [id, key] of [['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
+    for (const [id, key] of [['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
       root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
         const settings = this.getSettings(); settings[key] = !settings[key];
         this.saveSettings(); this.renderOptions(root, onBack);
@@ -11069,15 +11059,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       const st = this.getSettings(); st.supportReadyHint = !st.supportReadyHint;
       this.saveSettings(); this.refreshInventory(true); this.renderOptions(root, onBack);
     });
-    for (const [id, key] of [['opt-passiveavailable', 'passiveAvailableList'], ['opt-passiveallocated', 'passiveAllocatedList']] as const) {
-      root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
-        const st = this.getSettings();
-        st[key] = !st[key];
-        this.saveSettings();
-        this.refreshTree();
-        this.renderOptions(root, onBack);
-      });
-    }
     // THE ABILITY POINT PROMPT: the chooser popup is opt-in — the shown
     // tells (the slot's bloom, the pips) carry the milestone either way.
     root.querySelector<HTMLElement>('#opt-treeprompt')?.addEventListener('click', () => {

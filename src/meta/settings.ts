@@ -90,6 +90,12 @@ export interface Settings {
   afflictionOverlays: import('../data/afflictionCues').AfflictionOverlayMode;
   /** Keep native meter anchors unless crowd avoidance is explicitly requested. */
   crowdedMeters: boolean;
+  /** Optional ground-label packing; classic placement is the default. */
+  rewardLabelAvoidance: boolean;
+  /** Optional floating-number displacement around visible bodies. */
+  floatingTextAvoidance: boolean;
+  /** Optional outline on the actively casting hotbar slot. */
+  castSlotHint: boolean;
   /** Optional name of the skill currently being cast. */
   castNameHint: boolean;
   /** Optional affirmative support-readiness message in Skills. Refusals stay visible. */
@@ -197,9 +203,6 @@ export interface Settings {
    *  — the bar slot's blooming pip, the SKILLS drawer's pip, the Menu
    *  button's roll-up — and the drawer or the tree spends it. */
   treePrompt: boolean;
-  /** Optional passive text lists; the authored graph is the default view. */
-  passiveAvailableList: boolean;
-  passiveAllocatedList: boolean;
   /** THE CAMERA MODE (render/camera.ts registry): 'hero' locks the view to
    *  your hero everywhere — zone edges simply reveal the void frame — while
    *  'zone' is the classic frame that never leaves the zone. A ZoneDef.camera
@@ -307,6 +310,9 @@ export interface SettingsSave {
   lowLifePulse?: boolean;
   afflictionOverlays?: import('../data/afflictionCues').AfflictionOverlayMode;
   crowdedMeters?: boolean;
+  rewardLabelAvoidance?: boolean;
+  floatingTextAvoidance?: boolean;
+  castSlotHint?: boolean;
   castNameHint?: boolean;
   supportReadyHint?: boolean;
   castMovementHint?: boolean;
@@ -332,8 +338,6 @@ export interface SettingsSave {
   destinationLabels?: 'near' | 'always';
   escapeCloses?: EscapeCloseMode;
   treePrompt?: boolean;
-  passiveAvailableList?: boolean;
-  passiveAllocatedList?: boolean;
   cameraMode?: CameraModeId;
   cameraZoom?: number;
   renderScale?: number | 'auto';
@@ -489,6 +493,9 @@ export const makeSettings = (): Settings => ({
   lowLifePulse: true,
   afflictionOverlays: 'gentle',
   crowdedMeters: false,
+  rewardLabelAvoidance: false,
+  floatingTextAvoidance: false,
+  castSlotHint: false,
   castNameHint: false,
   supportReadyHint: false,
   castMovementHint: false,
@@ -512,8 +519,6 @@ export const makeSettings = (): Settings => ({
   destinationLabels: 'near',
   escapeCloses: ESCAPE_CFG.default,
   treePrompt: false,
-  passiveAvailableList: false,
-  passiveAllocatedList: false,
   cameraMode: CAMERA_CFG.default,
   cameraZoom: CAMERA_CFG.zoom.default,
   renderScale: 'auto',
@@ -539,6 +544,9 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   lowLifePulse: s.lowLifePulse,
   afflictionOverlays: s.afflictionOverlays,
   crowdedMeters: s.crowdedMeters,
+  rewardLabelAvoidance: s.rewardLabelAvoidance,
+  floatingTextAvoidance: s.floatingTextAvoidance,
+  castSlotHint: s.castSlotHint,
   castNameHint: s.castNameHint,
   supportReadyHint: s.supportReadyHint,
   castMovementHint: s.castMovementHint,
@@ -563,8 +571,6 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   destinationLabels: s.destinationLabels,
   escapeCloses: s.escapeCloses,
   treePrompt: s.treePrompt,
-  passiveAvailableList: s.passiveAvailableList,
-  passiveAllocatedList: s.passiveAllocatedList,
   cameraMode: s.cameraMode,
   cameraZoom: cameraZoomOf(s.cameraZoom),
   renderScale: s.renderScale,
@@ -644,6 +650,9 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     lowLifePulse: s.lowLifePulse ?? true,
     afflictionOverlays: s.afflictionOverlays === 'off' || s.afflictionOverlays === 'still' ? s.afflictionOverlays : 'gentle',
     crowdedMeters: s.crowdedMeters === true,
+    rewardLabelAvoidance: s.rewardLabelAvoidance === true,
+    floatingTextAvoidance: s.floatingTextAvoidance === true,
+    castSlotHint: s.castSlotHint === true,
     castNameHint: s.castNameHint === true,
     supportReadyHint: s.supportReadyHint === true,
     castMovementHint: s.castMovementHint === true,
@@ -682,8 +691,6 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     escapeCloses: ESCAPE_MODES.some(m => m.id === s.escapeCloses) ? s.escapeCloses! : ESCAPE_CFG.default,
     // The chooser popup is opt-in: a pre-dial save reads OFF (the shown tells stand regardless).
     treePrompt: s.treePrompt === true,
-    passiveAvailableList: s.passiveAvailableList === true,
-    passiveAllocatedList: s.passiveAllocatedList === true,
     // Unknown values (a renamed mode, a pre-dial save) fall back to the
     // registry default — currently the hero-locked frame.
     cameraMode: CAMERA_MODES.some(m => m.id === s.cameraMode) ? s.cameraMode! : CAMERA_CFG.default,

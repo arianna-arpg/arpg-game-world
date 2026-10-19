@@ -1,3 +1,5 @@
+import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
+import { RewardLabelLayout } from './vis/rewardLabels';
 import { ALTAR_BODY } from '../engine/altarBodies';
 import { combatTargetStrength } from './vis/combatTargets';
 import { buffReadoutLines, drawBuffReadout } from './vis/buffReadout';
@@ -297,6 +299,8 @@ function blendRgb(from: string, to: string, k: number): string {
 }
 
 export class Renderer {
+  private floatingTextLayout = new CombatTextLayout(() => ({ ...VIS_CFG.combatFocus.numbers, enabled: true }));
+  private rewardLabelLayout = new RewardLabelLayout(() => ({ ...VIS_CFG.drops.rewardLabels, enabled: true }));
   private massPainter = new MassPainter();
   private cosmeticTrails = new CosmeticTrails();
   ctx: CanvasRenderingContext2D;
@@ -4481,7 +4485,7 @@ export class Renderer {
         c.kind === 'objective' && !world.chestObjectiveDone(c), world.time);
       if (!c.opened && c.kind === 'timed' && c.maxLock > 0) {
         this.drawProgressRing(c.pos.x, c.pos.y, 1-c.lockTime/c.maxLock, 'lockpick');
-        if(cue?.chest===c)drawChestReadout(this.ctx,cue.text,c.pos);
+        if(cue?.chest===c)drawChestReadout(this.ctx,cue,c.pos,world.time);
       }
     }
   }
@@ -6918,6 +6922,10 @@ export class Renderer {
   private drawDrops(world: World): void {
     const { ctx } = this;
     const D = VIS_CFG.drops; // every size below is a lever, never a literal
+    const avoidLabels = this.getSettings?.().rewardLabelAvoidance === true;
+    if (avoidLabels) this.rewardLabelLayout.begin(world.drops.map(d => d.item.kind === 'gear' ? d.item.item.uid : d),
+      this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, Math.max(a.radius, D.rewardClearance / 2))),
+      { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
     const alpha0 = ctx.globalAlpha;
     for (const d of world.drops) {
       ctx.globalAlpha = alpha0 * dropAlpha(world, d); // THE SPOILS' OWNER (card 27): another seat's held drop, ghosted (shown, never told)
@@ -6972,10 +6980,21 @@ export class Renderer {
         ctx.textAlign = 'center';
         const label = item.item.name;
         const w = ctx.measureText(label).width;
-        ctx.fillStyle = 'rgba(10,8,14,0.78)';
-        ctx.fillRect(d.pos.x - w / 2 - D.labelPadX, y - D.labelLift, w + D.labelPadX * 2, D.labelPillH);
-        ctx.fillStyle = rc.color;
-        ctx.fillText(label, d.pos.x, y - D.labelLift + D.labelPillH - 4);
+        const anchor = { x: d.pos.x, y: y - D.labelLift };
+        const placed = avoidLabels ? this.rewardLabelLayout.place(item.item.uid, anchor, w + D.labelPadX * 2, D.labelPillH,
+          r => this.labelRevealAt(world, { x: r.x + r.w / 2, y: r.y }) > .05) :
+          { x: anchor.x - w / 2 - D.labelPadX, y: anchor.y, w: w + D.labelPadX * 2, h: D.labelPillH };
+        if (placed) {
+          const x = placed.x + placed.w / 2;
+          if (avoidLabels && Math.hypot(x - anchor.x, placed.y - anchor.y) > 2) {
+            ctx.strokeStyle = D.rewardLabels.linkColor; ctx.lineWidth = D.rewardLabels.linkWidth;
+            ctx.beginPath(); ctx.moveTo(d.pos.x, y); ctx.lineTo(x, placed.y + placed.h); ctx.stroke();
+          }
+          ctx.fillStyle = 'rgba(10,8,14,0.78)';
+          ctx.fillRect(placed.x, placed.y, placed.w, placed.h);
+          ctx.fillStyle = rc.color;
+          ctx.fillText(label, x, placed.y + placed.h - 4);
+        }
         continue;
       }
       const fill = item.kind === 'support' ? item.gem.def.color : item.inst.def.color;
@@ -7791,6 +7810,9 @@ export class Renderer {
     // THE INFO STREAM's per-kind curation: each client gates kinds by its
     // OWN settings (the host mints one truth; every seat curates its view).
     const kindPrefs = this.getSettings?.().floatKinds;
+    const avoidNumbers = this.getSettings?.().floatingTextAvoidance === true;
+    if (avoidNumbers) this.floatingTextLayout.begin(this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)),
+      { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
     // THE FLOAT'S OWNER (THE WIRE'S EYES): on a hosted world (partyRows stands) a number
     // another seat struck or mended draws per Settings.floatOwners; elsewhere every one does.
     const ownerMode = world.partyRows !== null ? this.getSettings?.().floatOwners : 'all';
@@ -7806,8 +7828,10 @@ export class Renderer {
       ctx.fillStyle = t.color;
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
       ctx.lineWidth = 3;
-      ctx.strokeText(txt, t.pos.x, t.pos.y);
-      ctx.fillText(txt, t.pos.x, t.pos.y);
+      const at = avoidNumbers && (!t.kind || VIS_CFG.combatFocus.numbers.kinds.includes(t.kind))
+        ? this.floatingTextLayout.place(t, t.pos, ctx.measureText(txt).width, t.size) : t.pos;
+      ctx.strokeText(txt, at.x, at.y);
+      ctx.fillText(txt, at.x, at.y);
     }
     ctx.globalAlpha = 1;
     const focus = VIS_CFG.combatFocus;
@@ -8642,7 +8666,7 @@ export class Renderer {
           gx += 7;
         }
       }
-      drawCastSlot(ctx, p, inst, x, by, slot);
+      if (this.getSettings?.().castSlotHint === true) drawCastSlot(ctx, p, inst, x, by, slot);
       ctx.fillStyle = '#8a8678';
       ctx.font = '10px Verdana';
       ctx.fillText(keyLabels[i] ?? '?', x + slot / 2, by + slot + 12);

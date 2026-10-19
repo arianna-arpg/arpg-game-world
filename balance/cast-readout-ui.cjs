@@ -15,10 +15,12 @@ app.whenReady().then(async()=>{
   if(!r.ok)throw Error(r.error);return r.value;
  };
  const timer=setTimeout(()=>app.exit(1),180000),results=[];
- const boot=async cls=>run(cls=>{
-  __game.devStartRun(cls);__game.settings().castNameHint=true;__game.settings().castMovementHint=true;__game.ui.hideAll();const w=__game.world();w.startWorldMass(42);
-  const m=w.massRuntime,p=m.journey.places.find(p=>p.content==='cinderwatch');
-  w.landPartyAt(m.journey.local(p));m.update(w,true);w.actors=[w.player];w.player.invulnerable=true;
+ const boot=async cls=>run(async cls=>{
+  if(!__game.world().startWorldMass)__game.account().ledger.prologue_lived=1;
+  __game.devStartRun(cls);__game.settings().castNameHint=true;__game.settings().castSlotHint=true;__game.settings().castMovementHint=true;__game.ui.hideAll();const w=__game.world();
+  if(w.startWorldMass){w.startWorldMass(42);const m=w.massRuntime,p=m.journey.places.find(p=>p.content==='cinderwatch');w.landPartyAt(m.journey.local(p));m.update(w,true);}
+  if(!w.startWorldMass){let at;for(let y=100;y<w.zone.size.h-100&&!at;y+=48)for(let x=100;x<w.zone.size.w-320&&!at;x+=48){if(Array.from({length:20},(_,i)=>x+i*12).every(px=>(!w.walk||w.walk.isWalkable(px,y))&&!w.pointInSolid(px,y,w.player.radius)))at={x,y};}if(!at)throw Error('No clear casting lane');w.player.pos=at;}
+  w.actors=[w.player];w.player.invulnerable=true;
   __game.step(2);w.player.fillResources();
  },cls);
  const capture=async(name,expected,slot)=>{
@@ -56,25 +58,31 @@ app.whenReady().then(async()=>{
    if(__game.hold)__game.hold(true);else window.requestAnimationFrame=()=>0;
    // Finish account/settings hydration before this fixture enables its hints.
    if(__game.hydrated)await __game.hydrated();
+   window.qaInput=fn=>__game.devInput?__game.devInput(fn):__game.pilot(fn?{poll:fn}:null);
+   for(const k of ['castSlotHint','castNameHint','castMovementHint','crowdedMeters','floatingTextAvoidance','rewardLabelAvoidance'])if(__game.settings()[k]!==false)throw Error(k+' must default off');
+   if(!__game.settings().skillArtwork)throw Error('artwork must default on');
    Object.defineProperty(navigator,'getGamepads',{value:()=>[]});
   });
   await boot('magician');
   const start=await run(()=>{
    const w=__game.world(),p=w.player,aim={x:p.pos.x+200,y:p.pos.y};
    const ok=w.useSkill(p,p.skills[0],aim,true);const pos={...p.pos};
-   __game.devInput(()=>({dx:1,dy:0,aim,held:[false,false,true],edge:[]}));__game.step(8);
+   qaInput(()=>({dx:1,dy:0,aim,held:[false,false,true],edge:[]}));__game.step(8);
    return {ok,stillFirst:p.casting?.inst===p.skills[0],moved:Math.hypot(p.pos.x-pos.x,p.pos.y-pos.y),name:p.skills[0].def.name};
   });
   assert.ok(start.ok&&start.stillFirst);assert.equal(start.moved,0);
+  await run(()=>{__game.settings().castNameHint=false;__game.settings().castMovementHint=false;__game.settings().castSlotHint=false;});
+  await capture('defaults','',-1);
+  await run(()=>{__game.settings().castNameHint=true;__game.settings().castMovementHint=true;__game.settings().castSlotHint=true;});
   await capture('casting',start.name,0);
   const release=await run(()=>{
    const w=__game.world(),p=w.player,pos={...p.pos};let frames=0;
-   __game.devInput(()=>({dx:1,dy:0,aim:{x:p.pos.x+200,y:p.pos.y},held:[],edge:[]}));
+   qaInput(()=>({dx:1,dy:0,aim:{x:p.pos.x+200,y:p.pos.y},held:[],edge:[]}));
    while(p.casting&&frames++<180)__game.step(1);
-   __game.step(8);__game.devInput(null);
+   __game.step(8);qaInput(null);
    return {frames,moved:Math.hypot(p.pos.x-pos.x,p.pos.y-pos.y),idle:p.casting===null};
   });
-  assert.ok(release.frames<180&&release.moved>5&&release.idle);
+  assert.ok(release.frames<180&&release.moved>5&&release.idle,JSON.stringify(release));
   await capture('released','',-1);
   const second=await run(()=>{
    const w=__game.world(),p=w.player;p.fillResources();
@@ -87,10 +95,10 @@ app.whenReady().then(async()=>{
   const guard=await run(()=>{
    const w=__game.world(),p=w.player,aim={x:p.pos.x+200,y:p.pos.y};
    const ok=w.useSkill(p,p.skills[1],aim,true);
-   __game.devInput(()=>({dx:1,dy:0,aim,held:[false,true],edge:[]}));const pos={...p.pos};__game.step(8);__game.devInput(null);
+   qaInput(()=>({dx:1,dy:0,aim,held:[false,true],edge:[]}));const pos={...p.pos};__game.step(8);qaInput(null);
    return {ok,mode:p.casting?.mode,moved:Math.hypot(p.pos.x-pos.x,p.pos.y-pos.y),name:p.skills[1].def.name};
   });
-  assert.ok(guard.ok&&guard.mode==='guard'&&guard.moved>0);
+  assert.ok(guard.ok&&guard.mode==='guard'&&guard.moved>0,JSON.stringify(guard));
   await capture('guard',guard.name,1);
   fs.writeFileSync(path.join(dir,tag+'-ui.json'),JSON.stringify({legacy,start,release,second,guard,results},null,2));
   console.log(JSON.stringify({legacy,start,release,second,guard}));

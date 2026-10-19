@@ -43,7 +43,7 @@ export const VIS_CFG = {
   combatFocus: {
     player: { enabled: true, pad: 7, corner: 6, nose: 7, width: 1.5, outline: 1.25,
       color: '#edf9e9', edge: '#18201f', crowdAlpha: .95, restAlpha: .4, crowdReach: 130 },
-    numbers: { enabled: true, kinds: ['dmg','gains','xp','drop','pickup','progression'] as readonly string[],
+    numbers: { enabled: false, kinds: ['dmg','gains','xp','drop','pickup','progression'] as readonly string[],
       bodyPad: 12, barRise: 34, gap: 3, step: 16, rings: 12 },
     names: { enabled: true, garrisons: true, formations: true, garrisonWidth: 220, gap: 4, step: 12, rings: 20, nameFont: 'bold 12px Verdana',
       subFont: '10px Verdana', nameHeight: 14, subHeight: 12, outline: 3, edge: '#151712',
@@ -430,9 +430,8 @@ export const VIS_CFG = {
     /** Keep reward names clear of hostile bodies and their immediate action.
      * Zero restores unconditional labels. Item glyphs and the pickup feed stay. */
     rewardClearance: 52,
-    /** Persistent labels share bounded space, with a tether to the actual item.
-     * Only an exactly attributed, drawn name replaces its transient twin. */
-    rewardLabels: { enabled: true, collapseAnnouncements: true, gap: 3, step: 16, rings: 12,
+    /** Optional persistent labels share bounded space with a tether to the item. */
+    rewardLabels: { enabled: false, gap: 3, step: 16, rings: 12,
       maxLabels: 32, maxWidth: 240, linkWidth: 1, linkColor: '#b5aca0', linkAlpha: .55 },
     /** Currency glyph type sizes (vestige sigils, essence trail). */
     vestigeFont: 13,
@@ -1491,9 +1490,8 @@ export const VIS_CFG = {
   /** The chest lid's swing on open: seconds, the lift (px) it rises before
    *  settling open. */
   chestLid: { seconds: 0.35, lift: 7 },
-  chestReadout: { enabled:true, range:180, hoverRadius:28, width:150, y:39,
-    searching:'Searching…', approach:'Move closer to search', font:'11px Verdana',
-    text:'#f1e7cd', edge:'#171510', outline:3 },
+  chestReadout: { enabled: true, range: 180, hoverRadius: 28,
+    color: '#e6c987', edge: '#171510', radius: 8, width: 1.8, pulseHz: 1.5, motes: 3 },
 
   /** THE STATUS VOICE's render dials (vis/statusVoiceLayer.ts — the drawn
    *  half of engine/statusVoice.ts; the life / reach / cap live THERE as

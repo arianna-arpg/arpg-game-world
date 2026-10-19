@@ -1,6 +1,8 @@
-# Main and seamless: gameplay decisions
+# Main and seamless: historical comparison before player decisions
 
-Updated 2026-10-19 for `arianna-arpg/arpg-game-world`. This is the current comparison, superseding the stale-main comparison in the earlier playtest notes. It is a decision register, not a list of commits or tests.
+This is the comparison snapshot used to assign C/V/P/W/N row IDs on 2026-10-19. Its branch tips, defaults, “Review” labels and file inventory are historical. **Use [the current gameplay decisions](gameplay-decisions-20261019.md) for approved changes, reversions and pending choices.** Main has since received approved shared features; this table is no longer a current difference report.
+
+Corrections discovered while applying the decisions: V07 floating-number avoidance and V13 ground-label avoidance helpers were not wired into the renderer. The claimed announcement collapsing was not implemented. V06 garrison/formation label helpers were also unused. The current record distinguishes these from visible features and documents the actual options now provided. P07's passive-list additions have been removed; V02's slot outline is now off by default; V14 uses animation rather than captions.
 
 ## What is aligned
 

@@ -60,6 +60,10 @@ try {
  // Native bag capacity refuses before either owner changes.
  while(freeCellCount(m.items)>0)assert.ok(w.grantSupportGemItem(seat,{def:SUPPORTS.splitting,level:1}));
  const full=canonical(m.items);assert.equal(w.unsocketBagSkill(item.uid,2),false);assert.equal(canonical(m.items),full);
+ const dropsBefore=w.drops.length;
+ assert.equal(w.unlearnSkill('firebolt'),false,'full bag keeps the supported skill equipped');
+ assert.equal(m.knownSkills.get('firebolt'),active);assert.equal(active.sockets[0]?.def.id,'splitting');
+ assert.equal(w.drops.length,dropsBefore,'unequipping never spills supports');
  m.items.pop();
  const field=Object.values(w.zoneMap).find(z=>!z.boundless&&z.objective?.kind!=='safe')!;
  w.loadZone(field.id);for(const a of w.actors)if(a.team==='enemy')a.dead=true;

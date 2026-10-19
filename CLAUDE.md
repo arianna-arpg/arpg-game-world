@@ -54,7 +54,7 @@ Tests must exercise current behavior and fail when that behavior is broken. Add 
 - `balance/`: simulation and verification tools; reports are generated, not source.
 - `docs/design/convergence-20261014.md`: agreed end state. `docs/design/seamless-world-foundation.md`: detailed implementation history and remaining cutover work.
 - `PLAYTEST.md`: concise player entry and current limits. Update it when the actual playable path changes.
-- `docs/ai/gameplay-alignment-20261019.md`: current main/seamless behavior decisions, with a complete changed-file/function inventory. Keep explicit keep/revert choices here; do not present every existing seamless change as approved or compare against a stale local main.
+- `docs/ai/gameplay-decisions-20261019.md`: current approved, reverted, pending and seamless-only behavior decisions. The older alignment comparison and file inventory are historical snapshots, not current differences or an approved backlog.
 
 ## Development rules
 
