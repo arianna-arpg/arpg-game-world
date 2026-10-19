@@ -10,9 +10,9 @@ The earlier main/seamless comparison and its file inventory are historical snaps
 | --- | --- |
 | C01 | Shared: the most recently pressed held skill gets the next casting opportunity. Existing committed casts finish normally. |
 | C02 | **Approved in follow-up.** Shared: a fresh movement press suppresses older held-skill repeats after the current cast. It does not cancel that cast or release a held guard/channel. Releasing movement allows held skills to resume. |
-| C03 | Pending: optional live aiming during committed casts. No authored skill currently opts into it; leave the capability out of main. |
+| C03 | Shared, approved as future authoring capability only: `castAim: 'live'` lets an ordinary windup follow its actor's aim. It originally accompanied a Cleave movement/aim experiment (5 October), whose skill changes were reverted (8 October). No authored skill currently opts in. Omitted/`press` aim, movement, costs and cast timing stay unchanged; targeted, locked, planted and held/timing casts keep their existing rules. |
 | C04 | Shared: Shadow Step lands behind the target's facing, then immediately turns the caster toward it. Immediate and delayed arrivals both support the full following Backstab when its normal hit conditions are met. |
-| C05 | Pending: lurker closing/melee rules. Main retains its existing behavior. |
+| C05 | Keep lurker closing/melee adjustments in seamless for future AI work. Main retains its existing behavior. |
 | C06 | Corrected shared behavior: Bonepicker retains its normal throwing/skirmish cadence at low nerve. Wounds can trigger one 3.5-second rout; being outnumbered cannot repeatedly restart flight. No permanent low-nerve retreat override. |
 | C07 | **Approved in follow-up.** Shared: ranged enemies move when their actual firing lane is blocked, including low cover that they can see across. A valid alternate attack still fires normally. Explicit authored `losSeek: false` remains respected. |
 | C08–C10 | Keep in seamless: encounter territories, physical sanctuary boundaries and additional road encounter groups. Do not add their continuous-world policy to ordinary zones. |
@@ -33,12 +33,12 @@ The earlier main/seamless comparison and its file inventory are historical snaps
 | V08 | Shared: compact status icons; details on hover by default. Focus/corner/off remain choices. |
 | V09 | Shared: actual buff details/expiry on hover and altar effects based on actual recipients/restoration. |
 | V10 | Shared artwork, **on by default**, across hotbar/build/bag. |
-| V11 | Pending: counters/descriptions for existing three-cast passives. Change the Rhythm counts three different casts within six seconds; Perfect One Motion counts three repeated casts. Their existing damage/speed bonuses are unchanged. Main keeps its current presentation. |
-| V12 | Pending: bounded objective/notice layout, including four objective rows and two compass rows. Main keeps its current HUD layout. |
+| V11 | Leave the existing seamless three-cast counters/descriptions in place for possible later reuse; no promotion to main. Change the Rhythm counts three different casts within six seconds; Perfect One Motion counts three repeated casts. Their existing bonuses are unchanged. |
+| V12 | The HUD change (four objective rows, two compass rows and bounded notices) remains unapproved for main. **This was not what the user meant by bounded objectives.** The intended feature is retained zone layouts and their substantial objective systems embedded as bounded areas in continuous terrain; see the corrected world direction below. |
 | V13 | Main ground-item label placement is the default. Alternate label avoidance is an option, **off by default**. Correction: previous claims of active displacement and collapsed announcements were inaccurate; the helper was unused, and announcement collapsing is not implemented by this option. Hosted ownership filtering is separate. |
 | V14 | Shared: chest latch glint, an arc driven by real search progress, and moving motes. Remove the added instructional search captions. This does not change chest rewards or search timing. |
 | V15 | Shared: revised ailment motifs and capped night/body contrast. Presentation only; it grants no sight through obstacles. |
-| V16 | Pending: zoom and network-camera smoothing. Seamless offers 85–160% with 100% retaining the original 1.3 scale. Main camera behavior is unchanged. |
+| V16 | Restore main's fixed **game-camera** scale (1.3) in seamless; remove the added 85–160% game zoom option and ignore its old saved preference. This is unrelated to map zoom. Existing couch framing remains; hosted correction smoothing and capture/showcase framing are separate technical functions. No new map-zoom behavior is authorized by this choice. |
 | V17 | Shared: quieter empty hotbar slots; key labels and hit areas remain. |
 | V18 | Shared: approved environment, body, golem, water, ground and skill artwork. Continuous settlement-specific visuals stay with seamless. |
 
@@ -58,7 +58,19 @@ The earlier main/seamless comparison and its file inventory are historical snaps
 
 ## World, hosting and continued work
 
-The W-series continuous-world/content choices remain undecided. Do not interpret this alignment as approval for another geography rebuild, full campaign parity, or a completed MMORPG. Hosting/ownership adaptations can remain in seamless; shared offline gameplay stays authoritative on main.
+The user clarified the world direction on 19 October; this supersedes older interpretations of “bounded/unbounded objectives” and blanket statements that the world direction is undecided. Individual W-series implementation choices remain subject to review. Hosting/ownership adaptations can remain in seamless; shared offline gameplay stays authoritative on main.
+
+### Retained zones inside continuous terrain
+
+- Intended geographic/map hierarchy: **world map → regions → zones → chunks**. A chunk is a streaming subdivision, not a replacement for a playable zone or an objective boundary.
+- Preserve the interesting main-branch zone layouts, terrain templates and authored spatial structure. Populate those zones directly into the seamless environment as bounded playable areas that a travelling player can encounter.
+- Retain each area's existing, substantial zone objective system, associated encounters and completion/reward behavior. Small incidental camp objectives can coexist, but do not substitute for these larger activities.
+- “Bounded instance” here describes the authored area's footprint and objective ownership. It does not by itself authorize a portal, loading transition, separate server instance or a reset on crossing a chunk boundary. Continuous travel remains the goal; deliberately separate interiors are a distinct case.
+- Adapt approaches and connections to surrounding terrain while retaining the layouts' identity. Administrative region/chunk edges must not become encounter walls. Any actual sealing or commitment rule comes from the retained area's authored gameplay.
+- Current delivery falls short: campaignPlaces() reuses quest definitions, rewards, enemies and bosses but places them in generic site templates. That is not individual retention of those quests' original zone layouts. The separate retained-area inspection route also does not constitute embedding them into seamless ground.
+- The next content implementation must prove one representative retained layout and its actual objective in surrounding seamless terrain, including walk-in/out and saved progress, before generalizing. This decision record does not claim that integration is already implemented or authorize replacing the codebase wholesale.
+
+Map presentation should reflect this hierarchy; game-camera scale and HUD line limits are independent concerns.
 
 Two dedicated chats own dialogue redesign and incremental infrastructure/context cleanup. Preserve unfinished work in the original checkout. Remove obsolete guidance from current entry points while retaining necessary history as clearly labeled reference material.
 

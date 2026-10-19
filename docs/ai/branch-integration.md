@@ -12,7 +12,7 @@ The user explicitly authorized this ongoing remote-write automation on 2026-10-1
 
 Main ancestry establishes that its changes were incorporated; it does not imply that every behavior is identical after later seamless edits. Keep the gameplay difference register on seamless current. Each intentional shared-gameplay deviation needs a named row explaining the main behavior, the seamless behavior and the user's keep/revert decision. Spatial adapters and multiplayer ownership changes belong in separate rows from balance or presentation changes.
 
-The published [main/seamless gameplay decision register](https://github.com/arianna-arpg/arpg-game-world/blob/codex/seamless-world-foundation/docs/ai/gameplay-alignment-20261019.md) is the review entrypoint from this main checkout. It includes linked source locations and the complete changed-file/function inventory. Its Review rows remain undecided; alignment has not silently accepted them into main.
+The [current gameplay decisions](gameplay-decisions-20261019.md) are the review entrypoint. They record approved shared changes, seamless-only choices, reversions and unresolved items, including the corrected retained-zone direction. The earlier comparison and file inventory are historical evidence, not an approved backlog or a current difference report.
 
 The cast-bar dimensions are decided: match main's 44 × 5 pixels. The one-time account tutorial and direct Mu handoff also match main. Do not treat other existing differences as approved merely because they are already committed. Changes intended for both games should start on main and flow through the integration merge; seamless-only geography remains on seamless.
 
