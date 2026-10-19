@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { Worker } from 'node:worker_threads';
+import path from 'node:path';
 import { installNodeMassWorkers, massWorkersStatus } from '../server/massWorkers';
 import { massDependencyCacheDefault } from '../src/worldmass/ownedDependencyCache';
 import { makeSimWorld } from '../src/sim/arena';
@@ -10,9 +12,10 @@ import { createProcessionPlanWarmQueue } from '../src/worldmass/processionWarm';
 import { createTerrainWarmQueue } from '../src/worldmass/terrainWarm';
 import { prepareTerrainPacket } from '../src/worldmass/terrainPreparation';
 import { resolveNativeFeature, type NativeFeatureRequest } from '../src/worldmass/nativeFeatures';
-import { compileGeographicPlan } from '../src/worldmass/geographicPlan';
+import { compileGeographicPlan, geographicPlanIdentity, type GeographicPlanReply } from '../src/worldmass/geographicPlan';
 import { compileProcessionPlan, PROCESSION_PLAN_COMPILER, PROCESSION_ROUTE_POLICY, type ProcessionPlanInput } from '../src/worldmass/processionPlan';
 import { makeMassRun } from '../src/worldmass/generator';
+import { MassPlanGeneratorCache } from '../src/worldmass/planGeneratorCache';
 import { MASS_HIERARCHY_DEFAULT, MassHierarchy } from '../src/worldmass/hierarchy';
 import { nativeGeographicSelectionReceipt } from '../src/worldmass/geographicObjectiveChoice';
 import { nativeMassProcessionSources, resolveMassProcessionContext } from '../src/worldmass/processionSources';
@@ -84,9 +87,34 @@ try{
   geographic.offer([input]);assert.ok(geographic.stats.inflight);
   const geographical=await ready(()=>geographic.takeReady(),()=>geographic.error);
   assert.equal(canonical(geographical.preparation.plan),canonical(compileGeographicPlan(input).plan));
+  // Exercise the browser entry with the same current source as the hosted and
+  // synchronous kernels, including its isolated imports and RNG behavior.
+  const browserWorker=new Worker(`const {parentPort,workerData}=require('node:worker_threads');require('tsx/cjs');globalThis.self=globalThis;globalThis.postMessage=value=>parentPort.postMessage(value);require(workerData.file);Math.random=()=>{throw Error('Worker consumed ambient RNG')};parentPort.on('message',data=>self.onmessage({data}));`,
+    {eval:true,env:{...process.env,TSX_DISABLE_CACHE:'1'},workerData:{file:path.resolve('src/worldmass/geographicPlan.worker.ts')}});
+  try{
+    const response=new Promise<GeographicPlanReply>((resolve,reject)=>{browserWorker.once('message',resolve);browserWorker.once('error',reject);});
+    browserWorker.postMessage({protocol:1,token:1,input,...geographicPlanIdentity(input),maxBytes:262144});
+    const reply=await response;assert.ok(reply.preparation,reply.error??'missing browser worker result');
+    assert.equal(canonical(reply.preparation.plan),canonical(geographical.preparation.plan),'browser and hosted workers produce the same current plan');
+    console.log('PASS actual browser geographic worker equals the hosted and synchronous current plan without ambient RNG');
+  }finally{await browserWorker.terminate();}
 
   const terrain={id:'shard-worker-route',version:1,addressSpan:960,terrainCell:24,fields:[],
     surfaces:[{id:'dry',priority:0,when:[],region:'ground',color:'#445533',biome:'grassland'}],places:[]};
+  const cache=new MassPlanGeneratorCache(),peerCache=new MassPlanGeneratorCache();
+  const cacheRun=makeMassRun(17,'plan-cache',terrain),firstGenerator=cache.get(cacheRun,terrain);
+  assert.equal(cache.get(structuredClone(cacheRun),structuredClone(terrain)),firstGenerator,'equivalent messages reuse the generator');
+  assert.notEqual(peerCache.get(cacheRun,terrain),firstGenerator,'workers and ports never share mutable generator caches');
+  assert.throws(()=>cache.get({...cacheRun,manifest:'stale'},terrain),/manifest mismatch/);
+  assert.equal(cache.get(cacheRun,terrain),firstGenerator,'failed construction preserves the last valid entry');
+  const nextRun=makeMassRun(18,'plan-cache',terrain);
+  assert.notEqual(cache.get(nextRun,terrain),firstGenerator,'a changed run replaces the cache');
+  const changedTerrain={...terrain,version:2},changedRun=makeMassRun(18,'plan-cache',changedTerrain);
+  const secondGenerator=cache.get(nextRun,terrain);
+  assert.notEqual(cache.get(changedRun,changedTerrain),secondGenerator,'changed terrain replaces the cache');
+  assert.notEqual(cache.get(cacheRun,terrain),firstGenerator,'returning to an older source reconstructs it; only one entry is retained');
+  assert.equal(peerCache.get(cacheRun,terrain).run.seed,17,'replacing one cache cannot alter its peer');
+  console.log('PASS shared planning cache reuse, per-port isolation, run/terrain replacement and failure recovery');
   const source=nativeMassProcessionSources().find(s=>s.tileset==='grassland')!;
   let route:ProcessionPlanInput|undefined;
   for(let seed=1;seed<200&&!route;seed++){
