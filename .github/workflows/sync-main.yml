@@ -44,15 +44,34 @@ jobs:
       - if: steps.merge.outputs.changed == 'true'
         run: npm ci
       - if: steps.merge.outputs.changed == 'true'
-        name: Validate the integrated game
+        name: Prepare the Linux desktop sandbox
         shell: bash
         run: |
-          npm run check
-          npm run probe -- --jobs 2
-          npm run sim -- run --suite smoke
-          npm run genqa
-          npm run build
-          xvfb-run --auto-servernum npm run smoke:world
+          node node_modules/electron/install.js
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+          xvfb-run --auto-servernum node_modules/.bin/electron --version
+      - if: steps.merge.outputs.changed == 'true'
+        name: Type-check the integrated game
+        run: npm run check
+      - if: steps.merge.outputs.changed == 'true'
+        name: Launcher checks
+        run: npm run test:launcher
+      - if: steps.merge.outputs.changed == 'true'
+        name: Current gameplay and hosted entry
+        run: npm run probe -- --jobs 2
+      - if: steps.merge.outputs.changed == 'true'
+        name: Shared combat simulation
+        run: npm run sim -- run --suite smoke
+      - if: steps.merge.outputs.changed == 'true'
+        name: Generation checks
+        run: npm run genqa
+      - if: steps.merge.outputs.changed == 'true'
+        name: Build the integrated client
+        run: npm run build
+      - if: steps.merge.outputs.changed == 'true'
+        name: Actual tutorial, Mu, continuous travel and Continue
+        run: xvfb-run --auto-servernum npm run smoke:world
       - if: steps.merge.outputs.changed == 'true'
         name: Publish only the verified merge
         shell: bash
