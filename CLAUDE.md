@@ -1,3 +1,5 @@
+Main is the shared-content baseline. Incorporate its changes into seamless with real merges, not copied commits. Follow [the branch integration policy](docs/ai/branch-integration.md); every published main change is verified and merged by the sync-main workflow. Preserve unfinished work in other checkouts.
+
 The playable Mu loading-screen foundation is documented in docs/ui/loading-screen.md.
 LoadingScreen provides token-owned status, cancellation, retry and input isolation;
 SpiritRun is a rewardless pastime with soul-flames, branching rune gates and currents.
