@@ -19,6 +19,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Prepare the Linux desktop sandbox
+        run: |
+          node node_modules/electron/install.js
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - run: npm run check
       - run: npm run test:launcher
       - name: Current gameplay, saves, terrain and hosted entry
