@@ -1,6 +1,6 @@
 import { DIALOGUE_CFG } from '../data/dialogue';
 import { MONSTERS } from '../data/monsters';
-import { DialogueSession, type DialogueOffer } from '../engine/dialogue';
+import { DialogueSession, DialogueVisits, type DialogueOffer } from '../engine/dialogue';
 import type { DialogueActions } from '../engine/dialogueActions';
 import type { NpcSpeechLine, World } from '../engine/world';
 import { isTypingTarget } from '../core/input';
@@ -19,6 +19,7 @@ import { panelCloseHtml } from './panelClose';
 export interface DialogueWorkspace {
   readonly active: boolean;
   readonly choosing: boolean;
+  repeatable?(world: World, speakerId: number): boolean;
   sync(world: World, speakerId: number): void;
   reset(): void;
   back(): void;
@@ -50,6 +51,7 @@ interface DialogueHost {
 export class DialogueUI {
   readonly root: HTMLElement;
   readonly session = new DialogueSession();
+  private readonly visits = new DialogueVisits();
   private readonly portrait: HTMLCanvasElement;
   private readonly title: HTMLElement;
   private readonly ink: HTMLElement;
@@ -213,6 +215,7 @@ export class DialogueUI {
   }
 
   reset(): void {
+    this.visits.reset();
     this.session.reset(); this.world = null; this.scene = -1; this.pageKey = '';
     this.root.hidden = true;
     this.choiceSignature = ''; this.choices.replaceChildren(); this.status.textContent = '';
@@ -225,7 +228,28 @@ export class DialogueUI {
     }
     const offer = this.available && line
       ? world.npcDialogues.readerOffer(line.a, line.text, DIALOGUE_CFG.pageChars, this.host.resolveText) : null;
-    this.finish(this.session.sync(focusId, offer));
+    let cooling = false;
+    if (focusId !== null && this.visits.has(focusId)) {
+      const repeatable = this.workspace?.repeatable?.(world, focusId) || !!offer?.choices?.length;
+      const cooldown = repeatable ? 0 : world.npcDialogueRepeatCooldown(focusId);
+      if (this.available && this.visits.rearm(focusId, world.localSeat.lastMovedAt, cooldown)) {
+        // Retire any remaining conversation tab after a service was closed.
+        // Do not admit this frame's old ready line; the next frame starts a
+        // fresh dwell through the world's single attention clock.
+        this.finish(this.session.close()); this.session.reset(); this.workspace?.reset();
+        this.pageKey = ''; this.root.hidden = true;
+        world.restartNpcDialogueDwell(focusId);
+        return;
+      }
+      cooling = this.visits.cooling(focusId, world.time, cooldown);
+    }
+    const wasReading = this.session.reading;
+    this.finish(this.session.sync(focusId, cooling ? null : offer));
+    // An approach made during cooldown is spent too. Expiry while standing
+    // there must not turn that old approach into a delayed conversation.
+    if (cooling && !this.session.reading) this.session.dismiss();
+    if (this.session.reading && wasReading?.offer.speakerId !== this.session.reading.offer.speakerId)
+      this.visits.opened(this.session.reading.offer.speakerId);
     const dt = Math.max(0, Math.min(0.1, world.time - this.lastTime));
     this.lastTime = world.time;
     this.setAvailable(this.available);
@@ -330,8 +354,16 @@ export class DialogueUI {
     this.choices.replaceChildren(); this.choiceSignature = '';
   }
 
+  /** Service X/Finish shares the conversation's re-entry latch, even while
+   * its retained conversation tab remains available behind the service. */
+  armReentry(): void {
+    const speaker = this.session.reading?.offer.speakerId;
+    if (speaker !== undefined && this.world) this.visits.dismiss(speaker, this.world.time);
+  }
+
   close(): boolean {
     if (!this.session.reading) return false;
+    this.armReentry();
     this.finish(this.session.dismiss()); this.pageKey = ''; this.root.hidden = true;
     this.workspace?.reset();
     return true;

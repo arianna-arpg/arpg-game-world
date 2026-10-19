@@ -64,7 +64,7 @@ import { dwellFocus, type DwellFocus } from '../src/engine/dwellFocus';
 import { SPEECH_ATTENTION_CFG, speechAttentionFor } from '../src/data/speechAttention';
 import { makeSpeakerRow, type SpeechSpeakerRow } from '../src/engine/speechGrammar';
 import { MONSTERS } from '../src/data/monsters';
-import { DialogueSession, dialoguePages, type DialogueOffer } from '../src/engine/dialogue';
+import { DialogueSession, DialogueVisits, dialoguePages, type DialogueOffer } from '../src/engine/dialogue';
 import { DialogueActions } from '../src/engine/dialogueActions';
 import { resetActorIdCounter } from '../src/engine/actor';
 import { buildManifest } from '../src/packages/manifest';
@@ -954,6 +954,36 @@ console.log('L. THE DIALOGUE READER (pages, explicit advance, pending state and 
   check('L21 leaving and returning rearms an explicitly dismissed conversation', !!d.reading);
   d.dismiss(); d.reset(); d.sync(2, { ...offer, speakerId: 2 });
   check('L22 world/scene reset clears explicit dismissal', !!d.reading);
+}
+
+console.log('Lv. FRESH DWELL AFTER DISMISSAL');
+{
+  const visits = new DialogueVisits();
+  for (const speaker of [1, 2, 300]) {
+    visits.dismiss(speaker, 10);
+    check('Lv service stays closed without a new step', !visits.rearm(speaker, 10, 0));
+    check('Lv every service can rearm without a radius exit', visits.rearm(speaker, 10.01, 0));
+    check('Lv one step consumes one request', !visits.rearm(speaker, 10.01, 0));
+    visits.dismiss(speaker, 20);
+    check('Lv empty chatter respects cooldown on a new approach', visits.cooling(speaker, 21, 12));
+    check('Lv a step during cooldown cannot cause a delayed popup', !visits.rearm(speaker, 21, 12));
+    check('Lv expiry alone cannot rearm chatter', !visits.rearm(speaker, 20, 12));
+    check('Lv a fresh step after cooldown can rearm chatter', visits.rearm(speaker, 32.01, 12));
+    visits.dismiss(speaker, 40);
+    check('Lv newly actionable content drops only the chatter cooldown', visits.rearm(speaker, 40.1, 0));
+  }
+  visits.dismiss(1, 100); visits.reset();
+  check('Lv reused actor ids clear dismissal', !visits.has(1));
+  const w = makeSimWorld('warrior', 77036), a = w.createMonster('townsfolk_innkeep', 1, 'player');
+  a.pos = { ...w.player.pos }; w.actors.push(a); w.time = 10; w.localSeat.lastActedAt = 0;
+  const poll = (n: number) => { for (let i = 0; i < n; i++) { w.time += 0.05; w.npcSpeechView(); } };
+  poll(20);
+  check('Lv the original dwell completes', !!w.speechFocusTarget()?.ready);
+  w.restartNpcDialogueDwell(a.id); w.localSeat.lastActedAt = w.time;
+  poll(4);
+  check('Lv reentry does not reuse the old completed focus', !w.speechFocusTarget()?.ready);
+  poll(10);
+  check('Lv normal attention dwell completes inside the same radius', !!w.speechFocusTarget()?.ready);
 }
 
 console.log('M. EXPLICIT DIALOGUE RESPONSES');

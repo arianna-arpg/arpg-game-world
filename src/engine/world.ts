@@ -24066,6 +24066,17 @@ export class World {
     return this.speechFocus.get(seat);
   }
 
+  /** A deliberate step after dismissing requests the same normal attention
+   * dwell again, even inside the current speaker's reach. */
+  restartNpcDialogueDwell(speakerId: number): void {
+    if (this.speechFocus.get(this.localSeat)?.id === speakerId) this.speechFocus.delete(this.localSeat);
+  }
+
+  npcDialogueRepeatCooldown(speakerId: number): number {
+    const row = this.speakerRows.get(speakerId);
+    return speechWindowFor(row?.lane ?? 'resident', row?.current ?? row?.line ?? '').cooldownSec;
+  }
+
   /** A reader-paced dialogue starts its ambient cooldown when finished or
    * interrupted, even if reading outlasted the old overhead telling window. */
   finishNpcDialogue(actorId: number): void {

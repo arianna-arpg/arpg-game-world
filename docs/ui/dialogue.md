@@ -48,11 +48,20 @@ The shortcut is a settings preference keyed by character and NPC definition.
 - Escape, controller B or the close button dismisses. Escape closes a visible dialogue
   before reaching the pause menu. The reader does not pause the world or lock
   movement; leaving the speaker's focus closes the exchange.
-- Explicit Finish and X/Esc dismiss the whole visit, including later
-  quest changes; a delayed shop timer cannot reopen the shop either.
-  Already read lines cannot cycle back into the queue. Departing and returning
-  must earn dwell again. Ambient speech additionally honors its
-  existing lane cooldown, starting at reader completion or interruption.
+- Finish, X and Escape dismiss through the same reader close path without
+  accepting work or changing any player ribbon. Escape also dismisses the
+  front NPC service before any player-panel sweep, regardless of which group
+  was last touched or the selected Escape preference.
+- Closing stays closed while standing still, including later quest changes;
+  a delayed shop timer cannot reopen the shop. A deliberate step inside the
+  same NPC's range requests a fresh normal dwell. Services, current quest
+  topics and authored responses can return immediately after that dwell.
+  Closing Shop also arms this return, even with Conversation still in its
+  NPC tabs. Existing vendor definitions supply Shop eligibility for all traders.
+- Residents and settled quest givers without attached content retain the
+  speech lane cooldown, starting at reader completion or interruption.
+  Cooldown expiry alone never rearms an explicitly dismissed visit. Physics
+  pushes, casts, menu clicks and old movement cannot count as a fresh step.
 - An ambient offer's old bubble window can expire while the page remains open.
   Reading has no deadline. Generated text is composed once, not every frame.
 - A changing functional line queues behind the current text. Only the latest
@@ -147,6 +156,8 @@ rewards or scene-specific dialogue rules.
   groups at desktop/narrow/175% scale.
   Add `--finish` for the focused footer course: topics, work/activity details,
   paged greetings, separate Back, mouse/Enter dismissal and retained player UI.
+  `--reentry` checks Finish/X/Escape with all four player ribbons, intentional
+  movement inside the same NPC radius, and Shop X/Escape under every Escape mode.
 
 The hidden client uses isolated saves and captures the actual DOM plus canvas.
 It checks dwell, priority, the live portrait, reveal/advance, paged content,

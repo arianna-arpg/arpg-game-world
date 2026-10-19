@@ -76,6 +76,60 @@ app.whenReady().then(async () => {
     assert.equal(await js('__game.crash().fatal'),null);
     log('PASS: Finish remains available on topics, activities and paged greetings; native click and Enter dismiss without accepting work; Back preserves conversation; player page survives at both scales');
   };
+  const reentryCourse = async () => {
+    win.setContentSize(2560,1440);
+    const key = async keyCode => {
+      await js('document.activeElement?.blur()');
+      win.webContents.sendInputEvent({type:'keyDown',keyCode});
+      await new Promise(resolve=>setTimeout(resolve,20));
+      await js('__game.step(1,50)');
+      win.webContents.sendInputEvent({type:'keyUp',keyCode});
+      await new Promise(resolve=>setTimeout(resolve,20));
+      await js('serviceQA.pos={...serviceQA.w.player.pos};serviceQA.run(1)');
+    };
+    const shimmy = async () => {
+      const at=await js('serviceQA.w.time');
+      await key('D');
+      const moved=await js('({at:serviceQA.w.localSeat.lastMovedAt,now:serviceQA.w.time})');
+      assert.ok(moved.at>=at,'real movement stamps a fresh intentional step: '+JSON.stringify({start:at,...moved}));
+      assert.equal(await js('serviceQA.w.npcDialogueReachable(serviceQA.target.id)'),true,'step stays inside the NPC radius');
+      const arrival=await js('(()=>{const q=serviceQA,start=q.w.time;for(let n=0;n<18&&!__game.ui.conversation.session.reading;n++)q.run(1);return {elapsed:q.w.time-start,open:!!__game.ui.conversation.session.reading};})()');
+      assert.ok(arrival.open&&arrival.elapsed<0.8,'fresh dwell reopens without leaving NPC range: '+JSON.stringify(arrival));
+    };
+    let cases=0;
+    for(const npc of ['smith','inn'])for(const page of ['skills','passives','container:reliquary','character'])for(const verb of ['finish','x','escape']) {
+      await js(`__game.settings().npcShopVisits=[];serviceQA.clear();serviceQA.page('${page}');serviceQA.target=serviceQA.${npc};serviceQA.run(90,serviceQA.target.pos)`);
+      const topics=await js('Array.from(document.querySelectorAll("[data-conversation-activity]"),b=>b.dataset.conversationActivity)');
+      const topic=topics.find(t=>t.startsWith('work:'))??topics[0];
+      if(topic)await click('[data-conversation-activity="'+topic+'"]');
+      const quests=await js('serviceQA.w.activeQuests.map(q=>q.questId)');
+      if(verb==='escape')await key('Escape');
+      else if(verb==='x')await click('#npc-dialogue [data-panel-x]');
+      else await click(await js('document.querySelector(".dialogue-finish").hidden?".dialogue-next":".dialogue-finish"'));
+      await js('serviceQA.run(75)');
+      assert.equal(await js('document.getElementById("npc-dialogue").hidden'),true,'all close paths stay closed while idle');
+      assert.equal(await js('__game.ui.folio.bookFor('+JSON.stringify(page)+')?.front'),page,'close preserves the selected ribbon');
+      assert.deepEqual(await js('serviceQA.w.activeQuests.map(q=>q.questId)'),quests,'closing never accepts work');
+      await shimmy();
+      assert.equal(await js('__game.ui.folio.bookFor('+JSON.stringify(page)+')?.front'),page,'reentry preserves the selected ribbon');
+      cases++; log({stage:'reentry',npc,page,verb,topic});
+    }
+    for(const mode of ['sweep','sweepKeepBag','step'])for(const verb of ['x','escape']) {
+      await js(`serviceQA.clear();serviceQA.page('skills');__game.settings().escapeCloses='${mode}';serviceQA.target=serviceQA.smith;serviceQA.run(90,serviceQA.smith.pos)`);
+      if(!await js('__game.ui.vendorOpen'))await click('[data-conversation-shop]');
+      await js('__game.ui.folio.front("skills")');
+      if(verb==='x')await click('#vendor-menu [data-panel-x]');else await key('Escape');
+      await js('serviceQA.run(90)');
+      assert.equal(await js('__game.ui.vendorOpen'),false,'no second timer reopens Shop');
+      assert.equal(await js('__game.ui.folio.bookFor("skills")?.front'),'skills','Shop close ignores the player Escape sweep');
+      await key('D');await js('serviceQA.run(42)');
+      assert.equal(await js('__game.ui.vendorOpen'),true,'Shop reopens after a small step without an exit or cooldown');
+      assert.equal(await js('__game.ui.folio.bookFor("skills")?.front'),'skills');
+      log({stage:'shop-reentry',mode,verb});
+    }
+    assert.equal(await js('__game.crash().fatal'),null);
+    log({pass:'universal NPC close and fresh service dwell',cases,shopCases:6});
+  };
   try {
     await win.loadURL(server.url);
     await js(`(async()=>{
@@ -105,6 +159,7 @@ app.whenReady().then(async () => {
       q.clear();q.run(120,{x:smith.pos.x+10,y:smith.pos.y});
     })()`);
     if(process.argv.includes('--finish')) { await finishCourse(); return; }
+    if(process.argv.includes('--reentry')) { await reentryCourse(); return; }
     let first=await js(`({vendor:__game.ui.vendorOpen,visible:document.getElementById('npc-dialogue').getBoundingClientRect().width>0,shop:!!document.querySelector('[data-conversation-shop]'),name:document.querySelector('#npc-dialogue h2').textContent,books:__game.ui.folio.views()})`);
     log({stage:'first-visit',...first});
     assert.ok(first.visible&&first.shop&&!first.vendor,'first Brandt visit offers Shop in conversation'); assert.match(first.name,/Brandt/);

@@ -1572,7 +1572,7 @@ export class UI {
 
   conversationShopAvailable(speakerId: number): boolean {
     const world = this.getWorld(), actor = world.actors.find(a => a.id === speakerId && !a.dead);
-    return !!actor?.defId && MONSTERS[actor.defId]?.npcRole === 'vendor'
+    return !!actor?.defId && VENDORS.some(v => v.npcRole === MONSTERS[actor.defId!]?.npcRole && v.near(world, world.localSeat))
       && world.npcDialogueReachable(speakerId) && this.dialogueMenuRefusal('vendor') === null;
   }
 
@@ -1588,7 +1588,7 @@ export class UI {
   }
   openVendorOnDwell(seatId?: string): void {
     const world = this.getWorld(), seat = this.couchSeatFor(seatId);
-    const speaker = world.actors.find(a => !!a.defId && MONSTERS[a.defId]?.npcRole === 'vendor'
+    const speaker = world.actors.find(a => !!a.defId && VENDORS.some(v => v.npcRole === MONSTERS[a.defId!]?.npcRole)
       && world.npcDialogueReachable(a.id));
     // The conversation's single arrival owns both the first Shop choice and
     // the remembered shop. The later service timer must not undo an X/Esc.
@@ -1637,6 +1637,15 @@ export class UI {
   folioCloseFront(seatId?: string): boolean {
     const id = seatId ?? this.getWorld().localSeat.id;
     const closed = this.folio.closeFront(l => l.owner() === id);
+    if (closed) this.folioStrip.update();
+    return closed;
+  }
+
+  /** NPC dismissal precedes every player-panel Escape policy. Touching a
+   * player ribbon must not change which group Escape dismisses first. */
+  closeNpcFront(seatId: string = this.getWorld().localSeat.id): boolean {
+    this.folio.sync();
+    const closed = this.folio.closeFront(l => l.owner() === seatId && l.group === 'npc');
     if (closed) this.folioStrip.update();
     return closed;
   }
@@ -1790,6 +1799,7 @@ export class UI {
    *  borough, vocation) belong to the local hero. True = press consumed. */
   escCascadeFor(seatId: string): boolean {
     if (this.cancelSalvageMode(seatId)) return true;
+    if (this.closeNpcFront(seatId)) return true;
     // THE ESCAPE POLICY (ui/escapeConfig.ts): a sweep mode clears the seat's
     // whole screen in one press; 'step' walks the classic cascade below.
     const mode = escapeModeOf(this.getSettings().escapeCloses);
@@ -6341,6 +6351,7 @@ export class UI {
   }
 
   closeVendor(): void {
+    if (this.vendorOpen && this.panelSeat(this.vendorMenu) === this.getWorld().localSeat) this.conversation?.armReentry();
     this.vendorOpen = false;
     this.scrapMode = false;
     this.vendorCommOpen = null;
