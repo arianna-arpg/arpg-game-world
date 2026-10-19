@@ -827,7 +827,7 @@ export class Renderer {
     this.dialogueVisibleSpeaker = null;
     if (!VIS_ABLATE.has('actors')) {
       for (const line of world.npcSpeechView(!this.dialogueReaderEnabled() || this.npcDialogueAvailable(),
-        this.speechPointerHits(world))) this.speechFocusLines.set(line.a, line);
+        this.speechPointerHits(world), this.npcDialogueOwner())) this.speechFocusLines.set(line.a, line);
     }
     this.drawDwellTells(world);    // THE DWELL TELL: the base ring on every station/NPC in dwell range
     this.drawCampfireHint(world);  // "linger to refresh" prompt by the town campfire
@@ -3816,6 +3816,7 @@ export class Renderer {
   private speechFocusLines = new Map<Actor, NpcSpeechLine>();
   private dialogueVisibleSpeaker: Actor | null = null;
   npcDialogueAvailable: () => boolean = () => true;
+  npcDialogueOwner: () => number | null = () => null;
   onNpcDialogue: ((world: World, line: NpcSpeechLine | null, focusId: number | null) => void) | null = null;
   private dialogueReaderEnabled(): boolean { return !!this.onNpcDialogue && DIALOGUE_CFG.presentation === 'dialogue'; }
   /** Per-speaker utterance clocks (sim time, so menu holds freeze the

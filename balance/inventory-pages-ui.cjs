@@ -8,7 +8,7 @@ app.setPath('userData', path.join(dir, `inventory-pages-profile-${process.pid}`)
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const timer = setTimeout(() => { console.error('Inventory pages timed out'); app.exit(1); }, 55000);
-  const server = await startGameServer({ root: path.resolve(__dirname, '../dist'),
+  const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'),
     savesDir: path.join(dir, `inventory-pages-saves-${process.pid}`) });
   const win = new BrowserWindow({ show: false, width: 1400, height: 1000,
     webPreferences: { offscreen: true, backgroundThrottling: false } });
@@ -62,6 +62,7 @@ app.whenReady().then(async () => {
       const ribbons = [
         ['skills', '[data-buildflap]'],
         ['passives', '[data-passiveflap]'],
+        ['character', '[data-characterflap]'],
         ['container:reliquary', '[data-containerflap="reliquary"]'],
       ];
       key('i');
@@ -188,10 +189,13 @@ app.whenReady().then(async () => {
       ui.folioSync();
     });
     for (const [id, selector] of [['skills', '[data-buildflap]'], ['passives', '[data-passiveflap]'],
+      ['character', '[data-characterflap]'],
       ['container:reliquary', '[data-containerflap="reliquary"]']]) {
       for (const opened of [true, false]) {
         const point = await win.webContents.executeJavaScript(`(() => {
-          const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
+          const el = document.querySelector(${JSON.stringify(selector)});
+          el.scrollIntoView({block:'nearest'});
+          const r = el.getBoundingClientRect();
           return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
         })()`);
         win.webContents.sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, ...point });

@@ -1,6 +1,6 @@
 # Inventory pages
 
-Inventory is the parent of Skills, Passives, each learned skill's tree, and every
+Inventory is the parent of Skills, Passives, the existing Character sheet, each learned skill's tree, and every
 owned container board (including Reliquary). These are pages of one development
 workspace, with Inventory's ribbons and the folio's tabs selecting the page.
 
@@ -19,7 +19,9 @@ workspace, with Inventory's ribbons and the folio's tabs selecting the page.
 Esc keeps the configured policy: **step** dismisses the front folio leaf first;
 **sweep** closes Inventory with its pages; **keep inventory** dismisses pages and
 other windows first, leaving Inventory until the next press. Station interactions
-retain their existing reach, priority and close semantics. Restoring Inventory
+retain their existing reach, priority and close semantics. Stations and Inventory
+pages share the owner's folio book even when their initial rectangles do not
+overlap. Restoring Inventory
 does not displace an active station; explicitly requesting a page does.
 
 ## Ownership and extension
@@ -57,11 +59,13 @@ couch seat, and fit the available viewport above the drawn HUD cluster. The
 shared height limit reserves the hotbar and resource orbs at the current UI
 scale, with `BUILD_PANEL_CFG.edge` as clearance; long skill lists scroll inside
 the page below the fixed skill rack. Moving Inventory moves all its pages.
-On narrow screens pages clamp into the screen. The rail drops count badges, then
-wallet chips if needed to fit Inventory's height. Widths and margins remain
+NPC services have their own group and cannot change the player selection or geometry.
+Narrow screens may overlap; use the existing movable layout or close a group.
+The rail drops count badges, then
+wallet chips if needed to fit Inventory's height, then scrolls if necessary. Widths and margins remain
 configurable in `BUILD_PANEL_CFG`. Historical saved page positions are ignored.
-During a station visit, [Service workspace](service-workspace.md) supplies the
-reading-band ceiling and compact tab visibility. Inventory's anchor and this
+The [Service workspace](service-workspace.md) supplies the same reading-band
+ceiling and compact tab visibility with or without a station visit. Inventory's anchor and this
 registry's page lifecycle remain unchanged.
 
 ## Verification

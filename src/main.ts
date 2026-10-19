@@ -22,6 +22,8 @@ import { applyCursor } from './core/cursor';
 import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
 import { DialogueUI, type DialogueActionContext } from './ui/dialogue';
+import { DIALOGUE_CFG } from './data/dialogue';
+import { NpcConversationUI, conversationHasRewards, conversationHasVocations } from './ui/npcConversation';
 import { DialogueActions } from './engine/dialogueActions';
 import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
 import { installUiStack } from './ui/zorder';
@@ -448,17 +450,28 @@ dialogueActions.register('menu', {
   refusal: (context, action) => context.world === world ? ui.dialogueMenuRefusal(action.target) : 'This conversation has ended.',
   run: (_context, action) => ui.activateDialogueMenu(action.target),
 });
-const dialogue = new DialogueUI({
+const dialogue: DialogueUI = new DialogueUI({
   settings: () => settings, padActive: padActiveNow,
   hudTop: () => ui.hudCluster?.()?.y,
   resolveText: text => renderer.resolveText(text),
   actions: dialogueActions,
   available: () => renderer.npcDialogueAvailable(),
+  createWorkspace: (root, changed) => new NpcConversationUI(root, {
+    world: () => world,
+    available: () => renderer.npcDialogueAvailable() && dialogue.open,
+    inventory: () => { if (!ui.inventoryOpen) ui.toggleInventory(); },
+    shopAvailable: id => ui.conversationShopAvailable(id),
+    shop: id => ui.openConversationShop(id),
+    changed: () => ui.refreshInventory(),
+  }, changed),
 });
+ui.enrollConversation(dialogue);
+renderer.npcDialogueOwner = () => dialogue.session.reading?.offer.speakerId ?? null;
 renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && ui.dialogueContext().available;
 renderer.onNpcDialogue = (w, line, focusId) => {
   dialogue.setAvailable(renderer.npcDialogueAvailable());
   dialogue.sync(w, line, focusId);
+  ui.syncConversation();
 };
 // A consumed dialogue button stays out of gameplay until physically released,
 // including the frame in which Finish closes the reader.
@@ -2006,17 +2019,17 @@ function tick(now: number): void {
       // A stocked vendor counter's dwell asks to open the Vendor screen.
       if (world.vendorDwellRequested && !ui.escapeMenuOpen) {
         world.vendorDwellRequested = false;
-        if (!ui.vendorOpen) ui.showVendor(world.vendorDwellSeatId);
+        ui.openVendorOnDwell(world.vendorDwellSeatId);
       }
       // The quartermaster dwell with FRESH vocation chains on offer asks to open
       // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).
       if (world.vocationOfferRequested && !ui.escapeMenuOpen) {
         world.vocationOfferRequested = false;
-        if (!ui.vocationOpen) ui.showVocationMenu();
+        if (!ui.vocationOpen && (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasVocations(world))) ui.showVocationMenu();
       }
       if (world.questRewardRequested && !ui.escapeMenuOpen) {
         world.questRewardRequested = false;
-        ui.showQuestReward();
+        if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();
       }
       // The mercenary outpost's calm parley asks to open the hire/retire menu.
       if (world.mercOutpostRequested && !ui.escapeMenuOpen) {

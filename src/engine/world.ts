@@ -24131,13 +24131,18 @@ export class World {
    * order/culling. Raw counter reads remain available to menus and lessons;
    * only this presentation seam admits proximity bubbles. Service actions
    * retain their existing dwell gates. Couch caravans keep their seat scope. */
-  npcSpeechView(admit = true, pointerHits?: ReadonlyMap<number, number>): NpcSpeechLine[] {
+  npcDialogueReachable(speakerId: number): boolean {
+    return this.speechCandidates(this.localSeat).some(c => c.id === speakerId);
+  }
+
+  npcSpeechView(admit = true, pointerHits?: ReadonlyMap<number, number>, retainedSpeakerId?: number | null): NpcSpeechLine[] {
     this.npcDialogues.refreshAppearances();
-    const callout = this.npcDialogues.callout(admit);
+    const retainedSpeaker = retainedSpeakerId == null ? undefined : this.speechCandidates(this.localSeat).find(c => c.id === retainedSpeakerId);
+    const callout = retainedSpeaker ? null : this.npcDialogues.callout(admit);
     if (callout) return [callout];
     const out: NpcSpeechLine[] = [];
     for (const seat of this.localHumanSeats()) {
-      const candidates = this.speechCandidates(seat);
+      const candidates = seat === this.localSeat && retainedSpeaker ? [retainedSpeaker] : this.speechCandidates(seat);
       if (admit && seat === this.localSeat && SPEECH_ATTENTION_CFG.pointer.enabled) {
         for (const c of candidates) if (c.available) c.pointerDistance = pointerHits?.get(c.id);
       }
