@@ -1,3 +1,5 @@
+> **Current direction (19 October 2026):** the [gameplay decisions](../ai/gameplay-decisions-20261019.md#retained-zones-inside-continuous-terrain) supersede this historical plan/implementation ledger where they differ. Generation may choose retained bounded zone layouts/objectives alongside sites, events, quests, unbounded objectives and other combinations. None is a universal template. World → regions → zones → chunks organizes geography, not mandatory activity structure. Generic sites and the retained inspection route do not deliver the missing retained-zone option. Old branch counts, staging plans and camera/Cleave experiments below are history, not current requirements.
+
 # Convergence (2026-10-14): one world, one branch, two threads
 
 Her word tonight: converge, work in tandem, no opposing plans. This page is

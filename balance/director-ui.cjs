@@ -34,7 +34,7 @@ app.whenReady().then(async()=>{
   const rejected=await js(`(()=>{const g=window.__game;g.pilot({poll(){return{dx:NaN,dy:0,aim:{x:0,y:0},held:[],edge:[]}}});let bad=false;try{g.step()}catch(e){bad=true}g.step();return bad})()`);
   check('invalid pilot input refuses and the failed source detaches',rejected);
   const restore=await js(`(()=>{const g=window.__game,d=g.director();d.setViewport(1600,900);g.settings().cameraZoom=1.23;d.end();g.step();const a=g.renderer.toScreen({x:0,y:0}),b=g.renderer.toScreen({x:100,y:0});return{worldOnly:g.renderer.worldOnly,focus:g.renderer.directorFocus,clean:g.renderer.directorClean,width:g.renderer.canvas.width,height:g.renderer.canvas.height,delta:Math.hypot(b.x-a.x,b.y-a.y),scale:g.renderer.pixelScale}})()`);
-  check('end restores current saved zoom, window viewport and renderer flags',!restore.worldOnly&&!restore.focus&&!restore.clean&&restore.width===1000&&restore.height===650&&Math.abs(restore.delta-100*1.3*1.23*restore.scale)<0.01,restore);
+  check('end restores main game scale despite a legacy zoom value, window viewport and renderer flags',!restore.worldOnly&&!restore.focus&&!restore.clean&&restore.width===1000&&restore.height===650&&Math.abs(restore.delta-100*1.3*restore.scale)<0.01,restore);
   const cancel=await js(`(async()=>{const g=window.__game,d=g.director(),p=d.stage(window.directorSpec);p.catch(()=>{});d.end();let cancelled=false;try{await p}catch{cancelled=true}return{cancelled,clean:!g.renderer.worldOnly&&!g.renderer.directorFocus}})()`);
   check('end cancels pending stage and releases capture flags',cancel.cancelled&&cancel.clean,cancel);
   await js('window.__game.director().stage(window.directorSpec)');

@@ -1,21 +1,18 @@
 import assert from 'node:assert/strict';
-import { CAMERA_CFG, cameraZoomOf, cameraModeOf, placeCamera, couchFit, couchConfineRect } from '../src/render/camera';
+import { cameraModeOf, placeCamera, couchFit, couchConfineRect } from '../src/render/camera';
 import { makeSettings, serializeSettings, deserializeSettings } from '../src/meta/settings';
 import { COUCH_CFG } from '../src/data/couch';
 
-const original=makeSettings(),saved=serializeSettings(original);delete saved.cameraZoom;
-assert.equal(deserializeSettings(saved)!.cameraZoom,1);
-for(const bad of [null,undefined,NaN,Infinity,-Infinity,'1.5',{},[]])
- assert.equal(deserializeSettings({...saved,cameraZoom:bad} as never)!.cameraZoom,1);
-for(const [input,expected] of [[-10,.85],[50,1.6],[1.45,1.45]]){
- const settings=makeSettings();settings.cameraZoom=input;
- assert.equal(deserializeSettings(serializeSettings(settings))!.cameraZoom,expected);
- assert.deepEqual({...serializeSettings(settings),cameraZoom:undefined},{...serializeSettings(original),cameraZoom:undefined});
+const original=makeSettings(),saved=serializeSettings(original);
+for(const oldZoom of [undefined,.85,1,1.6,50,null,'1.5']) {
+ const restored=deserializeSettings({...saved,cameraZoom:oldZoom} as never)!;
+ assert.deepEqual(restored,original,'obsolete game zoom cannot alter loaded settings');
+ assert.deepEqual(serializeSettings(restored),saved,'obsolete game zoom is not saved again');
 }
-console.log('PASS additive zoom preference survives serialization; malformed values restore classic framing and valid values stay bounded');
+console.log('PASS old game zoom preferences are ignored without changing other settings');
 const focus={x:-1930,y:761},arena={w:2000,h:2000,boundless:true};
-for(const userZoom of [.85,1,1.6]){
- const z=CAMERA_CFG.zoom.base*cameraZoomOf(userZoom),native=placeCamera(cameraModeOf('hero'),focus,1280/z,850/z,arena);
+{
+ const z=1.3,native=placeCamera(cameraModeOf('hero'),focus,1280/z,850/z,arena);
  for(const pixel of [.55,.75,1]){
   assert.deepEqual(placeCamera(cameraModeOf('hero'),focus,1280*pixel/(z*pixel),850*pixel/(z*pixel),arena),native);
  }
@@ -30,4 +27,4 @@ for(const userZoom of [.85,1,1.6]){
  const rect=couchConfineRect(cam,1280/(z*fit.stretch),850/(z*fit.stretch),COUCH_CFG.camera);
  for(const eye of eyes)assert.ok(eye.x>=rect.x&&eye.x<=rect.x+rect.w&&eye.y>=rect.y&&eye.y<=rect.y+rect.h);
 }
-console.log('PASS solo focus, pixel-resolution independence and native couch fit/edge geometry across the zoom range');
+console.log('PASS solo focus, pixel-resolution independence and native couch fit/edge geometry at main game scale');

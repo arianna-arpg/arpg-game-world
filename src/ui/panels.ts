@@ -94,7 +94,7 @@ import { bindFolioKeys, FolioCore, FolioStrip, FOLIO_SHELVED_CLASS, installFolio
 import type { TownSiteId } from '../data/townBuild';
 import type { SuiteStation } from '../data/suites';
 import { RENDER_SCALE_CFG } from '../render/renderScale';
-import { CAMERA_CFG, CAMERA_MODES, cameraZoomOf, cameraModeOf } from '../render/camera';
+import { CAMERA_MODES, cameraModeOf } from '../render/camera';
 import { FACTIONS, MONSTERS, defDensity, type MonsterDef } from '../data/monsters';
 import { heftTierOf } from '../engine/mass';
 import { DEFENSE_CFG } from '../engine/defense';
@@ -10638,14 +10638,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       ${savePortImportRow}`;
     const visualsTab = `
       <div class="rebind-row">
-        <span>World zoom</span>
-        <span class="pad-opt"><input type="range" id="opt-camerazoom" aria-label="World zoom"
-          min="${Math.round(CAMERA_CFG.zoom.min * 100)}" max="${Math.round(CAMERA_CFG.zoom.max * 100)}"
-          step="${Math.round(CAMERA_CFG.zoom.step * 100)}" value="${Math.round(s.cameraZoom * 100)}"
-          title="A closer view makes characters and terrain larger. A wider view shows more surrounding country.">
-          <b id="val-camerazoom">${Math.round(s.cameraZoom * 100)}%</b></span>
-      </div>
-      <div class="rebind-row">
         <span>Line-of-Sight Shade</span>
         <span class="pad-opt"><input type="range" id="opt-veildark" min="0" max="100" step="5"
           value="${Math.round(s.veilDarkness * 100)}"
@@ -10935,7 +10927,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       });
       el.addEventListener('change', () => this.saveSettings());
     };
-    slider('camerazoom', v => { this.getSettings().cameraZoom = cameraZoomOf(v / 100); }, v => `${v}%`);
     slider('deadzone', v => { this.getSettings().pad.deadzone = v / 100; }, v => `${v}%`);
     slider('aimreach', v => { this.getSettings().pad.aimRadius = v; }, v => String(v));
     slider('padspeed', v => { this.getSettings().pad.pointerSpeed = v; }, v => String(v));

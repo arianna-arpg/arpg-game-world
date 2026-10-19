@@ -4,6 +4,8 @@ This is the comparison snapshot used to assign C/V/P/W/N row IDs on 2026-10-19. 
 
 Corrections discovered while applying the decisions: V07 floating-number avoidance and V13 ground-label avoidance helpers were not wired into the renderer. The claimed announcement collapsing was not implemented. V06 garrison/formation label helpers were also unused. The current record distinguishes these from visible features and documents the actual options now provided. P07's passive-list additions have been removed; V02's slot outline is now off by default; V14 uses animation rather than captions.
 
+Later clarification: C03 was originally used by an experimental mobile/live-aim Cleave, then left unused when that skill change was reverted. V12's HUD bounding is unrelated to the user's intended **optional generation outcomes**, including bounded areas with retained layouts/objectives alongside sites, events, quests and unbounded objectives. V16 is game zoom, not map zoom, and has been reverted to main's fixed scale. Consult the current record for these dispositions.
+
 ## What is aligned
 
 The published content baseline is main `a2fa42917262e9229140b6364b6d5e461b32f50e`. It was already an ancestor of the seamless work being reviewed. Local main had copied patches and an older apparent tip; its history has now been reconciled through a real merge, preserving the published content tree and all unfinished root edits. Main `05847c85d531361f0a90c85bd71a37c15a18f08e` adds the approved integration workflow and policy, without changing that gameplay baseline.

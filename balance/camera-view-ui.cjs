@@ -1,9 +1,9 @@
-// Saved camera control, native pointer aiming and interface geometry in a disposable client.
+// Main game scale, ignored legacy zoom, native pointer aim and capture restore in a disposable client.
 const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const dir=path.join(__dirname,'reports');app.setPath('userData',path.join(dir,'camera-view-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
- const root=path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_DIST||'balance/reports/camera-view-dist');
+ const root=path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_DIST||'dist');
  const server=http.createServer((req,res)=>{
   const p=new URL(req.url,'http://localhost').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));
   if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);return res.end();}
@@ -24,8 +24,8 @@ app.whenReady().then(async()=>{
  try{
   await win.loadURL(url);win.webContents.focus();
   await run(async()=>{
-   window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});
-   await new Promise(r=>setTimeout(r,200));__game.devStartRun('magician');__game.ui.hideAll();
+   await __game.hydrated();__game.hold(true);Object.defineProperty(navigator,'getGamepads',{value:()=>[]});
+   __game.devStartRun('magician');__game.ui.hideAll();
    const w=__game.world();w.startWorldMass(42);const m=w.massRuntime,p=m.journey.places.find(p=>p.content==='cinderwatch');
    w.landPartyAt(m.journey.local(p));__game.settings().renderScale=1;
    for(let i=0;i<70;i++){w.time+=1/60;__game.renderer.render(w);}
@@ -35,22 +35,13 @@ app.whenReady().then(async()=>{
    return {zoom:__game.settings().cameraZoom,pos:{...p.pos},life:p.life,mana:p.mana,hud:r.hudSlotRects,
     center:r.toScreen(p.pos),offset:r.toScreen({x:p.pos.x+100,y:p.pos.y}),fatal:__game.crash().fatal};
   });
-  assert.equal(before.zoom,1);assert.equal(before.fatal,null);await shot('classic');
-  const slider=await run(()=>{
+  assert.equal(before.zoom,undefined);assert.ok(Math.abs(before.offset.x-before.center.x-130)<1e-8);assert.equal(before.fatal,null);await shot('classic');
+  const option=await run(()=>{
    __game.ui.showEscapeMenu();document.querySelector('#esc-keys').click();
    document.querySelector('[data-opttab="visuals"]').click();
-   const el=document.querySelector('#opt-camerazoom');el.scrollIntoView({block:'center'});
-   const b=el.getBoundingClientRect();return {x:Math.floor(b.right-2),y:Math.floor(b.top+b.height/2)};
+   return {gameZoom:!!document.querySelector('#opt-camerazoom'),cameraMode:!!document.querySelector('#opt-cameramode')};
   });
-  await input({type:'mouseMove',...slider},{type:'mouseDown',button:'left',clickCount:1,...slider},
-   {type:'mouseUp',button:'left',clickCount:1,...slider});
-  const option=await run(()=>{
-   const el=document.querySelector('#opt-camerazoom'),b=el.getBoundingClientRect();
-   return {value:Number(el.value),label:document.querySelector('#val-camerazoom').textContent,
-    zoom:__game.settings().cameraZoom,visible:b.top>=0&&b.bottom<=innerHeight,
-    persisted:Object.entries(localStorage).filter(([k])=>k.includes('settings')).map(([k,v])=>({key:k,value:JSON.parse(v).cameraZoom}))};
-  });
-  assert.equal(option.value,160);assert.equal(option.zoom,1.6);assert.ok(option.visible);
+  assert.equal(option.gameZoom,false);assert.equal(option.cameraMode,true);
   fs.writeFileSync(path.join(dir,'camera-view-options.png'),(await win.webContents.capturePage()).toPNG());
   await run(()=>{__game.ui.hideAll();__game.renderer.render(__game.world());});
   const after=await run(()=>{
@@ -60,16 +51,15 @@ app.whenReady().then(async()=>{
   });
   assert.deepEqual(after.pos,before.pos);assert.equal(after.life,before.life);assert.equal(after.mana,before.mana);
   assert.deepEqual(after.hud,before.hud);assert.ok(Math.hypot(after.center.x-before.center.x,after.center.y-before.center.y)<1e-8);
-  assert.ok(Math.abs((after.offset.x-after.center.x)/(before.offset.x-before.center.x)-1.6)<1e-10);
-  await shot('close');
-  await run(()=>{
-   const w=__game.world(),Constructor=w.massRuntime.constructor,c=JSON.parse(JSON.stringify(w.massRuntime.config));
-   delete c.settlement;delete c.journey;delete c.progression;delete c.ecology;
-   delete c.terrain.patches;
-   c.terrain.fields=[];c.terrain.places=[];c.content=[];c.populationRadius=0;c.startRadius=0;c.maxPopulation=0;
-   c.terrain.surfaces=[{id:'aim-floor',priority:0,when:[],region:'ground',biome:'downs',color:'#454331'}];
-   new Constructor(42,'camera-native-aim',c).attach(w);
+  assert.ok(Math.abs((after.offset.x-after.center.x)/(before.offset.x-before.center.x)-1)<1e-10);
+  const capture=await run(()=>{
+   const r=__game.renderer,w=__game.world(),p=w.player;
+   const span=()=>r.toScreen({x:p.pos.x+100,y:p.pos.y}).x-r.toScreen(p.pos).x;
+   r.setBaseZoom(2.1);r.render(w);const staged=span();
+   __game.settings().cameraZoom=1.6;r.setBaseZoom(null);r.render(w);
+   return {staged,restored:span()};
   });
+  assert.ok(Math.abs(capture.staged-210)<1e-8);assert.ok(Math.abs(capture.restored-130)<1e-8);
   const aims=[];
   for(const [zoom,resolution] of [[.85,1],[1.6,1],[1.6,.75]]){
    const aim=await run((zoom,resolution)=>{
@@ -102,18 +92,22 @@ app.whenReady().then(async()=>{
   await run(async()=>{
    __game.settings().cameraZoom=1.6;__game.settings().renderScale=1;__game.saveSettings();__game.save();
    await new Promise(r=>setTimeout(r,200));
+   // Simulate a preference written by the removed version.
+   for(const key of Object.keys(localStorage).filter(k=>k.includes('settings'))) {
+    const value=JSON.parse(localStorage.getItem(key));value.cameraZoom=1.6;localStorage.setItem(key,JSON.stringify(value));
+   }
   });
   await win.loadURL(url);
   const persisted=await run(async()=>{
-   window.requestAnimationFrame=()=>0;
+   await __game.hydrated();__game.hold(true);
    for(let i=0;i<80&&!document.querySelector('#sm-continue:not([disabled])');i++)await new Promise(r=>setTimeout(r,100));
    document.querySelector('#sm-continue:not([disabled])').click();
    return {zoom:__game.settings().cameraZoom,fatal:__game.crash().fatal};
   });
-  assert.equal(persisted.zoom,1.6);assert.equal(persisted.fatal,null);
-  fs.writeFileSync(path.join(dir,'camera-view-ui.json'),JSON.stringify({before,option,after,aims,persisted},null,2));
+  assert.equal(persisted.zoom,undefined);assert.equal(persisted.fatal,null);
+  fs.writeFileSync(path.join(dir,'camera-view-ui.json'),JSON.stringify({before,option,after,capture,aims,persisted},null,2));
   console.log(JSON.stringify({option,aims,persisted}));
-  console.log('PASS real slider, unchanged HUD/vitals, larger native world, mouse aim and Firebolt at zoom/resolution extremes, saved preference on Continue');
+  console.log('PASS main game scale, removed zoom option, capture restore, unchanged HUD/vitals, native mouse aim and Firebolt across resolution settings, legacy preference ignored on Continue');
  }catch(e){console.error(e.stack||String(e));process.exitCode=1;}
  finally{clearTimeout(timer);win.destroy();server.close();app.exit(process.exitCode||0);}
 });

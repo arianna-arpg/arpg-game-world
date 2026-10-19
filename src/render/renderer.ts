@@ -230,7 +230,7 @@ import { AOE_SHAPE } from '../engine/skills';
 
 import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
 import { UnderstoryLayer } from './vis/understory';
-import { CAMERA_CFG, CAMERA_FOLLOW_CFG, cameraZoomOf, cameraModeOf, couchConfineRect, couchFit, placeCamera, springFollow, type CameraFollow } from './camera';
+import { CAMERA_FOLLOW_CFG, cameraModeOf, couchConfineRect, couchFit, placeCamera, springFollow, type CameraFollow } from './camera';
 import { COUCH_CFG } from '../data/couch';
 import { drawVoidFrame, voidBaseOf } from './vis/voidFrame';
 import { activePieces } from '../world/shape';
@@ -359,16 +359,14 @@ export class Renderer {
   /** Couch guest seats whose CONTROLLER is currently lost (main.ts identity
    *  sweep publishes per frame) — their flank HUD says so. Empty solo. */
   couchPadLost: string[] = [];
-  /** Saved world framing shares the projection used by pointer aim and all
-   *  world passes. Couch fit still widens this base; resolution scales it
-   *  separately. An absent preference preserves the classic 1.3 framing. */
+  /** Main's fixed 1.3 game scale; only capture/showcase stages override it. */
   private captureBaseZoom: number | null = null;
-  /** Capture/showcase framing; null restores the live saved camera preference. */
+  /** Capture/showcase framing; null restores the normal game scale. */
   setBaseZoom(zoom: number | null): void {
     if (zoom !== null && (!Number.isFinite(zoom) || zoom <= 0)) throw new Error('Capture zoom must be positive and finite.');
     this.captureBaseZoom = zoom;
   }
-  private get baseZoom(): number { return this.captureBaseZoom ?? CAMERA_CFG.zoom.base * cameraZoomOf(this.getSettings?.().cameraZoom); }
+  private get baseZoom(): number { return this.captureBaseZoom ?? 1.3; }
   private couchStretch = 1;
   /** THE SMOOTH SHELL's follow (camera.ts springFollow): a client shell's camera chases its
    *  hero on a critically damped spring. Null on solo and every host (main.ts sets it on a
