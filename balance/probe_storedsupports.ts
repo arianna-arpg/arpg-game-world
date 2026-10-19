@@ -9,7 +9,7 @@ import { bagSkillSupport, freeCellCount, skillGemPayloadOf } from '../src/engine
 import { NullInput, type MetaAction } from '../src/net/intent';
 import { serializeCharacter, rebuildSavedMeta } from '../src/meta/character';
 import { storedSupportsHtml } from '../src/ui/storedSupports';
-import { canonical } from '../src/worldmass/random';
+const canonical = JSON.stringify;
 
 const restore=seedGlobalRandom(4781);
 try {

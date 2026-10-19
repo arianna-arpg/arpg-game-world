@@ -21,7 +21,7 @@ try {
   p.useLock=0;p.casting=null;p.sheet.setSource('test',[mod('accuracy','override',100000),mod('critChance','override',0)]);
   foe.sheet.setSource('test',[mod('life','override',100000),mod('evasion','override',0),mod('blockChance','override',0),mod('armor','override',0)]);foe.fillResources();
   const stab=makeSkillInstance(SKILLS.backstab),aim={...foe.pos};
-  const damage=()=>{foe.life=foe.maxLife();foe.es=0;const before=foe.life;const r=seedGlobalRandom(1234);w.executeSkill(p,stab,aim);r();return before-foe.life;};
+  const damage=()=>{foe.life=foe.maxLife();foe.es=0;const before=foe.life;const random=Math.random;Math.random=()=>.5;try{w.executeSkill(p,stab,aim);}finally{Math.random=random;}return before-foe.life;};
   const rear=damage();foe.facing=angleTo(foe.pos,p.pos);const front=damage();
   assert.ok(front>0&&Math.abs(rear/front-SKILLS.backstab.backstabMult!)<1e-6,'immediate native Backstab receives its full rear damage multiplier');
  }

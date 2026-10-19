@@ -74,7 +74,7 @@ try{
   SKILL_INPUT_CFG.movement=movement;
   const w=makeSimWorld('warrior',902),p=w.player;w.actors=[p];
   // Keep the historical rooted reference: this probe measures intent order.
-  p.skills[0]=makeSkillInstance(mobileCleave?{...SKILLS.cleave,castMove:.35,castAim:'live'}:SKILLS.cleave);
+  p.skills[0]=makeSkillInstance(mobileCleave?{...SKILLS.cleave,castMove:.35}:SKILLS.cleave);
   const origin={...p.pos},casts:{id:string;frame:number}[]=[];
   let previous:unknown,committed:unknown,firstMove=-1;
   for(let frame=0;frame<150;frame++){
