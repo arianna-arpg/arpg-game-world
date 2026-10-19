@@ -9,7 +9,7 @@ app.setPath('userData', path.join(dir, 'dialogue-profile-' + process.pid));
 app.disableHardwareAcceleration(); app.commandLine.appendSwitch('disable-gpu');
 app.whenReady().then(async () => {
   const timeout = setTimeout(() => { log('TIMEOUT'); app.exit(1); }, 150000);
-  const server = await startGameServer({ root: path.resolve(__dirname, '../dist'), savesDir: path.join(dir, 'dialogue-saves-' + process.pid) });
+  const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'), savesDir: path.join(dir, 'dialogue-saves-' + process.pid) });
   const win = new BrowserWindow({ show: false, width: 1400, height: 1000,
     webPreferences: { offscreen: true, backgroundThrottling: false } });
   const js = async code => {
@@ -46,6 +46,10 @@ app.whenReady().then(async () => {
       window.qaPad = null;
       Object.defineProperty(navigator,'getGamepads',{value:()=>qaPad ? [qaPad] : []});
       __game.account().ledger.prologue_lived = 1; __game.devStartRun('warrior'); __game.ui.hideAll();
+      // This course isolates the authored reader protocol; the service course
+      // exercises the real quest topics, Shop and retained player pages.
+      __game.ui.conversation.workspace.sync = () => {};
+      __game.ui.conversation.workspace.reset();
       const w = __game.world(); w.loadZone('lastlight'); w.player.invulnerable = true;
       const keeper = w.actors.find(a=>a.defId==='townsfolk_innkeep'), patron=w.actors.find(a=>a.defId==='townsfolk_patron');
       if (!keeper || !patron) throw new Error('Missing inn company');
@@ -208,7 +212,7 @@ app.whenReady().then(async () => {
     assert.ok(box.rect.x >= 0 && box.rect.y >= 0 && box.rect.x+box.rect.w<=box.viewport.w+1 && box.rect.y+box.rect.h<=box.viewport.h+1);
     assert.equal(box.shown, box.full); await capture('compact');
     const suspended = await js(`(() => {const before=dialogueQA.box();__game.ui.toggleInventory();const hidden=dialogueQA.run(10);__game.ui.toggleInventory();const resumed=dialogueQA.run(2);return {before,hidden,resumed};})()`);
-    assert.equal(suspended.hidden.open, false, 'inventory suspends dialogue');
+    assert.equal(suspended.hidden.open, true, 'inventory accompanies dialogue');
     assert.equal(suspended.resumed.open, true); assert.equal(suspended.resumed.full, suspended.before.full);
     box = await js(`(() => {
       __game.ui.showEscapeMenu(); document.getElementById('esc-keys').click();

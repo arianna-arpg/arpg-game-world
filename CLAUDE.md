@@ -2626,11 +2626,12 @@ we verify changes.
   `data/dialogue.ts`) is its default reader: live actor portraits shared
   with ultimate cutaways, paged reveal/advance, explicit finish, walk-away
   dismissal, cooldown from completion, and queued functional updates.
-  Station folio leaves share `ui/serviceWorkspace.ts` for stable placement and
-  compact Services/Inventory tabs. Inventory keeps its own anchor; dialogue
-  never repositions panels. The canonical contract is `docs/ui/service-workspace.md`.
+  NPC folio leaves share `ui/serviceWorkspace.ts` for stable placement. Player
+  ribbons (including Character) use an independent group; overlap never merges
+  them. Brandt's Shop opens the existing vendor and becomes the return default.
+  The canonical contract is `docs/ui/service-workspace.md`.
   `UI.dialogueContext` owns coexistence, `ui/dialogueLayout.ts` the reader's
-  fixed band. Verify `dialogue-services-ui.cjs`.
+  NPC panel. Verify `dialogue-services-ui.cjs` and `inventory-pages-ui.cjs`.
   `DIALOGUE_CFG.presentation` retains the bubble comparison. Contract:
   `docs/ui/dialogue.md`; probe_speech rig L + `balance/dialogue-ui.cjs`.
   Authored state/quest rules, Mireille's optional road invitation, Brandt's

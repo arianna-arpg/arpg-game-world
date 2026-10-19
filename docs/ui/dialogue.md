@@ -1,10 +1,18 @@
 # Portrait dialogue
 
-Dwelling on a selected speaker now opens a framed reader above the action bar.
+Dwelling on a selected speaker opens that NPC's conversation panel.
 It shows the speaker's name, their animated in-game model, and paged text.
 This is a client presentation over the existing speech grammar and functional
 prompt reads. Optional responses dispatch registered actions through their
 owning systems; the reader does not award items or replace station/quest gates.
+
+`NpcConversationUI` lists all currently applicable topics for that speaker:
+quest progress, available work/callings, rewards, imbues and Mireille's flask
+guidance. Topics are deliberate choices; Back returns to the list. The existing
+engine commands validate every acceptance and reward against current state.
+Brandt offers Shop, opening his existing full vendor UI as another NPC tab.
+After using Shop, return visits open it directly; Conversation stays available.
+The shortcut is a settings preference keyed by character and NPC definition.
 
 ## Reading and controls
 
@@ -13,7 +21,8 @@ owning systems; the reader does not award items or replace station/quest gates.
 - Hover a reachable speaker to override purpose priority. Overlapping hits
   choose the nearest body center, then stable actor id. A passing hover cannot
   complete dwell; a completed cursor choice stays selected when the mouse moves
-  onto the reader. Point at another eligible speaker or leave range to switch.
+  onto the reader. An admitted conversation retains its reachable speaker;
+  close it or leave range before selecting another.
   Menus, HUD controls and controller aim do not nominate mouse targets.
 - Available ambient speakers wear faint rings. The selected ring brightens and
   fills from its actual speech dwell clock. Cooling speakers cannot steal cursor
@@ -45,9 +54,9 @@ owning systems; the reader does not award items or replace station/quest gates.
 - A changing functional line queues behind the current text. Only the latest
   pending state survives; it is reached through Continue, never substituted
   halfway through a page. Closing dismisses the pending text too.
-- Ordinary station services coexist with the reader, including summoned
-  crafting tabs and their selling inventory. A station opening or changing
-  tabs never interrupts its conversation or requires it to be finished first.
+- Conversation and ordinary station services share NPC tabs, including summoned
+  crafting tabs. Changing tabs retains the conversation, and never selects or
+  closes a player page. Topics remain available without finishing the greeting.
   A service with no eligible speech opens without an empty dialogue box.
 - Inventory and all its pages permit local dialogue admission before and after
   an NPC conversation begins, including when the NPC has no station panel.
@@ -59,7 +68,8 @@ owning systems; the reader does not award items or replace station/quest gates.
 
 The local hero owns the reader. Existing couch guests retain their seat-scoped
 caravan bubbles; they cannot borrow the local hero's lesson or reading controls.
-Nothing is saved or added to the network protocol.
+Reading state is not saved or added to the network protocol. Only the per-character
+Shop return preference persists in local settings.
 
 ## Shared components and configuration
 
@@ -101,10 +111,10 @@ compact layouts remain within the viewport and can scroll at high UI scales.
 The canonical placement and coexistence contract is
 [Services, Inventory and dialogue](service-workspace.md). `UI.dialogueContext`
 derives admission from the same enrolled folio leaves that own station lifecycle;
-`ServiceWorkspace` owns service placement and compact tabs. The reader never
-repositions Inventory or stations. `ui/dialogueLayout.ts` supplies one reading
-band with continuously reachable advance/close controls, independent of content
-or service visibility. Font size follows the user's scale.
+`ServiceWorkspace` owns NPC placement. The reader never repositions Inventory
+or its pages. `ui/dialogueLayout.ts` supplies the NPC panel's bounds with reachable
+advance/close controls. Player and NPC groups remain independent at every scale;
+small windows can overlap and use the existing movable layout or close controls.
 
 Keyboard advance does not steal native activation from focused service controls;
 controller A uses the service pointer to operate either surface, and Escape
@@ -128,9 +138,9 @@ rewards or scene-specific dialogue rules.
 - `npm run build`, then `npx electron balance/dialogue-ui.cjs`
 - `npx electron balance/speech-focus-ui.cjs` retains the original inn focus rig.
 - `npx electron balance/dialogue-services-ui.cjs` checks actual stocked-counter
-  dwell with summoned crafting tabs, purchases, independent dismissal, new
-  state admission, suspension, controller input, departure, and non-overlapping
-  readable layouts at desktop/compact/175% scale.
+  dwell, Shop and return visits, summoned crafting tabs, purchases, unchanged
+  player page selection and geometry, departure, Character and independent
+  groups at desktop/narrow/175% scale.
 
 The hidden client uses isolated saves and captures the actual DOM plus canvas.
 It checks dwell, priority, the live portrait, reveal/advance, paged content,

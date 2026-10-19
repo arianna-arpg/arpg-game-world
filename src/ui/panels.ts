@@ -11,6 +11,8 @@ import { STASH_DEFS } from '../data/stashes';
 import { renderWardrobe } from './wardrobe';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 import { ServiceWorkspace } from './serviceWorkspace';
+import type { DialogueUI } from './dialogue';
+import { DIALOGUE_CFG } from '../data/dialogue';
 import { supportCompatibilityHtml } from './supportCompatibility';
 import { swapReadinessText } from './swapReadiness';
 // ---------------------------------------------------------------------------
@@ -586,7 +588,7 @@ export class UI {
    *  moment — pad glyphs while it drives, keyboard keys when the mouse does. */
   getPadActive: (() => boolean) | null = null;
 
-  charSheetOpen = false;
+  get charSheetOpen(): boolean { return this.inventoryPages.isOpen('character'); }
   /** The Statistics tab open on the character sheet (persists across
    *  re-renders — a page stays where you left it). */
   private charTab = 'offense';
@@ -629,11 +631,7 @@ export class UI {
   private readonly inventoryPages = new InventoryPages({
     owner: () => this.panelSeat(this.inventory).id,
     isOpen: () => this.inventoryOpen,
-    open: owner => {
-      const opened = this.openInventory(owner);
-      if (opened) this.serviceWorkspace.select('inventory');
-      return opened;
-    },
+    open: owner => this.openInventory(owner),
     close: () => this.closeInventory(),
     assign: (el, owner) => this.panelSeatIds.set(el, owner),
     enroll: page => this.enrollInventoryPage(page),
@@ -642,11 +640,12 @@ export class UI {
       this.syncInventoryPages();
       if (this.inventoryOpen) this.refreshInventory();
       this.refreshTree();
+      this.refreshCharSheet();
       this.refreshSkillTree();
       this.folio.sync();
       this.folioStrip.update();
     },
-    selected: () => { this.serviceWorkspace.select('services'); this.folioStrip.update(); },
+    selected: () => this.folioStrip.update(),
     folio: () => this.folio,
   });
   /** THE CONTAINER FABRIC's face (ui/containerPane.ts): the bag column's
@@ -863,26 +862,12 @@ export class UI {
   private readonly folio = new FolioCore(() => performance.now() / 1000);
   private readonly folioStrip = new FolioStrip(this.folio);
   private readonly folioSurfaces = new Map<HTMLElement, { id: string; isOpen: () => boolean; kind: string }>();
+  private conversation: DialogueUI | null = null;
+  private conversationSpeakerId: number | null = null;
   private readonly serviceWorkspace = new ServiceWorkspace({
-    inventory: this.inventory,
-    inventoryOpen: () => this.inventoryOpen && this.panelSeat(this.inventory) === this.getWorld().localSeat,
-    inventoryOwned: () => this.panelSeat(this.inventory) === this.getWorld().localSeat,
     services: () => [...this.folioSurfaces].filter(([el, row]) => row.kind === 'station'
       && row.isOpen() && this.panelSeat(el) === this.getWorld().localSeat).map(([el]) => el),
-    front: el => {
-      const id = this.folioSurfaces.get(el)?.id;
-      return !!id && this.folio.bookFor(id)?.front === id;
-    },
-    title: el => this.folio.leaf(this.folioSurfaces.get(el)?.id ?? '')?.title() ?? 'Panel',
-    pages: () => this.inventoryPages.entries().map(page => page.el),
     hudTop: () => this.hudCluster?.()?.y,
-    frontService: () => {
-      const rows = [...this.folioSurfaces].filter(([el, row]) => row.kind === 'station'
-        && row.isOpen() && this.panelSeat(el) === this.getWorld().localSeat);
-      const row = rows.find(([el]) => this.folioDrawn(el)) ?? rows[0];
-      if (row) this.folio.front(row[1].id);
-    },
-    changed: () => { this.syncInventoryPages(); this.folioStrip.update(); },
   });
   /** True while the couch JOIN overlay is up (main.ts owns the claim scan). */
   couchJoinOpen = false;
@@ -1053,7 +1038,7 @@ export class UI {
 
     // Independent windows opt into header dragging; development pages
     // inherit Inventory's position through syncInventoryPages.
-    this.movableRoots = [this.charSheet, this.inventory, this.worldMap,
+    this.movableRoots = [this.inventory, this.worldMap,
       this.vendorMenu, this.salvageMenu, this.fontMenu, this.recallMenu, this.oracleMenu,
       this.bestiaryMenu, this.boroughMenu, this.bountyMenu, this.caravanMenu, this.sailMenu,
       this.holdMenu, this.mercMenu, this.vocationMenu, this.menuBar.root];
@@ -1068,7 +1053,6 @@ export class UI {
     // their OWNER — the couch guest's ✕ closes the guest's bag: the toggle
     // with the owner's seat id IS the keyed close, byte for byte.
     const panelClosers: Array<[HTMLElement, () => void]> = [
-      [this.charSheet, () => this.toggleCharSheet(this.panelSeatIds.get(this.charSheet))],
       [this.inventory, () => this.closeInventory()],
       [this.worldMap, () => this.toggleMap()],
       [this.vendorMenu, () => this.closeVendor()],
@@ -1223,7 +1207,7 @@ export class UI {
     });
     this.folio.enroll(this.folioLeaf(page.id, page.el, page.title,
       () => this.inventoryPages.isOpen(page.id), () => this.inventoryPages.close(page.id), {
-        kind: 'page', selectionGroup: 'inventory',
+        kind: 'page', group: 'player', selectionGroup: 'inventory', bay: () => 'build',
         refresh: page.refresh,
       }));
   }
@@ -1239,13 +1223,11 @@ export class UI {
     this.inventory.querySelector('[data-passiveflap]')?.setAttribute('aria-expanded', String(this.treeOpen));
     if (!this.inventoryOpen) return;
     const inv = this.inventory.getBoundingClientRect();
-    if (!inv.width) return; // compact service tab temporarily hides the bag and its pages
+    if (!inv.width) return;
     const scale = uiScaleNow();
     // Reserve the drawn HUD's band, including its resource orbs. Long pages
     // scroll within this shared limit instead of growing behind HUD controls.
-    const pageBottom = Math.min(window.innerHeight, this.hudCluster?.()?.y ?? window.innerHeight,
-      this.panelSeat(this.inventory) === this.getWorld().localSeat
-        ? this.serviceWorkspace.contentBottom ?? window.innerHeight : window.innerHeight);
+    const pageBottom = Math.min(window.innerHeight, this.hudCluster?.()?.y ?? window.innerHeight);
     for (const { el, width } of this.inventoryPages.entries()) {
       // Older saved independent page seats no longer participate in layout.
       if (panelMoved(el)) panelMoveReset(el);
@@ -1272,7 +1254,8 @@ export class UI {
     const overhang = (): boolean => {
       const pane = this.inventory.getBoundingClientRect();
       const r = rail.getBoundingClientRect();
-      return pane.height > 0 && r.height > 0 && r.bottom > pane.bottom + 0.5;
+      return pane.height > 0 && r.height > 0
+        && (r.bottom > pane.bottom + 0.5 || rail.scrollHeight > rail.clientHeight + 1);
     };
     if (overhang()) rail.classList.add('build-rail-tight');
     if (overhang()) rail.classList.add('build-rail-tighter');
@@ -1291,6 +1274,7 @@ export class UI {
     this.folioSurfaces.set(el, { id, isOpen, kind: extra.kind ?? 'page' });
     return {
       id, title, isOpen, close,
+      group: extra.kind === 'station' ? 'npc' : extra.kind === 'modal' ? 'modal' : 'player',
       present: (front) => {
         this.serviceWorkspace.sync();
         if (el.classList.contains('inventory-page')) {
@@ -1350,9 +1334,8 @@ export class UI {
    *  its page on); `range` is the seat's distance to the station's town
    *  site where one stands (THE NEARER LAW — a same-arrival tie fronts the
    *  station the hero actually walked to); `kind` is the leaf's rung on THE
-   *  PRIMACY LAW's ladder — every dwell dialog is a STATION (the world's
-   *  offer fronts over the always-available player pages, so the bag's
-   *  Skills drawer stays one tab away when the counter opens), the pouch
+   *  PRIMACY LAW's ladder within its own group. Stations never bind to
+   *  player pages, including when their measured rectangles overlap. The pouch
    *  picker and the calling are MODALS (they arrive in FRONT and no offer
    *  shoves them aside). The crafting members carry `reach` (THE REACH LAW,
    *  World.stationReach: at the station OR at a counter that summons it)
@@ -1425,6 +1408,10 @@ export class UI {
     this.inventoryPages.register({ id: 'skills', el: this.buildPanel, title: () => 'Skills',
       width: BUILD_PANEL_CFG.skillsWidth, leave: () => this.closeMemorySellPrompt(),
       refresh: () => this.refreshInventory() });
+    this.inventoryPages.register({ id: 'character', el: this.charSheet, title: () => 'Character',
+      width: BUILD_PANEL_CFG.characterWidth,
+      available: () => !w().panelSealed('character'),
+      refresh: () => this.refreshCharSheet() });
     this.inventoryPages.register({ id: 'passives', el: this.passiveTree, title: () => 'Passives',
       width: BUILD_PANEL_CFG.passivesWidth,
       available: () => !w().panelSealed('passives'),
@@ -1494,7 +1481,6 @@ export class UI {
     const service = (id: string, show: (seatId?: string) => void): MenuVerb => ({
       open: seatId => {
         show(seatId);
-        this.serviceWorkspace.select('services');
         this.folio.front(id); this.folioStrip.update();
       },
       isOpen: () => this.folio.leaf(id)?.isOpen() ?? false,
@@ -1555,6 +1541,57 @@ export class UI {
   /** Dialogue uses the menu's registry and live gates, never a second station list. */
   dialogueMenuRefusal(entryId: string): string | null { return this.menuBar.refusal(entryId); }
   activateDialogueMenu(entryId: string): boolean { return this.menuBar.pick(entryId); }
+
+  /** Conversation and services share NPC tabs; player pages have their own book. */
+  enrollConversation(dialogue: DialogueUI): void {
+    this.conversation = dialogue;
+    const speaker = () => dialogue.session.reading?.offer.speakerId ?? null;
+    this.folio.enroll(this.folioLeaf('conversation', dialogue.root, () => 'Conversation',
+      () => !!dialogue.session.reading && !dialogue.root.hidden, () => { dialogue.close(); }, {
+        kind: 'station', group: 'npc',
+        engaged: () => speaker() !== null && this.getWorld().npcDialogueReachable(speaker()!),
+      }));
+    this.movableRoots.push(dialogue.root);
+    attachPanelMove(dialogue.root, { onMove: () => this.folioStrip.update() });
+  }
+
+  syncConversation(): void {
+    const id = this.conversation?.session.reading?.offer.speakerId ?? null;
+    if (id === this.conversationSpeakerId) return;
+    this.conversationSpeakerId = id;
+    if (id === null || !this.conversation) return;
+    this.ownPanel(this.conversation.root, this.getWorld().localSeat);
+    this.folio.adopt('conversation', this.vendorOpen ? 'behind' : 'front');
+    if (this.conversationShopAvailable(id) && this.shopVisited(id)) {
+      if (!this.vendorOpen) this.showVendor();
+      this.folio.front('vendor');
+    }
+    this.folioStrip.update();
+  }
+
+  conversationShopAvailable(speakerId: number): boolean {
+    const world = this.getWorld(), actor = world.actors.find(a => a.id === speakerId && !a.dead);
+    return !!actor?.defId && MONSTERS[actor.defId]?.npcRole === 'vendor'
+      && world.npcDialogueReachable(speakerId) && this.dialogueMenuRefusal('vendor') === null;
+  }
+
+  private shopVisitKey(speakerId: number): string {
+    return JSON.stringify([this.getWorld().meta.charId, this.getWorld().actors.find(a => a.id === speakerId)?.defId]);
+  }
+  private shopVisited(speakerId: number): boolean {
+    return this.getSettings().npcShopVisits.includes(this.shopVisitKey(speakerId));
+  }
+  openConversationShop(speakerId: number): void {
+    if (!this.conversationShopAvailable(speakerId)) return;
+    this.activateDialogueMenu('vendor');
+  }
+  openVendorOnDwell(seatId?: string): void {
+    const world = this.getWorld(), seat = this.couchSeatFor(seatId);
+    const speaker = world.actors.find(a => !!a.defId && MONSTERS[a.defId]?.npcRole === 'vendor'
+      && world.npcDialogueReachable(a.id));
+    if (DIALOGUE_CFG.presentation === 'dialogue' && seat === world.localSeat && speaker && !this.shopVisited(speaker.id)) return;
+    if (!this.vendorOpen) this.showVendor(seatId);
+  }
   /** Esc's first step: fold the tray. True = the press was consumed. */
   menuTrayClose(): boolean {
     if (!this.menuBar.isTrayOpen()) return false;
@@ -2420,7 +2457,7 @@ export class UI {
       && el.getBoundingClientRect().width > 0);
     const blocked = this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen || this.storyCardOpen()
-      || !this.startMenu.classList.contains('hidden') || this.charSheetOpen || this.mapOpen
+      || !this.startMenu.classList.contains('hidden') || this.mapOpen
       || drawn.some(([el, row]) => this.panelSeat(el).id !== local
         || row.kind !== 'station' && !el.classList.contains('inventory-page'))
       || (this.inventoryOpen && this.panelSeat(this.inventory).id !== local);
@@ -3618,22 +3655,10 @@ export class UI {
 
   // --------------------------------------------------------- character sheet
 
-  toggleCharSheet(seatId?: string): void {
+  toggleCharSheet(seatId?: string, mode: InventoryPageRequest = 'toggle'): void {
     const seat = this.couchSeatFor(seatId);
     if (!this.charSheetOpen && this.pageSealed('character', seat)) return;
-    // Open for ANOTHER local seat → take ownership (re-dock + re-render) —
-    // the couch's one-instance contention rule, visible and predictable.
-    if (this.charSheetOpen && this.panelSeat(this.charSheet) !== seat) {
-      this.ownPanel(this.charSheet, seat);
-      this.refreshCharSheet();
-      return;
-    }
-    this.charSheetOpen = !this.charSheetOpen;
-    this.charSheet.classList.toggle('hidden', !this.charSheetOpen);
-    if (this.charSheetOpen) {
-      this.ownPanel(this.charSheet, seat);
-      this.refreshCharSheet();
-    } else hideTooltip();
+    this.inventoryPages.request('character', seat.id, mode);
   }
 
   refreshCharSheet(): void {
@@ -3794,9 +3819,8 @@ export class UI {
 
   toggleInventory(seatId?: string): void {
     const seat = this.couchSeatFor(seatId);
-    if (this.inventoryOpen && this.panelSeat(this.inventory) === seat && this.serviceWorkspace.revealInventory()) return;
     if (this.inventoryOpen && this.panelSeat(this.inventory) === seat) this.closeInventory();
-    else if (this.openInventory(seat.id)) this.serviceWorkspace.select('inventory');
+    else this.openInventory(seat.id);
   }
 
   /** Every page request and the inventory toggle enter through this gate. */
@@ -3840,7 +3864,6 @@ export class UI {
       out.push({ x: r.left, y: r.top, w: r.width, h: r.height });
     };
     { const tray = this.menuBar.trayRect(); if (tray) out.push(tray); } // THE MENU BAR's tray while up (ui/menubar.ts)
-    add(this.serviceWorkspace.tabs);
     for (const el of [this.charSheet, this.inventory, ...this.inventoryPages.entries().map(p => p.el),
       this.worldMap, this.vendorMenu, this.salvageMenu, this.fontMenu,
       this.recallMenu, this.oracleMenu, this.bestiaryMenu, this.boroughMenu,
@@ -4509,6 +4532,9 @@ export class UI {
           <span class="build-ribbon-label">✧ PASSIVES</span>
           ${m.passivePoints > 0 ? `<span>${m.passivePoints}</span>` : ''}
         </button>
+        <button data-characterflap class="build-ribbon" aria-expanded="${this.charSheetOpen}" aria-controls="char-sheet" title="Open your character sheet">
+          <span class="build-ribbon-label">♙ CHARACTER</span>
+        </button>
         ${this.containerPane.ribbonsHtml()}
       </div>`;
     const drawer = this.skillsOpen ? `
@@ -4637,6 +4663,7 @@ export class UI {
     // The Build drawer (its handle hangs on the panel edge):
     // toggle + — when open — the learned list's full management wiring.
     this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => this.toggleBuildPanel(this.panelSeat(this.inventory).id, 'toggle-page'));
+    this.inventory.querySelector<HTMLButtonElement>('[data-characterflap]')?.addEventListener('click', () => this.toggleCharSheet(this.panelSeat(this.inventory).id, 'toggle-page'));
     this.inventory.querySelector<HTMLButtonElement>('[data-passiveflap]')?.addEventListener('click', () => {
       this.toggleTree(this.panelSeat(this.inventory).id, 'toggle-page');
       this.refreshInventory();
@@ -5180,7 +5207,7 @@ export class UI {
       el.addEventListener('click', () => {
         const owner=this.panelSeat(this.recallMenu), uid=Number(el.dataset.memFind);
         if (!owner.meta.items.some(i=>i.uid===uid && i.gem) || !this.openInventory(owner.id)) return;
-        this.closeRecall(); this.serviceWorkspace.select('inventory');
+        this.closeRecall();
         this.memFlash.set(uid,Date.now()+1700); this.refreshInventory();
       });
     });
@@ -6272,6 +6299,14 @@ export class UI {
 
   showVendor(seatId?: string): void {
     this.ownPanel(this.vendorMenu, this.couchSeatFor(seatId));
+    const world = this.getWorld();
+    if (this.panelSeat(this.vendorMenu) === world.localSeat) {
+      const speaker = world.actors.find(a => this.conversationShopAvailable(a.id));
+      if (speaker && !this.shopVisited(speaker.id)) {
+        this.getSettings().npcShopVisits = [...this.getSettings().npcShopVisits, this.shopVisitKey(speaker.id)];
+        this.saveSettings();
+      }
+    }
     this.vendorOpen = true;
     // THE BREAKER'S EYE, abroad (the salvage baseline): arriving at a
     // counter whose scrap gate is open opens the bag beside it — the
@@ -11499,7 +11534,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
 
   hideAll(): void {
     this.menuBar.closeTray();
-    this.charSheetOpen = false;
+    this.conversation?.reset(); this.conversationSpeakerId = null;
     this.closeInventory();
     dndCancel(); // also clear gestures on panels outside inventory
     this.salvageOpen = false;

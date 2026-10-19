@@ -197,9 +197,9 @@
        foot sheds the container COUNT badge first (her word), the Skills
        wallet chips second (the drawer's own header repeats them). */
     .build-ribbons { position:absolute; top:52px; right:100%; width:var(--build-rail);
-      display:flex; flex-direction:column; gap:3px; }
+      display:flex; flex-direction:column; gap:3px; max-height:calc(100% - 52px); overflow-y:auto; }
     .build-ribbons-right { right:auto; left:100%; }
-    .build-ribbon { width:100%; padding:8px 3px; background:#241d2e; color:#c8a8ff;
+    .build-ribbon { width:100%; flex-shrink:0; padding:8px 3px; background:#241d2e; color:#c8a8ff;
       border:1px solid #4a3a5a; border-radius:6px 0 0 6px; cursor:var(--cursor-point, pointer);
       display:flex; flex-direction:column; align-items:center; gap:6px; font-size:10px; }
     .build-ribbons-right .build-ribbon { border-radius:0 6px 6px 0; }
@@ -215,7 +215,7 @@
     #skills-panel > :not(.build-scroll) { flex-shrink:0; }
     .build-scroll { flex:1 1 auto; min-height:0; overflow-y:auto; font-size:12px; padding-right:4px; }
     /* Inventory supplies every development page's seat and available space. */
-    .panel.inventory-page { left:var(--build-left); right:auto; top:var(--build-top);
+    .panel.inventory-page, #char-sheet.inventory-page { left:var(--build-left); right:auto; top:var(--build-top);
       width:var(--build-width); max-height:var(--build-height); transform:none; overflow-y:auto; }
     .container-panel { display:flex; flex-direction:column; padding:10px 12px; }
     .rack-unlearn { position:absolute; right:0; top:0; width:var(--unlearn-size); height:var(--unlearn-size);

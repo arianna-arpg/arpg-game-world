@@ -2,6 +2,7 @@
 export const BUILD_PANEL_CFG = {
   railWidth: 42,
   skillsWidth: 360,
+  characterWidth: 320,
   passivesWidth: 760,
   /** THE CONTAINER DRAWERS (ui/containerPane.ts): a side board's page —
    *  the 5×5 case plus its return strip and hints. */

@@ -1,6 +1,10 @@
 # Dialogue redesign · 19 October 2026
 
-Status: revised design separates NPC panels from the existing player UI.
+Status: implementation authorized on 19 October 2026. NPC panels are now a
+separate Folio group, Brandt's Shop opens his existing vendor, and Character is
+an Inventory ribbon retaining the existing sheet contents. The current checks
+and contract are in `docs/ui/service-workspace.md`. The notes below retain the
+design history; historical verification is not the current acceptance gate.
 The earlier shared-book correction on `codex/dialogue-panel-parity`, based on
 main `645fe6ca`, is verified only against its previous contract and must not be
 integrated unchanged. The canonical seamless checkout was inspected at `ac9dedab`.
@@ -128,7 +132,8 @@ Brandt, Mireille, controller flask selection and a quest return, then failed
 on a missing Inventory button. It is a controlled fixture, not a passing full
 playthrough or evidence that the reported opening-order cases work.
 
-No dialogue-session gameplay changes are published or integrated yet. Combat, passive content,
+Delivery uses a normal merge through main into the canonical playable world;
+remote publication is not part of this task. Combat, passive content,
 support handling and the main/seamless decision register belong to the other
 active session. Integration must preserve its edits and use normal main to
 seamless ancestry.
