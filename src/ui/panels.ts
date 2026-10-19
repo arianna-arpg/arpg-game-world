@@ -944,8 +944,6 @@ export class UI {
   onBeginRun: (() => void) | null = null;
   /** The shell names the world a new run will actually enter. */
   newRunDescription = '';
-  tutorialEntry = false;
-  onContinueJourney: (() => void) | null = null;
   /** THE FRONT DOOR (W7, net/shardDoor.ts): the world the start menu leads into (the
    *  tab's binding, or the world that served this page); null on a plain page. The menu's
    *  primary row becomes "Enter the world" (onEnterWorld), the solo rows one row down. */
@@ -11282,14 +11280,12 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
       <div class="esc-btns">
         ${door && !homeHere ? `<button id="sm-door"${primary} title="${esc(worldNameOf(door))}">Enter the world</button>` : ''}
-        ${this.tutorialEntry ? `<button id="sm-start" title="Play the tutorial with a fresh local account; saved characters are kept">Begin</button>
-          <button id="sm-continue" ${sceneDue(acc, 'prologue') ? 'disabled title="Complete the tutorial first"' : 'title="Enter Mu and choose your next life"'}>Continue</button>`
-          : homeHere ? '' : `<button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>`}
-        <button id="${this.tutorialEntry ? 'sm-resume' : 'sm-continue'}"${homeHere ? primary : ''} ${this.continuePending ? 'disabled' : ''} ${home
+        ${homeHere ? '' : `<button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>`}
+        <button id="sm-continue"${homeHere ? primary : ''} ${this.continuePending ? 'disabled' : ''} ${home
           ? `title="${esc(contWho)} lives in ${esc(worldNameOf(home))}, and logs back in where it left"`
           : canContinue ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${home
-          ? `Return to ${esc(worldNameOf(home))}` : canContinue ? this.tutorialEntry ? `Resume ${esc(contWho)}` : 'Continue Run' : this.tutorialEntry ? 'No saved character' : 'No Run to Continue'}</button>
-        ${homeHere && !this.tutorialEntry ? `<button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>` : ''}
+          ? `Return to ${esc(worldNameOf(home))}` : canContinue ? 'Continue Run' : 'No Run to Continue'}</button>
+        ${homeHere ? `<button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>` : ''}
         ${immortalsBtn}
         ${isVaultAvailable(acc) ? `<button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
           ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>` : ''}
@@ -11300,8 +11296,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>`;
     document.getElementById('sm-start')!.addEventListener('click', () => {
       this.startMenu.classList.add('hidden');
-      // The shell owns Begin: continuous play uses a fresh local tutorial.
-      // Legacy/co-op callers without a shell callback retain their class picker.
+      // The shell uses the same account gate as the label: tutorial once,
+      // then Mu for each new life. Co-op callers retain their class picker.
       if (this.onBeginRun) { this.onBeginRun(); return; }
       // The way back is threaded in: class select reached from here can
       // always return (glyph or Back) instead of soft-locking into a run.
@@ -11314,11 +11310,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       b.disabled = true; b.textContent = 'Entering the world…';
       this.onEnterWorld(door);
     });
-    if (this.tutorialEntry) document.getElementById('sm-continue')!.addEventListener('click', () => {
-      if (sceneDue(acc, 'prologue')) return;
-      this.startMenu.classList.add('hidden'); this.onContinueJourney?.();
-    });
-    document.getElementById(this.tutorialEntry ? 'sm-resume' : 'sm-continue')!.addEventListener('click', () => {
+    document.getElementById('sm-continue')!.addEventListener('click', () => {
       if (!this.continueSave || this.continuePending) return;
       h.onContinue();
     });

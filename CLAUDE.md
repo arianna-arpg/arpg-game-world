@@ -8,6 +8,8 @@ Geography and physical places replace the connected-zone surface. Walking, comba
 
 The current playable route is `src/main.ts` -> `World.startWorldMass` -> `WorldMassRuntime`. The default build selects it; `?retained` explicitly selects the retained campaign for inspection. The retained-area ownership migration is substantial but still uses the campaign graph. Do not present its zone travel as seamless exploration or silently route the playable build back into it. The continuous runtime is still an interim adapter; full retained-content integration and worker-scale hosting are unfinished.
 
+Preserve main's entry loop: Begin only while the account's tutorial is due; the tutorial hands directly into Mu and stamps the existing completion ledger. Afterwards New Run goes to Mu, whose physical vessel selection starts the seamless world. Continue Run resumes the saved life. Do not add a permanent Begin/replay lane or return to the menu between tutorial completion and Mu.
+
 ## Play and verify
 
 - `Play World.cmd` / `npm run play`: build as needed and open the seamless desktop playtest.
@@ -15,7 +17,7 @@ The current playable route is `src/main.ts` -> `World.startWorldMass` -> `WorldM
 - `npm run dev`: browser development, default continuous world.
 - `npm run check`: all four TypeScript projects, including the balance tools.
 - `npm run probe`: eight current behavioral courses: terrain, combat continuity, progression, bounties, interiors, saves and hosted entry.
-- `npm run build` then `npm run smoke:world`: real Begin tutorial, Continue into Mu, physical vessel selection, walking/combat across pages, tutorial replay and disk Resume in an isolated client. `WORLD_GPU=1` enables hardware rendering for local performance measurement. Screenshots/report: `balance/reports/seamless-playthrough/`.
+- `npm run build` then `npm run smoke:world`: real Begin tutorial directly into Mu, physical vessel selection, walking/combat across pages, completed-account New Run directly into Mu and disk Continue Run in an isolated client. `WORLD_GPU=1` enables hardware rendering for local performance measurement. Screenshots/report: `balance/reports/seamless-playthrough/`.
 - `npm run smoke:host`: start the continuous host and check its served client and status.
 - `npm run sim -- run --suite smoke`: shared combat simulation; required for data changes.
 - `npm run genqa`: generation checks; required for generation changes.

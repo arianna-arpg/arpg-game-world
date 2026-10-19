@@ -1,4 +1,4 @@
-// Player-facing acceptance: local tutorial, physical Mu vessels and saved resume.
+// Player-facing acceptance: one account tutorial, direct Mu handoff and saved resume.
 // No debug start, no replacement generator and no predecessor source snapshots.
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
@@ -46,6 +46,7 @@ app.whenReady().then(async () => {
   const timer = setTimeout(() => { console.error('Seamless playthrough timed out'); app.exit(1); }, 360000);
   try {
     await boot();
+    assert.equal(await run(() => document.getElementById('sm-start').textContent), 'Begin');
     await run(() => document.getElementById('sm-start').click());
     for(let i=0;i<300;i++){
       if(await run(()=>!__game.loading.active && __game.world().scene?.def.id==='prologue'))break;
@@ -54,7 +55,7 @@ app.whenReady().then(async () => {
     const tutorial=await run(async()=>{
       const w=__game.world(), stages=new Set();let presses=0;
       if(w.scene?.def.id!=='prologue'||w.massRuntime)throw Error('Begin did not start the local tutorial');
-      if(w.account===__game.account()||w.account.roster.length||w.account.lifetimeCredits)throw Error('Tutorial inherited the real account');
+      if(w.account!==__game.account()||w.account.roster.length||w.account.lifetimeCredits)throw Error('Tutorial did not use the new account');
       __game.devInput(()=>{
         const target=w.actors.filter(a=>a.team==='enemy'&&!a.dead).sort((a,b)=>Math.hypot(a.pos.x-w.player.pos.x,a.pos.y-w.player.pos.y)-Math.hypot(b.pos.x-w.player.pos.x,b.pos.y-w.player.pos.y))[0];
         const kind=w.scene?.def.stages[w.scene.stageIx].kind, goal=target?.pos??{x:w.player.pos.x+100,y:w.player.pos.y};
@@ -69,23 +70,20 @@ app.whenReady().then(async () => {
           if(w.scene)stages.add(w.scene.def.stages[w.scene.stageIx].kind);
           __game.step(1,40);
           if(__game.crash().fatal)throw Error(JSON.stringify(__game.crash().fatal));
-          if(!document.getElementById('start-menu').classList.contains('hidden')&&__game.account().ledger.prologue_lived)break;
+          if(w.zone.id==='scene_mu'&&__game.account().ledger.prologue_lived){stages.add('mu');break;}
           if(i%8===0)await new Promise(r=>setTimeout(r,0));
         }
       }finally{__game.devInput(null);}
       return {stages:[...stages],complete:!!__game.account().ledger.prologue_lived,roster:__game.account().roster.length,
+        directMu:__game.world()===w&&w.zone.id==='scene_mu'&&document.getElementById('start-menu').classList.contains('hidden'),
         scene:w.scene&&{stage:w.scene.stageIx,goal:w.scene.state.goalIx,casts:w.scene.casts,prompt:w.scene.prompt},time:w.time};
     });
-    record('Begin completes a fresh local tutorial',tutorial);assert(tutorial.complete);assert.equal(tutorial.roster,0);await shot('tutorial-complete');
-    await run(()=>document.getElementById('sm-continue').click());
-    for(let i=0;i<300;i++){
-      if(await run(()=>!__game.loading.active && __game.world().scene?.def.id==='mu'))break;
-      await pause(30);
-    }
+    record('Begin completes the account tutorial directly into Mu',tutorial);
+    assert(tutorial.complete);assert(tutorial.directMu);assert.equal(tutorial.roster,0);await shot('tutorial-complete');
     const chosen=await run(async()=>{
       const w=__game.world();__game.step(2,40);
       const apps=w.scene?.state.apps??[],app=apps.find(a=>a.rank==='awake'&&a.classId==='warrior')??apps.find(a=>a.rank==='awake');
-      if(!app)throw Error('Continue did not reach the in-world Mu vessels');
+      if(!app)throw Error('The tutorial did not reach the in-world Mu vessels');
       const body=w.actors.find(a=>a.id===app.id);
       __game.devInput(()=>{const dx=body.pos.x-w.player.pos.x,dy=body.pos.y-w.player.pos.y,d=Math.hypot(dx,dy);return {dx:d>body.radius+25?dx/d:0,dy:d>body.radius+25?dy/d:0,aim:body.pos,held:[],edge:[]};});
       try{for(let i=0;i<500&&!document.getElementById('mu-wake');i++){__game.step(1,40);if(i%8===0)await new Promise(r=>setTimeout(r,0));}}finally{__game.devInput(null);}
@@ -208,33 +206,38 @@ app.whenReady().then(async () => {
       return { charId: w.meta.charId, seed: w.massRuntime.generator.run.seed, pos: { ...w.player.pos }, zone: w.zone.id };
     });
     await boot();
+    const menu=await run(()=>({start:document.getElementById('sm-start').textContent,
+      complete:!!__game.account().ledger.prologue_lived,
+      replayButton:[...document.querySelectorAll('#start-menu button')].some(b=>b.textContent==='Begin')}));
+    assert(menu.complete);assert.equal(menu.start,'New Run');assert.equal(menu.replayButton,false);
+    record('Completed account has New Run instead of Begin after restart',menu);
     await run(()=>document.getElementById('sm-start').click());
     for(let i=0;i<300;i++){
-      if(await run(()=>!__game.loading.active && __game.world().scene?.def.id==='prologue'))break;
+      if(await run(()=>!__game.loading.active && __game.world().scene?.def.id==='mu'))break;
       await pause(30);
     }
-    const replay=await run(()=>{
+    const veteran=await run(()=>{
       const w=__game.world();
-      if(w.scene?.def.id!=='prologue'||w.account===__game.account()||w.account.ledger.prologue_lived||w.meta.charId)
-        throw Error('Begin replay did not create a fresh provisional tutorial');
+      if(w.scene?.def.id!=='mu'||w.account!==__game.account()||!w.account.ledger.prologue_lived||w.meta.charId)
+        throw Error('New Run did not enter Mu on the completed account');
       window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true}));
       __game.step(1,20);
       window.dispatchEvent(new KeyboardEvent('keyup',{key:'Escape',code:'Escape',bubbles:true}));
-      const leave=document.getElementById('esc-end');if(!leave)throw Error('Tutorial has no Main Menu exit');
+      const leave=document.getElementById('esc-end');if(!leave)throw Error('Mu has no Main Menu exit');
       leave.click();__game.step(2,20);
-      return {fresh:true,complete:!!__game.account().ledger.prologue_lived};
+      return {scene:w.scene?.def.id,complete:!!__game.account().ledger.prologue_lived};
     });
-    assert(replay.complete);record('Begin replay leaves the saved life intact',replay);
+    assert(veteran.complete);record('New Run enters Mu without repeating the tutorial',veteran);
     await boot();
     await run(async () => {
-      for (let i = 0; i < 100 && !document.querySelector('#sm-resume:not([disabled])'); i++) await new Promise(r => setTimeout(r, 40));
-      const button = document.querySelector('#sm-resume:not([disabled])');
+      for (let i = 0; i < 100 && !document.querySelector('#sm-continue:not([disabled])'); i++) await new Promise(r => setTimeout(r, 40));
+      const button = document.querySelector('#sm-continue:not([disabled])');
       if (!button) throw Error('No Continue button after saving'); button.click();
     });
     await ready();
     const resumed = await run(() => { const w = __game.world(); return { charId: w.meta.charId,
       seed: w.massRuntime.generator.run.seed, pos: { ...w.player.pos }, zone: w.zone.id }; });
-    assert.deepEqual(resumed, saved); record('Disk Resume after tutorial replay', resumed); await shot('continued');
+    assert.deepEqual(resumed, saved); record('Continue Run preserves the saved life after leaving Mu', resumed); await shot('continued');
     assert.deepEqual(report.errors, []); report.status = 'passed';
   } catch (error) {
     try { report.crash = await run(() => __game.crash()); } catch {}
