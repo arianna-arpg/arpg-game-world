@@ -1,7 +1,9 @@
 # Dialogue redesign · 19 October 2026
 
-Status: panel parity correction verified on `codex/dialogue-panel-parity`, based on
-main `645fe6ca`. The canonical seamless checkout was inspected at `ac9dedab`.
+Status: revised design separates NPC panels from the existing player UI.
+The earlier shared-book correction on `codex/dialogue-panel-parity`, based on
+main `645fe6ca`, is verified only against its previous contract and must not be
+integrated unchanged. The canonical seamless checkout was inspected at `ac9dedab`.
 P08/P09 remain unapproved for wholesale promotion. Nothing here changes the
 once-per-account tutorial or physical class selection in Mu.
 
@@ -10,7 +12,10 @@ once-per-account tutorial or physical class selection in Mu.
 The player reports overlapping vendor and Skills tabs, different results when
 arriving with remembered pages versus an already open bag, inventory resizing
 at vendors, and Mireille failing to speak when Inventory is already open.
-They require one consistent panel rule that works at small resolutions.
+They require one consistent panel rule. The latest direction permits giving up
+automatic fitting at very small resolutions to preserve the existing player UI
+and full NPC services. A supported minimum viewport at the chosen UI scale is
+still to be measured; no arbitrary numerical cutoff has been accepted.
 The latest clarification supersedes the earlier brief-greeting proposal:
 ordinary encounters also open the conversation panel. This is the only surface
 for dialogue; there are no overhead greeting lines or separate Talk button.
@@ -21,7 +26,13 @@ tooltips, selling, holds and other controls. The conversation panel offers Shop
 as an action that opens that panel; it must not recreate shopping inside the
 conversation reader. The previous mockup's simplified shop is rejected.
 
-## Reproduced baseline failures and replacement rule
+The current proposed structure has two independent panel groups: NPC panels
+(conversation and the NPC's services) and player panels (the exact current
+Inventory, Skills, Passives and Reliquary setup). NPC arrival must not bind to,
+replace or resize the player's selected page. The groups coordinate placement,
+but never merge because their rectangles happen to overlap.
+
+## Reproduced baseline failures and revised rule
 
 - Main's dialogue admission rejects an open bag unless a station panel is open.
   Seamless also permits an already established conversation, so arriving with
@@ -33,19 +44,26 @@ conversation reader. The previous mockup's simplified shop is rejected.
   inventory visit uses a different height limit. The bigger seamless activity
   panel adds another height calculation.
 
-Replacement contract: one selected secondary panel for each player, with
-services and all Inventory pages sharing that selection. An arriving service
-takes priority over remembered pages; explicit page selection still works.
-Inventory remains its companion where space permits. Compact layouts expose
-one usable surface at a time through visible tabs. Opening order must not
-change the result. A local Inventory page cannot prevent NPC speech from
-starting; pause and genuine modal decisions still suspend it.
+Revised contract for review: NPC conversation and services share an NPC panel
+group, with the current player UI remaining a separate group. Both may remain
+open. NPC panels should occupy a dedicated side with enough space for the full
+player setup at supported viewport/scale combinations. Opening order must not
+change membership, player selection or inventory size. A local Inventory page
+cannot prevent NPC speech from starting; pause and genuine modal decisions
+still suspend it.
 
-The first implementation fixes this lifecycle/layout foundation. All local
-Inventory pages and station tabs join the same book without relying on initial
-overlap. The bag uses the same bounds before, during and after a station visit.
-Pages still follow a manually moved bag. The existing large reading strip
-remains in this first correction (`b979655f`).
+Preserve readable controls and existing player layout before attempting to fit
+both groups on an undersized screen. The proposed fallback is manual moving or
+closing through existing controls, not automatic cross-group tab merging,
+shrinking, or forced closure of Skills. Initial placement should avoid occupied
+space where possible; essential close/navigation controls still need to remain
+reachable. Do not promise simultaneous non-overlap at every resolution/scale.
+
+The first correction (`b979655f`) instead puts Inventory pages and station tabs
+into one book and constrains the bag to the reader's band. Those grouping and
+sizing choices are superseded. Its opening-order reproductions and local speech
+admission findings remain useful; its passing checks do not validate this new
+design. The conversation reader itself has not been redesigned in gameplay.
 
 ## Reviewable interaction
 
@@ -59,8 +77,8 @@ record rather than a gameplay implementation:
   chooses Shop once. Later dwelling opens the existing vendor panel directly;
   shopping does not repeatedly require a greeting or response. Remembering
   this per character is the proposed default, not a global account bypass.
-- Conversation remains a peer tab while trading, with a marker for available
-  quest options. Switching to it preserves vendor state; returning to Shop
+- Conversation remains a peer NPC tab while trading, with a marker for
+  available quest options. Switching to it preserves vendor state; returning to Shop
   restores that same panel. A quest does not need the shop to be open, and
   shopping does not require completing or accepting a quest.
 - Mireille defaults to the conversation view and shows all applicable topics
@@ -69,11 +87,13 @@ record rather than a gameplay implementation:
 - A new quest/reward changes the topic list without stealing the selected shop.
   The shop and conversation keep independent content and lifecycle inside the
   same visit and shared tab system.
-- Conversation, the actual vendor panel, Skills, Passives and Reliquary share
-  the selected-panel slot. Inventory is a stable companion on roomy layouts
-  and another selectable surface on small layouts. No dialogue overlay
-  competes with the vendor or inventory ribbons. Opening order must not change
-  this rule. Shared placement does not replace the vendor's internal UI.
+- The actual vendor panel and conversation belong to the NPC group. Inventory,
+  Skills, Passives and Reliquary retain their current player group, structure,
+  dimensions and selection. Opening Brandt while Skills is open leaves Skills
+  open in that group. Shared placement does not replace either group's UI.
+- The earlier mockup's combined NPC/player tab strip is superseded, along with
+  its compact Inventory tab. A future preview must show both independent
+  groups with the real vendor panel, not the simplified embedded shop.
 
 Implementation seam confirmed: the existing dialogue menu action routes through
 `UI.activateDialogueMenu('vendor')`, the registered menu verb and `showVendor`.
@@ -87,9 +107,9 @@ seamless's larger stacked conversation workspace or persistent approach/lesson
 text. Its existing quest actions are a reference for selective reuse, not
 approval to change progression or import the whole branch.
 
-## Verification and delivery
+## Historical verification and delivery
 
-Passed: `npm run check`, Folio, speech and speech-grammar probes, simulation
+For the first shared-book correction only: `npm run check`, Folio, speech and speech-grammar probes, simulation
 smoke, and production build. The existing dialogue/services client check passes
 buying, service selection, independent dismissal, pause/resume, controller use,
 custom positions and departure. Inventory pages and tabs client checks pass,
@@ -108,7 +128,7 @@ Brandt, Mireille, controller flask selection and a quest return, then failed
 on a missing Inventory button. It is a controlled fixture, not a passing full
 playthrough or evidence that the reported opening-order cases work.
 
-No gameplay changes are published or integrated yet. Combat, passive content,
+No dialogue-session gameplay changes are published or integrated yet. Combat, passive content,
 support handling and the main/seamless decision register belong to the other
 active session. Integration must preserve its edits and use normal main to
 seamless ancestry.
