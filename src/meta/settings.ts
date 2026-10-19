@@ -132,6 +132,8 @@ export interface Settings {
    *  OFF shows every line whole at once — the master switch over every
    *  per-kind/per-line typing dial (VIS_CFG.speech, MonsterDef.speech). */
   speechTyping: boolean;
+  /** Presentation shortcut, keyed by character and NPC definition, never account-wide. */
+  npcShopVisits: string[];
   /** THE HOVER NAMEPLATE (renderer drawEliteNameHover): which bodies bid for
    *  the D2-style cursor plate. 'named' (default) — distinctly-NAMED enemies
    *  only, the classic elite read. 'all' — every def-carrying actor on any
@@ -325,6 +327,7 @@ export interface SettingsSave {
   gearPickup?: 'vacuum' | 'key';
   castTelegraphs?: boolean;
   speechTyping?: boolean;
+  npcShopVisits?: string[];
   hoverNameplates?: HoverNameplatesMode;
   aimTick?: Partial<AimTickOptions>;
   poolBars?: PoolBarsMode;
@@ -506,6 +509,7 @@ export const makeSettings = (): Settings => ({
   gearPickup: 'vacuum',
   castTelegraphs: true,
   speechTyping: true,
+  npcShopVisits: [],
   hoverNameplates: 'named',
   aimTick: { ...DEFAULT_AIM_TICK },
   poolBars: 'smart',
@@ -558,6 +562,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   gearPickup: s.gearPickup,
   castTelegraphs: s.castTelegraphs,
   speechTyping: s.speechTyping,
+  npcShopVisits: [...s.npcShopVisits],
   hoverNameplates: s.hoverNameplates,
   aimTick: { ...s.aimTick },
   poolBars: s.poolBars,
@@ -664,6 +669,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
     castTelegraphs: s.castTelegraphs ?? true,
     speechTyping: s.speechTyping ?? true,
+    npcShopVisits: Array.isArray(s.npcShopVisits) ? [...new Set(s.npcShopVisits.filter((v): v is string => typeof v === 'string'))] : [],
     // Unknown values (and pre-dial saves) fall back to the classic read —
     // the additive-field law: no schema bump, older saves simply lack it.
     hoverNameplates: s.hoverNameplates === 'all' ? 'all' : 'named',

@@ -23,9 +23,9 @@ import { CouchJoinOverlay, type CouchJoinChoice, type CouchJoinView } from './ui
 import { applyCursor } from './core/cursor';
 import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
-import { DIALOGUE_CFG } from './data/dialogue';
-import { NpcConversationUI, conversationHasRewards } from './ui/npcConversation';
 import { DialogueUI, type DialogueActionContext } from './ui/dialogue';
+import { DIALOGUE_CFG } from './data/dialogue';
+import { NpcConversationUI, conversationHasRewards, conversationHasVocations } from './ui/npcConversation';
 import { DialogueActions } from './engine/dialogueActions';
 import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
 import { installUiStack } from './ui/zorder';
@@ -471,26 +471,29 @@ dialogueActions.register('menu', {
   run: (_context, action) => ui.activateDialogueMenu(action.target),
 });
 const dialogue: DialogueUI = new DialogueUI({
-  conversationTopFloor: () => ui.conversationTopFloor(),
-  ownerChanged: (id, active) => { ui.conversationSpeakerId = id; ui.conversationWorkspaceActive = id !== null && active; },
-  createWorkspace: (root, changed) => new NpcConversationUI(root, {
-    world: () => world,
-    available: () => renderer.npcDialogueAvailable() && dialogue.open,
-    inventory: () => { if (!ui.inventoryOpen) ui.toggleInventory(); },
-    slotLabels: () => ui.conversationSlotLabels(),
-    changed: () => ui.refreshInventory(),
-  }, changed),
   settings: () => settings, padActive: padActiveNow,
   hudTop: () => ui.hudCluster?.()?.y,
   resolveText: text => renderer.resolveText(text),
   actions: dialogueActions,
   available: () => renderer.npcDialogueAvailable(),
+  createWorkspace: (root, changed) => new NpcConversationUI(root, {
+    world: () => world,
+    available: () => renderer.npcDialogueAvailable() && dialogue.open,
+    inventory: () => { if (!ui.inventoryOpen) ui.toggleInventory(); },
+    shopAvailable: id => ui.conversationShopAvailable(id),
+    shop: id => ui.openConversationShop(id),
+    work: () => world.questOfferChoices(),
+    acceptWork: questId => { world.requestMeta({ t: 'questAccept', questId }); },
+    changed: () => ui.refreshInventory(),
+  }, changed),
 });
+ui.enrollConversation(dialogue);
 renderer.npcDialogueOwner = () => dialogue.session.reading?.offer.speakerId ?? null;
 renderer.npcDialogueAvailable = () => running && !world.player?.dead && !world.player?.downed && ui.dialogueContext().available;
 renderer.onNpcDialogue = (w, line, focusId) => {
   dialogue.setAvailable(renderer.npcDialogueAvailable());
   dialogue.sync(w, line, focusId);
+  ui.syncConversation();
 };
 // A consumed dialogue button stays out of gameplay until physically released,
 // including the frame in which Finish closes the reader.
@@ -2358,13 +2361,13 @@ function tick(now: number): void {
       // A stocked vendor counter's dwell asks to open the Vendor screen.
       if (world.vendorDwellRequested && !ui.escapeMenuOpen) {
         world.vendorDwellRequested = false;
-        if (!ui.vendorOpen) ui.showVendor(world.vendorDwellSeatId);
+        ui.openVendorOnDwell(world.vendorDwellSeatId);
       }
       // The quartermaster dwell with FRESH vocation chains on offer asks to open
       // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).
       if (world.vocationOfferRequested && !ui.escapeMenuOpen) {
         world.vocationOfferRequested = false;
-        if (!ui.vocationOpen) ui.showVocationMenu();
+        if (!ui.vocationOpen && (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasVocations(world))) ui.showVocationMenu();
       }
       if (world.questRewardRequested && !ui.escapeMenuOpen) {
         world.questRewardRequested = false;
@@ -2760,10 +2763,10 @@ function pollClientCounters(dt: number): void {
   if (world.bountyDwellRequested) { world.bountyDwellRequested = false; if (!ui.bountiesOpen) ui.showBounties(world.bountyDwellSeatId, world.bountyDwellBoardId); }
   if (world.oracleDwellRequested) { world.oracleDwellRequested = false; if (!ui.oracleOpen) ui.showOracle(world.oracleDwellSeatId); }
   if (world.trackerDwellRequested) { world.trackerDwellRequested = false; if (!ui.bestiaryOpen) ui.showBestiary(world.trackerDwellSeatId); }
-  if (world.vendorDwellRequested) { world.vendorDwellRequested = false; if (!ui.vendorOpen) ui.showVendor(world.vendorDwellSeatId); }
+  if (world.vendorDwellRequested) { world.vendorDwellRequested = false; ui.openVendorOnDwell(world.vendorDwellSeatId); }
   // THE VOCATION SITES PER SEAT (W12): the host's ask for this seat's calling (its journal row)
   // opens the same menu the solo dwell opens; the pick is this seat's own `vocationQuest` word.
-  if (world.vocationOfferRequested) { world.vocationOfferRequested = false; if (!ui.vocationOpen) ui.showVocationMenu(); }
+  if (world.vocationOfferRequested) { world.vocationOfferRequested = false; if (!ui.vocationOpen && (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasVocations(world))) ui.showVocationMenu(); }
   if (world.questRewardRequested) {
     world.questRewardRequested = false;
     if (DIALOGUE_CFG.presentation !== 'dialogue' || !conversationHasRewards(world)) ui.showQuestReward();

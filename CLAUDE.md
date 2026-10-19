@@ -25,6 +25,13 @@ Preserve main's entry loop: Begin only while the account's tutorial is due; the 
 
 ## Play and verify
 
+NPC conversation and services now use a separate Folio group from Inventory's
+Skills, Passives, Reliquary and Character ribbons. Brandt's Shop opens his existing
+vendor UI and becomes the return default; native quest offers keep their engine
+acceptance path. See `docs/ui/service-workspace.md`. Verify the dialogue/services
+and inventory-pages client courses after an isolated build; small windows may
+overlap but never merge player and NPC books or resize Inventory on arrival.
+
 - `Play World.cmd` / `npm run play`: build as needed and open the seamless desktop playtest.
 - `Host World.cmd` / `npm run host`: serve the continuous world locally, with separate host saves.
 - `npm run dev`: browser development, default continuous world.

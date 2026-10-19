@@ -152,6 +152,8 @@ export interface FolioRect { left: number; top: number; width: number; height: n
  *  none of them, so a leaf's truth is always its own. */
 export interface FolioLeafSpec {
   id: string;
+  /** Hard membership boundary, independent of geometry. */
+  group?: 'player' | 'npc' | 'modal';
   /** The tab's label (live — a counter may name its keeper). */
   title: () => string;
   /** The leaf's OWN open flag — the one truth of "bound". */
@@ -448,7 +450,8 @@ export class FolioCore {
   }
 
   private companionsIn(book: Book, leaf: FolioLeafSpec): boolean {
-    return book.order.some(id => leaf.companions?.includes(id) || this.leaves.get(id)?.companions?.includes(leaf.id));
+    return book.order.some(id => this.leaves.get(id)?.group !== leaf.group
+      || leaf.companions?.includes(id) || this.leaves.get(id)?.companions?.includes(leaf.id));
   }
 
   /** Does a newcomer take the front? THE CALL'S WORD first (an explicit ask

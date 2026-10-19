@@ -919,7 +919,7 @@ export class Renderer {
     if (!VIS_ABLATE.has('actors')) {
       for (const line of world.npcSpeechView(!this.dialogueReaderEnabled() || this.npcDialogueAvailable(),
         this.speechPointerHits(world), this.dialogueReaderEnabled() ? this.npcDialogueOwner() : null)) this.speechFocusLines.set(line.a, line);
-      if (VIS_CFG.speechApproach.enabled && (!this.dialogueReaderEnabled() || this.npcDialogueAvailable())
+      if (VIS_CFG.speechApproach.enabled && !this.dialogueReaderEnabled()
         && ![...this.speechFocusLines.values()].some(line => line.seatId === world.localSeat.id))
         this.speechApproach = world.speechApproachHint();
     }

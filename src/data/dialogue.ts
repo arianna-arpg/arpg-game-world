@@ -3,22 +3,13 @@
 export const DIALOGUE_CFG = {
   presentation: 'dialogue' as 'dialogue' | 'bubble',
   pageChars: 210,
-  width: 880,
+  width: 540,
   portraitSize: 72,
-  /** Short responses share rows; longer answers retain the reader scroll. */
-  choiceMinWidth: 160,
   edge: 18,
   hudGap: 18,
   fontSize: 18,
   lineHeight: 1.65,
-  /** Stable reading band, used with and without a service. Sizes pre-scale. */
-  height: 190,
-  /** Deliberate actions need room for actual reward/item choices. */
-  conversationWorkspaceHeight: 380,
-  heightMaxFraction: 0.36,
-  heightLimitFraction: 0.6,
-  minHeight: 130,
-  minWorkspaceHeight: 180,
-  controlClearance: 60,
+  /** An NPC panel, independent of Inventory and its pages. Sizes pre-scale. */
+  height: 520,
   workspaceTop: 56,
 };

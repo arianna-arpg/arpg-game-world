@@ -1,4 +1,4 @@
-// Build first. Real dwell, panels and input, hidden window, isolated profile/saves.
+// Real client: actual dwell and clicks, independent panel groups, unchanged player geometry.
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const { startGameServer } = require('../launcher/server.cjs');
@@ -8,203 +8,134 @@ const log = v => fs.appendFileSync(logfile, JSON.stringify(v) + '\n');
 app.setPath('userData', path.join(dir, 'dialogue-services-profile-' + process.pid));
 app.disableHardwareAcceleration(); app.commandLine.appendSwitch('disable-gpu');
 app.whenReady().then(async () => {
-  const timeout = setTimeout(() => { log('TIMEOUT'); app.exit(1); }, 180000);
+  const timeout = setTimeout(() => { log('TIMEOUT'); app.exit(1); }, 480000);
   const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'), savesDir: path.join(dir, 'dialogue-services-saves-' + process.pid) });
-  const win = new BrowserWindow({ show: false, width: 1400, height: 1000, webPreferences: { offscreen: true, backgroundThrottling: false } });
+  const win = new BrowserWindow({ show: false, width: 2560, height: 1440, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const js = async code => {
     const r = await win.webContents.executeJavaScript(`(async()=>{try{return await (0,eval)(${JSON.stringify(code)});}catch(e){return {qaError:String(e.stack??e)};}})()`);
     if (r?.qaError) throw Error(r.qaError); return r;
   };
   const capture = async name => {
-    await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
-    fs.writeFileSync(path.join(dir, `dialogue-services-${name}.png`), (await win.webContents.capturePage()).toPNG());
+    for(let attempt=0;attempt<3;attempt++) {
+      await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+      try { fs.writeFileSync(path.join(dir, `dialogue-services-${name}.png`), (await win.webContents.capturePage()).toPNG()); return; }
+      catch(error) { if(!String(error).includes('UnknownVizError')||attempt===2)throw error; await new Promise(resolve=>setTimeout(resolve,100)); }
+    }
   };
-  const fits = box => {
-    assert.equal(box.open, true, 'reader stays visible beside services');
-    for (const r of [box.reader, box.next, box.close, ...box.panels]) {
-      assert.ok(r.left >= -1 && r.top >= -1 && r.right <= box.width + 1 && r.bottom <= box.height + 1, `inside viewport: ${JSON.stringify(r)}`);
-    }
-    for (const panel of box.panels) assert.ok(panel.bottom <= box.reader.top - 1, 'service cannot cover dialogue');
-    for (let i = 0; i < box.panels.length; i++) for (const b of box.panels.slice(i + 1)) {
-      const a = box.panels[i];
-      assert.ok(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top, 'services and bag do not overlap');
-    }
-    assert.ok(box.next.top >= box.reader.top && box.next.bottom <= box.reader.bottom + 1, 'advance stays visible without scrolling');
-    assert.ok(box.readingHeight >= box.lineHeight, 'at least one text line remains readable below the fixed name');
+  const click = async selector => {
+    const point = await js(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)throw Error('Missing '+${JSON.stringify(selector)});
+      el.scrollIntoView({block:'nearest'});const r=el.getBoundingClientRect();if(!r.width||!r.height)throw Error('Hidden '+${JSON.stringify(selector)});
+      const x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2);if(!el.contains(document.elementFromPoint(x,y)))throw Error('Obscured '+${JSON.stringify(selector)});return {x,y};})()`);
+    win.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...point});
+    win.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...point});
+    await new Promise(resolve=>setTimeout(resolve,40)); await js('serviceQA.run(3)');
+  };
+  const stable = row => {
+    assert.ok(row.available, 'player pages cannot block dialogue');
+    assert.equal(row.selected, row.page, 'NPC arrival cannot change the selected player ribbon');
+    assert.deepEqual(row.bag, row.before.bag, 'NPC arrival cannot resize/reseat Inventory');
+    assert.deepEqual(row.player, row.before.player, 'NPC arrival cannot resize/reseat the player page');
+    assert.ok(row.books.every(b=>!b.tabs.some(t=>t.id===row.page)||!b.tabs.some(t=>['vendor','conversation'].includes(t.id))), 'NPC and player books are independent');
+    assert.ok(row.npc.width>0 && row.npc.left>=0 && row.npc.right<=row.width+1 && row.npc.top>=0, 'NPC controls remain in the viewport');
   };
   try {
     await win.loadURL(server.url);
-    await js(`(async () => {
+    await js(`(async()=>{
       __game.account().ledger.prologue_lived=1; __game.devStartRun('warrior'); __game.ui.hideAll();
       await new Promise(resolve=>setTimeout(resolve,700));
       Object.defineProperty(navigator,'getGamepads',{value:()=>[],configurable:true});
-      __game.settings().speechTyping=false; __game.settings().renderScale=1;
-      const w=__game.world(); w.account.features.add('salvage_station'); w.account.features.add('oracle_stone');
-      w.loadZone('lastlight'); w.account.features.add('salvage_station'); w.account.features.add('oracle_stone'); w.player.invulnerable=true;
-      const smith=w.actors.find(a=>a.defId==='townsfolk_smith');
-      const q=window.serviceQA={w,smith,home:{x:smith.pos.x+10,y:smith.pos.y},trace:[]};
-      q.rect=el=>{const r=el.getBoundingClientRect();return {id:el.id,left:r.left,top:r.top,right:r.right,bottom:r.bottom};};
-      q.box=()=>{const root=document.getElementById('npc-dialogue');return {
-        open:!root.hidden,text:root.querySelector('.dialogue-accessible').textContent,name:root.querySelector('h2').textContent,
-        reader:q.rect(root),next:q.rect(root.querySelector('.dialogue-next')),close:q.rect(root.querySelector('.dialogue-close')),
-        readingHeight:root.querySelector('.dialogue-layout').clientHeight,nameHeight:root.querySelector('h2').offsetHeight+5,
-        lineHeight:parseFloat(getComputedStyle(root.querySelector('.dialogue-page')).lineHeight),
-        panels:[...document.querySelectorAll('.service-workspace,.service-inventory')].filter(el=>el.getBoundingClientRect().width>0).map(q.rect),width:innerWidth,height:innerHeight,
-        compact:!document.getElementById('service-workspace-tabs').hidden,
-        vendor:__game.ui.vendorOpen,salvage:__game.ui.salvageOpen,oracle:__game.ui.oracleOpen,inventory:__game.ui.inventoryOpen};};
-      q.run=(n,pos=q.home)=>{for(let i=0;i<n;i++){w.player.pos={...pos};w.player.tier=0;w.mireilleCd=999;__game.step(1);
-        q.trace.push({open:!document.getElementById('npc-dialogue').hidden,vendor:__game.ui.vendorOpen,near:w.nearSmith(),focus:w.speechFocusTarget()?.id});}return q.box();};
-      q.targets=()=>[...document.querySelectorAll('#vendor-menu [data-vbuy],#inventory [data-uid],.folio-strip')]
-        .filter(el=>el.getBoundingClientRect().width>0).map(el=>({...q.rect(el),key:el.dataset.vbuy??el.dataset.uid??el.textContent}));
-      q.key=key=>{window.dispatchEvent(new KeyboardEvent('keydown',{key,code:key,bubbles:true}));q.run(1);window.dispatchEvent(new KeyboardEvent('keyup',{key,code:key,bubbles:true}));return q.box();};
-      q.tab=id=>{const tab=document.querySelector('[data-folio-tab="'+id+'"]');if(!tab)throw Error('Missing tab '+id);tab.click();return q.run(3);};
+      __game.settings().speechTyping=false; __game.settings().renderScale=1; __game.settings().npcShopVisits=[];
+      const w=__game.world();w.account.features.add('salvage_station');w.account.features.add('oracle_stone');w.account.features.add('reliquary');
+      if(!w.massRuntime)w.loadZone('lastlight');w.player.invulnerable=true;
+      const smith=w.actors.find(a=>a.defId==='townsfolk_smith'),inn=w.actors.find(a=>a.defId==='townsfolk_innkeep');
+      const q=window.serviceQA={w,smith,inn,pos:{x:smith.pos.x+10,y:smith.pos.y},away:{x:smith.pos.x+700,y:smith.pos.y}};
+      q.rect=el=>{const r=el.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height};};
+      q.run=(n,pos=q.pos)=>{q.pos={...pos};if(w.massRuntime)w.landPartyAt(pos);for(let i=0;i<Math.ceil(n/3);i++){w.player.pos={...pos};w.player.tier=0;w.mireilleCd=999;__game.step(1,50);}};
+      q.clear=()=>{__game.ui.hideAll();q.run(3,q.away);__game.ui.toggleInventory();for(const p of __game.ui.inventoryPages.entries())__game.ui.inventoryPages.close(p.id);__game.ui.closeInventory();q.run(2);};
+      q.page=id=>{const ui=__game.ui;if(!ui.inventoryOpen)ui.toggleInventory();if(id==='container:reliquary')ui.containerPane.toggle('reliquary',w.localSeat.id,'show');ui.inventoryPages.request(id,w.localSeat.id,'show');q.run(2);};
+      q.snapshot=page=>{const ui=__game.ui,root=document.getElementById('npc-dialogue'),vendor=document.getElementById('vendor-menu');return {
+        page,width:innerWidth,available:ui.dialogueContext().available,selected:ui.folio.bookFor(page)?.front,books:ui.folio.views(),
+        bag:q.rect(document.getElementById('inventory')),player:q.rect(ui.inventoryPages.entries().find(p=>p.id===page).el),
+        npc:q.rect(!vendor.classList.contains('hidden')&&!vendor.classList.contains('folio-shelved')?vendor:root),
+        speaker:root.dataset.speakerId,conversation:root.getBoundingClientRect().width>0,vendor:ui.vendorOpen};};
       q.scale=value=>{__game.ui.showEscapeMenu();document.getElementById('esc-keys').click();document.querySelector('[data-opttab="interface"]').click();
-        const slider=document.getElementById('opt-uiscale');slider.value=String(value);slider.dispatchEvent(new Event('input',{bubbles:true}));__game.ui.hideEscapeMenu();return q.run(3);};
-      q.workspace=tab=>{document.querySelector('[data-workspace-tab="'+tab+'"]').click();return q.run(3);};
-      __game.ui.toggleInventory(); __game.ui.folioSync();
-      q.bagHome=q.rect(document.getElementById('inventory'));
-      __game.ui.toggleInventory();
+        const slider=document.getElementById('opt-uiscale');slider.value=String(value);slider.dispatchEvent(new Event('input',{bubbles:true}));__game.ui.hideEscapeMenu();q.run(3);};
+      q.clear();q.run(120,{x:smith.pos.x+10,y:smith.pos.y});
     })()`);
-    let box = await js('serviceQA.run(110)'); log({stage:'dwell',...box}); fits(box);
-    const trace = await js('serviceQA.trace');
-    const began = trace.findIndex(f=>f.open);
-    assert.ok(began>=0 && trace.slice(began).some(f=>f.vendor));
-    assert.ok(trace.slice(began).every(f=>f.open), 'no single-frame dismissal during actual vendor/suite dwell');
-    log(await js('({features:[...serviceQA.w.account.features],salvage:serviceQA.w.hasSalvage(),oracle:serviceQA.w.hasOracle(),summons:serviceQA.w.suiteSummons()})'));
-    assert.ok(box.vendor && box.salvage && box.oracle && box.inventory, 'actual dwell opens stocked shop, bag and summoned suite');
-    const bagHome=await js('serviceQA.bagHome');
-    const bag=box.panels.find(p=>p.id==='inventory');
-    assert.equal(bag.left,bagHome.left,'vendor leaves Inventory at its ordinary horizontal anchor');
-    assert.equal(bag.top,bagHome.top,'vendor leaves Inventory at its ordinary vertical anchor');
-    const berth=box.panels.find(p=>p.id==='vendor-menu'), reader=box.reader;
-    assert.match(box.name, /Brandt/); assert.match(box.text, /hammer/);
-    const first = box.text; await capture('brandt');
-    // Roof/label visibility admits an offer, but cannot revoke an admitted
-    // page while the world's interaction focus and counter reach still hold.
-    const covered = await js(`(() => {const r=__game.renderer,read=r.labelRevealAt;
-      r.labelRevealAt=function(w,p){return p===serviceQA.smith.pos?0:read.call(this,w,p);};
-      try{return serviceQA.run(5);}finally{r.labelRevealAt=read;}})()`);
-    fits(covered); assert.equal(covered.text,first);
-    // The dialogue and shop must agree at BOTH sides of every roof edge.
-    const edges = await js(`(() => {const q=serviceQA,w=q.w,home=w.roofedStructureAt(q.smith.pos);let samples=0;
-      for(const roof of home.roofs)for(let x=roof.x-2;x<=roof.x+roof.w+2;x+=8)for(let y=roof.y-2;y<=roof.y+roof.h+2;y+=8){
-        w.player.pos={x,y};w.player.tier=0;const near=w.nearSmith(),talk=w.speechCandidates(w.localSeat).some(c=>c.id===q.smith.id);
-        if(near!==talk)throw Error('Counter/dialogue reach disagreement at '+JSON.stringify({x,y,near,talk}));samples++;
-      }w.player.pos={...q.home};return samples;})()`);
-    assert.ok(edges>100); log({stage:'roof-reach',samples:edges});
-    for (const id of ['salvage','oracle','vendor']) {
-      box = await js(`serviceQA.tab('${id}')`); fits(box); assert.equal(box.text, first, 'tab switches preserve page');
-      const panel=box.panels.find(p=>p.id!=='inventory');
-      assert.equal(panel.left,berth.left); assert.equal(panel.top,berth.top,'all service tabs use the same berth');
-      assert.deepEqual(box.reader,reader,'service tabs do not move the reader');
+    let first=await js(`({vendor:__game.ui.vendorOpen,visible:document.getElementById('npc-dialogue').getBoundingClientRect().width>0,shop:!!document.querySelector('[data-conversation-shop]'),name:document.querySelector('#npc-dialogue h2').textContent,books:__game.ui.folio.views()})`);
+    log({stage:'first-visit',...first});
+    assert.ok(first.visible&&first.shop&&!first.vendor,'first Brandt visit offers Shop in conversation'); assert.match(first.name,/Brandt/);
+    await capture('first-visit'); await click('[data-conversation-shop]');
+    assert.equal(await js('__game.ui.vendorOpen'),true);
+    assert.equal(await js('__game.ui.folio.bookFor("vendor").front'),'vendor');
+    assert.equal(await js('__game.settings().npcShopVisits.length'),1);
+    await click('[data-folio-tab="conversation"]');
+    assert.ok(await js('document.querySelector("[data-conversation-shop]").getBoundingClientRect().width>0'));
+    await click('[data-folio-tab="vendor"]');
+    // Existing stock, purchase and station-suite controls remain real services.
+    await js(`(()=>{const w=serviceQA.w;for(const id of Object.keys(w.meta.essences))w.meta.essences[id]=10000;__game.ui.refreshVendor();serviceQA.itemsBefore=w.meta.items.length;})()`);
+    await click('[data-vbuy^="brandt:"]:not([disabled])');
+    assert.equal(await js('serviceQA.w.meta.items.length-serviceQA.itemsBefore'),1,'actual purchase grants one item');
+    for(const tab of ['salvage','oracle','vendor'])await click('[data-folio-tab="'+tab+'"]');
+    await js('serviceQA.clear();serviceQA.run(120,{x:serviceQA.smith.pos.x+10,y:serviceQA.smith.pos.y})');
+    assert.equal(await js('__game.ui.folio.bookFor("vendor")?.front'),'vendor','return visit opens original shop directly');
+    assert.ok(await js('__game.ui.folio.bookFor("vendor").tabs.some(t=>t.id==="conversation")'),'conversation stays accessible from shop');
+    if(await js('!!serviceQA.w.massRuntime')) {
+      const gift=await js(`(()=>{const q=serviceQA,ui=__game.ui;q.clear();q.page('skills');
+        const snapshot=()=>({items:q.w.meta.items.map(i=>i.name),bag:q.rect(document.getElementById('inventory')),
+          parts:[...document.querySelector('#inventory .inv-scroll').children].map(e=>({tag:e.className,text:e.textContent.slice(0,160),rect:q.rect(e)}))});
+        const before=snapshot();q.run(120,q.inn.pos);return {before,after:snapshot(),selected:ui.folio.bookFor('skills')?.front};})()`);
+      log({stage:'first-mireille-gift',...gift});
+      assert.equal(gift.selected,'skills');
+      assert.deepEqual(gift.after.bag,gift.before.bag,'first Mireille visit cannot insert a lesson banner into Inventory');
     }
-    const bagToggle=await js(`(()=>{const q=serviceQA,before=q.box();__game.ui.toggleInventory();const closed=q.run(3);
-      __game.ui.toggleInventory();return {before,closed,after:q.run(3)};})()`);
-    assert.equal(bagToggle.closed.open,true,'closing Inventory does not dismiss the conversation');
-    assert.deepEqual(bagToggle.closed.panels.find(p=>p.id==='vendor-menu'),berth,'closing Inventory does not move the vendor');
-    assert.deepEqual(bagToggle.after.reader,reader);fits(bagToggle.after);
-    // A real buy action remains available while the same page is being read.
-    const bought = await js(`(() => {const q=serviceQA,w=q.w;for(const id of Object.keys(w.meta.essences))w.meta.essences[id]=10000;__game.ui.refreshVendor();
-      const before=w.meta.items.length,button=document.querySelector('[data-vbuy^="brandt:"]:not([disabled])');
-      if(!button)throw Error('No buyable stock');button.click();q.run(3);return {before,after:w.meta.items.length,box:q.box()};})()`);
-    assert.equal(bought.after, bought.before + 1); assert.equal(bought.box.text, first); fits(bought.box);
-    // Focused service controls retain their native Enter behavior.
-    const key = await js(`(() => {const q=serviceQA,button=document.querySelector('#vendor-menu button');
-      button.focus();const e=new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true});button.dispatchEvent(e);
-      button.dispatchEvent(new KeyboardEvent('keyup',{key:'Enter',code:'Enter',bubbles:true}));button.blur();return {prevented:e.defaultPrevented,text:q.box().text};})()`);
-    assert.equal(key.prevented, false); assert.equal(key.text, first);
-    const dismissal = await js(`(() => {const q=serviceQA,scroll=document.querySelector('#inventory .inv-scroll');
-      scroll.scrollTop=80;const top=scroll.scrollTop,panels=q.box().panels,targets=q.targets();q.key('Escape');q.run(4);
-      return {panels,targets,top,after:q.box(),afterTargets:q.targets(),afterTop:scroll.scrollTop};})()`);
-    box=dismissal.after;assert.equal(box.open,false);assert.ok(box.vendor&&box.inventory);
-    assert.deepEqual(box.panels,dismissal.panels,'dismissal must not move or resize service panels');
-    assert.deepEqual(dismissal.afterTargets,dismissal.targets,'buy/sell hit targets stay fixed');
-    assert.equal(dismissal.afterTop,dismissal.top,'dismissal preserves the inventory scroll');
-    assert.equal((await js('serviceQA.run(90)')).open, false, 'same line stays dismissed');
-    // A genuine new state can speak while the player still works the counter.
-    box = await js('serviceQA.w.account.features.add("brandt_magic_wares");serviceQA.w.restockVendor();serviceQA.run(3)');
-    fits(box); assert.notEqual(box.text, first); assert.match(box.text, /magic|writs/i);
-    // Modal pause suspends and resumes this exact page without moving controls.
-    const pause = await js('(() => {const before=serviceQA.box();__game.ui.showEscapeMenu();const hidden=serviceQA.run(2);__game.ui.hideEscapeMenu();return {before,hidden,after:serviceQA.run(2)};})()');
-    assert.equal(pause.hidden.open, false); assert.deepEqual(pause.hidden.panels,pause.before.panels);
-    assert.deepEqual(pause.after.panels,pause.before.panels);assert.equal(pause.after.text, pause.before.text); fits(pause.after);
-    // A remembered Skills drawer behind the shop is quiet; an explicit front
-    // page suspends conversation, then restores it when the station returns.
-    const page = await js(`(() => {const q=serviceQA,before=q.box().text;__game.ui.toggleBuildPanel();const hidden=q.run(2);
-      q.tab('vendor');return {before,hidden,after:q.box()};})()`);
-    assert.equal(page.hidden.open,false); assert.equal(page.after.text,page.before); fits(page.after);
-    win.setContentSize(820, 650); await new Promise(resolve=>setTimeout(resolve,150));
-    box = await js('serviceQA.run(5)'); fits(box); await capture('compact');
-    assert.equal(box.compact,true,'narrow screens offer Inventory/Services tabs');
-    box=await js('serviceQA.run(5)');
-    const narrowReader=box.reader; log({stage:'compact-before-tab',...box,hud:await js('__game.ui.hudCluster()')});
-    box=await js("serviceQA.workspace('inventory')");fits(box);
-    log({stage:'compact-after-tab',...box,hud:await js('__game.ui.hudCluster()')});
-    assert.deepEqual(box.panels.map(p=>p.id),['inventory'],'Inventory tab shows the full-width bag alone');
-    assert.deepEqual(box.reader,narrowReader,'compact tab switch keeps dialogue anchored');
-    box=await js("serviceQA.workspace('services')");fits(box);
-    assert.ok(box.panels.every(p=>p.id!=='inventory'),'Services tab hides the bag without closing it');
-    box=await js("serviceQA.key('i')");fits(box);
-    assert.deepEqual(box.panels.map(p=>p.id),['inventory'],'Inventory key reveals its hidden compact tab');
-    const sellLane=await js(`(()=>{__game.ui.scrapMode=true;__game.ui.refreshInventory();
-      return __game.ui.salvageLaneFor(document.getElementById('inventory'));})()`);
-    assert.equal(sellLane,'sell','compact Inventory retains the selected counter sell action');
-    box=await js("__game.ui.menuVerbs().vendor.open();serviceQA.run(3)");fits(box);
-    assert.ok(box.panels.some(p=>p.id==='vendor-menu'),'explicit menu request reveals the hidden service');
-    box = await js('serviceQA.scale(175)'); log({stage:'scaled',...box}); fits(box); await capture('scaled');
-    log(await js('__game.crash()'));
-    assert.equal(await js('__game.crash().fatal'), null);
-    // Controller A hits the service tabs, without also advancing.
-    const pad = await js(`(() => {const q=serviceQA;window.qaPad={id:'QA pad',index:0,connected:true,mapping:'standard',timestamp:performance.now(),axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,touched:false,value:0}))};
-      Object.defineProperty(navigator,'getGamepads',{value:()=>qaPad?[qaPad]:[]});q.run(2);
-      const r=document.querySelector('[data-folio-tab="salvage"]').getBoundingClientRect();__game.padPointer().place(r.left+r.width/2,r.top+r.height/2);const text=q.box().text;
-      const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.outerHTML;
-      qaPad.buttons[0]={pressed:true,touched:true,value:1};q.run(3);qaPad.buttons[0]={pressed:false,touched:false,value:0};q.run(2);window.qaPad=null;
-      return {before:text,after:q.box().text,open:q.box().open,hit,pointer:__game.padPointer().position(),tab:q.rect(document.querySelector('[data-folio-tab="salvage"]')),front:!document.getElementById('salvage-menu').classList.contains('folio-shelved')};})()`);
-    log({stage:'controller',...pad});
-    assert.equal(pad.before, pad.after); assert.equal(pad.open, true); assert.equal(pad.front,true,'controller hits the drawn service tab');
-    // Both pointer close and finishing the last page preserve the controls,
-    // including at accessibility scale. Neither gesture performs a trade.
-    for (const mode of ['close','finish']) {
-      const stable = await js(`(() => {const q=serviceQA;q.w.dialogueScene++;q.run(3);
-        const before=q.box().panels,targets=q.targets(),items=q.w.meta.items.length;
-        if('${mode}'==='close')document.querySelector('.dialogue-close').click();
-        else for(let i=0;i<10&&q.box().open;i++){document.querySelector('.dialogue-next').click();q.run(1);}
-        return {before,targets,items,after:q.run(3),afterTargets:q.targets(),afterItems:q.w.meta.items.length};})()`);
-      assert.equal(stable.after.open,false); assert.deepEqual(stable.after.panels,stable.before);
-      assert.deepEqual(stable.afterTargets,stable.targets);assert.equal(stable.afterItems,stable.items);
+    const rows=[];
+    for(const [width,height,scale] of [[2560,1440,100],[1280,800,100],[820,650,175]]) {
+      win.setContentSize(width,height);await new Promise(resolve=>setTimeout(resolve,100));
+      await js(`serviceQA.clear();serviceQA.scale(${scale})`);
+      for(const npc of ['smith','inn'])for(const page of ['skills','passives','container:reliquary','character'])for(const order of width===2560?['open','remembered']:['open']) {
+        const row=await js(`(()=>{const q=serviceQA,ui=__game.ui;q.clear();q.page('${page}');const before=q.snapshot('${page}');
+          if('${order}'==='remembered'){ui.toggleInventory();q.run(2);}
+          q.run(120,{x:q.${npc}.pos.x+10,y:q.${npc}.pos.y});
+          if('${order}'==='remembered'&&!ui.inventoryOpen){ui.toggleInventory();q.run(3);}
+          return {...q.snapshot('${page}'),before,npcName:'${npc}',order:'${order}',scale:${scale}};})()`);
+        log({stage:'matrix',npc,page,order,width,scale,selected:row.selected,speaker:row.speaker});
+        stable(row);if(npc==='inn')assert.ok(row.conversation,'Mireille dialogue opens with the player page');else assert.ok(row.vendor,'Brandt shop opens with the player page');
+        if(width===2560)assert.ok(row.npc.right<=row.player.left || row.player.right<=row.npc.left,'full desktop panels do not overlap');
+        rows.push(row);
+        if(order==='open'&&(width===2560||page==='skills'))await capture(`${npc}-${page.replace(':','-')}-${width}-${scale}`);
+      }
     }
-    win.setContentSize(1400, 1000); await new Promise(resolve=>setTimeout(resolve,150)); await js('serviceQA.scale(100)');
-    box = await js(`(() => {const q=serviceQA;const dwell=q.w.npcDialogues.dwell,quest=q.w.questGiverPrompt;
-      q.w.npcDialogues.dwell=()=>null;q.w.questGiverPrompt=()=>null;q.w.dialogueScene++;const box=q.run(5);
-      q.w.npcDialogues.dwell=dwell;q.w.questGiverPrompt=quest;return box;})()`);
-    assert.equal(box.open,false,'service alone never manufactures dialogue');assert.ok(box.vendor && box.inventory);
-    const unspoken=box.panels.find(p=>p.id==='vendor-menu');
-    box=await js('serviceQA.run(4)');fits(box);
-    assert.deepEqual(box.panels.find(p=>p.id==='vendor-menu'),unspoken,'admitting dialogue cannot reseat a service');
-    // Authored positions remain player-owned through refreshes and dialogue.
-    const custom=await js(`(()=>{const q=serviceQA,s=__game.settings();__game.ui.hideAll();__game.ui.folioSync();
-      s.layout.movable=true;s.layout.seats.inventory={fx:0.48,fy:0.08};s.layout.seats['vendor-menu']={fx:0.06,fy:0.1};
-      __game.ui.showVendor();q.run(4);const before=q.box(),saved=JSON.stringify(s.layout.seats);
-      __game.ui.refreshVendor();__game.ui.refreshInventory();q.run(4);
-      document.querySelector('.dialogue-close').click();q.run(3);
-      return {before,after:q.box(),saved,afterSaved:JSON.stringify(s.layout.seats)};})()`);
-    for(const [id,x,y] of [['inventory',672,80],['vendor-menu',84,100]]) {
-      const before=custom.before.panels.find(p=>p.id===id),after=custom.after.panels.find(p=>p.id===id);
-      assert.equal(before.left,x);assert.equal(before.top,y);assert.deepEqual(after,before,'custom window remains fixed');
+    fs.writeFileSync(path.join(dir,'dialogue-panel-matrix.json'),JSON.stringify(rows,null,2));
+    // Native work remains engine-owned: all available Mireille contracts are
+    // listed together and acceptance uses the real validated quest command.
+    if(await js('!!serviceQA.w.massRuntime')) {
+      win.setContentSize(2560,1440);await js('serviceQA.clear();serviceQA.scale(100);serviceQA.page("skills");serviceQA.run(120,serviceQA.inn.pos)');
+      const work=await js('serviceQA.w.questOfferChoices().filter(q=>serviceQA.w.questDefOf(q.questId)?.giver==="townsfolk_innkeep").map(q=>q.questId)');
+      assert.ok(work.length>0,'native Mireille has work available');
+      for(const id of work)assert.ok(await js(`!!document.querySelector('[data-conversation-activity="work:${id}"]')`),'every available contract is a topic');
+      await click('[data-conversation-activity="work:'+work[0]+'"]');
+      await click('[data-conversation-accept="'+work[0]+'"]');
+      assert.equal(await js(`serviceQA.w.activeQuests.filter(q=>q.questId==='${work[0]}').length`),1);
+      assert.equal(await js('__game.ui.folio.bookFor("skills").front'),'skills');
+      await click('.dialogue-next');
     }
-    assert.equal(custom.afterSaved,custom.saved,'workspace never rewrites saved positions');
-    const guest=await js(`(()=>{const ui=__game.ui,w=serviceQA.w;__game.addAlly();
-      const guest=w.seats.find(s=>s!==w.localSeat);guest.couch={side:'left',pad:1};
-      ui.toggleInventory(guest.id);ui.folioSync();
-      const bag=document.getElementById('inventory');return {owner:ui.panelSeat(bag).id,guest:guest.id,
-        width:bag.getBoundingClientRect().width,captured:bag.classList.contains('service-inventory')||bag.classList.contains('workspace-shelved')};})()`);
-    assert.equal(guest.owner,guest.guest);assert.ok(guest.width>0);assert.equal(guest.captured,false,'local services cannot capture the guest inventory');
-    box = await js('serviceQA.run(4,{x:serviceQA.home.x+700,y:serviceQA.home.y})');
-    assert.equal(box.open, false); assert.equal(box.vendor, false);
-    await js('__game.ui.hideAll();serviceQA.run(2,{x:serviceQA.home.x+700,y:serviceQA.home.y})');
-    assert.equal((await js('serviceQA.box()')).panels.length,0,'closed panels release their reservations');
-    assert.equal(await js('__game.crash().fatal'), null);
-    log('PASS: service dwell, suite tabs, purchase, independent dismissal, new state, pause, compact/scaled layout, controller, departure');
-  } finally { clearTimeout(timeout); win.destroy(); server.server.close(); app.quit(); }
-}).catch(error => { log(error.stack ?? String(error)); app.exit(1); });
+    // A real character ribbon click uses the existing sheet and close semantics.
+    win.setContentSize(2560,1440);await js('serviceQA.clear();serviceQA.scale(100);serviceQA.page("skills")');
+    await click('[data-characterflap]');
+    assert.equal(await js('__game.ui.folio.bookFor("character")?.front'),'character');
+    assert.ok(await js('document.querySelector("#char-sheet").textContent.length>100'),'existing character details remain populated');
+    await click('#char-sheet [data-panel-x]');
+    assert.equal(await js('__game.ui.inventoryOpen'),true,'character close keeps Inventory open');
+    assert.equal(await js('__game.ui.charSheetOpen'),false);
+    await js('serviceQA.run(120,{x:serviceQA.smith.pos.x+10,y:serviceQA.smith.pos.y});serviceQA.w.account.features.add("brandt_magic_wares");serviceQA.run(4)');
+    assert.equal(await js('__game.ui.folio.bookFor("vendor")?.front'),'vendor','new quest state cannot steal the shop');
+    await js('__game.ui.showEscapeMenu();serviceQA.run(2);__game.ui.hideEscapeMenu();serviceQA.run(3)');
+    assert.equal(await js('__game.ui.folio.bookFor("vendor")?.front'),'vendor','pause resumes the selected NPC tab');
+    await js('serviceQA.run(5,serviceQA.away)');
+    assert.equal(await js('__game.ui.vendorOpen'),false);assert.equal(await js('document.getElementById("npc-dialogue").hidden'),true);
+    assert.equal(await js('__game.ui.inventoryOpen'),true);
+    assert.equal(await js('__game.crash().fatal'),null);
+    log('PASS: first visit, Shop click, purchase, suite, return preference, conversation tab, 32 NPC/page/arrival/size cases, character ribbon, pause, quest refresh, departure');
+  } finally { clearTimeout(timeout);win.destroy();server.server.close();app.quit(); }
+}).catch(error=>{log(error.stack??String(error));app.exit(1);});

@@ -117,6 +117,7 @@ interface Fake {
   spec: FolioLeafSpec;
 }
 interface FakeOpts {
+  group?: FolioLeafSpec['group'];
   bay?: string; owner?: string; arrive?: FolioArrive; companions?: string[];
   binding?: 'active';
   selectionGroup?: string;
@@ -134,6 +135,7 @@ function fake(core: FolioCore, id: string, o: FakeOpts = {}): Fake {
   } as Fake;
   const spec: FolioLeafSpec = {
     id,
+    group: o.group,
     title: () => id.toUpperCase(),
     isOpen: () => f.open,
     close: () => { f.closes++; f.open = false; },
@@ -442,8 +444,8 @@ console.log('O. THE ENROLLMENT CENSUS');
     'bounties', 'caravan', 'sail', 'hold', 'merc', 'vocation'];
   const enrolled = [...panels.matchAll(/this\.folioLeaf\('([a-z_]+)'/g)].map(m => m[1]!);
   const adopted = [...panels.matchAll(/this\.folio\.adopt\('([a-z_]+)'\)/g)].map(m => m[1]!);
-  check('O1 the thirteen dwell dialogs enroll once each',
-    EXPECTED.every(id => enrolled.filter(x => x === id).length === 1) && enrolled.length === EXPECTED.length);
+  check('O1 dwell dialogs and the conversation enroll once each',
+    [...EXPECTED, 'conversation'].every(id => enrolled.filter(x => x === id).length === 1) && enrolled.length === EXPECTED.length + 1);
   check('O2 every dwell dialog adopts at its show path', EXPECTED.every(id => adopted.includes(id)));
   const body = (signature: string, end = '\n  }'): string => {
     const i = panels.indexOf(signature), j = panels.indexOf(end, i);
@@ -906,6 +908,23 @@ console.log('U. REMEMBERED DRAWER SELECTION');
   a.open = b.open = false; core.sync();
   owner.owner = 'p1'; a.open = b.open = true; core.sync();
   check('U10 the second owner retains its own selection', core.bookFor(a.id)?.front === b.id);
+}
+
+console.log('V. PLAYER AND NPC MEMBERSHIP');
+for (const binding of [undefined, 'active'] as const) {
+  const { core } = rig();
+  const rect = { left: 10, top: 50, width: 600, height: 500 };
+  const skills = fake(core, 'skills', { group: 'player', rect, selectionGroup: 'inventory' });
+  const character = fake(core, 'character', { group: 'player', rect, selectionGroup: 'inventory' });
+  const conversation = fake(core, 'conversation', { group: 'npc', rect, kind: 'station', binding });
+  const vendor = fake(core, 'vendor', { group: 'npc', rect, kind: 'station', binding });
+  show(core, character); show(core, skills, 'front'); show(core, conversation); show(core, vendor, 'front');
+  check(`V1 ${binding ?? 'bay'}: identical bounds cannot merge player and NPC books`, core.views().length === 2
+    && skills.drawn === true && vendor.drawn === true && ids(core, 'vendor') === 'conversation,vendor');
+  core.front('conversation');
+  check('V2 NPC tab changes preserve the selected player page', core.bookFor('skills')?.front === 'skills');
+  core.closeAll(core.bookFor('conversation')!.key);
+  check('V3 closing NPC tabs leaves player pages intact', skills.open && character.open && skills.drawn === true);
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed`);
