@@ -1,0 +1,73 @@
+name: Incorporate main into seamless
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: main-to-seamless
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/seamless-world-foundation
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Prepare a real main merge
+        id: merge
+        shell: bash
+        run: |
+          git fetch origin main codex/seamless-world-foundation
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          if ! git merge --no-ff --no-commit origin/main; then
+            echo "::error::Main needs a conflict resolution on seamless. No branch was published. Resolve the merge; do not discard either side or replace it with cherry-picks."
+            exit 1
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - if: steps.merge.outputs.changed == 'true'
+        run: npm ci
+      - if: steps.merge.outputs.changed == 'true'
+        name: Validate the integrated game
+        shell: bash
+        run: |
+          npm run check
+          npm run probe -- --jobs 2
+          npm run sim -- run --suite smoke
+          npm run genqa
+          npm run build
+          xvfb-run --auto-servernum npm run smoke:world
+      - if: steps.merge.outputs.changed == 'true'
+        name: Publish only the verified merge
+        shell: bash
+        run: |
+          mkdir -p .claude
+          printf '[files]\n' > .claude/ownership.main-sync.txt
+          node scripts/ownership-gate.mjs --allow .claude/ownership.main-sync.txt
+          git commit -m "Merge main into seamless"
+          git merge-base --is-ancestor origin/main HEAD
+          git push origin HEAD:refs/heads/codex/seamless-world-foundation
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.merge.outputs.changed == 'true'
+        with:
+          name: main-integration-playthrough
+          if-no-files-found: ignore
+          path: |
+            balance/reports/seamless-playthrough/REPORT.json
+            balance/reports/seamless-playthrough/*.png

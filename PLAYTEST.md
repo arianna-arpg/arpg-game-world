@@ -55,7 +55,7 @@ Performance changes move geographic validation into its worker, bound ordinary t
 
 ## Difference from main
 
-Compared on 2026-10-19 with local `main` at `118b510f`. The root checkout's uncommitted generation, adventure-region and bounty-passage work is separate and has not been folded into this integration.
+The [gameplay decision register](docs/ai/gameplay-alignment-20261019.md) compares the current published main content with seamless, separating mechanics, presentation, content gaps and runtime refactoring. It replaces the earlier comparison against stale local main. The root checkout's unfinished generation, adventure-region and bounty-passage work remains separate and preserved.
 
 | Area | `main` | This integration |
 | --- | --- | --- |
@@ -64,11 +64,11 @@ Compared on 2026-10-19 with local `main` at `118b510f`. The root checkout's unco
 | Surface | Connected campaign zones | Continuous terrain, embedded town, roads and physical campaign destinations |
 | Campaign coverage | Existing zone campaign | Partial spatial integration: the listed quests work here; the omissions above still matter |
 | Runtime | Existing World and zone systems | World plus the continuous adapter; a second retained-area path remains for inspection, not seamless travel |
-| Combat differences already in this branch | Main's baseline | Additional body/casting cues, live-aim support for authored windups, rear-target blink placement using body heading, and a 0.75-second life/mana orb-on-hit attempt interval per bearer and orb kind, with low-resource assistance |
+| Combat and presentation | Shared skill/content baseline; 44 × 5 cast bars | Cast bars restored to 44 × 5. Other input, AI and presentation differences are individually listed for keep/revert decisions in the register. Live-aim support is opt-in and no authored skill currently enables it. |
 
-The raw history shows 569 integration-side commits and 24 main-side commits before this entry correction. All 24 main-side commits have patch-equivalent commits in the integration history; that count is not 24 missing fixes. Solar Brand targeting, targeted echoes, Maddening Miasma's standing-ground ledger and the Mu Reliquary suppression are present. This does not certify every behavior as identical after subsequent edits.
+Solar Brand targeting, targeted echoes, Maddening Miasma's standing-ground ledger, Mu Reliquary suppression, orb recovery pacing, the harmless-critter minion fix and Charge's wake are already shared main content. The previous guide incorrectly described orb pacing as seamless-only.
 
-The size of the historical verification work is real: `balance/` accounts for 570,977 of 743,920 added lines in that tree comparison (about 77%), including large archived source copies. That measures repository additions, not development time or delivered gameplay. Those historical archives are outside the current release gates. The next architectural work should consolidate the existing gameplay owners while completing their continuous-world content; replacing the combat/account systems from scratch is not needed to fix entry.
+Main is the shared-content authority. The approved [integration workflow](docs/ai/branch-integration.md) merges future main changes into seamless, checks the integrated game and publishes only after success. Conflicts or failed checks stop publication. Historical verification archives remain outside normal release gates; the current decision register and playable route are the working references.
 
 ## Files and verification
 

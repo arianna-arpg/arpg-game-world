@@ -36,12 +36,15 @@ app.whenReady().then(async()=>{
   });
   assert.ok(r.same);assert.equal(r.fatal,null);
   const names=r.texts.filter(t=>t.text===expected);
-  assert.equal(names.length,expected&&!legacy?1:0);
+  assert.equal(names.length,expected&&!legacy?1:0,JSON.stringify({name,expected,cast:r.cast,texts:r.texts.map(t=>t.text)}));
   assert.equal(r.rims.length,slot>=0&&!legacy?1:0);
   if(slot>=0&&!legacy){
    const s=r.slots[slot];assert.equal(r.rims[0].x,s.x-2);assert.equal(r.rims[0].y,s.y-2);
    assert.ok(names[0].width<=104&&names[0].screenX>0&&names[0].screenX<1280&&names[0].screenY>0&&names[0].screenY<850);
-   if(r.cast.mode==='cast')assert.ok(r.fills.some(f=>f.height===6&&Math.abs(f.width-104*r.cast.elapsed/r.cast.total)<.01));
+   if(r.cast.mode==='cast'){
+    assert.ok(r.fills.some(f=>f.height===5&&Math.abs(f.width-44*r.cast.elapsed/r.cast.total)<.01));
+    assert.ok(!r.fills.some(f=>f.height===6&&Math.abs(f.width-104*r.cast.elapsed/r.cast.total)<.01));
+   }
   }
   fs.writeFileSync(path.join(dir,tag+'-'+name+'-canvas.png'),Buffer.from(r.png.split(',')[1],'base64'));delete r.png;
   win.webContents.invalidate();await new Promise(r=>setTimeout(r,120));fs.writeFileSync(path.join(dir,tag+'-'+name+'.png'),(await win.webContents.capturePage()).toPNG());
@@ -49,7 +52,11 @@ app.whenReady().then(async()=>{
  };
  try{
   await win.loadURL('http://127.0.0.1:'+server.address().port);await run(async()=>{
-   window.requestAnimationFrame=()=>0;Object.defineProperty(navigator,'getGamepads',{value:()=>[]});await new Promise(r=>setTimeout(r,200));
+   while(!window.__game)await new Promise(r=>setTimeout(r,40));
+   if(__game.hold)__game.hold(true);else window.requestAnimationFrame=()=>0;
+   // Finish account/settings hydration before this fixture enables its hints.
+   if(__game.hydrated)await __game.hydrated();
+   Object.defineProperty(navigator,'getGamepads',{value:()=>[]});
   });
   await boot('magician');
   const start=await run(()=>{

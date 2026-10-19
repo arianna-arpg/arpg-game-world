@@ -1,5 +1,16 @@
 # Hollow Wake: current working guide
 
+Main is the shared-content baseline. Incorporate its changes into seamless with real merges, not copied commits. Follow [the branch integration policy](docs/ai/branch-integration.md); every published main change is verified and merged by the sync-main workflow. Preserve unfinished work in other checkouts.
+
+The playable Mu loading-screen foundation is documented in docs/ui/loading-screen.md.
+LoadingScreen provides token-owned status, cancellation, retry and input isolation;
+SpiritRun is a rewardless pastime with soul-flames, branching rune gates and currents.
+Main's withLoadingScreen wraps its existing class-entry and Continue flows without
+importing seamless world or save machinery. The seamless branch additionally owns
+native-page readiness. Reuse the lease for future disruptive preparations; never
+delay readiness or grant gameplay rewards. Verify spiritrun, all types, boot smoke
+and balance/loading-screen-ui.cjs after an isolated build.
+
 This repository is `arianna-arpg/arpg-game-world`, the original TypeScript/Canvas/Electron ARPG. Work on the canonical `codex/seamless-world-foundation` branch. The user's 2026-10-19 direction is to deliver a playable continuous world and stop expanding historical probe scaffolding. This guide supersedes the accumulated handoff instructions preserved in [the reference archive](docs/ai/reference-before-playable-recovery.md). That archive is context, not an additional mandatory checklist.
 
 ## The delivery target
@@ -43,6 +54,7 @@ Tests must exercise current behavior and fail when that behavior is broken. Add 
 - `balance/`: simulation and verification tools; reports are generated, not source.
 - `docs/design/convergence-20261014.md`: agreed end state. `docs/design/seamless-world-foundation.md`: detailed implementation history and remaining cutover work.
 - `PLAYTEST.md`: concise player entry and current limits. Update it when the actual playable path changes.
+- `docs/ai/gameplay-alignment-20261019.md`: current main/seamless behavior decisions, with a complete changed-file/function inventory. Keep explicit keep/revert choices here; do not present every existing seamless change as approved or compare against a stale local main.
 
 ## Development rules
 

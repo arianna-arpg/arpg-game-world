@@ -6558,7 +6558,7 @@ export class Renderer {
       const meterRise=cs.mode==='overcharge'?Math.max(0,cs.stage??0)*4:4;
       const meterWidth=bw+(['overcharge','channel','multitude'].includes(cs.mode)?52:6);
       this.combatMeters.add(a,{x:bx2-3,y:by2-6-meterRise-nameHeight,w:meterWidth,h:bh+10+meterRise+nameHeight},()=>{
-        if (showName || movement) drawCastName(ctx, a, x, by2-6-meterRise, bw, movement, showName);
+        if (showName || movement) drawCastName(ctx, a, x, by2-6-meterRise, VIS_CFG.castReadout.labelWidth, movement, showName);
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
         ctx.fillRect(bx2 - 1, by2 - 1, bw + 2, bh + 2);
         let frac: number;

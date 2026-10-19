@@ -31,7 +31,7 @@ export const VIS_CFG = {
    * the battlefield visible. Filled skills retain their native readability. */
   hotbar: { emptyFillAlpha: .12, emptyBorderAlpha: .5 },
   /** Current player cast: actual work clock and owner, separate from cooldowns. */
-  castReadout: { enabled: true, width: 104, height: 6, nameHeight: 14,
+  castReadout: { enabled: true, width: 44, height: 5, labelWidth: 104, nameHeight: 14,
     showName: false, showMovement: false, plantedText: 'Feet planted', movementHeight: 12,
     movementFont: '10px Verdana', movementText: '#cad3d4',
     font: 'bold 11px Verdana', text: '#f1ecdd', edge: '#121719', outline: 3,
