@@ -1,3 +1,5 @@
+> **Current development focus: the offline seamless world.** Read [CURRENT.md](CURRENT.md) for the vision, playable path, main/seamless roles, unfinished work and deferred shard/MMORPG scope. The game references there are inspiration, not generation rules.
+
 <!--
   THE README DOCTRINE. This file is a DURABLE overview: it names nothing that
   ordinary development changes. No counts, rosters, class lists, file maps,
@@ -97,6 +99,7 @@ This page stays short on purpose. The project moves fast, and each kind of detai
 | What is in the game right now: every skill, support, monster, class, unique and biome | The [Database](https://arianna-arpg.github.io/arpg-game-world/database/), regenerated from `src/data/` on every push |
 | The passive tree | The [tree viewer](https://arianna-arpg.github.io/arpg-game-world/tree/) |
 | How the systems feel from the player's side | The [website](https://arianna-arpg.github.io/arpg-game-world/) and its [Systems](https://arianna-arpg.github.io/arpg-game-world/systems/) page |
+| Current vision, active/deferred work, branch roles and seamless playtest | [CURRENT.md](CURRENT.md) |
 | The repository map, every command, the verification gates and the working conventions | [CLAUDE.md](CLAUDE.md), maintained continuously. [AGENTS.md](AGENTS.md) points there too |
 | One system in depth | [docs/](docs/), one contract per system, grouped by area |
 | Packaging, releases, Steam Deck and controller layout | [STEAM.md](STEAM.md) |

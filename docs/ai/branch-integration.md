@@ -1,6 +1,6 @@
 # Main is the content baseline
 
-`main` owns shared combat, skills, balance, progression and authored content until the seamless cutover is ready. `codex/seamless-world-foundation` integrates that content with continuous geography and hosting. These are the two active delivery branches; other topic branches are sources to inspect, not alternative player entrypoints.
+`main` owns shared combat, skills, balance, progression and authored content until the seamless cutover is ready. `codex/seamless-world-foundation` integrates that content with continuous geography. New shard/MMORPG work is deferred under [the current offline focus](../../CURRENT.md); existing hosting remains retained code, not the controlling milestone. These are the two active delivery branches; other topic branches are sources to inspect, not alternative player entrypoints.
 
 Incorporate main with real merges, preserving ancestry. Do not create another stream of cherry-picked copies. Before starting seamless work, fetch main and verify it is an ancestor of the integration branch. After committing shared gameplay to main, merge that main commit into the canonical seamless checkout and run checks appropriate to the integration. Uncommitted work in another checkout is not part of either branch's delivered content and must remain intact.
 
