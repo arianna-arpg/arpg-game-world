@@ -132,6 +132,15 @@ test('saved changes and single claims survive eviction; failed restore is atomic
   assert.throws(() => restored.restore({ ...save, run: { ...save.run, seed: 7 } }));
   assert.equal(canonical(restored.snapshot()), before);
   save.terrain[0].color = '#ffffff'; assert.equal(restored.patchAt(at(1, 1))?.color, '#123456');
+  const foundation={address:at(13,14),region:'ground',color:'#556644',cause:'journey:road'};
+  restored.establish(foundation);
+  restored.establish({...foundation,address:at(61,1)});
+  assert.equal(restored.patchAt(at(1,1))?.color,'#123456','player edits win over regenerated roads');
+  assert.equal(restored.patchAt(at(61,1))?.color,'#556644');
+  assert.equal(restored.snapshot().terrain.length,1,'unchanged roads are not player consequences');
+  restored.restore(restored.snapshot());
+  assert.equal(restored.patchAt(at(61,1))?.color,'#556644','restoring changes retains derived ground');
+  assert.ok(restored.patchesInCells([origin]).some(p=>p.address.x===60));
 });
 test('worldmass movement, weighted routes, and shared rays cross negative page boundaries', () => {
   const flat: MassSpec = { ...spec, surfaces: [{ id: 'land', priority: 0, when: [], region: 'ground', color: '#557744', biome: 'field' }] };

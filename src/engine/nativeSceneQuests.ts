@@ -15,6 +15,7 @@ import {npcDwellReach} from '../data/transit';
 import {countRoads,placeZoneAt,projectCoord,nearestNode,roadBudgetOf} from './worldgen';
 import {BOUNTY_BOARD_CFG,describeBountyPay} from '../data/bountyboard';
 import {QUESTS} from '../quests/defs';
+import {massQuestGround} from '../worldmass/quests';
 import {resolveQuestZone} from '../quests/reliquary';
 import type {QuestDef} from '../quests/types';
 import {mintQuestImbue} from './questImbue';
@@ -179,7 +180,9 @@ export function sceneCompleteQuestField(host:NativeSceneQuestHost,aq: SavedQuest
 export function sceneEnsureQuestCargo(host:NativeSceneQuestHost):void {
     if (host.localSeat.keeper) { host.ensureSeatCargo(); return; } // THE CHARACTER'S QUESTS
     for (const aq of host.activeQuests) {
-      if (aq.placeId || !aq.fieldDone || aq.zoneId !== host.zone.id) continue;
+      if (!aq.fieldDone || aq.zoneId !== host.zone.id) continue;
+      const ground=aq.placeId ? massQuestGround(host.massRuntime,aq,host.player.pos) : undefined;
+      if(aq.placeId && !ground)continue;
       const q = host.questDefOf(aq.questId);
       if (!q?.collect) continue;
       // THE QUEST HAND (a hosted world): the one cargo is carried when any player's bag holds it.
@@ -192,7 +195,7 @@ export function sceneEnsureQuestCargo(host:NativeSceneQuestHost):void {
         tier: 1, baseRoll: 0, affixes: [], implicitRolls: [] };
       const boss = host.zone.objective.kind === 'boss' ? host.zone.objective.id : undefined;
       const deed = host.localSeat.keeper ? host.objectivePlaces()[0] : undefined; // XP BY PLACE's own: where the deed was done, never the keeper's spot
-      const at = host.actors.find(a => a.defId === boss && a.dead)?.pos ?? deed ?? host.player.pos;
+      const at = ground ?? host.actors.find(a => a.defId === boss && a.dead)?.pos ?? deed ?? host.player.pos;
       host.dropGearAt(at, item, undefined, true);
       host.charDirty = true;
     }
@@ -202,7 +205,9 @@ export function sceneEnsureSeatCargo(host:NativeSceneQuestHost):void {
     let lying: Map<string, number> | null = null; // the ground's cargo, counted once a hand is owed (never per tick)
     for (const seat of host.handSeats()) {
       for (const aq of host.questLedgerOf(seat).active) {
-        if (aq.placeId || !aq.fieldDone || aq.zoneId !== host.zone.id) continue;
+        if (!aq.fieldDone || aq.zoneId !== host.zone.id) continue;
+        const ground=aq.placeId ? massQuestGround(host.massRuntime,aq,seat.actor.pos) : undefined;
+        if(aq.placeId && !ground)continue;
         const q = host.withQuestHand(seat, () => host.questDefOf(aq.questId));
         if (!q?.collect || seat.meta.items.some(i => i.questId === q.id)) continue;
         if (!lying) {
@@ -217,7 +222,7 @@ export function sceneEnsureSeatCargo(host:NativeSceneQuestHost):void {
           name: q.collect.name, questId: q.id, rarity: 'common', ilvl: host.zone.level,
           tier: 1, baseRoll: 0, affixes: [], implicitRolls: [] };
         const boss = host.zone.objective.kind === 'boss' ? host.zone.objective.id : undefined;
-        const at = host.actors.find(a => a.defId === boss && a.dead)?.pos ?? host.objectivePlaces()[0] ?? host.seatHero(seat).pos;
+        const at = ground ?? host.actors.find(a => a.defId === boss && a.dead)?.pos ?? host.objectivePlaces()[0] ?? host.seatHero(seat).pos;
         host.dropGearAt(at, item, undefined, true);
         host.charDirty = true;
       }

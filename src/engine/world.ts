@@ -15106,8 +15106,9 @@ actors: Actor[] = [];
   }
 
   serializeWorldState(): WorldStateSave;
+  serializeWorldState(options: { shareConfig: true }): WorldStateSave;
   serializeWorldState(options: MassCheckpointOptions): MassWorldCheckpoint;
-  serializeWorldState(options?: MassCheckpointOptions): WorldStateSave | MassWorldCheckpoint {
+  serializeWorldState(options?: MassCheckpointOptions | { shareConfig: true }): WorldStateSave | MassWorldCheckpoint {
     // Snapshot the overlays FIRST: their bags carry the ownedZones claims
     // (world/overlay.ts convention) that decide which event ground rides.
     const overlays = this.sim.snapshotOverlays();
@@ -15264,8 +15265,9 @@ actors: Actor[] = [];
     const vfrac = (cur: number, max: number): number => max > 0 ? clamp(cur / max, 0, 1) : 1;
     return sealNativeAreaWorldSave(this, {
       schemaVersion: WORLD_SCHEMA_VERSION,
-      ...(this.massRuntime ? { worldmass: options ? this.massRuntime.snapshot(this, options) : this.massRuntime.snapshot(this) }
-        : this.massAway ? { worldmass: copyMassSidearea(options ? compactMass(this.massAway.surface) : this.massAway.surface) } : {}),
+      ...(this.massRuntime ? { worldmass: options && 'massCheckpoint' in options ? this.massRuntime.snapshot(this, options)
+        : options && 'shareConfig' in options ? this.massRuntime.snapshot(this, options) : this.massRuntime.snapshot(this) }
+        : this.massAway ? { worldmass: copyMassSidearea(options && 'massCheckpoint' in options ? compactMass(this.massAway.surface) : this.massAway.surface) } : {}),
       ...(this.captureMassSideareas() ? { massSideareas: this.captureMassSideareas() } : {}),
       odyssey: this.odyssey.snapshot(),
       zones,

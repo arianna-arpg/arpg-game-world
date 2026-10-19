@@ -6,7 +6,9 @@ import type { Doodad, PlacedStructure } from '../engine/levelgen';
 import { hasDoodadRule } from '../engine/levelgen';
 import { START_ZONE, type ZoneDef } from '../data/zones';
 import { MONSTERS } from '../data/monsters';
-import { TOWN_TIERS } from '../data/townBuild';
+import { ORACLE_RESCUED } from '../data/oracle';
+import { TOWN_TIERS, townSiteAt } from '../data/townBuild';
+import { QUESTS } from '../quests/defs';
 import { regionKind } from '../world/regions';
 import { GridWalkField } from '../world/gridWalk';
 import type { MassState } from './state';
@@ -101,9 +103,26 @@ export class MassSettlement {
     });
     if (saved) this.restore(world, saved);
     this.residents = new WeakSet(this.bodies.map(b=>b.live));
+    this.syncQuestResidents(world);
   }
   contains(x: number, y: number): boolean {
     return x >= 0 && y >= 0 && x < this.zone.size.w && y < this.zone.size.h;
+  }
+  /** A rescue changes this living town without unloading/rebuilding its scene. */
+  syncQuestResidents(world: World): void {
+    const seat=(monster:string,site:'quest_house'|'oracle',dy:number)=>{
+      if(this.bodies.some(b=>b.live.defId===monster))return;
+      const at=townSiteAt(this.tier,site);if(!at)return;
+      const live=world.createMonster(monster,1,'player');
+      live.pos=world.findFreeSpot({x:at.x,y:at.y+dy},live.radius);
+      live.fromZoneGen=true;live.fillResources();
+      this.bodies.push({id:monster+'#campaign',live});this.residents.add(live);world.actors.push(live);
+      world.actorGridRev++;
+    };
+    // Campaign work is available at the quartermaster even before the account
+    // buys his house. The purchase and all native quest gates remain intact.
+    if(this.spec.quests?.bindings.some(b=>QUESTS[b.quest]?.giver==='townsfolk_questgiver'))seat('townsfolk_questgiver','quest_house',105);
+    if(world.account.ledger[ORACLE_RESCUED] || world.ledger[ORACLE_RESCUED])seat('townsfolk_oracle','oracle',76);
   }
   /** Immutable native foundation used by generation planners. Live floor edits
    * must not move a seeded destination when Continue rebuilds its route plan. */

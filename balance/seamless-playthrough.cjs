@@ -1,4 +1,4 @@
-// Player-facing acceptance: default build, actual Begin/class/Continue buttons.
+// Player-facing acceptance: local tutorial, physical Mu vessels and saved resume.
 // No debug start, no replacement generator and no predecessor source snapshots.
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
@@ -6,7 +6,7 @@ const { startGameServer } = require('../launcher/server.cjs');
 const out = path.join(__dirname, 'reports', 'seamless-playthrough');
 fs.mkdirSync(out, { recursive: true });
 app.setPath('userData', path.join(out, 'profile-' + process.pid));
-app.disableHardwareAcceleration();
+if (!process.env.WORLD_GPU) app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const report = { checks: [], errors: [] };
   const record = (name, value) => { report.checks.push({ name, ...value }); console.log(JSON.stringify({ name, ...value })); };
@@ -40,20 +40,62 @@ app.whenReady().then(async () => {
     throw Error('Normal entry did not reach a ready continuous world');
   };
   const shot = async name => {
-    const png = await run(() => document.getElementById('game').toDataURL('image/png'));
-    fs.writeFileSync(path.join(out, name + '.png'), Buffer.from(png.split(',')[1], 'base64'));
+    const png = await win.webContents.capturePage();
+    fs.writeFileSync(path.join(out, name + '.png'), png.toPNG());
   };
   const timer = setTimeout(() => { console.error('Seamless playthrough timed out'); app.exit(1); }, 360000);
   try {
     await boot();
     await run(() => document.getElementById('sm-start').click());
-    await pause(100);
-    const chosen = await run(() => {
-      const card = document.querySelector('#class-select .class-card[data-locked="false"]');
-      if (!card) throw Error('Begin did not show playable classes');
-      const id = card.dataset.id; card.click(); return id;
+    for(let i=0;i<300;i++){
+      if(await run(()=>!__game.loading.active && __game.world().scene?.def.id==='prologue'))break;
+      await pause(30);
+    }
+    const tutorial=await run(async()=>{
+      const w=__game.world(), stages=new Set();let presses=0;
+      if(w.scene?.def.id!=='prologue'||w.massRuntime)throw Error('Begin did not start the local tutorial');
+      if(w.account===__game.account()||w.account.roster.length||w.account.lifetimeCredits)throw Error('Tutorial inherited the real account');
+      __game.devInput(()=>{
+        const target=w.actors.filter(a=>a.team==='enemy'&&!a.dead).sort((a,b)=>Math.hypot(a.pos.x-w.player.pos.x,a.pos.y-w.player.pos.y)-Math.hypot(b.pos.x-w.player.pos.x,b.pos.y-w.player.pos.y))[0];
+        const kind=w.scene?.def.stages[w.scene.stageIx].kind, goal=target?.pos??{x:w.player.pos.x+100,y:w.player.pos.y};
+        const d=Math.hypot(goal.x-w.player.pos.x,goal.y-w.player.pos.y);
+        const press=presses++%16;
+        return {dx:kind==='drill'?(w.scene.state.goalIx===0?1:0):target&&d>65?(goal.x-w.player.pos.x)/d:0,
+          dy:kind==='drill'?0:target&&d>65?(goal.y-w.player.pos.y)/d:0,aim:goal,held:[press<8],edge:[press===0]};
+      });
+      try{
+        for(let i=0;i<4500;i++){
+          const button=document.querySelector('#story-continue:not([disabled])');button?.click();
+          if(w.scene)stages.add(w.scene.def.stages[w.scene.stageIx].kind);
+          __game.step(1,40);
+          if(__game.crash().fatal)throw Error(JSON.stringify(__game.crash().fatal));
+          if(!document.getElementById('start-menu').classList.contains('hidden')&&__game.account().ledger.prologue_lived)break;
+          if(i%8===0)await new Promise(r=>setTimeout(r,0));
+        }
+      }finally{__game.devInput(null);}
+      return {stages:[...stages],complete:!!__game.account().ledger.prologue_lived,roster:__game.account().roster.length,
+        scene:w.scene&&{stage:w.scene.stageIx,goal:w.scene.state.goalIx,casts:w.scene.casts,prompt:w.scene.prompt},time:w.time};
     });
+    record('Begin completes a fresh local tutorial',tutorial);assert(tutorial.complete);assert.equal(tutorial.roster,0);await shot('tutorial-complete');
+    await run(()=>document.getElementById('sm-continue').click());
+    for(let i=0;i<300;i++){
+      if(await run(()=>!__game.loading.active && __game.world().scene?.def.id==='mu'))break;
+      await pause(30);
+    }
+    const chosen=await run(async()=>{
+      const w=__game.world();__game.step(2,40);
+      const apps=w.scene?.state.apps??[],app=apps.find(a=>a.rank==='awake'&&a.classId==='warrior')??apps.find(a=>a.rank==='awake');
+      if(!app)throw Error('Continue did not reach the in-world Mu vessels');
+      const body=w.actors.find(a=>a.id===app.id);
+      __game.devInput(()=>{const dx=body.pos.x-w.player.pos.x,dy=body.pos.y-w.player.pos.y,d=Math.hypot(dx,dy);return {dx:d>body.radius+25?dx/d:0,dy:d>body.radius+25?dy/d:0,aim:body.pos,held:[],edge:[]};});
+      try{for(let i=0;i<500&&!document.getElementById('mu-wake');i++){__game.step(1,40);if(i%8===0)await new Promise(r=>setTimeout(r,0));}}finally{__game.devInput(null);}
+      const wake=document.getElementById('mu-wake');if(!wake)throw Error('Physical approach did not offer the Mu vessel');
+      return app.classId;
+    });
+    await shot('mu');
+    await run(seed=>{if(seed){window.__savedRandom=Math.random;Math.random=()=>seed/4294967296;}document.getElementById('mu-wake').click();},Number(process.env.WORLD_SEED)||0);
     await ready();
+    await run(()=>{if(window.__savedRandom){Math.random=__savedRandom;delete window.__savedRandom;}});
     const fresh = await run(() => {
       const w = __game.world(), m = w.massRuntime;
       window.__playtestHero = w.player; window.__playtestLoads = 0;
@@ -65,7 +107,7 @@ app.whenReady().then(async () => {
         trails: m.journey.trails.slice(0, 4), enemies: w.actors.filter(a => a.team === 'enemy' && !a.dead).length };
     });
     assert.equal(fresh.zone, 'worldmass_expedition'); assert.equal(fresh.retained, false); assert.equal(fresh.classId, chosen);
-    record('Begin reaches the continuous world', fresh); await shot('lastlight');
+    record('Mu wakes into the continuous world', fresh); await shot('lastlight');
     const moved = await run(() => {
       const w = __game.world(), before = { ...w.player.pos };
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', code: 'KeyD', bubbles: true }));
@@ -76,8 +118,22 @@ app.whenReady().then(async () => {
     assert.equal(moved.loads, 0); assert(moved.sameHero); record('Keyboard movement', moved);
     // Walk the actual opening road using ordinary movement intents. The hero's
     // position, terrain and opponents are never moved to manufacture a crossing.
+    if (process.env.PROFILE_WORLD) {
+      await run(()=>{window.__profileWork=true;});
+      win.webContents.debugger.attach('1.3');
+      await win.webContents.debugger.sendCommand('Profiler.enable');
+      await win.webContents.debugger.sendCommand('Profiler.start');
+    }
     const journey = await run(async () => {
+      __game.perfFrames(true);
       const w = __game.world(), m = w.massRuntime, trail = m.journey.trails[0];
+      const work={}, undo=[];
+      if(window.__profileWork)for(const [owner,name] of [[m,'update'],[m,'prepareNativeCountry'],[m.stream,'step'],[m.dormancy,'update'],[m.geography,'prepare'],[m,'snapshot']]){
+        if(!owner||typeof owner[name]!=='function')continue;
+        const original=owner[name],label=owner===m?'mass.'+name:owner.constructor.name+'.'+name;
+        owner[name]=function(...args){const t=performance.now();try{return original.apply(this,args);}finally{work[label]=Math.max(work[label]??0,performance.now()-t);}};
+        undo.push(()=>owner[name]=original);
+      }
       const innDoor = w.doodads.filter(d => d.door)
         .sort((a,b) => Math.hypot(a.pos.x-w.player.pos.x,a.pos.y-w.player.pos.y)-Math.hypot(b.pos.x-w.player.pos.x,b.pos.y-w.player.pos.y))[0];
       const cells = new Set(), frames = [], points = [
@@ -106,12 +162,21 @@ app.whenReady().then(async () => {
             panels: [...document.querySelectorAll('[id]')].filter(e => /menu|dialogue|story|card/.test(e.id) && e.offsetHeight > 0 && !e.classList.contains('hidden')).map(e => e.id) }));
           if (i % 8 === 0) await new Promise(r => setTimeout(r, 0));
         }
-      } finally { __game.devInput(null); }
+      } finally { __game.devInput(null);for(const restore of undo)restore(); }
       frames.sort((a,b) => a-b);
+      const perf = __game.perfFrames();
+      const percentiles = rows => { rows.sort((a,b)=>a-b); return { p50: rows[Math.floor(rows.length*.5)], p95: rows[Math.floor(rows.length*.95)], max: rows.at(-1) }; };
       return { distance, cells: [...cells], pos: { ...w.player.pos }, target, remaining: points.length,
+        simulation: percentiles(perf.sim), rendering: percentiles(perf.ren),
+        frameMax:frames.at(-1),work,phase:perf.phase,
         zone: w.zone.id, loads: __playtestLoads, sameHero: w.player === __playtestHero,
         frameMsP50: frames[Math.floor(frames.length * .5)], frameMsP95: frames[Math.floor(frames.length * .95)] };
     });
+    if (process.env.PROFILE_WORLD) {
+      const { profile } = await win.webContents.debugger.sendCommand('Profiler.stop');
+      fs.writeFileSync(path.join(out, 'opening-road.cpuprofile'), JSON.stringify(profile));
+      win.webContents.debugger.detach();
+    }
     assert(journey.cells.length > 1); assert.equal(journey.loads, 0); assert(journey.sameHero);
     assert.equal(journey.remaining, 0); assert(Math.hypot(journey.pos.x - journey.target.x, journey.pos.y - journey.target.y) < 24);
     record('Walk from Lastlight to the western camp', journey); await shot('western-road');
@@ -143,15 +208,33 @@ app.whenReady().then(async () => {
       return { charId: w.meta.charId, seed: w.massRuntime.generator.run.seed, pos: { ...w.player.pos }, zone: w.zone.id };
     });
     await boot();
+    await run(()=>document.getElementById('sm-start').click());
+    for(let i=0;i<300;i++){
+      if(await run(()=>!__game.loading.active && __game.world().scene?.def.id==='prologue'))break;
+      await pause(30);
+    }
+    const replay=await run(()=>{
+      const w=__game.world();
+      if(w.scene?.def.id!=='prologue'||w.account===__game.account()||w.account.ledger.prologue_lived||w.meta.charId)
+        throw Error('Begin replay did not create a fresh provisional tutorial');
+      window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true}));
+      __game.step(1,20);
+      window.dispatchEvent(new KeyboardEvent('keyup',{key:'Escape',code:'Escape',bubbles:true}));
+      const leave=document.getElementById('esc-end');if(!leave)throw Error('Tutorial has no Main Menu exit');
+      leave.click();__game.step(2,20);
+      return {fresh:true,complete:!!__game.account().ledger.prologue_lived};
+    });
+    assert(replay.complete);record('Begin replay leaves the saved life intact',replay);
+    await boot();
     await run(async () => {
-      for (let i = 0; i < 100 && !document.querySelector('#sm-continue:not([disabled])'); i++) await new Promise(r => setTimeout(r, 40));
-      const button = document.querySelector('#sm-continue:not([disabled])');
+      for (let i = 0; i < 100 && !document.querySelector('#sm-resume:not([disabled])'); i++) await new Promise(r => setTimeout(r, 40));
+      const button = document.querySelector('#sm-resume:not([disabled])');
       if (!button) throw Error('No Continue button after saving'); button.click();
     });
     await ready();
     const resumed = await run(() => { const w = __game.world(); return { charId: w.meta.charId,
       seed: w.massRuntime.generator.run.seed, pos: { ...w.player.pos }, zone: w.zone.id }; });
-    assert.deepEqual(resumed, saved); record('Disk save and normal Continue', resumed); await shot('continued');
+    assert.deepEqual(resumed, saved); record('Disk Resume after tutorial replay', resumed); await shot('continued');
     assert.deepEqual(report.errors, []); report.status = 'passed';
   } catch (error) {
     try { report.crash = await run(() => __game.crash()); } catch {}

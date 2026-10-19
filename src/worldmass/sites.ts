@@ -22,7 +22,7 @@ export interface MassSiteSpec {
   doodads: Doodad[];
   /** Native placed bodies. Explicit garrison roles join admission and clearance;
    * omitted roles preserve older scenery-only completion semantics. */
-  fixtures: { monster: string; x: number; y: number; garrison?: boolean }[];
+  fixtures: { monster: string; x: number; y: number; garrison?: boolean; level?: number }[];
   cache?: { x: number; y: number; holdSeconds: number; clearedHoldSeconds?: number };
   /** Native altar rules, snapshotted per expedition. Repeated places require field residency. */
   altars?: MassAltarSpec[];
@@ -74,7 +74,8 @@ export function validateMassSite(site: MassSiteSpec, radius: number): void {
     || new Set(site.puzzles.map(p => p?.id)).size !== site.puzzles.length)) throw Error('Invalid worldmass site puzzles');
   for (const puzzle of site.puzzles ?? []) validateMassPuzzle(puzzle, radius);
   for (const f of site.fixtures) if (!MONSTERS[f.monster] || !within(f.x, f.y, 32)
-    || f.garrison!==undefined && typeof f.garrison!=='boolean')
+    || f.garrison!==undefined && typeof f.garrison!=='boolean'
+    || f.level!==undefined && (!Number.isSafeInteger(f.level) || f.level<1 || f.level>100))
     throw new Error('Invalid worldmass site fixture');
   if (site.cache && (!within(site.cache.x, site.cache.y, 32)
     || !Number.isFinite(site.cache.holdSeconds) || site.cache.holdSeconds <= 0

@@ -283,6 +283,7 @@ export class WorldMassRuntime {
         throw Error('WildernessPaths require real cache-bearing destinations');
     }
     if(config.journey?.nearbyReservations!==undefined && config.journey.nearbyReservations!==true)throw Error('Invalid nearbyReservations');
+    if(config.journey?.derivedGround!==undefined && config.journey.derivedGround!==true)throw Error('Invalid journey ground');
     validateMassQuests(config);
     if (config.geography && !config.nativeCountry) throw Error('Geographic gameplay requires native country sources');
     if (config.bounties !== undefined) validateMassBounties(config.bounties);
@@ -314,7 +315,7 @@ export class WorldMassRuntime {
     for (const c of config.content) {
       if(c.ambientPack){validateAmbientPack(c.ambientPack);if(c.site||c.magicPack||!config.dormancy)throw Error('ambientPack requires ordinary dormant ownership');}
       if (!c.id || !c.source || !Number.isSafeInteger(c.level) || c.level < 1 || c.level > 100
-        || !Number.isSafeInteger(c.count) || c.count < 0 || c.count === 0 && !c.site || c.count > 16 || !c.table.length
+        || !Number.isSafeInteger(c.count) || c.count < 0 || c.count === 0 && !c.site || c.count > 48 || !c.table.length
         || c.table.some(r => !MONSTERS[r.id] || !Number.isFinite(r.weight) || r.weight <= 0)) throw new Error('Invalid worldmass population');
     }
     const regionalDiscoveries = config.terrain.regionalDiscoveries?.choices ?? [];
@@ -476,7 +477,7 @@ export class WorldMassRuntime {
     this.sites.restore(save?.sites, world.time);
     if (this.config.journey && this.settlement) {
       this.journey = new MassJourney(this.config.journey, this.settlement, this.generator, this.walk);
-      if (!save) this.journey.establish(this.state);
+      if (!save || this.config.journey.derivedGround) this.journey.establish(this.state);
       if (this.config.journey.roadside) this.roadside = new MassRoadside(this.config.journey.roadside,
         this.journey, this.settlement, this.generator, this.walk);
     }
@@ -663,6 +664,10 @@ export class WorldMassRuntime {
     return Math.max(1,chest.maxLock/seconds);
   }
   siteCleared(id: string): boolean { return this.state.claimed('site-cleared',id); }
+  garrisonProgress(place: MassPlace): { total: number; remaining: number } | null {
+    const content=this.config.content.find(c=>c.id===place.content);
+    return content ? massGarrisonProgress(this.state,content,place.id,id=>this.hasNative(id),this.populationCount(place)) : null;
+  }
   siteSearched(id: string): boolean {
     return this.state.claimed('site-looted', id) || this.cacheOpened(canonical([id, 'cache']));
   }
@@ -914,7 +919,7 @@ export class WorldMassRuntime {
       }
       for(const cell of focusCells)this.state.claim('explored',cellKey(cell));
     }
-    if(world.massRenderPages)this.stream.step(boot ? this.stream.cols ** 2 * 9 : this.config.samplesPerTick);
+    if(world.massRenderPages)this.stream.step(boot ? this.stream.cols ** 2 * 9 : this.config.samplesPerTick, boot ? Infinity : 2);
     for (const [id, actor] of this.natives) if (actor.dead) {
       this.state.claim('fallen', id); this.natives.delete(id);
     }
@@ -925,6 +930,7 @@ export class WorldMassRuntime {
     }
     if (!boot && world.time < this.nextPopulation) return;
     this.nextPopulation = world.time + .5;
+    this.settlement?.syncQuestResidents(world);
     this.dormancy?.update(world, this.natives);
     if(this.nativeFeatures && this.nativeCountry && this.nativeHost){
       const radius=Math.min(2400,this.nativeCountry.spec.spacing/2);
@@ -1016,7 +1022,7 @@ export class WorldMassRuntime {
           const id = canonical([p.id, 'fixture', index]);
           if (this.hasNative(id) || this.state.claimed('fallen', id) || this.population >= capacity) continue;
           const offset = siteOffset(p, fixture.x, fixture.y);
-          const a = this.births.create(world,id,fixture.monster,population.level);
+          const a = this.births.create(world,id,fixture.monster,fixture.level ?? population.level);
           applyMassTerritory(a, this.config.territory);
           const spot = world.findFreeSpot({ x: q.x + offset.x, y: q.y + offset.y }, a.radius);
           if (!this.walk.isWalkable(spot.x, spot.y) || world.pointInSolid(spot.x, spot.y, a.radius)
@@ -1279,8 +1285,9 @@ export class WorldMassRuntime {
     this.natives.clear();for(const [id,a]of ordered)this.natives.set(id,a);
   }
   snapshot(world: World): MassAdventureSave;
+  snapshot(world: World, options: { shareConfig: true }): MassAdventureSave;
   snapshot(world: World, options: MassCheckpointOptions): MassCheckpoint;
-  snapshot(world: World, options?: MassCheckpointOptions): MassAdventureSave | MassCheckpoint {
+  snapshot(world: World, options?: MassCheckpointOptions | { shareConfig: true }): MassAdventureSave | MassCheckpoint {
     this.orderNativeBodies(world);
     const enemies: MassEnemySave[] = [];
     for (const [id, a] of this.natives) {
@@ -1307,6 +1314,12 @@ export class WorldMassRuntime {
       origin: this.origin, player: { ...world.player.pos, tier: world.player.tier ?? 0 }, enemies,
       ...(this.settlement ? { settlement: this.settlement.snapshot(world) } : {}),
       ...(this.ecology ? { ecology: this.ecology.snapshot(world) } : {}), sites: this.sites.snapshot(world), contents: captureZoneContents(world) };
+    if(options && 'shareConfig' in options){
+      // Persistence may share recursively frozen land. Live consequences still
+      // detach at capture; public exports retain a fully independent copy.
+      const {config,...dynamic}=massCheckpoint;
+      return {...JSON.parse(JSON.stringify(dynamic)),config};
+    }
     return JSON.parse(JSON.stringify(options ? compactMass(massCheckpoint) : massCheckpoint));
   }
   get population(): number { return (this.dormancy?.activeCount(this.natives) ?? this.natives.size) + this.puzzles.population + (this.nativeHost?.population ?? 0) + (this.geography?.population ?? 0); }

@@ -128,10 +128,15 @@ export function prepareGeographicPlan(job:GeographicPlanJob,generator?:MassGener
     const identity=geographicPlanIdentity(job.input);if(identity.inputHash!==job.inputHash||identity.sourceHash!==job.sourceHash)throw Error('Geographic input identity mismatch');
     const {plan,metrics}=compileGeographicPlan(job.input,generator),bytes=JSON.stringify(plan).length*2;
     if(bytes>job.maxBytes)throw Error('Geographic plan exceeds transfer budget');
-    return {protocol:1,token:job.token,preparation:{...identity,plan,metrics,compileMs:performance.now()-started,bytes,planHash:massDigest(plan)}};
+    const preparation={...identity,plan,metrics,compileMs:performance.now()-started,bytes,planHash:massDigest(plan)};
+    // The worker owns the expensive terrain/route check as well as compilation.
+    // A generated page is not a bounded main-thread task, even between yields.
+    validateGeographicPreparation(job.input,preparation,generator);
+    preparation.compileMs=performance.now()-started;
+    return {protocol:1,token:job.token,preparation};
   }catch(error){return {protocol:1,token:job.token,error:String(error instanceof Error?error.message:error)};}
 }
-function validateGeographicEnvelope(input:Readonly<GeographicPlanInput>,p:GeographicPreparation):Readonly<GeographicPlan>|null{
+export function validateGeographicEnvelope(input:Readonly<GeographicPlanInput>,p:GeographicPreparation):Readonly<GeographicPlan>|null{
   validateGeographicPlanInput(input);const identity=geographicPlanIdentity(input);
   if(!p||p.compiler!==identity.compiler||p.inputHash!==identity.inputHash||p.sourceHash!==identity.sourceHash||p.planHash!==massDigest(p.plan)
     ||!Number.isFinite(p.compileMs)||p.compileMs<0||!Number.isSafeInteger(p.bytes)||p.bytes!==JSON.stringify(p.plan).length*2

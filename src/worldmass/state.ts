@@ -11,6 +11,7 @@ export interface MassStateSave {
 /** Sparse consequences belong to the run, never a resident page's lifetime. */
 export class MassState {
   private patches = new Map<string, MassTerrainPatch>();
+  private foundations = new Map<string, MassTerrainPatch>();
   /** Derived page index: bounded planning reads only nearby sparse edits. */
   private patchPages = new Map<string, Map<string, Readonly<MassTerrainPatch>>>();
   private claims = new Map<string, [string, string]>();
@@ -36,20 +37,28 @@ export class MassState {
     const p = this.atCell(at);
     return canonical([cellKey(p), p.x, p.y]);
   }
-  patchAt(at: MassAddress): Readonly<MassTerrainPatch> | undefined { return this.patches.get(this.key(at)); }
+  patchAt(at: MassAddress): Readonly<MassTerrainPatch> | undefined {
+    const key=this.key(at); return this.patches.get(key) ?? this.foundations.get(key);
+  }
   /** No history-wide snapshot or scan when preparing a local physical route. */
   patchesInCells(cells: readonly MassCell[]): readonly Readonly<MassTerrainPatch>[] {
     if (!Array.isArray(cells) || cells.length > 128) throw Error('Terrain patch query exceeds page budget');
     const keys = new Set(cells.map(c => cellKey(address(c.dimension, c.cx, c.cy, 0, 0, this.run.addressSpan))));
     return Object.freeze([...keys].sort().flatMap(key => [...(this.patchPages.get(key)?.values() ?? [])]));
   }
-  paint(patch: MassTerrainPatch): void {
+  /** Pinned journey ground is regenerated on entry; only player edits are saved. */
+  establish(patch: MassTerrainPatch): void { this.paintInto(patch, this.foundations); }
+  paint(patch: MassTerrainPatch): void { this.paintInto(patch, this.patches); }
+  private paintInto(patch: MassTerrainPatch, target: Map<string, MassTerrainPatch>): void {
     if (typeof patch.region !== 'string' || !patch.region || typeof patch.cause !== 'string' || !patch.cause
       || !/^#[0-9a-f]{6}$/i.test(patch.color)) throw new Error('Terrain change needs region, color, and cause');
     const normalized = freezeData({ region: patch.region, color: patch.color, cause: patch.cause, address: this.atCell(patch.address) });
-    const key = this.key(normalized.address), before = this.patches.get(key);
+    const key = this.key(normalized.address), before = target.get(key);
     if (before && canonical(before) === canonical(normalized)) return;
-    this.patches.set(key, normalized); this.revision++; this.terrainRevision++;
+    target.set(key, normalized);
+    if (target===this.foundations && this.patches.has(key)) return;
+    if (target===this.patches) this.revision++;
+    this.terrainRevision++;
     const page = cellKey(normalized.address);
     let rows = this.patchPages.get(page);
     if (!rows) { rows = new Map(); this.patchPages.set(page, rows); }
@@ -91,6 +100,10 @@ export class MassState {
         || !next.claim(row[0], row[1])) throw new Error('Malformed or duplicate world claim');
     }
     this.patches = next.patches; this.patchPages = next.patchPages; this.claims = next.claims;
+    for(const [key,patch] of this.foundations)if(!this.patches.has(key)){
+      const page=cellKey(patch.address),rows=this.patchPages.get(page)??new Map();
+      rows.set(key,patch);this.patchPages.set(page,rows);
+    }
     // Revision is local invalidation, monotonic even when loading an earlier save.
     this.revision = Math.max(this.revision + 1, data.revision);
     this.terrainRevision++;

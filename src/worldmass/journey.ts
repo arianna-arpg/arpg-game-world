@@ -22,6 +22,8 @@ export interface MassJourneyStop {
   offset: number;
 }
 export interface MassJourneySpec {
+  /** Regenerate pinned roads/clearings; save only later terrain changes. */
+  derivedGround?: true;
   /** Keep room for unadmitted destination bodies and riddles within the shared cap. */
   reservePopulation?: boolean;
   /** Reserve unissued destination bodies only within the approaching play area. */
@@ -138,7 +140,7 @@ export class MassJourney {
         trails.push({ id: a.p.id + '/circuit', points: [a.q, corner, b.q], width: spec.width });
       }
     const extensionIds=new Set(spec.destinations.map(d=>d.id));
-    if (spec.extensions!==undefined && (!Array.isArray(spec.extensions)||spec.extensions.length>12))
+    if (spec.extensions!==undefined && (!Array.isArray(spec.extensions)||spec.extensions.length>48))
       throw new Error('Invalid frontier extensions');
     for (const e of spec.extensions ?? []) {
       const parent=places.find(p=>p.recipe===e.from);
@@ -232,13 +234,14 @@ export class MassJourney {
       return Math.hypot(Math.max(0, o.x - q.x, q.x - o.x - s), Math.max(0, o.y - q.y, q.y - o.y - s)) <= p.radius;
     });
   }
-  /** Paint only on creation. On Continue sparse player edits remain authoritative. */
+  /** Derived ground sits below saved player edits. Legacy runs keep painted ground. */
   establish(state: MassState): void {
     const cs = this.generator.spec.terrainCell, painted = new Set<string>();
     const paint = (x: number, y: number, color: string, cause: string) => {
       if (this.town.contains(x + cs / 2, y + cs / 2))
         return;
-      state.paint({ address: this.walk.at(x, y), region: 'ground', color, cause });
+      const patch={ address: this.walk.at(x, y), region: 'ground', color, cause };
+      if(this.spec.derivedGround)state.establish(patch);else state.paint(patch);
     };
     for (const p of this.places) {
       const q = this.local(p);

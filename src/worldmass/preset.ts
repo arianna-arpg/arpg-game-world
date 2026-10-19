@@ -32,6 +32,7 @@ import { nativeMassEncounters } from './encounters';
 import { countryFieldSites } from './fieldSites';
 import { nativeMassGround, type MassGroundSpec } from './ground';
 import { Q_FRONTIER_WATCH, Q_FRONTIER_STONEWARD } from '../quests/frontier';
+import { campaignPlaces } from './campaign';
 
 export const MASS_ZONE = 'worldmass_expedition';
 export interface MassContent extends MassPopulation {
@@ -80,6 +81,7 @@ export interface MassAdventure {
 /** Snapshot existing content vocabulary, then own it for this run. Future
  * packages can supply another descriptor without replacing engine rules. */
 export function massAdventure(): MassAdventure {
+  const campaign=campaignPlaces();
   const families = MASS_BIOME_FAMILIES, fields = countryFieldSites(), regional = regionalCountrySites(), activities = countryActivitySites();
   const progression: MassProgressionSpec = {
     source: 'worldmass/expedition-progression', minLevel: 1, maxLevel: 24,
@@ -181,6 +183,7 @@ export function massAdventure(): MassAdventure {
         const levels=populations(TILESETS[f.id].packs.table);
         return {...levels[0],id:'roadside-'+f.id,source:'tilesets/'+f.id+'/roadside-packs',count:2,levels};
       }),
+      ...campaign.content,
       ...countryOutposts().map(outpost => {
         const levels=populations(outpost.roster==='undead'?FACTIONS.undead.table:TILESETS.downs.packs.table)
           .map(row=>reserveMassGuardians(row,outpost.count));
@@ -199,7 +202,7 @@ export function massAdventure(): MassAdventure {
     ],
     wildernessPaths: {source:'worldmass/wilderness-paths-v1',district:7680,width:90,color:'#62573e',chance:.75,
       destinations:regional.map(p=>({content:p.id,entry:{x:0,y:300}}))},
-    journey: { reservePopulation: true, nearbyReservations: true, source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
+    journey: { derivedGround: true, reservePopulation: true, nearbyReservations: true, source: 'worldmass/frontier-circuit', width: 120, color: '#62573e', clearingColor: '#454331',
       notices: [
         { destination: 'west-camp', note: 'Gnolls hold the western road; their bone-thrower borrows courage from the leader. A shrine and provisions remain at camp. Farther north along the circuit, a burned caravan shelters clustered dead and a bone mender.' },
         { destination: 'east-camp', note: 'Crystals wait among the graves of a quiet grove. Kindling the lattice is a riddle; farther along the circuit, a side path leads to a ring of fading coals. Past the grove, paired stones answer matching voices.' },
@@ -216,7 +219,7 @@ export function massAdventure(): MassAdventure {
       extensions: [{ id: 'north-stoneward', from: 'north-ruin', content: 'stoneward',
         offset: {x: -400, y: -1500}, radius: 390, jitter: .08 },
         {id:'east-paired-stones',from:'east-camp',content:'paired-stones',
-          offset:{x:1550,y:350},radius:350,jitter:.08}],
+          offset:{x:1550,y:350},radius:350,jitter:.08}, ...campaign.extensions],
       destinations: [
         { id: 'west-camp', content: 'cinderwatch', edge: 'west', distance: 1050, radius: 310, jitter: .12 },
         { id: 'north-ruin', content: 'broken-gate', edge: 'north', distance: 1550, radius: 330, jitter: .16 },
@@ -246,6 +249,7 @@ export function massAdventure(): MassAdventure {
         sample: {minX:-2000,minY:-2500,maxX:4500,maxY:4000,step:500},
         when: [{field:'elevation',min:-.16}] },
       quests: { source: 'worldmass/native-place-contracts', acceptance: 'journal', bindings: [
+        ...campaign.bindings,
         { quest: Q_FRONTIER_WATCH.id, destination: 'west-camp' },
         { quest: Q_FRONTIER_STONEWARD.id, destination: 'north-stoneward', defeat: { kind: 'population', index: 0 } },
       ] },

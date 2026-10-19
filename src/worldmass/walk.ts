@@ -1,6 +1,6 @@
 import { MASS_FOCUS_CACHE_MULTIPLIER } from './foci';
 import type { Vec2 } from '../core/math';
-import { regionKind } from '../world/regions';
+import { regionKind, regionIds } from '../world/regions';
 import type { PathProfile, RegionGrid } from '../world/walk';
 import { address, type MassAddress, type MassCell } from './address';
 import { MassStream } from './stream';
@@ -13,7 +13,7 @@ export const MASS_NAVIGATION: Readonly<MassNavigationConfig> = Object.freeze({
   maxNodes: 2048, searchRadius: 32, snapRadius: 16, maxLineCells: 256,
   cacheEntries: 128, searchesPerFrame: 4, regionCacheEntries: 32768,
 });
-interface Node { x: number; y: number; cost: number; first: Vec2 }
+interface Node { x: number; y: number; cost: number; priority: number; first: Vec2 }
 /** A local simulation view onto durable world addresses. Physics queries truth
  * even before a render page arrives; page residency never means solid/empty. */
 export class MassWalk implements RegionGrid {
@@ -180,10 +180,16 @@ export class MassWalk implements RegionGrid {
     if (this.searches >= this.config.searchesPerFrame) return null;
     this.searches++;
     if (!this.isWalkable(from.x, from.y) || !this.isWalkable(to.x, to.y)) return null;
+    // A* keeps the native travel prices but explores toward the destination.
+    // The cheapest registered walkable ground is an admissible lower bound,
+    // including profiles which prefer roads/water at a price below one.
+    const cheapest=profile ? Math.min(1,...regionIds().filter(id=>regionKind(id)?.walkable)
+      .map(id=>profile.costOf(id)).filter(cost=>Number.isFinite(cost)&&cost>0)) : 1;
+    const estimate=(x:number,y:number)=>cheapest*(Math.abs(tx-x)+Math.abs(ty-y));
     const heap: Node[] = [];
     const push = (n: Node): void => {
       let i = heap.length; heap.push(n);
-      while (i) { const p = (i - 1) >> 1; if (heap[p].cost <= n.cost) break; heap[i] = heap[p]; i = p; }
+      while (i) { const p = (i - 1) >> 1; if (heap[p].priority <= n.priority) break; heap[i] = heap[p]; i = p; }
       heap[i] = n;
     };
     const pop = (): Node => {
@@ -192,8 +198,8 @@ export class MassWalk implements RegionGrid {
         let i = 0;
         while (i * 2 + 1 < heap.length) {
           let c = i * 2 + 1;
-          if (c + 1 < heap.length && heap[c + 1].cost < heap[c].cost) c++;
-          if (tail.cost <= heap[c].cost) break;
+          if (c + 1 < heap.length && heap[c + 1].priority < heap[c].priority) c++;
+          if (tail.priority <= heap[c].priority) break;
           heap[i] = heap[c]; i = c;
         }
         heap[i] = tail;
@@ -201,7 +207,7 @@ export class MassWalk implements RegionGrid {
       return result;
     };
     const costs = new Map<string, number>([[fx + ',' + fy, 0]]);
-    push({ x: fx, y: fy, cost: 0, first: { ...from } });
+    push({ x: fx, y: fy, cost: 0, priority: estimate(fx,fy), first: { ...from } });
     let result: Vec2 | null = null;
     for (let visited = 0; heap.length && visited < this.config.maxNodes; visited++) {
       const n = pop();
@@ -222,7 +228,7 @@ export class MassWalk implements RegionGrid {
         if (!Number.isFinite(price) || price <= 0) continue;
         const cost = n.cost + price;
         if (cost >= (known ?? Infinity)) continue;
-        costs.set(k, cost); push({ x, y, cost, first: n.cost === 0 ? q : n.first });
+        costs.set(k, cost); push({ x, y, cost, priority: cost+estimate(x,y), first: n.cost === 0 ? q : n.first });
       }
     }
     this.cache.set(key, result);

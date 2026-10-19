@@ -13,7 +13,7 @@ import { discTerrainClear, GeographicAccessIndex, MASS_ACCESS_POLICY, validateGe
 import { MassHierarchy, massAddressBounds, nativeHierarchySources, type MassGeography, type MassHierarchyPolicy, type MassHierarchySave } from './hierarchy';
 import { MassObjectiveBodies } from './objectiveBodies';
 import { MassObjectives, resolveMassHoldContext, isNativeMassHoldKind, type MassObjectiveHost, type MassHoldContext, type NativeMassHoldSource, type NativeMassPyreSource } from './objectives';
-import { compileGeographicPlan, GEOGRAPHIC_PLAN_COMPILER, validateGeographicPreparation, validateGeographicPreparationSteps, type GeographicPlan, type GeographicPlanInput, type GeographicPreparation, type GeographicReservations, type GeographicPlanMetrics } from './geographicPlan';
+import { compileGeographicPlan, GEOGRAPHIC_PLAN_COMPILER, validateGeographicEnvelope, validateGeographicPreparation, validateGeographicPreparationSteps, type GeographicPlan, type GeographicPlanInput, type GeographicPreparation, type GeographicReservations, type GeographicPlanMetrics } from './geographicPlan';
 import { createGeographicPlanWarmQueue, type GeographicPlanWarmQueue } from './geographicWarm';
 import { canonical, freezeData, massRandom } from './random';
 import type { WorldMassRuntime } from './runtime';
@@ -189,7 +189,17 @@ export class MassGeographicGameplay {
     if(!this.warm)return;
     const start=performance.now();
     try{
-      if(!this.validation){const ready=this.warm.takeReady();if(ready&&!this.preparedStatus(ready.input))this.validation={...ready,steps:validateGeographicPreparationSteps(ready.input,ready.preparation,this.mass.generator)};}
+      if(!this.validation){
+        const ready=this.warm.takeReady();
+        if(ready&&!this.preparedStatus(ready.input)){
+          if(ready.workerValidated){
+            const plan=validateGeographicEnvelope(ready.input,ready.preparation);
+            if(!this.preparedStatus(ready.input))this.publishPrepared(ready.input,plan);
+            return;
+          }
+          this.validation={...ready,steps:validateGeographicPreparationSteps(ready.input,ready.preparation,this.mass.generator)};
+        }
+      }
       const pending=this.validation;if(!pending)return;
       if(this.preparedStatus(pending.input,false)){this.validation=null;return;}
       for(let i=0;i<64;i++){

@@ -5,7 +5,7 @@ import { characterNativePage, encodeCharacterPages, decodeCharacterPages, hasCha
 import type { NativeCohortLease } from '../worldmass/nativePaging';
 import { BrowserRunStore, isBrowserRunReference } from './browserRunStore';
 import { characterResumeFields, type CharacterFields, type CharacterResume, type CharacterResumeRead, type CharacterContinueSummary, type ResumeAuthority } from './characterResume';
-import { freezeData, massDigest } from '../worldmass/random';
+import { freezeData, isMassFrozenData, massDigest } from '../worldmass/random';
 import type { ShardStand } from '../net/vesselWire';
 import { shardHomeOf, type ShardHome } from '../net/shardDoor';
 // ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ const saveSocket = (s: SupportInstance): SavedSocket => ({
   ...(s.rolled ? { rolled: { ...s.rolled } } : {}),
 });
 
-export function serializeCharacter(world: World): CharacterSave {
+export function serializeCharacter(world: World, shareConfig = false): CharacterSave {
   const m = world.meta;
   // THE POSSESSION SEAM (engine/possess.ts): the save is the HERO's truth.
   // Mid-possession, world.player is a borrowed monster body — the bar, the
@@ -236,7 +236,7 @@ export function serializeCharacter(world: World): CharacterSave {
   // The world half rides every character save (one atomic write — the build
   // and the ground it stood on can never tear apart). Its kept-zone set also
   // decides which objective clears persist: exactly the ground that does.
-  const ws = world.serializeWorldState();
+  const ws = shareConfig ? world.serializeWorldState({shareConfig:true}) : world.serializeWorldState();
   const keptZones = new Set(ws.zones.map(z => z.id));
   return {
     relicScope: m.relicScope ?? (m.charId || 'run:' + world.manifest.seed),
@@ -907,6 +907,7 @@ function saveSlotFor(world: World): number {
  *  plain stringify. Correctness never rides the optimization
  *  (probe_persistence pins byte parity between the lanes, and pins
  *  rawJSON's array refusal so the old idiom can't return). */
+const frozenLandJson=new WeakMap<object,string>();
 export function characterBody(world: World, save: CharacterSave): string {
   const w = save.world;
   const zonesJson = w ? world.zonesSaveJson() : null;
@@ -914,12 +915,19 @@ export function characterBody(world: World, save: CharacterSave): string {
   // against the array in THIS save, so a stale save object (built before
   // the memo's last serialize) can never wear fresher bytes than its own.
   const memJson = w?.memory ? world.memorySaveJson(w.memory) : null;
-  if (w && (zonesJson || memJson)) {
+  const land=w?.worldmass?.config;
+  let landJson:string|undefined;
+  if(land && isMassFrozenData(land)){
+    landJson=frozenLandJson.get(land);
+    if(landJson===undefined){landJson=JSON.stringify(land);frozenLandJson.set(land,landJson);}
+  }
+  if (w && (zonesJson || memJson || landJson)) {
     const zs = w.zones;
     const mem = w.memory;
     const salt = `${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffffff).toString(36)}`;
     const zSentinel = `__zsplice_${salt}__`;
     const mSentinel = `__msplice_${salt}__`;
+    const landSentinel = `__landsplice_${salt}__`;
     // The sentinels are SWAPPED into the save directly rather than minted by
     // a replacer callback: a replacer de-optimizes the whole stringify (V8
     // leaves the fast path — measured ~11ms extra on a 2MB body), and the
@@ -930,10 +938,12 @@ export function characterBody(world: World, save: CharacterSave): string {
     try {
       if (zonesJson) (w as { zones: unknown }).zones = zSentinel;
       if (memJson) (w as { memory: unknown }).memory = mSentinel;
+      if (landJson) (w.worldmass as {config:unknown}).config = landSentinel;
       body = JSON.stringify(save);
     } finally {
       if (zonesJson) w.zones = zs;
       if (memJson) w.memory = mem;
+      if (landJson) w.worldmass!.config = land!;
     }
     // Verify then apply: every requested splice's token must appear EXACTLY
     // once, or the whole body falls back to the plain stringify — a partial
@@ -944,6 +954,7 @@ export function characterBody(world: World, save: CharacterSave): string {
     for (const s of [
       ...(zonesJson ? [{ sentinel: zSentinel, json: zonesJson }] : []),
       ...(memJson ? [{ sentinel: mSentinel, json: memJson }] : []),
+      ...(landJson ? [{ sentinel: landSentinel, json: landJson }] : []),
     ]) {
       const token = JSON.stringify(s.sentinel); // quoted, exactly as it appears in the body
       const at = body.indexOf(token);
@@ -970,7 +981,7 @@ export function saveCharacter(world: World): void {
   // Serialize failures never crash gameplay — but they must never be SILENT
   // either: a quiet return here is how a broken save path loses runs for
   // days (the rawJSON regression). Loud on the console, visible to probes.
-  try { body = mirrorBody(world, serializeCharacter(world)); }
+  try { body = mirrorBody(world, serializeCharacter(world, true)); }
   catch (e) { console.error('[save] serializeCharacter threw — nothing written:', e); return; }
   writeCharacterMirror(slot, body);
   diskPut(slot, body);
@@ -991,7 +1002,7 @@ export function saveCharacterDurable(world: World): void {
   // gets a say over the exact-resume promise.
   world.invalidateZonesSaveMemo();
   let body: string;
-  try { body = mirrorBody(world, serializeCharacter(world)); }
+  try { body = mirrorBody(world, serializeCharacter(world, true)); }
   catch (e) { console.error('[save] serializeCharacter threw — durable write refused:', e); return; }
   writeCharacterMirror(slot, body);
   diskBeacon(slot, body);

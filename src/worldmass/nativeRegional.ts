@@ -4,7 +4,7 @@ import type { LocalePlan } from '../world/locales';
 import type { LocaleReport } from '../engine/localeGen';
 import { doodadRuleOf, type Doodad, type DoodadRule } from '../engine/levelgen';
 import { regionKind } from '../world/regions';
-import { address, floorDiv, latticeAt, localOffset, moveAddress, type MassAddress, type MassCell } from './address';
+import { address, cellKey, floorDiv, latticeAt, localOffset, moveAddress, type MassAddress, type MassCell } from './address';
 import type { MassPlace, MassRun, MassSpec, MassTerrain } from './contracts';
 import type { RegionalLandformSite } from './regionalLandformComposition';
 import type { MassPatchBox } from './terrainPatches';
@@ -70,6 +70,7 @@ export function validateNativeRegional(spec:MassSpec):void {
  * content never move/clip around protected sites. A failed seat is refused whole. */
 export class MassNativeRegional {
   private cache=new Map<string,NativeRegionalPlan|null>();
+  private pagePlaces=new Map<string,readonly MassPlace[]>();
   readonly counters={tried:0,accepted:0,opening:0,sites:0,siteBudget:0,biome:0,water:0,ports:0,reads:0,biomeReads:0,fallbackTried:0,fallbackAccepted:0};
   constructor(readonly spec:MassSpec,readonly run:MassRun,
     private read:(at:MassAddress)=>MassTerrain,
@@ -178,6 +179,8 @@ export class MassNativeRegional {
       return {id:p.id,x:q.x+g.width/2,y:q.y+g.height/2,radius:Math.hypot(g.width,g.height)/2+this.policy.clearance};});
   }
   inCell(cell:MassCell):readonly MassPlace[] {
+    const key=cellKey(cell),cached=this.pagePlaces.get(key);
+    if(cached)return cached;
     const span=this.spec.addressSpan,origin=address(cell.dimension,cell.cx,cell.cy,0,0,span),result:MassPlace[]=[];
     // Content circles fit within their candidate lattice, just like the source.
     for(const p of this.plans(origin,{minX:0,minY:0,maxX:span,maxY:span})) {
@@ -187,7 +190,10 @@ export class MassNativeRegional {
       result.push({id:p.id,recipe:this.policy.source,content:'nativeRegional/'+p.source.id,center,radius,nativeRegional:p.source.hash,
         source:{generator:this.policy.source,version:1,source:'main/adventureLocales/'+p.source.program,rule:p.source.id,stream:p.id}});
     }
-    return freezeData(result.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0));
+    const places=freezeData(result.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0));
+    this.pagePlaces.set(key,places);
+    if(this.pagePlaces.size>128)this.pagePlaces.delete(this.pagePlaces.keys().next().value!);
+    return places;
   }
   get stats():{cached:number}{return {cached:this.cache.size};}
 }

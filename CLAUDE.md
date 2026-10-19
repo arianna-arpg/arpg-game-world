@@ -15,7 +15,7 @@ The current playable route is `src/main.ts` -> `World.startWorldMass` -> `WorldM
 - `npm run dev`: browser development, default continuous world.
 - `npm run check`: all four TypeScript projects, including the balance tools.
 - `npm run probe`: eight current behavioral courses: terrain, combat continuity, progression, bounties, interiors, saves and hosted entry.
-- `npm run build` then `npm run smoke:world`: real Begin/class selection, physical walking across pages, and disk Continue in an isolated client. Screenshots/report: `balance/reports/seamless-playthrough/`.
+- `npm run build` then `npm run smoke:world`: real Begin tutorial, Continue into Mu, physical vessel selection, walking/combat across pages, tutorial replay and disk Resume in an isolated client. `WORLD_GPU=1` enables hardware rendering for local performance measurement. Screenshots/report: `balance/reports/seamless-playthrough/`.
 - `npm run smoke:host`: start the continuous host and check its served client and status.
 - `npm run sim -- run --suite smoke`: shared combat simulation; required for data changes.
 - `npm run genqa`: generation checks; required for generation changes.
@@ -32,6 +32,7 @@ Tests must exercise current behavior and fail when that behavior is broken. Add 
 - `src/engine/`: shared combat, actors, inventory, structures and World adapter.
 - `src/data/`, `src/quests/`, `src/packages/`: authored content and progression.
 - `src/worldmass/`: continuous geography, streaming, physical places, map, native content adapters and checkpoints. `preset.ts` supplies the current world descriptor; `runtime.ts` owns the continuous run.
+- `src/worldmass/campaign.ts`: physical destinations for the undead, Brandt, Reliquary and faction revenge/Oracle chains. Original quest definitions still own gates and rewards. New locations require a fresh world; saved geography stays pinned.
 - `src/worldmass/nativeClientRuntime.ts` and `nativeClientStart.ts`: retained campaign inspection/migration; not the continuous surface's player entry.
 - `src/meta/resumeWorld.ts`: continuous/ordinary save restoration. `nativeClientContinue.ts`: recorded retained-campaign restoration. Select by save envelope; never silently convert one map into another.
 - `src/net/`, `server/shardHost.ts`: continuous hosted world and transport. `server/nativeShardHost.ts`: retained campaign host.

@@ -38,6 +38,7 @@ import { World, type Seat } from './engine/world';
 import { applyLab, ULT_QA } from './engine/ultimates'; // THE LAB LEVER — the dev panel's Lab tab; __game.ultqa is its console twin
 import { sceneBegin, sceneCardAck, sceneDue, muTakeClassRequest, muOfferOf } from './engine/scenes';
 import { MU_CFG } from './data/mu';
+import { tutorialFactionOf, tutorialFactionKey } from './data/commanders';
 import { buildManifest, type ExpeditionManifest } from './packages/manifest';
 import { bumpLedger, mergeLedger } from './packages/ledger';
 import { registerAllPackageFactions } from './packages/factionGen';
@@ -412,16 +413,20 @@ registerAllPackageFactions();
 // A placeholder world until a run begins (the start menu is shown first); it is
 // replaced wholesale by startGame / resumeGame with the run's frozen manifest.
 let world = adoptWorld(new World(account, Object.freeze(buildManifest(account, rollSeed()))));
+let tutorialWorld: World | null = null;
 // THE SKILL SHOWCASE (src/showcase/host.ts): any surface's data-skill-showcase
 // element becomes a live showcase of that skill, wherever it is shown.
 installSkillShowcases(document.body);
 const ui = new UI(
-  () => world, () => account, () => saveAccount(account),
+  () => world, () => world === tutorialWorld ? world.account : account,
+  () => { if (world !== tutorialWorld) saveAccount(account); },
   () => settings, () => saveSettings(settings),
   () => !net.isHost,        // a network co-op CLIENT (world is a render shell)
   () => leaveCoop(),        // tear down a co-op session → back to the menu
 );
 ui.newRunDescription = worldmassRequested() ? 'Seamless exploration · The Unbroken Wilds' : 'Retained campaign';
+ui.tutorialEntry = worldmassRequested();
+ui.onContinueJourney = () => { forgetDoor(); void startMu(); };
 // The rebind view captures pad buttons through these (panels never touch the
 // device layer directly — same altitude as its getSettings/saveSettings deps).
 ui.armPadCapture = (cb) => pad.armCapture(cb);
@@ -704,6 +709,7 @@ const startPicked = async (d: ClassDef, modeId?: string, name?: string, kitPicks
  *  roster vessel is minted. The wisp strips the provisional class to nothing;
  *  taking a vessel calls startPicked, which discards this world wholesale. */
 async function startMu(notice?: string): Promise<void> {
+  if (worldmassRequested()) { await startLocalScene('mu', account, notice); return; }
   couchReset();
   const lease = loadingScreen.begin({ kind: 'entry', label: 'Finding your way', loadout: account.cosmetics.loadout,
     cancel: cancelLoadingToMenu });
@@ -733,14 +739,29 @@ async function startMu(notice?: string): Promise<void> {
   finally { lease.finish(); }
 }
 
-/** THE BEGIN PRESS (the start menu's one primary button): a virgin account —
- *  or a deliberate ?prologue — walks the tutorial as the Warrior with no
- *  class screen at all; everyone else drifts into Mu, where the class roster
- *  stands IN the world. The legacy class screen remains beneath (co-op
- *  rejoin offers still call it directly). */
+/** The continuous playtest is the default; retained campaign inspection is explicit. */
 function worldmassRequested(): boolean {
   const query = new URLSearchParams(location.search);
   return !query.has('retained') && (BUILD_PROFILE.worldmass || query.has('worldmass'));
+}
+/** Scenes are local, provisional lives. They never mint a character slot or
+ * touch the saved run. Begin uses a virgin account even on a veteran profile. */
+async function startLocalScene(id: 'prologue' | 'mu', sceneAccount: Account, notice?: string): Promise<void> {
+  cancelCharacterResume(); couchReset();
+  const lease = loadingScreen.begin({ kind: 'entry', label: id === 'prologue' ? 'The Last Mile' : 'Finding your way',
+    loadout: sceneAccount.cosmetics.loadout, cancel: cancelLoadingToMenu });
+  try {
+    await lease.paint(); if (!lease.current) return;
+    const made = new World(sceneAccount, Object.freeze(buildManifest(sceneAccount, rollSeed())));
+    made.createPlayer(CLASSES.find(c => c.id === MU_CFG.provisionalClass) ?? CLASSES[0],
+      { load: false, startingCompanions: false, startingFlasks: false });
+    if (!sceneBegin(made, id)) throw Error('The opening scene could not begin');
+    world = adoptWorld(made); tutorialWorld = id === 'prologue' ? made : null;
+    lastSentZone = ''; ui.resetRunView(); deathShown = false; pendingDeathScreen = null; running = true;
+    if (notice) made.text(made.player.pos, notice, '#d8b87a', 13, undefined, 6);
+    await renderer.renderLoading(made, () => lease.paint(), () => lease.current && world === made && running);
+  } catch (error) { if (lease.current) reportFatal(error, 'local scene entry'); }
+  finally { lease.finish(); }
 }
 async function beginPressed(): Promise<void> {
   cancelCharacterResume();
@@ -748,7 +769,7 @@ async function beginPressed(): Promise<void> {
   await diskHydrated;
   if (request !== resumeRequest) return;
   if (worldmassRequested()) {
-    ui.showClassSelect(startPicked, () => toStartMenu());
+    await startLocalScene('prologue', makeAccount());
     return;
   }
   const prologueDue = sceneDue(account, 'prologue')
@@ -2290,6 +2311,17 @@ function tick(now: number): void {
       } else {
         net.drainInputs(); // do not replay accumulated movement/casts on recovery
       }
+      if (world === tutorialWorld && world.account.ledger.prologue_lived) {
+        // Only tutorial completion crosses back to the real account. Replaying
+        // cannot replace its faction, unlocks, currencies, roster or saved run.
+        const faction = tutorialFactionOf(world.account.ledger);
+        if (!account.ledger.prologue_lived && !tutorialFactionOf(account.ledger) && faction)
+          account.ledger[tutorialFactionKey(faction)] = 1;
+        account.ledger.prologue_lived = Math.max(1, account.ledger.prologue_lived ?? 0);
+        saveAccount(account);
+        toStartMenu('The Last Mile is complete. Continue to Mu.');
+        return;
+      }
       // DWELL → MENU polls. The world keeps simulating under the pause menu,
       // so a dwell can fire while it's up — HOLD the request (don't clear)
       // until the pause menu closes, else a station menu pops OVER the pause
@@ -3462,6 +3494,7 @@ function resetToLocal(): void {
  *  `notice` is the reason we landed here, shown on the menu (a session that ended
  *  under the player must say so — an unexplained menu reads as a crash). */
 function toStartMenu(notice?: string): void {
+  tutorialWorld = null;
   loadingScreen.close(); loadingGate = undefined;
   cancelCharacterResume();
   // THE DOOR (W7) survives the menu: only a deliberate leave or a solo road forgets it.

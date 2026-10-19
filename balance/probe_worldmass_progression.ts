@@ -7,13 +7,19 @@ import { massAdventure, type MassAdventure } from '../src/worldmass/preset';
 import { geographicLevel, validateMassProgression } from '../src/worldmass/progression';
 import { canonical } from '../src/worldmass/random';
 import { localOffset } from '../src/worldmass/address';
-import { serializeCharacter } from '../src/meta/character';
+import { serializeCharacter, applySavedCharacter, characterBody } from '../src/meta/character';
 import { MONSTERS } from '../src/data/monsters';
 import { LOOT_TABLES } from '../src/data/loottables';
 import { ITEM_BASES } from '../src/data/itembases';
 import { ORB_DEFS, orbAmount } from '../src/data/orbs';
 import { massMap } from '../src/worldmass/paint';
 import type { Chest } from '../src/engine/world';
+import { massQuestDestination, massQuestSatisfied } from '../src/worldmass/quests';
+import { Q_UNDEAD_SOUTH } from '../src/quests/defs';
+import { BRANDT_CFG, BRANDT_HAMMER_QUEST } from '../src/data/brandt';
+import { ORACLE_RESCUED } from '../src/data/oracle';
+import { revengeCullId, revengeCommanderId, revengeFactionOf } from '../src/quests/revenge';
+import type { SavedQuestEntry } from '../src/meta/worldstate';
 
 const restore = seedGlobalRandom(74812);
 const cfg = beforeWildernessPaths(structuredClone(massAdventure())), policy = cfg.progression!;
@@ -132,4 +138,70 @@ legacy.terrain.version = 3;
 const old = new WorldMassRuntime(777, 'old', legacy);
 assert.equal(old.levelAt(far), 1); assert.equal(old.populationFor(b).level, 1);
 console.log('PASS save/reload, bounded danger-cache eviction and legacy constant-level descriptors');
+
+// Current campaign integration: the same native rewards are earned by exact
+// physical targets; nothing swaps the surface zone or substitutes a clear flag.
+const campaign=makeSimWorld('warrior',42);
+campaign.account.features.add(BRANDT_CFG.magicWares.flag);
+delete campaign.account.ledger[ORACLE_RESCUED];
+campaign.player.level=20; campaign.startWorldMass(42);
+const cm=campaign.massRuntime!;
+const natives=(cm as unknown as {natives:Map<string,import('../src/engine/actor').Actor>}).natives;
+const take=(id:string,giver:string)=>{
+  const npc=campaign.actors.find(a=>a.defId===giver&&!a.dead)!;assert.ok(npc,giver);
+  campaign.landPartyAt({...npc.pos});
+  assert.ok(campaign.acceptQuestOffer(id),id+' must be offered by its native giver');
+  const place=massQuestDestination(cm,id)!;assert.ok(place);
+  campaign.landPartyAt(cm.journey!.local(place));campaign.time+=60;
+  for(let tick=0;tick<8;tick++)cm.update(campaign,true);
+  return place;
+};
+const defeat=(id:string)=>{
+  const place=massQuestDestination(cm,id)!, binding=cm.config.settlement!.quests!.bindings.find(b=>b.quest===id)!;
+  const keys=binding.defeat?[canonical([place.id,'fixture',binding.defeat.index])]:[...natives.keys()].filter(key=>{
+    try{return JSON.parse(key)[0]===place.id;}catch{return false;}
+  });
+  assert.ok(keys.length);
+  for(const key of keys){const body=natives.get(key);assert.ok(body,key+' population='+cm.population);if(!body.dead)campaign.kill(body,false,campaign.player);}
+  cm.update(campaign,true);assert.ok(massQuestSatisfied(cm,id,place.id),id+' physical deed');
+};
+const grave=take(Q_UNDEAD_SOUTH.id,'townsfolk_questgiver');
+const unrelated=campaign.createMonster('gravecaller',5,'enemy');campaign.actors.push(unrelated);campaign.kill(unrelated,false,campaign.player);
+assert.equal(massQuestSatisfied(cm,Q_UNDEAD_SOUTH.id,grave.id),false,'an unrelated gravecaller is not this quest target');
+defeat(Q_UNDEAD_SOUTH.id);
+assert.equal(campaign.questStanding(campaign.activeQuests.find(q=>q.questId===Q_UNDEAD_SOUTH.id)!),'ready');
+const smith=take(BRANDT_HAMMER_QUEST,'townsfolk_smith');defeat(BRANDT_HAMMER_QUEST);
+const hammer=campaign.drops.filter(d=>d.item.kind==='gear'&&d.item.item.questId===BRANDT_HAMMER_QUEST);
+assert.equal(hammer.length,1,'Brandt’s real quest cargo is dropped on its physical ground');
+(campaign as unknown as {ensureQuestCargo():void}).ensureQuestCargo();
+assert.equal(campaign.drops.filter(d=>d.item.kind==='gear'&&d.item.item.questId===BRANDT_HAMMER_QUEST).length,1);
+assert.ok(hammer[0].item.kind==='gear');campaign.meta.items.push(hammer[0].item.item);campaign.drops=campaign.drops.filter(d=>d!==hammer[0]);
+const faction=revengeFactionOf(campaign.account.ledger),cull=revengeCullId(faction),commander=revengeCommanderId(faction);
+take(cull,'townsfolk_questgiver');defeat(cull);assert.ok(campaign.completedQuests.has(cull));
+take(commander,'townsfolk_questgiver');defeat(commander);
+assert.ok(campaign.account.ledger[ORACLE_RESCUED]);cm.update(campaign,true);
+assert.ok(campaign.actors.some(a=>a.defId==='townsfolk_oracle'&&cm.settlement!.isResident(a)),'the rescued Oracle returns without a zone reload');
+const savedCampaign=serializeCharacter(campaign),continued=makeSimWorld('warrior',123);
+const efficientSave=serializeCharacter(campaign,true);
+assert.deepEqual(efficientSave,savedCampaign,'fast persistence captures the same character and world');
+assert.equal(characterBody(campaign,efficientSave),JSON.stringify(efficientSave),'frozen land serialization preserves exact bytes');
+assert.equal(characterBody(campaign,efficientSave),JSON.stringify(efficientSave),'cached land serialization preserves exact bytes');
+assert.equal(efficientSave.world!.worldmass!.config,cm.config,'the fast path shares only immutable land');
+assert.notEqual(savedCampaign.world!.worldmass!.config,cm.config,'ordinary exports remain independent');
+assert.ok(savedCampaign.world!.worldmass!.state.terrain.every(p=>!p.cause.startsWith(cm.journey!.spec.source)),
+  'campaign roads are derived from the pinned journey');
+assert.ok(continued.adoptWorldState(savedCampaign.world));continued.startWorldMass(42,savedCampaign.world!.worldmass);
+assert.ok(applySavedCharacter(continued,savedCampaign));
+assert.deepEqual(continued.massRuntime!.state.patchAt(cm.walk.at(cm.journey!.trails[0].points[2].x,cm.journey!.trails[0].points[2].y)),
+  cm.state.patchAt(cm.walk.at(cm.journey!.trails[0].points[2].x,cm.journey!.trails[0].points[2].y)),'the road is identical after Continue');
+assert.ok(continued.activeQuests.find(q=>q.questId===commander)?.fieldDone);
+assert.ok(massQuestSatisfied(continued.massRuntime!,BRANDT_HAMMER_QUEST,smith.id));
+const smithBody=continued.actors.find(a=>a.defId==='townsfolk_smith')!;continued.landPartyAt(smithBody.pos);
+const entry=continued.activeQuests.find(q=>q.questId===BRANDT_HAMMER_QUEST)!;
+assert.equal(continued.questStanding(entry),'ready');
+const reward=continued as unknown as {onQuestZoneCleared(e:SavedQuestEntry):void};reward.onQuestZoneCleared(entry);reward.onQuestZoneCleared(entry);
+assert.equal(continued.questImbues.filter(i=>i.questId===BRANDT_HAMMER_QUEST).length,1,'native return reward pays once across Continue');
+assert.equal(continued.zone.id,'worldmass_expedition');
+campaign.massRuntime?.dispose();continued.massRuntime?.dispose();
+console.log('PASS native campaign bosses, cargo, revenge/Oracle rescue and once-only return rewards across Continue');
 restore();

@@ -29,7 +29,7 @@ export function validateMassQuests(config: MassAdventure): void {
   const spec = config.settlement?.quests;
   if (spec === undefined) return;
   if (!spec || typeof spec.source !== 'string' || !spec.source || !Array.isArray(spec.bindings)
-    || spec.bindings.length > 16 || new Set(spec.bindings.map(b => b.quest)).size !== spec.bindings.length)
+    || spec.bindings.length > 48 || new Set(spec.bindings.map(b => b.quest)).size !== spec.bindings.length)
     throw new Error('Invalid worldmass quest bindings');
   if (spec.acceptance !== undefined && spec.acceptance !== 'journal')
     throw new Error('Invalid worldmass quest acceptance');
@@ -38,14 +38,14 @@ export function validateMassQuests(config: MassAdventure): void {
     const def = QUESTS[b.quest], target = destinations.find(d => d.id === b.destination);
     const content = target && config.content.find(c => c.id === target.content);
     const objective = def?.zone.objective;
-    if (!def || !content?.site?.completion || def.collect || def.rescue || def.zoneVariants
+    if (!def || !content?.site?.completion
       || def.geographies && !def.geographies.includes('continuous'))
       throw new Error('Unsupported worldmass quest objective or destination');
     // No partial-clear tally or borrowed success from opening the site's chest.
-    if (objective.kind === 'clear' && (objective.frac ?? 1) === 1 && objective.need === undefined
+    if (objective.kind === 'clear' && (objective.frac ?? 1) > 0 && (objective.frac ?? 1) <= 1 && objective.need === undefined
       && b.defeat === undefined) continue;
     const body = objective.kind === 'boss' ? MONSTERS[objective.id] : undefined, slot = b.defeat;
-    if (objective.kind !== 'boss' || objective.levelBonus !== undefined || objective.uber
+    if (objective.kind !== 'boss' || objective.uber
       || objective.promote || objective.arenaBossRetry || !body || body.passive || body.noObjective
       || AMBIENT_TAGS.has(body.tag ?? '') || !slot || !Number.isSafeInteger(slot.index) || slot.index < 0)
       throw new Error('Unsupported worldmass quest objective or destination');
@@ -53,6 +53,7 @@ export function validateMassQuests(config: MassAdventure): void {
     // rosters, formations and promoted encounters need explicit adapters.
     const exact = slot.kind === 'fixture'
       ? content.site.fixtures[slot.index]?.garrison === true && content.site.fixtures[slot.index].monster === objective.id
+        && (!objective.levelBonus || content.site.fixtures[slot.index].level === content.level + objective.levelBonus)
       : slot.kind === 'population' && slot.index < content.count && !content.levels && !content.encounters && !content.magicPack
         && content.table.length > 0 && content.table.every(row => row.id === objective.id);
     if (!exact) throw new Error('Unsupported worldmass quest objective or destination');
@@ -67,10 +68,23 @@ export function massQuestDestination(mass: WorldMassRuntime, quest: string): Mas
 export function massQuestSatisfied(mass: WorldMassRuntime, quest: string, placeId: string): boolean {
   if (massQuestDestination(mass, quest)?.id !== placeId) return false;
   const binding = mass.config.settlement?.quests?.bindings.find(b => b.quest === quest), objective = QUESTS[quest]?.zone.objective;
-  if (objective?.kind === 'clear' && !binding?.defeat) return mass.siteCleared(placeId);
+  if (objective?.kind === 'clear' && !binding?.defeat) {
+    const place=massQuestDestination(mass,quest)!, progress=mass.garrisonProgress(place);
+    return !!progress && progress.total-progress.remaining >= Math.ceil(progress.total*(objective.frac ?? 1));
+  }
   if (objective?.kind !== 'boss' || !binding?.defeat) return false;
   const slot = binding.defeat, id = slot.kind === 'fixture' ? canonical([placeId, 'fixture', slot.index]) : canonical([placeId, slot.index]);
   return mass.state.claimed('site-guardian', id) && mass.state.claimed('fallen', id);
+}
+
+/** A collect/rescue belongs to its own physical ground inside the shared scene. */
+export function massQuestGround(mass: WorldMassRuntime | null | undefined, entry: SavedQuestEntry,
+  near?: {x:number;y:number}): {x:number;y:number} | undefined {
+  if (!mass || !entry.placeId) return;
+  const place=massQuestDestination(mass,entry.questId);
+  if (!place || place.id!==entry.placeId) return;
+  const point=mass.journey!.local(place);
+  return !near || Math.hypot(near.x-point.x,near.y-point.y)<=place.radius+160 ? point : undefined;
 }
 /** Before the live scene exists, accept only the exact saved run's pinned
  * binding. A stale or foreign place cannot become an ordinary zone quest. */

@@ -95,15 +95,18 @@ export class MassStream {
     if (this.samples.size > this.focusSampleBudget) this.samples.delete(this.samples.keys().next().value!);
     return this.overlay?.sample(at,result) ?? result;
   }
-  step(sampleBudget: number): { sampled: number; published: number } {
+  step(sampleBudget: number, maxWorkMs = Infinity): { sampled: number; published: number } {
     if (!Number.isSafeInteger(sampleBudget) || sampleBudget < 0) throw new Error('Invalid generation work budget');
+    if (Number.isNaN(maxWorkMs) || maxWorkMs < 0) throw new Error('Invalid generation time budget');
     this.syncChanges();
     let sampled = 0, published = 0;
+    const started = performance.now();
     for (const job of this.pending.values()) {
       while (job.samples.length < this.cols * this.cols && sampled < sampleBudget) {
         const i = job.samples.length, size = this.generator.spec.terrainCell;
         job.samples.push(this.sample({ ...job.cell, x: (i % this.cols) * size, y: Math.floor(i / this.cols) * size }));
         sampled++;
+        if (performance.now() - started >= maxWorkMs) return { sampled, published };
       }
       if (job.samples.length === this.cols * this.cols) {
         const page = Object.freeze({ ...job, cell: Object.freeze({ ...job.cell }), cols: this.cols,

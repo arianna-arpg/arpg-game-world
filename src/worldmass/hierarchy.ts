@@ -223,8 +223,8 @@ export class MassHierarchy {
     c.receipts.push(copy(receipt)); c.revision++; return true;
   }
   snapshot(): MassHierarchySave {
-    return copy({ schema: 1, run: this.run, seed: this.seed, addressSpan: this.addressSpan, policy: this.policy,
-      sources: [...this.sources], owners: [...this.records.values()].sort((a, b) => a.owner.id.localeCompare(b.owner.id)) });
+    return JSON.parse(JSON.stringify({ schema: 1, run: this.run, seed: this.seed, addressSpan: this.addressSpan, policy: this.policy,
+      sources: [...this.sources], owners: [...this.records.values()].sort((a, b) => a.owner.id.localeCompare(b.owner.id)) }));
   }
   private geography(kind: MassGeographicKind, dimension: string, ix: string, iy: string): Readonly<MassGeography> {
     if (!['region', 'zone', 'chunk'].includes(kind)) throw Error('Unknown geographic owner kind');

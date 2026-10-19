@@ -344,6 +344,7 @@ export function restoreNativeActorState(actor: Actor, saved: NativeActorState,
  * and the owned map is already the input to this pass. */
 export function massDormancyPins(world: World, owned: ReadonlyMap<string,Actor>,
   excludedOwners: ReadonlySet<object> = new Set()): Set<Actor> {
+  if (!owned.size) return new Set();
   const native=new Set(owned.values()), ids=new Map([...native].map(a=>[a.id,a]));
   const pinned=new Set<Actor>(), seen=new Set<object>([world]);
   const visitCacheEntry=(k:unknown,v:unknown):void=>{if(typeof k==='number'){const a=ids.get(k);if(a)pinned.add(a);}else if(k!==null&&typeof k==='object')visit(k);if(v!==null&&typeof v==='object')visit(v);};
@@ -476,7 +477,11 @@ export class MassDormancy {
   update(world:World,owned:ReadonlyMap<string,Actor>):{slept:number;woke:number} {
     const groups=new Map<string,Actor[]>();
     for(const [id,a]of owned){const key=a.squadId===undefined?'body:'+id:'squad:'+a.squadId;const group=groups.get(key)??[];group.push(a);groups.set(key,group);}
-    const pins=massDormancyPins(world,owned), remove=new Set<Actor>();let slept=0,woke=0,checked=0;
+    // Nearby bodies cannot retire. Do not traverse the complete world's
+    // dependency graph every half-second when there is no retirement candidate.
+    let pins:Set<Actor>|undefined;
+    const pinned=()=>pins??=massDormancyPins(world,owned);
+    const remove=new Set<Actor>();let slept=0,woke=0,checked=0;
     const observerPoints=[...world.actors.filter(a=>!a.dead&&a.team!=='enemy'
       &&!world.seats.some(s=>s.keeper&&s.actor===a)).map(a=>a.pos),...(world.massRuntime?.focusPoints(world).map(f=>f.pos)??[])];
     const massObservers=new MassObserverIndex(observerPoints,this.policy.sleepRadius);
@@ -486,15 +491,16 @@ export class MassDormancy {
     for(let i=0;i<cohorts.length;i++){
       const index=(this.retireCursor+i)%cohorts.length,group=cohorts[index];
       if(group.some(a=>this.asleep.has(a))){
-        if(group.some(a=>near(a,this.policy.wakeRadius)||pins.has(a)))for(const a of group){
+        if(group.some(a=>near(a,this.policy.wakeRadius)||pinned().has(a)))for(const a of group){
           if(this.asleep.delete(a)&&!a.dead){this.frozen.delete(a);if(!world.actors.includes(a))world.actors.push(a);woke++;}
         }
         continue;
       }
-      if(group.some(a=>near(a,this.policy.sleepRadius)||pins.has(a)))continue;
+      if(group.some(a=>near(a,this.policy.sleepRadius)))continue;
       if(checked>=MASS_DORMANCY_RETIRE_BUDGET)continue;checked+=group.length;nextCursor=(index+1)%cohorts.length;
       const states=new Map(group.map(a=>[a,captureNativeActorState(a)]));
       if(group.some(a=>nativeDormancyRefusal(a,world,this.policy.quietSeconds,states.get(a))))continue;
+      if(group.some(a=>pinned().has(a)))continue;
       // A live native outside the squad is an inbound dependency as well.
       const members=new Set(group),memberIds=new Set(group.map(a=>a.id));let foreign=false;
       for(const a of group){const state=states.get(a);
