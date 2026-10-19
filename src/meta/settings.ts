@@ -86,6 +86,15 @@ export interface Settings {
   lowLifePulse: boolean;
   /** Independent ailment layers: gentle motion, still, or disabled. Icons stay visible. */
   afflictionOverlays: import('../data/afflictionCues').AfflictionOverlayMode;
+  skillArtwork: boolean;
+  statusReadout: 'hover' | 'focus' | 'corner' | 'off';
+  supportReadyHint: boolean;
+  rewardLabelAvoidance: boolean;
+  floatingTextAvoidance: boolean;
+  castSlotHint: boolean;
+  castMovementHint: boolean;
+  castNameHint: boolean;
+  crowdedMeters: boolean;
   /** THE FALTER (render/screenFx.ts ScreenFxDef.falter): faintness and the
    *  swoon deliberately HOLD presented frames — a simulated lag spike, the
    *  vasovagal skip. Designed and documented (docs/render/falter.md); the
@@ -282,6 +291,16 @@ export interface SettingsSave {
   cursor?: Partial<CursorOptions>;
   lowLifePulse?: boolean;
   afflictionOverlays?: import('../data/afflictionCues').AfflictionOverlayMode;
+  skillArtwork?: boolean;
+  statusReadoutVersion?: number;
+  statusReadout?: 'hover' | 'focus' | 'corner' | 'off';
+  supportReadyHint?: boolean;
+  rewardLabelAvoidance?: boolean;
+  floatingTextAvoidance?: boolean;
+  castSlotHint?: boolean;
+  castMovementHint?: boolean;
+  castNameHint?: boolean;
+  crowdedMeters?: boolean;
   statusFalter?: boolean;
   invertMove?: boolean;
   gearPickup?: 'vacuum' | 'key';
@@ -445,6 +464,15 @@ export const makeSettings = (): Settings => ({
   cursor: { ...DEFAULT_CURSOR_OPTIONS },
   lowLifePulse: true,
   afflictionOverlays: 'gentle',
+  skillArtwork: true,
+  statusReadout: 'hover',
+  supportReadyHint: false,
+  rewardLabelAvoidance: false,
+  floatingTextAvoidance: false,
+  castSlotHint: false,
+  castMovementHint: false,
+  castNameHint: false,
+  crowdedMeters: false,
   statusFalter: true,
   invertMove: false,
   gearPickup: 'vacuum',
@@ -486,6 +514,16 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   cursor: { ...s.cursor },
   lowLifePulse: s.lowLifePulse,
   afflictionOverlays: s.afflictionOverlays,
+  skillArtwork: s.skillArtwork,
+  statusReadout: s.statusReadout,
+  statusReadoutVersion: 2,
+  supportReadyHint: s.supportReadyHint,
+  rewardLabelAvoidance: s.rewardLabelAvoidance,
+  floatingTextAvoidance: s.floatingTextAvoidance,
+  castSlotHint: s.castSlotHint,
+  castMovementHint: s.castMovementHint,
+  castNameHint: s.castNameHint,
+  crowdedMeters: s.crowdedMeters,
   statusFalter: s.statusFalter,
   invertMove: s.invertMove,
   gearPickup: s.gearPickup,
@@ -579,6 +617,16 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     cursor: normalizeCursorOptions(s.cursor),
     lowLifePulse: s.lowLifePulse ?? true,
     afflictionOverlays: s.afflictionOverlays === 'off' || s.afflictionOverlays === 'still' ? s.afflictionOverlays : 'gentle',
+    skillArtwork: s.skillArtwork !== false,
+    statusReadout: s.statusReadout === 'corner' || s.statusReadout === 'off' ? s.statusReadout
+      : s.statusReadoutVersion === 2 && s.statusReadout === 'focus' ? 'focus' : 'hover',
+    supportReadyHint: s.supportReadyHint === true,
+    rewardLabelAvoidance: s.rewardLabelAvoidance === true,
+    floatingTextAvoidance: s.floatingTextAvoidance === true,
+    castSlotHint: s.castSlotHint === true,
+    castMovementHint: s.castMovementHint === true,
+    castNameHint: s.castNameHint === true,
+    crowdedMeters: s.crowdedMeters === true,
     statusFalter: s.statusFalter ?? true,
     invertMove: s.invertMove ?? false,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',

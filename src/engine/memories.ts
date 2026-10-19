@@ -116,16 +116,23 @@ export interface MemoryKindDef {
   /** THE FACET choice interposes at the recall (the banner lane): the cut
    *  is SKILLS-ONLY and rolls the chosen triad's requirement partition. */
   facets: boolean;
+  /** Player-facing purpose, shared by drops, pickup history and the recall. */
+  rewardLabel: string;
+  recallDescription: string;
 }
 
 export const MEMORY_KINDS: Record<MemoryKind, MemoryKindDef> = {
   rough: {
     base: 'rough_memory', name: 'Rough Memory',
     color: '#b89ae0', glyph: '✦', facets: false,
+    rewardLabel: 'Unrevealed gem',
+    recallDescription: 'Spend one Memory to reveal a skill or support gem in your bag. Its source influences what you may find.',
   },
   preformed: {
     base: 'preformed_memory', name: 'Preformed Memory',
     color: '#e8c07a', glyph: '❖', facets: true,
+    rewardLabel: 'Unrevealed skill',
+    recallDescription: 'Spend one Memory to reveal a skill gem in your bag. Choose a facet to seek skills using its attributes.',
   },
 };
 
@@ -144,12 +151,29 @@ export const MEMORY_TRADED_PROVENANCE = 'traded';
 /** Non-creature provenance remains explicit without forging a monster
  *  identity — the registered PROVENANCE WORDS a drop lane may seal into a
  *  unit in place of a dropper def id (the recall panel names them through
- *  this table; an unregistered word prints raw). 'found' is the default
+ *  this table; an unregistered word wears the found label). 'found' is the default
  *  every unforged drop wears (MEMORY_CFG.foundProvenance); 'chest' rides
  *  the container lane's LootCtx.sourceId; 'quest' is a writ's owed pay. */
 export const MEMORY_FOUND_SOURCES: Record<string, string> = {
   chest: 'Chest', found: 'Found in the world', quest: 'Quest pay',
 };
+
+/** Present registered names without exposing durable addresses from older saves. */
+export function memoryProvenanceLabel(id: string, monsterName?: string): string {
+  if (monsterName) return monsterName;
+  if (id === MEMORY_TRADED_PROVENANCE) return MEMORY_CFG.strings.tradedName;
+  if (Object.hasOwn(MEMORY_FOUND_SOURCES, id)) return MEMORY_FOUND_SOURCES[id];
+  // Early continuous-world caches stamped their durable address into the unit.
+  // Keep that recall identity intact; only its player-facing name is normalized.
+  if (id.startsWith('[')) {
+    try {
+      const address: unknown = JSON.parse(id);
+      if (Array.isArray(address) && address.length === 2 && typeof address[0] === 'string' && address[1] === 'cache')
+        return MEMORY_FOUND_SOURCES.chest;
+    } catch { /* Unknown provenance still has the ordinary found face. */ }
+  }
+  return MEMORY_FOUND_SOURCES[MEMORY_CFG.foundProvenance];
+}
 
 /** THE PROVENANCE a drop lane hands dropGemAt: WHO forged the drop (a def
  *  id or a registered word) and — an event fact the def cannot recover —
@@ -160,6 +184,8 @@ export interface MemoryProvenance { d: string; e?: MonsterRarity }
  *  her standing word: numbers bless through playthroughs). Strings are
  *  data here so iteration never hunts literals. */
 export const MEMORY_CFG = {
+  /** First successful recall ends the native menu/item invitation across lives. */
+  lessonReceipt: 'memory_recall_lived',
   /** THE KIT LEAN (§4 rung 1): weight multiplier on the dropper's own
    *  droppable-and-unlocked kit skills. The headline promise should be
    *  FELT — order 5–10×, well above gemBias's 2.5. */

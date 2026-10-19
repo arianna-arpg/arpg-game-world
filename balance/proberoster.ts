@@ -406,6 +406,13 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_titans.ts', status: 'green', tier: 'fast', why: 'Durable unseen Titan journeys, physical wakes, attributable contact damage, safe terrain birth, cleanup and co-op reconciliation' },
   { probe: 'probe_worldbossspectacle.ts', status: 'green', tier: 'fast', why: 'Colossi: real warning/damage, full-body escape routes, organ-break cancellation, recovery cycles, once-only brood and no looping phase rewards' },
   { probe: 'probe_zonepolicy.ts', status: 'green', tier: 'fast', why: 'ZONE POLICY — the layout half beside the biome half through the ONE policyFor seam: the shipped-empty layout table is byte-identical to biome-only (exhaustive biome × layout × id A/B against the old logic), authored deny/allow rows AND both ways, and eventTargetable/holdfastHostable route the composed verdict' },
+  { probe: 'probe_bodywalk.ts', status: 'green', tier: 'fast', why: 'Real displacement, wall/cast exclusions, shared class gait and remote pose clearing.' },
+  { probe: 'probe_meleeread.ts', status: 'green', tier: 'fast', why: 'Confirmed rear-hit feedback and native melee geometry across local and remote presentation.' },
+  { probe: 'probe_chestreadout.ts', status: 'green', tier: 'fast', why: 'Chest reach, real search clock, animation without captions and unchanged rewards.' },
+  { probe: 'probe_nerverecovery.ts', status: 'green', tier: 'fast', why: 'Bonepicker resumes ordinary attacks after one bounded wound rout; crowding cannot restart flight.' },
+  { probe: 'probe_shadowarrival.ts', status: 'green', tier: 'fast', why: 'Immediate and delayed Shadow Step face the target and enable full Backstab.' },
+  { probe: 'probe_skillinputorder.ts', status: 'green', tier: 'fast', why: 'New held skills and movement take priority after committed casts.' },
+  { probe: 'probe_storedsupports.ts', status: 'green', tier: 'fast', why: 'Stored support recovery preserves cargo, ownership, locks and full-bag refusal.' },
 ];
 
 /** Green rows — the gate — optionally narrowed to one lane. */

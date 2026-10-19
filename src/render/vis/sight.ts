@@ -27,7 +27,7 @@ function blocksAt(wf: GridWalkField, x: number, y: number): boolean {
  *  null when no sight-blocker stands inside the disc (use the plain disc).
  *  Rays overshoot the hit by a third of a cell so the wall's NEAR face still
  *  catches the glow; only the far side stays dark. */
-export function litPolygon(world: World, x: number, y: number, r: number):
+export function litPolygon(world: Pick<World, 'walk'>, x: number, y: number, r: number):
   { x: number; y: number }[] | null {
   const wf = world.walk instanceof GridWalkField ? world.walk : null;
   if (!wf || r <= 0) return null;
@@ -72,4 +72,18 @@ export function polygonPath(poly: { x: number; y: number }[],
   }
   path.closePath();
   return path;
+}
+
+export class LightSightCache {
+  private entries = new WeakMap<object, { grid: GridWalkField | null; version: number;
+    x: number; y: number; r: number; poly: ReturnType<typeof litPolygon> }>();
+  read(world: Pick<World, 'walk'>, key: object, x: number, y: number, r: number): ReturnType<typeof litPolygon> {
+    const grid = world.walk instanceof GridWalkField ? world.walk : null, version = grid?.version ?? 0;
+    const old = this.entries.get(key);
+    if (old && old.grid === grid && old.version === version && old.x === x && old.y === y && old.r === r)
+      return old.poly;
+    const poly = litPolygon(world, x, y, r);
+    this.entries.set(key, { grid, version, x, y, r, poly });
+    return poly;
+  }
 }

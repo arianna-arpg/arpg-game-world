@@ -153,6 +153,8 @@ export type ProcEffect =
   | { type: 'cast'; cast: ProcCastSpec };
 
 export interface ProcDef {
+  /** Optional authored procReference for complex payloads, shown while inspecting gear. */
+  description?: string;
   /** Compatibility opt-out for supplementary procCue gestures. Names are
    * reference metadata and never become automatic combat captions. */
   announceName?: boolean;

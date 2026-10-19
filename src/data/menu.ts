@@ -223,3 +223,8 @@ registerMenuAttention({
   id: 'reliquary_lesson', entry: 'inventory', kind: 'lesson',
   read: r => r.seat === r.world.localSeat && r.world.reliquaryLesson(),
 });
+
+registerMenuAttention({
+  id: 'memory_recall_lesson', entry: 'inventory', kind: 'lesson',
+  read: r => r.world.memoryRecallLesson(r.seat),
+});

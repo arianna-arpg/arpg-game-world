@@ -1,3 +1,5 @@
+import { paintRockFaceEntrance } from './rockFaceEntrance';
+import { paintWaterSurface } from './waterSurface';
 // ---------------------------------------------------------------------------
 // DOODAD PAINTERS — the parametric painter library. Every doodad kind maps
 // (in src/data/doodadVisuals.ts) to one of these painters plus params; the
@@ -12,6 +14,9 @@
 // ---------------------------------------------------------------------------
 
 import { creatureTerrain } from './creatureTerrain';
+import { paintStatue } from './statue';
+import { paintNeedleCrown, type NeedleCrownSpec } from './needleCrown';
+import { paintBroadleafCrown, type BroadleafCrownSpec } from './broadleafCrown';
 import { doodadRuleOf, type Doodad } from '../../engine/levelgen';
 import { rockFormBodies, rockSeedOf } from '../../engine/rockForms';
 import type { World } from '../../engine/world';
@@ -171,6 +176,10 @@ export interface DoodadVisualDef {
    *  standing objects 46–56, interactives/ritual 57–59. */
   order: number;
   params?: Record<string, unknown>;
+  /** Sparse standing art repainted above its OWN ground shadow (0..1).
+   * Other sight blockers still veil it; actors/ground underneath stay hidden.
+   * Use for opaque solid-object painters, not ground, crowns or labels. */
+  raisedSurface?: number;
   /** TERRAIN BLEND — mesh this ground-family kind into the land around it.
    *  The group's merged silhouette grows soft rings outward (feather world
    *  units) fading from `strength` to nothing, so a gravel road beds into
@@ -492,6 +501,8 @@ export interface LiquidParams {
   tufts?: { color: ColorSpec; flower?: ColorSpec };
   /** Drifting surface highlight arcs (deep water's living sheen). */
   sheen?: { color: ColorSpec };
+  /** Shared geographic waves, clipped to the merged ordinary-water body. */
+  waterMotion?: boolean;
   /** Sliding diagonal glass bands (ice). */
   glassSheen?: { color: ColorSpec };
   /** Slow-orbiting molten glow blobs under the crust (lava). */
@@ -647,6 +658,17 @@ export function paintLiquidStatics(env: PaintEnv, group: readonly Doodad[],
 /** Deep-water sheen: two bright arcs drifting across each pool — one home
  *  for the plain group pass and the illusion lane's per-disc draw. */
 function paintLiquidSheen(env: PaintEnv, group: readonly Doodad[], p: LiquidParams): void {
+  if (p.waterMotion && group.length) {
+    const { ctx } = env;
+    let x = Infinity, y = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const d of group) {
+      x = Math.min(x, d.pos.x - d.radius); y = Math.min(y, d.pos.y - d.radius);
+      right = Math.max(right, d.pos.x + d.radius); bottom = Math.max(bottom, d.pos.y + d.radius);
+    }
+    ctx.save(); blobPath(ctx, group, 0); ctx.clip();
+    paintWaterSurface(ctx, {x, y, w: right - x, h: bottom - y}, env.time);
+    ctx.restore(); return;
+  }
   if (!p.sheen) return;
   const { ctx, theme, time } = env;
   const col = resolveColor(p.sheen.color, theme);
@@ -3038,6 +3060,8 @@ const windowSlit: GroupPainter = (env, group) => {
 };
 
 export interface CaveMouthParams {
+  /** Horizontal passage in an upright rock face; omission retains a downward mouth. */
+  rockFace?: boolean;
   /** Brow/jamb stone color (default the biome's own obstacle rock). */
   color?: ColorSpec;
   edge?: ColorSpec;
@@ -3136,6 +3160,14 @@ const caveMouth: GroupPainter = (env, group, def) => {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+    }
+    if (p.rockFace) {
+      paintRockFaceEntrance(ctx, r, seed, base, edgeCol, throatCol, glowCol, flick, p,
+        resolveColorOpt(p.vines?.color, theme));
+      if (p.label) env.labelSink?.(o, o.pos, o.pos.x, o.pos.y + r + 14,
+        p.label, '#d8d4c8', { font: '11px Verdana' });
+      ctx.restore();
+      continue;
     }
     // THE THROAT: underground black swallowing a rim-lifted edge — the hole
     // reads round because its rim remembers the daylight.
@@ -7457,48 +7489,8 @@ export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alpha
   }
 }
 
-/** A WEATHERED STATUE: square plinth, the figure's shoulder-and-head mass
- *  off-centre the way old monuments lean, moss creeping up the north face. */
-const statue: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { stone?: ColorSpec; moss?: ColorSpec };
-  const { ctx, theme } = env;
-  const stone = resolveColor(p.stone, theme, '#8a8578');
-  const moss = resolveColor(p.moss, theme, '#5a6e42');
-  for (const o of group) {
-    const r = o.radius;
-    const seed = ((o.pos.x * 17 + o.pos.y * 5) | 0) >>> 0;
-    ctx.save();
-    ctx.translate(o.pos.x, o.pos.y);
-    ctx.rotate(o.rot ?? 0);
-    // The plinth: two stacked squares, the lower a shade darker.
-    ctx.fillStyle = shade(stone, -0.3);
-    ctx.fillRect(-r, -r, r * 2, r * 2);
-    ctx.fillStyle = shade(stone, -0.1);
-    ctx.fillRect(-r * 0.74, -r * 0.74, r * 1.48, r * 1.48);
-    ctx.strokeStyle = withAlpha(shade(stone, -0.5), 0.8);
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(-r * 0.74, -r * 0.74, r * 1.48, r * 1.48);
-    // The figure's mass: shoulders + head, leaning as the ground let it.
-    const lean = (hash01(1, seed) - 0.5) * r * 0.3;
-    ctx.fillStyle = shade(stone, 0.12);
-    ctx.beginPath();
-    ctx.ellipse(lean * 0.4, 0, r * 0.46, r * 0.34, hash01(2, seed) * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = shade(stone, 0.24);
-    ctx.beginPath();
-    ctx.arc(lean, -r * 0.08, r * 0.2, 0, Math.PI * 2);
-    ctx.fill();
-    // Moss holds the sunless corner.
-    ctx.fillStyle = withAlpha(moss, 0.55);
-    for (let i = 0; i < 4; i++) {
-      ctx.beginPath();
-      ctx.arc(-r * 0.5 + hash01(i + 3, seed) * r * 0.5, -r * 0.55 + hash01(i + 9, seed) * r * 0.5,
-        r * (0.1 + hash01(i + 5, seed) * 0.1), 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-};
+// Shared carved-stone vocabulary; material and relief live in the visual registry.
+const statue: GroupPainter = paintStatue;
 
 /** A WAYSHRINE: a stone niche with a pitched cap and the votive candle the
  *  road still keeps lit (the glow itself rides the def's LightSpec). */
@@ -9309,6 +9301,7 @@ const rootHairs: GroupPainter = (env, group, def) => {
 };
 
 export const PAINTERS: Record<string, GroupPainter> = {
+  altarBody: () => {}, // drawAltars owns the slab and field together; never paint a second body here.
   creatureTerrain,
   wheatStalk, windmillTower, chimneyStack, hideRack, targetButt, sewerGrate, lightShaft, culvertStair,
   trackGroove, shearDisc, rimeFlail, bumperDome, rollingStone, floorPlate, dartBolt,
@@ -9595,7 +9588,7 @@ const mushroomCrown: CanopyPainter = (env, o, alpha, params) => {
 /** A LUSH DECIDUOUS CROWN — layered scallop-edged leaf lobes (the bush's
  *  grammar at canopy scale) with a sun-lit side and a dark under-heart. */
 const leafCrown: CanopyPainter = (env, o, alpha, params) => {
-  const p = params as { fill?: ColorSpec };
+  const p = params as { fill?: ColorSpec; broadleaf?: BroadleafCrownSpec };
   const { ctx, theme } = env;
   const base = resolveColor(p.fill, theme, theme.tree ?? '#2c4424');
   const seed = ((o.pos.x * 17 + o.pos.y * 3) | 0) >>> 0;
@@ -9603,6 +9596,10 @@ const leafCrown: CanopyPainter = (env, o, alpha, params) => {
   ctx.translate(o.pos.x, o.pos.y);
   if (o.rot !== undefined) ctx.rotate(o.rot);
   ctx.globalAlpha = alpha;
+  if (p.broadleaf) {
+    paintBroadleafCrown(ctx, o.radius, base, seed, p.broadleaf);
+    ctx.restore(); return;
+  }
   // Under-heart: the crown's own depth.
   ctx.fillStyle = shade(base, -0.4);
   ctx.beginPath();
@@ -9760,16 +9757,20 @@ const stoneCrown: CanopyPainter = (env, o, alpha, params) => {
   ctx.restore();
 };
 
-/** An EVERGREEN SPIRE from above: stacked pointed star-rings tightening to
- *  a pale tip — conifers read apart from broadleaf at any distance. */
+/** Evergreen crowns share native cached canopy placement. Optional needle
+ *  boughs add seeded detail; omitting them retains the original star rings. */
 const pineCrown: CanopyPainter = (env, o, alpha, params) => {
-  const p = params as { fill?: ColorSpec };
+  const p = params as { fill?: ColorSpec; needles?: NeedleCrownSpec };
   const { ctx, theme } = env;
   const base = resolveColor(p.fill, theme, theme.tree ?? '#1e3a28');
   ctx.save();
   ctx.translate(o.pos.x, o.pos.y);
   ctx.rotate(o.rot ?? 0);
   ctx.globalAlpha = alpha;
+  if(p.needles){
+    paintNeedleCrown(ctx,o.radius,base,((o.pos.x*11+o.pos.y*5)|0)>>>0,p.needles);
+    ctx.restore();return;
+  }
   const layers: [number, string][] = [
     [1.0, shade(base, -0.18)],
     [0.66, base],

@@ -1,3 +1,5 @@
+import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
+import { storedSupportsHtml } from './storedSupports';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
 import { SKILL_EMPOWERMENT } from '../data/skillEmpowerment';
@@ -10,6 +12,7 @@ import { renderWardrobe } from './wardrobe';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 import { ServiceWorkspace } from './serviceWorkspace';
 import { supportCompatibilityHtml } from './supportCompatibility';
+import { swapReadinessText } from './swapReadiness';
 // ---------------------------------------------------------------------------
 // DOM panels: class selection, character sheet, skill book (unlock / level /
 // socket support gems), passive tree, death screen.
@@ -36,10 +39,10 @@ import {
   type SkillDef, type SkillInstance, type SkillRarity, type SkillTreeNode, type SupportInstance,
 } from '../engine/skills';
 import { EQUIP_SLOTS, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
-import { findBagGem, gemInitials, packSkillGemPayload, packSupportGemPayload, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
+import { findBagGem, packSkillGemPayload, packSupportGemPayload, skillGemPayloadOf, skillOfGemItem, supportGemPayloadOf, supportOfGemItem } from '../engine/gemitems';
 import { veinLines } from '../engine/supportbase';
 import {
-  MEMORY_FOUND_SOURCES, MEMORY_CFG, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE, memoryFacets,
+  memoryProvenanceLabel, MEMORY_CFG, MEMORY_KINDS, memoryFacets,
   memoryGroups, memoryKindOf, type MemoryKind, type MemoryRecallResult,
 } from '../engine/memories';
 import { GEM_DROP_CFG } from '../engine/loot';
@@ -58,6 +61,7 @@ import { PortalButton } from './portalbutton';
 import { ItemHoldController, type ItemHoldTarget } from './itemhold';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, itemLevelReq, type ModCompareRow } from '../engine/itemgen';
+import { itemProcReferences } from '../engine/procReference';
 import { ITEM_BASES } from '../data/itembases';
 import {
   ABILITY_ESSENCE_CFG, ABILITY_ESSENCES, abilityEssenceOfTier, ESSENCES, ESSENCE_IDS,
@@ -333,8 +337,7 @@ const gemTileColorOf = (item: ItemInstance): string => {
 };
 
 /** THE ICON LAW (walk-1): the tile face IS the hotbar icon at 1×1 — the
- *  skill's color swatch wearing its initials (one icon truth, no second
- *  art). Supports wear the same face in their def color. */
+ *  shared visual face. Supports retain their def color. */
 const gemTileFaceHtml = (item: ItemInstance): string => {
   const sp = skillGemPayloadOf(item);
   const gp = supportGemPayloadOf(item);
@@ -344,7 +347,7 @@ const gemTileFaceHtml = (item: ItemInstance): string => {
   const lvl = sp?.level ?? gp?.level ?? 1;
   return `<span style="display:flex;align-items:center;justify-content:center;
       width:22px;height:22px;border-radius:3px;background:${color};opacity:0.9;
-      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${gemInitials(def.name)}</span>
+      color:#0a0a0e;font-weight:bold;font-size:9px;font-family:Verdana">${sp ? skillIconSvg(SKILLS[sp.skillId],22) : skillIconSvg({color,name:def.name,icon:'support'},22)}</span>
     <span style="position:absolute;bottom:0;left:2px;font-size:8px;line-height:9px;color:#e8dcc8;text-shadow:0 0 2px #000">${lvl}</span>
     ${gp ? `<span title="Support Memory" aria-label="Support Memory" style="position:absolute;top:0;left:0;
       font-size:10px;line-height:11px;padding:0 1px;border-radius:2px;
@@ -727,7 +730,7 @@ export class UI {
   private recallKind: MemoryKind = 'rough';
   private recallFacet: string | null = null;
   /** THE REVEAL rows: dropper id → the grant its row last flipped to. */
-  private recallReveals = new Map<string, { name: string; color: string; sockets: number }>();
+  private recallReveals = new Map<string, { name: string; color: string; sockets: number; itemUid: number; id: string; kind: string }>();
   /** Found-flash marks: freshly-recalled bag uids → flash-until (ms). */
   private memFlash = new Map<number, number>();
   /** The Tracker's book: which leaf is open, and which page is under the thumb. */
@@ -936,6 +939,7 @@ export class UI {
     private onLeaveCoop: () => void = () => { /* default no-op */ },
   ) {
     configureTooltipDetail(() => this.getSettings().tooltipDetail);
+    configureSkillArtwork(() => this.getSettings().skillArtwork);
     installTooltipHints();
     this.portalButton = new PortalButton(this.getWorld, this.getSettings,
       () => this.menuBar.buttonRect(), () => this.menuBar.controls);
@@ -961,11 +965,13 @@ export class UI {
         : el.dataset.tip === 'vgem' ? this.vendorGemTooltip(el.dataset.vgem!, ext)
         : el.dataset.tip === 'gem-overview' ? this.gemOverviewTooltip(el.dataset.gemKind, el.dataset.gemId, this.panelSeat(this.vendorMenu)) : null,
     { extend: true });
-    bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
+    bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!)
+      : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null);
     // THE MU CARD (data/mu.ts) speaks the same chip tongue: its skill chips
     // carry data-tip="cskill" exactly like the class screen's — tooltips are
     // bound PER PANEL ROOT, so the card needs its own delegation row.
-    bindTooltips(this.muCard, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
+    bindTooltips(this.muCard, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!)
+      : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null);
     // THE VAULT reads compact — name and price on the card, the kind on the
     // section header above it — and keeps each unlock's full story in the
     // shared tooltip behind a HOVER-INTENT dwell: the wall of text speaks
@@ -2226,6 +2232,15 @@ export class UI {
     return { title: a.label, description: `Each point: ${perPoint}`, meta: a.description };
   }
 
+  /** Starting spreads use the same live attribute explanations as the sheet. */
+  private startingAttributesHtml(def: ClassDef): string {
+    const rows = ATTRIBUTE_IDS.filter(id => (def.attributes[id] ?? 0) > 0).map(id =>
+      `<span data-tip="attr" data-attr-id="${esc(id)}"
+        style="display:inline-block;white-space:nowrap;margin:2px 6px;cursor:var(--cursor-help, help);border-bottom:1px dotted var(--text-dim)">
+        ${esc(ATTRIBUTES[id].label)} ${def.attributes[id]}</span>`).join('');
+    return rows ? `<div class="cattrs"><div style="margin:5px 0 2px">Starting attributes</div>${rows}</div>` : '';
+  }
+
   /** Tooltip for a learned skill row (full description + key stats). */
   /** THE COMPUTED BLOCK (engine/skillPreview.ts): what this skill does for
    *  THIS build, read off the live sheet through the engine's own resolvers.
@@ -2667,8 +2682,7 @@ export class UI {
       ${offerHead}
       <div class="cname" style="color:${def.color};font-size:22px;letter-spacing:1px">${def.name}</div>
       <div class="cdesc" style="margin:6px 0 8px 0">${def.description}</div>
-      <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (def.attributes[a] ?? 0) > 0).map(a =>
-    `${ATTRIBUTES[a].short} ${def.attributes[a]}`).join(' &nbsp; ')}</div>
+      ${this.startingAttributesHtml(def)}
       ${chips ? `<div style="margin-top:4px">${chips}</div>` : ''}
       ${def.innateText ? `<div class="cskills" style="margin-top:4px">Innate: ${def.innateText}</div>` : ''}
       <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:14px 0 4px 0">
@@ -2866,8 +2880,7 @@ export class UI {
         ${note ? 'style="opacity:.5"' : ''}>
         <div class="cname" style="color:${c.color}">${c.name}</div>
         <div class="cdesc">${c.description}</div>
-        <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (c.attributes[a] ?? 0) > 0).map(a =>
-          `${ATTRIBUTES[a].short} ${c.attributes[a]}`).join(' &nbsp; ')}</div>
+        ${this.startingAttributesHtml(c)}
         ${note ? skillChips(c) : this.kitRowHtml(c)}
         ${c.innateText ? `<div class="cskills">Innate: ${c.innateText}</div>` : ''}
         ${note ? `<div class="class-lock">${note}</div>` : ''}
@@ -3953,6 +3966,10 @@ export class UI {
       for (const s of d.epitaph.lines) lines.push(`<div style="color:#ffe9a8">${s}</div>`);
       if (d.epitaph.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic">${d.epitaph.flavor}</div>`);
     }
+    const procReferences = itemProcReferences(item);
+    if (procReferences.length) lines.push(`<section data-proc-reference style="margin-top:7px;padding-top:6px;border-top:1px solid #48404e;font-size:11px;line-height:1.5">
+      <div style="color:#aaa18e">Triggered effects · base values</div>
+      ${procReferences.map(r=>`<p style="margin:4px 0;color:#c9c1b1"><strong>${esc(r.name)}</strong> — ${esc(r.text)}</p>`).join('')}</section>`);
     if (d.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic;margin-top:4px">${d.flavor}</div>`);
     // Full tooltipDetail includes the comparison immediately; the compact
     // card points to the preference without promising a timed expansion.
@@ -3989,7 +4006,7 @@ export class UI {
     const k = MEMORY_KINDS[kind];
     const groups = memoryGroups(units);
     const dropperName = (d: string): string =>
-      MONSTERS[d]?.name ?? (d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : MEMORY_FOUND_SOURCES[d] ?? d);
+      memoryProvenanceLabel(d, MONSTERS[d]?.name);
     const lines: string[] = [];
     if (item.locked) {
       lines.push(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
@@ -4396,7 +4413,8 @@ export class UI {
       // it (the engine refuses too), and a locked tile keeps still.
       if (i.mem) {
         const mk = MEMORY_KINDS[memoryKindOf(i) ?? 'rough'];
-        return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
+        const memoryRecallLesson = !breaking && world.memoryRecallLesson(invSeat);
+        return `<div class="${memoryRecallLesson ? 'tut-glow' : ''}" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${breaking ? (salv === 'sell' && !i.locked ? `data-salv-uid="${i.uid}"` : '') : `data-drag="gearItem:${i.uid}"`} data-drop="gearTile:${i.uid}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
           width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;
@@ -4574,6 +4592,14 @@ export class UI {
     if (scrollEl) scrollEl.scrollTop = prevScroll;
     const buildEl = this.buildPanel.querySelector<HTMLElement>('.build-scroll');
     if (buildEl) buildEl.scrollTop = prevBuildScroll;
+    // Update the clock text independently: changing tenths must not replace a
+    // dragged skill, its event handlers, scroll position or focused control.
+    const swapReadout = this.buildPanel.querySelector<HTMLElement>('[data-socket-readiness]');
+    if (swapReadout) {
+      const text = swapReadinessText(world.swapReadiness(invSeat, 'socket'), !world.clientActionHook, this.getSettings().supportReadyHint);
+      if (swapReadout.textContent !== text) swapReadout.textContent = text;
+      swapReadout.hidden = !text;
+    }
     if (inventoryChanged) this.wireInventory();
     if (buildChanged && this.skillsOpen) this.wireLearnedList(this.buildPanel, () => this.refreshInventory());
     if (inventoryChanged) this.fitBuildRail();
@@ -5021,6 +5047,7 @@ export class UI {
   // teaching, walk-2 ruled) before the RECALL buttons arm.
 
   showRecall(uid: number, seatId?: string): void {
+    hideTooltip(); // Retire the pouch card before opening its recall choice.
     this.ownPanel(this.recallMenu, this.couchSeatFor(seatId));
     this.recallOpen = true;
     this.recallUid = uid;
@@ -5074,11 +5101,12 @@ export class UI {
         : 'commit to a FACET: the recall grants a skill asking those attributes (skills only — supports hold no attribute)'}</div>` : '';
     const chipStyle = 'display:inline-flex;align-items:center;gap:3px;padding:1px 5px;margin:1px 2px;'
       + 'background:#241d2e;border:1px solid #4a3a5a;border-radius:8px;font-size:9px';
-    const revealHtml = (reveal: { name: string; color: string; sockets: number }): string =>
+    const revealHtml = (reveal: { name: string; color: string; sockets: number; itemUid: number; id: string; kind: string }): string =>
       `<div style="margin-top:2px;font-size:10px;color:${reveal.color}">
         <span style="display:inline-flex;width:14px;height:14px;border-radius:2px;background:${reveal.color}33;border:1px solid ${reveal.color};
-          align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${gemInitials(reveal.name)}</span>
-        ${reveal.name}${reveal.sockets ? ` <span style="color:#9a94a8">${'◆'.repeat(reveal.sockets)}</span>` : ''}</div>`;
+          align-items:center;justify-content:center;font-size:6px;vertical-align:middle">${skillIconSvg((reveal.kind === 'skill' ? SKILLS[reveal.id] : undefined) ?? {color:reveal.color,name:reveal.name,icon:'support'},14)}</span>
+        ${esc(reveal.name)}${reveal.sockets ? ` <span style="color:#9a94a8">${'◆'.repeat(reveal.sockets)}</span>` : ''}
+        ${seat.meta.items.some(i=>i.uid===reveal.itemUid && i.gem) ? `<button data-mem-find="${reveal.itemUid}" style="margin-left:6px;padding:3px 7px;font-size:10px">View in bag</button>` : ''}</div>`;
     const portraitOf = (def: MonsterDef | undefined): string => def
       ? this.monsterPortraitHtml(def, false, 30)
       : '<span style="width:30px;text-align:center;color:#5a5668">?</span>';
@@ -5095,14 +5123,14 @@ export class UI {
         // grant itself (and its pinned grade where the spoil named one).
         ? `<span style="${chipStyle}" title="${esc(g.pin.name)} — ${MEMORY_CFG.strings.pinned} this very memory">
             <span style="width:12px;height:12px;border-radius:2px;background:${g.pin.color}33;border:1px solid ${g.pin.color};
-              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${g.pin.color}">${gemInitials(g.pin.name)}</span>
+              display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${g.pin.color}">${skillIconSvg((g.pin.kind === 'skill' ? SKILLS[g.pin.id] : undefined) ?? {color:g.pin.color,name:g.pin.name,icon:'support'},12)}</span>
             <span style="color:${g.pin.rarity ? SKILL_RARITIES[g.pin.rarity].color : '#c8bce0'}">${esc(g.pin.name)}${g.pin.rarity ? ` · ${SKILL_RARITIES[g.pin.rarity].label}` : ''}</span></span>`
         : needsFacet
         ? `<span style="color:#5a5668;font-size:9px">the committed facet decides</span>`
         : g.rung === 'kit'
           ? g.kit.map(c => `<span style="${chipStyle}" title="${c.name} — ×${c.mult} lean">
               <span style="width:12px;height:12px;border-radius:2px;background:${c.color}33;border:1px solid ${c.color};
-                display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${gemInitials(c.name)}</span>
+                display:inline-flex;align-items:center;justify-content:center;font-size:6px;color:${c.color}">${skillIconSvg(SKILLS[c.id] ?? {color:c.color,name:c.name,icon:'support'},12)}</span>
               <span style="color:#c8bce0">×${c.mult}</span></span>`).join('')
           : g.rung === 'bias'
             ? g.tags.map(t => `<span style="${chipStyle}" title="tag lean — ×${GEM_DROP_CFG.biasMult}">
@@ -5115,7 +5143,7 @@ export class UI {
       return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634">
         ${portraitOf(def)}
         <div style="flex:1;min-width:0">
-          <div style="font-size:11px;color:#e0d8c8">${g.name} <span style="color:#9a94a8">×${g.count}</span></div>
+          <div style="font-size:11px;color:#e0d8c8">${esc(g.name)} <span style="color:#9a94a8">×${g.count}</span></div>
           <div>${chips}</div>${revealLine}
         </div>
         <button data-mem-recall="${esc(g.key)}" ${canRecall ? '' : 'disabled'}
@@ -5138,17 +5166,25 @@ export class UI {
         return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634;opacity:0.8">
           ${portraitOf(def)}
           <div style="flex:1;min-width:0">
-            <div style="font-size:11px;color:#8a8678">${def?.name ?? d} <span style="color:#5a5668">— spent</span></div>
+            <div style="font-size:11px;color:#8a8678">${esc(memoryProvenanceLabel(d, def?.name))} <span style="color:#5a5668">— spent</span></div>
             ${revealHtml(reveal)}
           </div>
         </div>`;
       }).join('');
     this.recallMenu.innerHTML = `${this.closeGlyphHtml()}
       <h3 style="margin:2px 0 2px;color:${mk.color}">${mk.name.replace(/Memory$/, 'Memories')} <span style="color:#9a94a8;font-size:11px">×${total} held</span></h3>
-      <div style="font-size:10px;color:#8a8678;margin-bottom:4px">each recall returns ONE memory of that body — oldest first, sealed at the drop</div>
+      <div data-memory-purpose style="font-size:11px;line-height:1.5;color:#c8bce0;margin-bottom:6px">${esc(mk.recallDescription)}</div>
       ${facetStrip}
       ${refusal ? `<div style="color:#c08a68;font-size:11px;margin-bottom:4px">${refusal}</div>` : ''}
       ${rows || '<div style="color:#5a5668;font-size:11px">nothing held</div>'}${spent}`;
+    this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-find]').forEach(el => {
+      el.addEventListener('click', () => {
+        const owner=this.panelSeat(this.recallMenu), uid=Number(el.dataset.memFind);
+        if (!owner.meta.items.some(i=>i.uid===uid && i.gem) || !this.openInventory(owner.id)) return;
+        this.closeRecall(); this.serviceWorkspace.select('inventory');
+        this.memFlash.set(uid,Date.now()+1700); this.refreshInventory();
+      });
+    });
     this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-facet]').forEach(el => {
       el.addEventListener('click', () => {
         this.recallFacet = el.dataset.memFacet!;
@@ -5169,7 +5205,7 @@ export class UI {
         const got = w.memoryRecallLast as (MemoryRecallResult & { seat: string }) | null;
         if (got && got.seat === this.panelSeat(this.recallMenu).id) {
           this.recallReveals.set(dropper, {
-            name: got.name,
+            name: got.name, itemUid: got.itemUid, id: got.id, kind: got.kind,
             color: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].color : (SUPPORTS[got.id]?.color ?? '#b8b8b8'),
             sockets: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].sockets : 0,
           });
@@ -6564,7 +6600,7 @@ export class UI {
               display:flex;align-items:center;justify-content:center;
               ${e.kind === 'skill' && e.inst.rarity === 'legendary' ? `box-shadow:0 0 10px ${col};` : ''}${canBuy ? '' : 'opacity:0.55;'}">
               <span style="width:22px;height:22px;border-radius:4px;background:${col}33;border:1px solid ${col};
-                display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${gemInitials(name)}</span>
+                display:flex;align-items:center;justify-content:center;font-size:8px;color:${col}">${skillIconSvg(e.kind === 'skill' ? e.inst.def : {color:col,name:e.gem.def.name,icon:'support'},22)}</span>
               ${priceTag}${lockPip}${badge}</div>`;
             return;
           }
@@ -6918,7 +6954,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
       }
       const sd = seated.def;
       // THE ICON LAW (M1): the seat wears the skill's hotbar face — the
-      // color swatch + initials the canvas bar prints, at seat scale.
+      // shared visual icon the canvas bar prints, at seat scale.
       return `<div data-drag="rackSeat:${slot}" data-drop="rackSeat:${slot}"
         data-tip="skill" data-skill-id="${sd.id}"
         style="--unlearn-size:${BUILD_PANEL_CFG.unlearnSize}px;position:relative;height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px solid ${sd.color};border-radius:5px;
@@ -6935,7 +6971,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
         <div style="display:flex;align-items:center;gap:4px">
           <span style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;
             width:15px;height:15px;border-radius:2px;background:${sd.color};opacity:0.9;
-            color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${gemInitials(sd.name)}</span>
+            color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${skillIconSvg(sd,15)}</span>
           <span style="min-width:0">
             <span style="display:block;font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${skillInstanceName(seated)}</span>
             <span style="display:block;font-size:8px;color:#8a8678">Lv ${seated.level}</span>
@@ -6957,6 +6993,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
     // THE FIELD DISCIPLINE, spoken at the button (the engine gate's words):
     // unsocket shares one verdict; unlearn adds its per-skill clock below.
     const unsocketWhy = world.swapRefusal(seat, 'unsocket');
+    const socketWhy = world.swapRefusal(seat, 'socket');
     // The book lists what the seat WIELDS: the learned residence plus the
     // GRANTED lane (THE LEGEND FABRIC) — a granted row sockets and picks
     // its tree like any other, but carries no level-up and no unlearn.
@@ -6992,7 +7029,7 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
             title="Level up for ${supportLevelAbilityCost(s.level + 1).count}× ${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).label}">+${abilityEssenceOfTier(supportLevelAbilityCost(s.level + 1).tier).glyph}</button>
           <button data-unsocket="${def.id}:${i}" ${unsocketWhy ? `disabled title="${unsocketWhy}"` : ''}>✕</button>
         </span>` : `<span class="gem-chip empty support-slot" aria-label="Empty support socket"
-          title="Socket a support here by dragging a Support Memory onto this skill.">
+          title="${esc(socketWhy ?? 'Socket a support here by dragging a Support Memory onto this skill.')}">
           <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 2 22 12 12 22 2 12Z M12 6 18 12 12 18 6 12Z M12 2V6 M22 12H18 M12 22V18 M2 12H6"
               fill="none" stroke="currentColor" stroke-width="1"/>
@@ -7121,7 +7158,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           ${modeRow}
         </div>`;
     }).join('');
-    return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${graftBank}${rows
+    return `<div class="build-rack">${rackHtml}</div><div class="build-scroll">${socketWhy
+      ? `<div data-socket-readiness data-socket-refusal role="status" style="color:#e4b58b;font-size:11px;line-height:1.5;padding:8px">Socket changes unavailable: ${esc(socketWhy)}.</div>` : `<div data-socket-readiness role="status" ${this.getSettings().supportReadyHint ? '' : 'hidden'} style="color:#a9bc9d;font-size:11px;line-height:1.5;padding:8px">${esc(swapReadinessText({ reason: null }, !world.clientActionHook, this.getSettings().supportReadyHint))}</div>`}${graftBank}${storedSupportsHtml(m.items, unsocketWhy)}${rows
       || '<div style="color:#8a8678;font-size:11px">Nothing seated. Skill Memories drop from monsters — press one from your pack into an empty seat above.</div>'}</div>`;
   }
 
@@ -7175,6 +7213,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     q<HTMLButtonElement>('button[data-unsocket]').forEach(btn => btn.addEventListener('click', () => {
       const [skillId, sock] = btn.dataset.unsocket!.split(':');
       world.requestMeta({ t: 'unsocket', skillId, socket: Number(sock) });
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-unsocket-bag]').forEach(btn => btn.addEventListener('click', () => {
+      const [uid, socket] = btn.dataset.unsocketBag!.split(':').map(Number);
+      world.requestMeta({ t: 'unsocketBagSkill', uid, socket });
       refresh();
     }));
     // GRAFTS: lift a bank chip → land it on a skill (click-lift twins, the
@@ -10504,7 +10547,43 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Ailment Screen Effects</span>
-        <button id="opt-affliction" title="Blood drips, rising kindling, poison haze and curse effects appear together, each scaling with its own severity. STILL stops their motion; OFF hides these layers. Status icons, body effects, frost, stun and the separate low-life pulse keep their own behavior.">${s.afflictionOverlays.toUpperCase()}</button>
+        <button id="opt-affliction" title="Blood drips, rising kindling, poison haze, mire and befuddlement appear together, each scaling with its own severity. STILL stops their motion; OFF hides these layers. Status icons, body effects, frost, stun and the separate low-life pulse keep their own behavior.">${s.afflictionOverlays.toUpperCase()}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Debuff Names &amp; Durations</span>
+        <button id="opt-statusreadout" title="Hover an icon near Life for details. Optional standing text can appear near your hero or in the upper corner. OFF hides the details; icons and screen effects keep their own behavior.">${s.statusReadout === 'hover' ? 'ON HOVER' : s.statusReadout === 'focus' ? 'NEAR HERO' : s.statusReadout === 'corner' ? 'UPPER CORNER' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Skill Faces</span>
+        <button id="opt-skillartwork" title="ARTWORK gives each skill its own illustration. ACRONYMS restores classic colored tiles and small initials.">${s.skillArtwork ? 'ARTWORK' : 'ACRONYMS'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Health &amp; Cast Bar Placement</span>
+        <button id="opt-crowdedmeters" title="FIXED keeps bars at their usual position above each body. AVOID CROWD moves overlapping groups with a line to their owner.">${s.crowdedMeters ? 'AVOID CROWD' : 'FIXED'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Support ready message</span>
+        <button id="opt-supportready" title="Show a message in Skills when supports can be changed. Restrictions remain visible either way.">${s.supportReadyHint ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Skill Cast Name</span>
+        <button id="opt-castname" title="Show the skill name above your hero while casting.">${s.castNameHint ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Active Cast Slot Outline</span>
+        <button id="opt-castslot" title="Outline the hotbar slot owning the current cast.">${s.castSlotHint ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Floating Number Placement</span>
+        <button id="opt-floatavoid" title="FIXED keeps original positions. AVOID BODIES shifts numbers away from visible bodies.">${s.floatingTextAvoidance ? 'AVOID BODIES' : 'FIXED'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Ground Item Label Placement</span>
+        <button id="opt-rewardavoid" title="FIXED keeps classic item names. AVOID BODIES packs names around visible bodies and links them to their items.">${s.rewardLabelAvoidance ? 'AVOID BODIES' : 'FIXED'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Feet Planted Caption</span>
+        <button id="opt-castmovement" title="Show a caption during casts that hold your hero in place.">${s.castMovementHint ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>Faintness Frame-Falter</span>
@@ -10553,6 +10632,21 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       s.afflictionOverlays = s.afflictionOverlays === 'gentle' ? 'still' : s.afflictionOverlays === 'still' ? 'off' : 'gentle';
       this.saveSettings();
       this.renderOptions(root, onBack);
+    });
+    for (const [id, key] of [['opt-supportready', 'supportReadyHint'], ['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
+      root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
+        const settings = this.getSettings(); settings[key] = !settings[key];
+        this.saveSettings(); this.renderOptions(root, onBack);
+      });
+    }
+    root.querySelector<HTMLElement>('#opt-skillartwork')?.addEventListener('click', () => {
+      const settings = this.getSettings(); settings.skillArtwork = !settings.skillArtwork;
+      this.saveSettings(); this.refreshInventory(true); if (this.vendorOpen) this.refreshVendor(); this.renderOptions(root, onBack);
+    });
+    root.querySelector<HTMLElement>('#opt-statusreadout')?.addEventListener('click', () => {
+      const settings = this.getSettings();
+      settings.statusReadout = settings.statusReadout === 'hover' ? 'focus' : settings.statusReadout === 'focus' ? 'corner' : settings.statusReadout === 'corner' ? 'off' : 'hover';
+      this.saveSettings(); this.renderOptions(root, onBack);
     });
     // THE FALTER is deliberate fake lag (docs/render/falter.md) — a comfort
     // switch, never a graphics-quality one: OFF loses no information (the

@@ -1806,6 +1806,19 @@ function acquireTarget(
     // Scenery is not prey: nobody dedicates their life to a barrel,
     // and the townsfolk are not on the menu.
     if (e.passive || !minionPreyInReach(actor, e)) continue;
+    // Reject only beyond the widest CURRENT sense reach before paying for
+    // diplomacy. Use both cone outcomes so mutable stealth/rear/alert values
+    // keep their exact fold. Long detection, NaNs and distant heads whose
+    // hittable coils are nearby fall through to the standing checks below.
+    const farDx = Math.abs(actor.pos.x - e.pos.x), farDy = Math.abs(actor.pos.y - e.pos.y);
+    if ((farDx > detect || farDy > detect) && !segsHittable(e)) {
+      const farDetectability = e.sheet.get('detectability');
+      const farConcealed = concealmentActive(e, world.time);
+      const farReach = Math.max(
+        senseReach(detect, farDetectability, farConcealed, alerted, true, rearMul),
+        senseReach(detect, farDetectability, farConcealed, alerted, false, rearMul));
+      if (Math.max(farDx, farDy) > farReach) continue;
+    }
     if (!(world.hostileTo(actor, e)
       || (e.construct?.breakable !== undefined && e.owner === actor))) continue;
     if (e.sheet.get('invisible') > 0) continue;
@@ -2844,20 +2857,22 @@ function refugeStep(actor: Actor, world: World, dt: number): boolean {
  *  Returns true while the lane is blocked (the tick is consumed). */
 function losStrafe(ctx: KernelCtx): boolean {
   const { a, world, target, dt } = ctx;
-  // IMPLICIT LOS-seek in GRID zones for kits with ANY projectile: once masonry
-  // can stop shots (rampart walls), a basic-brained shooter must reposition
-  // instead of dumping arrows into a wall forever. Mixed kits strafe too — a
-  // blocked archer-with-a-dagger rounding the corner beats one idling at the
-  // wall (LOS regained exits the strafe instantly, so the melee answer still
-  // fires the moment the lane opens). Pure-melee kits keep their old conduct;
-  // data losSeek behaves exactly as before; convex zones (no grid) untouched.
-  const implicit = !ctx.spec.losSeek && !!world.walk
-    && a.skills.some(s => s?.def.delivery.type === 'projectile');
-  if (!ctx.spec.losSeek && !implicit) return false;
-  if (world.lineOfSight(a.pos, target.pos, a.tier, target.tier)) {
-    a.aiLosTimer = rand(1.4, 2.2); // LOS regained: reset the patience clock
+  // Seeing a target is not a firing lane: low cover and elevation may pass
+  // eyes while stopping a shot. Use the native delivery policy, including
+  // rays and phasing, rather than guessing from one projectile type.
+  if(ctx.spec.losSeek===false)return false;
+  const needsFire=a.skills.some(s=>s?.def.ai && world.aiNeedsFireLine(a,s));
+  const implicit=!ctx.spec.losSeek && !!world.walk && needsFire;
+  if(!ctx.spec.losSeek && !implicit)return false;
+  const clear=needsFire ? world.lineOfFire(a.pos,target.pos,a.tier)
+    : world.lineOfSight(a.pos,target.pos,a.tier,target.tier);
+  if(clear){
+    a.aiLosTimer = rand(1.4, 2.2); // Lane regained: reset the patience clock
     return false;
   }
+  // A legal free/nearby/support answer still belongs to the kernel's normal
+  // cadence. One memoized native pick keeps its policy, bans and random roll.
+  if(needsFire && ctx.pick())return false;
   // The strafe patience clock lives on ITS OWN field — a.aiTimer is owned by
   // the kernels' phase machines (slideCast's slide/withdraw), and stomping it
   // on every LOS-clear tick froze strafers solid after their first cast.
@@ -3122,9 +3137,12 @@ function makeCtx(
     goal = segsHittable(target) ? nearestBody(target, actor.pos).pos : target.pos;
   }
   goal = { x: goal.x, y: goal.y, tier: target.tier }; // the goal carries its story
+  let picked: SkillInstance | null | undefined;
   return {
     a: actor, world, target, d, dt, spec, tuning, norm, noCast, paused, goal,
     pick: () => {
+      if(picked!==undefined)return picked;
+      picked=null;
       if (noCast) return null;
       // REACTION: the first cast of a fresh engagement waits out the wits.
       if (world.time < actor.aiReactAt) return null;
@@ -3134,7 +3152,7 @@ function makeCtx(
       if (beh?.castArc !== undefined && Math.abs(angleDiff(
         actor.facingPrev ?? actor.facing,
         angleTo(actor.pos, target.pos))) > beh.castArc) return null;
-      return pickSkill(actor, world, d, tuning, target);
+      return picked=pickSkill(actor, world, d, tuning, target);
     },
     cast: inst => {
       // THE FEINT (kernel casts only — reserves/menders never bluff): the
