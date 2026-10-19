@@ -49,6 +49,10 @@ try {
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
   app.setName('Hollow Wake World Playtest');
   app.setPath('userData', profile);
+  // Keep the checkout/revision identity when the game's generic HTML title loads.
+  app.on('browser-window-created', (_event, window) => {
+    window.on('page-title-updated', event => event.preventDefault());
+  });
   process.chdir(candidate);
   process.env.HOLLOW_WAKE_WORLDMASS = '1';
   delete process.env.HOLLOW_WAKE_STORAGE_SCOPE; // real disk saves in the isolated folder
