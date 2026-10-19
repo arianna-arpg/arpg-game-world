@@ -66,6 +66,7 @@ import { makeSpeakerRow, type SpeechSpeakerRow } from '../src/engine/speechGramm
 import { MONSTERS } from '../src/data/monsters';
 import { DialogueSession, DialogueVisits, dialoguePages, type DialogueOffer } from '../src/engine/dialogue';
 import { DialogueActions } from '../src/engine/dialogueActions';
+import { NPC_DIALOGUES } from '../src/data/npcDialogues';
 import { resetActorIdCounter } from '../src/engine/actor';
 import { buildManifest } from '../src/packages/manifest';
 import { makeAccount } from '../src/meta/account';
@@ -974,6 +975,9 @@ console.log('Lv. FRESH DWELL AFTER DISMISSAL');
   }
   visits.dismiss(1, 100); visits.reset();
   check('Lv reused actor ids clear dismissal', !visits.has(1));
+  visits.dismiss(1, 100, 90);
+  check('Lv old movement before closing never rearms', !visits.rearm(1, 90, 0));
+  check('Lv a first-frame step at the close timestamp rearms', visits.rearm(1, 100, 0));
   const w = makeSimWorld('warrior', 77036), a = w.createMonster('townsfolk_innkeep', 1, 'player');
   a.pos = { ...w.player.pos }; w.actors.push(a); w.time = 10; w.localSeat.lastActedAt = 0;
   const poll = (n: number) => { for (let i = 0; i < n; i++) { w.time += 0.05; w.npcSpeechView(); } };
@@ -984,6 +988,13 @@ console.log('Lv. FRESH DWELL AFTER DISMISSAL');
   check('Lv reentry does not reuse the old completed focus', !w.speechFocusTarget()?.ready);
   poll(10);
   check('Lv normal attention dwell completes inside the same radius', !!w.speechFocusTarget()?.ready);
+  NPC_DIALOGUES.push({ id: 'qa_long_quest_dwell', speaker: { role: 'innkeep' }, priority: 9999,
+    trigger: { kind: 'dwell', radius: 150, seconds: 1.1 }, lines: [{ text: 'Your work is waiting.' }] });
+  try {
+    w.restartNpcDialogueDwell(a.id); w.localSeat.lastActedAt = w.time;
+    poll(14);
+    check('Lv authored quest states cannot lengthen the shared functional dwell', !!w.speechFocusTarget()?.ready);
+  } finally { NPC_DIALOGUES.pop(); }
 }
 
 console.log('M. EXPLICIT DIALOGUE RESPONSES');

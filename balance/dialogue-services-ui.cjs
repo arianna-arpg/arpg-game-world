@@ -93,11 +93,11 @@ app.whenReady().then(async () => {
       const moved=await js('({at:serviceQA.w.localSeat.lastMovedAt,now:serviceQA.w.time})');
       assert.ok(moved.at>=at,'real movement stamps a fresh intentional step: '+JSON.stringify({start:at,...moved}));
       assert.equal(await js('serviceQA.w.npcDialogueReachable(serviceQA.target.id)'),true,'step stays inside the NPC radius');
-      const arrival=await js('(()=>{const q=serviceQA,start=q.w.time;for(let n=0;n<18&&!__game.ui.conversation.session.reading;n++)q.run(1);return {elapsed:q.w.time-start,open:!!__game.ui.conversation.session.reading};})()');
+      const arrival=await js('(()=>{const q=serviceQA,start=q.w.time;for(let n=0;n<18&&!__game.ui.conversation.session.reading;n++)q.run(1);return {elapsed:q.w.time-start,open:!!__game.ui.conversation.session.reading,target:q.target.id,focus:q.w.speechFocusTarget(),moved:q.w.localSeat.lastMovedAt,acted:q.w.localSeat.lastActedAt,idle:q.w.seatIdle(q.w.localSeat),available:__game.ui.dialogueContext().available,visits:[...__game.ui.conversation.visits.closed],session:__game.ui.conversation.session,lines:q.w.npcSpeechView().map(l=>({id:l.a.id,text:l.text})),candidates:q.w.speechCandidates(q.w.localSeat).map(c=>({id:c.id,name:c.a.name,text:c.text,priority:c.priority,dwell:c.dwellSec}))};})()');
       assert.ok(arrival.open&&arrival.elapsed<0.8,'fresh dwell reopens without leaving NPC range: '+JSON.stringify(arrival));
     };
     let cases=0;
-    for(const npc of ['smith','inn'])for(const page of ['skills','passives','container:reliquary','character'])for(const verb of ['finish','x','escape']) {
+    for(const npc of ['smith','inn'].filter(n=>!process.argv.includes('--inn')||n==='inn'))for(const page of ['skills','passives','container:reliquary','character'])for(const verb of ['finish','x','escape']) {
       await js(`__game.settings().npcShopVisits=[];serviceQA.clear();serviceQA.page('${page}');serviceQA.target=serviceQA.${npc};serviceQA.run(90,serviceQA.target.pos)`);
       const topics=await js('Array.from(document.querySelectorAll("[data-conversation-activity]"),b=>b.dataset.conversationActivity)');
       const topic=topics.find(t=>t.startsWith('work:'))??topics[0];

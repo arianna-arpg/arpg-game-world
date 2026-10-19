@@ -24123,7 +24123,9 @@ export class World {
       const available = !ambient || !row || speechAvailable(memory, this.time,
         speechWindowFor(row.lane, row.current ?? row.line));
       candidates.push({ id: a.id, a, text, color, distance, ambient, available,
-        ...attention, ...(authored ? { priority: authored.def.priority, dwellSec: authored.seconds } : {}) });
+        // A quest's script may request faster attention, but cannot impose
+        // a second, longer panel delay than the shared NPC attention rule.
+        ...attention, ...(authored ? { priority: authored.def.priority, dwellSec: Math.min(authored.seconds, attention.dwellSec) } : {}) });
     }
     return candidates;
   }

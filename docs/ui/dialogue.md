@@ -56,6 +56,9 @@ The shortcut is a settings preference keyed by character and NPC definition.
   a delayed shop timer cannot reopen the shop. A deliberate step inside the
   same NPC's range requests a fresh normal dwell. Services, current quest
   topics and authored responses can return immediately after that dwell.
+  Authored quest text cannot lengthen the shared functional dwell (0.4s by
+  default, after idle grace); first visits and subsequent quest states obey
+  that same limit, including Mireille's native flask introduction.
   Closing Shop also arms this return, even with Conversation still in its
   NPC tabs. Existing vendor definitions supply Shop eligibility for all traders.
 - Residents and settled quest givers without attached content retain the

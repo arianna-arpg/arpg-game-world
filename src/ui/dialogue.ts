@@ -358,7 +358,7 @@ export class DialogueUI {
    * its retained conversation tab remains available behind the service. */
   armReentry(): void {
     const speaker = this.session.reading?.offer.speakerId;
-    if (speaker !== undefined && this.world) this.visits.dismiss(speaker, this.world.time);
+    if (speaker !== undefined && this.world) this.visits.dismiss(speaker, this.world.time, this.world.localSeat.lastMovedAt);
   }
 
   close(): boolean {
