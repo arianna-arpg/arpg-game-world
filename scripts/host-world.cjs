@@ -1,4 +1,4 @@
-// The same retained host used by server/shard.ts, with a local-only front door.
+// Host the same continuous surface as Play World, with a local-only front door.
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
@@ -32,9 +32,9 @@ async function main() {
   }
   process.chdir(candidate);
   require('tsx/cjs');
-  const { NativeShardHost } = require(path.join(candidate, 'server', 'nativeShardHost.ts'));
-  const shard = new NativeShardHost({ open: process.argv.includes('--open'), ...(check ? { seed: 1231 } : {}), name: 'Hollow Wake - Retained World Playtest',
-    saveDir: check ? null : path.join(candidate, 'saves', 'hosted-world-playtest') });
+  const { ShardHost } = require(path.join(candidate, 'server', 'shardHost.ts'));
+  const shard = new ShardHost({ worldmass: true, open: process.argv.includes('--open'), ...(check ? { seed: 1231 } : {}), name: 'Hollow Wake - Unbroken Wilds',
+    saveDir: check ? null : path.join(candidate, 'saves', 'hosted-seamless-playtest') });
   let closing = false;
   const close = async (code = 0, persist = true) => {
     if (closing) return;
@@ -57,8 +57,7 @@ async function main() {
     if (check) shard.status(); // expose a failed status read instead of polling an empty response
     shard.start();
     const url = 'http://127.0.0.1:' + port + '/';
-    console.log('Local retained world is ready: ' + url);
-    console.log('This is the original world/shard project. It is separate from the newer MMO.');
+    console.log('Local seamless world is ready: ' + url);
     console.log('Keep this window open. Press Ctrl+C here to save and stop.');
     if (check) {
       let status;
@@ -68,12 +67,12 @@ async function main() {
         if (status && status.ticks > 0) break;
       }
       if (!status) throw new Error('Host status unavailable: ' + JSON.stringify(shard.status()));
-      if (status.world !== 'retained native' || status.broken || status.faults !== 0) {
+      if (status.world !== 'the Unbroken Wilds' || status.zone !== 'worldmass_expedition' || status.broken || status.faults !== 0) {
         throw new Error('Unexpected host state: ' + JSON.stringify(status));
       }
       const client = await read(url);
       if (client.code !== 200 || !client.body.includes('start-menu')) throw new Error('Game client was not served');
-      console.log('HOST PLAYTEST CHECK PASS: retained host, no faults, client served');
+      console.log('HOST PLAYTEST CHECK PASS: continuous world, no faults, client served');
       await close(0, false);
     } else if (!process.argv.includes('--no-open')) {
       execFile('powershell.exe', ['-NoProfile', '-Command', "Start-Process '" + url + "'"],

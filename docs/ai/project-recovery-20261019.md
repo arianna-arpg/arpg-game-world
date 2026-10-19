@@ -1,50 +1,51 @@
-# World playtest recovery, 2026-10-19
+# Seamless playability recovery — 2026-10-19
 
-## Finding
+## What went wrong
 
-The owner expected visible progress on generation, seamless play and shards. The project had accumulated separate source lines and detailed migration proofs without a reliable local entry point or a short, current completion ledger. The user-facing failure was real even though substantial gameplay and migration code exists.
+The project goal is a continuous geographic world carrying the original ARPG's gameplay, offline and hosted. The earlier recovery restored the canonical branch but launched its retained campaign. That was the wrong player-facing result: retained owners still travelled through campaign zones.
 
-This recovery uses the existing `codex/seamless-world-foundation` branch at `5bf91b86`, not a new development branch. Its previously recorded `C:/Users/John/.codex/worktrees/seamless-world/ARPG Game - World` directory was absent. The branch and its commits remained available locally and at the recorded remote-tracking tip. It was restored into the ignored `.claude/ownership.playable-foundation` directory inside the original checkout.
+Commit `4ad56308` had replaced the browser's worldmass selection with unconditional `NativeClientStart` entry. `HOLLOW_WAKE_WORLDMASS=1` therefore did not make normal Begin enter continuous terrain. The old worldmass visual course called `devStartRun` and then explicitly invoked `startWorldMass`; it bypassed the broken player entry. Continue likewise used only the retained save reader. Separately, the desktop launcher's configured default branch could redirect a checkout launch back to main.
 
-## Repository map
+The first six-file launcher recovery fixed branch selection but failed to fix the gameplay selection. Its zone-based screenshots were not evidence of seamless delivery. This correction replaces that playtest route, not merely its label.
 
-| Source | Evidence and disposition |
-| --- | --- |
-| Original checkout, `main` at `118b510f` | Existing modified and untracked generation/adventure work was present before recovery. It is preserved and is not claimed integrated. The root playtest shortcuts point at the recovered candidate. |
-| `codex/seamless-world-foundation`, `5bf91b86` | Canonical original-game integration. Both recorded `origin/main` at `a2fa4291` and `shard-world` at `ee680532` are ancestors. The earlier integration merge is `dd1e95a5`. No new shard merge is needed for those tips. |
-| `shard-world` / `perf-lane` | Their inspected tip is already contained in the canonical candidate. Their old checkout launchers are historical alternatives, not the current playtest entry. Existing worktrees and evidence remain preserved. |
-| `seamless-world`, `75333fd2` | Old August terrain experiment. Its name makes it easy to mistake for the newer integration. It is not the canonical candidate. |
-| `D:/Games/MMOARPG`, `main` at `ae3e66a7` | Separate C#/Godot/browser MMO. Its existing `PLAYTEST.md` records combat integration and deferred population work; its `Play.cmd` is a separate launch path. No MMO source or rollout policy was changed here. |
+## What had actually been built
 
-These are inspected local references, not a fresh remote-branch inventory. No remote branch was deleted or moved. Preserved work is not represented as newly merged. Cleanup in this pass establishes one entry point and an explicit map; it does not indiscriminately remove old working directories or their ignored evidence.
+The original combat/character/gear engine remains substantial and playable. The continuous branch contains deterministic terrain and climate sampling, page streaming, physical roads and places, embedded Lastlight, native content adapters, bounties, interiors, sparse world changes and saved continuity. The host has a continuous-world mode and real network entry, party and persistence machinery.
 
-## Concrete launch defect and repair
+A separate large body of work migrated original content/controller ownership into retained areas. That is useful foundation work, but its browser default still used the old campaign geography. Full integration of those retained owners into the continuous surface is unfinished. Source-provenance checks and controller parity do not establish that integration or MMO capacity.
 
-The integration's normal desktop launcher resolves `repo.branch`, whose committed default is `main`, to its local checkout. Starting that launcher from an experimental checkout can therefore redirect to main. This is implemented by `configureMainCheckout` in `launcher/main.cjs`; it is not evidence that the experimental code was being played.
+## Probe census
 
-`Play World.cmd` and `scripts/play-world.cjs` explicitly select the canonical branch, isolate the desktop profile and disk saves, disable update checks for this local playtest, show the revision in the window title and reuse the existing launcher's build freshness and game boot. They refuse a missing or unexpected checkout. `Host World.cmd` and `scripts/host-world.cjs` start the existing retained host locally, serve the built client and open the browser only after the listener is ready. Ctrl+C uses the host's existing save/shutdown path.
+Measured from tracked files before this correction, at `886e4fc6`, against the common `origin/main` baseline:
 
-The source runtime was not replaced, merged again or rebalanced. Existing unfinished root changes were left intact. These shortcuts do not claim the final seamless terrain architecture is complete.
+| Changed area | Added lines | Share of added lines |
+| --- | ---: | ---: |
+| `balance/` | 566,736 | 77.6% |
+| `src/` and `server/` | 134,233 | 18.4% |
+| `docs/` | 25,363 | 3.5% |
+| Other | 3,677 | 0.5% |
 
-## Verification on the restored source
+This is code volume, not an estimate of time or effort. The tracked balance tree contained 1,794 files and about 106 MB; 200 archive/fixture-source-named files accounted for about 81 MB. The largest single archive was about 12 MB. Exact predecessor snapshots and chained source expectations had become a major maintenance burden while the actual entrypoint regressed.
 
-- `npm run check`: all four TypeScript configurations passed.
-- Production Vite build: passed, with the existing large-bundle warning. The playable build is unscoped so disk saves remain enabled.
-- Actual direct desktop entry: `node node_modules/electron/cli.js scripts/play-world.cjs --smoke-test=game` passed and printed the restored checkout's dist path, `__game=object`, start menu present and the isolated save endpoint response.
-- `balance/native-browser-entry-ui.cjs`: passed. Real Begin/prologue, Mu approach and Wake, keyboard and pilot input, single campaign clock, field travel, exact reload/Continue, terminal menu cleanup and a second local keyboard player. Report contains no renderer errors and six captures.
-- `npm run probe -- nativeclientcontinue --jobs 1`: 6/6 passed, including cold disk restoration, mercenaries, throngs, cancellation and unchanged source-proof assertions.
-- `npm run genqa`: 869 cases times 3 seeds, zero failures and five warnings (four terrain spacing warnings and one slow metropolis case).
-- `npm run sim -- run --suite smoke`: completed all five scenarios with five seeded episodes each and no reported warnings. This is execution evidence, not a new balance-baseline acceptance.
-- `balance/native-shard-cli.cjs`: passed actual retained CLI startup and HTTP status with no faults.
-- `balance/probe_nativeshardhost.ts`: passed two real socket clients, shared nearby state, party joining, per-area input/actions, independent travel and return, remote reconnection and one campaign clock; zero host or transport faults.
-- `node scripts/host-world.cjs --check`: passed the actual local HTTP status and served client, then closed the ephemeral host. This uses Node HTTP because the simulation replaces global fetch with its headless browser shim.
+## Correction
 
-The first hidden Electron attempt failed to start its graphics process in the restricted shell; the same test passed outside that restriction. A direct invocation of the GUI executable also produced broken-console-pipe logging. The delivered command uses Electron's Node console wrapper and handles closed output pipes before loading the stock launcher, preventing its fatal logger from repeatedly logging a missing console. The corrected direct desktop smoke passed again. The failed process and repetitive diagnostic log were cleaned up; a bounded sample remains in the ignored recovery evidence.
+- Normal builds select continuous exploration. Begin opens the class picker and creates the continuous runtime before the first save. The authored prologue/Mu route remains in the explicit retained inspection mode; the local continuous entry currently goes directly to class selection.
+- Continue selects the owner from the saved envelope. Continuous saves use the existing staged world reader; retained saves keep their recorded-geography reader. Neither is silently converted.
+- Play World selects the canonical branch, displays the seamless identity and uses a fresh isolated save/profile folder. Host World starts `ShardHost` with `worldmass: true` and its own save directory.
+- Eight existing behavioral courses become the default probe gate, with no automatic retry. Individual named probes remain available. Historical broad/source audits become opt-in; their archives are preserved rather than expanded or erased.
+- Normal CI and nightly verification exercise maintained behaviors and the actual client playthrough. The old source-audit checklist is moved to a manual workflow.
+- The 4,863-line instruction/handoff accumulation is moved to `docs/ai/reference-before-playable-recovery.md`; a short current working guide replaces it. Historical source-preservation mandates no longer override delivery of current gameplay.
 
-The **stock launcher-page smoke with the experimental branch override failed** its Main-default picker/fallback expectations. The new player route bypasses that page; its actual direct boot passes. That stock test is not reported green, and the branch-picker UI remains separate repair work. The full historical probe roster, performance soak, Firefox responsiveness, broad content parity and real-time combat feel were not re-certified in this recovery.
+## Verification
 
-## Honest remaining scope
+The actual client course clicks Begin and a class, opens the physical waking-house door by movement, walks the road into negative local coordinates, attacks a generated opponent, saves, reloads and clicks Continue. It does not debug-start, install a substitute generator, teleport the hero or manually kill its opponents. Reports are under `balance/reports/seamless-playthrough/`.
 
-The canonical cutover checklist still marks geographic area identity, private instances, native export/adopt, continuous surface placement, generated entrances, threaded hosting/recovery, broad content acceptance and sustained performance open. The retained campaign preserves area state but still relies on native zone identities. The giant-zone Wilds prototype is a different transitional path. Neither is the finished geographic replacement.
+The initial complete walk covered about 1,564 world units across three terrain pages with zero calls to `loadZone` and the same hero instance. Disk Continue restored the world seed, character identity and exact saved countryside position. Eight default behavior courses passed in about 91 seconds on this machine. Continuous host startup/HTTP delivery passed with zero faults. Shared combat simulation and launcher unit checks also passed. Final four-project type checking passed. The final real-client run killed a Gnoll Prowler through ordinary attack input, kept the hero alive, and passed disk Continue with no renderer errors. The production build passed with its existing large-bundle warning.
 
-The next engineering milestone is a visible continuous route tested offline and hosted, with pursuit, projectiles, rewards, ownership and save/reload preserved. Implementation reports must name the reachable player action and its evidence, and keep engine support, player access and accepted performance separate. Claude's temporary absence does not block fixes within the owner's authorized scope; deferred MMO population work stays in that separate project's recorded queue.
+The software-rendered route measured roughly 30 ms median and 164 ms p95 per driven frame in that run. This is not a hardware-rendered desktop FPS benchmark, but it is enough to keep smooth-frame acceptance open. No large-player capacity result is claimed.
+
+## Scope and remaining work
+
+Keep this continuous route playable while integrating missing quests/events into physical places. Measure the costly loading/streaming frames before choosing performance work. Complete retained-area geography and worker transfer only against this visible surface; do not replace it with graph travel during migration.
+
+The original root checkout's unfinished changes remain intact. Work is on the existing canonical branch in `.claude/ownership.playable-foundation`; no unrelated project was used. Nothing was pushed, published or promoted to main by this recovery.

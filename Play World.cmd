@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Hollow Wake - World Playtest
+title Hollow Wake - Seamless World
 cd /d "%~dp0"
 if not exist "node_modules\electron\dist\electron.exe" (
     echo The desktop runtime is missing. Run npm install in this folder first.

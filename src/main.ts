@@ -1,5 +1,5 @@
 import { sanitizeCosmeticLoadout } from './meta/cosmetics';
-import { storageKey } from './buildProfile';
+import { BUILD_PROFILE, storageKey } from './buildProfile';
 // ---------------------------------------------------------------------------
 // Entry point: boots the world, runs the loop, and routes player input into
 // the same skill pipeline the AI uses.
@@ -110,6 +110,7 @@ import {
 } from './meta/character';
 import { resolveResumeSpawn } from './meta/worldstate';
 import { characterResumeFields } from './meta/characterResume';
+import { prepareCharacterWorld } from './meta/resumeWorld';
 import { prepareNativeCharacterContinue } from './worldmass/nativeClientContinue';
 import { NativeClientStart, type NativeClientStarted, type NativeClientStartRequest } from './worldmass/nativeClientStart';
 import { nativeClientRuntimeFor, type NativeClientRuntime } from './worldmass/nativeClientRuntime';
@@ -420,6 +421,7 @@ const ui = new UI(
   () => !net.isHost,        // a network co-op CLIENT (world is a render shell)
   () => leaveCoop(),        // tear down a co-op session → back to the menu
 );
+ui.newRunDescription = worldmassRequested() ? 'Seamless exploration · The Unbroken Wilds' : 'Retained campaign';
 // The rebind view captures pad buttons through these (panels never touch the
 // device layer directly — same altitude as its getSettings/saveSettings deps).
 ui.armPadCapture = (cb) => pad.armCapture(cb);
@@ -517,14 +519,15 @@ function startGame(
   // at the bedside as always. `?prologue` re-runs it deliberately for this
   // page load (the ?couchpads lever precedent) — a veteran re-watching the
   // opening, or a dev testing it, without touching the account gate.
-  const prologueDue = sceneDue(account, 'prologue')
-    || new URLSearchParams(location.search).has('prologue');
+  const massExpedition = worldmassRequested();
+  const prologueDue = !massExpedition && (sceneDue(account, 'prologue')
+    || new URLSearchParams(location.search).has('prologue'));
   // THE ONE CROSSING (net/crossing.ts): a server-bound wake mints its vessel on a World that
   // stands no local town (no zone loads, nothing is drawn); the shard's hearth is the far side.
   // THE DOOR (W7): the tab's persisted binding is what a wake travels to.
   const door = readDoor();
   const serverBound = !!door && !prologueDue;
-  if (!serverBound) {
+  if (!serverBound && !massExpedition) {
     const request: NativeClientStartRequest = { kind: 'run', classDef, manifest, modeId, name,
       graftSkillId, kitPicks, prologue: prologueDue ? 'force' : 'skip',
       onReady: made => { world = adoptWorld(made.writer); if (COOP_ALLY) spawnCoopAlly(); },
@@ -589,6 +592,9 @@ function startGame(
   // THE LAB KIT (ULT_QA.grantArts — engine/ultimates.ts): iteration builds
   // deal the ultimate + gauge debuts into the fresh bag, unlearned.
   world.dealLabArts();
+  // The playable continuous surface owns this run from its first save. Installing
+  // a retained campaign here silently replaced the worldmass build's entrypoint.
+  if (massExpedition && !serverBound) world.startWorldMass(m.seed);
   // THE SKILL GRAFT (meta/unlocks.ts kind 'graft'): the armed charge spends
   // HERE — where the run truly begins — before the baseline save, so the
   // snapshot carries the grafted gem from the first breath. A pick without
@@ -732,11 +738,19 @@ async function startMu(notice?: string): Promise<void> {
  *  class screen at all; everyone else drifts into Mu, where the class roster
  *  stands IN the world. The legacy class screen remains beneath (co-op
  *  rejoin offers still call it directly). */
+function worldmassRequested(): boolean {
+  const query = new URLSearchParams(location.search);
+  return !query.has('retained') && (BUILD_PROFILE.worldmass || query.has('worldmass'));
+}
 async function beginPressed(): Promise<void> {
   cancelCharacterResume();
   const request = resumeRequest;
   await diskHydrated;
   if (request !== resumeRequest) return;
+  if (worldmassRequested()) {
+    ui.showClassSelect(startPicked, () => toStartMenu());
+    return;
+  }
   const prologueDue = sceneDue(account, 'prologue')
     || new URLSearchParams(location.search).has('prologue');
   if (prologueDue) {
@@ -779,7 +793,7 @@ async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<
       if (!current() && !(published && world === published && running && loading.current)) return;
       cancelLoadingToMenu();
     } });
-  let prepared: Awaited<ReturnType<typeof prepareNativeCharacterContinue>> | undefined;
+  let prepared: { publish(): World; discard(): void } | undefined;
   let published: World | undefined;
   try {
     await loading.paint();
@@ -809,15 +823,24 @@ async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<
       return;
     }
     forgetDoor(); // a solo road chosen at the menu: the tab is bound for no world
-    prepared = await prepareNativeCharacterContinue(account, read.resume, {
+    const options = {
       isCurrent: () => current() && cardCurrent(), signal: controller.signal,
-      loadingStage: async label => { loading.update({ label }); await loading.paint(); },
+      loadingStage: async (label: string) => { loading.update({ label }); await loading.paint(); },
       spawn: resolveResumeSpawn(modeById(fields.modeId ?? DEFAULT_MODE_ID).resume, settings.resumeSpawn),
-    });
+    };
+    // The saved world's envelope chooses its owner. A continuous save must not
+    // be sent to the retained-zone reader or silently converted to another map.
+    if (read.resume.kind === 'inline' && read.resume.save.world?.nativeRetained) {
+      const retained = await prepareNativeCharacterContinue(account, read.resume, options);
+      prepared = { publish: () => retained.publish().writer, discard: () => retained.discard() };
+    } else {
+      prepared = await prepareCharacterWorld(account, read.resume, { ...options, fallbackSeed: rollSeed(),
+        ...(roster ? { roster: { charId: roster.charId, modeId: roster.modeId } } : {}) });
+    }
     if (!current() || !cardCurrent()) return;
     const resumed = prepared.publish();
     couchReset();
-    world = adoptWorld(resumed.writer);
+    world = adoptWorld(resumed);
     published = world;
     lastSentZone = '';
     if (COOP_ALLY) spawnCoopAlly();
@@ -827,9 +850,9 @@ async function resumeCharacterSlot(slot: number, roster?: RosterEntry): Promise<
     // loadingScreen stays interactive through the actual first terrain/sprite bake.
     loading.update({ label: 'Opening the world' });
     await loading.paint();
-    if (world === resumed.writer && running && loading.current) {
-      if (!await renderer.renderLoading(resumed.writer, () => loading.paint(),
-        () => world === resumed.writer && running && loading.current && resumed.runtime.ready)) return;
+    if (world === resumed && running && loading.current) {
+      if (!await renderer.renderLoading(resumed, () => loading.paint(),
+        () => world === resumed && running && loading.current)) return;
       await loading.paint();
     }
   } catch (error) {

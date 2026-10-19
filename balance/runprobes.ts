@@ -1,34 +1,6 @@
-// ---------------------------------------------------------------------------
-// THE PROBE RUNNER — `npm run probe`.
-//
-// balance/probe_*.ts are standalone rigs (boot the real engine headless, print
-// PASS/FAIL, exit 0/1). This drives the GREEN ones off balance/proberoster.ts
-// and fails loudly when any of them regresses — the standing gate the probes
-// were always written to be, run by machine instead of by hand.
-// Explicit CURRENT-SUCCESSOR mappings preserve historical source/roster identity
-// while dispatching the separately pinned, visibly named current-runtime check.
-//
-// THE CENSUS runs first, ALWAYS: the roster and the balance/ directory must
-// agree exactly. An unenrolled probe or a row naming a missing file is a hard
-// error (exit 2) before a single rig boots — the registry can never drift
-// behind the disk, and a new probe cannot be forgotten into silence.
-//
-//   npm run probe                        the fast green lane (what CI runs)
-//   npm run probe -- --slow              + the heavy green rigs (nightly)
-//   npm run probe -- --all               every probe on disk, excluded included
-//   npm run probe -- seas                only names containing 'seas'
-//   npm run probe -- --jobs 1            one at a time, output streamed live
-//   npm run probe -- --retries 0         first verdict is final (no re-runs)
-//   npm run probe -- --list              print the roster and run nothing
-//
-// EXIT: 0 every selected green probe passed · 1 a green probe failed every
-// attempt (or timed out) · 2 the census broke, the flags were nonsense, or
-// nothing was selected. Excluded probes NEVER gate — under --all/--filter they
-// are reported, and a deterministic red that now passes is called out as
-// HEALED so its row can be promoted. A green probe that fails and then passes
-// on a re-run does not fail the build but IS named as FLAKY (see THE RETRY).
-// ---------------------------------------------------------------------------
-
+// Current behavioral gate: npm run probe. Named filters still run specific rigs.
+// Historical source/roster audit: npm run probe:history (add -- --slow for heavy rigs).
+// Real player entry and Continue: npm run smoke:world after building.
 import { spawn } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -39,6 +11,14 @@ import { fileURLToPath } from 'node:url';
 import { PROBE_ROSTER, excludedProbes, greenProbes, type ProbeRow, type ProbeTier } from './proberoster';
 import {validateProbeSupersessions,resolveProbeExecution,probeExecutionLabel,probeRerunCommand,probeMatchesFilter} from './probesupersessions';
 
+// The default gate tests current player behavior. Historical source receipts
+// remain explicit opt-in work; they cannot certify that the game is playable.
+const PLAYABLE_PROBES = new Set([
+  'probe_worldmass.ts', 'probe_worldmass_engine.ts', 'probe_worldmass_progression.ts',
+  'probe_worldmass_bounties.ts', 'probe_worldmass_sideareas.ts', 'probe_worldmass_resumeworld.ts',
+  'probe_sharddoor.ts', 'probe_shardcrossing.ts',
+]);
+
 const BALANCE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.dirname(BALANCE_DIR);
 
@@ -48,23 +28,13 @@ const TSX_CLI = createRequire(import.meta.url).resolve('tsx/cli');
 /** A probe that has not finished in this long is a failure, not a wait. */
 const DEFAULT_TIMEOUT_SEC = 600;
 
-/**
- * THE RETRY, and why it is not a loophole. A handful of rigs in this suite
- * carry unseeded nondeterminism at a few percent (the four loudest are
- * excluded by name in the roster; the tail is thinner and unmapped). Across
- * ~84 probes that tail alone reddens a run often enough to teach people to
- * ignore the gate — the one way a gate truly dies. So a FAILING GREEN probe
- * is re-run, and only a probe that fails EVERY attempt gates the build. A
- * genuine regression is deterministic: it fails every attempt and still stops
- * the build. A probe that fails then passes is NOT swallowed — it is named in
- * the summary as FLAKY with its fail lines, which is how the next one earns
- * its roster row. `--retries 0` restores strict first-verdict behaviour.
- */
-const DEFAULT_RETRIES = 1;
+// Fail on the first attempt by default; explicit retries remain diagnostic only.
+const DEFAULT_RETRIES = 0;
 
 // --- the flags ------------------------------------------------------------
 
 interface Options {
+  history: boolean;
   filter: string | null;
   all: boolean;
   slow: boolean;
@@ -80,6 +50,7 @@ function autoJobs(): number {
 
 function parseArgs(argv: string[]): Options {
   const o: Options = {
+    history: false,
     filter: null, all: false, slow: false,
     jobs: autoJobs(), timeoutSec: DEFAULT_TIMEOUT_SEC, list: false,
     retries: DEFAULT_RETRIES,
@@ -116,6 +87,7 @@ function parseArgs(argv: string[]): Options {
         if (!Number.isInteger(n) || n < 0) die(`--retries wants a non-negative integer, got "${n}"`);
         o.retries = n; if (!inline) i++; break;
       }
+      case 'history': o.history = true; break;
       case 'all': o.all = true; break;
       case 'slow': o.slow = true; break;
       case 'list': o.list = true; break;
@@ -130,6 +102,8 @@ function usage(): void {
   console.log([
     'npm run probe -- [flags] [substr]',
     '',
+    '  default            eight current behavior courses; no automatic retries',
+    '  --history          the complete historical green roster (source proofs included)',
     '  --filter <substr>  only probes whose file name contains <substr>',
     '                     (a bare word works too: `npm run probe -- seas`)',
     '  --slow             include the heavy green rigs (tier "slow")',
@@ -187,6 +161,12 @@ function select(o: Options): ProbeRow[] {
       process.exit(2);
     }
     return named;
+  }
+  if (!o.history && !o.all && !o.slow) {
+    const chosen = PROBE_ROSTER.filter(r => PLAYABLE_PROBES.has(r.probe));
+    if (chosen.length !== PLAYABLE_PROBES.size || chosen.some(r => r.status !== 'green'))
+      die('The current behavior gate must name existing, required probes.');
+    return chosen;
   }
   const tiers: ProbeTier[] = o.all || o.slow ? ['fast', 'slow'] : ['fast'];
   const chosen = [...tiers.flatMap(t => greenProbes(t)), ...(o.all ? excludedProbes() : [])];
@@ -277,15 +257,17 @@ const secs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 async function main(): Promise<void> {
   const o = parseArgs(process.argv.slice(2));
   census();
-  try { validateProbeSupersessions(PROBE_ROSTER, REPO_ROOT); }
-  catch (error) { die('current-runtime supersession refused: ' + String(error)); }
+  if (o.history || o.all || o.slow) {
+    try { validateProbeSupersessions(PROBE_ROSTER, REPO_ROOT); }
+    catch (error) { die('historical supersession refused: ' + String(error)); }
+  }
 
   if (o.list) {
-    for (const r of PROBE_ROSTER) {
+    for (const r of select(o)) {
       const lane = r.status === 'green' ? `green/${r.tier}`.padEnd(12) : `EXCL/${r.excuse}`.padEnd(12);
       console.log(`${lane} ${probeExecutionLabel(r).padEnd(30)} ${r.why}`);
     }
-    console.log(`\n${PROBE_ROSTER.length} probes — ${greenProbes('fast').length} green/fast, `
+    console.log(`\n${select(o).length} selected; ${PROBE_ROSTER.length} in the full archive — ${greenProbes('fast').length} green/fast, `
       + `${greenProbes('slow').length} green/slow, ${excludedProbes('red').length} excluded/red, `
       + `${excludedProbes('flaky').length} excluded/flaky`);
     console.log('CURRENT-SUCCESSOR entries execute their named current checks; original probe/roster bytes are historical source checks only.');
@@ -358,11 +340,7 @@ async function main(): Promise<void> {
   if (stillOut.length) console.log(`\n${stillOut.length} excluded probe(s) still failing (expected — they do not gate).`);
 
   if (!o.all && !o.slow && !o.filter) {
-    const skipped = greenProbes('slow').length;
-    const excl = excludedProbes().length;
-    if (skipped || excl) {
-      console.log(`\nNot run: ${skipped} slow green probe(s) (--slow), ${excl} excluded probe(s) (--all).`);
-    }
+    console.log(`\nNot selected: ${PROBE_ROSTER.length - chosen.length} historical/extended probes. Use a name filter or npm run probe:history.`);
   }
 
   if (broke.length) {

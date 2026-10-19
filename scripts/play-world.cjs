@@ -36,13 +36,13 @@ try {
   const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
   const revision = execFileSync('git', ['-C', candidate, 'rev-parse', '--short', 'HEAD'],
     { encoding: 'utf8', windowsHide: true }).trim();
-  const profile = path.join(candidate, 'saves', 'world-playtest-profile');
+  const profile = path.join(candidate, 'saves', 'seamless-playtest-profile');
   fs.mkdirSync(profile, { recursive: true });
   Object.assign(config, {
     repo: { ...config.repo, branch },
-    game: { ...config.game, title: 'Hollow Wake - World Playtest (' + revision + ')' },
+    game: { ...config.game, title: 'Hollow Wake - Seamless World (' + revision + ')' },
     updates: { ...config.updates, checkOnLaunch: false, quiet: false },
-    paths: { ...config.paths, saves: 'saves/world-playtest' },
+    paths: { ...config.paths, saves: 'saves/seamless-playtest' },
     dev: { ...config.dev, developer: false, liveSource: false },
     launcher: { ...config.launcher, returnToLauncher: false },
   });

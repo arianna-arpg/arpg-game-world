@@ -1,0 +1,104 @@
+# Optional forensic audit. These source receipts do not establish playability.
+name: historical-audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run per ref. A new push supersedes the one still running on that branch.
+concurrency:
+  group: historical-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # A same-repo PR would duplicate the push run on its own branch; fork PRs
+    # have no push event here, so they still get the gate.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Retained-native source proofs read pinned ancestor blobs with git show.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Types first: a broken tree makes every probe verdict meaningless.
+      - name: Type-check (game + launcher + balance harness)
+        run: npm run check
+
+      # The launcher's update path, proven pure (launcher/updates.cjs): which
+      # release an install is offered, what it must never be offered, and
+      # what it refuses to run. About a second; no Electron, no network.
+      - name: Launcher update laws
+        run: npm run test:launcher
+
+      - name: Checkpoint and error-report regressions
+        run: |
+          npx tsx balance/check_nativecheckpointdiagnostics.ts
+          npx tsx balance/check_runtimediagnostics.ts
+
+      - name: Retained hosted calling and discovery regressions
+        run: |
+          npx tsx balance/check_nativemergevocation.ts
+          npx tsx balance/check_nativemergesites.ts
+
+      - name: Floor canvas lifetime and exact source regressions
+        run: |
+          npx tsx balance/check_masspainterpixels.ts
+          npx tsx balance/check_nativecanvasreleasesource.ts
+          npx tsx balance/check_nativeshardprobedeliverysource.ts
+
+      - name: Retained desktop performance travel regressions
+        run: |
+          npx tsx balance/check_nativeperftravel.ts
+          npx tsx balance/check_nativedesktopperfsource.ts
+
+      - name: Retained residency measurement instrument regressions
+        run: |
+          npx tsx balance/check_perfresidency.ts
+          npx tsx balance/check_perfresidencyboundaries.ts
+          node balance/check_perfresidencystarttiming.cjs
+          node --test scripts/test-launcher-residency.mjs scripts/test-launcher-residency-boundaries.mjs scripts/test-residency-launcher-course.mjs
+          npx tsx balance/check_nativeresidencysource.ts
+          npx tsx balance/check_nativeholdfastsource.ts
+
+      - name: Retained offline quest ground regression
+        run: |
+          npx tsx balance/check_nativeshardground.ts
+          npx tsx balance/check_nativeshardgroundsource.ts
+          npx tsx balance/check_nativefullgaterepairsource.ts
+
+      - name: Retained Verminfall event lifetime regressions
+        run: |
+          npx tsx balance/check_nativeverminfall.ts
+          npx tsx balance/check_nativeverminfallarrival.ts
+          npx tsx balance/check_nativeverminfallcrusadeboundaries.ts
+          npx tsx balance/check_nativeverminfallcold.ts
+          npx tsx balance/check_nativeverminfallcold.ts --king
+          npx tsx balance/check_nativeverminfallsource.ts
+          npx tsx balance/check_nativeverminfallarrivalsource.ts
+          npx tsx balance/check_nativeframeattendancesourceview.ts
+
+      - name: Retained Crusade arrival source and current probe dispatch
+        run: |
+          npx tsx balance/check_nativecrusadearrivalsource.ts
+          npx tsx balance/check_probesupersessionscurrent.ts
+          npx tsx balance/check_nativearrivalwindowboundaries.ts
+          npx tsx balance/check_nativearrivalinvocationsource.ts
+
+      - name: Development watcher and save-fixture source regressions
+        run: |
+          npx tsx balance/check_devwatchconfig.ts
+          npx tsx balance/check_nativesaveorderwatchsource.ts
+
+      - name: Probes (green roster, fast lane)
+        run: npm run probe:history -- --slow

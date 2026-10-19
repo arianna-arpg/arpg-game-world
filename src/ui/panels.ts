@@ -942,6 +942,8 @@ export class UI {
    *  the virgin lane walks the tutorial, everyone else drifts into Mu. The
    *  legacy screen stays whole beneath it (co-op rejoin still uses it). */
   onBeginRun: (() => void) | null = null;
+  /** The shell names the world a new run will actually enter. */
+  newRunDescription = '';
   /** THE FRONT DOOR (W7, net/shardDoor.ts): the world the start menu leads into (the
    *  tab's binding, or the world that served this page); null on a plain page. The menu's
    *  primary row becomes "Enter the world" (onEnterWorld), the solo rows one row down. */
@@ -11274,6 +11276,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       <h1>${GAME_TITLE.toUpperCase()}</h1>
       <div class="acct-head">Account Level <b>${acc.level}</b>${pending
         ? ` · <b style="color:var(--gold)">${acc.credits}</b> ${META_CURRENCY_LABEL} awaiting the Reckoning` : ''}</div>
+      ${this.newRunDescription ? `<div class="acct-head">${esc(this.newRunDescription)}</div>` : ''}
       ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
       <div class="esc-btns">
         ${door && !homeHere ? `<button id="sm-door"${primary} title="${esc(worldNameOf(door))}">Enter the world</button>` : ''}

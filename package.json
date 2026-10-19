@@ -36,7 +36,12 @@
     "icon": "node scripts/make-icon.mjs",
     "dist": "npm run build && node scripts/make-build-info.mjs && electron-builder --win --publish never",
     "dist:linux": "npm run build && node scripts/make-build-info.mjs && electron-builder --linux --publish never",
-    "dist:all": "npm run build && node scripts/make-build-info.mjs && electron-builder --win --linux --publish never"
+    "dist:all": "npm run build && node scripts/make-build-info.mjs && electron-builder --win --linux --publish never",
+    "play": "electron scripts/play-world.cjs --play",
+    "host": "node scripts/host-world.cjs",
+    "probe:history": "tsx balance/runprobes.ts --history",
+    "smoke:world": "electron balance/seamless-playthrough.cjs",
+    "smoke:host": "node scripts/host-world.cjs --check"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

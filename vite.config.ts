@@ -139,7 +139,7 @@ function reloadTreesPlugin() {
 export default defineConfig({
   define: {
     __HOLLOW_WAKE_STORAGE_SCOPE__: JSON.stringify(process.env.HOLLOW_WAKE_STORAGE_SCOPE ?? ''),
-    __HOLLOW_WAKE_WORLDMASS__: process.env.HOLLOW_WAKE_WORLDMASS === '1',
+    __HOLLOW_WAKE_WORLDMASS__: process.env.HOLLOW_WAKE_WORLDMASS !== '0',
   },
   plugins: [diskSavePlugin(), reloadTreesPlugin(), loadingFramePlugin()],
   // The showcase is a separate realm; both entries share the game modules.
