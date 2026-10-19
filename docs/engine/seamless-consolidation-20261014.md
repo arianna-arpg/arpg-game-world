@@ -1,5 +1,7 @@
 # Seamless consolidation — 2026-10-14
 
+> Historical merge and recovery record. The branch roles and worktree paths below are the inspected 2026-10-14 state. Current delivery uses [the main/seamless integration policy](../ai/branch-integration.md); start current work at [CLAUDE.md](../../CLAUDE.md). Source receipts below remain historical evidence, not additional release gates.
+
 `codex/seamless-world-foundation` is the canonical seamless integration branch.
 This consolidation joins local foundation `5a7eac003607edd65a4d30ec96a14543752a1177`
 and the 13-commit remote line at `cbafcc5b72b40b1eef1b64cf4ed7f34a7f5b940b`

@@ -14,20 +14,11 @@ for (const stream of [process.stdout, process.stderr]) {
   });
 }
 
-const branch = 'codex/seamless-world-foundation';
+const { WORLD_BRANCH: branch, resolveWorldCheckout } = require('./world-checkout.cjs');
 const project = path.resolve(__dirname, '..');
 
 try {
-  const projectBranch = execFileSync('git', ['-C', project, 'branch', '--show-current'],
-    { encoding: 'utf8', windowsHide: true }).trim();
-  const candidate = projectBranch === branch ? project : path.join(project, '.claude', 'ownership.playable-foundation');
-  if (!fs.existsSync(path.join(candidate, 'launcher', 'main.cjs'))) {
-    throw new Error('The world playtest checkout is missing. Restore the existing ' + branch +
-      ' branch to ' + candidate + ' before playing. No other build has been opened.');
-  }
-  const current = execFileSync('git', ['-C', candidate, 'branch', '--show-current'],
-    { encoding: 'utf8', windowsHide: true }).trim();
-  if (current !== branch) throw new Error('Expected ' + branch + ', found ' + current + '. No other build has been opened.');
+  const candidate = resolveWorldCheckout(project);
 
   // The stock launcher intentionally resolves repo.branch to a checkout. Its
   // default is main, even when launched from an experimental worktree.

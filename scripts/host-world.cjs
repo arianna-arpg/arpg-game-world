@@ -2,9 +2,9 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync, execFile } = require('node:child_process');
+const { execFile } = require('node:child_process');
 const http = require('node:http');
-const branch = 'codex/seamless-world-foundation';
+const { resolveWorldCheckout } = require('./world-checkout.cjs');
 const project = path.resolve(__dirname, '..');
 const check = process.argv.includes('--check');
 // The simulation installs a browser fetch shim; use actual Node HTTP here.
@@ -21,12 +21,9 @@ const read = url => new Promise((resolve, reject) => {
 });
 
 async function main() {
-  const at = dir => execFileSync('git', ['-C', dir, 'branch', '--show-current'],
-    { encoding: 'utf8', windowsHide: true }).trim();
-  const candidate = at(project) === branch ? project : path.join(project, '.claude', 'ownership.playable-foundation');
-  if (!fs.existsSync(path.join(candidate, 'server', 'nativeShardHost.ts')) || at(candidate) !== branch) {
-    throw new Error('Restore the ' + branch + ' checkout before hosting. See PLAYTEST.md.');
-  }
+  // The smoke check must exercise the checkout under test, including topic
+  // branches. It uses an ephemeral port, no saves and never opens a browser.
+  const candidate = check ? project : resolveWorldCheckout(project);
   if (!fs.existsSync(path.join(candidate, 'dist', 'index.html'))) {
     throw new Error('Open Play World.cmd once to prepare the current client, then host again.');
   }

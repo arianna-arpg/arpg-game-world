@@ -13,7 +13,7 @@ native-page readiness. Reuse the lease for future disruptive preparations; never
 delay readiness or grant gameplay rewards. Verify spiritrun, all types, boot smoke
 and balance/loading-screen-ui.cjs after an isolated build.
 
-This repository is `arianna-arpg/arpg-game-world`, the original TypeScript/Canvas/Electron ARPG. Work on the canonical `codex/seamless-world-foundation` branch. The user's 2026-10-19 direction is to deliver a playable continuous world and stop expanding historical probe scaffolding. This guide supersedes the accumulated handoff instructions preserved in [the reference archive](docs/ai/reference-before-playable-recovery.md). That archive is context, not an additional mandatory checklist.
+This repository is `arianna-arpg/arpg-game-world`, the original TypeScript/Canvas/Electron ARPG. This is the current working entrypoint: shared content starts on main; continuous-world integration belongs on `codex/seamless-world-foundation`. Use an isolated topic checkout when another session owns the affected files. The user's 2026-10-19 direction is to deliver a playable continuous world and stop expanding historical probe scaffolding. This guide supersedes the accumulated handoff instructions preserved in [the reference archive](docs/ai/reference-before-playable-recovery.md). Historical documents and project-memory session notes describe their recorded revisions; their branch paths, frozen-source mandates and handoff checklists are not current instructions. Read [branch integration](docs/ai/branch-integration.md) for delivery policy and the [cleanup audit](docs/ai/context-runtime-cleanup-20261019.md) for deferred migration work.
 
 ## The delivery target
 
@@ -35,11 +35,12 @@ Preserve main's entry loop: Begin only while the account's tutorial is due; the 
 - `npm run sim -- run --suite smoke`: shared combat simulation; required for data changes.
 - `npm run genqa`: generation checks; required for generation changes.
 - `npm run smoke` / `npm run smoke:launcher`: stock desktop/launcher checks when those surfaces change.
+- `node --test scripts/test-world-checkout.mjs`: shared Play/Host checkout selection, including wrong-branch and incomplete-checkout refusals.
 - `npm run review:context`: change summary and suggested relevant checks.
 
 Tests must exercise current behavior and fail when that behavior is broken. Add a regression for a concrete bug when existing coverage is insufficient. Do not copy predecessor runtime source into new fixtures, add archives to preserve stale source-string assertions, or treat probe counts as delivered gameplay. Keep fixtures small and use ordinary APIs. A visual acceptance test must enter through the player's buttons; a debug-start bypass cannot establish launch acceptance.
 
-`npm run probe -- <name>` still runs a specific existing rig. `npm run probe:history` (optionally `-- --slow`) runs the old broad roster. `.github/workflows/historical-audit.yml` is a manually dispatched forensic audit; historical source matches are not a release gate. The old source expectations may need explicit retirement after legitimate refactors; do not manufacture predecessor adapters to make them appear current. The normal CI gates the current behavior courses and actual client playthrough.
+`npm run probe -- <name>` still runs a specific existing rig. Default and named runs validate the selected files; `npm run probe:history` (optionally `-- --slow`) validates the entire old roster and its source receipts. `--all` and `--slow` also request historical sweeps. `.github/workflows/historical-audit.yml` is a manually dispatched forensic audit; historical source matches are not a release gate. The old source expectations may need explicit retirement after legitimate refactors; do not manufacture predecessor adapters to make them appear current. The normal CI gates the current behavior courses and actual client playthrough.
 
 ## Project map
 
@@ -52,7 +53,7 @@ Tests must exercise current behavior and fail when that behavior is broken. Add 
 - `src/meta/resumeWorld.ts`: continuous/ordinary save restoration. `nativeClientContinue.ts`: recorded retained-campaign restoration. Select by save envelope; never silently convert one map into another.
 - `src/net/`, `server/shardHost.ts`: continuous hosted world and transport. `server/nativeShardHost.ts`: retained campaign host.
 - `src/ui/`, `src/render/`: player UI and Canvas renderer.
-- `launcher/`, `scripts/play-world.cjs`, `scripts/host-world.cjs`: desktop and local hosting.
+- `launcher/`, `scripts/play-world.cjs`, `scripts/host-world.cjs`: desktop and local hosting. Both wrappers use `scripts/world-checkout.cjs` to select and validate the canonical checkout; their save/profile ownership remains separate.
 - `balance/`: simulation and verification tools; reports are generated, not source.
 - `docs/design/convergence-20261014.md`: agreed end state. `docs/design/seamless-world-foundation.md`: detailed implementation history and remaining cutover work.
 - `PLAYTEST.md`: concise player entry and current limits. Update it when the actual playable path changes.
@@ -72,7 +73,7 @@ Preserve the PolyForm Noncommercial license verbatim. Do not add third-party run
 
 ## Changes and commits
 
-Inspect the branch and dirty files before editing. The user's existing root-checkout changes must remain intact. Use the restored canonical checkout at `.claude/ownership.playable-foundation` when starting from the original dirty root. Do not merge unrelated projects.
+Inspect the branch and dirty files before editing. The user's existing root-checkout changes must remain intact. `.claude/ownership.playable-foundation` is the canonical playable checkout; isolated cleanup or content checkouts must not redirect the player's launcher or overwrite concurrent work there. Do not merge unrelated projects.
 
 Run `npm run check` and the checks relevant to the actual change before committing. Use a clear imperative commit message; push only when requested. Never commit `node_modules/`, `dist/`, `saves/`, `release/`, generated reports or machine-local settings.
 
