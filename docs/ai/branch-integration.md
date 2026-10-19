@@ -6,11 +6,13 @@ Incorporate main with real merges, preserving ancestry. Do not create another st
 
 The `Incorporate main into seamless` workflow runs on every push to main and can also be dispatched manually. It merges the latest published main into the latest published seamless branch, runs the existing current gameplay checks and actual client playthrough, and pushes a normal merge only after they pass. It never force-pushes, automatically chooses a side in a conflict, or runs the historical probe archive. A conflict, failed check, concurrent branch advance or branch-protection refusal fails visibly and publishes nothing. Resolve that condition and rerun the workflow.
 
-The user explicitly authorized this ongoing remote-write automation on 2026-10-19. It becomes active when this file and `.github/workflows/sync-main.yml` are pushed to main. Repository Actions permissions and branch rules must permit its normal push. Local unpushed commits cannot trigger a GitHub workflow.
+The user explicitly authorized this ongoing remote-write automation on 2026-10-19; the workflow is published on main. Repository Actions permissions and branch rules must permit its normal push. Local unpushed commits cannot trigger a GitHub workflow.
 
 ## Changes that still need a choice
 
 Main ancestry establishes that its changes were incorporated; it does not imply that every behavior is identical after later seamless edits. Keep the gameplay difference register on seamless current. Each intentional shared-gameplay deviation needs a named row explaining the main behavior, the seamless behavior and the user's keep/revert decision. Spatial adapters and multiplayer ownership changes belong in separate rows from balance or presentation changes.
+
+The published [main/seamless gameplay decision register](https://github.com/arianna-arpg/arpg-game-world/blob/codex/seamless-world-foundation/docs/ai/gameplay-alignment-20261019.md) is the review entrypoint from this main checkout. It includes linked source locations and the complete changed-file/function inventory. Its Review rows remain undecided; alignment has not silently accepted them into main.
 
 The cast-bar dimensions are decided: match main's 44 × 5 pixels. The one-time account tutorial and direct Mu handoff also match main. Do not treat other existing differences as approved merely because they are already committed. Changes intended for both games should start on main and flow through the integration merge; seamless-only geography remains on seamless.
 
