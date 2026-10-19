@@ -15,9 +15,11 @@ The latest clarification supersedes the earlier brief-greeting proposal:
 ordinary encounters also open the conversation panel. This is the only surface
 for dialogue; there are no overhead greeting lines or separate Talk button.
 Dwelling near Mireille opens her panel with content and all available options
-derived from the dwelling player's quest state. Brandt must expose shopping
-immediately, while his dialogue and quest options remain independently usable
-within the same NPC interface.
+derived from the dwelling player's quest state. Brandt's vendor interface must
+remain the existing full vendor panel, including its stock, transactions,
+tooltips, selling, holds and other controls. The conversation panel offers Shop
+as an action that opens that panel; it must not recreate shopping inside the
+conversation reader. The previous mockup's simplified shop is rejected.
 
 ## Reproduced baseline failures and replacement rule
 
@@ -47,21 +49,38 @@ remains in this first correction (`b979655f`).
 
 ## Reviewable interaction
 
-The next interface is illustrated by an interactive conversation mockup in this
-chat, with example content rather than a gameplay implementation:
+The Mireille interaction in the chat mockup is broadly accepted. The following
+Brandt routing supersedes that mockup's embedded shop. This remains a design
+record rather than a gameplay implementation:
 
-- One NPC frame, with name and portrait. Brandt defaults to Shop on dwell;
-  Conversation remains adjacent with its available-topic count. Shopping never
-  requires choosing a response, finishing a line, or opening another menu.
+- First visit: dwell opens Brandt's conversation panel, with Shop and all
+  currently available quest topics. Shop opens the existing vendor panel.
+- Returning visits: the proposed shortcut begins after that player explicitly
+  chooses Shop once. Later dwelling opens the existing vendor panel directly;
+  shopping does not repeatedly require a greeting or response. Remembering
+  this per character is the proposed default, not a global account bypass.
+- Conversation remains a peer tab while trading, with a marker for available
+  quest options. Switching to it preserves vendor state; returning to Shop
+  restores that same panel. A quest does not need the shop to be open, and
+  shopping does not require completing or accepting a quest.
 - Mireille defaults to the conversation view and shows all applicable topics
   together. Selecting one displays its dialogue and explicit actions inside
   that same frame. Quest eligibility and mutations remain engine-owned.
 - A new quest/reward changes the topic list without stealing the selected shop.
-  The shop and quest activity have independent state inside one visit.
-- The NPC frame shares the selected-panel slot with Skills, Passives and
-  Reliquary. Inventory is a stable companion on roomy layouts and another
-  selectable surface on small layouts. No second dialogue overlay competes
-  with that slot. Switching panels preserves the selected NPC activity.
+  The shop and conversation keep independent content and lifecycle inside the
+  same visit and shared tab system.
+- Conversation, the actual vendor panel, Skills, Passives and Reliquary share
+  the selected-panel slot. Inventory is a stable companion on roomy layouts
+  and another selectable surface on small layouts. No dialogue overlay
+  competes with the vendor or inventory ribbons. Opening order must not change
+  this rule. Shared placement does not replace the vendor's internal UI.
+
+Implementation seam confirmed: the existing dialogue menu action routes through
+`UI.activateDialogueMenu('vendor')`, the registered menu verb and `showVendor`.
+That path retains live availability checks, ordinary vendor rendering, selling
+inventory and Folio enrollment. Selecting an already-open vendor should front
+its existing leaf. The change belongs in arrival routing and shared panel
+selection, not `refreshVendor` or a second transaction implementation.
 
 No new Talk control or overhead speech is proposed. This design does not adopt
 seamless's larger stacked conversation workspace or persistent approach/lesson
