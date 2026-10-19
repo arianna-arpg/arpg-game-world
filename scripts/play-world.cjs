@@ -6,6 +6,14 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { app, dialog } = require('electron');
 
+// Explorer/automation can close inherited console pipes. A missing console is
+// not a game failure; do not let the stock fatal logger recursively log EPIPE.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', error => {
+    if (error.code !== 'EPIPE' && error.code !== 'ERR_STREAM_DESTROYED') throw error;
+  });
+}
+
 const branch = 'codex/seamless-world-foundation';
 const project = path.resolve(__dirname, '..');
 
