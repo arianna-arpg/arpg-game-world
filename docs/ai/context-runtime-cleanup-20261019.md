@@ -3,7 +3,7 @@
 This is a bounded audit and incremental cleanup of `arianna-arpg/arpg-game-world`,
 based on seamless `ac9dedab`. [CLAUDE.md](../../CLAUDE.md) remains the current
 working entrypoint. The [integration policy](branch-integration.md) and
-[gameplay register](gameplay-alignment-20261019.md) own branch policy and user
+[gameplay decisions](gameplay-decisions-20261019.md) own branch policy and user
 decisions. This audit does not claim complete content parity.
 
 ## Implemented
@@ -61,6 +61,9 @@ The original checkout's unfinished work remains preserved. Dialogue redesign
 continues separately; current gameplay choices live in
 [the decision record](gameplay-decisions-20261019.md).
 
+The first cleanup is published through canonical merge `03fb316b`, containing
+`ee9ef90e`; this was confirmed against the fetched remote on 2026-10-19.
+
 The verified real-merge `.github/workflows/sync-main.yml` is unchanged. Review
 and integration keep this cleanup on seamless; do not migrate the retained runtime or introduce
 another player entrypoint as part of landing it. Main needs its own appropriately
@@ -91,3 +94,29 @@ Passed on the isolated cleanup checkout:
   process sandbox; both passed when run with the required process permissions.
 - Script syntax, launch JSON and whitespace checks passed. No runtime source,
   save schema or main-sync workflow changed.
+
+## Next runtime cleanup: planning cache
+
+`codex/runtime-plan-cache-cleanup`, based on `03fb316b`, extracts the three
+copies of run/terrain generator caching from the geographic browser worker,
+procession browser worker and hosted compiler into `MassPlanGeneratorCache`.
+Each worker/port retains its own single entry. Source equality, replacement,
+constructor-failure recovery, worker termination and reply envelopes retain
+their existing behavior. No gameplay rule, save format or World/native ownership
+migration is included. See the [worker contract](../engine/shard-runtime-foundation.md).
+
+The existing shard-worker course now exercises the actual geographic browser
+entry with current inputs, compares its plan with hosted and synchronous output,
+and checks cache identity, replacement, isolation and failure recovery. No new
+probe roster, source snapshot or test framework was introduced.
+
+Verification: all four type checks, `shardworkers`, `processionworker`, production
+build, host smoke and the eight-step desktop tutorial/Mu/travel/combat/Continue
+course passed. Generation QA passed 869 cases × 3 seeds with zero failures and
+five warnings; the build retains its large-bundle warning.
+
+The older `probe_worldmass_geographicworker.ts` fails at its historical hash
+assertion on both unchanged `03fb316b` and this cleanup: actual
+`858b313b3053e3a7`, expected `9efb0cd46dc1b2b4`. Its assertion and roster status
+remain untouched. Current worker parity is verified separately, rather than
+changing that historical expected value to obtain a pass.

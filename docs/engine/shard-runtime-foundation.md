@@ -7,6 +7,18 @@ The old separate-worktree instruction is superseded by the
 Start current work at [CLAUDE.md](../../CLAUDE.md); this document describes
 runtime contracts, not a separate delivery branch or proof of content parity.
 
+## Planning worker caches
+
+Browser geographic/procession workers and the hosted content worker share
+`src/worldmass/planGeneratorCache.ts`. Each browser worker owns one cache; the
+host owns one per compile port and removes it when that port closes. Equivalent
+run/terrain messages reuse the same generator. A different run or terrain
+replaces it only after successful construction. There is no shared global cache,
+new runtime bootstrap, change to generation rules or change to reply envelopes.
+The existing `probe_shardworkers.ts` covers cache replacement/failure recovery
+and actual hosted compilation; the geographic/procession worker courses cover
+plan parity, queue behavior and isolated worker execution.
+
 ## Player neighborhoods
 
 `WorldMassRuntime.update(world, boot, foci?)` accepts explicit stable focus IDs,
