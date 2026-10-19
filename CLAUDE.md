@@ -1,5 +1,7 @@
 Main is the shared-content baseline. Incorporate its changes into seamless with real merges, not copied commits. Follow [the branch integration policy](docs/ai/branch-integration.md); every published main change is verified and merged by the sync-main workflow. Preserve unfinished work in other checkouts.
 
+The [current gameplay decisions](docs/ai/gameplay-decisions-20261019.md) are authoritative for approved features, reversions, defaults and pending choices. They supersede the earlier main/seamless comparison. This is `arianna-arpg/arpg-game-world`; the separate MMOARPG project is outside this work. Verify the behavior being changed with the relevant existing checks; historical probe counts and branch paths in older notes are not current delivery requirements. Main keeps its zone loop while seamless owns continuous geography and hosting.
+
 The playable Mu loading-screen foundation is documented in docs/ui/loading-screen.md.
 LoadingScreen provides token-owned status, cancellation, retry and input isolation;
 SpiritRun is a rewardless pastime with soul-flames, branching rune gates and currents.
