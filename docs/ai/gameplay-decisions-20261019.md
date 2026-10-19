@@ -34,7 +34,7 @@ The earlier main/seamless comparison and its file inventory are historical snaps
 | V09 | Shared: actual buff details/expiry on hover and altar effects based on actual recipients/restoration. |
 | V10 | Shared artwork, **on by default**, across hotbar/build/bag. |
 | V11 | Leave the existing seamless three-cast counters/descriptions in place for possible later reuse; no promotion to main. Change the Rhythm counts three different casts within six seconds; Perfect One Motion counts three repeated casts. Their existing bonuses are unchanged. |
-| V12 | The HUD change (four objective rows, two compass rows and bounded notices) remains unapproved for main. **This was not what the user meant by bounded objectives.** The intended feature is retained zone layouts and their substantial objective systems embedded as bounded areas in continuous terrain; see the corrected world direction below. |
+| V12 | The HUD change (four objective rows, two compass rows and bounded notices) remains unapproved for main. **This was not what the user meant by bounded objectives.** Retained zone layouts with their objectives are one optional generation outcome among many, not the required structure of all generated content; see the corrected generation direction below. |
 | V13 | Main ground-item label placement is the default. Alternate label avoidance is an option, **off by default**. Correction: previous claims of active displacement and collapsed announcements were inaccurate; the helper was unused, and announcement collapsing is not implemented by this option. Hosted ownership filtering is separate. |
 | V14 | Shared: chest latch glint, an arc driven by real search progress, and moving motes. Remove the added instructional search captions. This does not change chest rewards or search timing. |
 | V15 | Shared: revised ailment motifs and capped night/body contrast. Presentation only; it grants no sight through obstacles. |
@@ -62,15 +62,27 @@ The user clarified the world direction on 19 October; this supersedes older inte
 
 ### Retained zones inside continuous terrain
 
-- Intended geographic/map hierarchy: **world map → regions → zones → chunks**. A chunk is a streaming subdivision, not a replacement for a playable zone or an objective boundary.
-- Preserve the interesting main-branch zone layouts, terrain templates and authored spatial structure. Populate those zones directly into the seamless environment as bounded playable areas that a travelling player can encounter.
-- Retain each area's existing, substantial zone objective system, associated encounters and completion/reward behavior. Small incidental camp objectives can coexist, but do not substitute for these larger activities.
-- “Bounded instance” here describes the authored area's footprint and objective ownership. It does not by itself authorize a portal, loading transition, separate server instance or a reset on crossing a chunk boundary. Continuous travel remains the goal; deliberately separate interiors are a distinct case.
-- Adapt approaches and connections to surrounding terrain while retaining the layouts' identity. Administrative region/chunk edges must not become encounter walls. Any actual sealing or commitment rule comes from the retained area's authored gameplay.
-- Current delivery falls short: campaignPlaces() reuses quest definitions, rewards, enemies and bosses but places them in generic site templates. That is not individual retention of those quests' original zone layouts. The separate retained-area inspection route also does not constitute embedding them into seamless ground.
-- The next content implementation must prove one representative retained layout and its actual objective in surrounding seamless terrain, including walk-in/out and saved progress, before generalizing. This decision record does not claim that integration is already implemented or authorize replacing the codebase wholesale.
+**Latest clarification: bounded and unbounded objectives are OPTIONS FOR GENERATION TO SELECT FROM. They are not universal standards for generation.** The purpose is variety, uncertainty and an immersive world whose next discovery the player cannot reliably guess.
 
-Map presentation should reflect this hierarchy; game-camera scale and HUD line limits are independent concerns.
+Possible results include an existing-style site, an objective, a point of interest, a retained bounded zone with its corresponding objective, an event, a location, a quest, or an unbounded objective. These are examples, not an exhaustive list or a mandatory exclusive category system. They can be selected independently or combined where appropriate. Do not require every place to carry an objective, every objective to belong to a bounded area, or every discovery to resolve as the same camp/clear/cache loop.
+
+A retained main-branch zone is one valuable option: preserve its interesting layout/template and substantive authored objective, then embed it into the seamless terrain. Existing small sites remain valid options too. Neither should replace the whole generation vocabulary. “Bounded instance” refers to that optional area's footprint and gameplay; it does not by itself imply a portal, loading transition, separate server instance or chunk-boundary reset.
+
+The intended geographic/map hierarchy is **world map → regions → zones → chunks**. This organizes geography and navigation; it must not force one activity per zone or make chunk edges gameplay boundaries. Objective scope, terrain layout, population, quest/event relationships and place identity need room to vary and combine. An unbounded objective need not acquire the footprint or completion model of a retained zone.
+
+### Current evidence and recommended next work
+
+This is a targeted source assessment, not a claim of exhaustive performance or player-experience validation:
+
+- The current terrain/place generator has deterministic identities, environmental conditions, placement probabilities and overlap handling (src/worldmass/generator.ts). These are useful foundations, not proof of sufficient experiential variety.
+- Regional discoveries choose among compact caches, shrines, altars and puzzles; geographic objectives use a separate, narrower weighted draw of supported native objective types (regionalDiscoverySources.ts, regionalDiscoveries.ts, geographicObjectiveChoice.ts). These do not yet establish the full mix and relationships requested above.
+- campaignPlaces() reuses quest definitions, rewards, enemies and bosses but seats them in generic templates and predefined journey branches. It does not individually embed those quests' original zone layouts. The retained-area inspection route is separate from seamless embedding.
+- The archived seamless-world branch explicitly retained authored zone layouts, but its later cell-partition model made map nodes govern the terrain. Recover useful layout/placement work deliberately; do not restore that whole spatial policy as the answer.
+- The root checkout also contains unfinished adventure-region/locale grammar work. It is useful material to assess, not delivered seamless functionality; preserve it and do not count it as completed integration.
+
+Recommendation: redesign the generation selection/composition layer against this clarified intent while retaining working terrain, streaming, save identity, combat and authored gameplay systems. Review the archive and unfinished generators for reusable parts. Do not add another mandatory universal activity template, treat a large recipe count as success, or erase the whole implementation on the basis of this limited assessment.
+
+The next playable demonstration should show genuinely different possible outcomes across journeys/seeds, including both small optional discoveries and a retained bounded area with its own objective, plus content whose scope is not tied to that area's footprint. The selection should remain coherent with the world while preserving uncertainty. Design choices should be settled through those concrete results; technical repeatability and save safety serve that work, rather than replacing it. This recommendation is not a claim that the missing generation work has been delivered.
 
 Two dedicated chats own dialogue redesign and incremental infrastructure/context cleanup. Preserve unfinished work in the original checkout. Remove obsolete guidance from current entry points while retaining necessary history as clearly labeled reference material.
 
