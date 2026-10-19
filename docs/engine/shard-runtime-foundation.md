@@ -1,8 +1,11 @@
 # Shard runtime foundation
 
-This implements the three runtime seams requested in `docs/design/shard-world.md`
-§6.6. The integration branch combines foundation `ef76cb1e` and shard
-`096393f1`; development stays separate from both active worktrees.
+This records the three runtime seams requested in `docs/design/shard-world.md`
+§6.6, originally combining foundation `ef76cb1e` and shard `096393f1`.
+The old separate-worktree instruction is superseded by the
+[main/seamless integration policy](../ai/branch-integration.md).
+Start current work at [CLAUDE.md](../../CLAUDE.md); this document describes
+runtime contracts, not a separate delivery branch or proof of content parity.
 
 ## Player neighborhoods
 

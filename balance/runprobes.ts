@@ -123,24 +123,24 @@ function die(msg: string): never {
 // --- the census -----------------------------------------------------------
 
 /**
- * The roster and the directory must name the same set — exits 2 (naming every
- * offender) if they disagree: no probe silently unrun, no row silently
- * pointing at nothing, no probe rostered twice.
+ * Selected checks must exist and be unique. Only an explicit historical sweep
+ * requires the whole archive and directory to agree; archival drift must not
+ * prevent the current player-behavior gate from running.
  */
-function census(): void {
+function census(rows: readonly ProbeRow[], fullArchive: boolean): void {
   const onDisk = readdirSync(BALANCE_DIR).filter(f => /^probe_.+\.ts$/.test(f)).sort();
-  const rostered = new Set(PROBE_ROSTER.map(r => r.probe));
-  const unenrolled = onDisk.filter(f => !rostered.has(f));
-  const missing = PROBE_ROSTER.filter(r => !onDisk.includes(r.probe)).map(r => r.probe);
+  const rostered = new Set(rows.map(r => r.probe));
+  const unenrolled = fullArchive ? onDisk.filter(f => !rostered.has(f)) : [];
+  const missing = rows.filter(r => !onDisk.includes(r.probe)).map(r => r.probe);
   const seen = new Set<string>();
   const dupes: string[] = [];
-  for (const r of PROBE_ROSTER) {
+  for (const r of rows) {
     if (seen.has(r.probe)) dupes.push(r.probe);
     seen.add(r.probe);
   }
 
   if (unenrolled.length || missing.length || dupes.length) {
-    console.error('probe: THE CENSUS FAILED — balance/proberoster.ts and balance/ disagree.\n');
+    console.error(`probe: THE CENSUS FAILED — ${fullArchive ? 'the full archive' : 'the selected checks'} and balance/ disagree.\n`);
     for (const f of unenrolled) console.error(`  UNENROLLED  ${f} — add a row (green + tier, or excluded + excuse + why)`);
     for (const f of missing) console.error(`  MISSING     ${f} — the roster names a file that is not on disk`);
     for (const f of dupes) console.error(`  DUPLICATE   ${f} — one row per probe`);
@@ -256,25 +256,26 @@ const secs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 
 async function main(): Promise<void> {
   const o = parseArgs(process.argv.slice(2));
-  census();
-  if (o.history || o.all || o.slow) {
+  const chosen = select(o);
+  const fullArchive = o.history || o.all || o.slow;
+  census(fullArchive ? PROBE_ROSTER : chosen, fullArchive);
+  if (fullArchive) {
     try { validateProbeSupersessions(PROBE_ROSTER, REPO_ROOT); }
     catch (error) { die('historical supersession refused: ' + String(error)); }
   }
 
   if (o.list) {
-    for (const r of select(o)) {
+    for (const r of chosen) {
       const lane = r.status === 'green' ? `green/${r.tier}`.padEnd(12) : `EXCL/${r.excuse}`.padEnd(12);
       console.log(`${lane} ${probeExecutionLabel(r).padEnd(30)} ${r.why}`);
     }
-    console.log(`\n${select(o).length} selected; ${PROBE_ROSTER.length} in the full archive — ${greenProbes('fast').length} green/fast, `
+    console.log(`\n${chosen.length} selected; ${PROBE_ROSTER.length} in the full archive — ${greenProbes('fast').length} green/fast, `
       + `${greenProbes('slow').length} green/slow, ${excludedProbes('red').length} excluded/red, `
       + `${excludedProbes('flaky').length} excluded/flaky`);
     console.log('CURRENT-SUCCESSOR entries execute their named current checks; original probe/roster bytes are historical source checks only.');
     return;
   }
 
-  const chosen = select(o);
   const live = o.jobs === 1;
   const started = Date.now();
   console.log(`probe: ${chosen.length} probe(s) via tsx, ${o.jobs} at a time`

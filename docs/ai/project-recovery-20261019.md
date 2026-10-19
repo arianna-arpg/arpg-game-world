@@ -1,5 +1,7 @@
 # Seamless playability recovery — 2026-10-19
 
+> Historical recovery record. The direct class-picker entry described below was subsequently replaced by the tutorial → Mu → physical vessel flow. Use [CLAUDE.md](../../CLAUDE.md) for current work, [PLAYTEST.md](../../PLAYTEST.md) for play, and the [gameplay decision register](gameplay-alignment-20261019.md) for current differences. The observations and measurements below apply to the recovery revision only.
+
 ## What went wrong
 
 The project goal is a continuous geographic world carrying the original ARPG's gameplay, offline and hosted. The earlier recovery restored the canonical branch but launched its retained campaign. That was the wrong player-facing result: retained owners still travelled through campaign zones.

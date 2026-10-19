@@ -1,3 +1,6 @@
+# Historical instruction archive
+
+> Superseded by [CLAUDE.md](../../CLAUDE.md) and the [branch integration policy](branch-integration.md). The text below is a preserved pre-recovery record, not an additional checklist. Its runtime cutover instructions, branch locations, probe/source-preservation mandates and claims of current status apply only to their historical revisions. Do not use them to redirect the playable route or override current user decisions.
 
 Convergence (2026-10-14, her word): this is the one branch. The retained-area
 host (server/nativeShardHost.ts, npm run shard -- --native) is the host the
