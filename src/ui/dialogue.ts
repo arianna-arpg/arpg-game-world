@@ -56,6 +56,8 @@ export class DialogueUI {
   private readonly rest: HTMLElement;
   private readonly accessible: HTMLElement;
   private readonly next: HTMLButtonElement;
+  private readonly finishButton: HTMLButtonElement;
+  private readonly back: HTMLButtonElement;
   private readonly progress: HTMLElement;
   private readonly choices: HTMLElement;
   private readonly status: HTMLElement;
@@ -100,7 +102,7 @@ export class DialogueUI {
       .npc-dialogue button:not(.panel-x):not(.panel-lock):hover,.npc-dialogue button:focus-visible { background:#a58a5350; border-color:#d6bc7b; outline:1px solid #d6bc7b; }
       .dialogue-accessible { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); }
       .dialogue-choices { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
-      .dialogue-choices[hidden], .dialogue-next[hidden] { display:none; }
+      .dialogue-choices[hidden], .dialogue-footer button[hidden] { display:none; }
       .dialogue-choices button { text-align:left; white-space:normal; overflow-wrap:anywhere; }
       .dialogue-choices button:disabled { opacity:.6; cursor:default; }
       .dialogue-status { color:#e0be8a; font:11px/1.4 Verdana,sans-serif; }
@@ -124,16 +126,22 @@ export class DialogueUI {
       <div class="dialogue-choices" role="group" aria-label="Responses" hidden></div>
       <div class="dialogue-status" role="status"></div><div class="conversation-workspace"></div></div>
       <div class="dialogue-portrait"><canvas aria-hidden="true"></canvas></div></div>
-      <div class="dialogue-footer"><span class="dialogue-progress"></span><button class="dialogue-next" type="button"></button></div>`;
+      <div class="dialogue-footer"><span class="dialogue-progress"></span>
+      <button class="dialogue-back" type="button" hidden>Back to topics</button>
+      <button class="dialogue-finish" type="button">Finish</button>
+      <button class="dialogue-next" type="button"></button></div>`;
     document.body.appendChild(this.root);
     const get = <T extends Element>(selector: string): T => this.root.querySelector<T>(selector)!;
     this.portrait = get('canvas'); this.title = get('.dialogue-name');
     this.ink = get('.dialogue-ink'); this.rest = get('.dialogue-unread');
     this.accessible = get('.dialogue-accessible'); this.next = get('.dialogue-next');
+    this.finishButton = get('.dialogue-finish'); this.back = get('.dialogue-back');
     this.progress = get('.dialogue-progress');
     this.choices = get('.dialogue-choices'); this.status = get('.dialogue-status');
     this.workspace = host.createWorkspace?.(get('.conversation-workspace'), () => this.renderControls());
     this.next.onclick = () => this.advance();
+    this.finishButton.onclick = () => this.close();
+    this.back.onclick = () => { this.workspace?.back(); this.renderControls(); };
     get<HTMLButtonElement>('[data-panel-x]').onclick = event => {
       event.preventDefault(); event.stopPropagation(); this.close();
     };
@@ -252,10 +260,11 @@ export class DialogueUI {
 
   advance(): void {
     if (!this.open || !this.pageKey) return;
-    if (this.workspace?.active) { this.workspace.back(); this.renderControls(); return; }
+    if (this.workspace?.active) { this.close(); return; }
     if (!this.revealed) {
       this.revealed = true; this.ink.textContent = this.fullPage; this.rest.textContent = ''; this.renderControls();
-    } else if (!this.session.awaitingChoice && (this.session.hasNext() || !this.workspace?.choosing)) {
+    } else if (!this.session.awaitingChoice) {
+      if (!this.session.hasNext()) { this.close(); return; }
       this.finish(this.session.advance()); this.pageKey = ''; this.setAvailable(this.available);
     }
   }
@@ -266,12 +275,18 @@ export class DialogueUI {
     const settings = this.host.settings();
     const bind = this.host.padActive() ? padDisplay(settings.padBinds.dialogueAdvance) : keyDisplay(settings.keybinds.dialogueAdvance);
     const choosing = this.revealed && this.session.awaitingChoice;
+    const activity = !!this.workspace?.active;
+    const finishing = activity || this.revealed && !choosing && !this.session.hasNext();
     this.root.dataset.choosing = String(choosing);
-    this.root.dataset.activity = String(!!this.workspace?.active);
-    this.next.hidden = !this.workspace?.active && (choosing || this.revealed && !this.session.hasNext() && !!this.workspace?.choosing);
-    this.next.textContent = `${this.workspace?.active ? 'Back to topics' : this.revealed ? this.session.hasNext() ? 'Continue' : 'Finish' : 'Reveal'}  ›${bind ? `  ${bind}` : ''}`;
-    this.progress.textContent = choosing ? 'Choose a response' : node.pages.length > 1 ? `${reading.page + 1} / ${node.pages.length}` : '';
-    this.choices.hidden = !choosing || !!this.workspace?.active;
+    this.root.dataset.activity = String(activity);
+    this.back.hidden = !activity;
+    this.next.hidden = choosing && !activity;
+    this.next.textContent = `${finishing ? 'Finish' : this.revealed ? 'Continue' : 'Reveal'}  ›${bind ? `  ${bind}` : ''}`;
+    // There is always an explicit Finish, even while revealing text, paging,
+    // or awaiting an authored response. At rest it owns the advance binding.
+    this.finishButton.hidden = finishing;
+    this.progress.textContent = activity ? '' : choosing ? 'Choose a response' : node.pages.length > 1 ? `${reading.page + 1} / ${node.pages.length}` : '';
+    this.choices.hidden = !choosing || activity;
     const rows = choosing ? (node.choices ?? []).map(choice => ({ choice,
       reason: this.session.choiceRefusal(choice.id) ?? (choice.action ? this.host.actions.refusal(this.actionContext(choice.id), choice.action) : null),
     })) : [];

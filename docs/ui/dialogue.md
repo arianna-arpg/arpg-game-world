@@ -33,6 +33,11 @@ The shortcut is a settings preference keyed by character and NPC definition.
 - Enter, controller A, the dialogue surface or the advance button reveals the page
   first; the next press continues, or finishes on the last page. Keyboard and
   pad advance are rebindable as **Advance Dialogue** in Options.
+- The footer always includes **Finish**, including topic lists, work details,
+  rewards and unanswered responses. When no text needs revealing or paging,
+  **Finish › Enter** closes the dialogue; an activity has a separate **Back to
+  topics** button. During an authored response, focused choices retain their
+  normal activation and Finish remains a separate explicit action.
 - Surface clicks include the text, name, portrait and margins. Buttons own their
   click, so choosing a response or closing cannot also advance. Selecting text
   does not advance. All routes call the same `DialogueUI.advance` transition.
@@ -43,9 +48,7 @@ The shortcut is a settings preference keyed by character and NPC definition.
 - Escape, controller B or the close button dismisses. Escape closes a visible dialogue
   before reaching the pause menu. The reader does not pause the world or lock
   movement; leaving the speaker's focus closes the exchange.
-- Finishing cannot reopen the same content during a focused visit. A newly
-  relevant line may speak after completion while the player remains at the
-  counter. Explicit X/Esc instead dismisses the whole visit, including later
+- Explicit Finish and X/Esc dismiss the whole visit, including later
   quest changes; a delayed shop timer cannot reopen the shop either.
   Already read lines cannot cycle back into the queue. Departing and returning
   must earn dwell again. Ambient speech additionally honors its
@@ -142,6 +145,8 @@ rewards or scene-specific dialogue rules.
   dwell, Shop and return visits, summoned crafting tabs, purchases, unchanged
   player page selection and geometry, departure, Character and independent
   groups at desktop/narrow/175% scale.
+  Add `--finish` for the focused footer course: topics, work/activity details,
+  paged greetings, separate Back, mouse/Enter dismissal and retained player UI.
 
 The hidden client uses isolated saves and captures the actual DOM plus canvas.
 It checks dwell, priority, the live portrait, reveal/advance, paged content,

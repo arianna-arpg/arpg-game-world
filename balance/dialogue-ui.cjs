@@ -135,6 +135,7 @@ app.whenReady().then(async () => {
     assert.equal(box.open,true);assert.equal(box.shown,box.full,'portrait click reveals');
     assert.equal(await js('document.querySelectorAll(".dialogue-choices button").length'),5);
     assert.equal(await js('document.querySelector(".dialogue-next").hidden'),true,'no implicit answer button');
+    assert.equal(await js('document.querySelector(".dialogue-finish").hidden'),false,'authored responses retain an explicit Finish action');
     box=await click('#npc-dialogue .dialogue-name');
     assert.equal(box.open,true,'surface advance waits for an explicit response');
     box=await js('dialogueQA.key("Enter")');assert.equal(box.open,true,'advance key cannot select a response');
