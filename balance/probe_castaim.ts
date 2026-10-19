@@ -11,6 +11,7 @@ import { mod } from '../src/engine/stats';
 import { setSimTap } from '../src/engine/tap';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 
+assert.deepEqual(Object.values(SKILLS).filter(skill=>skill.castAim==='live').map(skill=>skill.id),[], 'live aim remains an unused authoring opt-in');
 assert.equal(SKILLS.cleave.castMove,undefined);
 assert.equal(SKILLS.cleave.castAim,undefined);
 assert.equal(SKILLS.cleave.useTime,.7);
@@ -55,7 +56,12 @@ try {
  p.casting=null;p.fillResources();const mobile=makeSkillInstance({...SKILLS.cleave,castMove:.35,castAim:'live'});
  assert.ok(w.useSkill(p,mobile,{x:800,y:600}));const cs=p.casting!;
  p.aimPos={x:400,y:600};updateCastAim(p);assert.deepEqual(cs.aim,p.aimPos);assert.notEqual(cs.aim,p.aimPos);
+ p.aimPos={x:500,y:700};w.update(1/60);assert.deepEqual(cs.aim,p.aimPos,'world casting calls the authoring opt-in');
  const locked={...cs.aim};
+ for(const key of ['targetInfo','plantTotem','plantChannel'] as const){
+  cs[key]=true;p.aimPos={x:900,y:900};updateCastAim(p);assert.deepEqual(cs.aim,locked);delete cs[key];
+ }
+
  for(const mode of ['channel','charge','guard','overcharge','concentration','perfect','timed','multitude'] as const){
   cs.mode=mode;p.aimPos={x:500,y:900};updateCastAim(p);assert.deepEqual(cs.aim,locked);
  }

@@ -10,9 +10,9 @@ The earlier main/seamless comparison and its file inventory are historical snaps
 | --- | --- |
 | C01 | Shared: the most recently pressed held skill gets the next casting opportunity. Existing committed casts finish normally. |
 | C02 | **Approved in follow-up.** Shared: a fresh movement press suppresses older held-skill repeats after the current cast. It does not cancel that cast or release a held guard/channel. Releasing movement allows held skills to resume. |
-| C03 | Pending: optional live aiming during committed casts. No authored skill currently opts into it; leave the capability out of main. |
+| C03 | Shared, approved as future authoring capability only: `castAim: 'live'` lets an ordinary windup follow its actor's aim. It originally accompanied a Cleave movement/aim experiment (5 October), whose skill changes were reverted (8 October). No authored skill currently opts in. Omitted/`press` aim, movement, costs and cast timing stay unchanged; targeted, locked, planted and held/timing casts keep their existing rules. |
 | C04 | Shared: Shadow Step lands behind the target's facing, then immediately turns the caster toward it. Immediate and delayed arrivals both support the full following Backstab when its normal hit conditions are met. |
-| C05 | Pending: lurker closing/melee rules. Main retains its existing behavior. |
+| C05 | Keep lurker closing/melee adjustments in seamless for future AI work. Main retains its existing behavior. |
 | C06 | Corrected shared behavior: Bonepicker retains its normal throwing/skirmish cadence at low nerve. Wounds can trigger one 3.5-second rout; being outnumbered cannot repeatedly restart flight. No permanent low-nerve retreat override. |
 | C07 | **Approved in follow-up.** Shared: ranged enemies move when their actual firing lane is blocked, including low cover that they can see across. A valid alternate attack still fires normally. Explicit authored `losSeek: false` remains respected. |
 | C08–C10 | Keep in seamless: encounter territories, physical sanctuary boundaries and additional road encounter groups. Do not add their continuous-world policy to ordinary zones. |
@@ -33,12 +33,12 @@ The earlier main/seamless comparison and its file inventory are historical snaps
 | V08 | Shared: compact status icons; details on hover by default. Focus/corner/off remain choices. |
 | V09 | Shared: actual buff details/expiry on hover and altar effects based on actual recipients/restoration. |
 | V10 | Shared artwork, **on by default**, across hotbar/build/bag. |
-| V11 | Pending: counters/descriptions for existing three-cast passives. Change the Rhythm counts three different casts within six seconds; Perfect One Motion counts three repeated casts. Their existing damage/speed bonuses are unchanged. Main keeps its current presentation. |
-| V12 | Pending: bounded objective/notice layout, including four objective rows and two compass rows. Main keeps its current HUD layout. |
+| V11 | Leave the existing seamless three-cast counters/descriptions in place for possible later reuse; no promotion to main. Change the Rhythm counts three different casts within six seconds; Perfect One Motion counts three repeated casts. Their existing bonuses are unchanged. |
+| V12 | The HUD change (four objective rows, two compass rows and bounded notices) remains unapproved for main. **This was not what the user meant by bounded objectives.** Retained zone layouts with their objectives are one optional generation outcome among many, not the required structure of all generated content; see the corrected generation direction below. |
 | V13 | Main ground-item label placement is the default. Alternate label avoidance is an option, **off by default**. Correction: previous claims of active displacement and collapsed announcements were inaccurate; the helper was unused, and announcement collapsing is not implemented by this option. Hosted ownership filtering is separate. |
 | V14 | Shared: chest latch glint, an arc driven by real search progress, and moving motes. Remove the added instructional search captions. This does not change chest rewards or search timing. |
 | V15 | Shared: revised ailment motifs and capped night/body contrast. Presentation only; it grants no sight through obstacles. |
-| V16 | Pending: zoom and network-camera smoothing. Seamless offers 85–160% with 100% retaining the original 1.3 scale. Main camera behavior is unchanged. |
+| V16 | Restore main's fixed **game-camera** scale (1.3) in seamless; remove the added 85–160% game zoom option and ignore its old saved preference. This is unrelated to map zoom. Existing couch framing remains; hosted correction smoothing and capture/showcase framing are separate technical functions. No new map-zoom behavior is authorized by this choice. |
 | V17 | Shared: quieter empty hotbar slots; key labels and hit areas remain. |
 | V18 | Shared: approved environment, body, golem, water, ground and skill artwork. Continuous settlement-specific visuals stay with seamless. |
 
@@ -58,7 +58,31 @@ The earlier main/seamless comparison and its file inventory are historical snaps
 
 ## World, hosting and continued work
 
-The W-series continuous-world/content choices remain undecided. Do not interpret this alignment as approval for another geography rebuild, full campaign parity, or a completed MMORPG. Hosting/ownership adaptations can remain in seamless; shared offline gameplay stays authoritative on main.
+The user clarified the world direction on 19 October; this supersedes older interpretations of “bounded/unbounded objectives” and blanket statements that the world direction is undecided. Individual W-series implementation choices remain subject to review. Hosting/ownership adaptations can remain in seamless; shared offline gameplay stays authoritative on main.
+
+### Retained zones inside continuous terrain
+
+**Latest clarification: bounded and unbounded objectives are OPTIONS FOR GENERATION TO SELECT FROM. They are not universal standards for generation.** The purpose is variety, uncertainty and an immersive world whose next discovery the player cannot reliably guess.
+
+Possible results include an existing-style site, an objective, a point of interest, a retained bounded zone with its corresponding objective, an event, a location, a quest, or an unbounded objective. These are examples, not an exhaustive list or a mandatory exclusive category system. They can be selected independently or combined where appropriate. Do not require every place to carry an objective, every objective to belong to a bounded area, or every discovery to resolve as the same camp/clear/cache loop.
+
+A retained main-branch zone is one valuable option: preserve its interesting layout/template and substantive authored objective, then embed it into the seamless terrain. Existing small sites remain valid options too. Neither should replace the whole generation vocabulary. “Bounded instance” refers to that optional area's footprint and gameplay; it does not by itself imply a portal, loading transition, separate server instance or chunk-boundary reset.
+
+The intended geographic/map hierarchy is **world map → regions → zones → chunks**. This organizes geography and navigation; it must not force one activity per zone or make chunk edges gameplay boundaries. Objective scope, terrain layout, population, quest/event relationships and place identity need room to vary and combine. An unbounded objective need not acquire the footprint or completion model of a retained zone.
+
+### Current evidence and recommended next work
+
+This is a targeted source assessment, not a claim of exhaustive performance or player-experience validation:
+
+- The current terrain/place generator has deterministic identities, environmental conditions, placement probabilities and overlap handling (src/worldmass/generator.ts). These are useful foundations, not proof of sufficient experiential variety.
+- Regional discoveries choose among compact caches, shrines, altars and puzzles; geographic objectives use a separate, narrower weighted draw of supported native objective types (regionalDiscoverySources.ts, regionalDiscoveries.ts, geographicObjectiveChoice.ts). These do not yet establish the full mix and relationships requested above.
+- campaignPlaces() reuses quest definitions, rewards, enemies and bosses but seats them in generic templates and predefined journey branches. It does not individually embed those quests' original zone layouts. The retained-area inspection route is separate from seamless embedding.
+- The archived seamless-world branch explicitly retained authored zone layouts, but its later cell-partition model made map nodes govern the terrain. Recover useful layout/placement work deliberately; do not restore that whole spatial policy as the answer.
+- The root checkout also contains unfinished adventure-region/locale grammar work. It is useful material to assess, not delivered seamless functionality; preserve it and do not count it as completed integration.
+
+Recommendation: redesign the generation selection/composition layer against this clarified intent while retaining working terrain, streaming, save identity, combat and authored gameplay systems. Review the archive and unfinished generators for reusable parts. Do not add another mandatory universal activity template, treat a large recipe count as success, or erase the whole implementation on the basis of this limited assessment.
+
+The next playable demonstration should show genuinely different possible outcomes across journeys/seeds, including both small optional discoveries and a retained bounded area with its own objective, plus content whose scope is not tied to that area's footprint. The selection should remain coherent with the world while preserving uncertainty. Design choices should be settled through those concrete results; technical repeatability and save safety serve that work, rather than replacing it. This recommendation is not a claim that the missing generation work has been delivered.
 
 Two dedicated chats own dialogue redesign and incremental infrastructure/context cleanup. Preserve unfinished work in the original checkout. Remove obsolete guidance from current entry points while retaining necessary history as clearly labeled reference material.
 

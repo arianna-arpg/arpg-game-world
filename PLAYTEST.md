@@ -14,6 +14,8 @@ Use **WASD** to move, the mouse buttons and numbered skill bar to fight, **M** f
 
 Fresh worlds now include eighteen additional physical campaign locations, with the original quest gates, enemies, cargo and rewards. Talk to the giver and read the journal directions; accepted work marks its destination on the map.
 
+These currently use generic site templates; they do not preserve each campaign zone's original terrain layout. The generation goal is a varied mix of optional sites, events, quests, objectives, locations and retained bounded areas—not one mandatory pattern for every place. That broader composition and the retained-layout option remain unfinished; see [the current generation direction](docs/ai/gameplay-decisions-20261019.md#retained-zones-inside-continuous-terrain).
+
 | Work | Where to begin | Physical destination |
 | --- | --- | --- |
 | The Western Watch / Northern Watch | Mireille, level 1 / level 3 after the first contract | Western camp / northern Stoneward |
