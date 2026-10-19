@@ -1,3 +1,7 @@
+import { SkillInputOrder } from './skillInputOrder';
+import { markBodyAction } from './bodyAction';
+import { markBodyWalk } from './bodyWalk';
+import { bagSkillSupport } from './gemitems';
 import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { skillMergePlan } from './skillMerge';
 import { skillBurstVoice } from '../data/skillVisuals';
@@ -15,7 +19,7 @@ import type { SkillFieldVisual } from './skillFieldVisual';
 import { concealmentActive, isConcealed, PERCEPTION_CFG } from './perception';
 import { anatomyCueState, anatomyFlash, notePartScar, clearPartScar } from './anatomyCues';
 import { takeWeakPointBreaks } from './weakpoints';
-import { feedingCueFlash, noteRestoreGain, noteResourceFlow } from './feedingCues';
+import { feedingCueFlash, restorationCueFlash, noteRestoreGain, noteResourceFlow } from './feedingCues';
 import { companionCueFlash, companionCueSpec, type CompanionCueEvent } from './companionCues';
 import { RECOVERY_CUES, type RecoveryCueKind } from '../data/companionCues';
 import { CompanionGrants, COMPANION_GRANT_PREFIX, companionGrantStat, summonReservationUnit } from './companionGrants';
@@ -371,7 +375,7 @@ import { PROC_CUE_CFG } from '../data/procCues';
 import { poolVentRead } from './skills';
 import { RESERVE_CUE_CFG } from '../data/reserveCues';
 import { defenseCueFlash } from './defenseCues';
-import { combatCueFlash, timingCueFlash } from './combatCues';
+import { combatCueFlash, timingCueFlash, guardArcRadians } from './combatCues';
 import { castingEventFlash } from './castingCues';
 import { guardBashGeometry } from './warningCues';
 import { DEFENSE_CUE_CFG } from '../data/defenseCues';
@@ -1656,6 +1660,8 @@ interface PendingRespawn {
 /** A delayed displacement in flight (Warp's telegraphed blink). */
 interface PendingBlink {
   actor: Actor; dest: Vec2; timer: number; color: string;
+  /** Rear-target blinks turn on arrival, including delayed variants. */
+  faceTarget?: Actor;
   visual?: Flash;
   /** The blinking skill (arrival Dive Bomb blasts / No Man's Land fields). */
   inst?: SkillInstance;
@@ -1837,6 +1843,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     // socket-in, and the loose level-up all address the wrapper by uid.
     case 'learn': return isIdx(a.uid) && (a.slot === undefined || isIdx(a.slot));
     case 'levelSupportInv': return isIdx(a.uid);
+    case 'unsocketBagSkill': return isIdx(a.uid) && isIdx(a.socket);
     case 'socket': return isIdx(a.uid) && isStr(a.skillId);
     case 'levelSupportSocket': case 'unsocket': return isStr(a.skillId) && isIdx(a.socket);
     case 'unlearn':
@@ -5135,8 +5142,11 @@ export class World {
           a.casting.aim = aim;
         }
       }
-      // Toggled auras respond to the press edge; everything else to the hold.
-      for (let i = 0; i < a.skills.length; i++) {
+      // A fresh skill or walk owns the next opportunity before older repeats.
+      // Running casts above retain their held state and native commitment;
+      // walking cannot cancel them or release a held guard/channel.
+      // Toggled auras still respond to the press edge; other skills to the hold.
+      for (const i of this.skillInputOrder.slots(seat,a.skills.length,held,inp.edge,inp.metaEdge,!!(inp.dx||inp.dy))) {
         const inst = a.skills[i];
         if (!inst) {
           // THE UNARMED FLOOR: an EMPTY slot still answers — the improvised
@@ -5201,6 +5211,7 @@ export class World {
    *  wired (the host runs the artery); an entry lives only while a slot is
    *  spent, and leaves with the seat (removeSeat). */
   private spentPresses = new Map<string, Set<number>>();
+  private readonly skillInputOrder = new SkillInputOrder();
   /** The held[] of a seat with no intent this frame (nothing to read). */
   private readonly noHeld: readonly boolean[] = [];
 
@@ -22999,27 +23010,34 @@ export class World {
    *  threat, and refuses nothing (structural, never a name list). ONE scan
    *  for every calm-gated dwell: the field discipline's swap gate and the
    *  harvest rite's arming gate read the same truth. */
-  private pressingFoeNear(at: Vec2, tier = 0, radius = SWAP_DISCIPLINE_CFG.foeRadius): boolean {
-    const r = radius;
-    if (r <= 0) return false;
-    return this.actors.some(a =>
-      a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
-      && a.tier === tier // the sovereignty gate: a foe on another story presses nobody
+  isPressingFoe(a: Actor, at: Vec2, tier = 0, radius = SWAP_DISCIPLINE_CFG.foeRadius): boolean {
+    return radius > 0 && a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
+      && a.tier === tier
       && (a.skills.some(s => s) || (a.defId ? !!MONSTERS[a.defId]?.spawner : false))
-      && dist(a.pos, at) <= r);
+      && dist(a.pos, at) <= radius;
+  }
+
+  private pressingFoeNear(at: Vec2, tier = 0, radius = SWAP_DISCIPLINE_CFG.foeRadius): boolean {
+    return this.actors.some(a => this.isPressingFoe(a, at, tier, radius));
+  }
+
+  swapReadiness(seat: Seat, kind: 'unlearn' | 'socket' | 'unsocket', skillId?: string): import('./swapReadiness').SwapReadiness {
+    const cfg = SWAP_DISCIPLINE_CFG;
+    if (cfg.sanctuaryWaives && this.zone.objective.kind === 'safe') return { reason: null };
+    const lastCombat = this.lastCombatAt;
+    const remaining = cfg.calmSec - (this.time - lastCombat);
+    if (remaining > 0) return { reason: 'the blood is still hot', remaining };
+    if (this.pressingFoeNear(seat.actor.pos, seat.actor.tier)) return { reason: 'foes press too near' };
+    if (kind === 'unlearn' && skillId) {
+      const hero = this.seatHero(seat);
+      if (cfg.unlearnOffCooldown && hero.cooldowns.has(skillId)) return { reason: 'its clock still turns' };
+      if (cfg.unlearnNotCasting && hero.casting?.inst.def.id === skillId) return { reason: 'mid-cast' };
+    }
+    return { reason: null };
   }
 
   swapRefusal(seat: Seat, kind: 'unlearn' | 'socket' | 'unsocket', skillId?: string): string | null {
-    const cfg = SWAP_DISCIPLINE_CFG;
-    if (cfg.sanctuaryWaives && this.zone.objective?.kind === 'safe') return null;
-    if (this.time - this.lastCombatAt < cfg.calmSec) return 'the blood is still hot';
-    if (this.pressingFoeNear(seat.actor.pos, seat.actor.tier)) return 'foes press too near';
-    if (kind === 'unlearn' && skillId) {
-      const hero = this.seatHero(seat);
-      if (cfg.unlearnOffCooldown && hero.cooldowns.has(skillId)) return 'its clock still turns';
-      if (cfg.unlearnNotCasting && hero.casting?.inst.def.id === skillId) return 'mid-cast';
-    }
-    return null;
+    return this.swapReadiness(seat, kind, skillId).reason;
   }
 
   /** THE UNLEARN'S OWN GATES as ONE read — the overdrive debt lock and the
@@ -29411,6 +29429,21 @@ export class World {
     return true;
   }
 
+  /** Recover a stored skill's support without seating it. The native bag and
+   * discipline laws still apply; only the selected cargo cell changes. */
+  unsocketBagSkill(uid: number, socketIndex: number, seat: Seat = this.localSeat): boolean {
+    const item = this.bagItem(seat, uid);
+    const payload = item && skillGemPayloadOf(item);
+    const gem = item && bagSkillSupport(item, socketIndex);
+    if (!payload || !gem) return false;
+    const why = this.swapRefusal(seat, 'unsocket', payload.skillId);
+    if (why) { this.failNote(seat.actor, payload.skillId + ':discipline', why); return false; }
+    if (!this.grantSupportGemItem(seat, gem)) return false;
+    payload.sockets[socketIndex] = null;
+    this.markMetaDirty(seat);
+    return true;
+  }
+
   /** Allocate a passive node adjacent to the existing allocation. VOCATION
    *  nodes are the same graph walk but spend VOCATION points, belong only to a
    *  character who EARNED that vocation, and (behind the playtest toggle) wait
@@ -29774,6 +29807,7 @@ export class World {
       case 'reacquireSkill': this.reacquireSkill(action.skillId, seat); break;
       case 'socket': this.socketSupport(action.uid, action.skillId, seat); break;
       case 'unsocket': this.unsocketSupport(action.skillId, action.socket, seat); break;
+      case 'unsocketBagSkill': this.unsocketBagSkill(action.uid, action.socket, seat); break;
       case 'allocate': this.allocateNode(action.nodeId, seat, action.optionId); break;
       case 'refundPassive': this.refundPassiveNode(action.nodeId, seat); break;
       case 'bindGraft': this.bindGraft(action.key, action.skillId, seat); break;
@@ -37323,9 +37357,10 @@ export class World {
         if (caster.caromRun) this.endCarom(caster, { quiet: true });
         let dest: Vec2;
         if (d.behindTarget && targetInfo?.actor) {
-          // Shadow Step: emerge on the far side, facing the target.
+          // A rear-target blink follows the victim's body heading, not the
+          // approach line: flanking an unaware foe must not move us in front.
           const foe = targetInfo.actor;
-          const ang = angleTo(caster.pos, foe.pos);
+          const ang = foe.facing + Math.PI;
           dest = vec(
             foe.pos.x + Math.cos(ang) * (foe.radius + caster.radius + 10),
             foe.pos.y + Math.sin(ang) * (foe.radius + caster.radius + 10));
@@ -37371,12 +37406,14 @@ export class World {
         if (d.delay && d.delay > 0) {
           const visual: Flash = { pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: cosmeticColor, life: d.delay, maxLife: d.delay,
             fx: skillMovementVoice(def.id, 'wait'), facing: caster.facing, recoveryCueTier: caster.tier };
-          this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: cosmeticColor, inst, visual });
+          this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: cosmeticColor, inst, visual,
+            ...(d.behindTarget && targetInfo?.actor ? { faceTarget: targetInfo.actor } : {}) });
           this.flashes.push(visual);
         } else {
           this.teleportActor(caster, dest, cosmeticColor, undefined, caster.tier, def.id);
           if (d.behindTarget && targetInfo?.actor) {
-            caster.facing = angleTo(caster.pos, targetInfo.actor.pos);
+            // Arrival is an atomic turn; the ordinary turn-rate cap must not undo it.
+            caster.facingPrev = caster.facing = angleTo(caster.pos, targetInfo.actor.pos);
           }
           // ...and where you reappear (No Man's Land fields drop here too).
           this.moveBlast(caster, inst, caster.pos);
@@ -38454,6 +38491,7 @@ export class World {
     if (!opts.noRepeat && !opts.noCooldown && !caster.construct) {
       // THE BEAT LAW: a chain step joins the ring as its HOST's beat.
       this.recordCast(caster, def, inst.chainOf);
+      markBodyAction(caster, inst, this.time, angleTo(caster.pos, aim));
     }
     // THE WITNESS LANE (engine/mimic.ts mimicWitness): a completed enemy
     // art may teach watching seats WITHOUT the blow — reach is each seat's
@@ -41614,9 +41652,7 @@ export class World {
     const cs = guardian.casting!;
     const spec = cs.inst.def.guard;
     if (!spec || (cs.shield ?? 0) <= 0) return false;
-    const tags = skillContextTags(cs.inst.def);
-    const extra = instanceMods(cs.inst);
-    const arc = (spec.arcDeg * Math.PI / 180) * Math.sqrt(guardian.sheet.get('aoeRadius', tags, extra));
+    const arc = guardArcRadians(guardian);
     if (Math.abs(angleDiff(guardian.facing, angleTo(guardian.pos, threatPos))) > arc / 2) return false;
 
     if (guardian === this.player && this.deedEnemy(attacker) && rawDamage > 0) {
@@ -43326,12 +43362,14 @@ export class World {
       }
     }
 
+    // Freeze the rear-hit result; only a landed wound earns its visual cue.
+    let rearHit = false;
     // Positional damage: striking from behind the target's facing.
     if (def.backstabMult && def.backstabMult > 1) {
       const behind = Math.abs(angleDiff(target.facing, angleTo(target.pos, caster.pos))) > 2.0;
       if (behind) {
         dmgMult *= def.backstabMult;
-        this.text(vec(target.pos.x, target.pos.y - 12), 'backstab!', '#d8c8ff', 12, 'combat');
+        rearHit = true;
       }
     }
     // PROXIMITY (the point-blank graft): up to the stat's bonus at touch,
@@ -43488,6 +43526,10 @@ export class World {
         }
       }
       dealt = result.total;
+      if (rearHit && dealt > 0 && def.backstabCue !== false) {
+        this.flashes.push(combatCueFlash(target.pos, def.backstabCue ?? 'rear_hit', target.radius,
+          angleTo(target.pos, caster.pos)));
+      }
       if (result.receivedAmounts) this.rollOwnProcs(target, 'struck', {
         depth, target: caster, crit: wasCrit, receivedAmounts: result.receivedAmounts,
       });
@@ -47159,6 +47201,13 @@ export class World {
     return { kind: 'skill', def, rarity, level: 1 };
   }
 
+  /** Optional first-reward invitation; selection and reward odds stay native. */
+  memoryRecallLesson(seat: Seat = this.localSeat): boolean {
+    return seat === this.localSeat && !this.account.ledger[MEMORY_CFG.lessonReceipt]
+      && !this.ledger[MEMORY_CFG.lessonReceipt] && !this.spoilsSealed()
+      && seat.meta.items.some(item => !!memoryUnitsOf(item)?.length);
+  }
+
   /** THE RECALL (skill-items M2/M3, §3b): consume ONE unit of the GROUP
    *  `dropperId` names (memoryGroupKey — the bare dropper id for wild units,
    *  a pinned promise's own key beside it; every pre-law caller's spelling
@@ -47229,6 +47278,12 @@ export class World {
       ...(cut.kind === 'skill' ? { rarity: cut.rarity } : {}),
     };
     this.memoryRecallLast = { ...res, seat: seat.id };
+    if (seat === this.localSeat) {
+      this.ledger[MEMORY_CFG.lessonReceipt] = 1;
+      if (this.metaProgressionActive()) {
+        this.account.ledger[MEMORY_CFG.lessonReceipt] = 1; this.accountDirty = true;
+      }
+    }
     return res;
   }
 
@@ -56307,7 +56362,11 @@ export class World {
           let touched = 0;
           for (const a of this.actors) {
             if (a.dead || !inside.has(a.id)) continue;
-            if (a.healBy(heal) > 0) touched++;
+            if (a.healBy(heal) > 0) {
+              touched++;
+              const cue = restorationCueFlash(al.pos, a, mend.cue === false ? false : { color: al.def.color, ...mend.cue }, a.tier);
+              if (cue) this.flashes.push(cue);
+            }
           }
           if (touched > 0) {
             this.flashes.push({ pos: vec(al.pos.x, al.pos.y), radius: al.def.radius * 0.5, color: al.def.color, life: 0.35, maxLife: 0.35 });
@@ -57508,6 +57567,9 @@ export class World {
         this.pendingBlinks.splice(i, 1);
         if (pb.visual) pb.visual.life = 0;
         this.teleportActor(pb.actor, pb.dest, pb.color, undefined, pb.actor.tier, pb.inst?.def.id);
+        if (pb.faceTarget && sameStory(pb.actor, pb.faceTarget)) {
+          pb.actor.facingPrev = pb.actor.facing = angleTo(pb.actor.pos, pb.faceTarget.pos);
+        }
         // Delayed blinks (Warp) erupt on arrival too.
         if (pb.inst) {
           this.moveBlast(pb.actor, pb.inst, pb.actor.pos);
@@ -64525,5 +64587,6 @@ export class World {
       this.steppedClamp(a, vec(a.pos.x + a.vel.x * dt, a.pos.y + a.vel.y * dt), a.pos, disp);
     }
     if (striding) a.strideDist += Math.hypot(a.pos.x - sx, a.pos.y - sy);
+    if (!this.sailing) markBodyWalk(a, a.pos.x - sx, a.pos.y - sy, this.time);
   }
 }

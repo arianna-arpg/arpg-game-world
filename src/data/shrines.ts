@@ -80,6 +80,8 @@ export interface AltarDef {
   radius: number;
   /** Applied to every actor inside — friend, foe, and minion alike. */
   mods: Modifier[];
+  /** Persistent source sigil on actual modifier recipients; presentation only. */
+  influenceCue?: boolean;
   /** LOCALIZED STORM: telegraphed strikes on random points inside the field,
    *  hitting EVERYONE beneath (the weather-strike shape, altar-local — the
    *  telegraph disc is dodgeable and the AI reads it like any blast). */
@@ -89,7 +91,9 @@ export interface AltarDef {
   /** A heal pulse to EVERYONE inside every `every` seconds — your enemies
    *  included (heal = base + perLevel × zone level). Bring burst, or fight
    *  outside the light. */
-  mend?: { every: number; base: number; perLevel: number };
+  mend?: { every: number; base: number; perLevel: number;
+    /** Measured restoration transfer; false opts out of the source-linked cue. */
+    cue?: import('./feedingCues').FeedingCueSpec | false };
   /** POI roll weight (default 1) — rarer altars stand on rarer ground. */
   weight?: number;
   /** Door clearance override for this row (default INTERACT_PLACE_CFG). */

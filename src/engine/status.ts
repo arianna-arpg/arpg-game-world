@@ -1849,6 +1849,10 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
 }
 
 export interface ActiveStatus {
+  /** Duration of the current application for its countdown icon. */
+  statusDuration?: number;
+  /** False only on a remote status without a supplied clock. */
+  remainingKnown?: boolean;
   /** Independent application lane, scoped to the originating actor/skill. */
   sourceKey?: string;
   /** A bank explicitly reserved for its source's finisher. Expiry still applies. */

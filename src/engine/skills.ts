@@ -4341,6 +4341,9 @@ export type SkillEffect =
 // --- The skill definition ---------------------------------------------------
 
 export interface SkillDef {
+  icon?: string;
+  bodyMotion?: string | false;
+  reachCue?: boolean;
   companionCue?: import('../data/companionCues').CompanionCueSpec | false;
   recoveryCues?: Partial<Record<import('../data/companionCues').RecoveryCueKind, import('../data/companionCues').RecoveryCueSpec | false>>;
   /** Curse-field creation/retirement material; false silences only its transition. */
@@ -4505,6 +4508,8 @@ export interface SkillDef {
   /** Positional damage: MORE multiplier when striking a target from behind
    *  (relative to its facing). Assassin tech — composes with Shadow Step. */
   backstabMult?: number;
+  /** Confirmed positional-hit effect; false suppresses its presentation. */
+  backstabCue?: string | false;
   /** Multiplier on flat added-damage stats (default 1). */
   addedEffectiveness?: number;
 

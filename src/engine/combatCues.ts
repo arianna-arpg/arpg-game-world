@@ -22,6 +22,16 @@ export function timingCueFlash(a: Actor, style: string, aim: { x: number; y: num
     y: a.pos.y + Math.sin(facing) * reach }, style, COMBAT_CUE_CFG.timingRadius, facing);
 }
 
+/** Exact angular coverage of the held native shield, in radians. The host
+ * resolves skill-local and actor modifiers; render-only shells use its result. */
+export function guardArcRadians(a: Actor): number {
+  const cs=a.casting;
+  if(!cs||cs.mode!=='guard'||!cs.inst.def.guard)return 0;
+  if(cs.resolvedGuardArc!==undefined)return cs.resolvedGuardArc;
+  return cs.inst.def.guard.arcDeg*Math.PI/180
+    *Math.sqrt(a.sheet.get('aoeRadius',skillContextTags(cs.inst.def),instanceMods(cs.inst)));
+}
+
 /** Exact opening guard window, including support-granted parries. The wire
  * carries this resolved read because remote casting instances are minimal. */
 export function parryCueStrength(a: Actor): number {

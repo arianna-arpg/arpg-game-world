@@ -1,3 +1,7 @@
+import { bodyActionPoseOf } from '../engine/bodyAction';
+import { bodyWalkPoseOf } from '../engine/bodyWalk';
+import { meleeReachCueOf } from '../engine/meleeReach';
+import { foresightRowOf, foresightOfRow, type ForesightW } from './foresightWire';
 import { empowermentRank, skillInstanceName } from '../engine/skillEmpowerment';
 import { afflictionPressureOf } from '../engine/afflictionPressure';
 import { armedStatusCues } from '../engine/armedCues';
@@ -7,7 +11,7 @@ import { castingCompletion, castingCueOf } from '../engine/castingCues';
 import { selfBankCuesOf, type SelfBankCue } from '../engine/skillSelfVisual';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
-import { parryCueStrength } from '../engine/combatCues';
+import { guardArcRadians, parryCueStrength } from '../engine/combatCues';
 import type { TitanScenePiece } from '../engine/titans';
 import { cosmeticStyle, COSMETIC_PROJECTILES } from '../data/cosmeticStyles';
 import { cosmeticLoadoutFor, cosmeticSummonSkill, cosmeticSkillPaint, sanitizeCosmeticLoadout } from '../meta/cosmetics';
@@ -83,6 +87,8 @@ export type Vec2W = [number, number];
 
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
+  bodyActionPose?: import('../engine/bodyAction').BodyActionPose;
+  bodyWalkPose?: import('../engine/bodyWalk').BodyWalkPose;
   selfBankCues?: SelfBankCue[];
   presenceBadge?: import('../data/skillPresenceVisuals').PresenceBadge;
   movementTether?: Actor['movementTether'];
@@ -216,10 +222,12 @@ export interface ActorW {
 /** `bk` = THE BANK READ (StatusDef.bank — ActiveStatus.bankFrac, 0..1 at
  *  two decimals): the derived scalar the body FX scale by (the tells-wire
  *  idiom — never the bank's source numbers). Absent = no bank worn. */
-export interface StatusW { id: string; stacks: number; bk?: number; dot?: 1; }
+export interface StatusW { id: string; stacks: number; bk?: number; dot?: 1; rem?: number; statusDuration?: number; }
 export interface AuraW { c: string; r: number; sh: number; skillId?: string; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW { parryCue?: number;
+  fg?: ForesightW;
+  meleeReach?: import('../engine/meleeReach').MeleeReachCue;
   /** Optional player skill identity; older hosts keep their plain cast bar. */
   sk?: string;
   castingCompletion?: number;
@@ -755,6 +763,8 @@ function actorToW(a: Actor, world: World): ActorW {
   // THE TIER FABRIC's layer (engine/tiers.ts) — clients gate draw + veil on it.
   if (a.tier) w.tr = a.tier;
   if (a.wane > 0) w.wn = Math.round(a.wane * 100) / 100;
+  w.bodyActionPose = bodyActionPoseOf(a, world.time);
+  w.bodyWalkPose = bodyWalkPoseOf(a, world.time);
   if (a.kind === 'player') { const s = SEAT_OF(a); if (s) w.seat = s; }
   if (a.adorn) w.adorn = a.adorn;
   if (a.material) w.mat = a.material;
@@ -820,7 +830,8 @@ function actorToW(a: Actor, world: World): ActorW {
   }
   if (a.absorbTotal > 0) w.ab = Math.round(a.absorbTotal);
   if (a.statuses.length) {
-    w.st = a.statuses.map(s => ({ id: s.id, stacks: s.stacks,
+    w.st = a.statuses.map(s => ({
+      rem: s.remaining, statusDuration: s.statusDuration ?? s.total, id: s.id, stacks: s.stacks,
       ...(s.dps > 0 ? { dot: 1 as const } : {}),
       ...(s.bankFrac !== undefined ? { bk: Math.round(s.bankFrac * 100) / 100 } : {}) }));
   }
@@ -828,6 +839,9 @@ function actorToW(a: Actor, world: World): ActorW {
     const cs = a.casting;
     const cw: CastW = { c: cs.inst.def.color, mode: cs.mode, total: cs.total, elapsed: cs.elapsed };
     if (a.kind === 'player') cw.sk = cs.inst.def.id;
+    const fg = foresightRowOf(a, cs);
+    if (fg) cw.fg = fg;
+    cw.meleeReach = meleeReachCueOf(a);
     // THE VENT-RIDE's broil rides the cast wire (the client draws the roil).
     const cd = cs.inst.def.delivery;
     if (cd.type === 'leap' && cd.vent) cw.vent = cd.vent.columnR;
@@ -842,7 +856,7 @@ function actorToW(a: Actor, world: World): ActorW {
     cw.castingCompletion = castingCompletion(a);
     cw.castingCue = castingCueOf(a);
     cw.focusBroken = cs.focusBroken;
-    if (cs.mode === 'guard' && cs.inst.def.guard) cw.guardArc = cs.inst.def.guard.arcDeg;
+    if (cs.mode === 'guard' && cs.inst.def.guard) cw.guardArc = guardArcRadians(a) * 180 / Math.PI;
     if (cs.bashAt !== undefined) cw.bashAt = cs.bashAt;
     if (cs.bashLow) cw.bashLow = true;
     if (cs.bashArmAt !== undefined) cw.bashArmAt = cs.bashArmAt;
@@ -1435,15 +1449,20 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.concealmentExposedUntil = aw.concealmentExposedUntil ?? 0;
     // Reconstruct the FX sub-objects the renderer draws (stand-in nested objects
     // so renderer.ts stays untouched). Absent → cleared → that FX simply skips.
+    a.bodyActionPose = aw.bodyActionPose ? { ...aw.bodyActionPose } : null;
+    a.bodyWalkPose = aw.bodyWalkPose ? { ...aw.bodyWalkPose } : null;
     a.statuses.length = 0;
-    if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: 99, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
+    if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), statusDuration: s.statusDuration, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
     a.casting = aw.cast ? ({
       // THE VENT-RIDE's broil: the client's cast stub carries the column
       // radius as a leap delivery with a vent, so the roil layer reads one
       // shape on both sides of the wire.
-      inst: { def: { color: aw.cast.c, guard: aw.cast.guardArc !== undefined ? { arcDeg: aw.cast.guardArc } : undefined,
+      inst: { hostSkillId: aw.cast.sk, def: { id: aw.cast.sk ?? '', name: aw.cast.sk ? SKILLS[aw.cast.sk]?.name ?? '' : '', color: aw.cast.c, guard: aw.cast.guardArc !== undefined ? { arcDeg: aw.cast.guardArc } : undefined,
         delivery: aw.cast.vent !== undefined ? { type: 'leap', vent: { columnR: aw.cast.vent } } : undefined } },
       mode: aw.cast.mode, total: aw.cast.total, elapsed: aw.cast.elapsed,
+      resolvedGuardArc: aw.cast.guardArc === undefined ? undefined : aw.cast.guardArc * Math.PI / 180,
+      resolvedMeleeReach: aw.cast.meleeReach ? { ...aw.cast.meleeReach } : null,
+      foresight: foresightOfRow(aw.cast.fg, aw.cast.c),
       castingCompletion: aw.cast.castingCompletion,
       castingCue: aw.cast.castingCue ? { ...aw.cast.castingCue } : undefined,
       focusBroken: aw.cast.focusBroken,

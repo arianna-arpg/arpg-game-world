@@ -82,6 +82,14 @@ export interface CastingState {
   castingCue?: import('./castingCues').CastingCue;
   /** Resolved host-only presentation read on a co-op render shell. */
   parryCue?: number;
+  /** Host-resolved radians on render-only shells; live guards derive their arc. */
+  resolvedGuardArc?: number;
+  /** Host-resolved local weapon footprint; null means deliberately absent. */
+  resolvedMeleeReach?: import('./meleeReach').MeleeReachCue | null;
+  /** THE FORESIGHT ON THE WIRE: a render shell's stub carries the host's own wind-up
+   *  geometry (engine/foresight.ts; null = the host draws none) and never resolves one.
+   *  Absent on every cast the World runs. */
+  foresight?: import('./foresight').ForesightGeo | null;
   inst: SkillInstance;
   mode: CastMode;
   aim: Vec2;               // updated each frame when the mode tracks aim
@@ -1476,6 +1484,13 @@ export class Actor {
   slamIcdUntil = 0;
   /** Set while a cast bar is running / a channel is held. */
   casting: CastingState | null = null;
+  /** Completed-use presentation stamp; transient, never a gameplay clock. */
+  bodyAction?: import('./bodyAction').BodyActionStamp;
+  /** Resolved co-op pose; null explicitly clears a pooled render shell. */
+  bodyActionPose?: import('./bodyAction').BodyActionPose | null;
+  /** Post-collision voluntary walking; cosmetic and deliberately unsaved. */
+  bodyWalk?: import('./bodyWalk').BodyWalkStamp;
+  bodyWalkPose?: import('./bodyWalk').BodyWalkPose | null;
 
   /** Role axis (player / minion / mercenary / monster). undefined ⇒ 'monster'.
    *  Orthogonal to `team`; see UnitKind. Set only at spawn, never per-frame. */
@@ -2773,6 +2788,7 @@ export class Actor {
     const baseDur = banking && def.bank!.duration !== undefined ? def.bank!.duration : def.duration;
     const duration = baseDur * durationScale / expiry;
     const existing = this.statuses.find(s => s.id === id && s.challengeField === opts?.challengeField && s.sourceKey === opts?.sourceKey);
+    const previousRemaining = existing?.remaining;
     // ARMED (rupture-bearing) statuses run a FIXED FUSE: re-application never
     // postpones the blast — the timer set when the keg was armed runs down no
     // matter how often the victim is re-struck. Fresh rupture payloads PUMP
@@ -2845,7 +2861,7 @@ export class Actor {
         casterId: opts?.casterId,
         brood: opts?.brood,
         leech: opts?.leech,
-        total: duration,
+        total: duration, statusDuration: duration,
         // THE BANK's first deposit: this blow is the peak, the read 1/capMul.
         bankPeak: banking ? dps : undefined,
         bankFrac: banking && def.bank ? bankFracOf({ dps, bankPeak: dps }, def) : undefined,
@@ -2863,6 +2879,7 @@ export class Actor {
       }
       return;
     }
+    if (existing && existing.remaining !== previousRemaining) existing.statusDuration = existing.remaining;
     if (existing && opts) {
       existing.propagates = existing.propagates || opts.propagates || def.propagateOnDeath;
       // Rupture payloads ADD (pumping the keg on its fixed fuse) rather than
