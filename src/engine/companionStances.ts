@@ -31,6 +31,7 @@ import { angleTo, dist } from '../core/math';
 import { registerCommandKind, aiMoveToward, aiHeelRecall } from './ai';
 import { registerMetaFace } from './skills';
 import { sameStory } from './tiers';
+import { incidentalMinionPrey, minionPreyInReach } from './minionTargets';
 import { COMPANION_STANCES, companionStanceIds, type CompanionStanceDef } from '../data/companionStances';
 
 export const COMPANION_STANCE_CFG = {
@@ -137,6 +138,7 @@ function heel(actor: Actor, world: World, dt: number): 'consumed' {
   const owner = actor.owner;
   if (owner && !owner.dead && dist(actor.pos, owner.pos) > COMPANION_STANCE_CFG.heelDist) {
     if (aiHeelRecall(actor, world, dt)) return 'consumed';
+    actor.companionReturnTo = owner.id;
     actor.facing = angleTo(actor.pos, owner.pos);
     aiMoveToward(actor, world, { x: owner.pos.x, y: owner.pos.y, tier: owner.tier }, dt);
   } else actor.lastProgress = undefined; // standing at heel is not being stuck
@@ -148,7 +150,7 @@ function heel(actor: Actor, world: World, dt: number): 'consumed' {
 function legalQuarry(actor: Actor, world: World, keeper: Actor, e: Actor | undefined): e is Actor {
   return !!e && !e.dead && !e.downed && !e.untargetable && !e.passive
     && e !== actor && e !== keeper && world.hostileTo(actor, e)
-    && e.sheet.get('invisible') <= 0 && sameStory(actor, e)
+    && e.sheet.get('invisible') <= 0 && sameStory(actor, e) && minionPreyInReach(actor, e)
     && dist(e.pos, keeper.pos) <= COMPANION_STANCE_CFG.leash;
 }
 
@@ -157,7 +159,7 @@ function legalQuarry(actor: Actor, world: World, keeper: Actor, e: Actor | undef
  *  the beast's own assailant, each read inside the engage window. */
 function defensiveQuarry(actor: Actor, world: World, keeper: Actor): Actor | undefined {
   const held = actor.aiTargetId !== undefined ? world.actorById(actor.aiTargetId) : undefined;
-  if (legalQuarry(actor, world, keeper, held)) return held;
+  if (legalQuarry(actor, world, keeper, held) && !incidentalMinionPrey(actor, held)) return held;
   const win = COMPANION_STANCE_CFG.engageWindow;
   const recent = (at: number) => at >= 0 && world.time - at <= win;
   const ids: number[] = [];
@@ -165,14 +167,18 @@ function defensiveQuarry(actor: Actor, world: World, keeper: Actor): Actor | und
   if (recent(keeper.lastFoeAt)) ids.push(keeper.lastFoeId);
   if (recent(actor.aiHitAt)) ids.push(actor.aiHitById);
   let best: Actor | undefined, bd = Infinity;
+  let prey = legalQuarry(actor, world, keeper, held) ? held : undefined;
+  let preyD = prey ? dist(actor.pos, prey.pos) : Infinity;
   for (const id of ids) {
     if (id < 0) continue;
     const e = world.actorById(id);
     if (!legalQuarry(actor, world, keeper, e)) continue;
     const d = dist(actor.pos, e.pos);
-    if (d < bd) { bd = d; best = e; }
+    if (incidentalMinionPrey(actor, e)) {
+      if (d < preyD) { preyD = d; prey = e; }
+    } else if (d < bd) { bd = d; best = e; }
   }
-  return best;
+  return best ?? prey;
 }
 
 registerStanceConduct('aggressive', () => undefined);

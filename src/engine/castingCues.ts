@@ -1,9 +1,11 @@
 import type { Actor, CastingState } from './actor';
-import { instanceChannel, instanceMods, skillContextTags } from './skills';
+import { guardBashReady, instanceChannel, instanceMods, skillContextTags } from './skills';
+import { selfProfile, SELF_VISUAL_STYLE as S } from '../data/skillSelfVisuals';
 import { castingCueStyle } from '../data/castingCues';
 import { combatCueFlash } from './combatCues';
+import { hasDecorativeCast } from '../data/skillCastVisuals';
 
-export interface CastingCue { fill: number; facing: number; style: string; color: string; }
+export interface CastingCue { fill: number; facing: number; style: string; color: string; skillId?: string; }
 const unit = (v: number) => Math.max(0, Math.min(1, v));
 
 /** The actual completion clock, not the channel's repeating pulse bar.
@@ -25,11 +27,26 @@ export function castingCompletion(a: Actor): number | undefined {
 
 /** Small held-work silhouette at the casting edge, never a fake AoE marker. */
 export function castingCueOf(a: Actor): CastingCue | undefined {
-  const cs = a.casting, fill = castingCompletion(a);
-  if (!cs || fill === undefined || cs.inst.def.castingCue === false) return;
+  const cs = a.casting;
+  if (!cs || a.dead || a.downed || a.isStunned() || cs.inst.def.castingCue === false) return;
+  // Client stubs cannot derive identities or finite-channel clocks. The host
+  // supplies the whole resolved cue, including ordinary casts and guards.
+  if (cs.castingCue) return cs.castingCue;
+  const decorative = hasDecorativeCast(cs.inst.def) || cs.mode === 'guard';
+  const skillId = decorative && selfProfile(cs.inst.def.id) ? cs.inst.def.id : undefined;
+  let fill = castingCompletion(a);
+  if (fill === undefined && skillId) {
+    if (cs.mode === 'guard') {
+      const ready = guardBashReady(cs);
+      fill = cs.bashAt === undefined ? 1 : ready.line ? ready.clock : 0;
+    } else if (cs.mode !== 'channel') fill = cs.total > 0 ? unit(cs.elapsed / cs.total) : 1;
+    // Endless channels have no completion. Their actual delivery pulses
+    // provide the release beat; never invent a cycling charge gauge.
+  }
+  if (fill === undefined) return;
   if (cs.castingCompletion !== undefined) return cs.castingCue;
   return { fill, facing: Math.atan2(cs.aim.y - a.pos.y, cs.aim.x - a.pos.x),
-    style: cs.inst.def.castingCue ?? 'standard', color: cs.inst.def.color };
+    style: cs.inst.def.castingCue ?? 'standard', color: cs.inst.def.color, ...(skillId ? { skillId } : {}) };
 }
 
 /** Freeze the same preparation's seat/color at its true state transition.
@@ -39,7 +56,7 @@ export function castingEventFlash(a: Actor, cs: CastingState, event: 'interrupt'
   if (a.dead || a.downed || cs.inst.def.castingCue === false) return;
   const cfg = castingCueStyle(cs.inst.def.castingCue);
   const facing = Math.atan2(cs.aim.y - a.pos.y, cs.aim.x - a.pos.x);
-  const reach = a.radius + cfg.frontPad;
+  const own = !!selfProfile(cs.inst.def.id), reach = a.radius + (own ? S.frontPad : cfg.frontPad);
   return combatCueFlash({ x: a.pos.x + Math.cos(facing) * reach, y: a.pos.y + Math.sin(facing) * reach },
-    cfg[event], cfg.radius, facing, cs.inst.def.color);
+    cfg[event], own ? S.prepareRadius : cfg.radius, facing, cs.inst.def.color);
 }

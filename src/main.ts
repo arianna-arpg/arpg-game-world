@@ -13,6 +13,7 @@ import { saveResetNotice } from './meta/saveCompatibility';
 import { DEATH_PRESENTATION } from './data/deathPresentation';
 import { deathPresentationPose } from './engine/deathPresentation';
 import { Input } from './core/input';
+import { LoadingScreen, type LoadingLease } from './ui/loadingScreen';
 import { PAD_CFG, PadState, connectedPadIndices, padIdAt, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
 import { COUCH_CFG } from './data/couch';
 import { CouchClaimSession, findRebindSlot, PadSeatInput } from './net/couch';
@@ -123,6 +124,7 @@ import type { Settings } from './meta/settings';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const input = new Input(canvas);
+const loadingScreen = new LoadingScreen(() => { input.clearForLoading(); barPress = null; });
 
 // ---------------------------------------------------------------------------
 // THE CRASH TRAP (game half — the early half is inline in index.html and owns
@@ -153,6 +155,7 @@ function reportFatal(err: unknown, kind: string): void {
   const entry = crashPush(kind, e?.message ?? String(err ?? 'unknown error'), e?.stack);
   if (crashFatal) return;   // the first fatal owns the screen; later ones just ring
   crashFatal = entry;
+  loadingScreen.close();
   console.error('[crash] fatal —', err);
   suppressSaves(`fatal ${kind}: ${entry.msg}`);
   try { showErrorOverlay(entry, crashRing); }
@@ -554,6 +557,30 @@ function startGame(
   running = true;
 }
 
+/** Loading cancellation returns to the current save without writing the toy. */
+function cancelLoadingToMenu(): void {
+  toStartMenu('The crossing was cancelled.');
+  ui.setContinueSave(loadCharacter());
+}
+
+/** Main retains its existing world/save owners. Paint around their bounded
+ * stages; the shared loading lease guards every asynchronous publication seam.
+ * Synchronous construction still needs cooperative work or workers to animate. */
+async function withLoadingScreen(work: (loading: LoadingLease) => void | Promise<void>, label = 'Taking form'): Promise<boolean> {
+  const loading = loadingScreen.begin({ kind: 'entry', label, loadout: account.cosmetics.loadout, cancel: cancelLoadingToMenu });
+  try {
+    await loading.paint(); await diskHydrated;
+    if (!loading.current) return false;
+    await work(loading);
+    if (!loading.current || !running) return false;
+    loading.update({ label: 'Opening the world' });
+    await loading.paint(); if (!loading.current) return false;
+    renderer.render(world);
+    return true;
+  } catch (error) { if (loading.current) reportFatal(error, 'world loading'); return false; }
+  finally { loading.finish(); }
+}
+
 /** Class-select adapter: the picker hands back (class, sworn mode, name);
  *  startGame wants (class, manifest, mode, name). One arrow so no call site
  *  can transpose them. THE SKILL GRAFT detour: an armed charge offers its
@@ -562,10 +589,10 @@ function startGame(
  *  keeps the charge armed for a later run. */
 const startPicked = (d: ClassDef, modeId?: string, name?: string, kitPicks?: Record<string, string>): void => {
   if (account.skillGraft) {
-    ui.showSkillGraftPick(pick => startGame(d, undefined, modeId, name, pick, kitPicks));
+    ui.showSkillGraftPick(pick => { void withLoadingScreen(() => startGame(d, undefined, modeId, name, pick, kitPicks)); });
     return;
   }
-  startGame(d, undefined, modeId, name, undefined, kitPicks);
+  void withLoadingScreen(() => startGame(d, undefined, modeId, name, undefined, kitPicks));
 };
 
 /** THE MU BOOT (data/mu.ts): stand a PROVISIONAL world up and drift into the
@@ -642,9 +669,13 @@ function resumeRosterChar(entry: RosterEntry): void {
       `${entry.name} lies fallen — resurrect them in the Vault (${entry.fallen.fee} ${META_CURRENCY_LABEL}).`);
     return;
   }
-  void (async (): Promise<void> => {
-    couchReset();
+  void withLoadingScreen(async loading => {
     const save = await loadRosterSave(entry.slot);
+    // A cancelled or superseded disk read cannot replace the current world.
+    if (!loading.current) return;
+    const card = account.roster.find(r => r.slot === entry.slot && r.charId === entry.charId && r.modeId === entry.modeId && !r.fallen);
+    if (!card) { toStartMenu('The selected vessel changed during Continue.'); return; }
+    couchReset();
     const classDef = save && CLASSES.find(c => c.id === save.classId);
     if (!save || !classDef) {
       ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
@@ -667,12 +698,17 @@ function resumeRosterChar(entry: RosterEntry): void {
     deathShown = false;
     running = true;
     ui.hideAll();
-  })();
+  }, 'Recalling your vessel');
 }
 
 /** Resume the saved in-progress character, or fall back to the start menu.
  *  `preloaded` is the disk/local save fetched at boot; without it we read sync. */
 function resumeGame(preloaded?: CharacterSave | null): void {
+  void withLoadingScreen(() => resumeGameNow(preloaded), 'Recalling your vessel');
+}
+
+/** The existing synchronous restore owner, called only by the current loading lease. */
+function resumeGameNow(preloaded?: CharacterSave | null): void {
   couchReset();
   const save = preloaded ?? loadCharacter();
   const classDef = save && CLASSES.find(c => c.id === save.classId);
@@ -738,6 +774,8 @@ declare global {
       hold: (on: boolean) => void;
       /** THE DIRECTOR (src/director/): staged, frame-stepped captures of real play. */
       director: () => Director;
+      loading: LoadingScreen;
+      devStartLoadingRun: (classId?: string) => Promise<void>;
       devStartRun: (classId?: string) => string;
       devGrantSkill: (skillId: string, level?: number, slot?: number) => number;
       hydrated: () => Promise<void>;
@@ -816,6 +854,8 @@ window.__game = {
   }),
   // DEV/QA: start a run headlessly (the perf harness's ignition) — the real
   // startGame path under the first (or named) class, menus dismissed.
+  loading: loadingScreen,
+  devStartLoadingRun: async (classId?: string) => { if (await withLoadingScreen(() => startGame(CLASSES.find(c => c.id === classId) ?? CLASSES[0]))) ui.hideAll(); },
   devStartRun: (classId?: string) => {
     const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
     document.getElementById('start-menu')?.classList.add('hidden');
@@ -951,6 +991,7 @@ const diskHydrated = (async (): Promise<void> => {
  *  every seat uniformly. `aim` is converted to WORLD space here so it's
  *  camera-independent (the one value that must survive the wire). */
 function readLocalInput(dt: number): PlayerInput | null {
+  if (loadingScreen.active || loadingScreen.padQuarantined) return null;
   const p = world.player;
   if (p.dead || p.downed) return null;
   // The pause menu AND the couch join ceremony both take the hero's hands
@@ -1797,6 +1838,9 @@ function tick(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
+  // Loading owns simulation, rendering and input while its independent toy runs.
+  if (loadingScreen.active) { input.clearForLoading(); pad.poll(now / 1000); pad.endFrame(); net.drainInputs(); return; }
+
   // THE RENDER SCALE: apply the dial/governor, and keep the pointer seam
   // synced (CSS events map into buffer pixels through Input.pointerScale).
   renderScaleTick(now);
@@ -1808,6 +1852,10 @@ function tick(now: number): void {
   // cascade stays single-sourced in handleLocalPanels.
   const nowSec = now / 1000;
   pad.poll(nowSec);
+  if (loadingScreen.padQuarantined) {
+    pad.move.x = pad.move.y = pad.aimStick.x = pad.aimStick.y = 0;
+    pad.moveMag = pad.aimMag = 0; pad.down.clear(); pad.pressed.clear();
+  }
   for (const code of dialoguePadHeld) if (!pad.isDown(code)) dialoguePadHeld.delete(code);
   if (!running || world.player?.dead || world.player?.downed) dialogue.reset();
   dialogue.setAvailable(renderer.npcDialogueAvailable());
@@ -2515,7 +2563,7 @@ function onClientNewRun(seat: string, seed: number): void {
  *  flushRejoins); single-player returns to the start menu. */
 function onDeathDismiss(): void {
   if (coopActive()) {
-    ui.showClassSelect(cls => { startGame(cls); flushRejoins(); });
+    ui.showClassSelect(cls => { void withLoadingScreen(() => startGame(cls)).then(started => { if (started) flushRejoins(); }); });
   } else {
     // THE LOOP CLOSES IN MU (data/mu.ts): a solo run's end drifts the player
     // back into the hub between lives — the next vessel is a walk, not a
@@ -2547,7 +2595,8 @@ function openLobby(): void {
         const invite = await rtc.createInvite();   // fallible WebRTC work FIRST
         net = rtc;                                 // commit globals only on success
         wireSession();                             // run-lifecycle channel (runEnd/rejoin/newRun)
-        startGame(CLASSES.find(c => c.id === classId) ?? CLASSES[0]); // host plays its own seat
+        if (!await withLoadingScreen(() => startGame(CLASSES.find(c => c.id === classId) ?? CLASSES[0])))
+          throw Error('World entry cancelled'); // loading cancellation cannot return a stale invite
         // newInvite mints a FRESH offer for the NEXT joiner (star topology — each
         // peer gets its own RTCPeerConnection), so >2-player co-op actually works.
         return { invite, accept: (resp: string) => rtc.acceptAnswer(resp), newInvite: () => rtc.createInvite() };
@@ -2616,6 +2665,7 @@ function resetToLocal(): void {
  *  `notice` is the reason we landed here, shown on the menu (a session that ended
  *  under the player must say so — an unexplained menu reads as a crash). */
 function toStartMenu(notice?: string): void {
+  loadingScreen.close();
   // A HOST SAYS GOODBYE FIRST — and says it HERE rather than in leaveCoop, so
   // that every road to the menu carries it (the Leave button, "Save & Main
   // Menu", any future exit), never just the one that remembered. The ordering is
@@ -2672,3 +2722,13 @@ function quitFlush(): void {
 window.addEventListener('pagehide', quitFlush);
 window.addEventListener('beforeunload', quitFlush);
 requestAnimationFrame(frame);
+
+// Explicit loading art/feel preview. It creates no run or save, and never delays a real load.
+const loadingPreview = new URLSearchParams(location.search).get('loadingPreview');
+if (loadingPreview === 'down' || loadingPreview === 'left' || loadingPreview === 'right') {
+  void diskHydrated.then(() => {
+    if (running || loadingScreen.active) return;
+    const loading = loadingScreen.begin({ kind: 'entry', direction: loadingPreview,
+      label: 'Loading screen preview', loadout: account.cosmetics.loadout, cancel: () => loading.finish() });
+  });
+}

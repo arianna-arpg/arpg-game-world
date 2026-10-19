@@ -43,6 +43,7 @@ import {
 } from './watch';
 import { isThrongBody, throngHeelOffset } from './throng';
 import { minionCommandSpeed } from './minionCombat';
+import { incidentalMinionPrey, minionPreyInReach } from './minionTargets';
 import { runAIActions } from './aiActions';
 import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
@@ -474,13 +475,16 @@ export function obedienceOf(actor: Actor): number {
 
 /** Nearest live foe within `r` of `at` — what "whatever holds the mark" means. */
 function foeNear(actor: Actor, world: World, at: Vec2, r: number): Actor | undefined {
-  let best: Actor | undefined, bd = r;
+  let best: Actor | undefined, bd = r, prey: Actor | undefined, preyD = r;
   for (const e of world.enemiesOf(actor)) {
-    if (e.passive || !perceiveTarget(actor, e, world, normalizeBrain(actor.brain ?? {}).base)) continue;
+    if (e.passive || !minionPreyInReach(actor, e)
+      || !perceiveTarget(actor, e, world, normalizeBrain(actor.brain ?? {}).base)) continue;
     const d = dist(e.pos, at);
-    if (d < bd) { bd = d; best = e; }
+    if (incidentalMinionPrey(actor, e)) {
+      if (d < preyD) { preyD = d; prey = e; }
+    } else if (d < bd) { bd = d; best = e; }
   }
-  return best;
+  return best ?? prey;
 }
 
 // ASSAULT — the flagship order (Command: Assault / a warcaller's bark): march
@@ -517,7 +521,10 @@ registerCommandKind({
     throngHeelOffset(actor, world.time, THRONG_HEEL_OFF);
     const goal = { x: keeper.pos.x + THRONG_HEEL_OFF.x,
       y: keeper.pos.y + THRONG_HEEL_OFF.y, tier: keeper.tier };
-    if (dist(actor.pos, goal) > 24) moveToward(actor, world, goal, dt);
+    if (dist(actor.pos, goal) > 24) {
+      actor.companionReturnTo = keeper.id;
+      moveToward(actor, world, goal, dt);
+    }
     return 'consumed';
   },
 });
@@ -546,6 +553,7 @@ const DEFAULT_BRAIN: BrainDef = {};
 // === THE PIPELINE ==============================================================
 
 export function updateAI(actor: Actor, world: World, dt: number): void {
+  actor.companionReturnTo = undefined; // no stale return line through any early exit
   actor.feedingMeal = undefined; // feedingCue posture ends even on an early AI refusal.
   if (actor.summonReform) return;
   ensureMovementTether(actor);
@@ -935,6 +943,8 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       // this branch only runs with NO target, and an armed bomber fuse
       // early-returns long before the heel.
       if (actor.isMinion() && updateRecall(actor, world, dt)) return;
+      // Small throng orbit corrections are idle formation, not a leash return.
+      if (!isThrongBody(actor) || dist(actor.pos, heelGoal) > 90) actor.companionReturnTo = actor.owner!.id;
       actor.facing = angleTo(actor.pos, heelGoal);
       moveToward(actor, world, heelGoal, dt);
     }
@@ -1154,6 +1164,8 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
         !x.dead && x.squadId === actor.squadId && x.squadLeader);
       const lt = lead?.aiTargetId !== undefined ? world.actorById(lead.aiTargetId) : undefined;
       if (lt && !lt.dead && !lt.passive && lt.team !== actor.team
+        && minionPreyInReach(actor, lt)
+        && (!incidentalMinionPrey(actor, lt) || incidentalMinionPrey(actor, target))
         && perceiveTarget(actor, lt, world, tuning)) {
         target = lt;
         best = segsHittable(target)
@@ -1744,6 +1756,7 @@ function acquireTarget(
     const e = actor.aiTargetRef;
     if (e && e.id === actor.aiTargetId
       && !e.dead && !e.untargetable && !e.downed && !e.passive
+      && minionPreyInReach(actor, e)
       && (world.hostileTo(actor, e)
         || (e.construct?.breakable !== undefined && e.owner === actor))
       && !(e.sheet.get('invisible') > 0)) {
@@ -1774,6 +1787,7 @@ function acquireTarget(
   let target: Actor | null = null;
   let bestScore = -Infinity;
   let bestD = Infinity;
+  let incidentalPrey: Actor | null = null, preyScore = -Infinity, preyD = Infinity;
   let current: Actor | null = null;
   let currentScore = 0;
   let currentD = 0;
@@ -1791,7 +1805,7 @@ function acquireTarget(
     if (e.dead || e.untargetable || e.downed) continue;
     // Scenery is not prey: nobody dedicates their life to a barrel,
     // and the townsfolk are not on the menu.
-    if (e.passive) continue;
+    if (e.passive || !minionPreyInReach(actor, e)) continue;
     if (!(world.hostileTo(actor, e)
       || (e.construct?.breakable !== undefined && e.owner === actor))) continue;
     if (e.sheet.get('invisible') > 0) continue;
@@ -1812,6 +1826,12 @@ function acquireTarget(
     if (e.taunt && d < tauntBest) { tauntBest = d; tauntTarget = e; }
     let score = scoreTarget(prefer, actor, e, d);
     if (bias) score *= bias[e.kind ?? 'monster'] ?? 1;
+    // Prey is a separate fallback: no preference score or held-lock bonus can
+    // put a harmless hare ahead of an actual visible opponent.
+    if (incidentalMinionPrey(actor, e)) {
+      if (score > preyScore) { incidentalPrey = e; preyScore = score; preyD = d; }
+      continue;
+    }
     if (e.id === actor.aiTargetId) { current = e; currentScore = score; currentD = d; }
     if (score > bestScore) { bestScore = score; target = e; bestD = d; }
   }
@@ -1823,6 +1843,7 @@ function acquireTarget(
     bestD = currentD;
   }
   if (tauntTarget && !tuning.target?.ignoreTaunt) { target = tauntTarget; bestD = tauntBest; }
+  if (!target && incidentalPrey) { target = incidentalPrey; bestD = preyD; }
   // THE WATCH GATE (engine/watch.ts): a watcher's UNPROVOKED fresh lock does
   // not lock — it CLIMBS. The would-be acquisition feeds the suspicion
   // ladder (proximity-tapered, alert-hastened, footfall-scaled for

@@ -87,7 +87,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     const charges = def?.consume ? cosmeticCharges(account.cosmetics, def.id) : 0;
     const preview: CosmeticLoadout = { slots: { ...account.cosmetics.loadout.slots },
       skills: Object.fromEntries(Object.entries(account.cosmetics.loadout.skills).map(([id, picks]) => [id, { ...picks }])),
-      customColors: { ...account.cosmetics.loadout.customColors } };
+      customColors: { ...account.cosmetics.loadout.customColors }, castingEffects: account.cosmetics.loadout.castingEffects };
     if (skill && (slot === 'skillSkin' || slot === 'skillRecolor')) (preview.skills[skill] ??= {})[slot] = selected;
     else if (selected) preview.slots[slot] = selected; else delete preview.slots[slot];
     if (!skill && slot === 'skillSkin' && def?.skills?.[0]) (preview.skills[def.skills[0]] ??= {}).skillSkin = selected;
@@ -103,6 +103,8 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
         <div class="wd-outfit">${Object.values(account.cosmetics.loadout.slots).map(id => `<span>${esc(COSMETICS[id]?.name ?? id)}</span>`).join('') || '<span>Original appearance</span>'}</div>
         <p>Owned choices stay with your account through every run. Wear them freely, in any combination.</p>
         <p class="wd-muted">Models change your silhouette; skins layer color and texture over it. Mu wisps have their own silhouettes. Your class, skills and attributes remain your own.</p>
+        <p><button data-wd-casting aria-pressed="${account.cosmetics.loadout.castingEffects !== false}">Casting effects: ${account.cosmetics.loadout.castingEffects === false ? 'Off' : 'On'}</button></p>
+        <small>Extra preparation shapes for your casts. Cast bars and readiness cues stay visible.</small>
         <p><b>${account.credits}</b> Mortal Essence available</p>
         <small>Spend a run’s Mortal Essence here from the Reckoning, before sealing it.</small>
         <p class="wd-note" role="status">${esc(note)}</p>
@@ -135,6 +137,10 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
       detail.classList.add('wd-picker-detail');
       detail.parentElement!.insertBefore(detail, root.querySelector('.wd-grid'));
     }
+    root.querySelector('[data-wd-casting]')!.addEventListener('click', () => {
+      account.cosmetics.loadout.castingEffects = account.cosmetics.loadout.castingEffects === false;
+      save(); draw();
+    });
     root.querySelector('[data-wd-back]')!.addEventListener('click', () => { cancelAnimationFrame(frame); opts.back(); });
     root.querySelectorAll<HTMLElement>('[data-wd-slot]').forEach(btn => btn.addEventListener('click', () => {
       slot = btn.dataset.wdSlot as CosmeticSlot;

@@ -1,4 +1,101 @@
+The playable Mu loading-screen foundation is documented in docs/ui/loading-screen.md.
+LoadingScreen provides token-owned status, cancellation, retry and input isolation;
+SpiritRun is a rewardless pastime with soul-flames, branching rune gates and currents.
+Main's withLoadingScreen wraps its existing class-entry and Continue flows without
+importing seamless world or save machinery. The seamless branch additionally owns
+native-page readiness. Reuse the lease for future disruptive preparations; never
+delay readiness or grant gameplay rewards. Verify spiritrun, all types, boot smoke
+and balance/loading-screen-ui.cjs after an isolated build.
+
 # CLAUDE.md — Hollow Wake (ARPG)
+
+Minion critter targeting, Charge's ground wake and life/mana orb pacing are
+documented in [combat-polish](docs/design/combat-polish.md). Verify
+probe_miniontargets, probe_orbgeneration, companionstance, flasktrees and
+movementvisuals; build before the hidden movement-visuals UI harness.
+
+Storm, summon and construct identities use `data/skillPresenceVisuals.ts`
+and `render/vis/skillPresenceVoice.ts`: 139 explicit source profiles.
+Births, completed actions, real aura/construct pulses and actual retirement
+own their cues. `ActorW.presenceBadge` copies source identity; ground-qualified
+`FlashW.onGround` clips impacts to the warning's terrain and floor gates.
+See `docs/design/presence-skill-visuals.md`. Verify presencevisuals, skillflights,
+selfvisuals, effectvoice, cosmetics, payloadcues, companioncues,
+companioninheritance, summonfill, clutch, cistern, scaldkit, supportfabric,
+all types and sim smoke; after build, run hidden `balance/presence-visuals-ui.cjs`.
+
+Spell preparation uses `data/skillCastVisuals.ts`: shared school/summon styles,
+semantic fallbacks and explicit exceptions (Quickstep is intentionally retained).
+Every spell resolves without a finished-effect registry entry; attacks keep their
+native animations and functional readiness. Body-centered art is local-player/
+couch only, respects the saved Wardrobe toggle, and follows the real cast clock.
+See `docs/design/seamless-visual-sweep.md`; verify playercastvisuals, castingcues,
+cosmetics, all types and sim smoke, then the hidden caster-vessel-ui and
+seamless-visual-sweep-ui (on seamless) client courses after an isolated build.
+
+Self, mark and detonation identities use `data/skillSelfVisuals.ts` and
+`render/vis/skillSelfVoice.ts`: 106 self skills and three dedicated deliveries.
+Casting cues carry optional host-resolved source identity; stored power uses
+`engine/skillSelfVisual.ts` and copied `ActorW.selfBankCues`. Release hooks stay
+with real execution, consumption, mine timers and ward expiry. Existing rites
+and guard/status semantics remain authoritative. See `docs/design/self-skill-visuals.md`.
+Verify selfvisuals, castingcues, targetvisuals, movementvisuals, payloadcues,
+companioncues, defensecues, guard, effectvoice, all types and sim smoke;
+after build, run hidden `balance/self-visuals-ui.cjs` for the interactive study.
+
+Movement identities use `data/skillMovementVisuals.ts` and
+`render/vis/skillMovementVoice.ts`: 21 dashes, 14 leaps, nine blinks and one carom.
+`engine/skillMovementVisual.ts` carries bounded actual-travel histories; blink
+endpoints and leap impacts reuse the effect-voice registry. No predicted travel.
+See `docs/design/movement-skill-visuals.md`. Verify movementvisuals, fourthwall,
+scaldkit, movementtether, devotedstartertrees, cosmetics, skillflights,
+strikevisuals, effectvoice, supportfabric, all types, sim smoke and hidden
+`balance/movement-visuals-ui.cjs` after the movement probe and build.
+
+Melee and non-beam cone identities use `data/skillStrikeVisuals.ts` and
+`render/vis/skillStrikeVoice.ts`, clipped to actual reach, angle and safe centers.
+Four lightning flights add bounded, measured travel afterimages through
+`engine/lightningVisual.ts`; chain turns follow actual projectile movement.
+`docs/design/strike-skill-visuals.md` covers profiles, aftermath and co-op.
+Verify strikevisuals, skillvisuals, skillflights, crossjab, devotedstartertrees,
+supportfabric, cosmetics, effectvoice, projectilecull, all types, sim smoke and
+hidden `balance/strike-visuals-ui.cjs` after the strike probe and build.
+
+Targeted casts, tether bands and offerings use `data/skillTargetVisuals.ts`
+and `render/vis/skillTargetVoice.ts`. Distinct marks and motion survive recolor;
+links stay clipped to actual widths and replicate as paint-only DTOs.
+`docs/design/target-skill-visuals.md` covers the recipient/consumption hooks.
+Verify targetvisuals, corpse, devotedstartertrees, supportfabric, feedingcues,
+resourcevisuals, effectvoice, cosmetics, projectilecull, sim smoke and hidden
+`balance/target-visuals-ui.cjs` after the target probe and build.
+
+Resource pickups, siphons and measured leech returns share geometry in
+`data/resourceVisuals.ts` and `render/vis/resourceFlowLayer.ts`; bounded transfer
+receipts extend feeding cues and co-op snapshots without changing payout timing.
+Coverage and the remaining visual sweep live in `docs/design/skill-visual-sweep.md`.
+Verify resourcevisuals, feedingcues, defenses, grab, cosmetics, skillflights,
+sim smoke and hidden `balance/resource-visuals-ui.cjs` plus feeding-cues-ui.
+
+Native nova identities use `data/skillVisuals.ts` and `render/vis/skillBurstVoice.ts`.
+Projectile, beam, ground and aura identities extend this through
+`data/skillFlightVisuals.ts` and `render/vis/skillFlightVoice.ts`; the shared
+`engine/skillFieldVisual.ts` paint surface also ships field warnings to peers.
+Shared prominence, authored silhouettes/motion, true shape/safe-center clipping,
+aftermath inheritance and co-op footprints are documented in `docs/design/skill-visuals.md`.
+Verify `probe_skillvisuals.ts` plus effectvoice/crossjab/cosmetics/supportfabric,
+sim smoke and the hidden `balance/skill-visuals-ui.cjs` after the probe and build.
+For flights/fields also run skillflights, projectilecull and the hidden
+`balance/skill-flight-ui.cjs` (after both catalogue probes and build).
+
+Shared sight/fog rendering fixes are documented in `docs/engine/visibility-stability.md`.
+Resolve visibility before drawing bodies; wall queries and pixels share one contact
+resolver. Verify the sightveil/visibility_stability probes and hidden
+`balance/visibility-ui.cjs` (including its old-code negative control).
+
+Browser branch previews: `docs/engine/browser-previews.md` documents the Pages
+deployment. `scripts/browser-previews.json` configures isolated builds beside
+`/play/`; `scripts/build-browser-previews.mjs` pins their commits and refuses
+shared save namespaces. Verify `node --test scripts/test-browser-previews.mjs`.
 
 Legendary skill empowerment is documented in `docs/design/legendary-skill-empowerment.md`.
 `data/skillEmpowerment.ts` configures duplicate merges and passive-only rewards;
@@ -2614,6 +2711,10 @@ we verify changes.
   line is retired; anchors `MENU_ANCHORS` (`bar` seats off the renderer's
   published `hudClusterRects` — drawn == seated), THE DOCK opt-in, movable
   by its grip under THE LAYOUT; glyphs are `ui/icons.ts` rows.
+- Dynamic desktop branches: `launcher/branches.cjs` and the `launcher-branches`
+  workflow provide live GitHub selection, verified cached games, per-branch saves,
+  and local Main fallback. Contract: `docs/engine/launcher-branches.md`; verify
+  `npm run test:launcher`, `smoke:launcher`, `smoke:update`, `smoke`, and `check`.
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via
   `tsconfig.launcher.json`): `main.cjs` (windows, git update flow + the
   packaged DIRECT UPDATE (GitHub-Releases download → silent install →

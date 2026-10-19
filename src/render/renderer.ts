@@ -3,6 +3,8 @@ import { concealmentActive } from '../engine/perception';
 import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
 import { feedingCueState, type FeedingTransfer } from '../engine/feedingCues';
 import { drawFeedingBody, drawFeedingTransfer, drawRestoreHud } from './vis/feedingCueLayer';
+import { drawResourceFlow, drawResourcePickup } from './vis/resourceFlowLayer';
+import { RESOURCE_FLOW } from '../data/resourceVisuals';
 import { companionCueState, type CompanionCueFlash } from '../engine/companionCues';
 import { COMPANION_CUE_CFG } from '../data/companionCues';
 import { drawCompanionCueBody, drawCompanionCueLinks, drawCompanionCueFlash } from './vis/companionCueLayer';
@@ -18,7 +20,7 @@ import { ASSAULT, assaultOrbitPositions } from '../engine/assault';
 import { cosmeticPortalColor, drawCosmeticPortal, cosmeticProjectileExtent, drawCosmeticProjectile, cosmeticHotbar, drawCosmeticHotbar } from './vis/cosmeticEffects';
 import { HIVECALL } from '../engine/hivecall';
 import { CosmeticTrails, cosmeticBody, cosmeticLoadoutFor, cosmeticPick, drawCosmeticMotif, drawCosmeticOrbit } from './vis/cosmetics';
-import { cosmeticSummonSkill } from '../meta/cosmetics';
+import { cosmeticSummonSkill, cosmeticSkillPaint } from '../meta/cosmetics';
 import { COSMETIC_CFG } from '../data/cosmetics';
 // ---------------------------------------------------------------------------
 // Canvas renderer: world (camera-following) + HUD. Placeholder geometry art —
@@ -124,6 +126,8 @@ import { reactiveCueOf, wardCueActive } from '../engine/combatReadability';
 import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { drawReactiveCue, drawGaspSpark, drawWardBody, drawWardLinks, drawWardBar } from './vis/combatReadabilityLayer';
 import { drawCastingCue, drawFocusFrame } from './vis/castingCueLayer';
+import { drawCastPreparation } from './vis/skillCastPreparation';
+import { playerCastPreparation } from '../engine/playerCastVisual';
 import { castingCompletion } from '../engine/castingCues';
 import { COMBAT_CUE_CFG } from '../data/combatCues';
 import { drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
@@ -168,6 +172,17 @@ import { boilRamp, drawBoilCells, groundedCellsIn } from './vis/boilLayer'; // T
 import { drawTrapworkTells } from './vis/trapLayer';
 import { drawEffectVoice } from './vis/effectVoice';
 import './vis/attackSequenceVoice';
+import './vis/skillBurstVoice';
+import './vis/skillStrikeVoice';
+import { drawLightningTrace } from './vis/lightningVoice';
+import { drawMovementTrail } from './vis/skillMovementVoice';
+import { drawRecallMark, drawSelfBanks } from './vis/skillSelfVoice';
+import { drawPresenceBadge } from './vis/skillPresenceVoice';
+import { selfBankCuesOf } from '../engine/skillSelfVisual';
+import { drawSkillTether } from './vis/skillTargetVoice';
+import { skillTetherVisual } from '../engine/skillTetherVisual';
+import { drawSkillFlightWake, drawSkillFlightHead, drawSkillField, clipSkillField, fieldProfile } from './vis/skillFlightVoice';
+import { skillFieldVisual } from '../engine/skillFieldVisual';
 import './vis/groundRising'; // Ground-born encounters signal through soil, dust and grasping hands.
 import { traceAoePath } from './vis/aoeTrace'; // THE AOE TRACER — one path builder per registered figure (drawn == tested with world.ts inAoe)
 import { AOE_SHAPE, bandSwingGeo } from '../engine/skills';
@@ -695,6 +710,17 @@ export class Renderer {
     // layer (empty everywhere a plan raised no floor above).
     this.stacked = world.zone.tiers ? world.storeyedStructures() : [];
     this.roomVeil.update(world, this.frameDt);
+    // Resolve visibility ONCE before any body, link or label queries it.
+    // Previously bodies read last frame's eye while the veil/labels read this
+    // frame's eye, flashing at corners and on zone or darkness changes.
+    this.updateRoofFades(world);
+    this.hullRects.length = 0;
+    for (const st of world.structures) {
+      if ((this.roofFade.get(st.id) ?? 1) <= VIS_CFG.sightVeil.hullGate) continue;
+      for (const r of st.roofs) this.hullRects.push(r);
+    }
+    this.sightVeil.userMul = this.getSettings?.().veilDarkness ?? 1;
+    this.sightVeil.update(world, this.roomVeil.frac(), vw, vh, this.hullRects);
 
     ctx.save();
     ctx.scale(z, z);
@@ -825,13 +851,15 @@ export class Renderer {
     this.drawTownPortals(world);
     this.drawDrops(world);
     this.drawResourceOrbs(world);
+    this.drawResourceFlows(world);
     this.drawRemnants(world);
     for (const f of world.flashes) {
       if (f.feedingCue && !this.feedingTransferVisible(f.pos, f.feedingCue, world)) continue;
       const recoveryCueTier = f.recoveryCueTier ?? f.companionCue?.tier;
       if (recoveryCueTier !== undefined && !this.companionCuePointVisible(f.pos, recoveryCueTier, world)) continue;
+      if (f.movement && f.movement.points.some(p => !this.companionCuePointVisible(p, recoveryCueTier ?? 0, world))) continue;
       if (f.companionCue?.from && !this.companionCuePointVisible(f.companionCue.from, f.companionCue.from.tier, world)) continue;
-      this.drawFlash(f);
+      this.drawTerrainFlash(f, world);
     }
     this.drawCompanionCues(world);
     // THE PACK LAYER's drawn bonds (engine/pack.ts): the warden's lines to
@@ -889,16 +917,7 @@ export class Renderer {
     // drawRoofs re-composites the sheet over its own pixels (roofMul) so an
     // occluded structure reads as ONE contiguous dark mass. Composites at
     // identity through the same effective camera as the light layer.
-    this.hullRects.length = 0;
-    for (const st of world.structures) {
-      if (!st.roofs.length) continue;
-      if ((this.roofFade.get(st.id) ?? 1) <= VIS_CFG.sightVeil.hullGate) continue;
-      for (const r of st.roofs) this.hullRects.push(r);
-    }
-    // The player's shade dial (Settings.veilDarkness) — read live, so the
-    // options slider previews on the battlefield behind the menu.
-    this.sightVeil.userMul = this.getSettings?.().veilDarkness ?? 1;
-    this.sightVeil.update(world, this.roomVeil.frac(), vw, vh, this.hullRects);
+    // Visibility was resolved before the world pass; only pixels composite here.
     this.sightVeil.draw(this.ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
     if (!VIS_ABLATE.has('doodads')) this.drawCanopies(world); // fake-2D depth: crowns above actors, faded near the hero
     if (!VIS_ABLATE.has('doodads')) this.drawCanopyEyes(world); // the roof's regard — gone wherever you're near
@@ -4141,9 +4160,7 @@ export class Renderer {
    *  sight veil so their coverage reads solid from outside). Reused. */
   private hullRects: { x: number; y: number; w: number; h: number }[] = [];
 
-  private drawRoofs(world: World): void {
-    if (!world.structures.length) return;
-    const { ctx } = this;
+  private updateRoofFades(world: World): void {
     // Reset the fades on ARRAY IDENTITY, not zone id: a co-op client's
     // world.zone.id never changes on applyZone, and structure ids repeat
     // across zones (grand_castle#0) — but both loadZone and applyZone replace
@@ -4162,6 +4179,15 @@ export class Renderer {
       const cur = this.roofFade.get(st.id) ?? style.alpha;
       const fade = cur + (target - cur) * Math.min(1, dt * 8);
       this.roofFade.set(st.id, fade);
+    }
+  }
+
+  private drawRoofs(world: World): void {
+    const { ctx } = this;
+    for (const st of world.structures) {
+      if (!st.roofs.length) continue;
+      const style = roofStyle(st.roofStyle);
+      const fade = this.roofFade.get(st.id) ?? style.alpha;
       if (fade < 0.03) continue;
       ctx.globalAlpha = fade;
       for (const r of st.roofs) {
@@ -4663,7 +4689,7 @@ export class Renderer {
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    for (const z of world.zones) {
+    for (const z of world.remoteSkillFields ?? world.zones.map(z => skillFieldVisual(z, world.time))) {
       // FISSURE FRACTURES (Zone.seg): the crack IS the hitbox — a jagged
       // line the capsule's width, not a disc. Deterministic jitter (seeded
       // off the segment's own coordinates) keeps every frame's crack the
@@ -4675,9 +4701,7 @@ export class Renderer {
         const len = Math.hypot(dx, dy) || 1;
         const nx = -dy / len, ny = dx / len;
         const seed = (s.ax * 13.37 + s.ay * 7.77) % Math.PI;
-        const armed = z.exploded && z.linger > 0
-          && ((z.aftershock && world.time >= z.aftershock.readyAt)
-            || (z.roulette && world.time < z.roulette.armedUntil));
+        const armed = z.exploded && z.linger > 0 && z.armed;
         const hot = z.volatile && z.exploded && z.linger > 0;
         ctx.beginPath();
         ctx.moveTo(s.ax, s.ay);
@@ -4719,6 +4743,7 @@ export class Renderer {
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
+        drawSkillField(ctx, z, world.time);
         continue;
       }
       ctx.beginPath();
@@ -4740,12 +4765,12 @@ export class Renderer {
           // up as the countdown runs out. Drawn on the caster's own story only
           // — the lid over a cistern shows a surface walker nothing of the
           // water below.
-          if (world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === (z.caster.tier ?? 0)) {
+          if (world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === z.tier) {
             const wfz = world.walk;
             const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
             const cells = groundedCellsIn(wfz, z.pos, z.radius, z.onGround,
               { x0: this.cam.x - wfz.cell, y0: this.cam.y - wfz.cell, x1: this.cam.x + vw + wfz.cell, y1: this.cam.y + vh + wfz.cell });
-            const fuse = (z.inst.def.delivery as { telegraph?: number }).telegraph ?? 1;
+            const fuse = z.telegraph;
             ctx.save();
             drawBoilCells(ctx, cells, wfz.cell, boilRamp(z.delay, fuse), world.time);
             ctx.restore();
@@ -4755,12 +4780,12 @@ export class Renderer {
           // EDGE BAND (the inheritance law): only the ring that will
           // bite washes — the safe eye stays clean at the telegraph,
           // matching the detonation's spare test (drawn == tested).
-          const mid = z.radius * (1 + z.edgeFrac) / 2;
+          ctx.save(); clipSkillField(ctx, z);
           ctx.globalAlpha = 0.15;
-          ctx.lineWidth = Math.max(2, z.radius * (1 - z.edgeFrac));
+          ctx.fillStyle = z.color;
           ctx.beginPath();
-          this.traceAoe(z.pos.x, z.pos.y, mid, z.shape, z.facing, z.arcRad);
-          ctx.stroke();
+          this.traceAoe(z.pos.x, z.pos.y, z.radius, z.shape, z.facing, z.arcRad);
+          ctx.fill(); ctx.restore();
         } else {
           ctx.globalAlpha = 0.15;
           ctx.fillStyle = z.color;
@@ -4796,6 +4821,7 @@ export class Renderer {
           ctx.beginPath(); ctx.arc(hx, hy, hr * 0.45, 0, Math.PI * 2); ctx.fill();
         }
       } else if (z.edge && z.edge > 0.02) {
+        ctx.save(); clipSkillField(ctx, z);
         // Fill-in cage (Pillar of Flame / Wildfire Sweep): only the closing
         // band burns — CLIPPED to the zone's faced shape, so a crescent
         // fill-in draws a crescent band, never a whole phantom circle.
@@ -4820,14 +4846,19 @@ export class Renderer {
         ctx.beginPath();
         this.traceAoe(z.pos.x, z.pos.y, z.radius, z.shape, z.facing, z.arcRad);
         ctx.stroke();
+        ctx.restore();
       } else {
-        ctx.globalAlpha = 0.22;
+        ctx.save(); clipSkillField(ctx, z);
+        ctx.beginPath();
+        this.traceAoe(z.pos.x, z.pos.y, z.radius, z.shape, z.facing, z.arcRad);
+        ctx.globalAlpha = fieldProfile(z.skillId) ? 0.085 : 0.22;
         ctx.fillStyle = z.color;
         ctx.fill();
         ctx.globalAlpha = 0.6;
         ctx.strokeStyle = z.color;
         ctx.lineWidth = 1.5;
         ctx.stroke();
+        ctx.restore();
       }
       // ARMED PULSE (GroundDelivery.pulse): dormant ground CHARGES — a
       // warning ring at the pulse's TRUE reach (radius × radiusMult, the
@@ -4845,7 +4876,23 @@ export class Renderer {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+      if (z.onGround && world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === z.tier) {
+        const cells = groundedCellsIn(world.walk, z.pos, z.radius, z.onGround);
+        ctx.save(); ctx.beginPath();
+        for (const cell of cells) ctx.rect(cell.x - world.walk.cell / 2, cell.y - world.walk.cell / 2, world.walk.cell, world.walk.cell);
+        ctx.clip(); drawSkillField(ctx, { ...z, onGround: undefined }, world.time); ctx.restore();
+      } else drawSkillField(ctx, z, world.time);
     }
+  }
+
+  /** Ground-qualified impacts share the warning's wet-cell and story gates. */
+  private drawTerrainFlash(f: World['flashes'][number], world: World): void {
+    if (!f.onGround) { this.drawFlash(f); return; }
+    if (!(world.walk instanceof GridWalkField) || (world.player?.tier ?? 0) !== (f.recoveryCueTier ?? 0)) return;
+    const { ctx } = this, cells = groundedCellsIn(world.walk, f.pos, f.radius, f.onGround);
+    ctx.save(); ctx.beginPath();
+    for (const cell of cells) ctx.rect(cell.x - world.walk.cell / 2, cell.y - world.walk.cell / 2, world.walk.cell, world.walk.cell);
+    ctx.clip(); this.drawFlash(f); ctx.restore();
   }
 
   /** The coalescing death-burst: a GATHER of inward-spiraling motes + a brightening core +
@@ -4942,7 +4989,7 @@ export class Renderer {
     }
   }
 
-  private feedingTransferVisible(from: Vec2, cue: FeedingTransfer, world: World): boolean {
+  private feedingTransferVisible(from: Vec2, cue: Pick<FeedingTransfer, 'to' | 'fromTier' | 'toTier'>, world: World): boolean {
     return [[from, cue.fromTier], [cue.to, cue.toTier]].every(([p, tier]) => {
       const at = p as Vec2;
       return tier === (world.player.tier ?? 0)
@@ -4951,7 +4998,7 @@ export class Renderer {
     });
   }
 
-  private drawFlash(f: { companionCue?: CompanionCueFlash; feedingCue?: FeedingTransfer; pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
+  private drawFlash(f: { movement?: import('../engine/skillMovementVisual').MovementTrail; lightning?: import('../engine/lightningVisual').LightningTrace; arcRad?: number; companionCue?: CompanionCueFlash; feedingCue?: FeedingTransfer; pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number; fx?: string; cosmeticMotif?: import('../engine/cosmetics').CosmeticMotif }): void {
     const { ctx } = this;
     // A big synchronous sim step (headless probes, background-tab catch-up)
     // can overshoot a flash's life below zero before the prune sweeps it —
@@ -4965,6 +5012,8 @@ export class Renderer {
     if (!Number.isFinite(f.pos.x + f.pos.y + f.radius + f.life + f.maxLife)) return;
     const t = f.maxLife > 0 ? Math.max(0, Math.min(1, f.life / f.maxLife)) : 0;
     if (t <= 0 || f.radius <= 0) return;
+    if (f.lightning) { drawLightningTrace(ctx, f.lightning, f.color, t); return; }
+    if (f.movement) { drawMovementTrail(ctx, { ...f, movement: f.movement }, t); return; }
     if (f.companionCue) drawCompanionCueFlash(ctx, { ...f, companionCue: f.companionCue });
     if (f.feedingCue) { drawFeedingTransfer(ctx, { ...f, feedingCue: f.feedingCue }); return; }
     if (f.cosmeticMotif) {
@@ -5662,6 +5711,11 @@ export class Renderer {
         Math.sin(a.facing) * bodyCueLean * TELL_CFG.lean.shift * a.radius);
       ctx.scale(1, 1 - bodyCueLean * TELL_CFG.lean.squash);
     }
+    const ownCastPreparation = a.casting && (a === world.localSeat.actor || world.seats.some(s => s.couch && s.actor === a))
+      && world.account.cosmetics.loadout.castingEffects !== false ? playerCastPreparation(a) : undefined;
+    const castPreparationColor = ownCastPreparation
+      ? cosmeticSkillPaint(world, a, ownCastPreparation.profile.skillId).color ?? a.casting!.inst.def.color ?? a.color : a.color;
+    if (ownCastPreparation) drawCastPreparation(ctx, ownCastPreparation, castPreparationColor, 'behind');
     if (rot !== 0) ctx.rotate(rot);
     ctx.drawImage(bodySprite(look), -half, -half);
     // THE HIT FLASH rides the body's own pose — a white wash or rim OVER
@@ -5690,6 +5744,7 @@ export class Renderer {
       if (flashA > 0) drawAdornHitFlash(ctx, look, baseAlpha * flashA);
       ctx.rotate(-a.facing);
     }
+    if (ownCastPreparation) drawCastPreparation(ctx, ownCastPreparation, castPreparationColor, 'front');
     ctx.restore();
     if (a.construct?.kind === 'echo') {
       ctx.setLineDash([4, 3]);
@@ -5866,7 +5921,9 @@ export class Renderer {
       drawArmedCues(ctx, a.radius, armedCues, world.time); ctx.restore();
     }
     drawParryReady(ctx, a);
-    drawCastingCue(ctx, a);
+    if (!ownCastPreparation) drawCastingCue(ctx, a);
+    drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
+    if (!a.dead) drawPresenceBadge(ctx, a.presenceBadge, a.radius);
     if (comboCueGround) {
       ctx.save(); ctx.setTransform(comboCueGround); ctx.globalAlpha = baseAlpha;
       drawComboBody(ctx, a.radius, comboCues); ctx.restore();
@@ -6469,17 +6526,21 @@ export class Renderer {
         ctx.globalAlpha = 1;
       }
       for (const aura of a.activeAuras.values()) {
+        const color = cosmeticSkillPaint(world, a, aura.inst.def.id).color ?? aura.inst.def.color;
         const pulse = 0.06 + 0.02 * Math.sin(t * 3);
         ctx.globalAlpha = pulse;
-        ctx.fillStyle = aura.inst.def.color;
+        ctx.fillStyle = color;
         ctx.beginPath();
         this.traceAoe(a.pos.x, a.pos.y, aura.radius, aura.shape, a.facing);
         ctx.fill();
         ctx.globalAlpha = 0.35;
-        ctx.strokeStyle = aura.inst.def.color;
+        ctx.strokeStyle = color;
         ctx.lineWidth = 1.5;
         ctx.stroke();
         ctx.globalAlpha = 1;
+        drawSkillField(ctx, { skillId: aura.inst.def.id, pos: a.pos, radius: aura.radius,
+          color, shape: aura.shape, facing: a.facing, delay: 0, exploded: true,
+          linger: 1, tier: a.tier ?? 0, telegraph: 0 }, t);
       }
     }
   }
@@ -6507,9 +6568,7 @@ export class Renderer {
         if (!this.companionCuePointVisible(m, m.tier, world)) continue;
         ctx.save(); ctx.strokeStyle = m.color; ctx.lineWidth = 2; ctx.globalAlpha = .7;
         const r = COMPANION_CUE_CFG.markRadius;
-        ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
-        ctx.moveTo(m.x - r * .5, m.y); ctx.lineTo(m.x + r * .5, m.y);
-        ctx.moveTo(m.x, m.y - r * .5); ctx.lineTo(m.x, m.y + r * .5); ctx.stroke(); ctx.restore();
+        drawRecallMark(ctx, m.x, m.y, r * 1.4, m.color); ctx.restore();
       }
     }
   }
@@ -6905,26 +6964,26 @@ export class Renderer {
     for (const o of world.orbs) {
       const def = ORB_DEFS[o.kind];
       if (!def) continue;
-      const y = o.pos.y + Math.sin(o.bob) * 2.5;
-      const fade = Math.min(1, o.life / 2);
-      const r = def.size ?? 5.5;
-      // Charge-bearing kinds breathe — a candle guttering, not a bead.
-      const pulse = def.charge ? 1 + Math.sin(o.bob * 2) * 0.12 : 1;
-      ctx.globalAlpha = 0.85 * fade;
-      ctx.shadowColor = def.color;
-      ctx.shadowBlur = def.glow ?? 9;
-      ctx.fillStyle = def.color;
-      ctx.beginPath();
-      ctx.arc(o.pos.x, y, r * pulse, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 0.9 * fade;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(o.pos.x - r * 0.27, y - r * 0.27, r * 0.33, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      const to = o.homeTo ? (!o.homeTo.dead ? o.homeTo.pos : undefined) : o.flowTo;
+      const fromTier = (to ? o.flowFromTier : undefined) ?? o.tier ?? world.spoilStoryAt(o.pos);
+      if (!this.feedingTransferVisible(o.pos, { to: to ?? o.pos, fromTier, toTier: to ? o.homeTo?.tier ?? o.flowTier ?? fromTier : fromTier }, world)) continue;
+      drawResourcePickup(ctx, { ...o, to, material: def.restore ?? 'flame', color: def.color, size: def.size ?? 5.5 });
     }
+  }
+
+  /** Bounded actual-gain traces. Prioritize the viewed seat in a busy battle. */
+  private drawResourceFlows(world: World): void {
+    let remaining = RESOURCE_FLOW.visible;
+    const draw = (a: Actor) => {
+      if (a.dead || a.downed || !(a.feedingCues?.flows?.length || a.resourceFlows?.length)) return;
+      for (const flow of feedingCueState(a).flows ?? []) {
+        if (!remaining) return;
+        if (!this.feedingTransferVisible(flow.from, flow, world)) continue;
+        drawResourceFlow(this.ctx, flow); remaining--;
+      }
+    };
+    draw(world.player);
+    for (const a of world.actors) if (a !== world.player && remaining) draw(a);
   }
 
   /** Remnants: slow-spinning shards of leftover power (elemental trio +
@@ -7046,28 +7105,14 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  /** Tether bands: a soft wide beam + a bright core line between the cached
-   *  endpoint coords, pulsing gently so a live wire reads as live. */
+  /** Authored strands within the actual band, with shared host/peer paint. */
   private drawTethers(world: World): void {
     const { ctx } = this;
-    if (!world.tethers.length) return;
-    const t = world.time;
-    const pulse = 0.75 + 0.25 * Math.sin(t * 5);
-    for (const tb of world.tethers) {
-      ctx.save();
-      ctx.strokeStyle = tb.color;
-      ctx.lineCap = 'round';
-      ctx.globalAlpha = 0.18 * pulse;
-      ctx.lineWidth = Math.max(3, tb.width * 1.6);
-      ctx.beginPath();
-      ctx.moveTo(tb.ax, tb.ay);
-      ctx.lineTo(tb.bx, tb.by);
-      ctx.stroke();
-      ctx.globalAlpha = 0.7 * pulse;
-      ctx.lineWidth = 1.6;
-      ctx.stroke();
-      ctx.restore();
-      ctx.globalAlpha = 1;
+    const rows = world.remoteSkillTethers ?? world.tethers.map(skillTetherVisual);
+    for (const row of rows) {
+      if (row.fromTier !== undefined && row.toTier !== undefined && !this.feedingTransferVisible(
+        { x: row.ax, y: row.ay }, { fromTier: row.fromTier, toTier: row.toTier, to: { x: row.bx, y: row.by } }, world)) continue;
+      drawSkillTether(ctx, row, world.time);
     }
   }
 
@@ -7091,24 +7136,25 @@ export class Renderer {
         drawOrbMote(ctx, p.pos.x, p.pos.y, p.radius, p.color, p.orbPaint, p.age);
         continue;
       }
-      // Every projectile is ENERGY IN FLIGHT now: an additive glow underlay
-      // in its own color + a motion streak trailing the heading. The shape
-      // language on top is unchanged — behavior stays readable, it just
-      // stopped looking like construction paper.
-      drawGlow(ctx, p.pos.x, p.pos.y, p.radius * VIS_CFG.fx.glowScale, p.color, VIS_CFG.fx.glowAlpha);
-      const sx = p.pos.x - Math.cos(p.dir) * p.radius * VIS_CFG.fx.streakLen;
-      const sy = p.pos.y - Math.sin(p.dir) * p.radius * VIS_CFG.fx.streakLen;
-      const streak = ctx.createLinearGradient(sx, sy, p.pos.x, p.pos.y);
-      streak.addColorStop(0, withAlpha(p.color, 0));
-      streak.addColorStop(1, withAlpha(p.color, VIS_CFG.fx.streakAlpha));
-      ctx.strokeStyle = streak;
-      ctx.lineWidth = Math.max(2, p.radius * 0.85);
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.lineTo(p.pos.x, p.pos.y);
-      ctx.stroke();
-      ctx.lineCap = 'butt';
+      // Authored source wakes survive wardrobe heads and recoloring.
+      // Unprofiled flights retain their existing glow and motion streak.
+      const authoredWake = drawSkillFlightWake(ctx, p);
+      if (!authoredWake) {
+        drawGlow(ctx, p.pos.x, p.pos.y, p.radius * VIS_CFG.fx.glowScale, p.color, VIS_CFG.fx.glowAlpha);
+        const sx = p.pos.x - Math.cos(p.dir) * p.radius * VIS_CFG.fx.streakLen;
+        const sy = p.pos.y - Math.sin(p.dir) * p.radius * VIS_CFG.fx.streakLen;
+        const streak = ctx.createLinearGradient(sx, sy, p.pos.x, p.pos.y);
+        streak.addColorStop(0, withAlpha(p.color, 0));
+        streak.addColorStop(1, withAlpha(p.color, VIS_CFG.fx.streakAlpha));
+        ctx.strokeStyle = streak;
+        ctx.lineWidth = Math.max(2, p.radius * 0.85);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(p.pos.x, p.pos.y);
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+      }
       ctx.fillStyle = p.color;
       ctx.save();
       ctx.translate(p.pos.x, p.pos.y);
@@ -7117,7 +7163,8 @@ export class Renderer {
       // Native form geometry rides PROJ_FORM_GEO, the same factors as collision.
       // A cosmetic body replaces the art only; the debug overlay keeps the true form.
       // Both animate on p.age (simulation time), shared with co-op peers.
-      if (!drawCosmeticProjectile(ctx, p.cosmeticProjectile, p.color, r, p.dir, p.age)) switch (p.shape) {
+      if (!drawCosmeticProjectile(ctx, p.cosmeticProjectile, p.color, r, p.dir, p.age)
+        && !drawSkillFlightHead(ctx, p)) switch (p.shape) {
         case 'vortex': {
           const g = PROJ_FORM_GEO.vortex;
           ctx.globalAlpha *= 0.3;

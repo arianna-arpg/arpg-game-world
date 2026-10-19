@@ -5,6 +5,7 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { makeSkillInstance, type TameEffect } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import { companionCueState, companionCueFlash, companionMaterial } from '../src/engine/companionCues';
+import { updateAI } from '../src/engine/ai';
 import { procCueRows } from '../src/engine/procCues';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
@@ -44,7 +45,7 @@ function rig() {
   check('hard rejection preserves wildness and snaps a binding', !a.owner && w.flashes.some(f => f.companionCue?.event === 'reject'));
   check('tame rejection never uses the damage-resistance cue', !w.flashes.some(f => f.combatCue?.style === 'resist'));
   w.flashes = []; a.life *= .1; w['tryTame'](p, inst, a, fx);
-  check('successful claim wears the real keeper endpoint', a.companion && a.owner === p && companionCueState(a, w).links[0]?.to.id === p.id);
+  check('successful claim preserves ownership without a permanent leash', a.companion && a.owner === p && !companionCueState(a, w).links.length);
   check('settled claim records a distinct bind event and collar', w.flashes.some(f => f.companionCue?.event === 'bind') && a.extraParts?.some(x => x.kind === 'collar'));
   for (const [id, profile] of [['aggressive','hunt'], ['defensive','guard'], ['passive','heel']]) {
     w.setCompanionStance(w.localSeat, inst.def.id, id);
@@ -52,6 +53,9 @@ function rig() {
   }
   const before = JSON.stringify([a.life, a.sheet.sourceNames(), a.standingOrder]); companionCueState(a, w);
   check('presentation reads cannot change conduct or stats', before === JSON.stringify([a.life, a.sheet.sourceNames(), a.standingOrder]));
+  a.anchored = false; a.pos.x += 300; w.walk = null;
+  updateAI(a, w, .05);
+  check('real passive heel movement shows the keeper endpoint', companionCueState(a, w).links[0]?.to.id === p.id);
   const client = rig().w, snap = serializeSnapshot(w, 1); applySnapshot(client, snap);
   const mirror = client.actors[snap.actors.findIndex(x => x.id === a.id)];
   check('co-op resolves keeper identity through local actor IDs', companionCueState(mirror, client).links[0]?.to.id === client.player.id && companionCueState(mirror, client).stance?.profile === 'heel');
@@ -61,7 +65,7 @@ function rig() {
   check('nested wire endpoint copies cannot mutate the host', companionCueState(a, w).links[0].to.x === p.pos.x);
   w.kill(a);
   check('companion down remains incapacitation, not death', a.downed && !a.dead && !w.corpses.length && w.flashes.some(f => f.companionCue?.event === 'down'));
-  check('fallen bodies retain ownership but stop showing active stance', !!companionCueState(a, w).links.length && !companionCueState(a, w).stance);
+  check('fallen bodies retain ownership but stop showing active stance', !companionCueState(a, w).links.length && !companionCueState(a, w).stance);
   w.reviveCompanion(a);
   check('revival keeps the established life fraction and immunity budget', !a.downed && near(a.life, a.maxLife() * .5) && a.statuses.some(s => s.id === 'companion_recovery' && near(s.remaining, 3)));
   check('revival adds a motion without a new targetability/AI hold', w.emergences.some(e => e.actorId === a.id && e.spec.motion === 'stir' && !e.held) && a.emergeUntil === undefined);
@@ -127,7 +131,7 @@ function rig() {
   check('life-sharing tether follows its actual buff recipient', companionCueState(p, w).links.some(l => l.kind === 'mend' && l.to.id === a.id));
   a.removeBuff('life_bond_probe');
   check('expired life-sharing buff clears its line immediately', !companionCueState(p, w).links.length);
-  b.owner = p; b.sourceSkillId = '__dominate:probe';
+  b.owner = p; b.sourceSkillId = '__dominate:probe'; b.companionReturnTo = p.id;
   check('dominated allegiance has chained ownership geometry', companionCueState(b, w).links[0].profile === 'thrall');
   const mark = makeSkillInstance(Object.values(SKILLS).find(s => s.delivery.type === 'mark')!); p.skills = [mark];
   check('Mark fixture exists', !!mark.def);
@@ -172,6 +176,7 @@ function rig() {
     { get: (o, k) => k in o ? o[k as keyof typeof o] : () => {} }) as unknown as CanvasRenderingContext2D;
   const { w, p, inst, beast } = rig(), a = beast(); w.tameCompanion(p, a, inst.def.id);
   for (const s of Object.keys(COMPANION_STANCES)) { w.setCompanionStance(w.localSeat, inst.def.id, s); drawCompanionCueBody(ctx, companionCueState(a, w), 16, 0); }
+  a.companionReturnTo = p.id;
   drawCompanionCueLinks(ctx, { ...a.pos, radius: a.radius }, companionCueState(a, w).links[0], 1);
   const f = companionCueFlash(a, 'sever', p)!; drawCompanionCueFlash(ctx, f);
   check('relationship shapes draw without captions or leaked context', strokes > 5 && depth === 0 && labels === 0);
@@ -183,7 +188,7 @@ function rig() {
   hit.sockets = [{ def: { ...SUPPORTS.dominating_blow, dominate: { chance: 1, duration: 12, max: 3 } }, level: 1 }];
   w['resolveHit'](p, hit, victim, 100, 0, undefined, true);
   const thrall = w.actors.find(a => a.owner === p && a.sourceSkillId === '__dominate:claw');
-  check('actual dominating kill gives its replacement a keeper and unheld arrival', victim.dead && !!thrall && companionCueState(thrall, w).links[0]?.profile === 'thrall'
+  check('actual dominating kill gives its replacement a keeper and unheld arrival', victim.dead && !!thrall && !companionCueState(thrall, w).links.length
     && w.emergences.some(e => e.actorId === thrall.id && !e.held));
 }
 {
