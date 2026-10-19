@@ -59,6 +59,7 @@ export class DialogueSession {
   private focus: number | null = null;
   private heard = new Set<string>();
   private pending: DialogueOffer | null = null;
+  private dismissed = false;
 
   get node(): DialogueNode | null {
     const r = this.reading;
@@ -76,9 +77,10 @@ export class DialogueSession {
     if (focus !== this.focus) {
       ended = this.reading?.offer ?? null;
       this.reading = null; this.pending = null; this.heard.clear(); this.focus = focus;
+      this.dismissed = false;
       this.revision++;
     }
-    if (!offer || offer.speakerId !== focus || !offer.pages.length) return ended;
+    if (this.dismissed || !offer || offer.speakerId !== focus || !offer.pages.length) return ended;
     if (this.heard.has(offer.key)) { this.pending = null; return ended; }
     if (!this.reading) { this.reading = { offer, page: 0 }; this.revision++; }
     else if (offer.key !== this.reading.offer.key) this.pending = offer;
@@ -138,5 +140,13 @@ export class DialogueSession {
     return ended;
   }
 
-  reset(): void { this.reading = null; this.pending = null; this.heard.clear(); this.focus = null; this.revision++; }
+  /** X/Esc declines the whole visit, including prompts that change later.
+   * Completing a page/response still permits newly relevant content. */
+  dismiss(): DialogueOffer | null {
+    const ended = this.close();
+    this.dismissed = true;
+    return ended;
+  }
+
+  reset(): void { this.reading = null; this.pending = null; this.heard.clear(); this.focus = null; this.dismissed = false; this.revision++; }
 }
