@@ -11,8 +11,13 @@ The player reports overlapping vendor and Skills tabs, different results when
 arriving with remembered pages versus an already open bag, inventory resizing
 at vendors, and Mireille failing to speak when Inventory is already open.
 They require one consistent panel rule that works at small resolutions.
-Ordinary encounters should be quick in-world interactions; full dialogue is
-for important scenes.
+The latest clarification supersedes the earlier brief-greeting proposal:
+ordinary encounters also open the conversation panel. This is the only surface
+for dialogue; there are no overhead greeting lines or separate Talk button.
+Dwelling near Mireille opens her panel with content and all available options
+derived from the dwelling player's quest state. Brandt must expose shopping
+immediately, while his dialogue and quest options remain independently usable
+within the same NPC interface.
 
 ## Reproduced baseline failures and replacement rule
 
@@ -37,17 +42,31 @@ starting; pause and genuine modal decisions still suspend it.
 The first implementation fixes this lifecycle/layout foundation. All local
 Inventory pages and station tabs join the same book without relying on initial
 overlap. The bag uses the same bounds before, during and after a station visit.
-Pages still follow a manually moved bag. The next
-presentation change will use brief in-world speech for routine visits and
-retain a reader for important exchanges and explicit decisions, using the
-existing speech/action machinery. This is not acceptance of seamless's large
-conversation workspace or persistent approach/lesson text. An earlier question
-introduced a possible Talk control without explaining that it does not exist
-today; the player requested clarification. The clarified proposal retains
-approach/dwell, uses brief overhead speech for ordinary visits, and opens the
-full reader automatically for important exchanges or decisions. No new Talk
-control is approved or implemented. The existing large reading strip remains
-in this first correction.
+Pages still follow a manually moved bag. The existing large reading strip
+remains in this first correction (`b979655f`).
+
+## Reviewable interaction
+
+The next interface is illustrated by an interactive conversation mockup in this
+chat, with example content rather than a gameplay implementation:
+
+- One NPC frame, with name and portrait. Brandt defaults to Shop on dwell;
+  Conversation remains adjacent with its available-topic count. Shopping never
+  requires choosing a response, finishing a line, or opening another menu.
+- Mireille defaults to the conversation view and shows all applicable topics
+  together. Selecting one displays its dialogue and explicit actions inside
+  that same frame. Quest eligibility and mutations remain engine-owned.
+- A new quest/reward changes the topic list without stealing the selected shop.
+  The shop and quest activity have independent state inside one visit.
+- The NPC frame shares the selected-panel slot with Skills, Passives and
+  Reliquary. Inventory is a stable companion on roomy layouts and another
+  selectable surface on small layouts. No second dialogue overlay competes
+  with that slot. Switching panels preserves the selected NPC activity.
+
+No new Talk control or overhead speech is proposed. This design does not adopt
+seamless's larger stacked conversation workspace or persistent approach/lesson
+text. Its existing quest actions are a reference for selective reuse, not
+approval to change progression or import the whole branch.
 
 ## Verification and delivery
 
