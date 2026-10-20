@@ -29,6 +29,13 @@ green run. The 2026-10 repair reconciles terrain debuff cues and Bonepicker
 morale with the approved shared behavior, and retains a separate authored
 outnumbering fixture.
 
+On seamless, the Holdfast workflow runs all 39 ownership, entry and barrier
+controls with `node balance/check_nativeholdfastcontrols.mjs --source-mode current`.
+It records the current source hashes and refuses files that change during the
+bundle. The script's default `pinned` mode retains the historical source audit;
+its frozen hashes are provenance, not a requirement to freeze future gameplay
+changes before the behavioral controls can run.
+
 GitHub outages, runner failures and future defects remain possible. These
 controls prevent unverified changes from being accepted and keep publication
 behind successful verification; they cannot guarantee that a service or test

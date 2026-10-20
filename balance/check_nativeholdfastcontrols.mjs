@@ -6,17 +6,22 @@ import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 
 // Current native Holdfast ownership, entry and barrier regression controls.
-// The 34 control bodies are retained from the reviewed V3 control course.
+// The 39 control bodies retain the reviewed V3 course and V5 supplements.
 // Only actual checkout sources are bundled; no historical source adapter is used.
+// Pinned mode reproduces the historical source audit. Current mode runs the same
+// behavioral controls on today's checkout and records its actual source hashes.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const options = {};
 for (let i = 0; i < args.length; i += 2) {
-  assert(['--project', '--out'].includes(args[i]) && args[i + 1], 'expected --project/--out value');
+  assert(['--project', '--out', '--source-mode'].includes(args[i]) && args[i + 1],
+    'expected --project/--out/--source-mode value');
   assert(!options[args[i]], 'duplicate option');
   options[args[i]] = args[i + 1];
 }
 const project = path.resolve(options['--project'] ?? path.join(here, '..'));
+const sourceMode = options['--source-mode'] ?? 'pinned';
+assert(['pinned', 'current'].includes(sourceMode), 'source mode must be pinned or current');
 const contractBytes = fs.readFileSync(path.join(here, 'nativeHoldfastControlSources.json'));
 const pins = JSON.parse(contractBytes.toString('utf8'));
 assert.equal(pins.schema, 'native-holdfast-control-sources/1');
@@ -26,7 +31,9 @@ assert.equal(new Set(pins.files.map(row => row.path)).size, 38);
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const seenPins = pins.files.map(row => {
   const actual = sha(fs.readFileSync(path.join(project, row.path)));
-  assert([row.rawSha256, row.checkoutRawSha256].includes(actual), 'current source pin: ' + row.path);
+  if (sourceMode === 'pinned') {
+    assert([row.rawSha256, row.checkoutRawSha256].includes(actual), 'historical source pin: ' + row.path);
+  }
   return { path: row.path, sha256: actual };
 });
 const require = createRequire(path.join(project, 'package.json'));
@@ -61,19 +68,24 @@ const result = await build({
         const suffix = additions.get(rel);
         if (!suffix) return;
         const bytes = fs.readFileSync(args.path);
-        const pin = pins.files.find(row => row.path === rel);
+        const pin = seenPins.find(row => row.path === rel);
         assert(pin);
-        assert([pin.rawSha256, pin.checkoutRawSha256].includes(sha(bytes)), 'source changed during bundle read');
+        assert.equal(sha(bytes), pin.sha256, 'source changed during bundle read');
         return { contents: bytes.toString('utf8') + suffix, loader: 'ts', resolveDir: path.dirname(args.path) };
       });
     },
   }],
 });
+for (const pin of seenPins) {
+  assert.equal(sha(fs.readFileSync(path.join(project, pin.path))), pin.sha256,
+    'source changed while bundling: ' + pin.path);
+}
 const module = { exports: {} };
 new Function('require', 'module', 'exports', result.outputFiles[0].text)(require, module, module.exports);
 const E = module.exports, G = E.GridWalkField;
 const rows = [];
 const report = { scope: 'Bounded actual native ownership/interior/placement controls; not original49 or whole-suite acceptance',
+  sourceMode,
   sourceContractSha256: sha(contractBytes), controlSourceSha256: sha(fs.readFileSync(fileURLToPath(import.meta.url))),
   origin: pins.origin, supplements: pins.supplements, sourcePins: seenPins, rows };
 function test(name, run) {

@@ -24,4 +24,6 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Native ownership, entry and barrier regressions
-        run: node balance/check_nativeholdfastcontrols.mjs
+        # Exercise all 39 controls on current code; the script's default pinned
+        # mode remains available to reproduce the historical source audit.
+        run: node balance/check_nativeholdfastcontrols.mjs --source-mode current
