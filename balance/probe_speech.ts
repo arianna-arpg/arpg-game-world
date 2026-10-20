@@ -937,7 +937,7 @@ console.log('L. THE DIALOGUE READER (pages, explicit advance, pending state and 
   check('L15 reset permits a fresh conversation with reused actor ids', !!d.reading);
   d.close();
   d.sync(2, { speakerId: 2, key: 'reward-ready', pages: ['Your hammer is home.'] });
-  check('L16 a newly relevant line can speak after dismissal without leaving the counter', d.reading?.offer.key === 'reward-ready');
+  check('L16 a newly relevant line can speak after completion without leaving the counter', d.reading?.offer.key === 'reward-ready');
   d.sync(2, { ...offer, speakerId: 2 });
   check('L17 a previously heard line cannot queue again during the visit', !d.hasNext());
   d.sync(2, { speakerId: 2, key: 'pending-reward', pages: ['Choose your reward.'] });
@@ -946,6 +946,14 @@ console.log('L. THE DIALOGUE READER (pages, explicit advance, pending state and 
   check('L18 dismissal includes the pending state, so it cannot immediately reopen', !d.reading);
   d.sync(2, null);
   check('L19 a silent service never invents a conversation', !d.reading);
+  d.sync(2, { speakerId: 2, key: 'topic', pages: ['A topic.'] });
+  d.dismiss();
+  d.sync(2, { speakerId: 2, key: 'gift-arrived', pages: ['A gift arrived after closing.'] });
+  check('L20 explicit X/Esc dismisses later quest changes for the same visit', !d.reading);
+  d.sync(null, null); d.sync(2, { speakerId: 2, key: 'gift-arrived', pages: ['A gift arrived after closing.'] });
+  check('L21 leaving and returning rearms an explicitly dismissed conversation', !!d.reading);
+  d.dismiss(); d.reset(); d.sync(2, { ...offer, speakerId: 2 });
+  check('L22 world/scene reset clears explicit dismissal', !!d.reading);
 }
 
 console.log('M. EXPLICIT DIALOGUE RESPONSES');

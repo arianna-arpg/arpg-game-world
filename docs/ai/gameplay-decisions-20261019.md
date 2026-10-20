@@ -58,6 +58,8 @@ The earlier main/seamless comparison and its file inventory are historical snaps
 
 ## World, hosting and continued work
 
+The subsequent [offline seamless vision](../../CURRENT.md) is the current scope: generation, authored/generated content and consequential world events first; new shard/MMORPG development deferred. Existing zones and the named reference games are precedents, not laws. Substantial generation/event/content reworking is authorized where justified; preserve saves and unfinished work.
+
 The user clarified the world direction on 19 October; this supersedes older interpretations of “bounded/unbounded objectives” and blanket statements that the world direction is undecided. Individual W-series implementation choices remain subject to review. Hosting/ownership adaptations can remain in seamless; shared offline gameplay stays authoritative on main.
 
 ### Retained zones inside continuous terrain

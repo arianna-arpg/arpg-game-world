@@ -41,7 +41,12 @@ app.whenReady().then(async () => {
   try {
     await win.loadURL(server.url);
     await js(`(async()=>{
-      __game.account().ledger.prologue_lived=1; __game.devStartRun('warrior'); __game.ui.hideAll();
+      await __game.hydrated();
+      __game.account().ledger.prologue_lived=1;
+      // Native town services are minted on arrival; unlock the fixture before
+      // starting the world, just as the zone fixture does before loadZone.
+      for(const feature of ['salvage_station','oracle_stone','reliquary'])__game.account().features.add(feature);
+      __game.devStartRun('warrior'); __game.ui.hideAll();
       await new Promise(resolve=>setTimeout(resolve,700));
       Object.defineProperty(navigator,'getGamepads',{value:()=>[],configurable:true});
       __game.settings().speechTyping=false; __game.settings().renderScale=1; __game.settings().npcShopVisits=[];
@@ -57,6 +62,7 @@ app.whenReady().then(async () => {
         page,width:innerWidth,available:ui.dialogueContext().available,selected:ui.folio.bookFor(page)?.front,books:ui.folio.views(),
         bag:q.rect(document.getElementById('inventory')),player:q.rect(ui.inventoryPages.entries().find(p=>p.id===page).el),
         npc:q.rect(!vendor.classList.contains('hidden')&&!vendor.classList.contains('folio-shelved')?vendor:root),
+        hudTop:ui.conversation.host.hudTop(),close:q.rect(root.querySelector('[data-panel-x]')),
         speaker:root.dataset.speakerId,conversation:root.getBoundingClientRect().width>0,vendor:ui.vendorOpen};};
       q.scale=value=>{__game.ui.showEscapeMenu();document.getElementById('esc-keys').click();document.querySelector('[data-opttab="interface"]').click();
         const slider=document.getElementById('opt-uiscale');slider.value=String(value);slider.dispatchEvent(new Event('input',{bubbles:true}));__game.ui.hideEscapeMenu();q.run(3);};
@@ -76,6 +82,7 @@ app.whenReady().then(async () => {
     await js(`(()=>{const w=serviceQA.w;for(const id of Object.keys(w.meta.essences))w.meta.essences[id]=10000;__game.ui.refreshVendor();serviceQA.itemsBefore=w.meta.items.length;})()`);
     await click('[data-vbuy^="brandt:"]:not([disabled])');
     assert.equal(await js('serviceQA.w.meta.items.length-serviceQA.itemsBefore'),1,'actual purchase grants one item');
+    log({stage:'services',...await js(`(()=>{const w=serviceQA.w;return {zone:w.zone.id,features:[...w.account.features],summons:w.suiteSummons(),near:w.nearAnyVendor(),books:__game.ui.folio.views(),salvage:w.hasSalvage(),oracle:w.hasOracle()};})()`)});
     for(const tab of ['salvage','oracle','vendor'])await click('[data-folio-tab="'+tab+'"]');
     await js('serviceQA.clear();serviceQA.run(120,{x:serviceQA.smith.pos.x+10,y:serviceQA.smith.pos.y})');
     assert.equal(await js('__game.ui.folio.bookFor("vendor")?.front'),'vendor','return visit opens original shop directly');
@@ -89,6 +96,18 @@ app.whenReady().then(async () => {
       assert.equal(gift.selected,'skills');
       assert.deepEqual(gift.after.bag,gift.before.bag,'first Mireille visit cannot insert a lesson banner into Inventory');
     }
+    // Close as soon as the return shop opens, before the old service dwell
+    // could issue a second open request. A real X click must stay closed.
+    const arrival=await js(`(()=>{const q=serviceQA;q.clear();q.w.localSeat.lastActedAt=q.w.time;
+      const start=q.w.time;for(let n=0;n<40&&!__game.ui.vendorOpen;n++)q.run(1,q.smith.pos);
+      return {elapsed:q.w.time-start,open:__game.ui.vendorOpen};})()`);
+    log({stage:'return-dwell',...arrival});assert.ok(arrival.open&&arrival.elapsed<0.8,'one short dwell opens the return shop');
+    await click('#vendor-menu [data-panel-x]');
+    await js('serviceQA.run(120)');
+    assert.equal(await js('__game.ui.vendorOpen'),false,'closing the shop cannot be undone by a second dwell timer');
+    await click('#npc-dialogue [data-panel-x]');
+    await js('serviceQA.w.account.features.add("brandt_magic_wares");serviceQA.run(120)');
+    assert.equal(await js('document.getElementById("npc-dialogue").hidden'),true,'explicit close dismisses changing prompts for this visit');
     const rows=[];
     for(const [width,height,scale] of [[2560,1440,100],[1280,800,100],[820,650,175]]) {
       win.setContentSize(width,height);await new Promise(resolve=>setTimeout(resolve,100));
@@ -101,9 +120,18 @@ app.whenReady().then(async () => {
           return {...q.snapshot('${page}'),before,npcName:'${npc}',order:'${order}',scale:${scale}};})()`);
         log({stage:'matrix',npc,page,order,width,scale,selected:row.selected,speaker:row.speaker});
         stable(row);if(npc==='inn')assert.ok(row.conversation,'Mireille dialogue opens with the player page');else assert.ok(row.vendor,'Brandt shop opens with the player page');
-        if(width===2560)assert.ok(row.npc.right<=row.player.left || row.player.right<=row.npc.left,'full desktop panels do not overlap');
+        if(width===2560)assert.ok(row.npc.right<=row.player.left || row.player.right<=row.npc.left
+          || row.npc.top>=row.player.bottom || row.player.top>=row.npc.bottom,'full desktop panels do not overlap');
         rows.push(row);
         if(order==='open'&&(width===2560||page==='skills'))await capture(`${npc}-${page.replace(':','-')}-${width}-${scale}`);
+        if(npc==='inn') {
+          assert.ok(Math.abs((row.npc.left+row.npc.right)/2-width/2)<1,'conversation is centered at the bottom');
+          assert.ok(Math.abs(row.hudTop-row.npc.bottom-18*scale/100)<2,'conversation has a consistent gap above the HUD');
+          assert.ok(Math.abs(row.close.width-28*scale/100)<1,'conversation uses the standard close target');
+          await click('#npc-dialogue [data-panel-x]');await js('serviceQA.run(120)');
+          assert.equal(await js('document.getElementById("npc-dialogue").hidden'),true,'X stays closed with the player ribbon open');
+          assert.equal(await js('__game.ui.folio.bookFor('+JSON.stringify(page)+')?.front'),page,'X preserves the player ribbon');
+        }
       }
     }
     fs.writeFileSync(path.join(dir,'dialogue-panel-matrix.json'),JSON.stringify(rows,null,2));
@@ -136,6 +164,6 @@ app.whenReady().then(async () => {
     assert.equal(await js('__game.ui.vendorOpen'),false);assert.equal(await js('document.getElementById("npc-dialogue").hidden'),true);
     assert.equal(await js('__game.ui.inventoryOpen'),true);
     assert.equal(await js('__game.crash().fatal'),null);
-    log('PASS: first visit, Shop click, purchase, suite, return preference, conversation tab, 32 NPC/page/arrival/size cases, character ribbon, pause, quest refresh, departure');
+    log('PASS: first visit, Shop click, purchase, suite, return preference, single dwell, persistent close, conversation tab, 32 NPC/page/arrival/size cases, bottom alignment, standard X, character ribbon, pause, quest refresh, departure');
   } finally { clearTimeout(timeout);win.destroy();server.server.close();app.quit(); }
 }).catch(error=>{log(error.stack??String(error));app.exit(1);});

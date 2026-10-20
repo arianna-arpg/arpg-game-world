@@ -43,10 +43,11 @@ The shortcut is a settings preference keyed by character and NPC definition.
 - Escape, controller B or the close button dismisses. Escape closes a visible dialogue
   before reaching the pause menu. The reader does not pause the world or lock
   movement; leaving the speaker's focus closes the exchange.
-- Finishing/dismissing cannot reopen the same content during a focused visit.
-  A newly relevant line (for example, a quest or stock unlock) may speak while
-  the player remains at the counter. Dismissal covers queued content too;
-  already read lines cannot cycle back into the queue. Departing and returning
+- Finishing cannot reopen the same content during a focused visit. A newly
+  relevant line may speak after completion while the player remains at the
+  counter. Explicit X/Esc instead dismisses the whole visit, including later
+  quest changes; a delayed shop timer cannot reopen the shop either.
+  Already read lines cannot cycle back into the queue. Departing and returning
   must earn dwell again. Ambient speech additionally honors its
   existing lane cooldown, starting at reader completion or interruption.
 - An ambient offer's old bubble window can expire while the page remains open.
@@ -111,8 +112,8 @@ compact layouts remain within the viewport and can scroll at high UI scales.
 The canonical placement and coexistence contract is
 [Services, Inventory and dialogue](service-workspace.md). `UI.dialogueContext`
 derives admission from the same enrolled folio leaves that own station lifecycle;
-`ServiceWorkspace` owns NPC placement. The reader never repositions Inventory
-or its pages. `ui/dialogueLayout.ts` supplies the NPC panel's bounds with reachable
+`ServiceWorkspace` owns shop/station placement. The reader never repositions Inventory
+or its pages. `ui/dialogueLayout.ts` seats conversation above the bottom HUD with reachable
 advance/close controls. Player and NPC groups remain independent at every scale;
 small windows can overlap and use the existing movable layout or close controls.
 

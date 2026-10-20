@@ -14,6 +14,7 @@ import { UI_SCALE_CFG } from './uiScale';
 import { seatDialogue } from './dialogueLayout';
 import { Z_LADDER } from './zorder';
 import { FOLIO_SHELVED_CLASS } from './folio';
+import { panelCloseHtml } from './panelClose';
 
 export interface DialogueWorkspace {
   readonly active: boolean;
@@ -73,7 +74,7 @@ export class DialogueUI {
   constructor(private host: DialogueHost) {
     const style = document.createElement('style');
     style.textContent = `
-      .npc-dialogue { position:fixed; box-sizing:border-box; left:16px; top:56px; transform:none;
+      .npc-dialogue { position:fixed; box-sizing:border-box; transform:none;
         display:flex; flex-direction:column;
         z-index:${Z_LADDER.panel}; color:#eee0c4; padding:12px 18px 10px;
         border:1px solid #b29762; border-radius:5px; background:linear-gradient(120deg,#28251ff7,#17191ffb);
@@ -81,7 +82,8 @@ export class DialogueUI {
         font-family:Verdana,sans-serif; cursor:var(--cursor-point,pointer); }
       .npc-dialogue[hidden] { display:none; }
       .npc-dialogue::before { content:''; position:absolute; inset:9px; border:1px solid #b297622a; pointer-events:none; }
-      .dialogue-layout { display:grid; grid-template-columns:minmax(0,1fr) ${DIALOGUE_CFG.portraitSize}px; gap:16px; flex:1; min-height:0; overflow-y:auto; }
+      .dialogue-layout { display:grid; grid-template-columns:minmax(0,1fr) ${DIALOGUE_CFG.portraitSize}px; gap:16px; flex:1; min-height:0; overflow-y:auto;
+        scrollbar-width:thin; scrollbar-color:#746344 #17191f; }
       .dialogue-name { position:relative; margin:0 32px 5px 0; color:var(--speaker-ink,#d8b87a);
         font:600 15px/1.4 Verdana,sans-serif; letter-spacing:.3px; flex-shrink:0; }
       .dialogue-page { margin:0; min-height:0; font:${DIALOGUE_CFG.fontSize}px/${DIALOGUE_CFG.lineHeight} Georgia,serif;
@@ -93,10 +95,9 @@ export class DialogueUI {
       .npc-dialogue[data-choosing=true] .dialogue-portrait { align-self:start; position:sticky; top:0; }
       .dialogue-footer { display:flex; gap:16px; align-items:center; margin-top:6px; min-height:28px; flex-shrink:0; }
       .dialogue-progress { color:#b5a68a; font:11px Verdana,sans-serif; flex:1; }
-      .npc-dialogue button { font:12px Verdana,sans-serif; color:#eee0c4; cursor:var(--cursor-point,pointer);
+      .npc-dialogue button:not(.panel-x):not(.panel-lock) { font:12px Verdana,sans-serif; color:#eee0c4; cursor:var(--cursor-point,pointer);
         background:#74603b33; border:1px solid #9d845377; border-radius:3px; padding:7px 12px; }
-      .npc-dialogue button:hover,.npc-dialogue button:focus-visible { background:#a58a5350; border-color:#d6bc7b; outline:1px solid #d6bc7b; }
-      .npc-dialogue .dialogue-close { position:absolute; right:17px; top:14px; padding:2px 7px; color:#c4b697; background:transparent; border-color:transparent; }
+      .npc-dialogue button:not(.panel-x):not(.panel-lock):hover,.npc-dialogue button:focus-visible { background:#a58a5350; border-color:#d6bc7b; outline:1px solid #d6bc7b; }
       .dialogue-accessible { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); }
       .dialogue-choices { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
       .dialogue-choices[hidden], .dialogue-next[hidden] { display:none; }
@@ -116,7 +117,7 @@ export class DialogueUI {
     this.root.setAttribute('role', 'dialog');
     this.root.setAttribute('aria-modal', 'false');
     this.root.setAttribute('aria-labelledby', 'npc-dialogue-title');
-    this.root.innerHTML = `<button class="dialogue-close" type="button" aria-label="Close dialogue (Escape)">×</button>
+    this.root.innerHTML = `${panelCloseHtml()}
       <h2 class="dialogue-name" id="npc-dialogue-title"></h2><div class="dialogue-layout"><div>
       <p class="dialogue-page" aria-hidden="true"><span class="dialogue-ink"></span><span class="dialogue-unread"></span></p>
       <div class="dialogue-accessible" aria-live="polite" aria-atomic="true"></div>
@@ -133,7 +134,9 @@ export class DialogueUI {
     this.choices = get('.dialogue-choices'); this.status = get('.dialogue-status');
     this.workspace = host.createWorkspace?.(get('.conversation-workspace'), () => this.renderControls());
     this.next.onclick = () => this.advance();
-    get<HTMLButtonElement>('.dialogue-close').onclick = () => this.close();
+    get<HTMLButtonElement>('[data-panel-x]').onclick = event => {
+      event.preventDefault(); event.stopPropagation(); this.close();
+    };
     // One surface gesture, including portrait, heading and margins. Nested
     // controls own their click; it must never also advance the conversation.
     this.root.addEventListener('click', event => {
@@ -314,7 +317,7 @@ export class DialogueUI {
 
   close(): boolean {
     if (!this.session.reading) return false;
-    this.finish(this.session.close()); this.pageKey = ''; this.root.hidden = true;
+    this.finish(this.session.dismiss()); this.pageKey = ''; this.root.hidden = true;
     this.workspace?.reset();
     return true;
   }

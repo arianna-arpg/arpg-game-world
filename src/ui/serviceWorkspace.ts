@@ -24,13 +24,14 @@ export class ServiceWorkspace {
       }
       .panel.service-workspace { max-height:var(--service-height) !important;
         overflow-y:auto; scrollbar-gutter:stable; z-index:${Z_LADDER.panel + 1}; }
-      .panel.service-workspace.npc-dialogue { overflow:hidden; }
     `;
     document.head.appendChild(style);
   }
 
   sync(): void {
-    const offered = this.host.services(), active = new Set(offered);
+    // Conversation has its own bottom berth. Sharing NPC tabs must not force
+    // it into the shop's top-left geometry (or change player geometry).
+    const offered = this.host.services().filter(el => !el.classList.contains('npc-dialogue')), active = new Set(offered);
     for (const el of this.managed) if (!active.has(el)) {
       el.classList.remove('service-workspace');
       for (const key of ['left', 'top', 'width', 'height']) el.style.removeProperty(`--service-${key}`);

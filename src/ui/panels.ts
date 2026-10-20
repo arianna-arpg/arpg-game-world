@@ -177,6 +177,7 @@ import { objectiveRead, objectiveSeals, type ZoneDef } from '../data/zones';
 import { underSpanPolicyOf } from '../data/underspans';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
+import { panelCloseHtml } from './panelClose';
 import { skillShowcaseMarkup } from '../showcase/host';
 import { sameWorld, shardHomeOf, worldNameOf } from '../net/shardDoor';
 import { bindTooltips, configureTooltipDetail, installTooltipHints, hideTooltip, tooltipSweep, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
@@ -1221,7 +1222,7 @@ export class UI {
    *  its drag). `title` names what the press does where it is more than a
    *  plain close. */
   private closeGlyphHtml(title = 'Close (Esc)'): string {
-    return `<div class="panel-x-row"><button type="button" class="panel-x" data-panel-x title="${title}" aria-label="Close">✕</button></div>`;
+    return panelCloseHtml(title);
   }
 
   /** One enrollment supplies ownership, tab memory, close and page placement. */
@@ -1616,7 +1617,9 @@ export class UI {
     const world = this.getWorld(), seat = this.couchSeatFor(seatId);
     const speaker = world.actors.find(a => !!a.defId && MONSTERS[a.defId]?.npcRole === 'vendor'
       && world.npcDialogueReachable(a.id));
-    if (DIALOGUE_CFG.presentation === 'dialogue' && seat === world.localSeat && speaker && !this.shopVisited(speaker.id)) return;
+    // The conversation's single arrival owns both the first Shop choice and
+    // the remembered shop. The later service timer must not undo an X/Esc.
+    if (DIALOGUE_CFG.presentation === 'dialogue' && seat === world.localSeat && speaker) return;
     if (!this.vendorOpen) this.showVendor(seatId);
   }
   /** Esc's first step: fold the tray. True = the press was consumed. */
