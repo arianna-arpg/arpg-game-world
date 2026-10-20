@@ -387,14 +387,30 @@ console.log('\n=== D. THE CRAVEN — posture tracks the real meter ===');
   tickLive(w, 0.2);
   check('a body that authors no morale stays at full nerve', brave.aiNerve === 1);
 
-  // THE ODDS LANE, live: nerve must also answer being outnumbered.
+  // Bonepickers deliberately no longer break on odds (decision C06).
   const w2 = mkWorld();
   const bp2 = at(spawn(w2, 'gnoll_bonepicker', 8), 0, 0);
   for (let i = 0; i < 4; i++) at(spawn(w2, 'probe_pack_dummy', 8, 'player'), 20 + i * 12, 10);
   bp2.aggroed = true;
   tickLive(w2, 0.25);
-  check('being outnumbered frays nerve on its own', bp2.aiNerve < 1,
-    `nerve=${bp2.aiNerve.toFixed(3)}`);
+  check('outnumbering alone does not rout a healthy Bonepicker', bp2.aiNerve === 1
+    && bp2.aiMoraleUntil <= w2.time, `nerve=${bp2.aiNerve.toFixed(3)}`);
+
+  // Keep the generic odds contract covered with a body that authors it.
+  const oddsId = 'probe_pack_craven';
+  MONSTERS[oddsId] = { ...MONSTERS.gnoll_bonepicker, id: oddsId, brain: {
+    ...MONSTERS.gnoll_bonepicker.brain!,
+    morale: { breakOutnumbered: { deficit: 2, radius: 300 }, rallyAfter: 3.5 },
+  } };
+  const w3 = mkWorld();
+  const craven = at(spawn(w3, oddsId, 8), 0, 0);
+  for (let i = 0; i < 4; i++) at(spawn(w3, 'probe_pack_dummy', 8, 'player'), 20 + i * 12, 10);
+  craven.aggroed = true;
+  tickLive(w3, 0.25);
+  check('authored outnumbering still frays nerve and starts a rout', craven.aiNerve < 1
+    && craven.aiMoraleUntil > w3.time,
+    `nerve=${craven.aiNerve.toFixed(3)}`);
+  delete MONSTERS[oddsId];
 }
 
 console.log('\n=== E. THE MATRIARCH AND HER YOUNG ===');

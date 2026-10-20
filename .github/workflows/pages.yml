@@ -1,34 +1,21 @@
 name: Deploy site to GitHub Pages
 
-# Regenerates the site's data from src/data on every push, then deploys.
+# Regenerates the site's data from src/data after successful CI, then deploys.
 # This is what keeps the Database (and later the Passive Tree) at parity with
 # the game: the JSON is never committed by hand — it's rebuilt here each time.
 
 on:
-  push:
-    branches: [main]
-    # Rebuild when the game data, the site, or the pipeline changes.
-    paths:
-      - 'src/**'
-      - 'index.html'
-      - 'vite.config.ts'
-      - 'vite.portraits.config.ts'
-      - 'site/**'
-      - 'scripts/export-web-data.ts'
-      - 'scripts/*browser-previews*'
-      - '.github/workflows/pages.yml'
-      - 'package.json'
-      - 'package-lock.json'
   workflow_dispatch: {}
   # Only the configured, same-repository experiment can refresh the preview.
   # This workflow runs from main, so the Pages environment remains main-only.
   workflow_run:
     workflows: [ci]
     types: [completed]
-    branches: [codex/seamless-world-foundation]
+    branches: [main, codex/seamless-world-foundation]
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -38,17 +25,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.main.outputs.ready }}
+      sha: ${{ steps.main.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: main
+        run: node scripts/verified-main.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
   build:
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)
+    needs: verify
+    if: needs.verify.outputs.ready == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ needs.verify.outputs.sha }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -67,10 +76,8 @@ jobs:
       # --- Phase 3: the playable in-browser demo, built into site/play ---
       # The game is a static Vite build; --base=./ keeps hashed asset URLs
       # relative so they resolve at the /arpg-game-world/play/ sub-path.
-      # Uses `npx vite build` directly (not `npm run build`) to skip the tsc
-      # gate — esbuild does no type-checking, so the demo deploys regardless of
-      # in-flight type state. Saves fall back to localStorage on this static
-      # host (no /__save endpoint) — see src/meta/persistence.ts.
+      # This exact main commit already passed types, probes and a client boot
+      # in CI. Saves fall back to localStorage on this static host.
       - name: Build the in-browser demo → site/play
         run: npx vite build --base=./ --outDir site/play --emptyOutDir
 
