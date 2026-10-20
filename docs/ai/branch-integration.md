@@ -4,7 +4,9 @@
 
 Incorporate main with real merges, preserving ancestry. Do not create another stream of cherry-picked copies. Before starting seamless work, fetch main and verify it is an ancestor of the integration branch. After committing shared gameplay to main, merge that main commit into the canonical seamless checkout and run checks appropriate to the integration. Uncommitted work in another checkout is not part of either branch's delivered content and must remain intact.
 
-The `Incorporate main into seamless` workflow runs on every push to main and can also be dispatched manually. It merges the latest published main into the latest published seamless branch, runs the existing current gameplay checks and actual client playthrough, and pushes a normal merge only after they pass. It never force-pushes, automatically chooses a side in a conflict, or runs the historical probe archive. A conflict, failed check, concurrent branch advance or branch-protection refusal fails visibly and publishes nothing. Resolve that condition and rerun the workflow.
+The `Incorporate main into seamless` workflow runs after successful push CI on main and can also be dispatched manually. It pins the verified main commit, merges it into the latest published seamless branch, runs the existing current gameplay checks and actual client playthrough, and pushes a normal merge only after they pass. Manual dispatch also requires successful CI on the current main commit. It never force-pushes, automatically chooses a side in a conflict, or runs the historical probe archive. A conflict, failed check, concurrent branch advance or branch-protection refusal fails visibly and publishes nothing. Resolve that condition and rerun the workflow.
+
+Main changes require an up-to-date pull request and successful CI, including for administrators. See [main health](main-health.md) for the required checks and publication gates.
 
 The user explicitly authorized this ongoing remote-write automation on 2026-10-19; the workflow is published on main. Repository Actions permissions and branch rules must permit its normal push. Local unpushed commits cannot trigger a GitHub workflow.
 

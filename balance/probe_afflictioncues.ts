@@ -145,7 +145,11 @@ for (const pool of ['ward', 'absorb', 'es'] as const) {
   const fx = collectActiveFx([status('faintness', 0, 3, 1)]);
   check('existing faintness/falter channel remains stack-scaled', collectFalterK(fx) > 0 && collectFalterK(fx) < 0.55);
   check('Mired opts into its own slow material haze', collectActiveFx([status('mired', 0)])[0]?.def.motif === 'mire');
-  check('statusPresentation gives unprofiled terrain a restrained shared vignette', collectActiveFx([status('sodden', 0)])[0]?.def.motif === 'soft');
+  const terrainFx = collectActiveFx([status('sodden', 0)]);
+  check('live terrain debuffs inherit the shared soft screen cue', terrainFx.length === 1
+    && terrainFx[0].id === 'sodden' && terrainFx[0].def.kind === 'vignette'
+    && terrainFx[0].def.motif === 'soft' && terrainFx[0].color === STATUS_DEFS.sodden.color);
+  check('expired terrain debuffs clear their screen cue', !collectActiveFx([status('mired', 0, 0)]).length);
   check('separate instances of one ailment do not duplicate the screen cue', collectActiveFx([status('burn'), status('burn')]).length === 1);
 }
 {
