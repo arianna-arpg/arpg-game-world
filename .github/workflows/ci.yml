@@ -1,38 +1,11 @@
-# ---------------------------------------------------------------------------
-# CI — the correctness gate on every push and pull request.
-#
-# Until now nothing type-checked or tested main automatically: release.yml's
-# `npm run build` was the only INDIRECT tsc pass (tag pushes only), `npm run
-# check` ran in no workflow at all, and balance/probe_*.ts — 98 standing
-# regression rigs — were run by hand or not at all. This closes both holes
-# with exactly the two commands a developer runs locally:
-#
-#   npm run check   tsc over the game, the Electron launcher and the balance
-#                   harness (the three tsconfigs — `npm run build`'s single
-#                   `tsc --noEmit` misses the launcher and balance legs)
-#   npm run probe   the green probe roster (balance/proberoster.ts), the
-#                   FAST lane — 84 rigs, well under a minute wall clock
-#
-# plus `npm run test:launcher` — the launcher's update laws under node:test
-# (the release channel; docs/engine/updates.md). Players' launchers follow
-# the nightly cadence, so the code that decides what they are offered is
-# gated on every push, not just on the night it would ship.
-#
-# The SLOW green lane (`npm run probe -- --slow`) rides nightly.yml, which
-# gates its release candidate on it — see that file.
-#
-# A failing green probe is re-run once (runprobes.ts's THE RETRY) — a real
-# regression is deterministic and still reddens this job, while the suite's
-# few-percent flake tail is reported by name instead of crying wolf.
-#
-# Adding a probe needs no edit here: runprobes.ts's census reads the balance/
-# directory and fails if the roster and the disk disagree.
-# ---------------------------------------------------------------------------
+# Required before main changes. Keep the job name "check" stable: GitHub's
+# branch protection requires it, including for same-repository pull requests.
 name: ci
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -44,10 +17,8 @@ concurrency:
 
 jobs:
   check:
-    # A same-repo PR would duplicate the push run on its own branch; fork PRs
-    # have no push event here, so they still get the gate.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -62,11 +33,23 @@ jobs:
       - name: Type-check (game + launcher + balance harness)
         run: npm run check
 
-      # The launcher's update path, proven pure (launcher/updates.cjs): which
-      # release an install is offered, what it must never be offered, and
-      # what it refuses to run. About a second; no Electron, no network.
-      - name: Launcher update laws
-        run: npm run test:launcher
-
-      - name: Probes (green roster, fast lane)
-        run: npm run probe
+      - name: Repository and launcher regression tests
+        run: node --test scripts/test-*.mjs
+      - name: All green probes, including the nightly lane
+        run: npm run probe -- --slow
+      - name: Combat simulation
+        run: npm run sim -- run --suite smoke
+      - name: Generation checks
+        run: npm run genqa
+      - name: Build the game
+        run: npm run build
+      - name: Prepare the Linux desktop sandbox
+        run: |
+          node node_modules/electron/install.js
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+      - name: Boot game, launcher and update path
+        run: |
+          xvfb-run --auto-servernum npm run smoke
+          xvfb-run --auto-servernum npm run smoke:launcher
+          xvfb-run --auto-servernum npm run smoke:update
