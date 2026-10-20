@@ -44,3 +44,13 @@ test('a superseded main completion cannot deploy or integrate newer unchecked co
   const result = verifiedMain({ mainSha: 'new', runs: [], event: { workflow_run: { head_branch: 'main', head_sha: 'old' } } });
   assert.equal(result.ready, false);
 });
+test('a seamless completion waits for main verification instead of publishing or failing spuriously', () => {
+  for (const conclusion of [null, 'failure']) {
+    const result = verifiedMain({ mainSha: 'current',
+      runs: [{ ...passing, status: conclusion ? 'completed' : 'in_progress', conclusion }],
+      event: { workflow_run: { head_branch: 'codex/seamless-world-foundation', head_sha: 'other' } } });
+    assert.equal(result.ready, false);
+  }
+  assert.throws(() => verifiedMain({ mainSha: 'current', runs: [],
+    event: { workflow_run: { head_branch: 'main', head_sha: 'current' } } }), /publication is blocked/);
+});

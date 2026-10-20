@@ -9,7 +9,15 @@ export function verifiedMain({ mainSha, runs, event }) {
   }
   const verified = runs.some(run => run.head_sha === mainSha && run.head_branch === 'main'
     && run.event === 'push' && run.status === 'completed' && run.conclusion === 'success');
-  if (!verified) throw new Error(`Main ${mainSha} has no successful push CI run; publication is blocked.`);
+  if (!verified) {
+    // A seamless completion can race a new main push. Main's own successful
+    // completion will trigger publication; do not publish or report a false
+    // deployment failure while that required check is still pending or red.
+    if (event?.workflow_run?.head_branch !== 'main' && event?.workflow_run) {
+      return { ready: false, sha: mainSha, reason: 'Waiting for successful CI on the current main commit.' };
+    }
+    throw new Error(`Main ${mainSha} has no successful push CI run; publication is blocked.`);
+  }
   return { ready: true, sha: mainSha };
 }
 
