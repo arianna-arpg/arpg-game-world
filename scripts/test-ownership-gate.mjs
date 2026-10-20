@@ -19,9 +19,12 @@ after(() => {
 function fixture() {
   const cwd = mkdtempSync(resolve(tmpdir(), 'hollow-ownership-test-'));
   roots.push(cwd);
+  // Even --no-commit merges require a committer identity on a clean CI host.
+  // Every Git path must use the fixture's identity, never the user's config.
+  const runGit = (...args) => spawnSync('git', ['-c', 'user.name=Ownership Test', '-c', 'user.email=test@example.invalid',
+    '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8' });
   const git = (...args) => {
-    const r = spawnSync('git', ['-c', 'user.name=Ownership Test', '-c', 'user.email=test@example.invalid',
-      '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8' });
+    const r = runGit(...args);
     assert.equal(r.status, 0, r.stderr || r.stdout);
     return r.stdout.trim();
   };
@@ -31,7 +34,7 @@ function fixture() {
   write('shared.txt', 'originalLine\n');
   write('numeric.txt', '1\n');
   commit();
-  const merge = () => spawnSync('git', ['merge', '--no-ff', '--no-commit', 'incoming'], { cwd, encoding: 'utf8' });
+  const merge = () => runGit('merge', '--no-ff', '--no-commit', 'incoming');
   const check = (...args) => {
     const r = spawnSync(process.execPath, [gate, '--own-file', 'owned.txt', '--json', ...args], { cwd, encoding: 'utf8' });
     return { status: r.status, report: r.stdout ? JSON.parse(r.stdout) : null, stderr: r.stderr };
