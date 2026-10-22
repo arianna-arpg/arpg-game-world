@@ -24,7 +24,7 @@ import type { ZoneTheme } from '../../data/zones';
 import { BIOMES } from '../../world/biomes';
 import { hash01, mix, shade, withAlpha } from './color';
 import { materialOf, rampOf, type Ramp } from './materials';
-import { litPolygon, polygonPath } from './sight';
+import { LightSightCache, polygonPath } from './sight';
 import { baked, drawShadow } from './sprites';
 import { VIS_CFG } from './visConfig';
 
@@ -3324,7 +3324,7 @@ const campfire: GroupPainter = (env, group, def) => {
     }
     // Warm ground halo, pooled at the walls.
     const haloR = R * 2.3;
-    const poly = litPolygon(world, o.pos.x, o.pos.y, haloR);
+    const poly = painterLightSight.read(world, o, o.pos.x, o.pos.y, haloR, o.tier ?? 0);
     ctx.save();
     if (poly) ctx.clip(polygonPath(poly));
     const g = ctx.createRadialGradient(o.pos.x, o.pos.y, R * 0.3, o.pos.x, o.pos.y, haloR * flick);
@@ -8096,7 +8096,7 @@ const pyre: GroupPainter = (env, group, def) => {
     const flick = 0.8 + 0.14 * Math.sin(time * 9 + seed * 0.13) + 0.06 * Math.sin(time * 21 + o.pos.y);
     // Pale halo, pooled at the walls (the campfire discipline).
     const haloR = R * 2.1;
-    const poly = litPolygon(world, o.pos.x, o.pos.y, haloR);
+    const poly = painterLightSight.read(world, o, o.pos.x, o.pos.y, haloR, o.tier ?? 0);
     ctx.save();
     if (poly) ctx.clip(polygonPath(poly));
     const g = ctx.createRadialGradient(o.pos.x, o.pos.y, R * 0.3, o.pos.x, o.pos.y, haloR * flick);
@@ -8255,7 +8255,7 @@ const hellforge: GroupPainter = (env, group, def) => {
     const breathe = 0.75 + 0.2 * Math.sin(time * 2.2 + seed * 0.19) + 0.05 * Math.sin(time * 9.7);
     // Forge-light halo, pooled at the walls.
     const haloR = R * 2.6;
-    const poly = litPolygon(world, o.pos.x, o.pos.y, haloR);
+    const poly = painterLightSight.read(world, o, o.pos.x, o.pos.y, haloR, o.tier ?? 0);
     ctx.save();
     if (poly) ctx.clip(polygonPath(poly));
     const g = ctx.createRadialGradient(o.pos.x, o.pos.y, R * 0.4, o.pos.x, o.pos.y, haloR * breathe);
@@ -10256,3 +10256,6 @@ export function paintBakedWhole(env: PaintEnv, group: readonly Doodad[],
     ctx.restore();
   }
 }
+
+// Source identities are weakly held; stationary halos share terrain invalidation.
+const painterLightSight = new LightSightCache();

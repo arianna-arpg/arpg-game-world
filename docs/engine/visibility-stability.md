@@ -85,3 +85,57 @@ This evidence verifies the reproduced defects, not every possible fog effect
 or the exact original playtest. Future reports should distinguish positional
 occlusion from exploration memory, room confinement, weather fog and intentional
 screen effects, and ideally preserve a seed/checkpoint plus movement trace.
+
+## October 2026 combat and lighting pass
+
+The intermittent report now has controlled reproductions for additional shared
+failures. This is still not a replay of the owner's exact scene.
+
+- Combat flashes consumed slots also used by persistent terrain lights. A busy
+  frame could extinguish remote light pools. Persistent lights now use spatial
+  admission; flashes, projectiles and orbs retain separate transient limits.
+- Quantized camera ranking changed the admitted terrain lights at bin edges.
+  Every visible static pool now remains present, with cached wall geometry.
+- The 768-caster ceiling could remove a visible forest shadow. The spatial
+  gather retains all relevant casters; repeated actor reads reuse the current
+  frame's already-resolved shade.
+- Light rays now share exact cell crossings with gameplay sight and carry the
+  emitting source's floor. A plateau no longer blocks the lantern standing on
+  it. Different floors do not combine into one terrain-light cluster.
+- Fixed-angle light fans still snapped at corner crossings after exact ray
+  traversal. Cached terrain-corner bearings add rays on either side of the
+  silhouette. Cache storage and discovery are bounded; extremely fine grids
+  with giant authoring lights retain the radial fallback.
+- Shadow unions are rasterized into small padded masks and feathered once per
+  strength layer, then reused for both max-blend operations. This avoids
+  repeatedly filtering the large offscreen bounds of complex shadow paths.
+  The masks request CPU backing to reduce driver-dependent tessellation stalls.
+- Stationary lanterns, moving-source pauses, and painted fire/forge halos reuse
+  cached polygons. Source movement, range, floor, map replacement, terrain and
+  door edits invalidate them. Brightness thresholds ease rather than blink.
+- Restoration cues have their intended style instead of the flesh fallback.
+
+Gameplay AI/shot visibility, damage, authored flicker frequencies, darkness
+preferences and the branch-specific world rules are unchanged.
+
+Checks: `npm run test:lighting`, the sightveil/visibility_stability probes,
+`npx electron balance/visibility-ui.cjs`, and the feedingcues, stealth, tiers,
+storey, combatreadability and skillflights regressions. The new UI fixture uses
+real Chromium pixels and rejects old main via
+`--baseline=89e36023` (nonzero is expected). Its corner test also retains the
+exact-ray-only radial fan as a negative control. `--combat` runs 150 real
+simulation/render frames with 80 pursuers, 1,050 cover objects, 120 emitters
+and overlapping flashes. Timings are diagnostic, not a hardware-independent
+frame-rate promise. `VIS_GPU=1` exercises the available graphics backend.
+
+### Capturing an intermittent occurrence
+
+After an isolated build, `node balance/lighting-playtest.cjs` serves a local
+preview on port 5187. It never serves production saves; the preview uses its
+own browser origin. Open `/?lightingDiagnostics=1&lightingCaptureSink=1`.
+During a run, F8 or **Capture flicker** saves the preceding 300 rendered frames
+and one second afterward, plus a screenshot, under ignored `balance/reports/`.
+The record includes source geometry/intensity, source and caster counts, floor,
+camera, grid revision, frame/pass times, and 32×24 light/shadow alpha masks.
+Capture is local and opt-in; other hosts download the report instead. Ordinary
+play does not allocate the recorder, read back its masks, or show its button.

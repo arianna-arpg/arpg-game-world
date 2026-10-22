@@ -1,3 +1,4 @@
+import { lightCorners } from './lightCorners';
 // ---------------------------------------------------------------------------
 // LIGHT SIGHTLINES — the lit-region polygon of a point source against the
 // walk grid's sight-blocking cells (wall/rampart/flesh_wall/…): rays march
@@ -12,53 +13,52 @@
 
 import type { World } from '../../engine/world';
 import { GridWalkField } from '../../world/gridWalk';
-import { regionKind } from '../../world/regions';
+import { castGridRay, LOS_CFG } from '../../engine/los';
 
 const RAYS = 48;
 
-/** Does the region cell at world (x, y) stop light? Out-of-grid counts as
- *  blocking (matches the ground baker's convention). */
-function blocksAt(wf: GridWalkField, x: number, y: number): boolean {
-  if (x < 0 || y < 0 || x >= wf.cols * wf.cell || y >= wf.rows * wf.cell) return true;
-  return !!regionKind(wf.regionAt(x, y))?.blocksSight;
-}
-
-/** The polygon of points a light at (x, y) actually reaches within r — or
- *  null when no sight-blocker stands inside the disc (use the plain disc).
- *  Rays overshoot the hit by a third of a cell so the wall's NEAR face still
- *  catches the glow; only the far side stays dark. */
-export function litPolygon(world: Pick<World, 'walk'>, x: number, y: number, r: number):
+/** Terrain lights share the exact cell crossings used by native sight. The
+ * source's story determines which decks and hanging walls stop its light.
+ * Exact cell crossings also avoid thin corner leaks from sampled marching.
+ * The small near-face overlap is decorative, not a gameplay visibility grant. */
+export function litPolygon(world: Pick<World, 'walk'>, x: number, y: number, r: number, tier = 0):
   { x: number; y: number }[] | null {
-  const wf = world.walk instanceof GridWalkField ? world.walk : null;
-  if (!wf || r <= 0) return null;
-  const cell = wf.cell;
-
-  // Prescan the bounding box: most lights stand in open ground — bail fast.
-  let any = false;
-  for (let sy = y - r; sy <= y + r + cell && !any; sy += cell) {
-    for (let sx = x - r; sx <= x + r + cell; sx += cell) {
-      if (blocksAt(wf, sx, sy)) { any = true; break; }
-    }
-  }
-  if (!any) return null;
-
-  const pts: { x: number; y: number }[] = [];
-  const step = cell * 0.45;
+  const grid = (world.walk instanceof GridWalkField ? world.walk : null);
+  if (!grid || ![x, y, r, tier].every(Number.isFinite) || r <= 0) return null;
+  const eye = tier + LOS_CFG.elev.eye;
+  const from = { x, y }, pts: { x: number; y: number }[] = [];
   let hitAny = false;
-  for (let i = 0; i < RAYS; i++) {
-    const a = (i / RAYS) * Math.PI * 2;
+  const angles = Array.from({length:RAYS},(_,i)=>i/RAYS*Math.PI*2);
+  for (const corner of lightCorners(grid,x,y,r,tier)) {
+    const a = Math.atan2(corner.y-y,corner.x-x);
+    for (const offset of [-0.00001,0,0.00001]) angles.push((a+offset+Math.PI*2)%(Math.PI*2));
+  }
+  angles.sort((a,b)=>a-b);
+  for (const a of angles) {
     const dx = Math.cos(a), dy = Math.sin(a);
-    let end = r;
-    for (let t = step * 0.5; t <= r; t += step) {
-      if (blocksAt(wf, x + dx * t, y + dy * t)) {
-        end = Math.min(r, t + cell * 0.3);
-        hitAny = true;
-        break;
-      }
-    }
+    const hit = castGridRay(grid, from, { x: x + dx * r, y: y + dy * r }, 'sight', { from: eye, to: eye });
+    const end = hit === null ? r : Math.min(r, hit * r + grid.cellSize * 0.3);
+    hitAny ||= hit !== null;
     pts.push({ x: x + dx * end, y: y + dy * end });
   }
   return hitAny ? pts : null;
+}
+
+/** Static lights keep their polygon until their terrain or geometry changes.
+ * Grid identity matters: a replaced grid may restart at the same revision.
+ * Movable light sources and resized wells must never reuse an old silhouette. */
+export class LightSightCache {
+  private entries = new WeakMap<object, { grid: GridWalkField | null; version: number;
+    x: number; y: number; r: number; tier: number; poly: ReturnType<typeof litPolygon> }>();
+  read(world: Pick<World, 'walk'>, key: object, x: number, y: number, r: number, tier = 0): ReturnType<typeof litPolygon> {
+    const grid = (world.walk instanceof GridWalkField ? world.walk : null), version = grid?.version ?? 0;
+    const old = this.entries.get(key);
+    if (old && old.grid === grid && old.version === version && old.x === x && old.y === y && old.r === r && old.tier === tier)
+      return old.poly;
+    const poly = litPolygon(world, x, y, r, tier);
+    this.entries.set(key, { grid, version, x, y, r, tier, poly });
+    return poly;
+  }
 }
 
 /** Build a clip path from a lit polygon under an (optional) point transform —
@@ -72,18 +72,4 @@ export function polygonPath(poly: { x: number; y: number }[],
   }
   path.closePath();
   return path;
-}
-
-export class LightSightCache {
-  private entries = new WeakMap<object, { grid: GridWalkField | null; version: number;
-    x: number; y: number; r: number; poly: ReturnType<typeof litPolygon> }>();
-  read(world: Pick<World, 'walk'>, key: object, x: number, y: number, r: number): ReturnType<typeof litPolygon> {
-    const grid = world.walk instanceof GridWalkField ? world.walk : null, version = grid?.version ?? 0;
-    const old = this.entries.get(key);
-    if (old && old.grid === grid && old.version === version && old.x === x && old.y === y && old.r === r)
-      return old.poly;
-    const poly = litPolygon(world, x, y, r);
-    this.entries.set(key, { grid, version, x, y, r, poly });
-    return poly;
-  }
 }

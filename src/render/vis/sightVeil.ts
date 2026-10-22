@@ -1,3 +1,4 @@
+import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityMask } from './visibilityDiagnostics';
 // ---------------------------------------------------------------------------
 // THE SIGHT VEIL — positional occlusion shadows (VIS_CFG.sightVeil).
 //
@@ -40,10 +41,8 @@
 // fills into a downscaled sheet, and ONE composite. Bodies whose whole
 // shadow lies beyond the veil radius are culled per frame (mirrored in
 // occludedAt, so drawn and tested agree about the rim), which keeps the
-// maxOccluders cap a true pathological backstop — the cap must NEVER bite
-// inside the visible field: when it did (dense jungle at 288), every
-// 96px gather re-sort swapped dozens of ON-SCREEN wedges in one frame (the
-// "veil bouncing between darker and lighter" flicker sighting).
+// gather spatially bounded. Every relevant caster stays in the cache: a
+// count cutoff can remove visible shadows during dense combat or movement.
 // Zones with nothing to occlude skip the sheet entirely. The room veil owns
 // a fully wrapped frame: this pass fades itself out as confinement wraps.
 // Ablate pass name: 'sightveil'.
@@ -222,6 +221,8 @@ export class SightVeil {
   /** The shadow sheet (lazy: headless probes construct + query with no DOM). */
   private buf: HTMLCanvasElement | null = null;
   private bctx: CanvasRenderingContext2D | null = null;
+  private mask: HTMLCanvasElement | null = null;
+  private softMask: HTMLCanvasElement | null = null;
 
   /** THE PLAYER'S SHADE DIAL (Settings.veilDarkness — the renderer stamps it
    *  each frame before update): one multiplier over BOTH shadow families, so
@@ -288,6 +289,7 @@ export class SightVeil {
    *  Per-body smoothing rides actorShade's own dt. */
   update(view: SightView, confineFrac: number, vw: number, vh: number,
     concealed: readonly { x: number; y: number; w: number; h: number }[] = []): void {
+    const started = visibilityDiagnosticsEnabled ? performance.now() : 0;
     const cfg = VIS_CFG.sightVeil;
     this.frame++;
     this.drew = false;
@@ -298,6 +300,7 @@ export class SightVeil {
     this.doodadF = Math.max(0, Math.min(1, cfg.doodadStrength * (t?.doodadMul ?? 1) * mul));
     this.active = cfg.enabled && !VIS_ABLATE.has('sightveil') && !this.suspend
       && (this.regionF > 0.01 || this.doodadF > 0.01);
+    visibilityRecord("sightActive",this.active);
     if (!this.active) return;
 
     const p = view.player.pos;
@@ -362,6 +365,10 @@ export class SightVeil {
       this.edges.length = 0;
     }
     this.wallEye = wallContactEye(this.edges, p.x, p.y);
+    if (visibilityDiagnosticsEnabled) visibilityRecord("sight", { updateMs:performance.now()-started,
+      discs:this.discs.length,rects:this.rects.length,edges:this.edges.length,
+      gridVersion:this.gridV,tier:this.heroT,wallEye:{...this.wallEye},
+      region:this.regionF,doodad:this.doodadF,hulls:concealed.length });
   }
 
   /** Is this WORLD point under a standing roof (THE HULL LAW)? Solid to the
@@ -416,17 +423,8 @@ export class SightVeil {
         });
       }
     }
-    // Backstop for pathological groves: keep the NEAREST bodies (the far
-    // ones matter least — the per-frame far cull already skips any body
-    // whose whole shadow lies past the veil radius, so by construction the
-    // cap only ever drops OFF-SCREEN casters unless a grove packs more than
-    // maxOccluders inside one screen).
-    if (this.discs.length > cfg.maxOccluders) {
-      const px = this.px, py = this.py;
-      this.discs.sort((a, b) =>
-        ((a.x - px) ** 2 + (a.y - py) ** 2) - ((b.x - px) ** 2 + (b.y - py) ** 2));
-      this.discs.length = cfg.maxOccluders;
-    }
+    // Keep every spatially gathered caster. A count cutoff changes visible
+    // geometry when a bucket re-sorts; density must never switch shadows off.
   }
 
   /** Extract the solid mass's facing edges (merged runs) within reach.
@@ -604,10 +602,10 @@ export class SightVeil {
    *  neighbor draws solid and a rim archer pokes above the cliff's dark. */
   actorShade(a: { pos: Pt; tier?: number }, dt: number): number {
     if (!this.active) return 0;
-    const target = this.occludedAt(a.pos, a.tier ?? 0) * VIS_CFG.sightVeil.actorHide;
     let e = this.shades.get(a);
+    if (e?.f === this.frame) return e.v;
+    const target = this.occludedAt(a.pos, a.tier ?? 0) * VIS_CFG.sightVeil.actorHide;
     if (!e) { e = { v: target, f: this.frame }; this.shades.set(a, e); return e.v; }
-    if (e.f === this.frame) return e.v;
     e.v = this.frame - e.f > 3 ? target
       : e.v + (target - e.v) * Math.min(1, dt * VIS_CFG.sightVeil.fadeRate);
     e.f = this.frame;
@@ -620,6 +618,7 @@ export class SightVeil {
    *  nothing in reach occludes. */
   draw(ctx: CanvasRenderingContext2D, camX: number, camY: number,
     zoom: number, w: number, h: number): void {
+    const started = visibilityDiagnosticsEnabled ? performance.now() : 0;
     const cfg = VIS_CFG.sightVeil;
     if (!this.active) return;
     const regionA = cfg.alpha * this.regionF;
@@ -694,16 +693,35 @@ export class SightVeil {
     // --- fill ascending weak → strong: punch, then paint (max, never sum) ---
     layers.sort((a, b) => a.alpha - b.alpha);
     const t = cfg.tint;
-    if (cfg.featherPx > 0) b.filter = `blur(${cfg.featherPx}px)`;
-    for (const L of layers) {
-      b.globalCompositeOperation = 'destination-out';
-      b.fillStyle = 'rgba(0,0,0,1)';
-      b.fill(L.path);
-      b.globalCompositeOperation = 'source-over';
-      b.fillStyle = `rgba(${t.r},${t.g},${t.b},${L.alpha.toFixed(3)})`;
-      b.fill(L.path);
+    // Rasterize each union into a viewport-sized mask before feathering.
+    // Filtering a large multi-wedge Path2D directly can allocate/rasterize
+    // its far-offscreen bounds twice per layer, causing large GPU stalls in
+    // dense combat. One bounded blur supplies both max-blend operations.
+    const pad = Math.ceil(cfg.featherPx * 3) + 1;
+    this.mask ??= document.createElement('canvas');
+    this.softMask ??= document.createElement('canvas');
+    for (const canvas of [this.mask, this.softMask]) {
+      if (canvas.width !== bw + pad * 2 || canvas.height !== bh + pad * 2) {
+        canvas.width = bw + pad * 2; canvas.height = bh + pad * 2;
+      }
     }
-    if (cfg.featherPx > 0) b.filter = 'none';
+    // These small CPU-backed masks avoid repeated driver tessellation of
+    // overlapping wedges; only the bounded finished image reaches the sheet.
+    const mask = this.mask.getContext('2d', { willReadFrequently:true })!, soft = this.softMask.getContext('2d', { willReadFrequently:true })!;
+    mask.setTransform(1,0,0,1,pad,pad);
+    mask.fillStyle = `rgb(${t.r},${t.g},${t.b})`;
+    for (const L of layers) {
+      mask.clearRect(-pad,-pad,this.mask.width,this.mask.height);
+      mask.fill(L.path);
+      soft.clearRect(0,0,this.softMask.width,this.softMask.height);
+      soft.filter = cfg.featherPx > 0 ? `blur(${cfg.featherPx}px)` : 'none';
+      soft.drawImage(this.mask,0,0);
+      b.globalCompositeOperation = 'destination-out'; b.globalAlpha = 1;
+      b.drawImage(this.softMask,-pad,-pad);
+      b.globalCompositeOperation = 'source-over'; b.globalAlpha = L.alpha;
+      b.drawImage(this.softMask,-pad,-pad);
+    }
+    b.globalAlpha = 1;
 
     // THE INTERACTABLE REVEALS (DoodadRule.veilPierce): punch a feathered
     // disc of visibility over each pierce doodad — a door must stay
@@ -730,6 +748,10 @@ export class SightVeil {
     ctx.restore();
     this.drew = true;
     this.drewW = w; this.drewH = h;
+    if (visibilityDiagnosticsEnabled) {
+      visibilityRecord("sightDrawMs",performance.now()-started);
+      visibilityMask("sightMask",this.buf);
+    }
   }
 
   /** ROOFS WEAR THE VEIL: re-composite this frame's sheet clipped to the
