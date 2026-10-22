@@ -135,7 +135,7 @@ import {
   supportOfGemItem, writeBackSupportGem,
 } from './gemitems';
 import {
-  MEMORY_FOUND_SOURCES, MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
+  memoryProvenanceLabel, MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
   facetRng, findMemoryItem, makeMemoryItem, memoryFacetAttrs, memoryFormOf, memoryGroupKey, memoryGroups,
   memoryKindForSeed, memoryKindOf, memoryRarityLean, memoryUnitsOf, mergeMemory, pickSeeded, rollSeededRarity,
   seedLaneFrac,
@@ -336,7 +336,7 @@ import { REGROWTH_CFG, SCALD_CFG, type BaskSpec } from '../data/scald';
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks, wakeRousedResidents, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
-import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
+import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleContactHeatsCombat, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
 import { MINION_COMBAT } from './minionCombat';
 import {
   batchScaleOf, buildWornThrongDef, isThrongBody, THRONG_CFG, throngMarkerOf,
@@ -578,6 +578,8 @@ export type { Doodad } from './levelgen';
  * off and the lock re-sets). Some chests are not chests.
  */
 export interface Chest {
+  /** Physical floor; legacy placements resolve from their ground before use. */
+  tier?: number;
   pos: Vec2;
   kind: 'objective' | 'timed';
   /** It was never a chest. Revealed (and removed) at the moment of truth. */
@@ -596,6 +598,7 @@ export interface Chest {
 
 /** An activatable one-shot buff pillar. */
 export interface Shrine {
+  tier?: number;
   pos: Vec2;
   def: ShrineDef;
   used: boolean;
@@ -2491,6 +2494,7 @@ interface ArenaBossSpec {
 /** A prior run's death spot, spawned in-zone by coordinate match. SEPARATE from
  *  the necromancy `corpses[]` (ephemeral raisable enemy remnants). */
 interface PlayerCorpse {
+  tier?: number;
   pos: Vec2;
   /** Index into account.deaths (O(1) clear on reclaim; account.deaths is stable per load). */
   recordIndex: number;
@@ -4211,6 +4215,8 @@ export class World {
    *  each re-aimed at the caster's LIVE aim (the repeating crossbow tracks). */
   pendingSalvos: {
     caster: Actor; inst: SkillInstance; aim: Vec2; origin: Vec2 | null;
+    /** Fixed firing points retain their floor; hand-fired later shots follow the caster. */
+    tier?: number;
     /** Launch damage multiplier carried by every beat of the burst. */
     mult?: number;
     /** Paid-cost flat carried by every beat (one payment, one burst). */
@@ -5781,6 +5787,7 @@ export class World {
       schema: DEATH_SCHEMA,
       mapX: this.zone.map.x, mapY: this.zone.map.y,
       pos: { x: this.player.pos.x, y: this.player.pos.y },
+      tier: this.player.tier,
       zoneId: this.zone.id,
       loot,
       classId: this.meta.classDef.id, charLevel: this.player.level, zoneName: this.zone.name,
@@ -5808,6 +5815,7 @@ export class World {
       schema: DEATH_SCHEMA,
       mapX: this.zone.map.x, mapY: this.zone.map.y,
       pos: { x: hero.pos.x, y: hero.pos.y },
+      tier: hero.tier,
       zoneId: this.zone.id,
       loot,
       classId: seat.meta.classDef.id, charLevel: hero.level, zoneName: this.zone.name,
@@ -12615,7 +12623,8 @@ export class World {
       if (z.exploded || z.delay <= 0) continue;
       if (z.delay > BEHAVIOR_CFG.dodgeHorizon) continue;
       if (z.caster === actor) continue;
-      if (!z.hitAll && !this.hostileTo(z.caster, actor)) continue;
+      if (!z.hitAll && (actor.tier !== (z.tier ?? z.caster.tier)
+        || !this.hostileTo(z.caster, actor, z.tier ?? z.caster.tier))) continue;
       const r = z.radius + pad;
       if (dist(actor.pos, z.pos) > r) continue;
       if (!best || z.delay < best.eta) {
@@ -14337,8 +14346,7 @@ export class World {
     ff.touch(); // we're engaged in its zone — keep it from idling out
     const surge = ff.surge();
     if (run.phase === 'fissure') {
-      const chasing = !this.player.dead && !this.player.downed
-        && dist(this.player.pos, run.head) <= surge.chaseRadius + this.player.radius;
+      const chasing = this.touchers().some(h => dist(h.pos, run.head) <= surge.chaseRadius + h.radius);
       if (chasing) {
         run.grace = 0; // first engagement SPENDS the arrival grace — nested rules own it now
         this.advanceFissure(dt, surge);
@@ -17187,7 +17195,7 @@ export class World {
       const ang = a0 + (i / count) * Math.PI * 2;
       const rr = ring + (jitter ? rand(-jitter, jitter) : 0);
       const at = this.clampPos(vec(d.pos.x + Math.cos(ang) * rr, d.pos.y + Math.sin(ang) * rr), 12);
-      this.zones.push({
+      this.zones.push({ tier: caster.tier,
         pos: at, radius: blast, caster, inst, color: eff.color ?? '#ff6a2a',
         delay: 0.9 + i * (eff.stagger ?? 0), exploded: false, linger: 0,
         tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
@@ -17228,7 +17236,7 @@ export class World {
       skill.delivery.type === 'ground' ? skill.delivery.sizeOver : undefined);
     const cloudR = opts.radius ?? 90;
     const cloudLinger = opts.linger ?? 2.6;
-    this.zones.push({
+    this.zones.push({ tier: caster.tier,
       pos: vec(at.x, at.y), radius: cloudR * (so?.from ?? 1), caster, inst,
       color: opts.color ?? '#8fd06f',
       delay: opts.delay ?? 0.6, exploded: false, linger: cloudLinger,
@@ -18507,7 +18515,7 @@ export class World {
     caster.pos = vec(at.x, at.y); // so a raised guard can still block it fairly
     // The bolt scales with the zone the way a monster's own skills do.
     const inst = makeSkillInstance(skill, 1 + Math.floor(this.zone.level / 3));
-    this.zones.push({
+    this.zones.push({ tier: caster.tier,
       pos: vec(at.x, at.y), radius: strike.radius, caster, inst, color: skill.color,
       delay: strike.telegraph, exploded: false, linger: 0,
       tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
@@ -18557,7 +18565,7 @@ export class World {
     const at = vec(rand(70, this.arena.w - 70), rand(70, this.arena.h - 70));
     caster.pos = vec(at.x, at.y);
     const inst = makeSkillInstance(skill, 1 + Math.floor(this.zone.level / 3) + info.strengthBonus);
-    this.zones.push({
+    this.zones.push({ tier: caster.tier,
       pos: at, radius: surge.meteorRadius, caster, inst, color: skill.color,
       delay: surge.meteorTelegraph, exploded: false, linger: 0,
       tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
@@ -22854,8 +22862,8 @@ export class World {
     if (!autoPlace(seat.meta.items, item)) {
       if (spill) {
         this.drops.push({
-          pos: this.clampPos(vec(seat.actor.pos.x + rand(-14, 14), seat.actor.pos.y + rand(-14, 14)), 10),
-          item: { kind: 'support', gem }, bob: rand(0, Math.PI * 2),
+          pos: this.clampPos(vec(seat.actor.pos.x + rand(-14, 14), seat.actor.pos.y + rand(-14, 14)), 10, undefined, { tier: seat.actor.tier }),
+          item: { kind: 'support', gem }, bob: rand(0, Math.PI * 2), tier: seat.actor.tier,
         });
         this.text(seat.actor.pos, 'your pack is full — it falls at your feet', '#c08a68', 12);
         return null;
@@ -24066,6 +24074,17 @@ export class World {
     return this.speechFocus.get(seat);
   }
 
+  /** A deliberate step after dismissing requests the same normal attention
+   * dwell again, even inside the current speaker's reach. */
+  restartNpcDialogueDwell(speakerId: number): void {
+    if (this.speechFocus.get(this.localSeat)?.id === speakerId) this.speechFocus.delete(this.localSeat);
+  }
+
+  npcDialogueRepeatCooldown(speakerId: number): number {
+    const row = this.speakerRows.get(speakerId);
+    return speechWindowFor(row?.lane ?? 'resident', row?.current ?? row?.line ?? '').cooldownSec;
+  }
+
   /** A reader-paced dialogue starts its ambient cooldown when finished or
    * interrupted, even if reading outlasted the old overhead telling window. */
   finishNpcDialogue(actorId: number): void {
@@ -24112,7 +24131,9 @@ export class World {
       const available = !ambient || !row || speechAvailable(memory, this.time,
         speechWindowFor(row.lane, row.current ?? row.line));
       candidates.push({ id: a.id, a, text, color, distance, ambient, available,
-        ...attention, ...(authored ? { priority: authored.def.priority, dwellSec: authored.seconds } : {}) });
+        // A quest's script may request faster attention, but cannot impose
+        // a second, longer panel delay than the shared NPC attention rule.
+        ...attention, ...(authored ? { priority: authored.def.priority, dwellSec: Math.min(authored.seconds, attention.dwellSec) } : {}) });
     }
     return candidates;
   }
@@ -29184,8 +29205,10 @@ export class World {
       } else if (!exact) {
         continue;
       }
+      const tier = this.zone.tiers && Number.isInteger(d.tier) && d.tier! >= 0
+        && d.tier! <= (this.zone.tiers.levels ?? 1) ? d.tier! : this.spoilStoryAt(d.pos);
       this.playerCorpses.push({
-        pos: this.clampPos(vec(d.pos.x, d.pos.y), 16),
+        tier, pos: this.clampPos(vec(d.pos.x, d.pos.y), 16, undefined, { tier }),
         recordIndex: i, owner: d.owner,
         who: { classId: d.classId, level: d.charLevel },
         dwell: 0, reclaimed: false,
@@ -29195,7 +29218,7 @@ export class World {
 
   /** Is the player by a not-yet-reclaimed corpse? (Renderer prompt.) */
   nearPlayerCorpse(): boolean {
-    return this.playerCorpses.some(c => !c.reclaimed && dist(c.pos, this.player.pos) <= CORPSE_RADIUS);
+    return this.playerCorpses.some(c => !c.reclaimed && sameStory(c, this.player) && dist(c.pos, this.player.pos) <= CORPSE_RADIUS);
   }
 
   /** The CHARTED zone where this death's corpse would actually spawn (or null) —
@@ -29230,7 +29253,7 @@ export class World {
       // The 'corpse_reclaim' transit row is the reach, discipline and clock
       // (corpseTargetsView draws the ring from the same row — drawn == dwelt).
       if (dist(c.pos, this.player.pos) > transitRadius('corpse_reclaim', CORPSE_RADIUS) || !this.playerIdle() || !this.canReclaim(c)
-        || !this.dwellReachable(this.player.pos, c.pos, transitReach('corpse_reclaim'), this.storyPair(this.player))) {
+        || !this.dwellReachable(this.player.pos, c.pos, transitReach('corpse_reclaim'), this.storyPair(this.player, c))) {
         c.dwell = 0;
         continue;
       }
@@ -29246,7 +29269,10 @@ export class World {
     const own = this.modeStageDef().corpseSource === 'own';
     const rec = this.corpseRecords()[c.recordIndex];
     if (!rec) { c.reclaimed = true; return; }
-    for (const it of rec.loot.items) this.dropSavedLoot(c.pos, it);
+    const previousStory = this.spoilStory;
+    this.spoilStory = c.tier ?? this.spoilStoryAt(c.pos);
+    try { for (const it of rec.loot.items) this.dropSavedLoot(c.pos, it); }
+    finally { this.spoilStory = previousStory; }
     rec.loot.items = [];
     c.reclaimed = true;
     // THE OBJECTIVE WEB's corpse deed (account.ts LEDGER_CORPSES_RECLAIMED):
@@ -29258,7 +29284,7 @@ export class World {
       this.accountDirty = true;
     }
     this.text(vec(c.pos.x, c.pos.y - 24), 'You reclaim what death took.', '#d8b048', 16);
-    this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 64, color: '#d8b048', life: 0.5, maxLife: 0.5 });
+    this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 64, color: '#d8b048', life: 0.5, maxLife: 0.5, recoveryCueTier: c.tier });
     if (own) this.charDirty = true; // the ring rides the character save
     else saveAccount(this.account); // fire-and-forget OK: a lost reclaim self-heals (corpse re-spawns)
   }
@@ -29279,9 +29305,9 @@ export class World {
       if (!item) return;
       if (item.gem) {
         const inst = skillOfGemItem(item);
-        if (inst) { this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) }); return; }
+        if (inst) { this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2), tier: this.spoilStory }); return; }
         const gem = supportOfGemItem(item);
-        if (gem) this.drops.push({ pos, item: { kind: 'support', gem }, bob: rand(0, Math.PI * 2) });
+        if (gem) this.drops.push({ pos, item: { kind: 'support', gem }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
         return;
       }
       this.dropGearAt(at, item, undefined, true);
@@ -29289,7 +29315,7 @@ export class World {
     }
     if (it.kind === 'skill') {
       const inst = rebuildSkill(it) /* preserve empowerment cargo on reclaim */;
-      if (inst) this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
+      if (inst) this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2), tier: this.spoilStory });
     } else {
       const def = SUPPORTS[it.supportId];
       // REHYDRATION, never a re-mint: a saved cut rides back verbatim
@@ -29297,7 +29323,7 @@ export class World {
       if (def) {
         this.drops.push({
           pos,
-          item: { kind: 'support', gem: { def, level: it.level, ...(it.rolled ? { rolled: { ...it.rolled } } : {}) } },
+          item: { kind: 'support', gem: { def, level: it.level, ...(it.rolled ? { rolled: { ...it.rolled } } : {}) } }, tier: this.spoilStory,
           bob: rand(0, Math.PI * 2),
         });
       }
@@ -30421,7 +30447,7 @@ export class World {
   }
 
   /** Are two actors on opposing sides — counting faction diplomacy? */
-  hostileTo(a: Actor, b: Actor): boolean {
+  hostileTo(a: Actor, b: Actor, sourceTier = a.tier ?? 0): boolean {
     if (throngTravelProtected(b)) return false;
     // THE TIER LAW (engine/tiers.ts): layers share a screen, never a fight —
     // a deck body and a valley body cannot target, strike, or threaten each
@@ -30431,7 +30457,7 @@ export class World {
     // EXCEPT under RIM DUELS (ZoneTiers.rimDuels, open exposure): cross-tier
     // hostility stands and SIGHT mediates — the butte walls' blocksSight
     // already confine the fights to rims and spans, which is the fantasy.
-    if ((a.tier ?? 0) !== (b.tier ?? 0) && !this.zone.tiers?.rimDuels) return false;
+    if (sourceTier !== (b.tier ?? 0) && !this.zone.tiers?.rimDuels) return false;
     // THE GUISE (the possession seam, engine/possess.ts): a seat wearing a
     // body of faction F reads as KIN to team-enemy bodies of F while the
     // guise holds — ONE-directional in the one hostility gate (their
@@ -34161,16 +34187,17 @@ export class World {
       ? conjurer.id : undefined;
   }
 
-  enemiesOf(actor: Actor): Actor[] {
+  enemiesOf(actor: Actor, sourceTier = actor.tier ?? 0): Actor[] {
     return this.actors.filter(a =>
-      (this.hostileTo(actor, a)
+      (this.hostileTo(actor, a, sourceTier)
         // BREAKABLE conjured objects join their OWNER's hostile pool — the
         // owner's every damage path (swings, zones, projectiles) can find
         // and demolish them, though the steering PICKS refuse to CHASE
         // furniture (assistAim + the SEEKWORTHY homing gate). Never anyone
         // else's pool: minions and allies see furniture, the owner sees a
         // target.
-        || (a.construct?.breakable !== undefined && a.owner === actor))
+        || (a.construct?.breakable !== undefined && a.owner === actor
+          && ((a.tier ?? 0) === sourceTier || this.zone.tiers?.rimDuels)))
       && !a.dead && !a.untargetable && !a.downed);
   }
 
@@ -35152,7 +35179,7 @@ export class World {
   executeSkill(
     caster: Actor, inst: SkillInstance, aim: Vec2,
     opts: {
-      targetInfo?: ResolvedTarget; dmgMult?: number; aoeMult?: number;
+      tier?: number; targetInfo?: ResolvedTarget; dmgMult?: number; aoeMult?: number;
       repeat?: number; noCooldown?: boolean; keepFacing?: boolean;
       /** Set on scheduled repeats so they don't schedule more repeats. */
       noRepeat?: boolean;
@@ -35192,6 +35219,7 @@ export class World {
       ventRounds?: number;
     } = {},
   ): boolean {
+    const effectTier = opts.tier ?? caster.tier;
     // Replenishment is a birth clock, never an echo/trigger/proc cast.
     if (replenishingDelivery(inst)) return false;
     inst = this.challenges.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
@@ -35232,12 +35260,12 @@ export class World {
       && def.effects.some(f => f.type === 'grabSeize')) {
       const reach = caster.radius + (def.delivery.range ?? 60) + 24;
       let anyClose = false;
-      for (const e of this.enemiesOf(caster)) {
+      for (const e of this.enemiesOf(caster, effectTier)) {
         if (dist(caster.pos, e.pos) - e.radius <= reach) { anyClose = true; break; }
       }
       if (!anyClose) {
         this.litePromoteNearest(caster.pos,
-          { within: reach, max: 1, opposing: caster.team, rank: aim, story: caster.tier });
+          { within: reach, max: 1, opposing: caster.team, rank: aim, story: effectTier });
       }
     }
     // CROWD EMPOWERMENT (SkillDef.empower — the warcry-power shape): tally
@@ -35246,7 +35274,7 @@ export class World {
     if (def.empower && !opts.noRepeat) {
       const w = DEFENSE_CFG.empower.weights;
       let power = 0;
-      for (const e of this.enemiesOf(caster)) {
+      for (const e of this.enemiesOf(caster, effectTier)) {
         if (e.dead || e.untargetable) continue;
         if (dist(caster.pos, e.pos) > def.empower.radius) continue;
         power += e.defId && MONSTERS[e.defId]?.boss ? w.boss
@@ -35360,7 +35388,7 @@ export class World {
         caster.pools.set(def.pool.id, 0);
         const radius = rel.radius * caster.sheet.get('aoeRadius', tags, extra);
         this.burstDamage(vec(caster.pos.x, caster.pos.y), radius,
-          banked * (rel.ratio ?? 1), def.pool.damageType, cosmeticColor, caster.team, caster.tier, undefined, undefined,
+          banked * (rel.ratio ?? 1), def.pool.damageType, cosmeticColor, caster.team, effectTier, undefined, undefined,
           banked > 0 ? skillSelfVoice(def.id, 'burst') : undefined);
       }
       return true;
@@ -35647,7 +35675,7 @@ export class World {
         };
         this.layFissure(caster, inst, vec(caster.pos.x, caster.pos.y), caster.facing,
           lashD, useMult * lash.damageScale, flatBonus,
-          Math.round(caster.sheet.get('fissureBranches', tags, extra)));
+          Math.round(caster.sheet.get('fissureBranches', tags, extra)), 0, effectTier);
       }
     }
 
@@ -35674,7 +35702,7 @@ export class World {
           }
           caster.reservedMana += reserve;
           caster.mana = Math.min(caster.mana, caster.availableMaxMana());
-          this.zones.push({
+          this.zones.push({ tier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: cfRadius,
             caster, inst, color: cosmeticColor,
             delay: 0, exploded: true,
@@ -35697,8 +35725,8 @@ export class World {
           const dd = Math.min(dist(caster.pos, aim), reach);
           const at = this.clampPos(vec(
             caster.pos.x + Math.cos(caster.facing) * dd,
-            caster.pos.y + Math.sin(caster.facing) * dd), 10);
-          this.zones.push({
+            caster.pos.y + Math.sin(caster.facing) * dd), 10, undefined, { tier: effectTier });
+          this.zones.push({ tier: effectTier,
             pos: at, radius: cfRadius,
             caster, inst, color: cosmeticColor,
             delay: 0, exploded: true,
@@ -35715,14 +35743,14 @@ export class World {
         const fieldCueZone = this.zones[this.zones.length - 1];
         if (def.fieldCue !== false) {
           fieldCueZone.fieldCue = def.fieldCue ?? {};
-          fieldCueZone.tier = caster.tier ?? 0;
+          fieldCueZone.tier = effectTier ?? 0;
           this.flashes.push({ ...combatCueFlash(fieldCueZone.pos, fieldCueZone.fieldCue.form ?? 'field_form', fieldCueZone.radius, 0, def.fieldCue?.color ?? cosmeticColor), recoveryCueTier: fieldCueZone.tier });
         }
         return true;
       }
     }
 
-    if (cosmeticPaint.motif) this.flashes.push({
+    if (cosmeticPaint.motif) this.flashes.push({ recoveryCueTier: effectTier,
       pos: { ...caster.pos }, radius: caster.radius * COSMETIC_CFG.cast.radiusScale, color: cosmeticColor,
       life: COSMETIC_CFG.cast.lifetime, maxLife: COSMETIC_CFG.cast.lifetime, cosmeticMotif: cosmeticPaint.motif,
     });
@@ -35769,7 +35797,7 @@ export class World {
             range: 0, duration: d.caroms.hang.duration ?? 24,
             maxActive: caromCap, invulnerable: true,
             placeRange: 9999,
-          }, aim, undefined, this.clampPos(vec(aim.x, aim.y), 10));
+          }, aim, undefined, this.clampPos(vec(aim.x, aim.y), 10, undefined, { tier: effectTier }), 1, effectTier);
           const arrows = this.minionsOfSkill(caster, def.id)
             .filter(a => a.construct?.kind === 'embed');
           if (arrow && arrows.length >= caromCap) {
@@ -35791,9 +35819,9 @@ export class World {
             && this.time - st.anchorsAt > d.caroms.window;
           if (!st.anchors || stale) st.anchors = [];
           st.anchorsAt = this.time;
-          const anchorAt = this.clampPos(vec(aim.x, aim.y), 10);
+          const anchorAt = this.clampPos(vec(aim.x, aim.y), 10, undefined, { tier: effectTier });
           st.anchors.push({ x: anchorAt.x, y: anchorAt.y });
-          this.flashes.push({ pos: vec(anchorAt.x, anchorAt.y), radius: 16, color: cosmeticColor, life: 0.35, maxLife: 0.35 });
+          this.flashes.push({ recoveryCueTier: effectTier, pos: vec(anchorAt.x, anchorAt.y), radius: 16, color: cosmeticColor, life: 0.35, maxLife: 0.35 });
           if (st.anchors.length < caromCap) {
             // payloadCueRows retains the placed point and remaining window.
             break;
@@ -35803,7 +35831,7 @@ export class World {
           for (let i = 0; i < count; i++) {
             this.spawnProjectile(caster, inst, vec(pts[0].x, pts[0].y),
               angleTo(pts[0], pts[1 % pts.length]),
-              { mult: useMult, flat: flatBonus, patrol: pts });
+              { tier: effectTier, mult: useMult, flat: flatBonus, patrol: pts });
           }
           fieldAt = vec(pts[0].x, pts[0].y);
           break;
@@ -35818,7 +35846,7 @@ export class World {
           const ang = angleTo(caster.pos, aim);
           origin = this.clampPos(vec(
             caster.pos.x + Math.cos(ang) * reach,
-            caster.pos.y + Math.sin(ang) * reach), d.radius);
+            caster.pos.y + Math.sin(ang) * reach), d.radius, undefined, { tier: effectTier });
         }
         // Nova Release: extra projectiles, and the whole volley rings out
         // in a full circle around the origin instead of toward the aim.
@@ -35828,7 +35856,7 @@ export class World {
           const total = count + nova;
           for (let i = 0; i < total; i++) {
             this.spawnProjectile(caster, inst, origin,
-              caster.facing + (i / total) * Math.PI * 2, { mult: useMult, flat: flatBonus });
+              caster.facing + (i / total) * Math.PI * 2, { tier: effectTier, mult: useMult, flat: flatBonus });
           }
           break;
         }
@@ -35843,9 +35871,10 @@ export class World {
           // nothing; a resolved one commits the whole burst.
           const interval = Math.max(0.03, (d.salvoInterval ?? 0.09) / caster.speedFactor(inst));
           const fixedOrigin = origin !== caster.pos ? vec(origin.x, origin.y) : null;
-          this.spawnProjectile(caster, inst, origin, caster.facing, { mult: useMult, flat: flatBonus });
+          this.spawnProjectile(caster, inst, origin, caster.facing, { tier: effectTier, mult: useMult, flat: flatBonus });
           if (count > 1) {
             this.pendingSalvos.push({
+              tier: fixedOrigin ? effectTier : undefined,
               caster, inst, aim: vec(aim.x, aim.y), origin: fixedOrigin,
               shots: count - 1, timer: interval, interval, mult: useMult,
               flat: flatBonus,
@@ -35862,8 +35891,8 @@ export class World {
             const rank = i === 0 ? 0 : Math.ceil(i / 2) * (i % 2 === 1 ? 1 : -1);
             const at = this.clampPos(vec(
               origin.x + Math.cos(perp) * gap * rank,
-              origin.y + Math.sin(perp) * gap * rank), d.radius);
-            this.spawnProjectile(caster, inst, at, caster.facing, { mult: useMult, flat: flatBonus });
+              origin.y + Math.sin(perp) * gap * rank), d.radius, undefined, { tier: effectTier });
+            this.spawnProjectile(caster, inst, at, caster.facing, { tier: effectTier, mult: useMult, flat: flatBonus });
           }
           break;
         }
@@ -35875,7 +35904,7 @@ export class World {
             ? 0 : rand(0, (Math.PI * 2) / Math.max(1, count));
           for (let i = 0; i < count; i++) {
             const ang = phase + (i / Math.max(1, count)) * Math.PI * 2;
-            this.spawnProjectile(caster, inst, origin, ang, { mult: useMult, flat: flatBonus });
+            this.spawnProjectile(caster, inst, origin, ang, { tier: effectTier, mult: useMult, flat: flatBonus });
           }
           break;
         }
@@ -35891,7 +35920,7 @@ export class World {
         for (let i = 0; i < count; i++) {
           const off = count === 1 ? 0 : (i / (count - 1) - 0.5) * spread;
           this.spawnProjectile(caster, inst, origin, caster.facing + off,
-            { mult: useMult, flat: flatBonus, dest: vec(aim.x, aim.y) });
+            { tier: effectTier, mult: useMult, flat: flatBonus, dest: vec(aim.x, aim.y) });
         }
         break;
       }
@@ -35940,8 +35969,8 @@ export class World {
         const assaultLockedTarget = this.assaults.locked(caster, inst);
         if (assaultLockedTarget) {
           struck.add(assaultLockedTarget.id);
-          this.resolveHit(caster, inst, assaultLockedTarget, useMult, 0, flatBonus);
-          this.flashes.push({ pos: { ...assaultLockedTarget.pos }, radius: 18, color: cosmeticColor, life: 0.18, maxLife: 0.18 });
+          this.resolveHit(caster, inst, assaultLockedTarget, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
+          this.flashes.push({ recoveryCueTier: effectTier, pos: { ...assaultLockedTarget.pos }, radius: 18, color: cosmeticColor, life: 0.18, maxLife: 0.18 });
         }
         // The crescent's geometry, hoisted for the shared tail below.
         let sweepR = 0, sweepArc = 0;
@@ -35951,7 +35980,7 @@ export class World {
           const speed = 480 * caster.sheet.get('sweepSpeed', tags, extra);
           const travel = 210 * caster.sheet.get('sweepRange', tags, extra)
             * Math.min(2, caster.sheet.get('effectDuration', tags, extra));
-          this.zones.push({
+          this.zones.push({ tier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: sweepR,
             caster, inst, color: cosmeticColor,
             delay: 0, exploded: true,
@@ -35963,7 +35992,7 @@ export class World {
             struck,
             flatBonus,
           });
-          this.flashes.push({
+          this.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: sweepR * 0.6, color: cosmeticColor,
             life: 0.2, maxLife: 0.2, arc: { facing: caster.facing, arcRad: sweepArc }, fx: d.fx ?? skillStrikeVoice(inst.def.id),
           });
@@ -35976,8 +36005,8 @@ export class World {
             return dist(caster.pos, body.pos) - body.radius <= reach
               && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, body.pos))) <= arcRad / 2;
           });
-          for (const enemy of this.enemiesOf(caster)) {
-            if (!sameStory(caster, enemy)) continue; // a swing is a TOUCH: its own story, rim duels or no
+          for (const enemy of this.enemiesOf(caster, effectTier)) {
+            if (enemy.tier !== effectTier) continue; // a swing is a TOUCH: its own story, rim duels or no
             // SEGMENT FABRIC: the swing connects with the NEAREST hittable
             // body — the coil beside you, not only the head across the room.
             // Plain monsters: nearest body IS the head, byte-identical.
@@ -35993,7 +36022,7 @@ export class World {
             }
             struck.add(enemy.id);
             noteBodyHit(enemy, nb.seg);
-            this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
+            this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
           }
         }
         // Reverberation: the blow rings outward to extra nearby enemies.
@@ -36010,15 +36039,15 @@ export class World {
         const reverb = Math.round(caster.sheet.get('meleeReverb', tags, extra));
         for (let r = 0; r < reverb; r++) {
           let next: Actor | null = null, bd = reach + 140;
-          for (const e of this.enemiesOf(caster)) {
+          for (const e of this.enemiesOf(caster, effectTier)) {
             if (struck.has(e.id)) continue;
             const dd = dist(caster.pos, e.pos);
             if (dd < bd) { bd = dd; next = e; }
           }
           if (!next) break;
           struck.add(next.id);
-          this.resolveHit(caster, inst, next, useMult, 0, flatBonus);
-          this.flashes.push({ pos: vec(next.pos.x, next.pos.y), radius: 18, color: cosmeticColor, life: 0.15, maxLife: 0.15 });
+          this.resolveHit(caster, inst, next, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
+          this.flashes.push({ recoveryCueTier: effectTier, pos: vec(next.pos.x, next.pos.y), radius: 18, color: cosmeticColor, life: 0.15, maxLife: 0.15 });
         }
         if (!sweeping) {
           // Drawn == tested: a sigil-shaped swing flashes its SHAPE; the
@@ -36066,7 +36095,7 @@ export class World {
             : swingShape >= 1 && swingShape <= 2 ? swingShape : AOE_SHAPE.sector,
           caster.facing, useMult, tags, extra,
           sweeping ? sweepArc
-            : banded || (swingShape >= 1 && swingShape <= 2) ? undefined : arcRad);
+            : banded || (swingShape >= 1 && swingShape <= 2) ? undefined : arcRad, undefined, undefined, effectTier);
         if (!sweeping) {
           // Heal-and-harm swings (Sanctified Strike): the same arc MENDS the
           // allies standing in it — one swing, both congregations. (A
@@ -36077,19 +36106,19 @@ export class World {
               ? inAoe(bandC, bandGeo!.halfWidth, AOE_SHAPE.band, caster.facing, a.pos, a.radius)
               : dist(caster.pos, a.pos) - a.radius <= reach
                 && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, a.pos))) <= arcRad / 2,
-            useMult);
+            useMult, undefined, undefined, effectTier);
           // THE MALLET: the swing's own arc rings castOnStruck constructs
           // and pops brittle 'hit' scenery through the shared strike-surface
           // seam — walk up and play the bell on purpose (the PoE2 combo),
           // smash the pots on the follow-through. Team-wide by design:
           // minions and co-op allies swing mallets too.
-          this.frontSplash(caster, inst, caster.pos, reach);
+          this.frontSplash(caster, inst, caster.pos, reach, effectTier);
           this.strikeSurfaces(caster, banded ? bandC : caster.pos, banded ? bandGeo!.halfWidth : reach, (p, r) =>
             banded
               ? inAoe(bandC, bandGeo!.halfWidth, AOE_SHAPE.band, caster.facing, p, r)
               : dist(caster.pos, p) - r <= reach
                 && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2,
-            undefined, undefined, skillContextTags(inst).has('aoe')); // minionCombat area classification
+            undefined, effectTier, skillContextTags(inst).has('aoe')); // minionCombat area classification
         }
         break;
       }
@@ -36104,14 +36133,14 @@ export class World {
           ? this.actors.filter(a => !a.dead && !a.untargetable)
           : d.affects === 'allies'
             ? this.actors.filter(a => !a.dead && a.team === caster.team)
-            : this.enemiesOf(caster);
+            : this.enemiesOf(caster, effectTier);
         // The author is not the audience (NovaDelivery.spareCaster): a burst
         // wearing the spare never strikes its own caster — nor the caster's
         // CARRIED PARTS (a wound to the horn is a wound to the horn-blower:
         // part damage bleeds to the root, and a composite would break its
         // own voice with its own verb).
         if (d.spareCaster) pool = pool.filter(a => a !== caster && a.partLink?.root !== caster);
-        pool = pool.filter(v => sameStory(v, caster)); // a burst from the body touches its own story only (the sovereignty gate)
+        pool = pool.filter(v => v.tier === effectTier); // a burst from the body touches its own story only (the sovereignty gate)
         // Capped-target novas (Galvanic Reserve): the burst picks the
         // NEAREST N instead of washing the whole room — walled-off bodies
         // never consume a slot.
@@ -36124,7 +36153,7 @@ export class World {
           inAoeBody(origin, radius, shape, caster.facing, v, undefined,
             (bp, br) =>
               !(d.edgeOnly && dist(origin, bp) + br < radius * d.edgeOnly)
-              && (phase || v === caster || this.lineOfFire(origin, bp, caster.tier)));
+              && (phase || v === caster || this.lineOfFire(origin, bp, effectTier)));
         if (d.maxTargets !== undefined) {
           pool = pool
             .filter(v => novaBody(v) !== null)
@@ -36138,11 +36167,11 @@ export class World {
           const nb = novaBody(victim);
           if (!nb) continue;
           noteBodyHit(victim, nb.seg);
-          this.resolveHit(caster, inst, victim, useMult, 0, flatBonus);
+          this.resolveHit(caster, inst, victim, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
           // LANCE VISUALS (Lancing Flurry): every victim is struck down a
           // drawn line from the origin — simultaneous razor lances.
           if (d.lanceFx) {
-            this.flashes.push({
+            this.flashes.push({ recoveryCueTier: effectTier,
               pos: vec(origin.x, origin.y),
               radius: dist(origin, nb.pos) + nb.r,
               color: cosmeticColor, life: 0.22, maxLife: 0.22,
@@ -36150,19 +36179,19 @@ export class World {
             });
           }
         }
-        this.flashes.push({
+        this.flashes.push({ recoveryCueTier: effectTier,
           pos: vec(origin.x, origin.y), radius, color: cosmeticColor,
           life: 0.3, maxLife: 0.3, shape, facing: caster.facing,
           edgeFrac: d.edgeOnly,
           fx: d.fx ?? skillBurstVoice(inst.def.id),
         });
-        this.spawnAftershocks(caster, inst, origin, radius, shape);
+        this.spawnAftershocks(caster, inst, origin, radius, shape, undefined, effectTier);
         // The cascade family beyond ground: the burst's sequels (armed
         // second detonations, marching ripples) mint off the strike area
         // — EDGE BAND included (the inheritance law): a Shock Nova sequel
         // is a ring with the same safe eye the nova itself keeps.
         this.mintAftermath(caster, inst, origin, radius, shape,
-          caster.facing, useMult, tags, extra, undefined, d.edgeOnly);
+          caster.facing, useMult, tags, extra, undefined, d.edgeOnly, undefined, effectTier);
         fieldAt = vec(origin.x, origin.y);
         // Enemy-facing novas with a mend side (Radiant Nova): allies in the
         // burst are healed. Ally/'all' novas already resolved them above.
@@ -36170,16 +36199,16 @@ export class World {
           this.healAlliesInArea(caster, inst, a =>
             inAoe(origin, radius, shape, caster.facing, a.pos, a.radius)
             && !(d.edgeOnly && dist(origin, a.pos) + a.radius < radius * d.edgeOnly),
-            useMult);
+            useMult, undefined, undefined, effectTier);
           // THE MALLET: the burst's own footprint (shape, edge band, walls)
           // rings bells and pops brittle scenery. Mend-washes ('allies')
           // strike nothing — a blessing is not a blow — and 'all' bursts
           // already reach the bell as a victim (resolveHit rings it).
-          this.frontSplash(caster, inst, origin, radius);
+          this.frontSplash(caster, inst, origin, radius, effectTier);
           this.strikeSurfaces(caster, origin, radius, (p, r) =>
             inAoe(origin, radius, shape, caster.facing, p, r)
             && !(d.edgeOnly && dist(origin, p) + r < radius * d.edgeOnly)
-            && (phase || this.lineOfFire(origin, p, caster.tier)));
+            && (phase || this.lineOfFire(origin, p, effectTier)), undefined, effectTier);
         }
         break;
       }
@@ -36223,43 +36252,43 @@ export class World {
             if (targetInfo.actor.owner === caster) this.showSkillArrival(caster, inst, targetInfo.actor.pos, targetInfo.actor.radius + 14, targetInfo.actor.tier);
             break;
           }
-          this.resolveHit(caster, inst, targetInfo.actor, useMult, 0, flatBonus);
+          this.resolveHit(caster, inst, targetInfo.actor, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
           // Forked Focus: targeted skills land on extra nearby victims —
           // Ignite three things at once.
           const extraTargets = Math.round(caster.sheet.get('multiTarget', tags, extra));
           if (extraTargets > 0) {
             const need = statusReqs(instanceTargeting(inst)?.requiresStatus);
-            const more = this.enemiesOf(caster)
+            const more = this.enemiesOf(caster, effectTier)
               .filter(e => e !== targetInfo.actor
                 && dist(targetInfo.pos, e.pos) <= 170
                 && (!need || e.statuses.some(s => need.includes(s.id))))
               .sort((a, b) => dist(targetInfo.pos, a.pos) - dist(targetInfo.pos, b.pos))
               .slice(0, extraTargets);
             for (const e of more) {
-              this.resolveHit(caster, inst, e, useMult, 0, flatBonus);
+              this.resolveHit(caster, inst, e, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
               this.showSkillArrival(caster, inst, e.pos, e.radius + 14, e.tier);
             }
           }
           if (d.splash) {
             const splash = d.splash * aoeScale;
-            for (const enemy of this.enemiesOf(caster)) {
+            for (const enemy of this.enemiesOf(caster, effectTier)) {
               if (enemy === targetInfo.actor) continue;
               // SEGMENT FABRIC: splash reaches the nearest hittable body.
               const nb = nearestBody(enemy, targetInfo.pos);
               if (dist(targetInfo.pos, nb.pos) - nb.r <= splash) {
                 noteBodyHit(enemy, nb.seg);
-                this.resolveHit(caster, inst, enemy, useMult * 0.5, 0);
+                this.resolveHit(caster, inst, enemy, useMult * 0.5, 0, undefined, undefined, undefined, undefined, undefined, effectTier);
               }
             }
             // THE MALLET: the named strike's splash is a blast too.
-            this.frontSplash(caster, inst, targetInfo.pos, splash);
-            this.strikeSurfaces(caster, targetInfo.pos, splash);
+            this.frontSplash(caster, inst, targetInfo.pos, splash, effectTier);
+            this.strikeSurfaces(caster, targetInfo.pos, splash, undefined, undefined, effectTier);
           }
         }
         if (!targetInfo?.corpse || targetSpec?.consumesCorpse === false || !skillRiteVoice(def.id)) {
           this.showSkillArrival(caster, inst, targetInfo?.actor?.pos ?? origin,
             d.splash ? d.splash * aoeScale : (targetInfo?.actor?.radius ?? 12) + 14,
-            targetInfo?.actor?.tier ?? caster.tier, false, !!d.splash);
+            targetInfo?.actor?.tier ?? effectTier, false, !!d.splash);
         }
         fieldAt = vec(origin.x, origin.y);
         break;
@@ -36299,7 +36328,7 @@ export class World {
         // origin are spared — the wedge licks around corners it can SEE past,
         // never through stone. A phasing use burns through everything.
         const phase = this.skillOcclusion(caster, inst) === 'free';
-        for (const enemy of this.enemiesOf(caster)) {
+        for (const enemy of this.enemiesOf(caster, effectTier)) {
           // SEGMENT FABRIC: the wedge judges range, rim, angle and firing
           // line against the NEAREST hittable body (head for everything
           // plain — the classic test, byte-identical).
@@ -36313,9 +36342,9 @@ export class World {
             if (d.edgeOnly && dd + nb.r < range * d.edgeOnly) continue;
             if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, nb.pos))) > arcRad / 2) continue;
           }
-          if (!phase && !this.lineOfFire(caster.pos, nb.pos, caster.tier)) continue;
+          if (!phase && !this.lineOfFire(caster.pos, nb.pos, effectTier)) continue;
           noteBodyHit(enemy, nb.seg);
-          this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
+          this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
         }
         // LASER presentation (beamFx): razor cones ARE hitscan — draw the
         // crystal-beam line instead of an invisible sliver of wedge. The
@@ -36323,20 +36352,20 @@ export class World {
         if (d.beamFx && !sigiled) {
           const beamLen = phase ? range : dist(caster.pos, this.clipShot(caster.pos,
             vec(caster.pos.x + Math.cos(caster.facing) * range,
-                caster.pos.y + Math.sin(caster.facing) * range), caster.tier));
-          this.flashes.push({
+                caster.pos.y + Math.sin(caster.facing) * range), effectTier));
+          this.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: beamLen, color: cosmeticColor,
             life: 0.22, maxLife: 0.22, beam: true, facing: caster.facing,
             fx: skillBeamVoice(inst.def.id), arc: { facing: caster.facing, arcRad },
           });
         } else if (sigiled) {
           // The sigil's figure IS the flash (drawn == tested).
-          this.flashes.push({
+          this.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(sigilC.x, sigilC.y), radius: sigilR, color: cosmeticColor,
             life: 0.25, maxLife: 0.25, shape: coneSigil, facing: sigilF, fx: skillStrikeVoice(inst.def.id),
           });
         } else {
-          this.flashes.push({
+          this.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: range, color: cosmeticColor,
             life: 0.25, maxLife: 0.25, arc: { facing: caster.facing, arcRad },
             edgeFrac: d.edgeOnly, fx: skillStrikeVoice(inst.def.id),
@@ -36356,22 +36385,22 @@ export class World {
           return dd - a.radius <= range
             && !(d.edgeOnly && dd + a.radius < range * d.edgeOnly)
             && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, a.pos))) <= arcRad / 2;
-        }, useMult);
+        }, useMult, undefined, undefined, effectTier);
         // THE MALLET: the wedge rings bells and pops brittle scenery it can
         // see — same range/arc/edge/occlusion gates as its victims (razor
         // beamFx cones included: the laser is a mallet too).
-        this.frontSplash(caster, inst, caster.pos, range);
+        this.frontSplash(caster, inst, caster.pos, range, effectTier);
         this.strikeSurfaces(caster, caster.pos, range, (p, r) => {
           if (sigiled) {
             return inAoe(sigilC, sigilR, coneSigil, sigilF, p, r)
-              && (phase || this.lineOfFire(caster.pos, p, caster.tier));
+              && (phase || this.lineOfFire(caster.pos, p, effectTier));
           }
           const dd = dist(caster.pos, p);
           return dd - r <= range
             && !(d.edgeOnly && dd + r < range * d.edgeOnly)
             && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2
-            && (phase || this.lineOfFire(caster.pos, p, caster.tier));
-        });
+            && (phase || this.lineOfFire(caster.pos, p, effectTier));
+        }, undefined, effectTier);
         // The cascade family reaches the WAVE (minter round 2): the cone's
         // sequels mint off its true figure — the sigiled square/inverted
         // triangle or the classic wedge as its own sector — with the walk
@@ -36385,7 +36414,7 @@ export class World {
           useMult, tags, extra,
           sigiled ? undefined : arcRad,
           sigiled ? undefined : d.edgeOnly,
-          caster.facing);
+          caster.facing, effectTier);
         break;
       }
 
@@ -36404,7 +36433,7 @@ export class World {
           // A PLANTED STEAM BANK goes where you point it (the 'vent' effect —
           // the fog fabric): reach with area, life with effectDuration.
           if (fx.type === 'vent') {
-            this.plantVent(fx, at, aoeScale, caster.sheet.get('effectDuration', tags, extra), caster.tier);
+            this.plantVent(fx, at, aoeScale, caster.sheet.get('effectDuration', tags, extra), effectTier);
             continue;
           }
           if (fx.type === 'conjure') {
@@ -36474,7 +36503,7 @@ export class World {
             duration: d.lingerDuration ?? 6, maxActive: 1,
             life: turret.life ?? 45, placeRange: 0,
             look: turret.look, // the support's own effigy body
-          }, caster.pos, turretCast, vec(caster.pos.x, caster.pos.y));
+          }, caster.pos, turretCast, vec(caster.pos.x, caster.pos.y), 1, effectTier);
           if (built) { zoneAnchor = built; at.x = built.pos.x; at.y = built.pos.y; }
         }
         // FISSURE: the placement is a traveling CRACK — chains of zones
@@ -36488,7 +36517,7 @@ export class World {
           for (let f = 0; f < fans; f++) {
             const off = fans === 1 ? 0 : (f / (fans - 1) - 0.5) * fanSpread * (fans - 1);
             this.layFissure(caster, inst, from, baseAng + off, d, useMult, flatBonus,
-              Math.round(caster.sheet.get('fissureBranches', tags, extra, d.fissure.branches ?? 0)), f);
+              Math.round(caster.sheet.get('fissureBranches', tags, extra, d.fissure.branches ?? 0)), f, effectTier);
           }
           fieldAt = at;
           break;
@@ -36604,8 +36633,8 @@ export class World {
             }
           }
           for (const pt of pts) {
-            this.zones.push({
-              pos: this.clampPos(pt, 10), radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
+            this.zones.push({ tier: effectTier,
+              pos: this.clampPos(pt, 10, undefined, { tier: effectTier }), radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
               caster, inst, color: cosmeticColor,
               delay: d.delay ?? 0, exploded: (d.delay ?? 0) <= 0,
               impactDress: d.impactDress,
@@ -36648,7 +36677,7 @@ export class World {
           }
         }
         const fillTime = d.fillTime ?? (d.lingerDuration ?? 1);
-        this.zones.push({
+        this.zones.push({ tier: effectTier,
           pos: at, radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
           caster, inst, color: cosmeticColor,
           marker: d.marker ? true : undefined,
@@ -36750,7 +36779,7 @@ export class World {
         // meeting line takes BOTH hands; convergence is the crunch, by
         // design. Two hands, one cost.
         if (d.sweep?.converge) {
-          this.zones.push({
+          this.zones.push({ tier: effectTier,
             ...prime,
             pos: vec(prime.pos.x, prime.pos.y),
             sweep: {
@@ -36829,7 +36858,7 @@ export class World {
             const scaleStep = spec?.scaleStep ?? 1;
             const dmgStep = spec?.dmgStep ?? 0.75;
             for (const p of walkPoints(spec, nativeCount, from)) {
-              this.zones.push({
+              this.zones.push({ tier: effectTier,
                 pos: vec(p.x, p.y),
                 radius: d.radius * aoeScale * Math.pow(scaleStep, p.k) * (sizeOver?.from ?? 1),
                 caster, inst, color: cosmeticColor,
@@ -36877,7 +36906,7 @@ export class World {
               const mult = useMult * Math.pow(rDmgStep, p.k);
               const delayBase = (d.delay ?? 0) + p.beatAt;
               const scale = Math.pow(rScaleStep, p.k);
-              this.zones.push({
+              this.zones.push({ tier: effectTier,
                 ...prime,
                 pos: vec(p.x, p.y),
                 radius: prime.radius * scale,
@@ -36904,7 +36933,7 @@ export class World {
         // Hex Blast: the cursed ground detonates shortly after the cast.
         const hex = caster.sheet.get('hexBlast', tags, extra);
         if (isCurse && hex > 0) {
-          this.zones.push({
+          this.zones.push({ tier: effectTier,
             pos: vec(at.x, at.y), radius: d.radius * aoeScale,
             caster, inst, color: '#b06bd4',
             delay: (d.delay ?? 0) + 0.9, exploded: false,
@@ -36920,7 +36949,7 @@ export class World {
       }
 
       case 'self':
-        this.showSkillArrival(caster, inst, caster.pos, caster.radius + 18, caster.tier, true);
+        this.showSkillArrival(caster, inst, caster.pos, caster.radius + 18, effectTier, true);
         // Rites already receipt their real payment. Destructive orders speak
         // at the body actually consumed below, never on an empty command.
         if (!skillRiteVoice(def.id) && !instanceEffects(inst).some(f => f.type === 'detonateMinions' || f.type === 'shatterConstructs'))
@@ -36984,7 +37013,7 @@ export class World {
           // already resolved to the plain aim point).
           const form = grimoireForm(inst);
           if (form && MONSTERS[form]) {
-            this.spawnMinion(caster, inst, { monsterId: form });
+            this.spawnMinion(caster, inst, { tier: effectTier, monsterId: form });
             break;
           }
           if (!targetInfo?.corpse) break;
@@ -37004,7 +37033,7 @@ export class World {
           for (let ri = 0; ri < raise; ri++) {
             const corpse = haul[ri];
             this.removeCorpse(corpse);
-            this.spawnMinion(caster, inst, { monsterId: corpse.defId, pos: corpse.pos });
+            this.spawnMinion(caster, inst, { tier: effectTier, monsterId: corpse.defId, pos: corpse.pos });
           }
           this.corpseSpawn(caster, inst, haul[0].pos, raise);
           break;
@@ -37046,13 +37075,13 @@ export class World {
           // contract, so a dead toggle never keeps birthing.
           const seqFill = caster.sheet.get('summonSequence', tags, extra) > 0;
           if (seqFill && first > 1) {
-            this.spawnMinion(caster, inst, { dmgMult: useMult });
+            this.spawnMinion(caster, inst, { tier: effectTier, dmgMult: useMult });
             this.pendingSummons.push({
               caster, inst, remaining: first - 1, timer: 0.35, interval: 0.35,
               mult: useMult,
             });
           } else {
-            for (let i = 0; i < first; i++) this.spawnMinion(caster, inst, { dmgMult: useMult });
+            for (let i = 0; i < first; i++) this.spawnMinion(caster, inst, { tier: effectTier, dmgMult: useMult });
           }
           break;
         }
@@ -37069,7 +37098,7 @@ export class World {
           ? this.clampPos(dist(caster.pos, aim) <= cursorRange
             ? vec(aim.x, aim.y)
             : vec(caster.pos.x + Math.cos(caster.facing) * cursorRange,
-                  caster.pos.y + Math.sin(caster.facing) * cursorRange), 10)
+                  caster.pos.y + Math.sin(caster.facing) * cursorRange), 10, undefined, { tier: effectTier })
           : undefined;
         const scatter = d.placeAt?.scatter ?? 60;
         const spot = (): Vec2 | undefined => summonAt
@@ -37078,7 +37107,7 @@ export class World {
         // CHANNEL-BUT-CASTED: one cast commits N waves on the beat, each
         // re-aimed at the caster's live cursor (the Barrage salvo rule).
         if (d.waves && d.waves.count > 1) {
-          for (let i = 0; i < total; i++) this.spawnMinion(caster, inst, { pos: spot(), dmgMult: useMult });
+          for (let i = 0; i < total; i++) this.spawnMinion(caster, inst, { tier: effectTier, pos: spot(), dmgMult: useMult });
           // #43: later waves can RE-BILL a fraction of the skill's cost —
           // running dry fizzles the remainder (updatePendingSummons pays).
           const perWave = d.waves.costFactor
@@ -37100,13 +37129,13 @@ export class World {
         const sequential = caster.sheet.get('summonSequence', tags, extra) > 0;
         if (sequential && total > 1) {
           // First emerges now, the rest scatter out over time.
-          this.spawnMinion(caster, inst, { pos: spot(), dmgMult: useMult });
+          this.spawnMinion(caster, inst, { tier: effectTier, pos: spot(), dmgMult: useMult });
           this.pendingSummons.push({
             caster, inst, remaining: total - 1, timer: 0.35, interval: 0.35,
             at: summonAt, scatter,
           });
         } else {
-          for (let i = 0; i < total; i++) this.spawnMinion(caster, inst, { pos: spot(), dmgMult: useMult });
+          for (let i = 0; i < total; i++) this.spawnMinion(caster, inst, { tier: effectTier, pos: spot(), dmgMult: useMult });
         }
         break;
       }
@@ -37119,7 +37148,7 @@ export class World {
           : vec(caster.pos.x + Math.cos(caster.facing) * d.castRange,
                 caster.pos.y + Math.sin(caster.facing) * d.castRange);
         const at = this.clampPos(this.skillOcclusion(caster, inst) === 'blocked'
-          ? this.clipShot(caster.pos, wantAt, caster.tier) : wantAt, 10);
+          ? this.clipShot(caster.pos, wantAt, effectTier) : wantAt, 10, undefined, { tier: effectTier });
         // (+ the VENT PRESS's spent rounds — Blowhole: every banked round is
         // one more column, the storm's own count shift.)
         const strikes = Math.max(1, Math.round(
@@ -37134,7 +37163,7 @@ export class World {
         // first — an honest circle every strike then lands inside.
         const fuse = d.telegraph ?? 0;
         if (fuse > 0) {
-          this.flashes.push({
+          this.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(at.x, at.y), radius: d.areaRadius * aoeScale,
             color: cosmeticColor, life: fuse, maxLife: fuse, edgeFrac: 0.94,
           });
@@ -37145,7 +37174,7 @@ export class World {
         // honest about where it actually lands.
         const sVar = d.scatter ?? 0;
         const under: Vec2[] = d.atEnemies
-          ? this.enemiesOf(caster)
+          ? this.enemiesOf(caster, effectTier)
             .filter(e => dist(at, e.pos) <= d.areaRadius * aoeScale)
             .sort((e1, e2) => dist(at, e1.pos) - dist(at, e2.pos))
             .slice(0, strikes)
@@ -37191,10 +37220,10 @@ export class World {
           const r = Math.sqrt(Math.random()) * d.areaRadius * aoeScale;
           const zDelay = arming ? 9999
             : fuse + (i < immCount ? rand(0.15, 0.3) : 0.3 + (i - immCount) * d.interval);
-          this.zones.push({
+          this.zones.push({ tier: effectTier,
             pos: this.clampPos(i < under.length
               ? vec(under[i].x, under[i].y)
-              : vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10),
+              : vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10, undefined, { tier: effectTier }),
             radius: d.hitRadius * aoeScale,
             caster, inst, color: cosmeticColor,
             delay: zDelay,
@@ -37250,7 +37279,7 @@ export class World {
           mirage.owner = caster;
           mirage.sourceSkillId = def.id;
           mirage.summonInst = inst;
-          mirage.tier = caster.tier;
+          mirage.tier = effectTier;
           // A convincing double wears the full silhouette, not just the tint.
           mirage.shape = caster.shape;
           mirage.color = caster.color;
@@ -37411,12 +37440,12 @@ export class World {
         this.moveBlast(caster, inst, caster.pos, 'depart');
         if (d.delay && d.delay > 0) {
           const visual: Flash = { pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: cosmeticColor, life: d.delay, maxLife: d.delay,
-            fx: skillMovementVoice(def.id, 'wait'), facing: caster.facing, recoveryCueTier: caster.tier };
+            fx: skillMovementVoice(def.id, 'wait'), facing: caster.facing, recoveryCueTier: effectTier };
           this.pendingBlinks.push({ actor: caster, dest, timer: d.delay, color: cosmeticColor, inst, visual,
             ...(d.behindTarget && targetInfo?.actor ? { faceTarget: targetInfo.actor } : {}) });
           this.flashes.push(visual);
         } else {
-          this.teleportActor(caster, dest, cosmeticColor, undefined, caster.tier, def.id);
+          this.teleportActor(caster, dest, cosmeticColor, undefined, effectTier, def.id);
           if (d.behindTarget && targetInfo?.actor) {
             // Arrival is an atomic turn; the ordinary turn-rate cap must not undo it.
             caster.facingPrev = caster.facing = angleTo(caster.pos, targetInfo.actor.pos);
@@ -37433,18 +37462,18 @@ export class World {
         // caster permanently untargetable) — the SLAM repeats instead.
         if (caster.leap || opts.noRepeat) {
           const radius = d.radius * aoeScale;
-          for (const e of this.enemiesOf(caster)) {
-            if (!sameStory(caster, e)) continue; // (the sovereignty gate)
+          for (const e of this.enemiesOf(caster, effectTier)) {
+            if (e.tier !== effectTier) continue; // (the sovereignty gate)
             if (dist(caster.pos, e.pos) - e.radius <= radius) {
-              this.resolveHit(caster, inst, e, useMult);
+              this.resolveHit(caster, inst, e, useMult, undefined, undefined, undefined, undefined, undefined, undefined, effectTier);
             }
           }
           // THE MALLET: the repeated slam is a blast where it stands.
-          this.strikeSurfaces(caster, caster.pos, radius);
+          this.strikeSurfaces(caster, caster.pos, radius, undefined, undefined, effectTier);
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius,
             color: cosmeticColor, life: 0.3, maxLife: 0.3,
-            fx: skillMovementVoice(def.id, 'impact'), facing: caster.facing, recoveryCueTier: caster.tier,
+            fx: skillMovementVoice(def.id, 'impact'), facing: caster.facing, recoveryCueTier: effectTier,
           });
           break;
         }
@@ -37495,11 +37524,11 @@ export class World {
         if (d.vent) {
           const vr = d.vent.columnR * aoeScale;
           const vScale = useMult * (d.vent.scale ?? 0.6);
-          for (const e of this.enemiesOf(caster)) {
-            if (dist(caster.pos, e.pos) - e.radius <= vr) this.resolveHit(caster, inst, e, vScale);
+          for (const e of this.enemiesOf(caster, effectTier)) {
+            if (dist(caster.pos, e.pos) - e.radius <= vr) this.resolveHit(caster, inst, e, vScale, undefined, undefined, undefined, undefined, undefined, undefined, effectTier);
           }
-          this.strikeSurfaces(caster, caster.pos, vr);
-          this.flashes.push({
+          this.strikeSurfaces(caster, caster.pos, vr, undefined, undefined, effectTier);
+          this.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: vr,
             color: '#d9f7fb', life: 0.35, maxLife: 0.35,
           });
@@ -37537,10 +37566,10 @@ export class World {
           const dd = Math.min(dist(caster.pos, aim), d.castRange);
           const at = this.clampPos(vec(
             caster.pos.x + Math.cos(caster.facing) * dd,
-            caster.pos.y + Math.sin(caster.facing) * dd), 10);
+            caster.pos.y + Math.sin(caster.facing) * dd), 10, undefined, { tier: effectTier });
           st.markPos = { x: at.x, y: at.y };
           this.flashes.push({ pos: vec(at.x, at.y), radius: 28, color: cosmeticColor, life: 0.4, maxLife: 0.4,
-            fx: skillSelfVoice(def.id), recoveryCueTier: caster.tier });
+            fx: skillSelfVoice(def.id), recoveryCueTier: effectTier });
         }
         break;
       }
@@ -37555,7 +37584,7 @@ export class World {
         // echo construct ever exists to mimic anything. Exclusive by build.
         const sum = instanceSummon(inst);
         if (sum) {
-          this.spawnMinion(caster, inst, { delivery: sum });
+          this.spawnMinion(caster, inst, { tier: effectTier, delivery: sum });
           break;
         }
         // Sub-skill instances honor OVER-CAP investment like emit payloads do.
@@ -37587,12 +37616,12 @@ export class World {
           const reach = Math.min(dist(caster.pos, aim), d.placeRange ?? 320);
           const center = targetInfo?.pos ?? this.clampPos(vec(
             caster.pos.x + Math.cos(caster.facing) * reach,
-            caster.pos.y + Math.sin(caster.facing) * reach), 10);
+            caster.pos.y + Math.sin(caster.facing) * reach), 10, undefined, { tier: effectTier });
           const R = d.ring.radius * aoeScale;
           for (let i = 0; i < d.ring.segments; i++) {
             const ang = (i / d.ring.segments) * Math.PI * 2;
             this.spawnConstruct(caster, inst, d, aim, castInst,
-              vec(center.x + Math.cos(ang) * R, center.y + Math.sin(ang) * R));
+              vec(center.x + Math.cos(ang) * R, center.y + Math.sin(ang) * R), 1, effectTier);
           }
           break;
         }
@@ -37608,13 +37637,13 @@ export class World {
           for (let i = 0; i < segs; i++) {
             const off = (i - (segs - 1) / 2) * spacing;
             this.spawnConstruct(caster, inst, d, aim, castInst,
-              vec(base.x + Math.cos(perp) * off, base.y + Math.sin(perp) * off));
+              vec(base.x + Math.cos(perp) * off, base.y + Math.sin(perp) * off), 1, effectTier);
           }
         } else {
           // Charged constructs (Volcano) grow with the hold: useMult from
           // the charge release scales duration and spew rate.
           this.spawnConstruct(caster, inst, d, aim, castInst, undefined,
-            def.castMode === 'charge' ? useMult : 1);
+            def.castMode === 'charge' ? useMult : 1, effectTier);
         }
         break;
       }
@@ -37640,23 +37669,23 @@ export class World {
         const mult = (best ? (d.consumeBonus ?? 1.5) : 1) * useMult;
         const radius = d.radius * aoeScale;
         const shape = caster.sheet.get('aoeShape', tags, extra);
-        for (const victim of this.enemiesOf(caster)) {
+        for (const victim of this.enemiesOf(caster, effectTier)) {
           if (!inAoe(at, radius, shape, caster.facing, victim.pos, victim.radius)) continue;
-          this.resolveHit(caster, inst, victim, mult, 0, flatBonus);
+          this.resolveHit(caster, inst, victim, mult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
         }
         // THE MALLET: the pop's own shape strikes the surfaces.
-        this.frontSplash(caster, inst, at, radius);
+        this.frontSplash(caster, inst, at, radius, effectTier);
         this.strikeSurfaces(caster, at, radius, (p, r) =>
-          inAoe(at, radius, shape, caster.facing, p, r));
+          inAoe(at, radius, shape, caster.facing, p, r), undefined, effectTier);
         this.flashes.push({
           pos: at, radius, color: cosmeticColor,
           life: 0.35, maxLife: 0.35, shape, facing: caster.facing,
-          fx: skillSelfVoice(def.id, 'burst'), recoveryCueTier: caster.tier,
+          fx: skillSelfVoice(def.id, 'burst'), recoveryCueTier: effectTier,
         });
-        this.spawnAftershocks(caster, inst, at, radius, shape);
+        this.spawnAftershocks(caster, inst, at, radius, shape, undefined, effectTier);
         // The cascade family beyond ground: the pop's sequels mint here.
         this.mintAftermath(caster, inst, at, radius, shape,
-          caster.facing, useMult, tags, extra);
+          caster.facing, useMult, tags, extra, undefined, undefined, undefined, effectTier);
         fieldAt = at;
         break;
       }
@@ -37719,7 +37748,7 @@ export class World {
             (fx.flat ?? 0) + (fx.pct ?? 0) * hostAura.ledger.balance);
           hostAura.ledger.balance -= paid;
           this.text(caster.pos, `absolved ${Math.round(paid)}`, '#d8c878', 12);
-          this.flashes.push({
+          this.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 14,
             color: '#d8c878', life: 0.3, maxLife: 0.3,
           });
@@ -37771,7 +37800,7 @@ export class World {
             const kindIdx = this.liteKindOf(hostSpec.monsterId);
             if (kindIdx >= 0) {
               this.litePromoteNearest(aim, {
-                within: 1e9, max: THRONG_CFG.metaDelegate, story: caster.tier,
+                within: 1e9, max: THRONG_CFG.metaDelegate, story: effectTier,
                 owner: lord.id, kindIdx,
               });
             }
@@ -37840,7 +37869,7 @@ export class World {
           const mark = vec(aim.x, aim.y);
           // Point AT a foe and the order PINS it — focus fire, not geography.
           let quarry: Actor | undefined; let qd = COMMAND_CFG.pinRadius;
-          for (const e of this.enemiesOf(caster)) {
+          for (const e of this.enemiesOf(caster, effectTier)) {
             if (e.passive || e.sheet.get('invisible') > 0) continue;
             const dq = dist(e.pos, mark);
             if (dq < qd) { qd = dq; quarry = e; }
@@ -37879,7 +37908,7 @@ export class World {
           }
           this.assaults.command(caster, inst, assaultRecipients, kind === 'recall');
           if (sent > 0) {
-            this.flashes.push({
+            this.flashes.push({ recoveryCueTier: effectTier,
               pos: vec(mark.x, mark.y), radius: 40, color: cosmeticColor,
               life: 0.3, maxLife: 0.3,
             });
@@ -37991,7 +38020,7 @@ export class World {
             caster.pos.y + Math.sin(ang) * reach), c.radius, undefined, { mover: c });
           c.facing = ang;
           c.casting = null; c.push = null;
-          this.flashes.push({ pos: { ...c.pos }, radius: 28, color: cosmeticColor, life: 0.25, maxLife: 0.25 });
+          this.flashes.push({ recoveryCueTier: effectTier, pos: { ...c.pos }, radius: 28, color: cosmeticColor, life: 0.25, maxLife: 0.25 });
           // Keep the same actor, payload, health, lifespan, timers, useLock and
           // cooldowns. No arrival effect, death event, refund or replacement.
         }
@@ -38013,7 +38042,7 @@ export class World {
           // stands upstairs), the arrival confined to that story's floor.
           this.teleportActor(m, vec(
             caster.pos.x + Math.cos(ang) * R,
-            caster.pos.y + Math.sin(ang) * R), def.color, undefined, caster.tier);
+            caster.pos.y + Math.sin(ang) * R), def.color, undefined, effectTier);
         });
       }
       if (d.type === 'self' && fx.type === 'status') {
@@ -38052,7 +38081,7 @@ export class World {
       // Terrain effects land at the resolution origin — for blinks that is
       // the DEPARTURE point (Shatterstep's ice patch where you stood).
       if (fx.type === 'terrain') {
-        this.addTempGround(origin, fx.kind, fx.radius * aoeScale, fx.duration * durScale);
+        this.addTempGround(origin, fx.kind, fx.radius * aoeScale, fx.duration * durScale, { tier: effectTier });
       }
       // CONJURED CLOUD (the flux fabric's second half): a standing cloud
       // called into being at the resolution origin — the walkable half
@@ -38081,7 +38110,7 @@ export class World {
       // skill resolved (ground deliveries plant at the target, above) — a
       // self-cast veils the caster's own feet, a leap's vent its departure.
       if (fx.type === 'vent' && d.type !== 'ground') {
-        this.plantVent(fx, origin, aoeScale, durScale, caster.tier);
+        this.plantVent(fx, origin, aoeScale, durScale, effectTier);
       }
       // A POURED SWARM (engine/lite.ts): pool bodies stand at the
       // resolution point — the nest's vent, the shepherd's call. A
@@ -38098,7 +38127,7 @@ export class World {
       // plant at the flight's end (the litePour hook's twin).
       if (fx.type === 'lure' && d.type !== 'projectile') {
         this.setLure(`skill#${caster.id}#${inst.def.id}`, origin, fx.radius,
-          fx.pace ?? 0.5, fx.standoff ?? 90, fx.sec, caster.tier);
+          fx.pace ?? 0.5, fx.standoff ?? 90, fx.sec, effectTier);
       }
       if (fx.type === 'gainCharge') {
         caster.gainCharge(fx.charge, fx.amount, fx.max, inst);
@@ -38141,7 +38170,7 @@ export class World {
         }
         if (drawn > 0) {
           this.text(vec(caster.pos.x, caster.pos.y - 22), drawn + ' drawn', def.color, 13);
-          this.flashes.push({
+          this.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius,
             color: cosmeticColor, life: 0.3, maxLife: 0.3,
           });
@@ -38156,7 +38185,7 @@ export class World {
       if (fx.type === 'recallImpales') {
         const radius = fx.radius * aoeScale;
         let wrenched = 0;
-        for (const e of this.enemiesOf(caster)) {
+        for (const e of this.enemiesOf(caster, effectTier)) {
           if (e.construct?.breakable) continue;
           if (dist(caster.pos, e.pos) - e.radius > radius) continue;
           for (let si = e.statuses.length - 1; si >= 0; si--) {
@@ -38188,7 +38217,7 @@ export class World {
               }
               this.spawnProjectile(caster, spear, vec(e.pos.x, e.pos.y),
                 angleTo(e.pos, caster.pos),
-                { flat: { physical: bank * (fx.spearShare ?? 0.5) } });
+                { tier: effectTier, flat: { physical: bank * (fx.spearShare ?? 0.5) } });
             }
             wrenched++;
           }
@@ -38253,12 +38282,12 @@ export class World {
           this.corpses.push({
             pos: this.clampPos(vec(aim.x + rand(-spread, spread), aim.y + rand(-spread, spread)), 10, undefined, { mover: caster }),
             defId: fx.monsterId, level: this.zone.level,
-            tier: caster.tier, // THE SPOILS STORY: dug on the caster's own story
+            tier: effectTier, // THE SPOILS STORY: dug on the caster's own story
             maxLife: CORPSE_CFG.mint.life + this.zone.level * CORPSE_CFG.mint.lifePerLevel,
             remaining: CORPSE_CFG.duration,
           });
         }
-        this.flashes.push({ pos: vec(aim.x, aim.y), radius: 44, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
+        this.flashes.push({ recoveryCueTier: effectTier, pos: vec(aim.x, aim.y), radius: 44, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
       }
       // GATHER THE DEAD (dragCorpses): the graveyard walks — every corpse in
       // reach steps to the mark and piles TIGHT (inside one corpse-find's
@@ -38271,13 +38300,13 @@ export class World {
         let gathered = 0;
         for (const c of this.corpses) {
           if (dist(aim, c.pos) > reach) continue;
-          if ((c.tier ?? this.spoilStoryAt(c.pos)) !== caster.tier) continue; // its own story's dead only
+          if ((c.tier ?? this.spoilStoryAt(c.pos)) !== effectTier) continue; // its own story's dead only
           const k = gathered++;
           const r = k === 0 ? 0 : 22 + 8 * Math.floor(k / 3);
-          c.pos = this.clampPos(vec(aim.x + Math.cos(k * 2.1) * r, aim.y + Math.sin(k * 2.1) * r), 8);
+          c.pos = this.clampPos(vec(aim.x + Math.cos(k * 2.1) * r, aim.y + Math.sin(k * 2.1) * r), 8, undefined, { tier: effectTier });
         }
         if (gathered) {
-          this.flashes.push({ pos: vec(aim.x, aim.y), radius: 40, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
+          this.flashes.push({ recoveryCueTier: effectTier, pos: vec(aim.x, aim.y), radius: 40, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
         } else {
           this.failNote(caster, def.id + ':nobodies', 'no dead to gather');
         }
@@ -38299,7 +38328,7 @@ export class World {
           }
           if (!['totem', 'sentry', 'pylon'].includes(t.construct.kind)) continue;
           this.burstDamage(vec(t.pos.x, t.pos.y), fx.radius,
-            t.maxLife() * fx.fraction, 'physical', cosmeticColor, caster.team, caster.tier, undefined, undefined, skillSelfVoice(def.id, 'burst'));
+            t.maxLife() * fx.fraction, 'physical', cosmeticColor, caster.team, effectTier, undefined, undefined, skillSelfVoice(def.id, 'burst'));
           this.kill(t, true);
           blown++;
         }
@@ -38319,7 +38348,7 @@ export class World {
       }
       if (fx.type === 'guardSurge' && applyGuardSurge(caster, inst, fx)) {
         this.text(caster.pos, 'TRANSGRESSION!', '#8ab8d8', 14, 'combat');
-        this.flashes.push({ pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 16,
+        this.flashes.push({ recoveryCueTier: effectTier, pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 16,
           color: '#8ab8d8', life: 0.3, maxLife: 0.3 });
       }
       // LINGERING GROUND: the pool stands at the resolved point — for a
@@ -38328,7 +38357,7 @@ export class World {
       // blooms at the FLIGHT'S END instead (the projectile sweep's hook,
       // the litePour/lure law — the lobbed rite pools where it lands).
       if (fx.type === 'spawnZone' && d.type !== 'projectile') {
-        this.zones.push({
+        this.zones.push({ tier: effectTier,
           pos: vec(origin.x, origin.y),
           radius: fx.radius * aoeScale,
           caster, inst, color: cosmeticColor,
@@ -38472,7 +38501,7 @@ export class World {
           const r = rand(40, 70);
           this.remnants.push({
             pos: this.clampPos(vec(caster.pos.x + Math.cos(ang) * r,
-              caster.pos.y + Math.sin(ang) * r), 8),
+              caster.pos.y + Math.sin(ang) * r), 8, undefined, { tier: effectTier }),
             element: pick(els),
             bob: rand(0, Math.PI * 2), life: 14,
           });
@@ -38511,7 +38540,7 @@ export class World {
         mimicRefreshWatch(p, this.time);
         if (!p.mimicWatch || p.mimicWitnessR <= 0) continue;
         if (dist(p.pos, caster.pos) > p.mimicWitnessR) continue;
-        if (!this.lineOfSight(p.pos, caster.pos, p.tier, caster.tier)) continue;
+        if (!this.lineOfSight(p.pos, caster.pos, p.tier, effectTier)) continue;
         if (mimicCapture(this, p, caster, def)) {
           this.notice(`ART WITNESSED: ${def.name}`, '#c8a0e8', 14, 'world'); // off the head, onto the feed (M-CRY: a ledger note is news)
         }
@@ -38709,7 +38738,7 @@ export class World {
   spawnProjectile(caster: Actor, inst: SkillInstance, origin: Vec2, dir: number,
     opts?: {
     // SOVEREIGNTY: targeting — the aim assist picks through hostility (the derived census, probe_tiers RIG T).
-      inherit?: InheritedFlight; depth?: number; mult?: number;
+      tier?: number; inherit?: InheritedFlight; depth?: number; mult?: number;
       flat?: Partial<Record<DamageType, number>>;
       /** ARC-TO override: converge on this point (defaults to the aim). */
       dest?: Vec2;
@@ -38772,7 +38801,7 @@ export class World {
       orbPaint: d.orbPaint,
       // THE TIER LAW: a flight belongs to its caster's layer (chain children
       // spread-copy it; hostility keeps victims same-tier).
-      tier: caster.tier,
+      tier: opts?.tier ?? caster.tier,
       dir, guideDir: dir,
       guided: spiral > 0 || orbit > 0 || spin > 0 || weave > 0,
       speed,
@@ -38858,7 +38887,7 @@ export class World {
       preyId: t?.selectivePierce
         ? (() => {
           let best: Actor | null = null, bd = 700;
-          for (const e of this.enemiesOf(caster)) {
+          for (const e of this.enemiesOf(caster, opts?.tier ?? caster.tier)) {
             const dd = dist(origin, e.pos);
             if (dd < bd) { bd = dd; best = e; }
           }
@@ -39145,7 +39174,7 @@ export class World {
     caster: Actor, inst: SkillInstance, from: Vec2, ang: number,
     d: GroundDelivery,
     useMult: number, flatBonus: Partial<Record<DamageType, number>> | undefined,
-    branches: number, fan = 0,
+    branches: number, fan = 0, tier = caster.tier,
   ): void {
     const fz = d.fissure!;
     const tags = skillContextTags(inst, grantedTags(inst));
@@ -39227,8 +39256,8 @@ export class World {
     const maddenBank = this.maddenBankOf(inst);
     const lay = (px: number, py: number, segAng: number, delay: number, mult: number, linger: number): void => {
       const half = step / 2;
-      this.zones.push({
-        pos: this.clampPos(vec(px, py), 10),
+      this.zones.push({ tier,
+        pos: this.clampPos(vec(px, py), 10, undefined, { tier }),
         radius: d.radius * aoeScale * (fizSizeOver?.from ?? 1),
         seg: {
           ax: px - Math.cos(segAng) * half, ay: py - Math.sin(segAng) * half,
@@ -39551,7 +39580,7 @@ export class World {
       pod.summonInst ? effectiveSkillLevel(pod.summonInst) : pod.level);
     payload.hostSkillId = pod.sourceSkillId;
     this.executeSkill(owner, payload, vec(pod.pos.x, pod.pos.y),
-      { keepFacing: true, noCooldown: true, noRepeat: true });
+      { tier: pod.tier, keepFacing: true, noCooldown: true, noRepeat: true });
     this.text(pod.pos, 'hatched!', pod.color, 12);
   }
 
@@ -39843,7 +39872,7 @@ export class World {
 
   private spawnMinion(
     caster: Actor, inst: SkillInstance,
-    overrides?: { monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number; noReplace?: boolean; offspring?: { maxActive: number; size: number; life: number; damage: number } },
+    overrides?: { tier?: number; monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number; noReplace?: boolean; offspring?: { maxActive: number; size: number; life: number; damage: number } },
   ): Actor | null {
     // SOVEREIGNTY: seat — the summon's story is stamped and clamped (the derived census, probe_tiers RIG T).
     // A support's summon graft (Vessel of Shadow) supplies the delivery when
@@ -39999,7 +40028,7 @@ export class World {
     // the root ducts fights the ducts, not the street over them. Stamped
     // BEFORE the clamp so the mover gate reads the right layer; flat zones
     // (tier 0) walk the identical path.
-    minion.tier = caster.tier;
+    minion.tier = overrides?.tier ?? caster.tier;
     const ang = rand(0, Math.PI * 2);
     minion.pos = overrides?.pos
       ? this.clampPos(vec(overrides.pos.x, overrides.pos.y), minion.radius, undefined, { mover: minion })
@@ -40345,7 +40374,7 @@ export class World {
    */
   spawnConstruct(
     caster: Actor, sourceInst: SkillInstance, d: ConstructDelivery,
-    aim: Vec2, castInst?: SkillInstance, at?: Vec2, scale = 1,
+    aim: Vec2, castInst?: SkillInstance, at?: Vec2, scale = 1, tier = caster.tier,
   ): Actor | null {
     // SOVEREIGNTY: seat — seated on the caster's story (the derived census, probe_tiers RIG T).
     const tags = skillContextTags(sourceInst); // Include tree-granted tags, such as Goad's device identity.
@@ -40498,7 +40527,7 @@ export class World {
     // STORY (layer sovereignty): the working stands on its caster's layer —
     // the flight law's sibling — so its rings, its bell, and the mallet's
     // answer all stay one story's conversation. Flat zones read 0 as ever.
-    c.tier = caster.tier;
+    c.tier = tier;
     const placeRange = d.placeRange ?? 100;
     const dd = dist(caster.pos, aim);
     const ang = angleTo(caster.pos, aim);
@@ -40511,7 +40540,7 @@ export class World {
     // footprint — a wall arriving under a goblin relocates the goblin.
     if (d.clearway) {
       for (const e of this.actors) {
-        if (e === c || e.dead || e.construct || e.anchored || e.leap) continue;
+        if (e === c || e.dead || e.construct || e.anchored || e.leap || !sameStory(c, e)) continue;
         const gap = c.radius + e.radius + 6 - dist(c.pos, e.pos);
         if (gap <= 0) continue;
         this.pushActor(e, dist(c.pos, e.pos) < 1
@@ -41440,14 +41469,14 @@ export class World {
     const r = radius ?? z.radius;
     // A lingering field parked ON a marching skin quenches or stokes it on
     // the zone's own strike cadence — the sustained-pressure verb.
-    this.frontSplash(z.caster, z.inst, cAt, r);
+    this.frontSplash(z.caster, z.inst, cAt, r, z.tier ?? z.caster.tier);
     this.strikeSurfaces(z.caster, cAt, r, (p, pr) =>
       (at !== undefined || radius !== undefined
         ? inAoe(cAt, r, z.shape, z.facing, p, pr, z.arcRad)
         : this.zoneHas(z, p, pr))
       && !zoneHoleSpares(z, p, pr)
       && this.zoneSees(z, p),
-      useStruck ? z.struck : undefined);
+      useStruck ? z.struck : undefined, z.tier ?? z.caster.tier);
   }
 
   /** Scatter an exploding area skill into smaller secondary explosions. */
@@ -41457,12 +41486,13 @@ export class World {
    *  depth 0, so the Aftershocks gem's aoeScatter scatters the dance-step
    *  into secondaries — aftershock flavors by composition, not by variant. */
   private detonateFissureSegment(z: Zone, damageScale: number, radiusScale: number): boolean {
-    if (z.caster.dead || !this.zoneHas(z, z.caster.pos, z.caster.radius)) return false;
+    if (z.caster.dead || z.caster.tier !== (z.tier ?? z.caster.tier)
+      || !this.zoneHas(z, z.caster.pos, z.caster.radius)) return false;
     const radius = z.radius * radiusScale;
     const at = z.seg
       ? vec((z.seg.ax + z.seg.bx) / 2, (z.seg.ay + z.seg.by) / 2)
       : vec(z.pos.x, z.pos.y);
-    this.flashes.push(combatCueFlash(at, 'aftershock', radius, z.facing ?? 0, z.color));
+    this.flashes.push({ ...combatCueFlash(at, 'aftershock', radius, z.facing ?? 0, z.color), recoveryCueTier: z.tier });
     for (const v of this.zoneVictims(z)) {
       const nb = bodyWhere(v, (bp, br) => dist(at, bp) - br <= radius);
       if (!nb) continue;
@@ -41473,11 +41503,11 @@ export class World {
     // THE MALLET: the segment's detonation is a fresh blast at the piece
     // (no sweep ledger, the same wall gates its victims saw).
     this.strikeZoneSurfaces(z, false, at, radius);
-    this.spawnAftershocks(z.caster, z.inst, at, radius, z.shape, 0);
+    this.spawnAftershocks(z.caster, z.inst, at, radius, z.shape, 0, z.tier ?? z.caster.tier);
     return true;
   }
 
-  private spawnAftershocks(caster: Actor, inst: SkillInstance, at: Vec2, radius: number, shape: AoeShape, depth = 0): void {
+  private spawnAftershocks(caster: Actor, inst: SkillInstance, at: Vec2, radius: number, shape: AoeShape, depth = 0, tier = caster.tier): void {
     if (depth > 0) return; // aftershocks don't scatter further
     const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
@@ -41485,8 +41515,8 @@ export class World {
     for (let i = 0; i < scatter; i++) {
       const ang = rand(0, Math.PI * 2);
       const r = rand(radius * 0.4, radius * 1.1);
-      this.zones.push({
-        pos: this.clampPos(vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10),
+      this.zones.push({ tier: tier,
+        pos: this.clampPos(vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10, undefined, { tier }),
         radius: radius * 0.5,
         caster, inst, color: inst.def.color,
         delay: 0.3 + i * 0.12, exploded: false,
@@ -41505,7 +41535,7 @@ export class World {
   private guardianFor(victim: Actor): Actor | null {
     if (victim.isGuarding()) return victim;
     const owner = victim.owner;
-    if (owner && !owner.dead && owner.isGuarding() && dist(owner.pos, victim.pos) <= 240) {
+    if (owner && !owner.dead && sameStory(owner, victim) && owner.isGuarding() && dist(owner.pos, victim.pos) <= 240) {
       const inst = owner.casting!.inst;
       if (owner.sheet.get('guardAegis', skillContextTags(inst), instanceMods(inst)) > 0) {
         return owner;
@@ -41660,6 +41690,8 @@ export class World {
     if (!spec || (cs.shield ?? 0) <= 0) return false;
     const arc = guardArcRadians(guardian);
     if (Math.abs(angleDiff(guardian.facing, angleTo(guardian.pos, threatPos))) > arc / 2) return false;
+
+    guardian.noteRecent('block');
 
     if (guardian === this.player && this.deedEnemy(attacker) && rawDamage > 0) {
       this.recordDeed({ kind: 'block', value: rawDamage });
@@ -42037,9 +42069,9 @@ export class World {
    * literal six-kind union was the registry's stale shadow.
    */
   addTempGround(pos: Vec2, kind: string, radius: number, duration: number,
-    opts?: { shallow?: boolean; evaporate?: { rate?: number } }): void {
+    opts?: { tier?: number; shallow?: boolean; evaporate?: { rate?: number } }): void {
     const doodad: Doodad = {
-      pos: vec(pos.x, pos.y), radius, kind,
+      pos: vec(pos.x, pos.y), radius, kind, tier: opts?.tier ?? 0,
       ...(opts?.shallow ? { shallow: true } : {}),
     };
     this.doodads.push(doodad);
@@ -42258,7 +42290,7 @@ export class World {
     caster: Actor, inst: SkillInstance, at: Vec2, radius: number,
     shape: AoeShape, facing: number, useMult: number,
     tags: Set<SkillTag>, extra: Modifier[], arcRad?: number, edgeFrac?: number,
-    walkFacing?: number,
+    walkFacing?: number, tier = caster.tier,
   ): void {
     const burstDelivery = instanceDelivery(inst);
     const burstVoice = burstDelivery.type === 'nova'
@@ -42293,7 +42325,7 @@ export class World {
         queue: pQueue.length ? [...pQueue] : undefined,
       } : undefined;
     if (pulseN > 0) {
-      this.zones.push({
+      this.zones.push({ tier,
         pos: vec(at.x, at.y), radius, caster, inst, color: inst.def.color,
         delay: 0, exploded: true,
         linger: pulseSpan, linger0: pulseSpan,
@@ -42348,7 +42380,7 @@ export class World {
       const scaleStep = spec?.scaleStep ?? 1;
       const dmgStep = spec?.dmgStep ?? 0.75;
       for (const p of walkPoints(spec, nativeCount, from)) {
-        this.zones.push({
+        this.zones.push({ tier,
           pos: vec(p.x, p.y), radius: radius * Math.pow(scaleStep, p.k),
           caster, inst, color: inst.def.color,
           delay: delayBase + p.beatAt, exploded: false,
@@ -42371,7 +42403,7 @@ export class World {
         const mult = useMult * Math.pow(rDmgStep, p.k);
         const delayBase = 0.12 + p.beatAt;
         const quakes = pulseN > 0;
-        this.zones.push({
+        this.zones.push({ tier,
           pos: vec(p.x, p.y), radius: radius * Math.pow(rScaleStep, p.k),
           caster, inst, color: inst.def.color,
           delay: delayBase, exploded: false,
@@ -42421,7 +42453,7 @@ export class World {
     const radius = 80 * caster.sheet.get('aoeRadius', tags, extra);
     const linger = Math.max(fieldSecs, healField ? 4 : 0)
       * caster.sheet.get('effectDuration', tags, extra);
-    this.zones.push({
+    this.zones.push({ tier: caster.tier,
       pos: vec(at.x, at.y),
       radius,
       caster, inst, color: healField ? '#8ae0a8' : inst.def.color,
@@ -42853,7 +42885,7 @@ export class World {
    *  already swept the enemies). */
   private healAlliesInArea(
     caster: Actor, inst: SkillInstance, accepts: (a: Actor) => boolean,
-    mult = 1, quiet = false, once?: Set<number>,
+    mult = 1, quiet = false, once?: Set<number>, tier = caster.tier,
   ): void {
     // `once` is a per-CROSSING ledger (the sweep zones' own struck set):
     // a drifting crescent mends each ally exactly once per pass — a
@@ -42864,7 +42896,7 @@ export class World {
     const fxs = inst.def.effects.filter(fx => fx.type === 'heal' || fx.type === 'cleanse');
     if (!fxs.length) return;
     for (const a of this.actors) {
-      if (a.dead || a.downed || a.untargetable || a.construct || a.team !== caster.team || !sameStory(a, caster)) continue; // (the sovereignty gate)
+      if (a.dead || a.downed || a.untargetable || a.construct || a.team !== caster.team || a.tier !== tier) continue; // (the sovereignty gate)
       if (once?.has(a.id)) continue;
       if (!accepts(a)) continue;
       let touched = false;
@@ -42923,7 +42955,7 @@ export class World {
   private burstDamage(pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team, sourceTier = 0, sourceActor?: Actor, recoveryCue?: string, visual?: string): void {
     for (const e of this.actors) {
       if (!this.isBurstTarget(e, sourceTeam, sourceTier)) continue;
-      if (sourceActor && !this.hostileTo(sourceActor, e)) continue;
+      if (sourceActor && !this.hostileTo(sourceActor, e, sourceTier)) continue;
       if (dist(pos, e.pos) - e.radius > radius) continue;
       const out: { clamped?: boolean } = {};
       const packet: DamagePacket = { amounts: { [type]: dmg }, crit: false,
@@ -42945,18 +42977,18 @@ export class World {
       if (e.life <= 0 && !e.dead) this.kill(e, false, sourceActor);
     }
     this.flashes.push(recoveryCue ? { ...combatCueFlash(pos, recoveryCue, radius, 0, color), recoveryCueTier: sourceTier }
-      : { pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35,
-        ...(visual ? { fx: visual, recoveryCueTier: sourceTier } : {}) });
+      : { pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35, recoveryCueTier: sourceTier,
+        ...(visual ? { fx: visual } : {}) });
     // THE MALLET, ownerless: a baked blast rings EVERY side's bells and
     // pops brittle scenery — the exploding corpse beside the bell already
     // damaged it without a toll; now the blast answers too.
-    this.strikeSurfaces(null, pos, radius);
+    this.strikeSurfaces(null, pos, radius, undefined, undefined, sourceTier);
     // The ownerless lane carries its type in hand — a marching skin under
     // the blast drinks it directly (quench/feed, FrontSpec levers).
-    if (this.creep?.quenchable) this.creep.damageSkin(pos.x, pos.y, radius, { [type]: dmg });
+    if (this.creep?.quenchable) this.creep.damageSkin(pos.x, pos.y, radius, { [type]: dmg }, sourceTier);
     // THE IGNITION DIAL (FrontSpawnRow.ignition): the same blast KINDLES
     // a lit lane's fuel under it — null-cost everywhere the dial is off.
-    if (this.creep?.ignitable) this.creep.igniteAt(pos.x, pos.y, radius, { [type]: dmg }, this.time);
+    if (this.creep?.ignitable) this.creep.igniteAt(pos.x, pos.y, radius, { [type]: dmg }, this.time, sourceTier);
   }
 
   // --- DEATH BURST: the telegraphed coalesce → implode / tracking-orb on enemy death ---
@@ -43303,7 +43335,9 @@ export class World {
     // The CALM clock: any blow involving the player's side is "recent combat"
     // for calm-gated dwells (the mercenary outpost's parley).
     if (caster.team === 'player' || target.team === 'player') {
-      this.lastCombatAt = this.time;
+      if (!target.puzzleNode || puzzleContactHeatsCombat(this.puzzles.find(r => r.id === target.puzzleNode!.id), target)) {
+        this.lastCombatAt = this.time;
+      }
       // THE GRUDGE STAMP (survivor trigger eligibility): the world notices a
       // foe that traded blows with a hero — in either direction.
       if (caster.team === 'enemy' && this.seatOf(target)) caster.grudgeMark = true;
@@ -43649,7 +43683,7 @@ export class World {
         target.lastSpillAt = this.time;
         const item = target.lootSack.pop()!;
         this.drops.push({
-          pos: vec(target.pos.x + rand(-20, 20), target.pos.y + rand(-20, 20)),
+          pos: this.clampPos(vec(target.pos.x + rand(-20, 20), target.pos.y + rand(-20, 20)), 10, undefined, { tier: target.tier }),
           item, bob: rand(0, Math.PI * 2),
           tier: target.tier, // THE SPOILS STORY: shaken loose where the sack stands
         });
@@ -46767,8 +46801,8 @@ export class World {
       if (actor.lootSack?.length) {
         for (const item of actor.lootSack) {
           this.drops.push({
-            pos: vec(actor.pos.x + rand(-26, 26), actor.pos.y + rand(-26, 26)),
-            item, bob: rand(0, Math.PI * 2),
+            pos: this.clampPos(vec(actor.pos.x + rand(-26, 26), actor.pos.y + rand(-26, 26)), 10, undefined, { tier: actor.tier }),
+            item, bob: rand(0, Math.PI * 2), tier: actor.tier,
           });
         }
         actor.lootSack = undefined;
@@ -47317,8 +47351,7 @@ export class World {
       : null;
     const groups = memoryGroups(units).map((g): MemoryRecallGroup => {
       const def = MONSTERS[g.d];
-      const name = def?.name
-        ?? (g.d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : MEMORY_FOUND_SOURCES[g.d] ?? g.d);
+      const name = memoryProvenanceLabel(g.d, def?.name);
       // THE PROMISE's row wears no lean chips — the sealed gem IS its odds
       // face (a vanished id degrades to the wild rung, exactly as the cut
       // falls: drawn == rolled).
@@ -50621,10 +50654,10 @@ export class World {
     // predicate) REFUSES the brush while its siphon drinks: the refusal
     // floats throttled, and the moment the thief falls the same brush
     // attunes. Radius is data (LEYLINE_CFG.attuneRadius — the historical 70).
-    if (!this.player.dead && !this.player.downed && this.waypointPos
+    if (this.waypointPos
       && !this.discoveredWaypoints.has(this.zone.id)
-      && this.player.tier === 0 // THE SAME-STORY LAW: the stone stands on the ground floor (placed on the base grid)
-      && dist(this.player.pos, this.waypointPos) <= LEYLINE_CFG.attuneRadius) {
+      && this.touchers().some(h => h.tier === 0
+        && dist(h.pos, this.waypointPos!) <= LEYLINE_CFG.attuneRadius)) {
       if (this.waypointBesieged()) {
         if (this.time - this.wpRefusedAt > 2.5) {
           this.wpRefusedAt = this.time;
@@ -50963,11 +50996,11 @@ export class World {
     // (EXTRACT encounters never step-open: theirs is the DWELL — an act of
     // attention, armed by updateExtraction — a knockback across a seam must
     // not start a defense.)
-    if (!this.player.dead && !this.player.downed) {
+    for (const h of this.touchers()) {
       for (const e of this.encounters) {
         if (e.phase !== 'dormant' || e.def.extract) continue;
         // (THE SAME-STORY LAW: an encounter seats on the ground floor — a storey walker over it never steps it open.)
-        if (this.player.tier === 0 && dist(this.player.pos, e.pos) <= this.player.radius + e.def.trigger.activateRadius) {
+        if (h.tier === 0 && dist(h.pos, e.pos) <= h.radius + e.def.trigger.activateRadius) {
           this.openEncounter(e);
         }
       }
@@ -50975,10 +51008,9 @@ export class World {
 
     // Fractures: RUN OVER the volatile fracture object (no dwell — it's twitchy)
     // to unleash the crawling fissure. No return; you keep playing as it crawls.
-    if (!this.player.dead && !this.player.downed
-      && this.fractureRun && this.fractureRun.phase === 'dormant'
-      && this.player.tier === 0 // THE SAME-STORY LAW: the fracture seats on the ground floor
-      && dist(this.player.pos, this.fractureRun.origin) <= this.player.radius + 26) {
+    if (this.fractureRun && this.fractureRun.phase === 'dormant'
+      && this.touchers().some(h => h.tier === 0
+        && dist(h.pos, this.fractureRun!.origin) <= h.radius + 26)) {
       this.triggerFracture();
     }
 
@@ -51147,7 +51179,7 @@ export class World {
     for (const c of this.playerCorpses) {
       if (c.reclaimed || !this.canReclaim(c)) continue;
       if (dist(c.pos, this.player.pos) > transitRadius('corpse_reclaim', CORPSE_RADIUS)
-        || !this.dwellReachable(this.player.pos, c.pos, transitReach('corpse_reclaim'), this.storyPair(this.player))) continue;
+        || !this.dwellReachable(this.player.pos, c.pos, transitReach('corpse_reclaim'), this.storyPair(this.player, c))) continue;
       out.push({ pos: vec(c.pos.x, c.pos.y), frac: clamp(c.dwell / transitDwell('corpse_reclaim', CORPSE_DWELL), 0, 1), kind: 'corpse_reclaim' });
     }
     return out;
@@ -53632,11 +53664,15 @@ export class World {
    *  preserves insertion order) — the old clear-on-overflow dumped every
    *  cached ray at once, so crowded fights re-marched them all next frame
    *  (a per-frame thrash cliff at exactly the moment frames were dearest). */
-  private losMemo = new Map<number, { ok: boolean; until: number }>();
+  private losMemo = new Map<number, { ok: boolean; until: number; fromTier: number; toTier: number }>();
   losCached(a: Actor, b: Actor): boolean {
-    const key = a.id * 1_000_000 + b.id;
+    // Two 26-bit ids fit exactly in a JavaScript integer. Larger ids use a
+    // fresh ray so a long-running world can never alias two actor pairs.
+    const stride = 2 ** 26;
+    if (a.id >= stride || b.id >= stride) return this.lineOfSight(a.pos, b.pos, a.tier, b.tier);
+    const key = a.id * stride + b.id;
     const hit = this.losMemo.get(key);
-    if (hit && hit.until > this.time) return hit.ok;
+    if (hit && hit.until > this.time && hit.fromTier === a.tier && hit.toTier === b.tier) return hit.ok;
     const ok = this.lineOfSight(a.pos, b.pos, a.tier, b.tier);
     if (this.losMemo.size > 4096) {
       let drop = this.losMemo.size - 3072;
@@ -53653,10 +53689,11 @@ export class World {
     // average, expiries spread across the window, and no draw from any rng
     // stream (seeded sim runs stay byte-identical).
     const j = LOS_CFG.memoJitter;
+    const legacyKey = a.id * 1_000_000 + b.id;
     const ttl = j > 0
-      ? LOS_CFG.memoTtl * (1 - j / 2 + j * ((Math.imul(key, 0x9E3779B1) >>> 16) / 65536))
+      ? LOS_CFG.memoTtl * (1 - j / 2 + j * ((Math.imul(legacyKey, 0x9E3779B1) >>> 16) / 65536))
       : LOS_CFG.memoTtl;
-    this.losMemo.set(key, { ok, until: this.time + ttl });
+    this.losMemo.set(key, { ok, until: this.time + ttl, fromTier: a.tier, toTier: b.tier });
     return ok;
   }
 
@@ -54512,7 +54549,7 @@ export class World {
     const apex = vec(v.pos.x, v.pos.y - (GEYSER_CFG.classes[v.cls].columnR * 2.4 + 36));
     for (const c of rainFanOf(v, ventIdx, k, this.windAt(v.pos), countMul)) {
       const at = this.clampPos(vec(c.x, c.y), 10);
-      this.zones.push({
+      this.zones.push({ tier: caster.tier,
         pos: at, radius: R.dropletR, caster, inst, color: skill.color,
         delay: GEYSER_CFG.rainDelay, delay0: GEYSER_CFG.rainDelay, exploded: false, linger: 0,
         tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
@@ -55652,15 +55689,15 @@ export class World {
    *  data, no element table. Sits beside the mallet seam at every blast
    *  site; null-cost while no live front carries a lever, and the roll is
    *  the ordinary one (the same dice a victim would see). */
-  private frontSplash(caster: Actor | null, inst: SkillInstance | null | undefined, at: Vec2, reach: number): void {
+  private frontSplash(caster: Actor | null, inst: SkillInstance | null | undefined, at: Vec2, reach: number, tier = caster?.tier ?? 0): void {
     if (!caster || !inst || !this.creep || (!this.creep.quenchable && !this.creep.ignitable)) return;
     const amounts = rollSkillDamage(caster, inst).amounts;
-    if (this.creep.quenchable) this.creep.damageSkin(at.x, at.y, reach, amounts);
+    if (this.creep.quenchable) this.creep.damageSkin(at.x, at.y, reach, amounts, tier);
     // THE IGNITION DIAL (FrontSpawnRow.ignition): sustained fire into a lit
     // lane's FUEL births a section — authored per lane (the Char), null-
     // cost everywhere the dial is off (the global default: player casts
     // never ignite fronts).
-    if (this.creep.ignitable) this.creep.igniteAt(at.x, at.y, reach, amounts, this.time);
+    if (this.creep.ignitable) this.creep.igniteAt(at.x, at.y, reach, amounts, this.time, tier);
   }
 
   /** The runtime seam every package/monster fog-bringer uses: get the zone's
@@ -56090,10 +56127,11 @@ export class World {
       if (ground) this.applyRegionEffects(a, ground.kind, ground.deep, prevG !== ground.kind, dt, drained);
       // GRID-sourced region (Phase 3: void/deep_water/air_pocket/…).
       if (hasGrid) {
-        const gk = this.walk!.regionAt?.(a.pos.x, a.pos.y);
+        const sampled = this.walk!.regionAt?.(a.pos.x, a.pos.y);
+        const gk = (regionKind(sampled)?.tier ?? 0) === a.tier ? sampled : undefined;
         const prevR = a.gridRegion;
         a.gridRegion = gk;
-        if (gk && gk !== prevR) regionKind(prevR)?.onExit?.(a, this);
+        if (gk !== prevR) regionKind(prevR)?.onExit?.(a, this);
         if (gk) this.applyRegionEffects(a, gk, false, prevR !== gk, dt, drained);
       }
       // THE DOUSE BEAT — ground as cure (RegionKind.douses): with both
@@ -56256,35 +56294,45 @@ export class World {
   /** Burst a chest open: one contextual loot list and a swig of resources. */
   private openChest(c: Chest): void {
     if (c.opened) return;
-    c.opened = true;
-    c.openedAt = this.time; // M-SPILL: the lid swings (the renderer's own clock read)
-    if (!this.spoilsSealed()) {
-      for (const result of resolveLootTable(selectContainerLoot('chest', this.zone), { ilvl: this.zone.level, sourceId: 'chest' })) {
-        this.mintLootResult(c.pos, result, false, 'chest'); // THE MEMORY LAW: the chest is the provenance
+    const previousStory = this.spoilStory;
+    this.spoilStory = c.tier ?? this.spoilStoryAt(c.pos);
+    try {
+      c.opened = true;
+      c.openedAt = this.time; // M-SPILL: the lid swings (the renderer's own clock read)
+      if (!this.spoilsSealed()) {
+        for (const result of resolveLootTable(selectContainerLoot('chest', this.zone), { ilvl: this.zone.level, sourceId: 'chest' })) {
+          this.mintLootResult(c.pos, result, false, 'chest'); // THE MEMORY LAW: the chest is the provenance
+        }
       }
-    }
-    // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled
-    // GEAR piece at exactly that rarity, on top of the ordinary container pay.
-    // Spoils-sealed ground still seals it (dropGearAt rides the same law).
-    if (c.rarity) {
-      const item = rollItem({ ilvl: Math.max(1, this.zone.level), rarityWeights: { [c.rarity]: 1 } });
-      if (item) {
-        this.dropGearAt(vec(c.pos.x, c.pos.y + 8), item); // the glyph's own rarity color is the read (M-SPILL: no caption)
+      // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled
+      // GEAR piece at exactly that rarity, on top of the ordinary container pay.
+      // Spoils-sealed ground still seals it (dropGearAt rides the same law).
+      if (c.rarity) {
+        const item = rollItem({ ilvl: Math.max(1, this.zone.level), rarityWeights: { [c.rarity]: 1 } });
+        if (item) {
+          this.dropGearAt(vec(c.pos.x, c.pos.y + 8), item); // the glyph's own rarity color is the read (M-SPILL: no caption)
+        }
       }
-    }
-    for (let i = 0; i < 2; i++) {
-      this.shedOrb(chance(0.5) ? 'life' : 'mana', c.pos, { scatter: 22, life: 14 });
-    }
-    this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 50, color: '#e8c87a', life: 0.4, maxLife: 0.4, fx: 'sparkle' }); // M-SPILL: the lid + the glints, no caption
+      for (let i = 0; i < 2; i++) {
+        this.shedOrb(chance(0.5) ? 'life' : 'mana', c.pos, { scatter: 22, life: 14 });
+      }
+      this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 50, color: '#e8c87a', life: 0.4, maxLife: 0.4, fx: 'sparkle', recoveryCueTier: c.tier }); // M-SPILL: the lid + the glints, no caption
+    } finally { this.spoilStory = previousStory; }
+  }
+
+  /** Only living human seats activate shared touch interactions. */
+  private touchers(): Actor[] {
+    return this.seats.filter(s => !('keeper' in s && s.keeper) && !s.merc && !s.actor.dead && !s.actor.downed).map(s => s.actor);
   }
 
   private updateChests(dt: number): void {
-    const p = this.player;
-    if (p.dead) return;
+    const hands = this.touchers();
+    if (!hands.length) return;
     for (let i = this.chests.length - 1; i >= 0; i--) {
       const c = this.chests[i];
       if (c.opened) continue;
-      const near = dist(c.pos, p.pos) <= p.radius + 60;
+      c.tier ??= this.spoilStoryAt(c.pos);
+      const near = hands.some(h => sameStory(h, c) && dist(c.pos, h.pos) <= h.radius + 60);
       if (c.kind === 'objective') {
         if (this.objectiveDone && near) this.openChest(c);
         continue;
@@ -56298,7 +56346,8 @@ export class World {
             // It was never a chest.
             const m = this.createMonster(FIXTURE_IDS.mimic, Math.max(1, this.zone.level), 'enemy');
             m.fromZoneGen = true; // a revealed chest cannot respawn on a return trip
-            m.pos = this.clampPos(vec(c.pos.x, c.pos.y), m.radius);
+            m.tier = c.tier;
+            m.pos = this.clampPos(vec(c.pos.x, c.pos.y), m.radius, undefined, { mover: m });
             this.actors.push(m);
             this.emergeBody(m, { host: true }); // THE EMERGENCE GRAMMAR: it was never a chest — the mimic BURSTS OUT of it (no caption)
           } else {
@@ -56314,12 +56363,15 @@ export class World {
 
   /** Shrines: first touch drinks the buff; the shrine goes dark. */
   private updateShrines(): void {
-    const p = this.player;
-    if (p.dead) return;
+    const hands = this.touchers();
+    if (!hands.length) return;
     for (const s of this.shrines) {
-      if (s.used || dist(s.pos, p.pos) > p.radius + 24) continue;
+      if (s.used) continue;
+      s.tier ??= this.spoilStoryAt(s.pos);
+      const p = hands.find(h => sameStory(h, s) && dist(s.pos, h.pos) <= h.radius + 24);
+      if (!p) continue;
       s.used = true;
-      p.addBuff({ type: 'buff', id: 'shrine_' + s.def.id, duration: s.def.duration, mods: s.def.mods });
+      p.addBuff({ type: 'buff', id: 'shrine_' + s.def.id, label: s.def.name, duration: s.def.duration, mods: s.def.mods });
       this.text(vec(s.pos.x, s.pos.y - 20), s.def.name + '!', s.def.color, 16);
       this.flashes.push({ pos: vec(s.pos.x, s.pos.y), radius: 60, color: s.def.color, life: 0.45, maxLife: 0.45 });
     }
@@ -57250,7 +57302,7 @@ export class World {
         cs.stormTimer = 1.1 / speed;
         const ang = rand(0, Math.PI * 2);
         const r = rand(40, 210);
-        this.zones.push({
+        this.zones.push({ tier: a.tier,
           pos: this.clampPos(vec(a.pos.x + Math.cos(ang) * r, a.pos.y + Math.sin(ang) * r), 10),
           radius: 52 * a.sheet.get('aoeRadius', tags, extra),
           caster: a, inst: cs.inst, color: '#ffe14a',
@@ -57281,7 +57333,7 @@ export class World {
       const aim = s.caster.aimPos ?? s.aim;
       const from = s.origin ?? s.caster.pos;
       this.spawnProjectile(s.caster, s.inst, vec(from.x, from.y),
-        angleTo(from, aim), { mult: s.mult, flat: s.flat });
+        angleTo(from, aim), { tier: s.tier, mult: s.mult, flat: s.flat });
       if (--s.shots <= 0) this.pendingSalvos.splice(i, 1);
     }
     // Sequence steps (AimSpec.sequence): deliver each baked bearing on its
@@ -58285,7 +58337,7 @@ export class World {
 
   /** Where a returning projectile is headed. */
   private returnTarget(p: Projectile): Vec2 {
-    return p.returnMode === 2 && !p.caster.dead ? p.caster.pos : p.origin;
+    return p.returnMode === 2 && !p.caster.dead && sameStory(p, p.caster) ? p.caster.pos : p.origin;
   }
 
   /** Flip a spent projectile into its homeward flight (if it returns). */
@@ -58647,10 +58699,10 @@ export class World {
     // SOVEREIGNTY: targeting — homing picks through hostility (rim duels are authored) (the derived census, probe_tiers RIG T).
     if (p.preyId !== undefined) {
       const prey = this.actorById(p.preyId);
-      return prey && !prey.dead ? prey : null;
+      return prey && !prey.dead && this.hostileTo(p.caster, prey, p.tier ?? 0) ? prey : null;
     }
     let target: Actor | null = null, bestD = 500;
-    for (const e of this.enemiesOf(p.caster)) {
+    for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
       // THE SEEKWORTHY GATE: a seeker chases things that FIGHT. Passive
       // scenery armor (pots, racks, bells) and the caster's OWN breakable
       // conjurations (in his pool so his blows can demolish them) never
@@ -58680,7 +58732,7 @@ export class World {
         this.spawnProjectile(p.caster,
           makeSkillInstance(SKILLS[SHRAPNEL_SKILL], effectiveSkillLevel(p.inst)),
           vec(p.pos.x, p.pos.y), abandoned + rand(-0.12, 0.12),
-          { depth: p.depth + 1, mult: p.mult * 0.6 });
+          { tier: p.tier ?? 0, depth: p.depth + 1, mult: p.mult * 0.6 });
       }
     }
   }
@@ -58736,6 +58788,7 @@ export class World {
       if (p.orbit > 0) {
         const orbitAnchor = p.orbitAnchorId !== undefined ? this.actorById(p.orbitAnchorId) : p.caster;
         if (orbitAnchor && !orbitAnchor.dead) {
+          p.tier = orbitAnchor.tier;
           p.anchor.x = orbitAnchor.pos.x; p.anchor.y = orbitAnchor.pos.y;
         }
       } else {
@@ -58850,7 +58903,7 @@ export class World {
     // cadence; the beats belong to ground and slams.
     const bSigil = Math.round(p.caster.sheet.get('aoeShape', tags, extra));
     const bShape = bSigil === 1 || bSigil === 2 ? bSigil : 0;
-    for (const e of this.enemiesOf(p.caster)) {
+    for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
       if (e.id === exceptId) continue; // the direct hit already landed
       if (e.tier !== (p.tier ?? 0)) continue; // the splash lands on the flight's story (the sovereignty gate)
       if (bShape
@@ -58859,7 +58912,7 @@ export class World {
       if (p.parryDamage) this.resolveParryDamage(p.caster, e, p.parryDamage, scale, p.pos);
       else this.resolveHit(p.caster, p.inst, e, scale * p.mult, 1, undefined, false, false, undefined, p.origin, p.tier);
     }
-    this.flashes.push({
+    this.flashes.push({ recoveryCueTier: p.tier,
       pos: vec(p.pos.x, p.pos.y), radius, color: p.inst.def.color,
       life: 0.3, maxLife: 0.3,
       shape: bShape, facing: p.dir,
@@ -58922,7 +58975,7 @@ export class World {
       this.spawnProjectile(p.caster,
         makeSkillInstance(SKILLS[SHRAPNEL_SKILL], effectiveSkillLevel(p.inst)),
         vec(p.pos.x, p.pos.y), (s / shed) * Math.PI * 2,
-        { depth: p.depth + 1, mult: p.mult * 0.7 });
+        { tier: p.tier ?? 0, depth: p.depth + 1, mult: p.mult * 0.7 });
     }
     return true;
   }
@@ -59016,7 +59069,7 @@ export class World {
           p.anchor.y = fw.y;
           p.traveled = 0;
           p.hits.clear();
-          this.flashes.push({
+          this.flashes.push({ recoveryCueTier: p.tier,
             pos: vec(fw.x, fw.y), radius: p.radius + FOURTH_WALL_CFG.proj.flashPad,
             color: p.color, life: 0.18, maxLife: 0.18,
           });
@@ -59040,7 +59093,7 @@ export class World {
               runOver: 'collect',
               collect: { charge: cspec.charge, amount: cspec.amount, max: cspec.max },
             },
-          }, p.pos, undefined, vec(p.landAt.x, p.landAt.y));
+          }, p.pos, undefined, vec(p.landAt.x, p.landAt.y), 1, p.tier ?? 0);
         }
         p.dissolved = true;
         this.projectiles.splice(i, 1);
@@ -59080,12 +59133,12 @@ export class World {
           p.range = p.range0 ?? p.range;
           p.origin = vec(p.pos.x, p.pos.y);
           p.hits.clear();
-          this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18 });
+          this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18 });
         } else {
           const ct = (p.inst.def.delivery as ProjectileDelivery).catch;
-          if (ct && !p.caster.dead) {
+          if (ct && !p.caster.dead && sameStory(p, p.caster)) {
             p.caster.gainCharge(ct.charge, ct.amount, ct.max, p.inst);
-            this.flashes.push({
+            this.flashes.push({ recoveryCueTier: p.tier,
               pos: vec(p.caster.pos.x, p.caster.pos.y), radius: p.caster.radius + 8,
               color: p.color, life: 0.2, maxLife: 0.2,
             });
@@ -59123,7 +59176,7 @@ export class World {
           // beside a closed door's slab line instead of dying on the old
           // breach-spanning circle.
           if (shapeContains(hitSurfaceOf(o, 'shot'), o.pos.x, o.pos.y, p.pos.x, p.pos.y, this.projNose(p) + 1e-9)) {
-          this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') }); // THE ARROW'S END on a surface: its type's voice, a shaft dusts
+          this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') }); // THE ARROW'S END on a surface: its type's voice, a shaft dusts
             if (p.bounces && p.bounces > 0) {
               p.bounces--;
               const surf = hitSurfaceOf(o, 'shot');
@@ -59166,7 +59219,7 @@ export class World {
         const hitT = castGridRay(this.walk, prev, p.pos, 'shot', elev);
         if (hitT !== null) {
           const sx = prev.x + sdx * hitT, sy = prev.y + sdy * hitT;
-          this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') });
+          this.flashes.push({ recoveryCueTier: p.tier, pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') });
           if (p.bounces && p.bounces > 0) {
             p.bounces--;
             // Back off by at most half a cell, then test the two axes with
@@ -59197,7 +59250,7 @@ export class World {
         const prey = this.actorById(p.preyId);
         if (!prey || prey.dead) {
           let best: Actor | null = null, bd = 700;
-          for (const e of this.enemiesOf(p.caster)) {
+          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
             const dd = dist(p.pos, e.pos);
             if (dd < bd) { bd = dd; best = e; }
           }
@@ -59210,7 +59263,7 @@ export class World {
         if (reflected) {
           p.pos = reflected.at;
           this.reflectParriedProjectile(p, reflected.owner, reflected.power);
-          this.flashes.push({ pos: { ...p.pos }, radius: reflected.radius, color: reflected.color, life: 0.18, maxLife: 0.18 });
+          this.flashes.push({ recoveryCueTier: p.tier, pos: { ...p.pos }, radius: reflected.radius, color: reflected.color, life: 0.18, maxLife: 0.18 });
           if (p.dissolved) this.projectiles.splice(i, 1);
           continue;
         }
@@ -59229,7 +59282,7 @@ export class World {
         let parryTurned = false;
         if (!dead) dead = this.interceptProjectileDomes(p);
         if (!dead) {
-          for (const enemy of this.enemiesOf(p.caster)) {
+          for (const enemy of this.enemiesOf(p.caster, p.tier ?? 0)) {
             if (p.age < (p.hits.get(enemy.id) ?? -Infinity)) continue;
             const touch = this.projTouchesBody(p, enemy);
             if (!touch) continue;
@@ -59269,15 +59322,15 @@ export class World {
         const aoeMul = p.caster.sheet.get('aoeRadius', tTags, tExtra);
         if (ts.blast) {
           const radius = ts.blast.radius * aoeMul;
-          for (const e of this.enemiesOf(p.caster)) {
+          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
             if (e.id === p.lastHitId) continue;
             if (dist(p.pos, e.pos) - e.radius > radius) continue;
             this.resolveHit(p.caster, p.inst, e, (ts.blast.damageScale ?? 0.35) * p.mult, 1, p.flat, false, false, undefined, p.origin, p.tier);
           }
-          this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius, color: p.color, life: 0.22, maxLife: 0.22 });
+          this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius, color: p.color, life: 0.22, maxLife: 0.22 });
           // THE MALLET: each path-blast is a fresh strike surface — on the
           // FLIGHT's story (the projectile law), not the caster's current one.
-          this.frontSplash(p.caster, p.inst, p.pos, radius);
+          this.frontSplash(p.caster, p.inst, p.pos, radius, p.tier ?? 0);
           this.strikeSurfaces(p.caster, p.pos, radius, undefined, undefined, p.tier ?? 0);
         }
         if (ts.zone) {
@@ -59289,7 +59342,7 @@ export class World {
           const tLinger = ts.zone.duration
             * speedLingerMul(ts.zone.durationBySpeed, p.speed)
             * p.caster.sheet.get('effectDuration', tTags, tExtra);
-          this.zones.push({
+          this.zones.push({ tier: p.tier ?? 0,
             pos: vec(p.pos.x, p.pos.y),
             radius: ts.zone.radius * aoeMul * (tso?.from ?? 1),
             caster: p.caster, inst: p.inst, color: p.color,
@@ -59327,7 +59380,7 @@ export class World {
         const baseLinger = (volatile || aftershock || roulette)
           ? Math.max(fs.linger, 5) : fs.linger;
         const linger = baseLinger * p.caster.sheet.get('effectDuration', fTags, fExtra);
-        this.zones.push({
+        this.zones.push({ tier: p.tier ?? 0,
           pos: vec(p.pos.x, p.pos.y),
           radius: fs.radius * p.caster.sheet.get('aoeRadius', fTags, fExtra),
           caster: p.caster, inst: p.inst, color: p.color,
@@ -59353,7 +59406,7 @@ export class World {
         p.auraTick = (p.auraTick ?? PROJ_AURA_TICK) - dt;
         if (p.auraTick <= 0) {
           p.auraTick += PROJ_AURA_TICK;
-          for (const e of this.enemiesOf(p.caster)) {
+          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
             if (dist(p.pos, e.pos) - e.radius > p.auraRadius) continue;
             const tick: Partial<Record<DamageType, number>> = {};
             for (const [k, v] of Object.entries(p.auraAmounts)) {
@@ -59381,7 +59434,7 @@ export class World {
             : (p.emit.angle += 2.39996); // golden-angle rotation
           const espec = (p.inst.def.delivery as ProjectileDelivery).emit;
           this.spawnProjectile(p.caster, p.emit.inst, p.pos, ang,
-            { inherit: this.inheritedFlight(p, espec?.inherit), depth: p.depth + 1, mult: p.mult });
+            { tier: p.tier ?? 0, inherit: this.inheritedFlight(p, espec?.inherit), depth: p.depth + 1, mult: p.mult });
         }
       }
 
@@ -59401,12 +59454,12 @@ export class World {
           if (!this.projTouches(p, c.pos.x, c.pos.y, c.radius)) continue;
           p.hits.set(c.id, p.rehit ? p.age + p.rehit : Infinity);
           if (this.ringBell(c)) {
-            this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.15, maxLife: 0.15 });
+            this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.15, maxLife: 0.15 });
           }
         }
       }
       if (!dead) {
-        for (const enemy of this.enemiesOf(p.caster)) {
+        for (const enemy of this.enemiesOf(p.caster, p.tier ?? 0)) {
           const until = p.hits.get(enemy.id);
           if (until !== undefined && p.age < until) continue;
           // SELECTIVE PIERCE (Heartchaser): everything but the prey is
@@ -59453,7 +59506,7 @@ export class World {
             this.attackSequences.beforeContact(p);
             this.resolveHit(p.caster, p.inst, enemy, p.mult, 0, hitFlat, false, false, undefined, p.origin, p.tier);
             // THE HIT VOICE (engine/bodyVoices.ts): the impact speaks the blow's type — fire flares, cold crackles, lightning sparks, chaos spatters, a shaft flecks the body.
-            this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(enemy.hitFlashType ?? p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'body') });
+            this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(enemy.hitFlashType ?? p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'body') });
             // SHATTER: the first impact flings a fan of shard projectiles
             // onward, raking the cone behind the victim. A skill's INNATE
             // shatter (Ice Spear) and the projShrapnel stat (the Shrapnel
@@ -59472,7 +59525,7 @@ export class World {
                 this.spawnProjectile(p.caster,
                   makeSkillInstance(shardSkill, effectiveSkillLevel(p.inst)),
                   vec(p.pos.x, p.pos.y), p.dir + off,
-                  { inherit, depth: p.depth + 1, mult: p.mult });
+                  { tier: p.tier ?? 0, inherit, depth: p.depth + 1, mult: p.mult });
                 // Shards rake the cone BEHIND the victim — never the victim
                 // itself (they spawn inside its body).
                 this.projectiles[this.projectiles.length - 1].hits.set(enemy.id, Infinity);
@@ -59519,7 +59572,7 @@ export class World {
                 p.traveled = 0;
                 p.range = 1e9;          // the trip to the circle is free
                 p.maxAge = undefined;
-                this.flashes.push({
+                this.flashes.push({ recoveryCueTier: p.tier,
                   pos: vec(p.landAt.x, p.landAt.y), radius: 26, color: p.color,
                   life: 0.9, maxLife: 0.9, edgeFrac: 0.8,
                 });
@@ -59544,7 +59597,7 @@ export class World {
               if (p.chains > 0) {
                 let next: Actor | null = null;
                 let bestD = 280;
-                for (const cand of this.enemiesOf(p.caster)) {
+                for (const cand of this.enemiesOf(p.caster, p.tier ?? 0)) {
                   if (cand === enemy || cand.dead) continue;
                   const until = p.hits.get(cand.id);
                   if (until !== undefined && p.age < until) continue;
@@ -59590,7 +59643,7 @@ export class World {
               // phasing flights hop through anything).
               let next: Actor | null = null;
               let bestD = 280;
-              for (const cand of this.enemiesOf(p.caster)) {
+              for (const cand of this.enemiesOf(p.caster, p.tier ?? 0)) {
                 if (p.hits.has(cand.id)) continue;
                 const dd = dist(p.pos, cand.pos);
                 if (dd >= bestD) continue;
@@ -59648,13 +59701,13 @@ export class World {
         if (p.zapTimer <= 0) {
           p.zapTimer = zap.interval;
           let zapped = false;
-          for (const e of this.enemiesOf(p.caster)) {
+          for (const e of this.enemiesOf(p.caster, p.tier ?? 0)) {
             if (dist(p.pos, e.pos) - e.radius > zap.radius) continue;
             this.resolveHit(p.caster, p.inst, e, (zap.damageScale ?? 0.5) * p.mult, 1, undefined, false, false, undefined, p.origin, p.tier);
             zapped = true;
           }
           if (zapped) {
-            this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: zap.radius, color: p.color, life: 0.15, maxLife: 0.15 });
+            this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: zap.radius, color: p.color, life: 0.15, maxLife: 0.15 });
           }
         }
       }
@@ -59675,7 +59728,7 @@ export class World {
               linger: Math.min(2.5, Math.max(0.8, z.linger)),
               dmgMult: z.dmgMult * 0.6,
             };
-            this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 8, color: z.color, life: 0.2, maxLife: 0.2 });
+            this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 8, color: z.color, life: 0.2, maxLife: 0.2 });
             break;
           }
         }
@@ -59691,12 +59744,12 @@ export class World {
           if (elem) { p.conductElem = elem; break; }
         }
         if (!p.conductElem) {
-          const ground = this.groundAt(p.pos);
+          const ground = this.groundAt(p.pos, p.tier);
           if (ground?.kind === 'bog' || ground?.kind === 'swamp') p.conductElem = 'chaos';
           else if (ground?.kind === 'ice') p.conductElem = 'cold';
         }
         if (p.conductElem) {
-          this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: REMNANT_COLORS[p.conductElem as RemnantElement] ?? '#9ec83a', life: 0.2, maxLife: 0.2 });
+          this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: REMNANT_COLORS[p.conductElem as RemnantElement] ?? '#9ec83a', life: 0.2, maxLife: 0.2 });
         }
       }
       if (dead) {
@@ -59712,7 +59765,7 @@ export class World {
         }
         // SUFFUSION delivery: the carried field re-blooms at the terminus.
         if (p.suffuse && !p.dissolved) {
-          this.zones.push({
+          this.zones.push({ tier: p.tier ?? 0,
             pos: vec(p.pos.x, p.pos.y), radius: p.suffuse.radius,
             caster: p.caster, inst: p.suffuse.inst, color: p.suffuse.inst.def.color,
             delay: 0, exploded: true,
@@ -59737,7 +59790,7 @@ export class World {
             const ezLinger = ez.duration
               * speedLingerMul(ez.durationBySpeed, p.speed)
               * p.caster.sheet.get('effectDuration', zTags, zExtra);
-            this.zones.push({
+            this.zones.push({ tier: p.tier ?? 0,
               pos: vec(p.pos.x, p.pos.y),
               radius: ezRadius * (ezo?.from ?? 1),
               caster: p.caster, inst: p.inst, color: p.color,
@@ -59771,7 +59824,7 @@ export class World {
             (minted.state ??= {}).seqDepth = seqDepth + 1;
             // procCue: the terminal payload appears at its real landing site.
             this.executeSkill(p.caster, minted, vec(
-              p.pos.x + Math.cos(p.dir) * 60, p.pos.y + Math.sin(p.dir) * 60), {
+              p.pos.x + Math.cos(p.dir) * 60, p.pos.y + Math.sin(p.dir) * 60), { tier: p.tier ?? 0,
               targetInfo: { pos: vec(p.pos.x, p.pos.y) },
               dmgMult: (sq.damageScale ?? 1) * p.mult,
               noCooldown: true, noRepeat: true, noFollowUp: true, keepFacing: true,
@@ -59802,7 +59855,7 @@ export class World {
             const scale = pass === 0 ? fclose.damageScale : freclose!.damageScale;
             for (let k = 0; k < n; k++) {
               const pt = p.fisChain[n - 1 - k]; // far end first: zip home
-              this.zones.push({
+              this.zones.push({ tier: p.tier ?? 0,
                 pos: vec(pt.x, pt.y), radius: closeRadius,
                 caster: p.caster, inst: p.inst, color: p.color,
                 delay: start + beat * k, exploded: false,
@@ -59835,7 +59888,7 @@ export class World {
             if (fx.type === 'spawnZone') {
               const zTags = skillContextTags(p.inst.def, grantedTags(p.inst));
               const zExtra = instanceMods(p.inst);
-              this.zones.push({
+              this.zones.push({ tier: p.tier ?? 0,
                 pos: vec(p.pos.x, p.pos.y),
                 radius: fx.radius * p.caster.sheet.get('aoeRadius', zTags, zExtra),
                 caster: p.caster, inst: p.inst, color: p.color,
@@ -59879,7 +59932,7 @@ export class World {
             life: pd.plantOnLand.life ?? 25,
             placeRange: 9999,
             embed: pd.plantOnLand.embed,
-          }, vec(p.pos.x, p.pos.y), undefined, vec(p.pos.x, p.pos.y));
+          }, vec(p.pos.x, p.pos.y), undefined, vec(p.pos.x, p.pos.y), 1, p.tier ?? 0);
         }
         this.projectiles.splice(i, 1);
       }
@@ -59897,7 +59950,9 @@ export class World {
     {
       let releasing: Map<string, typeof this.zones> | null = null;
       for (const z of this.zones) {
-        z.tier ??= z.caster.tier; // THE FIELD'S STORY, settled once
+        if (z.anchor) z.tier = z.anchor.tier;
+        else if (z.follow) z.tier = z.caster.tier;
+        else z.tier ??= z.caster.tier; // Unstamped legacy/test fields settle once.
         if (!z.armed) continue;
         const holding = !z.caster.dead && z.caster.casting?.mode === 'channel'
           && z.caster.casting.inst.def.id === z.inst.def.id;
@@ -60001,12 +60056,12 @@ export class World {
               other.delay = Math.min(other.delay, 0.06 * k++);
             }
           }
-          this.spawnAftershocks(z.caster, z.inst, z.pos, z.radius, z.shape, z.depth);
+          this.spawnAftershocks(z.caster, z.inst, z.pos, z.radius, z.shape, z.depth, z.tier ?? z.caster.tier);
           // The impact leaves real terrain behind (Icy Comet's ice sheet).
           if (z.leaveTerrain) {
             this.addTempGround(z.pos, z.leaveTerrain.kind,
               z.leaveTerrain.radius, z.leaveTerrain.duration
-              * z.caster.sheet.get('effectDuration', skillContextTags(z.inst.def), instanceMods(z.inst)));
+              * z.caster.sheet.get('effectDuration', skillContextTags(z.inst.def), instanceMods(z.inst)), { tier: z.tier });
           }
           if (z.linger <= 0) { this.expireZone(z); this.zones.splice(i, 1); continue; }
         }
@@ -60015,7 +60070,7 @@ export class World {
         if (z.drift && !z.seek) {
           z.pos = this.clampPos(vec(
             z.pos.x + Math.cos(z.facing) * z.drift * dt,
-            z.pos.y + Math.sin(z.facing) * z.drift * dt), 10);
+            z.pos.y + Math.sin(z.facing) * z.drift * dt), 10, z.pos, { tier: z.tier });
         }
         // SEEKING GROUNDS (Creeping Frost): the lingering field SLINKS
         // toward the nearest living enemy — a patch of winter with
@@ -60024,7 +60079,7 @@ export class World {
         if (z.seek) {
           let prey: Actor | null = null;
           let bd = z.seek.range;
-          for (const e of this.enemiesOf(z.caster)) {
+          for (const e of this.enemiesOf(z.caster, z.tier ?? z.caster.tier).filter(a => a.tier === (z.tier ?? z.caster.tier))) {
             if (e.construct?.breakable) continue;
             const dd = dist(z.pos, e.pos);
             if (dd < bd) { bd = dd; prey = e; }
@@ -60033,7 +60088,7 @@ export class World {
             const ang = angleTo(z.pos, prey.pos);
             z.pos = this.clampPos(vec(
               z.pos.x + Math.cos(ang) * z.seek.speed * dt,
-              z.pos.y + Math.sin(ang) * z.seek.speed * dt), 10);
+              z.pos.y + Math.sin(ang) * z.seek.speed * dt), 10, z.pos, { tier: z.tier });
           }
         }
         // WORN fields ride their caster (Blizzard Coil's mantle) — the
@@ -60092,7 +60147,7 @@ export class World {
         if (z.volatile && z.exploded && z.linger > 0 && this.time >= z.volatile.next) {
           z.volatile.next = this.time + z.volatile.interval;
           if (chance(z.volatile.chance)) {
-            this.flashes.push({
+            this.flashes.push({ recoveryCueTier: z.hitAll ? undefined : z.tier,
               pos: vec(z.pos.x, z.pos.y), radius: z.radius + 10,
               color: z.color, life: 0.3, maxLife: 0.3,
             });
@@ -60179,7 +60234,7 @@ export class World {
             fx: ['nova', 'melee', 'cone', 'leap', 'storm'].includes(instanceDelivery(z.inst).type) ? z.fx : undefined,
             onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier,
           });
-          this.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth);
+          this.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth, z.tier ?? z.caster.tier);
           z.pulse.dmgMult *= z.pulse.dmgStep;
           z.pulse.radiusMult *= z.pulse.radiusStep;
           // THE QUEUE HAND-OFF (kindred rule): the native rhythm spent,
@@ -60213,7 +60268,7 @@ export class World {
         // reach past the damage disc (pullRadius: the event horizon).
         if (z.pull) {
           const reach = z.pullRadius ?? z.radius * 1.35;
-          for (const v of this.enemiesOf(z.caster)) {
+          for (const v of this.enemiesOf(z.caster, z.tier ?? z.caster.tier).filter(a => a.tier === (z.tier ?? z.caster.tier))) {
             if (v.construct || v.leap || v.anchored) continue;
             const dd = dist(z.pos, v.pos);
             if (dd - v.radius > reach || dd < 6) continue;
@@ -60223,7 +60278,7 @@ export class World {
             // grid wall's face — never snapToWalkable's cell-center hop.
             v.pos = this.clampPos(vec(
               v.pos.x + Math.cos(ang) * stepIn,
-              v.pos.y + Math.sin(ang) * stepIn), v.radius, v.pos);
+              v.pos.y + Math.sin(ang) * stepIn), v.radius, v.pos, { mover: v });
           }
         }
         // Pillar of Flame: the cage closes — the safe center shrinks away.
@@ -60277,7 +60332,7 @@ export class World {
                 z.caster.facing = dist(z.pos, at) < 1
                   ? rand(0, Math.PI * 2) : angleTo(z.pos, at);
               }
-              this.executeSkill(z.caster, z.emitInst, at, {
+              this.executeSkill(z.caster, z.emitInst, at, { tier: z.tier ?? z.caster.tier,
                 dmgMult: z.dmgMult, noCooldown: true, noRepeat: true, keepFacing: true,
               });
               z.caster.facing = keepDir;
@@ -60295,7 +60350,7 @@ export class World {
         // (the pool mirrors updateZoneDomain's own filter).
         if (z.exposure && z.linger > 0) {
           const pool = z.exposureDomain && z.domain
-            ? this.actors.filter(a => !a.dead && !a.untargetable && !a.construct)
+            ? this.actors.filter(a => !a.dead && !a.untargetable && !a.construct && a.tier === (z.tier ?? z.caster.tier))
             : this.zoneVictims(z);
           for (const v of pool) {
             if (this.zoneHas(z, v.pos, v.radius)) {
@@ -60317,7 +60372,7 @@ export class World {
         if (z.madden && z.linger > 0) {
           const bank = z.madden;
           const story = z.tier ?? z.caster.tier;
-          for (const v of this.enemiesOf(z.caster)) {
+          for (const v of this.enemiesOf(z.caster, z.tier ?? z.caster.tier).filter(a => a.tier === (z.tier ?? z.caster.tier))) {
             if (v.tier !== story || bank.credited.get(v.id) === this.time) continue;
             if (!this.zoneHas(z, v.pos, v.radius)) continue;
             bank.credited.set(v.id, this.time);
@@ -60393,7 +60448,7 @@ export class World {
           // per-frame fountain (its tickInterval is 0).
           this.healAlliesInArea(z.caster, z.inst, a =>
             this.zoneHas(z, a.pos, a.radius),
-            z.dmgMult, true, z.struck);
+            z.dmgMult, true, z.struck, z.tier ?? z.caster.tier);
         }
         if (z.linger <= 0) {
           // The dying breath (Squall Rune): one final burst as it goes.
@@ -60408,9 +60463,9 @@ export class World {
             }
             // THE MALLET: the dying breath is a plain-disc blast, exactly
             // as its victims see it.
-            this.frontSplash(z.caster, z.inst, z.pos, radius);
-            this.strikeSurfaces(z.caster, z.pos, radius);
-            this.flashes.push({
+            this.frontSplash(z.caster, z.inst, z.pos, radius, z.tier ?? z.caster.tier);
+            this.strikeSurfaces(z.caster, z.pos, radius, undefined, undefined, z.tier);
+            this.flashes.push({ recoveryCueTier: z.hitAll ? undefined : z.tier,
               pos: vec(z.pos.x, z.pos.y), radius, color: z.color,
               life: 0.35, maxLife: 0.35,
             });
@@ -60514,7 +60569,7 @@ export class World {
     // bodies on the story it lies on — a field upstairs scorches nobody in
     // the common room beneath the boards.
     const story = z.tier ?? z.caster.tier;
-    const out = this.enemiesOf(z.caster).filter(v => v.tier === story);
+    const out = this.enemiesOf(z.caster, story).filter(v => v.tier === story);
     if (z.curseAllies) {
       for (const a of this.actors) {
         if (a.dead || a.team !== z.caster.team || a.untargetable || a.tier !== story) continue;
@@ -60547,7 +60602,7 @@ export class World {
         ? clamp(((p.x - z.seg.ax) * sx + (p.y - z.seg.ay) * sy) / ll, 0, 1) : 0;
       ox = z.seg.ax + sx * t; oy = z.seg.ay + sy * t;
     }
-    return this.lineOfFire(vec(ox, oy), p);
+    return this.lineOfFire(vec(ox, oy), p, z.tier ?? z.caster.tier);
   }
 
   /** THE WIND IS A FORCE: every unsheltered body drifts with the gale,
@@ -60571,7 +60626,7 @@ export class World {
       a.pos = this.clampPos(vec(
         a.pos.x + gale.x * push,
         a.pos.y + gale.y * push,
-      ), a.radius, a.pos);
+      ), a.radius, a.pos, { mover: a });
     }
   }
 
@@ -64131,6 +64186,7 @@ export class World {
     let deepFord = false, deepPen = 0;
     for (const d of this.doodadsAt(p.x, p.y)) {
       if ((d.tier ?? 0) !== wantTier) continue; // its layer's ground, never the other's
+      if (d.gone || d.felled) continue;
       const dd = dist(p, d.pos);
       if (dd > d.radius) continue;
       if (d.kind === 'water') {

@@ -253,11 +253,11 @@ export interface CastW { parryCue?: number;
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
  *  painters roll on (wave crest, square tumble) — client and host draw the
  *  same curve the host's hit test sampled. */
-export interface ProjW { skillId?: string; reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
+export interface ProjW { tier?: number; skillId?: string; reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number;
   voice?: string; skillId?: string; age?: number; fade?: number; fromTier?: number; toTier?: number; }
-export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; vid?: string; eid?: string; tid?: number; cnt?: number; }
+export interface DropW { tier?: number; p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; vid?: string; eid?: string; tid?: number; cnt?: number; }
 /** kind is an ORB_DEFS registry id — the client renders from the registry. */
 export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; tier?: number; flowTo?: Vec2W; flowTier?: number; flowFromTier?: number; }
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string;
@@ -955,14 +955,14 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     })),
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
     skillFields: world.zones.map(z => skillFieldVisual(z, world.time)),
-    projectiles: world.projectiles.map(p => ({ skillId: p.inst?.def.id ?? p.skillVisualId, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
+    projectiles: world.projectiles.map(p => ({ tier: p.tier ?? 0, skillId: p.inst?.def.id ?? p.skillVisualId, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
     tethers: world.tethers.map(t => {
       const v = skillTetherVisual(t);
       return { ax: Math.round(v.ax), ay: Math.round(v.ay), bx: Math.round(v.bx), by: Math.round(v.by), c: v.color, w: v.width,
         voice: v.voice, skillId: v.skillId, age: v.age, fade: v.fade, fromTier: v.fromTier, toTier: v.toTier };
     }),
     townPortalViews: world.townPortalViews(),
-    drops: world.drops.map(d => ({
+    drops: world.drops.map(d => ({ tier: d.tier ?? world.spoilStoryAt(d.pos),
       p: v2(d.pos), bob: d.bob, kind: d.item.kind,
       color: d.item.kind === 'support' ? d.item.gem.def.color
         : d.item.kind === 'gear' ? ITEM_RARITIES[d.item.item.rarity].color
@@ -1536,7 +1536,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
 
   // Lightweight entities — plain render structs the renderer reads positionally.
   world.remoteSkillFields = (snap.skillFields ?? []).map(cloneSkillFieldVisual);
-  world.projectiles = snap.projectiles.map(p => ({ skillVisualId: p.skillId, reflectedCue: p.reflectedCue,
+  world.projectiles = snap.projectiles.map(p => ({ tier: p.tier ?? 0, skillVisualId: p.skillId, reflectedCue: p.reflectedCue,
     orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined,
     pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0, cosmeticMotif: p.cosmeticMotif,
     cosmeticProjectile: cosmeticStyle(COSMETIC_PROJECTILES, p.cosmeticProjectile) ? p.cosmeticProjectile : undefined,
@@ -1548,7 +1548,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   }));
   world.townPortalClientViews = (snap.townPortalViews ?? []).map(p => ({ ...p,
     cosmeticLoadout: sanitizeCosmeticLoadout(p.cosmeticLoadout) }));
-  world.drops = snap.drops.map(d => ({
+  world.drops = snap.drops.map(d => ({ tier: d.tier ?? 0,
     pos: { x: d.p[0], y: d.p[1] }, bob: d.bob,
     item: d.kind === 'support'
       ? { kind: 'support', gem: { def: { color: d.color, name: d.name ?? '?' }, level: 1 } }

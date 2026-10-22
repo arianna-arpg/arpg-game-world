@@ -7,7 +7,7 @@ export interface SkillFieldVisual {
   pos: { x: number; y: number };
   radius: number; color: string; shape: number; facing: number;
   delay: number; exploded: boolean; linger: number;
-  tier: number; telegraph: number;
+  tier: number; telegraph: number; hitAll?: boolean;
   arcRad?: number; edge?: number; edgeFrac?: number;
   delay0?: number; onGround?: string[];
   seg?: { ax: number; ay: number; bx: number; by: number };
@@ -19,7 +19,7 @@ export function skillFieldVisual(z: World['zones'][number], time: number): Skill
   return {
     skillId: z.inst.def.id, pos: { ...z.pos }, radius: z.radius, color: z.color,
     shape: z.shape, facing: z.facing, delay: z.delay, exploded: z.exploded,
-    linger: z.linger, tier: z.caster.tier ?? 0,
+    linger: z.linger, tier: z.tier ?? z.caster.tier ?? 0, hitAll: z.hitAll,
     telegraph: (z.inst.def.delivery as { telegraph?: number }).telegraph ?? 1,
     arcRad: z.arcRad, edge: z.edge, edgeFrac: z.edgeFrac, delay0: z.delay0,
     onGround: z.onGround?.slice(), seg: z.seg ? { ...z.seg } : undefined,

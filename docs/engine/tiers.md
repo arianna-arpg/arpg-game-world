@@ -77,7 +77,7 @@ stateless adapter, one per story, built at zone load from
   wash, rupture splash, death bursts and blooms (`DeathBurst.tier`,
   `isBurstTarget`'s story), tether bands (strung and biting on one story),
   constructs' ally buffs, channel supports, projectile domes, the skill
-  FIELDS (`Zone.tier`, THE FIELD'S STORY settled at the first tick — a field
+  FIELDS (`Zone.tier`, THE FIELD'S STORY stamped at birth — a field
   laid upstairs keeps to it after its caster walks down; victims, allies,
   the domain and passing flights read it), the field discipline's
   `pressingFoeNear`, ambush packs, taming, trapworks plates
@@ -304,3 +304,30 @@ crossing law across arbitrary spans, all three carves, per-story orphan
 BFS, THE ASCENT LAW — entry → summit on foot — determinism, and RIG S: THE
 ENCLOSURE LAW on the real mints). genqa sweeps needles + tiered warrens +
 the pinnacle automatically.
+
+## Floor retention regression course (2026-10)
+
+Fired projectiles, placed fields, their explosions, emitted shots, secondary
+casts, fissures, and aftermath retain their origin floor even when the caster
+changes floors before the first update. Actor-attached fields and orbiting
+shots follow their anchor instead. Target selection, damage, healing, surface
+strikes, placement clamps, sight-cache entries and visual cues read that same
+floor. Authored sky hazards and open-cliff rim duels retain their existing rules.
+
+Drops and projectiles carry their physical floor in co-op snapshots separately
+from item rank. Bag overflow, looter spills, chest contents and reclaimed corpse
+loot keep the source floor. New death records save the floor; older records
+infer it from destination terrain. Chests and shrines require a same-floor
+human toucher. Grid terrain statuses cannot reach through a ceiling.
+
+`render/vis/storyVisibility.ts` shares the covered-floor/building rule for
+bodies, fields, loose objects and their light. Stair visibility includes only
+the two floors that the link actually connects. Open cliffs still show other
+floors. Static lamp clusters refresh when the viewer changes floors.
+
+Run `npm run test:shared-fixes` and `npm run test:layers`. The latter exercises
+real combat/loot/save/wire behavior and production Canvas painters in a hidden,
+disposable Electron profile. It writes `balance/reports/layer-visuals.json` and
+a contact sheet beside it. CI runs both courses. The existing `probe_tiers`
+and `probe_storey` courses cover traversal, wall collision, floor interaction,
+crowd separation and multi-story AI investigation.

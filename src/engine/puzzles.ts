@@ -314,7 +314,17 @@ export const PUZZLE_CFG = {
    *  refrain, a slow undo press on the lattice — either rings another
    *  node first (which clears the hum) or outlasts it. */
   hum: 0.9,
+  /** Passive, enrolled riddle props need not prolong the player-side combat lull. */
+  passiveContactHeatsCombat: false as boolean,
 } as const;
+
+/** A marker alone is insufficient: only a live enrolled passive node is quiet.
+ * Hostile actors, stale markers and unregistered targets retain normal combat. */
+export function puzzleContactHeatsCombat(run: PuzzleRun | undefined, node: Actor): boolean {
+  const seat = node.puzzleNode;
+  return PUZZLE_CFG.passiveContactHeatsCombat || node.dead || !node.passive || !seat || !run
+    || run.id !== seat.id || run.nodes[seat.idx] !== node;
+}
 
 /** THE ROUTING DIALS resolve spec → kind → config (the fabric's usual
  *  precedence); exported for World's drain and the probes. */
