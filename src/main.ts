@@ -1243,6 +1243,7 @@ function handleLocalPanels(): void {
     // The couch join overlay dismisses like any dialog — one press, gone.
     if (ui.couchJoinOpen) { closeCouchJoin(); return; }
     if (dialogue.open && dialogue.close()) return;
+    if (ui.closeNpcFront()) return;
     // COUCH: the hero's Esc walks ITS OWN cascade — a guest's open panels
     // are the guest's business (their Ⓑ walks theirs). Solo falls through
     // to the classic global cascade below, byte-identically.

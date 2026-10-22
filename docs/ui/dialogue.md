@@ -33,6 +33,11 @@ The shortcut is a settings preference keyed by character and NPC definition.
 - Enter, controller A, the dialogue surface or the advance button reveals the page
   first; the next press continues, or finishes on the last page. Keyboard and
   pad advance are rebindable as **Advance Dialogue** in Options.
+- The footer always includes **Finish**, including topic lists, work details,
+  rewards and unanswered responses. When no text needs revealing or paging,
+  **Finish › Enter** closes the dialogue; an activity has a separate **Back to
+  topics** button. During an authored response, focused choices retain their
+  normal activation and Finish remains a separate explicit action.
 - Surface clicks include the text, name, portrait and margins. Buttons own their
   click, so choosing a response or closing cannot also advance. Selecting text
   does not advance. All routes call the same `DialogueUI.advance` transition.
@@ -43,13 +48,23 @@ The shortcut is a settings preference keyed by character and NPC definition.
 - Escape, controller B or the close button dismisses. Escape closes a visible dialogue
   before reaching the pause menu. The reader does not pause the world or lock
   movement; leaving the speaker's focus closes the exchange.
-- Finishing cannot reopen the same content during a focused visit. A newly
-  relevant line may speak after completion while the player remains at the
-  counter. Explicit X/Esc instead dismisses the whole visit, including later
-  quest changes; a delayed shop timer cannot reopen the shop either.
-  Already read lines cannot cycle back into the queue. Departing and returning
-  must earn dwell again. Ambient speech additionally honors its
-  existing lane cooldown, starting at reader completion or interruption.
+- Finish, X and Escape dismiss through the same reader close path without
+  accepting work or changing any player ribbon. Escape also dismisses the
+  front NPC service before any player-panel sweep, regardless of which group
+  was last touched or the selected Escape preference.
+- Closing stays closed while standing still, including later quest changes;
+  a delayed shop timer cannot reopen the shop. A deliberate step inside the
+  same NPC's range requests a fresh normal dwell. Services, current quest
+  topics and authored responses can return immediately after that dwell.
+  Authored quest text cannot lengthen the shared functional dwell (0.4s by
+  default, after idle grace); first visits and subsequent quest states obey
+  that same limit, including Mireille's native flask introduction.
+  Closing Shop also arms this return, even with Conversation still in its
+  NPC tabs. Existing vendor definitions supply Shop eligibility for all traders.
+- Residents and settled quest givers without attached content retain the
+  speech lane cooldown, starting at reader completion or interruption.
+  Cooldown expiry alone never rearms an explicitly dismissed visit. Physics
+  pushes, casts, menu clicks and old movement cannot count as a fresh step.
 - An ambient offer's old bubble window can expire while the page remains open.
   Reading has no deadline. Generated text is composed once, not every frame.
 - A changing functional line queues behind the current text. Only the latest
@@ -142,6 +157,10 @@ rewards or scene-specific dialogue rules.
   dwell, Shop and return visits, summoned crafting tabs, purchases, unchanged
   player page selection and geometry, departure, Character and independent
   groups at desktop/narrow/175% scale.
+  Add `--finish` for the focused footer course: topics, work/activity details,
+  paged greetings, separate Back, mouse/Enter dismissal and retained player UI.
+  `--reentry` checks Finish/X/Escape with all four player ribbons, intentional
+  movement inside the same NPC radius, and Shop X/Escape under every Escape mode.
 
 The hidden client uses isolated saves and captures the actual DOM plus canvas.
 It checks dwell, priority, the live portrait, reveal/advance, paged content,

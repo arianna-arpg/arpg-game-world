@@ -51,6 +51,29 @@ export function dialoguePages(text: string, limit: number): string[] {
   return pages;
 }
 
+/** Explicit dismissal is a latch, not a radius lock. Only a willed step
+ * after closing requests another dwell. Empty chatter additionally waits
+ * for its cooldown; expiry alone must never pop a closed panel back up. */
+export class DialogueVisits {
+  private closed = new Map<number, { at: number; movedAt: number }>();
+  dismiss(speaker: number, now: number, movedAt = now): void { this.closed.set(speaker, { at: now, movedAt }); }
+  has(speaker: number): boolean { return this.closed.has(speaker); }
+  cooling(speaker: number, now: number, cooldown: number): boolean {
+    const visit = this.closed.get(speaker);
+    return visit !== undefined && now < visit.at + cooldown;
+  }
+  rearm(speaker: number, movedAt: number, cooldown: number): boolean {
+    const visit = this.closed.get(speaker);
+    // Movement can occur in the first simulation frame after a close, whose
+    // world time is still equal to the close time. Compare the captured move
+    // stamp too, so that fresh step counts without admitting an older step.
+    if (visit === undefined || movedAt <= visit.movedAt || movedAt < visit.at + cooldown) return false;
+    this.closed.delete(speaker); return true;
+  }
+  opened(speaker: number): void { this.closed.delete(speaker); }
+  reset(): void { this.closed.clear(); }
+}
+
 export class DialogueSession {
   reading: DialogueReading | null = null;
   /** Changes only with reading transitions; stale buttons cannot answer a new node. */
@@ -140,8 +163,9 @@ export class DialogueSession {
     return ended;
   }
 
-  /** X/Esc declines the whole visit, including prompts that change later.
-   * Completing a page/response still permits newly relevant content. */
+  /** Finish/X/Esc declines this visit, including prompts that change later.
+   * The host starts a new session only after departure or a fresh dwell.
+   * Completing an authored response still permits newly relevant content. */
   dismiss(): DialogueOffer | null {
     const ended = this.close();
     this.dismissed = true;

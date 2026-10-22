@@ -38,11 +38,106 @@ app.whenReady().then(async () => {
     assert.ok(row.books.every(b=>!b.tabs.some(t=>t.id===row.page)||!b.tabs.some(t=>['vendor','conversation'].includes(t.id))), 'NPC and player books are independent');
     assert.ok(row.npc.width>0 && row.npc.left>=0 && row.npc.right<=row.width+1 && row.npc.top>=0, 'NPC controls remain in the viewport');
   };
+  // --finish runs this focused regression without repeating the layout matrix.
+  const finishCourse = async () => {
+    const closed = async () => {
+      await js('serviceQA.run(60)');
+      assert.equal(await js('document.getElementById("npc-dialogue").hidden'),true,'Finish stays dismissed');
+      assert.equal(await js('__game.ui.folio.bookFor("skills")?.front'),'skills','Finish preserves the player page');
+    };
+    for(const [width,height,scale] of [[1280,800,100],[820,650,175]]) {
+      win.setContentSize(width,height);
+      await js(`serviceQA.clear();serviceQA.scale(${scale});serviceQA.page('skills');serviceQA.run(120,serviceQA.inn.pos)`);
+      for(let n=0;n<10&&await js('/^(Reveal|Continue)/.test(document.querySelector(".dialogue-next").textContent)');n++)await click('.dialogue-next');
+      assert.ok(await js('/^Finish.*ENTER/.test(document.querySelector(".dialogue-next").textContent)&&!document.querySelector(".dialogue-next").hidden'),'topic list has Finish / Enter');
+      const activity=await js(`(()=>{const work=document.querySelector('[data-conversation-activity^="work:"]');
+        if(serviceQA.w.massRuntime&&!work)throw Error('Mireille work topic missing');
+        return (work??document.querySelector('[data-conversation-activity]')).dataset.conversationActivity;})()`);
+      const topic='[data-conversation-activity="'+activity+'"]';
+      await click(topic);
+      assert.ok(await js('!document.querySelector(".dialogue-back").hidden&&/^Finish.*ENTER/.test(document.querySelector(".dialogue-next").textContent)'),'activity has separate Back and Finish / Enter');
+      const quests=await js('serviceQA.w.activeQuests.map(q=>q.questId)');
+      await capture(`finish-work-${width}-${scale}`);
+      await click('.dialogue-back');
+      assert.equal(await js('document.getElementById("npc-dialogue").dataset.activity'),'false','Back returns to topics');
+      await click(topic);await click('.dialogue-next');await closed();
+      assert.deepEqual(await js('serviceQA.w.activeQuests.map(q=>q.questId)'),quests,'Finish does not accept work');
+      await js('serviceQA.clear();serviceQA.page("skills");serviceQA.run(120,serviceQA.inn.pos)');
+      await click(topic);await js('document.activeElement?.blur()');
+      win.webContents.sendInputEvent({type:'keyDown',keyCode:'Return'});
+      win.webContents.sendInputEvent({type:'keyUp',keyCode:'Return'});
+      await new Promise(resolve=>setTimeout(resolve,40));await closed();
+      assert.deepEqual(await js('serviceQA.w.activeQuests.map(q=>q.questId)'),quests,'Enter finishes without accepting work');
+      await js('__game.settings().npcShopVisits=[];serviceQA.clear();serviceQA.page("skills");serviceQA.run(120,serviceQA.smith.pos)');
+      assert.ok(await js('!document.querySelector(".dialogue-finish").hidden'),'paged greeting still has a Finish action');
+      await click('.dialogue-finish');await closed();
+      log({stage:'finish-controls',width,scale,activity});
+    }
+    assert.equal(await js('__game.crash().fatal'),null);
+    log('PASS: Finish remains available on topics, activities and paged greetings; native click and Enter dismiss without accepting work; Back preserves conversation; player page survives at both scales');
+  };
+  const reentryCourse = async () => {
+    win.setContentSize(2560,1440);
+    const key = async keyCode => {
+      await js('document.activeElement?.blur()');
+      win.webContents.sendInputEvent({type:'keyDown',keyCode});
+      await new Promise(resolve=>setTimeout(resolve,20));
+      await js('__game.step(1,50)');
+      win.webContents.sendInputEvent({type:'keyUp',keyCode});
+      await new Promise(resolve=>setTimeout(resolve,20));
+      await js('serviceQA.pos={...serviceQA.w.player.pos};serviceQA.run(1)');
+    };
+    const shimmy = async () => {
+      const at=await js('serviceQA.w.time');
+      await key('D');
+      const moved=await js('({at:serviceQA.w.localSeat.lastMovedAt,now:serviceQA.w.time})');
+      assert.ok(moved.at>=at,'real movement stamps a fresh intentional step: '+JSON.stringify({start:at,...moved}));
+      assert.equal(await js('serviceQA.w.npcDialogueReachable(serviceQA.target.id)'),true,'step stays inside the NPC radius');
+      const arrival=await js('(()=>{const q=serviceQA,start=q.w.time;for(let n=0;n<18&&!__game.ui.conversation.session.reading;n++)q.run(1);return {elapsed:q.w.time-start,open:!!__game.ui.conversation.session.reading,target:q.target.id,focus:q.w.speechFocusTarget(),moved:q.w.localSeat.lastMovedAt,acted:q.w.localSeat.lastActedAt,idle:q.w.seatIdle(q.w.localSeat),available:__game.ui.dialogueContext().available,visits:[...__game.ui.conversation.visits.closed],session:__game.ui.conversation.session,lines:q.w.npcSpeechView().map(l=>({id:l.a.id,text:l.text})),candidates:q.w.speechCandidates(q.w.localSeat).map(c=>({id:c.id,name:c.a.name,text:c.text,priority:c.priority,dwell:c.dwellSec}))};})()');
+      assert.ok(arrival.open&&arrival.elapsed<0.8,'fresh dwell reopens without leaving NPC range: '+JSON.stringify(arrival));
+    };
+    let cases=0;
+    for(const npc of ['smith','inn'].filter(n=>!process.argv.includes('--inn')||n==='inn'))for(const page of ['skills','passives','container:reliquary','character'])for(const verb of ['finish','x','escape']) {
+      await js(`__game.settings().npcShopVisits=[];serviceQA.clear();serviceQA.page('${page}');serviceQA.target=serviceQA.${npc};serviceQA.run(90,serviceQA.target.pos)`);
+      const topics=await js('Array.from(document.querySelectorAll("[data-conversation-activity]"),b=>b.dataset.conversationActivity)');
+      const topic=topics.find(t=>t.startsWith('work:'))??topics[0];
+      if(topic)await click('[data-conversation-activity="'+topic+'"]');
+      const quests=await js('serviceQA.w.activeQuests.map(q=>q.questId)');
+      if(verb==='escape')await key('Escape');
+      else if(verb==='x')await click('#npc-dialogue [data-panel-x]');
+      else await click(await js('document.querySelector(".dialogue-finish").hidden?".dialogue-next":".dialogue-finish"'));
+      await js('serviceQA.run(75)');
+      assert.equal(await js('document.getElementById("npc-dialogue").hidden'),true,'all close paths stay closed while idle');
+      assert.equal(await js('__game.ui.folio.bookFor('+JSON.stringify(page)+')?.front'),page,'close preserves the selected ribbon');
+      assert.deepEqual(await js('serviceQA.w.activeQuests.map(q=>q.questId)'),quests,'closing never accepts work');
+      await shimmy();
+      assert.equal(await js('__game.ui.folio.bookFor('+JSON.stringify(page)+')?.front'),page,'reentry preserves the selected ribbon');
+      cases++; log({stage:'reentry',npc,page,verb,topic});
+    }
+    for(const mode of ['sweep','sweepKeepBag','step'])for(const verb of ['x','escape']) {
+      await js(`serviceQA.clear();serviceQA.page('skills');__game.settings().escapeCloses='${mode}';serviceQA.target=serviceQA.smith;serviceQA.run(90,serviceQA.smith.pos)`);
+      if(!await js('__game.ui.vendorOpen'))await click('[data-conversation-shop]');
+      await js('__game.ui.folio.front("skills")');
+      if(verb==='x')await click('#vendor-menu [data-panel-x]');else await key('Escape');
+      await js('serviceQA.run(90)');
+      assert.equal(await js('__game.ui.vendorOpen'),false,'no second timer reopens Shop');
+      assert.equal(await js('__game.ui.folio.bookFor("skills")?.front'),'skills','Shop close ignores the player Escape sweep');
+      await key('D');await js('serviceQA.run(42)');
+      assert.equal(await js('__game.ui.vendorOpen'),true,'Shop reopens after a small step without an exit or cooldown');
+      assert.equal(await js('__game.ui.folio.bookFor("skills")?.front'),'skills');
+      log({stage:'shop-reentry',mode,verb});
+    }
+    assert.equal(await js('__game.crash().fatal'),null);
+    log({pass:'universal NPC close and fresh service dwell',cases,shopCases:6});
+  };
   try {
     await win.loadURL(server.url);
     await js(`(async()=>{
       __game.account().ledger.prologue_lived=1; __game.devStartRun('warrior'); __game.ui.hideAll();
       await new Promise(resolve=>setTimeout(resolve,700));
+      // The course advances the real game explicitly below. Keep animation
+      // frames from adding unrelated simulation ticks between native clicks.
+      __game.hold(true);
       Object.defineProperty(navigator,'getGamepads',{value:()=>[],configurable:true});
       __game.settings().speechTyping=false; __game.settings().renderScale=1; __game.settings().npcShopVisits=[];
       const w=__game.world();w.account.features.add('salvage_station');w.account.features.add('oracle_stone');w.account.features.add('reliquary');
@@ -63,6 +158,8 @@ app.whenReady().then(async () => {
         const slider=document.getElementById('opt-uiscale');slider.value=String(value);slider.dispatchEvent(new Event('input',{bubbles:true}));__game.ui.hideEscapeMenu();q.run(3);};
       q.clear();q.run(120,{x:smith.pos.x+10,y:smith.pos.y});
     })()`);
+    if(process.argv.includes('--finish')) { await finishCourse(); return; }
+    if(process.argv.includes('--reentry')) { await reentryCourse(); return; }
     let first=await js(`({vendor:__game.ui.vendorOpen,visible:document.getElementById('npc-dialogue').getBoundingClientRect().width>0,shop:!!document.querySelector('[data-conversation-shop]'),name:document.querySelector('#npc-dialogue h2').textContent,books:__game.ui.folio.views()})`);
     log({stage:'first-visit',...first});
     assert.ok(first.visible&&first.shop&&!first.vendor,'first Brandt visit offers Shop in conversation'); assert.match(first.name,/Brandt/);
@@ -131,7 +228,7 @@ app.whenReady().then(async () => {
       await click('[data-conversation-accept="'+work[0]+'"]');
       assert.equal(await js(`serviceQA.w.activeQuests.filter(q=>q.questId==='${work[0]}').length`),1);
       assert.equal(await js('__game.ui.folio.bookFor("skills").front'),'skills');
-      await click('.dialogue-next');
+      await click('.dialogue-back');
     }
     // A real character ribbon click uses the existing sheet and close semantics.
     win.setContentSize(2560,1440);await js('serviceQA.clear();serviceQA.scale(100);serviceQA.page("skills")');
@@ -148,6 +245,7 @@ app.whenReady().then(async () => {
     await js('serviceQA.run(5,serviceQA.away)');
     assert.equal(await js('__game.ui.vendorOpen'),false);assert.equal(await js('document.getElementById("npc-dialogue").hidden'),true);
     assert.equal(await js('__game.ui.inventoryOpen'),true);
+    await finishCourse();
     assert.equal(await js('__game.crash().fatal'),null);
     log('PASS: first visit, Shop click, purchase, suite, return preference, single dwell, persistent close, conversation tab, 32 NPC/page/arrival/size cases, bottom alignment, standard X, character ribbon, pause, quest refresh, departure');
   } finally { clearTimeout(timeout);win.destroy();server.server.close();app.quit(); }
