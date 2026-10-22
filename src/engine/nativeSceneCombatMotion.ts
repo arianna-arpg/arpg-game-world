@@ -147,7 +147,8 @@ export function sceneImminentThreatTo(host:NativeSceneCombatMotionHost, actor: A
       if (z.exploded || z.delay <= 0) continue;
       if (z.delay > BEHAVIOR_CFG.dodgeHorizon) continue;
       if (z.caster === actor) continue;
-      if (!z.hitAll && !host.hostileTo(z.caster, actor)) continue;
+      if (!z.hitAll && (actor.tier !== (z.tier ?? z.caster.tier)
+        || !host.hostileTo(z.caster, actor, z.tier ?? z.caster.tier))) continue;
       const r = z.radius + pad;
       if (dist(actor.pos, z.pos) > r) continue;
       if (!best || z.delay < best.eta) {

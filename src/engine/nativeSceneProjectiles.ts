@@ -25,7 +25,7 @@ export interface NativeSceneProjectileHost {
 export function sceneSpawnProjectile(host:NativeSceneProjectileHost,caster: Actor, inst: SkillInstance, origin: Vec2, dir: number,
     opts?: {
     // SOVEREIGNTY: targeting — the aim assist picks through hostility (the derived census, probe_tiers RIG T).
-      inherit?: InheritedFlight; depth?: number; mult?: number;
+      tier?: number; inherit?: InheritedFlight; depth?: number; mult?: number;
       flat?: Partial<Record<DamageType, number>>;
       /** ARC-TO override: converge on this point (defaults to the aim). */
       dest?: Vec2;
@@ -90,7 +90,7 @@ export function sceneSpawnProjectile(host:NativeSceneProjectileHost,caster: Acto
       orbPaint: d.orbPaint,
       // THE TIER LAW: a flight belongs to its caster's layer (chain children
       // spread-copy it; hostility keeps victims same-tier).
-      tier: caster.tier,
+      tier: opts?.tier ?? caster.tier,
       dir, guideDir: dir,
       guided: spiral > 0 || orbit > 0 || spin > 0 || weave > 0,
       speed,
@@ -176,7 +176,7 @@ export function sceneSpawnProjectile(host:NativeSceneProjectileHost,caster: Acto
       preyId: t?.selectivePierce
         ? (() => {
           let best: Actor | null = null, bd = 700;
-          for (const e of host.enemiesOf(caster)) {
+          for (const e of host.enemiesOf(caster, opts?.tier ?? caster.tier)) {
             const dd = dist(origin, e.pos);
             if (dd < bd) { bd = dd; best = e; }
           }

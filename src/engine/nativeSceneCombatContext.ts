@@ -602,15 +602,15 @@ export function sceneCycleCompanionStance(nativeHost:NativeSceneCombatContextHos
     return moved;
   }
 
-export function sceneFrontSplash(nativeHost:NativeSceneCombatContextHost, caster: Actor | null, inst: SkillInstance | null | undefined, at: Vec2, reach: number): void {
+export function sceneFrontSplash(nativeHost:NativeSceneCombatContextHost, caster: Actor | null, inst: SkillInstance | null | undefined, at: Vec2, reach: number, tier = caster?.tier ?? 0): void {
     if (!caster || !inst || !nativeHost.creep || (!nativeHost.creep.quenchable && !nativeHost.creep.ignitable)) return;
     const amounts = rollSkillDamage(caster, inst).amounts;
-    if (nativeHost.creep.quenchable) nativeHost.creep.damageSkin(at.x, at.y, reach, amounts);
+    if (nativeHost.creep.quenchable) nativeHost.creep.damageSkin(at.x, at.y, reach, amounts, tier);
     // THE IGNITION DIAL (FrontSpawnRow.ignition): sustained fire into a lit
     // lane's FUEL births a section — authored per lane (the Char), null-
     // cost everywhere the dial is off (the global default: player casts
     // never ignite fronts).
-    if (nativeHost.creep.ignitable) nativeHost.creep.igniteAt(at.x, at.y, reach, amounts, nativeHost.time);
+    if (nativeHost.creep.ignitable) nativeHost.creep.igniteAt(at.x, at.y, reach, amounts, nativeHost.time, tier);
   }
 
 export function sceneMarkMetaDirty(nativeHost:Pick<NativeSceneCombatContextHost,'metaDirty'>, seat: Seat): void { nativeHost.metaDirty.add(seat.id); }
@@ -645,7 +645,7 @@ export function sceneMintHazardCloud(nativeHost:NativeSceneCombatContextHost, at
     const cloudLinger = opts.linger ?? 2.6;
     {
  let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
- (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={ tier: caster.tier,
       pos: vec(at.x, at.y), radius: cloudR * (so?.from ?? 1), caster:(nativeSource=caster), inst:(nativeInstance=inst),
       color: opts.color ?? '#8fd06f',
       delay: opts.delay ?? 0.6, exploded: false, linger: cloudLinger,

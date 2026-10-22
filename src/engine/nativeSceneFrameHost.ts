@@ -417,6 +417,7 @@ export interface NativeSceneFrameHost extends Pick<NativeSceneCombatHost, "admit
  readonly spawnProjectile:World["spawnProjectile"];
  readonly spoilsSealed:World["spoilsSealed"];
  readonly spoilStoryAt:World["spoilStoryAt"];
+ spoilStory:World["spoilStory"];
  readonly springAmbush:World["springAmbush"];
  readonly springTrapwork:World["springTrapwork"];
  readonly squishScratch:World["squishScratch"];

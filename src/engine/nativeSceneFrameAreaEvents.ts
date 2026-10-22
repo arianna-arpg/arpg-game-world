@@ -1460,7 +1460,7 @@ export function sceneFireMeteor(nativeHost:NativeSceneCampaignFrameClosureHost, 
     caster.pos = vec(at.x, at.y);
     const inst = makeSkillInstance(skill, 1 + Math.floor(nativeHost.zone.level / 3) + info.strengthBonus);
     let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];
-    (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
+    (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={ tier: caster.tier,
       pos: at, radius: surge.meteorRadius, caster, inst, color: skill.color,
       delay: surge.meteorTelegraph, exploded: false, linger: 0,
       tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,

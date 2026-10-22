@@ -104,7 +104,7 @@ import { floatOwnerShown } from '../world/bulletins'; // THE FLOAT'S OWNER (THE 
 import { dayCycle, sceneSkyTime } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
-import { tierLinkOf } from '../engine/tiers';
+import { storyPointVisible } from './vis/storyVisibility';
 import type { PlacedStructure } from '../engine/levelgen';
 import { stratumOf } from '../world/strata';
 import { VOYAGE_ZONE_ID } from '../world/voyage';
@@ -993,10 +993,7 @@ export class Renderer {
       this.drawPackLinks(world);
       drawWardLinks(ctx, world.actors, world.player, world.time);
       for (const a of world.actors) if (!a.dead) {
-        drawPayloadPlacements(ctx, payloadCueRows(a, world), p =>
-          p.tier === (world.player.tier ?? 0)
-          || (world.zone.tiers?.exposure !== 'covered' && !(this.stacked.length && this.inStack(p)))
-          || !!(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(p.x, p.y))));
+        drawPayloadPlacements(ctx, payloadCueRows(a, world), p => this.companionCuePointVisible(p, p.tier, world));
       }
     }
     if (!VIS_ABLATE.has('actors')) {
@@ -3585,23 +3582,17 @@ export class Renderer {
     // behind a ceiling (or under a street) — filter it out of the frame.
     // Open zones and flat zones pay nothing (hideTier stays null).
     const zt = world.zone.tiers;
-    const heroTier = world.player?.tier ?? 0;
-    const hideTier = zt?.exposure === 'covered' ? (heroTier === 1 ? 0 : 1) : null;
+    const covered = zt?.exposure === 'covered';
     // THE STOREY CULL (engine/storeys.ts): inside a stacked building the
     // other story's furniture stands behind a ceiling (or under the floor
     // you walk) — only the hero's own story draws there; a piece on the
     // crossing's cells (the stairway) shows to both floors.
     const stacked = this.stacked.length > 0;
-    const keep = (d: Doodad): boolean => {
-      if (hideTier !== null && (d.tier ?? 0) === hideTier) return false;
-      if (stacked && (d.tier ?? 0) !== heroTier && this.inStack(d.pos)
-        && !(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(d.pos.x, d.pos.y)))) return false;
-      return true;
-    };
+    const keep = (d: Doodad): boolean => this.companionCuePointVisible(d.pos, d.tier ?? 0, world);
     for (const [kind, list] of this.culled) {
       groups.push({
         kind,
-        list: (hideTier === null && !stacked) ? list : list.filter(keep),
+        list: (!covered && !stacked) ? list : list.filter(keep),
         def: DOODAD_VISUALS[kind],
       });
     }
@@ -4284,15 +4275,6 @@ export class Renderer {
   private roomVeil = new RoomVeil();
   /** THE STOREY FABRIC: this zone's stacked plan structures (per frame). */
   private stacked: PlacedStructure[] = [];
-  /** Is a point inside a stacked building's footprint? (The story culls'
-   *  one read — a body or a piece outside every stack draws as ever.) */
-  private inStack(p: { x: number; y: number }): boolean {
-    for (const st of this.stacked) {
-      const r = st.rect;
-      if (p.x > r.x && p.x < r.x + r.w && p.y > r.y && p.y < r.y + r.h) return true;
-    }
-    return false;
-  }
 
   /** THE SIGHT VEIL (vis/sightVeil.ts): positional occlusion shadows — from
    *  the hero's eye, every sight-blocking body (trunks, boulders, rampart
@@ -4477,6 +4459,7 @@ export class Renderer {
     const aim=this.padAim??(this.hudMouse.x>=0?this.toWorld(this.hudMouse):null);
     const cue=chestReadout(world,aim);
     for (const c of world.chests) {
+      if (!this.companionCuePointVisible(c.pos, c.tier ?? world.spoilStoryAt(c.pos), world)) continue;
       const age = c.openedAt === undefined ? Infinity : world.time - c.openedAt;
       const u = Math.max(0, Math.min(1, age / VIS_CFG.chestLid.seconds));
       drawTreasureChest(this.ctx, c.pos.x, c.pos.y, c.opened, 1-Math.pow(1-u,3),
@@ -4496,6 +4479,7 @@ export class Renderer {
     const { ctx } = this;
     const t = world.time;
     for (const s of world.shrines) {
+      if (!this.companionCuePointVisible(s.pos, s.tier ?? world.spoilStoryAt(s.pos), world)) continue;
       const seed = ((s.pos.x * 13 + s.pos.y * 7) | 0) >>> 0;
       const ramp = rampOf('#5a5a66', materialOf('stone'));
       const color = s.used ? '#4a4a52' : s.def.color;
@@ -4935,6 +4919,7 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
     for (const z of world.remoteSkillFields ?? world.zones.map(z => skillFieldVisual(z, world.time))) {
+      if (!z.hitAll && !this.companionCuePointVisible(z.pos, z.tier, world)) continue;
       // FISSURE FRACTURES (Zone.seg): the crack IS the hitbox — a jagged
       // line the capsule's width, not a disc. Deterministic jitter (seeded
       // off the segment's own coordinates) keeps every frame's crack the
@@ -5239,9 +5224,7 @@ export class Renderer {
   private feedingTransferVisible(from: Vec2, cue: Pick<FeedingTransfer, 'to' | 'fromTier' | 'toTier'>, world: World): boolean {
     return [[from, cue.fromTier], [cue.to, cue.toTier]].every(([p, tier]) => {
       const at = p as Vec2;
-      return tier === (world.player.tier ?? 0)
-        || (!(world.zone.tiers?.exposure === 'covered' || (this.stacked.length && this.inStack(at)))
-          || !!(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(at.x, at.y))));
+      return this.companionCuePointVisible(at, (tier as number | undefined) ?? 0, world);
     });
   }
 
@@ -5483,9 +5466,7 @@ export class Renderer {
   /** A wounded tail must obey the head's concealment and covered-storey gates. */
   private anatomyCueVisible(a: Actor, world: World): boolean {
     if (a.burrow || a.summonReform || a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)) return false;
-    if ((a.tier ?? 0) !== (world.player.tier ?? 0)
-      && (world.zone.tiers?.exposure === 'covered' || (this.stacked.length && this.inStack(a.pos)))
-      && !(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(a.pos.x, a.pos.y)))) return false;
+    if (!this.companionCuePointVisible(a.pos, a.tier, world)) return false;
     return a.throngWild === undefined || this.throngSightOf(world).has(a.throngWild);
   }
 
@@ -5694,14 +5675,7 @@ export class Renderer {
     // the same-tier combat law keeps the fights honest either way.
     // EXCEPT on a CROSSING: a link cell is ground on BOTH layers (an open
     // stair mouth) — whoever stands in the doorway is seen from both sides.
-    if (world.zone.tiers?.exposure === 'covered'
-      && (a.tier ?? 0) !== (world.player?.tier ?? 0)
-      && !(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(a.pos.x, a.pos.y)))) return;
-    // THE STOREY CULL (engine/storeys.ts): a body on another story of a
-    // stacked building is behind its ceiling / under its floor — unseen
-    // (its nameplate and bubble with it); the crossing shows both.
-    if (this.stacked.length && (a.tier ?? 0) !== (world.player?.tier ?? 0) && this.inStack(a.pos)
-      && !(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(a.pos.x, a.pos.y)))) return;
+    if (!this.companionCuePointVisible(a.pos, a.tier, world)) return;
 
     // THE THRONG SIGHT GATE (engine/throng.ts): an unclaimed husk exists
     // only to an attuned eye — the LOCAL bar must anchor its kind or the
@@ -6781,9 +6755,7 @@ export class Renderer {
 
   /** Mark runes and gate tethers. */
   private companionCuePointVisible(p: Vec2, tier: number, world: World): boolean {
-    return tier === (world.player.tier ?? 0)
-      || (!(world.zone.tiers?.exposure === 'covered' || (this.stacked.length && this.inStack(p)))
-        || !!(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(p.x, p.y))));
+    return storyPointVisible(world, p, tier, this.stacked);
   }
 
   private drawCompanionCues(world: World): void {
@@ -6836,6 +6808,7 @@ export class Renderer {
   private drawCorpses(world: World): void {
     const { ctx } = this;
     for (const c0 of world.corpses) {
+      if (!this.companionCuePointVisible(c0.pos, c0.tier ?? world.spoilStoryAt(c0.pos), world)) continue;
       const def = MONSTERS[c0.defId];
       const size = Math.min(15, 6 + (def?.radius ?? 10) * 0.4);
       const frac = Math.min(1, c0.remaining / CORPSE_CFG.duration); // 1 = fresh
@@ -6897,6 +6870,7 @@ export class Renderer {
   private drawPlayerCorpses(world: World): void {
     const { ctx } = this;
     for (const c of world.playerCorpses) {
+      if (!this.companionCuePointVisible(c.pos, c.tier ?? world.spoilStoryAt(c.pos), world)) continue;
       ctx.globalAlpha = c.reclaimed ? 0.25 : 1;
       if (!c.reclaimed) {
         // The wash at the 'corpse_reclaim' transit row's radius, so the
@@ -6926,6 +6900,7 @@ export class Renderer {
       { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
     const alpha0 = ctx.globalAlpha;
     for (const d of world.drops) {
+      if (!this.companionCuePointVisible(d.pos, d.tier ?? world.spoilStoryAt(d.pos), world)) continue;
       ctx.globalAlpha = alpha0 * dropAlpha(world, d); // THE SPOILS' OWNER (card 27): another seat's held drop, ghosted (shown, never told)
       const y = d.pos.y + Math.sin(d.bob) * D.bobAmp;
       const item = d.item;
@@ -7376,6 +7351,7 @@ export class Renderer {
     // Cover any jitter the world transform can apply this frame as well.
     const edgePad = 1 + 2 / this.zoom + Math.max(0, world.shake);
     for (const p of world.projectiles) {
+      if (!this.companionCuePointVisible(p.pos, p.tier ?? 0, world)) continue;
       const reflectedCue = !!p.parryDamage || !!p.reflectedCue;
       const reach = Math.max(p.radius, reflectedCue ? 3 : 0) * Math.max(reachScale, cosmeticProjectileExtent(p.cosmeticProjectile), reflectedCue ? COMBAT_CUE_CFG.reflectedScale : 0) + edgePad;
       if (p.pos.x + reach < x0 || p.pos.x - reach > x1

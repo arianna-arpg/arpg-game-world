@@ -17,6 +17,8 @@
     "check": "tsc --noEmit && tsc -p tsconfig.launcher.json && tsc -p tsconfig.sim.json && tsc -p tsconfig.shard.json",
     "shard": "tsx server/shard.ts",
     "soak:shard": "tsx balance/soak_shard.ts",
+    "test:shared-fixes": "tsx balance/shared-fixes-check.ts",
+    "test:layers": "tsx balance/layer-integrity-check.ts && tsx balance/layer-native-check.ts && electron balance/layer-visual-ui.cjs",
     "sim": "tsx balance/cli.ts",
     "probe": "tsx balance/runprobes.ts",
     "genqa": "tsx balance/genqa.ts",

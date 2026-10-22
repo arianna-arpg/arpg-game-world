@@ -16,10 +16,10 @@ export interface NativeHostilitySources {
 /** One actual staged population and its own sanctuary/tier context. */
 export interface NativeHostilityHost {
  readonly actors:Actor[]; readonly zone:Pick<ZoneDef,'tiers'>;
- sanctuaryBlocksCombat(a:Actor,b:Actor):boolean; isPrey(a:Actor,b:Actor):boolean; hostileTo(a:Actor,b:Actor):boolean;
+ sanctuaryBlocksCombat(a:Actor,b:Actor):boolean; isPrey(a:Actor,b:Actor):boolean; hostileTo(a:Actor,b:Actor,sourceTier?:number):boolean;
 }
 
-export function nativeHostileTo(host:Pick<NativeHostilityHost,'zone'|'sanctuaryBlocksCombat'|'isPrey'>,sources:NativeHostilitySources,a:Actor,b:Actor):boolean {
+export function nativeHostileTo(host:Pick<NativeHostilityHost,'zone'|'sanctuaryBlocksCombat'|'isPrey'>,sources:NativeHostilitySources,a:Actor,b:Actor,sourceTier=a.tier??0):boolean {
     if (host.sanctuaryBlocksCombat(a,b)) return false;
     if ((0, sources.throngTravelProtected)(b)) return false;
     // THE TIER LAW (engine/tiers.ts): layers share a screen, never a fight —
@@ -30,7 +30,7 @@ export function nativeHostileTo(host:Pick<NativeHostilityHost,'zone'|'sanctuaryB
     // EXCEPT under RIM DUELS (ZoneTiers.rimDuels, open exposure): cross-tier
     // hostility stands and SIGHT mediates — the butte walls' blocksSight
     // already confine the fights to rims and spans, which is the fantasy.
-    if ((a.tier ?? 0) !== (b.tier ?? 0) && !host.zone.tiers?.rimDuels) return false;
+    if (sourceTier !== (b.tier ?? 0) && !host.zone.tiers?.rimDuels) return false;
     // THE GUISE (the possession seam, engine/possess.ts): a seat wearing a
     // body of faction F reads as KIN to team-enemy bodies of F while the
     // guise holds — ONE-directional in the one hostility gate (their
@@ -89,15 +89,16 @@ export function nativeSeekPrey(host:Pick<NativeHostilityHost,'actors'|'isPrey'>,
     return best;
   }
 
-export function nativeEnemiesOf(host:Pick<NativeHostilityHost,'actors'|'hostileTo'>,actor:Actor):Actor[] {
+export function nativeEnemiesOf(host:Pick<NativeHostilityHost,'actors'|'hostileTo'|'zone'>,actor:Actor,sourceTier=actor.tier??0):Actor[] {
     return host.actors.filter(a =>
-      (host.hostileTo(actor, a)
+      (host.hostileTo(actor, a, sourceTier)
         // BREAKABLE conjured objects join their OWNER's hostile pool — the
         // owner's every damage path (swings, zones, projectiles) can find
         // and demolish them, though the steering PICKS refuse to CHASE
         // furniture (assistAim + the SEEKWORTHY homing gate). Never anyone
         // else's pool: minions and allies see furniture, the owner sees a
         // target.
-        || (a.construct?.breakable !== undefined && a.owner === actor))
+        || (a.construct?.breakable !== undefined && a.owner === actor
+          && ((a.tier ?? 0) === sourceTier || host.zone.tiers?.rimDuels)))
       && !a.dead && !a.untargetable && !a.downed);
   }

@@ -20,7 +20,7 @@ mintAftermath(
     caster: Actor, inst: SkillInstance, at: Vec2, radius: number,
     shape: AoeShape, facing: number, useMult: number,
     tags: Set<SkillTag>, extra: Modifier[], arcRad?: number, edgeFrac?: number,
-    walkFacing?: number,
+    walkFacing?: number, tier?: number,
   ): void;
 dropLingerField(caster: Actor, inst: SkillInstance, at: Vec2, useMult?:number): void;
 mintTrailPatch(
@@ -68,7 +68,7 @@ export function sceneMaddenBankOf(nativeHost:NativeSceneGroundFollowUpsHost,inst
     return bank;
   }
 
-export function sceneMintAftermath(nativeHost:NativeSceneGroundFollowUpsHost,caster: Actor,inst: SkillInstance,at: Vec2,radius: number,shape: AoeShape,facing: number,useMult: number,tags: Set<SkillTag>,extra: Modifier[],arcRad?: number,edgeFrac?: number,walkFacing?: number): void {
+export function sceneMintAftermath(nativeHost:NativeSceneGroundFollowUpsHost,caster: Actor,inst: SkillInstance,at: Vec2,radius: number,shape: AoeShape,facing: number,useMult: number,tags: Set<SkillTag>,extra: Modifier[],arcRad?: number,edgeFrac?: number,walkFacing?: number, tier = caster.tier): void {
     const burstDelivery = instanceDelivery(inst);
     const burstVoice = burstDelivery.type === 'nova'
       ? burstDelivery.fx ?? skillBurstVoice(inst.def.id)
@@ -104,7 +104,7 @@ export function sceneMintAftermath(nativeHost:NativeSceneGroundFollowUpsHost,cas
     if (pulseN > 0) {
       {
  let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
- (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={ tier,
         pos: vec(at.x, at.y), radius, caster:(nativeSource=caster), inst:(nativeInstance=inst), color: inst.def.color,
         delay: 0, exploded: true,
         linger: pulseSpan, linger0: pulseSpan,
@@ -163,7 +163,7 @@ export function sceneMintAftermath(nativeHost:NativeSceneGroundFollowUpsHost,cas
       for (const p of walkPoints(spec, nativeCount, from)) {
         {
  let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
- (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={ tier,
           pos: vec(p.x, p.y), radius: radius * Math.pow(scaleStep, p.k),
           caster:(nativeSource=caster), inst:(nativeInstance=inst), color: inst.def.color,
           delay: delayBase + p.beatAt, exploded: false,
@@ -190,7 +190,7 @@ export function sceneMintAftermath(nativeHost:NativeSceneGroundFollowUpsHost,cas
         const quakes = pulseN > 0;
         {
  let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
- (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={ tier,
           pos: vec(p.x, p.y), radius: radius * Math.pow(rScaleStep, p.k),
           caster:(nativeSource=caster), inst:(nativeInstance=inst), color: inst.def.color,
           delay: delayBase, exploded: false,
@@ -229,7 +229,7 @@ export function sceneDropLingerField(nativeHost:NativeSceneGroundFollowUpsHost,c
       * caster.sheet.get('effectDuration', tags, extra);
     {
  let nativeQueue:typeof nativeHost.zones;let nativeRecord:(typeof nativeHost.zones)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
- (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={
+ (nativeQueue=observeNativeCombatStorage(nativeHost,'zones',nativeHost.zones)).push(nativeRecord={ tier: caster.tier,
       pos: vec(at.x, at.y),
       radius,
       caster:(nativeSource=caster), inst:(nativeInstance=inst), color: healField ? '#8ae0a8' : inst.def.color,

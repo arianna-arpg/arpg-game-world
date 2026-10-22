@@ -1,6 +1,7 @@
 /** Exact native combat events algorithms from Git 42f95716294995cbdd83785f0a0782ddda971f76.
  * Extraction is not an admitted runtime: all capabilities must be bound by the actual area aggregate. */
 import { PROJ_CHILD_DEPTH_MAX, PROJ_AURA_TICK } from './nativeSceneProjectiles';
+import { sameStory } from './tiers';
 import { lightningProfile, LIGHTNING_STYLE } from '../data/lightningVisuals';
 import { extendLightningTrace } from './lightningVisual';
 import { summonCapacity } from './summonContracts';
@@ -171,23 +172,24 @@ export function sceneStrikeZoneSurfaces(nativeHost: NativeSceneCombatHost, z: Zo
     const r = radius ?? z.radius;
     // A lingering field parked ON a marching skin quenches or stokes it on
     // the zone's own strike cadence — the sustained-pressure verb.
-    nativeHost.frontSplash(z.caster, z.inst, cAt, r);
+    nativeHost.frontSplash(z.caster, z.inst, cAt, r, z.tier ?? z.caster.tier);
     nativeHost.strikeSurfaces(z.caster, cAt, r, (p, pr) =>
       (at !== undefined || radius !== undefined
         ? inAoe(cAt, r, z.shape, z.facing, p, pr, z.arcRad)
         : nativeHost.zoneHas(z, p, pr))
       && !zoneHoleSpares(z, p, pr)
       && nativeHost.zoneSees(z, p),
-      useStruck ? z.struck : undefined);
+      useStruck ? z.struck : undefined, z.tier ?? z.caster.tier);
   }
 
 export function sceneDetonateFissureSegment(nativeHost: NativeSceneCombatHost, z: Zone, damageScale: number, radiusScale: number): boolean {
-    if (z.caster.dead || !nativeHost.zoneHas(z, z.caster.pos, z.caster.radius)) return false;
+    if (z.caster.dead || z.caster.tier !== (z.tier ?? z.caster.tier)
+      || !nativeHost.zoneHas(z, z.caster.pos, z.caster.radius)) return false;
     const radius = z.radius * radiusScale;
     const at = z.seg
       ? vec((z.seg.ax + z.seg.bx) / 2, (z.seg.ay + z.seg.by) / 2)
       : vec(z.pos.x, z.pos.y);
-    nativeHost.flashes.push(combatCueFlash(at, 'aftershock', radius, z.facing ?? 0, z.color));
+    nativeHost.flashes.push({ ...combatCueFlash(at, 'aftershock', radius, z.facing ?? 0, z.color), recoveryCueTier: z.tier });
     for (const v of nativeHost.zoneVictims(z)) {
       const nb = bodyWhere(v, (bp, br) => dist(at, bp) - br <= radius);
       if (!nb) continue;
@@ -198,7 +200,7 @@ export function sceneDetonateFissureSegment(nativeHost: NativeSceneCombatHost, z
     // THE MALLET: the segment's detonation is a fresh blast at the piece
     // (no sweep ledger, the same wall gates its victims saw).
     nativeHost.strikeZoneSurfaces(z, false, at, radius);
-    nativeHost.spawnAftershocks(z.caster, z.inst, at, radius, z.shape, 0);
+    nativeHost.spawnAftershocks(z.caster, z.inst, at, radius, z.shape, 0, z.tier ?? z.caster.tier);
     return true;
   }
 
@@ -378,7 +380,7 @@ export function sceneAfflictionSeat(nativeHost: NativeSceneCombatHost, a: Actor)
   }
 
 export function sceneReturnTarget(nativeHost: NativeSceneCombatHost, p: Projectile): Vec2 {
-    return p.returnMode === 2 && !p.caster.dead ? p.caster.pos : p.origin;
+    return p.returnMode === 2 && !p.caster.dead && sameStory(p, p.caster) ? p.caster.pos : p.origin;
   }
 
 export function sceneEnterReturn(nativeHost: NativeSceneCombatHost, p: Projectile): boolean {
@@ -428,10 +430,10 @@ export function sceneNearestProjTarget(nativeHost: NativeSceneCombatHost, p: Pro
     // SOVEREIGNTY: targeting — homing picks through hostility (rim duels are authored) (the derived census, probe_tiers RIG T).
     if (p.preyId !== undefined) {
       const prey = nativeHost.actorById(p.preyId);
-      return prey && !prey.dead ? prey : null;
+      return prey && !prey.dead && nativeHost.hostileTo(p.caster, prey, p.tier ?? 0) ? prey : null;
     }
     let target: Actor | null = null, bestD = 500;
-    for (const e of nativeHost.enemiesOf(p.caster)) {
+    for (const e of nativeHost.enemiesOf(p.caster, p.tier ?? 0)) {
       // THE SEEKWORTHY GATE: a seeker chases things that FIGHT. Passive
       // scenery armor (pots, racks, bells) and the caster's OWN breakable
       // conjurations (in his pool so his blows can demolish them) never
@@ -459,7 +461,7 @@ export function sceneKinkProjectile(nativeHost: NativeSceneCombatHost, p: Projec
         nativeHost.spawnProjectile(p.caster,
           makeSkillInstance(SKILLS[SHRAPNEL_SKILL], effectiveSkillLevel(p.inst)),
           vec(p.pos.x, p.pos.y), abandoned + rand(-0.12, 0.12),
-          { depth: p.depth + 1, mult: p.mult * 0.6 });
+          { tier: p.tier ?? 0, depth: p.depth + 1, mult: p.mult * 0.6 });
       }
     }
   }
@@ -497,6 +499,7 @@ export function sceneAdvanceProjectile(nativeHost: NativeSceneCombatHost, p: Pro
       if (p.orbit > 0) {
         const orbitAnchor = p.orbitAnchorId !== undefined ? nativeHost.actorById(p.orbitAnchorId) : p.caster;
         if (orbitAnchor && !orbitAnchor.dead) {
+          p.tier = orbitAnchor.tier;
           p.anchor.x = orbitAnchor.pos.x; p.anchor.y = orbitAnchor.pos.y;
         }
       } else {
@@ -632,7 +635,7 @@ export function sceneShedFlightShrapnel(nativeHost: NativeSceneCombatHost, p: Pr
       nativeHost.spawnProjectile(p.caster,
         makeSkillInstance(SKILLS[SHRAPNEL_SKILL], effectiveSkillLevel(p.inst)),
         vec(p.pos.x, p.pos.y), (s / shed) * Math.PI * 2,
-        { depth: p.depth + 1, mult: p.mult * 0.7 });
+        { tier: p.tier ?? 0, depth: p.depth + 1, mult: p.mult * 0.7 });
     }
     return true;
   }
@@ -726,7 +729,7 @@ try {
           p.anchor.y = fw.y;
           p.traveled = 0;
           p.hits.clear();
-          nativeHost.flashes.push({
+          nativeHost.flashes.push({ recoveryCueTier: p.tier,
             pos: vec(fw.x, fw.y), radius: p.radius + FOURTH_WALL_CFG.proj.flashPad,
             color: p.color, life: 0.18, maxLife: 0.18,
           });
@@ -750,7 +753,7 @@ try {
               runOver: 'collect',
               collect: { charge: cspec.charge, amount: cspec.amount, max: cspec.max },
             },
-          }, p.pos, undefined, vec(p.landAt.x, p.landAt.y));
+          }, p.pos, undefined, vec(p.landAt.x, p.landAt.y), 1, p.tier ?? 0);
         }
         p.dissolved = true;
         nativeHost.projectiles.splice(i, 1);
@@ -790,12 +793,12 @@ try {
           p.range = p.range0 ?? p.range;
           p.origin = vec(p.pos.x, p.pos.y);
           p.hits.clear();
-          nativeHost.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18 });
+          nativeHost.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18 });
         } else {
           const ct = (p.inst.def.delivery as ProjectileDelivery).catch;
-          if (ct && !p.caster.dead) {
+          if (ct && !p.caster.dead && sameStory(p, p.caster)) {
             p.caster.gainCharge(ct.charge, ct.amount, ct.max, p.inst);
-            nativeHost.flashes.push({
+            nativeHost.flashes.push({ recoveryCueTier: p.tier,
               pos: vec(p.caster.pos.x, p.caster.pos.y), radius: p.caster.radius + 8,
               color: p.color, life: 0.2, maxLife: 0.2,
             });
@@ -833,7 +836,7 @@ try {
           // beside a closed door's slab line instead of dying on the old
           // breach-spanning circle.
           if (shapeContains(hitSurfaceOf(o, 'shot'), o.pos.x, o.pos.y, p.pos.x, p.pos.y, nativeHost.projNose(p) + 1e-9)) {
-          nativeHost.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') }); // THE ARROW'S END on a surface: its type's voice, a shaft dusts
+          nativeHost.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') }); // THE ARROW'S END on a surface: its type's voice, a shaft dusts
             if (p.bounces && p.bounces > 0) {
               p.bounces--;
               const surf = hitSurfaceOf(o, 'shot');
@@ -877,7 +880,7 @@ try {
         const hitT = castGridRay(flightGrid, prev, p.pos, 'shot', elev);
         if (hitT !== null) {
           const sx = prev.x + sdx * hitT, sy = prev.y + sdy * hitT;
-          nativeHost.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') });
+          nativeHost.flashes.push({ recoveryCueTier: p.tier, pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'wall') });
           if (p.bounces && p.bounces > 0) {
             p.bounces--;
             // Back off by at most half a cell, then test the two axes with
@@ -908,7 +911,7 @@ try {
         const prey = nativeHost.actorById(p.preyId);
         if (!prey || prey.dead) {
           let best: Actor | null = null, bd = 700;
-          for (const e of nativeHost.enemiesOf(p.caster)) {
+          for (const e of nativeHost.enemiesOf(p.caster, p.tier ?? 0)) {
             const dd = dist(p.pos, e.pos);
             if (dd < bd) { bd = dd; best = e; }
           }
@@ -921,7 +924,7 @@ try {
         if (reflected) {
           p.pos = reflected.at;
           nativeHost.reflectParriedProjectile(p, reflected.owner, reflected.power);
-          nativeHost.flashes.push({ pos: { ...p.pos }, radius: reflected.radius, color: reflected.color, life: 0.18, maxLife: 0.18 });
+          nativeHost.flashes.push({ recoveryCueTier: p.tier, pos: { ...p.pos }, radius: reflected.radius, color: reflected.color, life: 0.18, maxLife: 0.18 });
           if (p.dissolved) nativeHost.projectiles.splice(i, 1);
           continue;
         }
@@ -940,7 +943,7 @@ try {
         let parryTurned = false;
         if (!dead) dead = nativeHost.interceptProjectileDomes(p);
         if (!dead) {
-          for (const enemy of nativeHost.enemiesOf(p.caster)) {
+          for (const enemy of nativeHost.enemiesOf(p.caster, p.tier ?? 0)) {
             if (p.age < (p.hits.get(enemy.id) ?? -Infinity)) continue;
             const touch = nativeHost.projTouchesBody(p, enemy);
             if (!touch) continue;
@@ -980,15 +983,15 @@ try {
         const aoeMul = p.caster.sheet.get('aoeRadius', tTags, tExtra);
         if (ts.blast) {
           const radius = ts.blast.radius * aoeMul;
-          for (const e of nativeHost.enemiesOf(p.caster)) {
+          for (const e of nativeHost.enemiesOf(p.caster, p.tier ?? 0)) {
             if (e.id === p.lastHitId) continue;
             if (dist(p.pos, e.pos) - e.radius > radius) continue;
             nativeHost.resolveHit(p.caster, p.inst, e, (ts.blast.damageScale ?? 0.35) * p.mult, 1, p.flat, false, false, undefined, p.origin, p.tier);
           }
-          nativeHost.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius, color: p.color, life: 0.22, maxLife: 0.22 });
+          nativeHost.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius, color: p.color, life: 0.22, maxLife: 0.22 });
           // THE MALLET: each path-blast is a fresh strike surface — on the
           // FLIGHT's story (the projectile law), not the caster's current one.
-          nativeHost.frontSplash(p.caster, p.inst, p.pos, radius);
+          nativeHost.frontSplash(p.caster, p.inst, p.pos, radius, p.tier ?? 0);
           nativeHost.strikeSurfaces(p.caster, p.pos, radius, undefined, undefined, p.tier ?? 0);
         }
         if (ts.zone) {
@@ -1005,7 +1008,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: p.tier ?? 0,
             pos: vec(p.pos.x, p.pos.y),
             radius: ts.zone.radius * aoeMul * (tso?.from ?? 1),
             caster: (nativeRecordSource = p.caster), inst: (nativeRecordInstance = p.inst), color: p.color,
@@ -1050,7 +1053,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: p.tier ?? 0,
           pos: vec(p.pos.x, p.pos.y),
           radius: fs.radius * p.caster.sheet.get('aoeRadius', fTags, fExtra),
           caster: (nativeRecordSource = p.caster), inst: (nativeRecordInstance = p.inst), color: p.color,
@@ -1078,7 +1081,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
         p.auraTick = (p.auraTick ?? PROJ_AURA_TICK) - dt;
         if (p.auraTick <= 0) {
           p.auraTick += PROJ_AURA_TICK;
-          for (const e of nativeHost.enemiesOf(p.caster)) {
+          for (const e of nativeHost.enemiesOf(p.caster, p.tier ?? 0)) {
             if (dist(p.pos, e.pos) - e.radius > p.auraRadius) continue;
             const tick: Partial<Record<DamageType, number>> = {};
             for (const [k, v] of Object.entries(p.auraAmounts)) {
@@ -1106,7 +1109,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             : (p.emit.angle += 2.39996); // golden-angle rotation
           const espec = (p.inst.def.delivery as ProjectileDelivery).emit;
           nativeHost.spawnProjectile(p.caster, p.emit.inst, p.pos, ang,
-            { inherit: nativeHost.inheritedFlight(p, espec?.inherit), depth: p.depth + 1, mult: p.mult });
+            { tier: p.tier ?? 0, inherit: nativeHost.inheritedFlight(p, espec?.inherit), depth: p.depth + 1, mult: p.mult });
         }
       }
 
@@ -1126,12 +1129,12 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           if (!nativeHost.projTouches(p, c.pos.x, c.pos.y, c.radius)) continue;
           p.hits.set(c.id, p.rehit ? p.age + p.rehit : Infinity);
           if (nativeHost.ringBell(c)) {
-            nativeHost.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.15, maxLife: 0.15 });
+            nativeHost.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.15, maxLife: 0.15 });
           }
         }
       }
       if (!dead) {
-        for (const enemy of nativeHost.enemiesOf(p.caster)) {
+        for (const enemy of nativeHost.enemiesOf(p.caster, p.tier ?? 0)) {
           const until = p.hits.get(enemy.id);
           if (until !== undefined && p.age < until) continue;
           // SELECTIVE PIERCE (Heartchaser): everything but the prey is
@@ -1178,7 +1181,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             nativeHost.attackSequences.beforeContact(p);
             nativeHost.resolveHit(p.caster, p.inst, enemy, p.mult, 0, hitFlat, false, false, undefined, p.origin, p.tier);
             // THE HIT VOICE (engine/bodyVoices.ts): the impact speaks the blow's type — fire flares, cold crackles, lightning sparks, chaos spatters, a shaft flecks the body.
-            nativeHost.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(enemy.hitFlashType ?? p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'body') });
+            nativeHost.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(enemy.hitFlashType ?? p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'body') });
             // SHATTER: the first impact flings a fan of shard projectiles
             // onward, raking the cone behind the victim. A skill's INNATE
             // shatter (Ice Spear) and the projShrapnel stat (the Shrapnel
@@ -1197,7 +1200,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
                 nativeHost.spawnProjectile(p.caster,
                   makeSkillInstance(shardSkill, effectiveSkillLevel(p.inst)),
                   vec(p.pos.x, p.pos.y), p.dir + off,
-                  { inherit, depth: p.depth + 1, mult: p.mult });
+                  { tier: p.tier ?? 0, inherit, depth: p.depth + 1, mult: p.mult });
                 // Shards rake the cone BEHIND the victim — never the victim
                 // itself (they spawn inside its body).
                 nativeHost.projectiles[nativeHost.projectiles.length - 1].hits.set(enemy.id, Infinity);
@@ -1244,7 +1247,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
                 p.traveled = 0;
                 p.range = 1e9;          // the trip to the circle is free
                 p.maxAge = undefined;
-                nativeHost.flashes.push({
+                nativeHost.flashes.push({ recoveryCueTier: p.tier,
                   pos: vec(p.landAt.x, p.landAt.y), radius: 26, color: p.color,
                   life: 0.9, maxLife: 0.9, edgeFrac: 0.8,
                 });
@@ -1269,7 +1272,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
               if (p.chains > 0) {
                 let next: Actor | null = null;
                 let bestD = 280;
-                for (const cand of nativeHost.enemiesOf(p.caster)) {
+                for (const cand of nativeHost.enemiesOf(p.caster, p.tier ?? 0)) {
                   if (cand === enemy || cand.dead) continue;
                   const until = p.hits.get(cand.id);
                   if (until !== undefined && p.age < until) continue;
@@ -1315,7 +1318,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
               // phasing flights hop through anything).
               let next: Actor | null = null;
               let bestD = 280;
-              for (const cand of nativeHost.enemiesOf(p.caster)) {
+              for (const cand of nativeHost.enemiesOf(p.caster, p.tier ?? 0)) {
                 if (p.hits.has(cand.id)) continue;
                 const dd = dist(p.pos, cand.pos);
                 if (dd >= bestD) continue;
@@ -1373,13 +1376,13 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
         if (p.zapTimer <= 0) {
           p.zapTimer = zap.interval;
           let zapped = false;
-          for (const e of nativeHost.enemiesOf(p.caster)) {
+          for (const e of nativeHost.enemiesOf(p.caster, p.tier ?? 0)) {
             if (dist(p.pos, e.pos) - e.radius > zap.radius) continue;
             nativeHost.resolveHit(p.caster, p.inst, e, (zap.damageScale ?? 0.5) * p.mult, 1, undefined, false, false, undefined, p.origin, p.tier);
             zapped = true;
           }
           if (zapped) {
-            nativeHost.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: zap.radius, color: p.color, life: 0.15, maxLife: 0.15 });
+            nativeHost.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: zap.radius, color: p.color, life: 0.15, maxLife: 0.15 });
           }
         }
       }
@@ -1402,7 +1405,7 @@ try {
               linger: Math.min(2.5, Math.max(0.8, z.linger)),
               dmgMult: z.dmgMult * 0.6,
             };
-            nativeHost.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 8, color: z.color, life: 0.2, maxLife: 0.2 });
+            nativeHost.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 8, color: z.color, life: 0.2, maxLife: 0.2 });
             break;
           
 } finally { nativeHost.endCombatRecord(nativeRecordScope); }
@@ -1424,12 +1427,12 @@ try {
 } finally { nativeHost.endCombatRecord(nativeRecordScope); }
 }
         if (!p.conductElem) {
-          const ground = nativeHost.groundAt(p.pos);
+          const ground = nativeHost.groundAt(p.pos, p.tier);
           if (ground?.kind === 'bog' || ground?.kind === 'swamp') p.conductElem = 'chaos';
           else if (ground?.kind === 'ice') p.conductElem = 'cold';
         }
         if (p.conductElem) {
-          nativeHost.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: REMNANT_COLORS[p.conductElem as RemnantElement] ?? '#9ec83a', life: 0.2, maxLife: 0.2 });
+          nativeHost.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: REMNANT_COLORS[p.conductElem as RemnantElement] ?? '#9ec83a', life: 0.2, maxLife: 0.2 });
         }
       }
       if (dead) {
@@ -1450,7 +1453,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: p.tier ?? 0,
             pos: vec(p.pos.x, p.pos.y), radius: p.suffuse.radius,
             caster: (nativeRecordSource = p.caster), inst: (nativeRecordInstance = p.suffuse.inst), color: p.suffuse.inst.def.color,
             delay: 0, exploded: true,
@@ -1482,7 +1485,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: p.tier ?? 0,
               pos: vec(p.pos.x, p.pos.y),
               radius: ezRadius * (ezo?.from ?? 1),
               caster: (nativeRecordSource = p.caster), inst: (nativeRecordInstance = p.inst), color: p.color,
@@ -1518,7 +1521,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             (minted.state ??= {}).seqDepth = seqDepth + 1;
             // procCue: the terminal payload appears at its real landing site.
             nativeHost.executeSkill(p.caster, minted, vec(
-              p.pos.x + Math.cos(p.dir) * 60, p.pos.y + Math.sin(p.dir) * 60), {
+              p.pos.x + Math.cos(p.dir) * 60, p.pos.y + Math.sin(p.dir) * 60), { tier: p.tier ?? 0,
               targetInfo: { pos: vec(p.pos.x, p.pos.y) },
               dmgMult: (sq.damageScale ?? 1) * p.mult,
               noCooldown: true, noRepeat: true, noFollowUp: true, keepFacing: true,
@@ -1554,7 +1557,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: p.tier ?? 0,
                 pos: vec(pt.x, pt.y), radius: closeRadius,
                 caster: (nativeRecordSource = p.caster), inst: (nativeRecordInstance = p.inst), color: p.color,
                 delay: start + beat * k, exploded: false,
@@ -1594,7 +1597,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: p.tier ?? 0,
                 pos: vec(p.pos.x, p.pos.y),
                 radius: fx.radius * p.caster.sheet.get('aoeRadius', zTags, zExtra),
                 caster: (nativeRecordSource = p.caster), inst: (nativeRecordInstance = p.inst), color: p.color,
@@ -1640,7 +1643,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             life: pd.plantOnLand.life ?? 25,
             placeRange: 9999,
             embed: pd.plantOnLand.embed,
-          }, vec(p.pos.x, p.pos.y), undefined, vec(p.pos.x, p.pos.y));
+          }, vec(p.pos.x, p.pos.y), undefined, vec(p.pos.x, p.pos.y), 1, p.tier ?? 0);
         }
         nativeHost.projectiles.splice(i, 1);
       }
@@ -1659,7 +1662,9 @@ export function sceneUpdateZones(nativeHost: NativeSceneCombatHost, dt: number):
       for (const z of nativeHost.zones) {
 const nativeRecordScope = nativeHost.beginCombatRecord("zones", z);
 try {
-        z.tier ??= z.caster.tier; // THE FIELD'S STORY, settled once
+        if (z.anchor) z.tier = z.anchor.tier;
+        else if (z.follow) z.tier = z.caster.tier;
+        else z.tier ??= z.caster.tier; // Unstamped legacy/test fields settle once.
         if (!z.armed) continue;
         const holding = !z.caster.dead && z.caster.casting?.mode === 'channel'
           && z.caster.casting.inst.def.id === z.inst.def.id;
@@ -1780,12 +1785,12 @@ try {
 } finally { nativeHost.endCombatRecord(nativeRecordScope); }
 }
           }
-          nativeHost.spawnAftershocks(z.caster, z.inst, z.pos, z.radius, z.shape, z.depth);
+          nativeHost.spawnAftershocks(z.caster, z.inst, z.pos, z.radius, z.shape, z.depth, z.tier ?? z.caster.tier);
           // The impact leaves real terrain behind (Icy Comet's ice sheet).
           if (z.leaveTerrain) {
             nativeHost.addTempGround(z.pos, z.leaveTerrain.kind,
               z.leaveTerrain.radius, z.leaveTerrain.duration
-              * z.caster.sheet.get('effectDuration', skillContextTags(z.inst.def), instanceMods(z.inst)));
+              * z.caster.sheet.get('effectDuration', skillContextTags(z.inst.def), instanceMods(z.inst)), { tier: z.tier });
           }
           if (z.linger <= 0) { nativeHost.expireZone(z); nativeHost.zones.splice(i, 1); continue; }
         }
@@ -1794,7 +1799,7 @@ try {
         if (z.drift && !z.seek) {
           z.pos = nativeHost.clampPos(vec(
             z.pos.x + Math.cos(z.facing) * z.drift * dt,
-            z.pos.y + Math.sin(z.facing) * z.drift * dt), 10);
+            z.pos.y + Math.sin(z.facing) * z.drift * dt), 10, z.pos, { tier: z.tier });
         }
         // SEEKING GROUNDS (Creeping Frost): the lingering field SLINKS
         // toward the nearest living enemy — a patch of winter with
@@ -1803,7 +1808,7 @@ try {
         if (z.seek) {
           let prey: Actor | null = null;
           let bd = z.seek.range;
-          for (const e of nativeHost.enemiesOf(z.caster)) {
+          for (const e of nativeHost.enemiesOf(z.caster, z.tier ?? z.caster.tier).filter(a => a.tier === (z.tier ?? z.caster.tier))) {
             if (e.construct?.breakable) continue;
             const dd = dist(z.pos, e.pos);
             if (dd < bd) { bd = dd; prey = e; }
@@ -1812,7 +1817,7 @@ try {
             const ang = angleTo(z.pos, prey.pos);
             z.pos = nativeHost.clampPos(vec(
               z.pos.x + Math.cos(ang) * z.seek.speed * dt,
-              z.pos.y + Math.sin(ang) * z.seek.speed * dt), 10);
+              z.pos.y + Math.sin(ang) * z.seek.speed * dt), 10, z.pos, { tier: z.tier });
           }
         }
         // WORN fields ride their caster (Blizzard Coil's mantle) — the
@@ -1871,7 +1876,7 @@ try {
         if (z.volatile && z.exploded && z.linger > 0 && nativeHost.time >= z.volatile.next) {
           z.volatile.next = nativeHost.time + z.volatile.interval;
           if (chance(z.volatile.chance)) {
-            nativeHost.flashes.push({
+            nativeHost.flashes.push({ recoveryCueTier: z.hitAll ? undefined : z.tier,
               pos: vec(z.pos.x, z.pos.y), radius: z.radius + 10,
               color: z.color, life: 0.3, maxLife: 0.3,
             });
@@ -1958,7 +1963,7 @@ try {
             fx: ['nova', 'melee', 'cone', 'leap', 'storm'].includes(instanceDelivery(z.inst).type) ? z.fx : undefined,
             onGround: z.onGround?.slice(), recoveryCueTier: z.tier ?? z.caster.tier,
           });
-          nativeHost.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth);
+          nativeHost.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth, z.tier ?? z.caster.tier);
           z.pulse.dmgMult *= z.pulse.dmgStep;
           z.pulse.radiusMult *= z.pulse.radiusStep;
           // THE QUEUE HAND-OFF (kindred rule): the native rhythm spent,
@@ -1992,7 +1997,7 @@ try {
         // reach past the damage disc (pullRadius: the event horizon).
         if (z.pull) {
           const reach = z.pullRadius ?? z.radius * 1.35;
-          for (const v of nativeHost.enemiesOf(z.caster)) {
+          for (const v of nativeHost.enemiesOf(z.caster, z.tier ?? z.caster.tier).filter(a => a.tier === (z.tier ?? z.caster.tier))) {
             if (v.construct || v.leap || v.anchored) continue;
             const dd = dist(z.pos, v.pos);
             if (dd - v.radius > reach || dd < 6) continue;
@@ -2002,7 +2007,7 @@ try {
             // grid wall's face — never snapToWalkable's cell-center hop.
             v.pos = nativeHost.clampPos(vec(
               v.pos.x + Math.cos(ang) * stepIn,
-              v.pos.y + Math.sin(ang) * stepIn), v.radius, v.pos);
+              v.pos.y + Math.sin(ang) * stepIn), v.radius, v.pos, { mover: v });
           }
         }
         // Pillar of Flame: the cage closes — the safe center shrinks away.
@@ -2056,7 +2061,7 @@ try {
                 z.caster.facing = dist(z.pos, at) < 1
                   ? rand(0, Math.PI * 2) : angleTo(z.pos, at);
               }
-              nativeHost.executeSkill(z.caster, z.emitInst, at, {
+              nativeHost.executeSkill(z.caster, z.emitInst, at, { tier: z.tier ?? z.caster.tier,
                 dmgMult: z.dmgMult, noCooldown: true, noRepeat: true, keepFacing: true,
               });
               z.caster.facing = keepDir;
@@ -2074,7 +2079,7 @@ try {
         // (the pool mirrors updateZoneDomain's own filter).
         if (z.exposure && z.linger > 0) {
           const pool = z.exposureDomain && z.domain
-            ? nativeHost.actors.filter(a => !a.dead && !a.untargetable && !a.construct)
+            ? nativeHost.actors.filter(a => !a.dead && !a.untargetable && !a.construct && a.tier === (z.tier ?? z.caster.tier))
             : nativeHost.zoneVictims(z);
           for (const v of pool) {
             if (nativeHost.zoneHas(z, v.pos, v.radius)) {
@@ -2096,7 +2101,7 @@ try {
         if (z.madden && z.linger > 0) {
           const bank = z.madden;
           const story = z.tier ?? z.caster.tier;
-          for (const v of nativeHost.enemiesOf(z.caster)) {
+          for (const v of nativeHost.enemiesOf(z.caster, z.tier ?? z.caster.tier).filter(a => a.tier === (z.tier ?? z.caster.tier))) {
             if (v.tier !== story || bank.credited.get(v.id) === nativeHost.time) continue;
             if (!nativeHost.zoneHas(z, v.pos, v.radius)) continue;
             bank.credited.set(v.id, nativeHost.time);
@@ -2172,7 +2177,7 @@ try {
           // per-frame fountain (its tickInterval is 0).
           nativeHost.healAlliesInArea(z.caster, z.inst, a =>
             nativeHost.zoneHas(z, a.pos, a.radius),
-            z.dmgMult, true, z.struck);
+            z.dmgMult, true, z.struck, z.tier ?? z.caster.tier);
         }
         if (z.linger <= 0) {
           // The dying breath (Squall Rune): one final burst as it goes.
@@ -2187,9 +2192,9 @@ try {
             }
             // THE MALLET: the dying breath is a plain-disc blast, exactly
             // as its victims see it.
-            nativeHost.frontSplash(z.caster, z.inst, z.pos, radius);
-            nativeHost.strikeSurfaces(z.caster, z.pos, radius);
-            nativeHost.flashes.push({
+            nativeHost.frontSplash(z.caster, z.inst, z.pos, radius, z.tier ?? z.caster.tier);
+            nativeHost.strikeSurfaces(z.caster, z.pos, radius, undefined, undefined, z.tier);
+            nativeHost.flashes.push({ recoveryCueTier: z.hitAll ? undefined : z.tier,
               pos: vec(z.pos.x, z.pos.y), radius, color: z.color,
               life: 0.35, maxLife: 0.35,
             });
@@ -2258,7 +2263,7 @@ export function sceneZoneVictims(nativeHost: NativeSceneCombatHost, z: Zone): Ac
     // bodies on the story it lies on — a field upstairs scorches nobody in
     // the common room beneath the boards.
     const story = z.tier ?? z.caster.tier;
-    const out = nativeHost.enemiesOf(z.caster).filter(v => v.tier === story);
+    const out = nativeHost.enemiesOf(z.caster, story).filter(v => v.tier === story);
     if (z.curseAllies) {
       for (const a of nativeHost.actors) {
         if (a.dead || a.team !== z.caster.team || a.untargetable || a.tier !== story) continue;
@@ -2285,6 +2290,6 @@ export function sceneZoneSees(nativeHost: NativeSceneCombatHost, z: Zone, v: Act
         ? clamp(((p.x - z.seg.ax) * sx + (p.y - z.seg.ay) * sy) / ll, 0, 1) : 0;
       ox = z.seg.ax + sx * t; oy = z.seg.ay + sy * t;
     }
-    return nativeHost.lineOfFire(vec(ox, oy), p);
+    return nativeHost.lineOfFire(vec(ox, oy), p, z.tier ?? z.caster.tier);
   }
 

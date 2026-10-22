@@ -219,6 +219,7 @@ export const WIND_CFG = {
   pushPerSec: 24,
 };
 export interface Chest {
+  tier?: number;
   /** Optional place/event-owned loot context; ordinary chests inherit the zone. */
   rewardLevel?: number;
   rewardSource?: string;
@@ -709,10 +710,11 @@ export function sceneUpdateTerrainEffects(nativeHost:NativeSceneFrameHost, dt: n
       if (ground) nativeHost.applyRegionEffects(a, ground.kind, ground.deep, prevG !== ground.kind, dt, drained);
       // GRID-sourced region (Phase 3: void/deep_water/air_pocket/…).
       if (hasGrid) {
-        const gk = nativeHost.walk!.regionAt?.(a.pos.x, a.pos.y);
+        const sampled = nativeHost.walk!.regionAt?.(a.pos.x, a.pos.y);
+        const gk = (regionKind(sampled)?.tier ?? 0) === a.tier ? sampled : undefined;
         const prevR = a.gridRegion;
         a.gridRegion = gk;
-        if (gk && gk !== prevR) regionKind(prevR)?.onExit?.(a, nativeHost);
+        if (gk !== prevR) regionKind(prevR)?.onExit?.(a, nativeHost);
         if (gk) nativeHost.applyRegionEffects(a, gk, false, prevR !== gk, dt, drained);
       }
       // THE DOUSE BEAT — ground as cure (RegionKind.douses): with both
@@ -1564,7 +1566,8 @@ export function sceneUpdateShrines(nativeHost:NativeSceneFrameHost): void {
     if (!hands.length) return;
     for (const s of nativeHost.shrines) {
       if (s.used) continue;
-      const p = hands.find(h => dist(s.pos, h.pos) <= h.radius + 24);
+      s.tier ??= nativeHost.spoilStoryAt(s.pos);
+      const p = hands.find(h => sameStory(h, s) && dist(s.pos, h.pos) <= h.radius + 24);
       if (!p) continue;
       s.used = true;
       p.addBuff({ type: 'buff', id: 'shrine_' + s.def.id, label: s.def.name, duration: s.def.duration, mods: s.def.mods });
@@ -1632,6 +1635,7 @@ export function sceneUpdateChests(nativeHost:NativeSceneFrameHost, dt: number): 
     for (let i = nativeHost.chests.length - 1; i >= 0; i--) {
       const c = nativeHost.chests[i];
       if (c.opened) continue;
+      c.tier ??= nativeHost.spoilStoryAt(c.pos);
       const near = hands.some(h => chestInReach(c, h));
       if (c.kind === 'objective') {
         if (nativeHost.chestObjectiveDone(c) && near) nativeHost.openChest(c);
@@ -1646,7 +1650,8 @@ export function sceneUpdateChests(nativeHost:NativeSceneFrameHost, dt: number): 
             // It was never a chest.
             const m = nativeHost.createMonster(FIXTURE_IDS.mimic, Math.max(1, nativeHost.zone.level), 'enemy');
             m.fromZoneGen = true; // a revealed chest cannot respawn on a return trip
-            m.pos = nativeHost.clampPos(vec(c.pos.x, c.pos.y), m.radius);
+            m.tier = c.tier;
+            m.pos = nativeHost.clampPos(vec(c.pos.x, c.pos.y), m.radius, undefined, { mover: m });
             { nativeHost.actors.push(m); nativeHost.admitCombatBirth(m); }
             nativeHost.emergeBody(m, { host: true }); // THE EMERGENCE GRAMMAR: it was never a chest — the mimic BURSTS OUT of it (no caption)
           } else {
@@ -2983,7 +2988,7 @@ export function sceneUpdateWindPush(nativeHost:NativeSceneFrameHost, dt: number)
       a.pos = nativeHost.clampPos(vec(
         a.pos.x + gale.x * push,
         a.pos.y + gale.y * push,
-      ), a.radius, a.pos);
+      ), a.radius, a.pos, { mover: a });
     }
   }
 
@@ -4372,7 +4377,7 @@ let nativeStorage:typeof nativeHost.zones;
 let nativeRecord:typeof nativeHost.zones[number];
 let nativeRecordSource:Parameters<NativeSceneFrameHost["issueCombatRecord"]>[3];
 let nativeRecordInstance:Parameters<NativeSceneFrameHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: caster.tier,
       pos: vec(at.x, at.y), radius: strike.radius, caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: skill.color,
       delay: strike.telegraph, exploded: false, linger: 0,
       tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
@@ -4393,35 +4398,39 @@ export function sceneChestObjectiveDone(nativeHost:NativeSceneFrameHost, c: Ches
 
 export function sceneOpenChest(nativeHost:NativeSceneFrameHost, c: Chest): void {
     if (c.opened || c.massObjectiveOwner && !nativeHost.chestObjectiveDone(c)) return;
-    c.opened = true;
-    c.openedAt = nativeHost.time; // M-SPILL: the lid swings (the renderer's own clock read)
-    if(c.massObjectiveOwner)nativeHost.massRuntime?.geography?.chestOpened(c,nativeHost.time);
-    const rewardLevel = c.rewardLevel ?? nativeHost.levelAt(c.pos);
-    const d0 = nativeHost.drops.length; // THE OWNER STAMP (card 27): the chest's pay is its opener's
-    nativeHost.withMassReward(rewardLevel, () => {
-      const memoryProvenance = 'chest'; // Durable cache identity stays on the chest; Memories name their registered source.
-      const lootZone = nativeHost.massRuntime?.geography?.chestContext(c)
-        ?? (c.rewardLevel === undefined && !nativeHost.massRuntime ? nativeHost.zone : { ...nativeHost.zone, level: rewardLevel });
-      if (!nativeHost.spoilsSealed()) {
-        for (const result of resolveLootTable(selectContainerLoot('chest', lootZone), { ilvl: rewardLevel, sourceId: memoryProvenance })) {
-          nativeHost.mintLootResult(c.pos, result, false, memoryProvenance); // THE MEMORY LAW: the chest is the provenance
+    const previousStory = nativeHost.spoilStory;
+    nativeHost.spoilStory = c.tier ?? nativeHost.spoilStoryAt(c.pos);
+    try {
+      c.opened = true;
+      c.openedAt = nativeHost.time; // M-SPILL: the lid swings (the renderer's own clock read)
+      if(c.massObjectiveOwner)nativeHost.massRuntime?.geography?.chestOpened(c,nativeHost.time);
+      const rewardLevel = c.rewardLevel ?? nativeHost.levelAt(c.pos);
+      const d0 = nativeHost.drops.length; // THE OWNER STAMP (card 27): the chest's pay is its opener's
+      nativeHost.withMassReward(rewardLevel, () => {
+        const memoryProvenance = 'chest'; // Durable cache identity stays on the chest; Memories name their registered source.
+        const lootZone = nativeHost.massRuntime?.geography?.chestContext(c)
+          ?? (c.rewardLevel === undefined && !nativeHost.massRuntime ? nativeHost.zone : { ...nativeHost.zone, level: rewardLevel });
+        if (!nativeHost.spoilsSealed()) {
+          for (const result of resolveLootTable(selectContainerLoot('chest', lootZone), { ilvl: rewardLevel, sourceId: memoryProvenance })) {
+            nativeHost.mintLootResult(c.pos, result, false, memoryProvenance); // THE MEMORY LAW: the chest is the provenance
+          }
         }
-      }
-      // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled
-      // GEAR piece at exactly that rarity, on top of the ordinary container pay.
-      // Spoils-sealed ground still seals it (dropGearAt rides the same law).
-      if (c.rarity) {
-        const item = rollItem({ ilvl: Math.max(1, rewardLevel), rarityWeights: { [c.rarity]: 1 } });
-        if (item) {
-          nativeHost.dropGearAt(vec(c.pos.x, c.pos.y + 8), item); // the glyph's own rarity color is the read (M-SPILL: no caption)
+        // THE THEMED CACHE (Chest.rarity — a tinted toll's promise): one rolled
+        // GEAR piece at exactly that rarity, on top of the ordinary container pay.
+        // Spoils-sealed ground still seals it (dropGearAt rides the same law).
+        if (c.rarity) {
+          const item = rollItem({ ilvl: Math.max(1, rewardLevel), rarityWeights: { [c.rarity]: 1 } });
+          if (item) {
+            nativeHost.dropGearAt(vec(c.pos.x, c.pos.y + 8), item); // the glyph's own rarity color is the read (M-SPILL: no caption)
+          }
         }
-      }
-      for (let i = 0; i < 2; i++) {
-        nativeHost.shedOrb(chance(0.5) ? 'life' : 'mana', c.pos, { scatter: 22, life: 14 });
-      }
-    });
-    if (nativeHost.dropRuleOf) nativeHost.ownSpoils(d0, nativeHost.chestOpener(c));
-    nativeHost.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 50, color: '#e8c87a', life: 0.4, maxLife: 0.4, fx: 'sparkle' }); // M-SPILL: the lid + the glints, no caption
+        for (let i = 0; i < 2; i++) {
+          nativeHost.shedOrb(chance(0.5) ? 'life' : 'mana', c.pos, { scatter: 22, life: 14 });
+        }
+      });
+      if (nativeHost.dropRuleOf) nativeHost.ownSpoils(d0, nativeHost.chestOpener(c));
+      nativeHost.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 50, color: '#e8c87a', life: 0.4, maxLife: 0.4, fx: 'sparkle', recoveryCueTier: c.tier }); // M-SPILL: the lid + the glints, no caption
+    } finally { nativeHost.spoilStory = previousStory; }
   }
 
 export function sceneCreepPumpBearing(nativeHost:NativeSceneFrameHost, a: Actor, mode: 'toward' | 'away' | 'random'): number {
@@ -4784,7 +4793,7 @@ let nativeStorage:typeof nativeHost.zones;
 let nativeRecord:typeof nativeHost.zones[number];
 let nativeRecordSource:Parameters<NativeSceneFrameHost["issueCombatRecord"]>[3];
 let nativeRecordInstance:Parameters<NativeSceneFrameHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: caster.tier,
         pos: at, radius: R.dropletR, caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: skill.color,
         delay: GEYSER_CFG.rainDelay, delay0: GEYSER_CFG.rainDelay, exploded: false, linger: 0,
         tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,

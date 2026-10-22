@@ -228,7 +228,7 @@ export function sceneLosCached(nativeHost:NativeSceneAIPreparationHost, a: Actor
     if (a.id >= LOS_PAIR_STRIDE || b.id >= LOS_PAIR_STRIDE) return nativeHost.lineOfSight(a.pos, b.pos, a.tier, b.tier);
     const key = a.id * LOS_PAIR_STRIDE + b.id;
     const hit = nativeHost.losMemo.get(key);
-    if (hit && hit.until > nativeHost.time) return hit.ok;
+    if (hit && hit.until > nativeHost.time && hit.fromTier === a.tier && hit.toTier === b.tier) return hit.ok;
     const ok = nativeHost.lineOfSight(a.pos, b.pos, a.tier, b.tier);
     if (nativeHost.losMemo.size > 4096) {
       let drop = nativeHost.losMemo.size - 3072;
@@ -249,7 +249,7 @@ export function sceneLosCached(nativeHost:NativeSceneAIPreparationHost, a: Actor
     const ttl = j > 0
       ? LOS_CFG.memoTtl * (1 - j / 2 + j * ((Math.imul(legacyKey, 0x9E3779B1) >>> 16) / 65536))
       : LOS_CFG.memoTtl;
-    nativeHost.losMemo.set(key, { ok, until: nativeHost.time + ttl });
+    nativeHost.losMemo.set(key, { ok, until: nativeHost.time + ttl, fromTier: a.tier, toTier: b.tier });
     return ok;
   }
 

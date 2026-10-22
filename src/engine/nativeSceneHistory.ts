@@ -35,6 +35,8 @@ export interface NativeSceneHistoryHost {
  sagaDirty:World['sagaDirty'];
  playerCorpses:World['playerCorpses'];
  zoneMap:World['zoneMap'];
+ zone:World['zone'];
+ spoilStoryAt:World['spoilStoryAt'];
  corpseRecords:World['corpseRecords'];
  clampPos:World['clampPos'];
 }
@@ -150,8 +152,10 @@ export function historySpawnPlayerCorpses(host:NativeSceneHistoryHost, def: Zone
       } else if (!exact) {
         continue;
       }
+      const tier = host.zone.tiers && Number.isInteger(d.tier) && d.tier! >= 0
+        && d.tier! <= (host.zone.tiers.levels ?? 1) ? d.tier! : host.spoilStoryAt(d.pos);
       host.playerCorpses.push({
-        pos: host.clampPos(vec(d.pos.x, d.pos.y), 16),
+        tier, pos: host.clampPos(vec(d.pos.x, d.pos.y), 16, undefined, { tier }),
         recordIndex: i, owner: d.owner,
         who: { classId: d.classId, level: d.charLevel },
         dwell: 0, reclaimed: false,

@@ -700,6 +700,7 @@ export interface NativeSceneCampaignFrameCommonHost {
  readonly spoilClamp:World["spoilClamp"];
  readonly spoilsSealed:World["spoilsSealed"];
  readonly spoilStoryAt:World["spoilStoryAt"];
+ spoilStory:World["spoilStory"];
  readonly springTrapwork:World["springTrapwork"];
  readonly startCaravan:World["startCaravan"];
  stashedCompanions:World["stashedCompanions"];

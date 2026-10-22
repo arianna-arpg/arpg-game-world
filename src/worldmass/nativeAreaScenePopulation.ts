@@ -214,8 +214,8 @@ export class NativeAreaScenePopulation {
       return body;
     }finally{this.#birthMintFrames.pop();minted.clear();}
   }
-  hostileTo(a:Actor,b:Actor):boolean{return nativeHostileTo(this.hostility,this.input.sources.hostility,a,b);}
-  enemiesOf(a:Actor):Actor[]{return nativeEnemiesOf(this.hostility,a);}
+  hostileTo(a:Actor,b:Actor,sourceTier=a.tier??0):boolean{return nativeHostileTo(this.hostility,this.input.sources.hostility,a,b,sourceTier);}
+  enemiesOf(a:Actor,sourceTier=a.tier??0):Actor[]{return nativeEnemiesOf(this.hostility,a,sourceTier);}
   promoteRarity(...args:Parameters<NativeMonsterPromotionHost['promoteRarity']>):void{promoteNativeRarity(this.promotion,this.input.sources.promotion,...args);}
   promoteRarityStacked(a:Actor,rarity:Parameters<NativeAreaBirthHost['promoteRarityStacked']>[1],stacks=1,opts?:Parameters<NativeAreaBirthHost['promoteRarityStacked']>[3]):void{promoteNativeRarityStacked(this.promotion,this.input.sources.promotion,a,rarity,stacks,opts);}
   promoteMagicPack(members:Actor[],id:string):boolean{return promoteNativeMagicPack(this.promotion,this.input.sources.promotion,members,id);}

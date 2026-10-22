@@ -503,7 +503,7 @@ export function sceneLayFissure(nativeHost: NativeSceneCombatHost,
     caster: Actor, inst: SkillInstance, from: Vec2, ang: number,
     d: GroundDelivery,
     useMult: number, flatBonus: Partial<Record<DamageType, number>> | undefined,
-    branches: number, fan = 0,
+    branches: number, fan = 0, tier = caster.tier,
   ): void {
     const fz = d.fissure!;
     const tags = skillContextTags(inst, grantedTags(inst));
@@ -590,8 +590,8 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
-        pos: nativeHost.clampPos(vec(px, py), 10),
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier,
+        pos: nativeHost.clampPos(vec(px, py), 10, undefined, { tier }),
         radius: d.radius * aoeScale * (fizSizeOver?.from ?? 1),
         seg: {
           ax: px - Math.cos(segAng) * half, ay: py - Math.sin(segAng) * half,
@@ -814,7 +814,7 @@ export function sceneKnockFixtures(nativeHost: NativeSceneCombatHost, caster: Ac
     if (target.puzzleNode) nativeHost.puzzleStruck(target, caster, wounding);
   }
 
-export function sceneSpawnAftershocks(nativeHost: NativeSceneCombatHost, caster: Actor, inst: SkillInstance, at: Vec2, radius: number, shape: AoeShape, depth = 0): void {
+export function sceneSpawnAftershocks(nativeHost: NativeSceneCombatHost, caster: Actor, inst: SkillInstance, at: Vec2, radius: number, shape: AoeShape, depth = 0, tier = caster.tier): void {
     if (depth > 0) return; // aftershocks don't scatter further
     const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
@@ -827,8 +827,8 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
-        pos: nativeHost.clampPos(vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10),
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: tier,
+        pos: nativeHost.clampPos(vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10, undefined, { tier }),
         radius: radius * 0.5,
         caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: inst.def.color,
         delay: 0.3 + i * 0.12, exploded: false,
@@ -1012,9 +1012,9 @@ export function sceneGuardBash(nativeHost: NativeSceneCombatHost, a: Actor, inst
   }
 
 export function sceneAddTempGround(nativeHost: NativeSceneCombatHost, pos: Vec2, kind: string, radius: number, duration: number,
-    opts?: { shallow?: boolean; evaporate?: { rate?: number } }): void {
+    opts?: { tier?: number; shallow?: boolean; evaporate?: { rate?: number } }): void {
     const doodad: Doodad = {
-      pos: vec(pos.x, pos.y), radius, kind,
+      pos: vec(pos.x, pos.y), radius, kind, tier: opts?.tier ?? 0,
       ...(opts?.shallow ? { shallow: true } : {}),
     };
     nativeHost.doodads.push(doodad);
@@ -1078,7 +1078,7 @@ export function sceneExplodeActor(nativeHost: NativeSceneCombatHost, minion: Act
 export function sceneBurstDamage(nativeHost: NativeSceneCombatHost, pos: Vec2, radius: number, dmg: number, type: DamageType, color: string, sourceTeam: Team, sourceTier = 0, sourceActor?: Actor, recoveryCue?: string, visual?: string): void {
     for (const e of nativeHost.actors) {
       if (!nativeHost.isBurstTarget(e, sourceTeam, sourceTier)) continue;
-      if (sourceActor && !nativeHost.hostileTo(sourceActor, e)) continue;
+      if (sourceActor && !nativeHost.hostileTo(sourceActor, e, sourceTier)) continue;
       if (dist(pos, e.pos) - e.radius > radius) continue;
       const out: { clamped?: boolean } = {};
       const packet: DamagePacket = { amounts: { [type]: dmg }, crit: false,
@@ -1100,18 +1100,18 @@ export function sceneBurstDamage(nativeHost: NativeSceneCombatHost, pos: Vec2, r
       if (e.life <= 0 && !e.dead) nativeHost.kill(e, false, sourceActor);
     }
     nativeHost.flashes.push(recoveryCue ? { ...combatCueFlash(pos, recoveryCue, radius, 0, color), recoveryCueTier: sourceTier }
-      : { pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35,
-        ...(visual ? { fx: visual, recoveryCueTier: sourceTier } : {}) });
+      : { pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35, recoveryCueTier: sourceTier,
+        ...(visual ? { fx: visual } : {}) });
     // THE MALLET, ownerless: a baked blast rings EVERY side's bells and
     // pops brittle scenery — the exploding corpse beside the bell already
     // damaged it without a toll; now the blast answers too.
-    nativeHost.strikeSurfaces(null, pos, radius);
+    nativeHost.strikeSurfaces(null, pos, radius, undefined, undefined, sourceTier);
     // The ownerless lane carries its type in hand — a marching skin under
     // the blast drinks it directly (quench/feed, FrontSpec levers).
-    if (nativeHost.creep?.quenchable) nativeHost.creep.damageSkin(pos.x, pos.y, radius, { [type]: dmg });
+    if (nativeHost.creep?.quenchable) nativeHost.creep.damageSkin(pos.x, pos.y, radius, { [type]: dmg }, sourceTier);
     // THE IGNITION DIAL (FrontSpawnRow.ignition): the same blast KINDLES
     // a lit lane's fuel under it — null-cost everywhere the dial is off.
-    if (nativeHost.creep?.ignitable) nativeHost.creep.igniteAt(pos.x, pos.y, radius, { [type]: dmg }, nativeHost.time);
+    if (nativeHost.creep?.ignitable) nativeHost.creep.igniteAt(pos.x, pos.y, radius, { [type]: dmg }, nativeHost.time, sourceTier);
   }
 
 export function sceneResolveHit(nativeHost: NativeSceneCombatHost, 
@@ -1518,7 +1518,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
         target.lastSpillAt = nativeHost.time;
         const item = target.lootSack.pop()!;
         nativeHost.drops.push({
-          pos: vec(target.pos.x + rand(-20, 20), target.pos.y + rand(-20, 20)),
+          pos: nativeHost.clampPos(vec(target.pos.x + rand(-20, 20), target.pos.y + rand(-20, 20)), 10, undefined, { tier: target.tier }),
           item, bob: rand(0, Math.PI * 2),
           tier: target.tier, // THE SPOILS STORY: shaken loose where the sack stands
         });
@@ -3740,8 +3740,8 @@ export function sceneKill(nativeHost: NativeSceneCombatHost, actor: Actor, silen
         if (actor.lootSack?.length) {
           for (const item of actor.lootSack) {
             nativeHost.drops.push({
-              pos: vec(actor.pos.x + rand(-26, 26), actor.pos.y + rand(-26, 26)),
-              item, bob: rand(0, Math.PI * 2),
+              pos: nativeHost.clampPos(vec(actor.pos.x + rand(-26, 26), actor.pos.y + rand(-26, 26)), 10, undefined, { tier: actor.tier }),
+              item, bob: rand(0, Math.PI * 2), tier: actor.tier,
             });
           }
           actor.lootSack = undefined;
@@ -3976,7 +3976,7 @@ export function sceneExplodeProjectile(nativeHost: NativeSceneCombatHost, p: Pro
     // cadence; the beats belong to ground and slams.
     const bSigil = Math.round(p.caster.sheet.get('aoeShape', tags, extra));
     const bShape = bSigil === 1 || bSigil === 2 ? bSigil : 0;
-    for (const e of nativeHost.enemiesOf(p.caster)) {
+    for (const e of nativeHost.enemiesOf(p.caster, p.tier ?? 0)) {
       if (e.id === exceptId) continue; // the direct hit already landed
       if (e.tier !== (p.tier ?? 0)) continue; // the splash lands on the flight's story (the sovereignty gate)
       if (bShape
@@ -3985,7 +3985,7 @@ export function sceneExplodeProjectile(nativeHost: NativeSceneCombatHost, p: Pro
       if (p.parryDamage) nativeHost.resolveParryDamage(p.caster, e, p.parryDamage, scale, p.pos);
       else nativeHost.resolveHit(p.caster, p.inst, e, scale * p.mult, 1, undefined, false, false, undefined, p.origin, p.tier);
     }
-    nativeHost.flashes.push({
+    nativeHost.flashes.push({ recoveryCueTier: p.tier,
       pos: vec(p.pos.x, p.pos.y), radius, color: p.inst.def.color,
       life: 0.3, maxLife: 0.3,
       shape: bShape, facing: p.dir,

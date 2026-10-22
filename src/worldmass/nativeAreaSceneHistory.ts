@@ -4,6 +4,7 @@ import type {World} from '../engine/world';
 import type {NativeSceneActorContext,NativeAreaSceneGeometry} from './nativeAreaSceneGeometry';
 import type {NativeAreaScenePopulation} from './nativeAreaScenePopulation';
 import * as native from '../engine/nativeSceneHistory';
+import {floorStoryOf} from '../engine/tiers';
 export interface NativeSceneHistoryState {playerCorpses:World['playerCorpses']}
 export interface NativeSceneHistoryCampaign {
  meta:World['meta'];charDeaths:World['charDeaths'];account:World['account'];hiredMercs:World['hiredMercs'];
@@ -36,15 +37,19 @@ export class NativeAreaSceneHistory {
   const host={} as native.NativeSceneHistoryHost;
   const fields=(o:()=>object,keys:readonly string[],write=false)=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){return (o() as Record<string,unknown>)[key];},...(write?{set(v:unknown){(o() as Record<string,unknown>)[key]=v;}}:{})});};
   const methods=(o:()=>object,keys:readonly string[])=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){const provider=o() as Record<string,Function>,fn=provider[key];if(typeof fn!=='function')throw Error('Missing native history capability: '+key);return (...args:unknown[])=>Reflect.apply(fn,provider,args);}});};
-  fields(()=>input.scene,['actors']);fields(()=>input.geometry,['arena']);
+  fields(()=>input.scene,['actors','zone']);fields(()=>input.geometry,['arena']);
   fields(()=>input.campaign,['meta','charDeaths','account','hiredMercs','time','localSeat','sim','manifestedThisRun','zoneMap']);
   fields(()=>input.campaign,['lastSagaFlushAt','accountDirty'],true);fields(()=>input.state,['playerCorpses'],true);
   fields(()=>input.services,['events']);methods(()=>input.services,['notice','text']);
   methods(()=>input.geometry,['clampPos','findFreeSpot']);methods(()=>input.population,['createMonster','promoteRarity']);
-  methods(()=>this,['modeStageDef','corpseRecords','nemesisActive','watchedSagas','spawnNemesisActor','sagaDirty']);
+  methods(()=>this,['modeStageDef','corpseRecords','nemesisActive','watchedSagas','spawnNemesisActor','sagaDirty','spoilStoryAt']);
   this.host=Object.freeze(host);for(const key of ['input','host'])Object.defineProperty(this,key,{writable:false,configurable:false,enumerable:false});
  }
  modeStageDef(){return native.historyModeStageDef(this.host);}
+ spoilStoryAt(...[at]:Parameters<World['spoilStoryAt']>):number {
+  const {scene,geometry}=this.input;
+  return scene.zone.tiers && geometry.walk?.regionAt ? floorStoryOf(geometry.walk.regionAt(at.x,at.y)) : 0;
+ }
  corpseRecords(){return native.historyCorpseRecords(this.host);}
  nemesisActive(){return native.historyNemesisActive(this.host);}
  watchedSagas(){return native.historyWatchedSagas(this.host);}

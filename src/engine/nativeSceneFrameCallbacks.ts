@@ -86,7 +86,7 @@ let nativeStorage:typeof nativeHost.zones;
 let nativeRecord:typeof nativeHost.zones[number];
 let nativeRecordSource:Parameters<NativeSceneFrameHost["issueCombatRecord"]>[3];
 let nativeRecordInstance:Parameters<NativeSceneFrameHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: caster.tier,
         pos: at, radius: blast, caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: eff.color ?? '#ff6a2a',
         delay: 0.9 + i * (eff.stagger ?? 0), exploded: false, linger: 0,
         tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,

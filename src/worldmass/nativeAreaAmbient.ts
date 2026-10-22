@@ -188,8 +188,8 @@ export class NativeAreaAmbient {
   createMonster(id:string,level:number,team:Team,owner?:Actor,spawn?:{scale?:number}):Actor {
     return createNativeMonster(this.factory,this.sources.factory,id,level,team,owner,spawn);
   }
-  hostileTo(a:Actor,b:Actor):boolean {return nativeHostileTo(this.hostility,this.sources.hostility,a,b);}
-  enemiesOf(a:Actor):Actor[] {return nativeEnemiesOf(this.hostility,a);}
+  hostileTo(a:Actor,b:Actor,sourceTier=a.tier??0):boolean {return nativeHostileTo(this.hostility,this.sources.hostility,a,b,sourceTier);}
+  enemiesOf(a:Actor,sourceTier=a.tier??0):Actor[] {return nativeEnemiesOf(this.hostility,a,sourceTier);}
   promoteRarity(a:Actor,rarity:MonsterRarity,opts?:{distinctName?:string|boolean}):void {
     promoteNativeRarity(this.promotion,this.sources.promotion,a,rarity,opts);
   }

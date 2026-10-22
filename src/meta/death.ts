@@ -85,6 +85,8 @@ export const DEFAULT_LOOT_POLICY: DeathLootPolicy = {
  *  character wipe. Matched to a new run by MAP COORDINATE (id is just a static-
  *  zone fast path), so generated/quest zone-id churn is irrelevant. */
 export interface DeathRecord {
+  /** Physical floor at death. Older records infer their floor from the destination terrain. */
+  tier?: number;
   schema: number;
   /** Death zone's world-graph node coordinate — THE durable anchor. */
   mapX: number; mapY: number;

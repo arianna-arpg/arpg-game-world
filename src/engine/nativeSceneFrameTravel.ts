@@ -3971,8 +3971,8 @@ export function sceneGrantSupportGemItem(nativeHost:NativeSceneCampaignFrameClos
     if (!autoPlace(seat.meta.items, item)) {
       if (spill) {
         nativeHost.drops.push({
-          pos: nativeHost.clampPos(vec(seat.actor.pos.x + rand(-14, 14), seat.actor.pos.y + rand(-14, 14)), 10),
-          item: { kind: 'support', gem }, bob: rand(0, Math.PI * 2),
+          pos: nativeHost.clampPos(vec(seat.actor.pos.x + rand(-14, 14), seat.actor.pos.y + rand(-14, 14)), 10, undefined, { tier: seat.actor.tier }),
+          item: { kind: 'support', gem }, bob: rand(0, Math.PI * 2), tier: seat.actor.tier,
         });
         nativeHost.seatNote(seat, seat.actor.pos, 'your pack is full — it falls at your feet', '#c08a68', 12);
         return null;

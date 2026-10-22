@@ -548,7 +548,7 @@ try {
       const aim = s.caster.aimPos ?? s.aim;
       const from = s.origin ?? s.caster.pos;
       nativeHost.spawnProjectile(s.caster, s.inst, vec(from.x, from.y),
-        angleTo(from, aim), { mult: s.mult, flat: s.flat });
+        angleTo(from, aim), { tier: s.tier, mult: s.mult, flat: s.flat });
       if (--s.shots <= 0) nativeHost.pendingSalvos.splice(i, 1);
     
 } finally { nativeHost.endCombatRecord(nativeRecordScope); }

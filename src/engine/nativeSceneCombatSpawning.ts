@@ -696,7 +696,7 @@ export function sceneHatchPod(nativeHost: NativeSceneCombatHost, pod: Actor): vo
       pod.summonInst ? effectiveSkillLevel(pod.summonInst) : pod.level);
     payload.hostSkillId = pod.sourceSkillId;
     nativeHost.executeSkill(owner, payload, vec(pod.pos.x, pod.pos.y),
-      { keepFacing: true, noCooldown: true, noRepeat: true });
+      { tier: pod.tier, keepFacing: true, noCooldown: true, noRepeat: true });
     nativeHost.text(pod.pos, 'hatched!', pod.color, 12);
   }
 
@@ -729,7 +729,7 @@ export function sceneMinionAreaAvoidanceOf(nativeHost: NativeSceneCombatHost, ca
 
 export function sceneSpawnMinion(nativeHost: NativeSceneCombatHost, 
     caster: Actor, inst: SkillInstance,
-    overrides?: { monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number; noReplace?: boolean; offspring?: { maxActive: number; size: number; life: number; damage: number } },
+    overrides?: { tier?: number; monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number; noReplace?: boolean; offspring?: { maxActive: number; size: number; life: number; damage: number } },
   ): Actor | null {
     // SOVEREIGNTY: seat — the summon's story is stamped and clamped (the derived census, probe_tiers RIG T).
     // A support's summon graft (Vessel of Shadow) supplies the delivery when
@@ -885,7 +885,7 @@ export function sceneSpawnMinion(nativeHost: NativeSceneCombatHost,
     // the root ducts fights the ducts, not the street over them. Stamped
     // BEFORE the clamp so the mover gate reads the right layer; flat zones
     // (tier 0) walk the identical path.
-    minion.tier = caster.tier;
+    minion.tier = overrides?.tier ?? caster.tier;
     const ang = rand(0, Math.PI * 2);
     minion.pos = overrides?.pos
       ? nativeHost.clampPos(vec(overrides.pos.x, overrides.pos.y), minion.radius, undefined, { mover: minion })
@@ -1165,7 +1165,7 @@ export function sceneBuildEchoRider(nativeHost: NativeSceneCombatHost,
 
 export function sceneSpawnConstruct(nativeHost: NativeSceneCombatHost, 
     caster: Actor, sourceInst: SkillInstance, d: ConstructDelivery,
-    aim: Vec2, castInst?: SkillInstance, at?: Vec2, scale = 1,
+    aim: Vec2, castInst?: SkillInstance, at?: Vec2, scale = 1, tier = caster.tier,
   ): Actor | null {
     // SOVEREIGNTY: seat — seated on the caster's story (the derived census, probe_tiers RIG T).
     const tags = skillContextTags(sourceInst); // Include tree-granted tags, such as Goad's device identity.
@@ -1318,7 +1318,7 @@ export function sceneSpawnConstruct(nativeHost: NativeSceneCombatHost,
     // STORY (layer sovereignty): the working stands on its caster's layer —
     // the flight law's sibling — so its rings, its bell, and the mallet's
     // answer all stay one story's conversation. Flat zones read 0 as ever.
-    c.tier = caster.tier;
+    c.tier = tier;
     const placeRange = d.placeRange ?? 100;
     const dd = dist(caster.pos, aim);
     const ang = angleTo(caster.pos, aim);
@@ -1331,7 +1331,7 @@ export function sceneSpawnConstruct(nativeHost: NativeSceneCombatHost,
     // footprint — a wall arriving under a goblin relocates the goblin.
     if (d.clearway) {
       for (const e of nativeHost.actors) {
-        if (e === c || e.dead || e.construct || e.anchored || e.leap) continue;
+        if (e === c || e.dead || e.construct || e.anchored || e.leap || !sameStory(c, e)) continue;
         const gap = c.radius + e.radius + 6 - dist(c.pos, e.pos);
         if (gap <= 0) continue;
         nativeHost.pushActor(e, dist(c.pos, e.pos) < 1
@@ -1402,7 +1402,7 @@ export function sceneSpawnConstruct(nativeHost: NativeSceneCombatHost,
 export function sceneGuardianFor(nativeHost: NativeSceneCombatHost, victim: Actor): Actor | null {
     if (victim.isGuarding()) return victim;
     const owner = victim.owner;
-    if (owner && !owner.dead && owner.isGuarding() && dist(owner.pos, victim.pos) <= 240) {
+    if (owner && !owner.dead && sameStory(owner, victim) && owner.isGuarding() && dist(owner.pos, victim.pos) <= 240) {
       const inst = owner.casting!.inst;
       if (owner.sheet.get('guardAegis', skillContextTags(inst), instanceMods(inst)) > 0) {
         return owner;

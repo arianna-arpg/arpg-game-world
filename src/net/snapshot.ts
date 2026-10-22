@@ -312,7 +312,7 @@ export interface CastW { parryCue?: number;
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
  *  painters roll on (wave crest, square tumble) — client and host draw the
  *  same curve the host's hit test sampled. */
-export interface ProjW { skillId?: string; reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number;
+export interface ProjW { tier?: number; skillId?: string; reflectedCue?: true; orbPaint?: import('../engine/skills').OrbPaint; cosmeticProjectile?: string; cosmeticMotif?: CosmeticMotif; p: Vec2W; d: number; r: number; c: string; sh: string; a: number;
   /** THE WIRE'S EYES: the flight's stable wire id (the client glides a flight it saw before
    *  by id) and its velocity in px/s (the displacement since the host's last snapshot, the
    *  heading times speed at birth), which a late snapshot's flight extrapolates along. */
@@ -321,7 +321,7 @@ export interface ProjW { skillId?: string; reflectedCue?: true; orbPaint?: impor
  *  THE WIRE'S EYES: the endpoint bodies' host ids (the `bl` idiom), so the client's band
  *  follows its own interpolated bodies; the coords stand in for an endpoint it lacks. */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; ai?: number; bi?: number; voice?: string; skillId?: string; age?: number; fade?: number; fromTier?: number; toTier?: number; }
-export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; dropUid?: number; vid?: string; eid?: string; tid?: number; cnt?: number;
+export interface DropW { tier?: number; p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence' | 'abilityEssence'; color: string; rarity?: string; name?: string; baseId?: string; dropUid?: number; vid?: string; eid?: string; tid?: number; cnt?: number;
   /** THE SPOILS' OWNER (card 27, net/spoils.ts): the seat holding this drop and the whole
    *  seconds until it is anyone's (rounded up; absent = never, or no owner). The hosted wire
    *  alone (stampDropOwners); absent on every other lane. */
@@ -1188,7 +1188,7 @@ export function serializeSnapshot(world: NativeSnapshotHost, tick: number): Stat
     })),
     actors: world.actors.filter(a => (!a.dead || a.isPlayerKind()) && !world.seatOf(a)?.keeper) // keeperSeat: unseen, unshipped
       .map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
-    projectiles: world.projectiles.map(p => ({ skillId: p.inst?.def.id ?? p.skillVisualId, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile,
+    projectiles: world.projectiles.map(p => ({ tier: p.tier ?? 0, skillId: p.inst?.def.id ?? p.skillVisualId, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile,
       ...flightOf(p, world.time) })), // THE WIRE'S EYES: the flight's wire id + velocity
     tethers: world.tethers.map(t => {
       const v = skillTetherVisual(t);
@@ -1197,7 +1197,7 @@ export function serializeSnapshot(world: NativeSnapshotHost, tick: number): Stat
     }),
     zones: zonesOf(world), // THE WIRE'S EYES: the ground telegraphs and fields near a seated player
     townPortalViews: world.townPortalViews(),
-    drops: world.drops.map(d => ({
+    drops: world.drops.map(d => ({ tier: d.tier ?? world.spoilStoryAt(d.pos),
       p: v2(d.pos), bob: d.bob, kind: d.item.kind,
       color: d.item.kind === 'support' ? d.item.gem.def.color
         : d.item.kind === 'gear' ? ITEM_RARITIES[d.item.item.rarity].color
@@ -2266,7 +2266,7 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   // them each frame by their wire ids.
   const adopted: Adopted = { snap, flights: [], zones: new Map() };
   world.projectiles = snap.projectiles.map(p => {
-    const row = { skillVisualId: p.skillId, reflectedCue: p.reflectedCue,
+    const row = { tier: p.tier ?? 0, skillVisualId: p.skillId, reflectedCue: p.reflectedCue,
       orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined,
       pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0, cosmeticMotif: p.cosmeticMotif,
       cosmeticProjectile: cosmeticStyle(COSMETIC_PROJECTILES, p.cosmeticProjectile) ? p.cosmeticProjectile : undefined,
@@ -2302,7 +2302,7 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   ADOPTED.set(world, adopted);
   world.townPortalClientViews = (snap.townPortalViews ?? []).map(p => ({ ...p,
     cosmeticLoadout: sanitizeCosmeticLoadout(p.cosmeticLoadout) }));
-  world.drops = snap.drops.map(d => ({
+  world.drops = snap.drops.map(d => ({ tier: d.tier ?? 0,
     pos: { x: d.p[0], y: d.p[1] }, bob: d.bob,
     item: d.kind === 'support'
       ? { kind: 'support', gem: { def: { color: d.color, name: d.name ?? '?' }, level: 1 } }

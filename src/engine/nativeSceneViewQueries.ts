@@ -360,7 +360,7 @@ export function sceneCorpseTargetsView(host:NativeSceneViewHost):{ pos: Vec2; fr
     for (const c of host.playerCorpses) {
       if (c.reclaimed || !host.canReclaim(c)) continue;
       if (dist(c.pos, host.player.pos) > transitRadius('corpse_reclaim', CORPSE_RADIUS)
-        || !host.dwellReachable(host.player.pos, c.pos, transitReach('corpse_reclaim'), host.storyPair(host.player))) continue;
+        || !host.dwellReachable(host.player.pos, c.pos, transitReach('corpse_reclaim'), host.storyPair(host.player, c))) continue;
       out.push({ pos: vec(c.pos.x, c.pos.y), frac: clamp(c.dwell / transitDwell('corpse_reclaim', CORPSE_DWELL), 0, 1), kind: 'corpse_reclaim' });
     }
     return out;

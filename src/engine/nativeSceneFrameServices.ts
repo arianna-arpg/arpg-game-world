@@ -307,6 +307,7 @@ export const REVIVE_RADIUS = CORPSE_RADIUS;
 export const REVIVE_DWELL = 1.0;
 export const REVIVE_LIFE_FRAC = 0.35;
 export interface PlayerCorpse {
+  tier?: number;
   pos: Vec2;
   /** Index into account.deaths (O(1) clear on reclaim; account.deaths is stable per load). */
   recordIndex: number;
@@ -1249,7 +1250,7 @@ export function sceneUpdatePlayerCorpses(nativeHost:NativeSceneCampaignFrameClos
       // The 'corpse_reclaim' transit row is the reach, discipline and clock
       // (corpseTargetsView draws the ring from the same row — drawn == dwelt).
       if (dist(c.pos, nativeHost.player.pos) > transitRadius('corpse_reclaim', CORPSE_RADIUS) || !nativeHost.playerIdle() || !nativeHost.canReclaim(c)
-        || !nativeHost.dwellReachable(nativeHost.player.pos, c.pos, transitReach('corpse_reclaim'), nativeHost.storyPair(nativeHost.player))) {
+        || !nativeHost.dwellReachable(nativeHost.player.pos, c.pos, transitReach('corpse_reclaim'), nativeHost.storyPair(nativeHost.player, c))) {
         c.dwell = 0;
         continue;
       }
@@ -2395,7 +2396,10 @@ export function sceneReclaimCorpse(nativeHost:NativeSceneCampaignFrameClosureHos
     const own = nativeHost.modeStageDef().corpseSource === 'own';
     const rec = nativeHost.corpseRecords()[c.recordIndex];
     if (!rec) { c.reclaimed = true; return; }
-    for (const it of rec.loot.items) nativeHost.dropSavedLoot(c.pos, it);
+    const previousStory = nativeHost.spoilStory;
+    nativeHost.spoilStory = c.tier ?? nativeHost.spoilStoryAt(c.pos);
+    try { for (const it of rec.loot.items) nativeHost.dropSavedLoot(c.pos, it); }
+    finally { nativeHost.spoilStory = previousStory; }
     rec.loot.items = [];
     c.reclaimed = true;
     // THE OBJECTIVE WEB's corpse deed (account.ts LEDGER_CORPSES_RECLAIMED):
@@ -2407,7 +2411,7 @@ export function sceneReclaimCorpse(nativeHost:NativeSceneCampaignFrameClosureHos
       nativeHost.accountDirty = true;
     }
     nativeHost.text(vec(c.pos.x, c.pos.y - 24), 'You reclaim what death took.', '#d8b048', 16);
-    nativeHost.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 64, color: '#d8b048', life: 0.5, maxLife: 0.5 });
+    nativeHost.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 64, color: '#d8b048', life: 0.5, maxLife: 0.5, recoveryCueTier: c.tier });
     if (own) nativeHost.charDirty = true; // the ring rides the character save
     else saveAccount(nativeHost.account); // fire-and-forget OK: a lost reclaim self-heals (corpse re-spawns)
   }
@@ -2837,9 +2841,9 @@ export function sceneDropSavedLoot(nativeHost:NativeSceneCampaignFrameClosureHos
       if (!item) return;
       if (item.gem) {
         const inst = skillOfGemItem(item);
-        if (inst) { nativeHost.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) }); return; }
+        if (inst) { nativeHost.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2), tier: nativeHost.spoilStory }); return; }
         const gem = supportOfGemItem(item);
-        if (gem) nativeHost.drops.push({ pos, item: { kind: 'support', gem }, bob: rand(0, Math.PI * 2) });
+        if (gem) nativeHost.drops.push({ pos, item: { kind: 'support', gem }, bob: rand(0, Math.PI * 2), tier: nativeHost.spoilStory });
         return;
       }
       nativeHost.dropGearAt(at, item, undefined, true);
@@ -2847,7 +2851,7 @@ export function sceneDropSavedLoot(nativeHost:NativeSceneCampaignFrameClosureHos
     }
     if (it.kind === 'skill') {
       const inst = rebuildSkill(it) /* preserve empowerment cargo on reclaim */;
-      if (inst) nativeHost.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
+      if (inst) nativeHost.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2), tier: nativeHost.spoilStory });
     } else {
       const def = SUPPORTS[it.supportId];
       // REHYDRATION, never a re-mint: a saved cut rides back verbatim
@@ -2855,7 +2859,7 @@ export function sceneDropSavedLoot(nativeHost:NativeSceneCampaignFrameClosureHos
       if (def) {
         nativeHost.drops.push({
           pos,
-          item: { kind: 'support', gem: { def, level: it.level, ...(it.rolled ? { rolled: { ...it.rolled } } : {}) } },
+          item: { kind: 'support', gem: { def, level: it.level, ...(it.rolled ? { rolled: { ...it.rolled } } : {}) } }, tier: nativeHost.spoilStory,
           bob: rand(0, Math.PI * 2),
         });
       }

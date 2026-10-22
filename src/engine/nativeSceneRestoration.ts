@@ -43,7 +43,7 @@ cleanseActor(target: Actor, count?: number): number;
 ringAfflictions(target: Actor, portion: number): number;
 healAlliesInArea(
     caster: Actor, inst: SkillInstance, accepts: (a: Actor) => boolean,
-    mult?: number, quiet?: boolean, once?: Set<number>,
+    mult?: number, quiet?: boolean, once?: Set<number>, tier?: number,
   ): void;
 seatText(by: Actor | null | undefined, at: Vec2, text: string, color: string, size?: number, kind?: string): void;
 creditFloat(by: Actor | null | undefined, seatId?: string | null): void;
@@ -279,7 +279,7 @@ export function sceneRingAfflictions(host:NativeSceneRestorationHost,target: Act
 
 export function sceneHealAlliesInArea(host:NativeSceneRestorationHost,
     caster: Actor, inst: SkillInstance, accepts: (a: Actor) => boolean,
-    mult = 1, quiet = false, once?: Set<number>,
+    mult = 1, quiet = false, once?: Set<number>, tier = caster.tier,
   ): void {
     // `once` is a per-CROSSING ledger (the sweep zones' own struck set):
     // a drifting crescent mends each ally exactly once per pass — a
@@ -290,7 +290,7 @@ export function sceneHealAlliesInArea(host:NativeSceneRestorationHost,
     const fxs = inst.def.effects.filter(fx => fx.type === 'heal' || fx.type === 'cleanse');
     if (!fxs.length) return;
     for (const a of host.actors) {
-      if (a.dead || a.downed || a.untargetable || a.construct || a.team !== caster.team || !sameStory(a, caster)) continue; // (the sovereignty gate)
+      if (a.dead || a.downed || a.untargetable || a.construct || a.team !== caster.team || a.tier !== tier) continue; // (the sovereignty gate)
       if (once?.has(a.id)) continue;
       if (!accepts(a)) continue;
       let touched = false;

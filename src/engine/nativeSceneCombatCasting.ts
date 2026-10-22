@@ -1059,13 +1059,13 @@ export function sceneCastPress(nativeHost: NativeSceneCombatHost, caster: Actor)
 export function sceneExecuteSkill(nativeHost: NativeSceneCombatHost, 
     caster: Actor, inst: SkillInstance, aim: Vec2,
     opts: {
-      targetInfo?: ResolvedTarget; dmgMult?: number; aoeMult?: number;
+      tier?: number; targetInfo?: ResolvedTarget; dmgMult?: number; aoeMult?: number;
       repeat?: number; noCooldown?: boolean; keepFacing?: boolean;
       /** Set on scheduled repeats so they don't schedule more repeats. */
       noRepeat?: boolean;
       /** An authored component of a paid cast owns its support repeat train,
        * fissures, echoes and follow-throughs. It does not repay resources or
-       * replay the parent's cast events. Generated descendants omit this. */
+       * replay the parent's cast events. Generated descendants omit nativeHost. */
       componentUse?: boolean;
       /** Set on follow-up fires so a payload never chains its own. */
       noFollowUp?: boolean;
@@ -1099,6 +1099,7 @@ export function sceneExecuteSkill(nativeHost: NativeSceneCombatHost,
       ventRounds?: number;
     } = {},
   ): boolean {
+    const effectTier = opts.tier ?? caster.tier;
     // Replenishment is a birth clock, never an echo/trigger/proc cast.
     if (replenishingDelivery(inst)) return false;
     inst = nativeHost.challenges.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
@@ -1139,12 +1140,12 @@ export function sceneExecuteSkill(nativeHost: NativeSceneCombatHost,
       && def.effects.some(f => f.type === 'grabSeize')) {
       const reach = caster.radius + (def.delivery.range ?? 60) + 24;
       let anyClose = false;
-      for (const e of nativeHost.enemiesOf(caster)) {
+      for (const e of nativeHost.enemiesOf(caster, effectTier)) {
         if (dist(caster.pos, e.pos) - e.radius <= reach) { anyClose = true; break; }
       }
       if (!anyClose) {
         nativeHost.litePromoteNearest(caster.pos,
-          { within: reach, max: 1, opposing: caster.team, rank: aim, story: caster.tier });
+          { within: reach, max: 1, opposing: caster.team, rank: aim, story: effectTier });
       }
     }
     // CROWD EMPOWERMENT (SkillDef.empower — the warcry-power shape): tally
@@ -1153,7 +1154,7 @@ export function sceneExecuteSkill(nativeHost: NativeSceneCombatHost,
     if (def.empower && !opts.noRepeat) {
       const w = DEFENSE_CFG.empower.weights;
       let power = 0;
-      for (const e of nativeHost.enemiesOf(caster)) {
+      for (const e of nativeHost.enemiesOf(caster, effectTier)) {
         if (e.dead || e.untargetable) continue;
         if (dist(caster.pos, e.pos) > def.empower.radius) continue;
         power += e.defId && MONSTERS[e.defId]?.boss ? w.boss
@@ -1267,7 +1268,7 @@ export function sceneExecuteSkill(nativeHost: NativeSceneCombatHost,
         caster.pools.set(def.pool.id, 0);
         const radius = rel.radius * caster.sheet.get('aoeRadius', tags, extra);
         nativeHost.burstDamage(vec(caster.pos.x, caster.pos.y), radius,
-          banked * (rel.ratio ?? 1), def.pool.damageType, cosmeticColor, caster.team, caster.tier, undefined, undefined,
+          banked * (rel.ratio ?? 1), def.pool.damageType, cosmeticColor, caster.team, effectTier, undefined, undefined,
           banked > 0 ? skillSelfVoice(def.id, 'burst') : undefined);
       }
       return true;
@@ -1568,7 +1569,7 @@ nativeHost.issueCombatRecord("pendingRepeats", nativeStorage, nativeRecord, nati
         };
         nativeHost.layFissure(caster, inst, vec(caster.pos.x, caster.pos.y), caster.facing,
           lashD, useMult * lash.damageScale, flatBonus,
-          Math.round(caster.sheet.get('fissureBranches', tags, extra)));
+          Math.round(caster.sheet.get('fissureBranches', tags, extra)), 0, effectTier);
       }
     }
 
@@ -1600,7 +1601,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: cfRadius,
             caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: cosmeticColor,
             delay: 0, exploded: true,
@@ -1625,13 +1626,13 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           const dd = Math.min(dist(caster.pos, aim), reach);
           const at = nativeHost.clampPos(vec(
             caster.pos.x + Math.cos(caster.facing) * dd,
-            caster.pos.y + Math.sin(caster.facing) * dd), 10);
+            caster.pos.y + Math.sin(caster.facing) * dd), 10, undefined, { tier: effectTier });
           {
 let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: effectTier,
             pos: at, radius: cfRadius,
             caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: cosmeticColor,
             delay: 0, exploded: true,
@@ -1650,14 +1651,14 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
         const fieldCueZone = nativeHost.zones[nativeHost.zones.length - 1];
         if (def.fieldCue !== false) {
           fieldCueZone.fieldCue = def.fieldCue ?? {};
-          fieldCueZone.tier = caster.tier ?? 0;
+          fieldCueZone.tier = effectTier ?? 0;
           nativeHost.flashes.push({ ...combatCueFlash(fieldCueZone.pos, fieldCueZone.fieldCue.form ?? 'field_form', fieldCueZone.radius, 0, def.fieldCue?.color ?? cosmeticColor), recoveryCueTier: fieldCueZone.tier });
         }
         return true;
       }
     }
 
-    if (cosmeticPaint.motif) nativeHost.flashes.push({
+    if (cosmeticPaint.motif) nativeHost.flashes.push({ recoveryCueTier: effectTier,
       pos: { ...caster.pos }, radius: caster.radius * COSMETIC_CFG.cast.radiusScale, color: cosmeticColor,
       life: COSMETIC_CFG.cast.lifetime, maxLife: COSMETIC_CFG.cast.lifetime, cosmeticMotif: cosmeticPaint.motif,
     });
@@ -1704,7 +1705,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             range: 0, duration: d.caroms.hang.duration ?? 24,
             maxActive: caromCap, invulnerable: true,
             placeRange: 9999,
-          }, aim, undefined, nativeHost.clampPos(vec(aim.x, aim.y), 10));
+          }, aim, undefined, nativeHost.clampPos(vec(aim.x, aim.y), 10, undefined, { tier: effectTier }), 1, effectTier);
           const arrows = nativeHost.minionsOfSkill(caster, def.id)
             .filter(a => a.construct?.kind === 'embed');
           if (arrow && arrows.length >= caromCap) {
@@ -1733,9 +1734,9 @@ nativeHost.issueCombatRecord("pendingAmbushes", nativeStorage, nativeRecord, nat
             && nativeHost.time - st.anchorsAt > d.caroms.window;
           if (!st.anchors || stale) st.anchors = [];
           st.anchorsAt = nativeHost.time;
-          const anchorAt = nativeHost.clampPos(vec(aim.x, aim.y), 10);
+          const anchorAt = nativeHost.clampPos(vec(aim.x, aim.y), 10, undefined, { tier: effectTier });
           st.anchors.push({ x: anchorAt.x, y: anchorAt.y });
-          nativeHost.flashes.push({ pos: vec(anchorAt.x, anchorAt.y), radius: 16, color: cosmeticColor, life: 0.35, maxLife: 0.35 });
+          nativeHost.flashes.push({ recoveryCueTier: effectTier, pos: vec(anchorAt.x, anchorAt.y), radius: 16, color: cosmeticColor, life: 0.35, maxLife: 0.35 });
           if (st.anchors.length < caromCap) {
             // payloadCueRows retains the placed point and remaining window.
             break;
@@ -1745,7 +1746,7 @@ nativeHost.issueCombatRecord("pendingAmbushes", nativeStorage, nativeRecord, nat
           for (let i = 0; i < count; i++) {
             nativeHost.spawnProjectile(caster, inst, vec(pts[0].x, pts[0].y),
               angleTo(pts[0], pts[1 % pts.length]),
-              { mult: useMult, flat: flatBonus, patrol: pts });
+              { tier: effectTier, mult: useMult, flat: flatBonus, patrol: pts });
           }
           fieldAt = vec(pts[0].x, pts[0].y);
           break;
@@ -1760,7 +1761,7 @@ nativeHost.issueCombatRecord("pendingAmbushes", nativeStorage, nativeRecord, nat
           const ang = angleTo(caster.pos, aim);
           origin = nativeHost.clampPos(vec(
             caster.pos.x + Math.cos(ang) * reach,
-            caster.pos.y + Math.sin(ang) * reach), d.radius);
+            caster.pos.y + Math.sin(ang) * reach), d.radius, undefined, { tier: effectTier });
         }
         // Nova Release: extra projectiles, and the whole volley rings out
         // in a full circle around the origin instead of toward the aim.
@@ -1770,7 +1771,7 @@ nativeHost.issueCombatRecord("pendingAmbushes", nativeStorage, nativeRecord, nat
           const total = count + nova;
           for (let i = 0; i < total; i++) {
             nativeHost.spawnProjectile(caster, inst, origin,
-              caster.facing + (i / total) * Math.PI * 2, { mult: useMult, flat: flatBonus });
+              caster.facing + (i / total) * Math.PI * 2, { tier: effectTier, mult: useMult, flat: flatBonus });
           }
           break;
         }
@@ -1785,14 +1786,14 @@ nativeHost.issueCombatRecord("pendingAmbushes", nativeStorage, nativeRecord, nat
           // nothing; a resolved one commits the whole burst.
           const interval = Math.max(0.03, (d.salvoInterval ?? 0.09) / caster.speedFactor(inst));
           const fixedOrigin = origin !== caster.pos ? vec(origin.x, origin.y) : null;
-          nativeHost.spawnProjectile(caster, inst, origin, caster.facing, { mult: useMult, flat: flatBonus });
+          nativeHost.spawnProjectile(caster, inst, origin, caster.facing, { tier: effectTier, mult: useMult, flat: flatBonus });
           if (count > 1) {
             {
 let nativeStorage: typeof nativeHost.pendingSalvos;
 let nativeRecord: typeof nativeHost.pendingSalvos[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.pendingSalvos).push(nativeRecord = {
+(nativeStorage = nativeHost.pendingSalvos).push(nativeRecord = { tier: fixedOrigin ? effectTier : undefined,
               caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), aim: vec(aim.x, aim.y), origin: fixedOrigin,
               shots: count - 1, timer: interval, interval, mult: useMult,
               flat: flatBonus,
@@ -1811,8 +1812,8 @@ nativeHost.issueCombatRecord("pendingSalvos", nativeStorage, nativeRecord, nativ
             const rank = i === 0 ? 0 : Math.ceil(i / 2) * (i % 2 === 1 ? 1 : -1);
             const at = nativeHost.clampPos(vec(
               origin.x + Math.cos(perp) * gap * rank,
-              origin.y + Math.sin(perp) * gap * rank), d.radius);
-            nativeHost.spawnProjectile(caster, inst, at, caster.facing, { mult: useMult, flat: flatBonus });
+              origin.y + Math.sin(perp) * gap * rank), d.radius, undefined, { tier: effectTier });
+            nativeHost.spawnProjectile(caster, inst, at, caster.facing, { tier: effectTier, mult: useMult, flat: flatBonus });
           }
           break;
         }
@@ -1824,7 +1825,7 @@ nativeHost.issueCombatRecord("pendingSalvos", nativeStorage, nativeRecord, nativ
             ? 0 : rand(0, (Math.PI * 2) / Math.max(1, count));
           for (let i = 0; i < count; i++) {
             const ang = phase + (i / Math.max(1, count)) * Math.PI * 2;
-            nativeHost.spawnProjectile(caster, inst, origin, ang, { mult: useMult, flat: flatBonus });
+            nativeHost.spawnProjectile(caster, inst, origin, ang, { tier: effectTier, mult: useMult, flat: flatBonus });
           }
           break;
         }
@@ -1840,7 +1841,7 @@ nativeHost.issueCombatRecord("pendingSalvos", nativeStorage, nativeRecord, nativ
         for (let i = 0; i < count; i++) {
           const off = count === 1 ? 0 : (i / (count - 1) - 0.5) * spread;
           nativeHost.spawnProjectile(caster, inst, origin, caster.facing + off,
-            { mult: useMult, flat: flatBonus, dest: vec(aim.x, aim.y) });
+            { tier: effectTier, mult: useMult, flat: flatBonus, dest: vec(aim.x, aim.y) });
         }
         break;
       }
@@ -1889,8 +1890,8 @@ nativeHost.issueCombatRecord("pendingSalvos", nativeStorage, nativeRecord, nativ
         const assaultLockedTarget = nativeHost.assaults.locked(caster, inst);
         if (assaultLockedTarget) {
           struck.add(assaultLockedTarget.id);
-          nativeHost.resolveHit(caster, inst, assaultLockedTarget, useMult, 0, flatBonus);
-          nativeHost.flashes.push({ pos: { ...assaultLockedTarget.pos }, radius: 18, color: cosmeticColor, life: 0.18, maxLife: 0.18 });
+          nativeHost.resolveHit(caster, inst, assaultLockedTarget, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
+          nativeHost.flashes.push({ recoveryCueTier: effectTier, pos: { ...assaultLockedTarget.pos }, radius: 18, color: cosmeticColor, life: 0.18, maxLife: 0.18 });
         }
         // The crescent's geometry, hoisted for the shared tail below.
         let sweepR = 0, sweepArc = 0;
@@ -1905,7 +1906,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: sweepR,
             caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: cosmeticColor,
             delay: 0, exploded: true,
@@ -1919,7 +1920,7 @@ let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>
           });
 nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordSource, nativeRecordInstance);
 }
-          nativeHost.flashes.push({
+          nativeHost.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: sweepR * 0.6, color: cosmeticColor,
             life: 0.2, maxLife: 0.2, arc: { facing: caster.facing, arcRad: sweepArc }, fx: d.fx ?? skillStrikeVoice(inst.def.id),
           });
@@ -1932,8 +1933,8 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             return dist(caster.pos, body.pos) - body.radius <= reach
               && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, body.pos))) <= arcRad / 2;
           });
-          for (const enemy of nativeHost.enemiesOf(caster)) {
-            if (!sameStory(caster, enemy)) continue; // a swing is a TOUCH: its own story, rim duels or no
+          for (const enemy of nativeHost.enemiesOf(caster, effectTier)) {
+            if (enemy.tier !== effectTier) continue; // a swing is a TOUCH: its own story, rim duels or no
             // SEGMENT FABRIC: the swing connects with the NEAREST hittable
             // body — the coil beside you, not only the head across the room.
             // Plain monsters: nearest body IS the head, byte-identical.
@@ -1949,7 +1950,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             }
             struck.add(enemy.id);
             noteBodyHit(enemy, nb.seg);
-            nativeHost.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
+            nativeHost.resolveHit(caster, inst, enemy, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
           }
         }
         // Reverberation: the blow rings outward to extra nearby enemies.
@@ -1966,15 +1967,15 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
         const reverb = Math.round(caster.sheet.get('meleeReverb', tags, extra));
         for (let r = 0; r < reverb; r++) {
           let next: Actor | null = null, bd = reach + 140;
-          for (const e of nativeHost.enemiesOf(caster)) {
+          for (const e of nativeHost.enemiesOf(caster, effectTier)) {
             if (struck.has(e.id)) continue;
             const dd = dist(caster.pos, e.pos);
             if (dd < bd) { bd = dd; next = e; }
           }
           if (!next) break;
           struck.add(next.id);
-          nativeHost.resolveHit(caster, inst, next, useMult, 0, flatBonus);
-          nativeHost.flashes.push({ pos: vec(next.pos.x, next.pos.y), radius: 18, color: cosmeticColor, life: 0.15, maxLife: 0.15 });
+          nativeHost.resolveHit(caster, inst, next, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
+          nativeHost.flashes.push({ recoveryCueTier: effectTier, pos: vec(next.pos.x, next.pos.y), radius: 18, color: cosmeticColor, life: 0.15, maxLife: 0.15 });
         }
         if (!sweeping) {
           // Drawn == tested: a sigil-shaped swing flashes its SHAPE; the
@@ -2022,7 +2023,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             : swingShape >= 1 && swingShape <= 2 ? swingShape : AOE_SHAPE.sector,
           caster.facing, useMult, tags, extra,
           sweeping ? sweepArc
-            : banded || (swingShape >= 1 && swingShape <= 2) ? undefined : arcRad);
+            : banded || (swingShape >= 1 && swingShape <= 2) ? undefined : arcRad, undefined, undefined, effectTier);
         if (!sweeping) {
           // Heal-and-harm swings (Sanctified Strike): the same arc MENDS the
           // allies standing in it — one swing, both congregations. (A
@@ -2033,19 +2034,19 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
               ? inAoe(bandC, bandGeo!.halfWidth, AOE_SHAPE.band, caster.facing, a.pos, a.radius)
               : dist(caster.pos, a.pos) - a.radius <= reach
                 && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, a.pos))) <= arcRad / 2,
-            useMult);
+            useMult, undefined, undefined, effectTier);
           // THE MALLET: the swing's own arc rings castOnStruck constructs
           // and pops brittle 'hit' scenery through the shared strike-surface
           // seam — walk up and play the bell on purpose (the PoE2 combo),
           // smash the pots on the follow-through. Team-wide by design:
           // minions and co-op allies swing mallets too.
-          nativeHost.frontSplash(caster, inst, caster.pos, reach);
+          nativeHost.frontSplash(caster, inst, caster.pos, reach, effectTier);
           nativeHost.strikeSurfaces(caster, banded ? bandC : caster.pos, banded ? bandGeo!.halfWidth : reach, (p, r) =>
             banded
               ? inAoe(bandC, bandGeo!.halfWidth, AOE_SHAPE.band, caster.facing, p, r)
               : dist(caster.pos, p) - r <= reach
                 && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2,
-            undefined, undefined, skillContextTags(inst).has('aoe')); // minionCombat area classification
+            undefined, effectTier, skillContextTags(inst).has('aoe')); // minionCombat area classification
         }
         break;
       }
@@ -2060,14 +2061,14 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           ? nativeHost.actors.filter(a => !a.dead && !a.untargetable)
           : d.affects === 'allies'
             ? nativeHost.actors.filter(a => !a.dead && a.team === caster.team)
-            : nativeHost.enemiesOf(caster);
+            : nativeHost.enemiesOf(caster, effectTier);
         // The author is not the audience (NovaDelivery.spareCaster): a burst
         // wearing the spare never strikes its own caster — nor the caster's
         // CARRIED PARTS (a wound to the horn is a wound to the horn-blower:
         // part damage bleeds to the root, and a composite would break its
         // own voice with its own verb).
         if (d.spareCaster) pool = pool.filter(a => a !== caster && a.partLink?.root !== caster);
-        pool = pool.filter(v => sameStory(v, caster)); // a burst from the body touches its own story only (the sovereignty gate)
+        pool = pool.filter(v => v.tier === effectTier); // a burst from the body touches its own story only (the sovereignty gate)
         // Capped-target novas (Galvanic Reserve): the burst picks the
         // NEAREST N instead of washing the whole room — walled-off bodies
         // never consume a slot.
@@ -2080,7 +2081,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           inAoeBody(origin, radius, shape, caster.facing, v, undefined,
             (bp, br) =>
               !(d.edgeOnly && dist(origin, bp) + br < radius * d.edgeOnly)
-              && (phase || v === caster || nativeHost.lineOfFire(origin, bp, caster.tier)));
+              && (phase || v === caster || nativeHost.lineOfFire(origin, bp, effectTier)));
         if (d.maxTargets !== undefined) {
           pool = pool
             .filter(v => novaBody(v) !== null)
@@ -2094,11 +2095,11 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           const nb = novaBody(victim);
           if (!nb) continue;
           noteBodyHit(victim, nb.seg);
-          nativeHost.resolveHit(caster, inst, victim, useMult, 0, flatBonus);
+          nativeHost.resolveHit(caster, inst, victim, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
           // LANCE VISUALS (Lancing Flurry): every victim is struck down a
           // drawn line from the origin — simultaneous razor lances.
           if (d.lanceFx) {
-            nativeHost.flashes.push({
+            nativeHost.flashes.push({ recoveryCueTier: effectTier,
               pos: vec(origin.x, origin.y),
               radius: dist(origin, nb.pos) + nb.r,
               color: cosmeticColor, life: 0.22, maxLife: 0.22,
@@ -2106,19 +2107,19 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             });
           }
         }
-        nativeHost.flashes.push({
+        nativeHost.flashes.push({ recoveryCueTier: effectTier,
           pos: vec(origin.x, origin.y), radius, color: cosmeticColor,
           life: 0.3, maxLife: 0.3, shape, facing: caster.facing,
           edgeFrac: d.edgeOnly,
           fx: d.fx ?? skillBurstVoice(inst.def.id),
         });
-        nativeHost.spawnAftershocks(caster, inst, origin, radius, shape);
+        nativeHost.spawnAftershocks(caster, inst, origin, radius, shape, undefined, effectTier);
         // The cascade family beyond ground: the burst's sequels (armed
         // second detonations, marching ripples) mint off the strike area
         // — EDGE BAND included (the inheritance law): a Shock Nova sequel
         // is a ring with the same safe eye the nova itself keeps.
         nativeHost.mintAftermath(caster, inst, origin, radius, shape,
-          caster.facing, useMult, tags, extra, undefined, d.edgeOnly);
+          caster.facing, useMult, tags, extra, undefined, d.edgeOnly, undefined, effectTier);
         fieldAt = vec(origin.x, origin.y);
         // Enemy-facing novas with a mend side (Radiant Nova): allies in the
         // burst are healed. Ally/'all' novas already resolved them above.
@@ -2126,16 +2127,16 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           nativeHost.healAlliesInArea(caster, inst, a =>
             inAoe(origin, radius, shape, caster.facing, a.pos, a.radius)
             && !(d.edgeOnly && dist(origin, a.pos) + a.radius < radius * d.edgeOnly),
-            useMult);
+            useMult, undefined, undefined, effectTier);
           // THE MALLET: the burst's own footprint (shape, edge band, walls)
           // rings bells and pops brittle scenery. Mend-washes ('allies')
           // strike nothing — a blessing is not a blow — and 'all' bursts
           // already reach the bell as a victim (resolveHit rings it).
-          nativeHost.frontSplash(caster, inst, origin, radius);
+          nativeHost.frontSplash(caster, inst, origin, radius, effectTier);
           nativeHost.strikeSurfaces(caster, origin, radius, (p, r) =>
             inAoe(origin, radius, shape, caster.facing, p, r)
             && !(d.edgeOnly && dist(origin, p) + r < radius * d.edgeOnly)
-            && (phase || nativeHost.lineOfFire(origin, p, caster.tier)));
+            && (phase || nativeHost.lineOfFire(origin, p, effectTier)), undefined, effectTier);
         }
         break;
       }
@@ -2179,43 +2180,43 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             if (targetInfo.actor.owner === caster) nativeHost.showSkillArrival(caster, inst, targetInfo.actor.pos, targetInfo.actor.radius + 14, targetInfo.actor.tier);
             break;
           }
-          nativeHost.resolveHit(caster, inst, targetInfo.actor, useMult, 0, flatBonus);
+          nativeHost.resolveHit(caster, inst, targetInfo.actor, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
           // Forked Focus: targeted skills land on extra nearby victims —
           // Ignite three things at once.
           const extraTargets = Math.round(caster.sheet.get('multiTarget', tags, extra));
           if (extraTargets > 0) {
             const need = statusReqs(instanceTargeting(inst)?.requiresStatus);
-            const more = nativeHost.enemiesOf(caster)
+            const more = nativeHost.enemiesOf(caster, effectTier)
               .filter(e => e !== targetInfo.actor
                 && dist(targetInfo.pos, e.pos) <= 170
                 && (!need || e.statuses.some(s => need.includes(s.id))))
               .sort((a, b) => dist(targetInfo.pos, a.pos) - dist(targetInfo.pos, b.pos))
               .slice(0, extraTargets);
             for (const e of more) {
-              nativeHost.resolveHit(caster, inst, e, useMult, 0, flatBonus);
+              nativeHost.resolveHit(caster, inst, e, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
               nativeHost.showSkillArrival(caster, inst, e.pos, e.radius + 14, e.tier);
             }
           }
           if (d.splash) {
             const splash = d.splash * aoeScale;
-            for (const enemy of nativeHost.enemiesOf(caster)) {
+            for (const enemy of nativeHost.enemiesOf(caster, effectTier)) {
               if (enemy === targetInfo.actor) continue;
               // SEGMENT FABRIC: splash reaches the nearest hittable body.
               const nb = nearestBody(enemy, targetInfo.pos);
               if (dist(targetInfo.pos, nb.pos) - nb.r <= splash) {
                 noteBodyHit(enemy, nb.seg);
-                nativeHost.resolveHit(caster, inst, enemy, useMult * 0.5, 0);
+                nativeHost.resolveHit(caster, inst, enemy, useMult * 0.5, 0, undefined, undefined, undefined, undefined, undefined, effectTier);
               }
             }
             // THE MALLET: the named strike's splash is a blast too.
-            nativeHost.frontSplash(caster, inst, targetInfo.pos, splash);
-            nativeHost.strikeSurfaces(caster, targetInfo.pos, splash);
+            nativeHost.frontSplash(caster, inst, targetInfo.pos, splash, effectTier);
+            nativeHost.strikeSurfaces(caster, targetInfo.pos, splash, undefined, undefined, effectTier);
           }
         }
         if (!targetInfo?.corpse || targetSpec?.consumesCorpse === false || !skillRiteVoice(def.id)) {
           nativeHost.showSkillArrival(caster, inst, targetInfo?.actor?.pos ?? origin,
             d.splash ? d.splash * aoeScale : (targetInfo?.actor?.radius ?? 12) + 14,
-            targetInfo?.actor?.tier ?? caster.tier, false, !!d.splash);
+            targetInfo?.actor?.tier ?? effectTier, false, !!d.splash);
         }
         fieldAt = vec(origin.x, origin.y);
         break;
@@ -2255,7 +2256,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
         // origin are spared — the wedge licks around corners it can SEE past,
         // never through stone. A phasing use burns through everything.
         const phase = nativeHost.skillOcclusion(caster, inst) === 'free';
-        for (const enemy of nativeHost.enemiesOf(caster)) {
+        for (const enemy of nativeHost.enemiesOf(caster, effectTier)) {
           // SEGMENT FABRIC: the wedge judges range, rim, angle and firing
           // line against the NEAREST hittable body (head for everything
           // plain — the classic test, byte-identical).
@@ -2269,9 +2270,9 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             if (d.edgeOnly && dd + nb.r < range * d.edgeOnly) continue;
             if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, nb.pos))) > arcRad / 2) continue;
           }
-          if (!phase && !nativeHost.lineOfFire(caster.pos, nb.pos, caster.tier)) continue;
+          if (!phase && !nativeHost.lineOfFire(caster.pos, nb.pos, effectTier)) continue;
           noteBodyHit(enemy, nb.seg);
-          nativeHost.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
+          nativeHost.resolveHit(caster, inst, enemy, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
         }
         // LASER presentation (beamFx): razor cones ARE hitscan — draw the
         // crystal-beam line instead of an invisible sliver of wedge. The
@@ -2279,20 +2280,20 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
         if (d.beamFx && !sigiled) {
           const beamLen = phase ? range : dist(caster.pos, nativeHost.clipShot(caster.pos,
             vec(caster.pos.x + Math.cos(caster.facing) * range,
-                caster.pos.y + Math.sin(caster.facing) * range), caster.tier));
-          nativeHost.flashes.push({
+                caster.pos.y + Math.sin(caster.facing) * range), effectTier));
+          nativeHost.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: beamLen, color: cosmeticColor,
             life: 0.22, maxLife: 0.22, beam: true, facing: caster.facing,
             fx: skillBeamVoice(inst.def.id), arc: { facing: caster.facing, arcRad },
           });
         } else if (sigiled) {
           // The sigil's figure IS the flash (drawn == tested).
-          nativeHost.flashes.push({
+          nativeHost.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(sigilC.x, sigilC.y), radius: sigilR, color: cosmeticColor,
             life: 0.25, maxLife: 0.25, shape: coneSigil, facing: sigilF, fx: skillStrikeVoice(inst.def.id),
           });
         } else {
-          nativeHost.flashes.push({
+          nativeHost.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: range, color: cosmeticColor,
             life: 0.25, maxLife: 0.25, arc: { facing: caster.facing, arcRad },
             edgeFrac: d.edgeOnly, fx: skillStrikeVoice(inst.def.id),
@@ -2312,22 +2313,22 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           return dd - a.radius <= range
             && !(d.edgeOnly && dd + a.radius < range * d.edgeOnly)
             && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, a.pos))) <= arcRad / 2;
-        }, useMult);
+        }, useMult, undefined, undefined, effectTier);
         // THE MALLET: the wedge rings bells and pops brittle scenery it can
         // see — same range/arc/edge/occlusion gates as its victims (razor
         // beamFx cones included: the laser is a mallet too).
-        nativeHost.frontSplash(caster, inst, caster.pos, range);
+        nativeHost.frontSplash(caster, inst, caster.pos, range, effectTier);
         nativeHost.strikeSurfaces(caster, caster.pos, range, (p, r) => {
           if (sigiled) {
             return inAoe(sigilC, sigilR, coneSigil, sigilF, p, r)
-              && (phase || nativeHost.lineOfFire(caster.pos, p, caster.tier));
+              && (phase || nativeHost.lineOfFire(caster.pos, p, effectTier));
           }
           const dd = dist(caster.pos, p);
           return dd - r <= range
             && !(d.edgeOnly && dd + r < range * d.edgeOnly)
             && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2
-            && (phase || nativeHost.lineOfFire(caster.pos, p, caster.tier));
-        });
+            && (phase || nativeHost.lineOfFire(caster.pos, p, effectTier));
+        }, undefined, effectTier);
         // The cascade family reaches the WAVE (minter round 2): the cone's
         // sequels mint off its true figure — the sigiled square/inverted
         // triangle or the classic wedge as its own sector — with the walk
@@ -2341,7 +2342,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           useMult, tags, extra,
           sigiled ? undefined : arcRad,
           sigiled ? undefined : d.edgeOnly,
-          caster.facing);
+          caster.facing, effectTier);
         break;
       }
 
@@ -2360,7 +2361,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           // A PLANTED STEAM BANK goes where you point it (the 'vent' effect —
           // the fog fabric): reach with area, life with effectDuration.
           if (fx.type === 'vent') {
-            nativeHost.plantVent(fx, at, aoeScale, caster.sheet.get('effectDuration', tags, extra), caster.tier);
+            nativeHost.plantVent(fx, at, aoeScale, caster.sheet.get('effectDuration', tags, extra), effectTier);
             continue;
           }
           if (fx.type === 'conjure') {
@@ -2430,7 +2431,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
             duration: d.lingerDuration ?? 6, maxActive: 1,
             life: turret.life ?? 45, placeRange: 0,
             look: turret.look, // the support's own effigy body
-          }, caster.pos, turretCast, vec(caster.pos.x, caster.pos.y));
+          }, caster.pos, turretCast, vec(caster.pos.x, caster.pos.y), 1, effectTier);
           if (built) { zoneAnchor = built; at.x = built.pos.x; at.y = built.pos.y; }
         }
         // FISSURE: the placement is a traveling CRACK — chains of zones
@@ -2444,7 +2445,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           for (let f = 0; f < fans; f++) {
             const off = fans === 1 ? 0 : (f / (fans - 1) - 0.5) * fanSpread * (fans - 1);
             nativeHost.layFissure(caster, inst, from, baseAng + off, d, useMult, flatBonus,
-              Math.round(caster.sheet.get('fissureBranches', tags, extra, d.fissure.branches ?? 0)), f);
+              Math.round(caster.sheet.get('fissureBranches', tags, extra, d.fissure.branches ?? 0)), f, effectTier);
           }
           fieldAt = at;
           break;
@@ -2565,8 +2566,8 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
-              pos: nativeHost.clampPos(pt, 10), radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: effectTier,
+              pos: nativeHost.clampPos(pt, 10, undefined, { tier: effectTier }), radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
               caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: cosmeticColor,
               delay: d.delay ?? 0, exploded: (d.delay ?? 0) <= 0,
               impactDress: d.impactDress,
@@ -2616,7 +2617,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: effectTier,
           pos: at, radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
           caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: cosmeticColor,
           marker: d.marker ? true : undefined,
@@ -2724,7 +2725,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
 let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativePreparation: ReturnType<NativeSceneCombatHost["prepareCombatRecord"]>;
-(nativeStorage = nativeHost.zones).push((nativeRecord = {
+(nativeStorage = nativeHost.zones).push((nativeRecord = { tier: effectTier,
             ...prime,
             pos: vec(prime.pos.x, prime.pos.y),
             sweep: {
@@ -2810,7 +2811,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: effectTier,
                 pos: vec(p.x, p.y),
                 radius: d.radius * aoeScale * Math.pow(scaleStep, p.k) * (sizeOver?.from ?? 1),
                 caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: cosmeticColor,
@@ -2864,7 +2865,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
 let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativePreparation: ReturnType<NativeSceneCombatHost["prepareCombatRecord"]>;
-(nativeStorage = nativeHost.zones).push((nativeRecord = {
+(nativeStorage = nativeHost.zones).push((nativeRecord = { tier: effectTier,
                 ...prime,
                 pos: vec(p.x, p.y),
                 radius: prime.radius * scale,
@@ -2898,7 +2899,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: effectTier,
             pos: vec(at.x, at.y), radius: d.radius * aoeScale,
             caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: '#b06bd4',
             delay: (d.delay ?? 0) + 0.9, exploded: false,
@@ -2916,7 +2917,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
       }
 
       case 'self':
-        nativeHost.showSkillArrival(caster, inst, caster.pos, caster.radius + 18, caster.tier, true);
+        nativeHost.showSkillArrival(caster, inst, caster.pos, caster.radius + 18, effectTier, true);
         // Rites already receipt their real payment. Destructive orders speak
         // at the body actually consumed below, never on an empty command.
         if (!skillRiteVoice(def.id) && !instanceEffects(inst).some(f => f.type === 'detonateMinions' || f.type === 'shatterConstructs'))
@@ -2980,7 +2981,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           // already resolved to the plain aim point).
           const form = grimoireForm(inst);
           if (form && MONSTERS[form]) {
-            nativeHost.spawnMinion(caster, inst, { monsterId: form });
+            nativeHost.spawnMinion(caster, inst, { tier: effectTier, monsterId: form });
             break;
           }
           if (!targetInfo?.corpse) break;
@@ -3000,7 +3001,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           for (let ri = 0; ri < raise; ri++) {
             const corpse = haul[ri];
             nativeHost.withCombatRecord("corpses", corpse, () => nativeHost.removeCorpse(corpse));
-            nativeHost.spawnMinion(caster, inst, { monsterId: corpse.defId, pos: corpse.pos });
+            nativeHost.spawnMinion(caster, inst, { tier: effectTier, monsterId: corpse.defId, pos: corpse.pos });
           }
           nativeHost.corpseSpawn(caster, inst, haul[0].pos, raise);
           break;
@@ -3042,7 +3043,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           // contract, so a dead toggle never keeps birthing.
           const seqFill = caster.sheet.get('summonSequence', tags, extra) > 0;
           if (seqFill && first > 1) {
-            nativeHost.spawnMinion(caster, inst, { dmgMult: useMult });
+            nativeHost.spawnMinion(caster, inst, { tier: effectTier, dmgMult: useMult });
             {
 let nativeStorage: typeof nativeHost.pendingSummons;
 let nativeRecord: typeof nativeHost.pendingSummons[number];
@@ -3055,7 +3056,7 @@ let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>
 nativeHost.issueCombatRecord("pendingSummons", nativeStorage, nativeRecord, nativeRecordSource, nativeRecordInstance);
 }
           } else {
-            for (let i = 0; i < first; i++) nativeHost.spawnMinion(caster, inst, { dmgMult: useMult });
+            for (let i = 0; i < first; i++) nativeHost.spawnMinion(caster, inst, { tier: effectTier, dmgMult: useMult });
           }
           break;
         }
@@ -3072,7 +3073,7 @@ nativeHost.issueCombatRecord("pendingSummons", nativeStorage, nativeRecord, nati
           ? nativeHost.clampPos(dist(caster.pos, aim) <= cursorRange
             ? vec(aim.x, aim.y)
             : vec(caster.pos.x + Math.cos(caster.facing) * cursorRange,
-                  caster.pos.y + Math.sin(caster.facing) * cursorRange), 10)
+                  caster.pos.y + Math.sin(caster.facing) * cursorRange), 10, undefined, { tier: effectTier })
           : undefined;
         const scatter = d.placeAt?.scatter ?? 60;
         const spot = (): Vec2 | undefined => summonAt
@@ -3081,7 +3082,7 @@ nativeHost.issueCombatRecord("pendingSummons", nativeStorage, nativeRecord, nati
         // CHANNEL-BUT-CASTED: one cast commits N waves on the beat, each
         // re-aimed at the caster's live cursor (the Barrage salvo rule).
         if (d.waves && d.waves.count > 1) {
-          for (let i = 0; i < total; i++) nativeHost.spawnMinion(caster, inst, { pos: spot(), dmgMult: useMult });
+          for (let i = 0; i < total; i++) nativeHost.spawnMinion(caster, inst, { tier: effectTier, pos: spot(), dmgMult: useMult });
           // #43: later waves can RE-BILL a fraction of the skill's cost —
           // running dry fizzles the remainder (updatePendingSummons pays).
           const perWave = d.waves.costFactor
@@ -3110,7 +3111,7 @@ nativeHost.issueCombatRecord("pendingSummons", nativeStorage, nativeRecord, nati
         const sequential = caster.sheet.get('summonSequence', tags, extra) > 0;
         if (sequential && total > 1) {
           // First emerges now, the rest scatter out over time.
-          nativeHost.spawnMinion(caster, inst, { pos: spot(), dmgMult: useMult });
+          nativeHost.spawnMinion(caster, inst, { tier: effectTier, pos: spot(), dmgMult: useMult });
           {
 let nativeStorage: typeof nativeHost.pendingSummons;
 let nativeRecord: typeof nativeHost.pendingSummons[number];
@@ -3123,7 +3124,7 @@ let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>
 nativeHost.issueCombatRecord("pendingSummons", nativeStorage, nativeRecord, nativeRecordSource, nativeRecordInstance);
 }
         } else {
-          for (let i = 0; i < total; i++) nativeHost.spawnMinion(caster, inst, { pos: spot(), dmgMult: useMult });
+          for (let i = 0; i < total; i++) nativeHost.spawnMinion(caster, inst, { tier: effectTier, pos: spot(), dmgMult: useMult });
         }
         break;
       }
@@ -3136,7 +3137,7 @@ nativeHost.issueCombatRecord("pendingSummons", nativeStorage, nativeRecord, nati
           : vec(caster.pos.x + Math.cos(caster.facing) * d.castRange,
                 caster.pos.y + Math.sin(caster.facing) * d.castRange);
         const at = nativeHost.clampPos(nativeHost.skillOcclusion(caster, inst) === 'blocked'
-          ? nativeHost.clipShot(caster.pos, wantAt, caster.tier) : wantAt, 10);
+          ? nativeHost.clipShot(caster.pos, wantAt, effectTier) : wantAt, 10, undefined, { tier: effectTier });
         // (+ the VENT PRESS's spent rounds — Blowhole: every banked round is
         // one more column, the storm's own count shift.)
         const strikes = Math.max(1, Math.round(
@@ -3151,7 +3152,7 @@ nativeHost.issueCombatRecord("pendingSummons", nativeStorage, nativeRecord, nati
         // first — an honest circle every strike then lands inside.
         const fuse = d.telegraph ?? 0;
         if (fuse > 0) {
-          nativeHost.flashes.push({
+          nativeHost.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(at.x, at.y), radius: d.areaRadius * aoeScale,
             color: cosmeticColor, life: fuse, maxLife: fuse, edgeFrac: 0.94,
           });
@@ -3162,7 +3163,7 @@ nativeHost.issueCombatRecord("pendingSummons", nativeStorage, nativeRecord, nati
         // honest about where it actually lands.
         const sVar = d.scatter ?? 0;
         const under: Vec2[] = d.atEnemies
-          ? nativeHost.enemiesOf(caster)
+          ? nativeHost.enemiesOf(caster, effectTier)
             .filter(e => dist(at, e.pos) <= d.areaRadius * aoeScale)
             .sort((e1, e2) => dist(at, e1.pos) - dist(at, e2.pos))
             .slice(0, strikes)
@@ -3213,10 +3214,10 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: effectTier,
             pos: nativeHost.clampPos(i < under.length
               ? vec(under[i].x, under[i].y)
-              : vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10),
+              : vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10, undefined, { tier: effectTier }),
             radius: d.hitRadius * aoeScale,
             caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: cosmeticColor,
             delay: zDelay,
@@ -3274,7 +3275,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           mirage.owner = caster;
           mirage.sourceSkillId = def.id;
           mirage.summonInst = inst;
-          mirage.tier = caster.tier;
+          mirage.tier = effectTier;
           // A convincing double wears the full silhouette, not just the tint.
           mirage.shape = caster.shape;
           mirage.color = caster.color;
@@ -3435,7 +3436,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
         nativeHost.moveBlast(caster, inst, caster.pos, 'depart');
         if (d.delay && d.delay > 0) {
           const visual: Flash = { pos: vec(dest.x, dest.y), radius: caster.radius * 1.6, color: cosmeticColor, life: d.delay, maxLife: d.delay,
-            fx: skillMovementVoice(def.id, 'wait'), facing: caster.facing, recoveryCueTier: caster.tier };
+            fx: skillMovementVoice(def.id, 'wait'), facing: caster.facing, recoveryCueTier: effectTier };
           {
 let nativeStorage: typeof nativeHost.pendingBlinks;
 let nativeRecord: typeof nativeHost.pendingBlinks[number];
@@ -3447,7 +3448,7 @@ nativeHost.issueCombatRecord("pendingBlinks", nativeStorage, nativeRecord, nativ
 }
           nativeHost.flashes.push(visual);
         } else {
-          nativeHost.teleportActor(caster, dest, cosmeticColor, undefined, caster.tier, def.id);
+          nativeHost.teleportActor(caster, dest, cosmeticColor, undefined, effectTier, def.id);
           if (d.behindTarget && targetInfo?.actor) {
             // Arrival is an atomic turn; the ordinary turn-rate cap must not undo it.
             caster.facingPrev = caster.facing = angleTo(caster.pos, targetInfo.actor.pos);
@@ -3464,18 +3465,18 @@ nativeHost.issueCombatRecord("pendingBlinks", nativeStorage, nativeRecord, nativ
         // caster permanently untargetable) — the SLAM repeats instead.
         if (caster.leap || opts.noRepeat) {
           const radius = d.radius * aoeScale;
-          for (const e of nativeHost.enemiesOf(caster)) {
-            if (!sameStory(caster, e)) continue; // (the sovereignty gate)
+          for (const e of nativeHost.enemiesOf(caster, effectTier)) {
+            if (e.tier !== effectTier) continue; // (the sovereignty gate)
             if (dist(caster.pos, e.pos) - e.radius <= radius) {
-              nativeHost.resolveHit(caster, inst, e, useMult);
+              nativeHost.resolveHit(caster, inst, e, useMult, undefined, undefined, undefined, undefined, undefined, undefined, effectTier);
             }
           }
           // THE MALLET: the repeated slam is a blast where it stands.
-          nativeHost.strikeSurfaces(caster, caster.pos, radius);
+          nativeHost.strikeSurfaces(caster, caster.pos, radius, undefined, undefined, effectTier);
           nativeHost.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius,
             color: cosmeticColor, life: 0.3, maxLife: 0.3,
-            fx: skillMovementVoice(def.id, 'impact'), facing: caster.facing, recoveryCueTier: caster.tier,
+            fx: skillMovementVoice(def.id, 'impact'), facing: caster.facing, recoveryCueTier: effectTier,
           });
           break;
         }
@@ -3526,11 +3527,11 @@ nativeHost.issueCombatRecord("pendingBlinks", nativeStorage, nativeRecord, nativ
         if (d.vent) {
           const vr = d.vent.columnR * aoeScale;
           const vScale = useMult * (d.vent.scale ?? 0.6);
-          for (const e of nativeHost.enemiesOf(caster)) {
-            if (dist(caster.pos, e.pos) - e.radius <= vr) nativeHost.resolveHit(caster, inst, e, vScale);
+          for (const e of nativeHost.enemiesOf(caster, effectTier)) {
+            if (dist(caster.pos, e.pos) - e.radius <= vr) nativeHost.resolveHit(caster, inst, e, vScale, undefined, undefined, undefined, undefined, undefined, undefined, effectTier);
           }
-          nativeHost.strikeSurfaces(caster, caster.pos, vr);
-          nativeHost.flashes.push({
+          nativeHost.strikeSurfaces(caster, caster.pos, vr, undefined, undefined, effectTier);
+          nativeHost.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: vr,
             color: '#d9f7fb', life: 0.35, maxLife: 0.35,
           });
@@ -3568,10 +3569,10 @@ nativeHost.issueCombatRecord("pendingBlinks", nativeStorage, nativeRecord, nativ
           const dd = Math.min(dist(caster.pos, aim), d.castRange);
           const at = nativeHost.clampPos(vec(
             caster.pos.x + Math.cos(caster.facing) * dd,
-            caster.pos.y + Math.sin(caster.facing) * dd), 10);
+            caster.pos.y + Math.sin(caster.facing) * dd), 10, undefined, { tier: effectTier });
           st.markPos = { x: at.x, y: at.y };
           nativeHost.flashes.push({ pos: vec(at.x, at.y), radius: 28, color: cosmeticColor, life: 0.4, maxLife: 0.4,
-            fx: skillSelfVoice(def.id), recoveryCueTier: caster.tier });
+            fx: skillSelfVoice(def.id), recoveryCueTier: effectTier });
         }
         break;
       }
@@ -3586,7 +3587,7 @@ nativeHost.issueCombatRecord("pendingBlinks", nativeStorage, nativeRecord, nativ
         // echo construct ever exists to mimic anything. Exclusive by build.
         const sum = instanceSummon(inst);
         if (sum) {
-          nativeHost.spawnMinion(caster, inst, { delivery: sum });
+          nativeHost.spawnMinion(caster, inst, { tier: effectTier, delivery: sum });
           break;
         }
         // Sub-skill instances honor OVER-CAP investment like emit payloads do.
@@ -3618,12 +3619,12 @@ nativeHost.issueCombatRecord("pendingBlinks", nativeStorage, nativeRecord, nativ
           const reach = Math.min(dist(caster.pos, aim), d.placeRange ?? 320);
           const center = targetInfo?.pos ?? nativeHost.clampPos(vec(
             caster.pos.x + Math.cos(caster.facing) * reach,
-            caster.pos.y + Math.sin(caster.facing) * reach), 10);
+            caster.pos.y + Math.sin(caster.facing) * reach), 10, undefined, { tier: effectTier });
           const R = d.ring.radius * aoeScale;
           for (let i = 0; i < d.ring.segments; i++) {
             const ang = (i / d.ring.segments) * Math.PI * 2;
             nativeHost.spawnConstruct(caster, inst, d, aim, castInst,
-              vec(center.x + Math.cos(ang) * R, center.y + Math.sin(ang) * R));
+              vec(center.x + Math.cos(ang) * R, center.y + Math.sin(ang) * R), 1, effectTier);
           }
           break;
         }
@@ -3639,13 +3640,13 @@ nativeHost.issueCombatRecord("pendingBlinks", nativeStorage, nativeRecord, nativ
           for (let i = 0; i < segs; i++) {
             const off = (i - (segs - 1) / 2) * spacing;
             nativeHost.spawnConstruct(caster, inst, d, aim, castInst,
-              vec(base.x + Math.cos(perp) * off, base.y + Math.sin(perp) * off));
+              vec(base.x + Math.cos(perp) * off, base.y + Math.sin(perp) * off), 1, effectTier);
           }
         } else {
           // Charged constructs (Volcano) grow with the hold: useMult from
           // the charge release scales duration and spew rate.
           nativeHost.spawnConstruct(caster, inst, d, aim, castInst, undefined,
-            def.castMode === 'charge' ? useMult : 1);
+            def.castMode === 'charge' ? useMult : 1, effectTier);
         }
         break;
       }
@@ -3675,23 +3676,23 @@ try {
         const mult = (best ? (d.consumeBonus ?? 1.5) : 1) * useMult;
         const radius = d.radius * aoeScale;
         const shape = caster.sheet.get('aoeShape', tags, extra);
-        for (const victim of nativeHost.enemiesOf(caster)) {
+        for (const victim of nativeHost.enemiesOf(caster, effectTier)) {
           if (!inAoe(at, radius, shape, caster.facing, victim.pos, victim.radius)) continue;
-          nativeHost.resolveHit(caster, inst, victim, mult, 0, flatBonus);
+          nativeHost.resolveHit(caster, inst, victim, mult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
         }
         // THE MALLET: the pop's own shape strikes the surfaces.
-        nativeHost.frontSplash(caster, inst, at, radius);
+        nativeHost.frontSplash(caster, inst, at, radius, effectTier);
         nativeHost.strikeSurfaces(caster, at, radius, (p, r) =>
-          inAoe(at, radius, shape, caster.facing, p, r));
+          inAoe(at, radius, shape, caster.facing, p, r), undefined, effectTier);
         nativeHost.flashes.push({
           pos: at, radius, color: cosmeticColor,
           life: 0.35, maxLife: 0.35, shape, facing: caster.facing,
-          fx: skillSelfVoice(def.id, 'burst'), recoveryCueTier: caster.tier,
+          fx: skillSelfVoice(def.id, 'burst'), recoveryCueTier: effectTier,
         });
-        nativeHost.spawnAftershocks(caster, inst, at, radius, shape);
+        nativeHost.spawnAftershocks(caster, inst, at, radius, shape, undefined, effectTier);
         // The cascade family beyond ground: the pop's sequels mint here.
         nativeHost.mintAftermath(caster, inst, at, radius, shape,
-          caster.facing, useMult, tags, extra);
+          caster.facing, useMult, tags, extra, undefined, undefined, undefined, effectTier);
         fieldAt = at;
         break;
       }
@@ -3767,7 +3768,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
             (fx.flat ?? 0) + (fx.pct ?? 0) * hostAura.ledger.balance);
           hostAura.ledger.balance -= paid;
           nativeHost.text(caster.pos, `absolved ${Math.round(paid)}`, '#d8c878', 12);
-          nativeHost.flashes.push({
+          nativeHost.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 14,
             color: '#d8c878', life: 0.3, maxLife: 0.3,
           });
@@ -3819,7 +3820,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
             const kindIdx = nativeHost.liteKindOf(hostSpec.monsterId);
             if (kindIdx >= 0) {
               nativeHost.litePromoteNearest(aim, {
-                within: 1e9, max: THRONG_CFG.metaDelegate, story: caster.tier,
+                within: 1e9, max: THRONG_CFG.metaDelegate, story: effectTier,
                 owner: lord.id, kindIdx,
               });
             }
@@ -3888,7 +3889,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
           const mark = vec(aim.x, aim.y);
           // Point AT a foe and the order PINS it — focus fire, not geography.
           let quarry: Actor | undefined; let qd = COMMAND_CFG.pinRadius;
-          for (const e of nativeHost.enemiesOf(caster)) {
+          for (const e of nativeHost.enemiesOf(caster, effectTier)) {
             if (e.passive || e.sheet.get('invisible') > 0) continue;
             const dq = dist(e.pos, mark);
             if (dq < qd) { qd = dq; quarry = e; }
@@ -3927,7 +3928,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
           }
           nativeHost.assaults.command(caster, inst, assaultRecipients, kind === 'recall');
           if (sent > 0) {
-            nativeHost.flashes.push({
+            nativeHost.flashes.push({ recoveryCueTier: effectTier,
               pos: vec(mark.x, mark.y), radius: 40, color: cosmeticColor,
               life: 0.3, maxLife: 0.3,
             });
@@ -4039,7 +4040,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
             caster.pos.y + Math.sin(ang) * reach), c.radius, undefined, { mover: c });
           c.facing = ang;
           c.casting = null; c.push = null;
-          nativeHost.flashes.push({ pos: { ...c.pos }, radius: 28, color: cosmeticColor, life: 0.25, maxLife: 0.25 });
+          nativeHost.flashes.push({ recoveryCueTier: effectTier, pos: { ...c.pos }, radius: 28, color: cosmeticColor, life: 0.25, maxLife: 0.25 });
           // Keep the same actor, payload, health, lifespan, timers, useLock and
           // cooldowns. No arrival effect, death event, refund or replacement.
         }
@@ -4061,7 +4062,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
           // stands upstairs), the arrival confined to that story's floor.
           nativeHost.teleportActor(m, vec(
             caster.pos.x + Math.cos(ang) * R,
-            caster.pos.y + Math.sin(ang) * R), def.color, undefined, caster.tier);
+            caster.pos.y + Math.sin(ang) * R), def.color, undefined, effectTier);
         });
       }
       if (d.type === 'self' && fx.type === 'status') {
@@ -4100,7 +4101,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
       // Terrain effects land at the resolution origin — for blinks that is
       // the DEPARTURE point (Shatterstep's ice patch where you stood).
       if (fx.type === 'terrain') {
-        nativeHost.addTempGround(origin, fx.kind, fx.radius * aoeScale, fx.duration * durScale);
+        nativeHost.addTempGround(origin, fx.kind, fx.radius * aoeScale, fx.duration * durScale, { tier: effectTier });
       }
       // CONJURED CLOUD (the flux fabric's second half): a standing cloud
       // called into being at the resolution origin — the walkable half
@@ -4129,7 +4130,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
       // skill resolved (ground deliveries plant at the target, above) — a
       // self-cast veils the caster's own feet, a leap's vent its departure.
       if (fx.type === 'vent' && d.type !== 'ground') {
-        nativeHost.plantVent(fx, origin, aoeScale, durScale, caster.tier);
+        nativeHost.plantVent(fx, origin, aoeScale, durScale, effectTier);
       }
       // A POURED SWARM (engine/lite.ts): pool bodies stand at the
       // resolution point — the nest's vent, the shepherd's call. A
@@ -4146,7 +4147,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
       // plant at the flight's end (the litePour hook's twin).
       if (fx.type === 'lure' && d.type !== 'projectile') {
         nativeHost.setLure(`skill#${caster.id}#${inst.def.id}`, origin, fx.radius,
-          fx.pace ?? 0.5, fx.standoff ?? 90, fx.sec, caster.tier);
+          fx.pace ?? 0.5, fx.standoff ?? 90, fx.sec, effectTier);
       }
       if (fx.type === 'gainCharge') {
         caster.gainCharge(fx.charge, fx.amount, fx.max, inst);
@@ -4189,7 +4190,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
         }
         if (drawn > 0) {
           nativeHost.text(vec(caster.pos.x, caster.pos.y - 22), drawn + ' drawn', def.color, 13);
-          nativeHost.flashes.push({
+          nativeHost.flashes.push({ recoveryCueTier: effectTier,
             pos: vec(caster.pos.x, caster.pos.y), radius,
             color: cosmeticColor, life: 0.3, maxLife: 0.3,
           });
@@ -4204,7 +4205,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
       if (fx.type === 'recallImpales') {
         const radius = fx.radius * aoeScale;
         let wrenched = 0;
-        for (const e of nativeHost.enemiesOf(caster)) {
+        for (const e of nativeHost.enemiesOf(caster, effectTier)) {
           if (e.construct?.breakable) continue;
           if (dist(caster.pos, e.pos) - e.radius > radius) continue;
           for (let si = e.statuses.length - 1; si >= 0; si--) {
@@ -4236,7 +4237,7 @@ nativeHost.issueCombatRecord("pendingFuses", nativeStorage, nativeRecord, native
               }
               nativeHost.spawnProjectile(caster, spear, vec(e.pos.x, e.pos.y),
                 angleTo(e.pos, caster.pos),
-                { flat: { physical: bank * (fx.spearShare ?? 0.5) } });
+                { tier: effectTier, flat: { physical: bank * (fx.spearShare ?? 0.5) } });
             }
             wrenched++;
           }
@@ -4304,14 +4305,14 @@ let nativeRecord: typeof nativeHost.corpses[number];
 (nativeStorage = nativeHost.corpses).push(nativeRecord = {
             pos: nativeHost.clampPos(vec(aim.x + rand(-spread, spread), aim.y + rand(-spread, spread)), 10, undefined, { mover: caster }),
             defId: fx.monsterId, level: nativeHost.zone.level,
-            tier: caster.tier, // THE SPOILS STORY: dug on the caster's own story
+            tier: effectTier, // THE SPOILS STORY: dug on the caster's own story
             maxLife: CORPSE_CFG.mint.life + nativeHost.zone.level * CORPSE_CFG.mint.lifePerLevel,
             remaining: CORPSE_CFG.duration,
           });
 nativeHost.issueCombatRecord("corpses", nativeStorage, nativeRecord, undefined, undefined);
 }
         }
-        nativeHost.flashes.push({ pos: vec(aim.x, aim.y), radius: 44, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
+        nativeHost.flashes.push({ recoveryCueTier: effectTier, pos: vec(aim.x, aim.y), radius: 44, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
       }
       // GATHER THE DEAD (dragCorpses): the graveyard walks — every corpse in
       // reach steps to the mark and piles TIGHT (inside one corpse-find's
@@ -4324,13 +4325,13 @@ nativeHost.issueCombatRecord("corpses", nativeStorage, nativeRecord, undefined, 
         let gathered = 0;
         for (const c of nativeHost.corpses) {
           if (dist(aim, c.pos) > reach) continue;
-          if ((c.tier ?? nativeHost.spoilStoryAt(c.pos)) !== caster.tier) continue; // its own story's dead only
+          if ((c.tier ?? nativeHost.spoilStoryAt(c.pos)) !== effectTier) continue; // its own story's dead only
           const k = gathered++;
           const r = k === 0 ? 0 : 22 + 8 * Math.floor(k / 3);
-          c.pos = nativeHost.clampPos(vec(aim.x + Math.cos(k * 2.1) * r, aim.y + Math.sin(k * 2.1) * r), 8);
+          c.pos = nativeHost.clampPos(vec(aim.x + Math.cos(k * 2.1) * r, aim.y + Math.sin(k * 2.1) * r), 8, undefined, { tier: effectTier });
         }
         if (gathered) {
-          nativeHost.flashes.push({ pos: vec(aim.x, aim.y), radius: 40, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
+          nativeHost.flashes.push({ recoveryCueTier: effectTier, pos: vec(aim.x, aim.y), radius: 40, color: cosmeticColor, life: 0.3, maxLife: 0.3 });
         } else {
           nativeHost.failNote(caster, def.id + ':nobodies', 'no dead to gather');
         }
@@ -4352,7 +4353,7 @@ nativeHost.issueCombatRecord("corpses", nativeStorage, nativeRecord, undefined, 
           }
           if (!['totem', 'sentry', 'pylon'].includes(t.construct.kind)) continue;
           nativeHost.burstDamage(vec(t.pos.x, t.pos.y), fx.radius,
-            t.maxLife() * fx.fraction, 'physical', cosmeticColor, caster.team, caster.tier, undefined, undefined, skillSelfVoice(def.id, 'burst'));
+            t.maxLife() * fx.fraction, 'physical', cosmeticColor, caster.team, effectTier, undefined, undefined, skillSelfVoice(def.id, 'burst'));
           nativeHost.kill(t, true);
           blown++;
         }
@@ -4372,7 +4373,7 @@ nativeHost.issueCombatRecord("corpses", nativeStorage, nativeRecord, undefined, 
       }
       if (fx.type === 'guardSurge' && applyGuardSurge(caster, inst, fx)) {
         nativeHost.text(caster.pos, 'TRANSGRESSION!', '#8ab8d8', 14, 'combat');
-        nativeHost.flashes.push({ pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 16,
+        nativeHost.flashes.push({ recoveryCueTier: effectTier, pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 16,
           color: '#8ab8d8', life: 0.3, maxLife: 0.3 });
       }
       // LINGERING GROUND: the pool stands at the resolved point — for a
@@ -4386,7 +4387,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: effectTier,
           pos: vec(origin.x, origin.y),
           radius: fx.radius * aoeScale,
           caster: (nativeRecordSource = caster), inst: (nativeRecordInstance = inst), color: cosmeticColor,
@@ -4542,7 +4543,7 @@ let nativeStorage: typeof nativeHost.remnants;
 let nativeRecord: typeof nativeHost.remnants[number];
 (nativeStorage = nativeHost.remnants).push(nativeRecord = {
             pos: nativeHost.clampPos(vec(caster.pos.x + Math.cos(ang) * r,
-              caster.pos.y + Math.sin(ang) * r), 8),
+              caster.pos.y + Math.sin(ang) * r), 8, undefined, { tier: effectTier }),
             element: pick(els),
             bob: rand(0, Math.PI * 2), life: 14,
           });
@@ -4583,7 +4584,7 @@ nativeHost.issueCombatRecord("remnants", nativeStorage, nativeRecord, undefined,
         mimicRefreshWatch(p, nativeHost.time);
         if (!p.mimicWatch || p.mimicWitnessR <= 0) continue;
         if (dist(p.pos, caster.pos) > p.mimicWitnessR) continue;
-        if (!nativeHost.lineOfSight(p.pos, caster.pos, p.tier, caster.tier)) continue;
+        if (!nativeHost.lineOfSight(p.pos, caster.pos, p.tier, effectTier)) continue;
         if (mimicCapture(nativeHost, p, caster, def)) {
           nativeHost.notice(`ART WITNESSED: ${def.name}`, '#c8a0e8', 14, 'world'); // off the head, onto the feed (M-CRY: a ledger note is news)
         }
@@ -5728,7 +5729,7 @@ let nativeStorage: typeof nativeHost.zones;
 let nativeRecord: typeof nativeHost.zones[number];
 let nativeRecordSource: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[3];
 let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>[4];
-(nativeStorage = nativeHost.zones).push(nativeRecord = {
+(nativeStorage = nativeHost.zones).push(nativeRecord = { tier: a.tier,
           pos: nativeHost.clampPos(vec(a.pos.x + Math.cos(ang) * r, a.pos.y + Math.sin(ang) * r), 10),
           radius: 52 * a.sheet.get('aoeRadius', tags, extra),
           caster: (nativeRecordSource = a), inst: (nativeRecordInstance = cs.inst), color: '#ffe14a',
