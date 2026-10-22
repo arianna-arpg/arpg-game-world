@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_collisionsweep.ts', status: 'green', tier: 'fast', why: 'Continuous furniture contact, real knockback, layer gates, phasing and seeded cluster movement; collision_shadow regression.' },
   { probe: 'probe_castaim.ts', status: 'green', tier: 'fast', why: 'Existing Cleave remains committed at press-time aim; explicit ordinary-windup opt-in follows actor aim without bypassing cast ownership.' },
   { probe: 'probe_miniontargets.ts', status: 'green', tier: 'fast', why: 'Harmless critter contact-only fallback, threat priority, cached chase expiry, dangerous wildlife, natural predation and companion orders.' },
   { probe: 'probe_orbgeneration.ts', status: 'green', tier: 'fast', why: 'Shared life/mana attempt cadence, failed-roll lockout, real chains and rapid hits, resource/reserve assistance, reservation ceilings and proc isolation.' },
