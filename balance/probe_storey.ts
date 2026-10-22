@@ -45,6 +45,7 @@ import { doodadRuleOf } from '../src/engine/levelgen';
 import { updateAI } from '../src/engine/ai'; // (J — the investigation crosses)
 import { tierMapTell, tierMapTint } from '../src/ui/panels';
 import { vec } from '../src/core/math';
+import { storyPointVisible } from '../src/render/vis/storyVisibility';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -224,8 +225,15 @@ const kindAt = (cx: number, cy: number): string => wf.regionAt!(inn.rect.x + cx 
     /this\.drawTierVeil\(world, vw, vh\);[\s\S]{0,400}this\.drawStoreyLayer\(world\);[\s\S]{0,200}this\.drawDoodads\(world\)/.test(renderer));
   check('G2 the layer paints the story\'s floor in the structure\'s own style and its hanging walls; the understair closets downstairs',
     renderer.includes('paintFloorRect(ctx, r, style)') && renderer.includes('rec.walls') && renderer.includes("'storey_landing'"));
-  check('G3 the doodad cull and the actor cull both read the stack (the other story hides; the crossing shows both)',
-    (renderer.match(/this\.inStack\(/g) ?? []).length >= 2 && renderer.includes('tierLinkOf(world.walk.regionAt(d.pos.x, d.pos.y))'));
+  const viewerTier = w.player.tier;
+  w.player.tier = 0;
+  const upstairs = w.doodads.find(d => d.kind === 'dresser' && d.tier === 1)!;
+  const flight = w.doodads.find(d => d.kind === 'stairway')!;
+  check('G3 the shared visibility gate hides the other storey and exposes the actual stair flight',
+    !storyPointVisible(w, upstairs.pos, 1, [inn])
+    && storyPointVisible(w, upstairs.pos, 0, [inn])
+    && storyPointVisible(w, flight.pos, 1, [inn]));
+  w.player.tier = viewerTier;
   check('G4 the room veil confines by the hero\'s story (the storey\'s own ledger + archways)',
     veil.includes('st0?.storeys?.find(s => s.tier === tier)') && veil.includes('rooms: storey.rooms, doors: storey.doors'));
 }

@@ -66,7 +66,9 @@ function paint(w: World, drops = w.drops): { text: string[]; shapes: unknown[][]
     : (...args: unknown[]) => shapes.push([String(key), ...args]) });
   const renderer = Object.create(Renderer.prototype) as { ctx: unknown; drawDrops(w: World): void };
   renderer.ctx = ctx;
-  renderer.drawDrops({ drops } as World);
+  const previous = w.drops;
+  try { w.drops = drops; renderer.drawDrops(w); }
+  finally { w.drops = previous; }
   return { text, shapes };
 }
 const hostPaint = paint(host);
