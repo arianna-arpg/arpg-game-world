@@ -1,4 +1,5 @@
 import type { World } from '../engine/world';
+import { MONSTERS } from '../data/monsters';
 import type { DialogueWorkspace } from './dialogue';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c =>
@@ -59,6 +60,18 @@ export class NpcConversationUI implements DialogueWorkspace {
   private status: HTMLElement;
   get active(): boolean { return this.activity !== null; }
   get choosing(): boolean { return this.active || this.toolbar.childElementCount > 0; }
+
+  /** Evaluate the current speaker and quest state, including content that
+   * became available after dismissal. Service roles always permit a return;
+   * a resident or a settled quest giver needs actual attached topics. */
+  repeatable(world: World, speakerId: number): boolean {
+    const actor = world.actors.find(a => a.id === speakerId && !a.dead);
+    const role = actor?.defId && MONSTERS[actor.defId]?.npcRole;
+    if (role && role !== 'resident' && role !== 'questgiver') return true;
+    const q = conversationQuests(world, speakerId);
+    return !!(q.active.length || q.vocations.length || q.rewards.length || q.imbues.length
+      || this.host.work?.().some(r => q.belongs(r.questId, false)));
+  }
 
   constructor(root: HTMLElement, private host: Host, private changed: () => void) {
     const style = document.createElement('style');

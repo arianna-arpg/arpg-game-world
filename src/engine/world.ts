@@ -20449,6 +20449,17 @@ actors: Actor[] = [];
     return this.speechFocus.get(seat);
   }
 
+  /** A deliberate step after dismissing requests the same normal attention
+   * dwell again, even inside the current speaker's reach. */
+  restartNpcDialogueDwell(speakerId: number): void {
+    if (this.speechFocus.get(this.localSeat)?.id === speakerId) this.speechFocus.delete(this.localSeat);
+  }
+
+  npcDialogueRepeatCooldown(speakerId: number): number {
+    const row = this.speakerRows.get(speakerId);
+    return speechWindowFor(row?.lane ?? 'resident', row?.current ?? row?.line ?? '').cooldownSec;
+  }
+
   /** A reader-paced dialogue starts its ambient cooldown when finished or
    * interrupted, even if reading outlasted the old overhead telling window. */
   finishNpcDialogue(actorId: number): void {
@@ -20502,7 +20513,9 @@ actors: Actor[] = [];
       const available = !ambient || !row || speechAvailable(memory, this.time,
         speechWindowFor(row.lane, row.current ?? row.line));
       candidates.push({ id: a.id, a, text, color, distance, ambient, available,
-        ...attention, ...(authored ? { priority: authored.def.priority, dwellSec: authored.seconds } : {}) });
+        // A quest's script may request faster attention, but cannot impose
+        // a second, longer panel delay than the shared NPC attention rule.
+        ...attention, ...(authored ? { priority: authored.def.priority, dwellSec: Math.min(authored.seconds, attention.dwellSec) } : {}) });
     }
     return candidates;
   }
