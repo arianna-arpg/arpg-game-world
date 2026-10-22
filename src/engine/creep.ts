@@ -1394,10 +1394,11 @@ export class CreepField {
    *  a section's vigor, feed types stoke it — per-row levers, nothing
    *  global. Callers early-out on `quenchable`; returns whether any
    *  section drank the hit (FX seams may care). */
-  damageSkin(x: number, y: number, r: number, amounts: Readonly<Record<string, number>>): boolean {
+  damageSkin(x: number, y: number, r: number, amounts: Readonly<Record<string, number>>, tier = 0): boolean {
     if (!this.quenchable) return false;
     let drank = false;
     for (const s of this.sources) {
+      if ((s.tier ?? 0) !== tier) continue;
       const fs = s.def.front;
       const run = s.front;
       if (!run || !fs || (!fs.quench && !fs.feed) || s.cur < CREEP_CFG.minReach) continue;
@@ -1449,8 +1450,9 @@ export class CreepField {
    *  Callers early-out on `ignitable` (a zone without the dial pays nothing
    *  per hit — the global default-off, structurally); returns sections
    *  born (0 = nothing happened). */
-  igniteAt(x: number, y: number, r: number, amounts: Readonly<Record<string, number>>, now: number): number {
-    if (!this.ignitable || !this.terrain) return 0;
+  igniteAt(x: number, y: number, r: number, amounts: Readonly<Record<string, number>>, now: number, tier = 0): number {
+    // Authored ignition lanes consume the ground terrain, never fuel through a ceiling.
+    if (tier !== 0 || !this.ignitable || !this.terrain) return 0;
     const fd = CREEP_CFG.front.ignition;
     let born = 0;
     for (const lane of this.lanes) {

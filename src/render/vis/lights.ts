@@ -29,6 +29,7 @@ import { baked, drawGlow } from './sprites';
 import { VIS_CFG } from './visConfig';
 import { drawReadableLightMask } from './readableLight';
 import type { CombatRect } from './combatFocus';
+import { storyPointVisible } from './storyVisibility';
 
 // The cluster cache re-derives only when a LIGHT-bearing doodad changes —
 // the exact filter zoneClusters gathers with (scoped invalidation:
@@ -72,6 +73,7 @@ export class LightLayer {
   private clustersFor: unknown = null;
   private clustersLen = -1;
   private clustersRev = -1;
+  private clustersTier = -1;
   /** This frame's resolved ambient darkness (rendered + reusable by callers). */
   ambient = 0;
 
@@ -79,21 +81,23 @@ export class LightLayer {
    *  VIS_CFG.lights.clusterBin): centroid position, a radius that covers
    *  every member's own glow, the kind's color/intensity/flicker. Isolated
    *  sources (a lone campfire) become 1:1 clusters — one uniform path. */
-  private zoneClusters(world: World): LightCluster[] {
+  private zoneClusters(world: World, stacks: Parameters<typeof storyPointVisible>[3]): LightCluster[] {
     const rev = world.doodadFamilyRev('light');
     if (this.clustersFor === world.doodads && this.clustersLen === world.doodads.length
-      && this.clustersRev === rev) {
+      && this.clustersRev === rev && this.clustersTier === world.player.tier) {
       return this.clusters;
     }
     this.clustersFor = world.doodads;
     this.clustersLen = world.doodads.length;
     this.clustersRev = rev;
+    this.clustersTier = world.player.tier;
     const bin = VIS_CFG.lights.clusterBin;
     type Acc = { sx: number; sy: number; n: number; members: { x: number; y: number; lr: number }[];
       color: string; intensity: number; flicker?: number;
       radiance?: { at0?: number; at1?: number } };
     const bins = new Map<string, Acc>();
     for (const d of world.doodads) {
+      if (!storyPointVisible(world, d.pos, d.tier ?? 0, stacks)) continue;
       const spec = DOODAD_VISUALS[d.kind]?.light;
       if (!spec) continue;
       // A crushed lamp goes dark (the rampage fabric) — the fell/regrow flips
@@ -152,6 +156,7 @@ export class LightLayer {
   collect(world: World, culled: ReadonlyMap<string, readonly Doodad[]>,
     camX: number, camY: number, vw: number, vh: number): void {
     this.lights.length = 0;
+    const stacks = world.zone.tiers?.interior ? world.storeyedStructures() : [];
     this.ambient = this.ambientDark(world);
     const cap = VIS_CFG.lights.maxLights;
     // Fully lit scene → only bloom draws (intensity ≥ 0.25); dimmer lights
@@ -199,7 +204,7 @@ export class LightLayer {
     // [player] outside couch play — the solo path is byte-identical).
     if (this.ambient > 0.1) {
       for (const hero of (world.couchActive() ? world.couchHeroes() : [world.player])) {
-        if (hero.dead) continue;
+        if (hero.dead || !storyPointVisible(world, hero.pos, hero.tier, stacks)) continue;
         push(hero.pos.x, hero.pos.y, VIS_CFG.lights.heroRadius,
           '#ffe8c0', Math.min(0.9, this.ambient + 0.15));
       }
@@ -208,6 +213,7 @@ export class LightLayer {
     // light — the near-spent ember is the one that yields.
     for (let i = world.flashes.length - 1; i >= 0; i--) {
       const f = world.flashes[i];
+      if (f.recoveryCueTier !== undefined && !storyPointVisible(world, f.pos, f.recoveryCueTier, stacks)) continue;
       if (f.haze || f.departure || f.cosmeticMotif || f.lightning || f.movement
         || f.fx?.startsWith('skillPresence:') && !(f.fx.startsWith('skillPresence:pulse:') && presenceProfile(f.fx.split(':')[2])?.family === 'storm')
         || f.fx?.startsWith('skillSelf:') && !f.fx.startsWith('skillSelf:burst:')
@@ -216,11 +222,13 @@ export class LightLayer {
       push(f.pos.x, f.pos.y, f.radius * 1.5, f.color, 0.5 * k, undefined, undefined, 'flashes');
     }
     for (const p of world.projectiles) {
+      if (!storyPointVisible(world, p.pos, p.tier ?? 0, stacks)) continue;
       push(p.pos.x, p.pos.y, p.radius * 8, p.color, 0.3, undefined, undefined, 'projectiles');
     }
     // Orb kinds that declare a light carry a real candle (wakeflames in the
     // dark) — movers like projectiles, fading out with their last seconds.
     for (const o of world.orbs) {
+      if (!storyPointVisible(world, o.pos, o.tier ?? world.spoilStoryAt(o.pos), stacks)) continue;
       const r = ORB_DEFS[o.kind]?.light;
       if (!r) continue;
       push(o.pos.x, o.pos.y, r, ORB_DEFS[o.kind].color,
@@ -232,7 +240,7 @@ export class LightLayer {
     // them out of the cap. Dead bodies shed nothing; a concealed body
     // (StatusDef.conceals — the swallowed) keeps its light swallowed too.
     for (const a of world.actors) {
-      if (a.dead) continue;
+      if (a.dead || !storyPointVisible(world, a.pos, a.tier, stacks)) continue;
       // THE CARRIED LAMP at actor grain first (Actor.carriedLamp — a lantern
       // handed to ONE body by a fabric: the terrace pilgrim), then the kind's
       // own lamp (MonsterDef.light). Same LightSpec, same breath.
@@ -256,6 +264,7 @@ export class LightLayer {
     // feeds them (drawn == tested). Position is static: the occlusion poly
     // caches per grid version at the UN-dimmed reach (its widest).
     for (const d of world.lightwellDoodads()) {
+      if (!storyPointVisible(world, d.pos, d.tier ?? 0, stacks)) continue;
       if (!d.well) continue; // steady rows stay clustered
       const spec = DOODAD_VISUALS[d.kind]?.light;
       if (!spec) continue;
@@ -273,6 +282,7 @@ export class LightLayer {
 
     // Zone exits breathe their accent so the way out reads in the dark.
     for (const e of world.exits) {
+      if (!storyPointVisible(world, e.pos, world.spoilStoryAt(e.pos), stacks)) continue;
       push(e.pos.x, e.pos.y, 85, world.zone.theme.accent, 0.3, e);
     }
 
@@ -282,6 +292,7 @@ export class LightLayer {
     // breathes every frame), so they live-march like flashes do.
     const EC = VIS_CFG.lights.encounter;
     for (const enc of world.encountersView()) {
+      if (!storyPointVisible(world, enc.pos, world.spoilStoryAt(enc.pos), stacks)) continue;
       if (enc.phase === 'open' || enc.phase === 'collapsing') {
         const c = (enc.lordId ? courtLord(enc.lordId)?.color : undefined) ?? enc.def.trigger.color;
         push(enc.pos.x, enc.pos.y, Math.min(enc.radius, EC.radiusCap), c, EC.intensity);
@@ -304,7 +315,7 @@ export class LightLayer {
       // changes only at bin crossings, never a per-frame reshuffle; the
       // 'winking lava field' was exactly cap eviction in cull order).
       const cands: { c: LightCluster; r: number; k: number }[] = [];
-      for (const c of this.zoneClusters(world)) {
+      for (const c of this.zoneClusters(world, stacks)) {
         const br = breathe(c.radiance);
         if (br <= 0.02) continue;
         const flick = c.flicker
@@ -339,6 +350,7 @@ export class LightLayer {
         if (br <= 0.02) continue;
         const color = resolveColor(spec.color, world.zone.theme);
         for (const d of list) {
+          if (!storyPointVisible(world, d.pos, d.tier ?? 0, stacks)) continue;
           const r = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
           const flick = spec.flicker
             ? 0.82 + 0.18 * Math.sin(t * spec.flicker + d.pos.x * 0.13) : 1;
