@@ -1022,7 +1022,8 @@ export class Actor {
   /** CAST CYCLES (SkillDef.castCycle): completed real uses counted per
    *  skill id toward the every-Nth-cast grant. */
   castCycles = new Map<string, number>();
-  castSequences = new WeakMap<SkillInstance, number>();
+  /** Serializable with native actor checkpoints; keys retain skill-instance identity. */
+  castSequences = new Map<SkillInstance, number>();
   /** Minion life-cycle rites, baked at summon from the OWNER's stats:
    *  on death, the flock heals (deathHealPct × max life + flat); expiry
    *  may count as death (the raging-spirits lever). */
