@@ -71,6 +71,11 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'skull', x: 0.5 },
     ],
   },
+  skeletal_mortarman: {
+    parts: [{ kind: 'ribs', params: { under: true } },
+      { kind: 'mortarMaw', y: -0.4, scale: 0.85, params: { len: 0.9, w: 0.3 } },
+      { kind: 'skull', x: 0.5 }, { kind: 'keg', x: -0.55, scale: 0.45 }],
+  },
   skeleton_archer: {
     walk: { cycle: 5.8, swing: 0.6, sway: 0.04, lift: 0.065, parts: [
       { kind: 'boot', x: -.5, y: -.55, hip: { x: -.12, y: -.42, width: .21 }, role: 'bone', phase: 1 },

@@ -48,6 +48,8 @@ import { ensureMovementTether, landMovementTether, updateMovementTethers, refres
 import { CompanionBonds } from './companionBonds';
 import { Assaults, assaultNode } from './assault';
 import { Challenges } from './challenges';
+import { ChannelFormations } from './channelFormation';
+import { castSequenceInstance } from './castSequence';
 import { AttackSequences } from './attackSequences';
 import { GuardArts } from './guardArts';
 import { guardCapacity } from './guardArtsSpec';
@@ -3684,6 +3686,9 @@ export class World {
   readonly creepers = new Creepers();
   readonly challenges = new Challenges(this);
   readonly attackSequences = new AttackSequences(this);
+  readonly channelFormations = new ChannelFormations(this,
+    (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
+    (body, inst, aim) => { this.executeSkill(body, inst, aim, { noRepeat: true, noCooldown: true, keepFacing: true }); });
   readonly guardArts = new GuardArts(this);
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
@@ -5878,6 +5883,7 @@ export class World {
     this.creepers.clear();
     this.assaults.clearAll();
     this.challenges.clearAll();
+    this.channelFormations.clear();
     this.attackSequences.clearAll();
     this.guardArts.clearAll();
     this.guardArts.rebind();
@@ -35230,6 +35236,7 @@ export class World {
     // Replenishment is a birth clock, never an echo/trigger/proc cast.
     if (replenishingDelivery(inst)) return false;
     inst = this.challenges.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
+    inst = castSequenceInstance(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.attackSequences.prepare(caster, inst, aim, opts.dmgMult ?? 1);
     const def = inst.def;
     const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
@@ -37013,6 +37020,7 @@ export class World {
         break;
 
       case 'summon': {
+        if (d.channelFormation) { this.channelFormations.pulse(caster, inst); break; }
         // Corpse summons (Raise Spectre / Revive): the minion IS the corpse.
         if (d.fromCorpse) {
           // THE GRIMOIRE: mastery replaces scavenging — an attuned bestiary
@@ -42867,6 +42875,7 @@ export class World {
       if (def?.beneficial) continue;
       if (s.stacks > 1) {
         s.stacks -= Math.max(1, Math.round(s.stacks * portion));
+        if (s.stackTimes) s.stackTimes = s.stacks > 0 ? s.stackTimes.slice(-s.stacks) : [];
         if (s.stacks <= 0) {
           target.statuses.splice(i, 1);
           if (!target.statuses.some(o => o.id === s.id)) {
@@ -43443,6 +43452,12 @@ export class World {
     const vs = victimScopeArmed(caster.sheet, extra)
       ? victimTags(target, caster, { time: this.time }) : undefined;
     const packet: DamagePacket = rollSkillDamage(caster, inst, flatBonus, vs);
+    // Matching typed hits benefit before ordinary hit effects add new stacks.
+    for (const status of target.statuses) {
+      const v = STATUS_DEFS[status.id]?.hitVulnerability;
+      if (v && v.skills.includes(inst.def.id) && packet.amounts[v.type])
+        packet.amounts[v.type]! *= 1 + status.stacks * v.perStack * (status.power ?? 1);
+    }
     if (dmgMult !== 1) {
       for (const t of Object.keys(packet.amounts) as (keyof typeof packet.amounts)[]) {
         packet.amounts[t]! *= dmgMult;
@@ -49202,6 +49217,7 @@ export class World {
     // The same tending mends a downed COMPANION (the Hunter's bond).
     this.companionBonds.update(dt);
     this.challenges.update(dt);
+    this.channelFormations.update();
     this.attackSequences.update(dt);
     this.guardArts.update(dt);
     this.updateDownedCompanions(dt);
@@ -56603,11 +56619,11 @@ export class World {
       // channels (innate or a Gathered Casting conversion) hold to the
       // BRIM: a monster releases at full power or not at all.
       const chSpec = cs.mode === 'channel' ? (cs.gather ?? instanceChannel(cs.inst)) : undefined;
-      cs.aiHold ??= chSpec?.release?.requireFull
+      cs.aiHold ??= chSpec?.aiHold ?? (chSpec?.release?.requireFull
         ? (chSpec.maxHold ?? 4) + 0.5
         : chSpec?.brim
           ? chSpec.brim.fillTime + 0.4
-          : rand(1.2, 2.6);
+          : rand(1.2, 2.6));
       // Charge bars release at FULL CHARGE at the latest: elapsed CAPS at
       // total, so an aiHold rolled above it would otherwise hold the cast
       // open forever (wedged monsters, totems, and echo riders mid-charge).
@@ -56918,6 +56934,7 @@ export class World {
           }
         }
         if (!cs.held || a.dead) {
+          this.channelFormations.release(a, cs);
           const rel = ch.release;
           const heldT = cs.channelTime ?? 0;
           a.casting = null;
@@ -57830,6 +57847,7 @@ export class World {
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
     this.guardArts.clear(caster, inst);
+    this.channelFormations.clear(caster, inst);
     this.attackSequences.clear(caster, inst);
     this.challenges.clear(caster, inst);
     const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst || candidate.challengeHost === inst || candidate.guardArtsHost === inst;
