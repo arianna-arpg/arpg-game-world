@@ -19,7 +19,7 @@ export function skillFieldVisual(z: World['zones'][number], time: number): Skill
   return {
     skillId: z.inst.def.id, pos: { ...z.pos }, radius: z.radius, color: z.color,
     shape: z.shape, facing: z.facing, delay: z.delay, exploded: z.exploded,
-    linger: z.linger, tier: z.caster.tier ?? 0,
+    linger: z.linger, tier: z.tier ?? z.caster.tier ?? 0,
     telegraph: (z.inst.def.delivery as { telegraph?: number }).telegraph ?? 1,
     arcRad: z.arcRad, edge: z.edge, edgeFrac: z.edgeFrac, delay0: z.delay0,
     onGround: z.onGround?.slice(), seg: z.seg ? { ...z.seg } : undefined,

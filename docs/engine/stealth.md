@@ -1,6 +1,6 @@
 # Stealth, cover and enemy knowledge
 
-Personal concealment and terrain cover are separate systems. A tree crown is overhead art and shade; its trunk blocks sight and projectiles. Bushes, reeds, berry bushes and tall crops obscure sight through their foliage, without applying a stealth buff to their occupants.
+Personal concealment and terrain cover are separate systems. A tree crown is overhead art and shade; its trunk blocks sight and projectiles. Bushes, reeds and berry bushes also apply the existing Concealed standing buff: 50% detectability with a 0.7-second exit linger and the actor's existing translucent presentation. Tall crops and overhead crowns supply optical cover without this standing buff. Removed or felled foliage grants no standing cover, and cover belongs to its own floor.
 
 ## Terrain
 

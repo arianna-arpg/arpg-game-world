@@ -4046,10 +4046,8 @@ export class UI {
     if (item.locked) {
       lines.push(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
     }
-    lines.push(`<div style="color:#9a94a8;font-size:10px">${k.name} · <span style="color:${k.color}">×${units.length} held</span></div>`);
-    if (k.facets) {
-      lines.push('<div style="color:#c8bce0;font-size:10px">committed before the recall: choose a FACET (one attribute triad) — the grant is a skill of that facet</div>');
-    }
+    lines.push(`<div data-memory-purpose style="color:#d8cce8;font-size:11px;line-height:1.5;margin:4px 0">${esc(k.recallDescription)}</div>`);
+    lines.push(`<div style="color:#9a94a8;font-size:10px">${esc(k.rewardLabel)} · <span style="color:${k.color}">×${units.length} held</span></div>`);
     const top = groups.slice(0, MEMORY_CFG.tooltipGroups);
     for (const g of top) {
       // THE PROMISE reads on the card: a pinned group names the gem it is

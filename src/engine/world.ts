@@ -135,7 +135,7 @@ import {
   supportOfGemItem, writeBackSupportGem,
 } from './gemitems';
 import {
-  MEMORY_FOUND_SOURCES, MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
+  memoryProvenanceLabel, MEMORY_CFG, MEMORY_KIND_IDS, MEMORY_KINDS, MEMORY_TRADED_PROVENANCE,
   facetRng, findMemoryItem, makeMemoryItem, memoryFacetAttrs, memoryFormOf, memoryGroupKey, memoryGroups,
   memoryKindForSeed, memoryKindOf, memoryRarityLean, memoryUnitsOf, mergeMemory, pickSeeded, rollSeededRarity,
   seedLaneFrac,
@@ -336,7 +336,7 @@ import { REGROWTH_CFG, SCALD_CFG, type BaskSpec } from '../data/scald';
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, seedOccClockMarks, wakeRousedResidents, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
-import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
+import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleContactHeatsCombat, puzzleHumOf, puzzleKnockOf, puzzleRewardOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
 import { MINION_COMBAT } from './minionCombat';
 import {
   batchScaleOf, buildWornThrongDef, isThrongBody, THRONG_CFG, throngMarkerOf,
@@ -14337,8 +14337,7 @@ export class World {
     ff.touch(); // we're engaged in its zone — keep it from idling out
     const surge = ff.surge();
     if (run.phase === 'fissure') {
-      const chasing = !this.player.dead && !this.player.downed
-        && dist(this.player.pos, run.head) <= surge.chaseRadius + this.player.radius;
+      const chasing = this.touchers().some(h => dist(h.pos, run.head) <= surge.chaseRadius + h.radius);
       if (chasing) {
         run.grace = 0; // first engagement SPENDS the arrival grace — nested rules own it now
         this.advanceFissure(dt, surge);
@@ -41674,6 +41673,8 @@ export class World {
     const arc = guardArcRadians(guardian);
     if (Math.abs(angleDiff(guardian.facing, angleTo(guardian.pos, threatPos))) > arc / 2) return false;
 
+    guardian.noteRecent('block');
+
     if (guardian === this.player && this.deedEnemy(attacker) && rawDamage > 0) {
       this.recordDeed({ kind: 'block', value: rawDamage });
     }
@@ -43316,7 +43317,9 @@ export class World {
     // The CALM clock: any blow involving the player's side is "recent combat"
     // for calm-gated dwells (the mercenary outpost's parley).
     if (caster.team === 'player' || target.team === 'player') {
-      this.lastCombatAt = this.time;
+      if (!target.puzzleNode || puzzleContactHeatsCombat(this.puzzles.find(r => r.id === target.puzzleNode!.id), target)) {
+        this.lastCombatAt = this.time;
+      }
       // THE GRUDGE STAMP (survivor trigger eligibility): the world notices a
       // foe that traded blows with a hero — in either direction.
       if (caster.team === 'enemy' && this.seatOf(target)) caster.grudgeMark = true;
@@ -47330,8 +47333,7 @@ export class World {
       : null;
     const groups = memoryGroups(units).map((g): MemoryRecallGroup => {
       const def = MONSTERS[g.d];
-      const name = def?.name
-        ?? (g.d === MEMORY_TRADED_PROVENANCE ? MEMORY_CFG.strings.tradedName : MEMORY_FOUND_SOURCES[g.d] ?? g.d);
+      const name = memoryProvenanceLabel(g.d, def?.name);
       // THE PROMISE's row wears no lean chips — the sealed gem IS its odds
       // face (a vanished id degrades to the wild rung, exactly as the cut
       // falls: drawn == rolled).
@@ -50634,10 +50636,10 @@ export class World {
     // predicate) REFUSES the brush while its siphon drinks: the refusal
     // floats throttled, and the moment the thief falls the same brush
     // attunes. Radius is data (LEYLINE_CFG.attuneRadius — the historical 70).
-    if (!this.player.dead && !this.player.downed && this.waypointPos
+    if (this.waypointPos
       && !this.discoveredWaypoints.has(this.zone.id)
-      && this.player.tier === 0 // THE SAME-STORY LAW: the stone stands on the ground floor (placed on the base grid)
-      && dist(this.player.pos, this.waypointPos) <= LEYLINE_CFG.attuneRadius) {
+      && this.touchers().some(h => h.tier === 0
+        && dist(h.pos, this.waypointPos!) <= LEYLINE_CFG.attuneRadius)) {
       if (this.waypointBesieged()) {
         if (this.time - this.wpRefusedAt > 2.5) {
           this.wpRefusedAt = this.time;
@@ -50976,11 +50978,11 @@ export class World {
     // (EXTRACT encounters never step-open: theirs is the DWELL — an act of
     // attention, armed by updateExtraction — a knockback across a seam must
     // not start a defense.)
-    if (!this.player.dead && !this.player.downed) {
+    for (const h of this.touchers()) {
       for (const e of this.encounters) {
         if (e.phase !== 'dormant' || e.def.extract) continue;
         // (THE SAME-STORY LAW: an encounter seats on the ground floor — a storey walker over it never steps it open.)
-        if (this.player.tier === 0 && dist(this.player.pos, e.pos) <= this.player.radius + e.def.trigger.activateRadius) {
+        if (h.tier === 0 && dist(h.pos, e.pos) <= h.radius + e.def.trigger.activateRadius) {
           this.openEncounter(e);
         }
       }
@@ -50988,10 +50990,9 @@ export class World {
 
     // Fractures: RUN OVER the volatile fracture object (no dwell — it's twitchy)
     // to unleash the crawling fissure. No return; you keep playing as it crawls.
-    if (!this.player.dead && !this.player.downed
-      && this.fractureRun && this.fractureRun.phase === 'dormant'
-      && this.player.tier === 0 // THE SAME-STORY LAW: the fracture seats on the ground floor
-      && dist(this.player.pos, this.fractureRun.origin) <= this.player.radius + 26) {
+    if (this.fractureRun && this.fractureRun.phase === 'dormant'
+      && this.touchers().some(h => h.tier === 0
+        && dist(h.pos, this.fractureRun!.origin) <= h.radius + 26)) {
       this.triggerFracture();
     }
 
@@ -53647,7 +53648,11 @@ export class World {
    *  (a per-frame thrash cliff at exactly the moment frames were dearest). */
   private losMemo = new Map<number, { ok: boolean; until: number }>();
   losCached(a: Actor, b: Actor): boolean {
-    const key = a.id * 1_000_000 + b.id;
+    // Two 26-bit ids fit exactly in a JavaScript integer. Larger ids use a
+    // fresh ray so a long-running world can never alias two actor pairs.
+    const stride = 2 ** 26;
+    if (a.id >= stride || b.id >= stride) return this.lineOfSight(a.pos, b.pos, a.tier, b.tier);
+    const key = a.id * stride + b.id;
     const hit = this.losMemo.get(key);
     if (hit && hit.until > this.time) return hit.ok;
     const ok = this.lineOfSight(a.pos, b.pos, a.tier, b.tier);
@@ -53666,8 +53671,9 @@ export class World {
     // average, expiries spread across the window, and no draw from any rng
     // stream (seeded sim runs stay byte-identical).
     const j = LOS_CFG.memoJitter;
+    const legacyKey = a.id * 1_000_000 + b.id;
     const ttl = j > 0
-      ? LOS_CFG.memoTtl * (1 - j / 2 + j * ((Math.imul(key, 0x9E3779B1) >>> 16) / 65536))
+      ? LOS_CFG.memoTtl * (1 - j / 2 + j * ((Math.imul(legacyKey, 0x9E3779B1) >>> 16) / 65536))
       : LOS_CFG.memoTtl;
     this.losMemo.set(key, { ok, until: this.time + ttl });
     return ok;
@@ -56291,13 +56297,18 @@ export class World {
     this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 50, color: '#e8c87a', life: 0.4, maxLife: 0.4, fx: 'sparkle' }); // M-SPILL: the lid + the glints, no caption
   }
 
+  /** Only living human seats activate shared touch interactions. */
+  private touchers(): Actor[] {
+    return this.seats.filter(s => !('keeper' in s && s.keeper) && !s.merc && !s.actor.dead && !s.actor.downed).map(s => s.actor);
+  }
+
   private updateChests(dt: number): void {
-    const p = this.player;
-    if (p.dead) return;
+    const hands = this.touchers();
+    if (!hands.length) return;
     for (let i = this.chests.length - 1; i >= 0; i--) {
       const c = this.chests[i];
       if (c.opened) continue;
-      const near = dist(c.pos, p.pos) <= p.radius + 60;
+      const near = hands.some(h => dist(c.pos, h.pos) <= h.radius + 60);
       if (c.kind === 'objective') {
         if (this.objectiveDone && near) this.openChest(c);
         continue;
@@ -56327,12 +56338,14 @@ export class World {
 
   /** Shrines: first touch drinks the buff; the shrine goes dark. */
   private updateShrines(): void {
-    const p = this.player;
-    if (p.dead) return;
+    const hands = this.touchers();
+    if (!hands.length) return;
     for (const s of this.shrines) {
-      if (s.used || dist(s.pos, p.pos) > p.radius + 24) continue;
+      if (s.used) continue;
+      const p = hands.find(h => dist(s.pos, h.pos) <= h.radius + 24);
+      if (!p) continue;
       s.used = true;
-      p.addBuff({ type: 'buff', id: 'shrine_' + s.def.id, duration: s.def.duration, mods: s.def.mods });
+      p.addBuff({ type: 'buff', id: 'shrine_' + s.def.id, label: s.def.name, duration: s.def.duration, mods: s.def.mods });
       this.text(vec(s.pos.x, s.pos.y - 20), s.def.name + '!', s.def.color, 16);
       this.flashes.push({ pos: vec(s.pos.x, s.pos.y), radius: 60, color: s.def.color, life: 0.45, maxLife: 0.45 });
     }
@@ -64144,6 +64157,7 @@ export class World {
     let deepFord = false, deepPen = 0;
     for (const d of this.doodadsAt(p.x, p.y)) {
       if ((d.tier ?? 0) !== wantTier) continue; // its layer's ground, never the other's
+      if (d.gone || d.felled) continue;
       const dd = dist(p, d.pos);
       if (dd > d.radius) continue;
       if (d.kind === 'water') {
