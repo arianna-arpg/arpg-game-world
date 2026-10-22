@@ -16,8 +16,8 @@
 //   B. CAP CHURN: the maxOccluders backstop biting inside the visible field
 //      swapped 17–40 ON-SCREEN wedges per 96px gather re-sort in dense
 //      jungle (the "veil bouncing darker/lighter while walking" flicker).
-//      The per-frame far cull must be mirrored drawn==tested, and the cap
-//      must keep nearest-first order.
+//      The per-frame far cull must be mirrored drawn==tested; every
+//      spatially relevant caster must stay present.
 //   C. LOW-PROFILE PROPS: knee-high fire-ring rocks and headstones threw
 //      160px full-dark wedges (southern Lastlight). The graded sightShadow
 //      ladder must scale strength AND length, and occludedAt must report
@@ -460,7 +460,7 @@ console.log('— B + drawn==tested: the live veil (cap, cull, graded query) —'
     veil.occludedAt(behindCliff) > 0);
 }
 
-console.log('— B2. the cap: real density never trips it; pathological trims nearest-first —');
+console.log('— B2. density: spatially relevant shadows remain present —');
 {
   const mkView = (doodads: Doodad[], at: { x: number; y: number }): SightView => ({
     player: { pos: at },
@@ -473,11 +473,8 @@ console.log('— B2. the cap: real density never trips it; pathological trims ne
   });
   const radius = Math.min(VIS_CFG.sightVeil.maxRadius, Math.hypot(1280, 800) / 2 + 120);
 
-  // Jungle-density analog: 700 solids spread over the WHOLE gather disc —
-  // the count that actually lands in reach must sit under the cap, so the
-  // kept set is exactly "everything in reach" and a bucket re-sort can never
-  // change membership (the flicker's mechanism was the cap trimming INSIDE
-  // this set at 288).
+  // Jungle-density analog: retain every solid inside the spatial gather;
+  // no count cutoff may replace visible geometry when the hero moves.
   {
     const doodads: Doodad[] = [];
     for (let i = 0; i < 700; i++) {
@@ -491,13 +488,12 @@ console.log('— B2. the cap: real density never trips it; pathological trims ne
     const discs = (veil as unknown as { discs: { x: number; y: number }[] }).discs;
     const inReach = doodads.filter(d =>
       Math.hypot(d.pos.x - 3000, d.pos.y - 3000) <= radius + 160).length;
-    check('spread density stays under the cap (no trim, no churn)',
-      discs.length < VIS_CFG.sightVeil.maxOccluders && discs.length >= inReach,
+    check('spread density retains every spatially relevant caster',
+      discs.length >= inReach,
       `kept ${discs.length}, in-reach ${inReach}`);
   }
 
-  // Pathological density: 900 packed INSIDE one screen — the backstop trims
-  // to exactly the cap, nearest-first (max kept ≤ min dropped).
+  // Dense scene: all 900 spatially relevant casters must remain present.
   {
     const doodads: Doodad[] = [];
     for (let i = 0; i < 900; i++) {
@@ -509,17 +505,9 @@ console.log('— B2. the cap: real density never trips it; pathological trims ne
     const veil = new SightVeil();
     veil.update(mkView(doodads, { x: 3000, y: 3000 }), 0, 1280, 800);
     const discs = (veil as unknown as { discs: { x: number; y: number }[] }).discs;
-    check('pathological grove trims to exactly maxOccluders',
-      discs.length === VIS_CFG.sightVeil.maxOccluders, `${discs.length}`);
-    const kept = new Set(discs.map(c => `${Math.round(c.x)}:${Math.round(c.y)}`));
-    let maxKept = 0, minDropped = Infinity;
-    for (const d of doodads) {
-      const dist = Math.hypot(d.pos.x - 3000, d.pos.y - 3000);
-      if (kept.has(`${Math.round(d.pos.x)}:${Math.round(d.pos.y)}`)) maxKept = Math.max(maxKept, dist);
-      else minDropped = Math.min(minDropped, dist);
-    }
-    check('the trim is nearest-first (max kept ≤ min dropped)',
-      maxKept <= minDropped + 1e-6, `kept ${Math.round(maxKept)} vs dropped ${Math.round(minDropped)}`);
+    check('dense grove keeps all 900 spatially relevant casters',
+      discs.length === 900, `${discs.length}`);
+
   }
 }
 

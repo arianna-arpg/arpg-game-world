@@ -55,6 +55,7 @@ jobs:
       - name: Boot game, launcher and update path
         run: |
           xvfb-run --auto-servernum npm run test:reliability:ui
+          xvfb-run --auto-servernum npm run test:lighting
           xvfb-run --auto-servernum npm run test:layers
           xvfb-run --auto-servernum npm run smoke
           xvfb-run --auto-servernum npm run smoke:launcher
