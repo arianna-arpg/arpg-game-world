@@ -62,18 +62,197 @@ export const WALK_CFG = {
  *  the packed bytes identically regardless of its own registration order. */
 export interface PackedWalk { cols: number; rows: number; cell: number; kinds: string[]; kbits: string; }
 
+/** An opaque generation-only claim on the negative ground a recipe just painted.
+ * Public array borrowing revokes it permanently; native paints consume touched
+ * cells even when a paint writes the same kind. No public version is authority. */
+export interface NativeGridGroundView {
+  readonly token: object;
+  readonly packed: PackedWalk;
+  readonly mask: readonly number[];
+  readonly owned: readonly number[];
+}
+export interface NativeGridGroundClaim {
+  snapshot(): NativeGridGroundView | undefined;
+  current(view: NativeGridGroundView): boolean;
+  paintGround(view: NativeGridGroundView, cells: readonly number[], stillAdmitted: () => boolean): boolean;
+  close(): void;
+}
+export interface NativeGridRecipePainter {
+  paintRect(x0: number, y0: number, x1: number, y1: number): void;
+  finish(): NativeGridGroundClaim;
+}
+interface NativeGridGroundState {
+  active: boolean;
+  epoch: number;
+  readonly cols: number;
+  readonly rows: number;
+  readonly cell: number;
+  byte: number;
+  readonly region: string;
+  painting: boolean;
+  readonly owned: Uint8Array;
+  readonly views: WeakMap<object, number>;
+}
+
+let nativePaints:Map<GridWalkField,Set<number>>|undefined;
+export function beginNativeGridPaintReceipt(){const prior=nativePaints,rows=new Map<GridWalkField,Set<number>>();nativePaints=rows;let done=false;return Object.freeze({finish(){if(!done){if(nativePaints!==rows)throw Error('Native grid receipt nesting changed');nativePaints=prior;done=true;}return rows;}});}
+export function inheritNativeGridPaintReceipt(from:GridWalkField,to:GridWalkField):void {if(!nativePaints)return;const next=new Set<number>();for(const i of nativePaints.get(from)??[]){const y=Math.floor(i/from.cols),x=i%from.cols;if(x<to.cols&&y<to.rows)next.add(y*to.cols+x);}nativePaints.set(to,next);}
+function recordNativePaint(g:GridWalkField,a:number,b:number,c:number,d:number,circle?:{x:number;y:number;r2:number}){if(!nativePaints)return;let rows=nativePaints.get(g);if(!rows){rows=new Set();nativePaints.set(g,rows);}for(let y=c;y<=d;y++)for(let x=a;x<=b;x++){if(circle&&Math.pow((x+.5)*g.cell-circle.x,2)+Math.pow((y+.5)*g.cell-circle.y,2)>circle.r2)continue;rows.add(y*g.cols+x);}}
+/** Temporary open-door topology restores the same cells; it creates no terrain owner. */
+export function withoutNativeGridPaintReceipt<T>(run:()=>T):T {const prior=nativePaints;nativePaints=undefined;try{return run();}finally{nativePaints=prior;}}
+const nativeInteriorGroundToken = Symbol('native interior initial ground');
+const nativeGridImportToken = Symbol('native grid import');
+const nativeInteriorGroundClaims = new WeakMap<GridWalkField, NativeGridGroundClaim>();
+
+/** The only initial-ground allocator. The private constructor token attests
+ * actual zero initialization before the grid can escape. It cannot claim an
+ * existing grid or infer ownership from equal wall bytes/public version. */
+export function createNativeInteriorGrid(w: number, h: number, cell = DEFAULT_CELL): {
+  grid: GridWalkField; claim?: NativeGridGroundClaim;
+} {
+  const grid = new GridWalkField(w, h, cell, nativeInteriorGroundToken);
+  const claim = nativeInteriorGroundClaims.get(grid);
+  nativeInteriorGroundClaims.delete(grid);
+  return { grid, claim };
+}
+
 export class GridWalkField implements WalkField {
+  readonly cellOcclusion = true; // shared finite-grid / worldmass ray contract
+  #mask: Uint8Array;
+  #kind: Uint8Array;
+  #arraysBorrowed = false;
+  #groundImport = false;
+  #recipeProducer: NativeGridGroundState | undefined;
+  readonly #groundClaims = new Set<NativeGridGroundState>();
+  readonly #maskBorrow = (): Uint8Array => this.#borrowArray(this.#mask);
+  readonly #kindBorrow = (): Uint8Array => this.#borrowArray(this.#kind);
+  readonly #kindListBorrow = (): string[] => this.#borrowArray(this.#kindList);
+
+  #borrowArray<T extends Uint8Array | string[]>(value: T): T {
+    this.#arraysBorrowed = true;
+    for (const claim of this.#groundClaims) claim.active = false;
+    this.#groundClaims.clear();
+    return value;
+  }
+
+  #invalidateGround(a: number, b: number, c: number, d: number,
+    circle?: { x: number; y: number; r2: number }): void {
+    for (const claim of this.#groundClaims) {
+      claim.epoch++;
+      for (let y = c; y <= d; y++) for (let x = a; x <= b; x++) {
+        if (circle && ((x + .5) * this.cell - circle.x) ** 2
+          + ((y + .5) * this.cell - circle.y) ** 2 > circle.r2) continue;
+        claim.owned[y * this.cols + x] = 0;
+      }
+    }
+  }
+
+  #groundCurrent(claim: NativeGridGroundState): boolean {
+    return claim.active && !this.#arraysBorrowed && !this.#groundImport
+      && Object.getOwnPropertyDescriptor(this, 'cols')?.value === claim.cols
+      && Object.getOwnPropertyDescriptor(this, 'rows')?.value === claim.rows
+      && Object.getOwnPropertyDescriptor(this, 'cell')?.value === claim.cell
+      && Object.getOwnPropertyDescriptor(this, 'mask')?.get === this.#maskBorrow
+      && Object.getOwnPropertyDescriptor(this, 'kind')?.get === this.#kindBorrow
+      && Object.getOwnPropertyDescriptor(this, 'kindList')?.get === this.#kindListBorrow;
+  }
+
+  /** The producer owns only cells its own completed paints actually wrote.
+   * Merely finding an equal region never creates ownership. */
+  beginNativeRecipeGround(region: string): NativeGridRecipePainter | undefined {
+    return this.#beginNativeRecipeGround(region, false);
+  }
+
+  #beginNativeRecipeGround(region: string, initialized: boolean): NativeGridRecipePainter | undefined {
+    if (this.#arraysBorrowed || this.#groundImport || this.#kind.length > 65536 || (region !== 'wall' && region !== 'briarwall')) return undefined;
+    const claim: NativeGridGroundState = {
+      active: true, painting: true, epoch: 0,
+      cols: this.cols, rows: this.rows, cell: this.cell,
+      region, byte: initialized ? 0 : -1, owned: new Uint8Array(this.#kind.length), views: new WeakMap(),
+    };
+    // Only the private constructor branch requests this, immediately after its
+    // actual fresh wall-buffer allocations. Every later paint consumes cells.
+    if (initialized) claim.owned.fill(1);
+    this.#groundClaims.add(claim);
+    const current = (view: NativeGridGroundView): boolean => this.#groundCurrent(claim)
+      && claim.views.get(view) === claim.epoch;
+    const close = (): void => { claim.active = false; this.#groundClaims.delete(claim); };
+    const handle: NativeGridGroundClaim = Object.freeze({
+      snapshot: (): NativeGridGroundView | undefined => {
+        if (claim.painting || !this.#groundCurrent(claim)) { close(); return undefined; }
+        let s = '';
+        for (const b of this.#kind) s += String.fromCharCode(b);
+        const token = Object.freeze({});
+        const view: NativeGridGroundView = Object.freeze({ token, packed: {
+          cols: this.cols, rows: this.rows, cell: this.cell,
+          kinds: this.#kindList.slice(), kbits: btoa(s),
+        }, mask: Array.from(this.#mask), owned: Array.from(claim.owned.keys()).filter(i => claim.owned[i] === 1) });
+        claim.views.set(view, claim.epoch);
+        return view;
+      },
+      current,
+      paintGround: (view: NativeGridGroundView, cells: readonly number[], stillAdmitted: () => boolean): boolean => {
+        const selected = [...new Set(cells)].sort((a, b) => a - b);
+        const ground = this.#kindList.indexOf('ground');
+        const walkable = regionKind('ground')?.walkable;
+        if (ground < 0 || walkable !== true || !current(view) || !stillAdmitted()
+          || selected.some(i => !Number.isSafeInteger(i) || i < 0 || i >= claim.owned.length
+            || claim.owned[i] !== 1 || this.#kind[i] !== claim.byte || this.#mask[i] !== 0)) return false;
+        claim.views.delete(view);
+        // Selected native policy reads have ended. Each run consumes private
+        // authority before painting; no external callback can renew that right.
+        for (let k = 0; k < selected.length;) {
+          if (!this.#groundCurrent(claim)) throw Error('Native recipe ground ownership changed during paint');
+          const start = selected[k], y = Math.floor(start / this.cols);
+          let end = start;
+          while (++k < selected.length && selected[k] === end + 1
+            && Math.floor(selected[k] / this.cols) === y) end++;
+          const a = start % this.cols, b = end % this.cols;
+          this.#invalidateGround(a, b, y, y);
+          if (nativePaints) recordNativePaint(this, a, b, y, y);
+          for (let i = start; i <= end; i++) { this.#kind[i] = ground; this.#mask[i] = 1; }
+          const epoch = claim.epoch;
+          this.pushDirty(a * this.cell, y * this.cell,
+            (b + 1) * this.cell - .01, (y + 1) * this.cell - .01);
+          if (!this.#groundCurrent(claim) || claim.epoch !== epoch || !stillAdmitted())
+            throw Error('Native recipe ground ownership changed during paint');
+        }
+        return true;
+      },
+      close,
+    });
+    return Object.freeze({
+      paintRect: (x0: number, y0: number, x1: number, y1: number): void => {
+        if (!claim.painting) throw Error('Native recipe negative paint is sealed');
+        // Ordinary paint semantics continue even if a selected callback has
+        // revoked the claim. Revocation removes recovery rights, not effects.
+        // A replaced selected method still runs, with no recipe authority.
+        // The one-shot tag is consumed at the native method's entry, before
+        // its first policy read: a callback's nested paint is never ours.
+        const ownMethod = Object.getOwnPropertyDescriptor(this, 'fillRegion');
+        const nativeMethod = Object.getOwnPropertyDescriptor(GridWalkField.prototype, 'fillRegion');
+        if (ownMethod || Object.getPrototypeOf(this) !== GridWalkField.prototype
+          || nativeMethod?.value !== nativeRecipeFillRegion) close();
+        else this.#recipeProducer = claim;
+        try { this.fillRegion(x0, y0, x1, y1, region); }
+        finally { this.#recipeProducer = undefined; }
+      },
+      finish: (): NativeGridGroundClaim => { claim.painting = false; return handle; },
+    });
+  }
+
   readonly cols: number;
   readonly rows: number;
   readonly cell: number;
   /** 1 = walkable, 0 = blocked. A DERIVED CACHE of regionKind(kindOf(i)).walkable,
    *  so isWalkable/reachable/pathStep/BFS stay fast + unchanged. */
-  readonly mask: Uint8Array;
+  readonly mask!: Uint8Array;
   /** Per-cell region-kind BYTE (Phase 3). 0 = the default 'wall'. Indexes kindList. */
-  readonly kind: Uint8Array;
+  readonly kind!: Uint8Array;
   /** byte → region-kind id. Byte 0 is always 'wall' (the unpainted default), so an
    *  all-zero kind array = an all-blocked grid (byte-identical to Phase 2). */
-  private kindList: string[] = ['wall'];
+  readonly kindList!: string[]; // Emitted undefined slot; the constructor redefines it in place.
+  #kindList: string[] = ['wall'];
   /** Bumped on every region repaint (door breaks, terraforms) — cache-keying
    *  seam for anything that bakes the grid (the renderer's ground chunks). */
   version = 0;
@@ -139,12 +318,35 @@ export class GridWalkField implements WalkField {
     this.refreshesLeft = WALK_CFG.distRefreshPerTick;
   }
 
-  constructor(w: number, h: number, cell = DEFAULT_CELL) {
+  constructor(w: number, h: number, cell = DEFAULT_CELL, initialGround?: symbol) {
+    this.#groundImport = initialGround === nativeGridImportToken;
     this.cell = cell;
     this.cols = Math.max(1, Math.ceil(w / cell));
     this.rows = Math.max(1, Math.ceil(h / cell));
-    this.mask = new Uint8Array(this.cols * this.rows);
-    this.kind = new Uint8Array(this.cols * this.rows); // all 0 = 'wall'
+    this.#mask = new Uint8Array(this.cols * this.rows);
+    this.#kind = new Uint8Array(this.cols * this.rows); // all 0 = 'wall'
+    try {
+      // Mint before even the descriptor installer can observe this instance.
+      // Ordinary construction performs no extra fill, dirty/version operation,
+      // policy read or selected method dispatch.
+      if (initialGround === nativeInteriorGroundToken) {
+        const claim = this.#beginNativeRecipeGround('wall', true)?.finish();
+        if (claim) nativeInteriorGroundClaims.set(this, claim);
+      }
+      Object.defineProperties(this, {
+        mask: { enumerable: true, configurable: true, get: this.#maskBorrow },
+        kind: { enumerable: true, configurable: true, get: this.#kindBorrow },
+        kindList: { enumerable: true, configurable: true, get: this.#kindListBorrow },
+      });
+    } catch (error) {
+      // A descriptor callback may observe this grid then fail. Retire all
+      // private rights, retain its partial effects, and rethrow that same error.
+      for (const claim of this.#groundClaims) claim.active = false;
+      this.#groundClaims.clear();
+      nativeInteriorGroundClaims.delete(this);
+      this.#groundImport = false;
+      throw error;
+    }
   }
 
   /** Sweep granularity for swept collision (the WalkField contract). */
@@ -152,8 +354,8 @@ export class GridWalkField implements WalkField {
 
   /** byte for a region id (find-or-add to the per-grid table). */
   private kindByte(id: string): number {
-    let b = this.kindList.indexOf(id);
-    if (b < 0) { b = this.kindList.length; this.kindList.push(id); }
+    let b = this.#kindList.indexOf(id);
+    if (b < 0) { b = this.#kindList.length; this.#kindList.push(id); }
     return b;
   }
 
@@ -163,12 +365,12 @@ export class GridWalkField implements WalkField {
    *  field, so hazard-free grids and heedless minds never pay for weighting. */
   private profileEntry(p: PathProfile): { idx: number; t: Uint8Array; uniform: boolean } {
     let e = this.profTables.get(p.key);
-    if (!e || e.n !== this.kindList.length) {
-      const n = this.kindList.length;
+    if (!e || e.n !== this.#kindList.length) {
+      const n = this.#kindList.length;
       const t = new Uint8Array(n);
       let uniform = true;
       for (let b = 0; b < n; b++) {
-        const id = this.kindList[b];
+        const id = this.#kindList[b];
         let w = PATH_SCALE;
         if (regionKind(id)?.walkable) {
           const c = Math.min(PATH_CFG.maxCost, Math.max(PATH_CFG.minCost, p.costOf(id)));
@@ -204,13 +406,28 @@ export class GridWalkField implements WalkField {
    *  chunks never stale and the dirty ring never floods under a drift of a
    *  dozen moving carriers. Never pass it for a repaint a bake can see. */
   fillRegion(x0: number, y0: number, x1: number, y1: number, id: string, quiet = false): void {
+    const producer = this.#recipeProducer;
+    this.#recipeProducer = undefined;
+    this.#fillRegion(x0, y0, x1, y1, id, quiet, producer);
+  }
+
+  #fillRegion(x0: number, y0: number, x1: number, y1: number, id: string, quiet: boolean,
+    producer?: NativeGridGroundState): void {
     const byte = this.kindByte(id);
     const walkable = regionKind(id)?.walkable ? 1 : 0;
     const a = this.cx(Math.min(x0, x1)), b = this.cx(Math.max(x0, x1));
     const c = this.cy(Math.min(y0, y1)), d = this.cy(Math.max(y0, y1));
+    this.#invalidateGround(a,b,c,d);
+    if(nativePaints)recordNativePaint(this,a,b,c,d);
+    const own = producer && this.#groundCurrent(producer) && producer.painting
+      && producer.region === id && this.#kindList[byte] === id && walkable === 0 ? producer : undefined;
     for (let cy = c; cy <= d; cy++) for (let cx = a; cx <= b; cx++) {
       const i = cy * this.cols + cx;
-      this.kind[i] = byte; this.mask[i] = walkable;
+      this.#kind[i] = byte; this.#mask[i] = walkable;
+      if (own) {
+        own.byte = byte;
+        own.owned[i] = 1;
+      }
     }
     if (quiet) { this.version++; return; }
     // No eager cache clears: pushDirty's version bump lazily stales the
@@ -231,11 +448,13 @@ export class GridWalkField implements WalkField {
     const walkable = regionKind(id)?.walkable ? 1 : 0;
     const a = this.cx(cx - r), b = this.cx(cx + r), c = this.cy(cy - r), d = this.cy(cy + r);
     const r2 = r * r;
+    this.#invalidateGround(a,b,c,d,{x:cx,y:cy,r2});
+    if(nativePaints)recordNativePaint(this,a,b,c,d,{x:cx,y:cy,r2});
     for (let gy = c; gy <= d; gy++) for (let gx = a; gx <= b; gx++) {
       const px = (gx + 0.5) * this.cell - cx, py = (gy + 0.5) * this.cell - cy;
       if (px * px + py * py > r2) continue;
       const i = gy * this.cols + gx;
-      this.kind[i] = byte; this.mask[i] = walkable;
+      this.#kind[i] = byte; this.#mask[i] = walkable;
     }
     this.pushDirty(cx - r, cy - r, cx + r, cy + r);
   }
@@ -250,14 +469,14 @@ export class GridWalkField implements WalkField {
   }
 
   /** Count of walkable cells (sanity / density). */
-  walkableCount(): number { let n = 0; for (const v of this.mask) if (v) n++; return n; }
+  walkableCount(): number { let n = 0; for (const v of this.#mask) if (v) n++; return n; }
 
   // --- WalkField interface ---------------------------------------------------
 
   isWalkable(x: number, y: number): boolean {
     const cx = Math.floor(x / this.cell), cy = Math.floor(y / this.cell);
     if (!this.inGrid(cx, cy)) return false;
-    return this.mask[cy * this.cols + cx] === 1;
+    return this.#mask[cy * this.cols + cx] === 1;
   }
 
   /** The region-kind id painted at a world point ('wall' for the unpainted
@@ -268,7 +487,7 @@ export class GridWalkField implements WalkField {
   kindAt(x: number, y: number): string | undefined {
     const cx = Math.floor(x / this.cell), cy = Math.floor(y / this.cell);
     if (!this.inGrid(cx, cy)) return undefined;
-    return this.kindList[this.kind[cy * this.cols + cx]] ?? 'wall';
+    return this.#kindList[this.#kind[cy * this.cols + cx]] ?? 'wall';
   }
 
   /** LEDGE GRASP (WALK_CFG.ledgeGrasp): is any part of a body disc still on
@@ -287,7 +506,7 @@ export class GridWalkField implements WalkField {
     const gy1 = Math.min(this.rows - 1, Math.floor((y + r) / this.cell));
     for (let gy = gy0; gy <= gy1; gy++) {
       for (let gx = gx0; gx <= gx1; gx++) {
-        const rk = regionKind(this.kindList[this.kind[gy * this.cols + gx]]);
+        const rk = regionKind(this.#kindList[this.#kind[gy * this.cols + gx]]);
         if (rk && !rk.walkable && !rk.blocks) continue; // void: nothing to hold
         // Disc-vs-cell overlap: nearest point of the cell rect to the center.
         const nx = Math.max(gx * this.cell, Math.min(x, (gx + 1) * this.cell));
@@ -304,7 +523,7 @@ export class GridWalkField implements WalkField {
   regionAt(x: number, y: number): string {
     const cx = Math.floor(x / this.cell), cy = Math.floor(y / this.cell);
     if (!this.inGrid(cx, cy)) return 'wall';
-    return this.kindList[this.kind[cy * this.cols + cx]] ?? 'wall';
+    return this.#kindList[this.#kind[cy * this.cols + cx]] ?? 'wall';
   }
 
   /** Nearest walkable point — a ring search outward from the point's cell,
@@ -312,7 +531,7 @@ export class GridWalkField implements WalkField {
    *  point itself if the grid is somehow empty. */
   snapToWalkable(p: Vec2): Vec2 {
     const sx = this.cx(p.x), sy = this.cy(p.y);
-    if (this.mask[sy * this.cols + sx] === 1) return vec(this.centerX(sx), this.centerY(sy));
+    if (this.#mask[sy * this.cols + sx] === 1) return vec(this.centerX(sx), this.centerY(sy));
     const maxR = Math.max(this.cols, this.rows);
     let best = -1, bestD = Infinity;
     for (let r = 1; r <= maxR; r++) {
@@ -320,7 +539,7 @@ export class GridWalkField implements WalkField {
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // ring only
           const cx = sx + dx, cy = sy + dy;
-          if (!this.inGrid(cx, cy) || this.mask[cy * this.cols + cx] !== 1) continue;
+          if (!this.inGrid(cx, cy) || this.#mask[cy * this.cols + cx] !== 1) continue;
           const d = (this.centerX(cx) - p.x) ** 2 + (this.centerY(cy) - p.y) ** 2;
           if (d < bestD) { bestD = d; best = cy * this.cols + cx; }
         }
@@ -366,7 +585,7 @@ export class GridWalkField implements WalkField {
       const cx = Math.floor(x / this.cell), cy = Math.floor(y / this.cell);
       if (!this.inGrid(cx, cy)) return false;
       const i = cy * this.cols + cx;
-      return this.mask[i] === 1 && (tab[this.kind[i]] || PATH_SCALE) <= PATH_SCALE;
+      return this.#mask[i] === 1 && (tab[this.#kind[i]] || PATH_SCALE) <= PATH_SCALE;
     };
     const dx = to.x - from.x, dy = to.y - from.y;
     const len = Math.hypot(dx, dy);
@@ -390,10 +609,10 @@ export class GridWalkField implements WalkField {
     if (prof && this.profileEntry(prof).uniform) prof = null; // neutral view → the classic field
     const tCell = this.cy(to.y) * this.cols + this.cx(to.x);
     const fCell = this.cy(from.y) * this.cols + this.cx(from.x);
-    if (this.mask[tCell] !== 1) {
+    if (this.#mask[tCell] !== 1) {
       const s = this.snapToWalkable(to); // target off-mesh → aim at nearest walkable
       const sc = this.cy(s.y) * this.cols + this.cx(s.x);
-      if (this.mask[sc] !== 1) return null;
+      if (this.#mask[sc] !== 1) return null;
       return this.stepToward(fCell, sc, from, s, prof);
     }
     return this.stepToward(fCell, tCell, from, to, prof);
@@ -402,7 +621,7 @@ export class GridWalkField implements WalkField {
   private stepToward(fCell: number, tCell: number, from: Vec2, to: Vec2, prof: PathProfile | null): Vec2 | null {
     if (fCell === tCell) return vec(to.x, to.y);
     const dist = this.distanceTo(tCell, prof);
-    if (this.mask[fCell] !== 1 || dist[fCell] < 0) return null; // actor off-mesh / unreachable
+    if (this.#mask[fCell] !== 1 || dist[fCell] < 0) return null; // actor off-mesh / unreachable
     // Adjacent (cell coords, not field units — weighted fields don't count in
     // steps) → walk straight in.
     const cx = fCell % this.cols, cy = Math.floor(fCell / this.cols);
@@ -413,7 +632,7 @@ export class GridWalkField implements WalkField {
       const nx = cx + dx, ny = cy + dy;
       if (!this.inGrid(nx, ny)) continue;
       const nc = ny * this.cols + nx;
-      if (this.mask[nc] !== 1 || dist[nc] < 0) continue;
+      if (this.#mask[nc] !== 1 || dist[nc] < 0) continue;
       if (dist[nc] < bestD) { bestD = dist[nc]; bestC = nc; }
     }
     if (bestC < 0) return vec(to.x, to.y);
@@ -487,8 +706,8 @@ export class GridWalkField implements WalkField {
           const nx = cx + dx, ny = cy + dy;
           if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
           const nc = ny * this.cols + nx;
-          if (this.mask[nc] !== 1) continue;
-          const nd = cur + (tab[this.kind[nc]] || PATH_SCALE);
+          if (this.#mask[nc] !== 1) continue;
+          const nd = cur + (tab[this.#kind[nc]] || PATH_SCALE);
           if (d[nc] >= 0 && d[nc] <= nd) continue;
           d[nc] = nd;
           ring[nd % W].push(nc);
@@ -513,7 +732,7 @@ export class GridWalkField implements WalkField {
         const nx = cx + dx, ny = cy + dy;
         if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
         const nc = ny * this.cols + nx;
-        if (this.mask[nc] !== 1 || d[nc] >= 0) continue;
+        if (this.#mask[nc] !== 1 || d[nc] >= 0) continue;
         d[nc] = nd; q.push(nc);
       }
     }
@@ -531,7 +750,7 @@ export class GridWalkField implements WalkField {
     let label = 0;
     const q = this.scratchQ;
     for (let start = 0; start < n; start++) {
-      if (this.mask[start] !== 1 || reg[start] >= 0) continue;
+      if (this.#mask[start] !== 1 || reg[start] >= 0) continue;
       q.length = 0;
       q.push(start); reg[start] = label;
       for (let head = 0; head < q.length; head++) {
@@ -540,7 +759,7 @@ export class GridWalkField implements WalkField {
           const nx = cx + dx, ny = cy + dy;
           if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
           const nc = ny * this.cols + nx;
-          if (this.mask[nc] !== 1 || reg[nc] >= 0) continue;
+          if (this.#mask[nc] !== 1 || reg[nc] >= 0) continue;
           reg[nc] = label; q.push(nc);
         }
       }
@@ -557,19 +776,32 @@ export class GridWalkField implements WalkField {
    *  walkable mask is DERIVED on unpack, so kinds are the single source of truth. */
   pack(): PackedWalk {
     let s = '';
-    for (const b of this.kind) s += String.fromCharCode(b);
-    return { cols: this.cols, rows: this.rows, cell: this.cell, kinds: this.kindList.slice(), kbits: btoa(s) };
+    for (const b of this.#kind) s += String.fromCharCode(b);
+    return { cols: this.cols, rows: this.rows, cell: this.cell, kinds: this.#kindList.slice(), kbits: btoa(s) };
   }
 
   static unpack(p: PackedWalk): GridWalkField {
-    const g = new GridWalkField(p.cols * p.cell, p.rows * p.cell, p.cell);
-    g.kindList = p.kinds.slice();
-    const s = atob(p.kbits);
-    for (let i = 0; i < g.kind.length; i++) {
-      const b = s.charCodeAt(i) || 0;
-      g.kind[i] = b;
-      g.mask[i] = regionKind(g.kindList[b])?.walkable ? 1 : 0;
+    // The private token closes acquisition before the constructor's selected
+    // installer can expose this instance, through every selected input/policy read.
+    const g = new GridWalkField(p.cols * p.cell, p.rows * p.cell, p.cell, nativeGridImportToken);
+    try {
+      g.#kindList = p.kinds.slice();
+      const s = atob(p.kbits);
+      for (let i = 0; i < g.#kind.length; i++) {
+        const b = s.charCodeAt(i) || 0;
+        g.#kind[i] = b;
+        g.#mask[i] = regionKind(g.#kindList[b])?.walkable ? 1 : 0;
+      }
+      return g;
+    } finally {
+      // Import is not a producer paint. Preserve completed writes and the first
+      // native error, but leave no rights across this scope. Later real paints
+      // may acquire their own cells unless a backing array actually escaped.
+      for (const claim of g.#groundClaims) claim.active = false;
+      g.#groundClaims.clear();
+      g.#groundImport = false;
     }
-    return g;
   }
 }
+
+const nativeRecipeFillRegion = GridWalkField.prototype.fillRegion;

@@ -82,6 +82,24 @@ export function diskPut(slot: SaveSlot, body: string): void {
   void diskPutRaw(slot, body);
 }
 
+// One page identity and one sequence per slot cover both fetch and beacon.
+// They do not claim authority over another page/session or change save bytes.
+let diskWriter: string | undefined;
+const diskSequences = new Map<string, number>();
+function orderedSaveUrl(slot: SaveSlot): string {
+  if (!diskWriter) diskWriter = Array.from(crypto.getRandomValues(new Uint32Array(4)), n => n.toString(16).padStart(8, '0')).join('');
+  const key = String(slot), sequence = (diskSequences.get(key) ?? 0) + 1;
+  if (!Number.isSafeInteger(sequence)) throw Error('Save write sequence exhausted');
+  diskSequences.set(key, sequence);
+  return `/__save/${slot}?writer=${diskWriter}&sequence=${sequence}`;
+}
+function postDiskSave(url: string, body: string): Promise<void> {
+  try {
+    return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
+      .then(() => undefined)
+      .catch(() => { /* endpoint absent — localStorage is the fallback */ });
+  } catch { return Promise.resolve(); }
+}
 /** AWAITED, latch-FREE disk write — the save-import lane's primitive
  *  (meta/portage.ts): import stands the ordinary writers down FIRST
  *  (suppressSaves, so a mid-import autosave can't clobber the incoming
@@ -90,26 +108,23 @@ export function diskPut(slot: SaveSlot, body: string): void {
  *  resurrect the pre-import state from a POST the reload dropped. Nothing
  *  else should route here: the stand-down latch exists for a reason. */
 export function diskPutRaw(slot: SaveSlot, body: string): Promise<void> {
-  return fetch(`/__save/${slot}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
-    .then(() => undefined)
-    .catch(() => { /* endpoint absent — localStorage is the fallback */ });
+  try { return postDiskSave(orderedSaveUrl(slot), body); }
+  catch { return Promise.resolve(); } // keep the established no-throw disk boundary
 }
 
-/** DURABLE disk write for writes that must survive the tab closing immediately
- *  (the PERMADEATH wipe — a fire-and-forget fetch can be dropped mid-flight when
- *  the player closes the game on the death screen, and the disk-first loader
- *  would then resurrect the dead character). sendBeacon is queued by the browser
- *  and flushed even on unload; we fall back to the plain POST when it's absent. */
+/** DURABLE disk write: its sequence is selected before sendBeacon, so a late
+ * older fetch cannot overwrite a newer unload write. A rejected beacon falls
+ * back to fetch with the same sequence and body. */
 export function diskBeacon(slot: SaveSlot, body: string): void {
-  if (saveRefused(`disk slot ${slot}`)) return; // stand-down: the durable lane refuses too
+  if (saveRefused(`disk slot ${slot}`)) return;
+  let url: string;
+  try { url = orderedSaveUrl(slot); } catch { return; }
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-      // A string body is sent as text/plain; the middleware JSON.parses it
-      // regardless of content-type, so '{}' lands correctly.
-      if (navigator.sendBeacon(`/__save/${slot}`, body)) return;
+      if (navigator.sendBeacon(url, body)) return;
     }
-  } catch { /* fall through to the fetch path */ }
-  diskPut(slot, body);
+  } catch { /* fall through with the exact selected write */ }
+  void postDiskSave(url, body);
 }
 
 // --- ACCOUNT ----------------------------------------------------------------

@@ -16,6 +16,9 @@ export class Rng {
     if (this.s === 0) this.s = 0x9e3779b9;
   }
 
+  /** Read the random cursor without consuming a draw (generation diagnostics). */
+  snapshot(): number { return this.s; }
+
   /** Next float in [0, 1) — mulberry32. */
   next(): number {
     this.s = (this.s + 0x6d2b79f5) >>> 0;

@@ -1,3 +1,4 @@
+import { syncAltarBodies } from './altarBodies';
 import { SkillInputOrder } from './skillInputOrder';
 import { markBodyAction } from './bodyAction';
 import { markBodyWalk } from './bodyWalk';
@@ -6195,6 +6196,8 @@ export class World {
     const crusadeWorks = this.crusadeFixtureSpecs(def, entry);
     this.crusadeWorksAt = crusadeWorks ? vec(crusadeWorks.center.x, crusadeWorks.center.y) : null;
     const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), crusadeWorks?.fixtures);
+    const worksPlacement = layout.fixturePlacements?.find(f => f.fixtureIndex === (def.fixtures?.length ?? 0));
+    if (crusadeWorks && worksPlacement?.reseated) this.crusadeWorksAt = vec(worksPlacement.center.x, worksPlacement.center.y);
     this.doodads = layout.doodads;
     // RULE-EFFECT ATTACH: a kind whose DOODAD_RULES row declares a standing
     // `effect` (lava's heat wash, a leyline node's element surge) gets it
@@ -7304,6 +7307,7 @@ export class World {
     }
 
     if (memory?.contents) restoreZoneContents(this, memory.contents);
+    syncAltarBodies(this);
 
     // THE ARRIVAL LATCH re-arms per zone: every station must see its disc
     // EMPTY once before its dwell may fire (stationDwellArmed).
