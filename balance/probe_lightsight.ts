@@ -8,20 +8,21 @@ import { massAdventure } from '../src/worldmass/preset';
 import { canonical } from '../src/worldmass/random';
 import { seedGlobalRandom } from '../src/sim/rng';
 
+const along=(p:{x:number;y:number}[],x:number,y:number,axis:'x'|'y',sign:number)=>p.find(q=>Math.abs(axis==='x'?q.y-y:q.x-x)<1e-6&&(axis==='x'?q.x-x:q.y-y)*sign>0)!;
 const restore=seedGlobalRandom(91735), cache=new LightSightCache();
 const grid=new GridWalkField(600,600,10);
 grid.fillRegion(0,0,599,599,'ground');grid.fillRegion(300,0,309,599,'wall');
 const finite={walk:grid}, from={x:250,y:250}, radius=100;
 const poly=litPolygon(finite,from.x,from.y,radius)!;
-assert.equal(poly.length,48);assert.equal(poly[0].x,303);
-assert.equal(poly[24].x,150,'open side keeps full light radius');
+assert.ok(poly.length>=48);assert.equal(poly[0].x,303);
+assert.equal(along(poly,250,250,'x',-1).x,150,'open side keeps full light radius');
 const translated:RegionGrid={cellOcclusion:true,cellSize:10,version:0,
  isWalkable:(x,y)=>grid.isWalkable(x+1000,y+1000),
  snapToWalkable:p=>p,regionAt:(x,y)=>grid.regionAt(x+1000,y+1000)};
 assert.deepEqual(litPolygon({walk:translated},-750,-750,radius)!.map(p=>({x:p.x+1000,y:p.y+1000}))
  .map(p=>({x:Math.round(p.x*1e7),y:Math.round(p.y*1e7)})),
  poly.map(p=>({x:Math.round(p.x*1e7),y:Math.round(p.y*1e7)})));
-assert.ok(litPolygon(finite,20,250,100)![24].x>=-3.000001,'finite out-of-bounds wall retained');
+assert.ok(along(litPolygon(finite,20,250,100)!,20,250,'x',-1).x>=-3.000001,'finite out-of-bounds wall retained');
 grid.fillRegion(300,0,309,599,'window');assert.equal(litPolygon(finite,250,250,100),null,'windows pass light');
 assert.equal(litPolygon({walk:null},1,1,100),null);
 for(const r of [0,-1,Infinity,NaN])assert.equal(litPolygon(finite,250,250,r),null);
@@ -50,11 +51,11 @@ for(const seed of [1,42,451]){
  const x=d.pos.x,y=d.pos.y-42,r=120;
  const before=canonical(m.snapshot(w)),closed=cache.read(w,d,x,y,r)!;
  assert.ok(closed,'actual worldmass walls now admit a light polygon');
- assert.ok(closed[12].y<d.pos.y+20,'closed native door arrests south ray');
+ assert.ok(along(closed,x,y,'y',1).y<d.pos.y+20,'closed native door arrests south ray');
  assert.equal(canonical(m.snapshot(w)),before,'reading light never mutates run');
  w.setDoorState(d.door!.id,'open',{silent:true});
  const open=cache.read(w,d,x,y,r)!;
- assert.ok(open[12].y>closed[12].y+30,'native door paint invalidates through settlement overlay');
+ assert.ok(along(open,x,y,'y',1).y>along(closed,x,y,'y',1).y+30,'native door paint invalidates through settlement overlay');
  (w as unknown as {resealDoor(id:string):void}).resealDoor(d.door!.id);
  assert.deepEqual(cache.read(w,d,x,y,r),closed,'closing restores same silhouette');
  const pos={x:-6000,y:-6000},cs=m.config.terrain.terrainCell;

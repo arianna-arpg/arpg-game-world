@@ -521,18 +521,6 @@ export const VIS_CFG = {
     /** Shadow quad length as a fraction of the veil reach (past the screen
      *  edge, so no shadow ever ends visibly short). */
     farSlack: 1.35,
-    /** Occluder-count ceiling (a pathological grove degrades gracefully:
-     *  nearest bodies win by construction). MUST comfortably exceed the
-     *  densest biome's on-screen caster count — when the cap bites inside
-     *  the visible field, every 96px gather re-sort swaps a churn of
-     *  ON-SCREEN wedges in one frame (dense jungle at 288 measured 17–40
-     *  visible shadows popping per bucket crossing — the "veil bouncing
-     *  darker/lighter while walking" flicker; a denser mint saturated 512
-     *  with the cutoff a mere 21px past the visible rim). The per-frame far
-     *  cull keeps the DRAWN cost bounded by what's actually near the screen
-     *  regardless of this cache size, so the cap is a true pathological
-     *  backstop, not a perf dial. */
-    maxOccluders: 768,
     /** THE SETTLE DEBOUNCE (THE ELEVATION LAW's cost guard): a hero STORY
      *  change re-gathers doodads AND re-extracts wall faces — but on ramp
      *  lips and leap/dash landings the tier can flicker frame-to-frame,
@@ -765,28 +753,12 @@ export const VIS_CFG = {
   lights: {
     /** Lightmap resolution as a fraction of the screen. */
     scale: 0.28,
-    /** Total light budget per frame. The punch pass is one small blit per
-     *  light on the scale-reduced buffer — the cap protects the collect and
-     *  bloom passes, not fill rate, so it can afford to be generous. (72
-     *  re-starved dense fields once cinder beds + vent formations joined the
-     *  caldera: in-view static demand alone neared the cap and eruption
-     *  movers evicted the terrain glow — the original 'strange lights' bug
-     *  reborn as a class war.) */
+    /** Transient combat-light budget; persistent lights are spatially culled
+     * and cached independently so combat cannot switch the environment off. */
     maxLights: 128,
-    /** THE SHARE LAW: per-class caps on the MOVER classes so no burst can
-     *  flood the budget and starve everything after it in collect order —
-     *  an eruption's orb volley keeps its own lane, the lava sea keeps its
-     *  glow. Unshared classes (the hero's lantern, lightwells, exits,
-     *  encounter fields) are few by construction. Flashes fill newest-first
-     *  (the fresh explosion wins its lane, not the dying ember). */
-    share: { flashes: 14, projectiles: 18, bodies: 26, orbs: 10 },
-    /** Static doodad emissives collapse into per-zone cluster aggregates
-     *  (bin size below, world units) — dense lava fields stop fighting the
-     *  cap and the lit set stops reshuffling as the camera pans. Should the
-     *  in-view cluster set STILL outgrow the room left after movers, the
-     *  drop is deterministic and stable: farthest from the bin-quantized
-     *  view centre first (the kept set changes only at bin crossings —
-     *  never a per-frame reshuffle). */
+    share: { flashes: 14, projectiles: 18, orbs: 10 },
+    /** Nearby same-kind, same-story terrain lights share a static pool.
+     * Every visible pool draws; camera quantization never changes selection. */
     cluster: true,
     clusterBin: 176,
     /** How dark deep night gets (0 = untouched, 1 = pitch black). */

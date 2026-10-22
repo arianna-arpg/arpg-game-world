@@ -823,6 +823,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_segments.ts', status: 'green', tier: 'fast', why: 'THE SEGMENT FABRIC against its debut consumer (Vhorun) — per-segment wound pools that tear permanently and retaliate' },
   { probe: 'probe_settled.ts', status: 'green', tier: 'fast', why: 'THE SETTLED BELT — farmland + metropolis pinned structurally over the biome/tileset/door rows, not by lucky sweep seeds' },
   { probe: 'probe_sheet.ts', status: 'green', tier: 'fast', why: 'THE SHEET CATALOG — every seated id exists in STAT_DEFS, statics seated-or-omitted with blurbs, family seats + the show-all census (healed by THE SHEET SPEAKS THE WHOLE BUILD: the 27 missing seats landed)' },
+  { probe: 'probe_lightingstability.ts', status: 'green', tier: 'fast', why: 'Exact moving-light wall clipping, cache invalidation, source-floor light, restoration style and per-frame sight reuse.' },
   { probe: 'probe_visibility_stability.ts', status: 'green', tier: 'fast', why: 'Wall-corner visual queries share the painted shadow eye in all four orientations' },
   { probe: 'probe_skillpreparation.ts', status: 'green', tier: 'fast', why: 'Optional flask guide directs actual pack gestures; native once-only lesson and legacy intent guards' },
   { probe: 'probe_lightsight.ts', status: 'green', tier: 'fast', why: 'Shared finite and unbounded native light rays, door/repaint/map/source cache invalidation, immutable reads and linear fine-grid work' },
