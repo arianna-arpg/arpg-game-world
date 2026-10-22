@@ -26,6 +26,9 @@ assert.equal(nav.isWalkable(795,615),false,'route cannot target the center of a 
 assert.equal(JSON.stringify(floor.pack()),floorBefore,'routing cannot alter floor or shadow geometry');
 assert.equal(doodadNavigation(w,floor,0,14),nav,'unchanged furniture reuses the route cache');
 assert.ok(doodadNavigation(w,floor,1,14).isWalkable(795,615),'other-floor furniture stays out of the route');
+w.walk=floor;w.zone.tiers=undefined;
+assert.equal(w.pathField(9),w.pathField(0),'a stale story on flat terrain shares its one furniture route');
+w.walk=null;
 floor.fillRegion(700,500,700,500,'wall');
 assert.equal(doodadNavigation(w,floor,0,14).isWalkable(700,500),false,'terrain edits invalidate the advisory route');
 scene([]);

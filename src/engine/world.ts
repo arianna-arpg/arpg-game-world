@@ -63285,8 +63285,9 @@ export class World {
   pathField(story = 0): WalkField | null {
     if (this.walk) {
       if (!this.walk.pathStep) return null;
-      const base = story >= 1 && this.zone.tiers && this.tierViews ? this.tierPathField(story) : this.walk;
-      return base instanceof GridWalkField ? doodadNavigation(this, base, story, NAV_CFG.pad, this.bridges) : base;
+      const navTier = story >= 1 && this.zone.tiers && this.tierViews ? Math.min(story, this.tierViews.length - 1) : 0;
+      const base = navTier >= 1 ? this.tierPathField(navTier) : this.walk;
+      return base instanceof GridWalkField ? doodadNavigation(this, base, navTier, NAV_CFG.pad, this.bridges) : base;
     }
     if (this.arena.boundless) return null;
     // Convex zones carry no tier stack (tierViews ride this.walk), so every
