@@ -60,6 +60,9 @@ try {
     for (let n = 0; n < 10; n++) foe.applyStatus('rattled_bones', 0, 1, 'test');
     w['ringAfflictions'](foe, 0.5); step(w, 0.1);
     check('partial cleanse removes independent timers permanently', foe.statuses.find(s => s.id === 'rattled_bones')?.stacks === 5);
+    w['ringAfflictions'](foe, 1); foe.applyStatus('rattled_bones', 0, 1, 'test');
+    w['ringAfflictions'](foe, 0.5); step(w, 2.6);
+    check('duration cleanse shortens the last independent stack', !foe.statuses.some(s => s.id === 'rattled_bones'));
   }
   {
     const { w, p, inst, aim, bodies } = rig(['rattling_bows', 'ranked_bows', 'endless_quivers', 'rain_of_bones']);

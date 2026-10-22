@@ -42894,6 +42894,7 @@ export class World {
         }
       } else {
         s.remaining *= 1 - portion;
+        if (s.stackTimes) s.stackTimes = s.stackTimes.map(t => t * (1 - portion));
       }
       rung++;
     }
