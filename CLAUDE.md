@@ -17,6 +17,10 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Tutorial scenes cannot feed account nemeses. See `docs/engine/tutorial-isolation.md`;
+verify tutorialisolation, scenes, mu, Odyssey checks and all types when changing
+scene departure or nemesis formation/manifestation.
+
 Minion critter targeting, Charge's ground wake and life/mana orb pacing are
 documented in [combat-polish](docs/design/combat-polish.md). Verify
 probe_miniontargets, probe_orbgeneration, companionstance, flasktrees and
