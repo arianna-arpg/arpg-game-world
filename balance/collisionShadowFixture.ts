@@ -51,7 +51,7 @@ function run() {
   prev=data;
  }
  check('real shove stays outside cover and needs no recovery jump',embedded===0&&maxTravel<48.001,{embedded,maxTravel,maxShadowChange});
- const trace=takeMovementRecords(w);
+ const trace=takeMovementRecords({player:w.player});
  check('capture identifies knockback without an unstuck teleport',trace.events.some(e=>e.reason==='knockback')&&!trace.events.some(e=>e.reason==='unstuck'),{events:trace.events.length,dropped:trace.dropped});
  const worldCanvas=document.createElement('canvas'),overlay=document.createElement('canvas');
  worldCanvas.width=640;worldCanvas.height=480;overlay.width=1280;overlay.height=960;

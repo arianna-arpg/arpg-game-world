@@ -8,10 +8,12 @@ type Movement = { time:number; reason:string; from:Point; to:Point; detail?:unkn
 const histories = new WeakMap<object, { events:Movement[]; dropped:number }>();
 export function recordMovement(world:Host, actor:object, reason:string, from:Point, to:Point, detail?:unknown): void {
   if (!movementDiagnosticsEnabled || actor !== world.player || Math.hypot(to.x-from.x,to.y-from.y)<1e-6) return;
-  let h=histories.get(world);if(!h){h={events:[],dropped:0};histories.set(world,h);}
+  // Native scene hosts and the renderer can wrap the same hero differently.
+  // The actor is the stable identity shared by every movement owner.
+  let h=histories.get(actor);if(!h){h={events:[],dropped:0};histories.set(actor,h);}
   if(h.events.length>=128){h.events.shift();h.dropped++;}
   h.events.push({time:world.time,reason,from:{...from},to:{...to},detail});
 }
-export function takeMovementRecords(world:object) {
-  const h=histories.get(world);histories.delete(world);return h ?? {events:[],dropped:0};
+export function takeMovementRecords(world:{player:object}) {
+  const h=histories.get(world.player);histories.delete(world.player);return h ?? {events:[],dropped:0};
 }
