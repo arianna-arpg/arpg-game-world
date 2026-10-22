@@ -28113,7 +28113,9 @@ export class World {
   /** Does the world's memory watch this character? (Mode-stage policy;
    *  defaults ON — world bookkeeping, not player progression.) */
   private nemesisActive(): boolean {
-    return this.modeStageDef().nemesisMemory ?? true;
+    // The tutorial and Mu are outside the run, including their loadZone
+    // departure callbacks. Their combat must never seed account hunters.
+    return !this.scene && (this.modeStageDef().nemesisMemory ?? true);
   }
 
   /** The names the world watches this run: the hero's — and, THE HIRELING
@@ -28143,6 +28145,7 @@ export class World {
    *  flagged noNemesis are beneath memory. */
   private nemesisEligible(a: Actor): boolean {
     if (a.team !== 'enemy' || a.passive || a.untargetable || a.owner || a.doorId) return false;
+    if (a.noBounty || a.eventKey?.startsWith('scene:')) return false;
     if (!a.defId || !MONSTERS[a.defId]) return false;
     if (MONSTERS[a.defId].noNemesis) return false;
     return true;
@@ -28269,7 +28272,9 @@ export class World {
       for (const rec of saga.nemeses) {
         if (placed >= NEMESIS_CFG.maxManifestPerZone) break;
         if (this.manifestedThisRun.has(rec.id)) continue;
-        if (!MONSTERS[rec.defId]) continue; // a patched-out foe stays a story
+        // Honor exclusions for existing saves too: a leaked tutorial commander
+        // stays a historical record, never a hunter in the opening zones.
+        if (!MONSTERS[rec.defId] || MONSTERS[rec.defId].noNemesis) continue;
         let chance: number = NEMESIS_CFG.manifestChance;
         if (owner && owner === rec.faction) chance += NEMESIS_CFG.manifestFactionBonus;
         chance += grudgeTier(saga, rec.faction)?.manifestBonus ?? 0;

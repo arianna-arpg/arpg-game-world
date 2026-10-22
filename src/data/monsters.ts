@@ -13859,6 +13859,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // stand it up for a fight the player is finally owed a fair shot at.
   goblin_colossus: {
     id: 'goblin_colossus', name: 'Ghorvane, the Hordefather',
+    noNemesis: true, // Unique tutorial/revenge encounter; never an account hunter.
     color: '#6f8f3e', shape: 'octagon', radius: 46, material: 'flesh', look: 'goblin_colossus',
     boss: true,
     base: { life: 2600, moveSpeed: 62, accuracy: 118, armor: 90, poise: 220, mana: 160, manaRegen: 8 },
