@@ -414,6 +414,9 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_shadowarrival.ts', status: 'green', tier: 'fast', why: 'Immediate and delayed Shadow Step face the target and enable full Backstab.' },
   { probe: 'probe_skillinputorder.ts', status: 'green', tier: 'fast', why: 'New held skills and movement take priority after committed casts.' },
   { probe: 'probe_storedsupports.ts', status: 'green', tier: 'fast', why: 'Stored support recovery preserves cargo, ownership, locks and full-bag refusal.' },
+  { probe: 'probe_altar_bodies.ts', status: 'green', tier: 'fast', why: 'Physical altar slabs, floor isolation, collision clearance, saved contents, Continue and revisit.' },
+  { probe: 'probe_savewriteorder.ts', status: 'green', tier: 'fast', why: 'Ordered fetch/beacon writes through both actual save endpoints, including failed and malformed writes.' },
+  { probe: 'probe_sharedstructures.ts', status: 'green', tier: 'fast', why: 'Whole fixture bounds, physical aprons, deterministic relocation, required open/winding entrances and refusal.' },
 ];
 
 /** Green rows — the gate — optionally narrowed to one lane. */
