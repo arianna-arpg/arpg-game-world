@@ -27,7 +27,7 @@ app.whenReady().then(async () => {
   await win.loadURL('http://127.0.0.1:' + server.address().port);
   await run(async () => {
    for (let i = 0; !window.__game && i < 100; i++) await new Promise(r => setTimeout(r, 100));
-   if (!window.__game) throw Error('Missing game'); await __game.hydrated();
+   if (!window.__game) throw Error('Missing game'); await __game.hydrated(); __game.account().ledger.prologue_lived = 1; __game.saveAccount();
    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => window.__qaPads ?? [] });
   });
   // Surface mechanics run inside the actual isolated renderer. Host lease and
@@ -185,7 +185,9 @@ app.whenReady().then(async () => {
   };
   // Exercise the actual async entry wrapper; it must expose down BEFORE construction.
   const entry = await run(async () => {
-   document.getElementById('sm-start').click(); __game.step(2);
+   document.getElementById('sm-start').click();
+   for (let i = 0; i < 1200; i++) { if (!__game.loading.active && __game.world().scene?.state.apps?.some(a => a.rank === 'awake')) break; await new Promise(r => setTimeout(r, 25)); }
+   __game.step(2);
    const mu = __game.world(), apps = mu.scene?.state.apps?.filter(a => a.rank === 'awake');
    if (!apps?.length) throw Error('Begin did not enter Mu');
    const vessel = mu.actors.find(a => a.id === apps[0].id), target = { ...vessel.pos };
@@ -247,7 +249,7 @@ app.whenReady().then(async () => {
   // Cold Continue, then cancellation before its first async phase can publish.
   await win.loadURL('http://127.0.0.1:' + server.address().port);
   await run(async () => {
-   for (let i = 0; !window.__game && i < 100; i++) await new Promise(r => setTimeout(r, 100)); await __game.hydrated();
+   for (let i = 0; !window.__game && i < 100; i++) await new Promise(r => setTimeout(r, 100)); await __game.hydrated(); __game.account().ledger.prologue_lived = 1; __game.saveAccount();
    window.__beforeContinue = __game.world();
   });
   // Cancel in the foreground as soon as its action appears, before its first
@@ -274,7 +276,9 @@ app.whenReady().then(async () => {
    return { active: __game.loading.active, direction: __game.loading.snapshot.direction, label: __game.loading.snapshot.label };
   });
   assert.deepEqual(preview, { active: true, direction: 'left', label: 'Loading screen preview' }); report.checks.push('playable preview URL');
-  assert.deepEqual(report.errors, []); console.log('PASS playable loading UI:', report.checks.length, 'checks,', report.images.length, 'screenshots');
+  assert.equal(report.errors.length, 1, 'only the deliberately injected page refusal is reported');
+  assert.match(report.errors[0], /^\[runtime\] crossing refused Controlled missing page(?: \[object Object\])?$/);
+  console.log('PASS playable loading UI:', report.checks.length, 'checks,', report.images.length, 'screenshots');
  } catch (error) { report.failure = error.stack || String(error); console.error(report.failure); process.exitCode = 1; }
  finally { save(); clearTimeout(timer); win.destroy(); server.close(); app.exit(process.exitCode || 0); }
 });

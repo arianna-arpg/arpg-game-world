@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
 const dir=path.join(__dirname,'reports'),legacy=process.env.HOLLOW_WAKE_QA_LEGACY==='1';
 app.setPath('userData',path.join(dir,'menu-tray-profile-'+process.pid));app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
- const root=path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_DIST||'balance/reports/menu-tray-dist');
+ const root=path.resolve(__dirname,'..',process.env.HOLLOW_WAKE_QA_DIST||'dist');
  const server=http.createServer((req,res)=>{
   const p=new URL(req.url,'http://localhost').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));
   if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);return res.end();}

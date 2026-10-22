@@ -26,6 +26,8 @@ jobs:
         run: node --test scripts/test-*.mjs
       - name: Shared gameplay regressions
         run: npm run test:shared-fixes
+      - name: Shared reliability regressions
+        run: npm run test:reliability
       - name: Current gameplay, saves, terrain and hosted entry
         # On seamless, --slow opts into the historical source archive.
         # Preserve this branch's current behavior gate and full client course.
@@ -43,6 +45,7 @@ jobs:
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - name: Boot game, launcher and update path
         run: |
+          xvfb-run --auto-servernum npm run test:reliability:ui
           xvfb-run --auto-servernum npm run test:layers
           xvfb-run --auto-servernum npm run smoke
           xvfb-run --auto-servernum npm run smoke:launcher

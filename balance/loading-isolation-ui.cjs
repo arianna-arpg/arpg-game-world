@@ -154,6 +154,24 @@ app.whenReady().then(async () => {
   });
   const continued = await observePreparation('continue');
   assert.equal(continued.seed, entry.seed, 'Continue restored the persisted world rather than starting a fresh one');
+  const firstFrame = await run(async () => {
+   const w = __game.world(), renderer = __game.renderer;
+   const lease = __game.loading.begin({ kind: 'entry', label: 'Checking the first frame' });
+   await lease.paint(); let pauses = 0, reentryRefused = false;
+   const complete = await renderer.renderLoading(w, async () => {
+    if (++pauses === 1) {
+     try { renderer.render(w); } catch { reentryRefused = true; }
+     renderer.resize();
+    }
+    await lease.paint();
+   }, () => lease.current);
+   const cancelled = await renderer.renderLoading(w, async () => lease.finish(), () => lease.current);
+   for (let i = 0; __game.loading.active && i < 100; i++) await new Promise(r => setTimeout(r, 10));
+   renderer.render(w);
+   return { complete, pauses, reentryRefused, cancelled, active: __game.loading.active };
+  });
+  assert.deepEqual(firstFrame, { complete: true, pauses: 2, reentryRefused: true, cancelled: false, active: false });
+  report.checks.push('first frame restarts after resize; concurrent rendering refuses; cancellation releases renderer ownership');
   assert.deepEqual(report.errors, []); console.log('PASS isolated loading runtime:', report.checks.length, 'checks');
  } catch (error) { report.failure = error.stack || String(error); console.error(report.failure); process.exitCode = 1; }
  finally { fs.writeFileSync(path.join(reports, 'loading-isolation-ui.json'), JSON.stringify(report, null, 2)); clearTimeout(timer); win.destroy(); server.close(); app.exit(process.exitCode || 0); }
