@@ -51772,6 +51772,7 @@ export class World {
     if (state === 'open' ? (d.door.open || d.door.broken) : d.door.broken) return;
     if (state === 'open') d.door.open = true;
     else { d.door.broken = true; d.door.open = true; }
+    this.markDoodadsChanged(d); // doodadNavigation and sight caches follow free-standing doors too
     if (this.walk instanceof GridWalkField && d.door.cells) {
       const c = d.door.cells;
       this.walk.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'ground');

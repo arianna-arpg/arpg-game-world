@@ -180,6 +180,11 @@ sweep stopped it. Grid-based navigation now derives a cached furniture-aware
 advisory field, with own-story blockers, bridge spans, and terrain/doodad
 invalidation. It leaves the authoritative floor and shadow grid untouched.
 The unchanged live straying course verifies that the animal walks home and pays.
+Flat ground shares one route even if an actor retains a stale story index.
+Plan doors keep their exact grid footprint, without a second inflation that
+closes the apron. Strike-opened growth retains its authored passage semantics;
+feet still collide until it is actually cut. Door state changes invalidate
+furniture navigation, including free-standing doors without grid cells.
 
 Crowded pursuit also runs at 30 and 60 Hz. The dense lighting fixture now sets
 both its zone dimensions and its actual arena bounds; previously its actors

@@ -33,6 +33,23 @@ floor.fillRegion(700,500,700,500,'wall');
 assert.equal(doodadNavigation(w,floor,0,14).isWalkable(700,500),false,'terrain edits invalidate the advisory route');
 scene([]);
 assert.ok(doodadNavigation(w,floor,0,14).isWalkable(795,615),'removed furniture reopens its route');
+// Grid-owned doors must not inflate across their walkable aprons; strike-opened
+// growth remains a possible route while its physical body still blocks feet.
+const door={kind:'door',pos:{x:795,y:615},radius:35,hitbox:{kind:'rect',hw:45,hh:8},
+  door:{id:'collision-qa-door',mode:'dwell',cells:{x:750,y:600,w:90,h:30}}} as Doodad;
+w.doodads=[door];w.markDoodadsChanged();floor.fillRegion(750,600,839,629,'rampart');
+const doorNav=doodadNavigation(w,floor,0,14);
+assert.equal(doorNav.isWalkable(795,615),false);
+assert.ok(doorNav.isWalkable(795,645),'door apron remains governed by its exact grid footprint');
+door.door!.cells=undefined;floor.fillRegion(750,600,839,629,'ground');w.markDoodadsChanged();
+w.walk=floor;assert.equal(w.pathField()!.isWalkable(795,615),false);
+w.setDoorState('collision-qa-door','open',{silent:true});
+assert.ok(w.pathField()!.isWalkable(795,615),'opening a free-standing door invalidates cached navigation');
+w.walk=null;
+w.doodads=[{kind:'jungle_brush',pos:{x:795,y:615},radius:30}] as Doodad[];w.markDoodadsChanged();
+assert.ok(doodadNavigation(w,floor,0,14).isWalkable(795,615),'strike-opened passage stays reachable');
+const brushStop=w.clampPos({x:795,y:615},radius,{x:695,y:615},{mover:body});
+assert.ok(brushStop.x<775,'reachable brush still physically blocks until cut');
 const circle = { kind:'circle',r:25 } as const;
 scene([{x:800,y:600,shape:circle}]);
 const hit = w.clampPos({x:900,y:600}, radius, {x:700,y:600}, {mover:body});

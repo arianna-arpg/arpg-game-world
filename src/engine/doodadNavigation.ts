@@ -1,5 +1,5 @@
 import { GridWalkField } from '../world/gridWalk';
-import { blocksMovement, hitSurfaceOf, type Doodad } from './levelgen';
+import { blocksMovement, doodadRuleOf, hitSurfaceOf, type Doodad } from './levelgen';
 import { shapeAabbHalf, shapeDistance } from './shapes';
 import type { Vec2 } from '../core/math';
 
@@ -27,7 +27,12 @@ export function doodadNavigation(host: NavigationHost, base: GridWalkField, tier
   let entry = stories.get(tier);
   if (!entry || entry.version !== base.version || entry.revision !== revision
     || entry.source !== host.doodads || entry.count !== host.doodads.length) {
-    const solids = host.doodads.filter(d => (d.tier ?? 0) === tier && blocksMovement(d));
+    // Plan doors already own exact cells in the floor grid. Inflating their
+    // slab again can close the narrow apron outside a closed doorway.
+    // Strike-opened brush is an authored passage, like generation's open-door
+    // topology. Collision still stops feet until the player actually cuts it.
+    const solids = host.doodads.filter(d => (d.tier ?? 0) === tier && blocksMovement(d)
+      && !d.door?.cells && !doodadRuleOf(d.kind).brittle?.on.includes('hit'));
     let grid = base;
     if (solids.length) {
       grid = GridWalkField.unpack(base.pack());
