@@ -107,6 +107,7 @@ export function sceneModeDef(host:NativeSceneCampaignLifecycleHost): CharacterMo
 
 export function sceneNemesisEligible(host:NativeSceneCampaignLifecycleHost,a: Actor): boolean {
     if (a.team !== 'enemy' || a.passive || a.untargetable || a.owner || a.doorId) return false;
+    if (a.noBounty || a.eventKey?.startsWith('scene:')) return false;
     if (!a.defId || !MONSTERS[a.defId]) return false;
     if (MONSTERS[a.defId].noNemesis) return false;
     return true;

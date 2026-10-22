@@ -9930,6 +9930,7 @@ actors: Actor[] = [];
       get accountDirty(){return world.accountDirty;}, set accountDirty(value){world.accountDirty=value;},
       get localSeat(){return world.localSeat;},
       get nemesisActive(){const method=world.nemesisActive;return (...args:Parameters<NativeSceneHistoryHost['nemesisActive']>)=>method.apply(world,args);},
+      get scene(){return world.scene;},
       get watchedSagas(){const method=world.watchedSagas;return (...args:Parameters<NativeSceneHistoryHost['watchedSagas']>)=>method.apply(world,args);},
       get sim(){return world.sim;},
       get manifestedThisRun(){return world.manifestedThisRun;},
@@ -23964,6 +23965,7 @@ actors: Actor[] = [];
    *  flagged noNemesis are beneath memory. */
   private nemesisEligible(a: Actor): boolean {
     if (a.team !== 'enemy' || a.passive || a.untargetable || a.owner || a.doorId) return false;
+    if (a.noBounty || a.eventKey?.startsWith('scene:')) return false;
     if (!a.defId || !MONSTERS[a.defId]) return false;
     if (MONSTERS[a.defId].noNemesis) return false;
     return true;

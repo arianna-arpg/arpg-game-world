@@ -10,6 +10,7 @@ import {MONSTERS,FACTIONS} from '../data/monsters';
 import {vec} from '../core/math';
 import {mod} from './stats';
 export interface NativeSceneHistoryHost {
+ scene:World['scene'];
  meta:World['meta'];
  modeStageDef:World['modeStageDef'];
  charDeaths:World['charDeaths'];
@@ -48,7 +49,7 @@ export function historyCorpseRecords(host:NativeSceneHistoryHost):DeathRecord[] 
   }
 
 export function historyNemesisActive(host:NativeSceneHistoryHost):boolean {
-    return host.modeStageDef().nemesisMemory ?? true;
+    return !host.scene && (host.modeStageDef().nemesisMemory ?? true);
   }
 
 export function historyWatchedSagas(host:NativeSceneHistoryHost):{ name: string; role: 'self' | 'merc' }[] {
@@ -81,7 +82,8 @@ export function historyManifestNemeses(host:NativeSceneHistoryHost, def: ZoneDef
       for (const rec of saga.nemeses) {
         if (placed >= NEMESIS_CFG.maxManifestPerZone) break;
         if (host.manifestedThisRun.has(rec.id)) continue;
-        if (!MONSTERS[rec.defId]) continue; // a patched-out foe stays a story
+        // Old tutorial commander records remain history, never opening-zone hunters.
+        if (!MONSTERS[rec.defId] || MONSTERS[rec.defId].noNemesis) continue;
         let chance: number = NEMESIS_CFG.manifestChance;
         if (owner && owner === rec.faction) chance += NEMESIS_CFG.manifestFactionBonus;
         chance += grudgeTier(saga, rec.faction)?.manifestBonus ?? 0;

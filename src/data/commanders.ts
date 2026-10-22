@@ -370,7 +370,9 @@ const father = (
   MONSTERS[id] = {
     id, name,
     color, shape: 'octagon', radius: 46, material: 'flesh', look,
-    boss: true,
+    // These unique commanders belong to the prologue and authored revenge
+    // encounters. Their scene-ending kits must never roam as account hunters.
+    boss: true, noNemesis: true,
     base: { life: 2600, moveSpeed: 62, accuracy: 118, armor: 90, poise: 220, mana: 160, manaRegen: 8 },
     skills: ['heavy_strike', 'sunder', voice.verb],
     xp: 800, faction, tags: ['giant'],

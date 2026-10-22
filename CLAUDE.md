@@ -19,6 +19,10 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 This repository is `arianna-arpg/arpg-game-world`, the original TypeScript/Canvas/Electron ARPG. This is the current working entrypoint: shared content starts on main; continuous-world integration belongs on `codex/seamless-world-foundation`. Use an isolated topic checkout when another session owns the affected files. The user's 2026-10-19 direction is to deliver a playable continuous world and stop expanding historical probe scaffolding. This guide supersedes the accumulated handoff instructions preserved in [the reference archive](docs/ai/reference-before-playable-recovery.md). Historical documents and project-memory session notes describe their recorded revisions; their branch paths, frozen-source mandates and handoff checklists are not current instructions. Read [branch integration](docs/ai/branch-integration.md) for delivery policy and the [cleanup audit](docs/ai/context-runtime-cleanup-20261019.md) for deferred migration work.
 
+Tutorial scenes cannot feed account nemeses. See `docs/engine/tutorial-isolation.md`;
+verify tutorialisolation, scenes, mu, Odyssey checks and all types when changing
+scene departure or nemesis formation/manifestation.
+
 ## The delivery target
 
 Geography and physical places replace the connected-zone surface. Walking, combat, pursuit and consequences continue across streaming boundaries. Offline play is the core; a hosted shard serves the same world. Separate interiors can remain separate. Retain the existing combat, character and content systems wherever possible.

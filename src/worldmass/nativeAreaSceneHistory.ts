@@ -7,6 +7,7 @@ import * as native from '../engine/nativeSceneHistory';
 import {floorStoryOf} from '../engine/tiers';
 export interface NativeSceneHistoryState {playerCorpses:World['playerCorpses']}
 export interface NativeSceneHistoryCampaign {
+ scene:World['scene'];
  meta:World['meta'];charDeaths:World['charDeaths'];account:World['account'];hiredMercs:World['hiredMercs'];
  time:World['time'];lastSagaFlushAt:World['lastSagaFlushAt'];accountDirty:World['accountDirty'];
  localSeat:World['localSeat'];sim:Pick<World['sim'],'faction'>;manifestedThisRun:World['manifestedThisRun'];zoneMap:World['zoneMap'];
@@ -38,7 +39,7 @@ export class NativeAreaSceneHistory {
   const fields=(o:()=>object,keys:readonly string[],write=false)=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){return (o() as Record<string,unknown>)[key];},...(write?{set(v:unknown){(o() as Record<string,unknown>)[key]=v;}}:{})});};
   const methods=(o:()=>object,keys:readonly string[])=>{for(const key of keys)Object.defineProperty(host,key,{enumerable:true,get(){const provider=o() as Record<string,Function>,fn=provider[key];if(typeof fn!=='function')throw Error('Missing native history capability: '+key);return (...args:unknown[])=>Reflect.apply(fn,provider,args);}});};
   fields(()=>input.scene,['actors','zone']);fields(()=>input.geometry,['arena']);
-  fields(()=>input.campaign,['meta','charDeaths','account','hiredMercs','time','localSeat','sim','manifestedThisRun','zoneMap']);
+  fields(()=>input.campaign,['scene','meta','charDeaths','account','hiredMercs','time','localSeat','sim','manifestedThisRun','zoneMap']);
   fields(()=>input.campaign,['lastSagaFlushAt','accountDirty'],true);fields(()=>input.state,['playerCorpses'],true);
   fields(()=>input.services,['events']);methods(()=>input.services,['notice','text']);
   methods(()=>input.geometry,['clampPos','findFreeSpot']);methods(()=>input.population,['createMonster','promoteRarity']);
