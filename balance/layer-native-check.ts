@@ -6,6 +6,8 @@ import {SKILLS} from '../src/data/skills';
 import {mod} from '../src/engine/stats';
 import {withSeededRandom} from '../src/core/rng';
 import {skillToLoot,type DeathRecord} from '../src/meta/death';
+import {applySnapshot} from '../src/net/snapshot';
+import {makeSimWorld} from '../src/sim/arena';
 
 function fixture() {
  const setup=nativeCampaignFixture(1971),all=birthActualNativeArea(setup);
@@ -65,6 +67,15 @@ const checks:Record<string,()=>void>={
   const shot=queues.projectiles[0];shot.orbit=1;shot.orbRadius=50;shot.orbitR0=50;
   caster.tier=1;combat.updateZones(.01);combat.updateProjectiles(.01);
   assert.equal(zone.tier,1);assert.equal(shot.tier,1);
+ },
+ 'native hosted fields retain their floor and sky-hazard visibility exception':()=>{
+  const {combat,caster,scene,queues}=fixture();caster.pos={...scene.player.pos};caster.tier=1;
+  combat.executeSkill(caster,makeSkillInstance(SKILLS.toxic_cloud),caster.pos,{noCooldown:true,noRepeat:true});
+  queues.zones[0].hitAll=true;
+  const {snapshot}=combat.serializeHostedArea(1),remote=makeSimWorld('warrior',1972);
+  applySnapshot(remote,snapshot);
+  const field=remote.remoteSkillFields?.find(z=>z.skillId==='toxic_cloud');
+  assert.ok(field);assert.equal(field.tier,1);assert.equal(field.hitAll,true);
  },
  'native corpse history restores its saved floor':()=>{
   const {ongoing,scene,caster}=fixture();

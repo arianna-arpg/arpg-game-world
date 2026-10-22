@@ -66,8 +66,9 @@ function paint(w: World, drops = w.drops): { text: string[]; labels: unknown[][]
     : (...args: unknown[]) => shapes.push([String(key), ...args]) });
   // Classic labels are painted beside their native symbols before the veils.
   const renderer = Object.assign(Object.create(Renderer.prototype), {ctx}) as {drawDrops(w:World):void};
-  const frame=Object.assign(Object.create(w),{drops}) as World;
-  renderer.drawDrops(frame);
+  const previous = w.drops;
+  try { w.drops = drops; renderer.drawDrops(w); }
+  finally { w.drops = previous; }
   return { text, labels, shapes };
 }
 const hostPaint = paint(host);

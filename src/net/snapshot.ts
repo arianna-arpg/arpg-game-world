@@ -390,6 +390,8 @@ export interface ZoneW {
   ex?: 1; fill?: number;
   /** The field's story (Zone.tier, else its caster's); absent = 0. */
   tier?: number;
+  /** Authored sky hazards remain visible across floors. */
+  ha?: 1;
   /** THE GROUNDED STRIKE's named grounds (telegraph only: the roil draws on those cells). */
   og?: string[];
   /** A FISSURE segment [ax, ay, bx, by]; `sa` = armed now (aftershock ready / roulette
@@ -1408,6 +1410,7 @@ function zoneW(z: ZoneT, world: NativeSnapshotHost, heroes: ReadonlySet<Actor>):
   if (z.armed) w.ar = 1;
   const tier = z.tier ?? z.caster.tier ?? 0;
   if (tier) w.tier = tier;
+  if (z.hitAll) w.ha = 1;
   if (z.exploded) {
     w.ex = 1;
     if (z.seg && ((z.aftershock && world.time >= z.aftershock.readyAt) || (z.roulette && world.time < z.roulette.armedUntil))) w.sa = 1;
@@ -1821,7 +1824,7 @@ function zoneStub(z: ZoneW, time: number): ZoneStub {
     facing: z.f ?? 0,
     arcRad: z.arc, exploded: !!z.ex, linger: z.ex ? 1 : 0,
     delay: 1 - (z.ex ? 1 : z.fill ?? 0), delay0: z.lf ? 1 : undefined,
-    tier, caster: (z.ci !== undefined ? POOL.get(z.ci) : undefined) ?? { tier },
+    tier, hitAll: !!z.ha, caster: (z.ci !== undefined ? POOL.get(z.ci) : undefined) ?? { tier },
     inst: { def: { id: z.sk ?? '', delivery: { telegraph: 1 } } },
     onGround: z.og, edgeFrac: z.ef, edge: z.ed,
     seg: z.seg ? { ax: z.seg[0], ay: z.seg[1], bx: z.seg[2], by: z.seg[3] } : undefined,
@@ -1839,7 +1842,7 @@ function zonePaint(stub: ZoneStub, z: ZoneW, time: number): SkillFieldVisual {
     skillId: z.sk ?? z.vi ?? '', get pos() { return stub.pos; },
     get radius() { return stub.radius; }, get facing() { return stub.facing; },
     get delay() { return stub.delay; }, color: z.c, shape: z.sh ?? 0,
-    exploded: !!z.ex, linger: z.ex ? 1 : 0, tier: z.tier ?? 0, telegraph: 1,
+    exploded: !!z.ex, linger: z.ex ? 1 : 0, tier: z.tier ?? 0, hitAll: !!z.ha, telegraph: 1,
     arcRad: z.arc, delay0: z.lf ? 1 : undefined, onGround: z.og?.slice(),
     edgeFrac: z.ef, edge: z.ed,
     seg: z.seg ? { ax: z.seg[0], ay: z.seg[1], bx: z.seg[2], by: z.seg[3] } : undefined,
