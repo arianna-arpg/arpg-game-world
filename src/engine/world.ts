@@ -242,6 +242,9 @@ import {
 } from './sympathy';
 import { CHARGE_DEFS } from './charges';
 import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance, type HitShape } from './shapes';
+import { sweepDoodadMove } from './doodadMovement';
+import { doodadNavigation } from './doodadNavigation';
+import { movementDiagnosticsEnabled, recordMovement } from './movementDiagnostics';
 import { projFormNose, projFormTouches } from './projForms';
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
@@ -50423,6 +50426,7 @@ export class World {
         a.pos = this.clampPos(vec(
           a.pos.x + p.vx * dt,
           a.pos.y + p.vy * dt), a.radius, from, { out: sc, mover: a });
+        if (movementDiagnosticsEnabled) recordMovement(this, a, 'knockback', from, a.pos, { vx:p.vx, vy:p.vy, hit:sc.hit });
         const hit = sc.hit as string;
         // THE BOWLING LANE (engine/mass.ts): a body flying fast enough
         // slams through — or is arrested by — bodies in its path. Swept
@@ -56090,6 +56094,7 @@ export class World {
       // off a lip (the aetherial rescue-snap lesson, disc space).
       if (pitRegionOf(stuck)) continue;
       const free = this.findFreeSpot(a.pos, a.radius, a.tier);
+      if (movementDiagnosticsEnabled) recordMovement(this, a, 'unstuck', a.pos, free, { kind:stuck.kind, obstacle:{...stuck.pos} });
       a.pos.x = free.x; a.pos.y = free.y;
     }
     const hasGrid = !!this.walk;
@@ -61802,12 +61807,14 @@ export class World {
             // (The shove confines against the body's OWN story — a crowd
             // never nudges a storey walker through a hanging wall.)
             a.pos = this.clampPos(a.pos, a.radius, vec(fx, fy), { mover: a });
+            if (movementDiagnosticsEnabled) recordMovement(this, a, 'body-separation', vec(fx, fy), a.pos, { other:b.id });
           }
           if (!bFixed && aShare < 1) {
             const fx = b.pos.x, fy = b.pos.y;
             b.pos.x += Math.cos(ang) * overlap * (1 - aShare);
             b.pos.y += Math.sin(ang) * overlap * (1 - aShare);
             b.pos = this.clampPos(b.pos, b.radius, vec(fx, fy), { mover: b });
+            if (movementDiagnosticsEnabled) recordMovement(this, b, 'body-separation', vec(fx, fy), b.pos, { other:a.id });
           }
         }
       }
@@ -63278,8 +63285,8 @@ export class World {
   pathField(story = 0): WalkField | null {
     if (this.walk) {
       if (!this.walk.pathStep) return null;
-      if (story >= 1 && this.zone.tiers && this.tierViews) return this.tierPathField(story);
-      return this.walk;
+      const base = story >= 1 && this.zone.tiers && this.tierViews ? this.tierPathField(story) : this.walk;
+      return base instanceof GridWalkField ? doodadNavigation(this, base, story, NAV_CFG.pad, this.bridges) : base;
     }
     if (this.arena.boundless) return null;
     // Convex zones carry no tier stack (tierViews ride this.walk), so every
@@ -63613,7 +63620,8 @@ export class World {
     // Iterate: escaping one circle of a blob can land inside its neighbor.
     // Candidates come from the spatial index, re-queried per pass (a push can
     // slide the point toward discs the first bucket didn't see).
-    for (let pass = 0; pass < 3; pass++) {
+    const sweptDoodads = from && sweepDoodadMove(this, this.bridges, from, out, radius, mvTier, opts?.out);
+    for (let pass = 0; !sweptDoodads && pass < 3; pass++) {
       let moved = false;
       for (const o of this.doodadsAt(out.x, out.y)) {
         if ((o.tier ?? 0) !== mvTier) continue; // its layer's furniture only
@@ -63646,6 +63654,7 @@ export class World {
       if (!moved) break;
     }
     }
+    const sweepEndX = out.x, sweepEndY = out.y; // sweepDoodadMove's endpoint before grid/bounds
     const b1 = clampToBounds(out, radius, this.arena);
     out.x = b1.x; out.y = b1.y;
     // THE TIER SWAP (engine/tiers.ts): an elevated mover confines against
@@ -63705,6 +63714,11 @@ export class World {
       }
     }
     } finally { if (tierSwap) this.walk = tierSwap; } // the tier swap ends with the walk confine
+    // Grid axis-sliding may choose a different endpoint. Check that path
+    // against furniture too; a second slide could re-enter the grid wall.
+    if (from && !opts?.disp?.ignoreConfine && (out.x !== sweepEndX || out.y !== sweepEndY)) {
+      sweepDoodadMove(this, this.bridges, from, out, radius, mvTier, opts?.out, false);
+    }
     // THE PITFALL CONFINE (the pitfall fabric, engine/pitfall.ts): fall-able
     // pit doodads are DROPS, not walls. The sweep advances while the body's
     // grasp disc still overlaps standing ground or a spanning deck — the

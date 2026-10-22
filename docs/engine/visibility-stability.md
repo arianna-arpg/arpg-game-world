@@ -139,3 +139,56 @@ The record includes source geometry/intensity, source and caster counts, floor,
 camera, grid revision, frame/pass times, and 32×24 light/shadow alpha masks.
 Capture is local and opt-in; other hosts download the report instead. Ordinary
 play does not allocate the recorder, read back its masks, or show its button.
+
+## Combat capture follow-up: collision and shadow continuity
+
+The October 22 Whitewood captures contain 1,025 frames. The hero light remains
+present at radius 190; the three largest sampled shadow changes coincide with
+44–66 world-pixel eye jumps. The recordings lack movement provenance and caster
+geometry, so they cannot establish which movement operation caused those exact
+jumps. The live captured run remains paused; all reproductions use separate worlds.
+
+Controlled reproductions exposed three additional defects:
+
+- Furniture movement checked the destination and pushed outward up to three
+  times. A strong shove could cross a trunk, or escape one rock into its neighbor
+  and end embedded. The periodic unstuck fallback could then relocate it again.
+  Clear-origin movement now sweeps a disc against the actual circles, rotated
+  slabs and multi-lobe unions, takes the first contact and slides the remaining
+  displacement. Grid-constrained alternate endpoints are checked again. Placement
+  recovery, authored phasing, pits, bridges and own-story admission remain distinct.
+- Shadow far arcs changed their subdivision count at angle thresholds. Every
+  intermediate vertex jumped at once, flashing a crescent even for subpixel eye
+  motion. A fixed topology keeps those vertices continuous through the threshold.
+- Doodad reveal queries ignored the shadow's contact melt, while slab drawing
+  added its reach to the corner distance twice. Draw and reveal now share the
+  finite, melting reach; an eye displaced inside a body also agrees with its pixels.
+
+`probe_collisionsweep` checks exact contact, fast travel, tangents, leaving a
+surface, phasing, floor separation, a real knockback counterexample and seeded
+cluster movement. `balance/collision-shadow-ui.cjs` tests actual Chromium pixels,
+the simulation/shadow combination and the diagnostic screenshot composition.
+It is included in `npm run test:lighting`. Its negative control
+`--baseline=4ba2e3ff` rejects the old implementation: the subpixel arc crossing
+changes 4,326 pixels instead of zero, and the cluster shove moves 76.7 pixels
+and embeds the actor instead of remaining clear with a maximum 13.1-pixel step.
+These are controlled witnesses, not a replay or proof of every reported flicker.
+
+The full regression roster also exposed a route through a hay bale: the old
+destination push-out sometimes let the herded animal cross it, while a correct
+sweep stopped it. Grid-based navigation now derives a cached furniture-aware
+advisory field, with own-story blockers, bridge spans, and terrain/doodad
+invalidation. It leaves the authoritative floor and shadow grid untouched.
+The unchanged live straying course verifies that the animal walks home and pays.
+
+Crowded pursuit also runs at 30 and 60 Hz. The dense lighting fixture now sets
+both its zone dimensions and its actual arena bounds; previously its actors
+started outside the arena. Exterior origins retain placement recovery instead
+of sweeping back from invalid ground. Use `--combat --profile-movement` on the
+lighting UI harness to attribute collision cost; timings remain machine-dependent.
+
+The opt-in recorder now includes bounded hero knockback/separation/rescue events,
+hero motion state, zone seed, actual render scale and shake, and deduplicated
+shadow-caster geometry. Screenshot capture composites the renderer's world and
+visible text overlay explicitly; adaptive resolution previously caused it to
+select the larger text-only canvas. Captures remain local and are not save games.
