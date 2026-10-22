@@ -33,6 +33,7 @@ import type { ExitRoadSpec, ZoneDef } from '../data/zones';
 import { boundaryGateOf, type BoundaryGateDef } from '../data/boundaryGates';
 import { meldOf, MELD_CFG } from '../data/melds';
 import { GridWalkField } from '../world/gridWalk';
+import { beginRecipeReservations, installRecipeGround } from './nativeRecipeGround';
 import { regionKind } from '../world/regions';
 import {
   registerLayout, layoutParam, ensureGrid, scatterDecoration,
@@ -65,13 +66,21 @@ function negativeRegion(def: ZoneDef): string {
  *  polyline so the tileset scatter that follows (and later landmark rolls)
  *  can never re-plug the zone's only passage — findSpot/blobs/landmarks all
  *  honor reservations. */
-function reserveArtery(ctx: GenCtx, pts: Vec2[], halfW: number): void {
+function reserveArtery(ctx: GenCtx, pts: Vec2[], halfW: number,
+  capture?: (reservation: import('./levelgen').Reservation) => void): void {
   for (let i = 0; i < pts.length - 1; i++) {
     const ax = pts[i].x, ay = pts[i].y, bx = pts[i + 1].x, by = pts[i + 1].y;
     const len = Math.hypot(bx - ax, by - ay);
     const steps = Math.max(1, Math.ceil(len / 100));
     for (let s = 0; s <= steps; s++) {
-      ctx.reserved.push({
+      if (capture) {
+        const reservation = {
+          pos: vec(ax + (bx - ax) * (s / steps), ay + (by - ay) * (s / steps)),
+          radius: halfW + 30,
+        };
+        capture(reservation);
+        ctx.reserved.push(reservation);
+      } else ctx.reserved.push({
         pos: vec(ax + (bx - ax) * (s / steps), ay + (by - ay) * (s / steps)),
         radius: halfW + 30,
       });
@@ -85,7 +94,13 @@ function windingLayout(ctx: GenCtx, def: ZoneDef): void {
   const grid = ensureGrid(ctx);
   const all = Mask.forRect(0, 0, arena.w, arena.h);
   all.invert(); // full coverage
-  paintRegion(grid, all, negativeRegion(def));
+  const negative = negativeRegion(def);
+  const producer = grid.beginNativeRecipeGround(negative);
+  const reservations = producer ? beginRecipeReservations() : undefined;
+  let handedOff = false;
+  try {
+  paintRegion(grid, all, negative, producer?.paintRect);
+  const claim = producer?.finish();
 
   const gutW = layoutParam(def, 'gutWidth', [64, 96]) as [number, number];
   const carve = Mask.forRect(0, 0, arena.w, arena.h);
@@ -96,7 +111,7 @@ function windingLayout(ctx: GenCtx, def: ZoneDef): void {
     const pts = wanderPath(rng, anchors[0], anchors[i], { step: 130, wobble: 60, bowFrac: 0.34 });
     const halfW = rng.range(gutW[0], gutW[1]) / 2;
     band(carve, pts, halfW);
-    reserveArtery(ctx, pts, halfW);
+    reserveArtery(ctx, pts, halfW, reservations?.capture);
   }
   // Branch stubs: dead-end pockets off the gut (loot corners, ambush nooks).
   const branches = layoutParam(def, 'branches', [2, 4]) as [number, number];
@@ -122,7 +137,15 @@ function windingLayout(ctx: GenCtx, def: ZoneDef): void {
   // Portal mouths breathe.
   for (const pt of anchors) disc(carve, pt.x, pt.y, 100);
   paintRegion(grid, carve, 'ground');
+  if (claim) {
+    installRecipeGround(ctx, grid, claim, reservations!.finish());
+    handedOff = true;
+  }
   scatterDecoration(ctx, def);
+  } finally {
+    if (!handedOff) producer?.finish().close();
+    reservations?.finish();
+  }
 }
 registerLayout('winding', windingLayout);
 

@@ -1,3 +1,4 @@
+import { ALTAR_BODY } from '../engine/altarBodies';
 import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
 import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
 import { RewardLabelLayout } from './vis/rewardLabels';
@@ -512,7 +513,11 @@ export class Renderer {
     this.resize();
   }
 
+  private resizeEpoch = 0;
+  private loadingRenderActive = false;
+
   resize(): void {
+    this.resizeEpoch++;
     const w = this.frameW, h = this.frameH;
     // Buffer at the scaled size; the ELEMENT stays window-sized (CSS pins it
     // — with no explicit style the element would shrink to the buffer).
@@ -587,6 +592,60 @@ export class Renderer {
   private falterH = 0;
 
   render(world: World): void {
+    if (this.loadingRenderActive) throw Error('A loading frame already owns the renderer');
+    const stages = this.renderStages(world, false);
+    while (!stages.next().done) { /* Ordinary frames stay entirely synchronous. */ }
+  }
+
+  /** Local entry holds simulation and input under its loading lease. A complete
+   * world pass releases its canvas scope before yielding to the cover; the word
+   * and HUD passes then finish that same frame. Resizing/settings changes start
+   * a new frame, never a suffix over an erased or differently projected buffer. */
+  async renderLoading(world: World, pause: () => Promise<void>, current: () => boolean): Promise<boolean> {
+    if (this.loadingRenderActive) throw Error('A loading frame already owns the renderer');
+    this.loadingRenderActive = true;
+    let stages: Generator<void, void, unknown> | undefined;
+    let completed = false;
+    try {
+      const zone = world.zone, player = world.player, time = world.time, walk = world.walk, arena = world.arena;
+      const ownerCurrent = (): boolean => current() && world.zone === zone && world.player === player &&
+        world.time === time && world.walk === walk && world.arena === arena;
+      while (ownerCurrent()) {
+        const stamp = this.loadingPresentationStamp(), settings = this.getSettings;
+        stages = this.renderStages(world, true);
+        const first = stages.next();
+        if (first.done) throw Error('The loading frame did not release its world pass');
+        await pause();
+        if (!ownerCurrent()) return false;
+        if (stamp !== this.loadingPresentationStamp() || settings !== this.getSettings) {
+          stages.return(); stages = undefined; this.clearLoadingWords();
+          continue;
+        }
+        if (!stages.next().done) throw Error('The loading frame has an unexpected extra stage');
+        stages = undefined;
+        completed = ownerCurrent();
+        return completed;
+      }
+      return false;
+    } finally {
+      stages?.return();
+      if (!completed) this.clearLoadingWords();
+      this.loadingRenderActive = false;
+    }
+  }
+
+  private loadingPresentationStamp(): string {
+    return JSON.stringify([this.resizeEpoch, this.frameW, this.frameH, this.pixelScale, this.baseZoom,
+      this.captureViewport, this.worldOnly, this.directorFocus, this.directorClean, this.directorNoSightVeil,
+      this.directorCinematic, this.getSettings?.()]);
+  }
+
+  private clearLoadingWords(): void {
+    this.labels.length = 0; this.speeches.length = 0;
+    this.speechFocusLines.clear(); this.dialogueVisibleSpeaker = null;
+  }
+
+  private *renderStages(world: World, cooperative: boolean): Generator<void, void, unknown> {
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
 
@@ -620,7 +679,7 @@ export class Renderer {
     this.falterW = w; this.falterH = h;
     const falterK = (this.getSettings?.().statusFalter ?? true)
       ? collectFalterK(this.frameFx) : 0;
-    if (falterK <= 0 || boundary || resized) {
+    if (falterK <= 0 || boundary || resized || cooperative) {
       // Not faltering (or must draw): disarm so the NEXT activation gets a
       // fresh firstDelaySec beat instead of a mid-schedule leftover.
       this.falterArmed = false;
@@ -958,6 +1017,7 @@ export class Renderer {
     this.drawRoofs(world);         // structure roofs: interiors reveal only when you're inside
 
     ctx.restore();
+    if (cooperative) yield;
 
     // THE ROOM VEIL: interior confinement — inside a confining structure the
     // world beyond the room is unseen (labels gate through veiledAt; the
@@ -4437,12 +4497,14 @@ export class Renderer {
       // The altar itself: foot course, slab, chisel light.
       drawShadow(ctx, x, y + 3, 15, 0.5);
       ctx.fillStyle = shade(ramp.base, -0.14);
-      ctx.fillRect(x - 14, y - 2, 28, 13);
+      ctx.fillRect(x - ALTAR_BODY.halfWidth, y + ALTAR_BODY.offsetY - ALTAR_BODY.halfHeight,
+        ALTAR_BODY.halfWidth * 2, ALTAR_BODY.halfHeight * 2);
       ctx.fillStyle = ramp.base;
       ctx.fillRect(x - 12, y - 11, 24, 14);
       ctx.strokeStyle = withAlpha(ramp.outline, 0.9);
       ctx.lineWidth = 1.3;
-      ctx.strokeRect(x - 14, y - 2, 28, 13);
+      ctx.strokeRect(x - ALTAR_BODY.halfWidth, y + ALTAR_BODY.offsetY - ALTAR_BODY.halfHeight,
+        ALTAR_BODY.halfWidth * 2, ALTAR_BODY.halfHeight * 2);
       ctx.strokeRect(x - 12, y - 11, 24, 14);
       ctx.fillStyle = withAlpha(ramp.light, 0.4);
       ctx.fillRect(x - 12, y - 11, 24, 3);

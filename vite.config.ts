@@ -1,3 +1,4 @@
+import { loadingFramePlugin } from './scripts/loading-frame-plugin';
 // ---------------------------------------------------------------------------
 // Vite config — adds a DISK-SAVE plugin so the game can persist to real files
 // in <project>/saves/ (survives the browser AND the dev server closing). The
@@ -16,6 +17,7 @@
 // ---------------------------------------------------------------------------
 
 import { defineConfig } from 'vite';
+import { createSaveWriteOrder } from './launcher/saveWriteOrder.cjs';
 import type { Connect, HmrContext, ViteDevServer, PreviewServer } from 'vite';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -50,6 +52,7 @@ import { fileURLToPath } from 'node:url';
 const HMR_FULL_RELOAD_PREFIXES: readonly string[] = ['src/engine/', 'src/data/'];
 
 function diskSavePlugin() {
+  const saveWriteOrder = createSaveWriteOrder();
   const dir = join(process.cwd(), 'saves');
   const slotPath = (slot: string): string => join(dir, `save_${slot}.json`);
 
@@ -92,10 +95,13 @@ function diskSavePlugin() {
       return;
     }
     if (req.method === 'POST') {
+      let selected;
+      try { selected = saveWriteOrder.select(m[1], url); }
+      catch { res.statusCode = 400; res.end('{"ok":false}'); return; }
       let body = '';
       req.on('data', (c) => { body += c; });
       req.on('end', () => {
-        try { JSON.parse(body); writeFileSync(file, body); res.statusCode = 200; res.end('{"ok":true}'); }
+        try { JSON.parse(body); const written = saveWriteOrder.commit(selected, () => writeFileSync(file, body)); res.statusCode = 200; res.end(JSON.stringify({ok:true, written})); }
         catch { res.statusCode = 400; res.end('{"ok":false}'); }
       });
       return;
@@ -131,7 +137,7 @@ function reloadTreesPlugin() {
 }
 
 export default defineConfig({
-  plugins: [diskSavePlugin(), reloadTreesPlugin()],
+  plugins: [diskSavePlugin(), reloadTreesPlugin(), loadingFramePlugin()],
   // Two pages: the game, and THE SKILL SHOWCASE ENGINE (showcase.html — the
   // sandboxed stage the game's showcases and the clip recorder play through;
   // docs/engine/skill-showcases.md). They share chunks, so the engine adds

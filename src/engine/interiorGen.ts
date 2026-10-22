@@ -21,13 +21,14 @@
 
 import { vec, type Vec2 } from '../core/math';
 import type { StampSpec, ZoneDef } from '../data/zones';
-import { GridWalkField } from '../world/gridWalk';
+import { GridWalkField, createNativeInteriorGrid } from '../world/gridWalk';
 import {
   doorSurfaceOf, layoutParam, layTraveledWay, registerLayout, registerTrapPass, scatterDecoration,
   stampEntries, type DoodadDoor, type GenCtx, type PlacedDoor, type PlacedStructure,
 } from './levelgen';
 import { ringPath, trackRider } from './tracks';
 import { TRAPWORK_CFG } from './trapworks';
+import { installInteriorRecipeGround } from './nativeRecipeGround';
 
 const CELL = 30;
 /** Interior margin (cells) between the arena border and any carved space. */
@@ -122,7 +123,10 @@ function interiorLayout(ctx: GenCtx, def: ZoneDef, preset?: Record<string, unkno
     return p === undefined ? dflt : (p as T);
   };
   const { rng, arena } = ctx;
-  const grid = new GridWalkField(arena.w, arena.h, CELL);
+  const initial = createNativeInteriorGrid(arena.w, arena.h, CELL);
+  const { grid } = initial;
+  let handedOff = false;
+  try {
   const wallKind = P('interiorWall', 'wall');
   const floorKind = P('interiorFloor', 'ground');
   // A fresh grid is all byte-0 'wall'; only a THEMED wall needs painting.
@@ -342,6 +346,10 @@ function interiorLayout(ctx: GenCtx, def: ZoneDef, preset?: Record<string, unkno
   // 7) ROLES — BFS depth over the FINAL edge set from the entry room, then the
   // registry decides what the deep rooms are and how they dress.
   ctx.walk = grid;
+  if (initial.claim) {
+    installInteriorRecipeGround(ctx, grid, initial.claim);
+    handedOff = true;
+  }
   const adj: number[][] = rooms.map(() => []);
   for (const [i, j] of edges) { adj[i].push(j); adj[j].push(i); }
   const depth = new Array<number>(n).fill(-1);
@@ -401,6 +409,9 @@ function interiorLayout(ctx: GenCtx, def: ZoneDef, preset?: Record<string, unkno
   // 8) The tileset's own clutter dresses the carved floor (walk-gated), same
   // as rooms/flesh/mycelia.
   scatterDecoration(ctx, def);
+  } finally {
+    if (!handedOff) initial.claim?.close();
+  }
 }
 
 // --- THE TRAP PASS -------------------------------------------------------------

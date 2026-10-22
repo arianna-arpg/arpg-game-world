@@ -1,191 +1,168 @@
-import { encipher } from '../data/runescript';
-import type { CosmeticLoadout } from '../engine/cosmetics';
-import { SpiritRun, spiritDirection, spiritLayout, type SpiritDirection } from '../loading/spiritRun';
-import { drawSpiritRun } from '../loading/spiritView';
+import { loadingPresentation } from '../loading/presentation';
+import loadingScript from 'virtual:mu-loading-script';
+import { spiritDirection } from '../loading/spiritRun';
 import { Z_LADDER } from './zorder';
+import { LOADING_CHANNEL, type LoadingCommand, type LoadingReply, type LoadingOptions,
+  type LoadingLease, type LoadingSnapshot } from '../loading/protocol';
+export type { LoadingOptions, LoadingStatus, LoadingLease } from '../loading/protocol';
 
-export interface LoadingStatus { label: string; detail?: string; completed?: number; total?: number }
-export interface LoadingOptions extends LoadingStatus {
-  kind: 'entry' | 'travel'; direction?: SpiritDirection; loadout?: CosmeticLoadout;
-  cancel?: () => void;
-}
-export interface LoadingLease {
-  readonly current: boolean;
-  update(status: LoadingStatus): void;
-  /** Yield a paint before a bounded CPU stage; this does not make that stage asynchronous. */
-  paint(): Promise<void>;
-  fail(message: string, retry?: () => void): void;
-  finish(): void;
-}
-
-/** A token-owned loading surface. Old jobs cannot dismiss or rewrite a new job.
- * No fake percentage, minimum duration, gameplay rewards or save writes. */
+/** The game owns readiness and world authority; the sandboxed foreground owns
+ * all minigame input and painting. Do not add allow-same-origin: it would put
+ * the crossing back on the game's blocked renderer thread in desktop Chromium. */
 export class LoadingScreen {
-  private root?: HTMLDivElement;
-  private canvas?: HTMLCanvasElement;
-  private label?: HTMLElement;
-  private detail?: HTMLElement;
-  private progress?: HTMLProgressElement;
-  private actions?: HTMLElement;
+  private frame: HTMLIFrameElement;
+  private ready = false;
+  private startupError?: string;
+  private token = 0;
+  private visible = false;
+  private closing = false;
+  private statusKey = '';
   private cancel?: () => void;
   private retry?: () => void;
-  private run?: SpiritRun;
-  private loadout?: CosmeticLoadout;
-  private token = 0;
-  private raf = 0;
-  private last = 0;
-  private keys = new Set<string>();
-  private releasedKeys = new Set<string>();
-  private pointer?: number;
+  private failure?: { message: string; retry: boolean };
+  private beginCommand?: LoadingCommand;
+  private latest?: LoadingSnapshot;
   private inert: { el: HTMLElement; was: boolean }[] = [];
   private focus?: HTMLElement;
+  private heldKeys = new Set<string>();
+  private releasedKeys = new Set<string>();
   private padHeld = false;
-  private padConfirm = false;
-  private statusKey = '';
-  private media = matchMedia('(prefers-reduced-motion: reduce)');
+  private request = 0;
+  private presented: Promise<void> = Promise.resolve();
+  private closeTimer?: ReturnType<typeof setTimeout>;
+  private paints = new Map<number, { token: number; resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+
   constructor(private clearWorldInput: () => void) {
+    const frame = this.frame = document.createElement('iframe');
+    frame.id = 'mu-loading-frame'; frame.title = 'The Crossing — Loading';
+    frame.sandbox.add('allow-scripts'); frame.allow = 'gamepad *'; frame.referrerPolicy = 'no-referrer';
+    frame.style.cssText = `position:fixed;inset:0;width:100%;height:100%;border:0;z-index:${Z_LADDER.loading};background:#080e16;display:none`;
+    const src = new URL(loadingScript, location.href).href;
+    frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${new URL(src).origin}; style-src 'unsafe-inline'"><style>html,body{margin:0;background:#080e16;color:#d9e9e3}.runescript{font-family:'Segoe UI Symbol','Noto Sans Runic',Junicode,serif}</style></head><body><script src="${src.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"></script></body></html>`;
+    window.addEventListener('message', this.receive);
     window.addEventListener('keydown', this.keyDown, true);
     window.addEventListener('keyup', this.keyUp, true);
-    window.addEventListener('blur', () => { this.keys.clear(); this.releasedKeys.clear(); this.pointer = undefined; });
-    document.addEventListener('visibilitychange', () => { this.last = 0; this.keys.clear(); this.pointer = undefined; });
+    window.addEventListener('blur', () => this.releasedKeys.clear());
+    // Warm the lightweight document at boot, before the player chooses a vessel.
+    document.body.append(frame);
+    setInterval(() => { if (this.visible && this.ready && !this.closing) this.send(this.command({ type: 'sample' })); }, 100);
   }
-  get active(): boolean { return !!this.root; }
-  /** Controller buttons held in the toy must be released before they can cast. */
+  get active(): boolean { return this.visible; }
   get padQuarantined(): boolean {
     if (!this.padHeld) return false;
-    this.padHeld = this.pads().some(p => p.axes.some(a => Math.abs(a) > 0.2) || p.buttons.some(b => b.pressed));
+    this.padHeld = Array.from(navigator.getGamepads?.() ?? []).some(p => p?.connected
+      && (p.axes.some(a => Math.abs(a) > 0.2) || p.buttons.some(b => b.pressed)));
     return this.padHeld;
   }
-  /** Read-only diagnostics for the real-client acceptance course. */
-  get snapshot() {
-    const r = this.run;
-    return { active: this.active, direction: r?.direction, time: r?.time, lane: r?.lane,
-      passed: r?.passed, streak: r?.streak, hits: r?.hits, speed: r?.speed, dash: r?.dash, currentsTaken: r?.currentsTaken, collected: r?.collected, boostGates: r?.boostGates,
-      pickups: r?.pickups.map(p => ({ ...p })), currents: r?.currents.map(b => ({ ...b })),
-      gates: r?.gates.map(g => ({ ...g, openings: g.openings.map(o => ({ ...o })) })), label: this.label?.textContent, failed: !!this.retry };
+  get snapshot(): LoadingSnapshot {
+    return { ...(this.latest ?? { direction: this.beginCommand?.type === 'begin' ? this.beginCommand.options.direction : undefined, time: 0, lane: 0, passed: 0, streak: 0, hits: 0,
+      speed: 1, dash: 0, currentsTaken: 0, collected: 0, boostGates: 0, pickups: [], currents: [], gates: [],
+      label: this.beginCommand?.type === 'begin' ? this.beginCommand.options.label : '', failed: false }), active: this.active };
+  }
+  private send(command: LoadingCommand): void { this.frame.contentWindow?.postMessage(command, '*'); }
+  private command(message: Record<string, unknown>): LoadingCommand {
+    return { ...message, channel: LOADING_CHANNEL, token: this.token } as LoadingCommand;
   }
   begin(options: LoadingOptions): LoadingLease {
-    this.close(); const token = ++this.token;
-    this.run = new SpiritRun(options.direction ?? spiritDirection(options.kind));
-    this.loadout = options.loadout; this.cancel = options.cancel; this.statusKey = '';
-    this.clearWorldInput(); this.keys.clear(); this.pointer = undefined;
-    this.focus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
-    this.inert = Array.from(document.body.children).filter((el): el is HTMLElement => el instanceof HTMLElement)
-      .map(el => ({ el, was: el.inert }));
-    for (const row of this.inert) row.el.inert = true;
-    const root = this.root = document.createElement('div'); root.id = 'mu-loading-screen';
-    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Mu crossing'); root.tabIndex = -1;
-    root.style.cssText = `position:fixed;inset:0;z-index:${Z_LADDER.loading};background:#080e16;color:#d9e9e3;font-family:Georgia,serif;overflow:hidden;touch-action:none;user-select:none`;
-    root.innerHTML = `<style>
-      #mu-loading-screen *{box-sizing:border-box}
-      #mu-loading-screen .mu-head{position:absolute;top:clamp(20px,5vh,52px);left:clamp(22px,5vw,76px);right:clamp(22px,5vw,76px);display:flex;justify-content:space-between;gap:20px;pointer-events:none}
-      #mu-loading-screen .mu-eyebrow{font:11px system-ui;letter-spacing:.3em;color:#86a59e}
-      #mu-loading-screen h1{font-weight:400;font-size:clamp(24px,3vw,42px);letter-spacing:.14em;margin:9px 0;color:#bcd4e8;text-shadow:0 0 22px #9ab8dc38}
-      #mu-loading-screen canvas{position:absolute;inset:108px 0 162px;width:100%;height:calc(100% - 270px)}
-      #mu-loading-screen footer{position:absolute;bottom:clamp(18px,4vh,42px);left:clamp(22px,5vw,76px);right:clamp(22px,5vw,76px);display:grid;grid-template-columns:1fr auto;gap:12px 26px;align-items:end;font-family:system-ui}
-      #mu-loading-screen .mu-status{font-size:14px;letter-spacing:.04em}
-      #mu-loading-screen .mu-detail{font-size:11px;color:#8ba5a4;min-height:16px;margin-top:6px;max-width:65ch}
-      #mu-loading-screen progress{display:block;width:min(320px,100%);height:3px;margin:12px 0 0;accent-color:#8acbbc}
-      #mu-loading-screen .mu-pickups{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:10px;letter-spacing:.04em;grid-column:1/-1}
-      #mu-loading-screen .mu-controls{font-size:10px;letter-spacing:.08em;color:#809695;grid-column:1/-1}
-      #mu-loading-screen button{border:1px solid #69877f;background:#17282c;color:#dfebe3;padding:9px 17px;font:12px system-ui;cursor:pointer;margin-left:8px}
-      #mu-loading-screen button:focus-visible{outline:2px solid #e8c992;outline-offset:4px}
-      @media(max-height:480px){#mu-loading-screen canvas{inset:80px 0 145px;height:calc(100% - 225px)}#mu-loading-screen .mu-head{top:14px}#mu-loading-screen h1{font-size:22px;margin:4px 0}#mu-loading-screen footer{bottom:12px;gap:5px}#mu-loading-screen .mu-detail{margin-top:2px}}
-      </style><canvas aria-label="Steer the wisp through the openings in the spirit gates. Follow wandering spirits and optionally ride the wispy chevron currents to surge ahead."></canvas>
-      <header class="mu-head"><div><div class="mu-eyebrow">HOLLOW WAKE</div><h1 class="runescript" aria-label="The Crossing — Loading">${encipher('The Crossing')}</h1></div></header>
-      <footer><div><div class="mu-status" role="status" aria-live="polite"></div><div class="mu-detail"></div><progress aria-label="Loading progress"></progress></div><div class="mu-actions"></div><div class="mu-pickups">FOLLOW THE WISPS &nbsp; · &nbsp; RIDE THE CURRENTS</div><div class="mu-controls">MOUSE / TOUCH &nbsp; · &nbsp; WASD / ARROWS &nbsp; · &nbsp; LEFT STICK</div></footer>`;
-    this.canvas = root.querySelector('canvas')!; this.label = root.querySelector('.mu-status')!;
-    this.detail = root.querySelector('.mu-detail')!;
-    this.progress = root.querySelector('progress')!; this.actions = root.querySelector('.mu-actions')!;
-    root.addEventListener('pointermove', e => this.point(e));
-    root.addEventListener('pointerdown', e => { if (!(e.target instanceof HTMLButtonElement)) { this.point(e); root.focus({ preventScroll: true }); } });
-    root.addEventListener('contextmenu', e => e.preventDefault());
-    document.body.append(root); root.focus({ preventScroll: true });
-    this.update(options); this.buttons(); this.last = 0; this.padConfirm = !!this.pads()[0]?.buttons[0]?.pressed;
-    this.raf = requestAnimationFrame(this.frame);
-    const current = (): boolean => this.active && this.token === token;
+    if (!this.visible) {
+      this.focus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+      this.inert = Array.from(document.body.children).filter((el): el is HTMLElement => el instanceof HTMLElement && el !== this.frame)
+        .map(el => ({ el, was: el.inert }));
+      for (const row of this.inert) row.el.inert = true;
+    }
+    this.settlePaints(); clearTimeout(this.closeTimer);
+    const token = ++this.token;
+    this.visible = true; this.closing = false; this.statusKey = ''; this.retry = undefined; this.failure = undefined;
+    this.cancel = options.cancel; this.latest = undefined; this.heldKeys.clear(); this.clearWorldInput();
+    this.frame.style.display = 'block'; this.frame.focus({ preventScroll: true });
+    // Publish the embedding frame's visibility before blocking the game. A child
+    // paint alone can acknowledge its old hidden state and remain throttled.
+    this.presented = loadingPresentation();
+    const { cancel, ...wire } = options;
+    this.beginCommand = this.command({ type: 'begin', options: { ...wire, direction: wire.direction ?? spiritDirection(wire.kind) }, cancel: !!cancel });
+    if (this.ready) this.send(this.beginCommand);
+    const current = (): boolean => this.visible && !this.closing && token === this.token;
     return { get current() { return current(); },
-      update: status => { if (current()) { this.retry = undefined; this.update(status); this.buttons(); } },
-      paint: () => new Promise(resolve => {
-        // Background tabs throttle rAF. Never strand a preparation on visibility.
-        let done = false; const finish = (): void => { if (!done) { done = true; resolve(); } };
-        const fallback = setTimeout(finish, 100);
-        requestAnimationFrame(() => setTimeout(() => { clearTimeout(fallback); finish(); }, 0));
-      }),
-      fail: (message, retry) => { if (current()) { this.retry = retry; this.update({ label: 'The crossing is interrupted', detail: message }); this.buttons(); } },
+      update: status => { if (current()) {
+        const key = JSON.stringify(status); if (key === this.statusKey) return;
+        this.statusKey = key; this.retry = undefined; this.failure = undefined;
+        if (this.beginCommand?.type === 'begin') Object.assign(this.beginCommand.options, { label: status.label, detail: status.detail, completed: status.completed, total: status.total });
+        if (this.ready) this.send(this.command({ type: 'status', status }));
+      } },
+      paint: async () => {
+        await this.presented;
+        if (!current()) return;
+        if (this.startupError) return Promise.reject(new Error(this.startupError));
+        const request = ++this.request;
+        return new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => { this.paints.delete(request); reject(new Error('The crossing did not become ready')); }, 15000);
+          this.paints.set(request, { token, resolve, reject, timer });
+          if (this.ready) this.send(this.command({ type: 'paint', request }));
+        });
+      },
+      fail: (message, retry) => { if (current()) { this.retry = retry;
+        const key = 'fail:' + message + ':' + !!retry; if (key === this.statusKey) return; this.statusKey = key;
+        this.failure = { message, retry: !!retry };
+        if (this.ready) this.send(this.command({ type: 'fail', ...this.failure })); } },
       finish: () => { if (current()) this.close(); },
     };
   }
-  private update(status: LoadingStatus): void {
-    const key = JSON.stringify(status); if (key === this.statusKey) return; this.statusKey = key;
-    this.label!.textContent = status.label; this.detail!.textContent = status.detail ?? '';
-    if (Number.isFinite(status.total) && status.total! > 0 && Number.isFinite(status.completed)) {
-      this.progress!.max = status.total!; this.progress!.value = Math.max(0, Math.min(status.completed!, status.total!));
-    } else this.progress!.removeAttribute('value');
-  }
-  private buttons(): void {
-    const actions = this.actions!;
-    // Do not replace a focused button every time a readiness poll repeats.
-    const key = `${!!this.retry}:${!!this.cancel}`; if (actions.dataset.key === key) return;
-    actions.dataset.key = key; actions.replaceChildren();
-    for (const [label, action] of [['Retry', this.retry], ['Cancel', this.cancel]] as const) if (action) {
-      const button = document.createElement('button'); button.textContent = label;
-      button.onclick = () => label === 'Retry' ? this.retry?.() : this.cancel?.(); actions.append(button);
-    }
-  }
   close(): void {
-    if (!this.root) return;
-    cancelAnimationFrame(this.raf);
-    for (const key of this.keys) this.releasedKeys.add(key);
-    this.keys.clear(); this.padHeld = true; this.clearWorldInput();
-    this.root.remove(); this.root = undefined; this.run = undefined; this.retry = undefined;
-    if (this.canvas) this.canvas.width = this.canvas.height = 1;
-    this.canvas = undefined; this.label = this.detail = this.actions = undefined;
-    this.progress = undefined; this.loadout = undefined; this.cancel = undefined;
+    if (!this.visible || this.closing) return;
+    this.closing = true; this.settlePaints();
+    // Keep world input held until the child returns the exact held-key set.
+    // This is an acknowledgement, not a minimum duration or a gameplay gate.
+    if (this.ready && !this.startupError) {
+      this.send(this.command({ type: 'close' }));
+      const token = this.token;
+      this.closeTimer = setTimeout(() => { if (this.closing && this.token === token) this.hide(); }, 1500);
+    }
+    else this.hide();
+  }
+  private hide(): void {
+    clearTimeout(this.closeTimer);
+    for (const key of this.heldKeys) this.releasedKeys.add(key);
+    this.heldKeys.clear(); this.padHeld = true; this.clearWorldInput();
+    this.visible = false; this.closing = false; this.cancel = this.retry = undefined; this.beginCommand = undefined;
+    this.frame.style.display = 'none';
     for (const row of this.inert) row.el.inert = row.was;
     this.inert = []; if (this.focus?.isConnected) this.focus.focus({ preventScroll: true });
   }
-  private pads(): Gamepad[] { return Array.from(navigator.getGamepads?.() ?? []).filter((p): p is Gamepad => !!p && p.connected); }
-  private keyDown = (e: KeyboardEvent): void => {
-    if (!this.active) { if (this.releasedKeys.has(e.code)) { e.preventDefault(); e.stopImmediatePropagation(); } return; }
-    if (e.code === 'Tab') {
-      const buttons = Array.from(this.actions!.querySelectorAll('button'));
-      const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      if (buttons.length) buttons[(i + (e.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
-      e.preventDefault(); e.stopImmediatePropagation(); return;
-    }
-    if ((e.code === 'Enter' || e.code === 'Space') && e.target instanceof HTMLButtonElement) { e.stopPropagation(); return; }
-    this.keys.add(e.code); this.pointer = undefined; e.preventDefault(); e.stopImmediatePropagation();
-  };
-  private keyUp = (e: KeyboardEvent): void => {
-    const quarantined = this.releasedKeys.delete(e.code); this.keys.delete(e.code);
-    if (this.active || quarantined) { e.stopImmediatePropagation(); }
-  };
-  private point(e: PointerEvent): void {
-    if (!this.run || !this.canvas) return;
-    const rect = this.canvas.getBoundingClientRect();
-    this.pointer = spiritLayout(rect.width, rect.height, this.run.direction).lane(e.clientX - rect.left, e.clientY - rect.top);
+  private settlePaints(error?: string): void {
+    for (const pending of this.paints.values()) { clearTimeout(pending.timer); if (error) pending.reject(new Error(error)); else pending.resolve(); }
+    this.paints.clear();
   }
-  private frame = (now: number): void => {
-    if (!this.root || !this.run) return;
-    const canvas = this.canvas!, rect = canvas.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
-    const width = Math.max(1, rect.width), height = Math.max(1, rect.height);
-    if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-      canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
+  private receive = (event: MessageEvent<LoadingReply>): void => {
+    const message = event.data;
+    if (event.source !== this.frame.contentWindow || event.origin !== 'null' || !message || message.channel !== LOADING_CHANNEL) return;
+    if (message.type === 'ready') {
+      this.ready = true;
+      if (this.beginCommand && this.visible && !this.closing) {
+        this.send(this.beginCommand);
+        if (this.failure) this.send(this.command({ type: 'fail', ...this.failure }));
+        for (const [request, pending] of this.paints) if (pending.token === this.token) this.send(this.command({ type: 'paint', request }));
+      }
+      return;
     }
-    const down = this.run.direction === 'down', keys = this.keys;
-    let axis = down ? Number(keys.has('ArrowRight') || keys.has('KeyD')) - Number(keys.has('ArrowLeft') || keys.has('KeyA'))
-      : Number(keys.has('ArrowDown') || keys.has('KeyS')) - Number(keys.has('ArrowUp') || keys.has('KeyW'));
-    const pad = this.pads()[0], stick = pad?.axes[down ? 0 : 1] ?? 0;
-    const dpad = pad ? Number(pad.buttons[down ? 15 : 13]?.pressed) - Number(pad.buttons[down ? 14 : 12]?.pressed) : 0;
-    if (Math.abs(stick) > 0.2 || dpad) { axis = dpad || stick; this.pointer = undefined; }
-    const confirm = !!pad?.buttons[0]?.pressed;
-    if (confirm && !this.padConfirm) this.actions?.querySelector('button')?.click();
-    this.padConfirm = confirm;
-    if (!this.active) return;
-    this.run.step(this.last && !document.hidden ? (now - this.last) / 1000 : 0, { axis, target: this.pointer }); this.last = now;
-    const ctx = canvas.getContext('2d');
-    if (ctx) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); drawSpiritRun(ctx, width, height, this.run, this.loadout, this.media.matches); }
-    this.raf = requestAnimationFrame(this.frame);
+    if (message.type === 'error') { this.startupError = message.message; this.settlePaints(message.message); if (this.visible) this.hide(); return; }
+    if (!this.visible || message.token !== this.token) return;
+    switch (message.type) {
+      case 'snapshot': this.latest = message.value; break;
+      case 'keys': this.heldKeys = new Set(message.keys); break;
+      case 'closed': this.heldKeys = new Set(message.keys); if (this.closing) this.hide(); break;
+      case 'painted': {
+        const pending = this.paints.get(message.request);
+        if (pending?.token === this.token) { clearTimeout(pending.timer); this.paints.delete(message.request); pending.resolve(); }
+        break;
+      }
+      case 'action': if (!this.closing) { if (message.action === 'cancel') this.cancel?.(); else { this.statusKey = ''; this.retry?.(); } } break;
+    }
+  };
+  private keyDown = (event: KeyboardEvent): void => {
+    if (this.visible || this.releasedKeys.has(event.code)) { event.preventDefault(); event.stopImmediatePropagation(); }
+  };
+  private keyUp = (event: KeyboardEvent): void => {
+    const quarantined = this.releasedKeys.delete(event.code);
+    if (this.visible || quarantined) event.stopImmediatePropagation();
   };
 }

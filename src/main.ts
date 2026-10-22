@@ -578,7 +578,7 @@ function cancelLoadingToMenu(): void {
 
 /** Main retains its existing world/save owners. Paint around their bounded
  * stages; the shared loading lease guards every asynchronous publication seam.
- * Synchronous construction still needs cooperative work or workers to animate. */
+ * The opaque foreground keeps animating through synchronous generation. */
 async function withLoadingScreen(work: (loading: LoadingLease) => void | Promise<void>, label = 'Taking form'): Promise<boolean> {
   const loading = loadingScreen.begin({ kind: 'entry', label, loadout: account.cosmetics.loadout, cancel: cancelLoadingToMenu });
   try {
@@ -588,8 +588,8 @@ async function withLoadingScreen(work: (loading: LoadingLease) => void | Promise
     if (!loading.current || !running) return false;
     loading.update({ label: 'Opening the world' });
     await loading.paint(); if (!loading.current) return false;
-    renderer.render(world);
-    return true;
+    const prepared = world;
+    return await renderer.renderLoading(prepared, () => loading.paint(), () => loading.current && running && world === prepared);
   } catch (error) { if (loading.current) reportFatal(error, 'world loading'); return false; }
   finally { loading.finish(); }
 }
@@ -638,7 +638,7 @@ function beginPressed(): void {
     startPicked(CLASSES.find(c => c.id === MU_CFG.provisionalClass) ?? CLASSES[0]);
     return;
   }
-  startMu();
+  void withLoadingScreen(() => startMu(), 'Entering Mu');
 }
 ui.onBeginRun = beginPressed;
 
@@ -2582,7 +2582,7 @@ function onDeathDismiss(): void {
     // THE LOOP CLOSES IN MU (data/mu.ts): a solo run's end drifts the player
     // back into the hub between lives — the next vessel is a walk, not a
     // menu. The main menu stays one Esc away from inside Mu.
-    startMu();
+    void withLoadingScreen(() => startMu(), 'Entering Mu');
   }
 }
 
