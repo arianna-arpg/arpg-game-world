@@ -1,3 +1,4 @@
+import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
 import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
 import { RewardLabelLayout } from './vis/rewardLabels';
 import { ALTAR_BODY } from '../engine/altarBodies';
@@ -426,6 +427,7 @@ export class Renderer {
     os.position = 'fixed'; os.left = '0'; os.top = '0';
     os.pointerEvents = 'none'; os.zIndex = String(Z_LADDER.crest); os.display = 'none';
     (canvas.parentElement ?? document.body).insertBefore(this.overlay, canvas.nextSibling);
+    visibilityCaptureSurfaces(canvas, this.overlay);
     this.resize();
     window.addEventListener('resize', () => this.resize());
     // Warm the canvas capability probe (vis/canvasCaps.ts) off the hot
@@ -845,6 +847,10 @@ export class Renderer {
     const sh = world.shake;
     const shx = sh > 0 ? (Math.random() * 2 - 1) * sh : 0;
     const shy = sh > 0 ? (Math.random() * 2 - 1) * sh : 0;
+    if (visibilityDiagnosticsEnabled) visibilityRecord('render', {
+      scale:this.pixelScale,zoom:z,width:w,height:h,shake:{x:shx,y:shy},
+      camera:{x:this.cam.x-shx,y:this.cam.y-shy},
+    });
     ctx.translate(-this.cam.x + shx, -this.cam.y + shy);
 
     this.drawFloor(world);

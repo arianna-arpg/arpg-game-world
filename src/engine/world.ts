@@ -260,6 +260,7 @@ import { gaugeSpend, type GaugeFeedSpec } from './gauge';
 import { gatherSympathyRecipients, SYMPATHY_CFG, SYMPATHY_LINKS, sympathyRelationOf, sympathyStat } from './sympathy';
 import { CHARGE_DEFS } from './charges';
 import { pushOutOfShape, shapeAabbHalf, shapeContains, type HitShape } from './shapes';
+import { movementDiagnosticsEnabled, recordMovement } from './movementDiagnostics';
 import { projFormNose, projFormTouches } from './projForms';
 import '../data/structures';
 import { dwellOf, sidezoneOf, sidezonePocketId } from '../data/sidezones';
@@ -43328,6 +43329,7 @@ actors: Actor[] = [];
         a.pos = this.clampPos(vec(
           a.pos.x + p.vx * dt,
           a.pos.y + p.vy * dt), a.radius, from, { out: sc, mover: a });
+        if (movementDiagnosticsEnabled) recordMovement(this, a, 'knockback', from, a.pos, { vx:p.vx, vy:p.vy, hit:sc.hit });
         const hit = sc.hit as string;
         // THE BOWLING LANE (engine/mass.ts): a body flying fast enough
         // slams through — or is arrested by — bodies in its path. Swept
@@ -48901,6 +48903,7 @@ actors: Actor[] = [];
       // off a lip (the aetherial rescue-snap lesson, disc space).
       if (pitRegionOf(stuck)) continue;
       const free = this.findFreeSpot(a.pos, a.radius, a.tier);
+      if (movementDiagnosticsEnabled) recordMovement(this, a, 'unstuck', a.pos, free, { kind:stuck.kind, obstacle:{...stuck.pos} });
       a.pos.x = free.x; a.pos.y = free.y;
     }
     const hasGrid = !!this.walk;
@@ -54763,12 +54766,14 @@ actors: Actor[] = [];
             // (The shove confines against the body's OWN story — a crowd
             // never nudges a storey walker through a hanging wall.)
             a.pos = this.clampPos(a.pos, a.radius, vec(fx, fy), { mover: a });
+            if (movementDiagnosticsEnabled) recordMovement(this, a, 'body-separation', vec(fx, fy), a.pos, { other:b.id });
           }
           if (!bFixed && aShare < 1) {
             const fx = b.pos.x, fy = b.pos.y;
             b.pos.x += Math.cos(ang) * overlap * (1 - aShare);
             b.pos.y += Math.sin(ang) * overlap * (1 - aShare);
             b.pos = this.clampPos(b.pos, b.radius, vec(fx, fy), { mover: b });
+            if (movementDiagnosticsEnabled) recordMovement(this, b, 'body-separation', vec(fx, fy), b.pos, { other:a.id });
           }
         }
       }

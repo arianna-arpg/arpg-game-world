@@ -669,6 +669,7 @@ export function sceneUpdateTerrainEffects(nativeHost:NativeSceneFrameHost, dt: n
       // off a lip (the aetherial rescue-snap lesson, disc space).
       if (pitRegionOf(stuck)) continue;
       const free = nativeHost.findFreeSpot(a.pos, a.radius, a.tier);
+      if (movementDiagnosticsEnabled) recordMovement(nativeHost, a, 'unstuck', a.pos, free, { kind:stuck.kind, obstacle:{...stuck.pos} });
       a.pos.x = free.x; a.pos.y = free.y;
     }
     const hasGrid = !!nativeHost.walk;
@@ -2920,12 +2921,14 @@ export function sceneSeparateActors(nativeHost:NativeSceneFrameHost): void {
             // (The shove confines against the body's OWN story — a crowd
             // never nudges a storey walker through a hanging wall.)
             a.pos = nativeHost.clampPos(a.pos, a.radius, vec(fx, fy), { mover: a });
+            if (movementDiagnosticsEnabled) recordMovement(nativeHost, a, 'body-separation', vec(fx, fy), a.pos, { other:b.id });
           }
           if (!bFixed && aShare < 1) {
             const fx = b.pos.x, fy = b.pos.y;
             b.pos.x += Math.cos(ang) * overlap * (1 - aShare);
             b.pos.y += Math.sin(ang) * overlap * (1 - aShare);
             b.pos = nativeHost.clampPos(b.pos, b.radius, vec(fx, fy), { mover: b });
+            if (movementDiagnosticsEnabled) recordMovement(nativeHost, b, 'body-separation', vec(fx, fy), b.pos, { other:a.id });
           }
         }
       }
@@ -4999,3 +5002,4 @@ export function sceneClearDoodadsNear(nativeHost:NativeSceneFrameHost, kind: str
     if (any) nativeHost.markDoodadsChanged();
   }
 
+import { movementDiagnosticsEnabled, recordMovement } from './movementDiagnostics';

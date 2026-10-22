@@ -1,4 +1,6 @@
 import {chance, clamp} from '../core/math';
+import { sweepDoodadMove } from './doodadMovement';
+import { doodadNavigation } from './doodadNavigation';
 import {baselineStatusDps} from './status';
 import {isDormant} from './ai';
 import {isDoodadGround} from '../world/regions';
@@ -194,8 +196,9 @@ export function nativeSceneDoodadFamilyRev(host:NativeSceneGeometryHost, id: str
 export function nativeScenePathField(host:NativeSceneGeometryHost, story = 0): WalkField | null {
     if (host.walk) {
       if (!host.walk.pathStep) return null;
-      if (story >= 1 && host.zone.tiers && host.tierViews) return host.tierPathField(story);
-      return host.walk;
+      const navTier = story >= 1 && host.zone.tiers && host.tierViews ? Math.min(story, host.tierViews.length - 1) : 0;
+      const base = navTier >= 1 ? host.tierPathField(navTier) : host.walk;
+      return base instanceof GridWalkField ? doodadNavigation(host, base, navTier, host.navigationPad, host.bridges) : base;
     }
     if (host.arena.boundless) return null;
     // Convex zones carry no tier stack (tierViews ride host.walk), so every
@@ -378,7 +381,8 @@ export function nativeSceneClampPos(host:NativeSceneGeometryHost, p: Vec2, radiu
     // Iterate: escaping one circle of a blob can land inside its neighbor.
     // Candidates come from the spatial index, re-queried per pass (a push can
     // slide the point toward discs the first bucket didn't see).
-    for (let pass = 0; pass < 3; pass++) {
+    const sweptDoodads = from && sweepDoodadMove(host, host.bridges, from, out, radius, mvTier, opts?.out);
+    for (let pass = 0; !sweptDoodads && pass < 3; pass++) {
       let moved = false;
       for (const o of host.doodadsAt(out.x, out.y)) {
         if ((o.tier ?? 0) !== mvTier) continue; // its layer's furniture only
@@ -411,6 +415,7 @@ export function nativeSceneClampPos(host:NativeSceneGeometryHost, p: Vec2, radiu
       if (!moved) break;
     }
     }
+    const sweepEndX = out.x, sweepEndY = out.y;
     const b1 = clampToBounds(out, radius, host.arena);
     out.x = b1.x; out.y = b1.y;
     // THE TIER SWAP (engine/tiers.ts): an elevated mover confines against
@@ -470,6 +475,10 @@ export function nativeSceneClampPos(host:NativeSceneGeometryHost, p: Vec2, radiu
       }
     }
     } finally { if (tierSwap) host.walk = tierSwap; } // the tier swap ends with the walk confine
+    // Grid axis sliding must not introduce a new furniture overlap.
+    if (from && !opts?.disp?.ignoreConfine && (out.x !== sweepEndX || out.y !== sweepEndY)) {
+      sweepDoodadMove(host, host.bridges, from, out, radius, mvTier, opts?.out, false);
+    }
     // THE PITFALL CONFINE (the pitfall fabric, engine/pitfall.ts): fall-able
     // pit doodads are DROPS, not walls. The sweep advances while the body's
     // grasp disc still overlaps standing ground or a spanning deck — the
@@ -683,6 +692,7 @@ export function nativeSceneSetDoorState(host:NativeSceneGeometryHost, id: string
     if (state === 'open' ? (d.door.open || d.door.broken) : d.door.broken) return;
     if (state === 'open') d.door.open = true;
     else { d.door.broken = true; d.door.open = true; }
+    host.markDoodadsChanged(d); // doodadNavigation and sight caches follow free-standing doors too
     const nativeSettlementGrid = host.nativeGridAt(d.pos);
     if (nativeSettlementGrid && d.door.cells) {
       const c = d.door.cells;

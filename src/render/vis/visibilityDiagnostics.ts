@@ -1,4 +1,5 @@
 import type { World } from '../../engine/world';
+import { takeMovementRecords } from '../../engine/movementDiagnostics';
 
 /** Opt-in local playtest recorder. Normal play allocates no frame history or
  * readback canvas. The record is presentation data, never a saved character. */
@@ -8,12 +9,28 @@ type Frame = { at: number; [key: string]: unknown };
 const frames: Frame[] = [];
 let current: Frame | undefined, previousAt = 0, mounted = false, capturing = false;
 let sampler: HTMLCanvasElement | undefined;
+let surfaces: { world:HTMLCanvasElement; overlay:HTMLCanvasElement } | undefined;
+/** Renderer-owned surfaces avoid mistaking the full-resolution text overlay
+ * for the world when adaptive resolution reduces the world buffer. */
+export function visibilityCaptureSurfaces(world:HTMLCanvasElement, overlay:HTMLCanvasElement): void {
+  if (visibilityDiagnosticsEnabled) surfaces={world,overlay};
+}
+export function captureVisibilityCanvas(world:HTMLCanvasElement, overlay?:HTMLCanvasElement): HTMLCanvasElement {
+  const c=document.createElement('canvas');
+  c.width=Math.max(world.width,overlay?.width??0);c.height=Math.max(world.height,overlay?.height??0);
+  const ctx=c.getContext('2d')!;ctx.drawImage(world,0,0,c.width,c.height);
+  if(overlay && getComputedStyle(overlay).display!=='none')ctx.drawImage(overlay,0,0,c.width,c.height);
+  return c;
+}
 const limit = 300;
 export function beginVisibilityFrame(world: World, camera: { x:number; y:number; w:number; h:number }): void {
   if (!visibilityDiagnosticsEnabled) return;
   const now = performance.now();
   current = { at: now, gapMs: previousAt ? now - previousAt : 0, time: world.time,
-    zone: world.zone.id, eye: { ...world.player.pos }, tier: world.player.tier, camera,
+    zone: world.zone.id, seed:world.zone.seed, eye: { ...world.player.pos }, tier: world.player.tier, camera,
+    movement:takeMovementRecords(world), hero:{radius:world.player.radius,velocity:{...world.player.vel},
+      push:world.player.push?{vx:world.player.push.vx,vy:world.player.push.vy}:null,
+      dash:!!world.player.dash,leap:!!world.player.leap,carom:!!world.player.caromRun},
     actors: world.actors.length, projectiles: world.projectiles.length,
     flashes: world.flashes.length, doodads: world.doodads.length };
   previousAt = now;
@@ -44,13 +61,19 @@ function mount(): void {
     if (capturing) return;
     capturing = true; button.textContent = 'Capturing…';
     const before = frames.slice(), markedAt = performance.now();
-    const canvas = [...document.querySelectorAll('canvas')].sort((a,b)=>b.width*b.height-a.width*a.height)[0];
     let screenshot: string | undefined;
-    try { screenshot = canvas?.toDataURL('image/png'); } catch { /* the trace remains usable */ }
+    try { if(surfaces)screenshot=captureVisibilityCanvas(surfaces.world,surfaces.overlay).toDataURL('image/png'); } catch { /* the trace remains usable */ }
     await new Promise(resolve => setTimeout(resolve, 1000));
+    const captured=[...before, ...frames.filter(f=>f.at>markedAt)];
+    const geometries:unknown[]=[], ids=new Map<unknown,number>();
+    const packed=captured.map(({sightGeometry,...frame})=>{
+      if(!sightGeometry)return frame;
+      let id=ids.get(sightGeometry);if(id===undefined){id=geometries.length;ids.set(sightGeometry,id);geometries.push(sightGeometry);}
+      return {...frame,sightGeometryId:id};
+    });
     const report = { version: 1, markedAt, recordedAt: new Date().toISOString(),
       viewport: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio },
-      mask: { w:32, h:24 }, frames: [...before, ...frames.filter(f=>f.at>markedAt)], screenshot };
+      mask: { w:32, h:24 }, frames:packed, geometries, screenshot };
     const json = JSON.stringify(report);
     let saved = false;
     if (['127.0.0.1','localhost'].includes(location.hostname)

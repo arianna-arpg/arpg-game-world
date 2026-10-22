@@ -7,11 +7,12 @@ import type { Doodad } from '../src/engine/levelgen';
 
 /** Real simulation + renderer, with active pursuing actors, dense cover and
  * transient flashes. Timing is reported, not asserted against one machine. */
-export function combatProfile() {
+export function combatProfile(instrumentMovement = false) {
  const restore=seedGlobalRandom(71379);
  const w=makeSimWorld('warrior',71379),g=new GridWalkField(4800,4800,24);
  g.fillRegion(0,0,4799,4799,'ground');g.fillDisc(2700,2400,120,'wall');
  w.walk=g;w.zone.size={w:4800,h:4800};w.zone.theme={...w.zone.theme,ambientDark:.55};
+ w.arena={w:4800,h:4800,shape:'rect'};w.arenaHull={w:4800,h:4800};
  w.player.pos={x:2100,y:2400};w.actors=[w.player];w.doodads=[];w.exits=[];w.structures=[];
  w.player.sheet.setSource('lighting-qa',[mod('life','override',1000000),mod('lifeRegen','override',1000000)]);
  w.player.fillResources();
@@ -30,6 +31,12 @@ export function combatProfile() {
  const times:number[]=[],sim:number[]=[],detail:Record<string,number[]>={};
  const internal=renderer as unknown as {lightLayer:{collect:(...a:unknown[])=>unknown;render:(...a:unknown[])=>unknown};sightVeil:{update:(...a:unknown[])=>unknown;draw:(...a:unknown[])=>unknown}};
  let measuring=false;
+ const movement:Record<string,{calls:number;ms:number}>={};
+ if(instrumentMovement)for(const key of ['clampPos','sweepDoodadMove','findFreeSpot','doodadsAt','doodadsNear','updateTerrainEffects','separateActors','walkResolve']){
+  const obj=w as unknown as Record<string,(...a:unknown[])=>unknown>,fn=obj[key];if(!fn)continue;
+  const entry=movement[key]={calls:0,ms:0};
+  obj[key]=function(...args:unknown[]){const t=performance.now();try{return fn.apply(this,args)}finally{if(measuring){entry.calls++;entry.ms+=performance.now()-t}}};
+ }
  for(const [name,obj,key] of [['lightCollect',internal.lightLayer,'collect'],['lightDraw',internal.lightLayer,'render'],['sightUpdate',internal.sightVeil,'update'],['sightDraw',internal.sightVeil,'draw']] as const){
   const target=obj as unknown as Record<string,(...a:unknown[])=>unknown>,fn=target[key];detail[name]=[];
   target[key]=function(...args:unknown[]){const t=performance.now();try{return fn.apply(this,args)}finally{if(measuring)detail[name].push(performance.now()-t)}};
@@ -45,6 +52,6 @@ export function combatProfile() {
  }
  const p=(a:number[],q:number)=>a.slice().sort((a,b)=>a-b)[Math.floor((a.length-1)*q)];
  const passes=Object.fromEntries(Object.entries(detail).map(([k,a])=>[k,{p50:p(a,.5),p95:p(a,.95),max:Math.max(...a)}]));
- const result={passes,frames:times.length,maxActors,maxFlashes,render:{p50:p(times,.5),p95:p(times,.95),max:Math.max(...times)},simulation:{p50:p(sim,.5),p95:p(sim,.95)},finite:times.every(Number.isFinite)};
+ const result={passes,movement,frames:times.length,maxActors,maxFlashes,render:{p50:p(times,.5),p95:p(times,.95),max:Math.max(...times)},simulation:{p50:p(sim,.5),p95:p(sim,.95)},finite:times.every(Number.isFinite)};
  canvas.remove();restore();return result;
 }

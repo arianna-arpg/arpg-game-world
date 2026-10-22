@@ -149,12 +149,10 @@ export const SIGHT_VEIL_GEO = {
    *  can carry the eye to the face line itself — a melt there would BE the
    *  sight hack). */
   surfaceFeather: 10,
-  /** Far-boundary fan pitch (radians): every shadow's far side is swept as
-   *  an eye-centered arc in steps of at most this, never closed with one
-   *  straight chord. Distant casters span less than one step and pay zero
-   *  extra points; a pressed eye's near-π silhouette gets the honest
-   *  half-plane. (The chord's sag toward the eye at wide spans was the
-   *  wall-press "overview" inversion.) */
+  /** Maximum far-boundary fan pitch (radians). A fixed ceil(π / pitch)
+   *  subdivision count keeps the vertices continuous as the silhouette
+   *  widens. The fan also prevents a wide shadow's closing chord from
+   *  sagging toward the eye and exposing the ground behind a pressed wall. */
   arcStep: Math.PI / 6,
   /** World px of ON-PLANE tolerance for a wall face's facing test. Grid
    *  collision holds the eye's CENTER on the face line itself (measured
@@ -280,6 +278,7 @@ export class SightVeil {
 
   /** Per-actor smoothed hide fades (WeakMap: dead actors collect themselves). */
   private shades = new WeakMap<object, { v: number; f: number }>();
+  private diagnosticGeometry?: unknown;
 
   /** Resolve strengths + refresh occluder caches. Once per frame, before
    *  draw. confineFrac is the room veil's wrap (this pass yields to a
@@ -290,6 +289,7 @@ export class SightVeil {
   update(view: SightView, confineFrac: number, vw: number, vh: number,
     concealed: readonly { x: number; y: number; w: number; h: number }[] = []): void {
     const started = visibilityDiagnosticsEnabled ? performance.now() : 0;
+    let geometryChanged = false;
     const cfg = VIS_CFG.sightVeil;
     this.frame++;
     this.drew = false;
@@ -334,6 +334,7 @@ export class SightVeil {
       || view.doodads !== this.dooArr || view.doodads.length !== this.dooLen
       || this.radius > this.dooR || heroLifted) {
       this.gatherDoodads(view);
+      geometryChanged = true;
       this.dooBx = bx; this.dooBy = by; this.dooRev = view.doodadRev;
       this.dooArr = view.doodads; this.dooLen = view.doodads.length;
       this.dooR = this.radius + GATHER_PAD;
@@ -357,14 +358,24 @@ export class SightVeil {
         || g.version !== this.gridV || this.radius > this.gridR || hullChanged
         || heroLifted) {
         this.extractEdges(g);
+        geometryChanged = true;
         this.gridRef = g; this.gridBx = gbx; this.gridBy = gby;
         this.gridV = g.version; this.gridR = this.radius + GATHER_PAD;
       }
     } else if (this.gridRef) {
       this.gridRef = null;
       this.edges.length = 0;
+      geometryChanged = true;
     }
     this.wallEye = wallContactEye(this.edges, p.x, p.y);
+    if (visibilityDiagnosticsEnabled) {
+      if (geometryChanged || !this.diagnosticGeometry) this.diagnosticGeometry = {
+        discs:this.discs.map(({owner,...c})=>({...c,kind:owner?.kind,tier:owner?.tier??0})),
+        rects:this.rects.map(({owner,...r})=>({...r,kind:owner?.kind,tier:owner?.tier??0})),
+        edges:this.edges.map(e=>({...e})),
+      };
+      visibilityRecord('sightGeometry', this.diagnosticGeometry);
+    }
     if (visibilityDiagnosticsEnabled) visibilityRecord("sight", { updateMs:performance.now()-started,
       discs:this.discs.length,rects:this.rects.length,edges:this.edges.length,
       gridVersion:this.gridV,tier:this.heroT,wallEye:{...this.wallEye},
@@ -534,7 +545,7 @@ export class SightVeil {
         // shadow lies past the veil radius casts nothing; a point past a
         // body's shadow length reads clear of THAT body.
         if (bd - c.r > this.radius) continue;
-        if (len > bd + castLen(c.r, c.s)) continue;
+        if (len > discShadowReach(bd, c.r, c.s, this.radius * VIS_CFG.sightVeil.farSlack)) continue;
         if (segHitsCircle(px, py, qx, qy, len2, c.x, c.y, c.r)) {
           f = v;
           if (f >= this.doodadF) break;
@@ -547,7 +558,8 @@ export class SightVeil {
           if (v <= f) continue;
           const bd = Math.hypot(r.x - px, r.y - py);
           if (bd - r.boundR > this.radius) continue;
-          if (len > bd + castLen(r.boundR, r.s)) continue;
+          const geometry = rectShadowGeometry(r, px, py, this.radius * VIS_CFG.sightVeil.farSlack);
+          if (!geometry || len > geometry.reach) continue;
           // Broad phase at the bounding circle, then THE EXACT SLAB: the
           // drawn wedge walks the TRUE oriented corners (rectShadowPath),
           // so the query must test the same slab. The circle verdict alone
@@ -785,7 +797,10 @@ function farArc(sink: PathSink, px: number, py: number, thFrom: number,
   let d = thTo - thFrom;
   while (d > Math.PI) d -= Math.PI * 2;
   while (d < -Math.PI) d += Math.PI * 2;
-  const n = Math.ceil(Math.abs(d) / SIGHT_VEIL_GEO.arcStep);
+  // A variable ceil(span / pitch) changes every vertex at once at each
+  // pitch boundary. Even subpixel eye movement then flashes a wide crescent.
+  // Keep topology fixed so every point moves continuously with the eye.
+  const n = Math.ceil(Math.PI / SIGHT_VEIL_GEO.arcStep);
   for (let i = 1; i < n; i++) {
     const th = thFrom + d * (i / n);
     sink.lineTo((px + Math.cos(th) * R - ox) * k, (py + Math.sin(th) * R - oy) * k);
@@ -905,11 +920,9 @@ export function discShadowPath(sink: PathSink, cx: number, cy: number,
   ox: number, oy: number, k: number): number {
   const dx = cx - px, dy = cy - py;
   const d2 = dx * dx + dy * dy;
-  if (d2 <= r * r + 1) return 0;   // the eye is inside the body
   const d = Math.sqrt(d2);
-  const melt = Math.min(1, (d - r) / SIGHT_VEIL_GEO.surfaceFeather);
-  if (melt <= 0) return 0;
-  const reach = Math.min(far, d + castLen(r, s)) * melt;
+  const reach = discShadowReach(d, r, s, far);
+  if (reach <= 0) return 0;
   const sin = r / d, cos = Math.sqrt(Math.max(0, 1 - sin * sin));
   const L = d * cos;
   if (reach <= L + 0.5) return 0;  // fully melted: the wedge has no length left
@@ -925,6 +938,14 @@ export function discShadowPath(sink: PathSink, cx: number, cy: number,
   return 1;
 }
 
+/** The same finite/melting shadow range for raster and reveal queries. */
+function discShadowReach(d: number, r: number, s: number, far: number): number {
+  if (d * d <= r * r + 1) return 0;
+  const melt = Math.min(1, (d - r) / SIGHT_VEIL_GEO.surfaceFeather);
+  const reach = Math.min(far, d + castLen(r, s)) * melt;
+  return reach > Math.sqrt(Math.max(0, d * d - r * r)) + .5 ? reach : 0;
+}
+
 /** Append an oriented-rect body's shadow: the two bearing-extreme corners
  *  from the eye pushed to a body-scaled reach, far side fanned. MELT rides
  *  the eye's distance to the slab's SURFACE (the disc rule, oriented) — the
@@ -932,6 +953,24 @@ export function discShadowPath(sink: PathSink, cx: number, cy: number,
  *  at ordinary press distance against a wall slab. Exported for the probe. */
 export function rectShadowPath(sink: PathSink, r: OccRectLike,
   px: number, py: number, far: number, ox: number, oy: number, k: number): number {
+  const g = rectShadowGeometry(r, px, py, far);
+  if (!g) return 0;
+  // Unlike wall edges, a prop's reach is an absolute distance from the eye.
+  // Adding it to both corner positions overextended the painted shadow past
+  // the range used to reveal actors and labels.
+  const la = Math.hypot(g.minX - px, g.minY - py), lb = Math.hypot(g.maxX - px, g.maxY - py);
+  const ax = (g.minX - px) / la, ay = (g.minY - py) / la;
+  const bx = (g.maxX - px) / lb, by = (g.maxY - py) / lb;
+  sink.moveTo((g.maxX - ox) * k, (g.maxY - oy) * k);
+  sink.lineTo((g.minX - ox) * k, (g.minY - oy) * k);
+  sink.lineTo((px + ax * g.reach - ox) * k, (py + ay * g.reach - oy) * k);
+  farArc(sink, px, py, Math.atan2(ay, ax), Math.atan2(by, bx), g.reach, ox, oy, k);
+  sink.lineTo((px + bx * g.reach - ox) * k, (py + by * g.reach - oy) * k);
+  sink.closePath();
+  return 1;
+}
+
+function rectShadowGeometry(r: OccRectLike, px: number, py: number, far: number) {
   const cos = Math.cos(r.rot), sin = Math.sin(r.rot);
   // Surface distance in the slab's local frame (0 inside).
   const rx = px - r.x, ry = py - r.y;
@@ -939,7 +978,7 @@ export function rectShadowPath(sink: PathSink, r: OccRectLike,
   const ddx = Math.max(0, Math.abs(lx) - r.hw), ddy = Math.max(0, Math.abs(ly) - r.hh);
   const sd = Math.hypot(ddx, ddy);
   const melt = Math.min(1, sd / SIGHT_VEIL_GEO.surfaceFeather);
-  if (melt <= 0) return 0;         // the eye is inside (or on) the slab
+  if (melt <= 0) return null;         // the eye is inside (or on) the slab
   const base = Math.atan2(r.y - py, r.x - px);
   let minD = Infinity, maxD = -Infinity;
   let minX = 0, minY = 0, maxX = 0, maxY = 0;
@@ -952,9 +991,10 @@ export function rectShadowPath(sink: PathSink, r: OccRectLike,
     if (d < minD) { minD = d; minX = cx; minY = cy; }
     if (d > maxD) { maxD = d; maxX = cx; maxY = cy; }
   }
-  if (maxD - minD >= Math.PI) return 0;   // degenerate (eye on a face plane)
+  if (maxD - minD >= Math.PI) return null;   // degenerate (eye on a face plane)
   const reach = Math.min(far, Math.hypot(r.x - px, r.y - py) + castLen(r.boundR, r.s)) * melt;
-  return edgeShadowPath(sink, minX, minY, maxX, maxY, px, py, reach, ox, oy, k);
+  if (reach <= Math.max(Math.hypot(minX - px, minY - py), Math.hypot(maxX - px, maxY - py)) + .5) return null;
+  return { minX, minY, maxX, maxY, reach };
 }
 
 /** The rect fields the shadow builder needs (structural, for the probe). */

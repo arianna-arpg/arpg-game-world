@@ -1,4 +1,5 @@
 import type {DashConjureStash} from './nativeSceneCombatHost';
+import { movementDiagnosticsEnabled, recordMovement } from './movementDiagnostics';
 import {speedLingerMul} from './nativeSceneCombatResolution';
 /** Exact original42 complete local-frame sections, in original order.
  * This source extraction does not constitute scheduler/runtime activation. */
@@ -961,6 +962,7 @@ try {
         a.pos = nativeHost.clampPos(vec(
           a.pos.x + p.vx * dt,
           a.pos.y + p.vy * dt), a.radius, from, { out: sc, mover: a });
+        if (movementDiagnosticsEnabled) recordMovement(nativeHost, a, 'knockback', from, a.pos, { vx:p.vx, vy:p.vy, hit:sc.hit });
         const hit = sc.hit as string;
         // THE BOWLING LANE (engine/mass.ts): a body flying fast enough
         // slams through — or is arrested by — bodies in its path. Swept
