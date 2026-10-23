@@ -31,7 +31,7 @@ export async function combatProfile(instrumentMovement = false) {
  const canvas=document.createElement('canvas');canvas.width=1280;canvas.height=960;document.body.appendChild(canvas);
  const renderer=new Renderer(canvas);renderer.worldOnly=true;
  const times:number[]=[],sim:number[]=[],gaps:number[]=[],detail:Record<string,number[]>={};
- const internal=renderer as unknown as {lightLayer:{collect:(...a:unknown[])=>unknown;render:(...a:unknown[])=>unknown};sightVeil:{update:(...a:unknown[])=>unknown;draw:(...a:unknown[])=>unknown}};
+ const internal=renderer as unknown as {overlay:HTMLCanvasElement;lightLayer:{collect:(...a:unknown[])=>unknown;render:(...a:unknown[])=>unknown};sightVeil:{update:(...a:unknown[])=>unknown;draw:(...a:unknown[])=>unknown}};
  let measuring=false;
  const movement:Record<string,{calls:number;ms:number}>={};
  if(instrumentMovement)for(const key of ['clampPos','sweepDoodadMove','findFreeSpot','doodadsAt','doodadsNear','updateTerrainEffects','separateActors','walkResolve']){
@@ -61,5 +61,5 @@ export async function combatProfile(instrumentMovement = false) {
  const result={passes,movement,frames:times.length,maxActors,maxFlashes,pursuingActors,
   gap:{p50:p(gaps,.5),p95:p(gaps,.95),max:Math.max(...gaps)},
   render:{p50:p(times,.5),p95:p(times,.95),max:Math.max(...times)},simulation:{p50:p(sim,.5),p95:p(sim,.95)},finite:times.every(Number.isFinite)};
- canvas.remove();renderer.overlay.remove();restore();return result;
+ canvas.remove();internal.overlay.remove();restore();return result;
 }
