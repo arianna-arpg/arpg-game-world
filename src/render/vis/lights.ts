@@ -1,4 +1,5 @@
 import { beginVisibilityFrame, visibilityDiagnosticsEnabled, visibilityRecord, visibilityMask } from './visibilityDiagnostics';
+import { visibilityRaster, type VisibilityRasterView } from './visibilityRaster';
 // ---------------------------------------------------------------------------
 // THE LIGHT LAYER — a low-res darkness buffer modulated by the day/night
 // cycle (plus an optional per-zone ambient floor), punched through by every
@@ -354,7 +355,7 @@ export class LightLayer {
   /** Composite the darkness + bloom over the drawn world. Call with the
    *  UNTRANSFORMED context (screen space), after the world layer. */
   render(ctx: CanvasRenderingContext2D, camX: number, camY: number,
-    zoom: number, w: number, h: number, readable: readonly CombatRect[] = []): void {
+    zoom: number, w: number, h: number, readable: readonly CombatRect[] = [], rasterView?: VisibilityRasterView): void {
     const started = visibilityDiagnosticsEnabled ? performance.now() : 0;
     const dark = this.ambient;
     if (dark <= 0.02) {
@@ -364,8 +365,7 @@ export class LightLayer {
       if (visibilityDiagnosticsEnabled) visibilityRecord('lightDrawMs', performance.now()-started);
       return;
     }
-    const scale = VIS_CFG.lights.scale;
-    const bw = Math.max(2, Math.ceil(w * scale)), bh = Math.max(2, Math.ceil(h * scale));
+    const { width:bw, height:bh, k } = visibilityRaster(w,h,zoom,VIS_CFG.lights.scale,rasterView);
     if (this.buf.width !== bw || this.buf.height !== bh) {
       this.buf.width = bw; this.buf.height = bh;
     }
@@ -381,7 +381,6 @@ export class LightLayer {
     // single sprite replaces a per-light per-frame gradient allocation).
     b.globalCompositeOperation = 'destination-out';
     const punch = this.punchSprite();
-    const k = zoom * scale;
     for (const L of this.lights) {
       const sx = (L.x - camX) * k, sy = (L.y - camY) * k, sr = Math.max(1, L.r * k);
       if (L.poly) {

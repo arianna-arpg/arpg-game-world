@@ -197,3 +197,64 @@ hero motion state, zone seed, actual render scale and shake, and deduplicated
 shadow-caster geometry. Screenshot capture composites the renderer's world and
 visible text overlay explicitly; adaptive resolution previously caused it to
 select the larger text-only canvas. Captures remain local and are not save games.
+
+## Resolution-independent masks and forest frame pacing
+
+The two later Elderbough captures (`1792712168069`, `1792712182268`) contain
+640 recorded frames, including an overlapping interval. In the first recording
+the stationary tree shadow changes at each automatic resolution step: 1 → .85
+→ .7 → .55. The eye, terrain revision and 974 casters stay unchanged. The fixed
+three-pixel blur was measured in an increasingly coarse internal buffer, so its
+displayed width grew from 12 to about 22 pixels. The second recording has stable
+stationary masks and roughly 18–20 FPS movement; no collision/rescue jumps occur.
+
+`visibilityRaster.ts` now supplies a display-sized projection independent of
+the adaptive world surface. Sight shadows, room feathers and light occlusion
+share it. Camera framing uses the same display dimensions, avoiding the small
+eye/camera shift caused by rounded adaptive dimensions. Resolution still reduces
+world drawing; it does not change the visibility mask's shape or feather width.
+
+SightVeil now computes conservative angular candidate bins and finite reach once
+per eye/geometry change. Exact circle/slab, owner, range and elevation tests still
+decide visibility. This removes repeated whole-forest scans for actors, raised
+props and labels. All relevant casters remain admitted. A stationary shadow sheet
+is reused until its eye, camera, geometry, floor, strength or raster changes.
+Movement is not quantized, delayed or smoothed separately from the visible world.
+The first strength layer needs no erase pass into an already clear sheet.
+
+The recorder reuses unchanged sampled masks and adds `frameTiming` (frame gap,
+input/UI head, simulation, rendering and end-of-frame UI/network CPU time) plus `sightRaster` (dimensions
+and cache reuse). These separate engine work from scheduling/presentation delays
+in subsequent captures. There is no mask readback or history in ordinary play.
+
+Verification: `npm run test:lighting` includes `visibility-pacing-ui.cjs`.
+It checks identical mask pixels through all resolution steps, the actual
+renderer/camera, moving eyes, edited/replaced terrain, caster edits/removal,
+floor changes, room transitions and mask reuse/invalidation. 18,000 mixed-shape
+queries plus raised-owner checks must match `visibilityReference.ts`, the old
+exhaustive calculation preserved as a test-only oracle (no Git history needed).
+Replaying the two saved forest geometries with the corrected camera/raster
+produced zero sampled-mask change across all 556 stationary transitions,
+including the three recorded resolution drops (formerly 4.08, 4.46 and 5.30
+mean alpha changes out of 255).
+`--baseline=de3cdead` must fail the resolution checks. Also run sightveil,
+visibility_stability, lightingstability, stealth, tiers, storey,
+combatreadability and skillflights, plus `visibility-ui.cjs` and all type checks.
+
+The saved geometry can reconstruct the shadow layer, not the entire live world.
+Performance comparisons use a separate world with those tree silhouettes and
+100 active pursuers. Hardware acceleration and offscreen readback materially
+affect frame gaps; report CPU phases and backend alongside timings. They are
+measurements on the test machine, not a universal frame-rate guarantee.
+
+For a repeatable synthetic combat course, run
+`electron balance/lighting-stability-ui.cjs --combat --profile-movement`
+(optionally `VIS_GPU=1`). It advances real AI and simulation on animation frames,
+reports the number of moving pursuers, frame gaps and CPU phases, and uses a
+disposable browser profile. The captured-geometry A/B on this machine reduced
+median rendering CPU time from 18.9 to 13.5 ms at full resolution (100 pursuers,
+974 casters, hardware canvas); median visibility-query work fell from 3.8 to
+0.4 ms. At 55% resolution the stable mask costs more than the former shrunken
+mask, but total rendering still fell from 16.2 to 14.6 ms. Remaining browser
+scheduling/presentation delay needs the new live phase diagnostics; it cannot
+be diagnosed conclusively from the earlier recordings alone.
