@@ -342,6 +342,13 @@ statuses, passives, zones are plain data entries composed by one shared engine,
 and the player, monsters, and minions all act through a single skill pipeline
 (`World.useSkill()` in `src/engine/world.ts`).
 
+Skeleton Archer's independently timed wounds, held firing squads, mortars and
+elemental mage arts are documented in `docs/design/skeleton-archer.md`. Tuning
+lives in `data/skeletonArcherTree.ts` and `skeletonArcherSkills.ts`; reusable
+contracts live in `engine/channelFormation.ts` and `castSequence.ts`. Verify
+skeletonarcher, nestednecromancer, supportfabric, skillflights and skillvisuals,
+all types, sim smoke and the hidden `balance/skeleton-archer-ui.cjs` after a build.
+
 Necromancer summon trees live in `src/data/necromancerTrees.ts`; reusable crew
 arts and forms are in `necromancerSkills.ts` / `necromancerMinions.ts`. The
 current binary mutator anatomy, comparison checkpoint and summon grammar are

@@ -880,6 +880,7 @@ withSeededRandom(H_SEED, () => {
   const hero = world.player;
   const storm = Object.values(SKILLS).find(s =>
     s.delivery.type === 'storm' && !!s.baseDamage
+    && (typeof s.delivery.count === 'number' ? s.delivery.count : s.delivery.count[0]) >= 2
     && (s.delivery as { awaitRelease?: unknown }).awaitRelease === undefined)!;
   const inst = makeSkillInstance(storm, 1, 3);
   inst.sockets[0] = { def: SUPPORTS.buried_charge, level: 1 };
