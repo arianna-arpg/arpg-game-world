@@ -41,7 +41,7 @@ for (const school of SKELETAL_SCHOOLS) {
   };
   const novaId = 'skeletal_nova_' + type;
   SKELETON_ARCHER_SKILLS[novaId] = {
-    id: novaId, name: (type === 'chaos' ? 'Poison' : type === 'cold' ? 'Frost' : type[0].toUpperCase() + type.slice(1)) + ' Nova',
+    id: novaId, name: 'Skeletal ' + (type === 'chaos' ? 'Poison' : type === 'cold' ? 'Frost' : type[0].toUpperCase() + type.slice(1)) + ' Nova',
     description: "An intermittent nova of the mage's own element.", noDrop: true,
     tags: ['spell', 'aoe', type], color, manaCost: 0, cooldown: 7, useTime: 0.5,
     baseDamage: { [type]: [9, 15] }, delivery: { type: 'nova', radius: 190 },
