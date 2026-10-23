@@ -17,7 +17,7 @@ let checks = 0;
 const check = (label: string, value: unknown) => { assert.ok(value, label); checks++; };
 const census = Object.values(SKILLS).filter(s => ['storm', 'summon', 'construct'].includes(s.delivery.type));
 assert.deepEqual(Object.keys(SKILL_PRESENCES).sort(), census.map(s => s.id).sort());
-check('139 native sources covered without fallback collisions', census.length === 139 && !presenceProfile('constructor'));
+check('144 native sources covered without fallback collisions', census.length === 144 && !presenceProfile('constructor'));
 function trace(id: string, phase: PresencePhase, life: number, color: string, radius = 42) {
   let depth = 0; const calls: unknown[] = [];
   const ctx = new Proxy({ globalAlpha: 1, lineWidth: 1 } as Record<string, unknown>, {

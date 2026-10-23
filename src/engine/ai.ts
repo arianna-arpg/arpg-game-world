@@ -561,7 +561,7 @@ const DEFAULT_BRAIN: BrainDef = {};
 export function updateAI(actor: Actor, world: NativeSceneAIHost, dt: number): void {
   actor.companionReturnTo = undefined; // no stale return line through any early exit
   actor.feedingMeal = undefined; // feedingCue posture ends even on an early AI refusal.
-  if (actor.summonReform) return;
+  if (actor.summonReform || actor.channelFormation) return;
   ensureMovementTether(actor);
   if (refreshMovementTether(actor, world)?.returning) return;
   // Skip ANY player seat (the local hero AND co-op allies) — they're driven by

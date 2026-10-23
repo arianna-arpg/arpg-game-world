@@ -1,3 +1,5 @@
+import { SKILLS } from '../src/data/skills';
+import { makeSkillInstance } from '../src/engine/skills';
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -57,6 +59,20 @@ for(const row of rows){const a=again.get(row.id)!;assert.equal(a.life,row.life);
  assert.equal(replay.isSleeping(a),m.isSleeping(row.a));assert.equal(typeof a.statusRelay,'function');}
 next.player.pos={...rows[0].a.pos};replay.update(next,again);assert.ok(next.actors.includes(again.get(rows[0].id)!));
 console.log('PASS JSON Continue restores whole native resources, loot banks, sheets, typed recency clocks and dormant ownership');
+
+// Periodic minion bolts keep their exact phase and skill identity across a checkpoint.
+const periodic=w.createMonster('skeletal_pyromancer',3,'enemy');
+const periodicBolt=makeSkillInstance(SKILLS.skeletal_volatile_fire);periodic.skills=[periodicBolt];
+const flightStart=w.projectiles.length,periodicAim={x:periodic.pos.x+300,y:periodic.pos.y};
+for(let cast=0;cast<3;cast++)w.executeSkill(periodic,periodicBolt,periodicAim);
+const periodicState=captureNativeActorState(periodic);assert.ok(periodicState,'periodic casts remain checkpointable');
+const periodicTwin=w.createMonster('skeletal_pyromancer',3,'enemy');
+restoreNativeActorState(periodicTwin,JSON.parse(JSON.stringify(periodicState)),new Map([[periodic.id,periodicTwin]]));
+w.executeSkill(periodicTwin,periodicTwin.skills[0]!,periodicAim);
+const fourth=w.projectiles.find(p=>p.caster===periodicTwin)!;
+assert.ok(fourth&&Math.abs(fourth.radius-12.6)<1e-9,'the restored fourth cast retains its empowered payload');
+w.projectiles.splice(flightStart);
+console.log('PASS periodic minion cast phase survives native checkpoint restoration');
 
 // Native actions remain authoritative: an unresolved status, cast or emission
 // must stay active, even far away. Do not manufacture a save-friendly idle foe.

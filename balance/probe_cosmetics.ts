@@ -575,7 +575,7 @@ test('Skeletal mage visuals: pool and tree previews retain source identity, nati
   const ids = Object.keys(SKELETAL_MAGE_LEGACY.paint.summonBodies!), a = makeAccount();
   assert(ownsCosmetic(a.cosmetics, SKELETAL_MAGE_LEGACY.id));
   assert.deepEqual(cosmeticPreviewSummons('summon_skeleton_mage').map(m => m.id), ids);
-  assert.deepEqual(cosmeticPreviewSummons('summon_skeleton_archer').map(m => m.id), ['skeleton_archer', ...ids.slice(0, 4)]);
+  assert.deepEqual(cosmeticPreviewSummons('summon_skeleton_archer').map(m => m.id), ['skeleton_archer', 'skeletal_mortarman', ...ids.slice(0, 4)]);
   assert.deepEqual(cosmeticPreviewSummons('raise_dead').map(m => m.id), ['skeleton_warrior', 'zombie', 'court_abomination']);
   assert.deepEqual(cosmeticPreviewSummons('fireball'), []);
   assert.deepEqual(cosmeticPreviewSummons('missing_skill'), []);

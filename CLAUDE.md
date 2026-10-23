@@ -23,6 +23,12 @@ Tutorial scenes cannot feed account nemeses. See `docs/engine/tutorial-isolation
 verify tutorialisolation, scenes, mu, Odyssey checks and all types when changing
 scene departure or nemesis formation/manifestation.
 
+Skeleton Archer's independent wound timers, firing squads, mortars and elemental
+mage arts follow main's contracts in `docs/design/skeleton-archer.md`. The
+seamless adapter keeps cleanse timer updates in `nativeSceneRestoration.ts`
+and retires held formations before its delegated tree-field cleanup. Verify
+skeletonarcher, the current gameplay courses, all types and the client walkthrough.
+
 ## The delivery target
 
 Geography and physical places replace the connected-zone surface. Walking, combat, pursuit and consequences continue across streaming boundaries. Offline play is the core; a hosted shard serves the same world. Separate interiors can remain separate. Retain the existing combat, character and content systems wherever possible.

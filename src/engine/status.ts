@@ -28,6 +28,10 @@ export interface StatusDef {
    *  ailmentStacks stat — the cap is INVESTABLE). */
   stacking?: boolean;
   maxStacks?: number;
+  /** Each accepted stack expires separately; a full bank rejects refreshes. */
+  independentStacks?: true;
+  /** Only matching skills gain this typed hit bonus. DoTs never use it. */
+  hitVulnerability?: { skills: string[]; type: DamageType; perStack: number };
   /** Non-stacking RE-APPLICATION policy — what makes each ailment feel
    *  distinct. 'refresh' (default): refresh the timer, keep the stronger
    *  dps. 'strongest': a new application only takes hold if it is STRONGER —
@@ -375,6 +379,16 @@ export function scorchErosionAt(units: number): number {
 }
 
 export const STATUS_DEFS: Record<string, StatusDef> = {
+  rattled_bones: {
+    label: 'Rattled Bones', color: '#d8d0b0', duration: 5,
+    stacking: true, maxStacks: 30, independentStacks: true, element: 'physical',
+    hitVulnerability: { skills: ['skeletal_rattling_arrow', 'skeletal_bombardment', 'skeletal_arrowfall'], type: 'physical', perStack: 0.04 },
+    bodyFx: { glow: '#d8d0b0', glowAlpha: 0.12, glowScale: 1.2 },
+  },
+  soul_burn: { label: 'Soulfire', color: '#ed985a', duration: 4, dotType: 'fire', element: 'fire' },
+  soul_frost: { label: 'Soulfrost', color: '#8bd6ed', duration: 4, dotType: 'cold', element: 'cold' },
+  soul_shock: { label: 'Soulstorm', color: '#c5b6fa', duration: 4, dotType: 'lightning', element: 'lightning' },
+  soul_venom: { label: 'Soulvenom', color: '#a8ce72', duration: 4, dotType: 'chaos', element: 'chaos' },
   burn: {
     label: 'Burning', color: '#ff7a2a', duration: 4,
     element: 'fire',
@@ -1866,6 +1880,8 @@ export interface ActiveStatus {
   /** Presentation span for the latest accepted clock; never used for damage. */
   statusDuration?: number;
   stacks: number;
+  /** Remaining time of each independently expiring application. */
+  stackTimes?: number[];
   /** DoT damage per second per stack (locked in at application time). */
   dps: number;
   /** THE POWER LANE (2026-07-21, "scale ALL ailments"): the applier's ailment

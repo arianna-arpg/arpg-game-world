@@ -451,7 +451,8 @@ export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
     const resolved = { ...d, ...summonOver };
     resolved.crewSkills = union(d.crewSkills, summonOver.crewSkills);
     resolved.crewAuras = union(d.crewAuras, summonOver.crewAuras);
-    resolved.crewRules = [...(d.crewRules ?? []), ...(summonOver.crewRules ?? [])];
+    resolved.crewRules = [...(d.crewRules ?? []), ...[...(summonOver.crewRules ?? [])]
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))];
     resolved.crewInherit = [...(d.crewInherit ?? []), ...(summonOver.crewInherit ?? [])];
     resolved.crewOnDeath = [...(d.crewOnDeath ?? []), ...(summonOver.crewOnDeath ?? [])];
     resolved.crewMods = [...(d.crewMods ?? []), ...(summonOver.crewMods ?? [])];
@@ -1959,6 +1960,11 @@ export interface SummonDelivery {
    *  replenish.toggle allows deliberate presses to pause future births; starts on.
    *  Incompatible with corpse targeting, contracts, decay and cast waves. */
   replenish?: { interval: number; toggle?: boolean };
+  /** A held, growing flank formation. Pulses add bodies without evicting at cap.
+   * Its own channel is the canonical cast-mode conversion for every consumer. */
+  channelFormation?: { channel: ChannelSpec; spacing: number; reach: number; emerge?: import('./emerge').EmergeSpec };
+  /** At a full formation, release empowers each body's primary art. */
+  channelFormationRelease?: { power: number; size: number };
   /** Fixed minion type — or use `pool` for weighted random selection. */
   monsterId?: string;
   /** Weighted pool, re-rolled per spawn (and per respawn). */
@@ -3064,6 +3070,8 @@ export function rampValue(r: RampSpec, t: number): number {
 }
 
 export interface ChannelSpec {
+  /** Authored AI commitment in seconds, still interruptible by normal cast gates. */
+  aiHold?: number;
   /** Seconds between pulses (divided by cast/attack speed). */
   interval: number;
   /** Seconds of SPOOL-UP before the first pulse (divided by cast/attack
@@ -4707,6 +4715,9 @@ export interface SkillDef {
    *  the counter resets — "casting this three times imbues the next cast"
    *  baked innately (pairs with BuffEffect.nextHit for guaranteed riders). */
   castCycle?: { count: number; buff: BuffEffect };
+  /** Every Nth completed use carries this payload on that use, including misses.
+   * Repeats inherit the captured payload; interruptions never advance it. */
+  castSequence?: { every: number; power: number; size: number; effects: SkillEffect[] };
 
   /** SELF-STACKS (the per-skill frenzy): every completed REAL use feeds a
    *  pile that buffs ONLY THIS SKILL — see SelfStackSpec. A socketed
@@ -5125,7 +5136,7 @@ export interface SkillTreeNode {
      *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */
     summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'duration' | 'replenish'
-      | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
+      | 'channelFormation' | 'channelFormationRelease' | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
     /** Host tag changes. Crew skills retain their own attack/spell tags. */
     tags?: { add?: SkillTag[]; remove?: SkillTag[] };
     /** delivery.arcDeg replacement (cone/melee deliveries only). */
@@ -5400,7 +5411,8 @@ export function instanceCastCycle(inst: SkillInstance): SkillDef['castCycle'] {
  *  (byte-identical by construction). A Gathered Casting conversion still
  *  wins whole at its call sites (cs.gather ?? this view). */
 export function instanceChannel(inst: SkillInstance): ChannelSpec | undefined {
-  const base = inst.def.channel;
+  const delivery = instanceDelivery(inst);
+  const base = delivery.type === 'summon' ? delivery.channelFormation?.channel ?? inst.def.channel : inst.def.channel;
   if (!base) return base;
   const over = instanceTreeOver(inst)?.channel;
   return over ? { ...base, ...over } : base;
@@ -6402,7 +6414,7 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
     // stays whole through the apply_ arm below: an apply_<dot> gem beside
     // the asking gem re-opens the door AND makes the wound real, since
     // bonusChance adds past the tuned zero at application.
-    return attackSequenceStatuses(inst).some(fits) || inst.def.effects.some(e => e.type === 'status'
+    return attackSequenceStatuses(inst).some(fits) || [...inst.def.effects, ...(inst.def.castSequence?.effects ?? [])].some(e => e.type === 'status'
       && (e.magnitude ?? 0) > 0 && tuneAilmentChance(e.status, e.chance) > 0
       && fits(e.status))
       || hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
@@ -6554,13 +6566,13 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
       if (!sd) return false;
       if (param === 'power') {
         return !sd.powerInert && (!!sd.dotType || !!sd.mods?.length
-          || !!sd.buildup || !!sd.interruptChance || !!sd.scrambleChance);
+          || !!sd.hitVulnerability || !!sd.buildup || !!sd.interruptChance || !!sd.scrambleChance);
       }
       if (param === 'stacking') return !!sd.stacking;
       if (param) return id === param;
       return true;
     };
-    return attackSequenceStatuses(inst).some(qualifies) || inst.def.effects.some(e => e.type === 'status' && qualifies(e.status))
+    return attackSequenceStatuses(inst).some(qualifies) || [...inst.def.effects, ...(inst.def.castSequence?.effects ?? [])].some(e => e.type === 'status' && qualifies(e.status))
       || hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
         .some(m => m.stat.startsWith('apply_') && qualifies(m.stat.slice(6))));
   },
@@ -6942,5 +6954,7 @@ export function skillCooldownSeconds(
 
 /** Native absorb discipline changes commitment without rewriting catalog data. */
 export function instanceCastMode(inst: SkillInstance): CastMode {
+  const d = instanceDelivery(inst);
+  if (d.type === 'summon' && d.channelFormation) return 'channel';
   return guardArtsOf(inst)?.absorb ? 'cast' : inst.def.castMode ?? 'cast';
 }

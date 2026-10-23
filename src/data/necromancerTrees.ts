@@ -1,4 +1,5 @@
-import { tree, n, life, damage, cap, count, haste, speed, size, dr, body, kit, aura, element } from './skillTreeBuilder';
+import { SKELETON_ARCHER_TREE } from './skeletonArcherTree';
+import { tree, n, life, damage, cap, count, haste, speed, size, dr, body, kit, aura } from './skillTreeBuilder';
 import { UNDEAD_COURT_TREES } from './necromancerCourts';
 import type { SkillTreeSpec, SummonDelivery } from '../engine/skills';
 import { mod } from '../engine/stats';
@@ -49,23 +50,7 @@ export const NECROMANCER_TREES: Record<string, SkillTreeSpec> = {
       n('adamant_frame', 'Adamant Frame', '40% less damage taken and 25% more life, at the cost of 20% less damage dealt.', [dr(0.4), mod('minionLife', 'more', 0.25), mod('minionDamage', 'more', -0.2)])],
   ], n('fitted_joints', 'Fitted Joints', '20% increased minion life and 15% faster movement.', [life(0.2), speed(0.15)])),
 
-  summon_skeleton_archer: tree([
-    n('rattling_bows', 'Rattling Bows', 'Commit to physical archers. Raise two at once, up to four; 20% more mana cost.', [mod('manaCost', 'more', 0.2)], { summon: { monsterId: 'skeleton_archer', count: 2, maxActive: 4 }, tags: { add: ['physical'] } }),
-    [n('ranked_bows', 'Ranked Bows', 'One additional archer per casting and two more slots.', [count(1), cap(2)]),
-      n('endless_quivers', 'Endless Quivers', 'Two more slots and 25% faster minions.', [cap(2), haste(0.25)]),
-      n('piercing_bones', 'Piercing Bones', 'Archer projectiles pierce two more enemies and deal 20% increased damage.', undefined, body(mod('pierceCount', 'flat', 2, ['projectile']), mod('damage', 'increased', 0.2, ['projectile'])))],
-    [n('rain_of_bones', 'Rain of Bones', 'Archers learn Rain of Bones: arrows rain over an area on an 8-second cooldown.', undefined, kit('skeletal_arrowfall')),
-      n('drumming_rain', 'Drumming Rain', 'Rain of Bones recovers 60% faster, covers a 25% larger radius, deals 50% more damage and has 30% chance to bleed.', undefined, body(mod('cooldownRecovery', 'increased', 0.6, ['storm']), mod('aoeRadius', 'increased', 0.25, ['storm']), mod('damage', 'more', 0.5, ['storm']), mod('apply_bleed', 'flat', 0.3, ['storm']))),
-      n('cruel_rain', 'Forked Quivers', 'Archers fire one additional projectile with their bow attacks, including their ordinary arrows.', undefined, body(mod('projectileCount', 'flat', 1, ['attack', 'projectile'])))],
-  ], [
-    n('unstrung_sorcery', 'Unstrung Sorcery', 'Replace archers with random fire, cold, lightning or venom bolt casters. Retain the base summon count and cap. Element choices form a shared selection pool.', undefined, { summon: { pool: SKELETAL_MAGE_POOL } }),
-    [n('volatile_souls', 'Volatile Souls', 'One additional random mage per casting and one additional slot. Leave elements unselected to retain all four kinds.', [count(1), cap(1)]),
-      n('ember_souls', 'Ember Souls', 'Select fire mages. Multiple element choices summon randomly from only those selected.', undefined, element('skeletal_pyromancer')),
-      n('rime_souls', 'Rime Souls', 'Select cold mages. Combines with other element selections.', undefined, element('skeletal_cryomancer'))],
-    [n('unstable_current', 'Unstable Current', 'Bolts gain 12% critical strike chance and 40% critical multiplier: embrace volatile damage.', undefined, body(mod('critChance', 'flat', 0.12, ['spell']), mod('critMulti', 'flat', 0.4, ['spell']))),
-      n('storm_souls', 'Storm Souls', 'Select lightning mages. Combines with other element selections.', undefined, element('skeletal_stormcaller')),
-      n('venom_souls', 'Venom Souls', 'Select venom mages. Combines with other element selections.', undefined, element('skeletal_venomancer'))],
-  ], n('remembered_training', 'Remembered Training', '25% increased minion damage for either bows or spells.', [damage(0.25)])),
+  summon_skeleton_archer: SKELETON_ARCHER_TREE,
 
   summon_skeleton_mage: tree([
     n('lich_ascendant', 'Lich Ascendant', 'Fuse the batch into one Lich, up to one. It casts an explosive Fireball, has a stronger frame and 60% more damage. 40% more mana cost.', [mod('minionDamage', 'more', 0.6), mod('manaCost', 'more', 0.4)], { summon: { monsterId: 'ossuary_lich', count: 1, maxActive: 1 }, tags: { add: ['fire'] } }),

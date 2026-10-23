@@ -2121,6 +2121,12 @@ export function validateContent(): void {
       for (const id of [d.monsterId, ...(d.pool ?? []).map(p => p.id)]) {
         if (id && !MONSTERS[id]) warn(`${src}: unknown summon monster '${id}'`);
       }
+      if (d.channelFormation) {
+        const f = d.channelFormation;
+        if (![f.spacing, f.reach, f.channel.interval].every(v => Number.isFinite(v) && v > 0)
+          || d.persistent || d.replenish || d.fromCorpse || d.waves) warn(src + ': invalid channelFormation contract');
+      }
+      if (d.channelFormationRelease && ![d.channelFormationRelease.power, d.channelFormationRelease.size].every(v => Number.isFinite(v) && v > 0)) warn(src + ': invalid channelFormationRelease');
       for (const r of d.crewRules ?? []) {
         if (!r.monsterIds.length || r.monsterIds.some(id => !MONSTERS[id])) warn(src + ": invalid crewRules forms");
         for (const id of [...(r.skills ?? []), ...(r.replace ?? []).flatMap(x => [x.from, x.to])]) if (!SKILLS[id]) warn(src + ": unknown crewRules skill " + id);
@@ -2428,6 +2434,11 @@ export function validateContent(): void {
       }
     } else if (s.convert?.when === 'chargesEmpty') {
       warn(`skill ${s.id}: convert rule 'chargesEmpty' without useCharges — the bank can never run dry`);
+    }
+    if (s.castSequence) {
+      const c = s.castSequence;
+      if (!Number.isInteger(c.every) || c.every < 2 || ![c.power, c.size].every(v => Number.isFinite(v) && v > 0)) warn('skill ' + s.id + ': invalid castSequence');
+      for (const e of c.effects) if (e.type === 'status' && !STATUS_DEFS[e.status]) warn('skill ' + s.id + ': unknown castSequence status');
     }
     for (const cid of s.comboChain?.skills ?? []) {
       if (!SKILLS[cid]) warn(`skill ${s.id}: combo step '${cid}' is not a catalog skill`);
@@ -3078,7 +3089,7 @@ export function validateContent(): void {
   // against the kit's own defs.
   {
     const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns', 'recallImpales', 'aura', 'invocation']);
-    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease']);
+    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease', 'channelFormation', 'channelFormationRelease']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);

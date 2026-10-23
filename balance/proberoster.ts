@@ -65,6 +65,7 @@ export type ProbeRow = ProbeInvocation & (
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_nativecollisionshadow.ts', status: 'green', tier: 'fast', why: 'Real retained native actor frames stop collision jumps, and furniture navigation leaves authoritative floors intact.' },
+  { probe: 'probe_skeletonarcher.ts', status: 'green', tier: 'fast', why: 'Independent wounds, channel formations, full-cap releases, mortar payloads, crew support routing and elemental mage arts' },
   { probe: 'probe_collisionsweep.ts', status: 'green', tier: 'fast', why: 'Continuous furniture contact, real knockback, layer gates, phasing and seeded cluster movement; collision_shadow regression.' },
   { probe: 'probe_criticcrusadeterraincold.ts', status: 'green', tier: 'slow', why: 'Retained Crusade works renewal, exact fixture ownership and original source assertions.' },
   { probe: 'probe_criticcurrentcontinue175.ts', status: 'green', tier: 'slow', why: 'Retained Crusade works renewal, exact fixture ownership and original source assertions.' },

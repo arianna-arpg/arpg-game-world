@@ -257,6 +257,7 @@ export function sceneRingAfflictions(host:NativeSceneRestorationHost,target: Act
       if (def?.beneficial) continue;
       if (s.stacks > 1) {
         s.stacks -= Math.max(1, Math.round(s.stacks * portion));
+        if (s.stackTimes) s.stackTimes = s.stacks > 0 ? s.stackTimes.slice(-s.stacks) : [];
         if (s.stacks <= 0) {
           target.statuses.splice(i, 1);
           if (!target.statuses.some(o => o.id === s.id)) {
@@ -270,6 +271,7 @@ export function sceneRingAfflictions(host:NativeSceneRestorationHost,target: Act
         }
       } else {
         s.remaining *= 1 - portion;
+        if (s.stackTimes) s.stackTimes = s.stackTimes.map(t => t * (1 - portion));
       }
       rung++;
     }
