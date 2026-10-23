@@ -9,6 +9,7 @@ type Frame = { at: number; [key: string]: unknown };
 const frames: Frame[] = [];
 let current: Frame | undefined, previousAt = 0, mounted = false, capturing = false;
 let sampler: HTMLCanvasElement | undefined;
+const sampledMasks = new WeakMap<HTMLCanvasElement,{revision:string;width:number;height:number;alpha:number[]}>();
 let surfaces: { world:HTMLCanvasElement; overlay:HTMLCanvasElement } | undefined;
 /** Renderer-owned surfaces avoid mistaking the full-resolution text overlay
  * for the world when adaptive resolution reduces the world buffer. */
@@ -40,8 +41,12 @@ export function beginVisibilityFrame(world: World, camera: { x:number; y:number;
 export function visibilityRecord(key: string, value: unknown): void {
   if (visibilityDiagnosticsEnabled && current) current[key] = value;
 }
-export function visibilityMask(key: string, source: HTMLCanvasElement | null): void {
+export function visibilityMask(key: string, source: HTMLCanvasElement | null, revision?:string): void {
   if (!visibilityDiagnosticsEnabled || !current || !source) return;
+  const saved=revision===undefined?undefined:sampledMasks.get(source);
+  if(saved && saved.revision===revision && saved.width===source.width && saved.height===source.height){
+    current[key]=saved.alpha;return;
+  }
   if (!sampler) { sampler=document.createElement('canvas');sampler.width=32;sampler.height=24; }
   const ctx = sampler.getContext('2d', { willReadFrequently: true })!;
   ctx.clearRect(0,0,32,24);
@@ -49,6 +54,14 @@ export function visibilityMask(key: string, source: HTMLCanvasElement | null): v
   const rgba = ctx.getImageData(0, 0, 32, 24).data, alpha: number[] = [];
   for (let i = 3; i < rgba.length; i += 4) alpha.push(rgba[i]);
   current[key] = alpha;
+  if(revision!==undefined)sampledMasks.set(source,{revision,width:source.width,height:source.height,alpha});
+}
+
+/** CPU phases belong to the frame just drawn. The gap includes work outside
+ * this callback as well; recording both separates slow simulation/rendering
+ * from browser scheduling or presentation. No timing reads in normal play. */
+export function visibilityFrameTiming(gapMs:number,headMs:number,simulationMs:number,renderMs:number,tailMs:number):void {
+  visibilityRecord('frameTiming',{gapMs,headMs,simulationMs,renderMs,tailMs});
 }
 function mount(): void {
   mounted = true;

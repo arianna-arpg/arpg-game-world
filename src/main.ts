@@ -64,6 +64,7 @@ import './data/authoredMaps'; // side-effect: THE AUTHORED-MAP FABRIC's shipped 
 import './data/bountyJourneys';
 import './data/bountyExpeditions'; // side-effect: the bounty board's 'expedition' kind (an authored map minted at the take)
 import { updateAI } from './engine/ai';
+import { visibilityFrameTiming, visibilityDiagnosticsEnabled } from './render/vis/visibilityDiagnostics';
 import { World, type Seat } from './engine/world';
 import { applyLab, ULT_QA } from './engine/ultimates'; // THE LAB LEVER — the dev panel's Lab tab; __game.ultqa is its console twin
 import { sceneBegin, sceneCardAck, sceneDue, muTakeClassRequest, muOfferOf } from './engine/scenes';
@@ -2075,7 +2076,8 @@ function tick(now: number): void {
       feedRendererAim();
       const perfRenT0 = performance.now();
       renderer.render(world);
-      perfPush(frameGapMs, perfRenT0 - perfSimT0, performance.now() - perfRenT0);
+      const perfRenderMs = performance.now() - perfRenT0;
+      perfPush(frameGapMs, perfRenT0 - perfSimT0, perfRenderMs);
       const perfTailT0 = performance.now(); // PHASE LEDGER: the tail starts here
 
       // Broadcast to connected clients. Gated on a REAL wire (never LocalTransport),
@@ -2107,6 +2109,8 @@ function tick(now: number): void {
 
       hostTail(dt);
       phasePendTail = performance.now() - perfTailT0; // flushes at the NEXT tick's fold
+      if(visibilityDiagnosticsEnabled) visibilityFrameTiming(frameGapMs,perfSimT0-tickT0,
+        perfRenT0-perfSimT0,perfRenderMs,phasePendTail);
     } else {
       // ---- CLIENT: run NO sim. Send local input, render the host's snapshot. ----
       handleLocalPanels();

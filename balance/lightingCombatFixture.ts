@@ -3,11 +3,12 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { Renderer } from '../src/render/renderer';
 import { GridWalkField } from '../src/world/gridWalk';
 import { mod } from '../src/engine/stats';
+import { updateAI } from '../src/engine/ai';
 import type { Doodad } from '../src/engine/levelgen';
 
 /** Real simulation + renderer, with active pursuing actors, dense cover and
  * transient flashes. Timing is reported, not asserted against one machine. */
-export function combatProfile(instrumentMovement = false) {
+export async function combatProfile(instrumentMovement = false) {
  const restore=seedGlobalRandom(71379);
  const w=makeSimWorld('warrior',71379),g=new GridWalkField(4800,4800,24);
  g.fillRegion(0,0,4799,4799,'ground');g.fillDisc(2700,2400,120,'wall');
@@ -26,9 +27,10 @@ export function combatProfile(instrumentMovement = false) {
  }
  w.markDoodadsChanged();
  for(let i=0;i<80;i++){const a=w.createMonster('zombie',1,'enemy');a.pos={x:2250+(i%10)*22,y:2300+Math.floor(i/10)*22};w.actors.push(a);}
+ const starts=new Map(w.actors.slice(1).map(a=>[a,{...a.pos}]));
  const canvas=document.createElement('canvas');canvas.width=1280;canvas.height=960;document.body.appendChild(canvas);
  const renderer=new Renderer(canvas);renderer.worldOnly=true;
- const times:number[]=[],sim:number[]=[],detail:Record<string,number[]>={};
+ const times:number[]=[],sim:number[]=[],gaps:number[]=[],detail:Record<string,number[]>={};
  const internal=renderer as unknown as {lightLayer:{collect:(...a:unknown[])=>unknown;render:(...a:unknown[])=>unknown};sightVeil:{update:(...a:unknown[])=>unknown;draw:(...a:unknown[])=>unknown}};
  let measuring=false;
  const movement:Record<string,{calls:number;ms:number}>={};
@@ -41,17 +43,23 @@ export function combatProfile(instrumentMovement = false) {
   const target=obj as unknown as Record<string,(...a:unknown[])=>unknown>,fn=target[key];detail[name]=[];
   target[key]=function(...args:unknown[]){const t=performance.now();try{return fn.apply(this,args)}finally{if(measuring)detail[name].push(performance.now()-t)}};
  }
- let maxActors=0,maxFlashes=0;
+ let maxActors=0,maxFlashes=0,lastFrame=performance.now();
  for(let i=0;i<150;i++){
+  await new Promise(requestAnimationFrame);
+  const frameAt=performance.now();if(i>=30)gaps.push(frameAt-lastFrame);lastFrame=frameAt;
   w.player.pos={x:2100+Math.sin(i/60)*70,y:2350+i*.7};
   for(let j=0;j<8;j++)w.flashes.push({pos:{x:2200+(j%4)*42,y:2300+Math.floor(j/4)*50},radius:20,color:'#ff8844',life:.25,maxLife:.25});
   measuring=i>=30;
-  const t0=performance.now();w.update(1/60);const t1=performance.now();renderer.render(w);const t2=performance.now();
+  const t0=performance.now();for(const a of w.actors)updateAI(a,w,1/60);
+  w.update(1/60);const t1=performance.now();renderer.render(w);const t2=performance.now();
   if(i>=30){times.push(t2-t1);sim.push(t1-t0);}
   maxActors=Math.max(maxActors,w.actors.length);maxFlashes=Math.max(maxFlashes,w.flashes.length);
  }
  const p=(a:number[],q:number)=>a.slice().sort((a,b)=>a-b)[Math.floor((a.length-1)*q)];
  const passes=Object.fromEntries(Object.entries(detail).map(([k,a])=>[k,{p50:p(a,.5),p95:p(a,.95),max:Math.max(...a)}]));
- const result={passes,movement,frames:times.length,maxActors,maxFlashes,render:{p50:p(times,.5),p95:p(times,.95),max:Math.max(...times)},simulation:{p50:p(sim,.5),p95:p(sim,.95)},finite:times.every(Number.isFinite)};
- canvas.remove();restore();return result;
+ const pursuingActors=[...starts].filter(([a,pos])=>Math.hypot(a.pos.x-pos.x,a.pos.y-pos.y)>1).length;
+ const result={passes,movement,frames:times.length,maxActors,maxFlashes,pursuingActors,
+  gap:{p50:p(gaps,.5),p95:p(gaps,.95),max:Math.max(...gaps)},
+  render:{p50:p(times,.5),p95:p(times,.95),max:Math.max(...times)},simulation:{p50:p(sim,.5),p95:p(sim,.95)},finite:times.every(Number.isFinite)};
+ canvas.remove();renderer.overlay.remove();restore();return result;
 }
