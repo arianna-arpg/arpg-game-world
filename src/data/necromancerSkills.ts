@@ -1,3 +1,4 @@
+import { SKELETON_ARCHER_SKILLS } from './skeletonArcherSkills';
 import { UNDEAD_COURT_SKILLS } from './necromancerCourts';
 import type { SkillDef, AuraSpec } from '../engine/skills';
 import { mod, type DamageType } from '../engine/stats';
@@ -17,6 +18,7 @@ const aura = (id: string, name: string, spec: AuraSpec): SkillDef => ({
 });
 export const NECROMANCER_SKILLS: Record<string, SkillDef> = {
   ...UNDEAD_COURT_SKILLS,
+  ...SKELETON_ARCHER_SKILLS,
   summon_skeleton_mage: {
     id: 'summon_skeleton_mage', name: 'Summon Skeleton Mage',
     description: 'Raise two random elemental mages, up to four. Their tree can fuse them into one Lich or teach elemental specialists their own schools of magic.',
@@ -76,7 +78,7 @@ export const NECROMANCER_SKILLS: Record<string, SkillDef> = {
     id: 'skeletal_arrowfall', name: 'Rain of Bones', description: 'A volley of bone arrows rains over the target area.', noDrop: true,
     tags: ['attack', 'projectile', 'physical', 'aoe', 'storm'], color: '#d8d0b0', manaCost: 0, cooldown: 8, useTime: 0.7,
     baseDamage: { physical: [5, 8] }, delivery: { type: 'storm', count: [6, 8], interval: 0.09, areaRadius: 110, hitRadius: 35, castRange: 470 },
-    effects: [{ type: 'damage' }], ai: { range: 440, weight: 6, keepDistance: 270 },
+    effects: [{ type: 'damage' }, { type: 'status', status: 'rattled_bones', chance: 1 }], ai: { range: 440, weight: 6, keepDistance: 270 },
   },
   skeletal_cinder_rain: {
     id: 'skeletal_cinder_rain', name: 'Cinder Rain', description: 'Rain embers across a distant patch of ground.', noDrop: true,
