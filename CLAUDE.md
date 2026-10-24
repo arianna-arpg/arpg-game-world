@@ -26,6 +26,13 @@ documented in [combat-polish](docs/design/combat-polish.md). Verify
 probe_miniontargets, probe_orbgeneration, companionstance, flasktrees and
 movementvisuals; build before the hidden movement-visuals UI harness.
 
+Trap/mine mechanics and reusable deviceVisuals are documented in
+`docs/engine/ground-devices.md`: walkable contact devices, configurable arming,
+resolved crossings and autonomous mine meta commands. Verify presencevisuals,
+selfvisuals, trapworks, tacticalai, controlstartertrees, movementvisuals,
+cosmetics, all types and sim smoke; then the hidden device-visuals-ui and
+construct-bodies-ui harnesses sequentially after an isolated build.
+
 The persistent construct body silhouettes are composed in `data/constructLooks.ts`
 and `data/constructGlyphs.ts`, selected through each delivery's ordinary `look`.
 See `docs/render/constructs.md`; verify presencevisuals, cosmetics, all types,

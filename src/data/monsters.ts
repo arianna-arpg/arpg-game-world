@@ -524,6 +524,8 @@ export interface WormWoundSpec {
 }
 
 export interface MonsterDef {
+  /** Floor device using the same arming, contact and payload path as skill constructs. */
+  groundDevice?: import('../engine/groundDevices').GroundDeviceSpec;
   id: string;
   name: string;
   color: string;
@@ -2323,7 +2325,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // tomorrow (parts ARE monster defs: one entry, both uses).
   war_banner_mast: {
     id: 'war_banner_mast', name: 'War Banner',
-    color: '#a83a3a', shape: 'circle', radius: 9, look: 'construct_totem',
+    color: '#a83a3a', shape: 'circle', radius: 9, look: 'device_war_banner',
     noNemesis: true,
     base: { life: 60, moveSpeed: 0, mana: 120, manaRegen: 8, poise: 40 },
     remains: false, // organic dress, but an OBJECT — no corpse
@@ -2353,7 +2355,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // entity-creator composable tomorrow (parts ARE monster defs).
   soul_cistern: {
     id: 'soul_cistern', name: 'Soul Cistern',
-    color: '#8ad0c8', shape: 'circle', radius: 8, look: 'construct_totem',
+    color: '#8ad0c8', shape: 'circle', radius: 8, look: 'device_soul_cistern',
     noNemesis: true,
     base: { life: 55, moveSpeed: 0, poise: 30 },
     remains: false, // organic dress, but an OBJECT — no corpse
@@ -6042,7 +6044,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // a composite part today and an entity-creator composable tomorrow.
   aegis_crystal: {
     id: 'aegis_crystal', name: 'Aegis Crystal',
-    color: '#c8ecf8', shape: 'diamond', radius: 8, look: 'construct_pylon',
+    color: '#c8ecf8', shape: 'diamond', radius: 8, look: 'device_aegis_crystal',
     noNemesis: true,
     base: { life: 45, energyShield: 20, moveSpeed: 0, mana: 60, manaRegen: 6 },
     remains: false, // organic dress, but an OBJECT — no corpse
@@ -13586,14 +13588,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
       obedience: 0.35,
     },
   },
-  // THE JAW SNARE — a trap with a heartbeat: hidden until stepped near,
-  // then one iron snap and a held ankle. Three seams holding hands.
+  // THE JAW SNARE — a destructible groundDevice: a visible pressure plate,
+  // half a second to arm, then one immediate iron snap and a held ankle.
   jaw_snare: {
     id: 'jaw_snare', name: 'Jaw Snare',
     color: '#b0a890', shape: 'oval', radius: 7, material: 'metal', look: 'jaw_snare',
     base: { life: 18, moveSpeed: 0, armor: 30, mana: 0 },
     skills: ['snap_shut'], xp: 3,
-    ambush: { radius: 42, emerge: { motion: 'stir', voice: 'dust' } },
+    groundDevice: { kind: 'trap', skillId: 'snap_shut', radius: 42, armTime: .5 },
     noNemesis: true, drops: 0,
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 2.0, brain: { type: 'basic' },

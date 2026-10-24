@@ -208,7 +208,7 @@ export interface ActorW {
   st?: StatusW[];              // active statuses (pips + screen ailment FX)
   cast?: CastW;                // cast bar + guard arc
   auras?: AuraW[];             // emanating aura fields
-  con?: { kind: string; domeRadius?: number };  // construct (dome bubble)
+  con?: { kind: string; domeRadius?: number; timer?: number; armingDuration?: number; detonationLeft?: number };
   fuse?: number;               // armed bomber fuse
   leap?: { timer: number; total: number; vent?: number };  // airborne leap (body swell; `vent` = the vent-ride's column radius — the steam jet draws)
   /** Snake/worm trailing segments. SEGMENT-FABRIC extras ride only when
@@ -866,7 +866,13 @@ function actorToW(a: Actor, world: World): ActorW {
     w.auras = [...a.activeAuras.values()].map(au => ({ skillId: au.inst.def.id,
       c: cosmeticSkillPaint(world, a, au.inst.def.id).color ?? au.inst.def.color, r: au.radius, sh: au.shape }));
   }
-  if (a.construct) w.con = { kind: a.construct.kind, domeRadius: a.construct.domeRadius };
+  if (a.construct) {
+    w.con = { kind: a.construct.kind, domeRadius: a.construct.domeRadius };
+    if (a.construct.kind === 'trap' || a.construct.kind === 'mine') {
+      w.con.timer = a.construct.timer; w.con.armingDuration = a.construct.armingDuration;
+      w.con.detonationLeft = a.construct.detonationLeft;
+    }
+  }
   if (a.fuse !== undefined) w.fuse = a.fuse;
   if (a.leap) {
     w.leap = a.leap.vent
@@ -1474,7 +1480,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     } as unknown as CastingState) : null;
     a.activeAuras.clear();
     if (aw.auras) aw.auras.forEach((au, i) => a!.activeAuras.set('a' + i, ({ inst: { def: { id: au.skillId ?? '', color: au.c } }, radius: au.r, shape: au.sh } as unknown as ActiveAura)));
-    a.construct = aw.con ? ({ kind: aw.con.kind, domeRadius: aw.con.domeRadius } as unknown as ConstructState) : undefined;
+    a.construct = aw.con ? ({ kind: aw.con.kind, domeRadius: aw.con.domeRadius,
+      timer: aw.con.timer ?? 0, armingDuration: aw.con.armingDuration,
+      detonationLeft: aw.con.detonationLeft } as unknown as ConstructState) : undefined;
     a.fuse = aw.fuse;
     a.leap = aw.leap
       ? ({ timer: aw.leap.timer, total: aw.leap.total,

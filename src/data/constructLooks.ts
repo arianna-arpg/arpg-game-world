@@ -1,4 +1,5 @@
 import type { LookDef, PartSpec } from '../render/vis/parts';
+import { TRAP_FRAME, MINE_FRAME } from './deviceVisuals';
 
 const part = (kind: string, spec: Omit<PartSpec, 'kind'> = {}): PartSpec => ({ kind, ...spec });
 const body = (parts: PartSpec[], shadowScale = .8, live?: PartSpec[]): LookDef => ({
@@ -35,10 +36,10 @@ export const CONSTRUCT_BODY_LOOKS: Record<string, LookDef> = {
     part('crateBox', { x: -.36, scale: .55 }), part('bow', { scale: 1.18 }), part('deviceRail'),
   ], .85),
   device_frost_trap: body([
-    part('deviceJaw', { scale: 1.05 }), part('frostFan', { scale: .44, params: { n: 3 } }),
+    ...TRAP_FRAME, part('frostFan', { scale: .44, params: { n: 3 } }),
   ], .4),
   device_fire_mine: body([
-    part('deviceCanister', { scale: .95 }), part('deviceBrazier', { x: -.05, scale: .37 }),
+    ...MINE_FRAME, part('deviceBrazier', { x: .22, scale: .37 }),
   ], .55),
   device_storm_pylon: body([
     plinth(), part('deviceFork', { rot: Math.PI / 2 }), gem(.73),
@@ -143,11 +144,11 @@ export const CONSTRUCT_BODY_LOOKS: Record<string, LookDef> = {
     part('shield', { scale: .65 }), part('frostFan', { x: -.3, scale: .49, params: { n: 3 } }),
   ], .8),
   device_cinderwhirl_trap: body([
-    part('deviceFork', { scale: .88 }), part('deviceFork', { scale: .88, rot: Math.PI }),
-    part('deviceBrazier', { scale: .55 }),
+    ...TRAP_FRAME, part('deviceFork', { scale: .5, rot: Math.PI / 2 }),
+    part('deviceBrazier', { scale: .48 }),
   ], .45),
   device_aftershock_snare: body([
-    part('deviceJaw'), part('deviceButtress', { scale: .5 }),
+    ...TRAP_FRAME, part('deviceButtress', { scale: .5 }),
     part('deviceFractures', { scale: .43 }),
   ], .45),
   device_battle_standard: body([

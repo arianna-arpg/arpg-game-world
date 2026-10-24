@@ -3664,7 +3664,7 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'detonate' },
     effects: [],
     requirements: { intelligence: 16 },
-    ai: { range: 400, weight: 2 },
+    ai: { range: 400, weight: 2, autonomousMeta: true, deployed: { kind: 'mine' } },
     leveling: { perLevel: [mod('cooldownRecovery', 'increased', 0.08)] },
   },
 

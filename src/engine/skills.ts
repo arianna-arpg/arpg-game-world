@@ -2457,6 +2457,8 @@ export function instanceBirth(inst: SkillInstance): BirthEffect | undefined {
 }
 
 export interface ConstructDelivery {
+  /** Ground-device arming and contact policy, shared with authored monster traps. */
+  deviceTrigger?: import('./groundDevices').DeviceTriggerSpec;
   type: 'construct';
   kind: ConstructKind;
   /** Part-grammar portrait override (data/looks.ts). Omitted = the kind's
@@ -4575,6 +4577,11 @@ export interface SkillDef {
     rangeStat?: string;   // optional multiplicative reach stat, e.g. aoeRadius
     weight: number;       // relative pick priority
     keepDistance?: number;// preferred standoff distance (casters kite)
+    /** Include this command when granted by a carried skill's meta slot. */
+    autonomousMeta?: boolean;
+    /** Use only when owned devices can reach applicable targets. Radius defaults
+     * to the payload's effective area; explicit radius supports other deliveries. */
+    deployed?: { kind: ConstructKind; radius?: number; minCount?: number; minTargets?: number };
     /** CHARGE DISCIPLINE — a SOFT minimum (px): inside this distance the
      *  pick weight collapses (× nearWeight, default
      *  BEHAVIOR_CFG.nearDiscount) so a shove-dash stops being the STANDARD

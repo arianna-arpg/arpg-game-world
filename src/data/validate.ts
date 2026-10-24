@@ -1,3 +1,4 @@
+import { deviceTriggerErrors } from '../engine/groundDevices';
 // ---------------------------------------------------------------------------
 // Content validation — cheap cross-checks over the data files, run once at
 // boot. Pure warnings: the game still runs, but authoring mistakes that
@@ -826,6 +827,12 @@ export function validateContent(): void {
       for (const l of a.lines) checkSympathyStat(`affix ${a.id}`, l.stat);
     }
     for (const [id, m] of Object.entries(MONSTERS)) {
+      if (m.groundDevice) {
+        const spec = m.groundDevice;
+        if (!['trap', 'mine'].includes(spec.kind)) warn(`monster ${id}: unknown groundDevice kind`);
+        if (!SKILLS[spec.skillId]) warn(`monster ${id}: unknown groundDevice skill ${spec.skillId}`);
+        for (const issue of deviceTriggerErrors(spec)) warn(`monster ${id}: groundDevice ${issue}`);
+      }
       if (m.movementTether) for (const issue of movementTetherErrors(m.movementTether)) warn(`monster ${id}: movementTether ${issue}`);
       if (m.movementTether?.anchorDoodad && !DOODAD_VISUALS[m.movementTether.anchorDoodad]) warn(`monster ${id}: unknown tether anchorDoodad ${m.movementTether.anchorDoodad}`);
       for (const link of m.sympathy ?? []) {
@@ -1111,6 +1118,18 @@ export function validateContent(): void {
   // their owner's silhouette instead (SELF_DRESSING_KINDS) and are exempt.
   for (const s of Object.values(SKILLS)) {
     const d = s.delivery;
+    const deployed = s.ai?.deployed;
+    if (deployed) {
+      for (const key of ['minCount', 'minTargets'] as const) {
+        const n = deployed[key];
+        if (n !== undefined && (!Number.isInteger(n) || n < 1)) warn(`skill ${s.id}: ai.deployed.${key} must be a positive integer`);
+      }
+      for (const issue of deviceTriggerErrors({ radius: deployed.radius })) warn(`skill ${s.id}: ai.deployed ${issue}`);
+    }
+    if (d.type === 'construct' && d.deviceTrigger) {
+      if (!['trap', 'mine'].includes(d.kind)) warn(`skill ${s.id}: deviceTrigger requires trap/mine`);
+      for (const issue of deviceTriggerErrors(d.deviceTrigger)) warn(`skill ${s.id}: deviceTrigger ${issue}`);
+    }
     if (d.type !== 'construct' || SELF_DRESSING_KINDS.has(d.kind)) continue;
     const look = d.look ?? CONSTRUCT_LOOKS[d.kind];
     if (!look) {

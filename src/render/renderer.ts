@@ -1,3 +1,4 @@
+import { drawDeviceState } from './vis/deviceState';
 import { ALTAR_BODY } from '../engine/altarBodies';
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
 import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
@@ -6077,6 +6078,7 @@ export class Renderer {
     if (!ownCastPreparation) drawCastingCue(ctx, a);
     drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
     if (!a.dead) drawPresenceBadge(ctx, a.presenceBadge, a.radius);
+    drawDeviceState(ctx, a);
     if (comboCueGround) {
       ctx.save(); ctx.setTransform(comboCueGround); ctx.globalAlpha = baseAlpha;
       drawComboBody(ctx, a.radius, comboCues); ctx.restore();

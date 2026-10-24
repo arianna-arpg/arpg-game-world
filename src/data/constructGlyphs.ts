@@ -4,6 +4,24 @@ import type { GlyphDef } from '../render/vis/parts';
  * bake once; source color lives in inlays rather than drowning the silhouette.
  * Original Hollow Wake vector work; no external assets or simulation state. */
 export const CONSTRUCT_GLYPHS: Record<string, GlyphDef> = {
+  devicePressurePlate: { ops: [
+    { kind: 'poly', pts: [[-.7,-.5],[.7,-.5],[.85,0],[.7,.5],[-.7,.5],[-.85,0]], role: 'metal', shade: -.1, outline: true },
+    { kind: 'poly', pts: [[-.38,-.26],[.38,-.26],[.38,.26],[-.38,.26]], role: 'glow' },
+    { kind: 'path', pts: [[-.56,-.36],[-.56,.36]], role: 'metal', shade: .3, wR: .12 },
+  ] },
+  deviceFuseCrown: { ops: [
+    { kind: 'poly', pts: [[-.34,-.64],[.3,-.64],[.3,.64],[-.34,.64]], role: 'metal', shade: -.25, outline: true },
+    { kind: 'path', pts: [[-.27,-.42],[.35,-.42]], role: 'glow', wR: .12, mirror: true },
+    { kind: 'path', pts: [[-.27,0],[.35,0]], role: 'glow', wR: .12 },
+  ] },
+  deviceFuseLight: { ops: [
+    { kind: 'poly', pts: [[-.8,-.3],[.8,-.3],[.8,.3],[-.8,.3]], role: 'glow', outline: true },
+  ] },
+  deviceVessel: { ops: [
+    { kind: 'poly', pts: [[-.62,-.44],[-.82,-.28],[-.86,.32],[-.5,.7],[.35,.7],[.72,.32],[.72,-.3],[.46,-.5],[.37,-.78],[-.5,-.78]], role: 'metal', shade: -.15, outline: true },
+    { kind: 'path', pts: [[-.49,-.6],[.4,-.6]], role: 'metal', shade: .35, wR: .18 },
+    { kind: 'poly', pts: [[-.42,-.27],[.28,-.27],[.42,.12],[.19,.42],[-.4,.38],[-.57,.08]], role: 'glow', shade: -.18, outline: true },
+  ] },
   deviceSun: { ops: [
     { kind: 'poly', pts: Array.from({ length: 12 }, (_, i): [number, number] => {
       const a = i * Math.PI / 6, r = i % 2 ? .57 : 1.03;
