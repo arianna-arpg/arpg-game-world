@@ -41,6 +41,7 @@ import {
   feedWatch, SENSE_CFG, senseReach, WATCH_CFG, WATCH_RUNG, watchArcDeg,
   watchRiseAmount, watchRungOf, watchValueOf,
 } from './watch';
+import { watchGazeActive } from './watchGaze';
 import { isThrongBody, throngHeelOffset } from './throng';
 import { minionCommandSpeed } from './minionCombat';
 import { incidentalMinionPrey, minionPreyInReach } from './minionTargets';
@@ -273,7 +274,7 @@ function updatePostReturn(actor: Actor, world: World, dt: number): boolean {
     if (actor.postHoming) {
       actor.postHoming = false;
       // Re-plant: the watch bearing is part of the post.
-      if (actor.aiPostFacing !== undefined) actor.facing = actor.aiPostFacing;
+      if (actor.aiPostFacing !== undefined && !watchGazeActive(actor, world.time)) actor.facing = actor.aiPostFacing;
     }
     return false;
   }
@@ -292,7 +293,7 @@ function updatePost(actor: Actor, world: World, dt: number): boolean {
   if (updatePostReturn(actor, world, dt)) return true;
   if (actor.postSpec.hold === false) return false;
   if (postOf(actor) === undefined) return false;
-  if (actor.aiPostFacing !== undefined) actor.facing = actor.aiPostFacing;
+  if (actor.aiPostFacing !== undefined && !watchGazeActive(actor, world.time)) actor.facing = actor.aiPostFacing;
   return true; // stands the watch — the idle tick is consumed
 }
 

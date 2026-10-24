@@ -15557,15 +15557,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 18,
     faction: 'sarcophate',
     tags: ['undead'],
-    detection: 1.4, // the long eye of the rim — the fan IS the crossing's ask
+    detection: 1.4, // the long eye over the crossing
     post: true,     // stands its ground; drifts walk home (brain.ts PostSpec)
     packSize: [1, 2], // sentinels dot the gaps, never march in files
     // The gilded face catches the light — a dim ember-glow marks the post
-    // toward dusk (the carried-lamp lever; the fan stays the daytime tell).
+    // toward dusk (the carried-lamp lever; the body carries the daytime tell).
     light: { radius: -8, color: '#e8c060', intensity: 0.4, flicker: 0.6 },
-    // FAN KEPT: "read the fans before you cross" — the threshold rhythm's
-    // legibility instrument, worn in the open on purpose.
-    watch: { sweep: { arcDeg: 130, sec: 7 }, riseSec: 1.6, searchSec: 7, fan: 'show' },
+    // Ambient sentries show attention through their body tells; the
+    // detection boundary stays available through the developer overlay.
+    watch: { sweep: { arcDeg: 130, sec: 7 }, riseSec: 1.6, searchSec: 7, fan: 'hide' },
     temper: 'territorial',
     brain: {
       type: 'basic',
@@ -22152,7 +22152,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
   // THE STILT-STRIDER: the shallows sentry — long-legged, wading the pool
-  // fields on watch (the watch fabric's SWEEP posture, the cone drawn),
+  // fields on watch (a smooth scanning gaze, with no detection overlay),
   // spear-fishing what the eruptions stun. Wading suspends nothing for it
   // (the pools are its ground); a hero's own wading breaks the scent line.
   stilt_strider: {
@@ -22167,7 +22167,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
     detection: 1.25,
     post: true,
-    watch: { sweep: { arcDeg: 140, sec: 6 }, riseSec: 1.6, searchSec: 6, fan: 'show' },
+    watch: { sweep: { arcDeg: 140, sec: 6 }, riseSec: 1.6, searchSec: 6, fan: 'hide' },
     brain: {
       type: 'basic',
       perception: { arcDeg: 80, rearMul: 0.25, alertShout: 380, memory: 5 },

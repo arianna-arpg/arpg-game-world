@@ -148,3 +148,25 @@ when a watch tell row stands in for it (the legibility law).
 - Ordinary locks never set `aggroed` (only relentless/taunt/swarm did) —
   the watch fabric sets it on ANY fresh lock so the tell can't lie
   mid-fight, and clears it itself at stand-down.
+
+
+## Stationary facing and ambient cones (24 October 2026)
+
+Posted watchers retain their gaze between frames. The idle post never resets
+an active sweep or stimulus turn to the post bearing. watchGaze.ts advances
+the shared sensing/body direction each simulation frame with a bounded turn;
+suspicion, scent and trail bookkeeping retain the existing 0.12-second cadence.
+Return-home movement, attacks, casts, displacement and incapacitation own their
+facing instead. No presentation-only direction can diverge from perception.
+
+Stilt-Striders and Ushabti Sentinels hide their ordinary detection overlays.
+They retain their perception, suspicion, smooth watch and body tells. Explicit
+stealth encounter cones (including the Barrow Watchman and Sleepless Warden)
+and developer fan controls retain their existing opt-ins.
+
+Verify probe_watchers.ts, probe_scald.ts, stealth/settled/butteland,
+type checks and sim smoke. balance/watcher-gaze-ui.cjs checks real rendered
+frames, hidden ambient fans and the developer override. The watcher probe
+drives every authored sweeping kind through the actual AI/world loop at 30,
+60 and 144 Hz; the old post/watch conflict produces repeated large turns while
+the actor's position stays fixed.

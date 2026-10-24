@@ -402,6 +402,7 @@ import {
   feedWatch, layTrailPoint, trailNewest, trailNext, WATCH_CFG, WATCH_RUNG,
   watchRungOf, watchValueOf, type WatchSpec,
 } from './watch';
+import { updateWatchGaze } from './watchGaze';
 import type { WispKindRow, WisplightSurge } from '../packages/overlays/wisplight';
 import type { DroveSurge } from '../packages/overlays/drove';
 import type { QuickeningField } from '../packages/overlays/quickening';
@@ -12749,15 +12750,13 @@ export class World {
    *  policy; and a widowed steed turns zone-memory eligible — it is real on
    *  its own now, no remembered rider implies it. */
   /** THE WATCH FABRIC's behavior sweep (engine/watch.ts), cadenced at
-   *  WATCH_CFG.sweepSec and run late among the movers so its facing writes
-   *  win the frame (the renderer and next tick's cone test read the same
-   *  bearing — drawn == tested). Per watcher: (1) the rung cache follows
+   *  WATCH_CFG.sweepSec for bookkeeping. Facing advances in the per-actor
+   *  frame through updateWatchGaze before the ordinary turn clamp, so the
+   *  renderer and perception share one continuous bearing. Per watcher: (1) the rung cache follows
    *  the decaying meter (the down-ladder is watchable), (2) THE STAND-DOWN
    *  — a locked watcher whose fight is over clears aggro and re-banks at
    *  the search rung, decaying from there like any suspicion, (3) THE
-   *  GAZE — unaware sweep-spec bodies oscillate their bearing around the
-   *  post (the drawn cone sweeps with it); stirring bodies turn toward the
-   *  stimulus (the head is the tell), (4) THE NOSE — scent watchers follow
+   *  GAZE runs per frame in updateWatchGaze; (4) THE NOSE — scent watchers follow
    *  their quarry's trail prints in lay order through the standing
    *  investigate walk (alertFrom), losing the line exactly where the
    *  prints gap. Also lays the players' trails (only while a live scent
@@ -12788,21 +12787,6 @@ export class World {
       if (w.scent) {
         scent++;
         if (!a.aggroed && a.aiTargetId === undefined) this.watchScent(a, w, t);
-      }
-      // (3) THE GAZE — never wrench a casting or locked body's aim.
-      if (a.aiTargetId === undefined && !a.casting && !a.aggroed) {
-        if (a.watchRung === WATCH_RUNG.unaware && w.sweep) {
-          const base = a.aiPostFacing ?? (a.watchBase ??= a.facing);
-          const ph = (((a.id * 2654435761) >>> 9) & 1023) / 1023 * Math.PI * 2;
-          a.facing = base
-            + Math.sin(t / w.sweep.sec * Math.PI * 2 + ph)
-            * (w.sweep.arcDeg * Math.PI / 180) / 2;
-        } else if (a.watchRung === WATCH_RUNG.stir && a.watchAt) {
-          const want = angleTo(a.pos, a.watchAt);
-          const d = angleDiff(a.facing, want);
-          const step = WATCH_CFG.turnRadSec * WATCH_CFG.sweepSec;
-          a.facing = Math.abs(d) <= step ? want : a.facing + Math.sign(d) * step;
-        }
       }
     }
     // THE TRAIL LAY: players print the ground while a scent watcher stands;
@@ -50035,6 +50019,9 @@ export class World {
           a.facing = angleTo(a.pos, cl.aim);
         }
       }
+      // A watch uses the same per-frame turn budget as every other aim.
+      // It never competes with the idle post or a later cadenced write.
+      updateWatchGaze(a, this.time, dt);
       // TURN CLAMP (BEHAVIOR_STATS.turnSpeed ← Actor.turnSpeed as the innate
       // base): facing may only swing so far per frame — big bodies LUMBER,
       // their shell arcs and their aim lag the fight, and circling them
