@@ -20,6 +20,7 @@ import { ROOTWILD_GLYPHS } from './rootwildGlyphs';
 import { COSMETIC_GLYPHS } from './cosmeticGlyphs';
 import { GOLEM_GLYPHS } from './golemGlyphs';
 import { SUMMON_GLYPHS } from './summonGlyphs';
+import { CONSTRUCT_GLYPHS } from './constructGlyphs';
 import { SKELETAL_MAGE_GLYPHS } from './skeletalMageGlyphs';
 import { UNDEAD_COURT_GLYPHS } from './undeadCourtGlyphs';
 import { AVIAN_GLYPHS } from './avianGlyphs';
@@ -30,6 +31,7 @@ import { STALKER_GLYPHS } from './stalkerGlyphs';
 export const GLYPH_PARTS: Record<string, GlyphDef> = {
   ...GOLEM_GLYPHS,
   ...SUMMON_GLYPHS,
+  ...CONSTRUCT_GLYPHS,
   ...SKELETAL_MAGE_GLYPHS,
   ...UNDEAD_COURT_GLYPHS,
   ...AVIAN_GLYPHS,

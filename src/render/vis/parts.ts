@@ -61,6 +61,9 @@ export interface WalkLook {
 }
 
 export interface LookDef {
+  /** Optional ownership-mark parts, tinted with the actor's binding color.
+   * Omitted keeps the legacy ring; [] suppresses it. Body-space like parts. */
+  binding?: PartSpec[];
   /** Optional body tint from its live native attunement, clamped to [0,1]. */
   toneTint?: number;
   walk?: WalkLook;

@@ -1145,7 +1145,7 @@ export function validateContent(): void {
   // silently SKIPS unknown kinds, so the class that "carries knives" walks
   // out bare-handed and nobody hears about it. Make it loud instead.
   for (const [id, look] of Object.entries(LOOKS)) {
-    for (const p of [...look.parts, ...(look.live ?? [])]) {
+    for (const p of [...look.parts, ...(look.live ?? []), ...(look.binding ?? [])]) {
       if (!PART_PAINTERS[p.kind]) warn(`look ${id}: part kind '${p.kind}' has no painter (PART_PAINTERS + registered glyphs)`);
     }
   }

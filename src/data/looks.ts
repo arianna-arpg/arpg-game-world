@@ -27,6 +27,7 @@ import { COSMETIC_LOOKS } from './cosmeticModels';
 import { COSMETIC_WISP_LOOKS } from './cosmeticExpansionModels';
 import { GOLEM_LOOKS } from './golemLooks';
 import { SUMMON_LOOKS } from './summonLooks';
+import { CONSTRUCT_BODY_LOOKS } from './constructLooks';
 import { SKELETAL_MAGE_LOOKS } from './skeletalMageLooks';
 import { UNDEAD_COURT_LOOKS } from './undeadCourtLooks';
 import { AVIAN_LOOKS } from './avianLooks';
@@ -38,6 +39,7 @@ import { RUBBLEKIN_LOOKS } from './rubblekin';
 export const LOOKS: Record<string, LookDef> = {
   ...GOLEM_LOOKS,
   ...SUMMON_LOOKS,
+  ...CONSTRUCT_BODY_LOOKS,
   ...SKELETAL_MAGE_LOOKS,
   ...UNDEAD_COURT_LOOKS,
   ...AVIAN_LOOKS,

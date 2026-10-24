@@ -26,6 +26,11 @@ documented in [combat-polish](docs/design/combat-polish.md). Verify
 probe_miniontargets, probe_orbgeneration, companionstance, flasktrees and
 movementvisuals; build before the hidden movement-visuals UI harness.
 
+The persistent construct body silhouettes are composed in `data/constructLooks.ts`
+and `data/constructGlyphs.ts`, selected through each delivery's ordinary `look`.
+See `docs/render/constructs.md`; verify presencevisuals, cosmetics, all types,
+sim smoke and hidden `balance/construct-bodies-ui.cjs` after an isolated build.
+
 Storm, summon and construct identities use `data/skillPresenceVisuals.ts`
 and `render/vis/skillPresenceVoice.ts`: 139 explicit source profiles.
 Births, completed actions, real aura/construct pulses and actual retirement
