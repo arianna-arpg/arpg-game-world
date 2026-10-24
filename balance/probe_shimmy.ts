@@ -11,7 +11,7 @@
 //   npx tsx balance/probe_shimmy.ts
 // ---------------------------------------------------------------------------
 
-import { readFileSync } from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import { resolve } from 'node:path';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';

@@ -234,6 +234,17 @@ the moment the full fee stands ("RISEN" toast). Releasing a fallen
 vessel deletes its half-poured investment with it; a malformed stamp
 heals FAIL-OPEN on load (shed, never a bricked vessel).
 
+**ON A SHARD** (card 30, docs/engine/shard.md "THE IMMORTAL'S COVENANT ON
+A SHARD"): an Undying that dies on a hosted world falls there by the same
+covenant, and the shard keeps a FALL RECORD beside its tombstones (the
+fall's time and the vessel's level). Its client stamps the roster card
+from the shard's `fell` word (the fee frozen at receipt, the record's time
+as `fallen.at`). The resurrection stamps `RosterEntry.risenAt` where it
+deletes `fallen` (never earlier than the fall's own time), the traveling
+vessel carries it (`CharacterSave.risenAt`), and a vessel risen after the
+record walks that shard again (the record lifts); any other upload of it
+hears its fall again and is refused 'fallen'.
+
 The shape this buys, in her words: an Immortal truly IS immortal — the
 character is never lost — but every death is a real setback, and the
 Undying line becomes the account's perpetual Mortal Essence dump, fed

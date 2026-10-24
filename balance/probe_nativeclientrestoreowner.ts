@@ -1,0 +1,16 @@
+import {recordedContinueSave} from './nativeClientContinueFixture';
+import '../src/engine/world';
+import assert from 'node:assert/strict';
+import {bootSimEngine} from '../src/sim/arena';
+import {World} from '../src/engine/world';
+import {makeAccount} from '../src/meta/account';
+import {serializeCharacter,type CharacterSave} from '../src/meta/character';
+import {NativeAreaCharacterResume} from '../src/worldmass/nativeAreaCharacterResume';
+import {NativeClientRuntime} from '../src/worldmass/nativeClientRuntime';
+import {readNativeRetainedSave} from '../src/worldmass/nativeRetainedSave';
+import {START_ZONE} from '../src/data/zones';
+import {refuseWorldStartup} from './nativeClientStartFixture';
+import {withSeededRandom} from '../src/core/rng';
+bootSimEngine();
+const save=JSON.parse(recordedContinueSave()) as CharacterSave,record=readNativeRetainedSave(save);
+const out=withSeededRandom(48011,()=>refuseWorldStartup([],worldDrivers=>{const writer=World.staged(makeAccount(),Object.freeze(record.manifest));const resume=new NativeAreaCharacterResume(writer,save);const runtime=new NativeClientRuntime({writer,definition:writer.zoneMap[START_ZONE],geography:record.geography.spec,resume});writer.withGlobalPolicies(()=>runtime.install());assert(runtime.ready);const now=serializeCharacter(writer);assert.equal(writer.meta.classDef.id,save.classId);assert.equal(now.world!.player!.vitals!.life,save.world!.player!.vitals!.life);assert.equal(now.companions?.length,save.companions?.length);const facts={zone:writer.zone.id,classId:writer.meta.classDef.id,life:now.world!.player!.vitals!.life,companions:now.companions?.length,sourceHash:record.geography.spec.sourceHash,worldDrivers};runtime.retire();return facts;}));console.log(JSON.stringify(out));

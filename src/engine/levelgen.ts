@@ -1,3 +1,4 @@
+import { structurePlanOf, validateStructurePlans } from './structurePlans';
 // ---------------------------------------------------------------------------
 // Level generation — set-piece stamps composed into a layout.
 //
@@ -30,7 +31,7 @@ import type { AmbushSpec } from './actor';
 import type { PostSpec } from './brain'; // THE SPAWN SEAT's duty post (the authored-map fabric)
 import { Rng } from '../core/rng';
 import type { ExitRoadSpec, PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
-import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
+import { STRUCTURES, STRUCTURE_SERVICE_SIGNS, legendCell, type CellSpec, type StructureDef } from '../data/structures';
 import { hollowShapeOf } from '../data/hollows';
 import { ANNEX_CFG, annexKindDef } from '../data/annexes';
 import { MONSTERS } from '../data/monsters';
@@ -51,7 +52,7 @@ import { regionKind } from '../world/regions';
 import { isFieldPixel } from '../world/fieldRegion';
 // Safe despite genkit importing our types: those are `import type` edges,
 // erased at runtime — no actual module cycle exists.
-import { Mask, GEN_CELL, disc, radial, bearingNoise, paintLiquid, valueNoise2, wanderPath } from './genkit';
+import { Mask, GEN_CELL, disc, radial, bearingNoise, pourLobes, paintLiquid, valueNoise2, wanderPath } from './genkit';
 import { blendDither, compileBlendField } from './blend';
 import { closeRecipeGround, recoverRecipeGround } from './nativeRecipeGround';
 import {
@@ -699,6 +700,8 @@ export interface Doodad {
  *  and it carries no `cells` (a lever is furniture, not a breach). */
 export interface DoodadDoor {
   id: string;
+  /** Optional deliberate walking toward this openable slab also builds its native dwell. */
+  press?: import('./doorPress').DoorPressSpec;
   mode: 'dwell' | 'breakable' | 'both' | 'sealed' | 'switched' | 'pull';
   open?: boolean;
   broken?: boolean;
@@ -2907,7 +2910,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
  *  layers) — the open half of the vocabulary. Known kinds stay in the exhaustive
  *  table above so tsc still proves full coverage for the built-ins. */
-const RUNTIME_RULES: Record<string, DoodadRule> = {};
+// Native service signs formerly fell through to non-blocking ground. Register
+// that same rule from their authored family so scenery checkpoints accept them.
+const RUNTIME_RULES: Record<string, DoodadRule> = Object.fromEntries(
+  STRUCTURE_SERVICE_SIGNS.map(sign => [sign.kind, { overlap: 'ground' }]));
 
 /** Register a placement/collision rule for a NEW doodad kind (one row = the kind
  *  exists engine-wide; the renderer draws unknown kinds as a generic themed disc
@@ -3076,6 +3082,7 @@ export type Reservation =
 
 export interface GenCtx {
   retainedFixtureFit?:boolean;
+  structurePlans?: import('./structurePlans').StructurePlanOverrides;
   rng: Rng;
   /** The zone box. `shape`/`boundless` ride along (generateLayout normalizes
    *  them off the def) so placement passes can ask the RIM LAW — the ellipse
@@ -4985,9 +4992,11 @@ export function generateLayout(
   // reserve), never mutating the def. Omitted everywhere else = byte-identical.
   extraFixtures?: { structure: string; x: number; y: number }[],
   // LITE (GenCtx.lite): the understory's aerial pass — geometry only.
-  opts?: { lite?: boolean },
+  opts?: { lite?: boolean; extraFixturePass?: (ctx:GenCtx, run:()=>void)=>void },
 ): GeneratedLayout {
+  validateStructurePlans(def.structurePlans);
   const ctx: GenCtx = {
+    structurePlans: def.structurePlans,
     rng,
     // THE RIM PLUMB: the def's shape rides ctx.arena so placement passes can
     // ask insideBounds (the rim law). World callers already pass a full
@@ -5085,7 +5094,8 @@ export function generateLayout(
       if(placed){const expected=plannedRect(vec(f.x,f.y),placed.rect.w,placed.rect.h);fixturePlacements.push({fixtureIndex,structureId:placed.id,requested:vec(f.x,f.y),center:vec(placed.rect.x+placed.rect.w/2,placed.rect.y+placed.rect.h/2),rect:{...placed.rect},reseated:expected.x!==placed.rect.x||expected.y!==placed.rect.y});}
     }
   }};
-  placeFixtures(0,allFixtures.length);
+  if(opts?.extraFixturePass){const split=def.fixtures?.length??0;placeFixtures(0,split);opts.extraFixturePass(ctx,()=>placeFixtures(split,allFixtures.length));}
+  else placeFixtures(0,allFixtures.length);
   // LANDMARK ROLLS first (they're TERRAIN — the ground-before-solids
   // convention: a structure sites around a lake, never under it), then
   // STRUCTURE ROLLS — both the zone's data-declared chances (merged from
@@ -6291,6 +6301,7 @@ function findStructureSpot(
  *  fx layers, and guarantee every door an open apron reachable from the entry. */
 function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): PlacedStructure | undefined {
   const audit = nativeStructureAttempt(ctx, def, at);
+  def = structurePlanOf(def, ctx.structurePlans);
   const required = requireStructure(ctx, def);
   const resolved = resolvePlan(ctx, def);
   if (!resolved) {
@@ -7754,7 +7765,9 @@ export function overgrowthOf(def: ZoneDef, override?: number): number {
  *  never salt-and-pepper), reclaiming flora sprouts along them, and the
  *  clearway carve/gate/genqa all read the same `wild` tag. Draw discipline:
  *  overgrowth 0 draws NOTHING beyond the caller's own disc radius. */
-export function wayRoller(ctx: GenCtx, overgrowth = ctx.overgrowth ?? 0):
+/** Native way emitters need no arena, actor or scene-generation state. */
+export type NativeWayContext = Pick<GenCtx, 'rng' | 'walk' | 'doodads' | 'reserved' | 'overgrowth'>;
+export function wayRoller(ctx: NativeWayContext, overgrowth = ctx.overgrowth ?? 0):
 (pos: Vec2, radius: number, kind: DoodadKind) => void {
   const og = Math.max(0, Math.min(1, overgrowth));
   const [runLo, runHi] = COHERENCE_CFG.wildRun;
@@ -7807,7 +7820,7 @@ export function wayRoller(ctx: GenCtx, overgrowth = ctx.overgrowth ?? 0):
  *  ground so later landmark/structure rolls route around them — wild
  *  stretches deliberately reserve nothing (what the wood won back, the world
  *  may crowd). Returns the way's discs. */
-export function layTraveledWay(ctx: GenCtx, pts: Vec2[], opts?: {
+export function layTraveledWay(ctx: NativeWayContext, pts: Vec2[], opts?: {
   band?: [number, number]; kind?: DoodadKind; overgrowth?: number; step?: number;
   reserve?: boolean;
 }): Doodad[] {
@@ -9775,18 +9788,9 @@ function pourBody(
   const ox = Math.floor((center.x - reach) / GEN_CELL) * GEN_CELL;
   const oy = Math.floor((center.y - reach) / GEN_CELL) * GEN_CELL;
   const m = Mask.forRect(ox, oy, reach * 2 + GEN_CELL, reach * 2 + GEN_CELL);
-  radial(m, center.x, center.y, a => body * (1 + bearingNoise(a, wob, seed)));
-  // LOBES: the piece rolls, reshaped — each a smaller wobbled radial ORed on,
-  // so a multi-lobed marsh keeps its sprawl without the circle seams. Lobe
-  // radii keep the union INSIDE `reach` (0.95 + 0.55×(1+wob) < 2.2 for any
-  // wobble ≤ 1), so the frame never clips a lobe.
-  const n = ctx.rng.int(pieces[0], pieces[1]);
-  for (let i = 0; i < n; i++) {
-    const ang = ctx.rng.range(0, Math.PI * 2);
-    const off = ctx.rng.range(body * 0.45, body * 0.95);
-    const lr = body * ctx.rng.range(0.3, 0.55);
-    radial(m, center.x + Math.cos(ang) * off, center.y + Math.sin(ang) * off,
-      a => lr * (1 + bearingNoise(a, wob, (seed + i + 1) >>> 0)));
+  // Core then lobes, preserving the native radial union and piece draw order.
+  for (const lobe of pourLobes(ctx.rng, center, body, seed, pieces)) {
+    radial(m, lobe.x, lobe.y, a => lobe.radius * (1 + bearingNoise(a, wob, lobe.seed)));
   }
   maskGuards(ctx, m, kind, hard);
   // Depth heart FIRST (under the lattice): the scatter's old center disc,
@@ -10385,3 +10389,6 @@ function stampRuin(ctx: GenCtx, spec: StampSpec): void {
   }
   ctx.pois.push(center);
 }
+
+/** Native final guarantees for an already staged retained fixture delta. */
+export function finishNativeRetainedFixtures(ctx:GenCtx):void {ensureReachability(ctx);ensureDoodadNavigability(ctx);}

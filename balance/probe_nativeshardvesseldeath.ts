@@ -1,0 +1,30 @@
+import {rollItem} from '../src/engine/itemgen';
+import {NativeShardRuntime} from '../server/nativeShardRuntime';
+import {NativeShardSeats} from '../server/nativeShardSeats';
+import {VesselDesk,judgeVessel} from '../server/vessel';
+import {ShardCorpses} from '../server/corpses';
+import assert from 'node:assert/strict';
+import {makeAccount} from '../src/meta/account';
+import {CLASSES} from '../src/data/classes';
+import {RemoteInput} from '../src/net/remote';
+import {serializeCouchGuest,throngRowsOf} from '../src/meta/character';
+import {refuseWorldStartup} from './nativeClientStartFixture';
+import {combatHash,writeCombatProof} from './probe_nativecombatcycle';
+import type {VesselArea} from '../server/nativeVesselAreas';
+import type {SessionMsg} from '../src/net/transport';
+const r=new NativeShardRuntime({account:makeAccount(),seed:1231});
+const result=refuseWorldStartup([],drivers=>{r.install();const service=new NativeShardSeats(r),w=r.writer,a=r.current,keeper=r.keeper,co=a.combat.input.coordinator,authority=a.authority;
+ const original=service.keeperWorld().addSeat('save-source',CLASSES.find(c=>c.id==='tamer')!,new RemoteInput('save-source'));
+ original.meta.charId='native-vessel-char';original.meta.modeId='mortal';original.meta.modeStage=0;const world=service.worldOf(original.id)!;const companions=world.actors.filter(x=>x.companion&&x.owner===original.actor).map(x=>world.companionBonds.saved(x));
+ const save=serializeCouchGuest(world,original,{companions,throng:throngRowsOf(world,original.actor),throngClaimed:[]});assert(!('refused' in judgeVessel(save)),JSON.stringify(judgeVessel(save)));service.within(original.id,x=>x.removeSeat(original.id));
+ const messages:{msg:SessionMsg;id:string}[]=[],send=(msg:SessionMsg,id:string)=>{messages.push({msg,id});},logs:string[]=[];const corpses=new ShardCorpses(service,send,null,1231,line=>logs.push(line)),desk=new VesselDesk(service,send,corpses,{beatSec:5,log:line=>logs.push(line)});
+ const peer=desk.seat({id:'vessel-peer',name:'Actual traveller',classId:'tamer',isHost:false,accountId:'11111111111111111111111111111111'},save);assert(peer,JSON.stringify({logs,messages}));assert.equal(w.seats.length,2);assert.equal(authority.require(peer.actor).combat,a.combat);assert.equal(service.worldOf(peer.id)!.actors.filter(x=>x.companion&&x.owner===peer.actor).length,companions.length);
+ const body=peer.actor;body.life-=3;const wounded=body.life,dest=Object.values(w.zoneMap).find(z=>z.id!==a.combat.scene.zone.id&&z.objective.kind!=='safe')!;a.combat.campaignFrame.enableHostedRoads();co.roadsFor(a.combat).shardWorld!.enqueue({seatId:peer.id,dest:dest.id});const travel=a.combat.campaignFrame.drainShardRoads()[0];if(travel.outcome==='failed')throw travel.error;assert.equal(travel.outcome,'moved');const b=co.residentAreas().find(area=>area.combat.scene.zone.id===dest.id)!;assert.equal(authority.require(body).combat,b.combat);assert.equal(body.life,wounded);assert.equal(co.published,a);
+ let held:VesselArea|undefined;service.within(peer.id,area=>{held=area;assert.equal(area.zone.id,dest.id);assert.equal(area.shardSpotOf(peer)?.zoneId,dest.id);});assert.throws(()=>held!.zone,/Expired/);assert.throws(()=>held!.seatHero(peer),/Expired/);
+ const mirror=desk.serialize(peer.id)!;assert(mirror);assert.equal(mirror.stand?.spot.zoneId,dest.id);assert.equal(mirror.companions?.length,companions.length);assert.equal(body.life,wounded);assert.equal(w.localSeat,keeper);assert.equal(co.published,a);
+ const carried=rollItem({ilvl:8});assert(carried);peer.meta.equipped.chest=carried; // Existing native party-death fixture: real generated gear, no rule/gate override.
+ b.combat.kill(body);assert(body.downed);desk.tick(.05);assert(body.dead);desk.tick(2);assert(messages.some(x=>x.id===peer.id&&x.msg.t==='runEnd'));assert.equal(corpses.all().length,1);const corpse=corpses.all()[0];assert.equal(corpse.zoneId,dest.id);assert(corpse.loot.items.length>0);assert.equal(w.seats.length,1);assert(!b.combat.scene.actors.includes(body));assert.throws(()=>authority.require(body),/Missing native actor authority/);assert.deepEqual(drivers,[]);
+ const returning=desk.seat({id:'returning-peer',name:'Claimant',classId:'warrior',isHost:false,accountId:'11111111111111111111111111111111'},undefined);assert(returning);co.roadsFor(a.combat).shardWorld!.enqueue({seatId:returning.id,dest:dest.id});const again=a.combat.campaignFrame.drainShardRoads()[0];if(again.outcome==='failed')throw again.error;assert.equal(again.outcome,'moved');assert.equal(authority.require(returning.actor).combat,b.combat);returning.actor.pos={...corpse.pos};const keeperFlashes=a.assembly.input.geometry.flashes.length,remoteFlashes=b.assembly.input.geometry.flashes.length,itemsBefore=returning.meta.items.length;corpses.tick(2);assert.equal(corpses.all().length,0);assert(returning.meta.items.length>itemsBefore);assert.equal(a.assembly.input.geometry.flashes.length,keeperFlashes);assert.equal(b.assembly.input.geometry.flashes.length,remoteFlashes+1);assert.equal(co.published,a);service.within(returning.id,area=>area.removeSeat(returning.id));r.retire();assert.throws(()=>service.allSeats(),/retired/);
+ return{actualSavedGraft:true,companions:companions.length,remoteZone:dest.id,woundPreserved:wounded,remoteMirror:true,expiredCallback:true,actualRemoteRemoval:true,actualRemoteDeath:true,actualRemoteCorpseReclaim:true,corpseItems:corpse.loot.items.length,worldDrivers:drivers};});
+writeCombatProof('native-shard-vessel-death.json',{result,receipt:combatHash(JSON.stringify(result))});console.log(JSON.stringify(result));
+

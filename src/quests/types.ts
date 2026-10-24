@@ -172,6 +172,8 @@ export interface QuestTurnIn {
 }
 
 export interface QuestDef {
+  /** Omission allows any geography with a valid destination adapter. */
+  geographies?: readonly ('zones' | 'continuous')[];
   /** A prisoner freed by the actual field objective, before the return reward. */
   rescue?: QuestRescue;
   id: string;
@@ -184,6 +186,9 @@ export interface QuestDef {
   category?: QuestCategory;
   /** Character level the giver starts offering it at. */
   offerAtLevel: number;
+  /** Optional giver preview when level alone blocks otherwise available work.
+   * {level} resolves from the same seeded native offer-level law. */
+  offerLevelHint?: string;
   /** Stable per run and quest; a late arrival remains eligible. */
   offerLevelRange?: readonly [number, number];
   /** Physical objective spoil, collected before the return leg can pay. */
@@ -191,6 +196,9 @@ export interface QuestDef {
   /** Ledger key (per-run OR per-account) that must be ≥1 to offer this — the
    *  chain mechanism (a follow-up quest requires a prior quest's reward key). */
   requiresLedger?: string;
+  /** Completed and paid quest IDs required in this character's current run.
+   * Account history and an unpaid field objective cannot advance this chain. */
+  requiresQuests?: readonly string[];
   /** Arbitrary extra availability predicate over the run's read-only gate ctx —
    *  the seam for gates requiresLedger can't express (class checks, RUN-only
    *  step chains, per-character caps). ANDed with every other gate. */

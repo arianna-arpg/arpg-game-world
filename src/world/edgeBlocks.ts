@@ -38,7 +38,8 @@ export interface EdgeBlock {
  *  fromZoneId → toZoneId, or null. Called from the travel gate (hot-ish path:
  *  a few exits per frame) — sources should be O(1) lookups over their own
  *  event state, never scans. */
-export type EdgeBlockSource = (world: World, fromZoneId: string, toZoneId: string) => EdgeBlock | null;
+export type NativeEdgeBlockHost=Pick<World,'sim'>;
+export type EdgeBlockSource = (world: NativeEdgeBlockHost, fromZoneId: string, toZoneId: string) => EdgeBlock | null;
 
 const EDGE_BLOCK_SOURCES: EdgeBlockSource[] = [];
 
@@ -48,7 +49,7 @@ export function registerEdgeBlockSource(s: EdgeBlockSource): void {
 }
 
 /** The one fold: the first live block on this road, or null. */
-export function edgeBlockAt(world: World, fromZoneId: string, toZoneId: string): EdgeBlock | null {
+export function edgeBlockAt(world: NativeEdgeBlockHost, fromZoneId: string, toZoneId: string): EdgeBlock | null {
   for (const s of EDGE_BLOCK_SOURCES) {
     const b = s(world, fromZoneId, toZoneId);
     if (b) return b;

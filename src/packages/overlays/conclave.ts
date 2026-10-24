@@ -23,7 +23,7 @@ import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
 import type { World } from '../../engine/world';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
-import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
+import { NO_BIAS, zonePresent, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { eventTargetable } from '../../world/zonePolicy';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
@@ -119,6 +119,10 @@ export class ConclaveField implements WorldOverlay {
   private readonly cfg: ConclaveSurge;
   /** zoneId → the ritual currently sitting in that zone. */
   private rituals = new Map<string, ActiveRitual>();
+  readonly #settledRituals = new WeakSet<object>();
+  /** Identity belongs to the real field allocation, including across same-ID restores. */
+  nativeRitualEpoch(zoneId: string): object | undefined { return this.rituals.get(zoneId); }
+  nativeRitualSettled(epoch: object): boolean { return this.#settledRituals.has(epoch); }
   private acc = 0;
   private seq = 0;
 
@@ -170,7 +174,7 @@ export class ConclaveField implements WorldOverlay {
 
   /** Remove a ritual from a zone — SUBDUED (all cultists slain) or DISRUPTED (the
    *  player left after thinning, but not clearing, them). No counter change. */
-  clearRitual(zoneId: string): void { this.rituals.delete(zoneId); }
+  clearRitual(zoneId: string): void { const epoch = this.rituals.get(zoneId); this.rituals.delete(zoneId); if (epoch) this.#settledRituals.add(epoch); }
 
   /** DEV: force an Occult ritual site into the given (current) zone. Mirrors the
    *  production maybeOpen filter (+ the sibling dev seams): rejects safe/waves/cave/
@@ -194,8 +198,10 @@ export class ConclaveField implements WorldOverlay {
   /** The player LEFT with every cultist still alive — the rite INCUBATES: tick the
    *  hidden counter, then disperse the site (the cultists migrate onward). */
   incubate(zoneId: string): void {
+    const epoch = this.rituals.get(zoneId);
     this.incubationCounter++;
     this.rituals.delete(zoneId);
+    if (epoch) this.#settledRituals.add(epoch);
   }
 
   /** The engine drains a pending Eldritch ignition once (the counter maxed) and
@@ -268,13 +274,14 @@ export class ConclaveField implements WorldOverlay {
     // let conclave keep pace). Byte-identical to before at the default profile.
     if (!this.rng.chance(clamp(cfg.openChance * g.ignitionMul, 0, cfg.openChanceCap))) return;
     // A ritual opens on non-safe/waves/cave/floating, populated ground that doesn't
-    // already host one — and NOT the zone the player currently stands in. The cultists
+    // already host one — and NOT a zone a player currently stands in (THE OCCUPIED
+    // LAW, shard M1-W3: every sim unit's zone is refused like the keeper's). The cultists
     // hide OFF the charted map, so it prefers a FRESH (uncharted) zone the player will
     // discover on first entry; only a small chartedChance (or a no-fresh fallback)
     // lands it in already-explored ground. Materializes lazily on entry (by-id), so a
     // fresh-zone ritual simply appears the first time the player walks in.
     const cands = view.nodes.filter(z =>
-      z.id !== view.currentZoneId && eventTargetable(this.id, z)
+      !zonePresent(view, z.id) && eventTargetable(this.id, z)
       && z.objective.kind !== 'waves'
       && !!z.packs?.table?.length && !this.rituals.has(z.id));
     if (!cands.length) return;
@@ -286,6 +293,12 @@ export class ConclaveField implements WorldOverlay {
     this.rituals.set(z.id, { id: `ritual_${this.seq++}`, zoneId: z.id });
   }
 }
+
+export const nativeConclaveLifetimeCalls = Object.freeze({
+  epoch: ConclaveField.prototype.nativeRitualEpoch,
+  settled: ConclaveField.prototype.nativeRitualSettled,
+  ritualIn: ConclaveField.prototype.ritualIn,
+});
 
 // --- map marker (registered on import — zero panels.ts edits) -----------------
 //

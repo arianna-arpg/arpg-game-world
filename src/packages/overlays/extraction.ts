@@ -36,6 +36,13 @@ export class ExtractionField implements WorldOverlay {
   private readonly cfg: ExtractionSurge;
   /** zoneId → world time the seam was spent (drained or shattered). */
   private spent: Record<string, number> = {};
+  // Private warm-area renewal receipts observe the original durable ledger.
+  #nativeGeneration:object={};
+  readonly #nativeEpochs=new Map<string,object>();
+  readonly #nativeEpochRows=new WeakMap<object,{generation:object;zoneId:string;at:number;renewed:boolean}>();
+  nativeSpentEpoch(zoneId:string,at:number):object|undefined {const token=this.#nativeEpochs.get(zoneId),row=token&&this.#nativeEpochRows.get(token);return token&&row&&row.generation===this.#nativeGeneration&&row.at===at&&Number.isFinite(at)&&this.spent[zoneId]===at?token:undefined;}
+  nativeSpentEpochRenewed(token:object,zoneId:string,at:number):boolean {const row=this.#nativeEpochRows.get(token);return !!row&&row.generation===this.#nativeGeneration&&row.zoneId===zoneId&&row.at===at&&row.renewed&&this.#nativeEpochs.get(zoneId)===token&&!(zoneId in this.spent);}
+
 
   constructor(ctx: OverlayBuildCtx, surge: ExtractionSurge) {
     this.gate = ctx.gate;
@@ -46,7 +53,7 @@ export class ExtractionField implements WorldOverlay {
     // Replenishment: a spent seam quietly refills once its clock lapses.
     if (this.cfg.respawnSec <= 0) return;
     for (const [zid, at] of Object.entries(this.spent)) {
-      if (view.time - at >= this.cfg.respawnSec) delete this.spent[zid];
+      if (view.time - at >= this.cfg.respawnSec) {delete this.spent[zid];const token=this.#nativeEpochs.get(zid),row=token&&this.#nativeEpochRows.get(token);if(row&&row.generation===this.#nativeGeneration&&row.at===at&&Number.isFinite(at)&&Number.isFinite(view.time))row.renewed=true;}
     }
   }
 
@@ -71,6 +78,7 @@ export class ExtractionField implements WorldOverlay {
   /** A seam ended (drained or shattered) — burn the ground until it refills. */
   markSpent(zoneId: string, atTime: number): void {
     this.spent[zoneId] = atTime;
+    const token=Object.freeze({});this.#nativeEpochs.set(zoneId,token);this.#nativeEpochRows.set(token,{generation:this.#nativeGeneration,zoneId,at:atTime,renewed:false});
   }
 
   // --- worldstate (the persistence pledge) -----------------------------------
@@ -85,6 +93,7 @@ export class ExtractionField implements WorldOverlay {
     const s = snap as { spent?: Record<string, unknown> } | null;
     if (!s || !s.spent || typeof s.spent !== 'object') return;
     this.spent = {};
+    this.#nativeGeneration={};this.#nativeEpochs.clear();
     for (const [zid, at] of Object.entries(s.spent)) {
       if (typeof zid !== 'string' || !zid) continue;
       if (typeof at !== 'number' || !Number.isFinite(at)) continue;

@@ -48,6 +48,9 @@ export interface TimeBody {
   team: Team;
   owner?: TimeBody | null;
   statuses: { id: string }[];
+  /** Where the body stands — read by a hold's `within` radius (THE SCOPED FREEZE); a
+   *  fake without one counts as inside every radius. */
+  pos?: { x: number; y: number };
 }
 
 /** Which bodies an actor-scoped hold bends — plain serializable data, so any
@@ -62,6 +65,9 @@ export interface ActorTimeFilter {
   exceptTeam?: Team;
   /** Restrict the bend to one team only (freeze THEM, nobody else). */
   onlyTeam?: Team;
+  /** Bend only bodies within `r` of a point (THE SCOPED FREEZE — a hosted world's
+   *  time stop is a bubble, never the whole World; keeperSeat lane, card 18 B). */
+  within?: { x: number; y: number; r: number };
 }
 
 /** Renderer feedback while a hold is live — pure data, drawn by
@@ -161,6 +167,11 @@ export class Timeflow {
   /** Policy gate for 'menu'-kind holds — injected by the shell (main.ts
    *  wires "no live co-op peers"); everything else always may hold. */
   allowHold: (hold: TimeHold) => boolean = () => true;
+  /** THE SCOPED FREEZE (keeperSeat lane — her ruling 2026-10-08, card 18 B with C): set
+   *  on a hosted world, every chrono cast bends a radius around its caster and never the
+   *  caster's own team (so one player's stop never bends another player). Null = the
+   *  solo law: the spec's own scope. */
+  chronoScope: { radius: number } | null = null;
 
   /** Any hold at all live? (Cheap outer gate for hot paths.) */
   get active(): boolean { return this.holds.length > 0; }
@@ -277,6 +288,7 @@ export class Timeflow {
   }
 
   private matches(a: TimeBody, f: ActorTimeFilter): boolean {
+    if (f.within && a.pos && Math.hypot(a.pos.x - f.within.x, a.pos.y - f.within.y) > f.within.r) return false; // THE SCOPED FREEZE
     if (f.onlyTeam && a.team !== f.onlyTeam) return false;
     if (f.exceptTeam && a.team === f.exceptTeam) return false;
     if (f.exceptIds && f.exceptIds.includes(a.id)) return false;

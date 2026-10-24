@@ -1,0 +1,9 @@
+import assert from 'node:assert/strict';
+import type {Seat} from '../src/engine/world';
+import {withSeededRandom} from '../src/core/rng';
+import {nativeCampaignFixture,birthActualNativeArea} from './nativeCombatRetainedFixture';
+import {refuseWorldCombat,combatHash,writeCombatProof} from './probe_nativecombatcycle';
+const result=withSeededRandom(45926,()=>{const setup=nativeCampaignFixture(45926);return refuseWorldCombat([setup.writer],calls=>{const {writer,ongoing:a}=birthActualNativeArea(setup),seat=writer.localSeat,hero=seat.actor,npc=a.combat.scene.actors.find(x=>x!==hero)!,fake=Object.assign({},seat,{actor:npc}) as Seat;assert.ok(npc);const descriptor=Object.getOwnPropertyDescriptor(writer,'seats')!,roster=writer.seats;let reads=0,target=Infinity,mutationReads=0;
+ Object.defineProperty(writer,'seats',{configurable:true,enumerable:true,get(){reads++;if(reads===target){writer.localSeat=fake;mutationReads++;}return roster;}});
+ try{a.combat.queryView('publishViewFrame',1,2,3,4);const benignReads=reads;assert.ok(benignReads>0);reads=0;target=benignReads;assert.throws(()=>a.combat.queryView('publishViewFrame',10,20,30,40),/presentation changed during admission/);assert.equal(mutationReads,1);assert.equal(writer.localSeat,fake);assert.deepEqual(a.combat.runtimeState.viewFrame,{x:1,y:2,w:3,h:4});assert.deepEqual(calls,[]);return{benignReads,reads,mutationReads,originalHeroStillPhysical:a.combat.scene.actors.includes(hero),finalViewFrame:a.combat.runtimeState.viewFrame,worldDrivers:calls};}finally{Object.defineProperty(writer,'seats',descriptor);writer.localSeat=seat;}
+ });});const report={scope:'Actual last roster read changes localSeat; final own-data check refuses before native viewFrame write while retaining the callback effect.',result,receipt:combatHash(JSON.stringify(result))};writeCombatProof('native-view-final-seat.json',report);console.log(JSON.stringify(report));

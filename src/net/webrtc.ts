@@ -19,7 +19,7 @@ import { sanitizeCosmeticLoadout } from '../meta/cosmetics';
 // ---------------------------------------------------------------------------
 
 import type { NetTransport, PeerInfo, SessionMsg, StateSnapshot, ZoneMsg } from './transport';
-import type { PlayerId, PlayerInput } from './intent';
+import { mergeInputs, type PlayerId, type PlayerInput } from './intent';
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
@@ -152,7 +152,9 @@ export class WebRtcTransport implements NetTransport {
       } else if (m.t === 'input' && seatId) {
         // Key by the AUTHORITATIVE channel→seat binding, NOT the client-supplied
         // m.seat — else a peer could drive another seat (incl. the host's hero).
-        this.pending.set(seatId, m.input);
+        // THE HONEST INPUT (docs/engine/shard.md): the shard's fold, so two frames in
+        // one host frame keep both walks, both edges and a quick tap's press.
+        this.pending.set(seatId, mergeInputs(this.pending.get(seatId), m.input));
       } else if (m.t === 'session' && seatId) {
         // A client's run-lifecycle message (rejoin) — tagged with its bound seat.
         this.sessionCbs.forEach(cb => cb(m.msg, seatId!));
@@ -236,6 +238,9 @@ export class WebRtcTransport implements NetTransport {
     if (!this.isHost) return;
     this.fanOut(JSON.stringify({ t: 'snap', snap: s } satisfies NetMsg));
   }
+  sendStateToSeat(s:StateSnapshot,to:PlayerId):boolean {if(!this.isHost)return false;return this.sendTo(to,JSON.stringify({t:'snap',snap:s} satisfies NetMsg));}
+  sendZoneToSeat(z:ZoneMsg,to:PlayerId):boolean {if(!this.isHost)return false;return this.sendTo(to,JSON.stringify({t:'zone',zone:z} satisfies NetMsg));}
+  private sendTo(to:PlayerId,data:string):boolean {const channel=this.conns.get(to);if(!channel||channel.readyState!=='open'||channel.bufferedAmount>=1_000_000)return false;try{channel.send(data);return true;}catch{return false;}}
   onState(cb: (s: StateSnapshot) => void): () => void { this.stateCbs.add(cb); return () => { this.stateCbs.delete(cb); }; }
 
   sendZone(z: ZoneMsg): void {

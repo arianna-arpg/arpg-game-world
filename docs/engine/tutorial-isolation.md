@@ -21,3 +21,9 @@ commander birth and Mu departure for all seven factions, then constructs the
 fresh World used by class selection. Winning random rolls remove chance from
 the assertions. It also checks contaminated account records, existing scene
 grudges and ordinary enemy controls. The unpatched code fails 24 assertions.
+
+Seamless routes these rules through `nativeSceneHistory` and the native campaign
+lifecycle. The history owner reads the live scene director from the campaign
+projection. `probe_tutorialnative.ts` covers that binding, scene-owned eligibility
+and actual native arrival with all seven legacy commander records plus an ordinary
+hunter. Both isolation probes are part of the current playable gate.

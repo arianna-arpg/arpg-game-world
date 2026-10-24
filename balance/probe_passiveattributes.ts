@@ -18,6 +18,15 @@ bootSimEngine();
 assert.equal(formatStatValue('critMulti', 'flat', 0.004), '0.004');
 assert.equal(formatStatValue('critMulti', 'flat', -0.004), '-0.004');
 assert.equal(formatStatValue('critMulti', 'flat', 0), '0');
+// Small authored percentages must remain distinguishable in shared tooltips.
+assert.equal(formatStatValue('critChance', 'flat', 0.0008), '0.08%');
+assert.equal(formatStatValue('critChance', 'flat', 0.0005), '0.05%');
+assert.equal(formatStatValue('fireRes', 'flat', 0.0015), '0.15%');
+assert.equal(formatStatValue('fireRes', 'flat', -0.00001), '-0.001%');
+assert.equal(formatStatValue('damage', 'increased', 0.00002), '0.002%');
+assert.equal(formatStatValue('critChance', 'flat', 0), '0%');
+assert.equal(formatStatValue('fireRes', 'flat', 0.01234), '1.2%');
+assert.equal(formatStatValue('damage', 'increased', 0.1234), '12.3%');
 const nodes = Object.values(N).filter(choicePathing);
 assert.equal(nodes.length, 136);
 assert.equal(nodes.filter(n => n.choice!.group === 'attribute_training').length, 122);

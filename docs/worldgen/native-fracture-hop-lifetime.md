@@ -1,0 +1,13 @@
+# Retained Fracture completed-hop lifetime
+
+A single Fracture can revisit earlier ground while retaining its event ID. Ordinary zone loads rebuild that visit's materialization marker. Retained areas preserve the marker, so a genuine return could arrive with an eligible field event and no local run.
+
+The retained completion owner now releases only the marker issued by the actual birth whose native completion has cleared its run. The defining field records a private event identity and hop count; real ignition or restore issues an identity, and actual diversion advances its hop. The shared birth records the real field, event, run, area definition and marker. The original completion body exposes a short private scope around its existing clear call. The retained clear validates those receipts and releases its exact marker after the native run becomes null.
+
+Native reward, gem, notice, capstone roll, diversion and clear order remain intact. An unfinished or occupied chain retains its original run, progress and wounded bodies. A same-ID restored event cannot authorize the previous event's cleanup. A completed clear that throws or briefly refuses bookkeeping retains a private pending receipt; a later genuine update may retry only marker cleanup, without repeating rewards, text or clear. A new birth, changed marker, replacement event or replacement run invalidates that pending receipt.
+
+The natural seed20731 course previously stopped on A → crossroads → A after six chasms. The authored repair completes nine chasms and one seal; its three-zone span does not produce a capstone. Natural seed20734 completes eleven chasms over four zones, one seal and one rift. Neither route is forced. Fixture movement follows the live fissure head and genuine combat kills settle waves; these finite controls are not a full AI playthrough or server-capacity result.
+
+The author courses also cover native hosted-road departures with idle, downed and dead physical peers; partial selected text and clear callbacks; failed bookkeeping followed by genuine-frame retry; and replacement-event controls. The save/Continue course compares native fresh chase reconstruction against ordinary Continue in separate processes using actual launcher persistence. Local chase progress is not added to the save format.
+
+This author handoff does not enroll probes or wrap historical source readers. Root composition must preserve all original assertions through an exact inverse successor, enroll the new probes, obtain independent runtime review, and run combined acceptance before production promotion. Shard timing, private generated quest zones, broader content parity and the separate unresolved original probe debt remain open.

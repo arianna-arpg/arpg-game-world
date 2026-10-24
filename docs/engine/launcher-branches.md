@@ -98,4 +98,3 @@ the next normal application release.
 - `npm run smoke:update`, `npm run smoke`: existing updater and game boot.
 - `scripts/smoke-launcher-branch.cjs`: downloaded bundle boot and save
   isolation; environment `BRANCH_SMOKE_BUNDLE`, `BUILD_BRANCH`, `BUILD_COMMIT`.
-

@@ -12,6 +12,11 @@ build is `applyBuild` from `sim/builds.ts`, monsters come through
 `createMonster` and the ordinary spawn rules, the hero is driven through
 `World.applyInputs`, and every frame is the game's own renderer.
 
+Native-world runs support current-entry captures. Explicit tileset shots still
+need retained-area admission: the native world intentionally refuses legacy
+`loadZone` travel, so those shots reject before a misleading mint. Classic
+runs retain the original tileset shot path.
+
 ## The pieces
 
 | File | Role |
@@ -27,7 +32,12 @@ hold, the account ledger and the UI.
 
 ## The held clock
 
-`stage()` holds the game loop (`__game.hold(true)`), so nothing advances
+`await stage()` first awaits real world entry and native page readiness under the
+existing loading cover. Entry cancellation or refusal rejects the stage;
+`end()` cancels an in-flight stage and returns input, clock, viewport, and
+camera framing to ordinary play. Calling `frame()` during preparation refuses.
+
+After admission, `stage()` holds the game loop (`__game.hold(true)`), so nothing advances
 except through `frame()`, which runs exactly one tick of `1 / fps` sim
 seconds (times the shot's `timeScale`) and renders it. A take is therefore
 deterministic: the same seed and the same spec give the same frames, however
@@ -37,8 +47,10 @@ global stream for the shot; `end()` restores everything.
 ## Staging, in order
 
 1. Seed, mark the prologue as lived, hold the clock, start a fresh run of the
-   hero's class, and run the UI's own Esc sweep until nothing stands.
-2. Mint the zone (or stay in Lastlight for `'town'`).
+   hero's class through the asynchronous loading path, wait for admission,
+   and run the UI's own Esc sweep until nothing stands.
+2. Mint the zone (or stay at the run entry for `'town'`) and wait for its
+   native pages before touching scene state. The current entry policy remains authoritative.
 3. Account access (`progression`, `awaken`) through the dev progression
    catalog's recipes (`dev/progression.ts`), then the build (`'auto'`
    passives use the harness's greedy walk for the level).

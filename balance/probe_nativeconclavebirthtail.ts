@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {nativeCampaignFixture,birthActualNativeArea,mintAdditionalNativeArea} from './nativeCombatRetainedFixture';
+import {refuseWorldCombat,combatHash,writeCombatProof} from './probe_nativecombatcycle';
+import {withSeededRandom} from '../src/core/rng';
+import {nativeConclaveBirthCalls,type NativeConclaveBirthReceipt} from '../src/engine/nativeSceneRuntimeBirth';
+import {NativeAreaSceneObjectiveCompletion} from '../src/worldmass/nativeAreaSceneObjectiveCompletion';
+const rows=['ledger','text'].map(mode=>withSeededRandom(17431,()=>{const setup=nativeCampaignFixture(17431),w=setup.writer;w.player.level=15;mintAdditionalNativeArea(setup);const cf=w.sim.conclaveField;assert(cf);let steps=0;while(!cf.peek().length&&steps++<15000)cf.update(.5,w.devOverlayView());const event=cf.peek()[0];assert(event);return refuseWorldCombat([w],worldDrivers=>{
+ const n=birthActualNativeArea(setup),travel=(to:string)=>n.coordinator.runFrom(n.coordinator.published,()=>n.coordinator.loadZone(to,w.zone.id));const marker=Error('Conclave native birth '+mode),target=mode==='ledger'?w.ledger:NativeAreaSceneObjectiveCompletion.prototype,key=mode==='ledger'?'rituals_seen':'text',old=Object.getOwnPropertyDescriptor(target,key),fn=Reflect.get(target,key);let hits=0;let observed:NativeConclaveBirthReceipt|undefined;
+ const observe=()=>{hits++;const birth=n.session.current.assembly.input.registry.input.birth;observed=nativeConclaveBirthCalls.read(birth.host);assert(observed);assert.equal(observed.site,birth.input.state.ritualSite);throw marker;};
+ if(mode==='ledger')Object.defineProperty(target,key,{configurable:true,get(){return 0;},set:observe});else Object.defineProperty(target,key,{configurable:true,value:function(this:unknown,...args:unknown[]){if(args[1]==='An Occult ritual is underway…')observe();return Reflect.apply(fn,this,args);}});
+ try{assert.throws(()=>travel(event.zoneId),e=>e===marker);}finally{if(old)Object.defineProperty(target,key,old);else Reflect.deleteProperty(target,key);}
+ assert.equal(hits,1);assert(observed);assert.equal(observed.bodies.length,5);assert.equal(observed.site.id,event.id);assert.equal(observed.field,cf);assert(observed.bodies.every(a=>observed!.host.actors.includes(a)));assert.equal(cf.incubationCounter,0);assert.deepEqual(worldDrivers,[]);n.coordinator.retire();return{mode,originalErrorPreserved:true,actualCompletedAllocationRecordedBeforeTail:true,noInventedIncubation:true,worldDrivers};
+});}));writeCombatProof('native-conclave-birth-tail.json',{rows,receipt:combatHash(JSON.stringify(rows))});console.log(JSON.stringify(rows));

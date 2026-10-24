@@ -666,7 +666,16 @@ function paintLiquidSheen(env: PaintEnv, group: readonly Doodad[], p: LiquidPara
       right = Math.max(right, d.pos.x + d.radius); bottom = Math.max(bottom, d.pos.y + d.radius);
     }
     ctx.save(); blobPath(ctx, group, 0); ctx.clip();
-    paintWaterSurface(ctx, {x, y, w: right - x, h: bottom - y}, env.time);
+    const town = env.world.massRuntime?.settlement;
+    // The native floor feathers at its edge; its waves must fade with it,
+    // rather than leaving bright strokes on the dry geographic underlay.
+    const waterOpacity = town ? (px: number, py: number): number => {
+      if (!town.reserves(px, py, 0)) return 1;
+      const {w, h} = town.zone.size, fade = town.spec.blend;
+      return Math.max(0, Math.min(1, px / fade, (w - px) / fade))
+        * Math.max(0, Math.min(1, py / fade, (h - py) / fade));
+    } : undefined;
+    paintWaterSurface(ctx, {x, y, w: right - x, h: bottom - y}, env.time, waterOpacity);
     ctx.restore(); return;
   }
   if (!p.sheen) return;

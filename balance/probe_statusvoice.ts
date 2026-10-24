@@ -15,7 +15,8 @@
 // Run: npx tsx balance/probe_statusvoice.ts
 // ---------------------------------------------------------------------------
 
-import { readFileSync } from 'node:fs';
+import {readNativeShardsCaravan as readFileSync} from './nativeShardsCompositionFixture';
+import {nativeStatusVoiceSources} from './nativeCaravanLegacySourceFixture';
 import { bootSimEngine } from '../src/sim/arena';
 import { STATUS_DEFS, type StatusDef } from '../src/engine/status';
 import { STATUS_VOICE_CFG, statusVoiceDiff, statusVoiceOf } from '../src/engine/statusVoice';
@@ -78,7 +79,7 @@ const def = (p: Partial<StatusDef>): StatusDef => ({ label: 'qa', color: '#fffff
 
 // ------------------------------------------------- D. the retirement census (source-lint)
 {
-  const src = readFileSync('src/engine/world.ts', 'utf8');
+  const src = nativeStatusVoiceSources(readFileSync('src/engine/world.ts', 'utf8'), readFileSync('src/engine/nativeSceneRestoration.ts', 'utf8'));
   const retired = ["'chilled to the bone!'", "'sunscorched!'", "'befuddled!'", "'maddened!'", "'possessed!'", "'corrupted!'", "'SEEN!'", "'beheld…'",
     "'carried!'", "'torn free!'", "'broke free!'", "'the grip breaks!'", "'UNHORSED'", "'FRENZY!'", "'contagion!'", "'transfused!'",
     "'swallowed by the dark!'", "'over the edge!'", "'renewing'", "'time stops!'", "'time bends!'", "'DOOM!'", "'volatile!'", "'CULLED!'", "'capped'", "'LAST GASP!'", "'primed'",

@@ -131,18 +131,15 @@ app.whenReady().then(async () => {
     } finally { observer.disconnect(); }
    }, kind);
    const live = await toy(() => __qaLive);
-   assert.equal(result.mass, false); assert.equal(result.active, false); assert.equal(result.fatal, null); assert.equal(result.replaced, true);
-   // Finite main can finish preparation before the first ordinary world frame; exclude that later frame.
-   const largest = result.tasks.filter(t => t.at >= live[0].at && t.at < live.at(-1).at).sort((a, b) => b.duration - a.duration)[0];
-   // A fast finite Continue may have no task above the browser's 50 ms threshold.
-   // The mandatory 1.8 s blocked-work test above covers sustained CPU pressure.
-   const inside = largest ? live.filter(s => s.at >= largest.at && s.at <= largest.at + largest.duration) : [];
-   const gaps = largest ? [inside[0]?.at - largest.at,
-    ...inside.slice(1).map((s, i) => s.at - inside[i].at), largest.at + largest.duration - inside.at(-1)?.at] : [];
-   if (largest) {
-    assert.ok(inside.length >= largest.duration / 50, kind + ': minigame remains playable during the real heavy stage');
-    assert.ok(Math.max(...gaps) < 250, kind + ': no foreground freeze or hidden-frame throttling');
-   }
+   assert.equal(result.mass, true); assert.equal(result.active, false); assert.equal(result.fatal, null); assert.equal(result.replaced, true);
+   const largest = [...result.tasks].sort((a, b) => b.duration - a.duration)[0];
+   assert.ok(largest?.duration >= 100, kind + ': real preparation exercised a substantial CPU stage');
+   const inside = live.filter(s => s.at >= largest.at && s.at <= largest.at + largest.duration);
+   const gaps = [inside[0]?.at - largest.at,
+    ...inside.slice(1).map((s, i) => s.at - inside[i].at), largest.at + largest.duration - inside.at(-1)?.at];
+   assert.ok(inside.length >= largest.duration / 50, kind + ': minigame remains playable during the real heavy stage');
+   assert.ok(Math.max(...gaps) < 250, kind + ': no foreground freeze or hidden-frame throttling');
+   assert.ok(Math.max(...inside.map(s => s.lane)) - Math.min(...inside.map(s => s.lane)) > 10, kind + ': steering changed during the real heavy stage');
    // Cover the complete observed crossing as well as its longest CPU stage.
    // This catches stalls in other restoration/publication/first-render phases.
    const allGaps = live.slice(1).map((s, i) => s.at - live[i].at);
@@ -150,16 +147,16 @@ app.whenReady().then(async () => {
    assert.ok(live.length >= duration / 50, kind + ': all preparation phases remain playable');
    assert.ok(Math.max(...allGaps) < 250, kind + ': no freeze between loading phases');
    report.checks.push({ [kind === 'entry' ? 'actualEntry' : 'actualContinue']: { ...result,
-    longestTaskFrames: inside.length, maxGapMs: gaps.length ? Math.max(...gaps) : null, samples: inside,
+    longestTaskFrames: inside.length, maxGapMs: Math.max(...gaps), samples: inside,
     wholeCrossing: { duration, frames: live.length, maxGapMs: Math.max(...allGaps) } } });
    return result;
   };
   const entry = await observePreparation('entry');
-  await run(async () => { __game.world().player.invulnerable = true; __game.save(); });
+  await run(async () => { __game.world().player.invulnerable = true; __game.save(); await __game.flushRunSave(); });
   await win.loadURL('http://127.0.0.1:' + server.address().port);
   await run(async () => {
    for (let i = 0; !window.__game && i < 100; i++) await new Promise(r => setTimeout(r, 100));
-   await __game.hydrated(); __game.account().ledger.prologue_lived = 1; __game.saveAccount();
+   await __game.hydrated();
    for (let i = 0; document.getElementById('sm-continue')?.disabled && i < 100; i++) await new Promise(r => setTimeout(r, 25));
   });
   const continued = await observePreparation('continue');

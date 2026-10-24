@@ -23,7 +23,10 @@
 // ---------------------------------------------------------------------------
 
 import type { Actor } from '../engine/actor';
-import type { World } from '../engine/world';
+import type {World} from '../engine/world';
+import type { NativeSceneFrameHost } from '../engine/nativeSceneFrameHost';
+/** Complete concrete local scene capabilities available to optional region handlers. */
+export type NativeRegionEffectHost = Pick<World, Extract<keyof NativeSceneFrameHost, keyof World>>;
 import type { DamageType } from '../engine/stats';
 import { scorchErosionAt } from '../engine/status';
 
@@ -289,9 +292,9 @@ export interface RegionKind {
   crossableBy?: (disp: DisplacementPolicy) => boolean;
   /** Escape-hatch handlers for ARBITRARY behaviour the declarative fields can't
    *  express — the open door for future "insane mechanics" (type-only World use). */
-  onEnter?: (actor: Actor, world: World) => void;
-  onStand?: (actor: Actor, world: World, dt: number) => void;
-  onExit?: (actor: Actor, world: World) => void;
+  onEnter?: (actor: Actor, world: NativeRegionEffectHost) => void;
+  onStand?: (actor: Actor, world: NativeRegionEffectHost, dt: number) => void;
+  onExit?: (actor: Actor, world: NativeRegionEffectHost) => void;
   /** Cells of this kind STOP projectiles (swept per sub-cell step). Default FALSE
    *  = a CHASM-LIKE: bodies can't cross but shots sail over (void/chasm/water/
    *  ledges). TRUE WALLS opt in — rampart masonry plus wall/flesh_wall/
@@ -682,6 +685,8 @@ registerRegion({ id: 'wall', walkable: false, blocks: true, blocksShot: true, bl
 // sit on pavement; the validate net keeps the pair harmless forever).
 registerRegion({ id: 'mud', walkable: true, blocks: false, label: 'the mud', standStatus: 'mired', pathCost: 2, severity: 10, overruns: true });
 registerRegion({ id: 'sand', walkable: true, blocks: false, label: 'the sand', standStatus: 'mired', pathCost: 2, severity: 10, overruns: true });
+// Firm sand is a neutral country foundation; loose native sand remains a deposit.
+registerRegion({ id: 'firm_sand', walkable: true, blocks: false, label: 'the firm sand' });
 // ASHFIELD — the wildfire front's wake (the creep fabric's convert lane):
 // dead burnt ground, fully walkable, no hazard and no molten glow — the
 // danger PASSED here, that's the point. moveScale 1 is deliberate: a benign

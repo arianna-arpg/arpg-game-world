@@ -6,6 +6,7 @@ node_modules/
 # Vite build; regenerate with `npm run build`.
 # NOTE: if you ever want to version a shippable build, remove this line.
 dist/
+dist-preview/
 dist-ssr/
 *.tsbuildinfo
 

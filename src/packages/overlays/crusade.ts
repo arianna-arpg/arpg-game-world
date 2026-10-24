@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from '../../world/bulletins';
 // ---------------------------------------------------------------------------
 // CRUSADE FIELD — a faction's holy war as a LIVING WARFRONT (pure overlay).
 //
@@ -291,6 +292,14 @@ export class CrusadeField implements WorldOverlay {
   private readonly gate: () => PackageGate;
   private readonly cfg: CrusadeSurge;
   private crusades: ActiveCrusade[] = [];
+  #nativeZoneKill:{epoch:object;id:string;zoneId:string;rewardMul:number;check:()=>void;used:boolean}|undefined;
+  /** Nominal identity survives field queries; restore/replacement creates a new event. */
+  nativeCrusadeEpoch(id:string):object|undefined {return this.crusades.find(c=>c.id===id&&!c.dead);}
+  withCrusadeZoneKill(epoch:object,id:string,zoneId:string,rewardMul:number,check:()=>void,run:()=>number):number {
+    if(!this.crusades.some(c=>c===epoch&&c.id===id&&!c.dead))return 1;
+    const prior=this.#nativeZoneKill;this.#nativeZoneKill={epoch,id,zoneId,rewardMul,check,used:false};
+    try{return run();}finally{this.#nativeZoneKill=prior;}
+  }
   /** Decaying local suppression discs (warfield fabric; key = crusade id). */
   private mods: FieldMod[] = [];
   private time = 0;
@@ -574,10 +583,13 @@ export class CrusadeField implements WorldOverlay {
    *  that HEALS, and the campaign pays a nick of power — enough pressure can
    *  gutter an unrooted war entirely. Returns the tier's reward multiplier. */
   resolveCrusadeZone(zoneId: string): number {
+    const selected=this.#nativeZoneKill;
+    if(selected){selected.check();if(selected.used||selected.zoneId!==zoneId||!this.crusades.some(c=>c===selected.epoch&&c.id===selected.id&&!c.dead))return 1;}
     const z = this.nodesById[zoneId];
     if (!z) return 1;
     const info = this.crusadeOn(zoneId);
-    let c = info ? this.crusades.find(x => x.id === info.crusadeId) : undefined;
+    let c = selected ? this.crusades.find(x=>x===selected.epoch&&!x.dead) : info ? this.crusades.find(x => x.id === info.crusadeId) : undefined;
+    if(selected){selected.check();if(!c||!this.crusades.some(c=>c===selected.epoch&&c.id===selected.id&&!c.dead))return 1;}
     if (!c) {
       // The ground may read clear THROUGH a fresh suppression disc while the
       // campaign that raised its works still stands — attribute the blow to
@@ -594,12 +606,13 @@ export class CrusadeField implements WorldOverlay {
     }
     if (!c) return 1;
     const S = this.cfg.suppress;
+    if(selected){selected.check();if(!this.crusades.some(c=>c===selected.epoch&&c.id===selected.id&&!c.dead))return 1;selected.used=true;}
     this.mods.push({
       key: c.id, at: { x: z.map.x, y: z.map.y },
       radius: S.radius, mul: S.mul, from: this.time, until: this.time + S.forSec,
     });
     c.power = Math.max(0, c.power - S.powerNick);
-    return info?.rewardMul ?? 1;
+    return selected && info?.crusadeId!==selected.id ? selected.rewardMul : info?.rewardMul ?? 1;
   }
 
   /** The Crusade Leader fell in his arena — the whole campaign COLLAPSES.
@@ -933,11 +946,17 @@ export class CrusadeField implements WorldOverlay {
   }
 }
 
+/** Authentic retained lifetime calls are captured before this defining module is exposed. */
+export const nativeCrusadeLifetimeCalls=Object.freeze({query:CrusadeField.prototype.crusadeOn,
+  epoch:CrusadeField.prototype.nativeCrusadeEpoch,
+  resolve:CrusadeField.prototype.withCrusadeZoneKill,
+});
+
 // --- bulletins (registered on import — zero panels.ts edits) ------------------
 // War news is DISCOVERY-GATED at the source (the overlay only pushes lines
 // about wars the player has found); the engine's single collectBulletins pump
 // drains us.
-registerBulletinSource((world: World) => {
+registerBulletinSource((world: NativeBulletinHost) => {
   const cf = world.sim.crusadeField;
   if (!cf || !cf.bulletins.length) return [];
   return cf.bulletins.splice(0);

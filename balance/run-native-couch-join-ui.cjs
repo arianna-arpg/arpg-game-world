@@ -1,0 +1,5 @@
+const fs=require('fs'),p=require('path'),cp=require('child_process');
+const root=p.resolve(__dirname,'..'),out=p.resolve(process.argv[2]??p.join(root,'balance/reports/native-couch-join-ui')),fixture=p.join(out,'fixtures'),dist=p.resolve(process.argv[3]??p.join(root,'dist-disk'));
+fs.mkdirSync(out,{recursive:true});
+async function run(exe,args,name){const log=p.join(out,name+'.log'),fd=fs.openSync(log,'w');const code=await new Promise((resolve,reject)=>{const child=cp.spawn(exe,args,{cwd:root,windowsHide:true,stdio:['ignore',fd,fd]});child.on('error',reject);child.on('exit',resolve);});fs.closeSync(fd);console.log(JSON.stringify({name,code,log}));if(code!==0)throw Error(name+' failed; see '+log);}
+(async()=>{await run(process.execPath,['--import','tsx',p.join(__dirname,'nativeCouchJoinBrowserFixture.ts'),fixture],'fixtures');await run(require('electron'),[p.join(__dirname,'native-couch-join-ui.cjs'),fixture,p.join(out,'browser'),dist],'browser');console.log(fs.readFileSync(p.join(out,'browser/REPORT.json'),'utf8'));})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -49,12 +49,13 @@ import type { World } from '../../engine/world';
 import { coordDist } from '../../world/coords';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { registerOmenSource, type Omen } from '../../world/omens';
-import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
+import { NO_BIAS, zonePresent, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { eventTargetable } from '../../world/zonePolicy';
 import { CONTAGION_COLORS } from '../../world/palette';
 import { rollStrain, strainOf } from '../contagionStrains';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
+import type {NativeOmenHost} from '../../world/omens';
 
 const STEP = 0.5;          // fixed ignition cadence (seconds)
 
@@ -816,12 +817,13 @@ export class ContagionField implements WorldOverlay {
    *  on the overlay's own stream — deterministic beat for beat. */
   private spread(o: ActiveOutbreak, view: OverlayView): void {
     // THE ZERO'S STEP first (the head walks, then the legs — one stream,
-    // stable order): once per `stride` beats, and NEVER out of the zone the
+    // stable order): once per `stride` beats, and NEVER out of a zone a
     // player stands in — THE CORNERED HOLD: the hunter's presence pins the
-    // quarry, so its materialized body can never desync from this seat.
+    // quarry, so its materialized body can never desync from this seat
+    // (THE OCCUPIED LAW, shard M1-W3: every sim unit's player pins it too).
     o.zeroBeat += 1;
     if (o.zero && o.zeroBeat % this.zeroCfg().stride === 0
-      && o.zero.zoneId !== view.currentZoneId) {
+      && !zonePresent(view, o.zero.zoneId)) {
       this.stepWalker(o, view, o.zero);
     }
     for (const c of o.carriers) this.stepWalker(o, view, c);
@@ -931,7 +933,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
 // (widenPerMin — an uncaught quarry's shadow grows), and close in it surveys
 // the seat onto the map. The omen id is stable per OUTBREAK while `at` walks
 // with the quarry — the whisper memory follows one hunt, not one zone.
-registerOmenSource((world: World): Omen[] => {
+registerOmenSource((world: NativeOmenHost): Omen[] => {
   const cf = world.sim.contagionField;
   if (!cf) return [];
   const surge = cf.surge();

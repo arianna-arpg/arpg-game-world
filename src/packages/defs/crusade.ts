@@ -1,3 +1,4 @@
+import {nativeCrusadeCommanderCurrent,resolveNativeCrusadeCommander} from '../../engine/nativeCrusadeIdentity';
 // ---------------------------------------------------------------------------
 // CRUSADES — a faction's holy war as a LIVING WARFRONT on the warfield fabric.
 //
@@ -263,9 +264,9 @@ export const CRUSADE: ContentPackage = {
 // lives on World.worldKillRules.)
 registerKillHandler({
   id: 'crusade_camp',
-  when: ctx => ctx.actor.tag === 'crusade_camp' || ctx.actor.tag === 'crusade_fortress',
+  when: ctx => (ctx.actor.tag === 'crusade_camp' || ctx.actor.tag === 'crusade_fortress') && nativeCrusadeCommanderCurrent(ctx),
   run: ctx => {
-    const mul = ctx.sim.crusadeField?.resolveCrusadeZone(ctx.zone.id) ?? 1;
+    const mul = resolveNativeCrusadeCommander(ctx);
     ctx.bumpLedger('crusade_zones_cleared');
     ctx.grantXp(Math.round((150 + ctx.zone.level * 30) * mul));
     for (let i = 0; i < 1 + Math.floor(mul); i++) ctx.dropGemAt(ctx.actor.pos);

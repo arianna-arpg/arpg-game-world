@@ -873,6 +873,11 @@ withSeededRandom(0x0bec7a, () => {
     // pinned open — adoption can never force a spawn.
     {
       const zid = stage(717171, 21, { kind: 'clear', adopt: true });
+      // This negative control asks whether an absent guest can conjure an ask.
+      // The native seed also rolls barrow_watch (a legitimate resident lair),
+      // which outranks packages and belongs to U13's separate precedence test.
+      const guestless = w.zoneMap[zid] as ZoneDef;
+      guestless.landmarks = []; guestless.compositions = []; guestless.structures = [];
       w.loadZone(zid);
       check('U2 guestless ground stays the bare cull (adopt:true forces nothing)',
         w.zone.objective.kind === 'clear');
@@ -1032,25 +1037,44 @@ withSeededRandom(0x0bec7a, () => {
       const guestId = ff.fractureIn(zid).id as string;
       w.loadZone(zid);
       killAllEnemies(); // the chase drive needs no ambient AI bill (wall-clock)
+      check('U9a the success-arm fixture adopts its standing fracture', w.zone.objective.kind === 'package', JSON.stringify(w.zone.objective));
       let run = w.fractureView();
       w.player.pos = w.clampPos(vec(run.origin.x, run.origin.y), w.player.radius);
       step(0.2);
       let guard = 0;
       let sawChasm = false;
+      let stayedOnSource = true;
+      // The fracture may legitimately crawl onto an ordinary road portal.
+      // Following its exact pixel used to dwell-travel to that road (b961,
+      // gen_295 -> gen_294 after123beats), abandoning the operation under test.
+      // Follow from real clear ground within its native chase reach instead.
+      const chaseStand = (head: { x: number; y: number }): { x: number; y: number } => {
+        for (const radius of [0, 60, 100, 135]) for (let n = 0; n < (radius ? 24 : 1); n++) {
+          const angle = n * Math.PI / 12;
+          const p = w.clampPos(vec(head.x + Math.cos(angle) * radius, head.y + Math.sin(angle) * radius), w.player.radius);
+          if (Math.hypot(p.x - head.x, p.y - head.y) <= ff.surge().chaseRadius + w.player.radius
+            && !(w.exits as ZoneExit[]).some(e => Math.hypot(p.x - e.pos.x, p.y - e.pos.y) <= e.radius + w.player.radius + 24)
+            && !w.pointInSolid(p.x, p.y, w.player.radius * .4)) return p;
+        }
+        throw Error('Fracture success fixture has no legal non-travel chase stand');
+      };
       while (w.fractureView() && guard++ < 900) {
         run = w.fractureView();
         if (run.phase === 'fissure') {
-          w.player.pos = w.clampPos(vec(run.head.x, run.head.y), w.player.radius);
+          w.player.pos = chaseStand(run.head);
         } else if (run.phase === 'chasm') {
+          w.player.pos = chaseStand(run.chasm ?? run.head);
           sawChasm = true;
           for (const a of w.actors as Actor[]) if (!a.dead && a.tag === 'fracture_foe') w.kill(a, true);
         }
         step(0.2);
+        stayedOnSource &&= w.zone.id === zid;
       }
       step(0.2); // the driver reads the end one tick later
+      check('U9b the hero never ordinary-road-travels while running the fracture', stayedOnSource && w.zone.id === zid);
       check('U9b the run was SEEN THROUGH (chasms culled in time) and the ask banked — the success arm',
         sawChasm && w.objectiveDone === true && (w.completedObjectives as Set<string>).has(zid),
-        `${guard} beats`);
+        `${guard} beats; source=${zid}; current=${w.zone.id}; ask=${JSON.stringify(w.zone.objective)}; caveDepth=${w.caveStack.length}`);
       const p = ff.peek();
       check('U9c THE BOUNCE SOVEREIGN: same guest, one hop spent by ITS OWN divert law, gliding onward',
         !!p && p.id === guestId && p.hopsRemaining === ff.surge().zoneSpan[1] - 2,

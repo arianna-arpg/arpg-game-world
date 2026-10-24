@@ -23,7 +23,7 @@
 
 import { AGENT_CFG, AGENT_PROFILES, type AgentProfile } from '../data/agent';
 import type { Actor } from '../engine/actor';
-import type { World } from '../engine/world';
+import type {HeroInputQuery} from './perception';
 import type { PlayerInput, PlayerInputSource } from '../net/intent';
 import { readKit, type KitSlot } from './kit';
 import { bestCluster, countNear, perceive, type Percept, type Pt } from './perception';
@@ -128,7 +128,7 @@ export class HeroAgent implements PlayerInputSource {
   /** True while scripted orders remain. */
   get busy(): boolean { return !!this.current || this.queue.length > 0; }
 
-  poll(actor: Actor, world: World, dt: number): PlayerInput | null {
+  poll(actor: Actor, world: HeroInputQuery, dt: number): PlayerInput | null {
     this.t += dt;
     if (actor.dead || actor.downed) return null;
     const n = actor.skills.length;
@@ -195,7 +195,7 @@ export class HeroAgent implements PlayerInputSource {
 
   // ---------------------------------------------------------------- decide --
 
-  private decide(world: World, actor: Actor, p: Percept): Intent {
+  private decide(world: HeroInputQuery, actor: Actor, p: Percept): Intent {
     // Directives first.
     while (!this.current && this.queue.length) this.current = { d: this.queue.shift()!, t0: this.t, n: 0, lastPress: -9 };
     if (this.current) {
@@ -207,7 +207,7 @@ export class HeroAgent implements PlayerInputSource {
     return this.autonomous(world, actor, p);
   }
 
-  private runDirective(world: World, actor: Actor, p: Percept): Intent | null {
+  private runDirective(world: HeroInputQuery, actor: Actor, p: Percept): Intent | null {
     const c = this.current!;
     const d = c.d;
     const el = this.t - c.t0;
@@ -267,7 +267,7 @@ export class HeroAgent implements PlayerInputSource {
     return null;
   }
 
-  private autonomous(world: World, actor: Actor, p: Percept): Intent {
+  private autonomous(world: HeroInputQuery, actor: Actor, p: Percept): Intent {
     const prof = this.profile;
     const out = idleIntent(actor);
     const f = p.focus ?? p.nearest;
@@ -311,7 +311,7 @@ export class HeroAgent implements PlayerInputSource {
   }
 
   /** Score one slot against the situation; null = not now. */
-  private score(world: World, actor: Actor, p: Percept, k: KitSlot): { score: number; aim: Pt; hold: number } | null {
+  private score(world: HeroInputQuery, actor: Actor, p: Percept, k: KitSlot): { score: number; aim: Pt; hold: number } | null {
     const prof = this.profile;
     const w = prof.weights[k.role] ?? 1;
     const f = p.focus ?? p.nearest;
@@ -384,7 +384,7 @@ export class HeroAgent implements PlayerInputSource {
   }
 
   /** Step out of a blast that is about to land (the dodge read). */
-  private dodge(world: World, actor: Actor, p: Percept, intent: Intent): void {
+  private dodge(world: HeroInputQuery, actor: Actor, p: Percept, intent: Intent): void {
     if (!this.profile.dodge || !p.threat) return;
     const th = p.threat;
     const d = Math.hypot(actor.pos.x - th.pos.x, actor.pos.y - th.pos.y);
@@ -419,7 +419,7 @@ export class HeroAgent implements PlayerInputSource {
     this.kit = readKit(actor);
   }
 
-  private usable(world: World, actor: Actor, k: KitSlot): boolean {
+  private usable(world: HeroInputQuery, actor: Actor, k: KitSlot): boolean {
     if ((actor.cooldowns.get(k.id) ?? 0) > 0) return false;
     if (!world.skillUsable(actor, k.inst)) return false;
     if (world.castReqRefusal(actor, k.inst)) return false;
@@ -428,13 +428,13 @@ export class HeroAgent implements PlayerInputSource {
     return true;
   }
 
-  private point(world: World, actor: Actor, _p: Percept, to: Pt | { actor: number } | { offset: Pt }): Pt | null {
+  private point(world: HeroInputQuery, actor: Actor, _p: Percept, to: Pt | { actor: number } | { offset: Pt }): Pt | null {
     if ('actor' in to) { const a = world.actorById(to.actor); return a ? { x: a.pos.x, y: a.pos.y } : null; }
     if ('offset' in to) return { x: actor.pos.x + to.offset.x, y: actor.pos.y + to.offset.y };
     return to;
   }
 
-  private aimAt(world: World, actor: Actor, p: Percept, a: AimSpec): Pt {
+  private aimAt(world: HeroInputQuery, actor: Actor, p: Percept, a: AimSpec): Pt {
     const self = { x: actor.pos.x, y: actor.pos.y };
     if (typeof a === 'string') {
       const f = p.focus ?? p.nearest;
@@ -488,7 +488,7 @@ function away(from: Pt, threat: Pt, by: number): Pt {
 
 /** Whisker steering: keep the straight line when it is clear, else try the
  *  nearest open bearing. Cheap and stateless; enough for open ground. */
-function steer(world: World, actor: Actor, ux: number, uy: number): Pt {
+function steer(world: HeroInputQuery, actor: Actor, ux: number, uy: number): Pt {
   const L = AGENT_CFG.whisker;
   const clear = (x: number, y: number): boolean => !world.pointInSolid(actor.pos.x + x * L, actor.pos.y + y * L, actor.radius, actor.tier);
   if (clear(ux, uy)) return { x: ux, y: uy };

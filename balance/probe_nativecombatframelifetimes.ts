@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {withSeededRandom} from '../src/core/rng';
+import {assertNativeStatusSelection} from '../src/engine/nativeStatusProvenance';
+import {nativeCampaignFixture,birthActualNativeArea} from './nativeCombatRetainedFixture';
+import {refuseWorldCombat,writeCombatProof,combatHash} from './probe_nativecombatcycle';
+const result=withSeededRandom(44773,()=>{const setup=nativeCampaignFixture();return refuseWorldCombat([setup.writer],calls=>{
+ const all=birthActualNativeArea(setup),{ongoing:a,authority}=all,{scene,population}=a.assembly.input;
+ const body=population.createMonster('skeleton_warrior',12,'player');body.pos={...scene.player.pos};scene.actors.push(body);authority.claim(a.binding,[body]);
+ body.applyStatus('stasis',0,.01,'actual native creation');const row=body.statuses.find(s=>s.id==='stasis')!;assert(row);assert.equal(assertNativeStatusSelection(body,row),'live');
+ a.combat.frameActors(1/60,1);assert(!body.statuses.includes(row));assert(body.expiredStatuses.includes(row));assert.equal(assertNativeStatusSelection(body,row),'expired');
+ a.combat.frameActors(1/60,1/60);assert(!body.expiredStatuses.includes(row));assert.throws(()=>assertNativeStatusSelection(body,row),/creation receipt/);
+ body.applyStatus('stasis',0,1,'actual next creation');const live=body.statuses.find(s=>s.id==='stasis')!,clone={...live};body.statuses.push(clone);const remaining=clone.remaining;
+ assert.throws(()=>a.combat.frameActors(1/60,1/60),/creation receipt/);assert.equal(clone.remaining,remaining);body.statuses.splice(body.statuses.indexOf(clone),1);
+ const other=population.createMonster('skeleton_warrior',12,'player');other.pos={...body.pos};scene.actors.push(other);authority.claim(a.binding,[other]);body.statuses.splice(body.statuses.indexOf(live),1);other.statuses.push(live);assert.throws(()=>a.combat.frameActors(1/60,1/60),/exact target creation receipt/);other.statuses.splice(other.statuses.indexOf(live),1);
+ const dead=population.createMonster('skeleton_warrior',12,'enemy');dead.dead=true;scene.actors.push(dead);authority.claim(a.binding,[dead]);const hero=scene.player;hero.dead=true;
+ a.combat.frameLateBodies(1/60);assert(!scene.actors.includes(dead));assert.throws(()=>authority.require(dead),/Missing native actor authority/);assert(scene.actors.includes(hero));assert.equal(authority.require(hero).combat,a.combat);hero.dead=false;
+ body.applyStatus('stasis',0,.01,'actual frozen expiry');const frozenRow=body.statuses.find(s=>s.id==='stasis')!;Object.freeze(body.expiredStatuses);
+ assert.throws(()=>a.combat.frameActors(1/60,1),/extensible|read only|Cannot add|frozen/i);assert(!body.statuses.includes(frozenRow),'native successful splice retained before frozen push fails');assert.equal(body.expiredStatuses.length,0);assert(Object.isFrozen(body.expiredStatuses));assert.deepEqual(calls,[]);
+ return{chronoExpiry:true,expiredCleanup:true,cloneRefused:true,rehomeRefused:true,actualDeadBodyReleased:true,deadPlayerRetained:true,frozenExpiryPartialWrite:true,worldDrivers:calls};
+});});const report={mode:'Actual retained actor phases, native-created status rows, chrono expiry handoff, clone/rehome refusal and native retirement/partial effects.',result,receipt:combatHash(JSON.stringify(result))};writeCombatProof('native-combat-frame-lifetimes.json',report);console.log(JSON.stringify(report));

@@ -23,6 +23,12 @@ import { TILESETS } from './tilesets';
 import type { ZoneDef } from './zones';
 import type { RadianceCond } from '../world/radiance';
 
+/** Stable native pocket identity, shared by minting and save-chain validation. */
+export function sidezonePocketId(parentId: string, kind: string, seed: number, underSpan?: string): string {
+  if (underSpan) return 'cave_' + underSpan;
+  return kind === 'cave_entrance' ? 'cave_' + parentId + '_' + seed : 'cave_' + kind + '_' + parentId + '_' + seed;
+}
+
 /** Everything a mint may read from the live world, passed by the engine. */
 export interface SidezoneMintCtx {
   /** The zone the entrance stands in (the pocket's way home). */
@@ -93,6 +99,13 @@ export interface SidezoneDef {
    *  stamps a SPAN-KEYED seed, so the pocket id (`cave_<span>`) agrees from
    *  every parent; a mouth left without a membership opens nothing. */
   spanMouth?: true;
+  /** TENANCY (card 25, RULED 2026-10-10: shared by default, an instance per
+   *  party by this data flag): on a hosted world a 'party' pocket wakes one sim
+   *  unit per party (`${pocketId}#${partyId}`; an ungrouped seat's own
+   *  `seat:<id>`), which mints fresh and forgets at its sleep (THE INSTANCE
+   *  FORGETS, engine/shardUnits.ts). Absent = 'shared': whoever walks in meets
+   *  the same pocket. Solo and co-op never read it. */
+  tenancy?: 'shared' | 'party';
   /** Build the pocket's ZoneDef. Minted once per entrance (cached in caveMap);
    *  keep it pure — the same ctx must yield the same def. */
   mint: (ctx: SidezoneMintCtx) => ZoneDef;

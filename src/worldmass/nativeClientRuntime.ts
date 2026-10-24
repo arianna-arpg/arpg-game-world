@@ -1,0 +1,176 @@
+import {NativeAreaHostedSnapshots,type NativeHostedDelivery} from './nativeAreaHostedSnapshots';
+import {isNativeAreaCharacterResume,NativeAreaCharacterResume} from './nativeAreaCharacterResume';
+import type {ResumeSpawn} from '../meta/worldstate';
+import type {HeroInputQuery} from '../agent/perception';
+import {NativeAreaCharacterCreation,type NativeFreshCharacter} from './nativeAreaCharacterCreation';
+/** A writer-bound retained client installation and authoritative frame dispatcher.
+ * Optional fresh character creation uses the actual private factory. Renderer
+ * publication, network shell and cold Continue remain explicit client steps. */
+import {isNativeWorld,type World,type Seat} from '../engine/world';
+import type {Actor} from '../engine/actor';
+import type {ZoneDef} from '../data/zones';
+import type {MetaAction,PlayerInput,PlayerInputQuery,PlayerInputSource} from '../net/intent';
+import {NullInput} from '../net/intent';
+import {MercInput} from '../engine/mercbrain';
+import {ScriptedInput,LocalCoopInput} from '../net/scripted';
+import {PadSeatInput} from '../net/couch';
+import {RemoteInput} from '../net/remote';
+import {noteActionEcho} from '../net/snapshot';
+import {MassNativeGeography,type MassNativeGeographySpec} from './nativeGeography';
+import {NativeGeographyCatalog,type NativeGeographyCatalogSpec} from './nativeGeographyCatalog';
+import {retireNativeRetainedWriter} from './nativeAreaRetainedLifetime';
+import {assertNativeRetainedMassState} from './nativeAreaRetainedMassState';
+import {NativeAreaCampaignSession,hasNativeAreaCampaignSession} from './nativeAreaCampaignSession';
+import {NativeAreaActorAuthority,type NativeAreaActorSelection} from './nativeAreaActorAuthority';
+import {NativeAreaMaddenLedger} from './nativeAreaMaddenLedger';
+import {NativeAreaMemoryRegistry,hasNativeAreaMemoryRegistry} from './nativeAreaMemoryRegistry';
+import {NativeAreaSceneTransitionCoordinator,hasNativeAreaSceneTransitionCoordinator} from './nativeAreaSceneTransitionCoordinator';
+import {NativeAreaScenePreparation} from './nativeAreaScenePreparation';
+import type {NativeAreaOngoingRuntime,NativeAreaSceneOngoing} from './nativeAreaSceneOngoing';
+const serializeHosted=NativeAreaHostedSnapshots.prototype.serialize;
+const creationLoadingActive=Object.getOwnPropertyDescriptor(NativeAreaCharacterCreation.prototype,'loadingActive')!.get!,resumeLoadingActive=Object.getOwnPropertyDescriptor(NativeAreaCharacterResume.prototype,'loadingActive')!.get!;
+const installed=new WeakMap<World,NativeClientRuntime>(),handles=new WeakSet<object>();
+const select=NativeAreaActorAuthority.prototype.selectActors,final=NativeAreaActorAuthority.prototype.assertFinalSelections,present=NativeAreaActorAuthority.prototype.isPresentActor,finalPhysical=NativeAreaActorAuthority.prototype.assertFinalPhysical;
+function own<T>(o:object,key:PropertyKey):T {const d=Object.getOwnPropertyDescriptor(o,key);if(!d||!Object.hasOwn(d,'value'))throw Error('Native client needs ordinary actual data: '+String(key));return d.value as T;}
+function assertAuthorityRole(writer:World):void {for(const key of ['clientActionHook','shardWorld']){const d=Object.getOwnPropertyDescriptor(writer,key);if(!d||!Object.hasOwn(d,'value')||d.value!==undefined)throw Error('Native client authority cannot install or dispatch on a network render shell or legacy shard unit');}}
+function roster(writer:World):readonly Seat[]{const rows=own<Seat[]>(writer,'seats');if(!Array.isArray(rows)||Object.getPrototypeOf(rows)!==Array.prototype)throw Error('Native client needs the actual raw roster');const n=own<number>(rows,'length');for(let i=0;i<n;i++)own(rows,i);return rows;}
+function member(rows:readonly Seat[],seat:Seat):boolean {for(let i=0;i<own<number>(rows,'length');i++)if(own(rows,i)===seat)return true;return false;}
+function time(value:number):void {if(!Number.isFinite(value)||value<0)throw Error('Native client frame time must be finite and nonnegative');}
+export interface NativeClientInstallation {readonly writer:World;readonly geography:MassNativeGeographySpec;readonly catalog?:NativeGeographyCatalogSpec;readonly definition:ZoneDef;readonly fresh?:NativeFreshCharacter;readonly resume?:NativeAreaCharacterResume;readonly resumePolicy?:ResumeSpawn}
+export interface NativeClientMetaAction {readonly seatId:string;readonly action:MetaAction;readonly seq?:number}
+export interface NativeClientFrame {readonly dt:number;readonly wallSeconds:number;readonly inputs:Map<string,PlayerInput>;readonly actions?:readonly NativeClientMetaAction[];readonly gearVacuum?:boolean}
+export interface NativeClientFrameResult {readonly ready:boolean;readonly aiAreas:readonly string[];readonly droppedActions:readonly {seatId:string;error:unknown}[]}
+interface SeatSelection {readonly seat:Seat;readonly id:string;readonly body:Actor;readonly rows:readonly Seat[];readonly selection:readonly NativeAreaActorSelection<NativeAreaOngoingRuntime>[];readonly area:NativeAreaSceneOngoing}
+export function nativeClientRuntimeFor(writer:World):NativeClientRuntime|undefined {return installed.get(writer);}
+export function isNativeClientRuntime(value:unknown):value is NativeClientRuntime{return !!value&&typeof value==='object'&&handles.has(value);}
+export class NativeClientRuntime {
+ readonly #retireAuthority=NativeAreaActorAuthority.prototype.retire;readonly #retireMemory=NativeAreaMemoryRegistry.prototype.retire;
+ readonly #close=NativeAreaSceneTransitionCoordinator.prototype.retire;readonly #assertIdle=NativeAreaSceneTransitionCoordinator.prototype.assertIdleFrame;
+ readonly hosted:NativeAreaHostedSnapshots;
+ readonly writer:World;readonly geography:MassNativeGeography;readonly definition:ZoneDef;
+ readonly #session:NativeAreaCampaignSession;readonly #authority:NativeAreaActorAuthority<NativeAreaOngoingRuntime>;readonly #coordinator:NativeAreaSceneTransitionCoordinator;readonly #preparation:NativeAreaScenePreparation;
+ readonly #installResumeLoading=NativeAreaCharacterResume.prototype.installLoading;
+ readonly #createCharacterLoading=NativeAreaCharacterCreation.prototype.createLoading;
+ readonly #installResume=NativeAreaCharacterResume.prototype.install;readonly #discardResume=NativeAreaCharacterResume.prototype.discard;
+ readonly #resume:NativeAreaCharacterResume|undefined;readonly #resumePolicy:ResumeSpawn;
+ readonly #creation:NativeAreaCharacterCreation|undefined;readonly #fresh:NativeFreshCharacter|undefined;
+ readonly #createCharacter=NativeAreaCharacterCreation.prototype.create;readonly #retireCharacter=NativeAreaCharacterCreation.prototype.retire;
+ #state:'prepared'|'installing'|'ready'|'retired'='prepared';#busy=false;
+ constructor(input:NativeClientInstallation){
+  const writer=own<World>(input,'writer'),definition=own<ZoneDef>(input,'definition'),spec=own<MassNativeGeographySpec>(input,'geography');
+  if(!isNativeWorld(writer)||installed.has(writer))throw Error('Native client runtime needs its one actual writer');assertNativeRetainedMassState(writer);
+  if(hasNativeAreaCampaignSession(writer)||hasNativeAreaMemoryRegistry(writer)||hasNativeAreaSceneTransitionCoordinator(writer))throw Error('Native client cannot adopt already-owned campaign roots');
+  assertAuthorityRole(writer);
+  if((writer.zoneMap[definition.id]??writer.caveMap[definition.id])!==definition)throw Error('Native client definition must be the exact recorded campaign definition');
+  let geography=new MassNativeGeography(spec);if(geography.seed!==writer.manifest.seed)throw Error('Native client geography belongs to a different campaign seed');
+  const catalog=Object.hasOwn(input,'catalog')?new NativeGeographyCatalog(own<NativeGeographyCatalogSpec>(input,'catalog')):undefined;if(catalog){catalog.initial.assertCompatible(spec);geography=catalog.initial;}
+  const resume=Object.hasOwn(input,'resume')?own<NativeAreaCharacterResume>(input,'resume'):undefined;if(resume&&(!isNativeAreaCharacterResume(resume)||resume.writer!==writer||Object.hasOwn(input,'fresh')))throw Error('Native Continue owner differs');if(resume&&(catalog||resume.record.catalog)){if(!catalog||!resume.record.catalog)throw Error('Native Continue catalog differs');catalog.assertCompatible(resume.record.catalog.spec);geography.assertCompatible(resume.record.geography.spec);}this.#resume=resume;this.#resumePolicy=Object.hasOwn(input,'resumePolicy')?own<ResumeSpawn>(input,'resumePolicy'):'exact';const fresh=Object.hasOwn(input,'fresh')?own<NativeFreshCharacter>(input,'fresh'):undefined;this.#fresh=fresh;const rows=roster(writer),seat=own<Seat|undefined>(writer,'localSeat'),actors=own<Actor[]>(writer,'actors');
+  if((fresh||resume)?(rows.length!==0||actors.length!==0||seat!==undefined):(!seat||rows.length!==1||rows[0]!==seat||actors.length!==1||actors[0]!==own<Actor>(seat,'actor')))throw Error('Native client initial installation requires the genuine unplaced local character; companion/cohort hydration is a separate bootstrap step');
+  const banks=own<World['maddenBanks']>(writer,'maddenBanks');try{Reflect.apply(WeakMap.prototype.has,banks,[{}]);}catch{throw Error('Native client needs the actual madness ledger');}
+  this.writer=writer;this.geography=geography;this.definition=definition;
+  let acquired=false,coordinator:NativeAreaSceneTransitionCoordinator|undefined,memoryRegistry:NativeAreaMemoryRegistry|undefined,authority:NativeAreaActorAuthority<NativeAreaOngoingRuntime>|undefined;
+  try{
+  const session=this.#session=new NativeAreaCampaignSession(writer),campaign=session.campaign;acquired=true;authority=this.#authority=new NativeAreaActorAuthority<NativeAreaOngoingRuntime>(campaign);memoryRegistry=new NativeAreaMemoryRegistry(writer);memoryRegistry.bindRecordedGeography(geography,catalog);
+  coordinator=this.#coordinator=new NativeAreaSceneTransitionCoordinator({campaign,characterWriter:writer,authority,memoryRegistry});session.bindCoordinator(coordinator);
+  const maddenLedger=new NativeAreaMaddenLedger({campaign,authority,banks});
+  this.#preparation=new NativeAreaScenePreparation({session,coordinator,authority,maddenLedger,...catalog?{catalog}:{}});
+  this.#creation=(fresh||resume)?new NativeAreaCharacterCreation(this.#preparation,definition,geography):undefined;
+  this.hosted=new NativeAreaHostedSnapshots({writer,coordinator,authority});
+  for(const key of ['writer','geography','definition','hosted'])Object.defineProperty(this,key,{writable:false,configurable:false});installed.set(writer,this);handles.add(this);
+  }catch(error){if(!acquired)throw error;if(coordinator)Reflect.apply(this.#close,coordinator,[]);else{retireNativeRetainedWriter(writer);if(authority)Reflect.apply(this.#retireAuthority,authority,[]);if(memoryRegistry)Reflect.apply(this.#retireMemory,memoryRegistry,[]);}throw error;}
+ }
+ #live():void {if(this.#state==='retired')throw Error('Native client runtime is retired');if(installed.get(this.writer)!==this)throw Error('Native client runtime registration changed');assertNativeRetainedMassState(this.writer);assertAuthorityRole(this.writer);}
+ #idle():void {this.#live();if(this.#busy)throw Error('Native client runtime cannot reenter');Reflect.apply(this.#assertIdle,this.#coordinator,[]);}
+ #isReady():boolean {const ready=this.#state==='ready'&&this.#coordinator.nativeWorldReady();this.#live();return ready;}
+ get ready():boolean {if(this.#state==='retired')return false;this.#idle();this.#busy=true;try{return this.#isReady();}finally{this.#busy=false;}}
+ get current():NativeAreaSceneOngoing {this.#idle();this.#busy=true;try{if(!this.#isReady())throw Error('Native client runtime is not ready');return this.#coordinator.published;}finally{this.#busy=false;}}
+ /** Final publication is synchronous. Caller checks loading generation before
+  * this entry; AbortSignal is rechecked after each native preparation boundary. */
+ install(signal?:AbortSignal):void {
+  this.#idle();if(this.#state!=='prepared')throw Error('Native client initial installation was already attempted');
+  this.#busy=true;this.#state='installing';
+  try{if(signal?.aborted)throw Error('Native client installation cancelled');this.#live();if(this.#creation&&this.#resume)Reflect.apply(this.#installResume,this.#resume,[this.#preparation,this.#creation,this.#resumePolicy,signal]);else if(this.#creation&&this.#fresh)Reflect.apply(this.#createCharacter,this.#creation,[this.#fresh,signal]);else{const area=this.#preparation.prepare(this.definition.id,this.geography);if(signal?.aborted)throw Error('Native client installation cancelled');this.#live();this.#preparation.birthInitial(area);}if(signal?.aborted)throw Error('Native client installation cancelled');this.#live();this.#state='ready';}
+  catch(error){this.#busy=false;this.#retire();throw error;}finally{this.#busy=false;}
+ }
+
+ /** Browser preparation yields only after real native stages have returned.
+  * The installer remains unready and rejects a second installation throughout. */
+ async installLoading(pause:(label:string)=>Promise<void>,signal?:AbortSignal):Promise<void> {
+  this.#idle();if(this.#state!=='prepared')throw Error('Native client initial installation was already attempted');this.#state='installing';
+  const check=()=>{this.#live();if(signal?.aborted)throw Error('Native client installation cancelled');};
+  const wait=async(label:string)=>{check();await pause(label);check();};
+  try {
+   check();
+   if(this.#creation&&this.#resume)await Reflect.apply(this.#installResumeLoading,this.#resume,[this.#preparation,this.#creation,this.#resumePolicy,wait,signal]);
+   else if(this.#creation&&this.#fresh)await Reflect.apply(this.#createCharacterLoading,this.#creation,[this.#fresh,wait,signal]);
+   else throw Error('Cooperative initial installation requires its fresh or resumed character owner');
+   check();this.#state='ready';
+  }catch(error){this.#retire();throw error;}
+ }
+
+ /** Terminal: retained bindings, tickets, callbacks and memory registrations are
+  * revoked by their owners. Raw native gameplay state is not rolled back. */
+ retire():readonly string[] {return this.#retire();}
+ #retire():readonly string[] {if(this.#state==='retired')return Reflect.apply(this.#close,this.#coordinator,[]);if(this.#busy||this.#creation&&Reflect.apply(creationLoadingActive,this.#creation,[])||this.#resume&&Reflect.apply(resumeLoadingActive,this.#resume,[]))throw Error('Native client runtime cannot retire during dispatch');const unrestored=Reflect.apply(this.#close,this.#coordinator,[]);if(this.#creation)Reflect.apply(this.#retireCharacter,this.#creation,[]);if(this.#resume)Reflect.apply(this.#discardResume,this.#resume,[]);this.#state='retired';return unrestored;}
+ #seat(seat:Seat):SeatSelection {
+  this.#live();const rows=roster(this.writer);if(!member(rows,seat))throw Error('Native client input seat left campaign');const body=own<Actor>(seat,'actor'),id=own<string>(seat,'id');
+  const selection=Reflect.apply(select,this.#authority,[[body],false]);if(selection.length!==1)throw Error('Native client input requires one physical owner');const area=this.#coordinator.areaFor(selection[0].owner.combat);
+  const capture={seat,id,body,rows,selection,area};this.#final(capture);return capture;
+ }
+ #final(c:SeatSelection):void {this.#live();if(roster(this.writer)!==c.rows||!member(c.rows,c.seat)||own(c.seat,'id')!==c.id||own(c.seat,'actor')!==c.body)throw Error('Native client input seat changed during selection');Reflect.apply(final,this.#authority,[c.selection]);}
+ /** Actual finite hosted serializer; shared metadata clears only after delivery. */
+ serializeHosted(tick:number,recipients:readonly Seat[]):readonly NativeHostedDelivery[]{this.#idle();this.#busy=true;try{if(!this.#isReady())throw Error('Native hosted serialization needs admitted publication');return Reflect.apply(serializeHosted,this.hosted,[tick,recipients]);}finally{this.#busy=false;}}
+ /** This finite query view exists only during the genuine input source call. */
+ pollSeat(seat:Seat,dt:number):PlayerInput|null {
+  this.#idle();this.#busy=true;
+  try{time(dt);if(!this.#isReady())throw Error('Native client polling needs admitted publication');const capture=this.#seat(seat),source=own<PlayerInputSource>(seat,'input');
+   if(!(source instanceof NullInput||source instanceof RemoteInput||source instanceof MercInput||source instanceof ScriptedInput||source instanceof LocalCoopInput||source instanceof PadSeatInput))throw Error('Native client input source needs a reviewed area query contract');
+   const poll=source.poll;return this.#inputQuery(capture,(body,query)=>Reflect.apply(poll,source,[body,query,dt]));
+  }finally{this.#busy=false;}
+ }
+ /** Device reads and developer pilots use this finite view of the actual local area.
+  * The capability expires when the synchronous input reader returns or throws. */
+ readLocalInput(read:(body:Actor,query:HeroInputQuery)=>PlayerInput|null):PlayerInput|null {
+  this.#idle();this.#busy=true;
+  try{if(!this.#isReady())throw Error('Native local input needs admitted publication');const seat=own<Seat>(this.writer,'localSeat'),capture=this.#seat(seat);
+   const local=()=>{if(own<Seat>(this.writer,'localSeat')!==seat)throw Error('Native local input seat changed during capture');};
+   return this.#inputQuery(capture,read,local);
+  }finally{this.#busy=false;}
+ }
+ #inputQuery(capture:SeatSelection,read:(body:Actor,query:HeroInputQuery)=>PlayerInput|null,local:()=>void=()=>{}):PlayerInput|null {
+   let active=true;const check=()=>{if(!active)throw Error('Native input query has expired');this.#final(capture);this.#live();local();if(roster(this.writer)!==capture.rows||!member(capture.rows,capture.seat)||own(capture.seat,'id')!==capture.id||own(capture.seat,'actor')!==capture.body)throw Error('Native input seat changed after final authority callbacks');Reflect.apply(finalPhysical,this.#authority,[capture.selection[0].binding,[capture.body]]);};const {population,ecology}=capture.area.assembly.input,combat=capture.area.combat,self=this;
+   const query:HeroInputQuery={get player(){check();const representative=own<Actor>(capture.area.assembly.input.scene,'player');return Reflect.apply(present,self.#authority,[capture.area.assembly.input.scene,representative])?representative:capture.body;},
+    get enemiesOf(){check();const fn=population.enemiesOf;return(...args:Parameters<PlayerInputQuery['enemiesOf']>)=>{check();return Reflect.apply(fn,population,args);};},
+    get actorById(){check();const fn=ecology.actorById;return(...args:Parameters<PlayerInputQuery['actorById']>)=>{check();return Reflect.apply(fn,ecology,args);};},
+    get hostileTo(){check();const fn=population.hostileTo;return(...args:Parameters<PlayerInputQuery['hostileTo']>)=>{check();return Reflect.apply(fn,population,args);};},
+    get isConcealedFrom(){check();const fn=combat.isConcealedFrom;return(...args:Parameters<PlayerInputQuery['isConcealedFrom']>)=>{check();return Reflect.apply(fn,combat,args);};},
+    get losCached(){check();const receiver=combat.ai,fn=receiver.losCached;return(...args:Parameters<PlayerInputQuery['losCached']>)=>{check();return Reflect.apply(fn,receiver,args);};},
+    get actors(){check();return capture.area.assembly.input.scene.actors;},
+    get corpses(){check();return combat.runtimeState.corpses;},
+    get imminentThreatTo(){check();const fn=combat.imminentThreatTo;return(...args:Parameters<HeroInputQuery['imminentThreatTo']>)=>{check();return Reflect.apply(fn,combat,args);};},
+    get skillUsable(){check();const fn=combat.queryView<'skillUsable'>;return(...args:Parameters<HeroInputQuery['skillUsable']>)=>{check();return Reflect.apply(fn,combat,['skillUsable',...args]);};},
+    get castReqRefusal(){check();const fn=combat.castReqRefusal;return(...args:Parameters<HeroInputQuery['castReqRefusal']>)=>{check();return Reflect.apply(fn,combat,args);};},
+    get pointInSolid(){check();const receiver=capture.area.assembly.input.geometry,fn=receiver.pointInSolid;return(...args:Parameters<HeroInputQuery['pointInSolid']>)=>{check();return Reflect.apply(fn,receiver,args);};}};
+   try{check();const result=read(capture.body,Object.freeze(query));check();return result;}finally{active=false;}
+ }
+ /** Transport draining happens at the client boundary, including not-ready
+  * frames. The already-drained map is never queued or replayed by this handle. */
+ dispatch(frame:NativeClientFrame):NativeClientFrameResult {
+  this.#idle();this.#busy=true;
+  try{
+   const dt=own<number>(frame,'dt'),wallSeconds=own<number>(frame,'wallSeconds'),inputs=own<Map<string,PlayerInput>>(frame,'inputs');
+   const option=<T>(key:string):T|undefined=>Object.hasOwn(frame,key)?own<T>(frame,key):undefined;
+   const actions=option<readonly NativeClientMetaAction[]>('actions'),gearVacuum=option<boolean>('gearVacuum');
+   time(dt);time(wallSeconds);if(wallSeconds<dt)throw Error('Native client wall budget is shorter than its clamped frame');if(!this.#isReady())return {ready:false,aiAreas:[],droppedActions:[]};
+   let area=this.#coordinator.published;area.combat.inputFrame.passInputTime(wallSeconds-dt);this.#live();area.combat.inputFrame.applyInputs(inputs,dt);this.#live();
+   const droppedActions:{seatId:string;error:unknown}[]=[];
+   for(const row of actions??[]){this.#live();const seat=roster(this.writer).find(s=>s.id===row.seatId);if(!seat)continue;noteActionEcho(this.#session.campaign,seat,row.seq);try{const selected=this.#seat(seat);selected.area.combat.campaignFrame.applyAction(seat,row.action);}catch(error){droppedActions.push({seatId:row.seatId,error});}}
+   this.#live();const residents=this.#coordinator.residentAreas(),aiAreas:string[]=[];
+   if(!this.writer.gameOver)for(const resident of residents){this.#live();this.#coordinator.runFrom(resident,()=>resident.combat.updateAI(dt));aiAreas.push(resident.assembly.input.scene.zone.id);}
+   this.#live();if(gearVacuum!==undefined)this.writer.gearVacuum=gearVacuum;
+   this.#live();area=this.#coordinator.published;area.combat.campaignFrame.tick(dt);this.#live();
+   return {ready:true,aiAreas:Object.freeze(aiAreas),droppedActions:Object.freeze(droppedActions)};
+  }finally{this.#busy=false;}
+ }
+}
+export function installNativeClientRuntime(input:NativeClientInstallation,signal?:AbortSignal):NativeClientRuntime {const runtime=new NativeClientRuntime(input);runtime.install(signal);return runtime;}

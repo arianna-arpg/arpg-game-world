@@ -77,6 +77,7 @@
 import type { Vec2 } from '../core/math';
 import { angleDiff, angleTo, dist, vec } from '../core/math';
 import type { Actor } from './actor';
+import type { ZoneDef } from '../data/zones';
 import type { DamageType } from './stats';
 import { ELEMENTAL_TYPES } from './stats';
 
@@ -220,6 +221,12 @@ export interface PuzzleRun {
   done: boolean;
   /** This run IS the zone objective (updateObjective watches it). */
   isObjective: boolean;
+  /** Placed geography may own a fixed native reward level. */
+  rewardLevel?: number;
+  /** A native generated feature owns this exact run and its reward context. */
+  owner?: string;
+  rewardZone?: Readonly<ZoneDef>;
+  rewardSource?: string;
 }
 
 /** The narrow world surface kinds drive — World hands the placer one
@@ -239,6 +246,15 @@ export interface PuzzleHost {
   /** A hero (a real seat, not a minion) stands within `within` of pos. */
   heroNear(pos: Vec2, within: number): boolean;
   complete(run: PuzzleRun): void;
+}
+
+/** Portable progress for a placed riddle. Clock values are remaining seconds,
+ * node references are stable seat indices. A kind must explicitly own its codec. */
+export interface PuzzleCheckpoint {
+  done: boolean; state: unknown; life: number[]; hums: [number, number][];
+  /** Literal native display time; absent on older checkpoints, whose kind
+   * codec reconstructs its customary solved/settled dressing. */
+  kindles?: number[];
 }
 
 export interface PuzzleKindDef {
@@ -269,6 +285,14 @@ export interface PuzzleKindDef {
   quantize?: number;
   label: string;
   boot(run: PuzzleRun, h: PuzzleHost): void;
+  /** Optional durable progress; kinds without a codec cannot be placed persistently. */
+  checkpoint?: {
+    capture(run: PuzzleRun, h: Pick<PuzzleHost, 'now'>): unknown;
+    restore(run: PuzzleRun, h: PuzzleHost, data: unknown): void;
+    /** Advance only this kind's native unheard behavior after a saved owner
+     * was absent. Called after restore, never instead of its live tick. */
+    absent?(run: PuzzleRun, h: PuzzleHost, elapsed: number): void;
+  };
   /** A qualifying landed hit on a node (resolveHit routes here). */
   struck?(run: PuzzleRun, node: Actor, h: PuzzleHost, striker: Actor | null): void;
   /** A node's TONE moved (the attunement fabric routes here — chord). */
@@ -314,6 +338,10 @@ export const PUZZLE_CFG = {
    *  refrain, a slow undo press on the lattice — either rings another
    *  node first (which clears the hum) or outlasts it. */
   hum: 0.9,
+  /** Native ember-ring burn window; persistent placements snapshot this value. */
+  emberGutter: 7,
+  /** Native matching-pair window; placed courts snapshot it with their recipe. */
+  accordLinger: 3,
   /** Passive, enrolled riddle props need not prolong the player-side combat lull. */
   passiveContactHeatsCombat: false as boolean,
 } as const;
@@ -535,6 +563,16 @@ registerPuzzleKind({
   who: 'player',
   spacing: 66,
   label: 'the charged lattice',
+  checkpoint: {
+    capture: run => [...run.state.lit as boolean[]],
+    restore(run, h, data) {
+      if (!Array.isArray(data) || data.length !== run.nodes.length
+        || data.some(v => typeof v !== 'boolean') || data.every(Boolean) !== run.done)
+        throw Error('Invalid lattice checkpoint');
+      run.state.lit = [...data];
+      for (let i = 0; i < run.nodes.length; i++) latticeDress(run, h, i);
+    },
+  },
   boot(run, h) {
     const [w, hgt] = run.spec.grid ?? [3, 3];
     // THE FORMAT: a shaped court re-seats the placer's minted line onto its
@@ -591,6 +629,24 @@ registerPuzzleKind({
 const REFRAIN_TINT = '#ffe9a8';
 const REFRAIN_FALTER = '#e86a5a';
 
+/** Native short blink state is distinct from musical progress. It keeps its
+ * remaining display time across Continue, and fades while the court sleeps. */
+export function capturePuzzleKindles(run: PuzzleRun): number[] {
+  return run.nodes.map(n => Math.max(0, n.statuses.find(s => s.id === PUZZLE_CFG.kindleStatus && s.sourceName === 'the refrain')?.remaining ?? 0));
+}
+export function restorePuzzleKindles(run: PuzzleRun, h: PuzzleHost, left: readonly number[]): void {
+  if (!validPuzzleKindles(left, run.nodes.length)) throw Error('Invalid puzzle kindle checkpoint');
+  // applyStatus refreshes to the longest remaining duration. Clear the old
+  // display first when reconciling absence, or a short blink never ages.
+  run.nodes.forEach((n, i) => { h.quench(n); if (left[i] > 0) h.kindle(n, left[i]); });
+}
+function validPuzzleKindles(data: unknown, count: number): data is number[] {
+  return Array.isArray(data) && data.length === count && data.every(n => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 9999 + 1e-6);
+}
+function fadePuzzleKindles(run: PuzzleRun, h: PuzzleHost, elapsed: number): void {
+  restorePuzzleKindles(run, h, capturePuzzleKindles(run).map(t => Math.max(0, t - elapsed)));
+}
+
 function refrainReplay(run: PuzzleRun, h: PuzzleHost, pause: number): void {
   run.state.phase = 'play';
   run.state.note = 0;
@@ -607,6 +663,38 @@ registerPuzzleKind({
   spacing: 112,
   count: [4, 5],
   label: 'the refrain',
+  checkpoint: {
+    capture(run, h) {
+      return { seq: [...run.state.seq as number[]], phase: run.state.phase, note: run.state.note,
+        progress: run.state.progress, left: run.done ? null : Math.max(0, (run.state.at as number) - h.now()), lit: capturePuzzleKindles(run) };
+    },
+    restore(run, h, data) {
+      const d = data as { seq: number[]; phase: string; note: number; progress: number; left: number | null; lit: number[] } | null;
+      if (!d || !Array.isArray(d.seq) || !d.seq.length || d.seq.length > 256
+        || d.seq.some((n, i) => !Number.isSafeInteger(n) || n < 0 || n >= run.nodes.length || i > 0 && n === d.seq[i - 1])
+        || !['play', 'answer'].includes(d.phase) || !Number.isSafeInteger(d.note) || d.note < 0 || d.note > d.seq.length
+        || !Number.isSafeInteger(d.progress) || d.progress < 0 || d.progress > d.seq.length
+        || d.phase === 'play' && (d.progress !== 0 || run.done)
+        // Native finite memory calls solved() directly after boot; its song
+        // cursor need not have reached the end, though its answer is complete.
+        || d.phase === 'answer' && !run.done && d.note !== d.seq.length
+        || (d.progress === d.seq.length) !== run.done
+        || (run.done ? d.left !== null : typeof d.left !== 'number' || !Number.isFinite(d.left) || d.left < 0
+          || d.left > Math.max(1.6, run.spec.beat ?? .85, (run.spec.window ?? 8) * d.seq.length) + 1e-6)
+        || !validPuzzleKindles(d.lit, run.nodes.length)) throw Error('Invalid refrain checkpoint');
+      run.state = { seq: [...d.seq], phase: d.phase, note: d.note, progress: d.progress,
+        at: run.done ? Infinity : h.now() + d.left! };
+      restorePuzzleKindles(run, h, d.lit);
+    },
+    absent(run, h, elapsed) {
+      fadePuzzleKindles(run, h, elapsed);
+      if (run.done) return;
+      const left = Math.max(0, (run.state.at as number) - h.now());
+      if (run.state.phase === 'play') run.state.at = h.now() + Math.max(.4, left - elapsed);
+      else if (elapsed >= left) refrainReplay(run, h, Math.max(.4, 1.2 - (elapsed - left)));
+      else run.state.at = h.now() + left - elapsed;
+    },
+  },
   boot(run, h) {
     const notes = rollBand(h, run.spec.rounds, [4, 6]);
     const seq: number[] = [];
@@ -770,6 +858,31 @@ registerPuzzleKind({
   spacing: 112,
   count: [4, 5],
   label: 'the rising tempo',
+  checkpoint: {
+    capture(run, h) {
+      return { order: [...run.state.order as number[]], progress: run.state.progress,
+        left: (run.state.pulseAt as number[]).map(t => Math.max(0, t - h.now())), lit: capturePuzzleKindles(run) };
+    },
+    restore(run, h, data) {
+      const d = data as { order: number[]; progress: number; left: number[]; lit: number[] } | null, count = run.nodes.length;
+      if (!d || !Array.isArray(d.order) || d.order.length !== count || new Set(d.order).size !== count
+        || d.order.some(n => !Number.isSafeInteger(n) || n < 0 || n >= count)
+        || !Number.isSafeInteger(d.progress) || d.progress < 0 || d.progress > count || (d.progress === count) !== run.done
+        || !Array.isArray(d.left) || d.left.length !== count || d.left.some((n, i) => typeof n !== 'number' || !Number.isFinite(n)
+          || n < 0 || n > Math.max(TEMPO_OPEN, tempoPeriodOf(run, d.order.indexOf(i))) + 1e-6)
+        || !validPuzzleKindles(d.lit, count)) throw Error('Invalid tempo checkpoint');
+      run.state = { order: [...d.order], progress: d.progress, pulseAt: d.left.map(t => h.now() + t) };
+      restorePuzzleKindles(run, h, d.lit);
+    },
+    absent(run, h, elapsed) {
+      // Native unheard ticks add dt to each absolute pulse clock, exactly
+      // preserving its remaining phase. Only the visible short blinks decay.
+      fadePuzzleKindles(run, h, elapsed);
+      // Solved runs no longer tick at all, so their unused pulse deadlines
+      // age normally rather than receiving the unheard phase extension.
+      if (run.done) run.state.pulseAt = (run.state.pulseAt as number[]).map(t => t - elapsed);
+    },
+  },
   boot(run, h) {
     // Ranks are a SHUFFLED permutation — the ring's seating never betrays
     // the measure (Fisher–Yates on the host's stream).
@@ -847,7 +960,7 @@ const ACCORD_TINT = '#e8fff0';
 const ACCORD_SLIP = '#9ab0c8';
 
 function accordLingerOf(run: PuzzleRun): number {
-  return run.spec.linger ?? 3;
+  return run.spec.linger ?? PUZZLE_CFG.accordLinger;
 }
 /** idx ↔ partner: pair p seats nodes p and p+pairs (opposite on the ring). */
 function accordPairOf(run: PuzzleRun, idx: number): number {
@@ -864,6 +977,40 @@ registerPuzzleKind({
   count: [4, 6],
   quantize: 2, // pairs stay whole — the placer floors odd rolls
   label: 'the twin accord',
+  checkpoint: {
+    capture(run,h) {
+      const bound=run.state.bound as boolean[], pending=run.state.pending as ({half:number;until:number}|null)[];
+      return {bound:[...bound],pending:pending.map((p,i)=>!bound[i]&&p&&p.until>=h.now()?{half:p.half,left:p.until-h.now()}:null)};
+    },
+    restore(run,h,data) {
+      const d=data as {bound?:boolean[];pending?:({half:number;left:number}|null)[]}|null, pairs=run.nodes.length>>1;
+      if(!d||!Array.isArray(d.bound)||d.bound.length!==pairs||d.bound.some(v=>typeof v!=='boolean')
+        ||d.bound.every(Boolean)!==run.done||!Array.isArray(d.pending)||d.pending.length!==pairs
+        ||d.pending.some((p,i)=>p!==null&&(!p||typeof p!=='object'||d.bound![i]
+          ||!Number.isSafeInteger(p.half)||p.half<0||p.half>=run.nodes.length||p.half%pairs!==i
+          ||typeof p.left!=='number'||!Number.isFinite(p.left)||p.left<0||p.left>accordLingerOf(run)+1e-6)))
+        throw Error('Invalid accord checkpoint');
+      run.state.bound=[...d.bound];
+      run.state.pending=d.pending.map(p=>p?{half:p.half,until:h.now()+p.left}:null);
+      run.nodes.forEach((n,i)=>{
+        const p=i%pairs, pending=d.pending![p];
+        if(d.bound![p])h.kindle(n,9999);
+        else if(pending?.half===i)h.kindle(n,pending.left);
+        else h.quench(n);
+      });
+    },
+    absent(run,h,elapsed) {
+      fadePuzzleKindles(run,h,elapsed);
+      if(run.done)return;
+      const pending=run.state.pending as ({half:number;until:number}|null)[];
+      for(let i=0;i<pending.length;i++){
+        const p=pending[i];if(!p)continue;
+        p.until-=elapsed;
+        if(p.until<h.now()){pending[i]=null;h.quench(run.nodes[p.half]);}
+        else { h.quench(run.nodes[p.half]); h.kindle(run.nodes[p.half],p.until-h.now()); }
+      }
+    },
+  },
   boot(run, h) {
     const pairs = run.nodes.length >> 1;
     const pool = run.spec.tones ?? [...ELEMENTAL_TYPES];
@@ -932,7 +1079,7 @@ registerPuzzleKind({
 const EMBER_TINT = '#ffb27a';
 
 function emberGutterOf(run: PuzzleRun): number {
-  return run.spec.gutter ?? 7;
+  return run.spec.gutter ?? PUZZLE_CFG.emberGutter;
 }
 
 registerPuzzleKind({
@@ -944,6 +1091,32 @@ registerPuzzleKind({
   spacing: 112,
   count: [5, 6],
   label: 'the ember ring',
+  checkpoint: {
+    capture(run, h) {
+      // Solved rings have infinite native clocks; done is their durable proof.
+      return run.done ? run.nodes.map(() => 0)
+        : (run.state.litUntil as number[]).map(t => Math.max(0, t - h.now()));
+    },
+    restore(run, h, data) {
+      if (!Array.isArray(data) || data.length !== run.nodes.length
+        || data.some(v => typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > emberGutterOf(run) + 1e-6)
+        || (run.done ? data.some(v => v !== 0) : data.every(v => v > 0)))
+        throw Error('Invalid ember checkpoint');
+      if (run.done) { run.kind.solved!(run,h); return; }
+      run.state.litUntil = data.map(v => v > 0 ? h.now() + v : 0);
+      run.nodes.forEach((n,i) => { if (data[i] > 0) h.kindle(n,data[i]); else h.quench(n); });
+    },
+    absent(run,h,elapsed) {
+      fadePuzzleKindles(run,h,elapsed);
+      if(run.done)return;
+      const lit=run.state.litUntil as number[];
+      for(let i=0;i<lit.length;i++){
+        lit[i]=lit[i]>0?Math.max(0,lit[i]-elapsed):0;
+        if(lit[i]<=h.now()){lit[i]=0;h.quench(run.nodes[i]);}
+        else { h.quench(run.nodes[i]); h.kindle(run.nodes[i],lit[i]-h.now()); }
+      }
+    },
+  },
   boot(run) {
     run.state.litUntil = run.nodes.map(() => 0);
   },

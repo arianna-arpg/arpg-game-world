@@ -22,7 +22,7 @@ import { Rng } from '../core/rng';
 import { factionStance } from '../data/monsters';
 import type { ZoneDef } from '../data/zones';
 import type { FactionField } from './faction';
-import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from './overlay';
+import { NO_BIAS, presentCensus, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from './overlay';
 import { FACTION_COLORS, FALLBACK_FACTION_COLOR } from './palette';
 import { scaledCap } from '../packages/frequency';
 import { isWarOrigin, traitsOf } from './traits';
@@ -101,10 +101,13 @@ export class InvasionField implements WorldOverlay {
       // field — thin the invaders and the pressure lifts, so clearing the zone
       // (and outlasting the host) repels the invasion. Where you AREN'T, it
       // presses at full strength: the frontier moves whether you watch or not.
+      // THE OCCUPIED LAW (shard M1-W3): "where you stand" is any zone a
+      // player's World stands in, each read through its own live census.
       if (d <= h.radius) {
         let rate = PUMP_RATE;
-        if (view.currentZoneId === h.targetZoneId) {
-          rate *= clamp((view.census[h.faction] ?? 0) / WARBAND_FULL, 0, 1);
+        const here = presentCensus(view, h.targetZoneId);
+        if (here) {
+          rate *= clamp((here[h.faction] ?? 0) / WARBAND_FULL, 0, 1);
         }
         if (rate > 0) this.faction.reinforce(h.targetZoneId, h.faction, rate * dt);
       }

@@ -1,0 +1,45 @@
+import '../src/engine/world';
+import assert from 'node:assert/strict';
+import {NativeClientStart} from '../src/worldmass/nativeClientStart';
+import {CLASSES} from '../src/data/classes';
+import {START_ZONE} from '../src/data/zones';
+import {FEATURE} from '../src/meta/account';
+import {withSeededRandom} from '../src/core/rng';
+import {placeZoneAt} from '../src/engine/worldgen';
+import {captureNativeGeographySource} from '../src/world/captureGeography';
+import {createNativeGeographyReader} from '../src/world/geographySource';
+import {makeMemoryItem} from '../src/engine/memories';
+import {autoPlace} from '../src/engine/inventory';
+import {freshClientSetup,refuseWorldStartup} from './nativeClientStartFixture';
+import {combatHash,writeCombatProof} from './probe_nativecombatcycle';
+
+const result=withSeededRandom(45422,()=>{
+ const seedSetup=freshClientSetup(1241,false),start=new NativeClientStart(seedSetup.writer.account,seedSetup.geography.spec.mapping);
+ return refuseWorldStartup([],worldDrivers=>{
+  const started=start.begin({kind:'run',classDef:CLASSES[0],manifest:seedSetup.writer.manifest,prologue:'skip'});
+  assert.ok(started);const {writer,runtime}=started,town=runtime.current,hero=writer.localSeat.actor;
+  assert.equal(writer.stationAnchor('salvage'),null);
+  const resident=[...town.assembly.townBodies.bodies.values()].find(a=>a.team==='player');assert.ok(resident);
+  resident.life-=1;const life=resident.life;
+  const stores=[town.combat,town.quests,town.progression,town.watching,writer.drops,town.assembly.input.residents.speechMemory];
+  const at={x:455,y:160},reader=createNativeGeographyReader(captureNativeGeographySource(writer.manifest.seed));
+  const request=seedSetup.geography.ownerContext('fresh-town-growth',seedSetup.geography.physicalAnchor(at));
+  const field=placeZoneAt(at,null,writer.zoneMap,request.requestedSeed,{seed:request.requestedSeed,fieldBiome:true,biomeFor:reader.biomeAt,biomeDepthFor:reader.biomeDepth,climateFor:reader.climateAt,levelFor:writer['levelFor'],courseFor:writer['courseMintFor']('surface')});
+  writer.zoneMap[field.id]=field;writer.discoveredWaypoints.add(field.id);writer.discoveredWaypoints.add(START_ZONE);
+  assert.equal(writer.travelToWaypoint(field.id),true);
+  writer.account.features.add(FEATURE.SALVAGE_STATION);writer.account.features.add(FEATURE.BOUNTY_BOARD);
+  assert.equal(writer.travelToWaypoint(START_ZONE),true);assert.equal(runtime.current,town);
+  assert.equal(town.assembly.input.geometry.arena.w,1700);assert.ok(writer.stationAnchor('salvage'));assert.ok(writer.stationAnchor('bounty_board'));
+  assert.equal(resident.life,life);assert.ok(writer.actors.includes(resident));
+  assert.deepEqual([town.combat,town.quests,town.progression,town.watching,writer.drops,town.assembly.input.residents.speechMemory],stores);
+  const memory=makeMemoryItem('rough',[{d:'zombie',s:47}]);assert.ok(autoPlace(writer.meta.items,memory));
+  assert.equal(writer.memoryRecallView(writer.localSeat,memory.uid)?.total,1);
+  const drops=writer.drops.length;writer.requestMeta({t:'dropItem',uid:memory.uid});assert.equal(writer.drops.length,drops+1);
+  const time=writer.time,frame=runtime.dispatch({dt:1/60,wallSeconds:1/60,inputs:new Map()});assert.equal(writer.time,time+1/60);assert.equal(frame.aiAreas.length,2);
+  const held=writer.text;start.cancel();assert.equal(start.current,undefined);assert.throws(()=>held(hero.pos,'retired','#ffffff'),/no published actual area/);
+  assert.deepEqual(worldDrivers,[]);
+  return {freshStart:true,width:1700,retainedOwners:stores.length,retainedResident:true,publishedInventory:true,aiAreas:frame.aiAreas.length,onceClock:true,terminalCancel:true,worldDrivers};
+ });
+});
+const report={scope:'Actual NativeClientStart, retained town growth after waypoint travel, published station/menu/inventory commands, two-area frame and terminal cancellation.',result,receipt:combatHash(JSON.stringify(result))};
+writeCombatProof('native-town-client-composition.json',report);console.log(JSON.stringify(report));

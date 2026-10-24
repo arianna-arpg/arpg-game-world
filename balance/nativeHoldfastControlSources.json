@@ -1,0 +1,181 @@
+{
+  "schema": "native-holdfast-control-sources/1",
+  "controls": 39,
+  "origin": {
+    "course": "Holdfast regression controls V3",
+    "manifestSha256": "a8241d1207f1dc2fe73905bac0e0cc62cc5c9cbfc90ae2a50d71c9a2eb6cbc38",
+    "scriptSha256": "c3cc49c47cd20ca0b6c989d00b6fb48237b01b3e8da30519037619653ee603cc",
+    "sourcePinsSha256": "5eeb26cfe07ca7568f594fe7665aad627aab6d8bcd7d6b437951ea0e6753f336",
+    "eolSourceCommit": "41fc4f42ef81929a9fac69f07bf401842be8cb58",
+    "eolExportSha256": "2b4b12dcffb3d8f9e6aa316debd66d805141270fb482077e8f282d792793ed8b"
+  },
+  "supplements": [
+    {
+      "course": "Titan GridWalk reflection/import controls V5",
+      "addedControls": 5,
+      "totalControls": 39,
+      "suffixSha256": "e283116cbf01c278a7bb20071902be7b35b31cede5f13d68f03c7afdc5053aa8",
+      "proposalSha256": "877efce24c54a0202765fc7d47087e283ee294787a614b83e55fee5d7f9cf60f",
+      "sourcePinsSha256": "4f77c7649b2355ea1e6746a56402305f34bb0dc2cb3d24a7336820ad7ebf4c28",
+      "sourceReviewSha256": "ef276e1df033a970ed91dcfcd3d9999eeb85e6ae97cdebb0533d2c053ec5525b",
+      "conditionalGridSha256": "cf133066cc70381485557aefb70364d7dfbb80e51f9005fa21eb9c89346eedbe",
+      "gridSourceReviewSha256": "2b073c60a3ca614766798c7934e0eaf804c474d2494bfb76cec9009befca8ec7"
+    }
+  ],
+  "files": [
+    {
+      "path": "src/world/gridWalk.ts",
+      "rawSha256": "cf133066cc70381485557aefb70364d7dfbb80e51f9005fa21eb9c89346eedbe"
+    },
+    {
+      "path": "src/engine/levelgen.ts",
+      "rawSha256": "99dd855ed922e9cc816fdf144817e445d7d9ba2f56928cf95afc09918b92f0a8"
+    },
+    {
+      "path": "src/engine/layoutRecipes.ts",
+      "rawSha256": "b0252ac8db0fd240c5fbfd613eb4454c1c566a7ab00ecaf4d18bf5446f5e032a"
+    },
+    {
+      "path": "src/engine/genkit.ts",
+      "rawSha256": "a20d053ab4138c79a59a79f11a46c86ce9cbb93394544a0664424a9589a56d38"
+    },
+    {
+      "path": "src/data/structures.ts",
+      "rawSha256": "0ef8fd89d4a080e33393ad97803d666431607d0572b538f9daf8a130494cfe85"
+    },
+    {
+      "path": "src/engine/nativeRecipeGround.ts",
+      "rawSha256": "554b73118b9b2ecd70ced86995b6589c02edc88705931c4b7f144406793a5f99"
+    },
+    {
+      "path": "src/engine/nativeStructureProof.ts",
+      "rawSha256": "d948b82857fc8dadf46ed76f6c45733d25d2410231c6a8617772f68fc69f281b"
+    },
+    {
+      "path": "src/engine/interiorGen.ts",
+      "rawSha256": "336d44b9f867a6f14dc572ca9275eba32caa4090604e90d4016919f9dec99c53"
+    },
+    {
+      "path": "src/engine/structureGen.ts",
+      "rawSha256": "62f037c144012d1000763508ab47e1d1dfcc49e9b7318be6b69b12d9eb373165"
+    },
+    {
+      "path": "src/engine/structurePlans.ts",
+      "rawSha256": "b3705ebdc9d316d1f2a83fe7f099e8b5a5d20ae65a69cb7d62effe31188f740a"
+    },
+    {
+      "path": "src/engine/nativeLayoutGeneration.ts",
+      "rawSha256": "f072e1e477bc7872e29cfd1e7031b599e8a6d15dcf080ca0bbdb010bdf8f521b"
+    },
+    {
+      "path": "src/engine/nativeAreaBoundaries.ts",
+      "rawSha256": "5117b9ec6cde9ac205c1e27324b0ceb383f654053a183ef220f3d0d50fffd7ac"
+    },
+    {
+      "path": "src/engine/nativeZoneMint.ts",
+      "rawSha256": "c49fffc1f8df028a6783d301eb8803064fee55bff2fb26305ad1fcac7b931144"
+    },
+    {
+      "path": "src/engine/nativeSceneGraph.ts",
+      "rawSha256": "2e151a3f2ff95b755d7c4fac15999948f6ba626433115bac2e5a382f834e4847"
+    },
+    {
+      "path": "src/engine/world.ts",
+      "rawSha256": "71f53028e9e7b34efe0212b077d6ea966627fcfe993a92167f354698f5ada6b3"
+    },
+    {
+      "path": "src/world/regions.ts",
+      "rawSha256": "3ad59b11d397e5c5583d9e4c8a917d58f937439cbabaad67606334b0eb796aff"
+    },
+    {
+      "path": "src/world/shape.ts",
+      "rawSha256": "daf83d9d1244efe6b216e06b59ae113db4ae00e637a336229f4d97023634be81"
+    },
+    {
+      "path": "src/world/biomes.ts",
+      "rawSha256": "d515fa5ea4413bdd4e0b9e75a93744ac54ecab93c669dafce06e7514735a0c34"
+    },
+    {
+      "path": "src/core/rng.ts",
+      "rawSha256": "56c80fddef28721e7196928fd1f097b1b8d0cf5b080f21ef309ea2eff692c0fd"
+    },
+    {
+      "path": "src/core/math.ts",
+      "rawSha256": "61879e2db45a922543fe26fe1e5cfb34cf7d472612e13f62085ed9f6e644c57b"
+    },
+    {
+      "path": "src/sim/rng.ts",
+      "rawSha256": "4b9d3a72eee7f115ddc9cd9e414c6241429956f681db1e88a8a2506156c1df43"
+    },
+    {
+      "path": "src/sim/arena.ts",
+      "rawSha256": "31b6fe72f6a7c3b1ab8d272ca751c74dcb35fd7b0d0ac7448fd42895e96ff11e"
+    },
+    {
+      "path": "src/data/tilesets.ts",
+      "rawSha256": "af2b4457ca7222c57c55db2c61aac47cd2b4b3b13cac0ac834bf5b8e46825408"
+    },
+    {
+      "path": "src/data/zones.ts",
+      "rawSha256": "deee0fca184696a8267cc404a4838a1cff6c44e3c5fe6cbc39a5b871a27ac053"
+    },
+    {
+      "path": "src/data/pocketForms.ts",
+      "rawSha256": "6f68bafed2388a379e3cf99469c957b19ab06d9c239e68b21fc794607ac1b503"
+    },
+    {
+      "path": "src/data/lonecrypt.ts",
+      "rawSha256": "7e1e3f613b51843e372140e84a0b911482926b188fbd28133698490b8b22b85a"
+    },
+    {
+      "path": "src/packages/holdfast.ts",
+      "rawSha256": "3e2ae6bae88eb5a5af919082313e742200c3cabaac9bf4999d804437fb69b60c"
+    },
+    {
+      "path": "src/packages/overlays/holdfast.ts",
+      "rawSha256": "72ebbd8a78f7383b346e9a654ee706fc68a23647e0c09f14f072812ae4300d86"
+    },
+    {
+      "path": "src/packages/manifest.ts",
+      "rawSha256": "5d439d3065786f4ee2af3f14dde41caafacecaca41299d4d080ea4fb508525f8"
+    },
+    {
+      "path": "src/meta/account.ts",
+      "rawSha256": "49879fb74d781d73a786f6bfa3907ff7427532f7135b2dece0b78ddc4fc16e19"
+    },
+    {
+      "path": "src/worldmass/nativeCrusadeLayoutCapture.ts",
+      "rawSha256": "258d15816427c881ed928de4207b5711e9e85c9a59536b5fb6abb2b742d7ebcb",
+      "checkoutRawSha256": "a744bb9c91b8c15babd8a90399208a91c479a75606eb1b8b35b046e1327fb056"
+    },
+    {
+      "path": "src/worldmass/nativeCrusadeTerrain.ts",
+      "rawSha256": "94cce3c0282f5874d6563c79ed93ba5066f9bd726895468a84a470d3921a8a00",
+      "checkoutRawSha256": "5d1fe10f49c26d035e80eaf7e70f0b8c875b3737ec58484cf9842485b4fdfc83"
+    },
+    {
+      "path": "balance/probe_holdfast_pocket.ts",
+      "rawSha256": "674b2c9f5dc2ef0ac2e3a5584831ad43d8de0e828f695f45122c9294f4bc445f"
+    },
+    {
+      "path": "balance/genqa.ts",
+      "rawSha256": "260d310c4e465234d8f2b7a9f742ecf1f4b72020657b9227d8c15f766cde2b2b"
+    },
+    {
+      "path": "src/engine/shapes.ts",
+      "rawSha256": "a7cdd37cd221970959d5c42d5464df67faebc78e2f0f6591e6b33f04d60e87db"
+    },
+    {
+      "path": "src/engine/nativePlacement.ts",
+      "rawSha256": "1c579621c5aec9705706e0ac42a62822f5a2e454179534157becc813c50cc276"
+    },
+    {
+      "path": "src/sim/shims.ts",
+      "rawSha256": "3d6915881f4dec28401ee64576064045917444f3e48cf7594ad34f1ea88b137b"
+    },
+    {
+      "path": "package.json",
+      "rawSha256": "4509cb6e8bee778333a968db4cd6b40e445ec661a9da6be4ce28a9efac38b643"
+    }
+  ]
+}

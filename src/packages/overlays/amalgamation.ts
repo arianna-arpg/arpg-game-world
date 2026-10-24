@@ -194,10 +194,10 @@ export class AmalgamationField implements WorldOverlay {
 
   /** The miniboss target sitting in this zone (engine spawns it), or null. Only
    *  while a hunt is live and unfinished. */
-  minibossIn(zoneId: string): { id: string; defId: string } | null {
+  minibossIn(zoneId: string): { id: string; stage: number; defId: string } | null {
     const a = this.active;
     if (!a || a.quest !== 'hunt' || a.minibossZoneId !== zoneId || !a.minibossDefId) return null;
-    return { id: a.id, defId: a.minibossDefId };
+    return { id: a.id, stage: a.stage, defId: a.minibossDefId };
   }
 
   // --- mutators the engine drives ---------------------------------------------

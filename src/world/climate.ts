@@ -24,7 +24,8 @@
 
 import type { MapCoord } from './coords';
 import { continentCellAt, continentSeedFrom } from './continents';
-import { presenceMul, type LevelEnvelope } from '../engine/presence';
+import type { LevelEnvelope } from '../engine/presence';
+import { NativeClimate, captureClimateSourceData, type NativeClimateSource } from './climateCore';
 
 // --- layers -----------------------------------------------------------------
 
@@ -191,7 +192,7 @@ export function registerClimateInvalidation(cb: () => void): void {
   invalidationListeners.push(cb);
 }
 function invalidateClimate(): void {
-  homeCellMemo = null; // the home landmass derives from the origin — re-resolve
+  classicClimate.resetHome(); // the home landmass derives from the origin — re-resolve
   for (const cb of invalidationListeners) cb();
 }
 
@@ -279,199 +280,24 @@ export function dimensionClimateOf(dimId: string): Record<string, DimensionAxisO
 
 // --- sampling ----------------------------------------------------------------
 
-/** Integer hash (Rng's family) → deterministic across host / client / reload. */
-function hashCell(a: number, b: number, seed: number): number {
-  let h = (seed ^ 0x9e3779b9) >>> 0;
-  h = Math.imul(h ^ (a | 0), 0x85ebca6b) >>> 0;
-  h = Math.imul(h ^ (b | 0), 0xc2b2ae35) >>> 0;
-  h ^= h >>> 13; h = Math.imul(h, 0x27d4eb2f) >>> 0; h ^= h >>> 15;
-  return h >>> 0;
+const classicClimate = new NativeClimate({ axes: CLIMATE_AXES, bands: CLIMATE_BANDS,
+  dimensions: DIMENSION_CLIMATE, climate: CLIMATE_CFG, continentCellAt, continentSeedFrom });
+export function climateAt(coord: MapCoord, fieldSeed: number, dimension = 'surface'): Record<string, number> {
+  return classicClimate.at(coord, fieldSeed, dimension);
+}
+export function climateAxisAt(coord: MapCoord, fieldSeed: number, axisId: string, dimension = 'surface'): number {
+  return classicClimate.axisAt(coord, fieldSeed, axisId, dimension);
+}
+export function climateEnvelope(axis: string, spec: ClimateSpec): LevelEnvelope { return classicClimate.envelope(axis, spec); }
+export function climateAffinity(spec: Record<string, ClimateSpec> | undefined, climate: Record<string, number>): number {
+  return classicClimate.affinity(spec, climate);
+}
+/** Capture HERE: only this owner can enumerate the actual private override registry. */
+export function captureNativeClimateSource(): NativeClimateSource {
+  return captureClimateSourceData({ axes: CLIMATE_AXES, bands: CLIMATE_BANDS,
+    dimensions: DIMENSION_CLIMATE, climate: CLIMATE_CFG });
 }
 
-const hash01 = (x: number, y: number, seed: number): number => hashCell(x, y, seed) / 0x100000000;
-
-/** Smooth (smoothstep-bilinear) value noise, 0..1 — the level field's idiom. */
-function valueNoise(x: number, y: number, cell: number, seed: number): number {
-  const gx = Math.floor(x / cell), gy = Math.floor(y / cell);
-  const fx = x / cell - gx, fy = y / cell - gy;
-  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
-  const a = hash01(gx, gy, seed), b = hash01(gx + 1, gy, seed);
-  const c = hash01(gx, gy + 1, seed), d = hash01(gx + 1, gy + 1, seed);
-  return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
-}
-
-/** Stable per-axis salt so axes decorrelate on the shared world seed. */
-function axisSalt(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193) >>> 0;
-  return h >>> 0;
-}
-
-const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
-
-// The origin's WINNING continent cell per seed (memoized — one world, one home).
-let homeCellMemo: { seed: number; gx: number; gy: number } | null = null;
-function homeCellFor(contSeed: number): { gx: number; gy: number } {
-  if (!homeCellMemo || homeCellMemo.seed !== contSeed) {
-    const c = continentCellAt(CLIMATE_CFG.origin, contSeed);
-    homeCellMemo = { seed: contSeed, gx: c.gx, gy: c.gy };
-  }
-  return homeCellMemo;
-}
-
-/** Continent info shared across an axis stack's layers (probed lazily). The
- *  coastal cache keys by PROBE REACH — two axes declaring different reaches
- *  (moisture 700, maritime 620) each get their own sample; a single slot once
- *  silently served the first-computed reach to every later axis. */
-interface ContinentProbe {
-  cell: { gx: number; gy: number; kind: 'land' | 'ocean' | 'bridge' } | null;
-  coastal: Map<number, number> | null;
-}
-
-function layerValue(
-  layer: ClimateLayer, coord: MapCoord, seed: number, salt: number, probe: ContinentProbe,
-): number {
-  switch (layer.kind) {
-    case 'noise':
-      return (valueNoise(coord.x, coord.y, layer.cell, (seed ^ salt ^ (layer.salt ?? 0)) >>> 0) - 0.5) * 2 * layer.amp;
-    case 'ridge': {
-      const n = valueNoise(coord.x, coord.y, layer.cell, (seed ^ salt ^ (layer.salt ?? 0)) >>> 0);
-      const crest = 1 - Math.abs(2 * n - 1);
-      return crest * crest * layer.amp;
-    }
-    case 'radial': {
-      const at = layer.anchor !== undefined ? CLIMATE_CFG.anchors[layer.anchor] : CLIMATE_CFG.origin;
-      if (!at) return layer.amp; // uninstalled anchor reads FAR — full contribution
-      const dx = coord.x - at.x, dy = coord.y - at.y;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      return clamp01((d - layer.innerRadius) / layer.span) * layer.amp;
-    }
-    case 'basin': {
-      const at = CLIMATE_CFG.anchors[layer.anchor];
-      if (!at) return 0; // no anchor installed — the basin doesn't exist
-      const dx = coord.x - at.x, dy = coord.y - at.y;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      return -(1 - clamp01((d - (layer.innerRadius ?? 0)) / layer.span)) * layer.amp;
-    }
-    case 'coastal': {
-      const cache = (probe.coastal ??= new Map<number, number>());
-      let v = cache.get(layer.probe);
-      if (v === undefined) {
-        const center = (probe.cell ??= continentCellAt(coord, seed));
-        if (center.kind !== 'land') v = 1;
-        else {
-          let sea = 0;
-          for (let i = 0; i < 4; i++) {
-            const a = (i / 4) * Math.PI * 2;
-            const c = continentCellAt(
-              { x: coord.x + Math.cos(a) * layer.probe, y: coord.y + Math.sin(a) * layer.probe }, seed,
-            );
-            if (c.kind !== 'land') sea++;
-          }
-          v = clamp01((sea / 4) * 1.6);
-        }
-        cache.set(layer.probe, v);
-      }
-      return v * layer.amp;
-    }
-    case 'landmass': {
-      const cell = (probe.cell ??= continentCellAt(coord, seed));
-      // The HOME landmass — whichever macro cell actually WINS at the climate
-      // origin under this seed's jitter (never assumed to be cell (0,0): the
-      // town sits near a macro-cell corner, so any of the four neighbours can
-      // win) — is the unbiased baseline.
-      const home = homeCellFor(seed);
-      if (cell.gx === home.gx && cell.gy === home.gy) return 0;
-      return (hash01(cell.gx, cell.gy, (seed ^ salt ^ 0x1a4d) >>> 0) - 0.5) * 2 * layer.spread;
-    }
-    case 'const':
-      return layer.value;
-  }
-}
-
-// The coastal/landmass layers read the CONTINENT field (seed derived once via
-// continentSeedFrom); noise/radial layers use the biome-field seed directly.
-
-/** One axis' composed value (the shared core of climateAt / climateAxisAt). */
-function axisValueAt(
-  axis: ClimateAxisDef, ov: DimensionAxisOverride | undefined,
-  coord: MapCoord, fieldSeed: number, contSeed: number, probe: ContinentProbe,
-): number {
-  let v = ov?.base ?? axis.base;
-  const salt = axisSalt(axis.id);
-  for (const layer of ov?.layers ?? axis.layers) {
-    v += layerValue(
-      layer, coord,
-      layer.kind === 'coastal' || layer.kind === 'landmass' ? contSeed : fieldSeed,
-      salt, probe,
-    );
-  }
-  return clamp01(v);
-}
-
-/** Every axis sampled at a coordinate, honoring the dimension's overrides.
- *  Pure + deterministic per (coord, fieldSeed, dimension). */
-export function climateAt(
-  coord: MapCoord, fieldSeed: number, dimension = 'surface',
-): Record<string, number> {
-  const out: Record<string, number> = {};
-  const overrides = DIMENSION_CLIMATE[dimension];
-  const contSeed = continentSeedFrom(fieldSeed);
-  const probe: ContinentProbe = { cell: null, coastal: null };
-  for (const axis of Object.values(CLIMATE_AXES)) {
-    out[axis.id] = axisValueAt(axis, overrides?.[axis.id], coord, fieldSeed, contSeed, probe);
-  }
-  return out;
-}
-
-/** ONE axis sampled at a coordinate — the cheap lane for hot loops that need
- *  a single field (the relief tracer descends 'elevation' hundreds of times
- *  per river; paying for six axes per probe would be pure waste). Identical
- *  value to climateAt(...)[axisId] by construction (same core). */
-export function climateAxisAt(
-  coord: MapCoord, fieldSeed: number, axisId: string, dimension = 'surface',
-): number {
-  const axis = CLIMATE_AXES[axisId];
-  if (!axis) return 0;
-  const probe: ContinentProbe = { cell: null, coastal: null };
-  return axisValueAt(
-    axis, DIMENSION_CLIMATE[dimension]?.[axisId], coord, fieldSeed, continentSeedFrom(fieldSeed), probe,
-  );
-}
-
-// --- affinity ----------------------------------------------------------------
-
-const warnedBands = new Set<string>();
-
-/** Resolve a spec to its envelope (unknown band → warn once, always-on). */
-export function climateEnvelope(axis: string, spec: ClimateSpec): LevelEnvelope {
-  if (typeof spec !== 'string') return spec;
-  const env = CLIMATE_BANDS[axis]?.[spec];
-  if (env) return env;
-  const key = `${axis}:${spec}`;
-  if (!warnedBands.has(key)) {
-    warnedBands.add(key);
-    console.warn(`[climate] unknown band '${spec}' on axis '${axis}' — treating as always-on`);
-  }
-  return {};
-}
-
-/** The affinity multiplier for a climate-spec map at sampled axis values —
- *  envelopes multiply across axes (all conditions must hold). Unknown axes
- *  are ignored here; validateClimate flags them at boot. */
-export function climateAffinity(
-  spec: Record<string, ClimateSpec> | undefined, climate: Record<string, number>,
-): number {
-  if (!spec) return 1;
-  let m = 1;
-  for (const axis in spec) {
-    const v = climate[axis];
-    if (v === undefined) continue;
-    m *= presenceMul(climateEnvelope(axis, spec[axis]), v);
-    if (m <= 0) return 0;
-  }
-  return m;
-}
 
 // --- validation ---------------------------------------------------------------
 

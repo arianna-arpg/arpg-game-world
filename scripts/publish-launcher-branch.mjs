@@ -61,4 +61,3 @@ const older = assets.filter(a => a.name.startsWith(branches.assetPrefix(branch))
   .sort((a,b) => String(b.created_at).localeCompare(String(a.created_at)));
 for (const a of older.slice(1)) await request('/releases/assets/' + a.id, { method: 'DELETE' });
 console.log('Published ' + branch + ' @ ' + commit.slice(0, 8));
-

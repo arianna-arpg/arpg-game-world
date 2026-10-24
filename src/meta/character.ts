@@ -1,4 +1,13 @@
 import { empowermentRank } from '../engine/skillEmpowerment';
+import { BUILD_PROFILE, storageKey } from '../buildProfile';
+import { BrowserNativePages } from './browserNativePages';
+import { characterNativePage, encodeCharacterPages, decodeCharacterPages, hasCharacterPages, readCharacterNativePage, preparePagedCharacterResume, validateCharacterPageEnvelope, type CharacterPageEntry } from './characterPages';
+import type { NativeCohortLease } from '../worldmass/nativePaging';
+import { BrowserRunStore, isBrowserRunReference } from './browserRunStore';
+import { characterResumeFields, type CharacterFields, type CharacterResume, type CharacterResumeRead, type CharacterContinueSummary, type ResumeAuthority } from './characterResume';
+import { freezeData, isMassFrozenData, massDigest } from '../worldmass/random';
+import type { ShardStand } from '../net/vesselWire';
+import { shardHomeOf, type ShardHome } from '../net/shardDoor';
 // ---------------------------------------------------------------------------
 // CHARACTER PERSISTENCE — the active-run half of localStorage.
 //
@@ -10,28 +19,26 @@ import { empowermentRank } from '../engine/skillEmpowerment';
 // No migration: a schema bump just makes old saves unresumable (→ class select).
 // ---------------------------------------------------------------------------
 
-import { replenishingDelivery } from '../engine/replenishment';
+import '../engine/replenishment';
 import { flaskChargeBanks, restoreFlaskChargeBanks } from '../engine/flaskState';
 import { SAVE_COMPATIBILITY, isCurrentCharacterSave, noteSaveReset } from './saveCompatibility';
 import { CLASSES } from '../data/classes';
 import { PASSIVE_NODES } from '../data/passives';
 import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
 import { sanitizeCompanionStances } from '../engine/companionStances';
-import { SKILLS } from '../data/skills';
+import '../data/skills';
 import { SUPPORTS } from '../data/supports';
-import { MONSTERS } from '../data/monsters';
-import {
-  makeSkillInstance, validTreeNodes,
-  type SkillInstance, type SupportInstance, type SkillRarity,
-} from '../engine/skills';
+import '../data/monsters';
+import {type SkillInstance,type SupportInstance} from '../engine/skills';
 import { rebuildItem } from '../engine/itemgen';
 import { makeSkillGemItem, makeSupportGemItem, rebuildAnyItem } from '../engine/gemitems';
 import { autoPlace } from '../engine/inventory';
 import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
+import type { Actor } from '../engine/actor'; // throngRowsOf's hero
 import { emptyAbilityEssences, emptyEssences, MAX_LEARNED_SKILLS, type PlayerMeta, type Seat, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
-import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused } from './persistence';
+import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused, saveSuppressed } from './persistence';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
 import { DEFAULT_MODE_ID, mintCharId, modeById, ROSTER_SLOT_BASE, type RosterEntry } from './modes';
 import type { WorldStateSave } from './worldstate';
@@ -39,40 +46,22 @@ import type { MercSnapshot } from './mercs';
 import type { Account } from './account';
 import { personalStashEntries, restoreStash, type PersonalStash } from '../engine/stash';
 import { STASH_DEFS } from '../data/stashes';
+import { sanitizeQuestWorlds, type QuestLedgerSave } from '../engine/questLedger'; // THE CHARACTER'S QUESTS (card 24)
 
 export const CHAR_SCHEMA_VERSION = SAVE_COMPATIBILITY.run;
-const CHAR_KEY = 'arpg_character_v1';
+const CHAR_KEY = storageKey('arpg_character_v1');
 export const CHAR_SLOT = 1; // disk save slot (saves/save_1.json; exported for meta/portage.ts)
 
-interface SavedSocket {
-  supportId: string; level: number;
-  /** THE KEEPER'S MARK (salvageLock): the gem refuses salvage and every
-   *  salvageBulk sweep skips it. Optional → older saves load unchanged. */
-  locked?: boolean;
-  /** THE CUT (the support base — engine/supportbase.ts): a chassis gem's
-   *  vein roll, fixed forever. Optional → older saves load unchanged. */
-  rolled?: Record<string, string>;
-}
-interface SavedSkill {
-  empowermentRank?: number;
-  skillId: string; level: number; rarity: SkillRarity;
-  sockets: (SavedSocket | null)[];
-  /** GRANTED (reacquired starter — worthless everywhere value is minted).
-   *  Optional → older saves load unchanged. */
-  granted?: boolean;
-  /** THE KEEPER'S MARK (salvageLock) — see SavedSocket. */
-  locked?: boolean;
-  /** THE GRIMOIRE: the bestiary form this instance is attuned to (a monster
-   *  def id; rebuilt tolerantly — a removed def drops the attunement). */
-  attunedForm?: string;
-  /** THE SKILL-MODE TREES: spent tree-node ids (M0: the one rung-1 pick).
-   *  Optional → older saves load unchanged; validated on load — an id no
-   *  longer on the def's tree drops with a console note. */
-  treeNodes?: string[];
-  replenishmentPaused?: true;
-}
+import type {SavedSocket} from '../engine/nativeProgressionMeta';
+export type {SavedSocket} from '../engine/nativeProgressionMeta';
+import type {SavedSkill} from '../engine/nativeProgressionMeta';
+export type {SavedSkill} from '../engine/nativeProgressionMeta';
 export interface CharacterSave {
   guardIntervention?: Record<string, number>;
+  /** THE IMMORTAL'S COVENANT ON A SHARD (card 30): the wall-clock ms this vessel was last
+   *  RISEN at the Vault's Fallen shelf (its roster card's RosterEntry.risenAt, carried by the
+   *  traveling vessel). A shard's FALL RECORD lifts for an upload risen after the fall. */
+  risenAt?: number;
   stash?: PersonalStash;
   accountRelics?: 1;
   relicScope?: string;
@@ -191,6 +180,13 @@ export interface CharacterSave {
    *  snapshots INLINE (resilient to roster churn), refs for pool release.
    *  The Harborwarden's retinue makes this a list; one blade = one entry. */
   mercenaries?: { name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string }[];
+  /** THE CHARACTER'S QUESTS (card 24 ruled; engine/questLedger.ts): the hero's own quest
+   *  ledger for each hosted world it walked (its quest log, its imbues, its rolled bounty
+   *  postings and boards, its quest keys, its Odyssey leads), keyed by questWorldKey. A
+   *  shard adopts its own world's at the vessel's graft and mirrors it home; every save
+   *  passes the rest through. Optional: a save without one has walked no hosted world
+   *  (a solo run's quests ride its world half, as ever). */
+  quests?: Record<string, QuestLedgerSave>;
   /** THE WAKEFUL WORLD (meta/worldstate.ts): the world half of the run — the
    *  minted zone graph, discovery, the clock, zone memory, quests, the spot
    *  the character stood on, and per-overlay snapshots. Optional → a save
@@ -198,6 +194,14 @@ export interface CharacterSave {
    *  exactly the pre-worldstate behavior. Applied by the RESUME path
    *  (World.adoptWorldState + resumeSpawn), never by applySavedCharacter. */
   world?: WorldStateSave;
+  /** HOME SLOTS (W7, net/shardDoor.ts THE HOME SLOT TAG): the hosted world this hero
+   *  lives on (its address, seed and name), stamped by the client on every mirror it
+   *  writes. A bound save is a RETURN at the menu, never a solo resume. Absent on every
+   *  solo save (THE SOLO INVARIANT). */
+  shard?: ShardHome;
+  /** THE RETURN (card 26 B, W7, net/vesselWire.ts): where the hero last stood on its
+   *  world, as the shard's mirror carried it; the next login lands it there. */
+  stand?: ShardStand;
 }
 
 const saveSkill = (i: SkillInstance): SavedSkill => ({
@@ -221,7 +225,7 @@ const saveSocket = (s: SupportInstance): SavedSocket => ({
   ...(s.rolled ? { rolled: { ...s.rolled } } : {}),
 });
 
-export function serializeCharacter(world: World): CharacterSave {
+export function serializeCharacter(world: World, shareConfig = false): CharacterSave {
   const m = world.meta;
   // THE POSSESSION SEAM (engine/possess.ts): the save is the HERO's truth.
   // Mid-possession, world.player is a borrowed monster body — the bar, the
@@ -232,7 +236,7 @@ export function serializeCharacter(world: World): CharacterSave {
   // The world half rides every character save (one atomic write — the build
   // and the ground it stood on can never tear apart). Its kept-zone set also
   // decides which objective clears persist: exactly the ground that does.
-  const ws = world.serializeWorldState();
+  const ws = shareConfig ? world.serializeWorldState({shareConfig:true}) : world.serializeWorldState();
   const keptZones = new Set(ws.zones.map(z => z.id));
   return {
     relicScope: m.relicScope ?? (m.charId || 'run:' + world.manifest.seed),
@@ -291,33 +295,7 @@ export function serializeCharacter(world: World): CharacterSave {
     // THE THRONG: rosters aggregate to one row per anchor skill (count +
     // the highest body level — claims re-level on restore anyway); the
     // claim ledger rides whole (keys are tiny, stale ones harmless).
-    throng: (() => {
-      const rows = new Map<string, { skillId: string; defId: string; level: number; count: number }>();
-      for (const a of world.actors) {
-        if (a.dead || a.owner !== hero || !a.defId) continue;
-        if (!a.sourceSkillId?.startsWith('__throng:')) continue;
-        const skillId = a.sourceSkillId.slice('__throng:'.length);
-        const morphKey = `${skillId}:${a.defId}`;
-        const row = rows.get(morphKey);
-        if (row) { row.count += a.throngUnits ?? 1; row.level = Math.max(row.level, a.level); }
-        else rows.set(morphKey, { skillId, defId: a.defId, level: a.level, count: a.throngUnits ?? 1 });
-      }
-      // THE LITE TIER (engine/lite.ts): a lite-tier anchor's pool rows join
-      // its count — the roster resumes at full strength either way.
-      for (const s of hero.skills) {
-        const spec = s?.def.throng;
-        if (!spec || spec.tier !== 'lite') continue;
-        const kindIdx = world.liteKindOf(spec.monsterId);
-        if (kindIdx < 0) continue;
-        const n = world.lite.countOwned(hero.id, kindIdx);
-        if (!n) continue;
-        const morphKey = `${s!.def.id}:${spec.monsterId}`;
-        const row = rows.get(morphKey);
-        if (row) row.count += n;
-        else rows.set(morphKey, { skillId: s!.def.id, defId: spec.monsterId, level: hero.level, count: n });
-      }
-      return [...rows.values()];
-    })(),
+    throng: throngRowsOf(world, hero),
     throngClaimed: [...world.throngClaimed],
     ...(world.annexFound.size ? { annexFound: [...world.annexFound] } : {}),
     // THE PRIMED POUR: paid, unreleased sips ride the save whole.
@@ -328,6 +306,7 @@ export function serializeCharacter(world: World): CharacterSave {
     modeStage: m.modeStage,
     charId: m.charId,
     deaths: world.charDeaths.map(d => ({ ...d })),
+    ...(m.questWorlds ? { quests: structuredClone(m.questWorlds) } : {}), // THE CHARACTER'S QUESTS: the hosted worlds' ledgers pass through
     world: ws,
     ...(world.hiredMercs.length ? {
       mercenaries: world.hiredMercs.map(hm => ({
@@ -340,43 +319,52 @@ export function serializeCharacter(world: World): CharacterSave {
   };
 }
 
+/** THE THRONG's save rows for one hero (throngRowsOf): every gathered roster
+ *  aggregated to one row per anchor skill and form (count + the highest body
+ *  level — claims re-level on restore anyway), lite-tier pool rows joined to
+ *  their anchor's count so the roster resumes at full strength either way.
+ *  The local save and THE SHARD's vessel mirror (server/vessel.ts) both read
+ *  their hero's rosters through this one fold. */
+export function throngRowsOf(world: Pick<World,'actors'|'liteKindOf'>&{lite:Pick<World['lite'],'countOwned'>}, hero: Actor): { skillId: string; defId: string; level: number; count: number }[] {
+  const rows = new Map<string, { skillId: string; defId: string; level: number; count: number }>();
+  for (const a of world.actors) {
+    if (a.dead || a.owner !== hero || !a.defId) continue;
+    if (!a.sourceSkillId?.startsWith('__throng:')) continue;
+    const skillId = a.sourceSkillId.slice('__throng:'.length);
+    const morphKey = `${skillId}:${a.defId}`;
+    const row = rows.get(morphKey);
+    if (row) { row.count += a.throngUnits ?? 1; row.level = Math.max(row.level, a.level); }
+    else rows.set(morphKey, { skillId, defId: a.defId, level: a.level, count: a.throngUnits ?? 1 });
+  }
+  // THE LITE TIER (engine/lite.ts): a lite-tier anchor's pool rows join
+  // its count — the roster resumes at full strength either way.
+  for (const s of hero.skills) {
+    const spec = s?.def.throng;
+    if (!spec || spec.tier !== 'lite') continue;
+    const kindIdx = world.liteKindOf(spec.monsterId);
+    if (kindIdx < 0) continue;
+    const n = world.lite.countOwned(hero.id, kindIdx);
+    if (!n) continue;
+    const morphKey = `${s!.def.id}:${spec.monsterId}`;
+    const row = rows.get(morphKey);
+    if (row) row.count += n;
+    else rows.set(morphKey, { skillId: s!.def.id, defId: spec.monsterId, level: hero.level, count: n });
+  }
+  return [...rows.values()];
+}
+
 /** Rebuild a SkillInstance; returns null for an unknown skill id (caller skips).
  *  Unknown socketed support ids become empty sockets. (Exported so the corpse-run
  *  reclaim rebuilds the EXACT lost gem — not a random roll.) */
-export function rebuildSkill(s: SavedSkill): SkillInstance | null {
-  const def = SKILLS[s.skillId];
-  if (!def) return null;
-  const inst = makeSkillInstance(def, s.level, Math.max(1, s.sockets.length));
-  inst.rarity = s.rarity;
-  if (empowermentRank(s)) inst.empowermentRank = empowermentRank(s);
-  if (s.granted) inst.granted = true;
-  if (s.attunedForm && MONSTERS[s.attunedForm]) inst.attunedForm = s.attunedForm;
-  // THE SKILL-MODE TREES: picks survive the round trip; orphans (a renamed
-  // node id, a retired tree), structure breaks (a rival-branch id, a broken
-  // rung chain) and over-budget tails (the level carries the bandPointsAt
-  // trim) drop with a console note — the attunedForm law. An M0-era save's
-  // single rung-1 pick loads as a 1-point spend, costless by construction.
-  if (s.treeNodes?.length) inst.treeNodes = validTreeNodes(def, s.treeNodes, s.level, inst);
-  if (s.replenishmentPaused === true && replenishingDelivery(inst)?.replenish?.toggle) inst.replenishmentPaused = true;
-  if (s.locked) inst.locked = true; // the keeper's mark (salvageLock) survives
-  inst.sockets = s.sockets.map(sock => {
-    if (!sock) return null;
-    const sd = SUPPORTS[sock.supportId];
-    return sd ? ({
-      def: sd, level: sock.level,
-      ...(sock.locked ? { locked: true } : {}),
-      ...(sock.rolled ? { rolled: { ...sock.rolled } } : {}),
-    } as SupportInstance) : null;
-  });
-  return inst;
-}
+import {rebuildSkill} from '../engine/nativeProgressionMeta';
+export {rebuildSkill} from '../engine/nativeProgressionMeta';
 
 /** Rebuild the CHARACTER half of a save — the PlayerMeta + its own corpse
  *  ring — touching NO world state. applySavedCharacter (the local resume)
  *  layers the world writes on top; the COUCH JOIN (a guest vessel grafting
  *  onto its own seat) uses exactly this and nothing more. Null only if the
  *  class id is gone (the save is unresumable). */
-export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; deaths: DeathRecord[] } | null {
+export function rebuildSavedMeta(save: CharacterFields): { meta: PlayerMeta; deaths: DeathRecord[] } | null {
   const classDef = CLASSES.find(c => c.id === save.classId);
   if (!classDef) return null;
 
@@ -474,12 +462,32 @@ export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; death
   };
   // The character's own corpse ring (same per-record tolerance as the account's).
   const deaths = (save.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS);
+  // THE CHARACTER'S QUESTS: the hosted worlds' ledgers ride the hero (shape-checked here;
+  // the world that adopts one re-validates every row against its own chart).
+  const questWorlds = sanitizeQuestWorlds(save.quests);
+  if (questWorlds) meta.questWorlds = questWorlds;
   return { meta, deaths };
 }
 
 /** Rebuild meta from a save and graft it onto an already-created World/player.
  *  Returns false for an incompatible save or a removed class (unresumable). */
 export function applySavedCharacter(world: World, save: CharacterSave): boolean {
+  return applyCharacterFields(world, save);
+}
+/** Applies only character build/carry state. World/page adoption is separate. */
+export function applyCharacterResumeFields(world: World, resume: CharacterResume): boolean {
+  if (!characterResumeAuthority(resume)) return false;
+  // The receipt remains frozen authority. Registry rebuilding and later play
+  // need their own mutable carry graph (affixes, gems, corpses and companions).
+  // Inline fields are only a type view: explicitly omit its potentially huge
+  // world before cloning, so this stage never expands native world history.
+  const fields = resume.kind === 'inline'
+    ? (({ world: _world, ...character }) => character)(resume.save)
+    : resume.character;
+  return applyCharacterFields(world, structuredClone(fields));
+}
+export type NativeCharacterRestoreHost = Pick<World,"actors"|"adoptSavedMeta"|"annexFound"|"charDeaths"|"companionBonds"|"completedObjectives"|"ledger"|"localSeat"|"player"|"rememberSkillSlots"|"restoreCompanions"|"restoreHiredMerc"|"restoreThrong"|"seatHero"|"stashedCompanions"|"throngClaimed">;
+export function applyCharacterFields(world: NativeCharacterRestoreHost, save: CharacterFields): boolean {
   if (!isCurrentCharacterSave(save)) return false;
   const built = rebuildSavedMeta(save);
   if (!built) return false;
@@ -532,34 +540,338 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
   return true;
 }
 
-function cachedCharacter(slot: number): CharacterSave | null {
-  try { return JSON.parse(window.localStorage.getItem(charKeyFor(slot)) ?? 'null') as CharacterSave | null; }
-  catch { return null; }
+/** Large browser runs commit atomically. Small local references publish only
+ * after the transaction; the in-session cache still serves synchronous callers. */
+let browserRuns: BrowserRunStore | undefined;
+let nativePages: BrowserNativePages | undefined;
+function nativePageStore(): BrowserNativePages {
+  if (typeof indexedDB === 'undefined') throw Error('Native page storage unavailable');
+  return nativePages ??= new BrowserNativePages(storageKey('arpg_native_pages_v1'));
 }
-export function loadCharacter(): CharacterSave | null {
-  const data = cachedCharacter(CHAR_SLOT);
+interface CharacterPageSession { pages: CharacterPageEntry[]; order: string[]; busy: boolean; revision: number;
+  slot: number; epoch: number }
+const slotEpochs = new Map<number, number>();
+const slotWriters = new Map<number, WeakRef<World>>();
+const slotEpoch = (slot: number): number => slotEpochs.get(slot) ?? 0;
+function invalidateCharacterSlot(slot: number): void { slotEpochs.set(slot, slotEpoch(slot) + 1); }
+function acceptCharacterWriter(world: World, slot: number): void {
+  const prior=slotWriters.get(slot)?.deref();
+  if(prior && prior!==world)invalidateCharacterSlot(slot);
+  slotWriters.set(slot,new WeakRef(world));
+  const session=pageSessions.get(world);
+  if(session && session.slot===slot)session.epoch=slotEpoch(slot);
+}
+const pageSessions = new WeakMap<World, CharacterPageSession>();
+const pageCommits = new Set<Promise<boolean>>();
+const pageFailures = new Map<number, unknown>();
+/** Native files remain inline until portable page transfer is implemented. */
+export const characterPagingAvailable = (): boolean => !!BUILD_PROFILE.storageScope && typeof indexedDB !== 'undefined';
+export const resetCharacterNativePages = (world: World): void => { pageSessions.delete(world); };
+export const characterNativePages = (world: World): readonly CharacterPageEntry[] => pageSessions.get(world)?.pages ?? [];
+export const characterNativePageOrder = (world: World): readonly string[] => pageSessions.get(world)?.order ?? [];
+export const characterNativeSessionToken = (world: World): object | undefined => pageSessions.get(world);
+export const characterNativeSessionCurrent = (world: World): boolean => {
+  const session=pageSessions.get(world);
+  return !saveSuppressed() && (!session || session.epoch===slotEpoch(session.slot)
+    && !deletionBarrier(session.slot) && saveSlotFor(world)===session.slot);
+};
+export const loadCharacterNativePage = (entry: CharacterPageEntry) => readCharacterNativePage(nativePageStore(),entry);
+/** Call only AFTER atomic native hydration publishes every page owner. */
+export function forgetCharacterNativePage(world: World, entry: CharacterPageEntry): void {
+  const session=pageSessions.get(world);if(!session)return;
+  session.pages=session.pages.filter(p=>p.ref.key!==entry.ref.key);session.revision++;
+}
+function mirrorBody(world: World, save: CharacterSave): string {
+  const session=pageSessions.get(world);
+  if(!characterNativeSessionCurrent(world))throw Error('Stale native character page session');
+  return session?.pages.length ? encodeCharacterPages(save,session.pages,session.order) : characterBody(world,save);
+}
+/** The ordinary CharacterSave slot is the sole commit authority. Pages land
+ * first; a later save/death/import invalidates this lease before any release.
+ * The runtime callback must remove every live/codec reference synchronously. */
+export async function commitCharacterNativeCohort(world: World, lease: NativeCohortLease,
+  release: (entry: CharacterPageEntry) => void): Promise<boolean> {
+  if (!characterPagingAvailable() || saveRefused('native page') || world.player!==world.seatHero(world.localSeat)) return Promise.resolve(false);
+  const slot=saveSlotFor(world);if(slot<0||pageCommits.size>=4||!characterNativeSessionCurrent(world))return Promise.resolve(false);
+  acceptCharacterWriter(world,slot);
+  let session=pageSessions.get(world);
+  if(!session){session={pages:[],order:[],busy:false,revision:0,slot,epoch:slotEpoch(slot)};pageSessions.set(world,session);}
+  if(session.busy||!lease.revalidate())return Promise.resolve(false);
+  const held=session,manifest=[...session.pages],priorOrder=[...session.order],revision=session.revision,
+    save=serializeCharacter(world),page=characterNativePage(save,lease);
+  if(held.pages.some(p=>p.ref.page===page.cohort.page||p.ids.some(id=>lease.ids.includes(id))))throw Error('Native page already committed');
+  const intent=(mirrorIntents.get(slot)??0)+1,barrier=deletionBarrier(slot);
+  mirrorIntents.set(slot,intent);held.busy=true;
+  const current=()=>characterNativeSessionCurrent(world)&&pageSessions.get(world)===held&&held.revision===revision
+    &&mirrorIntents.get(slot)===intent&&deletionBarrier(slot)===barrier&&!saveRefused('native page commit');
+  const task=(async()=>{
+    const ref=await nativePageStore().writePage(page.cohort.run,page.cohort.page,JSON.stringify(page));
+    if(!current()||!lease.revalidate())return false;
+    const entry={ref,ids:[...lease.ids],positions:lease.ids.map(id=>{const e=page.enemies.find(e=>e.id===id)!;return {x:e.x,y:e.y,...(e.nativeQuietRadius===undefined?{}:{nativeQuietRadius:e.nativeQuietRadius})};})},pages=[...manifest,entry];
+    Object.freeze(entry.ref);Object.freeze(entry.ids);entry.positions.forEach(p=>Object.freeze(p));Object.freeze(entry.positions);Object.freeze(entry);
+    const order=[...priorOrder,...save.world!.worldmass!.enemies.map(e=>e.id).filter(id=>!priorOrder.includes(id))];
+    const body=encodeCharacterPages(save,pages,order);
+    await writeCharacterMirrorTransaction(slot,body,{intent,barrier});
+    if(!current()||browserRunStore()?.peek(charKeyFor(slot))!==body||!lease.revalidate())return false;
+    // Register before release so a synchronous save from the runtime sees all
+    // owners. A callback must either succeed atomically or throw before edits.
+    held.pages=pages;held.order=order;held.revision++;
+    try{release(entry);}catch(error){held.pages=manifest;held.order=priorOrder;held.revision++;throw error;}
+    pageFailures.delete(slot);return true;
+  })();
+  pageCommits.add(task);
+  void task.catch(error=>pageFailures.set(slot,error)).finally(()=>{held.busy=false;pageCommits.delete(task);});
+  return task;
+}
+function browserRunStore(): BrowserRunStore | undefined {
+  if (typeof indexedDB === 'undefined') return undefined;
+  return browserRuns ??= new BrowserRunStore({ dbName: storageKey('arpg_run_snapshots_v1'),
+    references: { getItem: key => window.localStorage.getItem(key), setItem: (key, body) => window.localStorage.setItem(key, body) },
+    onError: (error, key) => console.error('[save] browser run commit failed:', key, error) });
+}
+const deletionKey = (slot: number): string => charKeyFor(slot) + ':deleted';
+const mirrorIntents = new Map<number, number>();
+function deletionBarrier(slot: number): string | null {
+  try { return window.localStorage.getItem(deletionKey(slot)); } catch { return null; }
+}
+/** Import owns its explicit stand-down exception and awaits this primitive.
+ * A synchronous deletion barrier prevents an unload from reviving a dead run
+ * before its asynchronous tombstone reaches the browser database. */
+export async function writeCharacterMirrorRaw(slot: number, body: string | null): Promise<void> {
+  // Import and disk mirrors must be portable inline saves, never references to
+  // another browser's storage. Internal paged commits use the private lane.
+  if(body!==null && hasCharacterPages(JSON.parse(body)))throw Error('External native page references require portable expansion');
+  invalidateCharacterSlot(slot);
+  await writeCharacterMirrorTransaction(slot,body);
+}
+async function writeCharacterMirrorTransaction(slot: number, body: string | null,
+  accepted?: {intent:number;barrier:string|null}): Promise<void> {
+  const key = charKeyFor(slot), store = browserRunStore();
+  const intent = accepted?.intent ?? (mirrorIntents.get(slot) ?? 0) + 1, barrier = accepted ? accepted.barrier : deletionBarrier(slot);
+  if(accepted && (mirrorIntents.get(slot)!==intent||deletionBarrier(slot)!==barrier))throw Error('Stale native character commit');
+  mirrorIntents.set(slot, intent);
+  if (body === null) {
+    try { window.localStorage.setItem(deletionKey(slot), Date.now() + ':' + Math.random()); window.localStorage.removeItem(key); }
+    catch (error) { console.error('[save] run deletion barrier failed:', error); }
+  }
+  if (store) {
+    await store.write(key, body);
+    // A later queued tombstone must retain its barrier.
+    if (body !== null && mirrorIntents.get(slot) === intent && deletionBarrier(slot) === barrier) {
+      try { window.localStorage.removeItem(deletionKey(slot)); } catch { /* a stale barrier fails closed */ }
+    }
+  } else {
+    if (body !== null) { window.localStorage.setItem(key, body); window.localStorage.removeItem(deletionKey(slot)); }
+  }
+  pageFailures.delete(slot);
+}
+function writeCharacterMirror(slot: number, body: string | null): void {
+  void writeCharacterMirrorTransaction(slot, body).catch(error => console.error('[save] run mirror remains at its last committed snapshot:', error));
+}
+/** Awaited by explicit checkpoints/import; unload keeps the last completed
+ * browser transaction and the ordinary native disk beacon. */
+export async function flushCharacterSaves(): Promise<void> {
+  while(pageCommits.size)await Promise.allSettled([...pageCommits]);
+  await browserRuns?.flush();
+  if(pageFailures.size)throw new AggregateError([...pageFailures.values()],'Native character page commits failed');
+}
+function cachedCharacter(slot: number): CharacterSave | null {
+  if (deletionBarrier(slot)) return null;
+  try {
+    const cached = browserRunStore()?.peek(charKeyFor(slot));
+    const data: unknown = JSON.parse((cached === undefined ? window.localStorage.getItem(charKeyFor(slot)) : cached) ?? 'null');
+    return isBrowserRunReference(data) || hasCharacterPages(data) ? null : data as CharacterSave | null;
+  } catch { return null; }
+}
+/** The New Run patron cleanup needs only identity. A paged transport must
+ * never masquerade as a complete synchronous CharacterSave for resumption. */
+export function savedCharacterPatronId(): string | undefined {
+  if(deletionBarrier(CHAR_SLOT))return undefined;
+  if(summaryPatron && leaseCurrent(summaryPatron.lease))return summaryPatron.id;
+  try {
+    const cached=browserRunStore()?.peek(charKeyFor(CHAR_SLOT));
+    const raw:unknown=JSON.parse((cached===undefined?window.localStorage.getItem(charKeyFor(CHAR_SLOT)):cached)??'null');
+    if(hasCharacterPages(raw)&&(raw.characterPages!==1||!Array.isArray(raw.pages)||!raw.pages.length||!Array.isArray(raw.order)))return undefined;
+    const data=(hasCharacterPages(raw)?raw.character:raw) as Partial<CharacterSave>|null;
+    return isCurrentCharacterSave(data)&&typeof data?.charId==='string'&&data.charId.length>0?data.charId:undefined;
+  } catch { return undefined; }
+}
+/** The synchronous cache read of one slot (the shared run slot unless named),
+ *  never written: the menu's instant Continue label, and THE TRAVELING
+ *  VESSEL's fallback for a roster slot too (meta/shardVessel.ts: the bedside
+ *  wake's own write may not have reached the disk when its hero travels). */
+export function loadCharacter(slot = CHAR_SLOT): CharacterSave | null {
+  const data = cachedCharacter(slot);
   return isCurrentCharacterSave(data) ? data : null;
 }
 
-/** One authority choice for every character slot: an existing disk tombstone
- *  or incompatible save must never resurrect a newer-looking cached mirror. */
+/** Disk remains authoritative where present. Browser tombstones/corruption
+ * cannot fall through to an older full-body localStorage mirror. */
 async function loadCharacterSlot(slot: number): Promise<CharacterSave | null> {
+  if (deletionBarrier(slot)) return null;
   const disk = await diskGet<CharacterSave>(slot);
-  const data = disk !== null ? disk : cachedCharacter(slot);
+  if (deletionBarrier(slot)) return null;
+  let data: CharacterSave | null = disk;
+  if(disk!==null && hasCharacterPages(disk)){writeCharacterMirror(slot,null);return null;}
+  if (disk === null) {
+    if (deletionBarrier(slot)) return null;
+    const store = browserRunStore();
+    if (store) {
+      try { await store.flush(); } catch { /* read the last durable transaction */ }
+      const read = await store.read(charKeyFor(slot));
+      if (read.status === 'value') {
+        try { data = await decodeCharacterPages(JSON.parse(read.body),nativePageStore()); }
+        catch(error) { console.error('[save] character native pages refused:',error); return null; }
+      } else if (read.status === 'deleted' || read.status === 'corrupt') return null;
+      else data = cachedCharacter(slot);
+    } else data = cachedCharacter(slot);
+  }
+  if (deletionBarrier(slot)) return null;
   if (isCurrentCharacterSave(data)) {
-    try { window.localStorage.setItem(charKeyFor(slot), JSON.stringify(data)); } catch { /* ignore */ }
+    if (disk !== null || browserRunStore()?.peek(charKeyFor(slot)) === undefined) writeCharacterMirror(slot, JSON.stringify(data));
     return data;
   }
   if (data && typeof data.schemaVersion === 'number') {
     noteSaveReset(data.accountVersion !== undefined && data.accountVersion !== SAVE_COMPATIBILITY.account ? 'account' : 'run');
-    // Only overwrite a disk copy we actually read. An unavailable endpoint
-    // must not schedule a wipe against an unseen save on that endpoint.
     if (disk !== null) diskPut(slot, '{}');
   }
-  try { window.localStorage.removeItem(charKeyFor(slot)); } catch { /* ignore */ }
+  if (disk !== null || data !== null) writeCharacterMirror(slot, null);
   return null;
 }
 export const loadCharacterAsync = (): Promise<CharacterSave | null> => loadCharacterSlot(CHAR_SLOT);
+
+interface ResumeLease {
+  slot:number; intent:number; barrier:string|null; epoch:number;
+  source:'disk'|'browser'|'legacy'; body:string; revision?:number; reference:string|null;
+  signal?:AbortSignal; bound?:World; session?:CharacterPageSession; cancelled:boolean;
+}
+const resumeLeases = new WeakMap<ResumeAuthority, ResumeLease>();
+type ResumeStamp=Pick<ResumeLease,'slot'|'intent'|'barrier'|'epoch'|'reference'|'signal'|'cancelled'>;
+let summaryPatron: {id:string|undefined;lease:ResumeStamp}|undefined;
+function slotReference(slot:number):string|null {try{const body=window.localStorage.getItem(charKeyFor(slot));return body===null?null:massDigest(body);}catch{return null;}}
+type ResumeSource = {status:'value'; data:unknown; lease:ResumeLease}
+  | {status:'empty'|'deleted'|'stale'} | {status:'refused';reason:string};
+function leaseCurrent(lease:ResumeStamp):boolean {
+  return !lease.cancelled && !lease.signal?.aborted && !saveSuppressed()
+    && (mirrorIntents.get(lease.slot)??0)===lease.intent && deletionBarrier(lease.slot)===lease.barrier
+    && slotEpoch(lease.slot)===lease.epoch && slotReference(lease.slot)===lease.reference;
+}
+/** A fresh authority read never writes, deletes, heals, or downgrades a slot. */
+async function readResumeSource(slot:number,signal?:AbortSignal):Promise<ResumeSource> {
+  if(slot!==CHAR_SLOT && (!Number.isSafeInteger(slot)||slot<ROSTER_SLOT_BASE))return {status:'refused',reason:'Invalid character slot'};
+  const lease:ResumeLease={slot,intent:mirrorIntents.get(slot)??0,barrier:deletionBarrier(slot),epoch:slotEpoch(slot),
+    source:'legacy',body:'',reference:slotReference(slot),...(signal?{signal}:{}),cancelled:false};
+  if(lease.barrier)return {status:'deleted'};
+  if(!leaseCurrent(lease))return {status:'stale'};
+  try {
+    const disk=await diskGet<unknown>(slot);
+    if(!leaseCurrent(lease))return {status:'stale'};
+    if(disk!==null){
+      if(hasCharacterPages(disk))return {status:'refused',reason:'Native files require a portable character'};
+      lease.source='disk';lease.body=JSON.stringify(disk);return {status:'value',data:disk,lease};
+    }
+    const store=browserRunStore();
+    if(store){
+      try{await store.flush();}catch{/* The durable root is still the authority. */}
+      if(!leaseCurrent(lease))return {status:'stale'};
+      const read=await store.read(charKeyFor(slot));
+      if(!leaseCurrent(lease))return {status:'stale'};
+      if(read.status==='deleted')return {status:'deleted'};
+      if(read.status==='corrupt'||read.status==='unavailable')return {status:'refused',reason:'Character storage '+read.status};
+      if(read.status==='value'){
+        lease.source='browser';lease.body=read.body;lease.revision=read.revision;
+        return {status:'value',data:JSON.parse(read.body),lease};
+      }
+    }
+    const raw=window.localStorage.getItem(charKeyFor(slot));
+    if(!raw)return {status:'empty'};
+    const data:unknown=JSON.parse(raw);
+    if(isBrowserRunReference(data)||hasCharacterPages(data))return {status:'refused',reason:'Referenced character storage unavailable'};
+    lease.body=raw;return {status:'value',data,lease};
+  }catch(error){return {status:'refused',reason:String(error instanceof Error?error.message:error)};}
+}
+/** The menu needs identity only. This does not validate/expand distant pages or
+ * grant resume authority, and never changes the complete synchronous loader. */
+export async function readCharacterContinueSummary(slot=CHAR_SLOT):Promise<CharacterContinueSummary|null> {
+  const read=await readResumeSource(slot);
+  if(read.status!=='value')return null;
+  try {
+    const save=hasCharacterPages(read.data)?validateCharacterPageEnvelope(read.data).character:read.data;
+    if(!isCurrentCharacterSave(save)||!leaseCurrent(read.lease))return null;
+    const fields=save as CharacterFields;
+    if(slot===CHAR_SLOT){const {slot:intendedSlot,intent,barrier,epoch,reference,cancelled}=read.lease;
+      summaryPatron={id:fields.charId,lease:{slot:intendedSlot,intent,barrier,epoch,reference,cancelled}};}
+    const home=shardHomeOf(fields); // HOME SLOTS (W7): a bound save's Continue is a return
+    return {classId:fields.classId,level:fields.level,...(fields.name===undefined?{}:{name:fields.name}),
+      ...(fields.charId===undefined?{}:{charId:fields.charId}),...(fields.modeId===undefined?{}:{modeId:fields.modeId}),
+      ...(home?{shard:home}:{})};
+  }catch{return null;}
+}
+export async function readCharacterResume(slot=CHAR_SLOT,options:{signal?:AbortSignal}={}):Promise<CharacterResumeRead> {
+  const read=await readResumeSource(slot,options.signal);
+  if(read.status!=='value')return read;
+  try {
+    const authority=Object.freeze({}) as ResumeAuthority;
+    let resume:CharacterResume;
+    if(hasCharacterPages(read.data)){
+      const payload=await preparePagedCharacterResume(read.data,nativePageStore(),()=>leaseCurrent(read.lease));
+      resume={...payload,authority};
+    }else{
+      if(!isCurrentCharacterSave(read.data))return {status:'incompatible'};
+      resume={kind:'inline',save:read.data as CharacterSave,authority};
+    }
+    if(!leaseCurrent(read.lease))return {status:'stale'};
+    resumeLeases.set(authority,read.lease);
+    return {status:'ready',resume:freezeData(resume)};
+  }catch(error){return leaseCurrent(read.lease)?{status:'refused',reason:String(error instanceof Error?error.message:error)}:{status:'stale'};}
+}
+/** Portable callers require every historical body. A corrupt/missing page is
+ * a failed export, never an empty slot silently omitted from the bundle. */
+export async function loadCharacterPortable(slot=CHAR_SLOT):Promise<CharacterSave|null> {
+  const read=await readResumeSource(slot);
+  if(read.status==='empty'||read.status==='deleted')return null;
+  if(read.status!=='value')throw Error(read.status==='refused'?read.reason:'Stale portable character read');
+  const saved=await decodeCharacterPages(read.data,nativePageStoreForPortable(read.data));
+  if(!isCurrentCharacterSave(saved))throw Error('Incompatible portable character');
+  if(!leaseCurrent(read.lease))throw Error('Stale portable character read');
+  const after=await readResumeSource(slot);
+  if(after.status!=='value'||!leaseCurrent(read.lease)||after.lease.source!==read.lease.source
+    ||after.lease.body!==read.lease.body||after.lease.revision!==read.lease.revision)throw Error('Stale portable character read');
+  return saved;
+}
+function nativePageStoreForPortable(value:unknown):Pick<BrowserNativePages,'readPage'> {
+  // Inline/native-file exports do not need an IndexedDB service at all.
+  return hasCharacterPages(value)?nativePageStore():{readPage:async()=>{throw Error('Unexpected native page read');}};
+}
+
+/** Synchronous final check, usable in the same turn as candidate publication. */
+export function characterResumeAuthority(resume:CharacterResume):boolean {
+  const lease=resumeLeases.get(resume.authority);
+  return !!lease && leaseCurrent(lease) && (!lease.bound || pageSessions.get(lease.bound)===lease.session);
+}
+export async function characterResumeCurrent(resume:CharacterResume):Promise<boolean> {
+  if(!characterResumeAuthority(resume))return false;
+  const lease=resumeLeases.get(resume.authority)!;
+  const current=await readResumeSource(lease.slot,lease.signal);
+  return characterResumeAuthority(resume) && current.status==='value' && current.lease.source===lease.source
+    && current.lease.body===lease.body && current.lease.revision===lease.revision;
+}
+/** Consume authority once, after build/world validation and before runtime
+ * attachment. Rollback only removes this exact session, never its successor. */
+export function bindCharacterResumePages(world:World,resume:CharacterResume):()=>void {
+  if(!characterResumeAuthority(resume))throw Error('Stale character resume');
+  const lease=resumeLeases.get(resume.authority)!;
+  if(lease.bound || saveSlotFor(world)!==lease.slot)throw Error('Character resume authority already used or foreign slot');
+  const fields=characterResumeFields(resume);
+  if(fields.charId && fields.charId!==world.meta.charId)throw Error('Foreign resumed character');
+  const prior=pageSessions.get(world), pages=resume.kind==='browser-native-pages'?resume.pages:undefined;
+  const session:CharacterPageSession={pages:pages?[...pages.pages]:[],order:pages?[...pages.order]:[],busy:false,revision:0,
+    slot:lease.slot,epoch:lease.epoch};
+  pageSessions.set(world,session);lease.bound=world;lease.session=session;
+  let rolled=false;
+  return ()=>{if(rolled)return;rolled=true;lease.cancelled=true;
+    if(pageSessions.get(world)===session){if(prior)pageSessions.set(world,prior);else pageSessions.delete(world);}};
+}
 
 /** The localStorage mirror key for a character slot (the shared run slot keeps
  *  its historical key; roster slots suffix theirs). Exported for meta/portage.ts. */
@@ -595,6 +907,7 @@ function saveSlotFor(world: World): number {
  *  plain stringify. Correctness never rides the optimization
  *  (probe_persistence pins byte parity between the lanes, and pins
  *  rawJSON's array refusal so the old idiom can't return). */
+const frozenLandJson=new WeakMap<object,string>();
 export function characterBody(world: World, save: CharacterSave): string {
   const w = save.world;
   const zonesJson = w ? world.zonesSaveJson() : null;
@@ -602,12 +915,19 @@ export function characterBody(world: World, save: CharacterSave): string {
   // against the array in THIS save, so a stale save object (built before
   // the memo's last serialize) can never wear fresher bytes than its own.
   const memJson = w?.memory ? world.memorySaveJson(w.memory) : null;
-  if (w && (zonesJson || memJson)) {
+  const land=w?.worldmass?.config;
+  let landJson:string|undefined;
+  if(land && isMassFrozenData(land)){
+    landJson=frozenLandJson.get(land);
+    if(landJson===undefined){landJson=JSON.stringify(land);frozenLandJson.set(land,landJson);}
+  }
+  if (w && (zonesJson || memJson || landJson)) {
     const zs = w.zones;
     const mem = w.memory;
     const salt = `${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffffff).toString(36)}`;
     const zSentinel = `__zsplice_${salt}__`;
     const mSentinel = `__msplice_${salt}__`;
+    const landSentinel = `__landsplice_${salt}__`;
     // The sentinels are SWAPPED into the save directly rather than minted by
     // a replacer callback: a replacer de-optimizes the whole stringify (V8
     // leaves the fast path — measured ~11ms extra on a 2MB body), and the
@@ -618,10 +938,12 @@ export function characterBody(world: World, save: CharacterSave): string {
     try {
       if (zonesJson) (w as { zones: unknown }).zones = zSentinel;
       if (memJson) (w as { memory: unknown }).memory = mSentinel;
+      if (landJson) (w.worldmass as {config:unknown}).config = landSentinel;
       body = JSON.stringify(save);
     } finally {
       if (zonesJson) w.zones = zs;
       if (memJson) w.memory = mem;
+      if (landJson) w.worldmass!.config = land!;
     }
     // Verify then apply: every requested splice's token must appear EXACTLY
     // once, or the whole body falls back to the plain stringify — a partial
@@ -632,6 +954,7 @@ export function characterBody(world: World, save: CharacterSave): string {
     for (const s of [
       ...(zonesJson ? [{ sentinel: zSentinel, json: zonesJson }] : []),
       ...(memJson ? [{ sentinel: mSentinel, json: memJson }] : []),
+      ...(landJson ? [{ sentinel: landSentinel, json: landJson }] : []),
     ]) {
       const token = JSON.stringify(s.sentinel); // quoted, exactly as it appears in the body
       const at = body.indexOf(token);
@@ -652,13 +975,15 @@ export function saveCharacter(world: World): void {
   if (!world.clientActionHook) saveAccount(world.account);
   const slot = saveSlotFor(world);
   if (slot < 0) return;
+  if(!characterNativeSessionCurrent(world))return;
+  acceptCharacterWriter(world,slot);
   let body: string;
   // Serialize failures never crash gameplay — but they must never be SILENT
   // either: a quiet return here is how a broken save path loses runs for
   // days (the rawJSON regression). Loud on the console, visible to probes.
-  try { body = characterBody(world, serializeCharacter(world)); }
+  try { body = mirrorBody(world, serializeCharacter(world, true)); }
   catch (e) { console.error('[save] serializeCharacter threw — nothing written:', e); return; }
-  try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
+  writeCharacterMirror(slot, body);
   diskPut(slot, body);
 }
 
@@ -671,13 +996,15 @@ export function saveCharacterDurable(world: World): void {
   if (!world.clientActionHook) saveAccountDurable(world.account);
   const slot = saveSlotFor(world);
   if (slot < 0) return;
+  if(!characterNativeSessionCurrent(world))return;
+  acceptCharacterWriter(world,slot);
   // The session's LAST write is always built fresh — the memo's fold never
   // gets a say over the exact-resume promise.
   world.invalidateZonesSaveMemo();
   let body: string;
-  try { body = characterBody(world, serializeCharacter(world)); }
+  try { body = mirrorBody(world, serializeCharacter(world, true)); }
   catch (e) { console.error('[save] serializeCharacter threw — durable write refused:', e); return; }
-  try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
+  writeCharacterMirror(slot, body);
   diskBeacon(slot, body);
 }
 
@@ -686,7 +1013,8 @@ export function clearCharacter(): void {
   // run off the back of untrusted state (frozen means frozen — both halves,
   // so the disk-first loader isn't left disagreeing with localStorage).
   if (saveRefused('character wipe')) return;
-  try { window.localStorage.removeItem(CHAR_KEY); } catch { /* ignore */ }
+  invalidateCharacterSlot(CHAR_SLOT);
+  writeCharacterMirror(CHAR_SLOT, null);
   // DURABLE wipe: must survive the player closing the game on the death screen,
   // else the disk-first loader resurrects the dead character (permadeath break).
   diskBeacon(CHAR_SLOT, '{}');
@@ -700,7 +1028,8 @@ export const loadRosterSave = (slot: number): Promise<CharacterSave | null> => l
 
 /** Durably empty a roster slot (vessel deletion — a deliberate roster action). */
 export function wipeRosterSlot(slot: number): void {
-  try { window.localStorage.removeItem(charKeyFor(slot)); } catch { /* ignore */ }
+  invalidateCharacterSlot(slot);
+  writeCharacterMirror(slot, null);
   diskBeacon(slot, '{}');
 }
 
@@ -746,7 +1075,7 @@ export function persistRunDurable(account: Account, world: World): void {
  *  session verbatim (companions/throng are not fielded beside a guest yet —
  *  they must not be lost to a session they slept through). */
 export function serializeCouchGuest(
-  world: World, seat: Seat,
+  world: Pick<World,'seatHero'|'manifest'|'ledger'|'annexFound'>, seat: Seat,
   dormant: Pick<CharacterSave, 'companions' | 'throng' | 'throngClaimed'>,
 ): CharacterSave {
   const m = seat.meta;
@@ -800,8 +1129,41 @@ export function serializeCouchGuest(
     modeStage: m.modeStage,
     charId: m.charId,
     deaths: (seat.couchDeaths ?? []).map(d => ({ ...d })),
+    ...(m.questWorlds ? { quests: structuredClone(m.questWorlds) } : {}), // THE CHARACTER'S QUESTS: the hosted worlds' ledgers pass through
     // world: deliberately absent — a guest save carries no ground.
   };
+}
+
+/** THE SHARD MIRROR (saveVesselMirror — docs/engine/shard.md "The vessel and
+ *  the corpse"): a hosted world mirrors a traveling vessel home as a
+ *  CharacterSave with NO world half (the couch guest's shape: the shard keeps
+ *  the ground). Written the way a couch guest's vessel is, routed like the
+ *  character's own saves: a run-mode vessel takes the shared Continue slot
+ *  (its next solo Continue wakes it on fresh ground), a roster vessel its own
+ *  slot by charId (a lost card writes nothing) with its card refreshed as
+ *  syncRosterEntry refreshes it, never touching the shared Continue (THE
+ *  IMMORTAL TRAVELS — balance/probe_shardimmortal.ts). Returns the slot
+ *  written, -1 when refused (a world half, a stale schema, the stand-down latch). */
+export function saveVesselMirror(account: Account, save: CharacterSave, durable = false): number {
+  if (saveRefused('shard vessel')) return -1;
+  if (!isCurrentCharacterSave(save) || save.world !== undefined) return -1;
+  const entry = modeById(save.modeId).save === 'roster' ? account.roster.find(r => r.charId === save.charId) : undefined;
+  const slot = modeById(save.modeId).save === 'roster' ? entry?.slot ?? -1 : CHAR_SLOT;
+  if (slot < 0) return -1;
+  let body: string;
+  try { body = JSON.stringify(save); }
+  catch (e) { console.error('[save] shard vessel mirror threw — nothing written:', e); return -1; }
+  writeCharacterMirror(slot, body);
+  if (durable) diskBeacon(slot, body); else diskPut(slot, body);
+  if (entry) {
+    entry.classId = save.classId;
+    entry.name = save.name?.trim() || entry.name;
+    entry.level = save.level;
+    entry.stage = save.modeStage ?? entry.stage;
+    entry.savedAt = Date.now();
+    if (durable) saveAccountDurable(account); else saveAccount(account);
+  }
+  return slot;
 }
 
 /** Persist one couch guest vessel to its roster slot + refresh its index
@@ -818,7 +1180,7 @@ export function saveCouchGuest(
   let body: string;
   try { body = JSON.stringify(serializeCouchGuest(world, seat, dormant)); }
   catch (e) { console.error('[save] serializeCouchGuest threw — nothing written:', e); return; }
-  try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
+  writeCharacterMirror(slot, body);
   if (durable) diskBeacon(slot, body); else diskPut(slot, body);
   const entry = account.roster.find(r => r.charId === seat.meta.charId);
   if (entry) {

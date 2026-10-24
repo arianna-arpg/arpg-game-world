@@ -70,7 +70,7 @@ const edgeDist = (a: Actor, x: number, y: number): number =>
   reachTo(a, { x, y });
 
 export function assistAim(
-  world: World,
+  world: Pick<World,'enemiesOf'|'isConcealedFrom'|'losCached'>,
   self: Actor,
   raw: { x: number; y: number },
   heldId: number | null,

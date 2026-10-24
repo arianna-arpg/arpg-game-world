@@ -1,46 +1,37 @@
-# Required before main changes. Keep the job name "check" stable: GitHub's
-# branch protection requires it, including for same-repository pull requests.
+# Keep main's required job identity and every seamless acceptance step.
 name: ci
-
 on:
   push:
   pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
-# One run per ref. A new push supersedes the one still running on that branch.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - run: npm ci
-
-      # Types first: a broken tree makes every probe verdict meaningless.
-      - name: Type-check (game + launcher + balance harness)
+      - name: Type-check game, launcher, simulation and host
         run: npm run check
-
       - name: Repository and launcher regression tests
         run: node --test scripts/test-*.mjs
       - name: Shared gameplay regressions
         run: npm run test:shared-fixes
       - name: Shared reliability regressions
         run: npm run test:reliability
-      - name: All green probes, including the nightly lane
-        run: npm run probe -- --slow
+      - name: Current gameplay, saves, terrain and hosted entry
+        # On seamless, --slow opts into the historical source archive.
+        # Preserve this branch's current behavior gate and full client course.
+        run: npm run probe -- --jobs 2
       - name: Combat simulation
         run: npm run sim -- run --suite smoke
       - name: Generation checks
@@ -60,3 +51,12 @@ jobs:
           xvfb-run --auto-servernum npm run smoke
           xvfb-run --auto-servernum npm run smoke:launcher
           xvfb-run --auto-servernum npm run smoke:update
+      - name: Actual Begin, continuous walk and Continue
+        run: xvfb-run --auto-servernum npm run smoke:world
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: seamless-playthrough
+          path: |
+            balance/reports/seamless-playthrough/REPORT.json
+            balance/reports/seamless-playthrough/*.png

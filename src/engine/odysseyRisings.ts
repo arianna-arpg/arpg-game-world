@@ -1,4 +1,6 @@
 import type { World } from './world';
+import {observeNativeCombatBirth} from './nativeCombatRecordObservation';
+export interface NativeOdysseyRisingHost extends Pick<World,'actors'|'arena'|'createMonster'|'doodadsNear'|'exits'|'flashes'|'inCave'|'manifest'|'pathField'|'player'|'seats'|'time'|'zone'> {}
 import type { OdysseyState } from '../world/odyssey';
 import type { Doodad } from './levelgen';
 import type { Vec2 } from '../core/math';
@@ -24,7 +26,7 @@ interface RisingWarning {
 export class OdysseyRisings {
   private warnings = new Map<string, RisingWarning>();
   private zoneId?: string;
-  constructor(private readonly w: World) {}
+  constructor(private readonly w: NativeOdysseyRisingHost) {}
 
   clear(): void {
     for (const warning of this.warnings.values()) for (const site of warning.sites) site.flash.life = 0;
@@ -142,6 +144,7 @@ export class OdysseyRisings {
         a.fromZoneGen = true; // ordinary zone memory owns kits, wounds, tags and casualties
         issueCommand(a, { kind: 'assault', pos: { ...warning.goal }, until: w.time + def.orderSec });
         w.actors.push(a);
+        observeNativeCombatBirth(w,a);
         room--;
       }
     }

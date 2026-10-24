@@ -46,7 +46,8 @@ function windowStats(r: Rings, n: number): {
   };
 }
 
-const CHIP_KEY = 'dev_pulse_chip';
+import { storageKey } from '../../buildProfile';
+const CHIP_KEY = storageKey('dev_pulse_chip');
 let chip: HTMLElement | null = null;
 function setChip(on: boolean): void {
   try { localStorage.setItem(CHIP_KEY, on ? '1' : '0'); } catch { /* ignore */ }

@@ -171,4 +171,3 @@ jobs:
           BUILD_BRANCH: ${{ matrix.branch }}
           BUILD_COMMIT: ${{ matrix.commit }}
         run: node scripts/publish-launcher-branch.mjs
-

@@ -40,11 +40,12 @@ import {
 import type { DoodadVisualDef } from '../render/vis/painters';
 import { clearBakes } from '../render/vis/sprites';
 import { diskGet, diskPut } from './persistence';
+import { storageKey } from '../buildProfile';
 import '../render/vis/glyphDoodad'; // the 'glyph' doodad brush must exist before any workshop doodad renders
 
 export const WORKSHOP_PREFIX = 'custom_';
 export const WORKSHOP_SLOT = 'workshop';
-const KEY = 'arpg_workshop_v1';
+const KEY = storageKey('arpg_workshop_v1');
 // v2 grew the DRAWN-PART rows (the glyph fabric) beside the entities; a v1
 // file is still adopted whole — additive arrays default empty, nothing wipes.
 const SCHEMA_VERSION = 2;

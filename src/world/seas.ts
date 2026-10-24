@@ -32,7 +32,7 @@ import { SEA_CFG, SEA_CLASSES, type SeaClassDef } from '../data/seas';
 import { CONTINENT_CFG, cellKind, cellSite, continentCellAt, continentSeedFrom } from './continents';
 import type { MapCoord } from './coords';
 import { registerOmenSource, type Omen } from './omens';
-import type { World } from '../engine/world';
+import type {NativeOmenHost} from './omens';
 
 export interface SeaPortSpot {
   /** Stable id — also the minted port ZONE's id (`sea_3_-2_p1`). */
@@ -306,7 +306,7 @@ export const SEA_OMEN = {
 /** The sea-spot omen rows near `at` — a PURE READ (zoneMap consulted, never
  *  written; no rng, no mint). Exported at this grain so the probe can stand
  *  the listener anywhere; the registered source listens at the current zone. */
-export function seaSpotOmensAt(world: World, at: MapCoord): Omen[] {
+export function seaSpotOmensAt(world: NativeOmenHost, at: MapCoord): Omen[] {
   const O = SEA_OMEN;
   const scanR = Math.max(O.whisper, O.reveal) + O.widenPerMin * O.widenCapMin + O.scanPad;
   const age = Math.min(world.time, O.widenCapMin * 60);
@@ -339,7 +339,7 @@ export function seaSpotOmensAt(world: World, at: MapCoord): Omen[] {
  *  sea's pull), and port spots are sparse enough (SEA_CFG.portMinSep) that
  *  its engine whisper-draw surface stays small — the island half gates
  *  harder (voyage.ts, THE SAILOR'S-EARS LAW). */
-export function seaSpotOmens(world: World): Omen[] {
+export function seaSpotOmens(world: NativeOmenHost): Omen[] {
   return seaSpotOmensAt(world, world.zone.map);
 }
 

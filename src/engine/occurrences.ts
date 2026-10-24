@@ -354,6 +354,21 @@ export function mintedOccurrencesOf(zoneId: string): readonly MintedOccurrence[]
   return MINTED.get(zoneId)?.rows ?? [];
 }
 
+/** An isolated native compiler must capture the generation side channel even
+ * when its next pass produces zero rows. Restore the ordinary scene's exact
+ * bundle afterward; this scope never changes finite World loading. */
+export function captureMintedOccurrences<T>(zoneId: string, generate: () => T): { value: T; rows: MintedOccurrence[] } {
+  const previous = MINTED.get(zoneId);
+  MINTED.delete(zoneId);
+  try {
+    const value = generate();
+    return { value, rows: mintedOccurrencesOf(zoneId).map(row => ({ ...row })) };
+  } finally {
+    if (previous) MINTED.set(zoneId, previous);
+    else MINTED.delete(zoneId);
+  }
+}
+
 // --- The runtime sites --------------------------------------------------------
 
 /** One live spot (index-aligned with the minted rows — Zone Memory's
@@ -404,8 +419,17 @@ function warnOnce(key: string, msg: string): void {
  *  degrade, never wedge). */
 export function bootOccSites(zoneId: string, sprung?: number[]): OccSite[] {
   const rows = mintedOccurrencesOf(zoneId);
+  return bootPlacedOccSites(zoneId, rows, rows.map(row => OCCURRENCES[row.id]), sprung);
+}
+
+/** The native boot law with explicit source ownership. Generated geography
+ * supplies its frozen definitions; ordinary zones supply their registry rows. */
+export function bootPlacedOccSites(zoneId: string, rows: readonly MintedOccurrence[],
+  definitions: readonly (OccurrenceDef | undefined)[], sprung?: readonly number[]): OccSite[] {
+  if (definitions.length !== rows.length) throw Error('Native occurrence source zip mismatch');
   return rows.map((row, i) => {
-    const def = OCCURRENCES[row.id];
+    const def = definitions[i];
+    if (def && def.id !== row.id) throw Error('Native occurrence source identity mismatch');
     if (!def) warnOnce(`def:${row.id}`, `minted occurrence '${row.id}' has no registered def — a dud seat holds its index`);
     return {
       def, x: row.x, y: row.y, floorR: row.floorR,

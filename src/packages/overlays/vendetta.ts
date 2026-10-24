@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from '../../world/bulletins';
 // ---------------------------------------------------------------------------
 // VENDETTA FIELD — the world answering the PLAYER's own violence (pure overlay).
 //
@@ -396,13 +397,16 @@ export class VendettaField implements WorldOverlay {
   }
 }
 
+/** Non-granting original active-writ query, captured in the defining module. */
+export const nativeVendettaLifetimeCalls=Object.freeze({view:VendettaField.prototype.writsView});
+
 function factionName(f: string): string {
   return (FACTIONS[f]?.name ?? f).replace(/^the /, '');
 }
 
 // --- bulletins + zone-info (registered on import — zero engine edits) ---------
 
-registerBulletinSource((world: World) => {
+registerBulletinSource((world: NativeBulletinHost) => {
   return world.sim.vendettaField?.drainNotices() ?? [];
 });
 

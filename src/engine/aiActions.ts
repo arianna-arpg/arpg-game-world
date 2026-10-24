@@ -1,3 +1,4 @@
+import {observeNativeCombatBirth,observeNativeCombatRecord} from './nativeCombatRecordObservation';
 // ---------------------------------------------------------------------------
 // AI ACTIONS — the choreography VERBS boss fights are written in.
 //
@@ -19,7 +20,7 @@ import type { Actor } from './actor';
 import { alertScale, type AIAction } from './brain';
 import { MOUNT_CFG, mountAccepts, seatPos } from './mounts';
 import { attackPatternPoints } from './attackPatterns';
-import type { World } from './world';
+import type { NativeAIActionHost } from './nativeAIActionHost';
 
 /** Mint (and cache) a skill instance for scripted casts — leveled like the
  *  monster's own kit (createMonster's formula), so choreography scales.
@@ -90,12 +91,12 @@ function resolvePoint(
 
 /** Snap a choreography point onto walkable ground (grid zones), clamped to
  *  the arena. */
-function groundPoint(world: World, p: Vec2, radius: number): Vec2 {
+function groundPoint(world: NativeAIActionHost, p: Vec2, radius: number): Vec2 {
   const snapped = world.walk ? world.walk.snapToWalkable(p) : p;
   return world.clampPos(vec(snapped.x, snapped.y), radius);
 }
 
-type Handler = (world: World, actor: Actor, act: AIAction, target: Actor | null) => void;
+type Handler = (world: NativeAIActionHost, actor: Actor, act: AIAction, target: Actor | null) => void;
 
 /** PACKAGE-EXTENDED verbs (`x_`-prefixed `do` ids): the open half of the
  *  registry — same contract as registerMoveStyle / registerCommandKind /
@@ -119,12 +120,15 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
       // Reject off-floor marks instead of piling snapped blasts into a gap.
       if (pos.x < 0 || pos.y < 0 || pos.x > world.arena.w || pos.y > world.arena.h
         || (world.walk && !world.walk.isWalkable(pos.x, pos.y))) continue;
-      world.zones.push({
+      let nativeStorage:NativeAIActionHost['zones'];
+      let nativeRecord:NativeAIActionHost['zones'][number];
+      (nativeStorage=world.zones).push(nativeRecord={
         pos, radius: act.pattern.radius, caster: actor, inst, color: inst.def.color,
         delay, exploded: false, linger: act.pattern.linger ?? 0,
         tickInterval: act.pattern.tickInterval ?? 1, tickTimer: 0,
         shape: 0, facing: 0, dmgMult: 1, depth: 1, attackPattern: true,
       });
+      observeNativeCombatRecord(world,'zones',nativeStorage,nativeRecord,actor,inst);
     }
   },
 
@@ -182,6 +186,7 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
       if (act.lifespan) m.lifespan = act.lifespan;
       if (act.rarity) world.promoteMonster(m, act.rarity);
       world.actors.push(m);
+      observeNativeCombatBirth(world,m);
       world.flashes.push({
         pos: vec(m.pos.x, m.pos.y), radius: m.radius * 2,
         color: actor.color, life: 0.4, maxLife: 0.4,
@@ -458,7 +463,7 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
 /** A blast's impact knockback: everyone hostile in the disc is thrown
  *  radially from its center (or sucked in). */
 function impactPush(
-  world: World, actor: Actor, at: Vec2, radius: number,
+  world: NativeAIActionHost, actor: Actor, at: Vec2, radius: number,
   push: { strength: number; inward?: boolean },
 ): void {
   for (const e of world.enemiesOf(actor)) {
@@ -475,7 +480,7 @@ function impactPush(
  *  author (kill() passes it); otherwise a beat that kills its own author
  *  (fuses, recoil) stops the list. */
 export function runAIActions(
-  world: World, actor: Actor, actions: AIAction[], target: Actor | null = null,
+  world: NativeAIActionHost, actor: Actor, actions: AIAction[], target: Actor | null = null,
   opts?: { allowDead?: boolean },
 ): void {
   for (const act of actions) {

@@ -1,3 +1,4 @@
+import {nativeWarlordCurrent,breakNativeWarlord} from './nativeWarlordIdentity';
 // ---------------------------------------------------------------------------
 // KILL HANDLERS — the per-kind bounty registry consumed by World.kill().
 //
@@ -173,8 +174,9 @@ registerKillHandler({
 registerKillHandler({
   id: 'warlord_bounty',
   tag: 'warlord',
-  when: ctx => ctx.credit && !!ctx.actor.faction,
+  when: ctx => ctx.credit && !!ctx.actor.faction && nativeWarlordCurrent(ctx),
   run: ctx => {
+    if (!nativeWarlordCurrent(ctx)) return;
     ctx.grantXp(200 + ctx.zone.level * 40);
     ctx.dropGemAt(ctx.actor.pos);
     ctx.dropGemAt(ctx.actor.pos);
@@ -188,9 +190,9 @@ registerKillHandler({
 registerKillHandler({
   id: 'warlord_break',
   tag: 'warlord',
-  when: ctx => !!ctx.actor.faction,
+  when: ctx => !!ctx.actor.faction && nativeWarlordCurrent(ctx),
   run: ctx => {
-    ctx.sim.warlord.onWarlordKilled(ctx.actor.faction!, ctx.time, ctx.simView());
+    if (!breakNativeWarlord(ctx)) return;
     ctx.bumpLedger('warlords_killed'); // → unlocks Demon Invasions
     const fname = (FACTIONS[ctx.actor.faction!]?.name ?? ctx.actor.faction!).replace(/^the /, '');
     ctx.notice(`${fname} warlord slain! Their power breaks.`, '#ffd700', 18, 'war');

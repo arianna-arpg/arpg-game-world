@@ -39,7 +39,7 @@ import { coordDist, type MapCoord } from '../../world/coords';
 import { dayCycle } from '../../world/daynight';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
-import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
+import { NO_BIAS, zonePresent, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import { scaledCap } from '../frequency';
@@ -767,7 +767,7 @@ export class DeadwakeField implements WorldOverlay {
     }
     for (const id of covered) {
       if (this.coveredLast.has(id)) continue;          // already rolled this collision
-      if (id === view.currentZoneId) continue;          // the player's zone gets the STREAM, never a consume
+      if (zonePresent(view, id)) continue;              // a player's zone gets the STREAM, never a consume (THE OCCUPIED LAW, shard M1-W3)
       if (this.rng.chance(this.cfg.consumeChance)) this.consumedZones.push(id);
     }
     this.coveredLast = covered;

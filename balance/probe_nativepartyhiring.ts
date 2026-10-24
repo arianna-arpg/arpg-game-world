@@ -1,0 +1,25 @@
+import '../src/engine/world';
+import assert from 'node:assert/strict';
+import {NativeClientStart} from '../src/worldmass/nativeClientStart';
+import {bootSimEngine} from '../src/sim/arena';
+import {makeAccount,LEDGER_FLASK_LESSON} from '../src/meta/account';
+import {buildManifest} from '../src/packages/manifest';
+import {CLASSES} from '../src/data/classes';
+import {townStationFeatures} from '../src/data/townBuild';
+import {NullInput} from '../src/net/intent';
+import {address} from '../src/worldmass/address';
+import type {MassNativeMapping} from '../src/worldmass/nativeGeography';
+import {refuseWorldParty} from './nativePartyFixture';
+import {combatHash,writeCombatProof} from './probe_nativecombatcycle';
+bootSimEngine();
+const mapping:MassNativeMapping={schema:1,algorithm:'bigint-relative-native-map-v1',addressSpan:960,physicalOrigin:address('surface','0','0',0,0,960),nativeOrigin:{x:0,y:0},physicalUnitsPerNativeUnit:{numerator:'20',denominator:'1'},nativeDimension:'surface',nativeBounds:{minX:-10000,minY:-10000,maxX:10000,maxY:10000},outsideDomain:'refuse',rounding:'nearest-binary64-ties-even-once'};
+const results=await refuseWorldParty(async drivers=>{
+ const account=makeAccount();for(const f of townStationFeatures())account.features.add(f);account.ledger[LEDGER_FLASK_LESSON]=1;
+ const start=new NativeClientStart(account,mapping),made=start.begin({kind:'run',classDef:CLASSES.find(c=>c.id==='warrior')!,manifest:buildManifest(account,1211),prologue:'skip'});assert(made);const {writer,runtime}=made;
+ const seat=writer.addSeat('c1',CLASSES.find(c=>c.id==='tamer')!,new NullInput());assert.equal(runtime.current.authority.require(seat.actor).combat,runtime.current.combat);assert(writer.actors.some(a=>a.companion&&a.owner===seat.actor));assert(seat.meta.knownSkills.has('life_flask'));
+ console.log('added',seat.actor.maxLife(),writer.seats.length,writer.mercOutpost?.offers);
+ const before=writer.hiredMercs.length;writer.meta.essences.coarse=100000;const hired=writer.hireMercenary(0);assert.equal(hired,true);assert.equal(writer.hiredMercs.length,before+1);assert.equal(runtime.current.authority.require(writer.hiredMercs[0].seat.actor).combat,runtime.current.combat);
+ runtime.dispatch({dt:.01,wallSeconds:.01,inputs:new Map()});
+ const result={seats:writer.seats.map(s=>({id:s.id,class:s.meta.classDef.id,life:s.actor.life,skills:s.actor.skills.map(i=>i?.def.id??null)})),hired,drivers};start.cancel();return result;
+});
+const report={scope:'Actual later Tamer seat with native gifts and real outpost hire, post-push authority and native MercInput dispatch.',results,receipt:combatHash(JSON.stringify(results))};writeCombatProof('native-party-hiring.json',report);console.log(JSON.stringify(report));

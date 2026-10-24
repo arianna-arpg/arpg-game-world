@@ -52,7 +52,7 @@ export function companionCanMimic(inst: SkillInstance): boolean {
 export class CompanionBonds {
   private states = new Map<Actor, BondState>();
   private copies = new WeakSet<SkillInstance>();
-  constructor(private w: World) {}
+  constructor(private w: NativeCompanionBondsHost) {}
 
   host(beast: Actor): SkillInstance | undefined {
     const id = beast.sourceSkillId?.replace('__companion:', '');
@@ -167,6 +167,19 @@ export class CompanionBonds {
     }
     beast.skills = [...state.native, ...[...state.granted].filter(([id]) => !state.native.some(s => s?.def.id === id)).map(([, s]) => s)];
   }
+
+  /** THE HAND-OFF (shard M1, engine/shardUnits.ts): a carried beast's bond leaves
+   *  this World whole (its native kit, claimed size and clocks), so refresh never
+   *  tears down a body that already walks another World, and the destination never
+   *  re-adopts a dressed body as if its kit were native. Opaque to everyone else. */
+  exportBond(beast: Actor): unknown {
+    const state = this.states.get(beast);
+    if (!state) return undefined;
+    this.states.delete(beast);
+    state.exposure.clear(); // the bodies it watched stay behind
+    return state;
+  }
+  importBond(beast: Actor, bond: unknown): void { if (bond) this.states.set(beast, bond as BondState); }
 
   refresh(): void {
     for (const [beast, state] of this.states) if (beast.dead || !beast.companion || !this.host(beast) || !this.w.actors.includes(beast)) {
@@ -358,4 +371,27 @@ export class CompanionBonds {
         raritySources: beast.sheet.sourceNames().filter(s => s === 'rarity' || s.startsWith('rarityStack')).map(s => [s, beast.sheet.getSourceMods(s)!] as [string, import('./stats').Modifier[]]) } : {}),
       ...(beast.companionReviveRemaining !== undefined ? { reviveRemaining: beast.companionReviveRemaining } : {}) };
   }
+}
+
+/** Structural authority only; executable controller bodies are unchanged. */
+export interface NativeCompanionBondsHost {
+ pendingRepeats:World['pendingRepeats'];
+ projectiles:World['projectiles'];
+ pendingFuses:World['pendingFuses'];
+ zones:World['zones'];
+ retireOwnedZone:World['retireOwnedZone'];
+ time:World['time'];
+ relevelActor:World['relevelActor'];
+ actors:World['actors'];
+ companionCapOf:World['companionCapOf'];
+ reviveCompanion:World['reviveCompanion'];
+ enemiesOf:World['enemiesOf'];
+ flashes:World['flashes'];
+ companionPulseHit:World['companionPulseHit'];
+ executeSkill:World['executeSkill'];
+ shedOrb:World['shedOrb'];
+ useSkill:World['useSkill'];
+ seatOf:World['seatOf'];
+ seats:World['seats'];
+ showCompanionCue:World['showCompanionCue'];
 }

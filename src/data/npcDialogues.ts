@@ -5,7 +5,7 @@ import { BRANDT_CFG, BRANDT_HAMMER_QUEST, BRANDT_TROPHY_QUEST } from './brandt';
 import { RELIQUARY_CFG } from './reliquary';
 import { ORACLE_RESCUED } from './oracle';
 export { BRANDT_HAMMER_QUEST } from './brandt';
-import type { World } from '../engine/world';
+import type { NativeNpcDialogueHost } from '../engine/nativeNpcDialogueHost';
 import type { DialogueResponses } from '../engine/dialogue';
 
 export type DialogueCondition =
@@ -27,26 +27,36 @@ export interface NpcDialogueDef {
     | { kind: 'exitApproach'; to: string; radius: number; holdSec: number;
         /** Require an on-screen exit with an unobstructed sight ray. Hidden
          * approaches arm the trigger, even when already inside its radius. */
-        visible?: boolean };
+        visible?: boolean }
+    | { kind: 'boundaryApproach'; radius: number; holdSec: number; visible?: boolean };
   /** Receipt is stamped on admission, never on a mere condition/preview read. */
   once?: 'run' | 'account';
   lines: readonly { text: string; weight?: number }[];
   /** Optional responses/branches. No choices are selected by ordinary advance. */
   responses?: DialogueResponses;
   color?: string;
+  /** Persistent sanctuary guidance while these conditions hold. Spoken receipts
+   * do not dismiss it; completing the underlying lesson/condition does. */
+  guide?: { label: string; radius: number };
 }
 
 /** Live facts supplement durable ledgers without putting NPC-specific cases in
  * the director. New systems can register their own facts here. */
-export const NPC_DIALOGUE_FACTS: Record<string, (w: World) => boolean> = {
+export const NPC_DIALOGUE_FACTS: Record<string, (w: NativeNpcDialogueHost) => boolean> = {
   oracleAttuned: w => !!w.account.ledger[RELIQUARY_CFG.attunement],
-  oracleAtHome: w => w.zone.id === START_ZONE,
+  oracleAtHome: w => w.localZoneAt(w.player.pos).id === START_ZONE,
   oracleRelicWaiting: w => w.activeQuests.some(a => w.questStanding(a) === 'ready'
     && w.questDefOf(a.questId)?.reward.choices?.some(c => c.baseId === 'relic_charm')),
   oracleMemoryWaiting: w => w.activeQuests.some(a => w.questStanding(a) === 'ready' && !!w.questDefOf(a.questId)?.reward.skillChoice),
   oracleCommanderAfield: w => w.activeQuests.some(q => q.questId.startsWith('oracle_commander_') && !q.fieldDone),
   reliquaryLesson: w => w.reliquaryLesson(),
   mireilleLessonComplete: w => w.mireilleLessonLived(),
+  mireillePreparingFlasks: w => w.mireilleGiftOwed() || w.mireilleGiftLesson() === 'learn',
+  continuousWorld: w => !!w.massRuntime,
+  mireilleContractActive: w => w.activeQuests.some(q => {
+    const def = w.questDefOf(q.questId);
+    return !!def && [def.giver, def.turnIn?.giver].flat().includes('townsfolk_innkeep');
+  }),
   brandtImbueWaiting: w => w.questImbues.some(r => [BRANDT_HAMMER_QUEST, BRANDT_TROPHY_QUEST].includes(r.questId)),
 };
 
@@ -58,10 +68,17 @@ export const NPC_APPEARANCES: Record<string, { base: string; variants: { all: re
 };
 export const NPC_DIALOGUES: NpcDialogueDef[] = [
   {
+    id: 'mireille_flask_preparation', speaker: { defId: 'townsfolk_innkeep' }, priority: 210,
+    all: [{ fact: 'continuousWorld' }, { fact: 'mireillePreparingFlasks' }],
+    none: [{ fact: 'mireilleContractActive' }],
+    trigger: { kind: 'dwell', radius: 150, seconds: 1.1 },
+    lines: [{ text: 'I keep flasks for new faces. Shall we find a place for yours?' }],
+  },
+  {
     id: 'oracle_memory_choice', speaker: { defId: 'townsfolk_oracle' }, priority: 212,
     all: [{ fact: 'oracleAtHome' }, { fact: 'oracleMemoryWaiting' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
-    lines: [{ text: 'A familiar shadow falls, and this life has room for a different answer. Choose a magic Memory in your Quest Journal.\n\nI can call upon the skills you have made your own. A calling glimpsed must first be welcomed in the Vault before its arts can answer by name.' }],
+    lines: [{ text: 'A familiar shadow falls, and this life has room for a different answer. Choose a magic Memory, and I will call it forth.\n\nI can call upon the skills you have made your own. A calling glimpsed must first be welcomed in the Vault before its arts can answer by name.' }],
   },
   {
     id: 'oracle_commander_pursuit', speaker: { defId: 'townsfolk_oracle' }, priority: 201,
@@ -85,7 +102,7 @@ export const NPC_DIALOGUES: NpcDialogueDef[] = [
     id: 'oracle_reliquary_gift', speaker: { defId: 'townsfolk_oracle' }, priority: 210,
     all: [{ fact: 'oracleAtHome' }, { fact: 'oracleRelicWaiting' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
-    lines: [{ text: 'A quiet place. I had almost forgotten such things existed. Your Reliquary is open now. Choose a charm in your Quest Journal, then seat it in the case.\n\nA relic carried loose is only a memory. Given a place, it can lend you its strength.' }],
+    lines: [{ text: 'A quiet place. I had almost forgotten such things existed. Your Reliquary is open now. Choose a charm, then seat it in the case.\n\nA relic carried loose is only a memory. Given a place, it can lend you its strength.' }],
   },
   {
     id: 'oracle_reliquary_lesson', speaker: { defId: 'townsfolk_oracle' }, priority: 205,
@@ -109,19 +126,26 @@ export const NPC_DIALOGUES: NpcDialogueDef[] = [
     id: 'brandt_trophy_imbue', speaker: { defId: 'townsfolk_smith' }, priority: 181,
     all: [{ fact: 'brandtImbueWaiting' }, { ledger: questDoneKey(BRANDT_TROPHY_QUEST), scope: 'run' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
-    lines: [{ text: 'That fang will do nicely. Thank you. The hammer you brought home still knows its work.\n\nChoose a magic piece and one of my offers in your Quest Journal. Its old strengths will stay. If there is a line you have not studied, a later turn at the salvage bench may teach you something. No hurry — the promise lasts this life.' }],
+    lines: [{ text: 'That fang will do nicely. Thank you. The hammer you brought home still knows its work.\n\nShow me a magic piece, and choose the strength I will add. Its old strengths will stay. If there is a line you have not studied, a later turn at the salvage bench may teach you something. No hurry — the promise lasts this life.' }],
   },
   {
     id: 'brandt_imbue_waiting', speaker: { defId: 'townsfolk_smith' }, priority: 180,
     all: [{ fact: 'brandtImbueWaiting' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
-    lines: [{ text: 'My old hammer. Thank you. You brought back more than a tool. Bring me a magic piece from your pack, and I will add a strength of your choosing without taking away what it already holds. You will find my offers in your Quest Journal.\n\nNo hurry. This work will wait for you through this life, though its strength is the strength we earned at the old forge. Returning my hammer has also opened Rare Wares for investment in the Vault; a salvage bench can follow.' }],
+    lines: [{ text: 'My old hammer. Thank you. You brought back more than a tool. Bring me a magic piece from your pack, and I will add a strength of your choosing without taking away what it already holds.\n\nNo hurry. This work will wait for you through this life, though its strength is the strength we earned at the old forge. Returning my hammer has also opened Rare Wares for investment in the Vault; a salvage bench can follow.' }],
   },
   {
     id: 'brandt_trophy_sought', speaker: { defId: 'townsfolk_smith' }, priority: 160,
     all: [{ quest: BRANDT_TROPHY_QUEST, state: 'active' }],
     trigger: { kind: 'dwell', radius: 150, seconds: 0.4 },
     lines: [{ text: 'My hammer is home, and here it stays. But Cindermaw has stirred at the Cold Cinder Forge again. Bring me its iron fang. There is a heat in that old beast that an honest anvil can put to better use.\n\nOne trophy, one piece made finer. I will keep the fire for you.' }],
+  },
+  {
+    id: 'mireille_frontier_welcome', speaker: { defId: 'townsfolk_innkeep' }, zone: START_ZONE,
+    guide: { label: 'Prepare flasks · Mireille at the inn', radius: 110 },
+    priority: 200, all: [{ fact: 'mireilleLessonComplete', is: false }], once: 'run',
+    trigger: { kind: 'boundaryApproach', radius: 300, holdSec: 16, visible: true },
+    lines: [{ text: 'Off into the wilds already, love? Come find me inside the inn before you go. Let us see those two little flasks settled where you can reach them.\n\nNo hurry. Stay beside me a moment when you are ready. The road can spare you that much kindness.' }],
   },
   {
     id: 'mireille_road_welcome', speaker: { defId: 'townsfolk_innkeep' }, zone: START_ZONE,

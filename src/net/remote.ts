@@ -8,10 +8,9 @@
 // ---------------------------------------------------------------------------
 
 import type { Actor } from '../engine/actor';
-import type { World } from '../engine/world';
-import type { PlayerInput, PlayerInputSource } from './intent';
+import type { PlayerInput, PlayerInputSource, PlayerInputQuery } from './intent';
 
 export class RemoteInput implements PlayerInputSource {
   constructor(readonly seatId: string) {}
-  poll(_actor: Actor, _world: World): PlayerInput | null { return null; }
+  poll(_actor: Actor, _world: PlayerInputQuery): PlayerInput | null { return null; }
 }

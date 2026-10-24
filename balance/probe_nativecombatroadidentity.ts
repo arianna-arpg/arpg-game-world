@@ -1,0 +1,9 @@
+import assert from 'node:assert/strict';
+import {withSeededRandom} from '../src/core/rng';
+import {nativeCampaignFixture,birthActualNativeArea} from './nativeCombatRetainedFixture';
+import {refuseWorldCombat,writeCombatProof,combatHash} from './probe_nativecombatcycle';
+const result=withSeededRandom(44901,()=>{const setup=nativeCampaignFixture();return refuseWorldCombat([setup.writer],calls=>{const all=birthActualNativeArea(setup),{ongoing:a,coordinator,writer,authority}=all,roads=coordinator.roadsFor(a.combat),seat=writer.localSeat,originalSeats=writer.seats,originalRequire=authority.require,before=roads.seatDoorOf(seat);let failure:unknown=null,changed=0;
+ Object.defineProperty(authority,'require',{configurable:true,value:function(this:typeof authority,actor:typeof seat.actor){const selected=Reflect.apply(originalRequire,this,[actor]);changed++;writer.seats=[];return selected;}});
+ try{roads.arrive(seat,{seatId:seat.id},'unjustified-road-entry');}catch(e){failure=e;}finally{writer.seats=originalSeats;Object.defineProperty(authority,'require',{value:originalRequire,writable:true,configurable:true});}
+ assert.equal(roads.seatDoorOf(seat),before,'removed seat must not mutate actual road state after final campaign callback');assert.match(String(failure),/campaign|seat/i);assert.equal(changed,1);
+ roads.arrive(seat,{seatId:seat.id},'valid-native-road-entry');assert.equal(roads.seatDoorOf(seat),'valid-native-road-entry');return{changed,refused:!!failure,validRetry:true,worldDrivers:calls};});});const report={mode:'Actual road arrival with real authority selection followed by labeled campaign-removal callback; raw road state must stay unchanged until a valid retry.',result,receipt:combatHash(JSON.stringify(result))};writeCombatProof('native-combat-road-identity.json',report);console.log(JSON.stringify(report));

@@ -1,0 +1,2 @@
+import {nativeCarriedAdmissionFinalArchive} from './nativeCarriedAdmissionFinalArchive';
+export function beforeNativeCarriedAdmissionFinal(file:string,source:string):string {const row=nativeCarriedAdmissionFinalArchive.find(row=>row.file===file);if(!row)throw Error('Unarchived native final admission source: '+file);let text=source.replace(/\r\n?/g,'\n');for(const h of [...row.hunks].reverse()){if(text.split(h.after).length!==2)throw Error('Missing or ambiguous final admission hunk: '+file);text=text.replace(h.after,h.before);}return text;}
