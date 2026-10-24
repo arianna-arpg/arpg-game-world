@@ -29,7 +29,12 @@ app.whenReady().then(async () => {
  try {
   await win.loadURL('http://127.0.0.1:' + server.address().port);
   await run(async () => {
-   for (let i = 0; !window.__game && i < 100; i++) await new Promise(r => setTimeout(r, 100)); await __game.hydrated();
+   for (let i = 0; !window.__game && i < 100; i++) await new Promise(r => setTimeout(r, 100)); await __game.hydrated(); __game.account().ledger.prologue_lived = 1; __game.saveAccount();
+  });
+  await toy(() => {
+   Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => window.__qaPads || [] });
+  });
+  await run(async () => {
    window.__qaLease = __game.loading.begin({ kind: 'travel', direction: 'right', label: 'Opening the world', cancel: () => { window.__qaCancelled = (window.__qaCancelled || 0) + 1; window.__qaLease.finish(); } });
    await __qaLease.paint();
   });
@@ -95,6 +100,8 @@ app.whenReady().then(async () => {
    await toy(async () => {
     for (let i = 0; !window.__muCrossing && i < 100; i++) await new Promise(r => setTimeout(r, 20));
     if (!window.__muCrossing) throw Error('Foreground did not initialize');
+    // A physical controller must not cancel preparation after the cold reload.
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [] });
     window.__qaLive = []; let last = 0;
     function play(now) { const s = __muCrossing.snapshot;
      if (s.active) { __qaLive.push({ at: Date.now(), time: s.time, lane: s.lane });

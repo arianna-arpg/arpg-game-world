@@ -1,3 +1,4 @@
+import { withVisibilityComposite } from './visibilityComposite';
 // ---------------------------------------------------------------------------
 // THE ROOM VEIL — interior vision confinement (VIS_CFG.roomVeil).
 //
@@ -207,9 +208,8 @@ export class RoomVeil {
     }
     if (cfg.featherPx > 0) b.filter = 'none';
     b.globalCompositeOperation = 'source-over';
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.buf, 0, 0, bw, bh, 0, 0, w, h);
-    ctx.restore();
+    withVisibilityComposite(ctx, () => {
+      ctx.drawImage(this.buf, 0, 0, bw, bh, 0, 0, w, h);
+    });
   }
 }

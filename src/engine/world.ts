@@ -1,3 +1,4 @@
+import { autonomousDeviceMetas, deviceCommandUseful } from './deviceCommands';
 import './nativeSceneBootstrap';
 import {sceneSettleNearScale} from './nativeSceneNearScale';
 import {parseNativeCrusadeFixtureMemory} from './nativeCrusadeFixtureMemory';
@@ -47,6 +48,7 @@ import { localOffset, type MassAddress } from '../worldmass/address';
 import { massDormancyPins } from '../worldmass/dormancy';
 import { massSideareaId, savedMassSideareas, copyMassSidearea, type MassSideareaRoot, type MassSideareaSave } from '../worldmass/sideareas';
 import { dealMassBounties, massBountiesAvailable, massBountyAccept, massBountyRoute } from '../worldmass/bounties';
+import { DEVICE_CFG, DeviceContacts, deviceContactEligible, groundDeviceState } from './groundDevices';
 import { syncAltarBodies } from './altarBodies';
 import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { skillMergePlan } from './skillMerge';
@@ -25222,7 +25224,9 @@ actors: Actor[] = [];
   relevelActor(a: Actor, level: number): void { return sceneRelevelActor(this.nativeSceneProgressionHost(),a,level); }
 
   createMonster(defId: string, level: number, team: Team, owner?: Actor, spawn?: { scale?: number }): Actor {
-    return createNativeMonster(this.nativeMonsterFactoryHost(), this.nativeMonsterFactorySources(), defId, level, team, owner, spawn);
+    const a = createNativeMonster(this.nativeMonsterFactoryHost(), this.nativeMonsterFactorySources(), defId, level, team, owner, spawn);
+    if (a.construct?.kind === 'trap') this.deviceContacts.watch(a);
+    return a;
   }
 
   minionsOf(owner: Actor, monsterId?: string): Actor[] {
@@ -28673,6 +28677,16 @@ actors: Actor[] = [];
    *  minions they command. */
   private mintMetaInstance(caster: Actor, host: SkillInstance, skillId: string): SkillInstance { return sceneMintMetaInstance(this.nativeSceneCastingPreparationHost(),caster,host,skillId); }
 
+  /** Opt-in meta commands join the same AI picker and payment/cooldown path.
+   * Explicit bar copies win; host bans/reservations also suppress their metas. */
+  autonomousMetas(caster: Actor, reserved?: Set<string>): SkillInstance[] {
+    return autonomousDeviceMetas(caster, reserved, (host, id) => this.mintMetaInstance(caster, host, id));
+  }
+
+  deviceCommandUseful(caster: Actor, inst: SkillInstance): boolean {
+    return deviceCommandUseful(this, caster, inst);
+  }
+
   private relocationHosts = new WeakMap<SkillInstance, SkillInstance>();
 
   /** The same eligibility read gates payment and execution. Instance identity
@@ -32116,9 +32130,12 @@ actors: Actor[] = [];
 
       case 'detonate': {
         const mines = this.actors.filter(a =>
-          a.owner === caster && !a.dead && a.construct?.kind === 'mine');
+          a.owner === caster && !a.dead && a.construct?.kind === 'mine'
+          && !(a.construct.timer > 0) && a.construct.detonationLeft === undefined
+          && !this.pendingDetonations.some(pd => pd.mine === a));
         mines.forEach((mine, i) => {
-          const timer = 0.05 + i * 0.08, fx = skillSelfVoice(def.id, 'prepare');
+          const timer = DEVICE_CFG.detonation.lead + i * DEVICE_CFG.detonation.stagger, fx = skillSelfVoice(def.id, 'prepare');
+          mine.construct!.detonationLeft = timer;
           const visual: Flash | undefined = fx ? { pos: { ...mine.pos }, radius: mine.radius + 18,
             color: cosmeticColor, life: timer, maxLife: timer, fx, recoveryCueTier: mine.tier } : undefined;
           if (visual) this.flashes.push(visual);
@@ -34489,8 +34506,12 @@ actors: Actor[] = [];
       kind: d.kind,
       castInst,
       range: d.range,
-      timer: d.kind === 'trap' ? 0.5 : (d.interval ?? 0),
+      timer: d.interval ?? 0,
     };
+    if (d.kind === 'trap' || d.kind === 'mine') {
+      c.construct = groundDeviceState({ kind: d.kind, ...d.deviceTrigger }, castInst, d.range);
+      if (d.kind === 'trap') this.deviceContacts.watch(c);
+    }
     // AIM IDENTITY: live-aiming kinds wear the renderer's aim tick; frozen
     // furniture (bone walls, embeds) doesn't — kind registry default, and
     // any skill may declare the exception on its delivery.
@@ -43346,6 +43367,7 @@ actors: Actor[] = [];
         a.pos = this.clampPos(vec(
           a.pos.x + p.vx * dt,
           a.pos.y + p.vy * dt), a.radius, from, { out: sc, mover: a });
+        this.deviceContacts.record(a, from, a.pos, a.tier, a.flying || !!a.leap || this.levitating(a));
         if (movementDiagnosticsEnabled) recordMovement(this, a, 'knockback', from, a.pos, { vx:p.vx, vy:p.vy, hit:sc.hit });
         const hit = sc.hit as string;
         // THE BOWLING LANE (engine/mass.ts): a body flying fast enough
@@ -45763,6 +45785,8 @@ actors: Actor[] = [];
 
   /** Totems target & cast; sentries fire down their lane; traps arm and
    *  trigger; pylons periodically cast. Mines wait for detonation. */
+  private deviceContacts = new DeviceContacts();
+
   private updateConstructs(dt: number): void {
     for (const c of this.actors) {
       if (c.dead || !c.construct) continue;
@@ -45843,9 +45867,13 @@ actors: Actor[] = [];
           break;
         }
         case 'trap': {
-          if (st.timer > 0) { st.timer -= dt; break; } // arming
+          const wasArming = st.timer > 0;
+          st.timer = Math.max(0, st.timer - dt);
+          if (st.timer > 0) break;
           const prey = this.enemiesOf(c).find(e =>
-            dist(c.pos, e.pos) - e.radius <= st.range);
+            deviceContactEligible(c, e, e.flying || !!e.leap || this.levitating(e))
+            && (dist(c.pos, e.pos) - e.radius <= st.range
+              || !wasArming && this.deviceContacts.crosses(c, e)));
           if (prey && st.castInst) {
             c.useLock = 0; c.mana = c.maxMana();
             // EXECUTE, never cast: a payload with a cast bar would die with
@@ -45856,11 +45884,13 @@ actors: Actor[] = [];
           break;
         }
         case 'mine':
+          st.timer = Math.max(0, st.timer - dt);
+          break; // remote activation remains a real paid command
         case 'decoy':
         case 'barrier':
         case 'dome':
         case 'relic': // event-driven: answers its owner's uses (executeSkill)
-          break; // mines wait for Detonate; the rest just stand there
+          break; // passive bodies wait for their event or lifetime
 
         case 'embed': {
           // The LODGED object (EmbedSpec): run-over triggers, self-
@@ -46102,6 +46132,7 @@ actors: Actor[] = [];
         }
       }
     }
+    this.deviceContacts.finish(this.actors.some(c => !c.dead && c.construct?.kind === 'trap'));
   }
 
   /** THE STROBE STANCES (GroundDelivery.strobe — Restless Earth): toggled
@@ -49302,6 +49333,7 @@ actors: Actor[] = [];
         if (pd.mine.dead || !pd.mine.construct?.castInst) pd.visual.life = 0;
       }
       pd.timer -= dt;
+      if (pd.mine.construct) pd.mine.construct.detonationLeft = Math.max(0, pd.timer);
       if (pd.timer > 0) continue;
       this.pendingDetonations.splice(i, 1);
       if (pd.visual) pd.visual.life = 0;
@@ -55717,6 +55749,7 @@ actors: Actor[] = [];
    *  and, if it entered a fall region (void), run its recovery. Sets a.pos itself so
    *  a recovery teleport isn't overwritten. The shared path for move/dash/slip. */
   private steppedClamp(a: Actor, dest: Vec2, from: Vec2, disp?: DisplacementPolicy): void {
+    const deviceTier = a.tier;
     const sc = this.cScratch;
     sc.hit = 'none';
     // THE LANDING RE-SEAT at the mover (engine/tiers.ts landingTier): a
@@ -55736,6 +55769,8 @@ actors: Actor[] = [];
     // walking. (Pure read; flat zones return the tier untouched.)
     if (this.zone.tiers && this.walk) a.tier = resolveTierCrossing(this.walk, a.tier, from, dest);
     a.pos = this.clampPos(dest, a.radius, from, { out: sc, disp, mover: a });
+    // Record the resolved ground segment BEFORE any recovery teleport.
+    this.deviceContacts.record(a, from, a.pos, deviceTier, a.flying || !!a.leap || this.levitating(a));
     if ((sc.hit as string) === 'void') this.resolveBoundary(a, sc, from);
     // THE LADDER TOGGLE (the crossing law's second half): a link cell whose
     // neighborhood is BOTH-tier ground (a culvert well among street-over-duct

@@ -10,6 +10,10 @@
 // own overlay sprite (they always track facing, even on non-rotating bodies).
 // ---------------------------------------------------------------------------
 
+// SHIPPED BODY PARTS belong to the renderer's dependency graph, not main.ts.
+// Isolated loading screens, portraits and previews must register the same
+// complete glyph roster before the first sprite can enter their bake cache.
+import '../../data/glyphParts';
 import type { ActorAdorn, ActorShape } from '../../engine/actor';
 import { LOOKS } from '../../data/looks';
 import { hash01, withAlpha } from './color';
@@ -431,14 +435,18 @@ export function bodySprite(look: BodyLook): HTMLCanvasElement {
       }
       paintTack(ctx, r, look);
       if (look.outline) {
-        // Minion binding: a thin ring, since a part stack has no one path.
-        ctx.strokeStyle = look.outline;
-        ctx.lineWidth = 1.6;
-        ctx.globalAlpha = 0.8;
-        ctx.beginPath();
-        ctx.arc(0, 0, r + 2, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+        ctx.save(); ctx.globalAlpha *= 0.8;
+        if (lookDef.binding) {
+          const pal = lookPalette(look.outline);
+          for (const spec of lookDef.binding) PART_PAINTERS[spec.kind]?.(ctx, r, spec, pal);
+        } else {
+          // Existing looks keep their ownership ring. Compositions can author
+          // a smaller mark when a shared circle would obscure their anatomy.
+          ctx.strokeStyle = look.outline;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath(); ctx.arc(0, 0, r + 2, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.restore();
       }
       return;
     }

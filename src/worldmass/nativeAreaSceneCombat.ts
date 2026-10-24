@@ -1,3 +1,4 @@
+import { autonomousDeviceMetas, deviceCommandUseful } from '../engine/deviceCommands';
 import {NativeAreaSceneVerminfallLifetime} from './nativeAreaSceneVerminfallLifetime';
 import {NativeAreaSceneVendettaLifetime} from './nativeAreaSceneVendettaLifetime';
 import {nativeFractureLifetimeCalls} from '../packages/overlays/fractures';
@@ -1054,6 +1055,8 @@ vendorGemsOpen:method(()=>this.input.assembly.input.settlement,'vendorGemsOpen')
   afflictionSeat:method(()=>this,"afflictionSeat"),
   affordedDest:method(()=>this,"affordedDest"),
   aiHoldOf:method(()=>this,"aiHoldOf"),
+  autonomousMetas:{get:()=>(caster,reserved)=>autonomousDeviceMetas(caster,reserved,(host,id)=>this.mintMetaInstance(caster,host,id))},
+  deviceCommandUseful:{get:()=>(caster,inst)=>deviceCommandUseful(this.#host,caster,inst)},
   aiNeedsFireLine:method(()=>this,"aiNeedsFireLine"),
   annexReveal:method(()=>assembly.input.openings,"annexReveal"),
   applyBuffEffect:method(()=>this,"applyBuffEffect"),

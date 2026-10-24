@@ -6,7 +6,7 @@ if(process.env.VIS_GPU!=='1')app.disableHardwareAcceleration();
 const timer=setTimeout(()=>{console.error('Visibility pacing QA timed out');app.exit(1)},240000);
 app.whenReady().then(async()=>{
  const plugins=[{name:'reference',setup(b){
-  if(baseline)b.onLoad({filter:/[\\/]src[\\/]render[\\/](renderer|vis[\\/](sightVeil|lights|roomVeil))\.ts$/},args=>({contents:execFileSync('git',['show',baseline+':'+path.relative(root,args.path).replaceAll('\\','/')],{cwd:root,encoding:'utf8',maxBuffer:8e6}),loader:'ts',resolveDir:path.dirname(args.path)}));
+  if(baseline)b.onLoad({filter:/[\\/]src[\\/]render[\\/](renderer|vis[\\/](sightVeil|lights|roomVeil|foresightLayer))\.ts$/},args=>({contents:execFileSync('git',['show',baseline+':'+path.relative(root,args.path).replaceAll('\\','/')],{cwd:root,encoding:'utf8',maxBuffer:8e6}),loader:'ts',resolveDir:path.dirname(args.path)}));
  }}];
  await require('esbuild').build({entryPoints:[path.join(__dirname,'visibilityPacingFixture.ts')],bundle:true,format:'iife',outfile:path.join(dir,'visibility-pacing-fixture.js'),plugins});
  fs.writeFileSync(path.join(dir,'visibility-pacing-fixture.html'),'<!doctype html><script src="visibility-pacing-fixture.js"></script>');

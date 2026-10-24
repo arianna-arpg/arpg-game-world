@@ -982,7 +982,7 @@ test('Arachnid visuals: real egg casts hatch source-aware spiders with identical
       assert(w.useSkill(p, inst, { x: p.pos.x + 50, y: p.pos.y }));
       for (let i = 0; i < 60; i++) w.update(1 / 60);
       const egg = w.actors.find(a => a.owner === p && a.construct?.kind === 'pod' && !a.dead); assert(egg);
-      assert.equal(egg.look, 'brood_egg');
+      assert.equal(egg.look, 'device_lay_brood_egg');
       const hatchTicks = Math.ceil(egg.lifespan! * 60) + 2; assert(hatchTicks > 0 && hatchTicks < 1800);
       if (broken) w.kill(egg);
       for (let i = 0; i < hatchTicks; i++) w.update(1 / 60);

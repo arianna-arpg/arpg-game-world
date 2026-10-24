@@ -29,6 +29,28 @@ seamless adapter keeps cleanse timer updates in `nativeSceneRestoration.ts`
 and retires held formations before its delegated tree-field cleanup. Verify
 skeletonarcher, the current gameplay courses, all types and the client walkthrough.
 
+Trap/mine mechanics and reusable deviceVisuals are documented in
+`docs/engine/ground-devices.md`: walkable contact devices, configurable arming,
+resolved crossings and autonomous mine meta commands. Verify presencevisuals,
+selfvisuals, trapworks, tacticalai, controlstartertrees, movementvisuals,
+cosmetics, all types and sim smoke; then the hidden device-visuals-ui and
+construct-bodies-ui harnesses sequentially after an isolated build.
+
+The persistent construct body silhouettes are composed in `data/constructLooks.ts`
+and `data/constructGlyphs.ts`, selected through each delivery's ordinary `look`.
+See `docs/render/constructs.md`; verify presencevisuals, cosmetics, all types,
+sim smoke and hidden `balance/construct-bodies-ui.cjs` after an isolated build.
+
+Storm, summon and construct identities use `data/skillPresenceVisuals.ts`
+and `render/vis/skillPresenceVoice.ts`: 139 explicit source profiles.
+Births, completed actions, real aura/construct pulses and actual retirement
+own their cues. `ActorW.presenceBadge` copies source identity; ground-qualified
+`FlashW.onGround` clips impacts to the warning's terrain and floor gates.
+See `docs/design/presence-skill-visuals.md`. Verify presencevisuals, skillflights,
+selfvisuals, effectvoice, cosmetics, payloadcues, companioncues,
+companioninheritance, summonfill, clutch, cistern, scaldkit, supportfabric,
+all types and sim smoke; after build, run hidden `balance/presence-visuals-ui.cjs`.
+
 ## The delivery target
 
 Geography and physical places replace the connected-zone surface. Walking, combat, pursuit and consequences continue across streaming boundaries. Offline play is the core; a hosted shard serves the same world. Separate interiors can remain separate. Retain the existing combat, character and content systems wherever possible.

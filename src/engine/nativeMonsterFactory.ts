@@ -1,3 +1,4 @@
+import { groundDeviceState } from './groundDevices';
 import type { Actor, Team, AmbushSpec } from './actor';
 import type { MonsterDef } from '../data/monsters';
 import type { Modifier } from './stats';
@@ -314,6 +315,15 @@ export function createNativeMonster(host: NativeMonsterFactoryHost, sources: Nat
     // Monsters' skills level up with them — same leveling system as the player.
     const skillLevel = (0, sources.monsterSkillLevelOf)(level);
     a.skills = def.skills.map(id => (0, sources.makeSkillInstance)(sources.SKILLS[id], skillLevel));
+    if (def.groundDevice) {
+      const payload = a.skills.find(s => s?.def.id === def.groundDevice!.skillId)
+        ?? (sources.SKILLS[def.groundDevice.skillId]
+          && (0, sources.makeSkillInstance)(sources.SKILLS[def.groundDevice.skillId], skillLevel));
+      if (payload) {
+        a.construct = groundDeviceState(def.groundDevice, payload);
+        a.aims = false;
+      }
+    }
     // LEVEL-GATED GRANTS (MonsterGrant): once the monster is high enough, its kit
     // evolves — gain a new skill, or socket a support into an existing one (riding
     // the skill instances' default 3 sockets; the cast pipeline reads them).

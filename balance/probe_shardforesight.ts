@@ -79,12 +79,17 @@ const GRID = 1 / WIRE_DIET_CFG.posSteps, TURN = TAU / WIRE_DIET_CFG.turnSteps;
  *  last bit: JSON prints the shortest round-trip form). */
 function recorder(): { ctx: CanvasRenderingContext2D; log: string[] } {
   const log: string[] = [];
-  const state = new Map<string, unknown>([['globalAlpha', 1]]);
+  const stack: Map<string, unknown>[] = [];
+  let state = new Map<string, unknown>([['globalAlpha', 1]]);
   const ctx = new Proxy({}, {
     get(_t, k) {
       if (typeof k !== 'string') return undefined;
       if (state.has(k)) return state.get(k);
-      return (...args: unknown[]): void => { log.push(`${k}(${JSON.stringify(args)})`); };
+      return (...args: unknown[]): void => {
+        log.push(k + '(' + JSON.stringify(args) + ')');
+        if (k === 'save') stack.push(new Map(state));
+        if (k === 'restore') state = stack.pop() ?? state;
+      };
     },
     set(_t, k, v) { log.push(`${String(k)}=${JSON.stringify(v)}`); state.set(String(k), v); return true; },
   }) as unknown as CanvasRenderingContext2D;
@@ -197,7 +202,7 @@ function newPaint(ctx: CanvasRenderingContext2D, a: Actor, x: number, y: number,
   if (a.team === 'enemy' && a.casting) {
     const fc = a.casting;
     const geo = foresightView(a, fc);
-    if (geo) drawForesight(ctx, geo, x, y, a.facing, foresightProgress(fc), baseAlpha);
+    if (geo) drawForesight(ctx, geo, x, y, a.facing, foresightProgress(fc));
   }
 }
 
@@ -329,7 +334,11 @@ function standCast(w: World, a: Actor, inst: SkillInstance, aim: Vec2, mode?: Ca
       oldPaint(o.ctx, foe, x, y, 0.9);
       newPaint(n.ctx, foe, x, y, 0.9);
       if (o.log.length) drawn++;
-      if (o.log.join('\n') === n.log.join('\n')) callsOk++;
+      // The historical painter leaked body opacity after restoring. Preserve
+      // every drawing operation, but explicitly reject that final state leak.
+      const expected = o.log.at(-1) === 'globalAlpha=0.9' ? o.log.slice(0, -1) : o.log;
+      check('A warning restores incoming opacity: ' + c.name, n.ctx.globalAlpha === 1);
+      if (expected.join('\n') === n.log.join('\n')) callsOk++;
       else misses.push(`${c.name} (${c.def.id}) calls: old ${o.log.length} ${o.log.slice(0, 3).join(' ')} / new ${n.log.length} ${n.log.slice(0, 3).join(' ')}`);
     }
     foe.casting = null;
@@ -343,7 +352,7 @@ function standCast(w: World, a: Actor, inst: SkillInstance, aim: Vec2, mode?: Ca
     compared >= CASES.length && fieldsOk === compared, `${fieldsOk}/${compared}; ${misses.filter(m => m.includes('fields')).slice(0, 2).join(' | ')}`);
   check('A parity: the kinds that draw resolve a figure, and a guard, an allied nova, a summon, a leap and a flight resolve none',
     nullsOk === compared, misses.filter(m => m.includes('expected')).slice(0, 3).join(' | '));
-  check('A pixels: the new painter\'s canvas calls equal the old painter\'s, call for call and argument for argument',
+  check('A pixels: the new painter\'s drawing calls equal the old painter\'s; the removed opacity leak is checked separately',
     callsOk === compared && drawn >= 18, `${callsOk}/${compared} identical (${drawn} drew, ${real} of ${CASES.length} casts stood by useSkill, by hand: ${byHand.join(', ') || 'none'}); ${misses.filter(m => m.includes('calls')).slice(0, 2).join(' | ')}`);
 }
 
@@ -433,7 +442,7 @@ function standCast(w: World, a: Actor, inst: SkillInstance, aim: Vec2, mode?: Ca
     const arcAt = (facing: number): string | undefined => {
       if (!body || !geo) return undefined;
       const r = recorder();
-      drawForesight(r.ctx, geo, body.pos.x, body.pos.y, facing, 0.5, 1);
+      drawForesight(r.ctx, geo, body.pos.x, body.pos.y, facing, 0.5);
       return r.log.find(l => l.startsWith('arc'));
     };
     const along = (facing: number): boolean => { const a = arcAt(facing); if (!a) return false; const args = JSON.parse(a.slice(4, -1)) as number[]; return Math.abs((args[3] + args[4]) / 2 - facing) < 1e-9; };
@@ -575,9 +584,9 @@ for (const [label, def, aimAt] of [
   // It paints the host's figure: the ring at the landing spot, the wedge down the aim.
   if (body && g && geo) {
     const r = recorder();
-    drawForesight(r.ctx, geo, body.pos.x, body.pos.y, body.facing, 0.5, 1);
+    drawForesight(r.ctx, geo, body.pos.x, body.pos.y, body.facing, 0.5);
     const hr = recorder();
-    drawForesight(hr.ctx, g, foe.pos.x, foe.pos.y, foe.facing, 0.5, 1);
+    drawForesight(hr.ctx, g, foe.pos.x, foe.pos.y, foe.facing, 0.5);
     // Call for call: the same calls in the same order, every style set exactly the host's, every
     // place and length within the px grid (plus the row's own rounding) and every arc's angles
     // within the turn grid.

@@ -1,3 +1,4 @@
+import { drawDeviceState } from './vis/deviceState';
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
 import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
 import { RewardLabelLayout } from './vis/rewardLabels';
@@ -6195,6 +6196,7 @@ export class Renderer {
     if (!ownCastPreparation) drawCastingCue(ctx, a);
     drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
     if (!a.dead) drawPresenceBadge(ctx, a.presenceBadge, a.radius);
+    drawDeviceState(ctx, a);
     if (comboCueGround) {
       ctx.save(); ctx.setTransform(comboCueGround); ctx.globalAlpha = baseAlpha;
       drawComboBody(ctx, a.radius, comboCues); ctx.restore();
@@ -6521,7 +6523,7 @@ export class Renderer {
     if (a.team === 'enemy' && a.casting && (this.getSettings?.().castTelegraphs ?? true)) {
       const fc = a.casting;
       const geo = foresightView(a, fc);
-      if (geo) drawForesight(ctx, geo, x, y, a.facing, foresightProgress(fc), baseAlpha);
+      if (geo) drawForesight(ctx, geo, x, y, a.facing, foresightProgress(fc));
     }
 
     // THE STRUGGLE METER (the grab fabric): a held body wears its break

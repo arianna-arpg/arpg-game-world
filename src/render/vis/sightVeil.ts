@@ -1,4 +1,5 @@
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityMask } from './visibilityDiagnostics';
+import { withVisibilityComposite } from './visibilityComposite';
 // ---------------------------------------------------------------------------
 // THE SIGHT VEIL — positional occlusion shadows (VIS_CFG.sightVeil).
 //
@@ -791,8 +792,12 @@ export class SightVeil {
   }
 
   private present(ctx:CanvasRenderingContext2D,w:number,h:number,started:number,cached:boolean):void {
-    ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.imageSmoothingEnabled=true;
-    ctx.drawImage(this.buf!,0,0,this.buf!.width,this.buf!.height,0,0,w,h);ctx.restore();
+    if (visibilityDiagnosticsEnabled) visibilityRecord('sightPresentation', {
+      incomingAlpha:ctx.globalAlpha, incomingBlend:ctx.globalCompositeOperation, appliedAlpha:1,
+    });
+    withVisibilityComposite(ctx, () => {
+      ctx.drawImage(this.buf!,0,0,this.buf!.width,this.buf!.height,0,0,w,h);
+    });
     this.drew = true;
     this.drewW = w; this.drewH = h;
     if (visibilityDiagnosticsEnabled) {
@@ -815,10 +820,10 @@ export class SightVeil {
     ctx.beginPath();
     for (const r of rects) ctx.rect(r.x, r.y, r.w, r.h);
     ctx.clip();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = alpha;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.buf, 0, 0, this.buf.width, this.buf.height, 0, 0, this.drewW, this.drewH);
+    withVisibilityComposite(ctx, () => {
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(this.buf!, 0, 0, this.buf!.width, this.buf!.height, 0, 0, this.drewW, this.drewH);
+    });
     ctx.restore();
   }
 }

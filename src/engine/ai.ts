@@ -2144,7 +2144,8 @@ function pickSkill(
   // face it would cast — an empty magazine still gets pressed (the press
   // IS the reload, and the standing-there-racking window is the player's
   // opening; the gunner walks into weapon range to do it).
-  const usable = actor.skills.filter((s): s is SkillInstance =>
+  const candidates = [...actor.skills, ...world.autonomousMetas(actor, reserved)];
+  const usable = candidates.filter((s): s is SkillInstance =>
     !!s && !!s.def.ai && !reserved?.has(s.def.id)
     // THE BAN BINDS THE PICKER TOO (aiSkillBans — breakDisables' strip is
     // its own belt, but the scene director's muster ban has ONLY this set):
@@ -2157,7 +2158,8 @@ function pickSkill(
     // socket-granted (Guarded Casting makes any carried spell one).
     && (!guarding || !!s.def.usableWhileGuarding || !!s.def.requiresGuard
       || !!socketSpec(s, 'guardCast'))
-    && world.pressUsable(actor, s) && best <= rangeOf(s)
+    && world.pressUsable(actor, s) && (!!s.def.ai.deployed || best <= rangeOf(s))
+    && world.deviceCommandUseful(actor, s)
     && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id))
     && (!world.aiNeedsFireLine(actor, s) || fireLine())
     && tempoGate(s));

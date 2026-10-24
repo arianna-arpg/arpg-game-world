@@ -168,6 +168,9 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
       ? (actor.aiAnchor ?? actor.pos) : actor.pos;
     for (let i = 0; i < count; i++) {
       const m = world.createMonster(act.monster, actor.level, actor.team);
+      // groundDevice deployments belong to their layer: remote mine commands
+      // find this roster, and trap damage keeps the ordinary owner attribution.
+      if (m.construct?.kind === 'trap' || m.construct?.kind === 'mine') m.owner = actor;
       // Conjured mid-fight by a living caster — recastable forever, so it
       // pays no bounty (xp/drops). Kill the summoner for the prize.
       m.noBounty = true;

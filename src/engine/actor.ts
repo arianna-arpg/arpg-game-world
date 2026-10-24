@@ -276,7 +276,11 @@ export interface ConstructState {
   /** The skill this construct casts (carries the deployer's gems & level). */
   castInst?: SkillInstance;
   range: number;
-  /** Trap arming countdown; pylon cast-interval timer. */
+  /** Configurable contact policy and real clocks, also sent to visual peers. */
+  deviceTrigger?: import('./groundDevices').DeviceTriggerSpec;
+  armingDuration?: number;
+  detonationLeft?: number;
+  /** Trap/mine arming countdown; pylon cast-interval timer. */
   timer: number;
   /** Eruptors: seconds between spews (charge-scaled at spawn). */
   castInterval?: number;

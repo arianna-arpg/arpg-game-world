@@ -7,8 +7,16 @@ existing `cosmeticBody`, body sprite, live parts and adorn system. The selected
 `wispSkin` and `playerEffect` travel with the wisp. No skin changes collision size.
 The toy never uses World state, combat RNG, progression, inventory or persistence.
 
-Entry after a vessel/class choice, and Continue, travel from top to bottom. A
-native-page wait during play chooses left-to-right or right-to-left once per wait.
+The body renderer (`render/vis/body.ts`) imports the complete shipped glyph roster
+itself, before any sprite is baked. Registration cannot depend on `main.ts`: the
+loading frame has its own module graph, painter registry and sprite cache. Without
+that dependency, a selected look can retain its color and live wisps while its
+glyph-defined body silently disappears. New Wardrobe skins use the ordinary
+cosmetic/look/glyph registries; never add loading-specific skin lists or painters.
+
+Entry after a vessel/class choice, and Continue, travel from top to bottom.
+Travel leases choose left-to-right or right-to-left once per wait. On the seamless
+foundation, native-page readiness opens those travel leases automatically.
 The wisp arrives from the entry edge, then the scenery and gates stream toward it.
 Mouse/touch steer across the travel direction; WASD/arrows and the first connected
 controller's left stick/D-pad provide the same axis. Pass through gate openings.
@@ -228,8 +236,20 @@ cosmetic/body separation, and keyboard/controller quarantine on return to play.
 - `npm run check`
 - `npm run probe -- spiritrun` and `npm run probe -- characterresume`
 - Scoped production build, then `electron balance/loading-screen-ui.cjs`
-- `electron balance/loading-isolation-ui.cjs` (actual distinct processes and input during busy work)
+- With the same build, `electron balance/loading-cosmetics-ui.cjs` and
+  `electron balance/loading-isolation-ui.cjs`
 - `npm run smoke` after a normal production build
+
+The cosmetics course discovers Original appearance and every registered `wispSkin`
+automatically. It checks the real Wardrobe catalogue and Mu body's baked pixels,
+then compares complete loading canvases against a reference initialized with the
+game's glyph roster: three directions, two animation times and reduced motion.
+Outfits cross the actual host/frame message boundary. Clearing a skin restores
+the original body. The reference stays in the host; it never initializes the
+frame under test. An in-memory build with the body-glyph dependency removed must
+fail pixel parity, reproducing the original missing-body defect. Reports and a
+side-by-side contact sheet go to `balance/reports/mu-skin-parity/`.
+Set `HOLLOW_WAKE_QA_DIST` to the scoped build directory for these UI courses.
 
 The UI course uses isolated browser storage and a hidden Electron window. It checks
 all directions, keyboard/pointer/controller steering, no numeric readouts, branching
