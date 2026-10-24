@@ -10,6 +10,10 @@
 // own overlay sprite (they always track facing, even on non-rotating bodies).
 // ---------------------------------------------------------------------------
 
+// SHIPPED BODY PARTS belong to the renderer's dependency graph, not main.ts.
+// Isolated loading screens, portraits and previews must register the same
+// complete glyph roster before the first sprite can enter their bake cache.
+import '../../data/glyphParts';
 import type { ActorAdorn, ActorShape } from '../../engine/actor';
 import { LOOKS } from '../../data/looks';
 import { hash01, withAlpha } from './color';
