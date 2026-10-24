@@ -3672,21 +3672,7 @@ export function sceneUpdateWatch(nativeHost:NativeSceneFrameHost): void {
         scent++;
         if (!a.aggroed && a.aiTargetId === undefined) nativeHost.watchScent(a, w, t);
       }
-      // (3) THE GAZE — never wrench a casting or locked body's aim.
-      if (a.aiTargetId === undefined && !a.casting && !a.aggroed) {
-        if (a.watchRung === WATCH_RUNG.unaware && w.sweep) {
-          const base = a.aiPostFacing ?? (a.watchBase ??= a.facing);
-          const ph = (((a.id * 2654435761) >>> 9) & 1023) / 1023 * Math.PI * 2;
-          a.facing = base
-            + Math.sin(t / w.sweep.sec * Math.PI * 2 + ph)
-            * (w.sweep.arcDeg * Math.PI / 180) / 2;
-        } else if (a.watchRung === WATCH_RUNG.stir && a.watchAt) {
-          const want = angleTo(a.pos, a.watchAt);
-          const d = angleDiff(a.facing, want);
-          const step = WATCH_CFG.turnRadSec * WATCH_CFG.sweepSec;
-          a.facing = Math.abs(d) <= step ? want : a.facing + Math.sign(d) * step;
-        }
-      }
+      // Facing advances in nativeSceneFrame through updateWatchGaze.
     }
     // THE TRAIL LAY: players print the ground while a scent watcher stands;
     // wet feet (WATCH_CFG.trail.breakStatuses — wading, swimming) print

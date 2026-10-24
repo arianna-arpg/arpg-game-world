@@ -1,3 +1,4 @@
+import { updateWatchGaze } from './watchGaze';
 import type {DashConjureStash} from './nativeSceneCombatHost';
 import { movementDiagnosticsEnabled, recordMovement } from './movementDiagnostics';
 import {speedLingerMul} from './nativeSceneCombatResolution';
@@ -477,6 +478,8 @@ try {
           a.facing = angleTo(a.pos, cl.aim);
         }
       }
+      // Share the ordinary per-frame turn budget with the main game.
+      updateWatchGaze(a, nativeHost.time, dt);
       // TURN CLAMP (BEHAVIOR_STATS.turnSpeed ← Actor.turnSpeed as the innate
       // base): facing may only swing so far per frame — big bodies LUMBER,
       // their shell arcs and their aim lag the fight, and circling them
