@@ -6383,7 +6383,7 @@ export class Renderer {
     if (a.team === 'enemy' && a.casting && (this.getSettings?.().castTelegraphs ?? true)) {
       const fc = a.casting;
       const geo = foresightView(a, fc);
-      if (geo) drawForesight(ctx, geo, x, y, a.facing, foresightProgress(fc), baseAlpha);
+      if (geo) drawForesight(ctx, geo, x, y, a.facing, foresightProgress(fc));
     }
 
     // THE STRUGGLE METER (the grab fabric): a held body wears its break

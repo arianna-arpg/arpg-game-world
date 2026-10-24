@@ -26,8 +26,9 @@ export function foresightProgress(fc: CastingState): number {
 }
 
 /** Paint one wind-up's geometry in world space (`x`, `y`: the caster's drawn body; `facing`:
- *  its drawn facing, which a channel's wedge rides). Leaves globalAlpha at `baseAlpha`. */
-export function drawForesight(ctx: CanvasRenderingContext2D, geo: ForesightGeo, x: number, y: number, facing: number, prog: number, baseAlpha: number): void {
+ *  its drawn facing, which a channel's wedge rides). Preserve the caller's
+ *  state: an occluded caster's body opacity must never escape into later passes. */
+export function drawForesight(ctx: CanvasRenderingContext2D, geo: ForesightGeo, x: number, y: number, facing: number, prog: number): void {
   if (geo.kind === 'ground') {
     const aim = geo.aim;
     const rr = geo.reach;
@@ -52,7 +53,6 @@ export function drawForesight(ctx: CanvasRenderingContext2D, geo: ForesightGeo, 
     ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-    ctx.globalAlpha = baseAlpha;
     return;
   }
   const { reach, inner, arcRad } = geo;
@@ -101,5 +101,4 @@ export function drawForesight(ctx: CanvasRenderingContext2D, geo: ForesightGeo, 
   figure(Math.max(inner + 2, reach * (0.35 + 0.65 * prog)));
   ctx.fill();
   ctx.restore();
-  ctx.globalAlpha = baseAlpha;
 }
