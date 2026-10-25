@@ -41,6 +41,7 @@ import {
   feedWatch, SENSE_CFG, senseReach, WATCH_CFG, WATCH_RUNG, watchArcDeg,
   watchRiseAmount, watchRungOf, watchValueOf,
 } from './watch';
+import { watchGazeActive } from './watchGaze';
 import { isThrongBody, throngHeelOffset } from './throng';
 import { minionCommandSpeed } from './minionCombat';
 import { incidentalMinionPrey, minionPreyInReach } from './minionTargets';
@@ -273,7 +274,7 @@ function updatePostReturn(actor: Actor, world: World, dt: number): boolean {
     if (actor.postHoming) {
       actor.postHoming = false;
       // Re-plant: the watch bearing is part of the post.
-      if (actor.aiPostFacing !== undefined) actor.facing = actor.aiPostFacing;
+      if (actor.aiPostFacing !== undefined && !watchGazeActive(actor, world.time)) actor.facing = actor.aiPostFacing;
     }
     return false;
   }
@@ -292,7 +293,7 @@ function updatePost(actor: Actor, world: World, dt: number): boolean {
   if (updatePostReturn(actor, world, dt)) return true;
   if (actor.postSpec.hold === false) return false;
   if (postOf(actor) === undefined) return false;
-  if (actor.aiPostFacing !== undefined) actor.facing = actor.aiPostFacing;
+  if (actor.aiPostFacing !== undefined && !watchGazeActive(actor, world.time)) actor.facing = actor.aiPostFacing;
   return true; // stands the watch — the idle tick is consumed
 }
 
@@ -555,7 +556,7 @@ const DEFAULT_BRAIN: BrainDef = {};
 export function updateAI(actor: Actor, world: World, dt: number): void {
   actor.companionReturnTo = undefined; // no stale return line through any early exit
   actor.feedingMeal = undefined; // feedingCue posture ends even on an early AI refusal.
-  if (actor.summonReform) return;
+  if (actor.summonReform || actor.channelFormation) return;
   ensureMovementTether(actor);
   if (refreshMovementTether(actor, world)?.returning) return;
   // Skip ANY player seat (the local hero AND co-op allies) — they're driven by
@@ -2126,7 +2127,8 @@ function pickSkill(
   // face it would cast — an empty magazine still gets pressed (the press
   // IS the reload, and the standing-there-racking window is the player's
   // opening; the gunner walks into weapon range to do it).
-  const usable = actor.skills.filter((s): s is SkillInstance =>
+  const candidates = [...actor.skills, ...world.autonomousMetas(actor, reserved)];
+  const usable = candidates.filter((s): s is SkillInstance =>
     !!s && !!s.def.ai && !reserved?.has(s.def.id)
     // THE BAN BINDS THE PICKER TOO (aiSkillBans — breakDisables' strip is
     // its own belt, but the scene director's muster ban has ONLY this set):
@@ -2139,7 +2141,8 @@ function pickSkill(
     // socket-granted (Guarded Casting makes any carried spell one).
     && (!guarding || !!s.def.usableWhileGuarding || !!s.def.requiresGuard
       || !!socketSpec(s, 'guardCast'))
-    && world.pressUsable(actor, s) && best <= rangeOf(s)
+    && world.pressUsable(actor, s) && (!!s.def.ai.deployed || best <= rangeOf(s))
+    && world.deviceCommandUseful(actor, s)
     && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id))
     && (!world.aiNeedsFireLine(actor, s) || fireLine())
     && tempoGate(s));

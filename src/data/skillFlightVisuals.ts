@@ -23,6 +23,11 @@ const f = (motif: BurstMotif, layout: SkillFieldProfile['layout'], motion: Skill
   count: number, echo?: BurstMotif): SkillFieldProfile => ({ motif, layout, motion, count, echo });
 
 export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
+  skeletal_rattling_arrow: p('teeth','quills','steady',5,'cracks'),
+  skeletal_volatile_fire: p('flame','saw','pulse',5,'teeth'),
+  skeletal_volatile_cold: p('ice','quills','steady',5,'runes'),
+  skeletal_volatile_lightning: p('sparks','fork','pulse',5,'souls'),
+  skeletal_volatile_chaos: p('souls','helix','weave',5,'spores'),
   hive_poison_spit: p('blood','beads','pulse',3,'teeth'),
   beast_spider_art: p('runes','links','weave',3,'spores'),
   beast_amphibian_art: p('blood','ribbon','pulse',3,'steam'),

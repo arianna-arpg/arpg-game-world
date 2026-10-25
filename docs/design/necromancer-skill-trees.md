@@ -40,7 +40,7 @@ Changing the investment budget is a separate balance decision, not hidden here.
 |---|---|---|---|
 | Shambling Horde | Wandering Dead: toggleable free, bar-seated replenishment; permanent waiting corpses. Specialize cadence, detection, batches, capacity or durability. | Commanded Dead: cast packs; combine brief fast rushes with fewer heavy bodies, or develop expiry explosions and larger batches. | Stitched Flesh: life |
 | Bone Golem | Osseous Might: fighting golems; grow a cohort, a giant commander aura bearer, a sweeping bruiser, or a hybrid. | Keeper's Bulwark: defensive guard, rapid reconstruction, mending, taunts and the close-bound Bone Stand. | Fitted Joints: life and movement |
-| Skeleton Archer | Rattling Bows: physical cohorts, piercing arrows, and Rain of Bones with combined cooldown/area/damage/bleed investment or baseline multishot. | Unstrung Sorcery: replace bows with random elemental bolt casters. The trunk preserves base population; Volatile Souls adds one body and one slot. Invest in volatile criticals or narrow the pool to selected elements. | Remembered Training: damage |
+| Skeleton Archer | Rattling Bows: independent physical vulnerability stacks; held firing squads, full-cap release volleys, mortars, doubled capacity and learned Rain of Bones. | Unstrung Sorcery: random elemental mages; every-fourth empowered bolts, sustained area channels and element-selected novas. Base population is preserved. See [the current contract](skeleton-archer.md). | Remembered Training: damage |
 | Skeleton Mage (new) | Lich Ascendant: fuse the batch into one larger Fireball caster; learn heavy area spells, grow its frame, or command allies. | Grave Academy: a faster cohort of elemental specialists, with cold/chaos and fire/lightning curricula. Each learned spell belongs only to its matching element. | Grave Studies: damage and haste |
 | Skeleton Warrior | Grave Phalanx: taunting shield sentinels, inherited Thorns, armor banners, relief auras and bounded death heirs. | Ossuary Duelists: twin-cut pursuers, bleeding strikes, culling, lunges and paired summons. | Tempered Bones: life and damage |
 | Raise Dead | Grave Levy: temporary random skeleton/zombie ranks, larger drafts, stench, poison and true-death expiry payoffs. | Flesh Assembly: one claw-and-slam abomination; consume other skills' minions for temporary strength, build a refuge or invest in its death. | Gravecraft: life and damage |
@@ -54,7 +54,7 @@ Changing the investment budget is a separate balance decision, not hidden here.
 | Spirit Pyre | Running Wildfire: mobile, short-lived swarms with fast linear ramp, larger batches, spreading burns and expiry explosions. | Banked Pyre: gradually rooted channel, larger skulls, stronger quadratic ramp, mana-paid absorb, halos and heavier expiry explosions. | Pyre Tending: minion damage |
 | Sanguine Burst | Hemorrhagic Rite: spreading bleeds, greater magnitude, stacked wounds, rupture and recovery. | Crimson Carapace: life-paid absorb; develop capacity, duration, a repelling pulse or more expensive empowered payments. | Blood Discipline: damage |
 
-Archer-derived mages cast one elemental bolt each. The separate Mage skill earns
+Archer-derived mages begin with one elemental bolt each and can learn the periodic bolts, novas and weather channels in [Skeleton Archer](skeleton-archer.md). The separate Mage skill earns
 its own identity through elemental lessons and innate cryomancer Ice Spears; the Lich starts with an explosive Fireball.
 The new skill belongs to the Necromancer discovery pool and enters drops at level 5.
 Values are an initial tuning pass, not a claim of final balance.
@@ -81,9 +81,9 @@ investment therefore offers a deliberate reservation-for-coverage/power trade.
 
 ## Elemental lessons and golem refinements
 
-- Archer rain endpoints are now Drumming Rain (all four former rain bonuses,
-  with a real 30% bleed-on-hit modifier) and Forked Quivers (+1 attack projectile).
-  Forked Quivers retains the old Cruel Rain node ID for saved allocations.
+- Archer endpoints now use the [Skeleton Archer contract](skeleton-archer.md):
+  Drumming Rain teaches the rain ability; Forked Quivers adds two projectiles
+  or storm strikes and retains the old Cruel Rain node ID for saved allocations.
 - Drilled Bones is the golem middle node, allowing its cooldown recovery to
   combine with Great Bones → Marrow Bruiser within four points. Bone Cohort
   grants one extra body/slot with 20% less life. Assembled Legion is the other

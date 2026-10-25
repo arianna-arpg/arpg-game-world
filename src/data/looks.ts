@@ -27,6 +27,8 @@ import { COSMETIC_LOOKS } from './cosmeticModels';
 import { COSMETIC_WISP_LOOKS } from './cosmeticExpansionModels';
 import { GOLEM_LOOKS } from './golemLooks';
 import { SUMMON_LOOKS } from './summonLooks';
+import { CONSTRUCT_BODY_LOOKS } from './constructLooks';
+import { DEVICE_OBJECT_LOOKS, TRAP_FRAME, MINE_FRAME } from './deviceVisuals';
 import { SKELETAL_MAGE_LOOKS } from './skeletalMageLooks';
 import { UNDEAD_COURT_LOOKS } from './undeadCourtLooks';
 import { AVIAN_LOOKS } from './avianLooks';
@@ -38,6 +40,8 @@ import { RUBBLEKIN_LOOKS } from './rubblekin';
 export const LOOKS: Record<string, LookDef> = {
   ...GOLEM_LOOKS,
   ...SUMMON_LOOKS,
+  ...CONSTRUCT_BODY_LOOKS,
+  ...DEVICE_OBJECT_LOOKS,
   ...SKELETAL_MAGE_LOOKS,
   ...UNDEAD_COURT_LOOKS,
   ...AVIAN_LOOKS,
@@ -70,6 +74,11 @@ export const LOOKS: Record<string, LookDef> = {
         action: { pivotX: .1, pivotY: .62, windTurn: -.95, strikeTurn: .85, reach: .12 } },
       { kind: 'skull', x: 0.5 },
     ],
+  },
+  skeletal_mortarman: {
+    parts: [{ kind: 'ribs', params: { under: true } },
+      { kind: 'mortarMaw', y: -0.4, scale: 0.85, params: { len: 0.9, w: 0.3 } },
+      { kind: 'skull', x: 0.5 }, { kind: 'keg', x: -0.55, scale: 0.45 }],
   },
   skeleton_archer: {
     walk: { cycle: 5.8, swing: 0.6, sway: 0.04, lift: 0.065, parts: [
@@ -2806,20 +2815,11 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'gem', scale: 1.15 },
     ],
   },
-  /** The trap: a half-buried jaw ring — faint by design (it is concealed). */
-  construct_trap: {
-    parts: [
-      { kind: 'disc', scale: 0.6, alpha: 0.45 },
-      { kind: 'mandibles', scale: 0.9, alpha: 0.85 },
-    ],
-  },
-  /** The mine: a squat orb bristling with contact barbs. */
-  construct_mine: {
-    parts: [
-      { kind: 'orb', scale: 0.8 },
-      { kind: 'barbs', scale: 0.85 },
-    ],
-  },
+  /** Family defaults also serve future generated/modded devices. */
+  construct_trap: { parts: TRAP_FRAME, shadowScale: .4,
+    binding: [{ kind: 'deviceBinding', x: -.9, scale: .65 }] },
+  construct_mine: { parts: MINE_FRAME, shadowScale: .5,
+    binding: [{ kind: 'deviceBinding', x: -.9, scale: .65 }] },
   /** A LODGED SPEAR (embedments, hanging carom arrows): one slim stake and
    *  its fletching, read from above. */
   construct_spear: {
@@ -4932,11 +4932,9 @@ export const LOOKS: Record<string, LookDef> = {
   },
   /** The jaw snare: nothing but teeth on a plate, waiting. */
   jaw_snare: {
-    parts: [
-      { kind: 'disc', scale: 0.65, role: 'metal' },
-      { kind: 'mandibles', scale: 1.25, role: 'metal' },
-    ],
-    shadowScale: 0.5,
+    parts: TRAP_FRAME,
+    binding: [{ kind: 'deviceBinding', x: -.9, scale: .65 }],
+    shadowScale: 0.4,
   },
   /** THE OFFERING EFFIGY (Risen Offering's turret body): powdered bone
    *  packed into an idol, wreathed in grave-incense. */

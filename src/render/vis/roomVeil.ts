@@ -1,3 +1,4 @@
+import { withVisibilityComposite } from './visibilityComposite';
 // ---------------------------------------------------------------------------
 // THE ROOM VEIL — interior vision confinement (VIS_CFG.roomVeil).
 //
@@ -21,6 +22,7 @@
 // ---------------------------------------------------------------------------
 
 import { VIS_CFG } from './visConfig';
+import { visibilityRaster, type VisibilityRasterView } from './visibilityRaster';
 
 interface Rect { x: number; y: number; w: number; h: number }
 interface Pt { x: number; y: number }
@@ -177,12 +179,11 @@ export class RoomVeil {
    *  ctx, projected through the same cam the light layer uses. Free when
    *  the hero is anywhere but inside a confining room (fade 0 → no-op). */
   draw(ctx: CanvasRenderingContext2D, camX: number, camY: number,
-    zoom: number, w: number, h: number): void {
+    zoom: number, w: number, h: number, rasterView?: VisibilityRasterView): void {
     const cfg = VIS_CFG.roomVeil;
     const a = this.frac() * cfg.alpha;
     if (a <= 0.02 || !this.vol) return;
-    const scale = cfg.scale;
-    const bw = Math.max(2, Math.ceil(w * scale)), bh = Math.max(2, Math.ceil(h * scale));
+    const { width:bw, height:bh, k } = visibilityRaster(w,h,zoom,cfg.scale,rasterView);
     if (this.buf.width !== bw || this.buf.height !== bh) {
       this.buf.width = bw; this.buf.height = bh;
     }
@@ -197,7 +198,6 @@ export class RoomVeil {
     b.globalCompositeOperation = 'destination-out';
     if (cfg.featherPx > 0) b.filter = `blur(${cfg.featherPx}px)`;
     b.fillStyle = '#fff';
-    const k = zoom * scale;
     for (const r of this.vol.rects) {
       b.fillRect((r.x - camX) * k, (r.y - camY) * k, r.w * k, r.h * k);
     }
@@ -208,9 +208,8 @@ export class RoomVeil {
     }
     if (cfg.featherPx > 0) b.filter = 'none';
     b.globalCompositeOperation = 'source-over';
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.buf, 0, 0, bw, bh, 0, 0, w, h);
-    ctx.restore();
+    withVisibilityComposite(ctx, () => {
+      ctx.drawImage(this.buf, 0, 0, bw, bh, 0, 0, w, h);
+    });
   }
 }

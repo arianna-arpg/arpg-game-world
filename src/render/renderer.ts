@@ -1,3 +1,4 @@
+import { drawDeviceState } from './vis/deviceState';
 import { ALTAR_BODY } from '../engine/altarBodies';
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
 import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
@@ -751,7 +752,12 @@ export class Renderer {
     // camera sees); each veil's own fade handles the transition gracefully.
     this.sightVeil.suspend = (couchOn && COUCH_CFG.render.sightVeil === 'off') || this.directorNoSightVeil;
     this.roomVeil.suspend = couchOn && COUCH_CFG.render.roomVeil === 'off';
-    const z = this.zoom, vw = w / z, vh = h / z;
+    // Adaptive output pixels must not change world framing or visibility's
+    // sampling/feather size. Integer rounding of the output used to move the
+    // camera slightly and resize every shadow when the governor stepped.
+    const z = this.zoom, displayZoom = z / this.pixelScale;
+    const visibilityRasterView = { width:this.frameW, height:this.frameH, zoom:displayZoom };
+    const vw = this.frameW / displayZoom, vh = this.frameH / displayZoom;
     const az = world.arena;
     const camMode = cameraModeOf(world.zone.camera ?? this.getSettings?.().cameraMode);
     // THE COMPOSITE BOUND: the frame spans the ACTIVE union's hull, so the
@@ -1011,7 +1017,7 @@ export class Renderer {
     // occluded structure reads as ONE contiguous dark mass. Composites at
     // identity through the same effective camera as the light layer.
     // Visibility was resolved before the world pass; only pixels composite here.
-    this.sightVeil.draw(this.ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
+    this.sightVeil.draw(this.ctx, this.cam.x - shx, this.cam.y - shy, z, w, h, visibilityRasterView);
     if (!VIS_ABLATE.has('doodads')) this.drawRaisedDoodads(world);
     if (!VIS_ABLATE.has('doodads')) this.drawCanopies(world); // fake-2D depth: crowns above actors, faded near the hero
     if (!VIS_ABLATE.has('doodads')) this.drawCanopyEyes(world); // the roof's regard — gone wherever you're near
@@ -1029,7 +1035,7 @@ export class Renderer {
     // world beyond the room is unseen (labels gate through veiledAt; the
     // atmosphere pass damps its weather against frac). Free when outside.
     // (Its update ran before the world pass — the sight veil reads frac().)
-    this.roomVeil.draw(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
+    this.roomVeil.draw(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h, visibilityRasterView);
 
     // THE WORD LAYER: every world-anchored line of TEXT re-enters world
     // space ABOVE the room veil's wash. The veils still decide WHETHER a
@@ -1077,7 +1083,7 @@ export class Renderer {
     // the lights must project through is cam - shake.
     if (!VIS_ABLATE.has('lights')) {
       this.lightLayer.render(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h,
-        this.combatMeters.readabilityBounds());
+        this.combatMeters.readabilityBounds(), visibilityRasterView);
     }
 
     this.drawAtmosphere(world);
@@ -6072,6 +6078,7 @@ export class Renderer {
     if (!ownCastPreparation) drawCastingCue(ctx, a);
     drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
     if (!a.dead) drawPresenceBadge(ctx, a.presenceBadge, a.radius);
+    drawDeviceState(ctx, a);
     if (comboCueGround) {
       ctx.save(); ctx.setTransform(comboCueGround); ctx.globalAlpha = baseAlpha;
       drawComboBody(ctx, a.radius, comboCues); ctx.restore();
@@ -6376,7 +6383,7 @@ export class Renderer {
     if (a.team === 'enemy' && a.casting && (this.getSettings?.().castTelegraphs ?? true)) {
       const fc = a.casting;
       const geo = foresightView(a, fc);
-      if (geo) drawForesight(ctx, geo, x, y, a.facing, foresightProgress(fc), baseAlpha);
+      if (geo) drawForesight(ctx, geo, x, y, a.facing, foresightProgress(fc));
     }
 
     // THE STRUGGLE METER (the grab fabric): a held body wears its break

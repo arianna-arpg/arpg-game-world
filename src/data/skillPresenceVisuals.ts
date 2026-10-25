@@ -17,6 +17,11 @@ const c = (form: PresenceForm, motif: BurstMotif, count: number, motion: Presenc
  * describe decoration, never the number of creatures or damaging strikes. */
 export const SKILL_PRESENCES: Readonly<Record<string, PresenceProfile>> = {
   skeletal_arrowfall: s('shafts', 'teeth', 3),
+  skeletal_bombardment: s('meteor', 'teeth', 4),
+  skeletal_weather_fire: s('shafts', 'flame', 6),
+  skeletal_weather_cold: s('hail', 'ice', 5),
+  skeletal_weather_lightning: s('thunder', 'arcs', 4, 'coil'),
+  skeletal_weather_chaos: s('vent', 'spores', 4),
   skeletal_cinder_rain: s('shafts', 'flame', 4),
   brimstone_volley: s('meteor', 'cracks', 3, 'split'),
   hellshot_volley: s('meteor', 'flame', 4, 'split'),

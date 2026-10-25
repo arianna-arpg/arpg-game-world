@@ -1,3 +1,4 @@
+import { DEVICE_CFG, DeviceContacts, deviceContactEligible, groundDeviceState } from './groundDevices';
 import { syncAltarBodies } from './altarBodies';
 import { SkillInputOrder } from './skillInputOrder';
 import { markBodyAction } from './bodyAction';
@@ -48,6 +49,8 @@ import { ensureMovementTether, landMovementTether, updateMovementTethers, refres
 import { CompanionBonds } from './companionBonds';
 import { Assaults, assaultNode } from './assault';
 import { Challenges } from './challenges';
+import { ChannelFormations } from './channelFormation';
+import { castSequenceInstance } from './castSequence';
 import { AttackSequences } from './attackSequences';
 import { GuardArts } from './guardArts';
 import { guardCapacity } from './guardArtsSpec';
@@ -399,6 +402,7 @@ import {
   feedWatch, layTrailPoint, trailNewest, trailNext, WATCH_CFG, WATCH_RUNG,
   watchRungOf, watchValueOf, type WatchSpec,
 } from './watch';
+import { updateWatchGaze } from './watchGaze';
 import type { WispKindRow, WisplightSurge } from '../packages/overlays/wisplight';
 import type { DroveSurge } from '../packages/overlays/drove';
 import type { QuickeningField } from '../packages/overlays/quickening';
@@ -3684,6 +3688,9 @@ export class World {
   readonly creepers = new Creepers();
   readonly challenges = new Challenges(this);
   readonly attackSequences = new AttackSequences(this);
+  readonly channelFormations = new ChannelFormations(this,
+    (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
+    (body, inst, aim) => { this.executeSkill(body, inst, aim, { noRepeat: true, noCooldown: true, keepFacing: true }); });
   readonly guardArts = new GuardArts(this);
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
@@ -5878,6 +5885,7 @@ export class World {
     this.creepers.clear();
     this.assaults.clearAll();
     this.challenges.clearAll();
+    this.channelFormations.clear();
     this.attackSequences.clearAll();
     this.guardArts.clearAll();
     this.guardArts.rebind();
@@ -12742,15 +12750,13 @@ export class World {
    *  policy; and a widowed steed turns zone-memory eligible — it is real on
    *  its own now, no remembered rider implies it. */
   /** THE WATCH FABRIC's behavior sweep (engine/watch.ts), cadenced at
-   *  WATCH_CFG.sweepSec and run late among the movers so its facing writes
-   *  win the frame (the renderer and next tick's cone test read the same
-   *  bearing — drawn == tested). Per watcher: (1) the rung cache follows
+   *  WATCH_CFG.sweepSec for bookkeeping. Facing advances in the per-actor
+   *  frame through updateWatchGaze before the ordinary turn clamp, so the
+   *  renderer and perception share one continuous bearing. Per watcher: (1) the rung cache follows
    *  the decaying meter (the down-ladder is watchable), (2) THE STAND-DOWN
    *  — a locked watcher whose fight is over clears aggro and re-banks at
    *  the search rung, decaying from there like any suspicion, (3) THE
-   *  GAZE — unaware sweep-spec bodies oscillate their bearing around the
-   *  post (the drawn cone sweeps with it); stirring bodies turn toward the
-   *  stimulus (the head is the tell), (4) THE NOSE — scent watchers follow
+   *  GAZE runs per frame in updateWatchGaze; (4) THE NOSE — scent watchers follow
    *  their quarry's trail prints in lay order through the standing
    *  investigate walk (alertFrom), losing the line exactly where the
    *  prints gap. Also lays the players' trails (only while a live scent
@@ -12781,21 +12787,6 @@ export class World {
       if (w.scent) {
         scent++;
         if (!a.aggroed && a.aiTargetId === undefined) this.watchScent(a, w, t);
-      }
-      // (3) THE GAZE — never wrench a casting or locked body's aim.
-      if (a.aiTargetId === undefined && !a.casting && !a.aggroed) {
-        if (a.watchRung === WATCH_RUNG.unaware && w.sweep) {
-          const base = a.aiPostFacing ?? (a.watchBase ??= a.facing);
-          const ph = (((a.id * 2654435761) >>> 9) & 1023) / 1023 * Math.PI * 2;
-          a.facing = base
-            + Math.sin(t / w.sweep.sec * Math.PI * 2 + ph)
-            * (w.sweep.arcDeg * Math.PI / 180) / 2;
-        } else if (a.watchRung === WATCH_RUNG.stir && a.watchAt) {
-          const want = angleTo(a.pos, a.watchAt);
-          const d = angleDiff(a.facing, want);
-          const step = WATCH_CFG.turnRadSec * WATCH_CFG.sweepSec;
-          a.facing = Math.abs(d) <= step ? want : a.facing + Math.sign(d) * step;
-        }
       }
     }
     // THE TRAIL LAY: players print the ground while a scent watcher stands;
@@ -30197,6 +30188,15 @@ export class World {
     // Monsters' skills level up with them — same leveling system as the player.
     const skillLevel = monsterSkillLevelOf(level);
     a.skills = def.skills.map(id => makeSkillInstance(SKILLS[id], skillLevel));
+    if (def.groundDevice) {
+      const payload = a.skills.find(s => s?.def.id === def.groundDevice!.skillId)
+        ?? (SKILLS[def.groundDevice.skillId] && makeSkillInstance(SKILLS[def.groundDevice.skillId], skillLevel));
+      if (payload) {
+        a.construct = groundDeviceState(def.groundDevice, payload);
+        a.aims = false;
+        if (def.groundDevice.kind === 'trap') this.deviceContacts.watch(a);
+      }
+    }
     // LEVEL-GATED GRANTS (MonsterGrant): once the monster is high enough, its kit
     // evolves — gain a new skill, or socket a support into an existing one (riding
     // the skill instances' default 3 sockets; the cast pipeline reads them).
@@ -34244,6 +34244,43 @@ export class World {
     return inst;
   }
 
+  /** Opt-in meta commands join the same AI picker and payment/cooldown path.
+   * Explicit bar copies win; host bans/reservations also suppress their metas. */
+  autonomousMetas(caster: Actor, reserved?: Set<string>): SkillInstance[] {
+    const seen = new Set(caster.skills.flatMap(s => s ? [s.def.id] : []));
+    const commands: SkillInstance[] = [];
+    for (const host of caster.skills) {
+      if (!host || reserved?.has(host.def.id) || caster.aiSkillBans?.has(host.def.id)) continue;
+      for (const meta of instanceMetas(host)) {
+        if (!SKILLS[meta.skillId]?.ai?.autonomousMeta || seen.has(meta.skillId)) continue;
+        seen.add(meta.skillId); commands.push(this.mintMetaInstance(caster, host, meta.skillId));
+      }
+    }
+    return commands;
+  }
+
+  /** Judge a remote command from its devices, not from the commander's feet. */
+  deviceCommandUseful(caster: Actor, inst: SkillInstance): boolean {
+    const spec = inst.def.ai?.deployed;
+    if (!spec) return true;
+    const devices = this.actors.filter(c => c.owner === caster && !c.dead
+      && c.construct?.kind === spec.kind && !(c.construct.timer > 0)
+      && c.construct.detonationLeft === undefined && !!c.construct.castInst);
+    if (devices.length < (spec.minCount ?? 1)) return false;
+    const targets = new Set<number>();
+    for (const c of devices) {
+      const payload = c.construct!.castInst!, delivery = instanceDelivery(payload);
+      const base = spec.radius ?? ((delivery.type === 'nova' || delivery.type === 'ground')
+        ? delivery.radius : payload.def.ai?.range ?? 0);
+      const radius = base * c.sheet.get('aoeRadius', skillContextTags(payload), instanceMods(payload));
+      for (const prey of this.enemiesOf(c)) {
+        if (!prey.construct && sameStory(c, prey) && dist(c.pos, prey.pos) - prey.radius <= radius
+          && this.lineOfFire(c.pos, prey.pos, c.tier)) targets.add(prey.id);
+      }
+    }
+    return targets.size >= (spec.minTargets ?? 1);
+  }
+
   private relocationHosts = new WeakMap<SkillInstance, SkillInstance>();
 
   /** The same eligibility read gates payment and execution. Instance identity
@@ -35235,6 +35272,7 @@ export class World {
     // Replenishment is a birth clock, never an echo/trigger/proc cast.
     if (replenishingDelivery(inst)) return false;
     inst = this.challenges.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
+    inst = castSequenceInstance(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.attackSequences.prepare(caster, inst, aim, opts.dmgMult ?? 1);
     const def = inst.def;
     const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
@@ -37018,6 +37056,7 @@ export class World {
         break;
 
       case 'summon': {
+        if (d.channelFormation) { this.channelFormations.pulse(caster, inst); break; }
         // Corpse summons (Raise Spectre / Revive): the minion IS the corpse.
         if (d.fromCorpse) {
           // THE GRIMOIRE: mastery replaces scavenging — an attuned bestiary
@@ -37704,9 +37743,12 @@ export class World {
 
       case 'detonate': {
         const mines = this.actors.filter(a =>
-          a.owner === caster && !a.dead && a.construct?.kind === 'mine');
+          a.owner === caster && !a.dead && a.construct?.kind === 'mine'
+          && !(a.construct.timer > 0) && a.construct.detonationLeft === undefined
+          && !this.pendingDetonations.some(pd => pd.mine === a));
         mines.forEach((mine, i) => {
-          const timer = 0.05 + i * 0.08, fx = skillSelfVoice(def.id, 'prepare');
+          const timer = DEVICE_CFG.detonation.lead + i * DEVICE_CFG.detonation.stagger, fx = skillSelfVoice(def.id, 'prepare');
+          mine.construct!.detonationLeft = timer;
           const visual: Flash | undefined = fx ? { pos: { ...mine.pos }, radius: mine.radius + 18,
             color: cosmeticColor, life: timer, maxLife: timer, fx, recoveryCueTier: mine.tier } : undefined;
           if (visual) this.flashes.push(visual);
@@ -40423,8 +40465,12 @@ export class World {
       kind: d.kind,
       castInst,
       range: d.range,
-      timer: d.kind === 'trap' ? 0.5 : (d.interval ?? 0),
+      timer: d.interval ?? 0,
     };
+    if (d.kind === 'trap' || d.kind === 'mine') {
+      c.construct = groundDeviceState({ kind: d.kind, ...d.deviceTrigger }, castInst, d.range);
+      if (d.kind === 'trap') this.deviceContacts.watch(c);
+    }
     // AIM IDENTITY: live-aiming kinds wear the renderer's aim tick; frozen
     // furniture (bone walls, embeds) doesn't — kind registry default, and
     // any skill may declare the exception on its delivery.
@@ -42872,6 +42918,7 @@ export class World {
       if (def?.beneficial) continue;
       if (s.stacks > 1) {
         s.stacks -= Math.max(1, Math.round(s.stacks * portion));
+        if (s.stackTimes) s.stackTimes = s.stacks > 0 ? s.stackTimes.slice(-s.stacks) : [];
         if (s.stacks <= 0) {
           target.statuses.splice(i, 1);
           if (!target.statuses.some(o => o.id === s.id)) {
@@ -42885,6 +42932,7 @@ export class World {
         }
       } else {
         s.remaining *= 1 - portion;
+        if (s.stackTimes) s.stackTimes = s.stackTimes.map(t => t * (1 - portion));
       }
       rung++;
     }
@@ -43448,6 +43496,12 @@ export class World {
     const vs = victimScopeArmed(caster.sheet, extra)
       ? victimTags(target, caster, { time: this.time }) : undefined;
     const packet: DamagePacket = rollSkillDamage(caster, inst, flatBonus, vs);
+    // Matching typed hits benefit before ordinary hit effects add new stacks.
+    for (const status of target.statuses) {
+      const v = STATUS_DEFS[status.id]?.hitVulnerability;
+      if (v && v.skills.includes(inst.def.id) && packet.amounts[v.type])
+        packet.amounts[v.type]! *= 1 + status.stacks * v.perStack * (status.power ?? 1);
+    }
     if (dmgMult !== 1) {
       for (const t of Object.keys(packet.amounts) as (keyof typeof packet.amounts)[]) {
         packet.amounts[t]! *= dmgMult;
@@ -49207,6 +49261,7 @@ export class World {
     // The same tending mends a downed COMPANION (the Hunter's bond).
     this.companionBonds.update(dt);
     this.challenges.update(dt);
+    this.channelFormations.update();
     this.attackSequences.update(dt);
     this.guardArts.update(dt);
     this.updateDownedCompanions(dt);
@@ -49964,6 +50019,9 @@ export class World {
           a.facing = angleTo(a.pos, cl.aim);
         }
       }
+      // A watch uses the same per-frame turn budget as every other aim.
+      // It never competes with the idle post or a later cadenced write.
+      updateWatchGaze(a, this.time, dt);
       // TURN CLAMP (BEHAVIOR_STATS.turnSpeed ← Actor.turnSpeed as the innate
       // base): facing may only swing so far per frame — big bodies LUMBER,
       // their shell arcs and their aim lag the fight, and circling them
@@ -50431,6 +50489,7 @@ export class World {
         a.pos = this.clampPos(vec(
           a.pos.x + p.vx * dt,
           a.pos.y + p.vy * dt), a.radius, from, { out: sc, mover: a });
+        this.deviceContacts.record(a, from, a.pos, a.tier, a.flying || !!a.leap || this.levitating(a));
         if (movementDiagnosticsEnabled) recordMovement(this, a, 'knockback', from, a.pos, { vx:p.vx, vy:p.vy, hit:sc.hit });
         const hit = sc.hit as string;
         // THE BOWLING LANE (engine/mass.ts): a body flying fast enough
@@ -52618,6 +52677,8 @@ export class World {
 
   /** Totems target & cast; sentries fire down their lane; traps arm and
    *  trigger; pylons periodically cast. Mines wait for detonation. */
+  private deviceContacts = new DeviceContacts();
+
   private updateConstructs(dt: number): void {
     for (const c of this.actors) {
       if (c.dead || !c.construct) continue;
@@ -52698,9 +52759,13 @@ export class World {
           break;
         }
         case 'trap': {
-          if (st.timer > 0) { st.timer -= dt; break; } // arming
+          const wasArming = st.timer > 0;
+          st.timer = Math.max(0, st.timer - dt);
+          if (st.timer > 0) break;
           const prey = this.enemiesOf(c).find(e =>
-            dist(c.pos, e.pos) - e.radius <= st.range);
+            deviceContactEligible(c, e, e.flying || !!e.leap || this.levitating(e))
+            && (dist(c.pos, e.pos) - e.radius <= st.range
+              || !wasArming && this.deviceContacts.crosses(c, e)));
           if (prey && st.castInst) {
             c.useLock = 0; c.mana = c.maxMana();
             // EXECUTE, never cast: a payload with a cast bar would die with
@@ -52711,11 +52776,13 @@ export class World {
           break;
         }
         case 'mine':
+          st.timer = Math.max(0, st.timer - dt);
+          break; // remote activation remains a real paid command
         case 'decoy':
         case 'barrier':
         case 'dome':
         case 'relic': // event-driven: answers its owner's uses (executeSkill)
-          break; // mines wait for Detonate; the rest just stand there
+          break; // passive bodies wait for their event or lifetime
 
         case 'embed': {
           // The LODGED object (EmbedSpec): run-over triggers, self-
@@ -52957,6 +53024,7 @@ export class World {
         }
       }
     }
+    this.deviceContacts.finish(this.actors.some(c => !c.dead && c.construct?.kind === 'trap'));
   }
 
   /** THE STROBE STANCES (GroundDelivery.strobe — Restless Earth): toggled
@@ -56458,6 +56526,7 @@ export class World {
         if (pd.mine.dead || !pd.mine.construct?.castInst) pd.visual.life = 0;
       }
       pd.timer -= dt;
+      if (pd.mine.construct) pd.mine.construct.detonationLeft = Math.max(0, pd.timer);
       if (pd.timer > 0) continue;
       this.pendingDetonations.splice(i, 1);
       if (pd.visual) pd.visual.life = 0;
@@ -56608,11 +56677,11 @@ export class World {
       // channels (innate or a Gathered Casting conversion) hold to the
       // BRIM: a monster releases at full power or not at all.
       const chSpec = cs.mode === 'channel' ? (cs.gather ?? instanceChannel(cs.inst)) : undefined;
-      cs.aiHold ??= chSpec?.release?.requireFull
+      cs.aiHold ??= chSpec?.aiHold ?? (chSpec?.release?.requireFull
         ? (chSpec.maxHold ?? 4) + 0.5
         : chSpec?.brim
           ? chSpec.brim.fillTime + 0.4
-          : rand(1.2, 2.6);
+          : rand(1.2, 2.6));
       // Charge bars release at FULL CHARGE at the latest: elapsed CAPS at
       // total, so an aiHold rolled above it would otherwise hold the cast
       // open forever (wedged monsters, totems, and echo riders mid-charge).
@@ -56923,6 +56992,7 @@ export class World {
           }
         }
         if (!cs.held || a.dead) {
+          this.channelFormations.release(a, cs);
           const rel = ch.release;
           const heldT = cs.channelTime ?? 0;
           a.casting = null;
@@ -57835,6 +57905,7 @@ export class World {
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
     this.guardArts.clear(caster, inst);
+    this.channelFormations.clear(caster, inst);
     this.attackSequences.clear(caster, inst);
     this.challenges.clear(caster, inst);
     const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst || candidate.challengeHost === inst || candidate.guardArtsHost === inst;
@@ -63925,6 +63996,7 @@ export class World {
    *  and, if it entered a fall region (void), run its recovery. Sets a.pos itself so
    *  a recovery teleport isn't overwritten. The shared path for move/dash/slip. */
   private steppedClamp(a: Actor, dest: Vec2, from: Vec2, disp?: DisplacementPolicy): void {
+    const deviceTier = a.tier;
     const sc = this.cScratch;
     sc.hit = 'none';
     // THE LANDING RE-SEAT at the mover (engine/tiers.ts landingTier): a
@@ -63944,6 +64016,8 @@ export class World {
     // walking. (Pure read; flat zones return the tier untouched.)
     if (this.zone.tiers && this.walk) a.tier = resolveTierCrossing(this.walk, a.tier, from, dest);
     a.pos = this.clampPos(dest, a.radius, from, { out: sc, disp, mover: a });
+    // Record the resolved ground segment BEFORE any recovery teleport.
+    this.deviceContacts.record(a, from, a.pos, deviceTier, a.flying || !!a.leap || this.levitating(a));
     if ((sc.hit as string) === 'void') this.resolveBoundary(a, sc, from);
     // THE LADDER TOGGLE (the crossing law's second half): a link cell whose
     // neighborhood is BOTH-tier ground (a culvert well among street-over-duct

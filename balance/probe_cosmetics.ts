@@ -575,7 +575,7 @@ test('Skeletal mage visuals: pool and tree previews retain source identity, nati
   const ids = Object.keys(SKELETAL_MAGE_LEGACY.paint.summonBodies!), a = makeAccount();
   assert(ownsCosmetic(a.cosmetics, SKELETAL_MAGE_LEGACY.id));
   assert.deepEqual(cosmeticPreviewSummons('summon_skeleton_mage').map(m => m.id), ids);
-  assert.deepEqual(cosmeticPreviewSummons('summon_skeleton_archer').map(m => m.id), ['skeleton_archer', ...ids.slice(0, 4)]);
+  assert.deepEqual(cosmeticPreviewSummons('summon_skeleton_archer').map(m => m.id), ['skeleton_archer', 'skeletal_mortarman', ...ids.slice(0, 4)]);
   assert.deepEqual(cosmeticPreviewSummons('raise_dead').map(m => m.id), ['skeleton_warrior', 'zombie', 'court_abomination']);
   assert.deepEqual(cosmeticPreviewSummons('fireball'), []);
   assert.deepEqual(cosmeticPreviewSummons('missing_skill'), []);
@@ -982,7 +982,7 @@ test('Arachnid visuals: real egg casts hatch source-aware spiders with identical
       assert(w.useSkill(p, inst, { x: p.pos.x + 50, y: p.pos.y }));
       for (let i = 0; i < 60; i++) w.update(1 / 60);
       const egg = w.actors.find(a => a.owner === p && a.construct?.kind === 'pod' && !a.dead); assert(egg);
-      assert.equal(egg.look, 'brood_egg');
+      assert.equal(egg.look, 'device_lay_brood_egg');
       const hatchTicks = Math.ceil(egg.lifespan! * 60) + 2; assert(hatchTicks > 0 && hatchTicks < 1800);
       if (broken) w.kill(egg);
       for (let i = 0; i < hatchTicks; i++) w.update(1 / 60);

@@ -6,7 +6,7 @@ Incorporate main with real merges, preserving ancestry. Do not create another st
 
 The `Incorporate main into seamless` workflow runs after successful push CI on main and can also be dispatched manually. It pins the verified main commit, merges it into the latest published seamless branch, runs the existing current gameplay checks and actual client playthrough, and pushes a normal merge only after they pass. Manual dispatch also requires successful CI on the current main commit. It never force-pushes, automatically chooses a side in a conflict, or runs the historical probe archive. A conflict, failed check, concurrent branch advance or branch-protection refusal fails visibly and publishes nothing. Resolve that condition and rerun the workflow.
 
-Main changes require an up-to-date pull request and successful CI, including for administrators. See [main health](main-health.md) for the required checks and publication gates.
+Verified main changes use direct fast-forward pushes by default; pull requests are optional. The exact commit must pass required CI and include current main before publication, including for administrators. See [main health](main-health.md) for the checks, publication steps and the owner's 2026-10-23 approval. Stay on the `arianna-arpg` GitHub account.
 
 The user explicitly authorized this ongoing remote-write automation on 2026-10-19; the workflow is published on main. Repository Actions permissions and branch rules must permit its normal push. Local unpushed commits cannot trigger a GitHub workflow.
 

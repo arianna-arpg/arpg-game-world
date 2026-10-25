@@ -26,6 +26,18 @@ documented in [combat-polish](docs/design/combat-polish.md). Verify
 probe_miniontargets, probe_orbgeneration, companionstance, flasktrees and
 movementvisuals; build before the hidden movement-visuals UI harness.
 
+Trap/mine mechanics and reusable deviceVisuals are documented in
+`docs/engine/ground-devices.md`: walkable contact devices, configurable arming,
+resolved crossings and autonomous mine meta commands. Verify presencevisuals,
+selfvisuals, trapworks, tacticalai, controlstartertrees, movementvisuals,
+cosmetics, all types and sim smoke; then the hidden device-visuals-ui and
+construct-bodies-ui harnesses sequentially after an isolated build.
+
+The persistent construct body silhouettes are composed in `data/constructLooks.ts`
+and `data/constructGlyphs.ts`, selected through each delivery's ordinary `look`.
+See `docs/render/constructs.md`; verify presencevisuals, cosmetics, all types,
+sim smoke and hidden `balance/construct-bodies-ui.cjs` after an isolated build.
+
 Storm, summon and construct identities use `data/skillPresenceVisuals.ts`
 and `render/vis/skillPresenceVoice.ts`: 139 explicit source profiles.
 Births, completed actions, real aura/construct pulses and actual retirement
@@ -341,6 +353,13 @@ A top-down action RPG prototype in TypeScript + Vite, rendered on HTML5 Canvas
 statuses, passives, zones are plain data entries composed by one shared engine,
 and the player, monsters, and minions all act through a single skill pipeline
 (`World.useSkill()` in `src/engine/world.ts`).
+
+Skeleton Archer's independently timed wounds, held firing squads, mortars and
+elemental mage arts are documented in `docs/design/skeleton-archer.md`. Tuning
+lives in `data/skeletonArcherTree.ts` and `skeletonArcherSkills.ts`; reusable
+contracts live in `engine/channelFormation.ts` and `castSequence.ts`. Verify
+skeletonarcher, nestednecromancer, supportfabric, skillflights and skillvisuals,
+all types, sim smoke and the hidden `balance/skeleton-archer-ui.cjs` after a build.
 
 Necromancer summon trees live in `src/data/necromancerTrees.ts`; reusable crew
 arts and forms are in `necromancerSkills.ts` / `necromancerMinions.ts`. The

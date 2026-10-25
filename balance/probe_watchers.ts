@@ -1,3 +1,4 @@
+import { watchGazeChecks } from './watchGazeChecks';
 // ---------------------------------------------------------------------------
 // ONE-OFF PROBE — THE WATCH FABRIC end to end on the real engine
 // (docs/engine/watchers.md): the registry weave (every watcher validates,
@@ -950,8 +951,10 @@ MONSTERS.probe_din_striker = {
       check('live: the strayed watchman WALKED HOME to its stand (the sentry fabric composed)',
         Math.hypot(eye.pos.x - stand.x, eye.pos.y - stand.y) < 24,
         `ended ${Math.hypot(eye.pos.x - stand.x, eye.pos.y - stand.y).toFixed(0)}px out`);
-      check('live: the posted facing re-planted on arrival',
-        eye.aiPostFacing !== undefined && Math.abs(eye.facing - eye.aiPostFacing) < 1e-6);
+      check('live: arrival resumes the watch around its posted bearing without pinning the gaze',
+        eye.aiPostFacing !== undefined && !eye.postHoming
+        && Math.abs(Math.atan2(Math.sin(eye.facing-eye.aiPostFacing), Math.cos(eye.facing-eye.aiPostFacing)))
+          <= eye.watch!.sweep!.arcDeg*Math.PI/360 + 1e-6);
     }
   }
 
@@ -1071,6 +1074,8 @@ MONSTERS.probe_din_striker = {
     rungsSeen.join(',').startsWith('0,1,2') && eye.aggroed && eye.aiTargetId === prey.id,
     `saw [${rungsSeen.join(',')}]`);
 }
+
+watchGazeChecks(check);
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

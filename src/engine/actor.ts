@@ -274,7 +274,11 @@ export interface ConstructState {
   /** The skill this construct casts (carries the deployer's gems & level). */
   castInst?: SkillInstance;
   range: number;
-  /** Trap arming countdown; pylon cast-interval timer. */
+  /** Configurable contact policy and real clocks, also sent to visual peers. */
+  deviceTrigger?: import('./groundDevices').DeviceTriggerSpec;
+  armingDuration?: number;
+  detonationLeft?: number;
+  /** Trap/mine arming countdown; pylon cast-interval timer. */
   timer: number;
   /** Eruptors: seconds between spews (charge-scaled at spawn). */
   castInterval?: number;
@@ -1022,6 +1026,8 @@ export class Actor {
   /** CAST CYCLES (SkillDef.castCycle): completed real uses counted per
    *  skill id toward the every-Nth-cast grant. */
   castCycles = new Map<string, number>();
+  /** Serializable with native actor checkpoints; keys retain skill-instance identity. */
+  castSequences = new Map<SkillInstance, number>();
   /** Minion life-cycle rites, baked at summon from the OWNER's stats:
    *  on death, the flock heals (deathHealPct × max life + flat); expiry
    *  may count as death (the raging-spirits lever). */
@@ -1834,6 +1840,8 @@ export class Actor {
   /** The summoning instance, kept for persistent respawns. */
   summonInst?: SkillInstance;
   summonEscort?: { distance: number };
+  /** The channel formation controller owns movement and firing for this body. */
+  channelFormation?: true;
   summonOffspring?: boolean; // temporary heirs do not occupy or respawn contract slots
   summonDeathActions?: import('./brain').AIAction[];
   summonShell?: SummonShellSpec;
@@ -2814,8 +2822,15 @@ export class Actor {
       existing.total = Math.max(existing.total ?? 0, existing.remaining);
       existing.bankFrac = bankFracOf(existing, def);
     } else if (existing && def.stacking) {
-      if (existing.stacks < cap) existing.stacks++;
-      if (!fixedFuse) existing.remaining = duration;
+      if (def.independentStacks) {
+        existing.stackTimes ??= Array(existing.stacks).fill(existing.remaining);
+        if (existing.stackTimes.length < cap) existing.stackTimes.push(duration);
+        existing.stacks = existing.stackTimes.length;
+        existing.remaining = Math.max(0, ...existing.stackTimes);
+      } else {
+        if (existing.stacks < cap) existing.stacks++;
+        if (!fixedFuse) existing.remaining = duration;
+      }
       existing.dps = Math.max(existing.dps, dps);
       // (Per-stack mods — Vulnerable — refold at the tail, power-aware.)
       // BUILDUP (chill → frozen): at peak intensity the stacks are consumed
@@ -2852,6 +2867,7 @@ export class Actor {
     } else {
       this.statuses.push({
         id, remaining: duration, stacks: 1, dps, sourceName, challengeField: opts?.challengeField,
+        stackTimes: def.independentStacks ? [duration] : undefined,
         sourceKey: opts?.sourceKey, holdDischarge: opts?.holdDischarge,
         power: power !== 1 ? power : undefined,
         propagates: opts?.propagates || def.propagateOnDeath,
@@ -3278,7 +3294,19 @@ export class Actor {
     for (let i = this.statuses.length - 1; i >= 0; i--) {
       const s = this.statuses[i];
       // Chrono statuses expire on the unbent clock (see chronoDt above).
-      s.remaining -= STATUS_DEFS[s.id]?.timeScale !== undefined ? chronoDt : dt;
+      const statusDt = STATUS_DEFS[s.id]?.timeScale !== undefined ? chronoDt : dt;
+      if (s.stackTimes) {
+        const previousStacks = s.stacks;
+        let kept = 0, remaining = 0;
+        for (const timer of s.stackTimes) {
+          const left = timer - statusDt;
+          if (left > 0) { s.stackTimes[kept++] = left; remaining = Math.max(remaining, left); }
+        }
+        s.stackTimes.length = kept; s.stacks = kept; s.remaining = remaining;
+        const def = STATUS_DEFS[s.id];
+        if (def?.mods && previousStacks !== kept) this.sheet.setSource('status:' + s.id, def.mods.map(m => ({ ...m,
+          value: m.value * (def.modsPerStack ? s.stacks : 1) * (s.power ?? 1) })));
+      } else s.remaining -= statusDt;
       if (s.dps > 0) {
         const sdef = STATUS_DEFS[s.id];
         const key = sdef?.dotType ?? 'untyped';

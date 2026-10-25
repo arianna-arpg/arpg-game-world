@@ -1,4 +1,5 @@
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityMask } from './visibilityDiagnostics';
+import { withVisibilityComposite } from './visibilityComposite';
 // ---------------------------------------------------------------------------
 // THE SIGHT VEIL — positional occlusion shadows (VIS_CFG.sightVeil).
 //
@@ -94,6 +95,8 @@ import { castGridRay, LOS_CFG } from '../../engine/los';
 import { tierElevOf } from '../../engine/tiers';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
+import { visibilityRaster, type VisibilityRasterView } from './visibilityRaster';
+import { VisibilityCandidates } from './visibilityCandidates';
 
 interface Pt { x: number; y: number }
 
@@ -279,6 +282,11 @@ export class SightVeil {
   /** Per-actor smoothed hide fades (WeakMap: dead actors collect themselves). */
   private shades = new WeakMap<object, { v: number; f: number }>();
   private diagnosticGeometry?: unknown;
+  private geometryRevision = 0;
+  private sheetKey = '';
+  private queryKey = '';
+  private discCandidates = new VisibilityCandidates<{body:OccDisc; reach:number}>();
+  private rectCandidates = new VisibilityCandidates<{body:OccRect; reach:number}>();
 
   /** Resolve strengths + refresh occluder caches. Once per frame, before
    *  draw. confineFrac is the room veil's wrap (this pass yields to a
@@ -368,6 +376,8 @@ export class SightVeil {
       geometryChanged = true;
     }
     this.wallEye = wallContactEye(this.edges, p.x, p.y);
+    if (geometryChanged) this.geometryRevision++;
+    this.prepareCandidates();
     if (visibilityDiagnosticsEnabled) {
       if (geometryChanged || !this.diagnosticGeometry) this.diagnosticGeometry = {
         discs:this.discs.map(({owner,...c})=>({...c,kind:owner?.kind,tier:owner?.tier??0})),
@@ -380,6 +390,27 @@ export class SightVeil {
       discs:this.discs.length,rects:this.rects.length,edges:this.edges.length,
       gridVersion:this.gridV,tier:this.heroT,wallEye:{...this.wallEye},
       region:this.regionF,doodad:this.doodadF,hulls:concealed.length });
+  }
+
+  /** Resolve eye-relative bounds once, not once per actor, label and prop.
+   * The exact narrow-phase tests below remain authoritative. */
+  private prepareCandidates(): void {
+    const key=[this.geometryRevision,this.px,this.py,this.radius,VIS_CFG.sightVeil.farSlack].join(':');
+    if(key===this.queryKey)return;
+    this.queryKey=key;this.discCandidates.clear();this.rectCandidates.clear();
+    const far=this.radius*VIS_CFG.sightVeil.farSlack;
+    for(const c of this.discs){
+      const dx=c.x-this.px,dy=c.y-this.py,d=Math.hypot(dx,dy);
+      if(d-c.r>this.radius)continue;
+      const reach=discShadowReach(d,c.r,c.s,far);if(reach<=0)continue;
+      this.discCandidates.add(dx,dy,c.r,{body:c,reach});
+    }
+    for(const r of this.rects){
+      const dx=r.x-this.px,dy=r.y-this.py;
+      if(Math.hypot(dx,dy)-r.boundR>this.radius)continue;
+      const g=rectShadowGeometry(r,this.px,this.py,far);if(!g)continue;
+      this.rectCandidates.add(dx,dy,r.boundR,{body:r,reach:g.reach});
+    }
   }
 
   /** Is this WORLD point under a standing roof (THE HULL LAW)? Solid to the
@@ -536,30 +567,25 @@ export class SightVeil {
     let f = 0;
     if (this.doodadF > 0) {
       const len = Math.sqrt(len2);
-      for (const c of this.discs) {
+      for (const {body:c,reach} of this.discCandidates.at(qx,qy)) {
         if (except && c.owner === except) continue;
         const v = this.doodadF * c.s;
         if (v <= f) continue;
-        const bd = Math.hypot(c.x - px, c.y - py);
         // The drawn pass's own guards, mirrored exactly: a body whose whole
         // shadow lies past the veil radius casts nothing; a point past a
         // body's shadow length reads clear of THAT body.
-        if (bd - c.r > this.radius) continue;
-        if (len > discShadowReach(bd, c.r, c.s, this.radius * VIS_CFG.sightVeil.farSlack)) continue;
+        if (len > reach) continue;
         if (segHitsCircle(px, py, qx, qy, len2, c.x, c.y, c.r)) {
           f = v;
           if (f >= this.doodadF) break;
         }
       }
       if (f < this.doodadF) {
-        for (const r of this.rects) {
+        for (const {body:r,reach} of this.rectCandidates.at(qx,qy)) {
           if (except && r.owner === except) continue;
           const v = this.doodadF * r.s;
           if (v <= f) continue;
-          const bd = Math.hypot(r.x - px, r.y - py);
-          if (bd - r.boundR > this.radius) continue;
-          const geometry = rectShadowGeometry(r, px, py, this.radius * VIS_CFG.sightVeil.farSlack);
-          if (!geometry || len > geometry.reach) continue;
+          if (len > reach) continue;
           // Broad phase at the bounding circle, then THE EXACT SLAB: the
           // drawn wedge walks the TRUE oriented corners (rectShadowPath),
           // so the query must test the same slab. The circle verdict alone
@@ -629,7 +655,7 @@ export class SightVeil {
    *  through the same effective camera the light layer uses. Free when
    *  nothing in reach occludes. */
   draw(ctx: CanvasRenderingContext2D, camX: number, camY: number,
-    zoom: number, w: number, h: number): void {
+    zoom: number, w: number, h: number, rasterView?: VisibilityRasterView): void {
     const started = visibilityDiagnosticsEnabled ? performance.now() : 0;
     const cfg = VIS_CFG.sightVeil;
     if (!this.active) return;
@@ -640,8 +666,13 @@ export class SightVeil {
     const px = this.px, py = this.py;
     const far = this.radius * cfg.farSlack;
 
-    const scale = cfg.scale;
-    const bw = Math.max(2, Math.ceil(w * scale)), bh = Math.max(2, Math.ceil(h * scale));
+    const { width:bw, height:bh, k } = visibilityRaster(w,h,zoom,cfg.scale,rasterView);
+    const sheetKey=[this.geometryRevision,px,py,this.radius,camX,camY,bw,bh,k,
+      regionA,doodadA,cfg.featherPx,cfg.farSlack,cfg.tint.r,cfg.tint.g,cfg.tint.b].join(':');
+    if(this.buf && sheetKey===this.sheetKey){
+      this.present(ctx,w,h,started,true);return;
+    }
+    this.sheetKey=''; // a cleared/empty raster must never reuse an older key
     if (!this.buf) {
       this.buf = document.createElement('canvas');
       this.bctx = this.buf.getContext('2d');
@@ -654,7 +685,6 @@ export class SightVeil {
     b.setTransform(1, 0, 0, 1, 0, 0);
     b.globalCompositeOperation = 'source-over';
     b.clearRect(0, 0, bw, bh);
-    const k = zoom * scale;
     const ox = camX, oy = camY;
 
     // --- build the shadow LAYERS (one Path2D per strength tier) -------------
@@ -722,14 +752,18 @@ export class SightVeil {
     const mask = this.mask.getContext('2d', { willReadFrequently:true })!, soft = this.softMask.getContext('2d', { willReadFrequently:true })!;
     mask.setTransform(1,0,0,1,pad,pad);
     mask.fillStyle = `rgb(${t.r},${t.g},${t.b})`;
+    let firstLayer=true;
     for (const L of layers) {
       mask.clearRect(-pad,-pad,this.mask.width,this.mask.height);
       mask.fill(L.path);
       soft.clearRect(0,0,this.softMask.width,this.softMask.height);
       soft.filter = cfg.featherPx > 0 ? `blur(${cfg.featherPx}px)` : 'none';
       soft.drawImage(this.mask,0,0);
-      b.globalCompositeOperation = 'destination-out'; b.globalAlpha = 1;
-      b.drawImage(this.softMask,-pad,-pad);
+      if(!firstLayer){
+        b.globalCompositeOperation = 'destination-out'; b.globalAlpha = 1;
+        b.drawImage(this.softMask,-pad,-pad);
+      }
+      firstLayer=false;
       b.globalCompositeOperation = 'source-over'; b.globalAlpha = L.alpha;
       b.drawImage(this.softMask,-pad,-pad);
     }
@@ -753,16 +787,23 @@ export class SightVeil {
     }
     b.globalCompositeOperation = 'source-over';
 
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.buf, 0, 0, bw, bh, 0, 0, w, h);
-    ctx.restore();
+    this.sheetKey=sheetKey;
+    this.present(ctx,w,h,started,false);
+  }
+
+  private present(ctx:CanvasRenderingContext2D,w:number,h:number,started:number,cached:boolean):void {
+    if (visibilityDiagnosticsEnabled) visibilityRecord('sightPresentation', {
+      incomingAlpha:ctx.globalAlpha, incomingBlend:ctx.globalCompositeOperation, appliedAlpha:1,
+    });
+    withVisibilityComposite(ctx, () => {
+      ctx.drawImage(this.buf!,0,0,this.buf!.width,this.buf!.height,0,0,w,h);
+    });
     this.drew = true;
     this.drewW = w; this.drewH = h;
     if (visibilityDiagnosticsEnabled) {
       visibilityRecord("sightDrawMs",performance.now()-started);
-      visibilityMask("sightMask",this.buf);
+      visibilityRecord('sightRaster',{cached,width:this.buf!.width,height:this.buf!.height});
+      visibilityMask("sightMask",this.buf,this.sheetKey);
     }
   }
 
@@ -779,10 +820,10 @@ export class SightVeil {
     ctx.beginPath();
     for (const r of rects) ctx.rect(r.x, r.y, r.w, r.h);
     ctx.clip();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = alpha;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.buf, 0, 0, this.buf.width, this.buf.height, 0, 0, this.drewW, this.drewH);
+    withVisibilityComposite(ctx, () => {
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(this.buf!, 0, 0, this.buf!.width, this.buf!.height, 0, 0, this.drewW, this.drewH);
+    });
     ctx.restore();
   }
 }
