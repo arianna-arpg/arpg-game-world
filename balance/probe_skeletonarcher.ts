@@ -38,7 +38,7 @@ try {
     const { w, p, inst, bodies, aim } = rig(['rattling_bows', 'rain_of_bones']);
     const d = instanceDelivery(inst); assert.equal(d.type, 'summon'); if (d.type !== 'summon') throw Error();
     p.sheet.setSource('capacity', [mod('minionMaxCount', 'flat', 3)]);
-    check('Rain doubles the entire invested cap', summonCapacity(p, inst, d) === 10);
+    check('Grave Legion doubles the entire invested cap', summonCapacity(p, inst, d) === 10);
     w.useSkill(p, inst, aim, true); step(w, 1.3);
     check('cap investment still births just one archer', bodies().length === 1);
     const archer = bodies()[0], foe = target(w, p.pos.x + 250, p.pos.y);
@@ -67,9 +67,9 @@ try {
   {
     const { w, p, inst, aim, bodies } = rig(['rattling_bows', 'ranked_bows', 'endless_quivers', 'rain_of_bones']);
     check('tree exposes a real uncapped channel', instanceCastMode(inst) === 'channel' && instanceChannel(inst)?.maxHold === undefined);
-    check('channel starts', w.useSkill(p, inst, aim, true)); step(w, 0.35);
+    check('channel starts', w.useSkill(p, inst, aim, true)); step(w, 0.15);
     check('first beat raises one flank archer', bodies().length === 1);
-    step(w, 4); check('held channel grows to doubled cap', bodies().length === 4);
+    step(w, 0.75); check('held channel grows to doubled cap within one second', bodies().length === 4);
     const ids = bodies().map(a => a.id).join(); step(w, 10);
     check('full formation never evicts or stops the channel', p.casting?.mode === 'channel' && bodies().map(a => a.id).join() === ids);
     p.casting!.aim = { x: p.pos.x, y: p.pos.y + 400 }; step(w, 1.5);
@@ -94,9 +94,28 @@ try {
     w.applyInputs(new Map([[w.localSeat.id, { dx: 0, dy: 0, aim, held: [false], edge: [false] }]]), 1 / 60); w.update(1 / 60);
     check('ordinary button release fires the full squad and retires it', bodies().length === 0 && w.projectiles.filter(pr => pr.radius >= 12).length === 2);
   }
+  for (const speed of [1, 2]) {
+    const squad = rig(['rattling_bows', 'ranked_bows', 'rain_of_bones']);
+    const ordinary = rig(['rattling_bows', 'rain_of_bones']);
+    for (const r of [squad, ordinary]) {
+      r.p.sheet.setSource('cadence', [mod('castSpeed', 'override', speed), mod('manaRegen', 'override', 0)]);
+      check('cadence comparison starts at speed ' + speed, r.w.useSkill(r.p, r.inst, r.aim, true));
+    }
+    step(squad.w, 0.9 / speed); step(ordinary.w, 0.9 / speed);
+    check('four ranks rise before one ordinary summon completes at speed ' + speed,
+      squad.bodies().length === 4 && ordinary.bodies().length === 0);
+    step(ordinary.w, 0.2 / speed);
+    check('ordinary casting still raises one persistent archer at speed ' + speed,
+      ordinary.bodies().length === 1 && !ordinary.bodies()[0].channelFormation);
+    const before = squad.p.mana, ids = squad.bodies().map(a => a.id).join();
+    step(squad.w, 3 / speed);
+    check('faster paid beats sustain full ranks without replacing them at speed ' + speed,
+      squad.p.casting?.mode === 'channel' && squad.bodies().map(a => a.id).join() === ids
+      && before - squad.p.mana >= 11 && before - squad.p.mana <= 13);
+  }
   for (const stop of ['early', 'interrupt', 'unseat', 'death'] as const) {
     const { w, p, inst, aim, bodies } = rig(['rattling_bows', 'ranked_bows', 'endless_quivers']);
-    w.useSkill(p, inst, aim, true); step(w, stop === 'early' ? 0.4 : 2);
+    w.useSkill(p, inst, aim, true); step(w, stop === 'early' ? 0.2 : 2);
     if (stop === 'early') p.casting!.held = false;
     if (stop === 'interrupt') p.casting = null;
     if (stop === 'unseat') p.skills[0] = null;
@@ -107,7 +126,7 @@ try {
   {
     const { w, p, inst, aim, bodies } = rig(['rattling_bows', 'ranked_bows', 'piercing_bones', 'endless_quivers']);
     w.useSkill(p, inst, aim, true); step(w, 2);
-    check('Piercing Bones raises actual mortarmen', bodies().length === 2 && bodies().every(a => a.defId === 'skeletal_mortarman' && a.skills.some(s => s?.def.id === 'skeletal_bombardment')));
+    check('Bone Mortars raises actual mortarmen', bodies().length === 2 && bodies().every(a => a.defId === 'skeletal_mortarman' && a.skills.some(s => s?.def.id === 'skeletal_bombardment')));
     p.casting!.held = false; step(w, 1 / 60);
     const mortar = w.zones.filter(z => z.inst.def.id === 'skeletal_bombardment' && z.radius >= 130);
     check('full mortar release launches empowered lobbed areas', mortar.length === 2 && bodies().length === 0);
@@ -125,7 +144,7 @@ try {
     check('channeled archers really cast Rain of Bones', w.zones.some(z => z.inst.def.id === 'skeletal_arrowfall'));
     const foe = target(w, aim.x, aim.y); foe.radius = 120;
     w.executeSkill(a, rain, foe.pos); step(w, 1);
-    check('Rain strikes participate in Rattling Bows wounds', foe.statuses.some(s => s.id === 'rattled_bones' && s.stacks > 0));
+    check('Rain strikes participate in Barbed Bones wounds', foe.statuses.some(s => s.id === 'rattled_bones' && s.stacks > 0));
     const bare = rig(['rattling_bows']); bare.inst.sockets[0] = { def: SUPPORTS.resonance, level: 1 };
     check('bare arrows do not admit area-only support', !supportFitsInstOrCrew(SUPPORTS.widening, bare.inst, bare.w.summonCrewSkills(bare.inst)));
   }
@@ -134,7 +153,7 @@ try {
     w.executeSkill(p, inst, aim); const a = bodies()[0], arrow = a.skills[0]!;
     w.executeSkill(a, arrow, { x: a.pos.x + 400, y: a.pos.y });
     const shots = w.projectiles.filter(pr => pr.caster === a);
-    check('Forked Quivers fires three arrows including a straight center shot', shots.length === 3 && shots.some(pr => Math.abs(pr.dir) < 0.001));
+    check('Fanned Volley fires three arrows including a straight center shot', shots.length === 3 && shots.some(pr => Math.abs(pr.dir) < 0.001));
   }
   for (const school of SKELETAL_SCHOOLS) {
     const { w, p, inst, aim, bodies } = rig(['unstrung_sorcery', 'volatile_souls']);
