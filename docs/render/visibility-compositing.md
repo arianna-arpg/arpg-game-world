@@ -29,3 +29,11 @@ Verification:
 
 The fixture checks composited pixels under inherited state, clipped roofs,
 five hidden-caster warning shapes, and 90 moving combat frames.
+
+The full-frame comparison first prepares the static floor synchronously, then
+restores the normal ground budget and upload settings before every assertion.
+Without that preparation, a cold floor could replace a flat placeholder between
+the cast and idle captures and report 48 changed color channels as a shadow
+failure. A settled-frame precondition and the existing zero-difference checks
+keep real compositing regressions visible; the old-renderer negative control
+must still fail.

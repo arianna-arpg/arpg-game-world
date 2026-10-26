@@ -5,6 +5,7 @@ import { LightLayer } from '../src/render/vis/lights';
 import { GridWalkField } from '../src/world/gridWalk';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
+import { VIS_CFG } from '../src/render/vis/visConfig';
 import type { ForesightGeo } from '../src/engine/foresight';
 
 type Check = { name:string; ok:boolean; detail?:unknown };
@@ -72,7 +73,20 @@ export function visibilityCompositeChecks():Check[]{
  const geometries:ForesightGeo[]=[{...common,kind:'ground'}, {...common,kind:'wedge'},
   {...common,kind:'wedge',arcRad:Math.PI*2}, {...common,kind:'wedge',band:{standoff:50,halfWidth:30}},
   {...common,kind:'wedge',track:true}];
- renderer.render(w);
+ // Finish the static floor before comparing warning states. Its normal
+ // time budget can otherwise replace a flat stand-in between these frames,
+ // creating a machine-speed-dependent pixel change unrelated to shadows.
+ // Only preparation is synchronous; all assertions use the ordinary config.
+ const ground=VIS_CFG.ground as {bakeBudgetMs:number;asyncUpload:boolean};
+ const {bakeBudgetMs,asyncUpload}=ground;
+ try {
+  ground.bakeBudgetMs=Infinity;ground.asyncUpload=false;
+  renderer.render(w);
+ } finally {
+  ground.bakeBudgetMs=bakeBudgetMs;ground.asyncUpload=asyncUpload;
+ }
+ const settled=pixels(c);renderer.render(w);
+ check('casting fixture starts with settled floor pixels',changed(settled,pixels(c))===0);
  check('casting fixture enemy is actually occluded',internal.sightVeil.occludedAt(enemy.pos)>.99);
  for(const [i,geo]of geometries.entries()){
   enemy.casting={inst,mode:'cast',aim:{...common.aim},elapsed:.5,total:1,held:true,baseMult:1,foresight:geo};
