@@ -11,7 +11,7 @@ export const SKELETAL_SCHOOLS: { monster: string; type: DamageType; color: strin
 const rattling: SkillEffect[] = [{ type: 'damage' }, { type: 'status', status: 'rattled_bones', chance: 1 }];
 export const SKELETON_ARCHER_SKILLS: Record<string, SkillDef> = {
   skeletal_rattling_arrow: {
-    id: 'skeletal_rattling_arrow', name: 'Rattling Arrow', noDrop: true,
+    id: 'skeletal_rattling_arrow', name: 'Barbed Arrow', noDrop: true,
     description: 'A bone arrow leaves an independently expiring physical vulnerability.',
     tags: ['attack', 'projectile', 'physical'], color: '#d8d0b0',
     manaCost: 0, cooldown: 0, useTime: 1.1, baseDamage: { physical: [6, 10] },

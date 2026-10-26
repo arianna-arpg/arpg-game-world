@@ -102,7 +102,7 @@ try {
     inst.sockets[1] = { def: gem, level: 1 };
     cast(w, inst); const archer = crew(w, inst)[0];
     const rain = archer.skills.find(s => s?.def.id === 'skeletal_arrowfall')!;
-    check('Drumming Rain teaches the native eight-second ability', !!rain && skillCooldownSeconds(archer, rain) === 8);
+    check('Rain of Bones teaches the native eight-second ability', !!rain && skillCooldownSeconds(archer, rain) === 8);
     check('the accepted projectile support really forwards onto Rain of Bones', rain.sockets.some(s => s?.forwarded && s.def.id === gem.id));
     const foe = w.createMonster('zombie', 1, 'enemy'); foe.pos = { x: archer.pos.x + 300, y: archer.pos.y }; foe.invulnerable = true; foe.sheet.setSource('stationary', [mod('moveSpeed', 'more', -1)]); w.actors.push(foe);
     let rains = 0; SIM_TAP.current = { onCast: (a, s) => { if (a === archer && s.def.id === 'skeletal_arrowfall') rains++; } };
@@ -180,7 +180,7 @@ try {
     check('Sorcery preserves base population', baseD.type === 'summon' && mageD.type === 'summon' && baseD.count === mageD.count && baseD.maxActive === mageD.maxActive);
     const more = setup('summon_skeleton_archer', ['unstrung_sorcery', 'volatile_souls']);
     const md = instanceDelivery(more.inst);
-    check('Volatile Souls preserves population while teaching empowered bolts', md.type === 'summon' && baseD.type === 'summon'
+    check('Gathered Malice preserves population while teaching empowered bolts', md.type === 'summon' && baseD.type === 'summon'
       && replenishShape(more.p, more.inst, md).count === baseD.count && replenishShape(more.p, more.inst, md).cap === baseD.maxActive
       && !!md.crewRules?.every(r => r.replace?.every(x => SKILLS[x.to].castSequence?.every === 4)));
     const { w, inst } = setup('summon_skeleton_archer', ['rattling_bows', 'rain_of_bones', 'cruel_rain', 'drumming_rain']);
@@ -188,9 +188,9 @@ try {
     const before = w.projectiles.length;
     w.useSkill(archer, arrow, {x: archer.pos.x + 350, y: archer.pos.y}, true);
     for(let i=0;i<180 && archer.casting;i++) w.update(1/60);
-    check('Forked Quivers emits three real baseline arrows', w.projectiles.filter(p => p.caster === archer).length === 3 && w.projectiles.length >= before + 3);
+    check('Fanned Volley emits three real baseline arrows', w.projectiles.filter(p => p.caster === archer).length === 3 && w.projectiles.length >= before + 3);
     const rain = archer.skills.find(k => k?.def.id === 'skeletal_arrowfall')!;
-    check('Forked Quivers adds two rain strikes without the retired bleed bonus', archer.sheet.get('stormCount', skillContextTags(rain), instanceMods(rain)) === 2
+    check('Fanned Volley adds two rain strikes without the retired bleed bonus', archer.sheet.get('stormCount', skillContextTags(rain), instanceMods(rain)) === 2
       && archer.sheet.get('apply_bleed', skillContextTags(rain), instanceMods(rain)) === 0);
   }
   {
