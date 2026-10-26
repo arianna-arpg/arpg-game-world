@@ -47,7 +47,8 @@ to adopt the catalog; it cannot acquire new behavior without updating its code.
 
 ## Version display and application updates
 
-The start and pause menus show the branch and actual loaded revision. The stamp
+The start and pause menus show the branch and actual loaded revision plus release
+ID (`source.release`). The stamp
 is embedded in that build, not fetched from the latest catalog after startup,
 so an already-open tab continues to report its real older version. Offline
 copies and modified local development builds are labeled. The launcher shows

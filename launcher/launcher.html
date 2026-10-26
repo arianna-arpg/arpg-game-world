@@ -268,7 +268,7 @@
       const version = experiment || s.publishedGame ? s.branchBuild?.version : s.version;
       const hash = experiment || s.publishedGame ? s.branchBuild?.commit?.slice(0, 8) : s.hash;
       $('build-line').textContent = (s.publishedGame ? 'Game ' : 'Local development ') + (s.selectedBranch || s.branch || 'main')
-        + ' · build ' + (hash || 'not downloaded') + (!s.publishedGame && !experiment && s.dirty ? ' (modified locally)' : '')
+        + ' · build ' + (hash || 'not downloaded') + (s.branchBuild?.buildId ? '.' + s.branchBuild.buildId.slice(0, 8) : '') + (!s.publishedGame && !experiment && s.dirty ? ' (modified locally)' : '')
         + (s.releaseOffline ? ' · Offline copy' : '') + ' · Launcher v' + (s.version || version || '—');
       // PACKAGED install (no repo, no toolchain): the rebuild button is
       // meaningless, and Update means "download from GitHub Releases and

@@ -250,10 +250,11 @@ const activeSession = () => selectedBranch === MAIN_BRANCH ? session.defaultSess
   : session.fromPartition('persist:branch-' + branches.key(String(cfg.repo.github).toLowerCase() + ':' + selectedBranch));
 const branchApi = () => ({ gh: String(cfg.repo.github), api: updateCfg().api, timeoutMs: updateCfg().probeTimeoutMs });
 function branchStatus() {
-  const build = publishedGameMode() ? releasedBuild() : selectedBranch === MAIN_BRANCH ? null : branchInstalled();
+  const published = publishedGameMode(), released = published ? releasedBuild() : null;
+  const build = published ? released : selectedBranch === MAIN_BRANCH ? null : branchInstalled();
   return { selectedBranch, mainBranch: MAIN_BRANCH, branchOnline, branchNote,
-    publishedGame: publishedGameMode(), releaseOffline,
-    branchBuild: build ? { commit: build.commit, version: build.version } : null,
+    publishedGame: published, releaseOffline,
+    branchBuild: build ? { commit: build.commit, version: build.version, buildId: released?.identity.buildId } : null,
     branches: [{ name: MAIN_BRANCH, commit: '' }, ...branchRows.filter(b => b.name !== MAIN_BRANCH)] };
 }
 async function closeGameServer() {
@@ -1130,7 +1131,8 @@ function createGameWindow(opts) {
       session: activeSession(),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
       // perfBeat: the perf harness alone loads the deadman's beat bridge
-      // (perf-preload.cjs → window.__perfBeat). Play/smoke stay preload-free.
+      // (perf-preload.cjs → window.__perfBeat). Released Play exposes only its
+      // save namespace and offline status; local developer/smoke stay preload-free.
       ...(opts?.perfBeat ? { preload: path.join(__dirname, 'perf-preload.cjs') } : publishedGameMode() ? {
         preload: path.join(__dirname, 'game-preload.cjs'), additionalArguments: [
           '--hollow-storage-scope=' + (releasedBuild()?.identity.desktopStorageScope ?? ''),
