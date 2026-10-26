@@ -380,7 +380,7 @@ export function scorchErosionAt(units: number): number {
 
 export const STATUS_DEFS: Record<string, StatusDef> = {
   rattled_bones: {
-    label: 'Rattled Bones', color: '#d8d0b0', duration: 5,
+    label: 'Lodged Splinters', color: '#d8d0b0', duration: 5,
     stacking: true, maxStacks: 30, independentStacks: true, element: 'physical',
     hitVulnerability: { skills: ['skeletal_rattling_arrow', 'skeletal_bombardment', 'skeletal_arrowfall'], type: 'physical', perStack: 0.04 },
     bodyFx: { glow: '#d8d0b0', glowAlpha: 0.12, glowScale: 1.2 },

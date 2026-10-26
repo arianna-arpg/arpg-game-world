@@ -40,7 +40,7 @@ Changing the investment budget is a separate balance decision, not hidden here.
 |---|---|---|---|
 | Shambling Horde | Wandering Dead: toggleable free, bar-seated replenishment; permanent waiting corpses. Specialize cadence, detection, batches, capacity or durability. | Commanded Dead: cast packs; combine brief fast rushes with fewer heavy bodies, or develop expiry explosions and larger batches. | Stitched Flesh: life |
 | Bone Golem | Osseous Might: fighting golems; grow a cohort, a giant commander aura bearer, a sweeping bruiser, or a hybrid. | Keeper's Bulwark: defensive guard, rapid reconstruction, mending, taunts and the close-bound Bone Stand. | Fitted Joints: life and movement |
-| Skeleton Archer | Rattling Bows: independent physical vulnerability stacks; held firing squads, full-cap release volleys, mortars, doubled capacity and learned Rain of Bones. | Unstrung Sorcery: random elemental mages; every-fourth empowered bolts, sustained area channels and element-selected novas. Base population is preserved. See [the current contract](skeleton-archer.md). | Remembered Training: damage |
+| Skeleton Archer | Barbed Bones: independent physical vulnerability stacks; held firing squads, full-cap release volleys, mortars, doubled capacity and learned Rain of Bones. | Unstrung Sorcery: random elemental mages; every-fourth empowered bolts, sustained area channels and element-selected novas. Base population is preserved. See [the current contract](skeleton-archer.md). | Remembered Training: damage |
 | Skeleton Mage (new) | Lich Ascendant: fuse the batch into one larger Fireball caster; learn heavy area spells, grow its frame, or command allies. | Grave Academy: a faster cohort of elemental specialists, with cold/chaos and fire/lightning curricula. Each learned spell belongs only to its matching element. | Grave Studies: damage and haste |
 | Skeleton Warrior | Grave Phalanx: taunting shield sentinels, inherited Thorns, armor banners, relief auras and bounded death heirs. | Ossuary Duelists: twin-cut pursuers, bleeding strikes, culling, lunges and paired summons. | Tempered Bones: life and damage |
 | Raise Dead | Grave Levy: temporary random skeleton/zombie ranks, larger drafts, stench, poison and true-death expiry payoffs. | Flesh Assembly: one claw-and-slam abomination; consume other skills' minions for temporary strength, build a refuge or invest in its death. | Gravecraft: life and damage |
@@ -82,7 +82,7 @@ investment therefore offers a deliberate reservation-for-coverage/power trade.
 ## Elemental lessons and golem refinements
 
 - Archer endpoints now use the [Skeleton Archer contract](skeleton-archer.md):
-  Drumming Rain teaches the rain ability; Forked Quivers adds two projectiles
+  Rain of Bones teaches the rain ability; Fanned Volley adds two projectiles
   or storm strikes and retains the old Cruel Rain node ID for saved allocations.
 - Drilled Bones is the golem middle node, allowing its cooldown recovery to
   combine with Great Bones → Marrow Bruiser within four points. Bone Cohort

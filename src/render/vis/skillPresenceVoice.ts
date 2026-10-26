@@ -135,10 +135,10 @@ export function drawPresenceField(ctx: CanvasRenderingContext2D, z: SkillFieldVi
   ctx.restore(); return true;
 }
 
-/** A small, static foot signature keeps shared creature bodies attributable.
- * There is no idle attack beat, lifetime gauge or decorative danger circle. */
+/** Constructs retain a static source signature. Summoned creatures use their
+ * anatomy and momentary cues instead of a persistent icon over the body. */
 export function drawPresenceBadge(ctx: CanvasRenderingContext2D, badge: PresenceBadge | undefined, radius: number): void {
-  const p = badge && presenceProfile(badge.skillId); if (!p || !badge) return;
+  const p = badge && presenceProfile(badge.skillId); if (!p || !badge || p.family === 'summon') return;
   ctx.save(); ctx.translate(0, radius * .85); ctx.globalAlpha *= .48;
   drawPresenceGlyph(ctx, p, Math.min(14, radius * .75), badge.color, 0, 'idle'); ctx.restore();
 }
