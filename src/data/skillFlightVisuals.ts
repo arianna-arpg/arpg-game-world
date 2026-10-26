@@ -11,6 +11,8 @@ export interface SkillFlightProfile {
   body?: 'orb' | 'star' | 'cluster';
 }
 export interface SkillFieldProfile {
+  /** A vertical flame column above an honest circular ground footprint. */
+  column?: true;
   motif: BurstMotif;
   layout: 'roots' | 'rings' | 'lattice' | 'spiral' | 'scatter' | 'spokes';
   motion: 'breathe' | 'out' | 'in' | 'orbit' | 'rise';

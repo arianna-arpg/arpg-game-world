@@ -222,7 +222,7 @@ export interface ActorW {
 /** `bk` = THE BANK READ (StatusDef.bank — ActiveStatus.bankFrac, 0..1 at
  *  two decimals): the derived scalar the body FX scale by (the tells-wire
  *  idiom — never the bank's source numbers). Absent = no bank worn. */
-export interface StatusW { id: string; stacks: number; bk?: number; dot?: 1; rem?: number; statusDuration?: number; }
+export interface StatusW { visual?: string; id: string; stacks: number; bk?: number; dot?: 1; rem?: number; statusDuration?: number; }
 export interface AuraW { c: string; r: number; sh: number; skillId?: string; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW { parryCue?: number;
@@ -831,7 +831,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.absorbTotal > 0) w.ab = Math.round(a.absorbTotal);
   if (a.statuses.length) {
     w.st = a.statuses.map(s => ({
-      rem: s.remaining, statusDuration: s.statusDuration ?? s.total, id: s.id, stacks: s.stacks,
+      rem: s.remaining, statusDuration: s.statusDuration ?? s.total, id: s.id, stacks: s.stacks, visual: s.visual,
       ...(s.dps > 0 ? { dot: 1 as const } : {}),
       ...(s.bankFrac !== undefined ? { bk: Math.round(s.bankFrac * 100) / 100 } : {}) }));
   }
@@ -955,7 +955,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     })),
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
     skillFields: world.zones.map(z => skillFieldVisual(z, world.time)),
-    projectiles: world.projectiles.map(p => ({ tier: p.tier ?? 0, skillId: p.inst?.def.id ?? p.skillVisualId, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
+    projectiles: world.projectiles.map(p => ({ tier: p.tier ?? 0, skillId: p.skillVisualId ?? p.inst?.def.id, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
     tethers: world.tethers.map(t => {
       const v = skillTetherVisual(t);
       return { ax: Math.round(v.ax), ay: Math.round(v.ay), bx: Math.round(v.bx), by: Math.round(v.by), c: v.color, w: v.width,
@@ -1452,7 +1452,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.bodyActionPose = aw.bodyActionPose ? { ...aw.bodyActionPose } : null;
     a.bodyWalkPose = aw.bodyWalkPose ? { ...aw.bodyWalkPose } : null;
     a.statuses.length = 0;
-    if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), statusDuration: s.statusDuration, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
+    if (aw.st) for (const s of aw.st) a.statuses.push({ visual: s.visual, id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), statusDuration: s.statusDuration, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
     a.casting = aw.cast ? ({
       // THE VENT-RIDE's broil: the client's cast stub carries the column
       // radius as a leap delivery with a vent, so the roil layer reads one

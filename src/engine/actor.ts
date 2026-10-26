@@ -2845,6 +2845,7 @@ export class Actor {
       if (dps > existing.dps) {
         existing.dps = dps;
         existing.remaining = duration;
+        existing.visual = undefined; // a stronger ordinary application replaces its former appearance
       }
     } else if (existing && def.pop && !fixedFuse) {
       // POP-ON-REAPPLY (Hemorrhage): detonate a fraction of the REMAINING

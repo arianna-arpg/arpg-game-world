@@ -32,6 +32,7 @@ import {
   supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
   type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec, AOE_SHAPE, BASH_CFG } from '../engine/skills';
 import { treeGraph, TREE_LAYOUT_CFG } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the fold the tree laws read
+import { projectileArtsErrors } from '../engine/projectileArtsSpec';
 import { attackSequenceErrors } from '../engine/attackSequenceSpec';
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
@@ -3094,6 +3095,7 @@ export function validateContent(): void {
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);
     for (const def of Object.values(SKILLS)) {
+      if (def.projectileArts) for (const error of projectileArtsErrors(def.projectileArts, id => !!STATUS_DEFS[id])) warn(`skill ${def.id}: ${error}`);
       const t = def.tree;
       if (!t) continue;
       const at = `skill ${def.id} tree`;
@@ -3219,6 +3221,7 @@ export function validateContent(): void {
           if (raw.some(other => other.id !== n.id && other.trigger && g.nodes.get(other.id)?.limbId === triggerLimb)) warn(`${at}/${n.id}: conflicting trigger identities in one limb`);
         }
         if (n.attackSequence) for (const error of attackSequenceErrors(n.attackSequence)) warn(`${at}/${n.id}: ${error}`);
+        if (n.projectileArts) for (const error of projectileArtsErrors(n.projectileArts, id => !!STATUS_DEFS[id])) warn(`${at}/${n.id}: ${error}`);
         for (const error of invocationTreeErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
         const constructOver = n.over?.construct;
         if (constructOver) {

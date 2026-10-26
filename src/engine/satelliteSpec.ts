@@ -1,4 +1,4 @@
-import { STAT_DEFS, type SkillTag } from './stats';
+import { STAT_DEFS, StatSheet, type Modifier, type SkillTag } from './stats';
 import type { OrbPaint } from './skills';
 
 export type SatelliteEmission = { interval: number; range: number; windup?: number; target?: 'nearest' | 'farthest' } & (
@@ -57,6 +57,19 @@ export function registerSatellite(def: SatelliteDef): void {
 
 // Generic investment applies only to an already-granted family.
 STAT_DEFS.satelliteCount = { label: 'Additional Satellites', desc: 'Adds satellites to families you already carry, up to the shared carrying limit.', base: 0, min: 0, max: SATELLITE_CFG.maxPerActor };
+STAT_DEFS.satelliteEquipmentCount = { label: 'Satellite-granting Items', desc: 'Equipped items granting at least one satellite family; each item counts once.', base: 0, min: 0 };
+
+/** Per-item fold, before item sources merge into a side board. Quantity and
+ * multiple family grants on one piece never masquerade as more items. */
+export function satelliteItemCount(items: Iterable<readonly Modifier[]>): number {
+  let count = 0;
+  const sheet = new StatSheet();
+  for (const mods of items) {
+    if (!mods.some(m => m.stat.startsWith('satelliteCount_'))) continue;
+    if (SATELLITE_IDS.some(id => sheet.get(satelliteCountStat(id), new Set(SATELLITES[id].tags), mods, 0) > 0)) count++;
+  }
+  return count;
+}
 STAT_DEFS.satelliteOrbit = { label: 'Satellite Orbit Radius', desc: 'Scales how far your satellites orbit from your body.', base: 1, min: 0.25, max: 3, percent: true };
 STAT_DEFS.satelliteSpeed = { label: 'Satellite Orbit Speed', desc: 'Scales the turning speed of your orbiting satellites.', base: 1, min: 0, max: 4, percent: true };
 

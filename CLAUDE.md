@@ -366,6 +366,13 @@ three-class scope and next batches are documented in
 `docs/design/class-starting-skill-trees.md`; `balance/probe_startertrees.ts`
 covers the complete opening bars.
 
+Firebolt's satellite and ignition disciplines live in `src/data/fireboltTree.ts`.
+Reusable `ProjectileArtsSpec` / `ProjectileArts` contracts own orbital contact,
+targeted payloads, expiry actions, ignite ramps/transfers/ruptures and cascades.
+`docs/design/firebolt.md` records tuning, attribution, support inheritance and
+cleanup. Verify with `balance/probe_firebolt.ts`, the relevant flight/status
+probes, sim smoke and the hidden `balance/firebolt-ui.cjs` after a build.
+
 The six flask trees live in `src/data/flaskTrees.ts`, with owned drink payloads
 in `flaskSkills.ts` and durable ammunition in `engine/flaskState.ts`.
 `docs/design/flask-skill-trees.md` records all nodes, empty-bank economies,

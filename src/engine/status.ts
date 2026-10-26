@@ -398,6 +398,10 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     stackPolicy: 'strongest',
     hitMagnitude: 0.35, baseline: { dps: 3, perLevel: 1.2 },
   },
+  ignite_attractor: {
+    label: 'Pyreheart', color: '#ffc16e', duration: 4, element: 'fire', powerInert: true,
+    bodyCue: { group: 'ignite-focus', parts: [{ kind: 'runes', color: '#ffd28b', scale: 1.15, params: { n: 5 } }] },
+  },
   flamewreathed: {
     // STANDING IN A LIVE FIRE FRONT (the wildfire creep's grant): a short,
     // refreshed terrain burn on the caster-less baseline lane — pressure
@@ -1865,6 +1869,10 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
 }
 
 export interface ActiveStatus {
+  /** Application-owned presentation; the ailment ID and behavior stay intact. */
+  visual?: string;
+  /** Transferred wounds cannot circulate repeatedly between attractors. */
+  gathered?: true;
   /** Duration of the current application for its countdown icon. */
   statusDuration?: number;
   /** False only on a remote status without a supplied clock. */

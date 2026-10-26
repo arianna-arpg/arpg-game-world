@@ -29,6 +29,7 @@
 // ---------------------------------------------------------------------------
 
 import { skillAbsorbAmount } from './absorb';
+import { projectileArtsOf, projectileArtsCount, projectileArtsLiveLimit } from './projectileArtsSpec';
 import { guardArtsOf, guardCapacity, guardArtAbsorb } from './guardArtsSpec';
 import { attackSequenceOf, attackSequenceStatuses, attackSequenceSweepInstances } from './attackSequenceSpec';
 import { guardSurgePreview } from './guardSurge';
@@ -199,16 +200,21 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   // in play. (Skill-mode audit: the resolved view — a picked branch's
   // folded fields preview as they will fire.)
   const d = instanceDelivery(inst);
+  const projectileArt = projectileArtsOf(inst);
   if (d.type === 'projectile') {
-    const bonus = Math.round(get('projectileCount'));
+    const bonus = Math.round(get('projectileCount')) + projectileArtsCount(caster, inst)
+      + (projectileArt?.orbit ? Math.max(0, Math.round(get('projNova'))) : 0);
     const baseCount = typeof d.count === 'number' ? d.count : undefined;
     if (baseCount !== undefined || bonus > 0) {
-      const total = (baseCount ?? 1) + bonus;
+      const total = Math.min(projectileArtsLiveLimit(inst), (baseCount ?? 1) + bonus);
       push('projectiles', 'Projectiles', String(total), 'headline',
         bonus > 0 && baseCount !== undefined ? `base ${baseCount}` : undefined);
     }
     const pierce = (d.pierce ?? 0) + Math.round(get('pierceCount'));
-    if (pierce > 0) push('pierce', 'Pierces', `${pierce} target${pierce === 1 ? '' : 's'}`, 'detail');
+    if (pierce > 0) push('pierce', 'Pierces', pierce === Infinity ? 'Unlimited' : `${pierce} target${pierce === 1 ? '' : 's'}`, 'detail');
+    if (projectileArt && d.duration !== undefined) push('projectileDuration', 'Projectile duration', secs(d.duration * get('effectDuration')), 'detail');
+    if (projectileArt?.ailmentRamp) push('igniteRamp', 'Ignite chance growth',
+      `+${Math.round(projectileArt.ailmentRamp.perCast * 100)} percentage points per cast`, 'detail', 'Resets when an ignite is applied.');
     const chains = Math.round(get('chainCount'));
     if (chains > 0) push('chains', 'Chains', `${chains} time${chains === 1 ? '' : 's'}`, 'detail');
   }
@@ -260,7 +266,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     const dur = fx.durationOverride !== undefined
       ? fx.durationOverride
       : (sdef?.duration ?? 0) * durScale;
-    push(`status_${fx.status}`, sdef?.label ?? fx.status,
+    push(`status_${fx.status}`, (sdef?.label ?? fx.status) + (projectileArt?.ailmentRamp?.status === fx.status ? ' (base)' : ''),
       eff >= 1 ? 'always' : pct(eff), 'detail', dur > 0 ? secs(dur) : undefined);
   }
   // Then the GRANTED ones (gems, gear, passives: the apply_ family), which no

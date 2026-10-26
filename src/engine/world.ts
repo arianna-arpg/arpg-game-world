@@ -95,6 +95,8 @@ import { NullInput, SPENT_PRESS_CFG, type PlayerInput, type PlayerInputSource, t
 import { ZONE_MEMORY_CFG, captureZoneContents, restoreZoneContents, savedZoneContents, type ZoneContents } from './zonecontents';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { readTownPortals, type TownPortal, type TownPortalView } from './townportal';
+import { ProjectileArts, type ProjectileOrbit } from './projectileArts';
+import { satelliteItemCount } from './satelliteSpec';
 import { applyConversion, applyDot, applyHit, landLifeDamage, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
 import { ParryDamageWindow, parryCounter, type ParryDamage } from './parry';
 import { HIVECALL, hivecallNode, hivecallState, hivecallRescueFactor, hivecallFormDamage } from './hivecall';
@@ -1061,6 +1063,7 @@ const HAUNT_TAGS = new Set([
 ]);
 
 export interface Projectile {
+  projectileOrbit?: ProjectileOrbit;
   /** Replica identity only; live flights resolve their originating instance. */
   skillVisualId?: string;
   orbPaint?: ProjectileDelivery['orbPaint'];
@@ -1316,6 +1319,7 @@ export interface MaddenBank {
 export const MADDEN_CFG = { epsilon: 1e-6 };
 
 interface Zone {
+  skillVisualId?: string;
   fieldCue?: import('../data/companionCues').FieldCueSpec;
   /** Source-maintained choreography: breaking its skill or killing its
    * caster clears both pending warnings and lingering ground. */
@@ -3686,6 +3690,13 @@ export class World {
   readonly creepers = new Creepers();
   readonly challenges = new Challenges(this);
   readonly attackSequences = new AttackSequences(this);
+  readonly projectileArts = new ProjectileArts(this, (caster, inst, target, power, origin, tier) =>
+    this.resolveHit(caster, inst, target, power, 1, undefined, false, false, undefined, origin, tier),
+    (source, target, amount, type) => {
+      const before = target.life;
+      applyDot(target, amount, type);
+      this.recordIndirectDamage(target, source, before);
+    });
   readonly channelFormations = new ChannelFormations(this,
     (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
     (body, inst, aim) => { this.executeSkill(body, inst, aim, { noRepeat: true, noCooldown: true, keepFacing: true }); });
@@ -5885,6 +5896,7 @@ export class World {
     this.challenges.clearAll();
     this.channelFormations.clear();
     this.attackSequences.clearAll();
+    this.projectileArts.clearAll();
     this.guardArts.clearAll();
     this.guardArts.rebind();
     this.odyssey.leaveZone();
@@ -22396,6 +22408,8 @@ export class World {
     }
     m.attrs = attrs;
 
+    p.sheet.setSource('satelliteEquipment', [mod('satelliteEquipmentCount', 'flat',
+      satelliteItemCount([...gearSheetMods.values(), ...containerPieceMods.values()]))]);
     p.setAttributes(attrs);
     p.sheet.setSource('class', m.classDef.innate ?? []);
     p.sheet.setSource('passives', passiveMods);
@@ -35243,6 +35257,7 @@ export class World {
     inst = this.challenges.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = castSequenceInstance(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.attackSequences.prepare(caster, inst, aim, opts.dmgMult ?? 1);
+    inst = this.projectileArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     const def = inst.def;
     const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
     const cosmeticColor = cosmeticPaint.color ?? def.color;
@@ -35776,6 +35791,7 @@ export class World {
     switch (d.type) {
       case 'projectile': {
         let count = rollCount(d.count, Math.round(caster.sheet.get('projectileCount', tags, extra)))
+          + this.projectileArts.count(caster, inst)
           + (opts.bonusProjectiles ?? 0)
           // THE VENT PRESS's spent rounds (useCharges.ventAll): more shots.
           + ventRounds
@@ -35792,6 +35808,12 @@ export class World {
         // Fewer-projectile gems (Pinpoint) can push the roll negative —
         // a volley always keeps its one focused shot.
         count = Math.max(1, count);
+        if (inst.projectileSpec?.orbit) {
+          const total = Math.min(this.projectileArts.limit(inst), count + Math.max(0, Math.round(caster.sheet.get('projNova', tags, extra))));
+          for (let n = 0; n < total; n++) this.spawnProjectile(caster, inst, caster.pos,
+            caster.facing + n / total * Math.PI * 2, { tier: effectTier, mult: useMult, flat: flatBonus });
+          break;
+        }
         // CAROMS: presses PLANT anchors at the cursor; the final press
         // releases the volley, which shuttles anchor-to-anchor for its
         // whole flight (patrol + rehit = the ping-pong killing line).
@@ -38770,8 +38792,9 @@ export class World {
     // (Skill-mode audit: projectile-family fields — pierce/forks/fire —
     // are off the M1 whitelist; the piercing_arrow/fireball waves adopt
     // this read behind the view when they land.)
-    if (def.delivery.type !== 'projectile') return;
-    const d: ProjectileDelivery = def.delivery;
+    const resolvedProjectile = instanceDelivery(inst);
+    if (resolvedProjectile.type !== 'projectile') return;
+    const d: ProjectileDelivery = resolvedProjectile;
     const tags = skillContextTags(def);
     const extra = instanceMods(inst);
     const depth = opts?.depth ?? 0;
@@ -38816,7 +38839,7 @@ export class World {
     const nativeReturn = d.returns === 'origin' ? 1 : d.returns === 'caster' ? 2 : 0;
     const grantedReturn = Math.round(caster.sheet.get('projReturn', tags, extra));
 
-    this.projectiles.push({
+    const projectile: Projectile = {
       pos: vec(origin.x, origin.y),
       orbPaint: d.orbPaint,
       // THE TIER LAW: a flight belongs to its caster's layer (chain children
@@ -38919,7 +38942,9 @@ export class World {
         : undefined,
       arcRate: t?.arcTo,
       patrol: opts?.patrol?.length ? { points: opts.patrol.map(p2 => vec(p2.x, p2.y)), idx: 0 } : undefined,
-    });
+    };
+    this.projectiles.push(projectile);
+    this.projectileArts.configure(projectile);
   }
 
   /** The parent's resolved axes × its effective inherit fraction (the
@@ -41683,6 +41708,7 @@ export class World {
     p.anchor = vec(p.pos.x, p.pos.y);
     p.origin = vec(p.pos.x, p.pos.y);
     p.homing = p.guide = p.orbit = p.spiral = p.spin = p.weave = p.erratic = 0;
+    p.projectileOrbit = undefined;
     p.guided = false;
     p.returnMode = 0;
     p.returnPhase = false;
@@ -44259,6 +44285,7 @@ export class World {
     // Delivery-specific hitEffects share every refusal, scaling and
     // attribution rule with authored effects, including delayed fuses.
     this.challenges.beforeEffects(caster, inst, target, dealt, depth);
+    this.projectileArts.landed(caster, inst, target, dealt, depth, dmgMult);
     const effects = instanceEffects(inst);
     for (const fx of hitEffects?.length ? [...effects, ...hitEffects] : effects) {
       if (fx.type === 'heal') {
@@ -44295,13 +44322,13 @@ export class World {
         // chances are scaled per AILMENT_TUNING — plain physical hits no longer
         // bleed, embers barely catch; investment (statusChance, the apply_
         // family) and identity skills carry ailments now. See engine/status.ts.
-        if (chance(Math.min(1, tuneAilmentChance(fx.status, fx.chance) + bonusChance))) {
+        if (chance(Math.min(1, tuneAilmentChance(fx.status, fx.chance) + bonusChance + this.projectileArts.chance(inst, fx.status)))) {
           // Hit-derived dps, FLOORED by the status's caster-less baseline (a
           // feeble hit still ignites like an ignite), × the potency crank —
           // × the linked-hex swell (Malediction: each hex fattens the debuff).
           // The septic bargain's return: the forgone bite rides the
           // affliction as if the blow had landed (carry) harder.
-          const derived = (fx.magnitude ?? 0) * (dealt + afflictionCarry);
+          const derived = (fx.magnitude ?? 0) * (this.projectileArts.basis(caster, inst, target, packet, dealt, fx.status) + afflictionCarry);
           const floor = fx.magnitude ? baselineStatusDps(fx.status, this.zone.level) : 0;
           const dps = Math.max(derived, floor) * potencyFor(fx.status) * hexDmg
             / Math.max(0.5, durScale);
@@ -44365,6 +44392,8 @@ export class World {
               this.flashes.push(combatCueFlash(target.pos, 'affliction', target.radius + 7, angleTo(target.pos, caster.pos), sdef?.color));
             }
           }
+          const priorArtStatus = target.statuses.find(s => s.id === fx.status && !s.sourceKey && !s.challengeField);
+          const priorArt = { status: priorArtStatus, dps: priorArtStatus?.dps, remaining: priorArtStatus?.remaining };
           target.applyStatus(fx.status, dpsOut, fxScale, caster.name, {
             // Propagation is a CHANCE rolled once at application (1 = the
             // old always-spreads flag).
@@ -44381,6 +44410,7 @@ export class World {
             // chill slows harder); DoTs carry theirs in dps already.
             power: STATUS_DEFS[fx.status]?.dotType ? undefined : potencyFor(fx.status),
           });
+          this.projectileArts.applied(inst, target, fx.status, priorArt);
           // Applying a status is a trigger (Bloodletter's Rhythm).
           this.rollStatusProcs(caster, inst, target, fx.status, tags, extra, depth);
           // DAMAGE POOLS: a DoT application banks its expected payload
@@ -44552,7 +44582,7 @@ export class World {
         if (ch <= 0 || !chance(Math.min(1, ch + bonusChance))) continue;
         const sdef = STATUS_DEFS[sid];
         const dps = sdef.dotType
-          ? Math.max((sdef.hitMagnitude ?? 0) * dealt, baselineStatusDps(sid, this.zone.level))
+          ? Math.max((sdef.hitMagnitude ?? 0) * this.projectileArts.basis(caster, inst, target, packet, dealt, sid), baselineStatusDps(sid, this.zone.level))
             * potencyFor(sid) / Math.max(0.5, durScale)
           : 0;
         // Stat-granted DOOMS (Creeping Doom): the derived power ARMS the
@@ -44596,6 +44626,8 @@ export class World {
             }
           }
         }
+        const priorArtStatus = target.statuses.find(s => s.id === sid && !s.sourceKey && !s.challengeField);
+        const priorArt = { status: priorArtStatus, dps: priorArtStatus?.dps, remaining: priorArtStatus?.remaining };
         target.applyStatus(sid, dpsOut2, durScale, caster.name, {
           propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
           stacksBonus: stacksBonusFor(sid),
@@ -44606,6 +44638,7 @@ export class World {
           ruptureRadius: armed !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
           popBonus: caster.sheet.get('popPower_' + sid, tags, extra) || undefined,
         });
+        this.projectileArts.applied(inst, target, sid, priorArt);
         // Stat-granted applications trigger statusApply procs too.
         this.rollStatusProcs(caster, inst, target, sid, tags, extra, depth);
         if (dps > 0) {
@@ -57855,8 +57888,9 @@ export class World {
     this.guardArts.clear(caster, inst);
     this.channelFormations.clear(caster, inst);
     this.attackSequences.clear(caster, inst);
+    this.projectileArts.clear(caster, inst);
     this.challenges.clear(caster, inst);
-    const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst || candidate.challengeHost === inst || candidate.guardArtsHost === inst;
+    const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst || candidate.challengeHost === inst || candidate.guardArtsHost === inst || candidate.projectileHost === inst;
     this.pendingFollowUps = this.pendingFollowUps.filter(p => p.caster !== caster || !ownsTreePayload(p.inst));
     caster.primedPours = caster.primedPours.filter(p => p.skillId !== inst.def.id);
     caster.clearTreeChargeClocks(inst);
@@ -58799,6 +58833,8 @@ export class World {
     p.stall = undefined;
     p.age += dt;
     p.traveled += step;
+    const orbitalPosition = this.projectileArts.move(p, dt);
+    if (orbitalPosition) return orbitalPosition;
     // PULSATION: the hit radius breathes ± its amplitude on a fixed
     // rhythm — the renderer draws the same live radius it hits with.
     if (p.pulse && p.radius0) {
@@ -58960,6 +58996,7 @@ export class World {
    *  runs looser than its body opts back to the classic radius disc with
    *  delivery.hitForm: 'circle'. */
   private projTouches(p: Projectile, cx: number, cy: number, cr: number): boolean {
+    if (p.projectileOrbit) return this.projectileArts.touches(p, cx, cy, cr);
     if ((p.inst.def.delivery as ProjectileDelivery).hitForm === 'circle') {
       const dx = cx - p.pos.x, dy = cy - p.pos.y;
       return dx * dx + dy * dy <= (p.radius + cr) * (p.radius + cr);
@@ -59065,17 +59102,22 @@ export class World {
   }
 
   private updateProjectiles(dt: number): void {
+    this.projectileArts.update(dt);
     const guardianContext = this.guardians.active ? this.carriedEffectContext() : undefined;
     const flowDt = dt; // the world-scaled frame; each flight bends it below
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
+      if ((p.inst.projectileCast || p.projectileOrbit) && (p.dissolved || !this.projectileArts.valid(p))) {
+        this.projectiles.splice(i, 1); continue;
+      }
       // THE TIMEFLOW BEND (engine/timeflow.ts): a projectile flies on its
       // CASTER's clock — a held caster's volley hangs mid-air and lands
       // when time resumes (the frozen quiver is half the time-stop
       // fantasy). The shadowed `dt` bends age, travel, zaps and steering.
       const ptf = this.timeflow.actorScale(p.caster);
       if (ptf <= 0) continue;
-      const dt = ptf === 1 ? flowDt : flowDt * ptf;
+      const elapsed = ptf === 1 ? flowDt : flowDt * ptf;
+      const dt = p.inst.projectileCast && p.maxAge !== undefined ? Math.max(0, Math.min(elapsed, p.maxAge - p.age)) : elapsed;
       this.attackSequences.flight(p);
       const prev = vec(p.pos.x, p.pos.y);
       p.pos = this.advanceProjectile(p, dt);
@@ -59096,6 +59138,7 @@ export class World {
           this.viewRectFor(p.caster), FOURTH_WALL_CFG.proj.edgePad);
         if (fw) {
           p.frameBounces--;
+          this.projectileArts.bounce(p);
           p.pos.x = fw.x;
           p.pos.y = fw.y;
           p.guideDir = p.dir = fw.dir;
@@ -59150,7 +59193,7 @@ export class World {
       // unspent-end bloom below against double payment).
       let shrapnelBloomed = false;
       // Spent projectiles that return get a second life instead of dying.
-      if (dead && this.enterReturn(p)) dead = false;
+      if (dead && !p.projectileOrbit && !p.inst.projectileSpec?.flight && this.enterReturn(p)) dead = false;
       // Homeward arrival — CATCHABLE returns (Gyreblade) bank their charge
       // in the catcher's hand before fading.
       if (!dead && p.returnPhase && dist(p.pos, this.returnTarget(p)) < 26) {
@@ -59190,7 +59233,7 @@ export class World {
       // BOUNCE it (Galewisp): reflect off the obstacle's normal and fly on.
       // PHASING flights (occlusion 'free' / Wraith Passage) skip terrain
       // entirely — through rock and masonry like mist.
-      if (!dead && !p.phase) {
+      if (!dead && !p.phase && !p.projectileOrbit) {
         for (const o of this.doodadsAt(p.pos.x, p.pos.y)) {
           // THE TIER FABRIC: a flight only meets ITS layer's furniture — a
           // duct bolt neither shatters nor stops on the street's pots above.
@@ -59247,7 +59290,7 @@ export class World {
       // Grid masonry uses the same exact traversal as lineOfFire: fast
       // flights and thin corner crossings cannot fall between samples.
       // Region flags, deck heights and hanging partitions share one law.
-      if (!dead && !p.phase && this.walk instanceof GridWalkField) {
+      if (!dead && !p.phase && !p.projectileOrbit && this.walk instanceof GridWalkField) {
         const sdx = p.pos.x - prev.x, sdy = p.pos.y - prev.y;
         const elev = this.shotElev(prev, p.tier ?? 0);
         const hitT = castGridRay(this.walk, prev, p.pos, 'shot', elev);
@@ -59279,6 +59322,7 @@ export class World {
           }
         }
       }
+      if (!dead && p.projectileOrbit && !this.lineOfFire(p.caster.pos, p.pos, p.tier)) continue;
       // Selective pierce: a dead prey RETARGETS the hunt (Heartchaser).
       if (!dead && p.preyId !== undefined) {
         const prey = this.actorById(p.preyId);
@@ -59473,6 +59517,7 @@ export class World {
       }
 
       if (!dead) dead = this.interceptProjectileDomes(p);
+      if (!dead) this.projectileArts.tick(p);
 
       // THE MALLET IN FLIGHT: your own shot rings your own bell as it
       // passes — the flight-side sibling of the brittle 'hit' pop in the
@@ -59506,7 +59551,7 @@ export class World {
             const parryPacket = rollSkillDamage(p.caster, p.inst, p.flat);
             const guardRaw = Object.values(parryPacket.amounts)
               .reduce((s, v) => s + (v ?? 0), 0) * p.mult;
-            if (guardRaw > 0 && this.tryGuardBlock(enemy, p.caster, p.pos, guardRaw, p, parryPacket)) {
+            if (guardRaw > 0 && this.tryGuardBlock(enemy, p.caster, this.projectileArts.impact(p), guardRaw, p, parryPacket)) {
               dead = !p.parryDamage || !!p.dissolved;
               diedOnBody = true; // a guarded stop still struck someone
               break;
@@ -59538,7 +59583,7 @@ export class World {
             }
             noteBodyHit(enemy, bodyTouch.seg);
             this.attackSequences.beforeContact(p);
-            this.resolveHit(p.caster, p.inst, enemy, p.mult, 0, hitFlat, false, false, undefined, p.origin, p.tier);
+            this.resolveHit(p.caster, this.projectileArts.contact(p), enemy, p.mult, 0, hitFlat, false, false, undefined, p.inst.projectileCast ? this.projectileArts.impact(p) : p.origin, p.tier);
             // THE HIT VOICE (engine/bodyVoices.ts): the impact speaks the blow's type — fire flares, cold crackles, lightning sparks, chaos spatters, a shaft flecks the body.
             this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(enemy.hitFlashType ?? p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'body') });
             // SHATTER: the first impact flings a fan of shard projectiles
@@ -59618,6 +59663,10 @@ export class World {
             // every hit the projectile SURVIVES — each rehit, pierce, and
             // chain — not just where the flight ends (which still bursts).
             if (p.rehit) {
+              if (p.projectileOrbit) {
+                if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
+                continue;
+              }
               if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
               // THE DRIFTER JAILBREAK (2026-07-22, the user's override
               // call): a CHAIN socketed into a re-hitting flight CONVERTS
@@ -59787,6 +59836,7 @@ export class World {
         }
       }
       if (dead) {
+        this.projectileArts.expire(p);
         this.explodeProjectile(p, p.lastHitId);
         // SHREDDING RETURN, THE UNSPENT END (2026-07-22): a flight that
         // ends WITHOUT dying on a body — range spent, aged out, stopped by

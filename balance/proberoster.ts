@@ -104,6 +104,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_creepers.ts', status: 'green', tier: 'fast', why: 'Autonomous carried burrowers: wandering, pursuit, leash, committed eruptions, gear, scaling, terrain and co-op' },
   { probe: 'probe_guardians.ts', status: 'green', tier: 'fast', why: 'Rime precision aiming and reactive Graveglass interception, suppression, recharge, equipment, lifecycle and co-op' },
   { probe: 'probe_auroras.ts', status: 'green', tier: 'fast', why: 'Lightning satellite projectiles and independent aurora reservoirs: charge, cascade, equipment, typed scaling, lifecycle and co-op' },
+  { probe: 'probe_firebolt.ts', status: 'green', tier: 'fast', why: 'Firebolt orbital clocks, equipment scaling, casts and cascades, white ignite mitigation, siphon and rupture conservation, expiry and source cleanup' },
   { probe: 'probe_satellites.ts', status: 'green', tier: 'fast', why: 'Shared carried satellites: stacking, physical scaling, swept contacts, cleanup, pack progression, gear, save and co-op geometry' },
   { probe: 'probe_passivespecializations.ts', status: 'green', tier: 'fast', why: '300 specific passives: resolved cast modes, body/family inheritance and limits, distance boundaries, investment forks, real preparation consumption, saves and co-op' },
   { probe: 'probe_parry.ts', status: 'green', tier: 'fast', why: 'Recipient-scoped parry damage windows, visible reflected flights, re-parry, typed mitigation and kill attribution' },

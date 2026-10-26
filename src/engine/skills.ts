@@ -1,3 +1,5 @@
+import { projectileArtsDelivery, type ProjectileArtsSpec } from './projectileArtsSpec';
+import type { ProjectileArtCast } from './projectileArts';
 import { summonScopeTags } from './skillScopes';
 import { empowermentPassive, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { guardArtsOf, type GuardArtsSpec } from './guardArtsSpec';
@@ -440,6 +442,8 @@ export function instanceAim(inst: SkillInstance): AimSpec | undefined {
  *  untouched — byte-identical by construction, zero allocation. The cast
  *  path reads delivery through THIS view (executeSkill's one binding). */
 export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
+  const projectileArts = projectileArtsDelivery(inst);
+  if (projectileArts) return projectileArts;
   const attackSequence = attackSequenceDelivery(inst);
   if (attackSequence) return attackSequence;
   const challenge = challengeDelivery(inst);
@@ -4349,6 +4353,7 @@ export type SkillEffect =
 // --- The skill definition ---------------------------------------------------
 
 export interface SkillDef {
+  projectileArts?: ProjectileArtsSpec;
   icon?: string;
   bodyMotion?: string | false;
   reachCue?: boolean;
@@ -5052,6 +5057,7 @@ function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain'
 }
 
 export interface SkillTreeNode {
+  projectileArts?: ProjectileArtsSpec;
   guardArts?: GuardArtsSpec;
   attackSequence?: AttackSequenceSpec;
   /** Complete armed-cast identity; sockets override it. One per exclusive limb. */
@@ -5956,6 +5962,12 @@ export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>):
 
 /** A skill as OWNED by an actor: definition + level + socketed supports. */
 export interface SkillInstance {
+  /** Captured projectile disciplines and provenance; never saved. */
+  projectileHost?: SkillInstance;
+  projectileRole?: 'primary' | 'payload';
+  projectileSpec?: ProjectileArtsSpec;
+  projectileCast?: ProjectileArtCast;
+  projectileContact?: { direction: number; depth: number; hits: number[]; power: number };
   guardArtsHost?: SkillInstance;
   guardArtsPayload?: true;
   /** Captured attack-sequence provenance; never persisted. */
