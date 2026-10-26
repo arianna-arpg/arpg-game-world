@@ -1,3 +1,4 @@
+import { releaseIdentityPlugin } from './scripts/release-identity-plugin.mjs';
 // ---------------------------------------------------------------------------
 // Vite config — adds a DISK-SAVE plugin so the game can persist to real files
 // in <project>/saves/ (survives the browser AND the dev server closing). The
@@ -141,7 +142,7 @@ export default defineConfig({
     __HOLLOW_WAKE_STORAGE_SCOPE__: JSON.stringify(process.env.HOLLOW_WAKE_STORAGE_SCOPE ?? ''),
     __HOLLOW_WAKE_WORLDMASS__: process.env.HOLLOW_WAKE_WORLDMASS !== '0',
   },
-  plugins: [diskSavePlugin(), reloadTreesPlugin(), loadingFramePlugin()],
+  plugins: [diskSavePlugin(), reloadTreesPlugin(), loadingFramePlugin(), releaseIdentityPlugin()],
   // The showcase is a separate realm; both entries share the game modules.
   build: { rollupOptions: {
     input: {

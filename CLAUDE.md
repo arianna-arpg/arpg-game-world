@@ -85,6 +85,13 @@ Tests must exercise current behavior and fail when that behavior is broken. Add 
 
 `npm run probe -- <name>` still runs a specific existing rig. Default and named runs validate the selected files; `npm run probe:history` (optionally `-- --slow`) validates the entire old roster and its source receipts. `--all` and `--slow` also request historical sweeps. `.github/workflows/historical-audit.yml` is a manually dispatched forensic audit; historical source matches are not a release gate. The old source expectations may need explicit retirement after legitimate refactors; do not manufacture predecessor adapters to make them appear current. The normal CI gates the current behavior courses and actual client playthrough.
 
+Coordinated releases: `docs/engine/coordinated-releases.md` documents the single
+Pages catalog/deployment for browser and desktop games. The release planner pins
+fully verified source; one build supplies both clients and their visible revision.
+`scripts/browser-previews.json` configures isolated branches beside `/play/`.
+Verify the coordinated-release, release-policy and browser-preview tests; the
+publisher also boots both clients before upload.
+
 ## Project map
 
 - `src/main.ts`: application entry, input/frame dispatch, Continue and network connection.
