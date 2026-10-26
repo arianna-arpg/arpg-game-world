@@ -116,10 +116,12 @@ Resolve visibility before drawing bodies; wall queries and pixels share one cont
 resolver. Verify the sightveil/visibility_stability probes and hidden
 `balance/visibility-ui.cjs` (including its old-code negative control).
 
-Browser branch previews: `docs/engine/browser-previews.md` documents the Pages
-deployment. `scripts/browser-previews.json` configures isolated builds beside
-`/play/`; `scripts/build-browser-previews.mjs` pins their commits and refuses
-shared save namespaces. Verify `node --test scripts/test-browser-previews.mjs`.
+Coordinated releases: `docs/engine/coordinated-releases.md` documents the single
+Pages catalog/deployment for browser and desktop games. The release planner pins
+fully verified source; one build supplies both clients and their visible revision.
+`scripts/browser-previews.json` configures isolated branches beside `/play/`.
+Verify the coordinated-release, release-policy and browser-preview tests; the
+publisher also boots both clients before upload.
 
 Legendary skill empowerment is documented in `docs/design/legendary-skill-empowerment.md`.
 `data/skillEmpowerment.ts` configures duplicate merges and passive-only rewards;

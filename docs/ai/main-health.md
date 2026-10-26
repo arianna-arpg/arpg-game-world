@@ -42,3 +42,11 @@ GitHub outages, runner failures and future defects remain possible. These
 controls prevent unverified changes from being accepted and keep publication
 behind successful verification; they cannot guarantee that a service or test
 will never fail.
+
+The coordinated publisher is described in [coordinated releases](../engine/coordinated-releases.md).
+Browser and desktop game versions now share one Pages catalog and deployment.
+Only active registry branches are released; independent desktop branch uploads
+are retired. Main requires full push CI; previews require successful full push
+or explicitly dispatched CI on their source history. Installer application
+releases bundle the already-published Main game and cannot independently advance
+the game version.

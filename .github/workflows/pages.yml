@@ -1,13 +1,7 @@
-name: Deploy site to GitHub Pages
-
-# Regenerates the site's data from src/data after successful CI, then deploys.
-# This is what keeps the Database (and later the Passive Tree) at parity with
-# the game: the JSON is never committed by hand — it's rebuilt here each time.
+name: Deploy coordinated browser and desktop games
 
 on:
   workflow_dispatch: {}
-  # Only the configured, same-repository experiment can refresh the preview.
-  # This workflow runs from main, so the Pages environment remains main-only.
   workflow_run:
     workflows: [ci]
     types: [completed]
@@ -16,10 +10,8 @@ on:
 permissions:
   contents: read
   actions: read
-  pages: write
-  id-token: write
 
-# Never run two deploys at once; let an in-progress one finish.
+# One complete catalog/deployment at a time; neither platform publishes alone.
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -29,7 +21,7 @@ jobs:
     if: >-
       github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
+       (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
        github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     outputs:
@@ -46,54 +38,42 @@ jobs:
         run: node scripts/verified-main.mjs
         env:
           GH_TOKEN: ${{ github.token }}
+
   build:
     needs: verify
     if: needs.verify.outputs.ready == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.verify.outputs.sha }}
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Export game data → site/data/*.json
-        run: npx tsx scripts/export-web-data.ts
-
-      # The database page's monster portraits: the game's own painters
-      # (render/vis/portrait.ts + the part grammar + LOOKS), bundled as one
-      # iife the page loads beside the JSON — site pixels regenerate from
-      # src/ on every deploy exactly like site facts do.
-      - name: Build the portrait bundle → site/assets/portraits.js
-        run: npx vite build --config vite.portraits.config.ts
-
-      # --- Phase 3: the playable in-browser demo, built into site/play ---
-      # The game is a static Vite build; --base=./ keeps hashed asset URLs
-      # relative so they resolve at the /arpg-game-world/play/ sub-path.
-      # This exact main commit already passed types, probes and a client boot
-      # in CI. Saves fall back to localStorage on this static host.
-      - name: Build the in-browser demo → site/play
-        run: npx vite build --base=./ --outDir site/play --emptyOutDir
-
-      - name: Validate browser-preview configuration
-        run: node --test scripts/test-browser-previews.mjs
-
-      - name: Build isolated branch previews → site/dev
-        run: node scripts/build-browser-previews.mjs
-
-      # The site cinema's films live on the `site-media` release, never in
-      # git; pull them in beside the pages (verified against
-      # site/media/manifest.json) so they serve from the site's own origin.
-      - name: Fetch the site's films → site/media
+      - run: npm ci
+      - name: Pin successful source CI for every released branch
+        run: node scripts/plan-coordinated-release.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Build the site database and portraits
+        run: |
+          npx tsx scripts/export-web-data.ts
+          npx vite build --config vite.portraits.config.ts
+      - name: Build each game once and stage both clients together
+        run: node scripts/build-coordinated-release.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Verify real browser and desktop entry, identity and storage
+        run: |
+          node node_modules/electron/install.js
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+          xvfb-run --auto-servernum node_modules/.bin/electron scripts/smoke-coordinated-release.cjs
+      - name: Fetch the site's films
         run: node scripts/fetch-site-media.mjs
-
-      - name: Upload Pages artifact
+      - name: Upload the complete catalog and both client artifacts
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
@@ -101,6 +81,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

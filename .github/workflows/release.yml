@@ -41,10 +41,45 @@ on:
 
 permissions:
   contents: write   # electron-builder uploads release assets
+  actions: read
   issues: write     # the red-night alarm, rung (and answered) from the lane's true end
 
 jobs:
+  verify-source:
+    runs-on: ubuntu-latest
+    outputs:
+      game: ${{ steps.source.outputs.game }}
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require full CI for this exact launcher source
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_BRANCH: ${{ startsWith(github.ref, 'refs/tags/') && 'main' || github.ref_name }}
+          PUBLISHED_INSTALLER: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          node --input-type=module <<'JS'
+          import {execFileSync} from 'node:child_process';
+          import {appendFileSync} from 'node:fs';
+          import {verifiedBranch,githubApi} from './scripts/plan-coordinated-release.mjs';
+          import releases from './launcher/releases.cjs';
+          const repository=process.env.GITHUB_REPOSITORY;
+          const requiredCommit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+          await verifiedBranch({api:githubApi(repository),repository,branch:process.env.SOURCE_BRANCH,requiredCommit});
+          if (process.env.PUBLISHED_INSTALLER === 'true') {
+            const catalog=await releases.readCatalog({gh:repository});
+            const entry=catalog.entries.find(e=>e.identity.branch==='main');
+            appendFileSync(process.env.GITHUB_OUTPUT,'game='+JSON.stringify({format:1,repository,entries:[entry]})+'\n');
+          }
+          JS
   package:
+    needs: verify-source
     strategy:
       fail-fast: false
       matrix:
@@ -81,7 +116,14 @@ jobs:
           echo "workspace version = $(npm pkg get version)"
 
       # Same pipeline as `npm run dist`, split so CI logs separate the stages.
-      - run: npm run build
+      - name: Bundle the already published coordinated Main game
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: node scripts/install-published-game.mjs
+        env:
+          HOLLOW_WAKE_GAME_RELEASE: ${{ needs.verify-source.outputs.game }}
+      - name: Build local game only for an unpublished packaging rehearsal
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: npm run build
       - run: node scripts/make-build-info.mjs
 
       # Uploads land on a DRAFT release (electron-builder.yml releaseType),

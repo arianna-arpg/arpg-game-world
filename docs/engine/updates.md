@@ -237,3 +237,13 @@ npm run check             strict checkJs over launcher/*.cjs
 - **Old RCs are never pruned.** Each night adds about 235 MB of release assets.
 - **The NSIS relaunch is not covered in CI.** The smoke boots the unpacked
   payload; the silent install and its `--force-run` relaunch are proven by hand.
+
+## Coordinated game versions
+
+The browser and desktop game now follow the same published catalog, described
+in [coordinated releases](coordinated-releases.md). The channels and installer
+mechanisms above apply to the **launcher application**. Normal Play downloads
+the catalog's verified game even for Main; it retains an offline copy and never
+changes saves. Packaged installers include the already-published Main game.
+Developer mode remains the explicit local-source path. The launcher and game
+show their separate identities so a locally modified or offline copy is clear.
