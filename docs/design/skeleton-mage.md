@@ -41,7 +41,9 @@ the rite autonomously. The command observes that same recovery clock.
   Its delivery/tag/target eligibility is authored data. The default permits
   offensive projectiles, cones/beams, novas, ground spells, storms and enemy
   targeted spells. Summons, movement, auras and corpse-fueled casts are outside
-  that default. Echoes keep separate runtime state and cannot echo or relay.
+  that default. Echoes keep separate runtime state and cannot echo or relay. Repeated echoes
+  share one ability identity per Lich, so the copied spell's live limits remain
+  binding; retiring the owner spell retires its captured copies too.
 
 ## Grave Conclave
 

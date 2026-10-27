@@ -621,7 +621,8 @@ test('Skeletal mage visuals: real random, ascendant and archer-tree casts preser
       p.sheet.setSource('mage-visual-rig', [{ stat: 'mana', kind: 'flat', value: 1000 }]);
       p.fillResources(); p.invulnerable = true;
       assert(w.useSkill(p, inst, p.pos), `${skill}/${nodes.join(',')}: real cast starts`);
-      for (let i = 0; i < 100; i++) w.update(1 / 60);
+      const settleTicks = Math.max(100, Math.ceil((p.skillUseTime(inst) + 0.25) * 60));
+      for (let i = 0; i < settleTicks; i++) w.update(1 / 60);
       const bodies = w.actors.filter(b => b.owner === p && !b.dead);
       assert(bodies.length > 0);
       assert(bodies.every(b => !!SKELETAL_MAGE_LOOKS[b.look!]));

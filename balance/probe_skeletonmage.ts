@@ -157,6 +157,20 @@ try {
     SIM_TAP.current = null;
   }
   {
+    const { w, p, aim, raise } = rig(['lich_ascendant', 'deathless_regent', 'plague_crown']);
+    const lich = raise()[0], spell = makeSkillInstance(SKILLS.firebolt, 20);
+    spell.treeNodes = ['ember_satellites']; p.skills[1] = spell;
+    lich.sheet.setSource('echo-cap', [mod('projectileCount', 'override', 100)]);
+    w.executeSkill(p, spell, aim);
+    const first = w.projectiles.filter(q => q.caster === lich && q.projectileOrbit), host = first[0]?.inst.projectileHost;
+    check('echoed projectile mutators create their own live minion-owned satellites', first.length > 0 && !!host && host !== spell);
+    lich.summonArtState!.echoReady = 0; w.executeSkill(p, spell, aim);
+    const live = w.projectiles.filter(q => q.caster === lich && q.projectileOrbit && !q.dissolved);
+    check('successive echoes share one independent ability identity and its configured summon cap', live.length === first.length && live.every(q => q.inst.projectileHost === host));
+    (w as unknown as { clearTreeFields(owner: typeof p, skill: SkillInstance): void }).clearTreeFields(p, spell);
+    check('retiring the owner spell also retires only its copied ability and captured projectiles', !lich.summonArtState!.echoes?.has(spell) && w.projectiles.every(q => q.caster !== lich));
+  }
+  {
     const { w, p, inst, aim, raise, bodies } = rig(['grave_academy', 'winter_curriculum', 'deep_winter', 'plague_curriculum']);
     w.setSummonSchools(inst.def.id, ['fire', 'cold']);
     raise(); raise();
