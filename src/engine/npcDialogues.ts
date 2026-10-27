@@ -135,15 +135,23 @@ export class NpcDialogueDirector {
       });
   }
 
+  /** Reading lease for an already-admitted call-out. This never admits new
+   * text or grants proximity to the speaker's services. */
+  activeCallout(): NpcSpeechLine | null {
+    const w = this.w;
+    if (!this.calling || w.scene || w.clientActionHook || !w.player || w.player.dead || w.player.downed) return null;
+    const { def, line, until } = this.calling;
+    // Ignore only its own receipt; live conditions still withdraw stale text.
+    return w.time < until && this.matches(line.a, def) && w.actors.includes(line.a)
+      && npcDialogueEligible(w, { ...def, once: undefined }) ? line : null;
+  }
+
   callout(admit: boolean): NpcSpeechLine | null {
     const w = this.w;
     if (w.scene || w.clientActionHook || !w.player || w.player.dead || w.player.downed) { this.calling = undefined; return null; }
     if (this.calling) {
-      const { def, line, until } = this.calling;
-      // Ignore only the receipt we just wrote; a completed lesson or departed
-      // speaker still withdraws a stale invitation immediately.
-      if (w.time < until && this.matches(line.a, def) && w.actors.includes(line.a)
-        && npcDialogueEligible(w, { ...def, once: undefined })) return admit ? line : null;
+      const line = this.activeCallout();
+      if (line) return admit ? line : null;
       this.calling = undefined;
     }
     for (const def of [...NPC_DIALOGUES].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))) {

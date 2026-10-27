@@ -183,7 +183,8 @@ app.whenReady().then(async () => {
       const target = w.actors.filter(a => a.team === 'enemy' && !a.dead && a.skills.some(Boolean))
         .sort((a,b) => Math.hypot(a.pos.x-w.player.pos.x,a.pos.y-w.player.pos.y)-Math.hypot(b.pos.x-w.player.pos.x,b.pos.y-w.player.pos.y))[0];
       if (!target) throw Error('No opponents at the camp');
-      const before = target.life;
+      const before = target.life; let lowest = before;
+      const initial = { hero: { ...w.player.pos }, target: { ...target.pos }, heroTier: w.player.tier, targetTier: target.tier, targetId: target.defId };
       __game.devInput(() => {
         const p = w.player.pos, goal = target.pos, d = Math.hypot(goal.x-p.x,goal.y-p.y);
         const step = w.walk.pathStep(p,goal) ?? goal, len = Math.hypot(step.x-p.x,step.y-p.y);
@@ -192,15 +193,17 @@ app.whenReady().then(async () => {
       });
       try {
         for (let i=0;i<300&&!target.dead&&!w.player.dead;i++) {
-          __game.step(1,40); if(i%8===0) await new Promise(r=>setTimeout(r,0));
+          __game.step(1,40); lowest = Math.min(lowest, target.life); if(i%8===0) await new Promise(r=>setTimeout(r,0));
         }
       } finally { __game.devInput(null); }
       return { target: target.name, before, after: target.life, killed: target.dead,
+        lowest, initial, final: { hero: { ...w.player.pos }, target: { ...target.pos }, skill: w.player.skills[0]?.def.id, targetTier: target.tier },
         heroAlive: !w.player.dead, loads: __playtestLoads, fatal: __game.crash().fatal };
     });
-    assert(combat.after < combat.before, 'Ordinary attack input must damage an actual camp opponent');
+    record('Combat at the generated camp',combat);
+    assert(combat.after < combat.before, 'Ordinary attack input must damage an actual camp opponent: '+JSON.stringify(combat));
     assert(combat.heroAlive); assert.equal(combat.loads,0); assert.equal(combat.fatal,null);
-    record('Combat at the generated camp',combat); await shot('camp-combat');
+    await shot('camp-combat');
     const saved = await run(async () => {
       __game.save(); await __game.flushRunSave(); const w = __game.world();
       return { charId: w.meta.charId, seed: w.massRuntime.generator.run.seed, pos: { ...w.player.pos }, zone: w.zone.id };

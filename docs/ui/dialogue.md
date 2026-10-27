@@ -48,6 +48,10 @@ The shortcut is a settings preference keyed by character and NPC definition.
 - Escape, controller B or the close button dismisses. Escape closes a visible dialogue
   before reaching the pause menu. The reader does not pause the world or lock
   movement; leaving the speaker's focus closes the exchange.
+  An armed selling/salvaging action consumes Cancel first and leaves the service
+  and conversation open; the next press resumes ordinary dismissal.
+  Distant call-outs retain their authored reading lifetime rather than nearby
+  conversation reach, including while moving. This does not unlock distant NPC actions.
 - Finish, X and Escape dismiss through the same reader close path without
   accepting work or changing any player ribbon. Escape also dismisses the
   front NPC service before any player-panel sweep, regardless of which group

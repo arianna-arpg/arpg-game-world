@@ -61,8 +61,18 @@ scale, with `BUILD_PANEL_CFG.edge` as clearance; long skill lists scroll inside
 the page below the fixed skill rack. Moving Inventory moves all its pages.
 NPC services have their own group and cannot change the player selection or geometry.
 Narrow screens may overlap; use the existing movable layout or close a group.
-The rail drops count badges, then
-wallet chips if needed to fit Inventory's height, then scrolls if necessary. Widths and margins remain
+Skills and Passives ribbons carry labels only. Memory Essence counts stay in
+the Skills page; unspent passive points appear beside the Passive Tree title
+only while positive. Other realms and vocation pools retain their own readouts.
+Inventory's header always shows nonzero salvage essence balances from the
+essence catalog, with names on hover. It wraps when needed without covering
+the close or move controls. Owned vestiges retain a separate dropdown with
+their existing lift/drag and socket interactions.
+Skill rows distinguish the next automatic level bonus from unlocked bonuses;
+each bonus's hover text describes its authored modifiers.
+The rail tightens spacing and hides container counts and secondary hints when
+needed to fit Inventory's height; pending lessons keep their control glow.
+It scrolls only if necessary. Widths and margins remain
 configurable in `BUILD_PANEL_CFG`. Historical saved page positions are ignored.
 The [Service workspace](service-workspace.md) supplies the same reading-band
 ceiling and compact tab visibility with or without a station visit. Inventory's anchor and this

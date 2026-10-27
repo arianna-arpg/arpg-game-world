@@ -229,10 +229,6 @@ export interface RunReckoning {
  *  (updateHintBar). Flip true to restore the standing crib sheet. */
 const HINT_BAR_ENABLED = false;
 
-/** THE CLOSE GLYPH keeps the inventory's top-right corner (closeGlyphHtml),
- *  so the essence satchel button — and the drop-down hanging under it —
- *  sit this many px in from the panel's right edge. */
-const SATCHEL_RIGHT_PX = 46;
 // (THE MILESTONE POPUP's dial moved to Settings.treePrompt — 2026-09-11,
 // OFF by default; the world's disciplined-calm sweep still queues the
 // offer, showTreePopup answers only for a player who asked.)
@@ -637,9 +633,8 @@ export class UI {
   /** THE PARTY PANEL (ui/party.ts): installed by the shell (main.ts) — null until it is. */
   partyPanel: import('./party').PartyPanel | null = null;
   setPartyPanel(p: import('./party').PartyPanel): void { this.partyPanel = p; }
-  /** The essence SATCHEL flap on the inventory panel (persists across
-   *  re-renders — a satchel stays however you left it). */
-  private satchelOpen = false;
+  /** Socket materials keep their own dropdown; essence balances stay visible. */
+  private vestigeSatchelOpen = false;
   /** All development-page lifecycle and ownership live in this registry. */
   private readonly inventoryPages = new InventoryPages({
     owner: () => this.panelSeat(this.inventory).id,
@@ -1271,13 +1266,12 @@ export class UI {
   /** THE RAIL FIT LAW: the ribbon rail (SKILLS · PASSIVES · every owned
    *  container) never runs past the inventory pane's foot. Measured, never
    *  assumed — after every render and every dock sync: a rail that would
-   *  overhang sheds the container COUNT badge first (her word), then the
-   *  Skills wallet chips (the drawer's own header repeats them); the
-   *  stylesheet's tight classes are the whole vocabulary. */
+   *  overhang tightens spacing and sheds container count badges. Skill and passive balances
+   *  belong to their page headers, so they never lengthen the rail. */
   private fitBuildRail(): void {
     const rail = this.inventory.querySelector<HTMLElement>('.build-ribbons');
     if (!rail || !this.inventoryOpen) return;
-    rail.classList.remove('build-rail-tight', 'build-rail-tighter');
+    rail.classList.remove('build-rail-tight');
     const overhang = (): boolean => {
       const pane = this.inventory.getBoundingClientRect();
       const r = rail.getBoundingClientRect();
@@ -1285,7 +1279,6 @@ export class UI {
         && (r.bottom > pane.bottom + 0.5 || rail.scrollHeight > rail.clientHeight + 1);
     };
     if (overhang()) rail.classList.add('build-rail-tight');
-    if (overhang()) rail.classList.add('build-rail-tighter');
   }
 
   // --- THE FOLIO (ui/folio.ts) -----------------------------------------------
@@ -1574,11 +1567,10 @@ export class UI {
   /** Conversation and services share NPC tabs; player pages have their own book. */
   enrollConversation(dialogue: DialogueUI): void {
     this.conversation = dialogue;
-    const speaker = () => dialogue.session.reading?.offer.speakerId ?? null;
     this.folio.enroll(this.folioLeaf('conversation', dialogue.root, () => 'Conversation',
       () => !!dialogue.session.reading && !dialogue.root.hidden, () => { dialogue.close(); }, {
         kind: 'station', group: 'npc',
-        engaged: () => speaker() !== null && this.getWorld().npcDialogueReachable(speaker()!),
+        engaged: () => dialogue.engaged,
       }));
     this.movableRoots.push(dialogue.root);
     attachPanelMove(dialogue.root, { onMove: () => this.folioStrip.update() });
@@ -4525,37 +4517,25 @@ export class UI {
         ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${CATEGORY_GLYPHS[cat] ?? '?'}${lockPip(i.locked)}${pipRow(i)}</div>`;
     }).join('');
 
-    // The SATCHEL: a little pouch flap on the panel's edge holding the
-    // essence wallet — click to flip it open/closed.
-    const satchel = `
-      <button data-satchel style="position:absolute;top:10px;right:${SATCHEL_RIGHT_PX}px;font-size:11px;
-        background:#241d2e;border:1px solid #4a3a5a;border-radius:6px 6px 2px 2px;padding:3px 9px;cursor:var(--cursor-point, pointer)"
-        title="Essence satchel (salvage currency, dies with you)">🎒 ${this.satchelOpen ? '▾' : '▸'}</button>
-      ${this.satchelOpen ? `
-        <div style="position:absolute;top:38px;right:${SATCHEL_RIGHT_PX}px;z-index:3;background:#1b1524;
-          border:1px solid #4a3a5a;border-radius:6px 2px 6px 6px;padding:8px 12px;box-shadow:0 3px 14px rgba(0,0,0,0.6)">
-          ${ESSENCE_IDS.map(id => {
-            const e = ESSENCES[id];
-            const n = m.essences[id] ?? 0;
-            return `<div style="font-size:11px;color:${e.color};margin:2px 0" title="${e.label}">${e.glyph} ${n} <span style="color:#6a6478;font-size:9px">${e.label.replace(' Essence', '')}</span></div>`;
-          }).join('')}
-          ${(() => {
-            // VESTIGES ride the satchel too — stackable socket material.
-            // Drag one onto a socket pip to inlay it (consumed on use).
-            const owned = VESTIGE_LIST.filter(v => (m.vestiges[v.id] ?? 0) > 0);
-            if (!owned.length) return '';
-            return `<div style="border-top:1px dashed #4a3a5a;margin-top:6px;padding-top:5px">
-              ${owned.map(v => {
-                const n = m.vestiges[v.id];
-                return `<div data-drag="vestige:${v.id}" data-tip="vestige" data-vestige-id="${v.id}"
-                  style="font-size:11px;color:${v.color};margin:2px 0;cursor:var(--cursor-grab, grab)">${v.glyph} ${n}
-                  <span style="color:#6a6478;font-size:9px">${v.name.split(',')[0]}</span></div>`;
-              }).join('')}
-              <div style="color:#5a5668;font-size:8px;margin-top:3px">drag (or click to lift) a vestige,
-                then a socket ◇ (a socketed item takes it in its first empty slot)</div>
-            </div>`;
-          })()}
-        </div>` : ''}`;
+    // Both wallets read the inventory owner's data and their existing catalogs.
+    // Currency needs no click; socket materials retain their lift/drag controls.
+    const essenceChips = ESSENCE_IDS.filter(id => (m.essences[id] ?? 0) > 0).map(id => {
+      const e = ESSENCES[id], n = m.essences[id];
+      return `<span class="build-essence" data-inventory-essence="${id}" style="color:${e.color}"
+        title="${esc(e.label)}: ${n}" aria-label="${esc(e.label)}: ${n}">${e.glyph} ${n}</span>`;
+    }).join('');
+    const ownedVestiges = VESTIGE_LIST.filter(v => (m.vestiges[v.id] ?? 0) > 0);
+    const vestigeSatchel = ownedVestiges.length ? `<span class="inventory-vestiges">
+      <button data-vestige-satchel aria-expanded="${this.vestigeSatchelOpen}" aria-controls="inventory-vestige-menu"
+        title="Vestiges: socket materials">🎒 ${this.vestigeSatchelOpen ? '▾' : '▸'}</button>
+      ${this.vestigeSatchelOpen ? `<span id="inventory-vestige-menu" class="inventory-vestige-menu">
+        ${ownedVestiges.map(v => `<span data-drag="vestige:${v.id}" data-tip="vestige" data-vestige-id="${v.id}"
+          style="display:block;color:${v.color};margin:2px 0;cursor:var(--cursor-grab, grab)">${v.glyph} ${m.vestiges[v.id]}
+          <span style="color:#6a6478;font-size:9px">${esc(v.name.split(',')[0])}</span></span>`).join('')}
+        <span style="display:block;color:#5a5668;font-size:8px;margin-top:3px">drag (or click to lift) a vestige,
+          then a socket ◇ (a socketed item takes it in its first empty slot)</span>
+      </span>` : ''}
+    </span>` : '';
     // Skills shares the inventory rail with every development page.
     // The pending gift lesson highlights the next reachable control.
     const flapGlow = this.getWorld().mireilleGiftLesson() !== null && !this.skillsOpen;
@@ -4566,11 +4546,10 @@ export class UI {
         style="--build-rail:${BUILD_PANEL_CFG.railWidth}px">
         <button data-buildflap class="build-ribbon ${flapGlow ? 'tut-glow' : ''}"
           aria-expanded="${this.skillsOpen}" aria-controls="skills-panel" title="Manage your learned skills and Memory Essences">
-          <span class="build-ribbon-label">📖 SKILLS</span><span class="build-wallet">${walletChips}</span>
+          <span class="build-ribbon-label">📖 SKILLS</span>
         </button>
         <button data-passiveflap class="build-ribbon" aria-expanded="${this.treeOpen}" aria-controls="passive-tree" title="Open your passive tree">
           <span class="build-ribbon-label">✧ PASSIVES</span>
-          ${m.passivePoints > 0 ? `<span>${m.passivePoints}</span>` : ''}
         </button>
         <button data-characterflap class="build-ribbon" aria-expanded="${this.charSheetOpen}" aria-controls="char-sheet" title="Open your character sheet">
           <span class="build-ribbon-label">♙ CHARACTER</span>
@@ -4651,7 +4630,8 @@ export class UI {
     const buildChanged = this.setPanelHtml(this.buildPanel, drawer);
     this.containerPane.renderAll(live);
     this.syncInventoryPages();
-    const inventoryChanged = this.setPanelHtml(this.inventory, `${drawerHandle}${satchel}${this.closeGlyphHtml()}<h2>Inventory</h2>
+    const inventoryChanged = this.setPanelHtml(this.inventory, `${drawerHandle}${this.closeGlyphHtml()}<h2 class="inventory-header">
+      <span>Inventory</span><span class="inventory-wallet">${essenceChips}${vestigeSatchel}</span></h2>
       <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`);
     const scrollEl = this.inventory.querySelector<HTMLElement>('.inv-scroll');
     if (scrollEl) scrollEl.scrollTop = prevScroll;
@@ -4682,8 +4662,8 @@ export class UI {
   private wireInventory(): void {
     const world = this.getWorld();
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.inventory.querySelectorAll<T>(sel)];
-    this.inventory.querySelector<HTMLButtonElement>('[data-satchel]')?.addEventListener('click', () => {
-      this.satchelOpen = !this.satchelOpen;
+    this.inventory.querySelector<HTMLButtonElement>('[data-vestige-satchel]')?.addEventListener('click', () => {
+      this.vestigeSatchelOpen = !this.vestigeSatchelOpen;
       this.refreshInventory();
     });
     // THE CONTAINER DRAWERS: the ribbons beside SKILLS / PASSIVES (ui/containerPane.ts).
@@ -7215,8 +7195,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       return `
         <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" data-drop="gemSock:${def.id}" style="border-left:3px solid ${def.color}">
           <div class="name">${skillInstanceName(inst)} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
-            ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px" title="Lv ${t.level} threshold">${t.label}</span>`).join('')}
-            ${nextThresh ? `<span style="font-size:9px;color:#6a6478;margin-left:4px">Lv ${nextThresh.level}: ${nextThresh.label}</span>` : ''}
+            ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px"
+              title="${esc(`Unlocked at skill level ${t.level}: ${t.mods.map(mo => formatModLine(mo, mo.value)).join(' · ')}`)}">${esc(t.label)}</span>`).join('')}
+            ${nextThresh ? `<span style="font-size:9px;color:#8a8498;margin-left:4px"
+              title="${esc(`Unlocks at skill level ${nextThresh.level}: ${nextThresh.mods.map(mo => formatModLine(mo, mo.value)).join(' · ')}`)}">Next at Lv ${nextThresh.level}: ${esc(nextThresh.label)}</span>` : ''}
             ${this.rarityTagHtml(inst)}${rackSeatTag}
             ${replenishingDelivery(inst) ? `<span style="color:#8a8678;font-weight:normal;font-size:10px">${replenishingDelivery(inst)?.replenish?.toggle ? (inst.replenishmentPaused ? 'Toggle · paused' : 'Toggle · replenishing') : 'Passive · replenishes while seated'}</span>` : ''}
           </div>
@@ -7506,31 +7488,29 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       if (!voc) return '';
       const open = vocationGateOpen(m.allocated, vid);
       const gateName = PASSIVE_NODES[vocationGateNodeId(vid) ?? '']?.name;
-      return ` · <span style="color:${voc.color}">${m.vocationPoints} vocation (${voc.name})</span>`
+      return `<span style="color:${voc.color}">${m.vocationPoints} vocation (${voc.name})</span>`
         + (open ? '' : ` <span style="color:#8a8678;font-size:11px">— locked: allocate ${gateName ?? 'its class start'}</span>`);
-    }).join('');
-    // The active realm's POOL: the star spends passive points; other realms
-    // read their currency wallet (earned at future shrines/communions).
+    }).join(' · ');
+    // Passive points live in the header; other realms retain their own wallet.
     const currency = activeRealm?.currency ?? 'passive';
     const poolChip = currency === 'passive'
-      ? `<span style="color:#ffd700">${m.passivePoints} points</span>`
+      ? ''
       : `<span style="color:${activeRealm?.color ?? '#ffd700'}">${m.realmPoints[currency] ?? 0} ${currency}</span>`;
     // REALM TABS — only when more than one constellation is open.
     const realmTabs = realms.length > 1 ? `<div class="realm-tabs">${realms.map(r => `
       <button class="realm-tab ${r.id === this.treeRealm ? 'active' : ''}" data-realm="${r.id}"
         style="--realm-color:${r.color ?? '#c8a84b'}" title="${r.blurb ?? ''}">${r.label}</button>`).join('')}</div>` : '';
-    // THE HEADER PARITY (2026-09-11, her ask): the same shape the Skills
-    // page wears — the close glyph FIRST (so the ✕ seats identically when
-    // the two tabs flip), one ribbon line "✧ Passive Tree" over the divider,
-    // and everything else (the realm's name, the pool, the vocation chips,
-    // search, zoom, the tips) in a tools row beneath it.
+    // Available passive points stay with their page, leaving the rail compact.
+    const passivePoints = m.passivePoints > 0
+      ? ` <span class="passive-points" title="Passive points available to allocate">· ${m.passivePoints} point${m.passivePoints === 1 ? '' : 's'}</span>` : '';
     const realmChip = activeRealm && this.treeRealm !== MAIN_REALM
-      ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b> · ` : '';
+      ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b>` : '';
+    const treeChips = [realmChip, poolChip, vocChips].filter(Boolean).join(' · ');
     this.passiveTree.innerHTML = `
-      ${this.closeGlyphHtml()}<h2>✧ Passive Tree</h2>
+      ${this.closeGlyphHtml()}<h2>✧ Passive Tree${passivePoints}</h2>
       ${realmTabs}
       <div class="build-tree-tools tree-tools">
-        <span>${realmChip}${poolChip}${vocChips}</span>
+        ${treeChips ? `<span>${treeChips}</span>` : ''}
         ${!DEV.passiveTreeEditor && FONT_CFG.passiveRespec.enabled ? `<button data-passive-refund-mode aria-pressed="${refundMode}"
           ${refundWhy ? 'disabled' : ''} title="${esc(refundWhy ?? 'Return a whole node and its choices to their original point pool.')}"
           style="color:#cf92f0">${refundMode ? 'Finish refunding' : 'Refund at Font'}</button>` : ''}
