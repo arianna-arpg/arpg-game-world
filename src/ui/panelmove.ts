@@ -55,7 +55,7 @@ export const PANEL_MOVE_CFG = {
   /** The handle selector — the panel's ribbon. Must be a DIRECT child of the root. */
   handle: 'h2',
   /** Ribbon descendants that keep their own press (never start a drag). */
-  ignore: 'button, input, select, textarea, a, label, [data-panel-x], .tree-zoom-grp, .map-zoom-grp, .realm-tabs',
+  ignore: 'button, input, select, textarea, a, label, [data-drag], [data-panel-x], .tree-zoom-grp, .map-zoom-grp, .realm-tabs',
   /** Screen px of the panel that must stay inside the viewport on every side. */
   keepPx: 56,
   /** Pointer travel (px) before a ribbon press becomes a drag — a jittery click stays a click. */
