@@ -138,7 +138,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     core: ['aoeRadius', 'effectDuration', 'cooldownRecovery'],
     used: [
       // Costs
-      'satelliteCount', 'satelliteOrbit', 'satelliteSpeed', 'auroraCapacity', 'auroraRecharge', 'creeperSpeed',
+      'satelliteCount', 'satelliteEquipmentCount', 'satelliteOrbit', 'satelliteSpeed', 'auroraCapacity', 'auroraRecharge', 'creeperSpeed',
       'manaCost', 'manaUseCost', 'addedManaCost', 'addedLifeCost', 'addedCooldown',
       'costDamage_mana', 'costDamage_life',
       'costWard_mana', 'costWard_life', 'costWardDuration', 'costWardCap',
