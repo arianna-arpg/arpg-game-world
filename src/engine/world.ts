@@ -3953,7 +3953,8 @@ actors: Actor[] = [];
     (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
     (host, skills) => this.forwardSummonSockets(host, skills),
     (body, inst) => { if (inst.def.delivery.type === 'aura') this.activateAura(body, inst, inst.def.delivery,
-      body.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst))); });
+      body.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst))); },
+    (body, inst) => this.clearTreeFields(body, inst));
   readonly channelFormations = new ChannelFormations(this,
     (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
     (body, inst, aim, arrival) => { this.executeSkill(body, inst, aim, { noRepeat: true, componentUse: arrival, noCooldown: true, keepFacing: true }); });

@@ -26,7 +26,8 @@ export class SummonArts {
   constructor(private world: World,
     private spawn: (owner: Actor, host: SkillInstance, pos: Vec2) => Actor | null,
     private forward: (host: SkillInstance, skills: SkillInstance[]) => void,
-    private activate: (body: Actor, inst: SkillInstance) => void) {}
+    private activate: (body: Actor, inst: SkillInstance) => void,
+    private retire: (body: Actor, inst: SkillInstance) => void) {}
 
   private members(owner: Actor, host: SkillInstance): Actor[] {
     return this.world.actors.filter(a => !a.dead && a.owner === owner && a.summonInst === host);
@@ -177,15 +178,23 @@ export class SummonArts {
       const art = summonArtsOf(lich.summonInst), s = lich.summonArtState;
       if (lich.dead || lich.owner !== caster || !art?.echo || !s || s.echoReady > 0
         || lich.isStunned() || lich.tagsForbidden(inst) || !echoableSpell(inst, art.echo)) continue;
-      const echo: SkillInstance = { ...inst, state: undefined, sockets: [...inst.sockets], grafts: inst.grafts ? [...inst.grafts] : undefined,
+      const copy: SkillInstance = { ...inst, state: undefined, sockets: [...inst.sockets], grafts: inst.grafts ? [...inst.grafts] : undefined,
         summonArtCast: { role: 'echo' }, summonCommandHost: undefined,
         projectileHost: undefined, projectileRole: undefined, projectileSpec: undefined, projectileCast: undefined, projectileContact: undefined,
         sequenceHost: undefined, sequenceRole: undefined, challengeHost: undefined, followUpHost: undefined, invocationHost: undefined, guardArtsHost: undefined };
-      this.forward(lich.summonInst!, [echo]);
+      this.forward(lich.summonInst!, [copy]);
+      // A copied ability belongs to this Lich across uses; casts still capture their own state.
+      const source = inst.projectileHost ?? inst.sequenceHost ?? inst.challengeHost ?? inst.followUpHost ?? inst.invocationHost ?? inst.guardArtsHost
+        ?? caster.skills.find(skill => skill?.def.id === inst.def.id) ?? inst;
+      const copies = s.echoes ??= new Map<SkillInstance, SkillInstance>();
+      let echo = copies.get(source);
+      const powered = empoweredSkill(copy, art.echo.power, 1);
+      if (!echo) { echo = powered; copies.set(source, echo); }
+      else { const runtime = echo.state; Object.assign(echo, powered); echo.state = runtime; }
       const targetInfo = instanceTargeting(echo) ? this.world.resolveTargeting(lich, echo, aim) : undefined;
       if (targetInfo === null) continue;
       s.echoReady = art.echo.cooldown;
-      this.world.executeSkill(lich, empoweredSkill(echo, art.echo.power, 1), aim,
+      this.world.executeSkill(lich, echo, aim,
         { targetInfo, noRepeat: true, componentUse: true, noCooldown: true, noFollowUp: true });
     }
   }
@@ -336,6 +345,10 @@ export class SummonArts {
     }
   }
   clear(owner?: Actor, host?: SkillInstance): void {
+    if (owner && host) for (const body of this.world.actors) {
+      const copies = body.owner === owner ? body.summonArtState?.echoes : undefined, echo = copies?.get(host);
+      if (echo) { copies!.delete(host); this.retire(body, echo); }
+    }
     for (const keeper of this.world.actors) {
       if (owner && keeper !== owner) continue;
       for (const [inst, c] of [...keeper.summonArtContracts]) {

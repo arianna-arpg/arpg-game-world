@@ -45,6 +45,7 @@ export interface SummonArtState {
   kit: SkillInstance[];
   relayReady: number;
   echoReady: number;
+  echoes?: Map<SkillInstance, SkillInstance>;
   flareReady: number;
   siphonCredit: number;
   ritual?: { pos: Vec2; radius: number; remaining: number; readyAt: number; power: number };
