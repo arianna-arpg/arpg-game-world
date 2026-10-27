@@ -26,6 +26,18 @@ documented in [combat-polish](docs/design/combat-polish.md). Verify
 probe_miniontargets, probe_orbgeneration, companionstance, flasktrees and
 movementvisuals; build before the hidden movement-visuals UI harness.
 
+Trap/mine mechanics and reusable deviceVisuals are documented in
+`docs/engine/ground-devices.md`: walkable contact devices, configurable arming,
+resolved crossings and autonomous mine meta commands. Verify presencevisuals,
+selfvisuals, trapworks, tacticalai, controlstartertrees, movementvisuals,
+cosmetics, all types and sim smoke; then the hidden device-visuals-ui and
+construct-bodies-ui harnesses sequentially after an isolated build.
+
+The persistent construct body silhouettes are composed in `data/constructLooks.ts`
+and `data/constructGlyphs.ts`, selected through each delivery's ordinary `look`.
+See `docs/render/constructs.md`; verify presencevisuals, cosmetics, all types,
+sim smoke and hidden `balance/construct-bodies-ui.cjs` after an isolated build.
+
 Storm, summon and construct identities use `data/skillPresenceVisuals.ts`
 and `render/vis/skillPresenceVoice.ts`: 139 explicit source profiles.
 Births, completed actions, real aura/construct pulses and actual retirement
@@ -104,10 +116,12 @@ Resolve visibility before drawing bodies; wall queries and pixels share one cont
 resolver. Verify the sightveil/visibility_stability probes and hidden
 `balance/visibility-ui.cjs` (including its old-code negative control).
 
-Browser branch previews: `docs/engine/browser-previews.md` documents the Pages
-deployment. `scripts/browser-previews.json` configures isolated builds beside
-`/play/`; `scripts/build-browser-previews.mjs` pins their commits and refuses
-shared save namespaces. Verify `node --test scripts/test-browser-previews.mjs`.
+Coordinated releases: `docs/engine/coordinated-releases.md` documents the single
+Pages catalog/deployment for browser and desktop games. The release planner pins
+fully verified source; one build supplies both clients and their visible revision.
+`scripts/browser-previews.json` configures isolated branches beside `/play/`.
+Verify the coordinated-release, release-policy and browser-preview tests; the
+publisher also boots both clients before upload.
 
 Legendary skill empowerment is documented in `docs/design/legendary-skill-empowerment.md`.
 `data/skillEmpowerment.ts` configures duplicate merges and passive-only rewards;

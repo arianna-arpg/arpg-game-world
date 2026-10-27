@@ -26,7 +26,7 @@ const isCommit = v => typeof v === 'string' && /^[a-f0-9]{40}$/.test(v);
 /** @param {string} root @param {string} gh @param {string} branch */
 const branchDir = (root, gh, branch) => path.join(root, key(gh.toLowerCase()), key(branch));
 /** @typedef {{name: string, commit: string}} Branch */
-/** @typedef {{branch: string, commit: string, version: string, root: string}} Installed */
+/** @typedef {{branch: string, commit: string, version: string, root: string, digest?:string}} Installed */
 /** @typedef {{gh: string, api?: string, timeoutMs?: number, fetchImpl?: typeof fetch}} Api */
 
 /** @param {Api} o @param {string} route */
@@ -134,24 +134,35 @@ function installed(home) {
   try {
     const row = JSON.parse(fs.readFileSync(path.join(home, 'current.json'), 'utf8'));
     if (!isCommit(row.commit) || typeof row.branch !== 'string') return null;
-    const root = path.join(home, row.commit, 'game');
-    const info = JSON.parse(fs.readFileSync(path.join(home, row.commit, 'build.json'), 'utf8'));
+    const directory = row.directory ?? row.commit;
+    if (directory !== row.commit && (!/^[a-f0-9]{64}$/.test(row.digest ?? '')
+        || directory !== row.commit + '-' + row.digest.slice(0, 16))) return null;
+    const root = path.join(home, directory, 'game');
+    const info = JSON.parse(fs.readFileSync(path.join(home, directory, 'build.json'), 'utf8'));
     if (info.commit !== row.commit || info.branch !== row.branch || !fs.statSync(path.join(root, 'index.html')).isFile()) return null;
-    return { branch: row.branch, commit: row.commit, version: String(info.version), root };
+    return { branch: row.branch, commit: row.commit, version: String(info.version), root, digest: info.digest };
   } catch { return null; }
 }
 
 /** Stage into a fresh directory and publish the pointer LAST. Interrupted installs
  * cannot damage the previous build or its saves. All removal targets are generated
  * descendants of the resolved cache home, never branch names or archive paths.
- * @param {{home: string, branch: string, commit: string, compressed: Buffer}} o */
+ * @param {{home: string, branch: string, commit: string, compressed: Buffer, expectedIdentity?:unknown}} o */
 function installBundle(o) {
   const decoded = decodeBundle(o.compressed, o.branch, o.commit);
+  if (o.expectedIdentity) {
+    const stamp = decoded.files.find(f => f.name === 'build.json');
+    if (!stamp || JSON.stringify(JSON.parse(stamp.data.toString('utf8'))) !== JSON.stringify(o.expectedIdentity)) {
+      throw new Error('Downloaded game identity differs from the release catalog.');
+    }
+  }
   const home = path.resolve(o.home);
   fs.mkdirSync(home, { recursive: true });
   const stage = fs.mkdtempSync(path.join(home, '.stage-'));
-  const final = path.join(home, o.commit);
-  const info = { branch: o.branch, commit: o.commit, version: decoded.version };
+  const digest = crypto.createHash('sha256').update(o.compressed).digest('hex');
+  const directory = o.commit + '-' + digest.slice(0, 16);
+  const final = path.join(home, directory);
+  const info = { branch: o.branch, commit: o.commit, version: decoded.version, digest, directory };
   try {
     for (const f of decoded.files) {
       const file = path.join(stage, 'game', f.name);
@@ -178,7 +189,7 @@ function installBundle(o) {
   return result;
 }
 
-/** @param {{home: string, branch: string, bundle: NonNullable<ReturnType<typeof pickBundle>>, fetchImpl?: typeof fetch, onProgress?: (p: {pct: number, got: number, total: number}) => void}} o */
+/** @param {{home: string, branch: string, bundle: NonNullable<ReturnType<typeof pickBundle>>, expectedIdentity?:unknown, fetchImpl?: typeof fetch, onProgress?: (p: {pct: number, got: number, total: number}) => void}} o */
 async function downloadBundle(o) {
   const home = path.resolve(o.home);
   fs.mkdirSync(home, { recursive: true });
@@ -187,7 +198,7 @@ async function downloadBundle(o) {
     await downloadAsset({ ...o.bundle.asset, url: o.bundle.asset.url, dest,
       sizeHint: o.bundle.asset.size, verifyDigest: true, fetchImpl: o.fetchImpl,
       onProgress: o.onProgress, ceilingMs: 10 * 60_000, stallMs: 30_000 });
-    return installBundle({ home, branch: o.branch, commit: o.bundle.commit, compressed: fs.readFileSync(dest) });
+    return installBundle({ home, branch: o.branch, commit: o.bundle.commit, compressed: fs.readFileSync(dest), expectedIdentity: o.expectedIdentity });
   } finally { fs.rmSync(dest, { force: true }); }
 }
 

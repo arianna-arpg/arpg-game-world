@@ -28,7 +28,7 @@
 //      and the torpor returns; the tells read the bar's own band.
 //   G  THE NO-TAG LAW + the kit nets: the shaman's kite budget is FINITE,
 //      the basker lurks with a commit range, the strider is posted with a
-//      shown fan, the kettleback's jet is a drive-gated rule; tells/looks
+//      hidden fan, the kettleback's jet is a drive-gated rule; tells/looks
 //      validate; wildlife ≥ 3 objective-exempt rows; the weather kinds.
 // Run: npx tsx balance/probe_scald.ts
 // ---------------------------------------------------------------------------
@@ -328,8 +328,8 @@ const KIN = ['vent_shaman', 'stilt_strider', 'kettleback', 'mudpot_skipper', 'sc
   check('G3 no-tag: the cool basker LURKS with a commit range (never an endless stand-off)',
     bk?.brain?.move?.style === 'lurk' && (bk.brain.move.commitRange ?? 0) > 0);
   const st = MONSTERS.stilt_strider;
-  check('G4 sentry: the stilt-strider is posted on a shown sweeping watch',
-    st?.post === true && !!st.watch?.sweep && st.watch.fan === 'show'
+  check('G4 sentry: the stilt-strider keeps its sweeping watch without a detection overlay',
+    st?.post === true && !!st.watch?.sweep && st.watch.fan === 'hide'
     && !!st.tells?.some(t => t.source === 'watch'));
   const kb = MONSTERS.kettleback;
   const jetRule = kb?.brain?.rules?.find(r => r.actions?.some(a => a.do === 'cast' && (a as { skill?: string }).skill === 'scald_jet'));

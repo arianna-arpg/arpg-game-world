@@ -37,11 +37,9 @@
 # identity all read the tag, and main's history stays free of bot commits
 # (which would otherwise re-trigger the "new commits?" gate forever).
 #
-# THE FULL LANE: `verify` runs the whole green probe roster — the fast lane
-# ci.yml runs on every push PLUS the heavy rigs (`--slow`) that are too
-# expensive to pay per push — and `cut` needs it. An RC is a build testers
-# install, so a red night cuts nothing and says why; the manual dispatch
-# button re-tries once the tree is green again.
+# `verify` requires successful full push CI on the exact main revision, and
+# `cut` checks out that pinned revision. Installers bundle the already-published
+# coordinated game; launcher releases never move the game catalog independently.
 # ---------------------------------------------------------------------------
 name: nightly-rc
 
@@ -58,25 +56,22 @@ permissions:
 concurrency: nightly-rc
 
 jobs:
-  # The full correctness lane — ci.yml's two commands, with the heavy probe
-  # rigs added. Nothing gets tagged for testers over a red tree.
+  # Reuse the full source CI result, including rendering and startup checks.
   verify:
     runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.verified.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - name: Type-check (game + launcher + balance harness)
-        run: npm run check
-      # The update path's laws (selection, the failed-night law, the digest
-      # law) — a launcher that cannot update can never be sent its own fix.
-      - name: Launcher update laws
-        run: npm run test:launcher
-      - name: Probes (green roster, fast + slow lanes)
-        run: npm run probe -- --slow
+      - name: Pin the exact main commit that passed full source CI
+        id: verified
+        run: node scripts/verified-main.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   cut:
     needs: verify
@@ -84,6 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.verify.outputs.sha }}
           fetch-depth: 0   # full history + tags — the gate is rev-list against the last tag
 
       - name: Gate on new commits, then tag and dispatch the release

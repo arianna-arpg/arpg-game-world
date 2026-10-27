@@ -3080,7 +3080,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'movement', 'totem', 'duration'], color: '#68d8b8',
     manaCost: 9, cooldown: 1.5, useTime: 0.5,
     delivery: {
-      type: 'construct', kind: 'pad',
+      type: 'construct', kind: 'pad', look: 'device_temporal_pad',
       range: 0, duration: 12, maxActive: 2, placeRange: 220,
       invulnerable: true,
       propel: { distance: 340, speed: 950 },
@@ -3097,7 +3097,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'movement', 'totem', 'duration'], color: '#b878e8',
     manaCost: 12, cooldown: 1, useTime: 0.6,
     delivery: {
-      type: 'construct', kind: 'gate',
+      type: 'construct', kind: 'gate', look: 'device_gate_shift',
       range: 0, duration: 16, maxActive: 2, placeRange: 520,
       invulnerable: true,
     },
@@ -3575,7 +3575,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'totem', 'lightning', 'duration'], color: '#e8e84a',
     manaCost: 14, cooldown: 3, useTime: 0.7,
     delivery: {
-      type: 'construct', kind: 'pylon', castSkillId: 'spark',
+      type: 'construct', kind: 'pylon', look: 'device_orb_of_storms', castSkillId: 'spark',
       range: 300, duration: 10, maxActive: 1, life: 40, placeRange: 380, interval: 0.7,
     },
     effects: [],
@@ -3594,7 +3594,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'totem', 'fire', 'duration'], color: '#e8824a',
     manaCost: 14, cooldown: 1, useTime: 0.8,
     delivery: {
-      type: 'construct', kind: 'totem', castSkillId: 'firebolt',
+      type: 'construct', kind: 'totem', look: 'device_flame_totem', castSkillId: 'firebolt',
       range: 420, duration: 10, maxActive: 2, life: 55, placeRange: 120,
     },
     effects: [],
@@ -3612,7 +3612,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['attack', 'totem', 'physical', 'projectile', 'duration'], color: '#c8b890',
     manaCost: 12, cooldown: 2, useTime: 0.8,
     delivery: {
-      type: 'construct', kind: 'sentry', castSkillId: 'piercing_arrow',
+      type: 'construct', kind: 'sentry', look: 'device_ballista_sentry', castSkillId: 'piercing_arrow',
       range: 540, duration: 12, maxActive: 2, invulnerable: true, placeRange: 110,
     },
     effects: [],
@@ -3628,7 +3628,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'trap', 'cold', 'aoe', 'duration', 'totem'], color: '#9ad4e8',
     manaCost: 10, cooldown: 2.5, useTime: 0.6,
     delivery: {
-      type: 'construct', kind: 'trap', castSkillId: 'frost_nova',
+      type: 'construct', kind: 'trap', look: 'device_frost_trap', castSkillId: 'frost_nova',
       range: 75, duration: 25, maxActive: 3, placeRange: 380,
     },
     effects: [],
@@ -3645,7 +3645,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'mine', 'fire', 'aoe', 'duration', 'totem'], color: '#e8624a',
     manaCost: 8, cooldown: 0.8, useTime: 0.5,
     delivery: {
-      type: 'construct', kind: 'mine', castSkillId: 'immolation_blast',
+      type: 'construct', kind: 'mine', look: 'device_fire_mine', castSkillId: 'immolation_blast',
       range: 0, duration: 30, maxActive: 5, placeRange: 340,
     },
     // The founding meta-button (#21): the trigger rides the mine's slot.
@@ -3664,7 +3664,7 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'detonate' },
     effects: [],
     requirements: { intelligence: 16 },
-    ai: { range: 400, weight: 2 },
+    ai: { range: 400, weight: 2, autonomousMeta: true, deployed: { kind: 'mine' } },
     leveling: { perLevel: [mod('cooldownRecovery', 'increased', 0.08)] },
   },
 
@@ -3676,7 +3676,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'totem', 'lightning', 'aura', 'duration'], color: '#d8e84a',
     manaCost: 18, cooldown: 4, useTime: 0.9,
     delivery: {
-      type: 'construct', kind: 'pylon', castSkillId: 'spark',
+      type: 'construct', kind: 'pylon', look: 'device_storm_pylon', castSkillId: 'spark',
       range: 360, duration: 12, maxActive: 1, life: 50, placeRange: 260, interval: 1.2,
       aura: { radius: 150, allyMods: [mod('damage', 'increased', 0.15)] },
     },
@@ -4105,7 +4105,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'construct', 'duration', 'totem'], color: '#a5e3b4',
     manaCost: 26, cooldown: 11, useTime: 0.5,
     delivery: {
-      type: 'construct', kind: 'totem', taunt: true, aims: false,
+      type: 'construct', kind: 'totem', look: 'device_lodestone', taunt: true, aims: false,
       range: 0, duration: 8, maxActive: 1, life: 90, placeRange: 320,
     },
     effects: [],
@@ -4434,7 +4434,7 @@ export const SKILLS: Record<string, SkillDef> = {
     // documented "cage that cooks" cook for zero. Per-segment, kept lean.
     baseDamage: { physical: [6, 10] },
     delivery: {
-      type: 'construct', kind: 'barrier', look: 'construct_barrier_bone',
+      type: 'construct', kind: 'barrier', look: 'device_bone_prison',
       ring: { segments: 10, radius: 78 },
       range: 0, duration: 6, maxActive: 10, life: 30, placeRange: 340,
     },
@@ -4454,7 +4454,7 @@ export const SKILLS: Record<string, SkillDef> = {
     // grafted pulse/burst hit pipeline): tighter ring, meaner bars.
     baseDamage: { physical: [7, 12] },
     delivery: {
-      type: 'construct', kind: 'barrier', look: 'construct_barrier_bone',
+      type: 'construct', kind: 'barrier', look: 'device_bone_cage',
       ring: { segments: 8, radius: 50 },
       range: 0, duration: 4, maxActive: 8, life: 20, placeRange: 320,
     },
@@ -4524,7 +4524,7 @@ export const SKILLS: Record<string, SkillDef> = {
     // grafted hit pipeline): stone hits harder per segment, but only three.
     baseDamage: { physical: [9, 14] },
     delivery: {
-      type: 'construct', kind: 'barrier',
+      type: 'construct', kind: 'barrier', look: 'device_stone_rampart',
       range: 0, duration: 12, maxActive: 6, life: 70,
       placeRange: 160, wallSegments: 3,
     },
@@ -4542,7 +4542,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'guard', 'aoe', 'duration', 'totem'], color: '#9ad8c8',
     manaCost: 26, cooldown: 14, useTime: 0.7,
     delivery: {
-      type: 'construct', kind: 'dome',
+      type: 'construct', kind: 'dome', look: 'device_sanctuary',
       range: 0, duration: 6, maxActive: 1,
       invulnerable: true, placeRange: 140,
       domeRadius: 120, domeMode: 'dissolve',
@@ -4822,7 +4822,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'lightning', 'aoe', 'duration', 'totem'], color: '#8ad0e0',
     manaCost: 18, cooldown: 7, useTime: 0.6,
     delivery: {
-      type: 'construct', kind: 'pylon', castSkillId: 'repulse_wave',
+      type: 'construct', kind: 'pylon', look: 'device_repulsor_beacon', castSkillId: 'repulse_wave',
       range: 180, duration: 6, maxActive: 2, invulnerable: true,
       placeRange: 380, interval: 0.6,
     },
@@ -6370,7 +6370,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'heal', 'summon', 'totem', 'aoe', 'duration'], color: '#6fbe5a',
     manaCost: 28, cooldown: 12, useTime: 0.8,
     delivery: {
-      type: 'construct', kind: 'tree',
+      type: 'construct', kind: 'tree', look: 'device_tree_of_life',
       range: 260, duration: 8, maxActive: 1, life: 60, placeRange: 240,
       healBurst: { ratio: 0.35, cap: 400, radius: 240 },
     },
@@ -6388,7 +6388,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'heal', 'totem', 'duration'], color: '#8ae0c0',
     manaCost: 24, cooldown: 8, useTime: 0.8,
     delivery: {
-      type: 'construct', kind: 'totem', castSkillId: 'mending_pulse',
+      type: 'construct', kind: 'totem', look: 'device_font_of_renewal', castSkillId: 'mending_pulse',
       range: 300, duration: 10, maxActive: 1, life: 50, placeRange: 260, interval: 1.1,
     },
     effects: [],
@@ -7275,7 +7275,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#c8c0a0',
     manaCost: 14, cooldown: 9, useTime: 0.8,
     delivery: {
-      type: 'construct', kind: 'pod', look: 'brood_egg',
+      type: 'construct', kind: 'pod', look: 'device_lay_brood_egg',
       range: 0, duration: 7, maxActive: 3, life: 40, placeRange: 80,
       hatch: { skillId: 'egg_hatch_spiders' },
     },
@@ -7300,7 +7300,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#d8b06a',
     manaCost: 14, cooldown: 9, useTime: 0.8,
     delivery: {
-      type: 'construct', kind: 'pod', look: 'chitin_clutch',
+      type: 'construct', kind: 'pod', look: 'device_lay_chitin_clutch',
       range: 0, duration: 7, maxActive: 3, life: 45, placeRange: 80,
       hatch: { skillId: 'egg_hatch_chitin' },
     },
@@ -7416,7 +7416,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#d0c8a8',
     manaCost: 14, cooldown: 10, useTime: 0.9,
     delivery: {
-      type: 'construct', kind: 'pod', look: 'grub_egg',
+      type: 'construct', kind: 'pod', look: 'device_lay_grub_clutch',
       range: 0, duration: 8, maxActive: 3, life: 45, placeRange: 90,
       hatch: { skillId: 'egg_hatch_maggots' },
     },
@@ -7451,7 +7451,7 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: {
       // A pod on a 1.4s incubation — killed pods HATCH (onBreak: the
       // powder rule): the garden does not accept editorial feedback.
-      type: 'construct', kind: 'pod',
+      type: 'construct', kind: 'pod', look: 'device_strangler_seed',
       range: 0, duration: 1.4, maxActive: 3, life: 30,
       placeRange: 340,
       hatch: { skillId: 'vine_bloom', onBreak: 'hatch' },
@@ -7491,7 +7491,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 15, cooldown: 7, useTime: 0.6,
     baseDamage: { physical: [7, 11] },
     delivery: {
-      type: 'construct', kind: 'barrier', look: 'construct_barrier_bramble',
+      type: 'construct', kind: 'barrier', look: 'device_bramble_hedge',
       range: 0, duration: 12, maxActive: 12, life: 38,
       placeRange: 320,
       wallSegments: 6,
@@ -7721,7 +7721,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'fire', 'projectile', 'duration', 'totem'], color: '#ff6a3a',
     manaCost: 26, cooldown: 9, useTime: 0.8,
     delivery: {
-      type: 'construct', kind: 'eruptor', look: 'construct_rift', castSkillId: 'hellfire_missile',
+      type: 'construct', kind: 'eruptor', look: 'device_hell_rift', castSkillId: 'hellfire_missile',
       range: 500, duration: 6, maxActive: 2, invulnerable: true,
       placeRange: 380, interval: 0.35,
     },
@@ -8470,7 +8470,7 @@ export const SKILLS: Record<string, SkillDef> = {
     castMode: 'charge',
     chargeUp: { maxTime: 2.5, minScale: 0.7, maxScale: 2.2 },
     delivery: {
-      type: 'construct', kind: 'eruptor', castSkillId: 'magma_glob',
+      type: 'construct', kind: 'eruptor', look: 'device_volcano', castSkillId: 'magma_glob',
       range: 240, duration: 5, maxActive: 1, life: 80, placeRange: 340,
       interval: 0.7,
     },
@@ -8519,7 +8519,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 26, cooldown: 10, useTime: 0.7,
     delivery: {
       // aims:false — it hangs and radiates; a sun points at nothing.
-      type: 'construct', kind: 'pylon', look: 'construct_sun', aims: false,
+      type: 'construct', kind: 'pylon', look: 'device_solar_orb', aims: false,
       range: 150, duration: 7, maxActive: 1, placeRange: 320, invulnerable: true,
       aura: { radius: 150, enemyDps: { amount: 9, type: 'fire' } },
     },
@@ -9270,7 +9270,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#b09060',
     manaCost: 16, cooldown: 11, useTime: 0.9,
     delivery: {
-      type: 'construct', kind: 'pod', look: 'grub_egg',
+      type: 'construct', kind: 'pod', look: 'device_lay_formic_clutch',
       range: 0, duration: 8, maxActive: 3, life: 50, placeRange: 110,
       hatch: { skillId: 'egg_hatch_formics' },
     },
@@ -10581,7 +10581,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 12, cooldown: 5, useTime: 0.55,
     baseDamage: { physical: [4, 6] },
     delivery: {
-      type: 'construct', kind: 'relic', castSkillId: 'relic_burst',
+      type: 'construct', kind: 'relic', look: 'device_warden_relic', castSkillId: 'relic_burst',
       range: 0, duration: 12, maxActive: 1, life: 50, placeRange: 260,
       interval: 0.7,
     },
@@ -10609,7 +10609,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'totem', 'duration', 'heal'], color: '#a8e0b8',
     manaCost: 12, cooldown: 5, useTime: 0.55,
     delivery: {
-      type: 'construct', kind: 'relic', castSkillId: 'relic_mend',
+      type: 'construct', kind: 'relic', look: 'device_mender_relic', castSkillId: 'relic_mend',
       range: 0, duration: 12, maxActive: 1, life: 50, placeRange: 260,
       interval: 0.9,
     },
@@ -11374,7 +11374,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 15, cooldown: 6, useTime: 0.6,
     baseDamage: { physical: [10, 16] },
     delivery: {
-      type: 'construct', kind: 'barrier',
+      type: 'construct', kind: 'barrier', look: 'device_stone_spires',
       range: 0, duration: 12, maxActive: 10, life: 44,
       placeRange: 240,
       ring: { segments: 5, radius: 85 },
@@ -11402,7 +11402,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 16, cooldown: 7, useTime: 0.6,
     baseDamage: { cold: [8, 13] },
     delivery: {
-      type: 'construct', kind: 'barrier', look: 'construct_barrier_ice',
+      type: 'construct', kind: 'barrier', look: 'device_frost_wall',
       range: 0, duration: 9, maxActive: 12, life: 32,
       placeRange: 340,
       wallSegments: 6,
@@ -11435,7 +11435,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 17, cooldown: 8, useTime: 0.7,
     baseDamage: { physical: [9, 14] },
     delivery: {
-      type: 'construct', kind: 'barrier', look: 'construct_barrier_bone',
+      type: 'construct', kind: 'barrier', look: 'device_wall_of_meat',
       range: 0, duration: 11, maxActive: 10, life: 55,
       placeRange: 300,
       wallSegments: 5,
@@ -11484,7 +11484,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 12, cooldown: 5, useTime: 0.55,
     baseDamage: { cold: [3, 5] },
     delivery: {
-      type: 'construct', kind: 'sentry', look: 'construct_rift', castSkillId: 'rift_shard',
+      type: 'construct', kind: 'sentry', look: 'device_shardrift', castSkillId: 'rift_shard',
       range: 440, duration: 4, maxActive: 2, invulnerable: true,
       placeRange: 300, interval: 0.5,
     },
@@ -11608,7 +11608,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 14, cooldown: 6, useTime: 0.6,
     baseDamage: { fire: [4, 7], lightning: [4, 7], cold: [4, 7] },
     delivery: {
-      type: 'construct', kind: 'eruptor', castSkillId: 'beacon_bolt',
+      type: 'construct', kind: 'eruptor', look: 'device_stormbrand_beacon', castSkillId: 'beacon_bolt',
       range: 200, duration: 5, maxActive: 2, life: 40, placeRange: 380,
       interval: 0.55,
       fx: { burst: { radius: 110, damageScale: 0.8 } },
@@ -11668,7 +11668,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 13, cooldown: 7, useTime: 0.6,
     baseDamage: { cold: [6, 10] },
     delivery: {
-      type: 'construct', kind: 'barrier', look: 'construct_barrier_ice',
+      type: 'construct', kind: 'barrier', look: 'device_glacial_bulwark',
       range: 0, duration: 7, maxActive: 5, life: 55, placeRange: 240,
       wallSegments: 5,
       fx: { pulse: { interval: 0.9, radius: 46, damageScale: 0.45 } },
@@ -11716,7 +11716,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 10, cooldown: 3, useTime: 0.45,
     baseDamage: { fire: [8, 13] },
     delivery: {
-      type: 'construct', kind: 'trap', castSkillId: 'cinder_whirl',
+      type: 'construct', kind: 'trap', look: 'device_cinderwhirl_trap', castSkillId: 'cinder_whirl',
       range: 55, duration: 20, maxActive: 3, placeRange: 320,
     },
     effects: [
@@ -11778,7 +11778,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 9, cooldown: 2.5, useTime: 0.45,
     baseDamage: { physical: [10, 16] },
     delivery: {
-      type: 'construct', kind: 'trap', castSkillId: 'snare_shock',
+      type: 'construct', kind: 'trap', look: 'device_aftershock_snare', castSkillId: 'snare_shock',
       range: 55, duration: 20, maxActive: 3, placeRange: 320,
     },
     effects: [
@@ -11977,7 +11977,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'totem', 'aura', 'duration', 'warcry'], color: '#e0b060',
     manaCost: 12, cooldown: 10, useTime: 0.6,
     delivery: {
-      type: 'construct', kind: 'pylon', aims: false,
+      type: 'construct', kind: 'pylon', look: 'device_battle_standard', aims: false,
       range: 0, duration: 16, maxActive: 1, life: 70, placeRange: 240,
       aura: {
         radius: 180,
@@ -14024,7 +14024,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'aoe', 'duration', 'totem'], color: '#88b8d8',
     manaCost: 14, cooldown: 8, useTime: 0.5,
     delivery: {
-      type: 'construct', kind: 'dome',
+      type: 'construct', kind: 'dome', look: 'device_torpor_field',
       domeMode: 'slow', domeSlow: 0.3, domeRadius: 140,
       range: 0, duration: 7, maxActive: 1, life: 55, placeRange: 320,
     },
@@ -14063,7 +14063,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#a8c860',
     manaCost: 16, cooldown: 6, useTime: 0.6,
     delivery: {
-      type: 'construct', kind: 'pod',
+      type: 'construct', kind: 'pod', look: 'device_broodpod',
       range: 0, duration: 5, maxActive: 2, life: 65, placeRange: 320,
       hatch: { skillId: 'brood_hatch' },
     },
@@ -14094,7 +14094,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'fire', 'aoe', 'duration', 'totem'], color: '#e07838',
     manaCost: 10, cooldown: 3, useTime: 0.45,
     delivery: {
-      type: 'construct', kind: 'pod', look: 'construct_cask',
+      type: 'construct', kind: 'pod', look: 'device_nitrocask',
       range: 0, duration: 2.4, maxActive: 3, life: 45, placeRange: 280,
       hatch: { skillId: 'cask_blast', onBreak: 'hatch' },
     },
@@ -14302,7 +14302,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 14, cooldown: 6, useTime: 0.55,
     baseDamage: { physical: [3, 5] },
     delivery: {
-      type: 'construct', kind: 'relic', castSkillId: 'relic_pulse',
+      type: 'construct', kind: 'relic', look: 'device_holy_relic', castSkillId: 'relic_pulse',
       range: 0, duration: 14, maxActive: 1, life: 45, placeRange: 60,
       interval: 0.8,
       follows: true,
@@ -14335,7 +14335,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 15, cooldown: 9, useTime: 0.6,
     baseDamage: { physical: [7, 11] },
     delivery: {
-      type: 'construct', kind: 'barrier', look: 'construct_bell', castSkillId: 'bell_toll',
+      type: 'construct', kind: 'barrier', look: 'device_tolling_bell', castSkillId: 'bell_toll',
       range: 0, duration: 10, maxActive: 1, life: 150, placeRange: 280,
       interval: 0.6,
       castOnStruck: true,
@@ -15032,7 +15032,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#9fe0e8',
     manaCost: 12, cooldown: 9, useTime: 0.9,
     delivery: {
-      type: 'construct', kind: 'pod', look: 'brood_clutch',
+      type: 'construct', kind: 'pod', look: 'device_lay_brood_clutch',
       range: 0, duration: 28, maxActive: 3, life: 40, placeRange: 90,
       hatch: { skillId: 'brood_clutch_hatch', onScorch: 1.6 },
     },
@@ -15865,7 +15865,7 @@ export const SKILLS: Record<string, SkillDef> = {
     // Genesis' arrival scale off the host's roll). Per-column, kept lean.
     baseDamage: { fire: [5, 8] },
     delivery: {
-      type: 'construct', kind: 'pylon',
+      type: 'construct', kind: 'pylon', look: 'device_colonnade',
       // The colonnade LAW (vs bone_prison's tight ten-bar cage): FIVE
       // columns on a WIDE ring — a court you duel across, never a wall.
       ring: { segments: 5, radius: 118 },

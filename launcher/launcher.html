@@ -122,7 +122,7 @@
       <ul id="changes"></ul>
     </div>
     <div id="channel-row" class="hidden">
-      <label for="channel">Update channel</label>
+      <label for="channel">Launcher updates</label>
       <select id="channel"></select>
       <span id="channel-blurb"></span>
     </div>
@@ -192,7 +192,7 @@
     for (const k of DEV_KEYS) {
       $('dev-' + k).addEventListener('change', async (e) => {
         const r = await window.launcher.setDev({ [k]: !!e.target.checked });
-        if (r && r.ok) { lastStatus = { ...(lastStatus || {}), dev: r.dev, mode: r.mode }; renderDev(lastStatus); }
+        if (r && r.ok) await refresh();
         else { appendLog('SETTINGS FAILED: ' + ((r && r.error) || 'unknown error')); await refresh(); }
       });
     }
@@ -237,10 +237,10 @@
       sel.value = s.selectedBranch || s.mainBranch || 'main';
       $('branch-note').textContent = s.branchNote || '';
       const experiment = s.selectedBranch !== s.mainBranch;
-      $('play').textContent = experiment && !s.branchBuild ? '↓  DOWNLOAD & PLAY' : '▶  PLAY';
+      $('play').textContent = (experiment || s.publishedGame) && !s.branchBuild ? '↓  DOWNLOAD & PLAY' : '▶  PLAY';
       $('row-liveSource').classList.toggle('hidden', !!s.packaged || experiment);
       $('channel-row').classList.toggle('hidden', experiment || s.updateMode !== 'release');
-      $('rebuild').classList.toggle('hidden', !!s.packaged || experiment);
+      $('rebuild').classList.toggle('hidden', !!s.packaged || experiment || s.publishedGame);
       if (experiment) {
         $('update-btn').textContent = '↓  Update Branch & Play';
         $('hint').textContent = 'Separate game files and saves. If GitHub cannot be reached, Play returns to local Main.';
@@ -265,20 +265,22 @@
       $('title').textContent = s.title;
       document.title = s.title + ' — Launcher';
       const experiment = s.selectedBranch !== s.mainBranch;
-      const version = experiment ? s.branchBuild?.version : s.version;
-      const hash = experiment ? s.branchBuild?.commit?.slice(0, 8) : s.hash;
-      $('build-line').textContent = 'v' + (version || '—') + ' · ' + (s.selectedBranch || s.branch || 'main')
-        + ' @ ' + (hash || 'not downloaded') + (!experiment && s.dirty ? ' (modified locally)' : '');
+      const version = experiment || s.publishedGame ? s.branchBuild?.version : s.version;
+      const hash = experiment || s.publishedGame ? s.branchBuild?.commit?.slice(0, 8) : s.hash;
+      $('build-line').textContent = (s.publishedGame ? 'Game ' : 'Local development ') + (s.selectedBranch || s.branch || 'main')
+        + ' · build ' + (hash || 'not downloaded') + (s.branchBuild?.buildId ? '.' + s.branchBuild.buildId.slice(0, 8) : '') + (!s.publishedGame && !experiment && s.dirty ? ' (modified locally)' : '')
+        + (s.releaseOffline ? ' · Offline copy' : '') + ' · Launcher v' + (s.version || version || '—');
       // PACKAGED install (no repo, no toolchain): the rebuild button is
       // meaningless, and Update means "download from GitHub Releases and
       // install it in place" (directInstall=false keeps the old open-the-
       // release-page behavior).
       $('update-btn').textContent = '⬇  Update & Play';
-      $('hint').textContent = 'Main plays locally. Other branches download separate game files and saves.';
+      $('hint').textContent = s.publishedGame ? 'Game versions match the browser. Play downloads the published version and keeps an offline copy.'
+        : 'Developer mode runs your local source. It can differ from the published game.';
       if (s.packaged) {
         $('rebuild').classList.add('hidden');
         $('update-btn').textContent = s.directInstall ? '⬇  Update & Restart' : '⬇  Get Update (opens browser)';
-        $('hint').textContent = s.directInstall
+        $('hint').textContent = s.publishedGame ? 'Game versions match the browser. The update channel below controls the launcher application.' : s.directInstall
           ? 'Playing is fully offline. Updates download from GitHub Releases and install themselves.'
           : 'Playing is fully offline. Updates come from GitHub Releases.';
       }
