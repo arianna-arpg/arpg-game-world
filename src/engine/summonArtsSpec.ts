@@ -6,6 +6,7 @@ import type { DamageType, SkillTag } from './stats';
 /** Optional, composable summon mechanics. Payloads remain ordinary supported skills. */
 export interface SummonSchool {
   id: DamageType; name: string; monster: string; primary: string; signature: string; trace: string;
+  conversion?: number; color?: string;
 }
 export interface SummonArtsSpec {
   single?: true;
@@ -24,6 +25,7 @@ export interface SummonArtsSpec {
     soulCap: number; soulDuration: number; soulRange: number; soulPower: number; soulRecovery: number };
   echo?: { cooldown: number; power: number; deliveries: Delivery['type'][]; requireTags: SkillTag[];
     excludeTags: SkillTag[]; targets: TargetingSpec['target'][] };
+  choicesLabel?: string;
   schools?: SummonSchool[];
   balanceSchools?: true;
   lessons?: true;

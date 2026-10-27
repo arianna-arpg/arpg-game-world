@@ -97,3 +97,5 @@ without resetting its rearm.
 Verification: `npm run check`; `npm run probe -- skeletonmage`;
 Archer, nested Necromancer, support, flight/field and visual probes; simulation
 smoke; after build, `npx electron balance/skeleton-mage-ui.cjs`.
+
+School selection now opens by clicking Grave Conclave itself, with a draft multi-selection and Apply/Close controls. The persistent tree-header selector is removed. Applying unchanged choices preserves existing minions; changed choices still retire the old cohort. See [the shared choice contract](skeleton-warrior.md#node-choices-and-ability-supports).

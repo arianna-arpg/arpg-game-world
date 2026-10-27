@@ -25,6 +25,9 @@ const f = (motif: BurstMotif, layout: SkillFieldProfile['layout'], motion: Skill
   count: number, echo?: BurstMotif): SkillFieldProfile => ({ motif, layout, motion, count, echo });
 
 export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
+  court_bone_shuriken: p('teeth','saw','tumble',3,'blades'),
+  court_fire_arc: p('flame','ribbon','weave',4,'blades'),
+  court_storm_chain: p('sparks','links','weave',3,'blades'),
   skeletal_rattling_arrow: p('teeth','quills','steady',5,'cracks'),
   skeletal_volatile_fire: p('flame','saw','pulse',5,'teeth'),
   skeletal_volatile_cold: p('ice','quills','steady',5,'runes'),
@@ -207,6 +210,9 @@ export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
 /** Long-lived patterns: architecture, material and movement are independent.
  * Related arts share materials, never an entire composition. */
 export const SKILL_FIELDS: Readonly<Record<string, SkillFieldProfile>> = {
+  court_oath_standard: f('shields','spokes','rise',4,'runes'),
+  court_relief_aura: f('petals','rings','breathe',3,'shields'),
+  court_venom_ground: f('spores','spiral','breathe',5,'blades'),
   skeletal_grand_rite: f('flame','lattice','rise',9,'runes'),
   skeletal_ritual_dominion: f('runes','rings','breathe',11,'flame'),
   skeletal_ritual_flare: f('flame','spokes','out',7,'souls'),

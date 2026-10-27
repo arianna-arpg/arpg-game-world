@@ -4,7 +4,7 @@ import type { Vec2 } from '../core/math';
 import { dist } from '../core/math';
 import { mod } from './stats';
 import { instanceDelivery, instanceEffects, instanceTargeting, instanceMods, makeSkillInstance, skillContextTags,
-  type SkillInstance, type SummonDelivery, type SummonCrew } from './skills';
+  summonSchoolSkill, type SkillInstance, type SummonDelivery, type SummonCrew } from './skills';
 import { empoweredSkill } from './castSequence';
 import { summonArtIds, type SummonArtsSpec, type SummonArtContract, type SummonArtCast, type SummonArtView } from './summonArtsSpec';
 import { SKILLS } from '../data/skills';
@@ -56,7 +56,7 @@ export class SummonArts {
     this.contract(body.owner, host);
     const kit = summonArtIds(instanceDelivery(host) as SummonDelivery, body.defId)
       .filter(id => !body.skills.some(s => s?.def.id === id))
-      .flatMap(id => SKILLS[id] ? [makeSkillInstance(SKILLS[id], host.level + (host.bonusLevels ?? 0))] : []);
+      .flatMap(id => SKILLS[id] ? [makeSkillInstance(summonSchoolSkill(instanceDelivery(host) as SummonDelivery, body.defId!, SKILLS[id]), host.level + (host.bonusLevels ?? 0))] : []);
     this.forward(host, kit);
     body.summonArtState = { kit, relayReady: 0, echoReady: 0, flareReady: 0,
       siphonCredit: (a.siphon?.perSecond ?? 0) * body.maxLife() };

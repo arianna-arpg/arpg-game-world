@@ -1,3 +1,5 @@
+import { CohortArts } from './cohortArts';
+import { summonSchoolSkill } from './skills';
 import { SummonArts } from './summonArts';
 import { DEVICE_CFG, DeviceContacts, deviceContactEligible, groundDeviceState } from './groundDevices';
 import { syncAltarBodies } from './altarBodies';
@@ -1533,7 +1535,7 @@ interface Zone {
   /** DOMAIN: occupants wear these mods while standing inside (see
    *  GroundDelivery.domain — ground-anchored auras; minionMods dress the
    *  caster's minions on top). */
-  domain?: { allyMods?: Modifier[]; enemyMods?: Modifier[]; minionMods?: Modifier[] };
+  domain?: GroundDelivery['domain'];
   /** The domain's unique sheet-source key (minted at placement). */
   domainKey?: string;
   /** Actors currently dressed by this domain (stripped on exit/expiry). */
@@ -3700,6 +3702,16 @@ export class World {
       const before = target.life;
       applyDot(target, amount, type);
       this.recordIndirectDamage(target, source, before);
+    });
+  readonly cohortArts = new CohortArts(this,
+    (host, kit) => this.forwardSummonSockets(host, kit),
+    (body, inst) => { if (inst.def.delivery.type === 'aura') { this.deactivateAura(body, inst.def.id); this.activateAura(body, inst, inst.def.delivery, body.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst))); } },
+    (body, spec) => {
+      if (!body.owner || !body.summonInst) return null;
+      const d = instanceDelivery(body.summonInst); if (d.type !== 'summon') return null;
+      return this.spawnMinion(body.owner, body.summonInst, { pos: { ...body.pos }, tier: body.tier, monsterId: body.defId,
+        delivery: { ...d, duration: spec.duration, crewOnDeath: undefined }, noReplace: true,
+        offspring: { maxActive: spec.cap, size: 1, life: spec.life, damage: spec.damage } });
     });
   readonly summonArts = new SummonArts(this,
     (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
@@ -5911,6 +5923,7 @@ export class World {
     this.assaults.clearAll();
     this.challenges.clearAll();
     this.summonArts.leaveZone();
+    this.cohortArts.leaveZone();
     this.channelFormations.clear();
     this.attackSequences.clearAll();
     this.projectileArts.clearAll();
@@ -34201,6 +34214,8 @@ export class World {
     if (d.type !== 'summon' || !d.arts?.balanceSchools || !d.arts.schools) return;
     const schools = d.arts.schools.filter(s => choices.includes(s.id)).map(s => s.id);
     if (!schools.length || this.memorySecondaryRefusal(skillId) || this.swapRefusal(seat, 'socket')) return;
+    const current = inst.summonSchools?.length ? inst.summonSchools : d.arts.schools.map(s => s.id);
+    if (schools.length === current.length && schools.every(s => current.includes(s))) return;
     this.clearSummonTreeBodies(seat.actor, inst);
     this.clearTreeFields(seat.actor, inst);
     inst.summonSchools = schools;
@@ -34512,6 +34527,7 @@ export class World {
       const why = this.castReqRefusal(caster, inst);
       if (why) { this.failNote(caster, inst.def.id + ':req', why); return false; }
     }
+    inst = this.cohortArts.view(caster, inst);
     const ritualCommand = this.summonArts.commandView(caster, inst);
     if (ritualCommand) return this.summonArts.commandReady(caster, inst) && this.useSkill(caster, ritualCommand, aim, seatPress);
     if (inst.def.delivery.type === 'summon') {
@@ -35333,6 +35349,7 @@ export class World {
     inst = castSequenceInstance(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.attackSequences.prepare(caster, inst, aim, opts.dmgMult ?? 1);
     inst = this.projectileArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
+    inst = this.cohortArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.summonArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     const def = inst.def;
     const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
@@ -38707,6 +38724,7 @@ export class World {
     // into a periodic shadow-lash; repeats and echo replays are not.
     if (!opts.noRepeat && !caster.construct) {
       if (!opts.noCooldown) this.challenges.completed(caster, inst);
+      this.cohortArts.completed(caster, inst, aim);
       this.summonArts.completed(caster, inst, aim);
       this.companionBonds.onCast(caster, inst, aim);
       this.echoToClones(caster, inst, aim, useMult,
@@ -39885,6 +39903,7 @@ export class World {
    */
   resyncMinionSupports(inst: SkillInstance): void {
     this.summonArts.resync(inst);
+    this.cohortArts.resync(inst);
     for (const a of this.actors) {
       // Constructs carry summonInst as a back-reference too, but never
       // receive spawn-time forwarding — resync mirrors the spawn path.
@@ -40095,6 +40114,7 @@ export class World {
     // CASTS — forwarded before ownerMods so both lanes (crew sockets,
     // sheet source) are live for the minion's whole life. Corpse-raised
     // bodies (Raise Spectre) resolve fit HERE, against the actual kit.
+    minion.skills = minion.skills.map(sk => sk ? { ...sk, def: summonSchoolSkill(d, typeId, sk.def) } : sk);
     this.forwardSummonSockets(inst, minion.skills);
     // The owner-investment fold — ONE seam shared with throng claims
     // (which pass the batch scale); a summon wears it whole.
@@ -40263,6 +40283,7 @@ export class World {
     if (!this.presenceArrival(minion, caster, inst))
       this.flashes.push({ pos: vec(minion.pos.x, minion.pos.y), radius: 20 + minion.radius, color: inst.def.color, life: 0.35, maxLife: 0.35 });
     this.summonArts.init(minion, inst);
+    this.cohortArts.init(minion, inst);
     return minion;
   }
 
@@ -42878,9 +42899,10 @@ export class World {
     if (target.dead || target.downed || (fx.excludeCaster && target === caster)) return 0;
     const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
-    const raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
+    let raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
       * caster.sheet.get('healPower', tags, extra) * mult
       * this.critMendMult(caster, inst, quiet ? undefined : target.pos);
+    raw = this.cohortArts.heal(caster, inst, target, raw);
     if (raw <= 0) return 0;
     // HEAL-OVER-TIME conversion (Mending Echoes): the direct mend POURS
     // instead — total × factor over the graft's seconds, riding the
@@ -43570,6 +43592,7 @@ export class World {
     // the striker brings names one (null-cost for every uninvested body).
     const vs = victimScopeArmed(caster.sheet, extra)
       ? victimTags(target, caster, { time: this.time }) : undefined;
+    dmgMult *= this.cohortArts.power(caster, inst, target);
     const packet: DamagePacket = rollSkillDamage(caster, inst, flatBonus, vs);
     // Matching typed hits benefit before ordinary hit effects add new stacks.
     for (const status of target.statuses) {
@@ -43666,6 +43689,7 @@ export class World {
         return; // an evaded attack applies nothing
       }
       if (result.blocked) {
+        this.cohortArts.block(target, caster);
         this.flashes.push(defenseCueFlash(target, 'guard', 'impact', '#8ab8d8',
           { facing: angleTo(target.pos, caster.pos), arc: 0.85 }));
         this.applyThorns(target, caster);
@@ -43708,6 +43732,7 @@ export class World {
       }
       dealt = result.total;
       this.summonArts.hit(caster, inst, target, Math.min(dealt, Math.max(0, deedLifeBefore - Math.max(0, target.life))));
+      this.cohortArts.landed(caster, inst, target, Math.min(dealt, Math.max(0, deedLifeBefore - Math.max(0, target.life))));
       if (rearHit && dealt > 0 && def.backstabCue !== false) {
         this.flashes.push(combatCueFlash(target.pos, def.backstabCue ?? 'rear_hit', target.radius,
           angleTo(target.pos, caster.pos)));
@@ -44490,6 +44515,7 @@ export class World {
             ruptureRadius: rupture !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
             stacksBonus: stacksBonusFor(fx.status),
             ...this.summonArts.statusSource(caster, inst),
+            ...(inst.cohortCast?.statusKey ? { sourceKey: inst.cohortCast.statusKey } : {}),
             casterId: fx.status === 'taunted' && caster.summonShell && caster.owner ? caster.owner.id : caster.id,
             brood: instanceBrood(inst),
             leech: caster.sheet.get('dotLeech_' + fx.status, tags, extra) || undefined,
@@ -44722,6 +44748,7 @@ export class World {
           stacksBonus: stacksBonusFor(sid),
           casterId: caster.id,
           ...this.summonArts.statusSource(caster, inst),
+            ...(inst.cohortCast?.statusKey ? { sourceKey: inst.cohortCast.statusKey } : {}),
           brood: instanceBrood(inst),
           leech: caster.sheet.get('dotLeech_' + sid, tags, extra) || undefined,
           rupture: armed, ruptureType: armedType,
@@ -46737,6 +46764,7 @@ export class World {
     }
 
     actor.dead = true;
+    this.cohortArts.death(actor, silent, departure === 'expire');
     this.summonArts.death(actor, silent && departure !== 'sacrifice', departure === 'expire');
     this.presenceMoment(actor, departure === 'expire' || silent ? 'expire' : 'break');
     this.guardArts.clear(actor);
@@ -49348,6 +49376,7 @@ export class World {
     this.companionBonds.update(dt);
     this.challenges.update(dt);
     this.summonArts.update(dt);
+    this.cohortArts.update(dt);
     this.channelFormations.update();
     this.attackSequences.update(dt);
     this.guardArts.update(dt);
@@ -53300,10 +53329,12 @@ export class World {
               for (const a of this.actors) {
                 if (a.dead || a.team !== bearer.team || !sameStory(a, bearer)) continue; // (the sovereignty gate)
                 if (!inAoe(bearer.pos, aura.radius, aura.shape, bearer.facing, a.pos, a.radius)) continue;
-                const base = heal.base === 'maxLife' ? a.maxLife()
+                const base = heal.base === 'casterMaxLife' ? bearer.maxLife()
+                  : heal.base === 'maxLife' ? a.maxLife()
                   : heal.base === 'maxMana' ? a.maxMana()
                   : a.sheet.get('lifeRegen');
-                const landed = a.healBy(base * heal.amount);
+                const healing = heal.base === 'casterMaxLife' ? bearer.sheet.get('healPower', skillContextTags(aura.inst), instanceMods(aura.inst)) : 1;
+                const landed = a.healBy(base * heal.amount * healing);
                 if (landed > 0) {
                   this.text(a.pos, '+' + Math.round(landed), '#6fc06f', 12);
                 }
@@ -57994,6 +58025,7 @@ export class World {
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
     this.guardArts.clear(caster, inst);
     this.summonArts.clear(caster, inst);
+    this.cohortArts.clear(caster, inst);
     this.channelFormations.clear(caster, inst);
     this.attackSequences.clear(caster, inst);
     this.projectileArts.clear(caster, inst);
@@ -58081,7 +58113,7 @@ export class World {
    * dismissal or respec, including flights whose body has already died. */
   private clearSummonReleaseFields(owner: Actor, inst: SkillInstance): void {
     const d = instanceDelivery(inst);
-    if (d.type !== 'summon' || (!d.strikeRelease && !d.arts)) return;
+    if (d.type !== 'summon' || (!d.strikeRelease && !d.arts && !d.cohort)) return;
     const payloads = [...this.projectiles, ...this.zones, ...this.pendingRepeats, ...this.pendingFuses,
       ...this.pendingSalvos, ...this.pendingSteps, ...this.pendingFollowUps];
     const bodies = new Set([...this.actors, ...payloads.map(p => p.caster)]);
@@ -60692,6 +60724,13 @@ export class World {
       // the lungs on exit and this set-difference does the rest.
       if (z.exposure && z.exposureDomain
         && (z.exposure.dwell.get(a.id) ?? 0) < z.exposure.after) continue;
+      if (z.domain!.stackGroup) {
+        const leader = this.zones.find(q => q.domain?.stackGroup === z.domain!.stackGroup && q.caster.team === z.caster.team
+          && q.exploded && q.linger > 0 && q.delay <= 0 && (q.tier ?? q.caster.tier) === a.tier
+          && this.zoneHas(q, a.pos, a.radius) && this.zoneSees(q, a)
+          && (!q.exposureDomain || !q.exposure || (q.exposure.dwell.get(a.id) ?? 0) >= q.exposure.after));
+        if (leader !== z) continue;
+      }
       inside.add(a);
       if (!set.has(a)) {
         set.add(a);

@@ -1,3 +1,4 @@
+import type { CohortState, CohortMark } from './cohortSpec';
 import type { SummonArtContract, SummonArtState, SummonArtView } from './summonArtsSpec';
 import { summonReservationUnit } from './companionGrants';
 import { tickAbsorbLayers, type AbsorbLayer } from './absorb';
@@ -1848,6 +1849,9 @@ export class Actor {
   /** The channel formation controller owns movement and firing for this body. */
   channelFormation?: true;
   summonOffspring?: boolean; // temporary heirs do not occupy or respawn contract slots
+  cohortState?: CohortState;
+  cohortMarks = new Map<SkillInstance, CohortMark>();
+  spectralVeil?: { color: string; alpha: number };
   summonDeathActions?: import('./brain').AIAction[];
   summonShell?: SummonShellSpec;
   summonShells?: Set<Actor>; // attached defenders; absent on ordinary actors
@@ -1922,7 +1926,7 @@ export class Actor {
   hiveDeathPlies = 0;
   hiveBroodAt?: number;
   /** World-owned, composable life-wound interceptors; never serialized. */
-  lifeDamageInterceptors?: Map<string, (amount: number) => number>;
+  lifeDamageInterceptors?: Map<string, (amount: number, event?: import('./damage').LifeWoundEvent) => number>;
   /** An UNCLAIMED THRONG HUSK: the monster kind it belongs to. Husks are
    *  passive/untargetable/invulnerable scenery-actors only an attuned bar
    *  can SEE (throngSightSet) — walking through one claims it into the

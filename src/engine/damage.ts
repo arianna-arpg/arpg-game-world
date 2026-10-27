@@ -50,7 +50,10 @@ export const SLAYER_CFG = {
   quailAt: 0.5,
 } as const;
 
+export interface LifeWoundEvent { attacker: Actor; packet: DamagePacket; intercepted: number; }
 export interface DamagePacket {
+  /** Transferred wounds never re-enter a cohort interception chain. */
+  redirected?: boolean;
   assaultGuaranteed?: boolean;
   amounts: Partial<Record<DamageType, number>>;
   crit: boolean;
@@ -677,9 +680,9 @@ function plyEats(attacker: Actor, target: Actor, total: number, packet: DamagePa
  * costs, sacrifices and scripted falls never do — those are not wounds.
  * Returns the life actually removed.
  */
-export function landLifeDamage(target: Actor, total: number): number {
+export function landLifeDamage(target: Actor, total: number, event?: LifeWoundEvent): number {
   if (target.sheet.get('damageImmunity') > 0) return 0;
-  for (const intercept of target.lifeDamageInterceptors?.values() ?? []) total = Math.max(0, intercept(total));
+  for (const intercept of target.lifeDamageInterceptors?.values() ?? []) { const before = total; total = Math.max(0, intercept(total, event)); if (event) event.intercepted += Math.max(0, before - total); }
   if (total <= 0) return 0;
   if (total >= target.life && target.life > 0 && !target.dead && !target.invulnerable
     && target.lastGaspCd <= 0) {
@@ -794,7 +797,9 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
         return { evaded: false, immune: false, blocked: true, blockedAmount: stopped, total: 0,
           crit: false, poiseBroke: out.poiseBroke, plyEaten: true };
       }
-      landLifeDamage(target, leaked);
+      const seep: LifeWoundEvent = { attacker, packet, intercepted: 0 };
+      landLifeDamage(target, leaked, seep);
+      leaked = Math.max(0, leaked - seep.intercepted);
       target.hitFlash = 0.1;
       target.hitFlashType = dominantTypeOf(packet.amounts);
       if (leaked > 0 && segHit !== undefined && segHit >= 0) {
@@ -845,7 +850,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   }
 
   const out: NonNullable<MitigateOpts['out']> = {};
-  const total = mitigateTyped(target, packet.amounts,
+  let total = mitigateTyped(target, packet.amounts,
     { attacker, tags: packet.tags, extra: packet.extra, out });
   // THE PLY GATE (plyEats above): runs AFTER mitigation so poise still
   // chips (poise-break stays honest counterplay) and AFTER evasion/block
@@ -860,7 +865,9 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
       receivedAmounts: out.receivedAmounts,
     };
   }
-  landLifeDamage(target, total);
+  const wound: LifeWoundEvent = { attacker, packet, intercepted: 0 };
+  landLifeDamage(target, total, wound);
+  total = Math.max(0, total - wound.intercepted);
   target.hitFlash = 0.15;
   target.hitFlashType = dominantTypeOf(packet.amounts); // THE HIT TINT (engine/bodyVoices.ts): the blow's type colors the body's flash
   // SEGMENT FABRIC: the landed blow marks the struck body — the coil that
@@ -903,7 +910,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // packet.extra carries the SKILL-LOCAL mods, so a leech gem socketed in
   // the swinging skill counts — not just passives and global sources.
   if (total > 0 && !attacker.dead) {
-    const onHit = attacker.sheet.get('lifeOnHit', packet.tags, packet.extra);
+    const onHit = packet.redirected ? 0 : attacker.sheet.get('lifeOnHit', packet.tags, packet.extra);
     const leech = attacker.sheet.get('lifeLeech', packet.tags, packet.extra) * total;
     const healed = attacker.healBy(onHit + leech);
     noteResourceFlow(attacker, target, 'life', healed);
@@ -915,7 +922,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     if (wleech > 0) attacker.gainWard(wleech);
     // The other pools' sustain lanes (completing the family): energy
     // shield on-hit/leech and mana leech, each capped by its own max.
-    const esGain = attacker.sheet.get('esOnHit', packet.tags, packet.extra)
+    const esGain = (packet.redirected ? 0 : attacker.sheet.get('esOnHit', packet.tags, packet.extra))
       + attacker.sheet.get('esLeech', packet.tags, packet.extra) * total;
     if (esGain > 0) noteResourceFlow(attacker, target, 'es', attacker.gainEs(esGain));
     const mLeech = attacker.sheet.get('manaLeech', packet.tags, packet.extra) * total;

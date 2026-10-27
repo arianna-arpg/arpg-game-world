@@ -379,6 +379,7 @@ export function scorchErosionAt(units: number): number {
 }
 
 export const STATUS_DEFS: Record<string, StatusDef> = {
+  death_warrant: { label: 'Death Warrant', color: '#d06880', duration: 8, bodyFx: { rim: '#d06880', rimWidth: 1.8, rimAlpha: .75, glow: '#9d3f5a', glowAlpha: .1 } },
   rattled_bones: {
     label: 'Lodged Splinters', color: '#d8d0b0', duration: 5,
     stacking: true, maxStacks: 30, independentStacks: true, element: 'physical',

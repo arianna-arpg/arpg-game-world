@@ -1,3 +1,4 @@
+import { cohortSkillIds, type CohortSpec, type CohortCast } from './cohortSpec';
 import { summonArtIds, type SummonArtsSpec, type SummonArtCast } from './summonArtsSpec';
 import { projectileArtsDelivery, type ProjectileArtsSpec } from './projectileArtsSpec';
 import type { ProjectileArtCast } from './projectileArts';
@@ -454,6 +455,7 @@ export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
   if (d.type === 'summon' && (over?.summon || d.selectPool?.length)) {
     const summonOver = over?.summon ?? {};
     const resolved = { ...d, ...summonOver };
+    resolved.cohort = d.cohort || summonOver.cohort ? { ...d.cohort, ...summonOver.cohort } : undefined;
     resolved.arts = d.arts || summonOver.arts ? { ...d.arts, ...summonOver.arts } : undefined;
     resolved.crewSkills = union(d.crewSkills, summonOver.crewSkills);
     resolved.crewAuras = union(d.crewAuras, summonOver.crewAuras);
@@ -498,7 +500,8 @@ export function instanceMetas(inst: SkillInstance): { skillId: string; label: st
   const add = (m?: { skillId: string; label: string }): void => {
     if (m && !seen.has(m.skillId)) { seen.add(m.skillId); out.push(m); }
   };
-  add(inst.def.meta);
+  const d = instanceDelivery(inst);
+  add(d.type === 'summon' && d.cohort?.order ? { skillId: d.cohort.order.skill, label: d.cohort.order.label } : inst.def.meta);
   for (const s of hostSockets(inst)) add(s.def.meta);
   return out;
 }
@@ -1872,7 +1875,7 @@ export interface GroundDelivery {
    *  Toxic Domain's oppression). Applied per-actor as a sheet source,
    *  stripped on exit, death, or the zone's end. `minionMods` dress the
    *  caster's MINIONS on top of any allyMods (Oblation of Flesh's ring). */
-  domain?: { allyMods?: Modifier[]; enemyMods?: Modifier[]; minionMods?: Modifier[] };
+  domain?: { allyMods?: Modifier[]; enemyMods?: Modifier[]; minionMods?: Modifier[]; stackGroup?: string };
   /** On impact, leave real TERRAIN behind for a while (Icy Comet's ice
    *  patch — it is actual ice: slippery, with all terrain rules). */
   leaveTerrain?: { kind: 'ice' | 'mud' | 'bog' | 'swamp' | 'water'; radius: number; duration: number };
@@ -1964,6 +1967,7 @@ export interface SummonShellSpec {
 
 export interface SummonDelivery {
   arts?: SummonArtsSpec;
+  cohort?: Partial<CohortSpec>;
   type: 'summon';
   /** Passive replenishment while seated on a living actor's bar. Free births,
    *  no casts/cast events; interval scales with minionRespawnTime. The ordinary
@@ -2608,7 +2612,7 @@ export interface AuraSpec {
    *  target's max life or max mana, or seconds-worth of their life regen. */
   pulse?: {
     interval: number;
-    healAllies?: { base: 'maxLife' | 'maxMana' | 'lifeRegen'; amount: number };
+    healAllies?: { base: 'maxLife' | 'maxMana' | 'lifeRegen' | 'casterMaxLife'; amount: number };
   };
   /** Enemies dying inside spawn allied minions for the bearer. */
   deathSpawn?: {
@@ -5066,10 +5070,7 @@ export function impactTreeOverrideErrors(def: SkillDef, node: SkillTreeNode): st
 function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain']): GroundDelivery['domain'] {
   if (!a) return b;
   if (!b) return a;
-  return Object.fromEntries(['allyMods', 'enemyMods', 'minionMods'].map(key => {
-    const k = key as keyof NonNullable<GroundDelivery['domain']>;
-    return [k, [...(a[k] ?? []), ...(b[k] ?? [])]];
-  }));
+  return { stackGroup: b.stackGroup ?? a.stackGroup, ...Object.fromEntries((['allyMods', 'enemyMods', 'minionMods'] as const).map(k => [k, [...(a[k] ?? []), ...(b[k] ?? [])]])) };
 }
 
 export interface SkillTreeNode {
@@ -5153,7 +5154,7 @@ export interface SkillTreeNode {
      *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */
     summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'duration' | 'replenish'
-      | 'arts' | 'channelFormation' | 'channelFormationRelease' | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
+      | 'arts' | 'cohort' | 'channelFormation' | 'channelFormationRelease' | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
     /** Host tag changes. Crew skills retain their own attack/spell tags. */
     tags?: { add?: SkillTag[]; remove?: SkillTag[] };
     /** delivery.arcDeg replacement (cone/melee deliveries only). */
@@ -5343,6 +5344,8 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
           ? { channel: { ...out.channel, ...over.channel } } : {}),
         ...(out.summon || over.summon
           ? { summon: { ...out.summon, ...over.summon,
+            ...(over.summon?.pool ? { monsterId: undefined } : over.summon?.monsterId ? { pool: undefined } : {}),
+            cohort: out.summon?.cohort || over.summon?.cohort ? { ...out.summon?.cohort, ...over.summon?.cohort } : undefined,
             arts: out.summon?.arts || over.summon?.arts ? { ...out.summon?.arts, ...over.summon?.arts } : undefined,
             selectPool: union(out.summon?.selectPool, over.summon?.selectPool),
             crewSkills: union(out.summon?.crewSkills, over.summon?.crewSkills),
@@ -5981,6 +5984,8 @@ export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>):
 export interface SkillInstance {
   summonSchools?: string[];
   summonArtCast?: SummonArtCast;
+  cohortCast?: CohortCast;
+  cohortHeal?: { remaining: number; base: number; cap: number };
   summonCommandHost?: SkillInstance;
   /** Captured projectile disciplines and provenance; never saved. */
   projectileHost?: SkillInstance;
@@ -6687,12 +6692,20 @@ function supportFitsOwnInst(sup: SupportDef, inst: SkillInstance, rolled?: Suppo
  *  (World.summonCrewSkills); this type keeps the engine helpers pure. */
 export type SummonCrew = SkillDef[] | 'unknowable' | null;
 
+/** School conversion is skill-local, so support census and actual casts see the same element. */
+export function summonSchoolSkill(d: SummonDelivery, monsterId: string, def: SkillDef): SkillDef {
+  const school = d.arts?.schools?.find(s => s.monster === monsterId);
+  if (!school?.conversion || !def.effects.some(f => f.type === 'damage')) return def;
+  return { ...def, color: school.color ?? def.color, tags: [...new Set([...def.tags, school.id])],
+    innateMods: [...(def.innateMods ?? []), { stat: 'convert_physical_' + school.id, kind: 'flat', value: school.conversion }] };
+}
 /** Resolve per-form lessons without chaining replacements. */
 export function summonKitIds(d: SummonDelivery, monsterId: string, native: string[]): string[] {
   let ids = d.shell ? [d.shell.strikeSkill] : [...native];
   const rules = (d.crewRules ?? []).filter(r => r.monsterIds.includes(monsterId));
   // Replacements only read the original kit: ordering cannot build replacement chains.
   ids = ids.map(id => rules.flatMap(r => r.replace ?? []).reverse().find(r => r.from === id)?.to ?? id);
+  if (d.cohort?.primary) ids = [d.cohort.primary, ...(d.cohort.challenge ? [d.cohort.challenge] : [])];
   if (d.arts?.rite) ids.push(d.arts.rite);
   const school = d.arts?.schools?.find(s => s.monster === monsterId);
   if (school) { if (ids.length) ids[0] = school.primary; else ids.push(school.primary); }
@@ -6721,11 +6734,13 @@ export function summonCrewOf(
   const ids = d.monsterId ? [d.monsterId] : (d.pool ?? []).map(p => p.id);
   const out: SkillDef[] = [];
   const seen = new Set<string>();
-  const add = (skillId: string | undefined): void => {
-    if (!skillId || seen.has(skillId)) return;
-    const def = skill(skillId);
-    if (!def) return;
-    seen.add(skillId);
+  const add = (skillId: string | undefined, mid?: string): void => {
+    const school = d.arts?.schools?.find(s => s.monster === mid && s.conversion);
+    const key = skillId + ':' + (school?.id ?? '');
+    if (!skillId || seen.has(key)) return;
+    const source = skill(skillId); if (!source) return;
+    const def = mid ? summonSchoolSkill(d, mid, source) : source;
+    seen.add(key);
     if (skillId === d.arts?.discordance) {
       const elements = d.arts.schools?.filter(s => ids.includes(s.monster)).map(s => s.id) ?? [];
       out.push({ ...def, tags: [...def.tags.filter(t => !['fire', 'cold', 'lightning', 'chaos'].includes(t)), ...elements] });
@@ -6734,7 +6749,8 @@ export function summonCrewOf(
   for (const mid of ids) {
     const mdef = monster(mid);
     if (!mdef) continue;
-    for (const sid of summonKitIds(d, mid, [...mdef.skills, ...(mdef.grants ?? []).flatMap(g => g.skill ? [g.skill] : [])])) add(sid);
+    for (const sid of summonKitIds(d, mid, [...mdef.skills, ...(mdef.grants ?? []).flatMap(g => g.skill ? [g.skill] : [])])) add(sid, mid);
+    for (const id of cohortSkillIds(d)) add(id, mid);
   }
   for (const id of summonArtIds(d)) add(id);
   return out.length ? out : null;
