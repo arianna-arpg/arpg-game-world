@@ -1,3 +1,4 @@
+import { summonArtIds } from './summonArtsSpec';
 // ---------------------------------------------------------------------------
 // THE PREVIEW FABRIC — what a skill does FOR THIS BUILD, right now.
 //
@@ -183,9 +184,11 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   if (trigger?.on === 'meleeHit') push('trigger', 'Release', 'Next landed melee attack', 'headline', 'Toggle on to arm; pays this skill’s cost each release.');
   if (def.useTime > 0 && !replenishing && !(trigger && def.useTime <= instanceTriggerLimit(inst))) {
     const speed = caster.speedFactor(inst);
+    const castDelivery = instanceDelivery(inst);
+    const baseUseTime = castDelivery.type === 'summon' ? castDelivery.arts?.summonTime ?? def.useTime : def.useTime;
     push('castTime', tags.has('attack') ? 'Attack time' : 'Cast time',
-      secs(def.useTime / Math.max(0.01, speed)), 'headline',
-      Math.abs(speed - 1) > 0.005 ? `base ${secs(def.useTime)}` : undefined);
+      secs(baseUseTime / Math.max(0.01, speed)), 'headline',
+      Math.abs(speed - 1) > 0.005 ? `base ${secs(baseUseTime)}` : undefined);
   }
   if (skillCooldownSeconds(caster, inst) > 0 && !replenishing) {
     const cd = skillCooldownSeconds(caster, inst);
@@ -292,12 +295,12 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   if (d.type === 'summon') {
     const kinds = d.monsterId ? [d.monsterId] : (d.pool ?? []).map(p => p.id);
     push('minionKinds', 'Summoned forms', kinds.map(id => MONSTERS[id]?.name ?? id).join(', '), 'headline');
-    const taught = [...(d.crewSkills ?? []), ...(d.crewAuras ?? [])];
+    const taught = [...new Set([...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...summonArtIds(d)])];
     if (taught.length) push('minionArts', 'Additional minion arts', taught.map(id => SKILLS[id]?.name ?? id).join(', '), 'headline');
     for (const mid of kinds) {
       const rules = (d.crewRules ?? []).filter(r => r.monsterIds.includes(mid));
       const resolved = summonKitIds(d, mid, MONSTERS[mid]?.skills ?? []);
-      const arts = [...new Set(rules.flatMap(r => [...(r.skills ?? []), ...(r.replace ?? []).map(x => x.to)]))].filter(id => resolved.includes(id));
+      const arts = [...new Set([...summonArtIds(d, mid), ...rules.flatMap(r => [...(r.skills ?? []), ...(r.replace ?? []).map(x => x.to)])])].filter(id => resolved.includes(id));
       if (arts.length) push('crewRules_' + mid, MONSTERS[mid]?.name ?? mid,
         arts.map(id => SKILLS[id]?.name ?? id).join(', '), 'detail');
     }

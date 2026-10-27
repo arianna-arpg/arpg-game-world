@@ -8,6 +8,7 @@ const p = (form: SelfForm, motif: BurstMotif, count: number, motion: SelfProfile
  * Rites retain their existing consumption/recipient release; these profiles
  * give them the matching preparation vocabulary without a second receipt. */
 export const SKILL_SELFS: Readonly<Record<string, SelfProfile>> = {
+  skeletal_grand_command: p('crown', 'runes', 5, 'snap'),
   companion_stance: p('crown', 'teeth', 3, 'twist'),
   beast_rallying_whistle: p('horn', 'teeth', 5, 'rise'),
   town_portal: p('gate', 'runes', 4, 'rise'),

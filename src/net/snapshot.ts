@@ -1,3 +1,4 @@
+import { instanceDelivery } from '../engine/skills';
 import { bodyActionPoseOf } from '../engine/bodyAction';
 import { bodyWalkPoseOf } from '../engine/bodyWalk';
 import { meleeReachCueOf } from '../engine/meleeReach';
@@ -87,6 +88,7 @@ export type Vec2W = [number, number];
 
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
+  summonArts?: Record<string, import('../engine/summonArtsSpec').SummonArtView>;
   bodyActionPose?: import('../engine/bodyAction').BodyActionPose;
   bodyWalkPose?: import('../engine/bodyWalk').BodyWalkPose;
   selfBankCues?: SelfBankCue[];
@@ -327,7 +329,7 @@ export interface SupportInstW { id: string; lvl: number; lk?: 1; }
  *  when unpicked (the sparse idiom); the client rehydrates through
  *  validTreeNodes so its tooltip/pip/panel read the same truth the host
  *  spends (orphans from a version-skewed host drop with a note). */
-export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; rp?: 1; triggerOff?: boolean; empowermentRank?: number; }
+export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; schools?: string[]; rp?: 1; triggerOff?: boolean; empowermentRank?: number; }
 /** The client OWN-seat build: enough to render the char-sheet / skill-book / tree
  *  and re-derive the stat sheet (recalcSeat) on the client. */
 export interface SeatMetaW {
@@ -387,6 +389,7 @@ const skillInstW = (s: SkillInstance): SkillInstW => ({
   g: s.granted || undefined,
   lk: s.locked ? 1 : undefined,
   tn: s.treeNodes?.length ? [...s.treeNodes] : undefined,
+  schools: s.summonSchools?.length ? [...s.summonSchools] : undefined,
   rp: s.replenishmentPaused ? 1 : undefined,
   triggerOff: s.state?.triggerOff,
 });
@@ -447,6 +450,11 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
   // Untrusted wire → the one validation seam (structure + budget), so the
   // client's panels can never render a state the host would refuse.
   if (w.tn?.length) inst.treeNodes = validTreeNodes(def, w.tn, w.lvl, inst);
+  const summon = instanceDelivery(inst);
+  if (Array.isArray(w.schools) && summon.type === 'summon' && summon.arts?.schools) {
+    const selected = summon.arts.schools.filter(row => w.schools!.includes(row.id)).map(row => row.id);
+    if (selected.length) inst.summonSchools = selected;
+  }
   if (typeof w.triggerOff === 'boolean') (inst.state ??= {}).triggerOff = w.triggerOff;
   if (w.rp === 1 && replenishingDelivery(inst)?.replenish?.toggle) inst.replenishmentPaused = true;
   return inst;
@@ -703,6 +711,7 @@ function actorToW(a: Actor, world: World): ActorW {
   const w: ActorW = {
     id: a.id, p: v2(a.pos), f: a.facing, r: a.radius, c: a.color, sh: a.shape,
     team: a.team, name: a.name,
+    summonArts: world.summonArts.presentation(a),
     life: Math.max(0, Math.round(a.life)), maxLife: Math.round(a.maxLife()),
     es: Math.round(a.es), maxEs: Math.round(a.maxEs()),
     hf: a.hitFlash, downed: a.downed, dead: a.dead, mn: a.isMinion(), passive: a.passive, ut: a.untargetable,
@@ -1367,6 +1376,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.aims = aw.aims !== false; // absent = aims (older hosts, ordinary bodies)
     a.wane = aw.wn ?? 0;
     a.owner = aw.mn ? MINION_OWNER : undefined;
+    a.remoteSummonArts = aw.summonArts ? Object.fromEntries(Object.entries(aw.summonArts).map(([id, row]) => [id, { ...row }])) : undefined;
     a.summonShell = aw.ss;
     a.shellGuard = aw.sg ? { ...aw.sg, breathe: aw.sg.breathe ? { ...aw.sg.breathe } : undefined } : undefined;
     a.poiseBroken = aw.pb === true;

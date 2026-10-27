@@ -8,6 +8,10 @@ const mage = (id: string, name: string, color: string, skill: string, look: stri
 });
 export const NECROMANCER_MINIONS: Record<string, MonsterDef> = {
   ...UNDEAD_COURT_MINIONS,
+  skeletal_phylactery: {
+    id: 'skeletal_phylactery', name: 'Bound Phylactery', remains: false, color: '#ad83d6', shape: 'ribcage', radius: 15, material: 'bone', faction: 'undead',
+    base: { life: 40, moveSpeed: 0, mana: 0 }, skills: [], xp: 0,
+  },
   skeletal_mortarman: {
     id: 'skeletal_mortarman', name: 'Skeletal Mortarman', color: '#d8d0b0', shape: 'ribcage', radius: 12,
     material: 'bone', look: 'skeletal_mortarman', faction: 'undead',

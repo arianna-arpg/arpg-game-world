@@ -1,3 +1,4 @@
+import type { SummonArtContract, SummonArtState, SummonArtView } from './summonArtsSpec';
 import { summonReservationUnit } from './companionGrants';
 import { tickAbsorbLayers, type AbsorbLayer } from './absorb';
 import { buffProcCue, noteProcCue, noteProcPop, tickProcCues } from './procCues';
@@ -1839,6 +1840,10 @@ export class Actor {
   sourceSkillId?: string;
   /** The summoning instance, kept for persistent respawns. */
   summonInst?: SkillInstance;
+  summonArtState?: SummonArtState;
+  remoteSummonArts?: Record<string, SummonArtView>;
+  summonArtAnchor?: true;
+  summonArtContracts = new Map<SkillInstance, SummonArtContract>();
   summonEscort?: { distance: number };
   /** The channel formation controller owns movement and firing for this body. */
   channelFormation?: true;
@@ -2748,6 +2753,7 @@ export class Actor {
       stacksBonus?: number;
       /** The applier's actor id (brood attribution and kin). */
       casterId?: number;
+      skillId?: string;
       /** A field-bound ailment is a separate application from lasting wounds. */
       challengeField?: number;
       sourceKey?: string;
@@ -2875,7 +2881,7 @@ export class Actor {
         rupture: opts?.rupture,
         ruptureType: opts?.ruptureType,
         ruptureRadius: opts?.ruptureRadius,
-        casterId: opts?.casterId,
+        casterId: opts?.casterId, skillId: opts?.skillId,
         brood: opts?.brood,
         leech: opts?.leech,
         total: duration, statusDuration: duration,
@@ -2911,6 +2917,7 @@ export class Actor {
       existing.casterId = def.refreshCaster && opts.casterId !== undefined
         ? opts.casterId
         : existing.casterId ?? opts.casterId;
+      existing.skillId = existing.skillId ?? opts.skillId;
       existing.brood = existing.brood ?? opts.brood;
       if (opts.leech) existing.leech = Math.max(existing.leech ?? 0, opts.leech);
     }
@@ -3783,7 +3790,9 @@ export class Actor {
     // Lance-Thrust-style combo blow (and the hold-combo gate's instant
     // requirement passes by construction).
     if (socketSpec(inst, 'guardCast')) return 0;
-    return inst.def.useTime / this.speedFactor(inst);
+    const delivery = instanceDelivery(inst);
+    const baseTime = delivery.type === 'summon' ? delivery.arts?.summonTime ?? inst.def.useTime : inst.def.useTime;
+    return baseTime / this.speedFactor(inst);
   }
 
   /**

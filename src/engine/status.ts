@@ -1869,6 +1869,8 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
 }
 
 export interface ActiveStatus {
+  /** Originating ability for independently attributed periodic recovery. */
+  skillId?: string;
   /** Application-owned presentation; the ailment ID and behavior stay intact. */
   visual?: string;
   /** Transferred wounds cannot circulate repeatedly between attractors. */

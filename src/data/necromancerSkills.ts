@@ -1,3 +1,4 @@
+import { SKELETON_MAGE_SKILLS } from './skeletonMageSkills';
 import { SKELETON_ARCHER_SKILLS } from './skeletonArcherSkills';
 import { UNDEAD_COURT_SKILLS } from './necromancerCourts';
 import type { SkillDef, AuraSpec } from '../engine/skills';
@@ -19,9 +20,10 @@ const aura = (id: string, name: string, spec: AuraSpec): SkillDef => ({
 export const NECROMANCER_SKILLS: Record<string, SkillDef> = {
   ...UNDEAD_COURT_SKILLS,
   ...SKELETON_ARCHER_SKILLS,
+  ...SKELETON_MAGE_SKILLS,
   summon_skeleton_mage: {
     id: 'summon_skeleton_mage', name: 'Summon Skeleton Mage',
-    description: 'Raise two random elemental mages, up to four. Their tree can fuse them into one Lich or teach elemental specialists their own schools of magic.',
+    description: 'Raise two random elemental mages, up to four. Their tree raises a commanding Lich or a chosen Conclave of mages whose spells cooperate.',
     tags: ['spell', 'summon', 'minion'], color: '#b6a2de', manaCost: 30, cooldown: 3, useTime: 1.1,
     delivery: { type: 'summon', pool: SKELETAL_MAGE_POOL, count: 2, maxActive: 4, crewRules: [{ monsterIds: ['skeletal_cryomancer'], replace: [{ from: 'skeletal_cold_bolt', to: 'skeletal_ice_spear' }] }] }, effects: [],
     tree: NECROMANCER_TREES.summon_skeleton_mage,
@@ -47,9 +49,9 @@ export const NECROMANCER_SKILLS: Record<string, SkillDef> = {
   },
   skeletal_greater_ice_spear: {
     id: 'skeletal_greater_ice_spear', name: 'Greater Skeletal Ice Spear', description: 'An icy spear chills and shatters into five cold shards.', noDrop: true,
-    tags: ['spell', 'cold', 'projectile'], color: '#8bd6ed', manaCost: 0, cooldown: 0, useTime: 1.1,
+    tags: ['spell', 'cold', 'projectile'], color: '#8bd6ed', manaCost: 0, cooldown: 6, useTime: 1.1,
     baseDamage: { cold: [5, 8] }, delivery: { type: 'projectile', speed: 480, radius: 8, range: 460, shape: 'triangle', shatter: { skillId: 'skeletal_ice_shard', count: 5, spreadDeg: 70 } },
-    effects: [{ type: 'damage' }, { type: 'status', status: 'chill', chance: 1 }], ai: { range: 430, weight: 2, keepDistance: 270 },
+    effects: [{ type: 'damage' }, { type: 'status', status: 'chill', chance: 1 }], ai: { range: 430, weight: 6, keepDistance: 270 },
   },
   skeletal_ice_shard: {
     id: 'skeletal_ice_shard', name: 'Skeletal Ice Shard', description: 'A small splinter cast off by a skeletal spear.', noDrop: true,

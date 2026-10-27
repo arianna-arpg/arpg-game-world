@@ -5,7 +5,7 @@ import { SUPPORTS } from '../src/data/supports';
 import { MONSTERS } from '../src/data/monsters';
 import { NECROMANCER_TREES } from '../src/data/necromancerTrees';
 import { makeSkillInstance, instanceDelivery, instanceMods, instanceBaseTags, treeNodeRefusal,
-  skillContextTags, supportFitsInstOrCrew, skillCooldownSeconds, type SkillInstance } from '../src/engine/skills';
+  skillContextTags, supportFitsInstOrCrew, skillCooldownSeconds, type SkillInstance, type SummonDelivery } from '../src/engine/skills';
 import { treeGraph } from '../src/engine/skilltree';
 import { replenishShape } from '../src/engine/replenishment';
 import { updateAI } from '../src/engine/ai';
@@ -35,7 +35,7 @@ function step(w: World, seconds: number, minds = false) {
 const crew = (w: World, inst: SkillInstance) => w.actors.filter(a => !a.dead && a.owner === w.player && a.summonInst === inst);
 function cast(w: World, inst: SkillInstance) {
   w.player.casting = null; w.player.cooldowns.clear(); w.player.fillResources();
-  const ok = w.useSkill(w.player, inst, w.player.pos, true); step(w, 1.3); return ok;
+  const ok = w.useSkill(w.player, inst, w.player.pos, true); step(w, Math.max(1.3, w.player.skillUseTime(inst) + 0.2)); return ok;
 }
 const restore = seedGlobalRandom(0xb0ae);
 try {
@@ -259,13 +259,13 @@ try {
   {
     const {w,inst}=setup('summon_skeleton_mage',['lich_ascendant','fused_intellect','winter_crown','storm_crown']);cast(w,inst);
     const lich=crew(w,inst)[0], ids=lich.skills.flatMap(k=>k?[k.def.id]:[]);
-    check('Lich uses Fireball with devastating learned repertoire',crew(w,inst).length===1 && lich.defId==='ossuary_lich' && ['skeletal_lich_fireball','skeletal_cinder_rain','skeletal_winter_ring','skeletal_grave_thunder'].every(id=>ids.includes(id)) && !ids.some(id=>id.endsWith('_bolt')));
+    check('Lich uses Fireball with devastating learned repertoire',crew(w,inst).length===1 && lich.defId==='ossuary_lich' && ['skeletal_lich_fireball','skeletal_grand_rite'].every(id=>ids.includes(id)) && ['skeletal_rite_boundary','skeletal_rite_blizzard','skeletal_rite_rupture'].every(id=>lich.summonArtState?.kit.some(s=>s.def.id===id)) && !ids.some(id=>id.endsWith('_bolt')));
     const crown=setup('summon_skeleton_mage',['lich_ascendant','deathless_regent','court_of_one','plague_crown']);cast(crown.w,crown.inst);
-    check('regent keeps aura and empowered plague ring',crew(crown.w,crown.inst)[0].activeAuras.has('ossuary_command') && crew(crown.w,crown.inst)[0].skills.some(k=>k?.def.id==='skeletal_plague_ring'));
+    check('regent keeps aura and owner-spell echo contract',crew(crown.w,crown.inst)[0].activeAuras.has('ossuary_command') && !!(instanceDelivery(crown.inst) as SummonDelivery).arts?.echo);
   }
   for (const [mid, leaf, form, art] of [
-    ['winter_curriculum','deep_winter','skeletal_cryomancer','skeletal_greater_ice_spear'],
-    ['winter_curriculum','plague_curriculum','skeletal_venomancer','skeletal_essence_drain'],
+    ['storm_curriculum','rolling_thunder','skeletal_cryomancer','skeletal_greater_ice_spear'],
+    ['storm_curriculum','expanded_faculty','skeletal_venomancer','skeletal_essence_drain'],
     ['storm_curriculum','rolling_thunder','skeletal_stormcaller','skeletal_chain_lightning'],
     ['storm_curriculum','expanded_faculty','skeletal_pyromancer','skeletal_ignite'],
   ]) {
@@ -279,7 +279,7 @@ try {
     const known=w.summonCrewSkills(inst);
     check(form+': support census includes exact replacement and lesson',Array.isArray(known) && known.some(k=>k.id===art)
       && !known.some(k=>k.id==='skeletal_cinder_rain'||k.id==='skeletal_winter_ring'||k.id==='skeletal_plague_ring')
-      && (form!=='skeletal_cryomancer' || !known.some(k=>k.id==='skeletal_ice_spear'||k.id==='skeletal_cold_bolt')));
+      && (form!=='skeletal_cryomancer' || (known.some(k=>k.id==='skeletal_ice_spear') && !known.some(k=>k.id==='skeletal_cold_bolt'))));
     if(caster){
       const foe=w.createMonster('zombie',1,'enemy');foe.pos={x:caster.pos.x+300,y:caster.pos.y};foe.skills=[];foe.sheet.setSource('still',[mod('moveSpeed','more',-1),mod('life','flat',100000)]);foe.fillResources();w.actors.push(foe);
       let casts=0,hits=0;SIM_TAP.current={onCast:(a,k)=>{if(a===caster&&k.def.id===art)casts++;},onHit:(a,target,result,packet)=>{if(a===caster&&target===foe&&result.total>0&&packet.sourceName===SKILLS[art].name)hits++;}};step(w,12,true);SIM_TAP.current=null;
@@ -287,7 +287,7 @@ try {
     }
     if(form==='skeletal_cryomancer') {
       const preview=JSON.stringify(previewSkill(w.player,inst));
-      check('cryomancer preview lists the final spear without the replaced lesson',preview.includes('Greater Skeletal Ice Spear') && !preview.includes('"Skeletal Ice Spear"'));
+      check('cryomancer preview lists primary and signature separately',preview.includes('Greater Skeletal Ice Spear') && preview.includes('Skeletal Ice Spear'));
     }
     const loaded=rebuildSkill({skillId:inst.def.id,level:20,rarity:'common',sockets:[],treeNodes:inst.treeNodes});
     check(form+': lessons survive save repair',loaded?.treeNodes?.join()===inst.treeNodes?.join());

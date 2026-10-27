@@ -1,3 +1,4 @@
+import { mod } from './stats';
 import type { Actor, CastingState } from './actor';
 import type { World } from './world';
 import type { Vec2 } from '../core/math';
@@ -11,7 +12,7 @@ export class ChannelFormations {
   private formations = new Map<Actor, Formation>();
   constructor(private world: World,
     private spawn: (owner: Actor, inst: SkillInstance, pos: Vec2) => Actor | null,
-    private fire: (actor: Actor, inst: SkillInstance, aim: Vec2) => void) {}
+    private fire: (actor: Actor, inst: SkillInstance, aim: Vec2, arrival?: boolean) => void) {}
 
   private position(f: Formation, slot: number): Vec2 {
     const d = instanceDelivery(f.inst);
@@ -43,6 +44,13 @@ export class ChannelFormations {
       body.channelFormation = true; body.facing = owner.facing;
       if (d.channelFormation.emerge) this.world.emergeBody(body, { spec: d.channelFormation.emerge });
       f.members.push({ actor: body, slot });
+      if (d.channelFormation.attackSpeedMore) body.sheet.setSource('channelFormation', [mod('attackSpeed', 'more', d.channelFormation.attackSpeedMore)]);
+      const primary = body.skills[0];
+      if (d.channelFormation.fireOnArrival && primary && !body.tagsForbidden(primary)) {
+        this.fire(body, primary, this.aim(f, body), true);
+        // The first shot is immediate; its recovery still pays one accelerated attack beat.
+        body.useLock = Math.max(body.useLock, body.skillUseTime(primary));
+      }
     }
   }
   release(owner: Actor, cast: CastingState): void {

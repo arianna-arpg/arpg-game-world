@@ -1,3 +1,4 @@
+import { SummonArts } from './summonArts';
 import { DEVICE_CFG, DeviceContacts, deviceContactEligible, groundDeviceState } from './groundDevices';
 import { syncAltarBodies } from './altarBodies';
 import { SkillInputOrder } from './skillInputOrder';
@@ -1868,6 +1869,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'reacquireSkill': return isStr(a.skillId);
     case 'attuneSpectre': return isStr(a.skillId) && isStr(a.formId);
     case 'mimicSelect': return isStr(a.sid);
+    case 'setSummonSchools': return isStr(a.skillId) && Array.isArray(a.schools) && a.schools.length > 0 && a.schools.length <= 16 && a.schools.every(isStr);
     case 'pickTreeNode': return isStr(a.skillId) && isStr(a.nodeId);
     case 'untameCompanion': return isIdx(a.actorId);
     // THE STANCE SHIFT: an optional bond skill id + an optional stance id —
@@ -3699,9 +3701,14 @@ export class World {
       applyDot(target, amount, type);
       this.recordIndirectDamage(target, source, before);
     });
+  readonly summonArts = new SummonArts(this,
+    (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
+    (host, skills) => this.forwardSummonSockets(host, skills),
+    (body, inst) => { if (inst.def.delivery.type === 'aura') this.activateAura(body, inst, inst.def.delivery,
+      body.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst))); });
   readonly channelFormations = new ChannelFormations(this,
     (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
-    (body, inst, aim) => { this.executeSkill(body, inst, aim, { noRepeat: true, noCooldown: true, keepFacing: true }); });
+    (body, inst, aim, arrival) => { this.executeSkill(body, inst, aim, { noRepeat: true, componentUse: arrival, noCooldown: true, keepFacing: true }); });
   readonly guardArts = new GuardArts(this);
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
@@ -5511,16 +5518,22 @@ export class World {
   }
   // Observe each contributing affliction BEFORE timers remove its last tick.
   // Pool mitigation stays unchanged; account credit gets only its source's share.
+  private trackDeedDot = false;
+  private summonDotShares: { source: Actor; amount: number; type: DamageType | 'untyped' }[] = [];
   private deedDotAmounts: Partial<Record<DamageType | 'untyped', number>> | undefined;
   private collectDeedDot = (status: ActiveStatus, amount: number, type: DamageType | 'untyped'): void => {
     const source = status.casterId === undefined ? undefined : this.actorById(status.casterId);
-    if (!source || !this.deedOwned(source)) return;
+    if (source && status.skillId && this.summonArts.signature(source, status.skillId)) this.summonDotShares.push({ source, amount, type });
+    if (!this.trackDeedDot || !source || !this.deedOwned(source)) return;
     this.deedDotAmounts ??= {};
     this.deedDotAmounts[type] = (this.deedDotAmounts[type] ?? 0) + amount;
   };
   private applyDeedDot(target: Actor, amount: number, type: DamageType | 'untyped'): void {
+    if (!(amount > 0)) return;
     const before = target.life;
     applyDot(target, amount, type === 'untyped' ? undefined : type);
+    const landed = Math.max(0, before - Math.max(0, target.life));
+    for (const row of this.summonDotShares) if (row.type === type) this.summonArts.siphon(row.source, landed * row.amount / amount);
     const share = Math.min(1, (this.deedDotAmounts?.[type] ?? 0) / amount);
     const value = Math.max(0, before - Math.max(0, target.life)) * share;
     if (value > 0) this.recordDeed({ kind: 'indirect', value });
@@ -5896,6 +5909,7 @@ export class World {
     this.creepers.clear();
     this.assaults.clearAll();
     this.challenges.clearAll();
+    this.summonArts.leaveZone();
     this.channelFormations.clear();
     this.attackSequences.clearAll();
     this.projectileArts.clearAll();
@@ -29818,6 +29832,7 @@ export class World {
       case 'unlearn': this.unlearnSkill(action.skillId, seat, action.x, action.y); break;
       case 'attuneSpectre': this.attuneSpectre(action.skillId, action.formId, seat); break;
       case 'mimicSelect': this.mimicSelectFor(action.sid, seat); break;
+      case 'setSummonSchools': this.setSummonSchools(action.skillId, action.schools, seat); break;
       case 'pickTreeNode': this.pickTreeNode(action.skillId, action.nodeId, seat); break;
       case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;
       case 'companionStance': this.cycleCompanionStance(seat, action.skillId, action.stance); break;
@@ -30777,6 +30792,8 @@ export class World {
    *  full Tame presents the Whistle) — else the skill itself. The renderer
    *  reads this so the button never lies about what a press will do. */
   slotFaceOf(caster: Actor, inst: SkillInstance): SkillDef {
+    const ritual = this.summonArts.commandView(caster, inst);
+    if (ritual) return ritual.def;
     // A mimic slot wears the SELECTED captured art's face (the source
     // monster's chip rides the build flap — engine/mimic.ts).
     if (inst.def.mimic) {
@@ -30801,6 +30818,12 @@ export class World {
    *  canUse so an exhausted gun still gets pressed: the press is the
    *  reload, and the vulnerability window it opens is the design. */
   pressUsable(caster: Actor, inst: SkillInstance): boolean {
+    const ritual = this.summonArts.commandView(caster, inst);
+    if (ritual) return !this.castSealed(caster, inst) && this.summonArts.commandReady(caster, inst) && caster.canUse(ritual);
+    if (inst.def.delivery.type === 'summon') {
+      const summon = instanceDelivery(inst);
+      if (summon.type === 'summon' && !this.summonArts.canSpawn(caster, inst, summon)) return false;
+    }
     if (this.castSealed(caster, inst)) return false; // THE CAST SEAL — the brain never presses a sealed cast
     // A mimic slot presses as its selection — empty bank, dead button.
     if (inst.def.mimic) {
@@ -34170,6 +34193,20 @@ export class World {
     return open ? null : 'Awaken this skill through a legendary find or the Vault.';
   }
 
+  setSummonSchools(skillId: string, choices: string[], seat: Seat = this.localSeat): void {
+    const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
+    if (!inst) return;
+    const d = instanceDelivery(inst);
+    if (d.type !== 'summon' || !d.arts?.balanceSchools || !d.arts.schools) return;
+    const schools = d.arts.schools.filter(s => choices.includes(s.id)).map(s => s.id);
+    if (!schools.length || this.memorySecondaryRefusal(skillId) || this.swapRefusal(seat, 'socket')) return;
+    this.clearSummonTreeBodies(seat.actor, inst);
+    this.clearTreeFields(seat.actor, inst);
+    inst.summonSchools = schools;
+    this.recalcSeat(seat);
+    this.charDirty = true;
+  }
+
   pickTreeNode(skillId: string, nodeId: string, seat: Seat = this.localSeat): void {
     // A granted skill's picks ride its item's residence (the recalc below writes them back).
     const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
@@ -34473,6 +34510,12 @@ export class World {
     {
       const why = this.castReqRefusal(caster, inst);
       if (why) { this.failNote(caster, inst.def.id + ':req', why); return false; }
+    }
+    const ritualCommand = this.summonArts.commandView(caster, inst);
+    if (ritualCommand) return this.summonArts.commandReady(caster, inst) && this.useSkill(caster, ritualCommand, aim, seatPress);
+    if (inst.def.delivery.type === 'summon') {
+      const artDelivery = instanceDelivery(inst);
+      if (artDelivery.type === 'summon' && !this.summonArts.canSpawn(caster, inst, artDelivery)) return false;
     }
     // SKILL CONVERSION (SkillDef.convert): while the rule holds, this press
     // IS the converted skill — minted per host at the host's effective
@@ -35289,6 +35332,7 @@ export class World {
     inst = castSequenceInstance(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.attackSequences.prepare(caster, inst, aim, opts.dmgMult ?? 1);
     inst = this.projectileArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
+    inst = this.summonArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     const def = inst.def;
     const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
     const cosmeticColor = cosmeticPaint.color ?? def.color;
@@ -35387,7 +35431,7 @@ export class World {
         }
         if (pick2) {
           useMult *= 1 + pick2.life * sac.dmgPerLife;
-          this.kill(pick2, true);
+          this.kill(pick2, true, caster, 'sacrifice');
           const feedingCue = pick2.dead ? feedingCueFlash(pick2.pos, caster, def.feedingCue, 'ritual', pick2.tier, pick2.radius) : undefined;
           if (feedingCue) this.flashes.push(feedingCue);
           if (pick2.dead) this.showSkillArrival(caster, inst, pick2.pos, pick2.radius + 12, pick2.tier, 'sacrifice');
@@ -36815,8 +36859,8 @@ export class World {
             : undefined,
           linger0: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
           leaveTerrain: d.leaveTerrain,
-          edge: d.fillFrom,
-          fillRate: d.fillFrom ? d.fillFrom / Math.max(0.2, fillTime) : undefined,
+          edge: d.innerFraction ?? d.fillFrom,
+          fillRate: d.innerFraction === undefined && d.fillFrom ? d.fillFrom / Math.max(0.2, fillTime) : undefined,
           // Emitters & domains ride the PRIMARY placement only — cascades'
           // ripples stay plain zones (no source spam, no bolt storms²).
           // A zoneEmit graft (the pulse-cadence cursed ground) supplies an
@@ -37068,7 +37112,7 @@ export class World {
             }
             if (meal) {
               cs2.amalgamFed = (cs2.amalgamFed ?? 0) + 1;
-              this.kill(meal, true);
+              this.kill(meal, true, caster, 'sacrifice');
               const feedingCue = meal.dead ? feedingCueFlash(meal.pos, caster, def.feedingCue, 'ritual', meal.tier, meal.radius) : undefined;
               if (feedingCue) this.flashes.push(feedingCue);
             }
@@ -38662,6 +38706,7 @@ export class World {
     // into a periodic shadow-lash; repeats and echo replays are not.
     if (!opts.noRepeat && !caster.construct) {
       if (!opts.noCooldown) this.challenges.completed(caster, inst);
+      this.summonArts.completed(caster, inst, aim);
       this.companionBonds.onCast(caster, inst, aim);
       this.echoToClones(caster, inst, aim, useMult,
         opts.targetInfo as ResolvedTarget | undefined);
@@ -39838,6 +39883,7 @@ export class World {
    * skill never cross-contaminate each other's crews.
    */
   resyncMinionSupports(inst: SkillInstance): void {
+    this.summonArts.resync(inst);
     for (const a of this.actors) {
       // Constructs carry summonInst as a back-reference too, but never
       // receive spawn-time forwarding — resync mirrors the spawn path.
@@ -39872,7 +39918,7 @@ export class World {
     const resolved = instanceDelivery(inst);
     const d: SummonDelivery | undefined =
       resolved.type === 'summon' ? resolved : instanceSummon(inst);
-    return summonCrewOf(d, id => MONSTERS[id], id => SKILLS[id]);
+    return this.summonArts.crew(inst, summonCrewOf(d, id => MONSTERS[id], id => SKILLS[id]));
   }
 
   /** minionCombat: reuse full actors whenever a grant needs their complete
@@ -39962,6 +40008,7 @@ export class World {
     const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
 
+    if (!this.summonArts.canSpawn(caster, inst, d)) return null;
     const maxActive = summonCapacity(caster, inst, d);
     // Shared pool groups (golems) cap across every skill in the group.
     const existing = inst.companionGrant ? [] : d.poolGroup
@@ -39994,7 +40041,7 @@ export class World {
       }
     }
 
-    const typeId = overrides?.monsterId ?? this.rollSummonType(d);
+    const typeId = overrides?.monsterId ?? this.summonArts.choose(caster, inst, d) ?? this.rollSummonType(d);
     const minion = this.createMonster(typeId, caster.level, caster.team, caster);
     // Skill-conjured bodies pay no bounty on death — an enemy summoner's
     // spawn stream can't be farmed for xp/drops (kill the caster instead),
@@ -40214,6 +40261,7 @@ export class World {
     this.sim.deadwakeField?.accrue('summon', isDeathAligned(minion.faction));
     if (!this.presenceArrival(minion, caster, inst))
       this.flashes.push({ pos: vec(minion.pos.x, minion.pos.y), radius: 20 + minion.radius, color: inst.def.color, life: 0.35, maxLife: 0.35 });
+    this.summonArts.init(minion, inst);
     return minion;
   }
 
@@ -43658,6 +43706,7 @@ export class World {
         }
       }
       dealt = result.total;
+      this.summonArts.hit(caster, inst, target, Math.min(dealt, Math.max(0, deedLifeBefore - Math.max(0, target.life))));
       if (rearHit && dealt > 0 && def.backstabCue !== false) {
         this.flashes.push(combatCueFlash(target.pos, def.backstabCue ?? 'rear_hit', target.radius,
           angleTo(target.pos, caster.pos)));
@@ -44439,6 +44488,7 @@ export class World {
             rupture, ruptureType,
             ruptureRadius: rupture !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
             stacksBonus: stacksBonusFor(fx.status),
+            ...this.summonArts.statusSource(caster, inst),
             casterId: fx.status === 'taunted' && caster.summonShell && caster.owner ? caster.owner.id : caster.id,
             brood: instanceBrood(inst),
             leech: caster.sheet.get('dotLeech_' + fx.status, tags, extra) || undefined,
@@ -44670,6 +44720,7 @@ export class World {
           propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
           stacksBonus: stacksBonusFor(sid),
           casterId: caster.id,
+          ...this.summonArts.statusSource(caster, inst),
           brood: instanceBrood(inst),
           leech: caster.sheet.get('dotLeech_' + sid, tags, extra) || undefined,
           rupture: armed, ruptureType: armedType,
@@ -46473,7 +46524,7 @@ export class World {
     },
   ];
 
-  kill(actor: Actor, silent = false, killer?: Actor, departure?: 'expire'): void {
+  kill(actor: Actor, silent = false, killer?: Actor, departure?: 'expire' | 'sacrifice'): void {
     if (actor.dead) return;
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
@@ -46685,7 +46736,8 @@ export class World {
     }
 
     actor.dead = true;
-    this.presenceMoment(actor, departure ?? (silent ? 'expire' : 'break'));
+    this.summonArts.death(actor, silent && departure !== 'sacrifice', departure === 'expire');
+    this.presenceMoment(actor, departure === 'expire' || silent ? 'expire' : 'break');
     this.guardArts.clear(actor);
     if (actor.owner) this.strikeReleaseBodies.get(actor.owner)?.delete(actor);
     this.satellites.retire(actor);
@@ -49294,6 +49346,7 @@ export class World {
     // The same tending mends a downed COMPANION (the Hunter's bond).
     this.companionBonds.update(dt);
     this.challenges.update(dt);
+    this.summonArts.update(dt);
     this.channelFormations.update();
     this.attackSequences.update(dt);
     this.guardArts.update(dt);
@@ -49786,9 +49839,10 @@ export class World {
         }
       }
       this.deedDotAmounts = undefined;
-      const trackDeedDot = this.metaProgressionActive() && !a.dead && a.life > 0
+      this.summonDotShares = [];
+      this.trackDeedDot = this.metaProgressionActive() && !a.dead && a.life > 0
         && (this.deedEnemy(a) || (a === this.player && this.hasDeedEnemyNearby()));
-      const dot = a.updateTimers(dt, rawDt, trackDeedDot ? this.collectDeedDot : undefined);
+      const dot = a.updateTimers(dt, rawDt, this.collectDeedDot);
       // World-space procPopEvents survive a lethal payout and replicate as flashes.
       for (const procCue of a.procPopEvents) {
         const style = procCueStyle(procCue.profile ?? 'blood');
@@ -57938,6 +57992,7 @@ export class World {
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
     this.guardArts.clear(caster, inst);
+    this.summonArts.clear(caster, inst);
     this.channelFormations.clear(caster, inst);
     this.attackSequences.clear(caster, inst);
     this.projectileArts.clear(caster, inst);
@@ -58025,7 +58080,7 @@ export class World {
    * dismissal or respec, including flights whose body has already died. */
   private clearSummonReleaseFields(owner: Actor, inst: SkillInstance): void {
     const d = instanceDelivery(inst);
-    if (d.type !== 'summon' || !d.strikeRelease) return;
+    if (d.type !== 'summon' || (!d.strikeRelease && !d.arts)) return;
     const payloads = [...this.projectiles, ...this.zones, ...this.pendingRepeats, ...this.pendingFuses,
       ...this.pendingSalvos, ...this.pendingSteps, ...this.pendingFollowUps];
     const bodies = new Set([...this.actors, ...payloads.map(p => p.caster)]);
@@ -59654,7 +59709,7 @@ export class World {
               for (let s = 0; s < shardCount; s++) {
                 const off = shardCount === 1 ? 0 : (s / (shardCount - 1) - 0.5) * spread;
                 this.spawnProjectile(p.caster,
-                  makeSkillInstance(shardSkill, effectiveSkillLevel(p.inst)),
+                  { ...makeSkillInstance(shardSkill, effectiveSkillLevel(p.inst)), summonArtCast: p.inst.summonArtCast },
                   vec(p.pos.x, p.pos.y), p.dir + off,
                   { tier: p.tier ?? 0, inherit, depth: p.depth + 1, mult: p.mult });
                 // Shards rake the cone BEHIND the victim — never the victim

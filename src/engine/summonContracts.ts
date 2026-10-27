@@ -3,6 +3,7 @@ import { instanceDelivery, instanceMods, skillContextTags, type SkillInstance, t
 
 /** Shared capacity and mutually exclusive identities are independent contracts. */
 export function summonCapacity(owner: Actor, inst: SkillInstance, d: SummonDelivery): number {
+  if (d.arts?.single) return 1;
   return Math.max(1, Math.round(owner.sheet.get('minionMaxCount', skillContextTags(inst), instanceMods(inst), d.maxActive)));
 }
 
