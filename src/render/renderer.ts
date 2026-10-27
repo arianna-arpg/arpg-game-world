@@ -5985,6 +5985,17 @@ export class Renderer {
     if (rot !== 0) ctx.rotate(rot);
     this.drawCombatBodyEdge(a, world, look);
     ctx.drawImage(bodySprite(look), -half, -half);
+    if (a.spectralVeil) {
+      const veil = a.spectralVeil;
+      ctx.save();
+      drawBodyHitFlash(ctx, look, veil.alpha * (0.8 + 0.2 * Math.sin(world.time * 4 + a.id)), veil.color);
+      ctx.strokeStyle = veil.color; ctx.globalAlpha *= veil.alpha; ctx.lineWidth = 1.2;
+      for (let i = 0; i < 3; i++) {
+        const t = world.time * 1.4 + i * Math.PI * 2 / 3;
+        ctx.beginPath(); ctx.arc(0, 0, a.radius * (1.1 + 0.12 * Math.sin(t)), t, t + 0.9); ctx.stroke();
+      }
+      ctx.restore();
+    }
     // THE HIT FLASH rides the body's own pose — a white wash or rim OVER
     // the bake, never a swap: tints, live parts and worn gauges keep
     // speaking beneath it, and baseAlpha already folds every fade lane.

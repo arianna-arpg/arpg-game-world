@@ -14,6 +14,7 @@ import {validateProbeSupersessions,resolveProbeExecution,probeExecutionLabel,pro
 // The default gate tests current player behavior. Historical source receipts
 // remain explicit opt-in work; they cannot certify that the game is playable.
 const PLAYABLE_PROBES = new Set([
+  'probe_skeletonwarrior.ts', 'probe_skeletonmage.ts', 'probe_skeletonarcher.ts',
   'probe_tutorialisolation.ts', 'probe_tutorialnative.ts',
   'probe_worldmass.ts', 'probe_worldmass_engine.ts', 'probe_worldmass_progression.ts',
   'probe_worldmass_bounties.ts', 'probe_worldmass_sideareas.ts', 'probe_worldmass_resumeworld.ts',

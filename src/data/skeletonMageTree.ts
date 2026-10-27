@@ -30,8 +30,8 @@ export const SKELETON_MAGE_TREE = tree([
       undefined, arts({ echo: { cooldown: 1.5, power: 0.65, deliveries: ['projectile', 'cone', 'nova', 'ground', 'storm', 'target'],
         requireTags: ['spell'], excludeTags: ['summon', 'minion', 'aura', 'movement'], targets: ['enemy'] } }))],
 ], [
-  n('grave_academy', 'Grave Conclave', 'Raise two mages, up to four. Choose their schools in this skill tree; new summons favor underrepresented selected schools. 20% faster minions.',
-    [haste(0.2)], arts({ schools: SKELETON_MAGE_SCHOOLS, balanceSchools: true })),
+  n('grave_academy', 'Grave Conclave', 'Raise two mages, up to four. Click this node to choose their schools; new summons favor underrepresented selected schools. 20% faster minions.',
+    [haste(0.2)], arts({ schools: SKELETON_MAGE_SCHOOLS, balanceSchools: true, choicesLabel: 'Choose mage schools' })),
   [n('winter_curriculum', 'Spell Relay', 'A primary spell hit invites one nearby mage to reply with its own primary at 45% power. Each recipient can reply once per 2 seconds. A cast invites only one reply, and replies cannot relay.',
     undefined, arts({ relay: { range: 420, cooldown: 2, power: 0.45 } })),
     n('deep_winter', 'Concordant Souls', 'A same-school relay wards both mages for 12% of their maximum life for 4 seconds. Each mage holds one such ward.',

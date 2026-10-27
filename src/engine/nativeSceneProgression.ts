@@ -787,7 +787,7 @@ export function sceneDismissSummonToggle(nativeHost:NativeSceneProgressionHost,o
 
 export function sceneClearSummonReleaseFields(nativeHost:NativeSceneProgressionHost,owner: Actor, inst: SkillInstance): void {
     const d = instanceDelivery(inst);
-    if (d.type !== 'summon' || (!d.strikeRelease && !d.arts)) return;
+    if (d.type !== 'summon' || (!d.strikeRelease && !d.arts && !d.cohort)) return;
     const payloads = [...nativeHost.projectiles, ...nativeHost.zones, ...nativeHost.pendingRepeats, ...nativeHost.pendingFuses,
       ...nativeHost.pendingSalvos, ...nativeHost.pendingSteps, ...nativeHost.pendingFollowUps];
     const bodies = new Set([...nativeHost.actors, ...payloads.map(p => p.caster)]);

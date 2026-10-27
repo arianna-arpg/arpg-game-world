@@ -40,10 +40,10 @@ try{
     }
   }
   {
-    const {w,p,inst}=setup('summon_skeleton',['grave_phalanx','interlocking_shields','barbed_lattice','oath_banner']);
+    const {w,p,inst}=setup('summon_skeleton',['grave_phalanx','barbed_lattice','interlocking_shields','oath_banner']);
     p.sheet.setSource('spikes',[mod('thorns','flat',40)]);const armor=p.sheet.get('armor');cast(w,inst);step(w,0.3);
-    const a=crew(w,inst)[0];check('phalanx guards and grants its banner',a.guardMode&&a.activeAuras.has('sentinel_banner')&&p.sheet.get('armor')>armor);
-    check('barbed phalanx inherits Thorns into strikes',a.sheet.get('thorns')===19&&a.sheet.get('thornsToHit')===0.5);
+    const a=crew(w,inst)[0];check('phalanx guards and learns its banner',a.guardMode&&!!a.cohortState?.kit.some(s=>s.def.id==='court_oath_standard'));
+    check('barbed phalanx inherits Thorns for its reprisal',a.sheet.get('thorns')===14&&!!a.cohortState?.kit.some(s=>s.def.id==='court_reprisal'));
     const foe=dummy(w,a,50);let challenges=0;SIM_TAP.current={onCast:(actor,s)=>{if(actor===a&&s.def.id==='court_challenge')challenges++;}};
     for(let i=0;i<240&&!foe.statuses.some(s=>s.id==='taunted');i++){updateAI(a,w,1/60);w.update(1/60);}SIM_TAP.current=null;
     check('sentinel actually challenges and taunts toward itself',challenges>0&&foe.statuses.some(s=>s.id==='taunted'&&s.casterId===a.id));
@@ -52,14 +52,14 @@ try{
   }
   {
     const {w,inst}=setup('summon_skeleton',['grave_phalanx','veteran_watch','last_watch']);cast(w,inst);const parent=crew(w,inst)[0];w.kill(parent,false,w.player);
-    const heirs=crew(w,inst);check('Last Watch leaves one temporary smaller sentinel',heirs.length===1&&!!heirs[0].summonOffspring&&heirs[0].radius<parent.radius&&heirs[0].lifespan>0);
+    const heirs=crew(w,inst);check('Last Watch leaves one mobile spectral sentinel',heirs.length===1&&!!heirs[0].summonOffspring&&!!heirs[0].spectralVeil&&heirs[0].radius===parent.radius&&heirs[0].lifespan>0&&heirs[0].sheet.get('moveSpeed')>0);
     w.kill(heirs[0],false,w.player);check('Last Watch cannot recursively raise heirs',crew(w,inst).length===0);
   }
   {
-    const {w,inst}=setup('summon_skeleton',['ossuary_duelists','line_breakers','relentless_footwork','dueling_pairs']);cast(w,inst);
+    const {w,inst}=setup('summon_skeleton',['ossuary_duelists','line_breakers','relentless_footwork','dueling_pairs']);for(let i=0;i<4;i++)cast(w,inst);
     const a=crew(w,inst)[0],foe=dummy(w,a,130);let lunges=0,hits=0;
     SIM_TAP.current={onCast:(actor,s)=>{if(actor===a&&s.def.id==='court_bone_lunge')lunges++;},onHit:(actor,target,r)=>{if(actor===a&&target===foe&&r.total>0)hits++;}};step(w,7,a);SIM_TAP.current=null;
-    check('duelist pairs are real two-body casts and land their pursuit kit',crew(w,inst).length===2&&lunges>0&&hits>0);
+    check('duelist pairs fill a four-body cap and land their pursuit kit',crew(w,inst).length===4&&lunges>0&&hits>0);
   }
   {
     const {w,inst}=setup('raise_dead',['grave_levy','fresh_draft','mass_graves']);cast(w,inst);

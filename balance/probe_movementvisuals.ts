@@ -17,8 +17,8 @@ let checks = 0;
 const check = (label: string, value: unknown) => { assert.ok(value, label); checks++; console.log('PASS ' + label); };
 const census = Object.values(SKILLS).filter(s => ['dash', 'leap', 'blink', 'carom'].includes(s.delivery.type));
 assert.deepEqual(Object.keys(SKILL_MOVEMENTS).sort(), census.map(s => s.id).sort());
-check('45 movement skills have authored identities', census.length === 45);
-check('all movement compositions differ; unknown keys retain fallback', new Set(Object.values(SKILL_MOVEMENTS).map(p => JSON.stringify(p))).size === 45 && !skillMovementVoice('constructor', 'arrive'));
+check('47 movement skills have authored identities', census.length === 47);
+check('all movement compositions differ; unknown keys retain fallback', new Set(Object.values(SKILL_MOVEMENTS).map(p => JSON.stringify(p))).size === 47 && !skillMovementVoice('constructor', 'arrive'));
 function trace(draw: (ctx: CanvasRenderingContext2D) => void) {
   let depth = 0; const calls: unknown[] = [];
   const ctx = new Proxy({ globalAlpha: 1, lineWidth: 1 } as Record<string, unknown>, {

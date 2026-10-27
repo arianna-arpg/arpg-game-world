@@ -134,6 +134,7 @@ export const WIRE_CFG = {
 
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
+  spectralVeil?: Actor['spectralVeil'];
   summonArts?: Record<string, import('../engine/summonArtsSpec').SummonArtView>;
   bodyActionPose?: import('../engine/bodyAction').BodyActionPose;
   bodyWalkPose?: import('../engine/bodyWalk').BodyWalkPose;
@@ -983,6 +984,7 @@ function actorToW(a: Actor, world: NativeSnapshotHost): ActorW {
   w.bodyActionPose = bodyActionPoseOf(a, world.time);
   w.bodyWalkPose = bodyWalkPoseOf(a, world.time);
   const selfBanks = selfBankCuesOf(a, world.time);
+  if (a.spectralVeil) w.spectralVeil = { ...a.spectralVeil };
   if (a.presenceBadge) w.presenceBadge = { ...a.presenceBadge };
   if (selfBanks.length) w.selfBankCues = selfBanks.map(row => ({ ...row }));
   const poolCues = poolCueRows(a);
@@ -2160,6 +2162,7 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.reactiveCue = aw.reactiveCue ? { ...aw.reactiveCue, volatile: aw.reactiveCue.volatile ? { ...aw.reactiveCue.volatile } : undefined } : undefined;
     a.poolCues = aw.poolCues?.map(row => ({ ...row })) ?? [];
     a.selfBankCues = aw.selfBankCues?.map(row => ({ ...row })) ?? [];
+    a.spectralVeil = aw.spectralVeil ? { ...aw.spectralVeil } : undefined;
     a.presenceBadge = aw.presenceBadge ? { ...aw.presenceBadge } : undefined;
     a.payloadCues = aw.payloadCues?.map(row => ({ ...row, points: row.points?.map(p => ({ ...p })) })) ?? [];
     a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];

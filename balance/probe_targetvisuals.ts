@@ -17,7 +17,7 @@ let checks = 0;
 function check(label: string, ok: unknown) { assert.ok(ok, label); checks++; console.log('PASS ' + label); }
 const targets = Object.values(SKILLS).filter(s => s.delivery.type === 'target');
 assert.deepEqual(Object.keys(SKILL_TARGETS).sort(), targets.map(s => s.id).sort());
-check('every native target delivery has an authored identity', targets.length === 38);
+check('every native target delivery has an authored identity', targets.length === 39);
 check('target compositions are unique', new Set(Object.values(SKILL_TARGETS).map(p => JSON.stringify(p))).size === targets.length);
 check('unknown/prototype IDs retain the generic fallback', !skillTargetVoice('constructor') && !skillRiteVoice('constructor'));
 const supports = Object.values(SUPPORTS).filter(s => s.tether);

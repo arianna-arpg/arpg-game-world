@@ -3121,7 +3121,7 @@ export function validateContent(): void {
   // against the kit's own defs.
   {
     const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns', 'recallImpales', 'aura', 'invocation']);
-    const SUMMON_KEYS = new Set(['arts', 'count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease', 'channelFormation', 'channelFormationRelease']);
+    const SUMMON_KEYS = new Set(['arts', 'cohort', 'count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease', 'channelFormation', 'channelFormationRelease']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);
@@ -3228,6 +3228,8 @@ export function validateContent(): void {
           for (const k of Object.keys(n.over.ground)) if (!(GROUND_TREE_KEYS as readonly string[]).includes(k)) warn(`${at}/${n.id}: unknown ground.${k}`);
           if (n.over.ground.follow !== undefined && n.over.ground.follow !== true) warn(`${at}/${n.id}: ground.follow must be true`);
           for (const [key, mods] of Object.entries(n.over.ground.domain ?? {})) {
+            if (key === 'stackGroup' && typeof mods === 'string' && mods.length) continue;
+            if (!Array.isArray(mods)) { warn(at + '/' + n.id + ': invalid ground.domain.' + key); continue; }
             if (!['allyMods', 'enemyMods', 'minionMods'].includes(key)) warn(`${at}/${n.id}: unknown ground.domain.${key}`);
             for (const m of mods) if (!STAT_DEFS[m.stat] || !Number.isFinite(m.value)) warn(`${at}/${n.id}: invalid ground.domain modifier`);
           }

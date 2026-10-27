@@ -1,4 +1,3 @@
-import { instanceDelivery } from '../engine/skills';
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
@@ -7972,6 +7971,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** Dismiss one skill-tree page, or all currently visible skill-tree pages. */
   closeSkillTree(skillId?: string): void {
+    this.closeChoicePopup();
     const panes = skillId ? [this.skillTreePanes.get(skillId)].filter((p): p is SkillTreePane => !!p) : this.openSkillTreePanes();
     for (const pane of panes) {
       this.inventoryPages.close(`skilltree:${pane.skillId}`);
@@ -8023,6 +8023,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** Re-render one skill's pane, or every open pane (the drawer's beat). */
   refreshSkillTree(skillId?: string): void {
+    this.closeChoicePopup();
     const panes = this.openSkillTreePanes().filter(p => !skillId || p.skillId === skillId);
     for (const pane of panes) this.renderSkillTreePane(pane);
   }
@@ -8113,13 +8114,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       : open
         ? `<span style="color:#8a8678">no path chosen${limbs.length > 1 ? ' — the first point into a limb seals its rivals' : ''}</span>`
         : `<span style="color:#6a6478">the path opens at Lv ${tree.level}</span>`;
-    const summon = instanceDelivery(inst);
-    const schools = summon.type === 'summon' && summon.arts?.balanceSchools ? summon.arts.schools ?? [] : [];
-    const selectedSchools = inst.summonSchools?.length ? inst.summonSchools : schools.map(s => s.id);
-    const schoolControls = schools.length ? '<div class="st-schools" style="margin:8px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span>Conclave schools</span>'
-      + schools.map(s => '<button data-st-school="' + s.id + '" aria-pressed="' + selectedSchools.includes(s.id) + '" '
-        + (discipline ? 'disabled ' : '') + 'style="border-color:' + (selectedSchools.includes(s.id) ? '#d8b86a' : '#4c4458') + '">' + esc(s.name) + '</button>').join('')
-      + '<small>Changing schools dismisses this skill’s current mages.</small></div>' : '';
     const zPct = Math.round(pane.zoom * 100);
     pane.el.innerHTML = `
       ${this.closeGlyphHtml()}<h2 style="color:${def.color}">${esc(skillInstanceName(inst))}
@@ -8135,7 +8129,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span>${pip}${this.empowermentBudgetHtml(inst)}
         <span style="color:#5a5668">·</span>${status}
       </div>
-      ${schoolControls}
       <svg viewBox="${this.skillTreeViewBox(pane)}" class="st-svg"
         style="cursor:var(--cursor-grab, grab);touch-action:none;background:#100e16;border:1px solid #2a2438;border-radius:5px">${edges}${circles}</svg>
       <div style="font-size:10px;color:#6a6478;margin-top:5px">
@@ -8144,20 +8137,56 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
     // Clicks: a lit node spends through the ordinary intent; the drawer
     // (when open) re-renders and cascades back into every open pane.
-    pane.el.querySelectorAll<SVGCircleElement>('.st-node.available').forEach(el => {
+    pane.el.querySelectorAll<SVGCircleElement>('.st-node').forEach(el => {
       el.addEventListener('click', () => {
-        world.requestMeta({ t: 'pickTreeNode', skillId: def.id, nodeId: el.dataset.node! });
+        const node = tree.nodes?.find(n => n.id === el.dataset.node);
+        if (!node || discipline) return;
+        const chosen = inst.treeNodes?.includes(node.id);
+        const choices = node.over?.summon?.arts;
+        if (!el.classList.contains('available') && (!chosen || !choices?.balanceSchools)) return;
+        if (el.classList.contains('available')) world.requestMeta({ t: 'pickTreeNode', skillId: def.id, nodeId: node.id });
         if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
+        if (choices?.balanceSchools && choices.schools?.length) {
+          const anchor = pane.el.querySelector<SVGCircleElement>('[data-node="' + node.id + '"]');
+          if (anchor) this.openSummonChoicePopup(inst, choices, anchor, pane);
+        }
       });
     });
-    pane.el.querySelectorAll<HTMLButtonElement>('[data-st-school]').forEach(button => button.addEventListener('click', () => {
-      const id = button.dataset.stSchool!;
-      const choices = selectedSchools.includes(id) ? selectedSchools.filter(s => s !== id) : [...selectedSchools, id];
-      if (!choices.length) return;
-      world.requestMeta({ t: 'setSummonSchools', skillId: def.id, schools: choices });
-      if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
-    }));
     this.wireSkillTreeControls(pane);
+  }
+
+  /** Summon choices use the same anchored picker as passive attributes. */
+  private openSummonChoicePopup(inst: SkillInstance, spec: import('../engine/summonArtsSpec').SummonArtsSpec, el: SVGCircleElement, pane: SkillTreePane): void {
+    this.closeChoicePopup();
+    const schools = spec.schools ?? [], selected = new Set(inst.summonSchools?.length ? inst.summonSchools : schools.map(s => s.id));
+    const pop = document.createElement('div'); pop.className = 'choice-popup'; pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', spec.choicesLabel ?? 'Choose schools');
+    pop.innerHTML = '<div class="choice-head">' + esc(spec.choicesLabel ?? 'Choose schools') + '<span class="choice-count">Choose one or more. Changes dismiss this skill’s current minions.</span></div>'
+      + schools.map(s => '<button class="choice-opt" data-st-school="' + s.id + '"><span class="opt-name">' + esc(s.name) + '</span></button>').join('')
+      + '<button class="choice-opt" data-school-apply>Apply choices</button><button class="choice-opt" data-school-close>Close</button>';
+    const paint = () => {
+      pop.querySelectorAll<HTMLButtonElement>('[data-st-school]').forEach(b => { const on = selected.has(b.dataset.stSchool!); b.setAttribute('aria-pressed', String(on)); b.classList.toggle('chosen', on); });
+      pop.querySelector<HTMLButtonElement>('[data-school-apply]')!.disabled = !selected.size;
+    };
+    pop.querySelectorAll<HTMLButtonElement>('[data-st-school]').forEach(b => b.addEventListener('click', () => {
+      const id = b.dataset.stSchool!; if (selected.has(id)) selected.delete(id); else selected.add(id); paint();
+    }));
+    pop.querySelector('[data-school-apply]')!.addEventListener('click', () => {
+      if (!selected.size) return;
+      this.getWorld().requestMeta({ t: 'setSummonSchools', skillId: inst.def.id, schools: [...selected] });
+      this.closeChoicePopup();
+      if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
+    });
+    pop.querySelector('[data-school-close]')!.addEventListener('click', () => this.closeChoicePopup());
+    pop.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.closeChoicePopup(); } });
+    document.body.appendChild(pop); paint();
+    const r = el.getBoundingClientRect(), p = pop.getBoundingClientRect();
+    pop.style.left = Math.max(8, Math.min(window.innerWidth - p.width - 8, r.left + r.width / 2 - p.width / 2)) + 'px';
+    pop.style.top = Math.max(8, Math.min(window.innerHeight - p.height - 8, r.top - p.height - 10)) + 'px';
+    this.choicePopup = pop;
+    const dismiss = (event: PointerEvent) => { if (this.choicePopup === pop && !pop.contains(event.target as Node)) this.closeChoicePopup(); };
+    setTimeout(() => { if (this.choicePopup === pop) { window.addEventListener('pointerdown', dismiss, true); this.choicePopupDismiss = dismiss; } }, 0);
+    pop.querySelector<HTMLButtonElement>('[data-st-school]')?.focus();
   }
 
   /** A pane's viewBox from its graph's fitted box + its live zoom/pan,
@@ -8183,6 +8212,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const svg = pane.el.querySelector<SVGSVGElement>('.st-svg');
     if (!svg) return;
     const apply = (): void => {
+      this.closeChoicePopup();
       svg.setAttribute('viewBox', this.skillTreeViewBox(pane));
       const lbl = pane.el.querySelector<HTMLElement>('[data-stz="reset"]');
       if (lbl) lbl.textContent = `${Math.round(pane.zoom * 100)}%`;
@@ -8207,7 +8237,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       onClick: (e) => {
         // THE REACH: the same leeway the passive tree gives.
         const el = this.reachNode(svg, '.st-node', e);
-        if (el?.classList.contains('available')) el.dispatchEvent(new MouseEvent('click', { bubbles: false }));
+        el?.dispatchEvent(new MouseEvent('click', { bubbles: false }));
       },
     });
   }
@@ -8231,6 +8261,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (node.description) lines.push(node.description);
     const over = node.over;
     const summonTree = over?.summon;
+    if (have && summonTree?.arts?.balanceSchools) {
+      const selected = summonTree.arts.schools?.filter(s => !inst.summonSchools?.length || inst.summonSchools.includes(s.id));
+      if (selected?.length) lines.push('Selected: ' + selected.map(s => s.name).join(', ') + '. Click to change.');
+    }
     if (summonTree?.count !== undefined) lines.push(`${summonTree.count} summoned per birth`);
     if (summonTree?.maxActive !== undefined) lines.push(`base active cap ${summonTree.maxActive}`);
     if (summonTree?.duration !== undefined) lines.push(summonTree.duration ? `base lifespan ${summonTree.duration}s` : 'no lifespan limit');

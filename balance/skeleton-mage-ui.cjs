@@ -12,7 +12,7 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 1400, height: 1000, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const errors = []; win.webContents.on('console-message', (_event, level, message) => { if (level >= 3) errors.push(message); });
   const run = code => win.webContents.executeJavaScript(code);
-  const capture = async name => { await wait(150); fs.writeFileSync(path.join(dir, name + '.png'), (await win.webContents.capturePage()).toPNG()); };
+  const capture = async name => { await run('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))'); await wait(150); try { fs.writeFileSync(path.join(dir, name + '.png'), (await win.webContents.capturePage()).toPNG()); } catch(error) { throw new Error('Capture failed: '+name,{cause:error}); } };
   try {
     await win.loadURL(server.url); await wait(500);
     await run("(()=>{__game.account().ledger.prologue_lived=1;__game.devStartRun('necromancer');__game.ui.hideAll();__game.devGrantSkill('summon_skeleton_mage',20,0);const w=__game.world();w.netMemoryAccess={progression:true,tree:null};__game.ui.openSkillTree('summon_skeleton_mage');__game.step(2);})()");
@@ -24,10 +24,13 @@ app.whenReady().then(async () => {
       assert.equal(tree.labels.flatMap((a,i)=>tree.labels.slice(i+1).filter(b=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y)).length,0);
       await capture('skeleton-mage-tree-'+width);
     }
-    await run("(()=>{for(const id of ['grave_academy','storm_curriculum','rolling_thunder','expanded_faculty']){document.querySelector('#skill-tree-summon_skeleton_mage circle[data-node=\"'+id+'\"]').dispatchEvent(new MouseEvent('click',{bubbles:true}));__game.step(1);}for(const id of ['cold','lightning','chaos']){document.querySelector('[data-st-school=\"'+id+'\"]').click();__game.step(1);}})()");
+    await run("(()=>{for(const id of ['grave_academy','storm_curriculum','rolling_thunder','expanded_faculty']){document.querySelector('#skill-tree-summon_skeleton_mage circle[data-node=\"'+id+'\"]').dispatchEvent(new MouseEvent('click',{bubbles:true}));__game.step(1);}document.querySelector('#skill-tree-summon_skeleton_mage circle[data-node=\"grave_academy\"]').dispatchEvent(new MouseEvent('click',{bubbles:true}));for(const id of ['cold','lightning','chaos']){document.querySelector('[data-st-school=\"'+id+'\"]').click();}})()");
     const chosen=await run("(()=>{const i=__game.world().player.skills[0];return {nodes:i.treeNodes,schools:i.summonSchools,buttons:[...document.querySelectorAll('[data-st-school]')].map(b=>[b.dataset.stSchool,b.getAttribute('aria-pressed')])};})()");
-    assert.equal(chosen.nodes.length,4);assert.deepEqual(chosen.schools,['fire']);assert.equal(chosen.buttons.filter(x=>x[1]==='true').length,1);
+    assert.equal(chosen.nodes.length,4);assert.equal(chosen.schools,undefined);assert.equal(chosen.buttons.filter(x=>x[1]==='true').length,1);
     await capture('skeleton-mage-conclave-schools');
+    await run("document.querySelector('[data-school-apply]').click();__game.step(1)");
+    assert.deepEqual(await run("__game.world().player.skills[0].summonSchools"),['fire']);
+    assert.equal(await run("document.querySelector('.choice-popup')===null"),true);
     win.setContentSize(1400,1000);
     await run("(()=>{__game.ui.hideAll();const w=__game.world(),p=w.player,inst=p.skills[0];w.zoneMap.qa_mage={id:'qa_mage',name:'Ossuary Lessons',level:6,size:{w:1800,h:1300},seed:8642,theme:{floor:'#30343a',grid:'#353940',border:'#444b55',obstacle:'#444',obstacleEdge:'#555',accent:'#829fc2'},layout:[],objective:{kind:'safe'},exits:[],map:{x:9000,y:9000}};w.loadZone('qa_mage');p.pos={x:650,y:650};__game.step(180);const update=w.update.bind(w);w.update=()=>{};w.applyInputs=()=>{};w.walk=null;w.doodads=[];w.markDoodadsChanged();w.devIgnoreSkillAttributes=true;p.sheet.setSource('mage-ui',[{stat:'mana',kind:'flat',value:100000},{stat:'life',kind:'flat',value:100000}]);p.fillResources();const aim={x:p.pos.x+260,y:p.pos.y};const advance=seconds=>{for(let t=0;t<seconds;t+=1/60)update(1/60);};const start=nodes=>{w.summonArts.clear();p.casting=null;p.cooldowns.clear();p.useLock=0;p.fillResources();w.actors=[p];w.projectiles=[];w.zones=[];w.flashes=[];inst.treeNodes=nodes;delete inst.summonSchools;w.executeSkill(p,inst,aim);};window.__mageQA={w,p,inst,aim,advance,start};start(['lich_ascendant','fused_intellect','winter_crown','storm_crown']);const lich=w.actors.find(a=>a.owner===p);lich.pos={x:p.pos.x+90,y:p.pos.y};w.executeSkill(lich,lich.skills.find(s=>s?.def.id==='skeletal_grand_rite'),aim);advance(.8);__game.step(1);})()");
     const ritual=await run("(()=>{const q=__mageQA;return {lich:q.w.actors.filter(a=>!a.dead&&a.defId==='ossuary_lich').length,fields:q.w.zones.map(z=>z.inst.def.id),face:q.w.slotFaceOf(q.p,q.inst).id};})()");

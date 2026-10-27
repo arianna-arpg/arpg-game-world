@@ -931,6 +931,8 @@ export function updateAI(actor: Actor, world: NativeSceneAIHost, dt: number): vo
     }
   }
 
+  if (actor.cohortState && world.cohortArts?.act(actor, target, dt, point => moveToward(actor, world, point, dt))) return;
+
   // Minions with nothing to fight heel back to their owner. Guard-stance
   // minions (Meat Shield) keep a SHORT leash — they disengage anything that
   // would drag them off their master's flank. An ORDERED quarry is exempt

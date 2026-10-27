@@ -28,6 +28,9 @@ const p = (motif: BurstMotif, motion: SkillBurstProfile['motion'], count: number
  * Related skills share materials but vary silhouette, motion and counter-shape.
  * Other deliveries retain their existing art until their own authored pass. */
 export const SKILL_BURSTS: Readonly<Record<string, SkillBurstProfile>> = {
+  court_shield_contact: p('shields','out',3,'teeth'),
+  court_relief_pulse: p('petals','out',4,'shields'),
+  court_frost_ring: p('ice','out',5,'blades',1),
   skeletal_nova_fire: p('flame', 'out', 9, 'teeth', 2),
   skeletal_nova_cold: p('ice', 'out', 9, 'teeth', 2),
   skeletal_nova_lightning: p('sparks', 'out', 9, 'teeth', 2),

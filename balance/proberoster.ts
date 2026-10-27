@@ -65,6 +65,7 @@ export type ProbeRow = ProbeInvocation & (
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_nativecollisionshadow.ts', status: 'green', tier: 'fast', why: 'Real retained native actor frames stop collision jumps, and furniture navigation leaves authoritative floors intact.' },
+  { probe: 'probe_skeletonwarrior.ts', status: 'green', tier: 'fast', why: 'Four-point infantry trees, coordinated commands, attributed interception, spectral heirs, Assassin choices and per-element ability supports' },
   { probe: 'probe_skeletonmage.ts', status: 'green', tier: 'fast', why: 'Commanded rites, phylactery reconstruction, owner spell echoes, saved school choices, relay provenance and bounded signature recovery' },
   { probe: 'probe_skeletonarcher.ts', status: 'green', tier: 'fast', why: 'Independent wounds, channel formations, full-cap releases, mortar payloads, crew support routing and elemental mage arts' },
   { probe: 'probe_collisionsweep.ts', status: 'green', tier: 'fast', why: 'Continuous furniture contact, real knockback, layer gates, phasing and seeded cluster movement; collision_shadow regression.' },

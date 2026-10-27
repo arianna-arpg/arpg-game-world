@@ -49,6 +49,7 @@ seatText(by: Actor | null | undefined, at: Vec2, text: string, color: string, si
 creditFloat(by: Actor | null | undefined, seatId?: string | null): void;
 }
 export interface NativeSceneRestorationHost extends NativeSceneRestorationApi {
+ readonly cohortArts?:Pick<World['cohortArts'],'heal'>;
  showSkillArrival:World['showSkillArrival'];
  readonly actors:World['actors'];readonly flashes:World['flashes'];readonly texts:World['texts'];readonly tethers:World['tethers'];
  readonly partyRows:World['partyRows'];readonly seats:World['seats'];text:World['text'];seatOfRoot:World['seatOfRoot'];
@@ -152,9 +153,10 @@ export function sceneApplyHeal(host:NativeSceneRestorationHost,
     if (target.dead || target.downed || (fx.excludeCaster && target === caster)) return 0;
     const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
-    const raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
+    let raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
       * caster.sheet.get('healPower', tags, extra) * mult
       * host.critMendMult(caster, inst, quiet ? undefined : target.pos);
+    raw = host.cohortArts?.heal(caster, inst, target, raw) ?? raw;
     if (raw <= 0) return 0;
     // HEAL-OVER-TIME conversion (Mending Echoes): the direct mend POURS
     // instead — total × factor over the graft's seconds, riding the
