@@ -98,9 +98,9 @@ export class ContainerPane {
       const board = containerBoard(c)!;
       const n = this.held(c.id).length;
       const reliquaryLesson = c.id === 'reliquary' && this.host.world().reliquaryLesson();
-      return `<button data-containerflap="${esc(c.id)}" class="build-ribbon" aria-expanded="${this.isOpen(c.id)}"
+      return `<button data-containerflap="${esc(c.id)}" class="build-ribbon ${reliquaryLesson ? 'tut-glow' : ''}" aria-expanded="${this.isOpen(c.id)}"
           aria-controls="${containerPanelId(c.id)}" title="${esc(c.blurb)}">
-          <span class="build-ribbon-label">${c.glyph} ${esc(c.label.toUpperCase())}${reliquaryLesson ? ' · LESSON' : ''}</span>
+          <span class="build-ribbon-label">${c.glyph} ${esc(c.label.toUpperCase())}${reliquaryLesson ? '<span class="build-ribbon-hint"> · LESSON</span>' : ''}</span>
           <span class="build-ribbon-count" title="${n} seated of ${board.cells} open seats">${n}/${board.cells}</span>
         </button>`;
     }).join('');

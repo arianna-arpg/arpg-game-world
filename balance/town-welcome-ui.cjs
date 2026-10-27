@@ -40,7 +40,25 @@ app.whenReady().then(async () => {
     await js('document.querySelector(".dialogue-next").click()'); await capture('mireille');
     box = await js('townQA.key("Escape")'); assert.equal(box.open, false);
     box = await js('townQA.run(3,townQA.point(120))'); assert.equal(box.open, false);
+    // The folio must retain a distant call-out while real movement is held.
+    // Ordinary conversation/service reach remains unavailable at the road.
+    box = await js(`(() => {
+      const q=townQA,w=q.w;
+      delete w.ledger['dialogue_seen:mireille_road_welcome']; w.npcDialogues.leaveZone();
+      q.run(3,q.point(410)); q.run(3,q.point(120));
+      const speaker=w.actors.find(a=>a.defId==='townsfolk_innkeep');
+      if(w.npcDialogueReachable(speaker.id))throw Error('Call-out fixture must be outside normal conversation range');
+      for(const key of ['d','w','a','s']) {
+        window.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true}));
+        for(let i=0;i<12;i++) {__game.step(1); if(!q.box().open)throw Error('Call-out flickered while holding '+key);}
+        window.dispatchEvent(new KeyboardEvent('keyup',{key,bubbles:true}));
+      }
+      if(w.localSeat.lastMovedAt<=0)throw Error('Movement input never reached the hero');
+      if(w.npcDialogueReachable(speaker.id))throw Error('Reading the invitation granted distant service access');
+      return q.box();
+    })()`); assert.equal(box.open,true); await capture('mireille-moving');
     // Re-arm the fixture to test departure while the invitation is still open.
+    await js('townQA.key("Escape")');
     box = await js('delete townQA.w.ledger["dialogue_seen:mireille_road_welcome"];townQA.w.npcDialogues.leaveZone();townQA.run(3,townQA.point(410));townQA.run(3,townQA.point(120))');
     assert.equal(box.open, true);
     // Trigger the ordinary exit by actually stepping inside its travel radius.

@@ -11,7 +11,7 @@ app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
 app.whenReady().then(async () => {
   const timeout = setTimeout(() => { console.error('Inventory UI timed out'); app.exit(1); }, 60000);
-  const server = await startGameServer({ root: path.resolve(__dirname, '../dist'),
+  const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'),
     savesDir: path.join(dir, `inventory-ui-saves-${process.pid}`) });
   const win = new BrowserWindow({ show: false, width: 1400, height: 500,
     webPreferences: { offscreen: true, backgroundThrottling: false } });
@@ -68,17 +68,23 @@ app.whenReady().then(async () => {
       levelButton.click();
       check('drawer listeners fire once after independent updates', skill.level === level + 1);
 
-      const satchel = root.querySelector('[data-satchel]');
+      m.vestiges.kessa = 2; await beat();
+      const satchel = root.querySelector('[data-vestige-satchel]');
       satchel.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 91, button: 0, buttons: 1 }));
       const third = item(); drop(third); await beat();
       check('automatic changes defer during a pointer press', m.items.includes(third)
         && !tile(third.uid) && satchel.isConnected);
       window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 91, button: 0 }));
       satchel.click(); await beat();
-      check('release catches up and the original button still works', !!tile(third.uid) && ui.satchelOpen);
+      check('release catches up and the original button still works', !!tile(third.uid)
+        && !!root.querySelector('[data-drag="vestige:kessa"]'));
+      root.querySelector('[data-vestige-satchel]').click();
       const essence = Object.keys(m.essences)[0];
       m.essences[essence] = 4321; await beat();
-      check('satchel reflects external wallet changes', root.textContent.includes('4321'));
+      check('header reflects external wallet changes without opening a satchel',
+        root.querySelector('[data-inventory-essence="' + essence + '"]')?.textContent.includes('4321'));
+      m.essences[essence] = 0; await beat();
+      check('header hides empty essence balances', !root.querySelector('[data-inventory-essence="' + essence + '"]'));
 
       const oldPosition = { ...w.player.pos };
       const smith = w.actors.find(a => a.defId === 'townsfolk_smith');
@@ -193,12 +199,17 @@ app.whenReady().then(async () => {
         check(lane + ' right-click on the station cancels too', rightClick(panel)
           && !tile(first.uid).hasAttribute('data-salv-uid'));
       }
-      for (const policy of ['step', 'sweep', 'sweepKeepBag']) {
+      const guestDock = guest.couch;
+      for (const couch of [false, true]) for (const lane of ['sell', 'break']) for (const policy of ['step', 'sweep', 'sweepKeepBag']) {
+        guest.couch = couch ? guestDock : undefined;
         __game.settings().escapeCloses = policy;
-        prepare('sell'); escape();
-        check('Escape disarms before ' + policy + ' closes panels', ui.inventoryOpen && ui.vendorOpen
-          && !ui.escapeMenuOpen && !tile(first.uid).hasAttribute('data-salv-uid'));
+        const panel = prepare(lane), before = intents.length;
+        escape();
+        check('Escape disarms ' + lane + ' before ' + policy + ' closes panels (couch=' + couch + ')', ui.inventoryOpen
+          && !panel.classList.contains('hidden') && !ui.escapeMenuOpen
+          && !tile(first.uid).hasAttribute('data-salv-uid') && intents.length === before);
       }
+      guest.couch = guestDock;
       // Real controller polling: B drives PadPointer.onCancel -> the same Escape path.
       prepare('sell');
       __game.fakePad({ axes: [0, 0, 0, 0], buttons: Array(17).fill(0) });
@@ -209,7 +220,10 @@ app.whenReady().then(async () => {
         && !tile(first.uid).hasAttribute('data-salv-uid'));
       __game.fakePad(null);
       __game.settings().escapeCloses = 'sweep'; escape();
-      check('the next Escape resumes normal panel closing', !ui.inventoryOpen && !ui.vendorOpen);
+      check('the next Escape closes the NPC service before player pages', ui.inventoryOpen && !ui.vendorOpen
+        && !ui.escapeMenuOpen && document.getElementById('npc-dialogue').hidden);
+      escape();
+      check('a further Escape resumes the configured player-panel sweep', !ui.inventoryOpen && !ui.vendorOpen);
 
       prepare('sell');
       ui.showSalvage(); bench.querySelector('[data-breaker]').click();

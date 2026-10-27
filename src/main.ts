@@ -1243,6 +1243,8 @@ function handleLocalPanels(): void {
     if (ui.escapeMenuOpen) { ui.hideEscapeMenu(); return; }
     // The couch join overlay dismisses like any dialog — one press, gone.
     if (ui.couchJoinOpen) { closeCouchJoin(); return; }
+    // Cancel armed item actions before closing their service or conversation.
+    if (ui.cancelSalvageMode(world.localSeat.id)) return;
     if (dialogue.open && dialogue.close()) return;
     if (ui.closeNpcFront()) return;
     // COUCH: the hero's Esc walks ITS OWN cascade — a guest's open panels
@@ -1254,7 +1256,6 @@ function handleLocalPanels(): void {
       if (!ui.escCascadeFor(world.localSeat.id)) ui.showEscapeMenu();
       return;
     }
-    if (ui.cancelSalvageMode(world.localSeat.id)) return;
     // THE ESCAPE POLICY (ui/escapeConfig.ts): a sweep mode clears the whole
     // screen in one press — every book through its leaves' own closes, the
     // dialog belt, the ordinary panels (a kept page last) — and pauses only
