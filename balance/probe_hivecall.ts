@@ -39,7 +39,7 @@ function foe(w: World) {
   check('serial contract never accumulates generic respawn timers', !w.pendingRespawns.some(q => q.inst === inst));
   w['dismissSummonToggle'](p, inst.def.id); step(w, 5);
   check('toggle off stops hatching and refunds reservation', roster().length === 0 && p.reservedMana === 0);
-  check('Skeleton Warrior baseline is three', instanceDelivery(makeSkillInstance(SKILLS.summon_skeleton)).type === 'summon' && SKILLS.summon_skeleton.delivery.type === 'summon' && SKILLS.summon_skeleton.delivery.maxActive === 3);
+  check('Skeleton Warrior baseline is two', instanceDelivery(makeSkillInstance(SKILLS.summon_skeleton)).type === 'summon' && SKILLS.summon_skeleton.delivery.type === 'summon' && SKILLS.summon_skeleton.delivery.maxActive === 2);
 }
 {
   const { w, p, inst, roster } = setup(['teeming_contract', 'crowded_cells', 'overflowing_cells', 'sacrificial_chitin']);

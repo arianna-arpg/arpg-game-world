@@ -74,9 +74,9 @@ type Runtime={spawnMinion(a:Actor,i:SkillInstance):Actor|null;resolveHit(a:Actor
   const w=makeSimWorld('warrior',1234),p=w.player,rt=w as unknown as Runtime,i=makeSkillInstance(SKILLS.summon_skeleton);
   p.skills=[i];p.sheet.setSource('cap',[mod('minionMaxCount','flat',1,['minion:skeleton']),mod('mana','flat',1000)]);p.mana=p.maxMana();
   for(let n=0;n<6;n++)rt.spawnMinion(p,i);
-  check('family limit grants a real fourth skeleton, evicting overflow',w.actors.filter(a=>a.owner===p&&!a.dead&&a.sourceSkillId===i.def.id).length===4);
+  check('family limit grants a real third skeleton, evicting overflow',w.actors.filter(a=>a.owner===p&&!a.dead&&a.sourceSkillId===i.def.id).length===3);
   p.sheet.removeSource('cap');rt.spawnMinion(p,i);
-  check('removing family limit restores replacement cap',w.actors.filter(a=>a.owner===p&&!a.dead&&a.sourceSkillId===i.def.id).length===3);
+  check('removing family limit restores replacement cap',w.actors.filter(a=>a.owner===p&&!a.dead&&a.sourceSkillId===i.def.id).length===2);
 }
 // Every relay refuses wrong contexts, observes its clock, and disappears on
 // refund. Both derived-mode preparations are spent by a REAL resolved hit.
