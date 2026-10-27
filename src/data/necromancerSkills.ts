@@ -23,9 +23,9 @@ export const NECROMANCER_SKILLS: Record<string, SkillDef> = {
   ...SKELETON_MAGE_SKILLS,
   summon_skeleton_mage: {
     id: 'summon_skeleton_mage', name: 'Summon Skeleton Mage',
-    description: 'Raise two random elemental mages, up to four. Their tree raises a commanding Lich or a chosen Conclave of mages whose spells cooperate.',
+    description: 'Raise one random elemental mage per cast, up to two. Their tree raises a commanding Lich or a chosen Conclave of mages whose spells cooperate.',
     tags: ['spell', 'summon', 'minion'], color: '#b6a2de', manaCost: 30, cooldown: 3, useTime: 1.1,
-    delivery: { type: 'summon', pool: SKELETAL_MAGE_POOL, count: 2, maxActive: 4, crewRules: [{ monsterIds: ['skeletal_cryomancer'], replace: [{ from: 'skeletal_cold_bolt', to: 'skeletal_ice_spear' }] }] }, effects: [],
+    delivery: { type: 'summon', pool: SKELETAL_MAGE_POOL, count: 1, maxActive: 2, crewRules: [{ monsterIds: ['skeletal_cryomancer'], replace: [{ from: 'skeletal_cold_bolt', to: 'skeletal_ice_spear' }] }] }, effects: [],
     tree: NECROMANCER_TREES.summon_skeleton_mage,
     requirements: { willpower: 14, intelligence: 14 }, minDropLevel: 5,
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.15)] },

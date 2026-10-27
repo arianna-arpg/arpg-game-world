@@ -2139,6 +2139,8 @@ export function validateContent(): void {
   // both carry a SummonDelivery, so both are swept.
   const checkSummonContract = (src: string, d: Delivery | undefined): void => {
     if (d?.type === 'summon') {
+      if (d.capacityMultiple !== undefined && (!Number.isSafeInteger(d.capacityMultiple) || d.capacityMultiple < 1))
+        warn(src + ': summon.capacityMultiple must be a positive whole group size');
       for (const id of [d.monsterId, ...(d.pool ?? []).map(p => p.id)]) {
         if (id && !MONSTERS[id]) warn(`${src}: unknown summon monster '${id}'`);
       }
@@ -3121,7 +3123,7 @@ export function validateContent(): void {
   // against the kit's own defs.
   {
     const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns', 'recallImpales', 'aura', 'invocation']);
-    const SUMMON_KEYS = new Set(['arts', 'cohort', 'count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease', 'channelFormation', 'channelFormationRelease']);
+    const SUMMON_KEYS = new Set(['arts', 'cohort', 'count', 'maxActive', 'capacityMultiple', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease', 'channelFormation', 'channelFormationRelease']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);

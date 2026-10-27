@@ -46,9 +46,15 @@ export class SummonArts {
   choose(owner: Actor, host: SkillInstance, d: SummonDelivery): string | undefined {
     if (!d.arts?.balanceSchools || !d.pool?.length) return;
     const bodies = this.members(owner, host);
-    return [...d.pool].sort((a, b) =>
-      bodies.filter(m => m.defId === a.id).length - bodies.filter(m => m.defId === b.id).length
-      || a.id.localeCompare(b.id))[0].id;
+    const contract = this.contract(owner, host), pool = [...d.pool].sort((a,b) => a.id.localeCompare(b.id));
+    const last = pool.findIndex(row => row.id === contract.lastSchool);
+    let selected = pool[0], least = Infinity;
+    for (let offset = 1; offset <= pool.length; offset++) {
+      const row = pool[(last + offset) % pool.length], count = bodies.filter(m => m.defId === row.id).length;
+      if (count < least) { selected = row; least = count; }
+    }
+    contract.lastSchool = selected.id;
+    return selected.id;
   }
   init(body: Actor, host: SkillInstance): void {
     const a = summonArtsOf(host);

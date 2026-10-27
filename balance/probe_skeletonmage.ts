@@ -32,7 +32,7 @@ function rig(nodes: string[]) {
   p.fillResources();
   const aim = { x: p.pos.x + 280, y: p.pos.y };
   const bodies = () => w.actors.filter(a => !a.dead && a.owner === p && a.summonInst === inst && !a.summonArtAnchor);
-  const raise = () => { w.executeSkill(p, inst, aim); return bodies(); };
+  const raise = (n = 1) => { for(let i = 0; i < n; i++) w.executeSkill(p, inst, aim); return bodies(); };
   return { w, p, inst, aim, bodies, raise };
 }
 function target(w: World, x: number, y: number) {
@@ -47,6 +47,25 @@ function exact(body: ReturnType<typeof target>) {
 }
 const restore = seedGlobalRandom(8642);
 try {
+  // Both ordinary Mage routes summon one body into a two-body roster.
+  for (const nodes of [[], ['grave_academy']]) {
+    const {p,inst,raise,bodies}=rig(nodes),d=instanceDelivery(inst);
+    if(d.type!=='summon')throw Error('summon');
+    check('base/Conclave have two slots and one birth per cast: '+nodes.join(),d.count===1&&summonCapacity(p,inst,d)===2);
+    check('first base/Conclave cast creates one body',raise().length===1);
+    check('second base/Conclave cast fills two slots',raise().length===2);
+    const oldIds=new Set(bodies().map(a=>a.id));raise();
+    check('third base/Conclave cast replaces one body at the cap',bodies().length===2&&bodies().filter(a=>!oldIds.has(a.id)).length===1);
+    p.sheet.setSource('cap-tuning',[mod('minionMaxCount','flat',1)]);
+    check('ordinary capacity investment still adds a Mage slot',raise().length===3);
+  }
+  {
+    const {w,inst,raise}=rig(['grave_academy']),seen=new Set<string>();
+    w.setSummonSchools(inst.def.id,['fire','cold','lightning','chaos']);
+    for(let i=0;i<8;i++)for(const body of raise())seen.add(body.defId!);
+    check('a two-Mage Conclave can still summon every selected school',seen.size===4);
+  }
+
   {
     const { w, p, inst, aim, bodies } = rig(['lich_ascendant']);
     p.sheet.setSource('speed', [mod('castSpeed', 'override', 1), mod('minionMaxCount', 'flat', 20)]);
@@ -174,7 +193,7 @@ try {
     const { w, p, inst, aim, raise, bodies } = rig(['grave_academy', 'winter_curriculum', 'deep_winter', 'plague_curriculum']);
     w.setSummonSchools(inst.def.id, ['fire', 'cold']);
     raise(); raise();
-    check('chosen school balance fills a mixed roster predictably', bodies().length === 4 && bodies().filter(m => m.defId === 'skeletal_pyromancer').length === 2 && bodies().filter(m => m.defId === 'skeletal_cryomancer').length === 2);
+    check('chosen school balance fills a mixed roster predictably', bodies().length === 2 && bodies().filter(m => m.defId === 'skeletal_pyromancer').length === 1 && bodies().filter(m => m.defId === 'skeletal_cryomancer').length === 1);
     const source = bodies().find(m => m.defId === 'skeletal_pyromancer')!;
     for (const m of bodies()) { m.pos = { x: p.pos.x + 25, y: p.pos.y }; exact(m); }
     const foe = target(w, aim.x, aim.y);
@@ -190,7 +209,7 @@ try {
     SIM_TAP.current = null;
     w.setSummonSchools(inst.def.id, ['fire']);
     check('school changes silently retire the old roster', bodies().length === 0);
-    raise();
+    raise(2);
     const [a, b] = bodies(); a.pos = { ...p.pos }; b.pos = { x: p.pos.x + 20, y: p.pos.y }; exact(a);
     w.executeSkill(a, { ...a.skills[0]!, def: { ...a.skills[0]!.def, delivery: { type: 'nova', radius: 500 } } }, foe.pos);
     check('same-school reply wards both participants', a.absorbLayers.has('summonArts:concordance') && b.absorbLayers.has('summonArts:concordance'));
@@ -215,7 +234,7 @@ try {
     const crew = w.summonCrewSkills(inst);
     check(school.name + ' census excludes unselected signatures', Array.isArray(crew) && SKELETON_MAGE_SCHOOLS.filter(s => s !== school).every(s => !crew.some(k => k.id === s.signature || k.id === s.trace)));
     check(school.name + ' fields appear in support census', Array.isArray(crew) && crew.some(s => s.id === school.trace));
-    raise(); const [caster, ally] = bodies(); exact(caster);
+    raise(2); const [caster, ally] = bodies(); exact(caster);
     caster.pos = { ...p.pos }; ally.pos = { x: p.pos.x + 20, y: p.pos.y }; ally.life *= 0.2;
     caster.sheet.setSource('no-regen', [mod('lifeRegen', 'override', 0)]);
     ally.sheet.setSource('no-regen', [mod('lifeRegen', 'override', 0)]);

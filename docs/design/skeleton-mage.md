@@ -2,8 +2,9 @@
 
 Summon Skeleton Mage keeps fifteen nodes, two exclusive trunks, the four-point
 budget, and the existing stable node IDs. Grave Studies remains a four-rank
-damage/haste passive. The unallocated skill still summons two random mages,
-up to four.
+damage/haste passive. The unallocated skill summons one random mage per cast,
+up to two. Grave Conclave keeps that count and cap; ordinary summon-count and
+capacity investments still apply. Lich Ascendant retains its single-Lich limit.
 
 ## Lich Ascendant
 
@@ -49,7 +50,8 @@ the rite autonomously. The command observes that same recovery clock.
 
 The tree offers saved, authoritative multi-select school buttons. At least one
 school remains selected; new summons favor the least represented allowed
-school. Changing schools uses the existing equipment-change discipline and
+school; equally underrepresented schools rotate so a two-body cap cannot starve
+any selected element. Changing schools uses the existing equipment-change discipline and
 silently retires this instance's current bodies and captured effects.
 
 - **Spell Relay** invites one other nearby mage to reply with its own primary

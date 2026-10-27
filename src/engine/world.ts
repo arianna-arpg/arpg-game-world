@@ -31354,7 +31354,7 @@ export class World {
   private hivecallCap(hero: Actor, inst: SkillInstance): number {
     const d = instanceDelivery(inst);
     if (d.type !== 'summon') return 0;
-    const raw = Math.max(1, Math.round(hero.sheet.get('minionMaxCount', skillContextTags(inst), instanceMods(inst), d.maxActive)));
+    const raw = summonCapacity(hero, inst, d);
     const contract = hero.summonToggles.get(inst.def.id);
     const unit = summonReservationUnit(hero, inst, d);
     return contract && unit > 0 ? Math.min(raw, Math.round(contract.reserved / unit)) : raw;
@@ -37159,8 +37159,7 @@ export class World {
           const haul = (targetInfo.corpses ?? [targetInfo.corpse])
             .filter(c => this.corpses.includes(c));
           if (!haul.length) break;
-          const rosterCap = Math.max(1, Math.round(
-            caster.sheet.get('minionMaxCount', tags, extra, d.maxActive)));
+          const rosterCap = summonCapacity(caster, inst, d);
           const standing = (d.poolGroup
             ? this.minionsOfGroup(caster, d.poolGroup)
             : this.minionsOfSkill(caster, inst.def.id)).filter(a => !a.summonOffspring).length;

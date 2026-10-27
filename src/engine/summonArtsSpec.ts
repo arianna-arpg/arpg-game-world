@@ -38,6 +38,8 @@ export interface SummonArtsSpec {
 /** Read-only host presentation for clients that do not simulate minion ownership. */
 export interface SummonArtView { command?: string; ready: boolean; held: boolean; }
 export interface SummonArtContract {
+  /** Fair tie rotation when the selected schools outnumber available slots. */
+  lastSchool?: string;
   recovery: number;
   souls: number[];
   anchor?: Actor;

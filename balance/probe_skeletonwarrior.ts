@@ -6,6 +6,8 @@ import { SUPPORTS } from '../src/data/supports';
 import { SPELLSWORD_SCHOOLS } from '../src/data/skeletonWarriorTree';
 import { instanceDelivery, instanceMetas, instanceMods, skillContextTags, makeSkillInstance, supportFitsInstOrCrew, type SkillInstance } from '../src/engine/skills';
 import { summonCapacity } from '../src/engine/summonContracts';
+import { previewSkill } from '../src/engine/skillPreview';
+import { replenishShape } from '../src/engine/replenishment';
 import { mod } from '../src/engine/stats';
 import { applyHit, landLifeDamage } from '../src/engine/damage';
 import { updateAI } from '../src/engine/ai';
@@ -34,11 +36,56 @@ function target(w:World,x:number,y:number){
 function quiet(a:Actor){a.cooldowns.clear();a.useLock=0;a.casting=null;a.fillResources();}
 const restore=seedGlobalRandom(7318);
 try{
+ // Grouping uses the final modified capacity; unallocated trees retain odd caps.
  {
-  for(const nodes of [[],['grave_phalanx'],['ossuary_duelists']]){
+  const {p,inst,raise,bodies}=rig(['ossuary_duelists','line_breakers','dueling_pairs']);
+  let d=instanceDelivery(inst);
+  if(d.type!=='summon')throw Error('summon');
+  for(const [extra,want] of [[-2,2],[-1,4],[0,4],[1,6],[2,6],[3,8],[4,8]]) {
+   p.sheet.setSource('cap-tuning',[mod('minionMaxCount','flat',extra)]);
+   check('pairs round final capacity upward: extra '+extra,summonCapacity(p,inst,d)===want);
+  }
+  p.sheet.setSource('cap-tuning',[mod('minionMaxCount','increased',.1)]);
+  check('fractional caps group upward without prior nearest-body rounding',summonCapacity(p,inst,d)===6);
+  p.sheet.setSource('cap-tuning',[mod('minionMaxCount','flat',1),mod('minionMaxCount','more',-.5)]);
+  check('multiplicative cap reductions precede pair grouping',summonCapacity(p,inst,d)===4);
+  p.sheet.setSource('cap-tuning',[mod('minionMaxCount','flat',1,['minion:skeleton'])]);
+  check('family-scoped capacity participates in final grouping',summonCapacity(p,inst,d)===6);
+  check('preview and replenishment report the real six-body limit',
+   replenishShape(p,inst,d).cap===6&&previewSkill(p,inst).rows.find(row=>row.key==='minionCap')?.value==='6');
+  check('pair cap investment never grants extra bodies per cast',raise().length===1);
+  raise(5);
+  check('odd cap investment produces six real active warriors',bodies().length===6);
+  const oldIds=new Set(bodies().map(a=>a.id));raise();
+  check('a seventh cast replaces exactly one at the even cap',bodies().length===6&&bodies().filter(a=>!oldIds.has(a.id)).length===1);
+  inst.treeNodes=['ossuary_duelists','line_breakers'];
+  d=instanceDelivery(inst);
+  if(d.type!=='summon')throw Error('summon');
+  p.sheet.setSource('cap-tuning',[mod('minionMaxCount','flat',2)]);
+  check('removing pairs restores an ordinary odd capacity',d.capacityMultiple===undefined&&summonCapacity(p,inst,d)===5);
+ }
+ // A missing or distant partner never blocks ordinary engagement.
+ for(const distant of [false,true]) {
+  const {w,p,raise}=rig(['ossuary_duelists','line_breakers','dueling_pairs']);
+  const bodies=raise(distant?2:1),a=bodies[0];
+  a.pos={x:p.pos.x+160,y:p.pos.y};exact(a);
+  if(distant){bodies[1].pos={x:p.pos.x-200,y:p.pos.y};bodies[1].sheet.setSource('fixed-partner',[mod('moveSpeed','override',0)]);}
+  target(w,p.pos.x+280,p.pos.y);
+  let lunges=0,cuts=0,pincers=0;
+  SIM_TAP.current={onCast:(actor,s)=>{
+   if(actor===a&&s.def.id==='court_bone_lunge')lunges++;
+   if(actor===a&&s.def.id==='court_twin_cut')cuts++;
+   if(s.def.id==='court_pincer_strike')pincers++;
+  }};
+  step(w,4,true);SIM_TAP.current=null;
+  check(distant?'out-of-range pair retains solo engagement':'unpaired Duelist retains solo engagement',lunges>0&&cuts>0&&pincers===0);
+ }
+
+ {
+  for(const nodes of [[],['grave_phalanx'],['ossuary_duelists'],['ossuary_duelists','flensing_edges','merciless_measure'],['ossuary_duelists','line_breakers','relentless_footwork']]){
    const {p,inst,raise}=rig(nodes),d=instanceDelivery(inst);assert.equal(d.type,'summon');if(d.type!=='summon')throw Error();
-   check('base or trunk cap is two: '+nodes.join(','),summonCapacity(p,inst,d)===2);
-   check('one body per summon',raise().length===1);check('third summon preserves the two-body cap',raise(2).length===2);
+   check('base or trunk cap is three: '+nodes.join(','),summonCapacity(p,inst,d)===3);
+   check('one body per summon',raise().length===1);check('fourth summon preserves the three-body cap',raise(3).length===3);
   }
  }
  {
@@ -77,7 +124,7 @@ try{
   w.kill(low,false,enemy);const ghost=bodies().find(a=>a.summonOffspring)!;
   check('combat death raises one mobile spectral heir',!!ghost&&ghost.sheet.get('moveSpeed')>0&&!!ghost.spectralVeil);
   check('spectral heir retains interception and Relief Guard',!!ghost.cohortState&&ghost.activeAuras.has('court_relief_aura'));
-  check('spectral heir is outside the two-body adult cap',raise().filter(a=>!a.summonOffspring).length===2);
+  check('spectral heir is outside the three-body adult cap',raise(2).filter(a=>!a.summonOffspring).length===3);
   const client=makeSimWorld('necromancer',7319);applySnapshot(client,serializeSnapshot(w,0));
   check('spectral overlay survives replication',client.actors.some(a=>a.defId===ghost.defId&&!!a.spectralVeil&&a.spectralVeil.alpha===ghost.spectralVeil?.alpha));
   w.kill(ghost,false,enemy);check('spectral heirs never create recursive heirs',bodies().every(a=>!a.summonOffspring));
@@ -120,7 +167,7 @@ try{
  }
  {
   const {w,p,inst,raise}=rig(['ossuary_duelists','line_breakers','dueling_pairs']);
-  check('pairs add two to the cap while preserving one summon per cast',raise(4).length===4);
+  check('pairs add one to the cap while preserving one summon per cast',raise(4).length===4);
   const d=instanceDelivery(inst);if(d.type!=='summon')throw Error();check('Dueling Pairs resolves cap four',summonCapacity(p,inst,d)===4&&d.count===1);
   const a=raise()[0];a.pos={...p.pos};const foe=target(w,a.pos.x+160,a.pos.y);quiet(a);
   const casts:string[]=[];SIM_TAP.current={onCast:(who,s)=>{if(who===a)casts.push(s.def.id);}};

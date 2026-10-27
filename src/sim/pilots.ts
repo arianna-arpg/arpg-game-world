@@ -18,10 +18,11 @@
 // point: World.applyInputs is the same artery either way.
 // ---------------------------------------------------------------------------
 
+import { summonCapacity } from '../engine/summonContracts';
 import { dist } from '../core/math';
 import type { Actor } from '../engine/actor';
 import type { World } from '../engine/world';
-import { instanceCurseField, instanceMods, instanceTrigger, skillContextTags, socketSpec, type SkillInstance } from '../engine/skills';
+import { instanceCurseField, instanceDelivery, instanceTrigger, socketSpec, type SkillInstance } from '../engine/skills';
 import type { PlayerInput, PlayerInputSource } from '../net/intent';
 import type { PilotSpec } from './types';
 
@@ -356,11 +357,10 @@ class CourtKeeperPilot implements PlayerInputSource {
 
     const slot = this.spec.slot ?? 0;
     const inst = actor.skills[slot];
-    const dv = inst?.def.delivery;
+    const dv = inst ? instanceDelivery(inst) : undefined;
     let pressing = false;
     if (inst && dv && dv.type === 'summon') {
-      const cap = Math.max(1, Math.round(actor.sheet.get(
-        'minionMaxCount', skillContextTags(inst.def), instanceMods(inst), dv.maxActive)));
+      const cap = summonCapacity(actor, inst, dv);
       const court = dv.poolGroup
         ? world.minionsOfGroup(actor, dv.poolGroup).length
         : world.minionsOfSkill(actor, inst.def.id).length;
