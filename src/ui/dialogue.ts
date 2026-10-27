@@ -200,6 +200,14 @@ export class DialogueUI {
   get open(): boolean { return !this.root.hidden && !this.root.classList.contains(FOLIO_SHELVED_CLASS); }
   get choosing(): boolean { return this.open && (this.revealed && this.session.awaitingChoice || !!this.workspace?.choosing); }
 
+  /** Nearby conversations follow reach; distant invitations follow their
+   * authored lifetime. Neither read widens the range of NPC actions. */
+  get engaged(): boolean {
+    const speaker = this.session.reading?.offer.speakerId;
+    return speaker !== undefined && !!this.world
+      && (this.world.npcDialogues.activeCallout()?.a.id === speaker || this.world.npcDialogueReachable(speaker));
+  }
+
   /** Seat before DOM hit-testing as well as after rendering a new page. */
   syncLayout(): void {
     seatDialogue(this.root, this.host.hudTop());

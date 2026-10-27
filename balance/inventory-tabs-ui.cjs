@@ -10,7 +10,7 @@ app.setPath('userData', path.join(dir, `inventory-tabs-profile-${process.pid}`))
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const timer = setTimeout(() => { console.error('Inventory tabs timed out'); app.exit(1); }, 55000);
-  const server = await startGameServer({ root: path.resolve(__dirname, '../dist'),
+  const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'),
     savesDir: path.join(dir, `inventory-tabs-saves-${process.pid}`) });
   const win = new BrowserWindow({ show: false, width: 1400, height: 1000,
     webPreferences: { offscreen: true, backgroundThrottling: false } });
