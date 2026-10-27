@@ -20,7 +20,10 @@ Summon Skeleton Archer still raises one permanent archer, up to two.
   an ordinary summon still takes one second and has its native 2.5-second
   cooldown. `SKELETAL_FORMATION_TUNING` owns the pace and price together.
   Archers occupy alternating flanks and fire in the caster's facing, even
-  without a target. They use ordinary minion attack speed and skill cooldowns.
+  without a target. Each fires its primary immediately on arrival and gains 50%
+  more attack speed while channeling (one-third shorter attack casts). The
+  arrival shot pays an accelerated attack recovery beat and honors compatible
+  component supports. Ordinary skill cooldowns remain in force.
   The channel is immobile by default and has no time limit; its mana cost is
   97% lower per paid beat (rounded up to 1 mana before other investment),
   keeping baseline sustained drain near its previous level: 4 mana per second

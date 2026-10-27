@@ -1,4 +1,5 @@
 import type {NativeSnapshotHost} from './nativeSnapshotHost';
+import { instanceDelivery } from '../engine/skills';
 import { empowermentRank, skillInstanceName } from '../engine/skillEmpowerment';
 import { afflictionPressureOf } from '../engine/afflictionPressure';
 import { armedStatusCues } from '../engine/armedCues';
@@ -15,7 +16,7 @@ import { meleeReachCueOf } from '../engine/meleeReach';
 import type { TitanScenePiece } from '../engine/titans';
 import { cosmeticStyle, COSMETIC_PROJECTILES } from '../data/cosmeticStyles';
 import { cosmeticLoadoutFor, cosmeticSummonSkill, cosmeticSkillPaint, sanitizeCosmeticLoadout } from '../meta/cosmetics';
-import { cloneSkillFieldVisual, type SkillFieldVisual } from '../engine/skillFieldVisual';
+import { skillFieldVisual, cloneSkillFieldVisual, type SkillFieldVisual } from '../engine/skillFieldVisual';
 import { skillTetherVisual } from '../engine/skillTetherVisual';
 import { cloneLightningTrace, type LightningTrace } from '../engine/lightningVisual';
 import { cloneMovementTrail, type MovementTrail } from '../engine/skillMovementVisual';
@@ -133,6 +134,7 @@ export const WIRE_CFG = {
 
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
+  summonArts?: Record<string, import('../engine/summonArtsSpec').SummonArtView>;
   bodyActionPose?: import('../engine/bodyAction').BodyActionPose;
   bodyWalkPose?: import('../engine/bodyWalk').BodyWalkPose;
   selfBankCues?: SelfBankCue[];
@@ -276,7 +278,7 @@ export interface ActorW {
 /** `bk` = THE BANK READ (StatusDef.bank — ActiveStatus.bankFrac, 0..1 at
  *  two decimals): the derived scalar the body FX scale by (the tells-wire
  *  idiom — never the bank's source numbers). Absent = no bank worn. */
-export interface StatusW { id: string; stacks: number; bk?: number; dot?: 1; rem?: number; statusDuration?: number; }
+export interface StatusW { visual?: string; id: string; stacks: number; bk?: number; dot?: 1; rem?: number; statusDuration?: number; }
 export interface AuraW { c: string; r: number; sh: number; skillId?: string; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW { parryCue?: number;
@@ -480,7 +482,7 @@ export interface SupportInstW { id: string; lvl: number; lk?: 1; }
  *  when unpicked (the sparse idiom); the client rehydrates through
  *  validTreeNodes so its tooltip/pip/panel read the same truth the host
  *  spends (orphans from a version-skewed host drop with a note). */
-export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; rp?: 1; triggerOff?: boolean; empowermentRank?: number; }
+export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; schools?: string[]; rp?: 1; triggerOff?: boolean; empowermentRank?: number; }
 /** The client OWN-seat build: enough to render the char-sheet / skill-book / tree
  *  and re-derive the stat sheet (recalcSeat) on the client. */
 export interface SeatMetaW {
@@ -545,6 +547,7 @@ const skillInstW = (s: SkillInstance): SkillInstW => ({
   g: s.granted || undefined,
   lk: s.locked ? 1 : undefined,
   tn: s.treeNodes?.length ? [...s.treeNodes] : undefined,
+  schools: s.summonSchools?.length ? [...s.summonSchools] : undefined,
   rp: s.replenishmentPaused ? 1 : undefined,
   triggerOff: s.state?.triggerOff,
 });
@@ -620,6 +623,11 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
   // Untrusted wire → the one validation seam (structure + budget), so the
   // client's panels can never render a state the host would refuse.
   if (w.tn?.length) inst.treeNodes = validTreeNodes(def, w.tn, w.lvl, inst);
+  const summon = instanceDelivery(inst);
+  if (Array.isArray(w.schools) && summon.type === 'summon' && summon.arts?.schools) {
+    const selected = summon.arts.schools.filter(row => w.schools!.includes(row.id)).map(row => row.id);
+    if (selected.length) inst.summonSchools = selected;
+  }
   if (typeof w.triggerOff === 'boolean') (inst.state ??= {}).triggerOff = w.triggerOff;
   if (w.rp === 1 && replenishingDelivery(inst)?.replenish?.toggle) inst.replenishmentPaused = true;
   return inst;
@@ -897,6 +905,7 @@ function actorToW(a: Actor, world: NativeSnapshotHost): ActorW {
   const w: ActorW = {
     id: a.id, p: v2(a.pos), f: a.facing, r: a.radius, c: a.color, sh: a.shape,
     team: a.team, name: a.name,
+    summonArts: world.summonArts?.presentation(a),
     life: Math.max(0, Math.round(a.life)), maxLife: Math.round(a.maxLife()),
     es: Math.round(a.es), maxEs: Math.round(a.maxEs()),
     hf: a.hitFlash, downed: a.downed, dead: a.dead, mn: a.isMinion(), passive: a.passive, ut: a.untargetable,
@@ -1028,7 +1037,7 @@ function actorToW(a: Actor, world: NativeSnapshotHost): ActorW {
   }
   if (a.absorbTotal > 0) w.ab = Math.round(a.absorbTotal);
   if (a.statuses.length) {
-    w.st = a.statuses.map(s => ({ id: s.id, stacks: s.stacks,
+    w.st = a.statuses.map(s => ({ visual: s.visual, id: s.id, stacks: s.stacks,
       ...(Number.isFinite(s.statusDuration ?? s.total) ? { statusDuration: s.statusDuration ?? s.total } : {}),
       ...(Number.isFinite(s.remaining) ? { rem: Math.ceil(Math.max(0, s.remaining) * 10) / 10 } : {}),
       ...(s.dps > 0 ? { dot: 1 as const } : {}),
@@ -1196,7 +1205,8 @@ export function serializeSnapshot(world: NativeSnapshotHost, tick: number): Stat
     })),
     actors: world.actors.filter(a => (!a.dead || a.isPlayerKind()) && !world.seatOf(a)?.keeper) // keeperSeat: unseen, unshipped
       .map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
-    projectiles: world.projectiles.map(p => ({ tier: p.tier ?? 0, skillId: p.inst?.def.id ?? p.skillVisualId, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile,
+    skillFields: world.zones.map(z => skillFieldVisual(z, world.time)),
+    projectiles: world.projectiles.map(p => ({ tier: p.tier ?? 0, skillId: p.skillVisualId ?? p.inst?.def.id, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile,
       ...flightOf(p, world.time) })), // THE WIRE'S EYES: the flight's wire id + velocity
     tethers: world.tethers.map(t => {
       const v = skillTetherVisual(t);
@@ -2092,6 +2102,7 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.aims = aw.aims !== false; // absent = aims (older hosts, ordinary bodies)
     a.wane = aw.wn ?? 0;
     a.owner = aw.mn ? MINION_OWNER : undefined;
+    a.remoteSummonArts = aw.summonArts ? Object.fromEntries(Object.entries(aw.summonArts).map(([id, row]) => [id, { ...row }])) : undefined;
     a.summonShell = aw.ss;
     a.shellGuard = aw.sg ? { ...aw.sg, breathe: aw.sg.breathe ? { ...aw.sg.breathe } : undefined } : undefined;
     a.poiseBroken = aw.pb === true;
@@ -2181,7 +2192,7 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // Reconstruct the FX sub-objects the renderer draws (stand-in nested objects
     // so renderer.ts stays untouched). Absent → cleared → that FX simply skips.
     a.statuses.length = 0;
-    if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), stacks: s.stacks, statusDuration: s.statusDuration, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
+    if (aw.st) for (const s of aw.st) a.statuses.push({ visual: s.visual, id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), stacks: s.stacks, statusDuration: s.statusDuration, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
     // THE SMOOTH SHELL: the own hero's cast row names its skill (CastW.sk), and the stub
     // carries the real instance (ownCastInst), so the shell's replay walks a mobile cast,
     // a guard or a channel at the host's own factor instead of throwing on a bare def.

@@ -1,3 +1,4 @@
+import { FIREBOLT_TREE } from './fireboltTree';
 import { SHIELD_UP_TREE } from './shieldUpTree';
 import { CLEAVE_TREE } from './cleaveTree';
 import type { SkillTreeSpec, TreeBuffPatch } from '../engine/skills';
@@ -31,23 +32,7 @@ export const STARTER_SKILL_TREES: Record<string, SkillTreeSpec> = {
       buff(n('execution_order', 'Execution Order', 'While prepared, attack hits cull enemies below 10% life.'), 'war_cry', { mods: [mod('cullThreshold', 'flat', 0.1, ['attack'])] })],
   ], n('breath_control', 'Breath Control', '15% increased blessing duration.', [mod('effectDuration', 'increased', 0.15)])),
 
-  firebolt: tree([
-    n('ember_satellites', 'Ember Satellites', 'Flame orbs circle their caster instead of flying forward. Cast one additional orb; 20% less damage.', [mod('orbitPower', 'flat', 1), mod('projectileCount', 'flat', 1), mod('damage', 'more', -0.2)]),
-    [n('dense_constellation', 'Dense Constellation', 'Cast one additional orb; 10% less damage.', [mod('projectileCount', 'flat', 1), mod('damage', 'more', -0.1)]),
-      n('passing_embers', 'Passing Embers', 'Orbs pierce two additional enemies.', [mod('pierceCount', 'flat', 2)]),
-      n('broad_embers', 'Broad Embers', '50% increased projectile size and 20% increased damage.', [mod('projectileSize', 'increased', 0.5), mod('damage', 'increased', 0.2)])],
-    [n('searing_orbit', 'Searing Orbit', 'Hits gain 35% additional chance to burn.', [mod('apply_burn', 'flat', 0.35)]),
-      n('clinging_cinders', 'Clinging Cinders', '40% increased fire ailment magnitude and 25% increased duration.', [mod('statusMagnitude', 'increased', 0.4, ['fire']), mod('effectDuration', 'increased', 0.25)]),
-      n('wildfire_sparks', 'Wildfire Sparks', 'Burns spread when their victim dies.', [mod('dotPropagates', 'flat', 1)])],
-  ], [
-    n('cinder_lance', 'Cinder Lance', 'Flame bolts pierce three additional enemies and fly 30% faster; cast 15% more slowly.', [mod('pierceCount', 'flat', 3), mod('projectileSpeed', 'increased', 0.3), mod('castSpeed', 'more', -0.15)]),
-    [n('white_heat', 'White Heat', 'Penetrate 10% fire resistance.', [mod('firePen', 'flat', 0.1)]),
-      n('focused_flame', 'Focused Flame', '30% more damage at 15% more mana cost.', [mod('damage', 'more', 0.3), mod('manaCost', 'more', 0.15)]),
-      n('incandescent_point', 'Incandescent Point', '10% additional critical chance and 30% critical multiplier.', [mod('critChance', 'flat', 0.1), mod('critMulti', 'flat', 0.3)])],
-    [n('slow_combustion', 'Slow Combustion', 'Hits gain 30% additional burn chance and 35% increased fire ailment magnitude.', [mod('apply_burn', 'flat', 0.3), mod('statusMagnitude', 'increased', 0.35, ['fire'])]),
-      n('lasting_cinders', 'Lasting Cinders', '40% increased effect duration.', [mod('effectDuration', 'increased', 0.4)]),
-      n('far_flight', 'Far Flight', '40% increased projectile speed and 20% increased damage.', [mod('projectileSpeed', 'increased', 0.4), mod('damage', 'increased', 0.2)])],
-  ], n('flame_studies', 'Flame Studies', '15% increased fire damage.', [mod('damage', 'increased', 0.15, ['fire'])])),
+  firebolt: FIREBOLT_TREE,
 
   frost_nova: tree([
     n('winter_footprint', 'Winter Footprint', 'Leave an 80-radius cold field for 3 seconds after the nova. It strikes every half-second for 40% skill damage; 20% less damage.', [mod('lingerField', 'flat', 3), mod('damage', 'more', -0.2)]),

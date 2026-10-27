@@ -384,12 +384,14 @@ const RES_STAT: Record<DamageType, string | null> = {
  */
 export function resistValue(
   target: Actor, type: DamageType,
-  pen?: { attacker: Actor; tags?: Set<SkillTag>; extra?: Modifier[] },
+  pen?: { attacker: Actor; tags?: Set<SkillTag>; extra?: Modifier[]; resistanceZero?: DamageType },
 ): number {
   const stat = RES_STAT[type];
   if (!stat) return 0;
   const cap = Math.min(target.sheet.get(stat + 'Max'), DEFENSE_CFG.resistance.hardCap);
-  let res = Math.min(target.sheet.get(stat), cap);
+  let res = pen?.resistanceZero === type
+    ? Math.max(DEFENSE_CFG.resistance.floor, target.sheet.reductionsFromZero(stat))
+    : Math.min(target.sheet.get(stat), cap);
   if (pen) {
     const p = pen.attacker.sheet.get(type + 'Pen', pen.tags, pen.extra);
     if (p > 0) res = Math.max(DEFENSE_CFG.resistance.floor, res - p);
@@ -400,6 +402,7 @@ export function resistValue(
 /** Attacker context threaded into mitigation so victim pools can honour
  *  attacker-side stats (poiseDamage) — absent for caster-less sources. */
 export interface MitigateOpts {
+  resistanceZero?: DamageType;
   armorDamageFloor?: number;
   attacker?: Actor;
   tags?: Set<SkillTag>;
@@ -433,11 +436,15 @@ export function mitigateTyped(
   return mitigatePools(target, mitigateWound(target, amounts, opts), opts);
 }
 
+/** Pure ailment basis: calculate the landed wound with one resistance treated
+ * as zero before reductions. Never spends shields or lands a second hit. */
+export function ailmentWoundBasis(target: Actor, amounts: Partial<Record<DamageType, number>>,
+  attacker: Actor, tags: Set<SkillTag>, extra: Modifier[], resistanceZero?: DamageType): number {
+  return mitigateWound(target, amounts, { attacker, tags, extra, resistanceZero });
+}
+
 /** The PURE half of mitigation: armor/resists per type, the slayer lane,
- *  and the damage-taken multiplier — everything that decides how big the
- *  WOUND is before any pool pays. No rng, no state writes: safe to call
- *  as a preview (the passive block prices its guard against exactly this
- *  number), then the pools half spends against what it returned. */
+ * and damage taken, before defensive pools pay. Safe for previews. */
 function mitigateWound(
   target: Actor, amounts: Partial<Record<DamageType, number>>,
   opts?: MitigateOpts,
@@ -445,7 +452,7 @@ function mitigateWound(
   amounts = receiveDamageAs(target, amounts);
   if (opts?.out) opts.out.receivedAmounts = amounts;
   const pen = opts?.attacker
-    ? { attacker: opts.attacker, tags: opts.tags, extra: opts.extra } : undefined;
+    ? { attacker: opts.attacker, tags: opts.tags, extra: opts.extra, resistanceZero: opts.resistanceZero } : undefined;
   let total = 0;
   for (const type of Object.keys(amounts) as DamageType[]) {
     let dmg = amounts[type]!;

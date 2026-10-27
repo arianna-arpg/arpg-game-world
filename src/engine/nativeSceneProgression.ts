@@ -1,3 +1,4 @@
+import { satelliteItemCount } from './satelliteSpec';
 import {observeNativeCombatStatus} from './nativeCombatRecordObservation';
 import {observeNativeCombatStorage,observeNativeCombatRecord} from './nativeCombatRecordObservation';
 import type {Actor as NativeRecordActor} from './actor';
@@ -230,6 +231,8 @@ export function sceneRecalcSeat(nativeHost:NativeSceneProgressionHost,seat: Seat
       attrs[a] = Math.max(0, Math.round(attrs[a] * (1 + attrsPct[a])));
     }
     m.attrs = attrs;
+    p.sheet.setSource('satelliteEquipment', [mod('satelliteEquipmentCount', 'flat',
+      satelliteItemCount([...gearSheetMods.values(), ...containerPieceMods.values()]))]);
 
     p.setAttributes(attrs);
     p.sheet.setSource('class', m.classDef.innate ?? []);
@@ -784,7 +787,7 @@ export function sceneDismissSummonToggle(nativeHost:NativeSceneProgressionHost,o
 
 export function sceneClearSummonReleaseFields(nativeHost:NativeSceneProgressionHost,owner: Actor, inst: SkillInstance): void {
     const d = instanceDelivery(inst);
-    if (d.type !== 'summon' || !d.strikeRelease) return;
+    if (d.type !== 'summon' || (!d.strikeRelease && !d.arts)) return;
     const payloads = [...nativeHost.projectiles, ...nativeHost.zones, ...nativeHost.pendingRepeats, ...nativeHost.pendingFuses,
       ...nativeHost.pendingSalvos, ...nativeHost.pendingSteps, ...nativeHost.pendingFollowUps];
     const bodies = new Set([...nativeHost.actors, ...payloads.map(p => p.caster)]);
@@ -851,7 +854,7 @@ export function sceneClearTreeFields(nativeHost:NativeSceneProgressionHost,caste
     nativeHost.guardArts.clear(caster, inst);
     nativeHost.attackSequences.clear(caster, inst);
     nativeHost.challenges.clear(caster, inst);
-    const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst || candidate.challengeHost === inst || candidate.guardArtsHost === inst;
+    const ownsTreePayload = (candidate: SkillInstance) => candidate === inst || candidate.invocationHost === inst || candidate.followUpHost === inst || candidate.challengeHost === inst || candidate.guardArtsHost === inst || candidate.projectileHost === inst;
     nativeHost.pendingFollowUps = nativeHost.pendingFollowUps.filter(p => p.caster !== caster || !ownsTreePayload(p.inst));
     caster.primedPours = caster.primedPours.filter(p => p.skillId !== inst.def.id);
     caster.clearTreeChargeClocks(inst);

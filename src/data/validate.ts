@@ -1,3 +1,4 @@
+import { summonArtIds } from '../engine/summonArtsSpec';
 import { deviceTriggerErrors } from '../engine/groundDevices';
 // ---------------------------------------------------------------------------
 // Content validation — cheap cross-checks over the data files, run once at
@@ -33,6 +34,7 @@ import {
   supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
   type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec, AOE_SHAPE, BASH_CFG } from '../engine/skills';
 import { treeGraph, TREE_LAYOUT_CFG } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the fold the tree laws read
+import { projectileArtsErrors } from '../engine/projectileArtsSpec';
 import { attackSequenceErrors } from '../engine/attackSequenceSpec';
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
@@ -2140,6 +2142,17 @@ export function validateContent(): void {
       for (const id of [d.monsterId, ...(d.pool ?? []).map(p => p.id)]) {
         if (id && !MONSTERS[id]) warn(`${src}: unknown summon monster '${id}'`);
       }
+      if (d.arts) {
+        const a = d.arts;
+        for (const id of [...summonArtIds(d), a.command].filter((s): s is string => !!s)) if (!SKILLS[id]) warn(src + ': unknown summon art ' + id);
+        for (const row of a.schools ?? []) {
+          if (!MONSTERS[row.monster] || [row.primary, row.signature, row.trace].some(id => !SKILLS[id])) warn(src + ': invalid summon school ' + row.id);
+        }
+        if (a.reconstruction && !MONSTERS[a.reconstruction.monster]) warn(src + ': unknown reconstruction anchor');
+        for (const value of [a.summonTime, a.echo?.cooldown, a.relay?.cooldown, a.reconstruction?.delay, a.reconstruction?.recovery]) {
+          if (value !== undefined && (!Number.isFinite(value) || value <= 0)) warn(src + ': invalid summon-art timing');
+        }
+      }
       if (d.channelFormation) {
         const f = d.channelFormation;
         if (![f.spacing, f.reach, f.channel.interval].every(v => Number.isFinite(v) && v > 0)
@@ -3108,11 +3121,12 @@ export function validateContent(): void {
   // against the kit's own defs.
   {
     const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns', 'recallImpales', 'aura', 'invocation']);
-    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease', 'channelFormation', 'channelFormationRelease']);
+    const SUMMON_KEYS = new Set(['arts', 'count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease', 'channelFormation', 'channelFormationRelease']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);
     for (const def of Object.values(SKILLS)) {
+      if (def.projectileArts) for (const error of projectileArtsErrors(def.projectileArts, id => !!STATUS_DEFS[id])) warn(`skill ${def.id}: ${error}`);
       const t = def.tree;
       if (!t) continue;
       const at = `skill ${def.id} tree`;
@@ -3238,6 +3252,7 @@ export function validateContent(): void {
           if (raw.some(other => other.id !== n.id && other.trigger && g.nodes.get(other.id)?.limbId === triggerLimb)) warn(`${at}/${n.id}: conflicting trigger identities in one limb`);
         }
         if (n.attackSequence) for (const error of attackSequenceErrors(n.attackSequence)) warn(`${at}/${n.id}: ${error}`);
+        if (n.projectileArts) for (const error of projectileArtsErrors(n.projectileArts, id => !!STATUS_DEFS[id])) warn(`${at}/${n.id}: ${error}`);
         for (const error of invocationTreeErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
         const constructOver = n.over?.construct;
         if (constructOver) {

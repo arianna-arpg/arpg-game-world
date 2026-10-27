@@ -1,3 +1,4 @@
+import { instanceDelivery } from './skills';
 /** Exact pure native bar, wallet and saved-skill reconstruction. */
 import {BAR_SLOTS} from './skills';
 import {ABILITY_ESSENCES,ESSENCE_IDS,type EssenceId} from '../data/essences';
@@ -32,6 +33,7 @@ export interface SavedSocket {
 }
 
 export interface SavedSkill {
+  summonSchools?: string[];
   empowermentRank?: number;
   skillId: string; level: number; rarity: SkillRarity;
   sockets: (SavedSocket | null)[];
@@ -64,6 +66,11 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   // trim) drop with a console note — the attunedForm law. An M0-era save's
   // single rung-1 pick loads as a 1-point spend, costless by construction.
   if (s.treeNodes?.length) inst.treeNodes = validTreeNodes(def, s.treeNodes, s.level, inst);
+  const summon = instanceDelivery(inst);
+  if (Array.isArray(s.summonSchools) && summon.type === 'summon' && summon.arts?.schools) {
+    const selected = summon.arts.schools.filter(row => s.summonSchools!.includes(row.id)).map(row => row.id);
+    if (selected.length) inst.summonSchools = selected;
+  }
   if (s.replenishmentPaused === true && replenishingDelivery(inst)?.replenish?.toggle) inst.replenishmentPaused = true;
   if (s.locked) inst.locked = true; // the keeper's mark (salvageLock) survives
   inst.sockets = s.sockets.map(sock => {

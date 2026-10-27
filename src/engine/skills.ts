@@ -1,3 +1,6 @@
+import { summonArtIds, type SummonArtsSpec, type SummonArtCast } from './summonArtsSpec';
+import { projectileArtsDelivery, type ProjectileArtsSpec } from './projectileArtsSpec';
+import type { ProjectileArtCast } from './projectileArts';
 import { summonScopeTags } from './skillScopes';
 import { empowermentPassive, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { guardArtsOf, type GuardArtsSpec } from './guardArtsSpec';
@@ -440,6 +443,8 @@ export function instanceAim(inst: SkillInstance): AimSpec | undefined {
  *  untouched — byte-identical by construction, zero allocation. The cast
  *  path reads delivery through THIS view (executeSkill's one binding). */
 export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
+  const projectileArts = projectileArtsDelivery(inst);
+  if (projectileArts) return projectileArts;
   const attackSequence = attackSequenceDelivery(inst);
   if (attackSequence) return attackSequence;
   const challenge = challengeDelivery(inst);
@@ -449,6 +454,7 @@ export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
   if (d.type === 'summon' && (over?.summon || d.selectPool?.length)) {
     const summonOver = over?.summon ?? {};
     const resolved = { ...d, ...summonOver };
+    resolved.arts = d.arts || summonOver.arts ? { ...d.arts, ...summonOver.arts } : undefined;
     resolved.crewSkills = union(d.crewSkills, summonOver.crewSkills);
     resolved.crewAuras = union(d.crewAuras, summonOver.crewAuras);
     resolved.crewRules = [...(d.crewRules ?? []), ...[...(summonOver.crewRules ?? [])]
@@ -460,6 +466,10 @@ export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
     if (summonOver.monsterId) delete resolved.pool;
     if (resolved.selectPool?.length && resolved.pool) {
       resolved.pool = resolved.pool.filter(p => resolved.selectPool!.includes(p.id));
+    }
+    if (resolved.arts?.balanceSchools && inst.summonSchools?.length && resolved.pool) {
+      const wanted = resolved.arts.schools?.filter(s => inst.summonSchools!.includes(s.id)).map(s => s.monster) ?? [];
+      if (wanted.length) resolved.pool = resolved.pool.filter(p => wanted.includes(p.id));
     }
     return resolved;
   }
@@ -1775,6 +1785,8 @@ export interface GroundDelivery {
   /** How far the SUCTION reaches, in units (default: the damage radius ×
    *  1.35). An Event Horizon's grip extends well past the disc that kills. */
   pullRadius?: number;
+  /** A persistent hollow center, independent of the inward-fill mechanic. */
+  innerFraction?: number;
   /** Pillar of Flame: the zone starts as an OUTER BAND (this fraction of
    *  the radius is hollow) and fills inward over `fillTime` seconds —
    *  a cage of flame that cooks its way to the center. */
@@ -1953,6 +1965,7 @@ export interface SummonShellSpec {
 }
 
 export interface SummonDelivery {
+  arts?: SummonArtsSpec;
   type: 'summon';
   /** Passive replenishment while seated on a living actor's bar. Free births,
    *  no casts/cast events; interval scales with minionRespawnTime. The ordinary
@@ -1962,7 +1975,7 @@ export interface SummonDelivery {
   replenish?: { interval: number; toggle?: boolean };
   /** A held, growing flank formation. Pulses add bodies without evicting at cap.
    * Its own channel is the canonical cast-mode conversion for every consumer. */
-  channelFormation?: { channel: ChannelSpec; spacing: number; reach: number; emerge?: import('./emerge').EmergeSpec };
+  channelFormation?: { channel: ChannelSpec; spacing: number; reach: number; emerge?: import('./emerge').EmergeSpec; fireOnArrival?: true; attackSpeedMore?: number };
   /** At a full formation, release empowers each body's primary art. */
   channelFormationRelease?: { power: number; size: number };
   /** Fixed minion type — or use `pool` for weighted random selection. */
@@ -4353,6 +4366,7 @@ export type SkillEffect =
 // --- The skill definition ---------------------------------------------------
 
 export interface SkillDef {
+  projectileArts?: ProjectileArtsSpec;
   companionCue?: import('../data/companionCues').CompanionCueSpec | false;
   recoveryCues?: Partial<Record<import('../data/companionCues').RecoveryCueKind, import('../data/companionCues').RecoveryCueSpec | false>>;
   /** Curse-field creation/retirement material; false silences only its transition. */
@@ -5064,6 +5078,7 @@ function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain'
 }
 
 export interface SkillTreeNode {
+  projectileArts?: ProjectileArtsSpec;
   guardArts?: GuardArtsSpec;
   attackSequence?: AttackSequenceSpec;
   /** Complete armed-cast identity; sockets override it. One per exclusive limb. */
@@ -5143,7 +5158,7 @@ export interface SkillTreeNode {
      *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */
     summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'duration' | 'replenish'
-      | 'channelFormation' | 'channelFormationRelease' | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
+      | 'arts' | 'channelFormation' | 'channelFormationRelease' | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
     /** Host tag changes. Crew skills retain their own attack/spell tags. */
     tags?: { add?: SkillTag[]; remove?: SkillTag[] };
     /** delivery.arcDeg replacement (cone/melee deliveries only). */
@@ -5333,6 +5348,7 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
           ? { channel: { ...out.channel, ...over.channel } } : {}),
         ...(out.summon || over.summon
           ? { summon: { ...out.summon, ...over.summon,
+            arts: out.summon?.arts || over.summon?.arts ? { ...out.summon?.arts, ...over.summon?.arts } : undefined,
             selectPool: union(out.summon?.selectPool, over.summon?.selectPool),
             crewSkills: union(out.summon?.crewSkills, over.summon?.crewSkills),
             crewAuras: union(out.summon?.crewAuras, over.summon?.crewAuras),
@@ -5968,6 +5984,15 @@ export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>):
 
 /** A skill as OWNED by an actor: definition + level + socketed supports. */
 export interface SkillInstance {
+  summonSchools?: string[];
+  summonArtCast?: SummonArtCast;
+  summonCommandHost?: SkillInstance;
+  /** Captured projectile disciplines and provenance; never saved. */
+  projectileHost?: SkillInstance;
+  projectileRole?: 'primary' | 'payload';
+  projectileSpec?: ProjectileArtsSpec;
+  projectileCast?: ProjectileArtCast;
+  projectileContact?: { direction: number; depth: number; hits: number[]; power: number };
   guardArtsHost?: SkillInstance;
   guardArtsPayload?: true;
   /** Captured attack-sequence provenance; never persisted. */
@@ -6673,6 +6698,10 @@ export function summonKitIds(d: SummonDelivery, monsterId: string, native: strin
   const rules = (d.crewRules ?? []).filter(r => r.monsterIds.includes(monsterId));
   // Replacements only read the original kit: ordering cannot build replacement chains.
   ids = ids.map(id => rules.flatMap(r => r.replace ?? []).reverse().find(r => r.from === id)?.to ?? id);
+  if (d.arts?.rite) ids.push(d.arts.rite);
+  const school = d.arts?.schools?.find(s => s.monster === monsterId);
+  if (school) { if (ids.length) ids[0] = school.primary; else ids.push(school.primary); }
+  if (d.arts?.lessons && school) ids.push(school.signature);
   return [...new Set([...ids, ...(d.strikeRelease ? [d.strikeRelease.skill] : []), ...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...rules.flatMap(r => r.skills ?? [])])];
 }
 
@@ -6702,13 +6731,17 @@ export function summonCrewOf(
     const def = skill(skillId);
     if (!def) return;
     seen.add(skillId);
-    out.push(def);
+    if (skillId === d.arts?.discordance) {
+      const elements = d.arts.schools?.filter(s => ids.includes(s.monster)).map(s => s.id) ?? [];
+      out.push({ ...def, tags: [...def.tags.filter(t => !['fire', 'cold', 'lightning', 'chaos'].includes(t)), ...elements] });
+    } else out.push(def);
   };
   for (const mid of ids) {
     const mdef = monster(mid);
     if (!mdef) continue;
     for (const sid of summonKitIds(d, mid, [...mdef.skills, ...(mdef.grants ?? []).flatMap(g => g.skill ? [g.skill] : [])])) add(sid);
   }
+  for (const id of summonArtIds(d)) add(id);
   return out.length ? out : null;
 }
 

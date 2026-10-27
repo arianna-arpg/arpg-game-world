@@ -23,6 +23,12 @@ Tutorial scenes cannot feed account nemeses. See `docs/engine/tutorial-isolation
 verify tutorialisolation, scenes, mu, Odyssey checks and all types when changing
 scene departure or nemesis formation/manifestation.
 
+Skeleton Mage's configurable rites, reconstruction, spell echoes and Conclave
+schools are documented in [the Mage design](docs/design/skeleton-mage.md).
+Saved school choices use nativeProgressionMeta; crew support and field cleanup
+retain the native progression adapter. Verify skeletonmage, skeletonarcher,
+Firebolt, current gameplay courses, all types and hidden Mage/Archer UI courses.
+
 Skeleton Archer's independent wound timers, firing squads, mortars and elemental
 mage arts follow main's contracts in `docs/design/skeleton-archer.md`. The
 seamless adapter keeps cleanse timer updates in `nativeSceneRestoration.ts`

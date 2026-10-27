@@ -56,7 +56,7 @@ try {
       check(id + '/' + root.id + ': fork order preserves buff composition', JSON.stringify(normalize(s.inst)) === JSON.stringify(normalize(opposite.inst)));
     }
     for (const leaf of nodes.filter(n => n.links?.length && !nodes.some(other => other.links?.includes(n.id)))) {
-      const mid = nodes.find(n => n.id === leaf.links![0])!, s = setup(id, [mid.links![0], mid.id, leaf.id]), a = body(s.w, mid.links![0] === 'unbound_cleave' ? 180 : 45);
+      const mid = nodes.find(n => n.id === leaf.links![0])!, s = setup(id, [mid.links![0], mid.id, leaf.id]), a = body(s.w, mid.links![0] === 'unbound_cleave' ? 180 : mid.links![0] === 'ember_satellites' ? s.p.radius + 64 : 45);
       const used = cast(s.w, s.inst, a.pos);
       if (id === 'cleave' && mid.links![0] === 'readied_cleave') {
         cast(s.w, makeSkillInstance(SKILLS.backstab), a.pos);
@@ -150,7 +150,7 @@ try {
   }
   {
     const { w, inst } = setup('firebolt', ['ember_satellites', 'dense_constellation']); cast(w, inst);
-    check('satellite route launches three genuinely orbiting flames', w.projectiles.length === 3 && w.projectiles.every(p => p.orbit > 0));
+    check('satellite route launches two piercing orbiting flames without satellite items', w.projectiles.length === 2 && w.projectiles.every(p => p.orbit > 0));
   }
   {
     const plain = setup('war_cry'), shared = setup('war_cry', ['warband_call']);

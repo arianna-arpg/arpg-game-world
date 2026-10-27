@@ -209,6 +209,7 @@ const saveSkill = (i: SkillInstance): SavedSkill => ({
   skillId: i.def.id, level: i.level, rarity: i.rarity ?? 'common',
   sockets: i.sockets.map(s => s ? saveSocket(s) : null),
   ...(i.granted ? { granted: true } : {}),
+  ...(i.summonSchools?.length ? { summonSchools: [...i.summonSchools] } : {}),
   ...(i.attunedForm ? { attunedForm: i.attunedForm } : {}),
   ...(i.treeNodes?.length ? { treeNodes: [...i.treeNodes] } : {}),
   ...(i.replenishmentPaused ? { replenishmentPaused: true as const } : {}),

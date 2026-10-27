@@ -69,6 +69,13 @@ try {
     check('tree exposes a real uncapped channel', instanceCastMode(inst) === 'channel' && instanceChannel(inst)?.maxHold === undefined);
     check('channel starts', w.useSkill(p, inst, aim, true)); step(w, 0.15);
     check('first beat raises one flank archer', bodies().length === 1);
+    const firstArcher = bodies()[0];
+    check('first channeled archer fires during its arrival', w.projectiles.some(pr => pr.caster === firstArcher));
+    const fastAttack = firstArcher.skillUseTime(firstArcher.skills[0]!);
+    firstArcher.sheet.removeSource('channelFormation');
+    const ordinaryAttack = firstArcher.skillUseTime(firstArcher.skills[0]!);
+    firstArcher.sheet.setSource('channelFormation', [mod('attackSpeed', 'more', 0.5)]);
+    check('channeling makes actual archer attack casts 50 percent faster', Math.abs(fastAttack * 1.5 - ordinaryAttack) < 0.001);
     step(w, 0.75); check('held channel grows to doubled cap within one second', bodies().length === 4);
     const ids = bodies().map(a => a.id).join(); step(w, 10);
     check('full formation never evicts or stops the channel', p.casting?.mode === 'channel' && bodies().map(a => a.id).join() === ids);

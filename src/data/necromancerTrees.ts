@@ -1,3 +1,4 @@
+import { SKELETON_MAGE_TREE } from './skeletonMageTree';
 import { SKELETON_ARCHER_TREE } from './skeletonArcherTree';
 import { tree, n, life, damage, cap, count, haste, speed, size, dr, body, kit, aura } from './skillTreeBuilder';
 import { UNDEAD_COURT_TREES } from './necromancerCourts';
@@ -52,21 +53,5 @@ export const NECROMANCER_TREES: Record<string, SkillTreeSpec> = {
 
   summon_skeleton_archer: SKELETON_ARCHER_TREE,
 
-  summon_skeleton_mage: tree([
-    n('lich_ascendant', 'Lich Ascendant', 'Fuse the batch into one Lich, up to one. It casts an explosive Fireball, has a stronger frame and 60% more damage. 40% more mana cost.', [mod('minionDamage', 'more', 0.6), mod('manaCost', 'more', 0.4)], { summon: { monsterId: 'ossuary_lich', count: 1, maxActive: 1 }, tags: { add: ['fire'] } }),
-    [n('fused_intellect', 'Fused Intellect', 'The Lich learns Cinder Rain and casts 20% faster.', [haste(0.2)], kit('skeletal_cinder_rain')),
-      n('winter_crown', 'Winter Crown', 'Learn Winter Ring, freezing nearby foes on a cooldown, and gain 35% increased cold damage.', undefined, { tags: { add: ['cold'] }, summon: { crewSkills: ['skeletal_winter_ring'], crewMods: [mod('damage', 'increased', 0.35, ['cold'])] } }),
-      n('storm_crown', 'Storm Crown', 'Learn Grave Thunder, an area lightning strike, and gain 35% increased lightning damage.', undefined, { tags: { add: ['lightning'] }, summon: { crewSkills: ['skeletal_grave_thunder'], crewMods: [mod('damage', 'increased', 0.35, ['lightning'])] } })],
-    [n('deathless_regent', 'Deathless Regent', '60% increased life, 30% increased size, and 4 life regenerated per second.', [life(0.6), size(0.3), mod('minionRegen', 'flat', 4)]),
-      n('court_of_one', 'Court of One', 'The Lich bears the Ossuary Command aura, empowering allies within 220 units.', undefined, aura('ossuary_command')),
-      n('plague_crown', 'Plague Crown', 'Learn an empowered Plague Ring with a potent poison, and take 20% less damage.', [dr(0.2)], { tags: { add: ['chaos'] }, ...kit('skeletal_plague_ring') })],
-  ], [
-    n('grave_academy', 'Grave Academy', 'Raise two elemental specialists, up to four. Each learns only its own school from the lessons below. Cryomancers cast Ice Spear innately. 20% faster minions and 20% more mana cost.', [haste(0.2), mod('manaCost', 'more', 0.2)], { summon: { pool: SKELETAL_MAGE_POOL, count: 2, maxActive: 4 } }),
-    [n('winter_curriculum', 'Winter and Plague Curriculum', 'Cold and chaos spells deal 40% more damage and recover 40% faster.', undefined, body(mod('damage', 'more', 0.4, ['cold']), mod('cooldownRecovery', 'increased', 0.4, ['cold']), mod('damage', 'more', 0.4, ['chaos']), mod('cooldownRecovery', 'increased', 0.4, ['chaos']))),
-      n('deep_winter', 'Deep Winter', 'Cryomancers replace their innate Ice Spear with a greater spear that shatters into five shards instead of two and always chills.', undefined, { summon: { crewRules: [{ monsterIds: ['skeletal_cryomancer'], replace: [{ from: 'skeletal_cold_bolt', to: 'skeletal_greater_ice_spear' }] }] } }),
-      n('plague_curriculum', 'Essence Siphons', 'Only venomancers learn Essence Drain: a withering bolt that applies strong decay on a 6-second cooldown.', undefined, { summon: { crewRules: [{ monsterIds: ['skeletal_venomancer'], skills: ['skeletal_essence_drain'] }] } })],
-    [n('storm_curriculum', 'Storm and Cinder Curriculum', 'Fire and lightning spells deal 35% increased damage and recover 50% faster.', undefined, body(mod('damage', 'increased', 0.35, ['fire']), mod('cooldownRecovery', 'increased', 0.5, ['fire']), mod('damage', 'increased', 0.35, ['lightning']), mod('cooldownRecovery', 'increased', 0.5, ['lightning']))),
-      n('rolling_thunder', 'Rolling Thunder', 'Only stormcallers learn Chain Lightning: a bolt that leaps twice on a 5-second cooldown.', undefined, { summon: { crewRules: [{ monsterIds: ['skeletal_stormcaller'], skills: ['skeletal_chain_lightning'] }] } }),
-      n('expanded_faculty', 'Kindled Souls', 'Only pyromancers learn Ignite: a strong targeted burn on a 5-second cooldown.', undefined, { summon: { crewRules: [{ monsterIds: ['skeletal_pyromancer'], skills: ['skeletal_ignite'] }] } })],
-  ], n('grave_studies', 'Grave Studies', '20% increased minion damage and 20% faster minions.', [damage(0.2), haste(0.2)])),
+  summon_skeleton_mage: SKELETON_MAGE_TREE,
 };

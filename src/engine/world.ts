@@ -48,6 +48,7 @@ import { localOffset, type MassAddress } from '../worldmass/address';
 import { massDormancyPins } from '../worldmass/dormancy';
 import { massSideareaId, savedMassSideareas, copyMassSidearea, type MassSideareaRoot, type MassSideareaSave } from '../worldmass/sideareas';
 import { dealMassBounties, massBountiesAvailable, massBountyAccept, massBountyRoute } from '../worldmass/bounties';
+import { SummonArts } from './summonArts';
 import { DEVICE_CFG, DeviceContacts, deviceContactEligible, groundDeviceState } from './groundDevices';
 import { syncAltarBodies } from './altarBodies';
 import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
@@ -149,6 +150,7 @@ import { compactMass, type MassCheckpointOptions, type MassWorldCheckpoint } fro
 import { MASS_ZONE } from '../worldmass/preset';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
 import { readTownPortals, type TownPortal, type TownPortalView } from './townportal';
+import { ProjectileArts, type ProjectileOrbit } from './projectileArts';
 import { applyConversion, applyDot, applyHit, landLifeDamage, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
 import { ParryDamageWindow, parryCounter, type ParryDamage } from './parry';
 import { HIVECALL, hivecallNode, hivecallState, hivecallRescueFactor, hivecallFormDamage } from './hivecall';
@@ -1042,6 +1044,7 @@ const HAUNT_TAGS = new Set([
 ]);
 
 export interface Projectile {
+  projectileOrbit?: ProjectileOrbit;
   /** Replica identity only; live flights resolve their originating instance. */
   skillVisualId?: string;
   orbPaint?: ProjectileDelivery['orbPaint'];
@@ -1292,6 +1295,7 @@ export interface MaddenBank {
 export const MADDEN_CFG = { epsilon: 1e-6 };
 
 interface Zone {
+  skillVisualId?: string;
   fieldCue?: import('../data/companionCues').FieldCueSpec;
   /** Source-maintained choreography: breaking its skill or killing its
    * caster clears both pending warnings and lingering ground. */
@@ -1831,6 +1835,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'reacquireSkill': return isStr(a.skillId);
     case 'attuneSpectre': return isStr(a.skillId) && isStr(a.formId);
     case 'mimicSelect': return isStr(a.sid);
+    case 'setSummonSchools': return isStr(a.skillId) && Array.isArray(a.schools) && a.schools.length > 0 && a.schools.length <= 16 && a.schools.every(isStr);
     case 'pickTreeNode': return isStr(a.skillId) && isStr(a.nodeId);
     case 'untameCompanion': return isIdx(a.actorId);
     // THE STANCE SHIFT: an optional bond skill id + an optional stance id —
@@ -3937,9 +3942,21 @@ actors: Actor[] = [];
   readonly creepers = new Creepers();
   readonly challenges = new Challenges(this);
   readonly attackSequences = new AttackSequences(this);
+  readonly projectileArts = new ProjectileArts(this, (caster, inst, target, power, origin, tier) =>
+    this.resolveHit(caster, inst, target, power, 1, undefined, false, false, undefined, origin, tier),
+    (source, target, amount, type) => {
+      const before = target.life;
+      applyDot(target, amount, type);
+      this.recordIndirectDamage(target, source, before);
+    });
+  readonly summonArts = new SummonArts(this,
+    (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
+    (host, skills) => this.forwardSummonSockets(host, skills),
+    (body, inst) => { if (inst.def.delivery.type === 'aura') this.activateAura(body, inst, inst.def.delivery,
+      body.sheet.get('aoeRadius', skillContextTags(inst), instanceMods(inst))); });
   readonly channelFormations = new ChannelFormations(this,
     (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
-    (body, inst, aim) => { this.executeSkill(body, inst, aim, { noRepeat: true, noCooldown: true, keepFacing: true }); });
+    (body, inst, aim, arrival) => { this.executeSkill(body, inst, aim, { noRepeat: true, componentUse: arrival, noCooldown: true, keepFacing: true }); });
   readonly guardArts = new GuardArts(this);
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
@@ -6128,16 +6145,22 @@ actors: Actor[] = [];
   }
   // Observe each contributing affliction BEFORE timers remove its last tick.
   // Pool mitigation stays unchanged; account credit gets only its source's share.
+  private trackDeedDot = false;
+  private summonDotShares: { source: Actor; amount: number; type: DamageType | 'untyped' }[] = [];
   private deedDotAmounts: Partial<Record<DamageType | 'untyped', number>> | undefined;
   private collectDeedDot = (status: ActiveStatus, amount: number, type: DamageType | 'untyped'): void => {
     const source = status.casterId === undefined ? undefined : this.actorById(status.casterId);
-    if (!source || !this.deedOwned(source)) return;
+    if (source && status.skillId && this.summonArts.signature(source, status.skillId)) this.summonDotShares.push({ source, amount, type });
+    if (!this.trackDeedDot || !source || !this.deedOwned(source)) return;
     this.deedDotAmounts ??= {};
     this.deedDotAmounts[type] = (this.deedDotAmounts[type] ?? 0) + amount;
   };
   private applyDeedDot(target: Actor, amount: number, type: DamageType | 'untyped'): void {
+    if (!(amount > 0)) return;
     const before = target.life;
     applyDot(target, amount, type === 'untyped' ? undefined : type);
+    const landed = Math.max(0, before - Math.max(0, target.life));
+    for (const row of this.summonDotShares) if (row.type === type) this.summonArts.siphon(row.source, landed * row.amount / amount);
     const share = Math.min(1, (this.deedDotAmounts?.[type] ?? 0) / amount);
     const value = Math.max(0, before - Math.max(0, target.life)) * share;
     if (value > 0) this.recordDeed({ kind: 'indirect', value });
@@ -6524,8 +6547,10 @@ actors: Actor[] = [];
     this.creepers.clear();
     this.assaults.clearAll();
     this.challenges.clearAll();
+    this.summonArts.leaveZone();
     this.channelFormations.clear();
     this.attackSequences.clearAll();
+    this.projectileArts.clearAll();
     this.guardArts.clearAll();
     this.guardArts.rebind();
     this.odyssey.leaveZone();
@@ -25063,6 +25088,7 @@ actors: Actor[] = [];
       case 'unlearn': this.unlearnSkill(action.skillId, seat, action.x, action.y); break;
       case 'attuneSpectre': this.attuneSpectre(action.skillId, action.formId, seat); break;
       case 'mimicSelect': this.mimicSelectFor(action.sid, seat); break;
+      case 'setSummonSchools': this.setSummonSchools(action.skillId, action.schools, seat); break;
       case 'pickTreeNode': this.pickTreeNode(action.skillId, action.nodeId, seat); break;
       case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;
       case 'companionStance': this.cycleCompanionStance(seat, action.skillId, action.stance); break;
@@ -25613,6 +25639,8 @@ actors: Actor[] = [];
    *  full Tame presents the Whistle) — else the skill itself. The renderer
    *  reads this so the button never lies about what a press will do. */
   slotFaceOf(caster: Actor, inst: SkillInstance): SkillDef {
+    const ritual = this.summonArts.commandView(caster, inst);
+    if (ritual) return ritual.def;
     // A mimic slot wears the SELECTED captured art's face (the source
     // monster's chip rides the build flap — engine/mimic.ts).
     if (inst.def.mimic) {
@@ -25637,6 +25665,12 @@ actors: Actor[] = [];
    *  canUse so an exhausted gun still gets pressed: the press is the
    *  reload, and the vulnerability window it opens is the design. */
   pressUsable(caster: Actor, inst: SkillInstance): boolean {
+    const ritual = this.summonArts.commandView(caster, inst);
+    if (ritual) return !this.castSealed(caster, inst) && this.summonArts.commandReady(caster, inst) && caster.canUse(ritual);
+    if (inst.def.delivery.type === 'summon') {
+      const summon = instanceDelivery(inst);
+      if (summon.type === 'summon' && !this.summonArts.canSpawn(caster, inst, summon)) return false;
+    }
     if (this.castSealed(caster, inst)) return false; // THE CAST SEAL — the brain never presses a sealed cast
     // A mimic slot presses as its selection — empty bank, dead button.
     if (inst.def.mimic) {
@@ -28600,6 +28634,20 @@ actors: Actor[] = [];
     return open ? null : 'Awaken this skill through a legendary find or the Vault.';
   }
 
+  setSummonSchools(skillId: string, choices: string[], seat: Seat = this.localSeat): void {
+    const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
+    if (!inst) return;
+    const d = instanceDelivery(inst);
+    if (d.type !== 'summon' || !d.arts?.balanceSchools || !d.arts.schools) return;
+    const schools = d.arts.schools.filter(s => choices.includes(s.id)).map(s => s.id);
+    if (!schools.length || this.memorySecondaryRefusal(skillId) || this.swapRefusal(seat, 'socket')) return;
+    this.clearSummonTreeBodies(seat.actor, inst);
+    this.clearTreeFields(seat.actor, inst);
+    inst.summonSchools = schools;
+    this.recalcSeat(seat);
+    this.charDirty = true;
+  }
+
   pickTreeNode(skillId: string, nodeId: string, seat: Seat = this.localSeat): void {
     // A granted skill's picks ride its item's residence (the recalc below writes them back).
     const inst = seat.meta.knownSkills.get(skillId) ?? seat.grantedInsts?.get(skillId);
@@ -28824,6 +28872,12 @@ actors: Actor[] = [];
     {
       const why = this.castReqRefusal(caster, inst);
       if (why) { this.failNote(caster, inst.def.id + ':req', why); return false; }
+    }
+    const ritualCommand = this.summonArts.commandView(caster, inst);
+    if (ritualCommand) return this.summonArts.commandReady(caster, inst) && this.useSkill(caster, ritualCommand, aim, seatPress);
+    if (inst.def.delivery.type === 'summon') {
+      const artDelivery = instanceDelivery(inst);
+      if (artDelivery.type === 'summon' && !this.summonArts.canSpawn(caster, inst, artDelivery)) return false;
     }
     // SKILL CONVERSION (SkillDef.convert): while the rule holds, this press
     // IS the converted skill — minted per host at the host's effective
@@ -29645,6 +29699,8 @@ actors: Actor[] = [];
     inst = this.challenges.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = castSequenceInstance(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.attackSequences.prepare(caster, inst, aim, opts.dmgMult ?? 1);
+    inst = this.projectileArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
+    inst = this.summonArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     const def = inst.def;
     const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
     const cosmeticColor = cosmeticPaint.color ?? def.color;
@@ -29743,7 +29799,7 @@ actors: Actor[] = [];
         }
         if (pick2) {
           useMult *= 1 + pick2.life * sac.dmgPerLife;
-          this.kill(pick2, true);
+          this.kill(pick2, true, caster, 'sacrifice');
           const feedingCue = pick2.dead ? feedingCueFlash(pick2.pos, caster, def.feedingCue, 'ritual', pick2.tier, pick2.radius) : undefined;
           if (feedingCue) this.flashes.push(feedingCue);
           if (pick2.dead) this.showSkillArrival(caster, inst, pick2.pos, pick2.radius + 12, pick2.tier, 'sacrifice');
@@ -30178,6 +30234,7 @@ actors: Actor[] = [];
     switch (d.type) {
       case 'projectile': {
         let count = rollCount(d.count, Math.round(caster.sheet.get('projectileCount', tags, extra)))
+          + this.projectileArts.count(caster, inst)
           + (opts.bonusProjectiles ?? 0)
           // THE VENT PRESS's spent rounds (useCharges.ventAll): more shots.
           + ventRounds
@@ -30194,6 +30251,12 @@ actors: Actor[] = [];
         // Fewer-projectile gems (Pinpoint) can push the roll negative —
         // a volley always keeps its one focused shot.
         count = Math.max(1, count);
+        if (inst.projectileSpec?.orbit) {
+          const total = Math.min(this.projectileArts.limit(inst), count + Math.max(0, Math.round(caster.sheet.get('projNova', tags, extra))));
+          for (let n = 0; n < total; n++) this.spawnProjectile(caster, inst, caster.pos,
+            caster.facing + n / total * Math.PI * 2, { tier: effectTier, mult: useMult, flat: flatBonus });
+          break;
+        }
         // CAROMS: presses PLANT anchors at the cursor; the final press
         // releases the volley, which shuttles anchor-to-anchor for its
         // whole flight (patrol + rehit = the ping-pong killing line).
@@ -31164,8 +31227,8 @@ actors: Actor[] = [];
             : undefined,
           linger0: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
           leaveTerrain: d.leaveTerrain,
-          edge: d.fillFrom,
-          fillRate: d.fillFrom ? d.fillFrom / Math.max(0.2, fillTime) : undefined,
+          edge: d.innerFraction ?? d.fillFrom,
+          fillRate: d.innerFraction === undefined && d.fillFrom ? d.fillFrom / Math.max(0.2, fillTime) : undefined,
           // Emitters & domains ride the PRIMARY placement only — cascades'
           // ripples stay plain zones (no source spam, no bolt storms²).
           // A zoneEmit graft (the pulse-cadence cursed ground) supplies an
@@ -31417,7 +31480,7 @@ actors: Actor[] = [];
             }
             if (meal) {
               cs2.amalgamFed = (cs2.amalgamFed ?? 0) + 1;
-              this.kill(meal, true);
+              this.kill(meal, true, caster, 'sacrifice');
               const feedingCue = meal.dead ? feedingCueFlash(meal.pos, caster, def.feedingCue, 'ritual', meal.tier, meal.radius) : undefined;
               if (feedingCue) this.flashes.push(feedingCue);
             }
@@ -33011,6 +33074,7 @@ actors: Actor[] = [];
     // into a periodic shadow-lash; repeats and echo replays are not.
     if (!opts.noRepeat && !caster.construct) {
       if (!opts.noCooldown) this.challenges.completed(caster, inst);
+      this.summonArts.completed(caster, inst, aim);
       this.companionBonds.onCast(caster, inst, aim);
       this.echoToClones(caster, inst, aim, useMult,
         opts.targetInfo as ResolvedTarget | undefined);
@@ -33878,6 +33942,7 @@ actors: Actor[] = [];
    * skill never cross-contaminate each other's crews.
    */
   resyncMinionSupports(inst: SkillInstance): void {
+    this.summonArts.resync(inst);
     for (const a of this.actors) {
       // Constructs carry summonInst as a back-reference too, but never
       // receive spawn-time forwarding — resync mirrors the spawn path.
@@ -33908,7 +33973,7 @@ actors: Actor[] = [];
    * itself is the pure summonCrewOf core, shared with the validator's
    * crew-hop audit.
    */
-  summonCrewSkills(inst: SkillInstance): SummonCrew { return sceneSummonCrewSkills(this.nativeSceneProgressionHost(),inst); }
+  summonCrewSkills(inst: SkillInstance): SummonCrew { return this.summonArts.crew(inst, sceneSummonCrewSkills(this.nativeSceneProgressionHost(),inst)); }
 
   /** minionCombat: reuse full actors whenever a grant needs their complete
    * durability model. The ordinary owner bake remains the sole ply fold. */
@@ -33962,6 +34027,7 @@ actors: Actor[] = [];
     const tags = skillContextTags(inst);
     const extra = instanceMods(inst);
 
+    if (!this.summonArts.canSpawn(caster, inst, d)) return null;
     const maxActive = summonCapacity(caster, inst, d);
     // Shared pool groups (golems) cap across every skill in the group.
     const existing = inst.companionGrant ? [] : d.poolGroup
@@ -33994,7 +34060,7 @@ actors: Actor[] = [];
       }
     }
 
-    const typeId = overrides?.monsterId ?? this.rollSummonType(d);
+    const typeId = overrides?.monsterId ?? this.summonArts.choose(caster, inst, d) ?? this.rollSummonType(d);
     const minion = this.createMonster(typeId, caster.level, caster.team, caster);
     // Skill-conjured bodies pay no bounty on death — an enemy summoner's
     // spawn stream can't be farmed for xp/drops (kill the caster instead),
@@ -34214,6 +34280,7 @@ actors: Actor[] = [];
     this.sim.deadwakeField?.accrue('summon', isDeathAligned(minion.faction));
     if (!this.presenceArrival(minion, caster, inst))
       this.flashes.push({ pos: vec(minion.pos.x, minion.pos.y), radius: 20 + minion.radius, color: inst.def.color, life: 0.35, maxLife: 0.35 });
+    this.summonArts.init(minion, inst);
     return minion;
   }
 
@@ -35443,6 +35510,7 @@ actors: Actor[] = [];
     p.anchor = vec(p.pos.x, p.pos.y);
     p.origin = vec(p.pos.x, p.pos.y);
     p.homing = p.guide = p.orbit = p.spiral = p.spin = p.weave = p.erratic = 0;
+    p.projectileOrbit = undefined;
     p.guided = false;
     p.returnMode = 0;
     p.returnPhase = false;
@@ -36897,6 +36965,7 @@ actors: Actor[] = [];
         }
       }
       dealt = result.total;
+      this.summonArts.hit(caster, inst, target, Math.min(dealt, Math.max(0, deedLifeBefore - Math.max(0, target.life))));
       if (rearHit && dealt > 0 && def.backstabCue !== false) {
         this.flashes.push(combatCueFlash(target.pos, def.backstabCue ?? 'rear_hit', target.radius,
           angleTo(target.pos, caster.pos)));
@@ -37569,6 +37638,7 @@ actors: Actor[] = [];
     // Delivery-specific hitEffects share every refusal, scaling and
     // attribution rule with authored effects, including delayed fuses.
     this.challenges.beforeEffects(caster, inst, target, dealt, depth);
+    this.projectileArts.landed(caster, inst, target, dealt, depth, dmgMult);
     const effects = instanceEffects(inst);
     for (const fx of hitEffects?.length ? [...effects, ...hitEffects] : effects) {
       if (fx.type === 'heal') {
@@ -37605,13 +37675,13 @@ actors: Actor[] = [];
         // chances are scaled per AILMENT_TUNING — plain physical hits no longer
         // bleed, embers barely catch; investment (statusChance, the apply_
         // family) and identity skills carry ailments now. See engine/status.ts.
-        if (chance(Math.min(1, tuneAilmentChance(fx.status, fx.chance) + bonusChance))) {
+        if (chance(Math.min(1, tuneAilmentChance(fx.status, fx.chance) + bonusChance + this.projectileArts.chance(inst, fx.status)))) {
           // Hit-derived dps, FLOORED by the status's caster-less baseline (a
           // feeble hit still ignites like an ignite), × the potency crank —
           // × the linked-hex swell (Malediction: each hex fattens the debuff).
           // The septic bargain's return: the forgone bite rides the
           // affliction as if the blow had landed (carry) harder.
-          const derived = (fx.magnitude ?? 0) * (dealt + afflictionCarry);
+          const derived = (fx.magnitude ?? 0) * (this.projectileArts.basis(caster, inst, target, packet, dealt, fx.status) + afflictionCarry);
           const floor = fx.magnitude ? baselineStatusDps(fx.status, this.zone.level) : 0;
           const dps = Math.max(derived, floor) * potencyFor(fx.status) * hexDmg
             / Math.max(0.5, durScale);
@@ -37675,6 +37745,8 @@ actors: Actor[] = [];
               this.flashes.push(combatCueFlash(target.pos, 'affliction', target.radius + 7, angleTo(target.pos, caster.pos), sdef?.color));
             }
           }
+          const priorArtStatus = target.statuses.find(s => s.id === fx.status && !s.sourceKey && !s.challengeField);
+          const priorArt = { status: priorArtStatus, dps: priorArtStatus?.dps, remaining: priorArtStatus?.remaining };
           target.applyStatus(fx.status, dpsOut, fxScale, caster.name, {
             // Propagation is a CHANCE rolled once at application (1 = the
             // old always-spreads flag).
@@ -37682,6 +37754,7 @@ actors: Actor[] = [];
             rupture, ruptureType,
             ruptureRadius: rupture !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
             stacksBonus: stacksBonusFor(fx.status),
+            ...this.summonArts.statusSource(caster, inst),
             casterId: fx.status === 'taunted' && caster.summonShell && caster.owner ? caster.owner.id : caster.id,
             brood: instanceBrood(inst),
             leech: caster.sheet.get('dotLeech_' + fx.status, tags, extra) || undefined,
@@ -37691,6 +37764,7 @@ actors: Actor[] = [];
             // chill slows harder); DoTs carry theirs in dps already.
             power: STATUS_DEFS[fx.status]?.dotType ? undefined : potencyFor(fx.status),
           });
+          this.projectileArts.applied(inst, target, fx.status, priorArt);
           // Applying a status is a trigger (Bloodletter's Rhythm).
           this.rollStatusProcs(caster, inst, target, fx.status, tags, extra, depth);
           // DAMAGE POOLS: a DoT application banks its expected payload
@@ -37862,7 +37936,7 @@ actors: Actor[] = [];
         if (ch <= 0 || !chance(Math.min(1, ch + bonusChance))) continue;
         const sdef = STATUS_DEFS[sid];
         const dps = sdef.dotType
-          ? Math.max((sdef.hitMagnitude ?? 0) * dealt, baselineStatusDps(sid, this.zone.level))
+          ? Math.max((sdef.hitMagnitude ?? 0) * this.projectileArts.basis(caster, inst, target, packet, dealt, sid), baselineStatusDps(sid, this.zone.level))
             * potencyFor(sid) / Math.max(0.5, durScale)
           : 0;
         // Stat-granted DOOMS (Creeping Doom): the derived power ARMS the
@@ -37906,16 +37980,20 @@ actors: Actor[] = [];
             }
           }
         }
+        const priorArtStatus = target.statuses.find(s => s.id === sid && !s.sourceKey && !s.challengeField);
+        const priorArt = { status: priorArtStatus, dps: priorArtStatus?.dps, remaining: priorArtStatus?.remaining };
         target.applyStatus(sid, dpsOut2, durScale, caster.name, {
           propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
           stacksBonus: stacksBonusFor(sid),
           casterId: caster.id,
+          ...this.summonArts.statusSource(caster, inst),
           brood: instanceBrood(inst),
           leech: caster.sheet.get('dotLeech_' + sid, tags, extra) || undefined,
           rupture: armed, ruptureType: armedType,
           ruptureRadius: armed !== undefined ? 90 * caster.sheet.get('aoeRadius', tags, extra) : undefined,
           popBonus: caster.sheet.get('popPower_' + sid, tags, extra) || undefined,
         });
+        this.projectileArts.applied(inst, target, sid, priorArt);
         // Stat-granted applications trigger statusApply procs too.
         this.rollStatusProcs(caster, inst, target, sid, tags, extra, depth);
         if (dps > 0) {
@@ -39574,7 +39652,7 @@ actors: Actor[] = [];
     },
   ];
 
-  kill(actor: Actor, silent = false, killer?: Actor, departure?: 'expire'): void {
+  kill(actor: Actor, silent = false, killer?: Actor, departure?: 'expire' | 'sacrifice'): void {
     if (actor.dead) return;
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
@@ -39787,7 +39865,8 @@ actors: Actor[] = [];
     }
 
     actor.dead = true;
-    this.presenceMoment(actor, departure ?? (silent ? 'expire' : 'break'));
+    this.summonArts.death(actor, silent && departure !== 'sacrifice', departure === 'expire');
+    this.presenceMoment(actor, departure === 'expire' || silent ? 'expire' : 'break');
     this.guardArts.clear(actor);
     if (actor.owner) this.strikeReleaseBodies.get(actor.owner)?.delete(actor);
     this.satellites.retire(actor);
@@ -42112,6 +42191,7 @@ actors: Actor[] = [];
     // The same tending mends a downed COMPANION (the Hunter's bond).
     this.companionBonds.update(dt);
     this.challenges.update(dt);
+    this.summonArts.update(dt);
     this.channelFormations.update();
     this.attackSequences.update(dt);
     this.guardArts.update(dt);
@@ -42618,9 +42698,10 @@ actors: Actor[] = [];
         }
       }
       this.deedDotAmounts = undefined;
-      const trackDeedDot = this.metaProgressionActive() && !a.dead && a.life > 0
+      this.summonDotShares = [];
+      this.trackDeedDot = this.metaProgressionActive() && !a.dead && a.life > 0
         && (this.deedEnemy(a) || (a === this.player && this.hasDeedEnemyNearby()));
-      const dot = a.updateTimers(dt, rawDt, trackDeedDot ? this.collectDeedDot : undefined);
+      const dot = a.updateTimers(dt, rawDt, this.collectDeedDot);
       // World-space procPopEvents survive a lethal payout and replicate as flashes.
       for (const procCue of a.procPopEvents) {
         const style = procCueStyle(procCue.profile ?? 'blood');
@@ -50673,6 +50754,8 @@ actors: Actor[] = [];
 
   /** Retire fields that captured the previous allocation. */
   private clearTreeFields(caster: Actor, inst: SkillInstance): void {
+    this.summonArts.clear(caster, inst);
+    this.projectileArts.clear(caster, inst);
     this.channelFormations.clear(caster, inst);
     return sceneClearTreeFields(this.nativeSceneProgressionHost(),caster,inst);
   }
@@ -51935,6 +52018,8 @@ actors: Actor[] = [];
     p.stall = undefined;
     p.age += dt;
     p.traveled += step;
+    const orbitalPosition = this.projectileArts.move(p, dt);
+    if (orbitalPosition) return orbitalPosition;
     // PULSATION: the hit radius breathes ± its amplitude on a fixed
     // rhythm — the renderer draws the same live radius it hits with.
     if (p.pulse && p.radius0) {
@@ -52096,6 +52181,7 @@ actors: Actor[] = [];
    *  runs looser than its body opts back to the classic radius disc with
    *  delivery.hitForm: 'circle'. */
   private projTouches(p: Projectile, cx: number, cy: number, cr: number): boolean {
+    if (p.projectileOrbit) return this.projectileArts.touches(p, cx, cy, cr);
     if ((p.inst.def.delivery as ProjectileDelivery).hitForm === 'circle') {
       const dx = cx - p.pos.x, dy = cy - p.pos.y;
       return dx * dx + dy * dy <= (p.radius + cr) * (p.radius + cr);
@@ -52201,17 +52287,22 @@ actors: Actor[] = [];
   }
 
   private updateProjectiles(dt: number): void {
+    this.projectileArts.update(dt);
     const guardianContext = this.guardians.active ? this.carriedEffectContext() : undefined;
     const flowDt = dt; // the world-scaled frame; each flight bends it below
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
+      if ((p.inst.projectileCast || p.projectileOrbit) && (p.dissolved || !this.projectileArts.valid(p))) {
+        this.projectiles.splice(i, 1); continue;
+      }
       // THE TIMEFLOW BEND (engine/timeflow.ts): a projectile flies on its
       // CASTER's clock — a held caster's volley hangs mid-air and lands
       // when time resumes (the frozen quiver is half the time-stop
       // fantasy). The shadowed `dt` bends age, travel, zaps and steering.
       const ptf = this.timeflow.actorScale(p.caster);
       if (ptf <= 0) continue;
-      const dt = ptf === 1 ? flowDt : flowDt * ptf;
+      const elapsed = ptf === 1 ? flowDt : flowDt * ptf;
+      const dt = p.inst.projectileCast && p.maxAge !== undefined ? Math.max(0, Math.min(elapsed, p.maxAge - p.age)) : elapsed;
       this.attackSequences.flight(p);
       const prev = vec(p.pos.x, p.pos.y);
       p.pos = this.advanceProjectile(p, dt);
@@ -52232,6 +52323,7 @@ actors: Actor[] = [];
           this.viewRectFor(p.caster), FOURTH_WALL_CFG.proj.edgePad);
         if (fw) {
           p.frameBounces--;
+          this.projectileArts.bounce(p);
           p.pos.x = fw.x;
           p.pos.y = fw.y;
           p.guideDir = p.dir = fw.dir;
@@ -52286,7 +52378,7 @@ actors: Actor[] = [];
       // unspent-end bloom below against double payment).
       let shrapnelBloomed = false;
       // Spent projectiles that return get a second life instead of dying.
-      if (dead && this.enterReturn(p)) dead = false;
+      if (dead && !p.projectileOrbit && !p.inst.projectileSpec?.flight && this.enterReturn(p)) dead = false;
       // Homeward arrival — CATCHABLE returns (Gyreblade) bank their charge
       // in the catcher's hand before fading.
       if (!dead && p.returnPhase && dist(p.pos, this.returnTarget(p)) < 26) {
@@ -52326,7 +52418,7 @@ actors: Actor[] = [];
       // BOUNCE it (Galewisp): reflect off the obstacle's normal and fly on.
       // PHASING flights (occlusion 'free' / Wraith Passage) skip terrain
       // entirely — through rock and masonry like mist.
-      if (!dead && !p.phase) {
+      if (!dead && !p.phase && !p.projectileOrbit) {
         for (const o of this.doodadsAt(p.pos.x, p.pos.y)) {
           // THE TIER FABRIC: a flight only meets ITS layer's furniture — a
           // duct bolt neither shatters nor stops on the street's pots above.
@@ -52384,7 +52476,7 @@ actors: Actor[] = [];
       // flights and thin corner crossings cannot fall between samples.
       // Region flags, deck heights and hanging partitions share one law.
       const flightGrid = regionGrid(this.walk); // worldmass projectiles share the same wall/bounce law
-      if (!dead && !p.phase && flightGrid) {
+      if (!dead && !p.phase && !p.projectileOrbit && flightGrid) {
         const sdx = p.pos.x - prev.x, sdy = p.pos.y - prev.y;
         const elev = this.shotElev(prev, p.tier ?? 0);
         const hitT = castGridRay(flightGrid, prev, p.pos, 'shot', elev);
@@ -52416,6 +52508,7 @@ actors: Actor[] = [];
           }
         }
       }
+      if (!dead && p.projectileOrbit && !this.lineOfFire(p.caster.pos, p.pos, p.tier)) continue;
       // Selective pierce: a dead prey RETARGETS the hunt (Heartchaser).
       if (!dead && p.preyId !== undefined) {
         const prey = this.actorById(p.preyId);
@@ -52610,6 +52703,7 @@ actors: Actor[] = [];
       }
 
       if (!dead) dead = this.interceptProjectileDomes(p);
+      if (!dead) this.projectileArts.tick(p);
 
       // THE MALLET IN FLIGHT: your own shot rings your own bell as it
       // passes — the flight-side sibling of the brittle 'hit' pop in the
@@ -52643,7 +52737,7 @@ actors: Actor[] = [];
             const parryPacket = rollSkillDamage(p.caster, p.inst, p.flat);
             const guardRaw = Object.values(parryPacket.amounts)
               .reduce((s, v) => s + (v ?? 0), 0) * p.mult;
-            if (guardRaw > 0 && this.tryGuardBlock(enemy, p.caster, p.pos, guardRaw, p, parryPacket)) {
+            if (guardRaw > 0 && this.tryGuardBlock(enemy, p.caster, this.projectileArts.impact(p), guardRaw, p, parryPacket)) {
               dead = !p.parryDamage || !!p.dissolved;
               diedOnBody = true; // a guarded stop still struck someone
               break;
@@ -52675,7 +52769,7 @@ actors: Actor[] = [];
             }
             noteBodyHit(enemy, bodyTouch.seg);
             this.attackSequences.beforeContact(p);
-            this.resolveHit(p.caster, p.inst, enemy, p.mult, 0, hitFlat, false, false, undefined, p.origin, p.tier);
+            this.resolveHit(p.caster, this.projectileArts.contact(p), enemy, p.mult, 0, hitFlat, false, false, undefined, p.inst.projectileCast ? this.projectileArts.impact(p) : p.origin, p.tier);
             // THE HIT VOICE (engine/bodyVoices.ts): the impact speaks the blow's type — fire flares, cold crackles, lightning sparks, chaos spatters, a shaft flecks the body.
             this.flashes.push({ recoveryCueTier: p.tier, pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.18, maxLife: 0.18, fx: hitVoiceOf(enemy.hitFlashType ?? p.conductElem ?? skillBaseTypeOf(p.inst.def.baseDamage), 'body') });
             // SHATTER: the first impact flings a fan of shard projectiles
@@ -52694,7 +52788,7 @@ actors: Actor[] = [];
               for (let s = 0; s < shardCount; s++) {
                 const off = shardCount === 1 ? 0 : (s / (shardCount - 1) - 0.5) * spread;
                 this.spawnProjectile(p.caster,
-                  makeSkillInstance(shardSkill, effectiveSkillLevel(p.inst)),
+                  { ...makeSkillInstance(shardSkill, effectiveSkillLevel(p.inst)), summonArtCast: p.inst.summonArtCast },
                   vec(p.pos.x, p.pos.y), p.dir + off,
                   { tier: p.tier ?? 0, inherit, depth: p.depth + 1, mult: p.mult });
                 // Shards rake the cone BEHIND the victim — never the victim
@@ -52755,6 +52849,10 @@ actors: Actor[] = [];
             // every hit the projectile SURVIVES — each rehit, pierce, and
             // chain — not just where the flight ends (which still bursts).
             if (p.rehit) {
+              if (p.projectileOrbit) {
+                if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
+                continue;
+              }
               if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
               // THE DRIFTER JAILBREAK (2026-07-22, the user's override
               // call): a CHAIN socketed into a re-hitting flight CONVERTS
@@ -52924,6 +53022,7 @@ actors: Actor[] = [];
         }
       }
       if (dead) {
+        this.projectileArts.expire(p);
         this.explodeProjectile(p, p.lastHitId);
         // SHREDDING RETURN, THE UNSPENT END (2026-07-22): a flight that
         // ends WITHOUT dying on a body — range spent, aged out, stopped by

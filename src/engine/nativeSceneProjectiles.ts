@@ -1,3 +1,4 @@
+import { configureProjectileArt } from './projectileArts';
 import {observeNativeCombatStorage,observeNativeCombatRecord} from './nativeCombatRecordObservation';
 import type {Actor as NativeRecordActor} from './actor';
 import type {SkillInstance as NativeRecordSkill} from './skills';
@@ -189,6 +190,7 @@ export function sceneSpawnProjectile(host:NativeSceneProjectileHost,caster: Acto
       arcRate: t?.arcTo,
       patrol: opts?.patrol?.length ? { points: opts.patrol.map(p2 => vec(p2.x, p2.y)), idx: 0 } : undefined,
     });
+ configureProjectileArt(nativeRecord, host.projectiles);
  observeNativeCombatRecord(host,'projectiles',nativeQueue,nativeRecord,nativeSource,nativeInstance);
 }
   }

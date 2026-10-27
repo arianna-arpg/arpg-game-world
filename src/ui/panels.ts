@@ -1,3 +1,4 @@
+import { instanceDelivery } from '../engine/skills';
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
@@ -8132,6 +8133,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       : open
         ? `<span style="color:#8a8678">no path chosen${limbs.length > 1 ? ' — the first point into a limb seals its rivals' : ''}</span>`
         : `<span style="color:#6a6478">the path opens at Lv ${tree.level}</span>`;
+    const summon = instanceDelivery(inst);
+    const schools = summon.type === 'summon' && summon.arts?.balanceSchools ? summon.arts.schools ?? [] : [];
+    const selectedSchools = inst.summonSchools?.length ? inst.summonSchools : schools.map(s => s.id);
+    const schoolControls = schools.length ? '<div class="st-schools" style="margin:8px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span>Conclave schools</span>'
+      + schools.map(s => '<button data-st-school="' + s.id + '" aria-pressed="' + selectedSchools.includes(s.id) + '" '
+        + (discipline ? 'disabled ' : '') + 'style="border-color:' + (selectedSchools.includes(s.id) ? '#d8b86a' : '#4c4458') + '">' + esc(s.name) + '</button>').join('')
+      + '<small>Changing schools dismisses this skill’s current mages.</small></div>' : '';
     const zPct = Math.round(pane.zoom * 100);
     pane.el.innerHTML = `
       ${this.closeGlyphHtml()}<h2 style="color:${def.color}">${esc(skillInstanceName(inst))}
@@ -8147,6 +8155,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span>${pip}${this.empowermentBudgetHtml(inst)}
         <span style="color:#5a5668">·</span>${status}
       </div>
+      ${schoolControls}
       <svg viewBox="${this.skillTreeViewBox(pane)}" class="st-svg"
         style="cursor:var(--cursor-grab, grab);touch-action:none;background:#100e16;border:1px solid #2a2438;border-radius:5px">${edges}${circles}</svg>
       <div style="font-size:10px;color:#6a6478;margin-top:5px">
@@ -8161,6 +8170,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
       });
     });
+    pane.el.querySelectorAll<HTMLButtonElement>('[data-st-school]').forEach(button => button.addEventListener('click', () => {
+      const id = button.dataset.stSchool!;
+      const choices = selectedSchools.includes(id) ? selectedSchools.filter(s => s !== id) : [...selectedSchools, id];
+      if (!choices.length) return;
+      world.requestMeta({ t: 'setSummonSchools', skillId: def.id, schools: choices });
+      if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
+    }));
     this.wireSkillTreeControls(pane);
   }
 

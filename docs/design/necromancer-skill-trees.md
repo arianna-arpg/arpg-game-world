@@ -41,7 +41,7 @@ Changing the investment budget is a separate balance decision, not hidden here.
 | Shambling Horde | Wandering Dead: toggleable free, bar-seated replenishment; permanent waiting corpses. Specialize cadence, detection, batches, capacity or durability. | Commanded Dead: cast packs; combine brief fast rushes with fewer heavy bodies, or develop expiry explosions and larger batches. | Stitched Flesh: life |
 | Bone Golem | Osseous Might: fighting golems; grow a cohort, a giant commander aura bearer, a sweeping bruiser, or a hybrid. | Keeper's Bulwark: defensive guard, rapid reconstruction, mending, taunts and the close-bound Bone Stand. | Fitted Joints: life and movement |
 | Skeleton Archer | Barbed Bones: independent physical vulnerability stacks; held firing squads, full-cap release volleys, mortars, doubled capacity and learned Rain of Bones. | Unstrung Sorcery: random elemental mages; every-fourth empowered bolts, sustained area channels and element-selected novas. Base population is preserved. See [the current contract](skeleton-archer.md). | Remembered Training: damage |
-| Skeleton Mage (new) | Lich Ascendant: fuse the batch into one larger Fireball caster; learn heavy area spells, grow its frame, or command allies. | Grave Academy: a faster cohort of elemental specialists, with cold/chaos and fire/lightning curricula. Each learned spell belongs only to its matching element. | Grave Studies: damage and haste |
+| Skeleton Mage | Lich Ascendant: a single commander with Grand Rite, elemental crowns, a soul-fed phylactery, an ally court and owner-spell echoes. | Grave Conclave: selected schools cooperate through relays and learn independent signature spells, inscriptions and communal recovery. | Grave Studies: damage and haste |
 | Skeleton Warrior | Grave Phalanx: taunting shield sentinels, inherited Thorns, armor banners, relief auras and bounded death heirs. | Ossuary Duelists: twin-cut pursuers, bleeding strikes, culling, lunges and paired summons. | Tempered Bones: life and damage |
 | Raise Dead | Grave Levy: temporary random skeleton/zombie ranks, larger drafts, stench, poison and true-death expiry payoffs. | Flesh Assembly: one claw-and-slam abomination; consume other skills' minions for temporary strength, build a refuge or invest in its death. | Gravecraft: life and damage |
 | Raging Spirit | Frenzied Embers: brief fire-biting swarms, pursuit, a burning halo, ailments and expiry explosions. | Vigil Flames: targetable stationary sentries placed at the cursor; improve duration, durability, population or piercing, multiple bolts and Ignite. | Kindled Will: damage |
@@ -105,17 +105,12 @@ investment therefore offers a deliberate reservation-for-coverage/power trade.
 - Warding Reach carries the 75% movement bonus and teaches a 160-base-radius
   sweep: 2-second taunt, modest outward shove, and half-strength 3-second bleed,
   every 6 seconds. An attached shell taunts toward its protected keeper.
-- The Lich begins with modest, repeatable explosive Fireballs, then chooses
-  Cinder Rain, Winter Ring, Grave Thunder, Ossuary Command and/or empowered
-  Plague Ring. Its host elemental tags follow the chosen repertoire.
-- Grave Academy adds 20% haste; it does not teach universal area spells. The
-  cold/chaos middle grants 40% more damage and 40% faster recovery. Its leaves
-  upgrade only cryomancers' innate two-shard Ice Spear into a five-shard spear
-  that always chills, or teach only venomancers Essence Drain (6-second base
-  cooldown). The fire/lightning middle grants 35% increased damage and 50%
-  faster recovery. Its leaves teach only pyromancers Ignite or only stormcallers
-  Chain Lightning (both 5-second base cooldowns). The middle uses damage rather
-  than area radius because these spells do not all have an area delivery.
+- Skeleton Mage now follows the [rites and conclaves design](skeleton-mage.md).
+  The longer initial Lich summon becomes a Grand Rite command while it lives.
+  Bound Phylactery combines the soul bank and reconstruction; Sovereign's Echo
+  copies eligible owner spells with minion scaling. Grave Conclave chooses
+  schools, relays primary hits, and teaches independently supported signatures.
+  Stable node IDs and the four-point budget are preserved.
 
 Existing saved golem paths are repaired against the new prerequisites; removed
 invalid picks return their points. The tree budget and four-rank neutral passives

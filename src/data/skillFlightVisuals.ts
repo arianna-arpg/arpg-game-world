@@ -11,6 +11,8 @@ export interface SkillFlightProfile {
   body?: 'orb' | 'star' | 'cluster';
 }
 export interface SkillFieldProfile {
+  /** A vertical flame column above an honest circular ground footprint. */
+  column?: true;
   motif: BurstMotif;
   layout: 'roots' | 'rings' | 'lattice' | 'spiral' | 'scatter' | 'spokes';
   motion: 'breathe' | 'out' | 'in' | 'orbit' | 'rise';
@@ -205,6 +207,17 @@ export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
 /** Long-lived patterns: architecture, material and movement are independent.
  * Related arts share materials, never an entire composition. */
 export const SKILL_FIELDS: Readonly<Record<string, SkillFieldProfile>> = {
+  skeletal_grand_rite: f('flame','lattice','rise',9,'runes'),
+  skeletal_ritual_dominion: f('runes','rings','breathe',11,'flame'),
+  skeletal_ritual_flare: f('flame','spokes','out',7,'souls'),
+  skeletal_rite_boundary: f('ice','rings','orbit',12,'teeth'),
+  skeletal_rite_blizzard: f('ice','scatter','in',13,'souls'),
+  skeletal_rite_rupture: f('sparks','roots','out',11,'runes'),
+  skeletal_discordant_burst: f('souls','spiral','out',9,'sparks'),
+  skeletal_fire_script: f('flame','lattice','breathe',7,'teeth'),
+  skeletal_cold_script: f('ice','lattice','orbit',7,'teeth'),
+  skeletal_lightning_script: f('sparks','lattice','out',7,'teeth'),
+  skeletal_chaos_script: f('spores','lattice','in',7,'souls'),
   hive_death_pool: f('spores','scatter','breathe',6,'teeth'),
   hive_detonation: f('teeth','spokes','out',6,'spores'),
   hive_royal_nova: f('petals','rings','out',8,'teeth'),

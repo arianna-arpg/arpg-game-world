@@ -3,7 +3,7 @@ import { SKELETAL_SCHOOLS } from './skeletonArcherSkills';
 import { mod } from '../engine/stats';
 
 /** Formation pacing and price are authored together; ordinary summon timing stays native. */
-export const SKELETAL_FORMATION_TUNING = { interval: 0.25, windup: 0.1, manaCostReduction: 0.97 } as const;
+export const SKELETAL_FORMATION_TUNING = { interval: 0.25, windup: 0.1, manaCostReduction: 0.97, attackSpeedMore: 0.5 } as const;
 
 const lesson = (type: string) => {
   const school = SKELETAL_SCHOOLS.find(s => s.type === type)!;
@@ -12,8 +12,8 @@ const lesson = (type: string) => {
 export const SKELETON_ARCHER_TREE = tree([
   n('rattling_bows', 'Barbed Bones', 'Commit to physical archers. Their hits apply Lodged Splinters: each stack increases subsequent skeletal arrow and mortar physical damage by 4%, up to 30 stacks. Each stack lasts 5 seconds independently.', undefined,
     { tags: { add: ['physical'] }, summon: { monsterId: 'skeleton_archer', crewRules: [{ monsterIds: ['skeleton_archer'], replace: [{ from: 'bone_arrow', to: 'skeletal_rattling_arrow' }] }] } }),
-  [n('ranked_bows', 'Rising Ranks', `Channel a growing firing squad on your flanks. The first archer rises after ${SKELETAL_FORMATION_TUNING.windup} seconds, then one every ${SKELETAL_FORMATION_TUNING.interval} seconds, scaled by cast speed, up to your summon cap. They fire along your facing. Hold without a time limit; all crumble when the channel ends. Costs ${Math.round(SKELETAL_FORMATION_TUNING.manaCostReduction * 100)}% less mana per beat.`, [mod('manaCost', 'more', -SKELETAL_FORMATION_TUNING.manaCostReduction)],
-    { tags: { add: ['channel'] }, summon: { channelFormation: { channel: { interval: SKELETAL_FORMATION_TUNING.interval, windup: SKELETAL_FORMATION_TUNING.windup, move: 'immobile', trackAim: true, cooldownOnEnd: true }, spacing: 36, reach: 470, emerge: { motion: 'rise', life: 0.35, hold: false } } } }),
+  [n('ranked_bows', 'Rising Ranks', `Channel a growing firing squad on your flanks. The first archer rises after ${SKELETAL_FORMATION_TUNING.windup} seconds, then one every ${SKELETAL_FORMATION_TUNING.interval} seconds, scaled by cast speed, up to your summon cap. They fire immediately on arrival, along your facing, and attack 50% faster while channeled. Hold without a time limit; all crumble when the channel ends. Costs ${Math.round(SKELETAL_FORMATION_TUNING.manaCostReduction * 100)}% less mana per beat.`, [mod('manaCost', 'more', -SKELETAL_FORMATION_TUNING.manaCostReduction)],
+    { tags: { add: ['channel'] }, summon: { channelFormation: { channel: { interval: SKELETAL_FORMATION_TUNING.interval, windup: SKELETAL_FORMATION_TUNING.windup, move: 'immobile', trackAim: true, cooldownOnEnd: true }, spacing: 36, reach: 470, fireOnArrival: true, attackSpeedMore: SKELETAL_FORMATION_TUNING.attackSpeedMore, emerge: { motion: 'rise', life: 0.35, hold: false } } } }),
     n('endless_quivers', 'Parting Volley', 'Releasing a full firing squad makes every archer loose one final arrow at three times damage and twice the size. Mortarmen instead fire an empowered shell.', undefined,
       { summon: { channelFormationRelease: { power: 3, size: 2 } } }),
     n('piercing_bones', 'Bone Mortars', 'Replace arrows with lobbed bone mortars that explode over a marked area. The final full-squad volley also uses mortars.', undefined,

@@ -3305,7 +3305,7 @@ export function sceneKillCtx(nativeHost: NativeSceneCombatHost, actor: Actor, ki
     });
   }
 
-export function sceneKill(nativeHost: NativeSceneCombatHost, actor: Actor, silent = false, killer?: Actor, departure?: 'expire'): void {
+export function sceneKill(nativeHost: NativeSceneCombatHost, actor: Actor, silent = false, killer?: Actor, departure?: 'expire' | 'sacrifice'): void {
     if (actor.dead) return;
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
@@ -3518,7 +3518,7 @@ export function sceneKill(nativeHost: NativeSceneCombatHost, actor: Actor, silen
     }
 
     actor.dead = true;
-    nativeHost.presenceMoment(actor, departure ?? (silent ? 'expire' : 'break'));
+    nativeHost.presenceMoment(actor, departure === 'expire' || silent ? 'expire' : 'break');
     nativeHost.guardArts.clear(actor);
     if (actor.owner) nativeHost.strikeReleaseBodies.get(actor.owner)?.delete(actor);
     nativeHost.satellites.retire(actor);

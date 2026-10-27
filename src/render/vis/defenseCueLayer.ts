@@ -1,6 +1,7 @@
 import { DEFENSE_CUE_CFG as C } from '../../data/defenseCues';
 import { defenseStyle } from '../../engine/defenseCues';
 import { shellArcFactor, type Actor } from '../../engine/actor';
+import { STATUS_APPEARANCES } from '../../data/projectileArtVisuals';
 import { STATUS_DEFS } from '../../engine/status';
 import type { PartSpec } from './parts';
 import { registerEffectVoice } from './effectVoice';
@@ -112,7 +113,7 @@ export function collectStatusBodyParts(a: Pick<Actor, 'statuses' | 'dead' | 'dow
   const parts: PartSpec[] = [], groups = new Set<string>();
   for (const s of a.statuses) {
     if (s.remaining <= 0) continue;
-    const cue = STATUS_DEFS[s.id]?.bodyCue;
+    const cue = (s.visual && STATUS_APPEARANCES[s.visual]) || STATUS_DEFS[s.id]?.bodyCue;
     if (!cue?.parts || (cue.group && groups.has(cue.group))) continue;
     if (cue.group) groups.add(cue.group);
     parts.push(...cue.parts);

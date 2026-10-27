@@ -18,7 +18,7 @@ passive with a branch, or specialize entirely within one identity.
 | Warrior | Cleave | A toggled next-melee release with independent recovery, impales and sustain | A traveling crescent with reach, knockback and spreading bleeds |
 | Warrior | Shield Up | Armor-scaled guard, regenerative plates, battering contact and bash waves | A cast absorb shield with patient empowerment, outcome satellites and lethal intervention |
 | Warrior | War Cry | A blessing shared with nearby allies and minions | Preparation consumed by one landed attack hit |
-| Magician | Firebolt | Orbiting flames, additional orbs and spreading burns | Faster piercing bolts with penetration and prolonged burning |
+| Magician | Firebolt | Durable flame satellites, item-scaled quantity, independent novas and expiry attacks | Piercing ignition, white heat, gathered ignites, pillars, ruptures, cascades and rebounding comets |
 | Magician | Frost Nova | Persistent cold ground and stack capacity | Deep Freeze procs and damage against frozen targets |
 | Magician | Chain Lightning | More bolts and chains through crowds | Returning bolts with the innate chains removed |
 | Rogue | Backstab | Chaos conversion and accumulating poison | Physical impales and positional execution |

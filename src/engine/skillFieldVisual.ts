@@ -17,7 +17,7 @@ export interface SkillFieldVisual {
 }
 export function skillFieldVisual(z: World['zones'][number], time: number): SkillFieldVisual {
   return {
-    skillId: z.inst.def.id, pos: { ...z.pos }, radius: z.radius, color: z.color,
+    skillId: z.skillVisualId ?? z.inst.def.id, pos: { ...z.pos }, radius: z.radius, color: z.color,
     shape: z.shape, facing: z.facing, delay: z.delay, exploded: z.exploded,
     linger: z.linger, tier: z.tier ?? z.caster.tier ?? 0, hitAll: z.hitAll,
     telegraph: (z.inst.def.delivery as { telegraph?: number }).telegraph ?? 1,
