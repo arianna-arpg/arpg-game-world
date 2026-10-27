@@ -11,7 +11,7 @@ import { skillSelfVoice } from '../data/skillSelfVisuals';
 import { skillPresenceVoice } from '../data/skillPresenceVisuals';
 import { feedingCueFlash } from './feedingCues';
 import { summonReservationUnit } from './companionGrants';
-import { summonContractSlots } from './summonContracts';
+import { summonCapacity, summonContractSlots } from './summonContracts';
 import { throngTravelProtected } from './throngEvolution';
 import { cosmeticSkillPaint } from '../meta/cosmetics';
 import { COSMETIC_CFG } from '../data/cosmetics';
@@ -2992,8 +2992,7 @@ nativeHost.issueCombatRecord("zones", nativeStorage, nativeRecord, nativeRecordS
           const haul = (targetInfo.corpses ?? [targetInfo.corpse])
             .filter(c => nativeHost.corpses.includes(c));
           if (!haul.length) break;
-          const rosterCap = Math.max(1, Math.round(
-            caster.sheet.get('minionMaxCount', tags, extra, d.maxActive)));
+          const rosterCap = summonCapacity(caster, inst, d);
           const standing = (d.poolGroup
             ? nativeHost.minionsOfGroup(caster, d.poolGroup)
             : nativeHost.minionsOfSkill(caster, inst.def.id)).filter(a => !a.summonOffspring).length;

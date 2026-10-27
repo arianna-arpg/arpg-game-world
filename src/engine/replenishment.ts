@@ -1,3 +1,4 @@
+import { summonCapacity } from './summonContracts';
 import type { Actor } from './actor';
 import { instanceDelivery, instanceMods, skillContextTags, type SkillInstance, type SummonDelivery } from './skills';
 
@@ -19,7 +20,7 @@ export function replenishmentActive(inst: SkillInstance): boolean {
 export function replenishShape(actor: Actor, inst: SkillInstance, d: SummonDelivery) {
   const tags = skillContextTags(inst), extra = instanceMods(inst);
   return {
-    cap: Math.max(1, Math.round(actor.sheet.get('minionMaxCount', tags, extra, d.maxActive))),
+    cap: summonCapacity(actor, inst, d),
     count: Math.max(1, d.count + Math.round(actor.sheet.get('summonCount', tags, extra))),
     interval: Math.max(0.1, (d.replenish?.interval ?? 1) * actor.sheet.get('minionRespawnTime', tags, extra)),
   };

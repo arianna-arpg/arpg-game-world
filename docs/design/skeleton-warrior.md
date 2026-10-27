@@ -1,10 +1,13 @@
 # Skeleton Warrior: the ossuary vanguard
 
-Summon Skeleton Warrior raises **one Warrior per cast, with a base cap of two**.
+Summon Skeleton Warrior raises **one Warrior per cast, with a base cap of three**.
 The fifteen-node tree retains two exclusive trunks and the four-point ability
 budget. Tempered Bones remains the four-rank neutral life/damage investment.
-Sentinels, Duelists, Assassins and Spellswords all start with the two-body cap;
-Dueling Pairs adds two slots without changing bodies per cast.
+Sentinels, Duelists, Assassins and Spellswords all start with the three-body cap.
+Dueling Pairs adds one slot, then rounds the fully modified cap upward to an even
+number. It grants four slots without other investment; totals of five and six
+both resolve to six. Bodies per cast and the existing pair-range/solo rules stay
+the same.
 
 ## Grave Phalanx
 
@@ -51,7 +54,7 @@ quarry or location.
 | Ossuary Assassins | Flensing Cadence | Converts Duelists to Assassins with Backstab and Grave Veil. They assess actual rear openings, attempt bounded flanking, retain normal attack cadence, and cloak to reposition or retreat at low life. |
 | Line Breakers | Ossuary Duelists | Grants Bone Lunge and an instant Bone Shuriken. The AI strongly prefers lunging into melee; shuriken covers the approach while the lunge recovers. |
 | Runebound Blades | Line Breakers | Choose Fire, Cold, Lightning, Venom, or a mixture. Spellswords convert 60% of physical ability damage and receive an elemental art. |
-| Dueling Pairs | Line Breakers | Adds two cap slots. Stable pairs invite one Pincer Strike after a successful lunge, with a five-second shared recovery and a bounded wait through attack recovery. |
+| Dueling Pairs | Line Breakers | Adds one cap slot and rounds the final cap up to an even number. Stable pairs invite one Pincer Strike after a successful lunge, with a five-second shared recovery and a bounded wait through attack recovery. |
 
 Death Warrant uses the ordinary attributed status path, with curse tags for
 potency and duration scaling, without a curse-zone slot. Immunity, cleansing
@@ -88,6 +91,9 @@ windup, so its own supports and use time apply.
   without branching on node or species IDs.
 - Shared GroundDelivery.domain.stackGroup prevents overlapping banners from
   stacking. Normal field retirement removes protection on respec.
+- SummonDelivery.capacityMultiple applies upward grouping after all cap modifiers;
+  spawning, reservations, previews, replenishment and simulation share it. Omitted
+  grouping retains the ordinary nearest-whole-body cap rule.
 - AuraPulse.healAllies.base = 'casterMaxLife' exposes the source-life healing
   basis for other configurable auras.
 - ActorW.spectralVeil carries the paint-only spectral overlay to peers.

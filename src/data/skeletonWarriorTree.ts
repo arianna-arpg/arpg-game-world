@@ -10,8 +10,8 @@ export const SPELLSWORD_SCHOOLS: SummonSchool[] = [
   {id:'chaos',name:'Venom',monster:'skeletal_venom_spellsword',primary:'court_twin_cut',signature:'court_venom_ground',trace:'court_venom_ground',conversion:0.6,color:'#9cc86a'},
 ];
 export const SKELETON_WARRIOR_TREE=tree([
-  n('grave_phalanx','Grave Phalanx','Raise up to two shield sentinels. 25% increased life, 15% less damage taken and 15% block chance. Their challenge taunts nearby enemies; Rally! orders them to hold a position.',
-    [life(0.25),dr(0.15),mod('minionGuard','flat',1)],{tags:{add:['physical']},summon:{monsterId:'skeletal_sentinel',maxActive:2,crewMods:[mod('blockChance','flat',0.15)],
+  n('grave_phalanx','Grave Phalanx','Raise up to three shield sentinels. 25% increased life, 15% less damage taken and 15% block chance. Their challenge taunts nearby enemies; Rally! orders them to hold a position.',
+    [life(0.25),dr(0.15),mod('minionGuard','flat',1)],{tags:{add:['physical']},summon:{monsterId:'skeletal_sentinel',crewMods:[mod('blockChance','flat',0.15)],
       cohort:{primary:'cleave',challenge:'court_challenge',order:{skill:'court_rally',label:'Rally!',mode:'rally',duration:12,range:450,guardRadius:170}}}}),
   [n('barbed_lattice','Barbed Reprisal','Blocking readies a sweeping counterattack, once per 1.5 seconds. It adds 50% of the sentinel’s Thorns as physical damage. Sentinels inherit 35% of your Thorns.',undefined,
       tactics({reprisal:{skill:'court_reprisal',cooldown:1.5,thorns:0.5,inheritThorns:0.35,range:150}})),
@@ -26,8 +26,8 @@ export const SKELETON_WARRIOR_TREE=tree([
     n('relief_guard','Relief Guard','Intercepted damage supplies a healing reserve: 30% is banked, up to 12% of sentinel maximum life. Relief Pulse spends it every two seconds. A gentle aura also heals nearby allies for 0.1% of the sentinel’s maximum life each second.',undefined,
       tactics({relief:{pulse:'court_relief_pulse',aura:'court_relief_aura',ratio:0.3,bank:0.12,interval:2,recipientCap:0.06}}))],
 ],[
-  n('ossuary_duelists','Ossuary Duelists','Raise up to two mobile duelists using Twin Cut. Command them to pursue a target or location.',undefined,
-    {tags:{add:['physical']},summon:{monsterId:'skeletal_duelist',maxActive:2,cohort:{primary:'court_twin_cut',order:{skill:'court_pursuit',label:'Pursue!',mode:'assault',duration:10,range:600,guardRadius:170}}}}),
+  n('ossuary_duelists','Ossuary Duelists','Raise up to three mobile duelists using Twin Cut. Command them to pursue a target or location.',undefined,
+    {tags:{add:['physical']},summon:{monsterId:'skeletal_duelist',cohort:{primary:'court_twin_cut',order:{skill:'court_pursuit',label:'Pursue!',mode:'assault',duration:10,range:600,guardRadius:170}}}}),
   [n('flensing_edges','Flensing Cadence','Every third primary attack becomes Rending Cut: a broad, bleeding slash. Repeated strikes belong to one attack and do not advance this cadence again.',undefined,
       tactics({cadence:{every:3,skill:'court_rending_cut'}})),
     n('open_veins','Death Warrant','Commanding an enemy marks it for death for eight seconds. The next Rending Cut from this cohort consumes the mark for 150% more damage. Curse effect and duration scale the warrant without occupying a curse slot.',undefined,
@@ -38,6 +38,6 @@ export const SKELETON_WARRIOR_TREE=tree([
       tactics({approach:{lunge:'court_bone_lunge',ranged:'court_bone_shuriken',minRange:80,range:350}})),
     n('relentless_footwork','Runebound Blades','Choose Fire, Cold, Lightning or Venom Spellswords, or a mixture. They convert 60% of physical ability damage to their element and learn a distinct elemental art. Click this node to choose elements.',undefined,
       {summon:{pool:SPELLSWORD_SCHOOLS.map(s=>({id:s.monster,weight:1})),arts:{schools:SPELLSWORD_SCHOOLS,balanceSchools:true,lessons:true,choicesLabel:'Choose Spellsword elements'}}}),
-    n('dueling_pairs','Dueling Pairs','Add two maximum duelists, without changing summons per cast. Stable pairs coordinate a Pincer Strike after a successful lunge, with a five-second pair recovery. Unpaired warriors continue fighting normally.',[cap(2)],
-      tactics({pairs:{skill:'court_pincer_strike',cooldown:5,delay:0.25,range:280,timeout:2}}))],
+    n('dueling_pairs','Dueling Pairs','Add one maximum duelist, then round the final cap up to an even number after all modifiers, without changing summons per cast. Stable pairs coordinate a Pincer Strike after a successful lunge, with a five-second pair recovery. Unpaired warriors continue fighting normally.',[cap(1)],
+      {summon:{capacityMultiple:2,cohort:{pairs:{skill:'court_pincer_strike',cooldown:5,delay:0.25,range:280,timeout:2}}}})],
 ],n('tempered_bones','Tempered Bones','15% increased minion life and damage.',[life(0.15),damage(0.15)]));

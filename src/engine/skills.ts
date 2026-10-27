@@ -2015,6 +2015,9 @@ export interface SummonDelivery {
   grimoire?: boolean;
   count: number;
   maxActive: number;      // oldest minion is replaced beyond this
+  /** Round the final stat-adjusted cap upward to this positive whole group size.
+   * Omit to retain ordinary nearest-body rounding. Does not alter births per cast. */
+  capacityMultiple?: number;
   /** Capacity only: skills sharing a poolGroup count against one body limit. */
   poolGroup?: string;
   /** Activating this summon dismisses other summon types in this group.
@@ -5158,7 +5161,7 @@ export interface SkillTreeNode {
     /** Summon-tree adoption: execute/spawn, pending summons, previews and
      *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */
-    summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'duration' | 'replenish'
+    summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'capacityMultiple' | 'duration' | 'replenish'
       | 'arts' | 'cohort' | 'channelFormation' | 'channelFormationRelease' | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
     /** Host tag changes. Crew skills retain their own attack/spell tags. */
     tags?: { add?: SkillTag[]; remove?: SkillTag[] };

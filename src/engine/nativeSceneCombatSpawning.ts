@@ -196,7 +196,7 @@ export function sceneHivecallRoster(nativeHost: NativeSceneCombatHost, hero: Act
 export function sceneHivecallCap(nativeHost: NativeSceneCombatHost, hero: Actor, inst: SkillInstance): number {
     const d = instanceDelivery(inst);
     if (d.type !== 'summon') return 0;
-    const raw = Math.max(1, Math.round(hero.sheet.get('minionMaxCount', skillContextTags(inst), instanceMods(inst), d.maxActive)));
+    const raw = summonCapacity(hero, inst, d);
     const contract = hero.summonToggles.get(inst.def.id);
     const unit = summonReservationUnit(hero, inst, d);
     return contract && unit > 0 ? Math.min(raw, Math.round(contract.reserved / unit)) : raw;

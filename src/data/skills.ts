@@ -2090,12 +2090,12 @@ export const SKILLS: Record<string, SkillDef> = {
   summon_skeleton: {
     tree: NECROMANCER_TREES.summon_skeleton,
     id: 'summon_skeleton', name: 'Summon Skeleton Warrior',
-    description: 'Raise a skeletal warrior to fight beside you; up to 2 may serve at once, and'
+    description: 'Raise a skeletal warrior to fight beside you; up to 3 may serve at once, and'
       + ' their strength scales with your minion stats. The slot\'s meta-action, Attack!,'
       + ' orders an assault on your mark.',
     tags: ['spell', 'summon', 'minion'], color: '#cfc8b8',
     manaCost: 22, cooldown: 1.5, useTime: 0.9,
-    delivery: { type: 'summon', monsterId: 'skeleton_warrior', count: 1, maxActive: 2 },
+    delivery: { type: 'summon', monsterId: 'skeleton_warrior', count: 1, maxActive: 3 },
     meta: { skillId: 'command_assault', label: 'Attack!' },
     effects: [],
     requirements: { wisdom: 14, willpower: 10 },
