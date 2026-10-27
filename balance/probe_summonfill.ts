@@ -226,7 +226,7 @@ function runLane(skill: string, gems: GemSpec[], seconds: number, offAt?: number
     e.births.slice(1).map((x, i) => (x.t - e.births[i].t).toFixed(2)).join(' · '));
   check('E: no contract, no reservation — the toggle fabric never engaged',
     !e.p.summonToggles.has('summon_skeleton') && e.reservedEnd === 0
-    && e.aliveEnd === 3,
+    && e.aliveEnd === 2 && e.seen.size === 3,
     `reserved=${e.reservedEnd.toFixed(1)} alive=${e.aliveEnd}`);
 }
 
