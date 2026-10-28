@@ -170,6 +170,7 @@ import { castingCompletion } from '../engine/castingCues';
 import { chestReadout, drawChestReadout } from './vis/chestReadout';
 import { castMovementHeld, drawCastName, drawCastSlot } from './vis/castReadout';
 import { COMBAT_CUE_CFG } from '../data/combatCues';
+import { drawFrameBodyCue } from './vis/frameVoice';
 import { drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
 import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
 import { drawMovementTether } from './vis/movementTetherLayer';
@@ -5600,14 +5601,15 @@ export class Renderer {
 
   /** An attached summon leaves the keeper visible inside its breakable shell.
    * Arc, pool and break state are the same values used by damage absorption. */
-  private drawSummonShell(a: Actor, time: number): void {
-    const sg = a.shellGuard;
+  private drawSummonShell(a: Actor, world: World): void {
+    const sg = a.shellGuard, time = world.time;
     if (!sg) return;
     const ctx = this.ctx, r = Math.max(25, a.radius + 8);
     ctx.save(); ctx.translate(a.pos.x, a.pos.y);
-    drawShellCue(ctx, a, time, r);
+    drawFrameBodyCue(ctx, a, world.frameArts.bodyPresentation(a), time);
+    const anatomy = drawShellCue(ctx, a, time, r);
     ctx.strokeStyle = sg.color;
-    if (a.casting && !sg.broken) {
+    if (a.casting && !sg.broken && !anatomy) {
       const facing = Math.atan2(a.casting.aim.y - a.pos.y, a.casting.aim.x - a.pos.x);
       ctx.globalAlpha = 0.8; ctx.lineWidth = 5;
       for (const offset of [-0.25, 0.25]) {
@@ -5641,7 +5643,7 @@ export class Renderer {
       }
       ctx.restore(); return;
     }
-    if (a.summonShell) { this.drawSummonShell(a, world.time); return; }
+    if (a.summonShell) { this.drawSummonShell(a, world); return; }
     const { ctx } = this;
     const { x, y } = a.pos;
 
@@ -6176,6 +6178,8 @@ export class Renderer {
 
     ctx.save(); ctx.globalAlpha = baseAlpha;
     drawAltarInfluence(ctx, altarInfluences(a, world.altars), a.radius, a.pos, world.time); ctx.restore();
+    ctx.save(); ctx.globalAlpha = baseAlpha;
+    drawFrameBodyCue(ctx, a, world.frameArts.bodyPresentation(a), world.time); ctx.restore();
     drawShellCue(ctx, a, world.time);
     ctx.save(); ctx.globalAlpha = baseAlpha;
     drawPayloadBody(ctx, payloadCueRows(a, world), a.radius); ctx.restore();

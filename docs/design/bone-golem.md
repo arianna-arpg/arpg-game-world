@@ -33,3 +33,25 @@ Each available attack, utility pulse, healing spell, ward, field and command has
 Voluntary life payments bypass immunity and defenses but remain attributed hit events. Committed attacks finish before lethal self-payment resolves death. Charge immunity clears on completion, cancellation, dismissal or timeout. Respec, dismissal, owner departure and zone changes clear frame-owned commands, fields and receipts without granting death offspring.
 
 Run `npm run check`, `npx tsx balance/probe_bonegolem.ts`, `npx tsx balance/probe_nestednecromancer.ts`, the green probe roster, and the smoke simulation. After building, `npx electron balance/bone-golem-ui.cjs` checks the real client and saves inspection images in `balance/reports/`.
+
+
+## Visual language
+
+Living Ossuary selects the `ossuary` defense profile. Its open anatomy is authored
+in `src/data/frameVisuals.ts`: a skull and spine behind the keeper, enclosing
+shoulders and arms, and separate ribs. The renderer clips it to the real
+directional coverage and leaves the keeper visible. Broken bones separate and
+dim; rebuilding follows the actual guard pool and reform threshold. Other shell
+profiles retain their existing rendering and unknown anatomy falls back to plates.
+
+The same visual registry supplies the moving ribbed Rampart vanguard and body
+cues: pale enclosing ribs for actual charging participants, a flowing caster
+tether for Reknit, a warm strain indicator for Sanctuary, and a contracting
+countdown around the Reliquary's terminal body. These are presentation only.
+`FrameSpec.visual` and `charge.fx` select them independently of the ability kit.
+The host resolves body cues for co-op; release, charge completion and death clear
+them from subsequent snapshots. Ordinary ability impacts retain their own art.
+
+The hidden UI course captures four facings, broken/reforming anatomy, the
+projected escort, repair and terminal charge. It also exports
+`balance/reports/bone-golem-visual-study.png` from actual game frames.

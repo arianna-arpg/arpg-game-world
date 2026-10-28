@@ -1,6 +1,6 @@
 import {nativeStatusCreated,nativeStatusSelectCaster,nativeStatusCasterAssigned,beginNativeStatusSelection,endNativeStatusSelection,nativeStatusExpired} from './nativeStatusProvenance';
 import {nativeActorConstructed} from './nativeActorConstruction';
-import type { FrameState, FrameView } from './frameSpec';
+import type { FrameState, FrameView, FrameBodyView } from './frameSpec';
 import type { CohortState, CohortMark } from './cohortSpec';
 import type { SummonArtContract, SummonArtState, SummonArtView } from './summonArtsSpec';
 import { summonReservationUnit } from './companionGrants';
@@ -1069,6 +1069,7 @@ export class Actor {
   /** TOGGLED SUMMON CONTRACTS by skill id (PoE2 Spirit style): the skill —
    *  not the minion — owns the reservation, held across every death. */
   frameState?: FrameState;
+  remoteFrameBody?: FrameBodyView;
   remoteFrames?: Record<string,FrameView>;
   frameCharging = false;
   hitObservers?: Map<string,(attacker:Actor,packet:import('./damage').DamagePacket,result:import('./damage').HitResult)=>void>;

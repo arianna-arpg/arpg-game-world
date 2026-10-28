@@ -136,6 +136,7 @@ export const WIRE_CFG = {
 export interface ActorW {
   spectralVeil?: Actor['spectralVeil'];
   frames?: Record<string, import('../engine/frameSpec').FrameView>;
+  frameBody?: import('../engine/frameSpec').FrameBodyView;
   summonArts?: Record<string, import('../engine/summonArtsSpec').SummonArtView>;
   bodyActionPose?: import('../engine/bodyAction').BodyActionPose;
   bodyWalkPose?: import('../engine/bodyWalk').BodyWalkPose;
@@ -908,6 +909,7 @@ function actorToW(a: Actor, world: NativeSnapshotHost): ActorW {
     id: a.id, p: v2(a.pos), f: a.facing, r: a.radius, c: a.color, sh: a.shape,
     team: a.team, name: a.name,
     frames: world.frameArts?.presentation(a),
+    frameBody: world.frameArts?.bodyPresentation(a),
     summonArts: world.summonArts?.presentation(a),
     life: Math.max(0, Math.round(a.life)), maxLife: Math.round(a.maxLife()),
     es: Math.round(a.es), maxEs: Math.round(a.maxEs()),
@@ -2106,6 +2108,7 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.aims = aw.aims !== false; // absent = aims (older hosts, ordinary bodies)
     a.wane = aw.wn ?? 0;
     a.owner = aw.mn ? MINION_OWNER : undefined;
+    a.remoteFrameBody=aw.frameBody ? { ...aw.frameBody, from: aw.frameBody.from ? { ...aw.frameBody.from } : undefined } : undefined;
     a.remoteFrames=aw.frames ? Object.fromEntries(Object.entries(aw.frames).map(([id,row])=>[id,{...row}])):undefined;
     a.remoteSummonArts = aw.summonArts ? Object.fromEntries(Object.entries(aw.summonArts).map(([id, row]) => [id, { ...row }])) : undefined;
     a.summonShell = aw.ss;

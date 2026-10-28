@@ -3,6 +3,8 @@ import type { SkillInstance, SummonDelivery } from './skills';
 import type { Vec2 } from '../core/math';
 /** Composable summoned-frame actions. Skill references and balance knobs are authored. */
 export interface FrameSpec {
+  /** Presentation registry key, independent of the action kit. */
+  visual?: string;
   primary: string;
   slam?: string;
   arsenal?: {
@@ -67,6 +69,7 @@ export interface FrameSpec {
     damagePerSlot: number;
   };
   charge?: {
+    fx?: string;
     command: string;
     rush: string;
     wave: string;
@@ -149,6 +152,13 @@ export interface FrameState {
     strike?: string;
     pace: number;
   };
+}
+/** Host-resolved body state. It never grants protection or changes targeting. */
+export interface FrameBodyView {
+  style: string;
+  mode: 'repair' | 'transfusion' | 'terminal' | 'charge' | 'crush';
+  strength?: number;
+  from?: Vec2;
 }
 export interface FrameView {
   skill: string;
