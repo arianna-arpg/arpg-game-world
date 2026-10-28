@@ -338,6 +338,14 @@ try {
     t.w.executeSkill(t.p,t.w.frameArts.view(t.p,t.host)!,t.p.pos);
     check('repair pulses heal without turning the autonomous frame',a.life>before&&near(a.facing,Math.PI));
   }
+
+  {
+    const t=setup(['keepers_bulwark','close_guard','warding_reach']);t.p.sheet.setSource('extra-frame',[mod('minionMaxCount','flat',1)]);
+    const a=summon(t);step(t.w,10);const bodies=t.w.actors.filter(b=>!b.dead&&b.owner===t.p&&b.summonInst===t.host&&!b.summonOffspring);
+    t.p.useLock=0;t.w.useMetaSkill(t.p,t.host,{x:a.pos.x+180,y:a.pos.y});step(t.w,3);
+    const before=t.p.cooldowns.get('frame_charge_order')??0;t.w.kill(a,false,t.p);step(t.w,.1);
+    check('losing the vanguard preserves the surviving frames shared command recovery',bodies.length===2&&before>1&&(t.p.cooldowns.get('frame_charge_order')??0)>before-.2);
+  }
 }
 finally {
   SIM_TAP.current = null;

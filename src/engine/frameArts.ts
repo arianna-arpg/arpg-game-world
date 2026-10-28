@@ -266,7 +266,8 @@ export class FrameArts {
     if (inst.def.id === f.charge?.command) {
       if (this.commandLeft(body) > this.w.time)
         return;
-      body.frameState!.commandReady = this.w.time + this.cooldown(owner, inst);
+      const ready = this.w.time + this.cooldown(owner, inst);
+      for (const member of members) member.frameState!.commandReady = ready;
       this.syncCommand(body);
       this.startWedge(body, host, aim);
       return;
