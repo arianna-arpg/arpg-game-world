@@ -7491,7 +7491,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   bone_golem: {
     id: 'bone_golem', name: 'Bone Golem',
     color: '#d8d0c0', shape: 'octagon', radius: 18, material: 'bone', look: 'golem_bone_assembled',
-    base: { life: 140, moveSpeed: 105, accuracy: 95, armor: 40, mana: 40, manaRegen: 4, poise: 60 },
+    base: { life: 140, moveSpeed: 105, accuracy: 95, armor: 40, mana: 40, manaRegen: 4, poise: 60, bodyMass: 4 },
     mods: [mod('chaosRes', 'flat', 0.5), mod('damageTaken', 'more', -0.1)],
     skills: ['ground_slam', 'claw'],
     xp: 0,

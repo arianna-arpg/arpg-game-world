@@ -44,6 +44,7 @@ import {padBar,emptyEssences,emptyAbilityEssences,rebuildSkill} from './nativePr
 type Zone=World['zones'][number];
 type InheritedFlight=ReturnType<World['inheritedFlight']>;
 export interface NativeSceneProgressionHost {
+ readonly frameArts?:Pick<World['frameArts'],'clear'|'recovery'>;
  clientActionHook:World['clientActionHook'];
  localSeat:World['localSeat'];
  account:World['account'];
@@ -786,8 +787,9 @@ export function sceneDismissSummonToggle(nativeHost:NativeSceneProgressionHost,o
   }
 
 export function sceneClearSummonReleaseFields(nativeHost:NativeSceneProgressionHost,owner: Actor, inst: SkillInstance): void {
+    nativeHost.frameArts?.clear(owner,inst);
     const d = instanceDelivery(inst);
-    if (d.type !== 'summon' || (!d.strikeRelease && !d.arts && !d.cohort)) return;
+    if (d.type !== 'summon' || (!d.strikeRelease && !d.arts && !d.cohort && !d.frame)) return;
     const payloads = [...nativeHost.projectiles, ...nativeHost.zones, ...nativeHost.pendingRepeats, ...nativeHost.pendingFuses,
       ...nativeHost.pendingSalvos, ...nativeHost.pendingSteps, ...nativeHost.pendingFollowUps];
     const bodies = new Set([...nativeHost.actors, ...payloads.map(p => p.caster)]);
@@ -815,7 +817,7 @@ export function sceneReleaseContract(nativeHost:NativeSceneProgressionHost,minio
       const tags = skillContextTags(inst);
       const extra = instanceMods(inst);
       const timer = inst.def.delivery.persistent.respawnTime
-        * owner.sheet.get('minionRespawnTime', tags, extra);
+        * owner.sheet.get('minionRespawnTime', tags, extra) * (nativeHost.frameArts?.recovery(minion) ?? 1);
       {
  let nativeQueue:typeof nativeHost.pendingRespawns;let nativeRecord:(typeof nativeHost.pendingRespawns)[number];let nativeSource:NativeRecordActor|null=null;let nativeInstance:NativeRecordSkill|undefined=undefined;
  (nativeQueue=observeNativeCombatStorage(nativeHost,'pendingRespawns',nativeHost.pendingRespawns)).push(nativeRecord={ caster:(nativeSource=owner), inst:(nativeInstance=inst), timer });
@@ -851,6 +853,7 @@ export function sceneSettleLedger(nativeHost:NativeSceneProgressionHost,bearer: 
   }
 
 export function sceneClearTreeFields(nativeHost:NativeSceneProgressionHost,caster: Actor, inst: SkillInstance): void {
+    nativeHost.frameArts?.clear(caster,inst);
     nativeHost.guardArts.clear(caster, inst);
     nativeHost.attackSequences.clear(caster, inst);
     nativeHost.challenges.clear(caster, inst);

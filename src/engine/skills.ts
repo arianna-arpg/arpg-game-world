@@ -1,3 +1,4 @@
+import { frameSkillIds, type FrameSpec, type FrameCast } from './frameSpec';
 import { cohortSkillIds, type CohortSpec, type CohortCast } from './cohortSpec';
 import { summonArtIds, type SummonArtsSpec, type SummonArtCast } from './summonArtsSpec';
 import { projectileArtsDelivery, type ProjectileArtsSpec } from './projectileArtsSpec';
@@ -455,6 +456,7 @@ export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
   if (d.type === 'summon' && (over?.summon || d.selectPool?.length)) {
     const summonOver = over?.summon ?? {};
     const resolved = { ...d, ...summonOver };
+    resolved.frame = d.frame || summonOver.frame ? { ...d.frame, ...summonOver.frame } : undefined;
     resolved.cohort = d.cohort || summonOver.cohort ? { ...d.cohort, ...summonOver.cohort } : undefined;
     resolved.arts = d.arts || summonOver.arts ? { ...d.arts, ...summonOver.arts } : undefined;
     resolved.crewSkills = union(d.crewSkills, summonOver.crewSkills);
@@ -501,6 +503,8 @@ export function instanceMetas(inst: SkillInstance): { skillId: string; label: st
     if (m && !seen.has(m.skillId)) { seen.add(m.skillId); out.push(m); }
   };
   const d = instanceDelivery(inst);
+  const frameCommand=d.type==='summon' ? d.frame?.charge?.command ?? d.frame?.crush?.command ?? d.frame?.protect?.command : undefined;
+  if(frameCommand) add({skillId:frameCommand,label:d.type==='summon'&&d.frame?.charge?'Advance!':d.type==='summon'&&d.frame?.crush?'Crush!':'Interpose!'});
   add(d.type === 'summon' && d.cohort?.order ? { skillId: d.cohort.order.skill, label: d.cohort.order.label } : inst.def.meta);
   for (const s of hostSockets(inst)) add(s.def.meta);
   return out;
@@ -1955,6 +1959,7 @@ export interface SelfDelivery {
  * Its own kit becomes the strike skill plus taught crew arts. It protects its
  * owner through the ordinary shell absorption path, without replacing other shells. */
 export interface SummonShellSpec {
+  side?: 'front' | 'rear' | 'all';
   shellVisual?: string;
   lifeFraction: number;
   /** Capacity scales by minionSize raised to this power; angular coverage stays fixed. */
@@ -1968,6 +1973,7 @@ export interface SummonShellSpec {
 }
 
 export interface SummonDelivery {
+  frame?: Partial<FrameSpec>;
   arts?: SummonArtsSpec;
   cohort?: Partial<CohortSpec>;
   type: 'summon';
@@ -5162,7 +5168,7 @@ export interface SkillTreeNode {
      *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */
     summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'capacityMultiple' | 'duration' | 'replenish'
-      | 'arts' | 'cohort' | 'channelFormation' | 'channelFormationRelease' | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
+      | 'frame' | 'arts' | 'cohort' | 'channelFormation' | 'channelFormationRelease' | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
     /** Host tag changes. Crew skills retain their own attack/spell tags. */
     tags?: { add?: SkillTag[]; remove?: SkillTag[] };
     /** delivery.arcDeg replacement (cone/melee deliveries only). */
@@ -5353,6 +5359,7 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
         ...(out.summon || over.summon
           ? { summon: { ...out.summon, ...over.summon,
             ...(over.summon?.pool ? { monsterId: undefined } : over.summon?.monsterId ? { pool: undefined } : {}),
+            frame: out.summon?.frame || over.summon?.frame ? { ...out.summon?.frame, ...over.summon?.frame } : undefined,
             cohort: out.summon?.cohort || over.summon?.cohort ? { ...out.summon?.cohort, ...over.summon?.cohort } : undefined,
             arts: out.summon?.arts || over.summon?.arts ? { ...out.summon?.arts, ...over.summon?.arts } : undefined,
             selectPool: union(out.summon?.selectPool, over.summon?.selectPool),
@@ -5992,6 +5999,11 @@ export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>):
 export interface SkillInstance {
   summonSchools?: string[];
   summonArtCast?: SummonArtCast;
+  frameCast?: FrameCast;
+  frameExclusions?: ReadonlySet<number>;
+  frameReceipts?: Set<number>;
+  frameHost?: SkillInstance;
+  frameHeal?: { remaining: number };
   cohortCast?: CohortCast;
   cohortHeal?: { remaining: number; base: number; cap: number };
   summonCommandHost?: SkillInstance;
@@ -6713,6 +6725,7 @@ export function summonKitIds(d: SummonDelivery, monsterId: string, native: strin
   const rules = (d.crewRules ?? []).filter(r => r.monsterIds.includes(monsterId));
   // Replacements only read the original kit: ordering cannot build replacement chains.
   ids = ids.map(id => rules.flatMap(r => r.replace ?? []).reverse().find(r => r.from === id)?.to ?? id);
+  if (d.frame?.primary) ids = [d.shell?.strikeSkill ?? d.frame.primary, ...[d.frame.slam,d.frame.protect?.sweep].filter((id):id is string=>!!id)];
   if (d.cohort?.primary) ids = [d.cohort.primary, ...(d.cohort.challenge ? [d.cohort.challenge] : [])];
   if (d.arts?.rite) ids.push(d.arts.rite);
   const school = d.arts?.schools?.find(s => s.monster === monsterId);
@@ -6759,6 +6772,7 @@ export function summonCrewOf(
     if (!mdef) continue;
     for (const sid of summonKitIds(d, mid, [...mdef.skills, ...(mdef.grants ?? []).flatMap(g => g.skill ? [g.skill] : [])])) add(sid, mid);
     for (const id of cohortSkillIds(d)) add(id, mid);
+    for (const id of frameSkillIds(d)) add(id, mid);
   }
   for (const id of summonArtIds(d)) add(id);
   return out.length ? out : null;

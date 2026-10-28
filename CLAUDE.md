@@ -1,3 +1,6 @@
+Bone Golem native adapters preserve supported healing, reconstruction, command binding and cleanup through nativeSceneRestoration, nativeSceneProgression and nativeSceneCastingPreparation. The current behavior gate includes bonegolem.
+
+Bone Golem frame abilities, the four-point routes, support routing and lifecycle checks are documented in [bone-golem](docs/design/bone-golem.md). Verify bonegolem, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden bone-golem-ui course.
 Skeleton Warrior infantry, spectral heirs, Spellsword choices and the shared Mage/Warrior node picker are documented in [skeleton-warrior](docs/design/skeleton-warrior.md). Verify skeletonwarrior, skeletonmage, skeletonarcher, necromancercourts, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden skeleton-mage-ui and skeleton-warrior-ui courses.
 
 **Current scope:** [CURRENT.md](CURRENT.md) is the project direction and active/deferred work entrypoint. Deliver the offline seamless generation/content/event vision; new shard/MMORPG work is deferred. Prepare useful future boundaries without letting hosting dictate this phase. Existing zone content and the owner's game references are examples and reusable material, not generation laws. This priority supersedes conflicting older roadmaps and hosting handoffs.

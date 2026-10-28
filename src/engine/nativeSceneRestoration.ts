@@ -49,6 +49,7 @@ seatText(by: Actor | null | undefined, at: Vec2, text: string, color: string, si
 creditFloat(by: Actor | null | undefined, seatId?: string | null): void;
 }
 export interface NativeSceneRestorationHost extends NativeSceneRestorationApi {
+ readonly frameArts?:Pick<World['frameArts'],'heal'|'healed'>;
  readonly cohortArts?:Pick<World['cohortArts'],'heal'>;
  showSkillArrival:World['showSkillArrival'];
  readonly actors:World['actors'];readonly flashes:World['flashes'];readonly texts:World['texts'];readonly tethers:World['tethers'];
@@ -153,7 +154,8 @@ export function sceneApplyHeal(host:NativeSceneRestorationHost,
     if (target.dead || target.downed || (fx.excludeCaster && target === caster)) return 0;
     const tags = skillContextTags(inst, grantedTags(inst));
     const extra = instanceMods(inst);
-    let raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
+    const budget=(fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife();
+    let raw = (host.frameArts?.heal(caster,inst,target,budget) ?? budget)
       * caster.sheet.get('healPower', tags, extra) * mult
       * host.critMendMult(caster, inst, quiet ? undefined : target.pos);
     raw = host.cohortArts?.heal(caster, inst, target, raw) ?? raw;
@@ -166,11 +168,13 @@ export function sceneApplyHeal(host:NativeSceneRestorationHost,
       const total = raw * hot.factor;
       target.restoreStreams.push({
         resource: 'life', perSec: total / hot.seconds, remaining: total,
+        onHeal:inst.frameHeal?(amount:number)=>host.frameArts?.healed(caster,inst,target,amount):undefined,
         feedingCue: inst.def.feedingCue,
       });
       return 0;
     }
     const landed = target.healBy(raw);
+    host.frameArts?.healed(caster,inst,target,landed);
     // A landed mend is a GAIN EVENT (sympathy 'heal' channel — tick-rate
     // sources call healBy directly and stay quiet here). Echoes heal via
     // healBy alone and never re-event: heal chains are structurally dead.

@@ -1,5 +1,6 @@
 import {nativeStatusCreated,nativeStatusSelectCaster,nativeStatusCasterAssigned,beginNativeStatusSelection,endNativeStatusSelection,nativeStatusExpired} from './nativeStatusProvenance';
 import {nativeActorConstructed} from './nativeActorConstruction';
+import type { FrameState, FrameView } from './frameSpec';
 import type { CohortState, CohortMark } from './cohortSpec';
 import type { SummonArtContract, SummonArtState, SummonArtView } from './summonArtsSpec';
 import { summonReservationUnit } from './companionGrants';
@@ -1067,6 +1068,10 @@ export class Actor {
   dischargeAt = new Map<string, number>();
   /** TOGGLED SUMMON CONTRACTS by skill id (PoE2 Spirit style): the skill —
    *  not the minion — owns the reservation, held across every death. */
+  frameState?: FrameState;
+  remoteFrames?: Record<string,FrameView>;
+  frameCharging = false;
+  hitObservers?: Map<string,(attacker:Actor,packet:import('./damage').DamagePacket,result:import('./damage').HitResult)=>void>;
   summonToggles = new Map<string, { inst: SkillInstance; reserved: number; slots?: number }>();
   /** A released summon remains an owned slot while its body gathers again. */
   summonReform?: { remaining: number; duration: number; invulnerable: boolean; untargetable: boolean };
@@ -1386,6 +1391,7 @@ export class Actor {
   /** RESTORE STREAMS (restoreOverTime — the flask pours): each entry
    *  trickles a resource until spent. Life flows through healBy. */
   restoreStreams: { resource: 'life' | 'mana' | 'es'; perSec: number; remaining: number;
+    onHeal?: (amount:number)=>void;
     feedingCue?: import('../data/feedingCues').FeedingCueSpec | false }[] = [];
   /** THE PRIMED POUR (pourPrime): full-pool sips BANKED at press — every
    *  cost paid, the self-payload deferred — released whole by the first
@@ -3448,6 +3454,7 @@ export class Actor {
       st.remaining -= step;
       if (st.resource === 'life') {
         const landed = this.healBy(step);
+        st.onHeal?.(landed);
         noteRestoreGain(this, 'life', landed, st.feedingCue);
         // STREAM OVERMEND (2026-08-08, the pre-emptive drinker's lane):
         // pour past a full pool HARDENS instead of evaporating — ceiling

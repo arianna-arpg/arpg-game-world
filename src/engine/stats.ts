@@ -839,6 +839,7 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  bond heals, everything through Actor.healBy (the damageTaken mirror:
    *  a "seared wounds" debuff is pure status data). */
   healTaken:      { label: 'Healing Received', base: 1, min: 0 },
+  bodyMass:       { label: 'Body Mass', base: 1, min: 0 },
   /** Multiplier on healing the actor GIVES (heal effects, siphons, tree
    *  bursts) — the healer's damage stat. Tag-filtered like damage, so
    *  "increased healing with channelled skills" is a modifier away. */

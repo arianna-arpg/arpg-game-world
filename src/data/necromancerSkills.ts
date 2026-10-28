@@ -1,3 +1,4 @@
+import { BONE_GOLEM_SKILLS } from './boneGolemSkills';
 import { SKELETON_MAGE_SKILLS } from './skeletonMageSkills';
 import { SKELETON_ARCHER_SKILLS } from './skeletonArcherSkills';
 import { UNDEAD_COURT_SKILLS } from './necromancerCourts';
@@ -18,6 +19,7 @@ const aura = (id: string, name: string, spec: AuraSpec): SkillDef => ({
   delivery: { type: 'aura', mode: 'toggle', aura: spec }, effects: [],
 });
 export const NECROMANCER_SKILLS: Record<string, SkillDef> = {
+  ...BONE_GOLEM_SKILLS,
   ...UNDEAD_COURT_SKILLS,
   ...SKELETON_ARCHER_SKILLS,
   ...SKELETON_MAGE_SKILLS,

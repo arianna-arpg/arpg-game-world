@@ -27,7 +27,7 @@ heldSkillInst(actor: Actor, skillId: string): SkillInstance | null;
 relocationTarget(caster: Actor, inst: SkillInstance, radius: number): Actor | undefined;
 mintMetaInstance(caster: Actor, host: SkillInstance, skillId: string): SkillInstance;
 }
-export interface NativeSceneCastingPreparationHost {readonly actors:World['actors'];readonly time:World['time'];readonly comboCursors:WeakMap<Actor,Map<string,ComboCursor>>;readonly relocationHosts:WeakMap<SkillInstance,SkillInstance>;grantAbsorb:NativeSceneRestorationApi['grantAbsorb'];seatOf:World['seatOf'];}
+export interface NativeSceneCastingPreparationHost {readonly frameArts?:Pick<World['frameArts'],'bindCommand'>;readonly actors:World['actors'];readonly time:World['time'];readonly comboCursors:WeakMap<Actor,Map<string,ComboCursor>>;readonly relocationHosts:WeakMap<SkillInstance,SkillInstance>;grantAbsorb:NativeSceneRestorationApi['grantAbsorb'];seatOf:World['seatOf'];}
 export function scenePaySkillCost(scene:NativeSceneCastingPreparationHost,caster: Actor, inst: SkillInstance, cost: { mana: number; life: number }): void {
     const paid = {
       mana: Math.max(0, Math.min(caster.mana, cost.mana)),
@@ -155,5 +155,6 @@ export function sceneMintMetaInstance(scene:NativeSceneCastingPreparationHost,ca
       caster.metaInsts.set(key, inst);
       if (relocateConstruct) scene.relocationHosts.set(inst, host);
     }
+    scene.frameArts?.bindCommand(host,inst);
     return inst;
   }

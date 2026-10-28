@@ -1,3 +1,4 @@
+import { frameErrors } from '../engine/frameSpec';
 import { summonArtIds } from '../engine/summonArtsSpec';
 import { deviceTriggerErrors } from '../engine/groundDevices';
 // ---------------------------------------------------------------------------
@@ -2144,6 +2145,7 @@ export function validateContent(): void {
       for (const id of [d.monsterId, ...(d.pool ?? []).map(p => p.id)]) {
         if (id && !MONSTERS[id]) warn(`${src}: unknown summon monster '${id}'`);
       }
+      if(d.frame)for(const error of frameErrors(d.frame,id=>!!SKILLS[id],id=>!!MONSTERS[id]))warn(src+': '+error);
       if (d.arts) {
         const a = d.arts;
         for (const id of [...summonArtIds(d), a.command].filter((s): s is string => !!s)) if (!SKILLS[id]) warn(src + ': unknown summon art ' + id);
@@ -3123,7 +3125,7 @@ export function validateContent(): void {
   // against the kit's own defs.
   {
     const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns', 'recallImpales', 'aura', 'invocation']);
-    const SUMMON_KEYS = new Set(['arts', 'cohort', 'count', 'maxActive', 'capacityMultiple', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease', 'channelFormation', 'channelFormationRelease']);
+    const SUMMON_KEYS = new Set(['frame', 'arts', 'cohort', 'count', 'maxActive', 'capacityMultiple', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease', 'channelFormation', 'channelFormationRelease']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);
@@ -3200,6 +3202,7 @@ export function validateContent(): void {
         for (const k of Object.keys(n.over?.channel ?? {})) {
           if (!OVER_CHANNEL_KEYS.has(k)) warn(`${at}/${n.id}: over.channel.${k} is off the audited whitelist`);
         }
+        if(n.over?.summon?.frame)for(const error of frameErrors(n.over.summon.frame,id=>!!SKILLS[id],id=>!!MONSTERS[id]))warn(at+'/'+n.id+': '+error);
         const treeChargeCost = n.over?.chargeCost;
         const reduceCooldowns = n.over?.reduceCooldowns;
         if (reduceCooldowns && (!def.effects.some(fx => fx.type === 'reduceCooldowns')

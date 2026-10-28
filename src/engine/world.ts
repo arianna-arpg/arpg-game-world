@@ -48,6 +48,7 @@ import { localOffset, type MassAddress } from '../worldmass/address';
 import { massDormancyPins } from '../worldmass/dormancy';
 import { massSideareaId, savedMassSideareas, copyMassSidearea, type MassSideareaRoot, type MassSideareaSave } from '../worldmass/sideareas';
 import { dealMassBounties, massBountiesAvailable, massBountyAccept, massBountyRoute } from '../worldmass/bounties';
+import { FrameArts, frameOf } from './frameArts';
 import { CohortArts } from './cohortArts';
 import { summonSchoolSkill } from './skills';
 import { SummonArts } from './summonArts';
@@ -1837,6 +1838,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'reacquireSkill': return isStr(a.skillId);
     case 'attuneSpectre': return isStr(a.skillId) && isStr(a.formId);
     case 'mimicSelect': return isStr(a.sid);
+    case 'dismissFrame': return isStr(a.skillId);
     case 'setSummonSchools': return isStr(a.skillId) && Array.isArray(a.schools) && a.schools.length > 0 && a.schools.length <= 16 && a.schools.every(isStr);
     case 'pickTreeNode': return isStr(a.skillId) && isStr(a.nodeId);
     case 'untameCompanion': return isIdx(a.actorId);
@@ -2906,6 +2908,7 @@ private nativeSceneProgressionHost():NativeSceneProgressionHost {
  if(this.nativeSceneProgressionView)return this.nativeSceneProgressionView;
  const world=this;
  const host:NativeSceneProgressionHost={
+  get frameArts(){return world.frameArts;},
   get clientActionHook(){return world.clientActionHook;},set clientActionHook(v){world.clientActionHook=v;},
   get localSeat(){return world.localSeat;},set localSeat(v){world.localSeat=v;},
   get account(){return world.account;},
@@ -3961,6 +3964,22 @@ actors: Actor[] = [];
         delivery: { ...d, duration: spec.duration, crewOnDeath: undefined }, noReplace: true,
         offspring: { maxActive: spec.cap, size: 1, life: spec.life, damage: spec.damage } });
     });
+  readonly frameArts = new FrameArts(this,
+    (host,kit)=>this.forwardSummonSockets(host,kit),
+    (body,count)=>{
+      const host=body.summonInst, f=frameOf(host), spec=f?.legion;
+      if(!host||!body.owner||!spec||body.summonOffspring)return [];
+      const d=instanceDelivery(host);if(d.type!=='summon')return [];
+      const out:Actor[]=[];
+      for(let i=0;i<count;i++){const a=this.spawnMinion(body.owner,host,{
+        pos:{x:body.pos.x+Math.cos(i*Math.PI)*body.radius,y:body.pos.y+Math.sin(i*Math.PI)*body.radius},tier:body.tier,monsterId:spec.monster,
+        delivery:{...d,frame:undefined,shell:undefined,persistent:undefined,poolGroup:undefined,exclusiveGroup:undefined,crewOnDeath:undefined,duration:spec.duration},
+        offspring:{maxActive:spec.cap,size:spec.size,life:spec.life,damage:spec.damage}});
+        if(a)out.push(a);
+      }return out;
+    },
+    (owner,host)=>this.dismissSummonToggle(owner,host.def.id),
+    (body,inst)=>this.clearTreeFields(body,inst));
   readonly summonArts = new SummonArts(this,
     (owner, inst, pos) => this.spawnMinion(owner, inst, { pos, noReplace: true }),
     (host, skills) => this.forwardSummonSockets(host, skills),
@@ -6560,6 +6579,7 @@ actors: Actor[] = [];
     this.creepers.clear();
     this.assaults.clearAll();
     this.challenges.clearAll();
+    this.frameArts.leaveZone();
     this.summonArts.leaveZone();
     this.cohortArts.leaveZone();
     this.channelFormations.clear();
@@ -25102,6 +25122,7 @@ actors: Actor[] = [];
       case 'unlearn': this.unlearnSkill(action.skillId, seat, action.x, action.y); break;
       case 'attuneSpectre': this.attuneSpectre(action.skillId, action.formId, seat); break;
       case 'mimicSelect': this.mimicSelectFor(action.sid, seat); break;
+      case 'dismissFrame': { const host=seat.actor.skills.find(s=>s?.def.id===action.skillId);if(host&&frameOf(host))this.frameArts.dismissFrame(seat.actor,host);break; }
       case 'setSummonSchools': this.setSummonSchools(action.skillId, action.schools, seat); break;
       case 'pickTreeNode': this.pickTreeNode(action.skillId, action.nodeId, seat); break;
       case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;
@@ -25653,6 +25674,7 @@ actors: Actor[] = [];
    *  full Tame presents the Whistle) — else the skill itself. The renderer
    *  reads this so the button never lies about what a press will do. */
   slotFaceOf(caster: Actor, inst: SkillInstance): SkillDef {
+    const frame=this.frameArts.view(caster,inst);if(frame)return frame.def;
     const ritual = this.summonArts.commandView(caster, inst);
     if (ritual) return ritual.def;
     // A mimic slot wears the SELECTED captured art's face (the source
@@ -25679,6 +25701,7 @@ actors: Actor[] = [];
    *  canUse so an exhausted gun still gets pressed: the press is the
    *  reload, and the vulnerability window it opens is the design. */
   pressUsable(caster: Actor, inst: SkillInstance): boolean {
+    const frame=this.frameArts.view(caster,inst);if(frame)return this.frameArts.ready(caster,inst)&&!this.castSealed(caster,inst)&&caster.canUse(frame);
     const ritual = this.summonArts.commandView(caster, inst);
     if (ritual) return !this.castSealed(caster, inst) && this.summonArts.commandReady(caster, inst) && caster.canUse(ritual);
     if (inst.def.delivery.type === 'summon') {
@@ -28889,6 +28912,7 @@ actors: Actor[] = [];
       const why = this.castReqRefusal(caster, inst);
       if (why) { this.failNote(caster, inst.def.id + ':req', why); return false; }
     }
+    const frame=this.frameArts.view(caster,inst);if(frame){if(!this.frameArts.ready(caster,inst)||this.castSealed(caster,inst))return false;inst=frame;}
     inst = this.cohortArts.view(caster, inst);
     const ritualCommand = this.summonArts.commandView(caster, inst);
     if (ritualCommand) return this.summonArts.commandReady(caster, inst) && this.useSkill(caster, ritualCommand, aim, seatPress);
@@ -29719,6 +29743,7 @@ actors: Actor[] = [];
     inst = this.projectileArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.cohortArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
     inst = this.summonArts.prepare(caster, inst, !opts.noRepeat && !opts.noCooldown && !opts.fromFuse);
+    inst = this.frameArts.prepare(caster,inst,!opts.noRepeat&&!opts.fromFuse);
     const def = inst.def;
     const cosmeticPaint = cosmeticSkillPaint(this, caster, def.id);
     const cosmeticColor = cosmeticPaint.color ?? def.color;
@@ -30642,7 +30667,7 @@ actors: Actor[] = [];
         // part damage bleeds to the root, and a composite would break its
         // own voice with its own verb).
         if (d.spareCaster) pool = pool.filter(a => a !== caster && a.partLink?.root !== caster);
-        pool = pool.filter(v => v.tier === effectTier); // a burst from the body touches its own story only (the sovereignty gate)
+        pool = pool.filter(v => v.tier === effectTier && !inst.frameExclusions?.has(v.id)); // a burst from the body touches its own story only (the sovereignty gate)
         // Capped-target novas (Galvanic Reserve): the burst picks the
         // NEAREST N instead of washing the whole room — walled-off bodies
         // never consume a slot.
@@ -30669,6 +30694,7 @@ actors: Actor[] = [];
           const nb = novaBody(victim);
           if (!nb) continue;
           noteBodyHit(victim, nb.seg);
+          inst.frameReceipts?.add(victim.id);
           this.resolveHit(caster, inst, victim, useMult, 0, flatBonus, undefined, undefined, undefined, undefined, effectTier);
           // LANCE VISUALS (Lancing Flurry): every victim is struck down a
           // drawn line from the origin — simultaneous razor lances.
@@ -31565,7 +31591,7 @@ actors: Actor[] = [];
           caster.reservedMana += reserve;
           caster.mana = Math.min(caster.mana, caster.availableMaxMana());
           caster.summonToggles.set(def.id, { inst, reserved: reserve, slots });
-          const first = def.hivecall ? 1 : Math.min(slots, Math.max(1, Math.round(
+          const first = def.hivecall || d.frame?.consolidation ? 1 : Math.min(slots, Math.max(1, Math.round(
             (d.count + Math.round(caster.sheet.get('summonCount', tags, extra))) * gPow)));
           // A sequencing gem ("scattered in sequence") holds on toggled
           // contracts too: the ON-fill emerges through the SAME grammar
@@ -33093,6 +33119,7 @@ actors: Actor[] = [];
       if (!opts.noCooldown) this.challenges.completed(caster, inst);
       this.cohortArts.completed(caster, inst, aim);
       this.summonArts.completed(caster, inst, aim);
+      this.frameArts.completed(caster, inst, aim);
       this.companionBonds.onCast(caster, inst, aim);
       this.echoToClones(caster, inst, aim, useMult,
         opts.targetInfo as ResolvedTarget | undefined);
@@ -33960,6 +33987,7 @@ actors: Actor[] = [];
    * skill never cross-contaminate each other's crews.
    */
   resyncMinionSupports(inst: SkillInstance): void {
+    this.frameArts.resync(inst);
     this.summonArts.resync(inst);
     this.cohortArts.resync(inst);
     for (const a of this.actors) {
@@ -34047,7 +34075,7 @@ actors: Actor[] = [];
     const extra = instanceMods(inst);
 
     if (!this.summonArts.canSpawn(caster, inst, d)) return null;
-    const maxActive = summonCapacity(caster, inst, d);
+    const maxActive = d.frame?.consolidation ? 1 : summonCapacity(caster, inst, d);
     // Shared pool groups (golems) cap across every skill in the group.
     const existing = inst.companionGrant ? [] : d.poolGroup
       ? this.minionsOfGroup(caster, d.poolGroup)
@@ -34140,7 +34168,7 @@ actors: Actor[] = [];
     if (d.shell) {
       const s = d.shell;
       const max = Math.max(1, minion.maxLife() * s.lifeFraction * caster.sheet.get('guardStrength', tags, extra) * Math.pow(caster.sheet.get('minionSize', tags, extra), s.sizeScaling ?? 0));
-      minion.shellGuard = { side: 'front', arcDeg: s.arcDeg, max, pool: max, shellVisual: s.shellVisual,
+      minion.shellGuard = { side: s.side ?? 'front', arcDeg: s.arcDeg, max, pool: max, shellVisual: s.shellVisual,
         regenDelay: s.regenDelay, regenRate: max * s.regenFraction,
         reformFraction: s.reformFraction, lastHitAt: -999, broken: false, color: inst.def.color };
     }
@@ -34300,6 +34328,7 @@ actors: Actor[] = [];
     this.sim.deadwakeField?.accrue('summon', isDeathAligned(minion.faction));
     if (!this.presenceArrival(minion, caster, inst))
       this.flashes.push({ pos: vec(minion.pos.x, minion.pos.y), radius: 20 + minion.radius, color: inst.def.color, life: 0.35, maxLife: 0.35 });
+    this.frameArts.init(minion, inst);
     this.summonArts.init(minion, inst);
     this.cohortArts.init(minion, inst);
     return minion;
@@ -35458,7 +35487,7 @@ actors: Actor[] = [];
       if (!body.summonInst || !victim.skills.includes(body.summonInst)) continue;
       const before = body.shellGuard?.pool ?? 0;
       const blocked = this.tryShellPool(victim, threatPos, packet, body.shellGuard);
-      if (attacker && (body.shellGuard?.pool ?? 0) < before) this.applyThorns(body, attacker);
+      if (attacker && (body.shellGuard?.pool ?? 0) < before) { this.applyThorns(body, attacker);this.frameArts.absorbed(body,attacker,before-(body.shellGuard?.pool??0)); }
       if (blocked) return true;
     }
     return false;
@@ -36191,6 +36220,7 @@ actors: Actor[] = [];
   private nativeSceneCastingPreparationHost():NativeSceneCastingPreparationHost {
     if(this.nativeSceneCastingPreparationView)return this.nativeSceneCastingPreparationView;
     const world=this,host:NativeSceneCastingPreparationHost=Object.freeze({
+      get frameArts(){return world.frameArts;},
       get actors(){return world.actors;},
       get time(){return world.time;},
       get comboCursors(){return world.comboCursors;},
@@ -36210,6 +36240,7 @@ actors: Actor[] = [];
     if(this.nativeSceneRestorationView)return this.nativeSceneRestorationView;
     const world=this;
     const host:NativeSceneRestorationHost=Object.freeze({
+      get frameArts(){return world.frameArts;},
       get cohortArts(){return world.cohortArts;},
       get showSkillArrival(){const fn=world.showSkillArrival;return(...args:Parameters<World['showSkillArrival']>)=>Reflect.apply(fn,world,args);},
       get actors(){return world.actors;},
@@ -36990,6 +37021,7 @@ actors: Actor[] = [];
       }
       dealt = result.total;
       this.summonArts.hit(caster, inst, target, Math.min(dealt, Math.max(0, deedLifeBefore - Math.max(0, target.life))));
+      this.frameArts.landed(caster,inst,target,dealt);
       this.cohortArts.landed(caster, inst, target, Math.min(dealt, Math.max(0, deedLifeBefore - Math.max(0, target.life))));
       if (rearHit && dealt > 0 && def.backstabCue !== false) {
         this.flashes.push(combatCueFlash(target.pos, def.backstabCue ?? 'rear_hit', target.radius,
@@ -39684,6 +39716,7 @@ actors: Actor[] = [];
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
     if (actor.downed) return;
+    if(this.frameArts.deferDeath(actor,silent,killer))return;
     if (!silent) for (const cue of takeWeakPointBreaks(actor))
       this.flashes.push(anatomyFlash(actor.pos, actor.radius, actor.facing, cue));
     if (actor === this.player) this.combatDeeds.reset();
@@ -39892,6 +39925,7 @@ actors: Actor[] = [];
     }
 
     actor.dead = true;
+    this.frameArts.death(actor,silent,departure==='expire');
     this.cohortArts.death(actor, silent, departure === 'expire');
     this.summonArts.death(actor, silent && departure !== 'sacrifice', departure === 'expire');
     this.presenceMoment(actor, departure === 'expire' || silent ? 'expire' : 'break');
@@ -42221,6 +42255,7 @@ actors: Actor[] = [];
     this.challenges.update(dt);
     this.summonArts.update(dt);
     this.cohortArts.update(dt);
+    this.frameArts.update(dt);
     this.channelFormations.update();
     this.attackSequences.update(dt);
     this.guardArts.update(dt);
@@ -49886,6 +49921,7 @@ actors: Actor[] = [];
         }
         if (!cs.held || a.dead) {
           this.channelFormations.release(a, cs);
+          if(!a.dead)this.frameArts.release(a,cs.inst);
           const rel = ch.release;
           const heldT = cs.channelTime ?? 0;
           a.casting = null;
@@ -50671,6 +50707,7 @@ actors: Actor[] = [];
           a.mana = Math.min(a.mana, a.availableMaxMana());
           t.reserved = want;
         }
+        if(d.frame?.consolidation)slots=Math.min(1,slots);
         if (t.inst.def.hivecall) continue; // Hivecall owns one serial resurrection clock.
         const bodies = this.minionsOfSkill(a, id).filter(a => !a.summonOffspring);
         while (bodies.length > slots) this.kill(bodies.pop()!, true);

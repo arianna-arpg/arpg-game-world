@@ -562,7 +562,7 @@ const DEFAULT_BRAIN: BrainDef = {};
 export function updateAI(actor: Actor, world: NativeSceneAIHost, dt: number): void {
   actor.companionReturnTo = undefined; // no stale return line through any early exit
   actor.feedingMeal = undefined; // feedingCue posture ends even on an early AI refusal.
-  if (actor.summonReform || actor.channelFormation) return;
+  if (actor.summonReform || actor.channelFormation || actor.frameCharging || actor.frameState?.order || actor.frameState?.terminal) return;
   ensureMovementTether(actor);
   if (refreshMovementTether(actor, world)?.returning) return;
   // Skip ANY player seat (the local hero AND co-op allies) — they're driven by
@@ -931,6 +931,7 @@ export function updateAI(actor: Actor, world: NativeSceneAIHost, dt: number): vo
     }
   }
 
+  if(actor.frameState&&world.frameArts?.act(actor,target,point=>moveToward(actor,world,point,dt)))return;
   if (actor.cohortState && world.cohortArts?.act(actor, target, dt, point => moveToward(actor, world, point, dt))) return;
 
   // Minions with nothing to fight heel back to their owner. Guard-stance

@@ -29,7 +29,7 @@ import { swapReadinessText } from './swapReadiness';
 import { clamp, mixHex } from '../core/math';
 import { tellPortraitDress } from '../engine/tells';
 import { replenishingDelivery } from '../engine/replenishment';
-import { instanceBaseTags } from '../engine/skills';
+import { instanceBaseTags, instanceDelivery } from '../engine/skills';
 import { DEV, GAME_TITLE } from '../config';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
@@ -8114,9 +8114,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       : open
         ? `<span style="color:#8a8678">no path chosen${limbs.length > 1 ? ' — the first point into a limb seals its rivals' : ''}</span>`
         : `<span style="color:#6a6478">the path opens at Lv ${tree.level}</span>`;
+    const frameDelivery=instanceDelivery(inst);
+    const frameActive=seat.actor.summonToggles.has(def.id)||!!seat.actor.remoteFrames?.[def.id];
+    const frameDismiss=frameActive&&frameDelivery.type==='summon'&&frameDelivery.frame?'<button data-frame-dismiss>Dismiss frame</button>':'';
     const zPct = Math.round(pane.zoom * 100);
     pane.el.innerHTML = `
-      ${this.closeGlyphHtml()}<h2 style="color:${def.color}">${esc(skillInstanceName(inst))}
+      ${this.closeGlyphHtml()}${frameDismiss}<h2 style="color:${def.color}">${esc(skillInstanceName(inst))}
         <span style="color:var(--gold);font-size:12px;letter-spacing:0">— skill tree</span>
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal;text-transform:none;letter-spacing:0">
           <span class="tree-zoom-grp">
@@ -8137,6 +8140,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
     // Clicks: a lit node spends through the ordinary intent; the drawer
     // (when open) re-renders and cascades back into every open pane.
+    pane.el.querySelector('[data-frame-dismiss]')?.addEventListener('click',()=>world.requestMeta({t:'dismissFrame',skillId:def.id}));
     pane.el.querySelectorAll<SVGCircleElement>('.st-node').forEach(el => {
       el.addEventListener('click', () => {
         const node = tree.nodes?.find(n => n.id === el.dataset.node);
