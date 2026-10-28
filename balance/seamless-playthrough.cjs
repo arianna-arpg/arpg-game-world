@@ -183,13 +183,18 @@ app.whenReady().then(async () => {
       const target = w.actors.filter(a => a.team === 'enemy' && !a.dead && a.skills.some(Boolean))
         .sort((a,b) => Math.hypot(a.pos.x-w.player.pos.x,a.pos.y-w.player.pos.y)-Math.hypot(b.pos.x-w.player.pos.x,b.pos.y-w.player.pos.y))[0];
       if (!target) throw Error('No opponents at the camp');
+      const primary = w.player.skills[0], delivery = primary?.def.delivery;
+      if (delivery?.type !== 'melee') throw Error('Expected the fresh warrior melee primary');
+      const tags = new Set(primary.def.tags), extra = primary.def.innateMods ?? [];
       const before = target.life; let lowest = before;
       const initial = { hero: { ...w.player.pos }, target: { ...target.pos }, heroTier: w.player.tier, targetTier: target.tier, targetId: target.defId };
       __game.devInput(() => {
         const p = w.player.pos, goal = target.pos, d = Math.hypot(goal.x-p.x,goal.y-p.y);
         const step = w.walk.pathStep(p,goal) ?? goal, len = Math.hypot(step.x-p.x,step.y-p.y);
-        return { dx: d > 65 && len ? (step.x-p.x)/len : 0, dy: d > 65 && len ? (step.y-p.y)/len : 0,
-          aim: { ...goal }, held: [d < 260], edge: [] };
+        // Close to the fresh primary's real melee reach before committing a swing.
+        const engage = (w.player.radius + delivery.range) * w.player.sheet.get('meleeReach', tags, extra) * .8;
+        return { dx: d > engage && len ? (step.x-p.x)/len : 0, dy: d > engage && len ? (step.y-p.y)/len : 0,
+          aim: { ...goal }, held: [d <= engage], edge: [] };
       });
       try {
         for (let i=0;i<300&&!target.dead&&!w.player.dead;i++) {
