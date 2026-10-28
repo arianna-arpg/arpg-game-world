@@ -51,7 +51,8 @@ export interface FrameSpec {
     faultSpacing: number;
   };
   protect?: {
-    command: string;
+    /** Optional hold-position order; autonomous protection needs no command. */
+    command?: string;
     sweep: string;
     range: number;
     duration: number;

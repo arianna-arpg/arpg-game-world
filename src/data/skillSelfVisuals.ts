@@ -9,7 +9,6 @@ const p = (form: SelfForm, motif: BurstMotif, count: number, motion: SelfProfile
  * give them the matching preparation vocabulary without a second receipt. */
 export const SKILL_SELFS: Readonly<Record<string, SelfProfile>> = {
   frame_crush_order: p('horn','cracks',6,'snap'),
-  frame_interpose: p('plate','teeth',6,'rise'),
   frame_charge_order: p('horn','shields',6,'snap'),
   frame_reknit: p('coil','teeth',6,'twist'),
   frame_repair: p('plate','petals',6,'rise'),

@@ -25122,7 +25122,7 @@ actors: Actor[] = [];
       case 'unlearn': this.unlearnSkill(action.skillId, seat, action.x, action.y); break;
       case 'attuneSpectre': this.attuneSpectre(action.skillId, action.formId, seat); break;
       case 'mimicSelect': this.mimicSelectFor(action.sid, seat); break;
-      case 'dismissFrame': { const host=seat.actor.skills.find(s=>s?.def.id===action.skillId);if(host&&frameOf(host))this.frameArts.dismissFrame(seat.actor,host);break; }
+      case 'dismissFrame': { const host=seat.actor.skills.find(s=>s?.def.id===action.skillId);if(host&&frameOf(host)&&host.treeNodes?.some(id=>treeNodeOf(host.def,id)?.choiceActions?.some(c=>c.action==='dismissFrame')))this.frameArts.dismissFrame(seat.actor,host);break; }
       case 'setSummonSchools': this.setSummonSchools(action.skillId, action.schools, seat); break;
       case 'pickTreeNode': this.pickTreeNode(action.skillId, action.nodeId, seat); break;
       case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;

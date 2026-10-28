@@ -29,7 +29,7 @@ import { swapReadinessText } from './swapReadiness';
 import { clamp, mixHex } from '../core/math';
 import { tellPortraitDress } from '../engine/tells';
 import { replenishingDelivery } from '../engine/replenishment';
-import { instanceBaseTags, instanceDelivery } from '../engine/skills';
+import { instanceBaseTags } from '../engine/skills';
 import { DEV, GAME_TITLE } from '../config';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
@@ -8114,12 +8114,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       : open
         ? `<span style="color:#8a8678">no path chosen${limbs.length > 1 ? ' — the first point into a limb seals its rivals' : ''}</span>`
         : `<span style="color:#6a6478">the path opens at Lv ${tree.level}</span>`;
-    const frameDelivery=instanceDelivery(inst);
-    const frameActive=seat.actor.summonToggles.has(def.id)||!!seat.actor.remoteFrames?.[def.id];
-    const frameDismiss=frameActive&&frameDelivery.type==='summon'&&frameDelivery.frame?'<button data-frame-dismiss>Dismiss frame</button>':'';
     const zPct = Math.round(pane.zoom * 100);
     pane.el.innerHTML = `
-      ${this.closeGlyphHtml()}${frameDismiss}<h2 style="color:${def.color}">${esc(skillInstanceName(inst))}
+      ${this.closeGlyphHtml()}<h2 style="color:${def.color}">${esc(skillInstanceName(inst))}
         <span style="color:var(--gold);font-size:12px;letter-spacing:0">— skill tree</span>
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal;text-transform:none;letter-spacing:0">
           <span class="tree-zoom-grp">
@@ -8140,57 +8137,79 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
     // Clicks: a lit node spends through the ordinary intent; the drawer
     // (when open) re-renders and cascades back into every open pane.
-    pane.el.querySelector('[data-frame-dismiss]')?.addEventListener('click',()=>world.requestMeta({t:'dismissFrame',skillId:def.id}));
     pane.el.querySelectorAll<SVGCircleElement>('.st-node').forEach(el => {
       el.addEventListener('click', () => {
         const node = tree.nodes?.find(n => n.id === el.dataset.node);
         if (!node || discipline) return;
         const chosen = inst.treeNodes?.includes(node.id);
         const choices = node.over?.summon?.arts;
-        if (!el.classList.contains('available') && (!chosen || !choices?.balanceSchools)) return;
+        if (!el.classList.contains('available') && (!chosen || !(choices?.balanceSchools || node.choiceActions?.length))) return;
         if (el.classList.contains('available')) world.requestMeta({ t: 'pickTreeNode', skillId: def.id, nodeId: node.id });
         if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
-        if (choices?.balanceSchools && choices.schools?.length) {
+        if (choices?.balanceSchools && choices.schools?.length || node.choiceActions?.length) {
           const anchor = pane.el.querySelector<SVGCircleElement>('[data-node="' + node.id + '"]');
-          if (anchor) this.openSummonChoicePopup(inst, choices, anchor, pane);
+          if (anchor) this.openSkillNodeChoicePopup(inst, node, anchor, pane);
         }
       });
     });
     this.wireSkillTreeControls(pane);
   }
 
-  /** Summon choices use the same anchored picker as passive attributes. */
-  private openSummonChoicePopup(inst: SkillInstance, spec: import('../engine/summonArtsSpec').SummonArtsSpec, el: SVGCircleElement, pane: SkillTreePane): void {
+  /** Allocated-node choices and actions share the passive tree's anchored picker. */
+  private openSkillNodeChoicePopup(inst: SkillInstance, node: import('../engine/skills').SkillTreeNode, el: SVGCircleElement, pane: SkillTreePane): void {
     this.closeChoicePopup();
-    const schools = spec.schools ?? [], selected = new Set(inst.summonSchools?.length ? inst.summonSchools : schools.map(s => s.id));
-    const pop = document.createElement('div'); pop.className = 'choice-popup'; pop.setAttribute('role', 'dialog');
-    pop.setAttribute('aria-label', spec.choicesLabel ?? 'Choose schools');
-    pop.innerHTML = '<div class="choice-head">' + esc(spec.choicesLabel ?? 'Choose schools') + '<span class="choice-count">Choose one or more. Changes dismiss this skill’s current minions.</span></div>'
-      + schools.map(s => '<button class="choice-opt" data-st-school="' + s.id + '"><span class="opt-name">' + esc(s.name) + '</span></button>').join('')
-      + '<button class="choice-opt" data-school-apply>Apply choices</button><button class="choice-opt" data-school-close>Close</button>';
-    const paint = () => {
-      pop.querySelectorAll<HTMLButtonElement>('[data-st-school]').forEach(b => { const on = selected.has(b.dataset.stSchool!); b.setAttribute('aria-pressed', String(on)); b.classList.toggle('chosen', on); });
-      pop.querySelector<HTMLButtonElement>('[data-school-apply]')!.disabled = !selected.size;
+    if (!inst.treeNodes?.includes(node.id)) return;
+    const spec = node.over?.summon?.arts, schools = spec?.balanceSchools ? spec.schools ?? [] : [];
+    const selected = new Set(inst.summonSchools?.length ? inst.summonSchools : schools.map(s => s.id));
+    const actions = node.choiceActions ?? [], seat = this.panelSeat(pane.el);
+    // The popup is outside the panel DOM; carry its owner's action context explicitly.
+    const send = (action: import('../net/intent').MetaAction): void => {
+      const world = this.getWorld(), previous = world.uiActionSeatId;
+      world.uiActionSeatId = seat.id;
+      try { world.requestMeta(action); } finally { world.uiActionSeatId = previous; }
     };
-    pop.querySelectorAll<HTMLButtonElement>('[data-st-school]').forEach(b => b.addEventListener('click', () => {
-      const id = b.dataset.stSchool!; if (selected.has(id)) selected.delete(id); else selected.add(id); paint();
-    }));
-    pop.querySelector('[data-school-apply]')!.addEventListener('click', () => {
-      if (!selected.size) return;
-      this.getWorld().requestMeta({ t: 'setSummonSchools', skillId: inst.def.id, schools: [...selected] });
+    const frameActive = seat.actor.summonToggles.has(inst.def.id) || !!seat.actor.remoteFrames?.[inst.def.id];
+    const pop = document.createElement('div'); pop.className = 'choice-popup'; pop.setAttribute('role', 'dialog');
+    const label = spec?.choicesLabel ?? node.name;
+    pop.setAttribute('aria-label', label);
+    pop.innerHTML = '<div class="choice-head">' + esc(label) + (schools.length ? '<span class="choice-count">Choose one or more. Each change immediately dismisses this skill’s current minions.</span>' : '') + '</div>'
+      + schools.map(s => '<button class="choice-opt" data-st-school="' + s.id + '"><span class="opt-name">' + esc(s.name) + '</span></button>').join('')
+      + actions.map(a => '<button class="choice-opt" data-st-action="' + a.action + '"' + (a.action === 'dismissFrame' && !frameActive ? ' disabled' : '') + '><span class="opt-name">' + esc(a.label) + '</span><span class="opt-desc">' + esc(a.description ?? '') + '</span></button>').join('')
+      + '<button class="choice-opt" data-school-close>Close</button>';
+    pop.querySelectorAll<HTMLButtonElement>('[data-st-school]').forEach(b => {
+      const id = b.dataset.stSchool!, on = selected.has(id);
+      b.setAttribute('aria-pressed', String(on)); b.classList.toggle('chosen', on);
+      b.disabled = on && selected.size === 1;
+      if (b.disabled) b.title = 'Keep at least one element selected.';
+      b.addEventListener('click', () => {
+        const next = new Set(selected); if (next.has(id)) next.delete(id); else next.add(id);
+        if (!next.size) return;
+        send({ t: 'setSummonSchools', skillId: inst.def.id, schools: [...next] });
+        if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
+        // Re-read the applied choice after validation; keep multi-selection convenient.
+        const current = this.panelSeat(pane.el).meta.knownSkills.get(inst.def.id);
+        const anchor = pane.el.querySelector<SVGCircleElement>('[data-node="' + node.id + '"]');
+        if (current && anchor) {
+          this.openSkillNodeChoicePopup(current, node, anchor, pane);
+          this.choicePopup?.querySelector<HTMLButtonElement>('[data-st-school="' + id + '"]:not(:disabled)')?.focus();
+        }
+      });
+    });
+    pop.querySelectorAll<HTMLButtonElement>('[data-st-action]').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.stAction === 'dismissFrame') send({ t: 'dismissFrame', skillId: inst.def.id });
       this.closeChoicePopup();
       if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
-    });
+    }));
     pop.querySelector('[data-school-close]')!.addEventListener('click', () => this.closeChoicePopup());
     pop.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.closeChoicePopup(); } });
-    document.body.appendChild(pop); paint();
+    document.body.appendChild(pop);
     const r = el.getBoundingClientRect(), p = pop.getBoundingClientRect();
     pop.style.left = Math.max(8, Math.min(window.innerWidth - p.width - 8, r.left + r.width / 2 - p.width / 2)) + 'px';
     pop.style.top = Math.max(8, Math.min(window.innerHeight - p.height - 8, r.top - p.height - 10)) + 'px';
     this.choicePopup = pop;
     const dismiss = (event: PointerEvent) => { if (this.choicePopup === pop && !pop.contains(event.target as Node)) this.closeChoicePopup(); };
     setTimeout(() => { if (this.choicePopup === pop) { window.addEventListener('pointerdown', dismiss, true); this.choicePopupDismiss = dismiss; } }, 0);
-    pop.querySelector<HTMLButtonElement>('[data-st-school]')?.focus();
+    pop.querySelector<HTMLButtonElement>('.choice-opt:not(:disabled)')?.focus();
   }
 
   /** A pane's viewBox from its graph's fitted box + its live zoom/pan,
@@ -8269,6 +8288,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       const selected = summonTree.arts.schools?.filter(s => !inst.summonSchools?.length || inst.summonSchools.includes(s.id));
       if (selected?.length) lines.push('Selected: ' + selected.map(s => s.name).join(', ') + '. Click to change.');
     }
+    if (have && node.choiceActions?.length) lines.push('Click for ' + node.choiceActions.map(a => a.label).join(', ') + '.');
     if (summonTree?.count !== undefined) lines.push(`${summonTree.count} summoned per birth`);
     if (summonTree?.maxActive !== undefined) lines.push(`base active cap ${summonTree.maxActive}`);
     if (summonTree?.duration !== undefined) lines.push(summonTree.duration ? `base lifespan ${summonTree.duration}s` : 'no lifespan limit');

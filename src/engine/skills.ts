@@ -504,7 +504,7 @@ export function instanceMetas(inst: SkillInstance): { skillId: string; label: st
   };
   const d = instanceDelivery(inst);
   const frameCommand=d.type==='summon' ? d.frame?.charge?.command ?? d.frame?.crush?.command ?? d.frame?.protect?.command : undefined;
-  if(frameCommand) add({skillId:frameCommand,label:d.type==='summon'&&d.frame?.charge?'Advance!':d.type==='summon'&&d.frame?.crush?'Crush!':'Interpose!'});
+  if(frameCommand) add({skillId:frameCommand,label:d.type==='summon'&&d.frame?.charge?'Advance!':d.type==='summon'&&d.frame?.crush?'Crush!':'Guard!'});
   add(d.type === 'summon' && d.cohort?.order ? { skillId: d.cohort.order.skill, label: d.cohort.order.label } : inst.def.meta);
   for (const s of hostSockets(inst)) add(s.def.meta);
   return out;
@@ -5088,6 +5088,8 @@ function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain'
 }
 
 export interface SkillTreeNode {
+  /** Immediate actions exposed by an allocated node's anchored selector. */
+  choiceActions?: { action: 'dismissFrame'; label: string; description?: string }[];
   projectileArts?: ProjectileArtsSpec;
   guardArts?: GuardArtsSpec;
   attackSequence?: AttackSequenceSpec;

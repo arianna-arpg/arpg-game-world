@@ -25,7 +25,6 @@ export const BONE_GOLEM_SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'ground', radius: 75, castRange: 520, delay: .3, lingerDuration: 1.2, tickInterval: .4 }, effects: [{ type: 'damage' }] }),
   frame_warcall: art('frame_warcall', 'Warcall', { useTime: 0, cooldown: 5, tags: ['spell', 'warcry', 'buff', 'aoe', 'duration'], delivery: { type: 'nova', radius: 230 } }),
   frame_crush_order: art('frame_crush_order', 'Crush!', { tags: ['spell', 'minion'], cooldown: 24, useTime: 0 }),
-  frame_interpose: art('frame_interpose', 'Interpose!', { tags: ['spell', 'minion'], useTime: 0 }),
   frame_charge_order: art('frame_charge_order', 'Guardian’s Advance', { tags: ['spell', 'minion'], cooldown: 12, useTime: 0 }),
   frame_rush: art('frame_rush', 'Rampart Rush', { useTime: 0, tags: ['attack', 'physical', 'aoe', 'movement'], baseDamage: { physical: [12, 18] },
     delivery: { type: 'nova', radius: 85 }, effects: [{ type: 'damage' }, { type: 'knockback', strength: 100 }] }),

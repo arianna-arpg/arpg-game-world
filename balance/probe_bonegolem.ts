@@ -59,6 +59,13 @@ try {
     check('baseline reconstruction remains eight seconds', near(t.w.pendingRespawns[0].timer, 8 * t.p.sheet.get('minionRespawnTime')));
   }
   {
+    const t = setup(['keepers_bulwark']), a = summon(t);
+    check('Bulwark is autonomous with Warding Sweep and no starting command', a.skills.some(s => s?.def.id === 'warding_sweep') && instanceMetas(t.host).length === 0);
+    t.w.requestMeta({ t: 'dismissFrame', skillId: t.host.def.id });
+    check('node dismissal is refused before its action is allocated', !a.dead && t.p.summonToggles.has(t.host.def.id));
+    check('Interpose is removed from the ability catalogue', !SKILLS.frame_interpose);
+  }
+  {
     const t = setup(['osseous_might', 'drilled_bones', 'bone_cohort', 'assembled_legion']), a = summon(t), e = enemy(t.w, a);
     check('sacrifice and legion are a legal four-point route', t.host.treeNodes?.length === 4 && !!a.frameState);
     check('Juggernaut does not grant Crush', instanceMetas(t.host).every(m => m.skillId !== 'frame_crush_order'));

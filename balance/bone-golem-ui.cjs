@@ -51,10 +51,16 @@ app.whenReady().then(async()=>{
   await capture('bone-golem-repair');
   await run("(()=>{const q=__golemQA,a=q.start(['keepers_bulwark','renewing_frame','sheltering_bones','adamant_frame']);q.p.life=q.p.maxLife()*.5;q.p.useLock=0;q.w.useSkill(q.p,q.inst,q.p.pos,true);q.advance(1);__game.step(1);__game.ui.openSkillTree('summon_bone_golem');__game.ui.refreshSkillTree('summon_bone_golem');})()");
   assert.equal(await run("__golemQA.w.slotFaceOf(__golemQA.p,__golemQA.inst).id"),'frame_reknit');
-  assert.equal(await run("document.querySelectorAll('#skill-tree-summon_bone_golem [data-frame-dismiss]').length"),1);await capture('bone-golem-reknit-control');
-  await run("document.querySelector('#skill-tree-summon_bone_golem [data-frame-dismiss]').click()");
+  assert.equal(await run("document.querySelectorAll('#skill-tree-summon_bone_golem [data-frame-dismiss]').length"),0);
+  await run("document.querySelector('#skill-tree-summon_bone_golem circle[data-node=\"renewing_frame\"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
+  assert.equal(await run("document.querySelector('.choice-popup').getAttribute('aria-label')"),'Reknitting Frame');
+  assert.equal(await run("document.querySelector('[data-st-action=\"dismissFrame\"]').disabled"),false);await capture('bone-golem-reknit-control');
+  await run("document.querySelector('[data-st-action=\"dismissFrame\"]').click()");
   assert.equal(await run("__golemQA.p.summonToggles.has(__golemQA.inst.def.id)"),false);
   assert.equal(await run("__golemQA.p.casting"),null);
+  await run("document.querySelector('#skill-tree-summon_bone_golem circle[data-node=\"renewing_frame\"]').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
+  assert.equal(await run("document.querySelector('[data-st-action=\"dismissFrame\"]').disabled"),true);
+  assert.equal(await run("__golemQA.inst.treeNodes.length"),4);
 
   // Native display scenes retain sanctuary policy. Capture activation before the
   // immediate no-target detonation; probe_bonegolem verifies the complete chase.
