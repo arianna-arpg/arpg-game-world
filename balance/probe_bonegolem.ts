@@ -324,6 +324,20 @@ try {
     step(t.w, .1);
     check('zone travel retires terminal charges without carrying immunity or stale fields', a.dead && !a.invulnerable && !a.frameState!.terminal && !t.w.zones.some(z => z.inst.def.id === 'frame_reliquary') && t.w.pendingRespawns.length === 1);
   }
+
+  {
+    const t=setup(['keepers_bulwark','close_guard','bone_stand','warding_reach']),a=summon(t),e=enemy(t.w,a,-80);
+    a.facing=0;a.sheet.setSource('directional-wave',[mod('aoeShape','override',4,['attack'])]);
+    let hits=0;SIM_TAP.current={onHit:(source,target,_r,p)=>{if(source===a&&target===e&&p.sourceName===SKILLS.frame_wave.name)hits++;}};
+    t.p.useLock=0;t.w.useMetaSkill(t.p,t.host,{x:a.pos.x-20,y:a.pos.y});t.w.frameArts.update(.2);SIM_TAP.current=null;
+    check('a supported directional wave keeps its heading on the arrival frame',hits===1);
+    check('projected payloads preserve their source body facing',near(a.facing,0));
+  }
+  {
+    const t=setup(['keepers_bulwark','renewing_frame']),a=summon(t);a.facing=Math.PI;a.life=a.maxLife()*.5;const before=a.life;
+    t.w.executeSkill(t.p,t.w.frameArts.view(t.p,t.host)!,t.p.pos);
+    check('repair pulses heal without turning the autonomous frame',a.life>before&&near(a.facing,Math.PI));
+  }
 }
 finally {
   SIM_TAP.current = null;

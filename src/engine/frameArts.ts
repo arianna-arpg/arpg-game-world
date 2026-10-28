@@ -145,14 +145,16 @@ export class FrameArts {
     if (f?.spines && id === f.protect?.sweep)
       paid += a.sheet.get('thorns') * f.spines.sweepThorns;
     const inst: SkillInstance = { ...base, frameExclusions: exclude ? new Set(exclude) : undefined, frameReceipts: exclude instanceof Set ? exclude : undefined, frameCast: independent ? undefined : { origin: id, auxiliary: true, paid }, extraMods: [...(base.extraMods ?? []), mod('damage', 'more', power - 1), ...(paid ? [mod('addedPhysical', 'flat', paid)] : [])] };
-    const old = a.pos;
+    const old = a.pos, facing = a.facing;
+    const selfAim = dist(origin ?? a.pos, aim) < 1e-8;
     if (origin)
       a.pos = { ...origin };
     try {
-      this.w.executeSkill(a, inst, aim, { noRepeat: !independent, noCooldown: true, componentUse: true, noFollowUp: true });
+      this.w.executeSkill(a, inst, aim, { noRepeat: !independent, noCooldown: true, componentUse: true, noFollowUp: true, keepFacing: selfAim });
     }
     finally {
       a.pos = old;
+      a.facing = facing;
     }
     return inst;
   }
@@ -368,7 +370,7 @@ export class FrameArts {
   private healingPulse(a: Actor, base: SkillInstance, amount: number, budget: number, excludeCaster: boolean) {
     const inst: SkillInstance = { ...base, frameCast: { origin: base.def.id, auxiliary: true }, frameHeal: { remaining: budget },
       def: { ...base.def, effects: [{ type: 'heal', amount, excludeCaster }] } };
-    this.w.executeSkill(a, inst, a.pos, { noRepeat: true, componentUse: true, noCooldown: true, noFollowUp: true });
+    this.w.executeSkill(a, inst, a.pos, { noRepeat: true, componentUse: true, noCooldown: true, noFollowUp: true, keepFacing: true });
     return inst;
   }
   heal(a: Actor, inst: SkillInstance, target: Actor, raw: number) {
@@ -560,16 +562,18 @@ export class FrameArts {
         }
       const mass = this.mass(w.body) + w.members.filter(a => a !== w.body && !a.dead).reduce((n, a) => n + this.mass(a), 0);
       const id = w.wave ? c.wave : c.rush, skill = this.skill(w.body, id)!;
+      // A zero-length aim at arrival must not turn a supported sector east.
+      const forward = { x: w.pos.x + Math.cos(dir), y: w.pos.y + Math.sin(dir) };
       if ([...this.w.enemiesOf(w.body)].some(e => !w.hit.has(e.id) && this.within(w.body, skill, e, w.pos, dir))) {
         // A wave receipt prevents overlapping impact pulses from repeatedly hitting the same target.
-        this.payload(w.body, id, w.aim, 1 + mass * c.perMass, 0, w.pos, w.hit);
+        this.payload(w.body, id, forward, 1 + mass * c.perMass, 0, w.pos, w.hit);
       }
       this.w.flashes.push({ pos: { ...w.pos }, radius: this.radius(w.body, skill), color: '#c8e2dc', life: .08, maxLife: .08, arc: { facing: dir, arcRad: Math.PI * .8 } });
       if (dist(w.pos, w.aim) < 15) {
         this.stopWedge(w);
         const f = frameOf(w.host);
         if (f?.protect)
-          this.payload(w.body, f.protect.sweep, w.aim, 1, 0, w.pos);
+          this.payload(w.body, f.protect.sweep, forward, 1, 0, w.pos);
       }
     }
     const expired: Refuge[] = [];
