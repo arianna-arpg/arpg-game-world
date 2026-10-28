@@ -71,9 +71,11 @@ selected forms when summoning.
 
 Click **Grave Conclave** in the Mage tree or **Runebound Blades** in the
 Warrior tree to open an anchored multi-choice popup using the passive tree's
-presentation. Apply a nonempty selection; Close or Escape cancels the draft.
-Changes retire that skill's existing minions and captured fields.
-Applying an unchanged selection preserves them. Choices persist through saves
+presentation. Each element click applies immediately and retires that skill's
+existing minions and captured fields. The popup stays open for further changes;
+Close, Escape and clicking outside only dismiss the popup, without reverting choices.
+At least one element must remain selected. There is no Apply step.
+Reknitting Frame uses the same picker for its authored Dismiss Frame action. Choices persist through saves
 and authoritative co-op intents, and the node tooltip lists the selection.
 
 Every active art has its own SkillDef, tags, timing, delivery and compatible

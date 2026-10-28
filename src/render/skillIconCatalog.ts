@@ -14,7 +14,6 @@ export const SKILL_ICON_CATALOG = {
   frame_fault: ["bone","nova","rubble"],
   frame_warcall: ["horn","empower","ribs"],
   frame_crush_order: ["horn","impact","ribs"],
-  frame_interpose: ["shield","guard","ribs"],
   frame_charge_order: ["horn","charge","ribs"],
   frame_rush: ["ribs","charge","shield"],
   frame_wave: ["wave","guard","ribs"],
