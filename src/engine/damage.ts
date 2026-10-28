@@ -52,6 +52,8 @@ export const SLAYER_CFG = {
 
 export interface LifeWoundEvent { attacker: Actor; packet: DamagePacket; intercepted: number; }
 export interface DamagePacket {
+  /** Attributed voluntary life payments cannot be evaded, absorbed or waived by charge immunity. */
+  resourceHit?: boolean;
   /** Transferred wounds never re-enter a cohort interception chain. */
   redirected?: boolean;
   assaultGuaranteed?: boolean;
@@ -435,7 +437,7 @@ export function mitigateTyped(
 ): number {
   // Stat-granted damageImmunity also protects direct typed hazards/bursts
   // that do not enter applyHit; no defense pool is spent during shelter.
-  if (target.sheet.get('damageImmunity') > 0) return 0;
+  if (target.frameCharging || target.sheet.get('damageImmunity') > 0) return 0;
   return mitigatePools(target, mitigateWound(target, amounts, opts), opts);
 }
 
@@ -681,7 +683,7 @@ function plyEats(attacker: Actor, target: Actor, total: number, packet: DamagePa
  * Returns the life actually removed.
  */
 export function landLifeDamage(target: Actor, total: number, event?: LifeWoundEvent): number {
-  if (target.sheet.get('damageImmunity') > 0) return 0;
+  if (target.frameCharging || target.sheet.get('damageImmunity') > 0) return 0;
   for (const intercept of target.lifeDamageInterceptors?.values() ?? []) { const before = total; total = Math.max(0, intercept(total, event)); if (event) event.intercepted += Math.max(0, before - total); }
   if (total <= 0) return 0;
   if (total >= target.life && target.life > 0 && !target.dead && !target.invulnerable
@@ -704,6 +706,7 @@ export function landLifeDamage(target: Actor, total: number, event?: LifeWoundEv
 /** Apply a rolled packet to a defender. Returns what actually landed. */
 export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): HitResult {
   const result = applyHitCore(attacker, target, packet);
+  for (const observer of target.hitObservers?.values() ?? []) observer(attacker,packet,result);
   SIM_TAP.current?.onHit?.(attacker, target, result, packet);
   return result;
 }
@@ -711,13 +714,14 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
 /** The actual hit pipeline. applyHit is its thin observed wrapper, so the sim
  *  tap sees EVERY exit — evade, immunity, block, and the landed wound alike. */
 function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): HitResult {
+  if(packet.resourceHit){const amount=Math.min(Math.max(0,target.life),Object.values(packet.amounts).reduce((n,v)=>n+(v??0),0));target.life-=amount;return {evaded:false,immune:false,blocked:false,total:amount,crit:false};}
   // SEGMENT FABRIC: consume the collection-time contact latch up front —
   // whatever happens below (evade, block, land), the latch never goes
   // stale or misattributes a later, unrelated hit. Wound accounting and
   // the per-segment flash fire only where damage actually lands.
   const segHit = target.segHitPending;
   target.segHitPending = undefined;
-  if (target.invulnerable || throngTravelProtected(target)) return { evaded: false, immune: true, blocked: false, total: 0, crit: false };
+  if (target.frameCharging || target.invulnerable || throngTravelProtected(target)) return { evaded: false, immune: true, blocked: false, total: 0, crit: false };
   // HIT IMMUNITY (Cerement's shroud): every incoming HIT — attack, spell,
   // projectile — is dodged outright while the stat holds. DoTs still tick
   // (applyDot never comes through here); the shroud's own price bleeds on.
@@ -1078,7 +1082,7 @@ export function applyDot(target: Actor, amount: number, type?: DamageType): numb
 
 /** The actual DoT pipeline (applyDot is its thin observed wrapper). */
 function applyDotCore(target: Actor, amount: number, type?: DamageType): number {
-  if (target.invulnerable || throngTravelProtected(target)) return 0;
+  if (target.frameCharging || target.invulnerable || throngTravelProtected(target)) return 0;
   const tags = type ? new Set<SkillTag>([type]) : undefined;
   let total = amount * target.sheet.get('damageTaken', tags) * (1 + weakPointBonus(target));
   if (total <= 0) return 0;

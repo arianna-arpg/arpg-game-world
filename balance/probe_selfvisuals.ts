@@ -18,8 +18,8 @@ let checks = 0;
 const check = (label: string, value: unknown) => { assert.ok(value, label); checks++; };
 const census = Object.values(SKILLS).filter(s => ['self', 'mark', 'detonate', 'detonateProjectile'].includes(s.delivery.type));
 assert.deepEqual(Object.keys(SKILL_SELFS).sort(), census.map(s => s.id).sort());
-check('113 authored profiles cover the complete native census', census.length === 113);
-check('each composition is distinct; unknown profiles keep fallback', new Set(Object.values(SKILL_SELFS).map(p => JSON.stringify(p))).size === 113 && !selfProfile('constructor'));
+check('118 authored profiles cover the complete native census', census.length === 118);
+check('each composition is distinct; unknown profiles keep fallback', new Set(Object.values(SKILL_SELFS).map(p => JSON.stringify(p))).size === 118 && !selfProfile('constructor'));
 function trace(id: string, phase: 'release' | 'prepare' | 'burst', life: number, color: string, radius = 42) {
   let depth = 0; const calls: unknown[] = [];
   const ctx = new Proxy({ globalAlpha: 1, lineWidth: 1 } as Record<string, unknown>, {

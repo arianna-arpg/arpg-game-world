@@ -25,6 +25,9 @@ const f = (motif: BurstMotif, layout: SkillFieldProfile['layout'], motion: Skill
   count: number, echo?: BurstMotif): SkillFieldProfile => ({ motif, layout, motion, count, echo });
 
 export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
+  frame_barrage: p('teeth','quills','steady',6,'shields'),
+  frame_nova: p('teeth','saw','tumble',4,'cracks'),
+  frame_splinters: p('teeth','fork','pulse',4,'shields'),
   court_bone_shuriken: p('teeth','saw','tumble',3,'blades'),
   court_fire_arc: p('flame','ribbon','weave',4,'blades'),
   court_storm_chain: p('sparks','links','weave',3,'blades'),
@@ -210,6 +213,8 @@ export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
 /** Long-lived patterns: architecture, material and movement are independent.
  * Related arts share materials, never an entire composition. */
 export const SKILL_FIELDS: Readonly<Record<string, SkillFieldProfile>> = {
+  frame_fault: f('cracks','spokes','out',9,'teeth'),
+  frame_reliquary: f('shields','rings','breathe',9,'teeth'),
   court_oath_standard: f('shields','spokes','rise',4,'runes'),
   court_relief_aura: f('petals','rings','breathe',3,'shields'),
   court_venom_ground: f('spores','spiral','breathe',5,'blades'),

@@ -61,6 +61,7 @@ export type ProbeRow =
  * for green rows, what the rig pins; for excluded rows, why it is off the gate.
  */
 export const PROBE_ROSTER: readonly ProbeRow[] = [
+  { probe: 'probe_bonegolem.ts', status: 'green', tier: 'fast', why: 'Configurable four-point golem routes, attributed life costs, independent supported payloads, formations, repair and terminal protection' },
   { probe: 'probe_skeletonwarrior.ts', status: 'green', tier: 'fast', why: 'Four-point infantry trees, coordinated commands, attributed interception, spectral heirs, Assassin choices and per-element ability supports' },
   { probe: 'probe_skeletonmage.ts', status: 'green', tier: 'fast', why: 'Commanded rites, phylactery reconstruction, owner spell echoes, saved school choices, relay provenance and bounded signature recovery' },
   { probe: 'probe_skeletonarcher.ts', status: 'green', tier: 'fast', why: 'Independent wounds, channel formations, full-cap releases, mortar payloads, crew support routing and elemental mage arts' },
