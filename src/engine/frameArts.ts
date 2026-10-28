@@ -3,7 +3,7 @@ import { inAoe, type World } from './world';
 import { angleTo, dist, type Vec2 } from '../core/math';
 import { applyHit, type DamagePacket, type HitResult, type LifeWoundEvent } from './damage';
 import { instanceDelivery, instanceMods, skillContextTags, makeSkillInstance, skillCooldownSeconds, type SkillInstance, type SummonDelivery } from './skills';
-import { frameSkillIds, type FrameSpec } from './frameSpec';
+import { frameSkillIds, type FrameSpec, type FrameBodyView } from './frameSpec';
 import { mod } from './stats';
 import { skillAbsorbAmount } from './absorb';
 import { SKILLS } from '../data/skills';
@@ -136,6 +136,25 @@ export class FrameArts {
     if (view)
       out[host.def.id] = { skill: view.def.id, ready: this.ready(owner, host) };
   } return Object.keys(out).length ? out : undefined; }
+  /** Resolve real action state once for both local rendering and co-op snapshots. */
+  bodyPresentation(a: Actor): FrameBodyView | undefined {
+    if (a.dead || a.downed) return;
+    if (a.remoteFrameBody) return a.remoteFrameBody;
+    if (!a.frameState && !a.frameCharging) return;
+    const s = a.frameState, f = frameOf(a.summonInst);
+    if (s?.terminal && f?.visual) return { style: f.visual, mode: 'terminal',
+      strength: Math.max(0, Math.min(1, 1 - (s.terminal.end - this.w.time) / Math.max(.01, f.reliquary?.duration ?? 1))) };
+    if (a.frameCharging) {
+      const wedge = this.wedges.find(w => w.members.includes(a));
+      const style = frameOf(wedge?.host)?.visual;
+      if (style) return { style, mode: 'charge' };
+    }
+    if (!s || !f?.visual) return;
+    if (s.order?.strike) return { style: f.visual, mode: 'crush' };
+    if (f.repair && a.owner && a.owner.casting?.inst.frameHost === a.summonInst)
+      return { style: f.visual, mode: f.sanctuary ? 'transfusion' : 'repair',
+        from: { ...a.owner.pos }, strength: Math.max(0, Math.min(1, s.strain * (f.sanctuary?.escalation ?? 0))) };
+  }
   isActive(a: Actor) { return !!a.frameState && !a.dead; }
   private payload(a: Actor, id: string, aim: Vec2, power = 1, paid = 0, origin?: Vec2, exclude?: ReadonlySet<number>, independent = false): SkillInstance | undefined {
     const base = this.skill(a, id);
@@ -569,7 +588,7 @@ export class FrameArts {
         // A wave receipt prevents overlapping impact pulses from repeatedly hitting the same target.
         this.payload(w.body, id, forward, 1 + mass * c.perMass, 0, w.pos, w.hit);
       }
-      this.w.flashes.push({ pos: { ...w.pos }, radius: this.radius(w.body, skill), color: '#c8e2dc', life: .08, maxLife: .08, arc: { facing: dir, arcRad: Math.PI * .8 } });
+      this.w.flashes.push({ pos: { ...w.pos }, radius: this.radius(w.body, skill), color: skill.def.color, fx: c.fx, life: .08, maxLife: .08, arc: { facing: dir, arcRad: Math.PI * .8 } });
       if (dist(w.pos, w.aim) < 15) {
         this.stopWedge(w);
         const f = frameOf(w.host);

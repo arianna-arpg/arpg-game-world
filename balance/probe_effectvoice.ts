@@ -54,6 +54,7 @@ import { doodadRuleKinds, doodadRuleOf, type DoodadKind } from '../src/engine/le
 // kegs' rules live in data/formations.ts as RUNTIME registrants — without
 // this import the registry sweep would silently never see them.
 import '../src/data/formations';
+import '../src/render/vis/frameVoice';
 import { effectVoiceKinds, effectVoiceOf } from '../src/render/vis/effectVoice';
 
 let failed = 0;

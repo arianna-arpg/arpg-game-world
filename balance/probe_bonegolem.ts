@@ -128,6 +128,7 @@ try {
     t.p.sheet.setSource('extra', [mod('minionMaxCount', 'flat', 2)]);
     const a = summon(t);
     check('worn frame protects rear and sides with a forward opening', !!a.summonShell && a.shellGuard?.side === 'rear' && a.shellGuard.arcDeg === 300);
+    check('worn guardian selects its articulated bone anatomy', a.shellGuard?.shellVisual === 'ossuary');
     check('worn strike has shorter authored reach', a.skills.some(s => s?.def.id === 'frame_marrow_sweep' && s.def.delivery.type === 'cone' && s.def.delivery.range === 85));
     const slots = t.p.summonToggles.get(t.host.def.id)!.slots;
     step(t.w, 10);
@@ -144,11 +145,14 @@ try {
     t.w.useMetaSkill(t.p, t.host, { x: t.p.pos.x + 250, y: t.p.pos.y });
     step(t.w, .1);
     check('wave includes a nearby melee ally and protects it during charge', warrior.frameCharging && applyHit(e, warrior, { amounts: { physical: 100 }, tags: new Set(['physical']), crit: false, sourceName: 'fixture' }).immune);
+    check('only actual charging escorts display the protection cue', t.w.frameArts.bodyPresentation(warrior)?.mode === 'charge' && !t.w.frameArts.bodyPresentation(t.p));
+    check('moving vanguard emits its authored bone voice', t.w.flashes.some(f => f.fx === 'boneRampart'));
     check('charge immunity also prevents ongoing damage', applyDot(warrior, 10, 'physical') === 0);
     const cost = applyHit(warrior, warrior, { resourceHit: true, amounts: { physical: 1 }, tags: new Set(['physical']), crit: false, sourceName: 'fixture' });
     check('charge immunity cannot waive voluntary health costs', near(cost.total, 1));
     step(t.w, 3);
     SIM_TAP.current = null;
+    check('escort protection cue expires with the actual charge', !t.w.frameArts.bodyPresentation(warrior));
     check('projected wave attacks without moving the caster and clears immunity', waves > 0 && near(t.p.pos.x, before.x) && near(t.p.pos.y, before.y) && !warrior.frameCharging);
   }
   {
@@ -171,13 +175,20 @@ try {
     const life = t.p.life;
     step(t.w, 1.2);
     check('player channels while autonomous frame spends health to restore allies', t.p.casting?.inst.def.id === 'frame_reknit' && t.p.life > life && a.frameState!.strain > 0);
+    const activeSnap = serializeSnapshot(t.w, 2); applySnapshot(remote, activeSnap);
+    const bodyMirror = () => remote.actors[activeSnap.actors.findIndex(row => row.id === a.id)];
+    check('transfusion cue and strain reach co-op without a private minion kit', !bodyMirror().summonInst && JSON.stringify(remote.frameArts.bodyPresentation(bodyMirror())) === JSON.stringify(t.w.frameArts.bodyPresentation(a)) && t.w.frameArts.bodyPresentation(a)?.mode === 'transfusion');
     if (t.p.casting)
       t.p.casting.held = false;
     step(t.w, .1);
+    applySnapshot(remote, serializeSnapshot(t.w, 3));
+    check('release removes the local and remote channel cue', !t.w.frameArts.bodyPresentation(a) && !remote.frameArts.bodyPresentation(bodyMirror()));
     check('voluntary release grants a ward earned from actual healing', t.p.absorbLayers.size > 0);
     const origin = { ...a.pos }, e = enemy(t.w, a, 400);
     a.life = 0;
     t.w.kill(a, false, e);
+    applySnapshot(remote, serializeSnapshot(t.w, 4));
+    check('Reliquary countdown is visible locally and on co-op clients', t.w.frameArts.bodyPresentation(a)?.mode === 'terminal' && remote.frameArts.bodyPresentation(bodyMirror())?.mode === 'terminal');
     check('Reliquary defers death and retains its reserved body', !a.dead && !!a.frameState?.terminal && t.p.reservedMana > 0);
     t.p.absorbLayers.clear();
     t.p.es = 0;
@@ -250,6 +261,7 @@ try {
       t.w.useSkill(t.p, t.host, t.p.pos, true);
       step(t.w, 1);
     }
+    check('repair has a distinct cue and the real caster tether', plain.w.frameArts.bodyPresentation(a)?.mode === 'repair' && plain.w.frameArts.bodyPresentation(a)?.from?.x === plain.p.pos.x);
     check('Reknitting Pulse receives and uses its own healing support', b.frameState!.kit.find(s => s.def.id === 'frame_repair')!.sockets.some(g => g?.forwarded && g.def.id === 'intensive_care') && (b.life - bb) > (a.life - aa) * 1.35);
     const e = enemy(boost.w, b, 30);
     step(boost.w, 3.5);
