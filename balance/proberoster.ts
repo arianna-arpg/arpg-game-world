@@ -93,6 +93,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_brandtprogression.ts', status: 'green', tier: 'fast', why: 'Brandt rarity ceilings, starter trade, staged investments, craft-bounty qualification, board cues and quest appearance' },
   { probe: 'probe_vendorinvestment.ts', status: 'green', tier: 'fast', why: 'Ten-tier market investment, curated affix floors and Magic bases, paged purchases, protected reservations and mixed writ/cash choices' },
   { probe: 'probe_companionrecovery.ts', status: 'green', tier: 'fast', why: 'Revival/Whistle cleanse, damage and debuff immunity, body-count budget, expiry, living/downed parity, litter/dwell paths and co-op cue' },
+  { probe: 'probe_memoryrecall.ts', status: 'green', tier: 'fast', why: 'paced bulk recall, seeded parity, full-bag pause/resume, facet and seat boundaries, independent panel placement' },
   { probe: 'probe_memoryunlocks.ts', status: 'green', tier: 'fast', why: 'Repeatable memory discovery, secondary access, payment, exhaustion, persistence, legendary mint and host gate' },
   { probe: 'probe_uniqueaccords.ts', status: 'green', tier: 'fast', why: 'Unique grant census, item-owned sockets, live companion investment, Cinder Conductor fuel, Breach Bell cries and Unspent Reply casting costs' },
   { probe: 'probe_playercastvisuals.ts', status: 'green', tier: 'fast', why: 'Player preparation families follow true clocks, interruption and birth; return-only summon links, own co-op casts, saved wardrobe toggle and tint-independent geometry.' },

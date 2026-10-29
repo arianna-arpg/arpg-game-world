@@ -2355,6 +2355,12 @@ we verify changes.
   docs/design/bounty-board.md §6 R4, docs/engine/vendors.md; probe
   `balance/probe_memories.ts` rigs R–W (+ probe_vendorlocker C,
   probe_scaldkit P3, probe_worldbossloot D3 re-aimed).
+  Recall's independent adaptive pane and cancellable **Open all** session live
+  in `ui/memoryRecall.ts` + `ui/panelPlacement.ts`; native recall intents retain
+  seeded results, facets and room gates. A full bag pauses until space opens.
+  See `docs/ui/memory-recall.md`; verify `probe_memoryrecall.ts`, the memories /
+  folio / menubar probes, and the hidden `balance/memory-recall-ui.cjs` plus
+  `balance/inventory-pages-ui.cjs` after a build.
   THE COUNTER GLASS + THE MARKET CHAIN (2026-07-22; ONE-SHELF fold
   2026-08-23, skill-items M3): every counter renders ONE FACE — the whole
   shelf packed D2-style by `World.vendorGridPack` through the player bag's
