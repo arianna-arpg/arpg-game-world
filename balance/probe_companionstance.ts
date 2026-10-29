@@ -14,6 +14,7 @@
 //      Command gem's chained Assault, `lunges`, the tree's stance-art hook,
 //      dormant/released cleanup.
 // docs/design/tame-beast.md; `npm run probe -- companionstance`.
+import { angleDiff } from '../src/core/math';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { updateAI } from '../src/engine/ai';
@@ -87,6 +88,19 @@ const orderOf = (beast: Actor) => stanceOfOrder(beast.standingOrder);
 
 const restore = seedGlobalRandom(51217);
 try {
+  // All walking orders use the path mover's actual steering bearing.
+  for (const kind of ['recall', 'assault', 'hold']) {
+    const s = setup(), a = pet(s, 'plains_wolf', 1, 350);
+    a.facing = a.facingPrev = -Math.PI / 2;
+    a.aiCommand = { kind, pos: { ...s.p.pos }, issuerId: s.p.id, until: s.w.time + 5 };
+    const before = { ...a.pos };
+    updateAI(a, s.w, 1 / 60);
+    check(kind + ' turns the companion toward the walked route',
+      a.pos.x < before.x && Math.cos(a.facing) < -.9);
+    s.w.update(1 / 60);
+    check(kind + ' retains ordinary body turn limits', Math.abs(angleDiff(-Math.PI/2, a.facing)) <= a.turnSpeed/60+.001);
+  }
+
   // ---- registry + data contracts ---------------------------------------------
   check('Three stances ship in cycle order', companionStanceIds().join(',') === 'aggressive,defensive,passive');
   check('Every stance registers a command kind', companionStanceIds().every(id => COMMAND_KINDS[stanceKindId(id)]));

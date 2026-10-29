@@ -1,3 +1,4 @@
+import { angleDiff } from '../src/core/math';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { SKILLS } from '../src/data/skills';
@@ -365,6 +366,42 @@ try {
     const before=t.p.cooldowns.get('frame_charge_order')??0;t.w.kill(a,false,t.p);step(t.w,.1);
     check('losing the vanguard preserves the surviving frames shared command recovery',bodies.length===2&&before>1&&(t.p.cooldowns.get('frame_charge_order')??0)>before-.2);
   }
+  // Commanded bodies face their advance; projected shells retain their wearer's aim.
+  for (const worn of [false, true]) for (const heading of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    const t = setup(['keepers_bulwark', 'close_guard', ...(worn ? ['bone_stand'] : []), 'warding_reach']), a = summon(t);
+    t.p.facing = .47; a.facing = a.facingPrev = worn ? .47 : heading - .4;
+    const escort = t.w.createMonster('skeleton_warrior', 1, 'player');
+    escort.owner = t.p;
+    escort.pos = { x: a.pos.x - Math.sin(heading) * 65, y: a.pos.y + Math.cos(heading) * 65 };
+    escort.facing = escort.facingPrev = heading - .4;
+    t.w.actors.push(escort);
+    const aim = { x: a.pos.x + Math.cos(heading) * 400, y: a.pos.y + Math.sin(heading) * 400 };
+    t.p.useLock = 0;
+    check('directional Guardian command is accepted', t.w.useMetaSkill(t.p, t.host, aim));
+    if(worn) t.p.facing = t.p.facingPrev = a.facing = a.facingPrev = .47;
+    step(t.w, .55);
+    check('charging escort faces the vanguard, including lateral slot correction',
+      !!escort.frameCharging && Math.abs(angleDiff(escort.facing, heading)) < .01);
+    check(worn ? 'projected charge leaves wearer and shell facing alone' : 'physical vanguard faces its commanded advance',
+      worn ? near(t.p.facing, .47) && near(a.facing, .47) : !!a.frameCharging && Math.abs(angleDiff(a.facing, heading)) < .01);
+    const remote = makeSimWorld('necromancer', 0xb06e);
+    const snap = serializeSnapshot(t.w, 1);
+    applySnapshot(remote, snap);
+    check('remote escort renders the authoritative charge heading',
+      Math.abs(angleDiff(remote.actors[snap.actors.findIndex(x => x.id === escort.id)].facing, escort.facing)) < .01);
+  }
+  {
+    const t = setup(['osseous_might', 'great_bones', 'ossuary_commander', 'marrow_bruiser']), a = summon(t);
+    const heading = -Math.PI / 2;
+    a.facing = a.facingPrev = heading - .4;
+    const start = { ...a.pos };
+    t.p.useLock = 0;
+    t.w.useMetaSkill(t.p, t.host, { x: start.x, y: start.y - 400 });
+    step(t.w, .55);
+    check('Crush faces its approach before the finishing slam',
+      !!a.frameState?.order && a.pos.y < start.y && Math.abs(angleDiff(a.facing, heading)) < .01);
+  }
+
 }
 finally {
   SIM_TAP.current = null;

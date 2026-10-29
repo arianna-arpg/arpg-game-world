@@ -24,7 +24,7 @@ import { wardGuardians, wardCueStyle } from './combatReadability';
 import { combatCueFlash } from './combatCues';
 import { MONSTERS } from '../data/monsters';
 import { mod } from './stats';
-import { finishAIRecovery } from './handling';
+import { finishAIRecovery, faceAlongTravel } from './handling';
 import type { Actor } from './actor';
 import {
   alertScale, ARCHETYPES, BEHAVIOR_CFG, BEHAVIOR_STATS, castRemaining, evalCondition, FLOCK_CFG, mergeTuning,
@@ -502,8 +502,7 @@ registerCommandKind({
     const foe = foeNear(actor, world, cmd.pos, cmd.radius ?? COMMAND_CFG.markRadius);
     if (foe) return foe;
     if (dist(actor.pos, cmd.pos) > COMMAND_CFG.arriveDist) {
-      actor.facing = angleTo(actor.pos, cmd.pos);
-      moveToward(actor, world, cmd.pos, dt);
+      moveToward(actor, world, cmd.pos, dt, true);
       return 'consumed';
     }
     return 'done';
@@ -524,7 +523,7 @@ registerCommandKind({
       y: keeper.pos.y + THRONG_HEEL_OFF.y, tier: keeper.tier };
     if (dist(actor.pos, goal) > 24) {
       actor.companionReturnTo = keeper.id;
-      moveToward(actor, world, goal, dt);
+      moveToward(actor, world, goal, dt, true);
     }
     return 'consumed';
   },
@@ -538,8 +537,7 @@ registerCommandKind({
     const foe = foeNear(actor, world, cmd.pos, cmd.radius ?? COMMAND_CFG.markRadius);
     if (foe) return foe;
     if (dist(actor.pos, cmd.pos) > COMMAND_CFG.arriveDist) {
-      actor.facing = angleTo(actor.pos, cmd.pos);
-      moveToward(actor, world, cmd.pos, dt);
+      moveToward(actor, world, cmd.pos, dt, true);
     }
     return 'consumed';
   },
@@ -913,8 +911,8 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
     }
   }
 
-  if(actor.frameState&&world.frameArts.act(actor,target,point=>moveToward(actor,world,point,dt)))return;
-  if (actor.cohortState && world.cohortArts.act(actor, target, dt, point => moveToward(actor, world, point, dt))) return;
+  if(actor.frameState&&world.frameArts.act(actor,target,point=>moveToward(actor,world,point,dt,true)))return;
+  if (actor.cohortState && world.cohortArts.act(actor, target, dt, point => moveToward(actor, world, point, dt, true))) return;
 
   // Minions with nothing to fight heel back to their owner. Guard-stance
   // minions (Meat Shield) keep a SHORT leash — they disengage anything that
@@ -2507,7 +2505,7 @@ function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false)
  *  fall, re-orient, fall, ~18% max life a pop). 'lemming' minds
  *  (MoveSpec.hazards) opt out — authored self-destruction, one word away
  *  and machine-shiftable (bait a charge phase off a cliff by DESIGN). */
-function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: number): void {
+function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: number, faceTravel = false): void {
   // THE MURMURATION (BehaviorSpec.flock, stamped as aiFlock): boid steering
   // folded into the desire BEFORE the self-preservation veto — the flock
   // bends the mind's bearing, the veto still refuses the rim. Composable
@@ -2527,6 +2525,7 @@ function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: numbe
       else return; // rim-pinned: stand, don't step off
     }
   }
+  if (faceTravel) faceAlongTravel(actor, dx, dy);
   world.moveActor(actor, dx, dy, dt * minionCommandSpeed(actor, world.time));
 }
 
@@ -2623,7 +2622,7 @@ function flockSteer(
   return { x: ux, y: uy };
 }
 
-function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier?: number }, dt: number): void {
+function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier?: number }, dt: number, faceTravel = false): void {
   // Steer toward the next cell along the zone's walkable flow-field instead
   // of straight at the target — around warren walls AND plains cliff pockets
   // alike (World.pathField lazily rakes a nav grid over a convex zone's
@@ -2707,7 +2706,7 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier
   // THE UNWATCHED ADVANCE: a stamped stalk-creep scales the step (0 = a
   // statue while watched). Everything above still ran, so the body resumes
   // mid-stride the instant the gaze breaks.
-  steerMove(actor, world, dx, dy, dt * (actor.aiStalkCreep ?? 1));
+  steerMove(actor, world, dx, dy, dt * (actor.aiStalkCreep ?? 1), faceTravel);
 }
 
 /** THE RETREAT GATE: every backpedal flows through here. A WINDED actor

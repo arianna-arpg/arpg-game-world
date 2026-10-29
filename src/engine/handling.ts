@@ -41,3 +41,11 @@ export function finishAIRecovery(actor: Actor, now: number, seconds: number): vo
   actor.useLock = Math.max(actor.useLock, duration);
   actor.aiPlantUntil = Math.max(actor.aiPlantUntil, now + duration);
 }
+
+/** A movement owner expresses a desired bearing; the world's ordinary turn
+ * budget still resolves it. Casts retain their committed aim, and arriving
+ * at a point must not manufacture an eastward heading from a zero vector. */
+export function faceAlongTravel(actor: Actor, dx: number, dy: number): void {
+  if (!actor.casting && Number.isFinite(dx) && Number.isFinite(dy)
+    && Math.hypot(dx, dy) > 1e-8) actor.facing = Math.atan2(dy, dx);
+}

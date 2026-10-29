@@ -1,6 +1,6 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { monsterTurnSpeed, TURNING_CFG } from '../src/engine/handling';
+import { monsterTurnSpeed, TURNING_CFG, faceAlongTravel } from '../src/engine/handling';
 import { updateAI } from '../src/engine/ai';
 import { makeSkillInstance } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
@@ -191,5 +191,21 @@ for (const id of ['shield_up', 'infernal_ray']) {
   }
   check('a fallback rush also waits until the horns face its target', launched && aligned && startedAt > 0.5);
 }
+
+
+{
+  const {w,m,p}=fixture();
+  m.facing=m.facingPrev=1;
+  faceAlongTravel(m,0,0);
+  check('zero-distance arrival preserves the last heading', m.facing===1);
+  faceAlongTravel(m,Number.NaN,1);
+  check('invalid movement cannot poison body facing', m.facing===1);
+  const cast=makeSkillInstance(SKILLS.fireball,1);
+  w.useSkill(m,cast,p.pos,true);
+  const committed=m.facing;
+  faceAlongTravel(m,0,-1);
+  check('a movement request cannot steal a committed cast aim', !!m.casting && m.facing===committed);
+}
+
 console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
 process.exitCode = failed ? 1 : 0;
