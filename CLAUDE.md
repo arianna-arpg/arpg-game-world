@@ -6,6 +6,11 @@ bonuses; duplicate kinds keep first-source precedence. See docs/engine/strike-ti
 Verify striketiming, combatcues, castingcues, playercastvisuals, supportfabric,
 castaim, agent, all types and sim smoke; after an isolated build run the hidden
 balance/strike-timing-ui.cjs harness.
+Cast bars use the late, native-resolution reading layer in `render/vis/castBars.ts`.
+Local input feedback takes priority; enemy bars retain native concealment.
+Overlay placement/style is configured in `VIS_CFG.castReadout.overlay`.
+See `docs/render/cast-bars.md`; verify castbars, the existing casting/timing probes,
+all types and the hidden cast-bars, strike-timing and cast-readout UI courses.
 
 **Current scope:** [CURRENT.md](CURRENT.md) is the project direction and active/deferred work entrypoint. Deliver the offline seamless generation/content/event vision; new shard/MMORPG work is deferred. Prepare useful future boundaries without letting hosting dictate this phase. Existing zone content and the owner's game references are examples and reusable material, not generation laws. This priority supersedes conflicting older roadmaps and hosting handoffs.
 

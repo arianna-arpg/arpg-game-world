@@ -26,7 +26,13 @@ export const VIS_CFG = {
     showName: false, showMovement: false, plantedText: 'Feet planted', movementHeight: 12,
     movementFont: '10px Verdana', movementText: '#cad3d4',
     font: 'bold 11px Verdana', text: '#f1ecdd', edge: '#121719', outline: 3,
-    slotEdge: '#f1ecdd', slotWidth: 2, slotPad: 2 },
+    slotEdge: '#f1ecdd', slotWidth: 2, slotPad: 2,
+    /** Casts reserve space by importance, then paint in the reverse order.
+     * These are reading surfaces: washes never tint their timing markers. */
+    overlay: { avoidOverlap: true, gap: 3, step: 10, rings: 8, pad: 1,
+      background: '#101219', edge: '#58616c', edgeWidth: 1,
+      link: '#aab6c4', linkWidth: 1,
+      priority: { self: 4, local: 3, party: 2, enemy: 1, ally: 0 } } },
   meleeReach: { enabled:true, color:'#dcebd6', edge:'#17201b', alpha:.34, progressAlpha:.25,
     fillAlpha:.025, width:1.3, outline:1.5 },
   /** Local body identity and numeric clutter share one configurable presentation
