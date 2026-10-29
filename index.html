@@ -516,6 +516,15 @@
       width: 470px; max-height: calc(84vh / var(--ui-scale));
       scrollbar-gutter: stable; overflow-anchor: none;
     }
+    #recall-menu[data-recall-layout]:not([data-moved]) {
+      left:var(--recall-left) !important; top:var(--recall-top) !important;
+      right:auto !important; bottom:auto !important; transform:none !important;
+      width:var(--recall-width) !important; max-width:var(--recall-width) !important;
+      max-height:var(--recall-maxHeight) !important;
+    }
+    #recall-menu .recall-title { margin-bottom:5px; font-size:12px; letter-spacing:0; text-transform:none; }
+    #recall-menu .recall-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:10px; color:var(--text-dim); }
+    #recall-menu [data-mem-all] { padding:3px 8px; font-size:10px; flex-shrink:0; }
     /* Names, odds chips and reveals may wrap; the action stays at row top. */
     #recall-menu [data-mem-recall] { align-self: flex-start; flex-shrink: 0; }
     #oracle-menu { width: 520px; max-height: calc(84vh / var(--ui-scale)); }

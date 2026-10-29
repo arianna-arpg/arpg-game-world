@@ -11,6 +11,8 @@ import { STASH_DEFS } from '../data/stashes';
 import { renderWardrobe } from './wardrobe';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 import { ServiceWorkspace } from './serviceWorkspace';
+import { independentPanelSeat } from './panelPlacement';
+import { MemoryRecallBatch, MEMORY_RECALL_UI_CFG, requestMemoryRecall } from './memoryRecall';
 import type { DialogueUI } from './dialogue';
 import { DIALOGUE_CFG } from '../data/dialogue';
 import { supportCompatibilityHtml } from './supportCompatibility';
@@ -718,6 +720,11 @@ export class UI {
   /** THE RECALL (skill-items M2/M3, §3b): the Memory pouches' picker. */
   recallOpen = false;
   private recallUid = 0;
+  private readonly recallBatch = new MemoryRecallBatch();
+  private recallWorld: World | null = null;
+  private recallOwner: Seat | null = null;
+  private recallRefreshAt = 0;
+  private recallViewKey = '';
   /** The open pouch's KIND (last seen — outlives the pouch for the spent
    *  panel's header) and, on a Preformed pouch, THE FACET the player has
    *  committed to (a triad's lead attribute id; null until chosen — the
@@ -1616,6 +1623,7 @@ export class UI {
     this.folio.sync();
     this.serviceWorkspace.sync();
     this.folioStrip.update();
+    this.syncRecall();
   }
 
   /** Every root THE PANEL MOVE governs: the static panels + the minted skill-tree panes. */
@@ -5064,6 +5072,10 @@ export class UI {
   // teaching, walk-2 ruled) before the RECALL buttons arm.
 
   showRecall(uid: number, seatId?: string): void {
+    this.recallBatch.stop();
+    this.recallWorld = this.getWorld();
+    this.recallOwner = this.couchSeatFor(seatId);
+    this.recallRefreshAt = 0;
     hideTooltip(); // Retire the pouch card before opening its recall choice.
     this.ownPanel(this.recallMenu, this.couchSeatFor(seatId));
     this.recallOpen = true;
@@ -5076,9 +5088,60 @@ export class UI {
   }
 
   closeRecall(): void {
+    this.recallBatch.stop();
+    this.recallWorld = null;
+    this.recallOwner = null;
     this.recallOpen = false;
     this.recallMenu.classList.add('hidden');
     hideTooltip();
+  }
+
+  /** Reconcile a visible recall with live bag space and the surrounding panels. */
+  private syncRecall(): void {
+    if (!this.recallOpen) return;
+    const world = this.getWorld(), seat = this.panelSeat(this.recallMenu);
+    if (world !== this.recallWorld || seat !== this.recallOwner || !world.seats.includes(seat) || seat.actor.dead) {
+      this.closeRecall(); return;
+    }
+    const now = performance.now(), wasActive = this.recallBatch.active, wasPaused = this.recallBatch.paused;
+    const got = !this.escapeMenuOpen && !this.minigameActive && this.folioDrawn(this.recallMenu)
+      ? this.recallBatch.tick(world, seat, this.recallUid, now) : null;
+    if (got) this.rememberRecall(got.group, got.result);
+    let changed = !!got || wasActive !== this.recallBatch.active || wasPaused !== this.recallBatch.paused;
+    if (now >= this.recallRefreshAt) {
+      this.recallRefreshAt = now + MEMORY_RECALL_UI_CFG.refreshMs;
+      const view = world.memoryRecallView(seat, this.recallUid);
+      changed ||= this.recallViewKey !== JSON.stringify(view && [view.total, view.refusal, view.groups.map(g => [g.key, g.count])]);
+    }
+    if (changed) this.refreshRecall();
+    if (got && this.inventoryOpen && this.panelSeat(this.inventory) === seat) this.refreshInventory();
+    this.placeRecall();
+  }
+
+  private placeRecall(): void {
+    if (!this.recallOpen || !this.folioDrawn(this.recallMenu) || panelMoved(this.recallMenu)) return;
+    const c = MEMORY_RECALL_UI_CFG, scale = uiScaleNow(), edge = c.edge * scale;
+    const bottom = Math.max(edge, Math.min(window.innerHeight - edge,
+      (this.hudCluster?.()?.y ?? window.innerHeight) - edge));
+    const visible = (el: HTMLElement) => !el.classList.contains('hidden') && this.folioDrawn(el);
+    const neighbors = [this.inventory, ...this.inventoryPages.entries().map(p => p.el),
+      ...document.querySelectorAll<HTMLElement>('.build-ribbons, .folio-strip')]
+      .filter(visible).map(el => el.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0);
+    const width = c.width * scale;
+    const seat = independentPanelSeat({ left: edge, right: Math.max(edge, window.innerWidth - edge), top: edge, bottom },
+      neighbors, { left: (window.innerWidth - width) / 2, top: window.innerHeight * c.topFraction, width },
+      c.minWidth * scale, c.gap * scale);
+    this.recallMenu.dataset.recallLayout = '1';
+    for (const [key, value] of Object.entries(seat)) this.recallMenu.style.setProperty('--recall-' + key, (value / scale) + 'px');
+  }
+
+  private rememberRecall(group: string, got: MemoryRecallResult): void {
+    this.recallReveals.set(group, {
+      name: got.name, itemUid: got.itemUid, id: got.id, kind: got.kind,
+      color: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].color : (SUPPORTS[got.id]?.color ?? '#b8b8b8'),
+      sockets: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].sockets : 0,
+    });
+    this.memFlash.set(got.itemUid, Date.now() + 1700);
   }
 
   refreshRecall(): void {
@@ -5094,6 +5157,7 @@ export class UI {
     const mk = MEMORY_KINDS[this.recallKind];
     const groups = view?.groups ?? [];
     const total = view?.total ?? 0;
+    this.recallViewKey = JSON.stringify(view && [view.total, view.refusal, view.groups.map(g => [g.key, g.count])]);
     const refusal = view?.refusal ?? null;
     // THE FACET (M3, §4 lane 2 — walk-2 ruled): a Preformed pouch arms its
     // RECALL buttons only once a triad is committed. The three cards derive
@@ -5105,7 +5169,7 @@ export class UI {
       <div style="display:flex;gap:6px;margin:4px 0 6px">
         ${memoryFacets().map(f => {
           const sel = this.recallFacet === f.id;
-          return `<button data-mem-facet="${f.id}" style="flex:1;text-align:left;padding:5px 7px;
+          return `<button data-mem-facet="${f.id}" ${this.recallBatch.active ? 'disabled' : ''} style="flex:1;text-align:left;padding:5px 7px;
             background:${sel ? '#2e2538' : '#1c1824'};border:1px solid ${sel ? mk.color : '#3a3644'};
             border-radius:4px;cursor:var(--cursor-point, pointer)">
             <div style="font-size:11px;font-weight:bold;color:${sel ? mk.color : '#d8d0c0'}">${f.label}</div>
@@ -5156,7 +5220,7 @@ export class UI {
       // THE REVEAL (§3b): the row flips to the granted skill — icon, name,
       // rarity color, socket pips — until the next press re-arms it.
       const revealLine = reveal ? revealHtml(reveal) : '';
-      const canRecall = !refusal && facetChosen;
+      const canRecall = !refusal && facetChosen && !this.recallBatch.active;
       return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634">
         ${portraitOf(def)}
         <div style="flex:1;min-width:0">
@@ -5188,11 +5252,36 @@ export class UI {
           </div>
         </div>`;
       }).join('');
-    this.recallMenu.innerHTML = `${this.closeGlyphHtml()}
-      <h3 style="margin:2px 0 2px;color:${mk.color}">${mk.name.replace(/Memory$/, 'Memories')} <span style="color:#9a94a8;font-size:11px">×${total} held</span></h3>
+    // Keep the header and batch control mounted while results change, so a
+    // pointer-down/up or keyboard focus cannot be lost to the next reveal.
+    if (!this.recallMenu.querySelector('[data-memory-body]')) {
+      this.recallMenu.innerHTML = `${this.closeGlyphHtml()}
+        <h2 class="recall-title"><span data-memory-title></span></h2>
+        <div class="recall-toolbar"><button data-mem-all type="button">Open all</button>
+          <span data-mem-progress aria-live="polite"></span></div>
+        <div data-memory-body></div>`;
+      this.recallMenu.querySelector('[data-mem-all]')!.addEventListener('click', () => {
+        if (this.recallBatch.active) this.recallBatch.stop();
+        else this.recallBatch.start(this.getWorld(), this.panelSeat(this.recallMenu), this.recallUid, this.recallFacet ?? undefined);
+        this.refreshRecall();
+      });
+    }
+    const title = this.recallMenu.querySelector<HTMLElement>('[data-memory-title]')!;
+    title.style.color = mk.color;
+    title.textContent = mk.name.replace(/Memory$/, 'Memories') + ' · ' + total + ' held';
+    const all = this.recallMenu.querySelector<HTMLButtonElement>('[data-mem-all]')!;
+    all.textContent = this.recallBatch.active ? 'Stop' : 'Open all';
+    all.disabled = !this.recallBatch.active && (!total || !facetChosen);
+    all.title = this.recallBatch.active ? 'Stop opening this pouch.'
+      : 'Open every Memory in this pouch. Pauses when the bag is full and resumes when space is available.';
+    const progress = this.recallMenu.querySelector<HTMLElement>('[data-mem-progress]')!;
+    const progressText = this.recallBatch.active
+      ? this.recallBatch.paused ? 'Paused — ' + this.recallBatch.paused : 'Opening…' : '';
+    if (progress.textContent !== progressText) progress.textContent = progressText;
+    this.recallMenu.querySelector<HTMLElement>('[data-memory-body]')!.innerHTML = `
       <div data-memory-purpose style="font-size:11px;line-height:1.5;color:#c8bce0;margin-bottom:6px">${esc(mk.recallDescription)}</div>
       ${facetStrip}
-      ${refusal ? `<div style="color:#c08a68;font-size:11px;margin-bottom:4px">${refusal}</div>` : ''}
+      ${refusal && !this.recallBatch.paused ? `<div style="color:#c08a68;font-size:11px;margin-bottom:4px">${refusal}</div>` : ''}
       ${rows || '<div style="color:#5a5668;font-size:11px">nothing held</div>'}${spent}`;
     this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-find]').forEach(el => {
       el.addEventListener('click', () => {
@@ -5204,6 +5293,7 @@ export class UI {
     });
     this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-facet]').forEach(el => {
       el.addEventListener('click', () => {
+        this.recallBatch.stop();
         this.recallFacet = el.dataset.memFacet!;
         this.refreshRecall();
       });
@@ -5211,28 +5301,15 @@ export class UI {
     this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-recall]').forEach(el => {
       el.addEventListener('click', () => {
         const dropper = el.dataset.memRecall!;
-        const w = this.getWorld();
-        // The handshake: clear, dispatch, read back — a refused recall
-        // (room/seal raced the panel) leaves null and flips nothing.
-        w.memoryRecallLast = null;
-        w.requestMeta({ t: 'recallMemory', uid: this.recallUid, dropper,
-          ...(needsFacet && this.recallFacet ? { facet: this.recallFacet } : {}) });
-        // (cast: TS narrows the field to null across the dispatch, but the
-        // seat-scoped applyAction inside requestMeta just rewrote it)
-        const got = w.memoryRecallLast as (MemoryRecallResult & { seat: string }) | null;
-        if (got && got.seat === this.panelSeat(this.recallMenu).id) {
-          this.recallReveals.set(dropper, {
-            name: got.name, itemUid: got.itemUid, id: got.id, kind: got.kind,
-            color: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].color : (SUPPORTS[got.id]?.color ?? '#b8b8b8'),
-            sockets: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].sockets : 0,
-          });
-          this.memFlash.set(got.itemUid, Date.now() + 1700);
-        }
+        const got = requestMemoryRecall(this.getWorld(), this.panelSeat(this.recallMenu), this.recallUid,
+          dropper, needsFacet ? this.recallFacet ?? undefined : undefined);
+        if (got) this.rememberRecall(dropper, got);
         this.refreshRecall();
         if (this.inventoryOpen) this.refreshInventory();
       });
     });
     this.paintPortraitsIn(this.recallMenu);
+    this.placeRecall();
   }
 
   refreshFont(): void {
@@ -11608,8 +11685,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.salvageMenu.classList.add('hidden');
     this.fontOpen = false;
     this.fontMenu.classList.add('hidden');
-    this.recallOpen = false;
-    this.recallMenu.classList.add('hidden');
+    this.closeRecall();
     this.oracleOpen = false;
     this.oracleTargetUid = null;
     this.oracleMenu.classList.add('hidden');

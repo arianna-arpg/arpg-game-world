@@ -1,5 +1,17 @@
 Bone Golem frame abilities, the four-point routes, support routing and lifecycle checks are documented in [bone-golem](docs/design/bone-golem.md). Verify bonegolem, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden bone-golem-ui course.
 Skeleton Warrior infantry, spectral heirs, Spellsword choices and the shared Mage/Warrior node picker are documented in [skeleton-warrior](docs/design/skeleton-warrior.md). Verify skeletonwarrior, skeletonmage, skeletonarcher, necromancercourts, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden skeleton-mage-ui and skeleton-warrior-ui courses.
+Strike-timing disciplines compose independently through engine/strikeTiming.ts.
+Perfect Draw and Wandering Mark share one timing attempt and multiply earned
+bonuses; duplicate kinds keep first-source precedence. See docs/engine/strike-timing.md.
+Verify striketiming, combatcues, castingcues, playercastvisuals, supportfabric,
+castaim, agent, all types and sim smoke; after an isolated build run the hidden
+balance/strike-timing-ui.cjs harness.
+Cast bars use the late, native-resolution reading layer in `render/vis/castBars.ts`.
+Local input feedback takes priority; enemy bars retain native concealment.
+Bars retain their original fixed position and artwork; no relocation or leaders.
+Adaptive outlines use `VIS_CFG.castReadout.contrast`; stacking uses `overlay.priority`.
+See `docs/render/cast-bars.md`; verify castbars, the existing casting/timing probes,
+all types and the hidden cast-bars, strike-timing and cast-readout UI courses.
 
 **Current scope:** [CURRENT.md](CURRENT.md) is the project direction and active/deferred work entrypoint. Deliver the offline seamless generation/content/event vision; new shard/MMORPG work is deferred. Prepare useful future boundaries without letting hosting dictate this phase. Existing zone content and the owner's game references are examples and reusable material, not generation laws. This priority supersedes conflicting older roadmaps and hosting handoffs.
 
@@ -2349,6 +2361,12 @@ we verify changes.
   docs/design/bounty-board.md §6 R4, docs/engine/vendors.md; probe
   `balance/probe_memories.ts` rigs R–W (+ probe_vendorlocker C,
   probe_scaldkit P3, probe_worldbossloot D3 re-aimed).
+  Recall's independent adaptive pane and cancellable **Open all** session live
+  in `ui/memoryRecall.ts` + `ui/panelPlacement.ts`; native recall intents retain
+  seeded results, facets and room gates. A full bag pauses until space opens.
+  See `docs/ui/memory-recall.md`; verify `probe_memoryrecall.ts`, the memories /
+  folio / menubar probes, and the hidden `balance/memory-recall-ui.cjs` plus
+  `balance/inventory-pages-ui.cjs` after a build.
   THE COUNTER GLASS + THE MARKET CHAIN (2026-07-22; ONE-SHELF fold
   2026-08-23, skill-items M3): every counter renders ONE FACE — the whole
   shelf packed D2-style by `World.vendorGridPack` through the player bag's

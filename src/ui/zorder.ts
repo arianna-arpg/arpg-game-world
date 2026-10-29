@@ -37,8 +37,10 @@
 //                stacking context and its internal z rows (drawer flaps,
 //                sticky heads, seal modals) stay panel-local by construction.
 //   folio      — THE FOLIO's thumb index (ui/folio.ts): the tab strip seated
-//                on a book's front leaf. Above every panel, so a neighbor's
-//                overlap can never bury the tabs; under the popups it serves.
+//                on a book's front leaf. Above ordinary page panels, so a
+//                neighboring page cannot bury its tabs.
+//   independentPanel — standalone decisions (Memory Recall). Above neighboring
+//                books and tabs when the viewport cannot fit them side by side.
 //   menubar    — THE MENU BAR (ui/menubar.ts): the HUD's Menu button + its
 //                tray. Above every panel and the strip (the button must stay
 //                pressable under a dragged panel), under the popups and the
@@ -85,6 +87,7 @@ export const Z_LADDER = {
   crest: 10,         // renderer.ts — the crest overlay (word layer + HUD, scale < 1)
   panel: 40,         // every activatable .panel root (via the injected sheet)
   folio: 50,         // ui/folio.ts — the thumb index (a TS-built root; reads the rung)
+  independentPanel: 52, // standalone decisions remain reachable above neighboring books
   menubar: 55,       // ui/menubar.ts — THE MENU BAR's button + tray (TS-built; reads the rung)
   popup: 60,         // .choice-popup floaters
   minigame: 900,     // ui/minigames.ts cover
@@ -104,6 +107,7 @@ export const Z_LADDER = {
  *  read Z_LADDER at their own createElement site. */
 export const UI_STACK_SURFACES: ReadonlyArray<{ sel: string; z: number }> = [
   { sel: '.panel', z: Z_LADDER.panel },        // every activatable panel root (index.html)
+  { sel: '#recall-menu', z: Z_LADDER.independentPanel },
   { sel: '.choice-popup', z: Z_LADDER.popup }, // passive choice-node deals (ui/panels.ts)
   { sel: '.tooltip', z: Z_LADDER.tooltip },    // the hover card (ui/tooltip.ts)
   { sel: '.dnd-ghost', z: Z_LADDER.drag },     // the drag ghost (ui/dnd.ts)

@@ -3,6 +3,7 @@ import { CohortArts } from './cohortArts';
 import { summonSchoolSkill } from './skills';
 import { SummonArts } from './summonArts';
 import { DEVICE_CFG, DeviceContacts, deviceContactEligible, groundDeviceState } from './groundDevices';
+import { resolveStrikeTiming, rollStrikeMarker, strikeTimingsOf } from './strikeTiming';
 import { syncAltarBodies } from './altarBodies';
 import { SkillInputOrder } from './skillInputOrder';
 import { markBodyAction } from './bodyAction';
@@ -112,7 +113,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { aiKitInstance, runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTimings, instanceBirth, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, rollSkillRarityWeighted, socketSpec, treeNodeOf, treeNodeRefusal, validTreeNodes, instanceChannel, bandPointsAt, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE, AOE_BAND_DEPTH, bandSwingGeo,
   skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, essenceTierForLevel, summonCrewOf, supportFitsInst,
   type SkillRarity,
@@ -35150,7 +35151,7 @@ export class World {
         || mode === 'overcharge')) {
         const tags = skillContextTags(def);
         const extra = instanceMods(inst);
-        const timing = instanceStrikeTiming(inst);
+        const timings = instanceStrikeTimings(inst);
         caster.casting = {
           inst, mode: 'overcharge', aim: vec(aim.x, aim.y),
           elapsed: 0,
@@ -35164,7 +35165,8 @@ export class World {
           targetInfo: targetInfo ?? undefined,
           paidCost: paid,
           stage: 0, sinceStage: 999, channelTime: 0,
-          indicatorAt: timing?.kind === 'timed' ? rand(0.3, 0.85) : undefined,
+          strikeTimings: timings,
+          indicatorAt: rollStrikeMarker(timings),
           sparkWindow: caster.sheet.get('sparkWindow', tags, extra, ocSpec.window ?? 0),
         };
         return true;
@@ -35174,8 +35176,8 @@ export class World {
     // A grafted strike-timing discipline promotes a plain bar cast into
     // the perfect/timed machinery (Snipe's golden window on anything) —
     // except on a pierced press, which owns no bar to hang a window on.
-    const timing = instanceStrikeTiming(inst);
-    const effMode = mode === 'cast' && timing && !pierced ? timing.kind : mode;
+    const timings = instanceStrikeTimings(inst);
+    const effMode = mode === 'cast' && timings.length && !pierced ? timings[0].kind : mode;
 
     const castTime = caster.skillUseTime(inst);
     this.assaults.lock(caster, inst, aim);
@@ -35211,7 +35213,8 @@ export class World {
       held: true, baseMult,
       chargesSpent: cc.consumed,
       targetInfo: targetInfo ?? undefined,
-      indicatorAt: effMode === 'timed' ? rand(0.3, 0.85) : undefined,
+      strikeTimings: effMode === 'perfect' || effMode === 'timed' ? timings : undefined,
+      indicatorAt: effMode === 'perfect' || effMode === 'timed' ? rollStrikeMarker(timings) : undefined,
       presses: effMode === 'multitude' ? 1 : undefined,
       paidCost: paid,
       ventRounds,
@@ -35238,21 +35241,14 @@ export class World {
     const cs = caster.casting;
     if (!cs) return;
     const frac = cs.total > 0 ? cs.elapsed / cs.total : 0;
-    const timing = instanceStrikeTiming(cs.inst);
-    if (cs.mode === 'perfect' && !cs.pressUsed) {
+    if ((cs.mode === 'perfect' || cs.mode === 'timed') && !cs.pressUsed) {
       cs.pressUsed = true;
-      if (frac >= 0.72) {
-        cs.empowered = 1 + (timing?.bonus ?? 0.7);
-        this.flashes.push(timingCueFlash(caster, 'perfect', cs.aim));
-        // The made window IS an event — skill expression as a trigger.
-        this.rollTriggers(caster, 'flawless',
-          { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
-      }
-    } else if (cs.mode === 'timed' && !cs.pressUsed) {
-      cs.pressUsed = true;
-      if (cs.indicatorAt !== undefined && Math.abs(frac - cs.indicatorAt) <= 0.08) {
-        cs.empowered = 1 + (timing?.bonus ?? 1.2);
-        this.flashes.push(timingCueFlash(caster, 'flawless', cs.aim));
+      const result = resolveStrikeTiming(strikeTimingsOf(cs), frac, cs.indicatorAt);
+      if (result.successes.length) {
+        cs.empowered = result.multiplier;
+        for (const timing of result.successes) this.flashes.push(
+          timingCueFlash(caster, timing.kind === 'timed' ? 'flawless' : 'perfect', cs.aim));
+        // One successful input remains one flawless event, even at an overlap.
         this.rollTriggers(caster, 'flawless',
           { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
       }
@@ -57398,7 +57394,7 @@ export class World {
                 cs.sinceStage = 0;
                 cs.elapsed = 0;
                 // A timed discipline re-rolls its marker for the new bar.
-                if (cs.indicatorAt !== undefined) cs.indicatorAt = rand(0.3, 0.85);
+                if (cs.indicatorAt !== undefined) cs.indicatorAt = rollStrikeMarker(strikeTimingsOf(cs));
                 // The SPARK: each banked stage flashes its arrival.
                 this.flashes.push({
                   pos: vec(a.pos.x, a.pos.y), radius: 18 + 7 * cs.stage,
@@ -57422,15 +57418,8 @@ export class World {
         //  - the SPARK window met within a breath of a stage banking
         //    (sparkWindow stat — works at max stages; greed's discipline).
         const stages = cs.stage ?? 0;
-        const timing = instanceStrikeTiming(cs.inst);
         const frac = cs.total > 0 ? cs.elapsed / cs.total : 0;
-        let strikeMult = 1;
-        if (timing?.kind === 'perfect' && frac >= 0.72) {
-          strikeMult = 1 + (timing.bonus ?? 0.7);
-        } else if (timing?.kind === 'timed' && cs.indicatorAt !== undefined
-          && Math.abs(frac - cs.indicatorAt) <= 0.08) {
-          strikeMult = 1 + (timing.bonus ?? 1.2);
-        }
+        const strike = resolveStrikeTiming(stages < maxStages ? strikeTimingsOf(cs) : [], frac, cs.indicatorAt);
         const window = cs.sparkWindow ?? 0;
         const spark = window > 0 && stages > 0 && (cs.sinceStage ?? 999) <= window;
         const sparkMult = spark
@@ -57440,14 +57429,14 @@ export class World {
         a.useLock = 0.15;
         if (!a.dead) {
           this.executeSkill(a, cs.inst, cs.aim, {
-            dmgMult: (1 + spec.perStage * stages) * strikeMult * sparkMult * cs.baseMult,
+            dmgMult: (1 + spec.perStage * stages) * strike.multiplier * sparkMult * cs.baseMult,
             aoeMult: 1 + (spec.aoePerStage ?? 0) * stages,
             targetInfo,
             paidCost: cs.paidCost,
             chargesSpent: cs.chargesSpent,
           });
-          if (strikeMult > 1) {
-            this.flashes.push(timingCueFlash(a, timing?.kind === 'timed' ? 'flawless' : 'perfect', cs.aim));
+          if (strike.multiplier > 1) for (const timing of strike.successes) {
+            this.flashes.push(timingCueFlash(a, timing.kind === 'timed' ? 'flawless' : 'perfect', cs.aim));
           }
           if (spark) this.flashes.push(timingCueFlash(a, 'spark', cs.aim));
         }

@@ -721,17 +721,22 @@ export function instanceTurret(inst: SkillInstance): { castSkillId: string; life
   return undefined;
 }
 
-/** The strike-timing discipline a use obeys: a socketed graft wins; a
- *  skill's innate castMode 'perfect'/'timed' provides the fallback (so
- *  Snipe + Overcharge composes with no extra gem — the innate golden
- *  window becomes the release window). One discipline per use. */
-export function instanceStrikeTiming(inst: SkillInstance): StrikeTimingSpec | undefined {
-  for (const s of hostSockets(inst)) if (s.def.strikeTiming) return s.def.strikeTiming;
-  // The skill's own timing spec tunes its innate window (Iai Strike's
-  // wider flawless bonus); the castMode alone falls to the old baselines.
-  if (inst.def.castMode === 'perfect') return inst.def.timing ?? { kind: 'perfect' };
-  if (inst.def.castMode === 'timed') return inst.def.timing ?? { kind: 'timed', bonus: 1.2 };
-  return undefined;
+/** Distinct strike-timing mechanics compose. Within one kind the first
+ *  socket still wins, then the skill supplies any missing innate kind.
+ *  Keep the source with the resolved spec for casts, cues and inspection. */
+export function instanceStrikeTimings(inst: SkillInstance): ResolvedStrikeTiming[] {
+  const timings = new Map<StrikeTimingSpec['kind'], ResolvedStrikeTiming>();
+  for (const s of hostSockets(inst)) {
+    const spec = s.def.strikeTiming;
+    if (spec && !timings.has(spec.kind)) timings.set(spec.kind,
+      { ...spec, source: { kind: 'support', id: s.def.id } });
+  }
+  const mode = inst.def.castMode;
+  const innate = mode === 'perfect' || mode === 'timed'
+    ? inst.def.timing ?? { kind: mode } : undefined;
+  if (innate && !timings.has(innate.kind)) timings.set(innate.kind,
+    { ...innate, source: { kind: 'skill', id: inst.def.id } });
+  return [...timings.values()];
 }
 
 /** The self-stack pile a use feeds: a socketed graft (Building Rhythm)
@@ -2915,6 +2920,11 @@ export interface StrikeTimingSpec {
   bonus?: number;
 }
 
+/** A timing mechanic and the content source that supplied it. */
+export interface ResolvedStrikeTiming extends StrikeTimingSpec {
+  source: { kind: 'skill' | 'support'; id: string };
+}
+
 /**
  * SELF-STACKS: the per-skill frenzy. Every completed REAL use of the host
  * feeds a pile that lives on THIS INSTANCE — the mods fold into
@@ -4755,7 +4765,7 @@ export interface SkillDef {
 
   /** INNATE strike-timing window tuning for castMode 'perfect'/'timed' —
    *  the data lever over the old hardcoded defaults (a socketed
-   *  strikeTiming graft still wins; see instanceStrikeTiming). */
+   *  strikeTiming graft of the same kind still wins; see instanceStrikeTimings). */
   timing?: StrikeTimingSpec;
 
   /** CROWD EMPOWERMENT (the warcry-power shape): at execution, tally the
