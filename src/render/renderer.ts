@@ -1,5 +1,6 @@
 import { drawDeviceState } from './vis/deviceState';
 import { CastBarOverlay, prepareCastBar } from './vis/castBars';
+import { CastBarContrast } from './vis/castBarContrast';
 import { ALTAR_BODY } from '../engine/altarBodies';
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
 import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
@@ -289,6 +290,7 @@ export class Renderer {
   private rewardLabelLayout = new RewardLabelLayout(() => ({ ...VIS_CFG.drops.rewardLabels, enabled: true }));
   private combatMeters = new CombatMeterLayout();
   private castBars = new CastBarOverlay();
+  private castBarContrast = new CastBarContrast();
   private cosmeticTrails = new CosmeticTrails();
   ctx: CanvasRenderingContext2D;
   cam = { x: 0, y: 0 };
@@ -991,7 +993,7 @@ export class Renderer {
       if (!this.directorClean) for (const seat of world.localHumanSeats()) {
         if (this.castBars.has(seat.actor)) continue;
         const bar = prepareCastBar(seat.actor, world, this.getSettings?.());
-        if (bar) this.castBars.add(bar, { x: 0, y: 0 });
+        if (bar) this.castBars.add(bar);
       }
       if (world.deathPresentation) drawPlayerDeath(this.ctx, world.player, world.deathPresentation, world.time);
       // THE STATUS VOICE (vis/statusVoiceLayer.ts): what just LANDED on a
@@ -1151,12 +1153,17 @@ export class Renderer {
     // before deliberate full-screen covers. Reduced render scale uses native
     // crest pixels and the same shaken camera as the world beneath it.
     if (!this.directorClean) this.onCrest(crest, () => {
+      if (this.castBars.active) this.castBarContrast.capture(ctx.canvas, crest ? this.overlay : undefined, performance.now());
       const cc = this.ctx;
       cc.save(); cc.scale(wordZ, wordZ);
       cc.translate(-this.cam.x + shx, -this.cam.y + shy);
       this.castBars.paint(cc, world,
         { x: this.cam.x-shx, y: this.cam.y-shy, w: surfW/wordZ, h: surfH/wordZ },
-        a => this.labelRevealAt(world, a.pos) > .05);
+        a => this.labelRevealAt(world, a.pos) > .05,
+        bar => this.castBarContrast.outline({
+          x: (bar.meter.x-this.cam.x+shx)*wordZ/surfW, y: (bar.meter.y-this.cam.y+shy)*wordZ/surfH,
+          w: bar.meter.w*wordZ/surfW, h: bar.meter.h*wordZ/surfH,
+        }, bar.color));
       cc.restore();
     });
     // Covers must still cover: on the crest these two draw THERE (topmost
@@ -6430,14 +6437,11 @@ export class Renderer {
     if(!this.directorClean && (a.heldBy!==undefined || a.grabHud)) this.combatMeters.add(a,
       {x:x-50,y:y-a.radius-29,w:100,h:22},()=>this.drawGrabMeter(a,world));
 
-    // Queue only after the actor's native story/concealment gates. Cast bars
-    // retain optional grouped-meter placement, but paint above combat effects.
-    if (!this.directorClean) {
+    // Cast bars keep their native anchor, independently of optional meter
+    // relocation. The later pass changes visibility and stacking only.
+    if (!this.directorClean && meterReveal > .05) {
       const bar = prepareCastBar(a, world, this.getSettings?.());
-      if (bar) {
-        const queue = (offset: Vec2) => this.castBars.add(bar, offset);
-        this.combatMeters.add(a, bar.rect, queue);
-      }
+      if (bar) this.castBars.add(bar);
     }
   }
 

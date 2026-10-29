@@ -5,8 +5,8 @@ import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { makeSkillInstance } from '../src/engine/skills';
 import { CastBarOverlay, castBarPriority, prepareCastBar, type CastBar } from '../src/render/vis/castBars';
-import { CombatMeterLayout } from '../src/render/vis/combatMeters';
-import { combatRectsOverlap, type CombatRect } from '../src/render/vis/combatFocus';
+import { castBarOutline, CastBarContrast } from '../src/render/vis/castBarContrast';
+import { type CombatRect } from '../src/render/vis/combatFocus';
 import { VIS_CFG } from '../src/render/vis/visConfig';
 import type { Actor, CastingState } from '../src/engine/actor';
 
@@ -18,10 +18,12 @@ assert.ok(w.useSkill(p, inst, { x: p.pos.x+100, y: p.pos.y }, true));
 const cs = p.casting!; cs.elapsed = cs.total*.4; cs.indicatorAt = .8; cs.stage = 2;
 const fills: { x: number; y: number; w: number; h: number; ink: unknown }[] = [];
 let at = { x: 0, y: 0 }, stack: typeof at[] = [];
+let leaders = 0, outlines = 0;
 const ctx = new Proxy({
   save: () => stack.push({ ...at }), restore: () => { at = stack.pop()!; },
   translate: (x: number, y: number) => { at.x += x; at.y += y; },
   fillRect(x: number, y: number, width: number, height: number) { fills.push({x:x+at.x,y:y+at.y,w:width,h:height,ink:this.fillStyle}); },
+  lineTo: () => { leaders++; }, strokeRect: () => { outlines++; },
   fillStyle: '', measureText: (text: string) => ({ width: text.length*6 }),
 }, { get: (target, key) => key in target ? Reflect.get(target,key) : () => {} }) as unknown as CanvasRenderingContext2D;
 const before = JSON.stringify(cs);
@@ -48,37 +50,44 @@ assert.ok(castBarPriority(w,guest.actor)>castBarPriority(w,enemy));
 assert.ok(castBarPriority(w,enemy)>castBarPriority(w,ally));
 const overlay = new CastBarOverlay(), viewport = { x:0,y:0,w:600,h:400 };
 let painted: { actor: Actor; rect: CombatRect }[] = [];
-const bar = (actor: Actor, rect = { x:175,y:140,w:50,h:18 }): CastBar => ({ actor, key:actor.casting!, rect,
+const bar = (actor: Actor, rect = { x:175,y:140,w:50,h:18 }): CastBar => ({ actor, key:actor.casting!, rect, meter: rect, color: '#43d9f1',
   paint: () => painted.push({actor,rect:{...rect,x:rect.x+at.x,y:rect.y+at.y}}) });
-const add = (actors: Actor[]) => { overlay.begin(); painted=[]; for (const a of actors) overlay.add(bar(a),{x:0,y:0}); };
+const add = (actors: Actor[]) => { overlay.begin(); painted=[]; for (const a of actors) overlay.add(bar(a)); };
+leaders=0;outlines=0;
 add([p,enemy,guest.actor,ally]); overlay.paint(ctx,w,viewport,()=>true);
+assert.equal(leaders,0,'no ownership connector lines');assert.equal(outlines,0,'no new panel border when contrast is sufficient');
 const first = painted.map(row => ({id:row.actor.id,rect:row.rect}));
 assert.equal(painted.at(-1)!.actor,p);
 assert.deepEqual(painted.at(-1)!.rect,bar(p).rect);
-for (let i=0;i<painted.length;i++) for (let j=i+1;j<painted.length;j++) assert.ok(!combatRectsOverlap(painted[i].rect,painted[j].rect));
+for (let i=0;i<painted.length;i++) for (let j=i+1;j<painted.length;j++) assert.deepEqual(painted[i].rect,painted[j].rect,'overlapping bars never relocate');
 add([ally,guest.actor,enemy,p]); overlay.paint(ctx,w,viewport,()=>true);
 assert.deepEqual(painted.map(row=>({id:row.actor.id,rect:row.rect})),first,'stable across actor-array order');
-console.log('PASS competing bars separate with stable ownership, player priority and actor-order independence');
+console.log('PASS native anchors never move; player paint priority is independent of actor order');
 
 add([p,guest.actor,enemy]); overlay.paint(ctx,w,viewport,()=>false);
 assert.deepEqual(painted.map(row=>row.actor),[guest.actor,p],'local mechanics survive cover; hidden enemies do not leak');
-const tuning = VIS_CFG.castReadout.overlay as { avoidOverlap: boolean };
-tuning.avoidOverlap = false;
-add([p,enemy]); overlay.paint(ctx,w,viewport,()=>true);
-assert.ok(combatRectsOverlap(painted[0].rect,painted[1].rect)); assert.equal(painted.at(-1)!.actor,p);
-tuning.avoidOverlap = true;
-overlay.begin(); painted=[]; overlay.add(bar(p,{x:-30,y:-20,w:50,h:18}),{x:0,y:0});overlay.paint(ctx,w,viewport,()=>true);
-assert.ok(painted[0].rect.x>=0&&painted[0].rect.y>=0);
+overlay.begin(); painted=[]; overlay.add(bar(p,{x:-30,y:-10,w:50,h:18}));overlay.paint(ctx,w,viewport,()=>true);
+assert.deepEqual(painted[0].rect,{x:-30,y:-10,w:50,h:18},'viewport edges never re-seat the bar');
 add([enemy]); enemy.casting=null;overlay.paint(ctx,w,viewport,()=>true);assert.equal(painted.length,0);
 add([p]);p.dead=true;overlay.paint(ctx,w,viewport,()=>true);assert.equal(painted.length,0);p.dead=false;
 overlay.begin();overlay.paint(ctx,w,viewport,()=>true);assert.equal(painted.length,0);
-console.log('PASS cover admission, configurable crowded fallback, screen-edge clamping and stale/dead cast retirement');
+console.log('PASS concealment, original edge clipping and stale/dead cast retirement');
 
-const meters = new CombatMeterLayout(); let offset: {x:number;y:number}|undefined;
-meters.begin(1,true);meters.body(p,p.pos,p.radius);
-meters.add(p,{x:190,y:190,w:30,h:20},o=>{offset=o;});
-assert.equal(offset,undefined,'grouped callback waits for layout');meters.paint(ctx);assert.ok(offset);
-assert.notDeepEqual(offset,{x:0,y:0},'deferred overlay receives the actual relocation');
-meters.begin(2,false);offset=undefined;meters.add(p,bar(p).rect,o=>{offset=o;});assert.deepEqual(offset,{x:0,y:0});
-meters.begin(3,false);meters.conceal(enemy);offset=undefined;meters.add(enemy,bar(p).rect,o=>{offset=o;});assert.equal(offset,undefined);
-console.log('PASS grouped-meter offsets and concealment survive deferred painting');
+assert.equal(castBarOutline('#ffffff',[.01,.02,.03]),null,'clear ink needs no outline');
+assert.ok(castBarOutline('#666666',[.39,.4,.41])!.alpha>.7,'matching terrain enables contrast');
+assert.equal(castBarOutline('#eeeeee',[.92,.94,.95])!.color,VIS_CFG.castReadout.contrast.dark);
+assert.equal(castBarOutline('#222222',[.12,.13,.14])!.color,VIS_CFG.castReadout.contrast.light);
+assert.ok(castBarOutline('#777777',[0,.25,.5,.75,1]),'busy scene enables outline');
+assert.ok(castBarOutline('#777777',[]),'unavailable readback has a safe fallback');
+// A tiny real sampling fixture tests compositing, throttle and normalized projection.
+let reads=0,draws=0;const rgba=new Uint8ClampedArray(192*128*4).fill(102);
+const sampleCtx={fillRect(){},drawImage(){draws++;},getImageData(){reads++;return {data:rgba};}};
+const oldDocument=globalThis.document;
+Object.defineProperty(globalThis,'document',{configurable:true,value:{createElement:()=>({width:0,height:0,getContext:()=>sampleCtx})}});
+try {
+  const field=new CastBarContrast(),world={width:1500,height:1000} as HTMLCanvasElement;
+  field.capture(world,world,0);field.capture(world,world,1);assert.equal(reads,1);assert.equal(draws,2);
+  assert.ok(field.outline({x:.4,y:.4,w:.05,h:.01},'#666666'));
+  field.capture(world,undefined,100);assert.equal(reads,2);assert.equal(draws,3);
+} finally { Object.defineProperty(globalThis,'document',{configurable:true,value:oldDocument}); }
+console.log('PASS adaptive contrast, composite sampling and bounded readback cadence');

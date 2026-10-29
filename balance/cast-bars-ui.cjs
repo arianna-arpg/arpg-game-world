@@ -40,7 +40,7 @@ app.whenReady().then(async()=>{
           if(!w.useSkill(a,inst,{x:a.pos.x+100,y:a.pos.y},true))throw Error('cannot cast '+a.id);
           a.casting.elapsed=a.casting.total*.8;a.casting.indicatorAt=.8;if(held)a.casting.stage=2;
         },
-        render(){this.painted=[];this.events=[];const before=JSON.stringify(this.actors.map(a=>a.casting));r.render(w);
+        render(){this.painted=[];this.events=[];const before=JSON.stringify(this.actors.map(a=>a.casting));r.castBarContrast.nextAt=0;r.render(w);
           if(before!==JSON.stringify(this.actors.map(a=>a.casting)))throw Error('render mutated casts');
           const surface=r.pixelScale<1?r.octx:r.ctx;
           return {painted:this.painted.map(v=>({...v,pixel:Array.from(surface.getImageData(Math.floor(v.marker.x),Math.floor(v.marker.y),1,1).data)})),
@@ -52,7 +52,7 @@ app.whenReady().then(async()=>{
       r.castBars.add=(bar,offset)=>add({...bar,paint:ctx=>{
         const a=bar.actor,m=ctx.getTransform(),x=a.pos.x-22+44*.8,y=a.pos.y-a.radius-18+2;
         const point=(x,y)=>({x:m.a*x+m.c*y+m.e,y:m.b*x+m.d*y+m.f});
-        q.painted.push({id:a.id,self:a===p,marker:point(x,y),rect:{...point(bar.rect.x,bar.rect.y),w:bar.rect.w*m.a,h:bar.rect.h*m.d},zoom:m.a});
+        q.painted.push({id:a.id,self:a===p,marker:point(x,y),rect:{...point(bar.rect.x,bar.rect.y),w:bar.rect.w*m.a,h:bar.rect.h*m.d},zoom:m.a,native:{x:(x-r.cam.x)*r.zoom/(r.pixelScale<1?r.pixelScale:1),y:(y-r.cam.y)*r.zoom/(r.pixelScale<1?r.pixelScale:1)}});
         q.events.push('cast:'+a.id);bar.paint(ctx);
       }},offset);
       const reveal=r.labelRevealAt.bind(r);r.labelRevealAt=(world,pos)=>q.hidden.has(pos)?0:reveal(world,pos);
@@ -69,6 +69,7 @@ app.whenReady().then(async()=>{
       await run(`castQA.r.setRenderScale(${scale});castQA.actors.forEach(a=>castQA.start(a,${held}));castQA.obscure=false;void 0;`);
       const plain=await run('castQA.render()');log({phase:'plain',held,...plain});
       assert.equal(plain.fatal,null);assert.equal(plain.painted.length,4);assert.ok(plain.painted.at(-1).self);
+      for(const row of plain.painted)assert.ok(Math.abs(row.marker.x-row.native.x)<.01&&Math.abs(row.marker.y-row.native.y)<.01,'bar remains at native actor anchor');
       for(const row of plain.painted)assert.deepEqual(row.pixel,[255,255,255,255],'uncovered live marker');
       if(scale===1)await capture(held?'overcharge':'normal');
       await run('castQA.obscure=true;void 0;');const covered=await run('castQA.render()');
@@ -80,12 +81,23 @@ app.whenReady().then(async()=>{
       for(const row of faded.painted)assert.deepEqual(row.pixel,[8,8,8,255],'intentional fade covers cast bars');
       await run('castQA.cover=false;castQA.obscure=false;void 0;');
     }
+    // Contrast changes independently of placement and without a new box or leader.
+    const contrast=await run(`(()=>{
+      const q=castQA,r=q.r;q.obscure=false;r.setRenderScale(1);q.actors.forEach(a=>q.start(a));
+      const native=r.drawEyecatch.bind(r),decision=r.castBarContrast.outline.bind(r.castBarContrast),seen=[];
+      r.castBarContrast.outline=(rect,ink)=>{const out=decision(rect,ink);seen.push(out);return out;};
+      const sample=color=>{r.drawEyecatch=(...args)=>{native(...args);const c=r.ctx;c.save();c.setTransform(1,0,0,1,0,0);c.fillStyle=color;c.fillRect(0,0,r.canvas.width,r.canvas.height);c.restore();};seen.length=0;const frame=q.render();return {decisions:[...seen],frame};};
+      const clear=sample('#030303'),matching=sample('#43d9f1');
+      if(clear.decisions.at(-1)!==null||!matching.decisions.at(-1))throw Error('adaptive outline decision');
+      if(JSON.stringify(clear.frame.painted.map(v=>v.marker))!==JSON.stringify(matching.frame.painted.map(v=>v.marker)))throw Error('contrast moved bars');
+      r.drawEyecatch=native;r.castBarContrast.outline=decision;q.render();return {clear:clear.decisions.at(-1),matching:matching.decisions.at(-1)};
+    })()`);log({contrast});
     const gates=await run(`(()=>{
       const q=castQA,{w,r,p}=q;r.setRenderScale(.5);q.hidden.add(q.actors[1].pos);q.hidden.add(p.pos);
       let rows=q.render().painted;if(rows.length!==3||!rows.some(v=>v.self)||rows.some(v=>v.id===q.actors[1].id))throw Error('cover admission');
       q.actors[2].burrow={};rows=q.render().painted;if(rows.length!==2)throw Error('burrow admission');q.actors[2].burrow=undefined;
       p.burrow={};rows=q.render().painted;if(!rows.some(v=>v.self))throw Error('local concealed-body feedback');p.burrow=undefined;
-      q.hidden.clear();__game.settings().crowdedMeters=true;rows=q.render().painted;if(rows.length!==4||!rows.at(-1).self)throw Error('grouped meters');
+      q.hidden.clear();__game.settings().crowdedMeters=true;rows=q.render().painted;if(rows.length!==4||!rows.at(-1).self||rows.some(v=>Math.abs(v.marker.x-v.native.x)>.01||Math.abs(v.marker.y-v.native.y)>.01))throw Error('cast moved with grouped meters');
       __game.settings().crowdedMeters=false;w.actors.reverse();rows=q.render().painted;if(!rows.at(-1).self)throw Error('actor array order');
       r.directorClean=true;if(q.render().painted.length)throw Error('clean take');r.directorClean=false;
       r.worldOnly=true;if(q.render().painted.length)throw Error('world-only take');r.worldOnly=false;

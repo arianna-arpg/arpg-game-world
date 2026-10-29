@@ -8,7 +8,8 @@ castaim, agent, all types and sim smoke; after an isolated build run the hidden
 balance/strike-timing-ui.cjs harness.
 Cast bars use the late, native-resolution reading layer in `render/vis/castBars.ts`.
 Local input feedback takes priority; enemy bars retain native concealment.
-Overlay placement/style is configured in `VIS_CFG.castReadout.overlay`.
+Bars retain their original fixed position and artwork; no relocation or leaders.
+Adaptive outlines use `VIS_CFG.castReadout.contrast`; stacking uses `overlay.priority`.
 See `docs/render/cast-bars.md`; verify castbars, the existing casting/timing probes,
 all types and the hidden cast-bars, strike-timing and cast-readout UI courses.
 

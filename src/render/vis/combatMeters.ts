@@ -3,7 +3,7 @@ import { combatRectsOverlap, type CombatRect } from './combatFocus';
 import { VIS_CFG } from './visConfig';
 
 interface Body { pos: Vec2; radius: number; rect: CombatRect }
-interface Meter { key: object; rect: CombatRect; paint: ((offset: Vec2) => void)[] }
+interface Meter { key: object; rect: CombatRect; paint: (() => void)[] }
 interface Memory { offset: Vec2; clearSince?: number }
 const shifted = (r: CombatRect, p: Vec2): CombatRect => ({...r, x:r.x+p.x, y:r.y+p.y});
 const padded = (r: CombatRect, gap: number): CombatRect =>
@@ -40,9 +40,7 @@ export class CombatMeterLayout {
     return [...this.bodies].filter(([key])=>!this.concealed.has(key))
       .map(([,body])=>({...body.rect})).concat(this.footprints.map(rect=>({...rect})));
   }
-  /** The offset is also delivered to deferred reading layers, which must
-   * recreate this translation when painting on their own surface. */
-  add(key: object, rect: CombatRect, paint: (offset: Vec2) => void): void {
+  add(key: object, rect: CombatRect, paint: () => void): void {
     // Native fog is translucent: drawing a concealed meter beneath it still
     // leaks the owner's presence. Concealment also applies with layout disabled.
     if(this.concealed.has(key))return;
@@ -50,7 +48,7 @@ export class CombatMeterLayout {
     // influence the layout of a visible body.
     if(!this.relocate || !this.bodies.has(key)){
       if(this.bodies.has(key))this.footprints.push({...rect});
-      paint({x:0,y:0});return;
+      paint();return;
     }
     const row=this.rows.get(key);
     if(row){row.rect=union(row.rect,rect);row.paint.push(paint);}
@@ -120,7 +118,7 @@ export class CombatMeterLayout {
         }
       }
       ctx.translate(offset.x,offset.y);
-      for(const paint of row.paint)paint(offset);
+      for(const paint of row.paint)paint();
       ctx.restore();
     }
   }

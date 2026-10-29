@@ -1,66 +1,64 @@
 # Cast-bar reading layer
 
-Cast bars are combat input and warning information. Their actor pass admits
-them and supplies their positions; a separate, late reading pass paints them
-after bodies, projectiles, raised scenery, weather, light, floating text and
-the ordinary HUD. The pass uses the existing crest surface at reduced render
-scale, so bars and timing markers remain native-resolution. At full scale it
-uses the main canvas. Both paths share the world's camera, zoom and shake.
+Cast bars retain the original 44 x 5 artwork, translucent backing, actor-relative
+position and cast-mode decorations. They never relocate, clamp to a screen edge,
+separate from other bars, acquire a surrounding card, or draw an ownership leader.
+The crowded-meter option continues to govern the other native meters only.
 
-Menus still stack above canvas content. Deliberate traversal/death fades paint
-after cast bars. Clean and world-only director takes omit this reading layer.
-No additional canvas, input target, save field or network action is required.
+The late reading pass paints casts after bodies, projectiles, raised scenery,
+weather, light, floating text and the ordinary HUD. Reduced render scale uses
+native crest pixels; full scale uses the main canvas. Both paths use the same
+camera, zoom and shake as the actor. Menus and deliberate traversal/death fades
+remain above this pass. Clean and world-only director takes omit cast readouts.
 
-## Ownership and placement
+## Priority and contrast
 
-`render/vis/castBars.ts` owns the prepared readout and overlay compositor.
-The existing mode painter was moved from `Renderer.drawActor`: bar widths,
-fill clocks, Perfect Draw and Wandering Mark windows, Overcharge stages,
-Spark, guard bash, channel completion, concentration and press counts use
-the same live cast state and gameplay helpers. Drawing never resolves a cast.
+`render/vis/castBars.ts` owns the unchanged mode painter and paint ordering.
+The controlling player's bar paints last, followed in importance by local couch
+players, other seated players, enemies and other allies. Actor identity breaks
+ties. Priority affects stacking only: overlapping actors keep overlapping bars.
 
-Bars reserve space in descending priority: controlling player, local couch
-players, other seated players, enemies, then other allies. They paint in the
-reverse order, so an unresolvable crowd still gives the controlling player's
-mechanics the foremost read. Identity breaks ties; actor-array order cannot
-change that choice. An opaque backing provides contrast independently of
-the world behind each bar.
+`render/vis/castBarContrast.ts` samples the composed scene before any cast bars
+paint. One small scratch canvas is shared by all active casts, with bounded
+resolution and refresh cadence. At reduced scale it composites the world and
+crest before sampling. There is no native-framebuffer readback per actor.
 
-The shared `CombatTextLayout` performs bounded separation between cast
-readouts, retaining offsets for the life of a cast. Local bars keep their
-preferred anchor unless another local bar or a viewport edge requires room.
-A displaced bar has a leader to its caster; leaders paint before all bars.
-The optional grouped-meter setting still supplies its native offset through
-`CombatMeterLayout.add`'s callback before this additional reading pass.
+The skill's ink is compared with scene luminance at five points around its bar.
+Poor contrast or strong variation enables a thin light/dark outline around the
+native bar. Clear contrast leaves the original appearance alone. The outline
+paints before the native art, so timing markers and mode cues retain precedence.
+An unavailable readback has a quiet fallback; no cast or visibility rule depends
+on the sample. The bar's fill, position, size, clocks and input mechanics do not
+change with the backdrop.
 
-Enemy and remote bars retain native body admission (including story, burrow,
-and status concealment) and the final label-reveal gate for roofs, crowns,
-room and sight veils. Off-screen hostile readouts do not become edge markers.
-Local cast feedback is independently queued when cover or a replacement form
-hides the player's body. This exception grants no information about enemies.
-Dead, downed, ended or replaced casts cannot leave stale bars behind.
+`VIS_CFG.castReadout.overlay.priority` controls paint precedence.
+`VIS_CFG.castReadout.contrast` controls sampling limits, contrast thresholds,
+outline opacity, colors, width and padding. Existing name/movement/slot hints
+retain their own settings. No support or monster IDs enter this policy.
 
-## Configuration and verification
+## Visibility and lifecycle
 
-`VIS_CFG.castReadout.overlay` supplies priority values, overlap avoidance,
-bounded search spacing, backing, border and leader styling. Existing
-`castReadout` sizes and name/movement hints remain their own controls. No
-support IDs, skill IDs, monster species or first-socket decisions enter the
-overlay policy.
+Enemy and remote bars retain native body admission (story, burrow, status
+concealment) and the final label-reveal gate for roofs, crowns, room and sight
+veils. Off-screen bars keep ordinary canvas clipping. Local input feedback is
+queued even when cover or a replacement form hides the player's body; this
+exception reveals no enemies. Dead, downed, ended and replaced casts retire
+normally. Drawing never resolves a cast or alters its state.
 
-- `npm run check`
-- `npm run probe -- castbars`: all nine mode clocks, both timing windows,
-  read-only painting, overlap priority/stability, concealment, viewport
-  clamping, retirement and the grouped-meter callback contract.
+## Verification
+
+- `npm run check` and `npm run probe -- castbars`: native mode clocks, timing
+  decorations, fixed overlapping anchors, no cards/leaders, priority, original
+  edge clipping, concealment, cleanup, contrast decisions and sampling cadence.
 - Existing `striketiming`, `castingcues`, `playercastvisuals`, `castaim` and
   `combatreadability` probes.
-- After a build, `electron balance/cast-bars-ui.cjs`: real renderer pixel
-  checks under opaque late effects at 1, .75 and .5 render scale; native and
-  Overcharge casts; camera projection, cover ordering, local/hostile
-  admission, couch ownership, crowded meters, director takes and cleanup.
+- Build, then `electron balance/cast-bars-ui.cjs`: real pixel checks under
+  opaque late effects at 1, .75 and .5 render scale; normal and Overcharge
+  casts; original screen coordinates even with crowded meters enabled; contrast
+  changes without relocation; cover ordering, local/enemy admission, couch
+  ownership, director takes and retirement.
 - Existing `balance/strike-timing-ui.cjs` and `balance/cast-readout-ui.cjs`
-  (set `HOLLOW_WAKE_QA_DIST=dist` for the latter) preserve composed timing
-  cues, cast-name/slot opt-ins, queued-cast ownership and normal movement.
+  (`HOLLOW_WAKE_QA_DIST=dist` for the latter) preserve composed timing cues,
+  cast-name/slot opt-ins, ownership and normal movement.
 
-Hidden UI courses use disposable saves and profiles. Their images and logs
-are written to ignored `balance/reports/`.
+Hidden UI courses use disposable saves/profiles and write to ignored reports.

@@ -1,19 +1,21 @@
 import type { Actor } from '../../engine/actor';
 import type { World } from '../../engine/world';
 import type { Settings } from '../../meta/settings';
-import type { Vec2 } from '../../core/math';
 import { guardBashReady } from '../../engine/skills';
 import { castingCompletion } from '../../engine/castingCues';
 import { castMovementHeld, drawCastName } from './castReadout';
 import { drawFocusFrame } from './castingCueLayer';
 import { drawStrikeTimingBar } from './strikeTimingBar';
-import { CombatTextLayout, combatRectsOverlap, type CombatRect } from './combatFocus';
+import { combatRectsOverlap, type CombatRect } from './combatFocus';
+import type { CastBarOutline } from './castBarContrast';
 import { VIS_CFG } from './visConfig';
 
 export interface CastBar {
   actor: Actor;
   key: object;
   rect: CombatRect;
+  meter: CombatRect;
+  color: string;
   paint: (ctx: CanvasRenderingContext2D) => void;
 }
 
@@ -25,59 +27,32 @@ export function castBarPriority(world: World, actor: Actor): number {
   return actor.team === 'enemy' ? p.enemy : p.ally;
 }
 
-/** Native actor admission and grouped-meter offsets arrive here first. Only
- * the painting is deferred; this class never advances or resolves a cast. */
+/** Readouts stay at their native actor anchor. Only paint order changes. */
 export class CastBarOverlay {
-  private rows: { bar: CastBar; offset: Vec2 }[] = [];
-  private layout = new CombatTextLayout(() => ({ ...VIS_CFG.castReadout.overlay,
-    enabled: VIS_CFG.castReadout.overlay.avoidOverlap }));
+  private rows: CastBar[] = [];
   begin(): void { this.rows.length = 0; }
-  add(bar: CastBar, offset: Vec2): void { this.rows.push({ bar, offset }); }
-  has(actor: Actor): boolean { return this.rows.some(row => row.bar.actor === actor); }
+  add(bar: CastBar): void { this.rows.push(bar); }
+  has(actor: Actor): boolean { return this.rows.some(bar => bar.actor === actor); }
+  get active(): boolean { return this.rows.length > 0; }
 
-  paint(ctx: CanvasRenderingContext2D, world: World, bounds: CombatRect, visible: (actor: Actor) => boolean): void {
-    const c = VIS_CFG.castReadout.overlay;
+  paint(ctx: CanvasRenderingContext2D, world: World, bounds: CombatRect, visible: (actor: Actor) => boolean,
+    contrast: (bar: CastBar) => CastBarOutline | null = () => null): void {
     const local = new Set(world.localHumanSeats().map(s => s.actor));
-    const rows = this.rows.filter(({ bar }) => !bar.actor.dead && !bar.actor.downed && bar.actor.casting === bar.key
-      && (local.has(bar.actor) || visible(bar.actor)))
-      .sort((a, b) => castBarPriority(world, b.bar.actor) - castBarPriority(world, a.bar.actor)
-        || a.bar.actor.id - b.bar.actor.id);
-    this.layout.begin([], bounds);
-    const placed: { bar: CastBar; rect: CombatRect; offset: Vec2 }[] = [];
-    for (const { bar, offset } of rows) {
-      const r = { ...bar.rect, x: bar.rect.x + offset.x, y: bar.rect.y + offset.y };
-      if (!local.has(bar.actor) && !combatRectsOverlap(r, bounds)) continue;
-      if (local.has(bar.actor)) {
-        // Re-evaluate a local anchor instead of retaining an old displacement
-        // once another local caster clears it. Lower-priority bars yield to it.
-        this.layout.forget(bar.key);
-        r.x = Math.max(bounds.x+c.gap, Math.min(r.x, bounds.x+bounds.w-r.w-c.gap));
-        r.y = Math.max(bounds.y+c.gap, Math.min(r.y, bounds.y+bounds.h-r.h-c.gap));
-      }
-      const pos = { x: r.x+r.w/2, y: r.y+r.h };
-      const at = this.layout.place(bar.key, pos, r.w, r.h);
-      r.x += at.x-pos.x; r.y += at.y-pos.y;
-      placed.push({ bar, rect: r, offset: { x: r.x-bar.rect.x, y: r.y-bar.rect.y } });
-    }
+    const rows = this.rows.filter(bar => !bar.actor.dead && !bar.actor.downed && bar.actor.casting === bar.key
+      && (local.has(bar.actor) || visible(bar.actor)) && combatRectsOverlap(bar.rect, bounds))
+      .sort((a, b) => castBarPriority(world, a.actor) - castBarPriority(world, b.actor) || b.actor.id-a.actor.id);
     ctx.save(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    // Leaders explain displaced readouts, and cannot paint over any bar.
-    for (const { bar, rect, offset } of placed) if (offset.x || offset.y) {
-      const a = bar.actor, end = { x: rect.x+rect.w/2, y: rect.y+rect.h+c.pad };
-      const dx = end.x-a.pos.x, dy = end.y-a.pos.y, length = Math.hypot(dx,dy);
-      if (length <= a.radius+c.gap) continue;
-      const t = (a.radius+c.gap)/length;
-      ctx.beginPath(); ctx.moveTo(a.pos.x+dx*t,a.pos.y+dy*t); ctx.lineTo(end.x,end.y);
-      ctx.strokeStyle = c.background; ctx.lineWidth = c.linkWidth+2; ctx.stroke();
-      ctx.strokeStyle = c.link; ctx.lineWidth = c.linkWidth; ctx.stroke();
-    }
-    // Reserve high priority first, paint it last. Saturation keeps every cast
-    // and lets the local player's timing markers remain the foremost read.
-    for (const { bar, rect, offset } of placed.reverse()) {
+    for (const bar of rows) {
       ctx.save();
-      ctx.fillStyle = c.background; ctx.fillRect(rect.x-c.pad,rect.y-c.pad,rect.w+2*c.pad,rect.h+2*c.pad);
-      ctx.strokeStyle = c.edge; ctx.lineWidth = c.edgeWidth;
-      ctx.strokeRect(rect.x-c.pad,rect.y-c.pad,rect.w+2*c.pad,rect.h+2*c.pad);
-      ctx.translate(offset.x,offset.y); bar.paint(ctx);
+      const outline = contrast(bar);
+      if (outline) {
+        const c = VIS_CFG.castReadout.contrast, r = bar.meter;
+        ctx.globalAlpha = outline.alpha; ctx.strokeStyle = outline.color; ctx.lineWidth = c.width;
+        ctx.strokeRect(r.x-c.pad,r.y-c.pad,r.w+2*c.pad,r.h+2*c.pad);
+        ctx.globalAlpha = 1;
+      }
+      // Native art comes last, including white timing tics and gold windows.
+      bar.paint(ctx);
       ctx.restore();
     }
     ctx.restore();
@@ -102,10 +77,11 @@ export function prepareCastBar(a: Actor, world: World, settings?: Settings): Cas
   const labelHalf=(showName||movement)?VIS_CFG.castReadout.labelWidth/2+3:0;
   const meterLeft=Math.min(bx2-3,x-labelHalf),meterRight=Math.max(bx2-3+meterWidth,x+labelHalf);
   return { actor: a, key: cs,
+    meter: { x: bx2, y: by2, w: bw, h: bh }, color,
     rect: { x: meterLeft, y: by2-6-meterRise-nameHeight, w: meterRight-meterLeft, h: bh+8+meterRise+nameHeight },
     paint: ctx => {
       if (showName || movement) drawCastName(ctx, a, x, by2-6-meterRise, VIS_CFG.castReadout.labelWidth, movement, showName);
-      ctx.fillStyle = VIS_CFG.castReadout.overlay.background;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.fillRect(bx2 - 1, by2 - 1, bw + 2, bh + 2);
       let frac: number;
       if (cs.mode === 'channel') {
@@ -127,7 +103,7 @@ export function prepareCastBar(a: Actor, world: World, settings?: Settings): Cas
         const holdFrac = castingCompletion(a) ?? null;
         if (holdFrac !== null) {
           const hy = by2 - 4;
-          ctx.fillStyle = VIS_CFG.castReadout.overlay.background;
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
           ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
           ctx.fillStyle = holdFrac >= 1 ? '#ffd700' : color;
           ctx.fillRect(bx2, hy, bw * holdFrac, 3);
@@ -154,7 +130,7 @@ export function prepareCastBar(a: Actor, world: World, settings?: Settings): Cas
         const gold = '#ffd700';
         if ((cs.bashArmAt ?? 0) > 0) {
           const hy = by2 - 4;
-          ctx.fillStyle = VIS_CFG.castReadout.overlay.background;
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
           ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
           ctx.fillStyle = ready.ready ? gold : color;
           ctx.fillRect(bx2, hy, bw * ready.clock, 3);
@@ -189,7 +165,7 @@ export function prepareCastBar(a: Actor, world: World, settings?: Settings): Cas
         const stages = cs.stage ?? 0;
         for (let s = 0; s < stages; s++) {
           const sy = by2 - 4 - s * 4;
-          ctx.fillStyle = VIS_CFG.castReadout.overlay.background;
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
           ctx.fillRect(bx2 - 1, sy - 1, bw + 2, 4);
           ctx.fillStyle = '#ffd700';
           ctx.fillRect(bx2, sy, bw, 3);
