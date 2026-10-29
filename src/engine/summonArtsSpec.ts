@@ -14,6 +14,8 @@ export interface SummonArtsSpec {
   capacityPower?: { base: number; perSlot: number; maximum: number };
   command?: string;
   rite?: string;
+  /** Opt a rite into the normal AI kit; otherwise it remains command/auxiliary only. */
+  riteAutonomous?: boolean;
   field?: string;
   flare?: string;
   flareCooldown?: number;

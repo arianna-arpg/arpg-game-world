@@ -680,6 +680,7 @@ export const SKILL_ICON_CATALOG = {
   skeletal_lightning_bolt: ["lightning","shot","bone"],
   skeletal_chaos_bolt: ["void","shot","bone"],
   skeletal_lich_fireball: ["flame","splash","skull"],
+  skeletal_gravefire_mortar: ["skull","lob","flame"],
   skeletal_ice_spear: ["icicle","split","bone"],
   skeletal_greater_ice_spear: ["icicle","fan","skull"],
   skeletal_ice_shard: ["splinter","shot","snowflake"],

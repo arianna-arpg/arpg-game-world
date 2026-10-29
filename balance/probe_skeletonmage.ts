@@ -4,7 +4,7 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { SKELETON_MAGE_SCHOOLS } from '../src/data/skeletonMageTree';
-import { makeSkillInstance, instanceDelivery, supportFitsInstOrCrew, type SkillInstance } from '../src/engine/skills';
+import { makeSkillInstance, instanceDelivery, summonKitIds, skillCooldownSeconds, supportFitsInstOrCrew, type SkillInstance } from '../src/engine/skills';
 import { summonCapacity } from '../src/engine/summonContracts';
 import { mod } from '../src/engine/stats';
 import { updateAI } from '../src/engine/ai';
@@ -47,6 +47,47 @@ function exact(body: ReturnType<typeof target>) {
 }
 const restore = seedGlobalRandom(8642);
 try {
+  {
+    const { w, p, inst, raise } = rig(['lich_ascendant', 'deathless_regent']);
+    inst.sockets[0] = { def: SUPPORTS.resonance, level: 1 };
+    inst.sockets[1] = { def: SUPPORTS.widening, level: 1 };
+    inst.sockets[2] = { def: SUPPORTS.volley, level: 1 };
+    const lich = raise()[0], mortar = lich.skills.find(s=>s?.def.id==='skeletal_gravefire_mortar')!;
+    const rite = lich.summonArtState!.kit.find(s=>s.def.id==='skeletal_grand_rite')!;
+    const d = instanceDelivery(inst); if(d.type!=='summon')throw Error('summon');
+    check('command-only policy also excludes rites inherited from native kits',
+      !summonKitIds(d, lich.defId!, ['skeletal_grand_rite']).includes('skeletal_grand_rite'));
+    check('autonomous rites remain a configurable opt-in',
+      summonKitIds({...d,arts:{...d.arts,riteAutonomous:true}},lich.defId!,[]).includes('skeletal_grand_rite'));
+    check('area supports independently reach command and mortar',
+      [rite,mortar].every(s=>s.sockets.some(g=>g?.def.id==='widening'&&g.forwarded)));
+    check('projectile supports reach the mortar without contaminating Grand Rite',
+      mortar.sockets.some(g=>g?.def.id==='volley'&&g.forwarded)&&!rite.sockets.some(g=>g?.def.id==='volley'));
+    const foe = target(w, lich.pos.x+220, lich.pos.y), mortars:number[]=[];
+    let rites=0,fireballs=0,mortarHits=0;
+    SIM_TAP.current={
+      onCast:(a,s)=>{if(a!==lich)return;if(s.def.id===mortar.def.id)mortars.push(w.time);if(s.def.id===rite.def.id)rites++;if(s.def.id==='skeletal_lich_fireball')fireballs++;},
+      onHit:(a,t,result,packet)=>{if(a===lich&&t===foe&&packet.sourceName===mortar.def.name&&result.total>0)mortarHits++;}
+    };
+    let alwaysReady=true;
+    for(let n=0;n<22*60;n++){
+      step(w,1/60,true);
+      alwaysReady &&= w.summonArts.commandReady(p,inst) && (lich.cooldowns.get(rite.def.id)??0)===0 && (p.cooldowns.get('skeletal_grand_command')??0)===0;
+    }
+    check('autonomous combat never casts or spends Grand Rite', alwaysReady&&rites===0&&!lich.summonArtState!.ritual);
+    check('the Lich actually alternates bombardments with ordinary fireballs', mortars.length>=2&&fireballs>2&&mortarHits>0);
+    check('autonomous bombardments obey their own long recovery',mortars.slice(1).every((t,i)=>t-mortars[i]>=7.99));
+    const fodder=w.createMonster('zombie',1,p.team,p);fodder.pos={...lich.pos};w.actors.push(fodder);w.kill(fodder,false);
+    const contract=p.summonArtContracts.get(inst)!;check('a soul is banked for the player command',contract.souls.length===1);
+    lich.casting=null;lich.useLock=0;lich.cooldowns.delete(mortar.def.id);
+    check('autonomous mortar can begin while Grand Rite stays available',w.useSkill(lich,mortar,foe.pos)&&w.summonArts.commandReady(p,inst));
+    step(w,.1);p.useLock=0;
+    check('player command takes priority over the autonomous mortar windup',w.useSkill(p,inst,foe.pos));
+    step(w,1.3);
+    check('only the player command starts rite recovery and spends its soul',rites===1&&(lich.cooldowns.get(rite.def.id)??0)>0&&contract.souls.length===0);
+    SIM_TAP.current=null;
+  }
+
   // Both ordinary Mage routes summon one body into a two-body roster.
   for (const nodes of [[], ['grave_academy']]) {
     const {p,inst,raise,bodies}=rig(nodes),d=instanceDelivery(inst);
@@ -75,7 +116,7 @@ try {
     step(w, 2.6); check('Lich does not arrive before its long windup', bodies().length === 0);
     step(w, 0.2); check('long summon raises exactly one Lich', bodies().length === 1);
     const lich = bodies()[0];
-    check('Lich has a native fireball and autonomous Grand Rite', lich.skills.some(s => s?.def.id === 'skeletal_lich_fireball') && lich.skills.some(s => s?.def.id === 'skeletal_grand_rite'));
+    check('Lich keeps Fireball and Mortar in its AI kit, with Grand Rite command-only', ['skeletal_lich_fireball','skeletal_gravefire_mortar'].every(id=>lich.skills.some(s=>s?.def.id===id)) && !lich.skills.some(s=>s?.def.id==='skeletal_grand_rite') && lich.summonArtState!.kit.some(s=>s.def.id==='skeletal_grand_rite'));
     lich.sheet.setSource('no-regen', [mod('lifeRegen', 'override', 0)]);
     const id = lich.id; lich.life *= 0.5; const life = lich.life;
     check('living summon presents the command face', w.slotFaceOf(p, inst).id === 'skeletal_grand_command');
@@ -96,7 +137,7 @@ try {
     inst.sockets[1] = { def: SUPPORTS.widening, level: 1 };
     check('ritual component census admits area supports', supportFitsInstOrCrew(SUPPORTS.widening, inst, w.summonCrewSkills(inst)));
     const lich = raise()[0]; exact(lich);
-    const rite = lich.skills.find(s => s?.def.id === 'skeletal_grand_rite')!;
+    const rite = lich.summonArtState!.kit.find(s => s.def.id === 'skeletal_grand_rite')!;
     const foe = target(w, aim.x, aim.y);
     w.executeSkill(lich, rite, aim);
     const fields = w.zones.filter(z => z.inst.summonArtCast?.field === 'ritual');
@@ -109,6 +150,7 @@ try {
     w.executeSkill(lich, rite, next);
     check('Storm Crown detonates the previous site', w.zones.some(z => z.inst.def.id === 'skeletal_rite_rupture' && z.pos.x === oldPos.x && z.pos.y === oldPos.y));
     check('Storm Crown consumes old lingering fields before relocating', w.zones.filter(z => z.inst.summonArtCast?.field === 'ritual').every(z => Math.abs(z.pos.y - next.y) < 1));
+    check('Storm Crown leaves autonomous mortar recovery independent', skillCooldownSeconds(lich,lich.skills.find(s=>s?.def.id==='skeletal_gravefire_mortar')!)===8);
     check('Storm Crown gives Grand Rite its own cooldown recovery', Math.abs((lich.cooldownTotals.get(rite.def.id) ?? 0) - 8 / 1.5) < 0.01);
     const before = w.zones.filter(z => z.inst.def.id === 'skeletal_ritual_flare').length;
     const native = lich.skills[0]!;
@@ -266,18 +308,18 @@ try {
     check('intentional sacrifice supplies a soul alongside combat deaths', contract.souls.length === 2);
     w.kill(fodder(), false, undefined, 'expire');
     check('expiry remains excluded even when other death effects are allowed', contract.souls.length === 2);
-    const rite = lich.skills.find(s => s?.def.id === 'skeletal_grand_rite')!;
+    const rite = lich.summonArtState!.kit.find(s => s.def.id === 'skeletal_grand_rite')!;
     rite.def = { ...rite.def, baseDamage: { fire: [20, 20] } };
     const foe = target(w, aim.x, aim.y), initial = foe.life;
     w.executeSkill(lich, rite, foe.pos); step(w, 0.8);
     const baseline = initial - foe.life;
-    check('autonomous rites leave banked souls available', contract.souls.length === 2 && baseline > 0);
+    check('uncommanded rite payloads leave banked souls available', contract.souls.length === 2 && baseline > 0);
     lich.cooldowns.clear(); p.cooldowns.clear(); p.useLock = 0;
     check('a commanded rite begins its own preparation', w.useSkill(p, inst, foe.pos)); step(w, 0.35);
     check('souls remain banked during the rite preparation', !!lich.casting && contract.souls.length === 2);
     lich.casting = null; lich.useLock = 0;
     w.executeSkill(lich, rite, foe.pos); step(w, 0.8);
-    check('interruption does not transfer soul spending to an autonomous rite', contract.souls.length === 2);
+    check('interruption does not transfer soul spending to an uncommanded payload', contract.souls.length === 2);
     lich.cooldowns.clear(); p.cooldowns.clear(); p.useLock = 0;
     const before = foe.life;
     check('soul-funded command is accepted', w.useSkill(p, inst, foe.pos)); step(w, 1.8);
@@ -285,7 +327,7 @@ try {
   }
   {
     const { w, p, inst, aim, raise, bodies } = rig(['lich_ascendant', 'fused_intellect', 'winter_crown']);
-    const lich = raise()[0]; w.executeSkill(lich, lich.skills.find(s => s?.def.id === 'skeletal_grand_rite')!, aim);
+    const lich = raise()[0]; w.executeSkill(lich, lich.summonArtState!.kit.find(s => s.def.id === 'skeletal_grand_rite')!, aim);
     check('ritual is present before tree retirement', w.zones.length > 0);
     w.pickTreeNode(inst.def.id, 'grave_studies');
     check('tree retirement clears bodies, captured ritual fields and contracts', bodies().length === 0 && w.zones.every(z => z.caster !== lich) && !p.summonArtContracts.has(inst));
@@ -293,7 +335,7 @@ try {
   {
     const { w, p, inst, aim, raise } = rig(['lich_ascendant', 'fused_intellect', 'deathless_regent']);
     const lich = raise()[0], contract = p.summonArtContracts.get(inst)!;
-    w.executeSkill(lich, lich.skills.find(s => s?.def.id === 'skeletal_grand_rite')!, aim);
+    w.executeSkill(lich, lich.summonArtState!.kit.find(s => s.def.id === 'skeletal_grand_rite')!, aim);
     contract.recovery = 12; contract.souls = [4];
     w.loadZone(w.zone.id);
     check('mobile Lich identity survives a real zone crossing', w.actors.includes(lich) && !lich.dead && lich.summonInst === inst);

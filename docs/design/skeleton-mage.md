@@ -15,8 +15,18 @@ minion damage and 40% more mana cost.
 
 The living skill slot becomes **Command Grand Rite**: a 0.25-second, eight-mana
 command. It directs the existing Lich without replacing or healing it. The
-Lich prepares a fire eruption with an eight-second base cooldown and also uses
-the rite autonomously. The command observes that same recovery clock.
+Lich prepares a fire eruption with an eight-second base cooldown only when the
+player commands it. Grand Rite remains in the auxiliary supported kit; autonomous
+combat cannot spend its cooldown or the Phylactery's banked souls. Storm Crown
+reduces this rite's recovery independently.
+
+The baseline Lich fights with Fireball and **Gravefire Mortar**: a lobbed,
+soul-wreathed fire explosion with a 100-unit radius, 0.8-second cast and
+0.7-second impact warning. Its separate eight-second cooldown never blocks
+Grand Rite. Projectile, storm and area supports resolve against the mortar's
+own delivery, while ground/ritual supports resolve against the command payload.
+The generic SummonArtsSpec.riteAutonomous opt-in can author autonomous rites;
+the Lich explicitly disables it.
 
 - **Ritual Dominion** leaves a six-second field. Primary hits inside kindle
   flares with a 0.5-second minimum interval.
@@ -100,4 +110,4 @@ Verification: `npm run check`; `npm run probe -- skeletonmage`;
 Archer, nested Necromancer, support, flight/field and visual probes; simulation
 smoke; after build, `npx electron balance/skeleton-mage-ui.cjs`.
 
-School selection now opens by clicking Grave Conclave itself, with a draft multi-selection and Apply/Close controls. The persistent tree-header selector is removed. Applying unchanged choices preserves existing minions; changed choices still retire the old cohort. See [the shared choice contract](skeleton-warrior.md#node-choices-and-ability-supports).
+School selection now opens by clicking Grave Conclave itself, with immediate multi-selection. The persistent tree-header selector is removed. Each selection change immediately retires the old cohort; there is no Apply button. See [the shared choice contract](skeleton-warrior.md#node-choices-and-ability-supports).

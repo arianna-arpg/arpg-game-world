@@ -6724,11 +6724,11 @@ export function summonKitIds(d: SummonDelivery, monsterId: string, native: strin
   ids = ids.map(id => rules.flatMap(r => r.replace ?? []).reverse().find(r => r.from === id)?.to ?? id);
   if (d.frame?.primary) ids = [d.shell?.strikeSkill ?? d.frame.primary, ...[d.frame.slam,d.frame.protect?.sweep].filter((id):id is string=>!!id)];
   if (d.cohort?.primary) ids = [d.cohort.primary, ...(d.cohort.challenge ? [d.cohort.challenge] : [])];
-  if (d.arts?.rite) ids.push(d.arts.rite);
+  if (d.arts?.rite && d.arts.riteAutonomous) ids.push(d.arts.rite);
   const school = d.arts?.schools?.find(s => s.monster === monsterId);
   if (school) { if (ids.length) ids[0] = school.primary; else ids.push(school.primary); }
   if (d.arts?.lessons && school) ids.push(school.signature);
-  return [...new Set([...ids, ...(d.strikeRelease ? [d.strikeRelease.skill] : []), ...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...rules.flatMap(r => r.skills ?? [])])];
+  return [...new Set([...ids, ...(d.strikeRelease ? [d.strikeRelease.skill] : []), ...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...rules.flatMap(r => r.skills ?? [])])].filter(id => id !== d.arts?.rite || d.arts?.riteAutonomous === true);
 }
 
 /**
