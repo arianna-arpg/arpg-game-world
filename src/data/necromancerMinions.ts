@@ -25,6 +25,6 @@ export const NECROMANCER_MINIONS: Record<string, MonsterDef> = {
     id: 'ossuary_lich', name: 'Ossuary Lich', color: '#bc9be8', shape: 'ribcage', radius: 21, material: 'bone', look: 'lich_ossuary_regent', faction: 'undead',
     base: { life: 120, moveSpeed: 125, mana: 100, manaRegen: 8, armor: 20, accuracy: 100 },
     mods: [mod('castSpeed', 'increased', 0.2)],
-    skills: ['skeletal_lich_fireball'], xp: 0,
+    skills: ['skeletal_lich_fireball', 'skeletal_gravefire_mortar'], xp: 0,
   },
 };

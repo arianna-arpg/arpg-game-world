@@ -66,7 +66,7 @@ export class SummonArts {
     this.forward(host, kit);
     body.summonArtState = { kit, relayReady: 0, echoReady: 0, flareReady: 0,
       siphonCredit: (a.siphon?.perSecond ?? 0) * body.maxLife() };
-    const rite = body.skills.find(s => s?.def.id === a.rite);
+    const rite = a.rite ? this.skill(body, a.rite) : undefined;
     if (rite && a.riteRecovery) rite.extraMods = [...(rite.extraMods ?? []), mod('cooldownRecovery', 'increased', a.riteRecovery)];
     if (a.capacityPower) {
       const d = instanceDelivery(host) as SummonDelivery, p = a.capacityPower;
@@ -112,7 +112,7 @@ export class SummonArts {
     const remote = owner.remoteSummonArts?.[host.def.id];
     if (remote) return remote.ready;
     const body = this.body(owner, host), a = summonArtsOf(host);
-    const rite = body?.skills.find(s => s?.def.id === a?.rite);
+    const rite = body && a?.rite ? this.skill(body, a.rite) : undefined;
     return !!body && !!a?.rite && !!rite && !body.isStunned() && !body.downed
       && !body.tagsForbidden(rite)
       && (body.cooldowns.get(a.rite) ?? 0) <= 0

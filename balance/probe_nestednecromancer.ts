@@ -255,7 +255,7 @@ try {
   {
     const {w,inst}=setup('summon_skeleton_mage',['lich_ascendant','fused_intellect','winter_crown','storm_crown']);cast(w,inst);
     const lich=crew(w,inst)[0], ids=lich.skills.flatMap(k=>k?[k.def.id]:[]);
-    check('Lich uses Fireball with devastating learned repertoire',crew(w,inst).length===1 && lich.defId==='ossuary_lich' && ['skeletal_lich_fireball','skeletal_grand_rite'].every(id=>ids.includes(id)) && ['skeletal_rite_boundary','skeletal_rite_blizzard','skeletal_rite_rupture'].every(id=>lich.summonArtState?.kit.some(s=>s.def.id===id)) && !ids.some(id=>id.endsWith('_bolt')));
+    check('Lich uses Fireball with devastating learned repertoire',crew(w,inst).length===1 && lich.defId==='ossuary_lich' && ['skeletal_lich_fireball','skeletal_gravefire_mortar'].every(id=>ids.includes(id)) && !ids.includes('skeletal_grand_rite') && ['skeletal_grand_rite','skeletal_rite_boundary','skeletal_rite_blizzard','skeletal_rite_rupture'].every(id=>lich.summonArtState?.kit.some(s=>s.def.id===id)) && !ids.some(id=>id.endsWith('_bolt')));
     const crown=setup('summon_skeleton_mage',['lich_ascendant','deathless_regent','court_of_one','plague_crown']);cast(crown.w,crown.inst);
     check('regent keeps aura and owner-spell echo contract',crew(crown.w,crown.inst)[0].activeAuras.has('ossuary_command') && !!(instanceDelivery(crown.inst) as SummonDelivery).arts?.echo);
   }

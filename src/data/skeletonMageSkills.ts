@@ -15,6 +15,15 @@ export const SKELETON_MAGE_SKILLS: Record<string, SkillDef> = {
     noDrop: true, tags: ['spell'], color: '#dc9c66', manaCost: 8, cooldown: 0, useTime: 0.25,
     delivery: { type: 'self' }, effects: [],
   },
+  skeletal_gravefire_mortar: {
+    id: 'skeletal_gravefire_mortar', name: 'Gravefire Mortar', noDrop: true,
+    description: 'Lob a soul-wreathed ember that explodes over a marked area. Recovers independently of Grand Rite.',
+    tags: ['spell', 'projectile', 'fire', 'aoe', 'storm'], color: '#bc9be8',
+    manaCost: 0, cooldown: 8, useTime: 0.8, baseDamage: { fire: [16, 24] },
+    delivery: { type: 'storm', count: 1, interval: 0, areaRadius: 0, hitRadius: 100,
+      castRange: 520, telegraph: 0.7, lob: { arc: 0.4 }, fx: 'blast' },
+    effects: [{ type: 'damage' }], ai: { range: 460, weight: 5, keepDistance: 270 },
+  },
   skeletal_grand_rite: {
     ...field('skeletal_grand_rite', 'Grand Rite', 'fire', '#ed985a', 130, [22, 34], { delay: 0.6 }),
     cooldown: 8, useTime: 0.8, ai: { range: 460, weight: 5, keepDistance: 270 },

@@ -10,11 +10,11 @@ export const SKELETON_MAGE_SCHOOLS: SummonSchool[] = [
 ];
 const arts = (value: SummonArtsSpec) => ({ summon: { arts: value } });
 export const SKELETON_MAGE_TREE = tree([
-  n('lich_ascendant', 'Lich Ascendant', 'Raise one Lich with 120% more damage. Its initial summon takes 2.75 seconds before cast speed. While it lives, this skill commands Grand Rite instead of replacing it. Extra summon capacity grants 12% more damage per slot, capped at 60%. 40% more mana cost.',
+  n('lich_ascendant', 'Lich Ascendant', 'Raise one Lich with 120% more damage. Its initial summon takes 2.75 seconds before cast speed. It casts Fireball and Gravefire Mortar autonomously; Grand Rite is only cast on your command while it lives. Extra summon capacity grants 12% more damage per slot, capped at 60%. 40% more mana cost.',
     [mod('minionDamage', 'more', 1.2), mod('manaCost', 'more', 0.4)],
     { tags: { add: ['fire'] }, summon: { monsterId: 'ossuary_lich', count: 1, maxActive: 1,
       arts: { single: true, summonTime: 2.75, capacityPower: { base: 1, perSlot: 0.12, maximum: 0.6 },
-        command: 'skeletal_grand_command', rite: 'skeletal_grand_rite' } } }),
+        command: 'skeletal_grand_command', rite: 'skeletal_grand_rite', riteAutonomous: false } } }),
   [n('fused_intellect', 'Ritual Dominion', 'Grand Rite leaves a ritual field for 6 seconds. Lich primary hits inside it kindle flares, at most once every 0.5 seconds.',
     undefined, arts({ field: 'skeletal_ritual_dominion', flare: 'skeletal_ritual_flare', flareCooldown: 0.5 })),
     n('winter_crown', 'Winter Crown', 'Grand Rite gains a freezing boundary and a blizzard within the ritual. Remaining inside invites repeated cold strikes.',
