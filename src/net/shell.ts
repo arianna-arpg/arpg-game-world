@@ -47,7 +47,7 @@
 
 import type { Actor, CastingState } from '../engine/actor';
 import type { World } from '../engine/world';
-import { instanceCastMode, instanceConvert, instanceDelivery, instanceStrikeTiming, instanceTrigger, type SkillInstance } from '../engine/skills';
+import { instanceCastMode, instanceConvert, instanceDelivery, instanceStrikeTimings, instanceTrigger, type SkillInstance } from '../engine/skills';
 import { replenishingDelivery } from '../engine/replenishment';
 import { applyOwnReviveRow } from './partyReads'; // THE PARTY THAT READS: the revive row (SeatW.rv)
 import type { MetaAction, PlayerInput } from './intent';
@@ -222,7 +222,7 @@ export function linkStrainOf(sinceMs: number, cfg: WireShellCfg = WIRE_SHELL_CFG
 export function predictableCast(p: Actor, inst: SkillInstance): number | null {
   try {
     if (p.dead || p.downed || p.casting || p.dash || p.leap) return null;
-    if (instanceCastMode(inst) !== 'cast' || instanceStrikeTiming(inst) || instanceConvert(inst)
+    if (instanceCastMode(inst) !== 'cast' || instanceStrikeTimings(inst).length > 0 || instanceConvert(inst)
       || inst.def.mimic || inst.def.hivecall || instanceTrigger(inst) || replenishingDelivery(inst)) return null;
     const d = instanceDelivery(inst).type;
     if (d === 'dash' || d === 'leap' || d === 'blink' || d === 'carom' || inst.def.tags?.includes('movement')) return null;

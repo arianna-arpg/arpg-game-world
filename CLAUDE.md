@@ -2,6 +2,18 @@ Bone Golem native adapters preserve supported healing, reconstruction, command b
 
 Bone Golem frame abilities, the four-point routes, support routing and lifecycle checks are documented in [bone-golem](docs/design/bone-golem.md). Verify bonegolem, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden bone-golem-ui course.
 Skeleton Warrior infantry, spectral heirs, Spellsword choices and the shared Mage/Warrior node picker are documented in [skeleton-warrior](docs/design/skeleton-warrior.md). Verify skeletonwarrior, skeletonmage, skeletonarcher, necromancercourts, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden skeleton-mage-ui and skeleton-warrior-ui courses.
+Strike-timing disciplines compose independently through engine/strikeTiming.ts.
+Perfect Draw and Wandering Mark share one timing attempt and multiply earned
+bonuses; duplicate kinds keep first-source precedence. See docs/engine/strike-timing.md.
+Verify striketiming, combatcues, castingcues, playercastvisuals, supportfabric,
+castaim, agent, all types and sim smoke; after an isolated build run the hidden
+balance/strike-timing-ui.cjs harness. Native retained casts and wire prediction use the same timing resolver; verify nativestriketiming against the actual retained combat area.
+Cast bars use the late, native-resolution reading layer in `render/vis/castBars.ts`.
+Local input feedback takes priority; enemy bars retain native concealment.
+Bars retain their original fixed position and artwork; no relocation or leaders.
+Adaptive outlines use `VIS_CFG.castReadout.contrast`; stacking uses `overlay.priority`.
+See `docs/render/cast-bars.md`; verify castbars, the existing casting/timing probes,
+all types and the hidden cast-bars, strike-timing and cast-readout UI courses.
 
 **Current scope:** [CURRENT.md](CURRENT.md) is the project direction and active/deferred work entrypoint. Deliver the offline seamless generation/content/event vision; new shard/MMORPG work is deferred. Prepare useful future boundaries without letting hosting dictate this phase. Existing zone content and the owner's game references are examples and reusable material, not generation laws. This priority supersedes conflicting older roadmaps and hosting handoffs.
 
@@ -102,6 +114,8 @@ fully verified source; one build supplies both clients and their visible revisio
 `scripts/browser-previews.json` configures isolated branches beside `/play/`.
 Verify the coordinated-release, release-policy and browser-preview tests; the
 publisher also boots both clients before upload.
+
+Memory Recall uses an independent adaptive pane and cancellable Open all session in ui/memoryRecall.ts and ui/panelPlacement.ts. Preserve native recall intents, seeded results, facets and bag-room gates. See docs/ui/memory-recall.md; verify memoryrecall and the hidden memory-recall-ui course after a build.
 
 ## Project map
 

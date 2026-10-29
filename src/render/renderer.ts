@@ -1,4 +1,6 @@
 import { drawDeviceState } from './vis/deviceState';
+import { CastBarOverlay, prepareCastBar } from './vis/castBars';
+import { CastBarContrast } from './vis/castBarContrast';
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
 import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
 import { RewardLabelLayout } from './vis/rewardLabels';
@@ -61,7 +63,7 @@ import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { guardBashReady, instanceChargeCost, instanceMeta, metaFaceOf, instanceStrikeTiming, instanceTriggerArmed, instanceUseCharges, poolReadOf, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
+import { instanceChargeCost, instanceMeta, metaFaceOf, instanceTriggerArmed, instanceUseCharges, poolReadOf, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
@@ -163,12 +165,11 @@ import { drawArmedCues } from './vis/armedCueLayer';
 import { reactiveCueOf, wardCueActive } from '../engine/combatReadability';
 import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { drawReactiveCue, drawGaspSpark, drawWardBody, drawWardLinks, drawWardBar } from './vis/combatReadabilityLayer';
-import { drawCastingCue, drawFocusFrame } from './vis/castingCueLayer';
+import { drawCastingCue } from './vis/castingCueLayer';
 import { drawCastPreparation } from './vis/skillCastPreparation';
 import { playerCastPreparation } from '../engine/playerCastVisual';
-import { castingCompletion } from '../engine/castingCues';
 import { chestReadout, drawChestReadout } from './vis/chestReadout';
-import { castMovementHeld, drawCastName, drawCastSlot } from './vis/castReadout';
+import { drawCastSlot } from './vis/castReadout';
 import { COMBAT_CUE_CFG } from '../data/combatCues';
 import { drawFrameBodyCue } from './vis/frameVoice';
 import { drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
@@ -305,6 +306,8 @@ export class Renderer {
   private floatingTextLayout = new CombatTextLayout(() => ({ ...VIS_CFG.combatFocus.numbers, enabled: true }));
   private rewardLabelLayout = new RewardLabelLayout(() => ({ ...VIS_CFG.drops.rewardLabels, enabled: true }));
   private massPainter = new MassPainter();
+  private castBars = new CastBarOverlay();
+  private castBarContrast = new CastBarContrast();
   private cosmeticTrails = new CosmeticTrails();
   ctx: CanvasRenderingContext2D;
   cam = { x: 0, y: 0 };
@@ -996,6 +999,7 @@ export class Renderer {
       this.drawTerrainFlash(f, world);
     }
     this.drawCompanionCues(world);
+    this.castBars.begin();
     this.combatMeters.begin(world.time, this.getSettings?.().crowdedMeters ?? VIS_CFG.combatFocus.meters.enabled);
     // THE PACK LAYER's drawn bonds (engine/pack.ts): the warden's lines to
     // every body it is actually empowering — over the ground reads, UNDER
@@ -1016,6 +1020,14 @@ export class Renderer {
       for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a, world.time, world);
       for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
       this.combatMeters.paint(ctx);
+      // A local cast is input feedback even when its body is inside cover,
+      // swallowed, or wearing a replacement form. Other actors keep native
+      // body admission; no concealed enemy gains an overlay through this path.
+      if (!this.directorClean) for (const seat of world.localHumanSeats()) {
+        if (this.castBars.has(seat.actor)) continue;
+        const bar = prepareCastBar(seat.actor, world, this.getSettings?.());
+        if (bar) this.castBars.add(bar);
+      }
       if (world.deathPresentation) drawPlayerDeath(this.ctx, world.player, world.deathPresentation, world.time);
       // THE STATUS VOICE (vis/statusVoiceLayer.ts): what just LANDED on a
       // body is drawn ON it — the frame-diff of each body's statuses plays
@@ -1173,6 +1185,23 @@ export class Renderer {
       this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
       this.drawEyecatch(world);     // THE EYECATCH: the super-art pane, above the HUD (engine/ultimates.ts)
     }));
+    // Cast mechanics are a late reading layer: after effects, words and HUD,
+    // before deliberate full-screen covers. Reduced render scale uses native
+    // crest pixels and the same shaken camera as the world beneath it.
+    if (!this.directorClean) this.onCrest(crest, () => {
+      if (this.castBars.active) this.castBarContrast.capture(ctx.canvas, crest ? this.overlay : undefined, performance.now());
+      const cc = this.ctx;
+      cc.save(); cc.scale(wordZ, wordZ);
+      cc.translate(-this.cam.x + shx, -this.cam.y + shy);
+      this.castBars.paint(cc, world,
+        { x: this.cam.x-shx, y: this.cam.y-shy, w: surfW/wordZ, h: surfH/wordZ },
+        a => this.labelRevealAt(world, a.pos) > .05,
+        bar => this.castBarContrast.outline({
+          x: (bar.meter.x-this.cam.x+shx)*wordZ/surfW, y: (bar.meter.y-this.cam.y+shy)*wordZ/surfH,
+          w: bar.meter.w*wordZ/surfW, h: bar.meter.h*wordZ/surfH,
+        }, bar.color));
+      cc.restore();
+    });
     // Covers must still cover: on the crest these two draw THERE (topmost
     // surface — one full-screen fade covers the whole composite).
     this.onCrest(crest, () => {
@@ -6548,156 +6577,11 @@ export class Renderer {
     if(!this.directorClean && (a.heldBy!==undefined || a.grabHud)) this.combatMeters.add(a,
       {x:x-50,y:y-a.radius-29,w:100,h:22},()=>this.drawGrabMeter(a,world));
 
-    // Cast bar above the head (telegraphs enemy casts, too)
-    const cs = a.casting;
-    if (cs && !this.directorClean) {
-      const castReadout = VIS_CFG.castReadout.enabled && world.seats.some(s => s.actor === a);
-      const bw = castReadout ? VIS_CFG.castReadout.width : 44, bh = castReadout ? VIS_CFG.castReadout.height : 5;
-      const movement = castReadout && (this.getSettings?.().castMovementHint ?? VIS_CFG.castReadout.showMovement) && castMovementHeld(world,a)
-        ? VIS_CFG.castReadout.plantedText : undefined;
-      const showName = castReadout && (this.getSettings?.().castNameHint ?? VIS_CFG.castReadout.showName);
-      const nameHeight = (showName ? VIS_CFG.castReadout.nameHeight : 0) + (movement ? VIS_CFG.castReadout.movementHeight : 0);
-      const bx2 = x - bw / 2, by2 = y - a.radius - 18;
-      const color = cs.inst.def.color;
-      const meterRise=cs.mode==='overcharge'?Math.max(0,cs.stage??0)*4:4;
-      const meterWidth=bw+(['overcharge','channel','multitude'].includes(cs.mode)?52:6);
-      const labelHalf=(showName||movement)?VIS_CFG.castReadout.labelWidth/2+3:0;
-      const meterLeft=Math.min(bx2-3,x-labelHalf),meterRight=Math.max(bx2-3+meterWidth,x+labelHalf);
-      this.combatMeters.add(a,{x:meterLeft,y:by2-6-meterRise-nameHeight,w:meterRight-meterLeft,h:bh+10+meterRise+nameHeight},()=>{
-        if (showName || movement) drawCastName(ctx, a, x, by2-6-meterRise, VIS_CFG.castReadout.labelWidth, movement, showName);
-        ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.fillRect(bx2 - 1, by2 - 1, bw + 2, bh + 2);
-        let frac: number;
-        if (cs.mode === 'channel') {
-          frac = cs.total > 0 ? 1 - Math.max(0, cs.pulseTimer ?? 0) / cs.total : 1;
-        } else if (cs.mode === 'guard') {
-          // The guard bar IS the shield's remaining health.
-          frac = Math.max(0, (cs.shield ?? 0) / (cs.maxShield ?? 1));
-        } else {
-          frac = cs.total > 0 ? Math.min(1, cs.elapsed / cs.total) : 1;
-        }
-        ctx.fillStyle = color;
-        ctx.fillRect(bx2, by2, bw * frac, bh);
-        // Mode decorations
-        if (cs.mode === 'channel') {
-          // CAPPED / BRIM channels wear their COMPLETION above the pulse
-          // bar (the overcharge stacked-bar idiom): the gather's walk to
-          // its ceiling, gold the instant it truly finishes. Enemies wear
-          // it too — the whole room reads the doom-cast burning in.
-          const holdFrac = castingCompletion(a) ?? null;
-          if (holdFrac !== null) {
-            const hy = by2 - 4;
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
-            ctx.fillStyle = holdFrac >= 1 ? '#ffd700' : color;
-            ctx.fillRect(bx2, hy, bw * holdFrac, 3);
-          }
-        }
-        if (cs.mode === 'perfect') {
-          ctx.fillStyle = 'rgba(255,215,0,0.55)';
-          ctx.fillRect(bx2 + bw * 0.72, by2, bw * 0.28, bh);
-        } else if (cs.mode === 'timed' && cs.indicatorAt !== undefined) {
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(bx2 + bw * cs.indicatorAt - 1, by2 - 2, 2, bh + 4);
-        } else if (cs.mode === 'guard' && cs.bashAt !== undefined) {
-          // THE BASH TIC: the live arming line — release on the ARMED side
-          // of it and the stance converts into the blow. The value is
-          // refreshGuardBash's (one resolver: supports, buffs and the
-          // inverted contract all move it), shipped over the co-op wire, so
-          // what this draws is exactly what the release check will decide.
-          // The faint underline marks the armed side: right of the tic
-          // normally, LEFT of it inverted (Hollow Answer — the bar reads
-          // "cash what the wall has lost"). No tic = no bash on this stance.
-          // THE ARM METER + THE READIED GOLD (2026-09-16): guardBashReady is
-          // the ONE read the release decides by. The thin bar above the
-          // guard bar is the arm clock walking (the capped-channel idiom —
-          // hidden when the clock is 0), and the moment the bash is truly
-          // READY (clock run AND wall on the armed side) meter, tic and
-          // underline turn gold together; until then the tic sits dim — a
-          // quick release just drops the wall. Enemy guards draw it too.
-          const ready = guardBashReady(cs);
-          const gold = '#ffd700';
-          if ((cs.bashArmAt ?? 0) > 0) {
-            const hy = by2 - 4;
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
-            ctx.fillStyle = ready.ready ? gold : color;
-            ctx.fillRect(bx2, hy, bw * ready.clock, 3);
-          }
-          const tx = bx2 + bw * cs.bashAt;
-          const x0 = cs.bashLow ? bx2 : tx;
-          const x1 = cs.bashLow ? tx : bx2 + bw;
-          ctx.fillStyle = ready.ready ? gold : '#ffffff';
-          ctx.globalAlpha = ready.ready ? 0.8 : 0.35;
-          ctx.fillRect(x0, by2 + bh + 1, Math.max(0, x1 - x0), 1);
-          ctx.globalAlpha = ready.ready ? 1 : 0.55;
-          ctx.fillRect(tx - 1, by2 - 2, 2, bh + 4);
-          ctx.globalAlpha = 1;
-        } else if (cs.mode === 'multitude') {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(bx2 - 3, by2 - 3, bw + 6, bh + 6);
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 10px Verdana';
-          ctx.textAlign = 'left';
-          ctx.fillText(`×${cs.presses ?? 1}`, bx2 + bw + 6, by2 + bh);
-          ctx.textAlign = 'center';
-        } else if (cs.mode === 'charge' && frac >= 1) {
-          ctx.strokeStyle = '#ffd700';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(bx2 - 2, by2 - 2, bw + 4, bh + 4);
-        } else if (cs.mode === 'concentration') {
-          drawFocusFrame(ctx, bx2, by2, bw, bh, !!cs.focusBroken);
-        } else if (cs.mode === 'overcharge') {
-          // STACKED bars: every banked stage is a thin filled bar laid on
-          // top of the refilling one — the old JRPG hold, made literal.
-          const stages = cs.stage ?? 0;
-          for (let s = 0; s < stages; s++) {
-            const sy = by2 - 4 - s * 4;
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            ctx.fillRect(bx2 - 1, sy - 1, bw + 2, 4);
-            ctx.fillStyle = '#ffd700';
-            ctx.fillRect(bx2, sy, bw, 3);
-          }
-          // Strike-timing disciplines decorate the REFILLING bar — the
-          // release must land inside them (Perfect Draw's golden tail /
-          // Wandering Mark's roving marker).
-          const timing = instanceStrikeTiming(cs.inst);
-          if (timing?.kind === 'perfect') {
-            ctx.fillStyle = 'rgba(255,215,0,0.55)';
-            ctx.fillRect(bx2 + bw * 0.72, by2, bw * 0.28, bh);
-          } else if (timing?.kind === 'timed' && cs.indicatorAt !== undefined) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(bx2 + bw * cs.indicatorAt - 1, by2 - 2, 2, bh + 4);
-          }
-          // The SPARK: a bright flare right as a stage banks — and while a
-          // spark WINDOW is invested (Spark Discipline), a golden border
-          // marks the open release window after each bank.
-          const since = cs.sinceStage ?? 999;
-          if (since < 0.15 && stages > 0) {
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(bx2 + bw + 8, by2 + bh / 2, 4, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          if (stages > 0 && (cs.sparkWindow ?? 0) > 0 && since <= (cs.sparkWindow ?? 0)) {
-            ctx.strokeStyle = '#ffd700';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(bx2 - 2, by2 - 2, bw + 4, bh + 4);
-          }
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 9px Verdana';
-          ctx.textAlign = 'left';
-          if (stages > 0) ctx.fillText(`+${stages}`, bx2 + bw + 5, by2 - 4);
-          ctx.textAlign = 'center';
-        } else if (cs.mode === 'channel') {
-          ctx.fillStyle = '#fff';
-          ctx.font = '9px Verdana';
-          ctx.textAlign = 'left';
-          ctx.fillText(`${(cs.channelTime ?? 0).toFixed(1)}s`, bx2 + bw + 5, by2 + bh);
-          ctx.textAlign = 'center';
-        }
-      });
+    // Cast bars keep their native anchor, independently of optional meter
+    // relocation. The later pass changes visibility and stacking only.
+    if (!this.directorClean && meterReveal > .05) {
+      const bar = prepareCastBar(a, world, this.getSettings?.());
+      if (bar) this.castBars.add(bar);
     }
   }
 

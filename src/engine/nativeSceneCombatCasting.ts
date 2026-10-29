@@ -1,6 +1,7 @@
 /** Exact native combat casting algorithms from Git 42f95716294995cbdd83785f0a0782ddda971f76.
  * Extraction is not an admitted runtime: all capabilities must be bound by the actual area aggregate. */
 import { updateCastAim } from './castAim';
+import { resolveStrikeTiming, rollStrikeMarker, strikeTimingsOf } from './strikeTiming';
 import { markBodyAction } from './bodyAction';
 import { skillBurstVoice } from '../data/skillVisuals';
 import { skillBeamVoice } from '../data/skillFlightVisuals';
@@ -32,7 +33,7 @@ import { nearestBody, noteBodyHit, reachTo, type SegBody } from './segments';
 import { DEFENSE_CFG } from './defense';
 import { COMMAND_CFG, hasCommandKind, issueCommand, obedienceOf } from './ai';
 import { BEHAVIOR_STATS, normalizeBrain } from './brain';
-import { convertRuleHolds, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFuse, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceBirth, instanceSummon, instanceTargeting, instanceTethers, instanceTurret, instanceUseCharges, instanceVariance, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillInstance, rampValue, resolveSizeOver, rollCount, socketSpec, instanceChannel, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG, CONCENTRATION_CFG, TRIGGER_CFG, REFLEX_CFG, AOE_SHAPE, bandSwingGeo, skillContextTags, type AuraDelivery, type ChannelSpec, type GroundDelivery, type GroundCascadeSpec, type SkillDef, type SkillEffect, type DropZoneSpec, type SkillInstance } from './skills';
+import { convertRuleHolds, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, guardBashReady, hostSockets, instanceAim, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceDelivery, instanceEchoes, instanceFuse, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTimings, instanceBirth, instanceSummon, instanceTargeting, instanceTethers, instanceTurret, instanceUseCharges, instanceVariance, instanceCurseField, instanceTrigger, instanceTriggerArmed, instanceTriggerLimit, instanceTriggerPermit, makeSkillInstance, rampValue, resolveSizeOver, rollCount, socketSpec, instanceChannel, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG, CONCENTRATION_CFG, TRIGGER_CFG, REFLEX_CFG, AOE_SHAPE, bandSwingGeo, skillContextTags, type AuraDelivery, type ChannelSpec, type GroundDelivery, type GroundCascadeSpec, type SkillDef, type SkillEffect, type DropZoneSpec, type SkillInstance } from './skills';
 import { evalCurve } from './curves';
 import { SKILLS } from '../data/skills';
 import { MONSTERS, defLeavesRemains } from '../data/monsters';
@@ -938,7 +939,7 @@ nativeHost.issueCombatRecord("casting", nativeStorage, nativeRecord, nativeStora
         || mode === 'overcharge')) {
         const tags = skillContextTags(def);
         const extra = instanceMods(inst);
-        const timing = instanceStrikeTiming(inst);
+        const timings = instanceStrikeTimings(inst);
         {
 let nativeStorage: typeof caster;
 let nativeRecord: NonNullable<typeof caster.casting>;
@@ -956,7 +957,8 @@ let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>
           targetInfo: targetInfo ?? undefined,
           paidCost: paid,
           stage: 0, sinceStage: 999, channelTime: 0,
-          indicatorAt: timing?.kind === 'timed' ? rand(0.3, 0.85) : undefined,
+          strikeTimings: timings,
+          indicatorAt: rollStrikeMarker(timings),
           sparkWindow: caster.sheet.get('sparkWindow', tags, extra, ocSpec.window ?? 0),
         };
 nativeHost.issueCombatRecord("casting", nativeStorage, nativeRecord, nativeStorage, nativeRecordInstance);
@@ -968,8 +970,8 @@ nativeHost.issueCombatRecord("casting", nativeStorage, nativeRecord, nativeStora
     // A grafted strike-timing discipline promotes a plain bar cast into
     // the perfect/timed machinery (Snipe's golden window on anything) —
     // except on a pierced press, which owns no bar to hang a window on.
-    const timing = instanceStrikeTiming(inst);
-    const effMode = mode === 'cast' && timing && !pierced ? timing.kind : mode;
+    const timings = instanceStrikeTimings(inst);
+    const effMode = mode === 'cast' && timings.length && !pierced ? timings[0].kind : mode;
 
     const castTime = caster.skillUseTime(inst);
     nativeHost.assaults.lock(caster, inst, aim);
@@ -1009,7 +1011,8 @@ let nativeRecordInstance: Parameters<NativeSceneCombatHost["issueCombatRecord"]>
       held: true, baseMult,
       chargesSpent: cc.consumed,
       targetInfo: targetInfo ?? undefined,
-      indicatorAt: effMode === 'timed' ? rand(0.3, 0.85) : undefined,
+      strikeTimings: effMode === 'perfect' || effMode === 'timed' ? timings : undefined,
+      indicatorAt: effMode === 'perfect' || effMode === 'timed' ? rollStrikeMarker(timings) : undefined,
       presses: effMode === 'multitude' ? 1 : undefined,
       paidCost: paid,
       ventRounds,
@@ -1033,21 +1036,14 @@ export function sceneCastPress(nativeHost: NativeSceneCombatHost, caster: Actor)
     const cs = caster.casting;
     if (!cs) return;
     const frac = cs.total > 0 ? cs.elapsed / cs.total : 0;
-    const timing = instanceStrikeTiming(cs.inst);
-    if (cs.mode === 'perfect' && !cs.pressUsed) {
+    if ((cs.mode === 'perfect' || cs.mode === 'timed') && !cs.pressUsed) {
       cs.pressUsed = true;
-      if (frac >= 0.72) {
-        cs.empowered = 1 + (timing?.bonus ?? 0.7);
-        nativeHost.flashes.push(timingCueFlash(caster, 'perfect', cs.aim));
-        // The made window IS an event — skill expression as a trigger.
-        nativeHost.rollTriggers(caster, 'flawless',
-          { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
-      }
-    } else if (cs.mode === 'timed' && !cs.pressUsed) {
-      cs.pressUsed = true;
-      if (cs.indicatorAt !== undefined && Math.abs(frac - cs.indicatorAt) <= 0.08) {
-        cs.empowered = 1 + (timing?.bonus ?? 1.2);
-        nativeHost.flashes.push(timingCueFlash(caster, 'flawless', cs.aim));
+      const result = resolveStrikeTiming(strikeTimingsOf(cs), frac, cs.indicatorAt);
+      if (result.successes.length) {
+        cs.empowered = result.multiplier;
+        for (const timing of result.successes) nativeHost.flashes.push(
+          timingCueFlash(caster, timing.kind === 'timed' ? 'flawless' : 'perfect', cs.aim));
+        // One successful input remains one flawless event, even at an overlap.
         nativeHost.rollTriggers(caster, 'flawless',
           { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
       }
@@ -5578,7 +5574,7 @@ nativeHost.issueCombatRecord("pendingPersists", nativeStorage, nativeRecord, nat
                 cs.sinceStage = 0;
                 cs.elapsed = 0;
                 // A timed discipline re-rolls its marker for the new bar.
-                if (cs.indicatorAt !== undefined) cs.indicatorAt = rand(0.3, 0.85);
+                if (cs.indicatorAt !== undefined) cs.indicatorAt = rollStrikeMarker(strikeTimingsOf(cs));
                 // The SPARK: each banked stage flashes its arrival.
                 nativeHost.flashes.push({
                   pos: vec(a.pos.x, a.pos.y), radius: 18 + 7 * cs.stage,
@@ -5602,15 +5598,8 @@ nativeHost.issueCombatRecord("pendingPersists", nativeStorage, nativeRecord, nat
         //  - the SPARK window met within a breath of a stage banking
         //    (sparkWindow stat — works at max stages; greed's discipline).
         const stages = cs.stage ?? 0;
-        const timing = instanceStrikeTiming(cs.inst);
         const frac = cs.total > 0 ? cs.elapsed / cs.total : 0;
-        let strikeMult = 1;
-        if (timing?.kind === 'perfect' && frac >= 0.72) {
-          strikeMult = 1 + (timing.bonus ?? 0.7);
-        } else if (timing?.kind === 'timed' && cs.indicatorAt !== undefined
-          && Math.abs(frac - cs.indicatorAt) <= 0.08) {
-          strikeMult = 1 + (timing.bonus ?? 1.2);
-        }
+        const strike = resolveStrikeTiming(stages < maxStages ? strikeTimingsOf(cs) : [], frac, cs.indicatorAt);
         const window = cs.sparkWindow ?? 0;
         const spark = window > 0 && stages > 0 && (cs.sinceStage ?? 999) <= window;
         const sparkMult = spark
@@ -5620,14 +5609,14 @@ nativeHost.issueCombatRecord("pendingPersists", nativeStorage, nativeRecord, nat
         a.useLock = 0.15;
         if (!a.dead) {
           nativeHost.executeSkill(a, cs.inst, cs.aim, {
-            dmgMult: (1 + spec.perStage * stages) * strikeMult * sparkMult * cs.baseMult,
+            dmgMult: (1 + spec.perStage * stages) * strike.multiplier * sparkMult * cs.baseMult,
             aoeMult: 1 + (spec.aoePerStage ?? 0) * stages,
             targetInfo,
             paidCost: cs.paidCost,
             chargesSpent: cs.chargesSpent,
           });
-          if (strikeMult > 1) {
-            nativeHost.flashes.push(timingCueFlash(a, timing?.kind === 'timed' ? 'flawless' : 'perfect', cs.aim));
+          if (strike.multiplier > 1) for (const timing of strike.successes) {
+            nativeHost.flashes.push(timingCueFlash(a, timing.kind === 'timed' ? 'flawless' : 'perfect', cs.aim));
           }
           if (spark) nativeHost.flashes.push(timingCueFlash(a, 'spark', cs.aim));
         }

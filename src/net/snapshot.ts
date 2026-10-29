@@ -1,5 +1,6 @@
 import type {NativeSnapshotHost} from './nativeSnapshotHost';
 import { instanceDelivery } from '../engine/skills';
+import { strikeTimingsOf } from '../engine/strikeTiming';
 import { empowermentRank, skillInstanceName } from '../engine/skillEmpowerment';
 import { afflictionPressureOf } from '../engine/afflictionPressure';
 import { armedStatusCues } from '../engine/armedCues';
@@ -293,6 +294,8 @@ export interface CastW { parryCue?: number;
   c: string; mode: string; total: number; elapsed: number;
   pulseTimer?: number; shield?: number; maxShield?: number;
   indicatorAt?: number; presses?: number; channelTime?: number;
+  strikeTimings?: import('../engine/skills').ResolvedStrikeTiming[];
+  stage?: number; sinceStage?: number; sparkWindow?: number;
   guardArc?: number;           // resolved guard coverage in degrees (mode === 'guard')
   /** Guard bash tic: live arming line + inverted contract (mode 'guard'). */
   bashAt?: number; bashLow?: boolean;
@@ -1060,6 +1063,11 @@ function actorToW(a: Actor, world: NativeSnapshotHost): ActorW {
     if (cs.shield !== undefined) cw.shield = cs.shield;
     if (cs.maxShield !== undefined) cw.maxShield = cs.maxShield;
     if (cs.indicatorAt !== undefined) cw.indicatorAt = cs.indicatorAt;
+    const strikeTimings = strikeTimingsOf(cs);
+    if (strikeTimings.length) cw.strikeTimings = strikeTimings.map(t => ({ ...t, source: { ...t.source } }));
+    if (cs.stage !== undefined) cw.stage = cs.stage;
+    if (cs.sinceStage !== undefined) cw.sinceStage = cs.sinceStage;
+    if (cs.sparkWindow !== undefined) cw.sparkWindow = cs.sparkWindow;
     if (cs.presses !== undefined) cw.presses = cs.presses;
     if (cs.channelTime !== undefined) cw.channelTime = cs.channelTime;
     if (cs.mode === 'guard') cw.parryCue = parryCueStrength(a);
@@ -2221,6 +2229,8 @@ export function adoptSnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       resolvedGuardArc: aw.cast.guardArc===undefined?undefined:aw.cast.guardArc*Math.PI/180,
       resolvedMeleeReach: aw.cast.meleeReach ? { ...aw.cast.meleeReach } : null,
       parryCue: aw.cast.parryCue, indicatorAt: aw.cast.indicatorAt, presses: aw.cast.presses, channelTime: aw.cast.channelTime,
+      strikeTimings: aw.cast.strikeTimings?.map(t => ({ ...t, source: { ...t.source } })),
+      stage: aw.cast.stage, sinceStage: aw.cast.sinceStage, sparkWindow: aw.cast.sparkWindow,
       bashAt: aw.cast.bashAt, bashLow: aw.cast.bashLow, bashArmAt: aw.cast.bashArmAt,
       aim: { x: a.pos.x, y: a.pos.y }, held: false, baseMult: 1,
     } as unknown as CastingState) : null;
