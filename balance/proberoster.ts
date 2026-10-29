@@ -101,6 +101,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_doomcues.ts', status: 'green', tier: 'fast', why: 'GT-022 Doom: actual bank/life iris, fixed fuse, footprint, early/expiry/death rupture, cure, source credit and co-op cleanup' },
   { probe: 'probe_combatreadability.ts', status: 'green', tier: 'fast', why: 'GT-022/035: real volatile/cull/cap/rescue outcomes, cooldown state, ward source membership, HUD and co-op' },
   { probe: 'probe_warningcues.ts', status: 'green', tier: 'fast', why: 'GT-011/012: exact guard-release geometry, live plan gestures, interruption/recovery and co-op warning cleanup' },
+  { probe: 'probe_striketiming.ts', status: 'green', tier: 'fast', why: 'independent timing windows, socket-order parity, compound press/release rewards, source attribution, Overcharge and co-op paint' },
   { probe: 'probe_combatcues.ts', status: 'green', tier: 'fast', why: 'GT-007–010: parry opening/reflection, avoided hits, timing and critical outcome cues with exact state and co-op fidelity' },
   { probe: 'probe_defensecues.ts', status: 'green', tier: 'fast', why: 'State-driven winded, poise, guard and shell cues; profile fallback, typed overflow, recovery and co-op parity' },
   { probe: 'probe_exhaustioncues.ts', status: 'green', tier: 'fast', why: 'Retreat exhaustion and reserve gasps follow real windows, recovery, status removal and co-op state without captions' },

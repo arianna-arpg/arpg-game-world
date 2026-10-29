@@ -144,6 +144,8 @@ export interface CastingState {
   // perfect / timed / multitude state
   empowered?: number;
   indicatorAt?: number;
+  /** Independently active timing mechanics, resolved and attributed at cast start. */
+  strikeTimings?: import('./skills').ResolvedStrikeTiming[];
   pressUsed?: boolean;
   presses?: number;
   /** AI: how long a monster holds a channel/charge before letting go. */

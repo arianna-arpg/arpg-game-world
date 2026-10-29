@@ -1,5 +1,11 @@
 Bone Golem frame abilities, the four-point routes, support routing and lifecycle checks are documented in [bone-golem](docs/design/bone-golem.md). Verify bonegolem, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden bone-golem-ui course.
 Skeleton Warrior infantry, spectral heirs, Spellsword choices and the shared Mage/Warrior node picker are documented in [skeleton-warrior](docs/design/skeleton-warrior.md). Verify skeletonwarrior, skeletonmage, skeletonarcher, necromancercourts, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden skeleton-mage-ui and skeleton-warrior-ui courses.
+Strike-timing disciplines compose independently through engine/strikeTiming.ts.
+Perfect Draw and Wandering Mark share one timing attempt and multiply earned
+bonuses; duplicate kinds keep first-source precedence. See docs/engine/strike-timing.md.
+Verify striketiming, combatcues, castingcues, playercastvisuals, supportfabric,
+castaim, agent, all types and sim smoke; after an isolated build run the hidden
+balance/strike-timing-ui.cjs harness.
 
 **Current scope:** [CURRENT.md](CURRENT.md) is the project direction and active/deferred work entrypoint. Deliver the offline seamless generation/content/event vision; new shard/MMORPG work is deferred. Prepare useful future boundaries without letting hosting dictate this phase. Existing zone content and the owner's game references are examples and reusable material, not generation laws. This priority supersedes conflicting older roadmaps and hosting handoffs.
 

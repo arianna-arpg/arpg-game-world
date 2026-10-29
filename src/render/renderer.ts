@@ -1,4 +1,5 @@
 import { drawDeviceState } from './vis/deviceState';
+import { drawStrikeTimingBar } from './vis/strikeTimingBar';
 import { ALTAR_BODY } from '../engine/altarBodies';
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
 import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
@@ -60,7 +61,7 @@ import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { guardBashReady, instanceChargeCost, instanceMeta, metaFaceOf, instanceStrikeTiming, instanceTriggerArmed, instanceUseCharges, poolReadOf, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
+import { guardBashReady, instanceChargeCost, instanceMeta, metaFaceOf, instanceTriggerArmed, instanceUseCharges, poolReadOf, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
@@ -6453,13 +6454,8 @@ export class Renderer {
             ctx.fillRect(bx2, hy, bw * holdFrac, 3);
           }
         }
-        if (cs.mode === 'perfect') {
-          ctx.fillStyle = 'rgba(255,215,0,0.55)';
-          ctx.fillRect(bx2 + bw * 0.72, by2, bw * 0.28, bh);
-        } else if (cs.mode === 'timed' && cs.indicatorAt !== undefined) {
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(bx2 + bw * cs.indicatorAt - 1, by2 - 2, 2, bh + 4);
-        } else if (cs.mode === 'guard' && cs.bashAt !== undefined) {
+        if (cs.mode === 'perfect' || cs.mode === 'timed') drawStrikeTimingBar(ctx, cs, bx2, by2, bw, bh);
+        if (cs.mode === 'guard' && cs.bashAt !== undefined) {
           // THE BASH TIC: the live arming line — release on the ARMED side
           // of it and the stance converts into the blow. The value is
           // refreshGuardBash's (one resolver: supports, buffs and the
@@ -6519,17 +6515,7 @@ export class Renderer {
             ctx.fillStyle = '#ffd700';
             ctx.fillRect(bx2, sy, bw, 3);
           }
-          // Strike-timing disciplines decorate the REFILLING bar — the
-          // release must land inside them (Perfect Draw's golden tail /
-          // Wandering Mark's roving marker).
-          const timing = instanceStrikeTiming(cs.inst);
-          if (timing?.kind === 'perfect') {
-            ctx.fillStyle = 'rgba(255,215,0,0.55)';
-            ctx.fillRect(bx2 + bw * 0.72, by2, bw * 0.28, bh);
-          } else if (timing?.kind === 'timed' && cs.indicatorAt !== undefined) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(bx2 + bw * cs.indicatorAt - 1, by2 - 2, 2, bh + 4);
-          }
+          drawStrikeTimingBar(ctx, cs, bx2, by2, bw, bh);
           // The SPARK: a bright flare right as a stage banks — and while a
           // spark WINDOW is invested (Spark Discipline), a golden border
           // marks the open release window after each bank.
