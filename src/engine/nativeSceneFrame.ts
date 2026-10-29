@@ -12,7 +12,7 @@ import { takeWeakPointBreaks } from './weakpoints';
 import { noteResourceFlow } from './feedingCues';
 import { updateMovementTethers } from './movementTether';
 import { assaultNode } from './assault';
-import { finishAIRecovery } from './handling';
+import { finishAIRecovery, faceAlongTravel } from './handling';
 import { angleDiff, angleTo, chance, clamp, dist, rand, vec, type Vec2 } from '../core/math';
 import { FOURTH_WALL_CFG, frameReflect } from './fourthwall';
 import { type DamageType } from './stats';
@@ -480,6 +480,11 @@ try {
       }
       // Share the ordinary per-frame turn budget with the main game.
       updateWatchGaze(a, nativeHost.time, dt);
+      // Committed minion lunges/charges keep their travel bearing even when
+      // the quarry moves. Cast locks and player-controlled seats still win.
+      if (a.isMinion() && a.dash && !a.frameCharging
+        && !a.frameState?.order && !a.frameState?.terminal && !nativeHost.seatOf(a))
+        faceAlongTravel(a, Math.cos(a.dash.dir), Math.sin(a.dash.dir));
       // TURN CLAMP (BEHAVIOR_STATS.turnSpeed ← Actor.turnSpeed as the innate
       // base): facing may only swing so far per frame — big bodies LUMBER,
       // their shell arcs and their aim lag the fight, and circling them

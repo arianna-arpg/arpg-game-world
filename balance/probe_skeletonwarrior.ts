@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { angleDiff } from '../src/core/math';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { SKILLS } from '../src/data/skills';
@@ -36,6 +37,32 @@ function target(w:World,x:number,y:number){
 function quiet(a:Actor){a.cooldowns.clear();a.useLock=0;a.casting=null;a.fillResources();}
 const restore=seedGlobalRandom(7318);
 try{
+ // Empty-ground Pursue and assembly walks must turn even without a combat target.
+ for (const nodes of [['ossuary_duelists'], ['grave_phalanx', 'barbed_lattice', 'oath_banner']]) {
+  const {w,p,inst,raise}=rig(nodes),a=raise()[0];
+  a.pos={...p.pos};a.facing=a.facingPrev=0;
+  const start={...a.pos};
+  quiet(p);check('movement order is accepted',w.useMetaSkill(p,inst,{x:p.pos.x,y:p.pos.y-350}));
+  step(w,.05,true);
+  check('ordered infantry turns toward its actual travel without a foe',
+    a.pos.y<start.y&&a.facing<0&&Math.abs(a.facing)<=a.turnSpeed*.05+.001);
+ }
+ // A committed lunge keeps its travel bearing while a target crosses behind.
+ {
+  const {w,p,raise}=rig(['ossuary_duelists','line_breakers']),a=raise()[0];
+  a.pos={...p.pos};a.facing=a.facingPrev=-Math.PI/2;
+  const foe=target(w,a.pos.x,a.pos.y-260),lunge=a.cohortState!.kit.find(s=>s.def.id==='court_bone_lunge')!;
+  quiet(a);check('Duelist can launch its supported Bone Lunge',w.useSkill(a,lunge,foe.pos));
+  for(let n=0;n<120&&!a.dash;n++)step(w,1/60);
+  check('Bone Lunge has begun moving',!!a.dash);
+  if(a.dash){
+   const heading=a.dash.dir;
+   foe.pos={x:a.pos.x+150,y:a.pos.y+100};a.facing=0;
+   step(w,1/60);
+   check('lunging Duelist retains committed travel heading',Math.abs(angleDiff(a.facing,heading))<.01);
+  }
+ }
+
  // Grouping uses the final modified capacity; unallocated trees retain odd caps.
  {
   const {p,inst,raise,bodies}=rig(['ossuary_duelists','line_breakers','dueling_pairs']);

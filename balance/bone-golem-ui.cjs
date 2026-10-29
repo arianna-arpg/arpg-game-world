@@ -67,6 +67,17 @@ app.whenReady().then(async()=>{
   await run("(()=>{__game.ui.hideAll();const q=__golemQA,a=q.start(['keepers_bulwark','renewing_frame','sheltering_bones','adamant_frame']);a.pos={x:q.p.pos.x+80,y:q.p.pos.y};q.advance(.6);const e=q.w.createMonster('zombie',1,'enemy');e.pos={x:q.p.pos.x+370,y:q.p.pos.y};q.w.actors.push(e);const combat=!q.w.sanctuaryBlocksCombat(a,e);a.life=0;q.w.kill(a,false,e);if(combat)q.advance(.15);__game.step(2);})()");
   assert.equal(await run("__golemQA.w.frameArts.bodyPresentation(__golemQA.w.actors.find(a=>a.frameState)).mode"),'terminal');
   await capture('bone-golem-reliquary-charge');
+
+  // Deliberately start turned away, then inspect the rendered charge bearing.
+  for(const [label,nodes,heading] of [
+   ['bone-golem-rush-facing',['keepers_bulwark','close_guard','warding_reach'],-Math.PI/2],
+   ['bone-golem-crush-facing',['osseous_might','great_bones','ossuary_commander','marrow_bruiser'],Math.PI],
+  ]){
+   const pose=await run("(()=>{const q=__golemQA,a=q.start("+JSON.stringify(nodes)+"),heading="+heading+";a.facing=a.facingPrev=heading-.4;const aim={x:a.pos.x+Math.cos(heading)*400,y:a.pos.y+Math.sin(heading)*400};q.w.useMetaSkill(q.p,q.inst,aim);q.advance(.55);__game.step(1);return {facing:a.facing,charging:!!a.frameCharging||!!a.frameState.order};})()");
+   assert.ok(pose.charging);
+   assert.ok(Math.abs(Math.atan2(Math.sin(pose.facing-heading),Math.cos(pose.facing-heading)))<.02,label);
+   await capture(label);
+  }
   assert.deepEqual(errors,[]);console.log('Bone Golem UI PASS: responsive four-point tree, forward opening, articulated guardian, four facings, broken/reforming bones, projected escort, repair, terminal charge and dismissal');
  }finally{clearTimeout(timeout);win.destroy();server.server.close();app.quit();}
 }).catch(error=>{console.error(error);app.exit(1);});

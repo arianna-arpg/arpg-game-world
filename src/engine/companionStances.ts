@@ -27,7 +27,7 @@ import type { Actor } from './actor';
 import type { World } from './world';
 import type { CommandState } from './brain';
 import type { SkillInstance } from './skills';
-import { angleTo, dist } from '../core/math';
+import { dist } from '../core/math';
 import { registerCommandKind, aiMoveToward, aiHeelRecall } from './ai';
 import { registerMetaFace } from './skills';
 import { sameStory } from './tiers';
@@ -139,8 +139,7 @@ function heel(actor: Actor, world: World, dt: number): 'consumed' {
   if (owner && !owner.dead && dist(actor.pos, owner.pos) > COMPANION_STANCE_CFG.heelDist) {
     if (aiHeelRecall(actor, world, dt)) return 'consumed';
     actor.companionReturnTo = owner.id;
-    actor.facing = angleTo(actor.pos, owner.pos);
-    aiMoveToward(actor, world, { x: owner.pos.x, y: owner.pos.y, tier: owner.tier }, dt);
+    aiMoveToward(actor, world, { x: owner.pos.x, y: owner.pos.y, tier: owner.tier }, dt, true);
   } else actor.lastProgress = undefined; // standing at heel is not being stuck
   return 'consumed';
 }

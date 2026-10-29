@@ -48,6 +48,19 @@ and a skill's own guard/channel steering rules remain meaningful on those seats.
   Unrelated ground-targeted or omnidirectional abilities are not globally
   converted into forward-only attacks.
 
+## Minion command facing
+
+Commanded movement uses the same body turn budget. Pursue, Rally assembly,
+Assault, Hold, Recall and companion heeling face the navigated route after
+spacing and hazard steering. Crush and Reliquary advances face their approach;
+Guardian's Advance escorts face the vanguard even while correcting formation
+slots. Autonomous minion dashes keep their committed travel bearing if the
+quarry moves. Active casts retain their stamped aim, and player-controlled
+bodies keep their own aim. A projected Rampart Wave does not turn its wearer
+or the stationary Living Ossuary shell. Zero-distance movement preserves the
+previous heading. These are movement-owner policies, independent of skill IDs;
+ordinary combat strafing keeps its existing aim behavior.
+
 ## Focused balance batch
 
 Rates and recovery durations are ordinary monster/brain data. Half-turn times

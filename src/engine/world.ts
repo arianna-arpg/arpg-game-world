@@ -118,7 +118,7 @@ import { siteZoneExits } from './exitSiting';
 import { fillFlaskChargeBanks } from './flaskState';
 import '../data/odyssey';
 import { instanceCastCycle, instanceTreeOver } from './skills';
-import { finishAIRecovery } from './handling';
+import { finishAIRecovery, faceAlongTravel } from './handling';
 import { COMBAT_DEEDS, DEED_CFG } from '../data/classdeeds';
 import { selectContainerLoot } from '../data/containerloot';
 import { rollMemoryEssenceTier } from '../data/essences';
@@ -43032,6 +43032,11 @@ actors: Actor[] = [];
       // A watch uses the same per-frame turn budget as every other aim.
       // It never competes with the idle post or a later cadenced write.
       updateWatchGaze(a, this.time, dt);
+      // Committed minion lunges/charges keep their travel bearing even when
+      // the quarry moves. Cast locks and player-controlled seats still win.
+      if (a.isMinion() && a.dash && !a.frameCharging
+        && !a.frameState?.order && !a.frameState?.terminal && !this.seatOf(a))
+        faceAlongTravel(a, Math.cos(a.dash.dir), Math.sin(a.dash.dir));
       // TURN CLAMP (BEHAVIOR_STATS.turnSpeed ← Actor.turnSpeed as the innate
       // base): facing may only swing so far per frame — big bodies LUMBER,
       // their shell arcs and their aim lag the fight, and circling them

@@ -1,4 +1,5 @@
 import type { Actor } from './actor';
+import { faceAlongTravel } from './handling';
 import { inAoe, type World } from './world';
 import { angleTo, dist, type Vec2 } from '../core/math';
 import { applyHit, type DamagePacket, type HitResult, type LifeWoundEvent } from './damage';
@@ -335,7 +336,14 @@ export class FrameArts {
       move(post.aim);
     return true;
   } return false; }
-  private move(a: Actor, point: Vec2, dt: number, pace: number) { a.casting = null; this.w.moveActor(a, point.x - a.pos.x, point.y - a.pos.y, dt * pace); }
+  private move(a: Actor, point: Vec2, dt: number, pace: number, heading?: number) {
+    a.casting = null;
+    const dx = point.x - a.pos.x, dy = point.y - a.pos.y;
+    // Formation members face the vanguard while correcting their slots.
+    faceAlongTravel(a, heading === undefined ? dx : Math.cos(heading),
+      heading === undefined ? dy : Math.sin(heading));
+    this.w.moveActor(a, dx, dy, dt * pace);
+  }
   private repairPulse(owner: Actor, inst: SkillInstance) {
     const host = inst.frameHost!, f = frameOf(host);
     if (!f?.repair)
@@ -560,7 +568,7 @@ export class FrameArts {
         this.stopWedge(w);
         continue;
       }
-      const dir = angleTo(w.pos, w.aim), travel = Math.min(dist(w.pos, w.aim), w.body.sheet.get('moveSpeed') * c.pace * dt);
+      const remaining = dist(w.pos, w.aim), dir = remaining > 1e-8 ? angleTo(w.pos, w.aim) : w.body.facing, travel = Math.min(remaining, w.body.sheet.get('moveSpeed') * c.pace * dt);
       if (w.wave) {
         const next = { x: w.pos.x + Math.cos(dir) * travel, y: w.pos.y + Math.sin(dir) * travel };
         if (!this.w.lineOfSight(w.pos, next, w.body.tier, w.body.tier)) {
@@ -570,7 +578,7 @@ export class FrameArts {
         w.pos = next;
       }
       else {
-        this.move(w.body, w.aim, dt, c.pace);
+        this.move(w.body, w.aim, dt, c.pace, dir);
         w.pos = { ...w.body.pos };
       }
       let index = 0;
@@ -578,7 +586,7 @@ export class FrameArts {
         if (a !== w.body && !a.dead) {
           const row = 1 + Math.floor(index / 2), side = index % 2 ? 1 : -1;
           index++;
-          this.move(a, { x: w.pos.x - Math.cos(dir) * row * c.spacing - Math.sin(dir) * side * row * c.spacing, y: w.pos.y - Math.sin(dir) * row * c.spacing + Math.cos(dir) * side * row * c.spacing }, dt, c.pace);
+          this.move(a, { x: w.pos.x - Math.cos(dir) * row * c.spacing - Math.sin(dir) * side * row * c.spacing, y: w.pos.y - Math.sin(dir) * row * c.spacing + Math.cos(dir) * side * row * c.spacing }, dt, c.pace, dir);
         }
       const mass = this.mass(w.body) + w.members.filter(a => a !== w.body && !a.dead).reduce((n, a) => n + this.mass(a), 0);
       const id = w.wave ? c.wave : c.rush, skill = this.skill(w.body, id)!;
