@@ -48,6 +48,12 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Pause-menu Save & Exit now selects Main Menu or Desktop through the shell's
+save/session owner. Browser close refusal retains a safe-to-close screen;
+desktop quit waits for disk writes and bypasses return-to-launcher. See
+`docs/ui/save-exit.md`; verify check, probe_savewriteorder, save-exit-ui after
+an isolated build, and the game/launcher boot smoke checks.
+
 The player Codex is documented in [docs/ui/codex.md](docs/ui/codex.md).
 Its shelves/read policy live in `data/codex.ts`, public reading models in
 `meta/codex.ts`, and its shared reader in `ui/codex.ts`. It replaces the
