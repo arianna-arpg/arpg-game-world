@@ -19,6 +19,10 @@ export function renderWardrobeInterface(root: HTMLElement, options: WardrobeInte
       <div class="wd-interface-stage">
         <div class="panel interface-preview" data-interface-preview>
           <h2>Inventory</h2>
+          <div class="folio-strip" style="position:absolute;left:0;right:0;top:-26px;width:100%" aria-label="Page tab preview">
+            <button type="button" class="folio-tab now" data-interface-tab aria-pressed="true">Skills</button>
+            <button type="button" class="folio-tab" data-interface-tab aria-pressed="false">Character</button>
+          </div>
           <div class="build-ribbons" style="--build-rail:34px">
             <button class="build-ribbon" type="button" data-interface-page="Inventory" aria-pressed="false"><span class="build-ribbon-label">♙ CHARACTER</span></button>
             <button class="build-ribbon" type="button" data-interface-page="Skills" aria-pressed="true" aria-expanded="true"><span class="build-ribbon-label">📖 SKILLS</span></button>
@@ -29,9 +33,9 @@ export function renderWardrobeInterface(root: HTMLElement, options: WardrobeInte
           <button type="button" data-interface-highlight>Preview highlight</button>
         </div>
       </div>
-      <p class="wd-muted">Preview · Inventory and its pages</p>
+      <p class="wd-muted">Preview · Shared interface style</p>
       <p>Frames, title dividers and page ribbons can be mixed freely. All styles are included.</p>
-      <p class="wd-muted">Applies to Inventory, Skills, Passives, Character, skill trees and container pages such as Reliquary. Layouts, item colors and gameplay cues stay intact.</p>
+      <p class="wd-muted">Shared across character pages, page tabs, conversations, vendors, station windows and menus.</p>
     </aside><div class="wd-interface-choices">
       ${INTERFACE_STYLE_CATEGORIES.map(category => `<label class="wd-interface-choice"><b>${esc(category.label)}</b>
         <select data-interface-choice="${category.key}" aria-label="${esc(category.label)}">${category.choices.map(choice => `<option value="${esc(choice.id)}">${esc(choice.name)}</option>`).join('')}</select>
@@ -62,6 +66,9 @@ export function renderWardrobeInterface(root: HTMLElement, options: WardrobeInte
     draft = { ...DEFAULT_INTERFACE_STYLE }; note.textContent = 'Default preview restored. Save to apply.'; paint();
   });
   root.querySelector('[data-interface-back]')!.addEventListener('click', back);
+  preview.querySelectorAll<HTMLButtonElement>('[data-interface-tab]').forEach(button => button.addEventListener('click', () => {
+    preview.querySelectorAll('[data-interface-tab]').forEach(b => { b.classList.toggle('now', b === button); b.setAttribute('aria-pressed', String(b === button)); });
+  }));
   root.querySelectorAll<HTMLButtonElement>('[data-interface-page]').forEach(button => button.addEventListener('click', () => {
     preview.querySelectorAll('[data-interface-page]').forEach(b => { b.setAttribute('aria-expanded', String(b === button)); b.setAttribute('aria-pressed', String(b === button)); });
   }));

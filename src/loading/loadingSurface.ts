@@ -4,6 +4,8 @@ import type { CosmeticLoadout } from '../engine/cosmetics';
 import { SpiritRun, spiritDirection, spiritLayout } from '../loading/spiritRun';
 import { drawSpiritRun } from '../loading/spiritView';
 import { Z_LADDER } from '../ui/zorder';
+import { applyInterfaceStyle } from '../ui/interfaceStyle';
+import { DEFAULT_INTERFACE_STYLE } from '../ui/interfaceStyleConfig';
 import type { LoadingOptions, LoadingLease, LoadingStatus } from './protocol';
 export type { LoadingOptions, LoadingLease, LoadingStatus } from './protocol';
 
@@ -56,6 +58,7 @@ export class LoadingSurface {
   }
   begin(options: LoadingOptions): LoadingLease {
     this.close(); const token = ++this.token;
+    applyInterfaceStyle(options.interfaceStyle ?? DEFAULT_INTERFACE_STYLE);
     this.run = new SpiritRun(options.direction ?? spiritDirection(options.kind));
     this.loadout = options.loadout; this.cancel = options.cancel; this.statusKey = '';
     this.clearWorldInput(); this.keys.clear(); this.pointer = undefined;
@@ -69,17 +72,17 @@ export class LoadingSurface {
     root.innerHTML = `<style>
       #mu-loading-screen *{box-sizing:border-box}
       #mu-loading-screen .mu-head{position:absolute;top:clamp(20px,5vh,52px);left:clamp(22px,5vw,76px);right:clamp(22px,5vw,76px);display:flex;justify-content:space-between;gap:20px;pointer-events:none}
-      #mu-loading-screen .mu-eyebrow{font:11px system-ui;letter-spacing:.3em;color:#86a59e}
+      #mu-loading-screen .mu-eyebrow{font:11px system-ui;letter-spacing:.3em;color:var(--inv-muted,#86a59e)}
       #mu-loading-screen h1{font-weight:400;font-size:clamp(24px,3vw,42px);letter-spacing:.14em;margin:9px 0;color:#bcd4e8;text-shadow:0 0 22px #9ab8dc38}
       #mu-loading-screen canvas{position:absolute;inset:108px 0 162px;width:100%;height:calc(100% - 270px)}
       #mu-loading-screen footer{position:absolute;bottom:clamp(18px,4vh,42px);left:clamp(22px,5vw,76px);right:clamp(22px,5vw,76px);display:grid;grid-template-columns:1fr auto;gap:12px 26px;align-items:end;font-family:system-ui}
       #mu-loading-screen .mu-status{font-size:14px;letter-spacing:.04em}
       #mu-loading-screen .mu-detail{font-size:11px;color:#8ba5a4;min-height:16px;margin-top:6px;max-width:65ch}
-      #mu-loading-screen progress{display:block;width:min(320px,100%);height:3px;margin:12px 0 0;accent-color:#8acbbc}
+      #mu-loading-screen progress{display:block;width:min(320px,100%);height:3px;margin:12px 0 0;accent-color:var(--inv-light,#8acbbc)}
       #mu-loading-screen .mu-pickups{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:10px;letter-spacing:.04em;grid-column:1/-1}
       #mu-loading-screen .mu-controls{font-size:10px;letter-spacing:.08em;color:#809695;grid-column:1/-1}
-      #mu-loading-screen button{border:1px solid #69877f;background:#17282c;color:#dfebe3;padding:9px 17px;font:12px system-ui;cursor:pointer;margin-left:8px}
-      #mu-loading-screen button:focus-visible{outline:2px solid #e8c992;outline-offset:4px}
+      #mu-loading-screen button{border:1px solid var(--inv-edge,#69877f);background:var(--inv-control-fill,#17282c);color:var(--inv-text,#dfebe3);padding:9px 17px;font:12px system-ui;cursor:pointer;margin-left:8px}
+      #mu-loading-screen button:focus-visible{outline:2px solid var(--inv-light,#e8c992);outline-offset:4px}
       @media(max-height:480px){#mu-loading-screen canvas{inset:80px 0 145px;height:calc(100% - 225px)}#mu-loading-screen .mu-head{top:14px}#mu-loading-screen h1{font-size:22px;margin:4px 0}#mu-loading-screen footer{bottom:12px;gap:5px}#mu-loading-screen .mu-detail{margin-top:2px}}
       </style><canvas aria-label="Steer the wisp through the openings in the spirit gates. Follow wandering spirits and optionally ride the wispy chevron currents to surge ahead."></canvas>
       <header class="mu-head"><div><div class="mu-eyebrow">HOLLOW WAKE</div><h1 class="runescript" aria-label="The Crossing — Loading">${encipher('The Crossing')}</h1></div></header>

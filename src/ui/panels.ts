@@ -5047,7 +5047,7 @@ export class UI {
     const CELL = BAG_CELL_PX;
     const color = ITEM_RARITIES[item.rarity].color;
     const cat = ITEM_BASES[item.baseId]?.category ?? 'ring';
-    return `<div style="width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;border:2px solid ${color};
+    return `<div style="width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#221e2c);border:2px solid ${color};
       border-radius:3px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;
       font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;${item.rarity === 'unique' ? `box-shadow:0 0 10px ${color};` : ''}">
       ${CATEGORY_GLYPHS[cat] ?? '?'}</div>`;
@@ -6606,7 +6606,7 @@ export class UI {
       <div style="margin-top:6px;border:1px dashed ${v.accent}55;border-radius:4px;padding:6px">
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
           <input data-vcomm-search type="text" placeholder="Search the drop index…" value="${esc(this.vendorCommQuery)}"
-            style="flex:1;background:#141210;border:1px solid #3a352c;color:#d8d4c8;padding:3px 6px;font:inherit;font-size:11px">
+            style="flex:1;background:var(--inv-surface,#141210);border:1px solid var(--inv-edge,#3a352c);color:var(--inv-text,#d8d4c8);padding:3px 6px;font:inherit;font-size:11px">
           <button data-vcomm-close>Close</button>
         </div>
         <div style="max-height:180px;overflow-y:auto">
@@ -6691,7 +6691,7 @@ export class UI {
         for (let y = 0; y < b.h; y++) {
           for (let x = 0; x < b.w; x++) {
             cells += `<div style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
-              width:${CELL - 2}px;height:${CELL - 2}px;background:#16131d;border:1px solid #2a2634"></div>`;
+              width:${CELL - 2}px;height:${CELL - 2}px;background:var(--inv-cell-fill,#16131d);border:1px solid var(--inv-cell-edge,#2a2634)"></div>`;
           }
         }
         let tiles = '';
@@ -6754,7 +6754,7 @@ export class UI {
             }
             tiles += `<div ${holdAttr} data-tip="vgem" data-vgem="${v.id}:${idx}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
               style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
-              width:${CELL - 2}px;height:${CELL - 2}px;background:#1c1626;
+              width:${CELL - 2}px;height:${CELL - 2}px;background:var(--inv-item-fill,#1c1626);
               border:2px solid ${heldRow ? v.accent : col};border-radius:3px;cursor:${canBuy ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)'};box-sizing:border-box;
               display:flex;align-items:center;justify-content:center;
               ${e.kind === 'skill' && e.inst.rarity === 'legendary' ? `box-shadow:0 0 10px ${col};` : ''}${canBuy ? '' : 'opacity:0.55;'}">
@@ -6791,7 +6791,7 @@ export class UI {
           tiles += `<div ${holdAttr} data-tip="item" data-item-uid="${i.uid}" data-vware="${v.id}:${idx}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
             title="${entryLock ? esc(entryLock) : tradeRefusal ? esc(tradeRefusal) : afford ? `Buy: ${esc(i.name)} — ${esc(pricePlain)}` : `Not enough essence — ${esc(pricePlain)}`}"
             style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
-            width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:${mk ? '#1c1626' : '#221e2c'};
+            width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,${mk ? '#1c1626' : '#221e2c'});
             border:2px solid ${heldRow ? v.accent : (mk ? mk.color : r.color)};border-radius:3px;cursor:${canBuy ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)'};box-sizing:border-box;
             display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
             ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}${canBuy ? '' : 'opacity:0.55;'}">${face}${priceTag}${lockPip}${badge}</div>`;
@@ -7105,7 +7105,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
         const teachSeat = lessonSkills.length > 0;
         return `<div data-drop="rackSeat:${slot}" class="${teachSeat ? 'tut-glow' : ''}"
           title="Empty seat ${label} — drag a skill here to bind it"
-          style="height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px dashed #4a4458;border-radius:5px;background:#1c1626;
+          style="height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px dashed var(--inv-empty-edge,#4a4458);border-radius:5px;background:var(--inv-cell-fill,#1c1626);
             display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px">
           <span style="font-size:9px;color:#8a8678">${label}</span>
           <span style="font-size:12px;color:#3f3950;line-height:1">◇</span>
@@ -7117,7 +7117,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
       return `<div data-drag="rackSeat:${slot}" data-drop="rackSeat:${slot}"
         data-tip="skill" data-skill-id="${sd.id}"
         style="--unlearn-size:${BUILD_PANEL_CFG.unlearnSize}px;position:relative;height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px solid ${sd.color};border-radius:5px;
-          background:#241d2e;padding:3px 5px;overflow:hidden;cursor:var(--cursor-point, pointer)">
+          background:var(--inv-item-fill,#241d2e);padding:3px 5px;overflow:hidden;cursor:var(--cursor-point, pointer)">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span style="font-size:8px;color:var(--gold)">${label}</span>
           ${seated.grantedBy

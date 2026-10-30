@@ -1,7 +1,10 @@
 import { DEFAULT_INTERFACE_STYLE, INTERFACE_STYLE_CATEGORIES, INTERFACE_STYLE_TOKENS,
   normalizeInterfaceStyle, type InterfaceStyle } from './interfaceStyleConfig';
+import { installInterfaceSurfaceStyles } from './interfaceSurfaces';
 
 let activeStyle: InterfaceStyle = { ...DEFAULT_INTERFACE_STYLE };
+/** A copied presentation snapshot, also safe to send to the isolated loading UI. */
+export const currentInterfaceStyle = (): InterfaceStyle => ({ ...activeStyle });
 
 /** Apply colors and ornament grammar to a surface, including the Wardrobe's isolated sample. */
 export function styleInventorySurface(root: HTMLElement, value: InterfaceStyle): void {
@@ -17,6 +20,13 @@ export function styleInventorySurface(root: HTMLElement, value: InterfaceStyle):
 
 export function applyInterfaceStyle(value: InterfaceStyle): void {
   activeStyle = normalizeInterfaceStyle(value);
+  installInterfaceSurfaceStyles();
+  // Inheritance covers existing and future cards/tabs without a DOM observer.
+  // Separate attribute names keep the Inventory sample's local motifs isolated.
+  const root = document.documentElement;
+  styleInventorySurface(root, activeStyle);
+  root.setAttribute('data-interface-theme', 'true');
+  for (const category of INTERFACE_STYLE_CATEGORIES) root.removeAttribute(`data-ui-${category.key}`);
   document.querySelectorAll<HTMLElement>('.inventory-surface:not([data-interface-preview])')
     .forEach(root => styleInventorySurface(root, activeStyle));
 }

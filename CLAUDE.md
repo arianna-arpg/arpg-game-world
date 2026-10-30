@@ -25,7 +25,7 @@ See `docs/render/cast-bars.md`; verify castbars, the existing casting/timing pro
 all types and the hidden cast-bars, strike-timing and cast-readout UI courses.
 
 The cinematic front door uses ui/frontScreenConfig.ts for presentation and action definitions.
-Inventory's configurable Silver Inlay/Pennants styling and Wardrobe selectors use ui/interfaceStyleConfig.ts; see [interface-style](docs/ui/interface-style.md) for presentation boundaries and verification.
+Configurable Silver Inlay/Pennants styling and Wardrobe selectors use ui/interfaceStyleConfig.ts, with shared surface coverage in ui/interfaceSurfaces.ts; see [interface-style](docs/ui/interface-style.md) for presentation boundaries and verification.
 The shared outlined logo and established insignia use [brand](docs/ui/brand.md); run npm run brand after changing branding/identity.mjs. The type-check command also verifies generated brand copies.
 See [front-screen](docs/ui/front-screen.md); verify all types, build, game smoke
 and the isolated hidden balance/front-screen-ui.cjs acceptance.

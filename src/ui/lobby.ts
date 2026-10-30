@@ -3,8 +3,7 @@
 // no signaling server, the host and joiner exchange two text blobs by hand
 // (Discord/SMS/etc.): the host's INVITE, then the joiner's RESPONSE. This module
 // is a self-contained DOM overlay driven by callbacks; main.ts supplies the
-// actual WebRtcTransport plumbing. Kept deliberately plain — it's a utility
-// screen, not a polished menu.
+// actual WebRtcTransport plumbing. Presentation inherits the shared UI theme.
 // ---------------------------------------------------------------------------
 
 import { esc } from './dom';
@@ -35,10 +34,10 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
     alignItems: 'center', justifyContent: 'center', background: 'rgba(6,5,10,0.86)', font: '13px Verdana',
   });
   const panel = document.createElement('div');
+  panel.className = 'interface-dialog';
   css(panel, {
     width: '560px', maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto',
-    background: '#16121e', color: '#d8d4e0', border: '1px solid #5a4a6a',
-    borderRadius: '8px', padding: '18px 20px', boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+    borderWidth: '1px', borderStyle: 'solid', padding: '18px 20px',
   });
   overlay.append(panel);
 
@@ -47,12 +46,12 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
   const h = (tag: string, text?: string): HTMLElement => { const e = document.createElement(tag); if (text) e.textContent = text; return e; };
   const btn = (label: string): HTMLButtonElement => {
     const b = document.createElement('button'); b.textContent = label;
-    css(b, { background: '#2a2438', color: '#e8d44a', border: '1px solid #5a4a6a', borderRadius: '5px', padding: '7px 14px', font: '13px Verdana', cursor: 'var(--cursor-point, pointer)', marginRight: '8px' });
+    css(b, { color: 'var(--inv-text,#e8d44a)', border: '1px solid var(--inv-edge,#5a4a6a)', borderRadius: '5px', padding: '7px 14px', font: '13px Verdana', cursor: 'var(--cursor-point, pointer)', marginRight: '8px' });
     return b;
   };
   const box = (placeholder: string, ro = false): HTMLTextAreaElement => {
     const t = document.createElement('textarea'); t.placeholder = placeholder; t.readOnly = ro;
-    css(t, { width: '100%', height: '76px', marginTop: '6px', background: '#0e0c14', color: '#b8e0b8', border: '1px solid #3a3450', borderRadius: '5px', padding: '6px', font: '11px monospace', resize: 'vertical', boxSizing: 'border-box' });
+    css(t, { width: '100%', height: '76px', marginTop: '6px', border: '1px solid var(--inv-edge,#3a3450)', borderRadius: '5px', padding: '6px', font: '11px monospace', resize: 'vertical', boxSizing: 'border-box' });
     return t;
   };
   const copyBtn = (src: HTMLTextAreaElement, label = 'Copy'): HTMLButtonElement => {
