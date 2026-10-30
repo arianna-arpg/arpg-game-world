@@ -414,6 +414,9 @@ export class Renderer {
     private getSettings?: () => Settings,
   ) {
     this.ctx = canvas.getContext('2d')!;
+    registerVisCache({ id: 'castBarContrast', count: () => this.castBarContrast.count(),
+      bytes: () => this.castBarContrast.bytes(), onZoneSwap: () => this.castBarContrast.invalidate(),
+      onRunSwap: () => this.castBarContrast.reset() });
     this.overlay = document.createElement('canvas');
     this.octx = this.overlay.getContext('2d')!;
     const os = this.overlay.style;
@@ -1163,7 +1166,7 @@ export class Renderer {
         bar => this.castBarContrast.outline({
           x: (bar.meter.x-this.cam.x+shx)*wordZ/surfW, y: (bar.meter.y-this.cam.y+shy)*wordZ/surfH,
           w: bar.meter.w*wordZ/surfW, h: bar.meter.h*wordZ/surfH,
-        }, bar.color));
+        }, bar.colors));
       cc.restore();
     });
     // Covers must still cover: on the crest these two draw THERE (topmost

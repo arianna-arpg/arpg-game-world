@@ -80,6 +80,8 @@ export interface GainEvent {
 
 /** A cast in progress (also drives the cast bar above the actor's head). */
 export interface CastingState {
+  /** Host-resolved damage tags on render-only co-op shells. */
+  damageTags?: import('./stats').DamageType[];
   /** Resolved completion and body read on render-only co-op shells. */
   castingCompletion?: number;
   castingCue?: import('./castingCues').CastingCue;

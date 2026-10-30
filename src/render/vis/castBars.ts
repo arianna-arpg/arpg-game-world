@@ -2,7 +2,7 @@ import type { Actor } from '../../engine/actor';
 import type { World } from '../../engine/world';
 import type { Settings } from '../../meta/settings';
 import { guardBashReady } from '../../engine/skills';
-import { castingCompletion } from '../../engine/castingCues';
+import { castingCompletion, castingDamageTags } from '../../engine/castingCues';
 import { castMovementHeld, drawCastName } from './castReadout';
 import { drawFocusFrame } from './castingCueLayer';
 import { drawStrikeTimingBar } from './strikeTimingBar';
@@ -16,6 +16,7 @@ export interface CastBar {
   rect: CombatRect;
   meter: CombatRect;
   color: string;
+  colors: readonly string[];
   paint: (ctx: CanvasRenderingContext2D) => void;
 }
 
@@ -71,13 +72,23 @@ export function prepareCastBar(a: Actor, world: World, settings?: Settings): Cas
   const showName = castReadout && (settings?.castNameHint ?? VIS_CFG.castReadout.showName);
   const nameHeight = (showName ? VIS_CFG.castReadout.nameHeight : 0) + (movement ? VIS_CFG.castReadout.movementHeight : 0);
   const bx2 = x - bw / 2, by2 = y - a.radius - 18;
-  const color = cs.inst.def.color;
+  const cfg = VIS_CFG.castReadout.tagColors;
+  const colors = cfg.enabled ? castingDamageTags(cs).map(type => cfg.palette[type]) : [cs.inst.def.color];
+  if (!colors.length) colors.push(cfg.neutral);
+  const color = colors[0];
+  // Each band spans the same clock, so every tag reads even at the start of a cast.
+  const fillBands = (ctx: CanvasRenderingContext2D, width: number): void => {
+    colors.forEach((ink, i) => {
+      const top = Math.round(bh * i / colors.length), bottom = Math.round(bh * (i + 1) / colors.length);
+      ctx.fillStyle = ink; ctx.fillRect(bx2, by2 + top, width, bottom - top);
+    });
+  };
   const meterRise=cs.mode==='overcharge'?Math.max(0,cs.stage??0)*4:4;
   const meterWidth=bw+(['overcharge','channel','multitude'].includes(cs.mode)?52:6);
   const labelHalf=(showName||movement)?VIS_CFG.castReadout.labelWidth/2+3:0;
   const meterLeft=Math.min(bx2-3,x-labelHalf),meterRight=Math.max(bx2-3+meterWidth,x+labelHalf);
   return { actor: a, key: cs,
-    meter: { x: bx2, y: by2, w: bw, h: bh }, color,
+    meter: { x: bx2, y: by2, w: bw, h: bh }, color, colors,
     rect: { x: meterLeft, y: by2-6-meterRise-nameHeight, w: meterRight-meterLeft, h: bh+8+meterRise+nameHeight },
     paint: ctx => {
       if (showName || movement) drawCastName(ctx, a, x, by2-6-meterRise, VIS_CFG.castReadout.labelWidth, movement, showName);
@@ -92,8 +103,10 @@ export function prepareCastBar(a: Actor, world: World, settings?: Settings): Cas
       } else {
         frac = cs.total > 0 ? Math.min(1, cs.elapsed / cs.total) : 1;
       }
-      ctx.fillStyle = color;
-      ctx.fillRect(bx2, by2, bw * frac, bh);
+      if (cfg.enabled) {
+        ctx.globalAlpha = cfg.trackAlpha; fillBands(ctx, bw); ctx.globalAlpha = 1;
+      }
+      fillBands(ctx, bw * frac);
       // Mode decorations
       if (cs.mode === 'channel') {
         // CAPPED / BRIM channels wear their COMPLETION above the pulse

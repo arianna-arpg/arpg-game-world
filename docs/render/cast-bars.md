@@ -11,6 +11,23 @@ native crest pixels; full scale uses the main canvas. Both paths use the same
 camera, zoom and shake as the actor. Menus and deliberate traversal/death fades
 remain above this pass. Clean and world-only director takes omit cast readouts.
 
+## Damage-tag colors
+
+The base and progress fill use the actual skill instance's damage tags, including
+skill-tree tag changes and granted support tags. Fire is red, cold is blue,
+physical is white, lightning is yellow and chaos is purple. Mixed tags use equal
+horizontal bands which all advance with the same cast clock. A dim full-width
+track makes the tags visible before the first filled pixel. These bands identify
+tags; they do not claim damage percentages or predict final conversion/mitigation.
+Untagged skills use a neutral tint. Skill artwork never decides the default bar.
+
+VIS_CFG.castReadout.tagColors owns the palette, neutral tint, track opacity and
+an opt-out to the original authored colors. The palette extends DAMAGE_COLOR;
+no skill names or IDs select a tint. Host-resolved tags travel in cast snapshots,
+including empty results; older hosts degrade to the neutral bar. Gold readiness
+and white timing marks still paint over the base. All bands participate in the
+adaptive contrast decision, which changes only the outline.
+
 ## Priority and contrast
 
 `render/vis/castBars.ts` owns the unchanged mode painter and paint ordering.
@@ -19,11 +36,22 @@ players, other seated players, enemies and other allies. Actor identity breaks
 ties. Priority affects stacking only: overlapping actors keep overlapping bars.
 
 `render/vis/castBarContrast.ts` samples the composed scene before any cast bars
-paint. One small scratch canvas is shared by all active casts, with bounded
-resolution and refresh cadence. At reduced scale it composites the world and
-crest before sampling. There is no native-framebuffer readback per actor.
+paint. One sampling worker is shared by all active casts, with bounded
+resolution and refresh cadence. Immutable world/crest ImageBitmaps are composed
+and read inside that worker; the drawing thread never reads scene pixels. At
+most one bitmap pair is in flight, with no queued refreshes. Cast art and clocks
+paint immediately using the most recent completed sample or the existing quiet
+fallback. Bitmap transfer may slightly round sampled color channels.
 
-The skill's ink is compared with scene luminance at five points around its bar.
+Changing source surfaces, dimensions or zones invalidates old samples. Late
+results cannot repopulate an invalidated scene or a reset run. Partial snapshot
+failures close their fulfilled siblings; worker errors and a two-second blocked
+request use the quiet fallback until a run reset. Run cleanup terminates the
+worker. Cache reporting includes sampled pixels, scratch space and the estimated
+in-flight bitmap bytes. This removes synchronous scene readback; it does not
+promise a hard frame-time budget or zero sampling latency.
+
+Every base-band ink is compared with scene luminance at five points around its bar.
 Poor contrast or strong variation enables a thin light/dark outline around the
 native bar. Clear contrast leaves the original appearance alone. The outline
 paints before the native art, so timing markers and mode cues retain precedence.
