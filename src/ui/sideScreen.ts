@@ -39,6 +39,7 @@ export function mountSideScreen(root: HTMLElement, profile: SideScreenProfile,
     '--side-surface': SIDE_SCREEN.palette.surface, '--side-text': SIDE_SCREEN.palette.text,
     '--side-muted': SIDE_SCREEN.palette.muted, '--side-line': SIDE_SCREEN.palette.line,
     '--side-enter-ms': SIDE_SCREEN.transitionMs + 'ms',
+    '--side-footer-max': SIDE_SCREEN.footerMaxHeightPercent + '%',
   };
   for (const [key, value] of Object.entries(css)) shell.style.setProperty(key, value);
   shell.innerHTML = `<div class="side-pane">

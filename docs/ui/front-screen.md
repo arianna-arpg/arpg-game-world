@@ -72,6 +72,19 @@ link returns through its existing sealed visit; release still requires the
 existing confirmation, clears that vessel’s invested resurrection and save slot,
 and returns to the main menu when the last vessel is released.
 
+Headers can shrink and scroll when space is tight. `SIDE_SCREEN.footerMaxHeightPercent`
+caps the fixed footer within its content area; wrapped controls scroll inside
+that region instead of pushing Back below the viewport. This shared rule applies
+to every shell profile, including Vault and fallen-vessel actions at 200% scale.
+The acceptance course checks every visible footer action, including reaching
+the final control after scrolling, and requires the footer itself to stay onscreen.
+
+The legacy browser exit panel and Co-op lobby also respect the shared UI-scale
+dial in their viewport limits. Their text, cards and buttons wrap within that
+space, and their contents scroll when enlarged controls exceed the available
+height. The menu acceptance course checks both dialogs at compact widths and
+200% scale without starting a network session.
+
 ### Codex integration
 
 The completed Codex from main uses the same frame through the optional
