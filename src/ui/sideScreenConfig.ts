@@ -37,5 +37,7 @@ export const SIDE_SCREENS = {
 export const SIDE_SCREEN = {
   entranceLabel: 'The threshold',
   transitionMs: 240,
+  /** Reserve content space when enlarged controls wrap into multiple rows. */
+  footerMaxHeightPercent: 50,
   palette: { surface: '#0b1519', text: '#e7e5d9', muted: '#a6b7b5', line: '#a8bcb52e' },
 };

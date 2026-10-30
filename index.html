@@ -726,10 +726,10 @@
        Options sub-view (#esc-back is its signature) pins the classic width. */
     #start-menu {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: fit-content; min-width: 360px; /* hugs the shown options — the Immortal-roster overflow QA */
+      width: fit-content; min-width: min(360px, calc(92vw / var(--ui-scale)));
       max-width: min(540px, calc(92vw / var(--ui-scale)));
       max-height: calc(88vh / var(--ui-scale)); overflow-y: auto;
-      text-align: center; padding: 34px;
+      text-align: center; padding: 34px; overflow-wrap: anywhere;
     }
     #start-menu:has(#esc-back) { width: 460px; } /* Options pins the pre-Immortal-shelf measure */
     :is(#start-menu, #escape-menu):has(.options-body) { display:flex; flex-direction:column; overflow:hidden; }
@@ -741,7 +741,7 @@
     #start-menu .acct-head b { color: var(--gold); }
     #start-menu .esc-btns { display: flex; flex-direction: column; gap: 8px; align-items: center; }
     #start-menu .esc-btns button {
-      width: 260px; background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
+      width: 260px; max-width: 100%; background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
       border-radius: 4px; padding: 10px 0; font-size: 14px; cursor: var(--cursor-point, pointer);
     }
     #start-menu .esc-btns button:hover:not(:disabled) { background: #3a3a55; }

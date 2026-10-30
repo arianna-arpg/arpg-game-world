@@ -35,8 +35,10 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
     alignItems: 'center', justifyContent: 'center', background: 'rgba(6,5,10,0.86)', font: '13px Verdana',
   });
   const panel = document.createElement('div');
+  const scale = `var(${UI_SCALE_CFG.cssVar}, 1)`;
   css(panel, {
-    width: '560px', maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto',
+    width: '560px', minWidth: '0', maxWidth: `calc(92vw / ${scale})`,
+    maxHeight: `calc(88dvh / ${scale})`, overflowY: 'auto', overflowWrap: 'anywhere',
     background: '#16121e', color: '#d8d4e0', border: '1px solid #5a4a6a',
     borderRadius: '8px', padding: '18px 20px', boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
   });
@@ -47,7 +49,7 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
   const h = (tag: string, text?: string): HTMLElement => { const e = document.createElement(tag); if (text) e.textContent = text; return e; };
   const btn = (label: string): HTMLButtonElement => {
     const b = document.createElement('button'); b.textContent = label;
-    css(b, { background: '#2a2438', color: '#e8d44a', border: '1px solid #5a4a6a', borderRadius: '5px', padding: '7px 14px', font: '13px Verdana', cursor: 'var(--cursor-point, pointer)', marginRight: '8px' });
+    css(b, { maxWidth: 'calc(100% - 8px)', background: '#2a2438', color: '#e8d44a', border: '1px solid #5a4a6a', borderRadius: '5px', padding: '7px 14px', font: '13px Verdana', cursor: 'var(--cursor-point, pointer)', marginRight: '8px' });
     return b;
   };
   const box = (placeholder: string, ro = false): HTMLTextAreaElement => {
@@ -74,7 +76,7 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
   const refreshers: (() => void)[] = [];
   for (const c of cb.classes) {
     const card = h('div');
-    css(card, { width: '162px', padding: '8px 10px', border: '1px solid #3a3450', borderRadius: '6px', cursor: 'var(--cursor-point, pointer)', background: '#100d18', boxSizing: 'border-box' });
+    css(card, { width: '162px', maxWidth: '100%', minWidth: '0', padding: '8px 10px', border: '1px solid #3a3450', borderRadius: '6px', cursor: 'var(--cursor-point, pointer)', background: '#100d18', boxSizing: 'border-box' });
     card.innerHTML = `<div style="color:${c.color};font-weight:bold;margin-bottom:3px">${esc(c.name)}</div><div style="color:#9a93ac;font-size:11px;line-height:1.4">${esc(c.description)}</div>`;
     const refresh = (): void => css(card, {
       borderColor: c.id === selectedClassId ? c.color : '#3a3450',

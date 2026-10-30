@@ -244,11 +244,18 @@ app.whenReady().then(async () => {
           const shell = document.querySelector('.panel:not(.hidden) > .side-screen');
           const pane = shell.querySelector('.side-pane'), body = shell.querySelector('.side-scroll'), foot = shell.querySelector('.side-foot');
           const r=foot.getBoundingClientRect(), b=body.getBoundingClientRect();
-          const button=foot.querySelector('button'), br=button.getBoundingClientRect();
+          const footScroll=foot.scrollTop;
+          const reachable=Array.from(foot.querySelectorAll('button'))
+            .filter(button=>getComputedStyle(button).display!=='none').every(button=>{
+              button.scrollIntoView({block:'nearest',inline:'nearest'});
+              const br=button.getBoundingClientRect();
+              return br.top>=0 && br.bottom<=innerHeight && br.left>=0 && br.right<=innerWidth &&
+                button.contains(document.elementFromPoint(br.x+br.width/2,br.y+br.height/2));
+            });
+          foot.scrollTop=footScroll;
           return { fits:shell.getBoundingClientRect().right <= innerWidth+1 && pane.scrollWidth <= pane.clientWidth+1 && shell.scrollWidth <= shell.clientWidth+1,
             bodyHeight:b.height, footer:r.toJSON(), viewport:[innerWidth,innerHeight],
-            reachable:br.bottom<=innerHeight && br.left>=0 && br.right<=innerWidth &&
-              button.contains(document.elementFromPoint(br.x+br.width/2,br.y+br.height/2)) };
+            reachable:reachable && r.top>=0 && r.bottom<=innerHeight };
         });
         assert(await run(() => {
           const logo=document.querySelector('.panel:not(.hidden) .side-masthead .hw-brand');
@@ -360,11 +367,36 @@ app.whenReady().then(async () => {
     assert(pad, 'Controller pointer must activate over the front screen');
     assert.equal(await run(() => __frontQA.action), 'coop');
     report.checks.push('Controller pointer selects the existing co-op action');
-    // Browser-close fallback returns to the same menu without a trapped full-screen state.
-    await run(() => { window.close = () => {}; });
-    await click('#sm-exit');
-    assert(await run(() => !!document.querySelector('#sm-exit-back')));
-    await click('#sm-exit-back');
+    // Exercise the real utility dialogs without creating a network connection.
+    await run(() => {
+      window.close = () => {};
+      window.__frontDialogFits = panel => {
+        const r = panel.getBoundingClientRect();
+        return r.left >= 0 && r.top >= 0 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1 &&
+          panel.scrollWidth <= panel.clientWidth + 1 && Array.from(panel.querySelectorAll('button:not(:disabled), textarea')).every(control => {
+            control.scrollIntoView({ block:'nearest', inline:'nearest' });
+            const b = control.getBoundingClientRect();
+            return b.width > 0 && b.top >= 0 && b.bottom <= innerHeight + 1 && b.left >= 0 && b.right <= innerWidth + 1 &&
+              control.contains(document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2));
+          });
+      };
+      window.__frontLobbyPanel = () => Array.from(document.querySelectorAll('h2')).find(el => el.textContent === 'Co-op (Beta)').parentElement;
+    });
+    for (const [w,h,scale] of [[1600,1000,1],[1280,720,2],[390,844,1],[390,844,2],[320,568,2]]) {
+      win.setContentSize(w,h);
+      await run(s => document.documentElement.style.setProperty('--ui-scale', String(s)), scale);
+      await run(() => __frontQA.handlers.onCoop());
+      assert(await run(() => __frontDialogFits(__frontLobbyPanel())), `Co-op controls ${w}x${h}/${scale}`);
+      await run(() => Array.from(__frontLobbyPanel().querySelectorAll('button')).find(b => b.textContent === 'Join a Game').click());
+      assert(await run(() => __frontDialogFits(__frontLobbyPanel())), `Co-op invite form ${w}x${h}/${scale}`);
+      await run(() => Array.from(__frontLobbyPanel().querySelectorAll('button')).find(b => b.textContent === 'Close').click());
+      await click('#sm-exit');
+      assert(await run(() => !!document.querySelector('#sm-exit-back') && __frontDialogFits(document.querySelector('#start-menu'))), `Browser exit controls ${w}x${h}/${scale}`);
+      await click('#sm-exit-back');
+    }
+    win.setContentSize(1280,720);
+    await run(() => document.documentElement.style.setProperty('--ui-scale', '1'));
+    report.checks.push('Co-op controls/invite form and browser exit remain within the viewport and reachable at five viewport/scale combinations');
     // Electron versions differ in whether the nativeTheme test setter drives media;
     // CDP explicitly emulates the user preference for this regression.
     win.webContents.debugger.attach('1.3');

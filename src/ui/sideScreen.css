@@ -42,6 +42,7 @@ body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #hint-bar 
 .side-content { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .side-screen .side-content > * { flex-shrink: 0; }
 :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-head {
+  flex: 0 1 auto; min-height: 0;
   background: transparent; margin: 0; padding: 23px 28px 0; max-height: 44%; overflow: auto;
 }
 :is(#start-menu, #account-screen, #escape-menu) .side-screen h1 {
@@ -60,6 +61,8 @@ body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #hint-bar 
 }
 :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-foot {
   flex: 0 0 auto; display: flex; flex-direction: row; flex-wrap: wrap; justify-content: flex-end;
+  min-height: 0; max-height: var(--side-footer-max); overflow-y: auto; align-content: flex-start;
+  scrollbar-width: thin; scrollbar-color: var(--side-accent) var(--side-surface);
   gap: 10px; margin: 0; padding: 14px 28px; border-top: 1px solid var(--side-line); background: var(--side-surface);
 }
 :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-foot button {
