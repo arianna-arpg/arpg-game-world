@@ -34,9 +34,17 @@ including braziers when the parent kit supplies them.
 The native stamp placement rules still apply. A scoped footprint guard also
 protects district centers, connections, portal approaches, water, walls and
 authored fragment interiors. Decoration has separate seeded streams and cannot
-change the locale's walk grid. Existing discoveries without the saved
-`localeDecoration` field retain their original terrain; this does not reset or
-reroll saved regions. Co-op receives the host's final placed doodads.
+change the locale's walk grid. Existing adventure regions without the saved
+`localeDecoration` field gain it on world resume, or on their next visit in an
+already-running session. The migration recovers the root's saved tileset,
+variant and forest parameters, then copies the decoration to missing sections.
+If a tileset has retired, a private deterministic stream selects a replacement
+from the saved biome; an unknown variant uses that tileset's base decoration.
+Existing decoration records, including density zero, are preserved. The
+upgrade changes only decoration: plans, seeds, graph, objectives, passage
+access, partial work and remembered contents remain intact. Saving persists
+the resolved kit, so later visits do not repeat migration. Co-op receives the
+host's final placed doodads.
 
 `registerStamp` accepts an optional third argument to opt a scenery-only handler
 into inheritance. It must preserve terrain, POIs and gameplay lists. The

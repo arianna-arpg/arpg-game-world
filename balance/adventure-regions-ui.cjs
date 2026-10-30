@@ -139,9 +139,10 @@ app.whenReady().then(async () => {
         __game.devStartRun('warrior'); __game.hold(true); __game.ui.hideAll();
         const w = __game.world(), fixture = ${JSON.stringify(fixtures[index])};
         w.player.level = 10; w.player.invulnerable = true;
-        for (const z of fixture) w.zoneMap[z.id] = z;
+        for (const z of fixture) { delete z.localeDecoration; w.zoneMap[z.id] = z; }
         const zone = fixture.find(z => z.complex.stage === ${JSON.stringify(stage)});
         w.loadZone(zone.id);
+        if (fixture.some(z => !z.localeDecoration)) throw Error('legacy region decoration did not migrate on entry');
         const d = zone.locale.districts.find(d => d.id !== zone.locale.entrance);
         if (d) Object.assign(w.player.pos, { x: d.at[0] * zone.size.w, y: d.at[1] * zone.size.h });
         __game.step(2);
@@ -150,6 +151,6 @@ app.whenReady().then(async () => {
       await capture('adventure-' + stage);
     }
     assert.deepEqual(errors, []);
-    console.log('PASS board at two resolutions, UI accept/collect, timed cache interactions, round-trip passage travel, four rendered terrain families, no browser errors');
+    console.log('PASS board at two resolutions, UI accept/collect, timed cache interactions, round-trip passage travel, four migrated terrain families, no browser errors');
   } finally { if (!preview) { clearTimeout(timer); win.destroy(); server.server.close(); app.quit(); } }
 }).catch(e => { console.error(e); app.exit(1); });

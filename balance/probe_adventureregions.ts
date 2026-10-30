@@ -8,6 +8,7 @@ import { ADVENTURE_REGION_IDS } from '../src/data/adventureRegions';
 import { landmarkComplexes, resolveComplexForm, validateLandmarkComplex } from '../src/world/landmarkComplexes';
 import { placeZoneAt } from '../src/engine/worldgen';
 import { materializeComplex } from '../src/engine/landmarkComplexGen';
+import { migrateAdventureDecoration } from '../src/engine/biomeDecoration';
 import { generateLayout, isDecorationStamp, registerStamp, stampSingle } from '../src/engine/levelgen';
 import { TILESETS } from '../src/data/tilesets';
 import { GridWalkField } from '../src/world/gridWalk';
@@ -85,6 +86,40 @@ for (const def of definitions) {
   }
   fixtures.push(structuredClone(members));
 
+}
+
+// Legacy children did not save the rolled face. The root remains the source;
+// migration order cannot redeal palettes or rewrite anything beyond dressing.
+for (const fixture of fixtures) {
+  const old = structuredClone(fixture);
+  for (const z of old) { delete z.localeDecoration; if (z.id !== z.complex!.root) delete z.variantName; }
+  const original = structuredClone(old);
+  const map = Object.fromEntries(old.map(z => [z.id, z]));
+  const reversed = Object.fromEntries(structuredClone(old).reverse().map(z => [z.id, z]));
+  assert.equal(migrateAdventureDecoration(map), old.length);
+  assert.equal(migrateAdventureDecoration(reversed), old.length);
+  for (const z of old) {
+    assert.deepEqual(z.localeDecoration, fixture.find(f => f.id === z.id)!.localeDecoration, 'legacy receives the same parent kit as a new region');
+    assert.deepEqual(z, reversed[z.id], 'root-first/child-first traversal is equivalent');
+    const { localeDecoration: _decoration, ...unchanged } = z;
+    assert.deepEqual(unchanged, original.find(f => f.id === z.id), 'migration changes only decoration');
+  }
+  old[0].localeDecoration!.density = 0;
+  const once = structuredClone(old);
+  assert.equal(migrateAdventureDecoration(map), 0);
+  assert.deepEqual(old, once, 'existing records and explicit opt-outs are preserved');
+}
+{
+  const source = structuredClone(fixtures[3]);
+  for (const z of source) { delete z.localeDecoration; z.tileset = 'retired_face'; }
+  const one = Object.fromEntries(source.map(z => [z.id, z]));
+  const two = structuredClone(one);
+  assert.equal(migrateAdventureDecoration(one), source.length, 'older records can use their saved biome');
+  migrateAdventureDecoration(two);
+  assert.deepEqual(one, two, 'fallback never draws from live game randomness');
+  assert(Object.values(one).every(z => !z.localeDecoration!.trees), 'mountain fallback stays in mountain country');
+  const plain = structuredClone(fixtures[0][0]); delete plain.complex; delete plain.localeDecoration;
+  assert.equal(migrateAdventureDecoration({ [plain.id]: plain }), 0, 'migration is scoped to adventure regions');
 }
 
 for (const fixture of fixtures) {
@@ -213,19 +248,57 @@ assert(w.bountyOffers.some(p => p.boardId === oldRoot && p.kind === 'passage'), 
   for (const z of old) legacy.zoneMap[z.id] = z;
   legacy.loadZone(root.id); legacy.completedObjectives.add(task.id);
   const saved = JSON.parse(JSON.stringify(serializeCharacter(legacy)));
+  // Emulate a file written before decoration inheritance existed.
+  for (const z of saved.world.zones) if (z.complex?.root === root.id) delete z.localeDecoration;
   const resumed = makeSimWorld('warrior', 17182);
   assert(applySavedCharacter(resumed, saved) && resumed.adoptWorldState(saved.world));
   const before = JSON.stringify(old.map(z => z.locale));
   assert.deepEqual(materializeComplex(resumed.zoneMap[root.id], resumed.zoneMap, 'woodland_sanctuary'), []);
   resumed.loadZone(root.id);
-  assert.equal(resumed.zone.localeDecoration, undefined, 'legacy terrain does not silently gain a new decoration recipe');
+  assert(resumed.zone.localeDecoration?.layout.length, 'saved adventure receives biome decoration on resume');
+  assert(resumed.doodads.some(d => ['forest_oak', 'tree', 'conifer'].includes(d.kind)), 'legacy forest renders its new canopy');
   Object.assign(resumed.player.pos, resumed.bountyBoardsHere().find(b => b.id === root.id)!.pos);
   resumed.armBountyBoard(root.id);
   const hand = resumed.bountyOffers.find(p => p.boardId === root.id && p.kind === 'passage')!;
   assert(hand && resumed.acceptBounty(hand.id) && resumed.turnInBounty(hand.id));
   assert(resumed.zoneMap[task.id].complex!.bountyPassage!.opened);
   assert.equal(JSON.stringify(old.map(z => resumed.zoneMap[z.id].locale)), before);
+  const upgraded = JSON.parse(JSON.stringify(serializeCharacter(resumed)));
+  const twice = makeSimWorld('warrior', 17182);
+  assert(applySavedCharacter(twice, upgraded) && twice.adoptWorldState(upgraded.world));
+  for (const z of old) assert.deepEqual(twice.zoneMap[z.id].localeDecoration, resumed.zoneMap[z.id].localeDecoration);
+  assert(twice.zoneMap[task.id].complex!.bountyPassage!.opened, 'upgraded save retains collected access');
   console.log('PASS version-two saved woodland retains its original board, access commission and terrain');
+}
+
+// A live-session revisit uses the same upgrade and invalidates a hot save memo.
+// Partial work and remembered loot/survivors stay intact through file resume.
+{
+  const live = makeSimWorld('warrior', 99013); live.player.level = 10;
+  const digs = (world: typeof live) => (world as unknown as { digs: { charge: number }[] }).digs;
+  const region = structuredClone(fixtures[0]);
+  for (const z of region) live.zoneMap[z.id] = z;
+  const task = region.find(z => z.complex?.bountyPassage)!;
+  live.loadZone(task.id);
+  assert(digs(live).length > 0);
+  digs(live)[0].charge = 0.5;
+  const before = JSON.parse(JSON.stringify(serializeCharacter(live)));
+  for (const z of region) delete z.localeDecoration;
+  // Warm the serializer with a genuinely old set of records.
+  live.invalidateZonesSaveMemo();
+  const oldSave = JSON.parse(JSON.stringify(serializeCharacter(live)));
+  const loaded = makeSimWorld('warrior', 99013);
+  assert(applySavedCharacter(loaded, oldSave) && loaded.adoptWorldState(oldSave.world));
+  loaded.loadZone(task.id);
+  assert.equal(digs(loaded)[0].charge, 0.5, 'partial objective charge survives migration');
+  const after = JSON.parse(JSON.stringify(serializeCharacter(loaded)));
+  const remembered = (save: typeof oldSave) => save.world.memory.find((m: { zoneId: string }) => m.zoneId === task.id);
+  assert.deepEqual(remembered(after).contents, remembered(before).contents, 'remembered loot and furniture survive');
+  live.loadZone(task.id);
+  const revisited = JSON.parse(JSON.stringify(serializeCharacter(live)));
+  for (const z of region) assert(revisited.world.zones.find((s: ZoneDef) => s.id === z.id).localeDecoration, 'upgraded family is saved immediately');
+  assert.equal(digs(live)[0].charge, 0.5);
+  console.log('PASS legacy biome migration is additive, idempotent, saved, and preserves partial objectives and contents');
 }
 
 // Two extension providers must compete by weight, not insertion order.

@@ -12,8 +12,8 @@ import { clamp } from '../core/math';
 import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
 import { TILESETS, pickCaveFace, pickDockTileset, pickTilesetForBiome, pickTilesetVariant, type TilesetDef, type TilesetVariant } from '../data/tilesets';
-import { hasLayout, isDecorationStamp } from './levelgen';
-import { FOREST_TREES, FOREST_UNDERSTORY, type ForestTreeMix } from '../data/biomeDecoration';
+import { hasLayout } from './levelgen';
+import { bakeBiomeDecoration } from './biomeDecoration';
 import { registerGenPin } from './genPins';
 import { lairLandmarkRolls } from './lairs';
 import { darkFloorAt, deeperChanceAt, levelStepAt, namePrefixAt } from '../world/strata';
@@ -1671,10 +1671,6 @@ export function placeZoneAt(
   // ZoneDef.camera ▷ Settings ▷ CAMERA_CFG.default) picks it up unchanged.
   // Absent everywhere = no key, byte-identical — no draw burns either way.
   const camera = spec.camera ?? tileset.camera;
-  // Keep the receiving face's decoration, independently of the locale geometry.
-  // Forest recipes own their canopy outside layout rows: inherit that palette too.
-  const forestTrees = layoutParams.forestTrees as ForestTreeMix[] | undefined
-    ?? (tileset.forceLayout === 'forest' || (biome && BIOMES[biome]?.allowedLayouts?.forest) ? FOREST_TREES : undefined);
   const def: ZoneDef = {
     id, name, level,
     ...(locale ? { locale, destination } : {}),
@@ -1690,11 +1686,7 @@ export function placeZoneAt(
     theme: spec.special ? SPECIAL_ARENA_THEME
       : variantTheme ? { ...tileset.theme, ...variantTheme } : tileset.theme,
     layout: locale ? [] : layout,
-    ...(locale ? { localeDecoration: {
-      density: 0.65,
-      layout: structuredClone([...(forestTrees?.length ? FOREST_UNDERSTORY : []), ...layout.filter(s => isDecorationStamp(s.kind))]),
-      ...(forestTrees?.length ? { trees: structuredClone(forestTrees) } : {}),
-    } } : {}),
+    ...(locale ? { localeDecoration: bakeBiomeDecoration(tileset, layout, biome, layoutParams) } : {}),
     ...(layoutType !== 'plains' ? { layoutType } : {}),
     objective: objectiveFinal,
     // The biome's puzzle repertoire + ambient scenery-actors ride the def

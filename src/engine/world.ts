@@ -1,4 +1,5 @@
 import { FrameArts, frameOf } from './frameArts';
+import { migrateAdventureDecoration } from './biomeDecoration';
 import { CohortArts } from './cohortArts';
 import { summonSchoolSkill } from './skills';
 import { SummonArts } from './summonArts';
@@ -5974,6 +5975,8 @@ export class World {
     const firstVisit = !isCave && !this.visited.has(zoneId);
     if (zoneId === START_ZONE) this.refoldTownStations(); // THE STATION FOLD
     const def = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
+    if (def.locale && def.complex && def.localeDecoration === undefined
+      && migrateAdventureDecoration(this.zoneMap, def.complex.root)) this.invalidateZonesSaveMemo();
     this.zone = def;
     // The zone's own entry beat: the renderer exempts LOAD-time population
     // from the spawn-in grow (only true mid-play arrivals swell in).
@@ -18159,6 +18162,7 @@ export class World {
     const healed = sanitizeWorldZones(ws.zones, claimed);
     if (!healed) return false;
     this.zoneMap = healed;
+    if (migrateAdventureDecoration(healed)) this.invalidateZonesSaveMemo();
     this.townStationKey = '';
     const savedTownTier = TOWN_TIERS.findIndex(t => t.w === healed[START_ZONE].size.w && t.h === healed[START_ZONE].size.h);
     this.townTierIdx = Math.max(this.townTierIdx, savedTownTier);
