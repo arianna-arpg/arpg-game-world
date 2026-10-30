@@ -1809,7 +1809,7 @@ export function serializeZone(world: World): ZoneMsg {
   return {
     zoneId: world.zone.id, name: world.zone.name, level: world.zone.level,
     ...(world.zone.locale ? { locale: structuredClone(world.zone.locale) } : {}),
-    ...(world.zone.complex ? { complex: { ...world.zone.complex } } : {}),
+    ...(world.zone.complex ? { complex: structuredClone(world.zone.complex) } : {}),
     ...(world.zone.destination ? { destination: structuredClone(world.zone.destination) } : {}),
     ...(world.zone.journey ? { journey: { ...world.zone.journey } } : {}),
     ...(world.zone.geo ? { geo: structuredClone(world.zone.geo) } : {}),
@@ -1862,7 +1862,7 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.zone.level = msg.level;
   if (msg.locale) world.zone.locale = structuredClone(msg.locale);
   else delete world.zone.locale;
-  if (msg.complex) world.zone.complex = { ...msg.complex };
+  if (msg.complex) world.zone.complex = structuredClone(msg.complex);
   else delete world.zone.complex;
   if (msg.destination) world.zone.destination = structuredClone(msg.destination);
   else delete world.zone.destination;

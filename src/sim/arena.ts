@@ -52,6 +52,7 @@ import '../data/commanders'; // the tutorial factions (the Fathers) — under ev
 import '../data/locales';
 import '../data/authoredMaps'; // THE AUTHORED-MAP FABRIC's shipped maps (+ the 'authored' layout via engine/authoredMaps)
 import '../data/bountyJourneys';
+import '../data/bountyPassages';
 import '../data/bountyExpeditions'; // the bounty board's 'expedition' kind (mints an authored map at the take)
 import { validateContent } from '../data/validate';
 import { registerAllPackageFactions } from '../packages/factionGen';

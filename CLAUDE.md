@@ -1,3 +1,11 @@
+Adventure composition uses saved complex forms and locale plans, with optional
+native objectives and bounty-opened leaves. New side ground can carry no task;
+the woodland and highland journeys remain open while their activities wait.
+See [adventure regions](docs/worldgen/adventure-regions.md). Verify
+adventureregions, generationdiversity, complexes, locales, landforms, bounty,
+objectives, puzzles, genqa, all types and sim smoke; build before the hidden
+adventure-regions-ui course and generation-diversity-ui contact sheet.
+
 Bone Golem frame abilities, the four-point routes, support routing and lifecycle checks are documented in [bone-golem](docs/design/bone-golem.md). Verify bonegolem, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden bone-golem-ui course.
 Skeleton Warrior infantry, spectral heirs, Spellsword choices and the shared Mage/Warrior node picker are documented in [skeleton-warrior](docs/design/skeleton-warrior.md). Verify skeletonwarrior, skeletonmage, skeletonarcher, necromancercourts, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden skeleton-mage-ui and skeleton-warrior-ui courses.
 Strike-timing disciplines compose independently through engine/strikeTiming.ts.

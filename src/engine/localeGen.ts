@@ -248,4 +248,8 @@ registerLayout(LOCALE_LAYOUT, (ctx, def) => {
   if (!plan) throw new Error('district layout requires a registered locale program');
   if (plan.underTier) def.layoutParams = { ...def.layoutParams, underTier: plan.underTier };
   generateLocale(ctx, plan, def.layoutParams?.riverSides as string[] | undefined);
+  if (def.complex?.bountyPassageBoard && !ctx.lite) {
+    const pos = ctx.localeReport!.districts.find(d => d.id === plan.entrance)!.center;
+    ctx.doodads.push({ kind: 'bounty_board', pos: { ...pos }, radius: 28 });
+  }
 });
