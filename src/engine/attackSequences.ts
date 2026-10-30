@@ -1,4 +1,5 @@
 import type { Actor } from './actor';
+import { buffWithSource } from './buffSource';
 import type { Projectile, World } from './world';
 import { dist, type Vec2 } from '../core/math';
 import { instanceDelivery, instanceMods, skillContextTags,
@@ -115,8 +116,8 @@ export class AttackSequences {
     const v = s.spec.vulnerability;
     if (v) {
       target.removeBuff(s.key + ':vulnerability');
-      if (!maximum && !target.dead && target.life > 0) target.addBuff({ type: 'buff', id: s.key + ':vulnerability',
-        label: v.label, duration: v.duration, mods: [mod('damageTaken', 'increased', v.perStack * step)] });
+      if (!maximum && !target.dead && target.life > 0) target.addBuff(buffWithSource({ type: 'buff', id: s.key + ':vulnerability',
+        label: v.label, duration: v.duration, mods: [mod('damageTaken', 'increased', v.perStack * step)] }, s.host));
     }
     const rhythm = s.spec.rhythm;
     if (rhythm && !target.dead && target.life > 0) {
@@ -132,7 +133,7 @@ export class AttackSequences {
       }
     }
     if (maximum && s.spec.cycleBuff && !owner.dead) {
-      const buff = { ...s.spec.cycleBuff, id: s.key + ':maximum' };
+      const buff = buffWithSource({ ...s.spec.cycleBuff, id: s.key + ':maximum' }, s.host);
       owner.addBuff(buff, owner.sheet.get('effectDuration', skillContextTags(inst), instanceMods(inst)));
       s.buffs.set(owner, buff);
     }
@@ -305,8 +306,8 @@ export class AttackSequences {
             r.cast.caught++;
             if (s.spec.catchBuff) {
               s.caught = Math.min(s.spec.catchBuff.max, s.caught + 1);
-              owner.addBuff({ type: 'buff', id: s.key + ':catch', label: s.spec.catchBuff.label,
-                duration: 999999, maxStacks: s.spec.catchBuff.max, mods: [] });
+              owner.addBuff(buffWithSource({ type: 'buff', id: s.key + ':catch', label: s.spec.catchBuff.label,
+                duration: 999999, maxStacks: s.spec.catchBuff.max, mods: [] }, s.host));
             }
             const inherited = this.w.inheritedFlight(r.projectile);
             const nova = this.payload(s, r.cast.inst, { ...s.spec.thrown!, count: b.nova.count, ring: { phaseJitter: true },

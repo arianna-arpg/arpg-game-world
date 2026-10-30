@@ -9,6 +9,7 @@ import { damageTextRows } from './vis/damageText';
 import { RewardLabelLayout } from './vis/rewardLabels';
 import { combatTargetStrength } from './vis/combatTargets';
 import { buffReadoutLines, drawBuffReadout } from './vis/buffReadout';
+import { buffIconRect, drawBuffIcon, buffAuxiliaryLift } from './vis/buffIcons';
 import { drawSkillIcon } from './skillIcons';
 import { statusIcons, layoutStatusIcons, drawStatusIcons, drawStatusIconHover, type StatusIconHover } from './vis/statusIcons';
 import { drawMeleeReach } from './vis/meleeReachLayer';
@@ -7779,6 +7780,11 @@ export class Renderer {
     // Skill bar
     ctx.textAlign = 'center';
     const keyLabels = this.slotKeys(padLabels);
+    const procCues = procCueRows(p);
+    const buffMirrorCues = procCues.filter(row => row.phase === 'stored' && !row.id.startsWith('rune:') && !p.buffs.has(row.id));
+    const buffCharges = [...p.charges].filter(([name, count]) => count > 0 && !(CHARGE_DEFS[name]?.hud === 'slot'
+      && p.skills.some(s => s && instanceChargeCost(s)?.charge === name)));
+    const buffAuxY = by - buffAuxiliaryLift(p.buffs.size + buffMirrorCues.length + buffCharges.length, totalW);
     for (let i = 0; i < p.skills.length; i++) {
       const x = bx + i * (slot + gap);
       const inst = p.skills[i];
@@ -8216,23 +8222,23 @@ export class Renderer {
         }
         if (def.id === 'command_assault' && p.assaultHud) {
           const h = p.assaultHud;
-          ctx.fillStyle = '#292516'; ctx.fillRect(x, by - 46, slot, 5);
-          ctx.fillStyle = '#efcc73'; ctx.fillRect(x, by - 46, slot * h.progress, 5);
+          ctx.fillStyle = '#292516'; ctx.fillRect(x, buffAuxY - 46, slot, 5);
+          ctx.fillStyle = '#efcc73'; ctx.fillRect(x, buffAuxY - 46, slot * h.progress, 5);
           ctx.font = 'bold 9px Verdana'; ctx.textAlign = 'center'; ctx.fillStyle = '#f2dda3';
-          ctx.fillText('Next: ' + h.hits + (h.hits === 1 ? ' hit' : ' hits'), x + slot / 2, by - 50);
+          ctx.fillText('Next: ' + h.hits + (h.hits === 1 ? ' hit' : ' hits'), x + slot / 2, buffAuxY - 50);
         }
         if (def.hivecall && p.hivecallHud) {
           const h = p.hivecallHud;
           const transformed = h.remaining !== undefined;
           const fraction = transformed ? h.remaining! / HIVECALL.duration : h.meter / HIVECALL.meterMax;
-          ctx.fillStyle = '#182117'; ctx.fillRect(x, by - 46, slot, 5);
-          ctx.fillStyle = '#b8d060'; ctx.fillRect(x, by - 46, slot * clamp(fraction, 0, 1), 5);
+          ctx.fillStyle = '#182117'; ctx.fillRect(x, buffAuxY - 46, slot, 5);
+          ctx.fillStyle = '#b8d060'; ctx.fillRect(x, buffAuxY - 46, slot * clamp(fraction, 0, 1), 5);
           ctx.font = 'bold 9px Verdana'; ctx.textAlign = 'center';
           ctx.fillStyle = '#d8ec9a';
           const label = transformed ? h.remaining!.toFixed(1) + 's form'
             : inst.treeNodes?.includes('royal_guard') ? Math.floor(h.meter) + ' / 100'
             : h.rebirth !== undefined ? h.rebirth.toFixed(1) + 's hatch' : 'Hive ready';
-          ctx.fillText(label, x + slot / 2, by - 50);
+          ctx.fillText(label, x + slot / 2, buffAuxY - 50);
         }
         // Socketed gem pips
         let gx = x + 6;
@@ -8264,68 +8270,55 @@ export class Renderer {
       }
     }
 
-    // Buff pips — RAISED above the meta-button row so both always read;
-    // hovering a pip describes its actual native modifier payload.
-    const buffY = by - 40;
-    const procCues = procCueRows(p);
-    let bpx = bx;
-    let hoverLabel: { x: number; lines: string[] } | null = null;
+    // Skill-attributed buffs wrap above the meta row, keeping native hover text.
+    const buffBottom = by - VIS_CFG.buffIcons.barClearance;
+    let buffIndex = 0;
+    let hoverLabel: { x: number; y: number; lines: string[] } | null = null;
     for (const [id, buff] of p.buffs) {
+      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
       const procCue = procCues.find(row => row.id === id && row.phase === 'stored');
-      if (procCue) drawProcBuff(ctx, procCue, bpx + 5, buffY + 5);
-      else { ctx.fillStyle = '#c8a84b'; ctx.fillRect(bpx, buffY, 10, 10); }
-      if (buff.stacks > 1) {
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 9px Verdana';
-        ctx.fillText(String(buff.stacks), bpx + 5, buffY - 2);
+      drawBuffIcon(ctx, buff, rect, procCue);
+      const mx = this.uiMouse.x, myv = this.uiMouse.y;
+      if (mx >= rect.x && mx < rect.x + rect.w && myv >= rect.y && myv < rect.y + rect.h) {
+        hoverLabel = { x: rect.x + rect.w / 2, y: rect.y, lines: buffReadoutLines(id, buff) };
       }
-      const mx = this.uiMouse.x, myv = this.uiMouse.y; // virtual-space, matching the scaled pip rects
-      if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
-        hoverLabel = { x: bpx + 5, lines: buffReadoutLines(id, buff) };
-      }
-      bpx += 14;
     }
     // Host-resolved procCues also populate the bank row on a co-op mirror,
     // whose stripped-down actor does not reconstruct the host's buff definitions.
-    for (const procCue of procCues) {
-      if (procCue.phase !== 'stored' || procCue.id.startsWith('rune:') || p.buffs.has(procCue.id)) continue;
-      drawProcBuff(ctx, procCue, bpx + 5, buffY + 5);
+    for (const procCue of buffMirrorCues) {
+      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
+      drawProcBuff(ctx, procCue, rect.x + rect.w / 2, rect.y + rect.h / 2);
       if (procCue.count > 1) {
         ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Verdana';
-        ctx.fillText(String(procCue.count), bpx + 5, buffY - 2);
+        ctx.fillText(String(procCue.count), rect.x + rect.w / 2, rect.y - 2);
       }
-      bpx += 14;
     }
     // Charge pips (combo resources) next to the buffs, registry-tinted.
     // 'slot'-homed charges (flask founts) draw on their SPENDER's hotbar
     // slot instead — skipped here only while such a spender is slotted,
     // so an unslotted fount's bank still reads somewhere.
-    for (const [name, count] of p.charges) {
-      if (count <= 0) continue;
-      if (CHARGE_DEFS[name]?.hud === 'slot'
-        && p.skills.some(s => s && instanceChargeCost(s)?.charge === name)) continue;
+    for (const [name, count] of buffCharges) {
+      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
+      const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
       ctx.fillStyle = chargeColor(name);
       ctx.beginPath();
-      ctx.arc(bpx + 5, buffY + 5, 5, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 9px Verdana';
-      ctx.fillText(`${count}`, bpx + 5, buffY - 2);
-      const mx = this.uiMouse.x, myv = this.uiMouse.y; // virtual-space, matching the scaled pip rects
-      if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
-        hoverLabel = { x: bpx + 5, lines: [chargeLabel(name)] };
+      ctx.fillText(`${count}`, cx, rect.y - 2);
+      const mx = this.uiMouse.x, myv = this.uiMouse.y;
+      if (mx >= rect.x && mx < rect.x + rect.w && myv >= rect.y && myv < rect.y + rect.h) {
+        hoverLabel = { x: cx, y: rect.y, lines: [chargeLabel(name)] };
       }
-      bpx += 18;
     }
-    if (hoverLabel) drawBuffReadout(ctx, hoverLabel.lines, hoverLabel.x, buffY - 8, w);
-
     // INVOCATION RUNES: the woven SEQUENCE as ordered diamonds above the
     // bar's right edge — order is the whole grammar, so it must read.
     if (p.runes.length > 0) {
       const rx0 = bx + totalW - p.runes.length * 16;
       for (let i = 0; i < p.runes.length; i++) {
         const info = RUNE_INFO[p.runes[i] as keyof typeof RUNE_INFO];
-        const rx = rx0 + i * 16, ry = by - 54;
+        const rx = rx0 + i * 16, ry = buffAuxY - 54;
         ctx.fillStyle = info?.color ?? '#c8a8e8';
         ctx.beginPath();
         ctx.moveTo(rx, ry - 7);
@@ -8342,8 +8335,8 @@ export class Renderer {
 
     // comboCueRows shares consumed progress with body tells and the host wire;
     // completion closes the pattern into its body-matched signature.
-    drawComboHud(ctx, bx + 8, by - 54, comboCueRows(p, world.time));
-    drawProcHud(ctx, procCues, bx + totalW / 2, by - (seat.home && p.possession ? 108 : 78));
+    drawComboHud(ctx, bx + 8, buffAuxY - 54, comboCueRows(p, world.time));
+    drawProcHud(ctx, procCues, bx + totalW / 2, buffAuxY - (seat.home && p.possession ? 108 : 78));
 
     // THE POSSESSION STRIP (the possession seam, engine/possess.ts): while
     // the local seat rides a foreign body, one centered chip above the bar
@@ -8356,7 +8349,7 @@ export class Renderer {
       const home = seat.home;
       const ride = home ? p.possession : undefined;
       if (home && ride) {
-        const cy = by - 74;
+        const cy = buffAuxY - 74;
         const remain = ride.until !== undefined ? Math.max(0, ride.until - world.time) : null;
         const title = ride.kind === 'shift'
           ? `${p.name}` : `riding ${p.name}`;
@@ -8391,6 +8384,9 @@ export class Renderer {
         ctx.textAlign = 'center';
       }
     }
+
+    // The hover card paints above every auxiliary lane it may cover.
+    if (hoverLabel) drawBuffReadout(ctx, hoverLabel.lines, hoverLabel.x, hoverLabel.y - 8, w);
 
     // XP bar — tucked between the key-label row above and the DOM hint bar
     // below (its box top sits at ~h-17; +16 keeps the bar fully clear of it).

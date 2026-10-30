@@ -49,6 +49,13 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Buff icons use copied granting-skill identity through `engine/buffSource.ts`
+and the shared hotbar artwork. `VIS_CFG.buffIcons` configures size, layout and
+the top-down grayscale warning during the last five seconds. See
+`docs/ui/buff-icons.md`; verify all types, `balance/buff-icons-check.ts`,
+proccues/sympathy/shieldup/devotedstartertrees and the hidden
+`balance/buff-icons-ui.cjs` after its isolated build.
+
 Pause-menu Save & Exit now selects Main Menu or Desktop through the shell's
 save/session owner. Browser close refusal retains a safe-to-close screen;
 desktop quit waits for disk writes and bypasses return-to-launcher. See
