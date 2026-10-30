@@ -5327,7 +5327,7 @@ export const SKILLS: Record<string, SkillDef> = {
     baseDamage: { physical: [10, 15] },
     delivery: {
       type: 'projectile', speed: 620, radius: 7, range: 460, pierce: 1,
-      plantOnLand: { duration: 10, life: 30 },
+      plantOnLand: { duration: 10, life: 30, look: 'object_pinning_spear' },
     },
     effects: [
       { type: 'damage' },
@@ -11576,7 +11576,7 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: {
       type: 'projectile', speed: 620, radius: 9, range: 380, pierce: 2,
       plantOnLand: {
-        duration: 10, life: 30,
+        look: 'object_impale_lance', duration: 10, life: 30,
         embed: { runOver: 'detonate', detonateSkillId: 'lance_burst' },
       },
     },
@@ -11647,7 +11647,7 @@ export const SKILLS: Record<string, SkillDef> = {
       type: 'projectile', speed: 540, radius: 7, range: 420,
       count: 4, spreadDeg: 46,
       plantOnLand: {
-        duration: 6, life: 20,
+        look: 'object_arclight_arrow', duration: 6, life: 20,
         embed: { beam: { interval: 1.0, range: 300, damageScale: 0.6, width: 11 } },
       },
     },
@@ -12523,7 +12523,7 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: {
       type: 'projectile', speed: 600, radius: 11, range: 420,
       duration: 5, rehit: 0.7,
-      caroms: { anchors: 4, window: 4, hang: { triggerRadius: 90, duration: 24 } },
+      caroms: { anchors: 4, window: 4, hang: { triggerRadius: 90, duration: 24, look: 'object_hanging_arrow' } },
     },
     effects: [{ type: 'damage' }],
     requirements: { dexterity: 24 },

@@ -715,6 +715,12 @@ export function instanceTargeting(inst: SkillInstance): TargetingSpec | undefine
   return inst.def.targeting;
 }
 
+/** Fit-gated socket overrides, then innate appearance, then the caller's family default. */
+export function instanceConstructLook(inst: SkillInstance, role: keyof ConstructLookOverrides, fallback: string): string {
+  for (const s of hostSockets(inst)) if (s.def.constructLooks?.[role]) return s.def.constructLooks[role]!;
+  return inst.def.constructLooks?.[role] ?? fallback;
+}
+
 /** The turret conversion riding an instance, if any (Risen Offering). */
 export function instanceTurret(inst: SkillInstance): { castSkillId: string; life?: number; look?: string } | undefined {
   for (const s of hostSockets(inst)) if (s.def.turret) return s.def.turret;
@@ -1347,7 +1353,7 @@ export interface ProjectileDelivery {
    *  (Tripwire Web strings fences between planted spears). With `embed`
    *  set, the plant is an EMBEDMENT: run-over triggers, emissions, sibling
    *  beams (Impale Lance's spears, Arclight Rain's lodged arrows). */
-  plantOnLand?: { duration: number; life?: number; embed?: EmbedSpec };
+  plantOnLand?: { duration: number; life?: number; embed?: EmbedSpec; look?: string };
   /** Ball Lightning: while in flight, periodically ZAP everything within
    *  `radius` for `damageScale` of the skill's roll. */
   zap?: { interval: number; radius: number; damageScale?: number };
@@ -1404,7 +1410,7 @@ export interface ProjectileDelivery {
    *  or when the key is pressed again (the manual loose). */
   caroms?: {
     anchors: number; window: number;
-    hang?: { triggerRadius?: number; duration?: number };
+    hang?: { triggerRadius?: number; duration?: number; look?: string };
   };
   /** FISSURE TRAIL (Earthrender): the projectile IS the tear-head of a
    *  travelling CRACK — every `radius × 1.1` units of flight it rips a
@@ -4388,7 +4394,11 @@ export type SkillEffect =
 
 // --- The skill definition ---------------------------------------------------
 
+/** Appearance of bodies created by support/stat conversions, independent of payload. */
+export type ConstructLookOverrides = Partial<Record<'spiritTotem' | 'channelVessel', string>>;
+
 export interface SkillDef {
+  constructLooks?: ConstructLookOverrides;
   projectileArts?: ProjectileArtsSpec;
   icon?: string;
   bodyMotion?: string | false;
@@ -5476,6 +5486,7 @@ export function treePickOpen(inst: SkillInstance): boolean {
 // ---------------------------------------------------------------------------
 
 export interface SupportDef {
+  constructLooks?: ConstructLookOverrides;
   id: string;
   name: string;
   description: string;
@@ -6211,7 +6222,7 @@ export function supportFits(sup: SupportDef, skill: SkillDef): boolean {
  *  drop plumbing. Everything else on a def is a payload of some kind. */
 const SUPPORT_IDENTITY_FIELD_LIST = [
   'id', 'name', 'description', 'color', 'requiresTags', 'excludeTags',
-  'requiresMechanisms',
+  'requiresMechanisms', 'constructLooks', // presentation only; no mechanical ablation unit
   'maxLevel', 'weight', 'minDropLevel', 'dropTags',
 ] as const satisfies readonly (keyof SupportDef)[];
 

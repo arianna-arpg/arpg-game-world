@@ -1,4 +1,5 @@
 import { Actor } from './actor';
+import { SECONDARY_LOOKS } from '../data/secondaryVisuals';
 import { buffWithSource } from './buffSource';
 import type { World } from './world';
 import { angleTo, dist, type Vec2 } from '../core/math';
@@ -168,6 +169,8 @@ export class Challenges {
       const creeper = new Actor('Burrowing Pursuer', body.team, { ...at });
       creeper.owner = state.owner; creeper.sourceSkillId = `__goad_creeper:${body.id}`;
       creeper.tier = body.tier; creeper.radius = 8; creeper.color = '#b39364'; creeper.shape = 'circle';
+      creeper.look = state.spec.creeper.look ?? SECONDARY_LOOKS.pursuer;
+      creeper.fillResources(); // a fresh invulnerable body must not advertise a false wound
       creeper.passive = true; creeper.untargetable = true; creeper.invulnerable = true; creeper.noBounty = true;
       this.w.actors.push(creeper); effigy.creeper = creeper;
     }
@@ -221,7 +224,9 @@ export class Challenges {
     const phase = this.w.time * 3 + e.body.id, radius = target ? 34 : Math.min(65, e.radius * 0.4);
     let at = { x: e.center.x + Math.sin(phase) * radius, y: e.center.y + Math.sin(phase * 2) * radius * 0.5 };
     const reach = dist(at, e.body.pos); if (reach > e.radius) at = { x: e.body.pos.x + (at.x - e.body.pos.x) * e.radius / reach, y: e.body.pos.y + (at.y - e.body.pos.y) * e.radius / reach };
-    c.pos = this.w.clampPos(at, c.radius);
+    const next = this.w.clampPos(at, c.radius);
+    if (dist(c.pos, next) > .001) c.facing = angleTo(c.pos, next);
+    c.pos = next;
     if (this.w.time >= e.trailAt) {
       e.trailAt = this.w.time + 0.2;
       const trail = this.payload(e.cast, { type: 'ground', radius: s.trailRadius, delay: 0, castRange: 9999, lingerDuration: s.trailDuration, tickInterval: 0.3 }, 'Burrow Wake');

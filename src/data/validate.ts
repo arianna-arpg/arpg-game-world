@@ -97,6 +97,7 @@ import { hasCommandKind } from '../engine/ai';
 import { hasConvertRule } from '../engine/skills';
 import { DOODAD_VISUALS } from './doodadVisuals';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS, LOOKS, SELF_DRESSING_KINDS } from './looks';
+import { SECONDARY_LOOKS } from './secondaryVisuals';
 import { PART_PAINTERS } from '../render/vis/parts';
 import { painterParamGaps } from '../render/vis/painters';
 import './glyphParts'; // side-effect: the shipped glyph parts register before validation
@@ -1159,6 +1160,20 @@ export function validateContent(): void {
       s.delivery.type === 'projectile' ? s.delivery.catchSpot?.look : undefined,
     ]),
   ];
+  // Secondary bodies must be audited too: a projectile's landing object is
+  // absent from the direct-construct census that originally missed spears.
+  lookRefs.push(...Object.entries(SECONDARY_LOOKS));
+  for (const s of Object.values(SKILLS)) {
+    if (s.delivery.type === 'projectile') lookRefs.push(
+      [s.id + ' plantOnLand', s.delivery.plantOnLand?.look],
+      [s.id + ' hanging arrow', s.delivery.caroms?.hang?.look]);
+    for (const [role, look] of Object.entries(s.constructLooks ?? {})) lookRefs.push([s.id + ' ' + role, look]);
+    for (const { node } of treeGraph(s)?.nodes.values() ?? []) lookRefs.push(
+      [s.id + ' ' + node.id + ' effigy', node.challenge?.device?.look],
+      [s.id + ' ' + node.id + ' pursuer', node.challenge?.creeper?.look]);
+  }
+  for (const s of Object.values(SUPPORTS))
+    for (const [role, look] of Object.entries(s.constructLooks ?? {})) lookRefs.push([s.id + ' ' + role, look]);
   for (const [src, id] of lookRefs) {
     if (id && !LOOKS[id]) warn(`${src}: look '${id}' is not a LOOKS entry`);
   }

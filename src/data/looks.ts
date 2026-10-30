@@ -28,6 +28,7 @@ import { COSMETIC_WISP_LOOKS } from './cosmeticExpansionModels';
 import { GOLEM_LOOKS } from './golemLooks';
 import { SUMMON_LOOKS } from './summonLooks';
 import { CONSTRUCT_BODY_LOOKS } from './constructLooks';
+import { SECONDARY_BODY_LOOKS, PLANTED_SPEAR } from './secondaryVisuals';
 import { DEVICE_OBJECT_LOOKS, TRAP_FRAME, MINE_FRAME } from './deviceVisuals';
 import { SKELETAL_MAGE_LOOKS } from './skeletalMageLooks';
 import { UNDEAD_COURT_LOOKS } from './undeadCourtLooks';
@@ -41,6 +42,7 @@ export const LOOKS: Record<string, LookDef> = {
   ...GOLEM_LOOKS,
   ...SUMMON_LOOKS,
   ...CONSTRUCT_BODY_LOOKS,
+  ...SECONDARY_BODY_LOOKS,
   ...DEVICE_OBJECT_LOOKS,
   ...SKELETAL_MAGE_LOOKS,
   ...UNDEAD_COURT_LOOKS,
@@ -2820,14 +2822,8 @@ export const LOOKS: Record<string, LookDef> = {
     binding: [{ kind: 'deviceBinding', x: -.9, scale: .65 }] },
   construct_mine: { parts: MINE_FRAME, shadowScale: .5,
     binding: [{ kind: 'deviceBinding', x: -.9, scale: .65 }] },
-  /** A LODGED SPEAR (embedments, hanging carom arrows): one slim stake and
-   *  its fletching, read from above. */
-  construct_spear: {
-    parts: [
-      { kind: 'stakeRow', params: { n: 1, span: 0.66 } },
-      { kind: 'quiver', x: -0.34, scale: 0.66, alpha: 0.9 },
-    ],
-  },
+  /** Unspecified embedments retain recognizable weapon anatomy. */
+  construct_spear: { parts: PLANTED_SPEAR, shadowScale: .3, untargetableAlpha: 1 },
   /** Barrier segments: one stakeRow, three materials. */
   construct_barrier_bone: {
     parts: [{ kind: 'stakeRow', role: 'bone', params: { n: 4, span: 1.9 } }],

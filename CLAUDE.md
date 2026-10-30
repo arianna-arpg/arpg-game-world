@@ -94,6 +94,12 @@ selfvisuals, trapworks, tacticalai, controlstartertrees, movementvisuals,
 cosmetics, all types and sim smoke; then the hidden device-visuals-ui and
 construct-bodies-ui harnesses sequentially after an isolated build.
 
+Secondary objects (landed weapons, suspended arrows, support vessels and Goad's
+bodies) use `data/secondaryVisuals.ts` and reusable weapon parts. See
+`docs/render/secondary-visuals.md`; verify presencevisuals, skillflights, goad,
+supportfabric, payloadcues, impactstartertrees, castaim, projectilecull, cosmetics,
+all types and sim smoke, then the hidden secondary-visuals-ui after its isolated build.
+
 The persistent construct body silhouettes are composed in `data/constructLooks.ts`
 and `data/constructGlyphs.ts`, selected through each delivery's ordinary `look`.
 See `docs/render/constructs.md`; verify presencevisuals, cosmetics, all types,

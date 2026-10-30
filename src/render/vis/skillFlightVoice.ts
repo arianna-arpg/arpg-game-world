@@ -1,4 +1,6 @@
 import './projectileArtVoice';
+import '../../data/glyphParts';
+import { paintLook, lookPalette } from './parts';
 import { PROJECTILE_ART_FLIGHTS, PROJECTILE_ART_FIELDS } from '../../data/projectileArtVisuals';
 import { SKILL_FLIGHTS, SKILL_FIELDS, SKILL_BEAMS, SKILL_FLIGHT_STYLE as C,
   skillBeamVoice, type SkillFieldProfile } from '../../data/skillFlightVisuals';
@@ -92,6 +94,15 @@ export function drawSkillFlightHead(ctx: CanvasRenderingContext2D, p: SkillFligh
   const v = flightProfile(p);
   if (!v || p.shape !== 'circle' || p.radius <= 0) return false;
   const r = p.radius, phase = p.age * 6;
+  if (v.weapon) {
+    // Solid head stays within the native collision disc; the shaft extends
+    // aft as decoration, inside the existing flight-wake culling envelope.
+    ctx.save(); ctx.rotate(p.dir);
+    ctx.beginPath(); ctx.rect(-4.5 * r, -r, 5.5 * r, 2 * r); ctx.clip();
+    ctx.translate(-.6 * r, 0);
+    paintLook(ctx, r, { parts: v.weapon }, lookPalette(p.color));
+    ctx.restore(); return true;
+  }
   ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.clip();
   ctx.rotate(p.dir + (v.motion === 'tumble' ? phase : v.motion === 'weave' ? Math.sin(phase) * .18 : 0));
   const breath = v.motion === 'pulse' ? .85 + .15 * Math.sin(phase * 1.5) : 1;

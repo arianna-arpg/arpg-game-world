@@ -1,4 +1,6 @@
 import type { BurstMotif } from './skillVisuals';
+import type { PartSpec } from '../render/vis/parts';
+import { PLANTED_SPEAR, BARBED_LANCE, CONDUCTIVE_ARROW, SPECTRAL_ARROW, BONE_ARROW } from './secondaryVisuals';
 
 /** Authored visual grammar. No gameplay values and no palette assignments:
  * the live cast owns color, footprint, duration and flight path. */
@@ -9,6 +11,8 @@ export interface SkillFlightProfile {
   count: number;
   echo?: BurstMotif;
   body?: 'orb' | 'star' | 'cluster';
+  /** Optional reusable weapon anatomy; trails aft within the existing wake bounds. */
+  weapon?: PartSpec[];
 }
 export interface SkillFieldProfile {
   /** A vertical flame column above an honest circular ground footprint. */
@@ -31,7 +35,7 @@ export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
   court_bone_shuriken: p('teeth','saw','tumble',3,'blades'),
   court_fire_arc: p('flame','ribbon','weave',4,'blades'),
   court_storm_chain: p('sparks','links','weave',3,'blades'),
-  skeletal_rattling_arrow: p('teeth','quills','steady',5,'cracks'),
+  skeletal_rattling_arrow: { ...p('teeth','quills','steady',5,'cracks'), weapon: BONE_ARROW },
   skeletal_volatile_fire: p('flame','saw','pulse',5,'teeth'),
   skeletal_volatile_cold: p('ice','quills','steady',5,'runes'),
   skeletal_volatile_lightning: p('sparks','fork','pulse',5,'souls'),
@@ -94,7 +98,7 @@ export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
   hammer_of_judgment: p('shields','rings','tumble',3,'rays'),
   frozen_orb: p('ice','rings','tumble',3),
   spectral_helix: p('blades','helix','tumble',3,'souls'),
-  piercing_arrow: p('teeth','quills','steady',3),
+  piercing_arrow: { ...p('teeth','quills','steady',3), weapon: BONE_ARROW },
   fan_of_blades: p('blades','saw','steady',3),
   goad: p('teeth','rings','pulse',2,'chimes'),
   null_lance: p('runes','quills','steady',2,'arcs'),
@@ -109,8 +113,8 @@ export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
   lava_glob: p('cracks','beads','pulse',2,'flame'),
   powderkeg_arrow: p('teeth','beads','steady',4,'flame'),
   orbital_blades: p('blades','rings','tumble',3),
-  impale_spear: p('teeth','saw','steady',4,'blood'),
-  pinning_spear: p('teeth','links','steady',2,'shields'),
+  impale_spear: { ...p('teeth','saw','steady',4,'blood'), weapon: BARBED_LANCE },
+  pinning_spear: { ...p('teeth','links','steady',2,'shields'), weapon: PLANTED_SPEAR },
   rolling_cannonade: p('cracks','rings','tumble',3,'flame'),
   planted_banderilla: p('petals','quills','weave',2,'teeth'),
   thrown_ace: p('runes','saw','tumble',2,'blades'),
@@ -158,8 +162,8 @@ export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
   creeping_frost: p('ice','vapor','weave',3,'petals'),
   rift_shard: p('runes','quills','tumble',3,'ice'),
   arcswarm: { ...p('sparks','beads','weave',4), body: 'cluster' },
-  impale_lance: p('teeth','quills','steady',4,'blood'),
-  arclight_rain: p('sparks','quills','steady',3,'rays'),
+  impale_lance: { ...p('teeth','quills','steady',4,'blood'), weapon: BARBED_LANCE },
+  arclight_rain: { ...p('sparks','quills','steady',3,'rays'), weapon: CONDUCTIVE_ARROW },
   voltaic_orb: p('sparks','rings','tumble',2,'runes'),
   beguile: p('petals','helix','pulse',2,'souls'),
   ushers_lull: p('chimes','vapor','weave',3,'souls'),
@@ -168,7 +172,7 @@ export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
   gyreblade: p('blades','helix','tumble',2),
   gyre_hurl: p('blades','rings','tumble',4,'arcs'),
   caroms: p('shields','rings','tumble',2,'sparks'),
-  hanging_volley: p('teeth','links','pulse',4,'runes'),
+  hanging_volley: { ...p('teeth','links','pulse',4,'runes'), weapon: SPECTRAL_ARROW },
   heartchaser: p('blood','helix','weave',2,'teeth'),
   living_barrage: p('teeth','ribbon','weave',4,'blood'),
   skittering_bolt: p('spores','saw','weave',3,'teeth'),
@@ -197,7 +201,7 @@ export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
   scald_undertow: p('steam','ribbon','weave',4,'arcs'),
   barb_spit: p('teeth','beads','steady',2,'blood'),
   pale_zap: p('sparks','fork','pulse',2,'souls'),
-  bone_arrow: p('teeth','quills','steady',3,'souls'),
+  bone_arrow: { ...p('teeth','quills','steady',3,'souls'), weapon: BONE_ARROW },
   siren_song: p('chimes','rings','weave',3,'arcs'),
   hellchain_volley: p('flame','links','steady',4,'teeth'),
   static_jolt: p('sparks','fork','pulse',3),

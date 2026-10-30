@@ -61,6 +61,9 @@ export interface WalkLook {
 }
 
 export interface LookDef {
+  /** Native-body opacity when untargetable. Solid devices can opt out of
+   * the spirit fade; concealment, emergence and sight rules still apply. */
+  untargetableAlpha?: number;
   /** Optional ownership-mark parts, tinted with the actor's binding color.
    * Omitted keeps the legacy ring; [] suppresses it. Body-space like parts. */
   binding?: PartSpec[];

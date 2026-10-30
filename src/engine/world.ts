@@ -1,4 +1,6 @@
 import { FrameArts, frameOf } from './frameArts';
+import { SECONDARY_LOOKS } from '../data/secondaryVisuals';
+import { instanceConstructLook } from './skills';
 import { migrateAdventureDecoration } from './biomeDecoration';
 import { CohortArts } from './cohortArts';
 import { summonSchoolSkill } from './skills';
@@ -35242,6 +35244,7 @@ export class World {
     const def = inst.def;
     this.spawnConstruct(caster, inst, {
       type: 'construct', kind: 'totem',
+      look: instanceConstructLook(inst, 'spiritTotem', SECONDARY_LOOKS.spiritTotem),
       range: def.ai?.range ?? 420,
       duration: 8, maxActive: 1, life: 45, placeRange: 90,
     }, aim, inst);
@@ -35963,6 +35966,7 @@ export class World {
           }
           const arrow = this.spawnConstruct(caster, inst, {
             type: 'construct', kind: 'embed',
+            look: d.caroms.hang.look ?? SECONDARY_LOOKS.hanging,
             range: 0, duration: d.caroms.hang.duration ?? 24,
             maxActive: caromCap, invulnerable: true,
             placeRange: 9999,
@@ -57494,6 +57498,7 @@ export class World {
               skillContextTags(def), instanceMods(cs.inst));
             const vessel = this.spawnConstruct(a, cs.inst, {
               type: 'construct', kind: 'eruptor',
+              look: instanceConstructLook(cs.inst, 'channelVessel', SECONDARY_LOOKS.channelVessel),
               range: 240, duration: Math.max(1.5, persist),
               maxActive: 2, life: 40, placeRange: 440,
               interval: 0.4,
@@ -60213,14 +60218,17 @@ export class World {
         if (pd.type === 'projectile' && pd.plantOnLand && !p.caster.dead) {
           // With an EmbedSpec the plant is a live EMBEDMENT (run-over
           // triggers, emissions, sibling beams); bare plants stay barriers.
-          this.spawnConstruct(p.caster, p.inst, {
+          const planted = this.spawnConstruct(p.caster, p.inst, {
             type: 'construct', kind: pd.plantOnLand.embed ? 'embed' : 'barrier',
+            look: pd.plantOnLand.look ?? SECONDARY_LOOKS.planted,
             range: 0, duration: pd.plantOnLand.duration,
             maxActive: pd.plantOnLand.embed ? 8 : 6,
             life: pd.plantOnLand.life ?? 25,
             placeRange: 9999,
             embed: pd.plantOnLand.embed,
           }, vec(p.pos.x, p.pos.y), undefined, vec(p.pos.x, p.pos.y), 1, p.tier ?? 0);
+          // Keep the actual final flight bearing, even if the owner turned away.
+          if (planted) planted.facing = planted.facingPrev = p.dir;
         }
         this.projectiles.splice(i, 1);
       }

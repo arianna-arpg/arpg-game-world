@@ -1,4 +1,5 @@
 import { treeNodeOf, type SkillInstance, type ConstructDelivery } from './skills';
+import { SECONDARY_LOOKS } from '../data/secondaryVisuals';
 
 /** Composable challenge mechanics; scalar patches are unique per tree node. */
 export interface ChallengeSpec {
@@ -8,13 +9,13 @@ export interface ChallengeSpec {
   bleedingImpaleMore?: number;
   splinters?: { count: number; power: number; spread: number };
   ballast?: { duration: number; radius: number; power: number; rehit: number; cap: number };
-  device?: { duration: number; radius: number; life: number; thornsRatio: number; interval: number; range: number };
+  device?: { look?: string; duration: number; radius: number; life: number; thornsRatio: number; interval: number; range: number };
   deviceCap?: number;
   impaleField?: { ratio: number; radius: number };
   bleedingField?: { power: number };
   aftershock?: { chance: number; delay: number; radius: number; power: number };
   greaterShock?: { chance: number; radius: number; power: number; echoes: number };
-  creeper?: { speed: number; trailRadius: number; trailDuration: number; trailPower: number; strikePower: number; strikeInterval: number };
+  creeper?: { look?: string; speed: number; trailRadius: number; trailDuration: number; trailPower: number; strikePower: number; strikeInterval: number };
 }
 
 export function challengeOf(inst: SkillInstance): ChallengeSpec | undefined {
@@ -29,7 +30,7 @@ export function challengeOf(inst: SkillInstance): ChallengeSpec | undefined {
 
 export function challengeDelivery(inst: SkillInstance): ConstructDelivery | undefined {
   const s = challengeOf(inst), d = s?.device;
-  return d ? { type: 'construct', kind: 'pylon', look: 'construct_totem', range: d.radius,
+  return d ? { type: 'construct', kind: 'pylon', look: d.look ?? SECONDARY_LOOKS.effigy, range: d.radius,
     duration: d.duration, maxActive: s.deviceCap ?? 1, life: d.life, placeRange: d.range,
     interval: d.interval, taunt: true, castSkillId: 'goad_device_call' } : undefined;
 }

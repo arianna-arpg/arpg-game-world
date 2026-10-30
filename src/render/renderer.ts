@@ -5717,7 +5717,10 @@ export class Renderer {
         ctx.scale(s, s);
       }
     }
-    if (a.untargetable && !epose) ctx.globalAlpha = 0.55;
+    if (a.untargetable && !epose) {
+      const untargetableAlpha = lookOf(a.look)?.untargetableAlpha ?? .55;
+      ctx.globalAlpha = Number.isFinite(untargetableAlpha) ? clamp(untargetableAlpha, 0, 1) : .55;
+    }
     if (epose) ctx.globalAlpha = epose.alpha; // the arrival owns its own fade-in
     if (tpose) ctx.globalAlpha = 1; // a traversal's rise stays solid — cinema, not stealth
     if (a.sheet.get('invisible') > 0) ctx.globalAlpha = 0.3;

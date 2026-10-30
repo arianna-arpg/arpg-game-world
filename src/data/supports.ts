@@ -4356,6 +4356,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   spirit_totem: {
     id: 'spirit_totem', name: 'Spirit Totem',
+    constructLooks: { spiritTotem: 'object_spirit_totem' },
     description: 'The supported skill is cast by a planted totem instead of by you, for 25%'
       + ' less damage. Planting takes twice the skill\'s own cast time, and higher gem levels'
       + ' quicken the totem\'s casting.',
@@ -5126,6 +5127,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   ritual_ground: {
     id: 'ritual_ground', name: 'Ritual Ground',
+    constructLooks: { channelVessel: 'object_channel_vessel' },
     description: 'The channel becomes a cast: the bar plants a channeler vessel at your mark,'
       + ' and the held working runs there on its own for 4 seconds. Costs 35% more mana.',
     color: '#b8a0d0', requiresTags: ['channel'], excludeTags: ['guard'],
