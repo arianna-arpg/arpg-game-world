@@ -118,7 +118,7 @@ import { rememberKitPicks, resolveClassKit } from './meta/classkit';
 import {
   loadAccount, loadAccountAsync, loadSettings, loadSettingsAsync,
   saveAccount, saveAccountDurable, saveSettings, resetAccount,
-  saveSuppressed, suppressSaves,
+  saveSuppressed, suppressSaves, flushPendingDiskSaves,
 } from './meta/persistence';
 import {
   applySavedCharacter, clearCharacter, loadCharacter, loadCharacterAsync,
@@ -648,6 +648,22 @@ function beginPressed(): void {
   void withLoadingScreen(() => startMu(), 'Entering Mu');
 }
 ui.onBeginRun = beginPressed;
+ui.onSaveExit = async destination => {
+  // Capture before teardown: a co-op shell, scene, or dead run owns no live
+  // character save. Keep the same host/scene guards as the unload writer.
+  if (saveSuppressed()) throw new Error('Saving is unavailable after a game error. Restart to resume your last good save.');
+  if (running && net.isHost && !world.gameOver && !world.scene) {
+    world.invalidateZonesSaveMemo();
+    persistRun(account, world);
+    persistCouchGuests();
+  } else {
+    saveAccount(account);
+  }
+  running = false; // no later simulation/autosave can race this chosen exit
+  await flushPendingDiskSaves(); // roster Continue reads disk first, even without closing the app
+  toStartMenu();
+  if (destination === 'desktop') await ui.exitGame();
+};
 
 /** THE WAKEFUL WORLD: stand the saved world back up around a freshly-resumed
  *  character — adopt the save's world section (zone graph, discovery, clock,
@@ -2703,6 +2719,7 @@ function toStartMenu(notice?: string): void {
   couchReset(); // guest seats die with the world; the pads are free again
   running = false;
   pendingDeathScreen = null; // the menu is the screen now — no fade owes a debt
+  ui.setContinueSave(loadCharacter()); // explicit exits must refresh the in-memory Continue snapshot
   ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar, notice);
 }
 

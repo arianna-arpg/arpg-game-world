@@ -425,6 +425,7 @@ app.on('render-process-gone', (_e, _wc, d) => boot(`render-process-gone reason=$
 
 /** @type {BrowserWindow | null} */ let launcherWin = null;
 /** @type {BrowserWindow | null} */ let gameWin = null;
+let gameQuitRequested = false;
 /** @type {import('node:http').Server | null} */ let gameServer = null;
 /** @type {string | null} */ let gameUrl = null;
 /** What long operation is in flight (guards double-clicks); null = idle. */
@@ -1130,15 +1131,13 @@ function createGameWindow(opts) {
       devTools: tools,
       session: activeSession(),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
-      // perfBeat: the perf harness alone loads the deadman's beat bridge
-      // (perf-preload.cjs → window.__perfBeat). Released Play exposes only its
-      // save namespace and offline status; local developer/smoke stay preload-free.
-      ...(opts?.perfBeat ? { preload: path.join(__dirname, 'perf-preload.cjs') } : publishedGameMode() ? {
-        preload: path.join(__dirname, 'game-preload.cjs'), additionalArguments: [
+      // All game windows receive explicit quit; published builds retain their
+      // save identity/offline status, and only perf opts into its beat channel.
+      preload: path.join(__dirname, 'game-preload.cjs'),
+      additionalArguments: opts?.perfBeat ? ['--hollow-wake-perf-beat'] : publishedGameMode() ? [
           '--hollow-storage-scope=' + (releasedBuild()?.identity.desktopStorageScope ?? ''),
           '--hollow-offline=' + String(releaseOffline),
-        ],
-      } : {}),
+        ] : [],
     },
   });
   if (cfg.window.maximized && !fullscreen && opts?.show !== false) w.maximize();
@@ -1154,7 +1153,7 @@ function createGameWindow(opts) {
   });
   w.on('closed', () => {
     gameWin = null;
-    if (!SMOKE && cfg.launcher.returnToLauncher && launcherWin && !launcherWin.isDestroyed()) {
+    if (!SMOKE && !gameQuitRequested && cfg.launcher.returnToLauncher && launcherWin && !launcherWin.isDestroyed()) {
       launcherWin.show();
       launcherWin.webContents.send('launcher:state', { t: 'game-closed' });
     } else if (!SMOKE) {
@@ -1249,6 +1248,14 @@ async function exclusive(name, fn) {
 }
 
 function wireIpc() {
+  ipcMain.on('game:quit', event => {
+    // Only the current game's top frame may quit; launcher tools and embedded
+    // loading/showcase frames do not receive this authority.
+    if (!gameWin || event.sender !== gameWin.webContents
+      || event.senderFrame !== gameWin.webContents.mainFrame) return;
+    gameQuitRequested = true;
+    app.quit();
+  });
   ipcMain.handle('launcher:status', () => repoStatus());
   ipcMain.handle('launcher:branches', () => exclusive('branches', () => refreshBranches()));
   ipcMain.handle('launcher:selectBranch', (_e, name) => exclusive('branch selection', () => chooseBranch(String(name))));
@@ -1398,6 +1405,9 @@ async function smoke() {
       await wait(1500); // async boot: account load, world init, start menu
       const menu = await gameWin.webContents.executeJavaScript(
         `!!document.querySelector('#start-menu:not(.hidden)')`);
+      const exitBridge = await gameWin.webContents.executeJavaScript(
+        `typeof window.hollowWakeDesktop?.quit === 'function' && typeof window.__perfBeat === 'undefined'`);
+      if (!exitBridge) errors.push('game exit bridge missing or performance bridge exposed in normal play');
       const saveProbe = await gameWin.webContents.executeJavaScript(
         `fetch('/__save/0').then(r => r.status).catch(() => 'ERR')`);
       const search = await gameWin.webContents.executeJavaScript('location.search');

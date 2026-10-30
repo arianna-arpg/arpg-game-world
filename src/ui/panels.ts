@@ -1,3 +1,5 @@
+import { SAVE_EXIT_DESTINATIONS, requestAppExit, type SaveExitDestination } from './exitMenu';
+import { flushPendingDiskSaves } from '../meta/persistence';
 import { hollowWakeBrand, hollowWakeMenuHeader } from './brand';
 import type { SceneCardSpec } from '../data/scenes';
 import { mountSideScreen, sideScreenContext, captureSideScreenFocus } from './sideScreen';
@@ -925,6 +927,9 @@ export class UI {
    *  the virgin lane walks the tutorial, everyone else drifts into Mu. The
    *  legacy screen stays whole beneath it (co-op rejoin still uses it). */
   onBeginRun: (() => void) | null = null;
+  /** The shell owns persistence and session teardown for both exit destinations. */
+  onSaveExit?: (destination: SaveExitDestination) => void | Promise<void>;
+  private saveExitPending = false;
 
   constructor(
     private getWorld: () => World,
@@ -10361,6 +10366,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  allowHold policy (wired in main.ts) refuses the hold in live co-op —
    *  a shared world is never one player's to stop. */
   showEscapeMenu(): void {
+    if (this.saveExitPending) return;
     // THE HARVEST PAUSE LAW (engine/harvest.ts): while a rite's world-freeze
     // stands the pause toggle REFUSES — a pause atop the freeze would hold
     // the sequence prompt still for free reading (the anti-memorize law).
@@ -10465,11 +10471,29 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         }
       });
       document.getElementById('esc-close')!.addEventListener('click', () => {
-        try { window.close(); } catch { /* browsers block closing non-script-opened tabs */ }
         root.innerHTML = `
-          ${this.closeGlyphHtml('Resume (Esc)')}${hollowWakeMenuHeader('menu')}<h1>Progress Saved</h1>
-          <div class="acct-head">Your account and character are saved. Close this browser tab to exit.</div>
-          <div class="esc-btns"><button id="esc-back2">Back</button></div>`;
+          ${this.closeGlyphHtml('Resume (Esc)')}${hollowWakeMenuHeader('menu')}<h1>${this.isCoopClient() || sceneLive ? 'Exit Game' : 'Save &amp; Exit'}</h1>
+          <div class="acct-head">${this.isCoopClient()
+            ? 'Leave this co-op session and choose where to go.' : sceneLive
+              ? 'Your account progress is kept. This scene will restart when you return.'
+              : 'Save your progress and choose where to go.'}</div>
+          <div class="esc-btns">
+            ${SAVE_EXIT_DESTINATIONS.map(d => `<button data-save-exit="${d.id}" title="${esc(d.hint)}">${esc(d.label)}</button>`).join('')}
+            <button id="esc-back2">Back</button>
+          </div>`;
+        for (const destination of SAVE_EXIT_DESTINATIONS) {
+          root.querySelector(`[data-save-exit="${destination.id}"]`)!.addEventListener('click', async () => {
+            if (this.saveExitPending || !this.onSaveExit) return;
+            this.saveExitPending = true;
+            root.innerHTML = '<h1>Saving…</h1>';
+            try { await this.onSaveExit(destination.id); }
+            catch (error) {
+              root.innerHTML = `<h1>Unable to Save</h1><div class="acct-head">${esc(String(error))}</div>
+                <div class="esc-btns"><button id="esc-back2">Back</button></div>`;
+              document.getElementById('esc-back2')!.addEventListener('click', showMain);
+            } finally { this.saveExitPending = false; }
+          });
+        }
         document.getElementById('esc-back2')!.addEventListener('click', showMain);
       });
     };
@@ -10480,6 +10504,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   }
 
   hideEscapeMenu(): void {
+    if (this.saveExitPending) return;
     this.closeCodexView();
     this.escapeMenuOpen = false;
     this.escRefresh = null;
@@ -11436,16 +11461,19 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       };
       this.renderOptions(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster));
     });
-    // THE VISIBLE DOOR: full-screen and mobile players get a real exit at the
-    // menu — never only the window's own ✕. window.close() ends the desktop
-    // shell; a plain browser tab refuses it, so the fallback screen says the
-    // truth instead (everything saved, safe to close by hand).
-    document.getElementById('sm-exit')!.addEventListener('click', () => {
-      try { window.close(); } catch { /* browsers block closing non-script-opened tabs */ }
-      this.renderExitScreen();
-    });
+    document.getElementById('sm-exit')!.addEventListener('click', () => { void this.exitGame(); });
     this.onStartMenuRender?.();
     bindFrontScreen(this.startMenu, previousFocus);
+  }
+
+  /** Explicit exits wait for the existing disk writers before stopping the
+   * desktop's loopback server. Browser storage remains the static-host fallback. */
+  async exitGame(): Promise<void> {
+    this.startMenuBack = () => {}; // keep background refreshes/back presses off the saving view
+    this.startMenu.innerHTML = '<h1>Saving…</h1>';
+    await flushPendingDiskSaves();
+    this.renderExitScreen();
+    try { requestAppExit(); } catch { /* keep the browser/manual-close fallback */ }
   }
 
   /** THE VISIBLE DOOR's browser fallback (Exit Game with window.close()
