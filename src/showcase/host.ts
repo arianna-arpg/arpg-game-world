@@ -156,6 +156,8 @@ function blit(m: Mount, alpha: number): void {
   m.ctx.globalAlpha = alpha;
   m.ctx.drawImage(src, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, 0, 0, cw, ch);
   m.ctx.globalAlpha = 1;
+  // A surface can distinguish a real frame from a still-loading canvas.
+  if (!m.host.hasAttribute('data-showcase-ready')) m.host.setAttribute('data-showcase-ready', '');
   blits++;
 }
 
@@ -262,6 +264,7 @@ function handleOf(m: Mount): SkillShowcaseHandle {
       const key = specKey(spec);
       if (key === m.key) return;
       m.spec = spec; m.key = key; m.shownAt = performance.now();
+      m.host.removeAttribute('data-showcase-ready');
       m.host.removeAttribute(EMPTY_ATTR);
       wake();
     },
