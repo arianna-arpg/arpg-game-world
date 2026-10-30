@@ -28,22 +28,26 @@ real Lich death/reconstruction route, rather than only a catalogue spawn.
 
 data/weaponFlightVisuals.ts contains reusable families for arrows, darts,
 lances, knives, hooks, spinning blades, axes, cards, shuriken, grenades,
-stones, slugs and feathers. Eight new original glyphs compose with the
-secondary-weapon and device parts already in the game. Thirty-four more
-source profiles select these parts, bringing the physical-weapon total to
-42. Related weapons share anatomy; their source-specific wakes remain.
+stones, slugs, feathers, bone fragments, seed wings, shells, hammers, lanterns,
+gourds, tied bundles and swarm jars. Fourteen new original glyphs compose with
+the existing secondary-weapon, device and gourd parts. Fifty-nine more source
+profiles select these parts, bringing the physical-object total to 67. Related
+objects share anatomy; their source-specific wakes remain.
 
 SkillFlightProfile.weapon accepts PartSpec[] as before. Optional weaponPose
 configures radius-relative x/scale and radians-per-simulation-second spin.
 Finite values are bounded by the painter. Cosmetic wardrobe bodies still
 take precedence; source identity follows the existing co-op snapshot.
 
-Six native line flights (Spectral Helix, Chain Pull, Orbital Blades, Gaff
-Cast, Voltspear and Blightspear) previously bypassed weapon anatomy and
-remained solid bars. The shared painter now inlays the parts inside their
+Seven native line flights (Spectral Helix, Chain Pull, Orbital Blades, Gaff
+Cast, Voltspear, Blightspear and Void Hook) previously bypassed weapon anatomy
+and remained solid bars. The shared painter now inlays the parts inside their
 PROJ_FORM_GEO.line rectangle, retaining the entire contact boundary and
 clipping all artwork to it. The inlay rotates independently of that boundary.
-Other non-circular forms keep their existing painter. Circular weapon shafts
+Square, triangle and octagon objects also retain their native outline and
+simulation-age rotation, with clipped interior anatomy. This makes the spectral
+hammer and four living stones recognizable in flight. Remaining wide forms
+keep their measured painter. Circular weapon shafts
 still trail inside the existing culling envelope. Collision geometry is
 unchanged; no skill-ID branches were added to the renderer.
 
@@ -56,9 +60,11 @@ remain data-driven.
 presencevisuals now audits every registered actor definition for a look or an
 explicit owner-copy policy, resolves every look and part reference, exercises
 all nine new bodies and an actual Vessel of Shadow copy, and verifies peers.
-skillflights casts all 42 physical missiles through the engine, including
+skillflights casts all 67 physical missiles through the engine, including
 multi-press marker releases; checks finite balanced painting, clipping against
 line collision bounds, unchanged geometry and copied source identities.
+Corpse-targeted throws receive a real killed actor; their normal corpse
+consumption creates the checked flight.
 Its existing census covers all 183 projectile, six beam and 221 field/aura
 profiles. Intentional shared family art is not an error.
 
@@ -78,7 +84,7 @@ npx electron balance/visual-census-ui.cjs
 
 The hidden client uses isolated saves and real casts with the production
 renderer. It reveals ambushers through their native emergence, checks nine
-native body masks at four bearings, captures 42 flights at two simulation
+native body masks at four bearings, captures 67 flights at two simulation
 ages, checks a peer frame, and saves dark/bright sheets under
 balance/reports/visual-census. The sheets include native-size and common-tint
 samples; inspect them, because registered metadata alone missed the line

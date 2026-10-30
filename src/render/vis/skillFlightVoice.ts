@@ -94,26 +94,47 @@ export function drawSkillFlightHead(ctx: CanvasRenderingContext2D, p: SkillFligh
   if (drawLightningHead(ctx, p)) return true;
   const v = flightProfile(p);
   if (!v || p.radius <= 0 || !Number.isFinite(p.radius + p.dir + p.age)) return false;
-  const lineWeapon = p.shape === 'line' && !!v.weapon;
-  if (p.shape !== 'circle' && !lineWeapon) return false;
+  const framedWeapon = !!v.weapon && ['line', 'square', 'triangle', 'octagon'].includes(p.shape);
+  if (p.shape !== 'circle' && !framedWeapon) return false;
   const r = p.radius, phase = p.age * 6;
   if (v.weapon) {
     ctx.save(); ctx.rotate(p.dir);
-    if (lineWeapon) {
-      // Inlay anatomy inside the real line footprint. Keep its entire contact
-      // boundary visible; the rotating artwork cannot change the hit shape.
-      const g = PROJ_FORM_GEO.line;
-      ctx.beginPath(); ctx.rect(-g.hAlong * r, -g.hAcross * r, 2 * g.hAlong * r, 2 * g.hAcross * r); ctx.clip();
+    if (framedWeapon) {
+      // Inlay anatomy inside the native form, retaining its entire boundary.
+      // Wide lines use the collision registry; compact forms retain their
+      // existing outline and simulation-age rotation. Art never changes hits.
+      ctx.beginPath();
+      if (p.shape === 'line') {
+        const g = PROJ_FORM_GEO.line;
+        ctx.rect(-g.hAlong * r, -g.hAcross * r, 2 * g.hAlong * r, 2 * g.hAcross * r);
+      } else if (p.shape === 'square') {
+        const g = PROJ_FORM_GEO.square;
+        ctx.rotate(p.age * g.tumbleRate);
+        ctx.rect(-g.half * r, -g.half * r, 2 * g.half * r, 2 * g.half * r);
+      } else if (p.shape === 'triangle') {
+        ctx.moveTo(r, 0); ctx.lineTo(-r, r * PROJ_FORM_GEO.triangle.base);
+        ctx.lineTo(-r, -r * PROJ_FORM_GEO.triangle.base); ctx.closePath();
+      } else {
+        ctx.rotate(p.age * PROJ_FORM_GEO.octagon.spinRate - p.dir);
+        for (let i = 0; i < 8; i++) {
+          const a = i * TAU / 8;
+          if (!i) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+          else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        ctx.closePath();
+      }
+      ctx.clip();
       ctx.fillStyle = withAlpha(p.color, .15); ctx.fill();
       ctx.strokeStyle = withAlpha(p.color, .65); ctx.lineWidth = Math.max(.65, r * .07); ctx.stroke();
-      ctx.scale(g.hAlong / 1.8, g.hAcross / 1.05);
+      if (p.shape === 'line') ctx.scale(PROJ_FORM_GEO.line.hAlong / 1.8, PROJ_FORM_GEO.line.hAcross / 1.05);
+      else if (p.shape === 'square') ctx.scale(PROJ_FORM_GEO.square.half, PROJ_FORM_GEO.square.half);
     } else {
       // Circle heads stay inside the contact disc; decorative shafts trail
       // aft within the existing flight-wake culling envelope.
       ctx.beginPath(); ctx.rect(-4.5 * r, -r, 5.5 * r, 2 * r); ctx.clip();
     }
     const pose = v.weaponPose;
-    const x = Number.isFinite(pose?.x) ? Math.max(-1, Math.min(0, pose!.x!)) : lineWeapon ? 0 : -.6;
+    const x = Number.isFinite(pose?.x) ? Math.max(-1, Math.min(0, pose!.x!)) : framedWeapon ? 0 : -.6;
     const scale = Number.isFinite(pose?.scale) ? Math.max(.1, Math.min(1.5, pose!.scale!)) : 1;
     const spin = Number.isFinite(pose?.spin) ? Math.max(-20, Math.min(20, pose!.spin!)) : 0;
     ctx.translate(x * r, 0); if (spin) ctx.rotate(p.age * spin);

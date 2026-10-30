@@ -5,7 +5,7 @@ import { SKILL_FLIGHTS } from '../src/data/skillFlightVisuals';
 import { WEAPON_FLIGHT_ART } from '../src/data/weaponFlightVisuals';
 import { PROJ_FORM_GEO, projFormTouches } from '../src/engine/projForms';
 import { PART_PAINTERS } from '../src/render/vis/parts';
-import { drawSkillFlightHead } from '../src/render/vis/skillFlightVoice';
+import { drawSkillFlightHead, flightProfile } from '../src/render/vis/skillFlightVoice';
 import { makeSimWorld } from '../src/sim/arena';
 import { makeSkillInstance } from '../src/engine/skills';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
@@ -22,10 +22,15 @@ export function checkWeaponFlights(): void {
     const inst = makeSkillInstance(SKILLS[id]); p.skills[0] = inst; w.meta.knownSkills.set(id, inst);
     // Marker-based flights are released through their normal placement presses.
     const d = inst.def.delivery;
+    if (inst.def.targeting?.target === 'corpse') {
+      const dead = w.createMonster('zombie', 1, 'enemy'); dead.pos = { x: 880, y: 700 };
+      w.actors.push(dead); w.kill(dead, false);
+    }
     const presses = d.type === 'projectile' && d.caroms ? d.caroms.anchors + (d.caroms.hang ? 1 : 0) : 1;
     for (let i = 0; i < presses; i++) w.executeSkill(p, inst, { x: 880 + i * 35, y: 700 + i % 2 * 60 });
     const shot = w.projectiles.find(p => p.inst.def.id === id);
     assert(shot, id + ': real cast produced its projectile');
+    assert.equal(flightProfile(shot)?.weapon, v.weapon, id + ': resolved anatomy');
     const geometry = JSON.stringify({ pos: shot.pos, dir: shot.dir, radius: shot.radius, shape: shot.shape });
     let draws = 0, depth = 0;
     const rectangles: number[][] = [];
@@ -34,9 +39,10 @@ export function checkWeaponFlights(): void {
         assert(args.every(v => typeof v !== 'number' || Number.isFinite(v)), id + ': ' + String(k));
         if (k === 'rect') rectangles.push(args as number[]);
         if (k === 'save') depth++; if (k === 'restore') depth--; draws++;
+        if (k === 'createRadialGradient' || k === 'createLinearGradient') return { addColorStop: () => { draws++; } };
       }, set: (o, k, v) => { o[String(k)] = v; return true; },
     }) as unknown as CanvasRenderingContext2D;
-    const hasWeaponBody = shot.shape === 'circle' || shot.shape === 'line';
+    const hasWeaponBody = ['circle', 'line', 'square', 'triangle', 'octagon'].includes(shot.shape);
     assert.equal(drawSkillFlightHead(ctx, shot), hasWeaponBody, id);
     assert.equal(depth, 0);
     assert(hasWeaponBody ? draws > 10 && draws < 500 : draws === 0, id + ': native-form draw boundary');
@@ -50,7 +56,7 @@ export function checkWeaponFlights(): void {
     }
     nativeRows.push({ id, name: SKILLS[id].name, shape: shot.shape });
     assert.equal(JSON.stringify({ pos: shot.pos, dir: shot.dir, radius: shot.radius, shape: shot.shape }), geometry);
-    assert.equal(drawSkillFlightHead(ctx, { ...shot, shape: 'square' }), false, 'alternate collision form retains its renderer');
+    assert.equal(drawSkillFlightHead(ctx, { ...shot, shape: 'wave' }), false, 'wide wave retains its measured renderer');
     const snap = serializeSnapshot(w, 1), peer = makeSimWorld('warrior', 71928);
     applySnapshot(peer, JSON.parse(JSON.stringify(snap)));
     assert(peer.projectiles.some(p => p.skillVisualId === id), id + ': copied source identity');
@@ -62,5 +68,5 @@ export function checkWeaponFlights(): void {
   mkdirSync('balance/reports/visual-census', { recursive: true });
   writeFileSync('balance/reports/visual-census/flights.json', JSON.stringify(nativeRows, null, 2));
   console.log(`PASS ${rows.length} real weapon flights: registered parts, bounded painter, native forms and peer identity`);
-  console.log('Retained native wide forms: ' + nativeRows.filter(r => r.shape !== 'circle').map(r => r.id).join(', '));
+  console.log('Retained native non-circular forms: ' + nativeRows.filter(r => r.shape !== 'circle').map(r => r.id).join(', '));
 }

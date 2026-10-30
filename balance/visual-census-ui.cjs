@@ -42,6 +42,10 @@ app.whenReady().then(async () => {
       for (const row of flightRows) {
         w.actors = [p]; w.projectiles = []; w.zones = []; p.pos = { x: 900, y: 700 }; p.casting = null;
         __game.devGrantSkill(row.id, 1, 2); const inst = p.skills[2], d = inst.def.delivery;
+        if (inst.def.targeting?.target === 'corpse') {
+          const dead = w.createMonster('zombie', 1, 'enemy'); dead.pos = { x: 1080, y: 700 };
+          w.actors.push(dead); w.kill(dead, false);
+        }
         const presses = d.type === 'projectile' && d.caroms ? d.caroms.anchors + (d.caroms.hang ? 1 : 0) : 1;
         for (let i = 0; i < presses; i++) w.executeSkill(p, inst, { x: 1080 + i * 25, y: 700 + i % 2 * 60 });
         const shot = w.projectiles.find(p => p.inst.def.id === row.id);
@@ -93,7 +97,7 @@ app.whenReady().then(async () => {
       censusBodies.forEach(a => { a.facing = -.4; });
       return { bodies: censusBodies.length, checked, flights: censusFlights.length, moving, fatal: __game.crash().fatal };
     });
-    assert.equal(facts.bodies, 9); assert.equal(facts.checked, 36); assert.equal(facts.flights, 42); assert.equal(facts.fatal, null);
+    assert.equal(facts.bodies, 9); assert.equal(facts.checked, 36); assert.equal(facts.flights, flights.length); assert.equal(facts.fatal, null);
     for (const bright of [false, true]) {
       await win.webContents.executeJavaScript('window.censusBright=' + bright);
       await capture(bright ? 'bodies-bright.png' : 'bodies-dark.png', () => {
@@ -111,7 +115,7 @@ app.whenReady().then(async () => {
         return c.toDataURL('image/png').split(',')[1];
       });
       await capture(bright ? 'weapons-bright.png' : 'weapons-dark.png', () => {
-        const c = document.createElement('canvas'); c.width = 1500; c.height = 1300; const ctx = c.getContext('2d');
+        const c = document.createElement('canvas'); c.width = 1500; c.height = 100 + Math.ceil(censusFlights.length / 6) * 165; const ctx = c.getContext('2d');
         const fg = censusBright ? '#233039' : '#e2e8e8'; ctx.fillStyle = censusBright ? '#d8d6cc' : '#121a20'; ctx.fillRect(0, 0, c.width, c.height);
         ctx.fillStyle = fg; ctx.font = '25px sans-serif'; ctx.fillText('HOLLOW WAKE / REUSABLE WEAPON FAMILIES', 28, 40);
         ctx.font = '15px sans-serif'; ctx.fillText('Two enlarged poses / native size / shared color throughout; native collision boundaries retained', 28, 70);
@@ -128,13 +132,13 @@ app.whenReady().then(async () => {
     await capture('census-world.png', () => {
       const w = __game.world();
       censusBodies.forEach((a, i) => { a.pos = { x: 650 + i % 3 * 230, y: 510 + Math.floor(i / 3) * 120 }; });
-      w.player.pos = { x: 900, y: 900 }; w.actors = [w.player, ...censusBodies]; w.projectiles = [];
+      w.player.pos = { x: 900, y: 800 }; w.actors = [w.player, ...censusBodies]; w.projectiles = [];
       __game.renderer.render(w); return document.querySelector('#game').toDataURL('image/png').split(',')[1];
     });
     assert.equal(await run(() => { __game.applySnap(__game.snapshot()); __game.renderer.render(__game.world()); return __game.crash().fatal; }), null);
     assert.deepEqual(errors, []);
     fs.writeFileSync(path.join(dir, 'checks.json'), JSON.stringify(facts, null, 2));
-    console.log('PASS 9 real actor bodies, 36 distinct native silhouettes, 42 real flights, animation, dark/bright studies and peer frame');
+    console.log(`PASS 9 real actor bodies, 36 distinct native silhouettes, ${facts.flights} real flights, animation, dark/bright studies and peer frame`);
   } catch (e) { console.error(e, errors); process.exitCode = 1; }
   finally { clearTimeout(timer); win.destroy(); server.server.close(); app.exit(process.exitCode || 0); }
 }).catch(e => { console.error(e); app.exit(1); });

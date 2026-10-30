@@ -33,6 +33,9 @@ function trace(draw: (ctx: CanvasRenderingContext2D) => void): unknown[] {
     get: (o, key) => key in o ? o[String(key)] : (...args: unknown[]) => {
       assert(args.every(v => typeof v !== 'number' || Number.isFinite(v)), `invalid ${String(key)}`);
       calls.push([key, ...args]);
+      if (key === 'createRadialGradient' || key === 'createLinearGradient') return {
+        addColorStop: (offset: number) => { assert(Number.isFinite(offset)); calls.push(['weaponColorStop', offset]); },
+      };
     }, set: (o, k, v) => { o[String(k)] = v; return true; },
   }) as unknown as CanvasRenderingContext2D;
   draw(ctx); assert(calls.length < 1100, `detail budget ${calls.length}`); return calls;

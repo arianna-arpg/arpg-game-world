@@ -101,7 +101,7 @@ supportfabric, payloadcues, impactstartertrees, castaim, projectilecull, cosmeti
 all types and sim smoke, then the hidden secondary-visuals-ui after its isolated build.
 
 The catalogue visual-census covers all registered actor look/part references,
-nine formerly generic bodies and 42 physical weapon profiles. Shared families
+nine formerly generic bodies and 67 physical-object profiles. Shared families
 use `data/fieldActorLooks.ts` and `data/weaponFlightVisuals.ts`; native line
 weapons retain their collision boundary around the artwork. See
 `docs/render/visual-census.md`; verify presencevisuals, skillflights, skeletonmage,
