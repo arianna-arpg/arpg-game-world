@@ -323,6 +323,18 @@
     .gem-chip.support-slot { width:30px; height:30px; padding:0; justify-content:center;
       border-radius:5px; color:#8a789f; background:radial-gradient(circle, #30243d, #19151f); }
     .support-slot:hover, .support-slot.tt-anchor { color:#d4b8f0; border-color:#b89ad6; }
+    /* Tree surfaces keep their content's typography, without a separate chip. */
+    button.skill-tree-link { background:transparent; border:0; border-radius:3px; padding:0;
+      color:inherit; font:inherit; text-align:left; }
+    button.skill-tree-link:hover:not(:disabled) { background:#3a3a5533; color:inherit; }
+    button.skill-tree-link:focus-visible { outline:1px solid var(--gold); outline-offset:2px; }
+    .skill-tree-link:not(.tree-summary):hover { text-decoration:underline; text-decoration-color:var(--gold); }
+    .rack-skill-name { display:block; max-width:100%; font-size:10px; color:#fff;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    button.skill-tree-link.rack-skill-name { font-size:10px; color:#fff; }
+    .tree-summary, button.skill-tree-link.tree-summary { width:100%; margin-top:3px; font-size:10px;
+      color:#d8b86a; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+    .tree-summary-ready > span:first-child { color:#ffd700; }
     .tree-points { display:inline-grid; gap:3px; flex-shrink:0; margin:0 6px; vertical-align:middle; }
     .tree-point { display:flex; flex-direction:column; padding-top:4px; color:#81758f; }
     .tree-point-track { position:relative; display:block; height:5px; border:1px solid #4a4458; background:#241d2e; }

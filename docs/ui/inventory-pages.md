@@ -12,7 +12,7 @@ workspace, with Inventory's ribbons and the folio's tabs selecting the page.
 | Request a page through a key, menu or ribbon | Open Inventory for the requesting player and select that page, overriding the remembered selection. |
 | Repeat a keybind or menu toggle for the currently selected page | Close Inventory and hide all its pages. |
 | Activate the currently selected page's Inventory ribbon | Dismiss only that page, keeping Inventory open. With no remaining pages, return to Inventory alone; otherwise the folio promotes a remaining page. |
-| Follow a skill-tree handle or Font's refund action | Show the requested page; repeated show requests keep it open. |
+| Activate a skill's tree summary or name, or Font's refund action | Show the requested page; repeated show requests keep it open. |
 | Close Inventory by key, glyph, full sweep or owner clear | Hide every page and dismiss transient controls, retaining page membership and selection for the session. |
 | Close a page's glyph or folio tab | Dismiss that page and forget its membership; the folio promotes a remaining page. |
 
@@ -25,6 +25,14 @@ overlap. Restoring Inventory
 does not displace an active station; explicitly requesting a page does.
 
 ## Ownership and extension
+
+Tree surfaces use the shared `skillTreeLinkHtml` presenter: the full tree summary
+(label, branch or unchosen state, ticks and point counts) and skill names in the
+rack and learned list open the same page. Native buttons retain keyboard activation
+and focus cues without a separate Tree chip. Each tick keeps its own tooltip;
+opening the page never spends a point. Existing tree-level and Memory unlock gates
+apply to every surface. Rack icons and seat backgrounds keep their drag gestures;
+unlearn, level-up and support controls keep their independent actions.
 
 | Concern | Authority |
 | --- | --- |

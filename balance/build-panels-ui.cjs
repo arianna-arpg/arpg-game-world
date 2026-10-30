@@ -85,6 +85,55 @@ app.whenReady().then(async () => {
   // An earned, unallocated point updates its hover as the skill levels.
   await js(`__game.world().localSeat.meta.knownSkills.get('cleave').level=20;__game.ui.refreshInventory();void 0`);
   assert.match(await hover(point(3)),/An Ability point is ready/);
+  // TREE SURFACES: real pointer/keyboard activation opens the owning page,
+  // including nested ticks and blank strip space, without spending points.
+  const treeRow = '.skill-entry[data-skill-id="cleave"]';
+  const treeStrip = treeRow + ' .tree-summary';
+  const showSkills = async () => {
+   await js(`__game.ui.inventoryPages.request('skills',__game.world().localSeat.id,'show');void 0`);
+   await wait(40);
+  };
+  const openTreeAt = async (selector, edge = false) => {
+   await showSkills();
+   const pos = await js(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw Error('Missing tree surface');e.scrollIntoView({block:'nearest'});const r=e.getBoundingClientRect();return {x:Math.round(${edge ? 'r.right-3' : 'r.x+r.width/2'}),y:Math.round(r.y+r.height/2)}})()`);
+   win.webContents.sendInputEvent({type:'mouseMove',...pos});
+   win.webContents.sendInputEvent({type:'mouseDown',...pos,button:'left',clickCount:1});
+   win.webContents.sendInputEvent({type:'mouseUp',...pos,button:'left',clickCount:1});
+   await wait(50);
+   assert.equal(await js(`__game.ui.folio.bookFor('skills').front`),'skilltree:cleave',selector);
+   assert.equal(await js(`document.body.classList.contains('dnd-active')`),false);
+  };
+  const treeNodesBefore = await js(`__game.world().localSeat.meta.knownSkills.get('cleave').treeNodes.slice()`);
+  assert.equal(await js(`document.querySelectorAll('#skills-panel button.gem-chip[data-treeopen]').length`),0);
+  for (const selector of [treeStrip + ' > span:first-child', treeStrip + ' > span:nth-child(2)',
+    ...[0,1,2,3].map(point), treeRow + ' .name [data-treeopen]',
+    '.build-rack [data-skill-id="cleave"] [data-treeopen]']) await openTreeAt(selector);
+  await openTreeAt(treeStrip, true);
+  assert.deepEqual(await js(`__game.world().localSeat.meta.knownSkills.get('cleave').treeNodes`),treeNodesBefore);
+  for (const [keyCode, character] of [['Return','\r'],['Space',' ']]) {
+   await showSkills();
+   await js(`document.querySelector(${JSON.stringify(treeStrip)}).focus();void 0`);
+   assert.equal(await js(`document.activeElement?.dataset.treeopen`),'cleave');
+   win.webContents.sendInputEvent({type:'keyDown',keyCode});
+   win.webContents.sendInputEvent({type:'char',keyCode:character});
+   win.webContents.sendInputEvent({type:'keyUp',keyCode});
+   await wait(50);
+   assert.equal(await js(`__game.ui.folio.bookFor('skills').front`),'skilltree:cleave',keyCode);
+  }
+  await js(`__game.world().localSeat.meta.knownSkills.get('cleave').treeNodes=[];__game.ui.refreshInventory();void 0`);
+  await showSkills();
+  assert.equal(await js(`document.querySelector(${JSON.stringify(treeStrip + ' > span:nth-child(2)')}).textContent`),'unchosen');
+  await openTreeAt(treeStrip + ' > span:nth-child(2)');
+  assert.deepEqual(await js(`__game.world().localSeat.meta.knownSkills.get('cleave').treeNodes`),[]);
+  // Every entry surface obeys the same level and account gates.
+  await showSkills();
+  await js(`(()=>{const s=__game.world().localSeat.meta.knownSkills.get('cleave');s.level=s.def.tree.level-1;__game.ui.refreshInventory()})()`);
+  assert.equal(await js(`document.querySelectorAll('#skills-panel [data-treeopen="cleave"]').length`),0);
+  await js(`(()=>{const w=__game.world();w.localSeat.meta.knownSkills.get('cleave').level=20;w.account.memorySecondary.delete('skill:cleave');__game.ui.refreshInventory()})()`);
+  assert.equal(await js(`document.querySelectorAll('#skills-panel [data-treeopen="cleave"]').length`),0);
+  await js(`(()=>{const w=__game.world();w.account.memorySecondary.add('skill:cleave');w.localSeat.meta.knownSkills.get('cleave').treeNodes=${JSON.stringify(treeNodesBefore)};__game.ui.refreshInventory()})()`);
+  assert.equal(await js(`document.querySelectorAll('#skills-panel [data-treeopen="cleave"]').length`),3);
+  console.log('TREE SURFACES PASS');
   await js(`document.querySelector('#tooltip').classList.add('hidden');void 0`);
   fs.writeFileSync(path.join(dir,'build-panels-skill-points.png'),(await win.webContents.capturePage()).toPNG());
   await js(`document.querySelector('[data-passiveflap]').click(); void 0`); await wait(100);

@@ -7104,7 +7104,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
             width:15px;height:15px;border-radius:2px;background:${sd.color};opacity:0.9;
             color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${skillIconSvg(sd,15)}</span>
           <span style="min-width:0">
-            <span style="display:block;font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${skillInstanceName(seated)}</span>
+            ${this.skillTreeLinkHtml(seated, esc(skillInstanceName(seated)), 'rack-skill-name')}
             <span style="display:block;font-size:8px;color:#8a8678">Lv ${seated.level}</span>
           </span>
         </div>
@@ -7206,35 +7206,25 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
           ${chips || `<span style="color:#8a8678">no arts captured: take a studied kind's blow</span>`}
         </div>`;
       }
-      // The skill-tree strip opens its inventory page: level-band ticks, the
-      // point count, the committed limb, a waiting-PIP that lights the
-      // handle gold while a point is free, and the Font's reset ritual when
-      // a font stands near. Chunky buttons: couch lens + pad law.
+      // Tree surfaces share one navigation verb; the whole summary is the
+      // handle, while its level-band ticks retain their individual tooltips.
       let modeRow = empowermentRank(inst) && !hasEmpowermentPassive(def)
         ? this.empowermentBudgetHtml(inst) + '<span style="color:#8a8678"> · banked until this skill has a passive slot</span>' : '';
       if (def.tree && !world.memorySecondaryRefusal(def.id)) {
         const tree = def.tree;
-        const memoryWhy = world.memorySecondaryRefusal(def.id);
         const open = inst.level >= tree.level;
         const spent = inst.treeNodes ?? [];
         const budget = treePointBudget(inst).total;
         const free = Math.max(0, budget - spent.length);
         const committed = treeSpentBranch(inst);
-        const pip = free > 0 && !memoryWhy
+        const pip = free > 0
           ? `<span title="${free} tree point${free === 1 ? '' : 's'} waiting" style="color:#ffd700">◉ ${free}</span>`
           : '';
-        modeRow = `
-          <div style="margin-top:3px;font-size:10px;color:#d8b86a;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+        modeRow = this.skillTreeLinkHtml(inst, `
             <span>Tree:</span>
-            ${memoryWhy ? `<span style="color:var(--text-dim)">${esc(memoryWhy)}</span>` : ''}
             ${committed ? `<span style="color:${def.color}">${committed.name}</span>` : open ? '<span style="color:#8a8678">unchosen</span>' : ''}
             ${this.treeLevelBarHtml(inst)}<span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span> ${pip}${this.empowermentBudgetHtml(inst)}
-            ${open
-              ? `<button class="gem-chip" data-treeopen="${def.id}"
-                  style="border-color:${free > 0 && !memoryWhy ? '#ffd700' : '#d8b86a'};${free > 0 && !memoryWhy ? 'color:#ffd700;' : ''}"
-                  title="${memoryWhy ? esc(memoryWhy) : free > 0 ? 'A point waits — open the tree to spend it' : 'Open this skill\'s tree'}">⟡ Tree</button>`
-              : ''}
-          </div>`;
+          `, `tree-summary${free > 0 ? ' tree-summary-ready' : ''}`);
       }
       // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
       // landing button while a lifted graft is looking for its carrier.
@@ -7270,7 +7260,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             title="Learned but not on the bar — drag it from the strip onto a rack seat above">unseated</span>`;
       return `
         <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" data-drop="gemSock:${def.id}" style="border-left:3px solid ${def.color}">
-          <div class="name">${skillInstanceName(inst)} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
+          <div class="name">${this.skillTreeLinkHtml(inst, esc(skillInstanceName(inst)))} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
             ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px"
               title="${esc(`Unlocked at skill level ${t.level}: ${t.mods.map(mo => formatModLine(mo, mo.value)).join(' · ')}`)}">${esc(t.label)}</span>`).join('')}
             ${nextThresh ? `<span style="font-size:9px;color:#8a8498;margin-left:4px"
@@ -7339,7 +7329,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       world.requestMeta({ t: 'levelSupportSocket', skillId, socket: Number(sock) });
       refresh();
     }));
-    // The tree handle follows the Skills page's owner.
+    // Tree surfaces follow the Skills page's owner. Native buttons also keep
+    // keyboard activation and the drag fabric's inner-control protection.
     q<HTMLButtonElement>('button[data-treeopen]').forEach(btn => btn.addEventListener('click', () => {
       this.openSkillTree(btn.dataset.treeopen!, this.panelSeatIds.get(container));
     }));
@@ -8055,14 +8046,23 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }
   }
 
-  /** One hoverable segment per earned point, in allocation order. Partial
-   *  fill shows level progress; the number below each tick is its unlock. */
+  /** Present existing content as a tree link only when its tree is accessible. */
+  private skillTreeLinkHtml(inst: SkillInstance, content: string, classes = ''): string {
+    if (!inst.def.tree || inst.level < inst.def.tree.level || this.getWorld().memorySecondaryRefusal(inst.def.id)) {
+      return `<span class="${classes}">${content}</span>`;
+    }
+    return `<button type="button" class="skill-tree-link ${classes}" data-treeopen="${inst.def.id}"
+      aria-label="${esc(`Open ${skillInstanceName(inst)} skill tree`)}">${content}</button>`;
+  }
+
   private empowermentBudgetHtml(inst: SkillInstance): string {
     const b = treePointBudget(inst);
     return empowermentRank(inst) ? '<span style="color:#e8b878">Ability: ' + b.abilityFree + ' free · '
       + 'Empowerment: ' + b.passiveFree + '/' + b.passive + ' free (passive only)</span>' : '';
   }
 
+  /** One hoverable segment per earned point, in allocation order. Partial
+   *  fill shows level progress; the number below each tick is its unlock. */
   private treeLevelBarHtml(inst: SkillInstance, width = 110): string {
     const segments = SKILL_LEVEL_BANDS.map((level, point) => {
       const start = SKILL_LEVEL_BANDS[point - 1] ?? 0;
