@@ -238,6 +238,11 @@ export class MenuBar {
     if (!this.trayOpen) return;
     this.trayOpen = false;
     hideTooltip();
+    // Dismissal returns control to gameplay. Escape can turn the clicked
+    // trigger's retained focus into :focus-visible; do not leave it glowing.
+    // A picked page may already own focus, so release only this tray's focus.
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && (focused === this.btn || this.tray.contains(focused))) focused.blur();
     this.paint();
   }
 
