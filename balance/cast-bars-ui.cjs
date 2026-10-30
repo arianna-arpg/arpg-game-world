@@ -11,6 +11,9 @@ const log = value => fs.appendFileSync(logfile,JSON.stringify(value)+'\n');
 const supports = JSON.parse(execFileSync('node',['--import','tsx','--input-type=module','-e',
   "import { SUPPORTS } from './src/data/supports.ts';process.stdout.write(JSON.stringify(Object.fromEntries(['perfect_draw','wandering_mark','overcharge'].map(id=>[id,SUPPORTS[id]]))));"],
   {cwd:root,encoding:'utf8',windowsHide:true}));
+const tagColors = JSON.parse(execFileSync('node',['--import','tsx','--input-type=module','-e',
+  "import { VIS_CFG } from './src/render/vis/visConfig.ts';process.stdout.write(JSON.stringify(VIS_CFG.castReadout.tagColors));"],
+  {cwd:root,encoding:'utf8',windowsHide:true}));
 app.setPath('userData',path.join(dir,'cast-bars-profile-'+process.pid)); app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
   const timeout=setTimeout(()=>{log('TIMEOUT');app.exit(1);},120000);
@@ -34,9 +37,9 @@ app.whenReady().then(async()=>{
       __game.devGrantSkill('fireball',1,2);
       const base=p.skills[2],supports=${JSON.stringify(supports)};
       const q=window.castQA={w,r,p,actors:[p],hidden:new Set(),obscure:false,cover:false,painted:[],events:[],
-        start(a,held=false){a.casting=null;a.useLock=0;a.cooldowns.clear();a.fillResources();
+        start(a,held=false,tags){a.casting=null;a.useLock=0;a.cooldowns.clear();a.fillResources();
           const ids=held?['perfect_draw','wandering_mark','overcharge']:['perfect_draw','wandering_mark'];
-          const inst={...base,sockets:ids.map(id=>({def:supports[id],level:1})),def:{...base.def,requirements:undefined,manaCost:0,cooldown:0,useTime:1,color:a===p?'#43d9f1':'#ef7356'}};
+          const inst={...base,sockets:ids.map(id=>({def:supports[id],level:1})),def:{...base.def,requirements:undefined,manaCost:0,cooldown:0,useTime:1,color:a===p?'#43d9f1':'#ef7356',...(tags?{tags}:{})}};
           if(!w.useSkill(a,inst,{x:a.pos.x+100,y:a.pos.y},true))throw Error('cannot cast '+a.id);
           a.casting.elapsed=a.casting.total*.8;a.casting.indicatorAt=.8;if(held)a.casting.stage=2;
         },
@@ -81,13 +84,38 @@ app.whenReady().then(async()=>{
       for(const row of faded.painted)assert.deepEqual(row.pixel,[8,8,8,255],'intentional fade covers cast bars');
       await run('castQA.cover=false;castQA.obscure=false;void 0;');
     }
+    // Real pixels show semantic colors for both enemies and the local player.
+    const tagPixels=await run(`(()=>{
+      const q=castQA,{r,p}=q,palette=${JSON.stringify(tagColors)},rows=[];
+      const original=r.castBars.add.bind(r.castBars);let current;
+      r.castBars.add=bar=>{if(bar.actor===p)current=bar;return original(bar);};
+      const near=(actual,hex)=>{const rgb=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));return rgb.every((v,i)=>Math.abs(v-actual[i])<12);};
+      for(const scale of [1,.75,.5])for(const tags of [...Object.keys(palette.palette).map(t=>[t]),['fire','cold'],[]]){
+        r.setRenderScale(scale);q.actors.forEach(a=>q.start(a,false,tags));
+        for(const a of q.actors){a.casting.mode='cast';a.casting.strikeTimings=[];a.casting.elapsed=a.casting.total*.5;}
+        q.render();const surface=r.pixelScale<1?r.octx:r.ctx,zoom=r.zoom/(r.pixelScale<1?r.pixelScale:1);
+        const colors=current.colors, pixels=colors.map((color,i)=>{
+          const top=Math.round(5*i/colors.length),bottom=Math.round(5*(i+1)/colors.length);
+          const x=(p.pos.x-22+8-r.cam.x)*zoom,y=(p.pos.y-p.radius-18+(top+bottom)/2-r.cam.y)*zoom;
+          const pixel=Array.from(surface.getImageData(Math.floor(x),Math.floor(y),1,1).data);
+          if(!near(pixel,color))throw Error('tag pixel '+JSON.stringify({scale,tags,color,pixel}));return pixel;
+        });rows.push({scale,tags,colors,pixels});
+      }
+      r.castBars.add=original;q.actors.forEach(a=>q.start(a));
+      // Sampling itself never reads scene pixels on this drawing thread.
+      const get=CanvasRenderingContext2D.prototype.getImageData;let reads=0;
+      CanvasRenderingContext2D.prototype.getImageData=function(...args){reads++;return get.apply(this,args);};
+      try{r.castBarContrast.reset();r.render(q.w);}finally{CanvasRenderingContext2D.prototype.getImageData=get;}
+      if(reads)throw Error('synchronous scene readback: '+reads);
+      return {rows,drawingThreadReadbacks:reads};
+    })()`);log({tagPixels});await capture('tag-palette');
     // Contrast changes independently of placement and without a new box or leader.
-    const contrast=await run(`(()=>{
+    const contrast=await run(`(async()=>{
       const q=castQA,r=q.r;q.obscure=false;r.setRenderScale(1);q.actors.forEach(a=>q.start(a));
       const native=r.drawEyecatch.bind(r),decision=r.castBarContrast.outline.bind(r.castBarContrast),seen=[];
       r.castBarContrast.outline=(rect,ink)=>{const out=decision(rect,ink);seen.push(out);return out;};
-      const sample=color=>{r.drawEyecatch=(...args)=>{native(...args);const c=r.ctx;c.save();c.setTransform(1,0,0,1,0,0);c.fillStyle=color;c.fillRect(0,0,r.canvas.width,r.canvas.height);c.restore();};seen.length=0;const frame=q.render();return {decisions:[...seen],frame};};
-      const clear=sample('#030303'),matching=sample('#43d9f1');
+      const sample=async color=>{r.drawEyecatch=(...args)=>{native(...args);const c=r.ctx;c.save();c.setTransform(1,0,0,1,0,0);c.fillStyle=color;c.fillRect(0,0,r.canvas.width,r.canvas.height);c.restore();};r.castBarContrast.invalidate();const started=performance.now();while(!r.castBarContrast.pixels){q.render();if(r.castBarContrast.unavailable)throw Error("contrast worker unavailable");if(performance.now()-started>3000)throw Error("contrast worker timeout");if(!r.castBarContrast.pixels)await new Promise(requestAnimationFrame);}seen.length=0;const frame=q.render();return {decisions:[...seen],frame};};
+      const clear=await sample('#030303'),matching=await sample('${tagColors.palette.fire}');
       if(clear.decisions.at(-1)!==null||!matching.decisions.at(-1))throw Error('adaptive outline decision');
       if(JSON.stringify(clear.frame.painted.map(v=>v.marker))!==JSON.stringify(matching.frame.painted.map(v=>v.marker)))throw Error('contrast moved bars');
       r.drawEyecatch=native;r.castBarContrast.outline=decision;q.render();return {clear:clear.decisions.at(-1),matching:matching.decisions.at(-1)};

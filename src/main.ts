@@ -1,3 +1,4 @@
+import './ui/memoryReveal.css';
 import { sanitizeCosmeticLoadout } from './meta/cosmetics';
 // ---------------------------------------------------------------------------
 // Entry point: boots the world, runs the loop, and routes player input into

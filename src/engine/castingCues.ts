@@ -1,9 +1,19 @@
 import type { Actor, CastingState } from './actor';
-import { guardBashReady, instanceChannel, instanceMods, skillContextTags } from './skills';
+import { DAMAGE_TYPES, type DamageType } from './stats';
+import { guardBashReady, instanceBaseTags, grantedTags, instanceChannel, instanceMods, skillContextTags } from './skills';
 import { selfProfile, SELF_VISUAL_STYLE as S } from '../data/skillSelfVisuals';
 import { castingCueStyle } from '../data/castingCues';
 import { combatCueFlash } from './combatCues';
 import { hasDecorativeCast } from '../data/skillCastVisuals';
+
+/** Resolved skill tags, not a damage forecast. A render shell keeps the host's
+ * result, including an explicitly untyped cast; old stubs remain untyped. */
+export function castingDamageTags(cs: CastingState): DamageType[] {
+  if (cs.damageTags) return [...cs.damageTags];
+  if (!cs.inst.def.tags || !cs.inst.def.delivery) return [];
+  const tags = new Set([...instanceBaseTags(cs.inst), ...grantedTags(cs.inst)]);
+  return DAMAGE_TYPES.filter(type => tags.has(type));
+}
 
 export interface CastingCue { fill: number; facing: number; style: string; color: string; skillId?: string; }
 const unit = (v: number) => Math.max(0, Math.min(1, v));

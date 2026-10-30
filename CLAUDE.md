@@ -247,7 +247,7 @@ split films there; bump the page's `?v=` stamp when either file changes. See
 `docs/design/site-cinema.md`; verify with the hidden `balance/site-cinema-ui.cjs`.
 Skill showcases: any element wearing `data-skill-showcase` plays that skill live,
 always matching the build; where showcases appear is each surface's choice
-(the player Codex and bag gem tooltip). `src/showcase/` + `showcase.html`
+(the player Codex, bag gem tooltip and Vault `memoryReveal` results). `src/showcase/` + `showcase.html`
 (a sandboxed engine realm that never saves) + `data/skillShowcase.ts`; see
 `docs/engine/skill-showcases.md`, verify `probe_skillshowcase.ts` and the hidden
 `balance/skill-showcase-ui.cjs` after a build. The site's skill clips
@@ -577,6 +577,14 @@ class discovery now grants its live starting bar plus authored supports.
 saved investment transfer, host authority and the future removal of the
 temporary debug Grand Codex. Verify `probe_memoryunlocks.ts` and the isolated
 `balance/memory-unlocks-ui.cjs` harness after a build.
+
+Vault `memoryReveal` presentation lives in `ui/memoryReveal.ts`, with pace,
+defaults and tier copy in `ui/memoryRevealConfig.ts`. It reads already-granted
+receipts, uses the shared live skill showcase, and supports Skip, saved Instant
+mode, preview pause/autoplay, reduced motion, last-result review and searchable
+weighted pool odds. No animation owns payment or RNG. Verify memoryunlocks,
+skillshowcase, all types and both hidden Memory/showcase UI harnesses with an
+isolated build; the contract remains `docs/meta/memory-unlocks.md`.
 
 `docs/design/world-boss-colossi.md` documents the world-boss encounter pass:
 `data/worldBossEncounters.ts` owns Cragmaw's colossal anatomy and the two
