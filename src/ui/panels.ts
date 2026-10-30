@@ -4,7 +4,7 @@ import { hollowWakeBrand, hollowWakeMenuHeader } from './brand';
 import type { SceneCardSpec } from '../data/scenes';
 import { mountSideScreen, sideScreenContext, captureSideScreenFocus } from './sideScreen';
 import { SIDE_SCREENS } from './sideScreenConfig';
-import { frontScreenHtml, bindFrontScreen } from './frontScreen';
+import { frontScreenHtml, bindFrontScreen, setFrontEntrance } from './frontScreen';
 import { newCodexState, renderCodex } from './codex';
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
 import { MemoryReveal } from './memoryReveal';
@@ -11415,10 +11415,20 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     onRoster?: (e: RosterEntry) => void,
     notice?: string,
   ): void {
+    const entering = sideScreenContext() !== 'entrance';
     this.hideAll();
     this.startHandlers = { onStart, onContinue, onCoop, onRoster, notice };
     this.renderStartMenu();
+    setFrontEntrance(entering);
     this.startMenu.classList.remove('hidden');
+  }
+
+  /** Child menus can hide their host before returning; retain the known
+   * entrance origin instead of mistaking that transient hide for gameplay. */
+  private returnToStartMenu(): void {
+    const h = this.startHandlers!;
+    this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster);
+    setFrontEntrance(false);
   }
 
   private renderStartMenu(): void {
@@ -11452,7 +11462,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       if (this.onBeginRun) { this.onBeginRun(); return; }
       // The way back is threaded in: class select reached from here can
       // always return (glyph or Back) instead of soft-locking into a run.
-      this.showClassSelect(h.onStart, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster));
+      this.showClassSelect(h.onStart, () => this.returnToStartMenu());
     });
     if (h.onCoop) document.getElementById('sm-coop')!.addEventListener('click', () => h.onCoop!());
     document.getElementById('sm-continue')!.addEventListener('click', () => {
@@ -11461,21 +11471,21 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     });
     document.getElementById('sm-immortals')?.addEventListener('click', () => this.renderImmortalRoster());
     document.getElementById('sm-vault')?.addEventListener('click', () =>
-      this.showAccountScreen(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
+      this.showAccountScreen(() => this.returnToStartMenu()));
     document.getElementById('sm-codex')!.addEventListener('click', () => {
       this.startMenuBack = () => { this.closeCodexView(); this.renderStartMenu(); };
       this.codexView(this.startMenu, this.startMenuBack);
     });
     document.getElementById('sm-chronicle')!.addEventListener('click', () =>
-      this.showChronicle(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
+      this.showChronicle(() => this.returnToStartMenu()));
     document.getElementById('sm-keys')!.addEventListener('click', () => {
       // Mark Options as a subscreen so background roster updates cannot
       // replace it. Returning also disarms any pending rebind capture.
       this.startMenuBack = () => {
         this.disarmRebind();
-        this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster);
+        this.returnToStartMenu();
       };
-      this.renderOptions(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster));
+      this.renderOptions(this.startMenu, () => this.returnToStartMenu());
     });
     document.getElementById('sm-exit')!.addEventListener('click', () => { void this.exitGame(); });
     this.onStartMenuRender?.();
@@ -11593,7 +11603,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     // Vault returns THROUGH the menu proper back to this pane.
     document.getElementById('sm-imm-vault')?.addEventListener('click', () =>
       this.showAccountScreen(() => {
-        this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster);
+        this.returnToStartMenu();
         if (this.getAccount().roster.length) this.renderImmortalRoster();
       }));
     document.getElementById('sm-imm-back')!.addEventListener('click', () => this.renderStartMenu());

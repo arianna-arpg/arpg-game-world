@@ -17,7 +17,7 @@
     "brand": "node scripts/build-brand.mjs",
     "check": "node scripts/build-brand.mjs --check && tsc --noEmit && tsc -p tsconfig.launcher.json && tsc -p tsconfig.sim.json",
     "test:reliability": "tsx balance/probe_savewriteorder.ts && tsx balance/probe_sharedstructures.ts && tsx balance/probe_altar_bodies.ts && tsx balance/check_loadingpresentation.ts",
-    "test:reliability:ui": "electron balance/menu-tray-ui.cjs && electron balance/loading-screen-ui.cjs && electron balance/loading-isolation-ui.cjs && electron balance/save-exit-ui.cjs",
+    "test:reliability:ui": "electron balance/menu-tray-ui.cjs && electron balance/front-entrance-ui.cjs && electron balance/loading-screen-ui.cjs && electron balance/loading-isolation-ui.cjs && electron balance/save-exit-ui.cjs",
     "test:shared-fixes": "tsx balance/shared-fixes-check.ts",
     "test:lighting": "tsx balance/probe_lightingstability.ts && electron balance/lighting-stability-ui.cjs && electron balance/collision-shadow-ui.cjs && electron balance/visibility-pacing-ui.cjs",
     "test:layers": "tsx balance/layer-integrity-check.ts && electron balance/layer-visual-ui.cjs",

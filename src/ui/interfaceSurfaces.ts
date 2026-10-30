@@ -28,6 +28,7 @@ export const INTERFACE_SURFACES = {
   ],
   entrances: [
     '.panel:not(.hidden):not(.inventory-surface):not(:has(> .front-screen, > .side-screen, > .interface-page))',
+    '#start-menu:not(.hidden):has(> .front-screen)', '#front-backdrop[data-front-enter]',
     '.side-pane', '.interface-page', '.menu-tray:not(.hidden)', '.interface-dialog', '.seal-box',
   ],
 } as const;

@@ -70,6 +70,12 @@ export function ensureFrontAtmosphere(): void {
   window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', syncAtmosphere);
 }
 
+/** Navigation captures its origin before hiding menus. A transient hide during
+ * a side-screen return must not replay the scene's full entrance. */
+export function setFrontEntrance(entering: boolean): void {
+  document.getElementById('front-backdrop')?.toggleAttribute('data-front-enter', entering);
+}
+
 export function frontScreenHtml(state: FrontScreenState): string {
   ensureFrontAtmosphere();
   const cfg = FRONT_SCREEN;
