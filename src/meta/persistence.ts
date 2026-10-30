@@ -93,11 +93,22 @@ function orderedSaveUrl(slot: SaveSlot): string {
   diskSequences.set(key, sequence);
   return `/__save/${slot}?writer=${diskWriter}&sequence=${sequence}`;
 }
+const pendingDiskSaves = new Set<Promise<void>>();
+
+/** Explicit desktop exits keep the server alive until already-issued writes
+ * settle. Ordinary autosaves remain nonblocking; unload still uses beacons. */
+export async function flushPendingDiskSaves(): Promise<void> {
+  while (pendingDiskSaves.size) await Promise.all([...pendingDiskSaves]);
+}
+
 function postDiskSave(url: string, body: string): Promise<void> {
   try {
-    return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
+    const pending = fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
       .then(() => undefined)
       .catch(() => { /* endpoint absent — localStorage is the fallback */ });
+    pendingDiskSaves.add(pending);
+    void pending.then(() => pendingDiskSaves.delete(pending));
+    return pending;
   } catch { return Promise.resolve(); }
 }
 /** AWAITED, latch-FREE disk write — the save-import lane's primitive
