@@ -1019,11 +1019,11 @@
     #start-menu .esc-btns button, #escape-menu .esc-btns button,
     #account-screen .acct-btns button, #expedition-setup .acct-btns button,
     #class-select .acct-btns button, #death-screen button, #story-card button,
-    #mu-card .esc-btns button, #mu-card #mu-name-clear, .panel-foot button {
-      background: linear-gradient(180deg, #30304a, #232338);
-      color: var(--gold); border: 1px solid var(--gold); border-radius: 5px;
+    #mu-card .esc-btns button, #mu-card :where(#mu-name-clear), .panel-foot button {
+      background: var(--inv-control-fill, linear-gradient(180deg, #30304a, #232338));
+      color: var(--inv-text, var(--gold)); border: 1px solid var(--inv-edge, var(--gold)); border-radius: var(--inv-control-radius, 5px);
       font-size: 14px; font-family: inherit; cursor: var(--cursor-point, pointer);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+      box-shadow: var(--inv-control-shadow, 0 1px 4px rgba(0,0,0,0.45));
       transition: background 0.15s, box-shadow 0.15s, transform 0.05s;
     }
     #start-menu .esc-btns button:hover:not(:disabled), #escape-menu .esc-btns button:hover:not(:disabled),
@@ -1031,8 +1031,8 @@
     #class-select .acct-btns button:hover:not(:disabled), #death-screen button:hover:not(:disabled),
     #story-card button:hover:not(:disabled), #mu-card .esc-btns button:hover:not(:disabled),
     .panel-foot button:hover:not(:disabled) {
-      background: linear-gradient(180deg, #3d3d5c, #2b2b46);
-      box-shadow: 0 0 9px rgba(200,168,75,0.4);
+      background: var(--inv-control-hover, linear-gradient(180deg, #3d3d5c, #2b2b46));
+      box-shadow: var(--inv-control-glow, 0 0 9px rgba(200,168,75,0.4));
     }
     #start-menu .esc-btns button:active:not(:disabled), #escape-menu .esc-btns button:active:not(:disabled),
     #account-screen .acct-btns button:active:not(:disabled), #expedition-setup .acct-btns button:active:not(:disabled),
