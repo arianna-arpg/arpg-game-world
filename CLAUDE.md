@@ -13,6 +13,10 @@ Adaptive outlines use `VIS_CFG.castReadout.contrast`; stacking uses `overlay.pri
 See `docs/render/cast-bars.md`; verify castbars, the existing casting/timing probes,
 all types and the hidden cast-bars, strike-timing and cast-readout UI courses.
 
+The cinematic front door uses ui/frontScreenConfig.ts for presentation and action definitions.
+See [front-screen](docs/ui/front-screen.md); verify all types, build, game smoke
+and the isolated hidden balance/front-screen-ui.cjs acceptance.
+
 **Current scope:** [CURRENT.md](CURRENT.md) is the project direction and active/deferred work entrypoint. Deliver the offline seamless generation/content/event vision; new shard/MMORPG work is deferred. Prepare useful future boundaries without letting hosting dictate this phase. Existing zone content and the owner's game references are examples and reusable material, not generation laws. This priority supersedes conflicting older roadmaps and hosting handoffs.
 
 Generation must select and combine varied possibilities: sites, objectives, points of interest, events, locations, quests, unbounded objectives, and retained bounded zones with their authored objectives are examples, not mandatory templates or a closed list. The hierarchy **world map → regions → zones → chunks** organizes geography; it does not prescribe each place's gameplay. Read [the current generation decisions](docs/ai/gameplay-decisions-20261019.md#retained-zones-inside-continuous-terrain) before world/content work. Game-camera zoom follows main's fixed scale; map navigation is separate. Live cast aiming is an unused authoring opt-in, not a change to existing skills.

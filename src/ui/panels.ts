@@ -1,3 +1,4 @@
+import { frontScreenHtml, bindFrontScreen } from './frontScreen';
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
 import { storedSupportsHtml } from './storedSupports';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
@@ -11309,42 +11310,21 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     // THE RESUME FACE: Continue Run says WHO it resumes on hover — the quit
     // flush's exact-resume promise, spoken at the door.
     const cont = this.continueSave;
-    const contWho = cont
-      ? `${cont.name ?? CLASSES.find(c => c.id === cont.classId)?.name ?? 'the character'}, Level ${cont.level}`
-      : '';
-    const canContinue = !!cont;
-    // THE IMMORTAL SHELF: however many vessels the account swears, the menu
-    // proper spends ONE button on them — the roster lives in its own pane
-    // (renderImmortalRoster), so the option count here stays flat and no
-    // roster row can outgrow the bounding box. A fallen vessel still calls
-    // from the label so the covenant's debt is never buried a click deep.
-    const fallenN = acc.roster.filter(e => e.fallen).length;
-    const immortalsBtn = acc.roster.length
-      ? `<button id="sm-immortals">Immortal Vessels (${acc.roster.length})${fallenN
-          ? ` <span style="font-size:10px;color:#e85050">· ${fallenN} fallen</span>` : ''}</button>`
-      : '';
-    // A pending reckoning (essence standing on the account — a mid-reckoning
-    // quit, or a pre-seal-law save) surfaces on the Vault button: the seal
-    // law inside the Vault settles it the moment that visit closes.
-    const pending = isVaultAvailable(acc) && acc.credits > 0;
-    this.startMenu.innerHTML = `
-      <h1>${GAME_TITLE.toUpperCase()}</h1>
-      <div class="acct-head">Account Level <b>${acc.level}</b>${pending
-        ? ` · <b style="color:var(--gold)">${acc.credits}</b> ${META_CURRENCY_LABEL} awaiting the Reckoning` : ''}</div>
-      ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
-      <div class="esc-btns">
-        <button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>
-        <button id="sm-continue" ${canContinue
-          ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${canContinue
-          ? 'Continue Run' : 'No Run to Continue'}</button>
-        ${immortalsBtn}
-        ${isVaultAvailable(acc) ? `<button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
-          ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>` : ''}
-        <button id="sm-chronicle">Chronicle of Runs${acc.runRecords.length ? ` (${acc.runRecords.length})` : ''}</button>
-        <button id="sm-keys">Options</button>
-        ${h.onCoop ? '<button id="sm-coop">Co-op (Beta)</button>' : ''}
-        <button id="sm-exit">Exit Game</button>
-      </div>`;
+    const className = cont ? CLASSES.find(c => c.id === cont.classId)?.name ?? 'Adventurer' : '';
+    const previousFocus = this.startMenu.contains(document.activeElement) ? document.activeElement?.id : undefined;
+    this.startMenu.innerHTML = frontScreenHtml({
+      firstLife: sceneDue(acc, 'prologue'),
+      accountLevel: acc.level,
+      vessels: acc.roster.length,
+      fallen: acc.roster.filter(e => e.fallen).length,
+      records: acc.runRecords.length,
+      vaultAvailable: isVaultAvailable(acc),
+      pendingEssence: isVaultAvailable(acc) ? acc.credits : 0,
+      currency: META_CURRENCY_LABEL,
+      coopAvailable: !!h.onCoop,
+      notice: h.notice,
+      resume: cont ? { name: cont.name || className, className, level: cont.level, mode: modeById(cont.modeId).name } : undefined,
+    });
     document.getElementById('sm-start')!.addEventListener('click', () => {
       this.startMenu.classList.add('hidden');
       // THE MU REROUTE: when the shell armed onBeginRun, the press walks the
@@ -11384,6 +11364,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.renderExitScreen();
     });
     this.onStartMenuRender?.();
+    bindFrontScreen(this.startMenu, previousFocus);
   }
 
   /** THE VISIBLE DOOR's browser fallback (Exit Game with window.close()
