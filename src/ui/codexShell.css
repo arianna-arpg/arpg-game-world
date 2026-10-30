@@ -1,0 +1,85 @@
+/* Reader presentation is scoped to the shared shell. Content, discovery,
+   navigation and demonstration lifetime remain with the Codex providers. */
+.side-screen .side-content > .codex {
+  flex: 1 1 auto; min-height: 0; min-width: 0; height: auto; overflow: hidden;
+  color: var(--side-text); font: 13px/1.5 'Segoe UI', sans-serif;
+}
+.side-screen .codex * { scrollbar-color: var(--side-accent) var(--side-surface); }
+.side-screen .codex header { padding: 0 0 16px; background: transparent; }
+.side-screen .codex header h1 {
+  font: normal 32px/1.15 Georgia, serif !important; letter-spacing: .5px !important;
+  color: var(--side-text) !important;
+}
+.side-screen .codex header h1::after {
+  content: ''; display: block; height: 1px; width: 42px; margin-top: 17px; background: var(--side-accent);
+}
+.side-screen .codex .cx-eyebrow { display: none; }
+.side-screen .codex header p { color: var(--side-muted); margin-top: 12px; }
+.side-screen .codex :is(button, select, input) {
+  max-width: 100%; min-width: 0; border-radius: 2px; border-color: var(--side-line);
+  background: #ffffff04; color: var(--side-text); font: 11px/1.5 'Segoe UI', sans-serif;
+}
+.side-screen .codex select option { background: var(--side-surface); }
+.side-screen .codex :is(button, select, input):focus-visible {
+  outline-color: var(--side-accent); outline-offset: 2px;
+}
+.side-screen .codex button:hover:not(:disabled) { background: #ffffff0d; border-color: var(--side-accent); }
+.side-screen .codex nav { gap: 6px; padding: 0 0 12px; border-color: var(--side-line); }
+.side-screen .codex .cx-leaves { padding: 12px 0 0; gap: 6px; }
+.side-screen .codex :is(nav, .cx-leaves) [aria-current=true] {
+  color: var(--side-accent); background: color-mix(in srgb, var(--side-accent) 6%, transparent); border-color: var(--side-accent);
+}
+.side-screen .codex .cx-tools { padding: 14px 0 10px; gap: 8px; }
+.side-screen .codex .cx-search { min-width: min(180px, 100%); }
+.side-screen .codex .cx-tags { padding: 0; }
+.side-screen .codex .cx-count { padding: 7px 0 12px; color: var(--side-muted); font: 10px/1.5 'Segoe UI', sans-serif; }
+:is(#start-menu, #account-screen, #escape-menu) .side-screen .cx-body {
+  padding: 0; min-height: 0; border-color: var(--side-line);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); overflow: hidden;
+}
+.side-screen .codex .cx-list { border-color: var(--side-line); min-width: 0; }
+.side-screen .codex .cx-grid { gap: 10px; padding: 18px; grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); }
+.side-screen .codex .cx-card { min-height: 104px; padding: 12px; gap: 10px; }
+.side-screen .codex .cx-card b { font-size: 15px; font-weight: normal; color: var(--side-text); }
+.side-screen .codex .cx-card small { color: var(--side-muted); font-size: 10px; }
+.side-screen .codex .cx-card[aria-pressed=true] {
+  border-color: var(--side-accent); background: color-mix(in srgb, var(--side-accent) 6%, transparent); box-shadow: inset 2px 0 var(--side-accent);
+}
+.side-screen .codex .cx-card.cx-locked { background: #ffffff02; border-color: var(--side-line); opacity: .75; }
+.side-screen .codex .cx-icon { color: var(--side-accent); }
+.side-screen .codex .cx-pager { border-color: var(--side-line); padding: 12px 18px; color: var(--side-muted); }
+.side-screen .codex .cx-detail { padding: 24px; background: linear-gradient(140deg, color-mix(in srgb, var(--side-accent) 3%, transparent), #07121466); }
+:is(#start-menu, #account-screen, #escape-menu) .side-screen .codex .cx-detail h2 {
+  text-transform: none; letter-spacing: .2px; border: 0; padding: 0; color: var(--side-text); font: normal 26px/1.25 Georgia, serif; }
+.side-screen .codex .cx-detail :is(p, dt) { color: var(--side-muted); }
+.side-screen .codex .cx-detail dd { color: var(--side-text); }
+.side-screen .codex .cx-state { color: var(--side-accent); }
+.side-screen .codex .cx-badges span { border-color: var(--side-line); color: var(--side-accent); }
+.side-screen .codex .cx-preview { border-color: var(--side-line); }
+.side-screen .codex .cx-empty { color: var(--side-muted); }
+@container side-pane (max-width: 760px) {
+  .side-screen .codex header p { display: none; }
+  .side-screen .codex header { padding-bottom: 14px; }
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen .cx-body { display: block; overflow: auto; flex: 1 1 auto; }
+  .side-screen .codex .cx-list { height: 260px; border-right: 0; border-bottom: 1px solid var(--side-line); }
+  .side-screen .codex .cx-detail { overflow: visible; padding: 20px; }
+}
+@container side-pane (max-width: 480px) {
+  .side-screen .codex header h1 { font-size: 25px !important; }
+  .side-screen .codex :is(nav, .cx-leaves) button { padding: 6px 8px; }
+  .side-screen .codex .cx-tools > * { flex: 1 1 120px; }
+  .side-screen .codex .cx-tools .cx-search { flex-basis: 100%; }
+  .side-screen .codex .cx-grid { padding: 12px; grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr)); }
+  .side-screen .codex .cx-pager { gap: 5px; padding: 10px 12px; }
+  .side-screen .codex .cx-pager button { padding: 6px 8px; }
+  .side-screen .codex .cx-detail { padding: 16px; }
+}
+
+/* The reader is nested inside side-content, so its head needs the same
+   non-shrinking contract as the other views' direct header regions. */
+:is(#start-menu, #account-screen, #escape-menu) .side-screen .cx-head {
+  flex: 0 0 auto; max-height: 50%;
+}
+@media (max-height: 760px) and (min-width: 800px) {
+  .side-screen .codex header p { display: none; }
+}

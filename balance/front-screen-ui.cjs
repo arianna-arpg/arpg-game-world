@@ -59,7 +59,7 @@ app.whenReady().then(async () => {
     await pause(80);
     assert.equal(await run(() => document.activeElement.id), 'sm-chronicle');
     await run(() => document.querySelector('#sm-start').focus());
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 3; i++) {
       win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Down' });
       win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Down' });
     }
@@ -171,6 +171,33 @@ app.whenReady().then(async () => {
     await click('[data-invest="feat_bounty_board"]');
     assert.equal(await run(() => __game.account().credits), 120, 'The free claim must retain the essence pool');
     assert.equal(await run(() => document.querySelectorAll('#account-screen .side-screen').length), 1);
+    await run(() => {
+      document.querySelector('.vault-body').scrollTop=90;
+      __frontQA.vaultScroll=document.querySelector('.vault-body').scrollTop;
+      __frontQA.invested=JSON.stringify(__game.account().invested);
+    });
+    await click('#acct-codex');
+    assert.equal(await run(() => document.querySelector('#account-screen .side-screen').dataset.screen),'codex');
+    assert.equal(await run(() => document.querySelector('#account-screen .side-screen').dataset.context),'entrance');
+    assert.equal(await run(() => getComputedStyle(document.querySelector('#front-backdrop')).display),'block');
+    assert(await run(() => document.querySelector('[data-cx-page="owned"]').getAttribute('aria-current')==='true'));
+    await run(() => { document.querySelector('[data-cx-section="abilities"]').focus(); });
+    await click('[data-cx-section="abilities"]'); await pause(60);
+    assert.equal(await run(() => document.activeElement.dataset.cxSection),'abilities');
+    assert.equal(await run(() => document.querySelectorAll('#account-screen .side-screen').length),1);
+    await run(() => { const b=document.querySelector('[data-cx-search]');b.focus(); });
+    win.webContents.sendInputEvent({type:'keyDown',keyCode:'Tab'});
+    win.webContents.sendInputEvent({type:'keyUp',keyCode:'Tab'});
+    await pause(80);
+    assert(await run(() => document.activeElement.matches('[data-cx-tag]')));
+    win.webContents.sendInputEvent({type:'keyDown',keyCode:'Escape'});
+    win.webContents.sendInputEvent({type:'keyUp',keyCode:'Escape'});
+    await pause(120);
+    assert(await run(() => !!document.querySelector('#acct-close') && __game.account().credits===120 &&
+      JSON.stringify(__game.account().invested)===__frontQA.invested &&
+      document.querySelector('.vault-body').scrollTop===__frontQA.vaultScroll));
+    await click('#acct-codex'); await click('[data-cx-back]');
+    assert.equal(await run(() => __game.account().credits),120);
     await click('#acct-wardrobe'); await click('[data-wd-back]');
     assert.equal(await run(() => document.querySelector('#account-screen .side-screen').dataset.context), 'entrance');
     await click('#acct-close');
@@ -179,7 +206,7 @@ app.whenReady().then(async () => {
     assert.equal(await run(() => __game.account().credits), 120);
     await click('#acct-close'); await click('#seal-go');
     assert.equal(await run(() => __game.account().credits), 0);
-    report.checks.push('Shared Vault shell preserves free claim, Wardrobe return and explicit Reckoning seal');
+    report.checks.push('Shared Vault shell preserves free claim, Codex Back/Escape, investments, shelf scroll, native keyboard focus, Wardrobe return and explicit Reckoning seal');
 
     await run(() => {
       __game.account().runRecords = Array.from({ length: 20 }, (_, i) => ({
@@ -198,8 +225,8 @@ app.whenReady().then(async () => {
     for (const [width,height,scale] of [[1600,1000,1],[1280,720,1],[390,844,1],[390,844,2],[320,568,2]]) {
       win.setContentSize(width,height);
       await run(s => document.documentElement.style.setProperty('--ui-scale',String(s)), scale);
-      for (const [open,close,kind] of [['#sm-vault','#acct-close','vault'],['#sm-chronicle','#chron-close','chronicle'],['#sm-keys','#start-menu #esc-back','options'],['#sm-immortals','#sm-imm-back','immortals']]) {
-        await click(open); await pause(250);
+      for (const [open,close,kind] of [['#sm-vault','#acct-close','vault'],['#sm-chronicle','#chron-close','chronicle'],['#sm-keys','#start-menu #esc-back','options'],['#sm-immortals','#sm-imm-back','immortals'],['#sm-codex','[data-cx-back]','codex']]) {
+        await click(open); if (kind==='codex') await click('[data-cx-section="abilities"]'); await pause(250);
         const bounds = await run(() => {
           const shell = document.querySelector('.panel:not(.hidden) > .side-screen');
           const pane = shell.querySelector('.side-pane'), body = shell.querySelector('.side-scroll'), foot = shell.querySelector('.side-foot');
@@ -211,6 +238,12 @@ app.whenReady().then(async () => {
               button.contains(document.elementFromPoint(br.x+br.width/2,br.y+br.height/2)) };
         });
         assert(bounds.fits && bounds.bodyHeight > 24 && bounds.reachable, kind+' '+[width,height,scale]+' '+JSON.stringify(bounds));
+        if (kind==='codex' && width>=1280 && scale===1) {
+          assert(await run(() => {
+            const input=document.querySelector('[data-cx-search]'), r=input.getBoundingClientRect();
+            return input===document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
+          }), 'Desktop Codex search is visible without scrolling the header');
+        }
         if (kind==='immortals') {
           assert(await run(() => !window.__rosterInjected && !document.querySelector('.sm-roster img')));
           await run(() => { const b=document.querySelector('#sm-roster-del-qa-extra-15'); b.scrollIntoView({block:'nearest'}); });
@@ -224,7 +257,7 @@ app.whenReady().then(async () => {
         await click(close);
       }
     }
-    report.checks.push('Vault, Chronicle, Options and Immortal Vessels keep readable scrolling regions and reachable fixed controls across five viewport/scale combinations');
+    report.checks.push('Vault, Chronicle, Options, Immortal Vessels and Codex keep readable scrolling regions and reachable fixed controls across five viewport/scale combinations');
     win.setContentSize(1600,1000);
     await run(() => document.documentElement.style.setProperty('--ui-scale','1'));
     await click('#sm-chronicle');
@@ -265,7 +298,7 @@ app.whenReady().then(async () => {
         const root = document.querySelector('#start-menu'), r = root.getBoundingClientRect();
         return { width: r.width, height: r.height, viewport: innerWidth, horizontal: root.scrollWidth <= root.clientWidth + 1, vertical: root.scrollHeight <= root.clientHeight + 1 };
       });
-      if (width >= 800 && height >= 600 && scale === 1) assert(bounds.vertical, 'Standard desktop menu must fit without scrolling: ' + [width, height]);
+      if (width >= 800 && height >= 600 && scale === 1) assert(bounds.vertical, 'Standard desktop menu must fit without scrolling: ' + [width, height] + ' ' + JSON.stringify(bounds));
       assert(bounds.horizontal, JSON.stringify({ width, height, scale, bounds }));
       assert(Math.abs(bounds.width - width) < 2 && Math.abs(bounds.height - height) < 2);
       const reachable = await run(() => {

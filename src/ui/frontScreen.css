@@ -141,13 +141,14 @@ body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
   .front-legacy { margin-top: 10px; padding-top: 8px; }
 }
 @media (max-height: 640px) and (min-width: 800px) {
-  #start-menu .front-brand h1 { font-size: 48px; }
-  .front-tagline { margin-top: 12px; font-size: 13px; }
-  .front-brand { margin-bottom: 16px; }
-  .front-main { padding-top: 12px; padding-bottom: 12px; }
+  #start-menu .front-brand h1 { font-size: 40px; }
+  .front-tagline { margin-top: 8px; font-size: 13px; }
   .front-brand { margin-bottom: 12px; }
-  .front-tagline { margin-top: 8px; }
-  #start-menu .front-brand h1 { font-size: 44px; }
+  .front-main { padding-top: 8px; padding-bottom: 8px; }
+  .front-header { padding-bottom: 12px; }
+  #start-menu .front-action { min-height: 32px; padding-top: 5px; padding-bottom: 5px; }
+  #start-menu .front-primary { min-height: 58px; }
+  .front-footer { padding-top: 10px; }
 }
 @media (max-width: 600px) {
   .front-landscape { background-position: 76% center; }

@@ -1,6 +1,7 @@
 import { mountSideScreen, sideScreenContext, captureSideScreenFocus } from './sideScreen';
 import { SIDE_SCREENS } from './sideScreenConfig';
 import { frontScreenHtml, bindFrontScreen } from './frontScreen';
+import { newCodexState, renderCodex } from './codex';
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
 import { storedSupportsHtml } from './storedSupports';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
@@ -602,6 +603,9 @@ export class UI {
    *  Session-local by design — an abandoned confirm simply lapses. */
   private savePortNote: string | null = null;
   private savePortPending: SaveImportPlan | null = null;
+  private codexState = newCodexState();
+  private codexDispose: (() => void) | null = null;
+
   /** THE VAULT SHELVES (meta/unlocks.ts VAULT_TABS — the store's organization
    *  as data): the active shelf, plus each shelf's remembered scroll — the
    *  store keeps your place per aisle across purchases, flips, and re-opens.
@@ -1471,7 +1475,33 @@ export class UI {
     });
   }
 
+  private closeCodexView(): void {
+    this.codexDispose?.(); this.codexDispose = null;
+  }
+
+  private codexView(root: HTMLElement, back: () => void, page?: string): void {
+    const context = root === this.escapeMenu ? 'world' : sideScreenContext();
+    this.closeCodexView();
+    this.escRefresh = null;
+    hideTooltip(); dndCancel();
+    this.codexDispose = renderCodex(root, { account: () => this.getAccount(), state: this.codexState,
+      paintPortraits: el => this.paintPortraitsIn(el), page,
+      shell: { profile: SIDE_SCREENS.codex, context },
+      back: () => { this.closeCodexView(); back(); },
+    });
+  }
+
+  showCodex(page?: string): void {
+    // The same pause policy as the menu: timed rites and co-op keep their own clocks.
+    this.escapeMenuOpen = true;
+    this.menuBar.closeTray();
+    if (!this.getWorld().harvestPauseLocked()) this.getWorld().timeflow.holdSurface('menu:escape');
+    this.escapeMenu.classList.remove('hidden');
+    this.codexView(this.escapeMenu, () => this.hideEscapeMenu(), page);
+  }
+
   showWardrobe(): void {
+    this.closeCodexView();
     this.escapeMenuOpen = true;
     // Account cosmetics are available even when scene character pages are sealed.
     // A timed harvest still runs: opening appearance must not bypass its pause lock.
@@ -1490,6 +1520,7 @@ export class UI {
       isOpen: () => this.folio.leaf(id)?.isOpen() ?? false,
     });
     return {
+      codex: { open: () => this.showCodex(), isOpen: () => this.escapeMenuOpen && !!this.escapeMenu.querySelector('.codex') },
       wardrobe: { open: () => this.showWardrobe(), isOpen: () => this.escapeMenuOpen && !!this.escapeMenu.querySelector('.wardrobe') },
       inventory: { open: id => this.toggleInventory(id), isOpen: () => this.inventoryOpen },
       // THE CONTAINER FABRIC: one host row per registered side board — the
@@ -3148,15 +3179,15 @@ export class UI {
         const arr = sealedBy.get(seat);
         if (arr) arr.push(s.u); else sealedBy.set(seat, [s.u]);
       }
-      const visible = census.filter(c => c.visible || (sealedBy.get(c.tab.id)?.length ?? 0) > 0);
-      const strip = vaultStripVisible(acc, census);
+      const visible = census.filter(c => !c.tab.owned && (c.visible || (sealedBy.get(c.tab.id)?.length ?? 0) > 0)); // Owned lives in the Codex.
+      const strip = visible.length > 0 && vaultStripVisible(acc, census);
 
       // COMPACT BY DESIGN: name and price — the description lives in the
       // hover-intent tooltip (the accountScreen bind), so a shelf reads as a
       // shelf, never a wall of text. THE FACE LAW: a card never prints its
       // own classification; the section it hangs under says that (the kind
       // header of kindSections below, the tab face of a single-kind shelf,
-      // the Sealed / Shrouded / Owned headers for theirs), and the hover
+      // the Sealed / Shrouded headers; Owned lives in the Codex), and the hover
       // story's meta line keeps the kind + the level requirement for
       // whoever asks. availableUnlocks() already excludes
       // owned + un-gated entries. THE INVESTMENT LANE: every card wears its
@@ -3195,24 +3226,14 @@ export class UI {
                 free ? 'Claim · free' : inv > 0 ? `${buyVerb(u)} · ${rem} more` : `${buyVerb(u)} · ${u.cost}`}</button>
             </div>`;
       };
-      // THE EARNED ROWS (2026-09-11, her ask): a claimed class keeps the deed
-      // that earned it ON its owned card — the objective rows the shrouded
-      // card carried, met ones checked, so the trophy case still says how
-      // each class was won. A class claimed by an older road (before its
-      // deed was written) shows the deed unchecked: owned is owned, and the
-      // row still names the class's road. Non-class kinds print nothing.
+      // Pending classes show the deeds that earned their free activation.
+      // The Codex keeps these same deed rows after activation.
       const earnedRowsHtml = (u: Unlockable): string => {
         if (u.kind !== 'class' || !(u.reqAnyOf?.length)) return '';
         const read = classUnlockProgress(acc, u);
         return `<div class="uobjs">${read.rows.map(r =>
           `<div class="uobj${r.met ? ' met' : ''}" title="${esc(r.label)}"><span>${r.met ? '✓' : '·'} ${esc(r.label)}</span><i style="width:${Math.round(r.frac * 100)}%"></i></div>`).join('')}</div>`;
       };
-      const ownedCardHtml = (u: Unlockable): string => `
-            <div class="unlock-card uowned" data-tip="unlock" data-unlock-id="${u.id}">
-              <div class="uname">${u.label}</div>
-              ${earnedRowsHtml(u)}
-              <button disabled>✓ Owned</button>
-            </div>`;
       const pendingCardHtml = (u: Unlockable): string => `
             <div class="unlock-card" data-tip="unlock" data-unlock-id="${u.id}">
               <div class="uname">${esc(u.label)}</div>
@@ -3233,10 +3254,8 @@ export class UI {
       // THE SECTION LAW (the face law's other half): classification is
       // printed ONCE, as a kind header over the cards that share it — in
       // shelf order (vaultKindOrder), empty kinds silent. The ONE grouping
-      // for the young store's wall, a multi-kind shelf's floor and the
-      // trophy case; a single-kind shelf skips it (the tab face already
-      // says it), and the Sealed / Shrouded / Owned-tail sections ARE their
-      // own classification, so they print none.
+      // for the young store and multi-kind buying shelves. Single-kind and
+      // Sealed / Shrouded sections already name their kind. Owned is in Codex.
       const kindSections = (rows: Unlockable[], card: (u: Unlockable) => string): string =>
         vaultKindOrder()
           .map(k => ({ k, kr: rows.filter(u => u.kind === k) }))
@@ -3289,13 +3308,11 @@ export class UI {
         // tail. The furniture arrives when the account outgrows this room.
         this.vaultTab = '';
         const stock = visible.flatMap(c => c.stock);
-        const ownedAll = census.find(c => c.tab.owned)?.owned ?? [];
         body = stock.length ? kindSections(stock, cardHtml)
           : `<div class="vault-empty">Nothing for sale right now; earn ${META_CURRENCY_LABEL} and milestones by playing.</div>`;
         body = pendingSection(census.flatMap(c => c.pending)) + body;
         body += sealedRack(sealed.map(s => s.u));
         body += rumorSection(census.flatMap(c => c.rumors));
-        if (ownedAll.length) body += subHead(`Owned (${ownedAll.length})`) + grid(ownedAll.map(ownedCardHtml).join(''));
       } else {
         // Land on the remembered shelf if it still stands; else the first
         // shelf with something to BUY, else the first standing shelf.
@@ -3327,12 +3344,7 @@ export class UI {
         // The active shelf's floor. Multi-kind shelves group under kind
         // headers (kindSections — the section law); single-kind shelves
         // skip them, the face already says it.
-        if (tab.owned) {
-          // THE TROPHY CASE: everything claimed, grouped by kind in shelf
-          // order — browsed deliberately, never underfoot while shopping.
-          // (Visible only once anything IS claimed, so never empty here.)
-          body = kindSections(row.owned, ownedCardHtml);
-        } else {
+        { // The buying floor; claimed entries are browsed in the Codex.
           const rows = row.stock;
           const sealedRows = sealedBy.get(tab.id) ?? [];
           if (rows.length === 0 && sealedRows.length === 0 && row.pending.length === 0) {
@@ -3368,8 +3380,11 @@ export class UI {
           ${tabStrip}
         </div>
         <div class="vault-body">${body}</div>
-        <div class="vault-foot acct-btns"><button id="acct-wardrobe">Wardrobe</button><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
+        <div class="vault-foot acct-btns"><button id="acct-codex">Codex · Owned</button><button id="acct-wardrobe">Wardrobe</button><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
       mountSideScreen(this.accountScreen, SIDE_SCREENS.vault, sideContext, sideFocus);
+      this.accountScreen.querySelector('#acct-codex')!.addEventListener('click', () => {
+        saveShelfScroll(); this.codexView(this.accountScreen, render, 'owned');
+      });
       this.accountScreen.querySelector('#acct-wardrobe')!.addEventListener('click', () => this.wardrobeView(this.accountScreen, render));
       const bodyEl = this.accountScreen.querySelector<HTMLElement>('.vault-body');
       if (bodyEl) bodyEl.scrollTop = this.vaultScroll[this.vaultTab || '_flat'] ?? 0;
@@ -3407,7 +3422,7 @@ export class UI {
       // falls short. Ticks write the button face, the fill bar, and the
       // head's pool INLINE (never a re-render — the hold must keep its
       // button); release, a dry pool, or completion settles: save +
-      // re-render (a completed card re-shelves under Owned).
+      // re-render (a completed card moves into Codex Owned).
       let pourTimer = 0;
       let holdTimer = 0;
       this.accountScreen.querySelectorAll<HTMLButtonElement>('[data-invest]').forEach(btn => {
@@ -7082,7 +7097,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
             width:15px;height:15px;border-radius:2px;background:${sd.color};opacity:0.9;
             color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${skillIconSvg(sd,15)}</span>
           <span style="min-width:0">
-            <span style="display:block;font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${skillInstanceName(seated)}</span>
+            ${this.skillTreeLinkHtml(seated, esc(skillInstanceName(seated)), 'rack-skill-name')}
             <span style="display:block;font-size:8px;color:#8a8678">Lv ${seated.level}</span>
           </span>
         </div>
@@ -7184,35 +7199,25 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
           ${chips || `<span style="color:#8a8678">no arts captured: take a studied kind's blow</span>`}
         </div>`;
       }
-      // The skill-tree strip opens its inventory page: level-band ticks, the
-      // point count, the committed limb, a waiting-PIP that lights the
-      // handle gold while a point is free, and the Font's reset ritual when
-      // a font stands near. Chunky buttons: couch lens + pad law.
+      // Tree surfaces share one navigation verb; the whole summary is the
+      // handle, while its level-band ticks retain their individual tooltips.
       let modeRow = empowermentRank(inst) && !hasEmpowermentPassive(def)
         ? this.empowermentBudgetHtml(inst) + '<span style="color:#8a8678"> · banked until this skill has a passive slot</span>' : '';
       if (def.tree && !world.memorySecondaryRefusal(def.id)) {
         const tree = def.tree;
-        const memoryWhy = world.memorySecondaryRefusal(def.id);
         const open = inst.level >= tree.level;
         const spent = inst.treeNodes ?? [];
         const budget = treePointBudget(inst).total;
         const free = Math.max(0, budget - spent.length);
         const committed = treeSpentBranch(inst);
-        const pip = free > 0 && !memoryWhy
+        const pip = free > 0
           ? `<span title="${free} tree point${free === 1 ? '' : 's'} waiting" style="color:#ffd700">◉ ${free}</span>`
           : '';
-        modeRow = `
-          <div style="margin-top:3px;font-size:10px;color:#d8b86a;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+        modeRow = this.skillTreeLinkHtml(inst, `
             <span>Tree:</span>
-            ${memoryWhy ? `<span style="color:var(--text-dim)">${esc(memoryWhy)}</span>` : ''}
             ${committed ? `<span style="color:${def.color}">${committed.name}</span>` : open ? '<span style="color:#8a8678">unchosen</span>' : ''}
             ${this.treeLevelBarHtml(inst)}<span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span> ${pip}${this.empowermentBudgetHtml(inst)}
-            ${open
-              ? `<button class="gem-chip" data-treeopen="${def.id}"
-                  style="border-color:${free > 0 && !memoryWhy ? '#ffd700' : '#d8b86a'};${free > 0 && !memoryWhy ? 'color:#ffd700;' : ''}"
-                  title="${memoryWhy ? esc(memoryWhy) : free > 0 ? 'A point waits — open the tree to spend it' : 'Open this skill\'s tree'}">⟡ Tree</button>`
-              : ''}
-          </div>`;
+          `, `tree-summary${free > 0 ? ' tree-summary-ready' : ''}`);
       }
       // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
       // landing button while a lifted graft is looking for its carrier.
@@ -7248,7 +7253,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             title="Learned but not on the bar — drag it from the strip onto a rack seat above">unseated</span>`;
       return `
         <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" data-drop="gemSock:${def.id}" style="border-left:3px solid ${def.color}">
-          <div class="name">${skillInstanceName(inst)} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
+          <div class="name">${this.skillTreeLinkHtml(inst, esc(skillInstanceName(inst)))} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
             ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px"
               title="${esc(`Unlocked at skill level ${t.level}: ${t.mods.map(mo => formatModLine(mo, mo.value)).join(' · ')}`)}">${esc(t.label)}</span>`).join('')}
             ${nextThresh ? `<span style="font-size:9px;color:#8a8498;margin-left:4px"
@@ -7317,7 +7322,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       world.requestMeta({ t: 'levelSupportSocket', skillId, socket: Number(sock) });
       refresh();
     }));
-    // The tree handle follows the Skills page's owner.
+    // Tree surfaces follow the Skills page's owner. Native buttons also keep
+    // keyboard activation and the drag fabric's inner-control protection.
     q<HTMLButtonElement>('button[data-treeopen]').forEach(btn => btn.addEventListener('click', () => {
       this.openSkillTree(btn.dataset.treeopen!, this.panelSeatIds.get(container));
     }));
@@ -8033,14 +8039,23 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     }
   }
 
-  /** One hoverable segment per earned point, in allocation order. Partial
-   *  fill shows level progress; the number below each tick is its unlock. */
+  /** Present existing content as a tree link only when its tree is accessible. */
+  private skillTreeLinkHtml(inst: SkillInstance, content: string, classes = ''): string {
+    if (!inst.def.tree || inst.level < inst.def.tree.level || this.getWorld().memorySecondaryRefusal(inst.def.id)) {
+      return `<span class="${classes}">${content}</span>`;
+    }
+    return `<button type="button" class="skill-tree-link ${classes}" data-treeopen="${inst.def.id}"
+      aria-label="${esc(`Open ${skillInstanceName(inst)} skill tree`)}">${content}</button>`;
+  }
+
   private empowermentBudgetHtml(inst: SkillInstance): string {
     const b = treePointBudget(inst);
     return empowermentRank(inst) ? '<span style="color:#e8b878">Ability: ' + b.abilityFree + ' free · '
       + 'Empowerment: ' + b.passiveFree + '/' + b.passive + ' free (passive only)</span>' : '';
   }
 
+  /** One hoverable segment per earned point, in allocation order. Partial
+   *  fill shows level progress; the number below each tick is its unlock. */
   private treeLevelBarHtml(inst: SkillInstance, width = 110): string {
     const segments = SKILL_LEVEL_BANDS.map((level, point) => {
       const start = SKILL_LEVEL_BANDS[point - 1] ?? 0;
@@ -10331,6 +10346,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       this.getWorld().harvestPauseRefused();
       return;
     }
+    this.closeCodexView();
     this.escapeMenuOpen = true;
     this.getWorld().timeflow.holdSurface('menu:escape');
     const root = this.escapeMenu;
@@ -10389,6 +10405,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         <div class="esc-btns">
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
+          <button id="esc-codex">Codex</button>
           <button id="esc-keys">Options</button>
           <button id="esc-end"${endTitle}>${this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
           <button id="esc-close"${closeTitle}>${this.isCoopClient() || sceneLive ? 'Exit Game' : 'Save & Exit'}</button>
@@ -10402,6 +10419,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         this.hideEscapeMenu();
         this.onCouchLeave!();
       });
+      document.getElementById('esc-codex')!.addEventListener('click', () => this.codexView(root, showMain));
       document.getElementById('esc-keys')!.addEventListener('click', () => this.renderOptions(root, showMain));
       document.getElementById('esc-end')!.addEventListener('click', () => {
         // CLIENT: world is a render SHELL — never run host-authoritative endRun()
@@ -10438,6 +10456,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   }
 
   hideEscapeMenu(): void {
+    this.closeCodexView();
     this.escapeMenuOpen = false;
     this.escRefresh = null;
     this.getWorld().timeflow.release('menu:escape'); // the world breathes again
@@ -11361,6 +11380,10 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     document.getElementById('sm-immortals')?.addEventListener('click', () => this.renderImmortalRoster());
     document.getElementById('sm-vault')?.addEventListener('click', () =>
       this.showAccountScreen(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
+    document.getElementById('sm-codex')!.addEventListener('click', () => {
+      this.startMenuBack = () => { this.closeCodexView(); this.renderStartMenu(); };
+      this.codexView(this.startMenu, this.startMenuBack);
+    });
     document.getElementById('sm-chronicle')!.addEventListener('click', () =>
       this.showChronicle(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
     document.getElementById('sm-keys')!.addEventListener('click', () => {
@@ -11681,6 +11704,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
 
   hideAll(): void {
     this.menuBar.closeTray();
+    this.closeCodexView();
     this.conversation?.reset(); this.conversationSpeakerId = null;
     this.closeInventory();
     dndCancel(); // also clear gestures on panels outside inventory

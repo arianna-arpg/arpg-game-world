@@ -23,6 +23,11 @@ export const SIDE_SCREENS = {
     width: { share: 64, min: 640, max: 1020 },
     regions: { head: '.roster-head', scroll: '.roster-body', foot: '.roster-foot' },
   },
+  codex: {
+    id: 'codex', chapter: 'The discovered', caption: 'Knowledge endures beyond a single life.', accent: '#a2c7c1',
+    width: { share: 75, min: 820, max: 1240 },
+    regions: { head: '.cx-head', scroll: '.cx-body', foot: '.cx-foot' },
+  },
   options: {
     id: 'options', chapter: 'Your passage', caption: 'Your way through the veil.', accent: '#94c5c0',
     width: { share: 62, min: 640, max: 940 },

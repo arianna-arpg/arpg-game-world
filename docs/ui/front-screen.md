@@ -64,29 +64,34 @@ link returns through its existing sealed visit; release still requires the
 existing confirmation, clears that vessel’s invested resurrection and save slot,
 and returns to the main menu when the last vessel is released.
 
-### Connecting the Codex
+### Codex integration
 
-The reader is being developed separately; this change does not introduce a
-second Codex, synthetic catalog or prematurely expose its menu entry.
+The completed Codex from main uses the same frame through the optional
+`CodexOptions.shell` presentation contract. Its profile in
+`sideScreenConfig.ts` controls accent, width, chapter, caption and region
+selectors; `codexShell.css` styles only a reader inside that shell. The
+reader retains its data registry, discovery providers, filters, pagination,
+portraits and live demonstrations.
 
-1. Add a `SideScreenProfile` with the Codex accent, width and region selectors.
-2. Capture the opening context before hiding the parent, and carry it through
-   nested navigation (including Vault → Owned → Vault).
-3. Keep discovery/filter/media providers and Back/disposal with the reader.
-   Call `mountSideScreen` after its initial render and each full redraw; it
-   preserves node identity, so existing bound controls continue to work.
-4. Adapt the Codex's current root/direct-child sizing rules to its content
-   region; the shell owns the outer viewport dimensions. Retain the reader's
-   internal list/detail responsive layout and cleanup.
-5. Re-run the Codex UI and discovery checks along with the front-screen suite.
-   A Codex return during a Reckoning must retain the original render closure,
-   scroll and unassigned essence rather than opening a new Vault visit.
+`UI.codexView` captures the opening context before replacing any markup.
+Menu and Vault visits retain the entrance atmosphere; the escape-menu host
+explicitly uses world context and the existing input/pause policy.
+Each full reader redraw remounts the shell and restores surviving keyboard
+focus. The header can scroll independently, the body switches from two
+columns to a stacked reader on narrow panes, and Back remains reachable in
+the fixed footer. The shared atmosphere preference and reduced motion apply.
 
-The existing acceptance course also checks the side screens across five
-viewport/scale combinations, fixed footer reachability, purchase and Wardrobe
-round trips, native Options keyboard input, Chronicle sorting/escaped names,
-entrance/world context separation and reduced motion. All QA account/settings
-mutations use disposable profiles and saves.
+Vault → Codex · Owned → Back/Escape returns to the original Vault render
+closure. It preserves the current tab, shelf scroll, investments, unassigned
+essence and sealing contract. Parent close and global navigation still call
+the Codex disposer, removing its refresh timer, key listener and demonstration.
+
+The acceptance course checks all five side screens across five viewport/scale
+combinations, fixed footer reachability, Codex keyboard and Vault round trips,
+purchase and Wardrobe returns, Chronicle sorting/escaped names, entrance/world
+context separation and reduced motion. The upstream Codex and Vault discovery
+courses additionally cover catalog/discovery rules, live demonstration cleanup
+and in-game pause/resume. All QA mutations use disposable profiles and saves.
 
 ## Artwork provenance
 

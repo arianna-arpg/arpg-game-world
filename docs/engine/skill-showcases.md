@@ -6,9 +6,10 @@ It always matches the current build (nothing is recorded), it needs no
 download and no installer growth, and it works offline.
 
 Where showcases appear is deliberately **not** this system's decision. A
-surface asks for one; the showcase does the rest. Today a single temporary
-seat exists so the foundation can be exercised: the bag gem tooltip
-(`gemItemTooltip` in `src/ui/panels.ts`, one `skillShowcaseMarkup` line).
+surface asks for one; the showcase does the rest. The player
+[Codex](../ui/codex.md) offers explicit Play/Stop controls on discovered
+skills and compatible support examples. The bag gem tooltip also retains
+its preview (`gemItemTooltip` in `src/ui/panels.ts`).
 Moving it to a Vault card, an NPC prompt or anywhere else is a matter of
 emitting the element there instead.
 

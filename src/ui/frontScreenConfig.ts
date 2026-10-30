@@ -12,7 +12,7 @@ export interface FrontScreenState {
   notice?: string;
   resume?: { name: string; className: string; level: number; mode: string };
 }
-export type FrontAction = 'start' | 'continue' | 'immortals' | 'vault' | 'chronicle' | 'keys' | 'coop' | 'exit';
+export type FrontAction = 'start' | 'continue' | 'immortals' | 'vault' | 'codex' | 'chronicle' | 'keys' | 'coop' | 'exit';
 export interface FrontActionDef {
   id: FrontAction;
   group: 'journey' | 'legacy' | 'utility';
@@ -37,6 +37,8 @@ export const FRONT_ACTIONS: readonly FrontActionDef[] = [
     badge: s => s.pendingEssence ? String(s.pendingEssence) : '' },
   { id: 'chronicle', group: 'legacy', label: () => 'Chronicle of Runs',
     detail: () => 'The echoes of lives before', badge: s => s.records ? String(s.records) : '' },
+  { id: 'codex', group: 'legacy', label: () => 'Codex',
+    detail: () => 'Discover the possibilities of the world' },
   { id: 'keys', group: 'utility', label: () => 'Options', detail: () => 'Controls, sound & display' },
   { id: 'coop', group: 'utility', label: () => 'Co-op', detail: () => 'Gather your companions',
     visible: s => s.coopAvailable, badge: () => 'Beta' },

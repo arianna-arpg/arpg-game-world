@@ -36,6 +36,17 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+The player Codex is documented in [docs/ui/codex.md](docs/ui/codex.md).
+Its shelves/read policy live in `data/codex.ts`, public reading models in
+`meta/codex.ts`, and its shared reader in `ui/codex.ts`. It replaces the
+Vault Owned display while preserving purchases and the Reckoning.
+`engine/codexSightings.ts` records gated encounters; Tracker research and
+station-only actions retain their existing contracts. Verify codex, menubar,
+unlocks, memoryunlocks, classmastery, sheet, all types and sim smoke; after
+a build, run hidden `balance/codex-ui.cjs`, `balance/vault-discovery-ui.cjs`
+and boot smoke.
+
+
 Tutorial scenes cannot feed account nemeses. See `docs/engine/tutorial-isolation.md`;
 verify tutorialisolation, scenes, mu, Odyssey checks and all types when changing
 scene departure or nemesis formation/manifestation.
@@ -229,7 +240,7 @@ split films there; bump the page's `?v=` stamp when either file changes. See
 `docs/design/site-cinema.md`; verify with the hidden `balance/site-cinema-ui.cjs`.
 Skill showcases: any element wearing `data-skill-showcase` plays that skill live,
 always matching the build; where showcases appear is each surface's choice
-(today one temporary seat, the bag gem tooltip). `src/showcase/` + `showcase.html`
+(the player Codex and bag gem tooltip). `src/showcase/` + `showcase.html`
 (a sandboxed engine realm that never saves) + `data/skillShowcase.ts`; see
 `docs/engine/skill-showcases.md`, verify `probe_skillshowcase.ts` and the hidden
 `balance/skill-showcase-ui.cjs` after a build. The site's skill clips
