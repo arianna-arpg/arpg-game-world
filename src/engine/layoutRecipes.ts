@@ -30,6 +30,7 @@ import './arenaCourt';
 import { vec, type Vec2 } from '../core/math';
 import { Rng } from '../core/rng';
 import type { ExitRoadSpec, ZoneDef } from '../data/zones';
+import { FOREST_TREES, type ForestTreeMix } from '../data/biomeDecoration';
 import { boundaryGateOf, type BoundaryGateDef } from '../data/boundaryGates';
 import { meldOf, MELD_CFG } from '../data/melds';
 import { GridWalkField } from '../world/gridWalk';
@@ -1019,7 +1020,6 @@ function hitsReservation(ctx: GenCtx, x: number, y: number, r: number): boolean 
   return false;
 }
 
-interface ForestTreeMix { kind: string; weight: number; radius: [number, number] }
 
 function forestLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;
@@ -1064,12 +1064,7 @@ function forestLayout(ctx: GenCtx, def: ZoneDef): void {
   // THE CANOPY — a jittered lattice sweep through the density mask. Crowns
   // are sized to knit (spacing < neighbouring crown radii sums), so the veil
   // index reads whole stands as single patches.
-  const mix = layoutParam(def, 'forestTrees', [
-    { kind: 'forest_oak', weight: 5, radius: [38, 58] },
-    { kind: 'tree', weight: 3, radius: [20, 32] },
-    { kind: 'conifer', weight: 2, radius: [20, 30] },
-    { kind: 'briarwood', weight: 1, radius: [18, 26] },
-  ] as ForestTreeMix[]);
+  const mix = layoutParam(def, 'forestTrees', FOREST_TREES);
   const totalW = mix.reduce((a, m) => a + m.weight, 0);
   const portals = [ctx.entry, ...ctx.exits];
   const portalClear = layoutParam(def, 'forestPortalClear', 140);

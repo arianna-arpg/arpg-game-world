@@ -1,6 +1,8 @@
 Adventure composition uses saved complex forms and locale plans, with optional
 native objectives and bounty-opened leaves. New side ground can carry no task;
 the woodland and highland journeys remain open while their activities wait.
+New locales bake reduced receiving-biome decoration; forest canopy uses sparse
+stands, with paths and activity courts protected. Old discoveries retain terrain.
 See [adventure regions](docs/worldgen/adventure-regions.md). Verify
 adventureregions, generationdiversity, complexes, locales, landforms, bounty,
 objectives, puzzles, genqa, all types and sim smoke; build before the hidden

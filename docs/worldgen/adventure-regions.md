@@ -21,6 +21,29 @@ These places retain inhabitants and ambient content. Adding geometry does not
 automatically add a kill quota, completion chest, vendor or sanctuary.
 Existing complexes retain their previous defaults.
 
+Newly discovered locales also retain their receiving biome's decoration. The
+mint saves the selected tileset/variant's scenery stamps, and each section owns
+an independent copy. Terrain cuts, camps, structures and new sidezone doors do
+not join this pass. Ordinary stamps use 0.65 of their rolled count outdoors and
+0.3 in sheltered complex sections; `ComplexStage.decorationDensity` can override
+that fraction, including zero. Forests additionally inherit the forest recipe's
+tree palette and plant sparse stands with brush, ferns and berries instead of a
+continuous canopy. Mountain ground retains its rolled stone and furniture kit,
+including braziers when the parent kit supplies them.
+
+The native stamp placement rules still apply. A scoped footprint guard also
+protects district centers, connections, portal approaches, water, walls and
+authored fragment interiors. Decoration has separate seeded streams and cannot
+change the locale's walk grid. Existing discoveries without the saved
+`localeDecoration` field retain their original terrain; this does not reset or
+reroll saved regions. Co-op receives the host's final placed doodads.
+
+`registerStamp` accepts an optional third argument to opt a scenery-only handler
+into inheritance. It must preserve terrain, POIs and gameplay lists. The
+`stampSingle` helper qualifies automatically unless its kind is a registered
+sidezone entrance. This lets new biome furniture participate without extending
+a locale-specific kind list.
+
 ## Reusable contracts and catalogue choices
 
 `world/landmarkComplexes.ts` owns stage, form, link and saved-membership contracts.

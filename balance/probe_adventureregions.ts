@@ -8,7 +8,9 @@ import { ADVENTURE_REGION_IDS } from '../src/data/adventureRegions';
 import { landmarkComplexes, resolveComplexForm, validateLandmarkComplex } from '../src/world/landmarkComplexes';
 import { placeZoneAt } from '../src/engine/worldgen';
 import { materializeComplex } from '../src/engine/landmarkComplexGen';
-import { generateLayout } from '../src/engine/levelgen';
+import { generateLayout, isDecorationStamp, registerStamp, stampSingle } from '../src/engine/levelgen';
+import { TILESETS } from '../src/data/tilesets';
+import { GridWalkField } from '../src/world/gridWalk';
 import { atlasDestinationAt, compileLocale, localeProgram } from '../src/world/locales';
 import { Rng } from '../src/core/rng';
 import { BOUNTY_KINDS, BOUNTY_BOARD_CFG, registerBountyKind } from '../src/data/bountyboard';
@@ -55,12 +57,18 @@ for (const def of definitions) {
   assert(site, `${def.id}: found in real atlas`);
   const minted: Record<string, ZoneDef> = {};
   const root = placeZoneAt(site.seat, null, minted, 2000 + fixtures.length, {
-    fieldBiome: true, biomeFor: () => 'forest', seed: 88211 + fixtures.length, level: 8, forceFrontiers: 0,
+    fieldBiome: true, biomeFor: () => def.id === 'highland_pilgrimage' ? 'highland' : 'forest', seed: 88211 + fixtures.length, level: 8, forceFrontiers: 0,
   });
   Object.assign(w.zoneMap, minted);
   w.zoneMap[root.id] = root;
   assert.equal(root.complex?.kind, def.id);
   const members = Object.values(w.zoneMap).filter(z => z.complex?.root === root.id);
+  assert(root.localeDecoration?.layout.length, 'receiving biome decoration is baked');
+  for (const z of members) {
+    assert.deepEqual(z.localeDecoration?.layout, root.localeDecoration.layout);
+    assert.equal(z.localeDecoration?.density, z.sky === 'sheltered' ? 0.3 : 0.65);
+    if (z !== root) assert.notEqual(z.localeDecoration!.layout, root.localeDecoration.layout, 'sections own independent saved dressing');
+  }
   const form = def.forms?.find(f => f.id === root.complex?.form);
   assert.equal(members.length, (form ? resolveComplexForm(def, form) : def).stages.length);
   assert.equal(root.objective.kind, 'none', 'arrival is a place, not a compulsory clear');
@@ -142,6 +150,7 @@ for (const fixture of fixtures) {
   const resumed = makeSimWorld('warrior', 73121);
   assert(applySavedCharacter(resumed, saved));
   assert(resumed.adoptWorldState(saved.world));
+  assert.deepEqual(resumed.zoneMap[task.id].localeDecoration, task.localeDecoration, 'save/resume retains the exact rolled biome kit');
   assert.equal(resumed.zoneMap[task.id].complex!.bountyPassage!.opened, false);
   assert(resumed.bountyHands.some(h => h.id === p!.id));
   assert.equal(resumed.handState(resumed.bountyHands.find(h => h.id === p!.id)!), 'ready');
@@ -165,6 +174,8 @@ for (const fixture of fixtures) {
   const packet = serializeZone(resumed), client = makeSimWorld('warrior', 16);
   assert.equal(packet.complex?.bountyPassage?.opened, true);
   applyZone(client, packet);
+  for (const kind of ['forest_oak', 'tree', 'conifer', 'fern', 'brazier'])
+    assert.equal(client.doodads.filter(d => d.kind === kind).length, packet.doodads.filter(d => d.kind === kind).length, `${kind}: host decoration reaches peers`);
   assert.equal(client.zone.complex?.bountyPassage?.opened, true);
   packet.complex!.bountyPassage!.opened = false;
   assert.equal(client.zone.complex!.bountyPassage!.opened, true, 'network ownership is deep');
@@ -195,7 +206,7 @@ assert(w.bountyOffers.some(p => p.boardId === oldRoot && p.kind === 'passage'), 
   const root = old.find(z => z.id === z.complex!.root)!;
   const task = old.find(z => z.complex!.stage === 'groves')!;
   const end = old.find(z => z.complex!.stage === 'heart')!;
-  for (const z of old) z.complex!.version = 2;
+  for (const z of old) { z.complex!.version = 2; delete z.localeDecoration; }
   root.complex!.bountyPassageBoard = true; root.objective = { kind: 'clear' };
   task.complex!.bountyPassage = { to: end.id, label: 'The rootbound sanctuary', opened: false };
   const legacy = makeSimWorld('warrior', 17182); legacy.player.level = 10;
@@ -207,6 +218,7 @@ assert(w.bountyOffers.some(p => p.boardId === oldRoot && p.kind === 'passage'), 
   const before = JSON.stringify(old.map(z => z.locale));
   assert.deepEqual(materializeComplex(resumed.zoneMap[root.id], resumed.zoneMap, 'woodland_sanctuary'), []);
   resumed.loadZone(root.id);
+  assert.equal(resumed.zone.localeDecoration, undefined, 'legacy terrain does not silently gain a new decoration recipe');
   Object.assign(resumed.player.pos, resumed.bountyBoardsHere().find(b => b.id === root.id)!.pos);
   resumed.armBountyBoard(root.id);
   const hand = resumed.bountyOffers.find(p => p.boardId === root.id && p.kind === 'passage')!;
@@ -243,6 +255,61 @@ try {
 } finally {
   registerBountyKind(previousCharge);
 }
+
+// The same authored ground must receive its actual parent kit. Include an open
+// registry extension and hostile placement waivers, not just built-in kinds.
+registerStamp('qa_adventure_brazier', stampSingle('brazier', [8, 11]));
+assert(isDecorationStamp('qa_adventure_brazier'));
+for (const kind of ['river', 'ravine', 'structure', 'camp', 'clearing', 'cave', 'vault_gate'])
+  assert(!isDecorationStamp(kind), `${kind}: terrain/encounter recipes do not ride the decoration pass`);
+const source = structuredClone(TILESETS.highland);
+TILESETS.qa_adventure_dress = { ...source, id: 'qa_adventure_dress', variants: undefined, common: undefined,
+  layout: [{ kind: 'rocks', count: [18, 22], radius: [20, 32], rules: { ignore: ['reserved', 'walk', 'portalClear'] } },
+    { kind: 'qa_adventure_brazier', count: [8, 12] }, { kind: 'river', count: [1, 1] }, { kind: 'camp', count: [1, 1] }] };
+let reducedTrees = 0, fullTrees = 0;
+try {
+  setAtlasSeed(w.sim.biomeField.fieldSeed);
+  const site = sites.find(s => s.kind === 'woodland_sanctuary' && atlasDestinationAt(s.seat)?.feature.id === s.id)!;
+  for (const tileset of ['forest', 'qa_adventure_dress']) for (const seed of [801, 802, 803]) {
+    const minted: Record<string, ZoneDef> = {};
+    const root = placeZoneAt(site.seat, null, minted, 7000 + seed, { fieldBiome: true, tileset, seed, level: 8, forceFrontiers: 0 });
+    const z = Object.values(minted).find(z => z.complex?.stage === 'groves')!;
+    assert.deepEqual(z.localeDecoration!.layout, root.localeDecoration!.layout);
+    assert(z.localeDecoration!.layout.some(s => s.kind === (tileset === 'forest' ? 'log' : 'qa_adventure_brazier')));
+    const entry = { x: 120, y: z.size.h / 2 }, exits = [{ x: z.size.w - 120, y: z.size.h / 2 }];
+    const build = (def: ZoneDef) => generateLayout(def, def.size, new Rng(def.seed!), entry, exits);
+    const bare = structuredClone(z); delete bare.localeDecoration;
+    const base = build(bare), result = build(z);
+    assert.deepEqual((result.walk as GridWalkField).pack(), (base.walk as GridWalkField).pack(), 'biome dressing preserves the authored walk grid');
+    assert.deepEqual(build(JSON.parse(JSON.stringify(z))).doodads, result.doodads, 'saved kit replays exactly');
+    const zero = structuredClone(z); zero.localeDecoration!.density = 0;
+    assert.deepEqual(build(zero).doodads, base.doodads, 'zero density is a real opt-out');
+    const counts: Record<string, number> = {};
+    for (const d of result.doodads) counts[d.kind] = (counts[d.kind] ?? 0) + 1;
+    if (tileset === 'forest') {
+      const kinds = new Set(z.localeDecoration!.trees!.map(t => t.kind));
+      assert(result.doodads.some(d => kinds.has(d.kind)), 'forest canopy survives terrain composition');
+      assert(result.doodads.some(d => ['brush', 'fern', 'berry_bush'].includes(d.kind)), 'forest understory survives too');
+      const full = structuredClone(z); full.localeDecoration!.density = 1;
+      reducedTrees += result.doodads.filter(d => kinds.has(d.kind)).length;
+      fullTrees += build(full).doodads.filter(d => kinds.has(d.kind)).length;
+    } else {
+      assert((counts.rock ?? 0) > 0 && (counts.brazier ?? 0) > 0, 'mountain stones and parent-authored braziers both render');
+      assert(!z.localeDecoration!.trees, 'mountain does not acquire the forest palette');
+    }
+    const old = new Set(base.doodads.map(d => JSON.stringify(d)));
+    for (const d of result.doodads.filter(d => !old.has(JSON.stringify(d)))) {
+      // Every new inherited footprint stays away from activity courts and paths.
+      for (const district of result.localeReport!.districts)
+        assert(Math.hypot(d.pos.x - district.center.x, d.pos.y - district.center.y) >= d.radius + 125);
+      assert.equal(result.walk!.regionAt?.(d.pos.x, d.pos.y), 'ground');
+    }
+    for (const d of result.localeReport!.districts) assert(result.walk!.reachable?.(entry, d.center));
+    assert(result.walk!.reachable?.(entry, exits[0]));
+  }
+} finally { delete TILESETS.qa_adventure_dress; }
+assert(reducedTrees > 0 && reducedTrees < fullTrees, 'default density measurably reduces canopy');
+console.log(`PASS inherited forest/mountain stamps, open registry furniture, clear activity ground, unchanged geometry, saved replay, density ${reducedTrees}/${fullTrees} trees`);
 
 for (const id of ADVENTURE_LOCALE_IDS) {
   const program = localeProgram(id)!;

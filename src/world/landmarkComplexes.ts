@@ -9,6 +9,8 @@ export interface ComplexStage {
   offset: [number, number];
   theme?: Partial<ZoneTheme>;
   sky?: SkyExposure;
+  /** Fraction of the inherited biome dressing; default 0.65 outdoors, 0.3 sheltered. */
+  decorationDensity?: number;
   levelDelta?: number;
   /** Opt in when an activity needs a waypoint; sealed destinations cannot bypass access. */
   waypoint?: boolean;
@@ -55,6 +57,7 @@ export function validateLandmarkComplex(def: LandmarkComplex): string[] {
     if (!s.id || !s.label || !localeProgram(s.locale)) errors.push(`unknown locale or stage ${s.id}`);
     if (s.offset.length !== 2 || !s.offset.every(n => Number.isFinite(n) && Math.abs(n) <= 400)) errors.push(`invalid offset ${s.id}`);
     if (s.levelDelta !== undefined && (!Number.isInteger(s.levelDelta) || s.levelDelta < 0 || s.levelDelta > 5)) errors.push(`invalid level step ${s.id}`);
+    if (s.decorationDensity !== undefined && (!Number.isFinite(s.decorationDensity) || s.decorationDensity < 0 || s.decorationDensity > 1)) errors.push(`invalid decoration density ${s.id}`);
     if (s.objective?.kind === 'leyline' && s.waypoint !== true) errors.push(`leyline stage needs a waypoint ${s.id}`);
     if (s.id === def.entrance && s.offset.some(n => n !== 0)) errors.push('entrance must stand at the feature seat');
     if (def.links.filter(l => l.from === s.id || l.to === s.id).length > (s.id === def.entrance ? 2 : 4)) errors.push(`too many links ${s.id}`);

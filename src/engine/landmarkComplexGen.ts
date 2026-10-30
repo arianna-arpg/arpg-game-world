@@ -41,12 +41,17 @@ export function materializeComplex(entry: ZoneDef, zones: Record<string, ZoneDef
       size: locale.size ?? { ...program.size }, shape: 'rect', seed,
       biome: entry.biome, tileset: entry.tileset, theme: { ...structuredClone(entry.theme), ...structuredClone(stage.theme) },
       packs: structuredClone(entry.packs), layout: [], layoutType: 'districts', locale,
+      ...(entry.localeDecoration ? { localeDecoration: structuredClone(entry.localeDecoration) } : {}),
+      ...(entry.aquatic ? { aquatic: true } : {}),
+      ...(entry.variantName ? { variantName: entry.variantName } : {}),
       objective: { kind: 'clear' }, exits: [], map: { x: entry.map.x + x, y: entry.map.y + y },
       kind: 'landmark_section', waypoint: false, veiled: true,
       ...(entry.geo ? { geo: { ...structuredClone(entry.geo), escarpment: undefined } } : {}),
       ...(stage.sky ? { sky: stage.sky } : entry.sky ? { sky: entry.sky } : {}),
     };
     if (stage.packs) member.packs = structuredClone(stage.packs);
+    if (member.localeDecoration) member.localeDecoration.density = stage.decorationDensity
+      ?? ((stage.sky ?? member.sky) === 'sheltered' ? 0.3 : entry.localeDecoration!.density);
     if (stage.waypoint !== undefined) member.waypoint = stage.waypoint;
     if (stage.objective) member.objective = structuredClone(stage.objective);
     member.complex = { root: entry.id, kind, version: def.version, label: entry.name, stage: stage.id, stageLabel: stage.label, ...(form ? { form: form.id } : {}) };

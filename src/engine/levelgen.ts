@@ -3075,6 +3075,8 @@ export type Reservation =
   | { rect: { x: number; y: number; w: number; h: number }; margin?: number };
 
 export interface GenCtx {
+  /** Scoped footprint constraint for dressing authored terrain; never waived by stamp rules. */
+  decorationSite?: (p: Vec2, radius: number) => boolean;
   retainedFixtureFit?:boolean;
   rng: Rng;
   /** The zone box. `shape`/`boundless` ride along (generateLayout normalizes
@@ -4621,6 +4623,7 @@ export function areaFreeOf(ctx: GenCtx, p: Vec2, radius: number, kinds: DoodadKi
  *  Exported for recipe passes that place directly (the settled belt's crop
  *  parcels) — the same gate the scatter runs, never a parallel one. */
 export function inReserved(ctx: GenCtx, p: Vec2, radius: number): boolean {
+  if (ctx.decorationSite && !ctx.decorationSite(p, radius)) return true;
   if (ruleIgnored(ctx, 'reserved')) return false;
   return ctx.reserved.some(r => {
     if ('rect' in r) {
@@ -7076,14 +7079,23 @@ export function structureDoodads(s: StructureDef, at: Vec2): Doodad[] {
 // registerStamp call; boot validation (validateStamps) checks every layout
 // entry in ZONES/TILESETS against the live registry, so the safety net the
 // closed union provided lives on as a loud warning instead of a compile error.
-export type StampHandler = (ctx: GenCtx, spec: StampSpec) => void;
+export type StampHandler = ((ctx: GenCtx, spec: StampSpec) => void) & { decorationKind?: DoodadKind };
 
 const STAMP_HANDLERS: Record<string, StampHandler> = {};
+const DECORATION_STAMPS = new Set<string>();
 
 /** Register a set-piece stamp under an open-string kind (see StampKind). */
-export function registerStamp(id: string, h: StampHandler): void {
+export function registerStamp(id: string, h: StampHandler, decoration = false): void {
   if (STAMP_HANDLERS[id]) console.warn(`[stamps] re-registering stamp '${id}' — overriding`);
   STAMP_HANDLERS[id] = h;
+  if (decoration) DECORATION_STAMPS.add(id); else DECORATION_STAMPS.delete(id);
+}
+
+/** Opt-in scenery handlers preserve terrain, routes, POIs and gameplay lists.
+ * Single-doodad helpers qualify automatically, except registered sidezone doors. */
+export function isDecorationStamp(id: string): boolean {
+  const kind = STAMP_HANDLERS[id]?.decorationKind;
+  return DECORATION_STAMPS.has(id) || (kind !== undefined && !isSidezoneEntranceKind(kind) && !doodadRule(kind).seedPaired);
 }
 
 /** Is a stamp kind registered? (Boot validation for layout refs.) */
@@ -7202,7 +7214,7 @@ export function stamp(ctx: GenCtx, spec: StampSpec): void {
 // proper lake in the next, a pebble field here and a boulder run there —
 // terrain features stop reading as same-sized cookie cutters. A layout entry
 // that wants a tight band still overrides via `spec.radius`.
-registerStamp('rocks', (ctx, spec) => stampRock(ctx, spec.radius ?? [14, 58]));
+registerStamp('rocks', (ctx, spec) => stampRock(ctx, spec.radius ?? [14, 58]), true);
 registerStamp('cliff', (ctx) => stampCliff(ctx));
 registerStamp('mud', (ctx) => stampBlob(ctx, 'mud', [20, 62], [5, 9], false));
 registerStamp('swamp', (ctx) => stampBlob(ctx, 'swamp', [24, 68], [7, 12], false));
@@ -7214,10 +7226,10 @@ registerStamp('ravine', (ctx) => stampRavine(ctx));
 registerStamp('river', (ctx) => stampRiver(ctx));
 registerStamp('ruin', (ctx, spec) => stampRuin(ctx, spec));
 registerStamp('camp', (ctx, spec) => stampCamp(ctx, spec));
-registerStamp('trees', (ctx, spec) => stampTree(ctx, spec.radius ?? [12, 30]));
+registerStamp('trees', (ctx, spec) => stampTree(ctx, spec.radius ?? [12, 30]), true);
 registerStamp('grove', (ctx) => stampGrove(ctx));
-registerStamp('grass', (ctx) => stampBlob(ctx, 'grass', [16, 54], [4, 8], false));
-registerStamp('brush', (ctx) => stampBlob(ctx, 'brush', [20, 56], [3, 6], false));
+registerStamp('grass', (ctx) => stampBlob(ctx, 'grass', [16, 54], [4, 8], false), true);
+registerStamp('brush', (ctx) => stampBlob(ctx, 'brush', [20, 56], [3, 6], false), true);
 registerStamp('sand', (ctx) => stampBlob(ctx, 'sand', [24, 72], [5, 9], false));
 // Desert heat: shimmering-air patches (scorch-bar feed fields — World.updateScorch).
 registerStamp('heat_shimmer', (ctx, spec) => stampBlob(ctx, 'heat_shimmer', spec.radius ?? [40, 85], [2, 4], false));
@@ -7288,7 +7300,7 @@ function doorGuaranteeSeat(ctx: GenCtx, r: number): Vec2 | null {
 // Exported: data-side kits (formations.ts, packages) register their own
 // simple scatters through the same helper the base kinds use.
 export const stampSingle = (kind: DoodadKind, dflt: [number, number]) =>
-  (ctx: GenCtx, spec: StampSpec): void => {
+  Object.assign((ctx: GenCtx, spec: StampSpec): void => {
     const r = ctx.rng.range((spec.radius ?? dflt)[0], (spec.radius ?? dflt)[1]);
     const p = findSpot(ctx, r, true, doodadRule(kind).spacing ?? 0, true, kind);
     if (p) {
@@ -7317,7 +7329,7 @@ export const stampSingle = (kind: DoodadKind, dflt: [number, number]) =>
     }
     ctx.doodads.push({ pos: seat, radius: r, kind });
     (ctx.mustReach ??= []).push(seat);
-  };
+  }, { decorationKind: kind });
 registerStamp('dead_tree', stampSingle('dead_tree', [14, 26]));
 registerStamp('stump', stampSingle('stump', [9, 15]));
 registerStamp('log', stampSingle('log', [12, 20]));
@@ -7356,25 +7368,25 @@ registerStamp('rusted_snare', stampSingle('rusted_snare', [8, 11]));
 // mass; authored rows can still call one down), gourd tangles, the lone
 // carved lantern, the hanged road's gibbets.
 registerStamp('gloam_oak', stampSingle('gloam_oak', [38, 58]));
-registerStamp('pumpkin_patch', (ctx, spec) => stampBlob(ctx, 'pumpkin_patch', spec.radius ?? [16, 30], [2, 4], false));
+registerStamp('pumpkin_patch', (ctx, spec) => stampBlob(ctx, 'pumpkin_patch', spec.radius ?? [16, 30], [2, 4], false), true);
 registerStamp('jack_o_lantern', stampSingle('jack_o_lantern', [9, 12]));
 // The widdershin court's furniture: the bell stands alone; maddercaps puff
 // in walkable clumps (their touch-rule in data/tracks.ts does the arguing);
 // the mazing stone is an honest solid.
 registerStamp('witch_bell', stampSingle('witch_bell', [14, 18]));
 registerStamp('maddercap', (ctx, spec) => stampBlob(ctx, 'maddercap', spec.radius ?? [12, 20], [2, 4], false));
-registerStamp('mazing_stone', (ctx, spec) => stampSolid(ctx, 'mazing_stone', spec.radius ?? [14, 20]));
+registerStamp('mazing_stone', (ctx, spec) => stampSolid(ctx, 'mazing_stone', spec.radius ?? [14, 20]), true);
 registerStamp('hanging_cage', stampSingle('hanging_cage', [20, 27]));
 registerStamp('fishing_rack', stampSingle('fishing_rack', [16, 24]));
 registerStamp('charcoal_mound', stampSingle('charcoal_mound', [18, 28]));
-registerStamp('scree', (ctx, spec) => stampBlob(ctx, 'scree', spec.radius ?? [18, 46], [3, 6], false));
-registerStamp('rock_spire', (ctx, spec) => stampSolid(ctx, 'rock_spire', spec.radius ?? [14, 26]));
+registerStamp('scree', (ctx, spec) => stampBlob(ctx, 'scree', spec.radius ?? [18, 46], [3, 6], false), true);
+registerStamp('rock_spire', (ctx, spec) => stampSolid(ctx, 'rock_spire', spec.radius ?? [14, 26]), true);
 // The Karst Country's kit: stone trees ride the tree stamp (walk-under
 // contract intact), the fallen bole and the watcher are singles/solids.
-registerStamp('petrified_tree', (ctx, spec) => stampTree(ctx, spec.radius ?? [30, 48], 'petrified_tree'));
+registerStamp('petrified_tree', (ctx, spec) => stampTree(ctx, spec.radius ?? [30, 48], 'petrified_tree'), true);
 registerStamp('petrified_elder', stampSingle('petrified_elder', [44, 62]));
 registerStamp('petrified_trunk', stampSingle('petrified_trunk', [16, 24]));
-registerStamp('watcher_stone', (ctx, spec) => stampSolid(ctx, 'watcher_stone', spec.radius ?? [14, 20]));
+registerStamp('watcher_stone', (ctx, spec) => stampSolid(ctx, 'watcher_stone', spec.radius ?? [14, 20]), true);
 // The mass fabric's standing argument (data/tracks.ts rule + bumperDome
 // painter): walk-through trigger, so a single-place is honest — the rule's
 // contact payload does the arguing, not the footprint.
@@ -7384,16 +7396,16 @@ registerStamp('sarsen_bumper', stampSingle('sarsen_bumper', [15, 19]));
 // pick through free, HURLED bodies are shredded. Stand-sized on purpose
 // (a needle disc lets a fast body slip between contact samples).
 registerStamp('gore_stakes', stampSingle('gore_stakes', [16, 22]));
-registerStamp('boulder_field', (ctx) => stampBoulderField(ctx));
+registerStamp('boulder_field', (ctx) => stampBoulderField(ctx), true);
 // Flora clarity: fruiting bush clumps + feathery fern understory.
-registerStamp('berry_bush', (ctx, spec) => stampBlob(ctx, 'berry_bush', spec.radius ?? [16, 34], [2, 4], false));
-registerStamp('fern', (ctx, spec) => stampBlob(ctx, 'fern', spec.radius ?? [14, 30], [3, 6], false));
+registerStamp('berry_bush', (ctx, spec) => stampBlob(ctx, 'berry_bush', spec.radius ?? [16, 34], [2, 4], false), true);
+registerStamp('fern', (ctx, spec) => stampBlob(ctx, 'fern', spec.radius ?? [14, 30], [3, 6], false), true);
 // The fungal kit: bracket shelves + toadstool huddles.
-registerStamp('shelf_fungus', (ctx, spec) => stampSolid(ctx, 'shelf_fungus', spec.radius ?? [12, 22]));
-registerStamp('toadstool', (ctx, spec) => stampBlob(ctx, 'toadstool', spec.radius ?? [10, 20], [2, 4], false));
+registerStamp('shelf_fungus', (ctx, spec) => stampSolid(ctx, 'shelf_fungus', spec.radius ?? [12, 22]), true);
+registerStamp('toadstool', (ctx, spec) => stampBlob(ctx, 'toadstool', spec.radius ?? [10, 20], [2, 4], false), true);
 // The brittle kit: pot huddles, fissured plugs, and the hidden face.
-registerStamp('clay_pots', (ctx, spec) => stampBlob(ctx, 'clay_pots', spec.radius ?? [9, 14], [2, 4], false));
-registerStamp('crumbling_wall', (ctx, spec) => stampSolid(ctx, 'crumbling_wall', spec.radius ?? [18, 30]));
+registerStamp('clay_pots', (ctx, spec) => stampBlob(ctx, 'clay_pots', spec.radius ?? [9, 14], [2, 4], false), true);
+registerStamp('crumbling_wall', (ctx, spec) => stampSolid(ctx, 'crumbling_wall', spec.radius ?? [18, 30]), true);
 // A SECRET WALL hides flush against something that reads as wall. GRID zones:
 // scan for wall-adjacent walkable cells (deterministic order), pick one far
 // from the entry with the zone rng — the pop carves a pocket INTO the face.
@@ -7481,7 +7493,7 @@ registerStamp('icicle_cluster', stampSingle('icicle_cluster', [13, 19]));
 // The crystal-country kit (the attunement pass): tall singing needles +
 // treasure geodes — plain solids; the identity rides their rules
 // (spire resonance toll, geode brittle spill) and painters.
-registerStamp('crystal_spire', (ctx, spec) => stampSolid(ctx, 'crystal_spire', spec.radius ?? [16, 26]));
+registerStamp('crystal_spire', (ctx, spec) => stampSolid(ctx, 'crystal_spire', spec.radius ?? [16, 26]), true);
 registerStamp('geode_shell', stampSingle('geode_shell', [15, 22]));
 // The crystalline SWARD (the resplendence kit — rule + consumers in
 // data/formations.ts): walk-through spikelet patches in the grass blob
@@ -7492,14 +7504,14 @@ registerStamp('shardgrass', (ctx, spec) => stampBlob(ctx, 'shardgrass', spec.rad
 // grammar; sheets and pools merge as ground; the vein hunts a wall's foot
 // (grid zones) or a standing stone's flank (convex) — the secret_wall
 // discipline: one pick when candidates exist, none otherwise.
-registerStamp('stalagmite', (ctx, spec) => stampSolid(ctx, 'stalagmite', spec.radius ?? [14, 26]));
-registerStamp('dripstone_column', (ctx, spec) => stampSolid(ctx, 'dripstone_column', spec.radius ?? [16, 26]));
+registerStamp('stalagmite', (ctx, spec) => stampSolid(ctx, 'stalagmite', spec.radius ?? [14, 26]), true);
+registerStamp('dripstone_column', (ctx, spec) => stampSolid(ctx, 'dripstone_column', spec.radius ?? [16, 26]), true);
 registerStamp('flowstone', (ctx, spec) => stampBlob(ctx, 'flowstone', spec.radius ?? [22, 44], [2, 4], false));
 registerStamp('rimstone_pool', (ctx, spec) => stampBlob(ctx, 'rimstone_pool', spec.radius ?? [16, 30], [2, 3], false));
 registerStamp('glowworm_veil', stampSingle('glowworm_veil', [18, 30]));
 registerStamp('guano_heap', (ctx, spec) => stampBlob(ctx, 'guano_heap', spec.radius ?? [14, 26], [1, 3], false));
 registerStamp('spelunker_pack', stampSingle('spelunker_pack', [10, 14]));
-registerStamp('basalt_column', (ctx, spec) => stampSolid(ctx, 'basalt_column', spec.radius ?? [15, 26]));
+registerStamp('basalt_column', (ctx, spec) => stampSolid(ctx, 'basalt_column', spec.radius ?? [15, 26]), true);
 registerStamp('crystal_vein', (ctx) => {
   const grid = ctx.walk instanceof GridWalkField ? ctx.walk : null;
   if (grid) {
@@ -7559,14 +7571,14 @@ registerStamp('charged_crystal', stampSingle('charged_crystal', [9, 14]));
 registerStamp('static_bloom', stampSingle('static_bloom', [10, 16]));
 registerStamp('storm_glass', stampSingle('storm_glass', [16, 28]));
 // The hive kit: the Seethe's spires through the solid path, litter as scatter.
-registerStamp('hive_spire', (ctx, spec) => stampSolid(ctx, 'hive_spire', spec.radius ?? [16, 30]));
+registerStamp('hive_spire', (ctx, spec) => stampSolid(ctx, 'hive_spire', spec.radius ?? [16, 30]), true);
 registerStamp('resin_node', stampSingle('resin_node', [10, 15]));
 registerStamp('egg_clutch', stampSingle('egg_clutch', [10, 16]));
 registerStamp('brood_husk', stampSingle('brood_husk', [11, 17]));
 // The hell-steppes kit: horn-blade fins, the legions' stakes, titan chains,
 // glowing crust-rents — and the abyssal rent, a FALL pit (the descent's
 // void_chasm idiom: the stamp marks fall:true, the recovery does the physics).
-registerStamp('hell_fin', (ctx, spec) => stampSolid(ctx, 'hell_fin', spec.radius ?? [18, 34]));
+registerStamp('hell_fin', (ctx, spec) => stampSolid(ctx, 'hell_fin', spec.radius ?? [18, 34]), true);
 registerStamp('impaler_stake', stampSingle('impaler_stake', [12, 16]));
 registerStamp('hell_chain', stampSingle('hell_chain', [26, 40]));
 registerStamp('ember_fissure', stampSingle('ember_fissure', [16, 26]));
@@ -7579,39 +7591,39 @@ registerStamp('abyssal_rent', (ctx, spec) => {
 // The Caul kit: the invader's anatomy (data/tilesets.ts 'caul') — solid
 // fins/cables/sacs through the solid path (spacing + forbidOn honored),
 // ground orifices and nerve-webs through the plain scatter.
-registerStamp('chitin_fin', (ctx, spec) => stampSolid(ctx, 'chitin_fin', spec.radius ?? [16, 30]));
-registerStamp('black_umbilic', (ctx, spec) => stampSolid(ctx, 'black_umbilic', spec.radius ?? [22, 30]));
-registerStamp('caul_sac', (ctx, spec) => stampSolid(ctx, 'caul_sac', spec.radius ?? [12, 20]));
+registerStamp('chitin_fin', (ctx, spec) => stampSolid(ctx, 'chitin_fin', spec.radius ?? [16, 30]), true);
+registerStamp('black_umbilic', (ctx, spec) => stampSolid(ctx, 'black_umbilic', spec.radius ?? [22, 30]), true);
+registerStamp('caul_sac', (ctx, spec) => stampSolid(ctx, 'caul_sac', spec.radius ?? [12, 20]), true);
 registerStamp('caul_eyes', stampSingle('caul_eyes', [12, 18]));
 registerStamp('maw_pit', stampSingle('maw_pit', [26, 36]));
 registerStamp('nerve_root', stampSingle('nerve_root', [20, 30]));
 // The apothecary kit: brew-yard furniture (formations.ts herbalists_croft
 // composes them) + the lone wellspring pool.
 registerStamp('alembic', stampSingle('alembic', [10, 14]));
-registerStamp('herb_rack', (ctx, spec) => stampSolid(ctx, 'herb_rack', spec.radius ?? [12, 16]));
-registerStamp('cauldron', (ctx, spec) => stampSolid(ctx, 'cauldron', spec.radius ?? [12, 16]));
+registerStamp('herb_rack', (ctx, spec) => stampSolid(ctx, 'herb_rack', spec.radius ?? [12, 16]), true);
+registerStamp('cauldron', (ctx, spec) => stampSolid(ctx, 'cauldron', spec.radius ?? [12, 16]), true);
 registerStamp('spring_pool', stampSingle('spring_pool', [34, 52]));
 // The ossuary kit: bone dunes, reliquary shelf-walls, and the overflow pits —
 // the Necropolis' interior vocabulary (data/tilesets.ts 'ossuary').
-registerStamp('bone_mound', (ctx, spec) => stampSolid(ctx, 'bone_mound', spec.radius ?? [26, 48]));
-registerStamp('ossuary_niche', (ctx, spec) => stampSolid(ctx, 'ossuary_niche', spec.radius ?? [18, 26]));
+registerStamp('bone_mound', (ctx, spec) => stampSolid(ctx, 'bone_mound', spec.radius ?? [26, 48]), true);
+registerStamp('ossuary_niche', (ctx, spec) => stampSolid(ctx, 'ossuary_niche', spec.radius ?? [18, 26]), true);
 registerStamp('charnel_pit', stampSingle('charnel_pit', [26, 44]));
 // The leyline + abyss kits: fonts and resonance nodes stand solid; conduits
 // and cracks lay as ground glow (their chains come from formations).
 registerStamp('ley_conduit', stampSingle('ley_conduit', [18, 28]));
-registerStamp('ley_font', (ctx, spec) => stampSolid(ctx, 'ley_font', spec.radius ?? [14, 24]));
-registerStamp('pyre_node', (ctx, spec) => stampSolid(ctx, 'pyre_node', spec.radius ?? [16, 22]));
-registerStamp('gale_node', (ctx, spec) => stampSolid(ctx, 'gale_node', spec.radius ?? [16, 22]));
-registerStamp('rime_node', (ctx, spec) => stampSolid(ctx, 'rime_node', spec.radius ?? [16, 22]));
-registerStamp('stone_node', (ctx, spec) => stampSolid(ctx, 'stone_node', spec.radius ?? [16, 22]));
+registerStamp('ley_font', (ctx, spec) => stampSolid(ctx, 'ley_font', spec.radius ?? [14, 24]), true);
+registerStamp('pyre_node', (ctx, spec) => stampSolid(ctx, 'pyre_node', spec.radius ?? [16, 22]), true);
+registerStamp('gale_node', (ctx, spec) => stampSolid(ctx, 'gale_node', spec.radius ?? [16, 22]), true);
+registerStamp('rime_node', (ctx, spec) => stampSolid(ctx, 'rime_node', spec.radius ?? [16, 22]), true);
+registerStamp('stone_node', (ctx, spec) => stampSolid(ctx, 'stone_node', spec.radius ?? [16, 22]), true);
 registerStamp('abyss_crack', stampSingle('abyss_crack', [20, 34]));
-registerStamp('abyss_spine', (ctx, spec) => stampSolid(ctx, 'abyss_spine', spec.radius ?? [12, 22]));
+registerStamp('abyss_spine', (ctx, spec) => stampSolid(ctx, 'abyss_spine', spec.radius ?? [12, 22]), true);
 // The colosseum's seats (recipe-placed in rings; the stamp keeps the kind a
 // legal tileset row for any other builder that wants a bench of watchers).
 registerStamp('crowd_row', stampSingle('crowd_row', [20, 28]));
 // The river-of-flame kit: the forge-altar (cluster-anchored in practice; the
 // stamp keeps it a legal tileset row), gibbet cages, banners, bone-pyres.
-registerStamp('hellforge_anvil', (ctx, spec) => stampSolid(ctx, 'hellforge_anvil', spec.radius ?? [38, 46]));
+registerStamp('hellforge_anvil', (ctx, spec) => stampSolid(ctx, 'hellforge_anvil', spec.radius ?? [38, 46]), true);
 registerStamp('soul_cage', stampSingle('soul_cage', [11, 15]));
 registerStamp('demon_banner', stampSingle('demon_banner', [11, 15]));
 registerStamp('pyre_heap', stampSingle('pyre_heap', [16, 24]));
@@ -7620,25 +7632,25 @@ registerStamp('pyre_heap', stampSingle('pyre_heap', [16, 24]));
 registerStamp('drowned_cairn', stampSingle('drowned_cairn', [12, 17]));
 registerStamp('sunken_statue', stampSingle('sunken_statue', [16, 24]));
 registerStamp('candle_raft', stampSingle('candle_raft', [8, 12]));
-registerStamp('pale_rushes', (ctx, spec) => stampBlob(ctx, 'pale_rushes', spec.radius ?? [18, 34], [3, 6], false));
+registerStamp('pale_rushes', (ctx, spec) => stampBlob(ctx, 'pale_rushes', spec.radius ?? [18, 34], [3, 6], false), true);
 // The boundary-gate + durance kit (arch/pylon are composable-pushed in
 // practice; their stamps keep them legal tileset rows).
 registerStamp('gate_arch', stampSingle('gate_arch', [60, 80]));
-registerStamp('gate_pylon', (ctx, spec) => stampSolid(ctx, 'gate_pylon', spec.radius ?? [20, 28]));
+registerStamp('gate_pylon', (ctx, spec) => stampSolid(ctx, 'gate_pylon', spec.radius ?? [20, 28]), true);
 registerStamp('hate_brazier', stampSingle('hate_brazier', [8, 11]));
 registerStamp('torture_rack', stampSingle('torture_rack', [16, 22]));
 registerStamp('hate_idol', stampSingle('hate_idol', [14, 20]));
 // The war-wound kit (the surface rift): the ground-scar pair.
 registerStamp('hate_rent', stampSingle('hate_rent', [16, 26]));
-registerStamp('hate_glass', (ctx, spec) => stampSolid(ctx, 'hate_glass', spec.radius ?? [18, 36]));
+registerStamp('hate_glass', (ctx, spec) => stampSolid(ctx, 'hate_glass', spec.radius ?? [18, 36]), true);
 // The thorn kin: a lone gnarled briar tree (walk-under bramble crown).
 registerStamp('briarwood', stampSingle('briarwood', [18, 30]));
 // The undergrowth kit: the jungle's own scatter — cuttable plugs, sight-only
 // curtains, emergent giants, root fins, and the gloom's own lights.
 registerStamp('jungle_brush', stampSingle('jungle_brush', [22, 30]));
 registerStamp('liana_veil', stampSingle('liana_veil', [26, 40]));
-registerStamp('canopy_colossus', (ctx, spec) => stampTree(ctx, spec.radius ?? [64, 96], 'canopy_colossus'));
-registerStamp('strangler_root', (ctx, spec) => stampSolid(ctx, 'strangler_root', spec.radius ?? [16, 28]));
+registerStamp('canopy_colossus', (ctx, spec) => stampTree(ctx, spec.radius ?? [64, 96], 'canopy_colossus'), true);
+registerStamp('strangler_root', (ctx, spec) => stampSolid(ctx, 'strangler_root', spec.radius ?? [16, 28]), true);
 registerStamp('jungle_bloom', stampSingle('jungle_bloom', [10, 14]));
 // The sunken-ruin gate (usually composition-cluster-placed — this row exists
 // for layouts that want a stray descent).
@@ -7685,28 +7697,28 @@ registerStamp('spire_of_evening', stampSingle('spire_of_evening', [24, 32]));
 // last tenant's ribs, and (rarely) a row of teeth.
 registerStamp('flesh_membrane', (ctx, spec) => stampBlob(ctx, 'flesh_membrane', spec.radius ?? [24, 48], [3, 5], false));
 registerStamp('vein_cluster', (ctx, spec) => stampBlob(ctx, 'vein_cluster', spec.radius ?? [22, 42], [2, 4], false));
-registerStamp('eye_stalk', (ctx, spec) => stampSolid(ctx, 'eye_stalk', spec.radius ?? [11, 18]));
-registerStamp('rib_arch', (ctx, spec) => stampSolid(ctx, 'rib_arch', spec.radius ?? [16, 28]));
-registerStamp('tooth_row', (ctx, spec) => stampSolid(ctx, 'tooth_row', spec.radius ?? [18, 30]));
+registerStamp('eye_stalk', (ctx, spec) => stampSolid(ctx, 'eye_stalk', spec.radius ?? [11, 18]), true);
+registerStamp('rib_arch', (ctx, spec) => stampSolid(ctx, 'rib_arch', spec.radius ?? [16, 28]), true);
+registerStamp('tooth_row', (ctx, spec) => stampSolid(ctx, 'tooth_row', spec.radius ?? [18, 30]), true);
 // The flesh country kit: blood/bile/tear pools pour; clots, arteries, polyps,
 // knuckles and eye-knots are chamber clutter. (Sphincters are never scattered —
 // the tract generator seats them in the throats it carves, door state and all.)
 registerStamp('blood_pool', (ctx, spec) => stampBlob(ctx, 'blood_pool', spec.radius ?? [28, 54], [3, 6], false));
-registerStamp('clot_mound', (ctx, spec) => stampSolid(ctx, 'clot_mound', spec.radius ?? [16, 28]));
-registerStamp('artery_stalk', (ctx, spec) => stampSolid(ctx, 'artery_stalk', spec.radius ?? [10, 16]));
+registerStamp('clot_mound', (ctx, spec) => stampSolid(ctx, 'clot_mound', spec.radius ?? [16, 28]), true);
+registerStamp('artery_stalk', (ctx, spec) => stampSolid(ctx, 'artery_stalk', spec.radius ?? [10, 16]), true);
 registerStamp('chyme_pool', (ctx, spec) => stampBlob(ctx, 'chyme_pool', spec.radius ?? [24, 48], [3, 5], false));
-registerStamp('gas_polyp', (ctx, spec) => stampSolid(ctx, 'gas_polyp', spec.radius ?? [10, 15]));
+registerStamp('gas_polyp', (ctx, spec) => stampSolid(ctx, 'gas_polyp', spec.radius ?? [10, 15]), true);
 registerStamp('villus_bed', (ctx, spec) => stampBlob(ctx, 'villus_bed', spec.radius ?? [22, 44], [3, 5], false));
-registerStamp('gut_knuckle', (ctx, spec) => stampSolid(ctx, 'gut_knuckle', spec.radius ?? [18, 32]));
-registerStamp('ocular_knot', (ctx, spec) => stampSolid(ctx, 'ocular_knot', spec.radius ?? [13, 20]));
+registerStamp('gut_knuckle', (ctx, spec) => stampSolid(ctx, 'gut_knuckle', spec.radius ?? [18, 32]), true);
+registerStamp('ocular_knot', (ctx, spec) => stampSolid(ctx, 'ocular_knot', spec.radius ?? [13, 20]), true);
 registerStamp('lash_bed', (ctx, spec) => stampBlob(ctx, 'lash_bed', spec.radius ?? [20, 40], [2, 4], false));
 registerStamp('weep_spring', (ctx, spec) => stampBlob(ctx, 'weep_spring', spec.radius ?? [14, 26], [2, 3], false));
-registerStamp('colossal_heart', (ctx, spec) => stampSolid(ctx, 'colossal_heart', spec.radius ?? [40, 56]));
-registerStamp('membrane_seal', (ctx, spec) => stampSolid(ctx, 'membrane_seal', spec.radius ?? [22, 34]));
-registerStamp('flowers', (ctx, spec) => stampBlob(ctx, 'flowers', spec.radius ?? [16, 44], [3, 6], false));
-registerStamp('reeds', (ctx, spec) => stampBlob(ctx, 'reeds', spec.radius ?? [16, 36], [3, 6], false));
-registerStamp('web', (ctx, spec) => stampBlob(ctx, 'web', spec.radius ?? [18, 40], [2, 4], false));
-registerStamp('snowdrift', (ctx, spec) => stampBlob(ctx, 'snowdrift', spec.radius ?? [22, 60], [4, 7], false));
+registerStamp('colossal_heart', (ctx, spec) => stampSolid(ctx, 'colossal_heart', spec.radius ?? [40, 56]), true);
+registerStamp('membrane_seal', (ctx, spec) => stampSolid(ctx, 'membrane_seal', spec.radius ?? [22, 34]), true);
+registerStamp('flowers', (ctx, spec) => stampBlob(ctx, 'flowers', spec.radius ?? [16, 44], [3, 6], false), true);
+registerStamp('reeds', (ctx, spec) => stampBlob(ctx, 'reeds', spec.radius ?? [16, 36], [3, 6], false), true);
+registerStamp('web', (ctx, spec) => stampBlob(ctx, 'web', spec.radius ?? [18, 40], [2, 4], false), true);
+registerStamp('snowdrift', (ctx, spec) => stampBlob(ctx, 'snowdrift', spec.radius ?? [22, 60], [4, 7], false), true);
 // A FAIRY RING: glow-caps standing in a circle (grove/mycelia set-piece).
 registerStamp('mushroom_ring', (ctx, spec) => {
   const R = ctx.rng.range((spec.radius ?? [34, 60])[0], (spec.radius ?? [34, 60])[1]);
@@ -7729,9 +7741,9 @@ registerStamp('vines', (ctx) => stampBlob(ctx, 'vines', [20, 56], [4, 8], true))
 registerStamp('lava', (ctx) => stampBlob(ctx, 'lava', [26, 68], [5, 9], true));
 registerStamp('magma_core', (ctx) => stampBlob(ctx, 'magma_core', [24, 60], [4, 8], true));
 registerStamp('shallows', (ctx) => stampShallows(ctx));
-registerStamp('palm', (ctx, spec) => stampTree(ctx, spec.radius ?? [16, 28], 'palm'));
-registerStamp('conifers', (ctx, spec) => stampTree(ctx, spec.radius ?? [13, 26], 'conifer'));
-registerStamp('ancient_tree', (ctx, spec) => stampTree(ctx, spec.radius ?? [56, 88], 'ancient_tree'));
+registerStamp('palm', (ctx, spec) => stampTree(ctx, spec.radius ?? [16, 28], 'palm'), true);
+registerStamp('conifers', (ctx, spec) => stampTree(ctx, spec.radius ?? [13, 26], 'conifer'), true);
+registerStamp('ancient_tree', (ctx, spec) => stampTree(ctx, spec.radius ?? [56, 88], 'ancient_tree'), true);
 /** Resolve a zone's OVERGROWTH dial (0..1): how much of a traveled way the
  *  land wins back. `layoutParams.overgrowth` is a scalar, or a
  *  [fringe, heart] pair lerped by geo.biomeDepth — the deep wood swallows
@@ -8074,29 +8086,29 @@ registerStamp('drained_husk', stampSingle('drained_husk', [12, 17]));
 registerStamp('scarecrow', stampSingle('scarecrow', [10, 13]));
 registerStamp('hay_bale', stampSingle('hay_bale', [13, 17]));
 registerStamp('pot_cluster', stampSingle('pot_cluster', [11, 15]));
-registerStamp('rubble', (ctx, spec) => stampBlob(ctx, 'rubble', spec.radius ?? [22, 48], [2, 4], false));
+registerStamp('rubble', (ctx, spec) => stampBlob(ctx, 'rubble', spec.radius ?? [22, 48], [2, 4], false), true);
 registerStamp('banner_post', stampSingle('banner_post', [9, 11]));
 registerStamp('beehive', stampSingle('beehive', [10, 13]));
-registerStamp('thicket', (ctx) => stampThicket(ctx));
+registerStamp('thicket', (ctx) => stampThicket(ctx), true);
 registerStamp('tombstone', (ctx) => stampGraves(ctx));
 registerStamp('cave', (ctx) => stampCaveMouth(ctx));
 registerStamp('crystal', (ctx) => stampCrystal(ctx));
 registerStamp('lava_vent', (ctx) => stampLavaVent(ctx));
 // Flesh themed clutter (solids land in carved chambers; gore is a ground pool).
-registerStamp('flesh_pod', (ctx, spec) => stampSolid(ctx, 'flesh_pod', spec.radius ?? [18, 30]));
-registerStamp('bone', (ctx, spec) => stampSolid(ctx, 'bone', spec.radius ?? [12, 20]));
-registerStamp('gore', (ctx, spec) => stampBlob(ctx, 'gore', spec.radius ?? [26, 46], [4, 7], false));
+registerStamp('flesh_pod', (ctx, spec) => stampSolid(ctx, 'flesh_pod', spec.radius ?? [18, 30]), true);
+registerStamp('bone', (ctx, spec) => stampSolid(ctx, 'bone', spec.radius ?? [12, 20]), true);
+registerStamp('gore', (ctx, spec) => stampBlob(ctx, 'gore', spec.radius ?? [26, 46], [4, 7], false), true);
 // Volcanic themed clutter.
-registerStamp('obsidian', (ctx, spec) => stampSolid(ctx, 'obsidian', spec.radius ?? [20, 40]));
-registerStamp('cinder', (ctx, spec) => stampBlob(ctx, 'cinder', spec.radius ?? [28, 50], [4, 8], false));
+registerStamp('obsidian', (ctx, spec) => stampSolid(ctx, 'obsidian', spec.radius ?? [20, 40]), true);
+registerStamp('cinder', (ctx, spec) => stampBlob(ctx, 'cinder', spec.radius ?? [28, 50], [4, 8], false), true);
 registerStamp('ember_vent', (ctx) => stampEmberVent(ctx));
 // Marine clutter: kelp fields (walkable beds), coral heads + rocky outcrops (solids).
-registerStamp('kelp', (ctx, spec) => stampBlob(ctx, 'kelp', spec.radius ?? [22, 40], [3, 6], false));
+registerStamp('kelp', (ctx, spec) => stampBlob(ctx, 'kelp', spec.radius ?? [22, 40], [3, 6], false), true);
 // The littoral kit: tide trees place like palms; wrack and pools blob; the
 // wreck and the idol stand alone.
-registerStamp('mangrove', (ctx, spec) => stampTree(ctx, spec.radius ?? [18, 30], 'mangrove'));
-registerStamp('kelp_wrack', (ctx, spec) => stampBlob(ctx, 'kelp_wrack', spec.radius ?? [16, 34], [3, 6], false));
-registerStamp('bleached_coral', (ctx, spec) => stampSolid(ctx, 'bleached_coral', spec.radius ?? [14, 26]));
+registerStamp('mangrove', (ctx, spec) => stampTree(ctx, spec.radius ?? [18, 30], 'mangrove'), true);
+registerStamp('kelp_wrack', (ctx, spec) => stampBlob(ctx, 'kelp_wrack', spec.radius ?? [16, 34], [3, 6], false), true);
+registerStamp('bleached_coral', (ctx, spec) => stampSolid(ctx, 'bleached_coral', spec.radius ?? [14, 26]), true);
 registerStamp('tide_pool', (ctx, spec) => stampBlob(ctx, 'tide_pool', spec.radius ?? [12, 24], [2, 4], false));
 registerStamp('brine_sink', (ctx, spec) => stampBlob(ctx, 'brine_sink', spec.radius ?? [20, 44], [3, 6], false));
 registerStamp('hull_wreck', stampSingle('hull_wreck', [22, 30]));
@@ -8104,18 +8116,18 @@ registerStamp('coil_idol', stampSingle('coil_idol', [12, 16]));
 // The ship-deck kit (the boarding decks scatter these walk-gated; the layout
 // itself plants the masts and rails deterministically along the hull).
 registerStamp('ship_mast', stampSingle('ship_mast', [16, 20]));
-registerStamp('cargo_stack', (ctx, spec) => stampSolid(ctx, 'cargo_stack', spec.radius ?? [14, 22]));
+registerStamp('cargo_stack', (ctx, spec) => stampSolid(ctx, 'cargo_stack', spec.radius ?? [14, 22]), true);
 // The kelp TREE — a lone stipe; forests come from the 'kelp_forest' cluster.
-registerStamp('giant_kelp', (ctx, spec) => stampSolid(ctx, 'giant_kelp', spec.radius ?? [26, 42]));
-registerStamp('coral', (ctx, spec) => stampSolid(ctx, 'coral', spec.radius ?? [16, 28]));
-registerStamp('sea_rock', (ctx, spec) => stampSolid(ctx, 'sea_rock', spec.radius ?? [22, 40]));
+registerStamp('giant_kelp', (ctx, spec) => stampSolid(ctx, 'giant_kelp', spec.radius ?? [26, 42]), true);
+registerStamp('coral', (ctx, spec) => stampSolid(ctx, 'coral', spec.radius ?? [16, 28]), true);
+registerStamp('sea_rock', (ctx, spec) => stampSolid(ctx, 'sea_rock', spec.radius ?? [22, 40]), true);
 // Mycelia fungal clutter: towering caps + spires (solids), puffing spore-pods
 // (active), glow-caps + a hyphal carpet (walkable ground overlays).
-registerStamp('giant_mushroom', (ctx, spec) => stampSolid(ctx, 'giant_mushroom', spec.radius ?? [24, 42]));
-registerStamp('fruiting_tower', (ctx, spec) => stampSolid(ctx, 'fruiting_tower', spec.radius ?? [26, 40]));
+registerStamp('giant_mushroom', (ctx, spec) => stampSolid(ctx, 'giant_mushroom', spec.radius ?? [24, 42]), true);
+registerStamp('fruiting_tower', (ctx, spec) => stampSolid(ctx, 'fruiting_tower', spec.radius ?? [26, 40]), true);
 registerStamp('spore_pod', (ctx) => stampSporePod(ctx));
-registerStamp('glow_cap', (ctx, spec) => stampSolid(ctx, 'glow_cap', spec.radius ?? [8, 14]));
-registerStamp('mycelial_mat', (ctx, spec) => stampBlob(ctx, 'mycelial_mat', spec.radius ?? [30, 52], [4, 7], false));
+registerStamp('glow_cap', (ctx, spec) => stampSolid(ctx, 'glow_cap', spec.radius ?? [8, 14]), true);
+registerStamp('mycelial_mat', (ctx, spec) => stampBlob(ctx, 'mycelial_mat', spec.radius ?? [30, 52], [4, 7], false), true);
 registerStamp('structure', (ctx, spec) => {
   const s = spec.structure ? STRUCTURES[spec.structure] : undefined;
   if (!s) return;
