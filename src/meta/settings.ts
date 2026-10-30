@@ -27,6 +27,7 @@ import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 import { MENU_ANCHORS, MENU_CFG, type MenuAnchorId } from '../ui/menuConfig';
 import { ESCAPE_CFG, ESCAPE_MODES, type EscapeCloseMode } from '../ui/escapeConfig';
 import { PORTAL_ANCHORS, PORTAL_VISIBILITY, PORTAL_BUTTON_CFG, type PortalAnchorId, type PortalVisibilityId } from '../ui/portalConfig';
+import { MEMORY_REVEAL_CFG } from '../ui/memoryRevealConfig';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -121,6 +122,9 @@ export interface Settings {
    *  OFF shows every line whole at once — the master switch over every
    *  per-kind/per-line typing dial (VIS_CFG.speech, MonsterDef.speech). */
   speechTyping: boolean;
+  /** Vault receipt presentation; never changes price, eligibility or outcome. */
+  memoryReveal: 'cinematic' | 'instant';
+  memoryPreview: boolean;
   /** Presentation shortcut, keyed by character and NPC definition, never account-wide. */
   npcShopVisits: string[];
   /** THE HOVER NAMEPLATE (renderer drawEliteNameHover): which bodies bid for
@@ -308,6 +312,8 @@ export interface SettingsSave {
   gearPickup?: 'vacuum' | 'key';
   castTelegraphs?: boolean;
   speechTyping?: boolean;
+  memoryReveal?: 'cinematic' | 'instant';
+  memoryPreview?: boolean;
   npcShopVisits?: string[];
   hoverNameplates?: HoverNameplatesMode;
   aimTick?: Partial<AimTickOptions>;
@@ -481,6 +487,8 @@ export const makeSettings = (): Settings => ({
   gearPickup: 'vacuum',
   castTelegraphs: true,
   speechTyping: true,
+  memoryReveal: MEMORY_REVEAL_CFG.defaultMode,
+  memoryPreview: MEMORY_REVEAL_CFG.autoplayPreview,
   npcShopVisits: [],
   hoverNameplates: 'named',
   aimTick: { ...DEFAULT_AIM_TICK },
@@ -533,6 +541,8 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   gearPickup: s.gearPickup,
   castTelegraphs: s.castTelegraphs,
   speechTyping: s.speechTyping,
+  memoryReveal: s.memoryReveal,
+  memoryPreview: s.memoryPreview,
   npcShopVisits: [...s.npcShopVisits],
   hoverNameplates: s.hoverNameplates,
   aimTick: { ...s.aimTick },
@@ -637,6 +647,8 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
     castTelegraphs: s.castTelegraphs ?? true,
     speechTyping: s.speechTyping ?? true,
+    memoryReveal: s.memoryReveal === 'instant' || s.memoryReveal === 'cinematic' ? s.memoryReveal : MEMORY_REVEAL_CFG.defaultMode,
+    memoryPreview: typeof s.memoryPreview === 'boolean' ? s.memoryPreview : MEMORY_REVEAL_CFG.autoplayPreview,
     npcShopVisits: Array.isArray(s.npcShopVisits) ? [...new Set(s.npcShopVisits.filter((v): v is string => typeof v === 'string'))] : [],
     // Unknown values (and pre-dial saves) fall back to the classic read —
     // the additive-field law: no schema bump, older saves simply lack it.
