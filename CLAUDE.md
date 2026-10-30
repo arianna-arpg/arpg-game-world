@@ -17,6 +17,12 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Desert ambience uses stable zone-space births and travel for sand, dust devils
+and optional tumbleweeds; heat haze composes view and terrain layers through
+`world/ambientFx.ts`. See `docs/render/desert-ambience.md`; verify all types,
+`balance/ambient-weather-check.ts`, transience, sim smoke, genqa and the hidden
+`balance/ambient-weather-ui.cjs` after an isolated build.
+
 Tutorial scenes cannot feed account nemeses. See `docs/engine/tutorial-isolation.md`;
 verify tutorialisolation, scenes, mu, Odyssey checks and all types when changing
 scene departure or nemesis formation/manifestation.

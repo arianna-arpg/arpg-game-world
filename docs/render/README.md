@@ -217,6 +217,10 @@ it that way or the website bundle grows an engine.
 `bubbles` (drifting columns + periodic splay-bursts), desert `heatHaze`,
 generic `motes`. Stateless, deterministic, one draw branch per kind.
 
+Desert sand/dust devils and optional tumbleweeds use stable zone-space fields;
+heat haze supports screen and localized terrain layers. Authoring and checks:
+[desert ambience](desert-ambience.md).
+
 DESERT HEAT is a doodad + a status + one world loop: `heat_shimmer` fields
 (painter `shimmer`, stamped by desert layouts) bake `sunscorched` stacks
 onto players (fire res −5%/stack, cap on the status def); SHADE — a canopy
