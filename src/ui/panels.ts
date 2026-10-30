@@ -11714,8 +11714,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
   }
 
   hideAll(): void {
-    this.memoryReveal.close();
     this.menuBar.closeTray();
+    this.memoryReveal.close();
     this.conversation?.reset(); this.conversationSpeakerId = null;
     this.closeInventory();
     dndCancel(); // also clear gestures on panels outside inventory

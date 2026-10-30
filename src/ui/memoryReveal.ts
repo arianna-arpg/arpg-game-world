@@ -8,7 +8,7 @@ import { hideTooltip } from './tooltip';
 import { Z_LADDER } from './zorder';
 import { MEMORY_REVEAL_CFG as CFG } from './memoryRevealConfig';
 import { memoryChanceLabel, memoryPoolOdds, memoryPresentation, memoryRevealReel } from './memoryRevealModel';
-import './memoryReveal.css';
+// Styles enter through main.ts so headless UI-helper imports remain valid.
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const reducedMotion = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
