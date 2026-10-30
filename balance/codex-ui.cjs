@@ -32,16 +32,17 @@ app.whenReady().then(async () => {
     check('search cannot reveal a locked skill', await js(`document.querySelectorAll('.cx-card').length===0 && !document.querySelector('[data-skill-showcase]')`));
     await search('Cleave');
     check('known skill displays its game icon and live base information', await js(`document.querySelector('.cx-detail h2').textContent==='Cleave' && document.querySelector('.cx-detail').textContent.includes('Base cooldown') && !!document.querySelector('.cx-card svg,.cx-card [data-skill-acronym]')`));
-    await click('[data-cx-play]');
+    await js("document.querySelector('.cx-stage').scrollIntoView({block:'nearest'});void 0");
     await waitFor(`window.__skillShowcases?.stats().blits > 5`,25000);
     check('the current skill plays inside the Codex', await js(`window.__skillShowcases.stats().playing.startsWith('cleave|') && document.querySelectorAll('iframe[data-skill-showcase-engine]').length===1`));
-    check('demonstration is fully visible after pressing Play', await js(`(()=>{const p=document.querySelector('.cx-detail').getBoundingClientRect(), r=document.querySelector('.skill-showcase').getBoundingClientRect();return r.top>=p.top && r.bottom<=p.bottom+1;})()`));
+    check('demonstration is fully visible after automatic playback', await js(`(()=>{const p=document.querySelector('.cx-detail').getBoundingClientRect(), r=document.querySelector('.skill-showcase').getBoundingClientRect();return r.top>=p.top && r.bottom<=p.bottom+1;})()`));
     await shot('02-demonstration');
+    await js("window.oldPreview=document.querySelector('.skill-showcase');void 0");
     await click('[data-cx-page="supports"]');
-    await waitFor(`!window.__skillShowcases.stats().running`);
+    check('switching shelves removes the previous demonstration',await js("!oldPreview.isConnected"));
     await search('Piercing');
     check('support shows discovered compatible demonstration hosts', await js(`document.querySelector('[data-cx-host]').options.length>0 && document.querySelector('.cx-detail').textContent.includes('Per additional level')`));
-    await click('[data-cx-play]');
+    await js("document.querySelector('.cx-stage').scrollIntoView({block:'nearest'});void 0");
     await waitFor(`(window.__skillShowcases.stats().playing||'').includes('piercing')`);
     await shot('03-support');
     await click('[data-cx-section="classes"]');
@@ -71,8 +72,8 @@ app.whenReady().then(async () => {
     await click('[data-cx-section="abilities"]'); await click('[data-cx-page="skills"]'); await click('[data-cx-clear]');
     await js(`const tag=document.querySelector('[data-cx-tag]');tag.value='spell';tag.dispatchEvent(new Event('change'));void 0`);
     check('tag filters exclude undiscovered entries', await js(`document.querySelectorAll('.cx-locked').length===0 && document.querySelector('.cx-tags').textContent.includes('spell')`));
-    await click('[data-cx-clear]'); await click('[data-cx-next]');
-    check('pagination advances', await js(`document.querySelector('.cx-pager span').textContent.startsWith('Page 2')`));
+    await click('[data-cx-clear]'); await js("document.querySelector('.cx-grid').scrollTop=2000;void 0");await sleep(120);
+    check('continuous scrolling advances through a bounded card window',await js("Number(document.querySelector('.cx-grid').dataset.windowStart)>0 && document.querySelectorAll('.cx-card').length<80"));
     // Actual scaling, narrow screens and restored sizes; every root stays in bounds.
     for(const [width,height,scale] of [[800,600,1.5],[640,480,1],[1280,900,1]]) {
       win.setContentSize(width,height);await sleep(100);

@@ -25,7 +25,7 @@ app.whenReady().then(async () => {
     await win.loadURL(server.url);await js("Object.defineProperty(navigator,'getGamepads',{value:()=>[]});");
     await wait('window.__game');await js('__game.hydrated()');await click('#sm-codex');await sleep(450);
     await js("window.savedShell=document.querySelector('.side-screen');window.savedBrand=document.querySelector('.side-masthead');void 0");
-    check('no automatic demonstration on entry',await js("!document.querySelector('.codex [data-skill-showcase]')"));
+    check('automatic demonstrations are enabled by default',await js("document.querySelector('[data-cx-autoplay]').checked"));
     await focus('[data-cx-section="abilities"]');await key('Right');
     check('ribbon arrows navigate with focus on the selected section',await js("document.activeElement.dataset.cxSection==='account' && document.activeElement.getAttribute('aria-current')==='true'"));
     await key('End');check('ribbon End reaches classes',await js("document.activeElement.dataset.cxSection==='classes'"));await key('Home');
@@ -35,10 +35,10 @@ app.whenReady().then(async () => {
     check('multi-term search combines name and tag and retains typing focus',await js("document.querySelector('.cx-detail h2').textContent==='Firebolt' && document.querySelectorAll('.cx-card').length===1 && document.activeElement.matches('[data-cx-search]')"));
     await key('Escape');check('Escape first clears a focused query',await js("document.querySelector('[data-cx-search]').value==='' && !!document.querySelector('.codex')"));
     await key('Down');check('search Down reaches the selected result',await js("document.activeElement.matches('.cx-card[aria-pressed=true]')"));
-    await key('End');check('grid End reaches the last visible entry',await js("document.activeElement===document.querySelector('.cx-card:last-child')"));
-    await key('PageDown');check('keyboard paging preserves result focus',await js("document.querySelector('.cx-pager span').textContent.startsWith('Page 2') && document.activeElement.matches('.cx-card')"));
+    await key('End');check('grid End reaches the last entry in the collection',await js("document.activeElement.parentElement.getAttribute('aria-posinset')===document.querySelector('.cx-grid').dataset.total"));
+    await key('Home');await key('PageDown');check('keyboard scrolling preserves result focus',await js("Number(document.activeElement.parentElement.getAttribute('aria-posinset'))>1 && document.activeElement.matches('.cx-card')"));
     await key('f',['control']);check('Ctrl+F returns to search',await js("document.activeElement.matches('[data-cx-search]')"));
-    await search('Cleave');await click('[data-cx-play]');
+    await search('Cleave');await js("document.querySelector('.cx-stage').scrollIntoView({block:'nearest'});void 0");
     await wait("document.querySelector('.cx-stage').dataset.cxPreviewState==='ready'",25000);
     await js("window.savedPreview=document.querySelector('.skill-showcase');window.savedPlay=document.querySelector('[data-cx-play]');void 0");
     await search('cleave melee');await js("__game.account().ledger['codex:sighted:zombie']=1;void 0");await sleep(1100);
@@ -54,7 +54,7 @@ app.whenReady().then(async () => {
     await shot('01-skill-playing');
     await click('[data-cx-play]');await wait('!__skillShowcases.stats().running');
     check('Stop restores a stable idle stage and removes the player',await js("document.querySelector('.cx-stage').dataset.cxPreviewState==='idle' && !document.querySelector('.codex .skill-showcase')"));
-    await click('[data-cx-page="supports"]');await search('Piercing');await click('[data-cx-play]');
+    await click('[data-cx-page="supports"]');await search('Piercing');await js("document.querySelector('.cx-stage').scrollIntoView({block:'nearest'});void 0");
     await wait("document.querySelector('.cx-stage').dataset.cxPreviewState==='ready'");
     check('support demonstration includes its real support spec',await js("document.querySelector('.skill-showcase').dataset.showcaseSupports.includes('piercing') && __skillShowcases.stats().playing.includes('piercing')"));
     await click('[data-cx-support]');await wait("document.querySelector('.cx-stage').dataset.cxPreviewState==='ready'");
@@ -81,18 +81,17 @@ app.whenReady().then(async () => {
     await click('[data-cx-reset]');await shot('03-desktop-browser');
     for(const [width,height,scale] of [[800,600,1.5],[640,480,1],[390,844,1],[390,844,2],[320,568,2]]) {
       win.setContentSize(width,height);await js(`document.documentElement.style.setProperty('--ui-scale','${scale}');void 0`);await sleep(120);
-      await click('[data-cx-clear]');await click('[data-cx-next]');
-      await js("(()=>{const g=getComputedStyle(document.querySelector('.cx-list')).overflowY==='auto'?document.querySelector('.cx-list'):document.querySelector('.cx-grid');g.scrollTop=g.scrollHeight;document.querySelector('.cx-card:last-child').scrollIntoView({block:'nearest'});})()");await sleep(80);
-      await js("window.scrollBox=getComputedStyle(document.querySelector('.cx-list')).overflowY==='auto'?document.querySelector('.cx-list'):document.querySelector('.cx-grid');window.savedScroll=scrollBox.scrollTop;document.querySelector('.cx-card:last-child').click();void 0");
+      await click('[data-cx-clear]');await js("document.querySelector('.cx-grid').scrollTop=3500;void 0");await sleep(120);
+      await js("(()=>{const g=document.querySelector('.cx-grid'),r=g.getBoundingClientRect(),cards=[...g.querySelectorAll('.cx-card')],c=cards.find(c=>{const t=c.getBoundingClientRect();return t.top>=r.top&&t.bottom<=r.bottom;})||cards.find(c=>{const t=c.getBoundingClientRect();return t.top>=r.top&&t.top<r.bottom;})||cards.at(-1);window.scrollBox=g;window.savedScroll=g.scrollTop;window.savedKey=c.dataset.cxEntry;window.fullyVisible=c.getBoundingClientRect().bottom<=r.bottom;c.click();})()");
       check(`compact reading at ${width}/${scale} hides results and keeps the title reachable`,await js("(()=>{const d=document.querySelector('.cx-detail'),t=d.querySelector('h2').getBoundingClientRect(),b=d.getBoundingClientRect();return getComputedStyle(document.querySelector('.cx-list')).display==='none' && getComputedStyle(d).display==='block' && t.top>=b.top-1 && t.top< b.bottom;})()"));
       check(`footer and pane stay in bounds at ${width}/${scale}`,await js("(()=>{const c=document.querySelector('.codex'),b=document.querySelector('[data-cx-back]').getBoundingClientRect();return c.scrollWidth<=c.clientWidth+1 && b.top>=0 && b.bottom<=innerHeight+1 && b.left>=0 && b.right<=innerWidth+1;})()"));
       if(width===390&&scale===1) await shot('04-compact-reading');
       await key('Escape');
-      check(`Escape returns to the same page, scroll and card at ${width}/${scale}`,await js("document.querySelector('.codex').dataset.cxReading==='false' && document.querySelector('.cx-pager span').textContent.startsWith('Page 2') && Math.abs(scrollBox.scrollTop-savedScroll)<2 && document.activeElement.matches('.cx-card:last-child')"));
+      check(`Escape returns to the same scroll and card at ${width}/${scale}`,await js("document.querySelector('.codex').dataset.cxReading==='false' && (!fullyVisible || Math.abs(scrollBox.scrollTop-savedScroll)<2) && document.activeElement.dataset.cxEntry===savedKey"));
       if(width===320) await shot('05-smallest-browser');
     }
     win.setContentSize(390,844);await js("document.documentElement.style.setProperty('--ui-scale','1');void 0");await sleep(100);
-    await search('Cleave');await click('.cx-card');await click('[data-cx-play]');await wait("document.querySelector('.cx-stage').dataset.cxPreviewState==='ready'");
+    await search('Cleave');await click('.cx-card');await js("document.querySelector('.cx-stage').scrollIntoView({block:'nearest'});void 0");await wait("document.querySelector('.cx-stage').dataset.cxPreviewState==='ready'");
     check('compact demonstration and stop control fit the reader',await js("(()=>{const p=document.querySelector('.cx-detail').getBoundingClientRect(),s=document.querySelector('.cx-stage').getBoundingClientRect(),c=document.querySelector('[data-cx-play]').getBoundingClientRect();return s.top>=p.top-1 && s.bottom<=p.bottom+1 && c.top>=p.top-1 && c.bottom<=p.bottom+1;})()"));await shot('06-compact-demonstration');
     await key('f',['control']);
     check('compact search shortcut reveals the browse controls',await js("document.activeElement.matches('[data-cx-search]') && document.activeElement.getClientRects().length>0 && document.querySelector('.codex').dataset.cxReading==='false'"));

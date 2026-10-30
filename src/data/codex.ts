@@ -8,7 +8,9 @@ export const CODEX_SECTIONS: CodexSection[] = [
   { id: 'classes', label: 'Classes', pages: [{ id: 'classes', label: 'Vessels', description: 'The vessels discovered across your lives.' }] },
 ];
 export const CODEX_CFG = {
-  pageSize: 24,
+  /** Only visible rows and a small buffer have cards/portraits in the DOM. */
+  list: { minWidth: 152, rowHeight: 112, gap: 9, overscanRows: 3 },
+  autoplay: true,
   refreshMs: 1000,
   sightingsEverySec: 0.5,
   /** Explicit opt-ins for future non-dropping player abilities. NPC arts stay out. */

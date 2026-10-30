@@ -10,13 +10,13 @@ export interface CodexPreview {
   dispose(): void;
 }
 
-/** One explicit, read-only demonstration. Controls survive playback and account refreshes.
+/** One read-only demonstration, automatically played when its selected entry is visible. Controls survive playback and account refreshes.
  * The shared showcase owns simulation, visibility pausing and save isolation. */
 export function mountCodexPreview(element: HTMLElement, entry: CodexEntry, hosts: string[],
-  preferredHost: string, rememberHost: (id: string) => void): CodexPreview {
+  preferredHost: string, rememberHost: (id: string) => void, preference: { autoplay: boolean; changed(value: boolean): void }): CodexPreview {
   const support = entry.source?.kind === 'support' ? entry.source.id : null;
   let host = hosts.includes(preferredHost) ? preferredHost : hosts[0] ?? '';
-  let includeSupport = true, playing = false, disposed = false;
+  let includeSupport = true, playing = false, disposed = false, visible = false, pendingAutoplay = preference.autoplay;
   let cleanup: (() => void) | undefined;
   const sorted = (ids: string[]): string[] => [...ids].sort((a, b) => SKILLS[a].name.localeCompare(SKILLS[b].name));
   const hostOptions = (ids: string[]): string => sorted(ids).map(id =>
@@ -24,10 +24,10 @@ export function mountCodexPreview(element: HTMLElement, entry: CodexEntry, hosts
   element.innerHTML = `<div class="cx-preview-title"><h3>Live demonstration</h3><span>Level ${CODEX_CFG.previewLevel}</span></div>
     ${support ? `<label class="cx-host-label">Demonstration skill<select data-cx-host aria-label="Demonstration skill"></select></label>
       <label class="cx-compare"><input type="checkbox" data-cx-support checked> Include ${esc(entry.title)}</label>` : ''}
-    <div class="cx-preview-controls"><button data-cx-play aria-pressed="false">Play demonstration</button><button data-cx-replay disabled>Restart</button></div>
-    <div class="cx-stage" data-cx-preview-state="idle"><div class="cx-stage-media"></div>
+    <div class="cx-preview-controls"><button data-cx-play aria-pressed="false">Play demonstration</button><button data-cx-replay disabled>Restart</button><label class="cx-autoplay"><input type="checkbox" data-cx-autoplay ${preference.autoplay ? 'checked' : ''}> Autoplay</label></div>
+    <div class="cx-stage" role="button" tabindex="0" aria-label="Play demonstration" data-cx-preview-state="idle"><div class="cx-stage-media"></div>
       <div class="cx-stage-message"><span aria-hidden="true">▷</span><p role="status">Press Play to see this skill in action.</p></div></div>
-    <p class="cx-preview-note">${support ? 'Compare the same base skill with and without this support. Modified builds may allow further combinations.' : 'A live example from the current game. Your build may change how it plays.'}</p>`;
+    <p class="cx-preview-note">${support ? 'Compare the same base skill with and without this support. Modified builds may allow further combinations.' : 'A baseline vessel using the current game rules. Your build may change how it plays.'}</p>`;
   const stage = element.querySelector<HTMLElement>('.cx-stage')!;
   const media = element.querySelector<HTMLElement>('.cx-stage-media')!;
   const message = element.querySelector<HTMLElement>('.cx-stage-message p')!;
@@ -35,6 +35,7 @@ export function mountCodexPreview(element: HTMLElement, entry: CodexEntry, hosts
   const replay = element.querySelector<HTMLButtonElement>('[data-cx-replay]')!;
   const select = element.querySelector<HTMLSelectElement>('[data-cx-host]');
   const compare = element.querySelector<HTMLInputElement>('[data-cx-support]');
+  const autoplay = element.querySelector<HTMLInputElement>('[data-cx-autoplay]')!;
   const available = (): boolean => !!(entry.preview || (support && host));
   const state = (value: string, text: string): void => {
     stage.dataset.cxPreviewState = value; message.textContent = text;
@@ -42,6 +43,8 @@ export function mountCodexPreview(element: HTMLElement, entry: CodexEntry, hosts
     play.textContent = retry ? 'Retry demonstration' : playing ? 'Stop demonstration' : 'Play demonstration';
     play.setAttribute('aria-pressed', String(playing && !retry));
     play.disabled = !available(); replay.disabled = !playing;
+    stage.setAttribute('aria-label', play.textContent!); stage.setAttribute('aria-pressed', play.getAttribute('aria-pressed')!);
+    stage.setAttribute('aria-disabled', String(!available())); stage.tabIndex = available() ? 0 : -1;
     stage.setAttribute('aria-busy', String(value === 'loading'));
   };
   const stop = (): void => {
@@ -50,7 +53,7 @@ export function mountCodexPreview(element: HTMLElement, entry: CodexEntry, hosts
   };
   const start = (scroll = false): void => {
     if (disposed || !available()) return;
-    cleanup?.(); playing = true;
+    cleanup?.(); playing = true; pendingAutoplay = false;
     const spec = entry.preview ?? { skillId: host, supports: includeSupport && support ? [{ id: support }] : [] };
     media.innerHTML = skillShowcaseMarkup({ ...spec, level: CODEX_CFG.previewLevel });
     state('loading', 'Preparing demonstration…');
@@ -68,9 +71,22 @@ export function mountCodexPreview(element: HTMLElement, entry: CodexEntry, hosts
     read();
     if (scroll) requestAnimationFrame(() => { if (!disposed) stage.scrollIntoView({ block: 'nearest' }); });
   };
-  play.addEventListener('click', () => {
+  const toggle = (): void => {
+    pendingAutoplay = false;
     if (playing && !['delayed', 'unavailable'].includes(stage.dataset.cxPreviewState!)) stop();
     else start(true);
+  };
+  play.addEventListener('click', toggle); stage.addEventListener('click', toggle);
+  stage.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); toggle(); }
+  });
+  autoplay.addEventListener('change', () => {
+    preference.autoplay = autoplay.checked; preference.changed(autoplay.checked); pendingAutoplay = autoplay.checked;
+    if (!autoplay.checked) stop(); else if (visible) start();
+  });
+  const visibility = new IntersectionObserver(records => {
+    visible = records[records.length - 1].isIntersecting;
+    if (visible && pendingAutoplay && !playing) start();
   });
   replay.addEventListener('click', () => start(true));
   select?.addEventListener('change', () => { host = select.value; rememberHost(host); if (playing) start(true); else stop(); });
@@ -86,7 +102,8 @@ export function mountCodexPreview(element: HTMLElement, entry: CodexEntry, hosts
     rememberHost(host);
     if (playing && before !== host) { if (host) start(); else stop(); }
     else if (!playing) state('idle', available() ? 'Press Play to see this skill in action.' : 'Discover a compatible skill to try this support.');
+    if (visible && pendingAutoplay && !playing) start();
   };
-  updateHosts(hosts); stop();
-  return { element, updateHosts, dispose: () => { disposed = true; stop(); element.remove(); } };
+  updateHosts(hosts); stop(); visibility.observe(stage);
+  return { element, updateHosts, dispose: () => { disposed = true; visibility.disconnect(); stop(); element.remove(); } };
 }
