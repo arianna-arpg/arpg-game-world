@@ -1,6 +1,7 @@
 import { hollowWakeBrand } from './brand';
 import { FRONT_ACTIONS, FRONT_SCREEN, type FrontScreenState } from './frontScreenConfig';
 import { Z_LADDER } from './zorder';
+import { cancelFrontEntrance, revealFrontEntrance } from './frontEntrance';
 
 const text = (s: string | number): string => String(s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -131,10 +132,15 @@ export function frontScreenHtml(state: FrontScreenState): string {
 
 /** Local, disposable listeners: replacing the view cannot leak global handlers.
  * Preserve an existing focus target when asynchronous save hydration refreshes it. */
-export function bindFrontScreen(root: HTMLElement, previousFocus?: string): void {
+export function bindFrontScreen(root: HTMLElement, previousFocus?: string, entering = false): void {
   const view = root.querySelector<HTMLElement>('.front-screen')!;
   bindFrontAtmosphere(view);
+  if (entering) revealFrontEntrance(root);
+  view.addEventListener('pointerdown', () => cancelFrontEntrance(root), { capture: true });
+  // Cancel before the action: an action may immediately open a NEW menu reveal.
+  view.addEventListener('click', () => cancelFrontEntrance(root), { capture: true });
   view.addEventListener('keydown', e => {
+    cancelFrontEntrance(root);
     // The global gameplay Tab bind must not suppress native focus traversal.
     if (e.key === 'Tab') { e.stopPropagation(); return; }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;

@@ -3,6 +3,7 @@ import './ui/brand.css';
 import './ui/frontScreen.css';
 import './ui/sideScreen.css';
 import './ui/codexShell.css';
+import { setFrontEntranceReadiness } from './ui/frontEntrance';
 import { sanitizeCosmeticLoadout } from './meta/cosmetics';
 // ---------------------------------------------------------------------------
 // Entry point: boots the world, runs the loop, and routes player input into
@@ -994,12 +995,8 @@ if (DEV.entityForge) {
 // tooling lives inside the dev panel, never behind a URL param of its own).
 if (DEV.mapForge || devPanelOptIn) mountMapForge(ui, () => world);
 
-// Boot: show the start menu immediately (built from the synchronous localStorage
-// loaders so it appears instantly), THEN reconcile against the disk files in the
-// background — the authoritative cross-session save. The disk loads warm the
-// shared account/settings refs and enable Continue if a disk character exists.
-ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
-ui.setContinueSave(loadCharacter());          // instant: localStorage cache
+// The setFrontEntranceReadiness boundary below waits for the disk reconcile
+// before revealing the locally rendered menu in both browser and desktop.
 const diskHydrated = (async (): Promise<void> => {
   const [a, s, c] = await Promise.all([loadAccountAsync(), loadSettingsAsync(), loadCharacterAsync()]);
   Object.assign(account, a);                  // mutate-in-place: shared refs stay valid
@@ -1020,6 +1017,11 @@ const diskHydrated = (async (): Promise<void> => {
     saveAccount(account);
   }
 })();
+// Keep boot failures with the existing fatal/save-stand-down owner. The visual
+// reveal has a bounded wait, but never treats a failed boot as a successful one.
+setFrontEntranceReadiness(diskHydrated.catch(error => reportFatal(error, 'unhandled rejection')));
+ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
+ui.setContinueSave(loadCharacter());          // instant: localStorage cache
 
 /** Read the OS into the LOCAL seat's intent for this frame (or null when there's
  *  nothing to drive — dead/downed, or the pause menu is up). Pure input capture;

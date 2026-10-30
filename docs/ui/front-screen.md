@@ -24,6 +24,21 @@ The root's full-screen sizing is selected by its current child markup, so replac
 
 ## Input and motion
 
+The first menu entrance fades the complete composition from black over 850 ms;
+return visits use 320 ms. `FRONT_SCREEN.entrance` owns enabled state, color,
+durations, easing and the maximum readiness wait. The game owns this presentation
+in both the desktop launcher and browser builds; the website does not animate a
+separate copy of the menu.
+
+`frontEntrance.ts` waits for the shell's startup reconciliation and decoded menu
+images, then gives the final layout a display opportunity before revealing it.
+It adds no minimum loading delay. A failed image or the configured readiness
+deadline releases the cover, and fatal boot errors retain their existing owner
+above it. Reduced motion skips the timed fade. Pointer, keyboard and controller
+activation can skip it immediately. Leaving the menu disposes its cover and
+pending animation; save/notice refreshes preserve an active reveal and never
+restart it. The cover owns no simulation, persistence or loading-screen lease.
+
 Native buttons support pointer and controller activation through the existing pad pointer. Up/Down and Home/End move focus; native Tab traversal is kept separate from the gameplay Tab binding. Enter and Space retain native button activation.
 
 The atmosphere uses three configurable strata of CSS motes and haze, without a JavaScript animation loop or gameplay time. The mote palette echoes the website's teal/violet/ember insignia and pale aether light, weighted toward the scene's teal soul-flame. Each stratum independently controls count, size, glow, opacity, lifetime, rise and sway. Fixed seeds keep the field stable across menu refreshes; compact screens show half the motes. The lights sit above the vignette but below all interface content. It remains visible across entrance side screens and disappears when all entrance surfaces are hidden. Pause Atmosphere retains its choice during the current session. The operating system's reduced-motion preference suppresses all ambient animation and leaves a faint, still particle field. The UI scale remains configurable through Options, including at 200%.
@@ -31,6 +46,12 @@ The atmosphere uses three configurable strata of CSS motes and haze, without a J
 ## Verification
 
 Run `npm run check`, `npm run build`, `npm run smoke`, and `electron balance/front-screen-ui.cjs` (or `node_modules/.bin/electron.cmd balance/front-screen-ui.cjs` on Windows).
+
+Also run `electron balance/front-entrance-ui.cjs` for entrance changes. It uses
+the built client with isolated storage and controlled resource delays to check
+readiness, initial/return fades, refresh stability, input/navigation cancellation,
+reduced motion and failed/stalled artwork.
+CI runs this entrance course as part of `test:reliability:ui`.
 
 The hidden real-client harness uses a disposable profile and save directory under `balance/reports/`. It checks fresh/returning accounts, unlock gates, actual keyboard and controller input, saved-run callbacks, fallen vessels, Options hydration, Vault and Chronicle return paths, browser exit, text escaping, reduced motion, multiple viewport/UI scale combinations, and the real first-account tutorial entry. Its screenshots and JSON report are ignored outputs.
 

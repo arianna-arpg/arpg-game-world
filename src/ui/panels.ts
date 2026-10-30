@@ -11406,6 +11406,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
   }
 
   private renderStartMenu(): void {
+    const menuEntering = this.startMenu.classList.contains('hidden') || !this.startMenu.querySelector(':scope > .front-screen');
     const acc = this.getAccount();
     const h = this.startHandlers!;
     this.startMenuBack = null;  // the menu proper is showing — no subscreen to back out of
@@ -11463,7 +11464,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     });
     document.getElementById('sm-exit')!.addEventListener('click', () => { void this.exitGame(); });
     this.onStartMenuRender?.();
-    bindFrontScreen(this.startMenu, previousFocus);
+    bindFrontScreen(this.startMenu, previousFocus, menuEntering);
   }
 
   /** Explicit exits wait for the existing disk writers before stopping the

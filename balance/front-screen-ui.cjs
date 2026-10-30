@@ -43,6 +43,8 @@ app.whenReady().then(async () => {
       // from CSS (which could pass even when the actual landscape is absent).
       const image = document.querySelector('.front-landscape');
       await image.decode();
+      for (let i=0; document.querySelector('#front-entrance') && i<240; i++) await new Promise(r=>setTimeout(r,25));
+      if (document.querySelector('#front-entrance')) throw Error('Menu entrance did not settle');
     });
     assert(await run(() => {
       const image = document.querySelector('.front-landscape'), style = getComputedStyle(image);
@@ -438,6 +440,7 @@ app.whenReady().then(async () => {
     });
     assert(entered.hidden && entered.scene && !entered.loading && !entered.fatal, JSON.stringify(entered));
     assert.equal(await run(() => getComputedStyle(document.querySelector('#front-backdrop')).display), 'none');
+    assert.equal(await run(() => !!document.querySelector('#front-entrance')), false);
     report.checks.push('Real Begin enters the account tutorial with no front-screen overlay');
     await win.loadURL(server.url + '?dev=forges');
     await run(async () => {

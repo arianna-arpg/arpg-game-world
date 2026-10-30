@@ -55,6 +55,10 @@ export const FRONT_SCREEN = {
   footer: 'An ever-changing world',
   buildLabel: 'In development',
   palette: { ivory: '#eee6d4', muted: '#a7b2b0', gold: '#c8aa73', line: '#b39c6c40' },
+  entrance: {
+    enabled: true, color: '#000', initialMs: 850, returnMs: 320,
+    maxWaitMs: 5000, easing: 'cubic-bezier(0.22, 0, 0.36, 1)',
+  },
   atmosphere: {
     enabled: true,
     driftSeconds: 19,
