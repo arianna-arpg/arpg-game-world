@@ -100,6 +100,14 @@ bodies) use `data/secondaryVisuals.ts` and reusable weapon parts. See
 supportfabric, payloadcues, impactstartertrees, castaim, projectilecull, cosmetics,
 all types and sim smoke, then the hidden secondary-visuals-ui after its isolated build.
 
+The catalogue visual-census covers all registered actor look/part references,
+nine formerly generic bodies and 42 physical weapon profiles. Shared families
+use `data/fieldActorLooks.ts` and `data/weaponFlightVisuals.ts`; native line
+weapons retain their collision boundary around the artwork. See
+`docs/render/visual-census.md`; verify presencevisuals, skillflights, skeletonmage,
+projectilecull, cosmetics, all types and sim smoke, then hidden visual-census-ui
+after its isolated build.
+
 The persistent construct body silhouettes are composed in `data/constructLooks.ts`
 and `data/constructGlyphs.ts`, selected through each delivery's ordinary `look`.
 See `docs/render/constructs.md`; verify presencevisuals, cosmetics, all types,

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { checkWeaponFlights } from './weaponFlightChecks';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { makeSimWorld } from '../src/sim/arena';
 import { SKILLS } from '../src/data/skills';
@@ -8,6 +9,7 @@ import { makeSkillInstance } from '../src/engine/skills';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { skillFieldVisual, type SkillFieldVisual } from '../src/engine/skillFieldVisual';
 
+checkWeaponFlights();
 const all = Object.values(SKILLS);
 const flights = all.filter(s => s.delivery.type === 'projectile');
 const fields = all.filter(s => s.delivery.type === 'ground' || s.delivery.type === 'aura');

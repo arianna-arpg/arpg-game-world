@@ -22,6 +22,8 @@ import { GOLEM_GLYPHS } from './golemGlyphs';
 import { SUMMON_GLYPHS } from './summonGlyphs';
 import { CONSTRUCT_GLYPHS } from './constructGlyphs';
 import { SECONDARY_GLYPHS } from './secondaryGlyphs';
+import { FIELD_ACTOR_GLYPHS } from './fieldActorGlyphs';
+import { WEAPON_FLIGHT_GLYPHS } from './weaponFlightGlyphs';
 import { SKELETAL_MAGE_GLYPHS } from './skeletalMageGlyphs';
 import { UNDEAD_COURT_GLYPHS } from './undeadCourtGlyphs';
 import { AVIAN_GLYPHS } from './avianGlyphs';
@@ -34,6 +36,8 @@ export const GLYPH_PARTS: Record<string, GlyphDef> = {
   ...SUMMON_GLYPHS,
   ...CONSTRUCT_GLYPHS,
   ...SECONDARY_GLYPHS,
+  ...FIELD_ACTOR_GLYPHS,
+  ...WEAPON_FLIGHT_GLYPHS,
   ...SKELETAL_MAGE_GLYPHS,
   ...UNDEAD_COURT_GLYPHS,
   ...AVIAN_GLYPHS,

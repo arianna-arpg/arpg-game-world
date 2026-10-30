@@ -6347,7 +6347,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // splinters its door (World.kill → setDoorState 'broken'). Tough for its
   // level (a gate is a siege moment, not a barrel) — no drops, no experience.
   door_timber: {
-    id: 'door_timber', name: 'Barred Door',
+    id: 'door_timber', name: 'Barred Door', look: 'field_timber_door',
     color: '#5a4426', shape: 'square', radius: 14, material: 'wood',
     base: { life: 90, moveSpeed: 0, armor: 12, evasion: 0, mana: 0 },
     scaling: { life: { incPerLevel: 0.3 }, armor: { flatPerLevel: 1 } },
@@ -13085,7 +13085,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // (carrion / stalk composables — see MonsterDef — plus death division via
   // the brain's onDeath rattle, THE seam for it. Nothing below is bespoke.)
   quag_gel: {
-    id: 'quag_gel', name: 'Quag Gel',
+    id: 'quag_gel', name: 'Quag Gel', look: 'field_quag_gel',
     color: '#7fa04e', shape: 'oval', radius: 16, material: 'slime',
     base: { life: 64, moveSpeed: 92, accuracy: 88, poise: 20, mana: 0 },
     mods: [mod('chaosRes', 'flat', 0.45), mod('fireRes', 'flat', -0.25)],
@@ -13103,7 +13103,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'basic', onDeath: [{ do: 'summon', monster: 'quag_gelling', count: 3, ring: 26 }] },
   },
   quag_gelling: {
-    id: 'quag_gelling', name: 'Quag Gelling',
+    id: 'quag_gelling', name: 'Quag Gelling', look: 'field_quag_gelling',
     color: '#95b862', shape: 'circle', radius: 8, material: 'slime',
     base: { life: 16, moveSpeed: 150, accuracy: 80, mana: 0 },
     skills: ['claw'], xp: 4,
@@ -13185,7 +13185,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // The statue that was never a statue: it advances ONLY between glances —
   // stalk creep 0 + slow turn + all-around senses = the weeping-angel dread.
   pale_watcher: {
-    id: 'pale_watcher', name: 'Pale Watcher',
+    id: 'pale_watcher', name: 'Pale Watcher', look: 'field_pale_watcher',
     color: '#cdd0dc', shape: 'pentagon', radius: 14, material: 'stone',
     base: { life: 110, moveSpeed: 165, accuracy: 105, armor: 35, poise: 50, mana: 25, manaRegen: 2 },
     mods: [mod('coldRes', 'flat', 0.4), mod('chaosRes', 'flat', 0.3)],
@@ -14174,7 +14174,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // husk_throne dais it erupts from (hard-confined; it IS the arena's far
   // wall), sweeping the chamber with two anchored arm silhouettes.
   primeval_velketh: {
-    id: 'primeval_velketh', name: 'Velketh, the Enthroned Husk',
+    id: 'primeval_velketh', name: 'Velketh, the Enthroned Husk', look: 'field_husk_sovereign',
     color: '#9a6ad2', shape: 'pentagon', radius: 34, material: 'void',
     base: { life: 1000, moveSpeed: 0, accuracy: 135, armor: 50, mana: 320, manaRegen: 18, weight: 9 },
     mods: [mod('chaosRes', 'flat', 0.5), mod('coldRes', 'flat', 0.3), mod('damage', 'increased', 0.45)],
@@ -14228,7 +14228,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
   primeval_velketh_arm: {
-    id: 'primeval_velketh_arm', name: 'Husk Arm',
+    id: 'primeval_velketh_arm', name: 'Husk Arm', look: 'field_husk_arm',
     color: '#7e56ae', shape: 'oval', radius: 20, material: 'void',
     noNemesis: true, faction: 'primeval', tags: ['primeval'],
     base: { life: 140, moveSpeed: 0, mana: 70, manaRegen: 6, poise: 50 },
@@ -14237,7 +14237,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   // The sovereigns' BROODS — chaff the fights summon (and the escort tables).
   primeval_spawn: {
-    id: 'primeval_spawn', name: 'Primeval Spawn',
+    id: 'primeval_spawn', name: 'Primeval Spawn', look: 'field_primeval_spawn',
     color: '#a8a05c', shape: 'oval', radius: 10, material: 'chitin',
     base: { life: 42, moveSpeed: 126, mana: 0 },
     skills: ['claw'], xp: 12,
@@ -14245,7 +14245,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'swarm' },
   },
   primeval_cinder: {
-    id: 'primeval_cinder', name: 'Cinderling',
+    id: 'primeval_cinder', name: 'Cinderling', look: 'field_cinderling',
     color: '#e08a4a', shape: 'oval', radius: 10, material: 'ember',
     base: { life: 38, moveSpeed: 132, mana: 60, manaRegen: 6 },
     mods: [mod('fireRes', 'flat', 0.6)],

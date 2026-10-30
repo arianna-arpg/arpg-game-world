@@ -29,6 +29,7 @@ import { GOLEM_LOOKS } from './golemLooks';
 import { SUMMON_LOOKS } from './summonLooks';
 import { CONSTRUCT_BODY_LOOKS } from './constructLooks';
 import { SECONDARY_BODY_LOOKS, PLANTED_SPEAR } from './secondaryVisuals';
+import { FIELD_ACTOR_LOOKS } from './fieldActorLooks';
 import { DEVICE_OBJECT_LOOKS, TRAP_FRAME, MINE_FRAME } from './deviceVisuals';
 import { SKELETAL_MAGE_LOOKS } from './skeletalMageLooks';
 import { UNDEAD_COURT_LOOKS } from './undeadCourtLooks';
@@ -43,6 +44,7 @@ export const LOOKS: Record<string, LookDef> = {
   ...SUMMON_LOOKS,
   ...CONSTRUCT_BODY_LOOKS,
   ...SECONDARY_BODY_LOOKS,
+  ...FIELD_ACTOR_LOOKS,
   ...DEVICE_OBJECT_LOOKS,
   ...SKELETAL_MAGE_LOOKS,
   ...UNDEAD_COURT_LOOKS,

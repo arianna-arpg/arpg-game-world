@@ -14,6 +14,7 @@ import { selfProfile } from '../../data/skillSelfVisuals';
 import { presenceProfile } from '../../data/skillPresenceVisuals';
 import { drawPresenceField } from './skillPresenceVoice';
 import type { SkillFieldVisual } from '../../engine/skillFieldVisual';
+import { PROJ_FORM_GEO } from '../../engine/projForms';
 import { drawSkillMark } from './skillBurstVoice';
 import { traceAoePath } from './aoeTrace';
 import { registerEffectVoice, type EffectVoiceFlash } from './effectVoice';
@@ -33,7 +34,7 @@ export function flightProfile(p: SkillFlightVisual) {
 }
 
 /** Wakes are faint, trailing decoration. The unchanged collision form remains
- * the bright head; wide forms keep their shared PROJ_FORM_GEO painter. */
+ * the bright head; wide forms retain their shared PROJ_FORM_GEO boundary. */
 export function drawSkillFlightWake(ctx: CanvasRenderingContext2D, p: SkillFlightVisual): boolean {
   if (lightningProfile(p.skillVisualId ?? p.inst?.def.id ?? '')) return true; // the measured path owns its wake
   const v = flightProfile(p);
@@ -74,8 +75,8 @@ export function drawSkillFlightWake(ctx: CanvasRenderingContext2D, p: SkillFligh
     }
     ctx.stroke();
   }
-  // Wide forms still carry the source material in their wake; replacing their
-  // native head with a decorative glyph would lie about their collision.
+  // Wide forms carry the source material in their wake as well as their
+  // native collision boundary; decorative anatomy never expands that boundary.
   ctx.save(); ctx.translate(-r * 2.3, 0); ctx.rotate(v.motion === 'tumble' ? phase : 0);
   ctx.strokeStyle = withAlpha(shade(p.color, .35), .6); ctx.fillStyle = withAlpha(p.color, .45);
   drawSkillMark(ctx, v.head, r * .36, (Math.sin(phase) + 1) / 2);
@@ -92,15 +93,31 @@ export function drawSkillFlightWake(ctx: CanvasRenderingContext2D, p: SkillFligh
 export function drawSkillFlightHead(ctx: CanvasRenderingContext2D, p: SkillFlightVisual): boolean {
   if (drawLightningHead(ctx, p)) return true;
   const v = flightProfile(p);
-  if (!v || p.shape !== 'circle' || p.radius <= 0) return false;
+  if (!v || p.radius <= 0 || !Number.isFinite(p.radius + p.dir + p.age)) return false;
+  const lineWeapon = p.shape === 'line' && !!v.weapon;
+  if (p.shape !== 'circle' && !lineWeapon) return false;
   const r = p.radius, phase = p.age * 6;
   if (v.weapon) {
-    // Solid head stays within the native collision disc; the shaft extends
-    // aft as decoration, inside the existing flight-wake culling envelope.
     ctx.save(); ctx.rotate(p.dir);
-    ctx.beginPath(); ctx.rect(-4.5 * r, -r, 5.5 * r, 2 * r); ctx.clip();
-    ctx.translate(-.6 * r, 0);
-    paintLook(ctx, r, { parts: v.weapon }, lookPalette(p.color));
+    if (lineWeapon) {
+      // Inlay anatomy inside the real line footprint. Keep its entire contact
+      // boundary visible; the rotating artwork cannot change the hit shape.
+      const g = PROJ_FORM_GEO.line;
+      ctx.beginPath(); ctx.rect(-g.hAlong * r, -g.hAcross * r, 2 * g.hAlong * r, 2 * g.hAcross * r); ctx.clip();
+      ctx.fillStyle = withAlpha(p.color, .15); ctx.fill();
+      ctx.strokeStyle = withAlpha(p.color, .65); ctx.lineWidth = Math.max(.65, r * .07); ctx.stroke();
+      ctx.scale(g.hAlong / 1.8, g.hAcross / 1.05);
+    } else {
+      // Circle heads stay inside the contact disc; decorative shafts trail
+      // aft within the existing flight-wake culling envelope.
+      ctx.beginPath(); ctx.rect(-4.5 * r, -r, 5.5 * r, 2 * r); ctx.clip();
+    }
+    const pose = v.weaponPose;
+    const x = Number.isFinite(pose?.x) ? Math.max(-1, Math.min(0, pose!.x!)) : lineWeapon ? 0 : -.6;
+    const scale = Number.isFinite(pose?.scale) ? Math.max(.1, Math.min(1.5, pose!.scale!)) : 1;
+    const spin = Number.isFinite(pose?.spin) ? Math.max(-20, Math.min(20, pose!.spin!)) : 0;
+    ctx.translate(x * r, 0); if (spin) ctx.rotate(p.age * spin);
+    paintLook(ctx, r * scale, { parts: v.weapon }, lookPalette(p.color));
     ctx.restore(); return true;
   }
   ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.clip();

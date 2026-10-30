@@ -176,6 +176,7 @@ try {
     w.kill(lich, false);
     const anchor = c.anchor!;
     check('combat death creates a vulnerable, owned phylactery', !!anchor && !anchor.dead && Math.abs(anchor.maxLife() - maximum * 0.35) < 0.01);
+    check('rebuilt soul-jar uses its distinct composed body', anchor.look === 'field_bound_phylactery');
     check('phylactery retains Ossuary Court', anchor.activeAuras.has('ossuary_command'));
     check('unspent souls shorten reconstruction and are consumed', c.rebuilding === 4 && c.souls.length === 0);
     check('reserved phylactery slot refuses a replacement summon', !w.useSkill(p, inst, aim));
