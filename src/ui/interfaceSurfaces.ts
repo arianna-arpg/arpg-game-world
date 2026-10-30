@@ -15,22 +15,28 @@ export const INTERFACE_SURFACES = {
     '#escape-menu', '#story-card', '#death-screen', '#mu-card', '#class-select', '#expedition-setup',
   ],
   headings: [
-    '.panel:not(.inventory-surface):not(:has(> .front-screen, > .side-screen, > .wardrobe)) > h2',
-    '.panel:not(.inventory-surface):not(:has(> .front-screen, > .side-screen, > .wardrobe)) > h1',
+    '.panel:not(.inventory-surface,#inventory,.inventory-page,[data-interface-preview]):not(:has(> .front-screen, > .side-screen, > .wardrobe)) > h2',
+    '.panel:not(.inventory-surface,#inventory,.inventory-page,[data-interface-preview]):not(:has(> .front-screen, > .side-screen, > .wardrobe)) > h1',
     '.interface-dialog > h2', '.interface-heading', '.wardrobe header h1',
     '.memory-reveal-box > h1', '.seal-box > h2',
+    '#escape-menu > h1', '#start-menu:not(:has(> .front-screen)) > h1',
   ],
   tabs: [
     '.folio-strip .folio-tab', '.book-tabs button', '.realm-tabs button',
     '.wardrobe .wd-tabs button', '.codex nav button',
+    '#account-screen .book-tabs button', '#start-menu .book-tabs button', '#escape-menu .codex nav button',
+  ],
+  entrances: [
+    '.panel:not(.hidden):not(.inventory-surface):not(:has(> .front-screen, > .side-screen, > .interface-page))',
+    '.side-pane', '.interface-page', '.menu-tray:not(.hidden)', '.interface-dialog', '.seal-box',
   ],
 } as const;
 
 const styleId = 'interface-surface-theme';
 const scope = (selectors: readonly string[]): string => `:root[data-interface-theme] :is(${selectors.join(',')})`;
 
-/** Every rule changes paint only. Native dimensions, overflow, position,
- * selection, attention, rarity and disabled behavior stay authoritative. */
+/** Shared paint and explicitly opted-in page/footer layout. Gameplay panel
+ * geometry, semantic colors, attention and disabled behavior stay authoritative. */
 export function installInterfaceSurfaceStyles(): void {
   if (document.getElementById(styleId)) return;
   const style = document.createElement('style'); style.id = styleId;
@@ -38,6 +44,9 @@ export function installInterfaceSurfaceStyles(): void {
   const controls = scope(INTERFACE_SURFACES.controls), headings = scope(INTERFACE_SURFACES.headings);
   const tabs = scope(INTERFACE_SURFACES.tabs);
   const neutral = ':not(.bound,.active,.danger,.lit,.selected,.chosen,.locked,.sealed,.skill-tree-link,.rack-unlearn,[aria-pressed=true],[aria-selected=true],[aria-current=true])';
+  // Tabs own their ornament grammar. Plain controls share one complete material,
+  // including ink and feedback, instead of inheriting old per-menu gold rules.
+  const buttons = `${controls} button:where(${neutral}):not(:where(${INTERFACE_SURFACES.tabs.join(',')},.build-ribbon,.folio-x,.wd-swatch,[data-front-motion]))`;
   style.textContent = `
     ${frame}, ${compact}, ${controls} {
       --panel-bg:var(--inv-surface); --panel-border:var(--inv-line);
@@ -51,11 +60,19 @@ export function installInterfaceSurfaceStyles(): void {
     }
     ${compact} { color:var(--inv-text); background:var(--inv-panel-fill); border-color:var(--inv-edge);
       box-shadow:inset 0 0 0 2px #08141a,0 8px 25px #0009; }
-    ${headings} { position:relative; border-bottom-color:transparent; }
+    ${headings} { position:relative; color:var(--inv-title); border-bottom-color:transparent; font-family:Georgia,serif; font-weight:400; }
+    ${controls} :where(.options-body h1,.wardrobe h2) { color:var(--inv-title); font-family:Georgia,serif; font-weight:400; }
     ${headings}::after { content:''; position:absolute; pointer-events:none; left:0; right:0; bottom:-5px;
       height:8px; background:var(--inv-divider-art); }
-    ${controls} :where(button${neutral}:not(:disabled)) { background:var(--inv-control-fill); }
-    ${controls} :where(button${neutral}:hover:not(:disabled)) { background:var(--inv-control-hover); border-color:var(--inv-light); }
+    ${buttons}:is(:enabled,:disabled) {
+      color:var(--inv-text); border-color:var(--inv-edge); border-radius:var(--inv-control-radius);
+      background:var(--inv-control-fill); box-shadow:var(--inv-control-shadow);
+      transition:background var(--inv-control-ms),border-color var(--inv-control-ms),box-shadow var(--inv-control-ms),color var(--inv-control-ms);
+    }
+    ${buttons}:is(:hover,:focus-visible):not(:disabled) {
+      color:var(--inv-text); background:var(--inv-control-hover); border-color:var(--inv-light); box-shadow:var(--inv-control-glow);
+    }
+    ${buttons}:disabled { color:var(--inv-muted); border-color:var(--inv-line); box-shadow:none; }
     ${controls} :where(input:not([type=range]):not([type=checkbox]):not([type=radio]):not([type=color]),select,textarea) {
       color:var(--inv-text); background:var(--inv-surface); border-color:var(--inv-edge);
     }
@@ -67,8 +84,9 @@ export function installInterfaceSurfaceStyles(): void {
       border-color:var(--inv-edge); border-radius:var(--inv-tab-radius); text-shadow:0 1px 2px #0009; }
     ${tabs}:hover:not(:disabled) { color:var(--inv-text); background:var(--inv-tab-detail),var(--inv-control-hover); border-color:var(--inv-light); }
     ${tabs}:is(.now,.active,[aria-selected=true],[aria-pressed=true],[aria-current=true]) {
-      color:#fff0cc; background:var(--inv-tab-detail),var(--inv-tab-active); border-color:var(--inv-light);
+      color:var(--inv-text); background:var(--inv-tab-detail),var(--inv-tab-active); border-color:var(--inv-light);
     }
+    ${tabs}:is(:hover,:focus-visible):not(:disabled) { box-shadow:var(--inv-control-glow); }
     :root[data-interface-theme] .folio-strip .folio-x { color:var(--inv-muted); border-color:var(--inv-edge);
       background:var(--inv-control-fill); border-radius:var(--inv-tab-radius); }
     :root[data-interface-theme] .folio-strip .folio-x:hover { color:var(--inv-text); border-color:var(--inv-light); }
@@ -85,8 +103,29 @@ export function installInterfaceSurfaceStyles(): void {
       --cx-line:var(--inv-line); --cx-surface:var(--inv-surface);
     }
     :root[data-interface-theme] .side-head h1::after { background:var(--inv-divider-art); }
+    :root[data-interface-theme] :is(.wardrobe .wd-card,.codex .cx-card)[aria-pressed=true] {
+      color:var(--inv-text); border-color:var(--inv-light); background:var(--inv-tab-active); box-shadow:inset 2px 0 var(--inv-light);
+    }
+    :root[data-interface-theme] :is(.wardrobe .wd-card,.codex .cx-card)[aria-pressed=true]:is(:hover,:focus-visible) {
+      background:var(--inv-control-hover); box-shadow:inset 2px 0 var(--inv-light),var(--inv-control-glow);
+    }
+    :root[data-interface-theme] :is(.wardrobe .wd-card,.codex .cx-card) { border-radius:var(--inv-control-radius); }
+    :root[data-interface-theme] .menu-row:not(.sealed) svg { color:var(--inv-light); }
+    :root[data-interface-theme] #mu-card .cdesc { color:var(--inv-muted); }
+    :root[data-interface-theme] .interface-page { display:flex; flex-direction:column; height:100%; min-height:0; padding:0; overflow:hidden; }
+    :root[data-interface-theme] .interface-page-body { flex:1 1 auto; min-height:0; overflow:auto; padding:24px 26px; scrollbar-gutter:stable; }
+    :root[data-interface-theme] :is(.panel,.interface-page) .interface-footer {
+      display:flex; flex:0 0 auto; flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:flex-end;
+      gap:10px; margin:14px 0 0; padding:14px 0 0; border-top:1px solid var(--inv-line);
+    }
+    :root[data-interface-theme] :is(.panel,.interface-page) .interface-footer button { width:auto; max-width:100%; margin:0; padding:9px 22px; }
+    :root[data-interface-theme] .interface-page > .interface-footer { margin:0; padding:14px 26px; max-height:35%; overflow:auto; background:var(--inv-surface); }
+    ${scope(INTERFACE_SURFACES.entrances)} { animation:interface-arrive var(--inv-enter-ms) ease-out; }
+    @keyframes interface-arrive { from { opacity:0; } to { opacity:1; } }
     @media(prefers-reduced-motion:reduce) {
       :root[data-interface-theme] .folio-strip .folio-tab.fresh { animation:none; border-color:#e8d49a; }
+      ${scope(INTERFACE_SURFACES.entrances)} { animation:none; }
+      ${buttons}:is(:enabled,:disabled), ${tabs} { transition:none; }
     }
   `;
   document.head.appendChild(style);

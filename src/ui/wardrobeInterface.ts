@@ -1,4 +1,5 @@
 import { hollowWakeMenuHeader } from './brand';
+import { renderInterfacePage } from './interfacePage';
 import { decorateInventoryPanel, styleInventorySurface } from './interfaceStyle';
 import { DEFAULT_INTERFACE_STYLE, INTERFACE_STYLE_CATEGORIES, normalizeInterfaceStyle, type InterfaceStyle } from './interfaceStyleConfig';
 
@@ -11,10 +12,10 @@ export interface WardrobeInterfaceOptions {
 /** Draft changes stay within this sample. Save alone updates the actual pages. */
 export function renderWardrobeInterface(root: HTMLElement, options: WardrobeInterfaceOptions, back: () => void): void {
   let draft = normalizeInterfaceStyle(options.get());
-  root.innerHTML = `<section class="wardrobe" aria-label="Interface style">
+  renderInterfacePage(root, { id:'interface-style', className:'wardrobe', label:'Interface style', body:`
     ${hollowWakeMenuHeader()}
     <header><div><div class="wd-eyebrow">Wardrobe · Interface</div><h1>Your interface</h1>
-      <p class="wd-muted">Choose a frame. Inlay a divider. Find your ribbons.</p></div><button data-interface-back>Back to Wardrobe</button></header>
+      <p class="wd-muted">Choose a frame. Inlay a divider. Find your ribbons.</p></div></header>
     <div class="wd-layout"><aside>
       <div class="wd-interface-stage">
         <div class="panel interface-preview" data-interface-preview>
@@ -43,7 +44,7 @@ export function renderWardrobeInterface(root: HTMLElement, options: WardrobeInte
       <div class="wd-actions"><button class="wd-primary" data-interface-save>Save interface style</button><button data-interface-default>Restore default preview</button></div>
       <p class="wd-note" data-interface-note role="status">Preview freely before saving.</p>
       <small>Saved with your UI settings on this device, across characters and runs.</small>
-    </div></div></section>`;
+    </div></div>`, footer:'<button data-interface-back>Back to Wardrobe</button>' });
   const preview = root.querySelector<HTMLElement>('[data-interface-preview]')!;
   decorateInventoryPanel(preview);
   const note = root.querySelector<HTMLElement>('[data-interface-note]')!;
