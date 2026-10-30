@@ -27,7 +27,8 @@ app.whenReady().then(async () => {
     }
     const file = path.resolve(root, '.' + (name === '/' ? '/index.html' : name));
     if (!file.startsWith(root + path.sep) || !fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
-    res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html');
+    const types = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+    res.setHeader('Content-Type', types[path.extname(file)] || 'text/html');
     fs.createReadStream(file).pipe(res);
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -65,6 +66,7 @@ app.whenReady().then(async () => {
       const w = __game.world(); w.meta.name = 'Saved at the Door'; w.player.life = 37;
       __game.ui.showEscapeMenu(); document.querySelector('#esc-close').click();
     });
+    win.webContents.invalidate(); await new Promise(resolve => setTimeout(resolve, 150));
     fs.writeFileSync(path.join(reports, 'save-exit-prompt.png'), (await win.webContents.capturePage()).toPNG());
     await run(() => document.querySelector('[data-save-exit="main-menu"]').click());
     await waitFor(menu);
