@@ -1,3 +1,8 @@
+import { hollowWakeBrand, hollowWakeMenuHeader } from './brand';
+import type { SceneCardSpec } from '../data/scenes';
+import { mountSideScreen, sideScreenContext, captureSideScreenFocus } from './sideScreen';
+import { SIDE_SCREENS } from './sideScreenConfig';
+import { frontScreenHtml, bindFrontScreen } from './frontScreen';
 import { newCodexState, renderCodex } from './codex';
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
 import { MemoryReveal } from './memoryReveal';
@@ -31,7 +36,7 @@ import { clamp, mixHex } from '../core/math';
 import { tellPortraitDress } from '../engine/tells';
 import { replenishingDelivery } from '../engine/replenishment';
 import { instanceBaseTags } from '../engine/skills';
-import { DEV, GAME_TITLE } from '../config';
+import { DEV } from '../config';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
   type AttributeId, type DamageType,
@@ -1479,11 +1484,13 @@ export class UI {
   }
 
   private codexView(root: HTMLElement, back: () => void, page?: string): void {
+    const context = root === this.escapeMenu ? 'world' : sideScreenContext();
     this.closeCodexView();
     this.escRefresh = null;
     hideTooltip(); dndCancel();
     this.codexDispose = renderCodex(root, { account: () => this.getAccount(), state: this.codexState,
       paintPortraits: el => this.paintPortraitsIn(el), page,
+      shell: { profile: SIDE_SCREENS.codex, context },
       back: () => { this.closeCodexView(); back(); },
     });
   }
@@ -2542,9 +2549,9 @@ export class UI {
 
   storyCardOpen(): boolean { return !this.storyCard.classList.contains('hidden'); }
 
-  showStoryCard(card: { title: string; lines: string[]; button?: string }, onContinue: () => void): void {
+  showStoryCard(card: SceneCardSpec, onContinue: () => void): void {
     this.storyCard.innerHTML = `
-      <h1>${esc(card.title)}</h1>
+      ${card.brandPresentation ? `<h1 class="hw-brand-heading">${hollowWakeBrand(card.brandPresentation)}</h1>` : `<h1>${esc(card.title)}</h1>`}
       ${card.lines.map(l => `<p>${esc(l)}</p>`).join('')}
       <button id="story-continue">${esc(card.button ?? 'Continue')}</button>`;
     this.storyCard.classList.remove('hidden');
@@ -3002,7 +3009,7 @@ export class UI {
     const nameValue = this.pendingCharName ?? acc.namePref ?? '';
     this.classSelect.innerHTML = `
       ${onBack ? this.closeGlyphHtml('Back') : ''}
-      <h1>${GAME_TITLE.toUpperCase()}</h1>
+      <h1 class="hw-brand-heading">${hollowWakeBrand('panel')}</h1>
       <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:2px 0 8px 0">
         <span style="font-size:12px;color:var(--gold)">⚜ Name</span>
         <input id="char-name" type="text" maxlength="24" spellcheck="false"
@@ -3112,6 +3119,7 @@ export class UI {
     // Guard the shared entry point before changing screens or stamping the
     // Bounty Board lesson. Hidden buttons alone cannot protect other callers.
     if (!isVaultAvailable(acc)) return;
+    const sideContext = sideScreenContext();
     this.hideAll(); // close whatever opened it (start menu / class select / …) so it never overlaps
     // THE RECKONING VISIT: a Vault opened while ANY Mortal Essence stands is
     // the run's closing prompt — the seal law arms (leaving requires the
@@ -3151,6 +3159,7 @@ export class UI {
       if (b) this.vaultScroll[this.vaultTab || '_flat'] = b.scrollTop;
     };
     const render = (): void => {
+      const sideFocus = captureSideScreenFocus(this.accountScreen);
       // Record earned rewards without acknowledging them on the player's behalf.
       if (settleClassUnlocks(acc).length) this.saveAccount();
       // THE CENSUS (vaultShelfCensus): every shelf's stock/owned/rumors and
@@ -3379,6 +3388,7 @@ export class UI {
         </div>
         <div class="vault-body">${body}</div>
         <div class="vault-foot acct-btns"><button id="acct-codex">Codex · Owned</button><button id="acct-wardrobe">Wardrobe</button><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
+      mountSideScreen(this.accountScreen, SIDE_SCREENS.vault, sideContext, sideFocus);
       this.accountScreen.querySelector('#acct-codex')!.addEventListener('click', () => {
         saveShelfScroll(); this.codexView(this.accountScreen, render, 'owned');
       });
@@ -10188,9 +10198,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  against every run they have ever finished. Renders into the Vault's
    *  screen element (one full-screen surface, two faces). */
   showChronicle(onClose?: () => void): void {
+    const sideContext = sideScreenContext();
     this.hideAll();
     const acc = this.getAccount();
     const render = (): void => {
+      const sideFocus = captureSideScreenFocus(this.accountScreen);
       const sort = this.chronicleSort;
       const rows = [...acc.runRecords];
       if (sort === 'essence') rows.sort((a, b) => b.essence - a.essence || b.at - a.at);
@@ -10210,13 +10222,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div class="chron-row${r.at === latestAt ? ' chron-latest' : ''}">
             <span class="chron-rank">#${i + 1}</span>
             <span class="chron-who">${who}</span>
-            <span>L${r.level}</span>
-            <span>${r.zones} zones</span>
-            <span>${r.kills} kills</span>
-            <span class="chron-reason">${reasonFace(r)}</span>
-            <span class="chron-ess" title="${META_CURRENCY_LABEL} minted at the reckoning">${r.essence}</span>
-            <span class="chron-ren" title="Renown — the journey score">${r.renown}</span>
-            <span class="chron-when">${new Date(r.at).toLocaleDateString()}</span>
+            <span data-label="Level">${r.level}</span>
+            <span data-label="Zones">${r.zones}</span>
+            <span data-label="Kills">${r.kills}</span>
+            <span class="chron-reason" data-label="End">${reasonFace(r)}</span>
+            <span class="chron-ess" data-label="${META_CURRENCY_LABEL}" title="${META_CURRENCY_LABEL} minted at the reckoning">${r.essence}</span>
+            <span class="chron-ren" data-label="Renown" title="Renown — the journey score">${r.renown}</span>
+            <span class="chron-when" data-label="When">${new Date(r.at).toLocaleDateString()}</span>
           </div>`;
       };
       const sortBtn = (id: typeof sort, label: string): string =>
@@ -10239,6 +10251,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : `<div class="vault-empty">No runs remembered yet. Conclude one — however it goes — and the chronicle begins.</div>`}
         </div>
         <div class="vault-foot acct-btns"><button id="chron-close">Back</button></div>`;
+      mountSideScreen(this.accountScreen, SIDE_SCREENS.chronicle, sideContext, sideFocus);
       this.accountScreen.querySelectorAll<HTMLElement>('[data-chron-sort]').forEach(btn => {
         btn.addEventListener('click', () => {
           this.chronicleSort = btn.dataset.chronSort as typeof sort;
@@ -10412,7 +10425,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         : ` title="The run is saved exactly as it stands — ${rosterMode
           ? 'resume it from Immortal Vessels at the main menu' : 'Continue Run resumes it'}"`;
       root.innerHTML = `
-        ${this.closeGlyphHtml('Resume (Esc)')}<h1>Paused</h1>
+        ${this.closeGlyphHtml('Resume (Esc)')}${hollowWakeMenuHeader('menu')}<h1>Paused</h1>
         <div class="esc-btns">
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
@@ -10454,7 +10467,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       document.getElementById('esc-close')!.addEventListener('click', () => {
         try { window.close(); } catch { /* browsers block closing non-script-opened tabs */ }
         root.innerHTML = `
-          ${this.closeGlyphHtml('Resume (Esc)')}<h1>Progress Saved</h1>
+          ${this.closeGlyphHtml('Resume (Esc)')}${hollowWakeMenuHeader('menu')}<h1>Progress Saved</h1>
           <div class="acct-head">Your account and character are saved. Close this browser tab to exit.</div>
           <div class="esc-btns"><button id="esc-back2">Back</button></div>`;
         document.getElementById('esc-back2')!.addEventListener('click', showMain);
@@ -10489,6 +10502,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   /** Shared keybind rebind view, rendered into `root` (escape menu OR start
    *  menu). `onBack` returns to whichever menu opened it. */
   private renderOptions(root: HTMLElement, onBack: () => void): void {
+    const sideFocus = captureSideScreenFocus(root);
     this.disarmRebind(); // drop any capture left armed by a prior render
     const scrollTop = root.querySelector<HTMLElement>('.options-body')?.scrollTop ?? 0;
     const s = this.getSettings();
@@ -10826,6 +10840,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
     root.innerHTML = `
+      ${root === this.escapeMenu ? hollowWakeMenuHeader() : ''}
       <h1>Options</h1>
       ${tabStrip}
       <div class="options-body">${tab === 'controls' ? controlsTab
@@ -10833,6 +10848,14 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         : tab === 'visuals' ? visualsTab
         : interfaceTabHead}</div>
       <div class="esc-btns options-footer"><button id="esc-back">Back</button></div>`;
+    if (root === this.startMenu) {
+      // Group only the fixed heading/tabs; the settings and Back keep their own regions.
+      const head = document.createElement('div');
+      head.className = 'side-options-head';
+      head.append(root.querySelector('h1')!, root.querySelector('.book-tabs')!);
+      root.prepend(head);
+      mountSideScreen(root, SIDE_SCREENS.options, 'entrance', sideFocus);
+    }
     root.querySelector<HTMLElement>('.options-body')!.scrollTop = scrollTop;
     // Tab strip: remember the shelf, drop any armed capture, re-render.
     root.querySelectorAll<HTMLElement>('[data-opttab]').forEach(btn => {
@@ -11364,43 +11387,21 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     // THE RESUME FACE: Continue Run says WHO it resumes on hover — the quit
     // flush's exact-resume promise, spoken at the door.
     const cont = this.continueSave;
-    const contWho = cont
-      ? `${cont.name ?? CLASSES.find(c => c.id === cont.classId)?.name ?? 'the character'}, Level ${cont.level}`
-      : '';
-    const canContinue = !!cont;
-    // THE IMMORTAL SHELF: however many vessels the account swears, the menu
-    // proper spends ONE button on them — the roster lives in its own pane
-    // (renderImmortalRoster), so the option count here stays flat and no
-    // roster row can outgrow the bounding box. A fallen vessel still calls
-    // from the label so the covenant's debt is never buried a click deep.
-    const fallenN = acc.roster.filter(e => e.fallen).length;
-    const immortalsBtn = acc.roster.length
-      ? `<button id="sm-immortals">Immortal Vessels (${acc.roster.length})${fallenN
-          ? ` <span style="font-size:10px;color:#e85050">· ${fallenN} fallen</span>` : ''}</button>`
-      : '';
-    // A pending reckoning (essence standing on the account — a mid-reckoning
-    // quit, or a pre-seal-law save) surfaces on the Vault button: the seal
-    // law inside the Vault settles it the moment that visit closes.
-    const pending = isVaultAvailable(acc) && acc.credits > 0;
-    this.startMenu.innerHTML = `
-      <h1>${GAME_TITLE.toUpperCase()}</h1>
-      <div class="acct-head">Account Level <b>${acc.level}</b>${pending
-        ? ` · <b style="color:var(--gold)">${acc.credits}</b> ${META_CURRENCY_LABEL} awaiting the Reckoning` : ''}</div>
-      ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
-      <div class="esc-btns">
-        <button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>
-        <button id="sm-continue" ${canContinue
-          ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${canContinue
-          ? 'Continue Run' : 'No Run to Continue'}</button>
-        ${immortalsBtn}
-        ${isVaultAvailable(acc) ? `<button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
-          ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>` : ''}
-        <button id="sm-codex">Codex</button>
-        <button id="sm-chronicle">Chronicle of Runs${acc.runRecords.length ? ` (${acc.runRecords.length})` : ''}</button>
-        <button id="sm-keys">Options</button>
-        ${h.onCoop ? '<button id="sm-coop">Co-op (Beta)</button>' : ''}
-        <button id="sm-exit">Exit Game</button>
-      </div>`;
+    const className = cont ? CLASSES.find(c => c.id === cont.classId)?.name ?? 'Adventurer' : '';
+    const previousFocus = this.startMenu.contains(document.activeElement) ? document.activeElement?.id : undefined;
+    this.startMenu.innerHTML = frontScreenHtml({
+      firstLife: sceneDue(acc, 'prologue'),
+      accountLevel: acc.level,
+      vessels: acc.roster.length,
+      fallen: acc.roster.filter(e => e.fallen).length,
+      records: acc.runRecords.length,
+      vaultAvailable: isVaultAvailable(acc),
+      pendingEssence: isVaultAvailable(acc) ? acc.credits : 0,
+      currency: META_CURRENCY_LABEL,
+      coopAvailable: !!h.onCoop,
+      notice: h.notice,
+      resume: cont ? { name: cont.name || className, className, level: cont.level, mode: modeById(cont.modeId).name } : undefined,
+    });
     document.getElementById('sm-start')!.addEventListener('click', () => {
       this.startMenu.classList.add('hidden');
       // THE MU REROUTE: when the shell armed onBeginRun, the press walks the
@@ -11444,6 +11445,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.renderExitScreen();
     });
     this.onStartMenuRender?.();
+    bindFrontScreen(this.startMenu, previousFocus);
   }
 
   /** THE VISIBLE DOOR's browser fallback (Exit Game with window.close()
@@ -11464,9 +11466,11 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
    *  listed straight from the index cards — no slot file is read until one is
    *  chosen. Each vessel is ONE tile: the whole face resumes, and its corner
    *  ✕ (the in-game panels' close-glyph language) is the deliberate release —
-   *  confirmed, durable wipe. Tiles pack two to a row, so the shelf grows
-   *  DOWN the pane instead of out of it. */
+   *  confirmed, durable wipe. sideScreenConfig supplies the frame; cards adapt to
+   *  viewport/UI scale while its Back and Vault controls remain anchored. */
   private renderImmortalRoster(notice?: string): void {
+    const sideFocus = captureSideScreenFocus(this.startMenu);
+    const rosterScroll = this.startMenu.querySelector<HTMLElement>('.roster-body')?.scrollTop ?? 0;
     const acc = this.getAccount();
     const h = this.startHandlers!;
     this.startMenuBack = () => this.renderStartMenu();  // the pane's ✕ glyph = Back
@@ -11480,30 +11484,34 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       const bColor = fallen ? '#e85050' : mode.color;
       return `
         <div class="sm-roster-tile${fallen ? ' fallen' : ''}">
-          <button class="sm-roster-go" data-cid="${esc(e.charId)}"
+          <button class="sm-roster-go" id="sm-roster-go-${esc(e.charId)}" data-cid="${esc(e.charId)}"
             ${fallen ? `title="Fallen — resurrect in the Vault (${e.fallen!.fee} ${META_CURRENCY_LABEL}, invested across runs)"` : ''}>
             <span class="sm-roster-name">⟢ ${esc(e.name)}</span>
-            <span class="sm-roster-sub">Level ${e.level}
+            <span class="sm-roster-sub">${esc(CLASSES.find(c => c.id === e.classId)?.name ?? e.classId)} · Level ${e.level}
               <span style="font-size:10px;color:${bColor};border:1px solid ${bColor};
                 border-radius:6px;padding:0 5px;margin-left:4px">${badge}</span></span>${fallen
               ? `<span class="sm-roster-fee">☠ ${e.fallen!.fee} ${META_CURRENCY_LABEL} to resurrect</span>` : ''}
           </button>
-          <button class="sm-roster-del" data-cid="${esc(e.charId)}"
-            title="Release this vessel: the character is permanently discarded">✕</button>
+          <button class="sm-roster-del" id="sm-roster-del-${esc(e.charId)}" data-cid="${esc(e.charId)}"
+            aria-label="Release ${esc(e.name)}" title="Release this vessel: the character is permanently discarded">✕</button>
         </div>`;
     }).join('');
     const fallenN = acc.roster.filter(e => e.fallen).length;
     this.startMenu.innerHTML = `
-      ${this.closeGlyphHtml('Back')}
-      <h1>IMMORTAL VESSELS</h1>
-      <div class="acct-head">${acc.roster.length} vessel${acc.roster.length === 1 ? '' : 's'} sworn
-        — resume one, or release it from its corner ✕.</div>
-      ${notice ? `<div class="acct-head" style="color:#e8b06a">${notice}</div>` : ''}
-      <div class="esc-btns">
-        <div class="sm-roster">${tiles}</div>
+      <div class="roster-head">
+        ${this.closeGlyphHtml('Back')}
+        <h1>Immortal Vessels</h1>
+        <div class="acct-head">${acc.roster.length} vessel${acc.roster.length === 1 ? '' : 's'} sworn
+          — resume one, or release it from its corner ✕.</div>
+        ${notice ? `<div class="acct-head roster-notice" role="status">${notice}</div>` : ''}
+      </div>
+      <div class="roster-body"><div class="sm-roster">${tiles}</div></div>
+      <div class="roster-foot">
         ${fallenN && isVaultAvailable(acc) ? '<button id="sm-imm-vault">Vault — the Fallen shelf</button>' : ''}
         <button id="sm-imm-back">Back</button>
       </div>`;
+    mountSideScreen(this.startMenu, SIDE_SCREENS.immortals, 'entrance', sideFocus);
+    this.startMenu.querySelector<HTMLElement>('.roster-body')!.scrollTop = rosterScroll;
     this.startMenu.querySelectorAll<HTMLElement>('.sm-roster-go').forEach(btn => {
       btn.addEventListener('click', () => {
         const entry = this.getAccount().roster.find(r => r.charId === btn.dataset.cid);

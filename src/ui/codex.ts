@@ -1,3 +1,6 @@
+import { hollowWakeBrand } from './brand';
+import { mountSideScreen, captureSideScreenFocus, type SideScreenContext } from './sideScreen';
+import type { SideScreenProfile } from './sideScreenConfig';
 import { CODEX_CFG, CODEX_SECTIONS } from '../data/codex';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
@@ -11,7 +14,7 @@ const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '
 interface PageState extends CodexFilter { page: number; selected: string | null }
 export interface CodexState { section: string; pages: Record<string, PageState>; leaves: Record<string, string> }
 export const newCodexState = (): CodexState => ({ section: CODEX_SECTIONS[0].id, pages: {}, leaves: {} });
-interface CodexOptions { account: () => Account; back: () => void; paintPortraits: (root: HTMLElement) => void; state: CodexState; page?: string }
+interface CodexOptions { account: () => Account; back: () => void; paintPortraits: (root: HTMLElement) => void; state: CodexState; page?: string; shell?: { profile: SideScreenProfile; context: SideScreenContext } }
 
 function styles(): void {
   if (document.getElementById('codex-styles')) return;
@@ -157,20 +160,21 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     detail(visible.find(e => e.key === st.selected));
   };
   const draw = (): void => {
+    const previousFocus = captureSideScreenFocus(root);
     playing = false; previewHost = '';
     const section = CODEX_SECTIONS.find(s => s.id === state.section) ?? CODEX_SECTIONS[0];
     page = state.leaves[section.id] ?? section.pages[0].id;
     st = state.pages[page] ??= { query: '', tags: [], status: 'all', page: 0, selected: null };
     read();
     const tags = [...new Set(entries.filter(e => !e.locked).flatMap(e => e.tags))].sort();
-    root.innerHTML = `<section class="codex" aria-label="Codex"><header><div><div class="cx-eyebrow">Hollow Wake · Account knowledge</div><h1>CODEX</h1><p>Memories of the world. Possibilities of the next life.</p></div><button data-cx-back>Back</button></header>
+    root.innerHTML = `<section class="codex" aria-label="Codex"><div class="cx-head"><header><div><div class="cx-eyebrow">${hollowWakeBrand()}<span>Account knowledge</span></div><h1>CODEX</h1><p>Memories of the world. Possibilities of the next life.</p></div></header>
       <nav aria-label="Codex sections">${CODEX_SECTIONS.map(s => `<button data-cx-section="${s.id}" aria-current="${section.id === s.id}">${esc(s.label)}</button>`).join('')}</nav>
       <div class="cx-leaves" aria-label="${esc(section.label)} pages">${section.pages.map(p => `<button data-cx-page="${p.id}" aria-current="${p.id === page}">${esc(p.label)}</button>`).join('')}</div>
       <div class="cx-tools"><label class="cx-search"><input type="search" data-cx-search aria-label="Search known entries" placeholder="Search known entries…" value="${esc(st.query)}"></label>
         <select data-cx-tag aria-label="Add tag filter"><option value="">Filter by tag…</option>${tags.map(t => `<option>${esc(t)}</option>`).join('')}</select>
         <select data-cx-status aria-label="Discovery filter"><option value="all">All entries</option><option value="known">Known only</option><option value="locked">Locked only</option></select><button data-cx-clear>Clear filters</button></div>
-      <div class="cx-tags"></div><div class="cx-count" aria-live="polite"></div>
-      <div class="cx-body"><div class="cx-list"><div class="cx-grid"></div><div class="cx-pager"></div></div><article class="cx-detail" aria-label="Selected entry"></article></div></section>`;
+      <div class="cx-tags"></div><div class="cx-count" aria-live="polite"></div></div>
+      <div class="cx-body"><div class="cx-list"><div class="cx-grid"></div><div class="cx-pager"></div></div><article class="cx-detail" aria-label="Selected entry"></article></div><footer class="cx-foot"><button data-cx-back>Back</button></footer></section>`;
     root.querySelector('[data-cx-back]')!.addEventListener('click', opts.back);
     root.querySelectorAll<HTMLElement>('[data-cx-section]').forEach(el => el.addEventListener('click', () => { state.section = el.dataset.cxSection!; draw(); }));
     root.querySelectorAll<HTMLElement>('[data-cx-page]').forEach(el => el.addEventListener('click', () => { state.leaves[section.id] = el.dataset.cxPage!; draw(); }));
@@ -183,6 +187,7 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     status.addEventListener('change', () => { st.status = status.value as CodexFilter['status']; st.page = 0; playing = false; results(); });
     root.querySelector('[data-cx-clear]')!.addEventListener('click', () => { st.query = ''; st.tags = []; st.status = 'all'; st.page = 0; draw(); });
     results();
+    if (opts.shell) mountSideScreen(root, opts.shell.profile, opts.shell.context, previousFocus);
   };
   const onKey = (ev: KeyboardEvent): void => {
     if (ev.key !== 'Escape' || disposed || root.classList.contains('hidden') || !root.querySelector('.codex')) return;

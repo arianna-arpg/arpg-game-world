@@ -98,6 +98,7 @@ app.whenReady().then(async () => {
     await js(`__game.ui.hideAll();__game.ui.toggleMenu();void 0`);
     check('in-game menu exposes the Codex without Tracker proximity',await js(`!!document.querySelector('[data-menu-entry="codex"]')`));
     await click('[data-menu-entry="codex"]');
+    check('in-game Codex uses the world shell without entrance artwork',await js("document.querySelector('#escape-menu .side-screen').dataset.context==='world' && getComputedStyle(document.querySelector('#front-backdrop')).display==='none'"));
     const t=await js('__game.world().time');await sleep(250);
     check('Codex participates in gameplay input blocking and solo pause',await js(`__game.ui.uiBlocking() && __game.ui.escapeMenuOpen && __game.world().time===${t}`));
     await click('[data-cx-back]');

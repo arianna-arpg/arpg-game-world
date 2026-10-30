@@ -97,3 +97,13 @@ menu/reader/media/scale/reckoning walkthrough with temporary saves. Run
 `npx electron balance/vault-discovery-ui.cjs` for class discovery and activation
 through the new Owned location, and `npm run smoke` for boot. Screenshots are
 written to the ignored `balance/reports/codex/` folder.
+
+## Shared menu presentation
+
+The optional `CodexOptions.shell` contract applies the configurable profile in
+`ui/sideScreenConfig.ts` on every full reader redraw. It preserves keyboard
+focus and keeps Back in a fixed footer. Menu and Vault entries use the entrance
+atmosphere; the escape-menu host uses the world context with its existing
+pause and input policy. See [front-screen](front-screen.md) for configuration
+and the additional shared-shell acceptance course. Vault returns retain the
+original render closure, tab, scroll, investments and unassigned essence.

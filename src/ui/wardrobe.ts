@@ -7,6 +7,7 @@ import { applySkillColorCosmetic, buyCosmetic, cosmeticAcquisition, cosmeticChar
 import { drawCosmeticModelTile, drawCosmeticPreview, drawCosmeticSummonTile, cosmeticPreviewSummon, cosmeticPreviewSummons } from '../render/vis/cosmetics';
 import { drawCosmeticStyleTile } from '../render/vis/cosmeticEffects';
 import type { BodyLook } from '../render/vis/body';
+import { hollowWakeMenuHeader } from './brand';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 interface WardrobeOptions {
@@ -94,6 +95,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     let draftColor = account.cosmetics.loadout.customColors?.[skill] ?? def?.paint.color ?? '#c4b2f2';
     if (def?.consume && skill) preview.customColors![skill] = draftColor;
     root.innerHTML = `<section class="wardrobe" aria-label="Wardrobe">
+      ${hollowWakeMenuHeader()}
       <header><div><div class="wd-eyebrow">Your account · your identity</div><h1>Wardrobe</h1>
       <p class="wd-muted">A different life. An unmistakable you.</p></div><button data-wd-back>Back</button></header>
       <div class="wd-layout"><aside>

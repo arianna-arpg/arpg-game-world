@@ -72,3 +72,7 @@ p{margin:0}
 footer.site{border-top:1px solid var(--line);margin-top:60px;padding:34px 0;color:var(--ink-faint);font-size:13.5px;background:var(--bg-2)}
 footer.site .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
 footer.site a:hover{color:var(--teal)}
+
+/* The same outlined identity used by the game and launcher. */
+.site-brand-footer { display: inline-flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.site-brand-footer img { display: block; width: 104px; height: 40px; object-fit: contain; }
