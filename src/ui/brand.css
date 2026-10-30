@@ -1,0 +1,18 @@
+/* Artwork, proportions and glyphs are shared; hosts choose only a size. */
+.hw-brand { display: block; width: min(100%, var(--brand-width, 104px)); max-width: 100%; height: auto; object-fit: contain; flex-shrink: 0; }
+:is(#start-menu, #class-select, #story-card) .hw-brand-heading { margin: 0; padding: 0; border: 0; line-height: 0; letter-spacing: 0; }
+.hw-brand-heading > .hw-brand { margin-inline: auto; }
+.front-brand .hw-brand-heading > .hw-brand { margin-inline: 0; }
+.side-masthead .side-brand-line { display: flex; align-items: center; min-width: 0; gap: 14px; }
+.side-masthead .side-brand-line > .hw-brand { width: min(var(--brand-width), 30vw); }
+.side-masthead .side-brand-line i { padding: 0; }
+.side-masthead .side-brand-line > span { min-width: 0; overflow-wrap: anywhere; }
+@media (forced-colors: active) { .hw-brand { background: #091315; outline: 1px solid CanvasText; } }
+
+@container side-pane (max-width: 300px) {
+  .side-masthead { padding-block: 8px; gap: 4px; }
+  .side-masthead .side-brand-line { flex: 1 0 100%; gap: 0; }
+  .side-masthead .side-brand-line > .hw-brand { width: 60px; }
+  .side-masthead .side-brand-line > :is(i, span) { display: none; }
+  .side-masthead [data-front-motion] { font-size: 9px; }
+}

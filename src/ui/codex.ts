@@ -1,3 +1,4 @@
+import { hollowWakeBrand } from './brand';
 import { mountSideScreen, captureSideScreenFocus, type SideScreenContext } from './sideScreen';
 import type { SideScreenProfile } from './sideScreenConfig';
 import './codexShell.css';
@@ -167,7 +168,7 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     st = state.pages[page] ??= { query: '', tags: [], status: 'all', page: 0, selected: null };
     read();
     const tags = [...new Set(entries.filter(e => !e.locked).flatMap(e => e.tags))].sort();
-    root.innerHTML = `<section class="codex" aria-label="Codex"><div class="cx-head"><header><div><div class="cx-eyebrow">Hollow Wake · Account knowledge</div><h1>CODEX</h1><p>Memories of the world. Possibilities of the next life.</p></div></header>
+    root.innerHTML = `<section class="codex" aria-label="Codex"><div class="cx-head"><header><div><div class="cx-eyebrow">${hollowWakeBrand()}<span>Account knowledge</span></div><h1>CODEX</h1><p>Memories of the world. Possibilities of the next life.</p></div></header>
       <nav aria-label="Codex sections">${CODEX_SECTIONS.map(s => `<button data-cx-section="${s.id}" aria-current="${section.id === s.id}">${esc(s.label)}</button>`).join('')}</nav>
       <div class="cx-leaves" aria-label="${esc(section.label)} pages">${section.pages.map(p => `<button data-cx-page="${p.id}" aria-current="${p.id === page}">${esc(p.label)}</button>`).join('')}</div>
       <div class="cx-tools"><label class="cx-search"><input type="search" data-cx-search aria-label="Search known entries" placeholder="Search known entries…" value="${esc(st.query)}"></label>

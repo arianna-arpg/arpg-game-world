@@ -14,6 +14,7 @@ See `docs/render/cast-bars.md`; verify castbars, the existing casting/timing pro
 all types and the hidden cast-bars, strike-timing and cast-readout UI courses.
 
 The cinematic front door uses ui/frontScreenConfig.ts for presentation and action definitions.
+The shared outlined logo and established insignia use [brand](docs/ui/brand.md); run npm run brand after changing branding/identity.mjs. The type-check command also verifies generated brand copies.
 See [front-screen](docs/ui/front-screen.md); verify all types, build, game smoke
 and the isolated hidden balance/front-screen-ui.cjs acceptance.
 

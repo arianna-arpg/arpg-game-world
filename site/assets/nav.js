@@ -34,7 +34,7 @@
   /* THE INSIGNIA: canonical geometry (ring, HOLLOW core, three points in
      teal / violet / ember). The hero lockup and the home footer carry hand-
      tuned copies of the same design; keep the three in sync. */
-  var MARK = '<svg class="hwnav-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="12" stroke="url(#hwNavGrad)" stroke-width="1.4" opacity=".9"/><path d="M16 11.6V6.2M19.8 18.2l4.7 2.7M12.2 18.2l-4.7 2.7" stroke="url(#hwNavGrad)" stroke-width="1.1" opacity=".55"/><circle cx="16" cy="16" r="4.4" stroke="url(#hwNavGrad)" stroke-width="1.5"/><circle cx="16" cy="4" r="2.2" fill="#4fd6c4"/><circle cx="26.4" cy="22" r="2.2" fill="#a98bff"/><circle cx="5.6" cy="22" r="2.2" fill="#ff8a4c"/><defs><linearGradient id="hwNavGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#b0c6e4"/><stop offset="1" stop-color="#8fa8d8"/></linearGradient></defs></svg>';
+  var MARK = '<img class="hwnav-mark" src="' + prefix + 'assets/brand/hollow-wake.svg" width="600" height="230" alt="" draggable="false">';
 
   function pageLink(p) {
     var cur = p.id === page ? ' aria-current="page" class="active"' : '';
@@ -53,7 +53,7 @@
   var homeHref = prefix || '#top';
   var inner =
     '<div class="hwnav-wrap">' +
-      '<a class="hwnav-brand" href="' + homeHref + '" aria-label="Hollow Wake home">' + MARK + '<span>HOLLOW WAKE</span></a>' +
+      '<a class="hwnav-brand" href="' + homeHref + '" aria-label="Hollow Wake home">' + MARK + '</a>' +
       '<nav class="hwnav-links" aria-label="Primary">' +
         PAGES.map(pageLink).join('') +
         '<span class="hwnav-sep" aria-hidden="true"></span>' +
@@ -67,7 +67,7 @@
   '.hwnav.scrolled{background:rgba(8,9,14,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom-color:var(--line,rgba(255,255,255,.08))}' +
   '.hwnav-wrap{max-width:var(--maxw,1220px);margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between;gap:16px}' +
   '.hwnav-brand{display:flex;align-items:center;gap:11px;font-family:var(--font-display,"Cinzel",serif);font-weight:700;letter-spacing:.13em;font-size:14.5px;color:var(--ink,#e9eaf2);white-space:nowrap;text-decoration:none}' +
-  '.hwnav-mark{width:24px;height:24px;flex:0 0 auto}' +
+  '.hwnav-mark{display:block;width:104px;height:40px;flex:0 0 auto;object-fit:contain}' +
   '.hwnav-links{display:flex;align-items:center;gap:22px;font-size:14px;font-family:var(--font-body,system-ui,sans-serif);min-width:0}' +
   '.hwnav-links a{color:var(--ink-dim,#a3a9bd);transition:color .2s;position:relative;white-space:nowrap;text-decoration:none}' +
   '.hwnav-links a:hover,.hwnav-links a.active{color:var(--ink,#e9eaf2)}' +

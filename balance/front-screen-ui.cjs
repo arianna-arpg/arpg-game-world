@@ -50,6 +50,11 @@ app.whenReady().then(async () => {
       vault: !!document.querySelector('#sm-vault'),
       vessels: !!document.querySelector('#sm-immortals'),
     })), { begin: 'sm-start', locked: true, vault: false, vessels: false });
+    assert(await run(() => {
+      const logo=document.querySelector('.front-brand .hw-brand');
+      return logo && logo.complete && logo.naturalWidth>0 && logo.alt==='Hollow Wake' &&
+        document.querySelectorAll('.front-brand h1').length===1 && !document.querySelector('.front-sigil');
+    }), 'The shared vector identity loads with one accessible game title');
     await shot('fresh-1600');
     report.checks.push('Fresh account gates and original artwork load');
     // Real keyboard input: skip the disabled Continue and invoke Options with Enter.
@@ -237,6 +242,10 @@ app.whenReady().then(async () => {
             reachable:br.bottom<=innerHeight && br.left>=0 && br.right<=innerWidth &&
               button.contains(document.elementFromPoint(br.x+br.width/2,br.y+br.height/2)) };
         });
+        assert(await run(() => {
+          const logo=document.querySelector('.panel:not(.hidden) .side-masthead .hw-brand');
+          return logo && logo.naturalWidth>0 && logo.alt==='Hollow Wake';
+        }), kind+' wears the shared title and insignia');
         assert(bounds.fits && bounds.bodyHeight > 24 && bounds.reachable, kind+' '+[width,height,scale]+' '+JSON.stringify(bounds));
         if (kind==='codex' && width>=1280 && scale===1) {
           assert(await run(() => {
@@ -321,7 +330,7 @@ app.whenReady().then(async () => {
       __game.ui.setContinueSave({ classId:'warrior', name:hostile.repeat(8), level:99 });
       __game.ui.setStartMenuNotice(hostile);
     });
-    assert(await run(() => !window.__injected && !document.querySelector('.front-screen img') && document.querySelector('.front-memory').textContent.includes('<img')));
+    assert(await run(() => !window.__injected && document.querySelectorAll('.front-screen img').length === 1 && !!document.querySelector('.front-screen img.hw-brand[data-brand=hero]') && document.querySelector('.front-memory').textContent.includes('<img')));
     report.checks.push('Player names and boot notices remain text, including long hostile content');
     // Poll the real controller input and click through the existing virtual pointer.
     const pad = await run(() => {

@@ -98,8 +98,8 @@ and in-game pause/resume. All QA mutations use disposable profiles and saves.
 - Asset: `src/ui/assets/threshold.png`
 - Created for this repository on 2026-10-29 using the built-in OpenAI image-generation tool.
 - Original generated environment art; no third-party source image, font, code or runtime dependency was introduced.
-- The vector sigil in `frontScreen.ts` was authored directly for this interface.
-- Typography uses locally available system serif and sans-serif families.
+- Title artwork and the established three-point insignia come from the shared [brand source](brand.md). The earlier arch ornament has been replaced.
+- The title uses original outlined vector lettering; supporting text uses locally available serif and sans-serif families.
 - The original generated PNG is preserved without edits.
 
 Final generation prompt:

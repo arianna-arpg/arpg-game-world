@@ -1,3 +1,5 @@
+import { hollowWakeBrand } from './brand';
+import type { SceneCardSpec } from '../data/scenes';
 import { mountSideScreen, sideScreenContext, captureSideScreenFocus } from './sideScreen';
 import { SIDE_SCREENS } from './sideScreenConfig';
 import { frontScreenHtml, bindFrontScreen } from './frontScreen';
@@ -33,7 +35,7 @@ import { clamp, mixHex } from '../core/math';
 import { tellPortraitDress } from '../engine/tells';
 import { replenishingDelivery } from '../engine/replenishment';
 import { instanceBaseTags } from '../engine/skills';
-import { DEV, GAME_TITLE } from '../config';
+import { DEV } from '../config';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
   type AttributeId, type DamageType,
@@ -2545,9 +2547,9 @@ export class UI {
 
   storyCardOpen(): boolean { return !this.storyCard.classList.contains('hidden'); }
 
-  showStoryCard(card: { title: string; lines: string[]; button?: string }, onContinue: () => void): void {
+  showStoryCard(card: SceneCardSpec, onContinue: () => void): void {
     this.storyCard.innerHTML = `
-      <h1>${esc(card.title)}</h1>
+      ${card.brandPresentation ? `<h1 class="hw-brand-heading">${hollowWakeBrand(card.brandPresentation)}</h1>` : `<h1>${esc(card.title)}</h1>`}
       ${card.lines.map(l => `<p>${esc(l)}</p>`).join('')}
       <button id="story-continue">${esc(card.button ?? 'Continue')}</button>`;
     this.storyCard.classList.remove('hidden');
@@ -3005,7 +3007,7 @@ export class UI {
     const nameValue = this.pendingCharName ?? acc.namePref ?? '';
     this.classSelect.innerHTML = `
       ${onBack ? this.closeGlyphHtml('Back') : ''}
-      <h1>${GAME_TITLE.toUpperCase()}</h1>
+      <h1 class="hw-brand-heading">${hollowWakeBrand('panel')}</h1>
       <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:2px 0 8px 0">
         <span style="font-size:12px;color:var(--gold)">⚜ Name</span>
         <input id="char-name" type="text" maxlength="24" spellcheck="false"

@@ -1,4 +1,4 @@
-import { GAME_TITLE } from '../config';
+import { hollowWakeBrand } from './brand';
 import { bindFrontAtmosphere, ensureFrontAtmosphere } from './frontScreen';
 import { SIDE_SCREEN, type SideScreenProfile } from './sideScreenConfig';
 import './sideScreen.css';
@@ -43,7 +43,7 @@ export function mountSideScreen(root: HTMLElement, profile: SideScreenProfile,
   };
   for (const [key, value] of Object.entries(css)) shell.style.setProperty(key, value);
   shell.innerHTML = `<div class="side-pane">
-    <div class="side-masthead"><span>${esc(GAME_TITLE)} <i aria-hidden="true">/</i> ${esc(profile.chapter)}</span>
+    <div class="side-masthead"><span class="side-brand-line">${hollowWakeBrand()} <i aria-hidden="true">/</i> <span>${esc(profile.chapter)}</span></span>
       ${context === 'entrance' ? '<button type="button" data-front-motion aria-pressed="false">Pause atmosphere</button>' : ''}</div>
     <div class="side-content"></div>
   </div>

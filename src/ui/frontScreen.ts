@@ -1,4 +1,4 @@
-import { GAME_TITLE } from '../config';
+import { hollowWakeBrand } from './brand';
 import { FRONT_ACTIONS, FRONT_SCREEN, type FrontScreenState } from './frontScreenConfig';
 import { Z_LADDER } from './zorder';
 import './frontScreen.css';
@@ -6,12 +6,6 @@ import './frontScreen.css';
 const text = (s: string | number): string => String(s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 let atmospherePaused = false;
-
-/** Original vector ornament; decorative, never a second navigation target. */
-const sigil = `<svg viewBox="0 0 48 64" fill="none" aria-hidden="true">
-  <path d="M24 2v10m0 40v10M8 33c0-14 16-24 16-24s16 10 16 24v18H8V33Z"/>
-  <path d="M14 46V33c0-9 10-17 10-17s10 8 10 17v13M4 56h40M24 24l6 12-6 11-6-11 6-12Z"/>
-</svg>`;
 
 
 function syncAtmosphere(): void {
@@ -97,8 +91,7 @@ export function frontScreenHtml(state: FrontScreenState): string {
       <main class="front-main">
         <div class="front-left">
           <div class="front-brand">
-            <div class="front-sigil">${sigil}</div>
-            <h1 aria-label="${text(GAME_TITLE)}">${GAME_TITLE.split(' ').map(word => `<span>${text(word)}</span>`).join('')}</h1>
+            <h1 class="hw-brand-heading">${hollowWakeBrand('hero')}</h1>
             <p class="front-tagline">${text(cfg.tagline)}</p>
           </div>
           ${state.notice ? `<p class="front-notice" role="status">${text(state.notice)}</p>` : ''}

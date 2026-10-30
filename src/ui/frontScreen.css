@@ -39,12 +39,6 @@ body:has(#start-menu:not(.hidden)) #front-backdrop { display: block; }
   align-items: center; column-gap: 80px; padding: 34px 0 30px; }
 .front-left { min-width: 0; }
 .front-brand { position: relative; margin-bottom: 28px; }
-.front-sigil { width: 30px; height: 40px; color: var(--front-gold); margin-bottom: 16px; }
-.front-sigil svg { width: 100%; height: 100%; stroke: currentColor; stroke-width: .9; }
-#start-menu .front-brand h1 { margin: 0; color: var(--front-ivory); font: normal clamp(56px, 6.5vw, 94px)/.9 Georgia, 'Times New Roman', serif;
-  letter-spacing: .09em; text-transform: uppercase; text-shadow: 0 3px 30px #0009; }
-.front-brand h1 span { display: block; }
-.front-brand h1 span + span { margin-top: 9px; letter-spacing: .20em; }
 .front-tagline { color: #b8b9ac; font: italic 15px/1.5 Georgia, serif; margin: 23px 0 0; letter-spacing: .3px; }
 .front-nav { max-width: 380px; }
 #start-menu .front-action { display: flex; width: 100%; align-items: center; gap: 15px; text-align: left;
@@ -102,7 +96,7 @@ body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
 @container front-door (max-width: 760px) {
   .front-main { column-gap: 30px; grid-template-columns: minmax(250px, 1fr) minmax(180px, .8fr); }
   .front-shell { padding: 22px 30px; }
-  #start-menu .front-brand h1 { font-size: 64px; }
+  .front-brand .hw-brand { width: 340px; }
   .front-memory { padding: 18px; }
   .front-key-hints { display: none; }
 }
@@ -111,24 +105,22 @@ body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
   .front-memory { display: none; }
   .front-nav { max-width: none; }
   .front-brand { margin-bottom: 24px; }
-  #start-menu .front-brand h1 { font-size: 58px; }
+  .front-brand .hw-brand { width: 100%; }
   .front-header { font-size: 9px; letter-spacing: 1.2px; }
   .front-account { gap: 6px; }
-  .front-sigil { width: 24px; height: 32px; margin-bottom: 14px; }
   .front-footer { flex-wrap: wrap; gap: 8px; }
   .front-shell { padding: 20px 24px; }
   .front-world > span { display: none; }
 }
 @container front-door (max-width: 330px) {
-  #start-menu .front-brand h1 { font-size: clamp(23px, 12cqw, 39px); }
+  .front-brand .hw-brand { width: 100%; }
   .front-shell { padding: 16px; }
   .front-header { letter-spacing: .3px; }
   .front-primary .front-action-label { font-size: 17px; }
 }
 @media (max-height: 760px) and (min-width: 800px) {
   .front-main { padding-top: 22px; padding-bottom: 20px; }
-  #start-menu .front-brand h1 { font-size: 60px; }
-  .front-sigil { display: none; }
+  .front-brand .hw-brand { width: 310px; }
   .front-brand { margin-bottom: 22px; }
   .front-tagline { margin-top: 16px; }
   .front-shell { padding-top: 20px; padding-bottom: 14px; }
@@ -141,9 +133,9 @@ body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
   .front-legacy { margin-top: 10px; padding-top: 8px; }
 }
 @media (max-height: 640px) and (min-width: 800px) {
-  #start-menu .front-brand h1 { font-size: 40px; }
-  .front-tagline { margin-top: 8px; font-size: 13px; }
-  .front-brand { margin-bottom: 12px; }
+  .front-brand .hw-brand { width: 240px; }
+  .front-tagline { margin-top: 2px; font-size: 13px; }
+  .front-brand { margin-bottom: 6px; }
   .front-main { padding-top: 8px; padding-bottom: 8px; }
   .front-header { padding-bottom: 12px; }
   #start-menu .front-action { min-height: 32px; padding-top: 5px; padding-bottom: 5px; }
