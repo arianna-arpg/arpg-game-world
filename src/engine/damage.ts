@@ -82,7 +82,7 @@ export interface DamagePacket {
  * a player would expect them to.
  */
 export function applyConversion(
-  caster: Actor, amounts: Partial<Record<DamageType, number>>,
+  caster: Pick<Actor, 'sheet'>, amounts: Partial<Record<DamageType, number>>, // Codex examples use the same fold
   tags: Set<SkillTag>, extra?: Modifier[],
 ): void {
   for (const from of DAMAGE_TYPES) {

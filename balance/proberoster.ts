@@ -64,6 +64,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_bonegolem.ts', status: 'green', tier: 'fast', why: 'Configurable four-point golem routes, attributed life costs, independent supported payloads, formations, repair and terminal protection' },
   { probe: 'probe_skeletonwarrior.ts', status: 'green', tier: 'fast', why: 'Four-point infantry trees, coordinated commands, attributed interception, spectral heirs, Assassin choices and per-element ability supports' },
   { probe: 'probe_skeletonmage.ts', status: 'green', tier: 'fast', why: 'Commanded rites, phylactery reconstruction, owner spell echoes, saved school choices, relay provenance and bounded signature recovery' },
+  { probe: 'probe_codex.ts', status: 'green', tier: 'fast', why: 'Codex discovery privacy, live registry values, account receipts, research gates, conversion parity and real encounter sightings.' },
   { probe: 'probe_skeletonarcher.ts', status: 'green', tier: 'fast', why: 'Independent wounds, channel formations, full-cap releases, mortar payloads, crew support routing and elemental mage arts' },
   { probe: 'probe_collisionsweep.ts', status: 'green', tier: 'fast', why: 'Continuous furniture contact, real knockback, layer gates, phasing and seeded cluster movement; collision_shadow regression.' },
   { probe: 'probe_castbars.ts', status: 'green', tier: 'fast', why: 'Native cast clocks, fixed anchors without cards or leaders, player stacking priority, concealment, cleanup and adaptive contrast with bounded sampling.' },
