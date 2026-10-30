@@ -7,11 +7,14 @@ import { applySkillColorCosmetic, buyCosmetic, cosmeticAcquisition, cosmeticChar
 import { drawCosmeticModelTile, drawCosmeticPreview, drawCosmeticSummonTile, cosmeticPreviewSummon, cosmeticPreviewSummons } from '../render/vis/cosmetics';
 import { drawCosmeticStyleTile } from '../render/vis/cosmeticEffects';
 import type { BodyLook } from '../render/vis/body';
+import { hollowWakeMenuHeader } from './brand';
+import { renderWardrobeInterface, type WardrobeInterfaceOptions } from './wardrobeInterface';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 interface WardrobeOptions {
   account: Account; save: () => void; back: () => void; body: BodyLook;
   skills: readonly { id: string; name: string }[];
+  interfaceStyle: WardrobeInterfaceOptions;
 }
 function installStyles(): void {
   if (document.getElementById('wardrobe-styles')) return;
@@ -53,6 +56,13 @@ function installStyles(): void {
   .wardrobe .wd-outfit { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; font-size:12px; }
   .wardrobe .wd-outfit span { border:1px solid #344554; padding:4px 8px; border-radius:12px; }
   .wardrobe .wd-note { color:#b9d7c6; min-height:22px; }
+  .wardrobe .wd-interface-stage { padding:12px 6px 12px 40px; }
+  .wardrobe .interface-preview { position:relative; width:auto; padding:16px; text-align:left; }
+  .wardrobe .interface-preview > h2 { font-size:15px; margin:0 0 10px; }
+  .wardrobe .interface-preview .build-ribbon { padding:8px 3px; font:10px/1.3 sans-serif; }
+  .wardrobe .wd-interface-slots { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin:10px 0; }
+  .wardrobe .wd-interface-slots > span { height:32px; background:var(--inv-cell-fill); border:1px solid var(--inv-cell-edge); }
+  .wardrobe .wd-interface-choice { display:flex; flex-direction:column; gap:8px; margin-bottom:20px; }
   @media(max-width:760px) { .wardrobe { padding:16px; } .wardrobe .wd-layout { grid-template-columns:1fr; } .wardrobe canvas { max-height:200px; object-fit:contain; } .wardrobe .wd-grid { max-height:260px; } }
   `;
   document.head.appendChild(style);
@@ -94,6 +104,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     let draftColor = account.cosmetics.loadout.customColors?.[skill] ?? def?.paint.color ?? '#c4b2f2';
     if (def?.consume && skill) preview.customColors![skill] = draftColor;
     root.innerHTML = `<section class="wardrobe" aria-label="Wardrobe">
+      ${hollowWakeMenuHeader()}
       <header><div><div class="wd-eyebrow">Your account · your identity</div><h1>Wardrobe</h1>
       <p class="wd-muted">A different life. An unmistakable you.</p></div><button data-wd-back>Back</button></header>
       <div class="wd-layout"><aside>
@@ -109,7 +120,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
         <small>Spend a run’s Mortal Essence here from the Reckoning, before sealing it.</small>
         <p class="wd-note" role="status">${esc(note)}</p>
       </aside><div>
-        <nav class="wd-tabs" aria-label="Cosmetic categories">${Object.entries(COSMETIC_SLOTS).map(([id, label]) => `<button data-wd-slot="${id}" aria-pressed="${id === slot}">${label}</button>`).join('')}</nav>
+        <nav class="wd-tabs" aria-label="Cosmetic categories">${Object.entries(COSMETIC_SLOTS).map(([id, label]) => `<button data-wd-slot="${id}" aria-pressed="${id === slot}">${label}</button>`).join('')}<button data-wd-interface>Interface</button></nav>
         <div class="wd-tools"><input data-wd-search type="search" aria-label="Search cosmetics" placeholder="Find a look…" value="${esc(query)}">
           <button data-wd-owned aria-pressed="${ownedOnly}">Owned only</button></div>
         ${slot === 'skillSkin' || slot === 'skillRecolor' ? `<div class="wd-tools"><label>Apply to <select data-wd-skill><option value="">All skills by default</option>${opts.skills.map(s => `<option value="${esc(s.id)}" ${skill === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label></div>` : ''}
@@ -142,6 +153,10 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
       save(); draw();
     });
     root.querySelector('[data-wd-back]')!.addEventListener('click', () => { cancelAnimationFrame(frame); opts.back(); });
+    root.querySelector('[data-wd-interface]')!.addEventListener('click', () => {
+      cancelAnimationFrame(frame);
+      renderWardrobeInterface(root, opts.interfaceStyle, draw);
+    });
     root.querySelectorAll<HTMLElement>('[data-wd-slot]').forEach(btn => btn.addEventListener('click', () => {
       slot = btn.dataset.wdSlot as CosmeticSlot;
       if (slot !== 'skillSkin' && slot !== 'skillRecolor') skill = '';

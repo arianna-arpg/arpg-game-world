@@ -27,6 +27,8 @@ export const SKILL_MOVEMENTS: Readonly<Record<string, MovementProfile>> = {
   closing_fang: p('dash', 'talon', 'blood', 3, 'split'),
   reaper_lunge: p('dash', 'blade', 'blood', 4, 'coil'),
   skeletal_lunge: p('dash', 'blade', 'teeth', 3),
+  court_shield_charge: p('dash','ram','shields',4,'drive'),
+  court_pincer_strike: p('dash','blade','teeth',3,'split'),
   court_bone_lunge: p('dash', 'stride', 'teeth', 3, 'split'),
   court_wraith_lunge: p('dash', 'ribbon', 'souls', 4, 'coil'),
   vent_hop: p('dash', 'plume', 'steam', 5, 'scatter'),

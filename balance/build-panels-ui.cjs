@@ -9,7 +9,7 @@ app.setPath('userData', path.join(__dirname, 'reports', `build-panels-profile-${
 const dir = path.join(__dirname, 'reports');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 app.whenReady().then(async () => {
- const server = await startGameServer({ root: path.resolve(__dirname, '../dist'), savesDir: path.join(__dirname, 'reports', `build-panels-saves-${process.pid}`) });
+ const server = await startGameServer({ root: path.resolve(__dirname, '..', process.env.HOLLOW_WAKE_QA_DIST || 'dist'), savesDir: path.join(__dirname, 'reports', `build-panels-saves-${process.pid}`) });
  const win = new BrowserWindow({ show:false, width:1600,height:1000, webPreferences:{ offscreen:true,backgroundThrottling:false } });
  const js = async s => {
   const result = await win.webContents.executeJavaScript(`(async()=>{try{return await (0,eval)(${JSON.stringify(s)});}catch(e){return {qaError:String(e.stack??e)};}})()`);
@@ -24,9 +24,9 @@ app.whenReady().then(async () => {
     for(const s of w.localSeat.meta.knownSkills.values())if(s.def.tree)w.account.memorySecondary.add('skill:'+s.def.id);
     __game.ui.refreshInventory();})()`);
   await wait(300);
-  const tiers = await js(`document.querySelectorAll('[data-buildflap] .build-essence').length`); assert(tiers > 0);
+  assert.equal(await js(`document.querySelectorAll('[data-buildflap] .build-essence').length`), 0);
   await js(`document.querySelector('[data-buildflap]').click(); void 0`); await wait(150);
-  assert.equal(await js(`document.querySelectorAll('.build-wallet-header .build-essence').length`), tiers);
+  assert(await js(`document.querySelectorAll('.build-wallet-header .build-essence').length > 0`));
   const geometry = await js(`(()=>{const b=document.querySelector('[data-rackunbind]'),r=b.getBoundingClientRect(),p=document.querySelector('#skills-panel').getBoundingClientRect(),h=document.querySelector('.build-ribbons').getBoundingClientRect(); return {button:{x:r.x,y:r.y,w:r.width,h:r.height}, panel:{x:p.x,y:p.y,w:p.width,right:p.right},rail:{x:h.x,y:h.y}, skills:__game.world().localSeat.meta.knownSkills.size}})()`);
   console.log('GEOMETRY',geometry); assert(geometry.button.w>=24 && geometry.button.h>=24); assert(Math.abs(geometry.panel.right-geometry.rail.x)<2);
   const dropSize = await js(`(()=>{const box=document.querySelector('[data-drop="rackFree"]'),old=box.cloneNode(false);old.style.display='block';old.style.minHeight='20px';old.innerHTML='<span>drag seats to reorder · drop a seat here (or press its ✕) to unlearn — the skill returns to your pack</span>';box.after(old);const sizes={current:box.getBoundingClientRect().height,original:old.getBoundingClientRect().height};old.remove();return sizes;})()`);
@@ -85,6 +85,55 @@ app.whenReady().then(async () => {
   // An earned, unallocated point updates its hover as the skill levels.
   await js(`__game.world().localSeat.meta.knownSkills.get('cleave').level=20;__game.ui.refreshInventory();void 0`);
   assert.match(await hover(point(3)),/An Ability point is ready/);
+  // TREE SURFACES: real pointer/keyboard activation opens the owning page,
+  // including nested ticks and blank strip space, without spending points.
+  const treeRow = '.skill-entry[data-skill-id="cleave"]';
+  const treeStrip = treeRow + ' .tree-summary';
+  const showSkills = async () => {
+   await js(`__game.ui.inventoryPages.request('skills',__game.world().localSeat.id,'show');void 0`);
+   await wait(40);
+  };
+  const openTreeAt = async (selector, edge = false) => {
+   await showSkills();
+   const pos = await js(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw Error('Missing tree surface');e.scrollIntoView({block:'nearest'});const r=e.getBoundingClientRect();return {x:Math.round(${edge ? 'r.right-3' : 'r.x+r.width/2'}),y:Math.round(r.y+r.height/2)}})()`);
+   win.webContents.sendInputEvent({type:'mouseMove',...pos});
+   win.webContents.sendInputEvent({type:'mouseDown',...pos,button:'left',clickCount:1});
+   win.webContents.sendInputEvent({type:'mouseUp',...pos,button:'left',clickCount:1});
+   await wait(50);
+   assert.equal(await js(`__game.ui.folio.bookFor('skills').front`),'skilltree:cleave',selector);
+   assert.equal(await js(`document.body.classList.contains('dnd-active')`),false);
+  };
+  const treeNodesBefore = await js(`__game.world().localSeat.meta.knownSkills.get('cleave').treeNodes.slice()`);
+  assert.equal(await js(`document.querySelectorAll('#skills-panel button.gem-chip[data-treeopen]').length`),0);
+  for (const selector of [treeStrip + ' > span:first-child', treeStrip + ' > span:nth-child(2)',
+    ...[0,1,2,3].map(point), treeRow + ' .name [data-treeopen]',
+    '.build-rack [data-skill-id="cleave"] [data-treeopen]']) await openTreeAt(selector);
+  await openTreeAt(treeStrip, true);
+  assert.deepEqual(await js(`__game.world().localSeat.meta.knownSkills.get('cleave').treeNodes`),treeNodesBefore);
+  for (const [keyCode, character] of [['Return','\r'],['Space',' ']]) {
+   await showSkills();
+   await js(`document.querySelector(${JSON.stringify(treeStrip)}).focus();void 0`);
+   assert.equal(await js(`document.activeElement?.dataset.treeopen`),'cleave');
+   win.webContents.sendInputEvent({type:'keyDown',keyCode});
+   win.webContents.sendInputEvent({type:'char',keyCode:character});
+   win.webContents.sendInputEvent({type:'keyUp',keyCode});
+   await wait(50);
+   assert.equal(await js(`__game.ui.folio.bookFor('skills').front`),'skilltree:cleave',keyCode);
+  }
+  await js(`__game.world().localSeat.meta.knownSkills.get('cleave').treeNodes=[];__game.ui.refreshInventory();void 0`);
+  await showSkills();
+  assert.equal(await js(`document.querySelector(${JSON.stringify(treeStrip + ' > span:nth-child(2)')}).textContent`),'unchosen');
+  await openTreeAt(treeStrip + ' > span:nth-child(2)');
+  assert.deepEqual(await js(`__game.world().localSeat.meta.knownSkills.get('cleave').treeNodes`),[]);
+  // Every entry surface obeys the same level and account gates.
+  await showSkills();
+  await js(`(()=>{const s=__game.world().localSeat.meta.knownSkills.get('cleave');s.level=s.def.tree.level-1;__game.ui.refreshInventory()})()`);
+  assert.equal(await js(`document.querySelectorAll('#skills-panel [data-treeopen="cleave"]').length`),0);
+  await js(`(()=>{const w=__game.world();w.localSeat.meta.knownSkills.get('cleave').level=20;w.account.memorySecondary.delete('skill:cleave');__game.ui.refreshInventory()})()`);
+  assert.equal(await js(`document.querySelectorAll('#skills-panel [data-treeopen="cleave"]').length`),0);
+  await js(`(()=>{const w=__game.world();w.account.memorySecondary.add('skill:cleave');w.localSeat.meta.knownSkills.get('cleave').treeNodes=${JSON.stringify(treeNodesBefore)};__game.ui.refreshInventory()})()`);
+  assert.equal(await js(`document.querySelectorAll('#skills-panel [data-treeopen="cleave"]').length`),3);
+  console.log('TREE SURFACES PASS');
   await js(`document.querySelector('#tooltip').classList.add('hidden');void 0`);
   fs.writeFileSync(path.join(dir,'build-panels-skill-points.png'),(await win.webContents.capturePage()).toPNG());
   await js(`document.querySelector('[data-passiveflap]').click(); void 0`); await wait(100);
@@ -93,7 +142,7 @@ app.whenReady().then(async () => {
   assert(await js(`__game.ui.folio.bookFor('passives').tabs.some(t=>t.id==='skills')`));
   await js(`document.querySelector('[data-buildflap]').click(); void 0`); await wait(100);
   assert.equal(await js(`__game.ui.folio.bookFor('skills').front`),'skills');
-  await js(`__game.world().account.features.add('reliquary'); __game.ui.refreshInventory(); void 0`);
+  await js(`__game.world().account.features.add('reliquary'); __game.world().meta.passivePoints=7; __game.ui.refreshInventory(); void 0`);
   await js(`__game.ui.openSkillTree(__game.world().localSeat.actor.skills.find(s=>s?.def.tree).def.id); void 0`); await wait(100);
   assert(await js(`__game.ui.folio.bookFor('skills').tabs.length >= 3`));
   // Docked skill trees obey the same measured berth as Passives, including
@@ -103,13 +152,14 @@ app.whenReady().then(async () => {
    await js(`__game.ui.refreshSkillTree(); void 0`); await wait(50);
    const dock = await js(`(()=>{
     const pane=document.querySelector('.skill-tree.inventory-page:not(.hidden):not(.folio-shelved)'),r=pane.getBoundingClientRect();
-    const rail=document.querySelector('.build-ribbons').getBoundingClientRect();
+    const railEl=document.querySelector('.build-ribbons'),rail=railEl.getBoundingClientRect();
     const ribbons=['[data-buildflap]','[data-passiveflap]','[data-containerflap="reliquary"]'].map(sel=>{
      const e=document.querySelector(sel),b=e.getBoundingClientRect();return {sel,reachable:e.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2))};
-    });return {left:r.left,right:r.right,railLeft:rail.left,ribbons};
+    });return {left:r.left,right:r.right,railLeft:rail.left,railScroll:railEl.scrollHeight-railEl.clientHeight,ribbons};
    })()`);
    console.log('SKILL TREE DOCK',width,dock);
    assert(dock.left>=0 && dock.right<=dock.railLeft+1);
+   assert(dock.railScroll<=1,'All inventory ribbons fit with Reliquary and unspent passive points');
    assert(dock.ribbons.every(r=>r.reachable));
   }
   win.setContentSize(1600,1000); await wait(150);

@@ -9,7 +9,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: main-to-seamless
@@ -112,6 +112,13 @@ jobs:
           git commit -m "Merge main into seamless"
           git merge-base --is-ancestor "$VERIFIED_MAIN" HEAD
           git push origin HEAD:refs/heads/codex/seamless-world-foundation
+      # GITHUB_TOKEN pushes do not trigger push workflows. Explicit CI supplies
+      # the exact verification required by the coordinated release catalog.
+      - if: steps.merge.outputs.changed == 'true'
+        name: Verify the published seamless merge for both delivery platforms
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --ref codex/seamless-world-foundation
       - uses: actions/upload-artifact@v4
         if: always() && steps.merge.outputs.changed == 'true'
         with:

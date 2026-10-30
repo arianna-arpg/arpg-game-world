@@ -56,7 +56,7 @@ for (const program of localePrograms()) {
         const kind = grid.regionAt!(x, y); mask.push(kind);
         if (kind === locale.river?.region) water++;
       }
-      if (locale.river) assert.ok(water > 40, 'river remains actual water outside the crossings');
+      if (locale.river) assert.ok(water > 40, program.id + '/' + variant.id + '/' + seed + '/' + riverSides + ': river remains actual water outside the crossings');
       shapes.add(mask.join(','));
       const replay = generateLayout(JSON.parse(JSON.stringify(def)), def.size, new Rng(seed), entry, exits);
       assert.deepEqual(replay.localeReport, generated.localeReport);

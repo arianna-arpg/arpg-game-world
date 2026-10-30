@@ -1,3 +1,6 @@
+import type { FrameState, FrameView, FrameBodyView } from './frameSpec';
+import type { CohortState, CohortMark } from './cohortSpec';
+import type { SummonArtContract, SummonArtState, SummonArtView } from './summonArtsSpec';
 import { summonReservationUnit } from './companionGrants';
 import { tickAbsorbLayers, type AbsorbLayer } from './absorb';
 import { buffProcCue, noteProcCue, noteProcPop, tickProcCues } from './procCues';
@@ -77,6 +80,8 @@ export interface GainEvent {
 
 /** A cast in progress (also drives the cast bar above the actor's head). */
 export interface CastingState {
+  /** Host-resolved damage tags on render-only co-op shells. */
+  damageTags?: import('./stats').DamageType[];
   /** Resolved completion and body read on render-only co-op shells. */
   castingCompletion?: number;
   castingCue?: import('./castingCues').CastingCue;
@@ -141,6 +146,8 @@ export interface CastingState {
   // perfect / timed / multitude state
   empowered?: number;
   indicatorAt?: number;
+  /** Independently active timing mechanics, resolved and attributed at cast start. */
+  strikeTimings?: import('./skills').ResolvedStrikeTiming[];
   pressUsed?: boolean;
   presses?: number;
   /** AI: how long a monster holds a channel/charge before letting go. */
@@ -274,7 +281,11 @@ export interface ConstructState {
   /** The skill this construct casts (carries the deployer's gems & level). */
   castInst?: SkillInstance;
   range: number;
-  /** Trap arming countdown; pylon cast-interval timer. */
+  /** Configurable contact policy and real clocks, also sent to visual peers. */
+  deviceTrigger?: import('./groundDevices').DeviceTriggerSpec;
+  armingDuration?: number;
+  detonationLeft?: number;
+  /** Trap/mine arming countdown; pylon cast-interval timer. */
   timer: number;
   /** Eruptors: seconds between spews (charge-scaled at spawn). */
   castInterval?: number;
@@ -1056,6 +1067,11 @@ export class Actor {
   dischargeAt = new Map<string, number>();
   /** TOGGLED SUMMON CONTRACTS by skill id (PoE2 Spirit style): the skill —
    *  not the minion — owns the reservation, held across every death. */
+  frameState?: FrameState;
+  remoteFrameBody?: FrameBodyView;
+  remoteFrames?: Record<string,FrameView>;
+  frameCharging = false;
+  hitObservers?: Map<string,(attacker:Actor,packet:import('./damage').DamagePacket,result:import('./damage').HitResult)=>void>;
   summonToggles = new Map<string, { inst: SkillInstance; reserved: number; slots?: number }>();
   /** A released summon remains an owned slot while its body gathers again. */
   summonReform?: { remaining: number; duration: number; invulnerable: boolean; untargetable: boolean };
@@ -1375,6 +1391,7 @@ export class Actor {
   /** RESTORE STREAMS (restoreOverTime — the flask pours): each entry
    *  trickles a resource until spent. Life flows through healBy. */
   restoreStreams: { resource: 'life' | 'mana' | 'es'; perSec: number; remaining: number;
+    onHeal?: (amount:number)=>void;
     feedingCue?: import('../data/feedingCues').FeedingCueSpec | false }[] = [];
   /** THE PRIMED POUR (pourPrime): full-pool sips BANKED at press — every
    *  cost paid, the self-payload deferred — released whole by the first
@@ -1835,10 +1852,17 @@ export class Actor {
   sourceSkillId?: string;
   /** The summoning instance, kept for persistent respawns. */
   summonInst?: SkillInstance;
+  summonArtState?: SummonArtState;
+  remoteSummonArts?: Record<string, SummonArtView>;
+  summonArtAnchor?: true;
+  summonArtContracts = new Map<SkillInstance, SummonArtContract>();
   summonEscort?: { distance: number };
   /** The channel formation controller owns movement and firing for this body. */
   channelFormation?: true;
   summonOffspring?: boolean; // temporary heirs do not occupy or respawn contract slots
+  cohortState?: CohortState;
+  cohortMarks = new Map<SkillInstance, CohortMark>();
+  spectralVeil?: { color: string; alpha: number };
   summonDeathActions?: import('./brain').AIAction[];
   summonShell?: SummonShellSpec;
   summonShells?: Set<Actor>; // attached defenders; absent on ordinary actors
@@ -1913,7 +1937,7 @@ export class Actor {
   hiveDeathPlies = 0;
   hiveBroodAt?: number;
   /** World-owned, composable life-wound interceptors; never serialized. */
-  lifeDamageInterceptors?: Map<string, (amount: number) => number>;
+  lifeDamageInterceptors?: Map<string, (amount: number, event?: import('./damage').LifeWoundEvent) => number>;
   /** An UNCLAIMED THRONG HUSK: the monster kind it belongs to. Husks are
    *  passive/untargetable/invulnerable scenery-actors only an attuned bar
    *  can SEE (throngSightSet) — walking through one claims it into the
@@ -2744,6 +2768,7 @@ export class Actor {
       stacksBonus?: number;
       /** The applier's actor id (brood attribution and kin). */
       casterId?: number;
+      skillId?: string;
       /** A field-bound ailment is a separate application from lasting wounds. */
       challengeField?: number;
       sourceKey?: string;
@@ -2845,6 +2870,7 @@ export class Actor {
       if (dps > existing.dps) {
         existing.dps = dps;
         existing.remaining = duration;
+        existing.visual = undefined; // a stronger ordinary application replaces its former appearance
       }
     } else if (existing && def.pop && !fixedFuse) {
       // POP-ON-REAPPLY (Hemorrhage): detonate a fraction of the REMAINING
@@ -2870,7 +2896,7 @@ export class Actor {
         rupture: opts?.rupture,
         ruptureType: opts?.ruptureType,
         ruptureRadius: opts?.ruptureRadius,
-        casterId: opts?.casterId,
+        casterId: opts?.casterId, skillId: opts?.skillId,
         brood: opts?.brood,
         leech: opts?.leech,
         total: duration, statusDuration: duration,
@@ -2906,6 +2932,7 @@ export class Actor {
       existing.casterId = def.refreshCaster && opts.casterId !== undefined
         ? opts.casterId
         : existing.casterId ?? opts.casterId;
+      existing.skillId = existing.skillId ?? opts.skillId;
       existing.brood = existing.brood ?? opts.brood;
       if (opts.leech) existing.leech = Math.max(existing.leech ?? 0, opts.leech);
     }
@@ -3404,6 +3431,7 @@ export class Actor {
       st.remaining -= step;
       if (st.resource === 'life') {
         const landed = this.healBy(step);
+        st.onHeal?.(landed);
         noteRestoreGain(this, 'life', landed, st.feedingCue);
         // STREAM OVERMEND (2026-08-08, the pre-emptive drinker's lane):
         // pour past a full pool HARDENS instead of evaporating — ceiling
@@ -3778,7 +3806,9 @@ export class Actor {
     // Lance-Thrust-style combo blow (and the hold-combo gate's instant
     // requirement passes by construction).
     if (socketSpec(inst, 'guardCast')) return 0;
-    return inst.def.useTime / this.speedFactor(inst);
+    const delivery = instanceDelivery(inst);
+    const baseTime = delivery.type === 'summon' ? delivery.arts?.summonTime ?? inst.def.useTime : inst.def.useTime;
+    return baseTime / this.speedFactor(inst);
   }
 
   /**

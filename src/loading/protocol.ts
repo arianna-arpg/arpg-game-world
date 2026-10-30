@@ -1,10 +1,12 @@
 import type { CosmeticLoadout } from '../engine/cosmetics';
 import type { SpiritDirection } from './spiritRun';
 import type { LoadingSurface } from './loadingSurface';
+import type { InterfaceStyle } from '../ui/interfaceStyleConfig';
 
 export interface LoadingStatus { label: string; detail?: string; completed?: number; total?: number }
 export interface LoadingOptions extends LoadingStatus {
   kind: 'entry' | 'travel'; direction?: SpiritDirection; loadout?: CosmeticLoadout;
+  interfaceStyle?: InterfaceStyle;
   cancel?: () => void;
 }
 export interface LoadingLease {

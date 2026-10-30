@@ -524,6 +524,8 @@ export interface WormWoundSpec {
 }
 
 export interface MonsterDef {
+  /** Floor device using the same arming, contact and payload path as skill constructs. */
+  groundDevice?: import('../engine/groundDevices').GroundDeviceSpec;
   id: string;
   name: string;
   color: string;
@@ -2323,7 +2325,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // tomorrow (parts ARE monster defs: one entry, both uses).
   war_banner_mast: {
     id: 'war_banner_mast', name: 'War Banner',
-    color: '#a83a3a', shape: 'circle', radius: 9, look: 'construct_totem',
+    color: '#a83a3a', shape: 'circle', radius: 9, look: 'device_war_banner',
     noNemesis: true,
     base: { life: 60, moveSpeed: 0, mana: 120, manaRegen: 8, poise: 40 },
     remains: false, // organic dress, but an OBJECT — no corpse
@@ -2353,7 +2355,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // entity-creator composable tomorrow (parts ARE monster defs).
   soul_cistern: {
     id: 'soul_cistern', name: 'Soul Cistern',
-    color: '#8ad0c8', shape: 'circle', radius: 8, look: 'construct_totem',
+    color: '#8ad0c8', shape: 'circle', radius: 8, look: 'device_soul_cistern',
     noNemesis: true,
     base: { life: 55, moveSpeed: 0, poise: 30 },
     remains: false, // organic dress, but an OBJECT — no corpse
@@ -6042,7 +6044,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // a composite part today and an entity-creator composable tomorrow.
   aegis_crystal: {
     id: 'aegis_crystal', name: 'Aegis Crystal',
-    color: '#c8ecf8', shape: 'diamond', radius: 8, look: 'construct_pylon',
+    color: '#c8ecf8', shape: 'diamond', radius: 8, look: 'device_aegis_crystal',
     noNemesis: true,
     base: { life: 45, energyShield: 20, moveSpeed: 0, mana: 60, manaRegen: 6 },
     remains: false, // organic dress, but an OBJECT — no corpse
@@ -7483,7 +7485,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   bone_golem: {
     id: 'bone_golem', name: 'Bone Golem',
     color: '#d8d0c0', shape: 'octagon', radius: 18, material: 'bone', look: 'golem_bone_assembled',
-    base: { life: 140, moveSpeed: 105, accuracy: 95, armor: 40, mana: 40, manaRegen: 4, poise: 60 },
+    base: { life: 140, moveSpeed: 105, accuracy: 95, armor: 40, mana: 40, manaRegen: 4, poise: 60, bodyMass: 4 },
     mods: [mod('chaosRes', 'flat', 0.5), mod('damageTaken', 'more', -0.1)],
     skills: ['ground_slam', 'claw'],
     xp: 0,
@@ -13586,14 +13588,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
       obedience: 0.35,
     },
   },
-  // THE JAW SNARE — a trap with a heartbeat: hidden until stepped near,
-  // then one iron snap and a held ankle. Three seams holding hands.
+  // THE JAW SNARE — a destructible groundDevice: a visible pressure plate,
+  // half a second to arm, then one immediate iron snap and a held ankle.
   jaw_snare: {
     id: 'jaw_snare', name: 'Jaw Snare',
     color: '#b0a890', shape: 'oval', radius: 7, material: 'metal', look: 'jaw_snare',
     base: { life: 18, moveSpeed: 0, armor: 30, mana: 0 },
     skills: ['snap_shut'], xp: 3,
-    ambush: { radius: 42, emerge: { motion: 'stir', voice: 'dust' } },
+    groundDevice: { kind: 'trap', skillId: 'snap_shut', radius: 42, armTime: .5 },
     noNemesis: true, drops: 0,
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 2.0, brain: { type: 'basic' },
@@ -15555,15 +15557,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 18,
     faction: 'sarcophate',
     tags: ['undead'],
-    detection: 1.4, // the long eye of the rim — the fan IS the crossing's ask
+    detection: 1.4, // the long eye over the crossing
     post: true,     // stands its ground; drifts walk home (brain.ts PostSpec)
     packSize: [1, 2], // sentinels dot the gaps, never march in files
     // The gilded face catches the light — a dim ember-glow marks the post
-    // toward dusk (the carried-lamp lever; the fan stays the daytime tell).
+    // toward dusk (the carried-lamp lever; the body carries the daytime tell).
     light: { radius: -8, color: '#e8c060', intensity: 0.4, flicker: 0.6 },
-    // FAN KEPT: "read the fans before you cross" — the threshold rhythm's
-    // legibility instrument, worn in the open on purpose.
-    watch: { sweep: { arcDeg: 130, sec: 7 }, riseSec: 1.6, searchSec: 7, fan: 'show' },
+    // Ambient sentries show attention through their body tells; the
+    // detection boundary stays available through the developer overlay.
+    watch: { sweep: { arcDeg: 130, sec: 7 }, riseSec: 1.6, searchSec: 7, fan: 'hide' },
     temper: 'territorial',
     brain: {
       type: 'basic',
@@ -22150,7 +22152,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
   // THE STILT-STRIDER: the shallows sentry — long-legged, wading the pool
-  // fields on watch (the watch fabric's SWEEP posture, the cone drawn),
+  // fields on watch (a smooth scanning gaze, with no detection overlay),
   // spear-fishing what the eruptions stun. Wading suspends nothing for it
   // (the pools are its ground); a hero's own wading breaks the scent line.
   stilt_strider: {
@@ -22165,7 +22167,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     immuneGround: ['sulphur_pool', 'prism_pool', 'mudpot'],
     detection: 1.25,
     post: true,
-    watch: { sweep: { arcDeg: 140, sec: 6 }, riseSec: 1.6, searchSec: 6, fan: 'show' },
+    watch: { sweep: { arcDeg: 140, sec: 6 }, riseSec: 1.6, searchSec: 6, fan: 'hide' },
     brain: {
       type: 'basic',
       perception: { arcDeg: 80, rearMul: 0.25, alertShout: 380, memory: 5 },

@@ -1,3 +1,5 @@
+import { SKELETON_WARRIOR_TREE } from './skeletonWarriorTree';
+import { SKELETON_WARRIOR_SKILLS, SKELETON_WARRIOR_FORMS } from './skeletonWarriorSkills';
 import type { SkillDef, SkillTreeSpec } from '../engine/skills';
 import type { MonsterDef } from './monsters';
 import { mod } from '../engine/stats';
@@ -6,23 +8,7 @@ import { tree, n, life, damage, cap, count, haste, speed, size, dr, body, kit, a
 /** The next four undead courts. Branches compose existing summon, combat,
  * aura, decay and death grammars; no skill IDs are read by engine code. */
 export const UNDEAD_COURT_TREES: Record<string, SkillTreeSpec> = {
-  summon_skeleton: tree([
-    n('grave_phalanx', 'Grave Phalanx', 'Raise shield-bearing sentinels with a short defensive leash and a periodic taunting challenge. 25% increased life; 15% less damage taken.', [life(0.25), dr(0.15), mod('minionGuard', 'flat', 1)], { tags: { add: ['physical'] }, summon: { monsterId: 'skeletal_sentinel' } }),
-    [n('interlocking_shields', 'Interlocking Shields', 'Sentinels gain 10% block chance and 5 Thorns.', undefined, body(mod('blockChance', 'flat', 0.1), mod('thorns', 'flat', 5))),
-      n('barbed_lattice', 'Barbed Lattice', 'Sentinels inherit 35% of your Thorns and add half their Thorns to their hits as physical damage.', undefined, { summon: { crewInherit: [{ stat: 'thorns', fromStat: 'thorns', ratio: 0.35, kind: 'flat' }], crewMods: [mod('thornsToHit', 'flat', 0.5)] } }),
-      n('oath_banner', 'Oath Banner', 'Bear a 120-radius banner granting nearby allies 20 armor and 8% block chance. Separate banners stack.', undefined, aura('sentinel_banner'))],
-    [n('veteran_watch', 'Veteran Watch', '50% increased life and 15% increased size.', [life(0.5), size(0.15)]),
-      n('last_watch', 'Last Watch', 'On true death, leave one half-size sentinel for 6 seconds, with 30% life and 50% damage. Up to four heirs; they cannot divide again. Dismissal does not trigger this.', undefined, { summon: { crewOnDeath: [{ do: 'summon', monster: 'skeletal_sentinel', count: 1, lifespan: 6, ring: 18, inheritSummon: { maxActive: 4, size: 0.5, life: 0.3, damage: 0.5 } }] } }),
-      n('relief_guard', 'Relief Guard', 'Bear a 120-radius relief aura healing nearby allies for 1% of maximum life each second. Separate auras stack.', undefined, aura('sentinel_relief'))],
-  ], [
-    n('ossuary_duelists', 'Ossuary Duelists', 'Replace warriors with nimble duelists, up to three. Their quick twin cuts trade the phalanx for pursuit.', undefined, { tags: { add: ['physical'] }, summon: { monsterId: 'skeletal_duelist', maxActive: 3 } }),
-    [n('flensing_edges', 'Flensing Edges', 'Duelist hits gain 35% chance to bleed and 20% increased damage.', [damage(0.2)], body(mod('apply_bleed', 'flat', 0.35))),
-      n('open_veins', 'Open Veins', '50% increased physical ailment magnitude and 30% increased ailment duration.', undefined, body(mod('statusMagnitude', 'increased', 0.5, ['physical']), mod('effectDuration', 'increased', 0.3))),
-      n('merciless_measure', 'Merciless Measure', 'Cull enemies below 8% life and gain 10% critical strike chance.', undefined, body(mod('cullThreshold', 'flat', 0.08), mod('critChance', 'flat', 0.1)))],
-    [n('line_breakers', 'Line Breakers', 'Learn Bone Lunge: a piercing dash through the target on a 5-second cooldown.', undefined, kit('court_bone_lunge')),
-      n('relentless_footwork', 'Relentless Footwork', 'Movement skills recover 50% faster; duelists move 25% faster.', [speed(0.25)], body(mod('cooldownRecovery', 'increased', 0.5, ['movement']))),
-      n('dueling_pairs', 'Dueling Pairs', 'One additional duelist per cast and one additional slot, with 15% less life per body.', [count(1), cap(1), mod('minionLife', 'more', -0.15)])],
-  ], n('tempered_bones', 'Tempered Bones', '15% increased minion life and damage.', [life(0.15), damage(0.15)])),
+  summon_skeleton: SKELETON_WARRIOR_TREE,
 
   raise_dead: tree([
     n('grave_levy', 'Grave Levy', 'Raise three random skeletons or zombies, up to eight, lasting 12 seconds. Expendable ranks deal 20% less damage and cost 25% more mana.', [mod('minionDamage', 'more', -0.2), mod('manaCost', 'more', 0.25)], { tags: { add: ['duration'] }, summon: { count: 3, maxActive: 8, duration: 12 } }),
@@ -80,6 +66,7 @@ export const UNDEAD_COURT_TREES: Record<string, SkillTreeSpec> = {
 };
 
 export const UNDEAD_COURT_SKILLS: Record<string, SkillDef> = {
+  ...SKELETON_WARRIOR_SKILLS,
   court_challenge: {
     id: 'court_challenge', name: 'Sentinel Challenge', noDrop: true, description: 'A close shield knock taunts nearby foes.',
     tags: ['attack', 'physical', 'aoe'], color: '#cfc8b8', manaCost: 0, cooldown: 7, useTime: 0.4,
@@ -157,6 +144,7 @@ export const UNDEAD_COURT_SKILLS: Record<string, SkillDef> = {
 };
 
 export const UNDEAD_COURT_MINIONS: Record<string, MonsterDef> = {
+  ...SKELETON_WARRIOR_FORMS,
   skeletal_sentinel: {
     id: 'skeletal_sentinel', name: 'Skeletal Sentinel', color: '#bfc9be', shape: 'ribcage', look: 'sentinel_ossuary_guard', material: 'bone', radius: 15, faction: 'undead', xp: 0,
     base: { life: 42, moveSpeed: 130, armor: 15, accuracy: 90, mana: 30, manaRegen: 4 }, skills: ['cleave', 'court_challenge'],

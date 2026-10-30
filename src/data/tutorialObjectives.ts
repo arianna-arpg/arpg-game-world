@@ -21,7 +21,7 @@ const journey = (
   road: eastRoad,
   skyCycle: 0.44,
   intro: {
-    title: 'HOLLOW WAKE',
+    title: 'HOLLOW WAKE', brandPresentation: 'story',
     lines: [
       'The old roads run longer than they used to. The towns grow few, and the lights grow far between.',
       'You have walked for days on the promise of one: LASTLIGHT, where the candles are said never to gutter.',

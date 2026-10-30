@@ -1,3 +1,4 @@
+import { instanceDelivery } from '../engine/skills';
 import { empowermentRank } from '../engine/skillEmpowerment';
 // ---------------------------------------------------------------------------
 // CHARACTER PERSISTENCE — the active-run half of localStorage.
@@ -65,6 +66,7 @@ interface SavedSkill {
   /** THE GRIMOIRE: the bestiary form this instance is attuned to (a monster
    *  def id; rebuilt tolerantly — a removed def drops the attunement). */
   attunedForm?: string;
+  summonSchools?: string[];
   /** THE SKILL-MODE TREES: spent tree-node ids (M0: the one rung-1 pick).
    *  Optional → older saves load unchanged; validated on load — an id no
    *  longer on the def's tree drops with a console note. */
@@ -205,6 +207,7 @@ const saveSkill = (i: SkillInstance): SavedSkill => ({
   skillId: i.def.id, level: i.level, rarity: i.rarity ?? 'common',
   sockets: i.sockets.map(s => s ? saveSocket(s) : null),
   ...(i.granted ? { granted: true } : {}),
+  ...(i.summonSchools?.length ? { summonSchools: [...i.summonSchools] } : {}),
   ...(i.attunedForm ? { attunedForm: i.attunedForm } : {}),
   ...(i.treeNodes?.length ? { treeNodes: [...i.treeNodes] } : {}),
   ...(i.replenishmentPaused ? { replenishmentPaused: true as const } : {}),
@@ -357,6 +360,11 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   // trim) drop with a console note — the attunedForm law. An M0-era save's
   // single rung-1 pick loads as a 1-point spend, costless by construction.
   if (s.treeNodes?.length) inst.treeNodes = validTreeNodes(def, s.treeNodes, s.level, inst);
+  const summonDelivery = instanceDelivery(inst);
+  if (Array.isArray(s.summonSchools) && summonDelivery.type === 'summon' && summonDelivery.arts?.schools) {
+    const schools = summonDelivery.arts.schools.filter(row => s.summonSchools!.includes(row.id)).map(row => row.id);
+    if (schools.length) inst.summonSchools = schools;
+  }
   if (s.replenishmentPaused === true && replenishingDelivery(inst)?.replenish?.toggle) inst.replenishmentPaused = true;
   if (s.locked) inst.locked = true; // the keeper's mark (salvageLock) survives
   inst.sockets = s.sockets.map(sock => {

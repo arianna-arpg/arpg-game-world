@@ -1,4 +1,14 @@
+import { SAVE_EXIT_DESTINATIONS, requestAppExit, type SaveExitDestination } from './exitMenu';
+import { flushPendingDiskSaves } from '../meta/persistence';
+import { hollowWakeBrand, hollowWakeMenuHeader } from './brand';
+import type { SceneCardSpec } from '../data/scenes';
+import { mountSideScreen, sideScreenContext, captureSideScreenFocus } from './sideScreen';
+import { SIDE_SCREENS } from './sideScreenConfig';
+import { frontScreenHtml, bindFrontScreen } from './frontScreen';
+import { newCodexState, renderCodex } from './codex';
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
+import { MemoryReveal } from './memoryReveal';
+import { DAMAGE_TEXT_CFG } from '../world/damageText';
 import { storedSupportsHtml } from './storedSupports';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
@@ -9,8 +19,11 @@ import { personalStashHtml, STASH_CELL_PX } from './stash';
 import { emptyStash, personalStashEntries, planStashMove } from '../engine/stash';
 import { STASH_DEFS } from '../data/stashes';
 import { renderWardrobe } from './wardrobe';
+import { applyInterfaceStyle, decorateInventoryPanel } from './interfaceStyle';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 import { ServiceWorkspace } from './serviceWorkspace';
+import { independentPanelSeat } from './panelPlacement';
+import { MemoryRecallBatch, MEMORY_RECALL_UI_CFG, requestMemoryRecall } from './memoryRecall';
 import type { DialogueUI } from './dialogue';
 import { DIALOGUE_CFG } from '../data/dialogue';
 import { supportCompatibilityHtml } from './supportCompatibility';
@@ -27,7 +40,7 @@ import { clamp, mixHex } from '../core/math';
 import { tellPortraitDress } from '../engine/tells';
 import { replenishingDelivery } from '../engine/replenishment';
 import { instanceBaseTags } from '../engine/skills';
-import { DEV, GAME_TITLE } from '../config';
+import { DEV } from '../config';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
   type AttributeId, type DamageType,
@@ -221,10 +234,6 @@ export interface RunReckoning {
  *  (updateHintBar). Flip true to restore the standing crib sheet. */
 const HINT_BAR_ENABLED = false;
 
-/** THE CLOSE GLYPH keeps the inventory's top-right corner (closeGlyphHtml),
- *  so the essence satchel button — and the drop-down hanging under it —
- *  sit this many px in from the panel's right edge. */
-const SATCHEL_RIGHT_PX = 46;
 // (THE MILESTONE POPUP's dial moved to Settings.treePrompt — 2026-09-11,
 // OFF by default; the world's disciplined-calm sweep still queues the
 // offer, showTreePopup answers only for a player who asked.)
@@ -513,6 +522,7 @@ export class UI {
   private muCard = document.getElementById('mu-card')!;
   muCardOpen = false;
   private accountScreen = document.getElementById('account-screen')!;
+  private memoryReveal = new MemoryReveal(() => this.getSettings(), () => this.saveSettings());
   private escapeMenu = document.getElementById('escape-menu')!;
   private startMenu = document.getElementById('start-menu')!;
   private expeditionSetup = document.getElementById('expedition-setup')!;
@@ -601,6 +611,9 @@ export class UI {
    *  Session-local by design — an abandoned confirm simply lapses. */
   private savePortNote: string | null = null;
   private savePortPending: SaveImportPlan | null = null;
+  private codexState = newCodexState();
+  private codexDispose: (() => void) | null = null;
+
   /** THE VAULT SHELVES (meta/unlocks.ts VAULT_TABS — the store's organization
    *  as data): the active shelf, plus each shelf's remembered scroll — the
    *  store keeps your place per aisle across purchases, flips, and re-opens.
@@ -625,9 +638,8 @@ export class UI {
    *  (generated families still surface only once touched — see sheet.ts). */
   private charShowAll = false;
   inventoryOpen = false;
-  /** The essence SATCHEL flap on the inventory panel (persists across
-   *  re-renders — a satchel stays however you left it). */
-  private satchelOpen = false;
+  /** Socket materials keep their own dropdown; essence balances stay visible. */
+  private vestigeSatchelOpen = false;
   /** All development-page lifecycle and ownership live in this registry. */
   private readonly inventoryPages = new InventoryPages({
     owner: () => this.panelSeat(this.inventory).id,
@@ -723,6 +735,11 @@ export class UI {
   /** THE RECALL (skill-items M2/M3, §3b): the Memory pouches' picker. */
   recallOpen = false;
   private recallUid = 0;
+  private readonly recallBatch = new MemoryRecallBatch();
+  private recallWorld: World | null = null;
+  private recallOwner: Seat | null = null;
+  private recallRefreshAt = 0;
+  private recallViewKey = '';
   /** The open pouch's KIND (last seen — outlives the pouch for the spent
    *  panel's header) and, on a Preformed pouch, THE FACET the player has
    *  committed to (a triad's lead attribute id; null until chosen — the
@@ -912,6 +929,9 @@ export class UI {
    *  the virgin lane walks the tutorial, everyone else drifts into Mu. The
    *  legacy screen stays whole beneath it (co-op rejoin still uses it). */
   onBeginRun: (() => void) | null = null;
+  /** The shell owns persistence and session teardown for both exit destinations. */
+  onSaveExit?: (destination: SaveExitDestination) => void | Promise<void>;
+  private saveExitPending = false;
 
   constructor(
     private getWorld: () => World,
@@ -1183,6 +1203,7 @@ export class UI {
     if (this.panelHtml.get(el) === html && (el.childElementCount > 0 || html === '')) return false;
     this.panelHtml.set(el, html);
     el.innerHTML = html;
+    decorateInventoryPanel(el);
     return true;
   }
 
@@ -1245,13 +1266,12 @@ export class UI {
   /** THE RAIL FIT LAW: the ribbon rail (SKILLS · PASSIVES · every owned
    *  container) never runs past the inventory pane's foot. Measured, never
    *  assumed — after every render and every dock sync: a rail that would
-   *  overhang sheds the container COUNT badge first (her word), then the
-   *  Skills wallet chips (the drawer's own header repeats them); the
-   *  stylesheet's tight classes are the whole vocabulary. */
+   *  overhang tightens spacing and sheds container count badges. Skill and passive balances
+   *  belong to their page headers, so they never lengthen the rail. */
   private fitBuildRail(): void {
     const rail = this.inventory.querySelector<HTMLElement>('.build-ribbons');
     if (!rail || !this.inventoryOpen) return;
-    rail.classList.remove('build-rail-tight', 'build-rail-tighter');
+    rail.classList.remove('build-rail-tight');
     const overhang = (): boolean => {
       const pane = this.inventory.getBoundingClientRect();
       const r = rail.getBoundingClientRect();
@@ -1259,7 +1279,6 @@ export class UI {
         && (r.bottom > pane.bottom + 0.5 || rail.scrollHeight > rail.clientHeight + 1);
     };
     if (overhang()) rail.classList.add('build-rail-tight');
-    if (overhang()) rail.classList.add('build-rail-tighter');
   }
 
   // --- THE FOLIO (ui/folio.ts) -----------------------------------------------
@@ -1458,6 +1477,10 @@ export class UI {
     this.escRefresh = null;
     const actor = this.getWorld().seats.length ? this.getWorld().player : undefined;
     renderWardrobe(root, { account: this.getAccount(), back,
+      interfaceStyle: { get: () => this.getSettings().interfaceStyle, save: style => {
+        this.getSettings().interfaceStyle = style;
+        applyInterfaceStyle(style); this.saveSettings();
+      } },
       save: () => { this.saveAccount(); this.onCosmeticsChanged?.(); },
       body: actor && actor.cosmeticKind !== 'wisp' ? { shape: actor.shape, color: actor.color, radius: actor.radius, material: actor.material, look: actor.look, adorn: actor.adorn }
         : { shape: 'circle', radius: 16, color: CLASSES[0].color, look: CLASSES[0].look }, // the account Wardrobe also opens between lives
@@ -1468,7 +1491,33 @@ export class UI {
     });
   }
 
+  private closeCodexView(): void {
+    this.codexDispose?.(); this.codexDispose = null;
+  }
+
+  private codexView(root: HTMLElement, back: () => void, page?: string): void {
+    const context = root === this.escapeMenu ? 'world' : sideScreenContext();
+    this.closeCodexView();
+    this.escRefresh = null;
+    hideTooltip(); dndCancel();
+    this.codexDispose = renderCodex(root, { account: () => this.getAccount(), state: this.codexState,
+      paintPortraits: el => this.paintPortraitsIn(el), page,
+      shell: { profile: SIDE_SCREENS.codex, context },
+      back: () => { this.closeCodexView(); back(); },
+    });
+  }
+
+  showCodex(page?: string): void {
+    // The same pause policy as the menu: timed rites and co-op keep their own clocks.
+    this.escapeMenuOpen = true;
+    this.menuBar.closeTray();
+    if (!this.getWorld().harvestPauseLocked()) this.getWorld().timeflow.holdSurface('menu:escape');
+    this.escapeMenu.classList.remove('hidden');
+    this.codexView(this.escapeMenu, () => this.hideEscapeMenu(), page);
+  }
+
   showWardrobe(): void {
+    this.closeCodexView();
     this.escapeMenuOpen = true;
     // Account cosmetics are available even when scene character pages are sealed.
     // A timed harvest still runs: opening appearance must not bypass its pause lock.
@@ -1487,6 +1536,7 @@ export class UI {
       isOpen: () => this.folio.leaf(id)?.isOpen() ?? false,
     });
     return {
+      codex: { open: () => this.showCodex(), isOpen: () => this.escapeMenuOpen && !!this.escapeMenu.querySelector('.codex') },
       wardrobe: { open: () => this.showWardrobe(), isOpen: () => this.escapeMenuOpen && !!this.escapeMenu.querySelector('.wardrobe') },
       inventory: { open: id => this.toggleInventory(id), isOpen: () => this.inventoryOpen },
       // THE CONTAINER FABRIC: one host row per registered side board — the
@@ -1546,11 +1596,10 @@ export class UI {
   /** Conversation and services share NPC tabs; player pages have their own book. */
   enrollConversation(dialogue: DialogueUI): void {
     this.conversation = dialogue;
-    const speaker = () => dialogue.session.reading?.offer.speakerId ?? null;
     this.folio.enroll(this.folioLeaf('conversation', dialogue.root, () => 'Conversation',
       () => !!dialogue.session.reading && !dialogue.root.hidden, () => { dialogue.close(); }, {
         kind: 'station', group: 'npc',
-        engaged: () => speaker() !== null && this.getWorld().npcDialogueReachable(speaker()!),
+        engaged: () => dialogue.engaged,
       }));
     this.movableRoots.push(dialogue.root);
     attachPanelMove(dialogue.root, { onMove: () => this.folioStrip.update() });
@@ -1624,6 +1673,7 @@ export class UI {
     this.folio.sync();
     this.serviceWorkspace.sync();
     this.folioStrip.update();
+    this.syncRecall();
   }
 
   /** Every root THE PANEL MOVE governs: the static panels + the minted skill-tree panes. */
@@ -1694,7 +1744,7 @@ export class UI {
   blockingFor(seatId: string): boolean {
     // THE MENU BAR's tray is the hero's (its pad pointer wakes on it).
     if (this.menuBar.isTrayOpen() && seatId === this.getWorld().localSeat.id) return true;
-    if (this.escapeMenuOpen || this.minigameActive || this.couchJoinOpen
+    if (this.memoryReveal.isOpen || this.escapeMenuOpen || this.minigameActive || this.couchJoinOpen
       || this.caravanOpen || this.mercOpen || this.sailOpen || this.holdOpen
       || this.vocationOpen || this.boroughOpen || this.muCardOpen
       || !this.startMenu.classList.contains('hidden')) return true;
@@ -2451,7 +2501,7 @@ export class UI {
    *  surfaces join here and every input layer follows for free. Dialogue has
    *  its own presentation context; it never relaxes gameplay input gates. */
   uiBlocking(): boolean {
-    return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
+    return this.memoryReveal.isOpen || this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen
       || this.caravanOpen || this.mercOpen || this.salvageOpen
       || this.oracleOpen || this.vendorOpen || this.sailOpen || this.holdOpen || this.vocationOpen
@@ -2511,9 +2561,9 @@ export class UI {
 
   storyCardOpen(): boolean { return !this.storyCard.classList.contains('hidden'); }
 
-  showStoryCard(card: { title: string; lines: string[]; button?: string }, onContinue: () => void): void {
+  showStoryCard(card: SceneCardSpec, onContinue: () => void): void {
     this.storyCard.innerHTML = `
-      <h1>${esc(card.title)}</h1>
+      ${card.brandPresentation ? `<h1 class="hw-brand-heading">${hollowWakeBrand(card.brandPresentation)}</h1>` : `<h1>${esc(card.title)}</h1>`}
       ${card.lines.map(l => `<p>${esc(l)}</p>`).join('')}
       <button id="story-continue">${esc(card.button ?? 'Continue')}</button>`;
     this.storyCard.classList.remove('hidden');
@@ -2971,7 +3021,7 @@ export class UI {
     const nameValue = this.pendingCharName ?? acc.namePref ?? '';
     this.classSelect.innerHTML = `
       ${onBack ? this.closeGlyphHtml('Back') : ''}
-      <h1>${GAME_TITLE.toUpperCase()}</h1>
+      <h1 class="hw-brand-heading">${hollowWakeBrand('panel')}</h1>
       <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:2px 0 8px 0">
         <span style="font-size:12px;color:var(--gold)">⚜ Name</span>
         <input id="char-name" type="text" maxlength="24" spellcheck="false"
@@ -3081,6 +3131,7 @@ export class UI {
     // Guard the shared entry point before changing screens or stamping the
     // Bounty Board lesson. Hidden buttons alone cannot protect other callers.
     if (!isVaultAvailable(acc)) return;
+    const sideContext = sideScreenContext();
     this.hideAll(); // close whatever opened it (start menu / class select / …) so it never overlaps
     // THE RECKONING VISIT: a Vault opened while ANY Mortal Essence stands is
     // the run's closing prompt — the seal law arms (leaving requires the
@@ -3120,6 +3171,7 @@ export class UI {
       if (b) this.vaultScroll[this.vaultTab || '_flat'] = b.scrollTop;
     };
     const render = (): void => {
+      const sideFocus = captureSideScreenFocus(this.accountScreen);
       // Record earned rewards without acknowledging them on the player's behalf.
       if (settleClassUnlocks(acc).length) this.saveAccount();
       // THE CENSUS (vaultShelfCensus): every shelf's stock/owned/rumors and
@@ -3143,15 +3195,17 @@ export class UI {
         const arr = sealedBy.get(seat);
         if (arr) arr.push(s.u); else sealedBy.set(seat, [s.u]);
       }
-      const visible = census.filter(c => c.visible || (sealedBy.get(c.tab.id)?.length ?? 0) > 0);
-      const strip = vaultStripVisible(acc, census);
+      const memoryRevealHistory = Object.keys(acc.memoryReceipts).length > 0;
+      const visible = census.filter(c => !c.tab.owned && (c.visible || (sealedBy.get(c.tab.id)?.length ?? 0) > 0
+        || (memoryRevealHistory && c.tab.kinds?.includes('memory')))); // Owned lives in the Codex.
+      const strip = visible.length > 0 && vaultStripVisible(acc, census);
 
       // COMPACT BY DESIGN: name and price — the description lives in the
       // hover-intent tooltip (the accountScreen bind), so a shelf reads as a
       // shelf, never a wall of text. THE FACE LAW: a card never prints its
       // own classification; the section it hangs under says that (the kind
       // header of kindSections below, the tab face of a single-kind shelf,
-      // the Sealed / Shrouded / Owned headers for theirs), and the hover
+      // the Sealed / Shrouded headers; Owned lives in the Codex), and the hover
       // story's meta line keeps the kind + the level requirement for
       // whoever asks. availableUnlocks() already excludes
       // owned + un-gated entries. THE INVESTMENT LANE: every card wears its
@@ -3190,24 +3244,14 @@ export class UI {
                 free ? 'Claim · free' : inv > 0 ? `${buyVerb(u)} · ${rem} more` : `${buyVerb(u)} · ${u.cost}`}</button>
             </div>`;
       };
-      // THE EARNED ROWS (2026-09-11, her ask): a claimed class keeps the deed
-      // that earned it ON its owned card — the objective rows the shrouded
-      // card carried, met ones checked, so the trophy case still says how
-      // each class was won. A class claimed by an older road (before its
-      // deed was written) shows the deed unchecked: owned is owned, and the
-      // row still names the class's road. Non-class kinds print nothing.
+      // Pending classes show the deeds that earned their free activation.
+      // The Codex keeps these same deed rows after activation.
       const earnedRowsHtml = (u: Unlockable): string => {
         if (u.kind !== 'class' || !(u.reqAnyOf?.length)) return '';
         const read = classUnlockProgress(acc, u);
         return `<div class="uobjs">${read.rows.map(r =>
           `<div class="uobj${r.met ? ' met' : ''}" title="${esc(r.label)}"><span>${r.met ? '✓' : '·'} ${esc(r.label)}</span><i style="width:${Math.round(r.frac * 100)}%"></i></div>`).join('')}</div>`;
       };
-      const ownedCardHtml = (u: Unlockable): string => `
-            <div class="unlock-card uowned" data-tip="unlock" data-unlock-id="${u.id}">
-              <div class="uname">${u.label}</div>
-              ${earnedRowsHtml(u)}
-              <button disabled>✓ Owned</button>
-            </div>`;
       const pendingCardHtml = (u: Unlockable): string => `
             <div class="unlock-card" data-tip="unlock" data-unlock-id="${u.id}">
               <div class="uname">${esc(u.label)}</div>
@@ -3228,10 +3272,8 @@ export class UI {
       // THE SECTION LAW (the face law's other half): classification is
       // printed ONCE, as a kind header over the cards that share it — in
       // shelf order (vaultKindOrder), empty kinds silent. The ONE grouping
-      // for the young store's wall, a multi-kind shelf's floor and the
-      // trophy case; a single-kind shelf skips it (the tab face already
-      // says it), and the Sealed / Shrouded / Owned-tail sections ARE their
-      // own classification, so they print none.
+      // for the young store and multi-kind buying shelves. Single-kind and
+      // Sealed / Shrouded sections already name their kind. Owned is in Codex.
       const kindSections = (rows: Unlockable[], card: (u: Unlockable) => string): string =>
         vaultKindOrder()
           .map(k => ({ k, kr: rows.filter(u => u.kind === k) }))
@@ -3284,13 +3326,11 @@ export class UI {
         // tail. The furniture arrives when the account outgrows this room.
         this.vaultTab = '';
         const stock = visible.flatMap(c => c.stock);
-        const ownedAll = census.find(c => c.tab.owned)?.owned ?? [];
         body = stock.length ? kindSections(stock, cardHtml)
           : `<div class="vault-empty">Nothing for sale right now; earn ${META_CURRENCY_LABEL} and milestones by playing.</div>`;
         body = pendingSection(census.flatMap(c => c.pending)) + body;
         body += sealedRack(sealed.map(s => s.u));
         body += rumorSection(census.flatMap(c => c.rumors));
-        if (ownedAll.length) body += subHead(`Owned (${ownedAll.length})`) + grid(ownedAll.map(ownedCardHtml).join(''));
       } else {
         // Land on the remembered shelf if it still stands; else the first
         // shelf with something to BUY, else the first standing shelf.
@@ -3322,12 +3362,7 @@ export class UI {
         // The active shelf's floor. Multi-kind shelves group under kind
         // headers (kindSections — the section law); single-kind shelves
         // skip them, the face already says it.
-        if (tab.owned) {
-          // THE TROPHY CASE: everything claimed, grouped by kind in shelf
-          // order — browsed deliberately, never underfoot while shopping.
-          // (Visible only once anything IS claimed, so never empty here.)
-          body = kindSections(row.owned, ownedCardHtml);
-        } else {
+        { // The buying floor; claimed entries are browsed in the Codex.
           const rows = row.stock;
           const sealedRows = sealedBy.get(tab.id) ?? [];
           if (rows.length === 0 && sealedRows.length === 0 && row.pending.length === 0) {
@@ -3361,9 +3396,16 @@ export class UI {
             <b>${acc.lifetimeCredits}</b> ${META_CURRENCY_LABEL} lifetime${register}</div>
           ${boardLessonTalk && !featureEnabled(acc, FEATURE.BOUNTY_BOARD) ? `<div class="vault-lesson">Every run ends here: what you carried home became ${META_CURRENCY_LABEL}, and ${META_CURRENCY_LABEL} buys the town's standing services, which persist run after run.<br>The <b>Bounty Board</b> asks nothing. Claim it free, and Lastlight raises a posting board whose work pays the very essence this Vault spends.</div>` : ''}
           ${tabStrip}
+          ${!strip || this.vaultTab === vaultSeatOf('memory').id ? '<div class="memory-vault-tools" data-memory-tools></div>' : ''}
         </div>
         <div class="vault-body">${body}</div>
-        <div class="vault-foot acct-btns"><button id="acct-wardrobe">Wardrobe</button><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
+        <div class="vault-foot acct-btns"><button id="acct-codex">Codex · Owned</button><button id="acct-wardrobe">Wardrobe</button><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
+      mountSideScreen(this.accountScreen, SIDE_SCREENS.vault, sideContext, sideFocus);
+      this.accountScreen.querySelector('#acct-codex')!.addEventListener('click', () => {
+        saveShelfScroll(); this.codexView(this.accountScreen, render, 'owned');
+      });
+      this.memoryReveal.bindVault(this.accountScreen, acc, availableUnlocks(acc)
+        .flatMap(u => u.kind === 'memory' ? [memoryUnlockDef(u.payload.memoryUnlockId)!] : []));
       this.accountScreen.querySelector('#acct-wardrobe')!.addEventListener('click', () => this.wardrobeView(this.accountScreen, render));
       const bodyEl = this.accountScreen.querySelector<HTMLElement>('.vault-body');
       if (bodyEl) bodyEl.scrollTop = this.vaultScroll[this.vaultTab || '_flat'] ?? 0;
@@ -3401,13 +3443,20 @@ export class UI {
       // falls short. Ticks write the button face, the fill bar, and the
       // head's pool INLINE (never a re-render — the hold must keep its
       // button); release, a dry pool, or completion settles: save +
-      // re-render (a completed card re-shelves under Owned).
+      // re-render (a completed card moves into Codex Owned).
       let pourTimer = 0;
       let holdTimer = 0;
       this.accountScreen.querySelectorAll<HTMLButtonElement>('[data-invest]').forEach(btn => {
         const id = btn.dataset.invest!;
         const memorySequence = acc.memoryReceipts[id]?.sequence ?? 0;
-        const findU = (): Unlockable | undefined => availableUnlocks(acc).find(x => x.id === id);
+        let memoryRevealPool: ReturnType<typeof memoryUnlockCandidates> = [];
+        const findU = (): Unlockable | undefined => {
+          if (!btn.isConnected || this.memoryReveal.isOpen || (acc.memoryReceipts[id]?.sequence ?? 0) !== memorySequence) return undefined;
+          const u = availableUnlocks(acc).find(x => x.id === id);
+          const def = u?.kind === 'memory' ? memoryUnlockDef(u.payload.memoryUnlockId) : undefined;
+          memoryRevealPool = def ? memoryUnlockCandidates(acc, def) : [];
+          return u;
+        };
         const updateFaces = (u: Unlockable): void => {
           btn.textContent = `${buyVerb(u)} · ${remainingCost(acc, u)} more`;
           const bar = btn.parentElement?.querySelector<HTMLElement>('.uinvest i');
@@ -3429,13 +3478,18 @@ export class UI {
         // "This pour finished": ownership for the permanent kinds, the state
         // change for the service kinds (unlockCompleted — the one predicate).
         const completed = (u: Unlockable): boolean => unlockCompleted(acc, u, memorySequence);
+        const memoryRevealDone = (u: Unlockable): void => {
+          const receipt = u.kind === 'memory' ? acc.memoryReceipts[u.id] : undefined;
+          if (receipt && this.memoryReveal.celebrate(this.accountScreen, receipt, memoryRevealPool, u.id)) return;
+          this.vaultToast(doneToast(u));
+        };
         const settle = (poured: boolean, done?: Unlockable): void => {
           if (pourTimer) { window.clearInterval(pourTimer); pourTimer = 0; }
-          if (!poured) return;
+          if (!poured && !done) return; // funded Memory overflow can complete without a new payment
           saveShelfScroll();
           this.saveAccount();
           render();
-          if (done) this.vaultToast(doneToast(done));
+          if (done) memoryRevealDone(done);
         };
         // The one completion road every input shares: full unlock + log +
         // settle theater (used by the click, the keyboard, and the pour's
@@ -3447,7 +3501,7 @@ export class UI {
           saveShelfScroll();
           this.saveAccount();
           render();
-          this.vaultToast(doneToast(u));
+          memoryRevealDone(u);
           return true;
         };
         btn.addEventListener('pointerdown', e => {
@@ -3465,12 +3519,13 @@ export class UI {
           let held = false;
           const beginPour = (): void => {
             holdTimer = 0;
+            if (!btn.isConnected || this.memoryReveal.isOpen) return;
             held = true;
             let rate = INVEST_CFG.baseRate;
             let frac = INVEST_CFG.tapAmount; // the pour opens with the smallest step
             let last = performance.now();
             pourTimer = window.setInterval(() => {
-              if (!btn.isConnected) { settle(false); return; }
+              if (!btn.isConnected || this.memoryReveal.isOpen) { settle(poured > 0); return; }
               const now = performance.now();
               const dt = (now - last) / 1000;
               last = now;
@@ -3488,12 +3543,14 @@ export class UI {
             }, INVEST_CFG.tickMs);
           };
           holdTimer = window.setTimeout(beginPour, INVEST_CFG.holdDelayMs);
-          const release = (): void => {
+          const release = (event: PointerEvent): void => {
             btn.removeEventListener('pointerup', release);
             btn.removeEventListener('pointercancel', release);
             this.investPointerAt = performance.now(); // the release's own trailing click stays suppressed
             if (holdTimer) { window.clearTimeout(holdTimer); holdTimer = 0; }
             if (!held) {
+              // A cancelled pointer is not a purchase (including pad retirement).
+              if (event.type === 'pointercancel' || !btn.isConnected || this.memoryReveal.isOpen) return;
               // THE CLICK: unlock outright when the pool covers it; short,
               // point at the hold lane instead of quietly draining.
               if (!unlockOutright(u)) {
@@ -3768,7 +3825,7 @@ export class UI {
     const prevScroll = this.charSheet.scrollTop;
     const html = `
       <div style="position:sticky;top:-14px;z-index:2;background:var(--panel-bg);
-        margin:-14px -14px 8px;padding:14px 14px 5px;border-bottom:1px solid var(--panel-border)">
+        margin:-14px -14px 8px;padding:14px 14px 5px;border-bottom:1px solid var(--inv-heading-band-edge,var(--panel-border))">
         ${this.closeGlyphHtml()}<h2 style="border-bottom:none;margin:0;padding-bottom:2px"><span data-tip="class" style="cursor:var(--cursor-help, help);border-bottom:1px dotted var(--gold)">${m.classDef.name}</span>${vocTitle} — Level ${p.level}</h2>
         <div style="font-size:9px;color:#6a6478">starters: ${starterChips}</div>
       </div>
@@ -3967,8 +4024,8 @@ export class UI {
     if (seatNote) lines.push(`<div style="color:${seatNote.color};font-size:10px">${seatNote.text}</div>`);
     if (item.locked) {
       lines.unshift(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
-    } else if (salv && item.relicKey) {
-      lines.unshift('<div>Account Relic · store with the Oracle or equip in the Reliquary.</div>');
+    } else if (salv && item.relicKey && !this.getWorld().canRetireRelics(seat)) {
+      lines.unshift('<div>Account Relics can be sold or salvaged in your own hosted journey.</div>');
     } else if (salv) {
       const breakLine = seat.meta.items.some(i => i.uid === item.uid)
         ? `<div style="color:#e8c87a;font-weight:bold">${salv === 'sell'
@@ -4358,14 +4415,14 @@ export class UI {
       const wornGlyph = worn ? CATEGORY_GLYPHS[ITEM_BASES[worn.baseId]?.category ?? slot.accepts[0]] ?? '?' : '';
       const face = worn
         ? `<span style="font-size:${small ? 14 : 21}px;line-height:1">${wornGlyph}</span>${lockPip(worn.locked)}${pips}`
-        : `<span style="opacity:0.22;font-size:${small ? 14 : 22}px;line-height:1">${CATEGORY_GLYPHS[slot.accepts[0]] ?? '?'}</span>
-           ${small ? '' : `<span style="position:absolute;bottom:2px;left:0;right:0;font-size:7px;letter-spacing:0.5px;color:#4a4656;text-align:center">${slot.label.toUpperCase()}</span>`}`;
+        : `<span class="inv-ghost" style="font-size:${small ? 14 : 22}px;line-height:1">${CATEGORY_GLYPHS[slot.accepts[0]] ?? '?'}</span>
+           ${small ? '' : `<span class="inv-empty-label" style="position:absolute;bottom:2px;left:0;right:0;font-size:7px;letter-spacing:0.5px;text-align:center">${slot.label.toUpperCase()}</span>`}`;
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
         ${worn ? `data-drag="gearItem:${worn.uid}" data-lock-uid="${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : `title="${slot.label}"`}
         style="position:absolute;left:${seat.x * CELL}px;top:${seat.y * CELL}px;
         width:${seat.w * CELL - 2}px;height:${seat.h * CELL - 2}px;box-sizing:border-box;padding:0;
         display:flex;align-items:center;justify-content:center;
-        background:${worn ? '#221e2c' : '#171420'};border:${worn ? 2 : 1}px solid ${border};border-radius:4px;cursor:var(--cursor-point, pointer);
+        background:var(--inv-equip-fill,${worn ? '#221e2c' : '#171420'});border:${worn ? 2 : 1}px solid ${worn ? border : 'var(--inv-empty-edge,#3a3644)'};border-radius:4px;cursor:var(--cursor-point, pointer);
         ${worn?.rarity === 'unique' ? `box-shadow:0 0 10px ${border};` : ''}">${face}</button>`;
     };
     const seatedSlots = dollSlots.filter(s => DOLL_SEATS[s.id]);
@@ -4388,7 +4445,7 @@ export class UI {
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
         ${worn ? `data-drag="gearItem:${worn.uid}" data-lock-uid="${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : ''}
         style="display:block;width:${dollW}px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
-        background:#1a1722;border:1px solid ${border};border-radius:4px;cursor:var(--cursor-point, pointer)">${worn?.locked ? '🔒 ' : ''}${label}</button>`;
+        background:var(--inv-equip-fill,#1a1722);border:1px solid ${worn ? border : 'var(--inv-empty-edge,#3a3644)'};border-radius:4px;cursor:var(--cursor-point, pointer)">${worn?.locked ? '🔒 ' : ''}${label}</button>`;
     }).join('');
     const doll = figure + spare;
 
@@ -4399,7 +4456,7 @@ export class UI {
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         cells += `<div data-cell="${x}:${y}" data-drop="bagCell:${x}:${y}" style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
-          width:${CELL - 2}px;height:${CELL - 2}px;background:#16131d;border:1px solid #2a2634"></div>`;
+          width:${CELL - 2}px;height:${CELL - 2}px;background:var(--inv-cell-fill,#16131d);border:1px solid var(--inv-cell-edge,#2a2634)"></div>`;
       }
     }
     // Socket pips: each socket renders as a PRECISE drop target pip on its
@@ -4450,7 +4507,7 @@ export class UI {
         return `<div class="${memoryRecallLesson ? 'tut-glow' : ''}" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${breaking ? (salv === 'sell' && !i.locked ? `data-salv-uid="${i.uid}"` : '') : `data-drag="gearItem:${i.uid}"`} data-drop="gearTile:${i.uid}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
-          width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;
+          width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#1c1626);
           border:2px solid ${mk.color};border-radius:3px;cursor:var(--cursor-point, pointer);box-sizing:border-box;
           display:flex;align-items:center;justify-content:center">
           <span style="width:22px;height:22px;border-radius:4px;background:${mk.color}22;border:1px solid ${mk.color};
@@ -4480,7 +4537,7 @@ export class UI {
           ${verb} data-drop="gearTile:${i.uid}" ${sp ? `data-gem-skill="${i.uid}"` : ''}
           class="${teach ? 'tut-glow' : ''}${flashOf(i.uid)}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
-          width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;
+          width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#1c1626);
           border:2px solid ${color};border-radius:3px;cursor:${breaking ? 'inherit' : 'var(--cursor-point, pointer)'};box-sizing:border-box;
           display:flex;align-items:center;justify-content:center;
           ${sp?.rarity === 'legendary' ? `box-shadow:0 0 10px ${color};` : ''}">${gemTileFaceHtml(i)}${lockPip(i.locked)}${lvlBtn}</div>`;
@@ -4490,43 +4547,31 @@ export class UI {
       return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
         ${verb} data-drop="gearTile:${i.uid}"
         style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
-        width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
+        width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#221e2c);
         border:2px solid ${r.color};border-radius:3px;cursor:${breaking ? 'inherit' : 'var(--cursor-point, pointer)'};box-sizing:border-box;
         display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
         ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${CATEGORY_GLYPHS[cat] ?? '?'}${lockPip(i.locked)}${pipRow(i)}</div>`;
     }).join('');
 
-    // The SATCHEL: a little pouch flap on the panel's edge holding the
-    // essence wallet — click to flip it open/closed.
-    const satchel = `
-      <button data-satchel style="position:absolute;top:10px;right:${SATCHEL_RIGHT_PX}px;font-size:11px;
-        background:#241d2e;border:1px solid #4a3a5a;border-radius:6px 6px 2px 2px;padding:3px 9px;cursor:var(--cursor-point, pointer)"
-        title="Essence satchel (salvage currency, dies with you)">🎒 ${this.satchelOpen ? '▾' : '▸'}</button>
-      ${this.satchelOpen ? `
-        <div style="position:absolute;top:38px;right:${SATCHEL_RIGHT_PX}px;z-index:3;background:#1b1524;
-          border:1px solid #4a3a5a;border-radius:6px 2px 6px 6px;padding:8px 12px;box-shadow:0 3px 14px rgba(0,0,0,0.6)">
-          ${ESSENCE_IDS.map(id => {
-            const e = ESSENCES[id];
-            const n = m.essences[id] ?? 0;
-            return `<div style="font-size:11px;color:${e.color};margin:2px 0" title="${e.label}">${e.glyph} ${n} <span style="color:#6a6478;font-size:9px">${e.label.replace(' Essence', '')}</span></div>`;
-          }).join('')}
-          ${(() => {
-            // VESTIGES ride the satchel too — stackable socket material.
-            // Drag one onto a socket pip to inlay it (consumed on use).
-            const owned = VESTIGE_LIST.filter(v => (m.vestiges[v.id] ?? 0) > 0);
-            if (!owned.length) return '';
-            return `<div style="border-top:1px dashed #4a3a5a;margin-top:6px;padding-top:5px">
-              ${owned.map(v => {
-                const n = m.vestiges[v.id];
-                return `<div data-drag="vestige:${v.id}" data-tip="vestige" data-vestige-id="${v.id}"
-                  style="font-size:11px;color:${v.color};margin:2px 0;cursor:var(--cursor-grab, grab)">${v.glyph} ${n}
-                  <span style="color:#6a6478;font-size:9px">${v.name.split(',')[0]}</span></div>`;
-              }).join('')}
-              <div style="color:#5a5668;font-size:8px;margin-top:3px">drag (or click to lift) a vestige,
-                then a socket ◇ (a socketed item takes it in its first empty slot)</div>
-            </div>`;
-          })()}
-        </div>` : ''}`;
+    // Both wallets read the inventory owner's data and their existing catalogs.
+    // Currency needs no click; socket materials retain their lift/drag controls.
+    const essenceChips = ESSENCE_IDS.filter(id => (m.essences[id] ?? 0) > 0).map(id => {
+      const e = ESSENCES[id], n = m.essences[id];
+      return `<span class="build-essence" data-inventory-essence="${id}" style="color:${e.color}"
+        title="${esc(e.label)}: ${n}" aria-label="${esc(e.label)}: ${n}">${e.glyph} ${n}</span>`;
+    }).join('');
+    const ownedVestiges = VESTIGE_LIST.filter(v => (m.vestiges[v.id] ?? 0) > 0);
+    const vestigeSatchel = ownedVestiges.length ? `<span class="inventory-vestiges">
+      <button data-vestige-satchel aria-expanded="${this.vestigeSatchelOpen}" aria-controls="inventory-vestige-menu"
+        title="Vestiges: socket materials">🎒 ${this.vestigeSatchelOpen ? '▾' : '▸'}</button>
+      ${this.vestigeSatchelOpen ? `<span id="inventory-vestige-menu" class="inventory-vestige-menu">
+        ${ownedVestiges.map(v => `<span data-drag="vestige:${v.id}" data-tip="vestige" data-vestige-id="${v.id}"
+          style="display:block;color:${v.color};margin:2px 0;cursor:var(--cursor-grab, grab)">${v.glyph} ${m.vestiges[v.id]}
+          <span style="color:#6a6478;font-size:9px">${esc(v.name.split(',')[0])}</span></span>`).join('')}
+        <span style="display:block;color:#5a5668;font-size:8px;margin-top:3px">drag (or click to lift) a vestige,
+          then a socket ◇ (a socketed item takes it in its first empty slot)</span>
+      </span>` : ''}
+    </span>` : '';
     // Skills shares the inventory rail with every development page.
     // The pending gift lesson highlights the next reachable control.
     const flapGlow = this.getWorld().mireilleGiftLesson() !== null && !this.skillsOpen;
@@ -4537,11 +4582,10 @@ export class UI {
         style="--build-rail:${BUILD_PANEL_CFG.railWidth}px">
         <button data-buildflap class="build-ribbon ${flapGlow ? 'tut-glow' : ''}"
           aria-expanded="${this.skillsOpen}" aria-controls="skills-panel" title="Manage your learned skills and Memory Essences">
-          <span class="build-ribbon-label">📖 SKILLS</span><span class="build-wallet">${walletChips}</span>
+          <span class="build-ribbon-label">📖 SKILLS</span>
         </button>
         <button data-passiveflap class="build-ribbon" aria-expanded="${this.treeOpen}" aria-controls="passive-tree" title="Open your passive tree">
           <span class="build-ribbon-label">✧ PASSIVES</span>
-          ${m.passivePoints > 0 ? `<span>${m.passivePoints}</span>` : ''}
         </button>
         <button data-characterflap class="build-ribbon" aria-expanded="${this.charSheetOpen}" aria-controls="char-sheet" title="Open your character sheet">
           <span class="build-ribbon-label">♙ CHARACTER</span>
@@ -4569,7 +4613,7 @@ export class UI {
               const dir = on ? bsState!.dir : 'desc';
               return `<button data-bag-sort="${esc(s.id)}" title="${esc(s.label)}"
                 style="position:relative;width:22px;height:20px;padding:0;font-size:12px;line-height:18px;
-                background:${on ? '#2e2538' : '#241d2e'};border:1px solid ${on ? 'var(--gold)' : '#4a3a5a'};border-radius:4px;
+                background:${on ? '#2e2538' : 'var(--inv-control-fill,#241d2e)'};border:1px solid ${on ? 'var(--gold)' : '#4a3a5a'};border-radius:4px;
                 color:${on ? 'var(--gold)' : '#b8b0c8'};cursor:var(--cursor-point, pointer)">${s.icon}${on
                   ? `<span style="position:absolute;right:0;bottom:-3px;font-size:7px;line-height:8px;color:var(--gold)">${dir === 'desc' ? '▼' : '▲'}</span>`
                   : ''}</button>`;
@@ -4622,7 +4666,8 @@ export class UI {
     const buildChanged = this.setPanelHtml(this.buildPanel, drawer);
     this.containerPane.renderAll(live);
     this.syncInventoryPages();
-    const inventoryChanged = this.setPanelHtml(this.inventory, `${drawerHandle}${satchel}${this.closeGlyphHtml()}<h2>Inventory</h2>
+    const inventoryChanged = this.setPanelHtml(this.inventory, `${drawerHandle}${this.closeGlyphHtml()}<h2 class="inventory-header">
+      <span>Inventory</span><span class="inventory-wallet">${essenceChips}${vestigeSatchel}</span></h2>
       <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`);
     const scrollEl = this.inventory.querySelector<HTMLElement>('.inv-scroll');
     if (scrollEl) scrollEl.scrollTop = prevScroll;
@@ -4653,8 +4698,8 @@ export class UI {
   private wireInventory(): void {
     const world = this.getWorld();
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.inventory.querySelectorAll<T>(sel)];
-    this.inventory.querySelector<HTMLButtonElement>('[data-satchel]')?.addEventListener('click', () => {
-      this.satchelOpen = !this.satchelOpen;
+    this.inventory.querySelector<HTMLButtonElement>('[data-vestige-satchel]')?.addEventListener('click', () => {
+      this.vestigeSatchelOpen = !this.vestigeSatchelOpen;
       this.refreshInventory();
     });
     // THE CONTAINER DRAWERS: the ribbons beside SKILLS / PASSIVES (ui/containerPane.ts).
@@ -5003,7 +5048,7 @@ export class UI {
     const CELL = BAG_CELL_PX;
     const color = ITEM_RARITIES[item.rarity].color;
     const cat = ITEM_BASES[item.baseId]?.category ?? 'ring';
-    return `<div style="width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;border:2px solid ${color};
+    return `<div style="width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#221e2c);border:2px solid ${color};
       border-radius:3px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;
       font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;${item.rarity === 'unique' ? `box-shadow:0 0 10px ${color};` : ''}">
       ${CATEGORY_GLYPHS[cat] ?? '?'}</div>`;
@@ -5084,6 +5129,10 @@ export class UI {
   // teaching, walk-2 ruled) before the RECALL buttons arm.
 
   showRecall(uid: number, seatId?: string): void {
+    this.recallBatch.stop();
+    this.recallWorld = this.getWorld();
+    this.recallOwner = this.couchSeatFor(seatId);
+    this.recallRefreshAt = 0;
     hideTooltip(); // Retire the pouch card before opening its recall choice.
     this.ownPanel(this.recallMenu, this.couchSeatFor(seatId));
     this.recallOpen = true;
@@ -5096,9 +5145,60 @@ export class UI {
   }
 
   closeRecall(): void {
+    this.recallBatch.stop();
+    this.recallWorld = null;
+    this.recallOwner = null;
     this.recallOpen = false;
     this.recallMenu.classList.add('hidden');
     hideTooltip();
+  }
+
+  /** Reconcile a visible recall with live bag space and the surrounding panels. */
+  private syncRecall(): void {
+    if (!this.recallOpen) return;
+    const world = this.getWorld(), seat = this.panelSeat(this.recallMenu);
+    if (world !== this.recallWorld || seat !== this.recallOwner || !world.seats.includes(seat) || seat.actor.dead) {
+      this.closeRecall(); return;
+    }
+    const now = performance.now(), wasActive = this.recallBatch.active, wasPaused = this.recallBatch.paused;
+    const got = !this.escapeMenuOpen && !this.minigameActive && this.folioDrawn(this.recallMenu)
+      ? this.recallBatch.tick(world, seat, this.recallUid, now) : null;
+    if (got) this.rememberRecall(got.group, got.result);
+    let changed = !!got || wasActive !== this.recallBatch.active || wasPaused !== this.recallBatch.paused;
+    if (now >= this.recallRefreshAt) {
+      this.recallRefreshAt = now + MEMORY_RECALL_UI_CFG.refreshMs;
+      const view = world.memoryRecallView(seat, this.recallUid);
+      changed ||= this.recallViewKey !== JSON.stringify(view && [view.total, view.refusal, view.groups.map(g => [g.key, g.count])]);
+    }
+    if (changed) this.refreshRecall();
+    if (got && this.inventoryOpen && this.panelSeat(this.inventory) === seat) this.refreshInventory();
+    this.placeRecall();
+  }
+
+  private placeRecall(): void {
+    if (!this.recallOpen || !this.folioDrawn(this.recallMenu) || panelMoved(this.recallMenu)) return;
+    const c = MEMORY_RECALL_UI_CFG, scale = uiScaleNow(), edge = c.edge * scale;
+    const bottom = Math.max(edge, Math.min(window.innerHeight - edge,
+      (this.hudCluster?.()?.y ?? window.innerHeight) - edge));
+    const visible = (el: HTMLElement) => !el.classList.contains('hidden') && this.folioDrawn(el);
+    const neighbors = [this.inventory, ...this.inventoryPages.entries().map(p => p.el),
+      ...document.querySelectorAll<HTMLElement>('.build-ribbons, .folio-strip')]
+      .filter(visible).map(el => el.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0);
+    const width = c.width * scale;
+    const seat = independentPanelSeat({ left: edge, right: Math.max(edge, window.innerWidth - edge), top: edge, bottom },
+      neighbors, { left: (window.innerWidth - width) / 2, top: window.innerHeight * c.topFraction, width },
+      c.minWidth * scale, c.gap * scale);
+    this.recallMenu.dataset.recallLayout = '1';
+    for (const [key, value] of Object.entries(seat)) this.recallMenu.style.setProperty('--recall-' + key, (value / scale) + 'px');
+  }
+
+  private rememberRecall(group: string, got: MemoryRecallResult): void {
+    this.recallReveals.set(group, {
+      name: got.name, itemUid: got.itemUid, id: got.id, kind: got.kind,
+      color: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].color : (SUPPORTS[got.id]?.color ?? '#b8b8b8'),
+      sockets: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].sockets : 0,
+    });
+    this.memFlash.set(got.itemUid, Date.now() + 1700);
   }
 
   refreshRecall(): void {
@@ -5114,6 +5214,7 @@ export class UI {
     const mk = MEMORY_KINDS[this.recallKind];
     const groups = view?.groups ?? [];
     const total = view?.total ?? 0;
+    this.recallViewKey = JSON.stringify(view && [view.total, view.refusal, view.groups.map(g => [g.key, g.count])]);
     const refusal = view?.refusal ?? null;
     // THE FACET (M3, §4 lane 2 — walk-2 ruled): a Preformed pouch arms its
     // RECALL buttons only once a triad is committed. The three cards derive
@@ -5125,7 +5226,7 @@ export class UI {
       <div style="display:flex;gap:6px;margin:4px 0 6px">
         ${memoryFacets().map(f => {
           const sel = this.recallFacet === f.id;
-          return `<button data-mem-facet="${f.id}" style="flex:1;text-align:left;padding:5px 7px;
+          return `<button data-mem-facet="${f.id}" ${this.recallBatch.active ? 'disabled' : ''} style="flex:1;text-align:left;padding:5px 7px;
             background:${sel ? '#2e2538' : '#1c1824'};border:1px solid ${sel ? mk.color : '#3a3644'};
             border-radius:4px;cursor:var(--cursor-point, pointer)">
             <div style="font-size:11px;font-weight:bold;color:${sel ? mk.color : '#d8d0c0'}">${f.label}</div>
@@ -5176,7 +5277,7 @@ export class UI {
       // THE REVEAL (§3b): the row flips to the granted skill — icon, name,
       // rarity color, socket pips — until the next press re-arms it.
       const revealLine = reveal ? revealHtml(reveal) : '';
-      const canRecall = !refusal && facetChosen;
+      const canRecall = !refusal && facetChosen && !this.recallBatch.active;
       return `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #2a2634">
         ${portraitOf(def)}
         <div style="flex:1;min-width:0">
@@ -5208,11 +5309,36 @@ export class UI {
           </div>
         </div>`;
       }).join('');
-    this.recallMenu.innerHTML = `${this.closeGlyphHtml()}
-      <h3 style="margin:2px 0 2px;color:${mk.color}">${mk.name.replace(/Memory$/, 'Memories')} <span style="color:#9a94a8;font-size:11px">×${total} held</span></h3>
+    // Keep the header and batch control mounted while results change, so a
+    // pointer-down/up or keyboard focus cannot be lost to the next reveal.
+    if (!this.recallMenu.querySelector('[data-memory-body]')) {
+      this.recallMenu.innerHTML = `${this.closeGlyphHtml()}
+        <h2 class="recall-title"><span data-memory-title></span></h2>
+        <div class="recall-toolbar"><button data-mem-all type="button">Open all</button>
+          <span data-mem-progress aria-live="polite"></span></div>
+        <div data-memory-body></div>`;
+      this.recallMenu.querySelector('[data-mem-all]')!.addEventListener('click', () => {
+        if (this.recallBatch.active) this.recallBatch.stop();
+        else this.recallBatch.start(this.getWorld(), this.panelSeat(this.recallMenu), this.recallUid, this.recallFacet ?? undefined);
+        this.refreshRecall();
+      });
+    }
+    const title = this.recallMenu.querySelector<HTMLElement>('[data-memory-title]')!;
+    title.style.color = mk.color;
+    title.textContent = mk.name.replace(/Memory$/, 'Memories') + ' · ' + total + ' held';
+    const all = this.recallMenu.querySelector<HTMLButtonElement>('[data-mem-all]')!;
+    all.textContent = this.recallBatch.active ? 'Stop' : 'Open all';
+    all.disabled = !this.recallBatch.active && (!total || !facetChosen);
+    all.title = this.recallBatch.active ? 'Stop opening this pouch.'
+      : 'Open every Memory in this pouch. Pauses when the bag is full and resumes when space is available.';
+    const progress = this.recallMenu.querySelector<HTMLElement>('[data-mem-progress]')!;
+    const progressText = this.recallBatch.active
+      ? this.recallBatch.paused ? 'Paused — ' + this.recallBatch.paused : 'Opening…' : '';
+    if (progress.textContent !== progressText) progress.textContent = progressText;
+    this.recallMenu.querySelector<HTMLElement>('[data-memory-body]')!.innerHTML = `
       <div data-memory-purpose style="font-size:11px;line-height:1.5;color:#c8bce0;margin-bottom:6px">${esc(mk.recallDescription)}</div>
       ${facetStrip}
-      ${refusal ? `<div style="color:#c08a68;font-size:11px;margin-bottom:4px">${refusal}</div>` : ''}
+      ${refusal && !this.recallBatch.paused ? `<div style="color:#c08a68;font-size:11px;margin-bottom:4px">${refusal}</div>` : ''}
       ${rows || '<div style="color:#5a5668;font-size:11px">nothing held</div>'}${spent}`;
     this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-find]').forEach(el => {
       el.addEventListener('click', () => {
@@ -5224,6 +5350,7 @@ export class UI {
     });
     this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-facet]').forEach(el => {
       el.addEventListener('click', () => {
+        this.recallBatch.stop();
         this.recallFacet = el.dataset.memFacet!;
         this.refreshRecall();
       });
@@ -5231,28 +5358,15 @@ export class UI {
     this.recallMenu.querySelectorAll<HTMLElement>('[data-mem-recall]').forEach(el => {
       el.addEventListener('click', () => {
         const dropper = el.dataset.memRecall!;
-        const w = this.getWorld();
-        // The handshake: clear, dispatch, read back — a refused recall
-        // (room/seal raced the panel) leaves null and flips nothing.
-        w.memoryRecallLast = null;
-        w.requestMeta({ t: 'recallMemory', uid: this.recallUid, dropper,
-          ...(needsFacet && this.recallFacet ? { facet: this.recallFacet } : {}) });
-        // (cast: TS narrows the field to null across the dispatch, but the
-        // seat-scoped applyAction inside requestMeta just rewrote it)
-        const got = w.memoryRecallLast as (MemoryRecallResult & { seat: string }) | null;
-        if (got && got.seat === this.panelSeat(this.recallMenu).id) {
-          this.recallReveals.set(dropper, {
-            name: got.name, itemUid: got.itemUid, id: got.id, kind: got.kind,
-            color: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].color : (SUPPORTS[got.id]?.color ?? '#b8b8b8'),
-            sockets: got.kind === 'skill' ? SKILL_RARITIES[got.rarity ?? 'common'].sockets : 0,
-          });
-          this.memFlash.set(got.itemUid, Date.now() + 1700);
-        }
+        const got = requestMemoryRecall(this.getWorld(), this.panelSeat(this.recallMenu), this.recallUid,
+          dropper, needsFacet ? this.recallFacet ?? undefined : undefined);
+        if (got) this.rememberRecall(dropper, got);
         this.refreshRecall();
         if (this.inventoryOpen) this.refreshInventory();
       });
     });
     this.paintPortraitsIn(this.recallMenu);
+    this.placeRecall();
   }
 
   refreshFont(): void {
@@ -5621,7 +5735,7 @@ export class UI {
     // THE ONE BAG (M1): gear tiles and gem wrappers share m.items — the
     // sweeps split them exactly as the host's salvageBulk filters do.
     const gemItems = m.items.filter(i => i.gem);
-    const gearItems = m.items.filter(i => !i.gem && !i.mem && !i.questId && !i.relicKey);
+    const gearItems = m.items.filter(i => !i.gem && !i.mem && !i.questId && (!i.relicKey || this.getWorld().canRetireRelics(seat)));
     const gearAll = gearItems.filter(i => !i.locked);
     const gearLocked = gearItems.length - gearAll.length;
     const skillRows = gemItems.flatMap(i => {
@@ -6493,7 +6607,7 @@ export class UI {
       <div style="margin-top:6px;border:1px dashed ${v.accent}55;border-radius:4px;padding:6px">
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
           <input data-vcomm-search type="text" placeholder="Search the drop index…" value="${esc(this.vendorCommQuery)}"
-            style="flex:1;background:#141210;border:1px solid #3a352c;color:#d8d4c8;padding:3px 6px;font:inherit;font-size:11px">
+            style="flex:1;background:var(--inv-surface,#141210);border:1px solid var(--inv-edge,#3a352c);color:var(--inv-text,#d8d4c8);padding:3px 6px;font:inherit;font-size:11px">
           <button data-vcomm-close>Close</button>
         </div>
         <div style="max-height:180px;overflow-y:auto">
@@ -6578,7 +6692,7 @@ export class UI {
         for (let y = 0; y < b.h; y++) {
           for (let x = 0; x < b.w; x++) {
             cells += `<div style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
-              width:${CELL - 2}px;height:${CELL - 2}px;background:#16131d;border:1px solid #2a2634"></div>`;
+              width:${CELL - 2}px;height:${CELL - 2}px;background:var(--inv-cell-fill,#16131d);border:1px solid var(--inv-cell-edge,#2a2634)"></div>`;
           }
         }
         let tiles = '';
@@ -6641,7 +6755,7 @@ export class UI {
             }
             tiles += `<div ${holdAttr} data-tip="vgem" data-vgem="${v.id}:${idx}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
               style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
-              width:${CELL - 2}px;height:${CELL - 2}px;background:#1c1626;
+              width:${CELL - 2}px;height:${CELL - 2}px;background:var(--inv-item-fill,#1c1626);
               border:2px solid ${heldRow ? v.accent : col};border-radius:3px;cursor:${canBuy ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)'};box-sizing:border-box;
               display:flex;align-items:center;justify-content:center;
               ${e.kind === 'skill' && e.inst.rarity === 'legendary' ? `box-shadow:0 0 10px ${col};` : ''}${canBuy ? '' : 'opacity:0.55;'}">
@@ -6678,7 +6792,7 @@ export class UI {
           tiles += `<div ${holdAttr} data-tip="item" data-item-uid="${i.uid}" data-vware="${v.id}:${idx}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
             title="${entryLock ? esc(entryLock) : tradeRefusal ? esc(tradeRefusal) : afford ? `Buy: ${esc(i.name)} — ${esc(pricePlain)}` : `Not enough essence — ${esc(pricePlain)}`}"
             style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
-            width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:${mk ? '#1c1626' : '#221e2c'};
+            width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,${mk ? '#1c1626' : '#221e2c'});
             border:2px solid ${heldRow ? v.accent : (mk ? mk.color : r.color)};border-radius:3px;cursor:${canBuy ? 'var(--cursor-point, pointer)' : 'var(--cursor-default, default)'};box-sizing:border-box;
             display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
             ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}${canBuy ? '' : 'opacity:0.55;'}">${face}${priceTag}${lockPip}${badge}</div>`;
@@ -6992,7 +7106,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
         const teachSeat = lessonSkills.length > 0;
         return `<div data-drop="rackSeat:${slot}" class="${teachSeat ? 'tut-glow' : ''}"
           title="Empty seat ${label} — drag a skill here to bind it"
-          style="height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px dashed #4a4458;border-radius:5px;background:#1c1626;
+          style="height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px dashed var(--inv-empty-edge,#4a4458);border-radius:5px;background:var(--inv-cell-fill,#1c1626);
             display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px">
           <span style="font-size:9px;color:#8a8678">${label}</span>
           <span style="font-size:12px;color:#3f3950;line-height:1">◇</span>
@@ -7004,7 +7118,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
       return `<div data-drag="rackSeat:${slot}" data-drop="rackSeat:${slot}"
         data-tip="skill" data-skill-id="${sd.id}"
         style="--unlearn-size:${BUILD_PANEL_CFG.unlearnSize}px;position:relative;height:${BUILD_PANEL_CFG.rackSeatHeight}px;border:1px solid ${sd.color};border-radius:5px;
-          background:#241d2e;padding:3px 5px;overflow:hidden;cursor:var(--cursor-point, pointer)">
+          background:var(--inv-item-fill,#241d2e);padding:3px 5px;overflow:hidden;cursor:var(--cursor-point, pointer)">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <span style="font-size:8px;color:var(--gold)">${label}</span>
           ${seated.grantedBy
@@ -7019,7 +7133,7 @@ ${boosted ? `+${r.level} levels to your equipped skill from ${r.source}; its sup
             width:15px;height:15px;border-radius:2px;background:${sd.color};opacity:0.9;
             color:#0a0a0e;font-weight:bold;font-size:7px;font-family:Verdana">${skillIconSvg(sd,15)}</span>
           <span style="min-width:0">
-            <span style="display:block;font-size:10px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${skillInstanceName(seated)}</span>
+            ${this.skillTreeLinkHtml(seated, esc(skillInstanceName(seated)), 'rack-skill-name')}
             <span style="display:block;font-size:8px;color:#8a8678">Lv ${seated.level}</span>
           </span>
         </div>
@@ -7121,35 +7235,25 @@ THE CUT (fixed at the vein): ${veinLines(s.def.rollBase, s.rolled).join(' · ')}
           ${chips || `<span style="color:#8a8678">no arts captured: take a studied kind's blow</span>`}
         </div>`;
       }
-      // The skill-tree strip opens its inventory page: level-band ticks, the
-      // point count, the committed limb, a waiting-PIP that lights the
-      // handle gold while a point is free, and the Font's reset ritual when
-      // a font stands near. Chunky buttons: couch lens + pad law.
+      // Tree surfaces share one navigation verb; the whole summary is the
+      // handle, while its level-band ticks retain their individual tooltips.
       let modeRow = empowermentRank(inst) && !hasEmpowermentPassive(def)
         ? this.empowermentBudgetHtml(inst) + '<span style="color:#8a8678"> · banked until this skill has a passive slot</span>' : '';
       if (def.tree && !world.memorySecondaryRefusal(def.id)) {
         const tree = def.tree;
-        const memoryWhy = world.memorySecondaryRefusal(def.id);
         const open = inst.level >= tree.level;
         const spent = inst.treeNodes ?? [];
         const budget = treePointBudget(inst).total;
         const free = Math.max(0, budget - spent.length);
         const committed = treeSpentBranch(inst);
-        const pip = free > 0 && !memoryWhy
+        const pip = free > 0
           ? `<span title="${free} tree point${free === 1 ? '' : 's'} waiting" style="color:#ffd700">◉ ${free}</span>`
           : '';
-        modeRow = `
-          <div style="margin-top:3px;font-size:10px;color:#d8b86a;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+        modeRow = this.skillTreeLinkHtml(inst, `
             <span>Tree:</span>
-            ${memoryWhy ? `<span style="color:var(--text-dim)">${esc(memoryWhy)}</span>` : ''}
             ${committed ? `<span style="color:${def.color}">${committed.name}</span>` : open ? '<span style="color:#8a8678">unchosen</span>' : ''}
             ${this.treeLevelBarHtml(inst)}<span style="color:#8a8678">${spent.length}/${budget} pt${budget === 1 ? '' : 's'}</span> ${pip}${this.empowermentBudgetHtml(inst)}
-            ${open
-              ? `<button class="gem-chip" data-treeopen="${def.id}"
-                  style="border-color:${free > 0 && !memoryWhy ? '#ffd700' : '#d8b86a'};${free > 0 && !memoryWhy ? 'color:#ffd700;' : ''}"
-                  title="${memoryWhy ? esc(memoryWhy) : free > 0 ? 'A point waits — open the tree to spend it' : 'Open this skill\'s tree'}">⟡ Tree</button>`
-              : ''}
-          </div>`;
+          `, `tree-summary${free > 0 ? ' tree-summary-ready' : ''}`);
       }
       // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
       // landing button while a lifted graft is looking for its carrier.
@@ -7185,9 +7289,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             title="Learned but not on the bar — drag it from the strip onto a rack seat above">unseated</span>`;
       return `
         <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" data-drop="gemSock:${def.id}" style="border-left:3px solid ${def.color}">
-          <div class="name">${skillInstanceName(inst)} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
-            ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px" title="Lv ${t.level} threshold">${t.label}</span>`).join('')}
-            ${nextThresh ? `<span style="font-size:9px;color:#6a6478;margin-left:4px">Lv ${nextThresh.level}: ${nextThresh.label}</span>` : ''}
+          <div class="name">${this.skillTreeLinkHtml(inst, esc(skillInstanceName(inst)))} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
+            ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px"
+              title="${esc(`Unlocked at skill level ${t.level}: ${t.mods.map(mo => formatModLine(mo, mo.value)).join(' · ')}`)}">${esc(t.label)}</span>`).join('')}
+            ${nextThresh ? `<span style="font-size:9px;color:#8a8498;margin-left:4px"
+              title="${esc(`Unlocks at skill level ${nextThresh.level}: ${nextThresh.mods.map(mo => formatModLine(mo, mo.value)).join(' · ')}`)}">Next at Lv ${nextThresh.level}: ${esc(nextThresh.label)}</span>` : ''}
             ${this.rarityTagHtml(inst)}${rackSeatTag}
             ${replenishingDelivery(inst) ? `<span style="color:#8a8678;font-weight:normal;font-size:10px">${replenishingDelivery(inst)?.replenish?.toggle ? (inst.replenishmentPaused ? 'Toggle · paused' : 'Toggle · replenishing') : 'Passive · replenishes while seated'}</span>` : ''}
           </div>
@@ -7252,7 +7358,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       world.requestMeta({ t: 'levelSupportSocket', skillId, socket: Number(sock) });
       refresh();
     }));
-    // The tree handle follows the Skills page's owner.
+    // Tree surfaces follow the Skills page's owner. Native buttons also keep
+    // keyboard activation and the drag fabric's inner-control protection.
     q<HTMLButtonElement>('button[data-treeopen]').forEach(btn => btn.addEventListener('click', () => {
       this.openSkillTree(btn.dataset.treeopen!, this.panelSeatIds.get(container));
     }));
@@ -7477,31 +7584,29 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       if (!voc) return '';
       const open = vocationGateOpen(m.allocated, vid);
       const gateName = PASSIVE_NODES[vocationGateNodeId(vid) ?? '']?.name;
-      return ` · <span style="color:${voc.color}">${m.vocationPoints} vocation (${voc.name})</span>`
+      return `<span style="color:${voc.color}">${m.vocationPoints} vocation (${voc.name})</span>`
         + (open ? '' : ` <span style="color:#8a8678;font-size:11px">— locked: allocate ${gateName ?? 'its class start'}</span>`);
-    }).join('');
-    // The active realm's POOL: the star spends passive points; other realms
-    // read their currency wallet (earned at future shrines/communions).
+    }).join(' · ');
+    // Passive points live in the header; other realms retain their own wallet.
     const currency = activeRealm?.currency ?? 'passive';
     const poolChip = currency === 'passive'
-      ? `<span style="color:#ffd700">${m.passivePoints} points</span>`
+      ? ''
       : `<span style="color:${activeRealm?.color ?? '#ffd700'}">${m.realmPoints[currency] ?? 0} ${currency}</span>`;
     // REALM TABS — only when more than one constellation is open.
     const realmTabs = realms.length > 1 ? `<div class="realm-tabs">${realms.map(r => `
       <button class="realm-tab ${r.id === this.treeRealm ? 'active' : ''}" data-realm="${r.id}"
         style="--realm-color:${r.color ?? '#c8a84b'}" title="${r.blurb ?? ''}">${r.label}</button>`).join('')}</div>` : '';
-    // THE HEADER PARITY (2026-09-11, her ask): the same shape the Skills
-    // page wears — the close glyph FIRST (so the ✕ seats identically when
-    // the two tabs flip), one ribbon line "✧ Passive Tree" over the divider,
-    // and everything else (the realm's name, the pool, the vocation chips,
-    // search, zoom, the tips) in a tools row beneath it.
+    // Available passive points stay with their page, leaving the rail compact.
+    const passivePoints = m.passivePoints > 0
+      ? ` <span class="passive-points" title="Passive points available to allocate">· ${m.passivePoints} point${m.passivePoints === 1 ? '' : 's'}</span>` : '';
     const realmChip = activeRealm && this.treeRealm !== MAIN_REALM
-      ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b> · ` : '';
+      ? `<b style="color:${activeRealm.color ?? '#c8a84b'}">${activeRealm.label}</b>` : '';
+    const treeChips = [realmChip, poolChip, vocChips].filter(Boolean).join(' · ');
     this.passiveTree.innerHTML = `
-      ${this.closeGlyphHtml()}<h2>✧ Passive Tree</h2>
+      ${this.closeGlyphHtml()}<h2>✧ Passive Tree${passivePoints}</h2>
       ${realmTabs}
       <div class="build-tree-tools tree-tools">
-        <span>${realmChip}${poolChip}${vocChips}</span>
+        ${treeChips ? `<span>${treeChips}</span>` : ''}
         ${!DEV.passiveTreeEditor && FONT_CFG.passiveRespec.enabled ? `<button data-passive-refund-mode aria-pressed="${refundMode}"
           ${refundWhy ? 'disabled' : ''} title="${esc(refundWhy ?? 'Return a whole node and its choices to their original point pool.')}"
           style="color:#cf92f0">${refundMode ? 'Finish refunding' : 'Refund at Font'}</button>` : ''}
@@ -7519,6 +7624,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
       </div>
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${edges}${circles}</svg>`;
+    decorateInventoryPanel(this.passiveTree);
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
     // circles (never a re-render — the input keeps its focus); a refresh
@@ -7963,20 +8069,30 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** Dismiss one skill-tree page, or all currently visible skill-tree pages. */
   closeSkillTree(skillId?: string): void {
+    this.closeChoicePopup();
     const panes = skillId ? [this.skillTreePanes.get(skillId)].filter((p): p is SkillTreePane => !!p) : this.openSkillTreePanes();
     for (const pane of panes) {
       this.inventoryPages.close(`skilltree:${pane.skillId}`);
     }
   }
 
-  /** One hoverable segment per earned point, in allocation order. Partial
-   *  fill shows level progress; the number below each tick is its unlock. */
+  /** Present existing content as a tree link only when its tree is accessible. */
+  private skillTreeLinkHtml(inst: SkillInstance, content: string, classes = ''): string {
+    if (!inst.def.tree || inst.level < inst.def.tree.level || this.getWorld().memorySecondaryRefusal(inst.def.id)) {
+      return `<span class="${classes}">${content}</span>`;
+    }
+    return `<button type="button" class="skill-tree-link ${classes}" data-treeopen="${inst.def.id}"
+      aria-label="${esc(`Open ${skillInstanceName(inst)} skill tree`)}">${content}</button>`;
+  }
+
   private empowermentBudgetHtml(inst: SkillInstance): string {
     const b = treePointBudget(inst);
     return empowermentRank(inst) ? '<span style="color:#e8b878">Ability: ' + b.abilityFree + ' free · '
       + 'Empowerment: ' + b.passiveFree + '/' + b.passive + ' free (passive only)</span>' : '';
   }
 
+  /** One hoverable segment per earned point, in allocation order. Partial
+   *  fill shows level progress; the number below each tick is its unlock. */
   private treeLevelBarHtml(inst: SkillInstance, width = 110): string {
     const segments = SKILL_LEVEL_BANDS.map((level, point) => {
       const start = SKILL_LEVEL_BANDS[point - 1] ?? 0;
@@ -8014,6 +8130,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** Re-render one skill's pane, or every open pane (the drawer's beat). */
   refreshSkillTree(skillId?: string): void {
+    this.closeChoicePopup();
     const panes = this.openSkillTreePanes().filter(p => !skillId || p.skillId === skillId);
     for (const pane of panes) this.renderSkillTreePane(pane);
   }
@@ -8125,15 +8242,82 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         ${discipline ? esc(discipline) : open ? 'click a lit node to spend a point · scroll to zoom, drag to pan' : `no points yet — the tree opens at level ${tree.level}`}
       </div>`;
 
+    decorateInventoryPanel(pane.el);
     // Clicks: a lit node spends through the ordinary intent; the drawer
     // (when open) re-renders and cascades back into every open pane.
-    pane.el.querySelectorAll<SVGCircleElement>('.st-node.available').forEach(el => {
+    pane.el.querySelectorAll<SVGCircleElement>('.st-node').forEach(el => {
       el.addEventListener('click', () => {
-        world.requestMeta({ t: 'pickTreeNode', skillId: def.id, nodeId: el.dataset.node! });
+        const node = tree.nodes?.find(n => n.id === el.dataset.node);
+        if (!node || discipline) return;
+        const chosen = inst.treeNodes?.includes(node.id);
+        const choices = node.over?.summon?.arts;
+        if (!el.classList.contains('available') && (!chosen || !(choices?.balanceSchools || node.choiceActions?.length))) return;
+        if (el.classList.contains('available')) world.requestMeta({ t: 'pickTreeNode', skillId: def.id, nodeId: node.id });
         if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
+        if (choices?.balanceSchools && choices.schools?.length || node.choiceActions?.length) {
+          const anchor = pane.el.querySelector<SVGCircleElement>('[data-node="' + node.id + '"]');
+          if (anchor) this.openSkillNodeChoicePopup(inst, node, anchor, pane);
+        }
       });
     });
     this.wireSkillTreeControls(pane);
+  }
+
+  /** Allocated-node choices and actions share the passive tree's anchored picker. */
+  private openSkillNodeChoicePopup(inst: SkillInstance, node: import('../engine/skills').SkillTreeNode, el: SVGCircleElement, pane: SkillTreePane): void {
+    this.closeChoicePopup();
+    if (!inst.treeNodes?.includes(node.id)) return;
+    const spec = node.over?.summon?.arts, schools = spec?.balanceSchools ? spec.schools ?? [] : [];
+    const selected = new Set(inst.summonSchools?.length ? inst.summonSchools : schools.map(s => s.id));
+    const actions = node.choiceActions ?? [], seat = this.panelSeat(pane.el);
+    // The popup is outside the panel DOM; carry its owner's action context explicitly.
+    const send = (action: import('../net/intent').MetaAction): void => {
+      const world = this.getWorld(), previous = world.uiActionSeatId;
+      world.uiActionSeatId = seat.id;
+      try { world.requestMeta(action); } finally { world.uiActionSeatId = previous; }
+    };
+    const frameActive = seat.actor.summonToggles.has(inst.def.id) || !!seat.actor.remoteFrames?.[inst.def.id];
+    const pop = document.createElement('div'); pop.className = 'choice-popup'; pop.setAttribute('role', 'dialog');
+    const label = spec?.choicesLabel ?? node.name;
+    pop.setAttribute('aria-label', label);
+    pop.innerHTML = '<div class="choice-head">' + esc(label) + (schools.length ? '<span class="choice-count">Choose one or more. Each change immediately dismisses this skill’s current minions.</span>' : '') + '</div>'
+      + schools.map(s => '<button class="choice-opt" data-st-school="' + s.id + '"><span class="opt-name">' + esc(s.name) + '</span></button>').join('')
+      + actions.map(a => '<button class="choice-opt" data-st-action="' + a.action + '"' + (a.action === 'dismissFrame' && !frameActive ? ' disabled' : '') + '><span class="opt-name">' + esc(a.label) + '</span><span class="opt-desc">' + esc(a.description ?? '') + '</span></button>').join('')
+      + '<button class="choice-opt" data-school-close>Close</button>';
+    pop.querySelectorAll<HTMLButtonElement>('[data-st-school]').forEach(b => {
+      const id = b.dataset.stSchool!, on = selected.has(id);
+      b.setAttribute('aria-pressed', String(on)); b.classList.toggle('chosen', on);
+      b.disabled = on && selected.size === 1;
+      if (b.disabled) b.title = 'Keep at least one element selected.';
+      b.addEventListener('click', () => {
+        const next = new Set(selected); if (next.has(id)) next.delete(id); else next.add(id);
+        if (!next.size) return;
+        send({ t: 'setSummonSchools', skillId: inst.def.id, schools: [...next] });
+        if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
+        // Re-read the applied choice after validation; keep multi-selection convenient.
+        const current = this.panelSeat(pane.el).meta.knownSkills.get(inst.def.id);
+        const anchor = pane.el.querySelector<SVGCircleElement>('[data-node="' + node.id + '"]');
+        if (current && anchor) {
+          this.openSkillNodeChoicePopup(current, node, anchor, pane);
+          this.choicePopup?.querySelector<HTMLButtonElement>('[data-st-school="' + id + '"]:not(:disabled)')?.focus();
+        }
+      });
+    });
+    pop.querySelectorAll<HTMLButtonElement>('[data-st-action]').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.stAction === 'dismissFrame') send({ t: 'dismissFrame', skillId: inst.def.id });
+      this.closeChoicePopup();
+      if (this.inventoryOpen) this.refreshInventory(); else this.refreshSkillTree(pane.skillId);
+    }));
+    pop.querySelector('[data-school-close]')!.addEventListener('click', () => this.closeChoicePopup());
+    pop.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.closeChoicePopup(); } });
+    document.body.appendChild(pop);
+    const r = el.getBoundingClientRect(), p = pop.getBoundingClientRect();
+    pop.style.left = Math.max(8, Math.min(window.innerWidth - p.width - 8, r.left + r.width / 2 - p.width / 2)) + 'px';
+    pop.style.top = Math.max(8, Math.min(window.innerHeight - p.height - 8, r.top - p.height - 10)) + 'px';
+    this.choicePopup = pop;
+    const dismiss = (event: PointerEvent) => { if (this.choicePopup === pop && !pop.contains(event.target as Node)) this.closeChoicePopup(); };
+    setTimeout(() => { if (this.choicePopup === pop) { window.addEventListener('pointerdown', dismiss, true); this.choicePopupDismiss = dismiss; } }, 0);
+    pop.querySelector<HTMLButtonElement>('.choice-opt:not(:disabled)')?.focus();
   }
 
   /** A pane's viewBox from its graph's fitted box + its live zoom/pan,
@@ -8159,6 +8343,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const svg = pane.el.querySelector<SVGSVGElement>('.st-svg');
     if (!svg) return;
     const apply = (): void => {
+      this.closeChoicePopup();
       svg.setAttribute('viewBox', this.skillTreeViewBox(pane));
       const lbl = pane.el.querySelector<HTMLElement>('[data-stz="reset"]');
       if (lbl) lbl.textContent = `${Math.round(pane.zoom * 100)}%`;
@@ -8183,7 +8368,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       onClick: (e) => {
         // THE REACH: the same leeway the passive tree gives.
         const el = this.reachNode(svg, '.st-node', e);
-        if (el?.classList.contains('available')) el.dispatchEvent(new MouseEvent('click', { bubbles: false }));
+        el?.dispatchEvent(new MouseEvent('click', { bubbles: false }));
       },
     });
   }
@@ -8207,6 +8392,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     if (node.description) lines.push(node.description);
     const over = node.over;
     const summonTree = over?.summon;
+    if (have && summonTree?.arts?.balanceSchools) {
+      const selected = summonTree.arts.schools?.filter(s => !inst.summonSchools?.length || inst.summonSchools.includes(s.id));
+      if (selected?.length) lines.push('Selected: ' + selected.map(s => s.name).join(', ') + '. Click to change.');
+    }
+    if (have && node.choiceActions?.length) lines.push('Click for ' + node.choiceActions.map(a => a.label).join(', ') + '.');
     if (summonTree?.count !== undefined) lines.push(`${summonTree.count} summoned per birth`);
     if (summonTree?.maxActive !== undefined) lines.push(`base active cap ${summonTree.maxActive}`);
     if (summonTree?.duration !== undefined) lines.push(summonTree.duration ? `base lifespan ${summonTree.duration}s` : 'no lifespan limit');
@@ -10022,9 +10212,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  against every run they have ever finished. Renders into the Vault's
    *  screen element (one full-screen surface, two faces). */
   showChronicle(onClose?: () => void): void {
+    const sideContext = sideScreenContext();
     this.hideAll();
     const acc = this.getAccount();
     const render = (): void => {
+      const sideFocus = captureSideScreenFocus(this.accountScreen);
       const sort = this.chronicleSort;
       const rows = [...acc.runRecords];
       if (sort === 'essence') rows.sort((a, b) => b.essence - a.essence || b.at - a.at);
@@ -10044,13 +10236,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div class="chron-row${r.at === latestAt ? ' chron-latest' : ''}">
             <span class="chron-rank">#${i + 1}</span>
             <span class="chron-who">${who}</span>
-            <span>L${r.level}</span>
-            <span>${r.zones} zones</span>
-            <span>${r.kills} kills</span>
-            <span class="chron-reason">${reasonFace(r)}</span>
-            <span class="chron-ess" title="${META_CURRENCY_LABEL} minted at the reckoning">${r.essence}</span>
-            <span class="chron-ren" title="Renown — the journey score">${r.renown}</span>
-            <span class="chron-when">${new Date(r.at).toLocaleDateString()}</span>
+            <span data-label="Level">${r.level}</span>
+            <span data-label="Zones">${r.zones}</span>
+            <span data-label="Kills">${r.kills}</span>
+            <span class="chron-reason" data-label="End">${reasonFace(r)}</span>
+            <span class="chron-ess" data-label="${META_CURRENCY_LABEL}" title="${META_CURRENCY_LABEL} minted at the reckoning">${r.essence}</span>
+            <span class="chron-ren" data-label="Renown" title="Renown — the journey score">${r.renown}</span>
+            <span class="chron-when" data-label="When">${new Date(r.at).toLocaleDateString()}</span>
           </div>`;
       };
       const sortBtn = (id: typeof sort, label: string): string =>
@@ -10073,6 +10265,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : `<div class="vault-empty">No runs remembered yet. Conclude one — however it goes — and the chronicle begins.</div>`}
         </div>
         <div class="vault-foot acct-btns"><button id="chron-close">Back</button></div>`;
+      mountSideScreen(this.accountScreen, SIDE_SCREENS.chronicle, sideContext, sideFocus);
       this.accountScreen.querySelectorAll<HTMLElement>('[data-chron-sort]').forEach(btn => {
         btn.addEventListener('click', () => {
           this.chronicleSort = btn.dataset.chronSort as typeof sort;
@@ -10182,6 +10375,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  allowHold policy (wired in main.ts) refuses the hold in live co-op —
    *  a shared world is never one player's to stop. */
   showEscapeMenu(): void {
+    if (this.saveExitPending) return;
     // THE HARVEST PAUSE LAW (engine/harvest.ts): while a rite's world-freeze
     // stands the pause toggle REFUSES — a pause atop the freeze would hold
     // the sequence prompt still for free reading (the anti-memorize law).
@@ -10191,6 +10385,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       this.getWorld().harvestPauseRefused();
       return;
     }
+    this.closeCodexView();
     this.escapeMenuOpen = true;
     this.getWorld().timeflow.holdSurface('menu:escape');
     const root = this.escapeMenu;
@@ -10245,10 +10440,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         : ` title="The run is saved exactly as it stands — ${rosterMode
           ? 'resume it from Immortal Vessels at the main menu' : 'Continue Run resumes it'}"`;
       root.innerHTML = `
-        ${this.closeGlyphHtml('Resume (Esc)')}<h1>Paused</h1>
+        ${this.closeGlyphHtml('Resume (Esc)')}${hollowWakeMenuHeader('menu')}<h1>Paused</h1>
         <div class="esc-btns">
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
+          <button id="esc-codex">Codex</button>
           <button id="esc-keys">Options</button>
           <button id="esc-end"${endTitle}>${this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
           <button id="esc-close"${closeTitle}>${this.isCoopClient() || sceneLive ? 'Exit Game' : 'Save & Exit'}</button>
@@ -10262,6 +10458,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         this.hideEscapeMenu();
         this.onCouchLeave!();
       });
+      document.getElementById('esc-codex')!.addEventListener('click', () => this.codexView(root, showMain));
       document.getElementById('esc-keys')!.addEventListener('click', () => this.renderOptions(root, showMain));
       document.getElementById('esc-end')!.addEventListener('click', () => {
         // CLIENT: world is a render SHELL — never run host-authoritative endRun()
@@ -10283,11 +10480,29 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         }
       });
       document.getElementById('esc-close')!.addEventListener('click', () => {
-        try { window.close(); } catch { /* browsers block closing non-script-opened tabs */ }
         root.innerHTML = `
-          ${this.closeGlyphHtml('Resume (Esc)')}<h1>Progress Saved</h1>
-          <div class="acct-head">Your account and character are saved. Close this browser tab to exit.</div>
-          <div class="esc-btns"><button id="esc-back2">Back</button></div>`;
+          ${this.closeGlyphHtml('Resume (Esc)')}${hollowWakeMenuHeader('menu')}<h1>${this.isCoopClient() || sceneLive ? 'Exit Game' : 'Save &amp; Exit'}</h1>
+          <div class="acct-head">${this.isCoopClient()
+            ? 'Leave this co-op session and choose where to go.' : sceneLive
+              ? 'Your account progress is kept. This scene will restart when you return.'
+              : 'Save your progress and choose where to go.'}</div>
+          <div class="esc-btns">
+            ${SAVE_EXIT_DESTINATIONS.map(d => `<button data-save-exit="${d.id}" title="${esc(d.hint)}">${esc(d.label)}</button>`).join('')}
+            <button id="esc-back2">Back</button>
+          </div>`;
+        for (const destination of SAVE_EXIT_DESTINATIONS) {
+          root.querySelector(`[data-save-exit="${destination.id}"]`)!.addEventListener('click', async () => {
+            if (this.saveExitPending || !this.onSaveExit) return;
+            this.saveExitPending = true;
+            root.innerHTML = '<h1>Saving…</h1>';
+            try { await this.onSaveExit(destination.id); }
+            catch (error) {
+              root.innerHTML = `<h1>Unable to Save</h1><div class="acct-head">${esc(String(error))}</div>
+                <div class="esc-btns"><button id="esc-back2">Back</button></div>`;
+              document.getElementById('esc-back2')!.addEventListener('click', showMain);
+            } finally { this.saveExitPending = false; }
+          });
+        }
         document.getElementById('esc-back2')!.addEventListener('click', showMain);
       });
     };
@@ -10298,6 +10513,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   }
 
   hideEscapeMenu(): void {
+    if (this.saveExitPending) return;
+    this.closeCodexView();
     this.escapeMenuOpen = false;
     this.escRefresh = null;
     this.getWorld().timeflow.release('menu:escape'); // the world breathes again
@@ -10319,6 +10536,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   /** Shared keybind rebind view, rendered into `root` (escape menu OR start
    *  menu). `onBack` returns to whichever menu opened it. */
   private renderOptions(root: HTMLElement, onBack: () => void): void {
+    const sideFocus = captureSideScreenFocus(root);
     this.disarmRebind(); // drop any capture left armed by a prior render
     const scrollTop = root.querySelector<HTMLElement>('.options-body')?.scrollTop ?? 0;
     const s = this.getSettings();
@@ -10620,6 +10838,10 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-castslot" title="Outline the hotbar slot owning the current cast.">${s.castSlotHint ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Damage Number Display</span>
+        <button id="opt-damagesum" title="SUMMED adds damage from all sources on each target while popups arrive within ${DAMAGE_TEXT_CFG.gapSec} seconds of each other. A longer pause starts a new total.">${s.summedDamageText ? 'SUMMED' : 'SEPARATE'}</button>
+      </div>
+      <div class="rebind-row">
         <span>Floating Number Placement</span>
         <button id="opt-floatavoid" title="FIXED keeps original positions. AVOID BODIES shifts numbers away from visible bodies.">${s.floatingTextAvoidance ? 'AVOID BODIES' : 'FIXED'}</button>
       </div>
@@ -10644,10 +10866,19 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-speechtyping" title="Townsfolk tell their talk-bubble lines glyph by glyph, as if speaking. OFF shows each line whole at once: same words, no wait.">${s.speechTyping ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Vault Memory Reveals</span>
+        <button id="opt-memoryreveal" title="CINEMATIC reveals each Memory with a skippable animation. INSTANT unlocks immediately; View last result remains available in the Vault.">${s.memoryReveal === 'instant' ? 'INSTANT' : 'CINEMATIC'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Autoplay Memory Skill Previews</span>
+        <button id="opt-memorypreview" title="Automatically play the unlocked skill on the reveal screen. Reduced-motion preferences always require pressing Play.">${s.memoryPreview ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
         <span>Hover Nameplates</span>
         <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
     root.innerHTML = `
+      ${root === this.escapeMenu ? hollowWakeMenuHeader() : ''}
       <h1>Options</h1>
       ${tabStrip}
       <div class="options-body">${tab === 'controls' ? controlsTab
@@ -10655,6 +10886,14 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         : tab === 'visuals' ? visualsTab
         : interfaceTabHead}</div>
       <div class="esc-btns options-footer"><button id="esc-back">Back</button></div>`;
+    if (root === this.startMenu) {
+      // Group only the fixed heading/tabs; the settings and Back keep their own regions.
+      const head = document.createElement('div');
+      head.className = 'side-options-head';
+      head.append(root.querySelector('h1')!, root.querySelector('.book-tabs')!);
+      root.prepend(head);
+      mountSideScreen(root, SIDE_SCREENS.options, 'entrance', sideFocus);
+    }
     root.querySelector<HTMLElement>('.options-body')!.scrollTop = scrollTop;
     // Tab strip: remember the shelf, drop any armed capture, re-render.
     root.querySelectorAll<HTMLElement>('[data-opttab]').forEach(btn => {
@@ -10679,12 +10918,20 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
-    for (const [id, key] of [['opt-supportready', 'supportReadyHint'], ['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
+    for (const [id, key] of [['opt-damagesum', 'summedDamageText'], ['opt-supportready', 'supportReadyHint'], ['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
       root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
         const settings = this.getSettings(); settings[key] = !settings[key];
         this.saveSettings(); this.renderOptions(root, onBack);
       });
     }
+    root.querySelector<HTMLElement>('#opt-memoryreveal')?.addEventListener('click', () => {
+      const settings = this.getSettings(); settings.memoryReveal = settings.memoryReveal === 'instant' ? 'cinematic' : 'instant';
+      this.saveSettings(); this.renderOptions(root, onBack);
+    });
+    root.querySelector<HTMLElement>('#opt-memorypreview')?.addEventListener('click', () => {
+      const settings = this.getSettings(); settings.memoryPreview = !settings.memoryPreview;
+      this.saveSettings(); this.renderOptions(root, onBack);
+    });
     root.querySelector<HTMLElement>('#opt-skillartwork')?.addEventListener('click', () => {
       const settings = this.getSettings(); settings.skillArtwork = !settings.skillArtwork;
       this.saveSettings(); this.refreshInventory(true); if (this.vendorOpen) this.refreshVendor(); this.renderOptions(root, onBack);
@@ -11178,42 +11425,21 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     // THE RESUME FACE: Continue Run says WHO it resumes on hover — the quit
     // flush's exact-resume promise, spoken at the door.
     const cont = this.continueSave;
-    const contWho = cont
-      ? `${cont.name ?? CLASSES.find(c => c.id === cont.classId)?.name ?? 'the character'}, Level ${cont.level}`
-      : '';
-    const canContinue = !!cont;
-    // THE IMMORTAL SHELF: however many vessels the account swears, the menu
-    // proper spends ONE button on them — the roster lives in its own pane
-    // (renderImmortalRoster), so the option count here stays flat and no
-    // roster row can outgrow the bounding box. A fallen vessel still calls
-    // from the label so the covenant's debt is never buried a click deep.
-    const fallenN = acc.roster.filter(e => e.fallen).length;
-    const immortalsBtn = acc.roster.length
-      ? `<button id="sm-immortals">Immortal Vessels (${acc.roster.length})${fallenN
-          ? ` <span style="font-size:10px;color:#e85050">· ${fallenN} fallen</span>` : ''}</button>`
-      : '';
-    // A pending reckoning (essence standing on the account — a mid-reckoning
-    // quit, or a pre-seal-law save) surfaces on the Vault button: the seal
-    // law inside the Vault settles it the moment that visit closes.
-    const pending = isVaultAvailable(acc) && acc.credits > 0;
-    this.startMenu.innerHTML = `
-      <h1>${GAME_TITLE.toUpperCase()}</h1>
-      <div class="acct-head">Account Level <b>${acc.level}</b>${pending
-        ? ` · <b style="color:var(--gold)">${acc.credits}</b> ${META_CURRENCY_LABEL} awaiting the Reckoning` : ''}</div>
-      ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
-      <div class="esc-btns">
-        <button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>
-        <button id="sm-continue" ${canContinue
-          ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${canContinue
-          ? 'Continue Run' : 'No Run to Continue'}</button>
-        ${immortalsBtn}
-        ${isVaultAvailable(acc) ? `<button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
-          ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>` : ''}
-        <button id="sm-chronicle">Chronicle of Runs${acc.runRecords.length ? ` (${acc.runRecords.length})` : ''}</button>
-        <button id="sm-keys">Options</button>
-        ${h.onCoop ? '<button id="sm-coop">Co-op (Beta)</button>' : ''}
-        <button id="sm-exit">Exit Game</button>
-      </div>`;
+    const className = cont ? CLASSES.find(c => c.id === cont.classId)?.name ?? 'Adventurer' : '';
+    const previousFocus = this.startMenu.contains(document.activeElement) ? document.activeElement?.id : undefined;
+    this.startMenu.innerHTML = frontScreenHtml({
+      firstLife: sceneDue(acc, 'prologue'),
+      accountLevel: acc.level,
+      vessels: acc.roster.length,
+      fallen: acc.roster.filter(e => e.fallen).length,
+      records: acc.runRecords.length,
+      vaultAvailable: isVaultAvailable(acc),
+      pendingEssence: isVaultAvailable(acc) ? acc.credits : 0,
+      currency: META_CURRENCY_LABEL,
+      coopAvailable: !!h.onCoop,
+      notice: h.notice,
+      resume: cont ? { name: cont.name || className, className, level: cont.level, mode: modeById(cont.modeId).name } : undefined,
+    });
     document.getElementById('sm-start')!.addEventListener('click', () => {
       this.startMenu.classList.add('hidden');
       // THE MU REROUTE: when the shell armed onBeginRun, the press walks the
@@ -11233,6 +11459,10 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     document.getElementById('sm-immortals')?.addEventListener('click', () => this.renderImmortalRoster());
     document.getElementById('sm-vault')?.addEventListener('click', () =>
       this.showAccountScreen(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
+    document.getElementById('sm-codex')!.addEventListener('click', () => {
+      this.startMenuBack = () => { this.closeCodexView(); this.renderStartMenu(); };
+      this.codexView(this.startMenu, this.startMenuBack);
+    });
     document.getElementById('sm-chronicle')!.addEventListener('click', () =>
       this.showChronicle(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
     document.getElementById('sm-keys')!.addEventListener('click', () => {
@@ -11244,15 +11474,19 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       };
       this.renderOptions(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster));
     });
-    // THE VISIBLE DOOR: full-screen and mobile players get a real exit at the
-    // menu — never only the window's own ✕. window.close() ends the desktop
-    // shell; a plain browser tab refuses it, so the fallback screen says the
-    // truth instead (everything saved, safe to close by hand).
-    document.getElementById('sm-exit')!.addEventListener('click', () => {
-      try { window.close(); } catch { /* browsers block closing non-script-opened tabs */ }
-      this.renderExitScreen();
-    });
+    document.getElementById('sm-exit')!.addEventListener('click', () => { void this.exitGame(); });
     this.onStartMenuRender?.();
+    bindFrontScreen(this.startMenu, previousFocus);
+  }
+
+  /** Explicit exits wait for the existing disk writers before stopping the
+   * desktop's loopback server. Browser storage remains the static-host fallback. */
+  async exitGame(): Promise<void> {
+    this.startMenuBack = () => {}; // keep background refreshes/back presses off the saving view
+    this.startMenu.innerHTML = '<h1>Saving…</h1>';
+    await flushPendingDiskSaves();
+    this.renderExitScreen();
+    try { requestAppExit(); } catch { /* keep the browser/manual-close fallback */ }
   }
 
   /** THE VISIBLE DOOR's browser fallback (Exit Game with window.close()
@@ -11273,9 +11507,11 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
    *  listed straight from the index cards — no slot file is read until one is
    *  chosen. Each vessel is ONE tile: the whole face resumes, and its corner
    *  ✕ (the in-game panels' close-glyph language) is the deliberate release —
-   *  confirmed, durable wipe. Tiles pack two to a row, so the shelf grows
-   *  DOWN the pane instead of out of it. */
+   *  confirmed, durable wipe. sideScreenConfig supplies the frame; cards adapt to
+   *  viewport/UI scale while its Back and Vault controls remain anchored. */
   private renderImmortalRoster(notice?: string): void {
+    const sideFocus = captureSideScreenFocus(this.startMenu);
+    const rosterScroll = this.startMenu.querySelector<HTMLElement>('.roster-body')?.scrollTop ?? 0;
     const acc = this.getAccount();
     const h = this.startHandlers!;
     this.startMenuBack = () => this.renderStartMenu();  // the pane's ✕ glyph = Back
@@ -11289,30 +11525,34 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       const bColor = fallen ? '#e85050' : mode.color;
       return `
         <div class="sm-roster-tile${fallen ? ' fallen' : ''}">
-          <button class="sm-roster-go" data-cid="${esc(e.charId)}"
+          <button class="sm-roster-go" id="sm-roster-go-${esc(e.charId)}" data-cid="${esc(e.charId)}"
             ${fallen ? `title="Fallen — resurrect in the Vault (${e.fallen!.fee} ${META_CURRENCY_LABEL}, invested across runs)"` : ''}>
             <span class="sm-roster-name">⟢ ${esc(e.name)}</span>
-            <span class="sm-roster-sub">Level ${e.level}
+            <span class="sm-roster-sub">${esc(CLASSES.find(c => c.id === e.classId)?.name ?? e.classId)} · Level ${e.level}
               <span style="font-size:10px;color:${bColor};border:1px solid ${bColor};
                 border-radius:6px;padding:0 5px;margin-left:4px">${badge}</span></span>${fallen
               ? `<span class="sm-roster-fee">☠ ${e.fallen!.fee} ${META_CURRENCY_LABEL} to resurrect</span>` : ''}
           </button>
-          <button class="sm-roster-del" data-cid="${esc(e.charId)}"
-            title="Release this vessel: the character is permanently discarded">✕</button>
+          <button class="sm-roster-del" id="sm-roster-del-${esc(e.charId)}" data-cid="${esc(e.charId)}"
+            aria-label="Release ${esc(e.name)}" title="Release this vessel: the character is permanently discarded">✕</button>
         </div>`;
     }).join('');
     const fallenN = acc.roster.filter(e => e.fallen).length;
     this.startMenu.innerHTML = `
-      ${this.closeGlyphHtml('Back')}
-      <h1>IMMORTAL VESSELS</h1>
-      <div class="acct-head">${acc.roster.length} vessel${acc.roster.length === 1 ? '' : 's'} sworn
-        — resume one, or release it from its corner ✕.</div>
-      ${notice ? `<div class="acct-head" style="color:#e8b06a">${notice}</div>` : ''}
-      <div class="esc-btns">
-        <div class="sm-roster">${tiles}</div>
+      <div class="roster-head">
+        ${this.closeGlyphHtml('Back')}
+        <h1>Immortal Vessels</h1>
+        <div class="acct-head">${acc.roster.length} vessel${acc.roster.length === 1 ? '' : 's'} sworn
+          — resume one, or release it from its corner ✕.</div>
+        ${notice ? `<div class="acct-head roster-notice" role="status">${notice}</div>` : ''}
+      </div>
+      <div class="roster-body"><div class="sm-roster">${tiles}</div></div>
+      <div class="roster-foot">
         ${fallenN && isVaultAvailable(acc) ? '<button id="sm-imm-vault">Vault — the Fallen shelf</button>' : ''}
         <button id="sm-imm-back">Back</button>
       </div>`;
+    mountSideScreen(this.startMenu, SIDE_SCREENS.immortals, 'entrance', sideFocus);
+    this.startMenu.querySelector<HTMLElement>('.roster-body')!.scrollTop = rosterScroll;
     this.startMenu.querySelectorAll<HTMLElement>('.sm-roster-go').forEach(btn => {
       btn.addEventListener('click', () => {
         const entry = this.getAccount().roster.find(r => r.charId === btn.dataset.cid);
@@ -11546,6 +11786,8 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
 
   hideAll(): void {
     this.menuBar.closeTray();
+    this.memoryReveal.close();
+    this.closeCodexView();
     this.conversation?.reset(); this.conversationSpeakerId = null;
     this.closeInventory();
     dndCancel(); // also clear gestures on panels outside inventory
@@ -11554,8 +11796,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
     this.salvageMenu.classList.add('hidden');
     this.fontOpen = false;
     this.fontMenu.classList.add('hidden');
-    this.recallOpen = false;
-    this.recallMenu.classList.add('hidden');
+    this.closeRecall();
     this.oracleOpen = false;
     this.oracleTargetUid = null;
     this.oracleMenu.classList.add('hidden');

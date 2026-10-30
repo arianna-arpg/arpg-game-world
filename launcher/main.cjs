@@ -79,6 +79,7 @@ const { startGameServer } = require('./server.cjs');
 const { createDeadman, skipVerdict } = require('./perfdeadman.cjs');
 const updates = require('./updates.cjs');
 const branches = require('./branches.cjs');
+const releases = require('./releases.cjs');
 
 // ------------------------------------------------------------------- config
 
@@ -231,20 +232,29 @@ let selectedBranch = MAIN_BRANCH;
 let branchOnline = false;
 let branchNote = 'Refresh branches to see the latest GitHub list.';
 let mainUnavailable = '';
+let releaseOffline = false;
+let offeredGameUpdate = false;
+const publishedGameMode = () => !SMOKE && !PERF && !devMode().developer;
 const BRANCH_CACHE = path.join(app.getPath('userData'), 'branch-builds');
 const branchHome = (/** @type {string} */ name) => branches.branchDir(BRANCH_CACHE, String(cfg.repo.github), name);
 const branchInstalled = () => {
   const b = branches.installed(branchHome(selectedBranch));
   return b?.branch === selectedBranch ? b : null;
 };
+/** Only catalog-stamped games qualify as a released offline fallback. */
+function releasedBuild() {
+  return releases.cachedGame(branchHome(selectedBranch), selectedBranch, selectedBranch === MAIN_BRANCH ? DIST : null);
+}
 const activeSaves = () => selectedBranch === MAIN_BRANCH ? SAVES : path.join(branchHome(selectedBranch), 'saves');
 const activeSession = () => selectedBranch === MAIN_BRANCH ? session.defaultSession
   : session.fromPartition('persist:branch-' + branches.key(String(cfg.repo.github).toLowerCase() + ':' + selectedBranch));
 const branchApi = () => ({ gh: String(cfg.repo.github), api: updateCfg().api, timeoutMs: updateCfg().probeTimeoutMs });
 function branchStatus() {
-  const build = selectedBranch === MAIN_BRANCH ? null : branchInstalled();
+  const published = publishedGameMode(), released = published ? releasedBuild() : null;
+  const build = published ? released : selectedBranch === MAIN_BRANCH ? null : branchInstalled();
   return { selectedBranch, mainBranch: MAIN_BRANCH, branchOnline, branchNote,
-    branchBuild: build ? { commit: build.commit, version: build.version } : null,
+    publishedGame: published, releaseOffline,
+    branchBuild: build ? { commit: build.commit, version: build.version, buildId: released?.identity.buildId } : null,
     branches: [{ name: MAIN_BRANCH, commit: '' }, ...branchRows.filter(b => b.name !== MAIN_BRANCH)] };
 }
 async function closeGameServer() {
@@ -265,6 +275,20 @@ async function chooseBranch(/** @type {string} */ name) {
 let branchProbe = async () => SMOKE || PERF ? [] : branches.listBranches(branchApi());
 async function refreshBranches() {
   if (gameWin && !gameWin.isDestroyed()) return { ok: false, error: 'Close the game before refreshing branches.' };
+  if (publishedGameMode()) {
+    try {
+      const catalog = await releases.readCatalog({ gh: String(cfg.repo.github) });
+      branchRows = catalog.entries.map(e => ({ name: e.identity.branch, commit: e.identity.commit }));
+      branchOnline = true; releaseOffline = false;
+      branchNote = 'Browser and desktop follow the same published game versions.';
+      if (!branchRows.some(b => b.name === selectedBranch)) await chooseBranch(MAIN_BRANCH);
+    } catch (e) {
+      branchOnline = false; releaseOffline = true;
+      branchNote = 'Release service unavailable. A downloaded game can still be played offline.';
+      // Retain an already selected downloaded branch; never switch its saves.
+    }
+    return { ok: true, ...branchStatus() };
+  }
   try {
     branchRows = await branchProbe();
     branchOnline = true;
@@ -295,6 +319,16 @@ async function configureMainCheckout() {
   SOURCE_ROOT = root; DIST = path.join(root, 'dist'); STAMP = path.join(DIST, '.build-head'); SAVES = resolveSavesDir();
 }
 async function checkBranchBuild() {
+  if (publishedGameMode()) {
+    try {
+      const catalog = await releases.readCatalog({ gh: String(cfg.repo.github) });
+      const entry = catalog.entries.find(e => e.identity.branch === selectedBranch);
+      if (!entry) return { ok: false, hint: 'This branch has no published browser/desktop release.' };
+      const local = releasedBuild();
+      return { ok: true, mode: 'branch', behind: local?.identity.buildId === entry.identity.buildId ? 0 : 1, ahead: 0,
+        changes: [{ hash: entry.identity.commit.slice(0, 8), subject: 'Published game for ' + selectedBranch }] };
+    } catch (e) { return { ok: false, hint: 'Release service unavailable. Your downloaded game is unchanged.' }; }
+  }
   const found = await branches.findBundle(branchApi(), selectedBranch);
   const local = branchInstalled();
   if (!found) return { ok: false, hint: 'No verified build has been published for this branch yet. Choose Main or try again after its build finishes.' };
@@ -302,6 +336,16 @@ async function checkBranchBuild() {
     changes: [{ hash: found.commit.slice(0, 8), subject: 'Latest published build of ' + selectedBranch }] };
 }
 async function prepareBranchBuild() {
+  if (publishedGameMode()) {
+    const before = releasedBuild()?.identity.buildId;
+    const result = await releases.prepareGame({ gh: String(cfg.repo.github), branch: selectedBranch,
+      home: branchHome(selectedBranch), fallbackRoot: selectedBranch === MAIN_BRANCH ? DIST : null,
+      onProgress: p => sendProgress({ pct: p.pct, gotMb: p.got / 1048576, totalMb: p.total / 1048576, tag: selectedBranch }) });
+    releaseOffline = result.offline;
+    if (result.error) log('Published game unavailable: ' + result.error);
+    if (result.game?.identity.buildId !== before) await closeGameServer();
+    return !!result.game;
+  }
   const found = await branches.findBundle(branchApi(), selectedBranch);
   if (!found) return false;
   if (branchInstalled()?.commit === found.commit) return true;
@@ -381,6 +425,7 @@ app.on('render-process-gone', (_e, _wc, d) => boot(`render-process-gone reason=$
 
 /** @type {BrowserWindow | null} */ let launcherWin = null;
 /** @type {BrowserWindow | null} */ let gameWin = null;
+let gameQuitRequested = false;
 /** @type {import('node:http').Server | null} */ let gameServer = null;
 /** @type {string | null} */ let gameUrl = null;
 /** What long operation is in flight (guards double-clicks); null = idle. */
@@ -569,6 +614,12 @@ function setChannel(id) {
 }
 
 async function checkUpdates() {
+  offeredGameUpdate = false;
+  if (publishedGameMode()) {
+    const game = await checkBranchBuild();
+    offeredGameUpdate = game.ok && (game.behind ?? 0) > 0;
+    if (!game.ok || offeredGameUpdate || selectedBranch !== MAIN_BRANCH) return game;
+  }
   if (selectedBranch !== MAIN_BRANCH) return checkBranchBuild();
   if (UPDATE_MODE === 'none') return { ok: true, behind: 0, ahead: 0, changes: [], mode: 'none' };
   if (UPDATE_MODE === 'release') return checkReleaseUpdates();
@@ -775,9 +826,9 @@ async function ensureBuilt(force) {
 
 async function update() {
   if (gameWin && !gameWin.isDestroyed()) return { ok: false, error: 'Close the game before updating.' };
-  if (selectedBranch !== MAIN_BRANCH) {
+  if (selectedBranch !== MAIN_BRANCH || publishedGameMode() && offeredGameUpdate) {
     await refreshBranches();
-    if (selectedBranch === MAIN_BRANCH) return { ok: false, error: branchNote };
+    if (selectedBranch === MAIN_BRANCH && !publishedGameMode()) return { ok: false, error: branchNote };
     if (!await prepareBranchBuild()) return { ok: false, error: 'No verified build has been published for this branch yet.' };
     return { ok: true };
   }
@@ -886,8 +937,10 @@ async function resetAllData() {
 
 async function ensureServer() {
   if (gameServer && gameUrl) return gameUrl;
+  const released = publishedGameMode() ? releasedBuild() : null;
+  if (publishedGameMode() && !released) throw new Error('No published game is downloaded. Connect once before playing offline.');
   const started = await startGameServer({
-    root: selectedBranch === MAIN_BRANCH ? DIST : /** @type {import('./branches.cjs').Installed} */ (branchInstalled()).root, savesDir: activeSaves(),
+    root: released?.root ?? (selectedBranch === MAIN_BRANCH ? DIST : /** @type {import('./branches.cjs').Installed} */ (branchInstalled()).root), savesDir: activeSaves(),
     host: cfg.server.host, port: cfg.server.port,
   });
   gameServer = started.server;
@@ -970,7 +1023,10 @@ function writeLocalConfig(mutate) {
  * its terminal decision.
  * @param {any} patch
  */
-function setDev(patch) {
+async function setDev(patch) {
+  if (gameWin && !gameWin.isDestroyed()) return { ok: false, error: 'Close the game before changing developer settings.' };
+  await closeGameServer();
+  stopSourceServer();
   const next = { ...(cfg.dev || {}) };
   for (const k of ['developer', 'liveSource', 'forges', 'passiveEditor', 'console']) {
     if (patch && typeof patch[k] === 'boolean') next[k] = patch[k];
@@ -1075,9 +1131,13 @@ function createGameWindow(opts) {
       devTools: tools,
       session: activeSession(),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
-      // perfBeat: the perf harness alone loads the deadman's beat bridge
-      // (perf-preload.cjs → window.__perfBeat). Play/smoke stay preload-free.
-      ...(opts?.perfBeat ? { preload: path.join(__dirname, 'perf-preload.cjs') } : {}),
+      // All game windows receive explicit quit; published builds retain their
+      // save identity/offline status, and only perf opts into its beat channel.
+      preload: path.join(__dirname, 'game-preload.cjs'),
+      additionalArguments: opts?.perfBeat ? ['--hollow-wake-perf-beat'] : publishedGameMode() ? [
+          '--hollow-storage-scope=' + (releasedBuild()?.identity.desktopStorageScope ?? ''),
+          '--hollow-offline=' + String(releaseOffline),
+        ] : [],
     },
   });
   if (cfg.window.maximized && !fullscreen && opts?.show !== false) w.maximize();
@@ -1093,7 +1153,7 @@ function createGameWindow(opts) {
   });
   w.on('closed', () => {
     gameWin = null;
-    if (!SMOKE && cfg.launcher.returnToLauncher && launcherWin && !launcherWin.isDestroyed()) {
+    if (!SMOKE && !gameQuitRequested && cfg.launcher.returnToLauncher && launcherWin && !launcherWin.isDestroyed()) {
       launcherWin.show();
       launcherWin.webContents.send('launcher:state', { t: 'game-closed' });
     } else if (!SMOKE) {
@@ -1105,12 +1165,15 @@ function createGameWindow(opts) {
 
 async function play() {
   if (gameWin && !gameWin.isDestroyed()) { gameWin.focus(); return { ok: true }; }
-  if (selectedBranch !== MAIN_BRANCH) await refreshBranches();
-  if (mainUnavailable && selectedBranch === MAIN_BRANCH) return { ok: false, error: mainUnavailable };
+  if (!publishedGameMode() && selectedBranch !== MAIN_BRANCH) await refreshBranches();
+  if (!publishedGameMode() && mainUnavailable && selectedBranch === MAIN_BRANCH) return { ok: false, error: mainUnavailable };
   const mode = devMode();
   /** @type {string} */
   let url;
-  if (selectedBranch !== MAIN_BRANCH) {
+  if (publishedGameMode()) {
+    if (!await prepareBranchBuild()) return { ok: false, error: 'No released game is downloaded. Connect to download this branch, then it can be played offline.' };
+    url = await ensureServer();
+  } else if (selectedBranch !== MAIN_BRANCH) {
     try {
       if (!await prepareBranchBuild()) return { ok: false, error: 'No verified build has been published for this branch yet. Choose Main or wait for its build to finish.' };
     } catch (e) {
@@ -1185,15 +1248,23 @@ async function exclusive(name, fn) {
 }
 
 function wireIpc() {
+  ipcMain.on('game:quit', event => {
+    // Only the current game's top frame may quit; launcher tools and embedded
+    // loading/showcase frames do not receive this authority.
+    if (!gameWin || event.sender !== gameWin.webContents
+      || event.senderFrame !== gameWin.webContents.mainFrame) return;
+    gameQuitRequested = true;
+    app.quit();
+  });
   ipcMain.handle('launcher:status', () => repoStatus());
   ipcMain.handle('launcher:branches', () => exclusive('branches', () => refreshBranches()));
   ipcMain.handle('launcher:selectBranch', (_e, name) => exclusive('branch selection', () => chooseBranch(String(name))));
   ipcMain.handle('launcher:check', () => exclusive('check', () => checkUpdates()));
   ipcMain.handle('launcher:update', () => exclusive('update', () => update()));
   ipcMain.handle('launcher:play', () => exclusive('play', () => play()));
-  ipcMain.handle('launcher:rebuild', () => exclusive('rebuild', () => selectedBranch === MAIN_BRANCH ? ensureBuilt(true) : prepareBranchBuild().then(() => ({ ok: true }))));
+  ipcMain.handle('launcher:rebuild', () => exclusive('rebuild', () => selectedBranch === MAIN_BRANCH && !publishedGameMode() ? ensureBuilt(true) : prepareBranchBuild().then(ok => ({ ok }))));
   ipcMain.handle('launcher:reset', () => exclusive('reset', () => resetAllData()));
-  ipcMain.handle('launcher:setDev', (_e, patch) => setDev(patch));
+  ipcMain.handle('launcher:setDev', (_e, patch) => exclusive('developer settings', () => setDev(patch)));
   ipcMain.handle('launcher:setChannel', (_e, id) => setChannel(id));
   ipcMain.handle('launcher:quit', () => { app.quit(); });
 }
@@ -1258,11 +1329,11 @@ async function smoke() {
       watch(launcherWin.webContents, 'launcher');
       await new Promise(r => launcherWin?.webContents.once('did-finish-load', () => r(null)));
       // The page's status() round-trip populates the build line.
-      await until(launcherWin.webContents, `(document.getElementById('build-line')?.textContent ?? '').startsWith('v')`, 15000);
+      await until(launcherWin.webContents, `(document.getElementById('build-line')?.textContent ?? '').includes('Launcher v')`, 15000);
       await wait(400);
       const api = await launcherWin.webContents.executeJavaScript('typeof window.launcher');
       const version = await launcherWin.webContents.executeJavaScript(
-        `(document.getElementById('build-line')?.textContent ?? '').startsWith('v')`);
+        `(document.getElementById('build-line')?.textContent ?? '').includes(${JSON.stringify('Launcher v' + app.getVersion())})`);
       if (api !== 'object') errors.push(`preload bridge missing (typeof window.launcher = ${api})`);
       if (!version) errors.push('status round-trip never populated the build line');
       // Presence only — NEVER invoke reset from a smoke run (it would erase
@@ -1334,6 +1405,9 @@ async function smoke() {
       await wait(1500); // async boot: account load, world init, start menu
       const menu = await gameWin.webContents.executeJavaScript(
         `!!document.querySelector('#start-menu:not(.hidden)')`);
+      const exitBridge = await gameWin.webContents.executeJavaScript(
+        `typeof window.hollowWakeDesktop?.quit === 'function' && typeof window.__perfBeat === 'undefined'`);
+      if (!exitBridge) errors.push('game exit bridge missing or performance bridge exposed in normal play');
       const saveProbe = await gameWin.webContents.executeJavaScript(
         `fetch('/__save/0').then(r => r.status).catch(() => 'ERR')`);
       const search = await gameWin.webContents.executeJavaScript('location.search');

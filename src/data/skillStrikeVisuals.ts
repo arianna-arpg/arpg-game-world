@@ -5,6 +5,9 @@ export interface SkillStrikeProfile { form: StrikeForm; motif: BurstMotif; count
 const p = (form: StrikeForm, motif: BurstMotif, count: number, motion: SkillStrikeProfile['motion'] = 'out', echo?: BurstMotif): SkillStrikeProfile => ({ form, motif, count, motion, echo });
 /** Explicit action silhouettes. Related attacks share a material, not a whole composition. */
 export const SKILL_STRIKES: Readonly<Record<string, SkillStrikeProfile>> = {
+  frame_bonebreaker: p('crush','teeth',6,'out','cracks'),
+  frame_crush: p('crush','teeth',9,'out','souls'),
+  frame_marrow_sweep: p('fan','teeth',6,'sweep','shields'),
   hive_venom_mandibles: p('jaws','spores',4,'in','teeth'),
   beast_fallback_art: p('jaws','teeth',3,'recoil'),
   beast_hound_art: p('rake','blood',2,'in','teeth'),
@@ -16,6 +19,9 @@ export const SKILL_STRIKES: Readonly<Record<string, SkillStrikeProfile>> = {
   beast_small_art: p('jaws','chimes',2,'sweep'),
   beast_grub_art: p('jaws','blood',3,'in'),
   beast_stalker_art: p('lash','blades',3,'recoil'),
+  court_reprisal: p('fan','shields',4,'recoil','teeth'),
+  court_rending_cut: p('cut','blood',5,'sweep','teeth'),
+  court_backstab: p('thrust','souls',2,'in','blades'),
   court_twin_cut: p('cross','blades',2,'sweep'),
   court_abomination_slam: p('crush','blood',5,'out','cracks'),
   court_searing_bite: p('jaws','flame',3,'in'),

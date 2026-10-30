@@ -1,4 +1,5 @@
 import { Actor } from './actor';
+import { buffWithSource } from './buffSource';
 import type { World } from './world';
 import { angleTo, dist, type Vec2 } from '../core/math';
 import { mod } from './stats';
@@ -60,7 +61,7 @@ export class Challenges {
       if (guaranteed) state.guaranteedAt = this.w.time + s.guaranteedResetEvery!;
       owner.cooldowns.delete(state.host.def.id); owner.cooldownTotals.delete(state.host.def.id);
       state.primed = true;
-      owner.addBuff({ type: 'buff', id: this.readyId(state), label: 'Reopening Ready', duration: 999999, mods: [] });
+      owner.addBuff(buffWithSource({ type: 'buff', id: this.readyId(state), label: 'Reopening Ready', duration: 999999, mods: [] }, state.host));
       this.w.text(owner.pos, 'Goad reset — reopen the wound', '#e0a078', 12);
     }
   }

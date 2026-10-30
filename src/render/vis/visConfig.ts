@@ -5,11 +5,16 @@
 // draw code.
 // ---------------------------------------------------------------------------
 
+import { DAMAGE_COLOR } from '../../engine/stats';
+
 export const VIS_CFG = {
   /** Compact Life-adjacent debuffs; one detailed readout only while hovered. */
   statusIcons: { size:24, gap:3, columns:4, orbClearance:44,
     background:'rgba(12,16,20,.35)', ink:'#f4ebd7', margin:8, cardWidth:250, lineHeight:16 },
-  /** Actual temporary modifier payload, on demand at its native buff pip. */
+  /** Compact source-skill faces; expiry desaturates from top to bottom. */
+  buffIcons: { size: 22, gap: 3, warningSeconds: 5, barClearance: 30, auxiliaryClearance: 6,
+    edge: '#756b50', fallbackColor: '#c8a84b', stackInk: '#fff', stackOutline: '#070c12' },
+  /** Actual temporary modifier payload, on demand at its native buff icon. */
   buffReadout: { maxWidth: 360, maxRows: 10, margin: 8, pad: 9, lineHeight: 17, ascent: 12,
     font: '12px Verdana', background: 'rgba(8,8,12,.94)', edge: '#575368', title: '#f0d99c', detail: '#d8d4c8' },
   /** Native active effects: stable names, expiry clocks and shared pressure. */
@@ -26,7 +31,16 @@ export const VIS_CFG = {
     showName: false, showMovement: false, plantedText: 'Feet planted', movementHeight: 12,
     movementFont: '10px Verdana', movementText: '#cad3d4',
     font: 'bold 11px Verdana', text: '#f1ecdd', edge: '#121719', outline: 3,
-    slotEdge: '#f1ecdd', slotWidth: 2, slotPad: 2 },
+    slotEdge: '#f1ecdd', slotWidth: 2, slotPad: 2,
+    /** Damage tags share one palette; mixed casts show equal bands, never damage proportions. */
+    tagColors: { enabled: true, trackAlpha: .2, neutral: '#9c92ad',
+      palette: { ...DAMAGE_COLOR, physical: '#f4f5f7', fire: '#ef6255', cold: '#69b7ed' } },
+    /** Fixed native bars; priority affects paint order only. */
+    overlay: { priority: { self: 4, local: 3, party: 2, enemy: 1, ally: 0 } },
+    /** Read the composed scene at a bounded rate; outline only poor contrast. */
+    contrast: { enabled: true, sampleWidth: 192, maxSampleHeight: 192, intervalMs: 100, ratio: 3,
+      busyRange: .32, maxAlpha: .8, light: '#f2f4f7', dark: '#101219',
+      width: 1, pad: 2, fallbackAlpha: .45 } },
   meleeReach: { enabled:true, color:'#dcebd6', edge:'#17201b', alpha:.34, progressAlpha:.25,
     fillAlpha:.025, width:1.3, outline:1.5 },
   /** Local body identity and numeric clutter share one configurable presentation

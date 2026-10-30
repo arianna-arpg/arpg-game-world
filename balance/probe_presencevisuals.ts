@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { checkConstructBodies } from './constructVisualChecks';
+import { checkGroundDevices } from './groundDeviceChecks';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { SKILLS } from '../src/data/skills';
 import { SKILL_PRESENCES, presenceProfile, skillPresenceVoice, type PresenceProfile, type PresencePhase } from '../src/data/skillPresenceVisuals';
@@ -14,10 +16,12 @@ import { equipCosmetic } from '../src/meta/cosmetics';
 import { SUPPORTS } from '../src/data/supports';
 
 let checks = 0;
+checkConstructBodies();
+checkGroundDevices();
 const check = (label: string, value: unknown) => { assert.ok(value, label); checks++; };
 const census = Object.values(SKILLS).filter(s => ['storm', 'summon', 'construct'].includes(s.delivery.type));
 assert.deepEqual(Object.keys(SKILL_PRESENCES).sort(), census.map(s => s.id).sort());
-check('144 native sources covered without fallback collisions', census.length === 144 && !presenceProfile('constructor'));
+check('145 native sources covered without fallback collisions', census.length === 145 && !presenceProfile('constructor'));
 function trace(id: string, phase: PresencePhase, life: number, color: string, radius = 42) {
   let depth = 0; const calls: unknown[] = [];
   const ctx = new Proxy({ globalAlpha: 1, lineWidth: 1 } as Record<string, unknown>, {

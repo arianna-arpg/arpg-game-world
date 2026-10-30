@@ -1,3 +1,5 @@
+import './projectileArtVoice';
+import { PROJECTILE_ART_FLIGHTS, PROJECTILE_ART_FIELDS } from '../../data/projectileArtVisuals';
 import { SKILL_FLIGHTS, SKILL_FIELDS, SKILL_BEAMS, SKILL_FLIGHT_STYLE as C,
   skillBeamVoice, type SkillFieldProfile } from '../../data/skillFlightVisuals';
 import { SKILL_BURSTS } from '../../data/skillVisuals';
@@ -24,7 +26,8 @@ export interface SkillFlightVisual {
 }
 export function flightProfile(p: SkillFlightVisual) {
   const id = p.skillVisualId ?? p.inst?.def.id ?? '';
-  return Object.hasOwn(SKILL_FLIGHTS, id) ? SKILL_FLIGHTS[id] : undefined;
+  return Object.hasOwn(PROJECTILE_ART_FLIGHTS, id) ? PROJECTILE_ART_FLIGHTS[id]
+    : Object.hasOwn(SKILL_FLIGHTS, id) ? SKILL_FLIGHTS[id] : undefined;
 }
 
 /** Wakes are faint, trailing decoration. The unchanged collision form remains
@@ -111,6 +114,7 @@ export function drawSkillFlightHead(ctx: CanvasRenderingContext2D, p: SkillFligh
 }
 
 export function fieldProfile(id: string): SkillFieldProfile | undefined {
+  if (Object.hasOwn(PROJECTILE_ART_FIELDS, id)) return PROJECTILE_ART_FIELDS[id];
   const movement = movementProfile(id);
   if (movement) return { motif: movement.motif, layout: movement.motion === 'coil' ? 'spiral' : 'spokes', motion: 'out', count: movement.count + 2 };
   const strike = skillStrikeProfile(id);
@@ -160,6 +164,22 @@ export function drawSkillField(ctx: CanvasRenderingContext2D, z: SkillFieldVisua
   // Ground-qualified strikes must keep the existing per-cell roil: decorative
   // ink in a dry, unhittable cell would falsely advertise damage.
   if (!p || z.onGround || z.radius <= 0 || !Number.isFinite(z.radius + z.pos.x + z.pos.y + time)) return false;
+  if (p.column && z.exploded) {
+    const r = z.radius;
+    ctx.save(); ctx.translate(z.pos.x, z.pos.y);
+    ctx.strokeStyle = withAlpha(z.color, .7); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+    for (let i = 0; i < 7; i++) {
+      const phase = time * 4 + i * 2.4, x = Math.sin(i * 5) * r * .35;
+      const height = r * (1.3 + .35 * Math.sin(phase));
+      ctx.fillStyle = withAlpha(i % 2 ? shade(z.color, .7) : z.color, .25 + .1 * Math.sin(phase));
+      ctx.beginPath(); ctx.moveTo(x - r * .2, 0);
+      ctx.bezierCurveTo(x - r * .45, -height * .4, x + r * .25, -height * .7, x + Math.sin(phase) * r * .25, -height);
+      ctx.bezierCurveTo(x + r * .45, -height * .5, x + r * .2, -height * .2, x + r * .2, 0);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore(); return true;
+  }
   const strike = skillStrikeProfile(z.skillId);
   if (strike && z.exploded && !z.seg && !z.edge) {
     drawSkillStrike(ctx, { ...z, life: 1, maxLife: 1 }, .68 + .22 * Math.sin(time * 12), strike); return true;

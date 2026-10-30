@@ -42,8 +42,10 @@ A compact activation accent answers a completed payload, a real construct
 damage pulse, an aura pulse, or a used pad/gate. Multiple payloads within 0.12s
 share one accent. Its radius is body-local, never the attack range. Native
 projectile, beam, melee, healing and aura geometry still owns the payload.
-Passive furniture has no decorative attack cycle. A small static foot signature
-keeps bodies with shared anatomy attributable between events.
+Passive furniture has no decorative attack cycle. Constructs retain a small
+static foot signature. Summoned creatures omit that persistent badge so it
+does not cover their anatomy; arrival/action/retirement cues and companion
+leashes, collars and stance effects remain unchanged.
 
 Retirement cues occur after the kill path accepts an actual death. Natural
 expiry and silent withdrawal unbind; combat death breaks the signature into

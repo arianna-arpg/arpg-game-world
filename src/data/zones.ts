@@ -1161,6 +1161,8 @@ export interface ZoneDef {
   journey?: CourseJourney;
   /** Saved exploration plan and stable atlas ownership. */
   locale?: import('../world/locales').LocalePlan;
+  /** Biome dressing for composed terrain. Absent on older discoveries. */
+  localeDecoration?: import('./biomeDecoration').BiomeDecoration;
   /** Membership in a persistent, connected landmark region. */
   complex?: import('../world/landmarkComplexes').ComplexMembership;
   destination?: import('../world/locales').AtlasDestination;

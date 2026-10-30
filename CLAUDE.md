@@ -1,3 +1,35 @@
+Adventure composition uses saved complex forms and locale plans, with optional
+native objectives and bounty-opened leaves. New side ground can carry no task;
+the woodland and highland journeys remain open while their activities wait.
+New locales bake reduced receiving-biome decoration; forest canopy uses sparse
+stands, with paths and activity courts protected. Old adventures receive missing
+decoration on resume/revisit while their plans, access and progress stay intact.
+See [adventure regions](docs/worldgen/adventure-regions.md). Verify
+adventureregions, generationdiversity, complexes, locales, landforms, bounty,
+objectives, puzzles, genqa, all types and sim smoke; build before the hidden
+adventure-regions-ui course and generation-diversity-ui contact sheet.
+
+Bone Golem frame abilities, the four-point routes, support routing and lifecycle checks are documented in [bone-golem](docs/design/bone-golem.md). Verify bonegolem, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden bone-golem-ui course.
+Skeleton Warrior infantry, spectral heirs, Spellsword choices and the shared Mage/Warrior node picker are documented in [skeleton-warrior](docs/design/skeleton-warrior.md). Verify skeletonwarrior, skeletonmage, skeletonarcher, necromancercourts, nestednecromancer, supportfabric, all types and sim smoke; build before the hidden skeleton-mage-ui and skeleton-warrior-ui courses.
+Strike-timing disciplines compose independently through engine/strikeTiming.ts.
+Perfect Draw and Wandering Mark share one timing attempt and multiply earned
+bonuses; duplicate kinds keep first-source precedence. See docs/engine/strike-timing.md.
+Verify striketiming, combatcues, castingcues, playercastvisuals, supportfabric,
+castaim, agent, all types and sim smoke; after an isolated build run the hidden
+balance/strike-timing-ui.cjs harness.
+Cast bars use the late, native-resolution reading layer in `render/vis/castBars.ts`.
+Local input feedback takes priority; enemy bars retain native concealment.
+Bars retain their original fixed position and artwork; no relocation or leaders.
+Adaptive outlines use `VIS_CFG.castReadout.contrast`; stacking uses `overlay.priority`.
+See `docs/render/cast-bars.md`; verify castbars, the existing casting/timing probes,
+all types and the hidden cast-bars, strike-timing and cast-readout UI courses.
+
+The cinematic front door uses ui/frontScreenConfig.ts for presentation and action definitions.
+Configurable Silver Inlay/Pennants styling and Wardrobe selectors use ui/interfaceStyleConfig.ts, with shared surface coverage in ui/interfaceSurfaces.ts; see [interface-style](docs/ui/interface-style.md) for presentation boundaries and verification.
+The shared outlined logo and established insignia use [brand](docs/ui/brand.md); run npm run brand after changing branding/identity.mjs. The type-check command also verifies generated brand copies.
+See [front-screen](docs/ui/front-screen.md); verify all types, build, game smoke
+and the isolated hidden balance/front-screen-ui.cjs acceptance.
+
 **Current scope:** [CURRENT.md](CURRENT.md) is the project direction and active/deferred work entrypoint. Deliver the offline seamless generation/content/event vision; new shard/MMORPG work is deferred. Prepare useful future boundaries without letting hosting dictate this phase. Existing zone content and the owner's game references are examples and reusable material, not generation laws. This priority supersedes conflicting older roadmaps and hosting handoffs.
 
 Generation must select and combine varied possibilities: sites, objectives, points of interest, events, locations, quests, unbounded objectives, and retained bounded zones with their authored objectives are examples, not mandatory templates or a closed list. The hierarchy **world map → regions → zones → chunks** organizes geography; it does not prescribe each place's gameplay. Read [the current generation decisions](docs/ai/gameplay-decisions-20261019.md#retained-zones-inside-continuous-terrain) before world/content work. Game-camera zoom follows main's fixed scale; map navigation is separate. Live cast aiming is an unused authoring opt-in, not a change to existing skills.
@@ -23,6 +55,35 @@ and optional tumbleweeds; heat haze composes view and terrain layers through
 `balance/ambient-weather-check.ts`, transience, sim smoke, genqa and the hidden
 `balance/ambient-weather-ui.cjs` after an isolated build.
 
+Buff icons use copied granting-skill identity through `engine/buffSource.ts`
+and the shared hotbar artwork. `VIS_CFG.buffIcons` configures size, layout and
+the top-down grayscale warning during the last five seconds. See
+`docs/ui/buff-icons.md`; verify all types, `balance/buff-icons-check.ts`,
+proccues/sympathy/shieldup/devotedstartertrees and the hidden
+`balance/buff-icons-ui.cjs` after its isolated build.
+
+Pause-menu Save & Exit now selects Main Menu or Desktop through the shell's
+save/session owner. Browser close refusal retains a safe-to-close screen;
+desktop quit waits for disk writes and bypasses return-to-launcher. See
+`docs/ui/save-exit.md`; verify check, probe_savewriteorder, save-exit-ui after
+an isolated build, and the game/launcher boot smoke checks.
+
+The player Codex is documented in [docs/ui/codex.md](docs/ui/codex.md).
+Its shelves/read policy live in `data/codex.ts`, public reading models in
+`meta/codex.ts`, and its shared reader in `ui/codex.ts`. It replaces the
+Vault Owned display while preserving purchases and the Reckoning.
+`engine/codexSightings.ts` records gated encounters; Tracker research and
+station-only actions retain their existing contracts. Verify codex, menubar,
+unlocks, memoryunlocks, classmastery, sheet, all types and sim smoke; after
+a build, run hidden `balance/codex-ui.cjs`, `balance/vault-discovery-ui.cjs`
+and boot smoke.
+
+Optional summed damage numbers live in `world/damageText.ts` and
+`render/vis/damageText.ts`. Options → Visuals retains separate popups by default;
+the saved opt-in combines target-owned numeric receipts across damage sources.
+See `docs/ui/damage-text.md`; verify damagetext, infostream, combatcues and all
+types, then hidden `balance/damage-text-ui.cjs` after an isolated build.
+
 Tutorial scenes cannot feed account nemeses. See `docs/engine/tutorial-isolation.md`;
 verify tutorialisolation, scenes, mu, Odyssey checks and all types when changing
 scene departure or nemesis formation/manifestation.
@@ -31,6 +92,18 @@ Minion critter targeting, Charge's ground wake and life/mana orb pacing are
 documented in [combat-polish](docs/design/combat-polish.md). Verify
 probe_miniontargets, probe_orbgeneration, companionstance, flasktrees and
 movementvisuals; build before the hidden movement-visuals UI harness.
+
+Trap/mine mechanics and reusable deviceVisuals are documented in
+`docs/engine/ground-devices.md`: walkable contact devices, configurable arming,
+resolved crossings and autonomous mine meta commands. Verify presencevisuals,
+selfvisuals, trapworks, tacticalai, controlstartertrees, movementvisuals,
+cosmetics, all types and sim smoke; then the hidden device-visuals-ui and
+construct-bodies-ui harnesses sequentially after an isolated build.
+
+The persistent construct body silhouettes are composed in `data/constructLooks.ts`
+and `data/constructGlyphs.ts`, selected through each delivery's ordinary `look`.
+See `docs/render/constructs.md`; verify presencevisuals, cosmetics, all types,
+sim smoke and hidden `balance/construct-bodies-ui.cjs` after an isolated build.
 
 Storm, summon and construct identities use `data/skillPresenceVisuals.ts`
 and `render/vis/skillPresenceVoice.ts`: 139 explicit source profiles.
@@ -110,10 +183,12 @@ Resolve visibility before drawing bodies; wall queries and pixels share one cont
 resolver. Verify the sightveil/visibility_stability probes and hidden
 `balance/visibility-ui.cjs` (including its old-code negative control).
 
-Browser branch previews: `docs/engine/browser-previews.md` documents the Pages
-deployment. `scripts/browser-previews.json` configures isolated builds beside
-`/play/`; `scripts/build-browser-previews.mjs` pins their commits and refuses
-shared save namespaces. Verify `node --test scripts/test-browser-previews.mjs`.
+Coordinated releases: `docs/engine/coordinated-releases.md` documents the single
+Pages catalog/deployment for browser and desktop games. The release planner pins
+fully verified source; one build supplies both clients and their visible revision.
+`scripts/browser-previews.json` configures isolated branches beside `/play/`.
+Verify the coordinated-release, release-policy and browser-preview tests; the
+publisher also boots both clients before upload.
 
 Legendary skill empowerment is documented in `docs/design/legendary-skill-empowerment.md`.
 `data/skillEmpowerment.ts` configures duplicate merges and passive-only rewards;
@@ -163,7 +238,9 @@ investment and attributable Relic followers are documented in
 `engine/accountReliquary.ts` owns migration and `engine/relicPower.ts` the safe
 numeric fold. The inventory toggle trades equipped power for 2% XP per occupied
 cell; empowerment grows by 2% per account rank. Pack Relics are lost on death;
-equipped/stored Relics persist. Verify `probe_relicdeath.ts`, `probe_relicflow.ts`,
+equipped/stored Relics persist. Pack Relics can be sold or salvaged, with retired
+identities preventing stale-save restoration. Verify `probe_relicsale.ts`,
+`probe_relicdeath.ts`, `probe_relicflow.ts`,
 `probe_accountreliquary.ts`, `probe_reliquary.ts`,
 `probe_relicuniques.ts` and `balance/oracle-rescue-ui.cjs`.
 
@@ -202,7 +279,7 @@ split films there; bump the page's `?v=` stamp when either file changes. See
 `docs/design/site-cinema.md`; verify with the hidden `balance/site-cinema-ui.cjs`.
 Skill showcases: any element wearing `data-skill-showcase` plays that skill live,
 always matching the build; where showcases appear is each surface's choice
-(today one temporary seat, the bag gem tooltip). `src/showcase/` + `showcase.html`
+(the player Codex, bag gem tooltip and Vault `memoryReveal` results). `src/showcase/` + `showcase.html`
 (a sandboxed engine realm that never saves) + `data/skillShowcase.ts`; see
 `docs/engine/skill-showcases.md`, verify `probe_skillshowcase.ts` and the hidden
 `balance/skill-showcase-ui.cjs` after a build. The site's skill clips
@@ -372,6 +449,13 @@ three-class scope and next batches are documented in
 `docs/design/class-starting-skill-trees.md`; `balance/probe_startertrees.ts`
 covers the complete opening bars.
 
+Firebolt's satellite and ignition disciplines live in `src/data/fireboltTree.ts`.
+Reusable `ProjectileArtsSpec` / `ProjectileArts` contracts own orbital contact,
+targeted payloads, expiry actions, ignite ramps/transfers/ruptures and cascades.
+`docs/design/firebolt.md` records tuning, attribution, support inheritance and
+cleanup. Verify with `balance/probe_firebolt.ts`, the relevant flight/status
+probes, sim smoke and the hidden `balance/firebolt-ui.cjs` after a build.
+
 The six flask trees live in `src/data/flaskTrees.ts`, with owned drink payloads
 in `flaskSkills.ts` and durable ammunition in `engine/flaskState.ts`.
 `docs/design/flask-skill-trees.md` records all nodes, empty-bank economies,
@@ -525,6 +609,14 @@ class discovery now grants its live starting bar plus authored supports.
 saved investment transfer, host authority and the future removal of the
 temporary debug Grand Codex. Verify `probe_memoryunlocks.ts` and the isolated
 `balance/memory-unlocks-ui.cjs` harness after a build.
+
+Vault `memoryReveal` presentation lives in `ui/memoryReveal.ts`, with pace,
+defaults and tier copy in `ui/memoryRevealConfig.ts`. It reads already-granted
+receipts, uses the shared live skill showcase, and supports Skip, saved Instant
+mode, preview pause/autoplay, reduced motion, last-result review and searchable
+weighted pool odds. No animation owns payment or RNG. Verify memoryunlocks,
+skillshowcase, all types and both hidden Memory/showcase UI harnesses with an
+isolated build; the contract remains `docs/meta/memory-unlocks.md`.
 
 `docs/design/world-boss-colossi.md` documents the world-boss encounter pass:
 `data/worldBossEncounters.ts` owns Cragmaw's colossal anatomy and the two
@@ -2331,6 +2423,12 @@ we verify changes.
   docs/design/bounty-board.md §6 R4, docs/engine/vendors.md; probe
   `balance/probe_memories.ts` rigs R–W (+ probe_vendorlocker C,
   probe_scaldkit P3, probe_worldbossloot D3 re-aimed).
+  Recall's independent adaptive pane and cancellable **Open all** session live
+  in `ui/memoryRecall.ts` + `ui/panelPlacement.ts`; native recall intents retain
+  seeded results, facets and room gates. A full bag pauses until space opens.
+  See `docs/ui/memory-recall.md`; verify `probe_memoryrecall.ts`, the memories /
+  folio / menubar probes, and the hidden `balance/memory-recall-ui.cjs` plus
+  `balance/inventory-pages-ui.cjs` after a build.
   THE COUNTER GLASS + THE MARKET CHAIN (2026-07-22; ONE-SHELF fold
   2026-08-23, skill-items M3): every counter renders ONE FACE — the whole
   shelf packed D2-style by `World.vendorGridPack` through the player bag's

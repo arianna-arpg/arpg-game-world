@@ -18,6 +18,7 @@ const c = (form: PresenceForm, motif: BurstMotif, count: number, motion: Presenc
 export const SKILL_PRESENCES: Readonly<Record<string, PresenceProfile>> = {
   skeletal_arrowfall: s('shafts', 'teeth', 3),
   skeletal_bombardment: s('meteor', 'teeth', 4),
+  skeletal_gravefire_mortar: s('meteor', 'souls', 5),
   skeletal_weather_fire: s('shafts', 'flame', 6),
   skeletal_weather_cold: s('hail', 'ice', 5),
   skeletal_weather_lightning: s('thunder', 'arcs', 4, 'coil'),

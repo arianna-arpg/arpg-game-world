@@ -1,3 +1,6 @@
+import { frameErrors } from '../engine/frameSpec';
+import { summonArtIds } from '../engine/summonArtsSpec';
+import { deviceTriggerErrors } from '../engine/groundDevices';
 // ---------------------------------------------------------------------------
 // Content validation — cheap cross-checks over the data files, run once at
 // boot. Pure warnings: the game still runs, but authoring mistakes that
@@ -32,6 +35,7 @@ import {
   supportFits, supportFitsInst, treeNodeOf, validTreeNodes, bandPointsAt, MAX_SKILL_LEVEL,
   type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec, AOE_SHAPE, BASH_CFG } from '../engine/skills';
 import { treeGraph, TREE_LAYOUT_CFG } from '../engine/skilltree'; // THE SKILL-TREE GRAPH — the fold the tree laws read
+import { projectileArtsErrors } from '../engine/projectileArtsSpec';
 import { attackSequenceErrors } from '../engine/attackSequenceSpec';
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
@@ -826,6 +830,12 @@ export function validateContent(): void {
       for (const l of a.lines) checkSympathyStat(`affix ${a.id}`, l.stat);
     }
     for (const [id, m] of Object.entries(MONSTERS)) {
+      if (m.groundDevice) {
+        const spec = m.groundDevice;
+        if (!['trap', 'mine'].includes(spec.kind)) warn(`monster ${id}: unknown groundDevice kind`);
+        if (!SKILLS[spec.skillId]) warn(`monster ${id}: unknown groundDevice skill ${spec.skillId}`);
+        for (const issue of deviceTriggerErrors(spec)) warn(`monster ${id}: groundDevice ${issue}`);
+      }
       if (m.movementTether) for (const issue of movementTetherErrors(m.movementTether)) warn(`monster ${id}: movementTether ${issue}`);
       if (m.movementTether?.anchorDoodad && !DOODAD_VISUALS[m.movementTether.anchorDoodad]) warn(`monster ${id}: unknown tether anchorDoodad ${m.movementTether.anchorDoodad}`);
       for (const link of m.sympathy ?? []) {
@@ -1111,6 +1121,18 @@ export function validateContent(): void {
   // their owner's silhouette instead (SELF_DRESSING_KINDS) and are exempt.
   for (const s of Object.values(SKILLS)) {
     const d = s.delivery;
+    const deployed = s.ai?.deployed;
+    if (deployed) {
+      for (const key of ['minCount', 'minTargets'] as const) {
+        const n = deployed[key];
+        if (n !== undefined && (!Number.isInteger(n) || n < 1)) warn(`skill ${s.id}: ai.deployed.${key} must be a positive integer`);
+      }
+      for (const issue of deviceTriggerErrors({ radius: deployed.radius })) warn(`skill ${s.id}: ai.deployed ${issue}`);
+    }
+    if (d.type === 'construct' && d.deviceTrigger) {
+      if (!['trap', 'mine'].includes(d.kind)) warn(`skill ${s.id}: deviceTrigger requires trap/mine`);
+      for (const issue of deviceTriggerErrors(d.deviceTrigger)) warn(`skill ${s.id}: deviceTrigger ${issue}`);
+    }
     if (d.type !== 'construct' || SELF_DRESSING_KINDS.has(d.kind)) continue;
     const look = d.look ?? CONSTRUCT_LOOKS[d.kind];
     if (!look) {
@@ -1145,7 +1167,7 @@ export function validateContent(): void {
   // silently SKIPS unknown kinds, so the class that "carries knives" walks
   // out bare-handed and nobody hears about it. Make it loud instead.
   for (const [id, look] of Object.entries(LOOKS)) {
-    for (const p of [...look.parts, ...(look.live ?? [])]) {
+    for (const p of [...look.parts, ...(look.live ?? []), ...(look.binding ?? [])]) {
       if (!PART_PAINTERS[p.kind]) warn(`look ${id}: part kind '${p.kind}' has no painter (PART_PAINTERS + registered glyphs)`);
     }
   }
@@ -2118,8 +2140,22 @@ export function validateContent(): void {
   // both carry a SummonDelivery, so both are swept.
   const checkSummonContract = (src: string, d: Delivery | undefined): void => {
     if (d?.type === 'summon') {
+      if (d.capacityMultiple !== undefined && (!Number.isSafeInteger(d.capacityMultiple) || d.capacityMultiple < 1))
+        warn(src + ': summon.capacityMultiple must be a positive whole group size');
       for (const id of [d.monsterId, ...(d.pool ?? []).map(p => p.id)]) {
         if (id && !MONSTERS[id]) warn(`${src}: unknown summon monster '${id}'`);
+      }
+      if(d.frame)for(const error of frameErrors(d.frame,id=>!!SKILLS[id],id=>!!MONSTERS[id]))warn(src+': '+error);
+      if (d.arts) {
+        const a = d.arts;
+        for (const id of [...summonArtIds(d), a.command].filter((s): s is string => !!s)) if (!SKILLS[id]) warn(src + ': unknown summon art ' + id);
+        for (const row of a.schools ?? []) {
+          if (!MONSTERS[row.monster] || [row.primary, row.signature, row.trace].some(id => !SKILLS[id])) warn(src + ': invalid summon school ' + row.id);
+        }
+        if (a.reconstruction && !MONSTERS[a.reconstruction.monster]) warn(src + ': unknown reconstruction anchor');
+        for (const value of [a.summonTime, a.echo?.cooldown, a.relay?.cooldown, a.reconstruction?.delay, a.reconstruction?.recovery]) {
+          if (value !== undefined && (!Number.isFinite(value) || value <= 0)) warn(src + ': invalid summon-art timing');
+        }
       }
       if (d.channelFormation) {
         const f = d.channelFormation;
@@ -3089,11 +3125,12 @@ export function validateContent(): void {
   // against the kit's own defs.
   {
     const OVER_KEYS = new Set(['arcDeg', 'spreadDeg', 'channel', 'summon', 'tags', 'chargeCost', 'ground', 'castCycle', 'construct', 'reduceCooldowns', 'recallImpales', 'aura', 'invocation']);
-    const SUMMON_KEYS = new Set(['count', 'maxActive', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease', 'channelFormation', 'channelFormationRelease']);
+    const SUMMON_KEYS = new Set(['frame', 'arts', 'cohort', 'count', 'maxActive', 'capacityMultiple', 'duration', 'replenish', 'monsterId', 'pool', 'selectPool', 'crewSkills', 'crewAuras', 'crewMods', 'escort', 'shell', 'crewRules', 'crewInherit', 'crewOnDeath', 'devour', 'placeAt', 'strikeRelease', 'channelFormation', 'channelFormationRelease']);
     const OVER_CHANNEL_KEYS = new Set(['ramp', 'rampMove']);
     const KINDS = new Set(['minor', 'major', 'keystone']);
     const budget = bandPointsAt(MAX_SKILL_LEVEL);
     for (const def of Object.values(SKILLS)) {
+      if (def.projectileArts) for (const error of projectileArtsErrors(def.projectileArts, id => !!STATUS_DEFS[id])) warn(`skill ${def.id}: ${error}`);
       const t = def.tree;
       if (!t) continue;
       const at = `skill ${def.id} tree`;
@@ -3165,6 +3202,7 @@ export function validateContent(): void {
         for (const k of Object.keys(n.over?.channel ?? {})) {
           if (!OVER_CHANNEL_KEYS.has(k)) warn(`${at}/${n.id}: over.channel.${k} is off the audited whitelist`);
         }
+        if(n.over?.summon?.frame)for(const error of frameErrors(n.over.summon.frame,id=>!!SKILLS[id],id=>!!MONSTERS[id]))warn(at+'/'+n.id+': '+error);
         const treeChargeCost = n.over?.chargeCost;
         const reduceCooldowns = n.over?.reduceCooldowns;
         if (reduceCooldowns && (!def.effects.some(fx => fx.type === 'reduceCooldowns')
@@ -3195,6 +3233,8 @@ export function validateContent(): void {
           for (const k of Object.keys(n.over.ground)) if (!(GROUND_TREE_KEYS as readonly string[]).includes(k)) warn(`${at}/${n.id}: unknown ground.${k}`);
           if (n.over.ground.follow !== undefined && n.over.ground.follow !== true) warn(`${at}/${n.id}: ground.follow must be true`);
           for (const [key, mods] of Object.entries(n.over.ground.domain ?? {})) {
+            if (key === 'stackGroup' && typeof mods === 'string' && mods.length) continue;
+            if (!Array.isArray(mods)) { warn(at + '/' + n.id + ': invalid ground.domain.' + key); continue; }
             if (!['allyMods', 'enemyMods', 'minionMods'].includes(key)) warn(`${at}/${n.id}: unknown ground.domain.${key}`);
             for (const m of mods) if (!STAT_DEFS[m.stat] || !Number.isFinite(m.value)) warn(`${at}/${n.id}: invalid ground.domain modifier`);
           }
@@ -3219,6 +3259,7 @@ export function validateContent(): void {
           if (raw.some(other => other.id !== n.id && other.trigger && g.nodes.get(other.id)?.limbId === triggerLimb)) warn(`${at}/${n.id}: conflicting trigger identities in one limb`);
         }
         if (n.attackSequence) for (const error of attackSequenceErrors(n.attackSequence)) warn(`${at}/${n.id}: ${error}`);
+        if (n.projectileArts) for (const error of projectileArtsErrors(n.projectileArts, id => !!STATUS_DEFS[id])) warn(`${at}/${n.id}: ${error}`);
         for (const error of invocationTreeErrors(def, n)) warn(`${at}/${n.id}: ${error}`);
         const constructOver = n.over?.construct;
         if (constructOver) {

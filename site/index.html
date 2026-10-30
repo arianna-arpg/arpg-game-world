@@ -101,7 +101,7 @@
      (inhale to 44%, longer exhale). Thematic, and it pulls the eye to the
      name itself. user-select:none on the card: the title is ephemeral. You
      can't drag-copy it, only read it. */
-  .hero-lockup{position:relative;display:inline-block;margin:26px auto 4px;-webkit-user-select:none;user-select:none}
+  .hero-lockup{position:relative;display:block;width:fit-content;max-width:100%;margin:26px auto 4px;-webkit-user-select:none;user-select:none}
   .hero .eyebrow,.hero .tagline{-webkit-user-select:none;user-select:none}
   /* Glyph glow lives on this radial layer, NOT on a text-shadow: Gecko
      composites text-shadow over gradient-clipped text (mud), Blink behind it
@@ -118,10 +118,9 @@
   .hero-mark-wrap.observing{position:fixed;left:0;top:0;z-index:-1}
   .hero-mark{display:block;width:100%;height:auto;opacity:.15;animation:hw-mark 7.2s ease-in-out infinite;will-change:transform,opacity}
   .hero-eye{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-  .hero h1{position:relative;z-index:1;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(56px,15vw,120px);letter-spacing:.02em;margin:0;
-    background:linear-gradient(180deg,#ffffff 8%, #cfd6e6 52%, #8b96b4 100%);-webkit-background-clip:text;background-clip:text;
-    color:transparent;-webkit-text-fill-color:transparent;
-    animation:hw-breathe 7.2s ease-in-out infinite;will-change:transform}
+  .hero h1{position:relative;z-index:1;width:clamp(280px,65vw,620px);max-width:100%;margin:0;line-height:0}
+  .hero h1 img{display:block;width:100%;height:auto}
+  .hero-mark-wrap{opacity:0}
   @keyframes hw-breathe{0%,100%{transform:scale(1)}44%{transform:scale(1.024)}}
   @keyframes hw-mark{0%,100%{transform:scale(1);opacity:.11}44%{transform:scale(1.05);opacity:.21}}
   @keyframes hw-glow{0%,100%{opacity:.45}44%{opacity:1}}
@@ -256,23 +255,11 @@
 <section class="hero" data-nav="Top">
   <div class="wrap">
     <span class="eyebrow"><span class="dot"></span> Top-down action RPG · In development</span>
-    <!-- THE LOCKUP: the insignia (same mark as the nav + footer) hides behind
-         the wordmark and the whole card breathes: hollow core, three points,
-         the same three colours the backdrop's flickers wear. Deliberately
-         unselectable: the name is an impression, not a string to copy. -->
+    <!-- Shared outlined title + insignia, generated from branding/identity.mjs.
+         The ambient Observer remains a separate decorative layer. -->
     <div class="hero-lockup">
       <div class="hero-mark-wrap" aria-hidden="true">
-      <svg class="hero-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <circle cx="16" cy="16" r="12" stroke="url(#hwHeroGrad)" stroke-width=".2" opacity=".8"/>
-        <path d="M16 11.6V6.2M19.8 18.2l4.7 2.7M12.2 18.2l-4.7 2.7" stroke="url(#hwHeroGrad)" stroke-width=".16" opacity=".55"/>
-        <circle cx="16" cy="16" r="4.4" stroke="url(#hwHeroGrad)" stroke-width=".24"/>
-        <circle cx="16" cy="4" r="2" fill="#4fd6c4" opacity=".16"/><circle cx="16" cy="4" r=".8" fill="#4fd6c4"/>
-        <circle cx="26.4" cy="22" r="2" fill="#a98bff" opacity=".16"/><circle cx="26.4" cy="22" r=".8" fill="#a98bff"/>
-        <circle cx="5.6" cy="22" r="2" fill="#ff8a4c" opacity=".16"/><circle cx="5.6" cy="22" r=".8" fill="#ff8a4c"/>
-        <!-- THE FRAME IN ETHER (her word): the insignia's framing wears the
-             chart's own starlight, so only the three points speak the trio -->
-        <defs><linearGradient id="hwHeroGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#b0c6e4"/><stop offset="1" stop-color="#8fa8d8"/></linearGradient></defs>
-      </svg>
+      <img class="hero-mark" src="assets/brand/insignia-ambient.svg" width="32" height="32" alt="">
       <!-- THE EYE: dormant in the hollow. Rarely, once the Observer has
            parked, the lid opens for a moment and the pupil finds your
            cursor. A separate svg so the breath's opacity keyframes can't
@@ -285,7 +272,7 @@
         </g>
       </svg>
       </div>
-      <h1 class="display">Hollow Wake</h1>
+      <h1 class="display"><img src="assets/brand/hollow-wake.svg" alt="Hollow Wake" width="600" height="230" draggable="false"></h1>
     </div>
     <p class="tagline">One more drop. <b>One more zone.</b></p>
     <p class="pitch">Hollow Wake is an action RPG for players who like finding a skill and building around it. Combine skill gems, branching upgrades, and unusual loot, then take your build into a frontier of rival factions, roaming bosses, and dangerous detours. Head out alone or bring a friend.</p>
@@ -566,10 +553,7 @@ npm run <span class="g">build</span></pre>
   <div class="wrap">
     <div class="foot-top">
       <div>
-        <div class="foot-brand">
-          <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="12" stroke="url(#g2)" stroke-width="1.4" opacity=".9"/><path d="M16 11.6V6.2M19.8 18.2l4.7 2.7M12.2 18.2l-4.7 2.7" stroke="url(#g2)" stroke-width="1.1" opacity=".55"/><circle cx="16" cy="16" r="4.4" stroke="url(#g2)" stroke-width="1.5"/><circle cx="16" cy="4" r="2.2" fill="#4fd6c4"/><circle cx="26.4" cy="22" r="2.2" fill="#a98bff"/><circle cx="5.6" cy="22" r="2.2" fill="#ff8a4c"/><defs><linearGradient id="g2" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#b0c6e4"/><stop offset="1" stop-color="#8fa8d8"/></linearGradient></defs></svg>
-          HOLLOW WAKE
-        </div>
+        <div class="foot-brand"><img src="assets/brand/hollow-wake.svg" alt="Hollow Wake" width="160" height="61" draggable="false"></div>
         <p style="color:var(--ink-faint);font-size:14px;margin-top:14px;max-width:340px">An action RPG about finding your next build and seeing how far it can go. Made by Arianna.</p>
       </div>
       <div class="foot-links">
@@ -642,7 +626,7 @@ npm run <span class="g">build</span></pre>
       mwrap.style.width = (heroW + (obsW - heroW)*p) + 'px';
       /* -52%→-50% self-offset blends in so p=0 matches the CSS anchor exactly */
       mwrap.style.transform = 'translate(' + (x + jx) + 'px,' + (y + jy) + 'px) translate(-50%,' + (-52 + 2*p) + '%)' + (jr ? ' rotate(' + jr + 'deg)' : '');
-      var base = 1 - .45*p;
+      var base = .55*p; // The canonical lockup owns the anchored mark; its Observer emerges on scroll.
       mwrap.style.opacity = String(base + (.97 - base)*eyeBoost);
       mLastP = p;
     };

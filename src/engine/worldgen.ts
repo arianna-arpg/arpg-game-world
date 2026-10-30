@@ -13,6 +13,7 @@ import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
 import { TILESETS, pickCaveFace, pickDockTileset, pickTilesetForBiome, pickTilesetVariant, type TilesetDef, type TilesetVariant } from '../data/tilesets';
 import { hasLayout } from './levelgen';
+import { bakeBiomeDecoration } from './biomeDecoration';
 import { registerGenPin } from './genPins';
 import { lairLandmarkRolls } from './lairs';
 import { darkFloorAt, deeperChanceAt, levelStepAt, namePrefixAt } from '../world/strata';
@@ -1685,6 +1686,7 @@ export function placeZoneAt(
     theme: spec.special ? SPECIAL_ARENA_THEME
       : variantTheme ? { ...tileset.theme, ...variantTheme } : tileset.theme,
     layout: locale ? [] : layout,
+    ...(locale ? { localeDecoration: bakeBiomeDecoration(tileset, layout, biome, layoutParams) } : {}),
     ...(layoutType !== 'plains' ? { layoutType } : {}),
     objective: objectiveFinal,
     // The biome's puzzle repertoire + ambient scenery-actors ride the def

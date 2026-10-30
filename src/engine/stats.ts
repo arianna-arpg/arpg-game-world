@@ -839,6 +839,7 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  bond heals, everything through Actor.healBy (the damageTaken mirror:
    *  a "seared wounds" debuff is pure status data). */
   healTaken:      { label: 'Healing Received', base: 1, min: 0 },
+  bodyMass:       { label: 'Body Mass', base: 1, min: 0 },
   /** Multiplier on healing the actor GIVES (heal effects, siphons, tree
    *  bursts) — the healer's damage stat. Tag-filtered like damage, so
    *  "increased healing with channelled skills" is a modifier away. */
@@ -1978,6 +1979,12 @@ export class StatSheet {
     return this.compute(stat, contextTags, extra, baseValue, false);
   }
 
+  /** Ignore a stat's baseline and positive grants while retaining reductions.
+   * Used by resistance-neutral ailments before debuffs and penetration. */
+  reductionsFromZero(stat: string, contextTags?: ReadonlySet<SkillTag>): number {
+    return this.compute(stat, contextTags, undefined, 0, true, true);
+  }
+
   /**
    * The real computation behind get(). `noLinks` is the STAT-LINK golden
    * rule: a link ("gain 40% of life regen as thorns") reads its source at
@@ -1989,7 +1996,7 @@ export class StatSheet {
    */
   private compute(
     stat: string, contextTags?: ReadonlySet<SkillTag>,
-    extra?: readonly Modifier[], baseValue?: number, noLinks = false,
+    extra?: readonly Modifier[], baseValue?: number, noLinks = false, reductionsOnly = false,
   ): number {
     const cacheable = (!extra || !extra.length) && baseValue === undefined;
     // Skill-local modifiers and base overrides bypass the value cache.
@@ -2036,6 +2043,7 @@ export class StatSheet {
             v *= g;
           }
         }
+        if (reductionsOnly && v >= 0) continue;
         switch (m.kind) {
           case 'flat': flat += v; break;
           case 'increased': increased += v; break;

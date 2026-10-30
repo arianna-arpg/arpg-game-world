@@ -50,7 +50,12 @@ export const SLAYER_CFG = {
   quailAt: 0.5,
 } as const;
 
+export interface LifeWoundEvent { attacker: Actor; packet: DamagePacket; intercepted: number; }
 export interface DamagePacket {
+  /** Attributed voluntary life payments cannot be evaded, absorbed or waived by charge immunity. */
+  resourceHit?: boolean;
+  /** Transferred wounds never re-enter a cohort interception chain. */
+  redirected?: boolean;
   assaultGuaranteed?: boolean;
   amounts: Partial<Record<DamageType, number>>;
   crit: boolean;
@@ -77,7 +82,7 @@ export interface DamagePacket {
  * a player would expect them to.
  */
 export function applyConversion(
-  caster: Actor, amounts: Partial<Record<DamageType, number>>,
+  caster: Pick<Actor, 'sheet'>, amounts: Partial<Record<DamageType, number>>, // Codex examples use the same fold
   tags: Set<SkillTag>, extra?: Modifier[],
 ): void {
   for (const from of DAMAGE_TYPES) {
@@ -384,12 +389,14 @@ const RES_STAT: Record<DamageType, string | null> = {
  */
 export function resistValue(
   target: Actor, type: DamageType,
-  pen?: { attacker: Actor; tags?: Set<SkillTag>; extra?: Modifier[] },
+  pen?: { attacker: Actor; tags?: Set<SkillTag>; extra?: Modifier[]; resistanceZero?: DamageType },
 ): number {
   const stat = RES_STAT[type];
   if (!stat) return 0;
   const cap = Math.min(target.sheet.get(stat + 'Max'), DEFENSE_CFG.resistance.hardCap);
-  let res = Math.min(target.sheet.get(stat), cap);
+  let res = pen?.resistanceZero === type
+    ? Math.max(DEFENSE_CFG.resistance.floor, target.sheet.reductionsFromZero(stat))
+    : Math.min(target.sheet.get(stat), cap);
   if (pen) {
     const p = pen.attacker.sheet.get(type + 'Pen', pen.tags, pen.extra);
     if (p > 0) res = Math.max(DEFENSE_CFG.resistance.floor, res - p);
@@ -400,6 +407,7 @@ export function resistValue(
 /** Attacker context threaded into mitigation so victim pools can honour
  *  attacker-side stats (poiseDamage) — absent for caster-less sources. */
 export interface MitigateOpts {
+  resistanceZero?: DamageType;
   armorDamageFloor?: number;
   attacker?: Actor;
   tags?: Set<SkillTag>;
@@ -429,15 +437,19 @@ export function mitigateTyped(
 ): number {
   // Stat-granted damageImmunity also protects direct typed hazards/bursts
   // that do not enter applyHit; no defense pool is spent during shelter.
-  if (target.sheet.get('damageImmunity') > 0) return 0;
+  if (target.frameCharging || target.sheet.get('damageImmunity') > 0) return 0;
   return mitigatePools(target, mitigateWound(target, amounts, opts), opts);
 }
 
+/** Pure ailment basis: calculate the landed wound with one resistance treated
+ * as zero before reductions. Never spends shields or lands a second hit. */
+export function ailmentWoundBasis(target: Actor, amounts: Partial<Record<DamageType, number>>,
+  attacker: Actor, tags: Set<SkillTag>, extra: Modifier[], resistanceZero?: DamageType): number {
+  return mitigateWound(target, amounts, { attacker, tags, extra, resistanceZero });
+}
+
 /** The PURE half of mitigation: armor/resists per type, the slayer lane,
- *  and the damage-taken multiplier — everything that decides how big the
- *  WOUND is before any pool pays. No rng, no state writes: safe to call
- *  as a preview (the passive block prices its guard against exactly this
- *  number), then the pools half spends against what it returned. */
+ * and damage taken, before defensive pools pay. Safe for previews. */
 function mitigateWound(
   target: Actor, amounts: Partial<Record<DamageType, number>>,
   opts?: MitigateOpts,
@@ -445,7 +457,7 @@ function mitigateWound(
   amounts = receiveDamageAs(target, amounts);
   if (opts?.out) opts.out.receivedAmounts = amounts;
   const pen = opts?.attacker
-    ? { attacker: opts.attacker, tags: opts.tags, extra: opts.extra } : undefined;
+    ? { attacker: opts.attacker, tags: opts.tags, extra: opts.extra, resistanceZero: opts.resistanceZero } : undefined;
   let total = 0;
   for (const type of Object.keys(amounts) as DamageType[]) {
     let dmg = amounts[type]!;
@@ -670,9 +682,9 @@ function plyEats(attacker: Actor, target: Actor, total: number, packet: DamagePa
  * costs, sacrifices and scripted falls never do — those are not wounds.
  * Returns the life actually removed.
  */
-export function landLifeDamage(target: Actor, total: number): number {
-  if (target.sheet.get('damageImmunity') > 0) return 0;
-  for (const intercept of target.lifeDamageInterceptors?.values() ?? []) total = Math.max(0, intercept(total));
+export function landLifeDamage(target: Actor, total: number, event?: LifeWoundEvent): number {
+  if (target.frameCharging || target.sheet.get('damageImmunity') > 0) return 0;
+  for (const intercept of target.lifeDamageInterceptors?.values() ?? []) { const before = total; total = Math.max(0, intercept(total, event)); if (event) event.intercepted += Math.max(0, before - total); }
   if (total <= 0) return 0;
   if (total >= target.life && target.life > 0 && !target.dead && !target.invulnerable
     && target.lastGaspCd <= 0) {
@@ -694,6 +706,7 @@ export function landLifeDamage(target: Actor, total: number): number {
 /** Apply a rolled packet to a defender. Returns what actually landed. */
 export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): HitResult {
   const result = applyHitCore(attacker, target, packet);
+  for (const observer of target.hitObservers?.values() ?? []) observer(attacker,packet,result);
   SIM_TAP.current?.onHit?.(attacker, target, result, packet);
   return result;
 }
@@ -701,13 +714,14 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
 /** The actual hit pipeline. applyHit is its thin observed wrapper, so the sim
  *  tap sees EVERY exit — evade, immunity, block, and the landed wound alike. */
 function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): HitResult {
+  if(packet.resourceHit){const amount=Math.min(Math.max(0,target.life),Object.values(packet.amounts).reduce((n,v)=>n+(v??0),0));target.life-=amount;return {evaded:false,immune:false,blocked:false,total:amount,crit:false};}
   // SEGMENT FABRIC: consume the collection-time contact latch up front —
   // whatever happens below (evade, block, land), the latch never goes
   // stale or misattributes a later, unrelated hit. Wound accounting and
   // the per-segment flash fire only where damage actually lands.
   const segHit = target.segHitPending;
   target.segHitPending = undefined;
-  if (target.invulnerable || throngTravelProtected(target)) return { evaded: false, immune: true, blocked: false, total: 0, crit: false };
+  if (target.frameCharging || target.invulnerable || throngTravelProtected(target)) return { evaded: false, immune: true, blocked: false, total: 0, crit: false };
   // HIT IMMUNITY (Cerement's shroud): every incoming HIT — attack, spell,
   // projectile — is dodged outright while the stat holds. DoTs still tick
   // (applyDot never comes through here); the shroud's own price bleeds on.
@@ -787,7 +801,9 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
         return { evaded: false, immune: false, blocked: true, blockedAmount: stopped, total: 0,
           crit: false, poiseBroke: out.poiseBroke, plyEaten: true };
       }
-      landLifeDamage(target, leaked);
+      const seep: LifeWoundEvent = { attacker, packet, intercepted: 0 };
+      landLifeDamage(target, leaked, seep);
+      leaked = Math.max(0, leaked - seep.intercepted);
       target.hitFlash = 0.1;
       target.hitFlashType = dominantTypeOf(packet.amounts);
       if (leaked > 0 && segHit !== undefined && segHit >= 0) {
@@ -838,7 +854,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   }
 
   const out: NonNullable<MitigateOpts['out']> = {};
-  const total = mitigateTyped(target, packet.amounts,
+  let total = mitigateTyped(target, packet.amounts,
     { attacker, tags: packet.tags, extra: packet.extra, out });
   // THE PLY GATE (plyEats above): runs AFTER mitigation so poise still
   // chips (poise-break stays honest counterplay) and AFTER evasion/block
@@ -853,7 +869,9 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
       receivedAmounts: out.receivedAmounts,
     };
   }
-  landLifeDamage(target, total);
+  const wound: LifeWoundEvent = { attacker, packet, intercepted: 0 };
+  landLifeDamage(target, total, wound);
+  total = Math.max(0, total - wound.intercepted);
   target.hitFlash = 0.15;
   target.hitFlashType = dominantTypeOf(packet.amounts); // THE HIT TINT (engine/bodyVoices.ts): the blow's type colors the body's flash
   // SEGMENT FABRIC: the landed blow marks the struck body — the coil that
@@ -896,7 +914,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // packet.extra carries the SKILL-LOCAL mods, so a leech gem socketed in
   // the swinging skill counts — not just passives and global sources.
   if (total > 0 && !attacker.dead) {
-    const onHit = attacker.sheet.get('lifeOnHit', packet.tags, packet.extra);
+    const onHit = packet.redirected ? 0 : attacker.sheet.get('lifeOnHit', packet.tags, packet.extra);
     const leech = attacker.sheet.get('lifeLeech', packet.tags, packet.extra) * total;
     const healed = attacker.healBy(onHit + leech);
     noteResourceFlow(attacker, target, 'life', healed);
@@ -908,7 +926,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     if (wleech > 0) attacker.gainWard(wleech);
     // The other pools' sustain lanes (completing the family): energy
     // shield on-hit/leech and mana leech, each capped by its own max.
-    const esGain = attacker.sheet.get('esOnHit', packet.tags, packet.extra)
+    const esGain = (packet.redirected ? 0 : attacker.sheet.get('esOnHit', packet.tags, packet.extra))
       + attacker.sheet.get('esLeech', packet.tags, packet.extra) * total;
     if (esGain > 0) noteResourceFlow(attacker, target, 'es', attacker.gainEs(esGain));
     const mLeech = attacker.sheet.get('manaLeech', packet.tags, packet.extra) * total;
@@ -1064,7 +1082,7 @@ export function applyDot(target: Actor, amount: number, type?: DamageType): numb
 
 /** The actual DoT pipeline (applyDot is its thin observed wrapper). */
 function applyDotCore(target: Actor, amount: number, type?: DamageType): number {
-  if (target.invulnerable || throngTravelProtected(target)) return 0;
+  if (target.frameCharging || target.invulnerable || throngTravelProtected(target)) return 0;
   const tags = type ? new Set<SkillTag>([type]) : undefined;
   let total = amount * target.sheet.get('damageTaken', tags) * (1 + weakPointBonus(target));
   if (total <= 0) return 0;

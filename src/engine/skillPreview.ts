@@ -1,3 +1,4 @@
+import { summonArtIds } from './summonArtsSpec';
 // ---------------------------------------------------------------------------
 // THE PREVIEW FABRIC — what a skill does FOR THIS BUILD, right now.
 //
@@ -29,6 +30,7 @@
 // ---------------------------------------------------------------------------
 
 import { skillAbsorbAmount } from './absorb';
+import { projectileArtsOf, projectileArtsCount, projectileArtsLiveLimit } from './projectileArtsSpec';
 import { guardArtsOf, guardCapacity, guardArtAbsorb } from './guardArtsSpec';
 import { attackSequenceOf, attackSequenceStatuses, attackSequenceSweepInstances } from './attackSequenceSpec';
 import { guardSurgePreview } from './guardSurge';
@@ -182,9 +184,11 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   if (trigger?.on === 'meleeHit') push('trigger', 'Release', 'Next landed melee attack', 'headline', 'Toggle on to arm; pays this skill’s cost each release.');
   if (def.useTime > 0 && !replenishing && !(trigger && def.useTime <= instanceTriggerLimit(inst))) {
     const speed = caster.speedFactor(inst);
+    const castDelivery = instanceDelivery(inst);
+    const baseUseTime = castDelivery.type === 'summon' ? castDelivery.arts?.summonTime ?? def.useTime : def.useTime;
     push('castTime', tags.has('attack') ? 'Attack time' : 'Cast time',
-      secs(def.useTime / Math.max(0.01, speed)), 'headline',
-      Math.abs(speed - 1) > 0.005 ? `base ${secs(def.useTime)}` : undefined);
+      secs(baseUseTime / Math.max(0.01, speed)), 'headline',
+      Math.abs(speed - 1) > 0.005 ? `base ${secs(baseUseTime)}` : undefined);
   }
   if (skillCooldownSeconds(caster, inst) > 0 && !replenishing) {
     const cd = skillCooldownSeconds(caster, inst);
@@ -199,16 +203,21 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   // in play. (Skill-mode audit: the resolved view — a picked branch's
   // folded fields preview as they will fire.)
   const d = instanceDelivery(inst);
+  const projectileArt = projectileArtsOf(inst);
   if (d.type === 'projectile') {
-    const bonus = Math.round(get('projectileCount'));
+    const bonus = Math.round(get('projectileCount')) + projectileArtsCount(caster, inst)
+      + (projectileArt?.orbit ? Math.max(0, Math.round(get('projNova'))) : 0);
     const baseCount = typeof d.count === 'number' ? d.count : undefined;
     if (baseCount !== undefined || bonus > 0) {
-      const total = (baseCount ?? 1) + bonus;
+      const total = Math.min(projectileArtsLiveLimit(inst), (baseCount ?? 1) + bonus);
       push('projectiles', 'Projectiles', String(total), 'headline',
         bonus > 0 && baseCount !== undefined ? `base ${baseCount}` : undefined);
     }
     const pierce = (d.pierce ?? 0) + Math.round(get('pierceCount'));
-    if (pierce > 0) push('pierce', 'Pierces', `${pierce} target${pierce === 1 ? '' : 's'}`, 'detail');
+    if (pierce > 0) push('pierce', 'Pierces', pierce === Infinity ? 'Unlimited' : `${pierce} target${pierce === 1 ? '' : 's'}`, 'detail');
+    if (projectileArt && d.duration !== undefined) push('projectileDuration', 'Projectile duration', secs(d.duration * get('effectDuration')), 'detail');
+    if (projectileArt?.ailmentRamp) push('igniteRamp', 'Ignite chance growth',
+      `+${Math.round(projectileArt.ailmentRamp.perCast * 100)} percentage points per cast`, 'detail', 'Resets when an ignite is applied.');
     const chains = Math.round(get('chainCount'));
     if (chains > 0) push('chains', 'Chains', `${chains} time${chains === 1 ? '' : 's'}`, 'detail');
   }
@@ -260,7 +269,7 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
     const dur = fx.durationOverride !== undefined
       ? fx.durationOverride
       : (sdef?.duration ?? 0) * durScale;
-    push(`status_${fx.status}`, sdef?.label ?? fx.status,
+    push(`status_${fx.status}`, (sdef?.label ?? fx.status) + (projectileArt?.ailmentRamp?.status === fx.status ? ' (base)' : ''),
       eff >= 1 ? 'always' : pct(eff), 'detail', dur > 0 ? secs(dur) : undefined);
   }
   // Then the GRANTED ones (gems, gear, passives: the apply_ family), which no
@@ -286,12 +295,12 @@ export function previewSkill(caster: Actor, inst: SkillInstance): SkillPreview {
   if (d.type === 'summon') {
     const kinds = d.monsterId ? [d.monsterId] : (d.pool ?? []).map(p => p.id);
     push('minionKinds', 'Summoned forms', kinds.map(id => MONSTERS[id]?.name ?? id).join(', '), 'headline');
-    const taught = [...(d.crewSkills ?? []), ...(d.crewAuras ?? [])];
+    const taught = [...new Set([...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...summonArtIds(d)])];
     if (taught.length) push('minionArts', 'Additional minion arts', taught.map(id => SKILLS[id]?.name ?? id).join(', '), 'headline');
     for (const mid of kinds) {
       const rules = (d.crewRules ?? []).filter(r => r.monsterIds.includes(mid));
       const resolved = summonKitIds(d, mid, MONSTERS[mid]?.skills ?? []);
-      const arts = [...new Set(rules.flatMap(r => [...(r.skills ?? []), ...(r.replace ?? []).map(x => x.to)]))].filter(id => resolved.includes(id));
+      const arts = [...new Set([...summonArtIds(d, mid), ...rules.flatMap(r => [...(r.skills ?? []), ...(r.replace ?? []).map(x => x.to)])])].filter(id => resolved.includes(id));
       if (arts.length) push('crewRules_' + mid, MONSTERS[mid]?.name ?? mid,
         arts.map(id => SKILLS[id]?.name ?? id).join(', '), 'detail');
     }

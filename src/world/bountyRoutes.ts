@@ -17,7 +17,10 @@ export function bountyRoutes(w: World, home: string, policy: TravelPolicy) {
       return !edgeBlockAt(w, from.id, to.id);
     };
     const back = b.exits.find(x => x.to === a.id && unlocked(b, x, a));
-    return !!back && unlocked(a, e, b) && !w.roadIsWet(a.map, b.map)
-      && escarpmentRoad(a.map, b.map, w.sim.biomeField.fieldSeed);
+    // Baked landmark passages already realize their crossing locally (bridges,
+    // galleries, passes). Macro river/scarp samples must not erase that route.
+    const internal = !!a.complex && a.complex.root === b.complex?.root;
+    return !!back && unlocked(a, e, b) && (internal || (!w.roadIsWet(a.map, b.map)
+      && escarpmentRoad(a.map, b.map, w.sim.biomeField.fieldSeed)));
   }, id => w.objectiveDoneAt(id));
 }

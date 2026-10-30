@@ -1,4 +1,7 @@
+import { instanceDelivery } from '../engine/skills';
+import { strikeTimingsOf } from '../engine/strikeTiming';
 import { bodyActionPoseOf } from '../engine/bodyAction';
+import type { DamageTextSummary } from '../world/damageText';
 import { bodyWalkPoseOf } from '../engine/bodyWalk';
 import { meleeReachCueOf } from '../engine/meleeReach';
 import { foresightRowOf, foresightOfRow, type ForesightW } from './foresightWire';
@@ -7,7 +10,7 @@ import { afflictionPressureOf } from '../engine/afflictionPressure';
 import { armedStatusCues } from '../engine/armedCues';
 import { reactiveCueOf, wardCueActive, wardGuardians } from '../engine/combatReadability';
 import { memoryAccessView } from '../meta/memoryUnlocks';
-import { castingCompletion, castingCueOf } from '../engine/castingCues';
+import { castingCompletion, castingCueOf, castingDamageTags } from '../engine/castingCues';
 import { selfBankCuesOf, type SelfBankCue } from '../engine/skillSelfVisual';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
@@ -87,6 +90,10 @@ export type Vec2W = [number, number];
 
 /** One renderer-visible actor on the wire. Short keys keep the JSON small. */
 export interface ActorW {
+  spectralVeil?: Actor['spectralVeil'];
+  frames?: Record<string, import('../engine/frameSpec').FrameView>;
+  frameBody?: import('../engine/frameSpec').FrameBodyView;
+  summonArts?: Record<string, import('../engine/summonArtsSpec').SummonArtView>;
   bodyActionPose?: import('../engine/bodyAction').BodyActionPose;
   bodyWalkPose?: import('../engine/bodyWalk').BodyWalkPose;
   selfBankCues?: SelfBankCue[];
@@ -208,7 +215,7 @@ export interface ActorW {
   st?: StatusW[];              // active statuses (pips + screen ailment FX)
   cast?: CastW;                // cast bar + guard arc
   auras?: AuraW[];             // emanating aura fields
-  con?: { kind: string; domeRadius?: number };  // construct (dome bubble)
+  con?: { kind: string; domeRadius?: number; timer?: number; armingDuration?: number; detonationLeft?: number };
   fuse?: number;               // armed bomber fuse
   leap?: { timer: number; total: number; vent?: number };  // airborne leap (body swell; `vent` = the vent-ride's column radius — the steam jet draws)
   /** Snake/worm trailing segments. SEGMENT-FABRIC extras ride only when
@@ -222,10 +229,11 @@ export interface ActorW {
 /** `bk` = THE BANK READ (StatusDef.bank — ActiveStatus.bankFrac, 0..1 at
  *  two decimals): the derived scalar the body FX scale by (the tells-wire
  *  idiom — never the bank's source numbers). Absent = no bank worn. */
-export interface StatusW { id: string; stacks: number; bk?: number; dot?: 1; rem?: number; statusDuration?: number; }
+export interface StatusW { visual?: string; id: string; stacks: number; bk?: number; dot?: 1; rem?: number; statusDuration?: number; }
 export interface AuraW { c: string; r: number; sh: number; skillId?: string; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW { parryCue?: number;
+  damageTags?: import('../engine/stats').DamageType[];
   fg?: ForesightW;
   meleeReach?: import('../engine/meleeReach').MeleeReachCue;
   /** Optional player skill identity; older hosts keep their plain cast bar. */
@@ -237,6 +245,8 @@ export interface CastW { parryCue?: number;
   c: string; mode: string; total: number; elapsed: number;
   pulseTimer?: number; shield?: number; maxShield?: number;
   indicatorAt?: number; presses?: number; channelTime?: number;
+  strikeTimings?: import('../engine/skills').ResolvedStrikeTiming[];
+  stage?: number; sinceStage?: number; sparkWindow?: number;
   guardArc?: number;           // guard spec arcDeg (mode === 'guard')
   /** Guard bash tic: live arming line + inverted contract (mode 'guard'). */
   bashAt?: number; bashLow?: boolean;
@@ -263,7 +273,8 @@ export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; tier?
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string;
   /** INFO-STREAM float kind — ships so each CLIENT gates the draw by its own
    *  Settings.floatKinds (the host mints one truth; every seat curates). */
-  k?: string; }
+  k?: string;
+  damage?: DamageTextSummary; }
 /** A notice-feed line (screen-anchored world news) — the client filters by
  *  its own channel mutes and draws at its own anchor/duration. */
 export interface NoticeW { text: string; color: string; size: number; ch: string; born: number; }
@@ -327,7 +338,7 @@ export interface SupportInstW { id: string; lvl: number; lk?: 1; }
  *  when unpicked (the sparse idiom); the client rehydrates through
  *  validTreeNodes so its tooltip/pip/panel read the same truth the host
  *  spends (orphans from a version-skewed host drop with a note). */
-export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; rp?: 1; triggerOff?: boolean; empowermentRank?: number; }
+export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; lk?: 1; tn?: string[]; schools?: string[]; rp?: 1; triggerOff?: boolean; empowermentRank?: number; }
 /** The client OWN-seat build: enough to render the char-sheet / skill-book / tree
  *  and re-derive the stat sheet (recalcSeat) on the client. */
 export interface SeatMetaW {
@@ -387,6 +398,7 @@ const skillInstW = (s: SkillInstance): SkillInstW => ({
   g: s.granted || undefined,
   lk: s.locked ? 1 : undefined,
   tn: s.treeNodes?.length ? [...s.treeNodes] : undefined,
+  schools: s.summonSchools?.length ? [...s.summonSchools] : undefined,
   rp: s.replenishmentPaused ? 1 : undefined,
   triggerOff: s.state?.triggerOff,
 });
@@ -447,6 +459,11 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
   // Untrusted wire → the one validation seam (structure + budget), so the
   // client's panels can never render a state the host would refuse.
   if (w.tn?.length) inst.treeNodes = validTreeNodes(def, w.tn, w.lvl, inst);
+  const summon = instanceDelivery(inst);
+  if (Array.isArray(w.schools) && summon.type === 'summon' && summon.arts?.schools) {
+    const selected = summon.arts.schools.filter(row => w.schools!.includes(row.id)).map(row => row.id);
+    if (selected.length) inst.summonSchools = selected;
+  }
   if (typeof w.triggerOff === 'boolean') (inst.state ??= {}).triggerOff = w.triggerOff;
   if (w.rp === 1 && replenishingDelivery(inst)?.replenish?.toggle) inst.replenishmentPaused = true;
   return inst;
@@ -703,6 +720,9 @@ function actorToW(a: Actor, world: World): ActorW {
   const w: ActorW = {
     id: a.id, p: v2(a.pos), f: a.facing, r: a.radius, c: a.color, sh: a.shape,
     team: a.team, name: a.name,
+    frames: world.frameArts.presentation(a),
+    frameBody: world.frameArts.bodyPresentation(a),
+    summonArts: world.summonArts.presentation(a),
     life: Math.max(0, Math.round(a.life)), maxLife: Math.round(a.maxLife()),
     es: Math.round(a.es), maxEs: Math.round(a.maxEs()),
     hf: a.hitFlash, downed: a.downed, dead: a.dead, mn: a.isMinion(), passive: a.passive, ut: a.untargetable,
@@ -778,6 +798,7 @@ function actorToW(a: Actor, world: World): ActorW {
   if (armedCues.length) w.armedCues = armedCues.map(cue => ({ ...cue }));
   w.reactiveCue = reactiveCueOf(a, world.time);
   const selfBanks = selfBankCuesOf(a, world.time);
+  if (a.spectralVeil) w.spectralVeil = { ...a.spectralVeil };
   if (a.presenceBadge) w.presenceBadge = { ...a.presenceBadge };
   if (selfBanks.length) w.selfBankCues = selfBanks.map(row => ({ ...row }));
   const poolCues = poolCueRows(a);
@@ -831,13 +852,13 @@ function actorToW(a: Actor, world: World): ActorW {
   if (a.absorbTotal > 0) w.ab = Math.round(a.absorbTotal);
   if (a.statuses.length) {
     w.st = a.statuses.map(s => ({
-      rem: s.remaining, statusDuration: s.statusDuration ?? s.total, id: s.id, stacks: s.stacks,
+      rem: s.remaining, statusDuration: s.statusDuration ?? s.total, id: s.id, stacks: s.stacks, visual: s.visual,
       ...(s.dps > 0 ? { dot: 1 as const } : {}),
       ...(s.bankFrac !== undefined ? { bk: Math.round(s.bankFrac * 100) / 100 } : {}) }));
   }
   if (a.casting) {
     const cs = a.casting;
-    const cw: CastW = { c: cs.inst.def.color, mode: cs.mode, total: cs.total, elapsed: cs.elapsed };
+    const cw: CastW = { c: cs.inst.def.color, mode: cs.mode, total: cs.total, elapsed: cs.elapsed, damageTags: castingDamageTags(cs) };
     if (a.kind === 'player') cw.sk = cs.inst.def.id;
     const fg = foresightRowOf(a, cs);
     if (fg) cw.fg = fg;
@@ -849,6 +870,11 @@ function actorToW(a: Actor, world: World): ActorW {
     if (cs.shield !== undefined) cw.shield = cs.shield;
     if (cs.maxShield !== undefined) cw.maxShield = cs.maxShield;
     if (cs.indicatorAt !== undefined) cw.indicatorAt = cs.indicatorAt;
+    const strikeTimings = strikeTimingsOf(cs);
+    if (strikeTimings.length) cw.strikeTimings = strikeTimings.map(t => ({ ...t, source: { ...t.source } }));
+    if (cs.stage !== undefined) cw.stage = cs.stage;
+    if (cs.sinceStage !== undefined) cw.sinceStage = cs.sinceStage;
+    if (cs.sparkWindow !== undefined) cw.sparkWindow = cs.sparkWindow;
     if (cs.presses !== undefined) cw.presses = cs.presses;
     if (cs.channelTime !== undefined) cw.channelTime = cs.channelTime;
     if (cs.mode === 'guard') cw.parryCue = parryCueStrength(a);
@@ -866,7 +892,13 @@ function actorToW(a: Actor, world: World): ActorW {
     w.auras = [...a.activeAuras.values()].map(au => ({ skillId: au.inst.def.id,
       c: cosmeticSkillPaint(world, a, au.inst.def.id).color ?? au.inst.def.color, r: au.radius, sh: au.shape }));
   }
-  if (a.construct) w.con = { kind: a.construct.kind, domeRadius: a.construct.domeRadius };
+  if (a.construct) {
+    w.con = { kind: a.construct.kind, domeRadius: a.construct.domeRadius };
+    if (a.construct.kind === 'trap' || a.construct.kind === 'mine') {
+      w.con.timer = a.construct.timer; w.con.armingDuration = a.construct.armingDuration;
+      w.con.detonationLeft = a.construct.detonationLeft;
+    }
+  }
   if (a.fuse !== undefined) w.fuse = a.fuse;
   if (a.leap) {
     w.leap = a.leap.vent
@@ -955,7 +987,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     })),
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(a => ({ ...actorToW(a, world), cosmeticKind: a.cosmeticKind, cosmeticLoadout: cosmeticLoadoutFor(world, a) })),
     skillFields: world.zones.map(z => skillFieldVisual(z, world.time)),
-    projectiles: world.projectiles.map(p => ({ tier: p.tier ?? 0, skillId: p.inst?.def.id ?? p.skillVisualId, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
+    projectiles: world.projectiles.map(p => ({ tier: p.tier ?? 0, skillId: p.skillVisualId ?? p.inst?.def.id, reflectedCue: p.parryDamage ? true : undefined, orbPaint: p.orbPaint ? { ...p.orbPaint } : undefined, p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age, cosmeticMotif: p.cosmeticMotif, cosmeticProjectile: p.cosmeticProjectile })),
     tethers: world.tethers.map(t => {
       const v = skillTetherVisual(t);
       return { ax: Math.round(v.ax), ay: Math.round(v.ay), bx: Math.round(v.bx), by: Math.round(v.by), c: v.color, w: v.width,
@@ -985,7 +1017,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       flowFromTier: o.flowFromTier,
       flowTo: o.homeTo && !o.homeTo.dead ? v2(o.homeTo.pos) : undefined,
       flowTier: o.homeTo && !o.homeTo.dead ? o.homeTo.tier ?? 0 : undefined })),
-    texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind })),
+    texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind,
+      damage: t.damage ? { ...t.damage, at: { ...t.damage.at } } : undefined })),
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
@@ -1361,6 +1394,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.aims = aw.aims !== false; // absent = aims (older hosts, ordinary bodies)
     a.wane = aw.wn ?? 0;
     a.owner = aw.mn ? MINION_OWNER : undefined;
+    a.remoteFrameBody=aw.frameBody ? { ...aw.frameBody, from: aw.frameBody.from ? { ...aw.frameBody.from } : undefined } : undefined;
+    a.remoteFrames=aw.frames ? Object.fromEntries(Object.entries(aw.frames).map(([id,row])=>[id,{...row}])):undefined;
+    a.remoteSummonArts = aw.summonArts ? Object.fromEntries(Object.entries(aw.summonArts).map(([id, row]) => [id, { ...row }])) : undefined;
     a.summonShell = aw.ss;
     a.shellGuard = aw.sg ? { ...aw.sg, breathe: aw.sg.breathe ? { ...aw.sg.breathe } : undefined } : undefined;
     a.poiseBroken = aw.pb === true;
@@ -1418,6 +1454,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.reactiveCue = aw.reactiveCue ? { ...aw.reactiveCue, volatile: aw.reactiveCue.volatile ? { ...aw.reactiveCue.volatile } : undefined } : undefined;
     a.poolCues = aw.poolCues?.map(row => ({ ...row })) ?? [];
     a.selfBankCues = aw.selfBankCues?.map(row => ({ ...row })) ?? [];
+    a.spectralVeil = aw.spectralVeil ? { ...aw.spectralVeil } : undefined;
     a.presenceBadge = aw.presenceBadge ? { ...aw.presenceBadge } : undefined;
     a.payloadCues = aw.payloadCues?.map(row => ({ ...row, points: row.points?.map(p => ({ ...p })) })) ?? [];
     a.procCues = aw.procCues?.map(row => ({ ...row })) ?? [];
@@ -1452,7 +1489,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.bodyActionPose = aw.bodyActionPose ? { ...aw.bodyActionPose } : null;
     a.bodyWalkPose = aw.bodyWalkPose ? { ...aw.bodyWalkPose } : null;
     a.statuses.length = 0;
-    if (aw.st) for (const s of aw.st) a.statuses.push({ id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), statusDuration: s.statusDuration, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
+    if (aw.st) for (const s of aw.st) a.statuses.push({ visual: s.visual, id: s.id, remaining: Number.isFinite(s.rem) ? s.rem! : 99, remainingKnown: Number.isFinite(s.rem), statusDuration: s.statusDuration, stacks: s.stacks, dps: 0, screenDot: s.dot ? true : undefined, sourceName: '', bankFrac: s.bk });
     a.casting = aw.cast ? ({
       // THE VENT-RIDE's broil: the client's cast stub carries the column
       // radius as a leap delivery with a vent, so the roil layer reads one
@@ -1460,6 +1497,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       inst: { hostSkillId: aw.cast.sk, def: { id: aw.cast.sk ?? '', name: aw.cast.sk ? SKILLS[aw.cast.sk]?.name ?? '' : '', color: aw.cast.c, guard: aw.cast.guardArc !== undefined ? { arcDeg: aw.cast.guardArc } : undefined,
         delivery: aw.cast.vent !== undefined ? { type: 'leap', vent: { columnR: aw.cast.vent } } : undefined } },
       mode: aw.cast.mode, total: aw.cast.total, elapsed: aw.cast.elapsed,
+      damageTags: aw.cast.damageTags?.slice() ?? [],
       resolvedGuardArc: aw.cast.guardArc === undefined ? undefined : aw.cast.guardArc * Math.PI / 180,
       resolvedMeleeReach: aw.cast.meleeReach ? { ...aw.cast.meleeReach } : null,
       foresight: foresightOfRow(aw.cast.fg, aw.cast.c),
@@ -1469,12 +1507,16 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       pulseTimer: aw.cast.pulseTimer, shield: aw.cast.shield, maxShield: aw.cast.maxShield,
       guardReleaseCue: aw.cast.guardReleaseCue ? { ...aw.cast.guardReleaseCue } : undefined,
       parryCue: aw.cast.parryCue, indicatorAt: aw.cast.indicatorAt, presses: aw.cast.presses, channelTime: aw.cast.channelTime,
+      strikeTimings: aw.cast.strikeTimings?.map(t => ({ ...t, source: { ...t.source } })),
+      stage: aw.cast.stage, sinceStage: aw.cast.sinceStage, sparkWindow: aw.cast.sparkWindow,
       bashAt: aw.cast.bashAt, bashLow: aw.cast.bashLow, bashArmAt: aw.cast.bashArmAt,
       aim: { x: a.pos.x, y: a.pos.y }, held: false, baseMult: 1,
     } as unknown as CastingState) : null;
     a.activeAuras.clear();
     if (aw.auras) aw.auras.forEach((au, i) => a!.activeAuras.set('a' + i, ({ inst: { def: { id: au.skillId ?? '', color: au.c } }, radius: au.r, shape: au.sh } as unknown as ActiveAura)));
-    a.construct = aw.con ? ({ kind: aw.con.kind, domeRadius: aw.con.domeRadius } as unknown as ConstructState) : undefined;
+    a.construct = aw.con ? ({ kind: aw.con.kind, domeRadius: aw.con.domeRadius,
+      timer: aw.con.timer ?? 0, armingDuration: aw.con.armingDuration,
+      detonationLeft: aw.con.detonationLeft } as unknown as ConstructState) : undefined;
     a.fuse = aw.fuse;
     a.leap = aw.leap
       ? ({ timer: aw.leap.timer, total: aw.leap.total,
@@ -1572,7 +1614,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.satellites.flights.visuals = (snap.satelliteFlights ?? []).map(v => ({ ...v, from: { ...v.from }, to: { ...v.to } }));
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0,
     tier: o.tier, flowTo: o.flowTo ? { x: o.flowTo[0], y: o.flowTo[1] } : undefined, flowTier: o.flowTier, flowFromTier: o.flowFromTier }));
-  world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k })) as unknown as World['texts'];
+  world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k,
+    damage: t.damage ? { ...t.damage, at: { ...t.damage.at } } : undefined })) as unknown as World['texts'];
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,
@@ -1772,7 +1815,7 @@ export function serializeZone(world: World): ZoneMsg {
   return {
     zoneId: world.zone.id, name: world.zone.name, level: world.zone.level,
     ...(world.zone.locale ? { locale: structuredClone(world.zone.locale) } : {}),
-    ...(world.zone.complex ? { complex: { ...world.zone.complex } } : {}),
+    ...(world.zone.complex ? { complex: structuredClone(world.zone.complex) } : {}),
     ...(world.zone.destination ? { destination: structuredClone(world.zone.destination) } : {}),
     ...(world.zone.journey ? { journey: { ...world.zone.journey } } : {}),
     ...(world.zone.geo ? { geo: structuredClone(world.zone.geo) } : {}),
@@ -1825,7 +1868,7 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.zone.level = msg.level;
   if (msg.locale) world.zone.locale = structuredClone(msg.locale);
   else delete world.zone.locale;
-  if (msg.complex) world.zone.complex = { ...msg.complex };
+  if (msg.complex) world.zone.complex = structuredClone(msg.complex);
   else delete world.zone.complex;
   if (msg.destination) world.zone.destination = structuredClone(msg.destination);
   else delete world.zone.destination;

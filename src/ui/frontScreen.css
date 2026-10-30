@@ -1,0 +1,179 @@
+/* The front door is a full-viewport composition, still riding the shared UI
+   scale. All overrides are scoped to its markup; sideScreen.css supplies the
+   shared Options/Vault/Chronicle/Immortal Vessels frame. */
+#start-menu:has(> .front-screen) {
+  position: fixed; inset: 0 auto auto 0; transform: none;
+  width: calc(100vw / var(--ui-scale)); height: calc(100dvh / var(--ui-scale));
+  min-width: 0; max-width: none; max-height: none; padding: 0;
+  border: 0; border-radius: 0; box-shadow: none; background: transparent;
+  text-align: left; overflow: auto; scrollbar-color: #8b7753 #101818;
+  container: front-door / inline-size; scroll-padding-bottom: 48px;
+}
+#front-backdrop { position: fixed; inset: 0; overflow: hidden; pointer-events: none; display: none; background: #090f11; }
+body:has(#start-menu:not(.hidden)) #front-backdrop { display: block; }
+#front-backdrop > * { position: absolute; inset: 0; }
+.front-landscape { width: 100%; height: 100%; object-fit: cover; object-position: 62% center; }
+.front-vignette { background: linear-gradient(90deg, #04090be8 0%, #060d0f99 27%, transparent 67%),
+  linear-gradient(0deg, #060b10ed, transparent 30%, transparent 80%, #060b1066); }
+.front-haze { opacity: .24; background: radial-gradient(ellipse at 68% 78%, #afded640, transparent 52%);
+  animation: front-breathe var(--front-drift) ease-in-out infinite alternate; }
+.front-motes i { position: absolute; left: var(--x); top: var(--y);
+  width: var(--size); height: var(--size); border-radius: 50%; color: var(--tint);
+  background: radial-gradient(circle, #f1fffa 0%, var(--tint) 45%, transparent 75%);
+  box-shadow: 0 0 calc(var(--size) * 2) currentColor; opacity: 0;
+  animation: front-drift var(--duration) var(--delay) linear infinite; }
+.front-motes i::after { content: ''; position: absolute; inset: calc(var(--halo) * -1);
+  border-radius: 50%; background: radial-gradient(circle, var(--tint), transparent 68%); opacity: .24; }
+#front-backdrop[data-paused="true"] * { animation-play-state: paused; }
+.front-screen { color: var(--front-ivory); min-height: 100%; }
+.front-screen * { box-sizing: border-box; }
+.front-shell { min-height: calc(100dvh / var(--ui-scale)); display: flex; flex-direction: column;
+  padding: 26px clamp(26px, 5.6vw, 110px) 20px; }
+.front-header { display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding-bottom: 18px; border-bottom: 1px solid var(--front-line); color: var(--front-muted);
+  font-size: 10px; text-transform: uppercase; letter-spacing: 2.4px; }
+.front-chapter span { color: var(--front-gold); font-size: 17px; padding-right: 10px; }
+.front-account { display: flex; align-items: center; gap: 12px; }
+.front-account b { color: var(--front-ivory); font: normal 19px Georgia, serif; letter-spacing: 0; }
+.front-main { flex: 1; display: grid; grid-template-columns: minmax(300px, 430px) minmax(230px, 1fr);
+  align-items: center; column-gap: 80px; padding: 34px 0 30px; }
+.front-left { min-width: 0; }
+.front-brand { position: relative; margin-bottom: 28px; }
+.front-tagline { color: #b8b9ac; font: italic 15px/1.5 Georgia, serif; margin: 23px 0 0; letter-spacing: .3px; }
+.front-nav { max-width: 380px; }
+#start-menu .front-action { display: flex; width: 100%; align-items: center; gap: 15px; text-align: left;
+  position: relative; border: 1px solid transparent; border-radius: 0; background: transparent;
+  color: #cbd0ca; font: 14px 'Segoe UI', sans-serif; padding: 9px 14px; min-height: 41px;
+  cursor: var(--cursor-point, pointer); transition: background .18s, color .18s, border-color .18s; }
+#start-menu .front-action:hover:not(:disabled), #start-menu .front-action:focus-visible {
+  color: #fff8e9; border-color: #bca37370; background: linear-gradient(90deg, #bda06b24, #bda06b05); }
+#start-menu .front-action:focus-visible, #front-motion:focus-visible { outline: 2px solid #e3c68f; outline-offset: 3px; }
+#start-menu .front-action:active:not(:disabled) { background: #c3a57433; }
+#start-menu .front-action:disabled { opacity: .43; cursor: var(--cursor-default, default); }
+.front-action-mark { flex: 0 0 14px; color: var(--front-gold); font-size: 20px; line-height: 1; text-align: center; }
+.front-action-copy { flex: 1; min-width: 0; }
+.front-action-label { letter-spacing: .6px; }
+.front-action-detail { display: block; font-size: 11px; font-weight: 400; color: #afbab3; margin-top: 5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .15px; }
+.front-action-arrow { font: 20px/1 Georgia, serif; color: var(--front-gold); opacity: 0; transition: opacity .18s; }
+.front-action:hover .front-action-arrow, .front-action:focus-visible .front-action-arrow, .front-primary .front-action-arrow { opacity: 1; }
+#start-menu .front-primary { min-height: 68px; color: #f2e4c7; border-color: #bfa36c80;
+  background: linear-gradient(90deg, #a3874e2e, #a3874e0c); box-shadow: inset 3px 0 #c8aa73, 0 6px 25px #0002; margin-bottom: 5px; }
+.front-primary .front-action-label { font: 20px Georgia, serif; letter-spacing: .3px; }
+.front-journey > :not(.front-primary) { margin-top: 3px; }
+.front-legacy { margin-top: 15px; padding-top: 12px; border-top: 1px solid var(--front-line); }
+.front-utility { margin-top: 8px; }
+.front-badge { color: #d3ba8e; font-size: 10px; border: 1px solid #a58d5d55; padding: 3px 7px; white-space: nowrap; }
+.front-notice { margin: 0 0 16px; max-width: 420px; padding: 10px 14px; border-left: 2px solid var(--front-gold);
+  background: #131a1add; color: #e1c693; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.front-memory { align-self: end; justify-self: end; width: min(100%, 300px); margin-bottom: 20px; padding: 24px;
+  background: linear-gradient(120deg, #091315e0, #101a1c70); border: 1px solid #a9b8ac26; backdrop-filter: blur(8px); }
+.front-memory-rule { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; color: var(--front-gold); }
+.front-memory-rule::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--front-line), transparent); }
+.front-eyebrow { text-transform: uppercase; font-size: 9px; letter-spacing: 2px; color: #c8b58e; margin: 0 0 12px; }
+#start-menu .front-memory h2 { color: #eee6d4; text-transform: none; letter-spacing: .2px; font: normal 23px/1.25 Georgia, serif;
+  padding: 0; border: 0; margin: 0 0 13px; overflow-wrap: anywhere; }
+.front-memory > p:not(.front-eyebrow) { color: #b4c0ba; font-size: 12px; line-height: 1.8; margin: 0; }
+.front-saved { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #bbd5ca; margin-top: 22px; }
+.front-saved i { width: 4px; height: 4px; background: #b6e4ce; border-radius: 50%; box-shadow: 0 0 7px #8bd6bc; }
+.front-footer { border-top: 1px solid var(--front-line); padding-top: 17px; display: flex; justify-content: space-between;
+  align-items: center; gap: 20px; color: #a3b1ad; font-size: 10px; }
+.front-world { letter-spacing: .5px; }
+.front-world > span { color: #83948f; margin-left: 7px; }
+.front-footer-controls { display: flex; align-items: center; gap: 22px; }
+.front-key-hints { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.front-key-hints kbd { font: 9px 'Segoe UI', sans-serif; border: 1px solid #a9b8ac44; padding: 3px 5px; color: #c0ccc5; }
+.front-key-hints kbd:last-child { margin-left: 8px; }
+#front-motion { background: transparent; border: 0; border-radius: 0; color: #b5c2bc; padding: 8px 0; font: inherit; cursor: var(--cursor-point, pointer); }
+#front-motion:hover { color: #eee6d4; }
+#front-motion:disabled { cursor: default; opacity: .6; }
+#start-menu .front-dev:empty { display: none; }
+#start-menu .front-dev { align-items: stretch; margin-top: 16px; max-width: 380px; }
+#start-menu .front-dev button { width: 100%; font-size: 11px; padding: 6px; }
+body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
+/* The standalone backdrop carries the same art behind Options and the roster. */
+#start-menu:not(:has(.front-screen)) { background: #0b1417f5; border-color: #b39c6c55; }
+@container front-door (max-width: 760px) {
+  .front-main { column-gap: 30px; grid-template-columns: minmax(250px, 1fr) minmax(180px, .8fr); }
+  .front-shell { padding: 22px 30px; }
+  .front-brand .hw-brand { width: 340px; }
+  .front-memory { padding: 18px; }
+  .front-key-hints { display: none; }
+}
+@container front-door (max-width: 560px) {
+  .front-main { display: block; padding-top: 28px; }
+  .front-memory { display: none; }
+  .front-nav { max-width: none; }
+  .front-brand { margin-bottom: 24px; }
+  .front-brand .hw-brand { width: 100%; }
+  .front-header { font-size: 9px; letter-spacing: 1.2px; }
+  .front-account { gap: 6px; }
+  .front-footer { flex-wrap: wrap; gap: 8px; }
+  .front-shell { padding: 20px 24px; }
+  .front-world > span { display: none; }
+}
+@container front-door (max-width: 330px) {
+  .front-brand .hw-brand { width: 100%; }
+  .front-shell { padding: 16px; }
+  .front-header { letter-spacing: .3px; }
+  .front-primary .front-action-label { font-size: 17px; }
+}
+@media (max-height: 760px) and (min-width: 800px) {
+  .front-main { padding-top: 22px; padding-bottom: 20px; }
+  .front-brand .hw-brand { width: 310px; }
+  .front-brand { margin-bottom: 22px; }
+  .front-tagline { margin-top: 16px; }
+  .front-shell { padding-top: 20px; padding-bottom: 14px; }
+  #start-menu .front-action { min-height: 35px; padding-top: 6px; padding-bottom: 6px; }
+  #start-menu .front-primary { min-height: 58px; }
+  .front-utility { display: flex; gap: 4px; margin-top: 12px; }
+  #start-menu .front-utility .front-action { justify-content: center; padding: 8px; font-size: 12px; gap: 6px; }
+  .front-utility .front-action-copy { flex: 0 1 auto; }
+  .front-utility .front-action-mark, .front-utility .front-action-arrow { display: none; }
+  .front-legacy { margin-top: 10px; padding-top: 8px; }
+}
+@media (max-height: 640px) and (min-width: 800px) {
+  .front-brand .hw-brand { width: 240px; }
+  .front-tagline { margin-top: 2px; font-size: 13px; }
+  .front-brand { margin-bottom: 6px; }
+  .front-main { padding-top: 8px; padding-bottom: 8px; }
+  .front-header { padding-bottom: 12px; }
+  #start-menu .front-action { min-height: 32px; padding-top: 5px; padding-bottom: 5px; }
+  #start-menu .front-primary { min-height: 58px; }
+  .front-footer { padding-top: 10px; }
+}
+@media (max-width: 600px) {
+  .front-landscape { object-position: 76% center; }
+  .front-motes i:nth-child(even) { display: none; }
+  .front-vignette { background: linear-gradient(90deg, #04090be6, #04090b88), linear-gradient(0deg, #060b10e8, transparent 60%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #front-backdrop * { animation: none !important; }
+  .front-motes i { opacity: calc(var(--mote-alpha) * .45); }
+  .front-screen * { transition: none !important; }
+}
+@media (forced-colors: active) {
+  #front-backdrop { display: none !important; }
+  #start-menu:has(> .front-screen), .front-memory { background: Canvas; }
+  #start-menu .front-action { border: 1px solid ButtonText; color: ButtonText; }
+}
+@keyframes front-breathe { from { transform: translate(-2%, 1%) scale(1); opacity: .15; } to { transform: translate(2%, -1%) scale(1.06); opacity: .35; } }
+@keyframes front-drift {
+  0% { transform: translate3d(0, 0, 0) scale(.65); opacity: 0; }
+  20% { opacity: var(--mote-alpha); }
+  35% { transform: translate3d(calc(var(--sway) * .65), calc(var(--rise) * -.3), 0) scale(1); }
+  65% { transform: translate3d(calc(var(--sway) * -.25), calc(var(--rise) * -.65), 0) scale(.85); opacity: calc(var(--mote-alpha) * .7); }
+  82% { opacity: var(--mote-alpha); }
+  100% { transform: translate3d(var(--sway), calc(var(--rise) * -1), 0) scale(.55); opacity: 0; }
+}
+
+
+
+/* The release client owns this badge outside the game UI. Reserve its footer
+   lane and retain its real source/build identity, including in local previews. */
+body:has(#start-menu:not(.hidden) .front-screen) #game-build-identity {
+  right: 18px !important; bottom: 7px !important; max-width: calc(100vw - 36px) !important;
+  padding: 2px 0 !important; background: transparent !important;
+  border: 0 !important; color: #93a39c !important; font: 9px/1.4 'Segoe UI', sans-serif !important;
+}
+.front-footer { padding-bottom: 26px; }

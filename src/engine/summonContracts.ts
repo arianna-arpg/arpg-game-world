@@ -3,7 +3,12 @@ import { instanceDelivery, instanceMods, skillContextTags, type SkillInstance, t
 
 /** Shared capacity and mutually exclusive identities are independent contracts. */
 export function summonCapacity(owner: Actor, inst: SkillInstance, d: SummonDelivery): number {
-  return Math.max(1, Math.round(owner.sheet.get('minionMaxCount', skillContextTags(inst), instanceMods(inst), d.maxActive)));
+  if (d.arts?.single) return 1;
+  const raw = owner.sheet.get('minionMaxCount', skillContextTags(inst), instanceMods(inst), d.maxActive);
+  const multiple = d.capacityMultiple;
+  if (multiple !== undefined && Number.isSafeInteger(multiple) && multiple > 0)
+    return Math.max(multiple, Math.ceil(raw / multiple) * multiple);
+  return Math.max(1, Math.round(raw));
 }
 
 /** A fixed slot request permits several reserved types to inhabit one pool.

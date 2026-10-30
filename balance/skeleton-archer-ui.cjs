@@ -26,7 +26,7 @@ app.whenReady().then(async () => {
       const tree=await run(`(() => { __game.step(2); const pane=document.getElementById('skill-tree-summon_skeleton_archer'), r=pane.getBoundingClientRect();
         const labels=[...pane.querySelectorAll('.st-label')].map(e=>{const r=e.getBoundingClientRect();return {text:e.textContent,x:r.x,y:r.y,w:r.width,h:r.height};});
         return {nodes:pane.querySelectorAll('circle[data-node]').length,rect:[r.x,r.y,r.width,r.height],labels}; })()`);
-      assert.equal(tree.nodes,15); assert.ok(tree.labels.some(l=>l.text==='Ranked Bows'));
+      assert.equal(tree.nodes,15); assert.ok(tree.labels.some(l=>l.text==='Rising Ranks'));
       const [x,y,w,h]=tree.rect; assert.ok(x>=-1&&y>=-1&&x+w<=width+1&&y+h<=height+1);
       assert.equal(tree.labels.flatMap((a,i)=>tree.labels.slice(i+1).filter(b=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y)).length,0);
       await capture('skeleton-archer-tree-'+width);
@@ -52,8 +52,11 @@ app.whenReady().then(async () => {
       const advance=seconds=>{for(let t=0;t<seconds;t+=1/60) update(1/60);};
       const start=nodes=>{w.channelFormations.clear();p.casting=null;p.cooldowns.clear();p.useLock=0;p.fillResources();w.actors=[p];w.projectiles=[];w.zones=[];w.flashes=[];inst.treeNodes=nodes;p.facing=0;w.useSkill(p,inst,aim,true);};
       window.__archerQA={w,p,inst,aim,advance,start};
-      start(['rattling_bows','ranked_bows','rain_of_bones','endless_quivers']);advance(4.5);__game.step(1);
+      start(['rattling_bows','ranked_bows','rain_of_bones','endless_quivers']);advance(.9);__game.step(1);
     })()`);
+    const recruited=await run(`__archerQA.w.actors.filter(a=>!a.dead&&a.channelFormation).length`);
+    assert.equal(recruited,4);
+    await run(`__archerQA.advance(.8);__game.step(1);`);
     const squad=await run(`(() => {const {w,p}=__archerQA;return {bodies:w.actors.filter(a=>!a.dead&&a.channelFormation).length,shots:w.projectiles.length,held:p.casting?.mode};})()`);
     assert.equal(squad.bodies,4);assert.ok(squad.shots>0);assert.equal(squad.held,'channel');await capture('skeleton-archer-firing-squad');
     const final=await run(`(() => {const q=__archerQA;q.p.casting.held=false;q.advance(.15);__game.step(1);return {bodies:q.w.actors.filter(a=>!a.dead&&a.channelFormation).length,big:q.w.projectiles.filter(p=>p.radius>=12).length};})()`);

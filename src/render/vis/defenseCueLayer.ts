@@ -1,11 +1,13 @@
 import { DEFENSE_CUE_CFG as C } from '../../data/defenseCues';
 import { defenseStyle } from '../../engine/defenseCues';
 import { shellArcFactor, type Actor } from '../../engine/actor';
+import { STATUS_APPEARANCES } from '../../data/projectileArtVisuals';
 import { STATUS_DEFS } from '../../engine/status';
 import type { PartSpec } from './parts';
 import { registerEffectVoice } from './effectVoice';
 import { drawPartSpecs, type BodyLook } from './body';
 import { shade, withAlpha } from './color';
+import { drawFrameShell } from './frameVoice';
 
 const TAU = Math.PI * 2;
 
@@ -16,6 +18,10 @@ function plate(ctx: CanvasRenderingContext2D, shape: string, r: number, width: n
   if (shape === 'spiral') {
     ctx.arc(0, 0, r, -width / 2, width / 2);
     ctx.arc(0, 0, r * (1 - thick), width / 2, -width / 2, true);
+  } else if (shape === 'bones') {
+    const h = r * Math.min(.16, width * .4), w = r * thick * .5;
+    ctx.moveTo(r - w, -h); ctx.quadraticCurveTo(r, -h * .6, r + w, -h);
+    ctx.lineTo(r + w * .5, h); ctx.quadraticCurveTo(r, h * .6, r - w, h);
   } else if (shape === 'brace' || shape === 'guard') {
     ctx.moveTo(r, -r * width * 0.38); ctx.lineTo(r * (1 + thick), 0);
     ctx.lineTo(r, r * width * 0.38); ctx.lineTo(r * (1 - thick), 0);
@@ -56,13 +62,15 @@ registerEffectVoice('defenseCue', (ctx, f, remaining) => {
 });
 
 /** Body-local persistent shell. Gaps stay open until the mechanical reform
- * threshold; returning fragments show actual refill, never a guessed timer. */
-export function drawShellCue(ctx: CanvasRenderingContext2D, a: Actor, time: number, radius = a.radius + C.shellPad): void {
+ * threshold; returning fragments show actual refill, never a guessed timer.
+ * Returns true when anatomy supplies the limbs as well as the shell. */
+export function drawShellCue(ctx: CanvasRenderingContext2D, a: Actor, time: number, radius = a.radius + C.shellPad): boolean {
   const sg = a.shellGuard;
-  if (!sg || sg.max <= 0) return;
+  if (!sg || sg.max <= 0) return false;
   const cfg = defenseStyle(sg.shellVisual);
   const arc = sg.side === 'all' ? TAU : sg.arcDeg * Math.PI / 180 * shellArcFactor(sg, time);
   const center = a.facing + (sg.side === 'rear' ? Math.PI : 0);
+  if (cfg.anatomy && drawFrameShell(ctx, a, cfg.anatomy, time, radius, arc, center)) return true;
   const fill = Math.max(0, Math.min(1, sg.pool / sg.max));
   const open = sg.broken || sg.pool <= 0;
   const recovery = Math.min(1, fill / Math.max(0.001, sg.reformFraction ?? 0.4));
@@ -82,7 +90,7 @@ export function drawShellCue(ctx: CanvasRenderingContext2D, a: Actor, time: numb
     }
     ctx.restore();
   }
-  ctx.restore();
+  ctx.restore(); return false;
 }
 
 /** Broken poise is a split bronze brace close to the body, never an outer
@@ -112,7 +120,7 @@ export function collectStatusBodyParts(a: Pick<Actor, 'statuses' | 'dead' | 'dow
   const parts: PartSpec[] = [], groups = new Set<string>();
   for (const s of a.statuses) {
     if (s.remaining <= 0) continue;
-    const cue = STATUS_DEFS[s.id]?.bodyCue;
+    const cue = (s.visual && STATUS_APPEARANCES[s.visual]) || STATUS_DEFS[s.id]?.bodyCue;
     if (!cue?.parts || (cue.group && groups.has(cue.group))) continue;
     if (cue.group) groups.add(cue.group);
     parts.push(...cue.parts);

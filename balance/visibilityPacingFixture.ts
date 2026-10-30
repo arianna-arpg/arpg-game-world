@@ -1,3 +1,4 @@
+import { visibilityCompositeChecks } from './visibilityCompositeFixture';
 import { SightVeil } from '../src/render/vis/sightVeil';
 import { RoomVeil } from '../src/render/vis/roomVeil';
 import { LightLayer } from '../src/render/vis/lights';
@@ -107,6 +108,7 @@ export function run(){
   check('actual renderer keeps camera and shadow fixed at resolution '+scale,
    difference(renderMask,pixels(internal.sightVeil))===0&&camera.x===internal.cam.x&&camera.y===internal.cam.y);
  }
+ checks.push(...visibilityCompositeChecks());
  out.remove();restore();return {checks,failures:checks.filter(c=>!c.ok)};
 }
 (window as unknown as {visibilityPacing:{run:typeof run}}).visibilityPacing={run};

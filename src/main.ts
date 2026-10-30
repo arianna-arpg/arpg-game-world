@@ -1,3 +1,10 @@
+import './ui/memoryReveal.css';
+import './ui/brand.css';
+import './ui/frontScreen.css';
+import './ui/sideScreen.css';
+import './ui/codexShell.css';
+import './ui/interfaceStyle.css';
+import { applyInterfaceStyle } from './ui/interfaceStyle';
 import { sanitizeCosmeticLoadout } from './meta/cosmetics';
 // ---------------------------------------------------------------------------
 // Entry point: boots the world, runs the loop, and routes player input into
@@ -62,6 +69,7 @@ import './data/commanders'; // side-effect: the tutorial factions (the Fathers) 
 import './data/locales';
 import './data/authoredMaps'; // side-effect: THE AUTHORED-MAP FABRIC's shipped maps (+ the 'authored' layout via engine/authoredMaps)
 import './data/bountyJourneys';
+import './data/bountyPassages';
 import './data/bountyExpeditions'; // side-effect: the bounty board's 'expedition' kind (an authored map minted at the take)
 import { updateAI } from './engine/ai';
 import { visibilityFrameTiming, visibilityDiagnosticsEnabled } from './render/vis/visibilityDiagnostics';
@@ -112,7 +120,7 @@ import { rememberKitPicks, resolveClassKit } from './meta/classkit';
 import {
   loadAccount, loadAccountAsync, loadSettings, loadSettingsAsync,
   saveAccount, saveAccountDurable, saveSettings, resetAccount,
-  saveSuppressed, suppressSaves,
+  saveSuppressed, suppressSaves, flushPendingDiskSaves,
 } from './meta/persistence';
 import {
   applySavedCharacter, clearCharacter, loadCharacter, loadCharacterAsync,
@@ -181,6 +189,7 @@ const settings: Settings = loadSettings();
 // player's size, not at 100% until they visit Options.
 installUiScaleStyles();
 applyUiScale(settings.uiScale);
+applyInterfaceStyle(settings.interfaceStyle);
 // THE UI STACK LAW (ui/zorder.ts): seat every selector-delivered surface on
 // its rung before anything shows — activatable panels above every canvas.
 installUiStack();
@@ -642,6 +651,22 @@ function beginPressed(): void {
   void withLoadingScreen(() => startMu(), 'Entering Mu');
 }
 ui.onBeginRun = beginPressed;
+ui.onSaveExit = async destination => {
+  // Capture before teardown: a co-op shell, scene, or dead run owns no live
+  // character save. Keep the same host/scene guards as the unload writer.
+  if (saveSuppressed()) throw new Error('Saving is unavailable after a game error. Restart to resume your last good save.');
+  if (running && net.isHost && !world.gameOver && !world.scene) {
+    world.invalidateZonesSaveMemo();
+    persistRun(account, world);
+    persistCouchGuests();
+  } else {
+    saveAccount(account);
+  }
+  running = false; // no later simulation/autosave can race this chosen exit
+  await flushPendingDiskSaves(); // roster Continue reads disk first, even without closing the app
+  toStartMenu();
+  if (destination === 'desktop') await ui.exitGame();
+};
 
 /** THE WAKEFUL WORLD: stand the saved world back up around a freshly-resumed
  *  character — adopt the save's world section (zone graph, discovery, clock,
@@ -984,6 +1009,7 @@ const diskHydrated = (async (): Promise<void> => {
   reconcileClassBundleGems(account);
   Object.assign(settings, s);
   applyUiScale(settings.uiScale);             // the disk save may carry a different dial
+  applyInterfaceStyle(settings.interfaceStyle);
   ui.setContinueSave(c);                       // disk save wins (re-renders the menu)
   ui.setStartMenuNotice(saveResetNotice());
   // Workshop disk reconcile: the save file is the cross-session authority
@@ -1243,6 +1269,8 @@ function handleLocalPanels(): void {
     if (ui.escapeMenuOpen) { ui.hideEscapeMenu(); return; }
     // The couch join overlay dismisses like any dialog — one press, gone.
     if (ui.couchJoinOpen) { closeCouchJoin(); return; }
+    // Cancel armed item actions before closing their service or conversation.
+    if (ui.cancelSalvageMode(world.localSeat.id)) return;
     if (dialogue.open && dialogue.close()) return;
     if (ui.closeNpcFront()) return;
     // COUCH: the hero's Esc walks ITS OWN cascade — a guest's open panels
@@ -1254,7 +1282,6 @@ function handleLocalPanels(): void {
       if (!ui.escCascadeFor(world.localSeat.id)) ui.showEscapeMenu();
       return;
     }
-    if (ui.cancelSalvageMode(world.localSeat.id)) return;
     // THE ESCAPE POLICY (ui/escapeConfig.ts): a sweep mode clears the whole
     // screen in one press — every book through its leaves' own closes, the
     // dialog belt, the ordinary panels (a kept page last) — and pauses only
@@ -2696,6 +2723,7 @@ function toStartMenu(notice?: string): void {
   couchReset(); // guest seats die with the world; the pads are free again
   running = false;
   pendingDeathScreen = null; // the menu is the screen now — no fade owes a debt
+  ui.setContinueSave(loadCharacter()); // explicit exits must refresh the in-memory Continue snapshot
   ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar, notice);
 }
 

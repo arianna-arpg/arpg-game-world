@@ -6,6 +6,8 @@ import './landformLocales';
 import './explorationLocales';
 import './complexLocales';
 import './landmarkComplexes';
+import './adventureLocales';
+import './adventureRegions';
 import { registerLocaleProgram, type LocaleDistrict } from '../world/locales';
 import { registerRegion, regionKind } from '../world/regions';
 

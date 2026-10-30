@@ -12,6 +12,7 @@ const p = (seal: TargetSeal, motif: BurstMotif, motion: SkillTargetProfile['moti
 /** The center mark names the cast; its surrounding motion names the material.
  * These are arrival signatures, not promises of a successful status or heal. */
 export const SKILL_TARGETS: Readonly<Record<string, SkillTargetProfile>> = {
+  court_death_warrant: p('bones','blood','close',4,'runes'),
   beast_dread_pulse: p('fangs', 'souls', 'close', 5),
   skeletal_ignite: p('bones', 'flame', 'rise', 4),
   pact_mend: p('knot', 'petals', 'close', 3),

@@ -379,8 +379,9 @@ export function scorchErosionAt(units: number): number {
 }
 
 export const STATUS_DEFS: Record<string, StatusDef> = {
+  death_warrant: { label: 'Death Warrant', color: '#d06880', duration: 8, bodyFx: { rim: '#d06880', rimWidth: 1.8, rimAlpha: .75, glow: '#9d3f5a', glowAlpha: .1 } },
   rattled_bones: {
-    label: 'Rattled Bones', color: '#d8d0b0', duration: 5,
+    label: 'Lodged Splinters', color: '#d8d0b0', duration: 5,
     stacking: true, maxStacks: 30, independentStacks: true, element: 'physical',
     hitVulnerability: { skills: ['skeletal_rattling_arrow', 'skeletal_bombardment', 'skeletal_arrowfall'], type: 'physical', perStack: 0.04 },
     bodyFx: { glow: '#d8d0b0', glowAlpha: 0.12, glowScale: 1.2 },
@@ -397,6 +398,10 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     // want your biggest hit to be the one that burns.
     stackPolicy: 'strongest',
     hitMagnitude: 0.35, baseline: { dps: 3, perLevel: 1.2 },
+  },
+  ignite_attractor: {
+    label: 'Pyreheart', color: '#ffc16e', duration: 4, element: 'fire', powerInert: true,
+    bodyCue: { group: 'ignite-focus', parts: [{ kind: 'runes', color: '#ffd28b', scale: 1.15, params: { n: 5 } }] },
   },
   flamewreathed: {
     // STANDING IN A LIVE FIRE FRONT (the wildfire creep's grant): a short,
@@ -1865,6 +1870,12 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
 }
 
 export interface ActiveStatus {
+  /** Originating ability for independently attributed periodic recovery. */
+  skillId?: string;
+  /** Application-owned presentation; the ailment ID and behavior stay intact. */
+  visual?: string;
+  /** Transferred wounds cannot circulate repeatedly between attractors. */
+  gathered?: true;
   /** Duration of the current application for its countdown icon. */
   statusDuration?: number;
   /** False only on a remote status without a supplied clock. */

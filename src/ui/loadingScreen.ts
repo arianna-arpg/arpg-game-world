@@ -2,6 +2,7 @@ import { loadingPresentation } from '../loading/presentation';
 import loadingScript from 'virtual:mu-loading-script';
 import { spiritDirection } from '../loading/spiritRun';
 import { Z_LADDER } from './zorder';
+import { currentInterfaceStyle } from './interfaceStyle';
 import { LOADING_CHANNEL, type LoadingCommand, type LoadingReply, type LoadingOptions,
   type LoadingLease, type LoadingSnapshot } from '../loading/protocol';
 export type { LoadingOptions, LoadingStatus, LoadingLease } from '../loading/protocol';
@@ -79,7 +80,7 @@ export class LoadingScreen {
     // paint alone can acknowledge its old hidden state and remain throttled.
     this.presented = loadingPresentation();
     const { cancel, ...wire } = options;
-    this.beginCommand = this.command({ type: 'begin', options: { ...wire, direction: wire.direction ?? spiritDirection(wire.kind) }, cancel: !!cancel });
+    this.beginCommand = this.command({ type: 'begin', options: { ...wire, interfaceStyle: currentInterfaceStyle(), direction: wire.direction ?? spiritDirection(wire.kind) }, cancel: !!cancel });
     if (this.ready) this.send(this.beginCommand);
     const current = (): boolean => this.visible && !this.closing && token === this.token;
     return { get current() { return current(); },

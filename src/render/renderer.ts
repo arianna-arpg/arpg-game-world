@@ -1,10 +1,15 @@
+import { drawDeviceState } from './vis/deviceState';
+import { CastBarOverlay, prepareCastBar } from './vis/castBars';
+import { CastBarContrast } from './vis/castBarContrast';
 import { ALTAR_BODY } from '../engine/altarBodies';
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
 import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
 import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
+import { damageTextRows } from './vis/damageText';
 import { RewardLabelLayout } from './vis/rewardLabels';
 import { combatTargetStrength } from './vis/combatTargets';
 import { buffReadoutLines, drawBuffReadout } from './vis/buffReadout';
+import { buffIconRect, drawBuffIcon, buffAuxiliaryLift } from './vis/buffIcons';
 import { drawSkillIcon } from './skillIcons';
 import { statusIcons, layoutStatusIcons, drawStatusIcons, drawStatusIconHover, type StatusIconHover } from './vis/statusIcons';
 import { drawMeleeReach } from './vis/meleeReachLayer';
@@ -22,7 +27,7 @@ import { drawBodyContrast } from './vis/bodyContrast';
 import { drawRaisedGuard } from './vis/raisedGuard';
 import { guardArcRadians } from '../engine/combatCues';
 import { chestReadout, drawChestReadout } from './vis/chestReadout';
-import { castMovementHeld, drawCastName, drawCastSlot } from './vis/castReadout';
+import { drawCastSlot } from './vis/castReadout';
 import { treePointBudget } from '../engine/skillEmpowerment';
 import { concealmentActive } from '../engine/perception';
 import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
@@ -59,7 +64,7 @@ import { replenishmentActive } from '../engine/replenishment';
 import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { guardBashReady, instanceChargeCost, instanceMeta, metaFaceOf, instanceStrikeTiming, instanceTriggerArmed, instanceUseCharges, poolReadOf, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
+import { instanceChargeCost, instanceMeta, metaFaceOf, instanceTriggerArmed, instanceUseCharges, poolReadOf, SKILL_RARITIES, treeSpentBranch } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { drawGroundItem } from './groundItems';
 import { TOWN_PORTAL_CFG } from '../data/townportals';
@@ -150,11 +155,11 @@ import { drawArmedCues } from './vis/armedCueLayer';
 import { reactiveCueOf, wardCueActive } from '../engine/combatReadability';
 import { REACTIVE_CUE_CFG } from '../data/combatReadability';
 import { drawReactiveCue, drawGaspSpark, drawWardBody, drawWardLinks, drawWardBar } from './vis/combatReadabilityLayer';
-import { drawCastingCue, drawFocusFrame } from './vis/castingCueLayer';
+import { drawCastingCue } from './vis/castingCueLayer';
 import { drawCastPreparation } from './vis/skillCastPreparation';
 import { playerCastPreparation } from '../engine/playerCastVisual';
-import { castingCompletion } from '../engine/castingCues';
 import { COMBAT_CUE_CFG } from '../data/combatCues';
+import { drawFrameBodyCue } from './vis/frameVoice';
 import { drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
 import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
 import { drawMovementTether } from './vis/movementTetherLayer';
@@ -286,6 +291,8 @@ export class Renderer {
   private floatingTextLayout = new CombatTextLayout(() => ({ ...VIS_CFG.combatFocus.numbers, enabled: true }));
   private rewardLabelLayout = new RewardLabelLayout(() => ({ ...VIS_CFG.drops.rewardLabels, enabled: true }));
   private combatMeters = new CombatMeterLayout();
+  private castBars = new CastBarOverlay();
+  private castBarContrast = new CastBarContrast();
   private cosmeticTrails = new CosmeticTrails();
   ctx: CanvasRenderingContext2D;
   cam = { x: 0, y: 0 };
@@ -409,6 +416,9 @@ export class Renderer {
     private getSettings?: () => Settings,
   ) {
     this.ctx = canvas.getContext('2d')!;
+    registerVisCache({ id: 'castBarContrast', count: () => this.castBarContrast.count(),
+      bytes: () => this.castBarContrast.bytes(), onZoneSwap: () => this.castBarContrast.invalidate(),
+      onRunSwap: () => this.castBarContrast.reset() });
     this.overlay = document.createElement('canvas');
     this.octx = this.overlay.getContext('2d')!;
     const os = this.overlay.style;
@@ -961,6 +971,7 @@ export class Renderer {
       this.drawTerrainFlash(f, world);
     }
     this.drawCompanionCues(world);
+    this.castBars.begin();
     this.combatMeters.begin(world.time, this.getSettings?.().crowdedMeters ?? VIS_CFG.combatFocus.meters.enabled);
     // THE PACK LAYER's drawn bonds (engine/pack.ts): the warden's lines to
     // every body it is actually empowering — over the ground reads, UNDER
@@ -981,6 +992,14 @@ export class Renderer {
       for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a, world.time, world);
       for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
       this.combatMeters.paint(ctx);
+      // A local cast is input feedback even when its body is inside cover,
+      // swallowed, or wearing a replacement form. Other actors keep native
+      // body admission; no concealed enemy gains an overlay through this path.
+      if (!this.directorClean) for (const seat of world.localHumanSeats()) {
+        if (this.castBars.has(seat.actor)) continue;
+        const bar = prepareCastBar(seat.actor, world, this.getSettings?.());
+        if (bar) this.castBars.add(bar);
+      }
       if (world.deathPresentation) drawPlayerDeath(this.ctx, world.player, world.deathPresentation, world.time);
       // THE STATUS VOICE (vis/statusVoiceLayer.ts): what just LANDED on a
       // body is drawn ON it — the frame-diff of each body's statuses plays
@@ -1135,6 +1154,23 @@ export class Renderer {
       this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
       this.drawEyecatch(world);     // THE EYECATCH: the super-art pane, above the HUD (engine/ultimates.ts)
     }));
+    // Cast mechanics are a late reading layer: after effects, words and HUD,
+    // before deliberate full-screen covers. Reduced render scale uses native
+    // crest pixels and the same shaken camera as the world beneath it.
+    if (!this.directorClean) this.onCrest(crest, () => {
+      if (this.castBars.active) this.castBarContrast.capture(ctx.canvas, crest ? this.overlay : undefined, performance.now());
+      const cc = this.ctx;
+      cc.save(); cc.scale(wordZ, wordZ);
+      cc.translate(-this.cam.x + shx, -this.cam.y + shy);
+      this.castBars.paint(cc, world,
+        { x: this.cam.x-shx, y: this.cam.y-shy, w: surfW/wordZ, h: surfH/wordZ },
+        a => this.labelRevealAt(world, a.pos) > .05,
+        bar => this.castBarContrast.outline({
+          x: (bar.meter.x-this.cam.x+shx)*wordZ/surfW, y: (bar.meter.y-this.cam.y+shy)*wordZ/surfH,
+          w: bar.meter.w*wordZ/surfW, h: bar.meter.h*wordZ/surfH,
+        }, bar.colors));
+      cc.restore();
+    });
     // Covers must still cover: on the crest these two draw THERE (topmost
     // surface — one full-screen fade covers the whole composite).
     this.onCrest(crest, () => {
@@ -5485,14 +5521,15 @@ export class Renderer {
 
   /** An attached summon leaves the keeper visible inside its breakable shell.
    * Arc, pool and break state are the same values used by damage absorption. */
-  private drawSummonShell(a: Actor, time: number): void {
-    const sg = a.shellGuard;
+  private drawSummonShell(a: Actor, world: World): void {
+    const sg = a.shellGuard, time = world.time;
     if (!sg) return;
     const ctx = this.ctx, r = Math.max(25, a.radius + 8);
     ctx.save(); ctx.translate(a.pos.x, a.pos.y);
-    drawShellCue(ctx, a, time, r);
+    drawFrameBodyCue(ctx, a, world.frameArts.bodyPresentation(a), time);
+    const anatomy = drawShellCue(ctx, a, time, r);
     ctx.strokeStyle = sg.color;
-    if (a.casting && !sg.broken) {
+    if (a.casting && !sg.broken && !anatomy) {
       const facing = Math.atan2(a.casting.aim.y - a.pos.y, a.casting.aim.x - a.pos.x);
       ctx.globalAlpha = 0.8; ctx.lineWidth = 5;
       for (const offset of [-0.25, 0.25]) {
@@ -5526,7 +5563,7 @@ export class Renderer {
       }
       ctx.restore(); return;
     }
-    if (a.summonShell) { this.drawSummonShell(a, world.time); return; }
+    if (a.summonShell) { this.drawSummonShell(a, world); return; }
     const { ctx } = this;
     const { x, y } = a.pos;
 
@@ -5870,6 +5907,17 @@ export class Renderer {
     if (rot !== 0) ctx.rotate(rot);
     this.drawCombatBodyEdge(a, world, look);
     ctx.drawImage(bodySprite(look), -half, -half);
+    if (a.spectralVeil) {
+      const veil = a.spectralVeil;
+      ctx.save();
+      drawBodyHitFlash(ctx, look, veil.alpha * (0.8 + 0.2 * Math.sin(world.time * 4 + a.id)), veil.color);
+      ctx.strokeStyle = veil.color; ctx.globalAlpha *= veil.alpha; ctx.lineWidth = 1.2;
+      for (let i = 0; i < 3; i++) {
+        const t = world.time * 1.4 + i * Math.PI * 2 / 3;
+        ctx.beginPath(); ctx.arc(0, 0, a.radius * (1.1 + 0.12 * Math.sin(t)), t, t + 0.9); ctx.stroke();
+      }
+      ctx.restore();
+    }
     // THE HIT FLASH rides the body's own pose — a white wash or rim OVER
     // the bake, never a swap: tints, live parts and worn gauges keep
     // speaking beneath it, and baseAlpha already folds every fade lane.
@@ -6050,6 +6098,8 @@ export class Renderer {
 
     ctx.save(); ctx.globalAlpha = baseAlpha;
     drawAltarInfluence(ctx, altarInfluences(a, world.altars), a.radius, a.pos, world.time); ctx.restore();
+    ctx.save(); ctx.globalAlpha = baseAlpha;
+    drawFrameBodyCue(ctx, a, world.frameArts.bodyPresentation(a), world.time); ctx.restore();
     drawShellCue(ctx, a, world.time);
     ctx.save(); ctx.globalAlpha = baseAlpha;
     drawPayloadBody(ctx, payloadCueRows(a, world), a.radius); ctx.restore();
@@ -6081,6 +6131,7 @@ export class Renderer {
     if (!ownCastPreparation) drawCastingCue(ctx, a);
     drawSelfBanks(ctx, selfBankCuesOf(a, world.time), a.radius);
     if (!a.dead) drawPresenceBadge(ctx, a.presenceBadge, a.radius);
+    drawDeviceState(ctx, a);
     if (comboCueGround) {
       ctx.save(); ctx.setTransform(comboCueGround); ctx.globalAlpha = baseAlpha;
       drawComboBody(ctx, a.radius, comboCues); ctx.restore();
@@ -6385,7 +6436,7 @@ export class Renderer {
     if (a.team === 'enemy' && a.casting && (this.getSettings?.().castTelegraphs ?? true)) {
       const fc = a.casting;
       const geo = foresightView(a, fc);
-      if (geo) drawForesight(ctx, geo, x, y, a.facing, foresightProgress(fc), baseAlpha);
+      if (geo) drawForesight(ctx, geo, x, y, a.facing, foresightProgress(fc));
     }
 
     // THE STRUGGLE METER (the grab fabric): a held body wears its break
@@ -6395,156 +6446,11 @@ export class Renderer {
     if(!this.directorClean && (a.heldBy!==undefined || a.grabHud)) this.combatMeters.add(a,
       {x:x-50,y:y-a.radius-29,w:100,h:22},()=>this.drawGrabMeter(a,world));
 
-    // Cast bar above the head (telegraphs enemy casts, too)
-    const cs = a.casting;
-    if (cs && !this.directorClean) {
-      const castReadout = VIS_CFG.castReadout.enabled && world.seats.some(s => s.actor === a);
-      const bw = castReadout ? VIS_CFG.castReadout.width : 44, bh = castReadout ? VIS_CFG.castReadout.height : 5;
-      const movement = castReadout && (this.getSettings?.().castMovementHint ?? VIS_CFG.castReadout.showMovement) && castMovementHeld(world,a)
-        ? VIS_CFG.castReadout.plantedText : undefined;
-      const showName = castReadout && (this.getSettings?.().castNameHint ?? VIS_CFG.castReadout.showName);
-      const nameHeight = (showName ? VIS_CFG.castReadout.nameHeight : 0) + (movement ? VIS_CFG.castReadout.movementHeight : 0);
-      const bx2 = x - bw / 2, by2 = y - a.radius - 18;
-      const color = cs.inst.def.color;
-      const meterRise=cs.mode==='overcharge'?Math.max(0,cs.stage??0)*4:4;
-      const meterWidth=bw+(['overcharge','channel','multitude'].includes(cs.mode)?52:6);
-      const labelHalf=(showName||movement)?VIS_CFG.castReadout.labelWidth/2+3:0;
-      const meterLeft=Math.min(bx2-3,x-labelHalf),meterRight=Math.max(bx2-3+meterWidth,x+labelHalf);
-      this.combatMeters.add(a,{x:meterLeft,y:by2-6-meterRise-nameHeight,w:meterRight-meterLeft,h:bh+10+meterRise+nameHeight},()=>{
-        if (showName || movement) drawCastName(ctx, a, x, by2-6-meterRise, VIS_CFG.castReadout.labelWidth, movement, showName);
-        ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.fillRect(bx2 - 1, by2 - 1, bw + 2, bh + 2);
-        let frac: number;
-        if (cs.mode === 'channel') {
-          frac = cs.total > 0 ? 1 - Math.max(0, cs.pulseTimer ?? 0) / cs.total : 1;
-        } else if (cs.mode === 'guard') {
-          // The guard bar IS the shield's remaining health.
-          frac = Math.max(0, (cs.shield ?? 0) / (cs.maxShield ?? 1));
-        } else {
-          frac = cs.total > 0 ? Math.min(1, cs.elapsed / cs.total) : 1;
-        }
-        ctx.fillStyle = color;
-        ctx.fillRect(bx2, by2, bw * frac, bh);
-        // Mode decorations
-        if (cs.mode === 'channel') {
-          // CAPPED / BRIM channels wear their COMPLETION above the pulse
-          // bar (the overcharge stacked-bar idiom): the gather's walk to
-          // its ceiling, gold the instant it truly finishes. Enemies wear
-          // it too — the whole room reads the doom-cast burning in.
-          const holdFrac = castingCompletion(a) ?? null;
-          if (holdFrac !== null) {
-            const hy = by2 - 4;
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
-            ctx.fillStyle = holdFrac >= 1 ? '#ffd700' : color;
-            ctx.fillRect(bx2, hy, bw * holdFrac, 3);
-          }
-        }
-        if (cs.mode === 'perfect') {
-          ctx.fillStyle = 'rgba(255,215,0,0.55)';
-          ctx.fillRect(bx2 + bw * 0.72, by2, bw * 0.28, bh);
-        } else if (cs.mode === 'timed' && cs.indicatorAt !== undefined) {
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(bx2 + bw * cs.indicatorAt - 1, by2 - 2, 2, bh + 4);
-        } else if (cs.mode === 'guard' && cs.bashAt !== undefined) {
-          // THE BASH TIC: the live arming line — release on the ARMED side
-          // of it and the stance converts into the blow. The value is
-          // refreshGuardBash's (one resolver: supports, buffs and the
-          // inverted contract all move it), shipped over the co-op wire, so
-          // what this draws is exactly what the release check will decide.
-          // The faint underline marks the armed side: right of the tic
-          // normally, LEFT of it inverted (Hollow Answer — the bar reads
-          // "cash what the wall has lost"). No tic = no bash on this stance.
-          // THE ARM METER + THE READIED GOLD (2026-09-16): guardBashReady is
-          // the ONE read the release decides by. The thin bar above the
-          // guard bar is the arm clock walking (the capped-channel idiom —
-          // hidden when the clock is 0), and the moment the bash is truly
-          // READY (clock run AND wall on the armed side) meter, tic and
-          // underline turn gold together; until then the tic sits dim — a
-          // quick release just drops the wall. Enemy guards draw it too.
-          const ready = guardBashReady(cs);
-          const gold = '#ffd700';
-          if ((cs.bashArmAt ?? 0) > 0) {
-            const hy = by2 - 4;
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
-            ctx.fillStyle = ready.ready ? gold : color;
-            ctx.fillRect(bx2, hy, bw * ready.clock, 3);
-          }
-          const tx = bx2 + bw * cs.bashAt;
-          const x0 = cs.bashLow ? bx2 : tx;
-          const x1 = cs.bashLow ? tx : bx2 + bw;
-          ctx.fillStyle = ready.ready ? gold : '#ffffff';
-          ctx.globalAlpha = ready.ready ? 0.8 : 0.35;
-          ctx.fillRect(x0, by2 + bh + 1, Math.max(0, x1 - x0), 1);
-          ctx.globalAlpha = ready.ready ? 1 : 0.55;
-          ctx.fillRect(tx - 1, by2 - 2, 2, bh + 4);
-          ctx.globalAlpha = 1;
-        } else if (cs.mode === 'multitude') {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(bx2 - 3, by2 - 3, bw + 6, bh + 6);
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 10px Verdana';
-          ctx.textAlign = 'left';
-          ctx.fillText(`×${cs.presses ?? 1}`, bx2 + bw + 6, by2 + bh);
-          ctx.textAlign = 'center';
-        } else if (cs.mode === 'charge' && frac >= 1) {
-          ctx.strokeStyle = '#ffd700';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(bx2 - 2, by2 - 2, bw + 4, bh + 4);
-        } else if (cs.mode === 'concentration') {
-          drawFocusFrame(ctx, bx2, by2, bw, bh, !!cs.focusBroken);
-        } else if (cs.mode === 'overcharge') {
-          // STACKED bars: every banked stage is a thin filled bar laid on
-          // top of the refilling one — the old JRPG hold, made literal.
-          const stages = cs.stage ?? 0;
-          for (let s = 0; s < stages; s++) {
-            const sy = by2 - 4 - s * 4;
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            ctx.fillRect(bx2 - 1, sy - 1, bw + 2, 4);
-            ctx.fillStyle = '#ffd700';
-            ctx.fillRect(bx2, sy, bw, 3);
-          }
-          // Strike-timing disciplines decorate the REFILLING bar — the
-          // release must land inside them (Perfect Draw's golden tail /
-          // Wandering Mark's roving marker).
-          const timing = instanceStrikeTiming(cs.inst);
-          if (timing?.kind === 'perfect') {
-            ctx.fillStyle = 'rgba(255,215,0,0.55)';
-            ctx.fillRect(bx2 + bw * 0.72, by2, bw * 0.28, bh);
-          } else if (timing?.kind === 'timed' && cs.indicatorAt !== undefined) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(bx2 + bw * cs.indicatorAt - 1, by2 - 2, 2, bh + 4);
-          }
-          // The SPARK: a bright flare right as a stage banks — and while a
-          // spark WINDOW is invested (Spark Discipline), a golden border
-          // marks the open release window after each bank.
-          const since = cs.sinceStage ?? 999;
-          if (since < 0.15 && stages > 0) {
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(bx2 + bw + 8, by2 + bh / 2, 4, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          if (stages > 0 && (cs.sparkWindow ?? 0) > 0 && since <= (cs.sparkWindow ?? 0)) {
-            ctx.strokeStyle = '#ffd700';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(bx2 - 2, by2 - 2, bw + 4, bh + 4);
-          }
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 9px Verdana';
-          ctx.textAlign = 'left';
-          if (stages > 0) ctx.fillText(`+${stages}`, bx2 + bw + 5, by2 - 4);
-          ctx.textAlign = 'center';
-        } else if (cs.mode === 'channel') {
-          ctx.fillStyle = '#fff';
-          ctx.font = '9px Verdana';
-          ctx.textAlign = 'left';
-          ctx.fillText(`${(cs.channelTime ?? 0).toFixed(1)}s`, bx2 + bw + 5, by2 + bh);
-          ctx.textAlign = 'center';
-        }
-      });
+    // Cast bars keep their native anchor, independently of optional meter
+    // relocation. The later pass changes visibility and stacking only.
+    if (!this.directorClean && meterReveal > .05) {
+      const bar = prepareCastBar(a, world, this.getSettings?.());
+      if (bar) this.castBars.add(bar);
     }
   }
 
@@ -7514,7 +7420,7 @@ export class Renderer {
     const avoidNumbers = this.getSettings?.().floatingTextAvoidance === true;
     if (avoidNumbers) this.floatingTextLayout.begin(this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)),
       { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
-    for (const t of world.texts) {
+    for (const t of damageTextRows(world.texts, this.getSettings?.().summedDamageText === true)) {
       if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
       // Bind tokens resolve at DRAW, not at spawn — a float naming a key
       // stays honest even if the player rebinds (or grabs the pad) mid-air.
@@ -7525,7 +7431,7 @@ export class Renderer {
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
       ctx.lineWidth = 3;
       const at = avoidNumbers && (!t.kind || VIS_CFG.combatFocus.numbers.kinds.includes(t.kind))
-        ? this.floatingTextLayout.place(t, t.pos, ctx.measureText(txt).width, t.size) : t.pos;
+        ? this.floatingTextLayout.place(t.damage ?? t, t.pos, ctx.measureText(txt).width, t.size) : t.pos;
       ctx.strokeText(txt, at.x, at.y);
       ctx.fillText(txt, at.x, at.y);
     }
@@ -7878,6 +7784,11 @@ export class Renderer {
     // Skill bar
     ctx.textAlign = 'center';
     const keyLabels = this.slotKeys(padLabels);
+    const procCues = procCueRows(p);
+    const buffMirrorCues = procCues.filter(row => row.phase === 'stored' && !row.id.startsWith('rune:') && !p.buffs.has(row.id));
+    const buffCharges = [...p.charges].filter(([name, count]) => count > 0 && !(CHARGE_DEFS[name]?.hud === 'slot'
+      && p.skills.some(s => s && instanceChargeCost(s)?.charge === name)));
+    const buffAuxY = by - buffAuxiliaryLift(p.buffs.size + buffMirrorCues.length + buffCharges.length, totalW);
     for (let i = 0; i < p.skills.length; i++) {
       const x = bx + i * (slot + gap);
       const inst = p.skills[i];
@@ -8315,23 +8226,23 @@ export class Renderer {
         }
         if (def.id === 'command_assault' && p.assaultHud) {
           const h = p.assaultHud;
-          ctx.fillStyle = '#292516'; ctx.fillRect(x, by - 46, slot, 5);
-          ctx.fillStyle = '#efcc73'; ctx.fillRect(x, by - 46, slot * h.progress, 5);
+          ctx.fillStyle = '#292516'; ctx.fillRect(x, buffAuxY - 46, slot, 5);
+          ctx.fillStyle = '#efcc73'; ctx.fillRect(x, buffAuxY - 46, slot * h.progress, 5);
           ctx.font = 'bold 9px Verdana'; ctx.textAlign = 'center'; ctx.fillStyle = '#f2dda3';
-          ctx.fillText('Next: ' + h.hits + (h.hits === 1 ? ' hit' : ' hits'), x + slot / 2, by - 50);
+          ctx.fillText('Next: ' + h.hits + (h.hits === 1 ? ' hit' : ' hits'), x + slot / 2, buffAuxY - 50);
         }
         if (def.hivecall && p.hivecallHud) {
           const h = p.hivecallHud;
           const transformed = h.remaining !== undefined;
           const fraction = transformed ? h.remaining! / HIVECALL.duration : h.meter / HIVECALL.meterMax;
-          ctx.fillStyle = '#182117'; ctx.fillRect(x, by - 46, slot, 5);
-          ctx.fillStyle = '#b8d060'; ctx.fillRect(x, by - 46, slot * clamp(fraction, 0, 1), 5);
+          ctx.fillStyle = '#182117'; ctx.fillRect(x, buffAuxY - 46, slot, 5);
+          ctx.fillStyle = '#b8d060'; ctx.fillRect(x, buffAuxY - 46, slot * clamp(fraction, 0, 1), 5);
           ctx.font = 'bold 9px Verdana'; ctx.textAlign = 'center';
           ctx.fillStyle = '#d8ec9a';
           const label = transformed ? h.remaining!.toFixed(1) + 's form'
             : inst.treeNodes?.includes('royal_guard') ? Math.floor(h.meter) + ' / 100'
             : h.rebirth !== undefined ? h.rebirth.toFixed(1) + 's hatch' : 'Hive ready';
-          ctx.fillText(label, x + slot / 2, by - 50);
+          ctx.fillText(label, x + slot / 2, buffAuxY - 50);
         }
         // Socketed gem pips
         let gx = x + 6;
@@ -8363,68 +8274,55 @@ export class Renderer {
       }
     }
 
-    // Buff pips — RAISED above the meta-button row so both always read;
-    // hovering a pip describes its actual native modifier payload.
-    const buffY = by - 40;
-    const procCues = procCueRows(p);
-    let bpx = bx;
-    let hoverLabel: { x: number; lines: string[] } | null = null;
+    // Skill-attributed buffs wrap above the meta row, keeping native hover text.
+    const buffBottom = by - VIS_CFG.buffIcons.barClearance;
+    let buffIndex = 0;
+    let hoverLabel: { x: number; y: number; lines: string[] } | null = null;
     for (const [id, buff] of p.buffs) {
+      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
       const procCue = procCues.find(row => row.id === id && row.phase === 'stored');
-      if (procCue) drawProcBuff(ctx, procCue, bpx + 5, buffY + 5);
-      else { ctx.fillStyle = '#c8a84b'; ctx.fillRect(bpx, buffY, 10, 10); }
-      if (buff.stacks > 1) {
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 9px Verdana';
-        ctx.fillText(String(buff.stacks), bpx + 5, buffY - 2);
+      drawBuffIcon(ctx, buff, rect, procCue);
+      const mx = this.uiMouse.x, myv = this.uiMouse.y;
+      if (mx >= rect.x && mx < rect.x + rect.w && myv >= rect.y && myv < rect.y + rect.h) {
+        hoverLabel = { x: rect.x + rect.w / 2, y: rect.y, lines: buffReadoutLines(id, buff) };
       }
-      const mx = this.uiMouse.x, myv = this.uiMouse.y; // virtual-space, matching the scaled pip rects
-      if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
-        hoverLabel = { x: bpx + 5, lines: buffReadoutLines(id, buff) };
-      }
-      bpx += 14;
     }
     // Host-resolved procCues also populate the bank row on a co-op mirror,
     // whose stripped-down actor does not reconstruct the host's buff definitions.
-    for (const procCue of procCues) {
-      if (procCue.phase !== 'stored' || procCue.id.startsWith('rune:') || p.buffs.has(procCue.id)) continue;
-      drawProcBuff(ctx, procCue, bpx + 5, buffY + 5);
+    for (const procCue of buffMirrorCues) {
+      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
+      drawProcBuff(ctx, procCue, rect.x + rect.w / 2, rect.y + rect.h / 2);
       if (procCue.count > 1) {
         ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Verdana';
-        ctx.fillText(String(procCue.count), bpx + 5, buffY - 2);
+        ctx.fillText(String(procCue.count), rect.x + rect.w / 2, rect.y - 2);
       }
-      bpx += 14;
     }
     // Charge pips (combo resources) next to the buffs, registry-tinted.
     // 'slot'-homed charges (flask founts) draw on their SPENDER's hotbar
     // slot instead — skipped here only while such a spender is slotted,
     // so an unslotted fount's bank still reads somewhere.
-    for (const [name, count] of p.charges) {
-      if (count <= 0) continue;
-      if (CHARGE_DEFS[name]?.hud === 'slot'
-        && p.skills.some(s => s && instanceChargeCost(s)?.charge === name)) continue;
+    for (const [name, count] of buffCharges) {
+      const rect = buffIconRect(buffIndex++, bx, buffBottom, totalW);
+      const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
       ctx.fillStyle = chargeColor(name);
       ctx.beginPath();
-      ctx.arc(bpx + 5, buffY + 5, 5, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 9px Verdana';
-      ctx.fillText(`${count}`, bpx + 5, buffY - 2);
-      const mx = this.uiMouse.x, myv = this.uiMouse.y; // virtual-space, matching the scaled pip rects
-      if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
-        hoverLabel = { x: bpx + 5, lines: [chargeLabel(name)] };
+      ctx.fillText(`${count}`, cx, rect.y - 2);
+      const mx = this.uiMouse.x, myv = this.uiMouse.y;
+      if (mx >= rect.x && mx < rect.x + rect.w && myv >= rect.y && myv < rect.y + rect.h) {
+        hoverLabel = { x: cx, y: rect.y, lines: [chargeLabel(name)] };
       }
-      bpx += 18;
     }
-    if (hoverLabel) drawBuffReadout(ctx, hoverLabel.lines, hoverLabel.x, buffY - 8, w);
-
     // INVOCATION RUNES: the woven SEQUENCE as ordered diamonds above the
     // bar's right edge — order is the whole grammar, so it must read.
     if (p.runes.length > 0) {
       const rx0 = bx + totalW - p.runes.length * 16;
       for (let i = 0; i < p.runes.length; i++) {
         const info = RUNE_INFO[p.runes[i] as keyof typeof RUNE_INFO];
-        const rx = rx0 + i * 16, ry = by - 54;
+        const rx = rx0 + i * 16, ry = buffAuxY - 54;
         ctx.fillStyle = info?.color ?? '#c8a8e8';
         ctx.beginPath();
         ctx.moveTo(rx, ry - 7);
@@ -8441,8 +8339,8 @@ export class Renderer {
 
     // comboCueRows shares consumed progress with body tells and the host wire;
     // completion closes the pattern into its body-matched signature.
-    drawComboHud(ctx, bx + 8, by - 54, comboCueRows(p, world.time));
-    drawProcHud(ctx, procCues, bx + totalW / 2, by - (seat.home && p.possession ? 108 : 78));
+    drawComboHud(ctx, bx + 8, buffAuxY - 54, comboCueRows(p, world.time));
+    drawProcHud(ctx, procCues, bx + totalW / 2, buffAuxY - (seat.home && p.possession ? 108 : 78));
 
     // THE POSSESSION STRIP (the possession seam, engine/possess.ts): while
     // the local seat rides a foreign body, one centered chip above the bar
@@ -8455,7 +8353,7 @@ export class Renderer {
       const home = seat.home;
       const ride = home ? p.possession : undefined;
       if (home && ride) {
-        const cy = by - 74;
+        const cy = buffAuxY - 74;
         const remain = ride.until !== undefined ? Math.max(0, ride.until - world.time) : null;
         const title = ride.kind === 'shift'
           ? `${p.name}` : `riding ${p.name}`;
@@ -8490,6 +8388,9 @@ export class Renderer {
         ctx.textAlign = 'center';
       }
     }
+
+    // The hover card paints above every auxiliary lane it may cover.
+    if (hoverLabel) drawBuffReadout(ctx, hoverLabel.lines, hoverLabel.x, hoverLabel.y - 8, w);
 
     // XP bar — tucked between the key-label row above and the DOM hint bar
     // below (its box top sits at ~h-17; +16 keeps the bar fully clear of it).

@@ -72,6 +72,8 @@ import { TUTORIAL_JOURNEYS } from './tutorialObjectives';
 /** A full-screen story card: fade to black, read, continue. `{bind:…}`
  *  tokens in lines resolve against the LIVE keybinds at display time. */
 export interface SceneCardSpec {
+  /** Opt-in brand lockup; narration titles remain ordinary text. */
+  brandPresentation?: 'story';
   title: string;
   lines: string[];
   /** The continue button's label (default 'Continue'). */

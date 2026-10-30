@@ -1,3 +1,4 @@
+import { withVisibilityComposite } from './visibilityComposite';
 import { beginVisibilityFrame, visibilityDiagnosticsEnabled, visibilityRecord, visibilityMask } from './visibilityDiagnostics';
 import { visibilityRaster, type VisibilityRasterView } from './visibilityRaster';
 // ---------------------------------------------------------------------------
@@ -356,6 +357,13 @@ export class LightLayer {
    *  UNTRANSFORMED context (screen space), after the world layer. */
   render(ctx: CanvasRenderingContext2D, camX: number, camY: number,
     zoom: number, w: number, h: number, readable: readonly CombatRect[] = [], rasterView?: VisibilityRasterView): void {
+    withVisibilityComposite(ctx, () => {
+      this.renderLayer(ctx, camX, camY, zoom, w, h, readable, rasterView);
+    });
+  }
+
+  private renderLayer(ctx: CanvasRenderingContext2D, camX: number, camY: number,
+    zoom: number, w: number, h: number, readable: readonly CombatRect[], rasterView?: VisibilityRasterView): void {
     const started = visibilityDiagnosticsEnabled ? performance.now() : 0;
     const dark = this.ambient;
     if (dark <= 0.02) {

@@ -17,7 +17,7 @@ export function tree(left: Limb, right: Limb, passive: Node): SkillTreeSpec {
   }
   return { level: 5, nodes };
 }
-export const n = (id: string, name: string, description: string, mods?: Modifier[], over?: Node['over']): Node => ({ id, name, description, mods, over });
+export const n = (id: string, name: string, description: string, mods?: Modifier[], over?: Node['over'], choiceActions?: Node['choiceActions']): Node => ({ id, name, description, mods, over, choiceActions });
 export const life = (v: number) => mod('minionLife', 'increased', v);
 export const damage = (v: number) => mod('minionDamage', 'increased', v);
 export const cap = (v: number) => mod('minionMaxCount', 'flat', v);

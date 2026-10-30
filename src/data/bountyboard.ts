@@ -61,7 +61,7 @@ export const BOUNTY_BOARD_CFG = {
    * Repair adds seats without replacing a held or pinned player choice. */
   routes: {
     appropriateBelow: 2, manageableSeats: 2,
-    manageableKinds: ['charge', 'errand', 'gather', 'cull'] as readonly string[],
+    manageableKinds: ['charge', 'errand', 'gather', 'cull', 'passage'] as readonly string[],
     manageable: { above: 0, steps: 6, distance: 650 },
     demanding: { above: 4, steps: 12, distance: 1500 },
     challengeAbove: 3,
@@ -609,6 +609,8 @@ export interface BountyKindRow {
    *  wasting the seat — the slate stays as full as the world is honest.
    *  Absent = always in the draw (seat-search misses still run short). */
   available?(host: BountyRollHost): boolean;
+  /** Prefer this pool before repeatable work; competing providers retain their weights. */
+  bountyPriority?(host: BountyRollHost): boolean;
   roll(host: BountyRollHost, rng: Rng, taken: Set<string>): BountyPosting | null;
   /** THE WORLD ACT at the take (M3 — the summons' ignition): runs BEFORE
    *  the hand seats; a returned reason REFUSES the accept and strikes the
@@ -619,6 +621,8 @@ export interface BountyKindRow {
   target?(world: World, p: BountyPosting): string | null;
   route?(world: World, p: BountyPosting): string;
   arrival?(world: World, p: BountyPosting, zone: ZoneDef, firstVisit: boolean, from?: string): void;
+  /** Successful turn-in only; never called for abandon, failure or mere completion. */
+  collectBounty?(world: World, p: BountyPosting): void;
   done(world: World, p: BountyPosting): boolean;
   failed?(world: World, p: BountyPosting): boolean;
   /** A reason string ANNULS the posting (the world moved on — the reconcile's

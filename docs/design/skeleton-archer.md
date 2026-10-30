@@ -2,54 +2,64 @@
 
 The fifteen-node tree is authored in src/data/skeletonArcherTree.ts. Crew arts
 and the shared school table live in skeletonArcherSkills.ts. This pass keeps the
-existing node IDs, exclusive trunks and four-point branch budget. Unpicked
+existing node IDs, exclusive trunks and four-point branch budget. Display names
+can change without remapping saved allocations, skill IDs or status IDs. Unpicked
 Summon Skeleton Archer still raises one permanent archer, up to two.
 
 ## Physical trunk
 
-- **Rattling Bows:** physical arrows apply Rattled Bones after landing. Each
-  stack grants 4% extra physical damage to subsequent rattling arrows, bone
+- **Barbed Bones:** physical arrows apply Lodged Splinters after landing. Each
+  stack grants 4% extra physical damage to subsequent barbed arrows, bone
   mortars and Rain of Bones strikes. Thirty stacks fit; each accepted stack
   lasts five seconds independently. Reapplying at cap cannot refresh the bank.
   The summon count, base cap and base cost retain their ordinary values.
-- **Ranked Bows:** converts the host into a real held channel. The first archer
-  rises after 0.25 seconds, then one every 1.2 seconds, adjusted by cast speed.
+- **Rising Ranks:** converts the host into a real held channel. The first archer
+  rises after 0.1 seconds, then one every 0.25 seconds, adjusted by cast speed.
+  Recruitment is 4.8 times as frequent as the previous 1.2-second cadence.
+  At baseline speed, two ranks fill in 0.35 seconds and four in 0.85 seconds;
+  an ordinary summon still takes one second and has its native 2.5-second
+  cooldown. `SKELETAL_FORMATION_TUNING` owns the pace and price together.
   Archers occupy alternating flanks and fire in the caster's facing, even
-  without a target. They use ordinary minion attack speed and skill cooldowns.
+  without a target. Each fires its primary immediately on arrival and gains 50%
+  more attack speed while channeling (one-third shorter attack casts). The
+  arrival shot pays an accelerated attack recovery beat and honors compatible
+  component supports. Ordinary skill cooldowns remain in force.
   The channel is immobile by default and has no time limit; its mana cost is
-  80% lower per paid beat (5 mana before other investment). Full ranks stop
-  spawning and continue firing and paying. Native summon-count investment can
-  increase a birth beat; Rain of Bones itself never does.
-- **Endless Quivers:** releasing at the current effective cap fires each living
+  97% lower per paid beat (rounded up to 1 mana before other investment),
+  keeping baseline sustained drain near its previous level: 4 mana per second
+  instead of about 4.17. Cost additions and multipliers still compose normally.
+  Full ranks stop spawning and continue firing and paying. Native summon-count investment can
+  increase a birth beat; Grave Legion itself never does.
+- **Parting Volley:** releasing at the current effective cap fires each living
   member's primary art at triple damage and twice the projectile/blast size.
   The bodies then retire silently. Early release gives no finale. Interrupted,
   dead, unseated, respecced and zone-retired formations also give no finale.
   The ordinary resource-exhaustion release can pay out when already at cap.
-- **Piercing Bones:** replaces archers with visibly equipped mortarmen. Each
+- **Bone Mortars:** replaces archers with visibly equipped mortarmen. Each
   shell takes 0.65 seconds to land and explodes within 65 units. The ordinary
   bombardment uses 9–15 physical base damage and 1.4 seconds of attack time.
-  Endless Quivers empowers the actual mortar art, retaining support investment.
-- **Rain of Bones:** multiplies the entire effective cap by two, including
+  Parting Volley empowers the actual mortar art, retaining support investment.
+- **Grave Legion:** multiplies the entire effective cap by two, including
   flat slots from gear and supports, without adding bodies per cast.
-- **Drumming Rain:** teaches the separate Rain of Bones art on its native
+- **Rain of Bones:** teaches the separate Rain of Bones art on its native
   eight-second cooldown. Formation members prioritize it when ready and fire
   ordinary attacks between rains. The old combined damage/area/bleed bonus is
   removed.
-- **Forked Quivers:** adds two attack projectiles, preserving a central straight
+- **Fanned Volley:** adds two attack projectiles, preserving a central straight
   shot. Storm-based mortars and arrow rain gain two strikes through their
   corresponding count stat. The saved node ID remains cruel_rain.
 
 ## Elemental trunk
 
 Unstrung Sorcery retains its base population and unioned random element pool.
-Volatile Souls replaces each native bolt with a periodic empowered version.
+Gathered Malice replaces each native bolt with a periodic empowered version.
 Every fourth completed bolt deals double damage, is 1.8 times as large, and
 applies four seconds of its own elemental damage over time at 35% of hit damage
 per second. Each actual mage/skill instance keeps its own cycle. An interrupted
 windup does not count; misses do. Repeats inherit the captured cast and never
 advance the counter. This replaces the old extra body/slot bonus.
 
-Unstable Current teaches each school a three-second, interruptible area channel:
+Grave Tempests teaches each school a three-second, interruptible area channel:
 Rain of Fire, Blizzard, Thunderhead or Venom Rain. It pulses at a fixed target
 area every 0.5 seconds with a 10-second recovery after release. School effects
 use distinct impact materials. This replaces the old critical-strike bonuses.

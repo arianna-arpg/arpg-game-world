@@ -24,7 +24,7 @@ import { wardGuardians, wardCueStyle } from './combatReadability';
 import { combatCueFlash } from './combatCues';
 import { MONSTERS } from '../data/monsters';
 import { mod } from './stats';
-import { finishAIRecovery } from './handling';
+import { finishAIRecovery, faceAlongTravel } from './handling';
 import type { Actor } from './actor';
 import {
   alertScale, ARCHETYPES, BEHAVIOR_CFG, BEHAVIOR_STATS, castRemaining, evalCondition, FLOCK_CFG, mergeTuning,
@@ -41,6 +41,7 @@ import {
   feedWatch, SENSE_CFG, senseReach, WATCH_CFG, WATCH_RUNG, watchArcDeg,
   watchRiseAmount, watchRungOf, watchValueOf,
 } from './watch';
+import { watchGazeActive } from './watchGaze';
 import { isThrongBody, throngHeelOffset } from './throng';
 import { minionCommandSpeed } from './minionCombat';
 import { incidentalMinionPrey, minionPreyInReach } from './minionTargets';
@@ -273,7 +274,7 @@ function updatePostReturn(actor: Actor, world: World, dt: number): boolean {
     if (actor.postHoming) {
       actor.postHoming = false;
       // Re-plant: the watch bearing is part of the post.
-      if (actor.aiPostFacing !== undefined) actor.facing = actor.aiPostFacing;
+      if (actor.aiPostFacing !== undefined && !watchGazeActive(actor, world.time)) actor.facing = actor.aiPostFacing;
     }
     return false;
   }
@@ -292,7 +293,7 @@ function updatePost(actor: Actor, world: World, dt: number): boolean {
   if (updatePostReturn(actor, world, dt)) return true;
   if (actor.postSpec.hold === false) return false;
   if (postOf(actor) === undefined) return false;
-  if (actor.aiPostFacing !== undefined) actor.facing = actor.aiPostFacing;
+  if (actor.aiPostFacing !== undefined && !watchGazeActive(actor, world.time)) actor.facing = actor.aiPostFacing;
   return true; // stands the watch — the idle tick is consumed
 }
 
@@ -501,8 +502,7 @@ registerCommandKind({
     const foe = foeNear(actor, world, cmd.pos, cmd.radius ?? COMMAND_CFG.markRadius);
     if (foe) return foe;
     if (dist(actor.pos, cmd.pos) > COMMAND_CFG.arriveDist) {
-      actor.facing = angleTo(actor.pos, cmd.pos);
-      moveToward(actor, world, cmd.pos, dt);
+      moveToward(actor, world, cmd.pos, dt, true);
       return 'consumed';
     }
     return 'done';
@@ -523,7 +523,7 @@ registerCommandKind({
       y: keeper.pos.y + THRONG_HEEL_OFF.y, tier: keeper.tier };
     if (dist(actor.pos, goal) > 24) {
       actor.companionReturnTo = keeper.id;
-      moveToward(actor, world, goal, dt);
+      moveToward(actor, world, goal, dt, true);
     }
     return 'consumed';
   },
@@ -537,8 +537,7 @@ registerCommandKind({
     const foe = foeNear(actor, world, cmd.pos, cmd.radius ?? COMMAND_CFG.markRadius);
     if (foe) return foe;
     if (dist(actor.pos, cmd.pos) > COMMAND_CFG.arriveDist) {
-      actor.facing = angleTo(actor.pos, cmd.pos);
-      moveToward(actor, world, cmd.pos, dt);
+      moveToward(actor, world, cmd.pos, dt, true);
     }
     return 'consumed';
   },
@@ -555,7 +554,7 @@ const DEFAULT_BRAIN: BrainDef = {};
 export function updateAI(actor: Actor, world: World, dt: number): void {
   actor.companionReturnTo = undefined; // no stale return line through any early exit
   actor.feedingMeal = undefined; // feedingCue posture ends even on an early AI refusal.
-  if (actor.summonReform || actor.channelFormation) return;
+  if (actor.summonReform || actor.channelFormation || actor.frameCharging || actor.frameState?.order || actor.frameState?.terminal) return;
   ensureMovementTether(actor);
   if (refreshMovementTether(actor, world)?.returning) return;
   // Skip ANY player seat (the local hero AND co-op allies) — they're driven by
@@ -911,6 +910,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       return;
     }
   }
+
+  if(actor.frameState&&world.frameArts.act(actor,target,point=>moveToward(actor,world,point,dt,true)))return;
+  if (actor.cohortState && world.cohortArts.act(actor, target, dt, point => moveToward(actor, world, point, dt, true))) return;
 
   // Minions with nothing to fight heel back to their owner. Guard-stance
   // minions (Meat Shield) keep a SHORT leash — they disengage anything that
@@ -2126,7 +2128,8 @@ function pickSkill(
   // face it would cast — an empty magazine still gets pressed (the press
   // IS the reload, and the standing-there-racking window is the player's
   // opening; the gunner walks into weapon range to do it).
-  const usable = actor.skills.filter((s): s is SkillInstance =>
+  const candidates = [...actor.skills, ...world.autonomousMetas(actor, reserved)];
+  const usable = candidates.filter((s): s is SkillInstance =>
     !!s && !!s.def.ai && !reserved?.has(s.def.id)
     // THE BAN BINDS THE PICKER TOO (aiSkillBans — breakDisables' strip is
     // its own belt, but the scene director's muster ban has ONLY this set):
@@ -2139,7 +2142,8 @@ function pickSkill(
     // socket-granted (Guarded Casting makes any carried spell one).
     && (!guarding || !!s.def.usableWhileGuarding || !!s.def.requiresGuard
       || !!socketSpec(s, 'guardCast'))
-    && world.pressUsable(actor, s) && best <= rangeOf(s)
+    && world.pressUsable(actor, s) && (!!s.def.ai.deployed || best <= rangeOf(s))
+    && world.deviceCommandUseful(actor, s)
     && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id))
     && (!world.aiNeedsFireLine(actor, s) || fireLine())
     && tempoGate(s));
@@ -2501,7 +2505,7 @@ function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false)
  *  fall, re-orient, fall, ~18% max life a pop). 'lemming' minds
  *  (MoveSpec.hazards) opt out — authored self-destruction, one word away
  *  and machine-shiftable (bait a charge phase off a cliff by DESIGN). */
-function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: number): void {
+function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: number, faceTravel = false): void {
   // THE MURMURATION (BehaviorSpec.flock, stamped as aiFlock): boid steering
   // folded into the desire BEFORE the self-preservation veto — the flock
   // bends the mind's bearing, the veto still refuses the rim. Composable
@@ -2521,6 +2525,7 @@ function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: numbe
       else return; // rim-pinned: stand, don't step off
     }
   }
+  if (faceTravel) faceAlongTravel(actor, dx, dy);
   world.moveActor(actor, dx, dy, dt * minionCommandSpeed(actor, world.time));
 }
 
@@ -2617,7 +2622,7 @@ function flockSteer(
   return { x: ux, y: uy };
 }
 
-function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier?: number }, dt: number): void {
+function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier?: number }, dt: number, faceTravel = false): void {
   // Steer toward the next cell along the zone's walkable flow-field instead
   // of straight at the target — around warren walls AND plains cliff pockets
   // alike (World.pathField lazily rakes a nav grid over a convex zone's
@@ -2701,7 +2706,7 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number; tier
   // THE UNWATCHED ADVANCE: a stamped stalk-creep scales the step (0 = a
   // statue while watched). Everything above still ran, so the body resumes
   // mid-stride the instant the gaze breaks.
-  steerMove(actor, world, dx, dy, dt * (actor.aiStalkCreep ?? 1));
+  steerMove(actor, world, dx, dy, dt * (actor.aiStalkCreep ?? 1), faceTravel);
 }
 
 /** THE RETREAT GATE: every backpedal flows through here. A WINDED actor

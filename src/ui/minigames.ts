@@ -37,10 +37,11 @@ function overlay(title: string, hint: string): { box: HTMLElement; close: () => 
     root.addEventListener(ev, e => e.stopPropagation());
   }
   const box = document.createElement('div');
-  box.style.cssText = 'position:relative;width:460px;background:var(--panel-bg,#171221);border:1px solid #4a3a5a;border-radius:8px;padding:16px;box-shadow:0 6px 30px rgba(0,0,0,0.8)';
+  box.className = 'interface-dialog';
+  box.style.cssText = 'position:relative;width:460px;border-width:1px;border-style:solid;padding:16px';
   box.innerHTML = `
     <div style="color:var(--gold,#c8a84b);font-size:14px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:2px">${esc(title)}</div>
-    <div style="color:#8a8678;font-size:10px;margin-bottom:10px">${esc(hint)}</div>`;
+    <div class="interface-heading" style="color:#8a8678;font-size:10px;margin-bottom:10px">${esc(hint)}</div>`;
   root.appendChild(box);
   document.body.appendChild(root);
   let closed = false;

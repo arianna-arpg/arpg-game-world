@@ -21,7 +21,7 @@
 // (a lerp over log2(size)), the spokes fade out below 24 px, and the point
 // discs grow so the trio survives the tray. THE FRAME IN ETHER (her word):
 // ring, spokes and core stroke in #b0c6e4 → #8fa8d8; only the three points
-// speak the trio. Change the geometry in nav.js first, then mirror it here.
+// speak the trio. Geometry and palette come from branding/identity.mjs; all cuts share it.
 //
 // Deterministic: same script, same bytes — the committed files change only
 // when the art math does. Re-run: `npm run icon`. `--preview=<dir>` also
@@ -29,6 +29,7 @@
 // for eyeballing the hinted cuts.
 // ---------------------------------------------------------------------------
 
+import { INSIGNIA, PALETTE } from '../branding/identity.mjs';
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -37,33 +38,15 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // ------------------------------------------------------------------- palette
-const ETHER_A = [0xb0, 0xc6, 0xe4];     // the frame gradient's start (top-left)
-const ETHER_B = [0x8f, 0xa8, 0xd8];     // … and its end (bottom-right)
-const TEAL = [0x4f, 0xd6, 0xc4];        // --teal   · the top point
-const VIOLET = [0xa9, 0x8b, 0xff];      // --violet · the lower-right point
-const EMBER = [0xff, 0x8a, 0x4c];       // --ember  · the lower-left point
+const rgb = hex => hex.slice(1).match(/../g).map(value => parseInt(value, 16));
+const ETHER_A = rgb(PALETTE.etherA);
+const ETHER_B = rgb(PALETTE.etherB);
 const PLATE_TOP = [0x14, 0x14, 0x1e];   // the game's panel palette …
 const PLATE_BOT = [0x0a, 0x0a, 0x0e];   // … down to the window background
 
 // -------------------------------------------------------------- the insignia
 // The site mark's geometry verbatim, in its own 32-unit viewBox space.
-const MARK = {
-  ringR: 12,
-  coreR: 4.4,
-  /** [x1, y1, x2, y2] — core rim → toward each point */
-  spokes: [[16, 11.6, 16, 6.2], [19.8, 18.2, 24.5, 20.9], [12.2, 18.2, 7.5, 20.9]],
-  points: [
-    { x: 16, y: 4, rgb: TEAL },
-    { x: 26.4, y: 22, rgb: VIOLET },
-    { x: 5.6, y: 22, rgb: EMBER },
-  ],
-  ringAlpha: 0.9,
-  spokeAlpha: 0.55,
-  /** Optical centring: the mark's ink box sits ~1.1u above the ring's centre
-   *  (the top point reaches out, the lower points stop inside the ring), so
-   *  the ring centre drops by this much to centre the ink on the plate. */
-  lift: 1.1,
-};
+const MARK = { ...INSIGNIA, points: INSIGNIA.points.map(p => ({ x:p.x, y:p.y, rgb:rgb(p.color) })) };
 
 // ------------------------------------------------------------ the hinted cut
 // Stroke weights and disc radii in mark units, plus the mark's scale as a

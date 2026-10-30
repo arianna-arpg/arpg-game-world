@@ -18,8 +18,8 @@ let checks = 0;
 const check = (name: string, value: unknown) => { assert.ok(value, name); checks++; console.log('PASS ' + name); };
 const census = Object.values(SKILLS).filter(s => s.delivery.type === 'melee' || s.delivery.type === 'cone' && !s.delivery.beamFx);
 assert.deepEqual(Object.keys(SKILL_STRIKES).sort(), census.map(s => s.id).sort());
-check('99 melee and 32 non-beam cones have authored profiles', census.length === 131);
-check('all compositions differ and unknown IDs keep fallback', new Set(Object.values(SKILL_STRIKES).map(p => JSON.stringify(p))).size === 131 && !skillStrikeVoice('constructor'));
+check('102 melee and 35 non-beam cones have authored profiles', census.length === 137);
+check('all compositions differ and unknown IDs keep fallback', new Set(Object.values(SKILL_STRIKES).map(p => JSON.stringify(p))).size === 137 && !skillStrikeVoice('constructor'));
 function trace(draw: (ctx: CanvasRenderingContext2D) => void) {
   const calls: unknown[] = []; let depth = 0;
   const ctx = new Proxy({ globalAlpha: 1, lineWidth: 1 } as Record<string, unknown>, {

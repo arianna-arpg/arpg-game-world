@@ -5,7 +5,7 @@ import { SUPPORTS } from '../src/data/supports';
 import { MONSTERS } from '../src/data/monsters';
 import { NECROMANCER_TREES } from '../src/data/necromancerTrees';
 import { makeSkillInstance, instanceDelivery, instanceMods, instanceBaseTags, treeNodeRefusal,
-  skillContextTags, supportFitsInstOrCrew, skillCooldownSeconds, type SkillInstance } from '../src/engine/skills';
+  skillContextTags, supportFitsInstOrCrew, skillCooldownSeconds, type SkillInstance, type SummonDelivery } from '../src/engine/skills';
 import { treeGraph } from '../src/engine/skilltree';
 import { replenishShape } from '../src/engine/replenishment';
 import { updateAI } from '../src/engine/ai';
@@ -35,7 +35,7 @@ function step(w: World, seconds: number, minds = false) {
 const crew = (w: World, inst: SkillInstance) => w.actors.filter(a => !a.dead && a.owner === w.player && a.summonInst === inst);
 function cast(w: World, inst: SkillInstance) {
   w.player.casting = null; w.player.cooldowns.clear(); w.player.fillResources();
-  const ok = w.useSkill(w.player, inst, w.player.pos, true); step(w, 1.3); return ok;
+  const ok = w.useSkill(w.player, inst, w.player.pos, true); step(w, Math.max(1.3, w.player.skillUseTime(inst) + 0.2)); return ok;
 }
 const restore = seedGlobalRandom(0xb0ae);
 try {
@@ -102,7 +102,7 @@ try {
     inst.sockets[1] = { def: gem, level: 1 };
     cast(w, inst); const archer = crew(w, inst)[0];
     const rain = archer.skills.find(s => s?.def.id === 'skeletal_arrowfall')!;
-    check('Drumming Rain teaches the native eight-second ability', !!rain && skillCooldownSeconds(archer, rain) === 8);
+    check('Rain of Bones teaches the native eight-second ability', !!rain && skillCooldownSeconds(archer, rain) === 8);
     check('the accepted projectile support really forwards onto Rain of Bones', rain.sockets.some(s => s?.forwarded && s.def.id === gem.id));
     const foe = w.createMonster('zombie', 1, 'enemy'); foe.pos = { x: archer.pos.x + 300, y: archer.pos.y }; foe.invulnerable = true; foe.sheet.setSource('stationary', [mod('moveSpeed', 'more', -1)]); w.actors.push(foe);
     let rains = 0; SIM_TAP.current = { onCast: (a, s) => { if (a === archer && s.def.id === 'skeletal_arrowfall') rains++; } };
@@ -110,23 +110,19 @@ try {
     check('archer AI actually casts its cooldown rain', rains > 0);
   }
   {
-    const { w, p, inst } = setup('summon_bone_golem', ['osseous_might', 'great_bones', 'ossuary_commander']);
-    const base = p.sheet.get('damage'); cast(w, inst); step(w, 0.5);
-    const golem = crew(w, inst)[0];
-    check('giant commander is one large golem with active aura', crew(w, inst).length === 1 && golem.radius > MONSTERS.bone_golem.radius && golem.activeAuras.has('ossuary_command'));
-    check('commander aura buffs the keeper', p.sheet.get('damage') > base);
-    const auraRadius = golem.activeAuras.get('ossuary_command')!.radius;
-    inst.sockets[0] = { def: SUPPORTS.resonance, level: 1 };
-    inst.sockets[1] = { def: SUPPORTS.widening, level: 1 };
-    w.resyncMinionSupports(inst);
-    check('changing crew supports refreshes the living command aura', golem.activeAuras.get('ossuary_command')!.radius > auraRadius);
-    w.pickTreeNode(inst.def.id, 'marrow_bruiser'); step(w, 9);
-    check('tree mutation rebuilds a toggled contract', golem.dead && crew(w, inst).length === 1 && crew(w, inst)[0].skills.some(s => s?.def.id === 'marrow_sweep'));
+    const { w, inst } = setup('summon_bone_golem', ['osseous_might', 'great_bones', 'ossuary_commander']);
+    cast(w, inst); const golem=crew(w,inst)[0];
+    check('giant commander learns slam and triggered Warcall',crew(w,inst).length===1&&golem.radius>MONSTERS.bone_golem.radius&&golem.frameState?.kit.some(s=>s.def.id==='frame_warcall')===true);
+    const art=golem.frameState!.kit.find(s=>s.def.id==='frame_warcall')!, radius=golem.sheet.get('aoeRadius',skillContextTags(art),instanceMods(art));
+    inst.sockets[0]={def:SUPPORTS.resonance,level:1};inst.sockets[1]={def:SUPPORTS.widening,level:1};w.resyncMinionSupports(inst);
+    check('changing crew supports refreshes living Warcall',golem.sheet.get('aoeRadius',skillContextTags(art),instanceMods(art))>radius);
+    w.pickTreeNode(inst.def.id,'marrow_bruiser');step(w,9);
+    check('tree mutation rebuilds the toggled contract with its empowered payload',golem.dead&&crew(w,inst).length===1&&crew(w,inst)[0].frameState?.kit.some(s=>s.def.id==='frame_crush')===true);
   }
   {
     const { w, inst } = setup('summon_bone_golem', ['osseous_might', 'drilled_bones', 'bone_cohort']);
     cast(w, inst); step(w, 2);
-    check('cohort creates two golems with paid reservation per slot', crew(w, inst).length === 2 && w.player.reservedMana >= 64);
+    check('Sacrificial Frame retains one reserved adult with a configured life price', crew(w, inst).length === 1 && w.player.reservedMana > 0 && !!(instanceDelivery(inst) as SummonDelivery).frame?.sacrifice);
   }
   {
     const { w, p, inst } = setup('summon_bone_golem', ['keepers_bulwark', 'close_guard', 'bone_stand']);
@@ -134,7 +130,7 @@ try {
     const golem = crew(w, inst)[0], shell = golem.shellGuard!;
     check('Stand is an attached shell with a separate absorption pool', !!golem.summonShell && shell.max > 0 && !golem.activeAuras.has('ossuary_aegis'));
     const foe = w.createMonster('zombie', 1, 'enemy');
-    foe.pos = { x: p.pos.x + 400, y: p.pos.y }; foe.invulnerable = true;
+    foe.pos = { x: p.pos.x - 400, y: p.pos.y }; foe.invulnerable = true;
     foe.sheet.setSource('stationary', [mod('moveSpeed', 'more', -1), mod('critChance', 'more', -1)]); w.actors.push(foe);
     p.facing = 0;
     const hit = makeSkillInstance({ ...SKILLS.skeletal_grave_thunder, id: 'probe_shell_hit',
@@ -142,12 +138,12 @@ try {
       delivery: { type: 'nova', radius: 600 } }, 1, 0);
     const strike = () => { foe.casting = null; foe.useLock = 0; foe.cooldowns.clear(); w.useSkill(foe, hit, p.pos); };
     const life = p.life, pool = shell.pool;
-    strike(); check('front hit consumes the shell instead of keeper life', shell.pool < pool && p.life === life);
+    strike(); check('rear hit consumes the shell instead of keeper life', shell.pool < pool && p.life === life);
     foe.pos = { x: p.pos.x, y: p.pos.y + 100 }; const sidePool = shell.pool;
     strike(); check('shell covers side angles too', shell.pool < sidePool && p.life === life);
-    foe.pos = { x: p.pos.x - 100, y: p.pos.y }; const rearPool = shell.pool;
-    strike(); check('rear opening lets damage through without spending shell', p.life < life && shell.pool === rearPool);
-    p.fillResources(); foe.pos = { x: p.pos.x + 100, y: p.pos.y };
+    foe.pos = { x: p.pos.x + 100, y: p.pos.y }; const rearPool = shell.pool;
+    strike(); check('front opening lets damage through without spending shell', p.life < life && shell.pool === rearPool);
+    p.fillResources(); foe.pos = { x: p.pos.x - 100, y: p.pos.y };
     shell.pool = 1; const beforeBreak = p.life;
     strike(); check('breaking blow spends only remaining shell and leaks overflow', shell.broken && shell.pool === 0 && p.life < beforeBreak);
     let lashes = 0; SIM_TAP.current = { onCast: a => { if (a === golem) lashes++; } };
@@ -156,7 +152,7 @@ try {
     step(w, 3.2, true);
     check('shell knits after its delay and reforms at its threshold', !shell.broken && shell.pool >= shell.max * 0.4);
     step(w, 6, true); SIM_TAP.current = null;
-    check('reformed shell strikes nearby foes through its owned skill', lashes > 0 && golem.skills.some(k => k?.def.id === 'marrow_sweep'));
+    check('reformed shell strikes nearby foes through its owned skill', lashes > 0 && golem.skills.some(k => k?.def.id === 'frame_marrow_sweep'));
     const keeperPos = { ...p.pos }; step(w, 1, true);
     check('attached shell never shoulders its keeper', p.pos.x === keeperPos.x && p.pos.y === keeperPos.y && golem.pos.x === p.pos.x && golem.pos.y === p.pos.y);
     w.teleportActor(p, { x: p.pos.x + 200, y: p.pos.y + 150 }); step(w, 0.1);
@@ -180,7 +176,7 @@ try {
     check('Sorcery preserves base population', baseD.type === 'summon' && mageD.type === 'summon' && baseD.count === mageD.count && baseD.maxActive === mageD.maxActive);
     const more = setup('summon_skeleton_archer', ['unstrung_sorcery', 'volatile_souls']);
     const md = instanceDelivery(more.inst);
-    check('Volatile Souls preserves population while teaching empowered bolts', md.type === 'summon' && baseD.type === 'summon'
+    check('Gathered Malice preserves population while teaching empowered bolts', md.type === 'summon' && baseD.type === 'summon'
       && replenishShape(more.p, more.inst, md).count === baseD.count && replenishShape(more.p, more.inst, md).cap === baseD.maxActive
       && !!md.crewRules?.every(r => r.replace?.every(x => SKILLS[x.to].castSequence?.every === 4)));
     const { w, inst } = setup('summon_skeleton_archer', ['rattling_bows', 'rain_of_bones', 'cruel_rain', 'drumming_rain']);
@@ -188,15 +184,15 @@ try {
     const before = w.projectiles.length;
     w.useSkill(archer, arrow, {x: archer.pos.x + 350, y: archer.pos.y}, true);
     for(let i=0;i<180 && archer.casting;i++) w.update(1/60);
-    check('Forked Quivers emits three real baseline arrows', w.projectiles.filter(p => p.caster === archer).length === 3 && w.projectiles.length >= before + 3);
+    check('Fanned Volley emits three real baseline arrows', w.projectiles.filter(p => p.caster === archer).length === 3 && w.projectiles.length >= before + 3);
     const rain = archer.skills.find(k => k?.def.id === 'skeletal_arrowfall')!;
-    check('Forked Quivers adds two rain strikes without the retired bleed bonus', archer.sheet.get('stormCount', skillContextTags(rain), instanceMods(rain)) === 2
+    check('Fanned Volley adds two rain strikes without the retired bleed bonus', archer.sheet.get('stormCount', skillContextTags(rain), instanceMods(rain)) === 2
       && archer.sheet.get('apply_bleed', skillContextTags(rain), instanceMods(rain)) === 0);
   }
   {
     const { w, inst } = setup('summon_bone_golem', ['osseous_might', 'drilled_bones', 'great_bones', 'marrow_bruiser']);
-    cast(w, inst); const a = crew(w, inst)[0], sweep = a.skills.find(k => k?.def.id === 'marrow_sweep')!;
-    check('Drilled Bones can accelerate Marrow Bruiser within four points', inst.treeNodes?.length === 4 && skillCooldownSeconds(a, sweep) / a.sheet.get('cooldownRecovery') < 4);
+    cast(w, inst); const a = crew(w, inst)[0];
+    check('Arsenal and Cataclysm coexist within four points',inst.treeNodes?.length===4&&a.frameState?.kit.some(s=>s.def.id==='frame_nova')===true&&a.frameState.kit.some(s=>s.def.id==='frame_crush'));
   }
   {
     const { w, p, inst } = setup('summon_bone_golem', ['osseous_might', 'drilled_bones', 'assembled_legion']);
@@ -232,26 +228,26 @@ try {
     cast(small.w,small.inst); cast(big.w,big.inst);
     const a=crew(small.w,small.inst)[0], b=crew(big.w,big.inst)[0];
     const sw=b.skills.find(k=>k?.def.id==='warding_sweep')!;
-    check('size grows shell capacity and footprint without closing rear gap', b.shellGuard!.max > a.shellGuard!.max * 1.6 && b.radius > a.radius * 1.6 && b.shellGuard!.arcDeg === 300);
+    check('size grows shell capacity and footprint without closing forward gap', b.shellGuard!.max > a.shellGuard!.max * 1.6 && b.radius > a.radius * 1.6 && b.shellGuard!.arcDeg === 300);
     check('size grows Warding and Stand strike reach', b.sheet.get('aoeRadius',skillContextTags(sw),instanceMods(sw)) > a.sheet.get('aoeRadius',skillContextTags(sw),instanceMods(sw)) * 1.6);
     check('Close Guard inherits half keeper Thorns plus splinters', b.sheet.get('thorns') === 28 && a.sheet.get('thorns') === 8);
-    const foe=big.w.createMonster('zombie',1,'enemy'); foe.pos={x:big.p.pos.x+250,y:big.p.pos.y};
+    const foe=big.w.createMonster('zombie',1,'enemy'); foe.pos={x:big.p.pos.x-250,y:big.p.pos.y};
     // This fixture checks payloads on a landed sweep, independently of evasion/block.
     foe.sheet.setSource('probe',[mod('life','flat',10000),mod('moveSpeed','more',-1),mod('critChance','more',-1),
       mod('evasion','override',0),mod('blockChance','override',0)]);foe.fillResources(); big.w.actors.push(foe);
     const hit=makeSkillInstance({...SKILLS.skeletal_grave_thunder,id:'thorns_probe',cooldown:0,useTime:0,delivery:{type:'nova',radius:600}},1,0);
     big.p.facing=0; const life=foe.life;
     big.w.useSkill(foe,hit,big.p.pos); check('absorbed hit retaliates from attached shell', foe.life < life);
-    foe.pos={x:big.p.pos.x-100,y:big.p.pos.y}; const rearLife=foe.life;
-    foe.useLock=0;big.w.useSkill(foe,hit,big.p.pos); check('rear-gap hit only receives keeper Thorns', Math.abs(rearLife - foe.life - 40 * foe.sheet.get('damageTaken')) < 1e-6);
+    foe.pos={x:big.p.pos.x+100,y:big.p.pos.y}; const rearLife=foe.life;
+    foe.useLock=0;big.w.useSkill(foe,hit,big.p.pos); check('front-gap hit only receives keeper Thorns', Math.abs(rearLife - foe.life - 40 * foe.sheet.get('damageTaken')) < 1e-6);
     foe.pos={x:big.p.pos.x+250,y:big.p.pos.y};
     // Only Warding available: AI must recognize size-expanded reach beyond its base 150.
     b.skills=[sw]; let casts=0;SIM_TAP.current={onCast:(actor,skill)=>{if(actor===b&&skill.def.id==='warding_sweep')casts++;}};
     for(let i=0;i<180 && casts===0;i++){updateAI(b,big.w,1/60);big.w.update(1/60);}SIM_TAP.current=null;
     check('Warding AI casts at expanded reach',casts>0);
     check('Warding applies bleed and taunts toward shell keeper',foe.statuses.some(s=>s.id==='bleed') && foe.statuses.some(s=>s.id==='taunted' && s.casterId===big.p.id));
-    check('Warding applies an outward shove owned by the minion',!!foe.push && foe.push.vx>0 && foe.push.caster===b && foe.push.inst===sw);
-    foe.statuses=[];foe.life=1;foe.pos={x:big.p.pos.x+100,y:big.p.pos.y};big.p.facing=0;
+    check('Warding applies an outward shove owned by the minion',!!foe.push && foe.push.vx>0 && foe.push.caster===b && foe.push.inst?.def.id===sw.def.id);
+    foe.statuses=[];foe.life=1;foe.pos={x:big.p.pos.x-100,y:big.p.pos.y};big.p.facing=0;
     let credited=false;SIM_TAP.current={onDeath:(dead,killer)=>{if(dead===foe)credited=killer===b;}};
     foe.casting=null;foe.useLock=0;foe.cooldowns.clear();big.w.useSkill(foe,hit,big.p.pos);SIM_TAP.current=null;
     check('shell splinter kill credits the retaliating minion',foe.dead && credited);
@@ -259,13 +255,13 @@ try {
   {
     const {w,inst}=setup('summon_skeleton_mage',['lich_ascendant','fused_intellect','winter_crown','storm_crown']);cast(w,inst);
     const lich=crew(w,inst)[0], ids=lich.skills.flatMap(k=>k?[k.def.id]:[]);
-    check('Lich uses Fireball with devastating learned repertoire',crew(w,inst).length===1 && lich.defId==='ossuary_lich' && ['skeletal_lich_fireball','skeletal_cinder_rain','skeletal_winter_ring','skeletal_grave_thunder'].every(id=>ids.includes(id)) && !ids.some(id=>id.endsWith('_bolt')));
+    check('Lich uses Fireball with devastating learned repertoire',crew(w,inst).length===1 && lich.defId==='ossuary_lich' && ['skeletal_lich_fireball','skeletal_gravefire_mortar'].every(id=>ids.includes(id)) && !ids.includes('skeletal_grand_rite') && ['skeletal_grand_rite','skeletal_rite_boundary','skeletal_rite_blizzard','skeletal_rite_rupture'].every(id=>lich.summonArtState?.kit.some(s=>s.def.id===id)) && !ids.some(id=>id.endsWith('_bolt')));
     const crown=setup('summon_skeleton_mage',['lich_ascendant','deathless_regent','court_of_one','plague_crown']);cast(crown.w,crown.inst);
-    check('regent keeps aura and empowered plague ring',crew(crown.w,crown.inst)[0].activeAuras.has('ossuary_command') && crew(crown.w,crown.inst)[0].skills.some(k=>k?.def.id==='skeletal_plague_ring'));
+    check('regent keeps aura and owner-spell echo contract',crew(crown.w,crown.inst)[0].activeAuras.has('ossuary_command') && !!(instanceDelivery(crown.inst) as SummonDelivery).arts?.echo);
   }
   for (const [mid, leaf, form, art] of [
-    ['winter_curriculum','deep_winter','skeletal_cryomancer','skeletal_greater_ice_spear'],
-    ['winter_curriculum','plague_curriculum','skeletal_venomancer','skeletal_essence_drain'],
+    ['storm_curriculum','rolling_thunder','skeletal_cryomancer','skeletal_greater_ice_spear'],
+    ['storm_curriculum','expanded_faculty','skeletal_venomancer','skeletal_essence_drain'],
     ['storm_curriculum','rolling_thunder','skeletal_stormcaller','skeletal_chain_lightning'],
     ['storm_curriculum','expanded_faculty','skeletal_pyromancer','skeletal_ignite'],
   ]) {
@@ -279,7 +275,7 @@ try {
     const known=w.summonCrewSkills(inst);
     check(form+': support census includes exact replacement and lesson',Array.isArray(known) && known.some(k=>k.id===art)
       && !known.some(k=>k.id==='skeletal_cinder_rain'||k.id==='skeletal_winter_ring'||k.id==='skeletal_plague_ring')
-      && (form!=='skeletal_cryomancer' || !known.some(k=>k.id==='skeletal_ice_spear'||k.id==='skeletal_cold_bolt')));
+      && (form!=='skeletal_cryomancer' || (known.some(k=>k.id==='skeletal_ice_spear') && !known.some(k=>k.id==='skeletal_cold_bolt'))));
     if(caster){
       const foe=w.createMonster('zombie',1,'enemy');foe.pos={x:caster.pos.x+300,y:caster.pos.y};foe.skills=[];foe.sheet.setSource('still',[mod('moveSpeed','more',-1),mod('life','flat',100000)]);foe.fillResources();w.actors.push(foe);
       let casts=0,hits=0;SIM_TAP.current={onCast:(a,k)=>{if(a===caster&&k.def.id===art)casts++;},onHit:(a,target,result,packet)=>{if(a===caster&&target===foe&&result.total>0&&packet.sourceName===SKILLS[art].name)hits++;}};step(w,12,true);SIM_TAP.current=null;
@@ -287,7 +283,7 @@ try {
     }
     if(form==='skeletal_cryomancer') {
       const preview=JSON.stringify(previewSkill(w.player,inst));
-      check('cryomancer preview lists the final spear without the replaced lesson',preview.includes('Greater Skeletal Ice Spear') && !preview.includes('"Skeletal Ice Spear"'));
+      check('cryomancer preview lists primary and signature separately',preview.includes('Greater Skeletal Ice Spear') && preview.includes('Skeletal Ice Spear'));
     }
     const loaded=rebuildSkill({skillId:inst.def.id,level:20,rarity:'common',sockets:[],treeNodes:inst.treeNodes});
     check(form+': lessons survive save repair',loaded?.treeNodes?.join()===inst.treeNodes?.join());

@@ -11,6 +11,8 @@ export interface SkillFlightProfile {
   body?: 'orb' | 'star' | 'cluster';
 }
 export interface SkillFieldProfile {
+  /** A vertical flame column above an honest circular ground footprint. */
+  column?: true;
   motif: BurstMotif;
   layout: 'roots' | 'rings' | 'lattice' | 'spiral' | 'scatter' | 'spokes';
   motion: 'breathe' | 'out' | 'in' | 'orbit' | 'rise';
@@ -23,6 +25,12 @@ const f = (motif: BurstMotif, layout: SkillFieldProfile['layout'], motion: Skill
   count: number, echo?: BurstMotif): SkillFieldProfile => ({ motif, layout, motion, count, echo });
 
 export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
+  frame_barrage: p('teeth','quills','steady',6,'shields'),
+  frame_nova: p('teeth','saw','tumble',4,'cracks'),
+  frame_splinters: p('teeth','fork','pulse',4,'shields'),
+  court_bone_shuriken: p('teeth','saw','tumble',3,'blades'),
+  court_fire_arc: p('flame','ribbon','weave',4,'blades'),
+  court_storm_chain: p('sparks','links','weave',3,'blades'),
   skeletal_rattling_arrow: p('teeth','quills','steady',5,'cracks'),
   skeletal_volatile_fire: p('flame','saw','pulse',5,'teeth'),
   skeletal_volatile_cold: p('ice','quills','steady',5,'runes'),
@@ -205,6 +213,22 @@ export const SKILL_FLIGHTS: Readonly<Record<string, SkillFlightProfile>> = {
 /** Long-lived patterns: architecture, material and movement are independent.
  * Related arts share materials, never an entire composition. */
 export const SKILL_FIELDS: Readonly<Record<string, SkillFieldProfile>> = {
+  frame_fault: f('cracks','spokes','out',9,'teeth'),
+  frame_reliquary: f('shields','rings','breathe',9,'teeth'),
+  court_oath_standard: f('shields','spokes','rise',4,'runes'),
+  court_relief_aura: f('petals','rings','breathe',3,'shields'),
+  court_venom_ground: f('spores','spiral','breathe',5,'blades'),
+  skeletal_grand_rite: f('flame','lattice','rise',9,'runes'),
+  skeletal_ritual_dominion: f('runes','rings','breathe',11,'flame'),
+  skeletal_ritual_flare: f('flame','spokes','out',7,'souls'),
+  skeletal_rite_boundary: f('ice','rings','orbit',12,'teeth'),
+  skeletal_rite_blizzard: f('ice','scatter','in',13,'souls'),
+  skeletal_rite_rupture: f('sparks','roots','out',11,'runes'),
+  skeletal_discordant_burst: f('souls','spiral','out',9,'sparks'),
+  skeletal_fire_script: f('flame','lattice','breathe',7,'teeth'),
+  skeletal_cold_script: f('ice','lattice','orbit',7,'teeth'),
+  skeletal_lightning_script: f('sparks','lattice','out',7,'teeth'),
+  skeletal_chaos_script: f('spores','lattice','in',7,'souls'),
   hive_death_pool: f('spores','scatter','breathe',6,'teeth'),
   hive_detonation: f('teeth','spokes','out',6,'spores'),
   hive_royal_nova: f('petals','rings','out',8,'teeth'),

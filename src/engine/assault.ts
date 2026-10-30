@@ -1,4 +1,5 @@
 import type { Actor } from './actor';
+import { buffWithSource } from './buffSource';
 import type { World } from './world';
 import { dist, type Vec2 } from '../core/math';
 import { sameStory } from './tiers';
@@ -78,7 +79,7 @@ export class Assaults {
         return;
       }
       const ranks = host.treeNodes?.filter(id => id === 'clear_orders').length ?? 0;
-      if (ranks) a.addBuff({ type: 'buff', id: 'assault_orders', duration: this.duration(c), mods: [mod('moveSpeed', 'increased', 0.1 * ranks), mod('attackSpeed', 'increased', 0.1 * ranks), mod('castSpeed', 'increased', 0.1 * ranks), mod('damage', 'increased', 0.03 * ranks)] });
+      if (ranks) a.addBuff(buffWithSource({ type: 'buff', id: 'assault_orders', duration: this.duration(c), mods: [mod('moveSpeed', 'increased', 0.1 * ranks), mod('attackSpeed', 'increased', 0.1 * ranks), mod('castSpeed', 'increased', 0.1 * ranks), mod('damage', 'increased', 0.03 * ranks)] }, host));
       if (assaultNode(host, 'killing_signal')) a.assaultPreparation = { owner, host, hits: 1 + extra, until, policy: c.policy };
       this.endWard(a);
       if (assaultNode(host, 'sheltered_advance')) {
@@ -147,7 +148,7 @@ export class Assaults {
     for (const c of this.courts.values()) if (a !== c.owner && a.ownedBy(c.owner)) this.feed(c, target, dealt, a);
     const p = this.prepared(a);
     if (!p) return;
-    if (assaultNode(p.host, 'rushing_signal')) a.addBuff({ type: 'buff', id: 'assault_tempo', label: 'Rising Tempo', duration: 4, maxStacks: 5, mods: [mod('moveSpeed', 'increased', 0.1), mod('attackSpeed', 'increased', 0.1), mod('castSpeed', 'increased', 0.1)] });
+    if (assaultNode(p.host, 'rushing_signal')) a.addBuff(buffWithSource({ type: 'buff', id: 'assault_tempo', label: 'Rising Tempo', duration: 4, maxStacks: 5, mods: [mod('moveSpeed', 'increased', 0.1), mod('attackSpeed', 'increased', 0.1), mod('castSpeed', 'increased', 0.1)] }, p.host));
     if (--p.hits <= 0) { a.assaultPreparation = undefined; a.removeBuff('assault_preparation'); }
   }
   pooledHit(owner: Actor, target: Actor, dealt: number, amounts: DamagePacket['amounts']): void {

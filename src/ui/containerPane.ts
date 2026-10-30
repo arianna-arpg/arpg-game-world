@@ -20,6 +20,7 @@ import { empowermentText } from './reliquary';
 import { isVaultAvailable } from '../meta/account';
 import { planRelicStorage, reliquaryExperience } from '../engine/accountReliquary';
 import { BUILD_PANEL_CFG } from './buildPanels';
+import { decorateInventoryPanel } from './interfaceStyle';
 import type { InventoryPages, InventoryPageRequest } from './inventoryPages';
 
 /** What the drawers need from the panel that hosts them — read live, never
@@ -98,9 +99,9 @@ export class ContainerPane {
       const board = containerBoard(c)!;
       const n = this.held(c.id).length;
       const reliquaryLesson = c.id === 'reliquary' && this.host.world().reliquaryLesson();
-      return `<button data-containerflap="${esc(c.id)}" class="build-ribbon" aria-expanded="${this.isOpen(c.id)}"
+      return `<button data-containerflap="${esc(c.id)}" class="build-ribbon ${reliquaryLesson ? 'tut-glow' : ''}" aria-expanded="${this.isOpen(c.id)}"
           aria-controls="${containerPanelId(c.id)}" title="${esc(c.blurb)}">
-          <span class="build-ribbon-label">${c.glyph} ${esc(c.label.toUpperCase())}${reliquaryLesson ? ' · LESSON' : ''}</span>
+          <span class="build-ribbon-label">${c.glyph} ${esc(c.label.toUpperCase())}${reliquaryLesson ? '<span class="build-ribbon-hint"> · LESSON</span>' : ''}</span>
           <span class="build-ribbon-count" title="${n} seated of ${board.cells} open seats">${n}/${board.cells}</span>
         </button>`;
     }).join('');
@@ -175,7 +176,7 @@ export class ContainerPane {
         const px = `position:absolute;left:${x * CELL}px;top:${y * CELL}px;width:${CELL - 2}px;height:${CELL - 2}px;box-sizing:border-box;`;
         if (boardOpenAt(board, x, y)) {
           cells += `<div data-cell="${x}:${y}" data-drop="containerCell:${esc(id)}:${x}:${y}"
-            style="${px}background:#16131d;border:1px solid ${reliquaryLesson ? '#e4cb97;box-shadow:inset 0 0 12px #9b805566' : '#2a2634'}"></div>`;
+            style="${px}background:var(--inv-cell-fill,#16131d);border:1px solid ${reliquaryLesson ? '#e4cb97;box-shadow:inset 0 0 12px #9b805566' : 'var(--inv-cell-edge,#2a2634)'}"></div>`;
         } else if (boardOpenAt(full, x, y)) {
           const rung = containerRungAt(def, x, y);
           cells += `<div title="${esc(rung ? `Sealed: opens with ${rung.label}${isVaultAvailable(this.host.world().account) ? ' (the Vault)' : ''}` : 'Sealed')}"
@@ -218,6 +219,7 @@ export class ContainerPane {
     this.rendered.set(el, html);
     const scroll = el.scrollTop;
     el.innerHTML = html;
+    decorateInventoryPanel(el);
     el.scrollTop = scroll;
     el.querySelector('[data-reliquary-toggle]')?.addEventListener('click', () => {
       this.host.world().requestMeta({ t: 'reliquaryToggle', enabled: this.host.seat().meta.relicEnabled === false });
@@ -256,7 +258,7 @@ export class ContainerPane {
     return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
       data-drag="gearItem:${i.uid}" data-drop="gearTile:${i.uid}"
       style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
-      width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
+      width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#221e2c);
       border:2px solid ${r.color};border-radius:3px;cursor:var(--cursor-point, pointer);box-sizing:border-box;
       display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
       ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${CATEGORY_GLYPHS[cat] ?? '?'}${lock}</div>`;

@@ -1,0 +1,187 @@
+/* Markup owns the mode: replacing a view removes the shell automatically.
+   Root selectors out-rank legacy panel dimensions without changing game HUDs. */
+#start-menu:has(#esc-back):has(> .side-screen),
+:is(#start-menu, #account-screen, #escape-menu):has(> .side-screen) {
+  position: fixed; inset: 0 auto auto 0; transform: none;
+  width: calc(100vw / var(--ui-scale)); height: calc(100dvh / var(--ui-scale));
+  min-width: 0; max-width: none; max-height: none; padding: 0;
+  border: 0; border-radius: 0; box-shadow: none; background: transparent;
+  text-align: left; overflow: hidden; display: block;
+  container: side-viewport / inline-size;
+}
+body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #front-backdrop { display: block; }
+body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #hint-bar { display: none; }
+.side-screen {
+  height: 100%; min-height: 0; display: grid; gap: 32px;
+  grid-template-columns: minmax(0, min(var(--side-max), max(var(--side-min), var(--side-share)))) minmax(0, 1fr);
+  padding: 32px 40px 42px; color: var(--side-text);
+  --gold: var(--side-accent); --text: var(--side-text); --text-dim: var(--side-muted);
+  --panel-bg: var(--side-surface); --panel-border: var(--side-line);
+  font: 13px/1.5 'Segoe UI', sans-serif;
+}
+.side-screen, .side-screen * { box-sizing: border-box; }
+.side-pane {
+  min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  border: 1px solid var(--side-line); border-top-color: var(--side-accent);
+  background: linear-gradient(145deg, #18272aeb, var(--side-surface) 48%);
+  box-shadow: 0 20px 70px #0007; container: side-pane / inline-size;
+  animation: side-arrive var(--side-enter-ms) ease-out;
+}
+.side-masthead {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  margin: 0 28px; padding: 18px 0; border-bottom: 1px solid var(--side-line);
+  color: var(--side-muted); font-size: 9px; text-transform: uppercase; letter-spacing: 1.8px;
+}
+.side-masthead i { color: var(--side-accent); padding: 0 9px; font-style: normal; }
+.side-masthead [data-front-motion] {
+  background: none; border: 0; color: var(--side-muted); padding: 3px 0;
+  font: 10px/1.5 'Segoe UI', sans-serif; white-space: nowrap; cursor: var(--cursor-point, pointer);
+}
+.side-masthead [data-front-motion]:hover { color: var(--side-text); }
+.side-masthead [data-front-motion]:disabled { opacity: .6; cursor: default; }
+.side-content { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.side-screen .side-content > * { flex-shrink: 0; }
+:is(#start-menu, #account-screen, #escape-menu) .side-screen .side-head {
+  flex: 0 1 auto; min-height: 0;
+  background: transparent; margin: 0; padding: 23px 28px 0; max-height: 44%; overflow: auto;
+}
+:is(#start-menu, #account-screen, #escape-menu) .side-screen h1 {
+  margin: 0 0 14px; font: normal 32px/1.15 Georgia, serif; color: var(--side-text);
+  letter-spacing: .5px; overflow-wrap: anywhere; outline: none;
+}
+.side-screen .side-head > h1::after {
+  content: ''; display: block; height: 1px; width: 42px; margin-top: 17px; background: var(--side-accent);
+}
+:is(#start-menu, #account-screen, #escape-menu) .side-screen .acct-head {
+  font-size: 12px; line-height: 1.7; color: var(--side-muted); margin-bottom: 16px;
+}
+:is(#start-menu, #account-screen, #escape-menu) .side-screen .side-scroll {
+  flex: 1 1 auto; min-height: 0; padding: 20px 28px 28px; overflow: auto;
+  scrollbar-width: thin; scrollbar-color: var(--side-accent) #111d20; scroll-padding: 12px;
+}
+:is(#start-menu, #account-screen, #escape-menu) .side-screen .side-foot {
+  flex: 0 0 auto; display: flex; flex-direction: row; flex-wrap: wrap; justify-content: flex-end;
+  min-height: 0; max-height: var(--side-footer-max); overflow-y: auto; align-content: flex-start;
+  scrollbar-width: thin; scrollbar-color: var(--side-accent) var(--side-surface);
+  gap: 10px; margin: 0; padding: 14px 28px; border-top: 1px solid var(--side-line); background: var(--side-surface);
+}
+:is(#start-menu, #account-screen, #escape-menu) .side-screen .side-foot button {
+  width: auto; max-width: 100%; margin: 0; padding: 9px 22px; border: 1px solid var(--side-accent);
+  background: #1a292b; color: var(--side-text); border-radius: 2px; font: 12px/1.5 'Segoe UI', sans-serif;
+}
+.side-screen :is(button, input, select):focus-visible { outline: 2px solid var(--side-accent); outline-offset: 3px; }
+.side-screen button { transition: background .15s, border-color .15s; }
+.side-screen :is(.book-tabs, .stat-tabs) { gap: 5px; flex-wrap: wrap; margin: 0; padding: 0 0 14px; }
+:is(#start-menu, #account-screen) .side-screen .book-tabs button {
+  flex: 0 1 auto; padding: 8px 13px; border: 1px solid transparent; border-radius: 2px;
+  color: var(--side-muted); background: #ffffff04; font: 11px/1.4 'Segoe UI', sans-serif;
+}
+:is(#start-menu, #account-screen) .side-screen .book-tabs button.active {
+  color: var(--side-accent); border-color: var(--side-line); background: #ffffff09;
+}
+:is(#start-menu, #account-screen) .side-screen button:hover:not(:disabled) { background-color: #ffffff10; border-color: var(--side-accent); }
+.side-screen .vault-lesson { margin: 0 0 16px; padding: 12px 15px; background: #cfaf7709; border-color: #cfaf7740; line-height: 1.6; }
+.side-screen .unlock-grid { grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr)); gap: 12px; }
+.side-screen .unlock-card { padding: 14px; border-color: var(--side-line); border-radius: 2px; background: #ffffff03; }
+.side-screen .unlock-card .uname { color: var(--side-text); font: normal 15px/1.4 Georgia, serif; margin-bottom: 15px; overflow-wrap: anywhere; }
+.side-screen .unlock-card button { background: #18292b; border-color: #cfaf7760; border-radius: 2px; padding: 7px 9px; }
+.side-screen .vault-sub { margin-top: 24px; letter-spacing: 1.5px; }
+.side-screen .vault-empty { text-align: center; padding: 65px 24px; font: italic 17px/1.7 Georgia, serif; color: var(--side-muted); }
+.side-screen .chron-row {
+  grid-template-columns: 28px minmax(100px, 1fr) 38px 42px 42px 65px 72px 54px 70px;
+  gap: 8px; padding: 14px 8px; border-bottom-color: var(--side-line); font-size: 12px;
+}
+.side-screen .chron-row > span { min-width: 0; overflow-wrap: anywhere; }
+.side-screen .chron-who { font: 14px/1.4 Georgia, serif; }
+.side-screen .chron-head { font-size: 9px; letter-spacing: .3px; }
+.side-screen .chron-latest { border-left-color: var(--side-accent); background: #b9c8be09; }
+.side-screen .rebind-row { padding: 10px 4px; gap: 20px; }
+.side-screen .rebind-row > span { min-width: 0; overflow-wrap: anywhere; }
+.side-screen .rebind-row button { background: #18292b; padding: 6px 11px; color: var(--side-accent); }
+.side-screen .pad-opt { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.side-screen input[type="range"] { accent-color: var(--side-accent); max-width: 100%; min-width: 0; }
+:is(#start-menu, #account-screen) .side-screen .side-scroll h1 { font-size: 20px; margin: 22px 0 12px; }
+.side-echo { min-width: 0; align-self: end; padding: 28px 0 20px; text-shadow: 0 3px 20px #000; }
+.side-echo > span { color: var(--side-accent); font-size: 29px; }
+.side-echo p { color: #a5bcb4; font: 9px/1.5 'Segoe UI', sans-serif; text-transform: uppercase; letter-spacing: 3px; margin: 18px 0 10px; }
+.side-echo blockquote { color: #dddcca; font: italic 21px/1.6 Georgia, serif; margin: 0; max-width: 250px; }
+.side-screen[data-context="world"] { display: flex; justify-content: center; background: #02090c80; }
+.side-screen[data-context="world"] > .side-pane { width: min(100%, var(--side-max)); }
+/* The existing seal remains a sibling overlay owned by the Vault. */
+#account-screen:has(> .side-screen) .seal-box { max-width: min(440px, 92%); max-height: 90%; overflow: auto; background: #0b1519; border-radius: 2px; }
+#account-screen:has(> .side-screen) .seal-box button { max-width: 100%; margin: 8px 0; }
+body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #game-build-identity {
+  right: 18px !important; bottom: 7px !important; max-width: calc(100vw - 36px) !important;
+  padding: 2px 0 !important; background: transparent !important; border: 0 !important;
+  color: #93a39c !important; font: 9px/1.4 'Segoe UI', sans-serif !important;
+}
+@container side-viewport (max-width: 1080px) {
+  .side-screen { grid-template-columns: minmax(0, 1fr); padding: 20px 24px 34px; }
+  .side-echo { display: none; }
+}
+@container side-viewport (max-width: 560px) {
+  .side-screen { padding: 10px 10px 32px; gap: 0; }
+  .side-masthead { margin: 0 16px; padding: 12px 0; letter-spacing: 1px; gap: 8px; flex-wrap: wrap; }
+}
+@container side-pane (max-width: 700px) {
+  .side-screen .chron-head { display: none; }
+  .side-screen .chron-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px 10px; }
+  .side-screen .chron-who { grid-column: 1 / -1; font-size: 18px; }
+  .side-screen .chron-row [data-label] { text-align: left; }
+  .side-screen .chron-row [data-label]::before { content: attr(data-label); display: block; color: var(--side-muted); font: 9px/1.6 'Segoe UI', sans-serif; margin-bottom: 2px; }
+}
+@container side-pane (max-width: 480px) {
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-head { padding: 16px 16px 0; }
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen h1 { font-size: 25px; }
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-scroll { padding: 16px; }
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-foot { padding: 10px 16px; gap: 6px; }
+  :is(#start-menu, #account-screen, #escape-menu) .side-screen .side-foot button { padding: 8px 12px; flex: 1 1 auto; }
+  :is(#start-menu, #account-screen) .side-screen .book-tabs button { padding: 6px 8px; }
+  .side-screen .rebind-row { flex-wrap: wrap; gap: 8px; padding: 12px 0; }
+  .side-screen .pad-opt { width: 100%; }
+  .side-screen .pad-opt input { flex: 1; }
+  .side-screen .chron-lvlbar { max-width: 100%; margin: 4px 0; }
+}
+@media (prefers-reduced-motion: reduce) { .side-pane { animation: none; } .side-screen * { transition: none !important; } }
+@media (forced-colors: active) {
+  .side-pane, .side-screen .side-foot { background: Canvas; border-color: CanvasText; }
+  .side-screen { color: CanvasText; }
+}
+@keyframes side-arrive { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+
+/* The roster is another set of shell regions, with account-owned vessel cards.
+   Auto-fit gives long names and large UI scales the same readable surface. */
+#start-menu .side-screen .sm-roster {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+  align-content: start; gap: 14px; width: 100%; max-width: none;
+}
+#start-menu .side-screen .sm-roster-tile {
+  display: flex; min-width: 0; max-width: none; border: 1px solid var(--side-line);
+  border-radius: 2px; background: #ffffff03; position: relative;
+}
+#start-menu .side-screen .sm-roster-tile:hover { border-color: var(--side-accent); background: #ffffff06; }
+#start-menu .side-screen .sm-roster-go {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: 12px; width: 100%; min-width: 0; min-height: 150px; padding: 24px 48px 24px 20px;
+  border: 0; border-radius: 0; background: transparent; text-align: left;
+  cursor: var(--cursor-point, pointer); color: var(--side-text);
+}
+#start-menu .side-screen .sm-roster-name {
+  white-space: normal; overflow: visible; overflow-wrap: anywhere; text-overflow: clip;
+  font: normal 21px/1.3 Georgia, serif; color: var(--side-text);
+}
+#start-menu .side-screen .sm-roster-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; line-height: 1.6; }
+#start-menu .side-screen .sm-roster-fee { font-size: 11px; line-height: 1.6; color: #d8aca6; }
+#start-menu .side-screen .sm-roster-tile.fallen { border-color: #a96b6440; background: #a96b6406; }
+#start-menu .side-screen .sm-roster-tile.fallen .sm-roster-go { opacity: 1; }
+#start-menu .side-screen .sm-roster-tile.fallen .sm-roster-name { color: var(--side-muted); }
+#start-menu .side-screen .sm-roster-del {
+  position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; margin: 0; padding: 0;
+  display: flex; align-items: center; justify-content: center; border: 1px solid var(--side-line);
+  border-radius: 2px; background: var(--side-surface); color: var(--side-muted); font: 12px/1 'Segoe UI', sans-serif;
+  cursor: var(--cursor-point, pointer);
+}
+#start-menu .side-screen .sm-roster-del:hover:not(:disabled) { color: #f2c0b9; border-color: #cf8175; background: #392326; }
+.side-screen .roster-head h1 { padding-right: 40px; }
+.side-screen .roster-head .panel-x { margin: 0; border-radius: 2px; background: #ffffff04; color: var(--side-muted); }
+#start-menu .side-screen .roster-notice { color: #ddb278; border-left: 1px solid currentColor; padding-left: 12px; overflow-wrap: anywhere; }

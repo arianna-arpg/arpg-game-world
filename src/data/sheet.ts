@@ -138,7 +138,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     core: ['aoeRadius', 'effectDuration', 'cooldownRecovery'],
     used: [
       // Costs
-      'satelliteCount', 'satelliteOrbit', 'satelliteSpeed', 'auroraCapacity', 'auroraRecharge', 'creeperSpeed',
+      'satelliteCount', 'satelliteEquipmentCount', 'satelliteOrbit', 'satelliteSpeed', 'auroraCapacity', 'auroraRecharge', 'creeperSpeed',
       'manaCost', 'manaUseCost', 'addedManaCost', 'addedLifeCost', 'addedCooldown',
       'costDamage_mana', 'costDamage_life',
       'costWard_mana', 'costWard_life', 'costWardDuration', 'costWardCap',
@@ -224,7 +224,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     label: 'Misc',
     blurb: 'Movement, presence, fortune, and anything else your build touches.',
     core: [],
-    used: ['traction', 'detectability', 'concealment', 'noiseOnHit', 'threatGen', 'targetPriority', 'invisible', 'luck'],
+    used: ['bodyMass', 'traction', 'detectability', 'concealment', 'noiseOnHit', 'threatGen', 'targetPriority', 'invisible', 'luck'],
   },
 };
 
@@ -396,6 +396,7 @@ const STAT_BLURBS: Record<string, string> = {
 
   // Mobility & action speed
   moveSpeed: 'How fast you travel.',
+  bodyMass: 'Your contribution to a collective charge, further increased by body size.',
   traction: 'Grip on the ground: below full, movement becomes momentum that slides (ice).',
   attackSpeed: 'Multiplies how quickly attack skills swing.',
   castSpeed: 'Multiplies how quickly spells cast.',

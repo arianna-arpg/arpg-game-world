@@ -1,3 +1,8 @@
+import { frameSkillIds, type FrameSpec, type FrameCast } from './frameSpec';
+import { cohortSkillIds, type CohortSpec, type CohortCast } from './cohortSpec';
+import { summonArtIds, type SummonArtsSpec, type SummonArtCast } from './summonArtsSpec';
+import { projectileArtsDelivery, type ProjectileArtsSpec } from './projectileArtsSpec';
+import type { ProjectileArtCast } from './projectileArts';
 import { summonScopeTags } from './skillScopes';
 import { empowermentPassive, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { guardArtsOf, type GuardArtsSpec } from './guardArtsSpec';
@@ -440,6 +445,8 @@ export function instanceAim(inst: SkillInstance): AimSpec | undefined {
  *  untouched — byte-identical by construction, zero allocation. The cast
  *  path reads delivery through THIS view (executeSkill's one binding). */
 export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
+  const projectileArts = projectileArtsDelivery(inst);
+  if (projectileArts) return projectileArts;
   const attackSequence = attackSequenceDelivery(inst);
   if (attackSequence) return attackSequence;
   const challenge = challengeDelivery(inst);
@@ -449,6 +456,9 @@ export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
   if (d.type === 'summon' && (over?.summon || d.selectPool?.length)) {
     const summonOver = over?.summon ?? {};
     const resolved = { ...d, ...summonOver };
+    resolved.frame = d.frame || summonOver.frame ? { ...d.frame, ...summonOver.frame } : undefined;
+    resolved.cohort = d.cohort || summonOver.cohort ? { ...d.cohort, ...summonOver.cohort } : undefined;
+    resolved.arts = d.arts || summonOver.arts ? { ...d.arts, ...summonOver.arts } : undefined;
     resolved.crewSkills = union(d.crewSkills, summonOver.crewSkills);
     resolved.crewAuras = union(d.crewAuras, summonOver.crewAuras);
     resolved.crewRules = [...(d.crewRules ?? []), ...[...(summonOver.crewRules ?? [])]
@@ -460,6 +470,10 @@ export function instanceDelivery(inst: SkillInstance): SkillDef['delivery'] {
     if (summonOver.monsterId) delete resolved.pool;
     if (resolved.selectPool?.length && resolved.pool) {
       resolved.pool = resolved.pool.filter(p => resolved.selectPool!.includes(p.id));
+    }
+    if (resolved.arts?.balanceSchools && inst.summonSchools?.length && resolved.pool) {
+      const wanted = resolved.arts.schools?.filter(s => inst.summonSchools!.includes(s.id)).map(s => s.monster) ?? [];
+      if (wanted.length) resolved.pool = resolved.pool.filter(p => wanted.includes(p.id));
     }
     return resolved;
   }
@@ -488,7 +502,10 @@ export function instanceMetas(inst: SkillInstance): { skillId: string; label: st
   const add = (m?: { skillId: string; label: string }): void => {
     if (m && !seen.has(m.skillId)) { seen.add(m.skillId); out.push(m); }
   };
-  add(inst.def.meta);
+  const d = instanceDelivery(inst);
+  const frameCommand=d.type==='summon' ? d.frame?.charge?.command ?? d.frame?.crush?.command ?? d.frame?.protect?.command : undefined;
+  if(frameCommand) add({skillId:frameCommand,label:d.type==='summon'&&d.frame?.charge?'Advance!':d.type==='summon'&&d.frame?.crush?'Crush!':'Guard!'});
+  add(d.type === 'summon' && d.cohort?.order ? { skillId: d.cohort.order.skill, label: d.cohort.order.label } : inst.def.meta);
   for (const s of hostSockets(inst)) add(s.def.meta);
   return out;
 }
@@ -704,17 +721,22 @@ export function instanceTurret(inst: SkillInstance): { castSkillId: string; life
   return undefined;
 }
 
-/** The strike-timing discipline a use obeys: a socketed graft wins; a
- *  skill's innate castMode 'perfect'/'timed' provides the fallback (so
- *  Snipe + Overcharge composes with no extra gem — the innate golden
- *  window becomes the release window). One discipline per use. */
-export function instanceStrikeTiming(inst: SkillInstance): StrikeTimingSpec | undefined {
-  for (const s of hostSockets(inst)) if (s.def.strikeTiming) return s.def.strikeTiming;
-  // The skill's own timing spec tunes its innate window (Iai Strike's
-  // wider flawless bonus); the castMode alone falls to the old baselines.
-  if (inst.def.castMode === 'perfect') return inst.def.timing ?? { kind: 'perfect' };
-  if (inst.def.castMode === 'timed') return inst.def.timing ?? { kind: 'timed', bonus: 1.2 };
-  return undefined;
+/** Distinct strike-timing mechanics compose. Within one kind the first
+ *  socket still wins, then the skill supplies any missing innate kind.
+ *  Keep the source with the resolved spec for casts, cues and inspection. */
+export function instanceStrikeTimings(inst: SkillInstance): ResolvedStrikeTiming[] {
+  const timings = new Map<StrikeTimingSpec['kind'], ResolvedStrikeTiming>();
+  for (const s of hostSockets(inst)) {
+    const spec = s.def.strikeTiming;
+    if (spec && !timings.has(spec.kind)) timings.set(spec.kind,
+      { ...spec, source: { kind: 'support', id: s.def.id } });
+  }
+  const mode = inst.def.castMode;
+  const innate = mode === 'perfect' || mode === 'timed'
+    ? inst.def.timing ?? { kind: mode } : undefined;
+  if (innate && !timings.has(innate.kind)) timings.set(innate.kind,
+    { ...innate, source: { kind: 'skill', id: inst.def.id } });
+  return [...timings.values()];
 }
 
 /** The self-stack pile a use feeds: a socketed graft (Building Rhythm)
@@ -1773,6 +1795,8 @@ export interface GroundDelivery {
   /** How far the SUCTION reaches, in units (default: the damage radius ×
    *  1.35). An Event Horizon's grip extends well past the disc that kills. */
   pullRadius?: number;
+  /** A persistent hollow center, independent of the inward-fill mechanic. */
+  innerFraction?: number;
   /** Pillar of Flame: the zone starts as an OUTER BAND (this fraction of
    *  the radius is hollow) and fills inward over `fillTime` seconds —
    *  a cage of flame that cooks its way to the center. */
@@ -1860,7 +1884,7 @@ export interface GroundDelivery {
    *  Toxic Domain's oppression). Applied per-actor as a sheet source,
    *  stripped on exit, death, or the zone's end. `minionMods` dress the
    *  caster's MINIONS on top of any allyMods (Oblation of Flesh's ring). */
-  domain?: { allyMods?: Modifier[]; enemyMods?: Modifier[]; minionMods?: Modifier[] };
+  domain?: { allyMods?: Modifier[]; enemyMods?: Modifier[]; minionMods?: Modifier[]; stackGroup?: string };
   /** On impact, leave real TERRAIN behind for a while (Icy Comet's ice
    *  patch — it is actual ice: slippery, with all terrain rules). */
   leaveTerrain?: { kind: 'ice' | 'mud' | 'bog' | 'swamp' | 'water'; radius: number; duration: number };
@@ -1938,6 +1962,7 @@ export interface SelfDelivery {
  * Its own kit becomes the strike skill plus taught crew arts. It protects its
  * owner through the ordinary shell absorption path, without replacing other shells. */
 export interface SummonShellSpec {
+  side?: 'front' | 'rear' | 'all';
   shellVisual?: string;
   lifeFraction: number;
   /** Capacity scales by minionSize raised to this power; angular coverage stays fixed. */
@@ -1951,6 +1976,9 @@ export interface SummonShellSpec {
 }
 
 export interface SummonDelivery {
+  frame?: Partial<FrameSpec>;
+  arts?: SummonArtsSpec;
+  cohort?: Partial<CohortSpec>;
   type: 'summon';
   /** Passive replenishment while seated on a living actor's bar. Free births,
    *  no casts/cast events; interval scales with minionRespawnTime. The ordinary
@@ -1960,7 +1988,7 @@ export interface SummonDelivery {
   replenish?: { interval: number; toggle?: boolean };
   /** A held, growing flank formation. Pulses add bodies without evicting at cap.
    * Its own channel is the canonical cast-mode conversion for every consumer. */
-  channelFormation?: { channel: ChannelSpec; spacing: number; reach: number; emerge?: import('./emerge').EmergeSpec };
+  channelFormation?: { channel: ChannelSpec; spacing: number; reach: number; emerge?: import('./emerge').EmergeSpec; fireOnArrival?: true; attackSpeedMore?: number };
   /** At a full formation, release empowers each body's primary art. */
   channelFormationRelease?: { power: number; size: number };
   /** Fixed minion type — or use `pool` for weighted random selection. */
@@ -1996,6 +2024,9 @@ export interface SummonDelivery {
   grimoire?: boolean;
   count: number;
   maxActive: number;      // oldest minion is replaced beyond this
+  /** Round the final stat-adjusted cap upward to this positive whole group size.
+   * Omit to retain ordinary nearest-body rounding. Does not alter births per cast. */
+  capacityMultiple?: number;
   /** Capacity only: skills sharing a poolGroup count against one body limit. */
   poolGroup?: string;
   /** Activating this summon dismisses other summon types in this group.
@@ -2457,6 +2488,8 @@ export function instanceBirth(inst: SkillInstance): BirthEffect | undefined {
 }
 
 export interface ConstructDelivery {
+  /** Ground-device arming and contact policy, shared with authored monster traps. */
+  deviceTrigger?: import('./groundDevices').DeviceTriggerSpec;
   type: 'construct';
   kind: ConstructKind;
   /** Part-grammar portrait override (data/looks.ts). Omitted = the kind's
@@ -2593,7 +2626,7 @@ export interface AuraSpec {
    *  target's max life or max mana, or seconds-worth of their life regen. */
   pulse?: {
     interval: number;
-    healAllies?: { base: 'maxLife' | 'maxMana' | 'lifeRegen'; amount: number };
+    healAllies?: { base: 'maxLife' | 'maxMana' | 'lifeRegen' | 'casterMaxLife'; amount: number };
   };
   /** Enemies dying inside spawn allied minions for the bearer. */
   deathSpawn?: {
@@ -2885,6 +2918,11 @@ export interface StrikeTimingSpec {
   /** MORE bonus on success (default 0.7 perfect / 1.2 timed — the
    *  baselines Snipe and Timed Strike always had). */
   bonus?: number;
+}
+
+/** A timing mechanic and the content source that supplied it. */
+export interface ResolvedStrikeTiming extends StrikeTimingSpec {
+  source: { kind: 'skill' | 'support'; id: string };
 }
 
 /**
@@ -3567,6 +3605,8 @@ export interface StatusEffect {
 
 /** Grants the caster a temporary named bundle of modifiers. */
 export interface BuffEffect {
+  /** Originating skill face, copied at application for HUD attribution only. */
+  sourceSkill?: import('./buffSource').BuffSkillSource;
   /** Stored payload body/HUD material. Consumable buffs inherit a profile;
    * other buffs opt in. False hides only this supplementary presentation. */
   storedCue?: import('../data/procCues').ProcCueSpec | false;
@@ -4349,6 +4389,7 @@ export type SkillEffect =
 // --- The skill definition ---------------------------------------------------
 
 export interface SkillDef {
+  projectileArts?: ProjectileArtsSpec;
   icon?: string;
   bodyMotion?: string | false;
   reachCue?: boolean;
@@ -4575,6 +4616,11 @@ export interface SkillDef {
     rangeStat?: string;   // optional multiplicative reach stat, e.g. aoeRadius
     weight: number;       // relative pick priority
     keepDistance?: number;// preferred standoff distance (casters kite)
+    /** Include this command when granted by a carried skill's meta slot. */
+    autonomousMeta?: boolean;
+    /** Use only when owned devices can reach applicable targets. Radius defaults
+     * to the payload's effective area; explicit radius supports other deliveries. */
+    deployed?: { kind: ConstructKind; radius?: number; minCount?: number; minTargets?: number };
     /** CHARGE DISCIPLINE — a SOFT minimum (px): inside this distance the
      *  pick weight collapses (× nearWeight, default
      *  BEHAVIOR_CFG.nearDiscount) so a shove-dash stops being the STANDARD
@@ -4721,7 +4767,7 @@ export interface SkillDef {
 
   /** INNATE strike-timing window tuning for castMode 'perfect'/'timed' —
    *  the data lever over the old hardcoded defaults (a socketed
-   *  strikeTiming graft still wins; see instanceStrikeTiming). */
+   *  strikeTiming graft of the same kind still wins; see instanceStrikeTimings). */
   timing?: StrikeTimingSpec;
 
   /** CROWD EMPOWERMENT (the warcry-power shape): at execution, tally the
@@ -5045,13 +5091,13 @@ export function impactTreeOverrideErrors(def: SkillDef, node: SkillTreeNode): st
 function mergeTreeDomain(a: GroundDelivery['domain'], b: GroundDelivery['domain']): GroundDelivery['domain'] {
   if (!a) return b;
   if (!b) return a;
-  return Object.fromEntries(['allyMods', 'enemyMods', 'minionMods'].map(key => {
-    const k = key as keyof NonNullable<GroundDelivery['domain']>;
-    return [k, [...(a[k] ?? []), ...(b[k] ?? [])]];
-  }));
+  return { stackGroup: b.stackGroup ?? a.stackGroup, ...Object.fromEntries((['allyMods', 'enemyMods', 'minionMods'] as const).map(k => [k, [...(a[k] ?? []), ...(b[k] ?? [])]])) };
 }
 
 export interface SkillTreeNode {
+  /** Immediate actions exposed by an allocated node's anchored selector. */
+  choiceActions?: { action: 'dismissFrame'; label: string; description?: string }[];
+  projectileArts?: ProjectileArtsSpec;
   guardArts?: GuardArtsSpec;
   attackSequence?: AttackSequenceSpec;
   /** Complete armed-cast identity; sockets override it. One per exclusive limb. */
@@ -5130,8 +5176,8 @@ export interface SkillTreeNode {
     /** Summon-tree adoption: execute/spawn, pending summons, previews and
      *  replenishment and crew fit read instanceDelivery. Kits and selections union.
      *  duration: 0 explicitly removes the birth's expiry clock. */
-    summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'duration' | 'replenish'
-      | 'channelFormation' | 'channelFormationRelease' | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
+    summon?: Partial<Pick<SummonDelivery, 'count' | 'maxActive' | 'capacityMultiple' | 'duration' | 'replenish'
+      | 'frame' | 'arts' | 'cohort' | 'channelFormation' | 'channelFormationRelease' | 'monsterId' | 'pool' | 'selectPool' | 'crewSkills' | 'crewAuras' | 'crewMods' | 'escort' | 'shell' | 'crewRules' | 'crewInherit' | 'crewOnDeath' | 'devour' | 'placeAt' | 'strikeRelease'>>;
     /** Host tag changes. Crew skills retain their own attack/spell tags. */
     tags?: { add?: SkillTag[]; remove?: SkillTag[] };
     /** delivery.arcDeg replacement (cone/melee deliveries only). */
@@ -5321,6 +5367,10 @@ export function instanceTreeOver(inst: SkillInstance): SkillTreeNode['over'] | u
           ? { channel: { ...out.channel, ...over.channel } } : {}),
         ...(out.summon || over.summon
           ? { summon: { ...out.summon, ...over.summon,
+            ...(over.summon?.pool ? { monsterId: undefined } : over.summon?.monsterId ? { pool: undefined } : {}),
+            frame: out.summon?.frame || over.summon?.frame ? { ...out.summon?.frame, ...over.summon?.frame } : undefined,
+            cohort: out.summon?.cohort || over.summon?.cohort ? { ...out.summon?.cohort, ...over.summon?.cohort } : undefined,
+            arts: out.summon?.arts || over.summon?.arts ? { ...out.summon?.arts, ...over.summon?.arts } : undefined,
             selectPool: union(out.summon?.selectPool, over.summon?.selectPool),
             crewSkills: union(out.summon?.crewSkills, over.summon?.crewSkills),
             crewAuras: union(out.summon?.crewAuras, over.summon?.crewAuras),
@@ -5956,6 +6006,22 @@ export function skillRarityFloor(weights: Partial<Record<SkillRarity, number>>):
 
 /** A skill as OWNED by an actor: definition + level + socketed supports. */
 export interface SkillInstance {
+  summonSchools?: string[];
+  summonArtCast?: SummonArtCast;
+  frameCast?: FrameCast;
+  frameExclusions?: ReadonlySet<number>;
+  frameReceipts?: Set<number>;
+  frameHost?: SkillInstance;
+  frameHeal?: { remaining: number };
+  cohortCast?: CohortCast;
+  cohortHeal?: { remaining: number; base: number; cap: number };
+  summonCommandHost?: SkillInstance;
+  /** Captured projectile disciplines and provenance; never saved. */
+  projectileHost?: SkillInstance;
+  projectileRole?: 'primary' | 'payload';
+  projectileSpec?: ProjectileArtsSpec;
+  projectileCast?: ProjectileArtCast;
+  projectileContact?: { direction: number; depth: number; hits: number[]; power: number };
   guardArtsHost?: SkillInstance;
   guardArtsPayload?: true;
   /** Captured attack-sequence provenance; never persisted. */
@@ -6655,13 +6721,26 @@ function supportFitsOwnInst(sup: SupportDef, inst: SkillInstance, rolled?: Suppo
  *  (World.summonCrewSkills); this type keeps the engine helpers pure. */
 export type SummonCrew = SkillDef[] | 'unknowable' | null;
 
+/** School conversion is skill-local, so support census and actual casts see the same element. */
+export function summonSchoolSkill(d: SummonDelivery, monsterId: string, def: SkillDef): SkillDef {
+  const school = d.arts?.schools?.find(s => s.monster === monsterId);
+  if (!school?.conversion || !def.effects.some(f => f.type === 'damage')) return def;
+  return { ...def, color: school.color ?? def.color, tags: [...new Set([...def.tags, school.id])],
+    innateMods: [...(def.innateMods ?? []), { stat: 'convert_physical_' + school.id, kind: 'flat', value: school.conversion }] };
+}
 /** Resolve per-form lessons without chaining replacements. */
 export function summonKitIds(d: SummonDelivery, monsterId: string, native: string[]): string[] {
   let ids = d.shell ? [d.shell.strikeSkill] : [...native];
   const rules = (d.crewRules ?? []).filter(r => r.monsterIds.includes(monsterId));
   // Replacements only read the original kit: ordering cannot build replacement chains.
   ids = ids.map(id => rules.flatMap(r => r.replace ?? []).reverse().find(r => r.from === id)?.to ?? id);
-  return [...new Set([...ids, ...(d.strikeRelease ? [d.strikeRelease.skill] : []), ...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...rules.flatMap(r => r.skills ?? [])])];
+  if (d.frame?.primary) ids = [d.shell?.strikeSkill ?? d.frame.primary, ...[d.frame.slam,d.frame.protect?.sweep].filter((id):id is string=>!!id)];
+  if (d.cohort?.primary) ids = [d.cohort.primary, ...(d.cohort.challenge ? [d.cohort.challenge] : [])];
+  if (d.arts?.rite && d.arts.riteAutonomous) ids.push(d.arts.rite);
+  const school = d.arts?.schools?.find(s => s.monster === monsterId);
+  if (school) { if (ids.length) ids[0] = school.primary; else ids.push(school.primary); }
+  if (d.arts?.lessons && school) ids.push(school.signature);
+  return [...new Set([...ids, ...(d.strikeRelease ? [d.strikeRelease.skill] : []), ...(d.crewSkills ?? []), ...(d.crewAuras ?? []), ...rules.flatMap(r => r.skills ?? [])])].filter(id => id !== d.arts?.rite || d.arts?.riteAutonomous === true);
 }
 
 /**
@@ -6685,18 +6764,26 @@ export function summonCrewOf(
   const ids = d.monsterId ? [d.monsterId] : (d.pool ?? []).map(p => p.id);
   const out: SkillDef[] = [];
   const seen = new Set<string>();
-  const add = (skillId: string | undefined): void => {
-    if (!skillId || seen.has(skillId)) return;
-    const def = skill(skillId);
-    if (!def) return;
-    seen.add(skillId);
-    out.push(def);
+  const add = (skillId: string | undefined, mid?: string): void => {
+    const school = d.arts?.schools?.find(s => s.monster === mid && s.conversion);
+    const key = skillId + ':' + (school?.id ?? '');
+    if (!skillId || seen.has(key)) return;
+    const source = skill(skillId); if (!source) return;
+    const def = mid ? summonSchoolSkill(d, mid, source) : source;
+    seen.add(key);
+    if (skillId === d.arts?.discordance) {
+      const elements = d.arts.schools?.filter(s => ids.includes(s.monster)).map(s => s.id) ?? [];
+      out.push({ ...def, tags: [...def.tags.filter(t => !['fire', 'cold', 'lightning', 'chaos'].includes(t)), ...elements] });
+    } else out.push(def);
   };
   for (const mid of ids) {
     const mdef = monster(mid);
     if (!mdef) continue;
-    for (const sid of summonKitIds(d, mid, [...mdef.skills, ...(mdef.grants ?? []).flatMap(g => g.skill ? [g.skill] : [])])) add(sid);
+    for (const sid of summonKitIds(d, mid, [...mdef.skills, ...(mdef.grants ?? []).flatMap(g => g.skill ? [g.skill] : [])])) add(sid, mid);
+    for (const id of cohortSkillIds(d)) add(id, mid);
+    for (const id of frameSkillIds(d)) add(id, mid);
   }
+  for (const id of summonArtIds(d)) add(id);
   return out.length ? out : null;
 }
 

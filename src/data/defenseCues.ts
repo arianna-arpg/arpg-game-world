@@ -1,7 +1,9 @@
 /** Shared defense vocabulary. New shell anatomy selects a profile, never
  * a monster-name branch in the renderer. Unknown profiles use `shell`. */
 export interface DefenseCueStyle {
-  shape: 'plates' | 'spiral' | 'carapace' | 'brace' | 'guard';
+  shape: 'plates' | 'spiral' | 'carapace' | 'brace' | 'guard' | 'bones';
+  /** Optional articulated anatomy; unknown styles retain ordinary plates. */
+  anatomy?: string;
   pieces: number;
   travel: number;
   thickness: number;
@@ -11,6 +13,7 @@ export interface DefenseCueStyle {
 }
 
 export const DEFENSE_CUE_STYLES: Record<string, DefenseCueStyle> = {
+  ossuary: { shape: 'bones', anatomy: 'ossuary', pieces: 12, travel: 0.85, thickness: 0.17, breakLife: 0.65, reformLife: 0.5, impactLife: 0.2 },
   shell: { shape: 'plates', pieces: 8, travel: 0.85, thickness: 0.17, breakLife: 0.65, reformLife: 0.5, impactLife: 0.2 },
   spiral: { shape: 'spiral', pieces: 7, travel: 0.7, thickness: 0.12, breakLife: 0.75, reformLife: 0.6, impactLife: 0.22 },
   carapace: { shape: 'carapace', pieces: 5, travel: 0.9, thickness: 0.28, breakLife: 0.65, reformLife: 0.55, impactLife: 0.2 },

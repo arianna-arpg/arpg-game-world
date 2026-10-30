@@ -1,4 +1,5 @@
 import type { Actor } from './actor';
+import { buffWithSource } from './buffSource';
 import type { World } from './world';
 import type { Vec2 } from '../core/math';
 import { dist } from '../core/math';
@@ -268,9 +269,9 @@ export class CompanionBonds {
     const stacks = caster.buffs.get(id)?.stacks ?? 0;
     caster.removeBuff(id);
     for (const recipient of recipients) if (!recipient.dead && !recipient.downed) {
-      recipient.addBuff({ type: 'buff', id, label: 'Hunting Partners', duration: rally.duration, maxStacks: cap, mods: [mod('damage', 'increased', rally.damagePerStack, ['attack'])] });
+      recipient.addBuff(buffWithSource({ type: 'buff', id, label: 'Hunting Partners', duration: rally.duration, maxStacks: cap, mods: [mod('damage', 'increased', rally.damagePerStack, ['attack'])] }, state.inst));
       if (stacks >= cap && spec.frenzy) {
-        recipient.addBuff({ type: 'buff', id: this.frenzyId(beast), label: 'Pack Crescendo', duration: spec.frenzy.duration, mods: [mod('attackSpeed', 'increased', spec.frenzy.attackSpeed)] });
+        recipient.addBuff(buffWithSource({ type: 'buff', id: this.frenzyId(beast), label: 'Pack Crescendo', duration: spec.frenzy.duration, mods: [mod('attackSpeed', 'increased', spec.frenzy.attackSpeed)] }, state.inst));
         if (recipient.companion) {
           this.refreshBeast(recipient, state.inst, false);
           // THE LUNGE obeys the stance (CompanionStanceDef.lunges): a passive
