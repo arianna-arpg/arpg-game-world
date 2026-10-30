@@ -48,9 +48,10 @@ export function accountRelicBoard(a: Account): ItemInstance[] {
   return a.reliquary.items.filter(i => keys.has(i.relicKey!));
 }
 
-/** Pack custody is at risk, even for a previously stored account Relic.
- * Tombstones prevent old vessel saves or ground echoes from restoring losses. */
-export function loseCarriedRelics(a: Account, bag: readonly ItemInstance[], scope: string): number {
+/** Remove consumed Relics from account custody (sale, salvage or pack death).
+ * Tombstones prevent old vessel saves or ground echoes from restoring them.
+ * The caller validates the action and removes the live bag references. */
+export function retireRelics(a: Account, bag: readonly ItemInstance[], scope: string): number {
   const lost = new Set(bag.filter(isRelic).map(i => i.relicKey ?? `legacy:${scope}:${i.uid}`));
   if (!lost.size) return 0;
   const r = a.reliquary;
