@@ -1,4 +1,5 @@
 import { FrameArts, frameOf } from './frameArts';
+import { migrateAdventureDecoration } from './biomeDecoration';
 import { CohortArts } from './cohortArts';
 import { summonSchoolSkill } from './skills';
 import { SummonArts } from './summonArts';
@@ -5974,6 +5975,8 @@ export class World {
     const firstVisit = !isCave && !this.visited.has(zoneId);
     if (zoneId === START_ZONE) this.refoldTownStations(); // THE STATION FOLD
     const def = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
+    if (def.locale && def.complex && def.localeDecoration === undefined
+      && migrateAdventureDecoration(this.zoneMap, def.complex.root)) this.invalidateZonesSaveMemo();
     this.zone = def;
     // The zone's own entry beat: the renderer exempts LOAD-time population
     // from the spawn-in grow (only true mid-play arrivals swell in).
@@ -18159,6 +18162,7 @@ export class World {
     const healed = sanitizeWorldZones(ws.zones, claimed);
     if (!healed) return false;
     this.zoneMap = healed;
+    if (migrateAdventureDecoration(healed)) this.invalidateZonesSaveMemo();
     this.townStationKey = '';
     const savedTownTier = TOWN_TIERS.findIndex(t => t.w === healed[START_ZONE].size.w && t.h === healed[START_ZONE].size.h);
     this.townTierIdx = Math.max(this.townTierIdx, savedTownTier);
@@ -24486,7 +24490,7 @@ export class World {
       const a = this.stationAnchor('bounty_board');
       if (a) out.push({ id: BOUNTY_BOARD_CFG.boardId, pos: a.pos, tier: a.tier });
     }
-    if (this.zone.holdAnchor && this.bountyBoardRoster().some(b => b.id === this.zone.id)) {
+    if ((this.zone.holdAnchor || this.zone.complex?.bountyPassageBoard) && this.bountyBoardRoster().some(b => b.id === this.zone.id)) {
       const d = this.doodads.find(x => x.kind === 'bounty_board' && !x.gone && !x.felled);
       if (d) out.push({ id: this.zone.id, pos: vec(d.pos.x, d.pos.y), tier: d.tier ?? 0 });
     }
@@ -24840,6 +24844,7 @@ export class World {
     const out: { id: string; homeZoneId: string }[] = [];
     if (this.bountyBoardUnlocked()) out.push({ id: BOUNTY_BOARD_CFG.boardId, homeZoneId: START_ZONE });
     for (const z of Object.values(this.zoneMap)) {
+      if (z.complex?.bountyPassageBoard) out.push({ id: z.id, homeZoneId: z.id });
       if (!z.holdAnchor) continue;
       const anchor = this.zoneMap[z.holdAnchor];
       const hold = anchor?.harborhold;
@@ -25009,7 +25014,9 @@ export class World {
         // anchor seat while another kind can honestly ask here.
         const pool = [...rows];
         while (pool.length && !p) {
-          const r = draw(pool);
+          // Progression priority is a weighted pool, not registration order.
+          const priority = pool.filter(r => r.bountyPriority?.(host));
+          const r = draw(priority.length ? priority : pool);
           if (!r) break;
           pool.splice(pool.indexOf(r), 1);
           p = r.roll(host, rng, taken);
@@ -25017,7 +25024,7 @@ export class World {
         }
         // One intended stretch choice when such a target exists. If the local
         // region cannot supply it, retain the normal honest candidate instead.
-        if (!manageable && i === BOUNTY_BOARD_CFG.routes.manageableSeats && !pin) {
+        if (!manageable && i === BOUNTY_BOARD_CFG.routes.manageableSeats && !pin && !BOUNTY_KINDS[rowId]?.bountyPriority?.(host)) {
           const stretchHost = { ...host, routeFits: (id: string) => host.routeFits!(id)
             && this.zoneMap[id].level > this.player.level };
           for (const r of rows) {
@@ -25305,6 +25312,7 @@ export class World {
     // seat in hand (the pouch merges into that seat's bag) — the payout
     // site's branch owns the stamps + the essence lane.
     this.payBountyLanes(p, seat);
+    row.collectBounty?.(this, p);
     this.bountyHands = this.bountyHands.filter(h => h.id !== id);
     this.charDirty = true;
     // THE RECEIPT: the re-opened board prints what this paid (the counter

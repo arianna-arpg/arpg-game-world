@@ -5,7 +5,8 @@ import { Rng } from '../core/rng';
 import { vec, dist, type Vec2 } from '../core/math';
 import { compileLocale, localeProgram, localeSeed, type LocalePlan } from '../world/locales';
 import { GridWalkField } from '../world/gridWalk';
-import { registerLayout, type GenCtx } from './levelgen';
+import { registerLayout, scatterDecoration, stampSingle, type GenCtx } from './levelgen';
+import type { ZoneDef } from '../data/zones';
 import type { LocaleFragment } from '../world/localeFragments';
 
 export interface LocaleReport {
@@ -120,7 +121,8 @@ function pointDistance(p: Vec2, a: Vec2, b: Vec2): number {
   const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
   return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t);
 }
-function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): void {
+type LocaleRoute = { a: Vec2; b: Vec2; width: number };
+function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): LocaleRoute[] {
   const grid = new GridWalkField(ctx.arena.w, ctx.arena.h, 30);
   ctx.walk = grid; ctx.gridEnsured = true;
   if (plan.terrain) grid.fillRegion(0, 0, ctx.arena.w, ctx.arena.h, plan.terrain.background);
@@ -156,7 +158,7 @@ function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): v
     }
   }
   const crossingCells = new Set<string>();
-  const routes: { a: Vec2; b: Vec2; width: number }[] = [];
+  const routes: LocaleRoute[] = [];
   const connect = (points: Vec2[], width: number): void => {
     for (let i = 1; i < points.length; i++) {
       const a = points[i - 1], b = points[i]; routes.push({ a, b, width });
@@ -238,6 +240,64 @@ function generateLocale(ctx: GenCtx, plan: LocalePlan, riverSides?: string[]): v
     grid.fillRegion(side === 'e' ? w - width : 0, side === 's' ? h - width : 0, side === 'w' ? width : w, side === 'n' ? width : h, region);
   }
   ctx.localeReport = report;
+  return routes;
+}
+
+/** Use native biome stamps on composed ground without importing their geography.
+ * The scoped footprint guard also catches satellites emitted by patch stamps. */
+function decorateLocale(ctx: GenCtx, def: ZoneDef, plan: LocalePlan, routes: LocaleRoute[]): void {
+  const decor = def.localeDecoration;
+  if (ctx.lite || !decor || decor.density <= 0) return;
+  const density = Math.min(1, decor.density);
+  const previous = { rng: ctx.rng, site: ctx.decorationSite, walk: ctx.siteWalk, tries: ctx.siteTryMul };
+  const centers = ctx.localeReport!.districts.map(d => d.center);
+  const fragments = plan.districts.filter(d => d.fragment).map(d => ({
+    x: (d.at[0] - d.size[0] / 2) * ctx.arena.w, y: (d.at[1] - d.size[1] / 2) * ctx.arena.h,
+    w: d.size[0] * ctx.arena.w, h: d.size[1] * ctx.arena.h,
+  }));
+  const allowed = (p: Vec2, r: number): boolean => {
+    if (previous.site && !previous.site(p, r)) return false;
+    if (centers.some(c => dist(c, p) < r + 125)) return false;
+    if (routes.some(l => pointDistance(p, l.a, l.b) < r + l.width / 2 + 20)) return false;
+    if (fragments.some(f => p.x + r > f.x && p.x - r < f.x + f.w && p.y + r > f.y && p.y - r < f.y + f.h)) return false;
+    // Keep complete crowns/patches off walls, water and narrow authored passages.
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      if (ctx.walk!.regionAt?.(p.x + Math.cos(a) * (r + 15), p.y + Math.sin(a) * (r + 15)) !== 'ground') return false;
+    }
+    return ctx.walk!.regionAt?.(p.x, p.y) === 'ground';
+  };
+  const start = ctx.doodads.length;
+  try {
+    ctx.decorationSite = allowed; ctx.siteWalk = true; ctx.siteTryMul = 5;
+    const counts = new Rng(localeSeed(`${plan.seed}/biome/counts`));
+    ctx.rng = new Rng(localeSeed(`${plan.seed}/biome/stamps`));
+    const layout = decor.layout.map(row => {
+      const scaled = counts.int(...row.count) * density;
+      const n = Math.floor(scaled) + (counts.chance(scaled % 1) ? 1 : 0);
+      // Placement waivers from the full terrain recipe cannot waive locale clearance.
+      return { ...row, rules: undefined, count: [n, n] as [number, number] };
+    });
+    scatterDecoration(ctx, { ...def, layout, layoutParams: { dressTryMul: 5 } });
+    const trees = decor.trees?.filter(t => t.weight > 0) ?? [];
+    const total = trees.reduce((n, t) => n + t.weight, 0);
+    if (total) {
+      ctx.rng = new Rng(localeSeed(`${plan.seed}/biome/trees`));
+      // Sparse stands, far below the forest recipe's continuous canopy lattice.
+      const n = Math.round(ctx.arena.w * ctx.arena.h / 45000 * density);
+      for (let i = 0; i < n; i++) {
+        let roll = ctx.rng.range(0, total), tree = trees[trees.length - 1];
+        for (const candidate of trees) { roll -= candidate.weight; if (roll <= 0) { tree = candidate; break; } }
+        stampSingle(tree.kind, tree.radius)(ctx, { kind: tree.kind, count: [1, 1] });
+      }
+    }
+    // A registered multi-piece decorator may place satellites directly.
+    for (let i = ctx.doodads.length - 1; i >= start; i--)
+      if (!allowed(ctx.doodads[i].pos, ctx.doodads[i].radius)) ctx.doodads.splice(i, 1);
+  } finally {
+    ctx.rng = previous.rng; ctx.decorationSite = previous.site;
+    ctx.siteWalk = previous.walk; ctx.siteTryMul = previous.tries;
+  }
 }
 
 // The registry pin keeps the regular reference census aware of the engine's consumer.
@@ -247,5 +307,10 @@ registerLayout(LOCALE_LAYOUT, (ctx, def) => {
   const plan = def.locale ?? (program ? compileLocale(program, def.seed ?? 1, typeof def.layoutParams?.localeVariant === 'string' ? def.layoutParams.localeVariant : undefined) : undefined);
   if (!plan) throw new Error('district layout requires a registered locale program');
   if (plan.underTier) def.layoutParams = { ...def.layoutParams, underTier: plan.underTier };
-  generateLocale(ctx, plan, def.layoutParams?.riverSides as string[] | undefined);
+  const routes = generateLocale(ctx, plan, def.layoutParams?.riverSides as string[] | undefined);
+  decorateLocale(ctx, def, plan, routes);
+  if (def.complex?.bountyPassageBoard && !ctx.lite) {
+    const pos = ctx.localeReport!.districts.find(d => d.id === plan.entrance)!.center;
+    ctx.doodads.push({ kind: 'bounty_board', pos: { ...pos }, radius: 28 });
+  }
 });

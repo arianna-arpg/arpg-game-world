@@ -76,7 +76,9 @@ const mkGround = (id: string, opts?: { spoils?: 'none'; safe?: boolean }): ZoneD
     floor: '#101010', grid: '#181818', border: '#3a3a3a',
     obstacle: '#2a2a2a', obstacleEdge: '#444444', accent: '#888888',
   },
-  seed: 0x11a7, layout: [],
+  // Isolate calm/input from rolled altars, ambient fights and sky strikes.
+  // Harvest still uses its ordinary biome, arming, reward and save paths.
+  seed: 0x11a7, layout: [], special: true, sky: 'sheltered',
   objective: { kind: opts?.safe ? 'safe' : 'none' },
   exits: [],
   map: { x: 9500, y: 9500 },

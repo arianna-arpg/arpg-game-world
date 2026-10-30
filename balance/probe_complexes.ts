@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { featuresInRect, mapFeatureKind } from '../src/world/atlas';
-import { landmarkComplexes, validateLandmarkComplex } from '../src/world/landmarkComplexes';
+import { landmarkComplexes, resolveComplexForm, validateLandmarkComplex } from '../src/world/landmarkComplexes';
 import { materializeComplex } from '../src/engine/landmarkComplexGen';
 import { placeZoneAt, settleWeb } from '../src/engine/worldgen';
 import { compileLocale, localeProgram } from '../src/world/locales';
@@ -31,7 +31,8 @@ for (const def of landmarkComplexes()) {
   map[root.id] = root;
   assert.equal(root.complex?.kind, def.id);
   const members = Object.values(map).filter(z => z.complex?.root === root.id);
-  assert.equal(members.length, def.stages.length);
+  const form = def.forms?.find(f => f.id === root.complex?.form);
+  assert.equal(members.length, (form ? resolveComplexForm(def, form) : def).stages.length);
   const before = structuredClone(members);
   const again = placeZoneAt(site.seat, null, map, 1002, spec);
   assert.equal(again, root, 'different approach reuses the entrance');

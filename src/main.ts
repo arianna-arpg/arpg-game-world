@@ -67,6 +67,7 @@ import './data/commanders'; // side-effect: the tutorial factions (the Fathers) 
 import './data/locales';
 import './data/authoredMaps'; // side-effect: THE AUTHORED-MAP FABRIC's shipped maps (+ the 'authored' layout via engine/authoredMaps)
 import './data/bountyJourneys';
+import './data/bountyPassages';
 import './data/bountyExpeditions'; // side-effect: the bounty board's 'expedition' kind (an authored map minted at the take)
 import { updateAI } from './engine/ai';
 import { visibilityFrameTiming, visibilityDiagnosticsEnabled } from './render/vis/visibilityDiagnostics';
