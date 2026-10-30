@@ -4002,8 +4002,8 @@ export class UI {
     if (seatNote) lines.push(`<div style="color:${seatNote.color};font-size:10px">${seatNote.text}</div>`);
     if (item.locked) {
       lines.unshift(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
-    } else if (salv && item.relicKey) {
-      lines.unshift('<div>Account Relic · store with the Oracle or equip in the Reliquary.</div>');
+    } else if (salv && item.relicKey && !this.getWorld().canRetireRelics(seat)) {
+      lines.unshift('<div>Account Relics can be sold or salvaged in your own hosted journey.</div>');
     } else if (salv) {
       const breakLine = seat.meta.items.some(i => i.uid === item.uid)
         ? `<div style="color:#e8c87a;font-weight:bold">${salv === 'sell'
@@ -5713,7 +5713,7 @@ export class UI {
     // THE ONE BAG (M1): gear tiles and gem wrappers share m.items — the
     // sweeps split them exactly as the host's salvageBulk filters do.
     const gemItems = m.items.filter(i => i.gem);
-    const gearItems = m.items.filter(i => !i.gem && !i.mem && !i.questId && !i.relicKey);
+    const gearItems = m.items.filter(i => !i.gem && !i.mem && !i.questId && (!i.relicKey || this.getWorld().canRetireRelics(seat)));
     const gearAll = gearItems.filter(i => !i.locked);
     const gearLocked = gearItems.length - gearAll.length;
     const skillRows = gemItems.flatMap(i => {

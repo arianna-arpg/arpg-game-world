@@ -208,7 +208,9 @@ investment and attributable Relic followers are documented in
 `engine/accountReliquary.ts` owns migration and `engine/relicPower.ts` the safe
 numeric fold. The inventory toggle trades equipped power for 2% XP per occupied
 cell; empowerment grows by 2% per account rank. Pack Relics are lost on death;
-equipped/stored Relics persist. Verify `probe_relicdeath.ts`, `probe_relicflow.ts`,
+equipped/stored Relics persist. Pack Relics can be sold or salvaged, with retired
+identities preventing stale-save restoration. Verify `probe_relicsale.ts`,
+`probe_relicdeath.ts`, `probe_relicflow.ts`,
 `probe_accountreliquary.ts`, `probe_reliquary.ts`,
 `probe_relicuniques.ts` and `balance/oracle-rescue-ui.cjs`.
 
