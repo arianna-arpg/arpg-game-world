@@ -36,6 +36,25 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 This repository is `arianna-arpg/arpg-game-world`, the original TypeScript/Canvas/Electron ARPG. This is the current working entrypoint: shared content starts on main; continuous-world integration belongs on `codex/seamless-world-foundation`. Use an isolated topic checkout when another session owns the affected files. The user's 2026-10-19 direction is to deliver a playable continuous world and stop expanding historical probe scaffolding. This guide supersedes the accumulated handoff instructions preserved in [the reference archive](docs/ai/reference-before-playable-recovery.md). Historical documents and project-memory session notes describe their recorded revisions; their branch paths, frozen-source mandates and handoff checklists are not current instructions. Read [branch integration](docs/ai/branch-integration.md) for delivery policy and the [cleanup audit](docs/ai/context-runtime-cleanup-20261019.md) for deferred migration work.
 
+The player Codex is documented in [docs/ui/codex.md](docs/ui/codex.md).
+Its shelves/read policy live in `data/codex.ts`, public reading models in
+`meta/codex.ts`, and its shared reader in `ui/codex.ts`. It replaces the
+Vault Owned display while preserving purchases and the Reckoning.
+`engine/codexSightings.ts` records gated encounters; Tracker research and
+station-only actions retain their existing contracts. Verify codex, menubar,
+unlocks, memoryunlocks, classmastery, sheet, all types and sim smoke; after
+a build, run hidden `balance/codex-ui.cjs`, `balance/vault-discovery-ui.cjs`
+and boot smoke.
+
+
+Vault Memory reveals use `ui/memoryReveal.ts`, with pace, defaults and tier
+copy in `ui/memoryRevealConfig.ts`. They read already-granted receipts and
+reuse registry art/descriptions plus the live skill showcase. Saved Instant mode,
+replay, pool odds and reduced-motion handling leave the economy authoritative.
+See `docs/meta/memory-unlocks.md` and `docs/engine/skill-showcases.md`; verify
+Memory progression and showcase probes plus the hidden Memory and showcase
+UI walkthroughs after a build. Showcases also serve the player Codex and bag.
+
 Tutorial scenes cannot feed account nemeses. See `docs/engine/tutorial-isolation.md`;
 verify tutorialisolation, scenes, mu, Odyssey checks and all types when changing
 scene departure or nemesis formation/manifestation.

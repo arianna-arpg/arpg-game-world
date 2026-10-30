@@ -19,10 +19,17 @@ app.whenReady().then(async () => {
     if (!result.ok) throw Error(result.error); return result.value;
   };
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-  const boot = async () => { await win.loadURL(server.url); await run(async () => {
-    while (!window.__game) await new Promise(r => setTimeout(r, 40));
-    __game.hold(true); await __game.hydrated();
-  }); };
+  const boot = async () => {
+    await win.loadURL(server.url); await run(async () => {
+      while (!window.__game) await new Promise(r => setTimeout(r, 40));
+      __game.hold(true); await __game.hydrated();
+    });
+    // The crossing has its own renderer and reads hardware pads independently.
+    // Isolate both frames so desktop controllers cannot cancel scripted entry.
+    const frames = [win.webContents.mainFrame, ...win.webContents.mainFrame.frames];
+    assert(frames.some(frame => frame.url === 'about:srcdoc'), 'The crossing frame must be present');
+    for (const frame of frames) await frame.executeJavaScript("Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [] });");
+  };
   const ready = async () => {
     for (let i = 0; i < 600; i++) {
       const state = await run(() => {

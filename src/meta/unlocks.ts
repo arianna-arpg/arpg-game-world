@@ -1598,8 +1598,9 @@ export function lockedPackages(a: Account): { label: string; requirement: string
 //  THE VAULT SHELVES — the store's organization as DATA (the character
 //  sheet's data/sheet.ts pattern: the UI walks this list and knows nothing
 //  else). Browse shelves seat catalog KINDS; the rumor wall hangs where its
-//  shelf says; the Owned shelf is the trophy case, off the buying floor
-//  entirely so it never clutters a shopping read. Adding a catalog kind =
+//  shelf says. The Owned row remains a permanent-receipt census for shelf
+//  progression; its player-facing browser now lives in the Codex. The Vault
+//  omits this row from its tab strip. Adding a catalog kind =
 //  seat it here (balance/probe_unlocks.ts pins the contract). An unseated
 //  kind still SURFACES — it folds to the `fallback` shelf, the sheet's
 //  nothing-is-ever-invisible law — but the probe fails on it, so the fold
@@ -1619,8 +1620,8 @@ export interface VaultTabDef {
   kinds?: readonly UnlockKind[];
   /** This shelf also hangs the shrouded class-rumor wall. */
   rumors?: boolean;
-  /** The trophy case: lists everything OWNED (grouped by kind) instead of a
-   *  buying floor. Exactly one shelf wears this. */
+  /** Permanent receipt census (the Codex presents it). Exactly one row
+   *  wears this; the Vault excludes it from its visible tab strip. */
   owned?: boolean;
   /** Unseated kinds fold here. Exactly one browse shelf wears this. */
   fallback?: boolean;

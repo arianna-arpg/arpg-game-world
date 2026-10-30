@@ -114,6 +114,11 @@ registerMenuEntry({
   // Wardrobe stays available in Mu and while character panels are sealed.
 });
 
+registerMenuEntry({
+  id: 'codex', label: 'Codex', icon: 'book', group: 'hero', verb: 'codex', order: 7,
+  blurb: 'Skills, supports, account unlocks, creature knowledge, mechanics and classes.',
+});
+
 // --- the stations (exist by unlock, open at the station) ---------------------
 
 const at = (where: string): string => `Stand ${where} to open this.`;

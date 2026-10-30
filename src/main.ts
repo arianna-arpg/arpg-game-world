@@ -1,3 +1,4 @@
+import './ui/memoryReveal.css';
 import { sanitizeCosmeticLoadout } from './meta/cosmetics';
 import { BUILD_PROFILE, storageKey } from './buildProfile';
 // ---------------------------------------------------------------------------

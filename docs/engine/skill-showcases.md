@@ -6,11 +6,13 @@ It always matches the current build (nothing is recorded), it needs no
 download and no installer growth, and it works offline.
 
 Where showcases appear is deliberately **not** this system's decision. A
-surface asks for one; the showcase does the rest. Today a single temporary
-seat exists so the foundation can be exercised: the bag gem tooltip
-(`gemItemTooltip` in `src/ui/panels.ts`, one `skillShowcaseMarkup` line).
-Moving it to a Vault card, an NPC prompt or anywhere else is a matter of
-emitting the element there instead.
+surface asks for one; the showcase does the rest. The player
+[Codex](../ui/codex.md) offers explicit Play/Stop controls on discovered
+skills and compatible support examples. The bag gem tooltip
+(`gemItemTooltip` in `src/ui/panels.ts`) and Vault Memory result screen
+(`src/ui/memoryReveal.ts`) also use `skillShowcaseMarkup`. The Vault supports
+saved autoplay, pause and explicit Play under reduced motion. Adding another
+surface is a matter of emitting the element there.
 
 The same stages also film the website's skill clips
 (`scripts/capture-skill-clips.cjs`, see `docs/design/site-cinema.md`), so
@@ -46,6 +48,11 @@ shrink-wrapped boxes such as the tooltip). A skill with no showcase (a
 `installSkillShowcases(document.body)` (once, in `main.ts`) watches the page
 for these elements: mount on arrival, follow attribute changes, dispose on
 removal.
+
+The host sets `data-showcase-ready` after drawing a frame, and removes it on a
+spec change. Surfaces can pair this with `data-showcase-empty` to show loading
+and unavailable states without inspecting the engine or treating a blank canvas
+as ready. The Vault uses a configurable wait before showing its fallback.
 
 **Imperative.** `mountSkillShowcase(host, spec)` returns a handle with
 `update(spec)` and `dispose()`. `prewarmSkillShowcases()` boots the engine

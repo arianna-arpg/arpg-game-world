@@ -54,6 +54,7 @@ import { summonSchoolSkill } from './skills';
 import { SummonArts } from './summonArts';
 import { DEVICE_CFG, DeviceContacts, deviceContactEligible, groundDeviceState } from './groundDevices';
 import { resolveStrikeTiming, rollStrikeMarker, strikeTimingsOf } from './strikeTiming';
+import { CodexSightings } from './codexSightings';
 import { syncAltarBodies } from './altarBodies';
 import { skillInstanceName, treeInstanceNodeRanks, treePointBudget } from './skillEmpowerment';
 import { skillMergePlan } from './skillMerge';
@@ -42111,6 +42112,8 @@ actors: Actor[] = [];
   nativeWorldReady(): boolean {
     return !this.massRuntime || this.massRuntime.nativeReadiness(this).status === 'ready';
   }
+
+  private readonly codexSightings = new CodexSightings();
   update(dt: number): void {
     if (!this.gameOver && !this.nativeWorldReady()) return;
     const doorPressIntents = this.doorPressIntents;
@@ -42162,6 +42165,7 @@ actors: Actor[] = [];
     this.updateHarvest(rawDt, dt);
     if (dt <= 0) return;
     this.time += dt;
+    this.codexSightings.update(this, dt);
     for (const a of this.actors) if (!a.dead) ensureMovementTether(a);
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
     // moveActor directly), so spatial queries from here read current bodies.

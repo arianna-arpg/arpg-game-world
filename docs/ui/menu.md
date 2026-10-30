@@ -123,3 +123,10 @@ The bar rides the UI-scale dial in `zoom` mode (the marker class,
 `ui/uiScale.ts`) and its own `menubar` rung of the stack ladder
 (`ui/zorder.ts`): above every panel and the folio strip, under the popups
 and the tooltip it serves.
+
+## Codex
+
+The Codex is an always-available account reference in the hero group, with
+matching doors in the main and pause menus. It reads the account away from
+stations; the Tracker Bestiary row still opens its proximity-gated attunement
+and companion services. See [the Codex contract](codex.md).
