@@ -49,6 +49,12 @@ and balance/loading-screen-ui.cjs after an isolated build.
 
 # CLAUDE.md — Hollow Wake (ARPG)
 
+Desert ambience uses stable zone-space births and travel for sand, dust devils
+and optional tumbleweeds; heat haze composes view and terrain layers through
+`world/ambientFx.ts`. See `docs/render/desert-ambience.md`; verify all types,
+`balance/ambient-weather-check.ts`, transience, sim smoke, genqa and the hidden
+`balance/ambient-weather-ui.cjs` after an isolated build.
+
 Buff icons use copied granting-skill identity through `engine/buffSource.ts`
 and the shared hotbar artwork. `VIS_CFG.buffIcons` configures size, layout and
 the top-down grayscale warning during the last five seconds. See

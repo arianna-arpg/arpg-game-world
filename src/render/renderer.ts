@@ -1104,7 +1104,7 @@ export class Renderer {
         this.combatMeters.readabilityBounds(), visibilityRasterView);
     }
 
-    this.drawAtmosphere(world);
+    this.drawAtmosphere(world, shx, shy);
     if (this.worldOnly) {         // a showcase stage: no screen overlays, no HUD
       if (this.directorCinematic) this.drawCinematicOverlays(world, crest, w, h);
       return;
@@ -2602,7 +2602,7 @@ export class Renderer {
 
   /** A screen-space wash for time of day and weather — subtle enough to keep
    *  the world readable, enough to feel the night close in and a storm gather. */
-  private drawAtmosphere(world: World): void {
+  private drawAtmosphere(world: World, shakeX = 0, shakeY = 0): void {
     if (VIS_ABLATE.has('atmosphere')) return; // perf forensics (visConfig)
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
@@ -2680,7 +2680,11 @@ export class Renderer {
     // (the Mu globe's wrap) never jolts the parallax strata.
     for (const fx of world.zone.theme.ambientFx ?? []) {
       drawAmbientFx(ctx, fx, w, h, world.time,
-        this.cam.x - world.ambientCamShift.x, this.cam.y - world.ambientCamShift.y);
+        this.cam.x - world.ambientCamShift.x, this.cam.y - world.ambientCamShift.y,
+        { x: this.cam.x - shakeX, y: this.cam.y - shakeY, w, h, zoom: this.zoom,
+          seed: world.zone.seed ?? 0, bounds: world.arena.boundless ? undefined : world.arenaHull,
+          groundAt: (x, y) => (!world.walk || world.walk.isWalkable(x, y))
+            && world.roofedStructureAt({ x, y }) === null });
     }
     // WIND STREAMLINES: thin wisps riding the gale across the screen — the
     // flow made faintly visible (direction + strength read at a glance).

@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { MonsterRarity } from '../engine/rarity';
+import type { AmbientFxSpec } from '../world/ambientFx';
 import type { CourseJourney } from '../world/courseStages';
 import type { AtlasContext } from '../world/atlas';
 import type { ItemRarity } from '../engine/items';
@@ -752,8 +753,8 @@ export interface ZoneTheme {
    *  streaming OVER the scene at camera parallax (the sky countries'
    *  verticality read) — and FIREFLIES, the grove's night writing (self-
    *  gated on the dark like the aurora: by day the row is silent).
-   *  Screen-space, stateless, data-extensible. */
-  ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds' | 'fireflies' | 'seedDrift' | 'abyss'; intensity?: number; color?: string }[];
+   *  World or view anchored by kind; stateless, data-extensible. */
+  ambientFx?: AmbientFxSpec[];
   /** SIGHT-VEIL tuning (render/vis/sightVeil.ts): per-zone multipliers over
    *  the pass's global strengths (VIS_CFG.sightVeil) — `mul` scales both
    *  shadow families, `regionMul` the true-wall shadows (rampart, verdure,

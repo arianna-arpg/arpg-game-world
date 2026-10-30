@@ -2536,7 +2536,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       dayLight: 1.6,
       heat: 1,
       swelter: 0.85,
-      ambientFx: [{ kind: 'heatHaze', intensity: 0.8 }, { kind: 'sandDrift', intensity: 0.5 }],
+      ambientFx: [
+        { kind: 'heatHaze', intensity: 0.8 },
+        { kind: 'heatHaze', anchor: 'world', intensity: 0.45 },
+        { kind: 'sandDrift', intensity: 0.5 },
+        { kind: 'tumbleweeds', intensity: 0.7 },
+      ],
       // Sun-bleached scrub floor: a sand-to-dust gradient with a light bias —
       // the waste must READ as sand at a glance, never night-bog (live QA).
       ground: {
