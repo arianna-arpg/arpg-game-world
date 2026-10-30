@@ -20,6 +20,7 @@ import { emptyStash, personalStashEntries, planStashMove } from '../engine/stash
 import { STASH_DEFS } from '../data/stashes';
 import { renderWardrobe } from './wardrobe';
 import { applyInterfaceStyle, decorateInventoryPanel } from './interfaceStyle';
+import { presentInterfaceView } from './interfacePage';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 import { ServiceWorkspace } from './serviceWorkspace';
 import { independentPanelSeat } from './panelPlacement';
@@ -1489,6 +1490,7 @@ export class UI {
         ...(this.getAccount().cosmetics.applications ?? []).map(binding => binding.skill), ...this.getAccount().unlockedSkills])]
         .flatMap(id => SKILLS[id] ? [{ id, name: SKILLS[id].name }] : []).sort((a, b) => a.name.localeCompare(b.name)), // cosmetic overrides can be prepared between lives
     });
+    presentInterfaceView(root, 'wardrobe');
   }
 
   private closeCodexView(): void {
@@ -1505,6 +1507,7 @@ export class UI {
       shell: { profile: SIDE_SCREENS.codex, context },
       back: () => { this.closeCodexView(); back(); },
     });
+    presentInterfaceView(root, 'codex');
   }
 
   showCodex(page?: string): void {
@@ -2785,7 +2788,7 @@ export class UI {
       ${chips ? `<div style="margin-top:4px">${chips}</div>` : ''}
       ${def.innateText ? `<div class="cskills" style="margin-top:4px">Innate: ${def.innateText}</div>` : ''}
       <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:14px 0 4px 0">
-        <span style="font-size:12px;color:var(--gold)">⚜ Name</span>
+        <span style="font-size:12px;color:var(--inv-text,var(--text))">⚜ Name</span>
         <input id="mu-char-name" type="text" maxlength="24" spellcheck="false"
           placeholder="named for its class" value="${esc(nameValue)}"
           style="width:200px;padding:5px 9px;font-size:13px;background:var(--panel-bg);color:var(--text);
@@ -3023,7 +3026,7 @@ export class UI {
       ${onBack ? this.closeGlyphHtml('Back') : ''}
       <h1 class="hw-brand-heading">${hollowWakeBrand('panel')}</h1>
       <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:2px 0 8px 0">
-        <span style="font-size:12px;color:var(--gold)">⚜ Name</span>
+        <span style="font-size:12px;color:var(--inv-text,var(--text))">⚜ Name</span>
         <input id="char-name" type="text" maxlength="24" spellcheck="false"
           placeholder="named for its class" value="${esc(nameValue)}"
           style="width:220px;padding:5px 9px;font-size:13px;background:var(--panel-bg);color:var(--text);
@@ -3047,8 +3050,7 @@ export class UI {
       <div class="acct-btns">
         <button id="event-weights-btn">⚙ Event Weights</button>
         ${isVaultAvailable(acc) ? '<button id="account-btn">Vault (Unlocks)</button>' : ''}
-        ${onBack ? '<button id="class-back">Back</button>' : ''}
-      </div>`;
+      </div>${onBack ? '<footer class="interface-footer"><button id="class-back">Back</button></footer>' : ''}`;
     this.classSelect.classList.remove('hidden');
 
     // THE NAME ROW handlers: keystrokes track into pendingCharName (so the
@@ -10449,6 +10451,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <button id="esc-end"${endTitle}>${this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
           <button id="esc-close"${closeTitle}>${this.isCoopClient() || sceneLive ? 'Exit Game' : 'Save & Exit'}</button>
         </div>`;
+      presentInterfaceView(root, 'pause');
       document.getElementById('esc-resume')!.addEventListener('click', () => this.hideEscapeMenu());
       document.getElementById('esc-couch')?.addEventListener('click', () => {
         this.hideEscapeMenu();
@@ -10488,8 +10491,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
               : 'Save your progress and choose where to go.'}</div>
           <div class="esc-btns">
             ${SAVE_EXIT_DESTINATIONS.map(d => `<button data-save-exit="${d.id}" title="${esc(d.hint)}">${esc(d.label)}</button>`).join('')}
-            <button id="esc-back2">Back</button>
-          </div>`;
+          </div><footer class="interface-footer"><button id="esc-back2">Back</button></footer>`;
+        presentInterfaceView(root, 'save-exit');
         for (const destination of SAVE_EXIT_DESTINATIONS) {
           root.querySelector(`[data-save-exit="${destination.id}"]`)!.addEventListener('click', async () => {
             if (this.saveExitPending || !this.onSaveExit) return;
@@ -10498,7 +10501,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             try { await this.onSaveExit(destination.id); }
             catch (error) {
               root.innerHTML = `<h1>Unable to Save</h1><div class="acct-head">${esc(String(error))}</div>
-                <div class="esc-btns"><button id="esc-back2">Back</button></div>`;
+                <footer class="interface-footer"><button id="esc-back2">Back</button></footer>`;
               document.getElementById('esc-back2')!.addEventListener('click', showMain);
             } finally { this.saveExitPending = false; }
           });
@@ -10885,7 +10888,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         : tab === 'controller' ? controllerTab
         : tab === 'visuals' ? visualsTab
         : interfaceTabHead}</div>
-      <div class="esc-btns options-footer"><button id="esc-back">Back</button></div>`;
+      <div class="interface-footer options-footer"><button id="esc-back">Back</button></div>`;
     if (root === this.startMenu) {
       // Group only the fixed heading/tabs; the settings and Back keep their own regions.
       const head = document.createElement('div');
@@ -10894,6 +10897,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       root.prepend(head);
       mountSideScreen(root, SIDE_SCREENS.options, 'entrance', sideFocus);
     }
+    presentInterfaceView(root, 'options');
     root.querySelector<HTMLElement>('.options-body')!.scrollTop = scrollTop;
     // Tab strip: remember the shelf, drop any armed capture, re-render.
     root.querySelectorAll<HTMLElement>('[data-opttab]').forEach(btn => {
@@ -11499,7 +11503,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       ${this.closeGlyphHtml('Back')}
       <h1>SAFE TO CLOSE</h1>
       <div class="acct-head">Your account is saved — close this window or tab to exit.</div>
-      <div class="esc-btns"><button id="sm-exit-back">Back</button></div>`;
+      <footer class="interface-footer"><button id="sm-exit-back">Back</button></footer>`;
     document.getElementById('sm-exit-back')!.addEventListener('click', () => this.renderStartMenu());
   }
 

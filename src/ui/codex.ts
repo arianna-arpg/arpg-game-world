@@ -165,7 +165,7 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
         <select data-cx-tag aria-label="Add tag filter"></select><select data-cx-status aria-label="Discovery filter"><option value="all">All entries</option><option value="known">Known only</option><option value="locked">Locked only</option></select><button data-cx-clear>Clear filters</button></div>
       <div class="cx-search-summary"><div class="cx-tags"></div><div class="cx-count" role="status" aria-live="polite" aria-atomic="true"></div></div></div>
       <div class="cx-body"><div class="cx-list"><div class="cx-list-meta"></div><div class="cx-grid" role="group" aria-label="${esc(leaf.label)} entries"></div><div class="cx-list-empty" hidden></div></div><article class="cx-detail" aria-label="Selected entry"></article></div>
-      <footer class="cx-foot"><span class="cx-help"><kbd>/</kbd> Search <span>·</span> <kbd>↑</kbd><kbd>↓</kbd> Browse <span>·</span> <kbd>Esc</kbd> Back</span><button data-cx-back>Back</button><button data-cx-results-footer>Results</button></footer>`;
+      <footer class="cx-foot"><span class="cx-help"><kbd>/</kbd> Search <span>·</span> <kbd>↑</kbd><kbd>↓</kbd> Browse <span>·</span> <kbd>Esc</kbd> Back</span><button data-cx-results-footer>Results</button><button data-cx-back>Back</button></footer>`;
     const existing = root.querySelector<HTMLElement>('.codex');
     if (existing) existing.innerHTML = markup;
     else root.innerHTML = `<section class="codex" aria-label="Codex">${markup}</section>`;
