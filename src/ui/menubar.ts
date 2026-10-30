@@ -34,6 +34,7 @@ import { keyDisplay, type Settings } from '../meta/settings';
 import { padDisplay } from '../core/gamepad';
 import { MENU_CFG, type MenuAnchorId } from './menuConfig';
 import { iconSvg } from './icons';
+import { hollowWakeMenuHeader } from './brand';
 import { bindTooltips, hideTooltip, type TooltipContent } from './tooltip';
 import { UI_SCALE_CFG, uiScaleNow } from './uiScale';
 import { panelLayoutMovable, panelMoved } from './panelmove';
@@ -344,7 +345,7 @@ export class MenuBar {
     if (sig === this.signature) { this.seatTray(); return; }
     this.signature = sig;
     if (dock) this.dock.innerHTML = fold.entries.map(v => this.tileHtml(v)).join('');
-    this.tray.innerHTML = fold.groups.map(g => `
+    this.tray.innerHTML = hollowWakeMenuHeader() + fold.groups.map(g => `
       <div class="menu-group">
         <div class="menu-group-h">${escapeHtml(g.group.label)}</div>
         ${g.group.id === 'town' ? this.stationsHtml(g.entries) : g.entries.map(v => this.rowHtml(v)).join('')}

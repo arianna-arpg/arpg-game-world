@@ -1,4 +1,4 @@
-import { hollowWakeBrand } from './brand';
+import { hollowWakeBrand, hollowWakeMenuHeader } from './brand';
 import type { SceneCardSpec } from '../data/scenes';
 import { mountSideScreen, sideScreenContext, captureSideScreenFocus } from './sideScreen';
 import { SIDE_SCREENS } from './sideScreenConfig';
@@ -10403,7 +10403,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         : ` title="The run is saved exactly as it stands — ${rosterMode
           ? 'resume it from Immortal Vessels at the main menu' : 'Continue Run resumes it'}"`;
       root.innerHTML = `
-        ${this.closeGlyphHtml('Resume (Esc)')}<h1>Paused</h1>
+        ${this.closeGlyphHtml('Resume (Esc)')}${hollowWakeMenuHeader('menu')}<h1>Paused</h1>
         <div class="esc-btns">
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
@@ -10445,7 +10445,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       document.getElementById('esc-close')!.addEventListener('click', () => {
         try { window.close(); } catch { /* browsers block closing non-script-opened tabs */ }
         root.innerHTML = `
-          ${this.closeGlyphHtml('Resume (Esc)')}<h1>Progress Saved</h1>
+          ${this.closeGlyphHtml('Resume (Esc)')}${hollowWakeMenuHeader('menu')}<h1>Progress Saved</h1>
           <div class="acct-head">Your account and character are saved. Close this browser tab to exit.</div>
           <div class="esc-btns"><button id="esc-back2">Back</button></div>`;
         document.getElementById('esc-back2')!.addEventListener('click', showMain);
@@ -10810,6 +10810,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
     root.innerHTML = `
+      ${root === this.escapeMenu ? hollowWakeMenuHeader() : ''}
       <h1>Options</h1>
       ${tabStrip}
       <div class="options-body">${tab === 'controls' ? controlsTab

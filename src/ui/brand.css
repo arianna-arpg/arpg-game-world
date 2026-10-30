@@ -16,3 +16,7 @@
   .side-masthead .side-brand-line > :is(i, span) { display: none; }
   .side-masthead [data-front-motion] { font-size: 9px; }
 }
+
+/* Navigation menus share the title without borrowing the entrance backdrop. */
+.hw-menu-brand { display: flex; justify-content: center; flex: 0 0 auto; padding: 4px 0 12px; margin-bottom: 10px; border-bottom: 1px solid var(--panel-border); }
+.menu-tray > .hw-menu-brand { padding: 6px 0 10px; margin-bottom: 4px; }

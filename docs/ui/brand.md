@@ -43,3 +43,19 @@ The latter verifies all four website pages at desktop/mobile widths with
 remote fonts blocked, plus the real launcher preload/status refresh.
 Story-card changes also use the scenes probe and sim smoke.
 Screenshots and disposable saves are under ignored `balance/reports/`.
+
+## In-game navigation
+
+`hollowWakeMenuHeader(size)` adds the shared identity above a menu's own
+heading. The pause menu and browser-close fallback use the configurable
+`menu` width; Options, Wardrobe and the HUD Menu tray use `compact`. The
+in-game Codex already gets its identity from the shared side-screen shell.
+Headers are emitted on each view render, so Options tabs, Wardrobe filters
+and live pause-menu refreshes keep exactly one visible logo. Gameplay
+panels (Inventory, Skills, map and station dialogs) keep their own headings.
+The header adds no input handlers or time holds; existing menu navigation,
+co-op pause policy and controller input remain with their current owners.
+
+After a build, run `npx electron balance/in-game-brand-ui.cjs` for branding
+and pause/return checks, and `npx electron balance/menu-tray-ui.cjs` for
+tray placement across anchors and UI scales.
