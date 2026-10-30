@@ -11,7 +11,10 @@ export const VIS_CFG = {
   /** Compact Life-adjacent debuffs; one detailed readout only while hovered. */
   statusIcons: { size:24, gap:3, columns:4, orbClearance:44,
     background:'rgba(12,16,20,.35)', ink:'#f4ebd7', margin:8, cardWidth:250, lineHeight:16 },
-  /** Actual temporary modifier payload, on demand at its native buff pip. */
+  /** Compact source-skill faces; expiry desaturates from top to bottom. */
+  buffIcons: { size: 22, gap: 3, warningSeconds: 5, barClearance: 30, auxiliaryClearance: 6,
+    edge: '#756b50', fallbackColor: '#c8a84b', stackInk: '#fff', stackOutline: '#070c12' },
+  /** Actual temporary modifier payload, on demand at its native buff icon. */
   buffReadout: { maxWidth: 360, maxRows: 10, margin: 8, pad: 9, lineHeight: 17, ascent: 12,
     font: '12px Verdana', background: 'rgba(8,8,12,.94)', edge: '#575368', title: '#f0d99c', detail: '#d8d4c8' },
   /** Native active effects: stable names, expiry clocks and shared pressure. */

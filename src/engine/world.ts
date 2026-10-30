@@ -389,6 +389,7 @@ import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
 import { reserveStageCue } from './reserveCues';
 import { caromCapacity, payloadTransition } from './payloadCues';
 import { buffProcCue, noteProcCue, procCueStyle } from './procCues';
+import { buffWithSource } from './buffSource';
 import { PROC_CUE_CFG } from '../data/procCues';
 import { poolVentRead } from './skills';
 import { RESERVE_CUE_CFG } from '../data/reserveCues';
@@ -31607,7 +31608,7 @@ export class World {
         (a.lifeDamageInterceptors ??= new Map()).set(`hivecall:${hero.id}`, (amount: number) => {
           if (amount <= 0) return amount;
           if (aura && seat.actor.hiveForm && sameStory(a, seat.actor) && dist(a.pos, seat.actor.pos) <= HIVECALL.auraRadius) {
-            a.addBuff({ type: 'buff', id: 'hivecall_fury', duration: 3, mods: [mod('damage', 'more', 0.3), mod('attackSpeed', 'increased', 0.4), mod('castSpeed', 'increased', 0.4)] });
+            a.addBuff(buffWithSource({ type: 'buff', id: 'hivecall_fury', duration: 3, mods: [mod('damage', 'more', 0.3), mod('attackSpeed', 'increased', 0.4), mod('castSpeed', 'increased', 0.4)] }, host));
             if (this.hivecallRedirecting) return amount; // Shared wounds enrage, but never redirect recursively.
             const shields = this.hivecallRoster(hero, host).filter(m => m !== a && sameStory(m, a) && dist(m.pos, seat.actor.pos) <= HIVECALL.auraRadius);
             if (shields.length) {
@@ -35447,7 +35448,7 @@ export class World {
       if (power > 0) {
         if (def.empower.dmgPerPower) useMult *= 1 + def.empower.dmgPerPower * power;
         if (def.empower.buffPerPower) {
-          caster.addBuff({ ...def.empower.buffPerPower, stacksOnApply: power },
+          caster.addBuff(buffWithSource({ ...def.empower.buffPerPower, stacksOnApply: power }, inst),
             caster.sheet.get('effectDuration', tags, extra));
         }
         this.text(vec(caster.pos.x, caster.pos.y - 22), `power ${power}`, def.color, 11);
@@ -38415,10 +38416,10 @@ export class World {
           radius: fx.radius * aoeScale,
           visualColor: cosmeticColor,
         };
-        caster.addBuff({
+        caster.addBuff(buffWithSource({
           type: 'buff', id: 'iron_ward', duration: fx.duration,
           mods: [mod('damageTaken', 'more', -fx.reduce)],
-        }, durScale);
+        }, inst), durScale);
       }
       // SELF-DESTRUCT (detonateMinions): the horde's last instruction —
       // hard-resummonables only; contract bodies were never theirs to spend.
@@ -38642,7 +38643,7 @@ export class World {
       const n = (caster.castCycles.get(def.id) ?? 0) + 1;
       if (n >= castCycle.count) {
         caster.castCycles.set(def.id, 0);
-        const cycleBuff = { ...castCycle.buff };
+        const cycleBuff = buffWithSource(castCycle.buff, inst);
         this.treeBuffSources.set(cycleBuff, { caster, inst });
         caster.addBuff(cycleBuff, caster.sheet.get('effectDuration', tags, extra));
         this.text(vec(caster.pos.x, caster.pos.y - 18),
@@ -40279,7 +40280,7 @@ export class World {
     // wearing the graft's buff — "the recently raised fight harder".
     {
       const sb = socketSpec(inst, 'spawnBuff');
-      if (sb) minion.addBuff(sb);
+      if (sb) minion.addBuff(buffWithSource(sb, inst));
     }
     // RANDOM WEAK AURA (SupportDef.minionAuraPool): each minion is born
     // humming ONE aura rolled from the pool, shared with allies around it.
@@ -44229,10 +44230,10 @@ export class World {
       if (dealt > 0 && depth === 0) {
         const echo = caster.sheet.get('echoMight', packet.tags, extra);
         if (echo > 0) {
-          caster.addBuff({
+          caster.addBuff(buffWithSource({
             type: 'buff', id: 'echoing_might', duration: 4,
             mods: [mod('addedPhysical', 'flat', dealt * echo)],
-          });
+          }, inst));
         }
       }
       // DOMINATING BLOW (support graft): the slain may RISE for you —
@@ -45698,7 +45699,7 @@ export class World {
       case 'buff': {
         const storedCue = fx.buff.storedCue ?? (procCue === false ? false
           : { ...(buffProcCue(fx.buff) || {}), color: proc.color, ...proc.procCue });
-        caster.addBuff({ ...fx.buff, storedCue }, caster.sheet.get('effectDuration',
+        caster.addBuff(buffWithSource({ ...fx.buff, storedCue }, inst), caster.sheet.get('effectDuration',
           inst ? skillContextTags(inst) : undefined,
           inst ? instanceMods(inst) : undefined), depth + 1);
         if (caster.buffs.has(fx.buff.id)) noteProcCue(caster, storedCue, 'gain', proc.id);
@@ -58072,11 +58073,11 @@ export class World {
     const followUpHost = inst.followUpHost;
     inst = inst.followUpHost ?? inst;
     if (!followUpHost && !inst.treeNodes?.some(id => treeNodeOf(inst.def, id)?.buffs?.length)) {
-      target.addBuff(fx, durScale, 0, inst.def.tags);
+      target.addBuff(buffWithSource(fx, inst), durScale, 0, inst.def.tags);
       if (target.buffs.has(fx.id)) this.showSkillArrival(caster, inst, target.pos, target.radius + 16, target.tier, true);
       return;
     }
-    const tagged = { ...fx };
+    const tagged = buffWithSource(fx, inst);
     this.treeBuffSources.set(tagged, { caster, inst });
     target.addBuff(tagged, durScale, 0, [...skillContextTags(inst)]);
     if (target.buffs.has(fx.id)) this.showSkillArrival(caster, inst, target.pos, target.radius + 16, target.tier, true);

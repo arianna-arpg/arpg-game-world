@@ -1,4 +1,5 @@
 import type { Actor } from './actor';
+import { buffWithSource } from './buffSource';
 import type { World } from './world';
 import { angleDiff, angleTo, dist } from '../core/math';
 import { mod, type DamageType, type SkillTag } from './stats';
@@ -61,8 +62,8 @@ export class GuardArts {
           || a.invulnerable) return amount;
         // Stamp first: the resulting break burst may itself resolve retaliation.
         a.guardIntervention[inst.def.id] = s.spec.intervention!.cooldown;
-        a.addBuff({ type: 'buff', id: `guardIntervention:${inst.def.id}`, label: s.spec.intervention!.label,
-          duration: s.spec.intervention!.cooldown, mods: [] });
+        a.addBuff(buffWithSource({ type: 'buff', id: `guardIntervention:${inst.def.id}`, label: s.spec.intervention!.label,
+          duration: s.spec.intervention!.cooldown, mods: [] }, inst));
         this.cast(a, inst);
         this.w.guardArtCooldown(a, inst);
         return spendAbsorbLayers(a, amount);
@@ -97,8 +98,8 @@ export class GuardArts {
   private plateBuff(s: GuardArtState): void {
     const id = `${s.key}:plates`, p = s.spec.plates;
     s.owner.removeBuff(id);
-    if (p && s.plates > 0) s.owner.addBuff({ type: 'buff', id, label: `${p.label} (${s.plates})`, duration: 999999,
-      mods: [mod('damageTaken', 'more', -Math.min(GUARD_ARTS_LIMITS.maximumReduction, p.reduction * s.plates))] });
+    if (p && s.plates > 0) s.owner.addBuff(buffWithSource({ type: 'buff', id, label: `${p.label} (${s.plates})`, duration: 999999,
+      mods: [mod('damageTaken', 'more', -Math.min(GUARD_ARTS_LIMITS.maximumReduction, p.reduction * s.plates))] }, s.host));
   }
   /** Called only for a damaging guard interception, after the parry gate. */
   guardHit(a: Actor, inst: SkillInstance, amount: number): { damage: number; restore: number } {
