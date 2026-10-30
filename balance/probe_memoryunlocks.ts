@@ -16,6 +16,9 @@ import { CLASSES } from '../src/data/classes';
 import { POWER_PROGRESSION, odysseyMilestoneKey, powerProgressionOpen } from '../src/data/powerProgression';
 import { QUESTS } from '../src/quests/defs';
 import { abilityEssenceOfTier, skillLevelAbilityCost } from '../src/data/essences';
+import { makeSettings, serializeSettings, deserializeSettings } from '../src/meta/settings';
+import { memoryPoolOdds, memoryRevealReel, memoryPresentation } from '../src/ui/memoryRevealModel';
+import { MEMORY_REVEAL_CFG } from '../src/ui/memoryRevealConfig';
 
 function graduate(a: ReturnType<typeof makeAccount>): void {
   for (const gate of Object.values(POWER_PROGRESSION)) a.ledger[odysseyMilestoneKey(gate.odysseyStage)] = 1;
@@ -27,6 +30,43 @@ const discovery = MEMORY_UNLOCKS.find(r => r.tier === 'discovery')!;
 const secondary = MEMORY_UNLOCKS.find(r => r.tier === 'secondary')!;
 const row = UNLOCK_CATALOG.find(r => r.id === discovery.id)!;
 const wake = UNLOCK_CATALOG.find(r => r.id === secondary.id)!;
+
+check('reveal preferences round-trip and older settings get configurable defaults', () => {
+  const settings = makeSettings();
+  settings.memoryReveal = 'instant'; settings.memoryPreview = false;
+  const saved = serializeSettings(settings);
+  assert.equal(deserializeSettings(saved)?.memoryReveal, 'instant');
+  assert.equal(deserializeSettings(saved)?.memoryPreview, false);
+  delete saved.memoryReveal; delete saved.memoryPreview;
+  assert.equal(deserializeSettings(saved)?.memoryReveal, MEMORY_REVEAL_CFG.defaultMode);
+  assert.equal(deserializeSettings(saved)?.memoryPreview, MEMORY_REVEAL_CFG.autoplayPreview);
+});
+
+check('receipt reels never grant, spend or roll again; their landing is the receipt', () => {
+  const a = makeAccount(), pool = memoryUnlockCandidates(a, discovery);
+  const receipt = grantMemoryUnlock(a, discovery, () => 0)!;
+  const before = JSON.stringify(serializeAccount(a));
+  const reel = memoryRevealReel(receipt, pool);
+  assert.deepEqual(reel.cards[reel.landing], receipt);
+  assert.deepEqual(memoryRevealReel(receipt, pool), reel);
+  assert.deepEqual(memoryRevealReel(receipt, []).cards[reel.landing], receipt);
+  assert.equal(memoryPresentation(receipt).name, SKILLS[receipt.id].name);
+  assert.equal(JSON.stringify(serializeAccount(a)), before);
+});
+
+check('displayed odds follow the actual eligible weighted pool, including overrides', () => {
+  const a = makeAccount();
+  const original = MEMORY_UNLOCK_CFG.weightOverrides;
+  const first = memoryUnlockCandidates(a, discovery)[0];
+  try {
+    MEMORY_UNLOCK_CFG.weightOverrides = { [memoryKey(first.kind, first.id)]: 3 };
+    const pool = memoryUnlockCandidates(a, discovery), odds = memoryPoolOdds(pool);
+    assert(Math.abs(odds.reduce((n, c) => n + c.chance, 0) - 1) < 1e-10);
+    assert.equal(odds[0].chance / odds[1].chance, 3);
+    assert.deepEqual(memoryPoolOdds([]), []);
+    assert.equal(memoryPoolOdds([pool[0]])[0].chance, 1);
+  } finally { MEMORY_UNLOCK_CFG.weightOverrides = original; }
+});
 
 check('one mixed uniform discovery pool, existing rewards excluded, no internal verbs', () => {
   const a = makeAccount(), pool = memoryUnlockCandidates(a, discovery);

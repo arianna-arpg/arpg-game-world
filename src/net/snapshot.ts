@@ -9,7 +9,7 @@ import { afflictionPressureOf } from '../engine/afflictionPressure';
 import { armedStatusCues } from '../engine/armedCues';
 import { reactiveCueOf, wardCueActive, wardGuardians } from '../engine/combatReadability';
 import { memoryAccessView } from '../meta/memoryUnlocks';
-import { castingCompletion, castingCueOf } from '../engine/castingCues';
+import { castingCompletion, castingCueOf, castingDamageTags } from '../engine/castingCues';
 import { selfBankCuesOf, type SelfBankCue } from '../engine/skillSelfVisual';
 import { guardReleaseCue } from '../engine/warningCues';
 import { encounterCueOf } from '../engine/encounterCombat';
@@ -232,6 +232,7 @@ export interface StatusW { visual?: string; id: string; stacks: number; bk?: num
 export interface AuraW { c: string; r: number; sh: number; skillId?: string; }
 /** A cast in progress — the few fields the renderer's cast bar + guard arc read. */
 export interface CastW { parryCue?: number;
+  damageTags?: import('../engine/stats').DamageType[];
   fg?: ForesightW;
   meleeReach?: import('../engine/meleeReach').MeleeReachCue;
   /** Optional player skill identity; older hosts keep their plain cast bar. */
@@ -855,7 +856,7 @@ function actorToW(a: Actor, world: World): ActorW {
   }
   if (a.casting) {
     const cs = a.casting;
-    const cw: CastW = { c: cs.inst.def.color, mode: cs.mode, total: cs.total, elapsed: cs.elapsed };
+    const cw: CastW = { c: cs.inst.def.color, mode: cs.mode, total: cs.total, elapsed: cs.elapsed, damageTags: castingDamageTags(cs) };
     if (a.kind === 'player') cw.sk = cs.inst.def.id;
     const fg = foresightRowOf(a, cs);
     if (fg) cw.fg = fg;
@@ -1493,6 +1494,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       inst: { hostSkillId: aw.cast.sk, def: { id: aw.cast.sk ?? '', name: aw.cast.sk ? SKILLS[aw.cast.sk]?.name ?? '' : '', color: aw.cast.c, guard: aw.cast.guardArc !== undefined ? { arcDeg: aw.cast.guardArc } : undefined,
         delivery: aw.cast.vent !== undefined ? { type: 'leap', vent: { columnR: aw.cast.vent } } : undefined } },
       mode: aw.cast.mode, total: aw.cast.total, elapsed: aw.cast.elapsed,
+      damageTags: aw.cast.damageTags?.slice() ?? [],
       resolvedGuardArc: aw.cast.guardArc === undefined ? undefined : aw.cast.guardArc * Math.PI / 180,
       resolvedMeleeReach: aw.cast.meleeReach ? { ...aw.cast.meleeReach } : null,
       foresight: foresightOfRow(aw.cast.fg, aw.cast.c),

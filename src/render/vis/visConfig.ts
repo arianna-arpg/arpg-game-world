@@ -5,6 +5,8 @@
 // draw code.
 // ---------------------------------------------------------------------------
 
+import { DAMAGE_COLOR } from '../../engine/stats';
+
 export const VIS_CFG = {
   /** Compact Life-adjacent debuffs; one detailed readout only while hovered. */
   statusIcons: { size:24, gap:3, columns:4, orbClearance:44,
@@ -27,6 +29,9 @@ export const VIS_CFG = {
     movementFont: '10px Verdana', movementText: '#cad3d4',
     font: 'bold 11px Verdana', text: '#f1ecdd', edge: '#121719', outline: 3,
     slotEdge: '#f1ecdd', slotWidth: 2, slotPad: 2,
+    /** Damage tags share one palette; mixed casts show equal bands, never damage proportions. */
+    tagColors: { enabled: true, trackAlpha: .2, neutral: '#9c92ad',
+      palette: { ...DAMAGE_COLOR, physical: '#f4f5f7', fire: '#ef6255', cold: '#69b7ed' } },
     /** Fixed native bars; priority affects paint order only. */
     overlay: { priority: { self: 4, local: 3, party: 2, enemy: 1, ally: 0 } },
     /** Read the composed scene at a bounded rate; outline only poor contrast. */

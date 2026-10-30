@@ -60,6 +60,7 @@ app.whenReady().then(async () => {
   await win.loadURL(server.url);
   await waitFor('window.__game && window.__game.hydrated', 20000);
   await js('window.__game.hydrated()');
+  await js('window.__fakePads = []; void 0'); // isolate hover from connected controllers
   // A frame-gap recorder: the worst main-thread stall while the engine boots.
   await js(`(() => { window.__gap = { last: performance.now(), worst: 0 }; const f = (t) => { const g = window.__gap; g.worst = Math.max(g.worst, t - g.last); g.last = t; requestAnimationFrame(f); }; requestAnimationFrame(f); })()`);
   const run = await js(`(() => {

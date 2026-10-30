@@ -17,7 +17,7 @@ starting points for playtesting, not settled balance.
   dormant and awaken automatically when it is reached.
 - Both purchases repeat while eligible results remain, never return duplicates,
   and save partial investment. One held press completes at most one purchase.
-  The Vault names the result and retains the last result on the card.
+  The Vault presents a skippable reveal and retains the last result on the card.
 - Class discovery grants exactly its current starting bar and a small authored
   selection of related supports. The wider skill school stays in Memory discovery.
   Unlocking selection still requires the separate free Vault click. Discovery does
@@ -40,6 +40,49 @@ are unchanged. There is no separate prestige implementation yet; future prestige
 actions can use the same secondary-access predicate.
 
 ## Data and extension
+
+### Reveal and quality of life
+
+The default **Cinematic** setting opens a short Memory reel, then a full result
+with the existing skill artwork, authored description, tags and the entitlement
+just earned. Skills can play through the shared live showcase engine, offline
+and always matching the build. Supports show their own description and socketing
+purpose; they are not misrepresented as independently castable skills.
+
+- **Skip reveal** or Escape advances directly to the result. A second Escape
+  returns to the Vault. The controller's ordinary confirm/cancel pointer works
+  through the same controls. Held keys cannot skip and dismiss at once.
+- **Instant** unlocks immediately with the existing notification. Choose it on
+  the Memory shelf, in the reveal's “Use Instant next time” checkbox, or under
+  Options → Visuals → Vault Memory Reveals. The preference persists.
+- **View last discovery/awakening** reopens the latest receipt for that purchase,
+  including after a reload or an exhausted pool. It never spends or grants.
+- **Pool & odds** lists the current eligible catalog with its actual normalized
+  weights, search, kind filtering and paged results. Filtering never changes the
+  odds' denominator. Browsing costs nothing.
+- Preview autoplay is independently saved and can be paused. OS reduced motion
+  skips the reel and requires explicit Play. Failed, missing or slow previews
+  leave readable result details and a working Return button.
+- Focus stays inside the modal and returns to its purchase or review button.
+  The underlying Vault is inert, stale purchase clicks are refused, and leaving
+  the screen disposes timers, observers and showcase mounts. Layout scrolls on
+  narrow or short windows.
+
+`src/ui/memoryRevealConfig.ts` owns duration, card count/spacing, landing position,
+input settle guard, preview wait, pool page size, default preferences and tier
+presentation. `memoryRevealModel.ts` derives display data and odds from the actual
+registries and generates a deterministic decorative reel from a receipt.
+`memoryReveal.ts` owns only presentation and preferences; `memoryReveal.css` owns
+its layout. No skill roster, rarity ladder, pricing or drop logic is duplicated.
+
+The ordinary Vault investment path grants and requests saving **before** opening
+the reveal. The reel never rolls gameplay RNG, spends currency or delays access.
+Skip, replay, preview failure and interruption cannot change the selected result.
+Only a completed purchase opens the reveal; partial investment stays on the card.
+Prepaid overflow still completes and saves when the new payment is zero. A
+cancelled short pointer press buys nothing. No account/save schema reset is needed.
+
+### Economy
 
 `src/data/memoryUnlocks.ts` owns `MEMORY_UNLOCKS` (purchase ids, tiers, labels,
 descriptions, costs, per-entry category weights) and `MEMORY_UNLOCK_CFG`:
@@ -119,5 +162,10 @@ paid random draws while the corresponding bypass applies.
 - `npm run sim -- run --suite smoke`
 - `npm run build`, then `npx electron balance/memory-unlocks-ui.cjs`
 
-The UI harness uses isolated saves and a hidden window. It checks repeat clicks,
-one draw per hold, named results, persistence and the real skill-tree gate.
+The UI harness uses isolated saves and a hidden window (`--root <build>` accepts
+an isolated build). It checks repeat clicks, cancelled pointers, partial/prepaid
+investment, one draw per hold, reel completion/skip, live preview and failure
+fallback, input/focus isolation, narrow layout, saved Instant mode, reduced
+motion, replay, interruption/reload and the real skill-tree gate. Screenshots
+land under `balance/reports/memory-*.png`. Also run `probe_skillshowcase.ts` and
+`balance/skill-showcase-ui.cjs` when changing the shared preview lifecycle.

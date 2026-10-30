@@ -15,7 +15,7 @@ export interface AccountReliquary {
   rank: number;
   invested: number;
   stash: StashState;
-  /** Released or death-lost identities prevent stale saves from restoring items. */
+  /** Released, sold, salvaged or death-lost identities cannot return from stale saves. */
   released: string[];
 }
 export function emptyReliquary(): AccountReliquary {

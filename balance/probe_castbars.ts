@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
+import { DAMAGE_TYPES } from '../src/engine/stats';
+import { castingDamageTags } from '../src/engine/castingCues';
+import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { makeSkillInstance } from '../src/engine/skills';
@@ -32,7 +35,7 @@ for (const mode of ['cast', 'perfect', 'timed', 'channel', 'guard', 'charge', 'c
   fills.length = 0; const state = JSON.stringify(p.casting);
   prepareCastBar(p,w)!.paint(ctx);
   const fraction = mode === 'channel' ? .75 : mode === 'guard' ? .25 : .4;
-  assert.ok(fills.some(f => f.ink === inst.def.color && f.h === 5 && Math.abs(f.w-44*fraction)<1e-7), mode+' native clock');
+  assert.ok(fills.some(f => f.ink === VIS_CFG.castReadout.tagColors.palette.fire && f.h === 5 && Math.abs(f.w-44*fraction)<1e-7), mode+' native clock');
   if (['perfect','timed','overcharge'].includes(mode)) {
     assert.ok(fills.some(f => f.w === 2 && f.h === 9 && f.ink === '#ffffff'), 'marker');
     assert.ok(fills.some(f => Math.abs(f.w-12.32)<1e-7 && f.h === 5), 'gold window');
@@ -42,6 +45,39 @@ for (const mode of ['cast', 'perfect', 'timed', 'channel', 'guard', 'charge', 'c
 p.casting = cs; assert.equal(JSON.stringify(cs), before);
 console.log('PASS every native cast mode retains its clock and both timing decorations without mutation');
 
+const palette = VIS_CFG.castReadout.tagColors;
+for (const type of DAMAGE_TYPES) {
+  p.casting = { ...cs, inst: { ...inst, def: { ...inst.def, tags: ['spell',type], color: '#123456' } } };
+  assert.deepEqual(prepareCastBar(p,w)!.colors,[palette.palette[type]],'damage tags override decorative artwork');
+}
+const lich=makeSkillInstance(SKILLS.summon_skeleton_mage,1,0);
+lich.treeNodes=['lich_ascendant'];
+assert.ok(castingDamageTags({...cs,inst:lich}).includes('fire'),'invested tree tags reach the cast bar');
+p.casting = { ...cs, mode: 'cast', inst: { ...inst, def: { ...inst.def, tags: ['cold','spell','fire','cold'] },
+  sockets: [{ def: { ...SUPPORTS.perfect_draw, grantsTags: ['lightning'] }, level: 1 }] } };
+assert.deepEqual(castingDamageTags(p.casting),['fire','cold','lightning'],'canonical tag order and real support grants');
+fills.length=0;prepareCastBar(p,w)!.paint(ctx);
+for (const type of ['fire','cold','lightning'] as const) {
+  assert.ok(fills.some(f=>f.ink===palette.palette[type]&&f.h>0&&Math.abs(f.w-44*.4)<1e-7),'every band carries the same clock');
+  assert.ok(fills.some(f=>f.ink===palette.palette[type]&&f.w===44),'dim base shows all tags before progress');
+}
+const snap=serializeSnapshot(w,1), remote=makeSimWorld('warrior',0xca58);
+const wire=snap.actors.find(a=>a.id===p.id)!;
+assert.deepEqual(wire.cast!.damageTags,['fire','cold','lightning']);
+applySnapshot(remote,JSON.parse(JSON.stringify(snap)));
+const mirror=remote.actors[snap.actors.findIndex(a=>a.id===p.id)];
+assert.deepEqual(prepareCastBar(mirror,remote)!.colors,prepareCastBar(p,w)!.colors,'host and render shell share resolved tag bands');
+mirror.casting!.damageTags!.pop();
+assert.deepEqual(wire.cast!.damageTags,['fire','cold','lightning'],'wire and client own their arrays');
+assert.deepEqual(castingDamageTags(p.casting),['fire','cold','lightning'],'render shell cannot mutate host tags');
+delete wire.cast!.damageTags;applySnapshot(remote,snap);
+assert.deepEqual(prepareCastBar(remote.actors[snap.actors.findIndex(a=>a.id===p.id)],remote)!.colors,[palette.neutral],'old hosts have a safe untyped bar');
+p.casting = { ...cs, inst: { ...inst, sockets: [], def: { ...inst.def, tags: ['spell'] } } };
+assert.deepEqual(prepareCastBar(p,w)!.colors,[palette.neutral],'untagged skills do not masquerade as physical');
+(palette as {enabled:boolean}).enabled=false;assert.equal(prepareCastBar(p,w)!.color,inst.def.color);(palette as {enabled:boolean}).enabled=true;
+p.casting=cs;
+console.log('PASS tag palette, mixed bands, support grants, neutral/legacy fallback and co-op ownership');
+
 const enemy = w.createMonster('zombie',1,'enemy'), ally = w.createMonster('zombie',1,'player');
 const guest = w.addSeat('bar-guest',w.localSeat.meta.classDef,w.localSeat.input); guest.couch = { pad: 1, side: 'right' };
 for (const a of [p,guest.actor,enemy,ally]) { a.pos = {x:200,y:200}; a.casting = { ...cs }; }
@@ -50,7 +86,7 @@ assert.ok(castBarPriority(w,guest.actor)>castBarPriority(w,enemy));
 assert.ok(castBarPriority(w,enemy)>castBarPriority(w,ally));
 const overlay = new CastBarOverlay(), viewport = { x:0,y:0,w:600,h:400 };
 let painted: { actor: Actor; rect: CombatRect }[] = [];
-const bar = (actor: Actor, rect = { x:175,y:140,w:50,h:18 }): CastBar => ({ actor, key:actor.casting!, rect, meter: rect, color: '#43d9f1',
+const bar = (actor: Actor, rect = { x:175,y:140,w:50,h:18 }): CastBar => ({ actor, key:actor.casting!, rect, meter: rect, color: '#43d9f1', colors: ['#43d9f1'],
   paint: () => painted.push({actor,rect:{...rect,x:rect.x+at.x,y:rect.y+at.y}}) });
 const add = (actors: Actor[]) => { overlay.begin(); painted=[]; for (const a of actors) overlay.add(bar(a)); };
 leaders=0;outlines=0;
@@ -79,15 +115,70 @@ assert.equal(castBarOutline('#eeeeee',[.92,.94,.95])!.color,VIS_CFG.castReadout.
 assert.equal(castBarOutline('#222222',[.12,.13,.14])!.color,VIS_CFG.castReadout.contrast.light);
 assert.ok(castBarOutline('#777777',[0,.25,.5,.75,1]),'busy scene enables outline');
 assert.ok(castBarOutline('#777777',[]),'unavailable readback has a safe fallback');
-// A tiny real sampling fixture tests compositing, throttle and normalized projection.
-let reads=0,draws=0;const rgba=new Uint8ClampedArray(192*128*4).fill(102);
-const sampleCtx={fillRect(){},drawImage(){draws++;},getImageData(){reads++;return {data:rgba};}};
-const oldDocument=globalThis.document;
-Object.defineProperty(globalThis,'document',{configurable:true,value:{createElement:()=>({width:0,height:0,getContext:()=>sampleCtx})}});
+assert.ok(castBarOutline(['#ffffff','#111111'],[.06])!.alpha>.7,'each tag band participates in contrast');
+// Exercise asynchronous lifecycle with controllable worker/bitmap completion.
+const globals = ['Worker','createImageBitmap'].map(key => [key,Object.getOwnPropertyDescriptor(globalThis,key)] as const);
+const workers: MockWorker[] = [], bitmaps: { closed: number; close(): void }[] = [];
+let rejectBitmap = false, rejectPost = false, rejectWorker = false, deferBitmap = false;
+const releases: (() => void)[] = [];
+class MockWorker {
+  onmessage?: (event: { data: unknown }) => void; onerror?: () => void; onmessageerror?: () => void;
+  sent: { id: number; width: number; height: number }[] = []; terminated = false;
+  constructor() { if (rejectWorker) throw Error('Worker unavailable'); workers.push(this); }
+  terminate() { this.terminated = true; }
+  postMessage(value: { id: number; width: number; height: number }) { if (rejectPost) throw Error('Transfer refused'); this.sent.push(value); }
+  reply(index = this.sent.length-1) {
+    const row=this.sent[index];this.onmessage?.({data:{...row,pixels:new Uint8ClampedArray(row.width*row.height*4).fill(102)}});
+  }
+}
+Object.defineProperty(globalThis,'Worker',{configurable:true,value:MockWorker});
+Object.defineProperty(globalThis,'createImageBitmap',{configurable:true,value:() => {
+  if (rejectBitmap) { rejectBitmap=false;return Promise.reject(Error('Snapshot refused')); }
+  const bitmap={closed:0,close(){this.closed++;}};bitmaps.push(bitmap);
+  return deferBitmap ? new Promise(resolve=>releases.push(()=>resolve(bitmap))) : Promise.resolve(bitmap);
+}});
+const flush = async () => { for(let i=0;i<5;i++) await Promise.resolve(); };
+const rect={x:.4,y:.4,w:.05,h:.01},world={width:1500,height:1000} as HTMLCanvasElement;
 try {
-  const field=new CastBarContrast(),world={width:1500,height:1000} as HTMLCanvasElement;
-  field.capture(world,world,0);field.capture(world,world,1);assert.equal(reads,1);assert.equal(draws,2);
-  assert.ok(field.outline({x:.4,y:.4,w:.05,h:.01},'#666666'));
-  field.capture(world,undefined,100);assert.equal(reads,2);assert.equal(draws,3);
-} finally { Object.defineProperty(globalThis,'document',{configurable:true,value:oldDocument}); }
-console.log('PASS adaptive contrast, composite sampling and bounded readback cadence');
+  const field=new CastBarContrast();let now=performance.now();
+  field.capture(world,world,now);field.capture(world,world,now+100);await flush();
+  const first=workers.at(-1)!;assert.equal(first.sent.length,1);assert.equal(bitmaps.length,2,'one bitmap pair; no refresh queue');
+  assert.deepEqual(field.outline(rect,'#666666'),castBarOutline('#666666',[]),'quiet initial fallback');
+  first.reply();assert.ok(field.outline(rect,'#666666')!.alpha>.7);
+  field.capture(world,world,now+1);await flush();assert.equal(first.sent.length,1,'normal interval');
+  field.capture(world,undefined,now+2);await flush();assert.equal(first.sent.length,2,'crest change invalidates immediately');first.reply();
+
+  now+=200;field.capture(world,undefined,now);await flush();const oldIndex=first.sent.length-1;
+  world.width=1200;field.capture(world,undefined,now+1);first.reply(oldIndex);
+  assert.deepEqual(field.outline(rect,'#666666'),castBarOutline('#666666',[]),'resized old result refused');
+  field.capture(world,undefined,now+2);await flush();first.reply();assert.ok(field.outline(rect,'#666666')!.alpha>.7);
+  console.log('PASS bounded bitmap pair, native contrast, cadence and resize/crest stale-result rejection');
+
+  field.reset();assert.ok(first.terminated);deferBitmap=true;const before=bitmaps.length;
+  field.capture(world,world,now+3);field.invalidate();releases.splice(0).forEach(f=>f());await flush();
+  assert.ok(bitmaps.slice(before).every(b=>b.closed===1),'invalidated snapshots closed before transfer');
+  deferBitmap=false;field.capture(world,undefined,now+4);await flush();const second=workers.at(-1)!;
+  field.reset();field.capture(world,undefined,now+5);await flush();const third=workers.at(-1)!;
+  second.reply();assert.equal(field.count(),1,'late prior-worker reply cannot complete the new request');third.reply();
+  assert.ok(field.outline(rect,'#666666')!.alpha>.7);
+  console.log('PASS invalidation closes private bitmaps; reset terminates workers and rejects late replies');
+  field.reset();deferBitmap=true;const splitStart=bitmaps.length;field.capture(world,world,now+6);
+  const split=releases.splice(0);split[0]();await flush();assert.equal(bitmaps[splitStart].closed,0);
+  field.reset();assert.equal(bitmaps[splitStart].closed,1,'reset immediately releases fulfilled snapshot while sibling is unresolved');
+  split[1]();await flush();assert.equal(bitmaps[splitStart+1].closed,1,'late sibling closes independently');deferBitmap=false;
+  console.log('PASS partial snapshot completion cannot retain a bitmap across reset');
+
+  field.reset();rejectBitmap=true;let mark=bitmaps.length;field.capture(world,world,now+6);await flush();
+  assert.ok(bitmaps.slice(mark).every(b=>b.closed===1),'partial rejection closes fulfilled sibling');assert.equal(field.count(),0);
+  let count=workers.length;field.capture(world,world,now+500);await flush();assert.equal(workers.length,count,'failed worker is not retried every frame');
+  field.reset();rejectPost=true;mark=bitmaps.length;field.capture(world,world,now+7);await flush();rejectPost=false;
+  assert.ok(bitmaps.slice(mark).every(b=>b.closed===1),'failed transfer closes both snapshots');
+  field.reset();rejectWorker=true;field.capture(world,undefined,now+8);await flush();rejectWorker=false;assert.equal(field.count(),0);
+  field.reset();field.capture(world,undefined,now+9);await flush();const hung=workers.at(-1)!;
+  field.capture(world,undefined,now+2010);assert.ok(hung.terminated);assert.equal(field.count(),0);
+  field.reset();field.capture(world,undefined,now+2011);await flush();workers.at(-1)!.reply();
+  assert.ok(field.outline(rect,'#666666')!.alpha>.7,'new run can retry after failure');field.reset();
+  console.log('PASS snapshot/transfer/worker failure, bounded timeout, quiet fallback and run recovery');
+} finally {
+  for(const [key,descriptor] of globals){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else Reflect.deleteProperty(globalThis,key);}
+}

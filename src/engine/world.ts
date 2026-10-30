@@ -154,7 +154,7 @@ import {
   type MemoryKind, type MemoryPin, type MemoryProvenance, type MemoryRecallGroup, type MemoryRecallResult,
   type MemoryRecallViewData,
 } from './memories';
-import { accountRelicBoard, bankRelic, isRelic, loseCarriedRelics, migrateRelicCarry, migrateRelicCorpses, planRelicStorage, reconcileRelicStash, reliquaryExperience } from './accountReliquary';
+import { accountRelicBoard, bankRelic, isRelic, retireRelics, migrateRelicCarry, migrateRelicCorpses, planRelicStorage, reconcileRelicStash, reliquaryExperience } from './accountReliquary';
 import { emptyStash, personalStashEntries, planStashMove, type PersonalStash, type StashCell } from './stash';
 import { STASH_DEFS } from '../data/stashes';
 import { empowerRelicMods, relicPowerActive } from './relicPower';
@@ -5749,7 +5749,7 @@ export class World {
     if (this.clientActionHook) return;
     if (seat === this.localSeat) {
       const scope = seat.meta.relicScope ?? (seat.meta.charId || 'run:' + this.manifest.seed);
-      if (loseCarriedRelics(this.account, seat.meta.items, scope)) {
+      if (retireRelics(this.account, seat.meta.items, scope)) {
         this.accountDirty = true;
         saveAccount(this.account);
       }
@@ -48243,6 +48243,11 @@ export class World {
   // spends essence to stamp a studied affix onto gear within expertise's
   // ceiling. Account writes persist fire-and-forget (the reclaim pattern).
 
+  /** Account custody belongs to the hosting local seat, shared by UI and actions. */
+  canRetireRelics(seat: Seat): boolean {
+    return seat === this.localSeat && !this.clientActionHook;
+  }
+
   /** Resolve which salvage LANE a request rides: 'break' (the bench — the
    *  rarity's essence + lore) or 'sell' (a scrap counter — coarse volume,
    *  no study). Panels name their lane; an unnamed request takes the bench
@@ -48268,6 +48273,11 @@ export class World {
    *  into ONE account write and one summary line. */
   private breakOneItem(seat: Seat, item: ItemInstance, mode: 'break' | 'sell'): { family: string; rankedUp: boolean }[] {
     removeFromBag(seat.meta.items, item.uid);
+    if (this.canRetireRelics(seat) && isRelic(item)) {
+      retireRelics(this.account, [item], seat.meta.relicScope ?? (seat.meta.charId || 'run:' + this.manifest.seed));
+      this.accountDirty = true;
+      this.charDirty = true;
+    }
     this.grantEssence(seat, mode === 'break' ? salvageItemYield(item) : sellItemYield(item));
     // TIER-TRUE study — BENCH ONLY: the counter pays cash, never knowledge.
     // Craft lore is ACCOUNT knowledge (meta-progression): a sealed character
@@ -48322,7 +48332,9 @@ export class World {
     if (!mode) return;
     const item = this.bagItem(seat, uid);
     if (!item) return;
-    if (item.relicKey) { this.failNote(seat.actor, 'relicSale', 'Account Relics belong in your stash or Reliquary.'); return; }
+    if (item.relicKey && !this.canRetireRelics(seat)) {
+      this.failNote(seat.actor, 'relicSale', 'Account Relics can be sold or salvaged in your own hosted journey.'); return;
+    }
     if (item.questId) { this.failNote(seat.actor, 'questCargo', 'Bring this back to its quest giver.'); return; }
     if (item.locked) { this.lockedRefusal(seat); return; }
     // THE STONE (M2) + THE COUNTER'S BUY-BACK (2026-09-12): the BENCH never
@@ -48354,8 +48366,8 @@ export class World {
       this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
         `craft expertise deepens: ${t.family}`, '#c8a84b', 12);
     }
-    if (mode === 'break' && this.metaProgressionActive()) {
-      saveAccount(this.account); // lore is account knowledge — survive the run
+    if ((this.canRetireRelics(seat) && isRelic(item)) || (mode === 'break' && this.metaProgressionActive())) {
+      saveAccount(this.account); // Persist Relic retirement even when account progression is sealed.
     }
     this.markMetaDirty(seat);
   }
@@ -48383,13 +48395,15 @@ export class World {
       // GEM WRAPPERS sit out of the gear sweep: they are their own
       // categories below (a "break all gear" blow never eats the memories).
       // The ROUGH MEMORY pouch (M2) sits out of EVERY sweep likewise.
-      const targets = m.items.filter(i => !i.gem && !i.mem && !i.locked && !i.questId && !i.relicKey && (!rarity || i.rarity === rarity));
+      const targets = m.items.filter(i => !i.gem && !i.mem && !i.locked && !i.questId
+        && (!i.relicKey || this.canRetireRelics(seat)) && (!rarity || i.rarity === rarity));
+      const retiredRelics = this.canRetireRelics(seat) && targets.some(isRelic);
       for (const item of targets) {
         const taught = this.breakOneItem(seat, item, mode);
         ranked.push(...taught.filter(t => t.rankedUp).map(t => t.family));
         broke++;
       }
-      if (broke > 0 && mode === 'break' && this.metaProgressionActive()) {
+      if (broke > 0 && (retiredRelics || (mode === 'break' && this.metaProgressionActive()))) {
         saveAccount(this.account); // one write for the whole sweep
       }
     } else if (cat === 'skill') {

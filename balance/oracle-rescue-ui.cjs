@@ -10,7 +10,7 @@ app.disableHardwareAcceleration(); app.commandLine.appendSwitch('disable-gpu');
 app.whenReady().then(async () => {
   const timeout = setTimeout(() => { log('TIMEOUT'); app.exit(1); }, 150000);
   const server = await startGameServer({ root: path.resolve(__dirname, '../dist'), savesDir: path.join(dir, 'oracle-rescue-saves-' + process.pid) });
-  const win = new BrowserWindow({ show: false, width: 1400, height: 1000, webPreferences: { offscreen: true, backgroundThrottling: false } });
+  const win = new BrowserWindow({ show: false, width: 1920, height: 1080, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const js = async code => {
     const r = await win.webContents.executeJavaScript(`(async()=>{try{return await (0,eval)(${JSON.stringify(code)});}catch(e){return {qaError:String(e.stack??e)};}})()`);
     if (r?.qaError) throw Error(r.qaError); return r;
@@ -21,16 +21,21 @@ app.whenReady().then(async () => {
   };
   try {
     await win.loadURL(server.url);
+    // Let initial save hydration finish before seeding the disposable run.
+    await new Promise(resolve=>setTimeout(resolve,1200));
     await js(`(() => {
+      // This DOM course owns its idle hero; physical input cannot cancel dwell.
+      Object.defineProperty(navigator,'getGamepads',{value:()=>[],configurable:true});
+      __game.pilot({poll:()=>null});
       // Keep terrain, loot and dwell fixtures reproducible across UI runs.
       let seed=27811;Math.random=()=>{seed=(seed+0x6d2b79f5)>>>0;let t=seed;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;};
       __game.account().ledger.prologue_lived=1;__game.account().ledger['tutorial_faction:goblin']=1;
-      __game.devStartRun('warrior');__game.ui.hideAll();const w=__game.world();w.player.invulnerable=true;w.player.level=14;
+      __game.devStartRun('warrior');__game.hold(true);__game.ui.hideAll();const w=__game.world();w.player.invulnerable=true;w.player.level=14;
       w.odyssey.update();w.loadZone('quest_revenge_commander_goblin');w.questRescues.update();
       const q=window.oracleQA={w,id:'revenge_commander_goblin'};
       q.box=()=>{const r=document.getElementById('npc-dialogue');return {open:!r.hidden,name:r.querySelector('h2').textContent,text:r.querySelector('.dialogue-accessible').textContent,oracle:__game.ui.oracleOpen,fatal:__game.crash().fatal};};
       q.approach=()=>{const a=w.actors.find(a=>a.defId==='townsfolk_oracle');w.player.pos={...a.pos};w.player.tier=a.tier;return a;};
-      q.step=n=>{for(let i=0;i<n;i++){q.approach();__game.step(1);}return q.box();};
+      q.step=n=>{w.localSeat.lastMovedAt=w.time;for(let i=0;i<n;i++){q.approach();__game.step(1,50);}return q.box();};
       for(const a of w.actors)if(a.team==='enemy')a.pos={x:50,y:50};
     })()`);
     let box = await js('oracleQA.step(100)'); log({stage:'captive',...box});
@@ -41,8 +46,10 @@ app.whenReady().then(async () => {
       for(const a of [...w.actors])if(a.team==='enemy'&&!a.dead&&!a.invulnerable)w.kill(a,false,w.player);
       __game.step(2);w.questRescues.update();return {rescued:w.account.ledger.oracle_rescued,features:[...w.account.features],look:q.approach().look};
     })()`);log({stage:'freed',...box});assert.equal(box.rescued,1);assert.equal(box.look,'npc_scholar');assert.ok(box.features.includes('reliquary'));
+    // The manual reward view still needs a tick to consume the queued request,
+    // otherwise it can reopen the journal after claiming and block dialogue.
     const home = await js(`(() => {
-      const q=oracleQA,w=q.w;w.loadZone('lastlight');q.approach();w.updateQuestGiver(4);__game.ui.hideAll();__game.ui.showQuestReward();
+      const q=oracleQA,w=q.w;w.loadZone('lastlight');q.approach();w.updateQuestGiver(4);__game.ui.hideAll();__game.ui.showQuestReward();__game.step(1);
       return {buttons:document.querySelectorAll('[data-quest-reward]').length,look:q.approach().look};
     })()`);log({stage:'home',...home});assert.equal(home.buttons,3);await capture('charm-choice');
     const reward = await js(`(() => {
@@ -52,20 +59,27 @@ app.whenReady().then(async () => {
       w.player.pos={x:w.player.pos.x+400,y:w.player.pos.y};__game.step(4);
       return {lesson:w.account.ledger.reliquary_lesson,items:w.meta.containers.reliquary.length};
     })()`);log({stage:'seated',...reward});assert.equal(reward.items,1);
-    box = await js('oracleQA.step(120)');log({stage:'resident',...box});assert.equal(box.open,true);assert.equal(box.oracle,true);assert.match(box.name,/Oracle/);assert.equal(box.fatal,null);
+    box = await js("oracleQA.step(120);document.querySelector('[data-folio-tab=\"conversation\"]')?.click();oracleQA.box()");log({stage:'resident',...box});assert.equal(box.open,true);assert.match(box.name,/Oracle/);assert.equal(box.fatal,null);
     await js('document.querySelector(".dialogue-next").click()');await capture('resident');
+    // A fresh approach checks Oracle dwell independently of the claimed reward;
+    // held animation frames cannot add extra simulation ticks.
+    await js('document.querySelector(".dialogue-finish").click();__game.ui.hideAll();oracleQA.w.player.pos.x+=700;__game.step(10)');
+    box=await js('oracleQA.step(120)');assert.equal(box.oracle,true,'Oracle service opens after a fresh approach');
     const storage = await js(`(() => {
       const w=oracleQA.w;__game.ui.hideAll();w.player.pos={...w.stationAnchor('oracle').pos};__game.ui.showOracle();
-      document.querySelector('.dialogue-close').click();
+      document.querySelector('.dialogue-finish').click();
       document.querySelector('[data-oracle-attune]').click();
       const relic=w.meta.containers.reliquary[0];
-      w.lastCombatAt=-999;__game.ui.containerPane.openFromMenu('reliquary');
+      w.lastCombatAt=-999;__game.ui.containerPane.toggle('reliquary',w.localSeat.id,'show');
       const toggle=document.querySelector('[data-reliquary-toggle]');if(!toggle||toggle.disabled)throw Error('No enabled inventory toggle');toggle.click();
       if(w.meta.relicEnabled!==false)throw Error('Reliquary did not disable');
       document.querySelector('[data-reliquary-toggle]').click();if(w.meta.relicEnabled!==true)throw Error('Reliquary did not enable');
-      // The inventory drawer fronts its leaf; return to the storage tab before
-      // exercising gestures against the Oracle's visible grid.
-      document.querySelector('[data-folio-tab="oracle"]').click();
+      document.querySelector('[data-containerflap="reliquary"]').click();
+      if(!__game.ui.inventoryOpen)throw Error('Closing the Reliquary page closed Inventory');
+      // Inventory pages keep their own book; Oracle remains the active service.
+      // Select its tab when other services are present.
+      document.querySelector('[data-folio-tab="oracle"]')?.click();
+      if(__game.ui.folio.bookFor("oracle")?.front!=="oracle")throw Error("Oracle is not the active service");
       if(document.querySelector('[data-drop^="relicSeat:"]'))throw Error('Oracle still exposes equipped board');
       const loose=JSON.parse(JSON.stringify(relic));delete loose.relicKey;loose.uid=900001;loose.x=0;loose.y=0;loose.name='Reserve test charm';w.meta.items.push(loose);
       __game.ui.refreshOracle();document.querySelector('[data-relic-operation="store"]').click();
@@ -82,7 +96,8 @@ app.whenReady().then(async () => {
       oracleQA.clickTile('[data-drag="gearItem:'+loose.uid+'"]');
       oracleQA.clickTile('[data-drop="containerCell:reliquary:1:1"]');
       if(w.meta.containers.reliquary[0].uid!==loose.uid||!w.meta.items.includes(relic))throw Error('Inventory swap failed');
-      document.querySelector('[data-folio-tab="oracle"]').click();
+      document.querySelector('[data-folio-tab="oracle"]')?.click();
+      if(__game.ui.folio.bookFor("oracle")?.front!=="oracle")throw Error("Oracle is not the active service");
       oracleQA.clickTile('[data-drag="gearItem:'+relic.uid+'"]');
       oracleQA.clickTile('[data-drop="relicCell:0:5:3"]');
       if(w.meta.items.includes(relic)||!w.account.reliquary.stash.cells[relic.relicKey])throw Error('Inventory drag did not store');
@@ -119,7 +134,7 @@ app.whenReady().then(async () => {
       w.loadZone(aq.zoneId);w.questRescues.update();const captive=w.actors.some(a=>a.defId==='townsfolk_oracle');
       for(const a of [...w.actors])if(a.team==='enemy'&&!a.dead&&!a.invulnerable)w.kill(a,false,w.player);
       __game.step(2);w.loadZone('lastlight');const oracle=w.actors.find(a=>a.defId==='townsfolk_oracle');
-      w.player.pos={x:oracle.pos.x+20,y:oracle.pos.y};w.updateQuestGiver(4);__game.ui.hideAll();__game.ui.showQuestReward();
+      w.player.pos={x:oracle.pos.x+20,y:oracle.pos.y};w.updateQuestGiver(4);__game.ui.hideAll();__game.ui.showQuestReward();__game.step(1);
       window.oracleRepeatQA={w,id:aq.questId};const search=document.querySelector('[data-reward-search]');if(!search)throw Error('No skill search');
       const buttons=[...document.querySelectorAll('[data-quest-reward]')];const pick=buttons[0];
       oracleRepeatQA.chosen=pick.dataset.rewardChoice;search.value=pick.querySelector('strong').textContent;
@@ -132,7 +147,7 @@ app.whenReady().then(async () => {
     const locker=await js(`(() => {const w=oracleRepeatQA.w;__game.ui.hideAll();w.meta.modeId='immortal';w.player.pos={...w.stationAnchor('oracle').pos};__game.ui.showOracle();
       const item=w.meta.items.find(i=>i.gem);document.querySelector('[data-personal-stash-store="'+item.uid+'"]').click();
       if(w.meta.items.includes(item)||w.meta.stash.items.length!==1)throw Error('Personal stash deposit failed');
-      document.querySelector('.dialogue-close').click();
+      document.querySelector('.dialogue-finish').click();
       const source=document.querySelector('[data-drag="personalStashTile:'+item.uid+'"]'),target=document.querySelector('[data-drop="personalStashCell:3:2"]');
       source.scrollIntoView({block:'center',behavior:'instant'});const start=source.getBoundingClientRect();
       source.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,clientX:start.left+8,clientY:start.top+8}));
@@ -167,6 +182,44 @@ app.whenReady().then(async () => {
     assert.deepEqual(afterDeath.keys.sort(),[death.equipped,death.stored].sort());assert.deepEqual(afterDeath.carried,[]);
     assert.deepEqual(afterDeath.seated,[death.equipped]);assert(afterDeath.lost.includes(death.lost));assert.equal(afterDeath.fatal,null);
     log({stage:'death-disk-reload',...afterDeath});
+    const sale = await js(`(() => {
+      __game.devStartRun('warrior');__game.ui.hideAll();const w=__game.world();w.loadZone('lastlight');w.player.invulnerable=true;
+      w.account.features.add('salvage_station');w.loadZone('lastlight');w.player.pos={...w.stationAnchor('oracle').pos};
+      w.meta.items.length=0;const r=w.account.reliquary,template=r.items[0];
+      window.relicSaleQA={w,keys:[],protected:r.items.map(i=>i.relicKey)};
+      for(let n=0;n<3;n++){
+        const i=structuredClone(template);delete i.relicKey;i.uid=900110+n;i.x=n;i.y=0;
+        w.meta.items.push(i);w.oracleRelic(w.localSeat,i.uid,'store');w.withdrawRelic(w.localSeat,i.uid);
+        if(!i.relicKey||!w.meta.items.includes(i))throw Error('Sale fixture not account-carried');
+        relicSaleQA.keys.push(i.relicKey);if(n===2)i.locked=true;
+      }
+      const vendor=w.actors.find(a=>a.defId==='townsfolk_smith');w.player.pos={...vendor.pos};w.player.tier=vendor.tier;
+      __game.ui.showVendor();document.querySelector('.dialogue-finish')?.click();
+      document.querySelector('[data-folio-tab="vendor"]')?.click();
+      const toggle=document.querySelector('#vendor-menu [data-breaker]');if(!toggle.classList.contains('bound'))toggle.click();
+      const bulk=document.querySelector('#vendor-menu [data-bulk="item"]');
+      const preview=bulk.textContent,receipt=Number(bulk.querySelector('span').textContent.match(/\\d+/)[0]);
+      const wallet=w.meta.essences.coarse??0;
+      const tile=document.querySelector('[data-salv-uid="900110"]');if(!tile)throw Error('No Relic sell tile');tile.click();
+      if(w.meta.items.some(i=>i.uid===900110)||!r.released.includes(relicSaleQA.keys[0]))throw Error('UI sale did not consume account Relic');
+      return {preview,receipt,paid:(w.meta.essences.coarse??0)-wallet,keys:relicSaleQA.keys};
+    })()`);log({stage:'relic-vendor-sale',...sale});assert.match(sale.preview,/Sell all \(2\)/);assert.equal(sale.paid*2,sale.receipt);assert(sale.paid>0);await capture('relic-vendor-sale');
+    const salvage = await js(`(() => {
+      const q=relicSaleQA,w=q.w;__game.ui.hideAll();w.player.pos={...w.townSeat('salvage')};__game.ui.showSalvage();
+      document.querySelector('.dialogue-finish')?.click();document.querySelector('[data-folio-tab="salvage"]')?.click();
+      const bulk=document.querySelector('#salvage-menu [data-bulk="item"]'),preview=bulk.textContent;
+      bulk.click();
+      if(w.meta.items.some(i=>i.uid===900111)||!w.account.reliquary.released.includes(q.keys[1]))throw Error('UI salvage did not consume account Relic');
+      if(!w.meta.items.some(i=>i.uid===900112&&i.locked))throw Error('Sweep consumed locked Relic');
+      __game.save();return {preview,protected:q.protected,locked:q.keys[2],fatal:__game.crash().fatal};
+    })()`);log({stage:'relic-bench-salvage',...salvage});assert.match(salvage.preview,/Break all \(1\)/);assert.equal(salvage.fatal,null);await capture('relic-bench-salvage');
+    await js(`(async()=>{for(let i=0;i<60;i++){const a=await fetch('/__save/0').then(r=>r.json());if(${JSON.stringify(sale.keys.slice(0,2))}.every(k=>a.reliquary?.released.includes(k))&&a.reliquary.items.length===3)return;await new Promise(r=>setTimeout(r,50));}throw Error('Relic consumption was not persisted');})()`);
+    await win.loadURL(server.url);
+    const afterSale=await js(`({keys:__game.account().reliquary.items.map(i=>i.relicKey),carried:__game.account().reliquary.carried,released:__game.account().reliquary.released,fatal:__game.crash().fatal})`);
+    assert.deepEqual(afterSale.keys.sort(),[...salvage.protected,salvage.locked].sort());assert.deepEqual(afterSale.carried,[salvage.locked]);
+    assert(sale.keys.slice(0,2).every(k=>afterSale.released.includes(k)));assert.equal(afterSale.fatal,null);
+    log({stage:'sale-disk-reload',...afterSale});
+    log('PASS: vendor single-click and bench bulk controls consume account Relics, preview normal proceeds, preserve locks and survive disk reload');
     log('PASS: actual death destroys withdrawn/new pack Relics durably; equipped and stored Relics survive app reload');
     log('PASS: grid moves, capacity-preserving equipment swaps, cross-page drag, Vault page investment and personal Immortal storage');
     log('PASS: account reserve, equipped selection and empowerment survive a real app reload');

@@ -5,6 +5,7 @@ import { SIDE_SCREENS } from './sideScreenConfig';
 import { frontScreenHtml, bindFrontScreen } from './frontScreen';
 import { newCodexState, renderCodex } from './codex';
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
+import { MemoryReveal } from './memoryReveal';
 import { storedSupportsHtml } from './storedSupports';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
@@ -517,6 +518,7 @@ export class UI {
   private muCard = document.getElementById('mu-card')!;
   muCardOpen = false;
   private accountScreen = document.getElementById('account-screen')!;
+  private memoryReveal = new MemoryReveal(() => this.getSettings(), () => this.saveSettings());
   private escapeMenu = document.getElementById('escape-menu')!;
   private startMenu = document.getElementById('start-menu')!;
   private expeditionSetup = document.getElementById('expedition-setup')!;
@@ -1730,7 +1732,7 @@ export class UI {
   blockingFor(seatId: string): boolean {
     // THE MENU BAR's tray is the hero's (its pad pointer wakes on it).
     if (this.menuBar.isTrayOpen() && seatId === this.getWorld().localSeat.id) return true;
-    if (this.escapeMenuOpen || this.minigameActive || this.couchJoinOpen
+    if (this.memoryReveal.isOpen || this.escapeMenuOpen || this.minigameActive || this.couchJoinOpen
       || this.caravanOpen || this.mercOpen || this.sailOpen || this.holdOpen
       || this.vocationOpen || this.boroughOpen || this.muCardOpen
       || !this.startMenu.classList.contains('hidden')) return true;
@@ -2487,7 +2489,7 @@ export class UI {
    *  surfaces join here and every input layer follows for free. Dialogue has
    *  its own presentation context; it never relaxes gameplay input gates. */
   uiBlocking(): boolean {
-    return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
+    return this.memoryReveal.isOpen || this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive || this.menuBar.isTrayOpen()
       || this.couchJoinOpen || this.muCardOpen
       || this.caravanOpen || this.mercOpen || this.salvageOpen
       || this.oracleOpen || this.vendorOpen || this.sailOpen || this.holdOpen || this.vocationOpen
@@ -3181,7 +3183,9 @@ export class UI {
         const arr = sealedBy.get(seat);
         if (arr) arr.push(s.u); else sealedBy.set(seat, [s.u]);
       }
-      const visible = census.filter(c => !c.tab.owned && (c.visible || (sealedBy.get(c.tab.id)?.length ?? 0) > 0)); // Owned lives in the Codex.
+      const memoryRevealHistory = Object.keys(acc.memoryReceipts).length > 0;
+      const visible = census.filter(c => !c.tab.owned && (c.visible || (sealedBy.get(c.tab.id)?.length ?? 0) > 0
+        || (memoryRevealHistory && c.tab.kinds?.includes('memory')))); // Owned lives in the Codex.
       const strip = visible.length > 0 && vaultStripVisible(acc, census);
 
       // COMPACT BY DESIGN: name and price — the description lives in the
@@ -3380,6 +3384,7 @@ export class UI {
             <b>${acc.lifetimeCredits}</b> ${META_CURRENCY_LABEL} lifetime${register}</div>
           ${boardLessonTalk && !featureEnabled(acc, FEATURE.BOUNTY_BOARD) ? `<div class="vault-lesson">Every run ends here: what you carried home became ${META_CURRENCY_LABEL}, and ${META_CURRENCY_LABEL} buys the town's standing services, which persist run after run.<br>The <b>Bounty Board</b> asks nothing. Claim it free, and Lastlight raises a posting board whose work pays the very essence this Vault spends.</div>` : ''}
           ${tabStrip}
+          ${!strip || this.vaultTab === vaultSeatOf('memory').id ? '<div class="memory-vault-tools" data-memory-tools></div>' : ''}
         </div>
         <div class="vault-body">${body}</div>
         <div class="vault-foot acct-btns"><button id="acct-codex">Codex · Owned</button><button id="acct-wardrobe">Wardrobe</button><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
@@ -3387,6 +3392,8 @@ export class UI {
       this.accountScreen.querySelector('#acct-codex')!.addEventListener('click', () => {
         saveShelfScroll(); this.codexView(this.accountScreen, render, 'owned');
       });
+      this.memoryReveal.bindVault(this.accountScreen, acc, availableUnlocks(acc)
+        .flatMap(u => u.kind === 'memory' ? [memoryUnlockDef(u.payload.memoryUnlockId)!] : []));
       this.accountScreen.querySelector('#acct-wardrobe')!.addEventListener('click', () => this.wardrobeView(this.accountScreen, render));
       const bodyEl = this.accountScreen.querySelector<HTMLElement>('.vault-body');
       if (bodyEl) bodyEl.scrollTop = this.vaultScroll[this.vaultTab || '_flat'] ?? 0;
@@ -3430,7 +3437,14 @@ export class UI {
       this.accountScreen.querySelectorAll<HTMLButtonElement>('[data-invest]').forEach(btn => {
         const id = btn.dataset.invest!;
         const memorySequence = acc.memoryReceipts[id]?.sequence ?? 0;
-        const findU = (): Unlockable | undefined => availableUnlocks(acc).find(x => x.id === id);
+        let memoryRevealPool: ReturnType<typeof memoryUnlockCandidates> = [];
+        const findU = (): Unlockable | undefined => {
+          if (!btn.isConnected || this.memoryReveal.isOpen || (acc.memoryReceipts[id]?.sequence ?? 0) !== memorySequence) return undefined;
+          const u = availableUnlocks(acc).find(x => x.id === id);
+          const def = u?.kind === 'memory' ? memoryUnlockDef(u.payload.memoryUnlockId) : undefined;
+          memoryRevealPool = def ? memoryUnlockCandidates(acc, def) : [];
+          return u;
+        };
         const updateFaces = (u: Unlockable): void => {
           btn.textContent = `${buyVerb(u)} · ${remainingCost(acc, u)} more`;
           const bar = btn.parentElement?.querySelector<HTMLElement>('.uinvest i');
@@ -3452,13 +3466,18 @@ export class UI {
         // "This pour finished": ownership for the permanent kinds, the state
         // change for the service kinds (unlockCompleted — the one predicate).
         const completed = (u: Unlockable): boolean => unlockCompleted(acc, u, memorySequence);
+        const memoryRevealDone = (u: Unlockable): void => {
+          const receipt = u.kind === 'memory' ? acc.memoryReceipts[u.id] : undefined;
+          if (receipt && this.memoryReveal.celebrate(this.accountScreen, receipt, memoryRevealPool, u.id)) return;
+          this.vaultToast(doneToast(u));
+        };
         const settle = (poured: boolean, done?: Unlockable): void => {
           if (pourTimer) { window.clearInterval(pourTimer); pourTimer = 0; }
-          if (!poured) return;
+          if (!poured && !done) return; // funded Memory overflow can complete without a new payment
           saveShelfScroll();
           this.saveAccount();
           render();
-          if (done) this.vaultToast(doneToast(done));
+          if (done) memoryRevealDone(done);
         };
         // The one completion road every input shares: full unlock + log +
         // settle theater (used by the click, the keyboard, and the pour's
@@ -3470,7 +3489,7 @@ export class UI {
           saveShelfScroll();
           this.saveAccount();
           render();
-          this.vaultToast(doneToast(u));
+          memoryRevealDone(u);
           return true;
         };
         btn.addEventListener('pointerdown', e => {
@@ -3488,12 +3507,13 @@ export class UI {
           let held = false;
           const beginPour = (): void => {
             holdTimer = 0;
+            if (!btn.isConnected || this.memoryReveal.isOpen) return;
             held = true;
             let rate = INVEST_CFG.baseRate;
             let frac = INVEST_CFG.tapAmount; // the pour opens with the smallest step
             let last = performance.now();
             pourTimer = window.setInterval(() => {
-              if (!btn.isConnected) { settle(false); return; }
+              if (!btn.isConnected || this.memoryReveal.isOpen) { settle(poured > 0); return; }
               const now = performance.now();
               const dt = (now - last) / 1000;
               last = now;
@@ -3511,12 +3531,14 @@ export class UI {
             }, INVEST_CFG.tickMs);
           };
           holdTimer = window.setTimeout(beginPour, INVEST_CFG.holdDelayMs);
-          const release = (): void => {
+          const release = (event: PointerEvent): void => {
             btn.removeEventListener('pointerup', release);
             btn.removeEventListener('pointercancel', release);
             this.investPointerAt = performance.now(); // the release's own trailing click stays suppressed
             if (holdTimer) { window.clearTimeout(holdTimer); holdTimer = 0; }
             if (!held) {
+              // A cancelled pointer is not a purchase (including pad retirement).
+              if (event.type === 'pointercancel' || !btn.isConnected || this.memoryReveal.isOpen) return;
               // THE CLICK: unlock outright when the pool covers it; short,
               // point at the hold lane instead of quietly draining.
               if (!unlockOutright(u)) {
@@ -3990,8 +4012,8 @@ export class UI {
     if (seatNote) lines.push(`<div style="color:${seatNote.color};font-size:10px">${seatNote.text}</div>`);
     if (item.locked) {
       lines.unshift(`<div style="color:#c8a84b">🔒 Locked — it stays: no salvage, no drop, no sort (${this.lockGestureText()} to unlock)</div>`);
-    } else if (salv && item.relicKey) {
-      lines.unshift('<div>Account Relic · store with the Oracle or equip in the Reliquary.</div>');
+    } else if (salv && item.relicKey && !this.getWorld().canRetireRelics(seat)) {
+      lines.unshift('<div>Account Relics can be sold or salvaged in your own hosted journey.</div>');
     } else if (salv) {
       const breakLine = seat.meta.items.some(i => i.uid === item.uid)
         ? `<div style="color:#e8c87a;font-weight:bold">${salv === 'sell'
@@ -5701,7 +5723,7 @@ export class UI {
     // THE ONE BAG (M1): gear tiles and gem wrappers share m.items — the
     // sweeps split them exactly as the host's salvageBulk filters do.
     const gemItems = m.items.filter(i => i.gem);
-    const gearItems = m.items.filter(i => !i.gem && !i.mem && !i.questId && !i.relicKey);
+    const gearItems = m.items.filter(i => !i.gem && !i.mem && !i.questId && (!i.relicKey || this.getWorld().canRetireRelics(seat)));
     const gearAll = gearItems.filter(i => !i.locked);
     const gearLocked = gearItems.length - gearAll.length;
     const skillRows = gemItems.flatMap(i => {
@@ -10806,6 +10828,14 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-speechtyping" title="Townsfolk tell their talk-bubble lines glyph by glyph, as if speaking. OFF shows each line whole at once: same words, no wait.">${s.speechTyping ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Vault Memory Reveals</span>
+        <button id="opt-memoryreveal" title="CINEMATIC reveals each Memory with a skippable animation. INSTANT unlocks immediately; View last result remains available in the Vault.">${s.memoryReveal === 'instant' ? 'INSTANT' : 'CINEMATIC'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Autoplay Memory Skill Previews</span>
+        <button id="opt-memorypreview" title="Automatically play the unlocked skill on the reveal screen. Reduced-motion preferences always require pressing Play.">${s.memoryPreview ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
         <span>Hover Nameplates</span>
         <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
@@ -10856,6 +10886,14 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         this.saveSettings(); this.renderOptions(root, onBack);
       });
     }
+    root.querySelector<HTMLElement>('#opt-memoryreveal')?.addEventListener('click', () => {
+      const settings = this.getSettings(); settings.memoryReveal = settings.memoryReveal === 'instant' ? 'cinematic' : 'instant';
+      this.saveSettings(); this.renderOptions(root, onBack);
+    });
+    root.querySelector<HTMLElement>('#opt-memorypreview')?.addEventListener('click', () => {
+      const settings = this.getSettings(); settings.memoryPreview = !settings.memoryPreview;
+      this.saveSettings(); this.renderOptions(root, onBack);
+    });
     root.querySelector<HTMLElement>('#opt-skillartwork')?.addEventListener('click', () => {
       const settings = this.getSettings(); settings.skillArtwork = !settings.skillArtwork;
       this.saveSettings(); this.refreshInventory(true); if (this.vendorOpen) this.refreshVendor(); this.renderOptions(root, onBack);
@@ -11707,6 +11745,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
 
   hideAll(): void {
     this.menuBar.closeTray();
+    this.memoryReveal.close();
     this.closeCodexView();
     this.conversation?.reset(); this.conversationSpeakerId = null;
     this.closeInventory();
