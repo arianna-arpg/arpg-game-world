@@ -18,7 +18,7 @@ The root's full-screen sizing is selected by its current child markup, so replac
 
 Native buttons support pointer and controller activation through the existing pad pointer. Up/Down and Home/End move focus; native Tab traversal is kept separate from the gameplay Tab binding. Enter and Space retain native button activation.
 
-The atmosphere uses a bounded set of CSS motes and haze, without a JavaScript animation loop or gameplay time. It disappears while the menu is hidden. Pause Atmosphere retains its choice during the current session. The operating system's reduced-motion preference suppresses all ambient animation. The UI scale remains configurable through Options, including at 200%.
+The atmosphere uses three configurable strata of CSS motes and haze, without a JavaScript animation loop or gameplay time. The mote palette echoes the website's teal/violet/ember insignia and pale aether light, weighted toward the scene's teal soul-flame. Each stratum independently controls count, size, glow, opacity, lifetime, rise and sway. Fixed seeds keep the field stable across menu refreshes; compact screens show half the motes. The lights sit above the vignette but below all interface content. It disappears while the menu is hidden. Pause Atmosphere retains its choice during the current session. The operating system's reduced-motion preference suppresses all ambient animation and leaves a faint, still particle field. The UI scale remains configurable through Options, including at 200%.
 
 ## Verification
 

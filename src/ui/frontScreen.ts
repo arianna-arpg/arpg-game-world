@@ -27,6 +27,30 @@ function syncAtmosphere(): void {
   if (backdrop) backdrop.dataset.paused = String(atmospherePaused || !FRONT_SCREEN.atmosphere.enabled);
 }
 
+/** Fixed seeds keep the field stable across UI refreshes. Only CSS transforms
+ * and opacity animate; these lights never consume the gameplay random stream. */
+function aetherMotesHtml(): string {
+  const unit = (seed: number, salt: number): number => {
+    const n = Math.sin(seed * 127.1 + salt * 311.7) * 43758.5453;
+    return n - Math.floor(n);
+  };
+  return FRONT_SCREEN.atmosphere.strata.flatMap((layer, depth) =>
+    Array.from({ length: layer.count }, (_, i) => {
+      const seed = depth * 101 + i + 1;
+      const sample = (range: readonly [number, number], salt: number): number =>
+        range[0] + unit(seed, salt) * (range[1] - range[0]);
+      const colors = FRONT_SCREEN.atmosphere.moteColors;
+      const color = colors[Math.floor(unit(seed, 8) * colors.length)];
+      const duration = sample(layer.seconds, 4);
+      const sway = sample(layer.sway, 5) * (unit(seed, 9) < .5 ? -1 : 1);
+      return `<i style="--x:${unit(seed, 1) * 100}%;--y:${12 + unit(seed, 2) * 93}%;
+        --size:${sample(layer.size, 3)}px;--halo:${layer.halo}px;--tint:${color};--mote-alpha:${layer.alpha};
+        --sway:${sway}px;--rise:${sample(layer.rise, 6)}px;
+        --delay:${-unit(seed, 7) * duration}s;--duration:${duration}s"></i>`;
+    }),
+  ).join('');
+}
+
 /** A single passive backdrop survives menu refreshes; CSS owns visibility and
  * pauses it offscreen. No game loop, timers, save access or input listeners. */
 function ensureBackdrop(): void {
@@ -38,10 +62,10 @@ function ensureBackdrop(): void {
   el.style.setProperty('--front-art', `url("${FRONT_SCREEN.artwork}")`);
   el.style.setProperty('--front-drift', `${FRONT_SCREEN.atmosphere.driftSeconds}s`);
   el.dataset.paused = String(atmospherePaused || !FRONT_SCREEN.atmosphere.enabled);
-  el.innerHTML = `<div class="front-landscape"></div><div class="front-haze"></div><div class="front-motes">${Array.from(
-    { length: FRONT_SCREEN.atmosphere.motes }, (_, i) =>
-      `<i style="--x:${(i * 37 + 11) % 100}%;--y:${(i * 23 + 7) % 100}%;--delay:${-i * 1.7}s;--duration:${12 + i % 7}s"></i>`,
-  ).join('')}</div><div class="front-vignette"></div>`;
+  // Lights sit above the darkening wash so their colors survive the vignette,
+  // while the entire passive backdrop remains below text and controls.
+  el.innerHTML = `<div class="front-landscape"></div><div class="front-haze"></div>
+    <div class="front-vignette"></div><div class="front-motes">${aetherMotesHtml()}</div>`;
   document.body.appendChild(el);
   // One document-lifetime preference listener, independent of view rebuilds.
   window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', syncAtmosphere);

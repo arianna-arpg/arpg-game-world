@@ -53,5 +53,16 @@ export const FRONT_SCREEN = {
   footer: 'An ever-changing world',
   buildLabel: 'In development',
   palette: { ivory: '#eee6d4', muted: '#a7b2b0', gold: '#c8aa73', line: '#b39c6c40' },
-  atmosphere: { motes: 16, driftSeconds: 19, enabled: true },
+  atmosphere: {
+    enabled: true,
+    driftSeconds: 19,
+    // Website insignia colors (site/index.html), weighted toward the soul-flame.
+    moteColors: ['#4fd6c4', '#4fd6c4', '#7ff0e1', '#9ab8dc', '#a98bff', '#ff8a4c'],
+    // Each stratum sets density, core size, glow, opacity and travel independently.
+    strata: [
+      { count: 26, size: [0.9, 1.6], halo: 4, alpha: 0.36, seconds: [28, 42], rise: [65, 125], sway: [12, 30] },
+      { count: 22, size: [1.8, 3.0], halo: 8, alpha: 0.64, seconds: [20, 32], rise: [100, 190], sway: [20, 52] },
+      { count: 8, size: [3.0, 4.6], halo: 13, alpha: 0.74, seconds: [16, 26], rise: [140, 240], sway: [30, 72] },
+    ],
+  },
 } as const;

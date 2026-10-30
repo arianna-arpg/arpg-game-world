@@ -17,9 +17,13 @@ body:has(#start-menu:not(.hidden)) #front-backdrop { display: block; }
   linear-gradient(0deg, #060b10ed, transparent 30%, transparent 80%, #060b1066); }
 .front-haze { opacity: .24; background: radial-gradient(ellipse at 68% 78%, #afded640, transparent 52%);
   animation: front-breathe var(--front-drift) ease-in-out infinite alternate; }
-.front-motes i { position: absolute; left: var(--x); top: var(--y); width: 2px; height: 2px; border-radius: 50%;
-  background: #dceadd; box-shadow: 0 0 9px #b4e6dc; opacity: 0;
+.front-motes i { position: absolute; left: var(--x); top: var(--y);
+  width: var(--size); height: var(--size); border-radius: 50%; color: var(--tint);
+  background: radial-gradient(circle, #f1fffa 0%, var(--tint) 45%, transparent 75%);
+  box-shadow: 0 0 calc(var(--size) * 2) currentColor; opacity: 0;
   animation: front-drift var(--duration) var(--delay) linear infinite; }
+.front-motes i::after { content: ''; position: absolute; inset: calc(var(--halo) * -1);
+  border-radius: 50%; background: radial-gradient(circle, var(--tint), transparent 68%); opacity: .24; }
 #front-backdrop[data-paused="true"] * { animation-play-state: paused; }
 .front-screen { color: var(--front-ivory); min-height: 100%; }
 .front-screen * { box-sizing: border-box; }
@@ -147,10 +151,12 @@ body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
 }
 @media (max-width: 600px) {
   .front-landscape { background-position: 76% center; }
+  .front-motes i:nth-child(even) { display: none; }
   .front-vignette { background: linear-gradient(90deg, #04090be6, #04090b88), linear-gradient(0deg, #060b10e8, transparent 60%); }
 }
 @media (prefers-reduced-motion: reduce) {
   #front-backdrop * { animation: none !important; }
+  .front-motes i { opacity: calc(var(--mote-alpha) * .45); }
   .front-screen * { transition: none !important; }
 }
 @media (forced-colors: active) {
@@ -159,7 +165,14 @@ body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
   #start-menu .front-action { border: 1px solid ButtonText; color: ButtonText; }
 }
 @keyframes front-breathe { from { transform: translate(-2%, 1%) scale(1); opacity: .15; } to { transform: translate(2%, -1%) scale(1.06); opacity: .35; } }
-@keyframes front-drift { 0% { transform: translate(0, 25px); opacity: 0; } 20% { opacity: .5; } 80% { opacity: .3; } 100% { transform: translate(28px, -110px); opacity: 0; } }
+@keyframes front-drift {
+  0% { transform: translate3d(0, 0, 0) scale(.65); opacity: 0; }
+  20% { opacity: var(--mote-alpha); }
+  35% { transform: translate3d(calc(var(--sway) * .65), calc(var(--rise) * -.3), 0) scale(1); }
+  65% { transform: translate3d(calc(var(--sway) * -.25), calc(var(--rise) * -.65), 0) scale(.85); opacity: calc(var(--mote-alpha) * .7); }
+  82% { opacity: var(--mote-alpha); }
+  100% { transform: translate3d(var(--sway), calc(var(--rise) * -1), 0) scale(.55); opacity: 0; }
+}
 
 
 
