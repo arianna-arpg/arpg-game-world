@@ -66,10 +66,18 @@ app.whenReady().then(async()=>{
   const browsing=await js("(async()=>{const g=document.querySelector('.cx-grid'),times=[];let maxCards=0;for(let i=0;i<24;i++){const t=performance.now();g.scrollTop=(g.scrollHeight-g.clientHeight)*((i*7)%24)/23;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));times.push(performance.now()-t);maxCards=Math.max(maxCards,g.querySelectorAll('.cx-card').length);}return{maxCards,framesMs:times};})()");
   fs.writeFileSync(path.join(out,'browsing.json'),JSON.stringify(browsing,null,2));check('repeated long-distance scrolling never accumulates cards',browsing.maxCards<80);
   await js("window.resizeTop=document.querySelector('.cx-grid').scrollTop;void 0");
-  // Reflow from two columns to one, then back, with the top entry as the anchor.
+  // Reflow between desktop columns and compact results, then back, keeping the same anchor.
   const anchorKey=await js("(()=>{const g=document.querySelector('.cx-grid'),r=g.getBoundingClientRect();return [...g.querySelectorAll('.cx-card')].find(c=>{const b=c.getBoundingClientRect();return b.top<=r.top+1&&b.bottom>r.top;})?.dataset.cxEntry;})()");
-  win.setContentSize(900,1000);await sleep(180);win.setContentSize(1600,1000);await sleep(180);
-  check('column reflow preserves the top entry and scroll anchor',!!anchorKey && await js(`(()=>{const c=document.querySelector('[data-cx-entry="${anchorKey}"]'),g=document.querySelector('.cx-grid');if(!c)return false;const a=c.getBoundingClientRect(),b=g.getBoundingClientRect();return a.top<=b.top+1&&a.bottom>b.top&&Math.abs(g.scrollTop-resizeTop)<2;})()`));
+  assert(anchorKey,'A visible top entry is available before reflow');
+  const anchorVisible=`(()=>{const c=document.querySelector('[data-cx-entry="${anchorKey}"]'),g=document.querySelector('.cx-grid');if(!c)return false;const a=c.getBoundingClientRect(),b=g.getBoundingClientRect();return a.top<=b.top+1&&a.bottom>b.top;})()`;
+  // Native resize delivery and ResizeObserver are asynchronous. Await the real
+  // renderer geometry rather than treating a fixed sleep as readiness.
+  for(let turn=0;turn<4;turn++){
+   win.setContentSize(700,1000);await wait("innerWidth===700 && getComputedStyle(document.querySelector('.cx-body')).display==='block' && "+anchorVisible);
+   win.setContentSize(1600,1000);await wait("innerWidth===1600 && getComputedStyle(document.querySelector('.cx-body')).display==='grid' && Math.abs(document.querySelector('.cx-grid').scrollTop-resizeTop)<2 && "+anchorVisible);
+  }
+  const reflow=await js(`(()=>{const c=document.querySelector('[data-cx-entry="${anchorKey}"]'),g=document.querySelector('.cx-grid'),a=c?.getBoundingClientRect(),b=g.getBoundingClientRect();return{key:${JSON.stringify(anchorKey??null)},before:resizeTop,after:g.scrollTop,cardTop:a?.top,cardBottom:a?.bottom,gridTop:b.top};})()`);
+  check('column reflow preserves the top entry and scroll anchor: '+JSON.stringify(reflow),!!anchorKey && reflow.cardTop<=reflow.gridTop+1 && reflow.cardBottom>reflow.gridTop && Math.abs(reflow.before-reflow.after)<2);
   await js("__game.account().features.delete('unlock_all_gems');void 0");await sleep(1100);await search('Infernal Ray');
   check('empty searches remove stale cards and protected identities',await js("document.querySelectorAll('.cx-card').length===0 && !!document.querySelector('[data-cx-reset]') && !document.querySelector('.codex [data-skill-showcase]')"));
   await click('[data-cx-reset]');

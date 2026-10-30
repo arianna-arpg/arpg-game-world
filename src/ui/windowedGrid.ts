@@ -33,7 +33,14 @@ export function mountWindowedGrid<T extends { key: string }>(viewport: HTMLEleme
   const mounted = new Map<string, { root: HTMLElement; card: HTMLElement; signature: string }>();
   const stride = opts.rowHeight + opts.gap;
   const firstVisible = (): number => Math.min(Math.max(0, items.length - 1), Math.floor(viewport.scrollTop / stride) * columns);
-  const anchor = (): GridAnchor | undefined => items[firstVisible()] ? { key: items[firstVisible()].key, offset: viewport.scrollTop % stride } : undefined;
+  const anchor = (): GridAnchor | undefined => {
+    const first = firstVisible(), kept = lastAnchor ? positions.get(lastAnchor.key) : undefined;
+    // A reflow can put the anchored entry in a later column of the top row.
+    // Keep that identity until scrolling leaves the row, rather than adopting
+    // its new first item and drifting upward on every column-count change.
+    const index = kept !== undefined && Math.floor(kept / columns) === Math.floor(first / columns) ? kept : first;
+    return items[index] ? { key: items[index].key, offset: viewport.scrollTop % stride } : undefined;
+  };
   const height = (): void => { content.style.height = Math.max(0, Math.ceil(items.length / columns) * stride - opts.gap) + 'px'; };
   const restore = (a?: GridAnchor, top = viewport.scrollTop): void => {
     const index = a ? positions.get(a.key) : undefined;
