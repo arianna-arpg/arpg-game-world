@@ -12,6 +12,14 @@ The game opens on a full-viewport threshold scene with the existing account and 
 
 To add an action, add a typed ID and definition to the action registry, then connect its actual command in `UI.renderStartMenu`. Visibility should be derived from the same game-owned eligibility rules as the destination. To change a theme, edit the presentation config and stylesheet; replacing the image requires no simulation change.
 
+The landscape is a decorative `img` sourced from `FRONT_SCREEN.artwork`, with an
+empty alt, dragging disabled and no pointer interaction. CSS `object-fit: cover`
+and responsive `object-position` preserve the desktop/compact crop beneath the
+haze, vignette and motes. It does not depend on a CSS background custom property:
+the reported Firefox tab computed that background to `none` despite retaining
+the correct asset URL. Verification decodes the displayed image and checks its
+viewport coverage and crop through menu refreshes and UI-scale changes.
+
 The root's full-screen sizing is selected by its current child markup, so replacing it with Options, the roster or Exit cannot leave a stale layout mode. Save hydration refreshes only the menu proper and preserves a focused action where possible. Names and boot notices are escaped before insertion.
 
 ## Input and motion
