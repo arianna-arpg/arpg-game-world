@@ -17,7 +17,7 @@
 //      when the LAST button of a chord releases (press LMB, add RMB, release
 //      LMB → no pointerup), and a panel refresh that swaps the SVG mid-drag
 //      silently drops the capture without ending the gesture. So every
-//      pointermove re-checks `e.buttons` against the pan mask, and
+//      pointermove re-checks `e.buttons` against the initiating button, and
 //      `lostpointercapture` / `pointercancel` both end the drag. A pan can
 //      outlive its button by at most one event — it can never stick.
 // ---------------------------------------------------------------------------
@@ -67,7 +67,9 @@ export interface PanZoomHost {
   box(): { w: number; h: number };
   /** Re-apply the viewBox (and any zoom % label) after a zoom/pan change. */
   apply(): void;
-  /** pointerdown targets matching this selector never start a pan (node clicks). */
+  /** Targets with their own drag behavior (e.g. editor nodes) never start a pan.
+   *  Ordinary clickable children should participate: click vs pan is resolved
+   *  by movement, and drag-ending clicks are blocked before child handlers. */
   ignore?: string;
   /** Hover path while NOT dragging (e.g. the map's zone-hover preview). */
   onIdleMove?(e: PointerEvent): void;
@@ -75,8 +77,8 @@ export interface PanZoomHost {
   onLeave?(): void;
   /** Real clicks only — clicks that concluded a drag-pan are swallowed. */
   onClick?(e: MouseEvent): void;
-  /** Mirror of the drag state for panel-level guards (e.g. the map's
-   *  refresh-suppression flag) — guaranteed to return to false by the
+  /** Mirror of the held gesture, including its click-sized dead zone, for
+   *  panel-level refresh guards — guaranteed to return to false by the
    *  self-healing rules above. */
   onDragState?(dragging: boolean): void;
 }
@@ -89,47 +91,53 @@ export function attachPanZoom(
   host: PanZoomHost,
   cfg: PanZoomConfig = PANZOOM_DEFAULTS,
 ): void {
-  const panMask = cfg.panButtons.reduce((m, b) => m | (BUTTON_BIT[b] ?? 0), 0);
-
   svg.addEventListener('wheel', (e) => {
     e.preventDefault();
+    // A view change while pressed must not turn the release into an allocation.
+    if (pointerId !== null) { suppressClick = true; end(); }
     host.setZoom(clampZoom(host.getZoom() * (e.deltaY < 0 ? cfg.wheelFactor : 1 / cfg.wheelFactor), cfg));
     host.apply();
   }, { passive: false });
 
-  let dragging = false, moved = false, lastX = 0, lastY = 0;
+  let pointerId: number | null = null;
+  let capture: Element | null = null, heldButton = 0;
+  let moved = false, suppressClick = false, lastX = 0, lastY = 0;
   let downX = 0, downY = 0;   // pointerdown origin — the drag-threshold anchor
-  const end = (e: PointerEvent): void => {
-    if (!dragging) return;
-    dragging = false;
-    try { svg.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+  const end = (): void => {
+    if (pointerId === null) return;
+    const id = pointerId, target = capture;
+    pointerId = null; capture = null;
+    try { target?.releasePointerCapture(id); } catch { /* already released */ }
     svg.style.cursor = cfg.cursorIdle;
     host.onDragState?.(false);
   };
 
   svg.addEventListener('pointerdown', (e) => {
+    if (pointerId !== null) return; // another finger/button cannot steal a press
+    suppressClick = false;
     if (host.ignore && (e.target as Element).closest(host.ignore)) return;
     if (!cfg.panButtons.includes(e.button)) return;
     e.preventDefault(); // MMB pan must not arm the browser's autoscroll
-    dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
+    pointerId = e.pointerId; heldButton = BUTTON_BIT[e.button] ?? 0;
+    moved = false; lastX = e.clientX; lastY = e.clientY;
     downX = e.clientX; downY = e.clientY;
-    try { svg.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-    svg.style.cursor = cfg.cursorDrag;
+    // Capture the pressed child, not the SVG: Chromium targets the resulting
+    // click at the capture owner. A quiet press must still click its own node,
+    // even when nearby nodes share the generous proximity selection area.
+    capture = e.target as Element;
+    try { capture.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     host.onDragState?.(true);
   });
 
-  svg.addEventListener('pointermove', (e) => {
-    // Chord release (rule 2): the pan button is up but pointerup never came.
-    if (dragging && (e.buttons & panMask) === 0) end(e);
-    if (!dragging) { host.onIdleMove?.(e); return; }
+  const move = (e: PointerEvent): void => {
     // Dead zone: inside the threshold the gesture is still a CLICK — don't pan
     // and don't mark it moved (which would swallow the click on pointerup).
     if (!moved) {
       if (Math.hypot(e.clientX - downX, e.clientY - downY) < cfg.dragThresholdPx) {
-        lastX = e.clientX; lastY = e.clientY;
         return;
       }
-      moved = true;
+      moved = true; suppressClick = true;
+      svg.style.cursor = cfg.cursorDrag;
     }
     const rect = svg.getBoundingClientRect();
     const b = host.box(), z = host.getZoom();
@@ -140,16 +148,41 @@ export function attachPanZoom(
     );
     lastX = e.clientX; lastY = e.clientY;
     host.apply();
-  });
+  };
 
-  svg.addEventListener('pointerup', end);
-  svg.addEventListener('pointercancel', end);
-  svg.addEventListener('lostpointercapture', end); // SVG swapped/removed mid-drag
-  svg.addEventListener('pointerleave', () => { if (!dragging) host.onLeave?.(); });
+  svg.addEventListener('pointermove', (e) => {
+    if (pointerId === null) { host.onIdleMove?.(e); return; }
+    if (e.pointerId !== pointerId) return;
+    // Track the initiating button, not any allowed pan button in a chord.
+    if ((e.buttons & heldButton) === 0) { suppressClick = true; end(); return; }
+    move(e);
+  });
+  svg.addEventListener('pointerup', (e) => {
+    if (e.pointerId !== pointerId) return;
+    move(e); // a fast release can arrive beyond the last delivered move
+    end();
+  });
+  const cancel = (e: PointerEvent): void => {
+    if (e.pointerId !== pointerId) return;
+    suppressClick = true;
+    end();
+  };
+  svg.addEventListener('pointercancel', cancel);
+  svg.addEventListener('lostpointercapture', cancel); // SVG swapped/removed mid-drag
+  svg.addEventListener('pointerleave', () => { if (pointerId === null) host.onLeave?.(); });
+
+  // Capture phase is essential: a bubbling handler runs AFTER the node has
+  // already spent its point (or opened a choice/refund). Install even when the
+  // host has no background-click action. Returning to the origin stays a drag.
+  svg.addEventListener('click', (e) => {
+    if (!suppressClick) return;
+    suppressClick = false;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
 
   if (host.onClick) {
     svg.addEventListener('click', (e) => {
-      if (moved) { moved = false; return; } // a pan ends in a click — swallow it
       host.onClick!(e);
     });
   }

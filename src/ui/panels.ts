@@ -7768,10 +7768,10 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   }
 
   /** Wire the tree's zoom buttons + wheel-zoom + drag-pan onto the freshly rendered
-   *  SVG (listeners live on the re-created SVG, GC'd each refresh — no leak). A
-   *  pointerdown ON a node is let through so the allocate click still fires; drags
-   *  start only on empty space, and only on the pan buttons (LMB/MMB — never RMB,
-   *  the skill button). Gesture rules live in attachPanZoom. Mirrors wireMapControls.
+   *  SVG (listeners live on the re-created SVG, GC'd each refresh — no leak).
+   *  wireTreeControls lets play-mode nodes join the shared click/pan gesture;
+   *  only editor nodes keep their own position-drag behavior. Gesture rules
+   *  live in attachPanZoom. Mirrors wireMapControls.
    *  THE REACH rides the helper's real-click hook: a click on empty ground within
    *  reach of an allocatable node allocates it (never in the editor — its clicks
    *  select). */
@@ -7800,7 +7800,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       panBy: (dx, dy) => { this.treePan.x += dx; this.treePan.y += dy; },
       box: () => this.treeBox,
       apply,
-      ignore: '.tree-node',
+      ignore: DEV.passiveTreeEditor ? '.tree-node' : undefined,
       onClick: DEV.passiveTreeEditor ? undefined : (e) => {
         const el = this.reachNode(svg, '.tree-node', e);
         // The node's own handler does the allocating (choice deals included);
@@ -8366,7 +8366,6 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       panBy: (dx, dy) => { pane.pan.x += dx; pane.pan.y += dy; },
       box: () => pane.box,
       apply,
-      ignore: '.st-node',
       onClick: (e) => {
         // THE REACH: the same leeway the passive tree gives.
         const el = this.reachNode(svg, '.st-node', e);
