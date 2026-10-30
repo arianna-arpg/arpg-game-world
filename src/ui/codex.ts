@@ -8,11 +8,12 @@ import type { Account } from '../meta/account';
 import { codexConversion, codexEntries, codexFilter, codexSupportHosts, type CodexEntry, type CodexFilter } from '../meta/codex';
 import { skillIconSvg } from '../render/skillIcons';
 import { mountCodexPreview, type CodexPreview } from './codexPreview';
+import { mountWindowedGrid, type WindowedGrid, type GridAnchor } from './windowedGrid';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-interface PageState extends CodexFilter { page: number; selected: string | null; scroll?: number; host?: string }
-export interface CodexState { section: string; pages: Record<string, PageState>; leaves: Record<string, string> }
-export const newCodexState = (): CodexState => ({ section: CODEX_SECTIONS[0].id, pages: {}, leaves: {} });
+interface PageState extends CodexFilter { selected: string | null; scroll?: number; anchor?: GridAnchor; host?: string }
+export interface CodexState { section: string; pages: Record<string, PageState>; leaves: Record<string, string>; autoplay?: boolean }
+export const newCodexState = (): CodexState => ({ section: CODEX_SECTIONS[0].id, pages: {}, leaves: {}, autoplay: CODEX_CFG.autoplay });
 export interface CodexOptions {
   account: () => Account; back: () => void; paintPortraits: (root: HTMLElement) => void; state: CodexState; page?: string;
   shell?: { profile: SideScreenProfile; context: SideScreenContext };
@@ -34,9 +35,9 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     const section = CODEX_SECTIONS.find(s => s.pages.some(p => p.id === opts.page));
     if (section) { state.section = section.id; state.leaves[section.id] = opts.page; }
   }
-  let page = '', entries: CodexEntry[] = [], filtered: CodexEntry[] = [], visible: CodexEntry[] = [];
+  let page = '', entries: CodexEntry[] = [], filtered: CodexEntry[] = [];
   let signature = '', detailSignature = '', detailKey = '', knowledge = '', disposed = false;
-  let st: PageState, preview: CodexPreview | undefined;
+  let st: PageState, preview: CodexPreview | undefined, list: WindowedGrid<CodexEntry> | undefined;
   const q = <T extends HTMLElement = HTMLElement>(selector: string): T => root.querySelector<T>(selector)!;
   const compact = (): boolean => getComputedStyle(q('.cx-body')).display === 'block';
   const resetPreview = (): void => { preview?.dispose(); preview = undefined; };
@@ -46,15 +47,17 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     const target = root.querySelector<HTMLElement>(address);
     if (target && !target.matches(':disabled') && target.getClientRects().length) target.focus({ preventScroll: true });
   };
-  const firstCard = (): HTMLButtonElement | null => root.querySelector<HTMLButtonElement>('.cx-card[aria-pressed="true"]') ?? root.querySelector('.cx-card');
-  const listScroller = (): HTMLElement => getComputedStyle(q('.cx-list')).overflowY === 'auto' ? q('.cx-list') : q('.cx-grid');
-  const returnToResults = (): void => {
-    reading(false); listScroller().scrollTop = st.scroll ?? 0;
-    firstCard()?.focus({ preventScroll: true });
+  const rememberScroll = (): void => {
+    if (root.querySelector('.cx-grid')?.getClientRects().length && list) {
+      const saved = list.snapshot(); st.scroll = saved.top; st.anchor = saved.anchor;
+    }
   };
-  const rememberScroll = (): void => { if (root.querySelector('.cx-list')?.getClientRects().length) st.scroll = listScroller().scrollTop; };
+  const returnToResults = (): void => {
+    const position = { top: st.scroll ?? 0, anchor: st.anchor };
+    reading(false); list?.setItems(filtered, st.selected, position); list?.focus(st.selected);
+  };
   const activeFilters = (): boolean => !!(st.query.trim() || st.tags.length || st.status !== 'all');
-  const filterChanged = (): void => { st.page = 0; st.scroll = 0; reading(false); results(); updateTags(); };
+  const filterChanged = (): void => { st.scroll = 0; st.anchor = undefined; reading(false); results(); updateTags(); };
   const resetFilters = (): void => {
     st.query = ''; st.tags = []; st.status = 'all';
     q<HTMLInputElement>('[data-cx-search]').value = ''; q<HTMLSelectElement>('[data-cx-status]').value = 'all'; filterChanged();
@@ -71,7 +74,7 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     const entry = filtered[filtered.findIndex(e => e.key === st.selected) + delta];
     if (!entry) return;
     const focus = captureSideScreenFocus(root);
-    st.selected = entry.key; results(true); reading(true); q('.cx-detail').scrollTop = 0;
+    st.selected = entry.key; list?.select(entry.key); paintDetail(entry); navState(); reading(true); q('.cx-detail').scrollTop = 0;
     restoreFocus(focus);
     if (document.activeElement === document.body || (document.activeElement instanceof HTMLButtonElement && document.activeElement.disabled)) q('#cx-entry-title').focus({ preventScroll: true });
   };
@@ -101,11 +104,11 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     target.querySelector('[data-cx-results]')!.addEventListener('click', returnToResults);
     target.querySelector('[data-cx-entry-prev]')!.addEventListener('click', () => stepEntry(-1));
     target.querySelector('[data-cx-entry-next]')!.addEventListener('click', () => stepEntry(1));
-    target.querySelectorAll<HTMLElement>('[data-cx-filter]').forEach(button => button.addEventListener('click', () => { addTag(button.dataset.cxFilter!); firstCard()?.focus({ preventScroll: true }); }));
+    target.querySelectorAll<HTMLElement>('[data-cx-filter]').forEach(button => button.addEventListener('click', () => { addTag(button.dataset.cxFilter!); list?.focus(st.selected); }));
     const seat = target.querySelector<HTMLElement>('.cx-preview');
     if (seat) {
       if (savedPreview) seat.replaceWith(savedPreview);
-      else preview = mountCodexPreview(seat, e, e.source?.kind === 'support' ? codexSupportHosts(opts.account(), e.source.id) : [], st.host ?? '', id => { st.host = id; });
+      else preview = mountCodexPreview(seat, e, e.source?.kind === 'support' ? codexSupportHosts(opts.account(), e.source.id) : [], st.host ?? '', id => { st.host = id; }, { autoplay: state.autoplay ?? CODEX_CFG.autoplay, changed: value => { state.autoplay = value; } });
     } else resetPreview();
     if (e.conversion) {
       const convert = (): void => {
@@ -120,42 +123,26 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     opts.paintPortraits(target); navState(); target.scrollTop = sameEntry ? scroll : 0; restoreFocus(focus);
   };
   const selectEntry = (key: string, open: boolean): void => {
-    const entry = visible.find(e => e.key === key); if (!entry) return;
-    st.selected = key;
-    root.querySelectorAll<HTMLElement>('[data-cx-entry]').forEach(card => {
-      const selected = card.dataset.cxEntry === key; card.setAttribute('aria-pressed', String(selected)); card.tabIndex = selected ? 0 : -1;
-    });
-    paintDetail(entry); navState();
+    const entry = filtered.find(e => e.key === key); if (!entry) return;
+    st.selected = key; list?.select(key); paintDetail(entry); navState();
     if (open && compact()) { rememberScroll(); reading(true); q('.cx-detail').scrollTop = 0; q('#cx-entry-title').focus({ preventScroll: true }); q('#cx-entry-title').scrollIntoView({ block: 'nearest' }); }
   };
-  const pageTurn = (delta: number): void => {
-    st.page += delta; st.selected = null; st.scroll = 0; reading(false); results(); firstCard()?.focus({ preventScroll: true });
-  };
-  const results = (keepSelected = false): void => {
+  const results = (): void => {
     const focus = captureSideScreenFocus(root);
     filtered = codexFilter(entries, st);
-    const pages = Math.max(1, Math.ceil(filtered.length / CODEX_CFG.pageSize));
-    const index = filtered.findIndex(e => e.key === st.selected);
-    if (keepSelected && index >= 0) st.page = Math.floor(index / CODEX_CFG.pageSize);
-    st.page = Math.max(0, Math.min(st.page, pages - 1));
-    visible = filtered.slice(st.page * CODEX_CFG.pageSize, (st.page + 1) * CODEX_CFG.pageSize);
-    if (!visible.some(e => e.key === st.selected)) st.selected = visible[0]?.key ?? null;
+    if (!filtered.some(e => e.key === st.selected)) st.selected = filtered[0]?.key ?? null;
     const known = entries.filter(e => !e.locked).length;
     q('.cx-count').textContent = `${known} discovered · ${entries.length} entries${activeFilters() ? ` · ${filtered.length} ${filtered.length === 1 ? 'match' : 'matches'}` : ''}`;
-    q('.cx-list-meta').textContent = filtered.length ? `${st.page * CODEX_CFG.pageSize + 1}–${Math.min((st.page + 1) * CODEX_CFG.pageSize, filtered.length)} of ${filtered.length} entries` : 'No matching entries';
+    q('.cx-list-meta').textContent = filtered.length ? `${filtered.length} ${filtered.length === 1 ? 'entry' : 'entries'} · Scroll to explore` : 'No matching entries';
     q('.cx-tags').innerHTML = st.tags.map((tag, index) => `<button data-cx-remove="${index}" aria-label="Remove ${esc(tag)} filter">${esc(tag)} <span aria-hidden="true">×</span></button>`).join('');
     q<HTMLButtonElement>('[data-cx-clear-query]').disabled = !st.query;
-    q<HTMLButtonElement>('[data-cx-clear]').disabled = !activeFilters() && st.page === 0;
-    q('.cx-grid').innerHTML = visible.length ? visible.map(e => `<button class="cx-card${e.locked ? ' cx-locked' : ''}" data-cx-entry="${esc(e.key)}" aria-pressed="${e.key === st.selected}" tabindex="${e.key === st.selected ? 0 : -1}">
-      ${icon(e)}<span><b class="${e.locked ? 'runescript' : ''}">${esc(e.title)}</b><small>${esc(e.state)}</small></span></button>`).join('')
-      : `<div class="cx-empty"><span aria-hidden="true">◇</span><h3>${activeFilters() ? 'No known entries match' : 'An unwritten page'}</h3><p>${esc(activeFilters() ? 'Try fewer words or remove a filter. Locked names and tags stay veiled while searching.' : CODEX_SECTIONS.flatMap(s => s.pages).find(p => p.id === page)?.empty ?? 'Discover more through play to fill this part of the Codex.')}</p>${activeFilters() ? '<button data-cx-reset>Clear filters</button>' : ''}</div>`;
-    q('.cx-pager').innerHTML = `<button data-cx-prev ${st.page <= 0 ? 'disabled' : ''} aria-label="Previous results page">Previous</button><span>Page ${st.page + 1} of ${pages}</span><button data-cx-next ${st.page >= pages - 1 ? 'disabled' : ''} aria-label="Next results page">Next</button>`;
-    root.querySelectorAll<HTMLElement>('[data-cx-entry]').forEach(card => card.addEventListener('click', () => selectEntry(card.dataset.cxEntry!, true)));
-    q('[data-cx-prev]').addEventListener('click', () => pageTurn(-1)); q('[data-cx-next]').addEventListener('click', () => pageTurn(1));
+    q<HTMLButtonElement>('[data-cx-clear]').disabled = !activeFilters();
+    const empty = q('.cx-list-empty'); empty.hidden = filtered.length > 0; q('.cx-grid').hidden = !filtered.length;
+    empty.innerHTML = filtered.length ? '' : `<div class="cx-empty"><span aria-hidden="true">◇</span><h3>${activeFilters() ? 'No known entries match' : 'An unwritten page'}</h3><p>${esc(activeFilters() ? 'Try fewer words or remove a filter. Locked names and tags stay veiled while searching.' : CODEX_SECTIONS.flatMap(s => s.pages).find(p => p.id === page)?.empty ?? 'Discover more through play to fill this part of the Codex.')}</p>${activeFilters() ? '<button data-cx-reset>Clear filters</button>' : ''}</div>`;
     root.querySelector('[data-cx-reset]')?.addEventListener('click', resetFilters);
     root.querySelectorAll<HTMLElement>('[data-cx-remove]').forEach(button => button.addEventListener('click', () => { st.tags.splice(Number(button.dataset.cxRemove), 1); filterChanged(); }));
-    listScroller().scrollTop = st.scroll ?? 0;
-    opts.paintPortraits(q('.cx-grid')); paintDetail(visible.find(e => e.key === st.selected)); navState(); restoreFocus(focus);
+    list?.setItems(filtered, st.selected, { top: st.scroll ?? 0, anchor: st.anchor });
+    paintDetail(filtered.find(e => e.key === st.selected)); navState(); restoreFocus(focus);
   };
   const updateTags = (): void => {
     const counts = new Map<string, number>();
@@ -166,10 +153,10 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     if (select.innerHTML !== html) select.innerHTML = html;
   };
   const draw = (): void => {
-    const focus = captureSideScreenFocus(root); resetPreview(); detailSignature = ''; detailKey = '';
+    const focus = captureSideScreenFocus(root); list?.dispose(); list = undefined; resetPreview(); detailSignature = ''; detailKey = '';
     const section = CODEX_SECTIONS.find(s => s.id === state.section) ?? CODEX_SECTIONS[0];
     const leaf = section.pages.find(p => p.id === state.leaves[section.id]) ?? section.pages[0]; page = leaf.id;
-    st = state.pages[page] ??= { query: '', tags: [], status: 'all', page: 0, selected: null, scroll: 0 };
+    st = state.pages[page] ??= { query: '', tags: [], status: 'all', selected: null, scroll: 0 };
     entries = codexEntries(opts.account(), page); signature = JSON.stringify(entries);
     const markup = `<div class="cx-head"><header><h1>Codex</h1><p>${esc(leaf.description ?? 'Knowledge that endures across your lives.')}</p></header>
       <nav aria-label="Codex sections" class="cx-sections">${CODEX_SECTIONS.map(s => `<button data-cx-section="${s.id}" aria-current="${section.id === s.id}" tabindex="${section.id === s.id ? 0 : -1}">${esc(s.label)}</button>`).join('')}</nav>
@@ -177,7 +164,7 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
       <div class="cx-tools"><div class="cx-search"><input type="search" data-cx-search aria-label="Search known ${esc(leaf.label.toLocaleLowerCase())}" placeholder="Search names, tags and details…" value="${esc(st.query)}" autocomplete="off" spellcheck="false"><button data-cx-clear-query aria-label="Clear search" title="Clear search">×</button></div>
         <select data-cx-tag aria-label="Add tag filter"></select><select data-cx-status aria-label="Discovery filter"><option value="all">All entries</option><option value="known">Known only</option><option value="locked">Locked only</option></select><button data-cx-clear>Clear filters</button></div>
       <div class="cx-search-summary"><div class="cx-tags"></div><div class="cx-count" role="status" aria-live="polite" aria-atomic="true"></div></div></div>
-      <div class="cx-body"><div class="cx-list"><div class="cx-list-meta"></div><div class="cx-grid" role="group" aria-label="${esc(leaf.label)} entries"></div><div class="cx-pager"></div></div><article class="cx-detail" aria-label="Selected entry"></article></div>
+      <div class="cx-body"><div class="cx-list"><div class="cx-list-meta"></div><div class="cx-grid" role="group" aria-label="${esc(leaf.label)} entries"></div><div class="cx-list-empty" hidden></div></div><article class="cx-detail" aria-label="Selected entry"></article></div>
       <footer class="cx-foot"><span class="cx-help"><kbd>/</kbd> Search <span>·</span> <kbd>↑</kbd><kbd>↓</kbd> Browse <span>·</span> <kbd>Esc</kbd> Back</span><button data-cx-back>Back</button><button data-cx-results-footer>Results</button></footer>`;
     const existing = root.querySelector<HTMLElement>('.codex');
     if (existing) existing.innerHTML = markup;
@@ -193,13 +180,28 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     const status = q<HTMLSelectElement>('[data-cx-status]'); status.value = st.status;
     status.addEventListener('change', () => { st.status = status.value as CodexFilter['status']; filterChanged(); });
     q('[data-cx-clear]').addEventListener('click', resetFilters);
-    for (const selector of ['.cx-grid', '.cx-list']) q(selector).addEventListener('scroll', rememberScroll);
-    updateTags(); results();
     if (opts.shell) {
       if (root.querySelector(':scope > .side-screen')) refreshSideScreen(root, opts.shell.profile, focus);
       else mountSideScreen(root, opts.shell.profile, opts.shell.context, focus);
     }
-    restoreFocus(focus);
+    list = mountWindowedGrid(q('.cx-grid'), {
+      ...CODEX_CFG.list,
+      signature: entry => JSON.stringify(entry),
+      render: entry => {
+        const card = document.createElement('button');
+        card.className = `cx-card${entry.locked ? ' cx-locked' : ''}`; card.dataset.cxEntry = entry.key;
+        card.innerHTML = `${icon(entry)}<span><b class="${entry.locked ? 'runescript' : ''}">${esc(entry.title)}</b><small>${esc(entry.state)}</small></span>`;
+        return card;
+      },
+      selected: (card, selected, tabStop) => { card.setAttribute('aria-pressed', String(selected)); card.tabIndex = tabStop ? 0 : -1; },
+      paint: opts.paintPortraits,
+      scrolled: (top, anchor) => { st.scroll = top; st.anchor = anchor; },
+    });
+    q('.cx-grid').addEventListener('click', event => {
+      const card = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-cx-entry]') : null;
+      if (card) selectEntry(card.dataset.cxEntry!, true);
+    });
+    updateTags(); results(); restoreFocus(focus);
   };
   const onKey = (event: KeyboardEvent): void => {
     if (disposed || root.classList.contains('hidden') || !root.querySelector('.codex')) return;
@@ -208,7 +210,7 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
     const consume = (): void => { event.preventDefault(); event.stopImmediatePropagation(); };
     if ((event.key === '/' && !editing && !event.ctrlKey && !event.metaKey && !event.altKey)
       || (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey))) {
-      consume(); reading(false); q<HTMLInputElement>('[data-cx-search]').focus(); q<HTMLInputElement>('[data-cx-search]').select(); return;
+      consume(); returnToResults(); q<HTMLInputElement>('[data-cx-search]').focus(); q<HTMLInputElement>('[data-cx-search]').select(); return;
     }
     if (event.key === 'Escape') {
       consume(); if (event.repeat) return;
@@ -218,7 +220,7 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
       return;
     }
     if (target.matches('[data-cx-search]') && (event.key === 'ArrowDown' || event.key === 'Enter')) {
-      consume(); firstCard()?.focus(); if (event.key === 'Enter') firstCard()?.click(); return;
+      consume(); list?.focus(st.selected); if (event.key === 'Enter' && document.activeElement instanceof HTMLButtonElement) document.activeElement.click(); return;
     }
     if (!root.contains(target) || editing) return;
     const tab = target.closest<HTMLElement>('[data-cx-section],[data-cx-page]');
@@ -229,23 +231,20 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
       requestAnimationFrame(() => { root.querySelector('nav button:focus')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }); return;
     }
     const card = target.closest<HTMLButtonElement>('.cx-card');
-    if (!card) return;
-    if ((event.key === 'PageDown' && (st.page + 1) * CODEX_CFG.pageSize < filtered.length) || (event.key === 'PageUp' && st.page > 0)) {
-      consume(); pageTurn(event.key === 'PageDown' ? 1 : -1); return;
-    }
-    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    if ((!card && !target.matches('.cx-grid')) || !filtered.length || !list) return;
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) return;
     consume();
-    const cards = [...root.querySelectorAll<HTMLButtonElement>('.cx-card')], index = cards.indexOf(card);
-    const columns = getComputedStyle(q('.cx-grid')).gridTemplateColumns.split(' ').length;
-    const shift = event.key === 'ArrowDown' ? columns : event.key === 'ArrowUp' ? -columns : event.key === 'ArrowRight' ? 1 : -1;
-    const next = event.key === 'Home' ? 0 : event.key === 'End' ? cards.length - 1 : Math.max(0, Math.min(cards.length - 1, index + shift));
-    selectEntry(cards[next].dataset.cxEntry!, false); cards[next].focus();
+    const index = card ? filtered.findIndex(e => e.key === card.dataset.cxEntry) : list.firstVisible;
+    const shift = event.key === 'PageDown' ? list.pageStep : event.key === 'PageUp' ? -list.pageStep
+      : event.key === 'ArrowDown' ? list.columns : event.key === 'ArrowUp' ? -list.columns : event.key === 'ArrowRight' ? 1 : -1;
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? filtered.length - 1 : Math.max(0, Math.min(filtered.length - 1, index + shift));
+    selectEntry(filtered[next].key, false); list.focus(filtered[next].key);
   };
   window.addEventListener('keydown', onKey, true); draw();
   const timer = window.setInterval(() => {
     if (disposed || root.classList.contains('hidden') || !root.querySelector('.codex')) return;
     const account = opts.account(), next = codexEntries(account, page), sig = JSON.stringify(next);
-    if (sig !== signature) { entries = next; signature = sig; results(true); updateTags(); }
+    if (sig !== signature) { entries = next; signature = sig; results(); updateTags(); }
     const nextKnowledge = [...account.unlockedSkills, ...account.features].join('|');
     if (nextKnowledge !== knowledge) {
       knowledge = nextKnowledge;
@@ -253,5 +252,5 @@ export function renderCodex(root: HTMLElement, opts: CodexOptions): () => void {
       if (selected?.source?.kind === 'support') preview?.updateHosts(codexSupportHosts(account, selected.source.id));
     }
   }, CODEX_CFG.refreshMs);
-  return () => { disposed = true; clearInterval(timer); window.removeEventListener('keydown', onKey, true); resetPreview(); root.querySelector('.codex')?.remove(); };
+  return () => { rememberScroll(); list?.dispose(); disposed = true; clearInterval(timer); window.removeEventListener('keydown', onKey, true); resetPreview(); root.querySelector('.codex')?.remove(); };
 }

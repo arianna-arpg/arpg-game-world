@@ -9,12 +9,12 @@ in the Vault.
 
 ## Sources and extension
 
-- `src/data/codex.ts`: section/page registry and reading dials (pagination,
+- `src/data/codex.ts`: section/page registry and reading dials (list geometry, overscan, autoplay,
   refresh cadence, encounter cadence and optional non-dropping player skills).
 - `src/meta/codex.ts`: read-only providers, discovery projection, filtering,
   compatibility and the conversion example. A new page adds a provider and a
   section/page row; the reader has no hardcoded list of sections.
-- `src/ui/codex.ts`: shared reader, icon tiles, portraits, filters, pagination,
+- `src/ui/codex.ts`: shared reader, icon tiles, portraits, filters, continuous browsing,
   detail, demonstrations and cleanup. `UI.codexView` mounts it into existing
   menu surfaces and owns its lifetime.
 - `src/engine/codexSightings.ts`: account-owned encounter observations through
@@ -74,15 +74,19 @@ isolated stat sheet. Its argument now expresses the existing sheet-only
 dependency; combat arithmetic is unchanged. Registry values update without a
 second manual copy; explanatory prose remains owned by the shared definitions.
 
-Play starts an optional live skill showcase through the existing sandboxed
-engine. Support pages offer only discovered base skills accepted by the real
+Selecting a discovered skill automatically starts its live showcase when the
+preview becomes visible. It uses the existing isolated engine and a fresh
+level-one baseline vessel, including the skill's native equipment/setup needs.
+It never copies the current character's build. Autoplay can be disabled for
+the UI session; Play/Stop, Restart, and clicking the preview remain available. Support pages offer only discovered base skills accepted by
+the real
 instance socket gate, and identify that modified builds can admit further
 combinations. Explicit showcase skips do not offer a broken player. Only one
 selected demonstration is mounted; switching pages, stopping or leaving
 removes it. The existing showcase shield still prevents account/save access.
 
-The reader remembers filters, page and selection per leaf for the UI session.
-A changed account refreshes the current page at the configured cadence, without
+The reader remembers filters, scroll anchor and selection per leaf for the
+UI session. A changed account refreshes the current page at the configured cadence, without
 rebuilding idle input controls. Back/Escape returns to the opening surface.
 In-game access uses the existing menu hold and input blocking; shared worlds
 and timed harvests retain their pause policy. Parent close, run start, death
@@ -117,33 +121,50 @@ are normalized. Exact names rank first, then name prefixes, then other name
 matches, then descriptive matches. New queries select the top result. Locked
 rows never enter the search index, including rune and punctuation-only queries.
 Tag chips combine with AND and can be removed individually. Clear search keeps
-other filters; Clear filters resets the leaf's filters and results page.
+other filters; Clear filters resets the leaf's filters and scroll position.
 
-Each leaf remembers its filters, results page, selected entry and scroll for
+Each leaf remembers its filters, selected entry and keyed scroll anchor for
 the UI session. Arrow keys navigate section/page ribbons and the result grid;
-Home/End reach their ends and Page Up/Down turn result pages. `/` or Ctrl/Cmd+F
-focuses search. Down moves from search to its result; Enter opens that entry.
-Previous/next entry controls cross result pages without losing the reader.
+Home/End reach their ends and Page Up/Down move by the visible grid height.
+`/` or Ctrl/Cmd+F focuses search. Down moves from search to its result; Enter opens that entry.
+Previous/next entry controls traverse all filtered results without losing
+the reader.
 Escape clears a focused query first, then returns a compact reader to results,
 then returns to the opening surface.
 
 On narrow panes, opening an entry gives it the full reading area. Results and
 Escape restore the list position and selected card; the search shortcut reopens
-the browse controls. Back stays in the fixed footer. Short panes let the entire
-results column scroll so paging cannot squeeze the cards out of view. Layout
+the browse controls. Back stays in the fixed footer. Short panes reserve space
+for the scrolling cards and omit the redundant list caption. Layout
 uses the shared palette and UI scale, with reduced-motion and forced-color
 fallbacks. `codexShell.css` is loaded by the browser entry point, never a
 headless model/reader import.
 
-`ui/codexPreview.ts` owns the selected entry's demonstration controls. Explicit
-Play, Stop and Restart reuse the shared showcase engine; readiness, unavailable
+`ui/windowedGrid.ts` supplies a reusable continuous fixed-row grid. It mounts
+only visible rows plus `CODEX_CFG.list.overscanRows` above and below, reuses
+overlapping cards, and paints portraits only for fresh nodes. Scroll and resize
+work is coalesced into animation frames; no remote loading or catalog growth is
+required. Keyed anchors survive tab returns, resizing and account refreshes.
+An offscreen focused card is retained until focus moves; Home/End can jump
+across the full catalog without rendering intervening entries. List dimensions
+are configurable; multi-line tile names are clamped while the reader shows
+the full title. Filtering always searches the complete public entry model.
+
+`ui/codexPreview.ts` owns the selected entry's demonstration controls. Visible
+selection autoplay, Play, Stop and Restart reuse the shared showcase engine;
+readiness, unavailable
 and delayed messages use its public signals and `CODEX_CFG.previewWaitMs`.
 Retry replaces only the player. A late frame can still recover a delayed
 preview. Compatible support hosts are sorted by name and remembered per leaf;
 Include support switches the same base skill between supported and unsupported
 play. Changing filters or refreshing account facts keeps a still-selected
 player and its controls, while newly discovered hosts update the existing
-selector. Leaving the entry removes observers, wait timers and media.
+selector. A visibility observer defers autoplay until the reader is visible;
+the shared host pauses hidden previews and retains one isolated engine.
+Stopping does not restart merely because the stage comes back into view.
+The Autoplay checkbox is remembered across entries during the UI session,
+independently of the Vault Memory preference. Leaving the entry removes
+observers, wait timers and media.
 
 After a build, `npx electron balance/codex-polish-ui.cjs` checks the actual
 keyboard routes, normalized search, retained playback, base/support comparison,
@@ -151,3 +172,10 @@ restart/retry, live edits, compact reading and scroll restoration at several
 viewport/UI-scale combinations. Its screenshots are in the ignored
 `balance/reports/codex-polish/` directory. Also run the shared shell acceptance
 (`balance/front-screen-ui.cjs`) when changing the Codex's shell decoration.
+
+`npx electron balance/codex-scroll-ui.cjs` uses real Chromium pointer/wheel/key
+events with no desktop preload. It checks actual moving frames and skill casts
+without pressing Play, direct preview controls, autoplay preferences, bounded
+card counts across the full catalog, keyboard jumps, retained anchors and
+compact visibility/cleanup. Reports use disposable profiles and saves, with
+screenshots in ignored `balance/reports/codex-scroll/`.

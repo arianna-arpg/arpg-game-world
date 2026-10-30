@@ -7,9 +7,10 @@ download and no installer growth, and it works offline.
 
 Where showcases appear is deliberately **not** this system's decision. A
 surface asks for one; the showcase does the rest. The player
-[Codex](../ui/codex.md) offers explicit Play/Stop controls on discovered
-skills and compatible support examples, plus Restart and a same-skill support
-comparison. Its controls follow the shared readiness signals and preserve the
+[Codex](../ui/codex.md) autoplays the selected discovered skill or compatible
+support example when its preview is visible, using a fresh baseline vessel.
+It also offers Play/Stop (including clicking the stage), Restart, a session
+Autoplay checkbox and a same-skill support comparison. Its controls follow the shared readiness signals and preserve the
 player across matching searches and account refreshes. The bag gem tooltip
 (`gemItemTooltip` in `src/ui/panels.ts`) and Vault Memory result screen
 (`src/ui/memoryReveal.ts`) also use `skillShowcaseMarkup`. The Vault supports

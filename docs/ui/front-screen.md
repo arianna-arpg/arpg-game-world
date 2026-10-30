@@ -70,7 +70,7 @@ The completed Codex from main uses the same frame through the optional
 `CodexOptions.shell` presentation contract. Its profile in
 `sideScreenConfig.ts` controls accent, width, chapter, caption and region
 selectors; `codexShell.css` styles the reader with the shared shell palette. The
-reader retains its data registry, discovery providers, filters, pagination,
+reader retains its data registry, discovery providers, filters, continuous windowed browsing,
 portraits and live demonstrations.
 
 `UI.codexView` captures the opening context before replacing any markup.
@@ -79,7 +79,7 @@ explicitly uses world context and the existing input/pause policy.
 Codex tab changes refresh regions within the existing shell and restore surviving
 keyboard focus without replaying the entrance animation. The header can scroll
 independently; narrow panes switch between results and a full reading view,
-and short panes keep cards and paging scrollable. Back remains in the fixed footer.
+and short panes reserve room for the scrolling card window. Back remains in the fixed footer.
 The shared atmosphere preference and reduced motion apply.
 
 Vault → Codex · Owned → Back/Escape returns to the original Vault render
