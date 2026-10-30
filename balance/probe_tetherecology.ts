@@ -61,6 +61,19 @@ for (let i=0;i<600;i++) {
   w.update(1/60);
   for (const a of hounds) assert.ok(movementTetherDistance(a.movementTether!,a.pos)<=235.001);
 }
+// The southern draw tests the hounds' leash, outside the keeper's whip reach.
+// Test his attack with a target in range, independently of his chase cadence.
+const lash=master.skills.find(s=>s?.def.id==='hellfire_lash')!;
+assert.equal(lash.def.delivery.type,'melee');
+if (lash.def.delivery.type==='melee') {
+  casts.delete('hellfire_lash');
+  w.player.pos={x:master.pos.x,y:master.pos.y+lash.def.delivery.range*0.5};
+  for (let i=0;i<360 && !casts.has('hellfire_lash');i++) {
+    for (const a of [master,...hounds]) updateAI(a,w,1/60);
+    w.update(1/60);
+    for (const a of hounds) assert.ok(movementTetherDistance(a.movementTether!,a.pos)<=235.001);
+  }
+}
 for (let i=0;i<hounds.length;i++) assert.deepEqual(hounds[i].movementTether!.point,roots[i]);
 setSimTap(null);
 assert.ok(casts.has('rallying_howl'), 'Houndmaster never rallies his crew');
