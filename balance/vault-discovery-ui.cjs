@@ -11,7 +11,7 @@ app.whenReady().then(async () => {
   const js = source => win.webContents.executeJavaScript(source);
   const open = async () => { await js(`__game.ui.showAccountScreen(); void 0`); await wait(200); };
   // Discovery cards are tested after the first real death reveals the Vault.
-  const reload = async () => { await win.loadURL(server.url); await wait(800); await js(`__game.account().ledger.account_deaths ||= 1; void 0`); await open(); };
+  const reload = async () => { await win.loadURL(server.url); await js("Object.defineProperty(navigator, 'getGamepads', { value: () => [] });"); await wait(800); await js(`__game.account().ledger.account_deaths ||= 1; void 0`); await open(); };
   try {
     await reload();
     const fresh = await js(`(() => {
@@ -69,8 +69,8 @@ app.whenReady().then(async () => {
     })()`);
     assert(!clicked.pending && clicked.reward && clicked.credits===0 && !clicked.button, 'click acknowledges freely and retains the gameplay reward');
     assert(await js(`!!document.querySelector('[data-invest="slot_tier_4"]')`), 'Vault activation makes a fourth slot useful and purchasable');
-    await js(`document.querySelector('[data-vtab="owned"]').click(); void 0`);
-    assert(await js(`document.querySelector('[data-unlock-id="class_sorcerer"]')?.textContent.includes('Owned')`), 'acknowledged card moves to Owned');
+    await js(`document.querySelector('#acct-codex').click(); const q=document.querySelector('[data-cx-search]');q.value='Sorcerer';q.dispatchEvent(new Event('input',{bubbles:true})); void 0`);
+    assert(await js(`[...document.querySelectorAll('.cx-card')].some(c=>c.textContent.includes('Sorcerer')&&c.textContent.includes('Owned'))`), 'acknowledged card moves to Codex Owned');
     await reload();
     assert(await js(`!__game.account().pendingClassUnlocks.has('sorcerer') && __game.account().unlockedClasses.has('sorcerer')`), 'acknowledgement survives reload');
     assert(await js(`(() => {

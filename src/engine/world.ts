@@ -4,6 +4,7 @@ import { summonSchoolSkill } from './skills';
 import { SummonArts } from './summonArts';
 import { DEVICE_CFG, DeviceContacts, deviceContactEligible, groundDeviceState } from './groundDevices';
 import { resolveStrikeTiming, rollStrikeMarker, strikeTimingsOf } from './strikeTiming';
+import { CodexSightings } from './codexSightings';
 import { syncAltarBodies } from './altarBodies';
 import { SkillInputOrder } from './skillInputOrder';
 import { markBodyAction } from './bodyAction';
@@ -49275,6 +49276,8 @@ export class World {
 
   // --------------------------------------------------------------- update ---
 
+  private readonly codexSightings = new CodexSightings();
+
   update(dt: number): void {
     if (this.gameOver) {
       // Continue the visual aftermath on raw seconds, even under a stale menu
@@ -49323,6 +49326,7 @@ export class World {
     this.updateHarvest(rawDt, dt);
     if (dt <= 0) return;
     this.time += dt;
+    this.codexSightings.update(this, dt);
     for (const a of this.actors) if (!a.dead) ensureMovementTether(a);
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
     // moveActor directly), so spatial queries from here read current bodies.

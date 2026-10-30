@@ -6,11 +6,13 @@ It always matches the current build (nothing is recorded), it needs no
 download and no installer growth, and it works offline.
 
 Where showcases appear is deliberately **not** this system's decision. A
-surface asks for one; the showcase does the rest. The bag gem tooltip
+surface asks for one; the showcase does the rest. The player
+[Codex](../ui/codex.md) offers explicit Play/Stop controls on discovered
+skills and compatible support examples. The bag gem tooltip
 (`gemItemTooltip` in `src/ui/panels.ts`) and Vault Memory result screen
-(`src/ui/memoryReveal.ts`) use `skillShowcaseMarkup`. The Vault supports saved
-autoplay, pause and explicit Play under reduced motion. Adding another surface
-is a matter of emitting the element there.
+(`src/ui/memoryReveal.ts`) also use `skillShowcaseMarkup`. The Vault supports
+saved autoplay, pause and explicit Play under reduced motion. Adding another
+surface is a matter of emitting the element there.
 
 The same stages also film the website's skill clips
 (`scripts/capture-skill-clips.cjs`, see `docs/design/site-cinema.md`), so
