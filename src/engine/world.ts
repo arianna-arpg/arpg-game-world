@@ -7,6 +7,7 @@ import { DEVICE_CFG, DeviceContacts, deviceContactEligible, groundDeviceState } 
 import { resolveStrikeTiming, rollStrikeMarker, strikeTimingsOf } from './strikeTiming';
 import { CodexSightings } from './codexSightings';
 import { syncAltarBodies } from './altarBodies';
+import { DamageTextBursts, type DamageTextSummary } from '../world/damageText';
 import { SkillInputOrder } from './skillInputOrder';
 import { markBodyAction } from './bodyAction';
 import { markBodyWalk } from './bodyWalk';
@@ -1553,6 +1554,7 @@ interface FloatingText {
    *  gates the draw per-kind off the player's own Settings.floatKinds.
    *  Absent = unkinded, always drawn (story beats need no enrollment). */
   kind?: string;
+  damage?: DamageTextSummary;
 }
 
 /** THE DISSOLUTION GRAMMAR's live break record (World.dissolves — the flash
@@ -2964,6 +2966,7 @@ export class World {
    *  the social folds; the reads it feeds are all cadenced gauges. */
   private packNextAt = 0;
   texts: FloatingText[] = [];
+  private damageTextBursts = new DamageTextBursts();
   /** THE NOTICE FEED (world/bulletins.ts): world news as a screen-anchored
    *  stack — the bulletin pump lands lines here; the renderer draws them at
    *  the player's anchor, filtered by their channel mutes. */
@@ -6053,6 +6056,7 @@ export class World {
     this.movementFlashes = new WeakMap();
     this.tethers = [];
     this.texts = [];
+    this.damageTextBursts.clear();
     this.flashes = [];
     for (const a of this.actors) {
       a.procCuePulses.length = 0; a.procPopEvents.length = 0;
@@ -17108,7 +17112,7 @@ export class World {
     victim.life -= taken;
     victim.hitFlash = 0.15;
     victim.hitFlashType = 'physical';
-    this.text(victim.pos, Math.round(taken).toString(), '#6ac860', 12);
+    this.damageText(victim, taken, '#6ac860', 12);
     this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.7, color: '#6ac860', life: 0.22, maxLife: 0.22 });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
   }
@@ -17149,7 +17153,7 @@ export class World {
     victim.hitFlash = 0.15;
     victim.hitFlashType = 'chaos';
     this.pushActor(victim, angleTo(d.pos, victim.pos), 60);
-    this.text(victim.pos, Math.round(taken).toString(), '#7fce6a', 13);
+    this.damageText(victim, taken, '#7fce6a', 13);
     this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.8, color: '#7fce6a', life: 0.3, maxLife: 0.3 });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
   }
@@ -17178,7 +17182,7 @@ export class World {
     victim.life -= taken;
     victim.hitFlash = 0.15;
     victim.hitFlashType = 'physical';
-    this.text(vec(victim.pos.x, victim.pos.y - 14), Math.round(taken).toString(), '#b46a8a', 13);
+    this.damageText(victim, taken, '#b46a8a', 13, undefined, vec(victim.pos.x, victim.pos.y - 14));
     this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius * 1.3, color: '#b46a8a', life: 0.3, maxLife: 0.3 });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
   }
@@ -17193,7 +17197,7 @@ export class World {
     victim.life -= taken;
     victim.hitFlash = 0.15;
     victim.hitFlashType = 'chaos';
-    this.text(vec(victim.pos.x, victim.pos.y - 14), Math.round(taken).toString(), '#a06ad8', 12);
+    this.damageText(victim, taken, '#a06ad8', 12, undefined, vec(victim.pos.x, victim.pos.y - 14));
     this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.85, color: '#a06ad8', life: 0.3, maxLife: 0.3 });
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
   }
@@ -17223,7 +17227,7 @@ export class World {
       a.life -= taken;
       a.hitFlash = 0.15;
       a.hitFlashType = element;
-      this.text(vec(a.pos.x, a.pos.y - 14), Math.round(taken).toString(), col, 12);
+      this.damageText(a, taken, col, 12, undefined, vec(a.pos.x, a.pos.y - 14));
       if (a.life <= 0 && !a.dead) this.kill(a);
     }
   }
@@ -31117,7 +31121,7 @@ export class World {
     this.recordIndirectDamage(target, caster, before);
     SIM_TAP.current?.onDot?.(target, taken, 'physical');
     target.hitFlash = 0.15; target.hitFlashType = 'physical';
-    this.text(target.pos, String(Math.round(taken)), '#bc4540', 14, 'combat');
+    this.damageText(target, taken, '#bc4540', 14, 'combat');
     this.flashes.push({ pos: { ...target.pos }, radius: target.radius + 18, color: '#c6453b', life: 0.25, maxLife: 0.25 });
     if (target.life <= 0 && !target.dead) this.kill(target, false, caster);
   }
@@ -32936,7 +32940,7 @@ export class World {
     if (credit) this.assaults.pooledHit(credit, v, taken, amounts);
     v.hitFlash = 0.15;
     v.hitFlashType = domType;
-    if (taken > 0.5) this.text(v.pos, Math.round(taken).toString(), DAMAGE_COLOR[domType], 11);
+    if (taken > 0.5) this.damageText(v, taken, DAMAGE_COLOR[domType], 11);
     if (v.life <= 0 && !v.dead) {
       // Pooled companions carry their keeper as kill credit, not an Actor body.
       this.kill(v, false, credit);
@@ -33655,7 +33659,7 @@ export class World {
               v.hitFlash = 0.12;
               v.hitFlashType = type;
               if (taken >= 1) {
-                this.text(v.pos, Math.round(taken).toString(), DAMAGE_COLOR[type], 11);
+                this.damageText(v, taken, DAMAGE_COLOR[type], 11);
               }
               if (v.life <= 0 && !v.dead) this.kill(v, false, a);
             }
@@ -33798,7 +33802,7 @@ export class World {
           a.life -= taken;
           a.hitFlash = 0.15;
           a.hitFlashType = 'physical';
-          this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 13);
+          this.damageText(a, taken, DAMAGE_COLOR.physical, 13);
           if (a.life <= 0 && !a.dead) this.kill(a, false, v);
         }
         this.grabRelease(a);
@@ -38371,7 +38375,7 @@ export class World {
               e.life -= taken;
               e.hitFlash = 0.12;
               e.hitFlashType = s.ruptureType ?? 'physical';
-              this.text(e.pos, Math.round(taken).toString(), STATUS_DEFS[s.id]?.color ?? '#c8ccd8', 12);
+              this.damageText(e, taken, STATUS_DEFS[s.id]?.color ?? '#c8ccd8', 12);
               if (e.life <= 0 && !e.dead) this.kill(e, false, caster);
             }
             // The spear itself carries the bank share homeward. Native recalls
@@ -41825,7 +41829,7 @@ export class World {
     this.recordIndirectDamage(target, caster, before);
     if (result.clamped) this.showCombatOutcome(target, 'hit_cap', threatPos);
     if (result.culled) this.showCombatOutcome(target, 'culled', threatPos);
-    if (result.total > 0) this.text(target.pos, Math.round(result.total).toString(), '#ffd700', 14);
+    if (result.total > 0) this.damageText(target, result.total, '#ffd700', 14);
     if (target.life <= 0 && !target.dead) this.kill(target, false, caster);
   }
 
@@ -41911,7 +41915,7 @@ export class World {
           this.recordIndirectDamage(attacker, guardian, before);
           attacker.hitFlash = 0.15;
           attacker.hitFlashType = undefined;
-          this.text(attacker.pos, Math.round(counter).toString(), '#ffd700', 14);
+          this.damageText(attacker, counter, '#ffd700', 14);
           this.flashes.push({
             pos: vec(attacker.pos.x, attacker.pos.y), radius: attacker.radius + 10,
             color: '#ffd700', life: 0.25, maxLife: 0.25,
@@ -42165,7 +42169,7 @@ export class World {
       pos: vec(a.pos.x, a.pos.y), radius: a.radius + 12,
       color: '#c8b8a0', life: 0.22, maxLife: 0.22,
     });
-    this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 14);
+    this.damageText(a, taken, DAMAGE_COLOR.physical, 14);
     if (out.clamped) this.showCombatOutcome(a, 'hit_cap', caster?.pos);
     if (a.life <= 0 && !a.dead) this.kill(a, false, caster);
   }
@@ -42216,7 +42220,7 @@ export class World {
           if (poiseFrac > 0) b.damagePoise(frac * poiseFrac * b.maxPoise(), casterLive);
           b.hitFlash = 0.15;
           b.hitFlashType = 'physical';
-          this.text(b.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 13);
+          this.damageText(b, taken, DAMAGE_COLOR.physical, 13);
           if (out.clamped) this.showCombatOutcome(b, 'hit_cap', a.pos);
           if (b.life <= 0 && !b.dead) this.kill(b, false, casterLive);
         }
@@ -43122,7 +43126,7 @@ export class World {
     this.recordIndirectDamage(attacker, victim, deedLifeBefore);
     attacker.hitFlash = 0.1;
     attacker.hitFlashType = undefined; // raw thorns — the flash reads white
-    this.text(attacker.pos, Math.round(dealt).toString(), '#d88a50', 11);
+    this.damageText(attacker, dealt, '#d88a50', 11);
     // applyThorns credits the defender, including an attached summon.
     if (attacker.life <= 0 && !attacker.dead) this.kill(attacker, false, victim);
   }
@@ -43163,7 +43167,7 @@ export class World {
         e.hitFlash = 0.15;
         e.hitFlashType = type;
       }
-      this.text(e.pos, Math.round(taken).toString(), color, 14);
+      this.damageText(e, taken, color, 14);
       // Area wounds show the same cap/execution outcome as direct strikes.
       if (out.clamped || result?.clamped) this.showCombatOutcome(e, 'hit_cap', pos);
       if (result?.culled) this.showCombatOutcome(e, 'culled', pos);
@@ -43999,7 +44003,7 @@ export class World {
         && this.player.life < this.player.maxLife() * this.player.lowLifeLine()) {
         this.lowLifeHitFlash = LOW_LIFE_FLASH_SEC;
       }
-      this.text(target.pos, Math.round(dealt).toString(),
+      this.damageText(target, dealt,
         result.crit ? '#ffd24a' : '#ffffff', result.crit ? 18 : 13, 'dmg');
       // CULLED: the executing threshold fired inside applyHit.
       if (result.culled) {
@@ -44350,7 +44354,7 @@ export class World {
         target.life -= amt;
         target.hitFlash = 0.15;
         target.hitFlashType = elem;
-        this.text(vec(target.pos.x, target.pos.y - 12), Math.round(amt).toString(), '#ffe14a', 13);
+        this.damageText(target, amt, '#ffe14a', 13, undefined, vec(target.pos.x, target.pos.y - 12));
       }
     }
 
@@ -45769,7 +45773,7 @@ export class World {
           enemy.life -= landed;
           enemy.hitFlash = 0.15;
           enemy.hitFlashType = fx.damage;
-          this.text(enemy.pos, Math.round(landed).toString(), proc.color, 12);
+          this.damageText(enemy, landed, proc.color, 12);
           // The burst emptied a shield: the victim's esBreak reactions
           // fire one link deeper (this damage IS proc output). Poise
           // breaks/rungs it caused ride the same sweep at the same depth.
@@ -46173,7 +46177,7 @@ export class World {
           a.life -= landed;
           a.hitFlash = 0.15;
           a.hitFlashType = b.fx.damage.type;
-          this.text(a.pos, Math.round(landed).toString(), b.color, 12);
+          this.damageText(a, landed, b.color, 12);
           if (a.esBroke) {
             a.esBroke = false;
             this.rollOwnProcs(a, 'esBreak', { depth: b.depth });
@@ -46249,7 +46253,7 @@ export class World {
     victim.life -= taken;
     victim.hitFlash = 0.15;
     victim.hitFlashType = el;
-    this.text(vec(victim.pos.x, victim.pos.y - 14), Math.round(taken).toString(), sdef.color, 13);
+    this.damageText(victim, taken, sdef.color, 13, undefined, vec(victim.pos.x, victim.pos.y - 14));
     if (victim.life <= 0 && !victim.dead) this.kill(victim, false, caster);
     return taken;
   }
@@ -46271,7 +46275,7 @@ export class World {
       this.recordIndirectDamage(e, s.casterId === undefined ? undefined : this.actorById(s.casterId), deedLifeBefore);
       e.hitFlash = 0.15;
       e.hitFlashType = type;
-      this.text(e.pos, Math.round(amount).toString(), '#b06bd4', 12);
+      this.damageText(e, amount, '#b06bd4', 12);
       if (e.life <= 0 && !e.dead) this.kill(e, false, s.casterId === undefined ? undefined : this.actorById(s.casterId));
     }
   }
@@ -50310,7 +50314,7 @@ export class World {
           prey.life -= taken;
           prey.hitFlash = 0.12;
           prey.hitFlashType = 'physical';
-          this.text(prey.pos, Math.round(taken).toString(), '#d84a9a', 12);
+          this.damageText(prey, taken, '#d84a9a', 12);
           if (prey.life <= 0 && !prey.dead) this.kill(prey);
         }
         this.flashes.push({
@@ -50863,6 +50867,7 @@ export class World {
       if (this.corpses[i].remaining <= 0) this.corpses.splice(i, 1);
     }
 
+    this.damageTextBursts.prune(this.time);
     // Texts & flashes
     for (let i = this.texts.length - 1; i >= 0; i--) {
       const t = this.texts[i];
@@ -53741,7 +53746,7 @@ export class World {
                 e.life -= taken;
                 e.hitFlash = 0.1;
                 e.hitFlashType = b.type ?? 'physical';
-                this.text(vec(e.pos.x, e.pos.y - 12), Math.round(taken).toString(), b.color ?? '#ffd24a', 11);
+                this.damageText(e, taken, b.color ?? '#ffd24a', 11, undefined, vec(e.pos.x, e.pos.y - 12));
                 if (e.life <= 0 && !e.dead) this.kill(e, false, a);
               }
             }
@@ -55756,7 +55761,7 @@ export class World {
         a.life -= taken;
         a.hitFlash = 0.15;
         a.hitFlashType = payload.hit.type;
-        this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR[payload.hit.type], 14);
+        this.damageText(a, taken, DAMAGE_COLOR[payload.hit.type], 14);
         if (out.clamped) this.showCombatOutcome(a, 'hit_cap', { x, y });
         if (a.life <= 0 && !a.dead) this.kill(a, false, owner);
       }
@@ -58597,7 +58602,7 @@ export class World {
     if (!acc) { acc = { amount: 0, timer: 0 }; this.dotAccum.set(a.id, acc); }
     acc.amount += dot; acc.timer += dt;
     if (acc.timer >= 0.5 && acc.amount >= 1) {
-      this.text(a.pos, Math.round(acc.amount).toString(), '#d88a50', 11, 'dmg');
+      this.damageText(a, acc.amount, '#d88a50', 11, 'dmg');
       acc.amount = 0; acc.timer = 0;
     }
   }
@@ -64270,7 +64275,8 @@ export class World {
     const amt = d.amount + (d.pctMaxLife ?? 0) * a.maxLife();
     if (amt <= 0) return;
     a.life -= amt;
-    this.text(vec(a.pos.x, a.pos.y - 16), '-' + Math.round(amt), '#d86060', 13);
+    this.text(vec(a.pos.x, a.pos.y - 16), '-' + Math.round(amt), '#d86060', 13, undefined, 1,
+      this.damageTextBursts.record(a.id, amt, this.time, a.pos));
     if (a.life <= 0 && !a.dead) {
       if (d.canKill) this.kill(a, false); else a.life = 1;
     }
@@ -64736,10 +64742,17 @@ export class World {
     if (fx) this.flashes.push({ pos: vec(at.x, at.y), radius, color, life: 0.22, maxLife: 0.22, fx, ...(facing === undefined ? {} : { facing }) });
   }
 
-  text(at: Vec2, text: string, color: string, size = 13, kind?: string, life = 1): void {
+  /** Attribute numeric damage explicitly, never by parsing arbitrary text.
+   *  The individual popup and its random draw remain unchanged. */
+  damageText(target: Actor, amount: number, color: string, size = 13, kind?: string, at = target.pos): void {
+    this.text(at, Math.round(amount).toString(), color, size, kind, 1,
+      this.damageTextBursts.record(target.id, amount, this.time, target.pos));
+  }
+
+  text(at: Vec2, text: string, color: string, size = 13, kind?: string, life = 1, damage?: DamageTextSummary): void {
     this.texts.push({
       pos: vec(at.x + rand(-10, 10), at.y - 16), text, color,
-      life, maxLife: life, size, kind,
+      life, maxLife: life, size, kind, damage,
     });
   }
 
