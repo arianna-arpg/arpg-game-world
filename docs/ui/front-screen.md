@@ -6,7 +6,7 @@ The game opens on a full-viewport threshold scene with the existing account and 
 
 - `src/ui/frontScreenConfig.ts`: typed action definitions, ordering, labels, descriptions, visibility, enabled states, badges, copy, palette and atmosphere settings. `FrontScreenState` contains presentation facts, not a mutable account or save.
 - `src/ui/frontScreen.ts`: escaped markup, a decorative vector sigil, a passive backdrop and local keyboard bindings. The view never starts a run or changes progression. Existing `sm-*` IDs retain their handlers in `panels.ts`.
-- `src/ui/frontScreen.css`: layout, typography, focus and responsive rules, scoped to the front-screen markup. The existing UI scale remains authoritative; small viewports scroll vertically when needed. Options and roster use their existing layout and return lifecycle.
+- `src/ui/frontScreen.css`: layout, typography, focus and responsive rules, scoped to the front-screen markup. The existing UI scale remains authoritative; small viewports scroll vertically when needed. Main-menu Options uses the shared side-screen shell; the roster retains its existing layout. Return lifecycles stay with UI.
 - `src/ui/assets/threshold.png`: original environment artwork, bundled by Vite through a relative asset URL. It works offline and under a browser deployment subpath.
 - Developer menu hooks still receive their own `.esc-btns` slot.
 
@@ -18,13 +18,67 @@ The root's full-screen sizing is selected by its current child markup, so replac
 
 Native buttons support pointer and controller activation through the existing pad pointer. Up/Down and Home/End move focus; native Tab traversal is kept separate from the gameplay Tab binding. Enter and Space retain native button activation.
 
-The atmosphere uses three configurable strata of CSS motes and haze, without a JavaScript animation loop or gameplay time. The mote palette echoes the website's teal/violet/ember insignia and pale aether light, weighted toward the scene's teal soul-flame. Each stratum independently controls count, size, glow, opacity, lifetime, rise and sway. Fixed seeds keep the field stable across menu refreshes; compact screens show half the motes. The lights sit above the vignette but below all interface content. It disappears while the menu is hidden. Pause Atmosphere retains its choice during the current session. The operating system's reduced-motion preference suppresses all ambient animation and leaves a faint, still particle field. The UI scale remains configurable through Options, including at 200%.
+The atmosphere uses three configurable strata of CSS motes and haze, without a JavaScript animation loop or gameplay time. The mote palette echoes the website's teal/violet/ember insignia and pale aether light, weighted toward the scene's teal soul-flame. Each stratum independently controls count, size, glow, opacity, lifetime, rise and sway. Fixed seeds keep the field stable across menu refreshes; compact screens show half the motes. The lights sit above the vignette but below all interface content. It remains visible across entrance side screens and disappears when all entrance surfaces are hidden. Pause Atmosphere retains its choice during the current session. The operating system's reduced-motion preference suppresses all ambient animation and leaves a faint, still particle field. The UI scale remains configurable through Options, including at 200%.
 
 ## Verification
 
 Run `npm run check`, `npm run build`, `npm run smoke`, and `electron balance/front-screen-ui.cjs` (or `node_modules/.bin/electron.cmd balance/front-screen-ui.cjs` on Windows).
 
 The hidden real-client harness uses a disposable profile and save directory under `balance/reports/`. It checks fresh/returning accounts, unlock gates, actual keyboard and controller input, saved-run callbacks, fallen vessels, Options hydration, Vault and Chronicle return paths, browser exit, text escaping, reduced motion, multiple viewport/UI scale combinations, and the real first-account tutorial entry. Its screenshots and JSON report are ignored outputs.
+
+
+## Shared side screens
+
+Vault, Chronicle and main-menu Options use the same presentation shell. The
+entrance version leaves the threshold scene visible on the right; compact
+viewports and large UI scales use the full available width. In-world Vault and
+Chronicle visits use a centered version over the world, without entrance art.
+In-game Options keeps its existing pause-menu presentation.
+
+- `src/ui/sideScreenConfig.ts`: typed profiles own chapter/caption, accent,
+  preferred width and selectors identifying header, scroll and footer regions.
+  Shared surface colors and entrance duration also live here.
+- `src/ui/sideScreen.ts`: `sideScreenContext()` captures the visible origin
+  before `hideAll()`; `captureSideScreenFocus(root)` records a stable control
+  address before a render; `mountSideScreen(root, profile, context, focus)`
+  moves the newly rendered nodes into the frame without replacing their
+  controls/listeners. Replacing or hiding a view removes its layout/atmosphere
+  through markup-scoped CSS, with no persistent host classes to clean up.
+- `src/ui/sideScreen.css`: shared frame, region sizing and responsive rules,
+  plus the three views' visual treatments. Native UI scale remains authoritative.
+
+Vault ownership, purchases, hold-to-invest, shelf scroll and sealing remain with
+the existing UI handlers. There is no extra shortcut that bypasses the
+Reckoning. Wardrobe still opens its own view and returns to the same Vault
+visit/context. Chronicle sorting reads the original records; compact rows show
+their field labels. Options keeps its tabs, stored settings and rebind capture.
+Tab uses native traversal; surviving focused controls retain focus after a
+refresh. Every entrance screen shares the same atmosphere pause preference and
+honors the operating system's reduced-motion setting.
+
+### Connecting the Codex
+
+The reader is being developed separately; this change does not introduce a
+second Codex, synthetic catalog or prematurely expose its menu entry.
+
+1. Add a `SideScreenProfile` with the Codex accent, width and region selectors.
+2. Capture the opening context before hiding the parent, and carry it through
+   nested navigation (including Vault → Owned → Vault).
+3. Keep discovery/filter/media providers and Back/disposal with the reader.
+   Call `mountSideScreen` after its initial render and each full redraw; it
+   preserves node identity, so existing bound controls continue to work.
+4. Adapt the Codex's current root/direct-child sizing rules to its content
+   region; the shell owns the outer viewport dimensions. Retain the reader's
+   internal list/detail responsive layout and cleanup.
+5. Re-run the Codex UI and discovery checks along with the front-screen suite.
+   A Codex return during a Reckoning must retain the original render closure,
+   scroll and unassigned essence rather than opening a new Vault visit.
+
+The existing acceptance course also checks the side screens across five
+viewport/scale combinations, fixed footer reachability, purchase and Wardrobe
+round trips, native Options keyboard input, Chronicle sorting/escaped names,
+entrance/world context separation and reduced motion. All QA account/settings
+mutations use disposable profiles and saves.
 
 ## Artwork provenance
 

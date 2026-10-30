@@ -1,3 +1,5 @@
+import { mountSideScreen, sideScreenContext, captureSideScreenFocus } from './sideScreen';
+import { SIDE_SCREENS } from './sideScreenConfig';
 import { frontScreenHtml, bindFrontScreen } from './frontScreen';
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
 import { storedSupportsHtml } from './storedSupports';
@@ -3082,6 +3084,7 @@ export class UI {
     // Guard the shared entry point before changing screens or stamping the
     // Bounty Board lesson. Hidden buttons alone cannot protect other callers.
     if (!isVaultAvailable(acc)) return;
+    const sideContext = sideScreenContext();
     this.hideAll(); // close whatever opened it (start menu / class select / …) so it never overlaps
     // THE RECKONING VISIT: a Vault opened while ANY Mortal Essence stands is
     // the run's closing prompt — the seal law arms (leaving requires the
@@ -3121,6 +3124,7 @@ export class UI {
       if (b) this.vaultScroll[this.vaultTab || '_flat'] = b.scrollTop;
     };
     const render = (): void => {
+      const sideFocus = captureSideScreenFocus(this.accountScreen);
       // Record earned rewards without acknowledging them on the player's behalf.
       if (settleClassUnlocks(acc).length) this.saveAccount();
       // THE CENSUS (vaultShelfCensus): every shelf's stock/owned/rumors and
@@ -3365,6 +3369,7 @@ export class UI {
         </div>
         <div class="vault-body">${body}</div>
         <div class="vault-foot acct-btns"><button id="acct-wardrobe">Wardrobe</button><button id="acct-close">${reckoning ? 'Seal &amp; Continue' : 'Back'}</button></div>`;
+      mountSideScreen(this.accountScreen, SIDE_SCREENS.vault, sideContext, sideFocus);
       this.accountScreen.querySelector('#acct-wardrobe')!.addEventListener('click', () => this.wardrobeView(this.accountScreen, render));
       const bodyEl = this.accountScreen.querySelector<HTMLElement>('.vault-body');
       if (bodyEl) bodyEl.scrollTop = this.vaultScroll[this.vaultTab || '_flat'] ?? 0;
@@ -10154,9 +10159,11 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
    *  against every run they have ever finished. Renders into the Vault's
    *  screen element (one full-screen surface, two faces). */
   showChronicle(onClose?: () => void): void {
+    const sideContext = sideScreenContext();
     this.hideAll();
     const acc = this.getAccount();
     const render = (): void => {
+      const sideFocus = captureSideScreenFocus(this.accountScreen);
       const sort = this.chronicleSort;
       const rows = [...acc.runRecords];
       if (sort === 'essence') rows.sort((a, b) => b.essence - a.essence || b.at - a.at);
@@ -10176,13 +10183,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div class="chron-row${r.at === latestAt ? ' chron-latest' : ''}">
             <span class="chron-rank">#${i + 1}</span>
             <span class="chron-who">${who}</span>
-            <span>L${r.level}</span>
-            <span>${r.zones} zones</span>
-            <span>${r.kills} kills</span>
-            <span class="chron-reason">${reasonFace(r)}</span>
-            <span class="chron-ess" title="${META_CURRENCY_LABEL} minted at the reckoning">${r.essence}</span>
-            <span class="chron-ren" title="Renown — the journey score">${r.renown}</span>
-            <span class="chron-when">${new Date(r.at).toLocaleDateString()}</span>
+            <span data-label="Level">${r.level}</span>
+            <span data-label="Zones">${r.zones}</span>
+            <span data-label="Kills">${r.kills}</span>
+            <span class="chron-reason" data-label="End">${reasonFace(r)}</span>
+            <span class="chron-ess" data-label="${META_CURRENCY_LABEL}" title="${META_CURRENCY_LABEL} minted at the reckoning">${r.essence}</span>
+            <span class="chron-ren" data-label="Renown" title="Renown — the journey score">${r.renown}</span>
+            <span class="chron-when" data-label="When">${new Date(r.at).toLocaleDateString()}</span>
           </div>`;
       };
       const sortBtn = (id: typeof sort, label: string): string =>
@@ -10205,6 +10212,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : `<div class="vault-empty">No runs remembered yet. Conclude one — however it goes — and the chronicle begins.</div>`}
         </div>
         <div class="vault-foot acct-btns"><button id="chron-close">Back</button></div>`;
+      mountSideScreen(this.accountScreen, SIDE_SCREENS.chronicle, sideContext, sideFocus);
       this.accountScreen.querySelectorAll<HTMLElement>('[data-chron-sort]').forEach(btn => {
         btn.addEventListener('click', () => {
           this.chronicleSort = btn.dataset.chronSort as typeof sort;
@@ -10451,6 +10459,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
   /** Shared keybind rebind view, rendered into `root` (escape menu OR start
    *  menu). `onBack` returns to whichever menu opened it. */
   private renderOptions(root: HTMLElement, onBack: () => void): void {
+    const sideFocus = captureSideScreenFocus(root);
     this.disarmRebind(); // drop any capture left armed by a prior render
     const scrollTop = root.querySelector<HTMLElement>('.options-body')?.scrollTop ?? 0;
     const s = this.getSettings();
@@ -10787,6 +10796,14 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         : tab === 'visuals' ? visualsTab
         : interfaceTabHead}</div>
       <div class="esc-btns options-footer"><button id="esc-back">Back</button></div>`;
+    if (root === this.startMenu) {
+      // Group only the fixed heading/tabs; the settings and Back keep their own regions.
+      const head = document.createElement('div');
+      head.className = 'side-options-head';
+      head.append(root.querySelector('h1')!, root.querySelector('.book-tabs')!);
+      root.prepend(head);
+      mountSideScreen(root, SIDE_SCREENS.options, 'entrance', sideFocus);
+    }
     root.querySelector<HTMLElement>('.options-body')!.scrollTop = scrollTop;
     // Tab strip: remember the shelf, drop any armed capture, re-render.
     root.querySelectorAll<HTMLElement>('[data-opttab]').forEach(btn => {

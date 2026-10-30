@@ -17,7 +17,7 @@ app.whenReady().then(async () => {
   const report = { checks: [], errors: [], images: [] };
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message); });
   const run = (fn, ...args) => win.webContents.executeJavaScript('(' + fn + ')(' + args.map(v => JSON.stringify(v)).join(',') + ')');
-  const click = async sel => { await run(s => { document.querySelector(s).click(); }, sel); await pause(100); };
+  const click = async sel => { await run(s => { const el=document.querySelector(s); if (!el) throw Error('Missing control: '+s); el.click(); }, sel); await pause(100); };
   const shot = async name => {
     await pause(180); win.webContents.invalidate(); await pause(100);
     const file = path.join(reports, 'front-screen-' + name + '.png');
@@ -120,6 +120,91 @@ app.whenReady().then(async () => {
     await click('#chron-close');
     report.checks.push('Veteran gates, fallen vessel protection, roster resume, Vault and Chronicle routes');
 
+
+    // The same surface survives purchases, nested views and real sealing rules.
+    await run(() => { __game.account().credits=120; });
+    await click('#sm-vault');
+    assert.equal(await run(() => document.querySelector('#account-screen .side-screen').dataset.context), 'entrance');
+    assert.equal(await run(() => getComputedStyle(document.querySelector('#front-backdrop')).display), 'block');
+    await shot('side-vault-1600');
+    await click('[data-vtab="town"]');
+    await click('[data-invest="feat_bounty_board"]');
+    assert.equal(await run(() => __game.account().credits), 120, 'The free claim must retain the essence pool');
+    assert.equal(await run(() => document.querySelectorAll('#account-screen .side-screen').length), 1);
+    await click('#acct-wardrobe'); await click('[data-wd-back]');
+    assert.equal(await run(() => document.querySelector('#account-screen .side-screen').dataset.context), 'entrance');
+    await click('#acct-close');
+    assert(await run(() => !!document.querySelector('#seal-go')));
+    await click('#seal-back');
+    assert.equal(await run(() => __game.account().credits), 120);
+    await click('#acct-close'); await click('#seal-go');
+    assert.equal(await run(() => __game.account().credits), 0);
+    report.checks.push('Shared Vault shell preserves free claim, Wardrobe return and explicit Reckoning seal');
+
+    await run(() => {
+      __game.account().runRecords = Array.from({ length: 20 }, (_, i) => ({
+        schema:1, at:1700000000000 + i * 86400000,
+        name:i === 0 ? '<img src=x onerror="window.__injected=1">' : ['Aster of Lastlight','The Ashen Wanderer','Arianna'][i % 3],
+        classId:'warrior', level:12 + i, zones:3 + i, kills:130 + i * 17,
+        reason:i % 2 ? 'death' : 'retire', essence:40 + i * 9, renown:200 + i * 25,
+      }));
+    });
+    for (const [width,height,scale] of [[1600,1000,1],[1280,720,1],[390,844,1],[390,844,2],[320,568,2]]) {
+      win.setContentSize(width,height);
+      await run(s => document.documentElement.style.setProperty('--ui-scale',String(s)), scale);
+      for (const [open,close,kind] of [['#sm-vault','#acct-close','vault'],['#sm-chronicle','#chron-close','chronicle'],['#sm-keys','#start-menu #esc-back','options']]) {
+        await click(open); await pause(250);
+        const bounds = await run(() => {
+          const shell = document.querySelector('.panel:not(.hidden) > .side-screen');
+          const pane = shell.querySelector('.side-pane'), body = shell.querySelector('.side-scroll'), foot = shell.querySelector('.side-foot');
+          const r=foot.getBoundingClientRect(), b=body.getBoundingClientRect();
+          const button=foot.querySelector('button'), br=button.getBoundingClientRect();
+          return { fits:shell.getBoundingClientRect().right <= innerWidth+1 && pane.scrollWidth <= pane.clientWidth+1 && shell.scrollWidth <= shell.clientWidth+1,
+            bodyHeight:b.height, footer:r.toJSON(), viewport:[innerWidth,innerHeight],
+            reachable:br.bottom<=innerHeight && br.left>=0 && br.right<=innerWidth &&
+              button.contains(document.elementFromPoint(br.x+br.width/2,br.y+br.height/2)) };
+        });
+        assert(bounds.fits && bounds.bodyHeight > 24 && bounds.reachable, kind+' '+[width,height,scale]+' '+JSON.stringify(bounds));
+        const before = bounds.footer.top;
+        await run(() => { const b=document.querySelector('.panel:not(.hidden) .side-scroll'); b.scrollTop=b.scrollHeight; });
+        assert.equal(await run(() => document.querySelector('.panel:not(.hidden) .side-foot').getBoundingClientRect().top), before, 'Footer stays put');
+        await run(() => { document.querySelector('.panel:not(.hidden) .side-scroll').scrollTop=0; });
+        if ((width===1600 || width===390) && scale===1) await shot('side-'+kind+'-'+width);
+        await click(close);
+      }
+    }
+    report.checks.push('Vault, Chronicle and Options keep readable scrolling regions and reachable fixed controls across five viewport/scale combinations');
+    win.setContentSize(1600,1000);
+    await run(() => document.documentElement.style.setProperty('--ui-scale','1'));
+    await click('#sm-chronicle');
+    await click('[data-chron-sort="latest"]');
+    assert(await run(() => document.querySelector('.chron-row:not(.chron-head) .chron-who').textContent.includes('The Ashen Wanderer')));
+    assert(await run(() => !window.__injected && !document.querySelector('.chron-table img')));
+    await click('#chron-close');
+    await click('#sm-keys'); await click('[data-opttab="interface"]');
+    await run(() => { const b=document.querySelector('#opt-tooltipDetail'); b.focus(); b.scrollIntoView({block:'center'}); });
+    const oldTip = await run(() => document.querySelector('#opt-tooltipDetail').textContent);
+    win.webContents.sendInputEvent({type:'keyDown',keyCode:'Return'});
+    win.webContents.sendInputEvent({type:'char',keyCode:'\r'});
+    win.webContents.sendInputEvent({type:'keyUp',keyCode:'Return'});
+    await pause(300);
+    assert.notEqual(await run(() => document.querySelector('#opt-tooltipDetail').textContent),oldTip);
+    assert.equal(await run(() => document.activeElement.id),'opt-tooltipDetail');
+    win.webContents.sendInputEvent({type:'keyDown',keyCode:'Tab'});
+    win.webContents.sendInputEvent({type:'keyUp',keyCode:'Tab'});
+    await pause(80);
+    assert.equal(await run(() => document.activeElement.id),'opt-escapecloses');
+    await click('#start-menu #esc-back');
+    await run(() => { __game.ui.hideAll(); __game.ui.showAccountScreen(() => __frontShow()); });
+    assert.equal(await run(() => document.querySelector('#account-screen .side-screen').dataset.context),'world');
+    assert.equal(await run(() => getComputedStyle(document.querySelector('#front-backdrop')).display),'none');
+    await click('#acct-close');
+    await run(() => { __game.ui.hideAll(); __game.ui.showChronicle(() => __frontShow()); });
+    assert.equal(await run(() => document.querySelector('#account-screen .side-screen').dataset.context),'world');
+    assert.equal(await run(() => getComputedStyle(document.querySelector('#front-backdrop')).display),'none');
+    await click('#chron-close');
+    report.checks.push('Chronicle sorts safely; Options retains native keyboard focus; in-world visits do not revive entrance artwork');
+
     // Responsive widths AND the existing accessibility scale, with all destinations shown.
     for (const [width, height, scale] of [[1920,1080,1], [1280,720,1], [800,600,1], [390,844,1], [320,568,1], [1280,720,2], [390,844,2], [1280,720,.75]]) {
       win.setContentSize(width, height);
@@ -179,6 +264,10 @@ app.whenReady().then(async () => {
     await pause(80);
     assert.equal(await run(() => getComputedStyle(document.querySelector('.front-haze')).animationName), 'none');
     assert.equal(await run(() => document.querySelector('#front-motion').disabled), true);
+    await click('#sm-keys');
+    assert.equal(await run(() => getComputedStyle(document.querySelector('.side-pane')).animationName), 'none');
+    assert.equal(await run(() => document.querySelector('.side-screen [data-front-motion]').disabled), true);
+    await click('#start-menu #esc-back');
     await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features:[{name:'prefers-reduced-motion',value:'no-preference'}] });
     await pause(80);
     assert.equal(await run(() => document.querySelector('#front-motion').disabled), false);
@@ -194,6 +283,11 @@ app.whenReady().then(async () => {
       ui.onBeginRun = __frontQA.begin; ui.setContinueSave(null);
       ui.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster);
     });
+    // The opaque crossing frame owns its own navigator: isolate physical pads
+    // there too, as in loading-screen-ui.cjs. The parent shim cannot cross origins.
+    const crossing = win.webContents.mainFrame.frames.find(f => f.url === 'about:srcdoc');
+    assert(crossing, 'The isolated crossing frame must be present');
+    await crossing.executeJavaScript("Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [] })");
     await click('#sm-start');
     const entered = await run(async () => {
       for (let i=0; __game.loading.active && i<800; i++) await new Promise(r=>setTimeout(r,25));

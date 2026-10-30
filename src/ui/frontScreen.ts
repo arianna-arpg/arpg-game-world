@@ -16,13 +16,12 @@ const sigil = `<svg viewBox="0 0 48 64" fill="none" aria-hidden="true">
 
 function syncAtmosphere(): void {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const motion = document.querySelector<HTMLButtonElement>('#front-motion');
-  if (motion) {
+  document.querySelectorAll<HTMLButtonElement>('[data-front-motion]').forEach(motion => {
     motion.textContent = reduced ? 'Reduced motion' : !FRONT_SCREEN.atmosphere.enabled ? 'Still atmosphere'
       : atmospherePaused ? 'Resume atmosphere' : 'Pause atmosphere';
     motion.disabled = reduced || !FRONT_SCREEN.atmosphere.enabled;
     motion.setAttribute('aria-pressed', String(atmospherePaused || reduced || !FRONT_SCREEN.atmosphere.enabled));
-  }
+  });
   const backdrop = document.getElementById('front-backdrop');
   if (backdrop) backdrop.dataset.paused = String(atmospherePaused || !FRONT_SCREEN.atmosphere.enabled);
 }
@@ -53,7 +52,7 @@ function aetherMotesHtml(): string {
 
 /** A single passive backdrop survives menu refreshes; CSS owns visibility and
  * pauses it offscreen. No game loop, timers, save access or input listeners. */
-function ensureBackdrop(): void {
+export function ensureFrontAtmosphere(): void {
   if (document.getElementById('front-backdrop')) return;
   const el = document.createElement('div');
   el.id = 'front-backdrop';
@@ -72,7 +71,7 @@ function ensureBackdrop(): void {
 }
 
 export function frontScreenHtml(state: FrontScreenState): string {
-  ensureBackdrop();
+  ensureFrontAtmosphere();
   const cfg = FRONT_SCREEN;
   const primary = state.resume ? 'continue' : 'start';
   const actions = FRONT_ACTIONS.filter(a => !a.visible || a.visible(state));
@@ -124,7 +123,7 @@ export function frontScreenHtml(state: FrontScreenState): string {
         <span class="front-world">${text(cfg.footer)} <span>· ${text(cfg.buildLabel)}</span></span>
         <div class="front-footer-controls">
           <span class="front-key-hints"><kbd>↑</kbd><kbd>↓</kbd> Navigate <kbd>Enter</kbd> Select</span>
-          <button type="button" id="front-motion" aria-pressed="${atmospherePaused}" title="Pause ambient menu animation">Pause atmosphere</button>
+          <button type="button" id="front-motion" data-front-motion aria-pressed="${atmospherePaused}" title="Pause ambient menu animation">Pause atmosphere</button>
         </div>
       </footer>
     </div>
@@ -135,9 +134,7 @@ export function frontScreenHtml(state: FrontScreenState): string {
  * Preserve an existing focus target when asynchronous save hydration refreshes it. */
 export function bindFrontScreen(root: HTMLElement, previousFocus?: string): void {
   const view = root.querySelector<HTMLElement>('.front-screen')!;
-  const motion = view.querySelector<HTMLButtonElement>('#front-motion')!;
-  syncAtmosphere();
-  motion.addEventListener('click', () => { atmospherePaused = !atmospherePaused; syncAtmosphere(); });
+  bindFrontAtmosphere(view);
   view.addEventListener('keydown', e => {
     // The global gameplay Tab bind must not suppress native focus traversal.
     if (e.key === 'Tab') { e.stopPropagation(); return; }
@@ -153,5 +150,13 @@ export function bindFrontScreen(root: HTMLElement, previousFocus?: string): void
     const previous = previousFocus ? view.querySelector<HTMLButtonElement>(`#${CSS.escape(previousFocus)}:not(:disabled)`) : null;
     if (previous) previous.focus({ preventScroll: true });
     else if (document.activeElement === document.body) view.querySelector<HTMLButtonElement>('.front-primary')?.focus({ preventScroll: true });
+  });
+}
+
+/** Share one session motion preference across every entrance surface. */
+export function bindFrontAtmosphere(root: HTMLElement): void {
+  syncAtmosphere();
+  root.querySelectorAll<HTMLButtonElement>('[data-front-motion]').forEach(motion => {
+    motion.addEventListener('click', () => { atmospherePaused = !atmospherePaused; syncAtmosphere(); });
   });
 }

@@ -1,6 +1,6 @@
 /* The front door is a full-viewport composition, still riding the shared UI
-   scale. All overrides are scoped to its markup; Options and roster keep their
-   own panel dimensions and lifecycle. */
+   scale. All overrides are scoped to its markup; sideScreen.css supplies the
+   shared Options/Vault/Chronicle frame, while the roster retains its own pane. */
 #start-menu:has(> .front-screen) {
   position: fixed; inset: 0 auto auto 0; transform: none;
   width: calc(100vw / var(--ui-scale)); height: calc(100dvh / var(--ui-scale));
