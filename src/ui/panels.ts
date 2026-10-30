@@ -18,6 +18,7 @@ import { personalStashHtml, STASH_CELL_PX } from './stash';
 import { emptyStash, personalStashEntries, planStashMove } from '../engine/stash';
 import { STASH_DEFS } from '../data/stashes';
 import { renderWardrobe } from './wardrobe';
+import { applyInterfaceStyle, decorateInventoryPanel } from './interfaceStyle';
 import { BUILD_PANEL_CFG, buildPanelSeat } from './buildPanels';
 import { ServiceWorkspace } from './serviceWorkspace';
 import { independentPanelSeat } from './panelPlacement';
@@ -1201,6 +1202,7 @@ export class UI {
     if (this.panelHtml.get(el) === html && (el.childElementCount > 0 || html === '')) return false;
     this.panelHtml.set(el, html);
     el.innerHTML = html;
+    decorateInventoryPanel(el);
     return true;
   }
 
@@ -1474,6 +1476,10 @@ export class UI {
     this.escRefresh = null;
     const actor = this.getWorld().seats.length ? this.getWorld().player : undefined;
     renderWardrobe(root, { account: this.getAccount(), back,
+      interfaceStyle: { get: () => this.getSettings().interfaceStyle, save: style => {
+        this.getSettings().interfaceStyle = style;
+        applyInterfaceStyle(style); this.saveSettings();
+      } },
       save: () => { this.saveAccount(); this.onCosmeticsChanged?.(); },
       body: actor && actor.cosmeticKind !== 'wisp' ? { shape: actor.shape, color: actor.color, radius: actor.radius, material: actor.material, look: actor.look, adorn: actor.adorn }
         : { shape: 'circle', radius: 16, color: CLASSES[0].color, look: CLASSES[0].look }, // the account Wardrobe also opens between lives
@@ -3818,7 +3824,7 @@ export class UI {
     const prevScroll = this.charSheet.scrollTop;
     const html = `
       <div style="position:sticky;top:-14px;z-index:2;background:var(--panel-bg);
-        margin:-14px -14px 8px;padding:14px 14px 5px;border-bottom:1px solid var(--panel-border)">
+        margin:-14px -14px 8px;padding:14px 14px 5px;border-bottom:1px solid var(--inv-heading-band-edge,var(--panel-border))">
         ${this.closeGlyphHtml()}<h2 style="border-bottom:none;margin:0;padding-bottom:2px"><span data-tip="class" style="cursor:var(--cursor-help, help);border-bottom:1px dotted var(--gold)">${m.classDef.name}</span>${vocTitle} — Level ${p.level}</h2>
         <div style="font-size:9px;color:#6a6478">starters: ${starterChips}</div>
       </div>
@@ -4408,14 +4414,14 @@ export class UI {
       const wornGlyph = worn ? CATEGORY_GLYPHS[ITEM_BASES[worn.baseId]?.category ?? slot.accepts[0]] ?? '?' : '';
       const face = worn
         ? `<span style="font-size:${small ? 14 : 21}px;line-height:1">${wornGlyph}</span>${lockPip(worn.locked)}${pips}`
-        : `<span style="opacity:0.22;font-size:${small ? 14 : 22}px;line-height:1">${CATEGORY_GLYPHS[slot.accepts[0]] ?? '?'}</span>
-           ${small ? '' : `<span style="position:absolute;bottom:2px;left:0;right:0;font-size:7px;letter-spacing:0.5px;color:#4a4656;text-align:center">${slot.label.toUpperCase()}</span>`}`;
+        : `<span class="inv-ghost" style="font-size:${small ? 14 : 22}px;line-height:1">${CATEGORY_GLYPHS[slot.accepts[0]] ?? '?'}</span>
+           ${small ? '' : `<span class="inv-empty-label" style="position:absolute;bottom:2px;left:0;right:0;font-size:7px;letter-spacing:0.5px;text-align:center">${slot.label.toUpperCase()}</span>`}`;
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
         ${worn ? `data-drag="gearItem:${worn.uid}" data-lock-uid="${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : `title="${slot.label}"`}
         style="position:absolute;left:${seat.x * CELL}px;top:${seat.y * CELL}px;
         width:${seat.w * CELL - 2}px;height:${seat.h * CELL - 2}px;box-sizing:border-box;padding:0;
         display:flex;align-items:center;justify-content:center;
-        background:${worn ? '#221e2c' : '#171420'};border:${worn ? 2 : 1}px solid ${border};border-radius:4px;cursor:var(--cursor-point, pointer);
+        background:var(--inv-equip-fill,${worn ? '#221e2c' : '#171420'});border:${worn ? 2 : 1}px solid ${worn ? border : 'var(--inv-empty-edge,#3a3644)'};border-radius:4px;cursor:var(--cursor-point, pointer);
         ${worn?.rarity === 'unique' ? `box-shadow:0 0 10px ${border};` : ''}">${face}</button>`;
     };
     const seatedSlots = dollSlots.filter(s => DOLL_SEATS[s.id]);
@@ -4438,7 +4444,7 @@ export class UI {
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
         ${worn ? `data-drag="gearItem:${worn.uid}" data-lock-uid="${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : ''}
         style="display:block;width:${dollW}px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
-        background:#1a1722;border:1px solid ${border};border-radius:4px;cursor:var(--cursor-point, pointer)">${worn?.locked ? '🔒 ' : ''}${label}</button>`;
+        background:var(--inv-equip-fill,#1a1722);border:1px solid ${worn ? border : 'var(--inv-empty-edge,#3a3644)'};border-radius:4px;cursor:var(--cursor-point, pointer)">${worn?.locked ? '🔒 ' : ''}${label}</button>`;
     }).join('');
     const doll = figure + spare;
 
@@ -4449,7 +4455,7 @@ export class UI {
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         cells += `<div data-cell="${x}:${y}" data-drop="bagCell:${x}:${y}" style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
-          width:${CELL - 2}px;height:${CELL - 2}px;background:#16131d;border:1px solid #2a2634"></div>`;
+          width:${CELL - 2}px;height:${CELL - 2}px;background:var(--inv-cell-fill,#16131d);border:1px solid var(--inv-cell-edge,#2a2634)"></div>`;
       }
     }
     // Socket pips: each socket renders as a PRECISE drop target pip on its
@@ -4500,7 +4506,7 @@ export class UI {
         return `<div class="${memoryRecallLesson ? 'tut-glow' : ''}" data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
           ${breaking ? (salv === 'sell' && !i.locked ? `data-salv-uid="${i.uid}"` : '') : `data-drag="gearItem:${i.uid}"`} data-drop="gearTile:${i.uid}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
-          width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;
+          width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#1c1626);
           border:2px solid ${mk.color};border-radius:3px;cursor:var(--cursor-point, pointer);box-sizing:border-box;
           display:flex;align-items:center;justify-content:center">
           <span style="width:22px;height:22px;border-radius:4px;background:${mk.color}22;border:1px solid ${mk.color};
@@ -4530,7 +4536,7 @@ export class UI {
           ${verb} data-drop="gearTile:${i.uid}" ${sp ? `data-gem-skill="${i.uid}"` : ''}
           class="${teach ? 'tut-glow' : ''}${flashOf(i.uid)}"
           style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
-          width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#1c1626;
+          width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#1c1626);
           border:2px solid ${color};border-radius:3px;cursor:${breaking ? 'inherit' : 'var(--cursor-point, pointer)'};box-sizing:border-box;
           display:flex;align-items:center;justify-content:center;
           ${sp?.rarity === 'legendary' ? `box-shadow:0 0 10px ${color};` : ''}">${gemTileFaceHtml(i)}${lockPip(i.locked)}${lvlBtn}</div>`;
@@ -4540,7 +4546,7 @@ export class UI {
       return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1" data-lock-uid="${i.uid}"
         ${verb} data-drop="gearTile:${i.uid}"
         style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
-        width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
+        width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:var(--inv-item-fill,#221e2c);
         border:2px solid ${r.color};border-radius:3px;cursor:${breaking ? 'inherit' : 'var(--cursor-point, pointer)'};box-sizing:border-box;
         display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
         ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${CATEGORY_GLYPHS[cat] ?? '?'}${lockPip(i.locked)}${pipRow(i)}</div>`;
@@ -4606,7 +4612,7 @@ export class UI {
               const dir = on ? bsState!.dir : 'desc';
               return `<button data-bag-sort="${esc(s.id)}" title="${esc(s.label)}"
                 style="position:relative;width:22px;height:20px;padding:0;font-size:12px;line-height:18px;
-                background:${on ? '#2e2538' : '#241d2e'};border:1px solid ${on ? 'var(--gold)' : '#4a3a5a'};border-radius:4px;
+                background:${on ? '#2e2538' : 'var(--inv-control-fill,#241d2e)'};border:1px solid ${on ? 'var(--gold)' : '#4a3a5a'};border-radius:4px;
                 color:${on ? 'var(--gold)' : '#b8b0c8'};cursor:var(--cursor-point, pointer)">${s.icon}${on
                   ? `<span style="position:absolute;right:0;bottom:-3px;font-size:7px;line-height:8px;color:var(--gold)">${dir === 'desc' ? '▼' : '▲'}</span>`
                   : ''}</button>`;
@@ -7617,6 +7623,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span>
       </div>
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:var(--cursor-grab, grab);touch-action:none">${edges}${circles}</svg>`;
+    decorateInventoryPanel(this.passiveTree);
 
     // THE TREE LENS: typing filters LIVE via class toggles on the standing
     // circles (never a re-render — the input keeps its focus); a refresh
@@ -8234,6 +8241,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         ${discipline ? esc(discipline) : open ? 'click a lit node to spend a point · scroll to zoom, drag to pan' : `no points yet — the tree opens at level ${tree.level}`}
       </div>`;
 
+    decorateInventoryPanel(pane.el);
     // Clicks: a lit node spends through the ordinary intent; the drawer
     // (when open) re-renders and cascades back into every open pane.
     pane.el.querySelectorAll<SVGCircleElement>('.st-node').forEach(el => {

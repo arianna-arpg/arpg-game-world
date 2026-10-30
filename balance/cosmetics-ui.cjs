@@ -126,7 +126,16 @@ app.whenReady().then(async () => {
     assert.equal(await js('__game.account().cosmetics.loadout.slots.hotbarSkin'), 'hotbar_rose');
     // Enter the real between-lives flow, then use the collapsible menu's actual button.
     win.setSize(1280, 960);
-    await js('__game.ui.hideAll(); __game.ui.onBeginRun(); __game.step(30); void 0');
+    await js('__game.ui.hideAll(); __game.ui.onBeginRun(); void 0');
+    // Entry now paints the asynchronous Crossing before creating Mu's seat.
+    // Wait for actual readiness instead of stepping an uninitialized world.
+    await js(`(async () => {
+      for (let i=0;i<100;i++) {
+        if (!__game.loading.active && __game.world().seats.length && __game.world().player.cosmeticKind === 'wisp') return;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      throw Error('Mu entry did not finish');
+    })()`);
     assert.equal(await js('__game.world().player.cosmeticKind'), 'wisp');
     assert.equal(await js('__game.world().player.look'), 'spirit');
     assert(await js("!document.querySelector('#menu-bar').classList.contains('hidden')"), 'menu stays visible in Mu');

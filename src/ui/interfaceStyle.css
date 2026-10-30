@@ -1,0 +1,118 @@
+/* Shared Inventory presentation. Layout, rarity, availability and gesture cues
+   remain owned by the existing panels. No dimensions on gameplay controls. */
+.panel.inventory-surface {
+  --panel-bg:var(--inv-surface); --panel-border:var(--inv-line);
+  --text:var(--inv-text); --text-dim:var(--inv-muted);
+  --inv-heading-band-edge:transparent;
+  color:var(--inv-text); background:var(--inv-panel-fill);
+  border-color:var(--inv-edge); border-top-color:var(--inv-light); border-radius:2px;
+  box-shadow:inset 0 0 0 3px #08141a,inset 0 0 0 4px var(--inv-seam),
+    0 0 0 1px #071215,0 0 20px var(--inv-bloom),0 16px 36px #0009;
+  scrollbar-color:var(--inv-edge) var(--inv-surface);
+}
+.panel.inventory-surface h2 {
+  position:relative; color:var(--inv-title); font-family:Georgia,'Times New Roman',serif;
+  font-weight:400; line-height:var(--inv-title-line); letter-spacing:1.3px; border-bottom-color:transparent; text-shadow:0 1px 2px #0008;
+}
+.inventory-surface .inventory-wallet { font-family:'Segoe UI',sans-serif; }
+.inventory-surface h3 { color:#c6b58e; font-weight:500; letter-spacing:.4px; }
+.inventory-surface :where(button:not(.bound):not(.active):not([aria-pressed=true])) {
+  background:var(--inv-control-fill);
+}
+.inventory-surface :where(button:hover:not(:disabled):not(.bound):not(.active)) { background:var(--inv-control-hover); }
+.inventory-surface .panel-x { color:#c5cbc2; border-color:#435354; box-shadow:inset 0 1px #ffffff0b,0 2px 3px #0004; }
+.inventory-surface .panel-x:hover { color:#fff1d7; border-color:#c3ab7e; }
+.inventory-surface :is(.build-scroll,.inv-scroll,.build-ribbons) { scrollbar-color:var(--inv-edge) var(--inv-surface); }
+.inventory-surface .inventory-vestige-menu { background:#122027; border-color:var(--inv-edge); box-shadow:0 9px 25px #000b; }
+.inventory-surface .inv-ghost { opacity:.48; filter:grayscale(.8); }
+.inventory-surface .inv-empty-label { color:#8fabae; }
+.inventory-surface [data-doll]:not([data-item-uid]) { box-shadow:inset 0 0 0 2px #091519,inset 0 0 0 3px #2e4347; }
+.inventory-surface .skill-entry { background:linear-gradient(105deg,#1c3035,#13232b 80%); border-radius:2px; box-shadow:inset 0 1px #b9d5c311,0 2px 4px #0003; }
+.inventory-surface .skill-entry .name { color:var(--inv-text); }
+.inventory-surface .skill-entry .tags { color:var(--inv-muted); }
+.inventory-surface .rack-unlearn { color:#c0c5c7; background:#13252c; }
+.inventory-surface .gem-chip.support-slot { background:radial-gradient(circle,#2b3b43,#17252f); border-color:#748293; color:#c4c7d4; }
+.inventory-surface .tree-search { color:var(--inv-text); background:var(--inv-surface); border-color:var(--inv-edge); }
+.inventory-surface .book-tabs button:not(.active) { background:var(--inv-control-fill); }
+.inventory-surface .book-tabs button.active { background:#2c4145; }
+.inventory-surface :is(.inv-frame-chrome,.inv-frame-chrome *,.inv-heading-ornament,.inv-heading-ornament *, .inv-ribbon-inset) { pointer-events:none; box-sizing:border-box; }
+.inv-frame-chrome { position:absolute;inset:0;color:var(--inv-light);z-index:3; }
+.inv-frame-corner { position:absolute;width:24px;height:24px;border-top:1px solid currentColor;border-left:1px solid currentColor;transform-origin:center; }
+.inv-frame-corner.tl { left:3px;top:3px; }
+.inv-frame-corner.tr { right:3px;top:3px;transform:rotate(90deg); }
+.inv-frame-corner.br { right:3px;bottom:3px;transform:rotate(180deg); }
+.inv-frame-corner.bl { left:3px;bottom:3px;transform:rotate(270deg); }
+#inventory .inv-frame-corner.tl { left:-3px;top:-3px; }
+#inventory .inv-frame-corner.tr { right:-3px;top:-3px; }
+#inventory .inv-frame-corner.br { right:-3px;bottom:-3px; }
+#inventory .inv-frame-corner.bl { left:-3px;bottom:-3px; }
+.inv-frame-corner::before { content:'';position:absolute;width:5px;height:5px;left:-3px;top:-3px;transform:rotate(45deg);border:1px solid var(--inv-light);background:#0d1a1e; }
+.inv-frame-corner::after { content:'';position:absolute;width:12px;height:12px;left:4px;top:4px;border-top:1px solid var(--inv-edge);border-left:1px solid var(--inv-edge); }
+.inv-frame-crest { position:absolute;top:0;left:calc(50% - 24px);width:48px;height:9px;background:linear-gradient(90deg,transparent,#0c191f 18%,#0c191f 82%,transparent); }
+.inv-frame-crest::before,.inv-frame-crest::after { content:'';position:absolute;top:4px;height:1px;width:16px;background:linear-gradient(90deg,transparent,var(--inv-light)); }
+.inv-frame-crest::after { right:0;transform:rotate(180deg); }
+.inv-frame-crest > span { display:block;position:absolute;width:6px;height:6px;top:1px;left:21px;transform:rotate(45deg);background:var(--inv-light);box-shadow:0 0 9px var(--inv-light); }
+.inv-frame-crest.bottom { top:auto;bottom:0; }
+#inventory .inv-frame-crest { top:-4px; }
+#inventory .inv-frame-crest.bottom { top:auto;bottom:-4px; }
+[data-ui-frame=aether] > .inv-frame-chrome {
+  background:linear-gradient(90deg,transparent 8%,#a4d7c66b 28%,transparent 48%) top / 100% 1px no-repeat,
+    linear-gradient(90deg,transparent 45%,#a4d7c670 75%,transparent 98%) bottom / 100% 1px no-repeat,
+    radial-gradient(ellipse at top left,#61b7b72b,transparent 75%) top left / 46px 46px no-repeat,
+    radial-gradient(ellipse at bottom right,#61b7b72b,transparent 75%) bottom right / 46px 46px no-repeat;
+}
+[data-ui-frame=aether] .inv-frame-corner { filter:drop-shadow(0 0 3px #a4d7c678); }
+.panel.inventory-surface[data-ui-frame=relic] { box-shadow:inset 0 0 0 2px #111b1d,inset 0 0 0 3px var(--inv-edge),inset 0 0 0 5px #101a1c,inset 0 0 0 6px #d3b78919,0 12px 30px #000a; }
+[data-ui-frame=relic] .inv-frame-corner { width:28px;height:28px;border-width:2px; }
+[data-ui-frame=relic] .inv-frame-corner::after { width:16px;height:16px;left:5px;top:5px; }
+[data-ui-frame=relic] .inv-frame-crest > span { background:#352a1d;border:1px solid var(--inv-light);box-shadow:none; }
+[data-ui-frame=astral] .inv-frame-corner { width:30px;height:30px;border-radius:50% 0 0; }
+[data-ui-frame=astral] .inv-frame-corner::after { width:19px;height:19px;border-radius:50% 0 0; }
+[data-ui-frame=astral] .inv-frame-crest { width:58px;left:calc(50% - 29px); }
+[data-ui-frame=astral] .inv-frame-crest > span { left:26px;border-radius:50%;background:#211a30;border:1px solid var(--inv-light); }
+.panel.inventory-surface[data-ui-frame=simple] { border-color:var(--inv-line);border-radius:4px;box-shadow:inset 0 1px #d8ead210,0 12px 32px #0009; }
+[data-ui-frame=simple] > .inv-frame-chrome { display:none; }
+
+/* Title details are entirely outside the heading's text flow. */
+.inv-heading-ornament { position:absolute;left:0;right:0;bottom:-5px;height:10px; }
+.inv-heading-band > .inv-heading-ornament { left:14px;right:14px; }
+.inv-heading-ornament::before { content:'';position:absolute;left:0;top:2px;width:3px;height:5px;border-left:1px solid #b7d2c6;border-right:1px solid #678b86; }
+.inv-heading-line { position:absolute;left:0;right:0;top:4px;height:1px; }
+.inv-heading-line.main { background:linear-gradient(90deg,#96b9b0,#517471 22%,#8eaaa25e 75%,transparent); }
+.inv-heading-line.echo { top:7px;opacity:.42;left:8px;right:8px;background:linear-gradient(90deg,#739e97,transparent 43%,#638d8844); }
+.inv-heading-gem { position:absolute;width:5px;height:5px;top:2px;left:var(--inv-heading-jewel);transform:rotate(45deg);background:#c0d5c8;border:1px solid #dcf0d9;box-shadow:0 0 0 2px #142329,0 0 7px #8db9ad55; }
+.inv-heading-gem.two { left:calc(var(--inv-heading-jewel) - 12px);width:3px;height:3px;top:3px;background:#3a5c5d;border-color:#a7beb2; }
+.inv-heading-gem.three { left:calc(var(--inv-heading-jewel) + 12px);width:3px;height:3px;top:3px;background:#3a5c5d;border-color:#a7beb2; }
+.inv-heading-inscription { display:none; }
+[data-ui-divider=crest] .inv-heading-ornament { --inv-heading-jewel:calc(50% - 3px); }
+[data-ui-divider=crest] .inv-heading-line.echo { left:25%;right:25%;top:0;height:9px;border-bottom:1px solid #c2cda78c;border-radius:50%;background:none;opacity:1; }
+[data-ui-divider=crest] .inv-heading-gem.one { width:6px;height:6px;background:#56766c;border-color:#ddd3af; }
+[data-ui-divider=runic] .inv-heading-gem,[data-ui-divider=simple] .inv-heading-gem { display:none; }
+[data-ui-divider=runic] .inv-heading-line.echo { left:0;right:0;top:6px;height:2px;background:repeating-linear-gradient(90deg,transparent 0 18px,#a1b8c65e 18px 19px,transparent 19px 26px); }
+[data-ui-divider=runic] .inv-heading-inscription { display:block;position:absolute;left:calc(50% - 47px);top:-2px;width:94px;height:12px;font:10px/12px 'Segoe UI Symbol',serif;letter-spacing:6px;text-align:center;color:#c7d1dc;background:linear-gradient(90deg,transparent,#16272d 12%,#16272d 88%,transparent); }
+[data-ui-divider=simple] .inv-heading-line.echo,[data-ui-divider=simple] .inv-heading-ornament::before { display:none; }
+
+/* Native ribbon buttons retain their rectangular hit areas, padding and labels. */
+.inventory-surface .build-ribbon { position:relative;color:#d3ded7;background:linear-gradient(90deg,#101c22,#1d3036 55%,#142229);border-color:#597476;border-radius:2px;box-shadow:inset 0 1px #c0d7c51a,0 2px 5px #0005; }
+.inventory-surface .build-ribbon-label,.inventory-surface .build-ribbon-count { position:relative;text-shadow:0 1px 2px #000a; }
+.inventory-surface .build-ribbon-count { color:var(--inv-muted); }
+.inventory-surface .build-ribbon:hover { color:#f2f3df;border-color:#8bad9f;background:#243c42; }
+.inventory-surface .build-ribbon[aria-expanded=true] { color:#fff0cc;border-color:#a8bba6;background:#304849;box-shadow:inset 0 0 0 1px #07181e,0 0 11px #9cd1b82b; }
+.inv-ribbon-inset { position:absolute;inset:3px;border:1px solid #7b9d9b55;border-radius:1px; }
+.inv-ribbon-inset::before,.inv-ribbon-inset::after { content:'';position:absolute;pointer-events:none;box-sizing:border-box; }
+[data-ui-ribbon=pennants] .build-ribbon { background:linear-gradient(90deg,#08151b,#102129);border-color:#3e5b60;box-shadow:inset 0 0 0 1px #060e13,0 2px 4px #0008; }
+[data-ui-ribbon=pennants] .inv-ribbon-inset { inset:2px 2px 1px;border:0;border-radius:0;background:linear-gradient(105deg,#8caea9,#d3dfce 18%,#759d99 44%,#45696e 70%,#93b1a8);clip-path:polygon(0 0,100% 0,100% calc(100% - var(--inv-pennant-tip)),50% 100%,0 calc(100% - var(--inv-pennant-tip))); }
+[data-ui-ribbon=pennants] .inv-ribbon-inset::before { inset:1px;background:linear-gradient(90deg,#a5c8bd0a,transparent 22%,#06151b19 49%,#b2d0bc0d 51%,transparent 77%),linear-gradient(105deg,#1c3037,#293f44 35%,#192c34 74%,#263d43);clip-path:polygon(0 0,100% 0,100% calc(100% - var(--inv-pennant-tip)),50% calc(100% - 1px),0 calc(100% - var(--inv-pennant-tip))); }
+[data-ui-ribbon=pennants] .inv-ribbon-inset::after { left:4px;right:4px;top:4px;height:1px;background:linear-gradient(90deg,#52777a,#d1dfce 50%,#52777a);box-shadow:0 1px #061116,0 3px #b4d3c51a; }
+[data-ui-ribbon=pennants] .build-ribbon:hover .inv-ribbon-inset::before { background:linear-gradient(100deg,#2b4348,#344c4c 40%,#20363e 78%,#2b4348); }
+[data-ui-ribbon=pennants] .build-ribbon[aria-expanded=true] .inv-ribbon-inset { background:linear-gradient(100deg,#d1dbb9,#eee6c0 30%,#b6c9b2 57%,#6f9a91); }
+[data-ui-ribbon=pennants] .build-ribbon[aria-expanded=true] .inv-ribbon-inset::before { background:linear-gradient(100deg,#304b49,#3c5350 40%,#243b40 78%,#344a49); }
+[data-ui-ribbon=pennants] .build-ribbon[aria-expanded=true] .inv-ribbon-inset::after { background:linear-gradient(90deg,#9db9a4,#f0e5b8,#9db9a4);box-shadow:0 1px #07181d,0 0 5px #e2e3ac42; }
+[data-ui-ribbon=silver] .inv-ribbon-inset { background:linear-gradient(#b4d2c3,#b4d2c3) top left / 7px 1px no-repeat,linear-gradient(#b4d2c3,#b4d2c3) bottom left / 7px 1px no-repeat; }
+[data-ui-ribbon=silver] .inv-ribbon-inset::before { width:3px;height:3px;left:-2px;top:calc(50% - 2px);transform:rotate(45deg);border:1px solid #b1cbbb;background:#182b30;box-shadow:0 0 0 2px #15242a; }
+[data-ui-ribbon=runic] .build-ribbon { background:linear-gradient(90deg,transparent 5px,#b4a6d95e 5px 6px,transparent 6px),linear-gradient(90deg,#121c29,#25313e 48%,#14222d); }
+[data-ui-ribbon=runic] .inv-ribbon-inset { inset:4px;border-color:transparent;background:repeating-linear-gradient(90deg,transparent 0 4px,#b9add18c 4px 5px,transparent 5px 8px) top / 100% 2px no-repeat,repeating-linear-gradient(90deg,transparent 0 4px,#b9add18c 4px 5px,transparent 5px 8px) bottom / 100% 2px no-repeat; }
+[data-ui-ribbon=simple] .inv-ribbon-inset { display:none; }
+@media(prefers-reduced-motion:reduce) {
+  .inventory-surface .build-ribbon.tut-glow { animation:none;box-shadow:0 0 8px 2px #c8a8ff99;border-color:#e0c8ff;color:#f0e4ff; }
+}

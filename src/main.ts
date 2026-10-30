@@ -3,6 +3,8 @@ import './ui/brand.css';
 import './ui/frontScreen.css';
 import './ui/sideScreen.css';
 import './ui/codexShell.css';
+import './ui/interfaceStyle.css';
+import { applyInterfaceStyle } from './ui/interfaceStyle';
 import { sanitizeCosmeticLoadout } from './meta/cosmetics';
 // ---------------------------------------------------------------------------
 // Entry point: boots the world, runs the loop, and routes player input into
@@ -187,6 +189,7 @@ const settings: Settings = loadSettings();
 // player's size, not at 100% until they visit Options.
 installUiScaleStyles();
 applyUiScale(settings.uiScale);
+applyInterfaceStyle(settings.interfaceStyle);
 // THE UI STACK LAW (ui/zorder.ts): seat every selector-delivered surface on
 // its rung before anything shows — activatable panels above every canvas.
 installUiStack();
@@ -1006,6 +1009,7 @@ const diskHydrated = (async (): Promise<void> => {
   reconcileClassBundleGems(account);
   Object.assign(settings, s);
   applyUiScale(settings.uiScale);             // the disk save may carry a different dial
+  applyInterfaceStyle(settings.interfaceStyle);
   ui.setContinueSave(c);                       // disk save wins (re-renders the menu)
   ui.setStartMenuNotice(saveResetNotice());
   // Workshop disk reconcile: the save file is the cross-session authority

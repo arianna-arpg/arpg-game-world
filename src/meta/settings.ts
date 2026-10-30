@@ -28,6 +28,7 @@ import { MENU_ANCHORS, MENU_CFG, type MenuAnchorId } from '../ui/menuConfig';
 import { ESCAPE_CFG, ESCAPE_MODES, type EscapeCloseMode } from '../ui/escapeConfig';
 import { PORTAL_ANCHORS, PORTAL_VISIBILITY, PORTAL_BUTTON_CFG, type PortalAnchorId, type PortalVisibilityId } from '../ui/portalConfig';
 import { MEMORY_REVEAL_CFG } from '../ui/memoryRevealConfig';
+import { DEFAULT_INTERFACE_STYLE, normalizeInterfaceStyle, type InterfaceStyle } from '../ui/interfaceStyleConfig';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -72,6 +73,8 @@ export interface PadOptions {
 
 export interface Settings {
   schemaVersion: number;
+  /** Wardrobe's composable, device-local Inventory presentation. */
+  interfaceStyle: InterfaceStyle;
   keybinds: Record<ActionId, string>;
   /** Controller bindings, parallel to keybinds ('' = unbound). */
   padBinds: Record<PadActionId, string>;
@@ -291,6 +294,7 @@ export type HoverNameplatesMode = 'named' | 'all';
 
 export interface SettingsSave {
   schemaVersion: number;
+  interfaceStyle?: Partial<InterfaceStyle>;
   keybinds: Record<string, string>;
   padBinds?: Record<string, string>;
   pad?: Partial<PadOptions>;
@@ -467,6 +471,7 @@ export function resolveBindTokens(text: string, s: Settings, padActive: boolean)
 
 export const makeSettings = (): Settings => ({
   schemaVersion: SETTINGS_SCHEMA_VERSION,
+  interfaceStyle: { ...DEFAULT_INTERFACE_STYLE },
   keybinds: { ...DEFAULT_KEYBINDS },
   padBinds: { ...DEFAULT_PAD_BINDS },
   pad: { ...DEFAULT_PAD_OPTIONS },
@@ -519,6 +524,7 @@ export const makeSettings = (): Settings => ({
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
+  interfaceStyle: normalizeInterfaceStyle(s.interfaceStyle),
   schemaVersion: s.schemaVersion,
   keybinds: { ...s.keybinds },
   padBinds: { ...s.padBinds },
@@ -649,6 +655,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     speechTyping: s.speechTyping ?? true,
     memoryReveal: s.memoryReveal === 'instant' || s.memoryReveal === 'cinematic' ? s.memoryReveal : MEMORY_REVEAL_CFG.defaultMode,
     memoryPreview: typeof s.memoryPreview === 'boolean' ? s.memoryPreview : MEMORY_REVEAL_CFG.autoplayPreview,
+    interfaceStyle: normalizeInterfaceStyle(s.interfaceStyle),
     npcShopVisits: Array.isArray(s.npcShopVisits) ? [...new Set(s.npcShopVisits.filter((v): v is string => typeof v === 'string'))] : [],
     // Unknown values (and pre-dial saves) fall back to the classic read —
     // the additive-field law: no schema bump, older saves simply lack it.
