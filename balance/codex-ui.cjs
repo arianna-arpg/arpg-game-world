@@ -14,7 +14,7 @@ app.whenReady().then(async () => {
   const js = source => win.webContents.executeJavaScript(source);
   const click = async sel => { assert.ok(await js(`(()=>{const e=document.querySelector(${JSON.stringify(sel)});if(!e)return false;e.click();return true;})()`), `Missing clickable ${sel}`); };
   const search = value => js(`(()=>{const e=document.querySelector('[data-cx-search]');e.value=${JSON.stringify(value)};e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-  const shot = async name => { await sleep(180); fs.writeFileSync(path.join(out, name + '.png'), (await win.webContents.capturePage()).toPNG()); };
+  const shot = async name => { await sleep(450); fs.writeFileSync(path.join(out, name + '.png'), (await win.webContents.capturePage()).toPNG()); };
   const waitFor = async (source, limit = 15000) => { const end = Date.now()+limit; while(Date.now()<end){if(await js(`!!(${source})`))return; await sleep(100);} throw Error('Timed out: '+source); };
   const errors=[];win.webContents.on('console-message',e=>{if(e.level==='error')errors.push(e.message);});
   let checks=0; const check=(name,ok)=>{assert.ok(ok,name);checks++;console.log('PASS '+name);};

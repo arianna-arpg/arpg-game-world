@@ -183,14 +183,24 @@ export const CODEX_PROVIDERS: Record<string, (a: Account) => CodexEntry[]> = {
   ],
 };
 export function codexEntries(a: Account, page: string): CodexEntry[] { return CODEX_PROVIDERS[page]?.(a) ?? []; }
+/** Shared normalization for names, prose and tags. Query terms may match across fields. */
+const searchText = (text: string): string => text.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase()
+  .replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
 export function codexFilter(entries: readonly CodexEntry[], f: CodexFilter): CodexEntry[] {
-  const q = f.query.trim().toLocaleLowerCase();
-  return entries.filter(r => (f.status === 'all' || r.locked === (f.status === 'locked'))
-    // Secret names, tags, stats and rune word-shapes cannot be used as a search oracle.
-    && (!r.locked || (!q && !f.tags.length))
-    && f.tags.every(t => r.tags.includes(t))
-    && (!q || `${r.title} ${r.description} ${r.tags.join(' ')}`.toLocaleLowerCase().includes(q)))
-    .sort((a, b) => Number(a.locked) - Number(b.locked) || (a.locked ? 0 : a.title.localeCompare(b.title)));
+  const query = searchText(f.query), terms = [...new Set(query.split(' ').filter(Boolean))];
+  const searching = !!f.query.trim();
+  return entries.flatMap(r => {
+    if (f.status !== 'all' && r.locked !== (f.status === 'locked')) return [];
+    // Never index a locked row: even punctuation/runes-only queries cannot reveal it.
+    if (r.locked) return searching || f.tags.length ? [] : [{ entry: r, rank: 4 }];
+    if (!f.tags.every(t => r.tags.includes(t))) return [];
+    const name = searchText(r.title);
+    const body = searchText([r.title, r.description, ...r.tags, ...r.facts.flatMap(f => [f.label, f.value])].join(' '));
+    if (searching && (!terms.length || !terms.every(t => body.includes(t)))) return [];
+    const rank = !query || name === query ? 0 : name.startsWith(query) ? 1 : terms.every(t => name.includes(t)) ? 2 : 3;
+    return [{ entry: r, rank }];
+  }).sort((a, b) => Number(a.entry.locked) - Number(b.entry.locked) || a.rank - b.rank
+    || (a.entry.locked ? 0 : a.entry.title.localeCompare(b.entry.title))).map(r => r.entry);
 }
 /** A worked example executed by the actual combat conversion path. */
 export function codexConversion(from: DamageType, to: DamageType, percent: number): Partial<Record<DamageType, number>> {

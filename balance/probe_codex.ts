@@ -63,6 +63,25 @@ test('discovery, debug access, and all-tag filters share the existing account ru
   assert.ok(codexEntries(a, 'supports').every(e => !e.locked));
   a.features.delete(FEATURE.UNLOCK_ALL_GEMS);
 });
+test('search matches normalized terms across known names, tags, prose and live facts', () => {
+  const make = (key: string, title: string, description: string, tags: string[], facts: {label: string; value: string}[] = []) =>
+    ({ key, title, description, tags, facts, state: 'Known', locked: false });
+  const rows = [make('a', 'Ash', 'A firebolt trails the target.', ['spell']), make('b', 'Firebolt Nova', '', ['spell']),
+    make('c', 'Firebolt', 'A focused blast.', ['spell'], [{label:'Base cooldown',value:'0.5s'}]),
+    make('d', 'Éther—Ward', 'A protective field.', ['aura'])];
+  assert.deepEqual(codexFilter(rows, {...all,query:'FIREBOLT'}).map(e=>e.key), ['c','b','a']);
+  assert.deepEqual(codexFilter(rows, {...all,query:'spell focused 0.5s'}).map(e=>e.key), ['c']);
+  assert.deepEqual(codexFilter(rows, {...all,query:'  ether  ward  '}).map(e=>e.key), ['d']);
+  assert.deepEqual(codexFilter(rows, {...all,query:'ward',tags:['spell']}), []);
+  assert.deepEqual(codexFilter(rows, {...all,query:'!!!'}), []);
+});
+test('search never indexes locked facts, partial runes, punctuation or combined filters', () => {
+  const locked = codexEntries(makeAccount(), 'skills').filter(e => e.locked);
+  for (const query of ['fire', 'mana', '!!!', locked[0].title.slice(0, 1)]) {
+    assert.deepEqual(codexFilter(locked, {...all,query,status:'locked'}), []);
+  }
+  assert.equal(codexFilter(locked, {...all,query:'   ',status:'locked'}).length, locked.length);
+});
 test('support demonstrations only offer discovered, compatible base skills', () => {
   assert.deepEqual(codexSupportHosts(a, Object.values(SUPPORTS).find(s => !a.unlockedSupports.has(s.id))!.id), []);
   const hosts = codexSupportHosts(a, 'piercing');

@@ -51,9 +51,6 @@ export function mountSideScreen(root: HTMLElement, profile: SideScreenProfile,
   </aside>` : ''}`;
   const content = shell.querySelector<HTMLElement>('.side-content')!;
   content.append(...Array.from(root.childNodes));
-  for (const [region, selector] of Object.entries(profile.regions)) {
-    content.querySelectorAll(selector).forEach(el => el.classList.add('side-' + region));
-  }
   root.appendChild(shell);
   bindFrontAtmosphere(shell);
   shell.addEventListener('keydown', e => {
@@ -61,6 +58,17 @@ export function mountSideScreen(root: HTMLElement, profile: SideScreenProfile,
     // Rebind capture runs at window capture phase and remains authoritative.
     if (e.key === 'Tab') e.stopPropagation();
   });
+  refreshSideScreen(root, profile, previousFocus);
+}
+
+/** A reader can redraw within its existing shell without replaying the entrance animation. */
+export function refreshSideScreen(root: HTMLElement, profile: SideScreenProfile, previousFocus?: string): void {
+  const shell = root.querySelector<HTMLElement>(':scope > .side-screen');
+  const content = shell?.querySelector<HTMLElement>('.side-content');
+  if (!shell || !content) return;
+  for (const [region, selector] of Object.entries(profile.regions)) {
+    content.querySelectorAll(selector).forEach(el => el.classList.add('side-' + region));
+  }
   const heading = content.querySelector<HTMLElement>('h1');
   if (heading) heading.tabIndex = -1;
   requestAnimationFrame(() => {

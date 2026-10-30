@@ -101,9 +101,53 @@ written to the ignored `balance/reports/codex/` folder.
 ## Shared menu presentation
 
 The optional `CodexOptions.shell` contract applies the configurable profile in
-`ui/sideScreenConfig.ts` on every full reader redraw. It preserves keyboard
+`ui/sideScreenConfig.ts`. Tab changes refresh regions inside the existing shell
+without replaying its entrance animation. It preserves keyboard
 focus and keeps Back in a fixed footer. Menu and Vault entries use the entrance
 atmosphere; the escape-menu host uses the world context with its existing
 pause and input policy. See [front-screen](front-screen.md) for configuration
 and the additional shared-shell acceptance course. Vault returns retain the
 original render closure, tab, scroll, investments and unassigned essence.
+
+## Reading and navigation
+
+Search accepts multiple words across the public name, tags, description and
+current reference facts. Every word must match; punctuation, case and accents
+are normalized. Exact names rank first, then name prefixes, then other name
+matches, then descriptive matches. New queries select the top result. Locked
+rows never enter the search index, including rune and punctuation-only queries.
+Tag chips combine with AND and can be removed individually. Clear search keeps
+other filters; Clear filters resets the leaf's filters and results page.
+
+Each leaf remembers its filters, results page, selected entry and scroll for
+the UI session. Arrow keys navigate section/page ribbons and the result grid;
+Home/End reach their ends and Page Up/Down turn result pages. `/` or Ctrl/Cmd+F
+focuses search. Down moves from search to its result; Enter opens that entry.
+Previous/next entry controls cross result pages without losing the reader.
+Escape clears a focused query first, then returns a compact reader to results,
+then returns to the opening surface.
+
+On narrow panes, opening an entry gives it the full reading area. Results and
+Escape restore the list position and selected card; the search shortcut reopens
+the browse controls. Back stays in the fixed footer. Short panes let the entire
+results column scroll so paging cannot squeeze the cards out of view. Layout
+uses the shared palette and UI scale, with reduced-motion and forced-color
+fallbacks. `codexShell.css` is loaded by the browser entry point, never a
+headless model/reader import.
+
+`ui/codexPreview.ts` owns the selected entry's demonstration controls. Explicit
+Play, Stop and Restart reuse the shared showcase engine; readiness, unavailable
+and delayed messages use its public signals and `CODEX_CFG.previewWaitMs`.
+Retry replaces only the player. A late frame can still recover a delayed
+preview. Compatible support hosts are sorted by name and remembered per leaf;
+Include support switches the same base skill between supported and unsupported
+play. Changing filters or refreshing account facts keeps a still-selected
+player and its controls, while newly discovered hosts update the existing
+selector. Leaving the entry removes observers, wait timers and media.
+
+After a build, `npx electron balance/codex-polish-ui.cjs` checks the actual
+keyboard routes, normalized search, retained playback, base/support comparison,
+restart/retry, live edits, compact reading and scroll restoration at several
+viewport/UI-scale combinations. Its screenshots are in the ignored
+`balance/reports/codex-polish/` directory. Also run the shared shell acceptance
+(`balance/front-screen-ui.cjs`) when changing the Codex's shell decoration.
