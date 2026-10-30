@@ -8,6 +8,31 @@ placement, scrolling, folio selection, close policies and player ownership.
 The same choices now cover the upper folio tabs, nested category tabs, NPC
 dialogue, station windows, menus, tooltips and smaller decision dialogs.
 
+Navigation uses the same bone text, frame accent, neutral card material and
+hover/focus glow in Pause, Codex, Wardrobe, Options and Mu's vessel chooser.
+Shared control rules own ink, borders, corners and shadows as well as fills;
+legacy menu rules consume these tokens instead of supplying a separate gold
+palette. Cosmetic swatches, class identity, rarity and warning colors remain
+meaningful content. Selected catalogue cards retain a distinct inset accent.
+
+Back sits last, at the lower right, in menu navigation footers. Wardrobe and
+its Interface page keep that footer visible while the body scrolls; Options,
+Save & Exit, class selection and the browser exit fallback follow the same
+placement. Codex's compact Results action precedes Back. Existing Vault,
+Chronicle and Immortal footers retain their original return/seal actions.
+
+`INTERFACE_SURFACES.entrances` opts menu panes, dialogue/station panels and
+small dialogs into a shared opacity entrance. Its duration and the control
+transition/glow are configurable `--inv-*` tokens. No transforms, input delays,
+gameplay holds or per-frame scans are added. Reduced motion disables these
+entrances and control transitions. `renderInterfacePage` keeps Wardrobe's outer
+page stable across picker redraws, so searching, choosing a cosmetic or saving
+does not replay the entrance. Real navigation creates a new page. The sample
+inherits its parent's UI scale exactly once, including its folio tabs.
+Plain menu roots use `presentInterfaceView` to distinguish navigation from
+settings/census refreshes. It uses the same duration, cancels superseded motion
+and responds to reduced-motion changes without delaying navigation or input.
+
 ## Wardrobe
 
 Open **Menu → Wardrobe → Interface**, or enter Wardrobe from the Vault.
@@ -46,6 +71,8 @@ default; each unknown selection falls back independently when loading.
   faces and controls. Imported only by the browser entry in `main.ts` so Node
   checks can continue importing shared UI modules.
 - `ui/wardrobeInterface.ts`: isolated draft/sample and explicit save action.
+- `ui/interfacePage.ts`: reusable stable page, scrolling body and navigation
+  footer; each provider still owns its content and handlers.
 - `Settings.interfaceStyle`: additive persistence; no schema reset. Main applies
   the selection at initial load and again after authoritative disk hydration.
 
@@ -103,3 +130,9 @@ geometry, draft isolation, live saving, future dynamically created panels,
 station coverage, vendor materials, Pause, the menu tray, Vault and the isolated
 loading palette. Inventory and service courses retain the gesture/ownership
 contracts; no new skin-specific gameplay policies are introduced.
+
+`balance/interface-cohesion-ui.cjs` checks actual mouse hover and keyboard
+focus, matching menu materials before/after a saved theme change, live fade
+keyframes, picker redraw stability, lower-right Back placement, narrow/enlarged
+Wardrobe layouts, reduced motion and nested Vault returns. Run it after a build,
+alongside the Codex, cosmetics, front-screen and Save & Exit courses.

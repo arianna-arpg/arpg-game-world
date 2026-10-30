@@ -9,6 +9,7 @@ import { drawCosmeticStyleTile } from '../render/vis/cosmeticEffects';
 import type { BodyLook } from '../render/vis/body';
 import { hollowWakeMenuHeader } from './brand';
 import { renderWardrobeInterface, type WardrobeInterfaceOptions } from './wardrobeInterface';
+import { renderInterfacePage } from './interfacePage';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 interface WardrobeOptions {
@@ -20,50 +21,55 @@ function installStyles(): void {
   if (document.getElementById('wardrobe-styles')) return;
   const style = document.createElement('style'); style.id = 'wardrobe-styles';
   style.textContent = `
-  #escape-menu:has(.wardrobe), #account-screen:has(.wardrobe) { width:min(1080px,94vw); max-width:94vw; max-height:90vh; padding:0; overflow:auto; background:#101820; border:1px solid #596878; }
-  .wardrobe { color:#d9e1e8; text-align:left; font:14px/1.5 Georgia,serif; padding:26px; box-sizing:border-box; }
+  #escape-menu:has(> .wardrobe), #account-screen:has(> .wardrobe) { width:min(1080px,calc(94vw / var(--ui-scale,1))); height:min(900px,calc(90dvh / var(--ui-scale,1))); min-width:0; max-width:none; max-height:none; padding:0; overflow:hidden; background:transparent; border:0; }
+  .wardrobe { color:var(--inv-text); border:1px solid var(--inv-edge); text-align:left; font:13px/1.55 'Segoe UI',sans-serif; box-sizing:border-box; overflow-wrap:anywhere; }
   .wardrobe * { box-sizing:border-box; }
-  .wardrobe h1 { font-size:30px; margin:0; color:#f0dfbd; letter-spacing:2px; }
-  .wardrobe h2 { color:#ecdfc8; font-size:20px; margin:8px 0; }
+  .wardrobe h1, :is(#escape-menu,#account-screen) .wardrobe h1 { font:normal 29px/1.15 Georgia,serif; margin:0; color:var(--inv-title); letter-spacing:.5px; }
+  .wardrobe h2 { color:var(--inv-title); font:normal 20px/1.3 Georgia,serif; margin:8px 0; }
   .wardrobe p { margin:8px 0; }
   .wardrobe header { display:flex; gap:20px; justify-content:space-between; align-items:center; margin-bottom:18px; }
-  .wardrobe small,.wardrobe .wd-muted { color:#a9b7c4; }
-  .wardrobe .wd-eyebrow { font:11px/1.5 sans-serif; text-transform:uppercase; letter-spacing:2px; color:#b8a0d8; }
+  .wardrobe small,.wardrobe .wd-muted { color:var(--inv-muted); }
+  .wardrobe .wd-eyebrow { font:11px/1.5 sans-serif; text-transform:uppercase; letter-spacing:2px; color:var(--inv-light); }
   .wardrobe .wd-layout { display:grid; grid-template-columns:minmax(255px,0.85fr) minmax(300px,1.4fr); gap:24px; }
-  .wardrobe canvas { width:100%; height:auto; border:1px solid #344554; border-radius:8px; display:block; }
-  .wardrobe button,.wardrobe select,.wardrobe input { font:13px/1.4 sans-serif; color:#dde6ec; background:#1a2835; border:1px solid #415465; border-radius:5px; padding:9px 12px; }
+  .wardrobe canvas { width:100%; height:auto; border:1px solid var(--inv-line); border-radius:var(--inv-control-radius); display:block; }
+  .wardrobe button,.wardrobe select,.wardrobe input { font:12px/1.4 'Segoe UI',sans-serif; color:var(--inv-text); background:var(--inv-control-fill); border:1px solid var(--inv-edge); border-radius:var(--inv-control-radius); padding:9px 12px; }
   .wardrobe button { cursor:pointer; }
-  .wardrobe button:hover,.wardrobe button:focus-visible { border-color:#c8b0e7; background:#283748; }
+  .wardrobe button:hover:not(:disabled),.wardrobe button:focus-visible:not(:disabled) { border-color:var(--inv-light); background:var(--inv-control-hover); }
   .wardrobe button:disabled { opacity:0.5; cursor:default; }
   .wardrobe .wd-tabs { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
-  .wardrobe [aria-selected=true],.wardrobe [aria-pressed=true] { border-color:#d1b8ef; background:#302d44; }
+  .wardrobe [aria-selected=true],.wardrobe [aria-pressed=true] { border-color:var(--inv-light); background:var(--inv-tab-active); }
   .wardrobe .wd-tools { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
   .wardrobe input { flex:1; min-width:100px; }
   .wardrobe .wd-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; max-height:340px; overflow-y:auto; padding:2px; }
   .wardrobe .wd-card { padding:14px; text-align:left; min-height:115px; position:relative; }
   .wardrobe .wd-card b,.wardrobe .wd-card small { display:block; }
   .wardrobe .wd-swatch { width:28px; height:28px; border-radius:50%; margin-bottom:8px; background:radial-gradient(circle at 35% 25%,#ffffffa0,var(--swatch) 55%,#101820); box-shadow:0 0 18px color-mix(in srgb,var(--swatch) 25%,transparent); }
-  .wardrobe canvas.wd-model-thumb { width:100%; height:95px; border:0; background:radial-gradient(ellipse,#31415280,transparent 70%); object-fit:contain; }
+  .wardrobe canvas.wd-model-thumb { width:100%; height:95px; border:0; background:radial-gradient(ellipse,color-mix(in srgb,var(--inv-edge) 35%,transparent),transparent 70%); object-fit:contain; }
   .wardrobe canvas.wd-effect-thumb { width:110px; height:40px; border:0; object-fit:contain; margin-bottom:5px; }
   .wardrobe .wd-color-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px; }
   .wardrobe input[type=color] { width:52px; height:42px; padding:3px; flex:0 0 52px; min-width:0; cursor:pointer; }
   .wardrobe input[data-wd-hex] { width:115px; flex:0 0 115px; font-family:monospace; }
-  .wardrobe .wd-state { position:absolute; top:12px; right:10px; font:10px sans-serif; text-transform:uppercase; letter-spacing:1px; color:#b8c9d6; }
-  .wardrobe .wd-detail { margin-top:14px; padding-top:12px; border-top:1px solid #344554; min-height:175px; }
-  .wardrobe .wd-detail.wd-picker-detail { margin:0 0 16px; padding:0 0 14px; border-top:0; border-bottom:1px solid #344554; }
+  .wardrobe .wd-state { position:absolute; top:12px; right:10px; font:10px sans-serif; text-transform:uppercase; letter-spacing:1px; color:var(--inv-muted); }
+  .wardrobe .wd-detail { margin-top:14px; padding-top:12px; border-top:1px solid var(--inv-line); min-height:175px; }
+  .wardrobe .wd-detail.wd-picker-detail { margin:0 0 16px; padding:0 0 14px; border-top:0; border-bottom:1px solid var(--inv-line); }
   .wardrobe .wd-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
-  .wardrobe .wd-primary { background:#514461; border-color:#ac91c5; }
+  .wardrobe .wd-primary { background:var(--inv-tab-active); border-color:var(--inv-light); }
   .wardrobe .wd-outfit { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; font-size:12px; }
-  .wardrobe .wd-outfit span { border:1px solid #344554; padding:4px 8px; border-radius:12px; }
-  .wardrobe .wd-note { color:#b9d7c6; min-height:22px; }
+  .wardrobe .wd-outfit span { border:1px solid var(--inv-line); padding:4px 8px; border-radius:var(--inv-control-radius); }
+  .wardrobe .wd-note { color:var(--inv-light); min-height:22px; }
   .wardrobe .wd-interface-stage { padding:12px 6px 12px 40px; }
-  .wardrobe .interface-preview { position:relative; width:auto; padding:16px; text-align:left; }
+  .wardrobe .interface-preview { position:relative; width:auto; padding:16px; text-align:left; zoom:1; }
+  .wardrobe .interface-preview[data-ui-divider=silver] .inv-heading-ornament { --inv-heading-jewel:min(124px,calc(100% - 18px)); }
+  .wardrobe .interface-preview .folio-strip { scale:1; transform:none; overflow-x:auto; }
   .wardrobe .interface-preview > h2 { font-size:15px; margin:0 0 10px; }
   .wardrobe .interface-preview .build-ribbon { padding:8px 3px; font:10px/1.3 sans-serif; }
   .wardrobe .wd-interface-slots { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin:10px 0; }
   .wardrobe .wd-interface-slots > span { height:32px; background:var(--inv-cell-fill); border:1px solid var(--inv-cell-edge); }
-  .wardrobe .wd-interface-choice { display:flex; flex-direction:column; gap:8px; margin-bottom:20px; }
-  @media(max-width:760px) { .wardrobe { padding:16px; } .wardrobe .wd-layout { grid-template-columns:1fr; } .wardrobe canvas { max-height:200px; object-fit:contain; } .wardrobe .wd-grid { max-height:260px; } }
+  .wardrobe .wd-interface-choice { display:flex; flex-direction:column; gap:8px; margin-bottom:20px; min-width:0; }
+  .wardrobe .wd-interface-choice select { width:100%; min-width:0; }
+  .wardrobe { container:wardrobe / inline-size; }
+  @container wardrobe (max-width:760px) { .wardrobe .interface-page-body { padding:16px; } .wardrobe .wd-layout { grid-template-columns:minmax(0,1fr); } .wardrobe canvas { max-height:200px; object-fit:contain; } .wardrobe .wd-grid { max-height:260px; } .wardrobe .wd-tools { min-width:0; } .wardrobe .wd-tools select { max-width:100%; } }
+  @container wardrobe (max-width:400px) { .wardrobe .wd-grid { grid-template-columns:minmax(0,1fr); } .wardrobe .wd-tools { flex-direction:column; align-items:stretch; } .wardrobe .wd-tools input { min-width:0; width:100%; } .wardrobe .interface-preview { padding:8px; } .wardrobe .wd-interface-stage { padding-right:0; } }
   `;
   document.head.appendChild(style);
 }
@@ -103,10 +109,10 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
     if (!skill && slot === 'skillSkin' && def?.skills?.[0]) (preview.skills[def.skills[0]] ??= {}).skillSkin = selected;
     let draftColor = account.cosmetics.loadout.customColors?.[skill] ?? def?.paint.color ?? '#c4b2f2';
     if (def?.consume && skill) preview.customColors![skill] = draftColor;
-    root.innerHTML = `<section class="wardrobe" aria-label="Wardrobe">
+    renderInterfacePage(root, { id:'wardrobe', className:'wardrobe', label:'Wardrobe', body:`
       ${hollowWakeMenuHeader()}
       <header><div><div class="wd-eyebrow">Your account · your identity</div><h1>Wardrobe</h1>
-      <p class="wd-muted">A different life. An unmistakable you.</p></div><button data-wd-back>Back</button></header>
+      <p class="wd-muted">A different life. An unmistakable you.</p></div></header>
       <div class="wd-layout"><aside>
         <canvas width="${COSMETIC_CFG.preview.width}" height="${COSMETIC_CFG.preview.height}" aria-label="Appearance preview"></canvas>
         <p class="wd-muted">Preview · ${previewSummon ? esc(previewSummon.name) : slot === 'wispSkin' ? 'your Mu vessel' : slot === 'portalSkin' || slot === 'portalRecolor' ? 'your Town Portal' : slot === 'hotbarSkin' ? 'your skill bar' : 'character, companion &amp; skill effects'}</p>
@@ -141,7 +147,7 @@ export function renderWardrobe(root: HTMLElement, opts: WardrobeOptions): void {
           ${def?.acquire.kind === 'credits' && (!owned || def.consume) ? `<button data-wd-buy ${account.credits < def.acquire.cost ? 'disabled' : ''}>${def.consume ? 'Buy 1 ink' : 'Unlock'} · ${def.acquire.cost} Mortal Essence</button>` : ''}
           ${skill ? '<button data-wd-inherit>Use account default</button>' : ''}</div>
         </div>
-      </div></div></section>`;
+      </div></div>`, footer:'<button data-wd-back>Back</button>' });
     // Keep the active picker and its explicit spend/save action above the catalogue.
     if (def?.consume) {
       const detail = root.querySelector<HTMLElement>('.wd-detail')!;
