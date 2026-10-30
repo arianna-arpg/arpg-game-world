@@ -554,10 +554,12 @@ export interface ConvertSpec {
   skillId: string;
 }
 
+import type { NativeSkillRuleHost } from './nativeSkillRuleHost';
+
 export type ConvertRule = (
   caster: import('./actor').Actor,
   inst: SkillInstance,
-  world: import('./world').World,
+  world: NativeSkillRuleHost,
 ) => boolean;
 
 /** The open conversion-rule registry — a new condition is a new entry
@@ -570,7 +572,7 @@ export function registerConvertRule(id: string, rule: ConvertRule): void {
 export function hasConvertRule(id: string): boolean { return !!CONVERT_RULES[id]; }
 export function convertRuleHolds(
   when: string, caster: import('./actor').Actor, inst: SkillInstance,
-  world: import('./world').World,
+  world: NativeSkillRuleHost,
 ): boolean {
   return CONVERT_RULES[when]?.(caster, inst, world) ?? false;
 }
@@ -2269,8 +2271,8 @@ export interface BlinkDelivery {
   range: number;
   /** Seconds before the displacement happens (telegraphed). */
   delay?: number;
-  /** With `targeting: { target: 'enemy' }`: arrive BEHIND the target,
-   *  facing it (Shadow Step). */
+  /** With `targeting: { target: 'enemy' }`: arrive behind the target's
+   *  current body heading, facing it; native travel/landing collision still wins. */
   behindTarget?: boolean;
 }
 
@@ -4388,9 +4390,6 @@ export type SkillEffect =
 
 export interface SkillDef {
   projectileArts?: ProjectileArtsSpec;
-  icon?: string;
-  bodyMotion?: string | false;
-  reachCue?: boolean;
   companionCue?: import('../data/companionCues').CompanionCueSpec | false;
   recoveryCues?: Partial<Record<import('../data/companionCues').RecoveryCueKind, import('../data/companionCues').RecoveryCueSpec | false>>;
   /** Curse-field creation/retirement material; false silences only its transition. */
@@ -4405,6 +4404,8 @@ export interface SkillDef {
   trigger?: TriggerSpec;
   /** Reusable casting-read profile; false omits supplemental body/outcome cues. Bars remain. */
   castingCue?: string | false;
+  /** Body-space preparation/settle profile; defaults to resolved delivery. */
+  bodyMotion?: string | false;
   /** A serial resurrection contract with native Hivecall tree mechanics. */
   hivecall?: boolean;
   id: string;
@@ -4413,6 +4414,12 @@ export interface SkillDef {
   tags: SkillTag[];
   /** UI color used for icon + projectile/impact rendering. */
   color: string;
+  /** Optional shared vector face; absent/legacy false uses semantic visual rules. */
+  icon?: string | false;
+  /** False omits the local fixed-melee preparation footprint. */
+  reachCue?: false;
+  /** Override/omit the confirmed positional-hit outcome profile. */
+  backstabCue?: string | false;
 
   manaCost: number;
   /** Skills may natively cost life too (costToMana can convert it back). */
@@ -4555,8 +4562,6 @@ export interface SkillDef {
   /** Positional damage: MORE multiplier when striking a target from behind
    *  (relative to its facing). Assassin tech — composes with Shadow Step. */
   backstabMult?: number;
-  /** Confirmed positional-hit effect; false suppresses its presentation. */
-  backstabCue?: string | false;
   /** Multiplier on flat added-damage stats (default 1). */
   addedEffectiveness?: number;
 

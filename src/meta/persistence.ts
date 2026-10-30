@@ -10,8 +10,9 @@
 // ---------------------------------------------------------------------------
 
 import { SAVE_COMPATIBILITY, noteSaveReset } from './saveCompatibility';
+import { BUILD_PROFILE, storageKey } from '../buildProfile';
 import {
-  deserializeAccount, makeAccount, serializeAccount,
+  deserializeAccount, ensureAccountId, isAccountId, makeAccount, serializeAccount,
   type Account, type AccountSave,
 } from './account';
 import {
@@ -19,8 +20,8 @@ import {
   type Settings, type SettingsSave,
 } from './settings';
 
-const KEY = 'arpg_account_v1';
-const SETTINGS_KEY = 'arpg_settings_v1';
+const KEY = storageKey('arpg_account_v1');
+const SETTINGS_KEY = storageKey('arpg_settings_v1');
 
 // --- THE SAVE STAND-DOWN (the crash trap's fatal latch) ----------------------
 // One page-lifetime latch: after main.ts's crash trap reports a FATAL error,
@@ -70,6 +71,7 @@ export type SaveSlot = number | string;
 
 /** Read a save slot from disk; null on 404 / network error / no endpoint. */
 export async function diskGet<T>(slot: SaveSlot): Promise<T | null> {
+  if (BUILD_PROFILE.storageScope) return null; // preview builds use their browser namespace only
   try {
     const res = await fetch(`/__save/${slot}`, { method: 'GET' });
     if (!res.ok) return null;
@@ -108,6 +110,7 @@ function postDiskSave(url: string, body: string): Promise<void> {
  *  resurrect the pre-import state from a POST the reload dropped. Nothing
  *  else should route here: the stand-down latch exists for a reason. */
 export function diskPutRaw(slot: SaveSlot, body: string): Promise<void> {
+  if (BUILD_PROFILE.storageScope) return Promise.resolve();
   try { return postDiskSave(orderedSaveUrl(slot), body); }
   catch { return Promise.resolve(); } // keep the established no-throw disk boundary
 }
@@ -116,6 +119,7 @@ export function diskPutRaw(slot: SaveSlot, body: string): Promise<void> {
  * older fetch cannot overwrite a newer unload write. A rejected beacon falls
  * back to fetch with the same sequence and body. */
 export function diskBeacon(slot: SaveSlot, body: string): void {
+  if (BUILD_PROFILE.storageScope) return;
   if (saveRefused(`disk slot ${slot}`)) return;
   let url: string;
   try { url = orderedSaveUrl(slot); } catch { return; }
@@ -129,7 +133,19 @@ export function diskBeacon(slot: SaveSlot, body: string): void {
 
 // --- ACCOUNT ----------------------------------------------------------------
 
+/** THE IDENTITY (accountId): the id the synchronous boot load minted IN
+ *  MEMORY (its cache held none). It writes nothing (the disk-first load must
+ *  still judge the cached save for reset notices); that load adopts this id,
+ *  so one profile keeps one id, and persists it. */
+let bootAccountId: string | null = null;
+
 export function loadAccount(): Account {
+  const acc = cachedAccount();
+  if (ensureAccountId(acc)) bootAccountId = acc.accountId;
+  return acc;
+}
+
+function cachedAccount(): Account {
   let raw: string | null = null;
   try { raw = window.localStorage.getItem(KEY); } catch { return makeAccount(); }
   if (!raw) return makeAccount();
@@ -155,6 +171,14 @@ export async function loadAccountAsync(): Promise<Account> {
   if (accountReset) noteSaveReset('account');
   else if (runReset && (data?.roster?.length ?? 0) > 0) noteSaveReset('run');
   const fresh = acc ?? makeAccount();
+  // THE IDENTITY (accountId): a profile's first load mints it, keeping the id
+  // its cache or the synchronous boot load already holds. The cache carries
+  // it from this line on (every later boot adopts it); the disk takes it with
+  // the account's next ordinary write, since a compatible boot never writes
+  // the disk (a shard connection saves the account before any record keys by it).
+  let cachedId: unknown;
+  try { cachedId = (JSON.parse(window.localStorage.getItem(KEY) ?? 'null') as AccountSave | null)?.accountId; } catch { /* none */ }
+  ensureAccountId(fresh, isAccountId(cachedId) ? cachedId : bootAccountId);
   const body = JSON.stringify(serializeAccount(fresh));
   try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
   if (disk !== null && (accountReset || runReset)) diskPut(ACCOUNT_SLOT, body);

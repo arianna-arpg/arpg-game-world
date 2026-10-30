@@ -1,0 +1,12 @@
+import '../src/engine/world';
+import assert from 'node:assert/strict';
+import {CLASSES} from '../src/data/classes';
+import {START_ZONE} from '../src/data/zones';
+import {NativeClientRuntime} from '../src/worldmass/nativeClientRuntime';
+import {withSeededRandom} from '../src/core/rng';
+import {freshClientSetup,refuseWorldStartup} from './nativeClientStartFixture';
+import {combatHash,writeCombatProof} from './probe_nativecombatcycle';
+const sites=['campfire','salvage','oracle','tracker','bounty_board'] as const;
+const ordinary=withSeededRandom(45421,()=>{const {writer}=freshClientSetup(1241,false,true);writer.createPlayer(CLASSES[0]);return{tier:writer.townTierIndex(),size:writer.zone.size,fixtures:writer.zone.fixtures,anchors:sites.map(site=>{const a=writer.stationAnchor(site);assert(a,'ordinary unlocked station '+site);return{site,anchor:a.doodad.anchor,pos:a.pos,tier:a.tier};})};});
+const retained=withSeededRandom(45421,()=>{const {writer,geography}=freshClientSetup(1241,false,true);return refuseWorldStartup([writer],worldDrivers=>{const runtime=new NativeClientRuntime({writer,definition:writer.zoneMap[START_ZONE],geography:geography.spec,fresh:{classDef:CLASSES[0]}});runtime.install();const area=runtime.current;assert.deepEqual(area.assembly.input.scene.zone.size,ordinary.size);assert.deepEqual(area.assembly.input.scene.zone.fixtures,ordinary.fixtures);const anchors=ordinary.anchors.map(expected=>{const actual=area.assembly.input.geometry.doodads.find(d=>d.anchor===expected.anchor&&!d.gone&&!d.felled&&d.pos.x===expected.pos.x&&d.pos.y===expected.pos.y&&(d.tier??0)===expected.tier);assert(actual,'real retained initial birth raises the native anchor '+expected.site);return expected;});runtime.retire();return{anchors,worldDrivers};});});
+const report={scope:'Account station features unlocked before genuine World construction: native ordinary anchor results compared with the actual retained birth raw doodads/fixture placement. Later acquisition refolding and renderer query publication remain separate.',ordinary,retained,receipt:combatHash(JSON.stringify({ordinary,retained}))};writeCombatProof('native-client-start-town.json',report);console.log(JSON.stringify(report));

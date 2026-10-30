@@ -33,4 +33,3 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   console.log(packBuild({ directory: path.join(source, 'dist'), output,
     branch: process.env.BUILD_BRANCH, commit: process.env.BUILD_COMMIT, version }));
 }
-

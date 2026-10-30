@@ -1,3 +1,4 @@
+import {nativeVerminfallBodyCurrent,withNativeVerminfallKill,nativeVerminfallKillStep,createNativeVerminfallKing} from '../../engine/nativeVerminfallIdentity';
 // ---------------------------------------------------------------------------
 // THE VERMINFALL — rats, roaches, and the warren under the granary floor.
 //
@@ -97,15 +98,19 @@ const VERMIN_FACTION: FactionSpec = {
 registerKillHandler({
   id: 'warren_nest_broken',
   tag: 'warren_nest',
-  run: ctx => {
+  when: ctx => nativeVerminfallBodyCurrent(ctx,'nest'),
+  run: ctx => withNativeVerminfallKill(ctx,'nest',()=>{
     const vf = ctx.sim.verminfallField;
-    const res = vf?.onNestBroken(ctx.zone.id);
+    const res = nativeVerminfallKillStep(ctx,()=>{if(!vf)return()=>undefined;const selected=vf.onNestBroken,args=[ctx.zone.id];return()=>Reflect.apply(selected,vf,args);});
     ctx.bumpLedger('warren_nests_broken');
     if (!vf || !res) return;
     if (res.kingReady) {
-      const surge = vf.surge();
-      const king = ctx.spawnHostileAt(surge.kingDefId,
-        Math.max(1, ctx.zone.level + surge.kingLevelBonus), ctx.actor.pos);
+      const surge = nativeVerminfallKillStep(ctx,()=>{const selected=vf.surge;return()=>Reflect.apply(selected,vf,[]);});
+      const king = createNativeVerminfallKing(ctx,()=>{
+        const selected=ctx.spawnHostileAt,args=[surge.kingDefId,
+          Math.max(1,ctx.zone.level+surge.kingLevelBonus),ctx.actor.pos] as const;
+        return()=>Reflect.apply(selected,ctx,args);
+      });
       king.tag = 'rat_king_manifest';
       ctx.flash(ctx.actor.pos, 130, surge.color, 0.7);
       ctx.notice('The warren SCREAMS, and the RAT KING rises!', surge.color, 17, 'events');
@@ -113,7 +118,7 @@ registerKillHandler({
       ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 36),
         `The nest splits; ${res.remaining} warren${res.remaining === 1 ? '' : 's'} still seethe${res.remaining === 1 ? 's' : ''}…`, VERMIN_COLOR, 13);
     }
-  },
+  }),
 });
 
 // THE KING FALLS: the infestation clears — the reward path, and the town's
@@ -121,18 +126,19 @@ registerKillHandler({
 registerKillHandler({
   id: 'rat_king_laid_low',
   tag: 'rat_king_manifest',
-  run: ctx => {
+  when: ctx => nativeVerminfallBodyCurrent(ctx,'king'),
+  run: ctx => withNativeVerminfallKill(ctx,'king',()=>{
     const vf = ctx.sim.verminfallField;
-    const cleared = vf?.onKingSlain(ctx.zone.id) ?? false;
+    const cleared = nativeVerminfallKillStep(ctx,()=>{if(!vf)return()=>false;const selected=vf.onKingSlain,args=[ctx.zone.id];return()=>Reflect.apply(selected,vf,args);});
     ctx.bumpLedger('rat_kings_slain');
     if (cleared) ctx.bumpLedger('infestations_cleared');
-    const surge = vf?.surge();
+    const surge = nativeVerminfallKillStep(ctx,()=>{if(!vf)return()=>undefined;const selected=vf.surge;return()=>Reflect.apply(selected,vf,[]);});
     if (surge) {
       ctx.grantXp(Math.round(surge.reward.xpBase + ctx.zone.level * surge.reward.xpPerLevel));
       for (let i = 0; i < surge.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
     ctx.notice('The King is dead. The warren empties, and the town breathes easier.', surge?.color ?? VERMIN_COLOR, 17, 'events');
-  },
+  }),
 });
 
 export const VERMINFALL: ContentPackage = {

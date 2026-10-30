@@ -204,4 +204,3 @@ async function downloadBundle(o) {
 
 module.exports = { RELEASE_TAG, MAX_BUNDLE, MAX_EXPANDED, key, assetPrefix, assetName, isCommit,
   branchDir, listBranches, selectAvailable, pickBundle, findBundle, safeFile, decodeBundle, installed, installBundle, downloadBundle };
-

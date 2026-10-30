@@ -1,7 +1,10 @@
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
-import { storedSupportsHtml } from './storedSupports';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
+import { massMap } from '../worldmass/paint';
+import { massQuestPins } from '../worldmass/quests';
+import { roadGuideHtml } from './roadGuide';
+import { storedSupportsHtml } from './storedSupports';
 import { SKILL_EMPOWERMENT } from '../data/skillEmpowerment';
 import { oracleReliquaryHtml } from './reliquary';
 import { planRelicStorage } from '../engine/accountReliquary';
@@ -57,6 +60,8 @@ import { bagBoard, canPlaceAt, overlappingItems, swapBlockerFits } from '../engi
 import { ContainerPane } from './containerPane';
 import { InventoryPages, type InventoryPage, type InventoryPageRequest } from './inventoryPages';
 import { questRewardHtml, questImbueHtml } from './questRewards';
+import { questOfferHtml } from './questOffers';
+import { skillPreparationHtml } from './skillPreparation';
 import { containerOriginOf, findCarried, originContainerId } from '../engine/containers';
 import { CONTAINER_DEFS } from '../data/containers';
 import { BAG_SORT_MODES, type BagSortDir } from '../engine/bagsort';
@@ -156,7 +161,8 @@ import {
   type ActionId, type PadActionId, type Settings,
 } from '../meta/settings';
 import { PAD_CFG, padDisplay, AIM_ASSIST_MODES, connectedPadIndices } from '../core/gamepad';
-import { wipeRosterSlot, type CharacterSave } from '../meta/character';
+import { wipeRosterSlot } from '../meta/character';
+import type { CharacterContinueSummary } from '../meta/characterResume';
 import {
   applySaveImport, buildSaveEnvelope, planSaveImport, saveEnvelopeName,
   type SaveImportPlan,
@@ -174,8 +180,9 @@ import { underSpanPolicyOf } from '../data/underspans';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
 import { panelCloseHtml } from './panelClose';
-import { bindTooltips, configureTooltipDetail, installTooltipHints, hideTooltip, tooltipSweep, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
 import { skillShowcaseMarkup } from '../showcase/host';
+import { sameWorld, shardHomeOf, worldNameOf } from '../net/shardDoor';
+import { bindTooltips, configureTooltipDetail, installTooltipHints, hideTooltip, tooltipSweep, TIP_ANCHOR_CLASS, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
 import { VENDORS, VENDOR_CFG, fmtRestock, type VendorDef } from '../data/vendors';
 import { BOUNTY_BOARD_CFG } from '../data/bountyboard';
@@ -516,7 +523,8 @@ export class UI {
   private expeditionSetup = document.getElementById('expedition-setup')!;
 
   /** The resumable character save, if any (set after the async boot load). */
-  private continueSave: CharacterSave | null = null;
+  private continueSave: CharacterContinueSummary | null = null;
+  private continuePending = false;
   /** The rolled class roster for the CURRENT new-run offer. Cached so menu
    *  navigation (Vault, Event Weights, Back) doesn't re-roll it; reset only when
    *  a run ends (resetClassRoster, called on death) so each new run deals fresh. */
@@ -553,7 +561,7 @@ export class UI {
   /** Start-menu callbacks, retained so Vault/Keybinds sub-views can return. */
   private startHandlers: {
     onStart: (d: ClassDef, modeId?: string) => void;
-    onContinue: (s?: CharacterSave | null) => void;
+    onContinue: () => void;
     onCoop?: () => void;
     onRoster?: (e: RosterEntry) => void;
     /** Why we landed here (a co-op session that ended under the player). Shown
@@ -623,6 +631,9 @@ export class UI {
    *  (generated families still surface only once touched — see sheet.ts). */
   private charShowAll = false;
   inventoryOpen = false;
+  /** THE PARTY PANEL (ui/party.ts): installed by the shell (main.ts) — null until it is. */
+  partyPanel: import('./party').PartyPanel | null = null;
+  setPartyPanel(p: import('./party').PartyPanel): void { this.partyPanel = p; }
   /** Socket materials keep their own dropdown; essence balances stay visible. */
   private vestigeSatchelOpen = false;
   /** All development-page lifecycle and ownership live in this registry. */
@@ -777,9 +788,10 @@ export class UI {
    *  the fitted centre). Persist across opens; reset via the map's % button. As
    *  the charted map grows and the fixed-size text shrinks, zoom in to read it. */
   private mapZoom = 1;
+  private massSurveyGrain = 48;
   private mapPan = { x: 0, y: 0 };
   /** Which view the world-map panel shows: the map, or the quest journal. */
-  private mapTab: 'map' | 'quests' = 'map';
+  private mapTab: 'map' | 'quests' | 'roads' = 'map';
   /** Which DIMENSION the map tab shows (surface / underworld / …) — tabs
    *  appear once a run breaches a second dimension (the PoE Acts pattern). */
   private mapDimension = 'surface';
@@ -914,6 +926,19 @@ export class UI {
    *  the virgin lane walks the tutorial, everyone else drifts into Mu. The
    *  legacy screen stays whole beneath it (co-op rejoin still uses it). */
   onBeginRun: (() => void) | null = null;
+  /** The shell names the world a new run will actually enter. */
+  newRunDescription = '';
+  /** THE FRONT DOOR (W7, net/shardDoor.ts): the world the start menu leads into (the
+   *  tab's binding, or the world that served this page); null on a plain page. The menu's
+   *  primary row becomes "Enter the world" (onEnterWorld), the solo rows one row down. */
+  serverDoor: (() => { url: string; world?: string } | null) | null = null;
+  onEnterWorld: ((door: { url: string; world?: string }) => void) | null = null;
+  /** THE HONEST LEAVING (W7): the hosted world this client stands in (its name), or null
+   *  off one: the pause menu says "world" there and "co-op" on the WebRTC lane. */
+  hostedWorld: (() => string | null) | null = null;
+  /** THE HONEST LEAVING (W7): Exit Game on a hosted world (the deliberate leave, the
+   *  farewell awaited, then the exit screen with the truth). */
+  onExitWorld: (() => void) | null = null;
 
   constructor(
     private getWorld: () => World,
@@ -1488,6 +1513,8 @@ export class UI {
     });
     return {
       wardrobe: { open: () => this.showWardrobe(), isOpen: () => this.escapeMenuOpen && !!this.escapeMenu.querySelector('.wardrobe') },
+      // THE PARTY (ui/party.ts, card 23): the hosted world's social unit — a page the shell installs.
+      party: { open: () => this.partyPanel?.toggle(), isOpen: () => this.partyPanel?.isOpen() ?? false },
       inventory: { open: id => this.toggleInventory(id), isOpen: () => this.inventoryOpen },
       // THE CONTAINER FABRIC: one host row per registered side board — the
       // menu's 'container:<id>' verb opens the inventory on that face.
@@ -4048,6 +4075,7 @@ export class UI {
     }
     lines.push(`<div data-memory-purpose style="color:#d8cce8;font-size:11px;line-height:1.5;margin:4px 0">${esc(k.recallDescription)}</div>`);
     lines.push(`<div style="color:#9a94a8;font-size:10px">${esc(k.rewardLabel)} · <span style="color:${k.color}">×${units.length} held</span></div>`);
+    // recallDescription carries each kind's choice and result without duplicating it.
     const top = groups.slice(0, MEMORY_CFG.tooltipGroups);
     for (const g of top) {
       // THE PROMISE reads on the card: a pinned group names the gem it is
@@ -8578,7 +8606,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // direction line teaches the take; while the FIRST writ is in hand, one
     // closing line points the way out and back. The first accept's standing
     // ledger stamp closes the lesson forever — no new key.
-    const lessonTake = world.bountyLessonLive();
+    const lessonTake = !v.unavailable && world.bountyLessonLive();
     const lessonReturn = !lessonTake && v.hands.length > 0
       && (world.ledger.bounties_accepted ?? 0) + (world.account.ledger.bounties_accepted ?? 0) === 1;
     // THE TAKEN HAND(s): state speaks plainly — afield / ready / failed.
@@ -8617,9 +8645,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div class="bind-btns"><button data-bounty-accept="${esc(o.id)}"${handFull ? ' disabled title="One bounty in hand at a time."' : ''}${lessonTake && !handFull ? ' class="tut-glow"' : ''}>Accept</button>${
             pinCap > 0 ? `<button data-bounty-lock="${esc(o.id)}" data-locked="${o.locked ? '1' : ''}"${!o.locked && pinned >= pinCap ? ' disabled title="Every reserve pin is spoken for — release one first."' : ` title="${o.locked ? 'Release the pin — the next deal may replace this posting.' : 'Pin this posting — it holds its seat through fresh deals until taken or released.'}"`}>${o.locked ? 'Release' : `Pin (${pinCap - pinned} free)`}</button>` : ''}</div>
         </div>`).join('')
-      : `<div class="skill-entry"><div class="desc">No postings available.</div></div>`;
+      : `<div class="skill-entry"><div class="desc">${esc(v.unavailable ?? 'No postings available.')}</div></div>`;
     this.bountyMenu.innerHTML = `${this.closeGlyphHtml()}<h2>The Bounty Board</h2>`
-      + `<div class="desc" style="margin:-4px 0 8px 0;font-style:italic">Choose a bounty. Return here for your reward.</div>`
+      + (v.unavailable ? '' : `<div class="desc" style="margin:-4px 0 8px 0;font-style:italic">Choose a bounty. Return here for your reward.</div>`)
       + (lessonTake ? `<div class="bounty-lesson">Accept one bounty at a time per board.</div>` : '')
       + (lessonReturn ? `<div class="bounty-lesson">Track your bounty in the journal and map.</div>` : '')
       // THE RECEIPT (the counter laws): what the linger just settled, printed
@@ -8628,7 +8656,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         ? `Handed back: <b>${esc(v.receipt.title)}</b> — no reward.`
         : `Collected: <b>${esc(v.receipt.title)}</b> — paid ${esc(v.receipt.pay)}.`}</div>` : '')
       + handsHtml
-      + `<h3 style="margin:10px 0 4px 0">Available (${v.offers.length}) · refresh in <span data-bounty-countdown>${fmtRestock(v.countdown)}</span></h3>`
+      + `<h3 style="margin:10px 0 4px 0">Available (${v.offers.length})${v.unavailable ? '' : ` · refresh in <span data-bounty-countdown>${fmtRestock(v.countdown)}</span>`}</h3>`
       + offersHtml
       // THE COAST WRITS (a quay board only): the harborhold writ lane's
       // button — the board posts named marks on the coast's living foes,
@@ -8977,6 +9005,25 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     // clicks"); deliberate refreshes fire on click, after release, unharmed.
     if (this.mapDragging || this.mapWashDragging || this.pressHeld.has(this.worldMap)) return;
     const world = this.getWorld();
+    if (this.mapTab === 'roads') {
+      if (world.massRuntime?.journey?.spec.notices?.length) {
+        if (this.setPanelHtml(this.worldMap, this.closeGlyphHtml() + this.mapTabsHtml() + roadGuideHtml(world.massRuntime))) this.wireMapTabs();
+        return;
+      }
+      this.mapTab = 'map';
+    }
+    if (world.massRuntime && this.mapTab !== 'quests') {
+      if (this.setPanelHtml(this.worldMap, this.closeGlyphHtml() + this.mapTabsHtml() + massMap(world.massRuntime, world.player.pos, this.massSurveyGrain, world.doodads, massQuestPins(world)))) {
+        this.wireMapTabs();
+        this.worldMap.querySelectorAll<HTMLButtonElement>('[data-mass-zoom]').forEach(button => {
+          button.addEventListener('click', () => {
+            this.massSurveyGrain = Math.max(24, Math.min(192, this.massSurveyGrain * (button.dataset.massZoom === 'in' ? .5 : 2)));
+            this.refreshMap();
+          });
+        });
+      }
+      return;
+    }
     if (this.mapTab === 'quests') { this.renderQuestsTab(world); return; }
     const visited = world.visited;
     // ONE DIMENSION PER VIEW: the map shows the active dimension's worldmass;
@@ -9644,7 +9691,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
 
   /** The Map | Quests tab row (shared by both views of the world-map panel). */
   private mapTabsHtml(): string {
-    const tab = (id: 'map' | 'quests', label: string): string =>
+    const tab = (id: 'map' | 'quests' | 'roads', label: string): string =>
       `<button class="book-tab ${this.mapTab === id ? 'active' : ''}" data-mtab="${id}">${label}</button>`;
     // DIMENSION TABS (the PoE Acts pattern): appear once a run has breached a
     // second worldmass — each tab is its own explorable map to flip through.
@@ -9658,12 +9705,12 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       }).join('');
       dims = `<span style="margin-left:14px;border-left:1px solid #3a3a4e;padding-left:10px">${dims}</span>`;
     }
-    return `<div class="book-tabs" style="margin:2px 0 6px 0">${tab('map', 'Map')}${tab('quests', 'Quests')}${dims}</div>`;
+    return `<div class="book-tabs" style="margin:2px 0 6px 0">${tab('map', 'Map')}${tab('quests', 'Quests')}${world.massRuntime?.journey?.spec.notices?.length ? tab('roads', 'Roads') : ''}${dims}</div>`;
   }
 
   private wireMapTabs(root: ParentNode = this.worldMap): void {
     root.querySelectorAll<HTMLButtonElement>('.book-tab[data-mtab]').forEach(btn => {
-      btn.addEventListener('click', () => { this.mapTab = btn.dataset.mtab as 'map' | 'quests'; this.refreshMap(); });
+      btn.addEventListener('click', () => { this.mapTab = btn.dataset.mtab as 'map' | 'quests' | 'roads'; this.refreshMap(); });
     });
     root.querySelectorAll<HTMLButtonElement>('.book-tab[data-mdim]').forEach(btn => {
       btn.addEventListener('click', () => { this.mapDimension = btn.dataset.mdim!; this.refreshMap(); });
@@ -9741,7 +9788,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <div style="font-size:12px;color:#d8d4c8">${esc(e.label)}${badge(e.category)}</div>
           <div style="font-size:10px;color:${ink};margin-top:2px">${sub}</div></div>`;
       }).join('')
-      : '<div style="color:#8a8678;font-size:11px;padding:6px 2px">No active quests. Linger by the quartermaster for work.</div>';
+      : `<div style="color:#8a8678;font-size:11px;padding:6px 2px">No active quests.${world.massRuntime ? '' : ' Linger by the quartermaster for work.'}</div>`;
     const doneHtml = log.completed.length
       ? log.completed.map(e => `<div style="padding:6px 9px;margin:0 0 4px 0;background:#13130f;border-left:3px solid #4a4a40;border-radius:4px;opacity:0.7">
           <div style="font-size:12px;color:#9a968a;text-decoration:line-through">${esc(e.label)}${badge(e.category)}</div></div>`).join('')
@@ -9752,20 +9799,34 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
     const html = `
       ${this.closeGlyphHtml()}<h2>Quest Journal</h2>
       ${this.mapTabsHtml()}
-      <div style="color:#6ad8c0;font-size:12px;padding:8px">${esc(world.odyssey.status())}</div>
+      ${world.massRuntime ? '' : `<div style="color:#6ad8c0;font-size:12px;padding:8px">${esc(world.odyssey.status())}</div>`}
       <div id="quest-scroll" style="overflow-y:auto;max-height:64vh;padding:2px 4px 8px 2px">
+        ${skillPreparationHtml(world, this.slotLabels())}
         ${questRewardHtml(world)}
         ${questImbueHtml(world)}
+        ${questOfferHtml(world)}
         <h3 style="font-size:12px;color:#c8a8e8;margin:4px 0 6px 0">Active (${log.active.length})</h3>
         ${activeHtml}
         <h3 style="font-size:12px;color:#8a8678;margin:14px 0 6px 0">Completed (${log.completed.length})</h3>
         ${doneHtml}
-        ${world.odyssey.clues().map(line => `<p style="color:#9ebdb5;font-size:11px">${esc(line)}</p>`).join('')}
+        ${(world.massRuntime ? [] : world.odyssey.clues()).map(line => `<p style="color:#9ebdb5;font-size:11px">${esc(line)}</p>`).join('')}
       </div>`;
     // Same skip-if-unchanged discipline as the map view (setPanelHtml).
     if (!this.setPanelHtml(this.worldMap, html)) return;
     const qs = this.worldMap.querySelector<HTMLElement>('#quest-scroll');
     if (qs) qs.scrollTop = prevScroll;
+    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-prepare-inventory]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (this.mapOpen) this.toggleMap();
+        this.toggleInventory();
+      });
+    });
+    this.worldMap.querySelectorAll<HTMLButtonElement>('[data-quest-accept]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'questAccept', questId: btn.dataset.questAccept! });
+        this.refreshMap();
+      });
+    });
     this.worldMap.querySelectorAll<HTMLButtonElement>('[data-quest-reward]').forEach(btn => {
       btn.addEventListener('click', () => {
         world.requestMeta({ t: 'questReward', questId: btn.dataset.questReward!, choiceId: btn.dataset.rewardChoice! });
@@ -10367,7 +10428,9 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
       // (world.endRun mid-scene reroutes to the menu), and the exit door
       // speaks only the account truth.
       const sceneLive = !this.isCoopClient() && !!this.getWorld().scene;
-      const endTitle = this.isCoopClient() ? '' : sceneLive
+      // THE HONEST LEAVING (W7): a hosted world speaks of the world, the WebRTC lane of co-op.
+      const hosted = this.isCoopClient() ? this.hostedWorld?.() ?? null : null;
+      const endTitle = hosted ? ` title="Leave ${esc(hosted)}: your hero logs back in where it stands"` : this.isCoopClient() ? '' : sceneLive
         ? ' title="Return to the main menu (nothing here is lost — the account is already saved)"'
         : rosterMode
           ? ' title="Save the vessel and return to the main menu"'
@@ -10381,7 +10444,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
           <button id="esc-resume">Resume</button>
           ${couchRow}${couchLeaveRow}
           <button id="esc-keys">Options</button>
-          <button id="esc-end"${endTitle}>${this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
+          <button id="esc-end"${endTitle}>${hosted ? 'Leave the World' : this.isCoopClient() ? 'Leave Co-op' : sceneLive ? 'Main Menu' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
           <button id="esc-close"${closeTitle}>${this.isCoopClient() || sceneLive ? 'Exit Game' : 'Save & Exit'}</button>
         </div>`;
       document.getElementById('esc-resume')!.addEventListener('click', () => this.hideEscapeMenu());
@@ -10398,7 +10461,7 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         // CLIENT: world is a render SHELL — never run host-authoritative endRun()
         // (it would corrupt the shell with no effect). Leave the session instead.
         if (this.isCoopClient()) {
-          if (window.confirm('Leave this co-op session?')) { this.hideEscapeMenu(); this.onLeaveCoop(); }
+          if (window.confirm(hosted ? 'Leave this world?' : 'Leave this co-op session?')) { this.hideEscapeMenu(); this.onLeaveCoop(); }
           return;
         }
         if (sceneLive || rosterMode) {
@@ -10414,6 +10477,13 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
         }
       });
       document.getElementById('esc-close')!.addEventListener('click', () => {
+        // THE HONEST LEAVING (W7): on a hosted world Exit says goodbye first (the farewell
+        // awaited), then the exit screen carries the truth; it never just says "close the tab".
+        if (hosted && this.onExitWorld) {
+          root.innerHTML = `<h1>Leaving</h1><div class="acct-head">Saying goodbye to ${esc(hosted)}…</div>`;
+          this.onExitWorld();
+          return;
+        }
         try { window.close(); } catch { /* browsers block closing non-script-opened tabs */ }
         root.innerHTML = `
           ${this.closeGlyphHtml('Resume (Esc)')}<h1>Progress Saved</h1>
@@ -10567,6 +10637,10 @@ ${ESCAPE_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${escapeModeOf(s.e
       <div class="rebind-row">
         <span>Ability point prompt</span>
         <button id="opt-treeprompt" title="When a skill completes a level band and mints an Ability point. OFF: the bar slot's gold pip blooms and keeps breathing, the SKILLS drawer and the Menu button wear the pip, and you spend it from the drawer or the tree whenever you like. ON: the chooser popup also opens at the next calm moment.">${s.treePrompt ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Support ready message</span>
+        <button id="opt-supportready" title="Show a message in Skills when supports can be changed. Restrictions remain visible either way.">${s.supportReadyHint ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>UI Scale</span>
@@ -10739,10 +10813,6 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-crowdedmeters" title="FIXED keeps bars at their usual position above each body. AVOID CROWD moves overlapping groups with a line to their owner.">${s.crowdedMeters ? 'AVOID CROWD' : 'FIXED'}</button>
       </div>
       <div class="rebind-row">
-        <span>Support ready message</span>
-        <button id="opt-supportready" title="Show a message in Skills when supports can be changed. Restrictions remain visible either way.">${s.supportReadyHint ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
         <span>Skill Cast Name</span>
         <button id="opt-castname" title="Show the skill name above your hero while casting.">${s.castNameHint ? 'ON' : 'OFF'}</button>
       </div>
@@ -10776,7 +10846,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Hover Nameplates</span>
-        <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies only, the classic elite read. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
+        <button id="opt-hovernames" title="Which bodies show the cursor nameplate. NAMED: distinctly-named enemies. ALL: every creature, minion, townsfolk and critter names itself under the cursor (name over kind + tier), so you can identify the exact entity without recalling its look. One plate at a time either way, and hidden bodies never tell.">${s.hoverNameplates === 'all' ? 'ALL' : 'NAMED'}</button>
       </div>`;
     root.innerHTML = `
       <h1>Options</h1>
@@ -10810,7 +10880,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
-    for (const [id, key] of [['opt-supportready', 'supportReadyHint'], ['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
+    for (const [id, key] of [['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
       root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
         const settings = this.getSettings(); settings[key] = !settings[key];
         this.saveSettings(); this.renderOptions(root, onBack);
@@ -11146,6 +11216,10 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
+    root.querySelector<HTMLElement>('#opt-supportready')?.addEventListener('click', () => {
+      const st = this.getSettings(); st.supportReadyHint = !st.supportReadyHint;
+      this.saveSettings(); this.refreshInventory(true); this.renderOptions(root, onBack);
+    });
     // THE ABILITY POINT PROMPT: the chooser popup is opt-in — the shown
     // tells (the slot's bloom, the pips) carry the milestone either way.
     root.querySelector<HTMLElement>('#opt-treeprompt')?.addEventListener('click', () => {
@@ -11271,12 +11345,19 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
 
   // ------------------------------------------------------------ start menu
 
-  /** Cache the resumable character save (from the async disk/local load) so the
+  /** Cache only the resumable character summary (from the authoritative load) so the
    *  start menu can enable Continue. Null disables it. */
-  setContinueSave(save: CharacterSave | null): void {
-    this.continueSave = save;
+  setContinueSave(save: CharacterContinueSummary | null): void {
+    this.continueSave = save ? { classId: save.classId, name: save.name, level: save.level,
+      charId: save.charId, modeId: save.modeId, ...(shardHomeOf(save) ? { shard: shardHomeOf(save)! } : {}) } : null; // HOME SLOTS (W7)
     // Refresh only the menu PROPER (startMenuBack null): re-rendering while a
     // subscreen (Options, the Immortal roster) is up would yank the reader out.
+    if (!this.startMenu.classList.contains('hidden') && this.startHandlers && !this.startMenuBack) this.renderStartMenu();
+  }
+
+  /** Async storage retains the existing menu so New Run can cancel a read. */
+  setContinuePending(pending: boolean): void {
+    this.continuePending = pending;
     if (!this.startMenu.classList.contains('hidden') && this.startHandlers && !this.startMenuBack) this.renderStartMenu();
   }
 
@@ -11291,7 +11372,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
    *  Chronicle / Options / Exit (+ Co-op). Subscreens render into the pane. */
   showStartMenu(
     onStart: (d: ClassDef, modeId?: string) => void,
-    onContinue: (s?: CharacterSave | null) => void,
+    onContinue: () => void,
     onCoop?: () => void,
     onRoster?: (e: RosterEntry) => void,
     notice?: string,
@@ -11313,6 +11394,12 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       ? `${cont.name ?? CLASSES.find(c => c.id === cont.classId)?.name ?? 'the character'}, Level ${cont.level}`
       : '';
     const canContinue = !!cont;
+    // THE FRONT DOOR (W7): on a page a world served (or a tab bound for one) the primary row
+    // leads into that world; HOME SLOTS: a hero bound to a world reads "Return to <world>".
+    const door = this.serverDoor?.() ?? null;
+    const home = cont?.shard ?? null;
+    const homeHere = !!home && !!door && sameWorld(home.url, door.url);
+    const primary = ' style="border-color:var(--gold)"';
     // THE IMMORTAL SHELF: however many vessels the account swears, the menu
     // proper spends ONE button on them — the roster lives in its own pane
     // (renderImmortalRoster), so the option count here stays flat and no
@@ -11331,12 +11418,16 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       <h1>${GAME_TITLE.toUpperCase()}</h1>
       <div class="acct-head">Account Level <b>${acc.level}</b>${pending
         ? ` · <b style="color:var(--gold)">${acc.credits}</b> ${META_CURRENCY_LABEL} awaiting the Reckoning` : ''}</div>
+      ${this.newRunDescription ? `<div class="acct-head">${esc(this.newRunDescription)}</div>` : ''}
       ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
       <div class="esc-btns">
-        <button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>
-        <button id="sm-continue" ${canContinue
-          ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${canContinue
-          ? 'Continue Run' : 'No Run to Continue'}</button>
+        ${door && !homeHere ? `<button id="sm-door"${primary} title="${esc(worldNameOf(door))}">Enter the world</button>` : ''}
+        ${homeHere ? '' : `<button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>`}
+        <button id="sm-continue"${homeHere ? primary : ''} ${this.continuePending ? 'disabled' : ''} ${home
+          ? `title="${esc(contWho)} lives in ${esc(worldNameOf(home))}, and logs back in where it left"`
+          : canContinue ? `title="Resume ${esc(contWho)} — exactly where the run left off"` : 'disabled'}>${home
+          ? `Return to ${esc(worldNameOf(home))}` : canContinue ? 'Continue Run' : 'No Run to Continue'}</button>
+        ${homeHere ? `<button id="sm-start">${sceneDue(acc, 'prologue') ? 'Begin' : 'New Run'}</button>` : ''}
         ${immortalsBtn}
         ${isVaultAvailable(acc) ? `<button id="sm-vault"${pending ? ' style="border-color:var(--gold)"' : ''}>${pending
           ? `Vault — assign ${acc.credits} ${META_CURRENCY_LABEL}!` : 'Vault (Unlocks)'}</button>` : ''}
@@ -11347,19 +11438,23 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       </div>`;
     document.getElementById('sm-start')!.addEventListener('click', () => {
       this.startMenu.classList.add('hidden');
-      // THE MU REROUTE: when the shell armed onBeginRun, the press walks the
-      // Begin flow (virgin → the tutorial as Warrior; veteran → Mu, where the
-      // class roster stands in the world). The legacy class screen remains
-      // the fallback — and the co-op rejoin offers still use it directly.
+      // The shell uses the same account gate as the label: tutorial once,
+      // then Mu for each new life. Co-op callers retain their class picker.
       if (this.onBeginRun) { this.onBeginRun(); return; }
       // The way back is threaded in: class select reached from here can
       // always return (glyph or Back) instead of soft-locking into a run.
       this.showClassSelect(h.onStart, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster));
     });
     if (h.onCoop) document.getElementById('sm-coop')!.addEventListener('click', () => h.onCoop!());
+    document.getElementById('sm-door')?.addEventListener('click', (ev) => {
+      if (!door || !this.onEnterWorld) return;
+      const b = ev.currentTarget as HTMLButtonElement;
+      b.disabled = true; b.textContent = 'Entering the world…';
+      this.onEnterWorld(door);
+    });
     document.getElementById('sm-continue')!.addEventListener('click', () => {
-      if (!this.continueSave) return;
-      this.startMenu.classList.add('hidden'); h.onContinue(this.continueSave);
+      if (!this.continueSave || this.continuePending) return;
+      h.onContinue();
     });
     document.getElementById('sm-immortals')?.addEventListener('click', () => this.renderImmortalRoster());
     document.getElementById('sm-vault')?.addEventListener('click', () =>
@@ -11390,14 +11485,38 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
    *  refused): everything is already saved at the menu, so say so and let the
    *  player close the window by hand — or step Back. The desktop shell closes
    *  before this ever shows. */
-  private renderExitScreen(): void {
+  private renderExitScreen(line?: string): void {
     this.startMenuBack = () => this.renderStartMenu();
     this.startMenu.innerHTML = `
       ${this.closeGlyphHtml('Back')}
       <h1>SAFE TO CLOSE</h1>
+      ${line ? `<div class="acct-head">${esc(line)}</div>` : ''}
       <div class="acct-head">Your account is saved — close this window or tab to exit.</div>
       <div class="esc-btns"><button id="sm-exit-back">Back</button></div>`;
     document.getElementById('sm-exit-back')!.addEventListener('click', () => this.renderStartMenu());
+  }
+
+  /** THE HONEST LEAVING (W7): the exit screen after a hosted world's goodbye, wearing the
+   *  farewell's line (saved, or the hero standing its ground in a fight). */
+  showExitScreen(line?: string): void {
+    if (!this.startHandlers) return;
+    this.startMenu.classList.remove('hidden');
+    this.renderExitScreen(line);
+  }
+
+  /** THE SOLO GUARD at the front door (W7): a plain line and a confirm, never a modal:
+   *  the hero's own solo world stays behind for good if it travels. */
+  showTravelConfirm(line: string, onYes: () => void): void {
+    if (!this.startHandlers) return;
+    this.startMenu.classList.remove('hidden');
+    this.startMenuBack = () => this.renderStartMenu();
+    this.startMenu.innerHTML = `
+      ${this.closeGlyphHtml('Back')}
+      <h1>LEAVE A WORLD BEHIND?</h1>
+      <div class="acct-head">${esc(line)}</div>
+      <div class="esc-btns"><button id="sm-travel-yes">Travel</button><button id="sm-travel-back">Back</button></div>`;
+    document.getElementById('sm-travel-yes')!.addEventListener('click', () => { this.renderStartMenu(); onYes(); });
+    document.getElementById('sm-travel-back')!.addEventListener('click', () => this.renderStartMenu());
   }
 
   /** THE IMMORTAL ROSTER PANE: account-owned characters (Immortal vessels),

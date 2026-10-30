@@ -1,0 +1,148 @@
+import assert from 'node:assert/strict';
+import { MassWalk, MASS_NAVIGATION } from '../src/worldmass/walk';
+import { MassGenerator, makeMassRun } from '../src/worldmass/generator';
+import { MassState } from '../src/worldmass/state';
+import { MassStream } from '../src/worldmass/stream';
+import { address, moveAddress, localOffset } from '../src/worldmass/address';
+import type { MassSpec } from '../src/worldmass/contracts';
+import { makeSimWorld } from '../src/sim/arena';
+import { seedGlobalRandom } from '../src/sim/rng';
+import { resolveNativeFeature } from '../src/worldmass/nativeFeatures';
+import { MassNativeResidency, type NativeFeaturePlacement } from '../src/worldmass/nativeResidency';
+import { regionKind } from '../src/world/regions';
+
+const spec:MassSpec={id:'native-walk-cache',version:1,addressSpan:960,terrainCell:24,fields:[],
+ surfaces:[{id:'base',priority:0,when:[],region:'ground',color:'#445522',biome:'field'}],places:[]};
+const origin=address('surface','-4294967296','4294967297',0,0,960);
+const make=(terrain:MassSpec=spec)=>{
+ const generator=new MassGenerator(makeMassRun(713,'native-walk-cache',terrain),terrain),state=new MassState(generator.run,terrain.terrainCell);
+ const stream=new MassStream(generator,state,{maxPages:2,maxSamples:128});
+ return{generator,state,stream,walk:new MassWalk(stream,origin,{...MASS_NAVIGATION,regionCacheEntries:32})};
+};
+{
+ const {walk,stream,state}=make();let calls=0,revision=0,open=false;
+ walk.native={cellSize:30,get revision(){return revision;},regionAt(at){calls++;const p=localOffset(at,origin,960);return p.x>=-30&&p.x<30?(open?'ground':'crag'):undefined;}};
+ assert.equal(walk.cellSize,6);
+ for(let n=0;n<2000;n++)assert.equal(walk.regionAt(28+n%2,5),'crag');
+ assert.equal(calls,1,'repeated hot native cell resolves physical source exactly once');
+ assert.equal(walk.regionAt(31,5),'ground','native edge inside a geographic24 cell remains exact');
+ assert.equal(walk.regionAt(-.1,5),'crag');assert.equal(walk.regionAt(-30.1,5),'ground','negative boundary is not rounded toward zero');
+ walk.overlay={grid:{cellSize:20,version:0,regionAt:()=> 'drystone'} as unknown as NonNullable<MassWalk['overlay']>['grid'],contains:x=>x>10000};
+ assert.equal(walk.cellSize,2,'all present native/settlement/base grids participate in the common lattice');
+ assert.equal(walk.regionAt(29.99,5),'crag');assert.equal(walk.regionAt(30.01,5),'ground','20-unit settlement cannot erase30-unit native edges outside it');
+ walk.overlay=undefined;
+ const before=walk.version;open=true;revision++;
+ assert.equal(walk.regionAt(29,5),'ground','standalone native grid revision invalidates before the next query');assert.ok(walk.version>before,'path caches see standalone native edits too');
+ state.paint({address:moveAddress(origin,{x:48,y:0},960),region:'wall',color:'#123456',cause:'probe'});
+ assert.equal(walk.regionAt(49,5),'wall','transparent native support preserves immediately edited base');
+ const save=state.snapshot();state.paint({address:moveAddress(origin,{x:48,y:0},960),region:'ground',color:'#445522',cause:'probe'});
+ assert.equal(walk.regionAt(49,5),'ground');state.restore(save);assert.equal(walk.regionAt(49,5),'wall');
+ walk.native={cellSize:30,revision,regionAt:()=> 'sandstone'};assert.equal(walk.regionAt(29,5),'sandstone','replacing native provider at equal revision cannot retain old geography');
+ walk.native=undefined;assert.equal(walk.regionAt(29,5),'ground');assert.equal(walk.cellSize,24);
+ assert.equal(stream.stats.resident,0,'cache never requires streamed pages');
+ console.log('PASS bounded hot native queries, exact mixed24/30 and negative edges, native/base revisions, restore and equal-revision provider replacement');
+}
+const restore=seedGlobalRandom(713);
+{
+ const {walk}=make();let cellSize=30,reads=0,solid=true;
+ walk.native={get cellSize(){reads++;return cellSize;},revision:0,regionAt:()=>solid?'crag':'ground'};
+ assert.equal(walk.cellSize,6);assert.equal(walk.regionAt(1,1),'crag');
+ for(let i=0;i<2000;i++)assert.equal(walk.cellSize,6);
+ assert.ok(reads>=2000,'memoized lattice still reads live provider sizes');
+ cellSize=20;solid=false;
+ assert.equal(walk.cellSize,4);assert.equal(walk.regionAt(1,1),'ground','in-place lattice change clears hot region answers at equal revision');
+ const grid={cellSize:9,version:0,regionAt:()=> 'ground'} as unknown as NonNullable<MassWalk['overlay']>['grid'];
+ walk.overlay={grid,contains:()=>false};assert.equal(walk.cellSize,1);
+ grid.cellSize=12;assert.equal(walk.cellSize,4,'overlay mutation invalidates the size memo without replacement');
+ walk.native=undefined;assert.equal(walk.cellSize,12);walk.overlay=undefined;assert.equal(walk.cellSize,24);
+ console.log('PASS common-lattice memo observes size mutation, removal and hot region invalidation');
+}
+{
+ const {walk,stream,state}=make();let generated=0;
+ const original=stream.generator.terrainAt.bind(stream.generator);
+ stream.generator.terrainAt=at=>{generated++;return original(at);};
+ walk.setFocusCount(6);stream.setFocusCount(6);
+ const points=Array.from({length:180},(_,i)=>({x:(i%30)*24+1+Math.floor(i/30)*4000,y:1}));
+ const expected=points.map(p=>walk.regionAt(p.x,p.y));const cold=generated;
+ for(const p of [...points].reverse())walk.regionAt(p.x,p.y);
+ assert.equal(generated,cold,'recent terrain remains reusable within the capped sample budget');
+ assert.ok((walk as unknown as {regions:Map<string,string>}).regions.size<=64,'six foci cannot multiply the region memo beyond two neighborhoods');
+ assert.ok(stream.stats.samples<=256,'terrain sample memo is capped at two neighborhoods');
+ walk.setFocusCount(16);stream.setFocusCount(16);
+ for(let i=0;i<600;i++)walk.regionAt(i*24+1,24001);
+ assert.ok((walk as unknown as {regions:Map<string,string>}).regions.size<=64);
+ assert.ok(stream.stats.samples<=256,'sixteen foci use the same finite sample ceiling');
+ state.paint({address:moveAddress(origin,points[90],960),region:'wall',color:'#123456',cause:'cache-probe'});
+ assert.equal(walk.regionAt(points[90].x,points[90].y),'wall','sparse edits still invalidate immediately');
+ walk.setFocusCount(1);stream.setFocusCount(1);
+ assert.ok((walk as unknown as {regions:Map<string,string>}).regions.size<=32);
+ assert.ok(stream.stats.samples<=128,'leaving players release derived cache capacity');
+ for(let i=0;i<points.length;i++)assert.equal(walk.regionAt(points[i].x,points[i].y),i===90?'wall':expected[i]);
+ for(const n of [-1,17,1.5,NaN]){assert.throws(()=>walk.setFocusCount(n));assert.throws(()=>stream.setFocusCount(n));}
+ console.log('PASS bounded multi-focus terrain caches, exact edits, shrink and replay');
+}
+try{
+ makeSimWorld('warrior',713);
+ const {walk,stream}=make({...spec,terrainCell:30});
+ const p:NativeFeaturePlacement={id:'cold-native-walk',origin,request:{id:'cold-native-walk',seed:42,source:{kind:'structure',id:'marble_monastery',tileset:'downs'}}};
+ const descriptor=resolveNativeFeature(p.request),caps=new Set(descriptor.requirements),cfg={run:'native-walk-cache',addressSpan:960,maxBlueprints:4,maxResidents:1,maxCandidates:2};
+ let providerCalls=0;
+ let features=new MassNativeResidency(cfg,()=>{providerCalls++;return[p];},caps,()=>origin);
+ const bind=()=>{
+  const owner=features;
+  walk.native={cellSize:30,get revision(){return owner.version;},regionAt:at=>owner.regionAt(at)};
+  stream.overlay={get revision(){return owner.version;},revisionAt:cell=>owner.revisionAt(cell),sample:(at,base)=>owner.sample(at,base)};
+ };
+ bind();let solid:{x:number;y:number}|undefined;
+ for(let y=15;y<1800&&!solid;y+=30)for(let x=15;x<1800&&!solid;x+=30)if(regionKind(features.regionAt(moveAddress(origin,{x,y},960)))?.blocks)solid={x,y};
+ assert.ok(solid);const before=providerCalls;
+ for(let i=0;i<1000;i++)assert.equal(regionKind(walk.regionAt(solid.x,solid.y))!.blocks,true);
+ assert.ok(providerCalls-before<=1,'a hot walk cell needs at most one source lookup; residency may already have cached that exact point');assert.equal(features.stats.resident,0,'real native blockers exist before any scene admission');
+ const grid=features.gridAt(solid)!.grid;
+ grid.fillRegion(solid.x,solid.y,solid.x,solid.y,'ground');
+ assert.equal(walk.regionAt(solid.x,solid.y),'ground','real sparse native edits invalidate cached blockers synchronously');
+ const saved=features.snapshot(1);features=new MassNativeResidency(cfg,()=>[p],caps,()=>origin,JSON.parse(JSON.stringify(saved)));bind();
+ assert.equal(walk.regionAt(solid.x,solid.y),'ground','cold Continue retains the same native terrain mutation');
+ const reference=walk.regionAt(15,15);
+ for(let i=0;i<100;i++)walk.regionAt(1905+i*30,15);
+ assert.equal(walk.regionAt(15,15),reference,'bounded eviction and query order preserve transparent/native truth');
+ assert.ok((walk as unknown as {regions:Map<string,string>}).regions.size<=32);
+ console.log('PASS actual cold native structure, no scene admission, native grid mutation, Continue and bounded cache eviction');
+}finally{restore();}
+
+{
+ const {walk,stream}=make();walk.native={cellSize:30,revision:0,regionAt:()=> 'ground'};
+ let blocked:string|undefined,queries=0;
+ walk.obstacles={blocked(x,y){queries++;return Math.floor(x/6)+','+Math.floor(y/6)===blocked;},revision:()=>blocked??'clear'};
+ const cases:[{x:number;y:number},{x:number;y:number}][]=[
+  [{x:119,y:1},{x:60,y:60}], [{x:1,y:119},{x:60,y:60}],
+  [{x:-119,y:-1},{x:-60,y:-60}], [{x:-1,y:-119},{x:-60,y:-60}],
+  [{x:60,y:1},{x:60,y:119}], [{x:1,y:60},{x:119,y:60}],
+  [{x:60,y:60},{x:60,y:60}], [{x:-11,y:17},{x:60,y:60}],
+ ];
+ // Independent slab-intersection oracle: every closed touched cell must refuse
+ // in BOTH directions, including endpoints and rays lying along grid edges.
+ const touched=(a:{x:number;y:number},b:{x:number;y:number},x:number,y:number)=>{
+  let lo=0,hi=1;
+  for(const [start,delta,min,max] of [[a.x,b.x-a.x,x*6,(x+1)*6],[a.y,b.y-a.y,y*6,(y+1)*6]]){
+   if(delta===0){if(start<min||start>max)return false;continue;}
+   const u=(min-start)/delta,v=(max-start)/delta;lo=Math.max(lo,Math.min(u,v));hi=Math.min(hi,Math.max(u,v));if(lo>hi)return false;
+  }return true;
+ };
+ let comparisons=0;
+ for(const [a,b]of cases){
+  blocked=undefined;assert.equal(walk.lineWalkable(a,b),true);assert.equal(walk.lineWalkable(b,a),true);
+  for(let y=Math.floor(Math.min(a.y,b.y)/6)-1;y<=Math.floor(Math.max(a.y,b.y)/6)+1;y++)for(let x=Math.floor(Math.min(a.x,b.x)/6)-1;x<=Math.floor(Math.max(a.x,b.x)/6)+1;x++){
+   blocked=x+','+y;const expected=!touched(a,b,x,y);
+   assert.equal(walk.lineWalkable(a,b),expected,'forward closed supercover '+blocked+' '+JSON.stringify([a,b]));
+   assert.equal(walk.lineWalkable(b,a),expected,'reverse closed supercover '+blocked+' '+JSON.stringify([a,b]));comparisons+=2;
+  }
+ }
+ blocked=undefined;
+ const from={x:23931.467146196403,y:-10093.821228397079},to={x:23820,y:-10020};
+ assert.equal(walk.lineWalkable(from,to),true,'actual natural caravan connector is a clear line, not a spurious Manhattan detour');
+ assert.deepEqual(walk.pathStep(from,to),to);assert.equal(walk.lineWalkable(to,from),true);
+ const bounded=new MassWalk(stream,walk.origin,{...MASS_NAVIGATION,maxLineCells:2});bounded.native=walk.native;bounded.obstacles=walk.obstacles;queries=0;
+ assert.equal(bounded.lineWalkable({x:119,y:1},{x:60,y:60}),false,'long rays still refuse when traversal budget exhausts');assert.ok(queries<=16,'endpoint checks add only bounded constant work');
+ console.log('PASS exact negative-axis endpoint termination, direction symmetry, closed corner/edge/point blockers, independent slab oracle and bounded ray work',JSON.stringify({comparisons,queries}));
+}

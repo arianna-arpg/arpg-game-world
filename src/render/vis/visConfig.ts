@@ -9,6 +9,12 @@ export const VIS_CFG = {
   /** Compact Life-adjacent debuffs; one detailed readout only while hovered. */
   statusIcons: { size:24, gap:3, columns:4, orbClearance:44,
     background:'rgba(12,16,20,.35)', ink:'#f4ebd7', margin:8, cardWidth:250, lineHeight:16 },
+  /** The selected speaker explains the idle gesture before native dialogue opens. */
+  speechApproach: { enabled: true, font: '10px Verdana', color: '#e4ded0', dy: 22, maxCharacters: 64 },
+  /** Outline screen-space status/route text without changing its layout or authored color. */
+  hudText: { enabled: true, edge: '#10151a', outline: 3 },
+  /** Public activity instructions share a bounded, responsive HUD column. */
+  objectiveReadout: { minWidth: 48, maxWidth: 560, maxRows: 4, maxCharacters: 2048, lineHeight: 17, gap: 18, font: '12px Verdana' },
   /** Actual temporary modifier payload, on demand at its native buff pip. */
   buffReadout: { maxWidth: 360, maxRows: 10, margin: 8, pad: 9, lineHeight: 17, ascent: 12,
     font: '12px Verdana', background: 'rgba(8,8,12,.94)', edge: '#575368', title: '#f0d99c', detail: '#d8d4c8' },
@@ -18,6 +24,9 @@ export const VIS_CFG = {
     rowHeight: 34, lineHeight: 20, ascent: 13, detailOffset: 14, gap: 3, pad: 8, stripe: 3,
     font: 'bold 11px Verdana', detailFont: '10px Verdana',
     background: 'rgba(12,16,20,.82)', text: '#e9e6dc', detail: '#b9c3c8' },
+  /** Known contract bearings, independent of terrain survey and pathfinding. */
+  questCompass: { enabled: true, maxRows: 2, maxWidth: 360, lineHeight: 17,
+    font: '11px Verdana', active: '#b7c9d0', ready: '#e4c47e' },
   /** Unassigned controls keep their hit areas and key labels while leaving
    * the battlefield visible. Filled skills retain their native readability. */
   hotbar: { emptyFillAlpha: .12, emptyBorderAlpha: .5 },
@@ -42,6 +51,9 @@ export const VIS_CFG = {
       color: '#edf9e9', edge: '#18201f', crowdAlpha: .95, restAlpha: .4, crowdReach: 130 },
     numbers: { enabled: false, kinds: ['dmg','gains','xp','drop','pickup','progression'] as readonly string[],
       bodyPad: 12, barRise: 34, gap: 3, step: 16, rings: 12 },
+    names: { enabled: true, garrisons: true, formations: true, garrisonWidth: 220, gap: 4, step: 12, rings: 20, nameFont: 'bold 12px Verdana',
+      subFont: '10px Verdana', nameHeight: 14, subHeight: 12, outline: 3, edge: '#151712',
+      contrast: { minGap: .60, margin: .05 } },
     threats: { enabled: true, radius: 280, minWidth: 22 },
     bodies: { enabled: true, radius: 280, fade: 60, halfAngle: Math.PI / 3, angleFade: Math.PI / 18, width: 1.15, color: '#ddd5b8', alpha: .62 },
     meters: { enabled: false, bodyScale: 1.15, bodyPad: 3, gap: 2, step: 10, rings: 8,
@@ -1268,7 +1280,8 @@ export const VIS_CFG = {
   infoFeeds: {
     /** The world-news stack: edge pads per anchor + the line gap. maxRows
      *  bounds a bulletin storm to a readable column. */
-    notice: { topPad: 64, bottomPad: 96, sidePad: 18, rowGap: 4, maxRows: 8 },
+    notice: { topPad: 64, bottomPad: 96, sidePad: 18, rowGap: 4, maxRows: 8,
+      maxWidth: 640, hudGap: 12, cacheEntries: 64 },
     /** The right-flank pickup ledger ("Warcry (Common) x1") — seated over
      *  the ground the inventory panel opens onto. */
     pickup: { rightPad: 14, topFrac: 0.34, rowH: 17, font: 12, maxRows: 10 },

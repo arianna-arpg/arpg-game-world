@@ -286,7 +286,7 @@ export interface SceneDef {
    *  legion. Must keep id + ledger identical (the gate stamps read the base).
    *  Absent = the def walks as authored. (Type-only World import — the data
    *  leaf stays engine-import-free at runtime.) */
-  resolve?: (w: import('../engine/world').World, def: SceneDef) => SceneDef;
+  resolve?: (w: Pick<import('../engine/world').World,'account'|'accountDirty'|'manifest'>, def: SceneDef) => SceneDef;
   zone: SceneZoneSpec;
   stages: SceneStage[];
 }

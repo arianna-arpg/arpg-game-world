@@ -1,11 +1,10 @@
 import { drawDeviceState } from './vis/deviceState';
 import { CastBarOverlay, prepareCastBar } from './vis/castBars';
 import { CastBarContrast } from './vis/castBarContrast';
-import { ALTAR_BODY } from '../engine/altarBodies';
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
-import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
 import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
 import { RewardLabelLayout } from './vis/rewardLabels';
+import { ALTAR_BODY } from '../engine/altarBodies';
 import { combatTargetStrength } from './vis/combatTargets';
 import { buffReadoutLines, drawBuffReadout } from './vis/buffReadout';
 import { drawSkillIcon } from './skillIcons';
@@ -13,6 +12,7 @@ import { statusIcons, layoutStatusIcons, drawStatusIcons, drawStatusIconHover, t
 import { drawMeleeReach } from './vis/meleeReachLayer';
 import { drawForesight, foresightProgress } from './vis/foresightLayer'; // THE FORESIGHT's painter (draws the geometry alone)
 import { foresightView } from '../engine/foresight'; // THE FORESIGHT ON THE WIRE: a stub's row, else the resolve
+import { treePointBudget } from '../engine/skillEmpowerment';
 import { altarInfluences } from '../engine/altarCues';
 import { drawAltarInfluence } from './vis/altarCueLayer';
 import { CombatMeterLayout } from './vis/combatMeters';
@@ -23,10 +23,11 @@ import { bodyWalkPoseOf } from '../engine/bodyWalk';
 import { drawWalkParts, applyWalkBodyPose } from './vis/walkParts';
 import { drawBodyContrast } from './vis/bodyContrast';
 import { drawRaisedGuard } from './vis/raisedGuard';
-import { guardArcRadians } from '../engine/combatCues';
-import { chestReadout, drawChestReadout } from './vis/chestReadout';
-import { drawCastSlot } from './vis/castReadout';
-import { treePointBudget } from '../engine/skillEmpowerment';
+import { MassPainter } from '../worldmass/paint';
+import { massQuestPins } from '../worldmass/quests';
+import { drawQuestCompass, questCompassLines } from './vis/questCompass';
+import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
+import { regionGrid } from '../world/walk'; // worldmass shares native grounded telegraphs
 import { concealmentActive } from '../engine/perception';
 import { anatomyCueState, anatomyOverheadRise } from '../engine/anatomyCues';
 import { feedingCueState, type FeedingTransfer } from '../engine/feedingCues';
@@ -72,6 +73,8 @@ import { STATUS_DEFS, type StatusDef } from '../engine/status';
 import { toneTint } from '../engine/tuning';
 import { STANCE_PLANT_TIME, type Actor } from '../engine/actor';
 import { throngEvolution } from '../engine/throngEvolution';
+import type { LiteWire } from '../net/wireDiet'; // THE WIRE DIET: the lite mirror's wire ids (a hosted shell's bob phase)
+import { dropAlpha } from '../net/spoils'; // THE SPOILS' OWNER (card 27): another seat's held drop draws ghosted
 import { throngSightSet, wornThrongKindsOf } from '../engine/throng';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { PLY_CFG } from '../engine/plies';
@@ -81,6 +84,9 @@ import { REMNANT_KINDS } from '../data/remnants';
 import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
 import { comboCueRows } from '../engine/comboCues';
+import { comboConditionRows } from '../engine/comboConditions';
+import { drawComboConditions } from './vis/comboConditionLayer';
+import { COMBO_CONDITION_HUD } from '../data/comboConditions';
 import { drawComboBody, drawComboHud } from './vis/comboCueLayer';
 import { poolCueRows } from '../engine/reserveCues';
 import { payloadCueRows } from '../engine/payloadCues';
@@ -98,6 +104,7 @@ import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import {
   floatKindOn, noticeChannelOn, NOTICE_CFG, PICKUP_FEED_CFG, type NoticeEntry,
 } from '../world/bulletins';
+import { floatOwnerShown } from '../world/bulletins'; // THE FLOAT'S OWNER (THE WIRE'S EYES)
 import { dayCycle, sceneSkyTime } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
@@ -111,6 +118,7 @@ import type { HitShape } from '../engine/shapes';
 import { PROJ_FORM_GEO } from '../engine/projForms';
 import { projectileDrawScale } from './vis/projectileBounds';
 import { transitRing } from '../data/transit';
+import { PARTY_CUE } from '../data/partyCues'; // THE PARTY THAT READS
 import { EVENT_COLOR, gateLookOf } from '../data/gateVisuals';
 import { courtLord } from '../packages/courts';
 import { boundaryGateOf } from '../data/boundaryGates';
@@ -137,6 +145,9 @@ import { MAGIC_PACK_CFG, MAGIC_PACKS } from '../data/magicPacks';
 import { drawMagicPackEffects, drawMagicPackRole } from './vis/magicPackLayer';
 import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
 import { APPARITION_ROLE, MU_CFG } from '../data/mu';
+import { HERO_NAME_CUE, MUSTER_CUE, PING_CUE } from '../data/identityCues';
+import { musterRingIsOwn } from '../engine/shardMuster';
+import { pingEdgePoint } from '../engine/pings';
 import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
 import { contrastGuard, hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
@@ -144,6 +155,7 @@ import { adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs,
 import { drawAdornHitFlash, drawBodyHitFlash, hitFlashAlphaOf } from './vis/hitFlash';
 import { TELL_CFG, tellDressOf } from '../engine/tells';
 import { guardReleaseCue } from '../engine/warningCues';
+import { guardArcRadians } from '../engine/combatCues';
 import { encounterCueOf } from '../engine/encounterCombat';
 import { WARNING_CUE_CFG } from '../data/warningCues';
 import { drawGuardReleaseGround, drawEncounterCue, warningCueLean } from './vis/warningCueLayer';
@@ -156,6 +168,8 @@ import { drawReactiveCue, drawGaspSpark, drawWardBody, drawWardLinks, drawWardBa
 import { drawCastingCue } from './vis/castingCueLayer';
 import { drawCastPreparation } from './vis/skillCastPreparation';
 import { playerCastPreparation } from '../engine/playerCastVisual';
+import { chestReadout, drawChestReadout } from './vis/chestReadout';
+import { drawCastSlot } from './vis/castReadout';
 import { COMBAT_CUE_CFG } from '../data/combatCues';
 import { drawFrameBodyCue } from './vis/frameVoice';
 import { drawShellCue, drawPoiseCue, statusBodyLean, drawStatusBodyCue } from './vis/defenseCueLayer';
@@ -169,6 +183,9 @@ import { gaugeFrac, gaugeLocked, gaugeReady } from '../engine/gauge'; // THE GAU
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { drawRuneRing } from './vis/runeRing';
 import { registerVisCache, trimVisCaches } from './vis/caches';
+import { wrapNotice } from './vis/noticeLayout';
+import { ObjectiveReadout } from './vis/objectiveReadout';
+import { drawHudText } from './vis/hudText';
 import { resolveSpeech, revealedChars, wrapSpeech, resolveNameTokens, dodgeSpeechBox, layoutSpeechSeats, speechTailBase, type SpeechStyle, type SpeechRect, type SpeechSeatMemory } from './vis/speech';
 import { drawEdgeOverlay, qFrac } from './vis/overlays';
 import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
@@ -217,7 +234,7 @@ import { AOE_SHAPE } from '../engine/skills';
 
 import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
 import { UnderstoryLayer } from './vis/understory';
-import { cameraModeOf, couchConfineRect, couchFit, placeCamera } from './camera';
+import { CAMERA_FOLLOW_CFG, cameraModeOf, couchConfineRect, couchFit, placeCamera, springFollow, type CameraFollow } from './camera';
 import { COUCH_CFG } from '../data/couch';
 import { drawVoidFrame, voidBaseOf } from './vis/voidFrame';
 import { activePieces } from '../world/shape';
@@ -288,7 +305,7 @@ function blendRgb(from: string, to: string, k: number): string {
 export class Renderer {
   private floatingTextLayout = new CombatTextLayout(() => ({ ...VIS_CFG.combatFocus.numbers, enabled: true }));
   private rewardLabelLayout = new RewardLabelLayout(() => ({ ...VIS_CFG.drops.rewardLabels, enabled: true }));
-  private combatMeters = new CombatMeterLayout();
+  private massPainter = new MassPainter();
   private castBars = new CastBarOverlay();
   private castBarContrast = new CastBarContrast();
   private cosmeticTrails = new CosmeticTrails();
@@ -309,6 +326,10 @@ export class Renderer {
    *  those passes must compare uiMouse, never hudMouse. */
   private uiW = 0;
   private uiH = 0;
+  private objectiveReadout = new ObjectiveReadout();
+  /** Actual status/wave extent in this frame's virtual HUD coordinates. */
+  private noticeHeaderBottom = 0;
+  private noticeLineCache = new Map<string, string[]>();
   private uiMouse = { x: -1, y: -1 };
   /** THE PRESSABLE BAR (drawn == tested): every HUD skill-slot rect as THIS
    *  frame drew it, in CSS pixels — main.ts hit-tests a mouse press (and a
@@ -344,43 +365,34 @@ export class Renderer {
   /** Couch guest seats whose CONTROLLER is currently lost (main.ts identity
    *  sweep publishes per frame) — their flank HUD says so. Empty solo. */
   couchPadLost: string[] = [];
-  /** World→screen scale. >1 zooms in; the bigger zones keep it from cramping.
-   *  BASE is the classic constant; the COUCH FRAME (data/couch.ts) widens the
-   *  live value by couchStretch — smoothed toward couchFit each frame, hard-
-   *  floored at the stretch cap. Solo keeps couchStretch pinned at exactly 1,
-   *  so every consumer of `zoom` reads the byte-identical classic 1.3. */
-  private baseZoom = 1.3;
+  /** Main's fixed 1.3 game scale; only capture/showcase stages override it. */
+  private captureBaseZoom: number | null = null;
+  /** Capture/showcase framing; null restores the normal game scale. */
+  setBaseZoom(zoom: number | null): void {
+    if (zoom !== null && (!Number.isFinite(zoom) || zoom <= 0)) throw new Error('Capture zoom must be positive and finite.');
+    this.captureBaseZoom = zoom;
+  }
+  private get baseZoom(): number { return this.captureBaseZoom ?? 1.3; }
   private couchStretch = 1;
-  /** THE SHOWCASE ZOOM (src/showcase/engine.ts): a skill showcase stage frames
-   *  its own span; the live game never calls this and keeps the classic 1.3. */
-  setBaseZoom(z: number): void { this.baseZoom = z; }
-  /** WORLD ONLY (the skill showcase engine): draw the world and its light,
-   *  nothing that speaks to a player — no labels, speech, floating text,
-   *  reticle, screen overlays or HUD. The live game leaves it false. */
+  /** THE SMOOTH SHELL's follow (camera.ts springFollow): a client shell's camera chases its
+   *  hero on a critically damped spring. Null on solo and every host (main.ts sets it on a
+   *  render shell alone): the hard lock, byte for byte. */
+  cameraFollow: CameraFollow | null = null;
+  /** THE SMOOTH SHELL's watchdog (net/shell.ts): 0..1, how long a hosted world has gone
+   *  silent past its stall; the frame strains with it (a drawn cue, no text). 0 draws nothing. */
+  linkStrain = 0;
+  /** Standalone stages can omit words and HUD while retaining world rendering. */
   worldOnly = false;
-  /** THE DIRECTOR'S EYE (src/director/): a capture rig's camera focus. Wins
-   *  over every other follow point while set; the live game leaves it null. */
   directorFocus: { x: number; y: number } | null = null;
-  /** THE CLEAN PLATE (src/director/): a capture take may hide the overhead
-   *  readouts (life, ply, poise and shield bars, grab meters, cast bars),
-   *  keeping the world, its telegraphs and its light, and may lift the
-   *  positional sight veil. The live game leaves both false. */
   directorClean = false;
   directorNoSightVeil = false;
-  /** THE CINEMATIC OVERLAYS (src/director/): with worldOnly set, still draw
-   *  the screen moments that belong to the action rather than the HUD (the
-   *  ultimate's eyecatch pane, the held-time wash, crossings, a survived
-   *  death's fade and the death flash). The live game leaves it false. */
   directorCinematic = false;
-  /** THE CAPTURE VIEWPORT (src/director/): render the world at this size
-   *  instead of the window's (a 4K take from a smaller window). The element
-   *  keeps the window's CSS size; null = the window, the live game's value. */
   private captureViewport: { w: number; h: number } | null = null;
   setCaptureViewport(v: { w: number; h: number } | null): void {
+    if (v && (!Number.isFinite(v.w) || !Number.isFinite(v.h) || v.w <= 0 || v.h <= 0)) throw new Error('Capture viewport must be positive and finite.');
     this.captureViewport = v ? { w: Math.max(2, Math.round(v.w)), h: Math.max(2, Math.round(v.h)) } : null;
     this.resize();
   }
-  /** The CSS frame the buffer spans: the capture viewport, else the window. */
   private get frameW(): number { return this.captureViewport?.w ?? window.innerWidth; }
   private get frameH(): number { return this.captureViewport?.h ?? window.innerHeight; }
   private get zoom(): number { return this.baseZoom * this.couchStretch * this.pixelScale; }
@@ -430,6 +442,13 @@ export class Renderer {
     const idle: (f: () => void) => unknown =
       typeof requestIdleCallback !== 'undefined' ? requestIdleCallback : (f) => setTimeout(f, 400);
     idle(() => { try { canvasCapsReport(); } catch { /* probe failure = default verdicts */ } });
+    // Procedural floor pixels share the ordinary run/zone trim and memory census.
+    registerVisCache({
+      id: 'massPainter',
+      count: () => this.massPainter.pixelStats().count,
+      bytes: () => this.massPainter.pixelStats().bytes,
+      onZoneSwap: () => this.massPainter.dispose(),
+    });
     // THE LITE TIER's per-kind composite bakes (drawLite) join the cache
     // steward: tiny (a handful of kinds), dropped at every zone boundary.
     registerVisCache({
@@ -456,6 +475,10 @@ export class Renderer {
    *  talk (resolveNameTokens, vis/speech.ts) — so a renamed hero, or a fresh
    *  run's, re-addresses every line the same frame. */
   getPlayerName?: () => string;
+
+  /** Wired by main.ts (THE PARTY THAT READS, the invite tell): the seats whose invitation to
+   *  this client stands; each wears a beckon over its head (drawPartyMarks). Unwired = none. */
+  partyBeckons: (() => readonly string[]) | null = null;
 
   /** Wired by main.ts (same altitude as getSettings): THE OBSTRUCTION
    *  CENSUS — CSS-pixel rects of every open DOM pane standing over the
@@ -618,13 +641,13 @@ export class Renderer {
       const ownerCurrent = (): boolean => current() && world.zone === zone && world.player === player &&
         world.time === time && world.walk === walk && world.arena === arena;
       while (ownerCurrent()) {
-        const stamp = this.loadingPresentationStamp(), settings = this.getSettings;
+        const stamp = this.loadingPresentationStamp(), settings = this.getSettings, follow = this.cameraFollow;
         stages = this.renderStages(world, true);
         const first = stages.next();
         if (first.done) throw Error('The loading frame did not release its world pass');
         await pause();
         if (!ownerCurrent()) return false;
-        if (stamp !== this.loadingPresentationStamp() || settings !== this.getSettings) {
+        if (stamp !== this.loadingPresentationStamp() || settings !== this.getSettings || follow !== this.cameraFollow) {
           stages.return(); stages = undefined; this.clearLoadingWords();
           continue;
         }
@@ -642,14 +665,14 @@ export class Renderer {
   }
 
   private loadingPresentationStamp(): string {
-    return JSON.stringify([this.resizeEpoch, this.frameW, this.frameH, this.pixelScale, this.baseZoom,
+    return JSON.stringify([this.resizeEpoch, this.frameW, this.frameH, this.pixelScale, this.captureBaseZoom,
       this.captureViewport, this.worldOnly, this.directorFocus, this.directorClean, this.directorNoSightVeil,
-      this.directorCinematic, this.getSettings?.()]);
+      this.directorCinematic, this.linkStrain, this.getSettings?.()]);
   }
 
   private clearLoadingWords(): void {
     this.labels.length = 0; this.speeches.length = 0;
-    this.speechFocusLines.clear(); this.dialogueVisibleSpeaker = null;
+    this.speechFocusLines.clear(); this.speechApproach = null; this.dialogueVisibleSpeaker = null;
   }
 
   private *renderStages(world: World, cooperative: boolean): Generator<void, void, unknown> {
@@ -751,6 +774,11 @@ export class Renderer {
     } else if (!couchOn) {
       this.couchStretch = 1; // solo: pinned exactly — the classic frame
     } // else: couch play under a degenerate view — hold the stretch as-is
+    // THE SMOOTH SHELL's follow: a client shell's frame chases its hero on a critically damped
+    // spring (a scene's eye and a frame lock still pin it; null everywhere else: the hard lock).
+    if (this.cameraFollow && !couchOn && !world.scene?.focus && !lockFocus) {
+      focus = springFollow(this.cameraFollow, focus, performance.now(), CAMERA_FOLLOW_CFG);
+    }
     // The positional veils are single-eye fabrics — under a shared couch
     // frame they suspend per COUCH_CFG.render (both players see what the
     // camera sees); each veil's own fade handles the transition gracefully.
@@ -895,14 +923,19 @@ export class Renderer {
     this.drawChests(world);
     this.drawFonts(world);
     this.drawWaypoint(world);
+    this.drawDownReads(world);     // THE PARTY THAT READS: a held down's wipe radius, its bleed-out, your own revive fill
     this.drawHuntFootprint(world); // beast tracks to dwell on (the Hunt)
     this.drawAmalgamPicks(world);  // the Bonewright's body-part choice spots
     // Resolve attention once before both its ground cues and actor labels.
     this.speechFocusLines.clear();
+    this.speechApproach = null;
     this.dialogueVisibleSpeaker = null;
     if (!VIS_ABLATE.has('actors')) {
       for (const line of world.npcSpeechView(!this.dialogueReaderEnabled() || this.npcDialogueAvailable(),
-        this.speechPointerHits(world), this.npcDialogueOwner())) this.speechFocusLines.set(line.a, line);
+        this.speechPointerHits(world), this.dialogueReaderEnabled() ? this.npcDialogueOwner() : null)) this.speechFocusLines.set(line.a, line);
+      if (VIS_CFG.speechApproach.enabled && !this.dialogueReaderEnabled()
+        && ![...this.speechFocusLines.values()].some(line => line.seatId === world.localSeat.id))
+        this.speechApproach = world.speechApproachHint();
     }
     this.drawDwellTells(world);    // THE DWELL TELL: the base ring on every station/NPC in dwell range
     this.drawCampfireHint(world);  // "linger to refresh" prompt by the town campfire
@@ -1082,6 +1115,8 @@ export class Renderer {
       this.drawSpeeches(world);      // THE SPEECH FABRIC: wrapped talk bubbles, typewriter reveal
       this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
       this.drawTexts(world);
+      this.drawPings(world);        // THE PING (engine/pings.ts): your party's world-anchored marks + the edge chevrons
+      this.drawPartyMarks(world);   // THE PARTY THAT READS: an inviter's beckon, your down's holders marked
       this.drawSceneHeroHud(world); // scene fabric: hero-seated teaching bar + prompt (world-space)
       this.drawHarvest(world);      // harvest rites: node glints + live-bind symbol chips (world-space)
     this.drawTrace(world);        // the forge's steady hand: outline + band + laid ink (world-space)
@@ -1108,6 +1143,7 @@ export class Renderer {
     this.drawSurvivalVignette(world); // THE SURVIVAL VEIL: per-row meter washes (breath's asphyxiation blue)
     this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge — over the veil: death keeps the last word
     this.drawAfflictionOverlays(world); // blood, kindling, poison and curses retain separate identities
+    if (this.linkStrain > 0) this.drawLinkStrain(w, h); // THE SMOOTH SHELL's watchdog: the frame strains while the world is silent
     // THE UI-SCALE SUB-PASS: pure screen-space widgets draw in virtual
     // (uiW×uiH) coords under one ctx.scale, so the player's UI Scale dial
     // grows the whole HUD together (ui/uiScale.ts — the DOM surfaces ride
@@ -1387,7 +1423,11 @@ export class Renderer {
    *  members grey out, so the strip doubles as the alive/downed readout. Future
    *  mercenaries/minions extend as sub-rows keyed on owner — no layout change. */
   private drawParty(world: World): void {
-    const strip = world.party.strip;
+    let strip = world.party.strip;
+    if (world.partyRows) {
+      // keeperSeat: on a hosted world the strip is YOUR party, never every neighbour on the shard (card 23).
+      strip = world.party.members.filter(m => world.sameSeatParty(world.clientSeatId, m.seat)).map(m => m.actor);
+    }
     if (strip.length <= 1) return;
     const { ctx } = this;
     const w = this.uiW; // virtual — this pass runs inside the UI-scale sub-pass
@@ -1719,6 +1759,40 @@ export class Renderer {
   /** THE dwell progress ring — every linger-to-act draw goes through here. The
    *  style (radius/width/color/alpha) is the transit KIND's data row
    *  (data/transit.ts); a missing color tints with the zone `accent`. */
+  /** THE MUSTER RING (card 15 B, shard M1 W4; dials data/identityCues.ts MUSTER_CUE):
+   *  a party's road waiting for the party. A ring on the ground around the road:
+   *  its wash grows from the road with the gathered share (members on it out of
+   *  members standing in the unit), its rim closes as the wait runs out; her gold
+   *  for the viewer's own party, faint ether for a stranger's. Shapes only, never
+   *  a word (SHOW DON'T TELL). World space; a hosted world's rows alone. */
+  private drawMusterRings(world: World): void {
+    const rings = world.musterRings;
+    if (!rings?.length) return;
+    const { ctx } = this, cue = MUSTER_CUE;
+    ctx.save();
+    for (const r of rings) {
+      const own = musterRingIsOwn(world, r);
+      const a = own ? 1 : cue.strangerAlpha;
+      ctx.strokeStyle = ctx.fillStyle = own ? cue.inkParty : cue.inkStranger;
+      const share = r.need > 0 ? clamp(r.have / r.need, 0, 1) : 1;
+      if (share > 0) {
+        ctx.globalAlpha = a * cue.washAlpha;
+        ctx.beginPath(); ctx.arc(r.x, r.y, r.r * share, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = a * cue.baseAlpha;
+      ctx.lineWidth = cue.lineW;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2); ctx.stroke();
+      const left = r.wait > 0 ? clamp(r.left / r.wait, 0, 1) : 0;
+      if (left > 0) {
+        const breath = 1 + cue.pulse * Math.sin(world.time * cue.pulseHz * Math.PI * 2);
+        ctx.globalAlpha = clamp(a * cue.rimAlpha * breath, 0, 1);
+        ctx.lineWidth = cue.rimW;
+        ctx.beginPath(); ctx.arc(r.x, r.y, r.r, -Math.PI / 2, -Math.PI / 2 + left * Math.PI * 2); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   private drawProgressRing(x: number, y: number, frac: number, kind: string, accent = '#e8e8e8'): void {
     if (frac <= 0.02) return;
     const s = transitRing(kind);
@@ -2290,6 +2364,22 @@ export class Renderer {
     }, 0.65 * pulse);
   }
 
+  /** THE SMOOTH SHELL's watchdog (net/shell.ts): the frame STRAINS while a hosted world is
+   *  silent: a void vignette closing in on a slow held breath, an ether rim pulling taut at the
+   *  very edge, both growing with linkStrain and gone the moment the wire speaks again. Shown,
+   *  never told: no text. Her palette (void #07070d, ether #8fa8d8). */
+  private drawLinkStrain(w: number, h: number): void {
+    const k = Math.min(1, this.linkStrain), kq = qFrac(k), t = performance.now() / 1000;
+    drawEdgeOverlay(this.ctx, w, h, {
+      key: `linkstrain|${kq}`, innerFrac: 0.6 - 0.3 * kq,
+      stops: [[0, 'rgba(7,7,13,0)'], [0.7, 'rgba(7,7,13,0.55)'], [1, 'rgba(7,7,13,0.94)']],
+    }, (0.3 + 0.55 * k) * (0.86 + 0.14 * Math.sin(t * 1.6)));
+    drawEdgeOverlay(this.ctx, w, h, {
+      key: 'linkstrain-rim', innerFrac: 0.9,
+      stops: [[0, 'rgba(143,168,216,0)'], [0.84, 'rgba(143,168,216,0.06)'], [1, 'rgba(143,168,216,0.5)']],
+    }, k * (0.5 + 0.5 * Math.abs(Math.sin(t * 2.4))));
+  }
+
   /** Icy edge wash + drifting snowflakes (chill / frozen). */
   private drawFrost(w: number, h: number, t: number): void {
     const { ctx } = this;
@@ -2765,6 +2855,24 @@ export class Renderer {
     const { w, h } = world.arena;
     const theme = world.zone.theme;
     const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
+    if (world.massRuntime) {
+      const mass = world.massRuntime;
+      this.massPainter.draw(ctx, mass, this.cam.x, this.cam.y, vw, vh);
+      this.massPainter.drawSettlement(ctx, mass, this.cam.x, this.cam.y, vw, vh, layer => {
+        const walk = world.walk, zone = world.zone;
+        // Native floor baking is synchronous; asynchronous uploads capture pixels
+        // only. The simulation and every other draw pass keep the composite field.
+        try {
+          world.walk = mass.settlement!.grid; world.zone = mass.settlement!.zone;
+          this.ground.draw(layer, world, Math.max(0, this.cam.x), Math.max(0, this.cam.y),
+            Math.min(vw, world.zone.size.w), Math.min(vh, world.zone.size.h));
+          this.drawAnimatedRegions(world, layer);
+        } finally { world.walk = walk; world.zone = zone; }
+      });
+      this.massPainter.drawWater(ctx, mass, this.cam.x, this.cam.y, vw, vh, world.time);
+      return;
+    }
+    this.massPainter.dispose(); // Leaving procedural ground releases its cached pixel buffers.
     // BOUNDLESS (the Descent): no edges — stream baked chunks around the
     // camera forever, and draw NO border.
     if (world.arena.boundless) {
@@ -2964,11 +3072,10 @@ export class Renderer {
   /** ANIMATED region visuals (flesh throb, water drift) — the only per-frame
    *  cell painting left. Every STATIC cell (walls, still visuals, bevels,
    *  contact AO) bakes into the ground chunks; see vis/ground.ts. */
-  private drawAnimatedRegions(world: World): void {
+  private drawAnimatedRegions(world: World, ctx = this.ctx): void {
     if (VIS_ABLATE.has('animregions')) return; // perf forensics (visConfig)
     const wf = world.walk;
     if (!(wf instanceof GridWalkField)) return;
-    const { ctx } = this;
     const tMs = world.time * 1000;
     const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
     const cell = wf.cell;
@@ -3688,6 +3795,11 @@ export class Renderer {
     const wf = world.walk;
     for (const st of this.stacked) {
       const r0 = st.rect;
+      // The worldmass keeps distant native buildings alive. Floor rendering
+      // only needs structures that intersect this view, even on the ground tier.
+      if (r0.x + r0.w < this.cam.x || r0.y + r0.h < this.cam.y
+        || r0.x > this.cam.x + this.canvas.width / this.zoom
+        || r0.y > this.cam.y + this.canvas.height / this.zoom) continue;
       const inside = hero.pos.x > r0.x && hero.pos.x < r0.x + r0.w && hero.pos.y > r0.y && hero.pos.y < r0.y + r0.h;
       if (hT === 0) {
         // THE UNDERSTAIR: every landing cell is a closet downstairs.
@@ -3907,9 +4019,10 @@ export class Renderer {
    *  any future talker), drawn as bubbles in the WORD LAYER above the veils. */
   private speeches: { a: Actor; text: string; color: string; style?: SpeechStyle }[] = [];
   private speechFocusLines = new Map<Actor, NpcSpeechLine>();
+  private speechApproach: { a: Actor; text: string } | null = null;
   private dialogueVisibleSpeaker: Actor | null = null;
-  npcDialogueAvailable: () => boolean = () => true;
   npcDialogueOwner: () => number | null = () => null;
+  npcDialogueAvailable: () => boolean = () => true;
   onNpcDialogue: ((world: World, line: NpcSpeechLine | null, focusId: number | null) => void) | null = null;
   private dialogueReaderEnabled(): boolean { return !!this.onNpcDialogue && DIALOGUE_CFG.presentation === 'dialogue'; }
   /** Per-speaker utterance clocks (sim time, so menu holds freeze the
@@ -4392,7 +4505,7 @@ export class Renderer {
       const age = c.openedAt === undefined ? Infinity : world.time - c.openedAt;
       const u = Math.max(0, Math.min(1, age / VIS_CFG.chestLid.seconds));
       drawTreasureChest(this.ctx, c.pos.x, c.pos.y, c.opened, 1-Math.pow(1-u,3),
-        c.kind === 'objective' && !world.objectiveDone, world.time);
+        c.kind === 'objective' && !world.chestObjectiveDone(c), world.time);
       if (!c.opened && c.kind === 'timed' && c.maxLock > 0) {
         this.drawProgressRing(c.pos.x, c.pos.y, 1-c.lockTime/c.maxLock, 'lockpick');
         if(cue?.chest===c)drawChestReadout(this.ctx,cue,c.pos,world.time);
@@ -4787,6 +4900,7 @@ export class Renderer {
     for (const ring of world.dwellRingsView()) {
       this.drawProgressRing(ring.pos.x, ring.pos.y, ring.frac, ring.kind, world.zone.theme.accent);
     }
+    this.drawMusterRings(world); // THE MUSTER RING (shard M1 W4): a party's road waiting for the party
     // MAKE LANDFALL — the landing dwell at sea: the shared ring around the boat
     // plus a shore prompt (the Voyage's exit rule). A Voyage Island names itself.
     const ndw = world.voyageLandingView();
@@ -4923,14 +5037,14 @@ export class Renderer {
           // up as the countdown runs out. Drawn on the caster's own story only
           // — the lid over a cistern shows a surface walker nothing of the
           // water below.
-          if (world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === z.tier) {
-            const wfz = world.walk;
+          const wfz = regionGrid(world.walk); // worldmass uses the same spell painter
+          if (wfz && (world.player?.tier ?? 0) === z.tier) {
             const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
             const cells = groundedCellsIn(wfz, z.pos, z.radius, z.onGround,
-              { x0: this.cam.x - wfz.cell, y0: this.cam.y - wfz.cell, x1: this.cam.x + vw + wfz.cell, y1: this.cam.y + vh + wfz.cell });
+              { x0: this.cam.x - wfz.cellSize, y0: this.cam.y - wfz.cellSize, x1: this.cam.x + vw + wfz.cellSize, y1: this.cam.y + vh + wfz.cellSize });
             const fuse = z.telegraph;
             ctx.save();
-            drawBoilCells(ctx, cells, wfz.cell, boilRamp(z.delay, fuse), world.time);
+            drawBoilCells(ctx, cells, wfz.cellSize, boilRamp(z.delay, fuse), world.time);
             ctx.restore();
             ctx.globalAlpha = 1;
           }
@@ -5034,10 +5148,11 @@ export class Renderer {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      if (z.onGround && world.walk instanceof GridWalkField && (world.player?.tier ?? 0) === z.tier) {
-        const cells = groundedCellsIn(world.walk, z.pos, z.radius, z.onGround);
+      const fieldGrid = z.onGround ? regionGrid(world.walk) : null;
+      if (z.onGround && fieldGrid && (world.player?.tier ?? 0) === z.tier) {
+        const cells = groundedCellsIn(fieldGrid, z.pos, z.radius, z.onGround);
         ctx.save(); ctx.beginPath();
-        for (const cell of cells) ctx.rect(cell.x - world.walk.cell / 2, cell.y - world.walk.cell / 2, world.walk.cell, world.walk.cell);
+        for (const cell of cells) ctx.rect(cell.x - fieldGrid.cellSize / 2, cell.y - fieldGrid.cellSize / 2, fieldGrid.cellSize, fieldGrid.cellSize);
         ctx.clip(); drawSkillField(ctx, { ...z, onGround: undefined }, world.time); ctx.restore();
       } else drawSkillField(ctx, z, world.time);
     }
@@ -5046,10 +5161,11 @@ export class Renderer {
   /** Ground-qualified impacts share the warning's wet-cell and story gates. */
   private drawTerrainFlash(f: World['flashes'][number], world: World): void {
     if (!f.onGround) { this.drawFlash(f); return; }
-    if (!(world.walk instanceof GridWalkField) || (world.player?.tier ?? 0) !== (f.recoveryCueTier ?? 0)) return;
-    const { ctx } = this, cells = groundedCellsIn(world.walk, f.pos, f.radius, f.onGround);
+    const grid = regionGrid(world.walk);
+    if (!grid || (world.player?.tier ?? 0) !== (f.recoveryCueTier ?? 0)) return;
+    const { ctx } = this, cells = groundedCellsIn(grid, f.pos, f.radius, f.onGround);
     ctx.save(); ctx.beginPath();
-    for (const cell of cells) ctx.rect(cell.x - world.walk.cell / 2, cell.y - world.walk.cell / 2, world.walk.cell, world.walk.cell);
+    for (const cell of cells) ctx.rect(cell.x - grid.cellSize / 2, cell.y - grid.cellSize / 2, grid.cellSize, grid.cellSize);
     ctx.clip(); this.drawFlash(f); ctx.restore();
   }
 
@@ -5446,7 +5562,9 @@ export class Renderer {
         if (x < minX || x > maxX || y < minY || y > maxY) continue;
         const s = this.liteSpriteOf(wire.k[wire.b[j]] ?? '');
         if (!s) continue;
-        const bob = s.flier ? Math.sin(t * 5 + j * 0.8) * 2.2 : 0;
+        const ids = (wire as LiteWire).i; // THE WIRE DIET: a body's own phase rides its wire id (shard only)
+        const ph = ids ? ids[j / 3] * 0.8 : j * 0.8;
+        const bob = s.flier ? Math.sin(t * 5 + ph) * 2.2 : 0;
         ctx.drawImage(s.img, x - s.half, y - s.half + bob);
       }
       return;
@@ -6397,6 +6515,28 @@ export class Renderer {
       this.queueLabel(a, a.name, ink, dy, { font: '10px Verdana', stroke: false });
     }
 
+    // THE NAME OVER THE HERO (card 17 A, data/identityCues.ts HERO_NAME_CUE): every
+    // other player's hero wears the name it entered once — her gold for a party
+    // mate, ether for an independent neighbour; the local hero never wears its
+    // own (the strip and the sheet know it). Settings.heroNames dials it.
+    if (a.team === 'player' && a !== world.player) {
+      const seatId = world.seatIdOfActor(a); // both sides of the wire (the party view's row)
+      if (seatId && seatId !== world.clientSeatId && !world.seats.find(s => s.id === seatId)?.keeper) {
+        const mode = this.getSettings?.().heroNames ?? HERO_NAME_CUE.mode;
+        const mate = world.sameSeatParty(world.clientSeatId, seatId);
+        if (mode === 'all' || (mode === 'party' && mate)) {
+          const ink = a.dead || a.downed ? HERO_NAME_CUE.inkDown : mate ? HERO_NAME_CUE.inkMate : HERO_NAME_CUE.inkStranger;
+          this.queueLabel(a, a.name, ink, HERO_NAME_CUE.dy, { font: HERO_NAME_CUE.font, stroke: false });
+        }
+      }
+    }
+
+    // The same body, story and post-veil label gates protect the approach hint.
+    if (this.speechApproach?.a === a) {
+      const cue = VIS_CFG.speechApproach, points = Array.from(this.speechApproach.text);
+      const text = points.length > cue.maxCharacters ? points.slice(0, cue.maxCharacters).join('') + '…' : this.speechApproach.text;
+      this.queueLabel(a, text, cue.color, cue.dy, { font: cue.font });
+    }
     // Keep the actor's concealment/story gates above this presentation read.
     const speechFocusLine = this.speechFocusLines.get(a);
     if (world.speechFocusTarget()?.id === a.id) this.dialogueVisibleSpeaker = a;
@@ -6663,9 +6803,6 @@ export class Renderer {
     }
   }
 
-  /** World drops use the inventory's category glyphs / gem initials and
-   *  support badge. Rarity outlines, bobbing and gear name labels remain;
-   *  co-op shells carry the base id and gem name needed by the same reads. */
   private drawDrops(world: World): void {
     const { ctx } = this;
     const D = VIS_CFG.drops; // every size below is a lever, never a literal
@@ -6673,8 +6810,10 @@ export class Renderer {
     if (avoidLabels) this.rewardLabelLayout.begin(world.drops.map(d => d.item.kind === 'gear' ? d.item.item.uid : d),
       this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, Math.max(a.radius, D.rewardClearance / 2))),
       { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
+    const alpha0 = ctx.globalAlpha;
     for (const d of world.drops) {
       if (!this.companionCuePointVisible(d.pos, d.tier ?? world.spoilStoryAt(d.pos), world)) continue;
+      ctx.globalAlpha = alpha0 * dropAlpha(world, d); // THE SPOILS' OWNER (card 27): another seat's held drop, ghosted (shown, never told)
       const y = d.pos.y + Math.sin(d.bob) * D.bobAmp;
       const item = d.item;
       if (item.kind === 'vestige') {
@@ -6768,6 +6907,7 @@ export class Renderer {
       }
       ctx.restore();
     }
+    ctx.globalAlpha = alpha0;
   }
 
   private drawTownPortals(world: World): void {
@@ -7402,6 +7542,154 @@ export class Renderer {
     ctx.restore();
   }
 
+  private visibleCombatBodies(world: World): Actor[] {
+    return world.actors.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
+      && a.pos.x+a.radius > this.cam.x && a.pos.y+a.radius > this.cam.y
+      && a.pos.x-a.radius < this.cam.x+this.canvas.width/this.zoom
+      && a.pos.y-a.radius < this.cam.y+this.canvas.height/this.zoom
+      && this.labelRevealAt(world,a.pos) > .05);
+  }
+
+  private readonly combatMeters = new CombatMeterLayout();
+  /** THE PING (card 17 A — engine/pings.ts; dials data/identityCues.ts PING_CUE):
+   *  the world-anchored marks your party set. On-screen: rings breathing out of
+   *  the point under a bobbing beacon shard; off-screen: a chevron on the frame's
+   *  inset edge facing the mark. Your own mark wears inkSelf, a mate's her gold.
+   *  Every cue is a shape — never a word (SHOW DON'T TELL). World space. */
+  private drawPings(world: World): void {
+    if (!world.pings.length) return;
+    const me = world.clientSeatId; // the wire id on a client, the seat id on the host
+    const { ctx } = this, cue = PING_CUE, now = world.time;
+    const view = { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom };
+    ctx.save();
+    for (const p of world.pings) {
+      if (p.until <= now || now < p.at - 0.5) continue;
+      if (!world.pingVisibleTo(me, p)) continue;
+      const ink = p.seat === me ? cue.inkSelf : cue.inkMate;
+      const age = Math.max(0, now - p.at), left = p.until - now;
+      const fade = Math.max(0, Math.min(1, left / cue.fadeOutSec, cue.fadeInSec > 0 ? age / cue.fadeInSec : 1));
+      if (fade <= 0) continue;
+      const edge = pingEdgePoint(view, p.pos, cue.edge.pad / this.zoom);
+      if (edge) {
+        // Off-screen: a chevron on the inset edge, its point toward the mark, pulsing with the rings.
+        const size = cue.edge.size / this.zoom;
+        const pulse = 0.75 + 0.25 * Math.sin((age / cue.ringSec) * Math.PI * 2);
+        ctx.save();
+        ctx.translate(edge.x, edge.y); ctx.rotate(edge.ang);
+        ctx.globalAlpha = fade * pulse; ctx.fillStyle = ink;
+        ctx.beginPath(); ctx.moveTo(size, 0); ctx.lineTo(-size * 0.7, -size * 0.75); ctx.lineTo(-size * 0.25, 0); ctx.lineTo(-size * 0.7, size * 0.75); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        continue;
+      }
+      // The rings: PING_CUE.rings breaths staggered over one period, each growing and thinning.
+      ctx.strokeStyle = ink; ctx.lineWidth = cue.lineW;
+      for (let i = 0; i < cue.rings; i++) {
+        const t = ((age / cue.ringSec) + i / cue.rings) % 1;
+        const rad = cue.ringRadius * (0.15 + 0.85 * t);
+        ctx.globalAlpha = fade * (1 - t) * 0.9;
+        ctx.beginPath(); ctx.ellipse(p.pos.x, p.pos.y, rad, rad * 0.55, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      // The beacon: a tapered shard standing on the point, bobbing, over a small ground disc.
+      const bob = Math.sin((now * cue.beacon.bobHz + p.at) * Math.PI * 2) * cue.beacon.bobPx;
+      ctx.globalAlpha = fade; ctx.fillStyle = ink;
+      ctx.beginPath();
+      ctx.moveTo(p.pos.x, p.pos.y - 5 - bob);
+      ctx.lineTo(p.pos.x - cue.beacon.w, p.pos.y - cue.beacon.h - bob);
+      ctx.lineTo(p.pos.x + cue.beacon.w, p.pos.y - cue.beacon.h - bob);
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = fade * 0.5;
+      ctx.beginPath(); ctx.ellipse(p.pos.x, p.pos.y, 6, 3.3, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** THE PARTY THAT READS (data/partyCues.ts PARTY_CUE), the word layer. THE INVITE TELL: a
+   *  beckon over each inviter whose invitation to this client stands (partyBeckons), in its own
+   *  class color. THE HOLDERS: while you lie downed, the mates whose standing holds your down
+   *  (World.netRevive's `h`) wear brackets flanking their name, and one off-screen wears an edge
+   *  chevron facing it. Shapes only, never a word (SHOW DON'T TELL). World space. */
+  private drawPartyMarks(world: World): void {
+    const beckons = this.partyBeckons?.() ?? [];
+    const rv = world.netRevive;
+    const holders = rv && rv.s === world.clientSeatId ? rv.h ?? [] : [];
+    if (!beckons.length && !holders.length) return;
+    const { ctx } = this, cue = PARTY_CUE, now = world.time;
+    const bodyOf = (seat: string): Actor | undefined => world.party.members.find(m => m.seat === seat)?.actor;
+    ctx.save();
+    for (const seat of beckons) {
+      const a = bodyOf(seat);
+      if (!a || a.dead) continue;
+      const reveal = this.labelRevealAt(world, a.pos);
+      if (reveal <= 0.02) continue;
+      const b = cue.beckon, x = a.pos.x;
+      const bob = Math.sin((now * b.bobHz + a.id * 0.37) * Math.PI * 2) * b.bobPx;
+      const top = a.pos.y - a.radius - HERO_NAME_CUE.dy - b.lift - bob;
+      ctx.globalAlpha = reveal * b.alpha; ctx.fillStyle = a.color; ctx.strokeStyle = a.color; ctx.lineWidth = b.lineW;
+      ctx.beginPath(); // the shard, its point toward the inviter
+      ctx.moveTo(x, top + b.h); ctx.lineTo(x - b.w, top); ctx.lineTo(x + b.w, top);
+      ctx.closePath(); ctx.fill();
+      for (let i = 0; i < b.arcs; i++) { // the call: arcs breathing upward off the shard
+        const t = ((now / b.arcSec) + i / b.arcs) % 1;
+        ctx.globalAlpha = reveal * b.alpha * (1 - t);
+        ctx.beginPath(); ctx.arc(x, top, b.arcR * (0.35 + 0.65 * t), Math.PI * 1.2, Math.PI * 1.8); ctx.stroke();
+      }
+    }
+    if (holders.length) {
+      const h = cue.holder, s = h.size;
+      const view = { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom };
+      ctx.font = HERO_NAME_CUE.font; ctx.fillStyle = h.ink;
+      for (const seat of holders) {
+        const a = bodyOf(seat);
+        if (!a) continue;
+        const edge = pingEdgePoint(view, a.pos, h.edge.pad / this.zoom);
+        if (edge) { // off-screen: the ping's chevron, facing the mate who holds you
+          const size = h.edge.size / this.zoom;
+          ctx.save(); ctx.translate(edge.x, edge.y); ctx.rotate(edge.ang); ctx.globalAlpha = 0.9;
+          ctx.beginPath(); ctx.moveTo(size, 0); ctx.lineTo(-size * 0.7, -size * 0.75); ctx.lineTo(-size * 0.25, 0); ctx.lineTo(-size * 0.7, size * 0.75); ctx.closePath(); ctx.fill();
+          ctx.restore();
+          continue;
+        }
+        const reveal = this.labelRevealAt(world, a.pos);
+        if (reveal <= 0.02) continue;
+        const half = ctx.measureText(a.name).width / 2 + h.gap, y = a.pos.y - a.radius - HERO_NAME_CUE.dy - 4;
+        ctx.globalAlpha = reveal;
+        ctx.beginPath(); ctx.moveTo(a.pos.x - half, y); ctx.lineTo(a.pos.x - half - s, y - s); ctx.lineTo(a.pos.x - half - s, y + s); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(a.pos.x + half, y); ctx.lineTo(a.pos.x + half + s, y - s); ctx.lineTo(a.pos.x + half + s, y + s); ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  /** THE PARTY THAT READS (data/partyCues.ts PARTY_CUE), the ground: the down this client's row
+   *  reads (World.netRevive, SeatW.rv). THE WIPE RADIUS: THE NEAR LAW's ring around a held down,
+   *  drawn for the downed player and the mates whose standing holds it (the group law's reach
+   *  made visible). THE BLEED-OUT: a ring draining outside the revive ring as the wait runs out.
+   *  Your own down: the revive's fill (a kneel's progress, or THE MERCY's clock); a mate's fill
+   *  rides the dwell ring pass. World space. */
+  private drawDownReads(world: World): void {
+    const rv = world.netRevive;
+    if (!rv) return;
+    const { ctx } = this, cue = PARTY_CUE, now = world.time;
+    const own = rv.s === world.clientSeatId;
+    const at = own ? world.player.pos : world.party.members.find(m => m.seat === rv.s)?.actor.pos ?? { x: rv.p[0], y: rv.p[1] };
+    ctx.save();
+    if (rv.r && rv.r > 0) {
+      const wc = cue.wipe;
+      ctx.globalAlpha = Math.max(0, wc.alpha + wc.breath * Math.sin(now * wc.hz * Math.PI * 2));
+      ctx.strokeStyle = wc.ink; ctx.lineWidth = wc.lineW; ctx.setLineDash(wc.dash);
+      ctx.beginPath(); ctx.arc(at.x, at.y, rv.r, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (rv.l !== undefined && rv.lt) {
+      const b = cue.bleed, frac = clamp(rv.l / rv.lt, 0, 1);
+      const urgent = rv.l <= b.urgentSec ? 0.55 + 0.45 * Math.abs(Math.sin(now * b.urgentHz * Math.PI)) : 1;
+      ctx.globalAlpha = b.alpha * urgent; ctx.strokeStyle = b.ink; ctx.lineWidth = b.lineW;
+      ctx.beginPath(); ctx.arc(at.x, at.y, transitRing('revive').radius + b.gap, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+    if (own) this.drawProgressRing(at.x, at.y, rv.f, 'revive');
+  }
+
   private drawTexts(world: World): void {
     const { ctx } = this;
     ctx.textAlign = 'center';
@@ -7411,8 +7699,13 @@ export class Renderer {
     const avoidNumbers = this.getSettings?.().floatingTextAvoidance === true;
     if (avoidNumbers) this.floatingTextLayout.begin(this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)),
       { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
+    // THE FLOAT'S OWNER (THE WIRE'S EYES): on a hosted world (partyRows stands) a number
+    // another seat struck or mended draws per Settings.floatOwners; elsewhere every one does.
+    const ownerMode = world.partyRows !== null ? this.getSettings?.().floatOwners : 'all';
+    const sameParty = (a: string, b: string): boolean => world.sameSeatParty(a, b);
     for (const t of world.texts) {
       if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
+      if (!floatOwnerShown(ownerMode, world.clientSeatId, t.seat, sameParty)) continue;
       // Bind tokens resolve at DRAW, not at spawn — a float naming a key
       // stays honest even if the player rebinds (or grabs the pad) mid-air.
       const txt = this.resolveText(t.text);
@@ -7470,19 +7763,38 @@ export class Renderer {
     const { ctx } = this;
     ctx.save();
     ctx.textAlign = anchor === 'topLeft' ? 'left' : anchor === 'topRight' ? 'right' : 'center';
+    ctx.textBaseline = 'top';
     const x = anchor === 'topLeft' ? v.sidePad
       : anchor === 'topRight' ? this.uiW - v.sidePad : this.uiW / 2;
     const up = anchor === 'bottom';
-    let y = up ? this.uiH - v.bottomPad : v.topPad;
+    const width = Math.max(1, Math.min(v.maxWidth, this.uiW - v.sidePad * 2));
+    const top = Math.max(v.topPad, this.noticeHeaderBottom + v.hudGap);
+    const bottom = Math.min(this.uiH - v.bottomPad,
+      ...this.hudClusterRects.map(r => r.y / this.uiToCss - v.hudGap));
+    let edge = up ? bottom : top, rowsLeft = v.maxRows;
     for (const { n, alpha } of live) {
+      const stride = n.size + v.rowGap;
+      const room = Math.min(rowsLeft, Math.floor((up ? edge - top : bottom - edge) / stride));
+      if (room < 1) break;
       ctx.globalAlpha = alpha;
       ctx.font = `bold ${n.size}px Verdana`;
+      const key = JSON.stringify([ctx.font, width, room, n.text]);
+      let lines = this.noticeLineCache.get(key);
+      if (!lines) {
+        lines = wrapNotice(n.text, width, room, text => ctx.measureText(text).width);
+        this.noticeLineCache.set(key, lines);
+        if (this.noticeLineCache.size > v.cacheEntries) this.noticeLineCache.delete(this.noticeLineCache.keys().next().value!);
+      }
+      const start = up ? edge - lines.length * stride : edge;
       ctx.fillStyle = n.color;
       ctx.strokeStyle = 'rgba(0,0,0,0.75)';
       ctx.lineWidth = 3;
-      ctx.strokeText(n.text, x, y);
-      ctx.fillText(n.text, x, y);
-      y += (up ? -1 : 1) * (n.size + v.rowGap);
+      lines.forEach((line, i) => {
+        ctx.strokeText(line, x, start + i * stride);
+        ctx.fillText(line, x, start + i * stride);
+      });
+      rowsLeft -= lines.length;
+      edge += (up ? -1 : 1) * lines.length * stride;
     }
     ctx.restore();
   }
@@ -7569,10 +7881,11 @@ export class Renderer {
   }
 
   private drawHud(world: World): void {
-    this.statusIconRects.length = 0; this.statusIconHover = undefined;
     this.hudSlotRects.length = 0; // THE PRESSABLE BAR's ledger — this frame's rects only
     this.hudMetaRects.length = 0; // THE PRESSABLE META's ledger — likewise
     this.hudClusterRects.length = 0;
+    this.statusIconRects.length = 0; this.statusIconHover = undefined;
+    this.noticeHeaderBottom = 0;
     // THE COUCH DISPATCH (data/couch.ts): solo draws the one classic centered
     // cluster — byte-identical. With guests seated, each local seat's cluster
     // anchors to its own flank (guest bars read pad glyphs, guest identity
@@ -8338,8 +8651,11 @@ export class Renderer {
 
     // comboCueRows shares consumed progress with body tells and the host wire;
     // completion closes the pattern into its body-matched signature.
-    drawComboHud(ctx, bx + 8, by - 54, comboCueRows(p, world.time));
-    drawProcHud(ctx, procCues, bx + totalW / 2, by - (seat.home && p.possession ? 108 : 78));
+    const comboTop = drawComboHud(ctx, bx + 8, by - 54, comboCueRows(p, world.time));
+    const procY = by - (seat.home && p.possession ? 108 : 78);
+    drawProcHud(ctx, procCues, bx + totalW / 2, procY);
+    drawComboConditions(ctx, bx + totalW / 2, Math.min(comboTop, procY) - COMBO_CONDITION_HUD.gap,
+      Math.min(w - 24, totalW), comboConditionRows(p, world.time));
 
     // THE POSSESSION STRIP (the possession seam, engine/possess.ts): while
     // the local seat rides a foreign body, one centered chip above the bar
@@ -8417,7 +8733,7 @@ export class Renderer {
     const titleLine = m.name !== m.classDef.name
       ? `${m.name}  —  Level ${p.level} ${m.classDef.name}`
       : `${m.classDef.name}  —  Level ${p.level}`;
-    ctx.fillText(titleLine, x, 26);
+    drawHudText(ctx, titleLine, x, 26);
     // CHARACTER-MODE chip (data-driven — any stage that declares a badge shows
     // one): the Immortal's SWORN → UNDYING standing, at a glance, in mode color.
     const stage = world.seatStageDef(seat);
@@ -8434,7 +8750,7 @@ export class Renderer {
       ctx.strokeRect(chipX, 14, bw, 15);
       ctx.fillStyle = col;
       ctx.textAlign = 'left'; // the badge keeps its own left edge inside the chip
-      ctx.fillText(stage.badge, chipX + 6, 25);
+      drawHudText(ctx, stage.badge, chipX + 6, 25);
       ctx.textAlign = align;
     }
     let hintY = worldInfo ? 100 : 46; // a guest's hints start right under its title
@@ -8444,7 +8760,7 @@ export class Renderer {
     if (!worldInfo && this.couchPadLost.includes(seat.id)) {
       ctx.font = 'bold 12px Verdana';
       ctx.fillStyle = '#e8685a';
-      ctx.fillText('CONTROLLER DISCONNECTED — reconnect to rejoin', x, hintY);
+      drawHudText(ctx, 'CONTROLLER DISCONNECTED — reconnect to rejoin', x, hintY);
       hintY += 18;
     }
     if (worldInfo) {
@@ -8460,7 +8776,10 @@ export class Renderer {
       // (applyZone patches only name/level/theme), so the id of the terrain it
       // MIRRORS is the honest tell for a client — hence both reads.
       const atSea = world.sailing || world.appliedZoneId === VOYAGE_ZONE_ID;
-      const lvText = !atSea && world.zone.level > 0 ? ` — Monster Lv ${world.zone.level}` : '';
+      const massSettlement = world.massRuntime?.settlement;
+      const massSite = world.massRuntime?.localSite(p.pos);
+      const locality = massSettlement?.contains(p.pos.x, p.pos.y) ? massSettlement.zone : massSite ?? world.zone;
+      const lvText = !atSea && locality.level > 0 ? ` — ${massSite ? 'Site' : world.massRuntime ? 'Country' : 'Monster'} Lv ${massSite?.level ?? world.levelAt(p.pos)}` : '';
       // Underground, the banner names the BAND (the strata fabric) AND the rung
       // standing on it: where you are on the world's vertical ladder, and how
       // far down that is. Both read the ONE caveDepth datum — the number IS the
@@ -8469,16 +8788,19 @@ export class Renderer {
       const caveD = sceneGround ? undefined : world.zone.caveDepth;
       const stratText = caveD != null
         ? ` · ${stratumOf(caveD).name} · Depth ${caveD}` : '';
-      ctx.fillText(`${world.zone.name}${lvText}${stratText}`, x, 46);
+      drawHudText(ctx, `${locality.name}${lvText}${stratText}`, x, 46);
       // Living-world status: time of day · weather · who holds this ground.
       ctx.font = '11px Verdana';
       ctx.fillStyle = '#9ab0c8';
-      ctx.fillText(sceneGround ? dayCycle(sceneSkyTime(world)).label
+      drawHudText(ctx, sceneGround ? dayCycle(sceneSkyTime(world)).label
         : world.sim.hudLine(world.zone, world.time), x, 64);
       ctx.font = '12px Verdana';
-      ctx.fillStyle = world.objectiveDone ? '#ffd700' : '#9a96b8';
-      ctx.fillText(world.objectiveText(), x, 82);
+      ctx.fillStyle = (massSite?.activity?.complete ?? world.objectiveDone) ? '#ffd700' : '#9a96b8';
+      hintY = this.objectiveReadout.draw(ctx, world.objectiveText(), x, 82,
+        world.seats.length > 1 ? this.uiW / 2 - 32 : this.uiW - x - 16);
     }
+    if (worldInfo && world.massRuntime)
+      hintY = drawQuestCompass(ctx, questCompassLines(p.pos, [...world.npcDialogues.guidance(), ...massQuestPins(world)]), x, hintY, this.uiW - x - 16);
     // The kill counter is RUN-END information (credits math, the death
     // screen) — mid-run it's clutter, so the HUD no longer carries it.
     // Unspent-point nudges only — carried-gem COUNTS retired (the refreshed
@@ -8491,7 +8813,7 @@ export class Renderer {
     // A couch GUEST has no bar of their own, so the line still speaks to them.
     if (m.passivePoints > 0 && !worldInfo) {
       ctx.fillStyle = '#ffd700';
-      ctx.fillText(`${m.passivePoints} passive point${m.passivePoints > 1 ? 's' : ''} — press ${hintKey('panelTree')}`, x, hintY);
+      drawHudText(ctx, `${m.passivePoints} passive point${m.passivePoints > 1 ? 's' : ''} — press ${hintKey('panelTree')}`, x, hintY);
       hintY += 18;
     }
     // (The skill-point nudge retired with the point lane — skill levels are
@@ -8499,14 +8821,14 @@ export class Renderer {
     if (worldInfo && world.mireilleXpBuff > 0) {
       const t = Math.ceil(world.mireilleXpBuff);
       ctx.fillStyle = '#a0d8a0';
-      ctx.fillText(`✦ +5% XP blessing — ${Math.floor(t / 60)}:${(t % 60).toString().padStart(2, '0')}`, x, hintY);
+      drawHudText(ctx, `✦ +5% XP blessing — ${Math.floor(t / 60)}:${(t % 60).toString().padStart(2, '0')}`, x, hintY);
       hintY += 18;
     }
     if (worldInfo) {
       const rep = world.sim.reputation.hud();
       if (rep) {
         ctx.fillStyle = '#e8c87a';
-        ctx.fillText(rep, x, hintY);
+        drawHudText(ctx, rep, x, hintY);
         hintY += 18;
       }
     }
@@ -8524,6 +8846,7 @@ export class Renderer {
         drawStatusReadout(ctx, rows, anchor.x, anchor.y, anchor.width, 'left');
       }
     }
+    this.noticeHeaderBottom = Math.max(this.noticeHeaderBottom, hintY - 14);
   }
 
   /** The world-level HUD tail — the wave banner + the boss-bar stack. Drawn
@@ -8537,6 +8860,7 @@ export class Renderer {
       ctx.font = 'bold 22px Verdana';
       ctx.fillStyle = '#c8a84b';
       ctx.fillText(`Wave ${world.wave + 1} in ${Math.ceil(world.waveTimer)}...`, w / 2, 110);
+      this.noticeHeaderBottom = Math.max(this.noticeHeaderBottom, 116);
     }
 
     // Boss bar — pushed down below the co-op party strip when it's showing, so the
@@ -8694,13 +9018,6 @@ export class Renderer {
     ctx.font = '10px Verdana';
     ctx.fillStyle = '#8a8678';
     ctx.fillText(label, x, y - r - (ORB_ARCS.endurance + ORB_ARCS.captionPad));
-  }
-private visibleCombatBodies(world: World): Actor[] {
-    return world.actors.filter(a => !a.dead && !a.burrow && !a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)
-      && a.pos.x+a.radius > this.cam.x && a.pos.y+a.radius > this.cam.y
-      && a.pos.x-a.radius < this.cam.x+this.canvas.width/this.zoom
-      && a.pos.y-a.radius < this.cam.y+this.canvas.height/this.zoom
-      && this.labelRevealAt(world,a.pos) > .05);
   }
 }
 

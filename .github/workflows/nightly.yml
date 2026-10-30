@@ -63,6 +63,8 @@ jobs:
       sha: ${{ steps.verified.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - uses: actions/setup-node@v4
         with:
           node-version: 22

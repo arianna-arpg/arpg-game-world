@@ -331,3 +331,8 @@ disposable Electron profile. It writes `balance/reports/layer-visuals.json` and
 a contact sheet beside it. CI runs both courses. The existing `probe_tiers`
 and `probe_storey` courses cover traversal, wall collision, floor interaction,
 crowd separation and multi-story AI investigation.
+
+Seamless also runs `balance/layer-native-check.ts` through an actual born native
+area: launch-floor damage, field ticks, secondary bursts, terminal shards,
+attached effects and saved corpse floors. Its native adapters preserve the
+same floor arguments and record stamps as the shared World paths.

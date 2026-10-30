@@ -1,4 +1,4 @@
-import type { World } from './world';
+import type {NativeSceneDirectorHost} from './nativeSceneDirectorHost';
 import type { SceneRoadSpec } from '../data/scenes';
 import { type Doodad, doodadRuleOf } from './levelgen';
 import { type Vec2, vec } from '../core/math';
@@ -30,7 +30,7 @@ export function sceneRoadShoulder(road: SceneRoad, d: Doodad): boolean {
   return Math.abs(sceneRoadCoordinates(road, d.pos).across) > road.spec.radius + d.radius;
 }
 
-export function beginSceneRoad(w: World, spec: SceneRoadSpec): SceneRoad {
+export function beginSceneRoad(w: NativeSceneDirectorHost, spec: SceneRoadSpec): SceneRoad {
   if (!(spec.radius > 0 && spec.spacing > 0 && spec.spacing <= spec.radius)) {
     throw new Error('Scene road needs positive radius and spacing <= radius');
   }
@@ -45,7 +45,7 @@ export function beginSceneRoad(w: World, spec: SceneRoadSpec): SceneRoad {
 
 /** A bounded window per seat, on a global integer lattice: no seams, no
  *  endpoint, and returning to culled ground gives exactly the same road. */
-export function streamSceneRoad(w: World, road: SceneRoad): void {
+export function streamSceneRoad(w: NativeSceneDirectorHost, road: SceneRoad): void {
   const { reach, cull } = SCENE_CFG.dressStream;
   const seats = w.seats.map(s => sceneRoadCoordinates(road, s.actor.pos));
   const { spacing, radius } = road.spec;

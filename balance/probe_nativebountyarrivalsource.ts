@@ -1,0 +1,10 @@
+import {beforeNativeJourney as projectJourney} from './nativeJourneyCompositionFixture';
+import assert from 'node:assert/strict';
+import {readNativeArrivalMainCast as readFileSync} from './nativeArrivalCompositionFixture';
+import {createHash} from 'node:crypto';
+import {nativeBountyArrivalArchive as archive} from './nativeBountyArrivalArchive';
+import {beforeNativeBountyArrival as project} from './nativeBountyArrivalFixture';
+import {writeCombatProof} from './probe_nativecombatcycle';
+const hash=(s:string)=>createHash('sha256').update(s).digest('hex');let mutations=0,duplicates=0,portable=0,outside=0;
+for(const row of archive.rows){const source=projectJourney('bounty58',row.file,readFileSync(new URL('../'+row.file,import.meta.url),'utf8')).replaceAll('\r\n','\n'),run=(s:string)=>project(row.file,s);assert.equal(hash(source),row.afterHash,'whole current source');assert.equal(hash(run(source)),row.beforeHash,'whole frozen source');let n=0;for(const x of [source,source.replaceAll('\n','\r\n'),source.replace(/\n/g,()=>++n%2?'\r\n':'\n')]){assert.equal(hash(run(x)),row.beforeHash);portable++;}for(const h of row.hunks){const bad=source.replace(h.after,h.after.replace(/\S/,'!'));assert.notEqual(bad,source);assert.throws(()=>run(bad),/exact hunk refused/);mutations++;assert.throws(()=>run(source.replace(h.after,h.after+h.after)),/exact hunk refused/);duplicates++;}const extra='\n// unexplained source must remain visible\n';assert.equal(run(source+extra),run(source)+extra);assert.notEqual(hash(run(source+extra)),row.beforeHash);outside++;}
+const result={parent:archive.parent,files:archive.rows.length,mutations,duplicates,portable,outside,rows:archive.rows.map(r=>({file:r.file,before:r.beforeHash,after:r.afterHash,hunks:r.hunks.length}))},report={scope:'Six exact runtime successors and two declared historical reader adapters; whole frozen sources, original native bodies and assertions reconstructed without accepting unrelated edits.',result,receipt:hash(JSON.stringify(result))};writeCombatProof('native-bounty-arrival-source.json',report);console.log(JSON.stringify(report));

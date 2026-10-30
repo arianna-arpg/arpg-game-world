@@ -543,7 +543,7 @@ const FACTION_ROLL_SALT = 0x7fa7; // the Fathers' own stream fork
  *  it. The stamp persists mid-scene (account writes flow under scenes), so
  *  an aborted tutorial replays the SAME legion and the revenge quests read
  *  the same key forever after. */
-export function rollTutorialFaction(w: World): TutorialFactionRow {
+export function rollTutorialFaction(w: Pick<World,"account"|"accountDirty"|"manifest">): TutorialFactionRow {
   const stamped = tutorialFactionOf(w.account.ledger);
   if (stamped) return tutorialFactionRow(stamped);
   const rng = new Rng((w.manifest.seed ^ FACTION_ROLL_SALT) >>> 0);
@@ -586,4 +586,4 @@ export function prologueForFaction(row: TutorialFactionRow): SceneDef {
 // THE SEAM: assigned onto the base def (the open-record idiom) — sceneBegin
 // resolves through it when present; a boot that never imports this module
 // (a bare sim arena) walks the goblin default unchanged.
-PROLOGUE_SCENE.resolve = (w: World): SceneDef => prologueForFaction(rollTutorialFaction(w));
+PROLOGUE_SCENE.resolve = (w: Pick<World,"account"|"accountDirty"|"manifest">): SceneDef => prologueForFaction(rollTutorialFaction(w));

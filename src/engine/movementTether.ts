@@ -1,6 +1,7 @@
 import type { Vec2 } from '../core/math';
 import type { Actor } from './actor';
 import type { World } from './world';
+export type NativeMovementTetherHost=Pick<World,"actors"|"actorById"|"timeflow"|"clampPos">;
 
 /** Physical reach, independent of targeting leashes and damaging pack links.
  * Distances measure actor centres. Attacks retain their own authored reach. */
@@ -79,7 +80,7 @@ export function landMovementTether(a: Actor): void {
   else { a.movementTether.released = true; a.movementTether.returning = false; }
 }
 
-export function refreshMovementTether(a: Actor, w: World): MovementTetherState | undefined {
+export function refreshMovementTether(a: Actor, w: Pick<World, 'actorById'>): MovementTetherState | undefined {
   const t = a.movementTether;
   if (!t || t.released || a.dead) return;
   if (t.anchorId !== undefined) {
@@ -105,7 +106,7 @@ export function movementTetherLimit(t: MovementTetherState, p: Vec2): Vec2 {
 
 /** Final authority after displacement systems. Recoil is mechanical, so stun
  * cannot disable a chain; the world timeflow still scales its clock. */
-export function updateMovementTethers(w: World, dt: number): void {
+export function updateMovementTethers(w: NativeMovementTetherHost, dt: number): void {
   for (const a of w.actors) {
     if (a.dead) continue;
     ensureMovementTether(a);

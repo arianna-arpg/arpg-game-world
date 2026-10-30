@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {withSeededRandom} from '../src/core/rng';
+import {vec} from '../src/core/math';
+import {makeSkillInstance} from '../src/engine/skills';
+import {SKILLS} from '../src/data/skills';
+import {nativeCampaignFixture,birthActualNativeArea,mintAdditionalNativeArea} from './nativeCombatRetainedFixture';
+import {refuseWorldCombat,writeCombatProof,combatHash} from './probe_nativecombatcycle';
+const result=withSeededRandom(44551,()=>{const setup=nativeCampaignFixture(),defB=mintAdditionalNativeArea(setup);return refuseWorldCombat([setup.writer],calls=>{
+ const all=birthActualNativeArea(setup),{ongoing:a,authority,campaign,coordinator}=all,hero=campaign.localSeat.actor,scene=a.assembly.input.scene,combat=a.combat;
+ const enemy=a.assembly.input.population.createMonster('skeleton_warrior',12,'enemy');enemy.pos=a.assembly.input.geometry.clampPos(vec(hero.pos.x+100,hero.pos.y),enemy.radius);scene.actors.push(enemy);authority.claim(a.binding,[enemy]);
+ withSeededRandom(44407,()=>{for(let i=0;i<12&&hero.life===hero.maxLife();i++)combat.resolveHit(enemy,makeSkillInstance(SKILLS.claw,12),hero);});
+ const tracker=combat.campaignOwner.combatDeeds,wounds=Reflect.get(tracker,'wounds'),callback=hero.onLifeHealed;assert.ok(wounds>0);assert.equal(typeof callback,'function');
+ const inst=makeSkillInstance(SKILLS.form_of_the_dire_wolf,1),effect=inst.def.effects.find(e=>e.type==='shapeshift');assert.ok(effect&&effect.type==='shapeshift');combat.shapeshiftPress(hero,inst,effect.shift);
+ const form=campaign.localSeat.actor;assert.notEqual(form,hero);assert.equal(scene.player,form);assert.equal(campaign.localSeat.home,hero);assert.equal(scene.actors.includes(hero),false);assert.equal(authority.require(hero).combat,combat);assert.equal(authority.require(form).combat,combat);
+ const life=hero.life;assert.throws(()=>hero.healBy(1),/deed|callback|hero|actor|owner/i,'previous controlled-body callback refuses after native life mutation');assert.equal(hero.life,life+1);assert.equal(Reflect.get(tracker,'wounds'),wounds,'refused stale callback does not consume credit');
+ combat.campaignOwner.bindCombatDeeds();assert.equal(Reflect.get(tracker,'wounds'),0,'real controlled body identity change resets native tracker');assert.equal(hero.onLifeHealed,undefined);assert.equal(typeof form.onLifeHealed,'function');
+ coordinator.runFrom(a,()=>coordinator.loadZone(defB.id,scene.zone.id));const b=coordinator.current;
+ assert.equal(campaign.localSeat.actor,hero);assert.equal(campaign.localSeat.home,undefined);assert.equal(b.assembly.input.scene.player,hero);assert.equal(authority.require(hero).combat,b.combat);assert.equal(a.assembly.input.scene.actors.includes(hero),false);assert.equal(a.assembly.input.scene.actors.includes(form),true,'native ejection leaves the dead form until actual corpse cleanup');assert.equal(form.dead,true);assert.equal(authority.require(form).combat,a.combat);assert.equal(b.assembly.input.scene.actors.includes(form),false);assert.equal(typeof hero.onLifeHealed,'function');assert.notEqual(hero.onLifeHealed,callback);assert.equal(Reflect.get(tracker,'wounds'),0);authority.assertAdmitted(a.assembly.input.scene);authority.assertAdmitted(b.assembly.input.scene);
+ return{form:form.defId,source:scene.zone.id,destination:defB.id,earlierPartialHeal:hero.life>=life+1,woundsBefore:wounds,woundsAfter:Reflect.get(tracker,'wounds'),worldDrivers:calls};
+});});const report={mode:'Actual native shapeshift, stale prior-body healing partial effect, real bind reset and travel ejection/restoration before new-area birth.',result,receipt:combatHash(JSON.stringify(result))};writeCombatProof('native-combat-carry-travel.json',report);console.log(JSON.stringify(report));

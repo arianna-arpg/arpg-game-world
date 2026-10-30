@@ -4,7 +4,8 @@ import { npcDwellRadius } from '../data/transit';
 import { dist } from '../core/math';
 import { Rng } from '../core/rng';
 import type { Actor } from './actor';
-import type { NpcSpeechLine, World } from './world';
+import type { NpcSpeechLine } from './world';
+import type { NativeNpcDialogueHost } from './nativeNpcDialogueHost';
 import { dialoguePages, type DialogueOffer, type DialogueChoice } from './dialogue';
 
 export const npcDialogueReceipt = (id: string): string => `dialogue_seen:${id}`;
@@ -14,7 +15,7 @@ const hashStr = (s: string): number => {
   return hash >>> 0;
 };
 
-export function dialogueConditionMet(w: World, c: DialogueCondition): boolean {
+export function dialogueConditionMet(w: NativeNpcDialogueHost, c: DialogueCondition): boolean {
   if ('quest' in c) return w.activeQuests.some(q => q.questId === c.quest && (c.state !== 'ready' || w.questStanding(q) === 'ready'));
   if ('fact' in c) {
     const fact = NPC_DIALOGUE_FACTS[c.fact];
@@ -27,8 +28,8 @@ export function dialogueConditionMet(w: World, c: DialogueCondition): boolean {
     || (c.scope !== 'account' && (w.ledger[c.ledger] ?? 0) >= n);
 }
 
-export function npcDialogueEligible(w: World, def: NpcDialogueDef): boolean {
-  if (def.zone && w.zone.id !== def.zone) return false;
+export function npcDialogueEligible(w: NativeNpcDialogueHost, def: NpcDialogueDef): boolean {
+  if (def.zone && w.localZoneAt(w.player.pos).id !== def.zone) return false;
   if (def.once && (def.once === 'account' ? w.account.ledger : w.ledger)[npcDialogueReceipt(def.id)]) return false;
   return (def.all ?? []).every(c => dialogueConditionMet(w, c))
     && (!def.any?.length || def.any.some(c => dialogueConditionMet(w, c)))
@@ -39,11 +40,11 @@ export function npcDialogueEligible(w: World, def: NpcDialogueDef): boolean {
  * pages and input; this director owns conditions, variation and trigger life. */
 export class NpcDialogueDirector {
   private choices = new Map<number, { id: string; text: string }>();
-  private visits = new Map<string, number>();
+  private visits:Map<string, number>;
   private armed = new Set<string>();
   private admittedVisits = new Map<number, string>();
   private calling?: { def: NpcDialogueDef; line: NpcSpeechLine; until: number };
-  constructor(private readonly w: World) {}
+  constructor(private readonly w: NativeNpcDialogueHost, visits:Map<string,number>=new Map()) { this.visits=visits; }
 
   appearanceFor(defId: string): string | undefined {
     const rule = NPC_APPEARANCES[defId];
@@ -118,6 +119,22 @@ export class NpcDialogueDirector {
       }])) };
   }
 
+  /** Read known sanctuary services through authored conversation conditions.
+   * A guide is not a conversation admission, quest acceptance or survey. */
+  guidance(): { x: number; y: number; radius: number; label: string; ready: boolean }[] {
+    const w = this.w;
+    if (w.scene || w.clientActionHook || !w.player || w.player.dead || w.player.downed
+      || !w.isSafeAt(w.player.pos)) return [];
+    return [...NPC_DIALOGUES].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))
+      .flatMap(def => {
+        const guide = def.guide;
+        if (!guide?.label.trim() || !Number.isFinite(guide.radius) || guide.radius <= 0
+          || !npcDialogueEligible(w, { ...def, once: undefined })) return [];
+        const speaker = w.actors.find(a => this.matches(a, def) && w.isSafeAt(a.pos));
+        return speaker ? [{ ...speaker.pos, radius: guide.radius, label: guide.label, ready: false }] : [];
+      });
+  }
+
   /** Reading lease for an already-admitted call-out. This never admits new
    * text or grants proximity to the speaker's services. */
   activeCallout(): NpcSpeechLine | null {
@@ -138,14 +155,18 @@ export class NpcDialogueDirector {
       this.calling = undefined;
     }
     for (const def of [...NPC_DIALOGUES].sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id))) {
-      if (def.trigger.kind !== 'exitApproach' || !npcDialogueEligible(w, def)) continue;
+      if (def.trigger.kind === 'dwell' || !npcDialogueEligible(w, def)) continue;
       const trigger = def.trigger;
-      const exits = w.exits.filter(e => e.to === trigger.to && (w.player.tier ?? 0) === 0);
+      // boundaryApproach shares native visibility/admission/receipt rules with
+      // graph exits, but refers to physical routes rather than a loading gate.
+      const approaches = (w.player.tier ?? 0) !== 0 ? [] : trigger.kind === 'exitApproach'
+        ? w.exits.filter(e => e.to === trigger.to).map(e => e.pos)
+        : w.massRuntime?.journey?.departurePoints ?? [];
       const frame = w.viewRectFor(w.player);
-      const approached = exits.some(e => dist(w.player.pos, e.pos) <= trigger.radius
-        && (!trigger.visible || (e.pos.x >= frame.x && e.pos.x <= frame.x + frame.w
-          && e.pos.y >= frame.y && e.pos.y <= frame.y + frame.h
-          && w.lineOfSight(w.player.pos, e.pos, w.player.tier ?? 0, 0))));
+      const approached = approaches.some(pos => dist(w.player.pos, pos) <= trigger.radius
+        && (!trigger.visible || (pos.x >= frame.x && pos.x <= frame.x + frame.w
+          && pos.y >= frame.y && pos.y <= frame.y + frame.h
+          && w.lineOfSight(w.player.pos, pos, w.player.tier ?? 0, 0))));
       if (!approached) { this.armed.add(def.id); continue; }
       if (!admit || !this.armed.has(def.id)) continue;
       const a = w.actors.find(a => this.matches(a, def));

@@ -11,7 +11,7 @@ import { resolveTell, tellSpecsOf, tellDressOf, tellPortraitDress } from '../src
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { drawPoolVents, drawPoolVentHud } from '../src/render/vis/reserveCueLayer';
 import { SIM_TAP } from '../src/engine/tap';
-import { readFileSync } from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 
 seedGlobalRandom(0x20020);
 let checks = 0;

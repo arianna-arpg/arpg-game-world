@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import {withSeededRandom} from '../src/core/rng';
+import {nativeCampaignFixture,birthActualNativeArea,mintAdditionalNativeArea} from './nativeCombatRetainedFixture';
+import {refuseWorldCombat} from './probe_nativecombatcycle';
+import {RemoteInput} from '../src/net/remote';
+import {CLASSES} from '../src/data/classes';
+import {GridWalkField} from '../src/world/gridWalk';
+import {readNativeCrusadeFixtureMemory} from '../src/engine/nativeCrusadeFixtureMemory';
+const result=withSeededRandom(991,()=>{
+ const input=nativeCampaignFixture(991),w=input.writer,other=mintAdditionalNativeArea(input);
+ input.definition.fixtures=[...(input.definition.fixtures??[]),{structure:'cottage',x:1000,y:1000}];
+ w.loadZone(input.definition.id);const cf=w.sim.crusadeField!;
+ const ignite=()=>{const view=w.devOverlayView();assert(cf.devIgnite(view,input.definition.id,100,'undead'));cf.update(0,view);const info=cf.crusadeOn(input.definition.id);assert(info?.structure);return info;};
+ const first=ignite();return refuseWorldCombat([w],drivers=>{
+  const n=birthActualNativeArea(input),area=n.ongoing,g=area.assembly.input.geometry,scene=area.combat.scene,peer=area.combat.party.addSeat('terrain-peer',CLASSES[0],new RemoteInput('terrain-peer'),{startingCompanions:false});
+  const oldStructures=[...g.structures],unrelated=g.structures.find(s=>s.defId==='cottage')!,works=g.structures.find(s=>s.defId==='crusade_bastion')!;assert(unrelated&&works);assert(g.walk instanceof GridWalkField);
+  const originalWalk=g.walk,originalDoodads=g.doodads,originalStructures=g.structures,originalFog=g.fog;
+  const unrelatedDoor=g.doodads.find(d=>d.door&&unrelated.doors.some(p=>p.door===d.door))!,worksDoor=g.doodads.find(d=>d.door&&works.doors.some(p=>p.door===d.door))!;assert(unrelatedDoor&&worksDoor);g.setDoorState(unrelatedDoor.door!.id,'open',{silent:true});g.setDoorState(worksDoor.door!.id,'open',{silent:true});
+  const furniture=scene.actors.filter(a=>!!readNativeCrusadeFixtureMemory(a));assert(furniture.length>0);const wounded=furniture[0];wounded.life=Math.max(1,wounded.life-7);const furnitureLife=wounded.life;
+  const guard=scene.actors.find(a=>a.faction==='undead'&&a.fromZoneGen&&!a.doorId&&!readNativeCrusadeFixtureMemory(a));assert(guard);guard.life=Math.max(1,guard.life-23);const guardLife=guard.life;
+  const travel=(id:string)=>n.coordinator.runFrom(n.coordinator.published,()=>n.coordinator.loadZone(id,w.zone.id));
+  const move=(seat:typeof peer,dest:string)=>{const owner=n.authority.require(seat.actor).combat;owner.campaignFrame.enableHostedRoads();n.coordinator.runFrom(owner===area.combat?area:n.coordinator.published,()=>n.coordinator.roadsFor(owner).shardWorld!.enqueue({seatId:seat.id,dest}));const result=owner.campaignFrame.drainShardRoads()[0];if(result.error)throw result.error;assert.equal(result.outcome,'moved');};
+  travel(other.id);travel(input.definition.id);assert.equal(g.walk,originalWalk);assert.equal(g.doodads,originalDoodads);assert.equal(g.structures,originalStructures);assert.equal(g.fog,originalFog);for(const s of oldStructures)assert(g.structures.includes(s));assert(worksDoor.door!.open);assert.equal(wounded.life,furnitureLife);assert(scene.actors.includes(wounded));
+  move(w.localSeat,other.id);assert.equal(n.authority.require(peer.actor).combat,area.combat);cf.resolveCrusade(first.crusadeId);const second=ignite();move(w.localSeat,input.definition.id);for(const s of oldStructures)assert(g.structures.includes(s));assert.equal(wounded.life,furnitureLife);assert.equal(guard.life,guardLife);
+  move(w.localSeat,other.id);move(peer,other.id);assert(!n.coordinator.occupiedAreas().includes(area));const paidXp=w.localSeat.meta.xp,paidDrops=area.assembly.input.physical.input.state.drops.length;travel(input.definition.id);
+  assert.equal(g.walk,originalWalk);assert.equal(g.fog,originalFog);assert(g.structures.includes(unrelated));assert(g.doodads.includes(unrelatedDoor));assert(unrelatedDoor.door!.open);assert(!g.structures.includes(works));assert(!g.doodads.includes(worksDoor));assert(!scene.actors.includes(wounded));assert(scene.actors.includes(guard));assert.equal(guard.life,guardLife);assert.equal(w.localSeat.meta.xp,paidXp);assert.equal(area.assembly.input.physical.input.state.drops.length,paidDrops);assert(g.structures.some(s=>s.defId==='crusade_bastion'));
+  const renewed=[...g.structures],renewedFurniture=scene.actors.filter(a=>!!readNativeCrusadeFixtureMemory(a));assert(renewedFurniture.length>0);travel(other.id);travel(input.definition.id);for(const s of renewed)assert(g.structures.includes(s));for(const a of renewedFurniture)assert(scene.actors.includes(a));
+  cf.resolveCrusade(second.crusadeId);travel(other.id);travel(input.definition.id);assert.deepEqual(g.structures,[unrelated]);assert(g.doodads.includes(unrelatedDoor));assert(unrelatedDoor.door!.open);assert(scene.actors.includes(guard));assert.equal(guard.life,guardLife);assert.equal(area.assembly.generation.input.state.crusadeWorksAt,null);for(const a of renewedFurniture)assert(!scene.actors.includes(a));assert.deepEqual(drivers,[]);
+  return{firstBirthWorks:true,first: first.crusadeId,second:second.crusadeId,originalStructures:oldStructures.length,renewedStructures:renewed.length,furniture:furniture.length,realRemoteOccupancyDeferred:true,unoccupiedArrivalRenewed:true,unrelatedDoorIdentityAndOpenState:true,guardWoundRetained:true,sameEventNoReplay:true,expiredCleanup:true,noRewardOnRetirement:true,worldDrivers:drivers};
+ });
+});console.log(JSON.stringify(result));

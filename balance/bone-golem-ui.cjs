@@ -11,7 +11,7 @@ app.whenReady().then(async()=>{
  const win=new BrowserWindow({show:false,width:1400,height:1000,webPreferences:{offscreen:true,backgroundThrottling:false}});
  const errors=[];win.webContents.on('console-message',details=>{if(details.level==='error')errors.push(details.message);});
  const run=code=>win.webContents.executeJavaScript(code);
- const capture=async name=>{await wait(150);fs.writeFileSync(path.join(dir,name+'.png'),(await win.webContents.capturePage()).toPNG());};
+ const capture=async name=>{await wait(150);for(let i=0;i<3;i++){try{fs.writeFileSync(path.join(dir,name+'.png'),(await win.webContents.capturePage()).toPNG());return;}catch(error){if(i===2)throw error;await wait(250);}}};
  try{
   await win.loadURL(server.url);await wait(500);
   await run("(()=>{__game.account().ledger.prologue_lived=1;__game.devStartRun('necromancer');__game.ui.hideAll();__game.devGrantSkill('summon_bone_golem',20,0);const w=__game.world();w.netMemoryAccess={progression:true,tree:null};__game.ui.openSkillTree('summon_bone_golem');__game.step(2);})()");
@@ -62,7 +62,9 @@ app.whenReady().then(async()=>{
   assert.equal(await run("document.querySelector('[data-st-action=\"dismissFrame\"]').disabled"),true);
   assert.equal(await run("__golemQA.inst.treeNodes.length"),4);
 
-  await run("(()=>{__game.ui.hideAll();const q=__golemQA,a=q.start(['keepers_bulwark','renewing_frame','sheltering_bones','adamant_frame']);a.pos={x:q.p.pos.x+80,y:q.p.pos.y};const e=q.w.createMonster('zombie',1,'enemy');e.pos={x:q.p.pos.x+370,y:q.p.pos.y};q.w.actors.push(e);a.life=0;q.w.kill(a,false,e);q.advance(.15);__game.step(2);})()");
+  // Native display scenes retain sanctuary policy. Capture activation before the
+  // immediate no-target detonation; probe_bonegolem verifies the complete chase.
+  await run("(()=>{__game.ui.hideAll();const q=__golemQA,a=q.start(['keepers_bulwark','renewing_frame','sheltering_bones','adamant_frame']);a.pos={x:q.p.pos.x+80,y:q.p.pos.y};q.advance(.6);const e=q.w.createMonster('zombie',1,'enemy');e.pos={x:q.p.pos.x+370,y:q.p.pos.y};q.w.actors.push(e);const combat=!q.w.sanctuaryBlocksCombat(a,e);a.life=0;q.w.kill(a,false,e);if(combat)q.advance(.15);__game.step(2);})()");
   assert.equal(await run("__golemQA.w.frameArts.bodyPresentation(__golemQA.w.actors.find(a=>a.frameState)).mode"),'terminal');
   await capture('bone-golem-reliquary-charge');
 

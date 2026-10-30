@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
+import {createHash} from 'node:crypto';
+import ts from 'typescript';
+import {nativeArrivalCompositionArchive as archive} from './nativeArrivalCompositionArchive';
+import {beforeNativeArrivalRaw as project,readNativeArrivalMainCast,readNativeArrivalMainproof,readNativeArrivalSummonBoundary,type NativeArrivalSourceLane} from './nativeArrivalCompositionFixture';
+import {beforeNativeMainCastSource} from './nativeMainCastSourceFixture';
+import {beforeNativeMainProofSource} from './nativeMainProofSourceFixture';
+import {writeCombatProof} from './probe_nativecombatcycle';
+const hash=(source:string)=>createHash('sha256').update(source).digest('hex'),read=(file:string)=>readFileSync(new URL('../'+file,import.meta.url),'utf8');
+let mutations=0,duplicates=0,portable=0,outside=0,idempotent=0,rows=0;
+for(const [lane,items] of Object.entries(archive.lanes))for(const row of items){
+ const source=read(row.file).replace(/\r\n?/g,'\n'),run=(text:string)=>project(lane as NativeArrivalSourceLane,row.file,text);assert.equal(hash(source),row.afterHash,'actual whole combined source');const parent=run(source);assert.equal(hash(parent),row.rawBeforeHash,'exact raw immutable parent');assert.equal(hash(parent.replace(/\r\n?/g,'\n')),row.beforeHash);assert.equal(run(parent),parent);idempotent++;let line=0;
+ for(const variant of [source,source.replace(/\n/g,'\r\n'),source.replace(/\n/g,()=>++line%2?'\r\n':'\n')]){assert.equal(run(variant),parent);portable++;}
+ for(const h of row.hunks){for(const bad of [h.after.replace(/\S/,'!'),h.after.slice(0,Math.floor(h.after.length/2))+'!'+h.after.slice(Math.floor(h.after.length/2)),h.after.replace(/\S(?![\s\S]*\S)/,'?')]){assert.notEqual(bad,h.after);assert.throws(()=>run(source.replace(h.after,bad)),/native arrival/);mutations++;}assert.throws(()=>run(source.replace(h.after,h.after+h.after)),/native arrival/);duplicates++;}
+ assert.throws(()=>run(source+'\n// unexplained combined change\n'),/native arrival/);outside++;rows++;
+}
+const assertionTexts=(file:string,text:string):string[]=>{const sf=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true),calls:string[]=[];function visit(n:ts.Node):void {if(ts.isCallExpression(n)&&/^(assert(?:\.|$)|must$|check$)/.test(n.expression.getText(sf)))calls.push(n.getText(sf));n.forEachChild(visit);}visit(sf);return calls;};let assertions=0;
+for(const row of archive.readers){const source=read(row.file);assert.equal(hash(source),row.afterHash,'exact reader adapter');const parent=project(row.lane as NativeArrivalSourceLane,row.file,source);assert.equal(hash(parent),row.beforeHash,'exact original reader');const calls=assertionTexts(row.file,source);assert.deepEqual(calls,assertionTexts(row.file,parent),'all original assertion texts unchanged');assert.equal(calls.length,row.assertions);assert.equal(hash(JSON.stringify(calls)),row.assertionHash);assertions+=calls.length;}
+for(const row of archive.priorArchives)assert.equal(hash(read(row.file)),row.sha256,'prior committed/package archive unchanged');
+const unknown='// unknown reader content remains exact\r\n';assert.equal(project('production','unrelated.ts',unknown),unknown);
+// Validate the real read adapters as well as the pure lane projections above.
+for(const file of ['src/net/snapshot.ts','src/worldmass/nativeAreaSceneCombat.ts','src/engine/world.ts'])assert.equal(readNativeArrivalMainCast(new URL('../'+file,import.meta.url),'utf8'),beforeNativeMainCastSource(file,project('production',file,read(file))),'accepted inner casting guard remains selected');
+for(const file of ['src/engine/world.ts','balance/nativeMainProofSourceArchive.ts']){const url=new URL('../'+file,import.meta.url),buffer=readNativeArrivalMainproof(url);assert(Buffer.isBuffer(buffer),'original unencoded reads return Buffer');assert.deepEqual(buffer,Buffer.from(project('mainproof',file,read(file)),'utf8'),'exact parent raw bytes for known and unknown Buffer reads');assert.equal(readNativeArrivalMainproof(url,'utf8'),buffer.toString('utf8'));}
+assert.equal(readNativeArrivalSummonBoundary(new URL('../src/engine/world.ts',import.meta.url),'utf8'),beforeNativeMainProofSource('content','src/engine/world.ts',readNativeArrivalMainCast(new URL('../src/engine/world.ts',import.meta.url),'utf8')),'boundary selects exact reviewed ground-era World');
+assert.equal(readNativeArrivalSummonBoundary(new URL('../src/worldmass/nativeAreaSceneSummonPreparation.ts',import.meta.url),'utf8'),readNativeArrivalMainCast(new URL('../src/worldmass/nativeAreaSceneSummonPreparation.ts',import.meta.url),'utf8'),'boundary retains actual owner predecessor');
+const result={readAdapterCases:7,parents:archive.parents,rows,mutations,duplicates,portable,outside,idempotent,readers:archive.readers.length,originalAssertions:assertions,priorArchives:archive.priorArchives.length},report={scope:'Exact outer source reconstruction to accepted casting production, encounter, Warlord and historical-reader inputs. Original assertions and committed archive bytes remain unchanged; one old Sky archive EOL variant restores through its explicit parent lane. Existing inner guards and raw repeat-read behavior retained. Source composition alone is not gameplay acceptance.',result,receipt:hash(JSON.stringify(result))};writeCombatProof('native-arrival-composition-source.json',report);console.log(JSON.stringify(report));

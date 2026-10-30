@@ -12,7 +12,7 @@ import { lightCorners } from './lightCorners';
 // ---------------------------------------------------------------------------
 
 import type { World } from '../../engine/world';
-import { GridWalkField } from '../../world/gridWalk';
+import { regionGrid, type RegionGrid } from '../../world/walk';
 import { castGridRay, LOS_CFG } from '../../engine/los';
 
 const RAYS = 48;
@@ -23,7 +23,7 @@ const RAYS = 48;
  * The small near-face overlap is decorative, not a gameplay visibility grant. */
 export function litPolygon(world: Pick<World, 'walk'>, x: number, y: number, r: number, tier = 0):
   { x: number; y: number }[] | null {
-  const grid = (world.walk instanceof GridWalkField ? world.walk : null);
+  const grid = regionGrid(world.walk);
   if (!grid || ![x, y, r, tier].every(Number.isFinite) || r <= 0) return null;
   const eye = tier + LOS_CFG.elev.eye;
   const from = { x, y }, pts: { x: number; y: number }[] = [];
@@ -48,10 +48,10 @@ export function litPolygon(world: Pick<World, 'walk'>, x: number, y: number, r: 
  * Grid identity matters: a replaced grid may restart at the same revision.
  * Movable light sources and resized wells must never reuse an old silhouette. */
 export class LightSightCache {
-  private entries = new WeakMap<object, { grid: GridWalkField | null; version: number;
+  private entries = new WeakMap<object, { grid: RegionGrid | null; version: number;
     x: number; y: number; r: number; tier: number; poly: ReturnType<typeof litPolygon> }>();
   read(world: Pick<World, 'walk'>, key: object, x: number, y: number, r: number, tier = 0): ReturnType<typeof litPolygon> {
-    const grid = (world.walk instanceof GridWalkField ? world.walk : null), version = grid?.version ?? 0;
+    const grid = regionGrid(world.walk), version = grid?.version ?? 0;
     const old = this.entries.get(key);
     if (old && old.grid === grid && old.version === version && old.x === x && old.y === y && old.r === r && old.tier === tier)
       return old.poly;

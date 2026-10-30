@@ -133,7 +133,12 @@ app.whenReady().then(async () => {
   try {
     await win.loadURL(server.url);
     await js(`(async()=>{
-      __game.account().ledger.prologue_lived=1; __game.devStartRun('warrior'); __game.ui.hideAll();
+      await __game.hydrated();
+      __game.account().ledger.prologue_lived=1;
+      // Native town services are minted on arrival; unlock the fixture before
+      // starting the world, just as the zone fixture does before loadZone.
+      for(const feature of ['salvage_station','oracle_stone','reliquary'])__game.account().features.add(feature);
+      __game.devStartRun('warrior'); __game.ui.hideAll();
       await new Promise(resolve=>setTimeout(resolve,700));
       // The course advances the real game explicitly below. Keep animation
       // frames from adding unrelated simulation ticks between native clicks.
@@ -174,10 +179,20 @@ app.whenReady().then(async () => {
     await js(`(()=>{const w=serviceQA.w;for(const id of Object.keys(w.meta.essences))w.meta.essences[id]=10000;__game.ui.refreshVendor();serviceQA.itemsBefore=w.meta.items.length;})()`);
     await click('[data-vbuy^="brandt:"]:not([disabled])');
     assert.equal(await js('serviceQA.w.meta.items.length-serviceQA.itemsBefore'),1,'actual purchase grants one item');
+    log({stage:'services',...await js(`(()=>{const w=serviceQA.w;return {zone:w.zone.id,features:[...w.account.features],summons:w.suiteSummons(),near:w.nearAnyVendor(),books:__game.ui.folio.views(),salvage:w.hasSalvage(),oracle:w.hasOracle()};})()`)});
     for(const tab of ['salvage','oracle','vendor'])await click('[data-folio-tab="'+tab+'"]');
     await js('serviceQA.clear();serviceQA.run(120,{x:serviceQA.smith.pos.x+10,y:serviceQA.smith.pos.y})');
     assert.equal(await js('__game.ui.folio.bookFor("vendor")?.front'),'vendor','return visit opens original shop directly');
     assert.ok(await js('__game.ui.folio.bookFor("vendor").tabs.some(t=>t.id==="conversation")'),'conversation stays accessible from shop');
+    if(await js('!!serviceQA.w.massRuntime')) {
+      const gift=await js(`(()=>{const q=serviceQA,ui=__game.ui;q.clear();q.page('skills');
+        const snapshot=()=>({items:q.w.meta.items.map(i=>i.name),bag:q.rect(document.getElementById('inventory')),
+          parts:[...document.querySelector('#inventory .inv-scroll').children].map(e=>({tag:e.className,text:e.textContent.slice(0,160),rect:q.rect(e)}))});
+        const before=snapshot();q.run(120,q.inn.pos);return {before,after:snapshot(),selected:ui.folio.bookFor('skills')?.front};})()`);
+      log({stage:'first-mireille-gift',...gift});
+      assert.equal(gift.selected,'skills');
+      assert.deepEqual(gift.after.bag,gift.before.bag,'first Mireille visit cannot insert a lesson banner into Inventory');
+    }
     // Close as soon as the return shop opens, before the old service dwell
     // could issue a second open request. A real X click must stay closed.
     const arrival=await js(`(()=>{const q=serviceQA;q.clear();q.w.localSeat.lastActedAt=q.w.time;

@@ -48,4 +48,3 @@ app.whenReady().then(async () => {
     clearTimeout(deadline); win.destroy(); server.closeAllConnections(); server.close(); app.exit(0);
   } catch (e) { console.error('SMOKE branch: FAILED', e); clearTimeout(deadline); win?.destroy(); server?.close(); app.exit(1); }
 });
-

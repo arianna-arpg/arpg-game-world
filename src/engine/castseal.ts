@@ -49,13 +49,13 @@
 import type { Actor } from './actor';
 import type { SkillTag } from './stats';
 import { skillContextTags, type SkillInstance } from './skills';
-import type { World } from './world';
+import type { NativeSkillRuleHost } from './nativeSkillRuleHost';
 
 /** What a registered cast law reads — the live world, the body pressing,
  *  the instance it would cast, and whether that body is a player-kind SEAT
  *  (`World.seatOf`): the body a `binds: 'seats'` seal reaches. */
 export interface CastLawCtx {
-  world: World;
+  world: NativeSkillRuleHost;
   caster: Actor;
   inst: SkillInstance;
   seated: boolean;

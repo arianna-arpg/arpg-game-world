@@ -7,6 +7,8 @@ export interface SpeechAttention {
   reserveSilent: boolean;
   /** Used when a functional counter has no more specific instruction. */
   restingLine?: string;
+  /** Shown while this reachable speaker waits for the ordinary idle dwell. */
+  approachHint?: string;
 }
 
 export const SPEECH_ATTENTION_CFG = {
@@ -15,7 +17,7 @@ export const SPEECH_ATTENTION_CFG = {
   cue: { radius: 23, width: 1.5, color: '#d8c8a8', alpha: 0.16, selectedAlpha: 0.38, progressAlpha: 0.55 },
   kinds: {
     ambient: { priority: 0, dwellSec: 0.65, reserveSilent: false },
-    functional: { priority: 100, dwellSec: 0.4, reserveSilent: true },
+    functional: { priority: 100, dwellSec: 0.4, reserveSilent: true, approachHint: 'Stand still to talk' },
   },
   roles: {
     innkeep: { restingLine: 'Rest a moment, love. There is always a place for you by the fire.' },

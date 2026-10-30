@@ -26,8 +26,8 @@ import { continentAt, continentSeedFrom } from './continents';
 import { climateAt, climateAffinity } from './climate';
 import { islandMulAt } from './seas';
 import { registerOmenSource, type Omen } from './omens';
-import type { World } from '../engine/world';
 import { VOYAGE_ISLANDS, type VoyageIslandDef } from '../data/voyageIslands';
+import type {NativeOmenHost} from './omens';
 
 export const VOYAGE_CFG = {
   /** Sailing-arena pixels per node-space unit — the world's scale at sea. A
@@ -195,7 +195,7 @@ export const ISLE_OMEN = {
 
 /** The island omen rows near `at` — a PURE READ (zoneMap consulted, never
  *  written; no rng, no mint). Exported at this grain for the probe. */
-export function islandOmensAt(world: World, at: { x: number; y: number }): Omen[] {
+export function islandOmensAt(world: NativeOmenHost, at: { x: number; y: number }): Omen[] {
   const O = ISLE_OMEN;
   const scanR = O.whisper + O.widenPerMin * O.widenCapMin + O.scanPad;
   const age = Math.min(world.time, O.widenCapMin * 60);
@@ -227,7 +227,7 @@ export function islandOmensAt(world: World, at: { x: number; y: number }): Omen[
  *  While SAILING the source also stands down: the sighting law owns
  *  discovery at sea, and the pseudo-zone's map coord is the departure port,
  *  not the boat. */
-export function islandOmens(world: World): Omen[] {
+export function islandOmens(world: NativeOmenHost): Omen[] {
   const z = world.zone;
   if (z.id === VOYAGE_ZONE_ID) return [];
   if (!z.seaId && !z.port && !z.aquatic) return [];

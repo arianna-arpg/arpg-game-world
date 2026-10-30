@@ -55,10 +55,13 @@ export interface EventFrontPin {
   radius?: number;
 }
 
+/** Live event reads need no standing World or foreign local area. */
+export type EventWeatherHost=Pick<World,'sim'|'time'|'geyserSurge'>;
+
 /** One event's weather claim. `sample` is called for the CURRENT zone only. */
 export interface EventFrontSource {
   id: string;
-  sample(world: World, zone: ZoneDef): EventFrontPin | null;
+  sample(world: EventWeatherHost, zone: ZoneDef): EventFrontPin | null;
 }
 
 const SOURCES: EventFrontSource[] = [];
@@ -83,7 +86,7 @@ export function eventFrontSourceIds(): string[] { return SOURCES.map(s => s.id);
  *  when no event claims the zone or the claimed kind is unregistered
  *  (tolerance doctrine: a stale save naming a retired kind degrades to clear
  *  sky, never a crash). */
-export function eventFrontFor(world: World, zone: ZoneDef): WeatherFront | null {
+export function eventFrontFor(world: EventWeatherHost, zone: ZoneDef): WeatherFront | null {
   let best: EventFrontPin | null = null;
   for (const s of SOURCES) {
     try {

@@ -39,6 +39,7 @@ import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
+import type {NativeOmenHost} from '../../world/omens';
 
 const STEP = 0.5;
 const BOG_LIGHT = '#b8f0a0'; // the marsh_wisp doodad's own glow — one hue for the event
@@ -532,7 +533,7 @@ registerMarkerSource((world: World): MapMarker[] => {
 
 // A LATENT gathering murmurs instead of marking: lights heard {bearing} of
 // here, aging wider until someone follows them.
-registerOmenSource((world: World) => {
+registerOmenSource((world: NativeOmenHost) => {
   const wf = world.sim.wisplightField;
   const om = wf?.surge().omen;
   if (!wf || !om) return [];

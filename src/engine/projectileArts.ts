@@ -49,29 +49,7 @@ export class ProjectileArts {
     return projectileArtsCount(owner, inst);
   }
   limit(inst: SkillInstance): number { return projectileArtsLiveLimit(inst); }
-  configure(p: Projectile): void {
-    const spec = projectileArtsOf(p.inst), orbit = spec?.orbit;
-    if (!orbit || p.parryDamage) return;
-    const tags = skillContextTags(p.inst), extra = instanceMods(p.inst);
-    const radius = p.caster.radius + orbit.radius * (spec.satellite ? p.caster.sheet.get('satelliteOrbit', tags, extra) : 1);
-    const turn = orbit.turnSpeed * p.caster.sheet.get('orbitPower', tags, extra, 1)
-      * (spec.satellite ? p.caster.sheet.get('satelliteSpeed', tags, extra) : 1);
-    p.orbit = 1; p.pierce = Infinity; p.orbRadius = p.orbitR0 = radius;
-    p.skillVisualId = orbit.visual;
-    // Independent clocks remain deterministic even for a fixed firing phase.
-    const stagger = ((p.angle / (Math.PI * 2)) % 1 + 1) % 1;
-    p.projectileOrbit = { turn, radius, phase: p.angle, offset: { x: 0, y: 0 }, heading: p.dir,
-      emitAt: (spec.emit?.interval ?? Infinity) * (1 + stagger),
-      novaAt: (spec.nova?.interval ?? Infinity) * (1 + stagger), team: p.caster.team, path: [] };
-    p.pos = { x: p.caster.pos.x + Math.cos(p.angle) * radius, y: p.caster.pos.y + Math.sin(p.angle) * radius };
-    p.anchor = { ...p.caster.pos };
-    // A shared family limit bounds recast accumulation. Replacing old orbs is
-    // quiet retirement: it cannot pay expiry attacks early.
-    const cap = projectileArtsLiveLimit(p.inst);
-    const siblings = this.w.projectiles.filter(q => q !== p && q.caster === p.caster
-      && q.inst.projectileHost === p.inst.projectileHost && q.projectileOrbit && !q.dissolved);
-    for (const old of siblings.slice(0, Math.max(0, siblings.length + 1 - cap))) old.dissolved = true;
-  }
+  configure(p: Projectile): void { configureProjectileArt(p, this.w.projectiles); }
   valid(p: Projectile): boolean {
     const cast = p.inst.projectileCast;
     if (cast?.state.retired) return false;
@@ -334,3 +312,28 @@ export class ProjectileArts {
   }
   clearAll(): void { for (const s of [...this.states]) this.clear(s.owner, s.host); }
 }
+
+/** Same launch contract for shared and delegated projectile queues. */
+export function configureProjectileArt(p: Projectile, projectiles: readonly Projectile[]): void {
+    const spec = projectileArtsOf(p.inst), orbit = spec?.orbit;
+    if (!orbit || p.parryDamage) return;
+    const tags = skillContextTags(p.inst), extra = instanceMods(p.inst);
+    const radius = p.caster.radius + orbit.radius * (spec.satellite ? p.caster.sheet.get('satelliteOrbit', tags, extra) : 1);
+    const turn = orbit.turnSpeed * p.caster.sheet.get('orbitPower', tags, extra, 1)
+      * (spec.satellite ? p.caster.sheet.get('satelliteSpeed', tags, extra) : 1);
+    p.orbit = 1; p.pierce = Infinity; p.orbRadius = p.orbitR0 = radius;
+    p.skillVisualId = orbit.visual;
+    // Independent clocks remain deterministic even for a fixed firing phase.
+    const stagger = ((p.angle / (Math.PI * 2)) % 1 + 1) % 1;
+    p.projectileOrbit = { turn, radius, phase: p.angle, offset: { x: 0, y: 0 }, heading: p.dir,
+      emitAt: (spec.emit?.interval ?? Infinity) * (1 + stagger),
+      novaAt: (spec.nova?.interval ?? Infinity) * (1 + stagger), team: p.caster.team, path: [] };
+    p.pos = { x: p.caster.pos.x + Math.cos(p.angle) * radius, y: p.caster.pos.y + Math.sin(p.angle) * radius };
+    p.anchor = { ...p.caster.pos };
+    // A shared family limit bounds recast accumulation. Replacing old orbs is
+    // quiet retirement: it cannot pay expiry attacks early.
+    const cap = projectileArtsLiveLimit(p.inst);
+    const siblings = projectiles.filter(q => q !== p && q.caster === p.caster
+      && q.inst.projectileHost === p.inst.projectileHost && q.projectileOrbit && !q.dissolved);
+    for (const old of siblings.slice(0, Math.max(0, siblings.length + 1 - cap))) old.dissolved = true;
+  }

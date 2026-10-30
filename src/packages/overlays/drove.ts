@@ -42,6 +42,7 @@ import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
+import type {NativeOmenHost} from '../../world/omens';
 
 const STEP = 0.5;
 const SADDLE_TAN = '#c9964b'; // drover's leather — the drove reads as one thing
@@ -471,7 +472,7 @@ registerMarkerSource((world: World): MapMarker[] => {
 
 // A LATENT collapse murmurs instead of marking: loose bleating heard
 // {bearing} of here, aging wider until someone follows it.
-registerOmenSource((world: World) => {
+registerOmenSource((world: NativeOmenHost) => {
   const df = world.sim.droveField;
   const om = df?.surge().omen;
   if (!df || !om) return [];

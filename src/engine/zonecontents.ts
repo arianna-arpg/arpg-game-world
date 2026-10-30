@@ -20,12 +20,13 @@ export interface ZoneContents {
   altars: { pos: { x: number; y: number }; id: string; tier?: number; objective?: boolean }[];
   drops: (Omit<GemDrop, 'item'> & { item: SavedDropItem })[];
 }
+export interface NativeZoneContentsHost extends Pick<World,'chests'|'shrines'|'altars'|'drops'> {}
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
-export function captureZoneContents(w: World): ZoneContents {
+export function captureZoneContents(w: NativeZoneContentsHost): ZoneContents {
   return copy({
-    chests: w.chests,
-    shrines: w.shrines.map(s => ({ pos: s.pos, id: s.def.id, used: s.used })),
-    altars: w.altars.map(a => ({ pos: a.pos, id: a.def.id, tier: a.tier, objective: a.objective })),
+    chests: w.chests.filter(c=>!c.massObjectiveOwner),
+    shrines: w.shrines.filter(s => !s.massSource).map(s => ({ pos: s.pos, id: s.def.id, used: s.used })),
+    altars: w.altars.filter(a => !a.massSource).map(a => ({ pos: a.pos, id: a.def.id, tier: a.tier, objective: a.objective })),
     drops: w.drops.map(d => ({ ...d, item: d.item.kind === 'skill'
       ? { kind: 'gem' as const, gem: packSkillGemPayload(d.item.inst), locked: d.item.inst.locked }
       : d.item.kind === 'support'
@@ -45,9 +46,9 @@ export function savedZoneContents(raw: unknown): ZoneContents | undefined {
 const positioned = (v: { pos?: { x?: number; y?: number } } | null | undefined): boolean =>
   !!v?.pos && Number.isFinite(v.pos.x) && Number.isFinite(v.pos.y);
 
-export function restoreZoneContents(w: World, saved: ZoneContents): void {
+export function restoreZoneContents(w: NativeZoneContentsHost, saved: ZoneContents): void {
   const c = copy(saved);
-  w.chests = c.chests.filter(s => positioned(s) && ['objective', 'timed'].includes(s.kind)
+  w.chests = c.chests.filter(s => positioned(s) && !s.massObjectiveOwner && ['objective', 'timed'].includes(s.kind)
     && Number.isFinite(s.lockTime) && Number.isFinite(s.maxLock));
   w.shrines = c.shrines.flatMap(s => {
     const def = s && SHRINES.find(d => d.id === s.id);

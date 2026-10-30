@@ -3,6 +3,7 @@
 import type { Actor } from './actor';
 import type { BrainTuning } from './brain';
 import type { World } from './world';
+export type NativePerceptionHost=Pick<World,'time'|'losCached'>;
 import { MONSTERS } from '../data/monsters';
 import { nearestBody, segsHittable } from './segments';
 import { angleDiff, angleTo, dist } from '../core/math';
@@ -27,7 +28,7 @@ export function concealmentActive(a: Actor, now: number): boolean {
 }
 
 /** The common own-senses gate, also used by shared target orders. */
-export function perceiveTarget(a: Actor, target: Actor, w: World, tuning: BrainTuning): boolean {
+export function perceiveTarget(a: Actor, target: Actor, w: NativePerceptionHost, tuning: BrainTuning): boolean {
   if (target.dead || target.downed || target.untargetable || target.passive
     || target.sheet.get('invisible') > 0 || a.aiDazeUntil > w.time) return false;
   const per = tuning.perception;
@@ -45,7 +46,7 @@ export function perceiveTarget(a: Actor, target: Actor, w: World, tuning: BrainT
 
 /** Drop a live reference immediately. Memory is a copied place, never a
  * license for combat kernels to read the hidden target's current position. */
-export function investigateLoss(a: Actor, w: World, tuning: BrainTuning): void {
+export function investigateLoss(a: Actor, w: NativePerceptionHost, tuning: BrainTuning): void {
   a.aiTargetId = undefined;
   a.aiTargetRef = undefined;
   a.aggroed = false;

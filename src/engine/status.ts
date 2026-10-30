@@ -1876,10 +1876,6 @@ export interface ActiveStatus {
   visual?: string;
   /** Transferred wounds cannot circulate repeatedly between attractors. */
   gathered?: true;
-  /** Duration of the current application for its countdown icon. */
-  statusDuration?: number;
-  /** False only on a remote status without a supplied clock. */
-  remainingKnown?: boolean;
   /** Independent application lane, scoped to the originating actor/skill. */
   sourceKey?: string;
   /** A bank explicitly reserved for its source's finisher. Expiry still applies. */
@@ -1890,6 +1886,10 @@ export interface ActiveStatus {
   challengeField?: number;
   id: string;
   remaining: number;
+  /** False on legacy co-op mirrors whose wire supplied presence but no clock. */
+  remainingKnown?: boolean;
+  /** Presentation span for the latest accepted clock; never used for damage. */
+  statusDuration?: number;
   stacks: number;
   /** Remaining time of each independently expiring application. */
   stackTimes?: number[];

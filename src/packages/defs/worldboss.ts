@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from '../../world/bulletins';
 // ---------------------------------------------------------------------------
 // WORLD BOSSES — the PRIMEVAL sovereigns (a net-new package).
 //
@@ -34,6 +35,7 @@ import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { WorldBossField, type WorldBossSurge } from '../overlays/worldboss';
 import type { ContentPackage, FactionSpec } from '../types';
+import type {NativeEdgeBlockHost} from '../../world/edgeBlocks';
 
 /** The whole World Boss mechanic as data — every number a knob. */
 export const WORLDBOSS_SURGE: WorldBossSurge = {
@@ -258,7 +260,7 @@ registerDoodadRule('husk_throne', { overlap: 'ground' });
 //
 // One O(paths) lookup against every live instance: a sealed road answers with
 // the serpent's name — the travel gate refuses, the exit hint explains.
-registerEdgeBlockSource((world: World, fromZoneId: string, toZoneId: string) => {
+registerEdgeBlockSource((world: NativeEdgeBlockHost, fromZoneId: string, toZoneId: string) => {
   for (const f of world.sim.worldBossFieldsAll()) {
     const hit = f.edgeBlocked(fromZoneId, toZoneId);
     if (hit) return { reason: `${hit.def.name} coils across this pass`, color: hit.def.color, source: 'worldboss' };
@@ -326,7 +328,7 @@ registerMarkerSource((world: World): MapMarker[] => {
 // row's own worldboss_slain_<def> stamp, read by the board's delta law.
 registerBountySource({
   id: 'worldboss',
-  census(world: World): BountyTargetRef[] {
+  census(world: import('../../data/bountyboard').BountyReadContext): BountyTargetRef[] {
     const out: BountyTargetRef[] = [];
     for (const f of world.sim.worldBossFieldsAll()) {
       for (const s of f.peekSerpents()) {
@@ -410,7 +412,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
 
 // --- world notices (drained through the bulletins pump) -------------------------
 // Tagged at the drain: apparition news rides the WORLD EVENTS channel.
-registerBulletinSource((world: World) => {
+registerBulletinSource((world: NativeBulletinHost) => {
   const out = [];
   for (const f of world.sim.worldBossFieldsAll()) out.push(...f.drainBulletins());
   return out.map(b => ({ ...b, channel: 'events' }));

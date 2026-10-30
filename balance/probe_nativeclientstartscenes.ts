@@ -1,0 +1,15 @@
+import {refuseWorldStartup as refuseWorldCombat} from './nativeClientStartFixture';
+import '../src/engine/world';
+import assert from 'node:assert/strict';
+import {CLASSES} from '../src/data/classes';
+import {START_ZONE} from '../src/data/zones';
+import {NativeClientRuntime} from '../src/worldmass/nativeClientRuntime';
+import {assertNativeRetainedWriterLive} from '../src/worldmass/nativeAreaRetainedLifetime';
+import {hasNativeAreaMemoryRegistry} from '../src/worldmass/nativeAreaMemoryRegistry';
+import {withSeededRandom} from '../src/core/rng';
+import {freshClientSetup} from './nativeClientStartFixture';
+import {combatHash,writeCombatProof} from './probe_nativecombatcycle';
+const results=[];
+for(const scene of ['prologue','mu'])results.push(withSeededRandom(45202,()=>{const {writer,geography}=freshClientSetup(1111,false);return refuseWorldCombat([writer],worldDrivers=>{const runtime=new NativeClientRuntime({writer,definition:writer.zoneMap[START_ZONE],geography:geography.spec,fresh:{classDef:CLASSES[0],scene}});runtime.install();assert(runtime.ready);assert.equal(writer.scene?.def.id,scene);const area=runtime.current;assert(area.assembly.phase==='born');assert(writer.caveMap[writer.zone.id]);assert.equal(area.combat.input.coordinator.residentAreas().length,2);runtime.dispatch({dt:1/60,wallSeconds:1/60,inputs:new Map()});assert.deepEqual(worldDrivers,[]);const result={scene,zone:writer.zone.id,stage:writer.scene?.stageIx,actors:area.assembly.input.scene.actors.length,worldDrivers};runtime.retire();return result;});}));
+results.push(withSeededRandom(45203,()=>{const {writer,geography}=freshClientSetup(1112,false),abort=new AbortController();let joins=0;writer.events.on('party/join',()=>{joins++;abort.abort();});return refuseWorldCombat([writer],worldDrivers=>{const runtime=new NativeClientRuntime({writer,definition:writer.zoneMap[START_ZONE],geography:geography.spec,fresh:{classDef:CLASSES[0]}});assert.throws(()=>runtime.install(abort.signal),/cancelled/);assert.equal(joins,1);assert.equal(writer.actors.length,1,'native push before cancellation is retained');assert.equal(writer.visited.size,0,'layout has not started');assert.equal(runtime.ready,false);assert.throws(()=>assertNativeRetainedWriterLive(writer),/retired/);assert(!hasNativeAreaMemoryRegistry(writer));assert.throws(()=>runtime.install(),/retired/);assert.deepEqual(worldDrivers,[]);return{cancelAt:'actual party join',nativePushPreserved:true,noVisit:true,registryRevoked:true,worldDrivers};});}));
+const report={scope:'Actual prologue and Mu entry via retained Director with first destination birth; cancellation at the original party/join boundary preserves prior native effects and revokes the runtime.',results,receipt:combatHash(JSON.stringify(results))};writeCombatProof('native-client-start-scenes.json',report);console.log(JSON.stringify(report));

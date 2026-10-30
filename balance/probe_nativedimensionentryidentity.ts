@@ -1,0 +1,5 @@
+import assert from 'node:assert/strict';
+import {freshClientSetup} from './nativeClientStartFixture';
+import {NativeGeographyCatalog,makeNativeGeographyCatalogSpec} from '../src/worldmass/nativeGeographyCatalog';
+import {makeMassNativeGeographySpec} from '../src/worldmass/nativeGeography';
+const {geography}=freshClientSetup(1601,false),catalog=new NativeGeographyCatalog(makeNativeGeographyCatalogSpec(geography.spec.sourceJson)),entry=catalog.select('underworld'),recorded=JSON.stringify(catalog.spec);const mapping=structuredClone(entry.spec.mapping);mapping.physicalOrigin.dimension='unrecorded-physical-space';const replacement=makeMassNativeGeographySpec(entry.spec.sourceJson,mapping);let refused=false;try{Object.defineProperty(entry,'spec',{value:replacement});}catch{refused=true;}const selected=entry.sourceAnchor({x:0,y:0});const facts={refused,selectedSpace:selected.dimension,recordedUnchanged:JSON.stringify(catalog.spec)===recorded};console.log(JSON.stringify(facts));assert(refused,'a catalog entry must not change its recorded mapping after validation');assert.equal(selected.dimension,'underworld');

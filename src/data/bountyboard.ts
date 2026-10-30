@@ -40,6 +40,7 @@ import { ITEM_BASES } from './itembases';
 import { SKILLS } from './skills';
 import { UNIQUE_LIST } from './uniques';
 import { OBJECTIVE_READS, type ZoneDef } from './zones';
+import type {NativeOmenHost} from '../world/omens';
 
 /** ⚠ EVERY number here is UNBLESSED (2026-08-24) — the charter's open dials;
  *  her walks retune them. The offer count is HER walk-1 number (five). */
@@ -326,6 +327,8 @@ export interface BountyPay {
  *  ledger (credited at the kill chokepoint — readable from anywhere,
  *  wipe-proof: re-entry re-posts the remainder). */
 export interface BountyPosting {
+  /** A generated physical destination, independent of the finite zone graph. */
+  massBounty?: import('../worldmass/bounties').MassBountyTarget;
   id: string;
   kind: string;
   boardId: string;
@@ -338,6 +341,14 @@ export interface BountyPosting {
   failed?: boolean;
   face?: 'omen' | 'lift';
   acceptAt?: number;
+  /** THE BOARD PER SEAT (docs/engine/shard.md, THE COUNTERS AND THE JOURNAL):
+   *  on a hosted world the seat that took the hand (one hand per seat per
+   *  board; only it turns the writ in or forfeits it), and the hero's own
+   *  character id when it travels as a vessel, so a returning hero takes its
+   *  hand back. A holder gone from the world leaves the hand unheld (anyone's).
+   *  Absent everywhere else. */
+  holder?: string;
+  holderChar?: string;
   cull?: { count: number; claimed: number };
   /** THE POSTING PIN (her adjustment): a pinned OFFER rides every re-deal
    *  until accepted, released, or struck by the world (persisted — the
@@ -370,6 +381,7 @@ export interface BountyPosting {
 export function clonePosting(p: BountyPosting): BountyPosting {
   return {
     id: p.id, kind: p.kind, boardId: p.boardId, zoneId: p.zoneId, beat: p.beat,
+    ...(p.massBounty ? { massBounty: { ...p.massBounty, center: { ...p.massBounty.center } } } : {}),
     pay: {
       ...(p.pay.level !== undefined ? { level: p.pay.level } : {}),
       ...(p.pay.budget ? { budget: { ...p.pay.budget } } : {}),
@@ -426,19 +438,22 @@ export interface BountyTargetRef {
 }
 
 /** One live-census source — registered from the owning fabric's module. */
+export interface BountyReadContext extends Pick<World,'zoneMap'|'visited'|'ledger'|'sim'|'massRuntime'|'objectiveDoneAt'> {}
+
+export type NativeBountyActionHost=BountyReadContext & Pick<World,'manifest'|'devOverlayView'|'player'|'roadIsWet'|'questHandLevel'|'mintAuthoredZone'>;
 export interface BountySourceRow {
   id: string;
   /** The live census: every answerable ask this source stands behind right
    *  now. A pure read (never ignites, never mutates); empty when the
    *  package is absent or quiet. */
-  census(world: World): BountyTargetRef[];
+  census(world: BountyReadContext): BountyTargetRef[];
   /** The standing-state resolution read, for sources without a resolution
    *  ledger (the harborhold's `state === 'open'`). Refs that carry `ledger`
    *  never consult this — the kind's own delta law answers first. */
-  resolved?(world: World, p: BountyPosting): boolean;
+  resolved?(world: BountyReadContext, p: BountyPosting): boolean;
   /** The fail read (the hold FELL) — resolves at the board like a turn-in,
    *  no pay, per walk-1's fail ruling. A live read, never a latch. */
-  failed?(world: World, p: BountyPosting): boolean;
+  failed?(world: BountyReadContext, p: BountyPosting): boolean;
   /** THE SUMMONS face (M3 K5 — "the board plants the ask"): declaring this
    *  block makes the source SUMMONABLE. `ignite` is the directed verb
    *  (devIgnite promoted to the registry — the board's accept calls it);
@@ -453,10 +468,10 @@ export interface BountySourceRow {
     name: string;
     ask(zoneName: string, level: number): string;
     ledger: string;
-    headroom(world: World): boolean;
+    headroom(world: NativeBountyActionHost): boolean;
     /** The seat predicate — the package's own targetability (zone-pure). */
     fit?(def: ZoneDef): boolean;
-    ignite(world: World, zoneId: string): boolean;
+    ignite(world: NativeBountyActionHost, zoneId: string): boolean;
   };
 }
 
@@ -487,7 +502,7 @@ export interface BountyBandRow {
   board?: string;
   /** The live predicate — a pure read over the run's world; first live
    *  row wins the arm. */
-  while(world: World): boolean;
+  while(world: NativeBountyActionHost): boolean;
   /** Slate-size override (absent = BOUNTY_BOARD_CFG.offers). */
   offers?: number;
   /** Kind-weight overrides (0 = off this band's slate; an absent kind
@@ -522,7 +537,7 @@ export const BOUNTY_BANDS: BountyBandRow[] = [
 
 /** The arm's band resolve — first live row FOR THIS BOARD wins, none =
  *  the standing config. A pure read (bands never write). */
-export function liveBountyBand(world: World, boardId: string = BOUNTY_BOARD_CFG.boardId): BountyBandRow | null {
+export function liveBountyBand(world: NativeBountyActionHost, boardId: string = BOUNTY_BOARD_CFG.boardId): BountyBandRow | null {
   for (const b of BOUNTY_BANDS) {
     if (b.board !== undefined && b.board !== boardId) continue;
     if (b.while(world)) return b;
@@ -614,18 +629,18 @@ export interface BountyKindRow {
    *  the hand seats; a returned reason REFUSES the accept and strikes the
    *  posting with its courtesy (the stale-offer race law). May mutate the
    *  posting (the summons stamps its born key + at-accept baseline). */
-  accept?(world: World, p: BountyPosting): string | null;
+  accept?(world: NativeBountyActionHost, p: BountyPosting): string | null;
   /** Optional travel contract: null means the player chooses the destination. */
-  target?(world: World, p: BountyPosting): string | null;
-  route?(world: World, p: BountyPosting): string;
-  arrival?(world: World, p: BountyPosting, zone: ZoneDef, firstVisit: boolean, from?: string): void;
-  done(world: World, p: BountyPosting): boolean;
-  failed?(world: World, p: BountyPosting): boolean;
+  target?(world: NativeBountyActionHost, p: BountyPosting): string | null;
+  route?(world: NativeBountyActionHost, p: BountyPosting): string;
+  arrival?(world: BountyReadContext, p: BountyPosting, zone: ZoneDef, firstVisit: boolean, from?: string): void;
+  done(world: BountyReadContext, p: BountyPosting): boolean;
+  failed?(world: BountyReadContext, p: BountyPosting): boolean;
   /** A reason string ANNULS the posting (the world moved on — the reconcile's
    *  honesty read); null = the ask still stands. */
-  annulled?(world: World, p: BountyPosting): string | null;
+  annulled?(world: NativeBountyActionHost, p: BountyPosting): string | null;
   /** Card copy — the precision register (names, reads; never captions). */
-  copy(world: World, p: BountyPosting): { title: string; ask: string };
+  copy(world: BountyReadContext, p: BountyPosting): { title: string; ask: string };
 }
 
 export const BOUNTY_KINDS: Record<string, BountyKindRow> = {};
@@ -1160,7 +1175,7 @@ registerBountyKind({
 // THE ERRAND'S OMEN (the findability guarantee without the veil lift): every
 // omen-face errand in hand whispers its bearing and finally reveals its seat
 // — the omen fabric verbatim, aging from the accept.
-registerOmenSource((world: World) => world.bountyOmens());
+registerOmenSource((world: NativeOmenHost) => world.bountyOmens());
 
 // THE CHEVRON PATRON (M4 — charter §8's coupling): the board's own edge
 // pointers in the target zone, through the standing attention fold. Today
@@ -1183,7 +1198,7 @@ export const BOUNTY_BOARD_GIVER = 'bounty_board';
  *  (World.questDefOf = QUESTS[id] ?? this). Zone-spec fields are benign
  *  honest values off the CLAIMED zone (the mint lane never runs for a
  *  claim-lane posting; the fields exist to satisfy the standing type). */
-export function postingQuestDef(p: BountyPosting, world: World): QuestDef {
+export function postingQuestDef(p: BountyPosting, world: BountyReadContext): QuestDef {
   const z = world.zoneMap[p.zoneId] as ZoneDef | undefined;
   const c = BOUNTY_KINDS[p.kind]?.copy(world, p) ?? { title: p.id, ask: '' };
   return {

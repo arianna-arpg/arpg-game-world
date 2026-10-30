@@ -77,6 +77,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { startGameServer } = require('./server.cjs');
 const { createDeadman, skipVerdict } = require('./perfdeadman.cjs');
+const { residencyLines, parseResidencyFlags, residencyFlagValue, writeFailedResidencyReport } = require('./perfresidency.cjs');
 const updates = require('./updates.cjs');
 const branches = require('./branches.cjs');
 const releases = require('./releases.cjs');
@@ -1832,6 +1833,29 @@ async function perfMode() {
       settleSeconds: Number(budgets.settleSeconds || 1.5),
       filter: flagValue('--filter') || '',
     };
+    // ---- THE RESIDENCY INSTRUMENT (src/dev/perfResidency.ts; docs/design/desktop-residency.md) ----
+    // Her ruling (2026-10-16, policy D): the cumulative course keeps its
+    // budgets and gate; these ADDITIVE courses run in their OWN invocation,
+    // write no saves (the game latches suppressSaves) and never gate:
+    //   --fresh             one fresh run per matrix row: the town control at
+    //                       one resident area, the zone at two (an UNMATCHED
+    //                       residency contrast, read from the census, printed
+    //                       as such, never judged)
+    //   --ramp[=K]          one run, the town re-sampled after each of K-1
+    //                       visits (default 8 steps; --ramp-list=a,b,c names
+    //                       the visits; --ramp=51 walks the whole matrix in
+    //                       sweep order, the cumulative stop's reproduction)
+    //   --ramp-age-control  the ramp that visits nothing: residency stays one
+    //                       while the run ages (a comparison, not an isolation)
+    //   --run-seed=<n>      the manifest seed every fresh start shares
+    //                       (perf.config.json residency.seed, else 20261016;
+    //                       zero is a seed)
+    // A malformed or contradictory request is REFUSED here (launcher/
+    // perfresidency.cjs parseResidencyFlags) and again by perfSweep before
+    // any start.
+    const rf = parseResidencyFlags({ fresh: residencyFlagValue(argv, '--fresh') !== null, ramp: residencyFlagValue(argv, '--ramp'), rampList: residencyFlagValue(argv, '--ramp-list'), rampAge: residencyFlagValue(argv, '--ramp-age-control') !== null, runSeed: residencyFlagValue(argv, '--run-seed'), configSeed: (budgets.residency ?? {}).seed, filter: opts.filter });
+    if (rf.errors.length) throw new Error('residency flags refused: ' + rf.errors.join('; '));
+    if (rf.opts) Object.assign(opts, rf.opts);
     // GATE DETERMINISM (committed in perf.config.json, all optional — these
     // are the GATE's own settings, so the run still exits 2 on breach):
     //   weather      — the gate's pinned sky (silence the random front roll).
@@ -1884,6 +1908,7 @@ async function perfMode() {
     if (tilesetsFlag) opts.tilesets = tilesetsFlag.split(',').map(s => s.trim()).filter(Boolean);
     const forensics = weatherFlag !== null || !!ablateFlag || !!variantFlag || !!layoutFlag || !!seedFlag || !!liteFlag || !!tilesetsFlag;
     console.log(`PERF: sweeping tilesets (${opts.seconds}s steady + ${opts.settleSeconds}s entry per zone` +
+      (opts.course ? `, course '${opts.course}'${opts.rampAgeControl ? ' (age control)' : ''}` : '') +
       (opts.filter ? `, filter '${opts.filter}'` : '') +
       (opts.weather !== undefined ? `, weather pinned '${opts.weather || 'clear'}'` : '') +
       (opts.ablate ? `, ablate [${opts.ablate.join(',')}]` : '') + `)…`);
@@ -1897,8 +1922,8 @@ async function perfMode() {
     // (documented in _docHarnessShield — no committed values needed).
     const wc = gameWin.webContents;
     const dm = budgets.deadman ?? {};
-    /** @type {{ rows: any[], skipped: any[], control: any, controlEnd: any }} */
-    const banked = { rows: [], skipped: [], control: null, controlEnd: null };
+    /** @type {{ rows: any[], skipped: any[], control: any, controlEnd: any, fresh: any[], ramp: any[], residencyWindows: any[] }} */
+    const banked = { rows: [], skipped: [], control: null, controlEnd: null, fresh: [], ramp: [], residencyWindows: [] };
     const deadman = createDeadman({
       silenceMs: (dm.silenceSec ?? 45) * 1000,
       checkMs: (dm.checkSec ?? 5) * 1000,
@@ -1926,7 +1951,8 @@ async function perfMode() {
       setInterval: (fn, ms) => setInterval(fn, ms),
       clearInterval: (h) => clearInterval(h),
     });
-    ipcMain.on('perf:beat', (e, payload) => {
+    /** @param {Electron.IpcMainEvent} e @param {any} payload */
+    const onPerfBeat = (e, payload) => {
       if (!gameWin || e.sender !== gameWin.webContents) return;
       heartbeatRunLock(); // a beating run is a lock nobody may reclaim
       deadman.beat(payload);
@@ -1940,20 +1966,46 @@ async function perfMode() {
         console.log(`PERF: control '${payload.row.zone}' gap50 ${payload.row.gapP50}`);
       } else if (payload.at === 'aged') {
         banked.controlEnd = payload.row ?? null;
+      } else if (payload.at === 'fresh' && payload.row) {
+        // THE RESIDENCY INSTRUMENT's rows ride the same beats (a killed run
+        // still yields what it banked; the launcher prints live progress).
+        banked.fresh.push(payload.row);
+        const r = payload.row;
+        console.log(`PERF: [fresh ${banked.fresh.length}] ${payload.tileset} run ${r.runtime.ordinal} start ${r.runtime.startupMs}ms; ${r.regime}; town gap50 ${r.control.gapP50} gap99 ${r.control.gapP99}; '${r.zone.zone}' gap50 ${r.zone.gapP50} gap99 ${r.zone.gapP99} gapMax ${r.zone.gapMax} h40 ${r.zone.hitch40}`);
+      } else if (payload.at === 'ramp' && payload.step) {
+        banked.ramp.push(payload.step);
+        const s = payload.step;
+        console.log(`PERF: [ramp ${s.step}] ${s.visited ?? '(nothing visited)'} areas ${s.residentAreas} bodies ${s.residentActors} wall ${(s.wallMs / 1000).toFixed(1)}s camp ${s.campaignSec}s` +
+          (s.town ? ` town gap50 ${s.town.gapP50} gap99 ${s.town.gapP99} gapMax ${s.town.gapMax} h40 ${s.town.hitch40}` : ' town window not held'));
+      } else if (payload.at === 'residency-window' && payload.window) {
+        banked.residencyWindows.push(payload.window);
       } else if (payload.at === 'skip' && payload.skip) {
         banked.skipped.push(payload.skip);
         console.log(`PERF: skipped ${payload.skip.id} [${payload.skip.class}]`);
       }
-    });
-    const sweepP = wc.executeJavaScript(
-      `window.__game.perfSweep(${JSON.stringify(opts)})`, true);
+    };
+    ipcMain.on('perf:beat', onPerfBeat);
+    // Route a synchronous webContents refusal through the same failed-partial path.
+    const sweepP = Promise.resolve().then(() => wc.executeJavaScript(
+      `window.__game.perfSweep(${JSON.stringify(opts)})`, true));
     /** @type {any} */
     const outcome = await Promise.race([
       sweepP.then((r) => ({ kind: 'done', report: r }), (err) => ({ kind: 'err', err })),
       deadman.promise.then((w) => ({ kind: 'wedge', wedge: w })),
     ]);
     deadman.disarm();
-    if (outcome.kind === 'err') throw outcome.err;
+    ipcMain.removeListener('perf:beat', onPerfBeat);
+    if (outcome.kind === 'err') {
+      if (opts.course && opts.course !== 'cumulative') {
+        try {
+          const dir = writeFailedResidencyReport(path.join(BASE, 'balance', 'reports'), opts, banked, outcome.err,
+            { budgets, dist: { stamp: distStamp, treeDirty, allowDirty, rebuilt: !distFresh } });
+          console.error('PERF RESIDENCY FAILED: partial report -> ' + dir);
+        } catch (writeError) { console.error('PERF RESIDENCY partial-report write failed:', writeError); }
+        try { gameWin.destroy(); } catch { /* outer failure cleanup still releases server/lock */ }
+      }
+      throw outcome.err; // preserve the first course error after banking and cleanup
+    }
     /** @type {any} */
     let wedge = null;
     /** @type {any} */
@@ -1977,6 +2029,10 @@ async function perfMode() {
         }],
         canvas: { w: 0, h: 0 }, dpr: 0,
         sampleSeconds: opts.seconds, matrix: [],
+        ...(opts.course ? {
+          course: opts.course, startSeed: opts.seed ?? null, fresh: banked.fresh, residencyWindows: banked.residencyWindows,
+          ramp: { steps: banked.ramp, ageControl: !!opts.rampAgeControl, list: opts.rampList ?? [], slopes: [], slopesNote: 'partial: the run wedged before the fold', comparisonNote: null },
+        } : {}),
         weather: opts.weather ?? '', ablate: opts.ablate ?? [],
       };
       try { gameWin.destroy(); } catch { /* already dying */ }
@@ -1984,6 +2040,32 @@ async function perfMode() {
       report = outcome.report;
     }
 
+    // ---- THE RESIDENCY INSTRUMENT's own print (launcher/perfresidency.cjs): raw values, no cap, no verdict ----
+    // Its report never reaches the gate below: the cumulative caps judge the
+    // cumulative course alone (her ruling 2026-10-16). Exit 0 when the course
+    // completed, 1 when the deadman killed it or the renderer failed.
+    if (report.course && report.course !== 'cumulative') {
+      const rlines = residencyLines(report, wedge);
+      console.log(rlines.join('\n'));
+      const stampStr = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+      const dir = path.join(BASE, 'balance', 'reports', `perf_${report.course}_` + stampStr);
+      fs.mkdirSync(dir, { recursive: true });
+      const dist = { stamp: distStamp, treeDirty, allowDirty, rebuilt: !distFresh };
+      fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify({ budgets, opts, dist, report, wedge }, null, 2));
+      fs.writeFileSync(path.join(dir, 'report.md'), [
+        '# perf ' + report.course + ' ' + stampStr, '',
+        `dist ${distStamp ? distStamp.slice(0, 20) + '...' : '(no stamp)'}${treeDirty ? ' (TREE DIRTY at measure time)' : ''}`, '',
+        'REPORT-ONLY: the residency instrument applies no cap and renders no verdict.', '',
+        '```', ...rlines, '```', '',
+      ].join('\n'));
+      console.log('report -> ' + dir);
+      if (!wedge && errors.length) throw new Error(errors.join('; '));
+      console.log(wedge ? 'PERF RESIDENCY WEDGED: the deadman killed a hung run (exit 1; the banked rows stand above).' : 'PERF RESIDENCY DONE: report-only, nothing gated.');
+      gameServer?.close();
+      releaseRunLock();
+      app.exit(wedge ? 1 : 0);
+      return;
+    }
     // ---- the gate: relative-to-town caps + absolute backstops, all data ----
     const rel = budgets.relative ?? {};
     const abs = budgets.absolute ?? {};

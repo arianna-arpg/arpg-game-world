@@ -1,0 +1,2 @@
+import {nativeCombatPresentationArchive as archive} from './nativeCombatPresentationArchive';
+export function beforeNativeCombatPresentation(file:string,source:string):string {const row=archive.find(row=>row.file===file);if(!row)return source;for(const edit of [...row.edits].reverse()){const first=source.indexOf(edit.after);if(first<0||source.indexOf(edit.after,first+edit.after.length)>=0)throw Error('Exact native presentation hunk '+file);source=source.slice(0,first)+edit.before+source.slice(first+edit.after.length);}return source;}

@@ -17,6 +17,7 @@
 
 import { PAD_CFG, AIM_ASSIST_MODES, padDisplay, type AimAssistMode } from '../core/gamepad';
 import { NOTICE_CFG, NOTICE_ANCHORS, PICKUP_FEED_CFG, type NoticeAnchorId } from '../world/bulletins';
+import { FLOAT_OWNER_MODES } from '../world/bulletins'; // THE FLOAT'S OWNER (THE WIRE'S EYES)
 import { normalizeCursorOptions, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
 import { MAP_CFG, MAP_LABEL_MODES, type MapLabelMode, MAP_CHART_MODES, type MapChartMode } from '../ui/mapConfig';
@@ -35,7 +36,8 @@ export type ActionId =
   | 'skillSlot2' | 'skillSlot3' | 'skillSlot4' | 'skillSlot5' | 'skillSlot6' | 'skillSlot7'
   | 'metaModifier' | 'pickup'
   | 'panelChar' | 'panelTree' | 'panelSkills' | 'panelMap' | 'panelInv'
-  | 'panelMenu' | 'townPortal' | 'itemLock' | 'companionStance' | 'dialogueAdvance';
+  | 'panelMenu' | 'townPortal' | 'itemLock' | 'companionStance' | 'dialogueAdvance'
+  | 'ping'; // THE PING (card 17 A — engine/pings.ts, data/identityCues.ts PING_CUE): mark the ground for your party
 
 /** Pad-bindable actions: everything the keyboard binds, PLUS bar slots 0/1
  *  (fixed to LMB/RMB on mouse, free to live on any button on a pad). */
@@ -86,15 +88,24 @@ export interface Settings {
   lowLifePulse: boolean;
   /** Independent ailment layers: gentle motion, still, or disabled. Icons stay visible. */
   afflictionOverlays: import('../data/afflictionCues').AfflictionOverlayMode;
-  skillArtwork: boolean;
-  statusReadout: 'hover' | 'focus' | 'corner' | 'off';
-  supportReadyHint: boolean;
-  rewardLabelAvoidance: boolean;
-  floatingTextAvoidance: boolean;
-  castSlotHint: boolean;
-  castMovementHint: boolean;
-  castNameHint: boolean;
+  /** Keep native meter anchors unless crowd avoidance is explicitly requested. */
   crowdedMeters: boolean;
+  /** Optional ground-label packing; classic placement is the default. */
+  rewardLabelAvoidance: boolean;
+  /** Optional floating-number displacement around visible bodies. */
+  floatingTextAvoidance: boolean;
+  /** Optional outline on the actively casting hotbar slot. */
+  castSlotHint: boolean;
+  /** Optional name of the skill currently being cast. */
+  castNameHint: boolean;
+  /** Optional affirmative support-readiness message in Skills. Refusals stay visible. */
+  supportReadyHint: boolean;
+  /** Optional movement-lock caption, independent of the cast name. */
+  castMovementHint: boolean;
+  /** Text is independent of ailment screen effects. */
+  statusReadout: 'hover' | 'focus' | 'corner' | 'off';
+  /** Unique skill illustrations; acronyms remain an explicit accessibility preference. */
+  skillArtwork: boolean;
   /** THE FALTER (render/screenFx.ts ScreenFxDef.falter): faintness and the
    *  swoon deliberately HOLD presented frames — a simulated lag spike, the
    *  vasovagal skip. Designed and documented (docs/render/falter.md); the
@@ -257,6 +268,11 @@ export interface Settings {
    *  writes this OFF. Settings persist beside the account (disk slot +
    *  portage), so the choice survives every run. */
   confirmMemorySale: boolean;
+  /** THE NAME OVER THE HERO (data/identityCues.ts HERO_NAME_CUE.mode when unset): 'all' | 'party' | 'off'. */
+  heroNames?: import('../data/identityCues').HeroNameMode;
+  /** THE FLOAT'S OWNER (world/bulletins.ts FLOAT_OWNER_CFG.mode when unset): on a hosted world,
+   *  whose damage and heal numbers draw: 'all' | 'party' | 'mine'. */
+  floatOwners?: import('../world/bulletins').FloatOwnerMode;
 }
 
 /** THE MENU BAR options (ui/menuConfig.ts owns the dials + anchors). */
@@ -293,16 +309,17 @@ export interface SettingsSave {
   cursor?: Partial<CursorOptions>;
   lowLifePulse?: boolean;
   afflictionOverlays?: import('../data/afflictionCues').AfflictionOverlayMode;
-  skillArtwork?: boolean;
-  statusReadoutVersion?: number;
-  statusReadout?: 'hover' | 'focus' | 'corner' | 'off';
-  supportReadyHint?: boolean;
+  crowdedMeters?: boolean;
   rewardLabelAvoidance?: boolean;
   floatingTextAvoidance?: boolean;
   castSlotHint?: boolean;
-  castMovementHint?: boolean;
   castNameHint?: boolean;
-  crowdedMeters?: boolean;
+  supportReadyHint?: boolean;
+  castMovementHint?: boolean;
+  statusReadout?: 'hover' | 'focus' | 'corner' | 'off';
+  /** 2 migrates the former automatic near-hero readout to icons. */
+  statusReadoutVersion?: number;
+  skillArtwork?: boolean;
   statusFalter?: boolean;
   invertMove?: boolean;
   gearPickup?: 'vacuum' | 'key';
@@ -339,6 +356,10 @@ export interface SettingsSave {
   portalButton?: { anchor?: string; visibility?: string };
   /** THE SALE PROMPT (additive — a pre-dial save reads ON). */
   confirmMemorySale?: boolean;
+  /** THE NAME OVER THE HERO (additive — data/identityCues.ts HERO_NAME_CUE.mode when absent): 'all' | 'party' | 'off'. */
+  heroNames?: import('../data/identityCues').HeroNameMode;
+  /** THE FLOAT'S OWNER (additive: FLOAT_OWNER_CFG.mode when absent): 'all' | 'party' | 'mine'. */
+  floatOwners?: import('../world/bulletins').FloatOwnerMode;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -355,6 +376,8 @@ export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
   // THE COMPANION STANCE (engine/companionStances.ts): cycles every bonded
   // beast's conduct on the bar — the hunter's whistle-and-hand-signal key.
   companionStance: 'x',
+  // THE PING (engine/pings.ts, PING_CUE): mark the ground under the aim for your party — the MMO's G.
+  ping: 'g',
   dialogueAdvance: 'enter',
 };
 
@@ -365,7 +388,7 @@ export const ACTION_IDS = Object.keys(DEFAULT_KEYBINDS) as ActionId[];
 export function bindingContextsOverlap(a: string, b: string): boolean {
   if (a === 'dialogueAdvance' || b === 'dialogueAdvance') return false;
   const other = a === 'itemLock' ? b : b === 'itemLock' ? a : null;
-  return !other || !/^(skillSlot\d+|moveUp|moveDown|moveLeft|moveRight|townPortal|companionStance)$/.test(other);
+  return !other || !/^(skillSlot\d+|moveUp|moveDown|moveLeft|moveRight|townPortal|companionStance|ping)$/.test(other); // ping: a combat control (PING_CUE)
 }
 
 /** Default controller layout. The left stick IS movement (an axis, not a
@@ -382,6 +405,7 @@ export const DEFAULT_PAD_BINDS: Record<PadActionId, string> = {
   panelMenu: 'pad:l3',
   townPortal: '', itemLock: 'pad:a',
   companionStance: '', // pad buttons are scarce — bindable, ships unbound
+  ping: '', // THE PING (PING_CUE): bindable, ships unbound on the pad
   dialogueAdvance: 'pad:a',
 };
 
@@ -409,6 +433,7 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   panelInv: 'Inventory', panelMenu: 'Menu',
   townPortal: 'Town Portal', itemLock: 'Hold to Lock / Reserve (menus)',
   companionStance: 'Companion Stance (cycle)',
+  ping: 'Ping (mark the ground for your party)', // THE PING (PING_CUE)
   dialogueAdvance: 'Advance Dialogue',
 };
 
@@ -467,15 +492,15 @@ export const makeSettings = (): Settings => ({
   cursor: { ...DEFAULT_CURSOR_OPTIONS },
   lowLifePulse: true,
   afflictionOverlays: 'gentle',
-  skillArtwork: true,
-  statusReadout: 'hover',
-  supportReadyHint: false,
+  crowdedMeters: false,
   rewardLabelAvoidance: false,
   floatingTextAvoidance: false,
   castSlotHint: false,
-  castMovementHint: false,
   castNameHint: false,
-  crowdedMeters: false,
+  supportReadyHint: false,
+  castMovementHint: false,
+  statusReadout: 'hover',
+  skillArtwork: true,
   statusFalter: true,
   invertMove: false,
   gearPickup: 'vacuum',
@@ -518,16 +543,16 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   cursor: { ...s.cursor },
   lowLifePulse: s.lowLifePulse,
   afflictionOverlays: s.afflictionOverlays,
-  skillArtwork: s.skillArtwork,
-  statusReadout: s.statusReadout,
-  statusReadoutVersion: 2,
-  supportReadyHint: s.supportReadyHint,
+  crowdedMeters: s.crowdedMeters,
   rewardLabelAvoidance: s.rewardLabelAvoidance,
   floatingTextAvoidance: s.floatingTextAvoidance,
   castSlotHint: s.castSlotHint,
-  castMovementHint: s.castMovementHint,
   castNameHint: s.castNameHint,
-  crowdedMeters: s.crowdedMeters,
+  supportReadyHint: s.supportReadyHint,
+  castMovementHint: s.castMovementHint,
+  statusReadout: s.statusReadout,
+  statusReadoutVersion: 2,
+  skillArtwork: s.skillArtwork,
   statusFalter: s.statusFalter,
   invertMove: s.invertMove,
   gearPickup: s.gearPickup,
@@ -560,6 +585,8 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   menuBar: { ...s.menuBar },
   portalButton: { ...s.portalButton },
   confirmMemorySale: s.confirmMemorySale,
+  ...(s.heroNames ? { heroNames: s.heroNames } : {}), // HERO_NAME_CUE: the overhead-name dial rides the save only when set
+  ...(s.floatOwners ? { floatOwners: s.floatOwners } : {}), // THE FLOAT'S OWNER: rides the save only when set
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -622,16 +649,16 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     cursor: normalizeCursorOptions(s.cursor),
     lowLifePulse: s.lowLifePulse ?? true,
     afflictionOverlays: s.afflictionOverlays === 'off' || s.afflictionOverlays === 'still' ? s.afflictionOverlays : 'gentle',
-    skillArtwork: s.skillArtwork !== false,
-    statusReadout: s.statusReadout === 'corner' || s.statusReadout === 'off' ? s.statusReadout
-      : s.statusReadoutVersion === 2 && s.statusReadout === 'focus' ? 'focus' : 'hover',
-    supportReadyHint: s.supportReadyHint === true,
+    crowdedMeters: s.crowdedMeters === true,
     rewardLabelAvoidance: s.rewardLabelAvoidance === true,
     floatingTextAvoidance: s.floatingTextAvoidance === true,
     castSlotHint: s.castSlotHint === true,
-    castMovementHint: s.castMovementHint === true,
     castNameHint: s.castNameHint === true,
-    crowdedMeters: s.crowdedMeters === true,
+    supportReadyHint: s.supportReadyHint === true,
+    castMovementHint: s.castMovementHint === true,
+    statusReadout: s.statusReadout === 'corner' || s.statusReadout === 'off' ? s.statusReadout
+      : s.statusReadoutVersion === 2 && s.statusReadout === 'focus' ? 'focus' : 'hover',
+    skillArtwork: s.skillArtwork !== false,
     statusFalter: s.statusFalter ?? true,
     invertMove: s.invertMove ?? false,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
@@ -703,6 +730,8 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     // THE SALE PROMPT (additive): a pre-dial save reads ON — the guard is
     // the default, the opt-out is the player's own click.
     confirmMemorySale: s.confirmMemorySale ?? true,
+    ...(s.heroNames ? { heroNames: s.heroNames } : {}), // HERO_NAME_CUE: absent = the shipped default (no key, so deep-equal settings stay equal)
+    ...(FLOAT_OWNER_MODES.includes(s.floatOwners!) ? { floatOwners: s.floatOwners } : {}), // THE FLOAT'S OWNER: a known mode or the default
     // THE TOWN PORTAL BUTTON (additive): an unknown anchor (a renamed row,
     // a pre-dial save) falls back to the registry default.
     portalButton: {

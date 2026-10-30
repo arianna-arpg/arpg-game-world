@@ -321,6 +321,39 @@ export function radial(m: Mask, x: number, y: number, rOf: (angle: number) => nu
   return m;
 }
 
+/** One radial piece of the native poured-ground shape, in paint order. */
+export interface PourLobe { x: number; y: number; radius: number; seed: number }
+
+/** Native pour geometry: core first, then the original piece rolls. Siting,
+ *  guard trims, depth cores and liquid painting remain the caller's policy. */
+export function pourLobes(
+  rng: Pick<Rng, 'int' | 'range'>, center: { x: number; y: number },
+  body: number, seed: number, pieces: readonly [number, number],
+): readonly PourLobe[] {
+  const lobes: PourLobe[] = [{ x: center.x, y: center.y, radius: body, seed }];
+  const n = rng.int(pieces[0], pieces[1]);
+  for (let i = 0; i < n; i++) {
+    const ang = rng.range(0, Math.PI * 2);
+    const off = rng.range(body * 0.45, body * 0.95);
+    const lr = body * rng.range(0.3, 0.55);
+    lobes.push({ x: center.x + Math.cos(ang) * off, y: center.y + Math.sin(ang) * off,
+      radius: lr, seed: (seed + i + 1) >>> 0 });
+  }
+  return lobes;
+}
+
+/** Point membership in the native radial union, using radial's exact squared
+ *  distance test. This is the mask kernel, before guards or paintLiquid's
+ *  overlapping doodad discs; those painted footprints can extend beyond it. */
+export function pourContains(lobes: readonly PourLobe[], wobble: number, x: number, y: number): boolean {
+  for (const lobe of lobes) {
+    const dx = x - lobe.x, dy = y - lobe.y;
+    const r = lobe.radius * (1 + bearingNoise(Math.atan2(dy, dx), wobble, lobe.seed));
+    if (r > 0 && dx * dx + dy * dy <= r * r) return true;
+  }
+  return false;
+}
+
 // --- POLYLINES --------------------------------------------------------------------
 
 /** A WINDING path a→b: coherent sideways bow + per-step jitter, always

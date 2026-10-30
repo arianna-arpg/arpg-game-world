@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import {withSeededRandom} from '../src/core/rng';
+import {vec} from '../src/core/math';
+import {mod} from '../src/engine/stats';
+import {makeSkillInstance} from '../src/engine/skills';
+import {SKILLS} from '../src/data/skills';
+import {nativeCampaignFixture,birthActualNativeArea} from './nativeCombatRetainedFixture';
+import {refuseWorldCombat,writeCombatProof,combatHash} from './probe_nativecombatcycle';
+const results=[];
+for(const playerSource of [false,true])results.push(withSeededRandom(44401,()=>{const setup=nativeCampaignFixture();return refuseWorldCombat([setup.writer],calls=>{
+ const all=birthActualNativeArea(setup),{ongoing,authority,campaign}=all,combat=ongoing.combat,{scene,population,geometry}=ongoing.assembly.input;
+ const source=playerSource?scene.player:population.createMonster('skeleton_warrior',12,'player'),target=population.createMonster('skeleton_warrior',12,'enemy');
+ source.pos=geometry.findFreeSpot(vec(geometry.arena.w/2,geometry.arena.h/2),source.radius)??geometry.clampPos(vec(geometry.arena.w/2,geometry.arena.h/2),source.radius);target.pos=geometry.findFreeSpot(vec(source.pos.x+100,source.pos.y),target.radius)??geometry.clampPos(vec(source.pos.x+100,source.pos.y),target.radius);
+ if(!playerSource)scene.actors.push(source);scene.actors.push(target);authority.claim(ongoing.binding,playerSource?[target]:[source,target]);
+ source.sheet.setSource('controlled detached proof resource budget',[mod('maxMana','flat',10000),mod('maxLife','flat',1000),mod('lifeOnHit','flat',17)]);source.mana=source.maxMana();source.life=source.maxLife();
+ if(playerSource){assert.equal(typeof source.onLifeHealed,'function','real deed callback installed');withSeededRandom(44407,()=>{for(let woundAttempt=0;woundAttempt<12&&source.life===source.maxLife();woundAttempt++)combat.resolveHit(target,makeSkillInstance(SKILLS.claw,12),source);});console.log(JSON.stringify({diagnostic:'native wound',life:source.life,maxLife:source.maxLife(),es:source.es,invulnerable:source.invulnerable,team:source.team,tier:source.tier,targetTier:target.tier,wounds:Reflect.get(combat.campaignOwner.combatDeeds,'wounds')}));assert.ok(source.life<source.maxLife(),'real enemy hit establishes wound');assert.ok(Reflect.get(combat.campaignOwner.combatDeeds,'wounds')>0,'actual campaign tracker owns the wound');}else source.life=source.maxLife()/2;
+ const inst=makeSkillInstance(SKILLS.fireball,12);source.skills=[inst];assert.equal(combat.useSkill(source,inst,{...target.pos}),true);
+ for(let i=0;i<240&&source.casting;i++){campaign.time+=1/60;combat.updateCasting(source,1/60);}assert.equal(source.casting,null);assert.ok(ongoing.progression.input.state.projectiles.length);const projectile=ongoing.progression.input.state.projectiles[0];assert.equal(projectile.caster,source);
+ const life=source.life,targetLife=target.life,wounds=Reflect.get(combat.campaignOwner.combatDeeds,'wounds'),callback=source.onLifeHealed;
+ scene.actors.splice(scene.actors.indexOf(source),1);authority.release(ongoing.binding,[source]);combat.noteActorInsertion(source);
+ withSeededRandom(44411,()=>{for(let i=0;i<180;i++){campaign.time+=1/60;combat.updateProjectiles(1/60);}});
+ assert.ok(target.life<targetLife,'issued effect reaches actual native impact');assert.ok(source.life>life,'detached native source receives on-hit healing');assert.equal(source.onLifeHealed,callback,'native selected callback identity remains');assert.equal(scene.actors.includes(source),false);authority.assertAdmitted(scene);
+ const nowWounds=Reflect.get(combat.campaignOwner.combatDeeds,'wounds');if(playerSource)assert.ok(nowWounds<wounds,'issued detached player healing consumes real deed wound budget');
+ return{name:playerSource?'bound actual hero detached projectile heals and attributes deeds':'actual NPC detached projectile retains native gain',sourceGain:source.life-life,targetLoss:targetLife-target.life,woundsBefore:playerSource?wounds:undefined,woundsAfter:playerSource?nowWounds:undefined,remaining:ongoing.progression.input.state.projectiles.length,worldDrivers:calls};
+});}));
+const report={mode:'Actual admitted aggregate and nominal issued projectile after physical source retirement; player course uses genuine bound campaign callback and actual enemy wound.',courses:results.length,results,receipt:combatHash(JSON.stringify(results))};writeCombatProof('native-combat-actual-detached.json',report);console.log(JSON.stringify(report));

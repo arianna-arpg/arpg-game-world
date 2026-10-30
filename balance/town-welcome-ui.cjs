@@ -24,7 +24,8 @@ app.whenReady().then(async () => {
     await js(`(() => {
       __game.account().ledger.prologue_lived=1; __game.devStartRun('warrior'); __game.ui.hideAll();
       __game.settings().speechTyping=false;
-      const w=__game.world();w.zoneMap.lastlight.exits=[{to:'crossroads',side:'w'}];w.loadZone('lastlight');w.player.invulnerable=true;
+      // This course exercises authored Lastlight; smoke:world covers continuous travel.
+      const w=__game.world();w.massRuntime=null;w.zoneMap.lastlight.exits=[{to:'crossroads',side:'w'}];w.loadZone('lastlight');w.player.invulnerable=true;
       const exit=w.exits.find(e=>e.to==='crossroads');if(!exit)throw Error('No Crossroads exit');
       const center={x:w.arena.w/2,y:w.arena.h/2}, dx=center.x-exit.pos.x,dy=center.y-exit.pos.y,len=Math.hypot(dx,dy);
       const q=window.townQA={w,exit,point:d=>({x:exit.pos.x+dx/len*d,y:exit.pos.y+dy/len*d})};

@@ -46,6 +46,8 @@ app.whenReady().then(async () => {
       w.zoneMap.qa_firebolt={id:'qa_firebolt',name:'Proving Ground',level:6,size:{w:1600,h:1200},seed:23456,
         theme:{floor:'#30343a',grid:'#353940',border:'#444b55',obstacle:'#444',obstacleEdge:'#555',accent:'#829fc2'},
         layout:[],objective:{kind:'safe'},exits:[],map:{x:9000,y:9000}};
+      // This disposable scene owns its geometry and clock; suspend continuous streaming/input.
+      w.massRuntime=null; w.applyInputs=()=>{};
       w.loadZone('qa_firebolt'); p.pos={x:800,y:600}; __game.step(180); w.update=()=>{};
       w.actors=[p]; w.projectiles=[]; w.flashes=[]; w.doodads=[]; w.walk=null; w.markDoodadsChanged();
       const mod=(stat,value)=>({stat,kind:'override',value});
@@ -60,7 +62,7 @@ app.whenReady().then(async () => {
         w.flashes=w.flashes.filter(f=>(f.life-=1/120)>0);w.time+=1/120;w.updateProjectiles(1/120);w.updateZones(1/120);
       }};
       const reset=nodes=>{w.projectileArts.clearAll();w.projectiles=[];w.zones=[];w.flashes=[];inst.treeNodes=nodes;
-        targets.forEach((a,i)=>{a.statuses=[];a.fillResources();const angle=i*Math.PI/3;a.pos={x:p.pos.x+Math.cos(angle)*175,y:p.pos.y+Math.sin(angle)*125};});p.casting=null;p.cooldowns.clear();p.useLock=0;};
+        targets.forEach((a,i)=>{a.statuses=[];a.fillResources();const angle=i*Math.PI/3;a.pos={x:p.pos.x+Math.cos(angle)*175,y:p.pos.y+Math.sin(angle)*125};});p.casting=null;p.cooldowns.clear();p.useLock=0;w.actorGridRev++;};
       window.__fireboltQA={w,p,inst,targets,advance,reset};
       reset(['ember_satellites','dense_constellation','passing_embers','broad_embers','searing_orbit']);
       w.executeSkill(p,inst,targets[0].pos);advance(2.15);__game.step(1);

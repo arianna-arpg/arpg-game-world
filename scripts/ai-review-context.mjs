@@ -30,7 +30,7 @@ function chooseBase() {
 }
 
 function suggestedChecks(files) {
-  const checks = ['npx tsc --noEmit'];
+  const checks = ['npm run check'];
   const changed = files.join('\n');
 
   if (/^src\/data\//m.test(changed)) checks.push('npm run sim -- run --suite smoke');
@@ -39,6 +39,10 @@ function suggestedChecks(files) {
   }
   if (/^(launcher\/|launcher\.config|src\/main\.ts|index\.html)/m.test(changed)) checks.push('npm run smoke:launcher');
   if (/^(launcher\/|src\/main\.ts|index\.html)/m.test(changed)) checks.push('npm run smoke');
+  if (/^scripts\/(world-checkout\.cjs|test-world-checkout\.mjs|play-world\.cjs|host-world\.cjs)$/m.test(changed)) {
+    checks.push('node --test scripts/test-world-checkout.mjs', 'npm run test:launcher', 'npm run build', 'npm run smoke:world', 'npm run smoke:host');
+  }
+  if (/^balance\/runprobes\.ts$/m.test(changed)) checks.push('npm run probe -- --jobs 2');
   if (/^(src\/render\/|src\/engine\/(world|levelgen|worldgen)|src\/data\/(tilesets|zones))/m.test(changed)) {
     checks.push('npm run perf  # desktop/visual verification');
   }
@@ -53,7 +57,7 @@ const base = chooseBase();
 const baseSha = git(['rev-parse', '--short', base]) ?? 'unavailable';
 const localChanges = lines(git(['status', '--short']));
 const committedFiles = base === 'HEAD' ? [] : lines(git(['diff', '--name-only', `${base}...HEAD`]));
-const dirtyFiles = lines(git(['diff', '--name-only']));
+const dirtyFiles = [...lines(git(['diff', '--name-only'])), ...lines(git(['diff', '--cached', '--name-only']))];
 const untrackedFiles = lines(git(['ls-files', '--others', '--exclude-standard']));
 const files = [...new Set([...committedFiles, ...dirtyFiles, ...untrackedFiles])].sort();
 const comparison = base === 'HEAD' ? null : git(['rev-list', '--left-right', '--count', `${base}...HEAD`]);

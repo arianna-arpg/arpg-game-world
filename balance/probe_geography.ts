@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import ts from 'typescript';
+import { mulberry32 } from '../src/sim/rng';
+import { regionGeometry, regionCellHash, type RegionGeometryPolicy, type RegionGeometryWinner } from '../src/world/regionGeometry';
 import { makeSimWorld } from '../src/sim/arena';
-import { biomeAt, biomeDepth, BIOMES, BIOME_FIELD_CFG, regionWinner } from '../src/world/biomes';
+import { biomeAt, biomeDepth, BIOMES, BIOME_FIELD_CFG, BIOME_FIELD, fieldBiomePick, regionWinner } from '../src/world/biomes';
 import { biomeFrontierTarget, placeZoneAt, escarpmentConnection } from '../src/engine/worldgen';
 import { escarpmentsInRect, escarpmentAt, escarpmentRoad, cardinal } from '../src/world/escarpments';
 import { featuresAt, featuresInRect } from '../src/world/atlas';
@@ -15,22 +19,105 @@ import { regionKind } from '../src/world/regions';
 import { sanitizeWorldZones } from '../src/meta/worldstate';
 import { serializeZone, applyZone } from '../src/net/snapshot';
 
+// Verbatim native hash and solver at bc8a0e0a9211815d99dcf0ea389e451157c0684d.
+// The callback still uses current complete native field selection; this oracle
+// compares geometry and call order, not an archived climate/continent policy.
+const ARCHIVED_REGION_SOURCE = "function hashCell(a: number, b: number, seed: number): number {\n  let h = (seed ^ 0x9e3779b9) >>> 0;\n  h = Math.imul(h ^ (a | 0), 0x85ebca6b) >>> 0;\n  h = Math.imul(h ^ (b | 0), 0xc2b2ae35) >>> 0;\n  h ^= h >>> 13; h = Math.imul(h, 0x27d4eb2f) >>> 0; h ^= h >>> 15;\n  return h >>> 0;\n}\nexport function regionWinner(coord: MapCoord, seed: number): { biome: string; gx: number; gy: number; scale: number; score: number; depth: number } {\n  const span = BIOME_FIELD_CFG.cellSpan, cfg = BIOME_FIELD_CFG.regionScale;\n  const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);\n  let best = { biome: 'grove', gx: cx, gy: cy, scale: 1, score: Infinity };\n  let other = Infinity;\n  for (let dx = -cfg.search; dx <= cfg.search; dx++) for (let dy = -cfg.search; dy <= cfg.search; dy++) {\n    const gx = cx + dx, gy = cy + dy, h = hashCell(gx, gy, seed);\n    const x = (gx + 0.5 + ((h & 0xffff) / 0xffff - 0.5) * BIOME_FIELD_CFG.jitter) * span;\n    const y = (gy + 0.5 + ((h >>> 16) / 0xffff - 0.5) * BIOME_FIELD_CFG.jitter) * span;\n    const distance = (x - coord.x) ** 2 + (y - coord.y) ** 2;\n    if (distance / (cfg.max ** 2) >= other) continue;\n    const biome = fieldBiomePick(BIOME_FIELD, gx, gy, { x, y }, seed);\n    const band = BIOMES[biome]?.regionScale ?? cfg.default;\n    const scale = Math.max(cfg.min, Math.min(cfg.max, band[0] + (band[1] - band[0]) * hashCell(gx, gy, seed ^ 0x72ad1) / 0x100000000));\n    const score = distance / (scale * scale);\n    if (score < best.score) {\n      if (biome !== best.biome) other = best.score;\n      best = { biome, gx, gy, scale, score };\n    } else if (biome !== best.biome && score < other) other = score;\n  }\n  return { ...best, depth: Number.isFinite(other) ? Math.max(0, 1 - Math.sqrt(best.score / Math.max(other, 1e-9))) : 1 };\n}";
+const ARCHIVED_REGION_HASH = 'ce141f15d6cadc4bf5aaf6c0d70307c066ca9207b9a7e3d79e00b420fc9d7fcc';
+
+function geometryPolicy(overrides:Partial<RegionGeometryPolicy>={}):RegionGeometryPolicy {
+  return Object.freeze<RegionGeometryPolicy>({cellSpan:BIOME_FIELD_CFG.cellSpan,jitter:BIOME_FIELD_CFG.jitter,
+    regionScale:Object.freeze({...BIOME_FIELD_CFG.regionScale,default:Object.freeze([...BIOME_FIELD_CFG.regionScale.default]) as readonly [number,number]}),
+    biomeAtCell:(gx,gy,site,fieldSeed)=>fieldBiomePick(BIOME_FIELD,gx,gy,site,fieldSeed),
+    scaleForBiome:biome=>BIOMES[biome]?.regionScale,...overrides});
+}
+function verifyRegionGeometry(nativeSeed:number):void {
+  assert.equal(createHash('sha256').update(ARCHIVED_REGION_SOURCE).digest('hex'),ARCHIVED_REGION_HASH);
+  const js=ts.transpileModule(ARCHIVED_REGION_SOURCE.replace('export function regionWinner','function regionWinner'),
+    {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
+  const oracleFactory=new Function('BIOME_FIELD_CFG','BIOMES','fieldBiomePick','BIOME_FIELD',js+'\nreturn {regionWinner,hashCell};');
+  const archived=(policy:RegionGeometryPolicy):{regionWinner:(at:Readonly<MapCoord>,seed:number)=>RegionGeometryWinner;hashCell:typeof regionCellHash}=>oracleFactory(
+    policy,new Proxy({}, {get:(_target,name)=>({regionScale:policy.scaleForBiome(String(name))})}),
+    (_table:unknown,gx:number,gy:number,site:MapCoord,seed:number)=>policy.biomeAtCell(gx,gy,site,seed),[]);
+  let pairs=0,pruned=0;
+  const compare=(policy:RegionGeometryPolicy,at:Readonly<MapCoord>,fieldSeed:number,classic=false)=>{
+    const traces:unknown[][]=[[],[]];
+    const traced=(i:number):RegionGeometryPolicy=>Object.freeze<RegionGeometryPolicy>({...policy,
+      biomeAtCell:(gx,gy,site,seed)=>{traces[i].push(['pick',gx,gy,site.x,site.y,seed]);return policy.biomeAtCell(gx,gy,site,seed);},
+      scaleForBiome:biome=>{traces[i].push(['scale',biome]);return policy.scaleForBiome(biome);}});
+    const point=Object.freeze({...at}),before=JSON.stringify(policy),oldRandom=Math.random,next=mulberry32(45119),expected=mulberry32(45119);let draws=0;
+    Math.random=()=>{draws++;return next();};
+    try {
+      const old=archived(traced(0)).regionWinner(point,fieldSeed),current=regionGeometry(point,fieldSeed,traced(1));
+      assert.deepEqual(current,old,'full original native region result at '+JSON.stringify({at,fieldSeed}));
+      assert.deepEqual(traces[1],traces[0],'exact native candidate/callback order after pruning');
+      if(classic)assert.deepEqual(regionWinner(point,fieldSeed),old,'classic wrapper retains complete native field selection');
+      assert.equal(draws,0,'native sampling does not consume the global stream');assert.equal(Math.random(),expected(),'unchanged next global draw');
+      assert.equal(JSON.stringify(policy),before,'readonly geometry policy remains untouched');
+      assert.deepEqual(point,at);pairs++;
+      if(traces[0].length/2<(2*policy.regionScale.search+1)**2)pruned++;
+      return current;
+    } finally {Math.random=oldRandom;}
+  };
+  const native=geometryPolicy();
+  const nearEdges=[-780,-260,-1e-9,0,1e-9,260-1e-9,260,260+1e-9,780];
+  const locations=[...nearEdges.flatMap(x=>nearEdges.map(y=>({x,y}))),
+    ...Array.from({length:180},(_,i)=>({x:-13000+(i%18)*1527.25,y:-9000+Math.floor(i/18)*2177.75}))];
+  for(const fieldSeed of [nativeSeed,0,1,-771,0xffffffff])for(const p of locations)compare(native,p,fieldSeed,true);
+  assert.ok(pruned>100,'witnesses must actually exercise the original pruning path');
+
+  // Tie order and biome boundaries are observable mechanics. With no jitter
+  // and equal scales the x=0 seam is exact; a same-biome seam is not an edge.
+  const flatScale=Object.freeze({default:Object.freeze([1,1]) as readonly [number,number],min:1,max:1,search:3});
+  const border=geometryPolicy({jitter:0,regionScale:flatScale,biomeAtCell:gx=>gx<0?'west':'east',scaleForBiome:()=>undefined});
+  const same=geometryPolicy({...border,biomeAtCell:()=> 'one-biome'});
+  const tie=compare(border,{x:0,y:130},81);
+  assert.deepEqual([tie.gx,tie.gy,tie.biome,tie.depth],[-1,0,'west',0],'exact tie keeps first scanned site and zero biome depth');
+  const corner=compare(border,{x:0,y:0},81);assert.deepEqual([corner.gx,corner.gy],[-1,-1],'dx then dy scan wins equal-score corner');
+  const left=compare(border,{x:-1e-6,y:130},81),right=compare(border,{x:1e-6,y:130},81);
+  assert.equal(left.biome,'west');assert.equal(right.biome,'east');
+  assert.ok(left.depth>0&&left.depth<1e-6&&right.depth>0&&right.depth<1e-6,'different-biome edge tends continuously to zero');
+  for(const x of [-1e-6,0,1e-6])assert.equal(compare(same,{x,y:130},81).depth,1,'same-biome neighboring cells merge fully');
+  assert.equal(compare(border,{x:-130,y:130},81).depth,1,'native site center keeps full depth');
+
+  // Missing ranges use the native default; authored ranges retain native
+  // clamps. The leaf has no memo: interleave two immutable source policies
+  // over the same cell/seed and require A/B/A and reverse-order stability.
+  const low=geometryPolicy({biomeAtCell:()=> 'low',scaleForBiome:()=>[-2,-2]});
+  const high=geometryPolicy({biomeAtCell:()=> 'high',scaleForBiome:()=>[8,8]});
+  assert.equal(compare(low,{x:271,y:-130},91).scale,native.regionScale.min);
+  assert.equal(compare(high,{x:271,y:-130},91).scale,native.regionScale.max);
+  const a=geometryPolicy({biomeAtCell:(gx,gy)=>((gx+gy)%3===0?'a':'b'),scaleForBiome:b=>b==='a'?[.65,.8]:[1.4,1.7]});
+  const b=geometryPolicy({cellSpan:130,jitter:.2,biomeAtCell:()=> 'foreign',scaleForBiome:()=>undefined});
+  const first=locations.map(p=>regionGeometry(p,173,a));
+  for(const [i,p]of locations.entries()){
+    compare(a,p,173);const other=compare(b,p,173);assert.equal(other.biome,'foreign');
+    assert.deepEqual(regionGeometry(p,173,a),first[i],'interleaved policy does not poison the prior source');
+  }
+  for(let i=locations.length-1;i>=0;i--)assert.deepEqual(regionGeometry(locations[i],173,a),first[i],'query order is irrelevant');
+  // Explicitly preserve the native integer-hash domain, without promising a
+  // new address mapping. A future worldmass adapter must bound/map its cells.
+  const oldHash=archived(native).hashCell;
+  for(const x of [-4294967297,-2147483648,-1,0,1,2147483647,4294967296])for(const y of [-17,0,421])
+    assert.equal(regionCellHash(x,y,0x8157),oldHash(x,y,0x8157));
+  assert.equal(regionCellHash(1,9,71),regionCellHash(4294967297,9,71),'existing 32-bit hash alias is explicit, not an infinite-address claim');
+  console.log('PASS '+pairs+' archived native region pairs: exact winner/scale/score/depth, pruned callback order, classic full field selection, tie/boundary/default/clamp behavior, source isolation and untouched global RNG');
+}
+
 const world = makeSimWorld('warrior', 0xa71a501), seed = world.sim.biomeField.fieldSeed;
+verifyRegionGeometry(seed);
 const points = Array.from({ length: 1600 }, (_, i) => ({ x: 7200 + i % 40 * 75, y: 7200 + Math.floor(i / 40) * 75 }));
 assert.deepEqual(points.map(p => [biomeAt(p, seed), biomeDepth(p, seed)]), points.map(p => [biomeAt(p, seed), biomeDepth(p, seed)]));
 
 // Compare the bounded ownership solver against a much wider candidate search.
 const sampled = points.filter((_, i) => i % 31 === 0).map(p => ({ p, winner: regionWinner(p, seed) }));
-// Widen the readonly shipping constant only within this isolated QA witness.
-const searchConfig = BIOME_FIELD_CFG.regionScale as { search: number };
-const searchBefore = searchConfig.search;
-try {
-  searchConfig.search = 7;
-  for (const { p, winner } of sampled) {
-    const wide = regionWinner(p, seed);
-    assert.deepEqual([wide.gx, wide.gy, wide.biome], [winner.gx, winner.gy, winner.biome]);
-  }
-} finally { searchConfig.search = searchBefore; }
+// Widen only an explicit immutable input; native shipping policy stays intact.
+const widePolicy=geometryPolicy({regionScale:Object.freeze({...BIOME_FIELD_CFG.regionScale,search:7})});
+for (const { p, winner } of sampled) {
+  const wide=regionGeometry(p,seed,widePolicy);
+  assert.deepEqual([wide.gx,wide.gy,wide.biome,wide.scale,wide.score],
+    [winner.gx,winner.gy,winner.biome,winner.scale,winner.score]);
+}
 let sharedSeams = 0;
 for (const p of points) {
   let a = p, b = { x: p.x + 75, y: p.y };

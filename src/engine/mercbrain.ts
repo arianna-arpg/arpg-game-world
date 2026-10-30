@@ -20,8 +20,7 @@ import { dist } from '../core/math';
 import { MERC_CFG } from '../meta/mercs';
 import { instanceTrigger } from './skills';
 import type { Actor } from './actor';
-import type { World } from './world';
-import type { PlayerInput, PlayerInputSource } from '../net/intent';
+import type { PlayerInput, PlayerInputSource, PlayerInputQuery } from '../net/intent';
 
 /** Feel knobs for the hireling controller — one place, tune freely. */
 export const MERC_BRAIN = {
@@ -39,7 +38,7 @@ export class MercInput implements PlayerInputSource {
   private altTimer = MERC_BRAIN.altCastSec * 0.5; // first flourish comes early
   private altSlot = 1;
 
-  poll(actor: Actor, world: World, dt: number): PlayerInput | null {
+  poll(actor: Actor, world: PlayerInputQuery, dt: number): PlayerInput | null {
     const patron = world.player;
     const held = new Array<boolean>(actor.skills.length).fill(false);
     const edge = new Array<boolean>(actor.skills.length).fill(false);

@@ -1,3 +1,4 @@
+import {observeNativeCombatStatus,observeNativeCombatStatusSource} from './nativeCombatRecordObservation';
 import type { Actor } from './actor';
 import type { Projectile, World } from './world';
 import { dist, type Vec2 } from '../core/math';
@@ -35,7 +36,7 @@ export class AttackSequences {
   private rainAt = new WeakMap<Projectile, number>();
   private deferredContacts: { projectile: Projectile; target: Actor }[] = [];
   private serial = 0;
-  constructor(private w: World) {}
+  constructor(private w: NativeAttackSequencesHost) {}
 
   private policy(inst: SkillInstance): string {
     return JSON.stringify([inst.treeNodes, inst.level, inst.sockets.map(s => s && [s.def.id, s.level, s.rolled]),
@@ -259,11 +260,11 @@ export class AttackSequences {
     const critical = sd.dotType && Math.random() < s.owner.sheet.get('dotCrit', tags, extra) * s.owner.sheet.get('critChance', tags, extra);
     if (critical) dps *= s.owner.sheet.get('critMulti', tags, extra);
     const rupture = sd.dotType ? dps * sd.duration * duration * s.owner.sheet.get('dotRupture', tags, extra) : amount * power;
-    target.applyStatus(id, dps, duration, inst.def.name, { casterId: s.owner.id, sourceKey, holdDischarge,
+    observeNativeCombatStatus(this.w,target,()=>target.applyStatus(id, dps, duration, inst.def.name, { casterId: observeNativeCombatStatusSource(this.w,s.owner).id, sourceKey, holdDischarge,
       rupture: rupture > 0 ? rupture : undefined, ruptureType: sd.element,
       stacksBonus: Math.round(s.owner.sheet.get('ailmentStacks', tags, extra)),
       leech: s.owner.sheet.get('dotLeech_' + id, tags, extra),
-      propagates: Math.random() < s.owner.sheet.get('dotPropagates', tags, extra) });
+      propagates: Math.random() < s.owner.sheet.get('dotPropagates', tags, extra) }));
   }
   private burst(s: SequenceState, inst: SkillInstance, target: Actor, amount: number): void {
     this.w.attackSequenceBurst(s.owner, inst, target, amount);
@@ -381,4 +382,33 @@ export class AttackSequences {
     }
   }
   clearAll(): void { for (const s of [...this.states]) this.clear(s.owner, s.host); }
+  /** THE HAND-OFF (shard M1, engine/shardUnits.ts): one owner's cycles cleared now,
+   *  in the World it leaves (never by this World's later sweep on its absence). */
+  clearOwner(owner: Actor): void { for (const s of [...this.states]) if (s.owner === owner) this.clear(s.owner, s.host); }
+}
+
+/** Structural authority only; executable controller bodies are unchanged. */
+export interface NativeAttackSequencesHost {
+ enemiesOf:World['enemiesOf'];
+ time:World['time'];
+ flashes:World['flashes'];
+ executeSkill:World['executeSkill'];
+ pendingFuses:World['pendingFuses'];
+ lineOfFire:World['lineOfFire'];
+ clampPos:World['clampPos'];
+ spawnConstruct:World['spawnConstruct'];
+ spawnProjectile:World['spawnProjectile'];
+ inheritedFlight:World['inheritedFlight'];
+ zone:World['zone'];
+ attackSequenceBurst:World['attackSequenceBurst'];
+ actors:World['actors'];
+ timeflow:World['timeflow'];
+ projectiles:World['projectiles'];
+ pendingSalvos:World['pendingSalvos'];
+ pendingRepeats:World['pendingRepeats'];
+ pendingSteps:World['pendingSteps'];
+ pendingFollowUps:World['pendingFollowUps'];
+ zones:World['zones'];
+ retireOwnedZone:World['retireOwnedZone'];
+ kill:World['kill'];
 }

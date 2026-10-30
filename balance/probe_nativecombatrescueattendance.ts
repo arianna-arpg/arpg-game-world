@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {withSeededRandom} from '../src/core/rng';
+import {QUESTS} from '../src/quests/defs';
+import {nativeCampaignFixture,birthActualNativeArea,mintAdditionalNativeArea} from './nativeCombatRetainedFixture';
+import {refuseWorldCombat,writeCombatProof,combatHash} from './probe_nativecombatcycle';
+const result=withSeededRandom(44772,()=>{const setup=nativeCampaignFixture(),defB=mintAdditionalNativeArea(setup);setup.definition.objective={kind:'clear'};return refuseWorldCombat([setup.writer],calls=>{
+ const all=birthActualNativeArea(setup),{ongoing:a,coordinator,authority,campaign}=all,{scene,population}=a.assembly.input;
+ const q=Object.values(QUESTS).find(q=>q.rescue)!;assert(q?.rescue);const rescue=q.rescue,tag=`quest_rescue:${q.id}`;
+ coordinator.runFrom(a,()=>coordinator.loadZone(defB.id,scene.zone.id));const b=coordinator.current;assert.equal(a.combat.isPresentLocalPlayer(),false);
+ campaign.activeQuests.push({questId:q.id,zoneId:scene.zone.id,fieldDone:false});
+ const hero=b.assembly.input.scene.player,heroPos={...hero.pos},beforeBodies=[...scene.actors];
+ a.quests.rescues.update();assert.deepEqual(scene.actors,beforeBodies,'empty missing captive with no local anchor is inert');assert.deepEqual(hero.pos,heroPos);
+ const npc=population.createMonster(rescue.npc,1,'player');npc.tag=tag;npc.name='controlled wrong name';scene.actors.push(npc);authority.claim(a.binding,[npc]);
+ a.quests.rescues.update();assert.equal(npc.name,rescue.captiveName,'existing local captive refresh continues after player departure');assert.equal(npc.look,rescue.captiveLook);
+ const unclaimed=population.createMonster('skeleton_warrior',1,'enemy');scene.actors.push(unclaimed);npc.name='unchanged on invalid census';
+ assert.throws(()=>a.quests.rescues.update(),/admission|unowned|borrowed/i);assert.equal(npc.name,'unchanged on invalid census');scene.actors.splice(scene.actors.indexOf(unclaimed),1);
+ a.quests.rescues.update();assert.equal(npc.name,rescue.captiveName,'valid retry');
+ scene.actors.splice(scene.actors.indexOf(npc),1);authority.release(a.binding,[npc]);
+ const boss=scene.actors.find(body=>body.defId&&body.team==='enemy')!;assert(boss);scene.zone.objective={kind:'boss',id:boss.defId!};
+ a.quests.rescues.update();const created=scene.actors.find(body=>body.tag===tag)!;assert(created,'actual local boss permits missing-captive birth');assert.equal(authority.require(created).combat,a.combat);assert.notEqual(created,npc);assert.deepEqual(hero.pos,heroPos);assert.deepEqual(calls,[]);
+ return{quest:q.id,missingAbsentRefused:true,existingContinues:true,invalidCensusRefused:true,validRetry:true,localBossBirth:true,worldDrivers:calls};
+});});const report={mode:'Actual admitted rescue owner with empty-area fallback guard; native existing captive and local boss anchor continue. Original algorithms retain separate historical evidence.',result,receipt:combatHash(JSON.stringify(result))};writeCombatProof('native-combat-rescue-attendance.json',report);console.log(JSON.stringify(report));

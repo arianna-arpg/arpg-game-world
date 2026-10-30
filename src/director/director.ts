@@ -15,7 +15,7 @@ import type { Actor } from '../engine/actor';
 import { MONSTERS } from '../data/monsters';
 import { setSimTap } from '../engine/tap';
 import type { World } from '../engine/world';
-import type { PlayerInputSource } from '../net/intent';
+import type { HeroInputSource } from '../agent/perception';
 import type { Renderer } from '../render/renderer';
 import { setBakeScale } from '../render/vis/bakeScale';
 import { applyBuild } from '../sim/builds';
@@ -46,11 +46,13 @@ export interface DirectorHost {
   world(): World;
   renderer: Renderer;
   /** Begin a fresh run as this class (the real startGame path, menus down). */
-  startRun(classId: string): void;
+  startRun(classId: string, signal: AbortSignal): Promise<void>;
+  /** Resolve after actual entry/travel loading and native page admission finish. */
+  ready(signal: AbortSignal): Promise<void>;
   /** One whole game tick of `dtMs` (input, sim, render). */
   step(dtMs: number): void;
   /** The local seat's input source (null = the keyboard and mouse). */
-  setPilot(src: PlayerInputSource | null): void;
+  setPilot(src: HeroInputSource | null): void;
   /** Hold the live rAF loop so only step() advances the game. */
   hold(on: boolean): void;
   /** Mutable account ledger (the capture account skips the prologue). */
@@ -115,6 +117,7 @@ const OPEN = { clear: 150, samples: 160, ring: 900 };
 
 export class Director {
   private spec: ShotSpec | null = null;
+  private preparing: AbortController | null = null;
   private agent: HeroAgent | null = null;
   private cam: CinematicCamera | null = null;
   private cues: Cue[] = [];
@@ -150,149 +153,170 @@ export class Director {
   get heroAgent(): HeroAgent | null { return this.agent; }
 
   /** Stage a shot. Returns what was built; call frame() to advance. */
-  stage(spec: ShotSpec): StageInfo {
+  async stage(spec: ShotSpec): Promise<StageInfo> {
     this.end();
-    this.spec = spec;
-    this.fps = spec.fps ?? 30;
-    this.frames = Math.round(spec.duration * this.fps);
-    this.t = 0; this.index = 0; this.timeScale = 1;
-    this.cues = [...(spec.cues ?? [])].sort((a, b) => a.at - b.at);
-    this.named.clear(); this.sleepers = []; this.spentUlts.clear(); this.pointer = null;
-    this.guard = spec.guard === false ? false : spec.guard === 'floor' ? 'floor' : 'pool';
-    this.unseed = seedGlobalRandom(spec.seed ?? 1);
+    const preparation = new AbortController();
+    this.preparing = preparation;
+    const signal = preparation.signal;
+    try {
+      this.spec = spec;
+      this.fps = spec.fps ?? 30;
+      this.frames = Math.round(spec.duration * this.fps);
+      this.t = 0; this.index = 0; this.timeScale = 1;
+      this.cues = [...(spec.cues ?? [])].sort((a, b) => a.at - b.at);
+      this.named.clear(); this.sleepers = []; this.spentUlts.clear(); this.pointer = null;
+      this.guard = spec.guard === false ? false : spec.guard === 'floor' ? 'floor' : 'pool';
+      this.unseed = seedGlobalRandom(spec.seed ?? 1);
 
-    const host = this.host;
-    host.ledger().prologue_lived = 1;
-    host.hold(true);
-    host.startRun(spec.hero.classId);
-    // A clean screen: the game's own Esc sweep, until nothing stands.
-    const ui = host.ui() as { escapeSweep?: (seat: string, keep: readonly string[]) => boolean };
-    for (let i = 0; i < 12 && ui.escapeSweep?.(host.world().localSeat.id, []); i++) { /* sweep again */ }
-    let w = host.world();
-    // Settle the town (doors, lesson stamps) before leaving it.
-    for (let i = 0; i < 3; i++) host.step(1000 / 60);
-    w = host.world();
-    let tileset = 'town';
-    if (spec.zone && spec.zone !== 'town') {
-      tileset = spec.zone.tileset;
-      const id = w.devMintTileset(spec.zone.tileset, 0, spec.zone.level ?? spec.hero.level,
-        { seed: spec.zone.seed, variant: spec.zone.variant, layoutType: spec.zone.layoutType });
-      if (!id) throw new Error(`unknown tileset ${spec.zone.tileset}`);
-    }
-    // 'auto' passives: the balance harness's honest greedy walk for the level.
-    const hero = (spec.hero.passives as unknown) === 'auto'
-      ? { ...spec.hero, passives: greedyPassives(spec.hero.classId, PROGRESSION.passivePointsAtLevel(spec.hero.level)) }
-      : spec.hero;
-    const warnings: string[] = [];
-    // Account access first (an awakened tree must exist before the build's
-    // picks land): the dev catalog's recipes, never a hand-written ledger.
-    const prog = [...(spec.progression ?? [])];
-    for (const id of spec.awaken === 'hero' ? hero.skills.map(s => s.id) : spec.awaken ?? []) prog.push('memory:' + memoryKey('skill', id));
-    if (prog.length) {
-      const r = applyDevProgression(w, prog);
-      if (!r.ok) warnings.push('progression: ' + r.message);
-    }
-    warnings.push(...applyBuild(w, hero, (spec.seed ?? 1) ^ 0x5eed));
-    const p = w.player;
-    w.devIgnoreSkillAttributes = (spec.attributes ?? 'ignore') === 'ignore';
-    if (this.guard === 'pool') this.setGuardPool(w, true);
-    if ((spec.power ?? 1) !== 1) {
-      const more = (spec.power ?? 1) - 1;
-      p.sheet.setSource('director-power', [
-        { stat: 'damage', kind: 'more', value: more },
-        { stat: 'minionDamage', kind: 'more', value: more },
-      ]);
-      w.charDirty = true;
-      w.recalcPlayer();
-    }
-    p.fillResources();
-    if (spec.drops) {
-      this.dropsSaved = { ...DROP_CFG };
-      Object.assign(DROP_CFG, spec.drops);
-    }
-    if (spec.lens) setMapLens(spec.lens);
-    if (spec.nemesis === false) {
-      this.nemesisSaved = { slayer: NEMESIS_CFG.slayerChance, survivor: NEMESIS_CFG.survivorChance };
-      nemesisRolls.slayerChance = 0;
-      nemesisRolls.survivorChance = 0;
-    }
-    if (spec.bag) {
-      const seat = w.localSeat;
-      for (const g of spec.bag.supports ?? []) {
-        const def = SUPPORTS[g.id];
-        if (!def) { warnings.push('bag: unknown support ' + g.id); continue; }
-        w.grantSupportGemItem(seat, { def, level: g.level ?? 1 });
+      const host = this.host;
+      host.ledger().prologue_lived = 1;
+      host.hold(true);
+      await host.startRun(spec.hero.classId, signal);
+      await host.ready(signal);
+      signal.throwIfAborted();
+      // A clean screen: the game's own Esc sweep, until nothing stands.
+      const ui = host.ui() as { escapeSweep?: (seat: string, keep: readonly string[]) => boolean };
+      for (let i = 0; i < 12 && ui.escapeSweep?.(host.world().localSeat.id, []); i++) { /* sweep again */ }
+      let w = host.world();
+      // Settle the town (doors, lesson stamps) before leaving it.
+      for (let i = 0; i < 3; i++) host.step(1000 / 60);
+      w = host.world();
+      let tileset = 'town';
+      if (spec.zone && spec.zone !== 'town') {
+        // loadZone deliberately refuses legacy graph travel in native worlds.
+        // Never label the existing native ground as a requested minted tileset.
+        if (w.massRuntime) throw new Error('Native tileset capture requires retained-area admission; capture the current entry or use a classic run.');
+        tileset = spec.zone.tileset;
+        const id = w.devMintTileset(spec.zone.tileset, 0, spec.zone.level ?? spec.hero.level,
+          { seed: spec.zone.seed, variant: spec.zone.variant, layoutType: spec.zone.layoutType });
+        if (!id) throw new Error(`unknown tileset ${spec.zone.tileset}`);
+        if (w.zone.id !== id) throw new Error('The requested capture ground was not admitted.');
       }
-      const rng = mulberry32((spec.seed ?? 1) ^ 0xba9);
-      for (const g of spec.bag.gear ?? []) {
-        const item = rollItem({ ilvl: g.ilvl ?? spec.hero.level, rng, rarity: g.rarity as ItemRarity | undefined, baseId: g.baseId, uniqueId: g.uniqueId });
-        if (!item || !autoPlace(seat.meta.items, item)) warnings.push('bag: could not place a rolled ' + (g.uniqueId ?? g.baseId ?? g.rarity ?? 'item'));
+      await host.ready(signal);
+      signal.throwIfAborted();
+      // 'auto' passives: the balance harness's honest greedy walk for the level.
+      const hero = (spec.hero.passives as unknown) === 'auto'
+        ? { ...spec.hero, passives: greedyPassives(spec.hero.classId, PROGRESSION.passivePointsAtLevel(spec.hero.level)) }
+        : spec.hero;
+      const warnings: string[] = [];
+      // Account access first (an awakened tree must exist before the build's
+      // picks land): the dev catalog's recipes, never a hand-written ledger.
+      const prog = [...(spec.progression ?? [])];
+      for (const id of spec.awaken === 'hero' ? hero.skills.map(s => s.id) : spec.awaken ?? []) prog.push('memory:' + memoryKey('skill', id));
+      if (prog.length) {
+        const r = applyDevProgression(w, prog);
+        if (!r.ok) warnings.push('progression: ' + r.message);
       }
-      w.markMetaDirty(seat);
+      warnings.push(...applyBuild(w, hero, (spec.seed ?? 1) ^ 0x5eed));
+      const p = w.player;
+      w.devIgnoreSkillAttributes = (spec.attributes ?? 'ignore') === 'ignore';
+      if (this.guard === 'pool') this.setGuardPool(w, true);
+      if ((spec.power ?? 1) !== 1) {
+        const more = (spec.power ?? 1) - 1;
+        p.sheet.setSource('director-power', [
+          { stat: 'damage', kind: 'more', value: more },
+          { stat: 'minionDamage', kind: 'more', value: more },
+        ]);
+        w.charDirty = true;
+        w.recalcPlayer();
+      }
+      p.fillResources();
+      if (spec.drops) {
+        this.dropsSaved = { ...DROP_CFG };
+        Object.assign(DROP_CFG, spec.drops);
+      }
+      if (spec.lens) setMapLens(spec.lens);
+      if (spec.nemesis === false) {
+        this.nemesisSaved = { slayer: NEMESIS_CFG.slayerChance, survivor: NEMESIS_CFG.survivorChance };
+        nemesisRolls.slayerChance = 0;
+        nemesisRolls.survivorChance = 0;
+      }
+      if (spec.bag) {
+        const seat = w.localSeat;
+        for (const g of spec.bag.supports ?? []) {
+          const def = SUPPORTS[g.id];
+          if (!def) { warnings.push('bag: unknown support ' + g.id); continue; }
+          w.grantSupportGemItem(seat, { def, level: g.level ?? 1 });
+        }
+        const rng = mulberry32((spec.seed ?? 1) ^ 0xba9);
+        for (const g of spec.bag.gear ?? []) {
+          const item = rollItem({ ilvl: g.ilvl ?? spec.hero.level, rng, rarity: g.rarity as ItemRarity | undefined, baseId: g.baseId, uniqueId: g.uniqueId });
+          if (!item || !autoPlace(seat.meta.items, item)) warnings.push('bag: could not place a rolled ' + (g.uniqueId ?? g.baseId ?? g.rarity ?? 'item'));
+        }
+        w.markMetaDirty(seat);
+      }
+
+      // Ground.
+      if (spec.at && spec.at !== 'entry') {
+        const want = spec.at === 'open' ? openSpot(w, p) : spec.at;
+        const at = w.findFreeSpot(want, p.radius, p.tier);
+        w.landPartyAt(at);
+      }
+      if (spec.clear !== undefined) clearFoes(w, p, spec.clear);
+      if (spec.day !== undefined) w.time = setDay(w.time, spec.day);
+      const wx = w.sim.weather;
+      wx.spawnScale = 0;
+      wx.fronts.length = 0;
+      if (spec.weather) {
+        const life = 100000;
+        wx.fronts.push({ kind: spec.weather.kind, pos: { x: w.zone.map.x, y: w.zone.map.y }, vel: { x: 0, y: 0 },
+          radius: 12, intensity: spec.weather.intensity ?? 1, age: life / 2, life });
+      }
+
+      // Bodies.
+      for (const s of spec.allies ?? []) this.spawn(w, { team: 'player', ...s });
+      for (const s of spec.foes ?? []) this.spawn(w, s);
+
+      await host.ready(signal);
+      signal.throwIfAborted();
+
+      // The log: every cast, landed blow and death, through the engine's own
+      // observation seam (engine/tap.ts — observe only, one consumer).
+      this.installTap();
+
+      // The hand.
+      const a = spec.agent;
+      if (a && a.enabled !== false) {
+        this.agent = new HeroAgent(p, a);
+        host.setPilot(this.agent);
+      } else {
+        this.agent = null;
+        host.setPilot(idlePilot);
+      }
+
+      // The eye.
+      setBakeScale(spec.bakeScale ?? 1);
+      if (spec.capture === 'page') this.host.renderer.setCaptureViewport(null);
+      else this.host.renderer.setCaptureViewport(this.viewport);
+      host.renderer.worldOnly = !spec.hud;
+      host.renderer.directorClean = spec.clean ?? true;
+      host.renderer.directorNoSightVeil = !(spec.sightVeil ?? false);
+      host.renderer.directorCinematic = spec.cinematic ?? true;
+      this.cam = new CinematicCamera(spec.camera ?? { follow: 'hero', zoom: 2.2, damp: 0.3 }, { x: p.pos.x, y: p.pos.y });
+      this.applyCamera(0);
+
+      // Warm up (rendered, not counted).
+      const warm = Math.round((spec.warmup ?? 0.5) * this.fps);
+      this.t = -warm / this.fps;
+      for (let i = 0; i < warm; i++) this.tick(1 / this.fps, false);
+      this.t = 0;
+
+      const c = this.canvas;
+      this.preparing = null;
+      return {
+        id: spec.id, zone: w.zone.name, tileset, hero: { x: p.pos.x, y: p.pos.y },
+        foes: w.actors.filter(x => !x.dead && x.team === 'enemy' && !x.passive).length,
+        warnings, frames: this.frames, fps: this.fps, canvas: { w: c.width, h: c.height },
+      };
+    } catch (error) {
+      if (this.preparing === preparation) this.end();
+      throw error;
     }
-
-    // Ground.
-    if (spec.at && spec.at !== 'entry') {
-      const want = spec.at === 'open' ? openSpot(w, p) : spec.at;
-      const at = w.findFreeSpot(want, p.radius, p.tier);
-      w.landPartyAt(at);
-    }
-    if (spec.clear !== undefined) clearFoes(w, p, spec.clear);
-    if (spec.day !== undefined) w.time = setDay(w.time, spec.day);
-    const wx = w.sim.weather;
-    wx.spawnScale = 0;
-    wx.fronts.length = 0;
-    if (spec.weather) {
-      const life = 100000;
-      wx.fronts.push({ kind: spec.weather.kind, pos: { x: w.zone.map.x, y: w.zone.map.y }, vel: { x: 0, y: 0 },
-        radius: 12, intensity: spec.weather.intensity ?? 1, age: life / 2, life });
-    }
-
-    // Bodies.
-    for (const s of spec.allies ?? []) this.spawn(w, { team: 'player', ...s });
-    for (const s of spec.foes ?? []) this.spawn(w, s);
-
-    // The log: every cast, landed blow and death, through the engine's own
-    // observation seam (engine/tap.ts — observe only, one consumer).
-    this.installTap();
-
-    // The hand.
-    const a = spec.agent;
-    if (a && a.enabled !== false) {
-      this.agent = new HeroAgent(p, a);
-      host.setPilot(this.agent);
-    } else {
-      this.agent = null;
-      host.setPilot(idlePilot);
-    }
-
-    // The eye.
-    setBakeScale(spec.bakeScale ?? 1);
-    if (spec.capture === 'page') this.host.renderer.setCaptureViewport(null);
-    else this.host.renderer.setCaptureViewport(this.viewport);
-    host.renderer.worldOnly = !spec.hud;
-    host.renderer.directorClean = spec.clean ?? true;
-    host.renderer.directorNoSightVeil = !(spec.sightVeil ?? false);
-    host.renderer.directorCinematic = spec.cinematic ?? true;
-    this.cam = new CinematicCamera(spec.camera ?? { follow: 'hero', zoom: 2.2, damp: 0.3 }, { x: p.pos.x, y: p.pos.y });
-    this.applyCamera(0);
-
-    // Warm up (rendered, not counted).
-    const warm = Math.round((spec.warmup ?? 0.5) * this.fps);
-    this.t = -warm / this.fps;
-    for (let i = 0; i < warm; i++) this.tick(1 / this.fps, false);
-    this.t = 0;
-
-    const c = this.canvas;
-    return {
-      id: spec.id, zone: w.zone.name, tileset, hero: { x: p.pos.x, y: p.pos.y },
-      foes: w.actors.filter(x => !x.dead && x.team === 'enemy' && !x.passive).length,
-      warnings, frames: this.frames, fps: this.fps, canvas: { w: c.width, h: c.height },
-    };
   }
 
   /** Advance one captured frame. */
   frame(): FrameInfo {
+    if (this.preparing) throw new Error('shot is still preparing');
     if (!this.spec) throw new Error('no shot staged');
     this.ev = emptyEvents();
     this.tick(1 / this.fps, true);
@@ -313,10 +337,14 @@ export class Director {
 
   /** Release the game: the keyboard back, the loop free, the true die. */
   end(): void {
+    this.preparing?.abort();
+    this.preparing = null;
     setSimTap(null);
     this.host.setPilot(null);
     this.host.hold(false);
     this.host.renderer.directorFocus = null;
+    this.host.renderer.setBaseZoom(null);
+    this.host.renderer.setCaptureViewport(null);
     this.host.renderer.worldOnly = false;
     this.host.renderer.directorClean = false;
     this.host.renderer.directorNoSightVeil = false;
@@ -556,7 +584,7 @@ function emptyEvents(): FrameEvents {
 }
 
 /** A pilot that holds still (the hero stands; the keyboard cannot reach it). */
-const idlePilot: PlayerInputSource = {
+const idlePilot: HeroInputSource = {
   poll(actor) { return { dx: 0, dy: 0, aim: { x: actor.pos.x + Math.cos(actor.facing) * 80, y: actor.pos.y + Math.sin(actor.facing) * 80 }, held: actor.skills.map(() => false), edge: actor.skills.map(() => false) }; },
 };
 

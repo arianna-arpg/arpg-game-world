@@ -12,7 +12,7 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 1400, height: 1000, webPreferences: { offscreen: true, backgroundThrottling: false } });
   const errors = []; win.webContents.on('console-message', (_event, level, message) => { if (level >= 3) errors.push(message); });
   const run = code => win.webContents.executeJavaScript(code);
-  const capture = async name => { await wait(150); fs.writeFileSync(path.join(dir, name + '.png'), (await win.webContents.capturePage()).toPNG()); };
+  const capture = async name => { await run('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))'); await wait(150); try { fs.writeFileSync(path.join(dir, name + '.png'), (await win.webContents.capturePage()).toPNG()); } catch(error) { throw new Error('Capture failed: '+name,{cause:error}); } };
   try {
     await win.loadURL(server.url); await wait(500);
     await run("(()=>{__game.account().ledger.prologue_lived=1;__game.devStartRun('necromancer');__game.ui.hideAll();__game.devGrantSkill('summon_skeleton_mage',20,0);const w=__game.world();w.netMemoryAccess={progression:true,tree:null};__game.ui.openSkillTree('summon_skeleton_mage');__game.step(2);})()");

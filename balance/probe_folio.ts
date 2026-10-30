@@ -77,7 +77,7 @@
 //
 //   npx tsx balance/probe_folio.ts
 
-import { readFileSync } from 'node:fs';
+import {readNativeCaravanPrior as readFileSync} from './nativeCaravanCompositionFixture';
 import { resolve } from 'node:path';
 import {
   FolioCore, FOLIO_CFG, rectOverlapFrac,

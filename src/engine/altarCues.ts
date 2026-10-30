@@ -8,9 +8,9 @@ export interface AltarInfluence { source: string; color: string; x: number; y: n
 export function altarInfluences(a: Actor, altars: readonly Altar[]): AltarInfluence[] {
   if (a.dead) return [];
   return altars.flatMap((al,i) => {
-    const source='altar:'+i;
+    const source='altar:'+(al.massSource??i);
     return al.def.influenceCue!==false && al.def.mods.length>0
-      && al.affected.has(a.id) && a.sheet.hasSource(source)
+      && al.affected.has(a.id) && a.tier===(al.tier??0) && a.sheet.hasSource(source)
       ? [{source,color:al.def.color,x:al.pos.x,y:al.pos.y}] : [];
   });
 }

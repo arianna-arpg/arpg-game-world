@@ -1,3 +1,4 @@
+import { SETTLEMENT_DEFENSE_LOOKS } from './settlementDefenses';
 // ---------------------------------------------------------------------------
 // LOOKS — top-down portraits as data. Each entry assembles a monster (or
 // class, or NPC) from the part grammar (render/vis/parts.ts): a skeleton IS
@@ -38,6 +39,7 @@ import { STALKER_LOOKS } from './stalkerLooks';
 import { RUBBLEKIN_LOOKS } from './rubblekin';
 
 export const LOOKS: Record<string, LookDef> = {
+  ...SETTLEMENT_DEFENSE_LOOKS,
   ...GOLEM_LOOKS,
   ...SUMMON_LOOKS,
   ...CONSTRUCT_BODY_LOOKS,

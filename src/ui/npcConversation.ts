@@ -15,6 +15,8 @@ export function conversationQuests(world: World, speakerId: number) {
   };
   return {
     belongs,
+    // Native contracts stay authored and gated by the continuous-world engine.
+    work: world.questOfferChoices().filter(q => belongs(q.questId, false)),
     active: world.questLog().active.filter(q => belongs(q.id, false) || belongs(q.id, true)),
     vocations: world.vocationMenuOffers().filter(q => belongs(q.questId, false)),
     rewards: world.questRewardOffers().filter(q => belongs(q.questId, true)),

@@ -127,6 +127,57 @@ export class VerminfallField implements WorldOverlay {
   private readonly gate: () => PackageGate;
   private readonly cfg: VerminfallSurge;
   private infestations: ActiveInfestation[] = [];
+  #nativeInfo=new WeakMap<object,ActiveInfestation>();
+  #nativeScope:{epoch:object;zoneId:string;kind:'discovery'|'nest'|'king';check:()=>void;committed:()=>void;used:boolean}|undefined;
+  /** Native identity checks inspect actual ordinary storage. Overridden array
+   * methods and row accessors cannot manufacture membership or a second write. */
+  #nativeRows():ActiveInfestation[] {
+    const own=(object:object,key:PropertyKey):unknown=>{const d=Object.getOwnPropertyDescriptor(object,key);if(!d||!Object.hasOwn(d,'value'))throw Error('Native Verminfall event needs ordinary data');return d.value;};
+    const rows=own(this,'infestations');if(!Array.isArray(rows))throw Error('Native Verminfall needs its event array');
+    const length=own(rows,'length');if(typeof length!=='number')throw Error('Native Verminfall event array changed');
+    for(let i=0;i<length;i++){
+      const row=own(rows,i);if(!row||typeof row!=='object')throw Error('Native Verminfall event row changed');
+      for(const key of ['id','zoneId'] as const)if(typeof own(row,key)!=='string')throw Error('Native Verminfall event identity changed');
+      for(const key of ['nestsTotal','nestsBroken','age'] as const)if(typeof own(row,key)!=='number')throw Error('Native Verminfall event count changed');
+      for(const key of ['seen','dead'] as const)if(typeof own(row,key)!=='boolean')throw Error('Native Verminfall event state changed');
+    }
+    return rows as ActiveInfestation[];
+  }
+  /** Non-granting identity of the current row, including the absent-event query boundary. */
+  nativeInfestationEpoch(zoneId:string):object|undefined {
+    const rows=this.#nativeRows();for(let i=0;i<rows.length;i++){const inf=rows[i];if(inf.zoneId===zoneId&&!inf.dead)return inf;}return undefined;
+  }
+  /** Non-granting identity of the actual projection returned by infestOn. */
+  nativeInfestationIdentity(info:InfestationInfo,zoneId:string):object|undefined {
+    const inf=this.#nativeInfo.get(info),rows=this.#nativeRows();for(let i=0;i<rows.length;i++)if(rows[i]===inf&&inf.zoneId===zoneId&&!inf.dead)return inf;return undefined;
+  }
+  nativeInfestationCurrent(epoch:object,zoneId:string):boolean {
+    const rows=this.#nativeRows();for(let i=0;i<rows.length;i++){const inf=rows[i];if(inf===epoch&&inf.zoneId===zoneId&&!inf.dead)return true;}return false;
+  }
+  withNativeInfestation<T>(epoch:object,zoneId:string,kind:'discovery'|'nest'|'king',check:()=>void,committed:()=>void,run:()=>T):T {
+    if(this.#nativeScope)throw Error('Native Verminfall scope cannot reenter');
+    const prior=this.#nativeScope;this.#nativeScope={epoch,zoneId,kind,check,committed,used:false};
+    try{return run();}finally{this.#nativeScope=prior;}
+  }
+  #nativeInfestation(zoneId:string,kind:'discovery'|'nest'|'king'):ActiveInfestation|undefined {
+    const selected=this.#nativeScope;
+    if(!selected)return this.infestations.find(inf=>inf.zoneId===zoneId&&!inf.dead);
+    selected.check();
+    if(selected.used||selected.zoneId!==zoneId||selected.kind!==kind)return undefined;
+    const ready=()=>{selected.check();if(this.#nativeScope!==selected||selected.used)throw Error('Native Verminfall selected resolver reentered its mutation');};
+    ready();const rows=this.#nativeRows(),find=rows.find;
+    ready();if(this.#nativeRows()!==rows)throw Error('Native Verminfall selected event array changed');
+    // Identity-only predicate cannot execute an accessor installed by the selected
+    // find callback. The final ordinary-field/current proof follows that callback.
+    const inf=Reflect.apply(find,rows,[(row:ActiveInfestation)=>row===selected.epoch]) as ActiveInfestation|undefined;
+    ready();
+    if(this.#nativeRows()!==rows||inf!==selected.epoch)throw Error('Native Verminfall selected resolver returned another event');
+    return inf;
+  }
+  #nativeCommitted():void {
+    const selected=this.#nativeScope;if(selected){selected.used=true;selected.committed();}
+  }
+
   private acc = 0;
   private seq = 0;
   /** Live reference to the world's node map (= view.byId), refreshed each tick. */
@@ -196,13 +247,15 @@ export class VerminfallField implements WorldOverlay {
     const inf = this.infestations.find(i => i.zoneId === zoneId && !i.dead);
     if (!inf) return null;
     const remaining = Math.max(0, inf.nestsTotal - inf.nestsBroken);
-    return {
+    const info:InfestationInfo={
       nestsRemaining: remaining,
       nestsTotal: inf.nestsTotal,
       kingArmed: remaining <= 0,
       color: this.cfg.color,
       label: remaining <= 0 ? 'broken' : inf.nestsBroken > 0 ? 'stirred' : 'festering',
     };
+    this.#nativeInfo.set(info,inf);
+    return info;
   }
 
   /** TOWN PRESSURE — the ambient-vermin chance multiplier the town's own
@@ -216,18 +269,20 @@ export class VerminfallField implements WorldOverlay {
   /** The player entered a claimed zone — one-shot true per infestation (the
    *  engine bumps the discovery ledger + floats the entry line). */
   markDiscovered(zoneId: string): boolean {
-    const inf = this.infestations.find(i => i.zoneId === zoneId && !i.dead);
+    const inf = this.#nativeInfestation(zoneId,'discovery');
     if (!inf || inf.seen) return false;
     inf.seen = true;
+    this.#nativeCommitted();
     return true;
   }
 
   /** A warren nest broke in `zoneId`. Returns the standing count + whether
    *  that was the LAST one (the kill row manifests the King on true). */
   onNestBroken(zoneId: string): { remaining: number; kingReady: boolean } | null {
-    const inf = this.infestations.find(i => i.zoneId === zoneId && !i.dead);
+    const inf = this.#nativeInfestation(zoneId,'nest');
     if (!inf) return null;
     inf.nestsBroken = Math.min(inf.nestsTotal, inf.nestsBroken + 1);
+    this.#nativeCommitted();
     const remaining = inf.nestsTotal - inf.nestsBroken;
     return { remaining, kingReady: remaining <= 0 };
   }
@@ -235,9 +290,10 @@ export class VerminfallField implements WorldOverlay {
   /** The manifested King fell — the infestation clears. True once (the
    *  cleansed ledger gates the Vault tiers). */
   onKingSlain(zoneId: string): boolean {
-    const inf = this.infestations.find(i => i.zoneId === zoneId && !i.dead);
+    const inf = this.#nativeInfestation(zoneId,'king');
     if (!inf || inf.nestsBroken < inf.nestsTotal) return false;
     inf.dead = true;
+    this.#nativeCommitted();
     return true;
   }
 
@@ -354,4 +410,12 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
       : `${info.label}; ${info.nestsRemaining} warren nest${info.nestsRemaining === 1 ? '' : 's'} stand`,
     z: 14,
   }];
+});
+
+/** Capture authentic lifetime helpers in the defining module before exposure. */
+export const nativeVerminfallLifetimeCalls=Object.freeze({
+  epoch:VerminfallField.prototype.nativeInfestationEpoch,
+  identity:VerminfallField.prototype.nativeInfestationIdentity,
+  current:VerminfallField.prototype.nativeInfestationCurrent,
+  scope:VerminfallField.prototype.withNativeInfestation,
 });

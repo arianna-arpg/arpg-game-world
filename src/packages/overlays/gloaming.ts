@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from '../../world/bulletins';
 // ---------------------------------------------------------------------------
 // THE GLOAMING — a weather-front of darkness, worn as ONE breathing number.
 //
@@ -445,4 +446,4 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   }];
 });
 
-registerBulletinSource((world: World) => world.sim.gloamingField?.drainNews() ?? []);
+registerBulletinSource((world: NativeBulletinHost) => world.sim.gloamingField?.drainNews() ?? []);

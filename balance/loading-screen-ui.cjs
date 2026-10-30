@@ -186,15 +186,15 @@ app.whenReady().then(async () => {
   // Exercise the actual async entry wrapper; it must expose down BEFORE construction.
   const entry = await run(async () => {
    document.getElementById('sm-start').click();
-   for (let i = 0; __game.loading.active && i < 800; i++) await new Promise(r => setTimeout(r, 25));
+   for (let i = 0; i < 1200; i++) { if (!__game.loading.active && __game.world().scene?.state.apps?.some(a => a.rank === 'awake')) break; await new Promise(r => setTimeout(r, 25)); }
    __game.step(2);
    const mu = __game.world(), apps = mu.scene?.state.apps?.filter(a => a.rank === 'awake');
    if (!apps?.length) throw Error('Begin did not enter Mu');
    const vessel = mu.actors.find(a => a.id === apps[0].id), target = { ...vessel.pos };
-   __game.pilot({ poll: () => { const p = __game.world().player.pos, d = Math.hypot(target.x-p.x, target.y-p.y);
-     return { dx: d>45?target.x-p.x:0, dy: d>45?target.y-p.y:0, aim: target, held: [], edge: [] }; } });
+   __game.devInput(() => { const p = __game.world().player.pos, d = Math.hypot(target.x-p.x, target.y-p.y);
+     return { dx: d>45?target.x-p.x:0, dy: d>45?target.y-p.y:0, aim: target, held: [], edge: [] }; });
    try { for (let i = 0; i < 300 && !document.querySelector('#mu-wake'); i++) __game.step(1); }
-   finally { __game.pilot(null); }
+   finally { __game.devInput(null); }
    const wake = document.querySelector('#mu-wake'); if (!wake) throw Error('Mu vessel card did not open');
    wake.click(); await Promise.resolve();
    const first = __game.loading.snapshot;
@@ -202,8 +202,50 @@ app.whenReady().then(async () => {
    const w = __game.world(); w.player.invulnerable = true;
    return { first, active: __game.loading.active, mass: !!w.massRuntime, fatal: __game.crash().fatal };
   });
-  assert.equal(entry.first.direction, 'down'); assert.equal(entry.active, false); assert.equal(entry.mass, false); assert.equal(entry.fatal, null); report.checks.push('real Mu vessel dwell and Wake paint descent and complete without a score gate');
-  await run(() => __game.save());
+  assert.equal(entry.first.direction, 'down'); assert.equal(entry.active, false); assert.equal(entry.mass, true); assert.equal(entry.fatal, null); report.checks.push('real Mu vessel dwell and Wake paint descent and complete without a score gate');
+  // Controlled readiness reports test the UI adapter; nativepaging probe owns I/O truth.
+  const gate = await run(async () => {
+   const w = __game.world(), m = w.massRuntime; window.__qaReadiness = m.nativeReadiness.bind(m);
+   window.__qaRetryPages = m.retryNativePages.bind(m);
+   window.__qaPageState = 'pending'; window.__qaRetried = 0;
+   m.nativeReadiness = () => ({ status: window.__qaPageState, pending: 1, required: 1, retryable: window.__qaPageState === 'refused', error: 'Controlled missing page' });
+   m.retryNativePages = () => { window.__qaRetried++; window.__qaPageState = 'ready'; return m.nativeReadiness(); };
+   __game.step(1); const time = w.time, pos = { ...w.player.pos };
+   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true }));
+   await new Promise(r => setTimeout(r, 400));
+   const held = { time: w.time, pos: { ...w.player.pos }, loading: __game.loading.snapshot };
+   window.__qaPageState = 'refused'; __game.step(1);
+   return { time, pos, held };
+  });
+  assert.equal(gate.time, gate.held.time); assert.deepEqual(gate.pos, gate.held.pos); assert.ok(['left', 'right'].includes(gate.held.loading.direction));
+  await shot('native-retry');
+  await toy(() => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true })); document.querySelector('#mu-loading-screen button').click(); });
+  const recovered = await run(async () => {
+   for (let i = 0; __game.loading.active && i < 100; i++) { __game.step(0); await new Promise(r => setTimeout(r, 10)); }
+   const w = __game.world(), p = { ...w.player.pos };
+   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true, repeat: true })); __game.step(2);
+   const stayed = Math.hypot(p.x - w.player.pos.x, p.y - w.player.pos.y);
+   window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w', code: 'KeyW', bubbles: true }));
+   w.massRuntime.nativeReadiness = window.__qaReadiness; w.massRuntime.retryNativePages = window.__qaRetryPages;
+   __game.save(); await __game.flushRunSave();
+   return { stayed, retried: window.__qaRetried, active: __game.loading.active, inert: document.getElementById('game').inert };
+  });
+  assert.equal(recovered.stayed, 0); assert.equal(recovered.retried, 1); assert.equal(recovered.active, false); assert.equal(recovered.inert, false); report.checks.push('native pending/refused/retry gate holds world and releases without held-key movement');
+  await run(async () => {
+   const m = __game.world().massRuntime;
+   m.nativeReadiness = () => ({ status: 'pending', pending: 1, required: 1, retryable: false });
+   __game.step(1); await new Promise(r => setTimeout(r, 100));
+  });
+  await toy(() => document.querySelector('#mu-loading-screen button').click());
+  const cancelledTravel = await run(async () => {
+   const w = __game.world();
+   for (let i = 0; __game.loading.active && i < 100; i++) await new Promise(r => setTimeout(r, 10));
+   for (let i = 0; document.getElementById('sm-continue')?.disabled && i < 100; i++) await new Promise(r => setTimeout(r, 25));
+   const enabled = !document.getElementById('sm-continue').disabled;
+   return { enabled, active: __game.loading.active, sameWorld: __game.world() === w };
+  });
+  assert.deepEqual(cancelledTravel, { enabled: true, active: false, sameWorld: true });
+  report.checks.push('cancelled in-game crossing restores the Continue menu without publishing or saving');
   // Cold Continue, then cancellation before its first async phase can publish.
   await win.loadURL('http://127.0.0.1:' + server.address().port);
   await run(async () => {
@@ -226,7 +268,7 @@ app.whenReady().then(async () => {
    return { first, active: __game.loading.active, replaced: __game.world() !== before, mass: !!__game.world().massRuntime, fatal: __game.crash().fatal, notice: document.getElementById('start-menu')?.innerText };
   });
   report.checks.push({ continueResult: resumed });
-  assert.equal(resumed.first.direction, 'down'); assert.equal(resumed.active, false); assert.equal(resumed.replaced, true); assert.equal(resumed.mass, false); assert.equal(resumed.fatal, null);
+  assert.equal(resumed.first.direction, 'down'); assert.equal(resumed.active, false); assert.equal(resumed.replaced, true); assert.equal(resumed.mass, true); assert.equal(resumed.fatal, null);
   report.checks.push('cold Continue cancellation preserves the old world; subsequent Continue restores seamlessly');
   await win.loadURL('http://127.0.0.1:' + server.address().port + '/?loadingPreview=left');
   const preview = await run(async () => {
@@ -234,7 +276,9 @@ app.whenReady().then(async () => {
    return { active: __game.loading.active, direction: __game.loading.snapshot.direction, label: __game.loading.snapshot.label };
   });
   assert.deepEqual(preview, { active: true, direction: 'left', label: 'Loading screen preview' }); report.checks.push('playable preview URL');
-  assert.deepEqual(report.errors, []); console.log('PASS playable loading UI:', report.checks.length, 'checks,', report.images.length, 'screenshots');
+  assert.equal(report.errors.length, 1, 'only the deliberately injected page refusal is reported');
+  assert.match(report.errors[0], /^\[runtime\] crossing refused Controlled missing page(?: \[object Object\])?$/);
+  console.log('PASS playable loading UI:', report.checks.length, 'checks,', report.images.length, 'screenshots');
  } catch (error) { report.failure = error.stack || String(error); console.error(report.failure); process.exitCode = 1; }
  finally { save(); clearTimeout(timer); win.destroy(); server.close(); app.exit(process.exitCode || 0); }
 });

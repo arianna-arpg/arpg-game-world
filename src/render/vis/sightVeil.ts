@@ -93,7 +93,7 @@ import type { Doodad } from '../../engine/levelgen';
 import { doodadRuleOf, sightShadowFrac, hitSurfaceOf } from '../../engine/levelgen';
 import { castGridRay, LOS_CFG } from '../../engine/los';
 import { tierElevOf } from '../../engine/tiers';
-import { GridWalkField } from '../../world/gridWalk';
+import { regionGrid, type RegionGrid } from '../../world/walk'; // worldmass uses the same veil
 import { regionKind } from '../../world/regions';
 import { visibilityRaster, type VisibilityRasterView } from './visibilityRaster';
 import { VisibilityCandidates } from './visibilityCandidates';
@@ -264,7 +264,7 @@ export class SightVeil {
   private dooArr: readonly Doodad[] | null = null; private dooLen = -1; private dooR = 0;
 
   private edges: OccEdge[] = [];
-  private gridRef: GridWalkField | null = null; // worldmass has no finite grid extent
+  private gridRef: RegionGrid | null = null; // worldmass has no finite grid extent
   private gridBx = 1e9; private gridBy = 1e9; private gridV = -1; private gridR = 0;
 
   /** THE HULL LAW: roof rects currently CONCEALING (standing roofs, fed by
@@ -359,7 +359,7 @@ export class SightVeil {
     // Wall faces: re-extract when the hero crosses a GRID cell bucket, the
     // grid repaints (doors, terraforms, hollows — GridWalkField.version),
     // or the hull set changes.
-    const g = view.walk instanceof GridWalkField ? view.walk : null; // worldmass also casts visible cell shadows
+    const g = regionGrid(view.walk); // worldmass also casts visible cell shadows
     if (g) {
       const gbx = Math.floor(p.x / g.cellSize), gby = Math.floor(p.y / g.cellSize);
       if (g !== this.gridRef || gbx !== this.gridBx || gby !== this.gridBy
@@ -472,7 +472,7 @@ export class SightVeil {
   /** Extract the solid mass's facing edges (merged runs) within reach.
    *  Out-of-window and out-of-grid both read as SOLID, so no phantom edge
    *  ever appears at the sweep rim or the arena border. */
-  private extractEdges(g: GridWalkField): void { // worldmass: bound the query, not the world
+  private extractEdges(g: RegionGrid): void { // worldmass: bound the query, not the world
     this.edges.length = 0;
     const cs = g.cellSize;
     const reach = this.radius + GATHER_PAD;

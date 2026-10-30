@@ -78,10 +78,11 @@ test('Vault chain: magic → memories → reservations; hammer → rare → salv
 
 test('Offer levels are seeded in 9–12, feature gated, and never missed by late heroes', () => {
   const w = town(), seen = new Set<number>();
+  // Exercise questOfferLevel through real World receivers for every seed.
   for (let seed = 1; seed <= 60; seed++) {
-    const fixture = { manifest: { seed } } as World;
-    const n = w.questOfferLevel.call(fixture, QUESTS[HAMMER]);
-    assert.ok(n >= 9 && n <= 12); assert.equal(n, w.questOfferLevel.call(fixture, QUESTS[HAMMER])); seen.add(n);
+    const fixture = makeSimWorld('warrior', seed);
+    const n = fixture.questOfferLevel(QUESTS[HAMMER]);
+    assert.ok(n >= 9 && n <= 12); assert.equal(n, fixture.questOfferLevel(QUESTS[HAMMER])); seen.add(n);
   }
   assert.equal(seen.size, 4);
   w.player.level = 100; assert.ok(!hooks(w).acceptableQuests().some(q => q.id === HAMMER));

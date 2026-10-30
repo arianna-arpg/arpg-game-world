@@ -1,3 +1,4 @@
+import type {NativeBulletinHost} from '../../world/bulletins';
 // ---------------------------------------------------------------------------
 // BOROUGH — the defended village, in one def file.
 //
@@ -304,5 +305,5 @@ registerMarkerSource((world: World): MapMarker[] => {
 
 /** Arrival toasts: "+N souls reach Lastlight" as refugees make it home —
  *  tagged at the drain onto the CIVIC channel (the towns talking). */
-registerBulletinSource((world: World) =>
+registerBulletinSource((world: NativeBulletinHost) =>
   (world.sim.boroughField?.drainBulletins() ?? []).map(b => ({ ...b, channel: 'civic' })));

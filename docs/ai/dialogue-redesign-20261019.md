@@ -8,8 +8,26 @@ design history; historical verification is not the current acceptance gate.
 The earlier shared-book correction on `codex/dialogue-panel-parity`, based on
 main `645fe6ca`, is verified only against its previous contract and must not be
 integrated unchanged. The canonical seamless checkout was inspected at `ac9dedab`.
-P08/P09 remain unapproved for wholesale promotion. Nothing here changes the
+The former stacked workspace and overhead approach captions were not promoted;
+the implemented panel contract supersedes them. Nothing here changes the
 once-per-account tutorial or physical class selection in Mu.
+
+## Implementation verification
+
+The shared baseline and continuous-world client both passed the 32-case
+Brandt/Mireille matrix: Skills, Passives, Reliquary and Character; open/restored
+arrivals; 2560×1440, 1280×800 and 820×650 at 175% scale. Player selection and
+rectangles remain stable. The native first-Mireille regression also passes:
+her proximity previously inserted a 43.5-pixel flask-help block into Inventory;
+that guidance now stays in her conversation topic.
+
+The real Shop button, purchase, return shortcut, NPC tabs, native work acceptance,
+Character ribbon, pause, quest refresh and departure pass. Player-page mouse/key
+controls and owner isolation pass. All project types, dialogue/folio and native
+quest checks, simulation smoke, production build and the normal Begin → Mu →
+world → saved Continue client course pass. The tests use isolated profiles and
+saves; NPC matrices use controlled positioning and do not claim a full campaign
+playthrough. Reports and screenshots remain in ignored `balance/reports/`.
 
 ## Player direction
 

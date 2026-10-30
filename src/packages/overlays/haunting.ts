@@ -45,6 +45,7 @@ import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOve
 import { eventTargetable } from '../../world/zonePolicy';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
+import type {NativeOmenHost} from '../../world/omens';
 
 const STEP = 0.5;
 const HAUNT_PALE = '#b8c8e8';
@@ -498,7 +499,7 @@ registerMarkerSource((world: World): MapMarker[] => {
 // A LATENT grief murmurs instead of marking (world/omens.ts): the whisper
 // carries a bearing, the reveal surveys the seat — both aging wider, so no
 // grief waits forever unfound. Active haunts pin; latent ones haunt the ear.
-registerOmenSource((world: World) => {
+registerOmenSource((world: NativeOmenHost) => {
   const hf = world.sim.hauntField;
   const om = hf?.surge().omen;
   if (!hf || !om) return [];

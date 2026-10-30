@@ -1,3 +1,5 @@
+import {observeNativeCombatBirth,observeNativeSource,observeNativeCombatRetirement,finishNativeCombatRetirement,cancelNativeCombatRetirement} from './nativeCombatRecordObservation';
+import type {NativeCombatRetirement} from './nativeSceneFrameHost';
 import { dist, type Vec2 } from '../core/math';
 import { TitanField, type TitanJourney } from '../packages/overlays/titans';
 import { bumpLedger } from '../packages/ledger';
@@ -6,6 +8,9 @@ import type { Actor } from './actor';
 import { blocksMovement, hitSurfaceOf, doodadRuleOf, type Doodad } from './levelgen';
 import { shapeBoundR } from './shapes';
 import type { World } from './world';
+
+/** Complete installed terrain/controller contract, including retained wounds and network scenes. */
+export type NativeTitanHost = Pick<World, 'sim' | 'zone' | 'exits' | 'arena' | 'time' | 'player' | 'pathField' | 'walk' | 'doodads' | 'createMonster' | 'actors' | 'clampPos' | 'markDoodadsChanged' | 'ledger' | 'text' | 'fellDoodad' | 'collectContactHazards' | 'rebuildClientTerrain'> & {isPresentLocalPlayer?():boolean};
 
 export interface TitanScenePiece { key: string; kind: string; x: number; y: number; r: number; rot: number }
 interface Piece { d: Doodad; born: number }
@@ -49,7 +54,8 @@ export class TitanRuntime {
   private scarGround?: GridWalkField;
   private anchors: Vec2[] = [];
   private crossings = new Set<string>();
-  constructor(private world: World) {}
+  readonly #hiddenSource:(create:()=>Actor)=>Actor;
+  constructor(private world: NativeTitanHost,hiddenSource:(create:()=>Actor)=>Actor=create=>create()) {this.#hiddenSource=hiddenSource;}
   field(): TitanField | undefined { return this.world.sim?.overlayFor<TitanField>('titans') ?? undefined; }
   owns(d: Doodad): boolean { return this.owned.has(d); }
   reset(): void {
@@ -85,7 +91,7 @@ export class TitanRuntime {
         const life = Math.max(0.00001, Math.min(1, a.life / a.maxLife()));
         if (life < j.life) this.combatUntil.set(id, w.time + f.tuning.combatHoldSeconds);
         j.life = life;
-        f.engage(id, (this.combatUntil.get(id) ?? 0) > w.time && dist(w.player.pos, a.pos) < f.tuning.combatRadius);
+        f.engage(id, (this.combatUntil.get(id) ?? 0) > w.time && (w.isPresentLocalPlayer?.() ?? true) && dist(w.player.pos, a.pos) < f.tuning.combatRadius);
       }
     }
     this.acc += dt;
@@ -105,7 +111,7 @@ export class TitanRuntime {
           this.ground.fillDisc(d.pos.x, d.pos.y, shapeBoundR(hitSurfaceOf(d, 'move')), 'wall');
         }
         this.scarGround = GridWalkField.unpack(this.ground.pack());
-        this.anchors = [w.player.pos, ...w.exits.map(e => e.pos),
+        this.anchors = [...((w.isPresentLocalPlayer?.() ?? true) ? [w.player.pos] : []), ...w.exits.map(e => e.pos),
           ...journeys.map(j => this.route(j).point(0.6))].map(p => this.ground!.snapToWalkable(p));
       }
     }
@@ -115,10 +121,11 @@ export class TitanRuntime {
       if (!source) {
         // Attribution object, deliberately not a spawned combatant. It can
         // own damage in an old scar zone while the real head is miles away.
-        source = w.createMonster(def.monster, w.zone.level + def.levelBonus, 'enemy');
+        source = this.#hiddenSource(() => w.createMonster(def.monster, w.zone.level + def.levelBonus, 'enemy'));
         source.tag = 'titan_wake'; source.eventKey = j.id;
         this.sources.set(j.id, source);
       }
+      observeNativeSource(w, source);
       const head = j.head - route.i, tail = j.tail - route.i;
       if (head >= 0 && head < 1) {
         liveHeads.add(j.id);
@@ -128,7 +135,7 @@ export class TitanRuntime {
           a.worm = undefined; // the cross-zone solid body is this journey's projection
           a.tag = 'titan_head'; a.eventKey = j.id;
           a.life = a.maxLife() * j.life;
-          this.heads.set(j.id, a); w.actors.push(a);
+          this.heads.set(j.id, a); w.actors.push(a); observeNativeCombatBirth(w, a);
         }
         const p = route.point(head), ahead = route.point(Math.min(1, head + 0.01));
         a.pos = w.clampPos(p, a.radius);
@@ -155,7 +162,7 @@ export class TitanRuntime {
             if (key.includes(':wake:') && doodadRuleOf(kind).blocksMove) {
               const trial = this.ground && this.scarGround && titanScarAdmitted(this.ground,
                 this.scarGround, pos, radius + w.player.radius + 12,
-                [...this.anchors, this.ground.snapToWalkable(w.player.pos)]);
+                [...this.anchors, ...((w.isPresentLocalPlayer?.() ?? true) ? [this.ground.snapToWalkable(w.player.pos)] : [])]);
               // A field without connectivity answers cannot promise a safe
               // permanent wall. Keep its wake's other layers and crossings.
               if (!trial) { this.crossings.add(key); wanted.delete(key); return; }
@@ -164,7 +171,7 @@ export class TitanRuntime {
             d.kind = kind; w.markDoodadsChanged(d); changed = true;
           }
         }
-        if (dist(w.player.pos, pos) < f.tuning.discoveryRadius && f.discover(j.id, w.zone.id)) {
+        if ((w.isPresentLocalPlayer?.() ?? true) && dist(w.player.pos, pos) < f.tuning.discoveryRadius && f.discover(j.id, w.zone.id)) {
           bumpLedger(w.ledger, 'titans_seen');
           w.text(w.player.pos, `The wake of ${def.name}. Follow the devastation.`, def.color, 16);
         }
@@ -210,7 +217,11 @@ export class TitanRuntime {
     for (const [id, a] of this.heads) if (!liveHeads.has(id)) {
       // Departure is not death: splice the whole anatomy without corpses,
       // part-break effects or kill credit (wounds already live on the journey).
-      w.actors = w.actors.filter(b => b !== a && b.partLink?.root !== a);
+      let nativeRetirement:NativeCombatRetirement|undefined;
+      try {
+        w.actors = ((selected:Actor[]) => { nativeRetirement = observeNativeCombatRetirement(w, selected); return selected; })(w.actors).filter(b => b !== a && b.partLink?.root !== a);
+        finishNativeCombatRetirement(w, nativeRetirement);
+      } finally { cancelNativeCombatRetirement(w, nativeRetirement); }
       this.heads.delete(id); f.engage(id, false);
       this.combatUntil.delete(id);
     }

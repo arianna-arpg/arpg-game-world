@@ -1,0 +1,176 @@
+import assert from 'node:assert/strict';
+import { makeSimWorld } from '../src/sim/arena';
+import { seedGlobalRandom } from '../src/sim/rng';
+import { massDormancyPins } from '../src/worldmass/dormancy';
+import { isOwnedTerrainRecord } from '../src/worldmass/ownedTerrain';
+import { OwnedDependencyCache } from '../src/worldmass/ownedDependencyCache';
+import { Actor } from '../src/engine/actor';
+import type { World } from '../src/engine/world';
+import type { MassTerrain } from '../src/worldmass/contracts';
+
+// Pre-certificate scanner contract, independent of the candidate's cache.
+// Equality against this oracle catches extra and missing pins, not only known
+// positive cases. Keep deliberately direct and uncached.
+function referencePins(world:World,owned:ReadonlyMap<string,Actor>):Set<Actor>{
+  const keys=new Set(['aiTargetId','watchQuarryId','aiRingTarget','mountId','patrolFollow','bornOf','lifelineId','gateLink','heldBy','casterId','targetId','ownerId','sourceId','victimId','preyId','quarryId','orbitAnchorId','echoPrey','necroId','cartId']);
+  const native=new Set(owned.values()),ids=new Map([...native].map(a=>[a.id,a])),pins=new Set<Actor>(),seen=new Set<object>([world]);
+  const visit=(value:unknown,key=''):void=>{
+    if(typeof value==='number'&&keys.has(key)){const a=ids.get(value);if(a)pins.add(a);return;}
+    if(!value||typeof value!=='object'||seen.has(value))return;
+    if(value instanceof Actor){if(native.has(value))pins.add(value);return;}seen.add(value);
+    if(value instanceof WeakMap||value instanceof WeakSet){for(const a of native)if(value.has(a))pins.add(a);return;}
+    if(value instanceof Map||value instanceof OwnedDependencyCache){for(const[k,v]of value){if(typeof k==='number'){const a=ids.get(k);if(a)pins.add(a);}else visit(k);visit(v);}return;}
+    if(value instanceof Set){for(const v of value){if(typeof v==='number'){const a=ids.get(v);if(a)pins.add(a);}else visit(v);}return;}
+    for(const[k,v]of Object.entries(value))visit(v,k);
+  };
+  for(const[key,value]of Object.entries(world))if(!['actors','massRuntime','actorGrid','actorGridBuiltFor'].includes(key))visit(value,key);
+  for(const a of world.actors)if(!native.has(a))for(const[k,v]of Object.entries(a))visit(v,k);
+  return pins;
+}
+
+// Independent attribution only: this probe never patches the production
+// dependency scanner or changes live controllers. Existing excludedOwners supplies a diagnostic
+// counterfactual, never an instruction to retire an actor or skip a controller.
+const restore=seedGlobalRandom(901743);
+try {
+  const w=makeSimWorld('warrior',901743);w.startWorldMass(901743);const m=w.massRuntime!;
+  const span=m.config.terrain.addressSpan;
+  w.landPartyAt({x:21660-Number(BigInt(m.origin.cx))*span,y:13500-Number(BigInt(m.origin.cy))*span});
+  m.update(w,true);
+  while(m.stream.stats.pending)m.stream.step(8192);
+  const owned=(m as unknown as {readonly natives:ReadonlyMap<string,Actor>}).natives;const walk=w.walk!;assert.ok(owned.size>=3);
+  const bodies=[...owned.values()],expected=bodies.slice(0,3),liveBefore=[...w.actors];
+  const resources=bodies.map(a=>({actor:a,life:a.life,mana:a.mana,es:a.es}));
+  const unknownController={nested:{targetId:expected[0].id},direct:expected[1],weak:new WeakMap<Actor,boolean>([[expected[2],true]])};
+  Reflect.set(w,'probeUnknownNativeController',unknownController);
+  const entries=Object.entries,descriptors=Object.getOwnPropertyDescriptors,keys=Object.keys;
+  const profile=(excluded:ReadonlySet<object>)=>{
+    let visited=0,walkVisits=0,streamVisits=0,generatorVisits=0,sampleEntryVisits=0,sampleDescriptorReads=0,ownedRecordReads=0,sampleOwnedReads=0;
+    const sampleWrappers=new Set((m.stream as unknown as {samples:Map<string,object>}).samples.values());
+    const visitCounts=new Map<string,number>(),descriptorDictionaries=new WeakSet<object>();
+    // Count each source inspection once, independently of whether a scanner
+    // enumerates its temporary descriptor dictionary with entries or keys.
+    // A later ordinary source enumeration remains a separate reflective read.
+    Object.getOwnPropertyDescriptors=((value:object)=>{
+      visited++;visitCounts.set('descriptor inspection',(visitCounts.get('descriptor inspection')??0)+1);
+      if(sampleWrappers.has(value))sampleDescriptorReads++;
+      const result=descriptors(value);descriptorDictionaries.add(result);return result;
+    }) as typeof Object.getOwnPropertyDescriptors;
+    Object.keys=((value:object)=>{
+      if(isOwnedTerrainRecord(value)){
+        visited++;ownedRecordReads++;
+        if(sampleWrappers.has(value))sampleOwnedReads++;
+        visitCounts.set('owned record inspection',(visitCounts.get('owned record inspection')??0)+1);
+      }
+      return keys(value);
+    }) as typeof Object.keys;
+    Object.entries=((value:object)=>{if(descriptorDictionaries.has(value))return entries(value);
+      visited++;if(sampleWrappers.has(value))sampleEntryVisits++;if(value===walk)walkVisits++;if(value===m.stream)streamVisits++;if(value===m.generator)generatorVisits++;
+      const name=value?.constructor?.name??'null';visitCounts.set(name,(visitCounts.get(name)??0)+1);return entries(value);}) as typeof Object.entries;
+    let pins:Set<Actor>;const before=performance.now();
+    try{pins=massDormancyPins(w,owned,excluded);}finally{Object.entries=entries;Object.getOwnPropertyDescriptors=descriptors;Object.keys=keys;}
+    return {pins,diagnosticMs:performance.now()-before,visited,walkVisits,streamVisits,generatorVisits,sampleEntryVisits,sampleDescriptorReads,ownedRecordReads,sampleOwnedReads,topKinds:[...visitCounts].sort((a,b)=>b[1]-a[1]).slice(0,10)};
+  };
+  const all=profile(new Set()),warm=profile(new Set()),withoutWalk=profile(new Set([walk]));
+  const ids=(pins:ReadonlySet<Actor>)=>[...pins].map(a=>a.id).sort((a,b)=>a-b);
+  const orderedIds=(pins:ReadonlySet<Actor>)=>[...pins].map(a=>a.id);
+  assert.deepEqual(ids(warm.pins),ids(all.pins));
+  assert.deepEqual(ids(all.pins),ids(referencePins(w,owned)),'cold and warm exact pin set must match the uncached prior scanner');
+  assert.deepEqual(orderedIds(all.pins),orderedIds(referencePins(w,owned)),'cold pin insertion order must match the prior scanner');
+  assert.deepEqual(orderedIds(warm.pins),orderedIds(referencePins(w,owned)),'warm certificates must preserve pin insertion order');
+  assert.deepEqual(ids(withoutWalk.pins),ids(all.pins),'excluding the concrete derived MassWalk branch must not change these actual live pin identities');
+  assert.ok(expected.every(a=>all.pins.has(a)&&withoutWalk.pins.has(a)),'unknown nested numeric/direct/weak owners must retain dependencies');
+  assert.equal(all.walkVisits,1);assert.equal(all.streamVisits,1);assert.equal(all.generatorVisits,1);
+  assert.equal(withoutWalk.walkVisits,0);assert.equal(withoutWalk.streamVisits,0);assert.equal(withoutWalk.generatorVisits,0);
+  assert.ok(all.visited>withoutWalk.visited+10000,'the actual terrain graph must account for substantial extra source inspection');
+  assert.deepEqual(w.actors,liveBefore);assert.ok(resources.every(r=>r.actor.life===r.life&&r.actor.mana===r.mana&&r.actor.es===r.es));
+  assert.equal(w.massRuntime,m);assert.equal(w.walk,m.walk);
+  console.log('PASS actual warmed native-world pin traversal includes derived MassWalk/stream/generator caches; unknown controllers and exact actor resources stay intact');
+  for(const[label,r]of [['cold-all',all],['warm-all',warm],['diagnostic-excluded-walk',withoutWalk]] as const){const{pins,...stats}=r;console.log(JSON.stringify({label,pinIds:ids(pins),...stats}));}
+  console.log(JSON.stringify({terrain:m.stream.stats,classicOwned:owned.size,native:m.nativeFeatures?.stats,limit:'Diagnostic timings include source-reflection counters; use operation counts and browser dormancy owner timing, not these as a release benchmark.'}));
+  // A blanket walk exclusion is UNSAFE: arbitrary live references can be
+  // attached to the real walk, including frozen containers and dynamic getters.
+  let getterActor=bodies[5],getterCalls=0;
+  const dynamic=Object.freeze(Object.defineProperty({},'actor',{enumerable:true,get(){getterCalls++;return getterActor;}}));
+  const mutableMap=Object.freeze(new Map<unknown,unknown>([[bodies[6].id,true]]));
+  const mutableSet=Object.freeze(new Set<unknown>([bodies[7]]));
+  const mutableWeak=Object.freeze(new WeakMap<Actor,boolean>([[bodies[8],true]]));
+  class ForeignController {constructor(readonly actor:Actor){}}
+  const cycle:Record<string,unknown>={targetId:bodies[10].id};cycle.self=cycle;Object.freeze(cycle);
+  const refs={direct:Object.freeze({actor:bodies[3]}),numeric:Object.freeze({targetId:bodies[4].id}),
+    dynamic,mutableMap,mutableSet,mutableWeak,foreign:Object.freeze(new ForeignController(bodies[9])),cycle};
+  Reflect.set(walk,'probeActualLiveReferences',refs);
+  const check=(label:string)=>{const before=getterCalls,actual=profile(new Set());
+    assert.equal(getterCalls,before+1,'certificate inspection must not invoke an accessor in addition to the native scan');
+    assert.ok(bodies.slice(0,11).every(a=>actual.pins.has(a)),label+' lost an actual walk/controller dependency');
+    assert.deepEqual(ids(actual.pins),ids(referencePins(w,owned)),label+' changed the full native pin set');
+    return actual;
+  };
+  check('cold actual-walk refs');check('hot actual-walk refs');
+  const unsafeSkip=profile(new Set([walk]));assert.ok(!unsafeSkip.pins.has(bodies[3]),'this proves blanket World.walk skipping loses dependencies');
+  getterActor=bodies[11];mutableMap.set(bodies[12],true);mutableSet.add(bodies[13]);mutableWeak.set(bodies[14],true);
+  const changed=profile(new Set());assert.ok(bodies.slice(11,15).every(a=>changed.pins.has(a)),'mutable collections/getters inside frozen containers must remain live');
+  assert.deepEqual(ids(changed.pins),ids(referencePins(w,owned)),'mutation must preserve the full pin set');
+  const late=Object.freeze({targetId:bodies[15].id});Reflect.set(walk,'probeLateOwner',late);
+  const reduced=new Map([...owned].filter(([,a])=>a!==bodies[15]));massDormancyPins(w,reduced);
+  const later=massDormancyPins(w,owned);assert.ok(later.has(bodies[15]),'a later owned identity must match a previously observed frozen numeric reference');
+  assert.deepEqual(ids(later),ids(referencePins(w,owned)),'late owner must preserve the full pin set');
+  console.log('PASS actual-walk direct/numeric/weak/class/cyclic references; changing getter and frozen mutable collections; late owned identity; blanket walk skipping correctly fails this contract');
+  Reflect.deleteProperty(walk,'probeActualLiveReferences');Reflect.deleteProperty(walk,'probeLateOwner');
+  Reflect.deleteProperty(w,'probeUnknownNativeController');
+  // The production stream publishes immutable cache entries. Verify that hits
+  // reuse entries while edits/restore replace them, without mutation or a
+  // whole-owner exemption in the dependency scanner.
+  const samples=(m.stream as unknown as {samples:Map<string,Readonly<{terrain:MassTerrain;revision:number}>>}).samples;
+  const wrappers=[...samples.values()];assert.equal(wrappers.length,32768);
+  assert.ok(wrappers.every(Object.isFrozen),'all actual production sample entries must be frozen');
+  assert.ok(wrappers.every(isOwnedTerrainRecord),'all actual sample entries must come from the private fixed-shape constructor');
+  const wrapperCold=profile(new Set()),wrapperWarm=profile(new Set());
+  assert.deepEqual(ids(wrapperCold.pins),ids(referencePins(w,owned)));
+  assert.deepEqual(ids(wrapperWarm.pins),ids(wrapperCold.pins));
+  // Count the actual immutable entries, independently of unrelated native
+  // scenery/controller growth elsewhere in this real-world object graph.
+  assert.ok(all.sampleOwnedReads>0,'cold scan must actually inspect owned production sample entries');
+  assert.ok(all.ownedRecordReads>=all.sampleOwnedReads,'sample ownership inspections belong to the counted direct path');
+  assert.equal(all.sampleDescriptorReads,0,'owned samples use direct own reads, preserving recursive dependency certification');
+  assert.equal(wrapperWarm.sampleEntryVisits,0,'warm scan must not enumerate any immutable sample wrapper');
+  assert.equal(wrapperWarm.sampleDescriptorReads,0,'warm scan must reuse certificates without reinspecting sample descriptors');
+  assert.equal(wrapperWarm.sampleOwnedReads,0,'warm scan must reuse certificates without reinspecting owned sample keys');
+  const at={...m.origin,x:w.player.pos.x,y:w.player.pos.y},stateBefore=m.state.snapshot();
+  m.stream.sample(at);const key=m.state.key(at),old=samples.get(key)!;assert.ok(Object.isFrozen(old));
+  const oldRevision=old.revision,oldTerrain=old.terrain;m.stream.sample(at);assert.equal(samples.get(key),old);
+  m.state.paint({address:at,region:'wall',color:'#123456',cause:'probe/immutable-entry'});m.stream.sample(at);
+  const changedEntry=samples.get(key)!;assert.notEqual(changedEntry,old);assert.equal(changedEntry.terrain.region,'wall');
+  assert.equal(old.revision,oldRevision);assert.equal(old.terrain,oldTerrain);assert.ok(Object.isFrozen(changedEntry));
+  m.state.restore(stateBefore);m.stream.sample(at);assert.notEqual(samples.get(key),changedEntry);
+  assert.equal(old.revision,oldRevision);assert.equal(changedEntry.terrain.region,'wall');assert.ok(Object.isFrozen(samples.get(key)));
+  assert.equal(Reflect.set(old,'revision',-1),false,'frozen entries cannot be mutated even through reflection');
+  assert.ok(samples.size<=m.stream.config.maxSamples);
+  for(const[label,r]of [['production-wrapper-cold',wrapperCold],['production-wrapper-warm',wrapperWarm]]as const){const{pins,...stats}=r;console.log(JSON.stringify({label,pinIds:ids(pins),...stats}));}
+  console.log('PASS production immutable entries: full pin equality, exact sample-hit reuse, frozen patch/restore replacement, old entries unchanged, residency bound');
+  // Collection values have no dependency field name. Numeric Map KEYS and Set
+  // members retain their actor-ID meaning; other primitives are inert. Repeated
+  // certified aliases need no query-local seen entry, while a frozen accessor
+  // still requires one ordinary read, even when aliased across collections.
+  const shared=Object.freeze({fields:Object.freeze({density:12}),items:Object.freeze(['plain',0,null])});
+  let aliasReads=0;
+  const accessor=Object.freeze(Object.defineProperty({},'owner',{enumerable:true,get(){aliasReads++;return bodies[5];}}));
+  const primitives:unknown[]=[undefined,null,false,true,0,-0,NaN,Infinity,'text',17n,Symbol('primitive'),()=>bodies[15]];
+  const collectionWorld={actors:[],before:shared,map:new Map<unknown,unknown>([
+    ...primitives.map((v,i)=>['inert:'+i,v] as [unknown,unknown]),
+    ['numeric-value-is-inert',bodies[15].id],
+    [bodies[0].id,true],[{targetId:bodies[1].id},shared],['direct',bodies[2]],
+  ]),set:new Set<unknown>([...primitives,bodies[3].id,{owner:bodies[4]},shared,accessor]),
+  aliases:[shared,shared,accessor,new Map<unknown,unknown>([[shared,accessor]])]} as unknown as World;
+  const expectedOrder=bodies.slice(0,6).map(a=>a.id);
+  for(const temperature of ['cold','warm']){
+    const before=aliasReads,actual=massDormancyPins(collectionWorld,owned);
+    assert.equal(aliasReads,before+1,temperature+' aliased frozen accessor must be read once');
+    assert.deepEqual(orderedIds(actual),expectedOrder,temperature+' primitive collections must preserve exact pins and insertion order');
+    const prior=referencePins(collectionWorld,owned);
+    assert.equal(aliasReads,before+2,temperature+' original scanner reads the same aliased accessor once');
+    assert.deepEqual(orderedIds(actual),orderedIds(prior),temperature+' shared frozen graphs must match the original scanner');
+  }
+  console.log('PASS cold/warm exact pin insertion order; primitive Map/Set entries; shared frozen aliases; aliased live getter read once');
+  m.dispose();
+} finally { restore(); }

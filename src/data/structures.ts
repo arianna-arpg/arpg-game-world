@@ -1,3 +1,4 @@
+import { SETTLEMENT_DEFENSE_STRUCTURES } from './settlementDefenses';
 // ---------------------------------------------------------------------------
 // STRUCTURE BLUEPRINTS — buildings as data.
 //
@@ -125,7 +126,8 @@ export interface StructureDef {
   garrison?: string;
   /** Garrison pack size override [lo, hi] (default [3, 5]). */
   garrisonSize?: [number, number];
-  /** A selected gameplay structure must retain its ground-floor entrance. */
+  /** Selecting this gameplay feature promises both the building and its one
+   * ground-floor mouth. Optional chances remain optional before selection. */
   requiredMouth?: string;
   // --- plan-structure fields (all optional; legacy defs untouched) ----------
   /** Char-grid blueprint rows (see STRUCTURE_LEGEND). Presence routes the def
@@ -372,6 +374,7 @@ const CIVITAS_LEGEND: Record<string, CellSpec> = {
 };
 
 export const STRUCTURES: Record<string, StructureDef> = {
+  ...SETTLEMENT_DEFENSE_STRUCTURES,
 
   // A one-room cottage — a PLAN now: boarded floor, a dwell-open door, a
   // hearth-warm interior that reveals as you step beneath the roof.

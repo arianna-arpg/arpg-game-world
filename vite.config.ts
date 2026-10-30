@@ -1,4 +1,3 @@
-import { loadingFramePlugin } from './scripts/loading-frame-plugin';
 import { releaseIdentityPlugin } from './scripts/release-identity-plugin.mjs';
 // ---------------------------------------------------------------------------
 // Vite config — adds a DISK-SAVE plugin so the game can persist to real files
@@ -18,7 +17,8 @@ import { releaseIdentityPlugin } from './scripts/release-identity-plugin.mjs';
 // ---------------------------------------------------------------------------
 
 import { defineConfig } from 'vite';
-import { createSaveWriteOrder } from './launcher/saveWriteOrder.cjs';
+import {createSaveWriteOrder} from './launcher/saveWriteOrder.cjs';
+import { loadingFramePlugin } from './scripts/loading-frame-plugin';
 import type { Connect, HmrContext, ViteDevServer, PreviewServer } from 'vite';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -138,26 +138,27 @@ function reloadTreesPlugin() {
 }
 
 export default defineConfig({
-  plugins: [diskSavePlugin(), reloadTreesPlugin(), loadingFramePlugin(), releaseIdentityPlugin()],
-  // Two pages: the game, and THE SKILL SHOWCASE ENGINE (showcase.html — the
-  // sandboxed stage the game's showcases and the clip recorder play through;
-  // docs/engine/skill-showcases.md). They share chunks, so the engine adds
-  // only its own entry to every build (dist/, site/play/).
-  build: {
-    rollupOptions: {
-      input: {
-        main: fileURLToPath(new URL('./index.html', import.meta.url)),
-        showcase: fileURLToPath(new URL('./showcase.html', import.meta.url)),
-      },
-      // the code both pages share (nearly all of it) is named for what it is
-      output: { chunkFileNames: 'assets/shared-[hash].js' },
-    },
+  define: {
+    __HOLLOW_WAKE_STORAGE_SCOPE__: JSON.stringify(process.env.HOLLOW_WAKE_STORAGE_SCOPE ?? ''),
+    __HOLLOW_WAKE_WORLDMASS__: process.env.HOLLOW_WAKE_WORLDMASS !== '0',
   },
+  plugins: [diskSavePlugin(), reloadTreesPlugin(), loadingFramePlugin(), releaseIdentityPlugin()],
+  // The showcase is a separate realm; both entries share the game modules.
+  build: { rollupOptions: {
+    input: {
+      main: fileURLToPath(new URL('./index.html', import.meta.url)),
+      showcase: fileURLToPath(new URL('./showcase.html', import.meta.url)),
+    },
+    output: { chunkFileNames: 'assets/shared-[hash].js' },
+  } },
   // saves/ writes are DATA, not source — without this ignore, every zone-hop's
   // autosave tripped the watcher into a FULL RELOAD (killing the live world
   // mid-play and mid-QA; the long-standing "reload ate my test" gotcha).
   server: {
-    watch: { ignored: ['**/saves/**', '**/*.bak'] },
+    // Local agent scratch and generated reports are not live source inputs.
+    // They remain readable/servable, but edits there no longer trigger HMR or
+    // transformed-module cache invalidation; restart Vite for edited modules.
+    watch: { ignored: ['**/saves/**', '**/*.bak', '**/.claude/**', '**/balance/reports/**'] },
     // Enables the JS Self-Profiling API (`new Profiler(...)`) in dev — the
     // sampling profiler perf passes lean on; inert for normal play.
     headers: { 'Document-Policy': 'js-profiling' },
