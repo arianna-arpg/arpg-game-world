@@ -1,7 +1,6 @@
 import { hollowWakeBrand } from './brand';
 import { FRONT_ACTIONS, FRONT_SCREEN, type FrontScreenState } from './frontScreenConfig';
 import { Z_LADDER } from './zorder';
-import './frontScreen.css';
 
 const text = (s: string | number): string => String(s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);

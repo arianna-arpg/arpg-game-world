@@ -1,7 +1,6 @@
 import { hollowWakeBrand } from './brand';
 import { mountSideScreen, captureSideScreenFocus, type SideScreenContext } from './sideScreen';
 import type { SideScreenProfile } from './sideScreenConfig';
-import './codexShell.css';
 import { CODEX_CFG, CODEX_SECTIONS } from '../data/codex';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';

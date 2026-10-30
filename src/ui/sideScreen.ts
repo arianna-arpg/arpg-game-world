@@ -1,7 +1,6 @@
 import { hollowWakeBrand } from './brand';
 import { bindFrontAtmosphere, ensureFrontAtmosphere } from './frontScreen';
 import { SIDE_SCREEN, type SideScreenProfile } from './sideScreenConfig';
-import './sideScreen.css';
 
 export type SideScreenContext = 'entrance' | 'world';
 const esc = (value: string): string => value.replace(/[&<>"']/g, c =>

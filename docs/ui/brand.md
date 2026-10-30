@@ -59,3 +59,7 @@ co-op pause policy and controller input remain with their current owners.
 After a build, run `npx electron balance/in-game-brand-ui.cjs` for branding
 and pause/return checks, and `npx electron balance/menu-tray-ui.cjs` for
 tray placement across anchors and UI scales.
+
+Game styles load from the browser entry point (`src/main.ts`), keeping
+shared UI helpers importable by headless engine probes. After changing
+this boundary, also run the existing `storey` and `tiers` probes.

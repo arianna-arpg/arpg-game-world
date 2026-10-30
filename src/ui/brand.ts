@@ -1,5 +1,4 @@
 import { GAME_TITLE } from '../config';
-import './brand.css';
 
 /** One original, outlined wordmark and established insignia on every surface.
  * Sizes are presentation tokens; the artwork and accessible name are shared. */
