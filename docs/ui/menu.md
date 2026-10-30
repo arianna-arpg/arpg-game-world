@@ -71,6 +71,11 @@ lived-aware `World.mireilleGiftLesson` read).
   keyed grammar); a station page opens exactly as its dwell would.
 - **Esc folds the tray first**, before the folio's front leaf and the panel
   cascade. A press anywhere outside the bar folds it too.
+  Closing releases focus held by the trigger or tray so Escape cannot leave
+  the trigger's keyboard glow stuck on during gameplay. Focus already moved
+  into another page is preserved, as are hover and actual attention pulses.
+  The real mouse/Escape and keyboard activation checks live in
+  `balance/menu-tray-ui.cjs`.
 
 ## Options (Options → Menu Bar)
 

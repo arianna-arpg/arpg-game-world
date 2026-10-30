@@ -16,7 +16,44 @@ app.whenReady().then(async()=>{
  const timer=setTimeout(()=>app.exit(1),120000),rows=[];
  try{
   await win.loadURL('http://127.0.0.1:'+server.address().port);
+  win.webContents.debugger.attach('1.3');
+  await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:true});
   await run(async()=>{window.requestAnimationFrame=()=>0;await new Promise(r=>setTimeout(r,200));__game.devStartRun('magician');__game.ui.hideAll();__game.step(3);});
+  if(!legacy){
+   const wait=()=>new Promise(r=>setTimeout(r,220));
+   const paint=()=>run(()=>{
+    const b=document.querySelector('[data-menu-toggle]'),s=getComputedStyle(b);
+    return {open:__game.ui.menuTrayOpen(),paused:__game.ui.escapeMenuOpen,focused:document.activeElement===b,
+     focusVisible:b.matches(':focus-visible'),hovered:b.matches(':hover'),pips:b.classList.contains('menu-pips'),
+     paint:[s.backgroundImage,s.backgroundColor,s.borderTopColor,s.boxShadow,s.outlineStyle,s.outlineWidth]};
+   });
+   const key=async keyCode=>{
+    win.webContents.sendInputEvent({type:'keyDown',keyCode});
+    if(keyCode==='Return')win.webContents.sendInputEvent({type:'char',keyCode:'\r'});
+    win.webContents.sendInputEvent({type:'keyUp',keyCode});
+    await run(()=>__game.step(2));await wait();
+   };
+   win.webContents.sendInputEvent({type:'mouseMove',x:1,y:1});await wait();
+   const idle=await paint();assert.ok(!idle.pips,'focus fixture has no unspent-point pulse');
+   const point=await run(()=>{const r=document.querySelector('[data-menu-toggle]').getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};});
+   win.webContents.sendInputEvent({type:'mouseMove',...point});
+   win.webContents.sendInputEvent({type:'mouseDown',...point,button:'left',clickCount:1});
+   win.webContents.sendInputEvent({type:'mouseUp',...point,button:'left',clickCount:1});
+   await wait();assert.ok((await paint()).open,'real pointer click opens the tray');
+   win.webContents.sendInputEvent({type:'mouseMove',x:1,y:1});await key('Escape');
+   const closed=await paint();rows.push({focusAfterEscape:closed});console.log(JSON.stringify({focusAfterEscape:closed}));
+   assert.ok(!closed.open&&!closed.paused,'Escape closes just the tray');
+   assert.ok(!closed.focused&&!closed.focusVisible,'closing the tray releases its trigger focus');
+   assert.deepEqual(closed.paint,idle.paint,'Escape restores idle paint after the pointer leaves');
+   await key('Tab');
+   await run(()=>{__game.ui.menuBar.closeTray();document.querySelector('[data-menu-toggle]').focus();});
+   await wait();assert.ok((await paint()).focusVisible,'deliberate keyboard focus still has a visible cue');
+   await key('Return');assert.ok((await paint()).open,'keyboard activation still opens the tray');
+   await key('Escape');assert.ok(!(await paint()).focused,'keyboard dismissal returns focus to gameplay');
+   await run(()=>{__game.world().meta.passivePoints=1;__game.ui.menuBar.invalidate();__game.step(2);__game.ui.menuBar.openTray();});
+   await key('Escape');assert.ok((await paint()).pips,'closing preserves the real unspent-point attention pulse');
+   await run(()=>{__game.world().meta.passivePoints=0;__game.ui.menuBar.invalidate();__game.step(2);});
+  }
   for(const [width,height,scale,anchor] of [[1064,850,1,'bar'],[800,600,1.5,'bar'],[640,480,2,'right'],[640,480,.75,'left'],[320,360,2,'bar']]){
    win.setContentSize(width,height);await new Promise(r=>setTimeout(r,150));
    const row=await run((scale,anchor)=>{
