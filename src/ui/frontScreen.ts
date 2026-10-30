@@ -51,13 +51,20 @@ export function ensureFrontAtmosphere(): void {
   el.id = 'front-backdrop';
   el.setAttribute('aria-hidden', 'true');
   el.style.zIndex = String(Z_LADDER.panel - 1);
-  el.style.setProperty('--front-art', `url("${FRONT_SCREEN.artwork}")`);
   el.style.setProperty('--front-drift', `${FRONT_SCREEN.atmosphere.driftSeconds}s`);
   el.dataset.paused = String(atmospherePaused || !FRONT_SCREEN.atmosphere.enabled);
   // Lights sit above the darkening wash so their colors survive the vignette,
   // while the entire passive backdrop remains below text and controls.
-  el.innerHTML = `<div class="front-landscape"></div><div class="front-haze"></div>
+  el.innerHTML = `<div class="front-haze"></div>
     <div class="front-vignette"></div><div class="front-motes">${aetherMotesHtml()}</div>`;
+  // Keep the artwork in the browser's image pipeline: a CSS background can
+  // compute to none even while its custom-property URL remains configured.
+  const landscape = document.createElement('img');
+  landscape.className = 'front-landscape';
+  landscape.alt = '';
+  landscape.draggable = false;
+  landscape.src = FRONT_SCREEN.artwork;
+  el.prepend(landscape);
   document.body.appendChild(el);
   // One document-lifetime preference listener, independent of view rebuilds.
   window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', syncAtmosphere);

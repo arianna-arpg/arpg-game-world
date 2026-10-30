@@ -39,10 +39,18 @@ app.whenReady().then(async () => {
         () => { __frontQA.action = 'start'; }, s => { __frontQA.action = 'continue:' + s.name; },
         () => { __frontQA.action = 'coop'; }, e => { __frontQA.action = 'roster:' + e.name; });
       __frontShow();
-      const image = new Image();
-      image.src = getComputedStyle(document.querySelector('.front-landscape')).backgroundImage.slice(5, -2);
+      // Decode the displayed artwork itself, not a second image reconstructed
+      // from CSS (which could pass even when the actual landscape is absent).
+      const image = document.querySelector('.front-landscape');
       await image.decode();
     });
+    assert(await run(() => {
+      const image = document.querySelector('.front-landscape'), style = getComputedStyle(image);
+      const rect = image.getBoundingClientRect();
+      return image.complete && image.naturalWidth > 0 && image.naturalHeight > 0 &&
+        image.alt === '' && !image.draggable && style.objectFit === 'cover' &&
+        style.pointerEvents === 'none' && rect.width === innerWidth && rect.height === innerHeight;
+    }), 'Displayed decorative artwork decodes, covers the viewport and leaves controls reachable');
     await pause(250);
     assert.deepEqual(await run(() => ({
       begin: document.querySelector('.front-primary').id,
@@ -299,7 +307,7 @@ app.whenReady().then(async () => {
     report.checks.push('Chronicle sorts safely; Options retains native keyboard focus; in-world visits do not revive entrance artwork');
 
     // Responsive widths AND the existing accessibility scale, with all destinations shown.
-    for (const [width, height, scale] of [[1920,1080,1], [1280,720,1], [800,600,1], [390,844,1], [320,568,1], [1280,720,2], [390,844,2], [1280,720,.75]]) {
+    for (const [width, height, scale] of [[2557,1287,1], [1920,1080,1], [1280,720,1], [800,600,1], [390,844,1], [320,568,1], [1280,720,2], [390,844,2], [1280,720,.75]]) {
       win.setContentSize(width, height);
       await run(s => { document.documentElement.style.setProperty('--ui-scale', String(s)); document.querySelector('#start-menu').scrollTop = 0; }, scale);
       await pause(180);
@@ -310,6 +318,13 @@ app.whenReady().then(async () => {
       if (width >= 800 && height >= 600 && scale === 1) assert(bounds.vertical, 'Standard desktop menu must fit without scrolling: ' + [width, height] + ' ' + JSON.stringify(bounds));
       assert(bounds.horizontal, JSON.stringify({ width, height, scale, bounds }));
       assert(Math.abs(bounds.width - width) < 2 && Math.abs(bounds.height - height) < 2);
+      assert(await run(() => {
+        const images = document.querySelectorAll('#front-backdrop .front-landscape');
+        const image = images[0], rect = image.getBoundingClientRect();
+        return images.length === 1 && image.complete && image.naturalWidth > 0 &&
+          rect.width === innerWidth && rect.height === innerHeight &&
+          getComputedStyle(image).objectPosition === (innerWidth <= 600 ? '76% 50%' : '62% 50%');
+      }), 'One loaded landscape retains full viewport coverage and responsive crop: ' + [width,height,scale]);
       const reachable = await run(() => {
         const b = document.querySelector('#sm-exit'); b.scrollIntoView({ block: 'nearest' });
         const r = b.getBoundingClientRect();
@@ -322,7 +337,7 @@ app.whenReady().then(async () => {
       await run(() => { document.querySelector('#start-menu').scrollTop = 0; });
       await shot(width + '-' + height + '-scale-' + scale);
     }
-    report.checks.push('Responsive layout, reachable actions and no horizontal overflow at eight viewport/scale combinations');
+    report.checks.push('Loaded artwork, responsive crop, reachable actions and no horizontal overflow at nine viewport/scale combinations');
     win.setContentSize(1280,720);
     await run(() => {
       document.documentElement.style.setProperty('--ui-scale', '1');

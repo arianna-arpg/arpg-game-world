@@ -11,8 +11,8 @@
 }
 #front-backdrop { position: fixed; inset: 0; overflow: hidden; pointer-events: none; display: none; background: #090f11; }
 body:has(#start-menu:not(.hidden)) #front-backdrop { display: block; }
-#front-backdrop > div { position: absolute; inset: 0; }
-.front-landscape { background: var(--front-art) 62% center / cover no-repeat; }
+#front-backdrop > * { position: absolute; inset: 0; }
+.front-landscape { width: 100%; height: 100%; object-fit: cover; object-position: 62% center; }
 .front-vignette { background: linear-gradient(90deg, #04090be8 0%, #060d0f99 27%, transparent 67%),
   linear-gradient(0deg, #060b10ed, transparent 30%, transparent 80%, #060b1066); }
 .front-haze { opacity: .24; background: radial-gradient(ellipse at 68% 78%, #afded640, transparent 52%);
@@ -143,7 +143,7 @@ body:has(#start-menu:not(.hidden) .front-screen) #hint-bar { display: none; }
   .front-footer { padding-top: 10px; }
 }
 @media (max-width: 600px) {
-  .front-landscape { background-position: 76% center; }
+  .front-landscape { object-position: 76% center; }
   .front-motes i:nth-child(even) { display: none; }
   .front-vignette { background: linear-gradient(90deg, #04090be6, #04090b88), linear-gradient(0deg, #060b10e8, transparent 60%); }
 }
