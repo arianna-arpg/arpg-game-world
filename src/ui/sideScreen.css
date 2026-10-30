@@ -145,3 +145,40 @@ body:has(.panel:not(.hidden) > .side-screen[data-context="entrance"]) #game-buil
   .side-screen { color: CanvasText; }
 }
 @keyframes side-arrive { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+
+/* The roster is another set of shell regions, with account-owned vessel cards.
+   Auto-fit gives long names and large UI scales the same readable surface. */
+#start-menu .side-screen .sm-roster {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+  align-content: start; gap: 14px; width: 100%; max-width: none;
+}
+#start-menu .side-screen .sm-roster-tile {
+  display: flex; min-width: 0; max-width: none; border: 1px solid var(--side-line);
+  border-radius: 2px; background: #ffffff03; position: relative;
+}
+#start-menu .side-screen .sm-roster-tile:hover { border-color: var(--side-accent); background: #ffffff06; }
+#start-menu .side-screen .sm-roster-go {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: 12px; width: 100%; min-width: 0; min-height: 150px; padding: 24px 48px 24px 20px;
+  border: 0; border-radius: 0; background: transparent; text-align: left;
+  cursor: var(--cursor-point, pointer); color: var(--side-text);
+}
+#start-menu .side-screen .sm-roster-name {
+  white-space: normal; overflow: visible; overflow-wrap: anywhere; text-overflow: clip;
+  font: normal 21px/1.3 Georgia, serif; color: var(--side-text);
+}
+#start-menu .side-screen .sm-roster-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; line-height: 1.6; }
+#start-menu .side-screen .sm-roster-fee { font-size: 11px; line-height: 1.6; color: #d8aca6; }
+#start-menu .side-screen .sm-roster-tile.fallen { border-color: #a96b6440; background: #a96b6406; }
+#start-menu .side-screen .sm-roster-tile.fallen .sm-roster-go { opacity: 1; }
+#start-menu .side-screen .sm-roster-tile.fallen .sm-roster-name { color: var(--side-muted); }
+#start-menu .side-screen .sm-roster-del {
+  position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; margin: 0; padding: 0;
+  display: flex; align-items: center; justify-content: center; border: 1px solid var(--side-line);
+  border-radius: 2px; background: var(--side-surface); color: var(--side-muted); font: 12px/1 'Segoe UI', sans-serif;
+  cursor: var(--cursor-point, pointer);
+}
+#start-menu .side-screen .sm-roster-del:hover:not(:disabled) { color: #f2c0b9; border-color: #cf8175; background: #392326; }
+.side-screen .roster-head h1 { padding-right: 40px; }
+.side-screen .roster-head .panel-x { margin: 0; border-radius: 2px; background: #ffffff04; color: var(--side-muted); }
+#start-menu .side-screen .roster-notice { color: #ddb278; border-left: 1px solid currentColor; padding-left: 12px; overflow-wrap: anywhere; }

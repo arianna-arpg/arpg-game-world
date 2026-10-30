@@ -18,6 +18,11 @@ export const SIDE_SCREENS = {
     id: 'chronicle', chapter: 'The remembered', caption: 'Every life leaves an echo.', accent: '#b9c8be',
     width: { share: 70, min: 760, max: 1120 }, regions: ledgerRegions,
   },
+  immortals: {
+    id: 'immortals', chapter: 'The undying', caption: 'Some lives refuse to fade.', accent: '#b6add8',
+    width: { share: 64, min: 640, max: 1020 },
+    regions: { head: '.roster-head', scroll: '.roster-body', foot: '.roster-foot' },
+  },
   options: {
     id: 'options', chapter: 'Your passage', caption: 'Your way through the veil.', accent: '#94c5c0',
     width: { share: 62, min: 640, max: 940 },

@@ -105,11 +105,51 @@ app.whenReady().then(async () => {
     assert(await run(() => !!document.querySelector('#sm-vault') && document.querySelector('#sm-immortals').textContent.includes('fallen')));
     await shot('returning-1600');
     await click('#sm-immortals');
+
+    assert.equal(await run(() => document.querySelector('#start-menu .side-screen').dataset.screen),'immortals');
+    assert.equal(await run(() => getComputedStyle(document.querySelector('#front-backdrop')).display),'block');
+    await shot('immortals-1600');
+    await run(() => {
+      __frontQA.roster = structuredClone(__game.account().roster);
+      __frontQA.action = 'roster-untouched';
+      document.querySelector('#sm-roster-go-qa-fallen').focus();
+    });
     await click('[data-cid="qa-fallen"].sm-roster-go');
     assert(await run(() => document.querySelector('#start-menu').textContent.includes('resurrect')));
+
+    assert.equal(await run(() => __frontQA.action),'roster-untouched');
+    assert.equal(await run(() => document.activeElement.id),'sm-roster-go-qa-fallen');
+    assert(await run(() => !!document.querySelector('.roster-notice[role="status"]')));
+    await click('#sm-imm-vault');
+    assert.equal(await run(() => document.querySelector('#account-screen .side-screen').dataset.context),'entrance');
+    await click('#acct-close'); await click('#seal-back');
+    assert.equal(await run(() => __game.account().credits),120);
+    await click('#acct-close'); await click('#seal-go');
+    assert(await run(() => !!document.querySelector('#start-menu:not(.hidden) [data-screen="immortals"]')));
+
     await click('[data-cid="qa-living"].sm-roster-go');
     assert.equal(await run(() => __frontQA.action), 'roster:Aster');
+    assert.equal(await run(() => getComputedStyle(document.querySelector('#front-backdrop')).display), 'none');
     await run(() => __frontShow());
+
+    await click('#sm-immortals');
+    await run(() => {
+      __frontQA.confirm = window.confirm;
+      window.confirm = () => false;
+      __game.account().invested['resurrect_qa-fallen'] = 12;
+    });
+    await click('#sm-roster-del-qa-fallen');
+    assert.equal(await run(() => __game.account().roster.length),2,'Cancelling release preserves the vessel');
+    await run(() => { window.confirm=()=>true; });
+    await click('#sm-roster-del-qa-fallen');
+    assert(await run(() => __game.account().roster.length===1 && !('resurrect_qa-fallen' in __game.account().invested)));
+    await click('#sm-roster-del-qa-living');
+    assert(await run(() => !!document.querySelector('#start-menu .front-screen') && !document.querySelector('#sm-immortals')));
+    await run(() => { window.confirm=__frontQA.confirm; __game.account().roster=structuredClone(__frontQA.roster); __frontShow(); });
+    await click('#sm-immortals'); await click('#start-menu .panel-x');
+    assert(await run(() => !!document.querySelector('#start-menu .front-screen')));
+    report.checks.push('Immortal shell, fallen focus/notice, Vault seal round trip, release cancellation/removal and last-vessel return');
+
     await click('#sm-vault');
     assert(await run(() => !document.querySelector('#account-screen').classList.contains('hidden')));
     await click('#acct-close');
@@ -149,10 +189,16 @@ app.whenReady().then(async () => {
         reason:i % 2 ? 'death' : 'retire', essence:40 + i * 9, renown:200 + i * 25,
       }));
     });
+    await run(() => {
+      __game.account().roster.push(...Array.from({length:16},(_,i)=>({
+        charId:'qa-extra-'+i, name:i===15 ? '<img src=x onerror="window.__rosterInjected=1">'.repeat(5) : 'Vessel '+(i+3),
+        classId:'warrior', level:i+2, modeId:'immortal', stage:1, slot:200+i, savedAt:0,
+      })));
+    });
     for (const [width,height,scale] of [[1600,1000,1],[1280,720,1],[390,844,1],[390,844,2],[320,568,2]]) {
       win.setContentSize(width,height);
       await run(s => document.documentElement.style.setProperty('--ui-scale',String(s)), scale);
-      for (const [open,close,kind] of [['#sm-vault','#acct-close','vault'],['#sm-chronicle','#chron-close','chronicle'],['#sm-keys','#start-menu #esc-back','options']]) {
+      for (const [open,close,kind] of [['#sm-vault','#acct-close','vault'],['#sm-chronicle','#chron-close','chronicle'],['#sm-keys','#start-menu #esc-back','options'],['#sm-immortals','#sm-imm-back','immortals']]) {
         await click(open); await pause(250);
         const bounds = await run(() => {
           const shell = document.querySelector('.panel:not(.hidden) > .side-screen');
@@ -165,6 +211,11 @@ app.whenReady().then(async () => {
               button.contains(document.elementFromPoint(br.x+br.width/2,br.y+br.height/2)) };
         });
         assert(bounds.fits && bounds.bodyHeight > 24 && bounds.reachable, kind+' '+[width,height,scale]+' '+JSON.stringify(bounds));
+        if (kind==='immortals') {
+          assert(await run(() => !window.__rosterInjected && !document.querySelector('.sm-roster img')));
+          await run(() => { const b=document.querySelector('#sm-roster-del-qa-extra-15'); b.scrollIntoView({block:'nearest'}); });
+          assert(await run(() => { const b=document.querySelector('#sm-roster-del-qa-extra-15'), r=b.getBoundingClientRect(); return r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight && b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)); }), 'Last vessel release remains reachable');
+        }
         const before = bounds.footer.top;
         await run(() => { const b=document.querySelector('.panel:not(.hidden) .side-scroll'); b.scrollTop=b.scrollHeight; });
         assert.equal(await run(() => document.querySelector('.panel:not(.hidden) .side-foot').getBoundingClientRect().top), before, 'Footer stays put');
@@ -173,7 +224,7 @@ app.whenReady().then(async () => {
         await click(close);
       }
     }
-    report.checks.push('Vault, Chronicle and Options keep readable scrolling regions and reachable fixed controls across five viewport/scale combinations');
+    report.checks.push('Vault, Chronicle, Options and Immortal Vessels keep readable scrolling regions and reachable fixed controls across five viewport/scale combinations');
     win.setContentSize(1600,1000);
     await run(() => document.documentElement.style.setProperty('--ui-scale','1'));
     await click('#sm-chronicle');

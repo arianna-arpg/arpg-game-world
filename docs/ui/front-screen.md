@@ -6,7 +6,7 @@ The game opens on a full-viewport threshold scene with the existing account and 
 
 - `src/ui/frontScreenConfig.ts`: typed action definitions, ordering, labels, descriptions, visibility, enabled states, badges, copy, palette and atmosphere settings. `FrontScreenState` contains presentation facts, not a mutable account or save.
 - `src/ui/frontScreen.ts`: escaped markup, a decorative vector sigil, a passive backdrop and local keyboard bindings. The view never starts a run or changes progression. Existing `sm-*` IDs retain their handlers in `panels.ts`.
-- `src/ui/frontScreen.css`: layout, typography, focus and responsive rules, scoped to the front-screen markup. The existing UI scale remains authoritative; small viewports scroll vertically when needed. Main-menu Options uses the shared side-screen shell; the roster retains its existing layout. Return lifecycles stay with UI.
+- `src/ui/frontScreen.css`: layout, typography, focus and responsive rules, scoped to the front-screen markup. The existing UI scale remains authoritative; small viewports scroll vertically when needed. Main-menu Options and Immortal Vessels use the shared side-screen shell. Return lifecycles stay with UI.
 - `src/ui/assets/threshold.png`: original environment artwork, bundled by Vite through a relative asset URL. It works offline and under a browser deployment subpath.
 - Developer menu hooks still receive their own `.esc-btns` slot.
 
@@ -29,7 +29,7 @@ The hidden real-client harness uses a disposable profile and save directory unde
 
 ## Shared side screens
 
-Vault, Chronicle and main-menu Options use the same presentation shell. The
+Vault, Chronicle, Immortal Vessels and main-menu Options use the same presentation shell. The
 entrance version leaves the threshold scene visible on the right; compact
 viewports and large UI scales use the full available width. In-world Vault and
 Chronicle visits use a centered version over the world, without entrance art.
@@ -45,7 +45,7 @@ In-game Options keeps its existing pause-menu presentation.
   controls/listeners. Replacing or hiding a view removes its layout/atmosphere
   through markup-scoped CSS, with no persistent host classes to clean up.
 - `src/ui/sideScreen.css`: shared frame, region sizing and responsive rules,
-  plus the three views' visual treatments. Native UI scale remains authoritative.
+  plus the individual views' visual treatments. Native UI scale remains authoritative.
 
 Vault ownership, purchases, hold-to-invest, shelf scroll and sealing remain with
 the existing UI handlers. There is no extra shortcut that bypasses the
@@ -55,6 +55,14 @@ their field labels. Options keeps its tabs, stored settings and rebind capture.
 Tab uses native traversal; surviving focused controls retain focus after a
 refresh. Every entrance screen shares the same atmosphere pause preference and
 honors the operating system's reduced-motion setting.
+
+Immortal Vessels uses its own configurable profile and the same fixed header,
+scrolling body and footer. Cards derive class, level and mode from account/game
+definitions; fallen vessels retain their resurrection guidance. Stable control
+IDs restore focus after a notice, and roster refreshes retain scroll. The Vault
+link returns through its existing sealed visit; release still requires the
+existing confirmation, clears that vessel’s invested resurrection and save slot,
+and returns to the main menu when the last vessel is released.
 
 ### Connecting the Codex
 

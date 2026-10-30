@@ -11402,9 +11402,11 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
    *  listed straight from the index cards — no slot file is read until one is
    *  chosen. Each vessel is ONE tile: the whole face resumes, and its corner
    *  ✕ (the in-game panels' close-glyph language) is the deliberate release —
-   *  confirmed, durable wipe. Tiles pack two to a row, so the shelf grows
-   *  DOWN the pane instead of out of it. */
+   *  confirmed, durable wipe. sideScreenConfig supplies the frame; cards adapt to
+   *  viewport/UI scale while its Back and Vault controls remain anchored. */
   private renderImmortalRoster(notice?: string): void {
+    const sideFocus = captureSideScreenFocus(this.startMenu);
+    const rosterScroll = this.startMenu.querySelector<HTMLElement>('.roster-body')?.scrollTop ?? 0;
     const acc = this.getAccount();
     const h = this.startHandlers!;
     this.startMenuBack = () => this.renderStartMenu();  // the pane's ✕ glyph = Back
@@ -11418,30 +11420,34 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       const bColor = fallen ? '#e85050' : mode.color;
       return `
         <div class="sm-roster-tile${fallen ? ' fallen' : ''}">
-          <button class="sm-roster-go" data-cid="${esc(e.charId)}"
+          <button class="sm-roster-go" id="sm-roster-go-${esc(e.charId)}" data-cid="${esc(e.charId)}"
             ${fallen ? `title="Fallen — resurrect in the Vault (${e.fallen!.fee} ${META_CURRENCY_LABEL}, invested across runs)"` : ''}>
             <span class="sm-roster-name">⟢ ${esc(e.name)}</span>
-            <span class="sm-roster-sub">Level ${e.level}
+            <span class="sm-roster-sub">${esc(CLASSES.find(c => c.id === e.classId)?.name ?? e.classId)} · Level ${e.level}
               <span style="font-size:10px;color:${bColor};border:1px solid ${bColor};
                 border-radius:6px;padding:0 5px;margin-left:4px">${badge}</span></span>${fallen
               ? `<span class="sm-roster-fee">☠ ${e.fallen!.fee} ${META_CURRENCY_LABEL} to resurrect</span>` : ''}
           </button>
-          <button class="sm-roster-del" data-cid="${esc(e.charId)}"
-            title="Release this vessel: the character is permanently discarded">✕</button>
+          <button class="sm-roster-del" id="sm-roster-del-${esc(e.charId)}" data-cid="${esc(e.charId)}"
+            aria-label="Release ${esc(e.name)}" title="Release this vessel: the character is permanently discarded">✕</button>
         </div>`;
     }).join('');
     const fallenN = acc.roster.filter(e => e.fallen).length;
     this.startMenu.innerHTML = `
-      ${this.closeGlyphHtml('Back')}
-      <h1>IMMORTAL VESSELS</h1>
-      <div class="acct-head">${acc.roster.length} vessel${acc.roster.length === 1 ? '' : 's'} sworn
-        — resume one, or release it from its corner ✕.</div>
-      ${notice ? `<div class="acct-head" style="color:#e8b06a">${notice}</div>` : ''}
-      <div class="esc-btns">
-        <div class="sm-roster">${tiles}</div>
+      <div class="roster-head">
+        ${this.closeGlyphHtml('Back')}
+        <h1>Immortal Vessels</h1>
+        <div class="acct-head">${acc.roster.length} vessel${acc.roster.length === 1 ? '' : 's'} sworn
+          — resume one, or release it from its corner ✕.</div>
+        ${notice ? `<div class="acct-head roster-notice" role="status">${notice}</div>` : ''}
+      </div>
+      <div class="roster-body"><div class="sm-roster">${tiles}</div></div>
+      <div class="roster-foot">
         ${fallenN && isVaultAvailable(acc) ? '<button id="sm-imm-vault">Vault — the Fallen shelf</button>' : ''}
         <button id="sm-imm-back">Back</button>
       </div>`;
+    mountSideScreen(this.startMenu, SIDE_SCREENS.immortals, 'entrance', sideFocus);
+    this.startMenu.querySelector<HTMLElement>('.roster-body')!.scrollTop = rosterScroll;
     this.startMenu.querySelectorAll<HTMLElement>('.sm-roster-go').forEach(btn => {
       btn.addEventListener('click', () => {
         const entry = this.getAccount().roster.find(r => r.charId === btn.dataset.cid);
