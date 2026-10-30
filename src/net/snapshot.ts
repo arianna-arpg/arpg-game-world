@@ -1,6 +1,7 @@
 import { instanceDelivery } from '../engine/skills';
 import { strikeTimingsOf } from '../engine/strikeTiming';
 import { bodyActionPoseOf } from '../engine/bodyAction';
+import type { DamageTextSummary } from '../world/damageText';
 import { bodyWalkPoseOf } from '../engine/bodyWalk';
 import { meleeReachCueOf } from '../engine/meleeReach';
 import { foresightRowOf, foresightOfRow, type ForesightW } from './foresightWire';
@@ -272,7 +273,8 @@ export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; tier?
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string;
   /** INFO-STREAM float kind — ships so each CLIENT gates the draw by its own
    *  Settings.floatKinds (the host mints one truth; every seat curates). */
-  k?: string; }
+  k?: string;
+  damage?: DamageTextSummary; }
 /** A notice-feed line (screen-anchored world news) — the client filters by
  *  its own channel mutes and draws at its own anchor/duration. */
 export interface NoticeW { text: string; color: string; size: number; ch: string; born: number; }
@@ -1015,7 +1017,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       flowFromTier: o.flowFromTier,
       flowTo: o.homeTo && !o.homeTo.dead ? v2(o.homeTo.pos) : undefined,
       flowTier: o.homeTo && !o.homeTo.dead ? o.homeTo.tier ?? 0 : undefined })),
-    texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind })),
+    texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, k: t.kind,
+      damage: t.damage ? { ...t.damage, at: { ...t.damage.at } } : undefined })),
     no: world.notices.map(n => ({ text: n.text, color: n.color, size: n.size, ch: n.channel, born: n.bornAt })),
     pfd: world.pickupFeed.map(e => ({ s: e.seatId, l: e.label, c: e.color, n: e.count, born: e.bornAt })),
     recoveryCues: world.emergences.filter(e => e.recoveryCueTier !== undefined && e.life > 0).map(cloneRecoveryCue),
@@ -1611,7 +1614,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   world.satellites.flights.visuals = (snap.satelliteFlights ?? []).map(v => ({ ...v, from: { ...v.from }, to: { ...v.to } }));
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0,
     tier: o.tier, flowTo: o.flowTo ? { x: o.flowTo[0], y: o.flowTo[1] } : undefined, flowTier: o.flowTier, flowFromTier: o.flowFromTier }));
-  world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k })) as unknown as World['texts'];
+  world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text, kind: t.k,
+    damage: t.damage ? { ...t.damage, at: { ...t.damage.at } } : undefined })) as unknown as World['texts'];
   world.notices = (snap.no ?? []).map(n => ({ text: n.text, color: n.color, size: n.size, channel: n.ch, bornAt: n.born }));
   world.pickupFeed = (snap.pfd ?? []).map(e => ({ seatId: e.s, label: e.l, color: e.c, count: e.n, bornAt: e.born }));
   world.flashes = snap.flashes.map(f => ({ combatCue: f.combatCue ? { ...f.combatCue } : undefined, pos: { x: f.p[0], y: f.p[1] }, radius: f.radius, color: f.color, life: f.life, maxLife: f.maxLife,

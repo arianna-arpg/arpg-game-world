@@ -8,6 +8,7 @@ import { frontScreenHtml, bindFrontScreen } from './frontScreen';
 import { newCodexState, renderCodex } from './codex';
 import { configureSkillArtwork, skillIconSvg } from '../render/skillIcons';
 import { MemoryReveal } from './memoryReveal';
+import { DAMAGE_TEXT_CFG } from '../world/damageText';
 import { storedSupportsHtml } from './storedSupports';
 import { empowermentPassive, empowermentPoints, empowermentRank, hasEmpowermentPassive, skillInstanceName, treeAbilityNodes, treeInstanceNodeRanks, treePointBudget } from '../engine/skillEmpowerment';
 import { skillMergePlan } from '../engine/skillMerge';
@@ -10837,6 +10838,10 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <button id="opt-castslot" title="Outline the hotbar slot owning the current cast.">${s.castSlotHint ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Damage Number Display</span>
+        <button id="opt-damagesum" title="SUMMED adds damage from all sources on each target while popups arrive within ${DAMAGE_TEXT_CFG.gapSec} seconds of each other. A longer pause starts a new total.">${s.summedDamageText ? 'SUMMED' : 'SEPARATE'}</button>
+      </div>
+      <div class="rebind-row">
         <span>Floating Number Placement</span>
         <button id="opt-floatavoid" title="FIXED keeps original positions. AVOID BODIES shifts numbers away from visible bodies.">${s.floatingTextAvoidance ? 'AVOID BODIES' : 'FIXED'}</button>
       </div>
@@ -10913,7 +10918,7 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       this.saveSettings();
       this.renderOptions(root, onBack);
     });
-    for (const [id, key] of [['opt-supportready', 'supportReadyHint'], ['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
+    for (const [id, key] of [['opt-damagesum', 'summedDamageText'], ['opt-supportready', 'supportReadyHint'], ['opt-castslot', 'castSlotHint'], ['opt-floatavoid', 'floatingTextAvoidance'], ['opt-rewardavoid', 'rewardLabelAvoidance'], ['opt-crowdedmeters', 'crowdedMeters'], ['opt-castname', 'castNameHint'], ['opt-castmovement', 'castMovementHint']] as const) {
       root.querySelector<HTMLElement>('#' + id)?.addEventListener('click', () => {
         const settings = this.getSettings(); settings[key] = !settings[key];
         this.saveSettings(); this.renderOptions(root, onBack);

@@ -5,6 +5,7 @@ import { ALTAR_BODY } from '../engine/altarBodies';
 import { visibilityDiagnosticsEnabled, visibilityRecord, visibilityCaptureSurfaces } from './vis/visibilityDiagnostics';
 import { drawStatusReadout, statusReadoutRows, statusReadoutAnchor } from './vis/statusReadout';
 import { CombatTextLayout, combatBodyRect } from './vis/combatFocus';
+import { damageTextRows } from './vis/damageText';
 import { RewardLabelLayout } from './vis/rewardLabels';
 import { combatTargetStrength } from './vis/combatTargets';
 import { buffReadoutLines, drawBuffReadout } from './vis/buffReadout';
@@ -7414,7 +7415,7 @@ export class Renderer {
     const avoidNumbers = this.getSettings?.().floatingTextAvoidance === true;
     if (avoidNumbers) this.floatingTextLayout.begin(this.visibleCombatBodies(world).map(a => combatBodyRect(a.pos, a.radius)),
       { x: this.cam.x, y: this.cam.y, w: this.canvas.width / this.zoom, h: this.canvas.height / this.zoom });
-    for (const t of world.texts) {
+    for (const t of damageTextRows(world.texts, this.getSettings?.().summedDamageText === true)) {
       if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
       // Bind tokens resolve at DRAW, not at spawn — a float naming a key
       // stays honest even if the player rebinds (or grabs the pad) mid-air.
@@ -7425,7 +7426,7 @@ export class Renderer {
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
       ctx.lineWidth = 3;
       const at = avoidNumbers && (!t.kind || VIS_CFG.combatFocus.numbers.kinds.includes(t.kind))
-        ? this.floatingTextLayout.place(t, t.pos, ctx.measureText(txt).width, t.size) : t.pos;
+        ? this.floatingTextLayout.place(t.damage ?? t, t.pos, ctx.measureText(txt).width, t.size) : t.pos;
       ctx.strokeText(txt, at.x, at.y);
       ctx.fillText(txt, at.x, at.y);
     }
