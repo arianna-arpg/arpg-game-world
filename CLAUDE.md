@@ -209,6 +209,11 @@ Gather Rubblekin adds a separate flock with melee-triggered projectile releases.
 See `docs/design/living-rubble.md`, `data/rubblekin.ts` and `rubblekinTree.ts`;
 verify the landslide probe and hidden `balance/landslide-ui.cjs` after a build.
 
+Tree click/pan intent is shared through `ui/panzoom.ts`; play-mode nodes allow
+dragging and drag-ending clicks cannot allocate, choose or refund. See
+`docs/ui/tree-gestures.md`; verify all types and hidden `balance/tree-gestures-ui.cjs`
+after an isolated build. Editor node-position drags retain their own behavior.
+
 Selectable attribute training is documented in `docs/design/passive-attributes.md`.
 The 136 pure attribute nodes use `data/passiveAttributes.ts` choice groups;
 owned builds retain their former attributes through `allocatedDefault`.
