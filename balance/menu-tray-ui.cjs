@@ -18,7 +18,9 @@ app.whenReady().then(async()=>{
   await win.loadURL('http://127.0.0.1:'+server.address().port);
   win.webContents.debugger.attach('1.3');
   await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:true});
-  await run(async()=>{window.requestAnimationFrame=()=>0;await new Promise(r=>setTimeout(r,200));__game.devStartRun('magician');__game.ui.hideAll();__game.step(3);});
+  await run(async()=>{window.requestAnimationFrame=()=>0;await new Promise(r=>setTimeout(r,200));await __game.hydrated();
+   // Exercise ordinary play, not a prologue story card (which must cover the HUD).
+   __game.account().ledger.prologue_lived=1;__game.devStartRun('magician');__game.ui.hideAll();__game.step(3);});
   if(!legacy){
    const wait=()=>new Promise(r=>setTimeout(r,220));
    const paint=()=>run(()=>{

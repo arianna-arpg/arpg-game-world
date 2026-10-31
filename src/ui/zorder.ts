@@ -42,9 +42,12 @@
 //   independentPanel — standalone decisions (Memory Recall). Above neighboring
 //                books and tabs when the viewport cannot fit them side by side.
 //   menubar    — THE MENU BAR (ui/menubar.ts): the HUD's Menu button + its
-//                tray. Above every panel and the strip (the button must stay
-//                pressable under a dragged panel), under the popups and the
-//                tooltip it serves.
+//                tray, and Town Portal in every configured seat. Above ordinary
+//                books and their strips, so a dragged book cannot bury it.
+//   navigation — Pause and its Codex/Options/Wardrobe pages, front-door menus
+//                and modal journey cards. These own their navigation and cover
+//                HUD controls wherever they overlap; internal page content
+//                stays inside the root's stacking context.
 //   popup      — .choice-popup: JS-positioned deal floaters spawned over a
 //                panel's nodes.
 //   minigame   — the crafting minigame cover (ui/minigames.ts).
@@ -89,6 +92,7 @@ export const Z_LADDER = {
   folio: 50,         // ui/folio.ts — the thumb index (a TS-built root; reads the rung)
   independentPanel: 52, // standalone decisions remain reachable above neighboring books
   menubar: 55,       // ui/menubar.ts — THE MENU BAR's button + tray (TS-built; reads the rung)
+  navigation: 58,    // navigation roots cover Menu/Portal without changing ordinary books
   popup: 60,         // .choice-popup floaters
   minigame: 900,     // ui/minigames.ts cover
   cover: 9000,       // ui/lobby.ts + ui/couchJoin.ts system covers
@@ -108,6 +112,7 @@ export const Z_LADDER = {
 export const UI_STACK_SURFACES: ReadonlyArray<{ sel: string; z: number }> = [
   { sel: '.panel', z: Z_LADDER.panel },        // every activatable panel root (index.html)
   { sel: '#recall-menu', z: Z_LADDER.independentPanel },
+  { sel: '#escape-menu, #start-menu, #account-screen, #class-select, #expedition-setup, #mu-card, #story-card, #death-screen', z: Z_LADDER.navigation },
   { sel: '.choice-popup', z: Z_LADDER.popup }, // passive choice-node deals (ui/panels.ts)
   { sel: '.tooltip', z: Z_LADDER.tooltip },    // the hover card (ui/tooltip.ts)
   { sel: '.dnd-ghost', z: Z_LADDER.drag },     // the drag ghost (ui/dnd.ts)

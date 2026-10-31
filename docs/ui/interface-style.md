@@ -15,6 +15,18 @@ legacy menu rules consume these tokens instead of supplying a separate gold
 palette. Cosmetic swatches, class identity, rarity and warning colors remain
 meaningful content. Selected catalogue cards retain a distinct inset accent.
 
+The game, skill-showcase document and isolated Crossing declare an authored
+dark color scheme and the supported `darkreader-lock` metadata. Dark Reader's
+dynamic rewrite otherwise loses the decorative gradients' sizes and fills
+whole panels aqua. Palette changes remain owned by Wardrobe; OS forced-color
+accessibility is not disabled, and no extension settings are changed.
+
+`ui/zorder.ts` seats navigation roots above the HUD Menu and Town Portal in
+every configured portal seat. Pause, Codex, Wardrobe, Options, front-door and
+journey cards cover the controls wherever they overlap, including hit testing.
+Ordinary books retain their existing relation to the HUD, and Portal visibility
+preferences are unchanged. New navigation roots enroll in that shared registry.
+
 Back sits last, at the lower right, in menu navigation footers. Wardrobe and
 its Interface page keep that footer visible while the body scrolls; Options,
 Save & Exit, class selection and the browser exit fallback follow the same
@@ -136,3 +148,10 @@ focus, matching menu materials before/after a saved theme change, live fade
 keyframes, picker redraw stability, lower-right Back placement, narrow/enlarged
 Wardrobe layouts, reduced motion and nested Vault returns. Run it after a build,
 alongside the Codex, cosmetics, front-screen and Save & Exit courses.
+
+`balance/menu-presentation-ui.cjs` checks rendered panel pixels across UI scales,
+actual HUD overlap and dismissal, all portal seats, saved Wardrobe alternatives,
+the standalone showcase and isolated Crossing declarations. It is included in
+the reliability UI course. For the external recoloring reproduction, optionally
+set `HOLLOW_WAKE_QA_DARKREADER` to a local Dark Reader script (tested with 4.9.134);
+the library is test-only and is neither a game dependency nor a bundled asset.

@@ -39,7 +39,7 @@ export class LoadingScreen {
     frame.sandbox.add('allow-scripts'); frame.allow = 'gamepad *'; frame.referrerPolicy = 'no-referrer';
     frame.style.cssText = `position:fixed;inset:0;width:100%;height:100%;border:0;z-index:${Z_LADDER.loading};background:#080e16;display:none`;
     const src = new URL(loadingScript, location.href).href;
-    frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${new URL(src).origin}; style-src 'unsafe-inline'"><style>html,body{margin:0;background:#080e16;color:#d9e9e3}.runescript{font-family:'Segoe UI Symbol','Noto Sans Runic',Junicode,serif}</style></head><body><script src="${src.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"></script></body></html>`;
+    frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="darkreader-lock"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${new URL(src).origin}; style-src 'unsafe-inline'"><style>html,body{margin:0;background:#080e16;color:#d9e9e3}.runescript{font-family:'Segoe UI Symbol','Noto Sans Runic',Junicode,serif}</style></head><body><script src="${src.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"></script></body></html>`;
     window.addEventListener('message', this.receive);
     window.addEventListener('keydown', this.keyDown, true);
     window.addEventListener('keyup', this.keyUp, true);
